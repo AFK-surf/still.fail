@@ -1,17 +1,18 @@
-// A card over what the pointer rests on, as the web's (ember web/src/Peeks.tsx Hover, Hover.css.ts card, cardTile):
+// A card over what the pointer rests on, as the web's (still.fail web/src/Peeks.tsx Hover, cardTile):
 // opened once the pointer has rested on it 320 ms, closed 120 ms after it has left both it and the card; under it and
 // at its start, 6 away, kept in the window; a small panel (the popover's: 6 in, what it holds 10 in more), 320 wide
 // (`tile`: as wide as what it holds, 220 at least); it grows out of its edge from .96 and clear over 160 ms as it comes,
 // and goes to .97 and clear over 90 ms (Hover.css.ts enter, exit: a card the pointer left, not one put away by a
 // press, so not at once as a menu goes). And an agent's card
-// (AgentCard.tsx, AgentCard.css.ts), the same over its picture beside its messages and over its mark in the chat's bar.
+// , the same over its picture beside its messages and over its mark in the chat's bar.
 
 ///|
 /// `key`'s card over the trigger `trigger` (its id) while the pointer rests on it, holding `body`; to a finger, as it
 /// holds the trigger, or with `tap` (a trigger that does nothing else) as it taps it (@kit.hover_card). Under it and at
 /// its start, or on `side` lined up `along` it (beside the rail's places: their right, their tops); what it holds 10
-/// in from its padding, or (`padded` false) at its padding, for rows to lie there (a station's card's ways on). Whether
-/// it is open.
+/// in from its padding, or (`padded` false) at its padding, for rows to lie there (a station's card's ways on).
+/// `words_along`: a trigger that is words, the card's words starting where they start, its edge out to the side of them
+/// (the user, 2026-11-07). Whether it is open.
 pub fn hover(
   c : @ui.Ctx,
   key : String,
@@ -21,9 +22,12 @@ pub fn hover(
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
   padded? : Bool = true,
+  words_along? : Bool = false,
   body : () -> Unit,
 ) -> Bool {
-  @kit.hover_card(
+  // (not open as it was last built: opening now, or going)
+  let shut = !hover_open.contains(key)
+  let open = @kit.hover_card(
     c,
     key,
     trigger,
@@ -33,6 +37,7 @@ pub fn hover(
     close_delay=hover_close_ms,
     side~,
     along~,
+    along_offset=if words_along { -@sf.panel_pad - (if padded { hover_words_in } else { 0.0 }) } else { 0.0 },
     offset=hover_offset,
     enter=hover_in,
     exit=hover_out,
@@ -44,8 +49,11 @@ pub fn hover(
             s,
             fn() {
               hover_now.val = Some((key, s.panel))
+              let shut_was = hover_shut.val
+              hover_shut.val = shut
               body()
               hover_now.val = None
+              hover_shut.val = shut_was
             },
             inner=if padded { hover_inner } else { hover_bare },
           )
@@ -56,12 +64,26 @@ pub fn hover(
     },
     body,
   )
+  if open {
+    hover_open[key] = true
+  } else {
+    hover_open.remove(key)
+  }
+  open
 }
 
 ///|
-/// The card whose body is being built (its key, its panel's id); the cards kept open by what was pressed in them,
-/// by their keys: what that opened (@sf.last_presented), while it is drawn.
+/// The card whose body is being built (its key, its panel's id), and whether it was not open as it was last built
+/// (opening now, or going: what it holds as it is, none of it moving on from an opening before); the cards open as they
+/// were last built (by their keys); the cards kept open by what was pressed in them, by their keys: what that opened
+/// (@sf.last_presented), while it is drawn.
 let hover_now : Ref[(String, Int)?] = Ref(None)
+
+///|
+let hover_shut : Ref[Bool] = Ref(false)
+
+///|
+let hover_open : Map[String, Bool] = {}
 
 ///|
 let hover_holds : Map[String, Int] = {}
@@ -141,7 +163,7 @@ let hover_out : @motion.Trans = @motion.trans(fade=0.0, scale=0.97, spec=@motion
 let hover_out_ms : Double = 90.0
 
 ///|
-/// Its width: 320; a tile's as wide as it holds, 220 at least, 420 at most (Hover.css.ts cardTile).
+/// Its width: 320; a tile's as wide as it holds, 220 at least, 420 at most.
 // kept across runs: a value (no field of it changes)
 let hover_card : @ui.Style = @ui.style(w=@sf.hover_card_w)
 
@@ -150,7 +172,7 @@ let hover_card : @ui.Style = @ui.style(w=@sf.hover_card_w)
 let hover_tile : @ui.Style = @ui.style(min_w=@sf.hover_tile_least, max_w=@sf.hover_tile_most)
 
 ///|
-/// What it holds, 10 in from the panel's padding (controls.css.ts panelCard), 8 apart (Hover.css.ts card).
+/// What it holds, 10 in from the panel's padding (controls.css.ts panelCard), 8 apart.
 // kept across runs: a value (no field of it changes)
 let hover_inner : @ui.Style = @ui.css("w=Full p=S2_5 gap=S2")
 
@@ -166,7 +188,7 @@ let hover_bare : @ui.Style = @ui.css("w=Full")
 // ── an agent's card ──────────────────────────────────────────────────────
 
 ///|
-/// One of the chat's agents in brief (AgentCard.tsx), `a` as chat `r`'s view has it: what it runs as, one thing (its
+/// One of the chat's agents in brief, `a` as chat `r`'s view has it: what it runs as, one thing (its
 /// mark, its label, the account it runs on with what is left of it); where it stands and for how long, a stop for it
 /// alone at its end while it works; its latest three lines; what it has going in the background and its checklist in a
 /// line (agent_work_line); the figures that say most (UsageTiles); the rest in a quiet line; its jobs and what is
@@ -181,7 +203,7 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
   let av = Some(a)
   let s = field(av, "session")
   let key = text(s, "key")
-  let card = (src.topic)("agentCard", { "station": Json::string(station), "key": Json::string(key) }).value
+  let card = src.topic("agentCard", { "station": Json::string(station), "key": Json::string(key) }).get().value
   let status = text(av, "status")
   let working = status == "running" || status == "queued"
   let history = fn(entry : Int?) { open_page(History(r, key, entry)) }
@@ -201,9 +223,9 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
     // what it runs as, one thing: its mark (28), its label (its model) on its line and under it the account it runs
     // on, what is left of it at that line's end; to how it runs (its model and its account are of that)
     let who = c.id("agent-card/runs")
-    if c.clicked(who) {
+    c.on_press(who, fn() {
       runs(who)
-    }
+    })
     let w = c.box(style=agent_card_head, id=who, fn() {
       agent_mark(
         c,
@@ -263,9 +285,9 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
     }
     // what it has going in the background and its checklist, in a line: to its execution history
     let work = c.id("agent-card/work")
-    if c.clicked(work) {
+    c.on_press(work, fn() {
       history(None)
-    }
+    })
     agent_work_line(c, card, work, inset=true)
     if card is Some(Object(_)) {
       let compacts = flag(s, "canCompact")
@@ -294,9 +316,9 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
       c.box(style=agent_card_notes, fn() {
         if text(card, "jobs") != "" {
           let id = c.id("agent-card/jobs")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             (@sfbase.chat_jobs_asked.val)(c, src, r)
-          }
+          })
           agent_card_link(c, id, text(card, "jobs"), agent_card_line)
         }
         for i, x in attention {
@@ -311,9 +333,9 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
           // an account that cannot run: to how it runs, to move it to another
           if text(Some(x), "kind") == "account" {
             let id = c.id("agent-card/attention/" + i.to_string())
-            if c.clicked(id) {
+            c.on_press(id, fn() {
               runs(id)
-            }
+            })
             agent_card_link(c, id, text(Some(x), "text"), style, hot=style)
           } else {
             c.text(text(Some(x), "text"), style~) |> ignore
@@ -327,7 +349,7 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
 }
 
 ///|
-/// For how long it has stood where it does (AgentCard.tsx: Waited, Elapsed): waiting as long as it has (of at most),
+/// For how long it has stood where it does (Elapsed): waiting as long as it has (of at most),
 /// else at work since its turn began; nothing else.
 fn agent_waited(c : @ui.Ctx, src : Source, a : Json?) -> String {
   let now = (src.now)()
@@ -362,29 +384,29 @@ fn agent_waited(c : @ui.Ctx, src : Source, a : Json?) -> String {
 }
 
 ///|
-/// An agent's card's latest lines, a line each, oldest first (AgentCard.tsx's list), running on as they change
+/// An agent's card's latest lines, a line each, oldest first, running on as they change
 /// (useLinesMotion): none resized, nor the list; those that stay go from where they were to where they are, carrying
 /// on from wherever they had got to; a new one comes with them from beyond the edge, and one gone leaves with them, as
 /// a copy; with none staying, new and gone fade in place. As they are the first time the card shows them.
 fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit) -> Unit {
   let keys = latest.map(fn(l) { text(Some(l), "key") })
-  let frame = c.frame_number()
   let lid = c.id("agent-card/lines")
   let ran = match ran_lines.get(lid) {
-    // drawn the frame before (or in this one's earlier build): what they were then
-    Some(r) if r.frame >= frame - 1 => r
+    // the card open as it was last built, or going, with the same lines: what they were then (opening with the same,
+    // none of them moves any more since it went: as anew)
+    Some(r) if !hover_shut.val || r.keys == keys => r
+    // (the card opening: as they are now, none moving on from an opening before)
     _ => {
-      let r = { keys: keys.copy(), words: {}, frame, pitch: 0.0, gone: [] }
+      let r = { keys: keys.copy(), words: {}, pitch: 0.0, gone: [] }
       ran_lines[lid] = r
       // (as they are: none on its way from an opening before)
       for k in keys {
-        line_y(c, k).snap(0.0)
-        line_faint(c, k).snap(1.0)
+        line_y(c, k).snap(c, 0.0)
+        line_faint(c, k).snap(c, 1.0)
       }
       r
     }
   }
-  ran.frame = frame
   let spec = @motion.tween(lines_ms, ease=lines_ease)
   if ran.keys != keys {
     let before = ran.keys
@@ -399,34 +421,34 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
       let faint = line_faint(c, k)
       let j = at(before, k)
       // from where it was drawn (its place then, and how far it still was from it), as faint as it was
-      let (from, f) = if j >= 0 { ((j - i).to_double() * ran.pitch + y.get(), faint.get()) } else { (shift, 0.0) }
+      let (from, f) = if j >= 0 { ((j - i).to_double() * ran.pitch + y.get(c), faint.get(c)) } else { (shift, 0.0) }
       if from.abs() < 0.5 && f == 1.0 {
         continue
       }
-      y.snap(from)
-      y.animate(0.0, spec)
-      faint.snap(f)
-      faint.animate(1.0, spec)
+      y.snap(c, from)
+      y.animate(c, 0.0, spec)
+      faint.snap(c, f)
+      faint.animate(c, 1.0, spec)
     }
     // one gone: a copy of it where it was drawn, leaving as far as the others ran on
     for j, k in before {
       if at(keys, k) >= 0 {
         continue
       }
-      let (y, f) = (line_y(c, k).get(), line_faint(c, k).get())
+      let (y, f) = (line_y(c, k).get(c), line_faint(c, k).get(c))
       let (words, now) = ran.words.get(k).unwrap_or(("", false))
       ran.gone.push({ key: k, words, now, top: j.to_double() * ran.pitch })
       let gy = gone_y(c, k)
-      gy.snap(y)
-      gy.animate(y - shift, spec)
+      gy.snap(c, y)
+      gy.animate(c, y - shift, spec)
       let gf = gone_faint(c, k)
-      gf.snap(f)
-      gf.animate(0.0, spec)
+      gf.snap(c, f)
+      gf.animate(c, 0.0, spec)
     }
     ran.keys = keys.copy()
   }
-  // the copies gone out of sight let go
-  ran.gone.retain(fn(g) { gone_faint(c, g.key).get() > 0.0 })
+  // the copies gone out of sight let go, at the end their fading declared
+  ran.gone.retain(fn(g) { !gone_faint(c, g.key).over(c) })
   c.box(style=agent_card_lines, fn() {
     for l in latest {
       let k = text(Some(l), "key")
@@ -434,17 +456,16 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
       ran.words[k] = (text(Some(l), "text"), now)
       let id = c.id("agent-card/line/" + k)
       // each to where its history has it (what it does now: its newest), in the words' colour on hover
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         history(line_entry(k))
-      }
+      })
       let n = c.box(style=agent_card_line_box, id~, fn() {
         c.text(text(Some(l), "text"), style=if now || c.lit(id) { agent_card_now } else { agent_card_line }) |> ignore
       })
       c.semantics(n, Button, id~, label=text(Some(l), "text"))
-      let (y, f) = (line_y(c, k).get(), line_faint(c, k).get())
-      if y != 0.0 || f != 1.0 {
-        c.look(n, @ui.look(dy=y, alpha=f))
-      }
+      // (where it is on its way and how faint, as it is drawn)
+      let (y, f) = (line_y(c, k), line_faint(c, k))
+      c.look_by(n, fn() { @ui.look(dy=y.get(c), alpha=f.get(c)) })
       // how far apart they are as laid out: the steps of the next change
       match c.laid_size(id) {
         Some((_, h)) if h > 0.0 => ran.pitch = h + agent_card_lines_gap.px()
@@ -457,7 +478,8 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
           let n = c.box(style=agent_card_gone_box, fn() {
             c.text(g.words, style=if g.now { agent_card_now } else { agent_card_line }) |> ignore
           })
-          c.look(n, @ui.look(dy=g.top + gone_y(c, g.key).get(), alpha=gone_faint(c, g.key).get()))
+          let (y, f) = (gone_y(c, g.key), gone_faint(c, g.key))
+          c.look_by(n, fn() { @ui.look(dy=g.top + y.get(c), alpha=f.get(c)) })
         }
       })
       |> ignore
@@ -468,12 +490,11 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
 
 ///|
 /// The lines of an agent's card as last drawn (useLinesMotion's `was`), by its list: their keys in order, their
-/// words, the frame they were drawn in (one not drawn the frame before is the card opened again: none moves), how far
-/// apart they are, the copies of those gone, leaving.
+/// words, how far apart they are, the copies of those gone, leaving. As the card opens they are as they are then: none
+/// moves (hover's `hover_shut`).
 priv struct RanLines {
   mut keys : Array[String]
   words : Map[String, (String, Bool)]
-  mut frame : Int
   mut pitch : Double
   gone : Array[GoneLine]
 }
@@ -493,11 +514,14 @@ let ran_lines : Map[Int, RanLines] = {}
 fn hover_reset() -> Unit {
   ran_lines.clear()
   hover_now.val = None
+  hover_shut.val = false
+  hover_open.clear()
   hover_holds.clear()
+  peek_copied_at.clear()
 }
 
 ///|
-/// How long they take to run on, and how (AgentCard.tsx LINES_MS, LINES_EASE).
+/// How long they take to run on, and how (LINES_EASE).
 pub let lines_ms : Double = 240.0
 
 ///|
@@ -526,11 +550,11 @@ fn gone_faint(c : @ui.Ctx, key : String) -> @motion.Anim {
 }
 
 ///|
-/// Its mark's side (AgentCard.tsx AgentMark size).
+/// Its mark's side.
 let agent_card_mark : Double = 28.0
 
 ///|
-/// A tone's colour as a style says it (AgentCard.css.ts status's dot: accent, green, blue, red, amber; else subtle).
+/// A tone's colour as a style says it (green, blue, red, amber; else subtle).
 fn tone_token(tone : String) -> @ui.Color {
   match tone {
     "accent" => Accent
@@ -549,16 +573,18 @@ fn agent_card_stop(c : @ui.Ctx, src : Source, station : String, key : String) ->
   let skey = "stop/" + station + "/" + key
   let busy = doing(skey)
   let id = c.id("agent-card/stop")
-  if !busy && c.clicked(id) {
-    act(
-      src,
-      @sf.t("web-pages.chat.stop"),
-      skey,
-      "session.stop",
-      { "station": Json::string(station), "key": Json::string(key) },
-      done=@sf.t("web-pages.chat.stopAsked"),
-    )
-  }
+  c.on_press(id, fn() {
+    if !busy {
+      act(
+        src,
+        @sf.t("web-pages.chat.stop"),
+        skey,
+        "session.stop",
+        { "station": Json::string(station), "key": Json::string(key) },
+        done=@sf.t("web-pages.chat.stopAsked"),
+      )
+    }
+  })
   let label = @sf.t("web-pages.chat.stopTurn")
   @sf.tip(c, "agent-card/stop", id, label)
   let b = c.box(style=agent_card_stop_box, id~, fn() {
@@ -620,7 +646,7 @@ pub fn open_context_actions(src : Source, station : String, key : String, s : Js
         @sf.menu_item_of(
           @sf.t("web-pages.chat.clear"),
           fn() {
-            // asked as the web asks it (ChatPage.tsx: Confirm)
+            // asked as the web asks it
             @sf.confirm(
               @sf.t("web-pages.chat.clearConfirm"),
               @sf.t("web-pages.chat.clearBody"),
@@ -642,7 +668,7 @@ pub fn open_context_actions(src : Source, station : String, key : String, s : Js
 }
 
 ///|
-/// What can be done to an agent's context from its tile (AgentCard.tsx ContextEntry: its execution history's details):
+/// What can be done to an agent's context from its tile:
 /// its menu opened, something under way, whether it can be compacted.
 pub(all) struct ContextEntry {
   open : () -> Unit
@@ -657,7 +683,7 @@ pub fn context_tile_id(c : @ui.Ctx) -> Int {
 }
 
 ///|
-/// The figures that say most of what an agent used (AgentCard.tsx UsageTiles), each large over its name, side by
+/// The figures that say most of what an agent used, each large over its name, side by
 /// side: what it cost, the cache's hit rate, how full its context is (in its level's colour, how much of how much on
 /// hover). With `entry`, its context's tile opens what can be done to it, its name ending in › (that it can be
 /// compacted said once it is filling up), a spinner while something is under way. None before it has made a call.
@@ -702,9 +728,11 @@ pub fn usage_tiles(c : @ui.Ctx, card : Json?, entry? : ContextEntry) -> Unit {
         match entry {
           Some(e) => {
             let id = context_tile_id(c)
-            if !e.busy && c.clicked(id) {
-              (e.open)()
-            }
+            c.on_press(id, fn() {
+              if !e.busy {
+                (e.open)()
+              }
+            })
             let filling = e.compacts && (level == "amber" || level == "red")
             let b = tile(
               id,
@@ -914,7 +942,7 @@ let agent_card_account : @ui.Style = @ui.css("row w=Full gap=S2 align=AEnd").the
 )
 
 ///|
-let agent_card_chips_in : Double = @sf.capsule_in(@sf.row_corner, @sf.fill_chip_small_h) - agent_card_head_pad
+let agent_card_chips_in : Double = @ui.capsule_in(@sf.row_corner, @sf.fill_chip_small_h) - agent_card_head_pad
 
 ///|
 /// Words that lead somewhere: their whole line.

@@ -1,4 +1,4 @@
-// The admin's console (views/admin.rs): still.fail cloud's operator lists as its pages show them, so the page only
+// The admin's console: still.fail cloud's operator lists as its pages show them, so the page only
 // draws. `adminList`: one list found, filtered and sorted, with how many each filter holds; `adminItem`: one user's,
 // workspace's or bug report's page; `adminOverview`: the counts and what wants a look. Times stay in seconds.
 import { CoreError } from "../error.ts";
@@ -51,14 +51,15 @@ function admissionLabel(admission: string): string {
 
 const mark = (label: string, tone: string) => ({ label, tone });
 
-/// A version's numbers, to compare (`0.1.1212` → [0, 1, 1212]).
+/// A version's numbers, to compare (`0.1.1212` → [1212], a station's; `2.1.9` → [2, 1, 9]).
 function versionKey(v: string): number[] {
   const out: number[] = [];
   for (const p of v.split(/[.\-+]/)) {
     if (!/^[0-9]+$/.test(p)) break;
     out.push(Number(p));
   }
-  return out;
+  // A station's 0.<m>.<n>: by n, its build, alone (m, the stable releases before it, only said: the user, 2026-11-09).
+  return out.length === 3 && out[0] === 0 ? [out[2]!] : out;
 }
 
 function compareVersions(a: number[], b: number[]): number {

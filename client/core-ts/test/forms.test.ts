@@ -17,6 +17,8 @@ const store = () => {
   const host = new FakeHost();
   const s = new Store(host, new Runner(host.time.clock));
   s.setSource({ start: () => {}, stop: () => {} });
+  // (the station's overview kept up, as the form's page keeps it by reading it as the form is made)
+  s.watch({ topic: "overview", station: "ws/st" }, () => {});
   return s;
 };
 const overview: Topic = { topic: "overview", station: "ws/st" };
@@ -150,6 +152,8 @@ test("a_closed_and_reopened_form_does_not_take_the_old_result", () => {
 
 const flow = () => {
   const s = store();
+  // (and its workspace, for the viewer's role: whether they may install a runtime)
+  s.watch({ topic: "workspace", workspace: "ws" }, () => {});
   return { s, flows: new ProfileFlows(s), topic: { topic: "profileFlow", station: "ws/st", form: "t" } as Topic };
 };
 

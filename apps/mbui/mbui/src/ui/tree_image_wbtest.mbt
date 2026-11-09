@@ -84,22 +84,22 @@ test "a node's picture drawn frame after frame with nothing changed, the picture
   }
   assert_true(owned, msg="its picture's instance the node's")
   // (another picture decoded, big, shown by nothing: the pictures kept past their budget)
-  image_cache["big"] = [
-    {
-      id: 999999,
-      px: 8192,
-      state: 1,
-      w: 8192.0,
-      h: 8192.0,
-      ow: 8192.0,
-      oh: 8192.0,
-      used: 0,
-      ready_at: 0.0,
-      follows: None,
-      mover: Mover::new(),
-      fade_told: false,
-    },
-  ]
+  let big = {
+    id: 999999,
+    px: 8192,
+    state: 1,
+    w: 8192.0,
+    h: 8192.0,
+    ow: 8192.0,
+    oh: 8192.0,
+    used: 0,
+    ready_at: 0.0,
+    follows: None,
+    mover: Mover::new(),
+    fade_told: false,
+  }
+  image_cache["big"] = [big]
+  image_added("big", big)
   let mut total = 0.0
   for _, list in image_cache {
     for e in list {

@@ -71,8 +71,9 @@ pub fn fx_keys_of(changed : Map[String, Array[String]], a : (String, String, Arr
 }
 
 ///|
-/// The prefs' `keymap` (KeymapView) with `changed` the keys changed here; as on a Mac where the Tester plays one.
-pub fn fixture_keymap(changed : Map[String, Array[String]]) -> Json {
+/// The prefs' `keymap` (KeymapView) with `changed` the keys changed here, the composer sending as `send_key` says
+/// (keymap.ts sendView); as on a Mac where the Tester plays one.
+pub fn fixture_keymap(changed : Map[String, Array[String]], send_key? : String = "") -> Json {
   let mac = @ui.platform() == 0
   let actions = fx_key_actions.map(fn(a) {
     let keys = fx_keys_of(changed, a)
@@ -102,6 +103,31 @@ pub fn fixture_keymap(changed : Map[String, Array[String]]) -> Json {
     ),
     "actions": Json::array(actions),
     "workspace": Json::array(ws),
+    "send": fixture_send_keys(send_key, mac),
+  })
+}
+
+///|
+/// The composer's keys (keymap.ts sendView): Enter, or ⌘Enter (`mod`: Ctrl+Enter elsewhere), the keys of each in words.
+fn fixture_send_keys(send_key : String, mac : Bool) -> Json {
+  let by = if send_key == "mod" { "mod" } else { "enter" }
+  let send = fx_key_label(if by == "mod" { "Mod+Enter" } else { "Enter" }, mac)
+  let newline = if by == "mod" {
+    fx_key_label("Enter", mac) + " / " + fx_key_label("Shift+Enter", mac)
+  } else {
+    fx_key_label("Shift+Enter", mac)
+  }
+  let named = [("enter", "Enter"), ("mod", if mac { "⌘ Enter" } else { "Ctrl+Enter" })]
+  Json::object({
+    "by": Json::string(by),
+    "choices": Json::array(
+      named.map(fn(n) {
+        Json::object({ "by": Json::string(n.0), "name": Json::string(fill("web-main.shortcuts.sendWith", [("keys", n.1)])) })
+      }),
+    ),
+    "send": Json::string(send),
+    "newline": Json::string(newline),
+    "text": Json::string(fill("web-main.shortcuts.sendNote", [("send", send), ("newline", newline)])),
   })
 }
 

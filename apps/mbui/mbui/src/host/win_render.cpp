@@ -1,5 +1,6 @@
-// Direct3D 11 renderer: one pipeline, one instanced quad per scene instance,
-// the Metal/GLES shader in HLSL. Without a usable GPU (CI) the device is WARP.
+// Direct3D 11 renderer: one instanced quad per scene instance, the Metal/GLES
+// shader in HLSL, made a pixel shader for each kind it draws most (kind_ps).
+// Without a usable GPU (CI) the device is WARP.
 // The canvas is a composition swap chain with alpha in a DirectComposition
 // tree, over a visual the native views (win_views.cpp) go in: they show through
 // the holes the app paints (kind 9, written transparent without blending), as
@@ -20,6 +21,7 @@
 #include "win.h"
 #include "corner_sl.h"
 #include "contained.h"
+#include "bands.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
@@ -37,6 +39,8 @@ static IDXGISwapChain1 *chain;
 static ID3D11RenderTargetView *rtv;
 static ID3D11VertexShader *vs;
 static ID3D11PixelShader *ps;
+// a ground's flat middle (bands.h mb_pieces)
+static ID3D11PixelShader *ps_flat;
 static ID3D11InputLayout *layout;
 static ID3D11Buffer *vbuf, *ubuf;
 static size_t vbuf_cap;
@@ -77,6 +81,10 @@ static float last_bg[3];
 #define MB_INST 60
 
 static const char *shader_src =
+    "// the kind of what this pixel shader draws, fixed (kind_ps); -1 any, as the instance says\n"
+    "#ifndef ONE_KIND\n"
+    "#define ONE_KIND -1\n"
+    "#endif\n"
     "cbuffer U : register(b0) { float2 vp; float scale; float pad; };\n"
     "// glass (src/ui/glass.mbt): where a point is in the blurred copy under it (uv = p * gmap.xy + gmap.zw, kept in guvc),\n"
     "// a liquid group's bounds, shapes, corners (x of each), how many\n"
@@ -192,7 +200,7 @@ static const char *shader_src =
     "  if (I.fadex.y > 0.0) cover *= saturate((cp.x - I.fadex.x) / I.fadex.y);\n"
     "  if (I.fadex.w > 0.0) cover *= saturate((I.fadex.z - cp.x) / I.fadex.w);\n"
     "  if (cover <= 0.0) discard;\n"
-    "  int kind = int(I.prm.y + 0.5);\n"
+    "  int kind = ONE_KIND >= 0 ? ONE_KIND : int(I.prm.y + 0.5);\n"
     "  if (kind == 9) { float2 hh = I.rect.zw * 0.5; float rr = min(mb_corner_of(p - I.rect.xy - hh, I.rr), min(hh.x, hh.y)); float2 q = abs(p - I.rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; return (float4(0.0, 0.0, 0.0, 0.0)) * cover; }\n"
     "  float4 col = I.color;\n"
     "  if (kind == 11) {\n"
@@ -340,6 +348,14 @@ static const char *shader_src =
     "    fill = lerp(bc, fill, inner);\n"
     "  }\n"
     "  return (fill * a) * cover;\n"
+    "}\n"
+    "// the flat pipeline: a ground's colour where it is covered whole, cut by straight clips alone (bands.h mb_pieces):\n"
+    "// what fmain writes there, nothing worked out\n"
+    "FOut fflat(VOut I) {\n"
+    "  FOut o;\n"
+    "  o.c = float4(I.color.rgb, 1.0) * I.color.a;\n"
+    "  o.w = o.c.aaaa;\n"
+    "  return o;\n"
     "}\n";
 
 // glass's passes over its copy of what is under it
@@ -397,9 +413,10 @@ static const char *edge_src =
     "  return src.SampleLevel(samp, clamp((p - pc[0].xy) / pc[0].zw * ts, lo, hi), 0);\n"
     "}\n";
 
-static ID3DBlob *compile(const char *entry, const char *target, const char *src = shader_src) {
+static ID3DBlob *compile(const char *entry, const char *target, const char *src = shader_src,
+                         const D3D_SHADER_MACRO *defines = NULL) {
   ID3DBlob *code = NULL, *err = NULL;
-  HRESULT hr = D3DCompile(src, strlen(src), "mbui", NULL, NULL, entry, target,
+  HRESULT hr = D3DCompile(src, strlen(src), "mbui", defines, NULL, entry, target,
                           D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &code, &err);
   if (FAILED(hr)) fprintf(stderr, "shader %s: %s\n", entry, err ? (char *)err->GetBufferPointer() : "?");
   if (err) err->Release();
@@ -502,11 +519,58 @@ int mb_render_init(void *hwnd) {
   return chain != NULL;
 }
 
+// The kinds drawn by a pixel shader of their own: the shader with its kind fixed (ONE_KIND), so each is compiled to its
+// kind's branch alone and a pixel of it is shaded with the registers that branch needs, not the most any kind's does
+// (as Metal's: apple_render.m kind_pipe says what it saved there), what it draws the same to the byte. Compiled after
+// the rest, on a thread of their own (kinds_thread), the device's own to make them on: until they are, the one for
+// any kind draws every kind, the same pixels.
+#define MB_KINDS 12
+static int has_own_ps(int kind) { return (kind >= 0 && kind <= 4) || kind == 10 || kind == 11; }
+static ID3D11PixelShader *kps[MB_KINDS];
+static HANDLE kinds_thread;
+static volatile LONG kinds_ready;
+
+static DWORD WINAPI make_kinds(void *arg) {
+  ID3D11Device *d = (ID3D11Device *)arg;
+  for (int k = 0; k < MB_KINDS; k++) {
+    if (!has_own_ps(k)) continue;
+    char one[8];
+    snprintf(one, sizeof one, "%d", k);
+    D3D_SHADER_MACRO defines[2] = {{"ONE_KIND", one}, {NULL, NULL}};
+    ID3DBlob *code = compile("fmain", "ps_4_0", shader_src, defines);
+    if (code) {
+      d->CreatePixelShader(code->GetBufferPointer(), code->GetBufferSize(), NULL, &kps[k]);
+      code->Release();
+    }
+  }
+  InterlockedExchange(&kinds_ready, 1);
+  return 0;
+}
+
+// The pixel shader that draws a run of instances of `kind`.
+static ID3D11PixelShader *kind_ps(int kind) {
+  return has_own_ps(kind) && InterlockedCompareExchange(&kinds_ready, 1, 1) && kps[kind] ? kps[kind] : ps;
+}
+
 // The shaders, buffers, atlas and states every target is drawn with (the window's, the offscreen one).
 static void make_pipeline(void) {
-  ID3DBlob *vcode = compile("vmain", "vs_4_0"), *pcode = compile("fmain", "ps_4_0");
+  // (those of a device before, if there was one, let go once made)
+  if (kinds_thread) {
+    WaitForSingleObject(kinds_thread, INFINITE);
+    CloseHandle(kinds_thread);
+    kinds_thread = NULL;
+  }
+  kinds_ready = 0;
+  for (int k = 0; k < MB_KINDS; k++)
+    if (kps[k]) {
+      kps[k]->Release();
+      kps[k] = NULL;
+    }
+  ID3DBlob *vcode = compile("vmain", "vs_4_0"), *pcode = compile("fmain", "ps_4_0"), *fcode = compile("fflat", "ps_4_0");
   dev->CreateVertexShader(vcode->GetBufferPointer(), vcode->GetBufferSize(), NULL, &vs);
   dev->CreatePixelShader(pcode->GetBufferPointer(), pcode->GetBufferSize(), NULL, &ps);
+  dev->CreatePixelShader(fcode->GetBufferPointer(), fcode->GetBufferSize(), NULL, &ps_flat);
+  fcode->Release();
   // the instance's fifteen float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth,
   // how it is turned, a box's corners' radii, the outer clip's rect, corners' radii and how smooth, how it fades down
   // and across
@@ -516,6 +580,7 @@ static void make_pipeline(void) {
   dev->CreateInputLayout(el, 15, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
   vcode->Release();
   pcode->Release();
+  kinds_thread = CreateThread(NULL, 0, make_kinds, dev, 0, NULL);
   ID3DBlob *pv = compile("vpost", "vs_4_0", post_src), *pp = compile("fpost", "ps_4_0", post_src);
   ID3DBlob *ep = compile("fedge", "ps_4_0", edge_src);
   dev->CreateVertexShader(pv->GetBufferPointer(), pv->GetBufferSize(), NULL, &pvs);
@@ -564,7 +629,7 @@ static void make_pipeline(void) {
   rd.CullMode = D3D11_CULL_NONE;
   rd.DepthClipEnable = TRUE;
   dev->CreateRasterizerState(&rd, &raster);
-  // (a part drawn again: cut to it, docs/partial-redraw.md)
+  // (a part drawn again: cut to it)
   rd.ScissorEnable = TRUE;
   dev->CreateRasterizerState(&rd, &raster_cut);
 }
@@ -677,7 +742,7 @@ static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int 
   ctx->Draw(3, 0);
 }
 
-// Partial redraw (docs/partial-redraw.md): a window's frame is drawn into a canvas of its own, kept across frames, and
+// Partial redraw: a window's frame is drawn into a canvas of its own, kept across frames, and
 // copied into the swap chain's buffer (a flip model's holds a frame before the last); where the app says only some
 // parts differ from the frame before (@hostapi.render_dirty), only those parts of the canvas are drawn again, each cut
 // to it (the scissor, `cut`, while `cut_on`), the frame's ground over it first (the instance after the frame's,
@@ -924,6 +989,32 @@ static void main_state(ID3D11RenderTargetView *target, int pw, int ph) {
   ctx->OMSetBlendState(blend, NULL, 0xffffffff);
 }
 
+// Instances start to end drawn by `run`, each that pays for it in strips (bands.h), the rest as they come.
+static void draw_banded(const float *f, int32_t start, int32_t end, int32_t count, int pw, int ph,
+                        ID3D11PixelShader *run) {
+  MBStrip to = cut_on ? mb_strip((int)cut.left, (int)cut.top, (int)cut.right, (int)cut.bottom) : mb_strip(0, 0, pw, ph);
+  MBStrip st[MB_STRIPS];
+  int32_t s = start;
+  for (int32_t i = start; i < end; i++) {
+    if (!mb_band_kind(f, i)) continue;
+    int n = mb_bands(f, i, count, (float)vscale, to, st);
+    if (n < 0) continue;
+    if (i > s) ctx->DrawInstanced(6, (UINT)(i - s), 0, (UINT)s);
+    ctx->RSSetState(raster_cut);
+    for (int k = 0; k < n; k++) {
+      if (k == 0 || st[k].flat != st[k - 1].flat) ctx->PSSetShader(st[k].flat ? ps_flat : run, NULL, 0);
+      D3D11_RECT r = {st[k].x0, st[k].y0, st[k].x1, st[k].y1};
+      ctx->RSSetScissorRects(1, &r);
+      ctx->DrawInstanced(6, 1, 0, (UINT)i);
+    }
+    if (n > 0 && st[n - 1].flat) ctx->PSSetShader(run, NULL, 0);
+    if (cut_on) ctx->RSSetScissorRects(1, &cut);
+    else ctx->RSSetState(raster);
+    s = i + 1;
+  }
+  if (end > s) ctx->DrawInstanced(6, (UINT)(end - s), 0, (UINT)s);
+}
+
 // `part`: only that part of the target drawn again, over what it holds (the frame's ground first: the instance after
 // the frame's in the vertex buffer, submit's); NULL, all of it, cleared to the ground.
 static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count, const float *bg,
@@ -946,8 +1037,8 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
     ctx->DrawInstanced(6, 1, 0, (UINT)count);
     ctx->OMSetBlendState(blend, NULL, 0xffffffff);
   }
-  // one draw per run of instances showing the same image (slot 20; 0: none, the atlas stands in), or sharing one
-  // capture of glass (negative)
+  // one draw per run of instances showing the same image (slot 20; 0: none, the atlas stands in) of one kind (its
+  // pixel shader: kind_ps), or sharing one capture of glass (negative)
   int32_t start = 0;
   int bound = 0, shows = 0;
   while (start < count) {
@@ -960,15 +1051,21 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
         bound = tid;
         main_state(target, pw, ph);
       }
+      ctx->PSSetShader(ps, NULL, 0);
       // liquid: the group as one shape, drawn once
       if (shows) ctx->DrawInstanced(6, (int)(f[start * MB_INST + 5] + 0.5f) == 6 ? 1 : (UINT)(end - start), 0, (UINT)start);
       start = end;
       continue;
     }
     // holes for native views (kind 9) apart, written without blending: transparent there
-    int hole = (int)(f[start * MB_INST + 5] + 0.5f) == 9;
+    int kind = (int)(f[start * MB_INST + 5] + 0.5f), hole = kind == 9, own = has_own_ps(kind);
+    // (kinds without their own pixel shader one run, as before)
     end = start + 1;
-    while (end < count && (int)f[end * MB_INST + 20] == tid && ((int)(f[end * MB_INST + 5] + 0.5f) == 9) == hole) end++;
+    while (end < count && (int)f[end * MB_INST + 20] == tid) {
+      int k = (int)(f[end * MB_INST + 5] + 0.5f);
+      if ((k == 9) != hole || (own ? k != kind : has_own_ps(k))) break;
+      end++;
+    }
     // (a hole's image is its view's, src/hostapi/host.mbt view_tex_base + its id: the view is under the canvas here)
     ID3D11ShaderResourceView *t = hole ? atlas_srv
                                   : tid > MB_STREAM_TEX ? (ID3D11ShaderResourceView *)mb_stream_srv(tid - MB_STREAM_TEX)
@@ -980,8 +1077,11 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
     }
     if (!hole && tid > 0 && tid <= MB_STREAM_TEX && !t) encode_missing = 1;
     ctx->PSSetShaderResources(1, 1, t ? &t : &atlas_srv);
+    ID3D11PixelShader *run = own ? kind_ps(kind) : ps;
+    ctx->PSSetShader(run, NULL, 0);
     if (hole) ctx->OMSetBlendState(NULL, NULL, 0xffffffff);
-    ctx->DrawInstanced(6, (UINT)(end - start), 0, (UINT)start);
+    if (hole) ctx->DrawInstanced(6, (UINT)(end - start), 0, (UINT)start);
+    else draw_banded(f, start, end, count, pw, ph, run);
     if (hole) ctx->OMSetBlendState(blend, NULL, 0xffffffff);
     start = end;
   }
@@ -1090,7 +1190,7 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
 }
 
 // Without a window (mbui-render, src/render): WARP's device whatever the machine has (the same rasterizer on every
-// Windows: what the references are of, docs/determinism.md), a texture the size a window's swap chain would be as
+// Windows: what the references are of), a texture the size a window's swap chain would be as
 // the target, the text at the list's scale. A frame drawn there is drawn as a window's is, and its snapshot is of it.
 static ID3D11Texture2D *off_target;
 
@@ -1105,6 +1205,8 @@ extern "C" void mb_render_init_offscreen(double w, double h, double scale) {
   wchar_t warp_path[MAX_PATH];
   if (warp && GetModuleFileNameW(warp, warp_path, MAX_PATH)) fwprintf(stderr, L"WARP %ls\n", warp_path);
   make_pipeline();
+  // (with every kind's pixel shader: what is drawn here is what a window draws once they are made)
+  if (kinds_thread) WaitForSingleObject(kinds_thread, INFINITE);
   vw = w;
   vh = h;
   vscale = scale;

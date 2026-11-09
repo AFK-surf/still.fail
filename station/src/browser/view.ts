@@ -1,4 +1,4 @@
-// A person's view of a tab of the station's browser (docs/remote-screens.md): CDP's screencast for the frames (JPEG),
+// A person's view of a tab of the station's browser: CDP's screencast for the frames (JPEG),
 // Input.dispatch* for what they do, on a connection and a session of the view's own, so the agents' own sessions on
 // the tab are left as they are.
 //

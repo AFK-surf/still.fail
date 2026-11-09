@@ -1,61 +1,134 @@
-// A connect's page, one in every frame, laid out by its width (page_look.mbt) (web/src/pages/Connect.tsx ConnectPage, ConnectDetail, SlackSection,
+// A connect's page, one in every frame, laid out by its width (web/src/pages/Connect.tsx ConnectPage, ConnectDetail, SlackSection,
 // ConnectTrouble, TokenDialog, ModeChoices, RunSection, ModeDialog, ChooseSessionDialog, ConnectSessions,
 // OwnerDialog; Connect.css.ts; FeishuConnect.tsx FeishuSection, SecretDialog; FeishuConnect.css.ts): back to the
 // connects; who it is and whether it is up (its picture, its name, how it is, where it is reached, its station, who
 // owns it; what is done to it less often in its ⋯); what its link needs (Slack's tokens, or why it fails); how it runs
 // (its model, how its conversations become sessions and the one they go into); a Feishu connect's app; its latest
-// sessions. Everything said is the core's (its connects view, the core's ModeWords and ModeChange).
+// sessions. Everything said is the core's (its connects view, the core's ModeWords and ModeChange). Made once as nodes
+// of the window's tree in every frame (page_node); what has no node part yet (the tokens' fields, the model's picker,
+// the Slack app's form: shared with the old views of the new connect's dialog and a new chat) hosted as its old view.
 
 ///|
-/// A connect's page (ConnectPage, ConnectScreen), by its station and id: a wait until the connects are read (its
-/// station's among them); one gone, that it is not there.
-pub fn connect_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, station : String, id : String) -> Unit {
-  let connects = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(false) })
-  let found = items(connects.value, "items").iter().find_first(fn(i) {
-    text(Some(i), "station") == station && text(field(Some(i), "connect"), "id") == id
-  })
-  let wait = field(connects.value, "wait")
-  let key = "connect/" + station + "/" + id
-  let back = @sf.t("web-pages.settings.nav.connects")
-  if connects.value is None ||
-    (found is None && (flag(wait, "reading") || items(wait, "failing").length() > 0)) {
-    let error = match connects.error {
+/// A connect's page (ConnectPage, ConnectScreen) made once as nodes in node `v` (page_node, laid out by the `width`
+/// its frame gives it, narrow where none is given), by its station and id, as the core's connects view says it now: a
+/// wait until the connects are read (its station's among them), in its bones; what could not be read; one gone, that
+/// it is not there; else its page. `here`: who and where, as that changes; `stint`: its time on top (the pictures
+/// asked for on it); `tips`: the window's, else its own over it.
+pub fn connect_node(
+  v : @view.View,
+  src : Source,
+  core : Core,
+  here : () -> Here,
+  station : String,
+  id : String,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  stint~ : () -> Int,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+  tips? : @sf.TipLayer,
+) -> Unit {
+  // (what is said of what the pointer rests on: the frame's, over the window; else drawn over the page in the page's own
+  // node, each tip its holder over all of it there: history_node's)
+  let tips = match tips {
+    Some(t) => t
+    None => @sf.TipLayer::new(fn() { Some(v) })
+  }
+  let page_w = match width {
+    Some(w) => w
+    None => fn() { v.window().0 }
+  }
+  let connects = fn() { (core.topic)("connects", { "scope": str(here().workspace), "mine": Json::boolean(false) }).get() }
+  let found = fn() {
+    items(connects().value, "items")
+    .iter()
+    .find_first(fn(i) { text(Some(i), "station") == station && text(field(Some(i), "connect"), "id") == id })
+  }
+  let wait = fn() { field(connects().value, "wait") }
+  let error = fn() {
+    match connects().error {
       Some(e) => error_text(e)
       None => ""
     }
-    if error != "" {
-      @sf.page(c, on_back=core.pop, frame~, key, back, [fn() { @sf.page_note(c, error, bad=true) }])
+  }
+  let back = fn() { @sf.t("web-pages.settings.nav.connects") }
+  // (what it is now: read the first time, or what could not be; gone; found)
+  let state = fn() {
+    if connects().value is None || (found() is None && (flag(wait(), "reading") || items(wait(), "failing").length() > 0)) {
+      if error() != "" {
+        CdFailed
+      } else {
+        CdReading
+      }
+    } else if found() is None {
+      CdGone
     } else {
-      // (read the first time: a connect's page of made-up words, in its bones)
-      @sf.page_waiting(
-        c,
-        back,
-        text=@sf.t("web-pages.connect.loading"),
-        note={ reading: flag(wait, "reading"), text: "", failing: failing_of(wait) },
-        fn() {
-          connect_detail(c, @sfbase.sample_source, core.quiet(), here, frame, Some({
-            "station": "sample",
-            "stationName": Json::string(@sf.sample_words(4)),
-            "connect": {
-              "id": "sample",
-              "name": Json::string(@sf.sample_words(8)),
-              "kind": "slack",
-              "connection": { "state": "connected" },
-            },
-          }))
-        },
-      )
+      CdFound
     }
-    return
   }
-  match found {
-    None =>
-      @sf.page(c, on_back=core.pop, frame~, key, back, [
-        fn() { @sf.page_note(c, @sf.t("web-pages.connect.notFound", args=[("id", id)])) },
-      ])
-    Some(item) => connect_detail(c, src, core, here, frame, Some(item))
-  }
+  v.pick(state, fn(p, st) {
+    match st {
+      CdFailed =>
+        @sf.page_node(p, back, fn() { ["error"] }, fn(b, _) { @sf.page_note_node(b, error, bad=fn() { true }) }, on_back~, frame~, said?, width?, tips~)
+      CdGone =>
+        @sf.page_node(p, back, fn() { ["gone"] }, fn(b, _) {
+          @sf.page_note_node(b, fn() { @sf.t("web-pages.connect.notFound", args=[("id", id)]) })
+        }, on_back~, frame~, said?, width?, tips~)
+      // (read the first time: a connect's page of made-up words, in its bones, through a core that answers nothing)
+      CdReading => {
+        let sample = Some(cd_sample())
+        let quiet = core.quiet()
+        let note = fn() -> @sf.WaitNote { { reading: flag(wait(), "reading"), text: @sf.t("web-pages.connect.loading"), failing: failing_of(wait()) } }
+        @sf.page_node(
+          p,
+          back,
+          fn() { ["sample"] },
+          fn(b, _) {
+            @sf.waiting_node(b, fn(s) { cd_blocks(s, @sfbase.sample_source, quiet, here, fn() { sample }, tips, stint, page_w) }, note~)
+          },
+          on_back~,
+          frame~,
+          said?,
+          width?,
+          tips~,
+          head=fn(h) {
+            @sf.waiting_node(h, fn(s) { cd_identity_node(s, quiet, here, "sample", fn() { sample }, tips, stint) }, note=fn() {
+              { reading: true, text: "", failing: [] }
+            })
+          },
+        )
+      }
+      CdFound => {
+        // (while it is found: gone, the page is CdGone's and this one let go with its pick)
+        let item = found
+        let cv = fn() { field(item(), "connect") }
+        // (named by what it is of where a frame's bar names it, 连接: its head of its own says its name)
+        @sf.page_node(
+          p,
+          fn() { @sf.t("android-misc.bar.place.connects") },
+          fn() { cd_keys(cv()) },
+          fn(b, key) { cd_block(b, src, core, here, station, item, key, tips, stint, page_w) },
+          on_back~,
+          frame~,
+          said?,
+          width?,
+          tips~,
+          actions=fn(a) { cd_menu_node(a, core, here, station, cv) },
+          head=fn(h) { cd_identity_node(h, core, here, station, item, tips, stint) },
+        )
+      }
+    }
+  })
 }
+
+///|
+/// What a connect's page is now (connect_node's).
+priv enum CdState {
+  CdFailed
+  CdReading
+  CdGone
+  CdFound
+} derive(Eq)
 
 ///|
 /// What a block of a page shows, said as its data (what it reads: its version on its page's list, @sf.page's `keys`).
@@ -67,144 +140,192 @@ pub fn json_sign(v : Json?) -> String {
 }
 
 ///|
-/// The page of a connect found (ConnectDetail), the same parts in the same order on every screen: who it is and whether
-/// it is up (its head); what its link needs first where it does (Slack's tokens, or why it fails); how it runs (its
-/// model, how its conversations become sessions, the one they go into); its app (a Feishu one's ID and secret, a Slack
-/// one's look and permissions, folded); its latest sessions.
-fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, item : Json?) -> Unit {
-  let cv = field(item, "connect")
-  let station = text(item, "station")
-  let id = text(cv, "id")
-  let feishu = text(cv, "kind") == "feishu"
-  let blocks : Array[() -> Unit] = []
-  // (each block by what it is and what it shows: one come or gone opens or closes where it is, one showing another
-  // thing goes to its height, @sf.page's `keys`)
-  let keys : Array[(String, String)] = []
-  let sign = json_sign(cv)
-  // what its link needs: Slack's tokens, or why it fails (a Feishu connect's only why)
-  let state = text(field(cv, "connection"), "state")
-  if !feishu && state == "no_tokens" {
-    blocks.push(fn() { cd_slack_section(c, core, station, cv) })
-    keys.push(("tokens", sign))
-  } else if cd_trouble(cv) != "" {
-    blocks.push(fn() { cd_callout(c, cd_trouble(cv)) })
-    keys.push(("trouble", cd_trouble(cv)))
+/// A connect made up, for its page while the connects are read (in its bones).
+fn cd_sample() -> Json {
+  {
+    "station": "sample",
+    "stationName": Json::string(@sf.sample_words(4)),
+    "connect": { "id": "sample", "name": Json::string(@sf.sample_words(8)), "kind": "slack", "connection": { "state": "connected" } },
   }
-  blocks.push(fn() { cd_run_section(c, src, core, here, station, item) })
-  keys.push(("run", json_sign(item)))
-  if feishu {
-    if field(cv, "feishu") is Some(Object(_)) {
-      blocks.push(fn() { cd_feishu_section(c, core, station, cv) })
-      keys.push(("feishu", sign))
-    }
-  } else {
-    blocks.push(fn() { slack_app_section(c, core, station, cv) })
-    keys.push(("app", sign))
-  }
-  blocks.push(fn() { cd_sessions(c, core, station, item) })
-  keys.push(("sessions", json_sign(item)))
-  @sf.page(c, on_back=core.pop, frame~, "connect/" + station + "/" + id, text(cv, "name"), blocks, keys~, small=@sf.t("android-misc.bar.place.connects"), head=fn() {
-    cd_identity(c, core, here, station, text(item, "stationName"), cv)
-  })
 }
 
 ///|
-/// Who it is and whether it is up (its head): its picture, its name, where people reach it and its station; how it is
-/// (being reconnected, switched or saved: a ring and so; failed a moment ago: a red mark and so; else its dot and
-/// state) and who owns it; its ⋯ at the end.
-fn cd_identity(c : @ui.Ctx, core : Core, here : Here, station : String, station_name : String, cv : Json?) -> Unit {
-  let id = text(cv, "id")
-  let on = [("station", station), ("id", id)]
-  let reconnecting = is_doing(core, ["connect.reconnect"], on)
-  let saving = is_doing(core, ["connect.put"], on)
-  let switching = saving && cd_switching.get(station + "/" + id).unwrap_or(false)
-  let doing = if reconnecting {
-    @sf.t("common.reconnecting")
-  } else if switching {
-    @sf.t(if flag(cv, "enabled") { "web-pages.connect.disabling" } else { "web-pages.connect.enabling" })
-  } else if saving {
-    @sf.t("common.saving")
-  } else {
-    ""
+/// The blocks of a connect's page (ConnectDetail), the same parts in the same order on every screen, by what they are:
+/// what its link needs first where it does (Slack's tokens, or why it fails); how it runs; its app (a Feishu one's ID
+/// and secret, a Slack one's look and permissions, folded); its latest sessions.
+fn cd_keys(cv : Json?) -> Array[String] {
+  let feishu = text(cv, "kind") == "feishu"
+  // (a Comma connect has no app of its own: its line is all it connects with)
+  let comma = text(cv, "kind") == "comma"
+  let out : Array[String] = []
+  if !feishu && !comma && text(field(cv, "connection"), "state") == "no_tokens" {
+    out.push("tokens")
+  } else if cd_trouble(cv) != "" {
+    out.push("trouble")
   }
-  let failing = match failed_of(core, ["connect.reconnect"], on) {
-    Some(_) => @sf.t("web-pages.connect.reconnectFailedShort")
-    None =>
-      match failed_of(core, ["connect.put"], on) {
-        Some(_) => @sf.t("web-pages.connect.saveFailedShort")
-        None => ""
-      }
+  out.push("run")
+  if feishu {
+    if field(cv, "feishu") is Some(Object(_)) {
+      out.push("feishu")
+    }
+  } else if !comma {
+    out.push("app")
   }
-  @sf.own_head(
-    c,
-    fn(side) { cd_avatar(c, core, cv, side) },
-    text(cv, "name"),
-    lines=[join([text(cv, "placeText"), station_name], " · ")],
-    state=fn() {
-      if doing != "" {
-        @sf.spinner(c, size=cd_icon) |> ignore
-        c.text(doing, style=cd_sub_words) |> ignore
-      } else if failing != "" {
-        doing_mark(c, false, Some(failing), inline=true)
-        c.text(failing, style=cd_sub_words) |> ignore
-      } else {
-        @sf.status_dot(c, text(cv, "presence"))
-        c.text(text(cv, "statusText"), style=cd_sub_words) |> ignore
-      }
-      c.text(@sf.t("web-pages.connect.owner"), style=cd_sub_words) |> ignore
-      cn_owner(c, core, station + "/" + text(cv, "id"), field(cv, "createdBy"))
+  out.push("sessions")
+  out
+}
+
+///|
+/// A connect's page's blocks all at once (what is shown in their bones while it is read), its page `page_w` wide.
+fn cd_blocks(
+  v : @view.View,
+  src : Source,
+  core : Core,
+  here : () -> Here,
+  item : () -> Json?,
+  tips : @sf.TipLayer,
+  stint : () -> Int,
+  page_w : () -> Double,
+) -> Unit {
+  for key in cd_keys(field(@signals.untracked(item), "connect")) {
+    cd_block(v, src, core, here, text(@signals.untracked(item), "station"), item, key, tips, stint, page_w)
+  }
+}
+
+///|
+/// The block `key` of the page of `item` (as it is now) in `b`.
+fn cd_block(
+  b : @view.View,
+  src : Source,
+  core : Core,
+  here : () -> Here,
+  station : String,
+  item : () -> Json?,
+  key : String,
+  tips : @sf.TipLayer,
+  stint : () -> Int,
+  page_w : () -> Double,
+) -> Unit {
+  let cv = fn() { field(item(), "connect") }
+  let id = @signals.untracked(fn() { text(cv(), "id") })
+  match key {
+    "tokens" => cd_slack_node(b, core, station, id, cv)
+    "trouble" =>
+      b.box(fn(k) {
+        @sf.style_node(k, fn() { cd_amber })
+        k.ground(By(fn() { @sf.theme().p.amber_bg })) |> ignore
+        @sf.words_node(k, fn() { cd_trouble(cv()) }, fn() { cd_words }) |> ignore
+      })
+      |> ignore
+    "run" => cd_run_node(b, src, core, here, station, item)
+    "feishu" => cd_feishu_node(b, core, station, cv)
+    "app" => slack_app_node(b, core, station, id, page_w, tips)
+    _ => cd_sessions_node(b, core, station, item, tips)
+  }
+}
+
+///|
+/// Who it is and whether it is up (its head, `item` as it is now): its picture, its name, where people reach it and
+/// its station; how it is (being reconnected, switched or saved: a ring and so; failed a moment ago: a red mark and so;
+/// else its dot and state) and who owns it; its ⋯ at the end.
+fn cd_identity_node(
+  h : @view.View,
+  core : Core,
+  here : () -> Here,
+  station : String,
+  item : () -> Json?,
+  tips : @sf.TipLayer,
+  stint : () -> Int,
+) -> Unit {
+  let cv = fn() { field(item(), "connect") }
+  let on = fn() { [("station", station), ("id", text(cv(), "id"))] }
+  let doing = fn() {
+    let saving = is_doing(core, ["connect.put"], on())
+    if is_doing(core, ["connect.reconnect"], on()) {
+      @sf.t("common.reconnecting")
+    } else if saving && cd_switching.get(station + "/" + text(cv(), "id")).unwrap_or(false) {
+      @sf.t(if flag(cv(), "enabled") { "web-pages.connect.disabling" } else { "web-pages.connect.enabling" })
+    } else if saving {
+      @sf.t("common.saving")
+    } else {
+      ""
+    }
+  }
+  let failing = fn() {
+    match failed_of(core, ["connect.reconnect"], on()) {
+      Some(_) => @sf.t("web-pages.connect.reconnectFailedShort")
+      None =>
+        match failed_of(core, ["connect.put"], on()) {
+          Some(_) => @sf.t("web-pages.connect.saveFailedShort")
+          None => ""
+        }
+    }
+  }
+  @sf.own_head_node(
+    h,
+    fn(m, side) { cd_avatar_node(m, core, cv, side, stint) },
+    fn() { text(cv(), "name") },
+    lines=fn() { [join([text(cv(), "placeText"), text(item(), "stationName")], " · ")] },
+    state=fn(st) {
+      st.pick(fn() { if doing() != "" { 1 } else if failing() != "" { 2 } else { 0 } }, fn(p, k) {
+        p.row(Is(true)).gap(Is(cd_state_gap)).lines_up(Is(Some(Middle))) |> ignore
+        match k {
+          1 => {
+            @sf.spinner_node(p, size=cd_icon) |> ignore
+            @sf.words_node(p, doing, fn() { cd_sub_words }) |> ignore
+          }
+          2 => {
+            doing_mark_node(p, fn() { false }, fn() { Some(failing()) }, tips~)
+            @sf.words_node(p, failing, fn() { cd_sub_words }) |> ignore
+          }
+          _ => {
+            @sf.state_dot_node(p, fn() { text(cv(), "presence") })
+            @sf.words_node(p, fn() { text(cv(), "statusText") }, fn() { cd_sub_words }) |> ignore
+          }
+        }
+      })
+      @sf.words_node(st, fn() { @sf.t("web-pages.connect.owner") }, fn() { cd_sub_words }) |> ignore
+      cn_owner_node(st, core, fn() { field(cv(), "createdBy") }, tips, stint)
     },
-    actions=fn() { cd_menu(c, core, here, station, cv) },
+    actions=fn(a) { cd_menu_node(a, core, here, station, cv) },
   )
 }
+
+///|
+/// How it stands in its head's line (head_state's gap=S2, its parts as one).
+let cd_state_gap : Double = 8.0
 
 ///|
 /// Whether the connect's last write was its turning on or off (said as such meanwhile), by station/id.
 // kept across runs: said by the menu's 停用 and 启用; connect_reset empties it
 let cd_switching : Map[String, Bool] = {}
 
-
 ///|
-fn connect_reset() -> Unit {
-  cd_switching.clear()
-  cd_all_sessions.clear()
-  slack_reset()
-  slack_app_reset()
+/// What is done to it less often (Menu), its ⋯ in `a`: pressed, its menu by it at its end, as the connect is then:
+/// reconnecting it, its token (a Feishu one's secret) replaced, Slack (or its console) opened; it turned off or on,
+/// handed to another; deleted, asked first.
+fn cd_menu_node(a : @view.View, core : Core, here : () -> Here, station : String, cv : () -> Json?) -> Unit {
+  @sf.icon_action_opens_node(a, "more", fn() { @sf.t("common.more") }, fn(m) {
+    let (x, y, w, h) = m.placed_window_now()
+    @sf.menu(cd_menu_items(core, @signals.untracked(here), station, @signals.untracked(cv)), from=At(x, y, w, h), along=End)
+  })
+  |> ignore
 }
 
 ///|
-/// The connect's call to the core with its station and id, said done by `done`.
-fn cd_act(core : Core, station : String, id : String, what : String, name : String, more : Array[(String, Json)], done? : String = "") -> Unit {
-  let p = [("station", str(station)), ("id", str(id))]
-  p.append(more)
-  @settings.act(core, what, name, obj(p), done~)
-}
-
-///|
-/// Saved (useSaveConnect: `connect.put` with what changed), said by `done`.
-fn cd_put(core : Core, station : String, id : String, input : Json, done? : String = "") -> Unit {
-  cd_act(core, station, id, @sf.t("common.save"), "connect.put", [("input", input)], done~)
-}
-
-///|
-/// What is done to it less often (Menu): reconnecting it, its token (a Feishu one's secret) replaced, Slack (or its
-/// console) opened; it turned off or on, handed to another; deleted, asked first.
-fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) -> Unit {
-  let t = @sf.theme()
+/// The connect's menu's items, as it is now (cd_menu_node's).
+fn cd_menu_items(core : Core, here : Here, station : String, cv : Json?) -> Array[@sf.MenuItem?] {
   let id = text(cv, "id")
   let me = station + "/" + id
   let on = [("station", station), ("id", id)]
   let feishu = text(cv, "kind") == "feishu"
+  let comma = text(cv, "kind") == "comma"
   let reconnecting = is_doing(core, ["connect.reconnect"], on)
   let saving = is_doing(core, ["connect.put"], on)
   let conn = field(cv, "connection")
   let up = text(conn, "state") == "connected" || text(conn, "state") == "reconnecting"
   let slack_url = if up { text(field(conn, "workspace"), "url") } else { "" }
   let console = text(field(cv, "feishu"), "console")
-  if !@sf.icon_action(c, "more", "connect-more/" + me, @sf.t("common.more")) {
-    return
-  }
-  let mid = c.id("connect-more/" + me)
   let delete = fn() {
     let sessions = text_number(cv, "sessions")
     confirm(
@@ -229,7 +350,10 @@ fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) 
         cd_act(core, station, id, @sf.t("web-pages.connect.reconnect"), "connect.reconnect", [], done=@sf.t("web-pages.connect.reconnected"))
       }),
     ),
-    Some(
+  ]
+  // (a Comma connect's line is made again in Comma: there is no token of its own to replace here)
+  if !comma {
+    items.push(Some(
       @sf.menu_item_of(@sf.t(if feishu { "web-pages.connect.feishu.replace" } else { "web-pages.connect.replaceToken" }), icon="key", fn() {
         if feishu {
           cd_secret_dialog(core, station, cv)
@@ -237,9 +361,9 @@ fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) 
           cd_token_dialog(core, station, cv)
         }
       }),
-    ),
-  ]
-  if !feishu && slack_url != "" {
+    ))
+  }
+  if !feishu && !comma && slack_url != "" {
     items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.openSlack"), icon="external", fn() { (core.open_link)(slack_url) })))
   }
   if feishu && console != "" {
@@ -262,9 +386,367 @@ fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) 
     ),
   )
   items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.changeOwner"), icon="user", fn() { cd_owner_dialog(core, here, station, cv) })))
+  // (to another station of its workspace, which runs it from then on; a station from before cannot)
+  if flag(cv, "moves") {
+    items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.move"), icon="arrow-right", fn() { cd_station_dialog(core, here, station, cv, true) })))
+  }
   items.push(None)
   items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.delete"), icon="trash", danger=true, delete)))
-  @sf.menu(items, from=Of(mid), along=End)
+  items
+}
+
+///|
+/// How it runs, in one card (RunSection: runCard), `item` as it is now: the model it runs and who runs it (the core's
+/// pick of `connect:<id>`, its picker an old view's, hosted; none on its runtime: to its profiles), how its
+/// conversations become sessions (更改), in single-session the one they go into (切换; being switched, a ring beside
+/// it); under them what a change reaches.
+fn cd_run_node(b : @view.View, src : Source, core : Core, here : () -> Here, station : String, item : () -> Json?) -> Unit {
+  let cv = fn() { field(item(), "connect") }
+  let id = @signals.untracked(fn() { text(cv(), "id") })
+  let changes = fn() { flag(item(), "runtimeChanges") }
+  // the models its station can run, each with the runtimes it runs on (the core's station view)
+  let models = fn() {
+    let runtime = text(field(cv(), "bind"), "runtime")
+    let sv = match @settings.stations_of(core, here()).value {
+      Some(Array(a)) => a.iter().find_first(fn(s) { text(Some(s), "station") == station })
+      _ => None
+    }
+    items(sv, "models").filter(fn(m) { changes() || strings(Some(m), "runtimes").contains(runtime) })
+  }
+  let bind_on = [("station", station), ("connect", id)]
+  let binding = fn() { is_doing(core, ["connect.bindSession"], bind_on) }
+  @sf.section_node(b, fn() { @sf.t("web-pages.connect.run") }, fn(sec) {
+    @sf.group_node(sec, fn(g) {
+      // its model: picked here, or none its station runs for its runtime (to the station's profiles)
+      g.pick(fn() { models().length() == 0 }, fn(p, none) {
+        if none {
+          @sf.link_row_node(p, fn() { @sf.t("web-pages.profiles.models") }, fn() { (core.push)(Profiles(station)) }, note=fn() {
+            @sf.t("web-pages.connect.noModelsFor", args=[("runtime", text(cv(), "runtimeText"))])
+          })
+        } else {
+          // (its title, and at its end, in the room the title leaves, its model's control: said_row's `value`)
+          @sf.said_row_node(p, fn() { @sf.t("web-pages.profiles.models") }, fn(e) {
+            model_triple_node(e, src, station, "connect:" + id, saved=@sf.t("web-pages.connect.bindSaved"))
+          })
+        }
+      })
+      // how its conversations become sessions, switched in a dialog
+      @sf.link_row_node(g, fn() { @sf.t("web-pages.connect.session") }, fn() { cd_mode_dialog(core, station, @signals.untracked(item)) }, value=fn() {
+        text(cv(), "modeLabel")
+      }, note=fn() { text(cv(), "modeSentence") })
+      // the station its new conversations run on (a connect is its workspace's: its chats may run on any station of
+      // it), picked in a dialog; a single-session connect's one session, and a station from before, say none
+      g.show(fn() { text(cv(), "mode") != "single-session" && flag(cv(), "moves") && text(cv(), "kind") != "comma" }, fn(s) {
+        @sf.link_row_node(
+          s,
+          fn() { @sf.t("web-pages.connect.startsOn") },
+          fn() { cd_station_dialog(core, @signals.untracked(here), station, @signals.untracked(cv), false) },
+          // (a line of its own: a station's name may be long)
+          note=fn() {
+            let starts = text(cv(), "startsOn")
+            cd_station_name(core, here(), if starts == "" { station } else { starts })
+          },
+        )
+      })
+      // the one they all go into: its chat, another chosen
+      g.show(fn() { text(cv(), "mode") == "single-session" }, fn(s) {
+        let bound = fn() { field(item(), "bound") }
+        s.pick(fn() { bound() is Some(Object(_)) }, fn(r, has_bound) {
+          @sf.link_row_node(
+            r,
+            fn() { @sf.t("web-pages.connect.current") },
+            fn() {
+              let bv = @signals.untracked(bound)
+              (core.open_chat)(station, text(bv, "key"), text(bv, "titleText"))
+            },
+            value=fn() { if has_bound { text(bound(), "titleText") } else { @sf.t("web-pages.connect.noSession") } },
+            goes=has_bound,
+          )
+        })
+        s.pick(binding, fn(r, busy) {
+          @sf.link_row_node(
+            r,
+            fn() { @sf.t("web-pages.connect.switch") },
+            fn() { cd_choose_dialog(core, station, @signals.untracked(item)) },
+            chevron=false,
+            goes=!busy,
+            tail=fn(e) { doing_mark_node(e, binding, fn() { failed_of(core, ["connect.bindSession"], bind_on) }) },
+          )
+        })
+      })
+    })
+    @sf.page_note_node(sec, fn() {
+      @sf.t(if changes() { "web-pages.connect.runtimeChanges" } else { "web-pages.connect.runtimeNote" }, args=[("runtime", text(cv(), "runtimeText"))])
+    })
+  })
+}
+
+///|
+/// A Feishu connect's app (FeishuSection: in a run card, its labels 84 wide), `cv` as it is now: its App ID (its
+/// console opened beside it), its App Secret masked (replaced beside it), which of Feishu or Lark it is on.
+fn cd_feishu_node(b : @view.View, core : Core, station : String, cv : () -> Json?) -> Unit {
+  let app = fn() { field(cv(), "feishu") }
+  @sf.section_node(b, fn() { @sf.t("web-pages.connect.feishu.section") }, fn(sec) {
+    @sf.group_node(sec, fn(g) {
+      g.pick(fn() { text(app(), "console") }, fn(r, url) {
+        if url != "" {
+          @sf.link_row_node(r, fn() { "App ID" }, fn() { (core.open_link)(url) }, note=fn() { text(app(), "appId") }, value=fn() {
+            @sf.t("web-pages.connect.feishu.openConsole")
+          }, out=true)
+        } else {
+          @sf.link_row_node(r, fn() { "App ID" }, fn() {  }, goes=false, note=fn() { text(app(), "appId") })
+        }
+      })
+      @sf.link_row_node(
+        g,
+        fn() { "App Secret" },
+        fn() { cd_secret_dialog(core, station, @signals.untracked(cv)) },
+        note=fn() { if text(app(), "appSecret") == "" { "••••••••" } else { text(app(), "appSecret") } },
+        value=fn() { @sf.t("web-pages.connect.feishu.replace") },
+        value_lit=true,
+        chevron=false,
+      )
+      @sf.link_row_node(g, fn() { @sf.t("web-pages.connect.feishu.version") }, fn() {  }, value=fn() {
+        if text(app(), "domain") == "lark" { "Lark" } else { @sf.t("web-pages.connect.feishu.name") }
+      }, goes=false)
+    })
+  })
+}
+
+///|
+/// Its latest sessions (ConnectSessions), `item` as it is now: each its title, how it is in a pill, when it was last
+/// active, opening its chat; five, the rest asked for (all shown as it was left, kept with its connect); none, that
+/// none came yet.
+fn cd_sessions_node(b : @view.View, core : Core, station : String, item : () -> Json?, tips : @sf.TipLayer) -> Unit {
+  ignore(tips)
+  let cv = fn() { field(item(), "connect") }
+  let me = station + "/" + @signals.untracked(fn() { text(cv(), "id") })
+  let all : @signals.Signal[Bool] = @signals.signal(cd_all_sessions.get(me).unwrap_or(false), same=fn(a, b) { a == b })
+  let sessions = fn() { items(item(), "sessions") }
+  @sf.section_node(b, fn() { @sf.t("web-pages.connect.recent") }, fn(sec) {
+    @sf.group_node(sec, fn(g) {
+      g.show(fn() { sessions().length() == 0 }, fn(r) {
+        @sf.link_row_node(r, fn() { @sf.t(cd_kind_key("web-pages.connect.recentNone", cv()), args=[("name", text(cv(), "name"))]) }, fn() {  }, goes=false)
+      })
+      g.each(
+        fn() {
+          let s = sessions()
+          if all.get() || s.length() <= cd_sessions_shown { s } else { s[:cd_sessions_shown].to_array() }
+        },
+        fn(s) { text(Some(s), "key") },
+        fn(r, s) { cd_session_row_node(r, core, station, fn() { Some(s.get()) }) },
+      )
+      g.show(fn() { sessions().length() > cd_sessions_shown }, fn(r) {
+        @sf.link_row_node(
+          r,
+          fn() {
+            if all.get() {
+              @sf.t("web-pages.profiles.collapse")
+            } else {
+              @sf.t("web-pages.connect.showAll", args=[("n", sessions().length().to_string())])
+            }
+          },
+          fn() {
+            let now = !all.untracked()
+            cd_all_sessions[me] = now
+            all.set(now)
+          },
+          chevron=false,
+        )
+      })
+    })
+  })
+}
+
+///|
+/// A session of it (listRow), `s` as it is now: its title, how it is in a pill (StatusText: its check or wait, else
+/// its words), when it was last active at its end; pressed, its chat.
+fn cd_session_row_node(r : @view.View, core : Core, station : String, s : () -> Json?) -> Unit {
+  let tone = fn() -> @sf.PillTone {
+    match text(s(), "tone") {
+      "green" => Green
+      "blue" => Blue
+      "amber" => Amber
+      "red" => Red
+      "accent" => Accented
+      _ => Neutral
+    }
+  }
+  @sf.link_row_node(
+    r,
+    fn() { text(s(), "titleText") },
+    fn() {
+      let now = @signals.untracked(s)
+      (core.open_chat)(station, text(now, "key"), text(now, "titleText"))
+    },
+    value=fn() { text(field(field(s(), "time"), "lastActiveAt"), "ago") },
+    title_cut=true,
+    value_cut=true,
+    chevron=false,
+    tail=fn(e) {
+      // (its check or its wait before its words, and its tone: the pill made again as they change)
+      let icon = fn() {
+        match text(s(), "statusLead") {
+          "done" => "check"
+          "wait" => "wait"
+          _ => ""
+        }
+      }
+      // (giving way on its row as its title does, each cut short: neither takes the row from the other)
+      e.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+      e.pick(fn() { (icon(), tone()) }, fn(p, look) {
+        p.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        @sf.pill_node(
+          p,
+          fn() {
+            match text(s(), "statusLead") {
+              "done" | "wait" => text(s(), "statusRest")
+              _ => text(s(), "statusText")
+            }
+          },
+          tone=look.1,
+          icon=look.0,
+        )
+        |> ignore
+      })
+    },
+  )
+}
+
+///|
+/// A connect as its people see it (ui.tsx ConnectAvatar) in its head's tile `m`, `side` across: its bot's picture,
+/// filling the tile with the tile's corners (the app's icon it is: a square, as Slack shows it), once it is here; its
+/// kind's mark till then, and where it is not said.
+fn cd_avatar_node(m : @view.View, core : Core, cv : () -> Json?, side : Double, stint : () -> Int) -> Unit {
+  let key = fn() {
+    match opt_text(cv(), "botImage") {
+      Some(image) => (core.picture)(image, stint())
+      None => ""
+    }
+  }
+  m.box(fn(d) {
+    d.width(Is(Some(side))).height(Is(Some(side))) |> ignore
+    let ready = fn() { key() != "" && d.image_ready(key(), side * d.pixel_scale()) }
+    d.show(ready, fn(p) {
+      p
+      .width(Is(Some(side)))
+      .height(Is(Some(side)))
+      .radius(By(fn() { @ui.tree_theme().corner(Lg) }))
+      .image(By(fn() { Some((key(), "", 8192)) }))
+      .image_covers(Is(true))
+      |> ignore
+    })
+    // (its kind's mark three fifths of it, on a tile of its side: no larger than the room its head gives it, which
+    // a tile 2.4 times the mark was, over the lines under it on a phone)
+    d.show(fn() { !ready() }, fn(t) {
+      @sf.style_node(t, fn() { cd_avatar_box })
+      t.width(Is(Some(side))).height(Is(Some(side))).ground(By(fn() { @sf.theme().p.paper })) |> ignore
+      cn_kind_node(t, fn() { text(cv(), "kind") }, (side * cd_avatar_mark).round())
+    })
+  })
+  |> ignore
+}
+
+///|
+fn connect_reset() -> Unit {
+  cd_switching.clear()
+  cd_all_sessions.clear()
+  slack_reset()
+  slack_app_reset()
+}
+
+///|
+/// The connect's call to the core with its station and id, said done by `done`.
+fn cd_act(core : Core, station : String, id : String, what : String, name : String, more : Array[(String, Json)], done? : String = "") -> Unit {
+  let p = [("station", str(station)), ("id", str(id))]
+  p.append(more)
+  @settings.act(core, what, name, obj(p), done~)
+}
+
+///|
+/// Saved (useSaveConnect: `connect.put` with what changed), said by `done`.
+fn cd_put(core : Core, station : String, id : String, input : Json, done? : String = "") -> Unit {
+  cd_act(core, station, id, @sf.t("common.save"), "connect.put", [("input", input)], done~)
+}
+
+///|
+/// A station of the workspace by its name (its address till its view is read).
+fn cd_station_name(core : Core, here : Here, address : String) -> String {
+  match @settings.stations_of(core, here).value {
+    Some(Array(a)) =>
+      match a.iter().find_first(fn(s) { text(Some(s), "station") == address }) {
+        Some(s) if text(Some(s), "name") != "" => text(Some(s), "name")
+        _ => address
+      }
+    _ => address
+  }
+}
+
+///|
+/// A station of its workspace picked for the connect: where its new conversations run (`moving` false: its own
+/// station first, said as such), or where it moves to (`moving`: the others online, the connect itself and its tokens
+/// going there, its chats staying where they run).
+fn cd_station_dialog(core : Core, here : Here, station : String, cv : Json?, moving : Bool) -> Unit {
+  let id = text(cv, "id")
+  let key = "connect-station/" + (desk_dialogs.val + 1).to_string()
+  let starts = text(cv, "startsOn")
+  let choices = fn() -> Array[(String, String)] {
+    let all = match @settings.stations_of(core, here).value {
+      Some(Array(a)) => a
+      _ => []
+    }
+    let out : Array[(String, String)] = []
+    if !moving {
+      out.push(("", @sf.t("web-pages.connect.startsHere", args=[("station", cd_station_name(core, here, station))])))
+    }
+    for s in all {
+      let address = text(Some(s), "station")
+      if address != station && (!moving || flag(Some(s), "online")) {
+        out.push((address, cd_station_name(core, here, address)))
+      }
+    }
+    out
+  }
+  let picked : Ref[String] = Ref(
+    if moving {
+      match choices().get(0) {
+        Some(o) => o.0
+        None => ""
+      }
+    } else {
+      starts
+    },
+  )
+  open_dialog(
+    @sf.t(if moving { "web-pages.connect.move" } else { "web-pages.connect.startsOn" }),
+    description=@sf.t(if moving { "web-pages.connect.moveLead" } else { "web-pages.connect.startsOnLead" }),
+    fn(c, _) {
+      let options = choices()
+      if options.length() == 0 {
+        c.text(@sf.t("web-pages.connect.moveNone"), style=cn_note) |> ignore
+      } else {
+        @sf.field(c, @sf.t("web-pages.connect.station"), fn() {
+          @sf.select(c, key + "/select", picked.val, options, fn(v) { picked.val = v }, label=@sf.t("web-pages.connect.station"), w=cd_select_w)
+        })
+      }
+    },
+    fn(c, shut) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() { shut() }) |> ignore
+      if moving {
+        @sf.button(c, @sf.t("web-pages.connect.moveDo"), key=key + "/save", tone=Primary, disabled=picked.val == "", on_press=fn() {
+          // back to the list: the connect is the other station's from now on
+          (core.pop)()
+          cd_act(core, station, id, @sf.t("web-pages.connect.move"), "connect.move", [("to", str(picked.val))], done=@sf.t("web-pages.connect.moved"))
+          shut()
+        }) |> ignore
+      } else {
+        @sf.button(c, @sf.t("common.save"), key=key + "/save", tone=Primary, disabled=picked.val == starts, on_press=fn() {
+          cd_put(core, station, id, obj([("station", str(picked.val))]), done=@sf.t("web-pages.connect.startsOnSaved"))
+          shut()
+        }) |> ignore
+      }
+    },
+  )
 }
 
 ///|
@@ -299,40 +781,31 @@ fn cd_trouble(cv : Json?) -> String {
 }
 
 ///|
-/// What is wrong said on amber (additions.css.ts callout amber: 12 by 14 in, a corner of 14, the ui's 13 in the ink).
-fn cd_callout(c : @ui.Ctx, words : String) -> Unit {
-  c.box(style=cd_amber.then(@ui.style(bg=Data(@sf.theme().p.amber_bg))), fn() {
-    c.text(words, style=cd_words) |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The Slack link needing its tokens (SlackSection): how to make the app, the tokens' fields, 保存并连接 checking them
-/// first (then they are saved and it connects).
-fn cd_slack_section(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> Unit {
-  let id = text(cv, "id")
-  let tk = slack_tokens(c, core, station, "connect-slack/" + station + "/" + id, connect=id)
-  let saving = is_doing(core, ["connect.put"], [("station", station), ("id", id)])
-  @sf.section(c, @sf.t("web-pages.connect.slack"), note=@sf.t("web-pages.connect.slackLead"), fn() {
-    @sf.page_card(c, footed=true, fn() {
-      create_app_steps(c, core, station, text(cv, "name"))
-      token_fields(c, core, tk)
-      @sf.card_foot(c, at_end=true, fn() {
-        if @sf.button(
-            c,
-            @sf.t("web-pages.connect.saveConnect"),
-            key="connect-save-tokens/" + id,
-            tone=Primary,
-            busy=tokens_busy(core, tk) || saving,
-            disabled=!tokens_ready(core, tk),
-          ) {
-          tokens_check(core, tk, fn() {
-            let input = obj([("slack", tokens_input(tk))])
-            tokens_clear(core, tk)
-            cd_put(core, station, id, input, done=@sf.t("web-pages.connect.tokenSavedConnecting"))
-          })
-        }
+/// The Slack link needing its tokens (SlackSection), as nodes in `b`: how to make the app, the tokens' fields, 保存并连接
+/// checking them first (then they are saved and it connects).
+fn cd_slack_node(b : @view.View, core : Core, station : String, id : String, cv : () -> Json?) -> Unit {
+  let tk = slack_tokens_draft(core, station, "connect-slack/" + station + "/" + id, id, "", "", fn(_, open) { open() })
+  let saving = fn() { is_doing(core, ["connect.put"], [("station", station), ("id", id)]) }
+  @sf.section_node(b, fn() { @sf.t("web-pages.connect.slack") }, note=fn() { @sf.t("web-pages.connect.slackLead") }, fn(s) {
+    @sf.page_card_node(s, footed=true, fn(k) {
+      create_app_steps_node(k, core, station, fn() { text(cv(), "name") })
+      token_fields_node(k, core, tk)
+      @sf.card_foot_node(k, at_end=true, fn(f) {
+        @sf.button_node(
+          f,
+          fn() { @sf.t("web-pages.connect.saveConnect") },
+          fn() {
+            tokens_check(core, tk, fn() {
+              let input = obj([("slack", tokens_input(tk))])
+              tokens_clear(core, tk)
+              cd_put(core, station, id, input, done=@sf.t("web-pages.connect.tokenSavedConnecting"))
+            })
+          },
+          tone=Primary,
+          busy=fn() { tokens_busy(core, tk) || saving() },
+          disabled=fn() { !tokens_ready(core, tk) },
+        )
+        |> ignore
       })
     })
   })
@@ -354,25 +827,26 @@ fn cd_token_dialog(core : Core, station : String, cv : Json?) -> Unit {
     },
     fn(c, shut) {
       let tk = slack_tokens(c, core, station, key, connect=id)
-      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() {
         shut()
         tokens_drop(core, key)
-      }
+      }) |> ignore
       let saving = is_doing(core, ["connect.put"], [("station", station), ("id", id)])
-      if @sf.button(
-          c,
-          @sf.t("web-pages.connect.saveReconnect"),
-          key=key + "/save",
-          tone=Primary,
-          busy=tokens_busy(core, tk) || saving,
-          disabled=!tokens_ready(core, tk),
-        ) {
-        tokens_check(core, tk, fn() {
-          cd_put(core, station, id, obj([("slack", tokens_input(tk))]), done=@sf.t("web-pages.connect.tokenSavedReconnecting"))
-          shut()
-          tokens_drop(core, key)
-        })
-      }
+      @sf.button(
+        c,
+        @sf.t("web-pages.connect.saveReconnect"),
+        key=key + "/save",
+        tone=Primary,
+        busy=tokens_busy(core, tk) || saving,
+        disabled=!tokens_ready(core, tk),
+        on_press=fn() {
+          tokens_check(core, tk, fn() {
+            cd_put(core, station, id, obj([("slack", tokens_input(tk))]), done=@sf.t("web-pages.connect.tokenSavedReconnecting"))
+            shut()
+            tokens_drop(core, key)
+          })
+        },
+      ) |> ignore
     },
   )
 }
@@ -426,103 +900,24 @@ fn mode_choices(c : @ui.Ctx, key : String, words : Json?, mode : String, mention
 }
 
 ///|
-/// How it runs, in one card (RunSection: runCard): the model it runs and who runs it (the core's pick of
-/// `connect:<id>`; none on its runtime: to its profiles), how its conversations become sessions (更改), in single-session
-/// the one they go into (切换; being switched, a ring beside it); under them that its runtime is its own for good.
-fn cd_run_section(c : @ui.Ctx, src : Source, core : Core, here : Here, station : String, item : Json?) -> Unit {
-  let cv = field(item, "connect")
-  let id = text(cv, "id")
-  let runtime = text(field(cv, "bind"), "runtime")
-  // the models its station can run, each with the runtimes it runs on (the core's station view)
-  let sv = match @settings.stations_of(core, here).value {
-    Some(Array(a)) => a.iter().find_first(fn(s) { text(Some(s), "station") == station })
-    _ => None
-  }
-  let models = items(
-      match sv {
-        Some(s) => Some(s)
-        None => None
-      },
-      "models",
-    ).filter(fn(m) { strings(Some(m), "runtimes").contains(runtime) })
-  let single = text(cv, "mode") == "single-session"
-  let bind_on = [("station", station), ("connect", id)]
-  let binding = is_doing(core, ["connect.bindSession"], bind_on)
-  @sf.section(c, @sf.t("web-pages.connect.run"), fn() {
-    @sf.group(c, fn() {
-      // its model: picked here, or none its station runs for its runtime (to the station's profiles)
-      if models.length() == 0 {
-        if @sf.link_row(
-            c,
-            "connect-no-models/" + id,
-            @sf.t("web-pages.profiles.models"),
-            note=@sf.t("web-pages.connect.noModelsFor", args=[("runtime", text(cv, "runtimeText"))]),
-          ) {
-          (core.push)(Profiles(station))
-        }
-      } else {
-        @sf.said_row(c, @sf.t("web-pages.profiles.models"), "", value=fn() {
-          model_triple(c, src, station, "connect:" + id, saved=@sf.t("web-pages.connect.bindSaved"))
-        })
-      }
-      // how its conversations become sessions, switched in a dialog
-      if @sf.link_row(
-          c,
-          "connect-mode/" + id,
-          @sf.t("web-pages.connect.session"),
-          value=text(cv, "modeLabel"),
-          note=text(cv, "modeSentence"),
-        ) {
-        cd_mode_dialog(core, station, item)
-      }
-      // the one they all go into: its chat, another chosen
-      if single {
-        let bound = field(item, "bound")
-        if @sf.link_row(
-            c,
-            "connect-bound/" + id,
-            @sf.t("web-pages.connect.current"),
-            value=if bound is Some(Object(_)) { text(bound, "titleText") } else { @sf.t("web-pages.connect.noSession") },
-            goes=bound is Some(Object(_)),
-          ) {
-          (core.open_chat)(station, text(bound, "key"), text(bound, "titleText"))
-        }
-        if @sf.link_row(
-            c,
-            "connect-switch/" + id,
-            @sf.t("web-pages.connect.switch"),
-            chevron=false,
-            goes=!binding,
-            tail=fn() { doing_mark(c, binding, failed_of(core, ["connect.bindSession"], bind_on), inline=true) },
-          ) {
-          cd_choose_dialog(core, station, item)
-        }
-      }
-    })
-    @sf.page_note(c, @sf.t("web-pages.connect.runtimeNote", args=[("runtime", text(cv, "runtimeText"))]))
-  })
-}
-
-///|
-/// Words to press beside a row's (chat.css.ts textButton in a runCardRow: underlined, the ui's 13 muted); whether it
-/// was pressed.
-fn cd_text_button(c : @ui.Ctx, key : String, label : String, disabled? : Bool = false) -> Bool {
+/// Words to press beside a row's (the ui's 13 muted); `on_press`, what pressing them does, as it is let go.
+fn cd_text_button(c : @ui.Ctx, key : String, label : String, disabled? : Bool = false, on_press~ : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(style=cd_text_button_box, id=if disabled { 0 } else { id }, disabled~, fn() {
     c.rich([@ui.span(label, underline=true)], style=if c.hovered(id) { cd_text_button_lit } else { cd_text_button_words })
     |> ignore
   })
   c.semantics(b, Button, id~, label~, disabled~)
-  !disabled && hit(c, id)
+  @sf.press_does(c, id, !disabled, Some(on_press))
 }
 
 ///|
-/// A link in its words (chat.css.ts inlineLink: the accent's ink, underlined); whether it was pressed.
-fn cd_link(c : @ui.Ctx, key : String, label : String) -> Bool {
+/// A link in its words (underlined); `on_press`, what pressing it does, as it is let go.
+fn cd_link(c : @ui.Ctx, key : String, label : String, on_press~ : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(style=cd_link_box, id~, fn() { c.rich([@ui.span(label, underline=true)], style=cd_link_words) |> ignore })
   c.semantics(b, Link, id~, label~)
-  hit(c, id)
+  c.on_press(id, on_press)
 }
 
 ///|
@@ -566,11 +961,11 @@ pub fn cd_mode_dialog(core : Core, station : String, item : Json?) -> Unit {
       }
     },
     fn(c, shut) {
-      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() {
         shut()
-      }
+      }) |> ignore
       let ch = change()
-      if @sf.button(c, text(ch, "action"), key=key + "/save", tone=Primary, disabled=!flag(ch, "changed")) {
+      @sf.button(c, text(ch, "action"), key=key + "/save", tone=Primary, disabled=!flag(ch, "changed"), on_press=fn() {
         let (mode, mention, threads) = next.val
         let input = [("mode", str(mode)), ("requireMention", Json::boolean(mention))]
         if text(cv, "kind") == "feishu" {
@@ -584,7 +979,7 @@ pub fn cd_mode_dialog(core : Core, station : String, item : Json?) -> Unit {
           done=@sf.t("web-pages.connect.modeChanged"),
         )
         shut()
-      }
+      }) |> ignore
     },
   )
 }
@@ -630,31 +1025,32 @@ fn cd_choose_dialog(core : Core, station : String, item : Json?) -> Unit {
       |> ignore
     },
     fn(c, shut) {
-      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() {
         shut()
-      }
+      }) |> ignore
       let fresh = choice.val == "new"
-      if @sf.button(
-          c,
-          @sf.t(if fresh { "web-pages.connect.createUse" } else { "web-pages.connect.useThis" }),
-          key=key + "/use",
-          tone=Primary,
-          disabled=opt_text(cv, "session") == Some(choice.val),
-        ) {
-        @settings.act(
-          core,
-          @sf.t("web-pages.connect.switch"),
-          "connect.bindSession",
-          obj([
-            ("station", str(station)),
-            ("connect", str(id)),
-            ("session", if fresh { Json::null() } else { str(choice.val) }),
-            ("title", str(title.text())),
-          ]),
-          done=@sf.t(if fresh { "web-pages.connect.sessionCreated" } else { "web-pages.connect.sessionSwitched" }),
-        )
-        shut()
-      }
+      @sf.button(
+        c,
+        @sf.t(if fresh { "web-pages.connect.createUse" } else { "web-pages.connect.useThis" }),
+        key=key + "/use",
+        tone=Primary,
+        disabled=opt_text(cv, "session") == Some(choice.val),
+        on_press=fn() {
+          @settings.act(
+            core,
+            @sf.t("web-pages.connect.switch"),
+            "connect.bindSession",
+            obj([
+              ("station", str(station)),
+              ("connect", str(id)),
+              ("session", if fresh { Json::null() } else { str(choice.val) }),
+              ("title", str(title.text())),
+            ]),
+            done=@sf.t(if fresh { "web-pages.connect.sessionCreated" } else { "web-pages.connect.sessionSwitched" }),
+          )
+          shut()
+        },
+      ) |> ignore
     },
   )
 }
@@ -667,75 +1063,6 @@ let cd_sessions_shown : Int = 5
 /// The connects whose sessions are all shown, by station/id.
 // kept across runs: said by 显示全部 and 收起; connect_reset empties it
 let cd_all_sessions : Map[String, Bool] = {}
-
-///|
-/// Its latest sessions (ConnectSessions): each its title, how it is in a pill, when it was last active, opening its
-/// chat; five, the rest asked for; none, that none came yet.
-fn cd_sessions(c : @ui.Ctx, core : Core, station : String, item : Json?) -> Unit {
-  let cv = field(item, "connect")
-  let me = station + "/" + text(cv, "id")
-  let sessions = items(item, "sessions")
-  let all = cd_all_sessions.get(me).unwrap_or(false)
-  @sf.section(c, @sf.t("web-pages.connect.recent"), fn() {
-    @sf.group(c, fn() {
-      if sessions.length() == 0 {
-        @sf.said_row(c, @sf.t(cd_kind_key("web-pages.connect.recentNone", cv), args=[("name", text(cv, "name"))]), "")
-      }
-      for i, s in sessions {
-        if !all && i >= cd_sessions_shown {
-          break
-        }
-        cd_session_row(c, core, station, Some(s))
-      }
-      if sessions.length() > cd_sessions_shown &&
-        @sf.link_row(
-          c,
-          "connect-sessions-all/" + me,
-          if all {
-            @sf.t("web-pages.profiles.collapse")
-          } else {
-            @sf.t("web-pages.connect.showAll", args=[("n", sessions.length().to_string())])
-          },
-          chevron=false,
-        ) {
-        cd_all_sessions[me] = !all
-      }
-    })
-  })
-}
-
-///|
-/// A session of it (listRow): its title, how it is in a pill (StatusText: its check or wait, else its words), when it
-/// was last active at its end; pressed, its chat.
-fn cd_session_row(c : @ui.Ctx, core : Core, station : String, s : Json?) -> Unit {
-  let key = text(s, "key")
-  let tone : @sf.PillTone = match text(s, "tone") {
-    "green" => Green
-    "blue" => Blue
-    "amber" => Amber
-    "red" => Red
-    "accent" => Accented
-    _ => Neutral
-  }
-  if @sf.link_row(
-      c,
-      "connect-session-row/" + key,
-      text(s, "titleText"),
-      value=text(field(field(s, "time"), "lastActiveAt"), "ago"),
-      title_cut=true,
-      value_cut=true,
-      chevron=false,
-      tail=fn() {
-        match text(s, "statusLead") {
-          "done" => @sf.pill(c, text(s, "statusRest"), tone~, icon="check")
-          "wait" => @sf.pill(c, text(s, "statusRest"), tone~, icon="wait")
-          _ => @sf.pill(c, text(s, "statusText"), tone~)
-        }
-      },
-    ) {
-    (core.open_chat)(station, key, text(s, "titleText"))
-  }
-}
 
 ///|
 /// It handed to another person (OwnerDialog): a member of the workspace picked, or any email while its members are not
@@ -787,11 +1114,11 @@ fn cd_owner_dialog(core : Core, here : Here, station : String, cv : Json?) -> Un
       }
     },
     fn(c, shut) {
-      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() {
         shut()
-      }
+      }) |> ignore
       let to = owner.val.trim(chars=" \t\n").to_owned()
-      if @sf.button(c, @sf.t("common.save"), key=key + "/save", tone=Primary, disabled=to == "" || owner.val == current) {
+      @sf.button(c, @sf.t("common.save"), key=key + "/save", tone=Primary, disabled=to == "" || owner.val == current, on_press=fn() {
         let people = items(workspace_view(core, here).value, "members")
         let chosen = people.iter().find_first(fn(p) { text(Some(p), "email").to_lower() == to.to_lower() })
         let name = match chosen {
@@ -800,47 +1127,9 @@ fn cd_owner_dialog(core : Core, here : Here, station : String, cv : Json?) -> Un
         }
         cd_put(core, station, id, obj([("owner", obj([("id", str(to)), ("name", str(name))]))]), done=@sf.t("web-pages.connect.ownerChanged"))
         shut()
-      }
+      }) |> ignore
     },
   )
-}
-
-///|
-/// A Feishu connect's app (FeishuSection: in a run card, its labels 84 wide): its App ID (its console opened beside
-/// it), its App Secret masked (replaced beside it), which of Feishu or Lark it is on.
-fn cd_feishu_section(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> Unit {
-  let app = field(cv, "feishu")
-  let id = text(cv, "id")
-  @sf.section(c, @sf.t("web-pages.connect.feishu.section"), fn() {
-    @sf.group(c, fn() {
-      match opt_text(app, "console") {
-        Some(url) if url != "" =>
-          if @sf.link_row(c, "feishu-console/" + id, "App ID", note=text(app, "appId"), value=@sf.t("web-pages.connect.feishu.openConsole"), out=true) {
-            (core.open_link)(url)
-          }
-        _ => @sf.said_row(c, "App ID", text(app, "appId"))
-      }
-      if @sf.link_row(
-          c,
-          "feishu-replace/" + id,
-          "App Secret",
-          note=if text(app, "appSecret") == "" { "••••••••" } else { text(app, "appSecret") },
-          value=@sf.t("web-pages.connect.feishu.replace"),
-          value_lit=true,
-          chevron=false,
-        ) {
-        cd_secret_dialog(core, station, cv)
-      }
-      @sf.link_row(
-        c,
-        "",
-        @sf.t("web-pages.connect.feishu.version"),
-        value=if text(app, "domain") == "lark" { "Lark" } else { @sf.t("web-pages.connect.feishu.name") },
-        goes=false,
-      )
-      |> ignore
-    })
-  })
 }
 
 ///|
@@ -861,12 +1150,12 @@ fn cd_secret_dialog(core : Core, station : String, cv : Json?) -> Unit {
       })
     },
     fn(c, shut) {
-      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost, on_press=fn() {
         shut()
-      }
+      }) |> ignore
       let typed = secret.text().trim(chars=" \t\n").to_owned()
       let saving = is_doing(core, ["feishu.putSecret"], [("station", station), ("id", id)])
-      if @sf.button(c, @sf.t("web-pages.connect.saveReconnect"), key=key + "/save", tone=Primary, busy=saving, disabled=typed == "") {
+      @sf.button(c, @sf.t("web-pages.connect.saveReconnect"), key=key + "/save", tone=Primary, busy=saving, disabled=typed == "", on_press=fn() {
         error.set("")
         (core.call)("feishu.putSecret", obj([("station", str(station)), ("id", str(id)), ("appSecret", str(typed))]), fn(r) {
           match r {
@@ -877,38 +1166,10 @@ fn cd_secret_dialog(core : Core, station : String, cv : Json?) -> Unit {
             Err(e) => error.set(error_text(e))
           }
         })
-      }
+      }) |> ignore
     },
   )
 }
-
-///|
-/// A connect as its people see it (ui.tsx ConnectAvatar): its bot's picture, filling its head's tile with the tile's
-/// corners (the app's icon it is: a square, as Slack shows it), once it is here; its kind's mark till then, and where
-/// it is not said.
-fn cd_avatar(c : @ui.Ctx, core : Core, cv : Json?, size : Double) -> Unit {
-  let picture = match opt_text(cv, "botImage") {
-    Some(image) => (core.picture)(image, c.page_stint())
-    None => ""
-  }
-  match picture {
-    key if key != "" && c.image_ready(key, size * c.scale) =>
-      c.image(key, w=Px(size), h=Px(size), radius=c.theme().corner(Lg), bg=0L, fade=false) |> ignore
-    // (its kind's mark three fifths of it, on a tile of its side: no larger than the room its head gives it, which
-    // a tile 2.4 times the mark was, over the lines under it on a phone)
-    _ => {
-      let mark = (size * cd_avatar_mark).round()
-      c.box(style=cd_avatar_box.then(@ui.style(w=Fixed(size), h=Fixed(size), bg=Data(@sf.theme().p.paper))), fn() {
-        cn_kind(c, text(cv, "kind"), mark)
-      })
-      |> ignore
-    }
-  }
-}
-
-///|
-/// The sizes: its picture 52 (its kind's mark three fifths of it), the icons 14, the kind's 13, a select 280.
-let cd_avatar_size : Double = 52.0
 
 ///|
 let cd_avatar_mark : Double = 0.6
@@ -927,42 +1188,8 @@ let cd_select_w : Double = 280.0
 let cd_avatar_box : @ui.Style = @ui.css("align=ACenter justify=JCenter radius=Xl")
 
 ///|
-/// Its head (pages.css.ts identity: 16 apart, its middle in line, 28 over what follows; identityName 22 on 34 in 600;
-/// identitySub 6 under it, 6 by 14 apart, the ui's 13 on 20 muted; connectStatus, kindTag 5 and ownerLine 6 apart).
-// kept across runs: a value (no field of it changes)
-let cd_identity_box : @ui.Style = @ui.css("row w=Full gap=S4 pb=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_identity_text : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_name : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_sub : @ui.Style = @ui.css("row w=Full pt=S1_5 gap=S3_5 align=ACenter")
-
-///|
 // kept across runs: a value (no field of it changes)
 let cd_sub_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_sub_ink : @ui.TextStyle = cd_sub_words.then(@ui.text_style(color=Fg))
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_status : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_kind_tag : @ui.Style = @ui.css("row gap=S1_25 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_owner_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// The callout on amber (12 by 14 in, a corner of 14; its title in the amber's ink, its list 6 under it, 4 apart).
@@ -990,62 +1217,6 @@ let cd_effect_words : @ui.Style = @ui.style(w=@sf.grow)
 let cd_bullet : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false)
 
 ///|
-/// A card's buttons at its end (pages.css.ts cardActions: 8 apart).
-// kept across runs: a value (no field of it changes)
-let cd_card_actions : @ui.Style = @ui.css("row w=Full gap=S2 justify=JEnd")
-
-///|
-/// A card with its buttons last (cd_foot_actions): its foot as far in as makes them concentric with its corners
-/// (@sf.card_foot_in).
-fn cd_footed_card() -> @ui.Style {
-  @sf.desk_card.then(@sf.foot_pad(@sf.button_height()))
-}
-
-///|
-/// A cd_footed_card's buttons at its end, reaching past its words to its foot corner's.
-fn cd_foot_actions() -> @ui.Style {
-  cd_card_actions.then(@sf.foot_across(@sf.button_height()))
-}
-
-///|
-/// How it runs (Connect.css.ts runCard: a card, its rows 14 apart; runCardRow: 14 apart, at their tops; runCardLabel:
-/// 36 wide, 2 down, the ui's 13 muted; runCardText: as wide as is left, 2 apart, the ui's 13; the feishu app's labels
-/// 84 wide; controls.css.ts cardFoot: the meta's 12 muted).
-// kept across runs: a value (no field of it changes)
-let cd_run_card : @ui.Style = @sf.desk_card
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_run_row : @ui.Style = @ui.css("row w=Full gap=S3_5 align=AStart")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_run_label : @ui.Style = @ui.css("w=S9 pt=S0_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_app_label : @ui.Style = @ui.style(w=Fixed(cd_app_label_w), pt=S0_5)
-
-///|
-let cd_app_label_w : Double = 84.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_label_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_run_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_card_foot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_mono : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, w=Full)
-
-///|
 /// textButton: underlined (here the muted ink, the words' under the pointer); inlineLink: the accent's ink.
 // kept across runs: a value (no field of it changes)
 let cd_text_button_box : @ui.Style = @ui.css("disabled{opacity=O55}")
@@ -1067,27 +1238,9 @@ let cd_link_box : @ui.Style = @ui.css("")
 let cd_link_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=AccentText)
 
 ///|
-/// 显示全部 (moreSessions: 8 under the list).
-// kept across runs: a value (no field of it changes)
-let cd_more_room : @ui.Style = @ui.css("w=Full pt=S2")
-
-///|
 /// The sessions to choose from (sessionChoices: 52vh at most, scrolling).
 // kept across runs: a value (no field of it changes)
 let cd_session_choices : @ui.Style = @ui.css("w=Full")
-
-///|
-/// A session's row: its title as wide as is left, its time 5.5em at least at the right in the meta's 12 muted.
-// kept across runs: a value (no field of it changes)
-let cd_row_title : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_row_time : @ui.Style = @ui.css("min_w=S16 align=AEnd")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_time_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// What is wrong on its callout (the ui's 13, the words' ink).

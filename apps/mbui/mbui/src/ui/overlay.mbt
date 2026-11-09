@@ -40,6 +40,8 @@ struct Layer {
   outside : Bool
   inert : Bool
   anchor : Int
+  // (its trigger a node of the window's tree: Ctx::overlay's anchor_node)
+  anchor_node : @view.View?
   initial : Int
 }
 
@@ -56,10 +58,13 @@ pub fn Ctx::stacked(self : Ctx, stack : Int, body : () -> Unit) -> Unit {
 }
 
 ///|
-/// What a layer reports: whether it was dismissed since the last frame (and why); its node.
+/// What a layer reports: whether it was dismissed since the last frame (and why); its node, and its ground's (a modal
+/// one's, `scrim`'s; -1 none): only the handle a scrim fading in and out is painted through (Ctx::bg_by), read by
+/// nothing else.
 pub(all) struct Overlay {
   id : Int
   node : Int
+  scrim : Int
   dismissed : Dismiss?
 }
 
@@ -71,7 +76,8 @@ pub(all) struct Overlay {
 /// inside it), by a press outside (unless not `outside`); none of them while `stays` says it stays, asked as each
 /// comes (what it is doing may not be left: an Escape or a back taken by it all the same, nothing under it told; its
 /// view's own Ctx::dismiss not asked). A press on `anchor` (its trigger's id), or on what it holds, does not dismiss
-/// it. As it opens the focus goes to `initial_focus` (-1: its first focusable; 0: nowhere, it stays; -2, by
+/// it; nor, its trigger a node of the window's tree (`anchor_node`: a rail's place, an old view's popover by it), one
+/// where that node is drawn (on it or what it holds). As it opens the focus goes to `initial_focus` (-1: its first focusable; 0: nowhere, it stays; -2, by
 /// default: the first focusable when it traps, else nowhere); as it goes, back to `return_focus` (0, by default: what
 /// had it as it opened). `inert`: leaving (its exit drawn): it takes no press, focus or key, is not dismissed, is
 /// hidden from the semantics tree, and the focus goes back as though it had gone; its scrim is still drawn (as it
@@ -87,6 +93,7 @@ pub fn Ctx::overlay(
   outside? : Bool = true,
   scrim? : Int64 = 0L,
   anchor? : Int = 0,
+  anchor_node? : @view.View,
   initial_focus? : Int = -2,
   return_focus? : Int = 0,
   inert? : Bool = false,
@@ -178,6 +185,7 @@ pub fn Ctx::overlay(
     outside,
     inert,
     anchor,
+    anchor_node,
     initial,
   })
   // this opening of it (layer_gen), while it is not leaving; what is told as it is dismissed, at that moment (Ctx::with_dismissed:
@@ -213,12 +221,14 @@ pub fn Ctx::overlay(
   // (what is said in it, its: Ctx::back_within)
   let within_was = self.back_within
   self.back_within = gen
+  let mut ground = -1
   self.with_parent(i, fn() {
     if modal && (!inert || scrim != 0L) {
       // the ground that takes what the layer does not; leaving, its scrim still fading with it, taking nothing
       let b = self.box(w=Fill(1.0), h=Fill(1.0), bg=scrim, id=if inert { 0 } else { id }, fn() {  })
       self.nodes[b].layer = true
       self.nodes[b].blocks = !inert
+      ground = b
       // (what is put over it, a menu's thing held, painted once it is: Ctx::paint_raised)
       if scrim != 0L {
         dr.scrims.push(b)
@@ -236,7 +246,7 @@ pub fn Ctx::overlay(
   self.cur = saved_cur
   self.layer_cur = saved_layer
   self.group_cur = saved_group
-  { id, node: i, dismissed }
+  { id, node: i, scrim: ground, dismissed }
 }
 
 ///|
@@ -397,7 +407,7 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
         if self.in_layer(l, x, y) {
           break
         }
-        if l.outside && (l.anchor == 0 || !self.on_anchor(l.anchor, target, x, y)) && !layer_stays(l) {
+        if l.outside && !self.on_trigger(l, target, x, y) && !layer_stays(l) {
           self.dismissals[l.id] = Outside
         }
         if l.modal {
@@ -1178,6 +1188,20 @@ fn layer_stays(l : Layer) -> Bool {
     Some(f) => f()
     None => false
   }
+}
+
+///|
+/// Whether a press at (x, y) of the window, `target` what takes it, is on layer `l`'s trigger: its `anchor` (on_anchor),
+/// or where its node of the window's tree is drawn (anchor_node).
+fn Ctx::on_trigger(self : Ctx, l : Layer, target : Int, x : Double, y : Double) -> Bool {
+  (l.anchor != 0 && self.on_anchor(l.anchor, target, x, y)) ||
+  (match l.anchor_node {
+    Some(v) if v.alive() => {
+      let (ax, ay, aw, ah) = v.placed_window_now()
+      x >= ax && y >= ay && x < ax + aw && y < ay + ah
+    }
+    _ => false
+  })
 }
 
 ///|

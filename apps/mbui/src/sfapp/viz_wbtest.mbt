@@ -78,7 +78,7 @@ test "two scoped copies of a visualization each own their native view" {
       }
     })
   }, w=390.0, h=700.0, platform=1)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   t.draw()
   let views = opened_views(t, 2)
@@ -103,7 +103,7 @@ test "two copies of a visualization move with their rows while scrolling" {
       }, h=Px(340.0)) |> ignore
     })
   }, w=390.0, h=340.0, platform=1)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   t.draw()
   let views = opened_views(t, 2)
@@ -129,7 +129,7 @@ test "a visualization view is reused after its page leaves and all its copies cl
       }) |> ignore
     })
   }, w=390.0, h=700.0, platform=1)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   t.draw()
   assert_eq(opened_views(t, 2).length(), 1)

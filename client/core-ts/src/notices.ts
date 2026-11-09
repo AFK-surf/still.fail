@@ -1,9 +1,10 @@
-// What a person hears about while a client runs (notices.rs; the `notices` topic, docs/notifications.md): a chat of
+// What a person hears about while a client runs (the `notices` topic): a chat of
 // theirs whose agent is blocked on them, went wrong, or finished with something new to read, or where someone else
 // said something, or where a card newly waits for them. Noticed from the chat rows the core holds (what the sync keeps
 // current), by how each row changed in a write (db/account.ts says each row before and after): looked at as they change
 // (rule 2), never polled, and never all of them. A station's first rows are where it starts from. Each workspace hears
 // of its own.
+import { Marks } from "./reactive.ts";
 import * as decisions from "./decisions.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
@@ -45,6 +46,8 @@ export type NoticesEnv = {
 
 export class Notices {
   readonly #env: NoticesEnv;
+  /// What reads the notices (`value`) is made again as new ones are noticed.
+  readonly #seen = new Marks();
 
   constructor(env: NoticesEnv) {
     this.#env = env;
@@ -56,6 +59,7 @@ export class Notices {
 
   /// A workspace's notices; with none given, every workspace's, the latest KEEP.
   value(workspace: string | null): J {
+    this.#seen.read();
     if (workspace !== null) {
       const w = this.#env.workspaces.get(workspace);
       return { items: w ? structuredClone(this.#heard(w).items) : [] };
@@ -107,8 +111,9 @@ export class Notices {
       if (first) continue;
       const found = noticed(row, old, me, slackUsers, members);
       if (found !== null && found[0] === "block") next.told = needSeq(row);
-      if (found !== null) added.push(this.#add(its, station, row, found[0], found[1], found[0] === "wait" ? next.decision : next.seq));
+      if (found !== null && get(row, "muted") !== true) added.push(this.#add(its, station, row, found[0], found[1], found[0] === "wait" ? next.decision : next.seq));
     }
+    if (added.length > 0) this.#seen.touch();
     return added;
   }
 

@@ -1,4 +1,4 @@
-// What a person can see and drive on this station (docs/remote-screens.md): the machine's display, a tab of the
+// What a person can see and drive on this station: the machine's display, a tab of the
 // station's browser. A source opens views; a view is pull-driven (`next` gives a frame only when asked), so a slow
 // link lowers the frame rate instead of queueing frames. The mesh layer carries views (`/admin/api/screens`);
 // sources know nothing of it.
@@ -11,7 +11,7 @@ export type Codec = "h265" | "h264" | "jpeg";
 
 /// A frame's format: sent before the first frame and whenever it changes; the next frame is then a key frame.
 /// `description`: H.264's avcC, H.265's hvcC (what WebCodecs and MediaCodec take as the decoder's configuration).
-/// `region`: the part of the screen the frames after it show (a view zoomed in: docs/remote-screens.md, "Regions");
+/// `region`: the part of the screen the frames after it show (a view zoomed in, "Regions");
 /// none: the whole screen.
 export type FrameConfig = { codec: Codec; width: number; height: number; description?: Uint8Array; region?: Region };
 
@@ -48,6 +48,14 @@ export type ScreenInput =
 export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean; bitrate?: number; fps?: number; fit?: ViewFit; audio?: boolean; gamut?: "p3" };
 export type ViewFit = { width: number; height: number; scale: number };
 
+/// The codec a source that makes `own` (best first) sends a view: the first of them the view takes; for a preview
+/// (`peek`), JPEG where both have it, so a card stays a picture now and then while a source with nothing but a video
+/// (an Android device's) still gets a card that takes one. None: nothing in common.
+export function codecFor(options: Pick<ViewOptions, "codecs" | "peek">, own: readonly Codec[]): Codec | undefined {
+  if (options.peek === true && own.includes("jpeg") && options.codecs.includes("jpeg")) return "jpeg";
+  return own.find((c) => options.codecs.includes(c));
+}
+
 /// The least part of the screen a look shows, of its width or height (a 50th: zoomed in 50 times).
 export const LOOK_LEAST = 0.02;
 /// A part this much of the screen or more, both ways, is the whole of it.
@@ -64,7 +72,7 @@ export function regionOf(v: any): Region | null {
   return { x: r4(x), y: r4(y), w: r4(w), h: r4(h) };
 }
 
-/// What a screen's clipboard holds, as a view carries it (docs/remote-screens.md `clipboard`): text, or a PNG picture.
+/// What a screen's clipboard holds, as a view carries it: text, or a PNG picture.
 export type ClipType = "text" | "png";
 export type Clip = { type: "text"; text: string } | { type: "png"; data: Uint8Array };
 /// The most a clipboard carries each way: text (its UTF-8 bytes), a picture.
@@ -84,10 +92,10 @@ export interface ScreenView {
   /// Starts the next frame as a key frame (a client's decoder lost its state).
   keyframe(): void;
   input(event: ScreenInput): Promise<void>;
-  /// Encodes from the next frame at about this many bits a second (the link carries no more: docs/remote-screens.md,
+  /// Encodes from the next frame at about this many bits a second (the link carries no more,
   /// "Pace"); one without it encodes at its own.
   rate?(bitsPerSecond: number): void;
-  /// Its pictures from now on fitted into these bounds (a config first: docs/remote-screens.md, "Pace"), of `region` of
+  /// Its pictures from now on fitted into these bounds (a config first, "Pace"), of `region` of
   /// the screen where it frames a part (`regions`), else of the whole; one without it keeps those it opened with.
   bounds?(maxWidth: number, maxHeight: number, region?: Region | null): void;
   /// It frames a part of the screen when `bounds` says one (its configs then say which: `FrameConfig.region`).
@@ -187,8 +195,12 @@ export interface ScreenSource {
   readonly peek?: boolean;
   /// The session that opened it (a tab of the browser an agent opened), when known.
   openedBy?(): string | undefined;
-  /// Closes it for good (a tab of the browser); none: it is not closed from a person's app (the desktop).
+  /// Closes it for good (a tab of the browser, a simulator shut down); none: it is not closed from a person's app (the
+  /// desktop).
   discard?(): Promise<void>;
+  /// Since when it has been up (ms; a simulator's boot): what costs the machine while nobody uses it, told so a person
+  /// sees one left running (the core's `longJobs`); none: not told.
+  since?(): number | undefined;
   /// Its display's scale (null when it is not had now); none: a source whose scale is not changed (macOS, a tab).
   scale?(): Promise<ScreenScale | null>;
   /// Sets its display's scale to one of its steps, and says it as `scale` does; until its last view ends, after which

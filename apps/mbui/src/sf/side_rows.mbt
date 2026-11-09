@@ -1,45 +1,30 @@
-// A sidebar's rows (ember web/src/Sidebar.css.ts navRow, navNew, navScroll; SidebarList.tsx NavItem, NavAction): a
+// A sidebar's rows (still.fail web/src/Sidebar.css.ts navRow, navNew, navScroll; NavAction): a
 // row of one line, a row laid out as a chat's (list_row), the band's action over a list, the list under the band; a
 // row's ground as the web moves it. The sidebar's frame (its top row, its width, its fold)
 // is the shell's.
 
 ///|
-/// A row's or a place's ground as the web moves it (Sidebar.css.ts navRow, Rail.css.ts item: `transition: background
-/// 140ms` ease out): the pointer's ground in and out, the lit one's (`lit`, the selected grey by default), as the state
-/// changes.
-pub fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int64) -> Int64 {
-  let t = theme()
-  let lit = lit.unwrap_or(t.p.selected)
-  let h = @kit.animate(c, key + "/hover", if hover { 1.0 } else { 0.0 }, transition=nav_fade)
-  let o = @kit.animate(c, key + "/on", if on { 1.0 } else { 0.0 }, transition=nav_fade)
-  if h <= 0.0 && o <= 0.0 {
-    0L
-  } else {
-    over(alpha(t.p.hover, h * (1.0 - o)), alpha(lit, o))
-  }
-}
-
-///|
-/// Node `i`'s ground as nav_ground has it, worked out as it is painted (@ui.Ctx::bg_by): its easing to the pointer's
+/// Node `i`'s ground as the web moves a row's or a place's (nav_ground_by), worked out as it is painted (@ui.Ctx::bg_by): its easing to the pointer's
 /// ground and to the selected one read as it is drawn, so the row is not built again each frame it eases
-/// (docs/retained.md, motion in what is made once).
+/// (motion in what is made once).
 pub fn nav_ground_on(c : @ui.Ctx, i : Int, key : String, hover : Bool, on : Bool, lit? : Int64) -> Unit {
   c.bg_by(i, nav_ground_by(c, key, hover, on, lit?))
 }
 
 ///|
-/// nav_ground worked out where it is read (as what reads it is painted: @ui.Ctx::bg_by), its easing told as it is built
-/// without reading the clock (@motion.told).
+/// A row's or a place's ground as the web moves it (Sidebar.css.ts navRow, Rail.css.ts item: `transition: background
+/// 140ms` ease out): the pointer's ground in and out, the lit one's (`lit`, the selected grey by default), as the state
+/// changes. What the caller paints its ground with (@ui.Ctx::bg_by, list_row's `ground_by`): worked out where it is
+/// read, its easing told as it is built without reading the clock (@motion.told).
 pub fn nav_ground_by(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int64) -> () -> Int64 {
   let t = theme()
   let lit = lit.unwrap_or(t.p.selected)
   let hover_ink = t.p.hover
-  // (the same numbers animate kept them as: @kit.animate's keys)
-  let h = @motion.told(c, "\u{2}animate/" + key + "/hover", if hover { 1.0 } else { 0.0 }, spec=nav_fade)
-  let o = @motion.told(c, "\u{2}animate/" + key + "/on", if on { 1.0 } else { 0.0 }, spec=nav_fade)
+  let h = @motion.told(c, key + "/hover", if hover { 1.0 } else { 0.0 }, spec=nav_fade)
+  let o = @motion.told(c, key + "/on", if on { 1.0 } else { 0.0 }, spec=nav_fade)
   fn() {
-    let h = h.get()
-    let o = o.get()
+    let h = h.get(c)
+    let o = o.get(c)
     if h <= 0.0 && o <= 0.0 {
       0L
     } else {
@@ -56,7 +41,8 @@ pub let nav_fade : @motion.Spec = @motion.tween(dur_ms, ease=Out)
 ///|
 /// A row of one line of a sidebar's list (Sidebar.css.ts navRow; touch's SidebarList.css.ts phone: the theme's
 /// chats' list's `side_row`): the pointer's ground on hover, the selected one's ground when it is the page in view;
-/// `more`, another row under it (nav_apart). True on the frame after a press.
+/// `more`, another row under it (nav_apart); `on_press`, what a press on it does; `at`, where its list stands (its
+/// words' room: side_row_at).
 pub fn nav_row(
   c : @ui.Ctx,
   key : String,
@@ -64,16 +50,17 @@ pub fn nav_row(
   body : () -> Unit,
   align? : @ui.Align = ACenter,
   more? : Bool = false,
-) -> Bool {
-  let l = theme().chat_list
+  at? : ListAt = Side,
+  on_press~ : () -> Unit,
+) -> Unit {
   let id = c.id(key)
-  let look = l.side_row.then(@ui.style(align~))
+  c.on_press(id, on_press)
+  let look = side_row_at(at).then(@ui.style(align~))
   let hover = c.lit(id) || c.pressed(id)
   nav_apart(c, more, fn() {
     let i = c.box(style=look.then(row_least_h()), id~, body)
     nav_ground_on(c, i, key, hover, on)
   })
-  c.clicked(id)
 }
 
 ///|
@@ -89,20 +76,27 @@ pub fn nav_apart(c : @ui.Ctx, more : Bool, row : () -> Unit) -> Unit {
   }
 }
 
-
 ///|
 /// An action in a sidebar's band over its list (新建对话, Pin 文件夹, 待处理: Sidebar.css.ts navNew's row): not one of the
 /// list's rows but the band's, on one line with what else stands over the list (the search's field): its height, its
 /// words' room and its words the theme's chats' list's band's; its corner a sidebar row's; the pointer's ground on
-/// hover, the selected one's when it is the page in view. True on the frame after a press.
-pub fn band_row(c : @ui.Ctx, key : String, on : Bool, body : () -> Unit) -> Bool {
+/// hover, the selected one's when it is the page in view; `on_press`, what a press on it does; `at`, where its list
+/// stands (its words' room: band_pad_in).
+pub fn band_row(
+  c : @ui.Ctx,
+  key : String,
+  on : Bool,
+  body : () -> Unit,
+  at? : ListAt = Side,
+  on_press~ : () -> Unit,
+) -> Unit {
   let l = theme().chat_list
   let id = c.id(key)
+  c.on_press(id, on_press)
   let hover = c.lit(id) || c.pressed(id)
-  let look = band_row_look.then(@ui.style(min_h=Fixed(l.band_h), px=room_of(l.band_pad)))
+  let look = band_row_look.then(@ui.style(min_h=Fixed(l.band_h), px=room_of(band_pad_in(at))))
   let i = c.box(style=look, id~, body)
   nav_ground_on(c, i, key, hover, on)
-  c.clicked(id)
 }
 
 ///|
@@ -143,8 +137,16 @@ pub fn nav_words(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
 /// The action over a list (SidebarList.tsx NavAction, in its band: Sidebar.css.ts navNew, 6 over it, 8 at its sides, 2
 /// under, the list's own 4 then): its ＋ (16, the row's mark column, ICON) and words, with an optional key beside it.
 /// `band` places both where the frame needs them. No band where neither action is present. Pressed, `run` goes on with
-/// it as what opened what it puts up.
-pub fn nav_action(c : @ui.Ctx, key : String, label : String, run : ((Beside) -> Unit)?, trailing? : () -> Unit, band? : @ui.Style) -> Unit {
+/// it as what opened what it puts up. `at`: where its list stands (band_row's).
+pub fn nav_action(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  run : ((Beside) -> Unit)?,
+  trailing? : () -> Unit,
+  band? : @ui.Style,
+  at? : ListAt = Side,
+) -> Unit {
   let t = theme()
   if run is None && trailing is None {
     return
@@ -153,11 +155,12 @@ pub fn nav_action(c : @ui.Ctx, key : String, label : String, run : ((Beside) -> 
     c.box(style=nav_action_main, fn() {
       match run {
         Some(go) =>
-          if band_row(c, key, false, fn() {
+          {
+            let id = c.id(key)
+            band_row(c, key, false, fn() {
               band_mark(c, "plus", t.p.muted)
               band_words(c, label)
-            }) {
-            go(Of(c.id(key)))
+            }, at~, on_press=fn() { go(Of(id)) })
           }
         None => ()
       }
@@ -199,10 +202,6 @@ pub fn side_list() -> @ui.Style {
 let side_list_top : @ui.Style = @ui.css("pt=S1")
 
 ///|
-/// How far under the band a sidebar's list stands (side_list_top's).
-pub let side_list_top_in : Double = 4.0
-
-///|
 /// A sidebar's list under its band (side_list): what `rows` builds and the room under its last (list_foot_in),
 /// scrolling under the band when it is taller than the room (a list of one: `key` keeps where it is scrolled to);
 /// `top` the room over its first, scrolled with it.
@@ -230,16 +229,16 @@ pub fn side_scroll(c : @ui.Ctx, key : String, top? : Double = 0.0, rows : () -> 
 let side_scroll_est : Double = 600.0
 
 ///|
-/// A row's mark's side (SidebarList.css.ts mark, the action's icon: ICON's 16).
+/// A row's mark's side (the action's icon: ICON's 16).
 pub let nav_mark_side : Double = 16.0
 
 ///|
-/// A row of a list in a sidebar, a station's, a profile's, a folder's (SidebarList.tsx NavItem): the library's list
+/// A row of a list in a sidebar, a station's, a profile's, a folder's: the library's list
 /// row, laid out as a chat's (list_row): its `mark` beside its first line, its `title` (nav_title) with what is at
 /// that line's `end` (muted, never cut: the title gives way), then the `lines` under them (list_row_line each; `keep_lines` of
 /// them always, empty where it says none: list_row `lines`); the pointer's
-/// ground on hover, the selected one's when it is the page in view; `more`, another row under it (nav_apart). True
-/// when pressed. `foot` is a last line across the row; `foot_capsule` places a capsule on it at its foot corner's
+/// ground on hover, the selected one's when it is the page in view; `more`, another row under it (nav_apart);
+/// `on_press`, what a press on it does. `foot` is a last line across the row; `foot_capsule` places a capsule on it at its foot corner's
 /// inset (list_row's).
 pub fn nav_item(
   c : @ui.Ctx,
@@ -253,15 +252,19 @@ pub fn nav_item(
   more? : Bool = false,
   foot? : () -> Unit,
   foot_capsule? : Double,
-) -> Bool {
+  at? : ListAt = Side,
+  on_press~ : () -> Unit,
+) -> Unit {
   let id = c.id(key)
-  let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
+  c.on_press(id, on_press)
+  let ground = nav_ground_by(c, key, c.lit(id) || c.pressed(id), on)
   nav_apart(c, more, fn() {
     list_row(
       c,
       id,
-      Side,
-      ground,
+      at,
+      0L,
+      ground_by=ground,
       mark~,
       fn() {
         title()
@@ -282,11 +285,10 @@ pub fn nav_item(
     )
     |> ignore
   })
-  c.clicked(id)
 }
 
 ///|
-/// A row's title (SidebarList.css.ts title: the theme's chats' list's, a chat's title's), as long as there is room;
+/// A row's title (a chat's title's), as long as there is room;
 /// `away`, what it is not there now: faint.
 pub fn nav_title(c : @ui.Ctx, words : String, away? : Bool = false) -> Unit {
   let look = theme().chat_list.title.then(nav_title_grow)
@@ -306,7 +308,7 @@ let nav_title_grow : @ui.TextStyle = @ui.text_style(w=grow)
 let nav_title_away : @ui.TextStyle = @ui.text_style(color=Muted)
 
 ///|
-/// What a row says in a line under its title or at its end (SidebarList.css.ts line, end): a chat's second line's
+/// What a row says in a line under its title or at its end (end): a chat's second line's
 /// words (the theme's chats' list's), as long as they are.
 pub fn nav_meta() -> @ui.TextStyle {
   theme().chat_list.last.then(nav_meta_hug)

@@ -1,6 +1,6 @@
 // Subtitles read as text: SubRip, WebVTT and ASS/SSA's dialogue lines, each a cue (from when to when, its words),
 // and what is said at a moment. Styling is left out (tags, ASS's overrides), the words and their lines kept: every
-// host shows them alike (still.fail's player reads a video's subtitle beside it, Player.kt hands it to media3).
+// host shows them alike (still.fail's player reads a video's subtitle beside it).
 
 ///|
 /// A line of a subtitle: from when to when (ms), its words (lines apart by \n).

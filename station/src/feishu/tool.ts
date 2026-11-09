@@ -1,4 +1,4 @@
-// feishu_api (docs/feishu.md「agent 看到的」): any Feishu OpenAPI call as the bot of one of the session's Feishu chats.
+// feishu_api (「agent 看到的」): any Feishu OpenAPI call as the bot of one of the session's Feishu chats.
 // Messages are not sent through it (chat_post answers a chat, and keeps what was said), nor is the app itself managed.
 import { jsString } from "../sessions/args.ts";
 import { target } from "../sessions/conversations.ts";

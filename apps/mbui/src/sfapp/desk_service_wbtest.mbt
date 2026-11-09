@@ -1,4 +1,4 @@
-// A web service and a visualization beside a chat on the desktop (sfdesk/service_tab.mbt; ember web/src/pages/Chat.tsx's
+// A web service and a visualization beside a chat on the desktop (sfdesk/service_tab.mbt; still.fail web/src/pages/Chat.tsx's
 // side panel, Preview.tsx): asked as a page, the chat's page with it in front among the side panel's tabs, its page
 // served from the station; closed, its site view let go.
 
@@ -21,20 +21,20 @@ test "desk: a web service asked as a page is its chat with the service beside it
   assert_eq(side_now(r), (["service:j-web"], "service:j-web"))
   t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="刷新") is Some(_), msg="its bar")
-  // its page's size with keyboard and mouse: the bar's button, its choices in a panel beside it (ViewportSize.tsx), no toolbar
+  // its page's size with keyboard and mouse: the bar's button, its choices in a panel beside it, no toolbar
   // under the page as touch has
   assert_true(t.find("自适应") is None, msg="no toolbar under the page")
   let had = t.ctx().focused_id()
   t.click(Button, label="页面尺寸")
   t.frame()
   assert_true(t.find("自适应") is Some(_), msg="its sizes")
-  // as the web's (ViewportSize.tsx: the focus not taken as it opens: where it was, the composer's), all of them in the
+  // as the web's (the composer's), all of them in the
   // panel's room
   assert_eq(t.ctx().focused_id(), had)
   assert_eq(t.squeeze_faults(), [])
   t.key(@ui.key_escape)
   t.frame()
-  // marking it: what to do said in the address's place beside its keys (Marks.tsx mode), all of it in the tab's room
+  // marking it: what to do said in the address's place beside its keys, all of it in the tab's room
   t.click(Button, label="标注")
   t.frame()
   assert_true(t.find("点选页面上的元素") is Some(_), msg="what to do")

@@ -1,4 +1,4 @@
-// What is drawn over what: strata (still.fail's apps/mbui/docs/strata.md). In a stratum, what is built later is drawn
+// What is drawn over what: strata . In a stratum, what is built later is drawn
 // over what is built before it (a ZStack's order); what crosses strata says which it is in, by its name, never a
 // number.
 //

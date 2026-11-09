@@ -42,12 +42,12 @@ test "where a chat stands gone from its end (a person wrote): what is over it st
       None => tp
     }
   })
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   let (_, need_y) = t.find(need).unwrap()
   let (_, last_y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   assert_true(need_y > last_y)
-  // the core no longer says it: it fades as its room closes (docs/list-motion.md), what is over it coming down with
+  // the core no longer says it: it fades as its room closes (mbui's view/list_motion.mbt), what is over it coming down with
   // it, a step of the way each frame, never at once
   said.set(false)
   t.draw()
@@ -88,4 +88,72 @@ test "what a chat's agent needs is said under its last message" {
   let line_mid = (run.top + run.bottom) / 2.0
   let bell_mid = bell[0].y + bell[0].h / 2.0
   assert_true((bell_mid - line_mid).abs() < 0.01, msg="bell \{bell_mid}, line \{line_mid}")
+}
+
+///|
+test "a state ask added without changing its words moves the ask to the state and can be dismissed" {
+  let active = @signals.signal(false)
+  let held : Ref[Json?] = Ref(None)
+  let src : Ref[Source?] = Ref(None)
+  let calls : Array[Made] = []
+  let t = fake_core(calls, made=src, over=fn(name, topic) {
+    if name != "chat" {
+      return topic
+    }
+    let asking = active.get()
+    match topic.value {
+      Some(raw) => {
+        let original = match held.val {
+          Some(v) => v
+          None => {
+            let need = @sffixture.with_need(raw)
+            let obj = match need { Object(m) => m.copy(); _ => abort("chat is not an object") }
+            let all = items(Some(need), "messages")
+            obj["messages"] = Json::array([all[all.length() - 1]])
+            obj["agents"] = Json::array([])
+            obj["outbox"] = Json::array([])
+            obj["elsewhere"] = Json::array([])
+            obj["asks"] = Json::array([{ "seq": 12 }])
+            obj["askClear"] = Json::boolean(false)
+            let v = Json::object(obj)
+            held.val = Some(v)
+            v
+          }
+        }
+        let obj = match original { Object(m) => m.copy(); _ => abort("chat is not an object") }
+        if !asking {
+          obj.remove("stateAsk") |> ignore
+        }
+        { ..topic, value: Some(Json::object(obj)), version: topic.version + (if asking { 1 } else { 0 }) }
+      }
+      None => topic
+    }
+  })
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
+  let (before_view, before, _) = view_of_chat(src.val.unwrap(), r)
+  let old = before_view.unwrap()
+  let old_ask = @sfbase.ask_rows_of(old, before)[0]
+  assert_true(before[old_ask] is Said(_), msg="the ask was at its message")
+  let words = old.state
+  active.set(true)
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let (after_view, after, _) = view_of_chat(src.val.unwrap(), r)
+  let current = after_view.unwrap()
+  assert_eq(current.state, words)
+  let new_ask = @sfbase.ask_rows_of(current, after)[0]
+  assert_true(after[new_ask] is State(_, _, _), msg="the ask moved to the state")
+  assert_true(t.find(@sffixture.need_state.2) is Some(_))
+  let (x, y) = t.find_last("忽略").unwrap()
+  t.tap(x, y)
+  let made = named(calls, "decision.dismiss")
+  assert_eq(made.length(), 1)
+  assert_eq(number(Some(made[0].params), "seq"), 12.0)
+  active.set(false)
+  t.draw()
+  let (again_view, again, _) = view_of_chat(src.val.unwrap(), r)
+  let after_dismiss = again_view.unwrap()
+  assert_eq(after_dismiss.state, words)
+  let again_ask = @sfbase.ask_rows_of(after_dismiss, again)[0]
+  assert_true(again[again_ask] is Said(_), msg="the ask returned to its message")
 }

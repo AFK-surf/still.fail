@@ -119,7 +119,25 @@ export const NOTES: [number, string][] = [
   [112, "The Antigravity CLI (agy) also runs on a Google account signed in to (its plan: Google AI Pro / Ultra), each profile its own sign-in."],
   [113, "Station notices now arrive as via=\"station\" from=\"station\" (before: ember), and new still.fail chats have addresses CHAT/… and session keys chat:c-…; chats made before keep EMBER/… and chat:c-…, and both work everywhere."],
   [114, "The old names from before the rename are gone: `ember-job` (use `stillfail-job`), the EMBER_* variables (STILLFAIL_* only), and in inline HTML a widget's API is `window.openai` and its theme event `viz:theme` (window.ember and ember-viz:theme still work in widgets made before)."],
+  [115, "If station_task prepare fails or is interrupted, start refuses that key until a prepare succeeds: retry the intended prepare, or use a new key for different work. A failed re-prepare cannot silently start the previous command."],
+  [116, "A new built-in skill, stillfail-github-ci: scripts that wait for a pull request's checks or given workflow runs and exit at the first failure, and the pitfalls of reading checks and merging. Use it instead of writing your own polling loop."],
+  [117, "A login's card in a still.fail chat goes with a sentence only, never its link: the card opens the page, and a pasted link only shows its raw address. The link is for Slack and Feishu, posted alone."],
+  [118, "station_task preserves remote-only changes in a synced mirror and refuses conflicting local changes. The mirror stays busy while results are brought back; if the notice says retrieval was incomplete, save the files with station_file before action release on that task allows the next one there."],
+  [119, "In Slack a login card now also goes with a device code (gh, docker), not only a code to paste back: post the login's link alone with its card, which shows a button to the sign-in page and the code (or a field for the code that page gives)."],
+  [120, "When Codex is too old for a selected model, the station updates it and resumes the interrupted conversation once; check prior work before continuing."],
+  [121, "The instructions were rewritten whole and much shorter; every earlier note is void. Follow only the current instructions (the file named below): one state per turn, cards only for real choices, details of other chats, agents, Slack and Feishu in the new skill stillfail-chats."],
+  [122, "phone_send {path} puts a file on the phone granted to your chat (it fetches it as it downloads a chat's file), much faster and surer than adb push over its link, and answers its path there (pm cannot read that folder: install an APK from a copy in /data/local/tmp). Use it instead of adb push for anything but small files."],
+  [123, "Skill stillfail-chats corrected: Slack shows login cards (a login on this station that takes a pasted code or a device code, with its link); only Feishu has none, where the login's link goes alone."],
+  [124, "A repository's AGENTS.md files (its root's and each directory's down to where you change code) are its rules: read them before changing code there and keep them true in what you change."],
+  [125, "chat_post no longer posts over messages you have not read: when some came in its thread first, it holds the post back and answers its id, and they come to you next. If it still stands, send it unchanged with chat_post {to, send: <id>} plus the state the turn ends with, without writing it again; otherwise post what fits now."],
+  [126, "all_done only when nothing people asked for in the chat is left, not when a step of a longer goal is done; a post that says what you do next means you go on doing it in this turn; need_human is not for what people already decided."],
+  [127, "A choice on a card's action=close option still sends no message and does not wake you, but you are now told it: a <card-choice> block before what you are next handed (a message, a notice), with when it was chosen (at, ago). It is an earlier, settled choice, not what the new messages are about; chat_history shows it on the card as well."],
+  [128, "A station's queue no longer holds station_task tasks back for busy CPUs: a task waits only for memory pressure, the screen, or the small-task slot (queue.why memory, screen, person or small; no cause, and decision has only memoryPressure)."],
 ];
+
+/// The last note that replaces every one before it (the instructions rewritten whole): a session behind it hears only
+/// the notes from it on, not a pile of changes to instructions it no longer has.
+export const REWRITTEN = 121;
 
 /// The latest note's number: what a session that knows everything has been told.
 export const latest = () => NOTES.at(-1)?.[0] ?? 0;
@@ -127,7 +145,7 @@ export const latest = () => NOTES.at(-1)?.[0] ?? 0;
 /// The notes a session told up to `told` has yet to hear, as one block before its messages, and where today's whole
 /// instructions are (`full`); empty when there are none.
 export function untold(told: number, full: string): string {
-  const notes = NOTES.filter(([n]) => n > told).map(([, note]) => `- ${note}`);
+  const notes = NOTES.filter(([n]) => n > told && n >= REWRITTEN).map(([, note]) => `- ${note}`);
   if (notes.length === 0) return "";
   return `[still.fail changed how you work since this session began]\n${notes.join("\n")}\nToday's whole instructions, tool parameters included, are in ${full}: read them when you need the details (your tool list may not show the new parameters; pass them anyway).`;
 }

@@ -12,7 +12,7 @@ export const iconBtn = style({
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
     "&[aria-pressed=\"true\"]": { background: vars.selected, color: vars.text },
-    // On, pressing it turns it off: pointed at, the ink over its grey (docs/ui-panels.md 悬停).
+    // On, pressing it turns it off: pointed at, the ink over its grey (mbui ui/hand_moves.mbt).
     "&[aria-pressed=\"true\"]:hover": litOver,
   },
 });

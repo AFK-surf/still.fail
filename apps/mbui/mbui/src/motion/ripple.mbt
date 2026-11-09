@@ -8,7 +8,7 @@
 // progress, its edge soft from half that radius to half again (softCircle, blur 1: drawn here as the disc blurred, its
 // middle where the edge's is). Its sparkles (white specks in the growing ring, on the clock's noise) are not drawn.
 // While a finger is on it, the box it ripples sinks a little (drawn smaller about its middle, by a few points however
-// large it is: press_sink), and springs back as it lifts (docs/motion.md kind 7, a control answering: pressed): a box
+// large it is: press_sink), and springs back as it lifts (sf/motion.mbt kind 7, a control answering: pressed): a box
 // that stands on a ground of its own (a button, a card: Ctx::own_ground), not a row lying in a list or a card, whose
 // press is its ground lit (a row sunk in its card is drawn in from the card's edges, as if pressed out of it).
 
@@ -121,7 +121,7 @@ pub fn ripple(
     }
     let p = Anim::new(0.0)
     p.name = "ripple"
-    p.animate(0.5, tween(ripple_enter_ms, ease=Out))
+    p.animate(c, 0.5, tween(ripple_enter_ms, ease=Out))
     list.push({ x: px - bx + out_x, y: py - by + top, progress: p, at: c.moment(), lifted: false, lifted_at: 0.0, leaving: false })
     ripples[id] = list
   }
@@ -135,14 +135,15 @@ pub fn ripple(
     let out_at = if r.lifted_at > r.at + ripple_enter_ms { r.lifted_at } else { r.at + ripple_enter_ms }
     if r.lifted && !r.leaving && c.moment() >= out_at {
       r.leaving = true
-      r.progress.animate(1.0, tween(ripple_exit_ms, ease=Linear), start_at=out_at)
+      r.progress.animate(c, 1.0, tween(ripple_exit_ms, ease=Linear), start_at=out_at)
     } else if r.lifted && !r.leaving {
       // (what holds it built again at that moment, as it changes then: kept_part.mbt)
       c.shows_until(out_at)
     }
   }
-  // those faded away let go, before what is drawn of the rest (built again in the frame, it builds the same)
-  list.retain(fn(r) { !r.leaving || r.progress.get() < 1.0 })
+  // those faded away let go, by their way out's declared end, before what is drawn of the rest (built again at that
+  // end: Anim::over)
+  list.retain(fn(r) { !r.leaving || !r.progress.over(c) })
   if list.length() == 0 {
     ripples.remove(id)
   }
@@ -150,16 +151,13 @@ pub fn ripple(
   let on = list.iter().any(fn(r) { !r.lifted })
   // (none asked of what no finger has been on: nothing to keep for every box that ripples)
   let sink_key = "\u{2}sink/\{id}"
-  let sunk = if c.own_ground(holder) && (on || anims.contains(c.id(sink_key))) {
-    animate(c, sink_key, if on { 1.0 } else { 0.0 }, spec=sink_spring)
-  } else {
-    0.0
-  }
-  if sunk != 0.0 && c.own_ground(holder) {
+  // (how far it is sunk read as it is drawn: told as it is built, @motion.told)
+  if c.own_ground(holder) && (on || anims.contains(c.id(sink_key))) {
+    let sunk = told(c, sink_key, if on { 1.0 } else { 0.0 }, spec=sink_spring)
     match c.laid_size(id) {
       Some((bw, bh)) if bw > 0.0 && bh > 0.0 => {
         let most = dmin(press_sink_most, press_sink / dmax(bw, bh))
-        c.look(holder, @ui.look(scale=1.0 - most * sunk))
+        c.look_by(holder, fn() { @ui.look(scale=1.0 - most * sunk.get(c)) })
       }
       _ => ()
     }
@@ -172,38 +170,49 @@ pub fn ripple(
   let w = bw + 2.0 * out_x
   let h = bh + top + bottom
   let most = ((w * w + h * h).sqrt() / 2.0 + ripple_extra) * 2.3
+  // (each disc built whole, its reach all of it about the box's middle, and drawn as far as its progress has it as it
+  // is painted: a look scales its corner and its blur with it, so it is the disc that reach would build)
+  let across = most * 2.0
   c.layer(fn() {
     c.box(w=Px(w), h=Px(h), tx=-out_x, ty=-top, clip=true, radius=corner, fn() {
       for r in list {
-        let p = r.progress.get()
-        let fade = sub_progress(0.0, 0.13, p).min(1.0 - sub_progress(0.4, 1.0, p))
-        let radius = most * p
-        if fade <= 0.0 || radius <= 0.0 {
-          continue
-        }
-        // from the finger to the middle by progress .5
-        let k = clamp(0.0, 1.0, p * 2.0)
-        let cx = mix(r.x, w / 2.0, k)
-        let cy = mix(r.y, h / 2.0, k)
-        let alpha = ((ink & 0xFFL).to_double() * fade).round().to_int64()
-        let colour = (ink & 0xFFFFFF00L) | alpha
-        let across = radius * 2.0
-        let blur = radius * ripple_soft
+        let mut disc = -1
         c.layer(fn() {
-          c.box(
+          disc = c.box(
             w=Px(across),
             h=Px(across),
-            radius~,
-            tx=cx - radius,
-            ty=cy - radius,
-            shadow=blur,
+            radius=most,
+            tx=w / 2.0 - most,
+            ty=h / 2.0 - most,
+            shadow=most * ripple_soft,
             shadow_y=ripple_drop,
-            shadow_color=colour,
+            shadow_color=ink,
             fn() {  },
           )
-          |> ignore
         })
         |> ignore
+        let progress = r.progress
+        c.look_by(disc, fn() {
+          let p = progress.get(c)
+          let fade = sub_progress(0.0, 0.13, p).min(1.0 - sub_progress(0.4, 1.0, p))
+          let ink_alpha = (ink & 0xFFL).to_double()
+          if fade <= 0.0 || p <= 0.0 || ink_alpha <= 0.0 {
+            return @ui.look(alpha=0.0)
+          }
+          // from the finger to the middle by progress .5: drawn smaller about the point that puts its middle there (a
+          // move by a look would be on whole pixels, the disc's way is not)
+          let k = clamp(0.0, 1.0, p * 2.0)
+          let about = fn(to : Double, mid : Double) {
+            if p >= 1.0 {
+              0.5
+            } else {
+              ((to - mid * p) / (1.0 - p) - (mid - most)) / across
+            }
+          }
+          // (its alpha as a colour has it: in whole steps of 255)
+          let alpha = (ink_alpha * fade).round() / ink_alpha
+          @ui.look(alpha~, scale=p, ox=about(mix(r.x, w / 2.0, k), w / 2.0), oy=about(mix(r.y, h / 2.0, k), h / 2.0))
+        })
       }
     })
     |> ignore

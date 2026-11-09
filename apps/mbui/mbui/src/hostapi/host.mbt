@@ -16,6 +16,7 @@ pub(open) trait Host {
   wheel_kept(Self, Bool) -> Unit = _
   window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   window_inset(Self) -> Bool = _
+  window_buttons_down(Self, Double, Double) -> Unit = _
   window_hold(Self) -> Unit = _
   window_show(Self) -> Unit = _
   full_screen(Self) -> Bool = _
@@ -39,12 +40,15 @@ pub(open) trait Host {
   run(Self, String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int, Double, Double, Int) -> Unit], FuncRef[(Double, Double, Double, Double, Int) -> Unit], FuncRef[(Int, Int) -> Unit], FuncRef[(Int, String, Int, Int) -> Unit]) -> Unit = _
   now(Self) -> Double = _
   wall_ms(Self) -> Double = _
+  clock_at_wall(Self, Double) -> Double = _
   utc_offset_min(Self, Double) -> Int = _
   event_time(Self) -> Double = _
   event_finger(Self) -> Int = _
   frame_late(Self) -> Double = _
   platform(Self) -> Int = _
   request_frame(Self) -> Unit = _
+  request_frame_on(Self) -> Unit = _
+  frames_paced(Self, Double) -> Unit = _
   wake_after(Self, Double) -> Unit = _
   font_metrics(Self, Double, Int, Int, FixedArray[Double]) -> Unit = _
   shape(Self, String, Double, Int, Int, FixedArray[Double]) -> Int = _
@@ -60,6 +64,9 @@ pub(open) trait Host {
   local_font_families(Self) -> String = _
   atlas_generation(Self) -> Int = _
   present(Self, FixedArray[Double], Int, Double, Double, Double) -> Unit = _
+  groups_here(Self) -> Bool = _
+  group_set(Self, Int, FixedArray[Double], FixedArray[Double], Int) -> Unit = _
+  group_drop(Self, Int) -> Unit = _
   set_ime(Self, Bool, Double, Double, Double, Double, String, Int, Int) -> Unit = _
   text_menu(Self, Bool, Double, Double, Double, Double, Int) -> Unit = _
   edit_can(Self, Int) -> Unit = _
@@ -70,6 +77,11 @@ pub(open) trait Host {
   log(Self, String) -> Unit = _
   bench_mode(Self) -> Int = _
   set_outside(Self, FuncRef[(Int, Int, Int) -> Unit]) -> Bool = _
+  answers_by_frame(Self, Int) -> Bool = _
+  script_step(Self, String, String) -> String = _
+  rows_on_pixels(Self) -> Bool = _
+  keeps_sources(Self) -> Bool = _
+  lines_on_pixels(Self) -> Bool = _
   frame_awaiting(Self, Int, String) -> Unit = _
   own_clock(Self) -> Bool = _
   reduce_motion(Self) -> Bool = _
@@ -86,6 +98,7 @@ pub(open) trait Host {
   system_dark(Self) -> Bool = _
   font_scale(Self) -> Double = _
   native_pointing(Self) -> Int = _
+  pointing(Self) -> Int = _
   keyboard(Self) -> Int = _
   a11y_on(Self) -> Bool = _
   a11y_tree(Self, String) -> Unit = _
@@ -203,6 +216,7 @@ pub(open) trait Host {
   st_audio(Self, Int, Bytes) -> Unit = _
   st_layers(Self) -> Int = _
   st_pointer(Self, Int, Bytes, Double, Double, Double, Double) -> Unit = _
+  st_pointer_named(Self, Int, String, () -> Bytes, Double, Double, Double, Double) -> Unit = _
   st_pointer_at(Self, Int, Double, Double, Int) -> Unit = _
   st_direct(Self, Int, Double, Double, Int) -> Unit = _
   st_h265_here(Self) -> Int = _
@@ -262,6 +276,11 @@ impl Host with window_setup(_, _, _, _, _, _) {
 ///|
 impl Host with window_inset(_) {
   false
+}
+
+///|
+impl Host with window_buttons_down(_, _, _) {
+  ()
 }
 
 ///|
@@ -380,6 +399,11 @@ impl Host with wall_ms(_) {
 }
 
 ///|
+impl Host with clock_at_wall(self, ms) {
+  ms - (self.wall_ms() - self.now())
+}
+
+///|
 impl Host with utc_offset_min(_, _) {
   0
 }
@@ -407,6 +431,16 @@ impl Host with platform(_) {
 ///|
 impl Host with request_frame(_) {
   ()
+}
+
+///|
+impl Host with request_frame_on(self) {
+  self.request_frame()
+}
+
+///|
+impl Host with frames_paced(self, _) {
+  self.request_frame_on()
 }
 
 ///|
@@ -485,6 +519,21 @@ impl Host with present(_, _, _, _, _, _) {
 }
 
 ///|
+impl Host with groups_here(_) {
+  false
+}
+
+///|
+impl Host with group_set(_, _, _, _, _) {
+  ()
+}
+
+///|
+impl Host with group_drop(_, _) {
+  ()
+}
+
+///|
 impl Host with set_ime(_, _, _, _, _, _, _, _, _) {
   ()
 }
@@ -532,6 +581,33 @@ impl Host with bench_mode(_) {
 ///|
 impl Host with set_outside(_, _) {
   false
+}
+
+///|
+impl Host with answers_by_frame(_, _) {
+  false
+}
+
+///|
+impl Host with rows_on_pixels(_) {
+  false
+}
+
+///|
+impl Host with keeps_sources(_) {
+  false
+}
+
+///|
+impl Host with lines_on_pixels(self) {
+  let o = FixedArray::make(6, -1.0)
+  self.font_metrics(15.0, 400, 0, o)
+  o[5] == 1.0
+}
+
+///|
+impl Host with script_step(_, step, _) {
+  "\{step}: this host takes no such step of a script"
 }
 
 ///|
@@ -622,6 +698,11 @@ impl Host with system_dark(_) {
 ///|
 impl Host with native_pointing(_) {
   0
+}
+
+///|
+impl Host with pointing(_) {
+  -1
 }
 
 ///|
@@ -1388,6 +1469,15 @@ pub fn window_inset() -> Bool {
 }
 
 ///|
+/// The window's buttons in the app's top row (window_inset) moved to `by` lower than centred on its first 44, where the
+/// app's top row starts that much under the window's top (macOS's; a panel inset from the window's edges): from where
+/// they are, over `ms` on a Move's way (Ease::Move), at once where the window is not seen yet. Nothing where the system
+/// has no such buttons there.
+pub fn window_buttons_down(by : Double, ms : Double) -> Unit {
+  current.val.window_buttons_down(by, ms)
+}
+
+///|
 /// Whether the desktop's window fills the screen now (macOS's full screen). False where there is no such window.
 pub fn full_screen() -> Bool {
   current.val.full_screen()
@@ -1575,6 +1665,14 @@ pub fn wall_ms() -> Double {
 }
 
 ///|
+/// The moment on now()'s clock the time of day is `ms` (as wall_ms has it): how far the day is ahead of the clock
+/// taken from it. A run on a clock of its own (a scripted shot, a Tester's) has its day at its clock's 0 taken from it,
+/// as it is.
+pub fn clock_at_wall(ms : Double) -> Double {
+  current.val.clock_at_wall(ms)
+}
+
+///|
 /// What the pointer's event being delivered came from, where one machine has both: 1 a finger on the screen, 0 a
 /// mouse, a trackpad or a pen (Windows: a touch screen beside a mouse); -1 where the host does not say (its system's
 /// hand: Android's and iOS's fingers, a Mac's pointer).
@@ -1614,6 +1712,23 @@ pub fn platform() -> Int {
 ///|
 pub fn request_frame() -> Unit {
   current.val.request_frame()
+}
+
+///|
+/// A frame asked for what moves on by the clock (a motion going on, a cycle shown), not for what changed: a host's
+/// next display frame, as request_frame; a run whose time goes by as it says (a Tester's) owes none at this moment.
+pub fn request_frame_on() -> Unit {
+  current.val.request_frame_on()
+}
+
+///|
+/// A frame asked for what moves on by the clock (as request_frame_on, in the frame that asks) that needs only `hz`
+/// frames a second: drawn at the display's frame about `1000 / hz` ms after this one's, those between drawing nothing,
+/// and the display told it may refresh that slowly meanwhile (iOS's and macOS's CADisplayLink preferredFrameRateRange,
+/// Android's Surface.setFrameRate); anything asking for a frame before then (request_frame: an input, a change) has
+/// the display's next and every frame again. A host with nothing for it draws the display's next (request_frame_on).
+pub fn frames_paced(hz : Double) -> Unit {
+  current.val.frames_paced(hz)
 }
 
 ///|
@@ -1748,6 +1863,28 @@ pub fn present(
 }
 
 ///|
+/// Whether the host keeps groups of instances (group_set) and draws a header of one among a frame's in its place
+/// (kind 13, mbui/src/ui/scene.mbt): a row of a list kept, moved, drawn by its header alone.
+pub fn groups_here() -> Bool {
+  current.val.groups_here()
+}
+
+///|
+/// Group `id` kept by the host: `n` instances (`inst`, as `present` takes them), and which of each one's numbers a
+/// header moves with it (`moves`, one each: bits 0-3 its clip's 16-19, 4-7 its outer's 40-43, 8 its turn's point
+/// 33-34; its rect's 0-1 always, a shape's band's first piece 12 by the header's 15). A number is never another
+/// group's.
+pub fn group_set(id : Int, inst : FixedArray[Double], moves : FixedArray[Double], n : Int) -> Unit {
+  current.val.group_set(id, inst, moves, n)
+}
+
+///|
+/// Group `id` let go: no frame presented from here on has a header of it.
+pub fn group_drop(id : Int) -> Unit {
+  current.val.group_drop(id)
+}
+
+///|
 pub fn set_ime(
   active : Bool,
   x : Double,
@@ -1844,6 +1981,44 @@ pub fn bench_mode() -> Int {
 /// failed), on the main thread, between frames. False where the host sends no such events.
 pub fn set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool {
   current.val.set_outside(f)
+}
+
+///|
+/// Whether what the host does for the app of `kind` (as set_outside numbers them) is done by the next frame, told by
+/// no event: what waits on it reads it again at each frame while it waits. False where the host tells each as it is
+/// done (set_outside).
+pub fn answers_by_frame(kind : Int) -> Bool {
+  current.val.answers_by_frame(kind)
+}
+
+///|
+/// Whether the host draws each glyph on its device's pixels, a list's rows set on them as it moves (@ui's
+/// rows_on_grid): every platform's does.
+pub fn rows_on_pixels() -> Bool {
+  current.val.rows_on_pixels()
+}
+
+///|
+/// Whether the window's tree keeps where in the source each node was made and its properties said (view's source.mbt):
+/// a Tester's fake host does, for what it finds to say where to change it; a device's does not, its calls only passing
+/// their places on.
+pub fn keeps_sources() -> Bool {
+  current.val.keeps_sources()
+}
+
+///|
+/// Whether the host sets things on whole device pixels, its lengths as its lines (Android's: Compose rounds each
+/// length to pixels, StaticLayout each line), as it says of its fonts (font_metrics' sixth number).
+pub fn lines_on_pixels() -> Bool {
+  current.val.lines_on_pixels()
+}
+
+///|
+/// A scripted run's step only a host can carry out (@ui's drive: what the system says on its channel `system`, what a
+/// native view's host says `viewsaid`, the keyboard's height `ime`, the pickers' answers `picks`), `arg` as the script
+/// says it: "" done, else why not.
+pub fn script_step(step : String, arg : String) -> String {
+  current.val.script_step(step, arg)
 }
 
 ///|
@@ -1945,21 +2120,22 @@ pub fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
 
 ///|
 /// Whether something reads the app's widgets out (Android: an accessibility service on, TalkBack's or another's): the
-/// app then tells the host what its widgets are as they change (`a11y_tree`, @ui's semantics.mbt).
+/// app then tells the host what of its widgets changed (`a11y_tree`, @ui's a11y.mbt).
 pub fn a11y_on() -> Bool {
   current.val.a11y_on()
 }
 
 ///|
-/// What the app's widgets are now, for the system's accessibility (@ui's semantics.mbt says the lines). What is asked
-/// of one comes back on the channel `a11y_channel`.
+/// What of the app's widgets changed, for the system's accessibility: an update of what the host keeps of them (@ui's
+/// a11y.mbt's head says it: the nodes that changed, each whole, and the focus). What is asked of one comes back on the
+/// channel `a11y_channel`.
 pub fn a11y_tree(tree : String) -> Unit {
   current.val.a11y_tree(tree)
 }
 
 ///|
-/// The channel what the system's accessibility asks of a widget is posted on (`{"id": widget, "action": name}`): the
-/// framework's own (@ui takes it).
+/// The channel what the system's accessibility asks of a widget is posted on (`{"id": widget, "action": name}`; a host
+/// that lost what it kept, `{"action": "resend"}`): the framework's own (@ui takes it).
 pub let a11y_channel : String = "a11y"
 
 ///|
@@ -1977,6 +2153,13 @@ pub fn font_scale() -> Double {
 /// mouse or a touchpad: DeX, ChromeOS; Windows otherwise), 0 where it cannot tell (the platform's then: @ui).
 pub fn native_pointing() -> Int {
   current.val.native_pointing()
+}
+
+///|
+/// What the person points with as the host knows it before any event says (event_finger): 1 a finger, 0 a mouse, a
+/// trackpad or a pen; -1 where it does not say (its system's hand then: @ui).
+pub fn pointing() -> Int {
+  current.val.pointing()
 }
 
 ///|
@@ -2003,7 +2186,7 @@ pub fn set_dark(dark : Bool) -> Unit {
 }
 
 ///|
-/// Turned sideways for a film (still.fail's player, Player.kt): landscape asked for (a phone with rotation locked
+/// Turned sideways for a film (still.fail's player): landscape asked for (a phone with rotation locked
 /// turns too) and the system's bars out of the way (a swipe brings them for a while); `false`, upright as it was.
 /// Android does it (the activity's requested orientation, its window's insets controller), and iOS (the scene's
 /// orientations, the status bar and the home indicator hidden); elsewhere nothing turns.
@@ -2051,6 +2234,10 @@ let turnable_now : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) 
 /// 5 s while on, the host writes a line of what the process takes (its share of a CPU, by thread, the device's thermal
 /// state, …) to a file of the app's own, and the app's frames their summary (perf_line): nothing leaves the device.
 /// iOS and Windows keep one; elsewhere -1.
+/// Reading it for a warm phone: find when (thermal, then the cpu lines before it), then which thread: main is the
+/// app's frames (fps near 0 at rest; `frames why` names what drew), the core's is its JS (`core js:`, `core: in` by
+/// topic), the stream's is a screen, Apple's the system working for the app. Read it against background, a screen
+/// open, charging and low power.
 pub fn perf_state() -> Int {
   current.val.perf_state()
 }
@@ -2190,8 +2377,11 @@ pub fn install_package(name : String, data : Bytes) -> Unit {
 /// KEYCODE_PASTE), `drive_backspace`, `drive_shot` the window's picture saved at `text` (a path); 6 and 7 one of the
 /// app's notifications (notify.mbt) whose title or words hold `text`, tapped (6) or only looked for (7), false when none
 /// does; 8 the window resized to "<w>x<h>"; 9 the directory `text` watched for what the run's runner has done, each
-/// file come there posted on channel "runner" (done_watch.h: macOS, Android, Windows). False where the host has no
-/// such path (the caller sends it to the app itself).
+/// file come there posted on channel "runner" (done_watch.h: macOS, Android, Windows); 10 the canvas's GL context made
+/// anew, as one lost (Linux and the browser: the images' contract, scripts/host_contract.sh), 11 whether it has been since;
+/// 12 input to the screen measured by the host, `text` "MODE X Y" (macOS's mac_latency.h, Android's Latency.java: its
+/// own events from then on, the process ending with what it measured). False where
+/// the host has no such path (the caller sends it to the app itself).
 pub fn drive(kind : Int, text : String) -> Bool {
   current.val.drive(kind, text)
 }
@@ -2942,7 +3132,7 @@ fn ncall_end(id : Int) -> Unit {
 
 ///|
 /// A part of the next frame presented that changed from the one before (points), for a host that keeps its picture
-/// and draws only those parts again, the rest as it drew it (docs/partial-redraw.md): said once for each part before
+/// and draws only those parts again, the rest as it drew it: said once for each part before
 /// `present`; `w` < 0, all of it; once with `w` 0, none. A frame nothing was said for is drawn whole.
 pub fn render_dirty(x : Double, y : Double, w : Double, h : Double) -> Unit {
   current.val.rn_dirty(x, y, w, h)
@@ -2973,6 +3163,10 @@ impl Host with st_pointer(_, _, _, _, _, _, _) { () }
 fn st_pointer(id : Int, png : Bytes, w : Double, h : Double, hx : Double, hy : Double) -> Unit {
   current.val.st_pointer(id, png, w, h, hx, hy)
 }
+
+///|
+/// The pointer's picture told with the name the app gives it (`key`), made (`png`) only by a host that draws it.
+impl Host with st_pointer_named(self, id, _, png, w, h, hx, hy) { self.st_pointer(id, png(), w, h, hx, hy) }
 
 ///|
 impl Host with st_pointer_at(_, _, _, _, _) { () }

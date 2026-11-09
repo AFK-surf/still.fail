@@ -14,7 +14,7 @@ const rows: [scope: "station" | "account", name: string, fields: Field[]][] = Ob
     return [field.replace(/\?$/, ""), type, !field.endsWith("?")];
   });
   const service = name.slice(0, name.indexOf("."));
-  return [["workspace", "invitation", "loginSession", "admin"].includes(service) ? "account" : "station", name, fields];
+  return [["workspace", "invitation", "loginSession", "account", "admin"].includes(service) ? "account" : "station", name, fields];
 });
 
 const SAMPLE: Record<string, unknown> = { string: "x", number: 1, boolean: true, strings: ["x"], json: {} };

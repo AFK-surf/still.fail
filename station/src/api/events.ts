@@ -1,4 +1,4 @@
-// GET /events (the Rust station's admin/events.rs): what changed, as it changes, pushed. Changes that come in a burst go out
+// GET /events: what changed, as it changes, pushed. Changes that come in a burst go out
 // as one event per session, and one round of sidebar rows; a thread's entries go out as they are written; `host` adds
 // host samples, `job` a job's output as it grows, `live` sessions as they run. Keepalives and host samples only while
 // someone follows. The same event names and data as the Rust station's; what is told to everyone also carries an
@@ -82,11 +82,11 @@ export type EventsDeps = {
   subscribe(listener: (change: StoreChange) => void): () => void;
   /// A host sample (GET /host's answer).
   host(): Promise<unknown>;
-  /// A job's log path and how its lines are read (jobs.rs `tail`, `output_at`).
+  /// A job's log path and how its lines are read (`output_at`).
   jobLog(id: string): string | null;
   tail(path: string, lines: number): string;
   outputAt(path: string): number | null;
-  /// A session's live steps, from `from`, to `send`, until the returned function is called (live.rs); its transcript
+  /// A session's live steps, from `from`, to `send`, until the returned function is called; its transcript
   /// entries in brief (`brief`, read/transcript.ts) for a client that asks so.
   live?(key: string, from: number, last: number | null, send: (message: unknown) => void, brief: boolean): () => void;
   /// The sessions at work the station follows itself (sessions/live.ts `running`), and each as it is now (where its
@@ -95,16 +95,18 @@ export type EventsDeps = {
   heldNow?(key: string): unknown[];
   /// Whether a session is still there (a summary is told only of one that is).
   sessionExists(key: string): boolean;
+  /// Whether a live result still belongs to a session visible to this viewer, in one lookup when available.
+  liveSeen?(viewer: Viewer, key: string): boolean;
   /// The overview as `viewer` sees it, in `lang` (GET /overview); none until the agents' side is up.
   overview?(viewer: Viewer, lang: Lang): Promise<unknown>;
   /// A session's process state (the overview counts running and warm ones).
   processState?(key: string): string;
   /// Someone follows again, after nobody did (allowances are read again then).
   followed?(): void;
-  /// Whether `viewer` sees a session, a thread or a job: those of their workspace's chats (docs/multi-workspace.md).
+  /// Whether `viewer` sees a session, a thread or a job: those of their workspace's chats.
   /// None: every one.
   seen?(viewer: Viewer, of: { session: string } | { thread: number } | { job: string }): boolean;
-  /// A login's terminal (docs/remote-login.md): `send` given its screen now and as it changes, until the returned
+  /// A login's terminal: `send` given its screen now and as it changes, until the returned
   /// function is called.
   loginScreen?(id: string, send: (screen: { rows: string[]; cursor: { x: number; y: number }; echo: boolean; live: boolean }) => void): () => void;
   /// Whether `viewer` is a member of that vault of their workspace now (vault/secrets.ts `inVault`): whom its requests
@@ -117,7 +119,7 @@ export type EventsDeps = {
 };
 
 /// A viewer's streams in one language: what their sidebar and overview are told by. A person in two of the station's
-/// workspaces is two viewers (docs/multi-workspace.md).
+/// workspaces is two viewers.
 const viewerKey = (viewer: Viewer, lang: Lang) => `${viewer.email}\0${viewer.workspace}\0${lang}`;
 
 /// Whom an event is for, as data (what is kept goes over to the next process with it): the streams all it says holds
@@ -241,6 +243,9 @@ export class Events {
   }
   /// The process state last told per session.
   private states = new Map<string, string>();
+  /// How many times each session's taking of its messages was told (`session-pending`): a summary read across one is
+  /// older than it.
+  private taken = new Map<string, number>();
   private flushing: Promise<void> | null = null;
   private time: Fibers;
   private timers: (() => void)[] = [];
@@ -372,7 +377,7 @@ export class Events {
     Object.assign(this.deps, more);
   }
 
-  /// The station's screens changed (docs/remote-screens.md): `screens` as GET /screens answers it, in each stream's
+  /// The station's screens changed: `screens` as GET /screens answers it, in each stream's
   /// language (`listed`), the latest alone kept for one coming back.
   screens(listed: (lang: Lang) => unknown) {
     for (const lang of new Set(this.clients.map((c) => c.lang))) this.emit("screens", listed(lang), { lang }, `screens\0${lang}`);
@@ -384,7 +389,7 @@ export class Events {
     this.emit(event, data, to, of);
   }
 
-  /// A login changed (docs/remote-login.md): told to everyone as `machine-logins`, a read-only member given `limited`
+  /// A login changed: told to everyone as `machine-logins`, a read-only member given `limited`
   /// (how it stands only).
   machineLogins(data: { login: unknown }, limited: { login: unknown }, of: string) {
     this.emit("machine-logins", data, { readOnly: false }, `machine-logins\0${of}`);
@@ -589,7 +594,11 @@ export class Events {
     }
     // Those sessions as they run, on this same stream: each message a `live` event with its key.
     for (const [key, from, last] of live) {
-      const stop = this.deps.live?.(key, from, last, (message) => client.send("live", { ...(message as object), key }), brief);
+      const stop = this.deps.live?.(key, from, last, (message) => {
+        if (this.deps.liveSeen?.(viewer, key) ?? (this.deps.sessionExists(key) && this.sees(client, { session: key }))) {
+          client.send("live", { ...(message as object), key });
+        }
+      }, brief);
       if (stop) client.stops.push(stop);
     }
     // Those jobs' last lines: a `job-log` event now, and again each time the log changes, until the stream goes.
@@ -769,7 +778,10 @@ export class Events {
       case "session":
         // Its messages taken: how many it has yet to take, told now (its summary, read after, says it too): read
         // behind the station's other tells can leave a person's message showing that it waits for its agent.
-        if (change.pending !== undefined) this.emit("session-pending", { key: change.key, pending: change.pending }, { sees: { session: change.key } });
+        if (change.pending !== undefined) {
+          this.taken.set(change.key, (this.taken.get(change.key) ?? 0) + 1);
+          this.emit("session-pending", { key: change.key, pending: change.pending }, { sees: { session: change.key } });
+        }
         this.dirty.sessions.add(change.key);
         // Its summary is told (`session`): a device that makes its rows puts it in them.
         this.itemsChanged({ sessions: [change.key] }, null, true);
@@ -777,6 +789,7 @@ export class Events {
       case "sessionRemoved":
         this.dirty.sessions.delete(change.key);
         this.states.delete(change.key);
+        this.taken.delete(change.key);
         this.overviewChanged();
         this.emit("session-removed", { key: change.key }, { sees: { ws: change.ws ?? null } }, `session\0${change.key}`);
         this.itemsChanged({ sessions: [change.key] });
@@ -812,6 +825,14 @@ export class Events {
         break;
       case "read":
         this.emit("read", { viewer: change.viewer, thread: change.thread, n: change.n }, { email: change.viewer, sees: { thread: change.thread } });
+        this.itemsChanged({ threads: [change.thread] }, change.viewer, true);
+        break;
+      case "hidden":
+        this.emit("hidden", { thread: change.thread, hidden: change.hidden }, { email: change.viewer, sees: { thread: change.thread } });
+        this.itemsChanged({ threads: [change.thread] }, change.viewer, true);
+        break;
+      case "muted":
+        this.emit("muted", { thread: change.thread, muted: change.muted }, { email: change.viewer, sees: { thread: change.thread } });
         this.itemsChanged({ threads: [change.thread] }, change.viewer, true);
         break;
       case "identities":
@@ -962,7 +983,12 @@ export class Events {
     for (const key of dirty.sessions) {
       if (!this.deps.sessionExists(key)) continue;
       try {
-        this.emit("session", JSON.parse(await this.deps.readers.read("summary", { key }, "zh", TOLD)), { sees: { session: key } }, `session\0${key}`);
+        const taken = this.taken.get(key);
+        const summary = await this.deps.readers.read("summary", { key }, "zh", TOLD);
+        // Its messages taken while it was read: it has them waiting and the turn before, told after they were taken; the
+        // change that told it reads it again in the next round.
+        if (this.taken.get(key) !== taken) continue;
+        this.emit("session", JSON.parse(summary), { sees: { session: key } }, `session\0${key}`);
       } catch (error) {
         log.warn("events", "session event not sent", { session: key, error: (error as Error).message });
       }

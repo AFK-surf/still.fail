@@ -67,9 +67,9 @@ fn scroll_case() -> ScrollCase {
               b.width(Is(Some(300.0))).height(Is(Some(40.0))).on_press(fn() { pressed.val += 1 }) |> ignore
             })
             |> ignore
-            held.each(fn() { Array::makei(rows.get(), fn(i) { i }) }, fn(i) { i }, fn(r, i) {
+            held.each(at_once=true, fn() { Array::makei(rows.get(), fn(i) { i }) }, fn(i) { i }, fn(r, i) {
               r.width(Is(Some(300.0))).height(Is(Some(40.0))) |> ignore
-              if @signals.untracked(fn() { i.get() }) == 8 {
+              if i.untracked() == 8 {
                 r.focusable(Is(true)) |> ignore
                 focus.val = Some(r.id())
               }
@@ -228,7 +228,7 @@ test "scrolls: let go flinging, made again holding the same scroll: at rest wher
   let scroll = @view.Scroll::new()
   let tree = @view.Tree::new(
     fn(root) {
-      root.show(fn() { there.get() }, fn(v) {
+      root.show(at_once=true, fn() { there.get() }, fn(v) {
         v
         .width(Is(Some(300.0)))
         .height(Is(Some(100.0)))
@@ -315,11 +315,11 @@ test "claims: what takes over a hold let go after it went down, another made in 
   let ids : Array[@view.NodeId] = []
   let tree = @view.Tree::new(
     fn(root) {
-      root.show(fn() { a_on.get() }, fn(a) {
+      root.show(at_once=true, fn() { a_on.get() }, fn(a) {
         a.width(Is(Some(300.0))).height(Is(Some(100.0))).claims(fn(_, _) { true }).on_drag(fn(_) {  }) |> ignore
         ids.push(a.id())
       })
-      root.show(fn() { !a_on.get() }, fn(b) {
+      root.show(at_once=true, fn() { !a_on.get() }, fn(b) {
         b.width(Is(Some(300.0))).height(Is(Some(100.0))).claims(fn(_, _) { true }).on_drag(fn(_) {  }) |> ignore
         ids.push(b.id())
       })
@@ -380,12 +380,12 @@ test "scrolls: scrolled on, let go, made again holding the same scroll with what
   let scroll = @view.Scroll::new()
   let tree = @view.Tree::new(
     fn(root) {
-      root.show(fn() { there.get() }, fn(v) {
+      root.show(at_once=true, fn() { there.get() }, fn(v) {
         v
         .width(Is(Some(300.0)))
         .height(Is(Some(100.0)))
         .scrolls(scroll, fn(held) {
-          held.each(fn() { Array::makei(rows.get(), fn(i) { i }) }, fn(i) { i }, fn(r, _) {
+          held.each(at_once=true, fn() { Array::makei(rows.get(), fn(i) { i }) }, fn(i) { i }, fn(r, _) {
             r.width(Is(Some(300.0))).height(Is(Some(40.0))) |> ignore
           })
         })
@@ -623,7 +623,7 @@ fn bars_two(now : Ref[Double], inner : @signals.Signal[Bool], stacked? : Bool = 
           .width(Is(Some(300.0)))
           .height(Is(Some(100.0)))
           .scrolls(a, bar=test_bar(), fn(held) {
-            held.show(fn() { inner.get() && !stacked }, fn(deep) {
+            held.show(at_once=true, fn() { inner.get() && !stacked }, fn(deep) {
               deep.box(fn(deeper) {
                 deeper.box(fn(i) { i.width(Is(Some(300.0))).height(Is(Some(100.0))).scrolls(b, bar=blue_bar(), rows) |> ignore }) |> ignore
               })
@@ -728,7 +728,7 @@ test "a column's bar along its edge where the pointer stays still, a column in i
             .width(Is(Some(300.0)))
             .height(Is(Some(100.0)))
             .scrolls(inner, bar=blue_bar(), fn(ih) {
-              ih.each(fn() { Array::makei(rows.get(), fn(k) { k }) }, fn(k) { k }, fn(r, _) {
+              ih.each(at_once=true, fn() { Array::makei(rows.get(), fn(k) { k }) }, fn(k) { k }, fn(r, _) {
                 r.width(Is(Some(300.0))).height(Is(Some(40.0))) |> ignore
               })
             })
@@ -1012,4 +1012,20 @@ test "a column's bar in another along its edge where the pointer stays still, th
   tree.event(300.0, fn() { tall.set(100.0) })
   let gone = thumbs_drawn(tree, now, 1500.0)
   assert_eq((out, gone), (["other"], []))
+}
+
+///|
+test "scrolls: what it holds moved says it scrolled, once, whatever frames came between; its first placing, and frames with nothing moved, do not" {
+  let k = scroll_case()
+  let first = k.tree.take_scrolled()
+  k.tree.frame(390.0, 844.0) |> ignore
+  let still = k.tree.take_scrolled()
+  k.tree.wheel_at(150.0, 150.0, 0.0, 60.0, 0, 10.0) |> ignore
+  k.tree.frame(390.0, 844.0) |> ignore
+  // (a frame after it with nothing moved: what it said stays till asked)
+  k.tree.frame(390.0, 844.0) |> ignore
+  let moved = k.tree.take_scrolled()
+  let again = k.tree.take_scrolled()
+  k.tree.frame(390.0, 844.0) |> ignore
+  assert_eq((first, still, moved, again, k.tree.take_scrolled()), (false, false, true, false, false))
 }

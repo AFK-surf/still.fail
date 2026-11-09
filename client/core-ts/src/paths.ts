@@ -10,7 +10,7 @@ const ROOTS = /^\/(?:Users|Volumes|home|tmp|private|opt|var|etc|srv|mnt|workspac
  * The file (or directory) a bit of inline code names, with the line it points at (`src/a.ts:12`, `a.ts:12:4`,
  * `a.ts#L12`); null when it is not a path. Paths only: absolute ones under the machine's roots or with a file's
  * extension, `~/…`, `./…`, `../…`, or relative ones with a directory and an extension; a bare name with a code file's
- * extension (`Sidebar.tsx`), which is read under the session's working directory.
+ * extension, which is read under the session's working directory.
  */
 export function pathIn(code: string): { path: string; line: number | null } | null {
   const text = code.trim();

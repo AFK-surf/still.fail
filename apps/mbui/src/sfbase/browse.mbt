@@ -209,7 +209,7 @@ pub fn dv_drive_stations(src : Source, ws : String, here? : String = "") -> (Arr
   if here != "" {
     params["here"] = Json::string(here)
   }
-  let t = (src.topic)("stations", params)
+  let t = src.topic("stations", params).get().snapshot()
   let error = match t.error {
     Some(e) => Some(text(Some(e), "message"))
     None => None
@@ -227,8 +227,47 @@ pub fn dv_drive_stations(src : Source, ws : String, here? : String = "") -> (Arr
 pub fn dv_shown(src : Source, station : String, root : String, path : String, entries : Array[DvEntry]) -> Array[DvEntry]? {
   let v = browse_topic(src, browse_where("page", "phone", "list", station, root, path))
   match v {
-    Some(b) => dv_in_order(b.folders.get(path), entries)
+    Some(b) => dv_in_order_held(station + "|" + root + "|" + path, b.folders.get(path), entries)
     None => Some(entries)
+  }
+}
+
+///|
+/// Each folder's entries as last shown in an order said of the same entries (dv_in_order_held), by where it is.
+let dv_orders_held : Map[String, Array[DvEntry]] = {}
+
+///|
+/// Let go of each folder's entries held (sfbase's reset).
+fn dv_orders_reset() -> Unit {
+  dv_orders_held.clear()
+}
+
+///|
+/// `entries` in the order `names` says, as dv_in_order; but while the order names one the entries do not have (the
+/// core's two topics, the folder's entries and their order, each its own message: an entry renamed, gone or come told
+/// by one before the other), as the folder `key` was last shown, till they agree: a name changed is one row changed in
+/// place, not the old row gone and the new come a frame after (rows_steady.mbt's jolt, the list's room going back).
+pub fn dv_in_order_held(key : String, names : Array[String]?, entries : Array[DvEntry]) -> Array[DvEntry]? {
+  match names {
+    Some(ns) => {
+      let have : Set[String] = Set::new()
+      for e in entries {
+        have.add(e.name)
+      }
+      if ns.iter().any(fn(n) { !have.contains(n) }) {
+        match dv_orders_held.get(key) {
+          Some(was) => return Some(was)
+          None => ()
+        }
+      }
+      let out = dv_in_order(names, entries)
+      match out {
+        Some(o) => dv_orders_held[key] = o
+        None => ()
+      }
+      out
+    }
+    None => None
   }
 }
 

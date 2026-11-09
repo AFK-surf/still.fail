@@ -15,32 +15,35 @@ has_but() {
 }
 
 decide() {
-  # Part by part, as ~/bin/ember-deploy decided them.
+  # The agents' rules (AGENTS.md, CLAUDE.md) are built into nothing, and kept true by small changes of their own: one
+  # deploys and releases nothing (client/core-ts/AGENTS.md alone put out the web, the admin and three apps' betas, by
+  # its directory). scripts/plan-covers.ts holds it.
+  # (the right side reads the caller's `changed`: it is expanded before the local one is made)
+  local changed="$(printf '%s\n' "$changed" | grep -vE '(^|/)(AGENTS|CLAUDE)\.md$' || true)"
+  # Part by part.
   static=()
   # A reviewed stable release gets a fresh, pinned web artifact even when only its notes changed.
   if has '^docs/releases/'; then static+=(web-beta); fi
-  # (the app's page, each of the web app's pages: the app and mbui's web host built into it, apps/mbui/scripts/web-app.sh)
-  if has '^(web/|client/|rules/js/|apps/mbui/(src|mbui/src|mbui/web|assets)/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc)$)' && [ ${#static[@]} = 0 ]; then static+=(web-beta); fi
+  # (the app's page, each of the web app's pages: the app and mbui's web host built into it, apps/mbui/scripts/web-app.sh;
+  # the Worker that serves them, cloud/src/web.ts)
+  if has '^(web/|client/|rules/js/|apps/mbui/(src|mbui/src|mbui/web|assets)/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc|src/(web|compat)\.ts)$|apps/mbui/scripts/web-app\.sh$)' && [ ${#static[@]} = 0 ]; then static+=(web-beta); fi
   if has '^(web/|client/|rules/js/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.admin\.jsonc)$)'; then static+=(admin); fi
   if has '^cloud/(src/preview\.ts|build-static\.ts|wrangler\.preview\.jsonc)$'; then static+=(preview); fi
-  # The share host's page is the web's Markdown and visualizations, its words, the iroh it binds (client/), and its headers.
-  if has '^(web/|client/|rules/js/|package\.json$|pnpm-lock\.yaml$|cloud/(src/share\.ts|share-hosts\.ts|build-static\.ts|wrangler\.share\.jsonc|wrangler\.jsonc|deploy\.py)$)'; then static+=(share); fi
-  if has '^(web/src/site/|cloud/wrangler\.site-beta\.jsonc$)'; then static+=(site-beta); fi
+  # (the official site, website/, with the legal pages it serves from web/public)
+  if has '^(website/|web/public/((en/)?(terms|privacy|trademark)\.html|legal\.css|favicon-beta\.svg|favicon-beta-32\.png|apple-touch-icon-beta\.png)$|cloud/wrangler\.site-beta\.jsonc$)'; then static+=(site-beta); fi
   if has '^cloud/(status/|wrangler\.status\.jsonc$)'; then static+=(status); fi
   api=false
-  if has_but '^cloud/(src/|wrangler\.jsonc$|package\.json$|deploy\.py$)' '^cloud/src/(relay|relay-worker|preview|share)\.ts$'; then api=true; fi
+  if has_but '^cloud/(src/|wrangler\.jsonc$|package\.json$|deploy\.py$)' '^cloud/src/(relay|relay-worker|preview)\.ts$'; then api=true; fi
   # (and what cloud/src takes from outside cloud/: the lock's rules through the station's lock, the client's words and
   # limits; none of them deployed it, so a change to the rules alone reached no cloud, 2026-11-05)
   if has '^(rules/js/|station/src/cloud/lock\.ts$|client/(i18n/|limits\.ts$|core-ts/src/(picture-relay|lock-form)\.ts$))'; then api=true; fi
   relay=false
   if has '^cloud/(src/(relay|relay-worker|limits|auth)\.ts|Dockerfile|relay-entrypoint\.sh|wrangler\.relay\.jsonc)$'; then relay=true; fi
   station=false
-  # The station in TypeScript, its native parts (vendor/: the mesh addon's iroh), the rules it checks the lock and
+  # The station in TypeScript, its native parts (vendor/: the mesh addon's iroh), its programs in MoonBit (station/mb: the
+  # shell they link, client/shell, and mbui's effect), the rules it checks the lock and
   # vaults by (rules/js), what it shares with the core (client/core-ts/src: scripts/plan-covers.ts finds which), the words it says, the installer it carries (cloud/src/install*.ts: scripts/installers.ts).
-  if has '^(station/(src|native)/|rules/js/|client/core-ts/src/(shapes/(dsl|schema|model)|lock-form|whitespace|titles|chat-row|cache-policy|codex-quota|mediaFacts|digest|redact)\.ts$|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then station=true; fi
-  # The modules' packages (scripts/module-bundle.ts): what one packs (its module.json says), or how they are packed
-  # and signed: modules=….
-  if [ "${PLAN_MODULES:-1}" = 1 ]; then eval "$(printf '%s\n' "$changed" | node scripts/module-bundle.ts plan)"; else modules=; fi
+  if has '^(station/(src|native|mb)/|client/shell/|apps/mbui/mbui/src/effect/|rules/js/|client/core-ts/src/(shapes/(dsl|schema|model)|lock-form|whitespace|titles|chat-row|cache-policy|codex-quota|mediaFacts|digest|redact)\.ts$|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then station=true; fi
   # The beta Android app: mbui's in the Kotlin one's place (scripts/release.sh --beta android), released for a
   # change to what apps/mbui's beta is made of (scripts/beta.sh APP_SRC: its code, mbui's with its Android host's
   # Java, the client's, media's, vendor's), or to how it is released.
@@ -64,13 +67,6 @@ decide() {
   # to mbui (apps/mbui/mbui).
   mbui=false
   if has '^apps/mbui/' || has '^\.github/workflows/mbui-check\.yml$'; then mbui=true; fi
-  # The web in Chrome (check-browser): for a change to the web or its browser tests (scripts/check.sh's browser
-  # part says which exactly), or to the workflows (the job checks everything then). None, and its eight runners
-  # are not started: each fetched pnpm's 280 MB store and did nothing, 2.2 GB of a push's 4 GB of the Actions
-  # cache's downloads, whose account limit GitHub slows them by (mbui-only branches, login-flow-look 41162994216,
-  # 2026-10-31).
-  browser=false
-  if [ "$range" = all ] || has '^(web/|test/browser/)' || has_but '^\.github/' '^\.github/workflows/(mbui-|preview\.yml$)'; then browser=true; fi
   # Exercise the GitHub-hosted web and Mac release paths, without secrets or publishing, when their CI changes.
   release_smoke=false
   if [ "${GITHUB_REF:-}" != refs/heads/main ] && { [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ] || has '^(\.github/workflows/pipeline\.yml$|\.github/deploy\.sh$|\.github/actions/(setup|natives|mbui-moonbit)/|scripts/release\.sh$)'; }; then release_smoke=true; fi
@@ -84,13 +80,11 @@ print() {
     echo "api=$api"
     echo "relay=$relay"
     echo "station=$station"
-    echo "modules=$modules"
     echo "android_beta=$android_beta"
     echo "mac_beta=$mac_beta"
     echo "win_beta=$win_beta"
     echo "windows_natives=$windows_natives"
     echo "mbui=$mbui"
-    echo "browser=$browser"
     echo "release_smoke=$release_smoke"
   }
 }

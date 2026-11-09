@@ -116,7 +116,7 @@ fn usage_chats_node(parent : @view.View, core : Core, v : () -> Json?) -> Unit {
             .ground(By(fn() { if b.pointed() { @ui.tree_theme().color(Hover) } else { 0L } }))
             .says(By(fn() { Some(@view.said(Button, label=words())) }))
             |> ignore
-            @sf.presses_node(b, fn() { usage_pick.all.set(!@signals.untracked(fn() { usage_pick.all.get() })) })
+            @sf.presses_node(b, fn() { usage_pick.all.set(!usage_pick.all.untracked()) })
             @sf.words_node(b, words, fn() { if @sf.lit_node(b) { ug_more_lit } else { ug_more_words } }) |> ignore
           })
           |> ignore
@@ -262,7 +262,7 @@ fn usage_prices_link_node(parent : @view.View, core : Core) -> Unit {
     .radius(By(fn() { @ui.tree_theme().corner(Inner) }))
     .says(By(fn() { Some(@view.said(Link, label=@sf.t("web-main.usage.costPrices"))) }))
     |> ignore
-    @sf.presses_node(b, fn() { (core.push)(UsagePrices(@signals.untracked(fn() { usage_pick.days.get() }))) })
+    @sf.presses_node(b, fn() { (core.push)(UsagePrices(usage_pick.days.untracked())) })
     @sf.words_node(b, fn() { @sf.t("web-main.usage.seePrices") }, fn() { if @sf.lit_node(b) { ug_prices_lit } else { ug_prices_words } })
     |> ignore
   })
@@ -400,7 +400,7 @@ fn usage_chart_node(parent : @view.View, v : () -> Json?, filtered : () -> Json?
   }
   let days : Map[String, @view.View] = Map([])
   let press = fn(key : String) {
-    let now = @signals.untracked(fn() { usage_pick.day.get() })
+    let now = usage_pick.day.untracked()
     usage_pick.day.set(if now == key { "" } else { key })
   }
   // the day nearest a finger's x, by where the days are laid out
@@ -968,10 +968,10 @@ pub fn usage_node(
     Some(w) => w
     None => fn() { v.window().0 }
   }
-  let read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get())) }
+  let read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get())).get() }
   let value = fn() { read().value }
   // Keep the chart's unfiltered view subscribed while the selected totals and chats are read.
-  let chart_read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get(), chart=true)) }
+  let chart_read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get(), chart=true)).get() }
   let chart = fn() { chart_read().value }
   // (at its title's line's end; where a frame's bar names it, in that bar, as tall as its days' choice stands there)
   let actions = fn(l : @view.View) {
@@ -1074,7 +1074,7 @@ pub fn usage_prices_node(
   said? : (@sf.PageSaid) -> Unit,
   width? : () -> Double,
 ) -> Unit {
-  let topic = fn() { (core.topic)("usage", { "scope": str(here().workspace), "days": Json::number(days.to_double()) }) }
+  let topic = fn() { (core.topic)("usage", { "scope": str(here().workspace), "days": Json::number(days.to_double()) }).get() }
   let tables = fn() { items(topic().value, "prices") }
   let wait = fn() { field(topic().value, "wait") }
   let blocks = fn() {

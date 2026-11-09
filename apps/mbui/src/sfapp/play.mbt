@@ -2,7 +2,7 @@
 // first, and what is on top dark or light whatever the theme (the system bars' icons follow it).
 
 ///|
-/// Back while the player on top is sideways turns it upright first (Player.kt BackHandler).
+/// Back while the player on top is sideways turns it upright first.
 fn play_back(c : @ui.Ctx) -> Unit {
   match app.nav.top() {
     DrivePlay(at) =>

@@ -175,6 +175,26 @@ test "the app's core kept, then given again in its place, its wall clock with it
 }
 
 ///|
+test "attaching a replay sends the still watched subscription to the replay" {
+  let kept =
+    #|{"out":{"id":7,"subscribe":{"topic":"replay-watched"},"keyed":true}}
+    #|{"in":{"id":7,"value":"here"}}
+  let seen : Array[String] = []
+  let stop = @signals.effect(fn() {
+    let s = @core.subscribe("replay-watched").followed()
+    seen.push(match s.value { Some(String(v)) => v; _ => "" })
+  })
+  let r = @core.Replay::parse(kept)
+  r.attach()
+  assert_eq(r.unmade().length(), 0)
+  assert_eq(r.deliver(), 1)
+  assert_eq(seen, ["", "", "here"])
+  stop()
+  @core.Replay::detach()
+  @core.client.reset()
+}
+
+///|
 test "the run's calls a test does not make again, skipped with their answers" {
   let r = @core.Replay::parse(run)
   r.skip("chat.send")

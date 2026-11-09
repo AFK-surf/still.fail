@@ -161,6 +161,7 @@ fn Ctx::words_over_leaving_layer(self : Ctx, under : InstBy, over : InstBy) -> B
 ///|
 /// The pairs of nodes' words the frame just drawn shows one over the other, each once: their words, where they meet.
 fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double, Bool)] {
+  self.flat_from(0)
   let a = self.inst
   let ks : Array[Int] = []
   let rs : Array[(Double, Double, Double, Double)] = []
@@ -208,6 +209,13 @@ fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double,
     let y1 = dmin(a[b + 1] + a[b + 3] - 0.75, a[b + 19])
     let y1 = if a[b + 55] > 0.0 { dmin(y1, a[b + 54] - a[b + 55] * least) } else { y1 }
     let (x0, y0, x1, y1) = (dmax(x0, 0.0), dmax(y0, 0.0), dmin(x1, self.width), dmin(y1, self.height))
+    // (and by its outer, where it has one (40-51, a corner's radius: a round clip's in a square one): what the
+    // renderers cut it by too; a rect there with no corner's radius is none, cutting nothing as they draw it)
+    let (x0, y0, x1, y1) = if inst_has_outer(a, b) {
+      (dmax(x0, a[b + 40]), dmax(y0, a[b + 41]), dmin(x1, a[b + 42]), dmin(y1, a[b + 43]))
+    } else {
+      (x0, y0, x1, y1)
+    }
     if x1 > x0 && y1 > y0 {
       ks.push(k)
       rs.push((x0, y0, x1, y1))
@@ -297,6 +305,10 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
       continue
     }
     words_over.pairs.add(pair)
+    if self.motion == Count {
+      println("MOTION words_over \{words_over.file}: \{pair} at (\{x.round()}, \{y.round()}) at \{self.fake.time} (the Tester made at \{looks_made_at.val})")
+      continue
+    }
     let bar = words_over_bars.get(words_over.file).unwrap_or(0)
     if words_over.pairs.length() > bar {
       let said = "words over words while it moves (words_over.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +

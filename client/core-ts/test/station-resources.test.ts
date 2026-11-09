@@ -1,6 +1,6 @@
 // What still.fail uses of a station's machine (the `stationResources` topic, station/sync.ts `resourcesWatch`): told by
-// the station as it looks, on a stream of its own, while shown and a page of the app is in view; asked again and again
-// of a station from before.
+// the station as it looks, on a stream of its own, while shown and a page of the app is in view; asked once of a
+// station from before.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { RESOURCES_EVERY_MS } from "../src/station/sync.ts";
@@ -41,7 +41,7 @@ test("resources_are_told_on_one_stream_while_shown_and_none_is_held_while_no_pag
   await s.core.close();
 });
 
-test("a_station_from_before_answers_resources_whole_and_is_asked_again_every_few_seconds_while_shown", async () => {
+test("a_station_from_before_answers_resources_whole_once_and_is_not_asked_again_on_a_timer", async () => {
   const s = await started({ ...base(), "GET /resources": { at: 1, groups: [] } });
   const ui = s.core.connect();
   const values = new Map<number, unknown>();
@@ -51,6 +51,6 @@ test("a_station_from_before_answers_resources_whole_and_is_asked_again_every_few
   assert.deepEqual(values.get(1), { at: 1, groups: [] });
   const first = asks(s);
   await s.host.time.pass(3 * RESOURCES_EVERY_MS, 100);
-  assert.equal(asks(s) - first, 3);
+  assert.equal(asks(s) - first, 0);
   await s.core.close();
 });

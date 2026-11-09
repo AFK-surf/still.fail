@@ -64,18 +64,18 @@ Choosing where to run: the right OS and architecture first; then enough free mem
 build needs several GiB of each); then the least busy (low CPU busy and load per core, few running tasks). Heavy
 builds and test suites go to a big machine, not a small VM. Offline stations are skipped. There are no locks: do
 not wait for, ask for or announce a "lock" on a machine, and do not queue behind other agents' claims. Look at the
-load, and if a machine is busy pick another or start anyway when nothing better is free: the station queues it.
+load, and if a machine is busy pick another or start anyway when nothing better is free: the station queues it when
+it must.
 
-A station runs other stations' tasks through its own queue. When it is busy, `start` answers with `queue` (its place
-and why it waits: busy CPUs, memory under pressure, the screen another task's) and the task starts by itself when there
-is room: one by one, each next only once the last has got going and the CPUs have room, none while the memory is under
-pressure. A task started beside others gets `STILLFAIL_CPUS` (and `MAKEFLAGS`, `CARGO_BUILD_JOBS`,
-`CMAKE_BUILD_PARALLEL_LEVEL` when not set) with how many CPUs are free: pass it to tools that take every core
-otherwise. You end `waiting` as for any task; its end is told as usual.
+A station runs other stations' tasks through its own queue. Busy CPUs never hold a task back; when one must wait,
+`start` answers with `queue` (its place and why it waits: memory under pressure, the screen another task's or a
+person's, the small-task slot taken) and the task starts by itself when that passes. A task started beside others may
+get `STILLFAIL_CPUS` (and `MAKEFLAGS`, `CARGO_BUILD_JOBS`, `CMAKE_BUILD_PARALLEL_LEVEL` when not set) with how many CPUs
+are free: pass it to tools that take every core otherwise. You end `waiting` as for any task; its end is told as usual.
 
 For a brief offscreen task such as a single picture made with a prebuilt renderer, `station_task` prepare takes
-`small: true`: one such task may run alongside busy builds without waiting for the CPU sampling interval. It is told
-to use one CPU, still waits under memory pressure, and waits if another small task is running. Do not use it for builds,
+`small: true`: one such task may run beside the rest even while the memory is under pressure (not when it is about
+to run out). It is told to use one CPU, and waits if another small task is running. Do not use it for builds,
 test suites, video, or work needing the screen. An older target that cannot do this says so at prepare.
 
 The screen (windows, GUI tests, simulators, emulators, screenshots of what is on it) is one task's at a time. Run just
@@ -101,6 +101,9 @@ output inside it rather than elsewhere on that machine (or over ssh): it is remo
 this chat is archived or deleted, or after 14 days unused, which is what keeps the target's disk free. Pin inputs and
 versions: clone or fetch the intended revision there, or upload a bundle.
 
+If prepare fails or is interrupted, start refuses that key until a prepare succeeds. Retry the intended prepare; use a
+new key for different work. A failed re-prepare never makes the previous command the intended one.
+
 A station is often someone's own computer, in use. A command that needs an administrator's password or a permission
 the system asks for (`sudo`, `sfltool dumpbtm`, a first `osascript` controlling another app, a protected folder) puts
 the system's dialog on that machine's screen, naming only the command, so nobody there can tell who asks; the task
@@ -121,6 +124,12 @@ at a time per mirror.
 station restarts; no local polling job is needed. End `waiting`, naming the task. Download artifacts with
 `station_file` and post them to the requesting chat. Downloads create new files, never overwrite; inputs may be
 uploaded again before start.
+
+When a task changes files in a mirror, the next sync preserves those changes if the source is unchanged, and refuses
+conflicting changes on both sides. Its result must finish coming back before another task uses the mirror. If a notice
+says some results could not be saved, preserve those with `station_file` first, then use `station_task` action `release`
+with that task's key; this permits later tasks to change the remote files. A target without this protection must be
+updated before a task can sync a directory there.
 
 After a timeout, inspect or retry the same key: work may already have run. Lost remote processes are not restarted
 automatically; `failed` without an exit code means the outcome may be uncertain. Inspect before using a new key.

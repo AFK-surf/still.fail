@@ -1,5 +1,5 @@
-// Every call to the platform goes through here, so tests can swap in a fake
-// host: no window, no GPU, deterministic text metrics and a clock the test
+// Every call to the platform goes through here, each asked of @hostapi's host whoever it is. A Tester's is its fake
+// host (FakeHost, its answers in fake_host.mbt): no window, no GPU, deterministic text metrics and a clock the test
 // advances.
 
 ///|
@@ -18,6 +18,9 @@ struct FakeHost {
   /// how many times the app asked for the host's next frame for what goes on by the clock (h_request_frame_on): owed
   /// no frame at this moment, as a host draws one at its next display frame (Tester::frames_on)
   mut frames_on : Int
+  /// how many frames a second what moves on by the clock was last said to need (@hostapi.frames_paced), as a host is
+  /// told it after the frame it asked for (0: none said since a frame was last asked for: the display's every frame)
+  mut paced : Double
   mut wake : Double
   mut instances : Int
   mut ime_active : Bool
@@ -48,7 +51,7 @@ struct FakeHost {
   keys : Int
   // what the person points with (Tester::new's `pointing`: by default its system's; as the host says its events came,
   // where it does: Tester::host_says_finger)
-  mut pointing : Pointing
+  pointing : Pointing
   /// when the input event being handled happened, where the host says it so apart from its clock (a test's event
   /// taken late: Tester::touch_at); -1: as the clock has it
   mut event_at : Double
@@ -70,8 +73,8 @@ struct FakeHost {
   /// what each decode asked for is of: its source (bytes handed over, the source they were handed for)
   image_srcs : Map[Int, String]
   images : Map[Int, FakeImage]
-  /// Failed decodes of pictures the last painted frame needed, not every failed decode still in the cache.
-  frame_failed_images : Array[Int]
+  /// the last decode's number: each new one the next, never one let go of again (as every host numbers them)
+  mut image_ids : Int
   // what bold adds to a cluster's advance, in ems (0 by default: weight
   // changes nothing)
   mut bold : Double
@@ -81,6 +84,10 @@ struct FakeHost {
   // its glyphs' generation (@hostapi.atlas_generation): moved on by Tester::glyphs_moved_on, as a host's is once a face
   // it was given is in (a page's, loaded after it is asked for), its scale changes or its atlas is lost
   mut generation : Int
+  // Number of times a frame asks this fake host for its glyph generation.
+  mut generation_asks : Int
+  // Let a test model a host that advances its generation while installing a face.
+  generation_on_face_add : Ref[Bool]
   // what a digit set all one width (@hostapi.style_tabular) adds to its advance, in ems (0 by default: the same either way)
   mut tabular : Double
   // how big each glyph's picture is, in points (6 by 10 by default): what fills an atlas's plots, as large ones do
@@ -140,6 +147,9 @@ struct FakeHost {
   mut inset : Bool
   /// the window filling the screen (Ctx::set_full_screen), as last made to
   mut full : Bool
+  /// how much lower the window's buttons go in the app's top row and over how long (@hostapi.window_buttons_down), as
+  /// last told
+  mut buttons_down : (Double, Double)
   /// how round the system draws the window's corners (Tester::new's `window_corner`; none filling the screen), and
   /// each of them where they differ (Tester::new's `window_corners`: top left, then round it)
   window_corner : Double
@@ -150,9 +160,12 @@ struct FakeHost {
   /// handed it last (@hostapi.nav_bar's JSON; "" none yet)
   mut nav_able : Bool
   mut nav_said : String
-  /// something reading the widgets out (a11y_on), and what it was last told they are (a11y.mbt)
+  /// something reading the widgets out (a11y_on), the last update it was told (a11y.mbt), what it has of them as the
+  /// updates left it, and how many times the app had told it as the Tester last held that to what is read out
   mut a11y : Bool
   mut a11y_said : String
+  a11y_told : A11yMirror
+  mut a11y_held : Int
   env : Map[String, String]
   app_version : Int
   /// the system's notifications the app shows, oldest first (notify.mbt), and the one tapped, not yet taken
@@ -200,6 +213,12 @@ struct FakeHost {
   /// the PNG each drawing of marks gives (Tester::marks_make: what the next is to give, else one clear pixel)
   marks_out : Array[Bytes]
   mut marks_next : Bytes?
+  /// a list's rows set on its pixels (rows_on_pixels): every platform's host does; a Tester's only where its test says
+  /// so (Tester::set_rows_on_pixels), its frames' layout else as it always was
+  mut rows_on_pixels : Bool
+  /// the window's tree keeps where in the source each node was made (keeps_sources): a Tester's does, unless what it
+  /// runs is measured as a device runs it (Tester::new's `keeps_sources`)
+  keeps_sources : Bool
   /// the marks' drawings answered as the test says (Tester::marks_by_hand, Tester::marks_answer), not by the frame
   /// after each is asked
   mut marks_by_hand : Bool
@@ -297,15 +316,6 @@ pub(all) struct Live {
 }
 
 ///|
-/// The real host the Tester asks in place of its fake (Tester::new's `live`), None in a test.
-fn live_of() -> Live? {
-  match fake.val {
-    Some(f) => f.live
-    None => None
-  }
-}
-
-///|
 /// The most turns a live host is given to decode a picture (Live::turn): what it has not decoded by then failed.
 let live_turns_most = 3000
 
@@ -345,7 +355,8 @@ priv struct FakeImage {
 
 ///|
 fn fake_image_sized(f : FakeHost, w : Double, h : Double, ow : Double, oh : Double) -> Int {
-  let id = f.images.length() + 1
+  f.image_ids += 1
+  let id = f.image_ids
   f.wants = true
   f.images[id] = { state: if ow > 0.0 { 0 } else { -1 }, w, h, ow, oh }
   id
@@ -355,7 +366,8 @@ fn fake_image_sized(f : FakeHost, w : Double, h : Double, ow : Double, oh : Doub
 fn fake_image(f : FakeHost, ow : Int, oh : Int, max_px : Int) -> Int {
   let k = if ow > oh { max_px.to_double() / ow.to_double() } else { max_px.to_double() / oh.to_double() }
   let k = if k > 1.0 { 1.0 } else { k }
-  let id = f.images.length() + 1
+  f.image_ids += 1
+  let id = f.image_ids
   // the decode will be done by the next frame, which it asks for
   f.wants = true
   f.images[id] = {
@@ -374,141 +386,85 @@ let fake : Ref[FakeHost?] = { val: None }
 
 ///|
 fn h_now() -> Double {
-  match fake.val {
-    Some(f) => f.time
-    None => @hostapi.now()
-  }
+  @hostapi.now()
 }
 
 ///|
 fn h_wall_ms() -> Double {
-  match fake.val {
-    Some(f) => f.wall + f.time
-    None => @hostapi.wall_ms()
-  }
+  @hostapi.wall_ms()
 }
 
 ///|
-/// How far local time is ahead of UTC at `at_ms`, in minutes: a Tester's is UTC's (0).
+/// The frames' clock's moment the time of day is `ms` (@hostapi.clock_at_wall).
+fn h_clock_at_wall(ms : Double) -> Double {
+  @hostapi.clock_at_wall(ms)
+}
+
+///|
+/// How far local time is ahead of UTC at `at_ms`, in minutes.
 fn h_utc_offset_min(at_ms : Double) -> Int {
-  match fake.val {
-    Some(_) => 0
-    None => @hostapi.utc_offset_min(at_ms)
-  }
+  @hostapi.utc_offset_min(at_ms)
 }
 
 ///|
-/// How much later than its time the frame before this one reached the screen (@hostapi.frame_late): a Tester's as
-/// said for this frame (Tester::frame_late, a run's LATE line), else on time.
+/// How much later than its time the frame before this one reached the screen (@hostapi.frame_late).
 fn h_frame_late() -> Double {
-  match fake.val {
-    Some(f) => {
-      let c = g()
-      if f.late_after < 0.0 || c.clock <= f.late_after {
-        return 0.0
-      }
-      if f.late_frame < 0 {
-        f.late_frame = c.frame_no
-      }
-      if f.late_frame == c.frame_no {
-        f.late
-      } else {
-        f.late_after = -1.0
-        0.0
-      }
-    }
-    None => {
-      let late = @hostapi.frame_late()
-      // (kept on the tape, before the frame's DRAWHASH, for a Tester to draw the run again by: Tester::replay_frames)
-      if late > 0.0 && taping() && late_taped.val != g().frame_no {
-        late_taped.val = g().frame_no
-        tape_line("LATE \{late}")
-      }
-      late
-    }
+  let late = @hostapi.frame_late()
+  // (kept on the tape, before the frame's DRAWHASH, for a Tester to draw the run again by: Tester::replay_frames)
+  if late > 0.0 && taping() && late_taped.val != g().frame_no {
+    late_taped.val = g().frame_no
+    tape_line("LATE \{late}")
   }
+  late
 }
 
 ///|
 /// The frame whose lateness was kept on the tape last (h_frame_late).
-// kept across runs: a real host's alone, its frames numbered on from one run to the next (a Tester's lateness is not
-// taped)
+// kept across runs: its frames numbered on from one run to the next
 let late_taped : Ref[Int] = Ref(-1)
 
 ///|
-/// What the pointer's event being handled came from, as the host says (@hostapi.event_finger; the fake host's:
-/// Tester::host_says_finger): 1 a finger, 0 a mouse or a pen, -1 not said.
+/// What the pointer's event being handled came from, as the host says (@hostapi.event_finger): 1 a finger, 0 a mouse
+/// or a pen, -1 not said.
 fn h_event_finger() -> Int {
-  match fake.val {
-    Some(f) => f.event_finger
-    None => @hostapi.event_finger()
-  }
+  @hostapi.event_finger()
 }
 
 ///|
 /// When the input event being handled happened (the host's, else now).
 fn h_event_time() -> Double {
-  match fake.val {
-    Some(f) => if f.event_at >= 0.0 { f.event_at } else { f.time }
-    None => {
-      let t = @hostapi.event_time()
-      if t >= 0.0 {
-        t
-      } else {
-        @hostapi.now()
-      }
-    }
+  let t = @hostapi.event_time()
+  if t >= 0.0 {
+    t
+  } else {
+    @hostapi.now()
   }
 }
 
 ///|
 fn h_platform() -> Int {
-  match fake.val {
-    Some(f) => f.platform
-    None => {
-      if host_platform.val < 0 {
-        host_platform.val = @hostapi.platform()
-      }
-      host_platform.val
-    }
-  }
+  @hostapi.platform()
 }
 
 ///|
-/// The system whose keys the person types with (keys_system): a Tester's the system it plays; else the host's, but a
-/// browser's the system under it where it says (@hostapi.keys_platform), asked once.
+/// The system whose keys the person types with (keys_system): the host's, but a browser's the system under it where
+/// it says (@hostapi.keys_platform).
 fn h_keys() -> Int {
-  match fake.val {
-    Some(f) => f.keys
-    None => {
-      if host_keys.val < -1 {
-        host_keys.val = @hostapi.keys_platform()
-      }
-      if host_keys.val >= 0 {
-        host_keys.val
-      } else {
-        h_platform()
-      }
-    }
+  let k = @hostapi.keys_platform()
+  if k >= 0 {
+    k
+  } else {
+    h_platform()
   }
 }
 
 ///|
-// kept across runs: what the real host said of its keys (asked once, -2 not yet): a Tester never reads it
-let host_keys : Ref[Int] = { val: -2 }
-
-///|
-/// The host's system, asked once.
-// kept across runs: the real host's system (asked once): a Tester never reads it (h_platform answers its fake's)
-let host_platform : Ref[Int] = { val: -1 }
-
-///|
-/// Whose system's touches and fields this app has (`feel_as`): the host's own unless the app said another's. A
-/// Tester's is the system it plays.
+/// Whose system's touches and fields this app has (`feel_as`): the host's own unless the app said another's.
 fn h_feel() -> Int {
-  match fake.val {
-    Some(f) => f.platform
-    None => if feel_over.val >= 0 { feel_over.val } else { platform() }
+  if feel_over.val >= 0 {
+    feel_over.val
+  } else {
+    platform()
   }
 }
 
@@ -522,49 +478,37 @@ pub fn feel_as(platform : Int) -> Unit {
 }
 
 ///|
-// kept across runs: what the app's main said once (feel_as); a Tester never reads it (h_feel answers its fake's)
+// kept across runs: what the app's main said once (feel_as)
 let feel_over : Ref[Int] = { val: -1 }
 
 ///|
 fn h_request_frame() -> Unit {
+  journal_wants()
   // (asked from outside a frame: what asked changed what the view is built from, frame_watch.mbt)
   if !in_frame.val && !frame_running.val {
     outside_counted()
   }
-  match fake.val {
-    Some(f) => f.wants = true
-    None => @hostapi.request_frame()
-  }
+  @hostapi.request_frame()
 }
 
 ///|
 /// The host's next frame asked for what the frames' watch saw change (frame_watch.mbt): nothing come from outside.
 fn h_frame_owed() -> Unit {
-  match fake.val {
-    Some(f) => f.wants = true
-    None => @hostapi.request_frame()
-  }
+  journal_wants()
+  @hostapi.request_frame()
 }
 
 ///|
-/// The host's next frame asked for what moves on by the clock (a motion going on, a cycle shown): a Tester's host owes
-/// no frame at this moment for it (its time goes by run_for).
+/// The host's next frame asked for what moves on by the clock (a motion going on, a cycle shown:
+/// @hostapi.request_frame_on).
 fn h_request_frame_on() -> Unit {
-  match fake.val {
-    Some(f) => f.frames_on = f.frames_on + 1
-    None => @hostapi.request_frame()
-  }
+  journal_wants()
+  @hostapi.request_frame_on()
 }
 
 ///|
 fn h_wake_after(ms : Double) -> Unit {
-  match fake.val {
-    Some(f) =>
-      if f.wake < 0.0 || f.time + ms < f.wake {
-        f.wake = f.time + ms
-      }
-    None => @hostapi.wake_after(ms)
-  }
+  @hostapi.wake_after(ms)
 }
 
 ///|
@@ -574,29 +518,11 @@ fn h_font_metrics(
   style : Int,
   out : FixedArray[Double],
 ) -> Unit {
-  if live_of() is Some(l) {
-    l.host.font_metrics(size, weight, style, out)
-    rec_metrics(size, weight, style, out)
-    return
-  }
-  match fake.val {
-    Some(_) if kept_metrics(size, weight, style, out) => ()
-    Some(_) => {
-      out[0] = size * 0.8
-      out[1] = size * 0.2
-      out[2] = (size * 1.42).round()
-    }
-    None => {
-      @hostapi.font_metrics(size, weight, style, out)
-      rec_metrics(size, weight, style, out)
-    }
-  }
+  @hostapi.font_metrics(size, weight, style, out)
+  rec_metrics(size, weight, style, out)
 }
 
 ///|
-/// Fake shaping: one cluster per extended grapheme cluster, as real hosts
-/// make them; Latin half an em wide (0.6 in the code face), everything else
-/// a full em.
 fn h_shape(
   text : String,
   size : Double,
@@ -604,241 +530,159 @@ fn h_shape(
   style : Int,
   out : FixedArray[Double],
 ) -> Int {
-  if live_of() is Some(l) {
-    let k = l.host.shape(text, size, weight, style, out)
-    rec_shape(text, size, weight, style, out, k)
-    return k
-  }
-  match fake.val {
-    Some(_) if kept_shape(text, size, weight, style, out) is Some(k) => k
-    Some(f) => {
-      let n = text.length()
-      let cap = out.length() / 4
-      let mut i = 0
-      let mut k = 0
-      while i < n && k < cap {
-        let c = text.at(i).to_int()
-        let len = @text.next_grapheme(text, i) - i
-        let adv = if c == 10 {
-          0.0
-        } else if c < 0x2E80 {
-          if (style & @hostapi.style_mono) != 0 {
-            size * 0.6
-          } else {
-            size * 0.5
-          }
-        } else {
-          size
-        }
-        let adv = if weight >= 600 && c != 10 { adv + size * f.bold } else { adv }
-        let adv = if f.ui_face != 0.0 && c != 10 && in_ui_face(style) { adv + size * f.ui_face } else { adv }
-        let adv = if f.tabular != 0.0 && c >= 48 && c <= 57 && (style & @hostapi.style_tabular) != 0 {
-          adv + size * f.tabular
-        } else {
-          adv
-        }
-        let adv = match f.faces_wider.get(@hostapi.face_of_style(style)) {
-          Some(em) if c != 10 => adv + size * em
-          _ => adv
-        }
-        out[k * 4] = i.to_double()
-        out[k * 4 + 1] = len.to_double()
-        out[k * 4 + 2] = adv
-        // U+E000 plays a ligature's second letter: drawn as part of the cluster before it (unless shaped with no
-        // ligatures)
-        out[k * 4 + 3] = if c == 32 || c == 10 {
-          -1.0
-        } else if c == 0xE000 && k > 0 && (style & @hostapi.style_no_ligatures) == 0 {
-          -2.0
-        } else {
-          c.to_double()
-        }
-        i = i + len
-        k = k + 1
-      }
-      k
-    }
-    None => {
-      let k = @hostapi.shape(text, size, weight, style, out)
-      rec_shape(text, size, weight, style, out, k)
-      k
-    }
-  }
-}
-
-///|
-/// Whether words in `style` are set in the app's words' face (face_ui) as a host sets them: one is given and the style
-/// names no other (code's, the serif one, what people wrote's, one by its number).
-fn in_ui_face(style : Int) -> Bool {
-  face_given(@hostapi.face_ui) &&
-  @hostapi.face_of_style(style) == 0 &&
-  (style & (@hostapi.style_mono | @hostapi.style_serif | @hostapi.style_words)) == 0
+  let k = @hostapi.shape(text, size, weight, style, out)
+  rec_shape(text, size, weight, style, out, k)
+  k
 }
 
 ///|
 /// The key of `text` drawn as one piece (a word of a joining script).
 fn h_text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
-  if live_of() is Some(l) {
-    let k = l.host.text_key(text, size, weight, style)
-    rec_key(text, size, weight, style, k)
-    return k
-  }
-  match fake.val {
-    Some(_) if kept_key(text, size, weight, style) is Some(k) => k
-    Some(_) => text.at(0).to_int()
-    None => {
-      let k = @hostapi.text_key(text, size, weight, style)
-      rec_key(text, size, weight, style, k)
-      k
-    }
-  }
+  let k = @hostapi.text_key(text, size, weight, style)
+  rec_key(text, size, weight, style, k)
+  k
 }
 
 ///|
 fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
-  if live_of() is Some(l) {
-    l.host.glyph(key, out)
-    rec_glyph(key, out)
-    return
-  }
-  match fake.val {
-    Some(_) if kept_glyph(key, out) => ()
-    Some(f) => {
-      // a glyph box per cluster, so painting is exercised
-      out[0] = 0.0
-      out[1] = 0.0
-      out[2] = f.glyph_box.0
-      out[3] = f.glyph_box.1
-      out[4] = 0.0
-      out[5] = -10.0
-      out[6] = if key >= 0x1F000 { 1.0 } else { 0.0 }
-    }
-    None => {
-      @hostapi.glyph(key, out)
-      rec_glyph(key, out)
-    }
-  }
+  @hostapi.glyph(key, out)
+  rec_glyph(key, out)
 }
 
 ///|
-/// The picture of glyph `key`, drawn by the h_glyph asked last, put in the atlas at `x`, `y`: a fake host has no
-/// pictures.
+/// The picture of glyph `key`, drawn by the h_glyph asked last, put in the atlas at `x`, `y`.
 fn h_glyph_put(key : Int, x : Int, y : Int) -> Unit {
-  match fake.val {
-    Some({ live: Some(l), .. }) => l.host.glyph_put(key, x, y)
-    Some(_) => ()
-    None => @hostapi.glyph_put(key, x, y)
-  }
+  @hostapi.glyph_put(key, x, y)
 }
-
-///|
-/// The side of a fake host's atlas: the web's (its glyphs placed in it as a host's are), colour glyphs in it with the
-/// others.
-let fake_atlas_size : Int = 2048
 
 ///|
 fn h_atlas_size(colour : Bool) -> Int {
-  match fake.val {
-    Some({ live: Some(l), .. }) => l.host.atlas_size(colour)
-    Some(_) => if colour { 0 } else { fake_atlas_size }
-    None => @hostapi.atlas_size(colour)
-  }
+  @hostapi.atlas_size(colour)
 }
 
 ///|
 /// The glyphs of the first `n` of `keys` for the host to draw ahead (text.mbt glyphs_ahead): a Tester's hosts, fake
-/// or live, draw each as it is asked for.
+/// or live, draw each as it is asked for (the default: nothing ahead).
 fn h_glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
-  match fake.val {
-    Some(_) => ()
-    None => @hostapi.glyphs_ahead(keys, n)
-  }
+  @hostapi.glyphs_ahead(keys, n)
 }
 
 ///|
-/// A face's file given to the host (faces.mbt); a Tester's fake host takes any (its words measured as ever).
+/// A face's file given to the host (faces.mbt).
 fn h_face_add(face : Int, path : String, weight : Int) -> Bool {
-  match fake.val {
-    Some({ live: Some(l), .. }) => l.host.face_add(face, path, weight)
-    Some(f) => !f.unreadable_fonts.contains(path)
-    None => @hostapi.face_add(face, path, weight)
-  }
+  @hostapi.face_add(face, path, weight)
 }
 
 ///|
 fn h_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
-  match fake.val {
-    Some({ live: Some(l), .. }) => l.host.face_add_bytes(face, data, weight)
-    Some(_) => data.length() > 0
-    None => @hostapi.face_add_bytes(face, data, weight)
-  }
+  @hostapi.face_add_bytes(face, data, weight)
 }
 
 ///|
 fn h_face_add_family(face : Int, family : String) -> Bool {
-  match fake.val {
-    Some({ live: Some(l), .. }) => l.host.face_add_family(face, family)
-    Some(f) => {
-      f.families_given[face] = family
-      true
-    }
-    None => @hostapi.face_add_family(face, family)
-  }
+  @hostapi.face_add_family(face, family)
 }
 
 ///|
 fn h_face_clear(face : Int) -> Unit {
-  match fake.val {
-    Some({ live: Some(l), .. }) => l.host.face_clear(face)
-    Some(_) => ()
-    None => @hostapi.face_clear(face)
-  }
+  @hostapi.face_clear(face)
 }
 
 ///|
 fn h_atlas_generation() -> Int {
-  match fake.val {
-    Some({ live: Some(l), .. }) => l.host.atlas_generation()
-    Some(f) => f.generation
-    None => @hostapi.atlas_generation()
+  @hostapi.atlas_generation()
+}
+
+///|
+/// The host's glyph generation, read at the start of a frame and updated when a face changes it mid-frame.
+// kept across runs: said as each frame begins, reset by Ctx::let_go
+let atlas_said : Ref[Int?] = Ref(None)
+
+///|
+fn atlas_now() -> Int {
+  match atlas_said.val {
+    Some(g) => g
+    None => h_atlas_generation()
   }
 }
 
 ///|
 fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
-  match fake.val {
-    Some(f) => f.instances = count
-    None => {
-      let c = g()
-      let (r, gg, b) = c.clear
-      // what of it differs from the frame presented before, the part a host that keeps its picture draws again
-      // (docs/partial-redraw.md)
-      let t0 = h_now()
-      let parts = presented.next(buf, count, c.window_w, c.window_h, c.scale, r, gg, b)
-      presented_ms.val = h_now() - t0
-      if presented.telling() && presented.why() == 5 {
-        h_log("DAMAGE whole, the part more than half: \{presented.told()}")
-      }
-      let mut area = 0.0
-      for p in parts {
-        let (x, y, w, h) = p
-        @hostapi.render_dirty(x, y, w, h)
-        area = if w < 0.0 || area < 0.0 { -1.0 } else { area + w * h }
-      }
-      if parts.is_empty() {
-        @hostapi.render_dirty(0.0, 0.0, 0.0, 0.0)
-      }
-      presented_share.val = if area < 0.0 {
-        1.0
-      } else if c.window_w > 0.0 && c.window_h > 0.0 {
-        area / (c.window_w * c.window_h)
-      } else {
-        0.0
-      }
-      @hostapi.present(buf, count, r, gg, b)
-    }
+  let c = g()
+  let (r, gg, b) = c.clear
+  // what of it differs from the frame presented before, the part a host that keeps its picture draws again
+  let t0 = h_now()
+  // (a frame of its looks alone with only lists moved by their headers (looks_frame): those headers compared alone)
+  let moved = if looks_heads_only.val {
+    presented.moved(buf, count, c.window_w, c.window_h, c.scale, r, gg, b, list_heads.map(fn(h) { h.at }), known=damage_known)
+  } else {
+    None
   }
+  looks_heads_only.val = false
+  let heads_moved = moved is Some(_)
+  let parts = match moved {
+    Some(parts) => parts
+    None =>
+      presented.next(
+        buf,
+        count,
+        c.window_w,
+        c.window_h,
+        c.scale,
+        r,
+        gg,
+        b,
+        groups=!ride_spans.is_empty(),
+        known=damage_known,
+      )
+  }
+  damage_known.clear()
+  presented_ms.val = h_now() - t0
+  if presented.telling() && presented.why() == 5 {
+    h_log("DAMAGE whole, the part more than half: \{presented.told()}")
+  }
+  let mut area = 0.0
+  for p in parts {
+    let (x, y, w, h) = p
+    @hostapi.render_dirty(x, y, w, h)
+    area = if w < 0.0 || area < 0.0 { -1.0 } else { area + w * h }
+  }
+  if parts.is_empty() {
+    @hostapi.render_dirty(0.0, 0.0, 0.0, 0.0)
+  }
+  presented_share.val = if area < 0.0 {
+    1.0
+  } else if c.window_w > 0.0 && c.window_h > 0.0 {
+    area / (c.window_w * c.window_h)
+  } else {
+    0.0
+  }
+  // (what of it cannot be seen left out: drawn the same, to the byte, with less to draw; where only its lists' headers
+  // moved, those alone asked again)
+  let occluded = if heads_moved {
+    presented.occlude_moved(buf, count, c.window_w, c.window_h, list_heads.map(fn(h) { h.at }))
+  } else {
+    None
+  }
+  let (shown, n) = match occluded {
+    Some(o) => o
+    None => presented.occlude(buf, count, c.window_w, c.window_h)
+  }
+  @hostapi.present(shown, n, r, gg, b)
+  ride_groups_told()
 }
+
+///|
+/// What of the frame being painted is known drawn anew, x0 y0 x1 y1 in points: where what scrolled shows (view_paint),
+/// every instance there moved. Told to what works out what a host draws again (h_present), as its parts from the start.
+// kept across runs: emptied as each frame is presented
+let damage_known : Array[(Double, Double, Double, Double)] = []
+
+///|
+/// The old views' lists (their nodes' ids) that scrolled this frame: each, painted, told as known drawn anew where it
+/// shows (Ctx::paint_held, damage_known).
+// kept across runs: emptied as each frame begins
+let lists_scrolled : Array[Int] = []
 
 ///|
 /// The frames presented, the next compared with the last (h_present).
@@ -857,26 +701,29 @@ let presented_ms : Ref[Double] = { val: 0.0 }
 
 ///|
 fn h_reduce_transparency() -> Bool {
-  match fake.val {
-    Some(f) => f.reduce_transparency
-    None => @hostapi.reduce_transparency() || h_env("MBUI_GLASS") == "solid"
-  }
+  @hostapi.reduce_transparency() || h_env("MBUI_GLASS") == "solid"
 }
 
 ///|
 fn h_gpu_ms() -> Double {
-  match fake.val {
-    Some(_) => -1.0
-    None => @hostapi.gpu_ms()
+  @hostapi.gpu_ms()
+}
+
+///|
+/// The memory the process holds, MB, as the system counts it (-1: not said).
+fn h_mem_mb() -> Double {
+  let b = @hostapi.mem_bytes()
+  if b < 0.0 {
+    -1.0
+  } else {
+    b / 1048576.0
   }
 }
 
 ///|
+/// The process's CPU time, ms (-1: not said).
 fn h_cpu_ms() -> Double {
-  match fake.val {
-    Some(_) => -1.0
-    None => @hostapi.cpu_ms()
-  }
+  @hostapi.cpu_ms()
 }
 
 ///|
@@ -892,76 +739,42 @@ fn h_set_ime(
 ) -> Unit {
   let z = window_zoom_drawn.val
   let (x, y, w, h) = (x * z, y * z, w * z, h * z)
-  match fake.val {
-    Some(f) => {
-      f.ime_active = active
-      f.ime_text = text
-      f.ime_sel = (a, b)
-      f.ime_rect = (x, y, w, h)
-      f.ime_told = f.ime_told + 1
-    }
-    None => @hostapi.set_ime(active, x, y, w, h, text, a, b)
-  }
+  @hostapi.set_ime(active, x, y, w, h, text, a, b)
 }
 
 ///|
 fn h_text_menu(shown : Bool, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit {
   let z = window_zoom_drawn.val
   let (x, y, w, h) = (x * z, y * z, w * z, h * z)
-  match fake.val {
-    Some(f) => f.text_menu = (shown, x, y, w, h, can)
-    None => @hostapi.text_menu(shown, x, y, w, h, can)
-  }
+  @hostapi.text_menu(shown, x, y, w, h, can)
 }
 
 ///|
 fn h_edit_can(can : Int) -> Unit {
-  match fake.val {
-    Some(f) => f.edit_can = can
-    None => @hostapi.edit_can(can)
-  }
+  @hostapi.edit_can(can)
 }
 
 ///|
 fn h_clipboard_set(s : String) -> Unit {
-  match fake.val {
-    Some(f) => {
-      f.clipboard = s
-      f.clipboard_secret = -1.0
-    }
-    None => @hostapi.clipboard_set(s)
-  }
+  @hostapi.clipboard_set(s)
 }
 
 ///|
-/// The window made to fill the screen or back (@hostapi.set_full_screen); the fake host keeps it (@ui.full_screen).
+/// The window made to fill the screen or back (@hostapi.set_full_screen).
 fn h_set_full_screen(on : Bool) -> Unit {
-  match fake.val {
-    Some(f) => f.full = on
-    None => @hostapi.set_full_screen(on)
-  }
+  @hostapi.set_full_screen(on)
 }
 
 ///|
-/// A picture on the clipboard (@hostapi.clipboard_set_image); the fake host keeps how long it was (Tester::clipboard_image).
+/// A picture on the clipboard (@hostapi.clipboard_set_image).
 fn h_clipboard_image(data : Bytes) -> Unit {
-  match fake.val {
-    Some(f) => f.clipboard_image = data.length()
-    None => @hostapi.clipboard_set_image(data)
-  }
+  @hostapi.clipboard_set_image(data)
 }
 
 ///|
-/// A secret on the clipboard (@hostapi.clipboard_set_secret); the fake host keeps it as any words (Tester::clipboard)
-/// and says it was a secret (Tester::clipboard_secret).
+/// A secret on the clipboard (@hostapi.clipboard_set_secret).
 fn h_clipboard_secret(s : String, clear_ms : Double) -> Unit {
-  match fake.val {
-    Some(f) => {
-      f.clipboard = s
-      f.clipboard_secret = clear_ms
-    }
-    None => @hostapi.clipboard_set_secret(s, clear_ms~)
-  }
+  @hostapi.clipboard_set_secret(s, clear_ms~)
 }
 
 ///|
@@ -969,110 +782,53 @@ fn h_clipboard_secret(s : String, clear_ms : Double) -> Unit {
 let secret_copies : Ref[Int] = Ref(0)
 
 ///|
-/// The last secret copied taken off unless something else was copied since (@hostapi.clipboard_secret_off); the fake
-/// host's while it is there still (Tester::clipboard empty again, Tester::clipboard_secret None).
+/// The last secret copied taken off unless something else was copied since (@hostapi.clipboard_secret_off).
 fn h_clipboard_secret_off() -> Unit {
-  match fake.val {
-    Some(f) =>
-      if f.clipboard_secret >= 0.0 {
-        f.clipboard = ""
-        f.clipboard_secret = -1.0
-      }
-    None => @hostapi.clipboard_secret_off()
-  }
+  @hostapi.clipboard_secret_off()
 }
 
 ///|
-/// The word of `text` around `off` as the host's word boundaries have it, (-1, -1) where it has none (the fake host:
-/// words.mbt's own).
+/// The word of `text` around `off` as the host's word boundaries have it, (-1, -1) where it has none.
 fn h_word_at(text : String, off : Int) -> (Int, Int) {
-  let head : Json = [Json::string(text), Json::number(off.to_double())]
-  match fake.val {
-    Some({ live: Some(l), .. }) => {
-      let (s, e) = l.host.word_at(text, off)
-      if text_recording() {
-        let line : Json = { "wa": head, "r": [Json::number(s.to_double()), Json::number(e.to_double())] }
-        text_say("wa|" + head.stringify(), line)
-      }
-      (s, e)
-    }
-    // under a Tester over a host's kept text: the host's word, as it said it (a word it did not say: the test is told,
-    // Tester::text_missing, and gets none of its own made up in its place); with no kept text: this one's own
-    Some(_) =>
-      match text_table.val {
-        Some(_) =>
-          match kept_answer("wa", head) {
-            Some(Array([Number(s, ..), Number(e, ..), ..])) => (s.to_int(), e.to_int())
-            _ => (-1, -1)
-          }
-        None => (-1, -1)
-      }
-    None => {
-      let (s, e) = @hostapi.word_at(text, off)
-      if text_recording() {
-        let line : Json = { "wa": head, "r": [Json::number(s.to_double()), Json::number(e.to_double())] }
-        text_say("wa|" + head.stringify(), line)
-      }
-      (s, e)
-    }
+  let (s, e) = @hostapi.word_at(text, off)
+  if text_recording() {
+    let head : Json = [Json::string(text), Json::number(off.to_double())]
+    let line : Json = { "wa": head, "r": [Json::number(s.to_double()), Json::number(e.to_double())] }
+    text_say("wa|" + head.stringify(), line)
   }
+  (s, e)
 }
 
 ///|
-/// A URL handed to the system (its browser, or the app it belongs to); the fake host keeps it (Tester::opened).
+/// A URL handed to the system (its browser, or the app it belongs to).
 fn h_open_url(url : String) -> Bool {
-  match fake.val {
-    Some(f) => {
-      f.opened.push(url)
-      true
-    }
-    None => @hostapi.open_url(url)
-  }
+  @hostapi.open_url(url)
 }
 
 ///|
-/// A page in a browser's tab over the app (@hostapi.open_tab); the fake host keeps it as one handed to the system
-/// (Tester::opened).
+/// A page in a browser's tab over the app (@hostapi.open_tab).
 fn h_open_tab(url : String) -> Bool {
-  match fake.val {
-    Some(f) => {
-      f.opened.push(url)
-      true
-    }
-    None => @hostapi.open_tab(url)
-  }
+  @hostapi.open_tab(url)
 }
 
 ///|
 fn h_a11y_on() -> Bool {
-  match fake.val {
-    Some(f) => f.a11y
-    None => @hostapi.a11y_on()
-  }
+  @hostapi.a11y_on()
 }
 
 ///|
 fn h_a11y_tree(tree : String) -> Unit {
-  match fake.val {
-    Some(f) => f.a11y_said = tree
-    None => @hostapi.a11y_tree(tree)
-  }
+  @hostapi.a11y_tree(tree)
 }
 
 ///|
 fn h_back_enabled(on : Bool) -> Unit {
-  match fake.val {
-    Some(f) => f.back_on = on
-    None => @hostapi.back_enabled(on)
-  }
+  @hostapi.back_enabled(on)
 }
 
 ///|
 fn h_wheel_kept(kept : Bool) -> Unit {
-  match fake.val {
-    Some(f) => f.wheel_kept = kept
-    None => @hostapi.wheel_kept(kept)
-  }
+  @hostapi.wheel_kept(kept)
 }
 
 // What the app waits on from the host (effect.mb's outside, src/effect/outside.mbt): an image or a PDF's page
@@ -1188,7 +944,7 @@ fn outside_key(kind : Int, id : Int) -> Int64 {
 
 ///|
 fn outside_start(kind : Int, id : Int, what : String) -> Unit {
-  if id > 0 && (outside_told.val || fake.val is Some(_)) {
+  if id > 0 && (outside_told.val || @hostapi.answers_by_frame(kind)) {
     outside_tickets[outside_key(kind, id)] = runtime().outside_start(what)
   }
 }
@@ -1220,24 +976,16 @@ let answers_waiting : Map[Int64, Bool] = Map::new()
 /// An answer of `kind` came (the host's event; under a Tester, a frame: its fake host's answers come by the frame).
 fn answer_told(kind : Int) -> Unit {
   let s = answers_told[kind]
-  s.set(@signals.untracked(fn() { s.get() }) + 1)
+  s.set(s.untracked() + 1)
 }
 
 ///|
 /// Whether the host's answer of `kind` for `id` may be taken now, read as a signal (what reads it follows the
-/// answers as they come): once the host's event told of it, not asked of the host before; a Tester's (its answers
-/// come by the frame) and a host's that tells no events, whenever it is read.
+/// answers as they come): once the host's event told of it, not asked of the host before; a host's that answers it
+/// by the frame (@hostapi.answers_by_frame) or tells no events, whenever it is read.
 fn answer_here(kind : Int, id : Int) -> Bool {
   answers_told[kind].get() |> ignore
-  let by_hand = match fake.val {
-    Some(f) => kind == outside_marks && f.marks_by_hand
-    None => false
-  }
-  // (a fake host answering by hand: its word alone, as a host that tells its events)
-  if by_hand {
-    return answers_waiting.contains(outside_key(kind, id))
-  }
-  fake.val is Some(_) || !outside_told.val || answers_waiting.contains(outside_key(kind, id))
+  @hostapi.answers_by_frame(kind) || !outside_told.val || answers_waiting.contains(outside_key(kind, id))
 }
 
 ///|
@@ -1247,10 +995,10 @@ fn answer_taken(kind : Int, id : Int) -> Unit {
 }
 
 ///|
-/// A Tester's frame begins: its fake host's answers that were waited on may have come with it (each comes from the
-/// frame after it was asked or given), told as a host's event tells them.
+/// A frame begins: the answers waited on of the kinds the host answers by the frame (@hostapi.answers_by_frame) may
+/// have come with it, told as a host's event tells them.
 fn answers_by_the_frame() -> Unit {
-  if fake.val is None {
+  if outside_tickets.is_empty() {
     return
   }
   let kinds : Map[Int, Bool] = {}
@@ -1258,7 +1006,7 @@ fn answers_by_the_frame() -> Unit {
     kinds[(k >> 32).to_int()] = true
   }
   for kind, _ in kinds {
-    if kind < answers_told.length() && kind != outside_update && !(kind == outside_marks && fake.val.map_or(false, fn(f) { f.marks_by_hand })) {
+    if kind < answers_told.length() && kind != outside_update && @hostapi.answers_by_frame(kind) {
       answer_told(kind)
     }
   }
@@ -1273,7 +1021,7 @@ let views_told : Map[Int, Bool] = Map::new()
 /// app now: the bytes a player reads, a site's answer. Until the app answers, the host does nothing for it.
 fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
   // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { on_outside_now(kind, id, state) })
+  view_event(fn() { on_outside_now(kind, id, state) }, what=if kind == outside_posted { "messages" } else { "host" })
 }
 
 ///|
@@ -1312,7 +1060,7 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
       image_decoded(id, if at >= 0.0 { at } else { g().clock })
     }
     // (its sizes recorded now (hostrec.mbt), drawn or not: one never drawn is still asked of a Tester)
-    if state == 1 && fake.val is None && text_recording() {
+    if state == 1 && text_recording() {
       let out = FixedArray::make(4, 0.0)
       if @hostapi.image_info(id, out) == 1 {
         rec_image_ready(id, out)
@@ -1324,9 +1072,7 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
   outside_came()
   if kind == outside_update {
     // (how it goes changed: what it says now set, followed by what reads it; held while the host works at it)
-    if fake.val is None {
-      update_told.set(@hostapi.update_state())
-    }
+    update_told.set(@hostapi.update_state())
     if state == 0 {
       if !outside_tickets.contains(outside_key(kind, id)) {
         outside_start(kind, id, "an update downloading")
@@ -1386,155 +1132,68 @@ fn outside_answered(id : Int) -> Unit {
 
 ///|
 fn h_log(s : String) -> Unit {
-  match fake.val {
-    Some(f) => f.logs.push(s)
-    None => @hostapi.log(s)
-  }
+  @hostapi.log(s)
 }
 
 ///|
 fn h_image_load(src : String, max_px : Int) -> Int {
-  let head : Json = [Json::string(src), Json::number(max_px.to_double())]
-  let id = match fake.val {
-    Some({ live: Some(l), .. } as f) => {
-      f.image_loads.push((src, max_px))
-      live_image(f, l, l.host.image_load(src, max_px), { "is": head })
-    }
-    Some(f) => {
-      f.image_loads.push((src, max_px))
-      // as the host decoded it, when kept with the text; else as the test made it up (Tester::new's images)
-      let id = match (f.image_sizes.get(src), text_table.val) {
-        (None, Some(_)) =>
-          match kept_sizes(kept_answer("is", head)) {
-            Some((w, h, ow, oh)) => fake_image_sized(f, w, h, ow, oh)
-            None => fake_image(f, 0, 0, max_px)
-          }
-        (sized, _) => {
-          let (w, h) = sized.unwrap_or((0, 0))
-          fake_image(f, w, h, max_px)
-        }
-      }
-      match f.pixels_of_src.get(src) {
-        Some(px) => f.pixels_of[id] = px
-        None => ()
-      }
-      // one it does not know failed at once: nothing of it is left to wait for
-      match f.images.get(id) {
-        Some(im) if im.state < 0 => {
-          // Keep its source even on an immediate failure; image_src must describe the same id as a live host's.
-          f.image_srcs[id] = src
-          return id
-        }
-        _ => ()
-      }
-      id
-    }
-    None => {
-      let id = @hostapi.image_load(src, max_px)
-      rec_image_asked(id, { "is": head })
-      id
-    }
+  let id = @hostapi.image_load(src, max_px)
+  if text_recording() {
+    rec_image_asked(id, { "is": [Json::string(src), Json::number(max_px.to_double())] })
   }
-  match fake.val {
-    Some(f) => f.image_srcs[id] = src
-    None => ()
-  }
-  outside_start(outside_image, id, "image \{id} \{src}")
+  outside_waits_image(id, "image \{id} \{src}")
   id
+}
+
+///|
+/// A decode asked for waited on (outside_image) unless it failed at once (one the host does not know): nothing of it
+/// is left to wait for.
+fn outside_waits_image(id : Int, what : String) -> Unit {
+  if @hostapi.image_info(id, FixedArray::make(4, 0.0)) >= 0 {
+    outside_start(outside_image, id, what)
+  }
 }
 
 ///|
 /// Bytes handed over for `src` (Ctx::image_bytes, add_image) decoded: its wait on outside named by `src` too, as a
 /// picture loaded by its source is ("image N (B bytes) SRC": a scripted run's `decoded SRC`).
 fn h_image_load_bytes(data : Bytes, max_px : Int, src : String) -> Int {
-  let head : Json = [
-    Json::string(bytes_name(data)),
-    Json::number(data.length().to_double()),
-    Json::number(max_px.to_double()),
-  ]
-  let id = match fake.val {
-    Some({ live: Some(l), .. } as f) => {
-      f.image_loads.push(("bytes:\{data.length()}", max_px))
-      live_image(f, l, l.host.image_load_bytes(data, max_px), { "ib": head })
-    }
-    Some(f) => {
-      f.image_loads.push(("bytes:\{data.length()}", max_px))
-      // as the host decoded these bytes, when kept with the text; else a made-up 400 × 300
-      match (text_table.val, kept_sizes(kept_answer("ib", head))) {
-        (Some(_), Some((w, h, ow, oh))) => fake_image_sized(f, w, h, ow, oh)
-        _ => fake_image(f, 400, 300, max_px)
-      }
-    }
-    None => {
-      let id = @hostapi.image_load_bytes(data, max_px)
-      rec_image_asked(id, { "ib": head })
-      id
-    }
-  }
-  match fake.val {
-    Some(f) => f.image_srcs[id] = src
-    None => ()
+  let id = @hostapi.image_load_bytes(data, max_px)
+  if text_recording() {
+    rec_image_asked(id, { "ib": image_bytes_head(data, max_px) })
   }
   outside_start(outside_image, id, "image \{id} (\{data.length()} bytes) \{src}")
   id
 }
 
 ///|
-fn h_image_info(id : Int, out : FixedArray[Double]) -> Int {
-  match fake.val {
-    Some(f) =>
-      match f.images.get(id) {
-        Some(im) => {
-          if im.state == 1 {
-            out[0] = im.w
-            out[1] = im.h
-            out[2] = im.ow
-            out[3] = im.oh
-          }
-          im.state
-        }
-        None => -1
-      }
-    None => {
-      let st = @hostapi.image_info(id, out)
-      if st == 1 {
-        rec_image_ready(id, out)
-      }
-      st
-    }
-  }
+/// What a decode of bytes is kept by (hostrec.mbt): the bytes' name, their length, the size asked for.
+fn image_bytes_head(data : Bytes, max_px : Int) -> Json {
+  [
+    Json::string(bytes_name(data)),
+    Json::number(data.length().to_double()),
+    Json::number(max_px.to_double()),
+  ]
 }
 
 ///|
-/// A ready image's pixels read back (premultiplied RGBA, rows from the top) into `out`: the fake host's as the test
-/// made them (Tester::add_pixels), else every pixel a mid grey, opaque.
-fn h_image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
-  match fake.val {
-    Some({ live: Some(l), .. } as f) if f.live_images.get(id) is Some(mine) => l.host.image_pixels(mine, out)
-    Some(f) =>
-      match f.images.get(id) {
-        Some(im) if im.state == 1 => {
-          let n = im.w.to_int() * im.h.to_int() * 4
-          match f.pixels_of.get(id) {
-            Some(px) if px.length() == n => px.blit_to(out, len=n)
-            _ =>
-              for i in 0..<n {
-                out[i] = if i % 4 == 3 { b'\xFF' } else { b'\x80' }
-              }
-          }
-          true
-        }
-        _ => false
-      }
-    None => @hostapi.image_pixels(id, out)
+fn h_image_info(id : Int, out : FixedArray[Double]) -> Int {
+  let st = @hostapi.image_info(id, out)
+  if st == 1 {
+    rec_image_ready(id, out)
   }
+  st
+}
+
+///|
+/// A ready image's pixels read back (premultiplied RGBA, rows from the top) into `out`.
+fn h_image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
+  @hostapi.image_pixels(id, out)
 }
 
 ///|
 /// Instances never presented (a shot's: shot.mbt) drawn as a frame is on the frame's ground, `scale` pixels a point into
-/// a picture `w` by `h` of their own, and its pixels (as h_drawn_pixels) into `out`: a live Tester's host's, its
-/// pictures that host's own as a film draws a frame (film.mbt draw_frame: one it has not, nothing), the fake host's every
-/// pixel a mid grey, opaque.
+/// a picture `w` by `h` of their own, and its pixels (as h_drawn_pixels) into `out`.
 fn h_drawn_pixels_of(
   inst : FixedArray[Double],
   count : Int,
@@ -1544,75 +1203,22 @@ fn h_drawn_pixels_of(
   out : FixedArray[Byte],
 ) -> Bool {
   let (r, gg, b) = g().clear
-  match fake.val {
-    Some({ live: Some(l), .. } as f) => {
-      let len = count * inst_size
-      let mine = FixedArray::make(if len > 0 { len } else { 1 }, 0.0)
-      inst.blit_to(mine, len~)
-      for k in 0..<count {
-        let at = k * inst_size
-        if mine[at + 5] == 4.0 {
-          match f.live_images.get(mine[at + 20].to_int()) {
-            Some(id) => mine[at + 20] = id.to_double()
-            None => {
-              // nothing drawn: a rect of no colour, no border, no blur
-              mine[at + 5] = 0.0
-              for j in 6..<12 {
-                mine[at + j] = 0.0
-              }
-            }
-          }
-        }
-      }
-      l.host.drawn_pixels_of(mine, count, r, gg, b, scale, w, h, out)
-    }
-    Some(_) => {
-      for i in 0..<(w * h * 4) {
-        out[i] = if i % 4 == 3 { b'\xFF' } else { b'\x80' }
-      }
-      true
-    }
-    None => @hostapi.drawn_pixels_of(inst, count, r, gg, b, scale, w, h, out)
-  }
+  @hostapi.drawn_pixels_of(inst, count, r, gg, b, scale, w, h, out)
 }
 
 ///|
-/// The last frame's pixels in a rectangle of it (device pixels; premultiplied RGBA, rows from the top) into `out`: a
-/// live Tester's host's as it drew the frame (a film's), the fake host's every pixel a mid grey, opaque.
+/// The last frame's pixels in a rectangle of it (device pixels; premultiplied RGBA, rows from the top) into `out`.
 fn h_drawn_pixels(x : Int, y : Int, w : Int, h : Int, out : FixedArray[Byte]) -> Bool {
-  match fake.val {
-    Some({ live: Some(l), .. }) => l.host.drawn_pixels(x, y, w, h, out)
-    Some(_) => {
-      for i in 0..<(w * h * 4) {
-        out[i] = if i % 4 == 3 { b'\xFF' } else { b'\x80' }
-      }
-      true
-    }
-    None => @hostapi.drawn_pixels(x, y, w, h, out)
-  }
+  @hostapi.drawn_pixels(x, y, w, h, out)
 }
 
 ///|
 fn h_image_free(id : Int) -> Unit {
   outside_end(outside_image, id)
-  match fake.val {
-    Some({ live: Some(l), .. } as f) => {
-      f.images.remove(id)
-      match f.live_images.get(id) {
-        Some(mine) => {
-          f.live_images.remove(id)
-          l.host.image_free(mine)
-        }
-        None => ()
-      }
-    }
-    Some(f) => f.images.remove(id)
-    None => @hostapi.image_free(id)
-  }
+  @hostapi.image_free(id)
 }
 
-// Native views (native.mbt): the fake host has views of every kind, ready at once, 10 s long and 640 × 360, that
-// never ask to read; it notes what is asked of them (FakeHost.views).
+// Native views (native.mbt).
 
 ///|
 /// A native view's kind by name (native.mbt): video (audio, its type audio/…), web (a page), site.
@@ -1627,15 +1233,7 @@ fn view_kind_name(kind : Int, arg : String) -> String {
 
 ///|
 fn h_view_open(kind : Int, arg : String) -> Int {
-  let id = match fake.val {
-    Some(f) => {
-      f.view_ids += 1
-      f.views.push("open \{f.view_ids} \{kind} \{arg.length()}")
-      f.view_kinds[f.view_ids] = kind
-      f.view_ids
-    }
-    None => @hostapi.view_open(kind, arg)
-  }
+  let id = @hostapi.view_open(kind, arg)
   outside_start(outside_view, id, "view \{id} (kind \{kind}, \{view_kind_name(kind, arg)})")
   id
 }
@@ -1661,136 +1259,36 @@ fn h_view_place(
   let (px, py, pw, ph) = (x * z, y * z, w * z, h * z)
   let (pcx0, pcy0, pcx1, pcy1) = (cx0 * z, cy0 * z, cx1 * z, cy1 * z)
   let (pr0, pr1, pr2, pr3) = (r0 * z, r1 * z, r2 * z, r3 * z)
-  match fake.val {
-    Some(f) => {
-      f.views.push(
-        "place \{id} \{px} \{py} \{pw} \{ph} in \{pcx0} \{pcy0} \{pcx1} \{pcy1}" +
-        (if pr0 == pr1 && pr1 == pr2 && pr2 == pr3 {
-          if pr0 > 0.0 {
-            " round \{pr0}"
-          } else {
-            ""
-          }
-        } else {
-          " round \{pr0} \{pr1} \{pr2} \{pr3}"
-        }) +
-        (if shown { "" } else { " hidden" }),
-      )
-      f.view_at[id] = (dmax(x, cx0), dmax(y, cy0), dmin(x + w, cx1), dmin(y + h, cy1), shown)
-    }
-    None => @hostapi.view_place(id, px, py, pw, ph, pcx0, pcy0, pcx1, pcy1, pr0, pr1, pr2, pr3, shown)
-  }
+  @hostapi.view_place(id, px, py, pw, ph, pcx0, pcy0, pcx1, pcy1, pr0, pr1, pr2, pr3, shown)
 }
 
 ///|
 fn h_view_close(id : Int) -> Unit {
   outside_end(outside_view, id)
   views_told.remove(id)
-  match fake.val {
-    Some(f) => {
-      f.views.push("close \{id}")
-      f.view_at.remove(id)
-      f.scripts_waiting.remove(id)
-      if f.touch_view == id {
-        f.touch_view = 0
-      }
-    }
-    None => @hostapi.view_close(id)
-  }
+  @hostapi.view_close(id)
 }
 
 ///|
 fn h_view_control(id : Int, op : Int, value : Double) -> Unit {
-  match fake.val {
-    Some(f) => f.views.push("control \{id} \{op} \{value}")
-    None => @hostapi.view_control(id, op, value)
-  }
+  @hostapi.view_control(id, op, value)
 }
 
 ///|
 fn h_view_info(id : Int, out : FixedArray[Double]) -> Int {
-  let state = h_view_info_of(id, out)
-  // (a fake page there now runs what was sent to it)
-  match fake.val {
-    Some(f) => fake_scripts_flush(f, id)
-    None => ()
-  }
+  let state = @hostapi.view_info(id, out)
+  view_info_told(id, state, out)
   state
 }
 
 ///|
-fn h_view_info_of(id : Int, out : FixedArray[Double]) -> Int {
-  match fake.val {
-    Some(f) => f.view_reads += 1
-    None => ()
-  }
-  match fake.val {
-    // as the run recorded the host's saying it (Tester::view_said)
-    Some(f) if f.view_infos.get(id) is Some((state, at)) => {
-      for i in 0..<10 {
-        out[i] = at[i]
-      }
-      state
-    }
-    // a test that says when views are ready: not yet, until it does
-    Some(f) if !f.auto_finish && f.view_ready.get(id).unwrap_or(0) != 1 => {
-      for i in 0..<10 {
-        out[i] = 0.0
-      }
-      f.view_ready.get(id).unwrap_or(0)
-    }
-    Some(f) if f.players.get(id) is Some(p) => {
-      for i in 0..<10 {
-        out[i] = p[i]
-      }
-      1
-    }
-    Some(_) => {
-      out[0] = 10000.0
-      out[1] = 0.0
-      out[2] = 0.0
-      out[3] = 640.0
-      out[4] = 360.0
-      out[5] = 0.0
-      out[6] = 1.0
-      out[7] = 0.0
-      out[8] = 0.0
-      out[9] = 0.0
-      ignore(id)
-      1
-    }
-    None => {
-      let state = @hostapi.view_info(id, out)
-      view_info_told(id, state, out)
-      state
-    }
-  }
-}
-
-///|
 fn h_view_site_next(id : Int) -> String {
-  match fake.val {
-    Some(f) => {
-      let e = match f.site_of.get(id) {
-        Some(q) if q.length() > 0 => q.remove(0)
-        _ => if f.site.length() > 0 { f.site.remove(0) } else { "" }
-      }
-      // (a page that said something is there: what was sent to it runs)
-      if e.has_prefix("{\"said\"") {
-        f.page_there[id] = true
-        fake_scripts_flush(f, id)
-      }
-      e
-    }
-    None => {
-      let e = @hostapi.view_site_next(id)
-      // (what the page asked of its host, on a run's record: Tester::view_said gives it again)
-      if e != "" {
-        site_told(id, e)
-      }
-      e
-    }
+  let e = @hostapi.view_site_next(id)
+  // (what the page asked of its host, on a run's record: Tester::view_said gives it again)
+  if e != "" {
+    site_told(id, e)
   }
+  e
 }
 
 ///|
@@ -1917,201 +1415,67 @@ let sites_told_state : Map[Int, String] = {}
 /// What the app tells a view's host beyond its controls (native.mbt): `what` 1 a script to run in its page
 /// (NativeView::script), 2 who takes a finger on it (NativeView::touch: "all|through|pinch|vertical SLOP"), 3 a site's
 /// settings (`{"head_wait_ms":…,"backlog":…}`), 4 where what takes a press is drawn over it ("x0 y0 x1 y1 …": a
-/// finger there is the canvas's). The fake host notes each ("script 1 42 9a0b…", "touch 1 vertical 8",
-/// "settings 1 …") and runs a page's scripts as a host does: once its page is there (ready and not loading, or said
-/// something since it started), in the order sent.
+/// finger there is the canvas's), 5 raised over the others.
 fn h_view_tell(id : Int, what : Int, text : String) -> Unit {
-  match fake.val {
-    Some(f) => {
-      if what == 1 {
-        f.scripts_sent.push("\{id} \{text.length()} \{script_hash(text)}")
-        match f.scripts_waiting.get(id) {
-          Some(q) => q.push(text)
-          None => f.scripts_waiting[id] = [text]
-        }
-        fake_scripts_flush(f, id)
-      } else if what == 2 {
-        let parts = text.split(" ").map(fn(p) { p.to_owned() }).to_array()
-        let slop = match (try Some(@json.parse(parts.get(1).unwrap_or("0"))) catch { _ => None }) {
-          Some(Number(n, ..)) => n
-          _ => 0.0
-        }
-        f.view_touch[id] = (parts.get(0).unwrap_or("all"), slop)
-        f.views.push("touch \{id} \{text}")
-      } else if what == 4 {
-        let rects : Array[Double] = []
-        for p in text.split(" ") {
-          match (try Some(@json.parse(p.to_owned())) catch { _ => None }) {
-            Some(Number(n, ..)) => rects.push(n)
-            _ => ()
-          }
-        }
-        f.view_covers[id] = rects
-      } else if what == 5 {
-        f.views.push("raise \{id}")
-      } else {
-        f.views.push("settings \{id} \{text}")
-      }
-    }
-    None => @hostapi.view_tell(id, what, text)
-  }
-}
-
-///|
-/// Whether a fake page is there for scripts: said something since it started, or ready and not loading.
-fn fake_page_there(f : FakeHost, id : Int) -> Bool {
-  if f.page_there.get(id) is Some(true) {
-    return true
-  }
-  let ready = match f.view_infos.get(id) {
-    Some((state, _)) => state == 1
-    None => f.auto_finish || f.view_ready.get(id).unwrap_or(0) == 1
-  }
-  let loading = match f.site_states.get(id) {
-    Some(st) =>
-      match (try Some(@json.parse(st)) catch { _ => None }) {
-        Some(Object(m)) => m.get("loading") is Some(True)
-        _ => false
-      }
-    None => false
-  }
-  ready && !loading
-}
-
-///|
-/// A fake page's scripts that wait run, in the order sent, once it is there.
-fn fake_scripts_flush(f : FakeHost, id : Int) -> Unit {
-  match f.scripts_waiting.get(id) {
-    Some(q) if q.length() > 0 && fake_page_there(f, id) => {
-      let run = match f.scripts_run.get(id) {
-        Some(r) => r
-        None => {
-          let r = []
-          f.scripts_run[id] = r
-          r
-        }
-      }
-      for js in q {
-        run.push(js)
-        f.views.push("script \{id} \{js.length()} \{script_hash(js)}")
-      }
-      q.clear()
-    }
-    _ => ()
-  }
+  @hostapi.view_tell(id, what, text)
 }
 
 ///|
 fn h_view_site_body(id : Int, req : Int) -> Bytes {
-  match fake.val {
-    // as the run recorded it (Tester::view_said); else none
-    Some(f) => f.site_bodies.get((id, req)).unwrap_or(Bytes::new(0))
-    None => {
-      let b = @hostapi.view_site_body(id, req)
-      if views_tracer.val is Some(_) || taping() {
-        view_say({
-          "sitebody": Json::object({ "view": Json::number(id.to_double()), "req": Json::number(req.to_double()) }),
-          "b": Json::string(@codec.hex(site_body_kept(b))),
-        })
-      }
-      b
-    }
+  let b = @hostapi.view_site_body(id, req)
+  if views_tracer.val is Some(_) || taping() {
+    view_say({
+      "sitebody": Json::object({ "view": Json::number(id.to_double()), "req": Json::number(req.to_double()) }),
+      "b": Json::string(@codec.hex(site_body_kept(b))),
+    })
   }
+  b
 }
 
 ///|
 fn h_view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
-  match fake.val {
-    Some(f) => f.views.push("site head \{id} \{req} \{status} \{headers}")
-    None => @hostapi.view_site_head(id, req, status, headers)
-  }
+  @hostapi.view_site_head(id, req, status, headers)
 }
 
 ///|
 fn h_view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
-  match fake.val {
-    Some(f) => f.views.push("site chunk \{id} \{req} \{data.length()}")
-    None => @hostapi.view_site_chunk(id, req, data)
-  }
+  @hostapi.view_site_chunk(id, req, data)
 }
 
 ///|
 fn h_view_site_end(id : Int, req : Int, error : String) -> Unit {
   outside_answered(id)
-  match fake.val {
-    Some(f) => f.views.push("site end \{id} \{req} \{error}")
-    None => @hostapi.view_site_end(id, req, error)
-  }
+  @hostapi.view_site_end(id, req, error)
 }
 
 ///|
 fn h_view_site_state(id : Int) -> String {
-  match fake.val {
-    // as the run recorded the host's saying it (Tester::view_said); not said: at its start, loaded, untitled
-    Some(f) => {
-      let st = f.site_states.get(id).unwrap_or(
-        "{\"path\":\"/\",\"back\":false,\"forward\":false,\"loading\":false,\"title\":\"\"}",
-      )
-      fake_scripts_flush(f, id)
-      st
-    }
-    None => {
-      let st = @hostapi.view_site_state(id)
-      if st != "" && (views_tracer.val is Some(_) || taping()) && sites_told_state.get(id) != Some(st) {
-        sites_told_state[id] = st
-        let j : Json = @json.parse(st) catch { _ => Json::string(st) }
-        view_say({ "sitestate": Json::object({ "view": Json::number(id.to_double()), "state": j }) })
-      }
-      st
-    }
+  let st = @hostapi.view_site_state(id)
+  if st != "" && (views_tracer.val is Some(_) || taping()) && sites_told_state.get(id) != Some(st) {
+    sites_told_state[id] = st
+    let j : Json = @json.parse(st) catch { _ => Json::string(st) }
+    view_say({ "sitestate": Json::object({ "view": Json::number(id.to_double()), "state": j }) })
   }
+  st
 }
 
 ///|
 fn h_view_text(id : Int, what : Int) -> String? {
-  match fake.val {
-    // as the run recorded the host's saying it (Tester::view_said); not said yet: not known (a grab: none asked). A
-    // grab said ready before its frame is said ("2", then the `still` line: a host says both in one frame, a replay may
-    // give them a frame apart): still grabbing until the frame is here, not ready with none
-    Some(f) =>
-      match f.view_texts.get((id, what)) {
-        Some("2") if what == 2 && !(f.view_stills.get(id) is Some(q) && q.length() > 0) => Some("1")
-        Some(t) => Some(t)
-        None => if what == 2 { Some("0") } else { None }
-      }
-    None => {
-      let t = @hostapi.view_text(id, what)
-      match t {
-        Some(text) => view_told(id, what, text)
-        None => ()
-      }
-      t
-    }
+  let t = @hostapi.view_text(id, what)
+  match t {
+    Some(text) => view_told(id, what, text)
+    None => ()
   }
+  t
 }
 
 ///|
 fn h_view_still(id : Int) -> Bytes {
-  match fake.val {
-    // the oldest grabbed, taken (the grab's state back to none asked, as a host's)
-    Some(f) => {
-      let b = match f.view_stills.get(id) {
-        Some(q) if q.length() > 0 => q.remove(0)
-        _ => b""
-      }
-      if f.view_texts.get((id, 2)) == Some("2") {
-        f.view_texts[(id, 2)] = "0"
-      }
-      b
-    }
-    None => {
-      let b = @hostapi.view_still(id)
-      if views_tracer.val is Some(_) || taping() {
-        view_say({ "still": Json::object({ "view": Json::number(id.to_double()) }), "b": Json::string(@codec.hex(b)) })
-      }
-      b
-    }
+  let b = @hostapi.view_still(id)
+  if views_tracer.val is Some(_) || taping() {
+    view_say({ "still": Json::object({ "view": Json::number(id.to_double()) }), "b": Json::string(@codec.hex(b)) })
   }
+  b
 }
 
 ///|
@@ -2188,24 +1552,16 @@ fn view_say(m : Map[String, Json]) -> Unit {
 
 ///|
 fn h_view_site_load(id : Int, path : String) -> Unit {
-  match fake.val {
-    Some(f) => f.views.push("site load \{id} \{path}")
-    None => @hostapi.view_site_load(id, path)
-  }
+  @hostapi.view_site_load(id, path)
 }
 
 ///|
 fn h_view_read_next(id : Int, out : FixedArray[Double]) -> Int {
-  match fake.val {
-    Some(f) => fake_read_next(f, id, out)
-    None => {
-      let req = @hostapi.view_read_next(id, out)
-      if req != 0 {
-        view_read_told(id, req, out)
-      }
-      req
-    }
+  let req = @hostapi.view_read_next(id, out)
+  if req != 0 {
+    view_read_told(id, req, out)
   }
+  req
 }
 
 ///|
@@ -2229,33 +1585,18 @@ fn view_read_told(id : Int, req : Int, out : FixedArray[Double]) -> Unit {
 ///|
 fn h_view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit {
   outside_answered(id)
-  match fake.val {
-    Some(f) => f.read_answers.push((id, req, data.length(), total, more))
-    None => @hostapi.view_read_answer(id, req, data, total, more)
-  }
+  @hostapi.view_read_answer(id, req, data, total, more)
 }
 
-// PDFs (native.mbt Pdf): the fake host's every PDF has 3 pages of 612 × 792 points; a page drawn is an image of that
-// shape.
+// PDFs (native.mbt Pdf).
 
 ///|
 fn h_pdf_open(data : Bytes) -> Int {
-  let named = (bytes_name(data), data.length())
-  match fake.val {
-    Some(f) => {
-      f.views.push("pdf \{data.length()}")
-      let doc = 7 + f.pdfs.length()
-      f.pdfs[doc] = named
-      doc
-    }
-    None => {
-      let doc = @hostapi.pdf_open(data)
-      if text_recording() {
-        g().host_rec.pdfs[doc] = named
-      }
-      doc
-    }
+  let doc = @hostapi.pdf_open(data)
+  if text_recording() {
+    g().host_rec.pdfs[doc] = (bytes_name(data), data.length())
   }
+  doc
 }
 
 ///|
@@ -2270,88 +1611,35 @@ fn pdf_head(named : (String, Int), more : Array[Int]) -> Json {
 
 ///|
 fn h_pdf_pages(doc : Int) -> Int {
-  match fake.val {
-    Some(f) =>
-      match f.pdfs.get(doc) {
-        // as the host counted them, when kept with the text; else the fake's 3
-        Some(named) if text_table.val is Some(_) =>
-          match kept_answer("pn", pdf_head(named, [])) {
-            Some(Number(n, ..)) => n.to_int()
-            _ => 3
-          }
-        Some(_) => 3
-        None => -1
-      }
-    None => {
-      let n = @hostapi.pdf_pages(doc)
-      match g().host_rec.pdfs.get(doc) {
-        Some(named) if text_recording() => {
-          let line : Json = { "pn": pdf_head(named, []), "r": Json::number(n.to_double()) }
-          text_say(line.stringify(), line)
-        }
-        _ => ()
-      }
-      n
+  let n = @hostapi.pdf_pages(doc)
+  match g().host_rec.pdfs.get(doc) {
+    Some(named) if text_recording() => {
+      let line : Json = { "pn": pdf_head(named, []), "r": Json::number(n.to_double()) }
+      text_say(line.stringify(), line)
     }
+    _ => ()
   }
+  n
 }
 
 ///|
 fn h_pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
-  match fake.val {
-    Some(f) => {
-      out[0] = 612.0
-      out[1] = 792.0
-      match f.pdfs.get(doc) {
-        Some(named) if text_table.val is Some(_) =>
-          match kept_answer("ps", pdf_head(named, [page])) {
-            Some(Array([Number(w, ..), Number(h, ..), ..])) => {
-              out[0] = w
-              out[1] = h
-            }
-            _ => ()
-          }
-        _ => ()
-      }
+  @hostapi.pdf_page_size(doc, page, out)
+  match g().host_rec.pdfs.get(doc) {
+    Some(named) if text_recording() => {
+      let line : Json = { "ps": pdf_head(named, [page]), "r": nums(out, 2) }
+      text_say(line.stringify(), line)
     }
-    None => {
-      @hostapi.pdf_page_size(doc, page, out)
-      match g().host_rec.pdfs.get(doc) {
-        Some(named) if text_recording() => {
-          let line : Json = { "ps": pdf_head(named, [page]), "r": nums(out, 2) }
-          text_say(line.stringify(), line)
-        }
-        _ => ()
-      }
-    }
+    _ => ()
   }
 }
 
 ///|
 fn h_pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
-  let id = match fake.val {
-    Some(f) =>
-      match f.pdfs.get(doc) {
-        Some(named) if text_table.val is Some(_) => {
-          f.image_loads.push(("pdf:\{doc}/\{page}", max_px))
-          match kept_sizes(kept_answer("pi", pdf_head(named, [page, max_px]))) {
-            Some((w, h, ow, oh)) => fake_image_sized(f, w, h, ow, oh)
-            None => fake_image(f, 1224, 1584, max_px)
-          }
-        }
-        _ => {
-          f.image_loads.push(("pdf:\{doc}/\{page}", max_px))
-          fake_image(f, 1224, 1584, max_px)
-        }
-      }
-    None => {
-      let id = @hostapi.pdf_page_load(doc, page, max_px)
-      match g().host_rec.pdfs.get(doc) {
-        Some(named) if text_recording() => rec_image_asked(id, { "pi": pdf_head(named, [page, max_px]) })
-        _ => ()
-      }
-      id
-    }
+  let id = @hostapi.pdf_page_load(doc, page, max_px)
+  match g().host_rec.pdfs.get(doc) {
+    Some(named) if text_recording() => rec_image_asked(id, { "pi": pdf_head(named, [page, max_px]) })
+    _ => ()
   }
   outside_start(outside_image, id, "image \{id} (PDF \{doc}, page \{page})")
   id
@@ -2359,72 +1647,38 @@ fn h_pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
 
 ///|
 fn h_pdf_close(doc : Int) -> Unit {
-  match fake.val {
-    Some(f) => f.views.push("pdf close \{doc}")
-    None => @hostapi.pdf_close(doc)
-  }
+  @hostapi.pdf_close(doc)
 }
 
 ///|
 /// The pointer's shape (desktop.mbt Cursor's code).
 fn h_set_cursor(kind : Int) -> Unit {
-  match fake.val {
-    Some(f) => f.cursor = kind
-    None => @hostapi.set_cursor(kind)
-  }
+  @hostapi.set_cursor(kind)
 }
 
 ///|
 /// The press under way drags the window (the app's own title row).
 fn h_window_drag() -> Unit {
-  match fake.val {
-    Some(f) => f.window_drags = f.window_drags + 1
-    None => @hostapi.window_drag()
-  }
+  @hostapi.window_drag()
 }
 
 ///|
 fn h_window_act(what : Int) -> Unit {
-  match fake.val {
-    Some(f) => f.window_acts.push(what)
-    None => @hostapi.window_act(what)
-  }
+  @hostapi.window_act(what)
 }
 
 ///|
 fn h_window_open(what : String) -> Bool {
-  match fake.val {
-    Some(f) => {
-      if f.window_opens {
-        f.windows_opened.push(what)
-      }
-      f.window_opens
-    }
-    None => @hostapi.window_open(what)
-  }
+  @hostapi.window_open(what)
 }
 
 ///|
 fn h_window_front(what : String) -> Bool {
-  match fake.val {
-    Some(f) => {
-      let open = f.windows_opened.iter().filter(fn(w) { w == what }).count() >
-        f.windows_closed.iter().filter(fn(w) { w == what }).count()
-      if open {
-        f.windows_fronted.push(what)
-      }
-      open
-    }
-    None => @hostapi.window_front(what)
-  }
+  @hostapi.window_front(what)
 }
 
 ///|
 fn h_window_snap(x : Double, y : Double, w : Double, h : Double) -> Unit {
   let z = window_zoom_drawn.val
-  let (x, y, w, h) = (x * z, y * z, w * z, h * z)
-  match fake.val {
-    Some(f) => f.snap = (x, y, w, h)
-    None => @hostapi.window_snap(x, y, w, h)
-  }
+  @hostapi.window_snap(x * z, y * z, w * z, h * z)
 }

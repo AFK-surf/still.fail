@@ -11,7 +11,7 @@ import { CoreError, HostError } from "../src/error.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import { utf8 } from "../src/util.ts";
-import { BEHIND_MS, BEHIND_TRIES, read, signerKnown } from "../src/views/lock.ts";
+import { BEHIND_MS, BEHIND_TRIES, held, read, refusedAgain, signerKnown } from "../src/views/lock.ts";
 import { ME, PHONE, elsewhere, genesis, rig, unhex } from "./lock-rig.ts";
 import { stationLater, stationReplies, status } from "./station-fixture.ts";
 
@@ -232,6 +232,12 @@ test("a hello brings what put this device in the lock lately, for a station that
   r.cloud.chains.set("ws", [g, old]);
   r.core.inner.data.put("lock", "ws", { head: head(old), entries: [g, old] });
   assert.equal(r.core.inner.cloudSync.carry!("ws"), null);
+  // Its person made a member lately too (their first device): a station takes no device of someone it has not heard of.
+  const made = sign(next("ws", head(g), r.host.nowMs() / 1000, "member", { sub: "s3", email: "c@x.com", role: "member" }));
+  const first = sign(next("ws", head(made), r.host.nowMs() / 1000, "device", { id: ME, sub: "s3", kind: "app", label: "this" }));
+  r.cloud.chains.set("ws", [g, made, first]);
+  r.core.inner.data.put("lock", "ws", { head: head(first), entries: [g, made, first] });
+  assert.deepEqual(r.core.inner.cloudSync.carry!("ws"), [made, first], "from the one that made them a member on");
 });
 
 test("a change the cloud answers too many requests for is asked again a while later, not failed at once", async () => {
@@ -241,6 +247,37 @@ test("a change the cloud answers too many requests for is asked again a while la
   stationReplies(r.host, (req) => (req.url.includes("/lock") && limited-- > 0 ? status(429, { error: "rate_limited" }) : r.cloud.reply(req)));
   await r.ask("lock.removeDevice", { workspace: "ws", device: PHONE });
   assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device.remove", PHONE]]);
+});
+
+test("the lock moved on while the cloud answers too many requests: read again a while later, not left behind until it moves again", async () => {
+  const owner = elsewhere();
+  const r = await rig(() => ({ ws: genesis("ws", owner, false, [], {}, ME, [phone]) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const g = r.cloud.chains.get("ws")![0]!;
+  const sign = (e: ReturnType<typeof next>): Entry => ({ ...e, sig: { key: owner.id, alg: "Ed25519", sig: owner.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(e))])) } });
+  // This device put in by the owner, the cloud turning the next read of the lock away (the account's budget spent).
+  const approval = sign(next("ws", { seq: 0, hash: entryHash(g), genesis: entryHash(g) }, r.host.nowMs() / 1000, "device", { id: ME, sub: "s1", kind: "app", label: "this" }));
+  r.cloud.chains.set("ws", [g, approval]);
+  let limited = 1;
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock?") && limited-- > 0 ? status(429, { error: "rate_limited" }) : r.cloud.reply(req)));
+  r.core.inner.data.update({ topic: "workspace", workspace: "ws" }, (w) => ({ ...(w as object), lock: r.cloud.head("ws") }));
+  await r.host.time.pass(1_000);
+  assert.equal(limited, 0, "turned away once");
+  assert.equal(held(r.core.inner, "ws")?.head?.seq, 0, "not read yet");
+  await r.host.time.pass(10_000);
+  assert.equal(held(r.core.inner, "ws")?.head?.seq, 1, "read again, and this device in the lock");
+});
+
+test("a station that refused this device is tried again as its person's own lock moves on, not only the workspace's", async () => {
+  const r = await rig((_me) => ({ ws: genesis("ws", elsewhere(), false) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const woke: string[] = [];
+  r.core.inner.stations.cameOnline = (address: string) => void woke.push(address);
+  hooks.lockRefused!(r.core.inner, "ws", "st", null);
+  assert.notEqual(hooks.lockWaiting!(r.core.inner, "ws", "st"), null, "not asked again by itself");
+  refusedAgain(r.core.inner, "ws");
+  assert.deepEqual(woke, ["ws/st"]);
+  assert.equal(hooks.lockWaiting!(r.core.inner, "ws", "st"), null);
 });
 
 test("the lock says its devices and people in words, as every page shows them", async () => {

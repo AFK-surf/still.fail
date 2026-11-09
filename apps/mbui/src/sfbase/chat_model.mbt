@@ -140,7 +140,7 @@ pub(all) struct Card {
 }
 
 ///|
-/// An agent's ask to sign in to a site as its card says it (SignInAsk, ember docs/vault.md 登录态): its id, the site,
+/// An agent's ask to sign in to a site as its card says it (SignInAsk 登录态): its id, the site,
 /// why, the chat's tab it is on (a screen of the chat's station), and how it goes (`status`: "" waiting, filling, code,
 /// person, left, done, denied, expired, ended; `why` a person is needed; what the agent `said` is left; whether it is
 /// to be kept, `keep`; the vault request keeping it, `save`, and how that went, `kept`).
@@ -158,7 +158,7 @@ pub(all) struct SignInAsk {
 }
 
 ///|
-/// An agent's request to debug its person's phone as its card says it (PhoneAsk, docs/adb-share.md): its id, the
+/// An agent's request to debug its person's phone as its card says it (PhoneAsk): its id, the
 /// agent's reason, and once decided how (`status`: granted, denied, ended; `scope`: hour, chat; `why` it ended).
 pub(all) struct PhoneAsk {
   request : String
@@ -209,8 +209,6 @@ pub(all) struct VaultAsk {
 pub(all) struct Decision {
   resolved : Bool
   dismissed : Bool
-  /// still waiting, its agent in a turn: an option that closes the card waits for that turn's end (the station refuses it)
-  locked : Bool
   text : String?
   /// the option picked, once answered
   chosen : String?
@@ -339,7 +337,7 @@ pub(all) struct Message {
   seq : Double
   thread : Double
   ts : String
-  /// person | agent | ember
+  /// person | agent | the station (ember, as the station stores it)
   author_kind : String
   author : String
   text : String
@@ -382,6 +380,10 @@ pub(all) struct Message {
   notice_retry_session : String
   /// a failure's own words, as what failed said them, shown under its words when the notice is opened
   notice_detail : String
+  /// a chat's run changed: what it runs on now, said in place of its words where they have not the room on their line
+  /// ("": none), and how it ran and runs, whole, shown in place of its words once it is opened
+  notice_short : String
+  notice_lines : Array[String]
   /// the chats its words link to that their lists have (archived ones too)
   chats : Array[LinkedChat]
 }
@@ -486,7 +488,6 @@ pub fn message_of(m : Json) -> Message {
         Some({
           resolved: flag(d, "resolved"),
           dismissed: flag(d, "dismissed"),
-          locked: flag(d, "locked"),
           text: opt_text(d, "text"),
           chosen: opt_text(d, "chosen"),
         })
@@ -513,6 +514,13 @@ pub fn message_of(m : Json) -> Message {
     notice_md: field(field(s, "notice"), "md"),
     notice_retry_session: text(field(s, "notice"), "retrySession"),
     notice_detail: text(field(s, "notice"), "detail"),
+    notice_short: text(field(s, "notice"), "short"),
+    notice_lines: items(field(s, "notice"), "lines").filter_map(fn(l) {
+      match l {
+        String(l) => Some(l)
+        _ => None
+      }
+    }),
     chats: items(s, "chats").map(fn(c) -> LinkedChat {
       let c = Some(c)
       { href: text(c, "href"), title: text(c, "title"), archived: flag(c, "archived"), note: text(c, "note"), thread: opt_number(c, "thread") }
@@ -574,6 +582,9 @@ pub(all) struct Agent {
   started : Bool
   /// its last turn's id (its session's lastTurn), "" before it has had one
   last_turn : String
+  /// the message its last turn's state is about (lastTurn.about), by its seq: its answer, which a station may tell its
+  /// turn over before
+  about : Double?
 }
 
 ///|
@@ -594,6 +605,7 @@ pub fn agent_of(a : Json) -> Agent {
     },
     started: flag(s, "started"),
     last_turn: text(field(session, "lastTurn"), "id"),
+    about: opt_number(field(field(session, "lastTurn"), "about"), "seq"),
   }
 }
 
@@ -614,6 +626,10 @@ pub(all) struct ChatView {
   /// the first and last entries loaded (letters and edits are not messages): the cursors for loading pages
   first_entry : Double?
   last_entry : Double?
+  /// the page before, being read ("reading") or not read ("failed", why in `older_failed`, asked again a while after):
+  /// "" neither, when it may be asked for
+  older : String
+  older_failed : String
   /// how many letters its agents and other chats' wrote each other (not in `messages`: their own sheet)
   letters : Int
   at : Double?
@@ -621,6 +637,9 @@ pub(all) struct ChatView {
   unread_line : Double?
   unread_above : Bool
   outbox : Array[Outgoing]
+  /// till when (the core's time, its source's `now`) what the viewer sends here goes close under its last row, theirs,
+  /// that row's time under the new one (the core's `joinsUntil`); None: it would stand apart
+  joins_until : Double?
   offline : Bool
   /// its station down, the line over the composer (why, and that what is sent goes once it is reached)
   offline_note : String?
@@ -673,7 +692,7 @@ pub(all) struct ChatScreen {
 }
 
 ///|
-/// A thread a chat's messages can be copied to (the chat view's `cc`, docs/relay.md "抄送"): its id (`chat.cc`'s `to`),
+/// A thread a chat's messages can be copied to (the chat view's `cc`): its id (`chat.cc`'s `to`),
 /// where it is (#channel, 私信, the Feishu group), its platform for its mark ("slack" or "feishu"), and whether it is
 /// ticked.
 pub(all) struct ChatCcTo {
@@ -725,6 +744,8 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
     newer: flag(s, "newer"),
     first_entry: opt_number(s, "firstEntry"),
     last_entry: opt_number(s, "lastEntry"),
+    older: text(s, "older"),
+    older_failed: text(s, "olderFailed"),
     letters: number(s, "letters").to_int(),
     at: opt_number(s, "at"),
     at_offset: opt_number(s, "atOffset"),
@@ -753,6 +774,7 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
         final: flag(s, "final"),
       }
     }),
+    joins_until: opt_number(s, "joinsUntil"),
     offline: flag(s, "offline"),
     offline_note: opt_text(s, "offlineNote"),
     updating: flag(s, "updating"),
@@ -819,6 +841,13 @@ pub fn stations_of(v : Json?) -> Array[Station] {
       })
     _ => []
   }
+}
+
+///|
+/// The workspace's stations as a page that only names them shows them (`stations` `brief`: each one's mark and how it
+/// is reached, not its overview and profiles, nor their changes).
+pub fn station_marks(src : Source, scope : String) -> Array[Station] {
+  stations_of(src.topic("stations", { "scope": Json::string(scope), "brief": Json::boolean(true) }).get().value)
 }
 
 ///|

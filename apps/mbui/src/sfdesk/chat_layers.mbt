@@ -1,31 +1,13 @@
-// What lies over a chat's pane on the desktop round its composer (ember web/src/Chat.tsx useSelectionQuote, ChatSide.tsx
+// What lies over a chat's pane on the desktop round its composer (still.fail web/src/Chat.tsx useSelectionQuote, ChatSide.tsx
 // useChatDrop, DropHint; ChatPage.css.ts dropHint; keymap.ts composer.focus, panel.close): a passage of a message
 // picked (with the mouse its pill, with a finger its handles and bar: sfbase's pick.mbt) quoted into the chat's draft;
 // a row of the 文件 tab carried over the pane frosting it under the composer, let go there into the draft; the
 // chat's own keys.
 
 ///|
-/// What the chat's pane keeps of its own: the composer to take the keyboard at its next drawing (回到输入框).
-priv struct LayersOwn {
-  mut focus : Bool
-}
-
-///|
-let layers_own : LayersOwn = { focus: false }
-
-///|
-fn layers_reset() -> Unit {
-  layers_own.focus = false
-}
-
-///|
 /// Over chat `r`'s pane `pane` (its draft `draft`; `room`, what the composer keeps at its foot), after its composer:
 /// what is picked in its messages, what is carried over it.
 fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, pane : Int, room : Double) -> Unit {
-  if layers_own.focus {
-    layers_own.focus = false
-    c.focus_editor(@sfpages.composer_field_key)
-  }
   @sfbase.pick_layer(c, list_key(r), bar_foot, room, @sfbase.mouse_picks(), fn(author, words, ts, role) {
     c.tell("pick/quote", fn() {
       writing_quote(src, writing(src, draft), {
@@ -39,7 +21,7 @@ fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, pane : In
 }
 
 ///|
-/// A row of the 文件 tab carried over box `pane` (DropHint, ChatPage.css.ts dropHint): the pane frosted over under the
+/// A row of the 文件 tab carried over box `pane` (DropHint): the pane frosted over under the
 /// composer, the row's mark twice a card's and 松开以添加到消息 in its middle; let go there, into draft `draft` on
 /// `station` (useChatDrop: named by its path, or as a file where the chat says so).
 pub fn chat_drop(c : @ui.Ctx, src : Source, station : String, draft : String, pane : Int) -> Unit {
@@ -93,23 +75,25 @@ fn inside(r : (Double, Double, Double, Double)?, x : Double, y : Double) -> Bool
 }
 
 ///|
-/// The composer to take the keyboard at the pane's next drawing (Space with no field focused: 回到输入框).
-fn composer_focus() -> Unit {
-  layers_own.focus = true
+/// Chat `r`'s composer given the keyboard (Space with no field focused: 回到输入框), its draft's field (writing's), as
+/// the key is pressed.
+fn composer_focus(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
+  c.focus_field(writing(src, r.station + ":" + r.session).field)
 }
 
 ///|
-/// Esc in the open chat, after the frame's (`escape`: pressed, not taken by what the frame opened): to ⌘F's bar, then
-/// what is picked, then the side panel's tabs all closed (keymap.ts panel.close). Whether it took it.
-fn chat_escape(c : @ui.Ctx, src : Source, escape : Bool) -> Bool {
-  guard escape && app.nav.top() is Chat(r) else { return false }
+/// Esc in the open chat, after the frame's (not taken by what the frame opened), at its moment: to ⌘F's bar (the
+/// keyboard let go: `blur`), then what is picked, then the side panel's tabs all closed (keymap.ts panel.close).
+/// Whether it took it.
+fn chat_escape(src : Source, blur : () -> Unit) -> Bool {
+  guard app.nav.top() is Chat(r) else { return false }
   if find_chat() != "" {
     find_forget()
-    c.blur()
+    blur()
   } else if @sfbase.pk.ts != "" {
     @sfbase.pick_clear()
   } else if side_now(src, r).0.length() > 0 {
-    c.tell("chat/panel-close", fn() { side_change(src, r, "clear", None) })
+    side_change(src, r, "clear", None)
   } else {
     return false
   }

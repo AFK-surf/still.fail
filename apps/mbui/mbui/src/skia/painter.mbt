@@ -1,4 +1,4 @@
-// tiny-skia's painting (src/painter.rs, src/pipeline/blitter.rs): paints, the blitter that runs a paint's pipeline
+// tiny-skia's painting: paints, the blitter that runs a paint's pipeline
 // over spans, and filling, stroking and drawing into a pixmap.
 
 ///|

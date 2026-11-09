@@ -1,4 +1,4 @@
-// The vault's formats on the device (docs/vault.md, 实现约定): what is signed and how, the seal a key or secret is sent
+// The vault's formats on the device (实现约定): what is signed and how, the seal a key or secret is sent
 // in, an item's ciphertext, the recovery words. The stations check the same (station/src/vault/crypto.ts, on node's
 // crypto); both are tested on the same values (station/test/fixtures/vault-vectors.json).
 import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
@@ -46,7 +46,7 @@ export type Request = {
   command?: string; hosts?: string[]; box: string; at: number; status: "pending" | "granted" | "denied" | "expired";
   /// The plain library's item's owner, or whom a secret to keep is for (their email).
   owner?: string;
-  /// An agent asking to keep a secret (secret_save, docs/vault.md agent 存入): the item as it is to be listed, written
+  /// An agent asking to keep a secret (secret_save agent 存入): the item as it is to be listed, written
   /// under `item` into `vault` (empty: one of the person's own, made when they have none).
   save?: Save;
   /// Its fields, sealed by the station that asked to each of the person's devices set up (`saveContext`).

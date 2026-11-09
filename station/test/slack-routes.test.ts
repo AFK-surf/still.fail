@@ -307,7 +307,7 @@ test("adding, disabling and deleting connects follows through to connections", a
     assert.deepEqual(t.slack.connections.ids().sort(), ["ds", "gpt"]);
     await until("gpt's socket", () => t.fake.sockets.length === 2);
     await t.ask("PUT", "/connects/gpt", { bind: { runtime: "claude" } });
-    assert.equal(t.saved().connects.find((c: Json) => c.id === "gpt").bind.runtime, "codex", "a connect's runtime stays as it was made");
+    assert.equal(t.saved().connects.find((c: Json) => c.id === "gpt").bind.runtime, "claude", "a connect's runtime can change");
     await t.ask("PUT", "/connects/gpt", { enabled: false });
     await t.slack.reconcile();
     assert.deepEqual(t.slack.connections.ids(), ["ds"]);
@@ -373,6 +373,24 @@ test("a single-session connect can be set to wake without a mention, and pointed
     assert.equal(t.store.getSession(bound.session)!.title, "night shift");
     assert.deepEqual(await t.ask("POST", "/connects/ds/session", { session: "nope" }), [500, { error: "unknown session nope" }]);
     assert.deepEqual(await t.ask("POST", "/connects/ds/session", { session: bound.session }), [200, { session: bound.session }]);
+    // Another model reaches the session it is bound to, as a chat's own change does.
+    assert.equal(t.store.getSession(bound.session)!.model, null);
+    assert.equal((await t.ask("PUT", "/connects/ds", { bind: { model: "deepseek-flash" } }))[0], 400, "no profile runs it: refused for both");
+    assert.equal(hubConfig(t.config.raw(), t.data).connects[0]!.bind.model, undefined);
+    t.config.update((raw) => (raw.profiles[0].models = ["deepseek-flash"]));
+    const [changed, why] = await t.ask("PUT", "/connects/ds", { bind: { model: "deepseek-flash" } });
+    assert.equal(changed, 200, JSON.stringify(why));
+    assert.deepEqual([t.store.getSession(bound.session)!.model, t.store.getSession(bound.session)!.effort], ["deepseek-flash", null]);
+    await t.ask("PUT", "/connects/ds", { requireMention: true });
+    assert.equal(t.store.getSession(bound.session)!.model, "deepseek-flash", "an edit that leaves the model alone leaves the session's");
+    // Another runtime too: what went with the old one is not kept, and the session moves with its history.
+    const [moved, whyNot] = await t.ask("PUT", "/connects/ds", { bind: { runtime: "codex" } });
+    assert.equal(moved, 200, JSON.stringify(whyNot));
+    assert.deepEqual(t.saved().connects[0].bind, { runtime: "codex" });
+    assert.deepEqual([t.store.getSession(bound.session)!.runtime, t.store.getSession(bound.session)!.model, t.store.getSession(bound.session)!.profile], ["codex", null, "cx"]);
+    t.config.update((raw) => (raw.profiles = raw.profiles.filter((p: Json) => p.id !== "cc")));
+    assert.equal((await t.ask("PUT", "/connects/ds", { bind: { runtime: "claude" } }))[0], 400, "no profile runs it: refused for both");
+    assert.equal(t.store.getSession(bound.session)!.runtime, "codex");
     await t.ask("PUT", "/connects/ds", { mode: "multi-session" });
     assert.equal(hubConfig(t.config.raw(), t.data).connects[0]!.requireMention, true, "multi-session always needs a mention");
     assert.deepEqual(await t.ask("POST", "/connects/ds/session", {}), [500, { error: "connect ds is not single-session" }]);
@@ -609,5 +627,21 @@ test("a station in several workspaces: a connect is the workspace's it was added
     assert.deepEqual(t.saved().connects.map((c: Json) => c.id), ["ds"]);
   } finally {
     await t.close();
+  }
+});
+
+test("a new Slack connect named as a Feishu connect takes another id: the Feishu one stays", async () => {
+  const s = await rig();
+  try {
+    const feishu = { appId: "cli_a", appSecret: "secret", domain: "lark", botName: "ember" };
+    s.config.update((raw) => raw.connects.push({ id: "ember", kind: "feishu", mode: "multi-session", bind: { runtime: "claude" }, feishu }));
+    bot(s.fake, { name: "ember" });
+    const [ok, made] = await s.ask("POST", "/connects", { bind: { runtime: "codex" }, slack: { appToken: "xapp-2-x", botToken: "xoxb-2-y" } });
+    assert.equal(ok, 200, JSON.stringify(made));
+    assert.equal(made.id, "ember-2");
+    const kept = s.saved().connects.find((c: Json) => c.id === "ember");
+    assert.deepEqual([kept.kind, kept.feishu], ["feishu", feishu]);
+  } finally {
+    await s.close();
   }
 });

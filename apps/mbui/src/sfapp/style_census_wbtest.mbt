@@ -1,6 +1,6 @@
 // How many values of each kind the app's screens use (mbui's Tester::census over the fixtures' screens, narrow and
 // wide, light and dark): sizes of words with their lines, weights, paddings and gaps, corners, colours. The styles'
-// migration (mbui's docs/style.md) brings each down; scripts/style_census.sh prints them, and the values. What the old
+// migration (mbui's ui/style.mbt) brings each down; scripts/style_census.sh prints them, and the values. What the old
 // views draw and the window's tree's nodes are counted both (Tester::census: the tree's as each is set, Tree::styled).
 
 ///|
@@ -77,12 +77,18 @@ test "styles: how many values of each kind the app's screens use" {
   // The settings' list and 关于 on the window's tree keep their list's scroll bar's thumb as a node while at rest (unseen
   // then), so its existing look is counted where the old list built none at rest: a corner of 1.5 and the bar's two inks
   // (24272B42, ECECED42), no token of its own.
+  // 外观's 主题色 draws each accent other than the orange as a dot of its own colour, by day and by night (@sf.accents:
+  // four of them, eight colours), and 自定义's outline round its ＋ (the ink at 24%, by day and by night): what the
+  // setting shows, not a style's.
+  // A station's dials, wide, are still 36 apart (dials_node's dl_row_wide), but as nodes that is a row's gap across,
+  // which the tree's census does not count (Tree::styled: a node's paddings and its gap down only); the old view's
+  // dials were its last 36.
   inspect(counts.to_string(), content=(
     #|text 37
     #|weight 4
-    #|space 25
+    #|space 24
     #|radius 21
-    #|color 70
+    #|color 80
     #|
 
 

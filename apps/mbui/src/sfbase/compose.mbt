@@ -1,4 +1,4 @@
-// What is being written to a chat as the core keeps it (ember web/src/draft.ts useDraft; the core's composer.ts, the
+// What is being written to a chat as the core keeps it (still.fail web/src/draft.ts useDraft; the core's composer.ts, the
 // `composer` topic, by the draft's key: `<station>:<chat>`, `new:<workspace>` the workspace's new chat): its words,
 // the passages it quotes, the files going up to the station (the core sends them up and says how far), whether it can
 // be sent, what went wrong. Each chat has its own while the page shows another; the core keeps each on the device as the
@@ -12,21 +12,50 @@
 pub(all) struct Writing {
   key : String
   field : @ui.Field
+  text : @signals.Computed[String]
+  quotes : @signals.Computed[Array[Json]]
+  files : @signals.Computed[Array[Json]]
+  focus : @signals.Computed[String]
+  starting : @signals.Computed[Bool]
+  error : @signals.Computed[String]
+  ready : @signals.Computed[Bool]
+  uploading : @signals.Computed[Bool]
+  pending : @signals.Signal[Int]
+  priv state : WritingState
+  priv following : @signals.Computed[Unit]
+  /// what `take` took, put back by `restore`
+  mut taken : (String, Array[Json], Array[Json])?
+}
+
+///|
+priv struct WritingState {
+  field : @ui.Field
   text : @signals.Signal[String]
-  mut quotes : Array[Json]
-  mut files : Array[Json]
-  mut focus : String
-  mut starting : Bool
-  mut error : String
-  mut ready : Bool
-  mut uploading : Bool
+  quotes : @signals.Signal[Array[Json]]
+  files : @signals.Signal[Array[Json]]
+  focus : @signals.Signal[String]
+  starting : @signals.Signal[Bool]
+  error : @signals.Signal[String]
+  ready : @signals.Signal[Bool]
+  uploading : @signals.Signal[Bool]
   pending : @signals.Signal[Int]
   mut acked : Double
   mut seen_rev : Double
   mut adopted : Int
-  /// what `take` took, put back by `restore`
-  mut taken : (String, Array[Json], Array[Json])?
+  mut generation : Int
+  /// The committed words when a different core revision arrived during input-method composition.
+  mut composing_base : String?
 }
+
+///|
+priv struct WritingCached {
+  source : Source
+  key : String
+  value : Writing
+}
+
+///|
+let writing_cache : Ref[Array[WritingCached]] = Ref([])
 
 ///|
 /// Each draft by its key, as the page has it.
@@ -88,7 +117,7 @@ let writing_seeds : Map[String, String] = {}
 ///|
 /// Whether draft `w` has the file `seed` names already (writing_seeds).
 fn writing_has(w : Writing, seed : String) -> Bool {
-  w.files.iter().any(fn(f) { writing_seeds.get(text(Some(f), "id")) == Some(seed) })
+  w.state.files.get().iter().any(fn(f) { writing_seeds.get(text(Some(f), "id")) == Some(seed) })
 }
 
 ///|
@@ -99,8 +128,14 @@ let writing_n : Ref[Int] = { val: 0 }
 pub fn writings_reset() -> Unit {
   quoted_into.clear()
   files_put.clear()
+  drafts_given.set([])
   writing_stations.clear()
   shared_into.clear()
+  for cached in writing_cache.val {
+    cached.value.following.dispose()
+  }
+  // Array::clear keeps removed slots alive; drop its backing array when the app releases its drafts.
+  writing_cache.val = []
   writings.clear()
   writing_pictures.clear()
   writing_went.clear()
@@ -110,51 +145,121 @@ pub fn writings_reset() -> Unit {
 }
 
 ///|
-/// The draft `key`, as the core says it now unless the page has done something it has not answered yet.
-pub fn writing(src : Source, key : String) -> Writing {
-  let w = match writings.get(key) {
-    Some(w) => w
+/// Read one field and follow the shared core resource for as long as the computed has graph readers.
+fn[T] writing_value(value : @signals.Signal[T], following : @signals.Computed[Unit], same : (T, T) -> Bool) -> @signals.Computed[T] {
+  @signals.computed_following(fn(_) { value.get() }, following, same~)
+}
+
+///|
+/// A draft is shared by its source and key, independent of which page or node reads it.
+fn writing_cached(src : Source, key : String) -> Writing {
+  match writing_cache.val.search_by(fn(w) { physical_equal(w.source, src) && w.key == key }) {
+    Some(i) => writing_cache.val[i].value
     None => {
-      let w : Writing = {
-        key,
+      let state : WritingState = {
         field: @ui.Field::new(),
-        text: @signals.signal(""),
-        quotes: [],
-        files: [],
-        focus: "",
-        starting: false,
-        error: "",
-        ready: false,
-        uploading: false,
+        text: @signals.signal("", same=fn(a, b) { a == b }),
+        quotes: @signals.signal([], same=fn(a, b) { a == b }),
+        files: @signals.signal([], same=fn(a, b) { a == b }),
+        focus: @signals.signal("", same=fn(a, b) { a == b }),
+        starting: @signals.signal(false),
+        error: @signals.signal("", same=fn(a, b) { a == b }),
+        ready: @signals.signal(false),
+        uploading: @signals.signal(false),
         pending: @signals.signal(0),
         acked: 0.0,
         seen_rev: -1.0,
         adopted: -1,
+        generation: -1,
+        composing_base: None,
+      }
+      let topic = src.topic("composer", { "key": Json::string(key) })
+      let following = @signals.computed(fn(_) {
+        // (what the core reads of its field's words: its marks, its `@` words, refs.mbt)
+        refs_follow(src, key, state.field)
+        @signals.effect(fn() {
+          let t = topic.get()
+          state.pending.get() |> ignore
+          let composing = state.field.composing()
+          @signals.untracked(fn() {
+            let (generation, fresh) = (src.generation)("composer", { "key": Json::string(key) })
+            writing_adopt(state, t.value, t.version, generation, fresh, composing)
+          })
+        }) |> ignore
+      })
+      let w : Writing = {
+        key,
+        field: state.field,
+        text: writing_value(state.text, following, fn(a, b) { a == b }),
+        quotes: writing_value(state.quotes, following, fn(a, b) { a == b }),
+        files: writing_value(state.files, following, fn(a, b) { a == b }),
+        focus: writing_value(state.focus, following, fn(a, b) { a == b }),
+        starting: writing_value(state.starting, following, fn(a, b) { a == b }),
+        error: writing_value(state.error, following, fn(a, b) { a == b }),
+        ready: writing_value(state.ready, following, fn(a, b) { a == b }),
+        uploading: writing_value(state.uploading, following, fn(a, b) { a == b }),
+        pending: state.pending,
+        state,
+        following,
         taken: None,
       }
+      writing_cache.val.push({ source: src, key, value: w })
       writings[key] = w
       w
     }
   }
-  let t = (src.topic)("composer", { "key": Json::string(key) })
-  writing_adopt(w, t.value, t.version)
+}
+
+///|
+/// The shared draft, followed by what reads its fields. An untracked call only reads the current topic once.
+pub fn writing(src : Source, key : String) -> Writing {
+  let w = writing_cached(src, key)
+  if @signals.active_sub() is Some(_) {
+    w.following.get()
+  } else {
+    let t = src.topic("composer", { "key": Json::string(key) }).get()
+    @signals.untracked(fn() {
+      let (generation, fresh) = (src.generation)("composer", { "key": Json::string(key) })
+      writing_adopt(w.state, t.value, t.version, generation, fresh, w.field.composing())
+    })
+  }
   w
 }
 
 ///|
 /// The core's value shown, unless the page has done something it has not answered yet; its own words (a new `rev`:
 /// read back, taken, put back, carried on) into the field.
-fn writing_adopt(w : Writing, v : Json?, version : Int) -> Unit {
+fn writing_adopt(w : WritingState, v : Json?, version : Int, generation : Int, fresh : Bool, composing : Bool) -> Unit {
+  if w.generation != generation {
+    // A restarting client keeps the old value visible until the new core answers. Do not count that old revision as
+    // the new core's: its first value can have the same revision but different contents.
+    if !fresh && v is Some(_) {
+      return
+    }
+    // A new core has its own composer version and revision sequence.
+    w.generation = generation
+    w.acked = 0.0
+    w.adopted = -1
+    w.seen_rev = -1.0
+    w.composing_base = None
+  }
+  if v is None && version == 0 {
+    // A fresh subscription has its own message count even within the same core lifetime.
+    w.adopted = -1
+  }
   guard v is Some(Object(_)) else { return }
-  if w.pending.get() > 0 || number(v, "version") < w.acked || w.adopted == version {
+  if w.pending.get() > 0 || number(v, "version") < w.acked ||
+    (w.adopted == version && (composing || w.composing_base is None)) {
     return
   }
   w.adopted = version
-  w.quotes = items(v, "quotes")
-  w.files = items(v, "files")
+  @signals.start_batch()
+  w.quotes.set(items(v, "quotes"))
+  w.files.set(items(v, "files"))
   // a picture picked here (a quote's too: a mark's screenshot), up: its message drawn from it as picked, by the name
   // the station keeps it under (sent.mbt)
-  for f in writing_files(w) {
+  let files = w.files.get() + w.quotes.get().filter_map(fn(q) { field(Some(q), "own") })
+  for f in files {
     let o = Some(f)
     match (writing_pictures.get(text(o, "id")), writing_stations.get(text(o, "id")), field(o, "done")) {
       (Some(picture), Some(station), Some(done)) if text(Some(done), "path") != "" =>
@@ -162,17 +267,35 @@ fn writing_adopt(w : Writing, v : Json?, version : Int) -> Unit {
       _ => ()
     }
   }
-  w.focus = text(v, "focus")
-  w.starting = flag(v, "starting")
-  w.error = text(v, "error")
-  w.ready = flag(v, "ready")
-  w.uploading = flag(v, "uploading")
+  w.focus.set(text(v, "focus"))
+  w.starting.set(flag(v, "starting"))
+  w.error.set(text(v, "error"))
+  w.ready.set(flag(v, "ready"))
+  w.uploading.set(flag(v, "uploading"))
   let rev = number(v, "rev")
-  if rev != w.seen_rev {
-    w.seen_rev = rev
-    w.text.set(text(v, "text"))
-    w.field.set(w.text.get())
+  if rev != w.seen_rev || (!composing && w.composing_base is Some(_)) {
+    let words = text(v, "text")
+    if composing && w.field.text() != words {
+      // Leave marked text alone. When it ends, a cancel adopts the latest core words; a committed edit keeps its own.
+      if w.composing_base is None {
+        w.composing_base = Some(w.field.text())
+      }
+    } else {
+      let edited = match w.composing_base {
+        Some(base) => !composing && w.field.text() != base
+        None => false
+      }
+      w.composing_base = None
+      w.seen_rev = rev
+      if !edited {
+        w.text.set(words)
+        if w.field.text() != words {
+          w.field.set(words)
+        }
+      }
+    }
   }
+  @signals.end_batch()
 }
 
 ///|
@@ -191,20 +314,24 @@ fn writing_act(
     toast_later(read_only_words)
     return
   }
-  show(w)
+  @signals.start_batch()
   w.pending.set(w.pending.get() + 1)
+  show(w)
+  @signals.end_batch()
   params["key"] = Json::string(w.key)
   let answered = fn(r : Result[Json, Json]) {
-    w.pending.set(w.pending.get() - 1)
+    @signals.start_batch()
     match r {
       Ok(a) =>
         match field(Some(a), "version") {
-          Some(Number(n, ..)) => w.acked = if n > w.acked { n } else { w.acked }
+          Some(Number(n, ..)) => w.state.acked = if n > w.state.acked { n } else { w.state.acked }
           _ => ()
         }
-      Err(_) => ()
+      Err(_) => w.state.adopted = -1
     }
+    w.pending.set(w.pending.get() - 1)
     done(r)
+    @signals.end_batch()
   }
   match bytes {
     Some(b) => (src.call_bytes)("composer." + what, Json::object(params), b, answered)
@@ -213,13 +340,31 @@ fn writing_act(
 }
 
 ///|
+/// The core's calls whose answers change only signals (@core.said, as the app starts; a made-up core's the same): the
+/// words of a draft told (`composer.text`: what writing_act does with its answer, `pending` and the version it is at,
+/// read by what follows the draft's topic), where a ref is asked at the caret (`ref.at`: refs_ask_at's, what it found
+/// set with the signals the menu reads). Taken as they come, what read those is built again, nothing else: not a page
+/// whose field had a word typed in it built whole for each.
+pub fn calls_said() -> Array[String] {
+  ["composer.text", "ref.at"]
+}
+
+///|
+/// Whether call `name`'s answer changes only signals (calls_said).
+pub fn call_said(name : String) -> Bool {
+  calls_said().contains(name)
+}
+
+///|
 /// What is typed, told to the core as it is typed (`composer.text`).
 pub fn writing_text(src : Source, w : Writing, words : String) -> Unit {
   if words == w.text.get() {
     return
   }
-  w.text.set(words)
+  @signals.start_batch()
+  w.state.text.set(words)
   writing_act(src, w, "text", { "text": Json::string(words) })
+  @signals.end_batch()
 }
 
 ///|
@@ -304,9 +449,9 @@ pub fn writing_add(
     { "station": Json::string(station), "files": Json::array([Json::object(one)]) },
     show=fn(w) {
       if quote == "" {
-        w.files = w.files + [Json::object(shown)]
+        w.state.files.set(w.state.files.get() + [Json::object(shown)])
       } else {
-        w.quotes = w.quotes.map(fn(q) {
+        w.state.quotes.set(w.state.quotes.get().map(fn(q) {
           match q {
             Object(m) if text(Some(q), "id") == quote => {
               let n = m.copy()
@@ -315,7 +460,7 @@ pub fn writing_add(
             }
             _ => q
           }
-        })
+        }))
       }
     },
     bytes~,
@@ -364,7 +509,7 @@ pub fn writing_add_held(src : Source, w : Writing, station : String, f : @hostap
     w,
     "add",
     { "station": Json::string(station), "files": Json::array([Json::object(one)]) },
-    show=fn(w) { w.files = w.files + [Json::object(shown)] },
+    show=fn(w) { w.state.files.set(w.state.files.get() + [Json::object(shown)]) },
   )
 }
 
@@ -461,7 +606,7 @@ pub fn writing_drop(src : Source, d : Writing, station : String, dropped : Array
     Json::object(one)
   })
   writing_act(src, d, "add", { "station": Json::string(station), "files": Json::array(files) }, show=fn(d) {
-    d.files = d.files + files
+    d.state.files.set(d.state.files.get() + files)
   })
 }
 
@@ -478,7 +623,7 @@ pub fn writing_remove(src : Source, w : Writing, id : String) -> Unit {
   writing_went.remove(id)
   writing_seeds.remove(id)
   writing_act(src, w, "remove", { "id": Json::string(id) }, show=fn(w) {
-    w.files = w.files.filter(fn(f) { text(Some(f), "id") != id })
+    w.state.files.set(w.state.files.get().filter(fn(f) { text(Some(f), "id") != id }))
   })
 }
 
@@ -505,7 +650,7 @@ pub fn writing_quote(src : Source, w : Writing, quote : Json, file? : Json, pict
     }
     None => ()
   }
-  writing_act(src, w, "quote", p, show=fn(w) { if ask { w.focus = id } })
+  writing_act(src, w, "quote", p, show=fn(w) { if ask { w.state.focus.set(id) } })
   match picture {
     Some((station, name, bytes)) => writing_add(src, w, station, name, bytes, quote=id)
     None => ()
@@ -516,14 +661,14 @@ pub fn writing_quote(src : Source, w : Writing, quote : Json, file? : Json, pict
 /// Its files and its quotes' own pictures (the core's composer keeps both among its files; its message has both among
 /// its own).
 pub fn writing_files(w : Writing) -> Array[Json] {
-  w.files + w.quotes.filter_map(fn(q) { field(Some(q), "own") })
+  w.files.get() + w.quotes.get().filter_map(fn(q) { field(Some(q), "own") })
 }
 
 ///|
 /// What is said about a quote (`composer.comment`), the page's at once as the words are.
 pub fn writing_comment(src : Source, w : Writing, id : String, words : String) -> Unit {
   writing_act(src, w, "comment", { "id": Json::string(id), "comment": Json::string(words) }, show=fn(w) {
-    w.quotes = w.quotes.map(fn(q) {
+    w.state.quotes.set(w.state.quotes.get().map(fn(q) {
       match q {
         Object(m) if text(Some(q), "id") == id => {
           let said = m.copy()
@@ -532,14 +677,14 @@ pub fn writing_comment(src : Source, w : Writing, id : String, words : String) -
         }
         _ => q
       }
-    })
+    }))
   })
 }
 
 ///|
 /// A quote let go (`composer.unquote`), its picture with it.
 pub fn writing_unquote(src : Source, w : Writing, id : String) -> Unit {
-  match w.quotes.iter().find_first(fn(q) { text(Some(q), "id") == id }) {
+  match w.state.quotes.get().iter().find_first(fn(q) { text(Some(q), "id") == id }) {
     Some(q) => {
       let own = text(field(Some(q), "own"), "id")
       writing_pictures.remove(own)
@@ -548,9 +693,9 @@ pub fn writing_unquote(src : Source, w : Writing, id : String) -> Unit {
     None => ()
   }
   writing_act(src, w, "unquote", { "id": Json::string(id) }, show=fn(w) {
-    w.quotes = w.quotes.filter(fn(q) { text(Some(q), "id") != id })
-    if w.focus == id {
-      w.focus = ""
+    w.state.quotes.set(w.state.quotes.get().filter(fn(q) { text(Some(q), "id") != id }))
+    if w.state.focus.get() == id {
+      w.state.focus.set("")
     }
   })
 }
@@ -558,21 +703,21 @@ pub fn writing_unquote(src : Source, w : Writing, id : String) -> Unit {
 ///|
 /// A quote's comment line has the focus it asked for (`composer.focused`).
 pub fn writing_focused(src : Source, w : Writing) -> Unit {
-  writing_act(src, w, "focused", {}, show=fn(w) { w.focus = "" })
+  writing_act(src, w, "focused", {}, show=fn(w) { w.state.focus.set("") })
 }
 
 ///|
 /// What went wrong said in the draft, or no longer (`composer.error`).
 pub fn writing_error(src : Source, w : Writing, error : String) -> Unit {
   writing_act(src, w, "error", { "error": if error == "" { Json::null() } else { Json::string(error) } }, show=fn(w) {
-    w.error = error
+    w.state.error.set(error)
   })
 }
 
 ///|
 /// A new chat being made for the message, or no longer (`composer.starting`).
 pub fn writing_starting(src : Source, w : Writing, on : Bool) -> Unit {
-  writing_act(src, w, "starting", { "starting": Json::boolean(on) }, show=fn(w) { w.starting = on })
+  writing_act(src, w, "starting", { "starting": Json::boolean(on) }, show=fn(w) { w.state.starting.set(on) })
 }
 
 ///|
@@ -581,7 +726,7 @@ pub fn writing_starting(src : Source, w : Writing, on : Bool) -> Unit {
 /// going up), sent as it says: its files as they were when it took them, not as this page last drew them. `station`:
 /// the one it goes to, where a new chat's files go up now.
 pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (Json?) -> Unit) -> Unit {
-  w.taken = Some((w.text.get(), w.quotes, w.files))
+  w.taken = Some((w.state.text.get(), w.state.quotes.get(), w.state.files.get()))
   let params : Map[String, Json] = {}
   if station != "" {
     params["station"] = Json::string(station)
@@ -592,13 +737,13 @@ pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (J
     "take",
     params,
     show=fn(w) {
-      w.text.set("")
+      w.state.text.set("")
       w.field.set("")
-      w.quotes = []
-      w.files = []
-      w.focus = ""
-      w.error = ""
-      w.ready = false
+      w.state.quotes.set([])
+      w.state.files.set([])
+      w.state.focus.set("")
+      w.state.error.set("")
+      w.state.ready.set(false)
     },
     done=fn(r) {
       match r {
@@ -613,7 +758,7 @@ pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (J
 /// What `take` took put back (a chat that could not be made, a message never sent), saying why; with `unless_written`,
 /// only while nothing new is written there (`composer.restore`).
 pub fn writing_restore(src : Source, w : Writing, error : String, unless_written? : Bool = false) -> Unit {
-  if unless_written && (w.text.get().trim(chars=" \n\t").to_string() != "" || w.files.length() > 0 || w.quotes.length() > 0) {
+  if unless_written && (w.state.text.get().trim(chars=" \n\t").to_string() != "" || w.state.files.get().length() > 0 || w.state.quotes.get().length() > 0) {
     return
   }
   let kept = w.taken
@@ -629,14 +774,14 @@ pub fn writing_restore(src : Source, w : Writing, error : String, unless_written
     show=fn(w) {
       match kept {
         Some((words, quotes, files)) => {
-          w.text.set(words)
+          w.state.text.set(words)
           w.field.set(words)
-          w.quotes = quotes
-          w.files = files
+          w.state.quotes.set(quotes)
+          w.state.files.set(files)
         }
         None => ()
       }
-      w.error = error
+      w.state.error.set(error)
     },
   )
 }
@@ -728,7 +873,7 @@ pub fn quote_file_into(draft : String, author : String, ts : String, role : Stri
   let list = quoted_into.get(draft).unwrap_or([])
   list.push((author, ts, role, file))
   quoted_into[draft] = list
-  draft_given()
+  draft_given(draft)
 }
 
 ///|
@@ -736,15 +881,17 @@ pub fn quote_file_into(draft : String, author : String, ts : String, role : Stri
 /// the chat's key; taken by its composer as it is next drawn (files_taken).
 pub fn files_into(chat : String, d : Dragged) -> Unit {
   files_put.push((chat, d))
-  draft_given()
+  draft_given(chat)
 }
 
 ///|
-/// What was put into the chat `chat`'s message since it was last asked, taken.
+/// What was put into the chat `chat`'s message since it was last asked, taken; the last of what is put into that draft
+/// to be taken (its composer takes the rest before), so nothing waits for it any more (drafts_given).
 pub fn files_taken(chat : String) -> Array[Dragged] {
-  drafts_given_read()
+  drafts_given_read(chat)
   let out = files_put.filter(fn(x) { x.0 == chat }).map(fn(x) { x.1 })
   files_put.retain(fn(x) { x.0 != chat })
+  drafts_given.remove(chat)
   out
 }
 
@@ -802,21 +949,21 @@ pub fn finder_dragged(src : Source, paths : Array[@ui.DroppedPath]) -> Array[Dra
 let files_put : Array[(String, Dragged)] = []
 
 ///|
-/// Told as anything is put into a draft from elsewhere (files_into, quote_file_into, shared_into, marked_into,
-/// followed_into): what takes it (a composer as it is built) built again for it.
-// kept across runs: only counts on
-let drafts_given : @signals.Signal[Int] = @signals.signal(0)
+/// The drafts (by key) something was put into from elsewhere (files_into, quote_file_into, shared_into, marked_into,
+/// followed_into) not yet taken: what takes a draft's (its composer as it is built) built again as its key comes in.
+// kept across runs: emptied by writings_reset (sfbase's reset)
+let drafts_given : @signals.Keyed[String] = @signals.keyed()
 
 ///|
-/// Something put into a draft from elsewhere: what takes it told.
-pub fn draft_given() -> Unit {
-  drafts_given.set(@signals.untracked(fn() { drafts_given.get() }) + 1)
+/// Something put into the draft `key` from elsewhere: what takes it told.
+pub fn draft_given(key : String) -> Unit {
+  drafts_given.add(key)
 }
 
 ///|
-/// What is put into drafts from elsewhere, read (a composer taking what was put into its draft).
-pub fn drafts_given_read() -> Unit {
-  drafts_given.get() |> ignore
+/// Whether something put into the draft `key` from elsewhere waits, read (its composer taking it).
+pub fn drafts_given_read(key : String) -> Unit {
+  drafts_given.has(key) |> ignore
 }
 
 ///|

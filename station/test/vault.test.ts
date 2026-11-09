@@ -1,4 +1,4 @@
-// The vault on the station (docs/vault.md, src/vault/): its formats, on the values the core is tested on too
+// The vault on the station (src/vault/): its formats, on the values the core is tested on too
 // (fixtures/vault-vectors.json, made from fixed keys: `VAULT_VECTORS=write` makes it anew); who may write a vault or an
 // item, in which order; what a member sees and is told. Keys are fixed or made per run; nothing waits on time.
 import assert from "node:assert/strict";
@@ -18,6 +18,8 @@ import {
   certOk, itemSupersedes, keyContext, newBoxPair, openSeal, recoveryPair, seal, sealWith, signedBytes, signedOk, signerOf, vaultOk, vaultSupersedes,
 } from "../src/vault/crypto.ts";
 import { VaultStore } from "../src/vault/store.ts";
+// @ts-ignore: the MoonBit build's JS, untyped
+import * as rules from "../../rules/js/rules.js";
 
 const WS = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
 const VAULT = "v_01HZZZZZZZZZZZZZZZZZZZZZZZ";
@@ -199,6 +201,25 @@ test("a vault's keys go to box certificates of members' app devices in the lock,
   assert.equal(vaultOk(w.state, null, vaultOf(w, { certs: [good, boxOf(w.alice2)] })), null);
 });
 
+test("a certificate uses the same rules as the full lock, including removed devices and old keys", () => {
+  const w = lock();
+  const cert = boxOf(w.alice);
+  const original = w.state.devices.get(w.alice.base.hex)!;
+  const states = [
+    w.state,
+    { ...w.state, devices: new Map([...w.state.devices].filter(([id]) => id !== cert.device)) },
+    { ...w.state, members: new Map([...w.state.members].filter(([sub]) => sub !== "alice")) },
+    { ...w.state, devices: new Map([...w.state.devices].map(([id, d]) => [id, id === cert.device ? { ...d, own: false } : d] as const)) },
+    { ...w.state, devices: new Map([...w.state.devices].map(([id, d]) => [id, id === cert.device ? { ...original, sign_key: ed().id } : d] as const)) },
+  ];
+  const values: unknown[] = [cert, null, {}, { ...cert, device: 4 }, { ...cert, device: ed().hex }, { ...cert, ws: "other" },
+    { ...cert, box: "bad" }, { ...cert, box: newBoxPair().pub }, { ...cert, at: -1 }, { ...cert, sig: { ...cert.sig, sig: "00" } }];
+  const verify = { recordSigValid: (sig: Sig, tag: string, text: string) => signedOk({ ...JSON.parse(text), sig }, tag) };
+  for (const state of states) for (const value of values) for (const ever of [false, true]) {
+    assert.equal(certOk(state, value as BoxCert, ever), rules.cert_ok_js(state, value, ever, verify));
+  }
+});
+
 test("a device back in the lock under a new signing key keeps the key it was given: a vault's keys are checked against every signing key the lock has named for their device, the same on every station", () => {
   const w = lock();
   const [a1, a2] = [boxOf(w.alice), boxOf(w.alice2)];
@@ -232,6 +253,7 @@ test("a device back in the lock under a new signing key keeps the key it was giv
   // Published anew (PUT vault/boxes), a certificate is its device's current key's: the old one is not taken there.
   assert.match(certOk(state, a2)!, /its own device's key/);
   assert.equal(certOk(state, fresh), null);
+  assert.equal(certOk(state, a2, true), null, "a previously held certificate can use its historical signing key");
   // A device no longer in the lock at all: its key is no key (taking it out takes a new epoch).
   const gone = { ...state, devices: new Map([...state.devices].filter(([id]) => id !== w.alice2.base.hex)) };
   assert.match(vaultOk(gone, first, third)!, /not an app device in the lock/);

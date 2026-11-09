@@ -18,18 +18,18 @@ use crate::data::{Config, write_whole};
 /// machine's data directory), then any. The port it got is remembered.
 pub fn mcp(data: &Path, config: &Config, own: bool) -> Result<TcpListener, String> {
     let what = if config.english { "the agents' MCP endpoint" } else { "agent 的 MCP 端点" };
-    let (host, port) = (config.host.as_str(), config.port);
+    let port = config.port;
     let taken = || {
         if config.english {
-            format!("Port {host}:{port} for {what} is taken by another program (the config names this port). Run `lsof -nP -iTCP:{port} -sTCP:LISTEN` to see which, or pick another port in the config.")
+            format!("Port 127.0.0.1:{port} for {what} is taken by another program (the config names this port). Run `lsof -nP -iTCP:{port} -sTCP:LISTEN` to see which, or pick another port in the config.")
         } else {
-            format!("{what} 的端口 {host}:{port} 已被别的程序占用（配置里指定了这个端口）。用 `lsof -nP -iTCP:{port} -sTCP:LISTEN` 看是谁，或在配置里换一个端口。")
+            format!("{what} 的端口 127.0.0.1:{port} 已被别的程序占用（配置里指定了这个端口）。用 `lsof -nP -iTCP:{port} -sTCP:LISTEN` 看是谁，或在配置里换一个端口。")
         }
     };
     let file = data.join("run").join("mcp.json");
     let before = remembered(&file);
     let usual = (config.named || own).then_some(port);
-    let listener = listen_first(host, before, usual, config.named, taken, |port| TcpListener::bind((host, port)))?;
+    let listener = listen_first(before, usual, config.named, taken, |port| TcpListener::bind(("127.0.0.1", port)))?;
     let got = listener.local_addr().map_err(|e| e.to_string())?.port();
     if before.is_some_and(|before| before != got) && !config.named {
         crate::log::warn(&format!("the MCP endpoint's port of before cannot be had; agents left running start again (port={got})"));
@@ -57,7 +57,7 @@ pub fn admin(data: &Path, port: u16, named: bool, own: bool, english: bool) -> R
         }
     };
     let usual = (named || own).then_some(port);
-    let listener = listen_first("127.0.0.1", None, usual, named, taken, |port| TcpListener::bind(("127.0.0.1", port)))?;
+    let listener = listen_first(None, usual, named, taken, |port| TcpListener::bind(("127.0.0.1", port)))?;
     let got = listener.local_addr().map_err(|e| e.to_string())?.port();
     if usual.is_some_and(|usual| usual != got) {
         crate::log::warn(&format!("the loopback port's usual number is taken; listening on a free one (port={got})"));
@@ -69,7 +69,7 @@ pub fn admin(data: &Path, port: u16, named: bool, own: bool, english: bool) -> R
 /// `remembered` if it is free, else `usual` if it is, else any free port; named (then `usual` is that port), taken is an
 /// error. Bound with `bind` (a test's, for a port no other program can take meanwhile). The port remembered is passed
 /// over whatever keeps it from being had; the usual one says why it cannot be, unless it is only taken.
-fn listen_first(host: &str, remembered: Option<u16>, usual: Option<u16>, named: bool, taken: impl Fn() -> String, mut bind: impl FnMut(u16) -> std::io::Result<TcpListener>) -> Result<TcpListener, String> {
+fn listen_first(remembered: Option<u16>, usual: Option<u16>, named: bool, taken: impl Fn() -> String, mut bind: impl FnMut(u16) -> std::io::Result<TcpListener>) -> Result<TcpListener, String> {
     if let Some(port) = remembered.filter(|&p| Some(p) != usual && !named) {
         if let Ok(listener) = bind(port) {
             return Ok(listener);
@@ -80,18 +80,18 @@ fn listen_first(host: &str, remembered: Option<u16>, usual: Option<u16>, named: 
             Ok(listener) => return Ok(listener),
             Err(e) if e.kind() == ErrorKind::AddrInUse && named => return Err(taken()),
             Err(e) if e.kind() == ErrorKind::AddrInUse => {}
-            Err(e) => return Err(format!("{host}:{port}: {e}")),
+            Err(e) => return Err(format!("127.0.0.1:{port}: {e}")),
         }
     }
-    bind(0).map_err(|e| format!("{host}:0: {e}"))
+    bind(0).map_err(|e| format!("127.0.0.1:0: {e}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn listen(host: &str, port: u16, named: bool, taken: impl Fn() -> String) -> Result<TcpListener, String> {
-        listen_first(host, None, Some(port), named, taken, |port| TcpListener::bind((host, port)))
+    fn listen(port: u16, named: bool, taken: impl Fn() -> String) -> Result<TcpListener, String> {
+        listen_first(None, Some(port), named, taken, |port| TcpListener::bind(("127.0.0.1", port)))
     }
 
     fn temp(name: &str) -> std::path::PathBuf {
@@ -118,10 +118,10 @@ mod tests {
     fn a_usual_port_taken_gives_way_to_a_free_one_a_named_one_does_not() {
         let other = TcpListener::bind("127.0.0.1:0").unwrap();
         let taken = other.local_addr().unwrap().port();
-        let got = listen("127.0.0.1", taken, false, String::new).unwrap().local_addr().unwrap().port();
+        let got = listen(taken, false, String::new).unwrap().local_addr().unwrap().port();
         assert!(got != taken && got > 0);
-        assert_eq!(listen("127.0.0.1", taken, true, || "taken".into()).unwrap_err(), "taken");
-        let config = Config { host: "127.0.0.1".into(), port: taken, named: true, english: false };
+        assert_eq!(listen(taken, true, || "taken".into()).unwrap_err(), "taken");
+        let config = Config { port: taken, named: true, english: false };
         let data = temp("named");
         assert!(mcp(&data, &config, true).unwrap_err().contains("已被别的程序占用"));
         std::fs::remove_dir_all(&data).unwrap();
@@ -129,7 +129,7 @@ mod tests {
         let free = TcpListener::bind("127.0.0.1:0").unwrap();
         let at = free.local_addr().unwrap();
         let mut asked = vec![];
-        assert_eq!(listen_first("127.0.0.1", None, Some(at.port()), false, String::new, binder(vec![(at.port(), free)], &mut asked)).unwrap().local_addr().unwrap(), at);
+        assert_eq!(listen_first(None, Some(at.port()), false, String::new, binder(vec![(at.port(), free)], &mut asked)).unwrap().local_addr().unwrap(), at);
         assert_eq!(asked, [at.port()]);
     }
 
@@ -139,15 +139,15 @@ mod tests {
         let (at_before, at_any) = (before.local_addr().unwrap(), any.local_addr().unwrap());
         // Free, the port of before: agents left running know it.
         let mut asked = vec![];
-        let got = listen_first("127.0.0.1", Some(at_before.port()), Some(4750), false, String::new, binder(vec![(at_before.port(), before)], &mut asked)).unwrap();
+        let got = listen_first(Some(at_before.port()), Some(4750), false, String::new, binder(vec![(at_before.port(), before)], &mut asked)).unwrap();
         assert_eq!((got.local_addr().unwrap(), asked), (at_before, vec![at_before.port()]));
         // Taken, the usual one; taken too, any.
         let mut asked = vec![];
-        let got = listen_first("127.0.0.1", Some(12671), Some(4750), false, String::new, binder(vec![(0, any)], &mut asked)).unwrap();
+        let got = listen_first(Some(12671), Some(4750), false, String::new, binder(vec![(0, any)], &mut asked)).unwrap();
         assert_eq!((got.local_addr().unwrap(), asked), (at_any, vec![12671, 4750, 0]));
         // Named, the config's port alone.
         let mut asked = vec![];
-        assert_eq!(listen_first("127.0.0.1", Some(12671), Some(5000), true, || "taken".into(), binder(vec![], &mut asked)).unwrap_err(), "taken");
+        assert_eq!(listen_first(Some(12671), Some(5000), true, || "taken".into(), binder(vec![], &mut asked)).unwrap_err(), "taken");
         assert_eq!(asked, [5000]);
     }
 
@@ -156,11 +156,13 @@ mod tests {
         let data = temp("remembered");
         // The usual port, kept by another program: a station on another data directory never tries it.
         let usual = TcpListener::bind("127.0.0.1:0").unwrap();
-        let config = Config { host: "127.0.0.1".into(), port: usual.local_addr().unwrap().port(), named: false, english: true };
+        let config = Config { port: usual.local_addr().unwrap().port(), named: false, english: true };
         drop(usual);
         let first = mcp(&data, &config, false).unwrap();
         let port = first.local_addr().unwrap().port();
         assert_ne!(port, config.port);
+        // On this machine only, whatever a config of before said (`http.host`).
+        assert!(first.local_addr().unwrap().ip().is_loopback());
         assert_eq!(std::fs::read_to_string(data.join("run/mcp.json")).unwrap(), format!("{{\"port\":{port}}}\n"));
         assert_eq!(remembered(&data.join("run/mcp.json")), Some(port));
         // The station stops and starts again: the same port, so the agents it left running still reach it.

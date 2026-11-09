@@ -1,4 +1,4 @@
-// The station's search (docs/search.md): what of the station's data a query finds, as it is then, and for whom.
+// The station's search: what of the station's data a query finds, as it is then, and for whom.
 import assert from "node:assert/strict";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

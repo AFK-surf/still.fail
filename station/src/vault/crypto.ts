@@ -1,4 +1,4 @@
-// The vault's formats (docs/vault.md, 实现约定): what is signed and by whom, the seal a key or secret is sent in, and
+// The vault's formats (实现约定): what is signed and by whom, the seal a key or secret is sent in, and
 // whether a vault or item version may follow the one kept. The station holds only ciphertext and signatures; what it
 // checks here is who may write what, so a station or cloud taken over cannot add itself to a vault. Pure; the same
 // formats as client/core-ts/src/vault/crypto.ts, tested on the same values (test/fixtures/vault-vectors.json).
@@ -43,17 +43,17 @@ export type Request = {
   /// A request for an item of the plain library (`vault` is `plain`, no box): its owner's email, who decides it. A
   /// request to keep a secret (`save`): whose it is to be (whoever started the chat), who decides it.
   owner?: string;
-  /// An agent asking to keep a secret in its owner's vault (secret_save, docs/vault.md agent 存入): the item as it is to
+  /// An agent asking to keep a secret in its owner's vault (secret_save agent 存入): the item as it is to
   /// be listed; `item` is the id it is written under, `vault` the one it is meant for (`plain` without security mode;
   /// empty while its owner has none). No box: nothing is granted to the station.
   save?: Save;
   /// A request to keep a secret in a vault: the secret's fields, sealed to each of its owner's devices set up (their
   /// box keys), when it was asked or since (`saveContext`). The device that approves it opens its own.
   sealed?: Sealed[];
-  /// Another station of the workspace its commands run on (secret_use `station`, docs/vault.md 在另一台 station 上用):
+  /// Another station of the workspace its commands run on (secret_use `station` 在另一台 station 上用):
   /// its id and name, said on the card; the secret is sent there for each command and kept there only while it runs.
   runOn?: { id: string; name: string };
-  /// A sign-in's newer cookies, taken out of a chat's browser as an earlier grant of it ended (docs/vault.md 登录态
+  /// A sign-in's newer cookies, taken out of a chat's browser as an earlier grant of it ended ( 登录态
   /// 写回), sealed to each of its vault's members' devices set up (`saveContext` under its id): the app that grants this
   /// request writes them as the item's next version and grants those.
   renewal?: { id: string; sealed: Sealed[] };
@@ -196,7 +196,7 @@ export function recoveryPair(entropy: Uint8Array): { pub: string; priv: Uint8Arr
 }
 
 // The rules themselves (who may write which vault or item version, which box certificates count) are rules/'s, in
-// MoonBit (docs/rules.md): station and devices check by the same.
+// MoonBit: station and devices check by the same.
 const rulesCrypto = {
   recordSigValid: (sig: Sig, tag: string, text: string) => sigOver(sig, Buffer.concat([Buffer.from(`${tag}\0`), sha256(text)])),
 };
@@ -217,11 +217,23 @@ export const ITEM_ID = new RegExp(`^i_${ULID}$`);
 /// key sealed to it under its certificate from before; 2026-11-03); and a device that is no longer its person's own
 /// keeps the key it was given, which the owner's own device signed into the vault (its new versions keep it).
 export function certOk(lock: LockState, cert: BoxCert, ever = false): string | null {
-  return rules.cert_ok_js(lock, cert, ever, rulesCrypto);
+  // The certificate rule reads only this device, its member and its own signing-key history. Give the rules bridge
+  // just those entries; otherwise it copies every member and device before checking each individual certificate.
+  const id = typeof cert?.device === "string" ? cert.device : null;
+  const device = id === null ? undefined : lock.devices.get(id);
+  const member = device === undefined ? undefined : lock.members.get(device.sub);
+  // A newly published certificate must use the current key; historical keys matter only for `ever`.
+  const keys = !ever || id === null ? undefined : lock.signKeys.get(id);
+  return rules.cert_ok_js({
+    ws: lock.ws,
+    devices: new Map(id !== null && device !== undefined ? [[id, device]] : []),
+    members: new Map(device !== undefined && lock.members.has(device.sub) ? [[device.sub, member]] : []),
+    signKeys: new Map(id !== null && keys !== undefined ? [[id, keys]] : []),
+  }, cert, ever, rulesCrypto);
 }
 
 /// Why `next` may not follow `prev` (null: it is the vault's first version), or null when it may. `copy`: a later
-/// version brought from another station keeping the vault (docs/vault.md 副本), not necessarily the one right after:
+/// version brought from another station keeping the vault ( 副本), not necessarily the one right after:
 /// checked the same, but for its seq only being later than the one held (any, where none is).
 export function vaultOk(lock: LockState, prev: Vault | null, next: Vault, copy = false): string | null {
   return rules.vault_ok_js(lock, prev, next, copy, rulesCrypto);

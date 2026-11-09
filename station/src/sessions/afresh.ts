@@ -6,7 +6,7 @@
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { coldAfresh, coldWorth } from "../../../client/core-ts/src/cache-policy.ts";
-import { afresh, cleared, resumeLost, threadAddress } from "../agents/instructions.ts";
+import { LONG_CHAT, afresh, cleared, longChat, resumeLost, threadAddress } from "../agents/instructions.ts";
 import type { Profile } from "../agents/runtime.ts";
 import { log } from "../ops/log.ts";
 import { find as findMachineSession } from "../read/machine.ts";
@@ -18,7 +18,7 @@ import type { Hub } from "./hub.ts";
 /// `was` (when the store has no record of it); null when it takes it up: on the account it ran on, or one not known.
 export function startsAfresh(hub: Hub, key: string, id: string, to: Profile, was: string | null): string | null {
   const row = hub.store.getSession(key);
-  const source = hub.store.runtimeSessionSources(key).find((s) => s.id === id);
+  const source = hub.store.runtimeSessionSource(key, id);
   if (row && source && source.runtime !== row.runtime) return afresh(key, hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs)));
   const from = hub.store.ranOn(key, id) ?? was;
   if (from === null || from === to.id) return null;
@@ -56,6 +56,14 @@ export function toldResumeLost(hub: Hub, key: string): string {
   const runtime = row?.runtime === "claude" || row?.runtime === "codex" ? row.runtime : null;
   const terminal = row?.cwd && first !== undefined && runtime !== null ? (findMachineSession(hub.machineRoots(), runtime, first)?.path ?? null) : null;
   return resumeLost(key, threads, terminal);
+}
+
+/// What a session compacted or gone on in a new conversation is told when its chats are long (more than `LONG_CHAT`
+/// messages): to read back what people said in them. Null when they are not.
+export function toldLongChat(hub: Hub, key: string): string | null {
+  const threads = hub.store.sessionThreads(key);
+  const count = threads.reduce((sum, t) => sum + hub.store.messageCount(t.thread.id), 0);
+  return count > LONG_CHAT ? longChat(count, threads.map((t) => threadAddress(t.thread.channel, t.thread.threadTs))) : null;
 }
 
 /// Claude's subagents `ids` of runtime session `from`, stopped with its process, copied to session `to` (just started on

@@ -1,4 +1,4 @@
-// A simulator's device as Xcode draws it (docs/remote-screens.md "Simulators"): its case and buttons, whose pictures its
+// A simulator's device as Xcode draws it: its case and buttons, whose pictures its
 // station makes of what Xcode has on that Mac (screens/sim-chrome.ts; `screen.chrome`), turned as the device stands. The
 // case has the panel's shape cut out of it, so the picture shows through it, on the system's video layer or drawn here
 // alike; its buttons are pressed where they are, held as long as they are here. Until a device's pictures have come, or
@@ -350,8 +350,6 @@ fn case_button_press(
   c.semantics(i, Button, id~, label=word, actions=[Activate])
   @sf.tip(c, "screen-case-tip/" + b.name, id, word)
   let held = u.logs.buttons_held
-  let was = held.contains(b.name)
-  let now = c.pressed(id)
   let tell = fn(down : Bool) {
     s.input(s.src, Json::object({
       "t": Json::string("button"),
@@ -360,18 +358,32 @@ fn case_button_press(
       "down": Json::boolean(down),
     }))
   }
-  let frame = c.frame_number()
-  if now && !was {
-    held[b.name] = true
-    c.tell("screen-case-down/" + s.view + "/" + b.name + "/\{frame}", fn() { tell(true) })
-  } else if !now && was {
-    held.remove(b.name)
-    c.tell("screen-case-up/" + s.view + "/" + b.name + "/\{frame}", fn() { tell(false) })
-  } else if !now && c.clicked(id) {
-    // (down and up between two frames)
-    c.tell("screen-case-tap/" + s.view + "/" + b.name + "/\{frame}", fn() {
+  // the hand's press on it: down as it goes down (true), up as it is let go (false: the press it ends comes next) or
+  // called off; (pressed with no hand's press on it: a key's, a screen reader's Activate) down and up at once
+  c.follow_press(id, fn(step) {
+    match step {
+      Down(_, _, _) => {
+        held[b.name] = true
+        tell(true)
+      }
+      Up(_, _) =>
+        if held.get(b.name) == Some(true) {
+          held[b.name] = false
+          tell(false)
+        }
+      Off =>
+        if held.get(b.name) == Some(true) {
+          held.remove(b.name)
+          tell(false)
+        }
+      Moving(_, _) => ()
+    }
+  })
+  c.on_press(id, fn() {
+    if held.get(b.name) is None {
       tell(true)
       tell(false)
-    })
-  }
+    }
+    held.remove(b.name)
+  })
 }

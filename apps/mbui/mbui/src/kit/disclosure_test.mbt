@@ -183,3 +183,117 @@ test "form: nothing wrong shows before it is left or handed on; handed on wrong,
   assert_eq(got.val.map(fn(m) { m.get("age") }), Some(Some("36")))
   assert_eq(got.val.map(fn(m) { m.get("email") }), Some(Some("ada@example.com")))
 }
+
+///|
+/// An accordion of two folds, each trigger 40 high on its own colour (A's green, B's blue), A holding a red box 80
+/// high: what is open as `v` says.
+fn two_folds(v : Ref[Array[String]]) -> @ui.Tester {
+  let look = fn(c : @ui.Ctx, s : TriggerState) {
+    c.box(w=Fill(1.0), h=Px(40.0), bg=if s.label == "B" { 0x0000FFFFL } else { 0x00FF00FFL }, fn() {  }) |> ignore
+  }
+  let t = @ui.Tester::new(
+    fn(c) {
+      v.val = accordion(
+        c,
+        "two",
+        [
+          fold("a", "A", fn() { c.box(w=Px(100.0), h=Px(80.0), bg=0xFF0000FFL, fn() {  }) |> ignore }),
+          fold("b", "B", fn() {  }),
+        ],
+        v.val,
+        look~,
+      ).value
+    },
+    w=400.0,
+    h=400.0,
+  )
+  t.check_looks(false)
+  t.draw()
+  t
+}
+
+///|
+/// How far down A's red (40 down to 120) is seen with what cuts it ending `at`.
+fn red_shown(at : Double) -> Double {
+  if at > 120.0 {
+    120.0
+  } else {
+    at
+  }
+}
+
+///|
+/// Frames from now to the declared end of a fold's way, `ms` long (each the next one a motion asks for): at each, where
+/// B's trigger is drawn (its top) and how far down A's red is drawn (the bottom of what cuts it, none where it is not
+/// drawn); and each frame built for the clock (its why: "the clock read at" a motion as it was built).
+fn fold_frames(t : @ui.Tester, ms : Double) -> (Array[(Double, Double?)], Array[String]) {
+  let seen : Array[(Double, Double?)] = []
+  let built : Array[String] = []
+  let until = t.time() + ms
+  while t.time() < until {
+    let w = t.wanted_after()
+    if w == @double.infinity {
+      break
+    }
+    t.frame_at(if w <= t.time() { t.next_frame_time() } else { t.display_frame(w) })
+    if t.built_why().has_prefix("the clock read at") {
+      built.push("\{t.time()}: \{t.built_why()}")
+    }
+    let b = t.drawn_rects().filter(fn(r) { r.4 == 0x0000FFFFL }).map(fn(r) { r.1 })
+    let red = t.drawn_cut().filter(fn(i) { i.0 == 0 && i.3 == 100.0 && i.4 == 80.0 }).map(fn(i) { i.5.3 })
+    seen.push((b[0], red.get(0)))
+  }
+  (seen, built)
+}
+
+///|
+test "accordion: a fold opening is laid out open at once, what is under it drawn from where it was going down with it, what it holds shown down to there; closing, the same back; nothing built for the clock" {
+  let v : Ref[Array[String]] = Ref([])
+  let t = two_folds(v)
+  let b_at = fn() { t.drawn_rects().filter(fn(r) { r.4 == 0x0000FFFFL }).map(fn(r) { r.1 }) }
+  // (B's trigger under A's, and the line between them)
+  let shut = b_at()
+  assert_eq(shut, [41.0])
+  t.act(@ui.Role::Button, @ui.Action::Activate, label="A")
+  assert_eq(v.val, ["a"])
+  // laid out open at once: B's trigger there for a press, drawn where it was as it sets off
+  assert_eq(t.get(@ui.Role::Button, label="B").rect.1, 133.0)
+  assert_eq(b_at(), shut)
+  let (opening, built) = fold_frames(t, collapsible_open_ms)
+  // (it goes down through more than a few places to where it is laid out, never back up, and A's red is shown down to
+  // the line over B's trigger all the way: what is under it neither left as a gap nor drawn over)
+  let places = opening.map(fn(s) { s.0 })
+  assert_true(places.filter(fn(y) { y > 41.0 && y < 133.0 }).length() > 3, msg="\{places}")
+  assert_eq(places[places.length() - 1], 133.0)
+  for k, s in opening {
+    if k > 0 {
+      assert_true(s.0 >= opening[k - 1].0, msg="\{places}")
+    }
+    match s.1 {
+      // (shown down to the line over B's trigger: the whole of it once that is past its foot, 120 down)
+      Some(cut) => assert_true((red_shown(cut) - red_shown(s.0 - 1.0)).abs() <= 0.5, msg="\{s}")
+      None => fail("A's red not drawn as it opens: \{opening}")
+    }
+  }
+  assert_eq(built, [], msg="built for the clock: \{built}")
+  // closing: laid out shut at once, B's trigger going up from where it was, A's red going in under it
+  t.act(@ui.Role::Button, @ui.Action::Activate, label="A")
+  assert_eq(v.val, [])
+  assert_eq(t.get(@ui.Role::Button, label="B").rect.1, 41.0)
+  let (closing, built) = fold_frames(t, collapsible_close_ms)
+  let places = closing.map(fn(s) { s.0 })
+  assert_true(places.filter(fn(y) { y > 41.0 && y < 133.0 }).length() > 3, msg="\{places}")
+  for k, s in closing {
+    if k > 0 {
+      assert_true(s.0 <= closing[k - 1].0, msg="\{places}")
+    }
+    match s.1 {
+      // (shown down to the line over B's trigger: the whole of it once that is past its foot, 120 down)
+      Some(cut) => assert_true((red_shown(cut) - red_shown(s.0 - 1.0)).abs() <= 0.5, msg="\{s}")
+      None => assert_eq(s.0, 41.0, msg="A's red gone before B's trigger is up: \{closing}")
+    }
+  }
+  assert_eq(b_at(), shut)
+  assert_eq(built, [], msg="built for the clock: \{built}")
+  t.assert_idle()
+}

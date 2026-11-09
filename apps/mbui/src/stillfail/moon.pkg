@@ -13,13 +13,12 @@ import {
   "stillfail/sfapp",
   "stillfail/sfpages",
   "stillfail/sf",
-  "stillfail/keyboard",
   "mbui/wasmrt",
 }
 
 options(
   "is-main": true,
-  targets: { "link_native.mbt": [ "native" ], "link_js.mbt": [ "js" ], "link_wasm.mbt": [ "wasm" ], "wasm_shell.mbt": [ "wasm" ] },
+  targets: { "link_native.mbt": [ "native" ], "link_js.mbt": [ "js" ], "link_wasm.mbt": [ "wasm" ], "wasm_shell.mbt": [ "wasm" ], "reports_js_wbtest.mbt": [ "js" ] },
   "native-stub": [ "core_engine.m" ],
   link: {
     "js": { "format": "iife" },

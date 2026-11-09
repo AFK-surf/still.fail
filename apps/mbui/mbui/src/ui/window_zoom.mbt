@@ -37,13 +37,11 @@ pub fn window_points_to_content(points : Double) -> Double {
 ///|
 /// Ask for the next frame at this zoom; the frame in progress and its input keep the scale they started at.
 pub fn set_window_zoom(zoom : Double) -> Unit {
-  if !window_zoom_supported() || zoom <= 0.0 || zoom == @signals.untracked(fn() { window_zoom_wanted.get() }) {
+  if !window_zoom_supported() || zoom <= 0.0 || zoom == window_zoom_wanted.untracked() {
     return
   }
   window_zoom_wanted.set(zoom)
-  if fake.val is None {
-    @hostapi.set_window_zoom(zoom)
-  }
+  @hostapi.set_window_zoom(zoom)
   // The scale is taken at the start of a frame, so a change made during it belongs to the next one.
   g().owe_next()
 }

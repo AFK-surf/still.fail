@@ -13,7 +13,7 @@ fn[T] either(a : T?, b : T?) -> T? {
 }
 
 ///|
-/// Node `v`'s ground as nav_ground has it: the pointer's ground in and out (lit_node), the selected one's (`lit`, the
+/// Node `v`'s ground as nav_ground_by has it: the pointer's ground in and out (lit_node), the selected one's (`lit`, the
 /// selected grey by default) while `on()`, each over nav_fade from the moment it changes.
 pub fn nav_ground_node(v : @view.View, on : () -> Bool, lit? : Int64) -> Unit {
   let hover = EdgeWay::new(0.0)
@@ -36,115 +36,21 @@ pub fn nav_ground_node(v : @view.View, on : () -> Bool, lit? : Int64) -> Unit {
 }
 
 ///|
-/// A row of one line of a sidebar's list as a node (nav_row's): its look the theme's side row's, `across` laid over it
-/// where given (how what it holds stands across it), as tall as a row at least (row_least_h); its ground as nav_ground has
-/// it, the selected one's while `on()`; pressed, `press`; read out a link named `label()`; another row under it (`more`):
-/// the room between them (list_more). What it holds `body` makes. The row's node.
-pub fn nav_row_node(
-  parent : @view.View,
-  on : () -> Bool,
-  label : () -> String,
-  press : () -> Unit,
-  body : (@view.View) -> Unit,
-  more? : Bool = false,
-  across? : Bool = false,
-) -> @view.View {
-  let made : Ref[@view.View?] = Ref(None)
-  let row = fn(p : @view.View) {
-    p.box(fn(r) {
-      made.val = Some(r)
-      style_node(r, fn() { theme().chat_list.side_row })
-      if across {
-        r.lines_up(Is(Some(Middle))) |> ignore
-      }
-      r.min_height(By(fn() { Some(row_least()) })) |> ignore
-      nav_ground_node(r, on)
-      presses_node(r, press)
-      r.says(By(fn() { Some(@view.said(Link, label=label())) })) |> ignore
-      body(r)
-    })
-    |> ignore
-  }
-  if more {
-    parent.box(fn(m) {
-      m.padding(Is((0.0, 0.0, 0.0, @ui.Space::px(S0_5)))) |> ignore
-      row(m)
-    })
-    |> ignore
-  } else {
-    row(parent)
-  }
-  made.val.unwrap()
-}
-
-///|
-/// A heading over a part of a sidebar's list as a node (list_heading's, in a side column): the theme's heading's room,
-/// in from the list's line as its rows are, its words `label()`.
-pub fn side_heading_node(parent : @view.View, label : () -> String) -> Unit {
-  parent.box(fn(h) {
-    style_node(h, fn() { theme().chat_list.heading })
-    h.padding(By(fn() {
-      let base = theme().chat_list.heading.base
-      let y = fn(s : @ui.Space?) { s.map(fn(s) { s.px() }).unwrap_or(0.0) }
-      let x = theme().chat_list.heading_in
-      (x, y(either(base.pt, either(base.py, base.p))), x, y(either(base.pb, either(base.py, base.p))))
-    }))
-    |> ignore
-    words_node(h, label, fn() { theme().chat_list.heading_words.then(in_lines) }) |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The room between two parts of a sidebar's list where no heading stands over the second (list_apart's).
-pub fn side_apart_node(parent : @view.View) -> Unit {
-  parent.box(fn(a) { a.height(Is(Some(@ui.Space::px(S3_5)))) |> ignore }) |> ignore
-}
-
-///|
-/// A sidebar's list under its band as a node (side_scroll's): in at its sides as the theme's sidebar's lists are, 4
-/// under the band, scrolling under the band with the tree's bar where it is taller than the room, the room under its
-/// last (list_foot_in); what `rows` makes in it. Its column's node, the one `scroll` scrolls.
-pub fn side_scroll_node(parent : @view.View, scroll : @view.Scroll, rows : (@view.View) -> Unit) -> @view.View {
-  // (the 4 over it outside what scrolls: the list cut, and its bar's track begun, under them, as side_scroll's)
-  parent.box(fn(gap) { gap.height(By(fn() { Some(@ui.Space::px(S1)) })) |> ignore }) |> ignore
-  let made : Ref[@view.View?] = Ref(None)
-  parent.box(fn(col) {
-    made.val = Some(col)
-    col.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
-    col.scrolls(scroll, bar=@ui.tree_scroll_bar(), fn(body) {
-      body.box(fn(list) {
-        style_node(list, fn() { theme().chat_list.side_list })
-        list.padding(By(fn() {
-          let base = theme().chat_list.side_list.base
-          let x = fn(s : @ui.Space?) { s.map(fn(s) { s.px() }) }
-          let side = x(either(base.px, base.p)).unwrap_or(0.0)
-          (x(base.pl).unwrap_or(side), 0.0, x(base.pr).unwrap_or(side), list_foot_in(Side))
-        }))
-        |> ignore
-        rows(list)
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-  made.val.unwrap()
-}
-
-///|
 /// An action in a sidebar's band over its list as a node (band_row's: 返回对话 beside the update): not one of the
 /// list's rows but the band's, its height and its words' room the theme's band's, its corner a sidebar row's; its ground
-/// as nav_ground has it, the selected one's while `on()`; pressed, `press`; read out a link named `label()`. What it
-/// holds `body` makes.
+/// as nav_ground_by has it, the selected one's while `on()`; pressed, `press`; read out a link named `label()`. What it
+/// holds `body` makes. `at`: where its list stands (its words' room: band_pad_in).
+#callsite(autofill(loc))
 pub fn band_row_node(
   parent : @view.View,
   on : () -> Bool,
   label : () -> String,
   press : () -> Unit,
+  at : ListAt,
   body : (@view.View) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(fn(r) {
+  parent.box(made_for=loc, fn(r) {
     r
     .row(Is(true))
     .grow(Is(1.0))
@@ -153,7 +59,7 @@ pub fn band_row_node(
     .radius(By(fn() { @ui.tree_theme().corner(side_row_radius) }))
     .min_height(By(fn() { Some(theme().chat_list.band_h) }))
     .padding(By(fn() {
-      let x = theme().chat_list.band_pad
+      let x = band_pad_in(at)
       (x, 0.0, x, 0.0)
     }))
     |> ignore
@@ -168,8 +74,9 @@ pub fn band_row_node(
 
 ///|
 /// A row's words in a sidebar as a node (nav_words'): a list's title's look, cut short where the row has not the room.
-pub fn nav_words_node(parent : @view.View, words : () -> String) -> Unit {
-  parent.box(fn(w) {
+#callsite(autofill(loc))
+pub fn nav_words_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(w) {
     w.grow(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
     words_node(w, words, fn() { theme().chat_list.title.then(nav_cut) }) |> ignore
   })
@@ -188,6 +95,7 @@ let nav_cut : @ui.TextStyle = @ui.text_style(w=Cut)
 /// unknown one), its progress in the mark's place, the two marks faded between each other over a control's ease (dur_ms)
 /// without moving the key. Read out a button named `label()`, unable to be pressed while busy; `why()` its tip where it
 /// says one (in `tips`); pressed while not busy, `press`.
+#callsite(autofill(loc))
 pub fn update_key_node(
   parent : @view.View,
   tips : TipLayer,
@@ -199,9 +107,10 @@ pub fn update_key_node(
   coming : () -> Double??,
   press : () -> Unit,
   offered? : () -> Bool = fn() { false },
+  loc~ : SourceLoc,
 ) -> Unit {
   // (its tip on what holds it: said while busy too, the key taking no press then, as the pointer rests on it)
-  parent.box(fn(o) {
+  parent.box(made_for=loc, fn(o) {
     o.box(fn(k) {
       let progress = EdgeWay::new(if @signals.untracked(coming) is Some(_) { 1.0 } else { 0.0 })
       k.reacts(fn() { coming() is Some(_) }, fn(on) { progress.go(k, if on { 1.0 } else { 0.0 }, dur_ms) })
@@ -224,8 +133,13 @@ pub fn update_key_node(
       let on_it = fn(d : @view.Drag) { k.finger_target(d.wx, d.wy) }
       k.gesture(
         @ui.touch_slop(),
-        press=fn(d) { if able() { rippled(d) } },
-        tap=fn(d) { if on_it(d) && able() { press() } },
+        press=fn(d) { if able() { (rippled.down)(d) } },
+        tap=fn(d) {
+          (rippled.tapped)(d)
+          if on_it(d) && able() {
+            press()
+          }
+        },
         drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) && able() { press() } },
       )
       |> ignore
@@ -263,10 +177,17 @@ pub fn update_key_node(
 /// What comes as a node (coming_mark's): in an icon's place `size` across, a ring where the icons draw their circles,
 /// the accent from its top as far round as `coming()` says (eased to it over progress_ms; None, a quarter turning), a
 /// short arrow down in it, in `color()`.
-fn coming_node(parent : @view.View, coming : () -> Double?, size : Double, color : () -> Int64) -> Unit {
+#callsite(autofill(loc))
+fn coming_node(
+  parent : @view.View,
+  coming : () -> Double?,
+  size : Double,
+  color : () -> Int64,
+  loc~ : SourceLoc,
+) -> Unit {
   let stroke = size * icon_stroke / 24.0
   let ring = size * coming_ring / 24.0 + stroke
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     b.width(Is(Some(size))).height(Is(Some(size))).lines_up(Is(Some(Middle))) |> ignore
     b.box(fn(r) {
       r.width(Is(Some(size))).height(Is(Some(size))).padding(Is(((size - ring) / 2.0, (size - ring) / 2.0, 0.0, 0.0))) |> ignore
@@ -312,7 +233,8 @@ fn coming_node(parent : @view.View, coming : () -> Double?, size : Double, color
 /// An update being put in place as a node (updating_mark's): in a ring an arrow up standing a while, then off up through
 /// its top as the next comes up from its bottom, eased in and out, once every updating_rise_ms, seen in a round window
 /// inside the ring; `size` across, in `color()`, moved by the clock as each frame is drawn.
-fn updating_node(parent : @view.View, size : Double, color : () -> Int64) -> Unit {
+#callsite(autofill(loc))
+fn updating_node(parent : @view.View, size : Double, color : () -> Int64, loc~ : SourceLoc) -> Unit {
   let pi = 3.141592653589793
   let k = size / 24.0
   let stroke = 1.75 * k
@@ -328,7 +250,7 @@ fn updating_node(parent : @view.View, size : Double, color : () -> Int64) -> Uni
     ]
   }
   let top = wmid - length / 2.0
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     b
     .width(Is(Some(size)))
     .height(Is(Some(size)))

@@ -32,3 +32,29 @@ test("folder changes wake a waiting client and are kept between asks", async () 
     assert.equal(await watches.changed("/folder", "client"), true);
   } finally { watches.close(); }
 });
+
+test("a followed folder tells each burst of changes once, and once more when it goes, until it is let go", async () => {
+  const time = testClock();
+  const watcher = new EventEmitter() as FSWatcher;
+  let closed = 0;
+  watcher.close = () => void closed++;
+  const watches = new FolderWatches(1500, 5000, time.clock, () => watcher);
+  try {
+    let told = 0;
+    const stop = watches.follow("/folder", () => void told++)!;
+    assert.notEqual(stop, null);
+    const before = time.asked();
+    watcher.emit("change", "rename", "a");
+    watcher.emit("change", "change", "a");
+    await time.begun(before + 1);
+    await time.adjust(250);
+    assert.equal(told, 1, "a burst is one change");
+    // Nothing more is told while nothing changes, however long it is followed.
+    await time.adjust(60_000);
+    assert.equal(told, 1);
+    watcher.emit("error", new Error("gone"));
+    assert.equal(told, 2, "gone is told");
+    stop();
+    assert.ok(closed >= 1);
+  } finally { watches.close(); }
+});

@@ -6,7 +6,9 @@
 // Actions cache", runs 39536847651, 39731343052). A cache saved once per commit, run or content is keyed
 // <kind>-<id>, the id a sha, a content's hash (16 hex digits or more) or a run's <id>-<attempt>; a restore by
 // restore-keys takes the newest of a kind on its ref (then main's), so the older ones of a kind on a ref are never read
-// again: kept is the newest of each kind on each ref, the rest deleted (one under a megabyte left: it frees nothing).
+// again: kept is the newest of each kind on each live ref, the rest deleted (one under a megabyte left: it frees
+// nothing). A deleted branch's caches cannot be restored by another branch, so all of its caches are removed once
+// they have not been created or read for 30 minutes. Pull request and other refs keep their own existing rules.
 // (A list of the kinds by name, as .github/cache_prune.py had, missed each new one: on 2026-10-22 mbui-apk-<sha>,
 // android-lint-main-<sha>, android-build-main-<sha> and the mbui-linux-store-… ones were 4 GB of the 22.)
 // setup-gradle's parts of a Gradle home (gradle-transforms-v1-<hash>, gradle-dependencies-v1-…: by their content,
@@ -28,6 +30,9 @@ struct Cache {
 
 ///|
 let stale_parts_s : Double = 30.0 * 60.0
+
+///|
+let deleted_head_grace_s : Double = 30.0 * 60.0
 
 ///|
 fn is_hex(s : String) -> Bool {
@@ -114,11 +119,45 @@ fn gh_lines(args : String) -> Array[String]? {
 }
 
 ///|
+/// A deleted branch's old caches are not available to live branches. Keep recent, malformed and non-branch refs.
+fn deleted_head_cache(c : Cache, heads : Map[String, Bool], now : Double) -> Bool {
+  c.ref_.has_prefix("refs/heads/") &&
+  !heads.contains(c.ref_) &&
+  c.created > 0.0 && c.accessed > 0.0 &&
+  now - c.created >= deleted_head_grace_s && now - c.accessed >= deleted_head_grace_s
+}
+
+///|
+/// A Git ref can contain shell metacharacters, including single quotes.
+fn shell_arg(s : String) -> String {
+  "'" + s.replace(old="'", new="'\\''") + "'"
+}
+
+///|
+/// Recheck a missing ref: branch creation/deletion while listing pages can make one live branch fall between pages.
+/// None means GitHub did not give a definite answer; never turn an API failure into permission to delete.
+fn head_missing(repo : String, ref_ : String) -> Bool? {
+  let names = repo.split("/").map(fn(p) { p.to_owned() }).to_array()
+  if names.length() != 2 || names[0] == "" || names[1] == "" {
+    return None
+  }
+  let query = "query($owner:String!,$name:String!,$ref:String!){repository(owner:$owner,name:$name){ref(qualifiedName:$ref){name}}}"
+  let jq = "if ((.errors // []) | length) > 0 or .data.repository == null then \"error\" elif .data.repository.ref == null then \"missing\" else \"present\" end"
+  let args = "api graphql -f " + shell_arg("owner=" + names[0]) + " -f " + shell_arg("name=" + names[1]) +
+    " -f " + shell_arg("ref=" + ref_) + " -f " + shell_arg("query=" + query) + " --jq " + shell_arg(jq)
+  match gh_lines(args) {
+    Some(lines) if lines.length() == 1 && lines[0] == "missing" => Some(true)
+    Some(lines) if lines.length() == 1 && lines[0] == "present" => Some(false)
+    _ => None
+  }
+}
+
+///|
 fn still_there(repo : String, c : Cache) -> Bool {
-  match
-    gh_lines(
-      "api --paginate 'repos/\{repo}/actions/caches?per_page=100&ref=\{c.ref_}' -q '.actions_caches[].id'",
-    ) {
+  // Pass the ref as a query field, so quotes and URL metacharacters in a branch name stay part of the ref.
+  let args = "api --paginate -X GET " + shell_arg("repos/" + repo + "/actions/caches") +
+    " -f per_page=100 -f " + shell_arg("ref=" + c.ref_) + " -q '.actions_caches[].id'"
+  match gh_lines(args) {
     Some(ids) => ids.contains(c.id)
     None => true
   }
@@ -137,6 +176,36 @@ fn cache_prune(args : Array[String]) -> Int {
           return 2
         }
       }
+  }
+  // A failed or incomplete branch listing must never make live branches look deleted.
+  let default_head = match gh_lines("api repos/\{repo} -q .default_branch") {
+    Some(l) if l.length() == 1 => "refs/heads/" + l[0]
+    _ => {
+      @sys.eprintln("chk cache-prune: the default branch (gh api) failed")
+      return 1
+    }
+  }
+  let branch_names = match gh_lines("api --paginate 'repos/\{repo}/branches?per_page=100' -q '.[].name'") {
+    Some(l) => l
+    None => {
+      @sys.eprintln("chk cache-prune: the branches' list (gh api) failed")
+      return 1
+    }
+  }
+  let heads : Map[String, Bool] = Map([])
+  for name in branch_names {
+    heads["refs/heads/" + name] = true
+  }
+  if !heads.contains(default_head) {
+    @sys.eprintln("chk cache-prune: the branches' list has no default branch")
+    return 1
+  }
+  let now = match @sys.run_out("date -u +%s") {
+    Some(s) if is_digits(trim(s)) => num_of(trim(s))
+    _ => {
+      @sys.eprintln("chk cache-prune: the current time is unavailable")
+      return 1
+    }
   }
   let lines = match
     gh_lines(
@@ -187,8 +256,29 @@ fn cache_prune(args : Array[String]) -> Int {
     }
   }
   let newest : Map[String, Bool] = Map([])
+  let missing_heads : Map[String, Bool] = Map([])
   let gone : Array[Cache] = []
   for c in caches {
+    if deleted_head_cache(c, heads, now) {
+      let missing = match missing_heads.get(c.ref_) {
+        Some(m) => m
+        None =>
+          match head_missing(repo, c.ref_) {
+            Some(m) => {
+              missing_heads[c.ref_] = m
+              m
+            }
+            None => {
+              @sys.eprintln("chk cache-prune: could not confirm branch \{c.ref_}")
+              return 1
+            }
+          }
+      }
+      if missing {
+        gone.push(c)
+        continue
+      }
+    }
     if is_gradle_part(c.key) {
       let since = match homes_read.get(c.ref_) {
         Some(t) => t

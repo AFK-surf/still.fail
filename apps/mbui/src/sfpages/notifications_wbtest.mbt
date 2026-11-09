@@ -9,7 +9,7 @@ test "通知, at each width and with either hand: the ways, each kind with what 
     assert_true(t.find("提醒方式") is Some(_), msg=at)
     assert_true(t.find("通知类别") is Some(_), msg=at)
     assert_true(t.find("待你决定") is Some(_), msg=at)
-    // a done turn: its banner while away (the core's `done`), not counted in the badge (the core's badgeKinds)
+    // a done turn: its banner while away (the core's `done`), counted in the badge (the core's badgeKinds)
     assert_true(t.find("横幅（离开时）") is Some(_), msg=at)
     // (the kind's head, not the preview's banner that says it too)
     t.click(Button, label="待你决定")

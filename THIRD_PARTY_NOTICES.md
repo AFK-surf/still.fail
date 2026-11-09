@@ -20,27 +20,11 @@ still.fail Helper (the station's macOS app) builds in the simulator capture and 
 
 ## scrcpy's server in the station's release
 
-The station puts [scrcpy](https://github.com/Genymobile/scrcpy)'s server, the unmodified `scrcpy-server-v5.0.1` of its release (Genymobile and contributors, Apache-2.0), on an Android device for as long as a person views it (`station/src/screens/scrcpy-server`, docs/remote-screens.md "Android").
+The station puts [scrcpy](https://github.com/Genymobile/scrcpy)'s server, the unmodified `scrcpy-server-v5.0.1` of its release (Genymobile and contributors, Apache-2.0), on an Android device for as long as a person views it (`station/src/screens/scrcpy-server`).
 
 ## agent-desktop in the station's release
 
 still.fail Helper (macOS) carries `agent-desktop` and `agent-desktop-macos-helper` beside its executable, and the Windows station `agent-desktop.exe` beside `stillfail-screen.exe`: the unmodified binaries of [agent-desktop](https://github.com/vercel-labs/agent-desktop) 1.0.2 (Vercel, Inc.) from its GitHub release, each archive checked against the SHA-256 in that release's `checksums.txt` (`AGENT_DESKTOP` in `scripts/native.ts`), under its [Apache-2.0 license](https://github.com/vercel-labs/agent-desktop/blob/v1.0.2/LICENSE). The station runs them to read and act on the desktop's apps by their accessibility trees.
-
-## FFmpeg in the media service's package
-
-The media service's package (`media/service`, installed by stations as the module `media`) carries `ffmpeg` and `ffprobe` in its `bin/`, one build per platform (darwin-arm64, linux-x64, linux-arm64). They are built in CI from the unmodified upstream sources below by `scripts/ffmpeg.ts` (the native part `ffmpeg` of `scripts/native.ts`), each tarball checked against its SHA-256. still.fail keeps a copy of each, the same bytes, in the release [`third-party-sources`](https://github.com/AFK-surf/still.fail/releases/tag/third-party-sources) of this repository (with `SHA256SUMS`); the build falls back to it when upstream cannot be reached. Each package's `bin/` also holds FFmpeg's `LICENSE.md` and `COPYING.LGPLv2.1` (as `ffmpeg-LICENSE.md`, `ffmpeg-COPYING.LGPLv2.1`), the notices of what is linked in, and `SOURCE`, which names these sources and the exact configure flags.
-
-| Component | Version | License | Source | In |
-| --- | --- | --- | --- | --- |
-| FFmpeg | 9.0.2 | LGPL-2.1-or-later | <https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz> (sha256 `8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e`) | all three |
-| OpenH264 (Cisco Systems) | 2.6.0 | BSD-2-Clause | <https://github.com/cisco/openh264/archive/refs/tags/v2.6.0.tar.gz> (sha256 `558544ad358283a7ab2930d69a9ceddf913f4a51ee9bf1bfb9e377322af81a69`) | Linux (the H.264 encoder) |
-| zlib | 1.3.2 | Zlib | <https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz> (sha256 `bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16`) | Linux (macOS uses the system's libz) |
-
-FFmpeg is configured as LGPL only: `--disable-gpl --disable-nonfree --disable-version3` (no libx264, libx265 or any other GPL or non-free library), `--disable-autodetect` (nothing from the build machine is picked up) and `--disable-everything`, then only the demuxers, muxers, decoders, encoders, parsers, bitstream filters, filters and protocols the media service uses (`COMPONENTS` in `scripts/ffmpeg.ts`). H.264 is encoded by Apple's VideoToolbox on macOS (`--enable-videotoolbox`, `h264_videotoolbox`) and by OpenH264 on Linux (`--enable-libopenh264`); audio by FFmpeg's own AAC encoder. The binaries are static apart from the operating system's own libraries (macOS: libSystem, libz and the VideoToolbox, CoreMedia, CoreVideo, CoreFoundation and CoreServices frameworks; Linux: glibc 2.28 or later). The full flag list is in each package's `bin/SOURCE` and printed by `ffmpeg -buildconf`.
-
-Whoever has the package may replace these binaries with their own build: the media service runs `$MEDIA_FFMPEG` and `$MEDIA_FFPROBE` when they are set. NASM 3.02 (BSD-2-Clause) assembles the x86-64 code during the Linux x64 build and is not distributed.
-
-Patents are a separate question from copyright: H.264, HEVC, AAC, AC-3 and others may be covered by patents in some countries. Cisco's royalty-free H.264 patent coverage applies only to the OpenH264 binaries Cisco distributes, not to OpenH264 built from source as here.
 
 ## Model and runtime marks
 
@@ -74,11 +58,11 @@ SOFTWARE.
 
 ## The apps (`apps/mbui`)
 
-still.fail's apps (`apps/mbui`) are written in mbui (MIT, Copyright (c) 2026 still.fail contributors), which is in this repository at `apps/mbui/mbui`; its notices are its `THIRD_PARTY_NOTICES.md`. Its ThumbHash decoder (`apps/mbui/src/gallery/thumbhash.mbt`) is ported from [ThumbHash](https://github.com/evanw/thumbhash)'s reference implementation (MIT, Copyright (c) 2023 Evan Wallace), as `web/src/thumbhash.ts` has it. Its Android build fetches Hermes, JSI and fbjni (MIT, Meta Platforms) and AndroidX Media3 (Apache-2.0) from Maven Central. The pictures its photos and books apps show are drawn by mbui's `scripts/test_images.swift` (CC0 1.0); its `goldens/` are its own output over made-up data, drawn with the system's fonts.
+still.fail's apps (`apps/mbui`) are written in mbui (MIT, Copyright (c) 2026 still.fail contributors), which is in this repository at `apps/mbui/mbui`; its notices are its `THIRD_PARTY_NOTICES.md`. Its ThumbHash decoder (`apps/mbui/src/gallery/thumbhash.mbt`) is ported from [ThumbHash](https://github.com/evanw/thumbhash)'s reference implementation (MIT, Copyright (c) 2023 Evan Wallace). Its Android build fetches Hermes, JSI and fbjni (MIT, Meta Platforms) and AndroidX Media3 (Apache-2.0) from Maven Central. The pictures its photos and books apps show are drawn by mbui's `scripts/test_images.swift` (CC0 1.0); its `goldens/` are its own output over made-up data, drawn with the system's fonts.
 
 ## Installed dependencies
 
-JavaScript, Rust and Android dependencies are recorded in their package manifests and lockfiles and retain their respective licenses. Inter is supplied by `@fontsource-variable/inter` under the SIL Open Font License. The Android app carries JetBrains Mono (Copyright 2020 The JetBrains Mono Project Authors) under the SIL Open Font License 1.1; the license text ships with it in `apps/android/app/src/main/assets/licenses/JetBrainsMono-OFL.txt`. Electron and application bundles include additional third-party components; preserve the notices distributed with them.
+JavaScript, Rust and Android dependencies are recorded in their package manifests and lockfiles and retain their respective licenses. Inter is supplied by `@fontsource-variable/inter` under the SIL Open Font License. The apps carry JetBrains Mono (`apps/mbui/assets/fonts/jetbrains_mono.ttf`, Copyright 2020 The JetBrains Mono Project Authors) under the SIL Open Font License 1.1, whose text is below. Electron and application bundles include additional third-party components; preserve the notices distributed with them.
 
 The core bundles [alien-signals](https://github.com/stackblitz/alien-signals) 3.2.1 under this license:
 
@@ -107,3 +91,101 @@ SOFTWARE.
 ```
 
 This inventory of vendored code is not a complete license inventory for compiled distributions. Review the exact dependency versions and bundled notices for each release target before redistribution.
+
+## JetBrains Mono's license
+
+```text
+Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+https://openfontlicense.org
+
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded, 
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+```

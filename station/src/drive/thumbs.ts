@@ -4,7 +4,7 @@
 // preview. And each image's ThumbHash, kept with the message: a blurred likeness of it, a few dozen bytes, shown until it
 // loads. Decoding, resizing and encoding are the Rust's own code in the native addon (native/mesh/src/thumbs.rs), off
 // this thread; what is here is which files, where, and what the message keeps. The drive's files have theirs made the
-// same way for the modules (modules/media.ts): those change where they are, so theirs are made again once the file is
+// same way for the modules: those change where they are, so theirs are made again once the file is
 // newer than they are (`since`).
 import { createHash } from "node:crypto";
 import { rmSync, statSync } from "node:fs";

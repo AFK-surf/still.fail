@@ -1,4 +1,4 @@
-// Positioning marks without GPOS (harfrust's fallback.rs): marks go above or below their base by combining class,
+// Positioning marks without GPOS: marks go above or below their base by combining class,
 // from the glyphs' ink boxes.
 
 ///|

@@ -1,5 +1,5 @@
 // The bar floating at the top of a file opened in the Small tier (viewer_head's, fpHead) as nodes of the window's tree
-// (the way there, docs/retained.md 4): what it shows bound to what says it as that changes (the file's name, its kind
+// (the way there 4): what it shows bound to what says it as that changes (the file's name, its kind
 // and size, the window's width, its theme, how far the viewer is in), its tools nodes of their own (tool_node), never
 // narrower once open: as wide as it is laid out at each change that sets how wide it is (View::keeps_width: another
 // tool, another name, the window, the theme, the system's size of words), whatever frames come between.
@@ -12,6 +12,7 @@
 /// changes), then × (`close` as it is pressed). There while `awake`
 /// (in over wake_ms, out over sleep_ms, from where it is at that moment), as far in as `shown` says of the node as it is
 /// drawn (the viewer's fade). Its tools' tips in `tips`. The bar's node.
+#callsite(autofill(loc))
 pub fn viewer_head_node(
   parent : @view.View,
   name : () -> String,
@@ -26,11 +27,12 @@ pub fn viewer_head_node(
   holds : () -> String,
   close : () -> Unit,
   tips? : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let small = fn() { width() <= viewer_small_w }
   let fade = TipFade::new()
   let mut head : @view.View? = None
-  parent.box(fn(room) {
+  parent.box(made_for=loc, fn(room) {
     room.over(Is(true)).lines_up(Is(Some(Middle))) |> ignore
     // (awake as it is made: in whole, not come in)
     let woke = @signals.untracked(awake)

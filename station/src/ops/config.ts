@@ -1,10 +1,11 @@
-// config.json as a live, editable document (settings.rs): the file stays the source of truth. Edits are checked,
+// config.json as a live, editable document: the file stays the source of truth. Edits are checked,
 // written atomically (mode 600: it holds secrets) and told to whoever listens; fields this station does not know are
 // kept as they are. Edited by something else (the installer, `stillfail channel`, a person): read again when the file
 // changed (by its size and time) on the next read, and told then. A file that is not there is `{}` (the defaults).
-import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { setStationLang } from "./i18n.ts";
+import { readJsonFile } from "./json-file.ts";
 
 /// Checks a config before it is taken (config.rs `parse_config`'s refusals): throws what is wrong.
 export type ConfigCheck = (raw: any, data: string) => void;
@@ -16,6 +17,7 @@ export class ConfigFile {
   check: ConfigCheck = () => {};
   private seen = "";
   private value: any = {};
+  private invalid: Error | null = null;
   private listeners = new Set<(raw: any) => void>();
 
   constructor(data: string) {
@@ -29,11 +31,16 @@ export class ConfigFile {
     const now = this.stamp();
     if (now !== this.seen) {
       const first = this.seen === "";
-      this.seen = now;
       try {
-        this.value = now === "none" ? {} : JSON.parse(readFileSync(this.path, "utf8"));
-      } catch {
-        // Half written by something else, or broken by hand: what was read before stands.
+        this.value = now === "none" ? {} : readJsonFile(this.path);
+        this.seen = now;
+        this.invalid = null;
+      } catch (error) {
+        this.seen = now;
+        this.invalid = error instanceof Error ? error : new Error(String(error));
+        // An initial read must not silently turn an unreadable config into defaults. Later, keep the last good value
+        // for readers, but refuse edits until the file can be read again.
+        if (first) throw this.invalid;
         return this.value;
       }
       setStationLang(this.value?.language);
@@ -51,6 +58,7 @@ export class ConfigFile {
   /// Applies an edit to a copy; written and told only if the result checks out (else it throws, nothing changed).
   update(edit: (raw: any) => void): any {
     const next = structuredClone(this.raw());
+    if (this.invalid !== null) throw this.invalid;
     edit(next);
     this.check(next, this.data);
     mkdirSync(dirname(this.path), { recursive: true });
@@ -68,8 +76,9 @@ export class ConfigFile {
     try {
       const st = statSync(this.path);
       return `${st.size}:${st.mtimeMs}:${st.ino}`;
-    } catch {
-      return "none";
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return "none";
+      throw error;
     }
   }
 

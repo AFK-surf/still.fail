@@ -34,7 +34,7 @@ pub fn vector_faces(data : Bytes) -> Array[Bytes] {
   if code.length() > 0 {
     faces.push(code)
   }
-  match @signals.untracked(fn() { vector_cjk.get() }) {
+  match vector_cjk.untracked() {
     CjkHere(b) => faces.append(b)
     CjkUnwanted => if has_cjk(data) { vector_cjk.set(CjkWanted) }
     _ => ()

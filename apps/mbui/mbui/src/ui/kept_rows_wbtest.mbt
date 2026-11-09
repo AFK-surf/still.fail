@@ -29,9 +29,9 @@ fn TestRows::view(self : TestRows) -> (Ctx) -> Unit {
           self.builds[i] = self.builds[i] + 1
           let row = c.id("row")
           let go = c.id("go")
-          if c.clicked(go) {
+          c.on_press(go, fn() {
             self.clicks.push(i)
-          }
+          })
           let h = if i == 9 { 900.0 } else { 50.0 + (i % 3).to_double() * 10.0 }
           let n = if i == 3 { self.mark.get() } else { 0 }
           c.box(
@@ -84,7 +84,7 @@ let rows_notch_ms : Double = 50.0
 fn rows_scene(replay : Bool, platform : Int, steps : (Tester, TestRows) -> Unit) -> RowsRun {
   let k = TestRows::new()
   let t = Tester::new(k.view(), w=320.0, h=420.0, platform~)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   nodes_run.on = replay
   let frames = []
   let kept = Ref(0)
@@ -190,7 +190,7 @@ fn rows_off_pixels() -> Array[String] {
 test "a list's rows on the device's pixels however it stands: at its end as what is under them grows, dragged, said from another row" {
   let foot = @signals.signal(20.0)
   let t = Tester::new(pixel_rows(foot), w=390.0, h=700.0, platform=2, scale=2.625)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   assert_eq(rows_off_pixels(), [])
   // at its end, what is under the rows growing by parts of a pixel
@@ -256,7 +256,7 @@ fn row_parts_off_pixels() -> Array[String] {
 ///|
 test "on a host that sets things on whole pixels, what a list's rows hold is on them too however the rows move: its words move as their row" {
   let t = Tester::new(centred_rows(), w=390.0, h=700.0, platform=2, scale=3.25, text=whole_px_text)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   assert_eq(row_parts_off_pixels(), [])
   // dragged by parts of a pixel, then flung
@@ -388,7 +388,7 @@ test "a list's rows left still: a row going on with the clock built as it goes, 
   let run = fn(replay : Bool) -> (Array[Array[Double]], Int) {
     let builds = Array::make(30, 0)
     let t = Tester::new(timed_rows(builds), w=320.0, h=420.0, platform=2)
-    t.keep_parts(true)
+    t.set_rows_on_pixels(true)
     nodes_run.on = replay
     t.draw()
     let frames = []
@@ -442,7 +442,7 @@ test "a list's rows left still: a row's look by the clock goes on as it is drawn
   let run = fn(replay : Bool) -> (Array[Array[Double]], Array[Int]) {
     let builds = Array::make(30, 0)
     let t = Tester::new(looked_rows(builds), w=320.0, h=420.0, platform=2)
-    t.keep_parts(true)
+    t.set_rows_on_pixels(true)
     nodes_run.on = replay
     t.draw()
     let frames = []
@@ -510,7 +510,7 @@ test "a list's row in a part kept shows a motion another part told: drawn as it 
       h=420.0,
       platform=2,
     )
-    t.keep_parts(true)
+    t.set_rows_on_pixels(true)
     nodes_run.on = replay
     t.draw()
     t.frame()
@@ -533,7 +533,7 @@ test "a list's rows read out as they are dragged and flung: kept, read out as bu
   let run = fn(replay : Bool) -> (Array[String], Int) {
     let k = TestRows::new()
     let t = Tester::new(k.view(), w=320.0, h=420.0, platform=2)
-    t.keep_parts(true)
+    t.set_rows_on_pixels(true)
     t.set_a11y(true)
     nodes_run.on = replay
     let said = []
@@ -566,9 +566,9 @@ fn telling_rows(seen : Array[Int], taps : Ref[Int]) -> (Ctx) -> Unit {
   fn(c) {
     c.list("telling", 30, 50.0, fn(i) {
       let go = c.id("go")
-      if c.clicked(go) {
+      c.on_press(go, fn() {
         c.tell("tapped", fn() { taps.val = taps.val + 1 })
-      }
+      })
       c.after_build("shown", fn() { seen[i] = seen[i] + 1 })
       c.box(h=Px(50.0), dir=Row, padx=10.0, align=ACenter, fn() {
         c.box(w=Fill(1.0), fn() { c.text("row \{i}", size=12.0) |> ignore }) |> ignore
@@ -587,8 +587,7 @@ test "a list's rows kept as their nodes on the device's pixels as a host lays th
   let t = Tester::new(pixel_rows(foot), w=390.0, h=700.0, platform=2, scale=2.625)
   // (as a host lays them: its rows on the pixels, kept as their nodes, no part kept as drawn; how frames are built
   // changed by the test, the next built whole)
-  rows_grid_test.val = true
-  test_stepped()
+  t.set_rows_on_pixels(true)
   t.draw()
   assert_eq(rows_off_pixels(), [])
   foot.set(20.37)
@@ -759,7 +758,7 @@ test "a list's rows under a ground made once: kept as they are under one built e
   let run = fn(replay : Bool) {
     let k = TestRows::new()
     let t = Tester::new(k.made_view(), w=320.0, h=420.0, platform=2)
-    t.keep_parts(true)
+    t.set_rows_on_pixels(true)
     nodes_run.on = replay
     let frames = []
     let kept = Ref(0)

@@ -1,4 +1,4 @@
-// The settings as the desktop has them (ember web/src/cloud/settings.tsx SettingsPage, SettingsNav): the sidebar of
+// The settings as the desktop has them (SettingsNav): the sidebar of
 // their pages by where they act, and the page picked beside it: the desktop's own ported from the web's (account.mbt,
 // notifications.mbt, …, in settings_page.mbt's frame), the others the settings' package's (src/sfapp/settings) in the
 // wide frame's scale until they are ported. What both read and call (the core's calls, the models) is that
@@ -31,10 +31,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   }
   @settings.frame(core, here)
   settings_fixture(src, core)
-  match route {
-    NewProfile(a) => add_profile_page(c, core, here, a)
-    _ => @settings.page(c, core, here, route)
-  }
+  @settings.page(c, core, here, route)
 }
 
 ///|
@@ -43,7 +40,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// (关于, 更新日志, 记忆, 一台 station 的记忆, 用量, 价目表: pane_made, tape_made, narrow_made), and for one whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Home | Appearance | Fonts | BarSettings | Permissions | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoPolicy(_))) {
+  if !(route is (Fonts | BarSettings | Me | Vault | VaultItem(_, _))) {
     return false
   }
   let core = settings_core(src, w)
@@ -51,30 +48,11 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
   @settings.frame(core, here)
   settings_fixture(src, core)
   match route {
-    // the settings' list as a page of its own (a small screen's: sfpages' settings_list.mbt), a row pressed its page
-    // pushed
-    Home =>
-      @sf.page(c, on_back=fn() { @sfpages.settings_search_reset(); (core.pop)() }, frame~, "home", @sf.t("android-settings.title"), @sfpages.settings_blocks(c, core, here, fn(r) {
-        (core.push)(r)
-      }))
-    Appearance => @sfpages.appearance_page(c, core, frame)
     Fonts => @sfpages.fonts_page(c, core, frame)
     BarSettings => @sfpages.bars_page(c, core, frame)
-    Permissions => @sfpages.permissions_page(c, core, frame)
     Me => @sfpages.me_page(c, core, here, frame)
-    Workspace => @sfpages.workspace_page(c, core, here, frame)
-    Security => @sfpages.security_page(c, core, here, frame)
-    SecurityOpen => @sfpages.security_open_page(c, core, here, frame)
     Vault => @sfpages.vault_page(c, core, here, frame)
-    VaultItems => @sfpages.vault_items_page(c, core, here, frame)
     VaultItem(v, item) => @sfpages.vault_item_page(c, core, here, frame, v, item)
-    Connects(only) => @sfpages.connects_page(c, src, core, here, frame, only)
-    Connect(station, id) => @sfpages.connect_page(c, src, core, here, frame, station, id)
-    Station(a) => @sfpages.station_page(c, core, here, frame, a)
-    Profile(a, id) => @sfpages.profile_page(c, core, here, frame, a, id)
-    LocalStation => @sfpages.local_station_page(c, core, frame)
-    MemoryDoc(a, skill, at) => @sfpages.memory_doc_page(c, core, here, frame, a, skill, at)
-    AutoPolicy(s) => @sfpages.policy_page(c, core, here, frame, s)
     _ => ()
   }
   true
@@ -87,8 +65,9 @@ let settings_deep : Ref[Bool] = Ref(false)
 
 ///|
 /// A dialog a fixture's mode puts up over its page (MBUI_FIXTURE=settings-policy-text, settings-security-join, …:
-/// @settings.fixture_desk), once the page is drawn with what it needs.
-fn settings_fixture(src : Source, core : Core) -> Unit {
+/// @settings.fixture_desk), once the page is drawn with what it needs; before it is made where a frame makes it once
+/// (pane_made, tape_made, the narrow frame's).
+pub fn settings_fixture(src : Source, core : Core) -> Unit {
   match @settings.fixture_desk() {
     "policy-text" => @sfpages.fx_policy_up.val = "text"
     "policy-option" => @sfpages.fx_policy_up.val = "option"
@@ -96,7 +75,7 @@ fn settings_fixture(src : Source, core : Core) -> Unit {
     "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
     "local-fonts" => @sfpages.local_open.val = true
     "connect-mode" =>
-      match items((core.topic)("connects", { "scope": str("ws1"), "mine": Json::boolean(false) }).value, "items") {
+      match items((core.topic)("connects", { "scope": str("ws1"), "mine": Json::boolean(false) }).get().value, "items") {
         [item, ..] => @sfpages.cd_mode_dialog(core, "ws1/st1", Some(item))
         _ => ()
       }
@@ -151,14 +130,14 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
     // Without the back row, keep the field below the sidebar's upper corners.
     let search_band = if @sf.native_on() { settings_search_native_band } else { settings_search_band }
-    c.box(style=@sf.side_list().then(search_band), fn() { @sfpages.settings_search(c) }) |> ignore
+    c.box(style=@sf.side_list().then(search_band), fn() { @sfpages.settings_search(c, side_at()) }) |> ignore
     side_scroll(c, "settings-nav", fn() {
       // (a row's page in place of the one open; on the tape brought over to show it)
       @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
         @sfbase.history_push()
         app.nav.replace_above(1, [Setting(r)])
         @sfbase.show_chosen()
-      })
+      }, side_at())
     })
   })
   |> ignore
@@ -172,16 +151,16 @@ fn settings_back(c : @ui.Ctx, band : Bool) -> Unit {
     @sf.icon(c, "arrow-left", size=settings_nav_icon, color=t.p.muted) |> ignore
     nav_words(c, @sf.t("web-pages.settings.nav.backToChats"))
   }
-  let pressed = if band {
-    band_row(c, "settings-nav/back", false, body)
-  } else {
-    nav_row(c, "settings-nav/back", false, body)
-  }
-  if pressed {
+  let back = fn() {
     @sfpages.settings_search_reset()
     @sfbase.history_push()
     @sfbase.nav_over_home([])
     wide.landed.set("")
+  }
+  if band {
+    band_row(c, "settings-nav/back", false, body, at=side_at(), on_press=back)
+  } else {
+    nav_row(c, "settings-nav/back", false, body, at=side_at(), on_press=back)
   }
 }
 

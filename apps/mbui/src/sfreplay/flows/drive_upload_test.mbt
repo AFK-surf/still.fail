@@ -3,6 +3,8 @@
 // bytes: what each upload's id is made from): each a row going up a part at a time (drive.upload.part, the run's
 // parts), then the folder's entries.
 // before it: 15-drive-lend
+// The trace's local root is anonymized. Its upload IDs are recomputed from that root and the same fixture bytes,
+// keeping each upload's original serial; the recorded parts and their other parameters stay as the run sent them.
 
 ///|
 test "18-drive-upload" {

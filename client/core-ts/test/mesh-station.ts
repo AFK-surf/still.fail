@@ -30,7 +30,7 @@ export class Station {
   lateMs = 0;
   /// The paths of the requests the device let go of before their answers ended (their streams stopped by it).
   letGo: string[] = [];
-  /// Screen views (docs/remote-screens.md) as it served them: the head, what the client sent, the most frames it ever
+  /// Screen views as it served them: the head, what the client sent, the most frames it ever
   /// had sent and not acknowledged. A view sends `screenFrames` (a config first), each once fewer than 2 are
   /// unacknowledged, then ends.
   views: { head: J; got: J[]; mostUnacked: number }[] = [];
@@ -173,8 +173,9 @@ export class Station {
         await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers })}\n`));
         // A large reply: how fast a way brings one, written a piece at a time (as the station's file reads are), so two at
         // once share their way's line.
-        if (parsed.path === "/admin/api/big") {
-          for (let i = 0; i < 16; i++) await stream.write(Buffer.alloc(64 * 1024, 7)).catch(() => {});
+        if (parsed.path.startsWith("/admin/api/big")) {
+          const pieces = 16 * Number(new URL(parsed.path, "https://station.test").searchParams.get("mb") ?? 1);
+          for (let i = 0; i < pieces; i++) await stream.write(Buffer.alloc(64 * 1024, 7)).catch(() => {});
           ended = true;
           await stream.finish().catch(() => {});
           return;

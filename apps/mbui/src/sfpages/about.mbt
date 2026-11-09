@@ -1,14 +1,14 @@
-// 关于 and 更新日志, one page each in every frame (ember web/src/pages/About.tsx, Changelog.tsx, Changelog.css.ts; the
+// 关于 and 更新日志, one page each in every frame (still.fail web/src/pages/About.tsx, Changelog.tsx, Changelog.css.ts; the
 // narrow app's mobile/Settings.tsx AboutScreen, mobile/Changelog.tsx). 关于: this build, the way to a newer one,
 // what changed; whether this device sends usage statistics and error reports (not where nothing is sent); still.fail's
 // terms and privacy policy on its site; last, where the device keeps one, its performance record (性能记录: what
 // warms it, kept on the device alone, @hostapi.perf_state; where the device has no share sheet, the way to its folder,
 // where its logs are too: @hostapi.perf_opens). 更新日志: the core's `changelog`, a tab a part, by day,
 // each change's lines with their kind before them, its version, what is not out yet; opened, what the last update
-// brought is read (`changelog.seen`). Laid out by the page's width (page_look.mbt).
+// brought is read (`changelog.seen`). Laid out by the page's width.
 
 ///|
-/// 关于 (AboutPage; the narrow app's AboutScreen, Android's SettingsHome.kt AboutScreen) made once as nodes (page_node,
+/// 关于 (AboutPage; the narrow app's AboutScreen) made once as nodes (page_node,
 /// laid out by the `width` its frame gives it, narrow where none is given) in node `v`: this build and the way to a newer one (how it
 /// stands as the core's update says it, its bar coming and going with what is under way, the row growing and closing
 /// round it), what changed; whether this device sends usage statistics and error reports (where the build sends any:
@@ -94,7 +94,7 @@ pub fn about_node(
               on,
               fn(now) {
                 @hostapi.set_perf(now)
-                perf_turned.set(@signals.untracked(fn() { perf_turned.get() }) + 1)
+                perf_turned.set(Some(now))
               },
               note=fn() {
                 @sf.t(
@@ -135,7 +135,7 @@ pub fn about_node(
 fn version_rows_node(g : @view.View, core : Core) -> Unit {
   // (its name as the core's preferences say it, still.fail where they say none)
   @sf.link_row_node(g, fn() {
-    let product = text((core.topic)("prefs", Map::new()).value, "productName")
+    let product = text((core.topic)("prefs", Map::new()).get().value, "productName")
     (if product == "" { @sf.product() } else { product }) + " " + build_version()
   }, fn() {  }, goes=false)
   let v = fn() { (core.version_now)() }
@@ -193,10 +193,10 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
 let version_bar_room : Double = 9.0
 
 ///|
-/// How many times 性能记录 was turned here: what its row reads, so it is built again as it is (the host's state is no
-/// signal).
-// kept across runs: only counts on
-let perf_turned : @signals.Signal[Int] = @signals.signal(0)
+/// What 性能记录 was last turned to here (None: not turned here yet): what its row reads, so it is built again as it is
+/// turned otherwise (the host's state is no signal).
+// kept across runs: said as it is turned; changelog_reset puts it back
+let perf_turned : @signals.Signal[Bool?] = @signals.signal(None, same=fn(a, b) { a == b })
 
 ///|
 /// The changelog's part in view ("" the first), and the news last told read (as the core says it: told once, not again
@@ -212,6 +212,7 @@ let changelog_seen : Ref[String] = Ref("")
 fn changelog_reset() -> Unit {
   changelog_part.set("")
   changelog_seen.val = ""
+  perf_turned.set(None)
 }
 
 ///|

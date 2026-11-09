@@ -4,12 +4,15 @@
 import { Cause, Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { log } from "../ops/log.ts";
 import { stationLog } from "../ops/log-export.ts";
-import { AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
+import { AdminApi, ControlPlane, Events, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { PEER_ALPN, PEER_BYTES_ALPN, peerCall, servePeer } from "./peer.ts";
 import { PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.ts";
 import { followLock } from "./lock-sync.ts";
+import { followPersons } from "./person-sync.ts";
+import { tellLocks } from "./lock-events.ts";
+import { personChainsOf } from "./serve.ts";
 import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
@@ -35,10 +38,10 @@ export const MeshLive = Layer.effectDiscard(
     const own = yield* Own;
     const previous = yield* Previous;
     const peers = yield* Peers;
-    // The protocols the station's parts answer themselves (parts.ts): a published chat's visitors, say.
     const parts = yield* Parts;
     const config = yield* StationConfig;
     const screens = yield* ScreenRegistry;
+    const events = yield* Events;
     const run = Effect.gen(function* () {
       // Not in a workspace yet: on the mesh once `enroll` writes cloud.json.
       if (!cloud.state.state) yield* cloud.changes.pipe(Stream.filter(() => cloud.state.state !== null), Stream.runHead);
@@ -51,7 +54,7 @@ export const MeshLive = Layer.effectDiscard(
       // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
       // protocol after it (to tell a station from before it), and is to be answered in the first (peer-http.ts).
       const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN, ...parts.allAlpns().map((p) => p.alpn)], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()) })),
+        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, PEER_HTTP_ALPN, PEER_BYTES_ALPN, PEER_ALPN, TOOLS_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1", congestion: congestionOf(config.raw()) })),
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
@@ -93,6 +96,16 @@ export const MeshLive = Layer.effectDiscard(
       // The workspace lock, kept level with the other stations it names (lock-sync.ts).
       yield* Effect.acquireRelease(
         Effect.sync(() => followLock(cloud.state, call)),
+        (stop) => Effect.sync(stop),
+      );
+      // Each person's own lock, kept level with the stations of the workspaces it was heard in (person-sync.ts), and
+      // the locks' changes told to the devices (lock-events.ts).
+      yield* Effect.acquireRelease(
+        Effect.sync(() => followPersons(cloud.state, personChainsOf(cloud.state), call)),
+        (stop) => Effect.sync(stop),
+      );
+      yield* Effect.acquireRelease(
+        Effect.sync(() => tellLocks(cloud.state, personChainsOf(cloud.state), (event, data, of, to) => events.tell(event, data, of, to))),
         (stop) => Effect.sync(stop),
       );
       const connections = yield* FiberSet.make();
@@ -150,7 +163,7 @@ export const MeshLive = Layer.effectDiscard(
             conn.alpn().equals(PEER_BYTES_ALPN) || conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
             : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, { forwarded: (port) => side.forwarded(port) })
             : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
-            : (parts.allAlpns().find((p) => conn.alpn().equals(p.alpn))?.serve(conn) ?? serve(members, conn)),
+            : serve(members, conn),
           ).pipe(
             Effect.catch((e) => Effect.sync(() => log.info("mesh", "connection ended", { error: String((e as Error).cause ?? e) }))),
             Effect.ensuring(Effect.sync(() => conn.close(0, "station stopping"))),

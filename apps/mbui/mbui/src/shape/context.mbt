@@ -1,4 +1,4 @@
-// Context and chained context subtables, for both GSUB and GPOS (harfrust's ot/lookup/context.rs): by glyphs,
+// Context and chained context subtables, for both GSUB and GPOS: by glyphs,
 // by classes and by coverages. The rules of a set are tried in order; the first that matches applies its lookups.
 
 ///|

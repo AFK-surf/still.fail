@@ -8,9 +8,11 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <objbase.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#pragma comment(lib, "ole32.lib")
 
 // how a name compares with another in `locale`: <0, 0, >0
 static int win_collate_cmp(const WCHAR *a, const WCHAR *b, const WCHAR *locale) {
@@ -175,4 +177,15 @@ static char *win_collate_answer(const char *json, size_t len, const WCHAR *local
   for (int i = 0; i < n; i++) free(names[i]);
   free(names);
   return out;
+}
+
+// The answer crossing into the engine DLL must not be freed by another module's CRT.
+static char *win_collate_shared_answer(const char *json, size_t len, const WCHAR *locale) {
+  char *answer = win_collate_answer(json, len, locale);
+  if (!answer) return NULL;
+  size_t size = strlen(answer) + 1;
+  char *shared = CoTaskMemAlloc(size);
+  if (shared) memcpy(shared, answer, size);
+  free(answer);
+  return shared;
 }

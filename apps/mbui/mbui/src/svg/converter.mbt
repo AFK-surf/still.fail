@@ -1,4 +1,4 @@
-// usvg's converter (parser/converter.rs): the svgtree as a render tree, element by element.
+// usvg's converter: the svgtree as a render tree, element by element.
 
 ///|
 priv struct State {
@@ -572,7 +572,7 @@ fn svg_paint_order(order : Array[PaintOrderKind]) -> PaintOrder {
   }
 }
 
-// ── style (parser/style.rs) ───────────────────────────────────────────
+// ── style ───────────────────────────────────────────
 
 ///|
 fn resolve_fill(doc : SDoc, node : Int, has_bbox : Bool, state : State, cache : Cache) -> Fill? {
@@ -809,7 +809,7 @@ fn conv_dasharray(doc : SDoc, node : Int, state : State) -> Array[Float]? {
   Some(list)
 }
 
-// ── shapes (parser/shapes.rs) ─────────────────────────────────────────
+// ── shapes ─────────────────────────────────────────
 
 ///|
 fn convert_shape(doc : SDoc, node : Int, state : State) -> @skia.Path? {

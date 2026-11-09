@@ -1,9 +1,9 @@
-// An agent's answer coming out of its activity's avatar (emit.mbt, ChatMotion.kt), over the fixture's station: what
+// An agent's answer coming out of its activity's avatar (emit.mbt), over the fixture's station: what
 // is sent sets its agent to work (its activity shows), its answer is said while the chat shows.
 
 ///|
 /// The fixture's chat open, its clock the test's; words sent and taken by the station (its agent then at work).
-fn emit_core(clock : Ref[Double]) -> @ui.Tester {
+fn emit_core(clock : Ref[Double], words~ : String = "看一下列表") -> @ui.Tester {
   new_run()
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
@@ -12,7 +12,7 @@ fn emit_core(clock : Ref[Double]) -> @ui.Tester {
   // the chat pushed in over Home
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
-  t.type_text("看一下列表")
+  t.type_text(words)
   tap_send(t)
   // the station has it: in the chat, its agent at work
   fix_clock_set(clock, clock.val + fix_deliver_ms)
@@ -73,7 +73,7 @@ test "an answer taller than the window out of the avatar, the list at its end: r
   fix_clock_set(clock, clock.val + 1.0)
   t.draw()
   t.run_for(emit_all_ms() + 1000.0)
-  // its top in view under the bar (Follow.kt), not the list at the end of it
+  // its top in view under the bar, not the list at the end of it
   guard t.drawn_of(first) is Some((_, y)) else { fail("the answer's top is not in view") }
   assert_true(y > bar_foot() && y < 844.0 / 2.0, msg="the answer's top at \{y}, the bar's foot at \{bar_foot()}")
   emit_restore()
@@ -88,7 +88,11 @@ fn landing_faces(t : @ui.Tester) -> (Double, Double) raise {
   guard em.current is Some(turn) && turn.pose == Spit else {
     fail("not landing: \{em.current.map(fn(c) { c.pose })}")
   }
-  let face = @motion.measured_rect(t.ctx(), "emit-avatar/" + rk + "/" + turn.agent).unwrap()
+  // (its line gone as the answer left it: where it was last drawn)
+  let face = match @motion.measured_rect(t.ctx(), "emit-avatar/" + rk + "/" + turn.agent) {
+    Some(r) => (r.0, r.1)
+    None => em.home.unwrap()
+  }
   let lands = @motion.measured_rect(t.ctx(), "emit-landing/" + rk + "/" + seq_s(turn.seq)).unwrap()
   (face.0, lands.0)
 }
@@ -193,7 +197,7 @@ test "the answer coming in does not end its own motion: float, spit and return e
       None => ()
     }
   }
-  // 16 ms frames: Float 440 ms, Spit 380 (ChatMotion.kt), Return at least 230 (as long as its way home: 320 over a
+  // 16 ms frames: Float 440 ms, Spit 380, Return at least 230 (as long as its way home: 320 over a
   // row or two, a Move's least over none), each to its end
   assert_true(frames.get("Float").unwrap_or(0) >= 26)
   assert_true(frames.get("Spit").unwrap_or(0) >= 22)

@@ -6,6 +6,7 @@
 import { BUILT_AT } from "../core/built.ts";
 import { BETA } from "../channel.ts";
 import { takeShare } from "./share.ts";
+import { putBack, take } from "../login/signin.ts";
 // the app's words' face in a browser: the web's own Inter (its Latin, as the web's pages have it), not the whole face
 // the native hosts carry (apps/mbui src/sfbase/inter_face_js.mbt)
 import interLatin from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
@@ -17,11 +18,21 @@ interface MbHost {
   post(channel: string, json: string, bytes?: Uint8Array): void;
 }
 
+declare const __PREVIEW_ORIGIN__: string;
 const host = (): MbHost | undefined => (globalThis as { __mbhost?: MbHost }).__mbhost;
+
+/// The id of the call that hands the core the accounts signed in on the sign-in page (handOver): past any of the app's.
+const HANDOVER = 2 ** 31;
+let handed: (() => void) | null = null;
 
 /// What the worker says, to the app: its JSON without the bytes, and those beside it.
 function toApp(data: unknown): void {
   if (typeof data !== "object" || data === null) return;
+  if ((data as { id?: unknown }).id === HANDOVER) {
+    if ((data as { error?: unknown }).error !== undefined) putBack(signedIn);
+    handed?.();
+    return;
+  }
   const message = data as { bytes?: unknown; retired?: boolean; rejoin?: boolean; fault?: { name: string; message: string; stack?: string } };
   // A newer build's core took over: this page is of the older build and loads the newer.
   if (message.retired) {
@@ -110,9 +121,10 @@ function stop(): void {
   start: (_dataDir: string, _cloud: string, _beta: boolean) => start(),
   send,
   stop,
-  // Signing in is this page going to the cloud's, which brings it back here (mbui/core's js.mbt `auth_return_to`).
-  signIn: (url: string) => {
-    location.assign(url);
+  // Signing in is the web's sign-in page (web/src/login, no core: `url`, the core's own way there, is not taken), which
+  // brings it back here (mbui/core's js.mbt `auth_return_to`) with the account for this page's core (handOver).
+  signIn: (_url: string) => {
+    location.assign(`/login?return_to=${encodeURIComponent(location.pathname + location.search)}`);
     return true;
   },
 };
@@ -131,6 +143,14 @@ function load(src: string): Promise<void> {
 
 startWorker();
 
+/// The accounts signed in on the sign-in page since, handed to the core (its `migrate`) before the app asks who is
+/// signed in; put back for the next page should the core not keep them.
+const signedIn = take();
+const handOver = signedIn.length === 0 ? Promise.resolve() : new Promise<void>((done) => {
+  handed = done;
+  worker!.postMessage({ id: HANDOVER, call: "migrate", params: { accounts: signedIn } });
+});
+
 /// The files the app carries (fonts, the formulas' outlines: apps/mbui's tools/assets), fetched beside its script and
 /// given to it as `globalThis.__mbassets`: the face its words start in before it runs, the rest once it runs (read as
 /// they are drawn: code, a formula, the share card), the page drawn again as each comes. One
@@ -144,12 +164,15 @@ const starting = fetchCarried("inter.woff2", interLatin);
 
 // (named by this build: a page of a newer build never runs an older app's script from the browser's cache)
 await load(`/mbui/host.js?b=${BUILT_AT}`);
+// where a web service's page is shown (cloud/src/preview.ts, the host's site view)
+(host() as { siteFrame?: string } | undefined)!.siteFrame = `${__PREVIEW_ORIGIN__}/_stillfail/frame`;
 // what /share was given, for the app to take (share.ts), said before the app runs
 takeShare((channel, json) => host()?.post(channel, json), (open) => {
   const h = host() as { openUrl?(url: string): boolean } | undefined;
   if (h) h.openUrl = open;
 });
 await starting;
+await handOver;
 await load(`/mbui/app.js?b=${BUILT_AT}`);
 for (const name of ["jetbrains_mono.ttf", "math_glyphs.gz", "share_400.gz", "share_600.gz"])
   void fetchCarried(name).then(() => (host() as { requestFrame?(): void } | undefined)?.requestFrame?.());
@@ -162,7 +185,7 @@ interface MbHostPush {
   requestFrame?(): void;
 }
 
-/// Pushes while no page of the app is open (docs/notifications.md), through the service worker (/sw.js) as the web's
+/// Pushes while no page of the app is open, through the service worker (/sw.js) as the web's
 /// pages had them (src/notify.ts syncPush): once the browser lets the page notify, this browser's subscription to the
 /// cloud's key, given to the app as its push token (`web`), which registers it with the accounts as its `notify` says
 /// (apps/mbui sfbase/notices.mbt push_sync). A push's notification clicked opens its chat in the app.

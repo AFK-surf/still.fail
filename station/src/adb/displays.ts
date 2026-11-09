@@ -1,4 +1,4 @@
-// A screen of its own on the phone for each chat it is lent to (docs/adb-share.md "The chat's own screen", 2026-11-04,
+// A screen of its own on the phone for each chat it is lent to (2026-11-04,
 // user: 「会有一个虚拟屏跑 app 不影响我自己操作」): a virtual display, made and held by a run of scrcpy's server on the
 // phone (android.ts SERVER_FILE, `new_display`), in the grant's adb server. The agent starts its apps there
 // (`am start --display`), touches it (`input -d`) and takes its pictures (`screencap -d`, SurfaceFlinger's id of it),

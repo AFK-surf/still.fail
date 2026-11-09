@@ -6,6 +6,7 @@
 import { Effect } from "effect";
 import type { MessageRow } from "../store/store.ts";
 import type { SessionRow } from "../store/rows.ts";
+import { DecisionSessionsUnavailable } from "../store/legacy-decision-session.ts";
 import { type ArchivePolicy, archiveMass, currentPolicy, policyFrom, policyQuestion, recommends } from "./archive-policy.ts";
 import { type Capability, type ChoiceResult, decide, type DecisionConfig, resolvedModel } from "./decision.ts";
 import type { Hub } from "./hub.ts";
@@ -17,7 +18,7 @@ type Json = any;
 const ARCHIVE_REVIEW_MESSAGES = 400;
 const ARCHIVE_REVIEW_BYTES = 80_000;
 
-/// Whose archive policy a session's chat is under (docs/multi-workspace.md): its workspace's, null for the station's home
+/// Whose archive policy a session's chat is under: its workspace's, null for the station's home
 /// one (whose policy is kept as null).
 export function policyWs(hub: Hub, key: string | SessionRow): string | null {
   const ws = hub.wsOf(key);
@@ -40,6 +41,7 @@ function candidatesOf(hub: Hub): [string, DecisionConfig][] {
   const rule = hub.config().automaticDecisions.completion;
   const candidates: [string, DecisionConfig][] = [];
   for (const profile of hub.config().profiles) {
+    if (profile.enabled === false) continue;
     const health = hub.accounts.healthOf(profile.id);
     if (!usable(health)) continue;
     const capability = health.check?.decision as Capability | undefined;
@@ -102,7 +104,7 @@ export async function review(hub: Hub, key: string): Promise<void> {
       }
       const older = messages.length - kept.length;
       kept.reverse();
-      const pending = hub.store.pendingCard(id);
+      const pending = hub.reviewPendingCard ? await hub.reviewPendingCard(id) : hub.store.pendingCard(id);
       conversations.push({ thread: id, messages: kept, olderMessagesLeftOut: older > 0 || omitted, pendingCard: pending ? { ts: pending[0].ts, text: pending[0].text } : null });
       versions.push([id, version]);
     }
@@ -184,11 +186,18 @@ export function undecided(hub: Hub): string[] {
 }
 
 /// Asked from the pages: the sweep started, and how many chats it has to look at (null when no model can be asked).
-export function startReview(hub: Hub): number | null {
-  if (candidatesOf(hub).length === 0) return null;
-  const queued = undecided(hub).length;
+export async function startReview(hub: Hub): Promise<number | null> {
+  if (!hub.config().automaticDecisions.completion.enabled || candidatesOf(hub).length === 0) return null;
+  let keys: string[];
+  try { keys = undecided(hub); }
+  catch (error) {
+    if (!(error instanceof DecisionSessionsUnavailable)) throw error;
+    await hub.store.prepareDecisionSessions();
+    if (!hub.config().automaticDecisions.completion.enabled || candidatesOf(hub).length === 0) return null;
+    keys = undecided(hub);
+  }
   void reviewUndecided(hub).catch(() => {});
-  return queued;
+  return keys.length;
 }
 
 /// Per hub: the sweep going on, and whether it was asked for again meanwhile.
@@ -207,7 +216,15 @@ export function reviewUndecided(hub: Hub): Promise<void> {
     do {
       sweep.again = false;
       if (!hub.config().automaticDecisions.completion.enabled || candidatesOf(hub).length === 0) break;
-      for (const key of undecided(hub)) {
+      let keys: string[];
+      try { keys = undecided(hub); }
+      catch (error) {
+        if (!(error instanceof DecisionSessionsUnavailable)) throw error;
+        await hub.store.prepareDecisionSessions();
+        if (!hub.config().automaticDecisions.completion.enabled || candidatesOf(hub).length === 0) break;
+        keys = undecided(hub);
+      }
+      for (const key of keys) {
         if (!hub.config().automaticDecisions.completion.enabled) break;
         await review(hub, key).catch(() => {});
       }

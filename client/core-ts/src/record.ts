@@ -1,5 +1,5 @@
 // The device's record of what its connections do, written into the app's performance record while it is on (the iOS
-// app's 设置 › 关于 › 诊断 › 性能记录: apps/mbui/docs/perf-record.md, "Connections"), so a weak network's day says what
+// app's 设置 › 关于 › 诊断 › 性能记录: apps/mbui/hostapi perf_state, "Connections"), so a weak network's day says what
 // the core did: each dial and how far it got, what was waited for and what woke it, the cloud's socket, each way's
 // packets. Off (or a host that keeps no record), nothing is formatted: each place asks `recording()` first, one call
 // to the host, and builds its line only then. Nothing here changes what the core does.
@@ -59,7 +59,7 @@ export function dialLine(d: {
 /// Per host: whether the DHT's lines are being kept, and when they were last taken (`recordDht`).
 const dhtTakes = new WeakMap<object, { kept: boolean; at: number }>();
 
-/// The DHT lookup's lines since the last take (the shell's `dht.said`: vendor/n0-mainline's ember), as `dht:` lines
+/// The DHT lookup's lines since the last take (the shell's `dht.said`: vendor/n0-mainline's `stillfail`), as `dht:` lines
 /// each saying how long before it was. While the record is on the shell keeps them however long until the next take
 /// (an app back after minutes away says what its socket did then); once off it is told, once, to keep none. `every`:
 /// not taken again within that many ms (a station's tick, each station's: one take a tick between them); a dial and a

@@ -1,3 +1,7 @@
 import {
+  "mbui/dmath",
+}
+
+import {
   "moonbitlang/core/bench",
 } for "test"

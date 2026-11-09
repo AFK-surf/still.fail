@@ -1,4 +1,4 @@
-// A station's screen over the fixture (APP=sffix MBUI_FIXTURE=screen-…; ember apps/android ScreenViewerTest's shots,
+// A station's screen over the fixture (APP=sffix MBUI_FIXTURE=screen-…; still.fail apps/android ScreenViewerTest's shots,
 // the same states said the same way): the screen's view opened over the chats, its states and frames (a JPEG of a
 // browser's tab: screen_fixture_frame.mbt) as the core would say them, each mode one of the Android test's pictures.
 //
@@ -79,9 +79,9 @@ pub fn open_screen_fixture(mode : String) -> Unit {
         u.held.mods = mod_meta
       }
     }
-    "screen-full" => u.full = true
+    "screen-full" => u.full.set(true)
     "screen-full-tools" => {
-      u.full = true
+      u.full.set(true)
       u.tools_open = true
     }
     "screen-center" => u.asked_panel = "center"
@@ -90,7 +90,7 @@ pub fn open_screen_fixture(mode : String) -> Unit {
     "screen-simulator-logs" => u.asked_panel = "logs"
     "screen-simulator-apps" => u.asked_panel = "apps"
     "screen-simulator-device" => {
-      u.logs.tab = 1
+      u.logs.tab.set(1)
       u.asked_panel = "logs"
     }
     _ => ()

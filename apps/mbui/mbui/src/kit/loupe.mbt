@@ -33,13 +33,13 @@ pub fn loupe(c : @ui.Ctx, key : String, reads : (Double, Double)?, glass? : @ui.
   let ax = @motion.anim(c, key + "/x", tx)
   let ay = @motion.anim(c, key + "/y", ty)
   if fresh {
-    ax.snap(tx)
-    ay.snap(ty)
+    ax.snap(c, tx)
+    ay.snap(c, ty)
   }
-  ax.follow(tx, follow_spring, loc~)
-  ay.follow(ty, follow_spring, loc~)
-  let x = ax.get()
-  let y = ay.get()
+  ax.follow(c, tx, follow_spring, loc~)
+  ay.follow(c, ty, follow_spring, loc~)
+  let x = ax.get(c)
+  let y = ay.get(c)
   // (its way a frame at 60, as the ball's; none where it is all but there)
   let v = if (tx - x).abs() < 0.5 { 0.0 } else { ax.velocity / 60.0 }
   let (longer, lower) = speed_stretch(v)

@@ -1,4 +1,4 @@
-// The files' sidebar (ember web/src/pages/FilesNav.tsx, FilesNav.css.ts), as Finder's: the person's own folders kept at
+// The files' sidebar, as Finder's: the person's own folders kept at
 // hand (个人收藏, of any station: favorites.mbt, including old pins), then every station of the workspace with a drive,
 // opened to its places. A row opens its folder in the side in front; something dragged onto one goes into it, and a
 // folder dragged onto 个人收藏 is kept there (drag.mbt).
@@ -48,16 +48,15 @@ pub fn drive_start(s : DvStation) -> String? {
 ///|
 /// The files' sidebar of workspace `ws`: its add-favorite action, then the places.
 pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
-  // what is dragged over it moved on or let go
-  drag_frame(c, src, ws)
   c.box(style=nav_side, fn() {
     side_top(c)
     let stations = favorite_stations(src, ws)
     let pin = if stations.length() > 0 { Some(fn(_) { add_favorite_folder(src, ws, stations) }) } else { None }
-    nav_action(c, "files/pin", @sf.t("web-pages.files.addFavorite"), pin, trailing?=update_trailing(c, src), band=update_band())
-    // (a folder chosen there in the page, on the tape brought over to show it)
+    nav_action(c, "files/pin", @sf.t("web-pages.files.addFavorite"), pin, trailing?=update_trailing(c, src), band=update_band(), at=side_at())
+    // (a folder chosen there in the page, on the tape brought over to show it; what the page left read handed to the
+    // one opened, as a press opens it outside any build: open_handing_held)
     files_places(c, src, ws, top=nav_top, foot=@sf.list_foot_in(Side), go=fn(at) {
-      files_go(at)
+      @sfbase.open_handing_held(fn() { files_go(at) })
       @sfbase.show_chosen()
     })
   })
@@ -101,7 +100,7 @@ fn places_rows_of(ws : String) -> @ui.ListRows[PlaceItem] {
 }
 
 ///|
-/// The files' places of workspace `ws` (FilesNav's list; the phone's 文件, Files.tsx, is the same list), in the box it
+/// The files' places of workspace `ws` (FilesNav's list; the phone's 文件, is the same list), in the box it
 /// is given, scrolling: the person's folders kept at hand, then every station with a drive. Its rows a sidebar list's on this screen (the
 /// theme's: touch's a finger's list's, a size up, the box's width). `top`, `foot`: room kept at its ends for
 /// what is over it;
@@ -114,7 +113,6 @@ pub fn files_places(
   foot? : Double = 0.0,
   go? : (DriveAt) -> Unit = files_go,
 ) -> Unit {
-  drag_frame(c, src, ws)
   let here = this_machine()
   // those with a drive, this machine's first, then as the workspace lists them
   let (known, error) = drive_stations(src, ws)
@@ -194,16 +192,16 @@ pub fn files_places(
           PReading => @sf.waiting(c, fn() { places_sample(c) })
           PNone =>
             c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta()) |> ignore }) |> ignore
-          PFavoriteHead => favorite_drop(c, "head", fn() { @sf.list_heading(c, @sf.t("web-pages.files.favorites"), Side) })
-          PFavoriteHint => favorite_drop(c, "hint", fn() {
-            c.box(style=@sf.theme().chat_list.side_hint, fn() {
+          PFavoriteHead => favorite_drop(c, src, ws, "head", fn() { @sf.list_heading(c, @sf.t("web-pages.files.favorites"), side_at()) })
+          PFavoriteHint => favorite_drop(c, src, ws, "hint", fn() {
+            c.box(style=@sf.side_hint_at(side_at()), fn() {
               @sf.icon(c, "star", size=nav_icon, color=@sf.theme().p.subtle) |> ignore
               c.text(@sf.t("web-pages.files.favoritesHint"), style=nav_meta()) |> ignore
             })
             |> ignore
           })
           PFavorite(f, s, more) => favorite_row(c, src, ws, f, s, more, go)
-          PHeading(h) => @sf.list_heading(c, h, Side)
+          PHeading(h) => @sf.list_heading(c, h, side_at())
           PStation(s) => {
             let more = i + 1 < rows.length() && rows[i + 1] is PStation(_)
             station_row(c, src, s, s.station == here, dv_rights(src, ws, Some(s)).write, more, go)
@@ -237,9 +235,9 @@ fn place_lit(station : String, root : String, path : String) -> Bool {
 
 ///|
 /// A part of 个人收藏 takes a folder dragged onto it; a favorite's own drop target takes precedence.
-fn favorite_drop(c : @ui.Ctx, key : String, body : () -> Unit) -> Unit {
+fn favorite_drop(c : @ui.Ctx, src : Source, ws : String, key : String, body : () -> Unit) -> Unit {
   let kid = c.id("files/keep/" + key)
-  let keeping = fdrag_target(c, kid, "keep/" + key, None, "", true, true, 0, outside=false) is Some(_)
+  let keeping = fdrag_target(c, src, kid, "keep/" + key, None, "", true, true, 0, outside=false, ws~) is Some(_)
   c.box(style=if keeping { keep_on } else { keep_off }, id=kid, body) |> ignore
 }
 
@@ -263,8 +261,8 @@ fn favorite_row(
     Some(r) => { station: f.station, root: Some(r.path), path: "" }
     None => { station: f.station, root: Some(f.root), path: f.path }
   }
-  favorite_drop(c, "favorite/" + place, fn() {
-    fdrag_side_row(c, "fav/" + place, into, f.name, dv_rights(src, ws, Some(st)).write, st.transfers, fn() {
+  favorite_drop(c, src, ws, "favorite/" + place, fn() {
+    fdrag_side_row(c, src, "fav/" + place, into, f.name, dv_rights(src, ws, Some(st)).write, st.transfers, fn() {
       let key = "files/fav/" + place
       let id = c.id(key)
       let label = @sf.t("web-pages.files.unfavorite", args=[("name", f.name)])
@@ -279,9 +277,11 @@ fn favorite_row(
         }
         None => ()
       }
-      let removed = c.clicked(rid)
-      let opened = nav_row(
+      // (its ✕ takes it out, a press elsewhere on it goes there)
+      c.on_press(rid, fn() { favorite_remove(src, ws, f.station, f.root, f.path) })
+      nav_row(
           c,
+          at=side_at(),
           key,
           place_lit(f.station, into.root.unwrap_or(""), into.path),
           fn() {
@@ -299,12 +299,8 @@ fn favorite_row(
             }
           },
           more~,
+          on_press=fn() { go(into) },
         )
-      if removed {
-        favorite_remove(src, ws, f.station, f.root, f.path)
-      } else if opened {
-        go(into)
-      }
     })
   })
 }
@@ -323,21 +319,22 @@ fn station_row(
 ) -> Unit {
   let t = @sf.theme()
   let did = c.id("files/station-open/" + s.station)
-  if c.clicked(did) {
+  c.on_press(did, fn() {
     if nav.open.contains(s.station) {
       nav.open.remove(s.station)
     } else {
       nav.open[s.station] = true
     }
-  }
+  })
   let open = nav.open.contains(s.station)
   let start = drive_start(s)
   // (its places' rows under it while opened)
   let under = open &&
     (if s.anywhere { nav.places.get(s.station).unwrap_or([]).length() > 0 } else { s.roots.length() > 0 })
   let row = fn() {
-    if nav_row(
+    nav_row(
         c,
+        at=side_at(),
         "files/station/" + s.station,
         match start {
           Some(r) => place_lit(s.station, r, "")
@@ -367,18 +364,19 @@ fn station_row(
           }
         },
         more=under,
-      ) &&
-      !c.clicked(did) {
-      match start {
-        Some(r) => go({ station: s.station, root: Some(r), path: "" })
-        None => ()
-      }
-    }
+        // (its disclosure's press its own)
+        on_press=fn() {
+          match start {
+            Some(r) => go({ station: s.station, root: Some(r), path: "" })
+            None => ()
+          }
+        },
+      )
   }
   nav_apart(c, more, fn() {
     c.box(style=station_item, fn() {
       match start {
-        Some(r) => fdrag_side_row(c, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row)
+        Some(r) => fdrag_side_row(c, src, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row)
         None => row()
       }
       if open {
@@ -393,7 +391,7 @@ fn station_row(
 /// The stations to come while they are read (the library's Waiting, in its bones): their heading and two made-up
 /// stations' rows, as station_row draws them.
 fn places_sample(c : @ui.Ctx) -> Unit {
-  @sf.list_heading(c, "Station", Side)
+  @sf.list_heading(c, "Station", side_at())
   for i, n in [5, 3] {
     let s = @sfbase.dv_station({
       "station": Json::string("sample/" + i.to_string()),
@@ -445,9 +443,10 @@ fn station_places(
     for k, p in places {
       let (name, path, disk) = p
       let into : DriveAt = { station: s.station, root: Some(path), path: "" }
-      fdrag_side_row(c, "place/" + s.station + "/" + path, into, name, write, s.transfers, fn() {
-        if nav_row(
+      fdrag_side_row(c, src, "place/" + s.station + "/" + path, into, name, write, s.transfers, fn() {
+        nav_row(
             c,
+            at=side_at(),
             "files/place/" + s.station + "/" + path,
             place_lit(s.station, path, ""),
             fn() {
@@ -455,9 +454,8 @@ fn station_places(
               nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
             },
             more=k + 1 < places.length(),
-          ) {
-          go(into)
-        }
+            on_press=fn() { go(into) },
+          )
       })
     }
   })
@@ -473,7 +471,7 @@ fn disk_bar(c : @ui.Ctx, s : DvStation) -> Unit {
   }
   let used = 1.0 - s.disk_free / s.disk_total
   let part = (if used >= disk_full { disk_warn } else { disk_used }).then(@ui.style(w=Fixed(disk_w * used)))
-  // (what is left of it in words, over it while it is pointed at: FilesNav.tsx DiskBar's tip)
+  // (what is left of it in words)
   let id = c.id("files-disk/" + s.station)
   let bar = c.box(style=disk_track, id~, taps=false, points=true, fn() { c.box(style=part, fn() {  }) |> ignore })
   let gb = s.disk_free / 1.0e9
@@ -536,15 +534,15 @@ let keep_on : @ui.Style = keep_off.then(@ui.css("border=B1 border_color=Accent")
 /// A row key concentric with the side row's rounded end, without increasing the row's height.
 fn favorite_remove_key() -> @ui.Style {
   let corner = @sf.row_least() / 2.0
-  let inset = @sf.capsule_in(corner, @sf.row_keys_room(1), room=corner)
-  @sf.row_key_box.then(@ui.style(mr=@sf.room_of(inset - @sf.theme().chat_list.band_pad)))
+  let inset = @ui.capsule_in(corner, @sf.row_keys_room(1), room=corner)
+  @sf.row_key_box.then(@ui.style(mr=@sf.room_of(inset - @sf.band_pad_in(side_at()))))
 }
 
 ///|
 /// A station's disclosure: its chevron 16 across, its box as wide as makes it a press's room inside its row (whose sides
 /// are the band's pad in: 20 with touch), the chevron in its middle.
 fn disclosure() -> @ui.Style {
-  let w = dmax(disclosure_side, @ui.room_least() - 2.0 * @sf.theme().chat_list.band_pad)
+  let w = dmax(disclosure_side, @ui.room_least() - 2.0 * @sf.band_pad_in(side_at()))
   disclosure_look.then(@ui.style(w=Fixed(w)))
 }
 

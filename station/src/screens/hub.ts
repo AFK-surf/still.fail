@@ -1,4 +1,4 @@
-// The station's screens (docs/remote-screens.md): the registry its parts add their sources to (source.ts
+// The station's screens: the registry its parts add their sources to (source.ts
 // `makeScreens`), and who is on each now. What members are told of them (GET /admin/api/screens, `screens` on the
 // event stream, the agents' `screen` tool) is said here; the views themselves go over the member link (mesh/screens.ts).
 import { wall } from "../ops/fibers.ts";
@@ -14,7 +14,7 @@ import { type ScreenAccess, type ScreenSource, type ScreenView, type Screens, ty
 /// how a member elsewhere ends it or stops its input being taken, `by` naming them.
 export type Watcher = { name: string; control: boolean; tell(state: Record<string, unknown>): void; device?: string; self?: string; client?: string; app?: string; agent?: boolean; end?(by: string): void; watchOnly?(): void };
 
-/// One view as members are told of it (docs/remote-screens.md "Who is on a screen"): `id`, the hub's, to end it by; `at`,
+/// One view as members are told of it: `id`, the hub's, to end it by; `at`,
 /// when it opened (ms).
 export type ViewShown = { id: string; name: string; control: boolean; at: number; device?: string; self?: string; client?: string; app?: string; agent?: boolean };
 
@@ -69,7 +69,7 @@ export function accessShown(access: ScreenAccess | undefined, lang: Lang): Acces
 export const WATCH_HELD_MS = 90_000;
 
 export type HubOptions = {
-  /// Where a file a person drops into a view is put on this machine (docs/remote-screens.md `drop`, the drive's
+  /// Where a file a person drops into a view is put on this machine (the drive's
   /// `dropFolder`); none: files are not taken.
   drop?: () => string | null;
 };
@@ -276,7 +276,8 @@ export class ScreenHub implements Screens {
   /// `peek`, it can be previewed (ViewOptions.peek); `drop`, where a file
   /// dropped into a view is put (`folder`) and whether the view can show it in the machine's file manager (`reveal`);
   /// `closable`, a person may close it (POST …/close); `debug`, its apps' logs and restart are had, `install` where a file to
-  /// install on it goes up to; `openedBy`, the session that opened it (an agent's tab).
+  /// install on it goes up to; `openedBy`, the session that opened it (an agent's tab); `since`, since when it has been up
+/// (ms: a simulator's boot, an emulator's start).
   listed(lang: Lang): { screens: Record<string, unknown>[] } {
     const folder = this.#o.drop?.() ?? null;
     return {
@@ -285,6 +286,7 @@ export class ScreenHub implements Screens {
         const access = accessShown(s.access?.(), lang);
         const clipboard = s.clipboard?.() ?? [];
         const by = s.openedBy?.();
+        const since = s.since?.();
         return {
           id: s.id, kind: s.kind, title: s.title(), width, height, ...this.people(s.id), ...(access ? { access } : {}),
           ...(clipboard.length > 0 ? { clipboard } : {}),
@@ -295,6 +297,7 @@ export class ScreenHub implements Screens {
           ...(s.panels?.length ? { panels: s.panels } : {}),
           ...(s.chrome?.length ? { chrome: s.chrome.map(toldOf) } : {}),
           ...(by ? { openedBy: by } : {}),
+          ...(since !== undefined ? { since } : {}),
           ...(folder !== null ? { drop: { folder, reveal: s.reveal === true } } : {}),
         };
       }),

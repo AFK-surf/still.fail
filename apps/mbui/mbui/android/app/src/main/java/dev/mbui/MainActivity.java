@@ -32,8 +32,11 @@ public class MainActivity extends Activity {
         Host.holdUpright(this);
         // `--es env K=V;K2=V2`: environment variables for the app's MoonBit (as a desktop run has them: the core
         // demo's MBUI_AUTH_BEGIN, MBUI_CORE_DUMP…), set before it starts.
-        // The test hooks (env, script, bench) come in an intent any app on the device may send this exported
-        // activity: a release build (the beta app) takes them only on an emulator (e2e/run.sh with E2E_APK).
+        // The test hooks (env, script, bench, shot_at) come in an intent any app on the device may send this exported
+        // activity: taken on an emulator (made-up accounts; e2e/run.sh with E2E_APK), on a phone only by a debug build
+        // the shell has opened them in (testHooks): a phone's app holds a real account, and another app's intent would
+        // drive it (a script typing and sending) or turn on what writes down what it shows (MBUI_DRAW_LOG,
+        // MBUI_TEXT_RECORD).
         boolean hooks = testHooks();
         // The app's own defaults first (its manifest's <meta-data android:name="dev.mbui.env" android:value="K=V;…">: a
         // build's settings, as still.fail mbui's release says where its updates come from), the intent's over them.
@@ -485,9 +488,34 @@ public class MainActivity extends Activity {
         Host.tellAppState();
     }
 
-    /** A debug build, or any build on the emulator (its hardware ranchu, goldfish before it). */
+    /**
+     * Whether the test hooks of the intent are taken: any build on the emulator (its hardware ranchu, goldfish before
+     * it), unless it is told to be taken as a phone (`adb shell setprop debug.mbui.as_phone 1`, to try a phone's way
+     * there); on a phone a debug build the shell has opened them in (`adb shell setprop debug.mbui.hooks 1`). A debug
+     * property is set by the shell alone, no app: another app on the phone opens no hook.
+     */
     private boolean testHooks() {
-        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) return true;
-        return Build.HARDWARE.equals("ranchu") || Build.HARDWARE.equals("goldfish");
+        boolean emulator = Build.HARDWARE.equals("ranchu") || Build.HARDWARE.equals("goldfish");
+        if (emulator && !"1".equals(debugProperty("debug.mbui.as_phone"))) return true;
+        boolean debug = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        boolean open = debug && "1".equals(debugProperty("debug.mbui.hooks"));
+        if (!open && getIntent().getExtras() != null) {
+            Bundle x = getIntent().getExtras();
+            if (x.containsKey("env") || x.containsKey("script") || x.containsKey("bench") || x.containsKey("shot_at"))
+                Host.log("test hooks not taken: a phone's (debug.mbui.hooks 1 opens them in a debug build)");
+        }
+        return open;
+    }
+
+    /** A system property (getprop's), or null. */
+    private static String debugProperty(String name) {
+        try {
+            Process p = new ProcessBuilder("getprop", name).start();
+            String v = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream())).readLine();
+            p.waitFor();
+            return v == null ? null : v.trim();
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

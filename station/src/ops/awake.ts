@@ -23,12 +23,15 @@ const JOB_SPAN = 2 * 60 * 60_000;
 /// Whether the station has work going at `now`: a session's turn; a session waiting on what it started, until the
 /// wait it gave is up (then the station wakes it, a turn again); or a job that is work (watched, or with no port: a
 /// service on a port runs on by itself and keeps nobody waiting) within JOB_SPAN of its session's last turn.
-/// Looked at every EVERY: what it reads is the sessions shown and the jobs running, never every one ever (an archived
-/// session waits on nothing).
-export function working(store: Pick<StationStore, "anyRunning" | "liveSessions" | "lastTurnsOf" | "jobsRunning">, now: number): boolean {
+/// Looked at every EVERY: once the old lookup is prepared, only recorded waits and running jobs are read.
+export function working(store: Pick<StationStore, "anyRunning" | "liveSessions" | "lastTurnsOf" | "jobsRunning" | "awakeWait" | "awakeJobs">, now: number): boolean {
   if (store.anyRunning()) return true;
-  const jobs = store.jobsRunning().filter((j) => j.watch || j.port === null);
-  const turns = store.lastTurnsOf([...store.liveSessions().map((s) => s.key), ...jobs.map((j) => j.sessionKey)]);
+  const waiting = store.awakeWait?.(now, LINGER);
+  if (waiting === true) return true;
+  const jobs = store.awakeJobs?.() ?? store.jobsRunning().filter((j) => j.watch || j.port === null);
+  // Jobs can refer to an archived session; keep its last turn in the decision, as on an older store.
+  const live = waiting == null ? store.liveSessions().map((s) => s.key) : [];
+  const turns = store.lastTurnsOf([...live, ...jobs.map((j) => j.sessionKey)]);
   for (const t of turns.values()) {
     if (t?.declared === "waiting" && t.endedAt !== null && now < t.endedAt + (t.waitSeconds ?? 0) * 1000 + LINGER) return true;
   }

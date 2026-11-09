@@ -1,4 +1,4 @@
-// Background jobs and web services as the clients show them (jobs.rs): each job's dot, its state in a word and the
+// Background jobs and web services as the clients show them: each job's dot, its state in a word and the
 // line under its name (`shown`), a chat's all together (`chatJobs`), those left up a long while (`longJobs`). Times in
 // words here count in seconds, so what shows them is computed again when the next of them changes (`nextChange`).
 import * as format from "./format.ts";
@@ -247,10 +247,58 @@ export interface From {
 /// has shown already (`jobsSeen`, `<station>/<id>`).
 export type Bell = { on: boolean; seen: Set<string> };
 
-/// Those of the stations' open jobs up longer than `LONG`, watches aside, oldest first, services and jobs apart. A task
-/// run for another station's chat (`from`, by its session) is in that chat, and says which station it came from. The
-/// bell's dot (`lit`) while one is there it has not shown yet; `ids` are what it keeps as shown once it opens.
-export function longJobs(stations: [string, string | null, J[]][], c: Clock, from: (session: string) => From | null = () => null, bell: Bell = { on: true, seen: new Set() }): J {
+/// A station's screens as its `screens` topic has them (screens.ts `screensView`), for those left up long.
+export type HeldScreens = [address: string, name: string | null, screens: J[]];
+
+/// What costs a station while nobody uses it, besides its jobs (`longJobs`): its simulators and emulators up longer
+/// than `LONG` (`since`, closed from here: `screen.close`), and people's views of its screens open that long
+/// (`screen.endView`): each as a job is shown, with `stop` saying how it is stopped. Only those the viewer may stop;
+/// a view on this device aside (it is in sight here), and an agent's (it goes 60 s after its last use).
+export function longScreens(stations: HeldScreens[], c: Clock): { simulators: J[]; views: J[] } {
+  const simulators: J[] = [];
+  const views: J[] = [];
+  const row = (address: string, name: string | null, id: string, title: string, startedAt: number, where: (string | null)[], stop: J): J => ({
+    id, name: title, state: "running", startedAt, tone: "live", service: false, age: span(c.now - startedAt),
+    station: address, stationName: name, whereText: [name, ...where].filter((x) => x !== null && x !== "").join(" · "), stop,
+  });
+  for (const [address, name, screens] of stations) {
+    for (const s of screens) {
+      const id = strOf(s, "id");
+      const since = msOf(s, "since");
+      if (id !== "" && since !== null && get(s, "closable") === true && c.now - since >= LONG) {
+        const kind = id.startsWith("android:") ? "core-logic.jobs.long.android" : "core-logic.jobs.long.ios";
+        simulators.push(row(address, name, `screen:${id}`, strOf(s, "title"), since, [t(kind)], { call: "screen.close", screen: id, word: t("core-logic.jobs.long.shutdown") }));
+      }
+      for (const v of arr(get(s, "views"))) {
+        const at = msOf(v, "at");
+        if (at === null || get(v, "may") !== true || get(v, "agent") === true || get(v, "here") === true || c.now - at < LONG) continue;
+        views.push(row(address, name, `view:${id}/${strOf(v, "id")}`, strOf(s, "title"), at, [strOf(v, "name"), strOf(v, "device")], { call: "screen.endView", screen: id, view: strOf(v, "id"), word: t("core-logic.jobs.long.disconnect") }));
+      }
+    }
+  }
+  return { simulators, views };
+}
+
+/// How long until one of the stations' jobs or screens not up `LONG` yet is (null: none will be).
+export function longNext(stations: [string, string | null, J[]][], screens: HeldScreens[], now: number): number | null {
+  const starts: number[] = [];
+  for (const [, , jobs] of stations) for (const j of jobs) if (!isWatch(j) && msOf(j, "startedAt") !== null) starts.push(j.startedAt);
+  for (const [, , list] of screens) {
+    for (const s of list) {
+      const since = msOf(s, "since");
+      if (since !== null && get(s, "closable") === true) starts.push(since);
+      for (const v of arr(get(s, "views"))) if (msOf(v, "at") !== null && get(v, "may") === true && get(v, "agent") !== true) starts.push(v.at);
+    }
+  }
+  const left = starts.map((at) => at + LONG - now).filter((ms) => ms > 0);
+  return left.length === 0 ? null : Math.min(...left);
+}
+
+/// Those of the stations' open jobs up longer than `LONG`, watches aside, oldest first, services and jobs apart; then
+/// their simulators and people's views of their screens up that long (`longScreens`). A task run for another station's
+/// chat (`from`, by its session) is in that chat, and says which station it came from. The bell's dot (`lit`) while one
+/// is there it has not shown yet; `ids` are what it keeps as shown once it opens.
+export function longJobs(stations: [string, string | null, J[]][], c: Clock, from: (session: string) => From | null = () => null, bell: Bell = { on: true, seen: new Set() }, screens: HeldScreens[] = []): J {
   const long: J[] = [];
   for (const [address, name, jobs] of stations) {
     for (const j of jobs) {
@@ -270,17 +318,20 @@ export function longJobs(stations: [string, string | null, J[]][], c: Clock, fro
       long.push(job);
     }
   }
-  long.sort((a, b) => (msOf(a, "startedAt") ?? 0) - (msOf(b, "startedAt") ?? 0));
+  const oldest = (a: J, b: J) => (msOf(a, "startedAt") ?? 0) - (msOf(b, "startedAt") ?? 0);
+  long.sort(oldest);
+  const { simulators, views } = longScreens(screens, c);
+  simulators.sort(oldest);
+  views.sort(oldest);
   const groups = (
     [
-      ["services", "core-logic.jobs.long.services", true],
-      ["jobs", "core-logic.jobs.long.jobs", false],
-    ] as [string, string, boolean][]
-  ).flatMap(([key, head, service]) => {
-    const list = long.filter((j) => isService(j) === service);
-    return list.length === 0 ? [] : [{ key, head: `${t(head)} · ${list.length}`, jobs: list }];
-  });
-  const ids = long.map((j) => `${j.station}/${strOf(j, "id")}`);
+      ["services", "core-logic.jobs.long.services", long.filter((j) => isService(j))],
+      ["jobs", "core-logic.jobs.long.jobs", long.filter((j) => !isService(j))],
+      ["simulators", "core-logic.jobs.long.simulators", simulators],
+      ["views", "core-logic.jobs.long.views", views],
+    ] as [string, string, J[]][]
+  ).flatMap(([key, head, list]) => (list.length === 0 ? [] : [{ key, head: `${t(head)} · ${list.length}`, jobs: list }]));
+  const ids = [...long, ...simulators, ...views].map((j) => `${j.station}/${strOf(j, "id")}`);
   return { groups, lit: bell.on && ids.some((id) => !bell.seen.has(id)), ids };
 }
 

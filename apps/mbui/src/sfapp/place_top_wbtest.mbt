@@ -1,4 +1,4 @@
-// A place's top page with the bar under it (PlacePage.kt): its top bar frosted over what it shows, which starts under
+// A place's top page with the bar under it: its top bar frosted over what it shows, which starts under
 // the bar and scrolls on under it to the page's top, not cut short at the bar's foot; its actions in the bar.
 
 ///|
@@ -22,7 +22,7 @@ test "a place's page: from under its frosted top bar, scrolled on under it, not 
   if !glass.iter().any(fn(g) { g.0 == 0.0 && g.1 == 0.0 && g.3 == 24.0 + 50.0 }) {
     fail("no frosted bar at the top: \{glass}")
   }
-  // its first station as it opens: under the bar, 8 down (PlacePage.kt `bar + 8.dp`) in its card
+  // its first station as it opens: under the bar, 8 down in its card
   let y0 = match t.rect_of("Willow") {
     Some((_, y, _, _)) => y
     None => fail("no Willow")

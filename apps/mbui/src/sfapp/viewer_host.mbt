@@ -1,5 +1,5 @@
 // The app's reader and player (src/sf reader.mbt, player.mbt): what they ask of the page told them as the app builds
-// (@sf.set_viewer_host, as the web's web/src/viewer/whole.ts): how far its bars reach in, its
+// (@sf.set_viewer_host): how far its bars reach in, its
 // sheets, what a link in a text's Markdown opens, the reader's layout in the core's prefs (`prefs.reader`, the same on every page that reads), the core
 // reading a text for the reader (`reader.book`, `reader.text`) and finding words in it (`reader.search`).
 
@@ -91,14 +91,15 @@ fn read_book(src : Source, decoded : String, markdown : Bool, done : (Result[@sf
 }
 
 ///|
-/// The reader's layout as the prefs keep it, as changed here until they say.
-let reader_set : Map[String, Json] = Map([])
+/// The reader's layout as the prefs keep it, as changed here until they say. The panel's nodes follow these changes
+/// even before the core's prefs topic answers.
+let reader_set : @sf.LiveMap[String, Json] = @sf.LiveMap::new()
 
 ///|
 /// How the reader lays text out (the core fills in what is not kept): size 12–32, the lines' height 1.2–2.4 of it,
 /// the margin 8–44, the face, the indent, the paper.
 fn reader_prefs(src : Source) -> @sf.ReaderStyle {
-  let kept = field((src.topic)("prefs", {}).value, "reader")
+  let kept = field(src.topic("prefs", {}).get().value, "reader")
   let get = fn(k : String) -> Json? {
     match reader_set.get(k) {
       Some(v) => Some(v)

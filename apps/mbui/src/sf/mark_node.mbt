@@ -8,19 +8,21 @@
 /// A person, round (avatar's, as a node) in `parent`, `size` across: `picture` (an image's key, "" while it comes or
 /// without one) once it is decoded at the size it is shown, at once; their initial on their colour (by `id`) until
 /// then, and for good when it cannot be decoded. Each as it changes.
+#callsite(autofill(loc))
 pub fn avatar_node(
   parent : @view.View,
   id : () -> String,
   name : () -> String,
   picture : () -> String,
   size : Double,
+  loc~ : SourceLoc,
 ) -> Unit {
   let half = size / 2.0
-  parent.box(fn(d) {
-    let px = fn() { size * @ui.current().scale }
+  parent.box(made_for=loc, fn(d) {
+    let px = fn() { size * d.pixel_scale() }
     let decoded = fn() {
       let p = picture()
-      p != "" && @ui.current().image_ready(p, px())
+      p != "" && d.image_ready(p, px())
     }
     d
     .width(Is(Some(size)))
@@ -58,6 +60,7 @@ pub fn avatar_node(
 /// (glyph:<name>, glyph:<name>:<colour>, in that colour, else `tint`) or a picture put up (its address: its bytes the
 /// core's, asked for on `stint` as the page's time on top is, a GIF among them moving; or a data URL), covering its
 /// square, its corners a quarter of it round; else, and while that picture comes, its emoji. Each as it changes.
+#callsite(autofill(loc))
 pub fn station_mark_node(
   parent : @view.View,
   emoji : () -> String,
@@ -65,6 +68,7 @@ pub fn station_mark_node(
   size : Double,
   tint : () -> Int64,
   stint : () -> Int,
+  loc~ : SourceLoc,
 ) -> Unit {
   // (which it shows: a glyph's paths, a picture's key, its emoji, nothing)
   let glyph = fn() -> (String, Array[String], Array[String], String)? {
@@ -90,7 +94,7 @@ pub fn station_mark_node(
     }
     (data_image(i), false)
   }
-  parent.box(fn(m) {
+  parent.box(made_for=loc, fn(m) {
     m.show(fn() { glyph() is Some(_) }, fn(g) {
       g.width(Is(Some(size))).height(Is(Some(size))) |> ignore
       g
@@ -106,7 +110,7 @@ pub fn station_mark_node(
             }
             let color = glyph_color(colour, theme().dark).unwrap_or(tint())
             let drawing : @pixels.Vector = { w: 24.0, h: 24.0, layers }
-            @ui.vector_shapes(drawing, size, @ui.current().drawn_scale(), tint=color)
+            @ui.vector_shapes(drawing, size, g.pixel_scale(), tint=color)
           }
           None => []
         }
@@ -131,7 +135,7 @@ pub fn station_mark_node(
       e
       .width(By(fn() {
         e.words_redone() |> ignore
-        Some(@ui.text_advance(emoji(), size=@ui.current().sp(size * 0.9)))
+        Some(@ui.text_advance(emoji(), size=node_sp(e, size * 0.9)))
       }))
       .words(By(emoji))
       .words_look(Is({ size: size * 0.9, weight: 400, line: size, wrap: false, tracking: @view.letters_own, balance: false }))
@@ -141,8 +145,7 @@ pub fn station_mark_node(
       .offset(By(fn() {
         if @ui.web_lines_on() {
           e.words_redone() |> ignore
-          let c = @ui.current()
-          let (line, words) = (c.sp(size), c.sp(size * 0.9))
+          let (line, words) = (node_sp(e, size), node_sp(e, size * 0.9))
           (0.0, @ui.line_baseline(line, size=words, em=mark_em) - @ui.line_baseline(line, size=words))
         } else {
           (0.0, 0.0)

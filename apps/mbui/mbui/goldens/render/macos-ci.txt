@@ -1,4 +1,4 @@
-# The renderer's pixel references (docs/determinism.md): made and checked on the CI Mac (mbui's runner the dedicated runner), on
+# The renderer's pixel references: made and checked on the CI Mac (mbui's runner the dedicated runner), on
 # this macOS and this GPU only. Another (the CI Mac updated): every reference made again in one PR (the render
 # workflow's artifact), said there. Made again on macOS 27.0.1 (2026-10-21, render run 39475789327's artifact): only
 # glyphs' edges differ from 26.5's, Core Text's rasterizing; every shape the same to the byte. controls.png made again

@@ -222,3 +222,58 @@ test "the update key while the build goes in: its arrow going up as a station's 
   assert_true(t.find("重启更新") is None)
   assert_true(t.query(Button, label="重启更新").unwrap().disabled, msg="takes no press while it goes in")
 }
+
+///|
+test "left open, a newer build asked for again each hour: a window never shown again does not stay on its build" {
+  let asked = []
+  let t = updates_tester(Json::null(), asked)
+  t.frame()
+  assert_eq(asked, ["1 false"])
+  // (each hour in one jump, a frame at its end: run_for drew Home's spokes at every 100 ms step on the way, 90 000
+  // frames and 100-146 s of CI for two and a half hours (2026-11-09); the ask is a function of the moment)
+  t.frame(ms=@sfbase.update_again_ms / 2.0)
+  assert_eq(asked, ["1 false"])
+  t.frame(ms=@sfbase.update_again_ms / 2.0 + 1000.0)
+  assert_eq(asked, ["1 false", "1 false"])
+  t.frame(ms=@sfbase.update_again_ms)
+  assert_eq(asked, ["1 false", "1 false", "1 false"])
+}
+
+///|
+test "told a release may be out: a newer build asked for again at once, not as the hour's check" {
+  let asked = []
+  new_run()
+  let told = @signals.signal(3)
+  let base = fixture("home")
+  let src : @sfbase.Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      if name == "releases" {
+        { value: Some({ "told": Json::number(told.get().to_double()) }), error: None, version: 1 }
+      } else {
+        (base.topic_read)(name, params)
+      }
+    },
+  }
+  update_version.val = 1
+  set_update_source(
+    Some({
+      check: fn(version, now, done) {
+        asked.push("\{version} \{now}")
+        done(Ok(Json::null()))
+      },
+      url: fn(file) { "https://example.test/releases/" + file },
+    }),
+  )
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.frame()
+  // (what the core had said before the app heard it: nothing more than the start's check)
+  assert_eq(asked, ["1 false"])
+  told.set(4)
+  t.frame()
+  assert_eq(asked, ["1 false", "1 false"])
+  told.set(5)
+  t.frame()
+  t.frame()
+  assert_eq(asked, ["1 false", "1 false", "1 false"])
+}

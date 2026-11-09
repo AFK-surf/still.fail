@@ -17,8 +17,8 @@ test "a waiting device enters a security code on the digits keyboard and approva
         (base.call)(name, params, done)
       }
     },
-    topic: fn(name, params) {
-      let topic = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let topic = base.topic(name, params).get().snapshot()
       if name == "lock" && approved.get() {
         {
           ..topic,
@@ -101,8 +101,8 @@ fn lock_wait_tester(waiting : @signals.Signal[Bool], calls : Array[String]) -> @
       calls.push(name)
       (base.call)(name, params, done)
     },
-    topic: fn(name, params) {
-      let topic = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let topic = base.topic(name, params).get().snapshot()
       if name == "lock" && waiting.get() {
         {
           ..topic,
@@ -256,7 +256,7 @@ test "Duo: 发送批准请求 pressed on the waiting page is taken, the system's
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=669.0, h=951.0, platform=1, nav_able=true)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":82,\"bottom\":34,\"left\":0,\"right\":0}}")
   t.run_for(@ui.move_most_ms)
   // (none handed to the host in a frame would take the app's view out of the tabs, the finger on it never told it went up)
@@ -306,4 +306,42 @@ test "Duo: while the device waits in the lock the workspace's button is in the s
   t.tap_text("个人")
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfbase.workspace_in_view(src).0.map(fn(w) { w.id }), Some("ws2"))
+}
+
+///|
+test "wide: while the device looks for its trusted devices, 没收到？重新申请 under it asks again at once (a trusted device opened and nothing came up)" {
+  new_run()
+  let base = fixture("chat")
+  let calls : Array[String] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push(name)
+      (base.call)(name, params, done)
+    },
+    topic_read: fn(name, params) {
+      let topic = base.topic(name, params).get().snapshot()
+      if name == "lock" {
+        {
+          ..topic,
+          value: Some({
+            "me": {
+              "waiting": Json::boolean(true),
+              "unsigned": Json::boolean(false),
+              "pair": { "state": Json::string("finding") },
+            },
+          }),
+          version: topic.version + 1,
+        }
+      } else {
+        topic
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
+  t.frame()
+  assert_true(t.find("正在联系你的受信任设备") is Some(_))
+  t.tap_text("没收到？重新申请")
+  t.frame()
+  assert_true(calls.contains("lock.pair"), msg="\{calls}")
 }

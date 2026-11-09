@@ -24,7 +24,20 @@ use napi_derive::napi;
 use tokio::sync::Mutex;
 
 const MDNS_SERVICE: &str = "stillfail";
-const FORMER_MDNS_SERVICE: &str = "ember";
+
+/// The nodes a DHT starts from: n0-mainline's defaults, with ours (cloud/dht-node, on the relays' machines) in place of relay.pkarr.org.
+fn dht() -> n0_mainline::DhtBuilder {
+    let mut dht = n0_mainline::DhtBuilder::default();
+    dht.bootstrap(&[
+        "router.bittorrent.com:6881",
+        "dht.transmissionbt.com:6881",
+        "dht.libtorrent.org:25401",
+        "39.105.157.122:6881",
+        "47.79.40.84:6881",
+        "120.24.233.158:6881",
+    ]);
+    dht
+}
 
 fn failed(error: impl std::fmt::Display) -> napi::Error {
     napi::Error::from_reason(error.to_string())
@@ -36,6 +49,9 @@ fn failed(error: impl std::fmt::Display) -> napi::Error {
 /// punched through that stopped answering), every stream on it waiting.
 const PATH_KEEP_ALIVE: Duration = Duration::from_secs(1);
 const PATH_IDLE: Duration = Duration::from_secs(3);
+/// How long a connection may hear nothing before it is given up: with iroh's 30 s, a phone's app frozen in the background
+/// that long came back to every link timed out and dialled each anew (2026-11-08). The peers take the lower of theirs.
+const CONNECTION_IDLE_MS: u32 = 10 * 60_000;
 
 fn relay_url(url: &str) -> napi::Result<RelayUrl> {
     url.parse().map_err(failed)
@@ -101,6 +117,7 @@ fn transport(congestion: &str) -> napi::Result<QuicTransportConfig> {
         .congestion_controller_factory(controller)
         .default_path_keep_alive_interval(PATH_KEEP_ALIVE)
         .default_path_max_idle_timeout(PATH_IDLE)
+        .max_idle_timeout(Some(iroh::endpoint::VarInt::from_u32(CONNECTION_IDLE_MS).into()))
         .build())
 }
 
@@ -163,13 +180,11 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
     if options.lookup.unwrap_or(false) && !relays.is_empty() {
         builder = builder
             .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false)))
-            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false)))
-            .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish()));
+            .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).no_publish()));
     } else if options.discovery.unwrap_or(true) {
         builder = builder
             .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE)))
-            .address_lookup(Optional("mDNS", iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE)))
-            .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key)));
+            .address_lookup(Optional("the DHT", iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).secret_key(key)));
     }
     Ok(Endpoint { inner: builder.bind().await.map_err(failed)?, keepers: Arc::default(), homes: relays, held: Arc::default(), accepted: Arc::default() })
 }
@@ -533,7 +548,7 @@ impl Connection {
 
     /// Whether the other end is still there: asked with a datagram (which a live end acknowledges at once) a few times
     /// within `within_ms`, true as soon as anything is heard from it. A process killed with the connection open says
-    /// nothing, and the connection would only go at QUIC's idle timeout, half a minute on. An end that takes no
+    /// nothing, and the connection would only go at QUIC's idle timeout (CONNECTION_IDLE_MS). An end that takes no
     /// datagrams is not asked, and counts as there.
     #[napi]
     pub async fn answers(&self, within_ms: u32) -> bool {

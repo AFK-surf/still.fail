@@ -1,42 +1,16 @@
-// The chats' lists (ember web/src/Sidebar.tsx ChatList, ChatPane; SidebarList.tsx NavSection; web/src/mobile/Home.tsx
+// The chats' lists (still.fail web/src/Sidebar.tsx ChatList, ChatPane; SidebarList.tsx NavSection; web/src/mobile/Home.tsx
 // Home, ChatPane, Empty, FilterButton; Sidebar.css.ts navSlider, navTrack, navScroll, navEmpty; mobile/Home.css.ts
 // mHomePanes, mHomePane), one in every tier: 全部, 我参与的 and 监控中 side by side on one track, slid from one to
 // another as the filter changes (240 ms) with nothing to wait for, as the core's `chats` view lists each: its days
 // under their headings, a row each (chat_row.mbt); while it is read the rows to come, what is wrong over them, an
 // empty list's words. While a finger is on a list, the pointer over it or it moves, its rows keep their places
-// (listMotion.ts useHeldOrder); they move as it changes (useListMotion). The frame it is drawn in says what is over
+// ; they move as it changes (useListMotion). The frame it is drawn in says what is over
 // it and at its foot (the bar it is under, the bottom bar), what it adds at each list's top (a search's field, what is
 // left up long), and the lists that follow the three on the track (已归档, where the frame has it so).
 
 ///|
-/// What the frame gives the lists: the room over them (the bar they run under) and at their foot, what is over the
-/// box they are in where the search's bar goes under it (a phone's status bar, the sidebar's top row), their ground (what a
-/// row's faces' rings are cut in), what stands at a list's top before its words and rows (`before`) and after its
-/// words (`after`), each said for a list's filter and its view; the lists on the track after the three (each drawn the
-/// pane's whole), and which of all of them is shown (0 all, 1 mine, 2 watching, then the others'); where the lists
-/// stand (`at`: a side column's, their rows in and rounded, or across the whole screen: @sf.ListAt); how far down
-/// what is over them covers the box (`under`: the bar's foot, the room `top` keeps under it aside), what is tucked over
-/// a list's rows going out of view under it.
-pub(all) struct ListsFrame {
-  top : Double
-  under : Double
-  foot : Double
-  inset : Double
-  ground : Int64
-  before : (String, ChatsView?) -> Array[ListPart]
-  after : (String, ChatsView?) -> Array[ListPart]
-  others : Array[() -> Unit]
-  shown : Int
-  at : @sf.ListAt
-  /// whether each list is kept as what it built (Ctx::kept_part's `own`) while this frame's fields are the same, however
-  /// what holds it is built again: what the block moves each frame (the sidebar on its way) leaves its rows as they are.
-  /// Only where `before` and `after` give nothing else.
-  kept : Bool
-}
-
-///|
 /// Something a frame puts in a list: its key among the list's lines, what draws it, and whether the list is first
-/// shown scrolled past it (a phone's search over the first row, there once scrolled to: Home.kt).
+/// shown scrolled past it (a phone's search over the first row).
 pub(all) struct ListPart {
   key : String
   draw : () -> Unit
@@ -44,99 +18,14 @@ pub(all) struct ListPart {
 }
 
 ///|
-/// A frame's lists with nothing of the frame's own in them, standing `at`.
-pub fn bare_lists(top : Double, foot : Double, inset : Double, ground : Int64, shown : Int, at : @sf.ListAt) -> ListsFrame {
-  { top, under: top, foot, inset, ground, before: fn(_, _) { [] }, after: fn(_, _) { [] }, others: [], shown, at, kept: false }
-}
-
-///|
-/// What a list kept on the page's way (ListsFrame's `kept`) is built from besides what it reads.
-fn lists_kept_key(frame : ListsFrame, w : Double, h : Double) -> String {
-  @sfbase.page_way.id +
-  " " +
-  [frame.top, frame.under, frame.foot, frame.inset, w, h].map(fn(x) { x.to_string() }).join(" ") +
-  " " +
-  frame.ground.to_string() +
-  " " +
-  frame.shown.to_string()
-}
-
-///|
-/// The lists the track holds first, in this order (Sidebar.tsx, mobile/Home.tsx: all, mine, watching).
+/// The lists the track holds first, in this order (mine, watching).
 // kept across runs: a table, never written
-pub let list_filters : Array[String] = ["all", "mine", "watching"]
+pub let list_filters : Array[String] = ["all", "mine", "watching", "hidden"]
 
 ///|
 /// Which of the lists the filter shows (0 all, 1 mine, 2 watching).
 pub fn filter_at(src : Source, w : Workspace) -> Int {
   list_filters.search(@sfbase.filter_of(src, w.id)).unwrap_or(0)
-}
-
-///|
-/// The chats' lists of workspace `w` in the box they are given, as `frame` says (ListsFrame).
-pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame) -> Unit {
-  let last = list_filters.length() + frame.others.length() - 1
-  // (its track a list's width a step: a Move as long as it goes)
-  let x = @motion.animate(c, "lists/" + w.id, frame.shown.to_double(), spec=@sf.theme().chat_list.slide.per_unit(c.width))
-  // the others read once switching to them is in sight: as the filter's menu opens (what it would show is there by
-  // the time one is picked)
-  if @sf.presented_drawn_of(filter_menu_serial.val) {
-    for f in list_filters {
-      @sfbase.chats_of(src, w.id, f) |> ignore
-    }
-  }
-  let width = c.width
-  // the search's page open over them (search.mbt: from a list's field, or by ⌘K laid out Small): the lists up and
-  // away under it, whatever opened it (its page over them: chats_search)
-  search_start(c)
-  let away = search_away(c)
-  c.box(style=lists_window, fn() {
-    let track = c.layer(fn() {
-      for p in x.floor().to_int()..=x.ceil().to_int() {
-        if p < 0 || p > last {
-          continue
-        }
-        c.layer(fn() {
-          c.box(style=lists_fill, tx=(p.to_double() - x) * width, fn() {
-            if p < list_filters.length() {
-              let pane = fn() { chats_pane(c, src, w, list_filters[p], frame, p == frame.shown) }
-              // (on the page's way alone: at rest as any list, built whenever what holds it is)
-              if frame.kept && @sfbase.page_way.id != "" {
-                c.kept_part(
-                  c.id("chats-pane/" + w.id + "/" + list_filters[p]),
-                  lists_kept_key(frame, width, c.height),
-                  pane,
-                  read_out=true,
-                  rows_stay=true,
-                )
-              } else {
-                pane()
-              }
-            } else {
-              (frame.others[p - list_filters.length()])()
-            }
-          })
-          |> ignore
-        })
-        |> ignore
-      }
-    })
-    if away > 0.0 {
-      c.look(track, { ..@ui.still_look, alpha: 1.0 - away, dy: -search_list_rise * away })
-    }
-  })
-  |> ignore
-}
-
-///|
-/// A finger's search over the lists, while it is open (search.mbt): drawn by the frame after what it lays over the
-/// lists (their bar, faded by `search_away`), in the same box, `inset` what is over it there; its lines standing as the
-/// lists do (`at`).
-pub fn chats_search(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @sf.ListAt) -> Unit {
-  // (opened from the field at a list's top, or by ⌘K laid out Small; over another page, the shell's: search_over)
-  if !search_read().over {
-    search_page(c, src, w, inset, at)
-  }
 }
 
 ///|
@@ -155,36 +44,9 @@ priv enum Line {
 }
 
 ///|
-/// A line's key among the list's (listMotion.ts: a row by its station and key, a day by its heading).
-fn line_key(line : Line) -> String {
-  match line {
-    Top => "top"
-    Foot => "foot"
-    Part(p) => "part/" + p.key
-    Wait(_, _) => "wait"
-    Empty(_) => "empty"
-    Heading(label) => "h/" + label
-    Row(item) => "r/" + @sfbase.row_name(item)
-  }
-}
-
-///|
-/// The lists first shown once with their rows (scrolled past what is tucked over them).
-// kept across runs: put back by sidebar_reset (reset)
-let placed : Map[String, Bool] = {}
-
-///|
-/// How far each list made once is scrolled to tuck its search out of view, by its key, as it was first placed: the room
-/// its foot keeps so it goes that far with fewer rows than it is tall.
-// kept across runs: put back by sidebar_reset (reset)
-let tucked_by : Map[String, Double] = {}
-
-///|
 fn sidebar_reset() -> Unit {
   list_scrolls.clear()
-  tucked_by.clear()
   rows_rest_at.val = -1.0
-  placed.clear()
   rows_laid.clear()
   list_rows.clear()
   lists_had.clear()
@@ -208,179 +70,6 @@ priv struct DayLines {
 let rows_laid : Map[String, DayLines] = {}
 
 ///|
-/// List `key`'s days `days` as lines: those made for them last, while they are the same.
-fn day_lines(key : String, days : Array[ChatDay]) -> DayLines {
-  match rows_laid.get(key) {
-    Some(l) if physical_equal(l.days, days) => l
-    _ => {
-      let lines : Array[Line] = []
-      let shown : Array[ChatItem] = []
-      for d in days {
-        lines.push(Heading(d.label))
-        for item in d.items {
-          lines.push(Row(item))
-          shown.push(item)
-        }
-      }
-      let keys = lines.map(line_key)
-      let l = { days, lines, keys, shown }
-      rows_laid[key] = l
-      l
-    }
-  }
-}
-
-///|
-/// One of the lists (ChatPane): its states (being read, failing, empty) and its days under the bar's room; `current`,
-/// the one shown (its rows the ones an archived chat's neighbour is looked for in).
-fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame : ListsFrame, current : Bool) -> Unit {
-  let key = "chats/" + w.id + "/" + filter
-  let pane = c.id(key + "/pane")
-  let (view, error) = @sfbase.chats_of(src, w.id, filter)
-  match view {
-    Some(v) if current => @sfbase.open_listed(v)
-    _ => ()
-  }
-  // the lines over its days (its room under the bar, what the frame puts at its top, its states), then its days', then
-  // its foot
-  let lines : Array[Line] = [Top]
-  // its search at its top where the screen has no keys for ⌘K (touch's: the theme's), out of view until
-  // scrolled to (Home.kt top), while it has rows to look in
-  if !@sf.theme().chat_list.keys && !@sf.native_able() {
-    match view {
-      Some({ note: Some({ empty: true, .. }), .. }) | None => ()
-      Some(_) => lines.push(Part({ key: "search", draw: fn() { search_field(c, frame.at) }, tucked: true }))
-    }
-  }
-  for p in (frame.before)(filter, view) {
-    lines.push(Part(p))
-  }
-  let mut rows : DayLines? = None
-  match view {
-    None => lines.push(Wait(None, error))
-    Some(v) => {
-      match v.note {
-        Some(n) if v.days.length() == 0 && (n.reading || n.failing.length() > 0) => lines.push(Wait(Some(n), None))
-        _ => ()
-      }
-      match v.note {
-        Some(n) if n.empty && v.days.length() == 0 => lines.push(Empty(v))
-        _ => ()
-      }
-      for p in (frame.after)(filter, Some(v)) {
-        lines.push(Part(p))
-      }
-      // while a finger is on the list, the pointer over it or it moves, the rows keep their places (a row the viewer
-      // pinned, let go or wrote in moves at once: viewer_moved)
-      let days = @sfbase.held_order(key, v.days, list_held(c, key, pane) && !@sfbase.viewer_moved(key, v.days))
-      rows = Some(day_lines(key, days))
-    }
-  }
-  let (day, day_keys) = match rows {
-    Some(r) => (r.lines, r.keys)
-    None => ([], [])
-  }
-  // its lines and their keys: what came, went, changed its place among them worked out by the list (ListRows): a row
-  // or a day new to it comes where it is, one gone leaves where it was, a row gone ahead of others both
-  // (docs/list-motion.md); while it showed the frame before (back to it, its pane slid to: as it is)
-  let all_lines = lines.copy()
-  let all_keys = lines.map(line_key)
-  all_lines.append(day)
-  all_keys.append(day_keys)
-  all_lines.push(Foot)
-  all_keys.push(line_key(Foot))
-  let lr = list_rows_of(key)
-  // (the first rows, after the list waited or had none, there at once as it shows them: only what changes in a list
-  // that had rows moves, listMotion.ts)
-  let had_rows = lists_had.get(key).unwrap_or(false)
-  lists_had[key] = !day.is_empty()
-  // (nor what showed while it waited: gone at once as they come)
-  let watched = had_rows || day.is_empty()
-  let (shown_lines, shown_keys) = lr.rows(
-    c,
-    all_keys,
-    all_lines,
-    fn(_) { "" },
-    watched~,
-    comes=fn(l) { l is (Row(_) | Heading(_)) },
-    moves=fn(l) { l is Row(_) },
-  )
-  let count = shown_lines.length()
-  let line_at = fn(i : Int) -> Line { shown_lines[i] }
-  let key_at = fn(i : Int) -> String { shown_keys[i] }
-  if current {
-    listed.val = match rows {
-      Some(r) => r.shown
-      None => []
-    }
-  }
-  let lead = match view {
-    Some(v) => v.leading
-    None => "agents"
-  }
-  let open = open_chat()
-  let l = @sf.theme().chat_list
-  c.box(style=lists_fill, id=pane, fn() {
-    c.list(key, count, l.row_h, fn(i) {
-      let n = c.box(style=@sf.list_line(frame.at), fn() {
-        match line_at(i) {
-          Top => list_space(c, frame.top + l.top_in)
-          Foot => list_space(c, frame.foot + @sf.list_foot_in(frame.at))
-          Part(p) => (p.draw)()
-          Wait(note, error) => list_waiting(c, note, error, frame.at)
-          Empty(v) => list_empty(c, v, filter)
-          Heading(label) => @sf.list_heading(c, label, frame.at)
-          Row(item) => {
-            let on = match open {
-              Some(r) => @sfbase.row_is(item, r)
-              None => false
-            }
-            chat_row(
-              c,
-              src,
-              item,
-              lead,
-              on~,
-              list_ground=frame.ground,
-              at=frame.at,
-              more=i + 1 < count && line_at(i + 1) is Row(_),
-              unghost=fn(_) {  },
-            )
-            |> ignore
-          }
-        }
-      })
-      match line_at(i) {
-        Heading(_) | Row(_) => {
-          lr.enter(c, n, key_at(i))
-          lr.leave(c, n, key_at(i))
-        }
-        _ => ()
-      }
-    },
-    sized=lr.sized(),
-    )
-    |> ignore
-  })
-  |> ignore
-  // the list's first time with its rows: what is tucked over them out of view, its foot at the foot of what covers the
-  // list (frame.under: a phone's top bar, not the room under it, where its rounded foot showed), there once scrolled to
-  if !placed.contains(key) && view is Some(_) {
-    placed[key] = true
-    let mut at = -1
-    for i, l in lines {
-      match l {
-        Part(p) if p.tucked => at = i
-        _ => ()
-      }
-    }
-    if at >= 0 {
-      c.list_scroll_to(key, at + 1, offset=-(frame.under + tucked_foot))
-    }
-  }
-}
-
-///|
 /// The chat in the page pane, if one is.
 fn open_chat() -> ChatRef? {
   let pages = app.nav.pages()
@@ -394,24 +83,6 @@ fn open_chat() -> ChatRef? {
 }
 
 ///|
-/// The room over a list under its bar with keyboard and mouse's lists (navScroll: 4).
-pub let lists_top_in : Double = 4.0
-
-///|
-/// Whether list `key` keeps its rows where they are (listMotion.ts usePointerOver, ListMotion.kt HeldOrder): it moving,
-/// or the pointer over it (a mouse's, a finger down on it).
-fn list_held(c : @ui.Ctx, key : String, pane : Int) -> Bool {
-  if c.list_moving(key) {
-    return true
-  }
-  // (the hand as the frame sees it, read as it comes on the list and goes off it: a press gone down on it, a mouse's
-  // pointer over it. Not where the pointer is against where the list was drawn: read every build, every move of the
-  // pointer built the list's pane again, and what it read of the frame before kept it from being kept, every frame
-  // the hand was on it)
-  c.press_within(pane) || (@sf.pointer_rests() && c.hovered(pane))
-}
-
-///|
 /// Each list's rows as given and as the list made of them (ListRows: what came, went, went ahead), by the list's key.
 // kept across runs: put back by sidebar_reset (reset)
 let list_rows : Map[String, @ui.ListRows[Line]] = {}
@@ -422,109 +93,10 @@ let list_rows : Map[String, @ui.ListRows[Line]] = {}
 let lists_had : Map[String, Bool] = {}
 
 ///|
-fn list_rows_of(key : String) -> @ui.ListRows[Line] {
-  match list_rows.get(key) {
-    Some(l) => l
-    None => {
-      let l = @ui.ListRows::new()
-      list_rows[key] = l
-      l
-    }
-  }
-}
-
-///|
 /// Room in a list, `h` high (for the bar over it, at its foot).
 fn list_space(c : @ui.Ctx, h : Double) -> Unit {
   c.box(style=@ui.style(h=Fixed(h)), fn() {  }) |> ignore
 }
-
-///|
-/// The list read the first time, or no rows to show while it waits on a station or cannot read one (the library's
-/// Waiting, Status.tsx: the rows to come in their bones, what is wrong over them in red), as many as the theme's chats'
-/// list has them, where it stands (`at`).
-fn list_waiting(c : @ui.Ctx, note : ListNote?, error : String?, at : @sf.ListAt) -> Unit {
-  let l = @sf.theme().chat_list
-  let reading = match note {
-    Some(n) => n.reading
-    None => true
-  }
-  @sf.waiting(
-    c,
-    fn() { chat_rows_sample(c, if reading { l.waiting_rows } else { l.waiting_noted }, at) },
-    text=@sf.t("common.reading"),
-    error=error.unwrap_or(""),
-    note?=match note {
-      Some(nt) => Some({ reading: nt.reading, text: nt.text.unwrap_or(""), failing: nt.failing })
-      None => None
-    },
-  )
-}
-
-///|
-/// A list with nothing in it (mobile/Home.tsx Empty; Sidebar.tsx's navEmpty): in a box a phone wide or wider, the
-/// phone's illustration and what to do (a new chat; with no station, the stations); narrower, the sidebar's words
-/// (with no station, its link to the stations).
-fn list_empty(c : @ui.Ctx, v : ChatsView, filter : String) -> Unit {
-  let t = @sf.theme()
-  if c.width < illustrated_from {
-    c.box(style=said_box, fn() {
-      match filter {
-        "mine" => c.text(@sf.t("web-main.sidebar.noneMine"), style=said_words) |> ignore
-        "watching" => c.text(@sf.t("web-main.sidebar.noneWatching"), style=said_words) |> ignore
-        _ if v.stations > 0 => c.text(@sf.t("web-main.sidebar.none"), style=said_words) |> ignore
-        _ =>
-          c.rich(
-            [
-              @ui.span(@sf.t("web-main.sidebar.noStation.before")),
-              @ui.span(@sf.t("web-main.sidebar.noStation.link"), link="stations"),
-              @ui.span(@sf.t("web-main.sidebar.noStation.after")),
-            ],
-            style=said_words,
-            link_color=t.p.blue,
-            on_link=fn(_) { open_page(Place("stations")) },
-          )
-          |> ignore
-      }
-    })
-    |> ignore
-    return
-  }
-  if v.stations == 0 && filter == "all" {
-    c.box(style=empty_first, fn() {
-      @sf.drawable(c, if t.dark { "illus_no_station_dark" } else { "illus_no_station" }, illustration_w) |> ignore
-      c.text(@sf.t("android-settings.station.first"), style=empty_title) |> ignore
-      c.text(@sf.t("android-settings.station.firstNote"), style=empty_note) |> ignore
-    })
-    |> ignore
-    return
-  }
-  c.box(style=empty_box, fn() {
-    @sf.drawable(c, if t.dark { "illus_new_chat_dark" } else { "illus_new_chat" }, illustration_w) |> ignore
-    match filter {
-      "mine" => c.text(@sf.t("android-chat.home.empty.mine"), style=empty_words) |> ignore
-      "watching" => c.text(@sf.t("android-chat.home.empty.watching"), style=empty_words) |> ignore
-      _ => {
-        c.text(
-          @sf.t(if v.stations > 1 { "android-chat.home.empty.many" } else { "android-chat.home.empty.one" }),
-          style=empty_note,
-        )
-        |> ignore
-        let new = c.id("chats/empty-new")
-        if c.clicked(new) {
-          open_page(NewChat)
-        }
-        let b = c.box(id=new, fn() { c.text(@sf.t("android-chat.newChat"), style=empty_link) |> ignore })
-        c.semantics(b, Button, id=new, label=@sf.t("android-chat.newChat"))
-      }
-    }
-  })
-  |> ignore
-}
-
-///|
-/// How wide a list is at least for its empty state to be the phone's, with its illustration (240 wide, 30 each side).
-let illustrated_from : Double = 300.0
 
 ///|
 let illustration_w : Double = 240.0
@@ -562,16 +134,6 @@ let empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 let empty_link : @ui.TextStyle = @ui.text_style(size=Ui, color=Link)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let lists_fill : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
-/// The window the track slides in (Sidebar.css.ts navSlider: overflow hidden): a list on its way out or in shows only
-/// in the lists' own box, never over what is beside it (the rail, beside a sidebar).
-// kept across runs: a value (no field of it changes)
-let lists_window : @ui.Style = @ui.css("w=Full h=Full clip")
-
-///|
 /// The filter's menu last opened (its presenter).
 // kept across runs: put back by sidebar_reset (reset)
 let filter_menu_serial : Ref[Int] = Ref(-1)
@@ -583,7 +145,7 @@ pub fn filter_menu_open() -> Bool {
 }
 
 ///|
-/// The filter's menu (components.tsx MineFilter's DropdownMenu, mobile/Home.tsx FilterButton), opened by `from`: 全部会话,
+/// The filter's menu, opened by `from`: 全部会话,
 /// 我参与的, 监控中, then 已归档, a menu of choices, the list `shown` (all, mine, watching, archive) checked. Chosen, `go` is
 /// given which: where it goes is the frame's (a filter its list, 已归档 its page or list).
 pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> Unit {
@@ -595,6 +157,7 @@ pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> 
       item("all", "web-main.filter.chats.all"),
       item("mine", "web-main.filter.chats.mine"),
       item("watching", "web-main.filter.watching"),
+      item("hidden", "web-main.filter.hidden"),
       None,
       item("archive", "web-main.filter.archived"),
     ],
@@ -602,7 +165,7 @@ pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> 
     along=End,
   )
   filter_menu_serial.val = @sf.last_presented()
-  filter_menu_opened.set(@signals.untracked(fn() { filter_menu_opened.get() }) + 1)
+  filter_menu_opened.set(filter_menu_opened.untracked() + 1)
 }
 
 ///|

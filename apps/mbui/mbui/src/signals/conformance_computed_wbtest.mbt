@@ -1,5 +1,5 @@
-// The conformance suite (conformance_graph_wbtest.mbt): Computed Evaluation (computedEval.ts) and Equality & Same-Value
-// Optimization (equality.ts).
+// The conformance suite (conformance_graph_wbtest.mbt): Computed Evaluation and Equality & Same-Value
+// Optimization.
 
 ///|
 test "computed #18 cached — not re-evaluated if deps unchanged" {

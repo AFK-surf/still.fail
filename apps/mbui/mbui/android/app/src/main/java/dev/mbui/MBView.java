@@ -221,6 +221,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         // a view not the host's (its activity paused under another of the app's: an OverActivity's draws), kept as it
         // last drew: one thread draws the app at a time
         if (Host.view != this) return;
+        Latency.frameBegins();
         boolean app = pacer.appWanted.getAndSet(false), pictured = pacer.picturesOnly.getAndSet(false);
         // another view set the drawing up in its own context since this one did (an OverActivity came and went): set
         // up again here, at this view's size
@@ -248,6 +249,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             showAt(at[1]);
             NativeViews.framed(false);
             pacer.redrawn();
+            Latency.frameEnds();
             return;
         }
         long began = System.nanoTime();
@@ -257,14 +259,16 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         // (what it waits for said again by the frame, if it still does: Host.wakeAfter, from its time)
         wakeFor = -1;
         buildingFor = b.now;
+        pacedRate = 0;
         boolean more = Native.frame(w, h, density, b.now, b.late);
         buildingFor = -1;
         showAt(b.shows);
-        pacer.ended(more, later, b.following);
+        pacer.ended(more, later, b.following, pacedRate);
         // (the native views moved in it: their frames follow once they rest)
         NativeViews.framed(more || later);
         Script.frameDrawn();
         frameWorked(System.nanoTime() - began);
+        Latency.frameEnds();
     }
 
     // ---- the drawing thread, as the system's own ----
@@ -495,6 +499,25 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
      */
     volatile double wakeFor = -1;
     volatile double buildingFor = -1;
+
+    /** The rate the frame being built said what moves on by the clock needs (framesPaced; 0: none), GL thread. */
+    private float pacedRate;
+
+    /**
+     * A frame for what moves on by the clock that needs only {@code hz} frames a second (Host.framesPaced, GL thread, in
+     * the frame being built): woken for (Host.wakeAfter) at the vsync a whole number of the display's fastest frames on,
+     * as near {@code hz} as they come, the vsyncs between drawing nothing, and that rate said of the display as the
+     * frame ends (FramePacer.ended); false where that is every vsync (the display no faster than it), the next asked.
+     */
+    boolean framesPaced(double hz) {
+        float top = pacer.topRate > 0 ? pacer.topRate : (float) (1000.0 / framePeriodMs());
+        long every = hz > 0 ? Math.round(top / hz) : 1;
+        if (every <= 1 || buildingFor < 0) return false;
+        pacedRate = top / every;
+        // (half a display frame short of it: the vsync at it, whatever its time's rounding)
+        Host.wakeAfter((every - 0.5) * 1000.0 / top);
+        return true;
+    }
 
     /**
      * The frame for time `at` drawn (main thread, a little before it): asked for at the vsync before the first at or past

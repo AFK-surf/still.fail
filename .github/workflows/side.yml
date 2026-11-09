@@ -22,7 +22,7 @@ jobs:
       # Mac; beside those the mesh's measured too unevenly to move, or 109 ms for a line of nothing (side run 41798988101).
       max-parallel: 1
       matrix:
-        part: [core-ts, station, rust]
+        part: [core-ts, station, rust, locks]
     runs-on: [self-hosted, macos-ci]
     timeout-minutes: 10
     steps:
@@ -71,4 +71,3 @@ jobs:
           /usr/bin/python3 test/linux-portal-frames.py
           xvfb-run -a -s '-screen 0 800x600x24' /usr/bin/python3 test/linux-x11-gstreamer.py
           STILLFAIL_TEST_X11_APT=1 xvfb-run -a -s '-screen 0 1280x800x24' node --import ./test/setup-env.mjs --test --test-name-pattern='private APT pair' test/linux-screen-tools.test.ts
-          STILLFAIL_TEST_X11_BROWSER=1 node ../scripts/native.ts run mesh -- xvfb-run -a -s '-screen 0 1280x800x24' node --import ./test/setup-env.mjs --test test/x11-h264-browser.test.ts

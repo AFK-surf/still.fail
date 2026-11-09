@@ -61,7 +61,7 @@ fn card_at(c : @ui.Ctx, x : Double, y : Double, width : Double, reverse : Bool, 
 ///|
 fn comparison_panel(c : @ui.Ctx, x : Double, reverse : Bool) -> Unit {
   let w = 418.0
-  let dot = @sf.capsule_in(@sf.pane_corner, 10.0)
+  let dot = @ui.capsule_in(@sf.pane_corner, 10.0)
   @figure.panel(c, x, 244.0, w, 280.0, white, @sf.pane_corner, fn() {
     @figure.panel(c, dot, dot, 10.0, 10.0, if reverse { blue } else { red }, 5.0, fn() { })
     @figure.words(c, dot + 20.0, dot - 5.625, if reverse { "Narrow · reverse wrap" } else { "Narrow · normal wrap" }, 17.0, ink, weight=650)

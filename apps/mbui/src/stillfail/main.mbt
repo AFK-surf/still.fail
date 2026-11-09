@@ -12,7 +12,7 @@ let dumped : Map[String, Int] = {}
 ///|
 fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
   // (read in a computed, followed: Sub.changes)
-  let s = @core.subscribe(name, params=@sfbase.core_topic_params(name, params)).followed()
+  let s = @core.follow_topic(name, params=@sfbase.core_topic_params(name, params))
   if dump {
     let key = name + " " + Json::object(params).stringify()
     if dumped.get(key) != Some(s.version) {
@@ -157,8 +157,13 @@ fn refused(name : String) -> Json {
 
 ///|
 let core_source : @sfapp.Source = {
-  topic: core_topic,
-  waits: fn(name, params) { @core.subscribe(name, params=@sfbase.core_topic_params(name, params)).followed().waiting },
+  topic_read: core_topic,
+  topic_key: fn(name, params) { @sfbase.wire_topic_key(name, @sfbase.core_topic_params(name, params)) },
+  topic_scope: None,
+  topic_alive: fn() { true },
+  topic_lease_own: None,
+  waits: fn(name, params) { @core.follow_topic(name, params=@sfbase.core_topic_params(name, params)).waiting },
+  generation: fn(name, params) { @core.client.topic_generation(name, params=@sfbase.core_topic_params(name, params)) },
   call: fn(name, params, done) {
     if read_only && !read_only_calls.contains(name) {
       done(Err(refused(name)))
@@ -290,7 +295,11 @@ let core_source : @sfapp.Source = {
   draft_picture,
   images: chat_images,
   now: fn() { @ui.wall_ms() },
-  leave: fn(name, params) { @core.unsubscribe_topic(name, params=@sfbase.core_topic_params(name, params)) },
+  leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      @core.leave_topic(name, params=@sfbase.core_topic_params(name, params)) },
+  release: fn(name, params) { @core.release_topic(name, params=@sfbase.core_topic_params(name, params)) },
+  refresh: fn(name, params) { @core.refresh_topic(name, params=@sfbase.core_topic_params(name, params)) },
   read_only,
 }
 
@@ -357,11 +366,6 @@ fn draw_svg(data : Bytes, px : Int) -> (Int, Int, FixedArray[Byte])? {
 
 ///|
 fn main {
-  // the app as the system's keyboard (mbui's Keyboard.java, in a process of its own): the keyboard alone
-  if @ui.env("MBUI_KEYBOARD") == "1" {
-    @keyboard.run()
-    return
-  }
   // SVG pictures (a chat's .svg files) drawn by mbui's own SVG renderer, whatever the system decodes
   @ui.set_vector_pictures(draw_svg)
   // MBUI_PLATFORM=android: run as a phone's system has it (a test's trace recorded again on a Mac on the system its
@@ -420,6 +424,11 @@ fn main {
   @core.quiet("screen.view", @sfpages.screen_value_quiet)
   for name in @sfpages.screen_unread_calls() {
     @core.unread(name)
+  }
+  // (a draft's words told and a ref asked at the caret, as each key is typed: their answers change only signals, taken
+  // as they come, the page they were typed in not built whole for them, sfbase's calls_said)
+  for name in @sfbase.calls_said() {
+    @core.said(name)
   }
   if core_linked() == 0 || !@sfcore.start() {
     @sfapp.host_setup()

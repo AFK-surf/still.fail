@@ -1,0 +1,10 @@
+# 小屏, a finger: a message's table that is wider than its column (chat-md's) dragged across, to its end and back.
+timeout 20000
+until 全量重排
+wait 500
+log measure
+dragon -200 0 600 全量重排
+wait 400
+dragon 200 0 600 太慢
+wait 400
+exit

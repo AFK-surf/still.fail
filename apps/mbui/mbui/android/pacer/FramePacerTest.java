@@ -30,6 +30,12 @@ public final class FramePacerTest {
         double gpu(int frame, double now);
 
         boolean more(int frame, double now);
+
+        /** The rate what moves on by the clock alone needs, said by the frame (MBView.framesPaced; 0 none): its next
+         * woken for, at the vsync before the one that many frames a second on (MBView.wakeAt). */
+        default float paced(int frame, double now) {
+            return 0;
+        }
     }
 
     static final class Event implements Comparable<Event> {
@@ -213,11 +219,14 @@ public final class FramePacerTest {
             int f = frames++;
             double work = app.work(f, b.now);
             boolean more = app.more(f, b.now);
+            float paced = app.paced(f, b.now);
             long cpuEnd = began + Math.round(work * 1e6);
             // (the thread busy with it till its work is done: what comes meanwhile, a vsync, comes as it works)
             drawingFree = cpuEnd;
             at(cpuEnd, () -> {
-                pacer.ended(more, false, b.following);
+                pacer.ended(more, false, b.following, paced);
+                // (paced: woken for at the vsync before the one its rate's frame falls on, as MBView.wakeAt asks)
+                if (paced > 0) main(Math.round(b.now * 1e6 + 1e9 / paced) - period, pacer::wantFrame);
                 // the GPU draws it after the frame before's; swapped, the buffer is queued
                 long gpuStart = Math.max(cpuEnd, gpuFree);
                 long gpuEnd = gpuStart + Math.round(app.gpu(f, b.now) * 1e6);
@@ -385,6 +394,26 @@ public final class FramePacerTest {
                 "1.3 s after " + ph.rate);
     }
 
+    /** A spinner whose frames say they need 30 a second (frame_pace.mbt): that rate said, and as many frames drawn. */
+    static void pacedCase() {
+        Phone ph = new Phone(120, 3, true, 200_000);
+        ph.app = new App() {
+            @Override public double work(int f, double now) { return 1; }
+
+            @Override public double gpu(int f, double now) { return 1; }
+
+            @Override public boolean more(int f, double now) { return false; }
+
+            @Override public float paced(int f, double now) { return now < 1100 ? 30 : 0; }
+        };
+        ph.main(Math.round(100e6), ph.pacer::wantFrame);
+        ph.runUntil(Math.round(1050e6));
+        float during = ph.rate;
+        int frames = ph.drawn.size();
+        check("a motion paced at 30 Hz: that rate said of the display, about 30 frames a second drawn",
+                during == 30f && frames >= 28 && frames <= 30, "rate " + during + ", " + frames + " frames in 0.95 s");
+    }
+
     public static void main(String[] args) throws IOException {
         motionCase("a motion of 1 ms CPU and 1 ms GPU a frame shows a new frame at every refresh", 1, 1, true);
         motionCase("a motion of 0.5 ms CPU and 7 ms GPU a frame (the GPU under a refresh) shows a new frame at every refresh", 0.5, 7, true);
@@ -392,6 +421,7 @@ public final class FramePacerTest {
         motionCase("a motion of 6 ms CPU and 1 ms GPU a frame shows a new frame at every refresh", 6, 1, true);
         typingCase();
         rateAfterMotion();
+        pacedCase();
         if (args.length > 0) {
             replay(args[0], 1);
             replay(args[0], 7);

@@ -1,15 +1,15 @@
 // Contrast, measured: what a frame draws to be seen stands off what it is drawn on far enough to be seen (still.fail's
-// docs/ui-panels.md「对比度」). Words as WCAG 2's AA asks: 4.5:1, 3:1 where they are large (24 and up, or 18.66 and up
-// in bold); an icon (Ctx::shapes) 3:1, as its non-text contrast asks of what is understood by its shape. What is drawn
+// mbui ui/contrast.mbt). Words as WCAG 2's AA asks: 4.5:1, 3:1 where they are large (24 and up, or 18.66 and up in
+// bold); an icon (Ctx::shapes) 3:1, as its non-text contrast asks of what is understood by its shape. What is drawn
 // with nothing in it, its ground or (where that does not show) its edge alone saying what it is: a gauge's cell, a
 // bar's track, a line (Ctx::lines too), a sheet's grip, each bar and shape of a page's bones (bones.mbt): at least
-// `contrast_mark_least`, WCAG 2's ratio. A ground under words, a picture or an icon is not asked: what is in it
-// carries it (and under bones, as under the words they stand for). Each is measured where
-// it is drawn, against what the frame drew under it there (its instances before it, as the renderers lay them: fills,
-// and glass's tint over what it frosts); what lies on a picture, a video or another app's view, or is covered by what
-// is drawn after it (a dialog's scrim, a bar's glass over a list), is not asked, nor a picture drawn of something else
-// (Role Image: another system's screen, a code to scan), nor what is in a widget said disabled (WCAG asks nothing of
-// what cannot be used).
+// `contrast_mark_least`, WCAG 2's ratio. A ground under words, a picture or an icon is not asked: what is in it carries
+// it (and under bones, as under the words they stand for), as a shape (Ctx::shapes) with words drawn over it after it
+// is too (a highlighter's scribble behind a word found). Each is measured where it is drawn, against what the
+// frame drew under it there (its instances before it, as the renderers lay them: fills, and glass's tint over what it
+// frosts); what lies on a picture, a video or another app's view, or is covered by what is drawn after it (a dialog's
+// scrim, a bar's glass over a list), is not asked, nor a picture drawn of something else (Role Image: another system's
+// screen, a code to scan), nor what is in a widget said disabled (WCAG asks nothing of what cannot be used).
 
 ///|
 /// Which node drew each instance of a frame, kept only while a test asks (Tester::contrast_faults): `owner[k]`
@@ -502,6 +502,25 @@ fn Ctx::ground_piece(self : Ctx, k : Int, holding : Array[Bool]) -> Bool {
 }
 
 ///|
+/// Whether words are drawn after instance `k` over the box (`x`, `y`, `w`, `h`) its shape fills (the node's: a shape
+/// goes to the renderers as bands 8 tall, its last perhaps under its words' glyphs, the whole shape their ground): a
+/// glyph meeting it by more than a point each way.
+fn Ctx::words_on(self : Ctx, k : Int, x : Double, y : Double, w : Double, h : Double) -> Bool {
+  let a = self.inst
+  for j in (k + 1)..<self.ninst {
+    let q = j * inst_size
+    if a[q + 5] == 1.0 &&
+      a[q] + 1.0 < x + w &&
+      x + 1.0 < a[q] + a[q + 2] &&
+      a[q + 1] + 1.0 < y + h &&
+      y + 1.0 < a[q + 1] + a[q + 3] {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Whether node `i` is `own` or in it.
 fn Ctx::node_in(self : Ctx, i : Int, own : Int) -> Bool {
   let mut q = i
@@ -587,11 +606,13 @@ fn Ctx::drawn_over(self : Ctx, k : Int, own : Int, px : Double, py : Double) -> 
 }
 
 ///|
-/// Where node `i` is, and the words nearest it (its own, or the first of what holds it), to find it by: ` at x,y w×h
-/// by "…"`.
+/// Where node `i` is (and where the old view it is in was made: Ctx::old_source_said), and the words nearest it (its
+/// own, or the first of what holds it), to find it by: ` at x,y w×h (in an old view made at …) by "…"`.
 fn Ctx::contrast_where(self : Ctx, i : Int) -> String {
   let n = self.nodes[i]
-  let at = " at \{n.x.round()},\{n.y.round()} \{n.fw.round()}×\{n.fh.round()}"
+  let src = self.old_source_said(i)
+  let at = " at \{n.x.round()},\{n.y.round()} \{n.fw.round()}×\{n.fh.round()}" +
+    (if src == "" { "" } else { " (" + src + ")" })
   // (the first words in it, depth first, or in what holds it, up to four boxes out)
   let words_in = fn(r : Int) -> String {
     let todo = [r]
@@ -638,6 +659,7 @@ fn Ctx::contrast_where(self : Ctx, i : Int) -> String {
 /// under it, deeper than the one it lies on, is a cut through to that ground (round a dot over a picture, in the
 /// sidebar's colour), not a mark of its own.
 fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
+  self.flat_from(0)
   let a = self.inst
   let pictures = self.pictures()
   for n in inst_owners.own_colours {
@@ -667,6 +689,18 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
   // view_host.mbt); its shapes at their strongest piece, as an old view's icon or line)
   let tree_lines : Map[(@view.NodeId, Int), (Double, String)] = Map::new()
   let tree_order : Array[(@view.NodeId, Int)] = []
+  // (what a node of the window's tree said disabled holds, as an old view's in a widget said disabled: asked nothing;
+  // its own presses off, not what a modal layer over it takes them from)
+  let tree_off : Array[@view.NodeId] = match view_app.val {
+    Some(tree) => tree.said_order().filter(fn(s) { s.disabled && s.allowed }).map(fn(s) { s.id })
+    None => []
+  }
+  let tree_off_holds = fn(id : @view.NodeId) {
+    match view_app.val {
+      Some(tree) => tree_off.iter().any(fn(o) { tree.holds(o, id) })
+      None => false
+    }
+  }
   for k in 0..<self.ninst {
     let b = k * inst_size
     match inst_by(k) {
@@ -676,6 +710,9 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
         // (a shape's piece: checked as the whole shape it is of is, an icon or a line, as made: inst_owners' `mark`)
         let mark = if !is_words && kind == 11.0 { inst_mark_of(k) } else { 0 }
         if !is_words && mark == 0 {
+          continue
+        }
+        if tree_off_holds(id) {
           continue
         }
         // (a picture in its own colours (View::picture: a maker's mark, a logo), its owner's, as an old view's own_colours
@@ -724,7 +761,9 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
           ("line", marks)
         }
         let said = if r < least - 0.005 {
-          "\{what} (a node of the window's tree's) at \{a[b].round()},\{a[b + 1].round()}: " +
+          "\{what} (a node of the window's tree's) at \{a[b].round()},\{a[b + 1].round()}" +
+          tree_source_said(id, paren=true) +
+          ": " +
           "\{shown.hex()} on \{ground.hex()} \{ratio_said(r)}:1, under \{least}"
         } else {
           ""
@@ -771,6 +810,10 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
     // (a filled shape in the colour of a ground with words in it, touching it: that ground's piece, as a popover's arrow
     // is the popover's)
     if kind == 11.0 && a[b + 4] == 0.0 && self.ground_piece(k, holding) {
+      continue
+    }
+    // (a shape words are drawn over after it: their ground, as a box's is, a highlighter's scribble behind a word)
+    if kind == 11.0 && self.words_on(k, n.x, n.y, n.fw, n.fh) {
       continue
     }
     if is_line {

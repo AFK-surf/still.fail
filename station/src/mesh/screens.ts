@@ -1,4 +1,4 @@
-// A view of one of the station's screens over a member's link (docs/remote-screens.md, "Wire"): a stream whose head
+// A view of one of the station's screens over a member's link ("Wire"): a stream whose head
 // line has a `screen` object, answered 200 `application/x-stillfail-screen`, then frames both ways, each a kind byte,
 // its payload's length (4 bytes, big-endian) and the payload. Station → client: `config`, `video`, `state`; client →
 // station: `input`, `ack`, `keyframe`, `look` (the part of the screen it shows, zoomed in: its frames are then of that
@@ -20,7 +20,7 @@ import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "..
 import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type LoginFill, type PasskeyAnswer, type Region, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits, regionOf } from "../screens/source.ts";
 import { type Viewer, readOnly } from "./credential.ts";
 import type { Stream } from "./native.ts";
-import { type Fps, FrameLatency, Pacer, type Quality, STILL_MS, START_RATE, Sharpener, Sizer, isFps, loopStall, rateCeiling } from "./screen-pace.ts";
+import { type Fps, FrameLatency, Pacer, type Quality, STILL_MS, START_RATE, Sharpener, Sizer, isFps, loopStall, ownRate, rateCeiling } from "./screen-pace.ts";
 import { writeLine } from "./serve.ts";
 
 export const SCREEN_TYPE = "application/x-stillfail-screen";
@@ -595,7 +595,8 @@ class ViewSession {
       if (next === null) return this.#stop("gone");
       if (next.config) {
         if (next.config.codec !== "jpeg") {
-          this.pacer.ceiling(rateCeiling(next.config.width, next.config.height, this.quality));
+          // A preview (a card, two pictures a second) no higher than the source's own.
+          this.pacer.ceiling(this.peek ? ownRate(next.config.width, next.config.height) : rateCeiling(next.config.width, next.config.height, this.quality));
           this.#size = { width: next.config.width, height: next.config.height };
         }
         void this.#send(KIND.config, configPayload(next.config));

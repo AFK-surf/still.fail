@@ -250,7 +250,7 @@ test "中屏: a screen reader's press of a panel's cover brings it over at that 
   let page = covers_said(t, "收起侧边栏")
   assert_eq(page.length(), 1)
   t.advance(between_frames_ms)
-  @ui.current().ask_action(page[0], Activate)
+  t.ctx().ask_action(page[0], Activate)
   // (at once, as of the press's moment: no frame drawn since)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   t.run_for(@ui.move_most_ms)
@@ -258,13 +258,13 @@ test "中屏: a screen reader's press of a panel's cover brings it over at that 
   let side = covers_said(t, "展开侧边栏")
   assert_eq(side.length(), 1)
   t.advance(between_frames_ms)
-  @ui.current().ask_action(side[0], Activate)
+  t.ctx().ask_action(side[0], Activate)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   t.run_for(@ui.move_most_ms)
   assert_eq(covers_said(t, "收起侧边栏").length(), 1)
   // (the id read out before it left: its cover let go then, pressing it nothing)
   t.advance(between_frames_ms)
-  @ui.current().ask_action(page[0], Activate)
+  t.ctx().ask_action(page[0], Activate)
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
 }
@@ -448,7 +448,7 @@ fn held_let_go(
   (String, Int, Int, Int, Array[@ui.Haptic], @sfdesk.TapePane),
 ) {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   let (rx, ry, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
   let (x, y) = (rx + 24.0, ry + 8.0)
   let told = Ref(0)

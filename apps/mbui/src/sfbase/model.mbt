@@ -4,51 +4,16 @@
 // generated Shapes.kt decode it.
 
 ///|
-pub fn field(v : Json?, key : String) -> Json? {
-  match v {
-    Some(Object(m)) => m.get(key)
-    _ => None
-  }
-}
-
-///|
-pub fn text(v : Json?, key : String) -> String {
-  match field(v, key) {
-    Some(String(s)) => s
-    _ => ""
-  }
-}
-
-///|
-pub fn opt_text(v : Json?, key : String) -> String? {
-  match field(v, key) {
-    Some(String(s)) => Some(s)
-    _ => None
-  }
-}
-
-///|
-pub fn flag(v : Json?, key : String) -> Bool {
-  match field(v, key) {
-    Some(True) => true
-    _ => false
-  }
-}
-
-///|
-pub fn number(v : Json?, key : String) -> Double {
-  match field(v, key) {
-    Some(Number(n, ..)) => n
-    _ => 0.0
-  }
-}
-
-///|
-pub fn items(v : Json?, key : String) -> Array[Json] {
-  match field(v, key) {
-    Some(Array(a)) => a
-    _ => []
-  }
+/// A field of the core's JSON, its words, its flag, its number, its items (a field left out reads as nothing), and the
+/// workspace a station (`<workspace>/<station>`) is of: the settings' reading, the one for every package above them.
+pub using @settings {
+  workspace_of,
+  field,
+  text,
+  opt_text,
+  flag,
+  number,
+  items,
 }
 
 ///|
@@ -113,7 +78,7 @@ pub(all) struct ChatItem {
   origin_text : String
   /// the kind of connect it came from (slack | feishu: the core's originKind), for its mark
   origin_kind : String
-  /// the people in it in words, for a screen reader (RowPicture.kt Faces)
+  /// the people in it in words, for a screen reader
   people_text : String
   pending : Bool
   settled : Bool
@@ -132,11 +97,22 @@ pub(all) struct ChatItem {
   pinned : Bool?
   /// the viewer kept it out of the archive (保留), pinned or not
   kept : Bool
+  /// Personal list visibility (None: a station from before hiding).
+  hidden : Bool?
+  /// Personal notification setting (None: a station from before muting).
+  muted : Bool?
   /// the key a chat asked for here went by before its station made it ("" for none): its row is the same row
   /// throughout
   client_key : String
   /// the chat an agent opened it from (chat_create): the way back there, a link only
   opener : Opener?
+  /// what its menu offers besides the list's own, as its page's "…" (the core's mayShare, mayPublish, slackUrl, slackApp,
+  /// feishuUrl): shared with the viewer's other workspaces, a picture of it, it in Slack or Feishu ("" none)
+  may_share : Bool
+  may_publish : Bool
+  slack_url : String
+  slack_app : String
+  feishu_url : String
 }
 
 ///|
@@ -303,8 +279,51 @@ pub fn chat_item(v : Json) -> ChatItem {
       _ => None
     },
     kept: flag(s, "kept"),
+    hidden: match field(s, "hidden") {
+      Some(True) => Some(true)
+      Some(False) => Some(false)
+      _ => None
+    },
+    muted: match field(s, "muted") {
+      Some(True) => Some(true)
+      Some(False) => Some(false)
+      _ => None
+    },
     client_key: text(s, "clientKey"),
     opener: opener_of(s),
+    may_share: flag(s, "mayShare"),
+    may_publish: flag(s, "mayPublish"),
+    slack_url: text(s, "slackUrl"),
+    slack_app: text(s, "slackApp"),
+    feishu_url: text(s, "feishuUrl"),
+  }
+}
+
+///|
+/// A row as its station's state makes it (the `chats` list's `stations`: said once for a station, not on each of its
+/// rows; client/core-ts views.ts `stationOn`, which this follows): offline, it is not swiped away; gone for its update,
+/// its second line says so unless it needs the viewer. The row as it is while its station says nothing of it.
+fn station_on(item : ChatItem, station : Json?) -> ChatItem {
+  let offline = opt_text(station, "offline")
+  let reconnecting = opt_text(station, "reconnecting")
+  if offline is None && reconnecting is None {
+    return item
+  }
+  let item = match offline {
+    Some(_) => { ..item, offline, swipe_archive: false, swipe_ask: None }
+    None => item
+  }
+  let item = match reconnecting {
+    Some(_) => { ..item, reconnecting }
+    None => item
+  }
+  if !flag(station, "updating") {
+    return item
+  }
+  if item.state_lead == "need" {
+    { ..item, updating: true }
+  } else {
+    { ..item, updating: true, state_text: offline, state_lead: "", state_lead_text: "", state_rest: "", state_about: None }
   }
 }
 
@@ -318,7 +337,20 @@ pub fn chats_view_made(v : Json) -> ChatsView {
 ///|
 /// The chats' list as the core gives it: for chats_of alone (chats_read).
 fn chats_view(v : Json) -> ChatsView {
-  chats_view_by(v, chat_item)
+  let stations = stations_said(v)
+  chats_view_by(v, fn(j) { station_on(chat_item(j), stations.get(text(Some(j), "station"))) })
+}
+
+///|
+/// The list's stations that say something of each of their rows (station_on), by address.
+fn stations_said(v : Json) -> Map[String, Json] {
+  let out : Map[String, Json] = {}
+  for s in items(Some(v), "stations") {
+    if field(Some(s), "offline") is Some(_) || field(Some(s), "reconnecting") is Some(_) {
+      out[text(Some(s), "station")] = s
+    }
+  }
+  out
 }
 
 ///|
@@ -422,19 +454,8 @@ pub fn first_line(words : String) -> String {
   ""
 }
 
-
 ///|
-/// The workspace a station (`<workspace>/<station>`) is of.
-pub fn workspace_of(station : String) -> String {
-  match station.find("/") {
-    Some(k) => station.view(end_offset=k).to_string()
-    None => station
-  }
-}
-
-
-///|
-/// The station this machine is (thisMachine.ts: "<workspace>/<station>"), as its host says (its station's cloud.json),
+/// The station this machine is, as its host says (its station's cloud.json),
 /// read once it is one; "" where it is none, asked again (one 添加这台 Mac adds, known without the app opened again).
 pub fn this_machine() -> String {
   match machine_here.val {
@@ -455,9 +476,8 @@ pub fn this_machine() -> String {
   }
 }
 
-
 ///|
-/// Whether `screen` of `station` is this machine's own display (its `desktop` screen: docs/remote-screens.md): seen
+/// Whether `screen` of `station` is this machine's own display (its `desktop` screen): seen
 /// from here it would only show itself, a window inside a window inside a window, and driven from here it would drive
 /// the very pointer driving it. A browser's tab or a simulator of this machine is a screen of its own, and is not this.
 pub fn own_screen(station : String, screen : String) -> Bool {

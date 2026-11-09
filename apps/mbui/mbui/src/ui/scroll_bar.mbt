@@ -298,16 +298,38 @@ fn Ctx::bar_owner(self : Ctx, id : Int) -> (Bar, Double, Theme)? {
 }
 
 ///|
-/// The bars as the hand has them (near the pointer, held, let go), told as that changes (Ctx::bar_moved): what draws
-/// them (Ctx::bar_at, as the frame is painted) reads it, painted again as it changes.
-// kept across runs: only counts on
-let bars_said : @signals.Signal[Int] = @signals.signal(0)
+/// Each bar as the hand has it (the pointer near it, its thumb held), by the id of what it is for, told as that
+/// changes (Ctx::bar_moved): what draws one (Ctx::side_bar, Ctx::bar_where, as the frame is painted) reads its own,
+/// painted again as it changes, not as another's does.
+// kept across runs: put back as a run begins (reset_globals)
+let bars_hand : Map[Int, @signals.Signal[(Bool, Bool)]] = {}
+
+///|
+/// How the hand has the bar of `id` (near, held), read: its signal made as it is first read.
+fn Ctx::bar_hand(self : Ctx, id : Int) -> (Bool, Bool) {
+  let s = match bars_hand.get(id) {
+    Some(s) => s
+    None => {
+      let now = match self.bar_owner(id) {
+        Some((b, _, _)) => (b.near, b.held)
+        None => (false, false)
+      }
+      let s = @signals.signal(now, same=fn(a, b) { a == b })
+      bars_hand[id] = s
+      s
+    }
+  }
+  s.get()
+}
 
 ///|
 /// What shows the bar of `id` (its list's or box's motion) told again: when it is at rest has changed. What it was
 /// said to be stays (a fling, a glide: what moves with the bar).
 fn Ctx::bar_moved(self : Ctx, id : Int) -> Unit {
-  bars_said.set(@signals.untracked(fn() { bars_said.get() }) + 1)
+  match (bars_hand.get(id), self.bar_owner(id)) {
+    (Some(s), Some((b, _, _))) => s.set((b.near, b.held))
+    _ => ()
+  }
   let again = fn(who : Mover, m : &Moving, what : String) {
     let mut said = what
     for e in self.movers {
@@ -370,8 +392,8 @@ fn Ctx::side_bar(
   off : Double,
   floated : () -> (Double, Double),
 ) -> BarAt? {
-  // (where the hand has the bars: read so)
-  bars_said.get() |> ignore
+  // (where the hand has its bar: read so)
+  self.bar_hand(id) |> ignore
   let ((cx0, cy0, cx1, cy1), (_, r_tr, r_br, _), _) = clip_at(clip_top())
   let x0 = dmax(x, cx0)
   let y0 = dmax(y, cy0)
@@ -412,8 +434,8 @@ fn Ctx::side_bar(
 /// Where the bar of what scrolls in node `n` runs (Ctx::bar_at), nothing kept of it: what its thumb is a target where
 /// (Ctx::bar_target), as the frame's targets are found.
 fn Ctx::bar_where(self : Ctx, n : Node) -> BarAt? {
-  // (where the hand has the bars: read so)
-  bars_said.get() |> ignore
+  // (where the hand has its bar: read so)
+  self.bar_hand(n.id) |> ignore
   let side = fn(content : Double, off : Double) -> BarAt? {
     self.side_bar(n.id, n.x, n.y, n.fw, n.fh, content, off, fn() { self.floated(Some(n), n.x, n.y, n.x + n.fw, n.y + n.fh) })
   }
@@ -439,6 +461,8 @@ fn Ctx::bar_where(self : Ctx, n : Node) -> BarAt? {
           self.across_seen.push((n.id, n.x, n.fw))
           None
         } else {
+          // (where it is as it is painted: Ctx::sideways_drawn, followed)
+          st.said.get() |> ignore
           // (along the view it is for: `bar_in` in from either side, what it holds as wide less that)
           let b = dclamp(st.bar_in, 0.0, dmax(0.0, n.fw / 2.0 - scroll_bar_least))
           let shows = (dmax(x0, n.x + b), y0, dmin(x1, n.x + n.fw - b), y1)
@@ -516,6 +540,7 @@ fn Ctx::across_found(self : Ctx, n : Node, from : Int) -> Array[BarAt] {
     done.push(id)
     match sideways.get(id) {
       Some(st) => {
+        st.said.get() |> ignore
         let shows = (dmax(x, cx0), dmax(n.y, cy0), dmin(x + w, cx1), dmin(n.y + n.fh, cy1))
         match foot_bar(id, x, w, w + st.max, st.x, shows, r_bl, r_br) {
           Some(b) => found.push(b)
@@ -534,7 +559,7 @@ fn Ctx::across_found(self : Ctx, n : Node, from : Int) -> Array[BarAt] {
 fn Ctx::across_targets(self : Ctx, n : Node, from : Int, alpha : Double) -> Unit {
   for b in self.across_found(n, from) {
     self.next_bars.push(b)
-    if self.bar_shows(b) * alpha > 0.002 {
+    if self.bar_shows(b, self.clock) * alpha > 0.002 {
       self.bar_target(b)
     }
   }
@@ -595,13 +620,12 @@ fn Ctx::bar_target(self : Ctx, b : BarAt) -> Unit {
 }
 
 ///|
-/// How much of bar `b` shows now (0 hidden), as it is drawn (Ctx::paint_bar), what it wakes for aside.
-fn Ctx::bar_shows(self : Ctx, b : BarAt) -> Double {
+/// How much of bar `b` shows at `at` (0 hidden), as Ctx::paint_bar draws it then: where its thumb is taken (the
+/// frame's moment as its targets are found; an input's, as it is pressed). Read for where the thumb is, not for how it
+/// looks: what fades it is paint_bar's, which follows the clock while it fades.
+fn Ctx::bar_shows(self : Ctx, b : BarAt, at : Double) -> Double {
   guard self.bar_owner(b.id) is Some((bar, until, _)) else { return 0.0 }
-  let hide = bar.hides_at(until)
-  let t = self.clock
-  let fading = t < bar.in_at + scrollbar_fade_ms || (t >= hide && t < hide + scrollbar_fade_ms)
-  bar.shown(if fading { self.now() } else { t }, until)
+  bar.shown(at, until)
 }
 
 ///|
@@ -765,12 +789,17 @@ fn Ctx::bar_let_go(self : Ctx) -> Unit {
 
 ///|
 /// As a frame ends, its bars drawn: what holds a thumb gone, it is let go; the pointer's bar found again where it
-/// rests (what moved under it).
+/// rests (what moved under it), once what moves has come to rest: found on the way, it was found by whichever frames
+/// came (a page sliding back under a still pointer drew its list's bar near it at 24 frames a second and not at 60,
+/// nav_test, MBUI_TEST_FPS=24), not by where things are at a moment.
 fn Ctx::bars_frame_end(self : Ctx) -> Unit {
   if self.bar_drag != 0 {
     if self.bar_drawn(self.bar_drag) is None {
       self.bar_let_go()
     }
+    return
+  }
+  if self.motion_owed() || self.motion_read {
     return
   }
   self.bar_pointer(self.px, self.py)

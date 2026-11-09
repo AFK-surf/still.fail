@@ -2,7 +2,7 @@
 // ASWebAuthenticationSession is Safari's there whatever the browser chosen): ASWebAuthenticationSession opens still.fail cloud's login
 // page (auth.begin's url) and gives back the URL the cloud sends the browser to on the app's scheme
 // (stillfail://auth/callback?…), with no CFBundleURLTypes registration: another installed still.fail app owning the
-// scheme does not take the callback from us (core/README.md, Login). The session shares the browser's cookies, so a
+// scheme does not take the callback from us (Login). The session shares the browser's cookies, so a
 // person signed in to Google there is not asked again.
 //
 //   void mb_web_auth(const char *url, const char *scheme, void (*done)(const char *callback, const char *error, void *),

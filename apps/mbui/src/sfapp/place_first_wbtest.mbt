@@ -49,7 +49,7 @@ fn first_open_islands() -> Array[(Double, Double, Double, Double)] {
 test "the pages of the stack come in the same way the first time and again" {
   for mode in [
     "chat", "history", "files", "archived", "drive", "reader", "player-video", "service", "newchat", "screen-full",
-    "direct-preview", "direct-words", "direct-profile-account", "direct-kept-chat", "direct-station-archiving",
+    "direct-preview", "direct-profile-account", "direct-kept-chat", "direct-station-archiving",
     "settings-home", "settings-appearance", "settings-fonts", "settings-me", "settings-workspace", "settings-security",
     "settings-security-open", "settings-vault", "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station",
     "settings-profiles", "settings-profile", "settings-new-profile", "settings-connects", "settings-connect",
@@ -62,7 +62,6 @@ test "the pages of the stack come in the same way the first time and again" {
     let src = fixture_app(if mode.has_prefix("direct-") { "settings" } else { mode })
     let page : Page = match mode {
       "direct-preview" => PreviewFile("ws1/st1", "s-c1", "work/s-c1/release.html", "release.html")
-      "direct-words" => Words("完整内容", "一段短的粘贴文字，来自剪贴板 082947")
       "direct-profile-account" => Setting(@settings.Route::ProfileAccount("cc"))
       "direct-kept-chat" => Setting(@settings.Route::KeptChat("ws1/st1", 7))
       "direct-station-archiving" => Setting(@settings.Route::StationArchiving("ws1/st1"))
@@ -99,11 +98,11 @@ test "stations: the first list after a wait or an empty list appears in place" {
     let base = fixture("settings")
     let src : Source = {
       ..base,
-      topic: fn(name, params) {
+      topic_read: fn(name, params) {
         if name == "stations" && !ready.get() {
           { value: if empty { Some([]) } else { None }, error: None, version: 0 }
         } else {
-          (base.topic)(name, params)
+          base.topic(name, params).get().snapshot()
         }
       },
     }
@@ -130,8 +129,8 @@ test "stations: a station added to a list already shown opens its place" {
   let base = fixture("settings")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let answer = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let answer = base.topic(name, params).get().snapshot()
       if name == "stations" && added.get() {
         match answer.value {
           Some(Array(rows)) => {
@@ -169,11 +168,11 @@ test "shared debugging: its first read shows its sections in place" {
   let base = fixture("settings")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "adbShare" && !ready.get() {
         { value: None, error: None, version: 0 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -182,12 +181,12 @@ test "shared debugging: its first read shows its sections in place" {
   t.draw()
   t.run_for(@ui.move_most_ms)
   t.frame()
-  assert_true(t.find("共享给的 station") is None)
+  assert_true(t.find("等你允许") is None)
   ready.set(true)
   t.frame()
-  let first = t.drawn_of("共享给的 station").unwrap()
+  let first = t.drawn_of("等你允许").unwrap()
   t.run_for(@ui.row_size_ms)
-  let after = t.drawn_of("共享给的 station").unwrap()
+  let after = t.drawn_of("等你允许").unwrap()
   assert_eq(first, after)
 }
 

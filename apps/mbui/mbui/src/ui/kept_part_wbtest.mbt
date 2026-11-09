@@ -146,7 +146,7 @@ fn kept_frames(
   pointing? : Pointing = Finger,
 ) -> Array[Array[Double]] {
   let t = Tester::new(kept_list_view(Ref(0)), w=300.0, h=400.0, platform~, pointing~)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(keep)
   let frames = []
   frame_hook.val = Some(fn() {
@@ -271,7 +271,7 @@ test "a part kept drawn again: what takes the focus in it is in Tab's order, as 
     let ids = [0, 0, 0]
     let builds = Ref(0)
     let t = Tester::new(focus_part_view(ids, builds), w=420.0, h=400.0, platform=0)
-    t.keep_parts(true)
+    t.set_rows_on_pixels(true)
     nodes_run.on = replay
     t.draw()
     let went = []

@@ -1,4 +1,4 @@
-// A chat's way to the station's browser (docs/remote-screens.md, "A chat's own environment"): a WebSocket on the agents'
+// A chat's way to the station's browser ("A chat's own environment"): a WebSocket on the agents'
 // door, ws://127.0.0.1:<door>/browser/<the session's key, base64url>, to the DevTools of the station's one Chrome
 // through a gate (gate.ts) that lets the session reach only its chat's own browser context: its tabs, its cookies.
 // Nothing asked on it brings the browser in front of what the person at the machine is doing: each tab asked for is

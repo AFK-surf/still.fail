@@ -22,6 +22,8 @@ test("job search reads sessions and one session's jobs in bounded, cancellable b
     for (let i = 0; i < 1_024; i++) addJob.run(`j${i}`, "a", `job ${i}`, `job-token-${i}`, i % 7);
     addJob.run("private", "other-0000", "other job", "private-token", 100);
     store.db.exec("COMMIT");
+    // The original job-index walk remains the fallback while the session list is still being prepared.
+    store.db.exec("UPDATE session_list_meta SET complete = 0 WHERE id = 1");
 
     let largestSessions = 0;
     let largestJobs = 0;
@@ -40,7 +42,7 @@ test("job search reads sessions and one session's jobs in bounded, cancellable b
                 sessionLookups.push(String(args[0]));
                 return Reflect.apply(value, stmt, args);
               };
-              if (method === "get" && /SELECT session_key FROM jobs\b/i.test(sql)) return (...args: unknown[]) => {
+              if (method === "get" && /SELECT session_key, CAST\(session_key AS BLOB\)/i.test(sql) && /WHERE session_key/i.test(sql)) return (...args: unknown[]) => {
                 candidates.push({ sql, args });
                 return Reflect.apply(value, stmt, args);
               };
@@ -81,7 +83,7 @@ test("job search reads sessions and one session's jobs in bounded, cancellable b
     assert.ok(candidates.length <= 3, "a session's many jobs are skipped in one index seek");
     assert.ok(jobReads.every((r) => r.args[0] === "a"), "jobs in another workspace are never read");
     const jobSeek = jobReads.find((r) => /rowid > \?/i.test(r.sql))!;
-    const sessionSeek = candidates.find((r) => /session_key > \?/i.test(r.sql))!;
+    const sessionSeek = candidates.find((r) => /session_key > (?:CAST\()?\?/i.test(r.sql))!;
     for (const [query, index] of [[jobSeek, /jobs_by_session/], [sessionSeek, /jobs_by_session/]] as const) {
       assert.ok(query, "the next batch seeks after the previous one");
       const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.args as any[]) as { detail: string }[])

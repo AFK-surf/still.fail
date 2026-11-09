@@ -1,4 +1,4 @@
-// How a profile's account reaches its models (the Rust station's profiles.rs `access_env`, `codex_overrides`), and the
+// How a profile's account reaches its models (`codex_overrides`), and the
 // environment a profile's runtime is started with, as config.rs parse_config makes it (`envs`: what the access kind
 // needs there plus the profile's own variables, which win). A profile here is config.json's, its home made absolute.
 import { join } from "node:path";
@@ -36,7 +36,7 @@ export const kimiSignedIn = (p: Profile): boolean => accessKind(p) === "api-prov
 export const keyFile = (p: Profile): string | undefined => (kimiSignedIn(p) ? join(p.home, KIMI_TOKEN_FILE) : undefined);
 /// Its model, when it names one.
 export const profileModel = (p: Profile): string | undefined => str(p.model);
-/// On the machine's own login (machine_logins.rs).
+/// On the machine's own login.
 export const isMachine = (p: Profile): boolean => p.machine === true;
 export const profileFast = (p: Profile): boolean => p.fast === true;
 /// The runtimes a session can be set to Fast on (its own `fast`, else its profile's).
@@ -189,7 +189,7 @@ export function dshRoute(p: Profile): DshRoute | null {
   return null;
 }
 
-/// The runtimes an account runs (profiles.rs runtimes_for): an OpenCode Go key all three, an Anthropic key Claude Code
+/// The runtimes an account runs: an OpenCode Go key all three, an Anthropic key Claude Code
 /// and DeepSeek Harness, a provider's what it speaks; a subscription (and custom variables) the runtime it was made for.
 export function profileRuntimes(p: Profile): Runtime[] {
   const kind = accessKind(p);

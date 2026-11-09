@@ -108,12 +108,17 @@ fn replay_topic_params(name : String, params : Map[String, Json]) -> Map[String,
 /// The app's source over @core, as src/stillfail's (without its logs and its read-only runs).
 pub fn source() -> @sfapp.Source {
   {
-    topic: fn(name, params) {
-      let s = @core.subscribe(name, params=replay_topic_params(name, params)).followed()
+    topic_read: fn(name, params) {
+      let s = @core.follow_topic(name, params=replay_topic_params(name, params))
       let value = if name == "prefs" { with_rail_view(s.value) } else { s.value }
       { value, error: s.error, version: s.version }
     },
-    waits: fn(name, params) { @core.subscribe(name, params=replay_topic_params(name, params)).followed().waiting },
+    topic_key: fn(name, params) { @sfbase.wire_topic_key(name, replay_topic_params(name, params)) },
+    topic_scope: None,
+    topic_alive: fn() { true },
+    topic_lease_own: None,
+    waits: fn(name, params) { @core.follow_topic(name, params=replay_topic_params(name, params)).waiting },
+    generation: fn(name, params) { @core.client.topic_generation(name, params=replay_topic_params(name, params)) },
     // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
     // (src/sfkept): tapes older than a call have none of it, and it is a pure function of what is asked, not made up
     // here. Any other ask the tape does not have still diverges; ⌘K's `commands.find` is the tape's (it says it in the
@@ -203,7 +208,11 @@ pub fn source() -> @sfapp.Source {
     },
     images,
     now: fn() { @ui.wall_ms() },
-    leave: fn(name, params) { @core.unsubscribe_topic(name, params=replay_topic_params(name, params)) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      @core.leave_topic(name, params=replay_topic_params(name, params)) },
+    release: fn(name, params) { @core.release_topic(name, params=replay_topic_params(name, params)) },
+    refresh: fn(name, params) { @core.refresh_topic(name, params=replay_topic_params(name, params)) },
     read_only: false,
   }
 }
@@ -232,4 +241,11 @@ pub fn app(c : @ui.Ctx) -> Unit {
   }
   @sfcore.frame(@core.subscribe("accounts"))
   @sfapp.view(c, the_source)
+}
+
+///|
+/// The app's window tree over the kept conversations (sfapp's app_tree over this package's source): what `app` is the
+/// old frame around, the one way the app is drawn.
+pub fn app_tree(root : @view.View) -> Unit {
+  @sfapp.app_tree(the_source)(root)
 }

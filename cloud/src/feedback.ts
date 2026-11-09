@@ -1,4 +1,4 @@
-// Bug reports about still.fail itself (docs/feedback.md). A station's agent, asked by the person it works for, sends
+// Bug reports about still.fail itself. A station's agent, asked by the person it works for, sends
 // one to POST /v1/feedback signed with the station's key like its traces (tag "station-feedback-v1"); a signed-in
 // account may send one with its access token. Either host takes them (app.still.fail and the test channel's
 // app.youdid.wtf): each is marked with the channel it came on. They wait in the admin's console (/v1/admin/feedback),

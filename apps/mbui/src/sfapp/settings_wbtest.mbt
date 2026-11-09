@@ -25,7 +25,8 @@ fn settings_tester(
 ///|
 test "settings from Home come in from the right and go back to the right" {
   new_run()
-  let t = @ui.Tester::new(fn(c) { view(c, fixture("settings")) }, w=390.0, h=844.0)
+  let src = fixture("settings")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
   t.draw()
   // The gear is at Home's right edge. Once the core has said what the settings show, they come from that side.
   open_setting("home")
@@ -310,6 +311,43 @@ test "the workspace: its people, those added, the invitations out" {
 }
 
 ///|
+test "the workspace left: asked first, then another workspace's Home at once while still.fail cloud is asked" {
+  new_run()
+  let base = fixture("settings")
+  let asked : Array[(String, Json, (Result[Json, Json]) -> Unit)] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      match name {
+        "workspace.removeMember" => asked.push((name, params, done))
+        _ => (base.call)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=2400.0)
+  open_setting("workspace")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("退出此 workspace")
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.find("退出「星火工作室」？") is Some(_), msg=t.drawn_text())
+  let (x, y) = words_node(t, "退出").unwrap()
+  t.tap(x, y)
+  t.frame()
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0].1), "workspace"), "ws1")
+  // before the cloud answers: Home, on 个人
+  assert_eq(app.picked.get(), "ws2")
+  nav_rested(t)
+  assert_eq(app.nav.depth(), 1)
+  assert_eq(@sfbase.toast_words(), "")
+  (asked[0].2)(Ok(Json::null()))
+  t.frame()
+  assert_eq(@sfbase.toast_words(), "已退出 workspace")
+}
+
+///|
 test "memory: a station's global memory, its projects, a skill's page" {
   let t = settings_tester("memory:ws1/st1")
   assert_true(t.find("全局记忆") is Some(_))
@@ -375,7 +413,7 @@ test "profiles, connects, the vault: their lists" {
   assert_true(t.find("Claude 订阅") is Some(_))
   assert_true(t.find("Ultra") is Some(_), msg="the subscription's tier in its row")
   assert_true(t.find("Pro 200") is Some(_), msg="the Codex subscription's tier in its row")
-  // its allowance a line of its own under its words, at the row's start (Profiles.kt)
+  // its allowance a line of its own under its words, at the row's start
   let (nx, ny) = t.find("Claude 主账号").unwrap()
   let (qx, qy) = t.find("62%").unwrap()
   assert_true(qy > ny + 20.0)
@@ -460,7 +498,7 @@ test "下方栏: a place's \"−\" takes it off its bar (the bars kept as the wo
   let t = settings_tester("bars")
   bars_picked.set(None)
   assert_true(t.find("第 1 栏") is Some(_))
-  // under the title, what the bars are of (BarSettings.kt LargeTitle's small words)
+  // under the title, what the bars are of
   assert_true(t.find("此设备") is Some(_))
   // Station's "−", at its icon's top right over the first bar's last slot, said as what it takes off
   let (x, y, w, h) = t.query(Button, label="从此栏移除Station").unwrap().rect
@@ -479,7 +517,7 @@ test "下方栏: a place held and slid sideways goes where it is let go, by the 
   let t = settings_tester("bars")
   bars_picked.set(None)
   let (x, y, w, h) = t.query(@ui.Role::Group, label="对话").unwrap().rect
-  // a tap: nothing (BarSettings.kt: a place has no tap, only its drag)
+  // a tap: nothing (only its drag)
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(bars_picked.get() is None)
   // held and slid a slot and a third to the right: after 文件
@@ -605,11 +643,11 @@ fn stations_unread_net() -> @ui.Tester {
   let base = fixture("settings")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "stationNet" {
         { value: Some(Json::null()), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -629,7 +667,7 @@ fn unseen_lines(t : @ui.Tester) -> Array[Double] {
 }
 
 ///|
-/// The chip whose words are `words` and its ground's fill as drawn (Parts.kt FillChip): the fill's width (0: none) and
+/// The chip whose words are `words` and its ground's fill as drawn: the fill's width (0: none) and
 /// the chip's, the fill from the chip's left, as tall as it.
 fn chip_fill(t : @ui.Tester, words : String) -> (Double, Double) {
   let (x, y) = t.find(words).unwrap()
@@ -690,6 +728,25 @@ test "settings: an offline station's picture and line centred across its card's 
 }
 
 ///|
+test "settings: a station's card with its CPU, memory and disk all low shows each chip whole, never cut with an ellipsis" {
+  // (on a phone they were cut to CPU 空闲…, 内存剩 9.2 G, 磁盘剩 19…, 2026-11-06)
+  for w in [390.0, 320.0] {
+    let t = settings_tester("stations", shows="settings-stations-low")
+    t.resize(w, 844.0)
+    t.draw()
+    let shown = t.words().filter(fn(x) { x.5 > 0.5 }).map(fn(x) { x.0 })
+    // in words where the line has the room for all three, else all by their figures: one way for all of them
+    let worded = ["空闲 8%", "剩 5.8 G", "剩 19.4 G"].iter().all(fn(x) { shown.contains(x) })
+    let figured = ["8%", "5.8G", "19.4G"].iter().all(fn(x) { shown.contains(x) })
+    assert_true(worded != figured, msg="\{w}: \{shown}")
+    assert_true(!shown.iter().any(fn(x) { x.contains("…") }), msg="\{w}: \{shown}")
+    // (at 320 its summary beside its name is cut short, as it may be: none of the chips is)
+    let chips = t.squeeze_faults().filter(fn(f) { ["空闲", "剩", "%", "G」"].iter().any(fn(x) { f.contains(x) }) })
+    assert_eq(chips, [], msg="\{w}")
+  }
+}
+
+///|
 test "settings: a station's low box filled as far as is used (FillChip): 内存 18% left, 82% of it" {
   let t = stations_unread_net()
   let (fill, chip) = chip_fill(t, "剩 5.8 G")
@@ -741,6 +798,32 @@ test "a subscription signing in: what to do in the browser, then the code typed 
   t.tap_text("完成登录")
   t.draw()
   assert_true(t.find("abc-123") is None, msg="sent, its field emptied")
+}
+
+///|
+test "a subscription signing in: its page's address copied from the ⋯ beside 打开授权页面 (a browser elsewhere)" {
+  let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-login")
+  t.click(Button, label="其他方式")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("复制链接")
+  assert_true(t.clipboard().has_prefix("https://"), msg=t.clipboard())
+  assert_true(t.opened().is_empty(), msg="copied, nothing opened")
+}
+
+///|
+test "adding an Anthropic subscription asks before opening its authorization page" {
+  let t = settings_tester("new-profile:ws1/st1", shows="settings-new-profile-login", platform=2)
+  t.click(Button, label="打开授权页面")
+  sheet_rested(t, "sf-present")
+  assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+  assert_true(t.opened().is_empty(), msg="nothing opened before confirmation")
+  t.back()
+  sheet_rested(t, "sf-present")
+  assert_true(t.opened().is_empty(), msg="cancelling leaves the page closed")
+  t.click(Button, label="打开授权页面")
+  sheet_rested(t, "sf-present")
+  t.tap_text("继续打开")
+  assert_eq(t.opened().length(), 1)
 }
 
 ///|
@@ -799,7 +882,7 @@ test "本机缓存 with many chats: the ones keeping most first, all when asked,
 test "本机缓存: a chat's files opened, each let go by its bin; those of no chat known apart" {
   let t = settings_tester("kept")
   t.draw()
-  // the chat: its messages and its 2 files (KeptFiles.kt chat.both), what is kept of it all
+  // the chat: its messages and its 2 files, what is kept of it all
   assert_true(t.find("消息 2.3 MB · 2 个文件 15.2 MB") is Some(_))
   assert_true(t.find("17.5 MB") is Some(_))
   // a chat of its messages alone: its size once, at its end
@@ -830,7 +913,7 @@ test "本机缓存: a chat's files opened, each let go by its bin; those of no c
 
 ///|
 test "a secret's longest grant: on its page its own or its vault's, in its editor 跟随默认 or one of its own" {
-  // its page: none of its own, its vault's (Vault.kt: 跟随默认 · …)
+  // its page: none of its own, its vault's
   let t = settings_tester("vault-item:v1#it1")
   t.draw()
   assert_true(t.find("最长授权") is Some(_))
@@ -933,6 +1016,32 @@ test "a profile in trouble: what is wrong a pill in its head before what its che
 }
 
 ///|
+test "an API key can be disabled and enabled again from its page" {
+  new_run()
+  let calls : Array[Made] = []
+  let base = fixture("settings")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting("profile:ws1/st1#k2")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let log = t.drive("tap icon:more\nuntil 停用\ntap =停用\nuntil 停用「备用 key」？\ntap =停用\n")
+  assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
+  t.draw()
+  assert_true(named(calls, "profile.put").iter().any(fn(c) { !flag(field(Some(c.params), "input"), "enabled") }))
+  assert_true(t.find("已停用") is Some(_))
+  let again = t.drive("tap icon:more\nuntil 启用\ntap =启用\n")
+  assert_true(again.contains("EXIT 0"), msg=again.join("\n"))
+  assert_true(named(calls, "profile.put").iter().any(fn(c) { flag(field(Some(c.params), "input"), "enabled") }))
+}
+
+///|
 test "a subscription's page signed in: 重新登录 and the way by hand, rows of its account" {
   let t = profile_whole("profile:ws1/st1#cc")
   let (_, by) = t.find("重新登录").unwrap()
@@ -974,6 +1083,19 @@ test "a connect's page: its model the one its station's profiles turned on, at i
 }
 
 ///|
+test "a connect's page says what another runtime reaches where its station lets it change" {
+  new_run()
+  @settings.fixture_page("settings-connect-switch") |> ignore
+  let src = fixture("settings-connect-switch")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0, platform=0)
+  open_setting("connect:ws1/st1#k1")
+  t.draw()
+  assert_true(t.find("运行于 Claude Code。新会话用新设置，单会话的当前会话下一条起切换。") is Some(_))
+  let before = settings_tester("connect:ws1/st1#k1")
+  assert_true(before.find("运行于 Claude Code。新会话用新设置，单会话的当前会话下一条起切换。") is None)
+}
+
+///|
 /// What was just presented, in: a sheet (with a finger short of the Large tier) at rest; a panel by what opened it or
 /// a dialog (with a pointer) past its coming.
 fn presented_in(t : @ui.Tester) -> Unit {
@@ -1001,13 +1123,12 @@ test "a station's permissions: each grant's mark across the middle of its title'
         }
         None => fail("no \{g.1} at \{w}")
       }
-      // (its mark: the one just before its title, not the settings' side's of the same name)
-      let marks = t
-        .shape_boxes()
-        .filter(fn(b) { b.0.has_prefix("sf/icon/" + g.0 + "/") && b.1 < title.0 && b.1 > title.0 - 48.0 })
+      // (its mark: the one just before its title, not the settings' side's of the same name; by what it is drawn as,
+      // its middle, as the page's nodes draw it)
+      let marks = t.locate("icon:" + g.0).filter(fn(p) { p.0 < title.0 && p.0 > title.0 - 48.0 })
       assert_true(marks.length() == 1, msg="\{g.1}'s mark at \{w}")
       let mark = marks[0]
-      let off = (mark.2 + mark.4 / 2.0 - (title.1 + title.3 / 2.0)).abs()
+      let off = (mark.1 - (title.1 + title.3 / 2.0)).abs()
       assert_true(off < 1.0, msg="\{g.1}'s mark \{off} off its title's middle at \{w}")
     }
   }

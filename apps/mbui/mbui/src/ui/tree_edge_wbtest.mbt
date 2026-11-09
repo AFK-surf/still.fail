@@ -156,7 +156,7 @@ fn red_edged(at : Int) -> Bool {
 ///|
 test "a node's edge round what it holds, its ground drawn off and bigger and the node turned: the edge drawn off, bigger and turned as its ground is, after what it holds" {
   let (_, _) = edged_holder(0xFFFFFFFFL, fn(n) {
-    n.ground_drawn(Is((-4.0, -2.0, 8.0, 4.0))).turn(Is(0.3)) |> ignore
+    n.ground_drawn(Is({ dx: -4.0, dy: -2.0, dw: 8.0, dh: 4.0, corners: None })).turn(Is(0.3)) |> ignore
   })
   let c = g()
   let fill = inst_where(fn(at) { c.inst[at + 8] == 1.0 && c.inst[at + 9] == 1.0 && c.inst[at + 11] == 1.0 && c.inst[at + 2] > 40.0 })

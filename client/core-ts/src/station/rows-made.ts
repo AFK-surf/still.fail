@@ -23,6 +23,8 @@ export type Marks = {
   verdicts: Record<string, J>;
   reviews: boolean;
   kept: number[];
+  hidden?: number[];
+  muted?: number[];
   pins: Record<string, number>;
   openers: Record<string, J>;
   opened: Record<string, J[]>;
@@ -45,7 +47,9 @@ export function marksOf(answer: unknown): Marks | null {
   const a = (k: string) => (Array.isArray(get(answer, k)) ? (get(answer, k) as any[]) : []);
   return {
     card: o("card"), need: o("need"), answered: o("answered"), suggested: a("suggested"), verdicts: o("verdicts"), reviews: get(answer, "reviews") === true,
-    kept: a("kept"), pins: o("pins"), openers: o("openers"), opened: o("opened"), shares: o("shares"), clientKeys: o("clientKeys"), teams: o("teams"),
+    kept: a("kept"), ...(Array.isArray(get(answer, "hidden")) ? { hidden: a("hidden").filter((n): n is number => typeof n === "number") } : {}),
+    ...(Array.isArray(get(answer, "muted")) ? { muted: a("muted").filter((n): n is number => typeof n === "number") } : {}),
+    pins: o("pins"), openers: o("openers"), opened: o("opened"), shares: o("shares"), clientKeys: o("clientKeys"), teams: o("teams"),
     selves: a("selves").filter((s): s is string => typeof s === "string"),
     dismissed: a("dismissed").filter((s): s is string => typeof s === "string"),
     reads: o("reads"),
@@ -62,6 +66,8 @@ export function marksWith(held: Marks, read: Marks, scope: { sessions: string[];
   return {
     card: byThread(held.card, read.card), need: byThread(held.need, read.need), answered: byThread(held.answered, read.answered), verdicts: byThread(held.verdicts, read.verdicts),
     suggested: ids(held.suggested, read.suggested), kept: ids(held.kept, read.kept), reviews: read.reviews,
+    ...(read.hidden !== undefined ? { hidden: ids(held.hidden ?? [], read.hidden) } : {}),
+    ...(read.muted !== undefined ? { muted: ids(held.muted ?? [], read.muted) } : {}),
     pins: bySession(held.pins, read.pins), openers: bySession(held.openers, read.openers), opened: bySession(held.opened, read.opened), shares: bySession(held.shares, read.shares),
     clientKeys: bySession(held.clientKeys, read.clientKeys), teams: { ...held.teams, ...read.teams }, selves: read.selves,
     dismissed: [...held.dismissed.filter((d) => !threads.has(d.slice(0, d.indexOf(":")))), ...read.dismissed], reads: byThread(held.reads, read.reads),
@@ -91,6 +97,8 @@ export function rowsShared(shared: Iterable<J>, marks: Marks, me: string, words:
     reads: new Map(Object.entries(marks.reads).map(([k, n]) => [Number(k), num(n)])),
     dismissed: new Set(marks.dismissed),
     kept: new Set(marks.kept),
+    ...(marks.hidden !== undefined ? { hidden: new Set(marks.hidden) } : {}),
+    ...(marks.muted !== undefined ? { muted: new Set(marks.muted) } : {}),
     pins: new Map(Object.entries(marks.pins).map(([k, at]) => [k, num(at)])),
   };
   return [...shared].map((row) => rowFor(row, own, words)).sort((a, b) => num(b.lastActiveAt) - num(a.lastActiveAt));
@@ -119,7 +127,7 @@ export function rowsMade(sessions: readonly unknown[], threads: readonly unknown
   const connectOf = (t: J): string | null => members(t).map((m) => str(m.connect)).find((c) => c !== null && !titles.isOwnSurface(c)) ?? null;
   const origin = (t: J): J => {
     const connect = connectOf(t);
-    return { teamName: connect === null ? null : (marks.teams[connect] ?? null), channel: t.channel ?? null, channelName: t.channelName ?? null, threadTs: t.threadTs ?? null };
+    return { teamName: connect === null ? null : (marks.teams[connect] ?? null), channel: t.channel ?? null, channelName: t.channelName ?? null, threadTs: t.threadTs ?? null, surface: t.surface ?? null };
   };
   const titleOf = (t: J, channelName: string | null) => titles.chatTitle(t, str(t.firstText), channelName, words);
   // Per agent: the Slack thread it came from (the latest it is in), whether it has a chat of its own, and whether the
@@ -172,6 +180,8 @@ export function rowsMade(sessions: readonly unknown[], threads: readonly unknown
     };
     const id = String(t.id);
     row.archiveReminderDismissed = marks.kept.includes(t.id);
+    if (marks.hidden !== undefined) row.hidden = marks.hidden.includes(t.id);
+    if (marks.muted !== undefined) row.muted = marks.muted.includes(t.id);
     row.archiveRecommended = marks.suggested.includes(t.id);
     if (marks.reviews) {
       row.archiveReviewed = true;

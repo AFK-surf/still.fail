@@ -2,7 +2,7 @@
 // machine that is to be a station. It gets the release for the machine (scripts/release.sh put it in the releases
 // bucket, served at /releases/<file>), puts it in ~/.stillfail/app (the data around it stays), links `stillfail` into
 // ~/.local/bin, joins the workspace the token is for (a station already in one
-// stays in it and joins this one beside it, `enroll --stay`: docs/multi-workspace.md), and runs the station as
+// stays in it and joins this one beside it, `enroll --stay`), and runs the station as
 // a service of the user (launchd), started at login and again if it stops. Claude Code and Codex are the machine's own:
 // it says how to get them when they are missing.
 // On Linux the service is a systemd user service (lingering, so it runs with no one logged in); with no user systemd
@@ -59,12 +59,12 @@ export const NODE_FILE = /^node\/node-v[0-9]+\.[0-9]+\.[0-9]+-((darwin-arm64|lin
 
 /**
  * The apps' builds, as scripts/release.sh puts them beside the station's: what each app's updater reads for the
- * latest (the desktop app's electron-updater, the Android app's Updates.kt), and the files it names.
+ * latest (the desktop app's electron-updater), and the files it names.
  */
 const APP_FILES: [RegExp, string][] = [
   // The site's film (on it 2026-10-28 to 10-29; a page built then still asks for it), too large for the site's own files.
   [/^site\/film-[a-z]+-[0-9]+\.mp4$/, "video/mp4"],
-  // The station's latest release, for stations to say a newer one is out (the Rust station's updates.rs).
+  // The station's latest release, for stations to say a newer one is out.
   [/^station\.json$/, "application/json"],
   // The test channel's (scripts/release.sh --beta): the station's latest, and the beta apps' (fail.still.desktop.beta,
   // fail.still.android.beta, apps of their own beside the released ones): the desktop one's feed (electron-updater's
@@ -85,7 +85,7 @@ const APP_FILES: [RegExp, string][] = [
   [/^desktop\/stillfail\.yml$/, "text/yaml; charset=utf-8"],
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
-  // Its signature (scripts/release-sign.ts), which the app checks before installing it (docs/release-signing.md).
+  // Its signature (scripts/release-sign.ts), which the app checks before installing it (scripts/release-sign.ts).
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.sig$/, "application/json"],
   // It is mbui's (apps/mbui) in the Electron app's place (scripts/release.sh desktop-win): its own updater's feeds,
   // stable and beta (an AppRelease naming the installer above, its signed words in it), as the Mac's.
@@ -94,10 +94,6 @@ const APP_FILES: [RegExp, string][] = [
   // feed and the archives it names.
   [/^desktop\/web\/stillfail-beta-web\.json$/, "application/json"],
   [/^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$/, "application/gzip"],
-  // The packages of the modules stations install themselves (scripts/module-bundle.ts, docs/station-modules.md): each
-  // module's signed feeds, stable and beta, and the archives they name (one for every machine, or a platform's).
-  [/^modules\/([a-z][a-z0-9]{0,31})\/\1(-beta)?\.json$/, "application/json"],
-  [/^modules\/([a-z][a-z0-9]{0,31})\/\1-0\.1\.[0-9]+(-(darwin-arm64|linux-x64|linux-arm64|win32-x64))?\.tar\.gz$/, "application/gzip"],
   [/^android\/latest\.json$/, "application/json"],
   // monoid's (release.sh --product monoid), in its own bucket: monoid(-beta)-<n>.apk.
   [/^android\/(stillfail|stillfail-beta|monoid|monoid-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
@@ -117,7 +113,7 @@ const APP_FILES: [RegExp, string][] = [
   // each machine's builds a feed of their own (x64's linux/mbui, arm64's linux-arm64/mbui)
   [/^linux(-arm64)?\/mbui\/latest\.json$/, "application/json"],
   [/^linux\/stillfail-mbui-[0-9]+-(x64|arm64)-linux\.tar\.gz$/, "application/gzip"],
-  // The faces the apps offer beside the system's (scripts/fonts.py, docs/fonts.md): a page's stylesheet and its woff2
+  // The faces the apps offer beside the system's (scripts/fonts.py): a page's stylesheet and its woff2
   // slices, the Android app's gzipped files; each version in a folder of its own, never changed.
   [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/font\.css$/, "text/css; charset=utf-8"],
   [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/[a-z0-9-]+\.woff2$/, "font/woff2"],
@@ -137,12 +133,12 @@ const APP_FILES: [RegExp, string][] = [
 
 /**
  * The files every cloud made of this code serves alike, its stations' and not its apps': the station's releases and
- * feeds, their Node, the modules, the faces, the prebuilt native parts and the relay. A cloud whose bucket holds its
+ * feeds, their Node, the faces, the prebuilt native parts and the relay. A cloud whose bucket holds its
  * own apps' builds alone (monoid's: RELEASES_UPSTREAM) reads these from still.fail's when it has none (releases.ts
  * upstreamRelease); never an app's feed or build, which would update its apps to another product's.
  */
 export function sharedRelease(file: string): boolean {
-  return RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file) || NODE_FILE.test(file) || /^station(-beta)?\.json$|^(modules|fonts|natives|relay)\//.test(file);
+  return RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file) || NODE_FILE.test(file) || /^station(-beta)?\.json$|^(fonts|natives|relay)\//.test(file);
 }
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
@@ -176,7 +172,7 @@ esac
 # The data: $STILLFAIL_DATA, else ~/.stillfail.
 data="\${STILLFAIL_DATA:-$HOME/.$product}"
 cur="$data"
-# Where the update is, for the station to show on its pages (the Rust station's updates.rs): download, handoff, drain,
+# Where the update is, for the station to show on its pages: download, handoff, drain,
 # restart. Only for a station that is there to read it.
 step() { [ -d "$cur/run" ] && printf '%s\n' "$1" > "$cur/run/update.step" 2>/dev/null || true; }
 # A station already in a workspace is only updated: no token, and it stays the same station.
@@ -255,7 +251,7 @@ if [ -n "\${STILLFAIL_RELEASE_SHA256:-}" ] && [ -z "\${STILLFAIL_INSTALLER_HANDE
   trap - EXIT
   STILLFAIL_ARCHIVE="$keep/stillfail.tar.gz" STILLFAIL_INSTALLER_HANDED=1 exec sh "$keep/install.sh" "$@"
 fi
-# Which channel the release came from, for the station (the Rust station's updates.rs: where it goes back from the beta).
+# Which channel the release came from, for the station.
 printf '%s\n' "$channel" > "$tmp/stillfail/CHANNEL"
 
 # The Node it runs on (NODE_VERSION: its version) is not in the release: kept apart in node/v<version> beside the data, once per

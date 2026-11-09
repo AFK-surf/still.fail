@@ -42,7 +42,7 @@ export function certOk(lock: LockState, cert: BoxCert, ever = false): string | n
 }
 
 /// Why `next` may not follow `prev` (null: it is the vault's first version), or null when it may. `copy`: a later
-/// version brought from another station keeping the vault (docs/vault.md 副本), not necessarily the one right after:
+/// version brought from another station keeping the vault ( 副本), not necessarily the one right after:
 /// checked the same, but for its seq only being later than the one held (any, where none is).
 export function vaultOk(lock: LockState, prev: Vault | null, next: Vault, copy = false): string | null {
   const v = next as any;

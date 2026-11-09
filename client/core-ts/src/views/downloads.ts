@@ -1,5 +1,5 @@
-// What the core does to bring a file on a station onto this device and hand it to the system (docs/client-core.md,
-// Downloads): a chat's file a message names, a file of a station's drive, or a folder of it (zipped on the station
+// What the core does to bring a file on a station onto this device and hand it to the system:
+// a chat's file a message names, a file of a station's drive, or a folder of it (zipped on the station
 // first, `drive.zip`), whatever page asked and whatever becomes of it (a preview closed, another opened, the app closed
 // and opened again). It fetches the file a part at a time, each part kept as a reader of it keeps it (drive-kept.ts: a
 // chat's `chat`, a drive's `file`), and goes on from what is kept: what a viewer read of it before, what a download
@@ -49,6 +49,7 @@ import { StationAddr } from "../station/addr.ts";
 import { request } from "../ops.ts";
 import { conform } from "../conform.ts";
 import { isObject } from "../util.ts";
+import { concat } from "../station/wire.ts";
 
 type Of = Extract<Call, { kind: "download" }>;
 
@@ -110,6 +111,28 @@ const unreached = (e: CoreError) => e.status === undefined && (e.code === "host"
 export const AGAIN_MS = 5_000;
 
 const percent = (d: Download) => (d.size > 0 ? Math.floor((d.loaded / d.size) * 100) : d.state === "going" || d.state === "waiting" ? 0 : 100);
+
+/// A part received as a stream. If it is cut short (including cancellation), keep the bytes already received before
+/// the caller retries or stops; a successful part is kept by the caller after it has checked the station's answer.
+function receivedPart<H, R>(
+  read: (take: (bytes: Uint8Array) => void, said: (head: H) => void) => Effect.Effect<R, CoreError>,
+  keepCut: (head: H, bytes: Uint8Array) => Effect.Effect<void>,
+): Effect.Effect<{ part: R; bytes: Uint8Array }, CoreError> {
+  return Effect.suspend(() => {
+    const pieces: Uint8Array[] = [];
+    let head: H | null = null;
+    return read((bytes) => pieces.push(bytes), (said) => { head = said; }).pipe(
+      Effect.onExit((exit) => Effect.suspend(() =>
+        exit._tag === "Failure" && head !== null && pieces.length > 0 ? keepCut(head, concat(pieces)) : Effect.void)),
+      Effect.map((part) => ({ part, bytes: concat(pieces) })),
+    );
+  });
+}
+
+type FileHead = { type: string; total: number };
+type FilePart = FileHead & { bytes: Uint8Array };
+type DriveHead = FileHead & { mtime: number | null };
+type DrivePart = DriveHead & { bytes: Uint8Array };
 
 /// What a file is called to people: a file sent up as its sender named it, without what the station put before it
 /// (station/src/api/routes/hub.ts uploadPath: the time and a mark).
@@ -219,12 +242,20 @@ export class Downloads {
       // Old messages can omit a file's size (represented as 0). Ask for its first part to find the real size before
       // deciding it is ready: otherwise download.read would see a zero-length kept file even if it has contents.
       if (from.kind === "chat" && d.size === 0) {
-        const first = yield* inner.stations.requests.filePart(addr, from.key, from.file, 0, DOWNLOAD_PART, null);
+        const { part: first, bytes } = yield* receivedPart<FileHead, FilePart>(
+          (take, said) => inner.stations.requests.filePart(addr, from.key, from.file, 0, DOWNLOAD_PART, null, undefined, take, said, false, true),
+          (head, came) => Effect.gen(function* () {
+            if (head.total < came.length) return;
+            d.size = head.total;
+            yield* inner.driveKept.keep(file.id, "chat", 0, d.size, head.type, 0, came);
+            yield* self.#note(d);
+          }),
+        );
         d.size = first.total;
-        if (first.bytes.length === 0 && d.size > 0) return yield* Effect.fail(new CoreError("io", t("station.core.fileUnreadable")));
-        if (first.bytes.length > 0) yield* inner.driveKept.keep(file.id, "chat", 0, d.size, first.type, 0, first.bytes);
+        if (bytes.length === 0 && d.size > 0) return yield* Effect.fail(new CoreError("io", t("station.core.fileUnreadable")));
+        if (bytes.length > 0) yield* inner.driveKept.keep(file.id, "chat", 0, d.size, first.type, 0, bytes);
         yield* self.#note(d);
-        self.#moved(d, first.bytes.length);
+        self.#moved(d, bytes.length);
       }
       for (let at = 0; at < d.size;) {
         // what is kept from here on, however it came (a viewer's read, a player's ranges, what was loaded): taken
@@ -239,7 +270,11 @@ export class Downloads {
         const was = at;
         const heard = (n: number) => self.#moved(d, was + n);
         if (from.kind === "chat") {
-          const got = yield* Effect.result(inner.stations.requests.filePart(addr, from.key, from.file, at, length, null, heard));
+          const got = yield* Effect.result(receivedPart<FileHead, FilePart>(
+            (take, said) => inner.stations.requests.filePart(addr, from.key, from.file, at, length, null, heard, take, said, false, true),
+            (head, came) => head.total === d.size && at + came.length <= d.size
+              ? inner.driveKept.keep(file.id, "chat", 0, d.size, head.type, at, came) : Effect.void,
+          ));
           if (got._tag === "Failure") {
             if (at === 0 && got.failure.code === "unsupported" && d.size <= WHOLE_MAX) {
               const [type, whole] = yield* inner.stations.requests.file(addr, from.key, from.file, false, (loaded) => self.#moved(d, loaded), null);
@@ -250,18 +285,22 @@ export class Downloads {
             }
             return yield* Effect.fail(got.failure);
           }
-          const part = got.success;
+          const { part, bytes } = got.success;
           // (the station says how big it is: what the message said may be short of it)
           if (part.total !== d.size) d.size = part.total;
-          if (part.bytes.length === 0) {
+          if (bytes.length === 0) {
             if (at < d.size) return yield* Effect.fail(new CoreError("io", t("station.core.fileUnreadable")));
             break;
           }
-          yield* inner.driveKept.keep(file.id, "chat", 0, d.size, part.type, at, part.bytes);
-          at += part.bytes.length;
+          yield* inner.driveKept.keep(file.id, "chat", 0, d.size, part.type, at, bytes);
+          at += bytes.length;
         } else {
           const where = from.kind === "drive" ? from : from.made!;
-          const read = yield* Effect.result(inner.stations.requests.driveRead(addr, where.root, where.path, at, length, null, heard));
+          const read = yield* Effect.result(receivedPart<DriveHead, DrivePart>(
+            (take, said) => inner.stations.requests.driveRead(addr, where.root, where.path, at, length, null, heard, take, said, false, true),
+            (head, came) => head.total === d.size && (head.mtime === null || head.mtime === file.mtime) && at + came.length <= d.size
+              ? inner.driveKept.keep(file.id, "file", file.mtime, d.size, head.type, at, came) : Effect.void,
+          ));
           // the station lets a zip go after an hour: one gone by the time this goes on (the app closed a while) is made again
           if (read._tag === "Failure" && from.kind === "zip" && !zipped && read.failure.status === 404) {
             yield* inner.driveKept.forget(file.id);
@@ -270,7 +309,7 @@ export class Downloads {
             return yield* self.#fetchAll(d);
           }
           if (read._tag === "Failure") return yield* Effect.fail(read.failure);
-          const part = read.success;
+          const { part, bytes } = read.success;
           // changed on the station since its folder was read (or the zip's first part): what it is now, from its start
           if ((part.mtime !== null && part.mtime !== file.mtime) || part.total !== d.size) {
             if (where.mtime !== 0 || at > 0) yield* inner.driveKept.forget(file.id);
@@ -279,12 +318,12 @@ export class Downloads {
             yield* self.#note(d);
             return yield* self.#fetchAll(d);
           }
-          if (part.bytes.length === 0) {
+          if (bytes.length === 0) {
             if (at < d.size) return yield* Effect.fail(new CoreError("io", t("station.core.fileUnreadable")));
             break;
           }
-          yield* inner.driveKept.keep(file.id, "file", file.mtime, d.size, part.type, at, part.bytes);
-          at += part.bytes.length;
+          yield* inner.driveKept.keep(file.id, "file", file.mtime, d.size, part.type, at, bytes);
+          at += bytes.length;
         }
         self.#moved(d, at);
       }

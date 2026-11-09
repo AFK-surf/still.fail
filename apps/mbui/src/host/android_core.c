@@ -345,7 +345,7 @@ static int core_init(JNIEnv *env) {
     if (!cleared(env)) A.adb_core = (*env)->NewGlobalRef(env, adb);
     (*env)->DeleteLocalRef(env, adb);
   }
-  // the core's JS sampled, and what the shell was asked (the engine's, as still.fail's CoreProfile.kt has them):
+  // the core's JS sampled, and what the shell was asked (the engine's):
   // dev.mbui.CoreProfile's, for CoreProfileReceiver and MemoryWatch (their `this` is the class, which neither reads)
   jclass profile = (*env)->FindClass(env, "dev/mbui/CoreProfile");
   if (!cleared(env) && profile) {

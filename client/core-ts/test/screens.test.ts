@@ -1,4 +1,4 @@
-// A station's screens seen and driven (docs/remote-screens.md; src/screens.ts, src/screen-frames.ts): the `screens`
+// A station's screens seen and driven (src/screens.ts, src/screen-frames.ts): the `screens`
 // topic from the station's GET /screens and its `screens` events, and a view's stream as a fake station answers it.
 // What varies is how the station's bytes are cut on the way (each seed its own cuts; a failure names its seed, and
 // SIM_SEED=<seed> runs it again); nothing waits for real time.

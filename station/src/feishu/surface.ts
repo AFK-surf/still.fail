@@ -1,4 +1,4 @@
-// Feishu as a chat surface (docs/feishu.md), on a socket kept up as every connect's is (connects/surface.ts): its long
+// Feishu as a chat surface, on a socket kept up as every connect's is (connects/surface.ts): its long
 // connection for what Feishu tells the station, the OpenAPI for what the station and its agents say and ask. One
 // FeishuSurface per connected connect.
 import { readFile } from "node:fs/promises";
@@ -14,7 +14,7 @@ import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
 import type { ChatEvent, ChatMessage, Handler, InboundFile, Member, Person, Place, ThreadRef } from "../sessions/chat.ts";
 import { type CardEnd, endedWords } from "../connects/card-ends.ts";
-import { type Answer, answeredCard, endedCard, inline, questionCard, textCards } from "./cards.ts";
+import { type Answer, answeredCard, endedCard, inline, questionCard, textPosts } from "./cards.ts";
 import { CONTROL, DATA, type Frame, Parts, decode, encode, header } from "./frame.ts";
 import { type FeishuMessage, cardAnswerOf, listedAsEvent, messageOf, resourceOf } from "./parse.ts";
 import { FeishuStatus } from "./status.ts";
@@ -92,7 +92,7 @@ export type FeishuSurfaceOptions = {
   appSecret: string;
   domain: Domain;
   threads: FeishuThreads;
-  /// In a group, one conversation for each thread, begun by an @ and answered in it (docs/feishu.md「会话怎么分」); else
+  /// In a group, one conversation for each thread, begun by an @ and answered in it (「会话怎么分」); else
   /// one for the group.
   threadMode?: boolean;
   /// Keeps names across restarts and lets the admin API ask without waiting (knownPerson, knownChannel).
@@ -268,7 +268,7 @@ export class FeishuSurface extends ConnectedSurface {
     if (this.called.size > 500) this.called.delete(this.called.keys().next().value!);
   }
 
-  /// Which thread a message is in (docs/feishu.md「会话怎么分」): a topic group's topic is its own; in thread mode a
+  /// Which thread a message is in (「会话怎么分」): a topic group's topic is its own; in thread mode a
   /// group's thread is, by its first message (one that @s the bot outside a thread begins one); anything else said in
   /// the chat is the chat's conversation now, begun by the first message that @s the bot (or a new one asked for).
   private async heard(m: FeishuMessage, handler: Handler) {
@@ -328,16 +328,16 @@ export class FeishuSurface extends ConnectedSurface {
     return id;
   }
 
-  /// The agent's words as cards (a question's buttons or field with them), then each file as a message of its own. The
-  /// first message's id stands for the whole.
+  /// The agent's words as rich text (a question's as a card, its buttons or field with them), then each file as a message
+  /// of its own. The first message's id stands for the whole.
   async post(thread: ThreadRef, message: string, files: Attachment[], card?: Json | null): Promise<string> {
     (this.lines.get(`${thread.channel}/${thread.threadTs}`) as FeishuStatus | undefined)?.spoke();
     let first: string | null = null;
     const lang = stationLang();
     const question = card && (card.type === "options" || card.type === "text") ? card : null;
-    const cards = question ? [questionCard(message, question, thread.threadTs, lang)] : textCards(message);
-    for (const c of cards) {
-      const id = await this.send(thread, "interactive", inline(c));
+    const sends: [string, string][] = question ? [["interactive", inline(questionCard(message, question, thread.threadTs, lang))]] : textPosts(message).map((p) => ["post", p]);
+    for (const [msgType, content] of sends) {
+      const id = await this.send(thread, msgType, content);
       first ??= id;
       if (question) {
         this.asked.set(id, { text: message, card: question, thread: thread.threadTs, answered: false });
@@ -409,18 +409,18 @@ export class FeishuSurface extends ConnectedSurface {
     return `${app}/client/chat/open?openChatId=${encodeURIComponent(thread.channel)}`;
   }
 
-  /// A new message in the chat, as the agent's words are (cards): in a topic group a topic of its own; elsewhere the
-  /// chat's conversation from now on, as a new one asked for in it begins (docs/feishu.md「会话怎么分」).
+  /// A new message in the chat, as the agent's words are (rich text): in a topic group a topic of its own; elsewhere the
+  /// chat's conversation from now on, as a new one asked for in it begins (「会话怎么分」).
   async begin(chat: string, message: string): Promise<{ thread: ThreadRef; ts: string }> {
     const { topics } = await this.chatInfo(chat);
     let first: Json = null;
     let thread: ThreadRef | null = null;
-    for (const c of textCards(message)) {
+    for (const content of textPosts(message)) {
       if (thread !== null) {
-        await this.send(thread, "interactive", inline(c));
+        await this.send(thread, "post", content);
         continue;
       }
-      first = (await this.client.api("POST", "/open-apis/im/v1/messages", { receive_id: chat, msg_type: "interactive", content: inline(c) }, { receive_id_type: "chat_id" }))?.data ?? {};
+      first = (await this.client.api("POST", "/open-apis/im/v1/messages", { receive_id: chat, msg_type: "post", content }, { receive_id_type: "chat_id" }))?.data ?? {};
       const id = text(first.message_id);
       if (id === "") throw new Error("feishu gave no message_id");
       let topic = topics ? text(first.thread_id) : "";
@@ -452,11 +452,11 @@ export class FeishuSurface extends ConnectedSurface {
     await this.client.api("PATCH", `/open-apis/im/v1/messages/${encodeURIComponent(ts)}`, { content: inline(endedCard(asked?.text ?? said, endedWords(card, end, who, lang))) });
   }
 
-  /// A card changed in place (its message patched: the station's cards are shared, `update_multi`), as `post` writes one.
+  /// A message changed in place (`PUT /im/v1/messages/:id`, which edits rich text), as `post` writes one.
   async edit(_thread: ThreadRef, ts: string, message: string): Promise<boolean> {
-    const cards = textCards(message);
-    if (cards.length !== 1) return false;
-    await this.client.api("PATCH", `/open-apis/im/v1/messages/${encodeURIComponent(ts)}`, { content: inline(cards[0]) });
+    const posts = textPosts(message);
+    if (posts.length !== 1) return false;
+    await this.client.api("PUT", `/open-apis/im/v1/messages/${encodeURIComponent(ts)}`, { msg_type: "post", content: posts[0] });
     return true;
   }
 

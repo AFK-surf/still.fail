@@ -1,6 +1,6 @@
-// One UI client of the still.fail core, over whatever carries the protocol's JSON (ember docs/client-core.md,
-// Protocol): `{id, call, params}` and `{id, subscribe, keyed}` out; `{id, ok|error}`, `{id, value}`, `{id, delta}`
-// and `{fatal}` in. Each subscription keeps its topic's current value, deltas applied (delta.mbt), and a version that
+// One UI client of the still.fail core, over whatever carries the protocol's JSON:
+// `{id, call, params}` and `{id, subscribe, keyed, from?}` out; `{id, ok|error}`, `{id, value}`, `{id, delta}`,
+// `{id, delta, from}` and `{fatal}` in. Each subscription keeps its topic's current value, deltas applied (delta.mbt), and a version that
 // changes with every message for it, so a view can tell what changed since its last frame without comparing values;
 // and a signal of its changes (mbui/signals) set as each comes, and as it ends: what reads the topic in a computed
 // follows it from here, the core's change pushed on to it, not looked for as it is read.
@@ -12,7 +12,7 @@
 /// `changes` is set with each message too, and once more as it ends (unsubscribed, the client reset): what read it
 /// reads the topic again then, from the subscription asked anew.
 pub struct Sub {
-  id : Int
+  mut id : Int
   topic : Json
   mut value : Json?
   mut error : Json?
@@ -21,12 +21,31 @@ pub struct Sub {
   /// (core-ts store.ts `waits`), not the core still reading it
   mut waiting : Bool
   priv key : String
+  /// The lookup key; `key` remains the JSON text used to describe the subscription in waits.
+  priv look : String
   changes : @signals.Signal[Int]
+  /// A legacy untracked read holds this topic until it explicitly leaves.
+  priv mut manual : Bool
+  /// A caller directly holds the Sub itself until it explicitly unsubscribes.
+  priv mut direct : Bool
+  /// A signal or legacy holder asked to release it when no reader remains.
+  priv mut retiring : Bool
+  /// The core generation that produced the value currently kept in this subscription.
+  priv mut value_generation : Int
+  /// Asked as more of what another of its subscriptions has (`from_of`), till its first value: that one's id, its
+  /// first value coming as what changed from that one's (the core's store.ts `#firstFrom`), not the whole of it again.
+  priv mut from : Int?
+  /// Let go of while one asked from it waits for its first value: kept till then, as the core's delta to it reads it,
+  /// its readers told it ended.
+  priv mut ending : Bool
 }
 
 ///|
 /// The subscription read: what reads it in a computed follows its changes (Sub.changes).
 pub fn Sub::followed(self : Sub) -> Sub {
+  if @signals.active_sub() is None {
+    self.manual = true
+  }
   self.changes.get() |> ignore
   self
 }
@@ -35,6 +54,12 @@ pub fn Sub::followed(self : Sub) -> Sub {
 /// What reads it told it changed: a message for it, or its end (`ended`: -1, no version of its own).
 fn Sub::changed(self : Sub, ended? : Bool = false) -> Unit {
   self.changes.set(if ended { -1 } else { self.version })
+}
+
+///|
+// A retirement watch holds its client; remove it once it is no longer needed.
+fn Sub::clear_retirement_watch(self : Sub) -> Unit {
+  self.changes.on_unwatched(fn() {  })
 }
 
 ///|
@@ -54,7 +79,14 @@ pub struct Client {
   /// the calls whose answers nobody reads (Client::unread), by name; and the ids of those under way
   priv unread_names : Map[String, Bool]
   priv unread_calls : Map[Int, Bool]
+  /// the calls whose answers change only signals (Client::said), by name; and the ids of those under way
+  priv said_names : Map[String, Bool]
+  priv said_calls : Map[Int, Bool]
   priv mut next_id : Int
+  /// Distinguishes subscriptions when reset reuses an id.
+  priv mut epoch : Int
+  /// Changes when a new core starts, including a restart that keeps existing subscriptions.
+  priv mut generation : Int
   /// the bytes beside the message being taken, if any
   priv mut beside : Bytes?
   /// Changes with every message that changed something (a sub's value or error, a call's answer).
@@ -77,7 +109,7 @@ pub struct Client {
   /// when it could not be read): Client::time_topics
   priv mut timing : ((Int, String, Json?, Bool) -> Unit)?
   /// where the app's attention is, as told last (`client.focus`): told again to a core started anew
-  /// (StillFailCore.kt `focus`), which would else take the app for out of view
+  /// , which would else take the app for out of view
   priv mut focus : Json?
   /// While the device's performance record is kept (@hostapi.perf_recording): each call's name by its id until it is
   /// answered, so what the core says of it is put to its name (Client::perf_name)
@@ -102,7 +134,11 @@ pub fn Client::new(
     quiet_calls: {},
     unread_names: {},
     unread_calls: {},
+    said_names: {},
+    said_calls: {},
     next_id: 1,
+    epoch: 0,
+    generation: 0,
     beside: None,
     version: 0,
     fatal: None,
@@ -119,7 +155,7 @@ pub fn Client::new(
 }
 
 ///|
-/// What the app times of its topics (still.fail's Android app's bar_switch, BarTiming.kt `topics`): `f(id, topic,
+/// What the app times of its topics (still.fail's Android app's bar_switch): `f(id, topic,
 /// None, false)` as a subscription is made and asked of the core, `f(id, topic, value, true)` as its first message is
 /// taken (its value; None: an error). Nothing here reads a clock: the times are the caller's.
 pub fn Client::time_topics(self : Client, f : ((Int, String, Json?, Bool) -> Unit)?) -> Unit {
@@ -167,6 +203,35 @@ fn topic_json(topic : String, params : Map[String, Json]) -> Json {
 }
 
 ///|
+/// Find an existing subscription without constructing and escaping its whole JSON object on every read. Each part is
+/// tagged and length-prefixed. `topic_json` lets a parameter named `topic` replace the supplied name, so do that here
+/// too and keep the remaining parameters in the same order as the object sent to the core.
+fn subscribe_key(topic : String, params : Map[String, Json]) -> String {
+  let b = StringBuilder::new()
+  let part = fn(kind : Char, x : String) {
+    b.write_char(kind)
+    b.write_string(x.length().to_string())
+    b.write_char(':')
+    b.write_string(x)
+  }
+  match params.get("topic") {
+    Some(String(x)) => part('s', x)
+    Some(v) => part('j', v.stringify())
+    None => part('s', topic)
+  }
+  for k, v in params {
+    if k != "topic" {
+      part('k', k)
+      match v {
+        String(x) => part('s', x)
+        _ => part('j', v.stringify())
+      }
+    }
+  }
+  b.to_string()
+}
+
+///|
 /// A topic's name (its `topic`), without its params.
 fn topic_name(t : Json) -> String {
   match t {
@@ -209,22 +274,39 @@ fn Client::echo_of(self : Client, name : String, params : Json) -> Sub? {
 
 ///|
 /// The subscription to `topic` with `params`: made (and asked of the core) the first time, the same one after that,
-/// so a view can call this every frame.
+/// so a view can call this every frame. Repeated calls share one direct hold, not independently releasable handles;
+/// `unsubscribe` releases that direct hold, while any graph or legacy readers continue to hold the topic.
 pub fn Client::subscribe(
   self : Client,
   topic : String,
   params? : Map[String, Json] = {},
 ) -> Sub {
-  let t = topic_json(topic, params)
-  let key = t.stringify()
-  match self.by_key.get(key) {
-    Some(s) => s
+  self.subscribe_as(topic, params, true)
+}
+
+///|
+/// Read a topic through the signal graph or a legacy source; unlike `subscribe`, this does not hold a raw Sub.
+pub fn Client::follow_topic(self : Client, topic : String, params? : Map[String, Json] = {}) -> Sub {
+  self.subscribe_as(topic, params, false).followed()
+}
+
+///|
+fn Client::subscribe_as(self : Client, topic : String, params : Map[String, Json], direct : Bool) -> Sub {
+  let look = subscribe_key(topic, params)
+  match self.by_key.get(look) {
+    Some(s) => {
+      if direct { s.direct = true }
+      s
+    }
     None => {
+      let t = topic_json(topic, params)
+      let key = t.stringify()
       let id = self.next_id
       self.next_id += 1
-      let s = { id, topic: t, value: None, error: None, version: 0, waiting: false, key, changes: @signals.signal(0) }
+      let from = self.from_of(t)
+      let s = { id, topic: t, value: None, error: None, version: 0, waiting: false, key, look, changes: @signals.signal(0), manual: false, direct, retiring: false, value_generation: self.generation, from, ending: false }
       self.subs[id] = s
-      self.by_key[key] = s
+      self.by_key[look] = s
       self.ask(s)
       match self.timing {
         Some(f) => f(id, topic, None, false)
@@ -233,6 +315,57 @@ pub fn Client::subscribe(
       s
     }
   }
+}
+
+///|
+/// Of topic `t` with a `limit` (the first rows of a list, more of them asked now), a subscription to it that has a
+/// value with other params alike but its limit: what its first value comes as what changed from.
+fn Client::from_of(self : Client, t : Json) -> Int? {
+  guard t is Object(want) && want.get("limit") is Some(_) else { return None }
+  let mut best : Sub? = None
+  for _, s in self.subs {
+    guard !s.ending && s.value is Some(_) && s.topic is Object(has) && has.length() == want.length() else { continue }
+    let alike = want.iter().all(fn(kv) { kv.0 == "limit" || has.get(kv.0) == Some(kv.1) })
+    if alike && has.get("limit") is Some(_) && (best is None || best.map_or(0, fn(b) { b.id }) < s.id) {
+      best = Some(s)
+    }
+  }
+  best.map(fn(s) { s.id })
+}
+
+///|
+fn Client::watch_retirement(self : Client, s : Sub) -> Unit {
+  let epoch = self.epoch
+  let id = s.id
+  s.changes.on_unwatched(fn() {
+    @signals.after_flush(fn() {
+      if self.epoch == epoch {
+        match self.subs.get(id) {
+          Some(current) => {
+            current.clear_retirement_watch()
+            self.retire_if_unused(current)
+          }
+          None => ()
+        }
+      }
+    })
+  })
+}
+
+///|
+/// Look up an existing subscription without acquiring it.
+pub fn Client::peek_topic(self : Client, topic : String, params? : Map[String, Json] = {}) -> Sub? {
+  self.by_key.get(subscribe_key(topic, params))
+}
+
+///|
+/// The core generation and whether this topic's retained value came from it. This lookup acquires no subscription.
+pub fn Client::topic_generation(self : Client, topic : String, params? : Map[String, Json] = {}) -> (Int, Bool) {
+  let fresh = match self.peek_topic(topic, params~) {
+    Some(s) => s.value_generation == self.generation
+    None => true
+  }
+  (self.generation, fresh)
 }
 
 ///|
@@ -246,17 +379,78 @@ fn Client::ask(self : Client, s : Sub) -> Unit {
     "subscribe": s.topic,
     "keyed": Json::boolean(true),
   }
+  match s.from {
+    Some(f) => m["from"] = Json::number(f.to_double())
+    None => ()
+  }
   (self.send)(Json::object(m).stringify())
 }
 
 ///|
-/// Ends a subscription: the core stops sending it, and `subscribe` makes a new one.
+/// Ask for a fresh value while keeping the same Sub and its readers. A new wire id discards replies to the old ask.
+pub fn Client::refresh_topic(self : Client, topic : String, params? : Map[String, Json] = {}) -> Unit {
+  match self.by_key.get(subscribe_key(topic, params)) {
+    Some(s) => {
+      let old_id = s.id
+      self.end_sub_wait(old_id)
+      s.clear_retirement_watch()
+      self.subs.remove(old_id)
+      let id = self.next_id
+      self.next_id += 1
+      s.id = id
+      self.subs[id] = s
+      let pending = self.echo_waits.to_array()
+      for p in pending {
+        let (call, (sub, answered, seen)) = p
+        if sub == old_id { self.echo_waits[call] = (id, answered, seen) }
+      }
+      (self.send)(({ "id": Json::number(old_id.to_double()), "unsubscribe": true } : Json).stringify())
+      self.ask(s)
+      self.retire_if_unused(s)
+    }
+    None => ()
+  }
+}
+
+///|
+/// Release a direct subscriber. Other graph or legacy readers keep the subscription until they leave too.
 pub fn Client::unsubscribe(self : Client, s : Sub) -> Unit {
-  if self.subs.contains(s.id) {
+  if self.subs.get(s.id) is Some(current) && physical_equal(current, s) {
+    s.direct = false
+    s.retiring = true
+    self.retire_if_unused(s)
+  }
+}
+
+///|
+/// `s`'s first value come: the one it was asked from let go of, if it is waiting for that.
+fn Client::came_from(self : Client, s : Sub) -> Unit {
+  guard s.from is Some(f) else { return }
+  s.from = None
+  match self.subs.get(f) {
+    Some(o) if o.ending && !self.subs.values().any(fn(x) { x.from == Some(f) }) => {
+      self.subs.remove(f)
+      (self.send)(({ "id": Json::number(f.to_double()), "unsubscribe": true } : Json).stringify())
+    }
+    _ => ()
+  }
+}
+
+///|
+/// End a subscription once no reader holds it.
+fn Client::end_subscription(self : Client, s : Sub) -> Unit {
+  if self.subs.get(s.id) is Some(current) && physical_equal(current, s) {
     self.end_sub_wait(s.id)
-    self.subs.remove(s.id)
-    self.by_key.remove(s.key)
+    s.clear_retirement_watch()
+    self.by_key.remove(s.look)
     s.changed(ended=true)
+    // (one asked from it still waiting for its first value, which comes as what changed from this one's: kept till
+    // then, Client::came_from)
+    if self.subs.values().any(fn(o) { o.from == Some(s.id) }) {
+      s.ending = true
+      return
+    }
+    self.subs.remove(s.id)
     let m : Map[String, Json] = {
       "id": Json::number(s.id.to_double()),
       "unsubscribe": Json::boolean(true),
@@ -272,10 +466,56 @@ pub fn Client::unsubscribe_topic(
   topic : String,
   params? : Map[String, Json] = {},
 ) -> Unit {
-  let key = topic_json(topic, params).stringify()
-  match self.by_key.get(key) {
-    Some(s) => self.unsubscribe(s)
+  match self.by_key.get(subscribe_key(topic, params)) {
+    Some(s) => {
+      s.manual = false
+      s.direct = false
+      s.retiring = true
+      self.retire_if_unused(s)
+    }
     None => ()
+  }
+}
+
+///|
+/// A legacy Source reader left; a direct Sub holder and other graph readers retain their interests.
+pub fn Client::leave_topic(self : Client, topic : String, params? : Map[String, Json] = {}) -> Unit {
+  match self.by_key.get(subscribe_key(topic, params)) {
+    Some(s) => {
+      s.manual = false
+      s.retiring = true
+      self.retire_if_unused(s)
+    }
+    None => ()
+  }
+}
+
+///|
+/// A graph-owned reader went away. Preserve any legacy untracked hold, and any other graph reader of this Sub.
+pub fn Client::release_topic(
+  self : Client,
+  topic : String,
+  params? : Map[String, Json] = {},
+) -> Unit {
+  match self.by_key.get(subscribe_key(topic, params)) {
+    Some(s) => {
+      s.retiring = true
+      self.retire_if_unused(s)
+    }
+    None => ()
+  }
+}
+
+///|
+fn Client::retire_if_unused(self : Client, s : Sub) -> Unit {
+  if self.subs.get(s.id) is Some(current) && physical_equal(current, s) &&
+    s.retiring && !s.manual && !s.direct {
+    if s.changes.watched() {
+      // Only a pending retirement needs this callback. Installing it on every Sub would retain the Client in a cycle.
+      self.watch_retirement(s)
+    } else {
+      self.end_subscription(s)
+    }
   }
 }
 
@@ -297,8 +537,9 @@ pub fn Client::call(
   let id = self.next_id
   self.next_id += 1
   self.calls[id] = on_done
+  // (its name, for what its answer is in the record and in a hang: Client::perf_name)
+  self.perf_calls[id] = name
   if perf_counts() {
-    self.perf_calls[id] = name
     perf_out(name)
   }
   // (one whose answer nobody reads is awaited by nothing: its answer, taken as it comes, asks for no frame)
@@ -306,6 +547,10 @@ pub fn Client::call(
     self.unread_calls[id] = true
   } else {
     self.call_waits[id] = (self.start_wait)("core: \{name} (call \{id})")
+  }
+  // (one whose answer changes only signals: taken as it comes, what read them built again, nothing else)
+  if self.said_names.contains(name) {
+    self.said_calls[id] = true
   }
   match self.echo_of(name, params) {
     Some(e) => self.echo_waits[id] = (e.id, false, false)
@@ -437,8 +682,17 @@ pub fn Client::unread(self : Client, name : String) -> Unit {
 }
 
 ///|
-/// Whether message `m` is a call's alone and changes nothing a frame reads: a value of a call that says it changes
-/// nothing (Client::quiet), or the answer of one whose answer nobody reads (Client::unread, its wait ended with it),
+/// The answer of a call `name` changes only signals (what is done with it sets them and nothing else a frame reads:
+/// a draft's words told, `composer.text`), so it may be taken as it comes (Client::call_said): what read those signals
+/// is built again, nothing else; awaited as any call. Said once, as the app starts.
+pub fn Client::said(self : Client, name : String) -> Unit {
+  self.said_names[name] = true
+}
+
+///|
+/// Whether message `m` is a call's alone and changes nothing a frame reads but its signals: a value of a call that says
+/// it changes nothing (Client::quiet), the answer of one whose answer nobody reads (Client::unread, its wait ended with
+/// it) or of one whose answer changes only signals (Client::said),
 /// so it may be taken as it comes, before the frame decides what it does (@ui.on_message_said).
 pub fn Client::call_said(self : Client, m : Map[String, Json]) -> Bool {
   if m.contains("fatal") {
@@ -452,7 +706,7 @@ pub fn Client::call_said(self : Client, m : Map[String, Json]) -> Bool {
     return false
   }
   if m.contains("ok") || m.contains("error") {
-    return self.unread_calls.contains(id) && !self.echo_waits.contains(id)
+    return (self.unread_calls.contains(id) || self.said_calls.contains(id)) && !self.echo_waits.contains(id)
   }
   match (m.get("value"), self.quiet_calls.get(id)) {
     (Some(v), Some(f)) => self.progress.contains(id) && f(v)
@@ -491,11 +745,12 @@ fn Client::take(self : Client, msg : Json) -> Unit {
           r => r.stringify()
         },
       )
-      self.fatal_said.set(@signals.untracked(fn() { self.fatal_said.get() }) + 1)
+      self.fatal_said.set(self.fatal_said.untracked() + 1)
       // What was asked of this core is not answered by the next one.
       let calls = self.calls.to_array()
       self.calls.clear()
       self.unread_calls.clear()
+      self.said_calls.clear()
       self.echo_waits.clear()
       for c in calls {
         self.end_call_wait(c.0)
@@ -505,7 +760,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
       for id in subs {
         self.end_sub_wait(id)
       }
-      // (as StillFailCore.kt fails them: `core_restarted`, in the app's words; the reason is the core's own, on_failed)
+      // (in the app's words; the reason is the core's own, on_failed)
       let err = Json::object({
         "code": Json::string("core_restarted"),
         "message": Json::string(restarted_text.val),
@@ -523,6 +778,13 @@ fn Client::take(self : Client, msg : Json) -> Unit {
     _ => return
   }
   match self.subs.get(id) {
+    Some(s) if s.ending =>
+      // (let go of, kept as what one asked from it reads: its value as the core has it)
+      match (m.get("value"), m.get("delta"), s.value) {
+        (Some(v), _, _) => s.value = Some(v)
+        (_, Some(Array(ops)), Some(v)) => s.value = Some(apply_delta(v, ops))
+        _ => ()
+      }
     Some(s) => {
       if m.get("waiting") is Some(True) && s.value is None && s.error is None {
         // (no value of it yet: what shows it shows what is to come, the core's wait for it going on)
@@ -542,13 +804,26 @@ fn Client::take(self : Client, msg : Json) -> Unit {
           s.error = None
         }
         (_, Some(Array(ops)), _) =>
-          match s.value {
-            Some(v) => s.value = Some(apply_delta(v, ops))
-            None => return
+          match (s.value, m.get("from")) {
+            (Some(v), _) => s.value = Some(apply_delta(v, ops))
+            // its first value, as what changed from what another of its subscriptions has
+            (None, Some(Number(f, ..))) =>
+              match self.subs.get(f.to_int()).bind(fn(o) { o.value }) {
+                Some(v) => s.value = Some(apply_delta(v, ops))
+                None => {
+                  // (that one not had: asked again, whole)
+                  s.from = None
+                  self.ask(s)
+                  return
+                }
+              }
+            (None, _) => return
           }
         _ => return
       }
+      self.came_from(s)
       s.waiting = false
+      s.value_generation = self.generation
       match self.timing {
         Some(f) if s.version == 0 => f(id, topic_name(s.topic), s.value, true)
         _ => ()
@@ -612,14 +887,19 @@ pub fn Client::perf_name(self : Client, msg : Json) -> String {
 }
 
 ///|
-/// No call's name kept any more (the record turned off).
+/// No name kept of a call nothing more comes of (the record turned off): a call still answering keeps its own, for what
+/// its progress is in a hang (`progress ?` once each summary forgot them all, 2026-11-10).
 pub fn Client::perf_forget(self : Client) -> Unit {
-  self.perf_calls.clear()
+  let gone = self.perf_calls.keys().filter(fn(id) { !self.calls.contains(id) }).to_array()
+  for id in gone {
+    self.perf_calls.remove(id)
+  }
 }
 
 ///|
 fn Client::answer(self : Client, id : Int, r : Result[Json, Json]) -> Unit {
   self.unread_calls.remove(id)
+  self.said_calls.remove(id)
   match self.echo_waits.get(id) {
     // (an edit answered before its draft came: awaited still, until it does; refused: nothing to come)
     Some((sub, _, false)) if r is Ok(_) => self.echo_waits[id] = (sub, true, false)
@@ -643,40 +923,86 @@ fn Client::answer(self : Client, id : Int, r : Result[Json, Json]) -> Unit {
 /// After the core was started again (a fatal): every subscription asked of the new core, under its own id. Their
 /// values stay until the new core's first value replaces them.
 pub fn Client::restarted(self : Client) -> Unit {
+  // A web worker can rejoin without a preceding fatal. Its former core cannot answer the calls it held.
+  let calls = self.calls.to_array()
+  calls.sort_by_key(fn(c) { c.0 })
+  self.calls.clear()
+  self.progress.clear()
+  self.quiet_calls.clear()
+  self.unread_calls.clear()
+      self.said_calls.clear()
+  self.echo_waits.clear()
+  @signals.start_batch()
+  self.generation += 1
   self.fatal = None
-  self.fatal_said.set(@signals.untracked(fn() { self.fatal_said.get() }) + 1)
+  self.fatal_said.set(self.fatal_said.untracked() + 1)
+  let err : Json = { "code": "core_restarted", "message": Json::string(restarted_text.val) }
+  for c in calls {
+    self.end_call_wait(c.0)
+    (c.1)(Err(err))
+  }
+  // (a new core has none of them: those let go of are gone, each asked whole)
+  for s in self.subs.values().filter(fn(s) { s.ending }).to_array() {
+    self.subs.remove(s.id)
+  }
   let subs = self.subs.values().to_array()
   subs.sort_by_key(fn(s) { s.id })
   for s in subs {
+    s.from = None
     self.ask(s)
   }
   match self.focus {
     Some(p) => self.call("client.focus", params=p) |> ignore
     None => ()
   }
+  @signals.end_batch()
 }
 
 ///|
 /// Everything forgotten, as a new client: no subscription, no call waiting, ids from 1 (a Replay attached to the
 /// app's client starts it so).
 pub fn Client::reset(self : Client) -> Unit {
-  // (what read them reads anew: their ends told)
+  // Clear the old client before telling readers: a live reader may immediately subscribe again.
   let ended = self.subs.values().to_array()
+  ended.sort_by_key(fn(s) { s.id })
+  let calls = self.calls.to_array()
+  calls.sort_by_key(fn(c) { c.0 })
+  let call_waits = self.call_waits.values().to_array()
+  let sub_waits = self.sub_waits.values().to_array()
+  @signals.start_batch()
+  self.epoch += 1
+  self.generation += 1
   self.subs.clear()
-  for s in ended {
-    s.changed(ended=true)
-  }
   self.by_key.clear()
   self.calls.clear()
   self.progress.clear()
   self.quiet_calls.clear()
   self.unread_calls.clear()
+      self.said_calls.clear()
   self.echo_waits.clear()
+  self.call_waits.clear()
+  self.sub_waits.clear()
   self.focus = None
   self.next_id = 1
   self.beside = None
   self.version = 0
   self.fatal = None
+  for ticket in call_waits {
+    (self.end_wait)(ticket)
+  }
+  for ticket in sub_waits {
+    (self.end_wait)(ticket)
+  }
+  for s in ended {
+    s.clear_retirement_watch()
+    s.changed(ended=true)
+  }
+  // A call on the former client can never answer on the new one. Complete it so its optimistic state can settle.
+  let err : Json = { "code": "core_restarted", "message": Json::string(restarted_text.val) }
+  for c in calls {
+    (c.1)(Err(err))
+  }
+  @signals.end_batch()
 }
 
 ///|

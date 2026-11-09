@@ -1,5 +1,5 @@
 // One actor per session (the Rust station's session.rs): every change to a session's state runs through its serial queue, so
-// runtime events, deliveries and tool calls never interleave halfway. Redesigned on two points (docs/station-ts.md):
+// runtime events, deliveries and tool calls never interleave halfway. Redesigned on two points:
 // - Where it stands is one value (`phase`): idle, starting, running, waiting, or closed; not three flags kept apart.
 // - What tools say of the running turn (its state, need, about, what it waits for) goes through the queue too, and the
 //   tool answers once it is recorded: a turn's end comes after the tool's answer, so nothing a tool said is lost.
@@ -10,7 +10,7 @@ import { sessionSkills } from "./agent-home.ts";
 import { dirname, join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, FailureReason, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, nameUntitled, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_CODEX_UPDATE, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatCardChoices, formatInbound, formatWidgetModels, nameUntitled, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
@@ -19,8 +19,9 @@ import { unreadableDir, unreadableDirMessage } from "../ops/files.ts";
 import { Places } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { Said, tr, stationLang } from "../ops/i18n.ts";
-import { failureOf, runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
-import { type Handed, type MessageRow, type PendingMessage, handedOf } from "../store/rows.ts";
+import { failureOf, modelLimitOf, runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
+import { type CardChoice, type DeliveryCardState, type Handed, type MessageRow, type PendingMessage, type RunChange, handedOf } from "../store/rows.ts";
+import { runChangeWords } from "./run-change.ts";
 import { PostBlocksUnavailable } from "../store/post-blocks.ts";
 import { WidgetSourcesUnavailable } from "../store/widget-sources.ts";
 import { STATION_AUTHOR, STILLFAIL_SURFACE } from "../store/rows.ts";
@@ -64,12 +65,13 @@ type Working = { connect: string; channel: string; threadTs: string; ts: string 
 
 /// What the actor needs of the store: the Rust Store's methods, camelCase (src/store/store.ts).
 export type SessionStore = {
-  pendingMessages(key: string): any[];
   hasPending(key: string): boolean;
   markDelivered(key: string, handed: Handed[]): void;
   markUndelivered(key: string, handed: Handed[]): void;
   untoldWidgetModels(key: string): any[];
   markWidgetModelsTold(key: string, pairs: [string, string][]): void;
+  untoldCardChoices(key: string): CardChoice[];
+  markCardChoicesTold(key: string, told: readonly CardChoice[]): void;
   heardThreads(key: string, threads: number[]): Set<number> | number[];
   postsAfter(key: string, messages: readonly { thread: number; n: number }[]): (string | null)[];
   cardEndedByMessage(thread: number, n: number): [MessageRow, any] | null;
@@ -83,12 +85,14 @@ export type SessionStore = {
   setToldNotes(key: string, n: number): void;
   startTurnFor(id: string, key: string, kind: string, by: TurnFor): void;
   endTurn(id: string, outcome: string, detail: string | null, declared: string | null, wait: number | null): void;
-  declareTurn(id: string, declared: string, wait: number | null): void;
+  declareTurn(id: string, declared: string | null, wait: number | null): void;
   setRunning(key: string, running: boolean): void;
+  setSessionContextBefore(key: string, before: number | null): void;
   setRuntimeSessionId(key: string, id: string | null): void;
   /// The runtime sessions it ran in, the first first (optional: none known without it).
   runtimeSessions?(key: string): string[];
   runtimeSessionSources?(key: string): { id: string; runtime: string; profile: string | null }[];
+  runtimeSessionSource?(key: string, id: string): { id: string; runtime: string; profile: string | null } | null;
   setWaitFor(turn: string, what: string, watch: boolean): void;
   setNeed(turn: string, what: string): void;
   setAbout(turn: string, about: [number, number, string] | null): void;
@@ -118,6 +122,10 @@ export type Surface = {
 /// What a session needs of the station; the hub gives it.
 export type SessionDeps = {
   store: SessionStore;
+  /// Pending messages and letters, merged as they are now, read off the station thread.
+  pendingDeliveries(key: string, signal?: AbortSignal): Promise<PendingMessage[]>;
+  /// Card state for a person's delivery, read off the station thread.
+  deliveryCardState(thread: number, n: number, signal?: AbortSignal): Promise<DeliveryCardState | null>;
   /// An older store brings forward only the message ranges this delivery needs.
   preparePostsAfter?(messages: readonly { thread: number; n: number }[], signal?: AbortSignal): Promise<void>;
   prepareWidgetSources?(threads: readonly number[], signal?: AbortSignal): Promise<void>;
@@ -126,9 +134,9 @@ export type SessionDeps = {
   /// The profile a session's runtime starts on now: its own while usable, else another that can take it on (`holding`:
   /// its process has work going in the background, kept on an account nearly full).
   runOn(key: string, holding?: boolean): Profile & { spelling?(model: string): string | null };
-  /// A turn ran into the allowance of `ranOn`, the profile its process was started on (null: the session's own): the
-  /// profile left and the one moved to, when it moved.
-  spend(key: string, ranOn: string | null): [string, string] | null;
+  /// A turn ran into the allowance of `ranOn`, the profile its process was started on (null: the session's own), or
+  /// `model`'s own limit there (that model alone passed over on it): the profile left and the one moved to, when it moved.
+  spend(key: string, ranOn: string | null, model?: string | null): [string, string] | null;
   /// When session `key`'s profile, its allowance run out, is expected to run again (absent: in an hour).
   refillsAt?(key: string): number;
   /// A runtime failed to sign in on `profile`: it is checked again (the pool passes over one whose login is over).
@@ -158,6 +166,9 @@ export type SessionDeps = {
   /// What a session whose runtime session could not be resumed is told with its next prompt (sessions/afresh.ts
   /// `toldResumeLost`).
   resumeLost?(key: string): string;
+  /// What a session compacted or gone on in a new conversation is told when its chats are long (sessions/afresh.ts
+  /// `toldLongChat`): to read back what people said in them. Null when they are not.
+  longChat?(key: string): string | null;
   /// Its subagents `ids` of runtime session `from`, stopped with its process, taken to runtime session `to` begun on
   /// `on`, so that they are taken up there (sessions/afresh.ts): the ids taken.
   carrySubagents?(from: string, to: string, on: Profile, ids: string[]): string[];
@@ -185,13 +196,15 @@ export type SessionDeps = {
   places?: Places;
   /// Its runtime was not found on PATH as it started.
   runtimeMissing?(runtime: RuntimeKind): void;
+  /// Updates the local Codex installation and waits until it can serve new turns.
+  updateOldCodex?(runningVersion: string | null): Promise<void>;
   nextTs(): string;
   /// Its time (the hub's).
   clock: Clock.Clock;
 };
 
 /// `lostRetried`: started again once already after the connection to its sandbox was lost (agents/sandbox.ts).
-type Turn = { id: string; declared: DeclaredState | null; authRetried: boolean; lostRetried?: boolean; by: TurnFor };
+type Turn = { id: string; declared: DeclaredState | null; authRetried: boolean; lostRetried?: boolean; codexRetried?: boolean; by: TurnFor };
 
 /// Where a session stands: no runtime session; one starting up; a turn running; the agent waiting on work it started;
 /// or the actor closed (its station stopping or handing over).
@@ -202,7 +215,7 @@ export type Snapshot = {
   key: string;
   runtime: RuntimeKind;
   agent: unknown | null;
-  turn: { id: string; authRetried: boolean; lostRetried?: boolean; by: TurnFor; declared: string | null; wait: number | null } | null;
+  turn: { id: string; authRetried: boolean; lostRetried?: boolean; codexRetried?: boolean; by: TurnFor; declared: string | null; wait: number | null } | null;
   workingFor: Working[];
   notices: string[];
   waitingMs: number | null;
@@ -271,6 +284,8 @@ export class SessionActor {
   private generation = 0;
   private phase: Phase = "idle";
   private turn: Turn | null = null;
+  /// A failed turn waiting for the machine's shared Codex update; messages wait without blocking the actor's queue.
+  private codexUpdate: { by: TurnFor; finished: boolean } | null = null;
   private nudges = 0;
   /// The chats it was asked to name as a turn ended with them untitled: asked once each.
   private askedToName = new Set<string>();
@@ -289,6 +304,8 @@ export class SessionActor {
   private resumeLost = false;
   /// Started afresh: what it is told of it with its next prompt.
   private afresh: string | null = null;
+  /// Its context compacted with no turn to tell it in: its next prompt tells it, the chat long (`onCompacted`).
+  private compactedUntold = false;
   /// Its context is being compacted by hand (compact): what it is told meanwhile waits for the end, as does a wait over
   /// meanwhile (`overWhileCompacting`).
   private compacting = false;
@@ -324,6 +341,12 @@ export class SessionActor {
   private unread: PendingMessage[] = [];
   private queued = 0;
   private formatAbort: AbortController | null = null;
+  /// A stop or suspension also prevents earlier queued deliveries from starting another read before it takes effect.
+  private deliveryInterruptions = 0;
+  /// Recoveries queued or reading: a stop cancels them; suspension keeps the cut-off turn marked running.
+  private recoveries = 0;
+  /// A recovery that reached a hold must resume the cut-off turn when the hold is released.
+  private recoveryDeferred = false;
   /// File work cannot be interrupted by closing the effect that awaits it; disposal waits for it to stop.
   private archiving: Promise<void> | null = null;
 
@@ -339,6 +362,10 @@ export class SessionActor {
 
   private now(): number {
     return this.deps.clock.currentTimeMillisUnsafe();
+  }
+
+  private closed(): boolean {
+    return this.phase === "closed";
   }
 
   // ── the queue ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -387,7 +414,7 @@ export class SessionActor {
 
   /// running: a turn is in progress; warm: a runtime process waits for input; cold: none.
   processState(): "running" | "warm" | "cold" {
-    if (this.turn || this.agent?.session.busy()) return "running";
+    if (this.turn || this.codexUpdate || this.agent?.session.busy()) return "running";
     return this.agent ? "warm" : "cold";
   }
 
@@ -399,7 +426,7 @@ export class SessionActor {
   }
 
   holdsState(): boolean {
-    return this.notices.length > 0 || this.waiting !== null || this.refill !== null;
+    return this.codexUpdate !== null || this.notices.length > 0 || this.waiting !== null || this.refill !== null;
   }
 
   /// Delivers any pending messages.
@@ -420,6 +447,10 @@ export class SessionActor {
   putAway(): Promise<void> {
     return this.enqueue(async () => {
       this.notices = [];
+      if (this.codexUpdate) {
+        this.codexUpdate = null;
+        this.deps.store.setRunning(this.key, false);
+      }
       if (!this.turn && !this.agent?.session.busy()) await this.letGo();
     });
   }
@@ -434,6 +465,45 @@ export class SessionActor {
     return this.enqueue(async () => {
       this.posted = true;
     });
+  }
+
+  /// Bind an asynchronous tool read to the turn that asked for it.
+  currentTurnId(): string | null { return this.turn?.id ?? null; }
+
+  postedForTurn(id: string): Promise<void> {
+    return this.enqueue(async () => { if (this.turn?.id === id) this.posted = true; });
+  }
+
+  /// The question may have taken long enough for its turn to end. Record its state as one queue action only if that
+  /// same turn still runs, so its result cannot be applied to a later one.
+  async stateForTurn(id: string, state: DeclaredState, words: string | null, about: [number, number, string] | null,
+    watch = false, record?: (write: (about: [number, number, string] | null) => void) => void): Promise<boolean> {
+    let recorded = false;
+    let failed = false;
+    let failure: unknown;
+    await this.enqueue(async () => {
+      const turn = this.turn;
+      if (!turn || turn.id !== id) return;
+      try {
+        const write = (current: [number, number, string] | null) => {
+          if (words !== null) {
+            if (state.kind === "waiting") this.deps.store.setWaitFor(id, words, watch);
+            else this.deps.store.setNeed(id, words);
+          }
+          this.deps.store.setAbout(id, current);
+          this.deps.store.declareTurn(id, state.kind, state.kind === "waiting" ? state.seconds : null);
+        };
+        if (record) record(write);
+        else write(about);
+        turn.declared = state;
+        recorded = true;
+      } catch (error) {
+        failed = true;
+        failure = error;
+      }
+    });
+    if (failed) throw failure;
+    return recorded;
   }
 
   /// The station's tools are at `url` now. A process told another address (taken up from a station that had its tools
@@ -466,6 +536,13 @@ export class SessionActor {
     });
   }
 
+  private undeclare() {
+    if (!this.turn?.declared) return;
+    log.info("session", "a message read after the turn said its state: the state no longer stands", { session: this.key, was: this.turn.declared.kind });
+    this.turn.declared = null;
+    this.deps.store.declareTurn(this.turn.id, null, null);
+  }
+
   /// What its wait is for, and whether that is its watch keeping on (`watch`).
   waitFor(what: string, watch: boolean): Promise<void> {
     return this.enqueue(async () => {
@@ -487,22 +564,35 @@ export class SessionActor {
 
   /// Stops what it is doing: the running turn; or, while it waits on work it started, that work and the wait.
   stop(): Promise<void> {
+    const stopRecovery = this.recoveries > 0 || this.recoveryDeferred;
+    this.recoveryDeferred = false;
+    this.deliveryInterruptions++;
     this.formatAbort?.abort();
     return this.enqueue(async () => {
-      if (this.agent?.session.busy()) {
-        this.stopRequested = true;
-        try {
-          await this.agent.session.abort();
-        } catch (error) {
-          this.stopRequested = false;
-          throw error;
+      try {
+        if (stopRecovery) this.deps.store.setRunning(this.key, false);
+        if (this.codexUpdate) {
+          this.codexUpdate = null;
+          this.deps.store.setRunning(this.key, false);
+          await this.notice(t("station.notice.stopped"));
+          this.deps.live?.turnEnded(this.key);
+          return;
         }
-        return;
-      }
-      if (this.turn) return;
-      await this.stopWaiting();
-      // Nothing runs: whatever is still said to be under way (a start that failed) is not.
-      this.deps.live?.turnEnded(this.key);
+        if (this.agent?.session.busy()) {
+          this.stopRequested = true;
+          try {
+            await this.agent.session.abort();
+          } catch (error) {
+            this.stopRequested = false;
+            throw error;
+          }
+          return;
+        }
+        if (this.turn) return;
+        await this.stopWaiting();
+        // Nothing runs: whatever is still said to be under way (a start that failed) is not.
+        this.deps.live?.turnEnded(this.key);
+      } finally { this.deliveryInterruptions--; }
     });
   }
 
@@ -558,7 +648,7 @@ export class SessionActor {
   /// and it was changed since: it goes on where it stopped.
   goOn(): Promise<void> {
     return this.enqueue(async () => {
-      if (this.deps.held(this.key) || this.archived() || this.turn || this.agent?.session.busy()) return;
+      if (this.deps.held(this.key) || this.archived() || this.turn || this.codexUpdate || this.agent?.session.busy()) return;
       this.refill = null;
       if (this.deps.store.hasPending(this.key)) return this.pump();
       const last = this.deps.store.lastTurn(this.key);
@@ -582,14 +672,39 @@ export class SessionActor {
 
   /// After a station stopped with this session's turn running and no runner kept it: the turn was cut off; resume it.
   recover(): Promise<void> {
+    this.recoveries++;
     return this.enqueue(async () => {
-      const store = this.deps.store;
-      store.setRunning(this.key, false);
-      if (this.archived()) return this.letGo();
-      const pending = store.pendingMessages(this.key);
-      const [said, widgets] = await this.format(pending);
-      await this.startTurn("resume", said === "" ? RESUME_AFTER_RESTART : `${RESUME_AFTER_RESTART}\n\n${said}`);
-      this.delivered(pending, widgets);
+      let reading = true;
+      try {
+        if (this.deliveryInterruptions > 0) return;
+        const store = this.deps.store;
+        if (this.archived()) {
+          this.recoveryDeferred = false;
+          store.setRunning(this.key, false);
+          return this.letGo();
+        }
+        if (this.deps.held(this.key)) {
+          this.recoveryDeferred = true;
+          return;
+        }
+        this.recoveryDeferred = false;
+        const delivery = await this.pendingAndFormat(true);
+        this.recoveries--;
+        reading = false;
+        if (delivery === null || this.deliveryInterruptions > 0 || this.closed()) return;
+        if (this.archived()) {
+          store.setRunning(this.key, false);
+          return this.letGo();
+        }
+        if (this.deps.held(this.key)) {
+          this.recoveryDeferred = true;
+          return;
+        }
+        const { pending, text: said, widgets } = delivery;
+        store.setRunning(this.key, false);
+        await this.startTurn("resume", said === "" ? RESUME_AFTER_RESTART : `${RESUME_AFTER_RESTART}\n\n${said}`);
+        this.delivered(pending, widgets);
+      } finally { if (reading) this.recoveries--; }
     });
   }
 
@@ -621,6 +736,10 @@ export class SessionActor {
 
   /// Turns were held and are no longer: what waited meanwhile goes on.
   release(): Promise<void> {
+    if (this.recoveryDeferred) {
+      this.recoveryDeferred = false;
+      if (this.recoveries === 0) return this.recover();
+    }
     return this.enqueue(async () => {
       if (this.waiting !== null && this.waitingUntil <= this.now()) this.waitMs(this.waitingSeconds, 0);
       if (this.refill !== null && this.refillAt <= this.now()) this.awaitRefill(this.now());
@@ -632,7 +751,7 @@ export class SessionActor {
   /// Starts the runtime process ahead of a message, so its start-up overlaps the typing.
   warm(): Promise<void> {
     return this.enqueue(async () => {
-      if (this.agent || this.deps.held(this.key)) return;
+      if (this.agent || this.codexUpdate || this.deps.held(this.key)) return;
       log.info("session", "warming session process", { session: this.key });
       await this.ensureAgent();
       this.idleSince = this.now();
@@ -676,8 +795,30 @@ export class SessionActor {
     }).then(() => refused);
   }
 
+  /// What it holds is over its lowered most (`contextBefore`): compacted now if nothing runs; else a turn's end or the
+  /// next message comes back here.
+  compactToCap(): Promise<void> {
+    return this.enqueue(async () => {
+      await this.compactingToCap();
+    });
+  }
+
+  /// Whether a compaction down to its most has begun, for its end to go on from. Tried once: its runtime still compacts
+  /// on its own a few calls on.
+  private async compactingToCap(): Promise<boolean> {
+    const store = this.deps.store;
+    if (store.getSession(this.key)?.contextBefore == null) return false;
+    if (this.turn || this.codexUpdate || this.compacting || this.waiting !== null || this.agent?.session.busy() || this.deps.held(this.key) || this.archived()) return false;
+    const refused = await this.beginCompacting();
+    if (refused === null) return true;
+    log.info("session", "could not compact down to its most context", { session: this.key, why: refused });
+    store.setSessionContextBefore(this.key, null);
+    store.notify(this.key);
+    return false;
+  }
+
   private async beginCompacting(): Promise<string | null> {
-    if (this.turn || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
+    if (this.turn || this.codexUpdate || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
     if (this.deps.held(this.key)) return t("station.context.held");
     const row = this.deps.store.getSession(this.key);
     if (!row?.runtimeSessionId) return t("station.context.empty");
@@ -690,7 +831,7 @@ export class SessionActor {
     // Gone on in a new runtime session (another account's): nothing in it to compact yet.
     if (this.afresh !== null) return t("station.context.empty");
     if (!agent.compact) return t("station.context.cannotCompact", { name: runtimeLabel(this.runtime) });
-    log.info("session", "compacting its context, asked by hand", { session: this.key });
+    log.info("session", "compacting its context", { session: this.key });
     this.compacting = true;
     this.deps.store.setRunning(this.key, true);
     this.deps.store.notify(this.key);
@@ -713,8 +854,9 @@ export class SessionActor {
     const stopRequested = this.stopRequested;
     this.stopRequested = false;
     store.setRunning(this.key, false);
+    store.setSessionContextBefore(this.key, null);
     store.notify(this.key);
-    log.info("session", "compaction by hand ended", { session: this.key, outcome: outcome.kind });
+    log.info("session", "compaction ended", { session: this.key, outcome: outcome.kind });
     if (outcome.kind === "completed") await this.notice(t("station.notice.compacted"));
     else if (outcome.kind === "failed") {
       log.warn("session", "compaction failed", { session: this.key, reason: outcome.reason, error: outcome.message });
@@ -750,13 +892,15 @@ export class SessionActor {
     }).then(() => refused);
   }
 
-  /// Clears it (`clear`), saying `said` in its chat; `by`: who asked, for the log.
-  private async clearNow(readBack: boolean, said = readBack ? "station.notice.afresh" : "station.notice.cleared", by = "by hand"): Promise<string | null> {
-    if (this.turn || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
+  /// Clears it (`clear`), saying `said` in its chat; `by`: who asked, for the log. `keepJobs`: its jobs go on, as when
+  /// a message or notice starts it afresh by itself: the turn that comes is what its wait was for, and its watches keep
+  /// watching (stopped with it, a watch would end without a word, the fresh agent not knowing it had one).
+  private async clearNow(readBack: boolean, said = readBack ? "station.notice.afresh" : "station.notice.cleared", by = "by hand", keepJobs = false): Promise<string | null> {
+    if (this.turn || this.codexUpdate || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
     const store = this.deps.store;
     const row = store.getSession(this.key);
     if (!row?.runtimeSessionId) return t("station.context.empty");
-    await this.stopWaiting(false);
+    await this.stopWaiting(false, keepJobs);
     const agent = this.agent;
     this.agent = null;
     log.info("session", `clearing its context, asked ${by}`, { session: this.key, left: row.runtimeSessionId, readBack, background: agent?.session.background?.().length ?? 0 });
@@ -766,6 +910,7 @@ export class SessionActor {
     this.stoppedNote = null;
     this.resumeLost = false;
     this.afresh = null;
+    this.compactedUntold = false;
     this.nudges = 0;
     this.toolsRestarts = 0;
     this.deps.ranIn?.(this.key, row.runtimeSessionId, null);
@@ -780,31 +925,34 @@ export class SessionActor {
   /// given (session.rs `suspend`): a turn under way stays marked running (to resume once back), unless it had already
   /// said a settled state; messages given to it while it ran are pending again.
   suspend(): Promise<void> {
+    this.deliveryInterruptions++;
     this.formatAbort?.abort();
     return this.enqueue(async () => {
-      const agent = this.agent;
-      this.agent = null;
-      const busy = agent?.session.busy() ?? false;
-      const turn = this.turn;
-      this.turn = null;
-      this.tools = [];
-      this.workingFor = [];
-      this.stopRequested = false;
-      const steered = this.steered;
-      this.steered = [];
-      this.steeredFor = [];
-      this.unread = [];
-      if (!agent && !turn) return;
-      const store = this.deps.store;
-      const resume = (turn !== null || busy) && !(turn?.declared && settled(turn.declared));
-      log.info("session", "ending the runtime process: the station is in no workspace", { session: this.key, resume });
-      await agent?.session.dispose();
-      if (turn) store.endTurn(turn.id, "aborted", "other: the station left its workspace", endedIn(turn.declared, "aborted")?.kind ?? null, null);
-      store.setRunning(this.key, resume);
-      if (turn || busy) store.markUndelivered(this.key, steered);
-      this.deps.live?.turnEnded(this.key);
-      store.notify(this.key);
-      this.phase = "idle";
+      try {
+        const agent = this.agent;
+        this.agent = null;
+        const busy = agent?.session.busy() ?? false;
+        const turn = this.turn;
+        this.turn = null;
+        this.tools = [];
+        this.workingFor = [];
+        this.stopRequested = false;
+        const steered = this.steered;
+        this.steered = [];
+        this.steeredFor = [];
+        this.unread = [];
+        if (!agent && !turn) return;
+        const store = this.deps.store;
+        const resume = (turn !== null || busy) && !(turn?.declared && settled(turn.declared));
+        log.info("session", "ending the runtime process: the station is in no workspace", { session: this.key, resume });
+        await agent?.session.dispose();
+        if (turn) store.endTurn(turn.id, "aborted", "other: the station left its workspace", endedIn(turn.declared, "aborted")?.kind ?? null, null);
+        store.setRunning(this.key, resume);
+        if (turn || busy) store.markUndelivered(this.key, steered);
+        this.deps.live?.turnEnded(this.key);
+        store.notify(this.key);
+        this.phase = "idle";
+      } finally { this.deliveryInterruptions--; }
     });
   }
 
@@ -821,6 +969,7 @@ export class SessionActor {
         id: this.turn.id,
         authRetried: this.turn.authRetried,
         lostRetried: this.turn.lostRetried === true,
+        codexRetried: this.turn.codexRetried === true,
         by: this.turn.by,
         declared: this.turn.declared?.kind ?? null,
         wait: this.turn.declared?.kind === "waiting" ? this.turn.declared.seconds : null,
@@ -855,6 +1004,7 @@ export class SessionActor {
       id: snap.turn.id,
       authRetried: snap.turn.authRetried,
       lostRetried: snap.turn.lostRetried === true,
+      codexRetried: snap.turn.codexRetried === true,
       by: snap.turn.by,
       declared: snap.turn.declared ? parseDeclared(snap.turn.declared, snap.turn.wait ?? 0) : null,
     };
@@ -911,7 +1061,7 @@ export class SessionActor {
   }
 
   private async giveNotices() {
-    if (this.deps.held(this.key) || this.compacting) return;
+    if (this.deps.held(this.key) || this.compacting || this.codexUpdate) return;
     if (this.archived()) {
       this.notices = [];
       return;
@@ -921,8 +1071,10 @@ export class SessionActor {
     if (this.agent?.session.busy()) {
       const text = this.takeNotices();
       if (text === null) return;
+      const [handed, told] = await this.withChoices(text);
       // Not now: after the running turn.
-      if (!(await this.agent.session.steer(text))) this.notices.unshift(text);
+      if (await this.agent.session.steer(handed)) told();
+      else this.notices.unshift(text);
       return;
     }
     const text = this.takeNotices();
@@ -930,16 +1082,24 @@ export class SessionActor {
   }
 
   private async pump() {
-    if (this.deps.held(this.key) || this.archived() || this.compacting) return; // they stay pending
+    if (this.deliveryInterruptions > 0 || this.recoveries > 0 || this.recoveryDeferred || this.deps.held(this.key) || this.archived() || this.compacting) return; // they stay pending
+    if (this.codexUpdate) {
+      if (this.codexUpdate.finished) await this.continueAfterCodexUpdate(this.codexUpdate);
+      return;
+    }
     const store = this.deps.store;
-    const pending = store.pendingMessages(this.key);
-    if (pending.length === 0) return;
-    const [text, widgets] = await this.format(pending);
+    if (!store.hasPending(this.key) || (await this.compactingToCap())) return;
+    if (this.deliveryInterruptions > 0 || this.recoveries > 0 || this.recoveryDeferred || this.closed() || this.deps.held(this.key) || this.archived() || this.compacting) return;
+    const delivery = await this.pendingAndFormat(false);
+    if (delivery === null || this.deliveryInterruptions > 0 || this.recoveries > 0 || this.recoveryDeferred || this.closed() || this.deps.held(this.key) || this.archived() || this.compacting) return;
+    const { pending, text, widgets } = delivery;
     const agent = this.agent?.session;
     if (agent?.busy()) {
       // So it is read now, not when a long command ends; what it waited on goes on.
       if (this.deps.backgroundOnMessage(this.key)) await agent.backgroundTools();
-      if (await agent.steer(text)) {
+      const [handed, told] = await this.withChoices(text);
+      if (await agent.steer(handed)) {
+        told();
         this.workFor(pending);
         this.delivered(pending, widgets);
         this.steered.push(...pending.map(handedOf));
@@ -997,12 +1157,26 @@ export class SessionActor {
     this.deps.store.markWidgetModelsTold(this.key, widgets);
   }
 
-  /// The messages as the agent reads them, made now so edits count (session.rs `format`).
-  private async format(said: any[]): Promise<[string, [string, string][]]> {
+  /// Stop and handover can interrupt both the pending read and its formatting, including old-index preparation.
+  private async pendingAndFormat(allowEmpty: boolean): Promise<{ pending: PendingMessage[]; text: string; widgets: [string, string][] } | null> {
     const abort = new AbortController();
     this.formatAbort = abort;
-    try { return await this.formatWithSignal(said, abort.signal); }
-    finally { if (this.formatAbort === abort) this.formatAbort = null; }
+    try {
+      const pending = await this.deps.pendingDeliveries(this.key, abort.signal);
+      if (abort.signal.aborted) throw new Error("delivery cancelled");
+      if (!allowEmpty && pending.length === 0) return null;
+      const [text, widgets] = await this.format(pending, abort);
+      if (abort.signal.aborted) throw new Error("delivery cancelled");
+      return { pending, text, widgets };
+    } finally { if (this.formatAbort === abort) this.formatAbort = null; }
+  }
+
+  /// The messages as the agent reads them, made now so edits count (session.rs `format`).
+  private async format(said: any[], abort?: AbortController): Promise<[string, [string, string][]]> {
+    const controller = abort ?? new AbortController();
+    if (!abort) this.formatAbort = controller;
+    try { return await this.formatWithSignal(said, controller.signal); }
+    finally { if (!abort && this.formatAbort === controller) this.formatAbort = null; }
   }
 
   private async formatWithSignal(said: any[], signal: AbortSignal): Promise<[string, [string, string][]]> {
@@ -1043,19 +1217,19 @@ export class SessionActor {
       }
     }
     fromChat.forEach((m, i) => { const ts = laterPosts[i]; if (ts !== undefined && ts !== null) posts.set(m, ts); });
-    const cards = new Map<PendingMessage, { ended: MessageRow; current: MessageRow | null; special: string | null }>();
+    const cards = new Map<PendingMessage, { ended: DeliveryCardState["ended"]; current: DeliveryCardState["current"]; special: string | null }>();
     for (const m of said as PendingMessage[]) {
       if (m.message.apart === true || m.message.authorKind !== "person") continue;
-      const ended = store.cardEndedByMessage(m.message.thread, m.message.n);
-      if (ended === null) continue;
-      const card = ended[1];
-      const current = store.pendingCard(m.message.thread)?.[0] ?? null;
+      if (signal.aborted) throw new Error("delivery cancelled");
+      const state = await this.deps.deliveryCardState(m.message.thread, m.message.n, signal);
+      if (state === null) continue;
+      const card = state.card;
       const special = typeof card?.vault?.request === "string" ? `Use secret_reask {request: ${JSON.stringify(card.vault.request)}} if the request is still needed.`
         : typeof card?.adb?.request === "string" ? `Use phone_use {reason: ${JSON.stringify(card.adb.reason ?? "")}, reask: true} if the request is still needed.`
         : typeof card?.signin?.site === "string" ? `Use sign_in {site: ${JSON.stringify(card.signin.site)}, reask: true} if the sign-in is still needed.`
         : card?.type === "login" ? "Check the login with its tool; if it still needs the person, post its login card again."
         : null;
-      cards.set(m, { ended: ended[0], current, special });
+      cards.set(m, { ended: state.ended, current: state.current, special });
     }
     const text = formatInbound(said, newThreads, names, selves, posts, cards, this.key);
     let models: any[];
@@ -1070,6 +1244,23 @@ export class SessionActor {
     const widgets = models.map((w: any): [string, string] => [w.path, w.model]);
     const told = formatWidgetModels(models);
     return [told === "" ? text : text === "" ? told : `${text}\n\n${told}`, widgets];
+  }
+
+  /// `text` as the agent is handed it, after what people chose on its cards with an option that closes them (no message
+  /// was sent then, so it has not heard: store.ts closeCard), and what marks those told once it has been handed.
+  private async withChoices(text: string): Promise<[string, () => void]> {
+    const store = this.deps.store;
+    const chose = store.untoldCardChoices(this.key);
+    if (chose.length === 0) return [text, () => {}];
+    const names = new Map<string, string>();
+    for (const c of chose) {
+      if (names.has(c.by)) continue;
+      const via = store.threadSessions(c.thread).find((m) => m.session === this.key)?.connect;
+      const name = via === undefined ? undefined : await this.deps.chat(via)?.userName?.(c.by);
+      if (name) names.set(c.by, name);
+    }
+    const said = formatCardChoices(chose, names, this.now());
+    return [text === "" ? said : `${said}\n\n${text}`, () => store.markCardChoicesTold(this.key, chose)];
   }
 
   /// What another agent goes by in a thread: the bot of the connect it posts there through, with its mention; in the
@@ -1102,10 +1293,10 @@ export class SessionActor {
       this.deps.live?.event(this.key, { kind: "phase", phase: "starting" });
       // Started by a message or a notice, its large context's cache over, where its chat or else its station is set to
       // (`afresh`, config.json `afreshWhenCold`): it goes on afresh, as 换新上下文 has it by hand, not with all of it
-      // sent again (a wait of its own ends with it). Not while it has work going in the background (which would end
+      // sent again (a wait of its own ends with it; its jobs, watches too, go on). Not while it has work going in the background (which would end
       // with its process).
       if ((kind === "input" || kind === "job") && !this.holding() && !this.agent?.session.busy() && this.deps.coldAfresh?.(this.key, this.now()) === true) {
-        await this.clearNow(true, "station.notice.afreshCold", "as its cache is over");
+        await this.clearNow(true, "station.notice.afreshCold", "as its cache is over", true);
       }
       let agent = await this.ensureAgent();
       const row = store.getSession(this.key);
@@ -1113,12 +1304,19 @@ export class SessionActor {
       const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key))) : null;
       const lost = this.resumeLost;
       this.resumeLost = false;
-      let prompt = lost ? `${this.deps.resumeLost?.(this.key) ?? resumeLost(this.key, [])}\n\n${text}` : text;
+      // What people chose on its cards without a message since it was last handed anything: before what it is handed.
+      const [handed, toldChoices] = await this.withChoices(text);
+      let prompt = lost ? `${this.deps.resumeLost?.(this.key) ?? resumeLost(this.key, [])}\n\n${handed}` : handed;
       const stopped = this.stoppedNote;
       this.stoppedNote = null;
       if (stopped !== null) prompt = `${stopped}\n\n${prompt}`;
       const afresh = this.afresh;
       this.afresh = null;
+      const compacted = this.compactedUntold;
+      this.compactedUntold = false;
+      // Gone on in a new conversation, or compacted: in a long chat, told to read back what people said in it.
+      const long = lost || afresh !== null || compacted ? (this.deps.longChat?.(this.key) ?? null) : null;
+      if (long !== null) prompt = `${long}\n\n${prompt}`;
       if (afresh !== null) prompt = `${afresh}\n\n${prompt}`;
       if (continued !== null) prompt = `${continued}\n\n${prompt}`;
       // What changed in how it works since it was last told (migrations): once, before what it is handed.
@@ -1137,7 +1335,7 @@ export class SessionActor {
       }
       await this.deps.toSandbox?.(this.key).catch((error) => log.warn("session", "files not copied to its sandbox", { session: this.key, error: (error as Error).message }));
       // The runtime may have started a turn on its own (late input became a turn); join it.
-      if (agent.busy() && (await agent.steer(prompt))) return;
+      if (agent.busy() && (await agent.steer(prompt))) return toldChoices();
       this.steered = [];
       this.steeredFor = [];
       this.unread = [];
@@ -1153,6 +1351,7 @@ export class SessionActor {
         agent = await this.ensureAgent();
         await agent.prompt(prompt);
       }
+      toldChoices();
     } catch (error) {
       const message = (error as Error).message;
       const turn = this.turn;
@@ -1185,7 +1384,7 @@ export class SessionActor {
       this.posted = false;
     }
     const id = crypto.randomUUID();
-    this.turn = { id, declared: null, authRetried: kind === "auth_retry", lostRetried: kind === "sandbox_retry", by };
+    this.turn = { id, declared: null, authRetried: kind === "auth_retry", lostRetried: kind === "sandbox_retry", codexRetried: kind === "codex_retry", by };
     this.phase = "running";
     this.waiting = null;
     this.deps.store.startTurnFor(id, this.key, kind, { ...by, profile: this.profile });
@@ -1276,7 +1475,8 @@ export class SessionActor {
       log.info("session", "going on in a new runtime session on another account", { session: this.key, left: row.runtimeSessionId, profile: profile.id });
       agent = await driver.open(base, this.listener(generation));
       this.afresh = afresh;
-      const from = store.runtimeSessionSources?.(this.key).find((s) => s.id === row.runtimeSessionId);
+      const from = store.runtimeSessionSource ? store.runtimeSessionSource(this.key, row.runtimeSessionId!) ?? undefined
+        : store.runtimeSessionSources?.(this.key).find((s) => s.id === row.runtimeSessionId);
       if (from === undefined || from.runtime === row.runtime) resumable = this.deps.carrySubagents?.(row.runtimeSessionId!, agent.id(), profile, subagents) ?? [];
     } else if (row.runtimeSessionId) {
       try {
@@ -1336,7 +1536,11 @@ export class SessionActor {
         break;
       case "live":
         // Asking its model: what was given to the turn so far goes with the request.
-        if (event.event.kind === "phase" && event.event.phase === "requesting") this.unread = [];
+        if (event.event.kind === "phase" && event.event.phase === "requesting") {
+          // What it said of the turn it said without seeing them: it says where it stands again.
+          if (this.unread.length > 0) void this.enqueue(async () => this.undeclare());
+          this.unread = [];
+        }
         this.deps.live?.event(this.key, event.event);
         if (this.isCurrent(generation)) this.heard(event.event);
         this.onLive(event.event);
@@ -1347,6 +1551,9 @@ export class SessionActor {
           log.warn("session", "the agent cannot reach the station's tools", { session: this.key, why: event.why });
           this.toolsLost = event.why;
         });
+        break;
+      case "compacted":
+        void this.enqueue(() => this.onCompacted(generation));
         break;
       case "closed":
         void this.enqueue(async () => {
@@ -1369,6 +1576,20 @@ export class SessionActor {
         });
         break;
     }
+  }
+
+  /// Its context compacted: in a long chat, told to read back what people said in it. Compacted on its own in the
+  /// middle of a turn, the turn is told at once; compacted by hand (a turn of its own) or with the turn over, its next
+  /// prompt tells it.
+  private async onCompacted(generation: number) {
+    if (!this.isCurrent(generation)) return;
+    const agent = this.agent?.session;
+    if (!this.compacting && agent?.busy()) {
+      const long = this.deps.longChat?.(this.key) ?? null;
+      // As a notice is (takeNotices): a message from the station, not from the people of the chat.
+      if (long === null || (await agent.steer(`<message via="station" from="station" ts="${this.deps.nextTs()}">\n${long}\n</message>`))) return;
+    }
+    this.compactedUntold = true;
   }
 
   /// The agent's own words as they come (not a subagent's, not its thinking).
@@ -1414,6 +1635,41 @@ export class SessionActor {
       store.notify(this.key);
     }
     if (turn?.declared) this.toolsRestarts = 0;
+    // This refusal is about the local Codex binary, not the account or the model. Do not replay the input: a turn may
+    // have done work before it asked the model, so resume the transcript after the shared update instead.
+    if (this.runtime === "codex" && outcome.kind === "failed" && codexTooOld(outcome.message) && !stopRequested && !this.deps.held(this.key) && turn && !turn.codexRetried && !turn.declared && this.deps.updateOldCodex) {
+      const agent = this.agent;
+      const version = agent?.session.runtimeVersion?.() ?? null;
+      const update = { by: turn.by, finished: false };
+      this.codexUpdate = update;
+      this.agent = null;
+      this.nudges = 0;
+      await this.notice(t("station.notice.codexUpdating"), null, null, (where) => { store.setAbout(turn.id, where); store.notify(this.key); });
+      await this.endProcess(agent);
+      store.setRunning(this.key, true);
+      // Do not hold the session queue during an install: stop and new messages must still be accepted.
+      void Promise.resolve().then(async () => {
+        if (agent?.session.runtimeUpdateMatchesStation && !(await agent.session.runtimeUpdateMatchesStation())) throw new Error(t("station.notice.codexDifferentPath"));
+        await this.deps.updateOldCodex!(version);
+      }).then(
+        () => this.enqueue(async () => {
+          if (this.codexUpdate !== update) return;
+          update.finished = true;
+          await this.continueAfterCodexUpdate(update);
+        }),
+        (error) => this.enqueue(async () => {
+          if (this.codexUpdate !== update) return;
+          this.codexUpdate = null;
+          store.setRunning(this.key, false);
+          const why = (error as Error)?.message || String(error);
+          await this.notice(`⚠️ ${t("station.notice.codexUpdateFailed", { why })}`, null, null, (where) => { store.setAbout(turn.id, where); store.notify(this.key); });
+          this.deps.settled?.(this.key, "failed", why);
+          this.deps.idle(this.key);
+          if (store.hasPending(this.key)) await this.pump();
+        }),
+      );
+      return;
+    }
     // Every Codex authentication refusal updates account health, including the retry's refusal.
     if (this.runtime === "codex" && outcome.kind === "failed" && outcome.reason === "auth" && !stopRequested && this.profile !== null) {
       await this.deps.recheck?.(this.profile);
@@ -1428,7 +1684,9 @@ export class SessionActor {
       // Its account checked first: one whose login is over is left, and the turn goes on on another (`runOn`).
       if (this.runtime === "claude" && this.profile !== null) await this.deps.recheck?.(this.profile);
       log.info("session", "authentication failed; reopening and continuing once", { session: this.key, runtime: this.runtime });
-      return this.startTurn("auth_retry", GO_ON_AFTER_AUTH, turn.by);
+      await this.startTurn("auth_retry", GO_ON_AFTER_AUTH, turn.by);
+      if (this.turn && turn.codexRetried) (this.turn as Turn).codexRetried = true;
+      return;
     }
     // Its process ran in a sandbox and the connection to it was lost (not the program ending): started again there once,
     // going on from its transcript as after an authentication error.
@@ -1438,7 +1696,9 @@ export class SessionActor {
       this.agent = null;
       await this.endProcess(agent);
       log.info("session", "the connection to its sandbox was lost; starting again and continuing once", { session: this.key });
-      return this.startTurn("sandbox_retry", GO_ON_AFTER_LOST, turn.by);
+      await this.startTurn("sandbox_retry", GO_ON_AFTER_LOST, turn.by);
+      if (this.turn && turn.codexRetried) (this.turn as Turn).codexRetried = true;
+      return;
     }
     const spent = outcome.kind === "failed" && outcome.reason === "rate_limit";
     if (!spent) this.refill = null;
@@ -1447,7 +1707,8 @@ export class SessionActor {
       // Left to the station, it moves to another account and goes on there; otherwise it waits for a change.
       let moved: [string, string] | null = null;
       try {
-        moved = this.deps.spend(this.key, this.profile);
+        // A model's own limit is that model's on this account alone: its others still run there (#4643).
+        moved = this.deps.spend(this.key, this.profile, modelLimitOf(outcome.message));
       } catch (error) {
         log.warn("session", "could not move off a spent profile", { session: this.key, error: (error as Error).message });
       }
@@ -1462,7 +1723,7 @@ export class SessionActor {
         return this.startTurn("resume", GO_ON_AFTER_SPENT);
       }
       // Said once: what wakes it meanwhile (a job's notice, a wait over) would only run into it again.
-      if (!this.saidLast((said) => [SPENT_NOTICE(), ...SPENT_BEFORE].some((s) => said.startsWith(s)))) {
+      if (!this.saidLast((said) => [failureNotice(outcome).split("\n\n")[0]!, SPENT_NOTICE(), ...SPENT_BEFORE].some((s) => said.startsWith(s)))) {
         await this.notice(failureNotice(outcome), this.profile, null, turn ? (where) => { store.setAbout(turn.id, where); store.notify(this.key); } : undefined);
       } else if (turn) {
         // The existing notice is deliberately reused for this turn; retain its identity as for a new notice.
@@ -1489,7 +1750,9 @@ export class SessionActor {
       this.nudges = 0;
       // A sign-in that failed is its profile's, as is a refused request (its environment is where a proxy goes): the
       // notice points there.
-      await this.notice(failureNotice(outcome), outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null, null, turn ? (where) => { store.setAbout(turn.id, where); store.notify(this.key); } : undefined);
+      const said = this.runtime === "codex" && turn?.codexRetried && codexTooOld(outcome.message)
+        ? `⚠️ ${withSaid(t("station.notice.codexStillOld"), outcome.message)}` : failureNotice(outcome);
+      await this.notice(said, outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null, null, turn ? (where) => { store.setAbout(turn.id, where); store.notify(this.key); } : undefined);
     } else if (outcome.kind === "aborted") {
       this.nudges = 0;
       if (stopRequested) {
@@ -1524,6 +1787,7 @@ export class SessionActor {
       this.deps.idle(this.key);
       return;
     }
+    if (outcome.kind === "completed" && ends?.kind !== "waiting" && (await this.compactingToCap())) return;
     if (store.hasPending(this.key)) return this.pump();
     if (this.notices.length > 0) return this.giveNotices();
     const declared = turn?.declared ?? null;
@@ -1572,6 +1836,17 @@ export class SessionActor {
     await this.giveUp(turn?.id ?? null);
   }
 
+  /// A completed install resumes only this failed turn; stopping, archiving or a newer update invalidates it.
+  private async continueAfterCodexUpdate(update: { by: TurnFor; finished: boolean }) {
+    if (this.codexUpdate !== update || !update.finished || this.deps.held(this.key)) return;
+    this.codexUpdate = null;
+    this.deps.store.setRunning(this.key, false);
+    if (this.archived()) return;
+    await this.startTurn("codex_retry", GO_ON_AFTER_CODEX_UPDATE, update.by);
+    if (this.deps.store.hasPending(this.key)) await this.pump();
+    else if (this.notices.length > 0) await this.giveNotices();
+  }
+
   /// No turn ended in a state, and no more are asked for: the thread is told so, with the agent's last words when it
   /// posted none (it may have answered where nobody reads: its tools out of reach), marked as the station's.
   private async giveUp(turnId: string | null) {
@@ -1586,7 +1861,8 @@ export class SessionActor {
   }
 
   /// Stopped while it waits: the wait ends, and so does the work that would bring it back (session.rs `stop_waiting`).
-  private async stopWaiting(say = true) {
+  /// `keepJobs`: only the wait ends; its jobs go on (`clearNow` when it goes on afresh by itself).
+  private async stopWaiting(say = true, keepJobs = false) {
     const store = this.deps.store;
     const refill = this.refill !== null;
     const waited = this.waiting !== null || refill;
@@ -1600,7 +1876,7 @@ export class SessionActor {
     log.info("session", "stopped while waiting", { session: this.key });
     // A turn waiting to be tried again waits on no work of its own: its jobs go on. Asked again, it starts over.
     if (last && retrying(last)) this.overloads = 0;
-    else await this.deps.stopJobs(this.key);
+    else if (!keepJobs) await this.deps.stopJobs(this.key);
     this.nudges = 0;
     const agent = this.agent;
     this.agent = null;
@@ -1716,10 +1992,16 @@ export class SessionActor {
     ).catch(() => undefined);
   }
 
+  /// Its run changed (lifecycle.ts `configure`): said in its chat, how it ran and how it runs now kept with the words
+  /// (the clients say what changed from them).
+  async runChanged(change: RunChange): Promise<void> {
+    await this.notice(runChangeWords(change, stationLang()), null, null, undefined, change);
+  }
+
   /// The station's own words (not the agent's) go to the thread people spoke in last, and are recorded there; one about
   /// a profile (`profile`, its id) is linked to that profile's page, one about a runtime not installed (`runtime`)
-  /// offers to install it.
-  private async notice(text: string, profile: string | null = null, runtime: RuntimeKind | null = null, recorded?: (where: [number, number, string]) => void) {
+  /// offers to install it; one that its run changed keeps how (`change`).
+  private async notice(text: string, profile: string | null = null, runtime: RuntimeKind | null = null, recorded?: (where: [number, number, string]) => void, change?: RunChange) {
     const store = this.deps.store;
     const latest = store.latestThread(this.key);
     const chat = latest ? this.deps.chat(latest.connect) : undefined;
@@ -1729,7 +2011,7 @@ export class SessionActor {
     }
     try {
       const ts = await chat.post({ channel: latest.thread.channel, threadTs: latest.thread.threadTs }, text, []);
-      const [n] = store.insertMessage({ thread: latest.thread.id, ts, authorKind: STATION_AUTHOR, author: STATION_AUTHOR, text, profile, runtime, attachments: [], quotes: [], declared: null, client: null, card: null, options: null, agentIdentity: null });
+      const [n] = store.insertMessage({ thread: latest.thread.id, ts, authorKind: STATION_AUTHOR, author: STATION_AUTHOR, text, profile, runtime, attachments: [], quotes: [], declared: null, client: null, card: null, options: null, agentIdentity: null, ...(change !== undefined ? { change } : {}) });
       recorded?.([latest.thread.id, n, ts]);
     } catch (error) {
       log.warn("session", "notice failed", { session: this.key, error: (error as Error).message });
@@ -1783,12 +2065,18 @@ const SPENT_BEFORE = ["⚠️ 已达到额度或速率限制", "⚠️ Hit a usa
 /// That the provider had no room for it: its words, about no account, are of no use to people.
 const OVERLOADED_NOTICE = () => `⚠️ ${t("station.notice.overloaded")}`;
 
+/// Codex relays the provider's exact refusal inside its error message, sometimes wrapped in a JSON response.
+const codexTooOld = (message: string) => /\bmodel requires a newer version of Codex\.\s*Please upgrade to the latest app or CLI and try again\./i.test(message);
+
 /// A failed turn as its chat is told it: what it means and what to do, by its reason, on its first line (what a
 /// notice shows closed, and a push says); what the runtime said after it, as it said it (`withSaid`). A reason the
 /// station cannot put in words of its own (the model's, any other) has the runtime's first line in it: "模型服务出错"
-/// alone told people nothing (2026-11-05).
+/// alone told people nothing (2026-11-05). A model's own limit names the model: "额度已用完" beside quota bars with room
+/// left read as a mistake (#4365).
 function failureNotice(outcome: TurnOutcome): string {
   if (outcome.kind !== "failed") return "";
+  const model = outcome.reason === "rate_limit" ? modelLimitOf(outcome.message) : null;
+  if (model !== null) return `⚠️ ${withSaid(t("station.notice.modelLimit", { model }), outcome.message)}`;
   const key = outcome.reason === "rate_limit" ? "rateLimit" : outcome.reason === "other" ? "failed" : outcome.reason;
   const why = outcome.reason === "model" || outcome.reason === "other" ? firstLine(outcome.message) : "";
   return `⚠️ ${withSaid(why === "" ? t(`station.notice.${key}`) : t(`station.notice.${key}Why`, { why }), outcome.message)}`;

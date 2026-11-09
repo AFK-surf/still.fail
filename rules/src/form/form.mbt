@@ -1,4 +1,4 @@
-// The workspace lock's forms (docs/workspace-lock.md), as station/src/cloud/lock.ts and client/core-ts/src/lock-form.ts
+// The workspace lock's forms, as station/src/cloud/lock.ts and client/core-ts/src/lock-form.ts
 // have them: JSON with object keys sorted and no space (what is hashed), byte for byte as theirs (rules/test checks the
 // two agree), and what an entry's hash is of.
 

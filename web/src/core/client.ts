@@ -1,13 +1,11 @@
 import { UNTRACKED_OPERATIONS } from "./operations.ts";
-// The UI's side of the core (docs/client-core.md): one channel to the worker
+// The UI's side of the core: one channel to the worker
 // that runs it, calls with request ids, and subscriptions that survive the
 // worker being replaced. Each tab has a dedicated Worker; one of them runs the
-// core and the others' relay to it (worker.ts, docs/core-db.md).
+// core and the others' relay to it (worker.ts).
 import { BUILT_AT } from "./built.ts";
 import { BETA } from "../channel.ts";
 import { applyDelta, type DeltaOp } from "./delta.ts";
-import { captureException } from "../telemetry.ts";
-import { reload } from "../reloads.ts";
 import { t } from "../i18n.ts";
 
 /** What a UI can subscribe to (`Topic` in client/core-ts/src/protocol.ts). */
@@ -42,7 +40,7 @@ export type Topic =
   | { topic: "jobs"; station: string }
   // A job's last `lines` lines of output and when it last grew, current as it grows.
   | { topic: "jobLog"; station: string; job: string; lines: number }
-  // A station's logins to its command-line tools (docs/remote-login.md): the services it knows and its logins, one
+  // A station's logins to its command-line tools: the services it knows and its logins, one
   // login as it stands, and that login's terminal (only while it is looked at).
   | { topic: "machineLogins"; station: string }
   | { topic: "machineLogin"; station: string; id: string }
@@ -73,7 +71,7 @@ export type Topic =
   | { topic: "status"; workspace?: string }
   // What a chat on a station says of its connection, when it says it all decided (client/core-ts/src/pill.ts).
   | { topic: "connection"; station: string }
-  // What a person hears about while the client runs (docs/notifications.md): a workspace's, or every one's.
+  // What a person hears about while the client runs: a workspace's, or every one's.
   | { topic: "notices"; workspace?: string }
   // What is written to a chat on this device, until sent: `chat` its key, `thread:<id>`, or `new` (a new chat there).
   | { topic: "draft"; station: string; chat: string }
@@ -83,23 +81,23 @@ export type Topic =
   // The chats of a scope a few words find, titles first (not `exclude`, `limit` at most; written on `station`, the
   // other stations' say so): the composer's `@` menu and the switcher. A core from before it answers an error.
   | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number; messages?: number }
-  // What a few words find in a workspace, on the device and on every station (docs/search.md, views/search.ts): ⌘K and
+  // What a few words find in a workspace, on the device and on every station (views/search.ts): ⌘K and
   // the phone's search. With `kind`, that kind alone, more of it.
   | { topic: "search"; scope: string; query: string; kind?: string; limit?: number }
   // The archived chats of a scope's stations online, newest first by day (client/core-ts/src/views/archive.ts).
   | { topic: "archive"; scope: string; q?: string; limit?: number }
   // A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here.
   | { topic: "newChat"; scope: string }
-  // Where something another app shares goes (`source` what is shared, `query` narrowing the chats): docs/share-in.md.
+  // Where something another app shares goes (`source` what is shared, `query` narrowing the chats).
   | { topic: "shareIn"; scope: string; source: string; query?: string }
   // A model control: what it runs on now and what its panel picked (`of`: new, session:<key>, connect:<id>, connect-new).
   | { topic: "pick"; station: string; of: string }
   // A chat's services and background jobs as its pages show them (the same thread or session as its `chat`).
   // A chat's agent in brief, for its card over its avatar: what it did, cost and used, its account and quota, its jobs.
   | { topic: "agentCard"; station: string; key: string }
-  // What a chat's agents and other chats' wrote each other, not said in it (Letters.tsx).
+  // What a chat's agents and other chats' wrote each other, not said in it.
   | { topic: "chatLetters"; station: string; thread: number }
-  // What was said in a chat besides words: its pictures, files, links and pull requests (Things.tsx).
+  // What was said in a chat besides words: its pictures, files, links and pull requests.
   | { topic: "chatThings"; station: string; thread: number; q?: string }
   | { topic: "chatJobs"; station: string; thread: number }
   | { topic: "chatJobs"; station: string; session: string }
@@ -120,7 +118,7 @@ export type Topic =
   | { topic: "resources"; scope: string; station?: string }
   // A job as it is now (kept current by its events).
   | { topic: "job"; station: string; id: string }
-  // A folder of a station's drive (docs/drive.md): `root` one of its roots' paths, `path` under it ("" the root itself).
+  // A folder of a station's drive: `root` one of its roots' paths, `path` under it ("" the root itself).
   // Read again each time it is shown; what is held shows meanwhile, a refusal is the topic's error.
   | { topic: "drive"; station: string; root: string; path: string }
   // Where a file of a drive was left on this device (a text's offset, a video's time in ms): null before.
@@ -154,12 +152,12 @@ export type Topic =
   // workspaces that could be added to this one, and the workspaces a station is in. A core from before has neither.
   | { topic: "joinable"; workspace: string }
   | { topic: "memberships"; station: string }
-  // A station's screens a person can see and drive (docs/remote-screens.md): a core from before it answers an error.
+  // A station's screens a person can see and drive: a core from before it answers an error.
   | { topic: "screens"; station: string }
   | { topic: "screenCard"; station: string; screen: string }
-  // A link to a station's 共享调试 as a message shows it (AdbLink.tsx).
+  // A link to a station's 共享调试 as a message shows it.
   | { topic: "adbCard"; station: string }
-  // The vault (docs/vault.md, client/core-ts/src/views/vault.ts): the viewer's vaults in a workspace and what waits on
+  // The vault (client/core-ts/src/views/vault.ts): the viewer's vaults in a workspace and what waits on
   // them; a vault's items. A core from before has neither.
   | { topic: "vaults"; workspace: string }
   | { topic: "vaultItems"; workspace: string; vault: string }
@@ -169,7 +167,7 @@ export type Topic =
   | { topic: "vaultUses"; workspace: string; vault: string; item: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
-export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }
+interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }
 
 /**
  * Where this page's attention is (`client.focus`, client/core-ts/src/attend.ts): in view, looked at, the chat it shows,
@@ -178,7 +176,7 @@ export interface ChatShown { station: string; thread: number | null; session: st
  */
 export interface Focus { visible?: boolean; focused?: boolean; chat?: ChatShown | null; left?: ChatShown; workspace?: string; newChat?: string }
 
-export interface ErrorBody {
+interface ErrorBody {
   code: string;
   message: string;
   status?: number;
@@ -236,7 +234,7 @@ interface Subscription {
 
 export { applyDelta, type DeltaOp } from "./delta.ts";
 
-export interface ClientOptions {
+interface ClientOptions {
   /** Waits before reopening a failed worker; tests pass their own. */
   schedule?: (ms: number, run: () => void) => void;
   /** Errors in the worker (it reports them; the page cannot see them) and the worker failing, for error tracking. */
@@ -522,7 +520,7 @@ export class CoreClient {
     const message = data as { id?: number; ok?: unknown; value?: unknown; bytes?: Uint8Array; delta?: DeltaOp[]; waiting?: boolean; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean; rejoin?: boolean };
     // A newer build's core took over: this page is of the older build, so it loads the newer one.
     if (message.retired) {
-      reload("retired");
+      location.reload();
       return;
     }
     // The core this page talked to went with its tab; another tab's worker runs it now: this page asks it again.
@@ -582,7 +580,7 @@ const workerName = `stillfail-core-${BUILT_AT}${BETA ? "-test" : ""}`;
  * Opens a channel to this tab's core worker (worker.ts: one of the tabs' workers runs the core, the others relay to
  * it). The browser is asked to keep what the core stores (it is the only copy of what was sent offline).
  */
-export function workerOpener(): Opener {
+function workerOpener(): Opener {
   void navigator.storage?.persist?.().catch(() => false);
   return (onMessage, onFail) => {
     const receive = (event: MessageEvent) => {
@@ -602,7 +600,7 @@ function same(a: ChatShown, b: ChatShown): boolean {
 
 /** Starts (or joins) the core and keeps the page's client in step with the page's lifecycle. */
 export function connectCore(): CoreClient {
-  const client = new CoreClient(workerOpener(), { onFault: (error) => captureException(error, { source: "core" }), endWithPage: true });
+  const client = new CoreClient(workerOpener(), { onFault: (error) => console.error("still.fail core:", error), endWithPage: true });
   addEventListener("pagehide", () => client.suspend());
   // Hidden since when (wall clock: a frozen page's monotonic clock may stand still).
   let hidden = document.visibilityState === "hidden" ? Date.now() : null;

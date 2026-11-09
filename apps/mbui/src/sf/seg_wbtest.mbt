@@ -130,7 +130,7 @@ test "a filling Seg whose options do not fit side by side even at the system's o
 }
 
 ///|
-/// The thumb on the dark theme's track on every ground it may lie on: seen off it (1.25 to 1, docs/ui-panels.md 对比度)
+/// The thumb on the dark theme's track on every ground it may lie on: seen off it (1.25 to 1, mbui ui/contrast.mbt)
 /// and the chosen words read on it. (The light one is white with a shadow round it, the track grey: what a shadow does
 /// a ratio does not say.) The canvas and an opaque grey were 1.02 and 1.05 to 1 off it (2026-10-27).
 test "the dark theme's segmented thumb seen off its track on every ground, its words read on it" {
@@ -190,7 +190,7 @@ test "segmented whose options do not fit side by side even at the system's own s
   assert_true((x - 16.0).abs() < 0.5 && (x + w - 204.0).abs() < 0.5, msg="\{x} \{w}")
   assert_eq(t.lines_of("Overview"), ["Overview"])
   assert_eq(t.squeeze_faults(), [])
-  // (a window 220 wide is Small: the pick a sheet, with either hand: docs/architecture.md, rule 3)
+  // (a window 220 wide is Small: the pick a sheet, with either hand, rule 3)
   open_choice(t, "Overview")
   assert_eq(presented_how, [AsSheet])
   t.tap_text("Settings")

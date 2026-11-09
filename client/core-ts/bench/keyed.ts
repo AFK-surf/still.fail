@@ -1,4 +1,4 @@
-// Rule 7's measurement (docs/core-ts.md): a chat list of 2000 rows, one row changing, sent the Rust way (whole value
+// Rule 7's measurement: a chat list of 2000 rows, one row changing, sent the Rust way (whole value
 // diffed by index) and keyed (collections.ts). Bytes on the wire; the core's time from the change to the message
 // (view, decorate, shape, diff); the UI's time to parse and apply it (web/src/core/delta.ts) and how many rows it gets
 // as new objects (what React/Compose redraw).

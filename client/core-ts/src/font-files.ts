@@ -1,4 +1,4 @@
-// A face's files on a device whose app keeps no files of its own (the mbui app; docs/fonts.md): what the Android app
+// A face's files on a device whose app keeps no files of its own (the mbui app; sf/faces.mbt): what the Android app
 // does itself in files/fonts, done here in the host's storage. A face chosen is fetched (`fonts.fetch {id}`), each of its
 // files as it is put (gzipped), how far it got said on the `fonts` topic; the app unzips each and checks it by its
 // hash, and that is kept instead (`fonts.keep {sha256}` + the file); `fonts.file {sha256}` gives back either, saying

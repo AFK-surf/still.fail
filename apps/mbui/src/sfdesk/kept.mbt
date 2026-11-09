@@ -1,4 +1,4 @@
-// What the files keep as they are left, as a local file browser does, for the app's run (ember web/src/drive/kept.ts;
+// What the files keep as they are left, as a local file browser does, for the app's run (still.fail web/src/drive/kept.ts;
 // not stored): the folder last open in a workspace's files' page (the rail's 文件 comes back to it) and in its chats'
 // 文件 tab (the same over each chat, as the tab is kept while chats change beside it). How far each folder was
 // scrolled is its list's own (by where it is shown and how: its key). The folders a tree had open, a column's width
@@ -49,15 +49,4 @@ pub fn last_files_page(ws : String) -> DriveAt? {
 ///|
 pub fn keep_files_page(ws : String, at : DriveAt) -> Unit {
   kept.pages[ws] = at
-}
-
-///|
-/// Where the chats' 文件 tab was in workspace `ws` (Some(None): the places).
-pub fn kept_tab(ws : String) -> DriveAt?? {
-  kept.tabs.get(ws)
-}
-
-///|
-pub fn keep_tab(ws : String, at : DriveAt?) -> Unit {
-  kept.tabs[ws] = at
 }

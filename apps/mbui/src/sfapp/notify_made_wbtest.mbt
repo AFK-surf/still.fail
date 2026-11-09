@@ -5,7 +5,7 @@
 test "通知 and 权限 made once on each screen, as a page of the settings and as a place: the tree's own; a kind's banner turned asks the core" {
   for w in [390.0, 600.0, 800.0, 1000.0, 1280.0] {
     for entry in ["page", "place"] {
-      for name in ["notifications"] {
+      for name in ["notifications", "permissions"] {
         let route = if name == "notifications" { @settings.Route::Notifications } else { @settings.Route::Permissions }
         let calls : Array[Made] = []
         let t = wide_tester(calls, mode="settings", w~, platform=if w < 600.0 { 2 } else { 0 })

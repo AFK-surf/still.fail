@@ -142,9 +142,9 @@ fn rows_view(n : Int) -> (Ctx) -> Unit {
       let id = c.id("row")
       c.box(h=Px(50.0), bg=0xEEEEEEFFL, id~, fn() { c.text("row \{i}") |> ignore })
       |> ignore
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         clicks.push(i)
-      }
+      })
     })
     |> ignore
   }
@@ -231,6 +231,50 @@ test "Android: the drag starts where the slop ends, nothing jumps or is lost" {
   m.touch(1, 200.0, 490.0)
   m.frame(ms=0.0)
   approx(m.list_offset(), 4.0, 1.0e-9)
+}
+
+///|
+/// The host's fingers (`phase`, the system's id, y; all at x 200), each half a drag step after the one before, and
+/// where the list stands after each.
+fn fingers_on_list(events : Array[(Int, Int, Double)]) -> Array[Double] {
+  let t = Tester::new(rows_view(100), platform=2)
+  let stands = []
+  for e in events {
+    t.advance(drag_step_ms / 2.0)
+    t.touch_raw(e.0, e.1, 200.0, e.2, t.time())
+    t.frame(ms=0.0)
+    stands.push(t.list_offset())
+  }
+  stands
+}
+
+///|
+test "Android: a second finger down on a dragged list leads it, and the first let go, nothing jumps (2026-11-08 左子健: 两个手指协同滚动页面的时候体验会很奇怪)" {
+  let stands = fingers_on_list([
+    (0, 7, 500.0),
+    (1, 7, 480.0),
+    // the second down, 300 above the first: the list follows it, not the first
+    (0, 9, 200.0),
+    (1, 9, 190.0),
+    (1, 7, 470.0),
+    // the first let go: the second goes on from where it is
+    (2, 7, 470.0),
+    (1, 9, 185.0),
+    (1, 9, 175.0),
+  ])
+  assert_eq(stands, [0.0, 12.0, 12.0, 22.0, 22.0, 22.0, 27.0, 37.0])
+}
+
+///|
+test "Android: the first finger let go before the slop, the second's moves start the drag from where it is" {
+  let stands = fingers_on_list([(0, 7, 500.0), (0, 9, 200.0), (2, 7, 500.0), (1, 9, 195.0), (1, 9, 188.0)])
+  assert_eq(stands, [0.0, 0.0, 0.0, 0.0, 4.0])
+}
+
+///|
+test "Android: a second finger let go on a list it led, the first leads again from where it is" {
+  let stands = fingers_on_list([(0, 7, 500.0), (1, 7, 480.0), (0, 9, 200.0), (1, 9, 190.0), (2, 9, 190.0), (1, 7, 470.0)])
+  assert_eq(stands, [0.0, 12.0, 12.0, 22.0, 22.0, 32.0])
 }
 
 ///|

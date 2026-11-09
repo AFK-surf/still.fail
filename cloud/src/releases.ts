@@ -165,12 +165,13 @@ export function groupReads(ranges: Range[]): { start: number; end: number; last:
 
 /** Each app's feed: the released builds', and the beta apps' (fail.still.*.beta, for testers: /releases/latest/<app>-beta). */
 const FEEDS: Record<string, string> = {
-  mac: "desktop/stillfail-mac.yml",
+  // (the apps' own updaters' feeds, which every product's apps have: monoid's never had electron-updater's .yml)
+  mac: "mac/latest.json",
   android: "android/latest.json",
-  "mac-beta": "desktop/stillfail-beta-mac.yml",
+  "mac-beta": "mac/beta/latest.json",
   "android-beta": "android/beta/latest.json",
-  win: "desktop/stillfail.yml",
-  "win-beta": "desktop/stillfail-beta.yml",
+  win: "win/latest.json",
+  "win-beta": "win/beta/latest.json",
   // still.fail mbui (apps/mbui), the test app in mbui
   "android-mbui": "android/mbui/latest.json",
   "mac-mbui": "mac/mbui/latest.json",

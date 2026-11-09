@@ -13,7 +13,7 @@ test "locate and reachable: an old view's words and the tree's, made transparent
         // (going out: still drawn, pressed no more, as kit's menus are, inert, on their way out)
         c.overlay("old", inert=going.get(), fn() {
           let b = c.box(left=0.0, top=0.0, w=Px(120.0), h=Px(40.0), fn() { c.text("旧的字") |> ignore })
-          c.clicked(b) |> ignore
+          c.takes_presses(b)
           c.look(b, { alpha: if shown.get() { 1.0 } else { 0.0 }, dx: 0.0, dy: 0.0, sx: 1.0, sy: 1.0, ox: 0.5, oy: 0.5, rot: 0.0, circle: 0.0, words: 1.0 })
         })
         |> ignore

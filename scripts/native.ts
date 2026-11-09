@@ -1,4 +1,4 @@
-// The native parts the TypeScript station and clients use, prebuilt (docs/development.md, "Native parts"): each one
+// The native parts the TypeScript station and clients use, prebuilt: each one
 // is named by a key, the hash of all that goes into it (its sources, as git has them, not its tests, and every vendored
 // crate it uses; its Cargo.lock; the Rust toolchain; the target; how it is built), and found, in this order, in
 //   1. the cache on this machine, which every worktree shares: ~/Library/Caches/stillfail-native (macOS),
@@ -35,8 +35,10 @@
 //        (.github/workflows/prebuild.yml, run by hand); its other jobs fetch them, or fail saying to run it.
 //        --release: in the release native-artifacts instead (gh), which native.ts fetches from after the store (the
 //        workflow's, and a machine's without the bucket's token).
-//   node scripts/native.ts store-sync                  CI on main: each prebuilt part (the Windows ones) at its key that the
-//        release has and the store lacks, copied there (release-put.sh, CLOUDFLARE_API_TOKEN); never built
+//   node scripts/native.ts store-sync                  CI on main: each prebuilt part at its key that the release has and
+//        the store lacks, copied there (release-put.sh, CLOUDFLARE_API_TOKEN); never built. (Every part, not only the
+//        Windows ones: the release's download answered GitHub's runners 504 again and again on 2026-11-08, iroh-wasm's,
+//        failing every branch's bundle, static and check-linux; the store is asked first.)
 //
 // STILLFAIL_NATIVE=build never downloads (builds what the cache lacks); STILLFAIL_NATIVE=offline neither downloads nor
 // builds. Builds go to $CARGO_TARGET_DIR/native/<part> when it is set, else the crate's own target/ (a worktree's own:
@@ -52,7 +54,6 @@ import { request as httpsRequest } from "node:https";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
-import * as ffmpeg from "./ffmpeg.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /// The Rust every part is built with (rustup installs it on first use): part of each key, so a newer one is a rebuild.
@@ -130,8 +131,8 @@ const HERMES_LINUX_CMAKE = ["-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_
 /// ICU's libraries the Linux engine carries: Ubuntu 24.04's (the prebuild workflow's), what its build links.
 const ICU_LINUX = ["libicuuc.so.74", "libicui18n.so.74", "libicudata.so.74"];
 /// How Hermes and the engine are built on Windows: clang-cl (MSVC's own fails on HadesGC.cpp at this tag), CMake and
-/// Ninja, as a release with no debugger.
-const HERMES_CMAKE = ["-G", "Ninja", "-DCMAKE_C_COMPILER=clang-cl", "-DCMAKE_CXX_COMPILER=clang-cl", "-DCMAKE_BUILD_TYPE=Release", "-DHERMES_ENABLE_DEBUGGER=OFF", "-DHERMES_ENABLE_TEST_SUITE=OFF"];
+/// Ninja, as a release with no debugger and the CRT linked in (a clean Windows install need not have VC++ redist).
+const HERMES_CMAKE = ["-G", "Ninja", "-DCMAKE_C_COMPILER=clang-cl", "-DCMAKE_CXX_COMPILER=clang-cl", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW", "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded", "-DHERMES_ENABLE_DEBUGGER=OFF", "-DHERMES_ENABLE_TEST_SUITE=OFF"];
 /// The bsdtar Windows has (Git Bash's GNU tar takes C:\… for a remote host).
 const TAR = osPlatform() === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
 
@@ -177,7 +178,7 @@ function fail(message: string): never {
   throw new Error(message);
 }
 const STATION: Target[] = ["darwin-arm64", "linux-x64", "linux-arm64"];
-/// The station's own executables: Windows' too (docs/station-ts-native.md, "Windows"), named as it names them.
+/// The station's own executables: Windows' too ("Windows"), named as it names them.
 const STATION_BINS: Target[] = [...STATION, "win32-x64"];
 const exe = (name: string) => (t: Target) => (t === "win32-x64" ? `${name}.exe` : name);
 
@@ -283,7 +284,7 @@ const PARTS: Record<string, Part> = {
   "mbui-figure": mbuiRenderer("sffigure", "figure-run.sh"),
   "mbui-film": mbuiRenderer("sffilm", "media.sh"),
   "mbui-film-wasm": mbuiWasmFilm(),
-  // The station's iroh and image codecs, a Node addon (docs/station-ts-native.md §3); the core on Node (its tests,
+  // The station's iroh and image codecs, a Node addon ( §3); the core on Node (its tests,
   // apps/mbui's e2e peer) uses it too.
   mesh: {
     ...stationCrate("station/native/mesh", MESH_LIB, "mesh.node", VENDORED),
@@ -294,7 +295,7 @@ const PARTS: Record<string, Part> = {
   // On Windows with stillfail-station-w.exe beside it: the launcher as the logon task runs it, with no window.
   launcher: withHidden(stationCrate("station/native/launcher", exe("stillfail-station"), exe("stillfail-station"))),
   runner: { ...stationCrate("station/native/runner", exe("stillfail-runner"), exe("stillfail-runner")), targets: STATION_BINS, env: "STILLFAIL_RUNNER" },
-  // Windows' display as the station's desktop screen (docs/remote-screens.md), what still.fail Helper is on macOS.
+  // Windows' display as the station's desktop screen, what still.fail Helper is on macOS.
   screen: { ...stationCrate("station/native/screen", () => "stillfail-screen.exe", "stillfail-screen.exe"), targets: ["win32-x64"], env: "STILLFAIL_SCREEN" },
   // For the station's tests: the Rust station's cold storage as a command (test/cold-compat.test.ts), and a member's
   // client asking a station over iroh (tools/load: test/e2e.sh, compare.sh). This machine's only.
@@ -327,7 +328,7 @@ const PARTS: Record<string, Part> = {
     msvc: true,
     inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", "vendor/libadb", ...VENDORED],
     recipe: (t) =>
-      t === "win32-x64" ? { cargo: SHELL_TESTS, xwin: XWIN }
+      t === "win32-x64" ? { cargo: SHELL_TESTS, rustflags: SHELL_WIN_RUSTFLAGS, xwin: XWIN }
       : LINUX(t) ? { cargo: shellLinux(t) }
       : { ndk: NDK, api: ANDROID_API, cargo: shellCommand(), rustflags: SHELL_RUSTFLAGS },
     build(t, out) {
@@ -336,6 +337,38 @@ const PARTS: Record<string, Part> = {
       if (LINUX(t)) return shellLinuxBuild(t, target, out);
       cargo(shellCommand(), join(ROOT, "client"), { CARGO_TARGET_DIR: target, ...ndkEnv() });
       copyFileSync(join(target, "aarch64-linux-android/release/libstillfail_shell.so"), join(out, "libstillfail_shell.so"));
+    },
+  },
+  // The station's reader in MoonBit (station/mb: read/mb-reader.ts), for every station: its C made by moon on a Mac,
+  // compiled and linked there for each target (station/mb/build.sh: zig for Linux and Windows), with the shell's static
+  // library for it (shell-apple's on the Mac, shell-station's elsewhere: its key in this one's).
+  reader: {
+    files: (t) => [exe("stillfail-reader")(t)],
+    targets: STATION_BINS,
+    env: "STILLFAIL_MB_READER",
+    rust: false,
+    inputs: ["station/mb/src", "station/mb/moon.mod", "station/mb/moon.work", "station/mb/build.sh",
+      "apps/mbui/mbui/src/effect", "apps/mbui/mbui/moon.mod",
+      ":(exclude,glob)**/*_test.mbt", ":(exclude,glob)**/*_wbtest.mbt", ":(exclude,glob)**/pkg.generated.mbti"],
+    recipe: (t) => ({ moon: "native release", shell: t === "darwin-arm64" ? key("shell-apple", t) : key("shell-station", t), mac: key("shell-apple", "darwin-arm64") }),
+    build(t, out) {
+      if (osPlatform() !== "darwin" || osArch() !== "arm64") throw new Error("the reader is built on an Apple Silicon Mac");
+      const shell = ensure(t === "darwin-arm64" ? "shell-apple" : "shell-station", t);
+      run("bash", [join(ROOT, "station/mb/build.sh"), t, join(out, exe("stillfail-reader")(t))], { env: { ...process.env, SHELL_LIB: join(shell, "libstillfail_shell.a") } });
+    },
+  },
+  // The shell (client/shell) as a static library for the stations that are not Macs, the reader's (above): built on a
+  // Mac with zig, as the station's crates are (Linux for glibc 2.28 on, Windows MinGW's).
+  "shell-station": {
+    files: () => ["libstillfail_shell.a"],
+    targets: ["linux-x64", "linux-arm64", "win32-x64"],
+    inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", "vendor/libadb", ...VENDORED],
+    recipe: (t) => ({ cargo: shellStation(t) }),
+    build(t, out) {
+      const target = targetDir(join(ROOT, "client/target"), "shell-station");
+      rustTarget(TRIPLE(t));
+      run("cargo-zigbuild", shellStation(t), { cwd: join(ROOT, "client"), env: rustEnv({ CARGO_TARGET_DIR: target }) });
+      copyFileSync(join(target, TRIPLE(t), "release/libstillfail_shell.a"), join(out, "libstillfail_shell.a"));
     },
   },
   // The core's shell for the mbui app on Apple (scripts/core.sh shell's): the crate as a static library, with what it
@@ -391,8 +424,8 @@ const PARTS: Record<string, Part> = {
       engineAndroid(out);
     },
   },
-  // still.fail Helper (station/native/helper, docs/station-ts-native.md §4): the station's macOS app for what macOS
-  // grants an app (the screen, docs/remote-screens.md), Swift built with the Mac's Xcode, put in its bundle with its
+  // still.fail Helper (station/native/helper §4): the station's macOS app for what macOS
+  // grants an app (the screen), Swift built with the Mac's Xcode, put in its bundle with its
   // Info.plist and still.fail's icon (its permission window and System Settings show it) and signed ad hoc (a
   // release signs it again, scripts/station-bundle.sh).
   helper: {
@@ -439,20 +472,8 @@ const PARTS: Record<string, Part> = {
       run("codesign", ["--force", "--sign", "-", "--identifier", "fail.still.helper", app]);
     },
   },
-  // ffmpeg and ffprobe for the media service, LGPL only, from FFmpeg's source (scripts/ffmpeg.ts: its key is that file
-  // alone, and the media service's package carries it: scripts/module-bundle.ts).
-  ffmpeg: {
-    files: (t) => ffmpeg.files(t as ffmpeg.FfmpegTarget),
-    targets: ffmpeg.TARGETS,
-    env: "MEDIA_FFMPEG",
-    inputs: ["scripts/ffmpeg.ts"],
-    rust: false,
-    zig: ffmpeg.ZIG,
-    recipe: (t) => ffmpeg.recipe(t as ffmpeg.FfmpegTarget),
-    build: (t, out) => ffmpeg.build(t as ffmpeg.FfmpegTarget, out),
-  },
   // agent-desktop (vercel-labs/agent-desktop, Apache-2.0): the apps' accessibility trees, read and acted on by ref
-  // (docs/remote-screens.md, "Agents on a screen"). Its release's own build, checked against the SHA-256 its
+  // ("Agents on a screen"). Its release's own build, checked against the SHA-256 its
   // checksums.txt gives: still.fail Helper carries macOS's, the station Windows' beside stillfail-screen.exe.
   "agent-desktop": {
     files: (t) => (t === "win32-x64" ? AGENT_DESKTOP_FILES.win32 : AGENT_DESKTOP_FILES.darwin),
@@ -525,6 +546,12 @@ const shellApple = (t: Target) => [
   "rustc", "--locked", "--release", "-p", "stillfail-shell", "--lib", "--crate-type", "staticlib", "--target", APPLE_TRIPLES[t]!,
   "--", "--print", "native-static-libs",
 ];
+/// The shell as a static library for a station that is not a Mac (cargo-zigbuild's rustc: `cargo zigbuild` builds what the
+/// manifest says, a cdylib and an rlib; Linux for glibc 2.28 on).
+const shellStation = (t: Target) => [
+  "rustc", "--locked", "--release", "-p", "stillfail-shell", "--lib", "--crate-type", "staticlib",
+  "--target", t === "win32-x64" ? TRIPLE(t) : `${TRIPLE(t)}.2.28`,
+];
 const SHELL_RUSTFLAGS = "-C link-arg=-Wl,-z,max-page-size=16384";
 const shellCommand = () => [
   "rustc", "--locked", "-p", "stillfail-shell", "--lib", "--crate-type", "cdylib", "--target", "aarch64-linux-android", "--release",
@@ -547,6 +574,7 @@ function shellLinuxBuild(t: Target, target: string, out: string) {
 /// build, the tests' (whose library is the DLL: the crate has no dev-dependency to build what is below it with other
 /// features), not run (a Mac builds them; CI's Windows runs them). Two builds took 2 of the 8 minutes, 2026-10-23.
 const SHELL_TESTS = ["test", "--release", "--locked", "-p", "stillfail-shell", "--target", "x86_64-pc-windows-msvc", "--no-run", "--message-format=json-render-diagnostics"];
+const SHELL_WIN_RUSTFLAGS = "-C target-feature=+crt-static";
 /// cargo-xwin, which cross-builds the Windows parts on a Mac with the Windows SDK and MSVC's CRT (Microsoft's, which it
 /// downloads: xwin), clang-cl and lld-link (Homebrew's llvm and lld).
 const XWIN = "0.23.1";
@@ -568,7 +596,7 @@ function xwinEnv(): { XWIN_CACHE_DIR: string; PATH: string } {
 function shellWin(out: string) {
   const cross = osPlatform() === "darwin";
   const target = cross ? join(BUILD(), "target") : targetDir(join(ROOT, "client/target"), "shell");
-  const env = { CARGO_TARGET_DIR: target, ...(cross ? xwinEnv() : {}) };
+  const env = { CARGO_TARGET_DIR: target, CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: SHELL_WIN_RUSTFLAGS, ...(cross ? xwinEnv() : {}) };
   const xwin = (args: string[]) => (cross ? ["xwin", ...args] : args);
   // the library and the tests' executables, from cargo's own account of what it built
   rustTarget("x86_64-pc-windows-msvc");
@@ -724,7 +752,7 @@ function hermesCross(src: string, work: string): string[] {
     ...["EXE", "SHARED", "MODULE"].map((k) => `set(CMAKE_${k}_LINKER_FLAGS_INIT "${libs} /manifest:no")`),
     "set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)",
     "set(CMAKE_TRY_COMPILE_CONFIGURATION Release)",
-    "set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)",
+    "set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreaded)",
     "set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)",
     "",
   ].join("\n"));
@@ -940,6 +968,53 @@ function unpack(tgz: string, part: string, target: Target, k: string, from: stri
   }
 }
 
+// The browser download endpoint can fail while GitHub's release API and the asset itself are still available. Only
+// try this after that endpoint fails, so an unpublished part does not spend an API request on every build.
+async function releaseThroughApi(name: string): Promise<{ bytes: Buffer; url: string } | null> {
+  const [owner, repo, extra] = REPO.split("/");
+  if (!owner || !repo || extra !== undefined) return null;
+  const root = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/releases`;
+  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+  const api = async (url: string, accept: string, timeout: number): Promise<Response> => {
+    const get = (authenticated: boolean) => fetch(url, {
+      headers: { accept, ...(authenticated && token ? { authorization: `Bearer ${token}` } : {}) },
+      // Keep the token at api.github.com; an asset redirect goes to a separate, signed download URL.
+      redirect: "manual", signal: AbortSignal.timeout(timeout),
+    });
+    const r = await get(Boolean(token));
+    return token && (r.status === 401 || r.status === 403) ? get(false) : r;
+  };
+  try {
+    const found = await api(`${root}/tags/${encodeURIComponent(RELEASE)}`, "application/vnd.github+json", 30_000);
+    if (!found.ok) { log(`release API answered ${found.status}`); return null; }
+    const release = await found.json() as { assets?: { name?: unknown; id?: unknown; digest?: unknown }[] };
+    const asset = Array.isArray(release.assets) ? release.assets.find((a) => a.name === name) : undefined;
+    if (!asset || typeof asset.id !== "number" || !Number.isSafeInteger(asset.id) || asset.id <= 0) return null;
+    const url = `${root}/assets/${asset.id}`;
+    let response = await api(url, "application/octet-stream", 300_000);
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get("location");
+      if (location === null) return null;
+      const destination = new URL(location, url);
+      if (destination.protocol !== "https:") return null;
+      response = await fetch(destination, { headers: { accept: "application/octet-stream" }, redirect: "follow", signal: AbortSignal.timeout(300_000) });
+    }
+    if (!response.ok) { log(`release asset API answered ${response.status}`); return null; }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    // Some GitHub API versions answer metadata rather than bytes when they cannot serve the asset.
+    if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) { log("release asset API did not give a gzip archive"); return null; }
+    if (typeof asset.digest === "string" && asset.digest.startsWith("sha256:") &&
+        asset.digest !== `sha256:${createHash("sha256").update(bytes).digest("hex")}`) {
+      log("release asset API gave bytes with a different digest");
+      return null;
+    }
+    return { bytes, url };
+  } catch (e) {
+    log(`release API could not give ${name} (${(e as Error).message})`);
+    return null;
+  }
+}
+
 async function download(part: string, target: Target, k: string): Promise<string | null> {
   const name = asset(part, target, k);
   const inbox = process.env.STILLFAIL_NATIVE_INBOX;
@@ -951,13 +1026,16 @@ async function download(part: string, target: Target, k: string): Promise<string
   const started = Date.now();
   let url = "";
   let bytes: Buffer | null = null;
+  let releaseFailed = false;
+  const releaseUrl = `https://github.com/${REPO}/releases/download/${RELEASE}/${name}`;
   // (each place in turn: one that answers and then breaks off is said so, and the next one asked: a body cut short
   // failed the whole job with only the socket's error, 39431384793)
-  for (const at of [`${STORE}/${name}`, `https://github.com/${REPO}/releases/download/${RELEASE}/${name}`]) {
+  for (const at of [`${STORE}/${name}`, releaseUrl]) {
     let answered = false;
     try {
       const r = await fetchNative(at, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
       if (!r.ok) {
+        if (at === releaseUrl && r.status !== 404) releaseFailed = true;
         if (r.status !== 404) log(`${part} ${target}: ${at} answered ${r.status}`);
         continue;
       }
@@ -966,9 +1044,14 @@ async function download(part: string, target: Target, k: string): Promise<string
       url = at;
       break;
     } catch (e) {
+      if (at === releaseUrl) releaseFailed = true;
       const cause = (e as Error & { cause?: Error }).cause?.message;
       log(`${part} ${target}: ${answered ? `${at} broke off while sending it` : `could not reach ${new URL(at).host}`} (${(e as Error).message}${cause ? `: ${cause}` : ""})`);
     }
+  }
+  if (!bytes && releaseFailed) {
+    const fromApi = await releaseThroughApi(name);
+    if (fromApi !== null) { bytes = fromApi.bytes; url = fromApi.url; }
   }
   if (!bytes) return null;
   const tgz = join(tmpdir(), `${name}.${process.pid}`);
@@ -1285,7 +1368,7 @@ async function main(argv: string[]) {
           gh(["release", "view", RELEASE, "-R", REPO, "--json", "name"]);
         } catch (e) {
           if (!/release not found/i.test(String(e))) throw e;
-          throw new Error(`the release ${RELEASE} is not on ${REPO}: make it once (docs/development.md, "Native parts")`);
+          throw new Error(`the release ${RELEASE} is not on ${REPO}: make it once`);
         }
       }
       const work = join(tmpdir(), `stillfail-native-${process.pid}`);
@@ -1347,12 +1430,12 @@ async function main(argv: string[]) {
       let any = false;
       try {
         for (const [p, t] of ours()) {
-          if (!onWindows(p, t)) continue;
           const name = asset(p, t, key(p, t));
           if (await inStore(name)) { console.log(`${name}: in the store`); continue; }
           if (!(await exists(name))) { console.log(`${name}: in neither (prebuild it: the prebuild workflow, or node scripts/native.ts prebuild ${p}:${t})`); continue; }
           const r = await fetch(`https://github.com/${REPO}/releases/download/${RELEASE}/${name}`, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
-          if (!r.ok) throw new Error(`${name}: the release answered ${r.status}`);
+          // (one the release does not give now is left for main's next run, as prune leaves one GitHub dropped)
+          if (!r.ok) { console.log(`${name}: the release answered ${r.status}; the next run copies it`); continue; }
           writeFileSync(join(work, "natives", name), Buffer.from(await r.arrayBuffer()));
           console.log(`${name}: from the release, to the store`);
           any = true;
@@ -1392,8 +1475,7 @@ function ours(): [string, Target][] {
   return all;
 }
 
-/// What a part is made of, as paths in the repository (scripts/module-bundle.ts: a package carrying the part is a new
-/// version when they change): for every target.
+/// What a part is made of, as paths in the repository: for every target.
 export const inputsOf = (part: string): string[] => [...new Set(P(part).targets.flatMap((t) => inputsFor(P(part), t)))];
 /// The targets a part is built for.
 export const targetsOf = (part: string): string[] => P(part).targets;

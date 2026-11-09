@@ -53,7 +53,7 @@ export type LinkNet = {
   txBytes: number;
   /// Packets sent and lost on the way in use (`path` its id) since it opened.
   packets: { path: string; sent: number; lost: number } | null;
-  /// Where the station said it is on its LAN (`ip:port`, docs/mesh-lan.md); none from a station that said none.
+  /// Where the station said it is on its LAN (`ip:port`); none from a station that said none.
   lan?: string[];
 };
 
@@ -92,18 +92,18 @@ export interface StationWire {
   measure?(station: StationAddr): Effect.Effect<void, CoreError>;
   /// A preview page's WebSocket. Only the mesh carries one.
   socket?(station: StationAddr, head: RequestHead): Effect.Effect<WireSocket, CoreError, Scope.Scope>;
-  /// A view of one of the station's screens (docs/remote-screens.md): the head line carries `screen`, and the stream
+  /// A view of one of the station's screens: the head line carries `screen`, and the stream
   /// stays open both ways (the station's answer, then frames each way: screen-frames.ts). Only the mesh carries one.
   screen?(station: StationAddr, head: RequestHead, screen: ScreenAsk): Effect.Effect<WireSocket, CoreError, Scope.Scope>;
 }
 
-/// What a screen view asks for, as its head line's `screen` has it (docs/remote-screens.md). `client`, `app`: this device's
+/// What a screen view asks for, as its head line's `screen` has it. `client`, `app`: this device's
 /// name and which app it is, for those who look at who is on the screen; `self`: its main id, by which it knows its own
 /// views there (the link may be another's, made for a LAN or a relay); `taken`: its person asked to drive it.
 /// `peek`: a preview (a link's card in a chat): it only looks and is not among those on the screen (a station from
 /// before previews would take it for a view; one is asked only of a screen its list says can be previewed).
 /// `fit`: the stage it is shown on, on a phone or a tablet (its CSS pixels and their scale): a tab of the station's
-/// browser is laid out for it while the view drives it (docs/remote-screens.md).
+/// browser is laid out for it while the view drives it.
 /// `quality`: the 画质 chosen (none: 自动): the most the station lets its bit rate go to (a station before it lets it be).
 /// `fps`: the 帧率 chosen (none: 自动): the most frames a second the station sends (a station before it lets it be).
 export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean; audio?: "pcm_s16le"; quality?: ScreenQuality; fps?: ScreenFps; fit?: { width: number; height: number; scale: number }; gamut?: "p3"; client?: string; app?: string; self?: string; taken?: boolean };
@@ -149,7 +149,7 @@ export class HostWire implements StationWire {
   }
 }
 
-/// A WebSocket message on a socket stream (the Rust station's preview.rs): a kind byte (1 text, 2 binary, 8 close), the
+/// A WebSocket message on a socket stream: a kind byte (1 text, 2 binary, 8 close), the
 /// payload's length (4 bytes, big-endian), the payload; a close's is its code (2 bytes) and reason.
 export type Frame = { text: string } | { binary: Uint8Array } | { close: [number, string] };
 

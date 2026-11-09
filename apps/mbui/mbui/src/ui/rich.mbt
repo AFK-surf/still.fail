@@ -826,9 +826,11 @@ pub fn Ctx::rich(
   }
   let text = sb.to_string()
   let base = self.id(if key == "" { "\u{1}rich\u{1}" + text } else { key })
+  // a link pressed: told as it is let go (Ctx::on_press)
   for k, r in runs {
-    if link_starts(runs, k) && self.clicked(link_id(base, runs, k)) {
-      on_link(r.link)
+    if link_starts(runs, k) {
+      let link = r.link
+      self.on_press(link_id(base, runs, k), fn() { on_link(link) })
     }
   }
   // a link right clicked (a pointer's secondary button: a desktop's long press) told as held, at once; its menu the
@@ -918,7 +920,7 @@ pub fn Ctx::rich(
         0
       }
     ),
-    shaped_in: words_shaped_in.val,
+    shaped_in: words_shaped_in.get(),
   })
   // each link told with its words and its id, once the paragraph is there
   match on_link_shown {
@@ -942,7 +944,7 @@ pub fn Ctx::rich(
 ///|
 /// The paragraph laid out in `max_w`; as text_layout, one layout serves
 /// every width from its widest line up to the one it was laid out in. On one line (not wrapped) and laid out
-/// narrower than it is, cut with an ellipsis there, as Ctx::text's words are (style.md, Short of room); not cut, it
+/// narrower than it is, cut with an ellipsis there, as Ctx::text's words are (ui/squeeze.mbt); not cut, it
 /// serves every width it fits in.
 fn Node::rich_layout(self : Node, max_w : Double) -> RichLayout? {
   match self.rich {
@@ -1304,7 +1306,13 @@ fn Ctx::emit_rich_glyphs(
           let l = lay.line_of[c]
           let x = ox + lay.xs[c]
           let y = oy + lay.line_y[l] + lay.line_base[l] - d.baseline
-          if y > cy1 || y + d.height < cy0 { continue }
+          if y > cy1 || y + d.height < cy0 {
+            left_out()
+            continue
+          }
+          if rec_whole.val {
+            rec_line(self.ninst, y, d.height)
+          }
           let color = colors[lay.run_of[c]]
           for path in d.paths { self.emit_shape(x, y, path, true, 0.0, false, color, alpha) }
           for word in d.words {
@@ -1328,13 +1336,21 @@ fn Ctx::emit_rich_glyphs(
       _ => ()
     }
     if top > cy1 || top + lay.line_h[l] < cy0 {
+      left_out()
       continue
+    }
+    if rec_whole.val {
+      rec_line(self.ninst, top, lay.line_h[l])
     }
     // (made at the host's pixels a point; in a shot drawn at more, made that much larger and drawn that much smaller:
     // emit_text)
     let (key, z) = match zoomed {
       Some(big) if big[c] >= 0 => (big[c], zoom)
       _ => (key, 1.0)
+    }
+    if rec_glyph_early(key, sc / zoom, ox + lay.xs[c], top, ox + lay.xs[c] + lay.adv[c], top + lay.line_h[l]) {
+      rec_skip(top, top + lay.line_h[l])
+      continue
     }
     let g = glyph(key, sc / zoom)
     if g.gw <= 0.0 {
@@ -1380,5 +1396,8 @@ fn Ctx::emit_rich_glyphs(
       let (x0, x1) = lay.span_x(c, c + 1)
       inst_cell(self.ninst - 1, gx, gw, ox + x0 + lay.pre[c], ox + x1)
     }
+  }
+  if rec_whole.val {
+    rec_line(self.ninst, 0.0, -1.0)
   }
 }

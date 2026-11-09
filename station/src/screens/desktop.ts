@@ -1,4 +1,4 @@
-// This machine's display as a screen source (`desktop`, docs/remote-screens.md): on macOS, still.fail Helper
+// This machine's display as a screen source (`desktop`): on macOS, still.fail Helper
 // (helper/app.ts) captures the main display with ScreenCaptureKit, encodes H.264 with VideoToolbox (or a JPEG a
 // picture, for a view that takes no H.264) and posts input with CGEvent, a view a connection to it. Windows' is
 // win-desktop.ts (its views are this file's HelperView too); Linux's X11 source is x11-desktop.ts. Elsewhere the
@@ -22,7 +22,7 @@ import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
 import { helperUi } from "./ui.ts";
 export type { HelperStatus } from "../helper/grants.ts";
-import { type AudioFrame, type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, clipFits, regionOf } from "./source.ts";
+import { type AudioFrame, type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, clipFits, codecFor, regionOf } from "./source.ts";
 
 export type DesktopOptions = {
   /// Whether this machine's display can be seen at all (platform.desktopScreen: the helper).
@@ -123,7 +123,7 @@ export class Desktop implements ScreenSource {
     if (helper === null) throw new ScreenRefused(501, "station.screen.noHelper", {}, this.access());
     // H.265 where it is taken (the hardware's, smallest; the helper makes H.264 where this Mac encodes no H.265), H.264,
     // else a JPEG a picture (an agent's view, a client without either).
-    const codec: Codec | undefined = (["h265", "h264", "jpeg"] as const).find((c) => options.codecs.includes(c));
+    const codec = codecFor(options, ["h265", "h264", "jpeg"]);
     if (codec === undefined) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264, JPEG" });
     await this.refresh(true);
     const synthetic = this.#o.synthetic !== undefined;

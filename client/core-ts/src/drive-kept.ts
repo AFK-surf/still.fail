@@ -34,9 +34,9 @@ import type { Host, Sql } from "./host.ts";
 
 export type KeepKind = "file" | "played" | "chat" | "sent" | "outbox";
 
-/// Files read whole or from their start: the least lately read go past this (DriveCache.kt FILES_MAX).
+/// Files read whole or from their start: the least lately read go past this.
 export const FILES_MAX = 512 * 1024 * 1024;
-/// Videos and songs, by the ranges played (DriveCache.kt PLAYED_MAX).
+/// Videos and songs, by the ranges played.
 export const PLAYED_MAX = 1536 * 1024 * 1024;
 /// Files sent up from here: the least lately read go past this (a phone's video alone can be a few hundred MB).
 export const SENT_MAX = 1024 * 1024 * 1024;

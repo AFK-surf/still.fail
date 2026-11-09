@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { harness } from "./harness.ts";
 import type { AccountEvent } from "../src/types.ts";
+import { entryHash } from "../src/lock.ts";
+import { signer } from "./lock-signer.ts";
 
 type Harness = Awaited<ReturnType<typeof harness>>;
 const hex = (bytes: ArrayBuffer) => Buffer.from(bytes).toString("hex");
@@ -213,6 +216,13 @@ test("every change reaches exactly the accounts it affects", async () => {
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.equal(seen.last_seen, h.now(), "last here at");
 
+    // A picture of its own put up or taken away (own-picture.test.ts): its `/v1/me` changed, and the members lists it
+    // is in.
+    await bob("PUT", "/v1/me/picture", { picture: `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xe0]).toString("base64")}` });
+    await expect(on, { alice: [ws], bob: [list, ws] }, "own picture");
+    await bob("DELETE", "/v1/me/picture");
+    await expect(on, { alice: [ws], bob: [list, ws] }, "own picture taken away");
+
     // A leaver and a removed member hear of it too.
     assert.equal((await bob("DELETE", `/v1/workspaces/${w}/members/${bobSub}`)).status, 200);
     await expect(on, { alice: [list, ws], bob: [list, ws] }, "leave");
@@ -391,6 +401,49 @@ test("a workspace's own relays: set by its managers, told to its stations and me
     assert.deepEqual(((await (await alice("PUT", `/v1/workspaces/${w}/relays`, { relays: [] })).json()) as any).relays, []);
     await socket.ping!();
     assert.deepEqual(socket.frames!.at(-1).relay_urls, ours);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a release out, as the repository's releasing workflows say, is told to every device; nobody else can say it", async () => {
+  const { publicKey, privateKey } = await generateKeyPair("RS256");
+  const jwk = { ...(await exportJWK(publicKey)), kid: "actions", alg: "RS256", use: "sig" };
+  const h = await harness({ statusRepo: "o/r", push: () => ({ status: 200, body: JSON.stringify({ keys: [jwk] }) }) });
+  try {
+    const token = (claims: Record<string, unknown>, audience = h.origin) => new SignJWT({ repository: "o/r", workflow_ref: "o/r/.github/workflows/pipeline.yml@refs/heads/main", ...claims })
+      .setProtectedHeader({ alg: "RS256", kid: "actions" }).setIssuer("https://token.actions.githubusercontent.com").setAudience(audience).setIssuedAt().setExpirationTime("10 years").sign(privateKey);
+    const send = async (bearer: string | null) => (await h.fetch("/v1/releases/out", { method: "POST", headers: bearer ? { authorization: `Bearer ${bearer}` } : {} })).status;
+    const on = { alice: await listen(h, (await h.login("alice")).access_token), bob: await listen(h, (await h.login("bob")).access_token) };
+    await expect(on, {}, "signed in");
+    assert.equal(await send(null), 401);
+    assert.equal(await send(await token({ repository: "fork/r" })), 401);
+    assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/status-incidents.yml@refs/heads/main" })), 401);
+    assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/pipeline.yml@refs/heads/mine" })), 401);
+    assert.equal(await send(await token({}, "https://elsewhere.example")), 401);
+    await expect(on, {}, "refused");
+    assert.equal(await send(await token({})), 200);
+    assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/stable.yml@refs/heads/main" })), 200);
+    await expect(on, { alice: [{ type: "release" }, { type: "release" }], bob: [{ type: "release" }, { type: "release" }] }, "told");
+  } finally {
+    await h.close();
+  }
+});
+
+test("a workspace whose lock alone moved on says so in its event, its head with it: nothing for a device to ask again", async () => {
+  const h = await harness();
+  try {
+    const token = await h.login("alice");
+    const alice = h.as(token);
+    const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
+    const on = { alice: await listen(h, token.access_token) };
+    const g = await signer("alice").genesis(w);
+    assert.equal((await alice("POST", `/v1/workspaces/${w}/lock`, { entries: [g] })).status, 200);
+    const hash = await entryHash(g);
+    await expect(on, { alice: [{ type: "workspace", id: w, lock: { head: { seq: 0, hash, genesis: hash }, locked: true } }] }, "lock turned on");
+    // What else changes is told as before, to be read again.
+    await alice("PATCH", `/v1/workspaces/${w}`, { name: "House" });
+    await expect(on, { alice: [{ type: "workspaces" }, { type: "workspace", id: w }] }, "rename");
   } finally {
     await h.close();
   }

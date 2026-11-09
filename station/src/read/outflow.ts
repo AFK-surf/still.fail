@@ -1,12 +1,13 @@
-// What a program granted data outflow reads (docs/data-outflow.md), in the shape of its version (`/v1`): written out
-// field by field here, so that what the station keeps changing never changes what such a program is answered. The
-// chats of one workspace of the station's (its home one, unless another station of a workspace it joined asks),
-// a message only when asked for.
+// The statistics a Comma connect sends of the workspace (comma/stats.ts), as one station reads them of its own: what
+// its agents spent and the chats they worked in, written out field by field here, so that what the station keeps
+// changing never changes what another station of another version is answered (`outflow.read`, comma/peer.ts, named so
+// as stations of every version answer it). The chats of one workspace of the station's (its home one, unless another
+// station of a workspace it joined asks).
 import type { Json, Store } from "./store.ts";
 import * as store from "./store.ts";
 import { ending, sees } from "../store/rows.ts";
 import { outflowChatIndexReady, outflowChatScopes } from "../store/outflow-index.ts";
-import { titleOf } from "./views.ts";
+import { titleNeedsFirstText, titleOf } from "./views.ts";
 import { slackCreator } from "./slack-known.ts";
 import { usage } from "./usage.ts";
 import type { Lang } from "../ops/i18n.ts";
@@ -30,7 +31,7 @@ function person(s: Store, ref: string): Json {
 /// account and model, with what they cost at list prices (null for a model without one); `people` the rows' persons.
 export function outflowUsage(s: Store, lang: Lang, from: number, to: number, tz: number, of: Of = HOME): Json {
   // The export has no remote-task field, so it need not wait for or read those statistics.
-  const read = usage(s, lang, BigInt(from), BigInt(to), BigInt(tz), false, of, false, { remoteRuns: false }) as Json;
+  const read = usage(s, lang, BigInt(from), BigInt(to), BigInt(tz), false, of, false, { remoteRuns: false, metadata: false }) as Json;
   const rows = (read.rows as Json[]).map((r) => ({
     day: r.day, thread: r.thread, session: r.session, person: r.person, account: r.profile, runtime: r.runtime, model: r.model,
     calls: r.calls, input: r.input, cacheRead: r.cacheRead, cacheWrite: r.cacheWrite, output: r.output, cost: r.cost,
@@ -106,7 +107,7 @@ export function outflowChats(s: Store, since: number, of: Of = HOME, page: Chats
     chats.push({
       thread: thread.id,
       surface: thread.surface === store.STILLFAIL_SURFACE ? "stillfail" : thread.surface,
-      title: titleOf(thread, store.firstText(s, thread.id), null),
+      title: titleOf(thread, titleNeedsFirstText(thread) ? store.firstText(s, thread.id) : null, null),
       state: state(latest),
       creator: creator === null ? null : { ref: creator, ...person(s, creator) },
       createdAt: thread.createdAt,
@@ -120,29 +121,27 @@ export function outflowChats(s: Store, since: number, of: Of = HOME, page: Chats
   return { since, chats, more, next: more && last ? `${last.lastActiveAt}.${last.thread}` : null };
 }
 
-/// Which chat a program names for its messages: its `thread` (as `chats` and `usage` say it), a `session` of it (as
-/// `usage` rows name it), or a chat app's address (`channel` and `ts`). Null when none of them is a chat here.
-export function outflowThread(s: Store, by: { thread?: number | null; session?: string | null; channel?: string | null; ts?: string | null }): number | null {
-  if (typeof by.thread === "number" && Number.isSafeInteger(by.thread)) return by.thread;
-  if (typeof by.session === "string" && by.session !== "") return store.threadOfSession(s, by.session);
-  if (typeof by.channel === "string" && by.channel !== "" && typeof by.ts === "string" && by.ts !== "") return store.threadAt(s, by.channel, by.ts);
-  return null;
-}
-
-/// v1 `messages`: a chat's messages after its message `after` (its `n`), at most `limit`, oldest first: each one's
-/// `n`, what it is (`message`, `edit`: a later wording of message `target`), who wrote it (`person`, `agent`, and
-/// their reference), its words and when; `last`, the chat's latest `n`, and `more` when there are more after these.
-/// Null for a chat that is not the workspace's.
-export function outflowMessages(s: Store, thread: number, after: number, limit: number, of: Of = HOME): Json {
+/// A chat's messages after its message `after` (its `n`), at most `limit`, oldest first, as the Router reads a Task
+/// through a Comma connect (`task.read`): each one's `n`, what it is (`message`, `edit`: a later wording of message
+/// `target`), who wrote it (`person`, `agent`, and their reference, a person's name and email as far as known), its words
+/// and when; `last`, the chat's latest `n`, and `more` when there are more after these. Null for a chat that is not the
+/// workspace's. A newer Router asks for messages alone; without that option old peers still receive entries and edits.
+export function outflowMessages(s: Store, thread: number, after: number, limit: number, of: Of = HOME, messagesOnly = false): Json {
   if (store.getThread(s, thread) === null || !store.seesThread(s, of, thread)) return null;
-  const entries = store.entriesAfter(s, thread, BigInt(after), limit + 1);
+  const entries = messagesOnly
+    ? store.messageEntriesAfter(s, thread, BigInt(after), limit + 1)
+    : store.entriesAfter(s, thread, BigInt(after), limit + 1);
   const page = entries.slice(0, limit);
+  const people = new Map<string, Json>();
+  const named = (ref: string) => (people.has(ref) ? people.get(ref) : people.set(ref, person(s, ref)).get(ref));
   return {
     thread,
     messages: page.map((e) => ({
       n: e.n, kind: e.kind, target: e.target, authorKind: e.authorKind, author: e.author, text: e.text, at: e.at,
+      ...(e.authorKind === "person" && typeof e.author === "string" ? { person: named(e.author) } : {}),
     })),
     last: store.lastEntry(s, thread),
     more: entries.length > page.length,
+    ...(messagesOnly ? { messagesOnly: true } : {}),
   };
 }

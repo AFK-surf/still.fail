@@ -55,6 +55,7 @@ test "a shared link in a draft: a card with its site, sent as words after what i
     warm_n: 1,
     focus: 0,
     id: "",
+    sig: None,
   }
   fill_draft(d, {
     "text": "帮我下这个",

@@ -1,4 +1,4 @@
-// A vault's secret used on another station of the workspace (docs/vault.md 在另一台 station 上用; src/vault/secrets.ts
+// A vault's secret used on another station of the workspace ( 在另一台 station 上用; src/vault/secrets.ts
 // `heard`): a grant asked for that station runs its commands there, in the chat's directory on it, and nowhere else; a
 // secret to keep read there. Two stations' Secrets ask each other directly, as the station transport would carry it.
 // Nothing waits on time: a request's answer is awaited once it is decided, a command's once it has ended.

@@ -452,7 +452,7 @@ features = [
     "time",
 ]
 
-# ember: Android publishes private keys without hard links.
+# stillfail: Android publishes private keys without hard links.
 [target.'cfg(target_os = "android")'.dependencies.rustix]
 version = "1"
 features = ["fs"]

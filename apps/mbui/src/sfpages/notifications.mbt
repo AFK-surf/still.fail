@@ -1,11 +1,11 @@
-// 通知, one page in every frame, as the web's (ember web/src/pages/Notifications.tsx, Notifications.css.ts; laid out by its
+// 通知, one page in every frame, as the web's (still.fail web/src/pages/Notifications.tsx, Notifications.css.ts; laid out by its
 // width, page_look.mbt): what this device
 // tells its person about their chats, and how, laid out as a phone's notification settings are: a preview that follows
 // the settings (the banner of the kind looked at, the app's badge with what it counts), the ways it tells as tiles each
 // with a picture of it, each kind of thing that happens with which of those it uses (opened, each way on or off), and
 // the rest. The preview and the pictures are of this device's system (notice_look: where its banners come, its
 // icons), and the badge is a way only where the system shows the app's number (@ui.badge_shown): elsewhere a switch of
-// it would change nothing. The phone's settings have a switch of their own (SettingsHome.kt's).
+// it would change nothing. The phone's settings have a switch of their own.
 
 // ---------------------------------------------------------------------------
 // 通知
@@ -40,7 +40,7 @@ fn badge_kind(core : Core, here : Here, kind : String) -> Bool {
   match badge_chosen.get(kind) {
     Some(v) => v
     None =>
-      flag(field((core.topic)("workspaceMarks", { "workspace": str(here.workspace) }).value, "badgeKinds"), kind)
+      flag(field((core.topic)("workspaceMarks", { "workspace": str(here.workspace) }).get().value, "badgeKinds"), kind)
   }
 }
 
@@ -127,9 +127,9 @@ pub fn notify_node(
   said? : (@sf.PageSaid) -> Unit,
   width? : () -> Double,
 ) -> Unit {
-  let notify = fn() { (core.topic)("notify", Map::new()).value }
+  let notify = fn() { (core.topic)("notify", Map::new()).get().value }
   let kept_badge = fn() {
-    field((core.topic)("workspaceMarks", { "workspace": str(here().workspace) }).value, "badgeKinds")
+    field((core.topic)("workspaceMarks", { "workspace": str(here().workspace) }).get().value, "badgeKinds")
   }
   // what was chosen, once the core says it: the core's word from then on
   for k in notify_kinds {
@@ -369,7 +369,7 @@ fn notify_preview_node(
   }
   let latest = fn() {
     let k = kind()
-    items((core.topic)("notices", { "workspace": str(here().workspace) }).value, "items")
+    items((core.topic)("notices", { "workspace": str(here().workspace) }).get().value, "items")
     .rev()
     .iter()
     .find_first(fn(n) {
@@ -398,7 +398,7 @@ fn notify_preview_node(
   let look = notice_look()
   let mark = fn() -> @sf.IconMark {
     if @ui.badge_shown() {
-      let n = count((core.topic)("workspaceMarks", { "workspace": str(here().workspace) }).value, "badge")
+      let n = count((core.topic)("workspaceMarks", { "workspace": str(here().workspace) }).get().value, "badge")
       if badge_kind(core, here(), "on") && n > 0 {
         Count(n)
       } else {

@@ -1,4 +1,4 @@
-// The station's parts that are modules of it, in its own process (docs/station-modules.md, 「进程内的模块」): each a
+// The station's parts that are modules of it, in its own process (「进程内的模块」): each a
 // layer the composition root (main.ts) lists, made after the platform and the agents' side, saying here what it adds to
 // what the station answers: its routes of the admin API, the writes a read-only member may make of them, its own kinds
 // of request on a member's link, its fields of the overview and its tools for the agents. Nothing registers itself: a part is in the station because main.ts names
@@ -30,7 +30,6 @@ export class StationParts {
   readonly #routes: (Route[] | ((tools: Tools) => Route[]))[] = [];
   /// The routes as made for an admin API's tools, and how many parts' routes they were made of.
   readonly #made = new WeakMap<Tools, { of: number; routes: Route[] }>();
-  readonly #alpns: { alpn: Buffer; serve: (conn: Connection) => Promise<void> }[] = [];
   readonly #viewerMay: ((r: { method: string; path: string }) => boolean)[] = [];
   readonly #overview = new Map<string, (viewer: Viewer, lang: Lang) => unknown>();
   readonly #tools: Tool[] = [];
@@ -47,12 +46,6 @@ export class StationParts {
   /// (its readers, the store, the events), where they need it.
   routes(routes: Route[] | ((tools: Tools) => Route[])): void {
     this.#routes.push(routes);
-  }
-
-  /// A protocol of the station's mesh endpoint a part answers itself (a published chat's visitors, say): its
-  /// connections, whoever makes them; it checks what it lets them have.
-  alpn(alpn: Buffer, serve: (conn: Connection) => Promise<void>): void {
-    this.#alpns.push({ alpn, serve });
   }
 
   /// A kind of request on a member's link a part answers itself (a phone lent over it, say): one whose head line has an
@@ -173,10 +166,6 @@ export class StationParts {
       if (v !== null && typeof v === "object" && !Array.isArray(v)) return answer;
     }
     return undefined;
-  }
-
-  allAlpns(): readonly { alpn: Buffer; serve: (conn: Connection) => Promise<void> }[] {
-    return this.#alpns;
   }
 
   mayView(r: { method: string; path: string }): boolean {

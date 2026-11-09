@@ -1,11 +1,11 @@
-// The worker that runs the core (docs/client-core.md, docs/core-db.md). Every tab has a dedicated worker of its own;
+// The worker that runs the core (). Every tab has a dedicated worker of its own;
 // one of them runs the core: the one holding the Web Lock `stillfail-core`, as the core's databases are SQLite on
 // OPFS, whose access handles only one worker can hold. The other tabs' workers relay their page's messages to it over
 // a BroadcastChannel and what it says back; when the tab running the core goes, the lock goes to another worker, which
 // starts the core from the same databases, and every page subscribes again (`rejoin`).
 // A worker that holds the lock answers a starting worker's `hello` at once; one that answers nothing for a while is
 // frozen (its page kept in the back/forward cache) and would hold the lock for good, so the lock is taken from it.
-// The core is the TypeScript one (client/core-ts, its web host; docs/core-ts.md); of Rust only iroh is left,
+// The core is the TypeScript one (client/core-ts, its web host); of Rust only iroh is left,
 // client/iroh-wasm, loaded once the mesh is first needed while the core starts from its database.
 import { checkShared, startWeb, type WasmSqlite, type WebCore } from "@stillfail/core-ts/web";
 import { BUILT_AT } from "./built.ts";
@@ -328,7 +328,7 @@ async function lead(): Promise<void> {
   ready = startWeb(emit, (globalThis as { name?: string }).name?.endsWith("-test") ?? false, loadIroh, (reason, error) => {
     if (!dead) fault(error);
     fatal(reason);
-  }, loadSqlite, [], fault);
+  }, loadSqlite, fault);
   ready.catch((error: unknown) => fatal(`核心启动失败：${String(error)}`));
   const running = await ready;
   core = running;

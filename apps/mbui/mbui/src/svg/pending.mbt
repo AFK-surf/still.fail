@@ -1,4 +1,4 @@
-// Text's place in the paint server pass (paint_server.rs): its flattened paths, by its bounding box.
+// Text's place in the paint server pass: its flattened paths, by its bounding box.
 
 ///|
 fn text_uses_context_bbox(t : SText) -> Bool {

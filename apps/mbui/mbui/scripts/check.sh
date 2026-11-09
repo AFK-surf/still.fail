@@ -1,5 +1,5 @@
 #!/bin/bash
-# Type-check every target; print errors only. First the determinism lint (tools/detlint, docs/detlint.md): its
+# Type-check every target; print errors only. First the determinism lint (tools/detlint): its
 # report, and a failure stops here; then the hosts' H.264 conversion (scripts/avc_test.c) and log files
 # (scripts/log_files_test.c).
 D="$(cd "$(dirname "$0")" && pwd)"

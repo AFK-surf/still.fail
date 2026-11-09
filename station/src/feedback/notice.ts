@@ -1,5 +1,5 @@
 // A failure notice reported from the chat (its 上报): a person who takes what went wrong for still.fail's own sends it
-// to the team as a bug report (docs/feedback.md), made here of what the station knows of it. POST
+// to the team as a bug report, made here of what the station knows of it. POST
 // /threads/:id/report `{n}` (the notice's entry), answered `{number, duplicate?}`; a read-only member may report too,
 // as nothing on the station changes.
 import { createHash } from "node:crypto";
@@ -65,8 +65,10 @@ export function readTail(path: string, most: number): string | null {
 export function failedTurnOf(store: Store, thread: number, at: number): { session: SessionRow; turn: TurnSummary | null } | null {
   let best: { session: SessionRow; turn: TurnSummary; off: number } | null = null;
   const sessions = store.threadSessions(thread).flatMap((m) => store.getSession(m.session) ?? []);
+  const from = at - 10 * 60_000, to = at + 5_000;
+  const bounded = [at, from, to].every(Number.isSafeInteger);
   for (const session of sessions) {
-    for (const { summary } of store.listTurns(session.key)) {
+    for (const { summary } of bounded ? store.failedTurnsNear(session.key, from, to, at) : store.listTurns(session.key)) {
       if (summary.outcome !== "failed" || summary.endedAt === null) continue;
       const off = at - summary.endedAt;
       if (off < -5_000 || off > 10 * 60_000) continue;

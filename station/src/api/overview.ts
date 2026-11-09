@@ -1,4 +1,4 @@
-// GET /overview (admin/views.rs `overview`): the station as its settings pages show it — still.fail cloud, connects,
+// GET /overview: the station as its settings pages show it — still.fail cloud, connects,
 // profiles, the agents' processes, counts, the disk, logins, updates — as the viewer sees it. Answered on the main
 // thread from what is in memory and the config; told again on /events when it changes (`overview`).
 import { statfsSync } from "node:fs";
@@ -11,6 +11,7 @@ import { platform } from "../platform/index.ts";
 import type { Lang } from "../ops/i18n.ts";
 import type { Hub } from "../sessions/hub.ts";
 import type { Store } from "../store/store.ts";
+import { DecisionSessionsUnavailable } from "../store/legacy-decision-session.ts";
 import { sessionChatReadable } from "../store/session-chat-index.ts";
 import type { Updates } from "../updates/updates.ts";
 import { type RootView, rootView, rootsOf } from "../drive/drive.ts";
@@ -39,12 +40,10 @@ export type OverviewDeps = {
   /// A pinned root as the drive shows it (drive.ts `rootViewThrough`: one in a folder macOS protects by what still.fail
   /// Helper's grant is known to be, never listed by the station); default `rootView`.
   rootView?: (path: string) => RootView;
-  /// The modules beside the station (modules/modules.ts), each named and whether it runs now.
-  modules?: () => { id: string; running: boolean }[];
 };
 
 /// This station's link to still.fail cloud, as the pages show it (server.rs MeshFile::status): in the viewer's workspace
-/// (docs/multi-workspace.md), its home one for no one in particular.
+///, its home one for no one in particular.
 export function meshStatus(cloud: Cloud, viewer?: Viewer): Record<string, unknown> {
   const s = cloud.state;
   if (s === null) return { state: "off", origin: null, station: null, workspace: null, workspaceId: null, name: null };
@@ -96,7 +95,7 @@ function diskRoom(path: string): unknown {
 
 export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Promise<unknown> {
   const raw = d.config() ?? {};
-  // What is of the viewer's workspace (docs/multi-workspace.md): its chats, and the connects added in it.
+  // What is of the viewer's workspace: its chats, and the connects added in it.
   // (Counted by connect from the viewer's workspace in the index; the processes not cold are the hub's few.)
   const visibleConnects = (Array.isArray(raw.connects) ? raw.connects : []).filter((c: any) => sees(viewer, typeof c?.workspace === "string" && c.workspace !== "" ? c.workspace : null));
   const ids = visibleConnects.map((c: any) => c.id);
@@ -134,6 +133,10 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
       createdBy: c.createdBy?.id ? c.createdBy : null,
       sessions: sessionsOf(c.id),
       session: mode === "single-session" ? d.store.binding(c.id) : null,
+      // The station of its workspace its new conversations run on (null: this one), and that it can be moved to
+      // another (connects/workspace.ts; a station from before says neither).
+      startsOn: nonEmpty(c.station),
+      moves: true,
     };
     const own = d.connectKinds?.get(kind);
     return own === undefined ? shown : { ...shown, ...own.shown(c), connection: own.connection(c) ?? shown.connection };
@@ -147,6 +150,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     connects,
     profiles,
     sessionRuntimeChange: true,
+    connectRuntimeChange: true,
     // Who made each model its profiles run, and its series, as the model catalog says (accounts/catalog.ts): the
     // clients group and mark models by them, and by the names alone where it says none.
     modelMakers: modelMakers(profiles),
@@ -180,13 +184,11 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     diagnostics: diagnosticsView(raw),
     network: networkView(raw),
     drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map((p) => (d.rootView ?? rootView)(p)), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
-    // What its search finds of the machine (docs/search.md): its files through Spotlight (macOS) or walked as asked, and
+    // What its search finds of the machine: its files through Spotlight (macOS) or walked as asked, and
     // whether the person's own mail, messages and the like too.
     search: { files: platform.hasSpotlight ? "spotlight" : "walk", personal: raw?.search?.personal === true },
     // macOS's grants to still.fail Helper (a Mac's station only; a station from before them says none: not shown).
     ...withPermissions(d, viewer),
-    // The modules beside it (docs/station-modules.md), for clients to show theirs: said only where there is one.
-    ...withModules(d),
   };
 }
 
@@ -211,11 +213,6 @@ export function modelWindows(profiles: { models?: unknown }[]): Record<string, n
   return out;
 }
 
-function withModules(d: OverviewDeps): { modules?: { id: string; running: boolean }[] } {
-  const modules = d.modules?.() ?? [];
-  return modules.length === 0 ? {} : { modules };
-}
-
 /// How its chats go to the archive on their own (sessions/lifecycle.ts autoArchive): after so many days idle (0: never),
 /// Slack's sessions stopped at a block after theirs, and whether only those the archive review recommended. Everyone
 /// sees it (why their chats went); its managers change it (PUT /archiving).
@@ -230,7 +227,7 @@ function withPermissions(d: OverviewDeps, viewer: Viewer): { permissions?: unkno
 }
 
 /// The automatic decisions as the viewer sees them: the checks of their workspace's chats only, and the archive policy of
-/// their workspace (docs/multi-workspace.md: one each), which its owners and admins edit (`canEditPolicy`). The rest
+/// their workspace (one each), which its owners and admins edit (`canEditPolicy`). The rest
 /// (the rule, its model) is the station's, its workspaces' managers' alike.
 async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> {
   // Made again only once a check or the policy is written, the rule or its models change, or DECISIONS_KEPT_MS on (the
@@ -242,8 +239,16 @@ async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> 
   const now = d.store.now();
   const was = kept.get(whose);
   if (was !== undefined && was.stamp === stamp && now - was.at < DECISIONS_KEPT_MS) return structuredClone(was.view);
+  const notReady = Symbol("decision sessions not ready");
+  const make = (name: (session: string) => string, visible?: Map<string, boolean>) => {
+    try { return madeDecisionsView(d, viewer, name, visible); }
+    catch (error) { if (error instanceof DecisionSessionsUnavailable) return notReady; throw error; }
+  };
   let view: unknown;
-  if (d.hub.prepareSessionChatNames == null) view = madeDecisionsView(d, viewer, (session) => chatTitleOf(d.store, session));
+  if (d.hub.prepareSessionChatNames == null) {
+    view = make((session) => chatTitleOf(d.store, session));
+    if (view === notReady) { await d.store.prepareDecisionSessions(); return decisionsView(d, viewer); }
+  }
   else {
     // The policy and checks already select the names they show. Collect those names as placeholders while making the
     // view once, prepare them together, and replace only the placeholders after their bounded reads are ready.
@@ -259,7 +264,8 @@ async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> 
       return placeholder as unknown as string;
     };
     const visible = new Map<string, boolean>();
-    view = madeDecisionsView(d, viewer, pendingTitle, visible);
+    view = make(pendingTitle, visible);
+    if (view === notReady) { await d.store.prepareDecisionSessions(); return decisionsView(d, viewer); }
     const names = new Map<string, string>();
     let waited = false;
     for (;;) {

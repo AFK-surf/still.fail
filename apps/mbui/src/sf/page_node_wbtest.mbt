@@ -44,7 +44,7 @@ fn rows_drawn(node : Bool, scale : Double) -> Array[String] {
     })
   }
   t.draw()
-  let all = t.drawn_instances().map(fn(a) {
+  let all = t.drawn_instances_keyed().map(fn(a) {
     a
     .mapi(fn(j, x) {
       if a[5] == 1.0 && j == 12 {
@@ -118,7 +118,7 @@ fn page_part_drawn(node : Bool, scale : Double, old : (@ui.Ctx) -> Unit, made : 
     @ui.set_view_app(fn(root) { root.box(fn(b) { page_block(b, made) }) |> ignore })
   }
   t.draw()
-  let all = t.drawn_instances().map(fn(a) {
+  let all = t.drawn_instances_keyed().map(fn(a) {
     a
     .mapi(fn(j, x) {
       if a[5] == 1.0 && j == 12 {
@@ -235,7 +235,7 @@ fn head_end_drawn(
     })
   }
   t.run_for(@ui.move_most_ms)
-  let all = t.drawn_instances().map(fn(a) {
+  let all = t.drawn_instances_keyed().map(fn(a) {
     a
     .mapi(fn(j, x) {
       if a[5] == 1.0 && j == 12 {
@@ -356,7 +356,7 @@ fn shorter_seen(node : Bool, steps : Array[ShorterStep]) -> Array[String] {
     at.set(s)
     t.draw()
     t.draw()
-    let drawn = t.drawn_instances().map(fn(a) {
+    let drawn = t.drawn_instances_keyed().map(fn(a) {
       a.mapi(fn(j, x) { if a[5] == 1.0 && (j == 12 || j == 13) { "-" } else { ((x * 100.0).round() / 100.0).to_string() } }).join(",")
     })
     drawn.sort()
@@ -437,7 +437,7 @@ fn shorter_row_seen(node : Bool, said : String, alts : Array[String], widths : A
     w.set(x)
     t.draw()
     t.draw()
-    let drawn = t.drawn_instances().map(fn(a) {
+    let drawn = t.drawn_instances_keyed().map(fn(a) {
       a.mapi(fn(j, v) { if a[5] == 1.0 && (j == 12 || j == 13) { "-" } else { ((v * 100.0).round() / 100.0).to_string() } }).join(",")
     })
     drawn.sort()

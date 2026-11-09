@@ -13,7 +13,7 @@ import { devicePage, googleStart, consumeLoginRate, signedInPage } from "./login
 import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
-import { adminApi, api, blockAccount, socketToken } from "./api";
+import { adminApi, api, blockAccount, feedbackList, socketToken } from "./api";
 import { noted, parseTraceparent, recordCall, relayToAxiom, takeNotes, unverifiedNotes } from "./tracing";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
@@ -23,8 +23,12 @@ export { RelayLoad } from "./relay-load";
 export { ServiceStatus } from "./status";
 import { sampleOwnRelay } from "./relay-load";
 import { checkServices } from "./status";
+import { checkModels } from "./models";
 import { PROBE_EVERY_MIN, probeRelays } from "./probes";
 import { relayUrls } from "./relays";
+
+/** The minute of each hour the models' catalog is made afresh (`scheduled`). */
+const MODELS_MINUTE = 7;
 
 // The admin's console has a host of its own, ADMIN_ORIGIN: its /v1/ calls come here too — the calls its client core
 // makes to sign in and stay signed in (the core talks to the page's origin), and the console's API; nothing else. A
@@ -65,12 +69,22 @@ export default {
     if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
     return response;
   },
-  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts), then
-  // the services checked for still.fail/status (status.ts); every
-  // PROBE_EVERY_MIN, the relays probed from China's networks (probes.ts), where RELAY_PROBES says so.
+  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts; the
+  // operator's devices told they were sampled), then the services checked for still.fail/status (status.ts); every
+  // PROBE_EVERY_MIN, the relays probed from China's networks (probes.ts), where RELAY_PROBES says so; hourly, the
+  // models' catalog made afresh from models.dev, the stations told when it changed (models.ts).
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(sampleOwnRelay(env).catch(() => []).then((full) => checkServices(env, full)));
-    if (env.RELAY_PROBES === "globalping" && Math.floor(controller.scheduledTime / 60_000) % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
+    const minute = Math.floor(controller.scheduledTime / 60_000);
+    ctx.waitUntil(
+      sampleOwnRelay(env)
+        .catch(() => [])
+        .then(async (full) => {
+          await env.DIRECTORY.getByName("primary").tellAdmins({ type: "relays" }).catch(() => undefined);
+          await checkServices(env, full);
+        }),
+    );
+    if (minute % 60 === MODELS_MINUTE) ctx.waitUntil(checkModels(env).catch(() => undefined));
+    if (env.RELAY_PROBES === "globalping" && minute % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
   },
 } satisfies ExportedHandler<Env>;
 
@@ -208,6 +222,12 @@ async function handle(request: Request, env: Env): Promise<Response> {
     } catch {
       return reply({ error: "invalid_request" }, 400);
     }
+  }
+  // The console's bug reports for the team's feedback monitor: FEEDBACK_TOKEN reads them and nothing else.
+  if (path === "/v1/admin/feedback/list" && request.method === "POST") {
+    const supplied = bearerToken(request);
+    if (!env.FEEDBACK_TOKEN || env.FEEDBACK_TOKEN.length < 43 || !supplied || (await digest(supplied)) !== (await digest(env.FEEDBACK_TOKEN))) return denied();
+    return reply({ feedback: await feedbackList(env) });
   }
   // The Android app opens an item's link (/o/…) itself: this says the domain is its (App Links).
   if (path === "/.well-known/assetlinks.json") {

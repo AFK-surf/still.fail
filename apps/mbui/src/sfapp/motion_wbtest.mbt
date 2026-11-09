@@ -1,4 +1,4 @@
-// still.fail's motion over its made-up chats, frame by frame (docs/motion.md): Home's rows as the list
+// still.fail's motion over its made-up chats, frame by frame (sf/motion.mbt): Home's rows as the list
 // changes, words sent flying into their bubble, the way to the newest coming and going.
 
 ///|
@@ -42,7 +42,7 @@ fn home_moving(t : @ui.Tester) -> Array[String] {
 
 ///|
 test "Home: back from a chat to the list changed meanwhile, the list drawn as it is: nothing in it moves" {
-  // (Home.kt: the list composed anew as it is come back to, its ListMotion new: nothing moves the first time)
+  // (its ListMotion new: nothing moves the first time)
   new_run()
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
@@ -75,8 +75,8 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
   let base = fixture("home")
   let src = {
     ..base,
-    topic: fn(name, params) {
-      let tv = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let tv = base.topic(name, params).get().snapshot()
       match (name, tv.value) {
         ("chats", Some(Object(v))) => {
           let row : Map[String, Json] = {
@@ -300,11 +300,11 @@ test "Home: the first rows, after the list waited, come as they are and a tap on
   let waiting = @signals.signal(true)
   let src = {
     ..src,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chats" && waiting.get() {
         { value: None, error: None, version: 0 }
       } else {
-        (src.topic)(name, params)
+        src.topic(name, params).get().snapshot()
       }
     },
   }
@@ -373,7 +373,7 @@ test "a quote's line for a comment, tapped while the capsule grows round it, tak
   t.assert_idle()
 }
 
-// What leaves is only drawn (docs/motion.md): a sheet going down and its scrim fading, the bar
+// What leaves is only drawn (sf/motion.mbt): a sheet going down and its scrim fading, the bar
 // going down under a page pushed. A tap meanwhile is what is under them's.
 
 ///|

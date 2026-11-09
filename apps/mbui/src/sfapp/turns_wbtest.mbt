@@ -1,4 +1,4 @@
-// What changes a chat's list's height waits for nothing (turns.mbt, docs/list-motion.md): a row comes, what is under a
+// What changes a chat's list's height waits for nothing (mbui's view/list_motion.mbt): a row comes, what is under a
 // post changes, the moment it does, together; each one's room goes to its new height from then (Ctx::row_size).
 
 ///|

@@ -5,7 +5,9 @@
 
 ///|
 /// The icon button in `parent` showing icon `icon`, `size` across (round), its icon `icon_size`; named `label` (read
-/// out, and its tip in `tips`); `press` done as it is pressed. The node.
+/// out, and its tip in `tips`); `press` done as it is pressed. While `disabled()`, faded (icon_button's: 0.45), taking
+/// no press nor the focus. The node.
+#callsite(autofill(loc))
 pub fn icon_button_node(
   parent : @view.View,
   icon : String,
@@ -15,8 +17,48 @@ pub fn icon_button_node(
   size? : Double = icon_button_side,
   icon_size? : Double = 16.0,
   icon_now? : () -> String,
+  disabled? : () -> Bool = fn() { false },
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(v) {
+  icon_button_by(loc~, parent, icon, label, fn(_) { press() }, tips, size, icon_size, icon_now, disabled)
+}
+
+///|
+/// icon_button_node's button that opens what goes beside it (a menu under it): `open` given the button itself as it is
+/// pressed, where it is placed then.
+#callsite(autofill(loc))
+pub fn icon_button_opens_node(
+  parent : @view.View,
+  icon : String,
+  label : () -> String,
+  open : (@view.View) -> Unit,
+  loc~ : SourceLoc,
+) -> @view.View {
+  icon_button_by(loc~, parent, icon, label, open, None, icon_button_side, 16.0, None, fn() { false })
+}
+
+///|
+/// icon_button_node's button, `press` given the button itself as it is pressed (what opens beside it: its menu).
+#callsite(autofill(loc))
+fn icon_button_by(
+  parent : @view.View,
+  icon : String,
+  label : () -> String,
+  press : (@view.View) -> Unit,
+  tips : TipLayer?,
+  size : Double,
+  icon_size : Double,
+  icon_now : (() -> String)?,
+  disabled : () -> Bool,
+  loc~ : SourceLoc,
+) -> @view.View {
+  let live = fn() { !disabled() }
+  parent.box(made_for=loc, fn(v) {
+    let press = fn() {
+      if @signals.untracked(live) {
+        press(v)
+      }
+    }
     // (the hand on it: a mouse over it or pressing it, a finger pressing it; the keyboard's focus shown on it)
     let lit = fn() {
       v.focus_shown() ||
@@ -33,8 +75,9 @@ pub fn icon_button_node(
     .height(Is(Some(size)))
     .padding(Is((pad, pad, pad, pad)))
     .radius(Is(size / 2.0))
-    .presses(Is(true))
-    .focusable(Is(true))
+    .presses(By(live))
+    .focusable(By(live))
+    .alpha(By(fn() { if disabled() { icon_button_disabled_alpha } else { 1.0 } }))
     // (the page's hover, as a tint of the ink it sits with: icon_button's)
     .ground(By(fn() { alpha(theme().p.text, 0.065 * hand.shown(v)) }))
     .says(By(fn() { Some(@view.said(Button, label=label())) }))
@@ -83,3 +126,7 @@ pub fn icon_button_node(
     |> ignore
   })
 }
+
+///|
+/// How far a disabled icon button is seen (icon_button's `disabled`).
+let icon_button_disabled_alpha : Double = 0.45

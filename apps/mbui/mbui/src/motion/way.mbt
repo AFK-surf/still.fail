@@ -118,11 +118,12 @@ pub fn Way::go(
   self.to = target
   self.spec = spec
   self.start = at
-  self.dur = if @ui.current().still() { 0.0 } else { spec.duration(x, target, self.v0) }
+  // (motion reduced: there at once, the setting's, whoever tells it)
+  self.dur = if @ui.reduced_motion() { 0.0 } else { spec.duration(x, target, self.v0) }
   self.mover.changed()
   // (who it is for the performance record: who sent it, not where to)
   self.mover.told_as("a Way", loc)
-  self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+  self.told.set(self.told.untracked() + 1)
 }
 
 ///|
@@ -139,7 +140,7 @@ pub fn Way::put(self : Way, v : Double) -> Unit {
   self.spec = Snap(0.0)
   self.start = 0.0
   self.dur = 0.0
-  self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+  self.told.set(self.told.untracked() + 1)
 }
 
 ///|
@@ -150,11 +151,10 @@ pub fn Way::said(self : Way) -> Unit {
 }
 
 ///|
-/// Where it is as what is built or drawn now reads it (the frame's moment): read again each frame while it goes, as a
-/// motion's value is (Anim::get).
-pub fn Way::get(self : Way) -> Double {
+/// Where it is as what the old view `c` builds or draws now reads it (its frame's moment): read again each frame while
+/// it goes, as a motion's value is (Anim::get). A node of the window's tree reads value_at its own moment instead.
+pub fn Way::get(self : Way, c : @ui.Ctx) -> Double {
   self.said()
-  let c = @ui.current()
   let t = c.moment()
   c.shows_motion(self.mover, self.goes_at(t))
   self.value_at(t)

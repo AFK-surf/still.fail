@@ -1,4 +1,4 @@
-// The keeper's ssh-agent (docs/vault.md, 三种用法): a socket for one command run with a granted SSH key, which lists
+// The keeper's ssh-agent (三种用法): a socket for one command run with a granted SSH key, which lists
 // that key and signs with it, so the key itself never leaves the keeper. The agent protocol's few messages it needs
 // (draft-miller-ssh-agent): list identities, sign; anything else fails. Keys are OpenSSH's own format
 // (`openssh-key-v1`, unencrypted) or PEM, Ed25519 or RSA.

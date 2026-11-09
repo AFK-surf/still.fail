@@ -1,4 +1,4 @@
-// Sharing a chat as a picture with keyboard and mouse (sfpages publish.mbt, Publish.tsx PublishDialog): from the chat's
+// Sharing a chat as a picture with keyboard and mouse (sfpages publish.mbt): from the chat's
 // info, over the whole window, the picture as it would be; 复制图片 puts it on the clipboard, one PNG of it all.
 
 ///|
@@ -19,6 +19,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   t.click(Button, label="更多")
   t.frame()
   t.frame()
+  open_share(t)
   t.tap_text("分享图片")
   t.frame()
   t.frame()
@@ -34,7 +35,6 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   assert_true(ticks_before_words(t, @sf.message_avatar_reach), msg=t.all(Checkbox, label="放进图片").map(fn(n) { n.rect }).to_string())
   t.click(Button, label="复制图片")
   t.frame()
-  assert_eq(named(calls, "chat.publish").length(), 0)
   assert_eq(t.shots().length(), 1)
   // the picture on the clipboard: as wide as the chat's column (760) at two pixels a point, as tall as it all is
   match t.clipboard_png() {
@@ -63,6 +63,7 @@ test "wide: a vault request's outcome line has its dot in the middle of its word
   t.click(Button, label="更多")
   t.frame()
   t.frame()
+  open_share(t)
   t.tap_text("分享图片")
   t.frame()
   t.frame()
@@ -85,8 +86,8 @@ test "wide: right click copies the whole message for its author and the viewer, 
     let base = fixture("chat")
     let src : Source = {
       ..base,
-      topic: fn(name, params) {
-        let got = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let got = base.topic(name, params).get().snapshot()
         guard name == "chat" && got.value is Some(Object(chat)) else { return got }
         let out = chat.copy()
         let messages = items(got.value, "messages").copy()
@@ -118,7 +119,7 @@ test "wide: right click copies the whole message for its author and the viewer, 
 }
 
 ///|
-test "wide: a message right clicked offers 分享这一轮, which shares its turn as a picture (chat.publishPreview by its seq)" {
+test "wide: a message right clicked offers 多选, which opens the chat's picture with that message alone ticked (chat.publishPreview of the whole chat)" {
   new_run()
   let calls : Array[Made] = []
   let base = fixture("chat")
@@ -137,16 +138,17 @@ test "wide: a message right clicked offers 分享这一轮, which shares its tur
   t.frame()
   t.frame()
   assert_true(t.find("复制消息链接") is Some(_))
-  t.tap_text("分享这一轮")
+  t.tap_text("多选")
   t.frame()
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)
   assert_eq(number(Some(asked[0].params), "thread"), 7.0)
-  assert_eq(number(Some(asked[0].params), "turn"), 11.0)
+  // (the whole chat asked: the message ticked alone once it is read)
+  assert_true(field(Some(asked[0].params), "turn") is None)
 }
 
 ///|
-test "wide: a link in a message right clicked opens its own menu alone, not the message's 分享这一轮 under it" {
+test "wide: a link in a message right clicked opens its own menu alone, not the message's 多选 under it" {
   new_run()
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let src = fixture("chat")
@@ -166,14 +168,14 @@ test "wide: a link in a message right clicked opens its own menu alone, not the 
   t.right_click(x + w / 2.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("复制链接") is Some(_))
-  assert_true(t.find("分享这一轮") is None)
+  assert_true(t.find("多选") is None)
   assert_true(t.find("复制消息链接") is None)
   assert_true(t.find("复制消息") is None)
   // chosen, nothing comes after it
   t.tap_text("复制链接")
   t.run_for(@ui.move_most_ms)
   assert_eq(t.clipboard(), link)
-  assert_true(t.find("分享这一轮") is None)
+  assert_true(t.find("多选") is None)
 }
 
 ///|
@@ -221,12 +223,13 @@ test "wide: the message header's ⋯ offers the same message actions as a right 
   t.frame()
   t.click(Button, label="更多操作")
   t.run_for(@ui.move_most_ms)
-  t.tap_text("分享这一轮")
+  t.tap_text("多选")
   t.frame()
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)
   assert_eq(number(Some(asked[0].params), "thread"), 7.0)
-  assert_eq(number(Some(asked[0].params), "turn"), 11.0)
+  // (the whole chat asked: the message ticked alone once it is read)
+  assert_true(field(Some(asked[0].params), "turn") is None)
 }
 
 ///|
@@ -310,7 +313,7 @@ test "touch: the message header has neither; the held bar copies its position li
   let t = fake_core(calls)
   assert_true(t.query(Button, label="分享图片") is None)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  assert_true(t.query(Button, label="分享这一轮") is Some(_))
+  assert_true(t.query(Button, label="多选") is Some(_))
   t.click(Button, label="复制链接")
   assert_eq(t.clipboard(), "https://app.still.fail/o/ws1/st1/s-c1?message=11")
   assert_eq(pk.ts, "")

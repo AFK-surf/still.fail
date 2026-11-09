@@ -56,7 +56,7 @@
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 static const char MAGIC[8] = {'M', 'B', 'S', 'E', 'T', 'U', 'P', '1'};
-// System.AppUserModel.ID (propkey.h's PKEY_AppUserModel_ID)
+// System.AppUserModel.ID
 static const PROPERTYKEY app_id_key = {{0x9F4C2855, 0x9F79, 0x4B39, {0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3}}, 5};
 
 // ---- what it says ----

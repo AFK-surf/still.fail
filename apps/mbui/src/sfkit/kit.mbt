@@ -45,9 +45,9 @@ fn kit_bar(c : @ui.Ctx, page : Int) -> Unit {
   let t = @sf.theme()
   c.box(dir=Row, h=Px(52.0), padx=12.0, gap=8.0, align=ACenter, fn() {
     if page > 0 {
-      if @sf.icon_button(c, "chevron-left", key="back", icon_size=20.0) {
+      @sf.icon_button(c, "chevron-left", key="back", icon_size=20.0, on_press=fn() {
         kit.nav.pop() |> ignore
-      }
+      }) |> ignore
     }
     c.text(
       if page == 0 { "富文本与页面" } else { "第 \{page + 1} 页" },
@@ -58,9 +58,9 @@ fn kit_bar(c : @ui.Ctx, page : Int) -> Unit {
       w=Fill(1.0),
     )
     |> ignore
-    if @sf.button(c, "下一页", key="next", icon="arrow-right") {
+    @sf.button(c, "下一页", key="next", icon="arrow-right", on_press=fn() {
       kit.nav.push(page + 1)
-    }
+    }) |> ignore
   })
   |> ignore
   c.box(h=Px(1.0), bg=t.p.line, fn() {  }) |> ignore

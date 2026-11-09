@@ -1,0 +1,273 @@
+{
+  "overview": {
+    "connects": [],
+    "counts": {
+      "running": 1,
+      "sessions": 23,
+      "warm": 3
+    },
+    "disk": {
+      "freeBytes": 657129996288,
+      "totalBytes": 1067299373056
+    },
+    "logins": [],
+    "machineLogins": [
+      {
+        "email": "lin@acme.dev",
+        "installed": true,
+        "loggedIn": true,
+        "plan": "max",
+        "quota": {
+          "checkedAt": 0,
+          "state": "ok",
+          "windows": [
+            {
+              "label": "5 小时",
+              "left": 82,
+              "level": "ok",
+              "mark": "5H",
+              "refills": "2 小时 10 分钟后刷新",
+              "resetsAt": 7800000,
+              "usedPercent": 18
+            },
+            {
+              "label": "每周",
+              "left": 66,
+              "level": "ok",
+              "mark": "W",
+              "refills": "4 天 5 小时后刷新",
+              "resetsAt": 364000000,
+              "usedPercent": 34
+            }
+          ]
+        },
+        "runtime": "claude",
+        "text": "Claude Code 已登录 lin@acme.dev（Max）",
+        "usable": true
+      },
+      {
+        "email": "zhou@acme.dev",
+        "installed": true,
+        "loggedIn": true,
+        "plan": "pro",
+        "runtime": "codex",
+        "text": "Codex 已登录 zhou@acme.dev（Pro）",
+        "usable": true
+      }
+    ],
+    "mesh": {
+      "name": "Willow",
+      "origin": "https://app.still.fail",
+      "state": "running",
+      "station": "5f1c0b7d2a9e4c83b6d1f0a2e7c94b58d3a61f0e9c2b7d4a8e5f1c3b9a0d6e2f",
+      "workspace": "Acme",
+      "workspaceId": "demo"
+    },
+    "processes": [
+      {
+        "label": "claude 3b9e1c42-6a1d-4f7e-9d2b-8c5a1e0f7b63",
+        "pgid": 41021,
+        "rssMb": 118,
+        "runtime": "claude",
+        "startedAt": -600000
+      },
+      {
+        "label": "claude 7d2f0a18-3c6e-4b91-a5d4-2e8f9b1c6a07",
+        "pgid": 41377,
+        "rssMb": 96,
+        "runtime": "claude",
+        "startedAt": -3000000
+      },
+      {
+        "label": "codex app-server",
+        "pgid": 40210,
+        "rssMb": 52,
+        "runtime": "codex",
+        "startedAt": -7200000
+      }
+    ],
+    "processesText": "3 个 agent 进程 266 MB",
+    "profiles": [
+      {
+        "access": {
+          "key": "",
+          "kind": "subscription"
+        },
+        "backgroundOnMessage": true,
+        "check": {
+          "checkedAt": 0,
+          "detail": "已登录",
+          "models": [
+            "claude-sonnet-5-5",
+            "claude-opus-5-5",
+            "claude-fable-5-1",
+            "claude-opus-5",
+            "claude-sonnet-5",
+            "claude-fable-5",
+            "claude-opus-4-8",
+            "claude-opus-4-7",
+            "claude-sonnet-4-6",
+            "claude-opus-4-6",
+            "claude-opus-4-5-20251101",
+            "claude-haiku-4-5-20251001",
+            "claude-sonnet-4-5-20250929"
+          ],
+          "state": "ok"
+        },
+        "checkText": "可用",
+        "checkTone": "green",
+        "env": [],
+        "home": "/Users/lin/.stillfail/homes/machine-claude",
+        "homeExists": true,
+        "id": "machine-claude",
+        "loginCommand": "CLAUDE_CONFIG_DIR=/Users/lin/.stillfail/homes/machine-claude claude auth login",
+        "machine": true,
+        "makers": {
+          "claude-fable-5": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          },
+          "claude-fable-5-1": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          },
+          "claude-haiku-4-5-20251001": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          },
+          "claude-opus-4-5-20251101": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          },
+          "claude-opus-4-6": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          },
+          "claude-opus-4-7": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          },
+          "claude-opus-4-8": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          },
+          "claude-opus-5": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          },
+          "claude-opus-5-5": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          },
+          "claude-sonnet-4-5-20250929": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          },
+          "claude-sonnet-4-6": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          },
+          "claude-sonnet-5": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          },
+          "claude-sonnet-5-5": {
+            "id": "anthropic",
+            "name": "Anthropic"
+          }
+        },
+        "models": [
+          "claude-opus-5-5",
+          "claude-sonnet-5-5"
+        ],
+        "modelsText": "已启用 2 / 13 个模型",
+        "name": "lin@acme.dev（本机）",
+        "names": {
+          "claude-fable-5": "Fable 5",
+          "claude-fable-5-1": "Fable 5.1",
+          "claude-haiku-4-5-20251001": "Haiku 4.5",
+          "claude-opus-4-5-20251101": "Opus 4.5",
+          "claude-opus-4-6": "Opus 4.6",
+          "claude-opus-4-7": "Opus 4.7",
+          "claude-opus-4-8": "Opus 4.8",
+          "claude-opus-5": "Opus 5",
+          "claude-opus-5-5": "Opus 5.5",
+          "claude-sonnet-4-5-20250929": "Sonnet 4.5",
+          "claude-sonnet-4-6": "Sonnet 4.6",
+          "claude-sonnet-5": "Sonnet 5",
+          "claude-sonnet-5-5": "Sonnet 5.5"
+        },
+        "quota": {
+          "checkedAt": 0,
+          "state": "ok",
+          "windows": [
+            {
+              "label": "5 小时",
+              "left": 82,
+              "level": "ok",
+              "mark": "5H",
+              "refills": "2 小时 10 分钟后刷新",
+              "resetsAt": 7800000,
+              "usedPercent": 18
+            },
+            {
+              "label": "每周",
+              "left": 66,
+              "level": "ok",
+              "mark": "W",
+              "refills": "4 天 5 小时后刷新",
+              "resetsAt": 364000000,
+              "usedPercent": 34
+            }
+          ]
+        },
+        "runtime": "claude",
+        "runtimes": [
+          "claude"
+        ],
+        "series": [
+          {
+            "models": [
+              "claude-fable-5-1",
+              "claude-fable-5"
+            ],
+            "name": "Fable"
+          },
+          {
+            "models": [
+              "claude-opus-5-5",
+              "claude-opus-5",
+              "claude-opus-4-8",
+              "claude-opus-4-7",
+              "claude-opus-4-6",
+              "claude-opus-4-5-20251101"
+            ],
+            "name": "Opus"
+          },
+          {
+            "models": [
+              "claude-sonnet-5-5",
+              "claude-sonnet-5",
+              "claude-sonnet-4-6",
+              "claude-sonnet-4-5-20250929"
+            ],
+            "name": "Sonnet"
+          },
+          {
+            "models": [
+              "claude-haiku-4-5-20251001"
+            ],
+            "name": "Haiku"
+          }
+        ],
+        "usedBy": []
+      }
+    ],
+    "slackApps": [],
+    "slackTeams": [],
+    "slackUsers": [],
+    "viewer": {
+      "via": "local"
+    }
+  }
+}

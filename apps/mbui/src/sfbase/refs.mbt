@@ -7,25 +7,24 @@
 // draws the menu.
 
 ///|
-/// What a field of a draft was last seen as and what the core said of it: its words and selection (a change is told
-/// apart by them); the `@words` at its caret (where the `@` is, what follows) for the words and caret they were asked
-/// of; the `@` whose menu was closed (Escape, a pick; -1 none), not opened again until the `@words` are gone; the chat
-/// chosen in the menu; the marks in the words (where each starts and ends past its `]`) and the words the core read
-/// them in (others: moved along with an edit until it has read these); what the menu's words last found (refs_search).
+/// What the core said of a draft's field (`input`, its words and caret as they are, followed: refs_follow; none till
+/// its draft is made), and of the `@` at its caret: the `@words` at its caret (where the `@` is, what follows) for the
+/// words and caret they were asked of; the `@` whose menu was closed (Escape, a pick; -1 none), not opened again until
+/// the `@words` are gone; the chat chosen in the menu; the marks in its words (where each starts and ends past its `]`)
+/// and the words they are placed in (moved along with each edit of them until the core has read the words: the words
+/// it read them in, others); the runs its words will be drawn in once sent, for the words the core read them in; what
+/// the menu's words last found (refs_search).
 priv struct RefField {
-  mut text : String
-  mut anchor : Int
-  mut caret : Int
+  mut input : @ui.Field?
   at_of : @signals.Signal[String]
   at : @signals.Signal[(Int, String)?]
   closed : @signals.Signal[Int]
   active : @signals.Signal[Int]
   marks : @sf.LiveArray[(Int, Int)]
+  mut marks_in : String
   marks_of : @signals.Signal[String]
-  mut marks_asked : String
   mut runs : Json
   mut runs_of : String
-  mut runs_asked : String
   mut found : Json?
 }
 
@@ -52,19 +51,16 @@ fn ref_field(key : String) -> RefField {
     Some(f) => f
     None => {
       let f : RefField = {
-        text: "",
-        anchor: 0,
-        caret: 0,
+        input: None,
         at_of: @signals.signal("", same=fn(a, b) { a == b }),
         at: @signals.signal(None),
         closed: @signals.signal(-1),
         active: @signals.signal(0),
         marks: @sf.LiveArray::from([]),
+        marks_in: "",
         marks_of: @signals.signal("", same=fn(a, b) { a == b }),
-        marks_asked: "",
         runs: Json::null(),
         runs_of: "",
-        runs_asked: "",
         found: None,
       }
       ref_fields[key] = f
@@ -74,19 +70,51 @@ fn ref_field(key : String) -> RefField {
 }
 
 ///|
-/// What an edit changed: the words before it the same up to `start`, the old words' end of what it took and the new
-/// words' end of what it put in (each after them the same again).
-fn edit_of(was : String, now : String) -> (Int, Int, Int) {
-  let most = if was.length() < now.length() { was.length() } else { now.length() }
-  let mut start = 0
-  while start < most && was.at(start) == now.at(start) {
-    start += 1
+/// The words of draft `key`'s field as they are now ("" before its draft is made).
+fn ref_words(f : RefField) -> String {
+  match f.input {
+    Some(i) => i.text()
+    None => ""
   }
-  let mut end = 0
-  while end < most - start && was.at(was.length() - 1 - end) == now.at(now.length() - 1 - end) {
-    end += 1
-  }
-  (start, was.length() - end, now.length() - end)
+}
+
+///|
+/// The marks of `f` placed in words `was`, where they are once an edit of them leaves them as `now` (@ui.words_changed):
+/// those it did not touch, moved with it; those it touched gone. Placed in other words: as they are, the core to say
+/// where they are in these.
+fn refs_marks_moved(f : RefField, was : String, now : String) -> Unit {
+  guard f.marks_in == was else { return }
+  let (start, took, put) = @ui.words_changed(was, now)
+  let moved = put - took
+  f.marks.replace(f.marks.filter_map(fn(m) {
+    if m.1 <= start {
+      Some(m)
+    } else if m.0 >= took {
+      Some((m.0 + moved, m.1 + moved))
+    } else {
+      None
+    }
+  }))
+  f.marks_in = now
+}
+
+///|
+/// Draft `key`'s field (`input`) followed for what the core reads of its words, from as they are when its draft is
+/// made (words kept, put back) and each time they change, whatever changes them: the marks in them and the runs they
+/// will be drawn in once sent asked of the core. A reaction of the draft's own (compose.mbt's `following`), let go with
+/// it. The `@words` at its caret are the person's edit's to ask (refs_edited): words the core or the app put in are
+/// no one's typing, and ask nothing of it (a core write echoes nothing).
+fn refs_follow(src : Source, key : String, input : @ui.Field) -> Unit {
+  let f = ref_field(key)
+  f.input = Some(input)
+  @signals.effect(fn() {
+    let now = input.text()
+    @signals.untracked(fn() {
+      refs_ask_marks(src, key, now)
+      refs_ask_words(src, key, now)
+    })
+  })
+  |> ignore
 }
 
 ///|
@@ -95,148 +123,114 @@ fn ref_key(text : String, caret : Int) -> String {
 }
 
 ///|
-/// Draft `key`'s field (`input`) as the input left it since the last frame, read before it is built: a Backspace just
+/// The person's edit `e` of draft `key`'s field (`input`; Ctx::editor's `on_edit`), at its moment: a Backspace just
 /// after a mark takes the mark whole (the caret where it began); the marks the words held moved along with what was
-/// written, the core asked for the words' own; the `@words` at the caret asked of the core; a chat's link (of the
-/// workspace of station `here`) in what was put in at once going in as its mark, once the core has made it (not while
-/// `locked`).
-pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, here : String, locked : Bool) -> Unit {
+/// written; a chat's link (of the workspace of station `here`) in what was put in at once going in as its mark, once
+/// the core has made it (not while `locked`); the `@words` at its caret asked of the core, its words changed or only
+/// its caret moved (the marks and runs of its words: refs_follow asks, whatever changed them).
+pub fn refs_edited(src : Source, key : String, input : @ui.Field, here : String, locked : Bool, e : @ui.FieldEdit) -> Unit {
   let f = ref_field(key)
-  let now = input.text()
-  let (anchor, caret) = input.selection()
-  if now == f.text && anchor == f.anchor && caret == f.caret {
-    // (words the app put in itself: their marks)
-    refs_ask_marks(c, src, key, now)
-    refs_ask_words(c, src, key, now)
+  let (was, now) = (e.was, e.now)
+  let (wa, wc) = e.was_selection
+  let (anchor, caret) = e.selection
+  if now == was {
+    if anchor == caret {
+      refs_ask_at(src, key, now, caret)
+    }
     return
   }
-  let was = f.text
-  let (wa, wc) = (f.anchor, f.caret)
-  if now != was {
-    let (start, took, put) = edit_of(was, now)
-    // one character taken just before the caret: a mark ending there goes whole
-    let one_back = wa == wc && anchor == caret && caret == wc - 1 && start == wc - 1 && took == wc && put == start
-    let mark = if one_back { f.marks.search_by(fn(m) { m.1 == wc }) } else { None }
-    match mark {
-      Some(i) => {
-        let a = f.marks[i].0
-        refs_put(key, input, was.view(end_offset=a).to_string() + was.view(start_offset=wc).to_string(), caret=a)
-        return
-      }
-      None => ()
+  let (start, took, put) = e.span()
+  // one character taken just before the caret: a mark ending there goes whole
+  let one_back = wa == wc && anchor == caret && caret == wc - 1 && start == wc - 1 && took == wc && put == start
+  let mark = if one_back && f.marks_in == was { f.marks.search_by(fn(m) { m.1 == wc }) } else { None }
+  match mark {
+    Some(i) => {
+      let a = f.marks[i].0
+      refs_put(key, input, was.view(end_offset=a).to_string() + was.view(start_offset=wc).to_string(), caret=a)
+      return
     }
-    // the marks the edit did not touch, where they are now
-    let moved = put - took
-    f.marks.replace(f.marks.filter_map(fn(m) {
-      if m.1 <= start {
-        Some(m)
-      } else if m.0 >= took {
-        Some((m.0 + moved, m.1 + moved))
-      } else {
-        None
-      }
-    }))
-    // what was put in at once: the chats' links in it
-    if put - start > 1 && !locked {
-      let pasted = now.view(start_offset=start, end_offset=put).to_string()
-      c.tell("refs/pasted/" + key, fn() { refs_pasted(src, key, input, here, now, start, pasted) })
-    }
+    None => ()
   }
-  f.text = now
-  f.anchor = anchor
-  f.caret = caret
-  refs_ask_marks(c, src, key, now)
-  refs_ask_words(c, src, key, now)
+  // the marks the edit did not touch, where they are now
+  refs_marks_moved(f, was, now)
+  // what was put in at once: the chats' links in it
+  if put - start > 1 && !locked {
+    let pasted = now.view(start_offset=start, end_offset=put).to_string()
+    refs_pasted(src, key, input, here, now, start, pasted)
+  }
   if anchor == caret {
-    let asked = ref_key(now, caret)
-    c.tell("refs/at/" + key, fn() {
-      (src.call)("ref.at", { "text": Json::string(now), "caret": Json::number(caret.to_double()) }, fn(r) {
-        match r {
-          Ok(v) => {
-            let at = match field(Some(v), "at") {
-              Some(Object(_)) as o => Some((number(o, "start").to_int(), text(o, "query")))
-              _ => None
-            }
-            match at {
-              None => {
-                f.closed.set(-1)
-                f.found = None
-              }
-              Some((_, q)) =>
-                match f.at.get() {
-                  Some((_, was)) if was == q => ()
-                  _ => f.active.set(0)
-                }
-            }
-            f.at.set(at)
-            f.at_of.set(asked)
-          }
-          Err(_) => ()
-        }
-      })
-    })
+    refs_ask_at(src, key, now, caret)
   }
 }
 
 ///|
-/// The marks of words `now` asked of the core (once for them, holding a `@[`).
-fn refs_ask_marks(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit {
+/// The `@words` at caret `caret` of words `now` of draft `key`'s field asked of the core (`ref.at`).
+fn refs_ask_at(src : Source, key : String, now : String, caret : Int) -> Unit {
+  let f = ref_field(key)
+  let asked = ref_key(now, caret)
+  (src.call)("ref.at", { "text": Json::string(now), "caret": Json::number(caret.to_double()) }, fn(r) {
+    match r {
+      Ok(v) => {
+        let at = match field(Some(v), "at") {
+          Some(Object(_)) as o => Some((number(o, "start").to_int(), text(o, "query")))
+          _ => None
+        }
+        match at {
+          None => {
+            f.closed.set(-1)
+            f.found = None
+          }
+          Some((_, q)) =>
+            match f.at.get() {
+              Some((_, was)) if was == q => ()
+              _ => f.active.set(0)
+            }
+        }
+        f.at.set(at)
+        f.at_of.set(asked)
+      }
+      Err(_) => ()
+    }
+  })
+}
+
+///|
+/// The marks of words `now` of draft `key`'s field asked of the core (holding a `@[`, not read for them yet).
+fn refs_ask_marks(src : Source, key : String, now : String) -> Unit {
   let f = ref_field(key)
   if !now.contains("@[") {
-    // (said only as it changes: said each build, what read it would be built again each frame)
-    if !@signals.untracked(fn() { f.marks.is_empty() }) {
+    if !f.marks.is_empty() {
       f.marks.replace([])
     }
+    f.marks_in = now
     f.marks_of.set(now)
-    // (the same words written again are to be read again: their marks went with these)
-    f.marks_asked = ""
     return
   }
-  if f.marks_of.get() == now || f.marks_asked == now {
+  if f.marks_of.get() == now {
     return
   }
-  f.marks_asked = now
-  c.tell("refs/marks/" + key, fn() {
-    (src.call)("ref.marks", { "text": Json::string(now) }, fn(r) {
-      match r {
-        Ok(v) if f.text == now => {
-          f.marks.replace(items(Some(v), "marks").map(fn(m) {
-            (number(Some(m), "start").to_int(), number(Some(m), "end").to_int())
-          }))
-          f.marks_of.set(now)
-        }
-        _ => ()
+  (src.call)("ref.marks", { "text": Json::string(now) }, fn(r) {
+    match r {
+      Ok(v) if ref_words(f) == now => {
+        f.marks.replace(items(Some(v), "marks").map(fn(m) {
+          (number(Some(m), "start").to_int(), number(Some(m), "end").to_int())
+        }))
+        f.marks_in = now
+        f.marks_of.set(now)
       }
-    })
+      _ => ()
+    }
   })
 }
 
 ///|
 /// Words the app put in draft `key`'s field itself (a mark, the draft kept, put back): put there, seen as they are,
-/// not as written (no paste in them, no Backspace).
+/// not as written (no paste in them, no Backspace); its marks where they are in them, the `@` it was at none.
 pub fn refs_put(key : String, input : @ui.Field, words : String, caret? : Int) -> Unit {
   let f = ref_field(key)
-  let was = f.text
-  input.set(words, caret?)
-  let (anchor, at) = input.selection()
-  // its marks where they are now, those the change took gone
-  if words != was {
-    let (start, took, put) = edit_of(was, words)
-    let moved = put - took
-    f.marks.replace(f.marks.filter_map(fn(m) {
-      if m.1 <= start {
-        Some(m)
-      } else if m.0 >= took {
-        Some((m.0 + moved, m.1 + moved))
-      } else {
-        None
-      }
-    }))
-  }
-  f.text = words
-  f.anchor = anchor
-  f.caret = at
+  refs_marks_moved(f, input.text(), words)
   f.at.set(None)
+  input.set(words, caret?)
 }
 
 ///|
@@ -246,7 +240,7 @@ pub fn refs_put(key : String, input : @ui.Field, words : String, caret? : Int) -
 pub fn refs_look(key : String, accent : Int64) -> (String) -> (String, Array[(Int, Int, Int64)]) {
   fn(s) {
     let f = ref_field(key)
-    if s != f.text || f.marks.is_empty() {
+    if s != f.marks_in || f.marks.is_empty() {
       return (s, [])
     }
     let sb = StringBuilder()
@@ -278,31 +272,26 @@ fn sent_words_of(s : String) -> String {
 
 ///|
 /// The runs the words of draft `key`'s field `now` will be drawn in once sent (the core's `ref.words`: refLinks.ts
-/// draftWords), asked once for them (of words that may hold more than one: @sf.words_may_link).
-fn refs_ask_words(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit {
+/// draftWords), asked for them (of words that may hold more than one: @sf.words_may_link; not read for them yet).
+fn refs_ask_words(src : Source, key : String, now : String) -> Unit {
   let f = ref_field(key)
   let words = sent_words_of(now)
-  if f.runs_of == words || f.runs_asked == words {
+  if f.runs_of == words {
     return
   }
   if !@sf.words_may_link(words) {
     f.runs = Json::null()
     f.runs_of = words
-    // (the same words written again are to be read again: their runs went with these)
-    f.runs_asked = ""
     return
   }
-  f.runs_asked = words
-  c.tell("refs/words/" + key, fn() {
-    (src.call)("ref.words", { "text": Json::string(words) }, fn(r) {
-      match r {
-        Ok(v) if sent_words_of(f.text) == words => {
-          f.runs = field(Some(v), "runs").unwrap_or(Json::null())
-          f.runs_of = words
-        }
-        _ => ()
+  (src.call)("ref.words", { "text": Json::string(words) }, fn(r) {
+    match r {
+      Ok(v) if sent_words_of(ref_words(f)) == words => {
+        f.runs = field(Some(v), "runs").unwrap_or(Json::null())
+        f.runs_of = words
       }
-    })
+      _ => ()
+    }
   })
 }
 
@@ -312,7 +301,7 @@ fn refs_ask_words(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit
 /// and the rest as it is (refs_marked_runs), never a mark's brackets on the way.
 pub fn refs_sent_runs(key : String, words : String) -> Json? {
   let f = ref_field(key)
-  let held = sent_words_of(f.text)
+  let held = sent_words_of(ref_words(f))
   guard f.runs_of == held && words.has_prefix(held) else { return refs_marked_runs(key, words) }
   let runs : Array[Json] = match f.runs {
     Array(a) => a.copy()
@@ -354,7 +343,7 @@ fn refs_marked_runs(key : String, words : String) -> Json? {
 /// words.
 pub fn refs_sent_marks(key : String, words : String) -> Array[(Int, Int)] {
   let f = ref_field(key)
-  let s = f.text
+  let s = f.marks_in
   let blank = fn(i : Int) {
     let u = s.unsafe_charcode_at(i)
     u == 32 || u == 10 || u == 9
@@ -376,7 +365,7 @@ pub fn refs_sent_marks(key : String, words : String) -> Array[(Int, Int)] {
 /// changed since it was asked).
 pub fn refs_marked(key : String) -> Bool? {
   let f = ref_field(key)
-  if f.marks_of.get() == f.text {
+  if f.marks_of.get() == ref_words(f) {
     Some(!f.marks.is_empty())
   } else {
     None
@@ -390,13 +379,16 @@ pub fn refs_marked(key : String) -> Bool? {
 /// none, in one whose menu was closed, or none read yet.
 pub fn refs_at(key : String) -> (Int, String)? {
   let f = ref_field(key)
-  if f.anchor != f.caret {
+  guard f.input is Some(input) else { return None }
+  let (anchor, caret) = input.selection()
+  if anchor != caret {
     return None
   }
-  let read_now = f.at_of.get() == ref_key(f.text, f.caret)
+  let words = input.text()
+  let read_now = f.at_of.get() == ref_key(words, caret)
   match f.at.get() {
     Some((start, _)) as at if start != f.closed.get() &&
-      (read_now || (start < f.caret && f.caret <= f.text.length() && f.text.at(start).to_int() == 64)) => at
+      (read_now || (start < caret && caret <= words.length() && words.at(start).to_int() == 64)) => at
     _ => None
   }
 }
@@ -407,7 +399,7 @@ pub fn refs_at(key : String) -> (Int, String)? {
 /// reading); what it says when it has none yet, or failed.
 pub fn refs_search(src : Source, key : String, params : Map[String, Json]) -> Topic {
   let f = ref_field(key)
-  let topic = (src.topic)("chatSearch", params)
+  let topic = src.topic("chatSearch", params).get().snapshot()
   match (topic.value, f.found) {
     (Some(_), _) => {
       f.found = topic.value
@@ -444,15 +436,22 @@ pub fn refs_active(key : String, n : Int, by? : Int = 0, to? : Int) -> Int {
 }
 
 ///|
-/// A chat picked in the menu of draft `key` (its station, its id, its title) put in as the mark the core makes of it
-/// (`chat.ref`, which keeps its link until it is sent; one of another workspace's keeps it for this one, `into`, too)
-/// in the `@words`' place if they are still there, a space and the caret after it; the menu closed for this `@`.
-/// Failing, `failed` is told why.
+/// Whether the menu of draft `key` was closed for the `@` at `start` (Escape, a pick), till its `@words` are gone.
+pub fn refs_closed(key : String, start : Int) -> Bool {
+  ref_field(key).closed.get() == start
+}
+
+///|
+/// A chat picked in the menu of draft `key` for the `@` at `start` (as the menu showed it; its station, its id, its
+/// title) put in as the mark the core makes of it (`chat.ref`, which keeps its link until it is sent; one of another
+/// workspace's keeps it for this one, `into`, too) in the `@words`' place if they are still there, a space and the
+/// caret after it; the menu closed for this `@`. Failing, `failed` is told why.
 pub fn refs_pick(
   c : @ui.Ctx,
   src : Source,
   key : String,
   input : @ui.Field,
+  start : Int,
   into : String,
   station : String,
   id : String,
@@ -460,7 +459,6 @@ pub fn refs_pick(
   failed : (String) -> Unit,
 ) -> Unit {
   let f = ref_field(key)
-  guard f.at.get() is Some((start, _)) else { return }
   // (the caret as it is now: the words typed after the `@` since its menu was built are the `@`'s too)
   let caret = input.selection().1
   f.closed.set(start)
@@ -617,14 +615,14 @@ pub fn paste_threshold(c : @ui.Ctx, src : Source) -> Int {
 
 ///|
 /// Words pasted at once past the bound (what the field gave up) going with draft `w` as a file of their own
-/// (pastedText.ts makePastedFile: `pasted-text-<its id>.txt`), what the core says of them (`paste.info`) with it.
+/// , what the core says of them (`paste.info`) with it.
 pub fn writing_paste(src : Source, w : Writing, station : String, words : String) -> Unit {
   (src.call)("paste.info", { "text": Json::string(words) }, fn(r) {
     guard r is Ok(v) else { return }
     let info = field(Some(v), "info")
     match info {
       Some(Object(_)) =>
-        writing_add(src, w, station, "pasted-text-" + upload_id(w.key + "\u{2}" + words, w.files.length() + 1) + ".txt", @utf8.encode(words), pasted=info.unwrap())
+        writing_add(src, w, station, "pasted-text-" + upload_id(w.key + "\u{2}" + words, w.files.get().length() + 1) + ".txt", @utf8.encode(words), pasted=info.unwrap())
       _ => ()
     }
   })
@@ -635,7 +633,7 @@ pub fn writing_paste(src : Source, w : Writing, station : String, words : String
 /// again with what the core said of them).
 pub fn writing_paste_again(src : Source, w : Writing, id : String) -> Unit {
   guard writing_went.get(id) is Some((station, name, bytes)) else { return }
-  let info = w.files.iter().find_first(fn(f) { text(Some(f), "id") == id }).map(fn(f) { field(Some(f), "pasted") })
+  let info = w.files.get().iter().find_first(fn(f) { text(Some(f), "id") == id }).map(fn(f) { field(Some(f), "pasted") })
   writing_remove(src, w, id)
   match info {
     Some(Some(p)) => writing_add(src, w, station, name, bytes, pasted=p)

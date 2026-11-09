@@ -1,4 +1,4 @@
-// A chat's grant of a person's phone (adb/grants.ts, docs/adb-share.md): asked with a card in the chat, decided by the
+// A chat's grant of a person's phone (adb/grants.ts): asked with a card in the chat, decided by the
 // person the chat's agent works for, ended as its scope runs out, as its chat is archived or as it is taken back; and
 // a grant's adb server alone let into the phone's port (adb/servers.ts `allowed`).
 import assert from "node:assert/strict";
@@ -44,7 +44,7 @@ function world() {
         hidden = false;
         return [++n];
       },
-      pendingCard: (): [{ ts: string }, unknown] | null => hidden || cards.length === 0 ? null : [{ ts: cards.at(-1)!.ts }, cards.at(-1)!.card],
+      pendingCardHeader: (): [{ ts: string }, unknown] | null => hidden || cards.length === 0 ? null : [{ ts: cards.at(-1)!.ts }, cards.at(-1)!.card],
       withdrawCard: () => true,
       restateCard: (_a: string, _t: number, ts: string, f: (was: any) => any) => {
         const c = cards.find((x) => x.ts === ts)!;
@@ -63,7 +63,7 @@ function world() {
   db.exec("CREATE TABLE thread_sessions(thread INTEGER NOT NULL,session TEXT NOT NULL,joined_at INTEGER NOT NULL,PRIMARY KEY(thread,session)); INSERT INTO thread_sessions VALUES(1,'s1',1)");
   const grants = new PhoneGrants({ db, hub, home: () => "home", title: (r) => titles.get(r.session) ?? null, now: () => now, told: (r, workspace, change) => { heard.push({ ...r }); audiences.push(workspace); changes.push(change); }, id: () => `p${++ids}` });
   return {
-    db, grants, cards, told, heard, audiences, changes, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; },
+    db, hub, grants, cards, told, heard, audiences, changes, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; },
     latestReads: () => latestReads,
     withoutOriginal: () => { originalJoined = false; },
     withoutChats: () => { hasChats = false; },
@@ -83,6 +83,19 @@ function world() {
     },
   };
 }
+
+test("what the person's device signed goes with the grant to their phone, read by no one here", async () => {
+  const w = world();
+  try {
+    await w.grants.ask("s1", "debug the screen");
+    const signed = { body: { v: 1, request: "p1" }, sig: { key: "ed25519:aa", sig: "bb" } };
+    assert.equal(w.grants.decide("pat@example.com", "p1", "hour", "work-a", signed), null);
+    assert.deepEqual(w.grants.get("p1")!.signed, signed);
+    assert.deepEqual(w.grants.shown(w.grants.get("p1")!).signed, signed);
+  } finally {
+    w.db.close();
+  }
+});
 
 test("phone request status stays consistent as it is asked, granted and ended", async () => {
   const w = world();
@@ -192,6 +205,106 @@ test("a still-needed phone request can be asked again after its card stopped wai
   assert.equal(w.cards[2]!.card.adb.request, first.id);
   assert.equal(w.grants.decide("pat@example.com", first.id, "hour", "work-a"), null);
   assert.equal(w.cards[2]!.card.adb.outcome.status, "granted");
+});
+
+test("a phone reask rechecks its request after old card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  try {
+    const first = await w.grants.ask("s1", "debug the screen");
+    w.hideCard();
+    let ready = false;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async () => { started.resolve(); await release.promise; ready = true; };
+    const reask = w.grants.ask("s1", "debug the screen", true);
+    const waiting = await Promise.race([started.promise.then(() => true), reask.then(() => false)]);
+    assert.equal(waiting, true, "the reask waits for old card preparation");
+    assert.equal(w.grants.decide("pat@example.com", first.id, "hour", "work-a"), null);
+    release.resolve();
+    assert.equal((await reask).status, "granted");
+    assert.equal(w.cards.length, 1, "a decided request is not asked again");
+  } finally { release.resolve(); w.db.close(); }
+});
+
+test("a cancelled phone reask does not post after old card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  try {
+    await w.grants.ask("s1", "debug the screen");
+    w.hideCard();
+    let ready = false, passed: AbortSignal | undefined;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async (_threads: number[], signal?: AbortSignal) => { passed = signal; started.resolve(); await release.promise; ready = true; };
+    const tool = phoneTools(w.grants, async () => "ready")[0]!;
+    const reask = tool.run("s1", { reason: "debug the screen", reask: true }, controller.signal);
+    void reask.catch(() => {});
+    assert.equal(await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]), true);
+    assert.equal(passed, controller.signal, "the background preparation can release this caller's wait");
+    controller.abort();
+    release.resolve();
+    const error = await reask.then(() => null, (e: Error) => e);
+    assert.equal(w.cards.length, 1, "the cancelled call did not issue a new card");
+    assert.equal(error?.name, "AbortError");
+  } finally { release.resolve(); w.db.close(); }
+});
+
+test("a cancelled phone card check leaves old card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  try {
+    await w.grants.ask("s1", "debug the screen");
+    w.hideCard();
+    let ready = false, passed: AbortSignal | undefined;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async (_threads: number[], signal?: AbortSignal) => { passed = signal; started.resolve(); await release.promise; ready = true; };
+    const tool = phoneTools(w.grants, async () => "ready")[0]!;
+    const checking = tool.run("s1", { reason: "debug the screen" }, controller.signal);
+    void checking.catch(() => {});
+    assert.equal(await Promise.race([started.promise.then(() => true), checking.then(() => false, () => false)]), true);
+    assert.equal(passed, controller.signal);
+    controller.abort();
+    release.resolve();
+    await assert.rejects(checking, { name: "AbortError" });
+    assert.equal(w.cards.length, 1);
+  } finally { release.resolve(); w.db.close(); }
+});
+
+test("a phone reask does not record a card decided during final old-card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  try {
+    const first = await w.grants.ask("s1", "debug the screen");
+    w.hideCard();
+    let reads = 0, ready = false;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ++reads === 1 || ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async () => { started.resolve(); await release.promise; ready = true; };
+    const reask = w.grants.ask("s1", "debug the screen", true);
+    const waiting = await Promise.race([started.promise.then(() => true), reask.then(() => false)]);
+    assert.equal(waiting, true, "the final card check waits for preparation");
+    assert.equal(w.grants.decide("pat@example.com", first.id, "hour", "work-a"), null);
+    release.resolve();
+    assert.equal((await reask).status, "granted");
+    assert.equal(w.cards.length, 1, "a card for the decided request was not recorded");
+  } finally { release.resolve(); w.db.close(); }
+});
+
+test("a cancelled phone reask does not record a card after final old-card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  try {
+    await w.grants.ask("s1", "debug the screen");
+    w.hideCard();
+    let reads = 0, ready = false;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ++reads === 1 || ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async () => { started.resolve(); await release.promise; ready = true; };
+    const tool = phoneTools(w.grants, async () => "ready")[0]!;
+    const reask = tool.run("s1", { reason: "debug the screen", reask: true }, controller.signal);
+    void reask.catch(() => {});
+    assert.equal(await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]), true);
+    controller.abort();
+    release.resolve();
+    const error = await reask.then(() => null, (e: Error) => e);
+    assert.equal(w.cards.length, 1, "no card was recorded after cancellation");
+    assert.equal(error?.name, "AbortError");
+  } finally { release.resolve(); w.db.close(); }
 });
 
 test("a grant reports its chat title and actual use, and follows a rename", async () => {

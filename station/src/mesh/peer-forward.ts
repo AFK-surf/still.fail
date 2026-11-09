@@ -1,4 +1,4 @@
-// A port of another station forwarded to this machine, as `ssh -L` does (docs/station-peers.md "Forwarded ports"): a
+// A port of another station forwarded to this machine, as `ssh -L` does: a
 // listener on 127.0.0.1:<local> here, each connection to it carried as it is (bytes both ways, at the pace the slower
 // side takes them, either side's end passed on) over the mesh to localhost:<port> on that station. Unlike /peer's
 // path, nothing about the traffic changes (paths, Host, WebSockets, any protocol), so web pages, dev servers and

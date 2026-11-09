@@ -75,7 +75,7 @@ fn stack_tester(
     // (the tree's layers in one slot of the root's, in `grouped`'s order, each its own place)
     if !grouped.is_empty() {
       root.each(fn() { grouped.filter(fn(g) { k.on[g.0].get() }) }, fn(g) { g.0 }, fn(row, item) {
-        let (name, stack) = @signals.untracked(fn() { item.get() })
+        let (name, stack) = item.untracked()
         let on = k.on[name]
         row
         .over(Is(true))
@@ -320,7 +320,7 @@ fn kept_stack_tester(tick : @signals.Signal[Int], menu_stack : Ref[Int]) -> (Tes
     node
   }
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   set_view_app(fn(root) {
     root.box(fn(a) {

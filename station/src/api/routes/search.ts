@@ -1,4 +1,4 @@
-// What a search finds on this station (docs/search.md): GET /search?q=&kinds=&limit=&offset=&archived=, as the asker may see it
+// What a search finds on this station: GET /search?q=&kinds=&limit=&offset=&archived=, as the asker may see it
 // (their workspace's, and what only a member who may write reaches). `{groups: [{kind, hits, more}], building}`
 // (`building` always false). People find chats, messages, services and tasks, files: the execution history, skills and
 // memory, the profiles are the agents' to search (search/tool.ts).

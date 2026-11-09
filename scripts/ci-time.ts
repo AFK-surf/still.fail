@@ -1,6 +1,7 @@
 // How long a run of the pipeline (.github/workflows/pipeline.yml) took, against what it should: the time from its
 // first job starting to its last ending, the jobs on the way, and the longest steps. A run over its budget says so,
-// and what to look at first (docs/development.md, "CI time").
+// and what to look at first: what got slower (a step, a missed cache, a test waiting in real time, a queue), fixed or
+// the budget changed on purpose.
 //   node scripts/ci-time.ts <run id> [attempt]   the run's times as text; exit 3 when over budget
 //   node scripts/ci-time.ts <run id> --json      the same, as JSON
 // Reads the run through `gh api` (GH_TOKEN in CI). The pipeline's last job (timing) runs it on itself, into the run's

@@ -142,7 +142,7 @@ test "a picture goes to the preview, read by drive.read" {
   assert_eq(v.file.name, "首页截图.png")
   assert_true(v.drive is Some(_))
   assert_true(v.bytes.get() is Some(_))
-  // kept on the device as read from its start, as its folder lists it (DriveCache.kt; the core's drive-kept.ts)
+  // kept on the device as read from its start, as its folder lists it (the core's drive-kept.ts)
   let asked = fix_reads.filter(fn(p) { text(Some(p), "path").has_suffix("首页截图.png") })
   assert_true(asked.length() > 0)
   for p in asked {
@@ -205,7 +205,7 @@ test "＋'s Station 文件: a file ticked in a folder lent goes into the chat's 
   assert_true(log.contains("EXIT 0"), msg="\{log}")
   // in the draft as the core keeps it, where it is on the station (sent, the core names it in the message)
   t.draw()
-  let files = @sfbase.writing(src, "ws1/st1:s-c1").files
+  let files = @sfbase.writing(src, "ws1/st1:s-c1").files.get()
   assert_eq(files.length(), 1)
   assert_eq(text(field(Some(files[0]), "ref"), "path"), "/Users/lin/文档/发布清单.md")
   assert_true(t.find("发布清单") is Some(_))

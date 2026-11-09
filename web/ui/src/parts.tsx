@@ -3,13 +3,13 @@
 // a column's edge. Pages compose these instead of styling their own. What they say comes from the words the page gave
 // (i18n.ts); the keys a tip names, from the page's shortcuts (shortcuts.ts).
 import {
-  AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, RadioGroup, Select as RSelect, Switch as RSwitch,
+  AlertDialog as RAlert, Dialog as RDialog, DropdownMenu, Label, Select as RSelect, Switch as RSwitch,
   ToggleGroup, Tooltip,
 } from "radix-ui";
-import { createPortal } from "react-dom";
-import { forwardRef, Fragment, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createPortal } from "preact/compat";
+import { forwardRef, Fragment, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "preact/compat";
 import { useBackClose } from "./backClose.ts";
-import { Check, ChevronDown, Close, Copy, Info, More } from "./icons.tsx";
+import { Check, ChevronDown, Close, Copy, More } from "./icons.tsx";
 import { t } from "./i18n.ts";
 import { shortcutKeys, useShortcuts, type Shortcut } from "./shortcuts.ts";
 import { failure, useToast } from "./toast.tsx";
@@ -39,7 +39,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
 /**
  * An icon-only button; its label shows as a tooltip and names it for screen readers. `busy`: a spinner in its place, not
  * pressed again; `failed`: why what it set going failed a moment ago (useDoingFailed), a red mark in its place and the
- * tip saying so (as DoingMark.tsx does).
+ * tip saying so.
  */
 export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { label: string; icon: IconType; shortcut?: Shortcut; busy?: boolean | undefined; failed?: string | undefined }>(
   function IconButton({ label, icon: Icon, className, shortcut, busy, failed, ...rest }, ref) {
@@ -60,11 +60,6 @@ function TipKeys({ action }: { action: Shortcut }) {
   useShortcuts();
   const keys = shortcutKeys(action);
   return keys ? <span className={partsCss.tipKeys}>{keys}</span> : null;
-}
-
-/** A binding as shown (⌘⇧H, Ctrl+Shift+H) split into its keys: each mark of a Mac's modifiers one, the rest by its +s. */
-export function capsOf(label: string): string[] {
-  return label.match(/[⌃⌥⇧⌘]|[^⌃⌥⇧⌘+]+/g) ?? [];
 }
 
 /** Keys that do something, each as a cap. */
@@ -97,18 +92,6 @@ function isCut(el: Element): boolean {
   return [el, ...el.querySelectorAll("*")].some((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflowX !== "visible");
 }
 
-/**
- * What a thing is, for whoever wants to know: a quiet mark beside it that says so on hover (or focus), in place of a
- * paragraph everyone has to read past.
- */
-export function About({ children, side = "bottom" }: { children: ReactNode; side?: "top" | "bottom" | "left" | "right" }) {
-  return (
-    <Tip label={<span className={partsCss.aboutText}>{children}</span>} side={side}>
-      <button type="button" className={partsCss.about} aria-label={t("web-main.about")}><Info size={14} strokeWidth={1.8} /></button>
-    </Tip>
-  );
-}
-
 export function Field({ label, hint, error, children, htmlFor, aside }:
   { label: ReactNode; hint?: ReactNode; error?: ReactNode; children: ReactNode; htmlFor?: string; aside?: ReactNode }) {
   return (
@@ -139,28 +122,6 @@ export function Segmented<T extends string>({ options, value, onChange, label, c
         </ToggleGroup.Item>
       ))}
     </ToggleGroup.Root>
-  );
-}
-
-/** Exclusive options that need a sentence each: bordered cards with a radio mark. */
-export function Choices<T extends string>({ options, value, onChange, label }:
-  { options: { value: T; title: ReactNode; description?: ReactNode; icon?: ReactNode; disabled?: boolean | undefined; extra?: ReactNode }[]; value: T; onChange(value: T): void; label: string }) {
-  return (
-    <RadioGroup.Root className={partsCss.choices} aria-label={label} value={value} onValueChange={(v) => onChange(v as T)}>
-      {options.map((o) => (
-        <div key={o.value} className={partsCss.choice} data-checked={o.value === value || undefined} data-disabled={o.disabled || undefined}>
-          <RadioGroup.Item value={o.value} disabled={o.disabled ?? false} className={partsCss.choiceHit} aria-label={typeof o.title === "string" ? o.title : undefined}>
-            {o.icon}
-            <span className={partsCss.choiceText}>
-              <strong>{o.title}</strong>
-              {o.description && <span className={partsCss.note}>{o.description}</span>}
-            </span>
-            <span className={partsCss.radio} aria-hidden="true"><RadioGroup.Indicator className={partsCss.radioDot} /></span>
-          </RadioGroup.Item>
-          {o.extra && o.value === value && <div className={partsCss.choiceExtra}>{o.extra}</div>}
-        </div>
-      ))}
-    </RadioGroup.Root>
   );
 }
 
@@ -298,52 +259,13 @@ export function Confirm({ open, title, description, action, onConfirm, onClose, 
 
 /** A menu's item. `checked`: one of a choice's (a member's role), the one now chosen with a check at its end. */
 /** `note`: what it means, quieter after its words (a choice's: 默认最长授权's each). */
-export interface MenuItem { label: string; note?: string; icon?: IconType; danger?: boolean; disabled?: boolean | undefined; checked?: boolean; onSelect(): void }
-
-/**
- * A small panel's parts (docs/ui-panels.md), for what is put in styles/controls.css.ts `popover`: its head (a title, a
- * line under it), groups under a small label, rows (an icon, the words, something at the end), blocks of words
- * (PanelText), a foot of buttons, and its buttons (PanelButton, a small pill; PanelIconButton, a small circle). The
- * panel is padded 6; rows sit there, their words in by a row's padding, as a block of words' are; corners are the
- * panel's inner one (`--panel-in`), so a panel made of them is right whoever makes it.
- */
-export function PanelHead({ title, note }: { title: ReactNode; note?: ReactNode }) {
-  return <div className={partsCss.panelHead}><div className={partsCss.panelTitle}>{title}</div>{note && <p className={partsCss.panelNote}>{note}</p>}</div>;
-}
-export function PanelGroup({ label, children }: { label?: ReactNode; children: ReactNode }) {
-  return <div className={partsCss.panelGroup}>{label && <div className={partsCss.panelLabel}>{label}</div>}{children}</div>;
-}
-/** A row to press; without `onClick` one only to read (as for a read-only member), the same but for the pointer. */
-export function PanelRow({ icon, label, end, onClick }: { icon?: ReactNode; label: ReactNode; end?: ReactNode; onClick?: (() => void) | undefined }) {
-  const body = (
-    <>
-      {icon && <span className={partsCss.panelRowIcon}>{icon}</span>}
-      <span className={partsCss.panelRowLabel}>{label}</span>
-      {end && <span className={partsCss.panelRowEnd}>{end}</span>}
-    </>
-  );
-  return onClick ? <button type="button" className={partsCss.panelRow} onClick={onClick}>{body}</button> : <div className={partsCss.panelRow}>{body}</div>;
-}
-export function PanelNote({ children }: { children: ReactNode }) {
-  return <p className={partsCss.panelNote}>{children}</p>;
-}
-export function PanelFoot({ children }: { children: ReactNode }) {
-  return <div className={partsCss.panelFoot}>{children}</div>;
-}
-/** A block of words in a small panel: in by a row's padding, on the line its rows' words are. */
-export function PanelText({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={className ? `${partsCss.panelText} ${className}` : partsCss.panelText}>{children}</div>;
-}
+interface MenuItem { label: string; note?: string; icon?: IconType; danger?: boolean; disabled?: boolean | undefined; checked?: boolean; onSelect(): void }
 /** Words to press in a small panel: a small pill. `tone`: accent (the one thing to do), quiet, filled (always seen). */
-export const PanelButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { tone?: "accent" | "quiet" | "filled" }>(
+const PanelButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { tone?: "accent" | "quiet" | "filled" }>(
   function PanelButton({ tone, className, type = "button", ...rest }, ref) {
     return <button ref={ref} type={type} className={className ? `${partsCss.panelButton} ${className}` : partsCss.panelButton} data-tone={tone} {...rest} />;
   },
 );
-/** An icon to press in a small panel (close, stop, step): a small circle, named on hover. */
-export function PanelIconButton({ label, children, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; children: ReactNode }) {
-  return <Tip label={label}><button type="button" aria-label={label} className={className ? `${partsCss.panelIcon} ${className}` : partsCss.panelIcon} {...rest}>{children}</button></Tip>;
-}
 
 /** "…" menu: a list of actions on the thing it sits beside. `trigger`: what opens it in place of "…" (words in a line of words). */
 export function Menu({ label = t("web-main.menu.more"), items, trigger }: { label?: string; items: (MenuItem | "separator")[]; trigger?: ReactNode }) {
@@ -380,31 +302,6 @@ export function CopyCommand({ text }: { text: string }) {
 }
 
 /**
- * A choice that opens a menu of what it can be (a model, an account): not the browser's own select, so each option can
- * show what matters about it. `trigger` draws the chosen one; the class is the look of the button.
- */
-export function Chooser({ label, children, side = "bottom", className = controlsCss.chooser }: { label: ReactNode; children: ReactNode; side?: "top" | "bottom"; className?: string }) {
-  return (
-    <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger className={className}>{label}<ChevronDown size={12} className={controlsCss.chooserChevron} /></DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${controlsCss.chooserMenu}`} side={side} align="start" sideOffset={6} collisionPadding={8}>{children}</DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  );
-}
-
-/** `stays`: the menu stays open as it is chosen (one of several ticked in turn). `checkEnd`: its check at the row's end. */
-export function ChooserItem({ checked, onSelect, stays = false, checkEnd = false, children }: { checked: boolean; onSelect(): void; stays?: boolean; checkEnd?: boolean; children: ReactNode }) {
-  const check = <span className={checkEnd ? `${controlsCss.chooserCheck} ${controlsCss.chooserCheckEnd}` : controlsCss.chooserCheck}>{checked && <Check size={14} />}</span>;
-  return (
-    <DropdownMenu.Item className={`${controlsCss.menuItem} ${controlsCss.chooserItem}`} onSelect={(e) => { if (stays) e.preventDefault(); onSelect(); }}>
-      {!checkEnd && check}{children}{checkEnd && check}
-    </DropdownMenu.Item>
-  );
-}
-
-/**
  * A phone's screen, where the app is the phone's (mobile/): one column, the list or what is opened from it. Taller than
  * wide and narrow both: a small laptop's window, however narrow, stays the desktop app (whose own narrow widths only
  * fold its side panels over the page: the styles' `max-width: 1100px` blocks). Or a finger's screen no bigger than
@@ -412,54 +309,8 @@ export function ChooserItem({ checked, onSelect, stays = false, checkEnd = false
  */
 export const NARROW = "(orientation: portrait) and (max-width: 700px), (pointer: coarse) and (max-width: 1024px) and (max-height: 1024px)";
 
-/** Whether the screen is narrow (NARROW), following the window as it changes. */
-export function useNarrow(): boolean {
-  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
-  useEffect(() => {
-    const query = window.matchMedia(NARROW);
-    const update = () => setNarrow(query.matches);
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  return narrow;
-}
-
 export function Empty({ children }: { children: ReactNode }) {
   return <div className={partsCss.empty}>{children}</div>;
-}
-
-/**
- * A list with nothing in it yet, or a page whose first step is still to take: what that first one is, in a line, and
- * the one thing to do about it. Where it shows, the page's other actions stand back (its add button, its filters), so
- * the eye goes here.
- */
-export function FirstOne({ art, title, lead, children }: { art: ReactNode; title: ReactNode; lead?: ReactNode; children: ReactNode }) {
-  return (
-    <div className={partsCss.firstOne}>
-      {/* One of the project's scenes (brand.tsx's Illustration), not an icon on a tinted tile. */}
-      {art}
-      <h2 className={partsCss.firstOneTitle}>{title}</h2>
-      {lead && <p className={partsCss.firstOneLead}>{lead}</p>}
-      <div className={partsCss.firstOneAction}>{children}</div>
-    </div>
-  );
-}
-
-/** A titled block of a detail page. */
-export function Section({ title, actions, children, description }: { title: ReactNode; actions?: ReactNode; description?: ReactNode; children: ReactNode }) {
-  const id = useId();
-  return (
-    <section className={pageCss.section} aria-labelledby={id}>
-      <div className={partsCss.sectionHead}>
-        <div>
-          <h2 id={id}>{title}</h2>
-          {description && <p className={partsCss.sectionSub}>{description}</p>}
-        </div>
-        {actions && <div className={partsCss.sectionActions}>{actions}</div>}
-      </div>
-      {children}
-    </section>
-  );
 }
 
 /**
@@ -472,7 +323,7 @@ export function Section({ title, actions, children, description }: { title: Reac
  * page just loaded), and answered in pixels; null with none kept. What lays the column out by its own reckoning asks
  * here first, so the styles and it go by the same width from the column's first frame.
  */
-export function keptWidth(variable: string, min: number, max: number, key = variable): number | null {
+function keptWidth(variable: string, min: number, max: number, key = variable): number | null {
   const saved = Number(localStorage.getItem(`stillfail.width.${key}`));
   if (!saved) return null;
   const px = Math.min(max, Math.max(min, saved));
@@ -483,14 +334,14 @@ export function keptWidth(variable: string, min: number, max: number, key = vari
 }
 
 /**
- * A column's edge, as the sidebar's (Rail.tsx SidebarEdge, Cue's rail handle): a short bar at its middle, shown as the
+ * A column's edge, as the sidebar's (Cue's rail handle): a short bar at its middle, shown as the
  * pointer is over the column and longer on the edge, and a hairline fading toward both ends on hover or while dragged
  * (that edge alone, not every edge of the page), with a tip that follows the pointer along it. Dragged, the column takes
  * the width; pressed without moving, `press` (a panel closing); else double-clicked, its own width again.
  */
 /** Sets a column's width (null: its own again) and keeps it on this device (under `key`, one column's of several
  * drawn by the same variable), as keptWidth reads it. */
-export function setKeptWidth(variable: string, px: number | null, key = variable): void {
+function setKeptWidth(variable: string, px: number | null, key = variable): void {
   const storage = `stillfail.width.${key}`;
   if (px === null) {
     document.documentElement.style.removeProperty(variable);
@@ -516,7 +367,7 @@ export function ResizeHandle({ variable, edge, min, max, label, press }: {
     <>
       <div className={partsCss.resizeHandle} data-edge={edge} data-active={dragging || undefined} role="separator" aria-orientation="vertical" aria-label={words}
         {...tip.on}
-        onDoubleClick={() => { if (!press) set(null); }}
+        onDblClick={() => { if (!press) set(null); }}
         onPointerDown={(e) => {
           if (e.button !== 0) return;
           tip.hide();
@@ -551,7 +402,7 @@ export function ResizeHandle({ variable, edge, min, max, label, press }: {
  * A tip that follows the pointer along a tall thin thing (an edge): shown a moment after the pointer comes, beside it,
  * its middle level with the pointer; `on` goes on the thing, `draw` where the tip is drawn.
  */
-export function usePointerTip(): { on: { onPointerEnter(e: ReactPointerEvent): void; onPointerMove(e: ReactPointerEvent): void; onPointerLeave(): void }; hide(): void; draw(words: ReactNode, side: "left" | "right"): ReactNode } {
+function usePointerTip(): { on: { onPointerEnter(e: ReactPointerEvent<HTMLElement>): void; onPointerMove(e: ReactPointerEvent<HTMLElement>): void; onPointerLeave(): void }; hide(): void; draw(words: ReactNode, side: "left" | "right"): ReactNode } {
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);

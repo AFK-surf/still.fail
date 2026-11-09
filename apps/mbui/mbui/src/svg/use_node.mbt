@@ -1,4 +1,4 @@
-// usvg's `use` and nested `svg` (parser/use_node.rs), clip paths (parser/clippath.rs) and masks (parser/mask.rs).
+// usvg's `use` and nested `svg`, clip paths and masks.
 
 ///|
 fn convert_use(doc : SDoc, node : Int, state : State, cache : Cache, parent : Group) -> Unit {

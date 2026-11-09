@@ -1,5 +1,5 @@
 // A secret's page, one in every frame (设置 › 密钥 › it; web/src/cloud/VaultItem.tsx, Vault.css.ts; the narrow app's
-// mobile/Vault.tsx VaultItemScreen), laid out by its width (page_look.mbt), as a profile's is: what it is and where it
+// mobile/Vault.tsx VaultItemScreen), laid out by its width, as a profile's is: what it is and where it
 // is kept; in a library not locked, that it is not encrypted and the way to lock it; its content masked until shown
 // (each field's eye opens it, `vault.open`, and shows that field), copied; how agents may use it; when they did, each
 // use leading to its chat. 编辑 opens it first, then its editor (the presenters'). What it says is the core's
@@ -27,9 +27,9 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
   let t = @sf.theme()
   let look = look_of(c)
   let ws = here.workspace
-  let view = (core.topic)("vaults", { "workspace": str(ws) }).value
-  let list = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(vault) }).value
-  let uses = (core.topic)("vaultUses", { "workspace": str(ws), "vault": str(vault), "item": str(item) }).value
+  let view = (core.topic)("vaults", { "workspace": str(ws) }).get().value
+  let list = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(vault) }).get().value
+  let uses = (core.topic)("vaultUses", { "workspace": str(ws), "vault": str(vault), "item": str(item) }).get().value
   let key = "vault-item/" + vault + "/" + item
   let back = @sf.t("web-pages.vault.title")
   guard view is Some(_) && list is Some(_) else {
@@ -94,9 +94,9 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
             c.text(sub, style=pf_sub) |> ignore
           })
           |> ignore
-          if @sf.button(c, @sf.t("common.edit"), key=key + "/edit", tone=Ghost, icon="edit", busy=editing_busy) {
+          @sf.button(c, @sf.t("common.edit"), key=key + "/edit", tone=Ghost, icon="edit", busy=editing_busy, on_press=fn() {
             edit_pressed()
-          }
+          }) |> ignore
         })
         |> ignore
       })
@@ -105,8 +105,8 @@ pub fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
       @sf.page(c, on_back=core.pop, frame~, key, text(rv, "name"), blocks, keys~, lead=sub, actions=fn() {
         if editing_busy {
           @sf.spinner(c, size=pf_spin) |> ignore
-        } else if @sf.icon_button(c, "edit", key=key + "/edit", round=true, label=@sf.t("common.edit")) {
-          edit_pressed()
+        } else {
+          @sf.icon_button(c, "edit", key=key + "/edit", round=true, label=@sf.t("common.edit"), on_press=edit_pressed) |> ignore
         }
       })
   }
@@ -148,9 +148,9 @@ fn item_blocks(
         // (its button in its foot corner, concentric with it)
         c.box(style=pf_card_foot.then(@sf.foot_reach(@sf.button_height())), fn() {
           @sf.card_foot_words(fn() {
-            if @sf.button(c, @sf.t("web-pages.vault.lib.turnOn"), key=key + "/lock", tone=Primary) {
+            @sf.button(c, @sf.t("web-pages.vault.lib.turnOn"), key=key + "/lock", tone=Primary, on_press=fn() {
               (core.push)(Security)
-            }
+            }) |> ignore
           })
         })
         |> ignore
@@ -182,9 +182,12 @@ fn item_blocks(
                   c.rich([@ui.span(text(fv, "value"), mono=true)], style=vi_value) |> ignore
                   if opening {
                     @sf.spinner(c, size=pf_spin) |> ignore
-                  } else if @sf.icon_button(c, "eye", key=key + "/show/" + fk, corner=vi_key_corner, label=@sf.t("web-pages.vault.show")) {
-                    vi_reveal[item] = fk
-                    open(fn(_) {  })
+                  } else {
+                    @sf.icon_button(c, "eye", key=key + "/show/" + fk, corner=vi_key_corner, label=@sf.t("web-pages.vault.show"), on_press=fn() {
+                      vi_reveal[item] = fk
+                      open(fn(_) {  })
+                    })
+                    |> ignore
                   }
                 })
                 |> ignore
@@ -253,9 +256,9 @@ fn item_uses(c : @ui.Ctx, core : Core, ws : String, key : String, uses : Array[J
             let station = text(uv, "station")
             if station != "" {
               let id = c.id(key + "/use/" + i.to_string())
-              if c.clicked(id) {
+              c.on_press(id, fn() {
                 (core.open_chat)(ws + "/" + station, text(uv, "session"), chat)
-              }
+              })
               // (underlined under the pointer, or a finger's press: words in the words' colour, lit)
               c.box(id~, fn() {
                 c.rich([@ui.span(chat, underline=c.lit(id))], style=vi_chat, allow_ellipsis=true) |> ignore
@@ -318,24 +321,25 @@ fn secret_field(c : @ui.Ctx, key : String, label : String, value : String, secre
     c.box(style=vi_secret_line, fn() {
       let words = if shown { value } else { "•".repeat(@cmp.minimum(@cmp.maximum(value.length(), 8), 20)) }
       c.rich([@ui.span(words, mono~)], style=if shown && value.contains("\n") { vi_value_lines } else { vi_value }) |> ignore
-      if secret &&
-        @sf.icon_button(c, "eye", key=key + "/eye", corner=vi_key_corner, label=if shown { @sf.t("web-pages.vault.hide") } else { @sf.t("web-pages.vault.show") }, on=shown) {
-        vi_shown[key] = !shown
+      if secret {
+        @sf.icon_button(c, "eye", key=key + "/eye", corner=vi_key_corner, label=if shown { @sf.t("web-pages.vault.hide") } else { @sf.t("web-pages.vault.show") }, on=shown, on_press=fn() {
+          vi_shown[key] = !shown
+        }) |> ignore
       }
-      if @sf.icon_button(c, "copy", key=key + "/copy", corner=vi_key_corner, label=@sf.t("common.copy")) {
+      @sf.icon_button(c, "copy", key=key + "/copy", corner=vi_key_corner, label=@sf.t("common.copy"), on_press=fn() {
         if secret {
           c.copy_secret(value, clear_ms=vi_copied_life)
         } else {
           c.copy_text(value)
         }
-      }
+      }) |> ignore
     })
     |> ignore
   })
   |> ignore
 }
 
-// ── styles (Vault.css.ts) ───────────────────────────────────────────────
+// ── styles ───────────────────────────────────────────────
 
 ///|
 /// How long a secret copied stays on the clipboard (copySecret: 30 s).

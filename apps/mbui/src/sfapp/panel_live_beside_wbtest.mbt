@@ -61,10 +61,9 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: the focus as 
 }
 
 ///|
-test "panel live beside what opened it, 大屏 keyboard and mouse: opened under what opened it, opened flipped over it for want of room below (two panels, each where it was put), and under it with what stands at its head's end; its title none, some, none again (frames as the display draws them): where it is, its title, head's end and words, whether it stands above: as main has it" {
+test "panel live beside what opened it, 大屏 keyboard and mouse: opened under what opened it, opened flipped over it for want of room below (two panels, each where it was put), its title none, some, none again (frames as the display draws them): where it is, its title and words, whether it stands above: as main has it" {
   let out = []
-  let ends = []
-  for (y, end) in [(100.0, false), (780.0, false), (100.0, true)] {
+  for y in [100.0, 780.0] {
     let t = menu_tester(1280.0, 800.0, 0)
     let title = @signals.signal("")
     let up : Array[Bool] = []
@@ -76,7 +75,6 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: opened under 
       },
       from=At(600.0, y, 0.0, 0.0),
       live=fn() { (title.get(), "", "") },
-      head_end?=if end { Some(fn(c : @ui.Ctx) { c.text("尾", style=@sf.paragraph) |> ignore }) } else { None },
     )
     t.run_for(@ui.move_most_ms)
     let w = fn(s : String) { t.words().filter(fn(x) { x.0 == s }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) }) }
@@ -85,11 +83,7 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: opened under 
       live_frames(t, 30)
       let d = t.query(Dialog).map(fn(s) { (s.label, tenth4(s.rect)) })
       let line = "\{y} \{s}: dialog \{d} title \{w("面板")} words \{w("面板里的话，长一些，好看它怎么折行")} button \{t.query(Button, label="好的").map(fn(s) { tenth4(s.rect) })} up \{up.last()}"
-      if end {
-        ends.push("\{line} end \{w("尾")}")
-      } else {
-        out.push(line)
-      }
+      out.push(line)
     }
   }
   // (as main has it, 2f452a34)
@@ -100,12 +94,6 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: opened under 
     "780 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 706, 296, 68))) title [] words [(616, 712, 264, 22)] button Some((840, 738, 44, 24)) up Some(true)",
     "780 面板: dialog Some((面板 面板里的话，长一些，好看它怎么折行 好的, (600, 676, 296, 98))) title [(616, 688, 264, 20)] words [(616, 712, 264, 22)] button Some((840, 738, 44, 24)) up Some(true)",
     "780 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 706, 296, 68))) title [] words [(616, 712, 264, 22)] button Some((840, 738, 44, 24)) up Some(true)",
-  ])
-  // (what stands at its head's end there only while it has a title: as small_panel heads it; as main has it, 2f452a34)
-  assert_eq(ends, [
-    "100 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 68))) title [] words [(616, 112, 264, 22)] button Some((840, 138, 44, 24)) up Some(false) end []",
-    "100 面板: dialog Some((面板 尾 面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 94))) title [(616, 113, 26, 20)] words [(616, 138, 264, 22)] button Some((840, 164, 44, 24)) up Some(false) end [(654, 112, 236, 22)]",
-    "100 : dialog Some((面板里的话，长一些，好看它怎么折行 好的, (600, 106, 296, 68))) title [] words [(616, 112, 264, 22)] button Some((840, 138, 44, 24)) up Some(false) end []",
   ])
 }
 
@@ -123,10 +111,10 @@ test "panel live beside what opened it, 大屏 keyboard and mouse: held short of
         @sf.panel_text(c, fn() { c.text("第\{i}行", style=@sf.paragraph) |> ignore })
       }
       @sf.panel_foot(c, fn() {
-        if @sf.panel_button(c, "ok", "好的", tone=Filled) {
+        @sf.panel_button(c, "ok", "好的", tone=Filled, on_press=fn() {
           said.push("ok")
           close()
-        }
+        }) |> ignore
       })
     },
     from=At(600.0, 100.0, 0.0, 0.0),

@@ -1,4 +1,4 @@
-// The workspace's models in a station's model control (docs/station-share.md 借用): its own, those borrowed from
+// The workspace's models in a station's model control ( 借用): its own, those borrowed from
 // another station, those another station could lend it, and borrowing one (a manager's, confirmed first).
 import assert from "node:assert/strict";
 import { test } from "node:test";

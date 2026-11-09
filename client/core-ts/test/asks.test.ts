@@ -33,6 +33,8 @@ test("still_fail_links_open_in_the_app_and_others_do_not", () => {
   assert.deepEqual(linkTarget("https://app.still.fail/w/ws1/s/st1/adb", cloud), { opens: "adbShare", workspace: "ws1", station: "st1" });
   assert.deepEqual(linkTarget("https://app.still.fail/w/ws1/s/st1/login/l-3", cloud), { opens: "login", workspace: "ws1", station: "st1", login: "l-3" });
   assert.equal(linkTarget("https://app.still.fail/w/ws1/s/st1/login/", cloud), null);
+  assert.deepEqual(linkTarget("https://app.still.fail/w/ws1/s/st1/services/j-1", cloud), { opens: "service", workspace: "ws1", station: "st1", service: "j-1" });
+  assert.equal(linkTarget("https://app.still.fail/w/ws1/s/st1/services/", cloud), null);
   assert.deepEqual(linkTarget("https://app.still.fail/o/ws1/st1/k?history=k%3A2&entry=12", cloud), { opens: "item", workspace: "ws1", station: "st1", session: "k", service: null, history: "k:2", entry: 12 });
   assert.deepEqual(linkTarget("https://app.still.fail/w/ws1/s/st1/chats/c?history=k", cloud), { opens: "chat", workspace: "ws1", station: "st1", chat: "c", history: "k" });
   assert.deepEqual(linkTarget("?history=k&entry=3", cloud), { opens: "history", history: "k", entry: 3 });
@@ -64,7 +66,7 @@ test("message links keep their exact destination and reject invalid sequence num
   assert.equal(linkTarget(`${cloud}/o/ws1/st1/chat%3Ac-1?message=11`, cloud).session, "chat:c-1");
 });
 
-test("a_newer_app_is_asked_for_at_most_every_five_minutes_and_a_picture_once", async () => {
+test("a_newer_app_is_asked_for_once_until_a_release_is_said_to_be_out_and_a_picture_once", async () => {
   const host = new FakeHost();
   host.onFetch((req) => {
     if (req.url === "https://stillfail.test/releases/android/latest.json") return jsonResponse(200, { versionCode: 1200, versionName: "0.1.1200", file: "android/stillfail-1200.apk", sha256: "ab", size: 9, extra: 1 });
@@ -80,11 +82,13 @@ test("a_newer_app_is_asked_for_at_most_every_five_minutes_and_a_picture_once", a
   assert.equal(asked(), 1);
   await run(asks.update("android", 1100, true, false));
   assert.equal(asked(), 2);
-  // Back in the app (its activity started again) five minutes after it was last asked, asked again; sooner, not.
-  host.advance(5 * 60 * 1000 - 1);
+  // Back in the app (its activity started again), however long after: not asked again until a release is out.
+  host.advance(24 * 3600 * 1000);
   await run(asks.update("android", 1100, false, false));
   assert.equal(asked(), 2);
-  host.advance(1);
+  asks.released();
+  await run(asks.update("android", 1100, false, false));
+  assert.equal(asked(), 3);
   await run(asks.update("android", 1100, false, false));
   assert.equal(asked(), 3);
   const [a, b] = await run(Effect.all([asks.picture("https://p.test/a.png"), asks.picture("https://p.test/a.png")], { concurrency: "unbounded" }));

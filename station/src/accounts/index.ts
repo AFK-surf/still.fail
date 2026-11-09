@@ -1,4 +1,4 @@
-// The station's accounts (docs/station-ts.md `accounts`): its profiles as the pages edit them, their checks and
+// The station's accounts: its profiles as the pages edit them, their checks and
 // allowances, sign-ins, profiles on the machine's own login, the machine login's renewed token, and the models the
 // automatic decisions may use (the Rust station's admin/edits.rs and decision.rs, the profile parts of admin/mod.rs and
 // views.rs, and what server.rs wires for them).
@@ -49,7 +49,8 @@ import { CURSOR, authFile as cursorAuthFile, cursorIn } from "./cursor.ts";
 import { KIMI_AUTH, kimiDue, readKimi, renewKimiToken, writeKimi } from "./kimi.ts";
 import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
 import { codexAccountIdentity, codexClaimsIn, type MachineLogin, MachineLogins } from "./machine.ts";
-import { OUTDATED, uncheckOutdated } from "./models.ts";
+import { facts } from "./catalog.ts";
+import { uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { accessKinds, checkProfile, devinAccountFile, devinNotedIn, grokAuthFile, grokEmailIn, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
 import { checkQuota, codexUsage, lentCodexUsage, machineUsage } from "./quota.ts";
@@ -99,7 +100,7 @@ export type AccountsDeps = {
   config: ConfigFile;
   /// The hub, whose account pool picks profiles by their checks and allowances (and knows which ran out lately).
   /// Starts reviewing the done chats no decision has answered (review.ts): how many, or null without a usable model.
-  reviewUndecided?: () => number | null;
+  reviewUndecided?: () => number | null | Promise<number | null>;
   hub?: {
     accounts: { setHealth(health: (id: string) => ProfileHealth): void; healthOf(id: string): ProfileHealth; setRecheck?(recheck: (id: string) => Promise<unknown>): void };
     /// A profile was deleted: its sessions are taken on by another, or stopped.
@@ -130,7 +131,7 @@ export type AccountsDeps = {
   checkOnStart?: boolean;
   /// Its time (a TestClock in tests).
   clock?: Clock.Clock;
-  /// The workspaces the station is in, its home one first (docs/multi-workspace.md); none by default.
+  /// The workspaces the station is in, its home one first; none by default.
   workspaces?: () => string[];
   /// Profiles other stations share with this one (share/index.ts): how they are doing is their host's to say, and
   /// what the overview says of each profile's sharing.
@@ -275,7 +276,7 @@ export class Accounts {
     }
   }
 
-  /// Starts what runs on its own: the pool told of profiles' health, the known outdated models unchecked, sign-ins
+  /// Starts what runs on its own: the pool told of profiles' health, the outdated models unchecked, sign-ins
   /// followed, the checks after start, the allowance rounds, the machine's logins read.
   start() {
     this.deps.hub?.accounts.setHealth((id) => this.health(id));
@@ -339,7 +340,7 @@ export class Accounts {
     }
     if (this.deps.checkOnStart !== false) {
       this.background.after(CHECK_ON_START_MS, () => {
-        for (const p of this.profiles()) this.background.spawn(() => this.check(p.id));
+        for (const p of this.profiles()) if (p.enabled !== false) this.background.spawn(() => this.check(p.id));
         this.renewConsoles();
       });
     }
@@ -432,11 +433,14 @@ export class Accounts {
   }
 
   /// PUT /profiles/:id: a profile made or edited. Its new state is checked after (in the background). `workspaces`: the
-  /// joined workspaces whose sessions may run on it (docs/multi-workspace.md; [] or null: the home one's only), set by
+  /// joined workspaces whose sessions may run on it ([] or null: the home one's only), set by
   /// those who manage the station only; kept as those of the station's joined workspaces withheld from it, so one it
   /// joins later runs on it too.
   putProfile(id: string, given: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()) {
     this.own(id, lang);
+    const before = this.profile(id);
+    if (given.enabled !== undefined && typeof given.enabled !== "boolean") throw new Refusal(400, "enabled must be a boolean");
+    if (given.enabled !== undefined && before?.machine === true) throw new Refusal(400, "a machine login cannot be paused here");
     const givenWorkspaces = given.workspaces;
     if (givenWorkspaces !== undefined && !manages(viewer)) throw new Refusal(403, tr(lang, "station.share.managersOnly"));
     if (givenWorkspaces !== undefined && givenWorkspaces !== null && (!Array.isArray(givenWorkspaces) || !givenWorkspaces.every((w) => typeof w === "string" && /^[0-9A-Za-z_-]{1,128}$/.test(w)))) {
@@ -532,6 +536,7 @@ export class Accounts {
       // Only the default's opposite is written.
       if (background === false) next.backgroundOnMessage = false;
       if (fast === true) next.fast = true;
+      if ((given.enabled ?? existing?.enabled) === false) next.enabled = false;
       if (withheld.length > 0) next.withheld = withheld;
       if (existing) {
         const kept = runtimesFor(next.access, next.runtime);
@@ -542,6 +547,9 @@ export class Accounts {
       if (at >= 0) list[at] = next;
       else list.push(next);
     });
+    if (before?.enabled !== false && given.enabled === false) {
+      this.deps.hub?.profileGone?.(id).catch((error) => log.warn("accounts", "moving sessions off a disabled profile failed", { profile: id, error: (error as Error).message }));
+    }
   }
 
   /// DELETE /profiles/:id. Its home stays. Taken even while sessions or connects use it (the pages say so first): its
@@ -895,23 +903,24 @@ export class Accounts {
     });
   }
 
-  /// The known outdated models (models.ts) unchecked on this station's profiles, each once: config.json keeps which were
-  /// (`outdatedUnchecked`), so one checked again by hand stays, and a model added to the table is unchecked when the
-  /// station that has it next starts.
+  /// The models outdated on this station's profiles (models.ts) unchecked, each once: config.json keeps which were
+  /// (`outdatedUnchecked`), so one checked again by hand stays. Worked out at the start and again as a check finds other
+  /// models (a newer one offered, an old one gone).
   private uncheckOutdated() {
     const found = (id: string) => this.checks.get(id)?.models ?? null;
     const unchecked = (raw: Json) => {
       const done = new Set<string>(Array.isArray(raw?.outdatedUnchecked) ? raw.outdatedUnchecked.filter((k: unknown) => typeof k === "string") : []);
-      const { changes, deferred } = uncheckOutdated(raw, found, done);
-      const now = [...new Set([...done, ...[...OUTDATED.keys()].filter((k) => !deferred.has(k))])].sort();
-      return { changes, now, grew: now.length > done.size };
+      const { changes, unchecked } = uncheckOutdated(raw, found, done);
+      return { changes, now: [...new Set([...done, ...unchecked])].sort() };
     };
     // Worked out on a copy first: config.json is written only when something changes.
-    const { changes, grew } = unchecked(structuredClone(this.deps.config.raw()));
-    if (changes.length === 0 && !grew) return;
+    if (unchecked(structuredClone(this.deps.config.raw())).changes.length === 0) return;
+    let changes: ReturnType<typeof unchecked>["changes"] = [];
     try {
       this.deps.config.update((raw) => {
-        raw.outdatedUnchecked = unchecked(raw).now;
+        const done = unchecked(raw);
+        changes = done.changes;
+        raw.outdatedUnchecked = done.now;
       });
     } catch (e) {
       log.warn("accounts", "could not uncheck the outdated models", { error: (e as Error).message });
@@ -920,12 +929,47 @@ export class Accounts {
     for (const c of changes) log.info("accounts", "outdated models unchecked", { profile: c.profile, removed: c.removed.join(" "), added: c.added.join(" ") });
   }
 
+  /// The catalog named models it had not (models/module.ts): the profiles whose check found a model of one of their
+  /// makers are checked again, so a model a provider has just begun to offer is offered here, and replaces the one before
+  /// it, without the station starting again (Fable 5.2 came out with the stations up, 2026-11-09).
+  newModels(keys: readonly string[]) {
+    const makers = new Set(keys.flatMap((k) => facts(k)?.maker ?? []));
+    if (makers.size === 0) return;
+    const ids = this.profiles()
+      .filter((p) => p.enabled !== false && (this.checks.get(p.id)?.models ?? []).some((m) => makers.has(facts(m)?.maker ?? "")))
+      .map((p) => p.id);
+    if (ids.length === 0) return;
+    log.info("accounts", "new models in the catalog: their makers' profiles checked again", { models: keys.join(" "), profiles: ids.join(" ") });
+    this.background.spawn(() => this.checkEach(ids, stationLang()).catch(() => undefined));
+  }
+
+  /// Checks the profiles, four at a time; throws the first refusal once all are done.
+  private async checkEach(ids: readonly string[], lang: Lang) {
+    const errors: unknown[] = [];
+    let next = 0;
+    const worker = async () => {
+      while (next < ids.length) {
+        const id = ids[next++]!;
+        try {
+          await this.check(id, lang);
+        } catch (e) {
+          errors.push(e);
+        }
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    if (errors.length > 0) throw errors[0];
+  }
+
   // ── checks and allowances ──
 
   private keepCheck(id: string, check: ProfileCheck) {
     check.checkedAt = this.background.now();
+    const before = this.checks.get(id)?.models ?? null;
     this.checks.set(id, check);
     this.deps.store.setProfileCheck(id, check);
+    // Other models found: one may now replace one the profile names.
+    if (JSON.stringify(before) !== JSON.stringify(check.models)) this.uncheckOutdated();
     this.changed();
   }
 
@@ -946,6 +990,7 @@ export class Accounts {
   async check(id: string, lang: Lang = stationLang()): Promise<ProfileCheck> {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
+    if (profile.enabled === false) throw new Refusal(409, tr(lang, "station.profile.disabled", { profile: profile.name }));
     const kind = accessKind(profile);
     if (borrowed(profile) && kind === "subscription" && this.deps.shared) return this.checkBorrowed(profile, lang);
     // Signed in to Kimi: asked with its current token (renewed first where due), none once signed out.
@@ -1110,6 +1155,7 @@ export class Accounts {
   private async askQuota(id: string): Promise<ProfileQuota | null> {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
+    if (profile.enabled === false) return this.quotas.get(id) ?? null;
     const generation = this.loginGeneration.get(id) ?? 0;
     // Another station's subscription: a Codex one's is read with the login its host lent while that is good; otherwise
     // (none lent yet, run out, refused) it comes with its host's check.
@@ -1183,6 +1229,7 @@ export class Accounts {
     if (!this.quotaFn) return;
     const now = this.background.now();
     for (const p of this.profiles()) {
+      if (p.enabled === false) continue;
       const q = this.quotas.get(p.id);
       const fresh = q !== undefined && now - q.checkedAt < QUOTA_EVERY_MS - 1000;
       if (fresh && !all) {
@@ -1204,6 +1251,7 @@ export class Accounts {
   /// retire app-servers that cached it after their current turns. A reset also wakes sessions once its allowance is read.
   async sharedChanged(id: string, reset: boolean): Promise<void> {
     const profile = this.profile(id);
+    if (profile?.enabled === false) await this.deps.hub?.profileGone?.(id);
     if (!profile || !borrowed(profile) || accessKind(profile) !== "subscription" || !this.deps.shared) return;
     // A host that signed out may have no login to lend; its status must still reach the copy.
     await this.checkBorrowed(profile, stationLang());
@@ -1262,12 +1310,13 @@ export class Accounts {
     throw new Refusal(502, t("station.quota.resetUnconfirmed"));
   }
 
-  // ── the automatic decisions (admin/decision.rs) ──
+  // ── the automatic decisions ──
 
   /// The models the decisions may ask: each a usable profile's verified one, with the profiles that have it.
   decisionModels(): { id: string; name: string; profiles: string[] }[] {
     const models = new Map<string, string[]>();
     for (const profile of this.profiles()) {
+      if (profile.enabled === false) continue;
       const health = this.deps.hub?.accounts.healthOf(profile.id) ?? this.health(profile.id);
       if (!usable(health)) continue;
       const capability: Capability | undefined = health.check?.decision;
@@ -1316,12 +1365,13 @@ export class Accounts {
   }
 
   /// POST /automatic-decisions/review: the done chats no decision has answered, reviewed now in the background; how many.
-  reviewUndecided(viewer: Viewer, lang: Lang = stationLang()): number {
+  async reviewUndecided(viewer: Viewer, lang: Lang = stationLang()): Promise<number> {
     if (!manages(viewer)) throw new Refusal(403, tr(lang, "station.decisions.managersOnlyReview"));
     const review = this.deps.reviewUndecided;
     if (!review) throw new Refusal(503, tr(lang, "station.decisions.reviewUnsupported"));
     if (!hubConfig(this.deps.config.raw(), this.deps.data).automaticDecisions.completion.enabled) throw new Refusal(409, tr(lang, "station.decisions.enableFirst"));
-    const queued = review();
+    const queued = await review();
+    if (!hubConfig(this.deps.config.raw(), this.deps.data).automaticDecisions.completion.enabled) throw new Refusal(409, tr(lang, "station.decisions.enableFirst"));
     if (queued === null) throw new Refusal(409, tr(lang, "station.decisions.modelUnavailable"));
     return queued;
   }
@@ -1329,24 +1379,10 @@ export class Accounts {
   /// POST /automatic-decisions/refresh: every profile checked again (four at a time).
   async refreshDecisionModels(viewer: Viewer, lang: Lang = stationLang()) {
     if (!manages(viewer)) throw new Refusal(403, tr(lang, "station.decisions.managersOnlyRefresh"));
-    const ids = this.profiles().map((p) => p.id);
-    const errors: unknown[] = [];
-    let next = 0;
-    const worker = async () => {
-      while (next < ids.length) {
-        const id = ids[next++]!;
-        try {
-          await this.check(id, lang);
-        } catch (e) {
-          errors.push(e);
-        }
-      }
-    };
-    await Promise.all([worker(), worker(), worker(), worker()]);
-    if (errors.length > 0) throw errors[0];
+    await this.checkEach(this.profiles().filter((p) => p.enabled !== false).map((p) => p.id), lang);
   }
 
-  // ── what the overview shows of the accounts (admin/views.rs `overview`) ──
+  // ── what the overview shows of the accounts ──
 
   /// What the session's chat is called in the chat list; its key only where it has no chat.
   private chatTitleOf(session: string): string {
@@ -1439,7 +1475,7 @@ export class Accounts {
   }
 
   /// The overview's `profiles`: all of them, to the members of every workspace the station is in alike
-  /// (docs/multi-workspace.md); `workspaces` says which joined ones' chats run on each.
+  ///; `workspaces` says which joined ones' chats run on each.
   profilesView(viewer?: Viewer): Json[] {
     const raw = this.deps.config.raw();
     const config = hubConfig(raw, this.deps.data, this.found);
@@ -1478,9 +1514,10 @@ export class Accounts {
         models: p.models, named: p.named,
         env,
         // Connects whose sessions can run on it: of its runtime, and its models have theirs.
-        usedBy: config.connects.filter((c) => p.runtimes.includes(c.bind.runtime) && serves(p, c.bind.model)).map((c) => c.id),
+        usedBy: p.enabled === false ? [] : config.connects.filter((c) => p.runtimes.includes(c.bind.runtime) && serves(p, c.bind.model)).map((c) => c.id),
         loginCommand: kind === "subscription" ? loginCommand(p.runtime, p.home, p.machine === true) : "",
         machine: p.machine === true,
+        enabled: p.enabled !== false,
         backgroundOnMessage: p.backgroundOnMessage,
         fast: takesFast(p) && (!fastNeedsCredits(p) || this.quotas.get(p.id)?.extraUsage === true) ? p.fast === true : null,
         check: checkView,

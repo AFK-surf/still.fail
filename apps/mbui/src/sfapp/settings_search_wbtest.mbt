@@ -50,8 +50,8 @@ test "settings search follows the language and keeps its words when the list mov
   let base = fixture_app("settings-home")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       if name == "prefs" {
         let prefs = match got.value {
           Some(Object(m)) => m.copy()

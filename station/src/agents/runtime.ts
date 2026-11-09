@@ -43,6 +43,8 @@ export type RuntimeEvent =
   /// The station's tools (its MCP endpoint) failed it as unreachable: what it says through them reaches nobody until its
   /// process starts again.
   | { type: "toolsLost"; why: string }
+  /// It compacted its context (on its own as it filled, or asked for by hand): what it had read is now a summary.
+  | { type: "compacted" }
   | { type: "live"; event: LiveEvent };
 
 export type Profile = {
@@ -86,6 +88,10 @@ export type OpenOptions = {
 export interface AgentSession {
   /// Runtime-native id: claude session id, codex thread id, dsh, grok or Devin session id, Cursor's agent id. Persist it to resume.
   id(): string;
+  /// The version of the runtime serving this session, when it reports one (it may predate the installed binary).
+  runtimeVersion?(): string | null;
+  /// Whether the software page updates the executable serving this session.
+  runtimeUpdateMatchesStation?(): Promise<boolean>;
   busy(): boolean;
   /// Starts a turn. Fails when a turn is already running (or the runtime cannot take one as it is).
   prompt(text: string): Promise<void>;
@@ -156,6 +162,15 @@ export const OVERLOADED = ["overloaded", "at capacity"];
 const CONTEXT = ["context window", "context length", "context_length", "prompt is too long", "maximum context", "too many tokens", "input is too long"];
 /// What they say when the way to the provider broke: the request not sent, its answer cut off.
 const NETWORK = /stream disconnected|error sending request|connection (?:reset|refused|closed|error|failed)|network error|timed out|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|socket hang up|fetch failed|dns error|tls handshake/i;
+
+/// The model whose own allowance a limit was, as the runtime named it (Claude Code's "You've reached your Fable limit.
+/// Switch to another model…": Fable has a weekly cap of its own, under the account's), so it is told apart from the
+/// account's limit, whose quota then still shows room (#4365); null for the account's own ("your weekly usage limit").
+export function modelLimitOf(text: string): string | null {
+  const name = /\breached your ([\w.\- ]+?) limit\b/i.exec(text)?.[1]?.trim();
+  return name && !ACCOUNT_LIMIT.test(name) ? name : null;
+}
+const ACCOUNT_LIMIT = /\b(?:usage|session|weekly|daily|monthly|spend|rate|\d+[- ]hour)\b/i;
 
 /// The rest of a failure, once neither the account, the provider nor a limit: the network, the conversation's size,
 /// else the model.

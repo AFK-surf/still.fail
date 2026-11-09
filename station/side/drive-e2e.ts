@@ -1,4 +1,4 @@
-// The drive's protected folders end to end on a Mac (docs/drive.md): a dev cloud (cloud/test/dev.ts), a station of
+// The drive's protected folders end to end on a Mac: a dev cloud (cloud/test/dev.ts), a station of
 // this checkout started as launchd starts one (a job in the GUI session running the launcher itself; macOS keeps
 // Documents from it), still.fail Helper started by it, and a member's device on iroh using the drive in ~/Documents:
 // a folder of its own there (made by this script, removed at the end), pinned, listed, a file read whole and in part,
@@ -29,7 +29,7 @@ const ORIGIN = `http://127.0.0.1:${PORT}`;
 const RELAY = process.env.RELAY ?? "http://127.0.0.1:3340";
 const WORK = process.env.WORK ?? "/tmp/drive-e2e";
 const WAIT = Number(process.env.WAIT ?? 1800);
-const LABEL = "dev.ember.drive-e2e";
+const LABEL = "dev.stillfail.drive-e2e";
 const DOCS = join(homedir(), "Documents");
 const FOLDER = `stillfail-drive-e2e-${randomBytes(3).toString("hex")}`;
 const native = (what: string) => execFileSync(process.execPath, [join(ROOT, "scripts/native.ts"), "file", what], { encoding: "utf8" }).trim();

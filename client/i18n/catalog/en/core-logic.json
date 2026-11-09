@@ -56,6 +56,7 @@
   "core-logic.choose.force.moves_off": "Account “{account}” can't run {model}; will switch to one that can",
   "core-logic.choose.pick_model": "Choose a model",
   "core-logic.choose.problem.borrow_only": "{name} has no profile of its own; pick a model from another station to borrow its account",
+  "core-logic.choose.problem.disabled_profiles": "The profiles available on {name} are disabled. Enable one on the Profiles page.",
   "core-logic.choose.problem.loading": "Loading {name}'s Profiles",
   "core-logic.choose.problem.no_models": "No Profile on this station lists models yet. Use the button below to view profiles.",
   "core-logic.choose.problem.not_shared": "{name} belongs to {home}, and none of its Profiles is available to this workspace yet. Turn on “Also for {workspace}” on a Profile",
@@ -287,6 +288,7 @@
   "core-logic.format.failure.auth": "Account authentication failed",
   "core-logic.format.failure.exited": "Agent process exited",
   "core-logic.format.failure.model": "Model failed",
+  "core-logic.format.failure.model_limit": "{model}'s limit spent",
   "core-logic.format.failure.other": "Unknown error",
   "core-logic.format.failure.refused": "Region not served",
   "core-logic.format.failure.overloaded": "Model busy",
@@ -397,6 +399,7 @@
     "other": "visited {n} pages"
   },
   "core-logic.history.edge.earlier": "Loading earlier history",
+  "core-logic.history.edge.earlier_failed": "Couldn't load earlier history: {why}. Trying again shortly",
   "core-logic.history.edge.loading": "Loading history",
   "core-logic.history.edge.missing": "Runtime record not found; it may have been archived",
   "core-logic.history.edge.not_started": "Session not started yet",
@@ -464,8 +467,14 @@
   "core-logic.jobs.exit_code": "Exit code {code}",
   "core-logic.jobs.list_sep": ", ",
   "core-logic.jobs.live_count": "{n} running",
+  "core-logic.jobs.long.android": "Android emulator",
+  "core-logic.jobs.long.disconnect": "Disconnect",
+  "core-logic.jobs.long.ios": "iOS Simulator",
   "core-logic.jobs.long.jobs": "Long-running jobs",
   "core-logic.jobs.long.services": "Long-running services",
+  "core-logic.jobs.long.shutdown": "Shut down",
+  "core-logic.jobs.long.simulators": "Simulators left running",
+  "core-logic.jobs.long.views": "Remote connections left open",
   "core-logic.jobs.no_notice": "No notices yet · last output {ago}",
   "core-logic.jobs.notices": {
     "one": "1 notice",
@@ -674,6 +683,10 @@
   "core-logic.history.notice.stopped": "{what} stopped by {who}: {name}",
   "core-logic.history.notice.restarted": "{what} restarted with the station: {name}",
   "core-logic.history.notice.unstarted": "{what} couldn't be restarted: {name}",
+  "core-logic.history.notice.remote": "Remote task",
+  "core-logic.history.notice.remoteStopped": "{what} stopped: {name}",
+  "core-logic.history.notice.remoteNews": "{what} has news: {name}",
+  "core-logic.history.notice.lost": "{what} never started, no longer followed: {name}",
   "core-logic.history.notice.chat.done": "Chat done: {name}",
   "core-logic.history.notice.chat.human": "Chat needs you: {name}",
   "core-logic.history.notice.chat.failed": "Chat failed: {name}",
@@ -748,5 +761,11 @@
     "other": "{name} and others ({n} items)"
   },
   "core-logic.transfer.otherWorkspace": "Files are copied between stations of one workspace",
-  "core-logic.transfer.noGrant": "The station the files are on did not grant reading them"
+  "core-logic.transfer.noGrant": "The station the files are on did not grant reading them",
+  "core-logic.notice.run.context": "context {n}",
+  "core-logic.notice.run.effort": "Effort: {change}",
+  "core-logic.notice.run.now": "Now: {run}",
+  "core-logic.notice.run.speed": "Speed: {change}",
+  "core-logic.notice.run.to": "Now {now}",
+  "core-logic.notice.run.was": "Before: {run}"
 }

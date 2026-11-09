@@ -6,7 +6,7 @@
 // `clear` drops them all, `capture` asks for the pictures: with `each`, one PNG per mark, of what the window shows
 // with only that mark drawn on it (a mark scrolled out of sight gets the window's worth of page around it); without
 // (clients before that), the whole page with all the marks on it. `canvas` (true/false)
-// that the page is on a canvas (PreviewStage.tsx), whose zooming and two fingers it then hands on (ember-preview-gesture). It says
+// that the page is on a canvas, whose zooming and two fingers it then hands on (ember-preview-gesture). It says
 // (ember-preview-annotated): `picked` with where a mark is, `focus` when a marked element is picked again, `at` with
 // where the marks are in the frame's viewport as the page scrolls or moves (the client draws them), `off` when Esc
 // ended picking, `reset` when the page went elsewhere (its marks gone), `shot` with the pictures (`shots`, or `png`). The frame says it can
@@ -28,7 +28,7 @@ export interface Picked {
   /** tag#id.class, as a person reads it. */
   label: string;
   /**
-   * What sort of thing it is: a word the client says in its language (button, link, image…: Marks.tsx kindName); in
+   * What sort of thing it is: a word the client says in its language (button, link); in
    * words (按钮, 链接, 图片…) from a frame before that.
    */
   kind: string;
@@ -100,7 +100,7 @@ function attach(inner: HTMLIFrameElement, nonce: string) {
 
   const cursor = () => {
     if (!doc) return;
-    const id = "ember-annotate-cursor";
+    const id = "stillfail-annotate-cursor";
     const had = doc.getElementById(id);
     if (on && !had) {
       const style = doc.createElement("style");
@@ -388,7 +388,7 @@ function drawMark(g: CanvasRenderingContext2D, n: number, x: number, y: number, 
   g.beginPath();
   g.roundRect(x, y, width, height, 3);
   g.stroke();
-  // The pin: its point on the corner, as the client draws it (Marks.css.ts).
+  // The pin: its point on the corner, as the client draws it.
   const px = Math.max(2, x) - 2, py = Math.max(24, y) - 22;
   g.shadowColor = "rgba(0,0,0,.25)";
   g.shadowBlur = 6;

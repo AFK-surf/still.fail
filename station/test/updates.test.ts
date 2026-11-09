@@ -1,4 +1,4 @@
-// The station's and its runtimes' versions and updating them (the Rust station's updates.rs's tests), with fake release
+// The station's and its runtimes' versions and updating them, with fake release
 // servers, fake installers and fake npm/vp/curl commands in temporary directories: nothing real is installed or read.
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
@@ -9,7 +9,9 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
+import { setTimeout as sleep } from "node:timers/promises";
 import { ConfigFile } from "../src/ops/config.ts";
+import { hearLines, type Line } from "../src/ops/log.ts";
 import { type Env, type Found, howToInstall, howToUpdate, findCommand, ownNode, pinNpmVersion, run, runLines, Unable, kindCommand, kindPackage } from "../src/updates/runtimes.ts";
 import { hold } from "../src/updates/holds.ts";
 import { Updates, type UpdatesOptions } from "../src/updates/updates.ts";
@@ -26,11 +28,11 @@ import { settle, testClock } from "./hub-fakes.ts";
 delete process.env.STILLFAIL_CONFIG;
 
 const temp = () => realpathSync(mkdtempSync(join(tmpdir(), "stillfail-updates-")));
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /// Looks every 20 ms until `f` holds: what real processes, files and sockets do has no event here. No deadline (it
-/// comes, however slow the machine, or the test hangs).
-async function until(_what: string, f: () => boolean) {
-  while (!f()) await sleep(20);
+/// comes, however slow the machine, or the test times out); cancellation stops its wait and releases its timer.
+async function until(_what: string, f: () => boolean, signal: AbortSignal) {
+  signal.throwIfAborted();
+  while (!f()) await sleep(20, undefined, { signal });
 }
 /// An executable script at `path` (a shell one by the launcher the stand-ins share: see accounts-fakes.ts).
 const script = (path: string, text: string) => {
@@ -137,6 +139,20 @@ exit 0
 const found = (real: string): Found => ({ onPath: "/nowhere/bin/x", real });
 
 describe("updates", { concurrency: true }, () => {
+  test("a cancelled update wait lets its test end", async () => {
+    const controller = new AbortController();
+    let satisfied = false;
+    const waiting = until("a condition that has not happened", () => satisfied, controller.signal);
+    controller.abort();
+    const result = await Promise.race([
+      waiting.then(() => "resolved", (error: Error) => error.name),
+      new Promise<string>((resolve) => setImmediate(() => resolve("still waiting"))),
+    ]);
+    satisfied = true;
+    await waiting.catch(() => {});
+    assert.equal(result, "AbortError");
+  });
+
   test("an install says where it is as it goes", async () => {
     const env: Env = { PATH: "/usr/bin:/bin" };
     const steps: string[] = [];
@@ -205,6 +221,11 @@ describe("updates", { concurrency: true }, () => {
     assert.deepEqual(offer("0.1.12", "0.1.12", "stable", "beta"), [false, false]);
     assert.deepEqual(offer(null, "0.1.10", "stable", "beta"), [false, false]);
     assert.deepEqual(offer("0.1.12", null, "stable", "beta"), [false, false]);
+    // 0.<m>.<n> by n alone: a release branch's stable 0.35.11 (m one more) is not newer than the beta's 0.34.12.
+    assert.deepEqual(offer("0.34.10", "0.35.12", "stable", "stable"), [true, false]);
+    assert.deepEqual(offer("0.1.10", "0.34.12", "stable", "stable"), [true, false]);
+    assert.deepEqual(offer("0.34.12", "0.35.11", "beta", "beta"), [false, false]);
+    assert.deepEqual(offer("0.34.12", "0.35.11", "stable", "beta"), [false, true]);
   });
 
   test("an update started before a handover is followed to its end", async (t) => {
@@ -221,10 +242,10 @@ describe("updates", { concurrency: true }, () => {
     assert.deepEqual([station(updates).state, station(updates).progress], ["updating", "正在交接给新版本（agent 不中断）"]);
     // Had it had to restart: what the drain waits on.
     writeFileSync(join(runDir, "update.step"), "drain\n");
-    await until("draining", () => station(updates).progress === "等待 2 个 agent 完成本轮后重启（新消息将排队）");
+    await until("draining", () => station(updates).progress === "等待 2 个 agent 完成本轮后重启（新消息将排队）", t.signal);
     writeFileSync(join(runDir, "update.step"), "handoff\n");
     writeFileSync(join(runDir, "update.exit"), "0\n");
-    await until("done", () => station(updates).state === "idle");
+    await until("done", () => station(updates).state === "idle", t.signal);
     const line = station(updates);
     assert.deepEqual([line.state, line.progress, line.done], ["idle", undefined, "已更新到 0.1.1300，agent 未中断"]);
     assert.ok(!existsSync(join(runDir, "update.started")) && !existsSync(join(runDir, "update.step")));
@@ -272,13 +293,13 @@ describe("updates", { concurrency: true }, () => {
     updates.follow({ at: Date.now(), from: "0.1.1300" });
     assert.equal(station(updates).percent, 12);
     writeFileSync(join(runDir, "update.log"), "\r### 12.4%\r######## 44.9%");
-    await until("44%", () => station(updates).percent === 44);
+    await until("44%", () => station(updates).percent === 44, t.signal);
     assert.ok(told >= 2);
     writeFileSync(join(runDir, "update.step"), "handoff\n");
-    await until("handoff", () => station(updates).percent === undefined);
+    await until("handoff", () => station(updates).percent === undefined, t.signal);
     assert.equal(station(updates).progress, "正在交接给新版本（agent 不中断）");
     writeFileSync(join(runDir, "update.exit"), "0\n");
-    await until("ended", () => station(updates).state === "idle");
+    await until("ended", () => station(updates).state === "idle", t.signal);
     assert.equal(station(updates).percent, undefined);
     // The same version as it started from: it says so.
     assert.equal(station(updates).done, "已是最新版本");
@@ -290,11 +311,18 @@ describe("updates", { concurrency: true }, () => {
     mkdirSync(runDir, { recursive: true });
     const updates = installed(dir, "1300", null);
     t.after(() => updates.close());
+    // And says it on the station's log, which still.fail hears of (a station of someone else's workspace: its pages
+    // are not ours to look at).
+    const lines: Line[] = [];
+    hearLines((l) => void (l.at === "updates" && lines.push(l)));
+    t.after(() => hearLines(null));
     writeFileSync(join(runDir, "update.log"), "one\ntwo\nthree\nfour\nfive\n");
     updates.follow({ at: Date.now(), from: "0.1.1300" });
     writeFileSync(join(runDir, "update.exit"), "1\n");
-    await until("failed", () => station(updates).state === "failed");
+    await until("failed", () => station(updates).state === "failed", t.signal);
     assert.equal(station(updates).message, "two\nthree\nfour\nfive");
+    const ended = lines.find((l) => l.message === "the station's update ended");
+    assert.deepEqual(ended?.fields, { failed: true, why: "two\nthree\nfour\nfive" });
   });
 
   test("switched back from the beta the stable release is offered and kept in the config", async (t) => {
@@ -439,7 +467,7 @@ describe("updates", { concurrency: true }, () => {
     // Asked again meanwhile: refused.
     await assert.rejects(updates.update("station", "zh"), (e: Error) => e.message === "Station 正在更新");
     finish();
-    await until("ended", () => station(updates).state === "idle");
+    await until("ended", () => station(updates).state === "idle", t.signal);
     assert.equal(station(updates).done, "已更新到 0.1.1310，agent 未中断");
     // Never the cloud's installer.
     assert.ok(!asked.some((a) => a.startsWith("/install")), asked.join());
@@ -492,7 +520,7 @@ describe("updates", { concurrency: true }, () => {
     await back.setChannel("stable");
     assert.deepEqual([station(back).latest, station(back).downgrade], ["0.1.1290", true]);
     await back.update("station", "zh");
-    await until("ended", () => station(back).state === "idle");
+    await until("ended", () => station(back).state === "idle", t.signal);
     assert.equal(readFileSync(join(beta, "installer-ran"), "utf8"), "ran\n");
   });
 
@@ -507,24 +535,25 @@ describe("updates", { concurrency: true }, () => {
     /// Moves its time on by `ms` until `f` holds (what it waits for meanwhile may be a real process).
     const steps = async (ms: number, f: () => boolean) => {
       while (!f()) {
+        t.signal.throwIfAborted();
         await time.adjust(ms);
-        await sleep(10);
+        await sleep(10, undefined, { signal: t.signal });
       }
     };
     // A reading of what is out after the update ended once the feed was asked a third time (the first reading, the
     // update's own, then that one; it decides as it ends).
     const feeds = () => asked.filter((a) => a.startsWith("/releases/station.json")).length;
-    let readAgain = false;
-    updates.changes(() => void (feeds() >= 3 && (readAgain = true)));
     updates.start();
     // It reads what is out at once, and updates itself by the installer.
-    await until("read", () => station(updates).latest === "0.1.1310");
+    await until("read", () => station(updates).latest === "0.1.1310", t.signal);
     await steps(50, () => station(updates).state === "updating");
-    await until("the installer ended", () => existsSync(join(dir, "run", "update.exit")));
+    await until("the installer ended", () => existsSync(join(dir, "run", "update.exit")), t.signal);
     await steps(200, () => station(updates).done === "已更新到 0.1.1310，agent 未中断");
     // Then reads what is out again: the feed still says 0.1.1310 and the release is 0.1.1310, so nothing more (its
     // decision taken as the reading ends), nor on its rounds after.
-    await until("read again", () => readAgain);
+    await until("read again", () => station(updates).version === "0.1.1310", t.signal);
+    assert.equal(station(updates).latest, "0.1.1310", "the post-update feed was read successfully");
+    assert.ok(feeds() >= 3, "the post-update check asked for the feed");
     for (let i = 0; i < 5; i++) {
       await time.adjust(50);
       await settle();
@@ -571,7 +600,7 @@ describe("updates", { concurrency: true }, () => {
       });
       await updates.update("codex", "zh");
       assert.equal(updates.get("zh")[2]!.state, "updating");
-      await until("installed", () => updates.get("zh")[2]!.state !== "updating");
+      await until("installed", () => updates.get("zh")[2]!.state !== "updating", t.signal);
       codex = updates.get("zh")[2]!;
       assert.deepEqual([codex.installed, codex.version, codex.newer, codex.state, codex.message], [true, "0.47.0", false, "idle", undefined]);
       assert.equal(changed, 1);
@@ -589,9 +618,28 @@ describe("updates", { concurrency: true }, () => {
       t.after(() => updates.close());
       await updates.check();
       await updates.update("codex", "zh");
-      await until("failed", () => updates.get("zh")[2]!.state === "failed");
+      await until("failed", () => updates.get("zh")[2]!.state === "failed", t.signal);
       assert.equal(updates.get("zh")[2]!.message, `${exe(join(bin, "npm"))} 已完成，但 station 的 PATH 中仍找不到 codex：可能安装到了其他位置`);
     });
+  });
+
+  test("version refusals share the software page's update of the existing Codex installation", { skip: WINDOWS && "Homebrew is macOS's" }, async (t) => {
+    const [registry, server] = await serve((path) => path === "/@openai/codex/latest" ? { body: JSON.stringify({ version: "0.47.0" }) } : null);
+    t.after(() => server.close());
+    const dir = temp(), bin = join(dir, "bin"), codex = join(dir, "Cellar/codex/0.46.0/bin/codex"), calls = join(dir, "brew-calls");
+    mkdirSync(bin);
+    script(codex, "#!/bin/sh\necho 'codex-cli 0.46.0'\n");
+    symlinkSync(codex, join(bin, "codex"));
+    script(join(bin, "brew"), `#!/bin/sh\necho "$*" >> "${calls}"\nprintf '#!/bin/sh\\necho "codex-cli 0.47.0"\\n' > "${codex}.sh"\n`);
+    const updates = installed(dir, "1300", null, { registry, env: { PATH: withSystem(bin), HOME: dir }, codexHostProbe: async () => null });
+    t.after(() => updates.close());
+    await Promise.all([updates.updateOldCodex("0.46.0", "zh"), updates.updateOldCodex("0.46.0", "zh")]);
+    assert.deepEqual(readFileSync(calls, "utf8").trim().split("\n"), ["upgrade codex"]);
+    assert.equal(updates.get("zh").find((item) => item.id === "codex")!.version, "0.47.0");
+    // A stale app-server whose binary is already newer does not run a second install.
+    await updates.updateOldCodex("0.46.0", "zh");
+    assert.equal(readFileSync(calls, "utf8").trim(), "upgrade codex");
+    await assert.rejects(updates.updateOldCodex("0.47.0", "zh"), /没有可用的更新版本/);
   });
 
   for (const complete of [true, false]) {
@@ -632,7 +680,7 @@ echo 'added 2 packages'
       await updates.check();
       assert.equal(updates.get("zh")[2]!.repairable, true);
       await updates.repairCodex();
-      await until("repair ended", () => updates.get("zh")[2]!.state !== "updating");
+      await until("repair ended", () => updates.get("zh")[2]!.state !== "updating", t.signal);
       const codex = updates.get("zh")[2]!;
       if (complete) {
         assert.equal(codex.state, "idle");
@@ -673,7 +721,7 @@ esac
     const grok = () => updates.get("zh").find((v) => v.id === "grok")!;
     assert.deepEqual([grok().installed, grok().updatable], [false, true]);
     await updates.update("grok", "zh");
-    await until("installed", () => grok().state !== "updating");
+    await until("installed", () => grok().state !== "updating", t.signal);
     assert.deepEqual([grok().installed, grok().version, grok().state, grok().message], [true, "1.0.62", "idle", undefined]);
     assert.equal(readlinkSync(join(bin, "grok")), join(node, "bin", "grok"));
   });
@@ -734,7 +782,7 @@ echo "added 1 package"
     const grok = () => updates.get("zh").find((v) => v.id === "grok")!;
     assert.deepEqual([grok().installed, grok().updatable, grok().note], [false, true, undefined]);
     await updates.update("grok", "zh");
-    await until("installed", () => grok().state !== "updating");
+    await until("installed", () => grok().state !== "updating", t.signal);
     assert.deepEqual([grok().installed, grok().version, grok().state, grok().message], [true, "1.0.62", "idle", undefined]);
     // Nothing of the download left beside it, nothing put in ~/.local/bin; the station's PATH has it, last.
     assert.deepEqual(readdirSync(join(data, "node")), [own.build.dist]);
@@ -764,7 +812,7 @@ echo "added 1 package"
     await updates.check();
     const grok = () => updates.get("zh").find((v) => v.id === "grok")!;
     await updates.update("grok", "zh");
-    await until("failed", () => grok().state !== "updating");
+    await until("failed", () => grok().state !== "updating", t.signal);
     assert.deepEqual([grok().installed, grok().state, grok().message], [false, "failed", "下载的 Node 校验失败"]);
     assert.equal(updates.get("en").find((v) => v.id === "grok")!.message, "The downloaded Node failed verification");
     assert.deepEqual(readdirSync(join(data, "node")), []);
@@ -801,7 +849,7 @@ END
     const devin = () => updates.get("zh").find((v) => v.id === "devin")!;
     assert.deepEqual([devin().installed, devin().version, devin().latest, devin().newer, devin().updatable], [true, "3000.11.92", "3000.12.0", true, true]);
     await updates.update("devin", "zh");
-    await until("updated", () => devin().state !== "updating");
+    await until("updated", () => devin().state !== "updating", t.signal);
     assert.deepEqual([devin().version, devin().newer, devin().state, devin().message], ["3000.12.0", false, "idle", undefined]);
   });
 
@@ -860,7 +908,7 @@ END
     const claude = () => updates.get("zh").find((v) => v.id === "claude")!;
     assert.deepEqual([claude().version, claude().latest, claude().updatable], ["2.1.0", "2.2.0", true]);
     await updates.update("claude", "zh");
-    await until("failed", () => claude().state === "failed");
+    await until("failed", () => claude().state === "failed", t.signal);
     assert.equal(claude().message, "winget 暂无可在此安装的更新（其源可能还没有最新版本），未做改动：No available upgrade found.");
   });
 

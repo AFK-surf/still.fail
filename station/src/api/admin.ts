@@ -32,7 +32,6 @@ import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
 import { connectRoutes } from "./routes/connects.ts";
 import { type Drive, stationDrive } from "../drive/drive.ts";
-import { type ModuleSet, moduleOf } from "../modules/modules.ts";
 import type { StationParts } from "../parts.ts";
 import { HelperFiles } from "../helper/files.ts";
 import type { HelperApp } from "../helper/app.ts";
@@ -53,7 +52,7 @@ import { tr } from "../ops/i18n.ts";
 
 /// What a read-only member (a viewer, contract §4) may still ask besides reads: marks of their own (read, kept,
 /// dismissed), which change nothing anyone else sees.
-const OWN_MARKS = /^\/*threads\/+[^/]+\/+(read|dismissed|closed-card)(?:\/.*)?$/;
+const OWN_MARKS = /^\/*threads\/+[^/]+\/+(read|hidden|muted|dismissed|closed-card)(?:\/.*)?$/;
 /// Reads that send what the client holds (routes/changed.ts), and several reads in one (`batch`).
 const READS = /^\/*(changed\/+(chats|threads|sessions)|batch)$/;
 /// What a batch may read (POST /batch): the history a client brings onto its device in the background, each a read
@@ -105,14 +104,12 @@ export type AdminDeps = {
   grants?: HelperGrants | null;
   /// The station's drive (services.ts StationDrive); one is made for the routes when none is given.
   drive?: Drive;
-  /// The modules beside the station (modules/modules.ts): `/m/<id>/…` passed on to them; none, no such route.
-  modules?: ModuleSet;
   /// The station's parts in its own process (parts.ts): their routes after the platform's, and what of theirs a
   /// read-only member may write.
   parts?: StationParts;
 };
 
-/// The header a write's key comes in, and how long an answer is kept (once.rs).
+/// The header a write's key comes in, and how long an answer is kept.
 const ONCE_KEY = "idempotency-key";
 const ONCE_KEEP_MS = 10 * 60_000;
 type Kept = { status: number; headers: Record<string, string>; body: Buffer };
@@ -166,7 +163,7 @@ export class Admin {
       ...(config && data !== undefined
         ? drive({
             config,
-            // The station's, shared with the modules' local API (services.ts StationDrive); made here when not given (tests).
+            // The station's (services.ts StationDrive); made here when not given (tests).
             drive:
               deps.drive ??
               stationDrive(
@@ -184,9 +181,9 @@ export class Admin {
             stage: (name) => uploadPath(join(data, "uploads"), name),
           })
         : []),
-      // What macOS lets still.fail Helper do here, a grant asked for from a member's app (docs/remote-screens.md "Grants").
+      // What macOS lets still.fail Helper do here, a grant asked for from a member's app.
       ...(deps.grants ? permissions({ grants: deps.grants }) : []),
-      // The screens members see and drive (docs/remote-screens.md); a view of one is a stream of its own (mesh/screens.ts).
+      // The screens members see and drive; a view of one is a stream of its own (mesh/screens.ts).
       ...(deps.screens
         ? [
             { method: "GET", pattern: /^\/screens$/, handle: async (r: Request) => (await deps.screens!.refresh(), json(200, JSON.stringify(deps.screens!.listed(r.lang)))) },
@@ -245,7 +242,7 @@ export class Admin {
   async handle(r: Request): Promise<Answer> {
     // Who asks is remembered by name, as the cloud's names (`deps.names`): what chats show of people who wrote.
     if (r.viewer.name !== "") this.readers.names.set(r.viewer.email, r.viewer.name);
-    // A write with a key is done once, however often it is asked (once.rs); the key is the viewer's own.
+    // A write with a key is done once, however often it is asked; the key is the viewer's own.
     const key = Object.entries(r.headers).find(([k]) => k.toLowerCase() === ONCE_KEY)?.[1];
     const keyed = key !== undefined && key !== "" && key.length <= 200 && r.method !== "GET" && r.method !== "HEAD";
     const answer = keyed ? await this.once(`${r.viewer.email}\0${r.path}\0${key}`, () => this.answer(r)) : await this.answer(r);
@@ -255,7 +252,7 @@ export class Admin {
     return runtimeCompatible(r, answer);
   }
 
-  /// `write`'s answer, or the answer the first write under `key` had (once.rs): while the first is under way the
+  /// `write`'s answer, or the answer the first write under `key` had: while the first is under way the
   /// others wait for it; a 5xx is not kept (the write may not have happened: asked again, it is tried again).
   private async once(key: string, write: () => Promise<Answer>): Promise<Answer> {
     const now = (this.deps.clock ?? liveClock).currentTimeMillisUnsafe();
@@ -296,7 +293,7 @@ export class Admin {
   private async answer(r: Request): Promise<Answer> {
     // A viewer reads: no message sent, nothing changed (previews included); a module says what of its own a viewer
     // changes too (their reading progress, say: its manifest's `viewerWrites`).
-    if (readOnly(r.viewer) && !readOnlyMay(r) && this.deps.modules?.viewerMay(r) !== true && this.deps.parts?.mayView(r) !== true) return error(403, "read-only members cannot change this station");
+    if (readOnly(r.viewer) && !readOnlyMay(r) && this.deps.parts?.mayView(r) !== true) return error(403, "read-only members cannot change this station");
     if (r.method === "POST" && /^\/*batch$/.test(r.path)) return this.batch(r);
     // A session, chat or job of another workspace than the viewer's is none for them (api/seen.ts).
     const hidden = this.deps.store ? elsewhere(this.deps.store, r.path, r.viewer) : null;
@@ -311,9 +308,6 @@ export class Admin {
       for (const [name, value] of answer.headers) joined[name] = name in joined ? `${joined[name]}, ${value}` : value;
       return { status: answer.status, headers: joined, body: answer.body };
     }
-    // A module's (modules/forward.ts): any method, its answer as it comes.
-    const module = moduleOf(r.path);
-    if (module !== null && this.deps.modules) return this.deps.modules.forward(r, module);
     for (const route of [...this.routes, ...(this.deps.parts?.allRoutes(this.tools) ?? [])]) {
       const found = r.method === route.method ? route.pattern.exec(r.path) : null;
       if (found) return route.handle(r, found.slice(1));
@@ -370,6 +364,7 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
           overview: (viewer, lang) => agents.overview(viewer, lang),
           place: () => agents.place(),
           entry: (kind) => agents.connectKinds?.get(kind)?.entry,
+          heldBy: agents.heldBy,
           reconnect: async (kind, id) => void (await agents.connectKinds?.get(kind)?.reconnect(id)),
         })
       : []),
@@ -393,7 +388,7 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
 
 /// A simulator's logs, apps and restart: only for those who may drive it (what apps log may be private; a read-only
 /// member only sees the screen). 404 no such screen, 405 nothing to debug on it, 502 simctl failed.
-/// What a person does of a device as Device Hub would (docs/remote-screens.md "Simulators"), each with what it is told.
+/// What a person does of a device as Device Hub would, each with what it is told.
 function simActions(screens: ScreenHub) {
   const route = (path: string, act: (d: SimDebug, said: Record<string, unknown>) => Promise<void>) => ({
     method: "POST",

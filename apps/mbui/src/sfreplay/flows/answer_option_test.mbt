@@ -23,7 +23,7 @@ test "22-answer-option" {
     // the answer handed to the agent, its turn on it to its end (the fake's own posts nothing: the station says so),
     // the chat's mark at work gone with it
     f.see("本轮 agent 未在对话中回复")
-    // the card decided long since: its options closed as the answer came (docs/list-motion.md), nothing under the
+    // the card decided long since: its options closed as the answer came (mbui's view/list_motion.mbt), nothing under the
     // post going or coming
     f.gone("=先不换 083209")
     // (closed as the core said it decided: to its end)

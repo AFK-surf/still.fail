@@ -21,7 +21,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The app's memory running away, told from inside, as still.fail's Android app does (MemoryWatch.kt; docs/telemetry.md
+ * The app's memory running away, told from inside, as still.fail's Android app does (MemoryWatch.kt
  * → 安卓): on an OPPO PLP110 in 2026-10 the native heap grew some 300 MB a minute until the system killed the app, with
  * the Rust shell's threads busy while the app sat still. Once the native heap passes {@link #LIMIT}, what is under way
  * then goes to PostHog once per process as {@code MemoryRunaway}: the shell's calls by operation over a short window,

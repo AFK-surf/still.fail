@@ -1,4 +1,4 @@
-// tiny-skia's colours (src/color.rs), screen rects (src/geom.rs) and blend modes (src/blend_mode.rs).
+// tiny-skia's colours, screen rects and blend modes.
 
 ///|
 /// RGBA in bytes, straight alpha.

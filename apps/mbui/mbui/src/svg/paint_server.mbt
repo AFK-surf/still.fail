@@ -1,4 +1,4 @@
-// usvg's paint servers (parser/paint_server.rs): gradients and patterns, and their units made user space once the
+// usvg's paint servers: gradients and patterns, and their units made user space once the
 // tree (and so every bounding box) is known.
 
 ///|

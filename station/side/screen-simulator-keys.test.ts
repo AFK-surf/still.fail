@@ -1,4 +1,4 @@
-// What a person's keys do on an iOS Simulator (docs/remote-screens.md "Simulators") on a real Mac with Xcode: a simulator
+// What a person's keys do on an iOS Simulator on a real Mac with Xcode: a simulator
 // of this test's own, a small app whose focused field logs what it holds, keys and pasted text sent through still.fail
 // Helper's view as a person's are, with no window of Device Hub's and none of its permissions needed (vendor/serve-sim
 // DTUHIDKeys). STILLFAIL_HELPER and STILLFAIL_HELPER_DIR: another helper. A side test.

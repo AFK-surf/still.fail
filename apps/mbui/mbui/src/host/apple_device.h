@@ -117,7 +117,7 @@ static BOOL clip_is_png(NSData *d) {
   return d.length >= 8 && memcmp(d.bytes, sig, 8) == 0;
 }
 
-// A picture's bytes (another kind than PNG) as PNG, within the bounds (still.fail's ScreenClips.kt asPng).
+// A picture's bytes (another kind than PNG) as PNG, within the bounds.
 static int clip_make_png(NSData *src, NSData **out) {
   if (src.length == 0) return CLIP_UNREADABLE;
   if (clip_is_png(src)) {

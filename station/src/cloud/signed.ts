@@ -1,4 +1,4 @@
-// What the station posts to its control plane signed with its key (the Rust station's feedback.rs `send`, notify.rs):
+// What the station posts to its control plane signed with its key:
 // the body's sha256 under "<tag>:<origin>:<station>:<ts>:<digest>", in the x-stillfail-* headers. Comma reads the same
 // headers (contract §1).
 import { nowSecs } from "../ops/files.ts";

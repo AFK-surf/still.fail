@@ -1,4 +1,4 @@
-// Routes chat messages to session actors and creates sessions (the Rust station's hub.rs). Several connects share one hub;
+// Routes chat messages to session actors and creates sessions. Several connects share one hub;
 // each has its own chat connection and its own sessions.
 //
 // A connect's mode decides the sessions: multi-session gives each thread its own session (started by an @mention);
@@ -14,7 +14,7 @@
 // read in their chats), others.ts (other chats), messages.ts (session_send), titles.ts, lifecycle.ts (sessions and
 // chats made, archived, deleted), review.ts (the archive suggestion). The tools (src/tools/) are built on it.
 //
-// Redesigned where docs/station-ts.md asks: no settle-by-polling and no handing over of processes: at a handover the
+// Redesigned where asks: no settle-by-polling and no handing over of processes: at a handover the
 // hub holds turns, waits until every actor's queue has run what it had (`flushed`, pushed, not polled), and snapshots
 // every actor into <data>/run/handover.json; the runners keep the processes. A starting hub takes them up from that
 // file (`takeUp`), and from the runners a crashed station left (no snapshot), then `recover` resumes the turns marked
@@ -26,18 +26,20 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { Clock, Effect, Fiber } from "effect";
 import { liveClock, within } from "../ops/fibers.ts";
-import type { AgentDriver, AgentSession, RuntimeKind } from "../agents/runtime.ts";
+import { RUNTIME_KINDS, type AgentDriver, type AgentSession, type RuntimeKind } from "../agents/runtime.ts";
 import { runnerId } from "../agents/process.ts";
-import { allLeft, existingRunners } from "../agents/runner.ts";
+import { allLeft, liveRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { iso, sessionPlaces, transcriptSources } from "../read/transcript.ts";
-import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, slackSurface, type MessageRow, type ThreadRow, type ThreadSummary } from "../store/store.ts";
+import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, commaSurface, slackSurface, type MessageRow, type ThreadRow, type ThreadSummary } from "../store/store.ts";
+import type { DeliveryCardState, PendingMessage } from "../store/rows.ts";
 import type { RecentChatList } from "../store/chat-list.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
-import { threadCommand } from "./args.ts";
+import { threadCommand, type Args } from "./args.ts";
+import type { CardPage } from "../logins/index.ts";
 import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ModelChoice, Person, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
 import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle, sameModel } from "./config.ts";
@@ -48,11 +50,15 @@ import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
 import { Presets, RepoIndex } from "./presets.ts";
 import { type Roots, roots as machineRoots } from "../read/machine.ts";
-import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldResumeLost } from "./afresh.ts";
+import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldLongChat, toldResumeLost } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
 import { untitledChat } from "./titles.ts";
 import { shownFacts } from "./image-size.ts";
+import { sandboxIndexEnabled } from "../store/sandbox-index.ts";
+import { SandboxNameBuilder } from "./sandbox-name-builder.ts";
+import { SessionDirectoryBuilder } from "./session-directory-builder.ts";
+import { ProcessJobsBuilder } from "../jobs/process-jobs-builder.ts";
 
 type Json = any;
 
@@ -78,7 +84,7 @@ export type Hold = "drain" | "unbound" | "starting";
 /// A chat of another workspace shared with this one, as chat_list lists it (xshare/index.ts `Borrowed`).
 export type OutsideChat = { workspace: string; workspaceName: string; station: string; chat: string; title: string; link: string; write: boolean };
 
-/// Cold storage of archived sessions' files (archive.rs, footprint.rs): an archived, idle session's workspace and
+/// Cold storage of archived sessions' files (archive.rs): an archived, idle session's workspace and
 /// transcripts packed, and restored before its runtime starts again or when it is shown again. The station's is
 /// cold.ts; the default keeps nothing cold.
 export interface ColdStorage {
@@ -115,10 +121,12 @@ export type HubOptions = {
   places?: Places;
   /// A session's page in still.fail (its /o/ link), when the station is in a workspace.
   link?: (key: string) => string | undefined;
-  /// The workspaces the station is in now, its home one first (docs/multi-workspace.md); none outside any.
+  /// The workspaces the station is in now, its home one first; none outside any.
   workspaces?: () => string[];
   /// The runners alive on this machine now, by id (default: <data>/run/runners).
   runners?: () => string[];
+  /// Another session being taken up: the launcher hears the station gets on with it (ops/launcher.ts `taking`).
+  taking?: () => void;
   cold?: ColdStorage;
   /// Its time, and its sessions' (a TestClock in tests).
   clock?: Clock.Clock;
@@ -126,6 +134,8 @@ export type HubOptions = {
   machineRoots?: () => Roots;
   /// Detached cleanup begun by the hub, for an owner of its environment to await before removing that environment.
   background?: (work: Promise<void>) => void;
+  /// The previous station has released its foreground writes.
+  previous?: Promise<void>;
 };
 
 /// The handover file, in the data directory.
@@ -157,11 +167,29 @@ export class Hub {
   /// A thread's latest `limit` messages, oldest first, read by the readers (agents.ts sets it): the archive review's
   /// (review.ts), up to 400 of them through the merged view, 3 seconds held on a station. Unset (tests): the store.
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
+  /// Check whether a chat's opener wrote among its latest messages without reading their edits.
+  openedChatSaid: ((thread: number, author: string, agentOnly: boolean) => Promise<boolean>) | null = null;
+  /// Read a chat_history page and its optional before-message boundary off the station thread.
+  historyMessages: ((thread: number, before: string | null, limit: number) => Promise<MessageRow[] | null>) | null = null;
+  /// Read a chat history's pending card post off the station thread.
+  historyPendingCard: ((thread: number) => Promise<number | null>) | null = null;
+  prepareCardPosts: ((threads: readonly number[], signal?: AbortSignal) => Promise<void>) | null = null;
+  /// Check a named need against its visible question off the station thread.
+  stateQuestion: ((key: string, threads: number[], ts: string) => Promise<import("../read/store.ts").StateQuestion>) | null = null;
+  /// The pending card used by a need which does not name its question.
+  statePendingCard: ((threads: number[]) => Promise<[number, number, string] | null>) | null = null;
+  /// Card state accompanying a person's message to an agent.
+  deliveryCardState: ((thread: number, n: number, signal?: AbortSignal) => Promise<DeliveryCardState | null>) | null = null;
+  /// A session's undelivered messages and letters, merged by a reader.
+  pendingDeliveries: ((key: string, signal?: AbortSignal) => Promise<PendingMessage[]>) | null = null;
+  /// Read the pending post and its card for the background archive review.
+  reviewPendingCard: ((thread: number) => Promise<[MessageRow, Json] | null>) | null = null;
   /// Prepare an old session's up-job lookup before its archived actor stops its jobs.
   prepareSessionUpJobs: ((session: string) => Promise<void>) | null = null;
-  /// The station's logins (logins/module.ts sets it): whether one waits for a code from its page (a Slack login card
-  /// takes one only then), and that code handed to it, entered by `by` on its card. Unset: no logins here.
-  logins: { pastes(id: string): boolean; answer(id: string, code: string, by?: Person): void } | null = null;
+  /// The station's logins (logins/module.ts sets it): the page a Slack login card opens for one (null: no card there,
+  /// as for a loopback login), and the code from that page handed to it, entered by `by` on its card. Unset: no logins
+  /// here.
+  logins: { page(id: string): CardPage | null; answer(id: string, code: string, by?: Person): void } | null = null;
   /// Stops following the store's sessions starting and stopping (live.ts `running`).
   private unlistenRunning: () => void = () => {};
   readonly actors = new Map<string, SessionActor>();
@@ -173,6 +201,8 @@ export class Hub {
   preparePostsAfter: ((messages: readonly { thread: number; n: number }[], signal?: AbortSignal) => Promise<void>) | null = null;
   /// The message files needed to identify an old widget's source.
   prepareWidgetSources: ((threads: readonly number[], signal?: AbortSignal) => Promise<void>) | null = null;
+  /// Prepare an old store's merged-message lookup before accepting a platform edit.
+  prepareLegacyEdits: ((signal?: AbortSignal) => Promise<void>) | null = null;
   /// The sessions whose old copy destinations are needed before posting a copy.
   prepareCcSessions: ((sessions: readonly string[], signal?: AbortSignal) => Promise<void>) | null = null;
   /// The sessions whose old conversation order is needed to name them.
@@ -180,6 +210,9 @@ export class Hub {
   /// The sessions whose latest conversation must be ready before an asynchronous operation can continue.
   prepareLatestThreads: ((sessions: readonly string[], signal?: AbortSignal) => Promise<void>) | null = null;
   private awaitingWorkspaceActivity = new Set<string>();
+  private sandboxNames: SandboxNameBuilder | null = null;
+  private sessionDirectories: SessionDirectoryBuilder | null = null;
+  private processJobs: ProcessJobsBuilder | null = null;
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
   /// Fibers of the hub's own (title waits, archive reviews): interrupted at shutdown.
@@ -194,10 +227,16 @@ export class Hub {
   readonly titles = new Map<number, string>();
   /// Conversations a chat was relayed to whose agent has not posted there yet, by thread: the session and the station's
   /// first message there, which that post goes into (relay.ts). Kept in memory: after a restart it is a reply.
-  readonly openings = new Map<number, { session: string; ts: string }>();
-  /// One message at a time per thread: Slack sends a mention twice (app_mention and message), and both would make its
-  /// session.
-  readonly gates = new Map<string, { tail: Promise<void>; waiting: number }>();
+  readonly openings = new Map<number, { session: string; ts: string; claimed?: boolean }>();
+  /// Posts chat_post held back because messages the agent had not read came in their thread first (conversations.ts),
+  /// by session and then by id, until it sends them with send or the station restarts.
+  readonly heldPosts = new Map<string, Map<string, Args>>();
+  heldCount = 0;
+  /// One incoming message or edit at a time per thread: Slack also sends a mention twice (app_mention and message).
+  readonly gates = new Map<string, { tail: Promise<{ error: unknown } | null>; waiting: number }>();
+  private readonly incoming = new AbortController();
+  /// Work waiting to start an external write must stop when this hub is handed over or shut down.
+  get stoppingSignal(): AbortSignal { return this.incoming.signal; }
   /// The station's background jobs (made after the hub, which tells their agents).
   jobs: Jobs | null = null;
   /// Each workspace's presets, in its agent home (presets.ts).
@@ -318,7 +357,7 @@ export class Hub {
     return ws === null || all.includes(ws);
   }
 
-  /// The station left one of its workspaces but is still in others (docs/multi-workspace.md): that workspace's
+  /// The station left one of its workspaces but is still in others: that workspace's
   /// sessions end their processes as `suspendAll` ends everyone's; `backIn` resumes them once it is back.
   async leftWorkspace(ws: string) {
     // Only actors and their eviction deadlines have anything to suspend. Historical sessions have neither.
@@ -380,7 +419,9 @@ export class Hub {
       this.release("drain");
       throw error;
     }
-    // Settled: snapshotted at once, before anything else is taken in.
+    // Settled: leave incoming events waiting for old preparation unacknowledged for the next station.
+    this.incoming.abort();
+    // Snapshotted at once, before anything else is taken in.
     const sessions: Snapshot[] = [];
     for (const actor of this.actors.values()) {
       if (actor.processState() !== "cold" || actor.holdsState()) sessions.push(actor.snapshot());
@@ -425,12 +466,17 @@ export class Hub {
     }
     await this.adopt(handed);
     // A crash left runners without a snapshot: what they keep is taken up as it stands.
-    const runners = new Set(this.options.runners ? this.options.runners() : existingRunners(this.config().dataDir).map((r) => r.id));
+    const runners = new Set(this.options.runners ? this.options.runners() : (await liveRunners(this.config().dataDir, { strict: true })).map((r) => r.id));
     const taken = new Set(handed.sessions.map((s) => s.key));
     // A shared Codex host can only have a session to recover when that session was marked running. Without a
     // session-owned runner there is no reason to load the station's idle and archived sessions.
     const ownRunners = [...runners].some((id) => !id.startsWith("codex-"));
-    const candidates = ownRunners ? this.store.listSessions() : this.store.runningSessions();
+    const parts = [...runners].flatMap((id) => {
+      const kind = RUNTIME_KINDS.find((k) => k !== "codex" && id.startsWith(`${k}-`));
+      return kind === undefined ? [] : [id.slice(kind.length + 1)];
+    });
+    const found = ownRunners ? this.sandboxNameLookup().takeUp(parts) : null;
+    const candidates = !ownRunners ? this.store.runningSessions() : found === "fallback" ? this.store.listSessions() : found!;
     for (const row of candidates) {
       if (taken.has(row.key)) continue;
       const runtime = runtimeNamed(row.runtime);
@@ -443,7 +489,7 @@ export class Hub {
         key: row.key,
         runtime,
         agent: null,
-        turn: turn && turn.summary.endedAt === null ? { id: turn.id, authRetried: turn.summary.kind === "auth_retry", lostRetried: turn.summary.kind === "sandbox_retry", by: { profile: null, person: null, thread: null }, declared: turn.summary.declared, wait: turn.summary.waitSeconds } : null,
+        turn: turn && turn.summary.endedAt === null ? { id: turn.id, authRetried: turn.summary.kind === "auth_retry", lostRetried: turn.summary.kind === "sandbox_retry", codexRetried: turn.summary.kind === "codex_retry", by: { profile: null, person: null, thread: null }, declared: turn.summary.declared, wait: turn.summary.waitSeconds } : null,
         workingFor: [],
         notices: [],
         waitingMs: null,
@@ -468,6 +514,7 @@ export class Hub {
   }
 
   private async adoptOne(row: SessionRow, snap: Snapshot, withProcess: boolean) {
+    this.options.taking?.();
     let actor: SessionActor;
     try {
       actor = this.actor(row);
@@ -515,7 +562,20 @@ export class Hub {
       }
       return;
     }
-    this.store.editMessage(this.surface(connectId), event.channel, event.threadTs, event.ts, event.text);
+    const prepare = this.prepareLegacyEdits;
+    if (prepare === null) {
+      this.store.editMessage(this.surface(connectId), event.channel, event.threadTs, event.ts, event.text);
+      return;
+    }
+    const surface = this.surface(connectId), at = `${surface}\0${event.channel}\0${event.threadTs}`;
+    return this.inThread(at, async () => {
+      for (;;) {
+        this.incoming.signal.throwIfAborted();
+        const changed = this.store.editMessageIfReady(surface, event.channel, event.threadTs, event.ts, event.text);
+        if (changed !== undefined) return;
+        await prepare(this.incoming.signal);
+      }
+    }, true);
   }
 
   /// A login card's field answered on a platform (Slack): the code goes to the login that card is of, and only if the
@@ -535,13 +595,23 @@ export class Hub {
   /// deliberately ignored).
   async accept(connectId: string, message: InboundMessage) {
     const at = `${this.surface(connectId)}\0${message.channel}\0${message.threadTs}`;
+    return this.inThread(at, () => this.acceptInTurn(connectId, message));
+  }
+
+  private async inThread<T>(at: string, run: () => Promise<T>, blockFollowingOnError = false): Promise<T> {
     let gate = this.gates.get(at);
-    if (!gate) this.gates.set(at, (gate = { tail: Promise.resolve(), waiting: 0 }));
+    if (!gate) this.gates.set(at, (gate = { tail: Promise.resolve(null), waiting: 0 }));
     gate.waiting++;
-    const turn = gate.tail.then(() => this.acceptInTurn(connectId, message));
+    const previous = gate.tail;
+    const turn = previous.then((blocked) => {
+      if (blocked) throw blocked.error;
+      return run();
+    });
+    // An unrecorded edit must be redelivered before the events already waiting behind it. Ordinary message failures
+    // keep the previous behavior; once this queue has drained, a new delivery may try again.
     gate.tail = turn.then(
-      () => {},
-      () => {},
+      () => null,
+      async (error) => (await previous) ?? (blockFollowingOnError ? { error } : null),
     );
     try {
       return await turn;
@@ -573,7 +643,7 @@ export class Hub {
     const here: ThreadRef = { channel: message.channel, threadTs: message.threadTs };
     // Archived by hand: it takes no messages until someone shows it again; told so, once per message.
     if (existing && this.store.manuallyArchived(existing.id)) {
-      if (this.store.messageAt(existing.id, message.ts) === null) {
+      if (this.store.messageNumberAt(existing.id, message.ts) === null) {
         await chat.post(here, `⚠️ ${tr(stationLang(), "station.chat.archived")}`, []).catch((error) => log.warn("hub", "archived notice not posted", { thread: existing.id, error: (error as Error).message }));
       }
       return;
@@ -600,7 +670,7 @@ export class Hub {
     if (wanted) this.store.joinThread(thread.id, key, connect.id);
     // Its files go where a session of the thread reads them; once (Slack sends a message again it was slow to hear of).
     const into = wanted ? key : (members[0]?.session ?? key);
-    const said = this.store.messageAt(thread.id, message.ts) === null ? await this.fetched(chat, into, message.text, message.files) : { text: message.text, attachments: [] };
+    const said = this.store.messageNumberAt(thread.id, message.ts) === null ? await this.fetched(chat, into, message.text, message.files) : { text: message.text, attachments: [] };
     const [n, fresh] = this.store.insertMessage({ thread: thread.id, ts: message.ts, authorKind: "person", author: message.user, ...said });
     // A message seen by a second connect is already delivered to the thread; only a session it brings in lacks it.
     const targets = fresh ? this.store.threadSessions(thread.id).map((m) => m.session) : wanted ? [key] : [];
@@ -655,27 +725,40 @@ export class Hub {
     return { text: [text, ...missing].filter((t) => t !== "").join("\n\n"), attachments };
   }
 
-  /// Gives sessions a message they have not had: each runs it, or stops for `-stop` (hub.rs `hand_over`), compacts its
+  /// Gives sessions a message they have not had: each runs it, or stops for `-stop`, compacts its
   /// context for `-compact`, clears it for `-clear` (saying in the thread why not, when it cannot now).
   /// A session archived by hand hears nothing until shown again.
-  deliver(thread: number, n: number, sessions: string[], text: string) {
+  deliver(thread: number, n: number, sessions: string[], text: string, options: { retryPending?: boolean; workspace?: string | null } = {}) {
     // Neither archived by hand nor gone from the thread (chat_leave).
     const left = new Set(this.store.threadSessions(thread).filter((m) => m.leftAt !== null).map((m) => m.session));
     const hearing = sessions.filter((key) => !left.has(key) && this.store.getSession(key)?.archivedBy !== MANUAL);
-    for (const key of this.store.deliver(thread, n, hearing)) {
+    const workspace = options.workspace === undefined ? undefined : { expected: options.workspace, fallback: this.wsOf(null) };
+    const added = this.store.deliver(thread, n, hearing, workspace);
+    const command = threadCommand(text);
+    const give = (key: string) => {
       this.store.touch(key);
       const row = this.store.getSession(key);
-      if (!row) continue;
+      if (!row) return;
       const actor = this.actor(row);
-      const command = threadCommand(text);
       if (command === null) {
         void actor.kick();
-        continue;
+        return;
       }
-      this.store.markDelivered(key, [{ thread, n, apart: false }]);
+      // Another process can be retrying the same delivery; only the one that marks it runs the command.
+      const marked = this.store.markDelivered(key, [{ thread, n, apart: false }]);
+      if (options.workspace !== undefined && marked === 0) return;
       if (command === "stop") void actor.stop();
       else if (command === "compact") void actor.compact(true);
       else void actor.clear(true);
+    };
+    for (const key of added) give(key);
+    // A process may have stopped after queuing a delivery but before waking its actor. Retry only what still waits.
+    if (options.retryPending === true) {
+      const fresh = new Set(added);
+      for (const key of new Set(hearing)) {
+        if (fresh.has(key) || !this.store.deliveryPending(thread, n, key)) continue;
+        give(key);
+      }
     }
   }
 
@@ -715,9 +798,18 @@ export class Hub {
       const row = this.store.getSession(key);
       if (row && this.online(row)) void this.actor(row).kick();
     }
-    // Waits on record that were not handed over (the station before stopped without a handover): taken up, so each asks
-    // again when it would have (or put right, SessionActor.takeWait). Over the sessions shown: an archived one waits on
-    // nothing.
+    // Waits on record that were not handed over: taken up so each asks again when it would have, or put right by the
+    // actor. An old store retains its original recovery path until its lookup has been prepared.
+    const indexed = this.store.recoveryWaits?.();
+    if (indexed != null) {
+      for (const { row, refill } of indexed) {
+        if (!this.online(row)) continue;
+        if (refill) void this.actor(row).takeRefill();
+        else void this.actor(row).takeWait();
+      }
+      return;
+    }
+    // Preserve the first recovery's timing while an older store's lookup is still being prepared.
     const live = this.store.liveSessions();
     const turns = this.store.lastTurnsOf(live.map((s) => s.key));
     for (const row of live) {
@@ -791,15 +883,49 @@ export class Hub {
     if (await stopSandbox(data, keyPart(actor.key))) log.info("hub", "idle session's sandbox stopped", { session: actor.key });
   }
 
+  /// The same session-name lookup serves idle sandboxes and runners, whose ids use the same session-key part.
+  private sandboxNameLookup(): SandboxNameBuilder {
+    return this.sandboxNames ??= new SandboxNameBuilder(this.store, this.options?.previous ?? Promise.resolve(),
+      () => sandboxIdleMs(this.config().dataDir) !== null);
+  }
+
+  runnerNameSessions(runners: readonly { id: string; part: string }[]): Map<string, string> | "fallback" {
+    return runners.length === 0 && this.sandboxNames === null ? new Map() : this.sandboxNameLookup().runners(runners);
+  }
+
+  sessionInDirectory(dir: string) {
+    return (this.sessionDirectories ??= new SessionDirectoryBuilder(this.store, this.options?.previous ?? Promise.resolve())).find(dir);
+  }
+
+  sessionsInArguments(lines: readonly string[], home: string) {
+    return (this.sessionDirectories ??= new SessionDirectoryBuilder(this.store, this.options?.previous ?? Promise.resolve())).findArguments(lines, home);
+  }
+
+  processJobLookup(): ProcessJobsBuilder {
+    return this.processJobs ??= new ProcessJobsBuilder(this.store, this.options?.previous ?? Promise.resolve());
+  }
+
   /// Stops the sandboxes of this station's sessions that nothing runs in: a session whose process ended some other way
   /// than going idle (it exited, the station restarted without it), left with its sandbox. Every `SWEEP_MS` while the
   /// station runs things in sandboxes (agents.ts).
   async sweepSandboxes() {
     const data = this.config().dataDir;
-    if (sandboxIdleMs(data) === null) return;
+    if (sandboxIdleMs(data) === null) {
+      if (sandboxIndexEnabled(this.store.db)) {
+        await this.sandboxNameLookup().disable();
+      }
+      return;
+    }
     const idle = await idleSandboxes(data);
-    if (idle.length === 0) return;
-    const sessions = new Map(this.store.listSessions().map((row) => [sandboxName(keyPart(row.key)), row.key]));
+    // Once the lookup exists, keep its journal caught up even when no sandbox is idle. A station that has never
+    // needed it does no preparation at all until an idle sandbox is seen.
+    if (idle.length === 0 && !sandboxIndexEnabled(this.store.db)) return;
+    const lookup = this.sandboxNameLookup();
+    let sessions = await lookup.sessions(idle);
+    // Keep the previous immediate sweep while a handover or a failed preparation keeps the lookup unavailable.
+    if (sessions === "fallback" && idle.length > 0)
+      sessions = new Map(this.store.listSessions().map((row) => [sandboxName(keyPart(row.key)), row.key]));
+    if (sessions === null || sessions === "fallback") return;
     for (const name of idle) {
       const key = sessions.get(name);
       if (key === undefined) continue;
@@ -864,6 +990,14 @@ export class Hub {
   /// session's process ends now if idle, else before its next turn, and the next starts with it (none retuned in place).
   everyChanged() {
     for (const actor of [...this.actors.values()]) void actor.changed(true).catch(() => {});
+  }
+
+  /// A runtime updated here (from the pages): the processes of its sessions still run the old executable, which the
+  /// service may refuse from then on (a model a version before does not support), so each ends now if idle, else before
+  /// its next turn, and the next starts on the new one, resuming. Codex's app-servers are its driver's (codex.ts
+  /// `runtimeChanged`).
+  runtimeUpdated(runtime: RuntimeKind) {
+    for (const actor of [...this.actors.values()]) if (actor.runtime === runtime) void actor.changed(true).catch(() => {});
   }
 
   /// A profile was deleted: the sessions on it are taken on by another of their runtime's (their process ends now if
@@ -984,9 +1118,13 @@ export class Hub {
   }
 
   async shutdown() {
+    this.incoming.abort();
     this.stopTimers();
     this.unlistenRunning();
     this.live.close();
+    await this.sandboxNames?.close();
+    await this.sessionDirectories?.close();
+    await this.processJobs?.close();
     await Promise.all([...this.actors.values()].map((a) => a.dispose()));
     await Promise.all([...this.drivers.values()].map((d) => d.shutdown()));
   }
@@ -1037,10 +1175,12 @@ export class Hub {
   }
 
   /// Where a connect's threads live; the rule the v10 migration follows too. A Feishu connect's are its own (its people's
-  /// ids are the app's own, so another bot's in the same chat are other people: docs/feishu.md).
+  /// ids are the app's own, so another bot's in the same chat are other people).
   surface(connect: string): string {
     if (connect === INTERNAL_CONNECT) return STILLFAIL_SURFACE;
-    if (this.config().connects.find((c) => c.id === connect)?.kind === "feishu") return feishuSurface(connect);
+    const kind = this.config().connects.find((c) => c.id === connect)?.kind;
+    if (kind === "feishu") return feishuSurface(connect);
+    if (kind === "comma") return commaSurface(connect);
     return slackSurface(connect, this.chatOf(connect)?.workspace() ?? null);
   }
 
@@ -1066,10 +1206,10 @@ export class Hub {
     return s?.ws ?? this.workspaces()[0] ?? null;
   }
 
-  /// The profiles sessions of workspace `ws` may run on (docs/multi-workspace.md): every one for the home workspace's.
+  /// The profiles sessions of workspace `ws` may run on: every one for the home workspace's.
   profilesIn(ws: string | null): Profile[] {
     const home = this.workspaces()[0] ?? null;
-    return this.config().profiles.filter((p) => allowedIn(p, ws, home));
+    return this.config().profiles.filter((p) => p.enabled !== false && allowedIn(p, ws, home));
   }
 
   /// Whether a session's chat is in `workspace` (a viewer's): what a member of one workspace may see and use.
@@ -1084,7 +1224,7 @@ export class Hub {
     const config = this.config();
     const connect = connectOf(config, connectId);
     const own: ModelChoice = { runtime: connect.bind.runtime, model: connect.bind.model ?? null };
-    const profiles = config.profiles.filter((p) => allowedIn(p, connect.workspace ?? null, this.workspaces()[0] ?? null));
+    const profiles = config.profiles.filter((p) => p.enabled !== false && allowedIn(p, connect.workspace ?? null, this.workspaces()[0] ?? null));
     const same = (c: ModelChoice) => c.runtime === own.runtime && (c.model === null || own.model === null ? c.model === own.model : sameModel(c.model, own.model));
     return [own, ...modelsRun(profiles, null).filter((c) => !same(c))];
   }
@@ -1098,7 +1238,7 @@ export class Hub {
     const runtime = chosen === null ? connect.bind.runtime : runtimeNamed(chosen.runtime);
     if (runtime === null) throw new Error(`unknown runtime ${chosen?.runtime}`);
     const model = chosen === null ? (connect.bind.model ?? null) : chosen.model;
-    const fits = chosen === null ? profilesFor(config, connect, home) : config.profiles.filter((p) => p.runtimes.includes(runtime) && allowedIn(p, connect.workspace ?? null, home) && serves(p, model));
+    const fits = chosen === null ? profilesFor(config, connect, home) : config.profiles.filter((p) => p.enabled !== false && p.runtimes.includes(runtime) && allowedIn(p, connect.workspace ?? null, home) && serves(p, model));
     if (fits.length === 0 && chosen !== null) throw new Error(tr(stationLang(), "station.session.noProfileForModel", { model: model ?? runtimeTitle(runtime), runtime: runtimeTitle(runtime) }));
     if (fits.length === 0 && profilesFor(config, connect).length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(connect.bind.runtime) }));
     const kept = chosen === null && connect.bind.profile !== undefined ? fits.find((p) => p.id === connect.bind.profile && serves(p, model)) : undefined;
@@ -1162,6 +1302,16 @@ export class Hub {
   private sessionDeps(): SessionDeps {
     return {
       store: this.store,
+      pendingDeliveries: async (key, signal) => this.pendingDeliveries
+        ? this.pendingDeliveries(key, signal) : this.store.pendingMessages(key),
+      deliveryCardState: async (thread, n, signal) => {
+        if (this.deliveryCardState) return this.deliveryCardState(thread, n, signal);
+        const ended = this.store.cardEndedByMessage(thread, n);
+        if (ended === null) return null;
+        const current = this.store.pendingCard(thread)?.[0] ?? null;
+        return { ended: { author: ended[0].author, ts: ended[0].ts }, card: ended[1],
+          current: current === null ? null : { ts: current.ts } };
+      },
       preparePostsAfter: (messages, signal) => {
         if (!this.preparePostsAfter) throw new Error("post block builder unavailable");
         return this.preparePostsAfter(messages, signal);
@@ -1173,7 +1323,7 @@ export class Hub {
       chat: (connect) => this.chatOf(connect),
       driver: (runtime) => this.sessionDriver(runtime),
       runOn: (key, holding) => this.accounts.runOn(key, holding),
-      spend: (key, ranOn) => this.accounts.spend(key, ranOn),
+      spend: (key, ranOn, model) => this.accounts.spend(key, ranOn, model),
       refillsAt: (key) => this.accounts.refillsAt(key),
       recheck: (profile) => this.accounts.recheck(profile),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
@@ -1196,6 +1346,7 @@ export class Hub {
       cleared: (key, readBack) => toldCleared(this, key, readBack),
       coldAfresh: (key, now) => goesAfresh(this, key, now),
       resumeLost: (key) => toldResumeLost(this, key),
+      longChat: (key) => toldLongChat(this, key),
       carrySubagents: (from, to, on, ids) => carrySubagents(this, from, to, on, ids),
       ranIn: (key, id, profile) => this.store.ranIn(key, id, profile),
       idle: (key) => this.idleNow(key),

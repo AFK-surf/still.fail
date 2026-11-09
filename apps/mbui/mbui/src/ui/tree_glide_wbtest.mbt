@@ -15,7 +15,7 @@ fn two_columns(first : @signals.Signal[Bool]) -> (Tester, @view.Scroll, @view.Sc
       row.row(Is(true)).grow(Is(1.0)) |> ignore
       row.box(fn(left) {
         left.width(Is(Some(200.0))).height(Is(Some(600.0))) |> ignore
-        left.show(fn() { first.get() }, fn(col) {
+        left.show(at_once=true, fn() { first.get() }, fn(col) {
           col.grow(Is(1.0)).scrolls(a, fn(body) { body.height(Is(Some(2000.0))) |> ignore }) |> ignore
         })
       })

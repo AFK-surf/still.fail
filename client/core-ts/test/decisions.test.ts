@@ -280,30 +280,11 @@ test("what_the_viewer_sent_answers_the_last_card_before_the_station_has_it", () 
   assert.deepEqual(messages[0].decision, { resolved: true, text: "已替换为新问题" });
   assert.deepEqual(messages[2].decision, { resolved: true, answeredBy: "你", text: "你 回复了" });
   // Its station still saying it waits (its row not told the answer yet): what is on its way settles it all the same,
-  // the card closing with the answer coming in, not a moment after it (docs/list-motion.md).
+  // the card closing with the answer coming in, not a moment after it (mbui's view/list_motion.mbt).
   messages = [askedMsg(2)];
   messages = d.inMessages(messages, [2, false], [{ text: "B", quotes: [{ author: "Claude", text: "选哪个？", ts: "9.000002", role: "agent" }] }]);
   assert.equal(messages[0].decision.resolved, true);
   assert.equal(messages[0].decision.text, "你 选择了「B」");
-});
-
-test("a_card_is_locked_while_its_agent_is_still_in_the_turn_that_asked", () => {
-  const card = { ...askedMsg(2), by: { name: "Claude", agent: "chat:c-1" } };
-  // Its agent at work: an option that closes the card (closed-card) is refused by the station meanwhile, so the
-  // clients draw it as not answerable yet rather than let it be picked and fail.
-  let messages: J[] = d.inMessages([card], [2, false], [], new Set(["chat:c-1"]));
-  assert.deepEqual(messages[0].decision, { resolved: false, locked: true });
-  shape("MessageDecision", messages[0].decision);
-  // Another agent of the chat at work: not the one that asked.
-  messages = d.inMessages([card], [2, false], [], new Set(["chat:c-2"]));
-  assert.deepEqual(messages[0].decision, { resolved: false });
-  // Its turn over: answerable as before.
-  messages = d.inMessages([{ ...askedMsg(2), by: { name: "Claude", agent: "chat:c-1" } }], [2, false]);
-  assert.deepEqual(messages[0].decision, { resolved: false });
-  // Answered (or replaced): nothing left to wait for, whatever its agent is doing.
-  messages = d.inMessages([card, said(3, "person", "A")], null, [], new Set(["chat:c-1"]));
-  assert.equal(messages[0].decision.locked, undefined);
-  assert.equal(messages[0].decision.resolved, true);
 });
 
 test("a_picked_option_or_a_written_answer_quotes_the_post", () => {

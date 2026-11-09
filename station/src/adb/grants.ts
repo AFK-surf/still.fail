@@ -1,10 +1,11 @@
-// A chat's grant of a person's phone (docs/adb-share.md, 2026-10-29: as vault grants are): an agent asks with
+// A chat's grant of a person's phone (2026-10-29: as vault grants are): an agent asks with
 // `phone_use {reason}`, a card in its chat asks the person it works for (whoever started the chat), and they approve it
 // for this chat for an hour or until the chat is archived, or refuse it, from their app. Only that chat's session holds
 // the grant; it ends as its scope does, as the chat is archived or deleted, or as its owner takes it back. Asks,
 // decisions and ends are told in the chat; the owner's devices hear of the grants (`adb-grants`), and their phone lends
 // itself to the station while one is live.
 import type { DatabaseSync } from "node:sqlite";
+import type { CardOutcomeSaver } from "../store/card-outbox.ts";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { CARD_OCCUPIED, cardPlace, postCard } from "../sessions/card-place.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
@@ -18,6 +19,9 @@ const SCOPE_WORDS: Record<Scope, { label: string; detail: string }> = {
   chat: { label: "本对话直到归档", detail: "这个对话归档或删除前都能用，最长 30 天" },
 };
 
+/// The most a grant's signature takes (bytes of JSON).
+const SIGNED_MAX = 4096;
+
 export type Status = "pending" | "granted" | "denied" | "ended";
 export type PhoneRequest = {
   id: string; session: string; chat: string; owner: string; reason: string; at: number; status: Status;
@@ -26,6 +30,9 @@ export type PhoneRequest = {
   lastUsedAt?: number;
   /// The chat's current title, filled when sent (not kept in the record).
   chatTitle?: string | null;
+  /// What the person's device signed as it approved this: their phone lends only on it, and
+  /// checks it itself. Carried, not read, here.
+  signed?: { body: unknown; sig: unknown };
   /// Granted, how this station's adb holds the phone (link.ts `AdbState.adb`: `connected`, `unpaired`, `off`,
   /// `unauthorized`, `missing`, `failed`; `gone`: not offered here now; none yet: not heard since it was granted), and
   /// the last of them the agent was told of (`linked`).
@@ -63,6 +70,7 @@ CREATE TABLE IF NOT EXISTS adb_lasts (
 /// What it needs of the station: the chats (`hub`), its time (ms), and who hears of a change (the owner's devices).
 export type GrantsDeps = {
   db: DatabaseSync;
+  cardOutcomes?: CardOutcomeSaver;
   hub: {
     store: {
       getSession(key: string): { archivedAt?: number | null; ws: string | null } | null;
@@ -70,14 +78,16 @@ export type GrantsDeps = {
       latestThread(session: string): SessionThread | null;
       latestThreadIfReady?(session: string): SessionThread | null | undefined;
       sessionThreadById(session: string, thread: number): SessionThread | null;
-      pendingCard(thread: number): [{ ts: string }, unknown] | null;
+      pendingCardHeader(thread: number): [{ ts: string }, unknown] | null;
+      pendingCardHeaderIfReady?(thread: number): [{ ts: string }, unknown] | null | undefined;
       insertMessage(m: Record<string, unknown>): number[];
       withdrawCard(agent: string, thread: number, ts: string): boolean;
       restateCard(agent: string, thread: number, ts: string, card: (was: any) => any): boolean;
       threadSessions(thread: number): { session: string }[];
       subscribe(f: (c: { type: string; key?: string; id?: number; ws?: string | null }) => void): void;
     };
-    prepareLatestThreads?: ((sessions: readonly string[]) => Promise<void>) | null;
+    prepareLatestThreads?: ((sessions: readonly string[], signal?: AbortSignal) => Promise<void>) | null;
+    prepareCardPosts?: ((threads: readonly number[], signal?: AbortSignal) => Promise<void>) | null;
     chat(connect: string): { post(where: { channel: string; threadTs: string }, text: string, files: string[]): Promise<string> };
     shared(thread: number, n: number, session: string, text: string): void;
     notify(session: string, text: string): void;
@@ -267,7 +277,8 @@ export class PhoneGrants {
 
   /// phone_use: a grant of this session's already live, or a request asked in its chat: not waited for (the agent's turn
   /// goes on with the chat), its decision told to the session (#settle).
-  async ask(session: string, reason: string, reask = false): Promise<PhoneRequest> {
+  async ask(session: string, reason: string, reask = false, signal?: AbortSignal): Promise<PhoneRequest> {
+    signal?.throwIfAborted();
     const held = this.held(session)[0];
     if (held !== undefined) return held;
     if (reason.trim() === "") throw new Refused("say why you need the phone (reason)");
@@ -284,10 +295,11 @@ export class PhoneGrants {
       if (prepare && ready) {
         const found = ready.call(this.#d.hub.store, session);
         if (found === undefined) {
-          await prepare([session]);
+          await prepare([session], signal);
+          signal?.throwIfAborted();
           if (this.#ended(session)) throw new Refused("this chat is archived or gone");
           // A request, a grant, or a new delivery may have arrived while the old order was prepared.
-          return this.ask(session, reason, reask);
+          return this.ask(session, reason, reask, signal);
         }
         thread = found;
       } else thread = this.#d.hub.store.latestThread(session);
@@ -299,9 +311,19 @@ export class PhoneGrants {
     };
     if (pending !== undefined && reask) {
       const place = cardPlace(this.#d.hub.store, session, r.thread, r.cardTs);
+      if (place === undefined) {
+        if (!this.#d.hub.prepareCardPosts || r.thread == null) throw new Refused("card lookup is not ready");
+        await this.#d.hub.prepareCardPosts([r.thread], signal);
+        signal?.throwIfAborted();
+        const current = this.get(r.id);
+        if (current === null) throw new Refused("the phone request is no longer pending");
+        if (current.status !== "pending") return current;
+        if (this.#ended(session)) throw new Refused("this chat is archived or gone");
+        return this.ask(session, reason, reask, signal);
+      }
       if (place?.state === "other") throw new Refused(CARD_OCCUPIED);
       if (place?.state === "none") {
-        const posted = await this.#post(session, place.thread, r, true);
+        const posted = await this.#post(session, place.thread, r, true, signal);
         const current = this.get(r.id);
         // A person may have decided the original request while the post was being sent.
         if (current === null || current.status !== "pending") {
@@ -330,12 +352,21 @@ export class PhoneGrants {
   }
 
   /// Whether the current card of a still-open request can be acted on; null for a surface without one.
-  cardPending(r: PhoneRequest): boolean | null {
-    const place = cardPlace(this.#d.hub.store, r.session, r.thread, r.cardTs);
-    return place === null ? null : place.state === "same";
+  async cardPending(r: PhoneRequest, signal?: AbortSignal): Promise<boolean | null> {
+    let current = this.get(r.id);
+    while (current !== null && current.status === "pending") {
+      signal?.throwIfAborted();
+      const place = cardPlace(this.#d.hub.store, current.session, current.thread, current.cardTs);
+      if (place !== undefined) return place === null ? null : place.state === "same";
+      if (!this.#d.hub.prepareCardPosts || current.thread == null) throw new Refused("card lookup is not ready");
+      await this.#d.hub.prepareCardPosts([current.thread], signal);
+      signal?.throwIfAborted();
+      current = this.get(r.id);
+    }
+    return null;
   }
 
-  async #post(session: string, thread: SessionThread, r: PhoneRequest, requireEmpty = false): Promise<string | null> {
+  async #post(session: string, thread: SessionThread, r: PhoneRequest, requireEmpty = false, signal?: AbortSignal): Promise<string | null> {
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
     const text = [`申请调试你的手机：${r.reason}`, ...(stillfail ? [] : ["请在 still.fail 安卓 app 中批准。"])].join("\n\n");
     // The scopes its owner allows (their 默认最长授权), the longest recommended.
@@ -350,7 +381,8 @@ export class PhoneGrants {
           adb: { request: r.id, reason: r.reason, lasts },
         }
       : null;
-    return postCard(this.#d.hub, session, thread, text, card, requireEmpty ? (why) => new Refused(why) : null);
+    return postCard(this.#d.hub, session, thread, text, card, requireEmpty ? (why) => new Refused(why) : null,
+      requireEmpty ? () => this.get(r.id)?.status === "pending" && !this.#ended(session) : undefined, signal);
   }
 
   /// How the station's adb holds `owner`'s phone changed (null: offered here no longer): said on the cards of their
@@ -365,8 +397,7 @@ export class PhoneGrants {
       r.link = link;
       const tell = (link === "connected" || link === "unpaired") && r.toldLink !== link;
       if (tell) r.toldLink = link;
-      this.#save(r);
-      this.#restate(r);
+      this.#saveAndRestate(r, false);
       if (tell) {
         try {
           this.#d.hub.notify(r.session, linkSaid(r));
@@ -384,8 +415,22 @@ export class PhoneGrants {
     this.#d.hub.store.restateCard(r.session, r.thread, r.cardTs, (card) => ({ ...card, adb: { ...card?.adb, outcome } }));
   }
 
+  #saveAndRestate(r: PhoneRequest, close: boolean) {
+    if (r.thread !== undefined && r.cardTs !== undefined && this.#d.cardOutcomes) {
+      const outcome = { status: r.status, ...(r.scope ? { scope: r.scope } : {}), ...(r.why ? { why: r.why } : {}),
+        ...(r.status === "granted" && r.link ? { link: r.link } : {}) };
+      this.#d.cardOutcomes.save({ thread: r.thread, ts: r.cardTs, agent: r.session, field: "adb", close, outcome }, () => this.#save(r));
+      return;
+    }
+    this.#save(r);
+    if (r.thread !== undefined && r.cardTs !== undefined) {
+      if (close) this.#d.hub.store.withdrawCard(r.session, r.thread, r.cardTs);
+      this.#restate(r);
+    }
+  }
+
   /// The owner (`email`) decides request `id`: `scope` grants it, null refuses it. Why it is refused, or null.
-  decide(email: string, id: string, scope: Scope | null, workspace: string): string | null {
+  decide(email: string, id: string, scope: Scope | null, workspace: string, signed?: unknown): string | null {
     const r = this.get(id);
     if (r === null || this.#workspace(r) !== workspace) return "no such request";
     if (r.owner !== email.toLowerCase()) return "only the person the chat's agent works for decides its requests";
@@ -397,8 +442,24 @@ export class PhoneGrants {
     else {
       r.scope = scope;
       r.exp = this.#secs() + LASTS[scope];
+      const s = signed as PhoneRequest["signed"] | undefined;
+      if (s != null && typeof s === "object" && JSON.stringify(s).length <= SIGNED_MAX) r.signed = { body: s.body, sig: s.sig };
       this.#settle(r, "granted");
     }
+    return null;
+  }
+
+  /// What the owner's device signed for a grant live from before signatures: carried from now on.
+  sign(email: string, id: string, signed: unknown, workspace: string): string | null {
+    const r = this.get(id);
+    if (r === null || this.#workspace(r) !== workspace) return "no such request";
+    if (r.owner !== email.toLowerCase()) return "only the person the chat's agent works for signs its grants";
+    if (r.status !== "granted") return `the request is ${r.status}`;
+    const s = signed as PhoneRequest["signed"] | undefined;
+    if (s == null || typeof s !== "object" || JSON.stringify(s).length > SIGNED_MAX) return "not a signature";
+    r.signed = { body: s.body, sig: s.sig };
+    // (told to their devices, not to the chat: nothing changed for it)
+    this.#settle(r, "granted", undefined, false);
     return null;
   }
 
@@ -431,11 +492,7 @@ export class PhoneGrants {
     r.status = status;
     // Last use is only needed while the grant can appear in the person's list.
     if (status === "ended" || status === "denied") delete r.lastUsedAt;
-    this.#save(r);
-    if (r.thread !== undefined && r.cardTs !== undefined) {
-      this.#d.hub.store.withdrawCard(r.session, r.thread, r.cardTs);
-      this.#restate(r);
-    }
+    this.#saveAndRestate(r, true);
     if (status !== "pending" && notify) {
       try {
         this.#d.hub.notify(r.session, said(r));

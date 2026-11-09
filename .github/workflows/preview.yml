@@ -22,7 +22,6 @@ on:
     paths:
       - "apps/mbui/**"
       - "client/**"
-      - "media/**"
       - "vendor/**"
       - "scripts/native.ts"
       - "scripts/release-put.sh"
@@ -301,7 +300,7 @@ jobs:
             shell-apple-target-ios-arm64-
       - name: The iOS app for a device, as an .ipa
         run: |
-          APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui EMBER=$PWD bash apps/mbui/scripts/ios.sh build
+          APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui SF_SRC=$PWD bash apps/mbui/scripts/ios.sh build
           cd apps/mbui/out/ios-device && rm -rf Payload *.ipa && mkdir Payload && cp -R MBUI.app Payload/
           zip -qry stillfail-mbui.ipa Payload && ls -la stillfail-mbui.ipa
       - uses: actions/upload-artifact@v4
@@ -582,6 +581,8 @@ jobs:
       # the order of names the host gives the core (text.collate: src/host/win_collate.h), checked (a C program, ~2 s)
       - name: The order of names (win.sh collate)
         run: bash apps/mbui/scripts/win.sh collate
+      - name: Synchronous answers across the engine DLL
+        run: bash apps/mbui/scripts/win.sh engine-sync
       # what still.fail's desktop app kept sealed, opened by the app built in its place (src/host/win_electron_sealed.h)
       - name: The desktop app's sealed values (win.sh sealed)
         run: bash apps/mbui/scripts/win.sh sealed
@@ -592,7 +593,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # its .sig, which the feed carries (the app takes a build only as it says it: docs/release-signing.md)
+          # its .sig, which the feed carries (the app takes a build only as it says it: scripts/release-sign.ts)
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           MBUI_CACHE: ${{ runner.temp }}/mbui-release
         run: |
@@ -671,10 +672,14 @@ jobs:
             apps/mbui/out/handoff/*/*.txt
           if-no-files-found: warn
       # The release variants change only resources. Rebuilding one from this app's cache must reuse its C objects;
-      # otherwise a release recompiles the whole app before it can publish any platform's update.
+      # otherwise a release recompiles the whole app before it can publish any platform's update. (Its resources under
+      # the same name as the app's, win.sh's res: moon makes nothing of the app again, not even its C; the program alone
+      # is linked again, with the beta's resources.)
       - name: The beta Windows app reuses the app's compiled objects
         if: github.ref != 'refs/heads/main' && github.event_name == 'push' && needs.what.outputs.win_build == 'yes'
         run: |
-          MBUI_VARIANT=beta MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build > "$RUNNER_TEMP/beta-cache.log" 2>&1 || { cat "$RUNNER_TEMP/beta-cache.log"; exit 1; }
-          grep 'stillfail.c: .* of .* compiled' "$RUNNER_TEMP/beta-cache.log"
-          grep -Eq 'stillfail.c: 0 of [0-9]+ compiled' "$RUNNER_TEMP/beta-cache.log" || { echo "beta build recompiled the app"; exit 1; }
+          L=$RUNNER_TEMP/beta-cache.log
+          MBUI_VARIANT=beta MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build > "$L" 2>&1 || { cat "$L"; exit 1; }
+          grep 'mbc: ' "$L" | grep -v 'as is' || true
+          ! grep -Eq 'stillfail.c: [1-9][0-9]* of [0-9]+ compiled' "$L" || { echo "beta build recompiled the app"; exit 1; }
+          grep -q 'linked stillfail.exe' "$L" || { echo "beta build did not link the program again with its resources"; exit 1; }

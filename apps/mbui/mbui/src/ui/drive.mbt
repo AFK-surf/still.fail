@@ -69,6 +69,10 @@
 //   exit                        ends the run: DRIVE PASS, exit 0
 //   ends                        the app ends by itself, its host quitting it (an update handed to its installer), within
 //                               the timeout; else the run fails. What follows it is never reached
+//   latency MODE TEXT           input to the screen measured by the host itself (macOS, Android), from the lowest TEXT
+//                               on screen (or @X,Y; none: the window's middle): its own events from then on (type,
+//                               scroll, drag; anim none), the process ending with what it measured (LATENCY …, said by
+//                               the host: still.fail's scripts/latency.sh); `ends` after it. For people, never a check
 //   linger MS                   the run passed (DRIVE PASS said now), the app left running MS more for what the last
 //                               step set off (a share sheet, a download): a check beside the run looks at it
 //   answered CALL               a call to the core named CALL (drive.read; or a subscription's topic key, its first
@@ -307,10 +311,10 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
 }
 
 ///|
-/// What of the window's tree shows `what` (its words, `=WORDS` exactly, `icon:NAME` what it draws is called so:
-/// View::drawn_as; or is called `what`, its label whole: View::says), the middle of each where it is drawn, in the
-/// window, as it is made, however faded this frame (made transparent, coming in), as on_screen_nodes finds an old
-/// view's laid out; not on its way out (View::leaving: drawn only, as an old layer leaving is, Ctx::overlay's inert);
+/// What of the window's tree shows `what` (its words, `=WORDS` exactly, `field:WORDS` a field by the words in it,
+/// `icon:NAME` what it draws is called so: View::drawn_as; or is called `what`, its label whole: View::says), the
+/// middle of each where it is drawn, in the window, as it is made, however faded this frame (made transparent, coming
+/// in), as on_screen_nodes finds an old view's laid out; not on its way out (View::leaving: drawn only, as an old layer leaving is, Ctx::overlay's inert);
 /// whether it takes a press or not, whatever lies over it (reachable says which of it a finger
 /// reaches). What is seen is the glyphs' to say (Tester::glyphs_seen), not this.
 fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId)] {
@@ -335,6 +339,12 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
       // a switch by what it turns (its label, whole), as on_screen_nodes finds an old view's: the switch alone
       let label = what.unsafe_substring(start=7, end=what.length())
       tree.said_of(d.id) is Some({ role: Switch, label: l, .. }) && l == label
+    } else if what.has_prefix("field:") && what.length() > 6 {
+      // a field by the words in it, not its placeholder, as on_screen_nodes finds an old view's
+      match tree_fields.get(d.id) {
+        Some(tf) => tf.st.shown().contains(what.unsafe_substring(start=6, end=what.length()))
+        None => false
+      }
     } else if what.has_prefix("=") && what.length() > 1 {
       let exact = what.unsafe_substring(start=1, end=what.length())
       words == exact || (label != "" && label == exact)
@@ -637,12 +647,9 @@ fn fields_hold(c : Ctx, words : String) -> Bool {
 }
 
 ///|
-/// The host's way of sending a step's input (@hostapi.drive); a test's fake host has none.
+/// The host's way of sending a step's input (@hostapi.drive).
 fn h_drive(kind : Int, text : String) -> Bool {
-  match fake.val {
-    Some(_) => false
-    None => @hostapi.drive(kind, text)
-  }
+  @hostapi.drive(kind, text)
 }
 
 ///|
@@ -654,10 +661,7 @@ fn drive_end(code : Int) -> Unit {
   if code == 0 && h_env("MBUI_DRIVE_KEEP_OPEN") == "1" {
     return
   }
-  match fake.val {
-    Some(f) => f.logs.push("EXIT \{code}")
-    None => @hostapi.exit(code)
-  }
+  @hostapi.exit(code)
 }
 
 ///|
@@ -709,6 +713,18 @@ fn number(s : String) -> Double {
     -v
   } else {
     v
+  }
+}
+
+///|
+/// The place a step says as `@X,Y` (none where it says no such place).
+fn point_said(what : String) -> Array[(Double, Double)] {
+  match what.find(",") {
+    Some(i) => {
+      let x = number(what.unsafe_substring(start=1, end=i))
+      [(x, number(what.unsafe_substring(start=i + 1, end=what.length())))]
+    }
+    None => []
   }
 }
 
@@ -1137,17 +1153,7 @@ fn drive_steps(c : Ctx) -> Unit {
         }
         let what = words[4:].to_owned().join(" ")
         // (`@X,Y`: there, words in a field being none of what is on screen to find)
-        let at = if what.has_prefix("@") {
-          match what.find(",") {
-            Some(i) => {
-              let x = number(what.unsafe_substring(start=1, end=i))
-              [(x, number(what.unsafe_substring(start=i + 1, end=what.length())))]
-            }
-            None => []
-          }
-        } else {
-          reachable(c, what)
-        }
+        let at = if what.has_prefix("@") { point_said(what) } else { reachable(c, what) }
         if at.length() == 0 {
           if waited > d.timeout {
             drive_fail(c, d, not_reachable(c, what, d.timeout))
@@ -1373,6 +1379,34 @@ fn drive_steps(c : Ctx) -> Unit {
         acted()
         return
       }
+      "latency" => {
+        let (mode, what) = match arg.find(" ") {
+          Some(i) => (arg.unsafe_substring(start=0, end=i), arg.unsafe_substring(start=i + 1, end=arg.length()))
+          None => (arg, "")
+        }
+        // (where a wheel or a key goes: what is under the words, whatever lies over them)
+        let at = if what == "" {
+          [(c.width / 2.0, c.height / 2.0)]
+        } else if what.has_prefix("@") {
+          point_said(what)
+        } else {
+          on_screen(c, what)
+        }
+        if at.length() == 0 {
+          if waited > d.timeout {
+            drive_fail(c, d, not_reachable(c, what, d.timeout))
+          }
+          return
+        }
+        let (x, y) = lowest(at)
+        h_log("DRIVE latency \{mode} at \{x.to_int()},\{y.to_int()}")
+        if !h_drive(12, "\{mode} \{x} \{y}") {
+          drive_fail(c, d, "latency: this host measures no input latency, or not \{mode} (type, scroll, drag, anim)")
+          return
+        }
+        acted()
+        return
+      }
       "key" =>
         match key_named(arg) {
           Some((code, mods)) => {
@@ -1386,31 +1420,13 @@ fn drive_steps(c : Ctx) -> Unit {
             return
           }
         }
-      "system" => {
-        match fake.val {
-          Some(f) => fake_post(f, @hostapi.system_channel, arg, None)
-          None => {
-            drive_fail(c, d, "system: only a Tester's system says what a script tells it")
-            return
-          }
-        }
-        acted()
-        return
-      }
-      "viewsaid" => {
-        match fake.val {
-          Some(f) => {
-            // (what the host says of its native views comes from outside: frame_watch.mbt)
-            outside_counted()
-            if !fake_view_said(f, arg) {
-              drive_fail(c, d, "viewsaid: not a line of what a native view's host says: " + arg)
-              return
-            }
-          }
-          None => {
-            drive_fail(c, d, "viewsaid: only a Tester's host says what a script tells it of its views")
-            return
-          }
+      "system" | "viewsaid" | "ime" => {
+        // (what only some hosts take of a script: a Tester's says what its system, its native views' host and its
+        // keyboard do as it is told; a host that takes no such step says why)
+        let failed = @hostapi.script_step(cmd, arg)
+        if failed != "" {
+          drive_fail(c, d, failed)
+          return
         }
         acted()
         return
@@ -1431,20 +1447,6 @@ fn drive_steps(c : Ctx) -> Unit {
         acted()
         return
       }
-      "ime" => {
-        match fake.val {
-          Some(f) => {
-            f.dev.ime_inset = number(arg)
-            f.wants = true
-          }
-          None => {
-            drive_fail(c, d, "ime: only a Tester's keyboard moves as a script tells it")
-            return
-          }
-        }
-        acted()
-        return
-      }
       "resize" => {
         let wh = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
         if wh.length() < 2 {
@@ -1452,10 +1454,7 @@ fn drive_steps(c : Ctx) -> Unit {
           return
         }
         if !h_drive(8, "\{wh[0].to_int()}x\{wh[1].to_int()}") {
-          match fake.val {
-            Some(_) => tester_size.val = Some((wh[0], wh[1]))
-            None => h_log("DRIVE resize: the host cannot")
-          }
+          h_log("DRIVE resize: the host cannot")
         }
         acted()
         return
@@ -1485,24 +1484,10 @@ fn drive_steps(c : Ctx) -> Unit {
         next()
       }
       "picks" => {
-        match fake.val {
-          Some(f) => {
-            f.picks.clear()
-            for part in arg.split(" ") {
-              match part.rev_find(":") {
-                Some(i) => {
-                  let mut n = 0
-                  for ch in part[i + 1:] {
-                    n = n * 10 + (ch.to_int() - 48)
-                  }
-                  let bytes = Bytes::make(n, b'x')
-                  f.picks.push({ name: part[:i].to_string(), bytes, held: 0, size: n.to_double(), src: "" })
-                }
-                None => ()
-              }
-            }
-          }
-          None => h_log("DRIVE picks: no Tester here, the host's own pickers answer")
+        // (the pickers' answers a host says as it is told: a Tester's; else its own pickers answer)
+        let failed = @hostapi.script_step(cmd, arg)
+        if failed != "" {
+          h_log("DRIVE picks: " + failed)
         }
         next()
       }
@@ -1559,10 +1544,7 @@ fn drive_steps(c : Ctx) -> Unit {
       }
       "quit" => {
         driver.val = None
-        match fake.val {
-          Some(f) => f.logs.push("EXIT 0")
-          None => @hostapi.exit(0)
-        }
+        @hostapi.exit(0)
         return
       }
       _ => {

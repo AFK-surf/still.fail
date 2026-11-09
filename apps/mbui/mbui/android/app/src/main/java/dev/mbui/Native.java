@@ -57,4 +57,8 @@ final class Native {
     static native void ownClock();
     /** How many of the app's asks of the host are not answered yet, as its last frame said (mb_host_frame_awaiting). */
     static native int awaiting();
+    /** The frame the next swap presents (GL thread), its timestamps kept from now on; -1 where the system says none. */
+    static native long latencyFrame();
+    /** What the system says of frame `id` (Latency): its GPU done, latched, composited, shown (ns); false: nothing. */
+    static native int latencyTimes(long id, long[] out);
 }

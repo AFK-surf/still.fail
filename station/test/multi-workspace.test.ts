@@ -1,4 +1,4 @@
-// A station in several workspaces (docs/multi-workspace.md): joining one more through the control plane, kept in
+// A station in several workspaces: joining one more through the control plane, kept in
 // cloud.json's `joined` as the state frames say it; each workspace's members admitted with their own revocations; the
 // station's own settings and the workspaces it joins left to its home workspace's owners and admins.
 import assert from "node:assert/strict";

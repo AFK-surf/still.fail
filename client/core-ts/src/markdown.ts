@@ -5,7 +5,7 @@
 // web address is linked where a reader sees it end (bareLinks.ts), not at the next space as GFM's own finding does,
 // and `www.…` and e-mail addresses stay text.
 //
-// The tree (the shape of Cue's, clients/packages/core/src/markdown/tree.ts there): a run of words is where it stands in
+// The tree (the shape of Cue's): a run of words is where it stands in
 // the text (`[start, end]`, mdWords.ts), so the words go to the clients once, in the text beside the tree; or the words
 // themselves where reading changed them (an escape, an entity). Any other node is `[kind, children?, attributes?]`,
 // children told from attributes by being an array whose first item is not a number, attributes only what tells a node

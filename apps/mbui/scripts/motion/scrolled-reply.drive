@@ -1,5 +1,5 @@
 # Words sent, then the list scrolled up a little while the agent works: its answer and its line coming and going
-# under what is read, which stays where it shows (docs/list-motion.md: the row read from does not move).
+# under what is read, which stays where it shows (mbui's view/list_motion.mbt: the row read from does not move).
 timeout 20000
 until 发消息
 wait 600

@@ -146,13 +146,16 @@ pub(all) struct Style {
   // min-width, with its margins). `drop` k > 0: the k-th to be left out (the last in the row first of the same k);
   // -1: there only while something of its row is left out (its ⋯); 0: always there. `fits`: a row holding some of
   // either. Left out, an item is laid out nowhere (Node::left_out). `fit_need`: what such a row keeps of an item
-  // that stays, more than its min-width (NaN: its min-width), before one that may leave does. `one_of`: a row whose
+  // that stays, more than its min-width (NaN: its min-width), before one that may leave does; `fit_whole`: such a row
+  // keeps all of what it holds (as the line would lay it out given the room), and it gives way only once nothing more
+  // may leave (the old views' `keep` on words cut short: a title cut only after what is beside it has gone). `one_of`: a row whose
   // items are ways of saying one thing, each shorter than the one before, of which it keeps only the first that fits
   // it whole (the last where none does: SwiftUI's ViewThatFits), the rest left out.
   mut drop : Int
   mut fits : Bool
   mut one_of : Bool
   mut fit_need : Double
+  mut fit_whole : Bool
   // Not CSS's: the least an item of a row comes to as a last resort (NaN: its min-width), where the row has not the room
   // for all it holds at their min-widths once what may give way has: words on one line that say not how they give, and
   // what holds them. What may come down so, the widest first (layout.mbt last_resort).
@@ -176,6 +179,18 @@ pub(all) struct Style {
   // at its width, what it holds laid out whole in it (past it where the share is less than 1): a room opening on what
   // it holds, its height and what it holds the same layout's, whatever what it holds comes to as it opens.
   mut content_share : Double
+  // Not CSS's: an item coming or going in a column (the view's View::show, pick, each: what comes makes its way in,
+  // what goes closes its way, framework's own, the user 2026-11-09): from `come_from` tall (points) to `come_to` (0 or
+  // 1) of what it comes to, set out at `come_at` on a Move's way as long as how far that is the first time it is laid
+  // out so (move_ms), ending at `come_ends` (NaN till then, kept from then), drawn at `come_now` (NaN: none); as tall as
+  // its way has got, what it holds laid out whole from its top in that, the gap before it in its column its share of
+  // it. `come_k`: the share of what it comes to its last layout was (1 none), read by the column for that gap.
+  mut come_from : Double
+  mut come_to : Double
+  mut come_at : Double
+  mut come_now : Double
+  mut come_ends : Double
+  mut come_k : Double
   // Not CSS's: a column whose items are a page's list's rows set on a host's pixels (this many a point; 0: anywhere): each
   // as tall as whole pixels, rounded up, what is under it lower by as much, the column as much taller (an old view's
   // list's rows', ui's Ctx::row_slot).
@@ -255,11 +270,18 @@ pub fn Style::new() -> Style {
     fits: false,
     one_of: false,
     fit_need: 0.0 / 0.0,
+    fit_whole: false,
     soft_min: 0.0 / 0.0,
     stretch_past_max: false,
     min_held: false,
     wrap_least: false,
     content_share: 0.0 / 0.0,
+    come_from: 0.0 / 0.0,
+    come_to: 0.0 / 0.0,
+    come_at: 0.0 / 0.0,
+    come_now: 0.0 / 0.0,
+    come_ends: 0.0 / 0.0,
+    come_k: 1.0,
     rows_grid: 0.0,
     ver: 0,
     basis_v: 0.0,
@@ -335,6 +357,7 @@ pub fn Style::reset(self : Style) -> Unit {
   self.fits = false
   self.one_of = false
   self.fit_need = 0.0 / 0.0
+  self.fit_whole = false
   self.soft_min = 0.0 / 0.0
   self.stretch_past_max = false
   self.min_held = false
@@ -998,7 +1021,10 @@ pub fn Style::set_padding(self : Style, d : Dim) -> Unit {
 
 ///|
 /// Measures a leaf from its content: (width, width mode, height, height
-/// mode) -> (width, height), as Yoga's measure functions.
+/// mode) -> (width, height), as Yoga's measure functions. On a node said
+/// to be told its room (Node's `room`), told the room its content box gives
+/// what it holds before that is laid out (layout_flex), answering more than
+/// 0 first where what it holds changed by it.
 pub type MeasureFn = (Double, MeasureMode, Double, MeasureMode) -> (Double, Double)
 
 ///|
@@ -1036,6 +1062,9 @@ pub(all) struct Node {
   // its last layout (perform), while not dirty: what it was asked (known
   // size, containing block) and what it came to
   mut p_ok : Bool
+  // its measure is told the room its content box gives what it holds, before that is laid out (layout_flex), not asked
+  // how big it is (the view's View::by_room); here, where the C struct has room for it
+  mut room : Bool
   mut p_kw : Double
   mut p_kh : Double
   mut p_cbw : Double
@@ -1079,6 +1108,7 @@ pub fn Node::new() -> Node {
     box_ver: -1,
     dirty: true,
     p_ok: false,
+    room: false,
     p_kw: 0.0,
     p_kh: 0.0,
     p_cbw: 0.0,

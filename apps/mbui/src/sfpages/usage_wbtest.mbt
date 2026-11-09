@@ -1,4 +1,4 @@
-// 用量's days (usage.mbt usage_chart, the web's Usage.tsx DaysChart): each day's bar in the middle of its day over its
+// 用量's days (usage.mbt usage_chart): each day's bar in the middle of its day over its
 // date, standing on the days' foot as high as its share of the scale's top; all in full until a day is picked, then
 // the others faded, the day pressed again let go. And the page: what someone opening it wants to know, most first.
 
@@ -54,6 +54,8 @@ test "usage: the chosen series keeps its colour and shows its own peak on the wh
   usage_pick.only.set(("models", "b"))
   t.draw()
   assert_eq(t.rect_of("10/18"), Some(date))
+  // (the whole period's peak closing its room as the series' own comes, gone once it has)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("$20") is Some(_))
   assert_true(t.find("$82") is None)
   assert_true(t.drawn_rects().iter().any(fn(r) { r.2 == 24.0 && r.4 == @sf.usage_series(1) }))
@@ -298,8 +300,8 @@ test "用量: selecting a model keeps every legend and the chart in place while 
     let (w, platform) = case
     let pending = @signals.signal(true, same=fn(a, b) { a == b })
     let t = setting_tester(Usage, w, platform~, h=2400.0, over=fn(base) {
-      { ..base, topic: fn(name, params) {
-        let answer = (base.topic)(name, params)
+      { ..base, topic_read: fn(name, params) {
+        let answer = base.topic(name, params).get().snapshot()
         if name != "usage" || params.get("only") is None {
           answer
         } else if pending.get() {
@@ -362,7 +364,8 @@ test "用量: the overview follows the page's theme, including after a day is pi
     check("$118")
   }
   t.tap_text("10/3")
-  t.draw()
+  // (the day's chip makes its way in: looked at once there)
+  t.run_for(@ui.move_most_ms)
   for dark in [false, true, false] {
     @sf.set_dark(Some(dark))
     t.draw()

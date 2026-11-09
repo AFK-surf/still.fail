@@ -43,7 +43,7 @@ export class GrantKey {
   }
 }
 
-/// `joins`: a plane that keeps a station in several workspaces (docs/multi-workspace.md): it has the join route and says
+/// `joins`: a plane that keeps a station in several workspaces: it has the join route and says
 /// `workspaces` in its state frames; one from before has neither.
 export type FakeOptions = { provider: "stillfail" | "comma"; gateways?: string[]; joins?: boolean };
 

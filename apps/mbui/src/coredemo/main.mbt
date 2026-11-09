@@ -7,16 +7,10 @@
 ///|
 struct App {
   mut status : String
-  /// the shelf over the core's media module (shelf.mbt) rather than the accounts
-  mut shelf : Bool
-  /// the photos over it (photos.mbt)
-  mut photos : Bool
-  /// films and series (videos.mbt)
-  mut videos : Bool
 }
 
 ///|
-let app : App = { status: "", shelf: false, photos: false, videos: false }
+let app : App = { status: "" }
 
 ///|
 let grey : Int64 = 0x8E8E93FFL
@@ -127,19 +121,6 @@ fn dump(accounts : @core.Sub) -> Unit {
 
 ///|
 fn view(c : @ui.Ctx) -> Unit {
-  if app.shelf {
-    @shelf.view(c, core_source)
-    return
-  }
-  if app.videos {
-    @videos.view(c, video_source)
-    return
-  }
-  if app.photos {
-    @gallery.view(c, photo_source)
-    flush_thumbs()
-    return
-  }
   let accounts = @core.subscribe("accounts")
   @sfcore.frame(accounts)
   dump(accounts)
@@ -154,18 +135,7 @@ fn view(c : @ui.Ctx) -> Unit {
     })
     |> ignore
     c.row(gap=10.0, fn() {
-      if c.button("书架", key="shelf", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
-        app.shelf = true
-      }
-      if c.button("照片", key="photos", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
-        app.photos = true
-      }
-      if c.button("影视", key="videos", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
-        app.videos = true
-      }
-      if c.button(if signing_in { "登录中…" } else { "登录" }, key="sign-in") {
-        @sfcore.sign_in()
-      }
+      c.button(if signing_in { "登录中…" } else { "登录" }, key="sign-in", on_press=fn() { @sfcore.sign_in() })
     })
     |> ignore
     c.box(bg=0xFFFFFFFFL, radius=14.0, pad=16.0, gap=12.0, shadow=1.5, fn() {
@@ -185,8 +155,8 @@ fn view(c : @ui.Ctx) -> Unit {
         (Some(Array(list)), _) =>
           if list.length() == 0 {
             c.text("还没有登录的账号", size=15.0) |> ignore
-            if !signing_in && c.button("登录 still.fail", key="sign-in-card") {
-              @sfcore.sign_in()
+            if !signing_in {
+              c.button("登录 still.fail", key="sign-in-card", on_press=fn() { @sfcore.sign_in() })
             }
           } else {
             for a in list {
@@ -222,9 +192,6 @@ fn main {
   if !@sfcore.start() {
     app.status = "这个版本没有链接内核（MBUI_CORE=1 scripts/mac.sh build）"
   }
-  app.shelf = env("MBUI_SHELF") == "1"
-  app.photos = env("MBUI_PHOTOS") == "1"
-  app.videos = env("MBUI_VIDEOS") == "1"
   if env("MBUI_SECURE_TEST") == "1" && secure_test() == 0 {
     @hostapi.log("SECURE_TEST: not on this host")
   }

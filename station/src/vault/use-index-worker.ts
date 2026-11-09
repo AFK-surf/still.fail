@@ -4,16 +4,39 @@ import { parentPort, threadId, workerData } from "node:worker_threads";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { BACKFILL_PAUSE_MS, REQUEST_BACKFILL_PAUSE_MS, giveBackfill, takeBackfill } from "../store/backfill.ts";
-import { backfillNextWorkspace, backfillUseIndex, readUses, useIndexComplete, type UseAnswer, type UseRead } from "./use-index.ts";
+import { backfillPendingPreparation, pendingPreparationComplete } from "./pending-index.ts";
+import { backfillReboxIndex } from "./rebox-index.ts";
+import { backfillNextWorkspace, backfillUsePreparation, tryReadUses, type PendingPrepare, type UseAnswer, type UseRead } from "./use-index.ts";
 
 const db = new DatabaseSync(workerData.path as string, { timeout: 100 });
 db.exec("PRAGMA synchronous = NORMAL");
-const waiting: UseRead[] = [];
-const ready = new Set<string>();
+const waiting: (UseRead | PendingPrepare)[] = [];
 let backgroundComplete = false;
+let reboxComplete = false;
+let reboxTurn = true;
 let scheduled = false;
 let foregroundWaiting = false;
 const priority = workerData.priority instanceof SharedArrayBuffer ? new Int32Array(workerData.priority) : null;
+
+// A ready answer is a WAL read. It does not need the backfill permit or its pause between write batches.
+function answerIfReady(q: UseRead | PendingPrepare): "answered" | "unready" | "busy" {
+  try {
+    if ("kind" in q) {
+      if (!pendingPreparationComplete(db, q.ws, q.members, q.audit)) return "unready";
+      parentPort!.postMessage({ id: q.id, ready: true } satisfies UseAnswer);
+    } else {
+      const bodies = tryReadUses(db, q);
+      if (bodies === null) return "unready";
+      parentPort!.postMessage({ id: q.id, bodies } satisfies UseAnswer);
+    }
+    return "answered";
+  } catch (e) {
+    const code = (e as { errcode?: number }).errcode;
+    if (code !== undefined && ((code & 0xff) === 5 || (code & 0xff) === 6)) return "busy";
+    parentPort!.postMessage({ id: q.id, error: (e as Error).message } satisfies UseAnswer);
+    return "answered";
+  }
+}
 
 function schedule(delay = 0) {
   if (scheduled) return;
@@ -21,20 +44,15 @@ function schedule(delay = 0) {
   const step = () => {
     scheduled = false;
     const q = waiting.shift();
-    // A completed page is a WAL read, not a backfill write. It must stay available even while a writer is waiting.
     if (q) {
-      try {
-        if (ready.has(q.ws) || useIndexComplete(db, q.ws)) {
-          ready.add(q.ws);
-          parentPort!.postMessage({ id: q.id, bodies: readUses(db, q) } satisfies UseAnswer);
-          if (waiting.length || !backgroundComplete) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
-          return;
-        }
-      } catch (e) {
-        const code = (e as { errcode?: number }).errcode;
-        if (code !== undefined && ((code & 0xff) === 5 || (code & 0xff) === 6)) waiting.push(q);
-        else parentPort!.postMessage({ id: q.id, error: (e as Error).message } satisfies UseAnswer);
-        if (waiting.length || !backgroundComplete) schedule(waiting.length > 1 ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
+      const answer = answerIfReady(q);
+      if (answer === "answered") {
+        if (waiting.length || !backgroundComplete || !reboxComplete) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
+        return;
+      }
+      if (answer === "busy") {
+        waiting.push(q);
+        schedule(waiting.length > 1 ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
         return;
       }
     }
@@ -48,13 +66,28 @@ function schedule(delay = 0) {
       return;
     }
     foregroundWaiting = false;
+    let background: "uses" | "rebox" | null = null;
     try {
       if (q) {
-        if (backfillUseIndex(db, q.ws)) {
-          ready.add(q.ws);
-          parentPort!.postMessage({ id: q.id, bodies: readUses(db, q) } satisfies UseAnswer);
+        const pending = "kind" in q;
+        if (pending ? backfillPendingPreparation(db, q.ws, q.members, q.audit) : backfillUsePreparation(db, q.ws)) {
+          if (pending) {
+            parentPort!.postMessage({ id: q.id, ready: true } satisfies UseAnswer);
+          } else {
+            const bodies = tryReadUses(db, q);
+            if (bodies === null) waiting.push(q);
+            else parentPort!.postMessage({ id: q.id, bodies } satisfies UseAnswer);
+          }
         } else waiting.push(q); // Give other workspaces a turn between this one's batches.
-      } else if (!backgroundComplete) backgroundComplete = backfillNextWorkspace(db);
+      } else if (!reboxComplete && (backgroundComplete || reboxTurn)) {
+        background = "rebox";
+        reboxComplete = backfillReboxIndex(db);
+        reboxTurn = false;
+      } else if (!backgroundComplete) {
+        background = "uses";
+        backgroundComplete = backfillNextWorkspace(db);
+        reboxTurn = true;
+      }
     } catch (e) {
       // Another process can be writing at handover. Give it the connection and resume the same batch later.
       const sqliteCode = (e as { errcode?: number }).errcode;
@@ -64,6 +97,10 @@ function schedule(delay = 0) {
         return;
       }
       if (q) parentPort!.postMessage({ id: q.id, error: (e as Error).message } satisfies UseAnswer);
+      else if (background === "rebox") {
+        log.error("vault", "the recovery index backfill stopped", { error: (e as Error).message });
+        reboxComplete = true;
+      }
       else {
         // A broken old request must not prevent a different workspace's indexed page from being read.
         log.error("vault", "the use history backfill stopped", { error: (e as Error).message });
@@ -72,14 +109,16 @@ function schedule(delay = 0) {
     } finally {
       giveBackfill(priority, threadId);
     }
-    if (waiting.length || !backgroundComplete) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
+    if (waiting.length || !backgroundComplete || !reboxComplete) schedule(waiting.length ? REQUEST_BACKFILL_PAUSE_MS : BACKFILL_PAUSE_MS);
   };
   if (delay > 0) wall.after(delay, step);
   else setImmediate(step);
 }
 
-parentPort!.on("message", (q: UseRead) => {
+parentPort!.on("message", (q: UseRead | PendingPrepare) => {
   foregroundWaiting = false;
+  // A background timer may already be waiting; serve a ready read without interrupting that timer or its write pacing.
+  if (answerIfReady(q) === "answered") return;
   waiting.push(q);
   schedule();
 });

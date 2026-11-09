@@ -1,4 +1,4 @@
-// Copying into the station's drive (drive/transfers.ts, docs/drive.md "Copying between stations"), as members ask it:
+// Copying into the station's drive (drive/transfers.ts), as members ask it:
 // POST /drive/grant lets another station read names of a folder here for the asker (a read-only member: of a folder
 // pinned, and only to copy); POST /drive/transfers copies (or moves) names of a folder here or of another station's
 // (with what it granted) into a folder here, which only a member who may write asks; GET /drive/transfers says the

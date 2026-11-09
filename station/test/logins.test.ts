@@ -1,4 +1,4 @@
-// The station's logins to command-line tools (src/logins/; docs/remote-login.md): what a login command's output and
+// The station's logins to command-line tools (src/logins/): what a login command's output and
 // page say, and logins run for real with stand-in login commands in a temp HOME (shell and Node scripts in a pseudo-
 // terminal, as the station runs them), the browser's callback relayed to a loopback port the stand-in listens on (only
 // [::1], only 127.0.0.1, a form posted), and refused when it is not the one it waits for. Time is a TestClock: what waits
@@ -10,7 +10,7 @@ import type { AddressInfo } from "node:net";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { Logins, type Login, Refused } from "../src/logins/index.ts";
+import { Logins, type Login, Refused, slackPage } from "../src/logins/index.ts";
 import type { Callback } from "../src/logins/relay.ts";
 import { asksEnter, commandWords, deviceCodeIn, deviceUrls, loopbackOf, plainText, programOf, prompts, saysDone, storesSecret, unwrapped, urlsIn } from "../src/ops/command-output.ts";
 import { COLS, QUIET_MS, STALL_MS, TIMEOUT_MS } from "../src/logins/run.ts";
@@ -320,6 +320,9 @@ read ok < '${approved.path}'
     assert.match(ready, /The person's browser step is ready: chat_post with card \{"type": "login", "login": "/);
     assert.ok(ready.includes("<code>") && ready.includes("<link>"), ready);
     assert.ok(!ready.includes("1A2B-C3D4") && !ready.includes("github.com/login/device"), "neither the code nor the page");
+    // the card with a sentence, never the login's link beside it (it only shows its raw address); in Slack the link alone
+    // with the card (it shows the page and the code there), in Feishu the link alone
+    assert.match(ready, /why, without the link \(the card opens the page\); end need_human\. In Slack, post the link https:\/\/still\.fail\/w\/w1\/s\/st\/login\/\S+ alone with that same card: it shows the page and the code; in Feishu, post the link alone\./);
     assert.equal(m.logins.get(id)!.chatTitle, "部署");
     await approved.approve();
     await m.until(id, (l) => l.state === "done", "done");
@@ -795,4 +798,17 @@ test("a machine's lsof says where a process listens", { skip: WINDOWS && "lsof i
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+});
+
+test("what a Slack login card shows: a device code's page and code, or a page that gives a code to paste; nothing else", () => {
+  const base: Login = { id: "l", name: "gh", command: ["gh"], state: "browser", waiting: false, by: { email: "", name: "" }, startedAt: 0, expiresAt: 1 };
+  assert.deepEqual(slackPage({ ...base, step: "device", url: "https://github.com/login/device", code: "ABCD-1234" }), { url: "https://github.com/login/device", domain: "github.com", code: "ABCD-1234", paste: false });
+  assert.deepEqual(slackPage({ ...base, step: "device", url: "https://x.dev/d", codeUrl: "https://x.dev/d?user_code=AB", code: "AB" })?.url, "https://x.dev/d?user_code=AB");
+  assert.deepEqual(slackPage({ ...base, step: "open", url: "https://accounts.google.com/o/oauth2/auth?x=1", paste: true }), { url: "https://accounts.google.com/o/oauth2/auth?x=1", domain: "accounts.google.com", paste: true });
+  // A page to open that gives no code back, a loopback one, a device step without its code, one being checked or ended.
+  assert.equal(slackPage({ ...base, step: "open", url: "https://www.npmjs.com/login" }), null);
+  assert.equal(slackPage({ ...base, step: "loopback", url: "https://accounts.google.com/o/oauth2/auth?redirect_uri=http://localhost:8085/" }), null);
+  assert.equal(slackPage({ ...base, step: "device", url: "https://github.com/login/device" }), null);
+  assert.equal(slackPage({ ...base, step: "open", url: "https://accounts.google.com/x", paste: true, state: "verifying" }), null);
+  assert.equal(slackPage({ ...base, step: "device", url: "https://github.com/login/device", code: "ABCD-1234", endedAt: 2 }), null);
 });

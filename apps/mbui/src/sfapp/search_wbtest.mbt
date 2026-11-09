@@ -1,4 +1,4 @@
-// The search over Home (search.mbt; Search.kt) over the made-up chats (search_fixture.mbt).
+// The search over Home (search.mbt) over the made-up chats (search_fixture.mbt).
 
 ///|
 /// Home with the search open, its field come up (the list scrolled to it first: it starts out of view).
@@ -11,6 +11,17 @@ fn search_tester() -> @ui.Tester {
   t.tap_text("搜索全部内容")
   t.run_for(@ui.move_most_ms)
   t
+}
+
+///|
+/// Whether the last frame drew a search stroke beneath a visible line containing `words`.
+fn search_stroke_under(t : @ui.Tester, words : String, color : Int64, width : Double) -> Bool {
+  let text = t.text_runs().filter(fn(r) { r.text.contains(words) })
+  t.drawn_lines().iter().any(fn(l) {
+    l.4 == width && l.5 == color && text.iter().any(fn(r) {
+      l.0 >= r.x0 - 3.0 && l.0 <= r.x1 + 3.0 && l.1 >= r.base && l.1 <= r.bottom + 8.0
+    })
+  })
 }
 
 ///|
@@ -39,7 +50,7 @@ test "the field tapped: the search opens over Home, its field focused, the bars 
   t.run_for(@ui.move_most_ms)
   let (active, _, _, _) = t.ime()
   assert_true(active)
-  // the keyboard's action key a search key (Search.kt: ImeAction.Search)
+  // the keyboard's action key a search key
   assert_eq(t.ime_action(), @hostapi.ime_action_search)
   // its field at the top now (8 under the page's top), 取消 beside it
   let (_, to) = t.find("取消").unwrap()
@@ -252,11 +263,32 @@ test "a chat opened from a found message: the words bold in it, stroked under, n
     }
     None => fail("no bubble")
   }
-  t.run_for(found_draw_ms)
+  // its words laid out for their strokes, drawn in from the left
+  assert_true(t.ctx().words_of("pick/ts2") is Some(_))
+  assert_true(rd.found_drawn.target() == @sfpages.found_draw_ms)
+  assert_true(rd.found_drawn.get(t.ctx()) > 0.0)
+  t.run_for(@sfpages.found_draw_ms)
   // still marked once drawn in: for as long as the chat shows
   assert_eq(rd.found_at, "ts2")
   assert_eq(rd.found_words, ["虚拟列表"])
+  assert_true(search_stroke_under(t, "虚拟列表", @sf.theme().p.accent, @sf.message_stroke.width))
   t.assert_idle()
+}
+
+///|
+test "a match low in a long message is brought into view" {
+  let t = search_tester()
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  @sfbase.open_chat_found(r, 3.0, ["有问题随时说"])
+  t.run_for(@sfpages.found_draw_ms)
+  let line = t.text_runs().iter().find_first(fn(r) { r.text.contains("有问题随时说") })
+  match line {
+    Some(r) => {
+      assert_true(r.top > 200.0 && r.bottom < 650.0, msg="the match was not brought near the middle: \{r}")
+      assert_true(search_stroke_under(t, "有问题随时说", @sf.theme().p.accent, @sf.message_stroke.width))
+    }
+    None => fail("the match low in the message is not visible")
+  }
 }
 
 ///|

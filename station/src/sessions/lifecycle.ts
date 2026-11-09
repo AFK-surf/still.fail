@@ -13,12 +13,14 @@ import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import { checkContext } from "./context-cap.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
+import { usageNow } from "../read/usage.ts";
 import { readTimeline, sessionPlaces, sharedTranscripts, transcriptSources } from "../read/transcript.ts";
 import { forgetMarks, marksDir } from "../read/transcripts.ts";
 import { ARCHIVED_WORKSPACE_BATCH, AUTO, type ArchivedWorkspace, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
 import { sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { archiveMarksReady } from "../store/archive-mark-index.ts";
 import type { SessionChange } from "./accounts.ts";
+import { runChanged, runShown } from "./run-change.ts";
 import { unlockWorktrees, withLock } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
 import { type Runtime, runs, runtimeNamed, runtimeTitle } from "./config.ts";
@@ -68,7 +70,7 @@ export function bindSingle(hub: Hub, connectId: string, target: string | null, t
   const row = hub.store.getSession(target);
   if (!row) throw new Error(`unknown session ${target}`);
   if (row.runtime !== connect.bind.runtime) throw new Error(`session ${target} runs ${row.runtime}, the connect runs ${connect.bind.runtime}`);
-  // A connect's sessions are its workspace's chats (docs/multi-workspace.md): none of another workspace.
+  // A connect's sessions are its workspace's chats: none of another workspace.
   const home = hub.workspaces()[0] ?? null;
   if (home !== null && hub.wsOf(row) !== (connect.workspace ?? home)) throw new Error(`session ${target} is in another workspace than the connect`);
   hub.store.setBinding(connect.id, target);
@@ -101,7 +103,7 @@ export function addToThread(hub: Hub, thread: number, session: string) {
   stillfailChat(hub, thread);
   const row = hub.store.getSession(session);
   if (row === null) throw new Error(`unknown session ${session}`);
-  // A chat is one workspace's (docs/multi-workspace.md): no session of another joins it. Outside any workspace, all are
+  // A chat is one workspace's: no session of another joins it. Outside any workspace, all are
   // the same one's.
   const there = hub.store.threadSessions(thread)[0];
   if (hub.workspaces().length > 0 && there !== undefined && hub.wsOf(there.session) !== hub.wsOf(row)) throw new Error(`session ${session} is in another workspace than the chat`);
@@ -110,18 +112,25 @@ export function addToThread(hub: Hub, thread: number, session: string) {
 
 /// A person's message in a chat on the station's pages: recorded with its quotes and files and delivered to every
 /// session in the chat, like a Slack message. `client`: the app it was sent from, as it said. Its entry number.
-export function say(hub: Hub, thread: number, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = [], client: string | null = null): number {
-  stillfailChat(hub, thread);
-  if (hub.store.manuallyArchived(thread)) throw new Error(tr(stationLang(), "station.chat.archived"));
-  const [n] = hub.store.insertMessage({ thread, ts: hub.nextTs(), authorKind: "person", author: user, text, attachments, quotes, client });
-  const sessions = hub.store.threadSessions(thread).map((m) => m.session);
-  hub.deliver(thread, n, sessions, text);
+export function say(hub: Hub, thread: number, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = [], client: string | null = null,
+  once?: { before: () => void; inserted: (n: number) => void; targets: () => string[]; workspace: string | null }): number {
+  const checkChat = () => {
+    stillfailChat(hub, thread);
+    if (hub.store.manuallyArchived(thread)) throw new Error(tr(stationLang(), "station.chat.archived"));
+  };
+  checkChat();
+  const before = once === undefined ? undefined : () => { once.before(); checkChat(); };
+  const [n, fresh] = hub.store.insertMessage({ thread, ts: hub.nextTs(), authorKind: "person", author: user, text, attachments, quotes, client }, before, once?.inserted);
+  // A different process may have used the same timestamp. It is not this keyed write and must not be delivered as it.
+  if (once !== undefined && !fresh) throw new Error("message timestamp already used; retry the write");
+  const sessions = once?.targets() ?? hub.store.threadSessions(thread).map((m) => m.session);
+  hub.deliver(thread, n, sessions, text, once === undefined ? undefined : { workspace: once.workspace });
   return n;
 }
 
 /// A session of its own, talked to in the station's chat: the runtime, model and effort chosen by whoever starts it
 /// rather than a connect's, and the profile: one given keeps it there; else the pool picks one with the model on. Only
-/// the profiles allowed in its workspace (docs/multi-workspace.md).
+/// the profiles allowed in its workspace.
 export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang()): [string, ThreadRow] {
   const config = hub.config();
   const client = trimmed(options.clientKey);
@@ -138,11 +147,13 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
   const runtime = options.runtime;
   const all = config.profiles.filter((p) => p.runtimes.includes(runtime));
   if (all.length === 0) throw new Error(`no ${runtime} profile configured`);
+  const pinned = options.profile ?? null;
+  const requested = all.find((p) => p.id === pinned);
+  if (requested?.enabled === false) throw new Error(tr(lang, "station.profile.disabled", { profile: requested.name }));
   const here = new Set(hub.profilesIn(options.ws ?? null).map((p) => p.id));
   const profiles = all.filter((p) => here.has(p.id));
   if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
   const model = trimmed(options.model);
-  const pinned = options.profile ?? null;
   let profile;
   if (pinned !== null) {
     profile = profiles.find((p) => p.id === pinned);
@@ -216,20 +227,38 @@ export async function configure(hub: Hub, key: string, change: SessionChange, la
   const { row, runtime, model, effort, profile, pinned, repick } = hub.accounts.change(key, change, lang);
   const movedRuntime = runtime !== row.runtime && typeof profile === "string";
   const recapped = change.context !== undefined && change.context !== row.context;
+  // Its runtime compacts on its own only some calls into a new process: what it holds over a lower most is compacted
+  // once this turn is over, not sent whole again first.
+  const over = !movedRuntime && typeof change.context === "number" && (usageNow(hub.store, key)?.contextTokens ?? 0) > change.context;
   if (movedRuntime) {
     if (row.runtimeSessionId) hub.store.ranIn(key, row.runtimeSessionId, row.profile);
     hub.store.setSessionRuntime(key, runtime, profile, pinned === true, model, effort, change.fast ?? null, change.context ?? null);
+    hub.store.setSessionContextBefore(key, null);
   } else {
     if (profile !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null);
     if (model !== row.model || effort !== row.effort) hub.store.setSessionModel(key, model, effort);
     if (change.fast !== undefined) hub.store.setSessionFast(key, change.fast);
-    if (recapped) hub.store.setSessionContext(key, change.context ?? null);
+    if (recapped) {
+      hub.store.setSessionContext(key, change.context ?? null);
+      hub.store.setSessionContextBefore(key, over ? (row.contextBefore ?? row.context ?? 0) : null);
+    }
     if (repick) hub.accounts.repick(key);
     else if (profile === null) hub.accounts.runOn(key);
   }
   // Another most context is what its process starts with (Claude Code's settings, a Codex thread's config): only a new
   // one takes it.
   await hub.changed(key, movedRuntime || recapped);
+  // Another runtime, model, effort or speed: said in its chat, before and after.
+  const now = hub.store.getSession(key);
+  if (now) {
+    const named = (id: string) => {
+      const name = hub.accounts.profile(id)?.name;
+      return typeof name === "string" ? name : null;
+    };
+    const change = { was: runShown(row, named), now: runShown(now, named) };
+    if (runChanged(change)) await hub.actor(now).runChanged(change);
+  }
+  if (recapped && over) await hub.actor(hub.store.getSession(key) ?? row).compactToCap();
   log.info("hub", "session changed", { session: key, profile: hub.store.getSession(key)?.profile ?? "", model, effort, context: hub.store.getSession(key)?.context ?? "" });
   // Its last turn stopped at the allowance, or waits to be tried again on a model at capacity: changed, it goes on by
   // itself (at once).
@@ -337,7 +366,7 @@ export async function relieveArchived(hub: Hub, free: () => number): Promise<voi
 /// A session heard only in Slack goes after slackArchiveMs even when stopped at a block: nobody answers it from here.
 /// With autoArchiveReviewed, the rest goes only once the archive review recommended each of its chats.
 export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: number) => void, prepareBindings?: () => void,
-  prepareJobs?: (session: string) => void, prepareMarks?: () => void): number | null {
+  prepareJobs?: (session: string) => void, prepareMarks?: () => void, prepareLast?: (thread: number) => void): number | null {
   const { store } = hub;
   const { autoArchiveMs: after, slackArchiveMs, autoArchiveReviewed, automaticDecisions } = hub.config();
   if (after <= 0 && slackArchiveMs <= 0) return null;
@@ -412,8 +441,10 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
     archiveBy(hub, s.key, true, AUTO);
   }
   for (const t of own) {
-    const said = store.lastMessage(t.id)?.createdAt ?? null;
-    if (kept(t.id) || !idle([t.createdAt, said, t.shownAt]) || unread(t) || !recommended(t.id)) continue;
+    if (kept(t.id)) continue;
+    const said = store.lastMessageAtForArchive(t.id);
+    if (!said.known) { prepareLast?.(t.id); continue; }
+    if (!idle([t.createdAt, said.at, t.shownAt]) || unread(t) || !recommended(t.id)) continue;
     if (store.threadSessions(t.id).some((m) => pinned(m.session) || busy(m.session))) continue;
     log.info("hub", "archiving an idle chat", { thread: t.id });
     store.setThreadHidden(t.id, true, AUTO);
@@ -424,13 +455,15 @@ export function autoArchive(hub: Hub, now: number, prepareUnread?: (thread: numb
 /// Check on the usual schedule, and try again when an old chat's missing unread boundary is ready.
 export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: () => void): () => void },
   readers: { prepareSaid(threads: readonly number[], signal?: AbortSignal): Promise<void>; prepareSessionBindings(signal?: AbortSignal): Promise<void>;
-    prepareSessionUpJobs(sessions: readonly string[], signal?: AbortSignal): Promise<void>; prepareArchiveMarks?(signal?: AbortSignal): Promise<void> }): () => void {
+    prepareSessionUpJobs(sessions: readonly string[], signal?: AbortSignal): Promise<void>; prepareArchiveMarks?(signal?: AbortSignal): Promise<void>;
+    prepareArchiveLast?(threads: readonly number[], signal?: AbortSignal): Promise<void> }): () => void {
   const cancel = new AbortController();
   let timer: (() => void) | null = null;
   let preparing = false;
   let preparingBindings = false;
   let preparingJobs = false;
   let preparingMarks = false;
+  let preparingLast = false;
   const schedule = (ms: number) => {
     timer?.();
     timer = time.after(ms, check);
@@ -440,14 +473,26 @@ export function startAutoArchiveTimer(hub: Hub, time: { after(ms: number, run: (
     let next: number | null = null;
     const missing = new Set<number>();
     const missingJobs = new Set<string>();
+    const missingLast = new Set<number>();
     let missingBindings = false;
     let missingMarks = false;
     try {
-      next = autoArchive(hub, hub.now(), (thread) => missing.add(thread), () => { missingBindings = true; }, (session) => missingJobs.add(session), () => { missingMarks = true; });
+      next = autoArchive(hub, hub.now(), (thread) => missing.add(thread), () => { missingBindings = true; }, (session) => missingJobs.add(session),
+        () => { missingMarks = true; }, (thread) => missingLast.add(thread));
     } catch (error) {
       log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
     }
     schedule(Math.min(600_000, next === null ? Infinity : next - hub.now()));
+    if (!preparingLast && missingLast.size && readers.prepareArchiveLast) {
+      preparingLast = true;
+      void readers.prepareArchiveLast([...missingLast], cancel.signal).then(() => {
+        preparingLast = false;
+        if (!cancel.signal.aborted) schedule(0);
+      }, (error) => {
+        preparingLast = false;
+        if (!cancel.signal.aborted) log.warn("hub", "preparing last messages for auto-archiving failed", { error: (error as Error).message });
+      });
+    }
     if (!preparingMarks && missingMarks && readers.prepareArchiveMarks) {
       preparingMarks = true;
       void readers.prepareArchiveMarks(cancel.signal).then(() => {

@@ -8,7 +8,7 @@ import { STILLFAIL_SURFACE, cardOfEntry } from "../../store/rows.ts";
 import type { Store } from "../../store/store.ts";
 
 
-/// The most a widget's state takes, as JSON (web/src/Viz.tsx keeps no more); the most of its modelContent the agent
+/// The most a widget's state takes, as JSON; the most of its modelContent the agent
 /// is told, in characters.
 const WIDGET_STATE_MAX = 16384;
 const WIDGET_MODEL_MAX = 4000;
@@ -116,12 +116,24 @@ export const routes = ({ read, store }: Tools): Route[] => {
     },
     {
       method: "PUT",
-      pattern: /^\/*threads\/+([^/]+)\/+(read|title|keep|dismissed|closed-card)(?:\/.*)?$/,
+      pattern: /^\/*threads\/+([^/]+)\/+(read|hidden|muted|title|keep|dismissed|closed-card)(?:\/.*)?$/,
       handle: (r, [rawId, action]) =>
         write(async (s) => {
           const t = thread(s, segment(rawId!));
           const viewer = r.viewer.email;
           switch (action) {
+            case "hidden": {
+              const hidden = input(r).hidden;
+              if (typeof hidden !== "boolean") throw new Refused(400, "hidden must be a boolean");
+              s.setChatHidden(viewer, t.id, hidden);
+              return ok({ hidden });
+            }
+            case "muted": {
+              const muted = input(r).muted;
+              if (typeof muted !== "boolean") throw new Refused(400, "muted must be a boolean");
+              s.setChatMuted(viewer, t.id, muted);
+              return ok({ muted });
+            }
             case "read": {
               const n = whole(input(r).n, 0);
               if (n === null) throw new Refused(400, tr(r.lang, "station.admin.badN"));

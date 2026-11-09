@@ -1,4 +1,4 @@
-// still.fail's relay, a Worker of its own (ember-relay): deployed only when the relay changes, so the rest of
+// still.fail's relay, a Worker of its own (stillfail-relay): deployed only when the relay changes, so the rest of
 // still.fail cloud is deployed without dropping every device's and station's relay connection. It answers, on
 // PUBLIC_ORIGIN's host and its old ones (routes that take precedence over the web app's Custom Domain:
 // wrangler.relay.jsonc):

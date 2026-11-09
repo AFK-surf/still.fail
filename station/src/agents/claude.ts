@@ -1,7 +1,7 @@
-// Claude Code driver (the Rust station's runtime/claude.rs): one `claude -p` stream-json process per session, under a
+// Claude Code driver: one `claude -p` stream-json process per session, under a
 // runner whose id comes from the session key.
 //
-// Behaviour pinned by spikes (spike/README.md):
+// Behaviour pinned by spikes:
 // - a turn is framed by system/init … result; `result.is_error` decides success, not `subtype` (an auth failure ends
 //   as subtype "success");
 // - 401/403 is retried silently for minutes, visible only as system/api_retry frames, so the first one fails the turn
@@ -16,6 +16,7 @@
 //   say owned_by_subagent. They all end with the process.
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { REPO_RULES_COMMAND } from "./repo-rules.ts";
 import { log } from "../ops/log.ts";
 import { claudeProject } from "../read/transcript.ts";
 import { LiveFromClaude, chars, type ClaudeLiveState } from "./live.ts";
@@ -175,6 +176,11 @@ const RENEW_ATTEMPTS = 2;
 const DISALLOWED = ["ScheduleWakeup", "CronCreate", "CronDelete", "CronList", "RemoteTrigger"];
 const SETTINGS = {
   disableClaudeAiConnectors: true,
+  // A repository's rules told as its tools first touch it (./repo-rules.ts), and again after a compaction.
+  hooks: {
+    PostToolUse: [{ matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob", hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+    SessionStart: [{ matcher: "compact", hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+  },
   skillOverrides: {
     ...Object.fromEntries(["loop", "schedule", "keybindings-help", "fewer-permission-prompts", "plugin-authoring", "update-config"].map((name) => [name, "off"])),
     ...Object.fromEntries(["dataviz", "claude-api", "code-review", "run"].map((name) => [name, "name-only"])),
@@ -183,7 +189,7 @@ const SETTINGS = {
   },
 };
 
-/// A session as a next station takes it up (claude.rs Handed: the turn as its last handled line left it).
+/// A session as a next station takes it up.
 export type ClaudeSnapshot = {
   runtime: "claude";
   id: string;
@@ -210,7 +216,7 @@ export type ClaudeDriverOptions = {
 
 const interruptRequest = () => JSON.stringify({ type: "control_request", request_id: `interrupt-${uuid()}`, request: { subtype: "interrupt" } });
 
-/// What a frame does to the turn (claude.rs on_frame). `interrupt` is how an auth failure stops the turn; `now` when a
+/// What a frame does to the turn. `interrupt` is how an auth failure stops the turn; `now` when a
 /// task it tells of starts. What it has going in the background, said again (a `tasks` live event) as it changes.
 export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void, interrupt: () => void, now: () => number = wall.now) {
   const before = JSON.stringify(backgroundOf(turn));
@@ -250,6 +256,8 @@ function frameDoes(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void,
   } else if (kind === "system" && subtype === "status" && turn.compacting === true && frame.compact_result === "failed") {
     // `/compact` that compacted nothing still ends in a result of success: only this says so (2.1.289).
     turn.compactError = typeof frame.compact_error === "string" && frame.compact_error !== "" ? frame.compact_error : "compaction failed";
+  } else if (kind === "system" && subtype === "compact_boundary") {
+    emit({ type: "compacted" });
   } else if (kind === "result") {
     const text = typeof frame.result === "string" ? frame.result : subtype;
     let outcome: TurnOutcome;
@@ -337,7 +345,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
     env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);
     // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).
     env.STILLFAIL_RUNTIME_SESSION_ID = sessionId;
-    // A machine profile runs on the machine's own login, handed over as its current token (machine_logins.rs).
+    // A machine profile runs on the machine's own login, handed over as its current token.
     // Another station's subscription the same way, with the token that station lends.
     const renew = this.renewer(options.profile);
     const machine = renew ? await renew() : undefined;
@@ -345,7 +353,7 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
       env.CLAUDE_CODE_OAUTH_TOKEN = machine.token;
       Object.assign(env, RENEWED);
     } else {
-      // Its own login stays in its home's file when it refreshes it (no_keychain.rs).
+      // Its own login stays in its home's file when it refreshes it.
       await takeBack(home);
       fileCredentials(env);
     }

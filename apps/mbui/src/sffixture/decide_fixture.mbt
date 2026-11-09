@@ -1,6 +1,7 @@
 // An execution history, an agent's card, jobs, for the app with no core (fixture.mbt; slice 8's screenshots).
 // MBUI_FIXTURE: "history" (an agent's steps, a few opened), "history-reading" (the
-// steps not read yet: their bones), "history-details", the chat
+// steps not read yet: their bones), "history-failed" (their first read failed: why, over the bones), "history-older"
+// (pages before them, being read), "history-older-failed" (their read failed: why, at its top), "history-details", the chat
 // with a sheet open over it: "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid" (an agent's card that knows
 // no figure of it, as a station from before tells none of an agent at rest), "chat-peek" (its station's card), "chat-jobs",
 // "chat-job"; "chat-letters-many" (their sheet, more chats written with than it holds at its share: its list
@@ -12,7 +13,8 @@
 // 任务), "chat-model-pop" (its agent's model control's panel
 // open), "chat-model-accounts" (its accounts open over it), "chat-find" (⌘F's bar, a word typed in it), "chat-agent-card" (the chat, its agent's details and card read:
 // what its card over its picture says); "home-jobs"
-// (Home with the jobs left up a long while at its top); "home-attention" (the wide frame's 待处理 open: a decision to let
+// (Home with the jobs left up a long while at its top); "home-jobs-screens" (and simulators and views of screens
+// left up long, each with its 关闭 or 断开); "home-attention" (the wide frame's 待处理 open: a decision to let
 // go, a failure looked at, a station offline); "home-syncing" (Home catching up on what changed while away: the line
 // over the rows); "history-link" (Home, the history there for a link to open at
 // an entry: what apps/android's MbuiCompareTest pictures beside it). Every word here is made up.
@@ -21,8 +23,8 @@
 /// Whether `mode` is one of this slice's.
 pub fn decide_mode(mode : String) -> Bool {
   [
-    "history", "history-reading", "history-details",
-    "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
+    "history", "history-reading", "history-failed", "history-older", "history-older-failed", "history-details",
+    "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "home-jobs-screens", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-things", "chat-things-side", "chat-info-pulls",
     "chat-jobs-side", "chat-history-side", "chat-service-side", "chat-tabs-side", "chat-model-pop", "chat-model-accounts", "chat-find", "chat-agent-card",
@@ -181,20 +183,8 @@ pub fn fix_detailed_chat(base : Json) -> Json {
         "lastMessage": { "time": { "createdAt": { "ago": "5 分钟前" } } },
       }
       o["agents"] = [fix_agent()]
-      // made public twice (apps/android PublishSheetTest's `two`): the viewer's own, which they may revoke, and Bob's
-      let link = "https://share.still.fail/#B5CrvEZwwZq7oct4Vs0Ld90SJHgZO4uOwQdhtJsLRNE.Qm9vSzVnUkN2dUdS.k3Yq"
-      let published = fn(id : String, by : String, mine : Bool, ago : String) -> Json {
-        {
-          "id": Json::string(id),
-          "link": Json::string(link + "-" + id),
-          "createdAt": 0,
-          "byName": Json::string(by),
-          "mayRevoke": Json::boolean(mine),
-          "time": { "createdAt": { "ago": Json::string(ago), "full": "10月15日 10:00" } },
-        }
-      }
-      o["publish"] = { "may": true, "links": [published("p2", "Alice", true, "10 分钟前"), published("p1", "Bob", false, "2 天前")] }
-      // shared with one of the viewer's other workspaces, read only (ChatInfo.kt ShareRow)
+      o["publish"] = { "may": true }
+      // shared with one of the viewer's other workspaces, read only
       o["xshare"] = {
         "session": "s-c1",
         "text": "开源 · 只读",
@@ -383,6 +373,34 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
         None
       }
     "history" if f.mode == "history-reading" => Some(None)
+    "history" if f.mode == "history-failed" =>
+      Some(
+        Some({
+          "items": [],
+          "live": [],
+          "usage": [],
+          "edge": "正在读取执行历史",
+          "empty": true,
+          "loaded": false,
+          "failed": "请求超时",
+        }),
+      )
+    "history" if f.mode == "history-older" || f.mode == "history-older-failed" =>
+      match fix_history() {
+        Object(m) => {
+          let m = m.copy()
+          m["more"] = Json::boolean(true)
+          if f.mode == "history-older-failed" {
+            m["older"] = Json::string("failed")
+            m["edge"] = Json::string("读取更早的执行历史失败：请求超时，稍后重试")
+          } else {
+            m["older"] = Json::string("reading")
+            m["edge"] = Json::string("正在读取更早的执行历史")
+          }
+          Some(Some(Json::object(m)))
+        }
+        j => Some(Some(j))
+      }
     "history" => Some(Some(fix_history()))
     "agentCard" if f.mode == "chat-agent-unsaid" =>
       Some(
@@ -422,13 +440,17 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
     "jobLog" =>
       Some(
         Some({
-          "text": "✓ build (1m 12s)\n✓ unit tests (48s)\n✓ step 3: screenshots\n… waiting for deploy",
+          "text": Json::string(
+            "✓ build (1m 12s)\n✓ unit tests (48s)\n✓ step 3: screenshots\n… waiting for deploy" + fix_job_more_text(),
+          ),
           "said": "最后输出 · 3 分钟前",
           "last": "… waiting for deploy",
         }),
       )
     "longJobs" =>
-      if f.mode == "home-jobs" {
+      if f.mode == "home-jobs-screens" {
+        Some(Some(long_screens_view()))
+      } else if f.mode == "home-jobs" {
         Some(
           Some({
             "groups": [
@@ -443,7 +465,7 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
           }),
         )
       } else {
-        None
+        Some(Some({ "groups": [], "lit": false, "ids": [] }))
       }
     _ => None
   }
@@ -461,6 +483,54 @@ pub fn long_job() -> Json {
   m["age"] = Json::string("3 小时")
   m["chat"] = { "id": "s-c1", "title": "整理发布清单", "archived": false }
   Json::object(m)
+}
+
+///|
+/// The `longJobs` view with simulators and views of screens left up long besides a service (home-jobs-screens).
+pub fn long_screens_view() -> Json {
+  {
+    "groups": [
+      { "key": "services", "head": "长时间运行的网页服务 · 1", "jobs": [long_job()] },
+      {
+        "key": "simulators",
+        "head": "长时间开着的模拟器 · 2",
+        "jobs": [
+          long_screen("screen:simulator:A", "Demo iPhone · iOS 27.2", "Willow · iOS 模拟器", "5 小时", "screen.close", "simulator:A", "", "关闭"),
+          long_screen("screen:android:emulator-5580", "comma-findn6-fold · Android 16", "Willow · 安卓模拟器", "4 小时", "screen.close", "android:emulator-5580", "", "关闭"),
+        ],
+      },
+      {
+        "key": "views",
+        "head": "长时间开着的远程连接 · 1",
+        "jobs": [
+          long_screen("view:desktop/v1", "Willow 的桌面", "Willow · Peng · iPhone", "2 小时", "screen.endView", "desktop", "v1", "断开"),
+        ],
+      },
+    ],
+    "lit": true,
+    "ids": ["ws1/st1/j-web", "ws1/st1/screen:simulator:A", "ws1/st1/screen:android:emulator-5580", "ws1/st1/view:desktop/v1"],
+  }
+}
+
+///|
+/// A simulator or a view of a screen left up a long while, as the `longJobs` view has it (a job's shape, its `stop`).
+pub fn long_screen(id : String, name : String, where_text : String, age : String, call : String, screen : String, view : String, word : String) -> Json {
+  let stop : Map[String, Json] = { "call": Json::string(call), "screen": Json::string(screen), "word": Json::string(word) }
+  if view != "" {
+    stop["view"] = Json::string(view)
+  }
+  {
+    "id": Json::string(id),
+    "name": Json::string(name),
+    "state": "running",
+    "startedAt": 0,
+    "tone": "live",
+    "service": false,
+    "age": Json::string(age),
+    "station": "ws1/st1",
+    "whereText": Json::string(where_text),
+    "stop": Json::object(stop),
+  }
 }
 
 ///|
@@ -592,7 +662,7 @@ pub fn fix_preview_viz() -> Json {
 /// This slice's calls in the fixture: taken as a station would.
 pub fn decide_fixture_call(name : String) -> Result[Json, Json]? {
   match name {
-    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "history.detail" | "history.older" | "machineLogin.cancel" | "chat.unpublish" =>
+    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.read" | "chat.rename" | "session.stop" | "session.evict" | "session.compact" | "session.clear" | "job.stop" | "history.detail" | "history.older" | "machineLogin.cancel" =>
       Some(Ok(Json::object({})))
     "chat.publishPreview" => Some(Ok(fix_preview()))
     _ => None
@@ -646,7 +716,7 @@ pub fn fix_with_letters(v : Json) -> Json {
 
 ///|
 /// What wants the viewer in 待处理 (home-attention: the core's `workspaceMarks`): a decision waiting in 整理发布清单,
-/// to be let go, and a failure in another chat, looked at.
+/// to be let go, a failure in another chat, looked at, and a chat unread.
 pub fn fix_attention_marks() -> Json {
   let item = fn(kind : String, title : String, what : String, station : String, name : String, thread : Double) {
     let m : Map[String, Json] = {
@@ -665,18 +735,22 @@ pub fn fix_attention_marks() -> Json {
   wait["seq"] = Json::number(12.0)
   let failed = item("alert", "夜里的备份", "备份没有跑完", "ws1/st2", "Maple", 9.0)
   failed["seen"] = Json::boolean(true)
+  let unread = item("done", "周报草稿", "写好了", "ws1/st1", "Willow", 11.0)
+  unread["session"] = Json::string("s-c3")
+  unread["seq"] = Json::number(30.0)
   {
     "workspaces": {
       "ws1": {
         "alert": 1,
         "wait": 1,
+        "unread": 1,
         "tone": "alert",
-        "items": [Json::object(wait), Json::object(failed)],
+        "items": [Json::object(wait), Json::object(failed), Json::object(unread)],
       },
     },
     "others": "done",
-    "badge": 1,
-    "badgeKinds": { "on": true, "wait": true, "failed": true, "done": false, "message": false, "services": true },
+    "badge": 2,
+    "badgeKinds": { "on": true, "wait": true, "failed": true, "done": true, "message": true, "services": true },
   }
 }
 
@@ -759,4 +833,20 @@ pub fn fix_letters() -> Json {
       },
     ],
   }
+}
+
+///|
+/// How many lines a job's output (jobLog) has come to have past its made-up four (more said by fix_now, as a running
+/// job's come), each `deploy check N`.
+// kept across runs: put back by fixture_reset
+pub let fix_job_more : Ref[Int] = Ref(0)
+
+///|
+/// The lines past the four, each on a line of its own after them.
+fn fix_job_more_text() -> String {
+  let out = StringBuilder::new()
+  for k in 1..=fix_job_more.val {
+    out.write_string("\ndeploy check \{k}")
+  }
+  out.to_string()
 }

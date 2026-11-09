@@ -10,17 +10,16 @@ fn fits_said(t : @ui.Tester, words : String) -> String {
 }
 
 ///|
-test "panel fits, 大屏 keyboard and mouse: as wide as its words as they change, never narrower; its foot, its head's end, a narrower most; a column of its own, the window short of it: as main has it, drawn by the window's tree" {
+test "panel fits, 大屏 keyboard and mouse: as wide as its words as they change, never narrower; its foot, a narrower most; a column of its own, the window short of it: as main has it, drawn by the window's tree" {
   let out = []
   let drawn = []
   let long = "一行很长很长的话，比面板最宽的时候还要宽很多很多，好看它怎么折行和怎么定宽度"
   // (its words changing while it is open: short, long, middling, short again)
-  for kind in ["plain", "foot", "end", "narrow"] {
+  for kind in ["plain", "foot", "narrow"] {
     let t = menu_tester(1280.0, 800.0, 0)
     let words = @signals.signal("短短的")
     let w = if kind == "narrow" { 200.0 } else { 400.0 }
     match kind {
-      "plain" => @sf.panel("面板", fits_words_body(words), from=At(600.0, 100.0, 0.0, 0.0), fits=true, w~)
       "foot" =>
         @sf.panel(
           "面板",
@@ -29,24 +28,12 @@ test "panel fits, 大屏 keyboard and mouse: as wide as its words as they change
           fits=true,
           w~,
           foot=fn(c, close) {
-            if @sf.button(c, "好的", key="ok34", tone=Primary) {
+            @sf.button(c, "好的", key="ok34", tone=Primary, on_press=fn() {
               close()
-            }
+            }) |> ignore
           },
         )
-      _ =>
-        @sf.panel(
-          "面板",
-          fits_words_body(words),
-          from=At(600.0, 100.0, 0.0, 0.0),
-          fits=true,
-          w~,
-          head_end=fn(c) {
-            if @sf.button(c, "尾", key="end34", tone=Primary) {
-              ()
-            }
-          },
-        )
+      _ => @sf.panel("面板", fits_words_body(words), from=At(600.0, 100.0, 0.0, 0.0), fits=true, w~)
     }
     t.run_for(@ui.move_most_ms)
     for s in ["短短的", long, "中等长度的一句话", "短短的"] {
@@ -117,13 +104,9 @@ let fits_main : Array[String] = [
   "foot 38: dialog Some((600, 106, 400, 130)) title [(616, 118, 368, 20)] words [(616, 142, 368, 44)] button Some((936, 194, 58, 36)) end None",
   "foot 8: dialog Some((600, 106, 400, 108)) title [(616, 118, 368, 20)] words [(616, 142, 368, 22)] button Some((936, 172, 58, 36)) end None",
   "foot 3: dialog Some((600, 106, 400, 108)) title [(616, 118, 368, 20)] words [(616, 142, 368, 22)] button Some((936, 172, 58, 36)) end None",
-  "end 3: dialog Some((600, 106, 105, 74)) title [(616, 120, 26, 20)] words [(616, 152, 73, 22)] button None end Some((654, 112, 45, 36))",
-  "end 38: dialog Some((600, 106, 400, 96)) title [(616, 120, 26, 20)] words [(616, 152, 368, 44)] button None end Some((654, 112, 340, 36))",
-  "end 8: dialog Some((600, 106, 400, 74)) title [(616, 120, 26, 20)] words [(616, 152, 368, 22)] button None end Some((654, 112, 340, 36))",
-  "end 3: dialog Some((600, 106, 400, 74)) title [(616, 120, 26, 20)] words [(616, 152, 368, 22)] button None end Some((654, 112, 340, 36))",
-  "narrow 3: dialog Some((600, 106, 105, 74)) title [(616, 120, 26, 20)] words [(616, 152, 73, 22)] button None end Some((654, 112, 45, 36))",
-  "narrow 38: dialog Some((600, 106, 200, 140)) title [(616, 120, 26, 20)] words [(616, 152, 168, 88)] button None end Some((654, 112, 140, 36))",
-  "narrow 8: dialog Some((600, 106, 200, 74)) title [(616, 120, 26, 20)] words [(616, 152, 168, 22)] button None end Some((654, 112, 140, 36))",
-  "narrow 3: dialog Some((600, 106, 200, 74)) title [(616, 120, 26, 20)] words [(616, 152, 168, 22)] button None end Some((654, 112, 140, 36))",
+  "narrow 3: dialog Some((600, 106, 74, 64)) title [(616, 118, 42, 20)] words [(616, 142, 42, 22)] button None end None",
+  "narrow 38: dialog Some((600, 106, 200, 130)) title [(616, 118, 168, 20)] words [(616, 142, 168, 88)] button None end None",
+  "narrow 8: dialog Some((600, 106, 200, 64)) title [(616, 118, 168, 20)] words [(616, 142, 168, 22)] button None end None",
+  "narrow 3: dialog Some((600, 106, 200, 64)) title [(616, 118, 168, 20)] words [(616, 142, 168, 22)] button None end None",
   "column: dialog (600, 90, 74, 402) row0 [(616, 126, 42, 22)] held Some(false) | wheel: [(616, 6, 42, 22)]",
 ]

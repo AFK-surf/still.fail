@@ -1,4 +1,4 @@
-// What a function writes on that it was given (docs/core-ts.md「谁能改什么」): a function changes only what it
+// What a function writes on that it was given (「谁能改什么」): a function changes only what it
 // made itself; what it is given (a parameter, and what is reached from one) may be what the core keeps and shares, and
 // it makes a new value with what changes instead. This finds every write on such a value in the files it checks.
 //
@@ -184,7 +184,7 @@ export function writesIn(file: string, code: string): Write[] {
     const s = stateOf(target);
     if (s === "given" || (s === "copied" && deep)) out.push({ file, line: p.node.loc?.start.line ?? 0, what: code.slice(p.node.start ?? 0, Math.min(p.node.end ?? 0, (p.node.start ?? 0) + 80)).split("\n")[0] });
   };
-  /// The object a written member belongs to, and whether it is reached through another (`a.b.c = …` writes on `a.b`).
+  /// The object a written member belongs to, and whether it is reached through another.
   const written = (p: NodePath, member: NodePath) => {
     const object = unwrap(member.get("object") as NodePath);
     say(p, object, object.isMemberExpression() || object.isOptionalMemberExpression());
@@ -225,7 +225,7 @@ if (import.meta.main) {
   for (const f of files.length > 0 ? files : CHECKED.map((c) => resolve(ROOT, c))) all.push(...writesIn(relative(ROOT, resolve(f)), readFileSync(f, "utf8")));
   for (const w of all) console.log(`client/core-ts/${w.file}:${w.line}: ${w.what}`);
   if (all.length > 0) {
-    console.error(`${all.length} write(s) on what a function was given (docs/core-ts.md「谁能改什么」): make a new value instead`);
+    console.error(`${all.length} write(s) on what a function was given (「谁能改什么」): make a new value instead`);
     if (check) process.exit(1);
   }
 }

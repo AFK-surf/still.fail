@@ -1,4 +1,4 @@
-// A still.fail cloud for the side-by-side runs (docs/core-ts.md, 怎么验证): the account API the client core uses, over
+// A still.fail cloud for the side-by-side runs (怎么验证): the account API the client core uses, over
 // real HTTP and a real `/v1/events` WebSocket, answering both cores alike. Its state is plain data, so a script can
 // change it between steps and push events as the real cloud would.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";

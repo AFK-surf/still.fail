@@ -315,7 +315,8 @@ unsigned mb_image_tex(int id) {
   return imgs[id].state == 1 ? imgs[id].tex : 0;
 }
 
-// A new context: every ready one decoded again (its texture made as it comes), not told again.
+// A new context: every ready one decoded again (its texture made as it comes), told the app again as it is (what draws
+// it drawn again then, not left as the frames drawn without it had it).
 void mb_images_lost(void) {
   n_gone = 0;  // (the old context's, gone with it)
   if (!pool) return;
@@ -325,6 +326,7 @@ void mb_images_lost(void) {
     if (again) {
       imgs[id].state = 0;
       imgs[id].tex = 0;
+      imgs[id].told = 0;
     }
     g_mutex_unlock(&lock);
     if (again) g_thread_pool_push(pool, GINT_TO_POINTER(id), NULL);

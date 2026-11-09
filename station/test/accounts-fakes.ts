@@ -127,7 +127,7 @@ export function approval(dir: string): { path: string; approve: () => Promise<vo
   return { path, approve: () => writeFile(path, "approved\n") };
 }
 
-/// The stand-in login command (login.rs's tests): Claude's prints a link and reads a code; Codex's prints a device
+/// The stand-in login command: Claude's prints a link and reads a code; Codex's prints a device
 /// link and a code, then finishes once the person approved (when an `approval` fifo is given, once it is written).
 export const fakeLogin = (approval?: string) => `#!/bin/sh
 if [ "$1" = "auth" ]; then

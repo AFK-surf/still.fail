@@ -1,4 +1,4 @@
-// A new device showing this one's code (settings/lock_prompts.mbt; Security.kt LockPrompts): put up over the page open,
+// A new device showing this one's code (settings/lock_prompts.mbt): put up over the page open,
 // whose and what it is, where it asks to be let in, the code; turned away (拒绝), or the panel closed by hand (the code
 // still good: lockPrompt.hide), not put up again.
 

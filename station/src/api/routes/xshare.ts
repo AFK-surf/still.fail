@@ -1,4 +1,4 @@
-// Chats shared with other workspaces, from the pages (docs/chat-share.md): sharing a chat of this station (its starter
+// Chats shared with other workspaces, from the pages: sharing a chat of this station (its starter
 // or a workspace manager), and saying this workspace takes chats from a station of another (any member).
 import { type Request, type Answer, error, json, segment, Refused, input } from "../request.ts";
 import type { Route } from "../admin.ts";

@@ -46,17 +46,17 @@ test "a code field asks the host for the digits keyboard" {
 
 ///|
 test "a completed code field removed after verification lets go of the keyboard" {
-  let shown = Ref(true)
+  let shown = @signals.signal(true)
   let handed : Array[String] = []
   let t = Tester::new(fn(c) {
-    if shown.val {
+    if shown.get() {
       code_view(handed)(c)
     }
   }, platform=2)
   t.type_text("123456")
   assert_eq(handed, ["123456"])
   assert_true(t.ime().0)
-  shown.val = false
+  shown.set(false)
   t.frame()
   assert_false(t.ime().0)
 }
@@ -150,9 +150,9 @@ test "a code field: emptied as asked between frames, the same code typed again h
 ///|
 test "a code field: the next box edged, all red while wrong and empty, nothing typed while it may not" {
   let handed = []
-  let wrong = Ref(false)
-  let enabled = Ref(true)
-  let t = Tester::new(fn(c) { code_view(handed, wrong=wrong.val, enabled=enabled.val)(c) })
+  let wrong = @signals.signal(false)
+  let enabled = @signals.signal(true)
+  let t = Tester::new(fn(c) { code_view(handed, wrong=wrong.get(), enabled=enabled.get())(c) })
   let plain = 0x1D1D1F2EL
   let next = 0x1D1D1FFFL
   let red = 0xFF3B30FFL
@@ -167,14 +167,14 @@ test "a code field: the next box edged, all red while wrong and empty, nothing t
   t.type_text("3456")
   assert_eq(code_edges().map(fn(e) { e.1 }), [plain, plain, plain, plain, plain, next])
   // refused: red until a digit is typed
-  wrong.val = true
+  wrong.set(true)
   t.ctx().clear_code_field("code")
   t.frame()
   assert_eq(code_edges().map(fn(e) { e.1 }), [red, red, red, red, red, red])
   t.type_text("1")
   assert_eq(code_edges().map(fn(e) { e.1 }), [plain, next, plain, plain, plain, plain])
   // while it may not change (a code being checked), typing does nothing and no box is the next
-  enabled.val = false
+  enabled.set(false)
   t.frame()
   t.type_text("23456")
   t.frame()

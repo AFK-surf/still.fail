@@ -1,4 +1,4 @@
-// What changed between two values of a topic, as a few ops (delta.rs), so a long transcript that grew by one message
+// What changed between two values of a topic, as a few ops, so a long transcript that grew by one message
 // goes out as one `append`. Objects are compared key by key (in the order serde_json keeps them: sorted), an array
 // that only grew is an `append`, one of the same length is compared item by item, anything else is `set` whole.
 import { compareKeys, equal, isObject } from "./util.ts";

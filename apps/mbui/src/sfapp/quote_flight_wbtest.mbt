@@ -117,7 +117,7 @@ fn send_ground(t : @ui.Tester) -> Int64 raise {
   }
   // (its round: the largest round about its middle, what it is pressed in reaching past it; drawn on its way as the
   // composer changes shape, its place in the capsule's end and in the opened box's corner 1.13 apart: smooth.mbt
-  // round_like)
+  // capsule_in)
   let (mx, my) = (x + w / 2.0, y + h / 2.0)
   let mut round : (Double, Double, Double, Double, Int64)? = None
   for r in t.drawn_rects() {
@@ -250,9 +250,10 @@ test "a quote sent alone is in the list at once, its card flying there from the 
     }
   }
   assert_false(hinted)
-  // and back once it is out of it
+  // and not back once it is out of it: the words' field has the cursor its comment line had (composer_hint)
   t.run_for(@sf.hint_back_ms)
-  assert_true(hint_seen(t))
+  assert_eq(focused_field(t), "发消息")
+  assert_false(hint_seen(t))
   assert_true(send_flight.get() is None)
   // landed in its message, over the composer, as wide as it needs
   let (_, y) = quote_once(t)
@@ -265,6 +266,35 @@ test "a quote sent alone is in the list at once, its card flying there from the 
       fail("its width went from \{widths[k - 1]} to \{widths[k]} at once: \{widths}")
     }
   }
+}
+
+///|
+/// Which field has the keyboard's focus now: its hint ("" none).
+fn focused_field(t : @ui.Tester) -> String {
+  match t.focused() {
+    Some(s) if s.role is TextField => s.label
+    _ => ""
+  }
+}
+
+///|
+test "sent with the focus in its comment line, a quote leaves the focus in the words' field" {
+  let calls : Array[Made] = []
+  let t = quoting(calls)
+  assert_eq(focused_field(t), "添加说明（可选）")
+  tap_send(t)
+  t.run_for(flight_ms + 50.0)
+  assert_eq(focused_field(t), "发消息")
+}
+
+///|
+test "taken out with the focus in its comment line, a quote leaves the focus in the words' field" {
+  let calls : Array[Made] = []
+  let t = quoting(calls)
+  assert_eq(focused_field(t), "添加说明（可选）")
+  t.click(Button, label=@sf.t("web-main.quote.remove"))
+  t.run_for(@sf.leave_ms + 50.0)
+  assert_eq(focused_field(t), "发消息")
 }
 
 ///|

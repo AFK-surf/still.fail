@@ -78,7 +78,7 @@ export function genesis(e: Entry): LockState {
   const origins = Array.isArray(b.origins) ? b.origins.filter((o: unknown) => typeof o === "string") : [];
   const s: LockState = {
     ws: e.ws, seq: 0, head: entryHash(e), genesis: entryHash(e), origins, rp_id: str(b.rp_id) ?? "", cloud_keys: b.cloud_keys ?? null,
-    members: new Map(), devices: new Map(), signKeys: new Map(), passkeys: new Map(), signed: new Set(), stations: new Map(), gateways: new Set(), disabled: false,
+    members: new Map(), devices: new Map(), signKeys: new Map(), passkeys: new Map(), signed: new Set(), stations: new Map(), persons: new Map(), gateways: new Set(), disabled: false,
   };
   for (const m of arr(b.members)) s.members.set(member(m).sub, member(m));
   // (the genesis's devices and passkeys are the ones the owner found each person had: all their own)

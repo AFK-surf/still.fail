@@ -1,4 +1,4 @@
-// The agents' tools for the vault's secrets (docs/vault.md, agent 用密钥): secret_list, secret_use, secret_run, and
+// The agents' tools for the vault's secrets (agent 用密钥): secret_list, secret_use, secret_run, and
 // secret_save to ask to keep one (agent 存入). The value of a secret is never what a tool gives back: a command is run
 // with it, through the proxy, an ssh-agent or its environment, and the agent sees what the command said, with the value
 // hidden; one to keep is sealed to its owner's devices, printed by a command whose output the agent never sees, or typed
@@ -55,7 +55,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
         required: ["site"],
         additionalProperties: false,
       },
-      run: (key: string, args: Record<string, unknown>) =>
+      run: (key: string, args: Record<string, unknown>, signal?: AbortSignal) =>
         signIns.ask(key, {
           site: text(args, "site"),
           ...(text(args, "reason") ? { reason: text(args, "reason") } : {}),
@@ -64,7 +64,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
           ...(args.reask === true ? { reask: true } : {}),
           ...(args.done === true ? { done: true } : {}),
           ...(typeof args.stuck === "string" ? { stuck: args.stuck } : {}),
-        }),
+        }, signal),
     } satisfies Tool]),
     {
       name: "secret_list",
@@ -162,7 +162,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
         required: ["request"],
         additionalProperties: false,
       },
-      run: (key, args) => secrets.reask(key, text(args, "request")),
+      run: (key, args, signal) => secrets.reask(key, text(args, "request"), signal),
     },
     {
       name: "secret_run",

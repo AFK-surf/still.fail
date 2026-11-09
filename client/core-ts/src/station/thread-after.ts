@@ -1,6 +1,6 @@
 // A thread's summary as its viewer has it (GET /threads/:id: how far it goes, its latest message, what the viewer has not
 // read, who wrote in it), brought on by what its station's stream says was said in it, here: the station tells what it
-// writes as it writes it, and leaves what a thread's summary makes of that to the device (docs/core-ts.md, sync).
+// writes as it writes it, and leaves what a thread's summary makes of that to the device (sync).
 // Made by the station, the summary was read again for every viewer after every message (a phone's few languages and
 // workspaces each), from the disk while its machine was short of memory: seconds for each on a station (2026-11-02).
 import { get, isObject } from "../util.ts";

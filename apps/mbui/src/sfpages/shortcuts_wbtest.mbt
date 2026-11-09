@@ -83,3 +83,34 @@ test "快捷键 made once, at each width and with either hand: an action's keys 
     assert_eq(keys_recording.get(), "", msg=at)
   }
 }
+
+///|
+test "快捷键, at each width and with either hand: how a message is sent, Enter 发送 or ⌘ Enter 发送 (prefs sendKey), the keys that send and make a new line said under it as chosen" {
+  for case in page_cases {
+    let (w, platform) = case
+    let at = "\{w} platform \{platform}"
+    let sets : Array[Json] = []
+    let t = setting_tester(Shortcuts, w, platform~, h=2400.0, over=fn(s) {
+      { ..s, call: fn(name, params, done) { if name == "prefs.set" { sets.push(params) } ; (s.call)(name, params, done) } }
+    })
+    let mac = @ui.platform() == 0
+    let (by_mod, sends, lines) = if mac {
+      ("⌘ Enter 发送", "发送 ⌘↩，换行 ↩ / ⇧↩", "发送 ↩，换行 ⇧↩")
+    } else {
+      ("Ctrl+Enter 发送", "发送 Ctrl+↩，换行 ↩ / Shift+↩", "发送 ↩，换行 Shift+↩")
+    }
+    assert_true(t.find("发送消息") is Some(_), msg=at)
+    assert_true(t.find("Enter 发送") is Some(_) && t.find(by_mod) is Some(_), msg=at)
+    assert_true(t.find(lines) is Some(_), msg=at)
+    t.click(Radio, label=by_mod)
+    t.draw()
+    assert_eq(sets.length(), 1, msg=at)
+    assert_eq(field(Some(sets[0]), "sendKey"), Some(Json::string("mod")), msg=at)
+    assert_true(t.find(sends) is Some(_), msg=at)
+    t.click(Radio, label="Enter 发送")
+    t.draw()
+    assert_eq(field(Some(sets[1]), "sendKey"), Some(Json::null()), msg=at)
+    assert_true(t.find(lines) is Some(_), msg=at)
+    assert_eq(t.squeeze_faults(), [], msg=at)
+  }
+}

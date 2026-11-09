@@ -7,7 +7,7 @@ test "rooms: keys in thirds of a row and a column, the layout's rounding running
   let key = fn(c : Ctx, name : String, w : Size, h : Size) {
     let id = c.id(name)
     ids.push(id)
-    c.clicked(id) |> ignore
+    c.takes_presses(id)
     c.box(id~, w~, h~, fn() {  }) |> ignore
   }
   let t = Tester::new(

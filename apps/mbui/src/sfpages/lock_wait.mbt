@@ -1,5 +1,5 @@
 // A device not yet confirmed in the workspace's safe mode (its lock): what it shows in the workspace's place
-// (cloud/Security.tsx SecurityWaiting, mobile/Security.tsx SecurityWaitingScreen; docs/workspace-lock.md「新设备」).
+// .
 // Every station of a locked workspace refuses such a device, so its chats would only say they are offline. Nothing is
 // asked by itself (the person who will compare the codes asks: 发送批准请求, the core's `lock.pair`); the core finds the
 // person's trusted devices, one of them shows a code, it is typed here into six boxes (`lock.pairCode`), and how that
@@ -26,7 +26,7 @@ pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : @settings.Here) -> Unit {
 /// one, turning; else what is so (none found, why it failed, not asked yet), 发送批准请求 under it (`in_card`: last on
 /// a page's card, in its foot corner, concentric with it: @sf.foot_reach).
 pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false) -> Unit {
-  let lock = (core.topic)("lock", { "workspace": Json::string(ws) }).value
+  let lock = (core.topic)("lock", { "workspace": Json::string(ws) }).get().value
   let me = field(lock, "me")
   let pair = field(me, "pair")
   let state = text(pair, "state")
@@ -91,10 +91,10 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
       }
       c.box(style=if in_card { lock_actions.then(@sf.foot_reach(@sf.button_height())) } else { lock_actions }, fn() {
         @sf.card_foot_words(on=in_card, fn() {
-          if @sf.button(c, @sf.t("web-pages.security.pairAgain"), key="lock-pair-again/" + ws, tone=Ghost) {
+          @sf.button(c, @sf.t("web-pages.security.pairAgain"), key="lock-pair-again/" + ws, tone=Ghost, on_press=fn() {
             c.clear_code_field(key)
             @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.pairAgain"), [])
-          }
+          }) |> ignore
         })
       })
       |> ignore
@@ -102,6 +102,18 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
   } else if state == "finding" || asking {
     note(@sf.t("web-pages.security.pairFinding"), true)
     said("approversText")
+    // asked again while it looks: the person opened a trusted device and nothing came up, so it looks again now
+    // rather than once its dials run out (2026-11-06 the user: 「直接加个没收到重新申请的按钮」)
+    if !asking {
+      c.box(style=if in_card { lock_actions.then(@sf.foot_reach(@sf.button_height())) } else { lock_actions }, fn() {
+        @sf.card_foot_words(on=in_card, fn() {
+          @sf.button(c, @sf.t("web-pages.security.pairRetry"), key="lock-pair-retry/" + ws, tone=Ghost, on_press=fn() {
+            @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.pairRetry"), [])
+          }) |> ignore
+        })
+      })
+      |> ignore
+    }
   } else {
     match state {
       "none" => {
@@ -118,9 +130,9 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     // (actions: its row, the button as wide as its words)
     c.box(style=if in_card { lock_actions.then(@sf.foot_reach(@sf.button_height())) } else { lock_actions }, fn() {
       @sf.card_foot_words(on=in_card, fn() {
-        if @sf.button(c, @sf.t("web-pages.security.request"), key="lock-pair/" + ws, tone=Primary) {
+        @sf.button(c, @sf.t("web-pages.security.request"), key="lock-pair/" + ws, tone=Primary, on_press=fn() {
           @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.request"), [])
-        }
+        }) |> ignore
       })
     })
     |> ignore

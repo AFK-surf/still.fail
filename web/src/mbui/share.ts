@@ -1,4 +1,4 @@
-// What another app shares into still.fail on the web (docs/share-in.md): the installed page's share target and the
+// What another app shares into still.fail on the web: the installed page's share target and the
 // browser extension (apps/extension) open /share?url=&title=&text= (the extension with `popup=1&ext=<its id>`, in a
 // small window of its own). The app takes it as it takes what Android shares (apps/mbui sfapp/share.mbt, its host's
 // `shared_in`): its share sheet lists where it can go. In the extension's window the app is over another (`over`, as

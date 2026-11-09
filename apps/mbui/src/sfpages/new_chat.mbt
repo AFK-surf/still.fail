@@ -1,4 +1,4 @@
-// A new chat (ember web/src/NewChat.tsx and NewChat.css.ts, web/src/mobile/NewChat.tsx and NewChat.css.ts;
+// A new chat (still.fail web/src/NewChat.tsx and NewChat.css.ts, web/src/mobile/NewChat.tsx and NewChat.css.ts;
 // apps/android NewChat.kt; its frequent combinations in the model's panel, model_triple.mbt): say what to do, having
 // picked where it runs (the station) and on what (the model, its runtime, how hard it thinks, who runs it), as the
 // core keeps them (the `newChat` topic; `newChat.pick`, `pick.set`, `pick.save`). One page in every frame, laid out by
@@ -17,7 +17,7 @@
 // (`chat.send` by its key); the page becomes the chat in place, its first words carried where they were typed till
 // their row is in the chat's list (flight.mbt), what is written meanwhile going on into the chat's draft
 // (`composer.carry`); over the chat its scene and what is under it fade where they are
-// (madeChat.ts toMadeChat, NewChat.kt). The frame says what is over it and under it, and what it does as the page
+// . The frame says what is over it and under it, and what it does as the page
 // becomes the chat (NewChatFrame).
 
 ///|
@@ -29,7 +29,7 @@
 /// (switch.mbt).
 pub(all) struct NewChatFrame {
   core : Core
-  bar : () -> Unit
+  bar : (@ui.Ctx) -> Unit
   foot : Double
   in_place : Bool
   sent : (ChatRef) -> Unit
@@ -61,10 +61,10 @@ pub fn new_chat_ask(what : String) -> Unit {
 /// station it last started on, its composer taking words but sending nothing; with none at all, the first to add;
 /// with none up, said so; nothing to run a chat with yet, its first step; else the page on the station it starts on.
 pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, frame : NewChatFrame) -> Unit {
-  let topic = (src.topic)("newChat", { "scope": Json::string(w.id) })
+  let topic = src.topic("newChat", { "scope": Json::string(w.id) }).get().snapshot()
   let v = topic.value
   c.box(style=new_ground, fn() {
-    c.box(style=new_bar_room, frame.bar) |> ignore
+    c.box(style=new_bar_room, fn() { (frame.bar)(c) }) |> ignore
     c.box(style=new_room, fn() {
       match field(v, "stations") {
         Some(Array(_)) =>
@@ -102,9 +102,9 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, frame : NewChatFr
 }
 
 ///|
-/// The new chat of view `v` as it is left (madeChat.ts toMadeChat, data-made-leave): as it was but for its composer
+/// The new chat of view `v` as it is left (data-made-leave): as it was but for its composer
 /// (the chat's now, its place kept), its scene `up` of the way faded where it is, what is under the composer `fade` of
-/// the way faded where it is. The frame draws it over the chat it became (its scene leaving: 140 ms from its first
+/// the way faded where it is, each read as it is drawn. The frame draws it over the chat it became (its scene leaving: 140 ms from its first
 /// words sent, what is under the composer 80 ms: @sfbase.new_chat_leaving_of), or over the chat it was left for, in a
 /// layer drawn only.
 pub fn new_chat_left(
@@ -113,12 +113,12 @@ pub fn new_chat_left(
   w : Workspace,
   frame : NewChatFrame,
   v : Json?,
-  up : Double,
-  fade : Double,
+  up : @motion.Anim,
+  fade : @motion.Anim,
 ) -> Unit {
   c.box(style=new_frame_box, fn() {
     // its bar gone at once (the chat has its own), its room kept
-    let bar = c.box(style=new_bar_room, frame.bar)
+    let bar = c.box(style=new_bar_room, fn() { (frame.bar)(c) })
     c.look(bar, @ui.look(alpha=0.0))
     c.box(style=new_room, fn() { new_on(c, src, w, frame, v, field(v, "station"), Going(up, fade)) }) |> ignore
     list_space(c, frame.foot)
@@ -129,11 +129,11 @@ pub fn new_chat_left(
 ///|
 /// What the page on a station is: here (`Here`); its stations not read yet (`Held`: why they could not be, "" while
 /// they are read), the station it last started on in its place; become its chat (`Going`: how far its scene and what is
-/// under its composer have faded, 0 … 1 each).
+/// under its composer have faded, 0 … 1 each, read as it is drawn).
 priv enum NewState {
   Here
   Held(String)
-  Going(Double, Double)
+  Going(@motion.Anim, @motion.Anim)
 }
 
 ///|
@@ -194,10 +194,6 @@ fn new_narrow(
   state : NewState,
 ) -> Unit {
   let address = new_address(w, v, station, state)
-  let (up, fade) = match state {
-    Going(u, f) => (u, f)
-    _ => (0.0, 0.0)
-  }
   let going = state is Going(_, _)
   // the page the new chat again after its first words were sent (the chat not made): its scene and choices coming back
   let (sending_up, sending_fade) = if going { (0.0, 0.0) } else { @sfbase.new_sending(c) }
@@ -208,10 +204,10 @@ fn new_narrow(
     c.list("new/scene", 1, new_scene_guess, fn(_) {
       c.box(style=new_scene_column, fn() {
         let scene = c.box(style=new_scene_narrow, fn() { new_scene_narrow_body(c, src, w, frame, v, station, state) })
-        // fading where it is (madeChat.ts); back, the chat not made
-        let gone = if going { up } else { sending_up }
-        if gone > 0.0 {
-          c.look(scene, @ui.look(alpha=1.0 - gone))
+        // fading where it is (as it is drawn); back, the chat not made
+        match state {
+          Going(up, _) => c.look_by(scene, fn() { @ui.look(alpha=1.0 - up.get(c)) })
+          _ => if sending_up > 0.0 { c.look(scene, @ui.look(alpha=1.0 - sending_up)) }
         }
         list_space(c, clear)
       })
@@ -228,7 +224,7 @@ fn new_narrow(
   }
   let width = composer_width(c.width)
   // (as far from the page's foot as a chat's composer: composer_foot_in)
-  let under : @ui.Space = @sf.room_of(composer_foot_in(c.width))
+  let under : @ui.Space = @sf.room_of(composer_foot_in(c, c.width))
   c.layer(fn() {
     c.spacer()
     let foot = c.box(style=new_foot, fn() {
@@ -239,27 +235,29 @@ fn new_narrow(
       let band = c.id("new/band")
       let band_room = @ui.style(pt=under, pb=if going { S0 } else { under })
       let mut over = -1
-      let ground = c.box(style=new_band.then(band_room), glass=@sf.glass_foot(), id=band, fn() {
-        over = c.box(style=new_over, fn() {
-          if !going {
-            new_notices(c, v, station, width)
-          }
-          c.box(style=@ui.style(w=Fixed(width)), fn() { new_choosers(c, src, w, frame, v, station, state) }) |> ignore
-        })
-        if !going {
-          c.box(style=@ui.style(w=Fixed(width)), fn() {
-            new_composer_place(c, src, w, frame, v, address, station, state, width)
+      let (ground, shaped) = composer_shaped(fn() {
+        c.box(style=new_band.then(band_room), glass=@sf.glass_foot(), id=band, fn() {
+          over = c.box(style=new_over, fn() {
+            if !going {
+              new_notices(c, v, station, width)
+            }
+            c.box(style=@ui.style(w=Fixed(width)), fn() { new_choosers(c, src, w, frame, v, station, state) }) |> ignore
           })
-          |> ignore
-        }
+          if !going {
+            c.box(style=@ui.style(w=Fixed(width)), fn() {
+              new_composer_place(c, src, w, frame, v, address, station, state, width)
+            })
+            |> ignore
+          }
+        })
       })
       // as the composer changes shape (a line more or less, opened or let go), what is over it and the band's top go
       // with its ground, on its curve, not to where they are laid out at once
-      with_composer(c, over, "new/over")
+      with_composer(c, over, "new/over", shaped)
       if sending_fade > 0.0 {
         c.look(over, @ui.look(alpha=1.0 - sending_fade))
       }
-      match composer_shape(c) {
+      match shaped {
         Some((by, spec)) => @motion.reshape(c, ground, "new/band", by~, spec~)
         None => ()
       }
@@ -273,8 +271,9 @@ fn new_narrow(
     @motion.measure(c, foot, "new/foot")
     // over the scene: its scroll bar keeps clear of it
     c.floats_over(foot)
-    if going {
-      c.look(foot, @ui.look(alpha=1.0 - fade))
+    match state {
+      Going(_, fade) => c.look_by(foot, fn() { @ui.look(alpha=1.0 - fade.get(c)) })
+      _ => ()
     }
   })
   |> ignore
@@ -385,12 +384,13 @@ fn new_controls(
     text(v, "runtime") == "" ||
     field(v, "model") is None {
     // nothing to run it with: the way to where models are enabled
-    if new_capsule(c, "new/models", @sf.t("web-main.newChat.noModels"), floating, fn() {
-        c.text(@sf.t("web-main.newChat.noModels"), style=new_capsule_words) |> ignore
-      }) &&
-      !going {
-      open_page(Place("profiles"))
-    }
+    new_capsule(c, "new/models", @sf.t("web-main.newChat.noModels"), floating, fn() {
+      c.text(@sf.t("web-main.newChat.noModels"), style=new_capsule_words) |> ignore
+    }, on_press=fn() {
+      if !going {
+        open_page(Place("profiles"))
+      }
+    })
   } else {
     // (asked from elsewhere, opened here: not by what is drawn in a page's bones)
     if !c.in_bones() && take_asked("model") {
@@ -413,36 +413,41 @@ fn new_station_control(
   going : Bool,
 ) -> Unit {
   let t = @sf.theme()
-  if (new_capsule(
-      c,
-      "new/station",
-      text(station, "name"),
-      floating,
-      fn() {
-        @sf.station_mark(c, text(station, "emoji"), text(station, "icon"), new_mark, t.p.text)
-        // (its name left out after what the model's control leaves out, its mark kept: the page says where it starts)
-        c.box(style=new_station_name, drop=new_drop_station_name, fn() {
-          c.text(text(station, "name"), style=new_capsule_words) |> ignore
-        })
-        |> ignore
-        @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore
-      },
-    ) &&
-    !going) ||
-    (!c.in_bones() && take_asked("station")) {
-    @sf.panel(
-      @sf.t("android-chat.new.station.pick"),
-      fn(c, close) { station_rows(c, src, w, v, close) },
-      from=Of(c.id("new/station")),
-    )
+  let from = c.id("new/station")
+  let open = fn() {
+    @sf.panel(@sf.t("android-chat.new.station.pick"), fn(c, close) { station_rows(c, src, w, v, close) }, from=Of(from))
+  }
+  new_capsule(
+    c,
+    "new/station",
+    text(station, "name"),
+    floating,
+    fn() {
+      @sf.station_mark(c, text(station, "emoji"), text(station, "icon"), new_mark, t.p.text)
+      // (its name left out after what the model's control leaves out, its mark kept: the page says where it starts)
+      c.box(style=new_station_name, drop=new_drop_station_name, fn() {
+        c.text(text(station, "name"), style=new_capsule_words) |> ignore
+      })
+      |> ignore
+      @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore
+    },
+    on_press=fn() {
+      if !going {
+        open()
+      }
+    },
+  )
+  // (asked from elsewhere: opened as it is seen)
+  if !c.in_bones() && take_asked("station") {
+    open()
   }
 }
 
 ///|
 /// A control of the page's (where it runs, the way to models): over the composer a capsule of its glass (mChooser,
-/// NewChat.kt Chooser), in its row as the composer's other controls (Chooser in NewChat.tsx's toolbar); what it holds
+/// NewChat.kt Chooser), in its row as the composer's other controls; what it holds
 /// `body`. True on the frame after it was pressed.
-fn new_capsule(c : @ui.Ctx, key : String, label : String, floating : Bool, body : () -> Unit) -> Bool {
+fn new_capsule(c : @ui.Ctx, key : String, label : String, floating : Bool, body : () -> Unit, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = if floating {
     c.box(style=glass_chooser_box, glass=@sf.glass_floating(), id~, fn() {
@@ -453,7 +458,10 @@ fn new_capsule(c : @ui.Ctx, key : String, label : String, floating : Bool, body 
     c.box(style=new_capsule_in_row, id~, body)
   }
   c.semantics(b, Button, id~, label~)
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
@@ -467,7 +475,7 @@ fn take_asked(what : String) -> Bool {
 }
 
 ///|
-/// Where a new chat runs (the mobile pickStation, NewChat.kt pickStation): the workspace's stations up now, each its
+/// Where a new chat runs (the mobile pickStation): the workspace's stations up now, each its
 /// mark beside its name, the one it starts on checked, and what the stations' list says of it (station_facts.mbt: its
 /// agents at work, what is left of its machine, how this device reaches it); picked, the core has it (`newChat.pick`).
 fn station_rows(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, close : () -> Unit) -> Unit {
@@ -476,10 +484,10 @@ fn station_rows(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, close : () 
   for s in items(v, "stations") {
     let st = Some(s)
     let id = c.id("pick-station/" + text(st, "station"))
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       @sfbase.pick_new(src, w.id, { "station": Json::string(text(st, "id")) })
       close()
-    }
+    })
     // (its words on the panel's words' line wherever it is drawn: @sf.panel_row_in)
     let row = c.box(style=station_row.then(@sf.panel_row_in()), id~, fn() {
       c.box(style=station_row_mark_box, fn() {
@@ -531,10 +539,12 @@ fn new_wide(
         new_part(c, i, state, true)
         head.push(i)
       })
-      new_composer_place(c, src, w, frame, v, address, station, state, col)
+      let (_, shaped) = composer_shaped(fn() {
+        new_composer_place(c, src, w, frame, v, address, station, state, col)
+      })
       // the composer changing shape in the middle of the column, what is over it goes with its ground (as what is
       // under it does: new_column)
-      head.eachi(fn(k, i) { with_composer(c, i, "new/head/\{k}") })
+      head.eachi(fn(k, i) { with_composer(c, i, "new/head/\{k}", shaped) })
     },
     under=fn(col) {
       // (data-made-leave="fade": fading where it is)
@@ -576,13 +586,14 @@ fn new_column(c : @ui.Ctx, body : (Double) -> Unit, under? : (Double) -> Unit) -
       Some(under) =>
         c.box(style=new_inner_tall.then(@ui.style(w=Fixed(col))), fn() {
           c.spacer()
-          body(col)
+          // (the composer in it: what is under it moves with its box)
+          let (_, shaped) = composer_shaped(fn() { body(col) })
           let least = @motion.measured(c, "new/under").unwrap_or(0.0)
           c.box(style=new_under_room.then(@ui.style(min_h=Fixed(least))), fn() {
             let held = c.box(style=new_under, fn() { under(col) })
             @motion.measure(c, held, "new/under")
             // (the composer over it changing shape: with its ground)
-            with_composer(c, held, "new/under/moves")
+            with_composer(c, held, "new/under/moves", shaped)
           })
           |> ignore
         })
@@ -594,11 +605,11 @@ fn new_column(c : @ui.Ctx, body : (Double) -> Unit, under? : (Double) -> Unit) -
 
 ///|
 /// Part `i` of the page wide as it leaves, fading where it is: `up` (the scene) as its scene does, else as what is under
-/// the composer does (madeChat.ts). While it stays, as it is.
+/// the composer does. While it stays, as it is.
 fn new_part(c : @ui.Ctx, i : Int, state : NewState, up : Bool) -> Unit {
   match state {
-    Going(u, _) if up => c.look(i, @ui.look(alpha=1.0 - u))
-    Going(_, f) => c.look(i, @ui.look(alpha=1.0 - f))
+    Going(u, _) if up => c.look_by(i, fn() { @ui.look(alpha=1.0 - u.get(c)) })
+    Going(_, f) => c.look_by(i, fn() { @ui.look(alpha=1.0 - f.get(c)) })
     Here => {
       // the page the new chat again after its first words were sent (the chat not made): coming back
       let (u, f) = @sfbase.new_sending(c)
@@ -612,7 +623,7 @@ fn new_part(c : @ui.Ctx, i : Int, state : NewState, up : Bool) -> Unit {
 }
 
 ///|
-/// The composer's choices wide (NewChat.tsx toolbar), in its row: the page's controls (new_controls).
+/// The composer's choices wide, in its row: the page's controls (new_controls).
 fn new_tools(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json?) -> Unit {
   new_controls(c, src, w, v, station, false, false)
 }
@@ -656,7 +667,7 @@ fn new_composer_place(
       }
       let name = text(station, "name")
       // (at the page's foot, laid out narrow: in a panel's foot corners as a chat's is; roomy, in the page's middle)
-      let at = if wide { composer_alone } else { composer_place(c.width) }
+      let at = if wide { composer_alone } else { composer_place(c, c.width) }
       let place = c.box(style=new_composer_box, fn() {
         c.sized(width, c.height, fn() {
           composer(c, src, w, spec, fn(d) { new_send(c, src, frame, v, address, name, d) }, place=at)
@@ -700,7 +711,7 @@ fn new_offer(c : @ui.Ctx, src : Source, frame : NewChatFrame, station : Json?, s
 }
 
 ///|
-/// The page's head, the same at every width (NewChat.tsx's and the mobile page's say the same): the picture
+/// The page's head, the same at every width: the picture
 /// (Illustration "new-chat") `art_w` wide, what to do, where it starts (while its stations are read, two lines
 /// breathing in its place, still once what they wait on failed); each part given to `part` (how it leaves).
 fn new_head(c : @ui.Ctx, station : Json?, state : NewState, art_w : Double, part : (Int) -> Unit) -> Unit {
@@ -779,13 +790,14 @@ fn new_blocked(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Js
   let blocked = text(v, "blocked")
   let title = match blocked {
     "profile" => @sf.t("web-main.newChat.addProfileFor", args=[("name", name)])
+    "disabled" => @sf.t("web-main.newChat.profilesDisabled")
     "shared" => @sf.t("web-main.newChat.notShared", args=[("name", name)])
     _ => @sf.t("web-main.newChat.pickModels")
   }
   let lead = match blocked {
     "profile" =>
       @sf.t("web-pages.profiles.lead", args=[("subscription", @sf.t("web-pages.profiles.leadSubscription"))])
-    "shared" => text(v, "problem")
+    "shared" | "disabled" => text(v, "problem")
     _ => @sf.t("web-main.newChat.noModelsLead", args=[("name", name)])
   }
   new_column(c, fn(_) {
@@ -800,14 +812,14 @@ fn new_blocked(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Js
       fn() {
         match blocked {
           "profile" =>
-            if @sf.button(c, @sf.t("web-main.newChat.addProfile"), key="new/add-profile", tone=Primary, icon="plus") {
+            @sf.button(c, @sf.t("web-main.newChat.addProfile"), key="new/add-profile", tone=Primary, icon="plus", on_press=fn() {
               open_page(Setting(@settings.Route::NewProfile(address)))
-            }
+            }) |> ignore
           "shared" => ()
           _ =>
-            if @sf.button(c, @sf.t("web-main.newChat.goPickModels"), key="new/pick-models", tone=Primary) {
+            @sf.button(c, @sf.t("web-main.newChat.goPickModels"), key="new/pick-models", tone=Primary, on_press=fn() {
               open_page(Setting(@settings.Route::Profiles(address)))
-            }
+            }) |> ignore
         }
         if items(v, "stations").length() > 1 {
           new_station_control(c, src, w, v, station, false, false)
@@ -818,7 +830,7 @@ fn new_blocked(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Js
 }
 
 ///|
-/// The new chat's first message (draft.ts send with `first`, NewChat.tsx useEnsureChat, onSending, onSent): the page
+/// The new chat's first message (onSending, onSent): the page
 /// becomes the chat the frame it is sent, by the key the core keeps for the next one made (the `newChat` topic's
 /// `next`; the one made for it already while the picks are the same), its first words in its list from then and
 /// flying there as any chat's do, its scene leaving at the same moment: what the core does then (its words taken off
@@ -873,15 +885,15 @@ fn new_send(
     d.key,
     words,
     flying_quotes(c, src, d, station) + flying_files(c, src, d),
-    field=composer_field_key,
-    hold=fn(ms) { composer_hold(d.key, 0.0, box, ms) },
+    field=d.field,
+    hold=fn(c, ms) { composer_hold(c, d.key, 0.0, box, ms) },
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
     desk=!frame.in_place,
     marks~,
     runs~,
   )
-  let row = sent_local(rk, None, words, up, going~, quotes~, runs~)
-  @sfbase.flight_carry_into(d.key, draft, rk, row, hold=fn(ms) { composer_hold(draft, 0.0, box, ms) })
+  let row = sent_local(c, rk, None, words, up, going~, quotes~, runs~, now=(src.now)())
+  @sfbase.flight_carry_into(c, d.key, draft, rk, row, hold=fn(c, ms) { composer_hold(c, draft, 0.0, box, ms) })
   let sig = @sfbase.picked_sig(v)
   fresh.starting.set(true)
   fresh.sending.set(true)
@@ -893,7 +905,7 @@ fn new_send(
   fresh.became.set(Some(r))
   fresh.room.set(@motion.measured(c, "new/composer").unwrap_or(0.0))
   fresh.foot.set(@motion.measured(c, "new/foot").unwrap_or(0.0))
-  @sfbase.became_starts(wide=!frame.in_place)
+  @sfbase.became_starts(c, wide=!frame.in_place)
   @sfbase.writing_starting(src, d, true)
   // what the core does, in order: the words taken, the chat made, what is written meanwhile on into its draft; then
   // the message sent into it, once both are
@@ -978,7 +990,7 @@ fn new_send(
       }
     })
   }
-  // what is written meanwhile goes on in the chat's draft (dock.tsx carryTo)
+  // what is written meanwhile goes on in the chat's draft
   @sfbase.writing_carry(src, d.key, draft)
   new_chat_reset()
   (frame.sent)(r)
@@ -986,7 +998,6 @@ fn new_send(
 }
 
 // ── the run picker ────────────────────────────────────────────────────────
-
 
 ///|
 /// The column wide (newChatInner: 720 at most, 32 in from the pane's sides), the scene's width (ILLUS_SIZE: 320;
@@ -1161,11 +1172,6 @@ let new_alone_box : @ui.Style = @ui.css("w=Full px=S8 gap=S2_5 align=ACenter")
 let new_alone_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, center=true, w=Full)
 
 ///|
-/// 新对话 (newChatTitle: the heading's, 600).
-// kept across runs: a value (no field of it changes)
-let new_title_box : @ui.Style = @ui.css("w=Full")
-
-///|
 // kept across runs: a value (no field of it changes)
 let new_title : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, center=true, w=Full)
 
@@ -1211,13 +1217,3 @@ let new_notice_box : @ui.Style = @ui.css("px=S3 py=S2 mb=S2 radius=Xl bg=A(Warn,
 ///|
 // kept across runs: a value (no field of it changes)
 let new_notice_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
-
-///|
-/// The way to where models are chosen (controls.css.ts chooser as a link): 28 high, 8 in, the link's ink.
-// kept across runs: a value (no field of it changes)
-let new_link_box : @ui.Style = @ui.css("row h=S7 px=S2 radius=Lg align=ACenter hovered{bg=Hover}")
-
-///|
-// kept across runs: a value (no field of it changes)
-let new_link : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Link, wrap=false, w=Cut)
-

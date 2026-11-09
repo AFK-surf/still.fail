@@ -14,7 +14,7 @@ pub(all) struct MemoryRead {
 ///|
 /// A station's memory (the `memory` topic).
 pub fn memory_of(core : Core, address : String) -> MemoryRead {
-  let topic = (core.topic)("memory", { "station": str(address) })
+  let topic = (core.topic)("memory", { "station": str(address) }).get()
   {
     value: topic.value,
     error: match topic.error {
@@ -25,13 +25,13 @@ pub fn memory_of(core : Core, address : String) -> MemoryRead {
 }
 
 ///|
-/// The global memory's parts (Memory.kt sectionsOf): by its headings, as the core reads them.
+/// The global memory's parts: by its headings, as the core reads them.
 pub fn sections_of(m : Json?) -> Array[(String, String, String)] {
   items(field(m, "global"), "sections").map(fn(x) { (text(Some(x), "title"), text(Some(x), "text"), text(Some(x), "note")) })
 }
 
 ///|
-/// Whose a skill is, after its name (Memory.kt tagOf): another station's, or shared from here.
+/// Whose a skill is, after its name: another station's, or shared from here.
 pub fn skill_tag(k : Json?, names : Map[String, String]) -> String {
   let share = field(k, "share")
   match text(share, "role") {
@@ -83,5 +83,5 @@ pub fn builtin_open_of(address : String) -> Bool {
 /// Station `address`'s built-in skills folded open, or shut where they were open: told what follows them.
 pub fn builtin_turn(address : String) -> Unit {
   builtin_open[address] = !builtin_open.get(address).unwrap_or(false)
-  builtin_turned.set(@signals.untracked(fn() { builtin_turned.get() }) + 1)
+  builtin_turned.set(builtin_turned.untracked() + 1)
 }

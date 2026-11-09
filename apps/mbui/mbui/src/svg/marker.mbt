@@ -1,4 +1,4 @@
-// usvg's markers (parser/marker.rs): a marker's content drawn at a path's vertices, turned to its direction.
+// usvg's markers: a marker's content drawn at a path's vertices, turned to its direction.
 
 ///|
 priv enum MSeg {

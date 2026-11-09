@@ -1,4 +1,4 @@
-// The certificates the keeper's proxy shows (docs/vault.md, keeper): its own CA, made once and kept in the station's data
+// The certificates the keeper's proxy shows (keeper): its own CA, made once and kept in the station's data
 // directory, and a short-lived certificate for each host a grant is for, signed by it. node:crypto reads certificates
 // but does not make them, so this writes the DER itself: ECDSA P-256 with SHA-256, and the extensions strict verifiers
 // ask for (Python 3.13's VERIFY_X509_STRICT: key identifiers, a critical basic constraint and key usage on the CA).

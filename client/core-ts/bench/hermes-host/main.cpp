@@ -1,5 +1,5 @@
 // The Android engine (apps/android/core/src/main/cpp/engine.cpp) on a Mac, to measure the core in Hermes as the app
-// runs it (docs/core-db.md, Measurements): the same Hermes (0.81.4, React Native's macOS build), the same bundle
+// runs it (Measurements): the same Hermes (0.81.4, React Native's macOS build), the same bundle
 // (scripts/hermes-bundle.ts), the same Rust shell (client/shell, built for macOS) behind the same `__native`, the same
 // loop. The Hermes CLI cannot: it has no SQLite. What the app's Kotlin side does is a driver script here instead
 // (drive.js), with `__bench` to read the clock, the process's memory and Hermes's heap.

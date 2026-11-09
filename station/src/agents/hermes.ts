@@ -1,5 +1,5 @@
 // Hermes Agent driver: one `hermes acp` per session, spoken to in ACP (acp.ts) with one ACP session in it. See
-// docs/hermes.md for the protocol contract and supported profile setup. Beside what ACP says: the station's instructions
+// for the protocol contract and supported profile setup. Beside what ACP says: the station's instructions
 // go with each prompt; a message for the running turn waits for the next (Hermes would make it a turn of its own); a
 // call's title is `<tool>: <its input>`; the station keeps the transcript (acp.ts KeptTranscript).
 import { closeSync, existsSync, mkdirSync, openSync, readSync } from "node:fs";
@@ -55,7 +55,7 @@ function sessionHome(options: OpenOptions, configured: string): string {
   } finally { closeSync(fd); }
 }
 
-/// Hermes' ACP title is `<tool_name>: <argument preview>` (acp_adapter/tools.py). The live and transcript readers
+/// Hermes' ACP title is `<tool_name>: <argument preview>`. The live and transcript readers
 /// need the tool's name, notably to recognise chat_post; its arguments remain in rawInput, not in the name.
 function hermesUpdate(update: Json): Json {
   if (update?.sessionUpdate !== "tool_call" || typeof update.title !== "string") return update;
@@ -216,7 +216,7 @@ export class HermesSession extends AcpSession {
   }
 
   /// The station's instructions go with each prompt, as context before the message: ACP has no system prompt of a
-  /// client's (docs/hermes.md).
+  /// client's.
   protected promptText(text: string) {
     return this.instructions ? `<stillfail-context>\n${this.instructions}\n</stillfail-context>\n\n${text}` : text;
   }

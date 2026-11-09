@@ -1,4 +1,4 @@
-// Feishu on the station (docs/feishu.md): its connects as every platform's are kept (connects/connects.ts: connected as
+// Feishu on the station: its connects as every platform's are kept (connects/connects.ts: connected as
 // config.json and the station's workspace say, what Feishu calls people and chats in <data>/feishu-names.json), where
 // its chats' words go (<data>/feishu-threads.json), and the apps being made by a scan.
 import { join } from "node:path";
@@ -67,7 +67,7 @@ export type FeishuParts = ReturnType<typeof makeFeishu>;
 
 export function makeFeishu(options: FeishuOptions) {
   const threads = new FeishuThreads(join(options.data, "feishu-threads.json"));
-  const registrations = new Registrations({ clock: options.clock });
+  const registrations = new Registrations({ clock: options.clock, file: join(options.data, "feishu-registrations.json") });
   const create =
     options.create ??
     ((c: FeishuConnect, book: NameBook, t: FeishuThreads) => new FeishuSurface({ connect: c.id, appId: c.appId, appSecret: c.appSecret, domain: c.domain, threads: t, threadMode: c.threads, book, clock: options.clock }));
@@ -109,8 +109,8 @@ export function makeFeishu(options: FeishuOptions) {
       };
     },
     close: async () => {
-      await connects.close();
       await registrations.close();
+      await connects.close();
     },
   };
 }

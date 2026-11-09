@@ -1,4 +1,4 @@
-# The renderer's pixel references in the browser (docs/determinism.md): made and checked on GitHub's ubuntu-24.04 runner,
+# The renderer's pixel references in the browser: made and checked on GitHub's ubuntu-24.04 runner,
 # headless Chromium (Playwright pinned in scripts/render_web.sh) on SwiftShader. Checked: the browser and the system's
 # fonts (their files' bytes); the rest is said. Either new: every reference made again in one PR (the render-web
 # workflow's artifact), said there.

@@ -77,8 +77,8 @@ test "wide: a quota running out beside an agent's history's control is whole how
   }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       match (name, got.value) {
         ("chat", Some(Object(chat)) as v) => {
           let agents = items(v, "agents").map(fn(a) {
@@ -159,11 +159,11 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   t.tap_text("添加到消息")
   t.frame()
   t.frame()
-  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([])
+  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 1)
   assert_eq(text(field(Some(refs[0]), "ref"), "path"), fix_docs + "/发布清单.md")
   assert_eq(text(field(Some(refs[0]), "ref"), "stationName"), "Willow")
-  // another row dragged off the tab onto the chat (ChatSide.tsx useChatDrop): let go there, into its draft too
+  // another row dragged off the tab onto the chat: let go there, into its draft too
   let (x, y) = match t.find("长篇小说.txt") {
     Some(at) => at
     None => fail("no 长篇小说.txt in the tab")
@@ -171,7 +171,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   t.drag(x, y, 400.0, 400.0)
   t.frame()
   t.frame()
-  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([])
+  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 2)
   assert_eq(text(field(refs.get(1), "ref"), "path"), fix_docs + "/长篇小说.txt")
 }
@@ -214,7 +214,7 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
   t.tap_text("添加到消息")
   t.frame()
   t.frame()
-  let refs = @sfbase.writings.get("new:ws1").map(fn(d) { d.files }).unwrap_or([])
+  let refs = @sfbase.writings.get("new:ws1").map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 1)
   assert_eq(text(field(Some(refs[0]), "ref"), "path"), fix_docs + "/发布清单.md")
 }
@@ -302,8 +302,8 @@ test "wide: an agent's history asked as a page (a link's ?history=…&entry=…)
 fn slack_only(base : Source) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       guard name == "chat" && got.value is Some(Object(v)) else { return got }
       let v = v.copy()
       v["thread"] = Json::null()
@@ -333,5 +333,6 @@ test "wide: a chat of a Slack thread alone has its \"…\" too: where it is, its
   assert_true(t.find("在 Slack 中打开") is None)
   t.click(Button, label="更多")
   t.run_for(@ui.move_most_ms)
+  open_share(t)
   assert_true(t.find("在 Slack 中打开") is Some(_))
 }

@@ -1,10 +1,10 @@
 ///|
 /// The made-up chat open over Home (chat_fixture.mbt), from its start: pushed in.
-fn chat_tester(mode : String) -> @ui.Tester {
+fn chat_tester(mode : String, w? : Double = 390.0) -> @ui.Tester {
   new_run()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -13,10 +13,9 @@ fn chat_tester(mode : String) -> @ui.Tester {
 test "a chat opens at its end: its bar, its last messages, the composer's room under them" {
   let t = chat_tester("chat")
   assert_true(t.find("整理发布清单") is Some(_))
-  // its people in the bar lettered as it calls them: the viewer 「你」, not their name (Parts.kt PeopleStack)
-  let bar = t.words().filter(fn(w) { w.2 < 100.0 }).map(fn(w) { w.0 })
-  assert_true(bar.contains("你"))
-  assert_true(!bar.contains("林"))
+  // (what the bar shows: its words seen, not those its row left out for the title and its agent, as a phone's is)
+  let bar = fn(t : @ui.Tester) { t.words().filter(fn(w) { w.2 < 100.0 && w.5 > 0.0 }).map(fn(w) { w.0 }) }
+  assert_true(!bar(t).contains("你") && !bar(t).contains("林"), msg="its people left out for its title: \{bar(t)}")
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
   let (_, field_y) = t.find("发消息").unwrap()
@@ -29,6 +28,10 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   // no way to the newest at the newest
   assert_true(!readings.get("ws1/st1\u{1}s-c1").unwrap().jump)
   t.assert_idle()
+  // its people in the bar where it has the room, lettered as it calls them: the viewer 「你」, not their name
+  let wide = chat_tester("chat", w=480.0)
+  assert_true(bar(wide).contains("你"), msg="its people with the room: \{bar(wide)}")
+  assert_true(!bar(wide).contains("林"), msg="lettered as it calls them: \{bar(wide)}")
 }
 
 ///|
@@ -353,6 +356,43 @@ test "a chat's place: told the core as the list comes to rest (the message at th
 }
 
 ///|
+test "words sent going up into the list tell the core where it is as the message at the top changes, not each frame" {
+  // (each frame of their way up told the core where the chat was, and it wrote it down: 20 calls a send, 2026-11-08)
+  new_run()
+  let clock : Ref[Double] = { val: 0.0 }
+  fix_clock.val = Some(fn() { clock.val })
+  let base = fixture("chat")
+  let calls : Array[Made] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.type_text("测试一下")
+  tap_send(t)
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
+  t.draw()
+  t.run_for(fix_answer_ms)
+  fix_clock_set(clock, clock.val + fix_answer_ms)
+  t.draw()
+  t.run_for(Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() + turn_calm_ms)
+  assert_true(t.find("收到：「测试一下」") is Some(_))
+  // told as the message at the top changed, not as it moved under it
+  let told = named(calls, "chat.place").map(fn(m) { field(Some(m.params), "seq") })
+  assert_true(told.length() > 0)
+  for i in 1..<told.length() {
+    assert_true(told[i] != told[i - 1], msg="told again with the same message at the top: \{told}")
+  }
+  fix_clock.val = None
+}
+
+///|
 /// How far the list is dragged down from its end.
 let place_drag : Double = 300.0
 
@@ -392,11 +432,14 @@ test "a chat left lets go of all that holds its thread at the core: its view and
   let left : Array[(String, String)] = []
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       asked.push((name, Json::object(params).stringify()))
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
-    leave: fn(name, params) { left.push((name, Json::object(params).stringify())) },
+    leave: fn(name, params, __reason) {
+      left.push((name, Json::object(params).stringify()))
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop() }
+    },
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
@@ -655,4 +698,21 @@ test "a notice opened keeps the size of its words" {
   assert_true(after.length() > 0)
   assert_true((after[0].2 - before[0].2).abs() < 0.5)
   assert_true((after[0].3 - before[0].3).abs() < 0.5)
+}
+
+///|
+test "a chat's run changed: what changed on a line, else what it runs on now; pressed, both runs whole" {
+  // (the user, 2026-11-06: 默认按最小差异显示，点击查看完整信息，如果差异太大一行显示不了，就只显示变化后的信息)
+  let t = chat_tester("chat-run-change")
+  assert_eq(t.lines_of("Opus 5.5 · 高 → Sonnet 5.5 · 中"), ["Opus 5.5 · 高 → Sonnet 5.5 · 中"])
+  // too long for a phone's line: what it runs on now alone
+  assert_eq(t.lines_of("Claude Code · Sonnet 5.5 · 中 · 标准 → Codex · GPT-6 Astra · 高 · Fast"), [
+    "换成 Codex · GPT-6 Astra · 高 · Fast",
+  ])
+  let (x, y) = t.find("Opus 5.5 · 高 → Sonnet 5.5 · 中").unwrap()
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("之前：Claude Code · Opus 5.5 · 高 · 自动 · lin@example.com") is Some(_))
+  assert_true(t.find("现在：Claude Code · Sonnet 5.5 · 中 · 自动 · lin@example.com") is Some(_))
+  assert_true(t.find("Opus 5.5 · 高 → Sonnet 5.5 · 中") is None)
 }

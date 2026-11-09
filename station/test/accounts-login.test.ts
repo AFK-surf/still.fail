@@ -1,4 +1,4 @@
-// Signing in from the pages, and the machine's own logins (login.rs, machine_logins.rs tests): with stand-in CLIs in
+// Signing in from the pages, and the machine's own logins: with stand-in CLIs in
 // temp homes.
 import assert from "node:assert/strict";
 import { test } from "node:test";

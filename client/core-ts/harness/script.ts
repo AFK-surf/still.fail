@@ -10,7 +10,7 @@ export type Ctx = {
   disconnect(): void;
 };
 
-/// `deliberate`: the TS core is meant to show something else at this step (docs/core-ts.md, 刻意不同), and why; the end
+/// `deliberate`: the TS core is meant to show something else at this step (刻意不同), and why; the end
 /// state is still compared.
 export type Step = { name: string; run(ctx: Ctx): void | Promise<void>; wait?: number; deliberate?: string };
 

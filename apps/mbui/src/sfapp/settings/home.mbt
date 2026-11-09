@@ -4,7 +4,7 @@
 
 ///|
 /// A page of the settings, by its route: call for the page the app's stack shows. `root`: a place of the bottom
-/// bar's at the stack's root (PlacePage.kt), under the app's own top bar, so without its compact one. `top`: where
+/// bar's at the stack's root, under the app's own top bar, so without its compact one. `top`: where
 /// that bar is over the page rather than above it, how far down what it shows starts (it scrolls under the bar).
 pub fn page(
   c : @ui.Ctx,
@@ -59,13 +59,13 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     Profiles(only) => profiles_page(c, core, here, only)
     Archive => archive_page(c, core, here)
     AdbShare(a) => adb_page(c, core, here, a)
-    NewProfile(a) => new_profile_page(c, core, here, a)
+    PersonalLock => personal_lock_page(c, core)
     ProfileAccount(k) => profile_account_page(c, core, here, k)
     KeptFiles => kept_page(c, core)
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
     // one page for every frame (src/sfpages about.mbt; the list, sfpages' settings_list.mbt), drawn by the frame's
     // setting_route
-    Home | Appearance | Fonts | BarSettings | Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) | Usage | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) => ()
+    Home | Appearance | Fonts | BarSettings | Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) | Usage | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | NewProfile(_) => ()
     // the web's desktop pages, one for every frame (src/sfpages), drawn by the frame's setting_route too
     Shortcuts | Notifications | Permissions | Archiving | StationArchiving(_) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_) => ()
     RunSettings(s, key) => run_settings_page(c, core, s, key)
@@ -79,7 +79,7 @@ let chosen : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 ///|
 /// A pref as the core keeps it (the `prefs` topic), or as it was chosen here a moment ago.
 pub fn pref(core : Core, name : String) -> String {
-  pref_from((core.topic)("prefs", Map::new()).value, name)
+  pref_from((core.topic)("prefs", Map::new()).get().value, name)
 }
 
 ///|
@@ -159,7 +159,7 @@ pub fn dark(prefs : Json?, system_dark : Bool) -> Bool {
 }
 
 ///|
-/// still.fail's terms or privacy policy on the web (SettingsHome.kt Legal; the app speaks Chinese: no /en).
+/// still.fail's terms or privacy policy on the web (the app speaks Chinese: no /en).
 pub fn legal_url(page : String) -> String {
   "https://still.fail/" + page
 }
@@ -169,7 +169,7 @@ pub fn legal_url(page : String) -> String {
 pub let notify_switched : @signals.Signal[Bool?] = @signals.signal(None)
 
 ///|
-/// Notifications turned on or off on this device (SettingsHome.kt Notify, AppState.useNotify): turned on, the system
+/// Notifications turned on or off on this device (AppState.useNotify): turned on, the system
 /// asked to allow them too; the core keeps it (`notify.set`), taking this device's pushes off the accounts when off,
 /// and the push registration follows what it answers (Push.sync). Not done: said in a toast, the switch back.
 pub fn use_notify(core : Core, on : Bool) -> Unit {

@@ -78,6 +78,81 @@ test("a compaction that fails is said with why; one asked while a turn runs is r
   await r.close();
 });
 
+/// A session that holds `tokens`, as its last call said.
+function holds(r: Rig, key: string, tokens: number) {
+  r.store.recordUsage(`/t/${key}`, { session: key, offset: tokens, model: "claude-opus-5-5" }, "claude", [[
+    { id: `held-${tokens}`, at: Date.now(), model: "claude-opus-5-5", subagent: false, fast: false, input: 10, cacheRead: tokens - 10, cacheWrite: 0, cacheWriteLong: 10, output: 1, calls: 1, context: tokens, window: null },
+    { turn: null, person: null, thread: null, profile: null },
+  ]]);
+}
+
+test("a most lowered under what it holds, at rest: compacted at once, on a process that keeps to it", async () => {
+  const r = new Rig();
+  const { key, session } = await done(r);
+  holds(r, key, 627_800);
+  await configure(r.hub, key, { context: 300_000 });
+  await settle();
+  assert.equal(r.session(key).contextBefore, 0, "the card goes by what it ran with until compacted");
+  const next = r.claude.last();
+  assert.notEqual(next, session, "a new process takes the new most");
+  assert.equal(next.compactions, 1);
+  next.complete();
+  await settle();
+  assert.equal(r.session(key).contextBefore, null);
+  assert.ok(r.chat.texts().includes("已压缩上下文"), r.chat.texts().join("\n"));
+});
+
+test("a most lowered while a turn runs: that turn goes on, it is compacted as the turn ends, before what waited", async () => {
+  const r = new Rig();
+  const { m, key, session } = await done(r);
+  await r.accept(reply(m, "9999.2", "and then the tests"));
+  await settle();
+  holds(r, key, 627_800);
+  await configure(r.hub, key, { context: 300_000 });
+  await settle();
+  assert.equal(session.disposed, false, "the running turn is not interrupted");
+  assert.equal(r.session(key).contextBefore, 0);
+  await r.call(key, "chat_state", { kind: "all_done", done: "测试任务已完成，没有剩余工作" });
+  session.complete();
+  await settle();
+  const next = r.claude.last();
+  assert.notEqual(next, session);
+  assert.equal(next.compactions, 1);
+  assert.equal(next.prompts.length, 0);
+  await r.accept(reply(m, "9999.3", "one more"));
+  await settle();
+  assert.equal(next.prompts.length, 0, "what comes meanwhile waits for it");
+  next.complete();
+  await settle();
+  assert.equal(next.prompts.length, 1, "what waited is given after");
+});
+
+test("a most lowered but still over what it holds, or raised again: nothing to compact", async () => {
+  const r = new Rig();
+  const { key } = await done(r);
+  holds(r, key, 200_000);
+  await configure(r.hub, key, { context: 300_000 });
+  await settle();
+  assert.equal(r.session(key).contextBefore, null);
+  assert.equal(r.claude.last().compactions, 0);
+});
+
+test("a compaction down to its most that fails is said once and not tried again", async () => {
+  const r = new Rig();
+  const { m, key } = await done(r);
+  holds(r, key, 627_800);
+  await configure(r.hub, key, { context: 300_000 });
+  await settle();
+  const next = r.claude.last();
+  next.end({ kind: "failed", reason: "other", message: "Not enough messages to compact." });
+  await settle();
+  assert.equal(r.session(key).contextBefore, null);
+  await r.accept(reply(m, "9999.2", "go on"));
+  await settle();
+  assert.equal(next.compactions, 1);
+  assert.equal(next.prompts.length, 1);
+});
+
 test("a runtime that cannot compact says so", async () => {
   const r = new Rig();
   const { key, session } = await done(r);
@@ -328,5 +403,43 @@ test("clear is refused while a turn runs", async () => {
   const key = sessionKey("cl", "C1", m.threadTs);
   assert.equal(await r.hub.clear(key), "当前任务运行中，停止后再试");
   assert.equal(r.claude.last().disposed, false);
+  await r.close();
+});
+
+test("started afresh by itself while it waits on its watch, its watch goes on: only its process and wait end", async () => {
+  const r = new Rig();
+  r.hub.setJobs({
+    stop: async (id) => {
+      r.store.jobEnded(id, "stopped", null);
+      return r.store.getJob(id)!;
+    },
+  });
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const session = r.claude.last();
+  r.store.insertJob({
+    id: "job_w", sessionKey: key, name: "盯 CI", command: "sleep 600", cwd: "/", port: null, token: "tw", state: "running",
+    pgid: null, exitCode: null, startedAt: Date.now(), endedAt: null, restarts: 0, log: "/dev/null", watch: true,
+  });
+  await r.call(key, "chat_state", { kind: "waiting", seconds: 600, for: "盯 CI", watch: true });
+  session.complete();
+  await settle();
+  // Its last call wrote an hour's cache of 200K, three hours ago.
+  r.store.recordUsage(`/t/${key}`, { session: key, offset: 1, model: "claude-opus-5-5" }, "claude", [[
+    { id: "c1", at: Date.now() - 3 * 3_600_000, model: "claude-opus-5-5", subagent: false, fast: false, input: 10, cacheRead: 150_000, cacheWrite: 0, cacheWriteLong: 50_000, output: 1, calls: 1, context: 200_000, window: null },
+    { turn: null, person: null, thread: null, profile: null },
+  ]]);
+  r.store.db.prepare("UPDATE runtime_sessions SET at = 0 WHERE session_key = ?").run(key);
+  r.edit((raw) => (raw.afreshWhenCold = true));
+  // What the watch says starts it afresh; the watch that said it is still running.
+  r.hub.notify(key, "CI failed on PR #1");
+  await settle();
+  const fresh = r.claude.last();
+  assert.notEqual(fresh, session);
+  assert.ok(session.disposed);
+  assert.ok(fresh.prompts[0]!.includes("CI failed on PR #1"), fresh.prompts[0]);
+  assert.equal(r.store.getJob("job_w")!.state, "running", "its watch is not stopped with its context");
   await r.close();
 });

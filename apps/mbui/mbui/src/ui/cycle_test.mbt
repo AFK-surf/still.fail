@@ -12,7 +12,7 @@ test "a wait's cycle is drawn each frame: its phase at the frame's time, a frame
   assert_true(t.ctx().wants_frame)
   // halfway between two of the resident clock's steps, where the time is, not at the step before it
   t.run_for(@ui.cycle_step_ms * 1.5)
-  let now = t.ctx().now() / 1000.0
+  let now = t.time() / 1000.0
   assert_true((phase.val - (now - now.floor())).abs() < 1.0e-9, msg="\{phase.val}")
   assert_true(t.ctx().wants_frame)
   assert_eq(t.cycles().length(), 1)

@@ -1,4 +1,4 @@
-// What this device keeps of how its person likes it (the `prefs` topic; prefs.rs): one record in the data center
+// What this device keeps of how its person likes it (the `prefs` topic): one record in the data center
 // (table `prefs`, key `device`), written by `prefs.set`; with it, what the device is (`client.device`) and what follows.
 import * as brand from "./brand.ts";
 import * as fonts from "./fonts.ts";
@@ -13,7 +13,7 @@ import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 import { setOwnBuild } from "./station/oldest.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "windowZoom", "motion", "haptics", "appUpdate", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook"];
+const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "accent", "windowZoom", "motion", "haptics", "appUpdate", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook", "sendKey"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone"];
 const TABS_KEPT = 200;
 /// At most this many jobs kept as looked at in one workspace's bell.
@@ -21,10 +21,19 @@ const JOBS_SEEN_KEPT = 200;
 /// At most this many failures kept as let go in one workspace's 待处理.
 const FAILS_GONE_KEPT = 200;
 const PREFS = { topic: "prefs" };
+/// The app's colour themes other than still.fail's orange (`accent`; none: the orange), or a hue of one's own
+/// (`custom:<0..359>`, the app makes the theme of it).
+const ACCENTS = ["blue", "teal", "purple", "pink"];
+const CUSTOM = /^custom:([0-9]{1,3})$/;
+
+function customHue(v: unknown): number | null {
+  const m = typeof v === "string" ? CUSTOM.exec(v) : null;
+  return m && Number(m[1]) < 360 ? Number(m[1]) : null;
+}
 
 type Map_ = Record<string, unknown>;
 
-/// How the drive's reader lays text out on this device (docs/drive.md): each number within its bounds, its default
+/// How the drive's reader lays text out on this device: each number within its bounds, its default
 /// where none is kept; the papers and faces there are.
 const READER_NUMBERS = { size: [12, 32, 18], line: [1.2, 2.4, 1.7], margin: [8, 44, 22] } as const;
 const PAPERS = ["follow", "white", "green", "grey", "night"];
@@ -50,11 +59,12 @@ export function readerOf(v: unknown): Map_ {
 export type BadgeKinds = { on: boolean; wait: boolean; failed: boolean; done: boolean; message: boolean; services: boolean };
 
 /// What the badge counts, kind by kind: as kept (`badgeKinds`, what it does not say as before), or as the older
-/// `badge` says (decisions: the cards; attention, the default: and what went wrong; all: and the unread). `services`
+/// `badge` says (decisions: the cards; attention: and what went wrong; all, the default: and the unread). `services`
 /// is the rail's bell's alone: the services and jobs left up long light it until looked at (never the app's number).
 export function badgeKindsOf(prefs: unknown): BadgeKinds {
   const by = isObject(prefs) ? prefs.badge : null;
-  const base = { on: true, wait: true, failed: by !== "decisions", done: by === "all", message: by === "all", services: true };
+  const unread = by !== "decisions" && by !== "attention";
+  const base = { on: true, wait: true, failed: by !== "decisions", done: unread, message: unread, services: true };
   const k = isObject(prefs) && isObject(prefs.badgeKinds) ? prefs.badgeKinds : {};
   const flag = (name: keyof BadgeKinds) => (typeof k[name] === "boolean" ? k[name] as boolean : base[name]);
   return { on: flag("on"), wait: flag("wait"), failed: flag("failed"), done: flag("done"), message: flag("message"), services: flag("services") };
@@ -87,7 +97,7 @@ export function archiveHintOf(prefs: unknown): ArchiveHint {
   return v === "off" || v === "reviewed" ? v : "done";
 }
 
-/// The places a phone's bottom bar can hold (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt), in no order.
+/// The places a phone's bottom bar can hold, in no order.
 export const BAR_PLACES = ["chats", "files", "stations", "profiles", "connects", "usage", "archive", "vault"];
 /// At most this many places in one bar.
 export const BAR_SIZE = 4;
@@ -107,7 +117,7 @@ export function barsOf(v: unknown): { sets: string[][]; current: number } {
 }
 
 /// The lists a workspace's chat list can show (`listFilter`'s words).
-const LIST_FILTERS = ["all", "mine", "watching", "archive"];
+const LIST_FILTERS = ["all", "mine", "watching", "hidden", "archive"];
 
 /// The list filters as kept, without those this build does not know (奏, gone: the list it shows then is all).
 function listFiltersOf(v: unknown): Map_ {
@@ -206,9 +216,11 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   }
   if ("badge" in prefs && !["decisions", "attention", "all"].includes(prefs.badge as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badge" }));
   if ("motion" in prefs && prefs.motion !== "reduce" && prefs.motion !== "full") throw CoreError.invalid(t("core-misc.params.invalid", { error: "motion" }));
+  if ("accent" in prefs && !(ACCENTS.includes(prefs.accent as string) || customHue(prefs.accent) !== null)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "accent" }));
   if ("haptics" in prefs && prefs.haptics !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "haptics" }));
   if ("appUpdate" in prefs && prefs.appUpdate !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "appUpdate" }));
   if ("windowZoom" in prefs && !["50", "67", "75", "80", "90", "110", "125", "150", "175", "200"].includes(prefs.windowZoom as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "windowZoom" }));
+  if ("sendKey" in prefs && prefs.sendKey !== "mod") throw CoreError.invalid(t("core-misc.params.invalid", { error: "sendKey" }));
   if ("dropAs" in prefs && prefs.dropAs !== "file" && prefs.dropAs !== "path") throw CoreError.invalid(t("core-misc.params.invalid", { error: "dropAs" }));
   if ("shareLook" in prefs && !(typeof prefs.shareLook === "string" && SHARE_LOOK.test(prefs.shareLook))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "shareLook" }));
   if ("archiveHint" in prefs && !["off", "done", "reviewed"].includes(prefs.archiveHint as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "archiveHint" }));

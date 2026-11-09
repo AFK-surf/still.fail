@@ -46,7 +46,7 @@ pub let clip_too_large : Int = 2
 pub let clip_unreadable : Int = 3
 
 ///|
-/// The most a picture read off the clipboard is as PNG (still.fail's ScreenClips.kt CLIP_PNG_MAX).
+/// The most a picture read off the clipboard is as PNG.
 pub let clip_png_max : Int = 8 * 1024 * 1024
 
 ///|

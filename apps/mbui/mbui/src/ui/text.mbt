@@ -131,9 +131,8 @@ let text_cache : TextCache = {
 }
 
 ///|
-/// A frame begins: what it shapes and draws from the atlas is kept through it. What the host drew and measured
-/// before, forgotten where it is gone (@hostapi.atlas_generation): true then, everything laid out anew.
-fn text_frame() -> Bool {
+/// A frame begins: what it shapes and draws from the atlas is kept through it.
+fn text_frame() -> Unit {
   text_cache.frame = text_cache.frame + 1
   for a in [text_cache.atlas, text_cache.colour_atlas] {
     match a {
@@ -141,7 +140,14 @@ fn text_frame() -> Bool {
       None => ()
     }
   }
-  let g = h_atlas_generation()
+  none_short()
+}
+
+///|
+/// As a frame begins (frame_settings_arrive): what the host drew and measured before, forgotten where it is gone
+/// (@hostapi.atlas_generation moved on), what measured words told (words_shaped_in).
+fn text_arrive() -> Unit {
+  let g = atlas_now()
   if g != text_cache.generation {
     // (a host moves it on as its faces or its scale change, a face it was given is here (a page's, loaded later than
     // asked), its atlas is lost: what was measured in the face before is forgotten with the glyphs)
@@ -149,7 +155,7 @@ fn text_frame() -> Bool {
     text_cache.generation = g
     glyphs_forget()
     // (and the frame drawn whole: its glyphs drawn again where they were, the same numbers, other pixels: hostcall.mbt
-    // `presented`, docs/partial-redraw.md)
+    // `presented`)
     presented.forget()
     if !first {
       clear_shapes()
@@ -158,13 +164,10 @@ fn text_frame() -> Bool {
       // (and the words laid out in what it measured before, a text's or a paragraph's layout kept on its node, laid out
       // again: a page's face is loaded after it is given (words_forgotten then), its words laid out till it is in the
       // place's face, else kept with those widths and drawn in the face, 「s till.fa il」)
-      words_shaped_in.val += 1
+      words_shaped_in.set(words_shaped_in.untracked() + 1)
       view_words_rescaled()
-      return true
     }
   }
-  none_short()
-  false
 }
 
 ///|
@@ -198,6 +201,7 @@ fn glyphs_short_owed() -> Bool {
 ///|
 /// Every glyph forgotten, and where it was in the atlas: drawn again as it is next asked for.
 fn glyphs_forget() -> Unit {
+  glyphs_lost.val = true
   text_cache.glyphs.clear()
   text_cache.fresh.clear()
   text_cache.atlas = None
@@ -211,12 +215,34 @@ fn glyphs_forget() -> Unit {
 let glyphs_kept : Ref[Array[(Int, Double, Double)]?] = Ref(None)
 
 ///|
+/// Whether a glyph may have gone from where something made to be kept draws it since that was last looked for: one let
+/// go of for another (its plot emptied), all forgotten, or one there was no room for. What draws from the atlas frame
+/// after frame is looked through again then (view_glyphs_held), not each frame.
+// kept across runs: set as one goes, put back as what draws them is looked through
+let glyphs_lost : Ref[Bool] = Ref(true)
+
+///|
 /// Glyph `key` drawn from where `g` is, told to what is made to be kept (glyphs_kept).
 fn glyph_kept(key : Int, g : Glyph) -> Unit {
   match glyphs_kept.val {
     Some(a) => a.push((key, g.u, g.v))
     None => ()
   }
+}
+
+///|
+/// Whether the glyphs `kept` (glyphs_kept's) are each where they were in the atlas still, at `sc` pixels a point, as
+/// glyphs_still asks, none said drawn from in this frame (what is not drawn now: Atlas::drawn keeps a plot through the
+/// frame, and one drawn from by nothing on the screen may be emptied).
+fn glyphs_there(kept : Array[(Int, Double, Double)], sc : Double) -> Bool {
+  for k in kept {
+    let (key, u, v) = k
+    match text_cache.glyphs.get(key) {
+      Some(g) if g.u == u && g.v == v && !glyph_other_scale(g, sc) => ()
+      _ => return false
+    }
+  }
+  true
 }
 
 ///|
@@ -228,7 +254,7 @@ fn glyphs_still(kept : Array[(Int, Double, Double)], sc : Double) -> Bool {
     let (key, u, v) = k
     match text_cache.glyphs.get(key) {
       Some(g) if g.u == u && g.v == v && !glyph_other_scale(g, sc) =>
-        if g.plot >= 0 { atlas_for(g.in_colour).0.drawn(g.plot) }
+        if g.plot >= 0 { atlas_of(g.in_colour).drawn(g.plot) }
       _ => return false
     }
   }
@@ -350,6 +376,8 @@ fn whole_pixel_lines(size : Double, weight : Int, style? : Int = 0) -> Bool {
 
 ///|
 fn all_metrics(size : Double, weight : Int, style : Int) -> (Double, Double, Double, Double, Double, Bool) {
+  // (measured in what the host measures in now, followed: measured again as that changes)
+  words_shaped_in.get() |> ignore
   // (the font's figures change no line of it: its metrics are the same either way)
   let style = style & @hostapi.style_tabular.lnot()
   // (the size in tenths, the weight, the style's bits: faces and all, each in a field of its own)
@@ -525,6 +553,8 @@ fn has_digit(text : String) -> Bool {
 /// With `spacing` (letter spacing, as Android's: each cluster's advance has it, half before its piece and half
 /// after), shaped with no ligatures (@hostapi.style_no_ligatures): a ligature's letters would not be spaced.
 fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? : Double = 0.0) -> Shaped {
+  // (measured in what the host measures in now, followed: measured again as that changes)
+  words_shaped_in.get() |> ignore
   let style = if spacing != 0.0 { style | @hostapi.style_no_ligatures } else { style }
   // (digits all one width only where they would not be: the code face's are, and words with none have none)
   let style = if (style & @hostapi.style_tabular) != 0 &&
@@ -932,6 +962,22 @@ fn glyph_keys() -> Map[String, Int] {
 }
 
 ///|
+/// The host's atlas a glyph goes in (atlas_for), without how far across it is said: what marks a glyph drawn asks it for
+/// each glyph drawn, and a pair is an allocation each.
+fn atlas_of(colour : Bool) -> @hostapi.Atlas {
+  if colour {
+    match text_cache.colour_atlas {
+      Some(a) if a.sized() => return a
+      _ => ()
+    }
+  }
+  match text_cache.atlas {
+    Some(a) if !colour => a
+    _ => atlas_for(colour).0
+  }
+}
+
+///|
 /// The host's atlas a glyph goes in as its glyphs are placed in it: colour glyphs' own (`colour`, where the host keeps
 /// one), else the words'; how far across past its place in it the glyph is said (@hostapi.colour_atlas_u).
 fn atlas_for(colour : Bool) -> (@hostapi.Atlas, Int) {
@@ -940,6 +986,7 @@ fn atlas_for(colour : Bool) -> (@hostapi.Atlas, Int) {
       Some(a) => a
       None => {
         let a = @hostapi.Atlas::new(h_atlas_size(true))
+        a.before_full(glyphs_held_drawn)
         text_cache.colour_atlas = Some(a)
         a
       }
@@ -952,6 +999,7 @@ fn atlas_for(colour : Bool) -> (@hostapi.Atlas, Int) {
     Some(a) => (a, 0)
     None => {
       let a = @hostapi.Atlas::new(h_atlas_size(false))
+      a.before_full(glyphs_held_drawn)
       text_cache.atlas = Some(a)
       (a, 0)
     }
@@ -987,7 +1035,7 @@ fn glyph(key : Int, sc : Double) -> Glyph {
     }
     Some(g) => {
       if g.plot >= 0 {
-        atlas_for(g.in_colour).0.drawn(g.plot)
+        atlas_of(g.in_colour).drawn(g.plot)
       }
       glyph_kept(key, g)
       g
@@ -1003,7 +1051,10 @@ fn glyph(key : Int, sc : Double) -> Glyph {
         text_cache.glyphs[key] = no_glyph
         return no_glyph
       }
-      match a.place(key, w, h, fn(k) { text_cache.glyphs.remove(k) }) {
+      match a.place(key, w, h, fn(k) {
+        text_cache.glyphs.remove(k)
+        glyphs_lost.val = true
+      }) {
         Some((plot, x, y)) => {
           h_glyph_put(key, x + across, y)
           let g = {
@@ -1025,6 +1076,7 @@ fn glyph(key : Int, sc : Double) -> Glyph {
         // (no room while this frame is drawn: what is made to be kept made again once there is, glyphs_still)
         None => {
           text_cache.short = true
+          glyphs_lost.val = true
           glyph_kept(key, { ..no_glyph, u: -1.0, v: -1.0 })
           no_glyph
         }

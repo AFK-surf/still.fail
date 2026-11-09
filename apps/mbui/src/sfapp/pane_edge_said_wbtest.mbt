@@ -28,7 +28,7 @@ test "大屏: the sidebar's edge with the focus: Enter, Space and a screen reade
   let t = wide_tester([])
   t.draw()
   guard side_edge(t) is Some(s) else { fail("no edge") }
-  @ui.current().ask_action(s.id, Focus)
+  t.ctx().ask_action(s.id, Focus)
   t.draw()
   assert_eq(t.focused().map(fn(f) { f.id }), Some(s.id), msg="the edge has the focus")
   let tree = @ui.view_tree().unwrap()
@@ -45,7 +45,7 @@ test "大屏: the sidebar's edge with the focus: Enter, Space and a screen reade
   seen.push(look())
   t.draw()
   seen.push(look())
-  @ui.current().ask_action(s.id, Activate)
+  t.ctx().ask_action(s.id, Activate)
   seen.push(look())
   t.draw()
   seen.push(look())
@@ -70,7 +70,7 @@ test "大屏: the sidebar's edge folded: the hand, as what takes presses, read o
   t.move(fx, fy)
   t.frame()
   let folded = t.cursor()
-  @ui.current().ask_action(s.id, Focus)
+  t.ctx().ask_action(s.id, Focus)
   t.draw()
   assert_eq(
     (open, folded, s.label, s.actions.contains(Activate), t.focused().map(fn(f) { f.id })),

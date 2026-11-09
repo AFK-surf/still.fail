@@ -4,8 +4,8 @@
 //         moon's build of PKG with stand-ins for its C compiler and archiver (scripts/mbc-stub.sh): only moonc runs.
 //         Prints the generated .c; fails if moon did not write it anew. (Android, iOS: their compiler is not moon's.)
 //     mbc compile --cc CC --cflags FLAGS [--gen-flags F] [--init-flags F] [--extra FILE…] [--optional FILE…]
-//                 [--objc-flags F] --obj DIR [-j N] [--link-flags FILE] FILE.c
-//         FILE.c split into units and compiled with the extra C/Objective-C files, all at once (-j, default the
+//  [--objc-flags F] --obj DIR [-j N] [--link-flags FILE] FILE.c
+//  FILE.c split into units and compiled with the extra C/Objective-C files, all at once (-j, default the
 //         cores); prints the objects. An object whose command and inputs (its depfile's, by content) did not change
 //         is kept. --optional files that do not compile are left out (as the runtime's that a platform lacks).
 //     mbc wrap --real CC -- ARGS…
@@ -17,8 +17,8 @@
 //         the --dep ones). wrap's link is the same.
 //     mbc shim DIR
 //         DIR/cc (Windows: DIR/cl.exe, lib.exe, link.exe) running `mbc wrap` over the real one; prints DIR.
-//     mbc check --cc CC --cflags FLAGS [--nm NM] --obj DIR FILE.c
-//         The self-check: FILE.c compiled whole and split; the global symbols each defines must be the same, none
+//  mbc check --cc CC --cflags FLAGS [--nm NM] --obj DIR FILE.c
+//  The self-check: FILE.c compiled whole and split; the global symbols each defines must be the same, none
 //         defined twice among the units.
 //     mbc work MOON.WORK COPY
 //         A workspace's moon.work for a copy of its module elsewhere: the module ".", its other members by absolute
@@ -1866,6 +1866,33 @@ fn cmd_wrap(args : Array[String]) -> Unit {
       Some(o) => ends(o, b".o") && contains(o, b"/__moonbit_link_core__/")
       None => false
     })
+  // a test program its build said has no tests (MBC_EMPTY_TESTS: "pkg/name.kind …", apps/mbui/scripts/test.sh): moon
+  // builds a package's internal, blackbox and whitebox programs whatever it has, each the whole app, and runs only
+  // those with tests. Not compiled: in its place a file that is no program, so that one run anyway fails, said
+  // (sfapp's two empty ones were 27 s of the app part's compile, sfreplay's 29 s of the replay part's, 2026-10-24).
+  // Both of moon's steps of it: its core object (`…/__moonbit_link_core__/<program>.o`, moon 0.1.20261029 on) and the
+  // link of that object into the program. (Asked only of the program's own C until 2026-11-09: once moon compiled the
+  // core object apart, the empty programs were compiled whole again, sfapp's two 45 s of the app build's 176 and
+  // flows' internal one 17 s of the replay's, main 4aa7dac2, 42578500757.)
+  match (getenv("MBC_EMPTY_TESTS"), out) {
+    (Some(list), Some(o)) if core_obj || (links && ends(o, b".exe")) => {
+      let prog = if core_obj {
+        let b = basename(o)
+        cat([dirname(dirname(o)), b"/", sub(b, 0, b.length() - 2), b".exe"])
+      } else {
+        o
+      }
+      for e in split_words(list) {
+        if ends(prog, cat([b"/", e, b".exe"])) {
+          let _ = write_file(o, b"mbc: a test program with no tests (MBC_EMPTY_TESTS), not built\n")
+          log("\{str(e)}: no tests, not built")
+          c_exit(0)
+          return
+        }
+      }
+    }
+    _ => ()
+  }
   // (MSVC's the same: `/c /Fo…\__moonbit_link_core__\<program>.obj`, linked after through cl. MSVC has no `-r`: the
   // units compiled in its place, the object left a placeholder with the units' list beside it
   // (<object>.mbc-units), and the link after given the units in its place. Windows of main and every branch from
@@ -1935,22 +1962,6 @@ fn cmd_wrap(args : Array[String]) -> Unit {
     cat([dir, b"/", sub(b, 0, b.length() - 2), b".exe"])
   } else {
     out
-  }
-  // a test program its build said has no tests (MBC_EMPTY_TESTS: "pkg/name.kind …", apps/mbui/scripts/test.sh): moon
-  // builds a package's internal, blackbox and whitebox programs whatever it has, each the whole app, and runs only
-  // those with tests. Not compiled: in its place a file that is no program, so that one run anyway fails, said
-  // (sfapp's two empty ones were 27 s of the app part's compile, sfreplay's 29 s of the replay part's, 2026-10-24)
-  match getenv("MBC_EMPTY_TESTS") {
-    Some(list) if !core_obj =>
-      for e in split_words(list) {
-        if ends(out, cat([b"/", e, b".exe"])) {
-          let _ = write_file(out, b"mbc: a test program with no tests (MBC_EMPTY_TESTS), not built\n")
-          log("\{str(e)}: no tests, not built")
-          c_exit(0)
-          return
-        }
-      }
-    _ => ()
   }
   let c_file = wargs[cs[0]]
   let objdir = cat([sub(out, 0, out.length() - (if core_obj { 2 } else { 4 })), b".mbc"])

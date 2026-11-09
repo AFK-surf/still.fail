@@ -1,5 +1,17 @@
 // The compact bar (@sf.nav_bar) on settings' pages that have one: back, the title and what is at its end centred on
-// the bar's one 32 line, their boxes' middles (as laid out, not their letters') within 0.5 of each other.
+// the bar's one 32 line, their boxes' middles (as laid out, not their letters') within 0.5 of each other. A page made
+// once has the frame's standard head instead (page_node's): back, and what is at its end, on that line the same way,
+// its large title under the line.
+
+///|
+/// Whether settings' `mode` opens a page with the frame's standard head (page_node's: back on the line, the large
+/// title under it), with that title; else a compact bar of its own (its title on the line).
+fn standard_head(mode : String) -> String? {
+  match mode {
+    "settings-new-profile" => Some("选择服务商")
+    _ => None
+  }
+}
 
 ///|
 test "nav bar: back, title and what is at its end on one line (settings' pages)" {
@@ -30,8 +42,21 @@ test "nav bar: back, title and what is at its end on one line (settings' pages)"
     }
     let said = mids.map(fn(m) { m.0 + "@" + m.1.to_string() }).join(", ")
     println("nav bar \{mode}: \{said}")
-    if mids.length() < 2 || hi - lo > 0.5 {
-      fail("\{mode}: the bar's line holds \{said}")
+    match standard_head(mode) {
+      // the standard head: back on the line (and what is at its end, as one), the large title under the line
+      Some(title) => {
+        if mids.length() < 1 || hi - lo > 0.25 || !mids.iter().any(fn(m) { m.0.contains("设置") }) {
+          fail("\{mode}: the head's line holds \{said}")
+        }
+        match t.find(title) {
+          Some((_, y)) if y > hi + 16.0 => ()
+          at => fail("\{mode}: its title \{title} at \{at}, the head's line at \{hi}")
+        }
+      }
+      None =>
+        if mids.length() < 2 || hi - lo > 0.25 {
+          fail("\{mode}: the bar's line holds \{said}")
+        }
     }
   }
 }
@@ -64,9 +89,61 @@ test "nav bar: under the status bar on the pages that go back a step of their ow
     let mids = bar_line_under(mode, 24.0)
     let said = mids.map(fn(m) { m.0 + "@" + m.1.to_string() }).join(", ")
     println("under a 24 status bar \{mode}: \{said}")
-    // back and the title, both below the status bar (the page's paper is drawn over it), on one line
-    if mids.length() < 2 || mids.iter().any(fn(m) { m.1 < 24.0 }) {
+    // back and the title, both below the status bar (the page's paper is drawn over it), on one line; a standard
+    // head's back alone on it (its title under it, lower still)
+    let least = if standard_head(mode) is Some(_) { 1 } else { 2 }
+    let back_there = standard_head(mode) is None || mids.iter().any(fn(m) { m.0.contains("设置") })
+    if mids.length() < least || !back_there || mids.iter().any(fn(m) { m.1 < 24.0 }) {
       fail("\{mode}: the bar's line under a 24 status bar holds \{said}")
+    }
+  }
+}
+
+///|
+/// Where back's middle is on the head's line of settings' `mode` (its box's, as laid out: the first thing on the line
+/// from the left), under a status bar `top` high, with its words.
+fn back_middle(mode : String, top : Double) -> (String, Double)? {
+  new_run()
+  @settings.reset()
+  let src = fixture(mode)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting(@settings.fixture_page(mode))
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":\{top},\"bottom\":0,\"left\":0,\"right\":0}}")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let mut first : (String, Double, Double)? = None
+  for s in t.semantics() {
+    let (x, y, _, h) = s.rect
+    if !s.hidden && h > 0.0 && h <= 34.0 && y >= top && y + h / 2.0 < top + 38.0 {
+      match first {
+        Some((_, fx, _)) if fx <= x => ()
+        _ => first = Some((s.label, x, y + h / 2.0))
+      }
+    }
+  }
+  first.map(fn(f) { (f.0, f.2) })
+}
+
+///|
+test "nav bar: the standard head's back on the same line on every page made once (the new profile's among them)" {
+  for top in [0.0, 24.0] {
+    let at : Array[(String, Double)] = []
+    let missing : Array[String] = []
+    // (the notifications' page left out: under a status bar its back is not on the head's line, on main too; its own
+    // follow-up)
+    for mode in ["settings-new-profile", "settings-changelog", "settings-vault-items", "settings-prices"] {
+      match back_middle(mode, top) {
+        Some((words, y)) => at.push((mode + " " + words, y))
+        None => missing.push(mode)
+      }
+    }
+    let said = at.map(fn(m) { m.0 + "@" + m.1.to_string() }).join(", ")
+    println("standard head under \{top}: \{said}; none on the line: \{missing}")
+    if !missing.is_empty() {
+      fail("no back on the head's line under a \{top} status bar: \{missing}")
+    }
+    if at.iter().any(fn(m) { m.1 != at[0].1 }) {
+      fail("the standard head's back not on one line under a \{top} status bar: \{said}")
     }
   }
 }

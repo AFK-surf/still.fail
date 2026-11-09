@@ -222,9 +222,10 @@ export class Channels {
   }
 
   /// A channel's station's stream was away, so nothing says whether it goes further than what is held: asked what came
-  /// after that, whatever its summary says (it is as old). One none of which is held is not asked: it is brought.
+  /// after that, whatever its summary says (it is as old). One none of which is held asks for its latest page: its
+  /// first read may have failed while the stream was away.
   catchUp(c: Channel, priority: number): void {
-    if (!c.kind.whole || this.#held.letGo(c) || this.#held.span(c) === null) return;
+    if (!c.kind.whole || this.#held.letGo(c)) return;
     this.#unsure.add(keyOf(c));
     this.#reach.enqueue(c.station, c.kind.task(c.id), priority, this.#page(c, priority, "latest"));
   }

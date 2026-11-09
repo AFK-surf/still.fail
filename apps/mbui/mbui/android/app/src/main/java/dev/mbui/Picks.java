@@ -110,7 +110,7 @@ final class Picks {
         if (kind == 1) {
             if (Build.VERSION.SDK_INT >= 33
                     || (Build.VERSION.SDK_INT >= 30 && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.R) >= 2)) {
-                // (no type: photos and videos, as Attach.kt's PickVisualMedia.ImageAndVideo)
+                // (no type: photos and videos)
                 i = new Intent(MediaStore.ACTION_PICK_IMAGES);
                 i.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MediaStore.getPickImagesMaxLimit());
             } else {

@@ -1,4 +1,4 @@
-// The station's log, sent to still.fail (docs/telemetry.md): what is wrong between stations, or between a station and
+// The station's log, sent to still.fail: what is wrong between stations, or between a station and
 // still.fail cloud, is found from our side without asking anyone for their log file. On unless the station's config
 // turns it off (`telemetry.logs: false`), read for every batch so turning it off stops it at once. Each line goes
 // scrubbed: no home directories, emails, things shaped like keys or tokens, or quoted text, and fields that can carry

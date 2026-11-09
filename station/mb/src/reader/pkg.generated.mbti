@@ -1,0 +1,15 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "station/reader"
+
+// Values
+
+// Errors
+
+// Types and methods
+type Permit
+
+type Reader
+
+// Type aliases
+
+// Traits

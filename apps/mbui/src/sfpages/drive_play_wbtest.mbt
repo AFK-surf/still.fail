@@ -45,7 +45,7 @@ test "the player of a drive's video: its name, which of the folder's films, paus
   assert_true(t.find("5:12.000 / 23:24") is Some(_))
   assert_true(t.find("反正也不急") is Some(_))
   assert_true(app.nav.top() is DrivePlay(_))
-  // the subtitle kept on the device as the film's parts are, as played (Player.kt: through DriveCache.played), as
+  // the subtitle kept on the device as the film's parts are, as played, as
   // its folder lists it
   let sub = @sffixture.fix_reads.filter(fn(p) { text(Some(p), "path").has_suffix("第02集.srt") })
   assert_true(sub.length() > 0)

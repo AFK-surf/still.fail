@@ -1,4 +1,4 @@
-// Motion as data, not commands (docs/determinism.md): a motion is said once, as it starts (or anew when its target
+// Motion as data, not commands: a motion is said once, as it starts (or anew when its target
 // changes): where it goes, by what curve, from when, and so until when. Its value at a frame is a function of that
 // frame's time. What moves says so itself, once, as it sets out (Ctx::moving: a spring's way as it is sent somewhere,
 // an Anim as it is told to go); the framework asks it at each frame's end when it is at rest, draws frames until then
@@ -58,7 +58,7 @@ pub fn Mover::new() -> Mover {
 
 ///|
 /// What it moves is `what` (an Anim and its key, a Value), told at `loc` (the app's place that set it going): what the
-/// performance record says read the clock as it goes (docs/perf-record.md), never what moves. Said as it sets out, after
+/// performance record says read the clock as it goes (hostapi perf_state), never what moves. Said as it sets out, after
 /// Ctx::moving (which says its own `what`, with where to).
 pub fn Mover::told_as(self : Mover, what : String, loc : SourceLoc) -> Unit {
   self.what = what
@@ -159,6 +159,17 @@ pub fn Ctx::moving_as(self : Ctx, who : Mover, m : &Moving, what : String, tell?
     }
   }
   self.movers.push({ who, m, what })
+}
+
+///|
+/// Whether anything said to move is not at rest at the last frame's end (Ctx::moving_now's, none named).
+fn Ctx::moves_now(self : Ctx) -> Bool {
+  for e in self.movers {
+    if e.m.rest_at(self.clock, self.frame_no) > self.clock {
+      return true
+    }
+  }
+  false
 }
 
 ///|

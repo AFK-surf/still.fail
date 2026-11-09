@@ -18,9 +18,9 @@ test "panel centred, 大屏 keyboard and mouse: plain, with what it says, a foot
     let h = if kind == "tall 500" { 500.0 } else { 800.0 }
     let t = menu_tester(1280.0, h, 0)
     let foot = fn(c : @ui.Ctx, close : () -> Unit) {
-      if @sf.button(c, "好的", key="ok34", tone=Primary) {
+      @sf.button(c, "好的", key="ok34", tone=Primary, on_press=fn() {
         close()
-      }
+      }) |> ignore
     }
     match kind {
       "plain" => @sf.panel("面板", panel_test_body([]), from=Unanchored)
@@ -113,9 +113,9 @@ test "panel centred, 大屏 keyboard and mouse: untitled saying something; what 
     from=Unanchored,
     foot=fn(c, close) {
       c.box(style=@sf.panel_words_in(), fn() { c.text("脚注", style=@sf.paragraph) |> ignore }) |> ignore
-      if @sf.button(c, "好的", key="ok34", tone=Primary) {
+      @sf.button(c, "好的", key="ok34", tone=Primary, on_press=fn() {
         close()
-      }
+      }) |> ignore
     },
   )
   t.run_for(@ui.move_most_ms)
@@ -140,9 +140,9 @@ test "panel centred, 大屏 keyboard and mouse: untitled, what it holds reaching
     "",
     fn(c, _) {
       let id = c.id("under close")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         under.val = under.val + 1
-      }
+      })
       // (in the dialog's corners, round as a row there is: the ladder's 18, 24 in from its 42)
       c.box(id~, w=Fill(1.0), h=Px(60.0), bg=0x336699FFL, radius=@sf.row_corner, label="底下", fn() {  }) |> ignore
     },

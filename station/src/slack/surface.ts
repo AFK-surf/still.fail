@@ -1,4 +1,4 @@
-// Slack as a chat surface (chat/slack.rs), on a socket kept up as every connect's is (connects/surface.ts): Socket Mode
+// Slack as a chat surface, on a socket kept up as every connect's is (connects/surface.ts): Socket Mode
 // for what Slack tells the station (a card's buttons too), the Web API for what the station and its agents say and ask.
 // One SlackSurface per connected connect.
 import { readFile } from "node:fs/promises";
@@ -410,7 +410,11 @@ export class SlackSurface extends ConnectedSurface {
     for (const part of parts) await send(part, [markdown(part)]);
     if (question) {
       const before = first;
-      await send(asking, question.type === "login" ? loginBlocks(asking, stationLang()) : questionBlocks(asking, question, stationLang()), true);
+      const blocks =
+        question.type === "login"
+          ? loginBlocks(asking, stationLang(), question.page ?? null, question.page ? !(await this.sharedOut(thread.channel)) : true)
+          : questionBlocks(asking, question, stationLang());
+      await send(asking, blocks, true);
       const ts = this.ends.get(`${thread.channel}/${thread.threadTs}`)?.ts;
       if (before !== null && ts !== undefined) {
         this.questions.set(before, { ts, text: asking });
@@ -579,6 +583,9 @@ export class SlackSurface extends ConnectedSurface {
       await handler({ type: "message", message: { channel, threadTs, ts, user, text: answer.said, addressed: true } });
     } catch (error) {
       this.answered.delete(asked);
+      // Slack has already acknowledged the button press, so it will not redeliver a rejected answer.
+      await tell("station.slack.answerUnconfirmed").catch((noticeError) =>
+        log.warn("slack", "could not tell the person their answer was unconfirmed", { error: (noticeError as Error).message }));
       throw error;
     }
     const asking = text(payload?.message?.text);
@@ -933,6 +940,19 @@ export class SlackSurface extends ConnectedSurface {
     if (!this.book) return null;
     const team = this.workspace() ?? "?";
     return this.book.channel(channelKey(team, channel), () => channelNameOf(this.client, channel, this.botToken));
+  }
+
+  /// Whether a channel is shared with another organization (Slack Connect), whose people are not of this workspace: a
+  /// login's page and device code are not shown there. Not known (the answer failed): taken as shared.
+  async sharedOut(channel: string): Promise<boolean> {
+    let r: Json;
+    try {
+      r = await this.client.api("conversations.info", [["channel", channel]], this.botToken);
+    } catch {
+      return true;
+    }
+    const c = r?.channel ?? null;
+    return c === null || c.is_ext_shared === true || c.is_pending_ext_shared === true;
   }
 
   /// Channel name via conversations.info (null for DMs), kept for the connection's lifetime.

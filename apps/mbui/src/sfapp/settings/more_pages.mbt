@@ -1,8 +1,8 @@
 // The rest of settings' pages (the Android app's settings module): what the automatic decisions' pages keep (their
 // drafts: the pages are src/sfpages automatic_decisions.mbt's, one each in every frame), this device's bottom bars
-// (BarSettings.kt), what this device keeps (KeptFiles.kt), the changelog (Changelog.kt), the prices the usage is
-// counted at (Usage.kt UsagePricesScreen); and, used from the chats' pages, how an agent runs (History.kt
-// RunSettingsScreen, run_page) and the machine's own sessions to go on with (NewChat.kt MachineSessions).
+// , what this device keeps, the changelog, the prices the usage is
+// counted at; and, used from the chats' pages, how an agent runs (History.kt
+// RunSettingsScreen, run_page) and the machine's own sessions to go on with.
 
 // ---------------------------------------------------------------------------
 // 自动决策
@@ -35,7 +35,7 @@ fn decisions_left(core : Core, route : Route) -> Unit {
 pub let bar_size : Int = 4
 
 ///|
-/// Every place, in the picker's order (Places.kt PLACES).
+/// Every place, in the picker's order.
 // kept across runs: a table of constants, never written
 pub let all_places : Array[String] = ["chats", "files", "stations", "profiles", "connects", "usage", "archive", "vault"]
 
@@ -51,7 +51,7 @@ pub fn bars_value(core : Core) -> String {
 }
 
 ///|
-/// The bars kept whole (BarSettings.kt save): an empty one dropped, the one in view still the same bar after it.
+/// The bars kept whole: an empty one dropped, the one in view still the same bar after it.
 pub fn save_bars(core : Core, sets : Array[Array[String]], current : Int) -> Unit {
   let mut cur = current
   let kept : Array[Array[String]] = []
@@ -101,27 +101,39 @@ let kept : Kept = { chats: @signals.signal(None), drive: @signals.signal(0.0, sa
 ///|
 /// The chats' kept data asked of the core again.
 fn kept_read(c : @ui.Ctx, core : Core) -> Unit {
+  if kept_unread() {
+    // (asked once the frame's builds are over: the build that first comes to it alone)
+    c.tell("cache.usage", fn() { kept_usage(core) })
+  }
+}
+
+///|
+/// Whether what is kept is not read as last asked; said read as it is asked now.
+fn kept_unread() -> Bool {
   if kept.read.get() == kept.asked.get() {
-    return
+    return false
   }
   kept.read.set(kept.asked.get())
-  // (asked once the frame's builds are over: the build that first comes to it alone)
-  c.tell("cache.usage", fn() {
-    (core.call)("cache.usage", obj([]), fn(r) {
-      kept.chats.set(Some(
-        match r {
-          Ok(v) => items(Some(v), "chats")
-          Err(_) => []
-        },
-      ))
-      kept.drive.set(match r {
-        Ok(v) => number(Some(v), "drive")
-        Err(_) => 0.0
-      })
-      kept.loose.set(match r {
-        Ok(v) => items(Some(v), "loose")
+  true
+}
+
+///|
+/// The chats' kept data asked of the core now.
+fn kept_usage(core : Core) -> Unit {
+  (core.call)("cache.usage", obj([]), fn(r) {
+    kept.chats.set(Some(
+      match r {
+        Ok(v) => items(Some(v), "chats")
         Err(_) => []
-      })
+      },
+    ))
+    kept.drive.set(match r {
+      Ok(v) => number(Some(v), "drive")
+      Err(_) => 0.0
+    })
+    kept.loose.set(match r {
+      Ok(v) => items(Some(v), "loose")
+      Err(_) => []
     })
   })
 }
@@ -152,9 +164,11 @@ pub fn kept_asked() -> Int {
 
 ///|
 /// What is kept asked of the core where it is not read as last asked (kept_said's ask, at the moment of what reads it:
-/// a node's reaction to kept_asked).
-pub fn kept_ask(c : @ui.Ctx, core : Core) -> Unit {
-  kept_read(c, core)
+/// a node's reaction to kept_asked, outside a build: asked at once, as kept_read's told ask is there).
+pub fn kept_ask(core : Core) -> Unit {
+  if kept_unread() {
+    kept_usage(core)
+  }
 }
 
 ///|
@@ -191,7 +205,7 @@ fn size_words(n : Double) -> String {
 }
 
 ///|
-/// How long ago `at` was, in the app's words (KeptFiles.kt since): just now, minutes, hours, days.
+/// How long ago `at` was, in the app's words: just now, minutes, hours, days.
 fn since_words(now : Double, at : Double) -> String {
   let minutes = ((now - at) / 60000.0).floor().to_int()
   if minutes < 1 {
@@ -206,8 +220,8 @@ fn since_words(now : Double, at : Double) -> String {
 }
 
 ///|
-/// A row of a size (SizeRow): what, a line under it, its size; tapped when `key` is given; `piece`: a piece of its card
-/// (list_row).
+/// A row of a size (SizeRow): what, a line under it, its size; tapped when `key` is given (`on_press`: what tapping it
+/// does); `piece`: a piece of its card (list_row).
 fn size_row(
   c : @ui.Ctx,
   key : String,
@@ -216,9 +230,10 @@ fn size_row(
   size : Double,
   more? : Bool = false,
   piece? : (Bool, Bool),
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
-  list_row(c, key~, piece?, fn() {
+  list_row(c, key~, piece?, on_press?, fn() {
     // its size and chevron by its title, what it holds under them as wide as the row
     row_lines(c, title, sub, end=fn() {
       c.text(size_words(size), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
@@ -285,9 +300,9 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
             } else {
               fill("web-main.usage.showAll", [("n", chats.length().to_string())])
             }
-            if list_row(c, key="kept-chats-all", piece=(false, true), fn() { row_title(c, words, color=t.p.muted) }) {
+            list_row(c, key="kept-chats-all", piece=(false, true), fn() { row_title(c, words, color=t.p.muted) }, on_press=fn() {
               kept_all.set(!all)
-            }
+            })
           })
         }
       }
@@ -295,7 +310,7 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
       if total > 0.0 {
         blocks.push(fn() {
           list_card(c, fn() {
-            if list_row(c, key="kept-all", fn() { row_title(c, tr("android-settings.files.clearAll"), color=t.p.red) }) {
+            list_row(c, key="kept-all", fn() { row_title(c, tr("android-settings.files.clearAll"), color=t.p.red) }, on_press=fn() {
               confirm(
                 tr("android-settings.files.clearAll.title"),
                 fill("android-settings.files.clearAll.text", [("size", size_words(total))]),
@@ -313,7 +328,7 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
                   }
                 },
               )
-            }
+            })
           })
         })
       }
@@ -393,14 +408,16 @@ fn kept_parts(c : @ui.Ctx, core : Core, chats : Array[Json], loose : Array[Json]
             }
           })
           |> ignore
-          if id != 0 && hit(c, id) {
-            if what == "drive" {
-              confirm(tr("android-settings.files.drive"), tr("android-settings.files.drive.text"), tr("android-settings.files.clear.action"), danger=true, fn() {
-                (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked.set(kept.asked.get() + 1)})
-              })
-            } else {
-              (core.push)(KeptChat("", -1))
-            }
+          if id != 0 {
+            c.on_press(id, fn() {
+              if what == "drive" {
+                confirm(tr("android-settings.files.drive"), tr("android-settings.files.drive.text"), tr("android-settings.files.clear.action"), danger=true, fn() {
+                  (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked.set(kept.asked.get() + 1)})
+                })
+              } else {
+                (core.push)(KeptChat("", -1))
+              }
+            })
           }
         }
       })
@@ -430,14 +447,14 @@ fn kept_chat_row(c : @ui.Ctx, core : Core, x : Json, piece : (Bool, Bool)) -> Un
     ])
   }
   let key = "kept/" + text(xv, "station") + "/" + count(xv, "thread").to_string()
-  if list_row(c, key~, piece~, fn() {
-      row_lines(c, title, sub, end=fn() {
-        c.text(size_words(size), style=fill_size_words) |> ignore
-        chevron(c)
-      })
-    }) {
+  list_row(c, key~, piece~, fn() {
+    row_lines(c, title, sub, end=fn() {
+      c.text(size_words(size), style=fill_size_words) |> ignore
+      chevron(c)
+    })
+  }, on_press=fn() {
     (core.push)(KeptChat(text(xv, "station"), count(xv, "thread")))
-  }
+  })
 }
 
 ///|
@@ -522,7 +539,7 @@ let fill_sizes : Array[Double] = [1024.0 * 1024.0 * 1024.0, 100.0 * 1024.0 * 102
 /// `keeping`), each with how it stands, all of them stopped at once; into `blocks`.
 fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
   let t = @sf.theme()
-  let prefs = (core.topic)("prefs", Map::new()).value
+  let prefs = (core.topic)("prefs", Map::new()).get().value
   let on = !flag(prefs, "fillOff")
   let most = match field(prefs, "fillMax") {
     Some(Number(n, ..)) => n
@@ -533,22 +550,18 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
   blocks.push(fn() { section_header(c, tr("android-settings.files.fill.title"), start=S6) })
   blocks.push(fn() {
     list_card(c, fn() {
-      // (the switch in the row's middle, off its corners, as settings' switches are)
-      if list_row(c, key="kept-fill", fn() {
-          c.box(style=fill_words, fn() { row_lines(c, tr("android-settings.files.fill.on"), tr("android-settings.files.fill.on.sub"), wrap_sub=true) })
-          |> ignore
-          switch(c, "kept-fill-switch", on)
-        }) {
+      // (the library's switch row, as every setting's)
+      if @sf.switch_row(c, "kept-fill-switch", tr("android-settings.files.fill.on"), on, note=tr("android-settings.files.fill.on.sub")) != on {
         set("fillOff", if on { Json::boolean(true) } else { Json::null() })
       }
       if on {
         let id = c.id("kept-fill-max")
-        if list_row(c, key="kept-fill-max", fn() {
-            row_lines(c, tr("android-settings.files.fill.max"), tr("android-settings.files.fill.max.sub"), end=fn() {
-              c.text(size_said(most), style=fill_size_words) |> ignore
-              chevron(c)
-            })
-          }) {
+        list_row(c, key="kept-fill-max", fn() {
+          row_lines(c, tr("android-settings.files.fill.max"), tr("android-settings.files.fill.max.sub"), end=fn() {
+            c.text(size_said(most), style=fill_size_words) |> ignore
+            chevron(c)
+          })
+        }, on_press=fn() {
           let choices = fill_sizes.map(fn(n) { @sf.choice(n.to_string(), size_said(n)) })
           @sf.pick(
             tr("android-settings.files.fill.max"),
@@ -560,11 +573,11 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
             },
             from=Of(id),
           )
-        }
+        })
       }
     })
   })
-  let keeping = items((core.topic)("downloads", Map::new()).value, "keeping")
+  let keeping = items((core.topic)("downloads", Map::new()).get().value, "keeping")
   if !on || keeping.length() == 0 {
     return
   }
@@ -581,11 +594,11 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
     })
   }
   blocks.push(fn() {
-    if list_row(c, key="kept-fill-stop-all", piece=(false, true), fn() {
-        row_title(c, tr("android-settings.files.fill.stopAll"), color=t.p.red)
-      }) {
+    list_row(c, key="kept-fill-stop-all", piece=(false, true), fn() {
+      row_title(c, tr("android-settings.files.fill.stopAll"), color=t.p.red)
+    }, on_press=fn() {
       (core.call)("fill.stopAll", obj([]), fn(_) {  })
-    }
+    })
   })
 }
 
@@ -629,16 +642,16 @@ fn kept_file_row(c : @ui.Ctx, core : Core, station : String, f : Json, piece : (
         @motion.ripple(c, id, 18.0)
       })
       c.semantics(b, Button, id~, label=tr("android-settings.files.clear.action") + "「" + name + "」")
-      if hit(c, id) {
+      c.on_press(id, fn() {
         kept_file_clear(core, station, f)
-      }
+      })
     })
   })
   |> ignore
 }
 
 ///|
-/// A kept file's bin (KeptFiles.kt: 36 across, its icon in its middle, its ripple a circle): no ground or corner of its
+/// A kept file's bin (its icon in its middle, its ripple a circle): no ground or corner of its
 /// own, pressed or not, so none stands round in its card's corner where no circle is concentric with it.
 // kept across runs: a value (no field of it changes)
 let kept_bin : @ui.Style = @ui.css("w=S9 h=S9 align=ACenter justify=JCenter")
@@ -676,13 +689,13 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
     if chat is Some(_) {
       blocks.push(fn() {
         list_card(c, fn() {
-          if size_row(c, if messages > 0.0 { "kept-messages" } else { "" }, tr("android-settings.files.messages"), tr("android-settings.files.messages.text"), messages) {
+          size_row(c, if messages > 0.0 { "kept-messages" } else { "" }, tr("android-settings.files.messages"), tr("android-settings.files.messages.text"), messages, on_press=fn() {
             confirm(tr("android-settings.files.messages"), tr("android-settings.files.messages.clear"), tr("android-settings.files.clear.action"), danger=true, fn() {
               (core.call)("cache.clear", obj([("station", str(station)), ("thread", Json::number(thread.to_double()))]), fn(_) {
                 kept.asked.set(kept.asked.get() + 1)
               })
             })
-          }
+          })
         })
       })
     }
@@ -705,7 +718,7 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
     if all > 0.0 {
       blocks.push(fn() {
         list_card(c, fn() {
-          if list_row(c, key="kept-chat-all", fn() { row_title(c, tr("android-settings.files.clearChat"), color=t.p.red) }) {
+          list_row(c, key="kept-chat-all", fn() { row_title(c, tr("android-settings.files.clearChat"), color=t.p.red) }, on_press=fn() {
             confirm(
               tr("android-settings.files.clearChat"),
               fill("android-settings.files.clearChat.text", [("size", size_words(all))]),
@@ -713,7 +726,7 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
               danger=true,
               clear,
             )
-          }
+          })
         })
       })
     }

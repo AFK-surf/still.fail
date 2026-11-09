@@ -1,4 +1,4 @@
-// Android's composer taken by a tap (Composer.kt, Compose's tap on a field: the focus as the finger lifts), however long
+// Android's composer taken by a tap (Compose's tap on a field: the focus as the finger lifts), however long
 // the finger stayed down without moving.
 
 ///|

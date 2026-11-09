@@ -1,4 +1,4 @@
-// still.fail Helper's grants end to end on a Mac (docs/remote-screens.md "Grants"): a dev cloud (cloud/test/dev.ts), a
+// still.fail Helper's grants end to end on a Mac: a dev cloud (cloud/test/dev.ts), a
 // station of this checkout started as launchd starts one (a job in the GUI session), and a member's device on iroh. It
 // reads the overview's `permissions` (the helper's real grants on this Mac), asks for one (GRANT, default the first
 // folder not granted, else desktop) with POST /permissions/request, sees the window said to be up, and, where the
@@ -26,7 +26,7 @@ const PORT = Number(process.env.PORT ?? 8917);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const RELAY = process.env.RELAY ?? "http://127.0.0.1:3340";
 const WORK = process.env.WORK ?? "/tmp/permissions-e2e";
-const LABEL = "dev.ember.permissions-e2e";
+const LABEL = "dev.stillfail.permissions-e2e";
 const native = (what: string) => execFileSync(process.execPath, [join(ROOT, "scripts/native.ts"), "file", what], { encoding: "utf8" }).trim();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const say = (s: string) => console.log(`\n== ${s}`);

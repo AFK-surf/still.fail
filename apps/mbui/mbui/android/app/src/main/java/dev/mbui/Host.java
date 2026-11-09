@@ -132,7 +132,7 @@ final class Host {
     }
 
     /**
-     * Turned sideways for a film (@hostapi.set_sideways, still.fail's Player.kt): landscape asked for (a phone with rotation
+     * Turned sideways for a film (@hostapi.set_sideways): landscape asked for (a phone with rotation
      * locked turns too) and the system bars away, a swipe bringing them for a while; off, upright and the bars back.
      */
     static void setSideways(boolean on) {
@@ -284,6 +284,15 @@ final class Host {
         main.postDelayed(() -> v.wakeAt(at), (long) Math.max(0, lead));
     }
 
+    /**
+     * A frame for what moves on by the clock that needs only {@code hz} frames a second (android_host.c
+     * mb_host_frames_paced, GL thread, in the frame): MBView's (framesPaced); whether it paces it.
+     */
+    static boolean framesPaced(double hz) {
+        MBView v = view;
+        return v != null && v.framesPaced(hz);
+    }
+
     /** The input method's edits sent to MoonBit (MBView.MBInput.edited, main thread) and taken by it (GL thread). */
     static int imeSent;
     static volatile int imeTaken;
@@ -358,7 +367,7 @@ final class Host {
     static String secretCopied;
 
     /**
-     * A secret on the clipboard (@hostapi.clipboard_set_secret, still.fail's Vault.kt copy): marked sensitive (the
+     * A secret on the clipboard (@hostapi.clipboard_set_secret): marked sensitive (the
      * system's preview of it masked, Android 13 on: ClipDescription.EXTRA_IS_SENSITIVE, by its value, which older
      * systems pass over). The app takes it off `clearMs` later (clipboardSecretOff).
      */
@@ -522,6 +531,8 @@ final class Host {
     static int drive(int kind, String text) {
         // a notification of the app's, tapped or looked for by its words (Notices.drive)
         if (kind == 6 || kind == 7) return Notices.drive(kind == 6, text);
+        // input to the screen measured (Latency)
+        if (kind == 12) return Latency.start(text);
         if (kind == 4 || kind > 5) return 0;
         main.post(() -> {
             MBView v = view;

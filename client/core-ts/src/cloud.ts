@@ -1,4 +1,4 @@
-// still.fail cloud's account API, called as one of the signed-in accounts (cloud.rs). Errors come back as
+// still.fail cloud's account API, called as one of the signed-in accounts. Errors come back as
 // {error: code}; the codes and their words mirror web/src/cloud/api.ts.
 import { Effect } from "effect";
 import { encodeComponent, type Accounts } from "./accounts.ts";

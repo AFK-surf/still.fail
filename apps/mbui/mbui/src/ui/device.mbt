@@ -49,16 +49,12 @@ fn Haptic::code(self : Haptic) -> Int {
 }
 
 ///|
-/// A haptic of `kind` (@hostapi.haptic); a Tester's host keeps it (Tester::haptics). None while the app has them off
-/// (set_haptics).
+/// A haptic of `kind` (@hostapi.haptic). None while the app has them off (set_haptics).
 pub fn haptic(kind : Haptic) -> Unit {
   if !haptics_on.val {
     return
   }
-  match fake.val {
-    Some(f) => f.dev.haptics.push(kind)
-    None => @hostapi.haptic(kind.code())
-  }
+  @hostapi.haptic(kind.code())
 }
 
 ///|
@@ -72,62 +68,28 @@ pub fn set_haptics(on : Bool) -> Unit {
 let haptics_on : Ref[Bool] = { val: true }
 
 ///|
-/// The screen kept on while the app is in front (`on`), or let sleep again (@hostapi.keep_awake); a Tester's host keeps
-/// what it was last told (Tester::awake).
+/// The screen kept on while the app is in front (`on`), or let sleep again (@hostapi.keep_awake).
 pub fn keep_awake(on : Bool) -> Unit {
-  match fake.val {
-    Some(f) => f.dev.awake = on
-    None => @hostapi.keep_awake(on)
-  }
+  @hostapi.keep_awake(on)
 }
 
 ///|
-/// Words put on the clipboard, `label` what the system shows of where they came from (a screen's title); a Tester's
-/// host holds them (Tester::clipboard, clipboard_label).
+/// Words put on the clipboard, `label` what the system shows of where they came from (a screen's title).
 pub fn clipboard_set(text : String, label? : String = "") -> Unit {
-  match fake.val {
-    Some(f) => {
-      f.clipboard = text
-      f.dev.clip_png = None
-      f.dev.clip_label = label
-    }
-    None => @hostapi.clip_set_text(text, label)
-  }
+  @hostapi.clip_set_text(text, label)
 }
 
 ///|
-/// A picture (PNG's bytes) put on the clipboard (@hostapi.clip_set_png), in place of what it held; a Tester's host holds
-/// it (Tester::clipboard_png).
+/// A picture (PNG's bytes) put on the clipboard (@hostapi.clip_set_png), in place of what it held.
 pub fn clipboard_set_png(png : Bytes, label? : String = "") -> Unit {
-  match fake.val {
-    Some(f) => {
-      f.clipboard = ""
-      f.dev.clip_png = Some(png)
-      f.dev.clip_label = label
-    }
-    None => @hostapi.clip_set_png(png, label)
-  }
+  @hostapi.clip_set_png(png, label)
 }
-
-///|
-/// The real host's word on whether it says a copy itself, asked once (a Tester never reads it: its own is
-/// Tester::new's `copy_shown`).
-// kept across runs: the real host's (asked once); a Tester answers from its fake host
-let host_copy_shown : Ref[Int] = { val: -1 }
 
 ///|
 /// Whether the system says itself that something was put on the clipboard (Android 13 and later show it, with a
-/// preview): then the app does not say it again. Kept on the run's tape (ENV's `copy`); a Tester's is its `copy_shown`.
+/// preview): then the app does not say it again. Kept on the run's tape (ENV's `copy`).
 pub fn copy_shown() -> Bool {
-  match fake.val {
-    Some(f) => f.dev.copy_shown
-    None => {
-      if host_copy_shown.val < 0 {
-        host_copy_shown.val = if @hostapi.copy_shown() { 1 } else { 0 }
-      }
-      host_copy_shown.val == 1
-    }
-  }
+  @hostapi.copy_shown()
 }
 
 ///|
@@ -155,8 +117,7 @@ pub(all) struct Clipboard {
 ///|
 /// A read of the clipboard under way (clipboard_read), waited on (an outside ticket) until it is taken.
 pub struct ClipboardRead {
-  priv host : @hostapi.ClipRead?
-  priv fake : Int
+  priv host : @hostapi.ClipRead
   priv taken : Ref[Bool]
 }
 
@@ -216,37 +177,20 @@ fn FakeDevice::new(copy_shown : Bool) -> FakeDevice {
 /// (ClipboardRead::got). None where the host cannot. Under a Tester, what the test gives (Tester::clipboard_gives…):
 /// until it does, the read is waited on (the app is not at rest).
 pub fn clipboard_read() -> ClipboardRead? {
-  match fake.val {
-    Some(f) => {
-      let ask = { frame: g().frame_no, answer: None }
-      if f.dev.held.length() > 0 {
-        ask.answer = Some((f.dev.held.remove(0), g().frame_no))
-        f.wants = true
-      }
-      f.dev.reads.push(ask)
-      let r : ClipboardRead = { host: None, fake: f.dev.reads.length() - 1, taken: Ref::new(false) }
+  match @hostapi.clip_read() {
+    Some(h) => {
+      let r : ClipboardRead = { host: h, taken: Ref::new(false) }
       outside_start(outside_clip, r.outside_id(), "the clipboard read \{r.outside_id()}")
       Some(r)
     }
-    None =>
-      match @hostapi.clip_read() {
-        Some(h) => {
-          let r : ClipboardRead = { host: Some(h), fake: -1, taken: Ref::new(false) }
-          outside_start(outside_clip, r.outside_id(), "the clipboard read \{r.outside_id()}")
-          Some(r)
-        }
-        None => None
-      }
+    None => None
   }
 }
 
 ///|
-/// Its id as the host's event names it (outside_clip), a Tester's its ask's place, from 1.
+/// Its id as the host's event names it (outside_clip; a Tester's its ask's place, from 1).
 fn ClipboardRead::outside_id(self : ClipboardRead) -> Int {
-  match self.host {
-    Some(h) => h.id()
-    None => self.fake + 1
-  }
+  self.host.id()
 }
 
 ///|
@@ -255,18 +199,7 @@ pub fn ClipboardRead::got(self : ClipboardRead) -> Clipboard? {
   if self.taken.val || !answer_here(outside_clip, self.outside_id()) {
     return None
   }
-  let got = match self.host {
-    Some(h) => h.got().map(clipboard_of)
-    None =>
-      match fake.val {
-        Some(f) if self.fake >= 0 && self.fake < f.dev.reads.length() =>
-          match f.dev.reads[self.fake].answer {
-            Some((c, at)) if g().frame_no > at => Some(c)
-            _ => None
-          }
-        _ => None
-      }
-  }
+  let got = self.host.got().map(clipboard_of)
   if got is Some(c) {
     self.taken.val = true
     answer_taken(outside_clip, self.outside_id())
@@ -519,26 +452,17 @@ let text_float_unit : Double = 64.0
 
 ///|
 fn h_ime_action(kind : Int) -> Unit {
-  match fake.val {
-    Some(f) => f.dev.ime_action = kind
-    None => @hostapi.ime_action(kind)
-  }
+  @hostapi.ime_action(kind)
 }
 
 ///|
 fn h_key_catch(on : Bool) -> Unit {
-  match fake.val {
-    Some(f) => f.dev.key_catch = on
-    None => @hostapi.key_catch(on)
-  }
+  @hostapi.key_catch(on)
 }
 
 ///|
 fn h_ime_inset() -> Double {
-  match fake.val {
-    Some(f) => f.dev.ime_inset
-    None => @hostapi.ime_inset()
-  }
+  @hostapi.ime_inset()
 }
 
 ///|

@@ -24,7 +24,7 @@ test "desk composer: its menu of chats dismissed by Escape: closed for that @ as
   t.run_for(@kit.pop_out_ms)
   assert_eq(seen, [false, true, true])
   assert_true(t.find("引用对话") is None)
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key), msg="the field keeps the focus")
+  assert_true(composer_focused(), msg="the field keeps the focus")
 }
 
 ///|
@@ -59,7 +59,7 @@ fn ref_picked_then_escape(frames : Bool) -> (Int, String, Int, Bool) raise {
   // (the fixture's core answers it, its mark in)
   let made = named(calls, "chat.ref")
   t.draw()
-  (made.length(), desk_words(src), named(calls, "chat.send").length(), t.ctx().editor_focused(@sfpages.composer_field_key))
+  (made.length(), desk_words(src), named(calls, "chat.send").length(), composer_focused())
 }
 
 ///|
@@ -85,7 +85,7 @@ fn ref_keyed_then_escape(key : Int, frames : Bool) -> (Int, String, Int, Bool) r
   t.draw()
   let made = named(calls, "chat.ref")
   t.draw()
-  (made.length(), desk_words(src), named(calls, "chat.send").length(), t.ctx().editor_focused(@sfpages.composer_field_key))
+  (made.length(), desk_words(src), named(calls, "chat.send").length(), composer_focused())
 }
 
 ///|
@@ -157,7 +157,7 @@ test "desk composer: its menu under a panel that leaves the field its focus: Ent
   t.draw()
   assert_true(t.find("盖在上面的对话框") is Some(_))
   // (the field under it keeping the focus: what the menu is said to take keys of)
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key), msg="the field under the dialog keeps the focus")
+  assert_true(composer_focused(), msg="the field under the dialog keeps the focus")
   t.key_told(@ui.key_code_enter, 0, t.time())
   t.draw()
   assert_eq((named(calls, "chat.ref").length(), named(calls, "chat.send").length(), desk_words(src), entered.val), (0, 0, "看 @首页", 1))

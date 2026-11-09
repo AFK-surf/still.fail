@@ -1,4 +1,4 @@
-// The core's data (docs/core-db.md): a SQLite database per signed-in account (db/account.ts, db/schema.ts), reached
+// The core's data: a SQLite database per signed-in account (db/account.ts, db/schema.ts), reached
 // through Data (data.ts). What it promises: real tables, written row by row and only where something changed, by one
 // writer committing a burst at once and saying what it changed; lists loaded only when read, kept current from then
 // on; versions and migrations; what a newer core wrote only read; no room left said, and what was done here kept; what

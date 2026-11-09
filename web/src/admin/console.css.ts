@@ -113,7 +113,7 @@ export const command = style({ display: "grid", gridTemplateColumns: "minmax(0, 
 export const fbNumber = style({ flex: "none", fontSize: vars.textMeta });
 export const fbTitle = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const fbBar = style({ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "14px" });
-export const fbBody = style({ padding: "10px 12px", borderRadius: vars.rOption, background: vars.canvas, cornerShape: vars.cornerShape });
+export const fbBody = style({ whiteSpace: "pre-wrap", overflowWrap: "anywhere", padding: "10px 12px", borderRadius: vars.rOption, background: vars.canvas, cornerShape: vars.cornerShape });
 export const fbContext = style({ gridTemplateColumns: "minmax(72px, max-content) minmax(0, 1fr)", fontSize: vars.textMeta });
 export const fbLogs = style({
   margin: "0", maxHeight: "360px", overflow: "auto", padding: "10px 12px", borderRadius: vars.rOption, background: vars.canvas,

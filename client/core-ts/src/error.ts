@@ -75,7 +75,7 @@ export class CoreError extends Error {
 
   /// Gone wrong past what people did or can mend (the network, a host, a station's own fault, anything said `plainly`):
   /// said with the local date and time it failed at, to the second, by which an agent finds its spans
-  /// (docs/telemetry.md). The first time, the deepest span's: the one that has what the transport said.
+  ///. The first time, the deepest span's: the one that has what the transport said.
   stamped(atMs: number, offsetMin: number): void {
     if (this.at !== undefined) return;
     if (!(this.code === "mesh" || this.code === "host" || this.code === "timeout" || (this.status ?? 0) >= 500 || typeof this.cause === "string")) return;
@@ -88,7 +88,7 @@ export class CoreError extends Error {
   }
 }
 
-/// What a host says when what it was asked failed (host.rs `HostError`): in its own words, or (`said`) in the person's,
+/// What a host says when what it was asked failed: in its own words, or (`said`) in the person's,
 /// as the core says it to them.
 export class HostError extends Error {
   readonly said?: true;

@@ -1,30 +1,35 @@
 import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
+import { MbProcess, mbReaderBinary } from "../read/mb-reader.ts";
 import type { InWorkspace } from "../store/rows.ts";
 
 export type MinuteRequest = { id: number; viewer: InWorkspace | null } | { id: number; detail: InWorkspace | null }
   | { id: number; remote: true } | { id: number; chats: InWorkspace | null };
 export type MinuteResponse = { id?: number; error?: string; complete?: boolean; foreground?: boolean };
 
-/// Check whether previously maintained summaries are complete without writing or filling old history.
+/// Check whether previously maintained summaries are complete without writing or filling old history. By the MoonBit
+/// checker (station/mb, src/usage: `--builder usage-check`) where its program is there, else by the worker.
 export class MinuteReader {
   readonly #path: string;
-  #worker: Worker | null = null;
+  readonly #mb: string | null;
+  #worker: Worker | MbProcess | null = null;
   #next = 0;
   #closed = false;
   #complete = false;
   #termination: Promise<number> | null = null;
   #waiting = new Map<number, { resolve: () => void; reject: (error: Error) => void; request: MinuteRequest; sent: boolean }>();
-  constructor(path: string, _options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}) {
+  constructor(path: string, _options: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}, mb = mbReaderBinary()) {
     this.#path = path;
+    this.#mb = mb;
   }
 
   start(): void {
     if (this.#closed || this.#complete || this.#worker !== null) return;
     const file = new URL(import.meta.url.endsWith(".ts") ? "./minute-worker.ts" : "./usage/minute-worker.js", import.meta.url);
-    const worker = new Worker(file, { workerData: { path: this.#path }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
+    const worker = this.#mb !== null ? new MbProcess(this.#mb, ["--builder", "usage-check", "--db", this.#path])
+      : new Worker(file, { workerData: { path: this.#path }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     this.#worker = worker;
-    worker.unref();
+    if (worker instanceof Worker) worker.unref();
     worker.on("message", (answer: MinuteResponse) => {
       if (answer.complete) {
         this.#complete = true;
@@ -42,11 +47,11 @@ export class MinuteReader {
       else waiting.resolve();
     });
     let failure: Error | null = null;
-    worker.on("error", (error) => {
+    worker.on("error", (error: Error) => {
       failure = error;
       log.error("usage", "the minute summary worker stopped", { error: error.message });
     });
-    worker.on("exit", (code) => {
+    worker.on("exit", (code: number) => {
       const current = this.#worker === worker;
       if (current) this.#worker = null;
       if (current && !this.#complete && !this.#closed) {

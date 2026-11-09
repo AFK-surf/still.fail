@@ -3,6 +3,60 @@
 // back with no gesture one step.
 
 ///|
+test "back follows the current order as rows move, leave, and are made again" {
+  let items = @signals.signal([1, 2, 3])
+  let told : Array[Int] = []
+  let t = @view.Tree::new(fn(root) {
+    root.each(at_once=true, fn() { items.get() }, fn(it) { it }, fn(row, item) {
+      let id = item.get()
+      row.takes_back(fn() { told.push(id) }) |> ignore
+    })
+  })
+  t.frame(390.0, 844.0) |> ignore
+  t.back_step(t.back_taker().unwrap(), Back, 1.0) |> ignore
+  items.set([3, 2, 1])
+  t.frame(390.0, 844.0) |> ignore
+  t.back_step(t.back_taker().unwrap(), Back, 2.0) |> ignore
+  items.set([])
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(t.back_taker(), None)
+  items.set([2])
+  t.frame(390.0, 844.0) |> ignore
+  t.back_step(t.back_taker().unwrap(), Back, 3.0) |> ignore
+  assert_eq(told, [3, 1, 2])
+  t.dispose()
+  assert_eq(t.back_taker(), None)
+}
+
+///|
+test "back can change how a node takes it, and a removed node cannot take it again" {
+  let shown = @signals.signal(true)
+  let node : Ref[@view.View?] = Ref(None)
+  let told : Array[String] = []
+  let t = @view.Tree::new(fn(root) {
+    root.show(at_once=true, fn() { shown.get() }, fn(a) {
+      node.val = Some(a)
+      a.takes_back(fn() { told.push("once") }) |> ignore
+    })
+  })
+  t.frame(390.0, 844.0) |> ignore
+  let old = node.val.unwrap()
+  old.follows_back(fn(_) { told.push("follow") }) |> ignore
+  t.back_step(t.back_taker().unwrap(), Back, 1.0) |> ignore
+  old.takes_back(fn() { told.push("once again") }) |> ignore
+  t.back_step(t.back_taker().unwrap(), Back, 2.0) |> ignore
+  shown.set(false)
+  t.frame(390.0, 844.0) |> ignore
+  old.follows_back(fn(_) { told.push("removed") }) |> ignore
+  assert_eq(t.back_taker(), None)
+  shown.set(true)
+  t.frame(390.0, 844.0) |> ignore
+  t.back_step(t.back_taker().unwrap(), Back, 3.0) |> ignore
+  assert_eq(told, ["follow", "once again", "once"])
+  t.dispose()
+}
+
+///|
 /// Two nodes, "A" under "B" (B there while `b_on`): A following back (told in `told`, as `a_on` says it is there, taking
 /// presses while `a_presses`), B taking it once; a modal layer over both while `modal`.
 fn backed(
@@ -15,10 +69,10 @@ fn backed(
 ) -> @view.Tree {
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { a_on.get() }, fn(a) {
+      root.show(at_once=true, fn() { a_on.get() }, fn(a) {
         a.presses(By(fn() { a_presses.get() })).follows_back(fn(s) { told.push("A \{s}") }) |> ignore
       })
-      root.show(fn() { b_on.get() }, fn(b) {
+      root.show(at_once=true, fn() { b_on.get() }, fn(b) {
         b.over(Is(true)).takes_back(fn() { told.push("B done") }) |> ignore
       })
       root.box(fn(m) {

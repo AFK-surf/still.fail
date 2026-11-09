@@ -13,8 +13,8 @@ pub(all) struct CheckboxState {
 }
 
 ///|
-/// A checkbox at `checked` (its id `key`'s), named `label` for the semantics tree. What it became, and what happened
-/// to it.
+/// A checkbox at `checked` (its id `key`'s), named `label` for the semantics tree; `on_change`: what turning it does,
+/// given what it became, as it is turned, outside any build. What it became, and what happened to it.
 pub fn checkbox(
   c : @ui.Ctx,
   key : String,
@@ -22,8 +22,13 @@ pub fn checkbox(
   label? : String = "",
   disabled? : Bool = false,
   look? : (@ui.Ctx, CheckboxState) -> Unit = checkbox_look,
+  on_change? : (@ui.Check) -> Unit,
 ) -> @ui.Changed[@ui.Check] {
   let id = c.id(key)
+  match on_change {
+    Some(f) if !disabled => c.on_press(id, fn() { f(if checked is On { Off } else { On }) })
+    _ => ()
+  }
   let r = c.interact(id, disabled~, keys=@ui.press_space)
   let now : @ui.Check = if r.clicked {
     match checked {

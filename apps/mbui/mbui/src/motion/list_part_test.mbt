@@ -52,10 +52,10 @@ test "a list in a part kept while what is beside it is built moves its rows as t
           })
         })
         |> ignore
-        // (a part built each frame: what it shows reads the clock)
+        // (a part built at each step the test takes: what it shows changes every kept_look_ms, Ctx::every)
         c.box(w=Fill(1.0), h=Fill(1.0), fn() {
           c.kept_part(c.id("beside"), "", fn() {
-            c.text("\{(c.now() / kept_look_ms).floor()}", size=12.0) |> ignore
+            c.text("\{c.every(kept_look_ms)}", size=12.0) |> ignore
           })
         })
         |> ignore
