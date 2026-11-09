@@ -358,6 +358,9 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   })
   // (what comes or goes at once where motion is reduced)
   t.reduces_motion(reduced_motion)
+  // (what is drawn smaller than a press's room reached from round it, the room by the native input as an old view's
+  // is: one room, rooms.mbt)
+  t.press_least(room_least)
   // (two presses in a row by the hand that presses: a mouse's as a double click (Ctx::on_double_press's), a finger's
   // as a double tap)
   t.twice_within(fn() {

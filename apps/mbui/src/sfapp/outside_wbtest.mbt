@@ -405,3 +405,18 @@ test "分享对话: a chat and whose it is on one line, why it cannot be shared 
     }
   }
 }
+
+///|
+test "分享对话 on a sheet by touch: 分享并发送, drawn less tall than a press's room, is pressed from 3 over it and 3 under it" {
+  // (the window's tree reaching what is drawn smaller than its room from round it, as an old view's hit test does:
+  // mbui's view/reach.mbt)
+  for dy in [-3.0, 3.0] {
+    let calls : Array[Made] = []
+    let t = outside_asked(calls, outside_two())
+    let (x, y, w, h) = t.get(Button, label="分享并发送").rect
+    assert_true(h < @ui.room_least(), msg="drawn \{h} tall")
+    t.tap(x + w / 2.0, if dy < 0.0 { y + dy } else { y + h + dy })
+    t.draw()
+    assert_eq(named(calls, "chat.outsideShare").length(), 1, msg="\{dy} from it: \{(x, y, w, h)}")
+  }
+}
