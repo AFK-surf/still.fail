@@ -73,7 +73,9 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 ///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
-  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState"].contains(op)
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries"].contains(
+    op,
+  )
 }
 
 ///|
@@ -95,6 +97,9 @@ fn Reader::read(self : Reader, op : String, args : Json) -> Json raise {
     "historyPendingCard" => @readops.pending_card_number(db, args.value("thread").unwrap_or(Json::null()))
     "statePendingCard" => @readops.state_pending_card(db, args)
     "deliveryCardState" => @readops.delivery_card_state(db, args)
+    "reviewPendingCard" => @readops.review_pending_card(db, args)
+    "stateQuestion" => @readops.state_question(db, args)
+    "pendingDeliveries" => @readops.pending_deliveries(db, args)
     _ => fail("no read \{op}")
   }
 }

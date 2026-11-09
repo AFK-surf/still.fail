@@ -986,3 +986,60 @@ pub fn login_cards_maintenance(db : @sql.Db) -> Bool raise {
   }
   login_cards_step(db)
 }
+
+///|
+/// legacy-edits-build.ts `legacyMergedReadReady`: a single merged message can be read now.
+pub fn merged_read_ready(db : @sql.Db) -> Bool raise {
+  edits_ready(db)
+}
+
+///|
+/// legacy-edits-build.ts `legacyMergedNeedsRepair`: the merged view's index is gone; it must be switched first.
+pub fn merged_needs_repair(db : @sql.Db) -> Bool raise {
+  let view = sql_of(db, "view", "merged").unwrap_or("")
+  if view.contains("legacy_edit_meta") {
+    view.contains("INDEXED BY entries_target") && !has_old_edit_index(db)
+  } else {
+    !exists(db, "index", "entries_edits")
+  }
+}
+
+///|
+/// legacy-edits-read.ts `boundedEditKey`: a message's latest edit (as text), None when there is none; raises
+/// `Unprepared` when old edits need preparing first.
+pub fn bounded_edit_key(db : @sql.Db, thread : Json, n : Json) -> String? raise {
+  let read = (sql : String) => first(db, sql, [thread, n])
+  let mut edit = read(
+    "WITH tail AS MATERIALIZED (\n    SELECT n,target FROM entries WHERE thread=?1 ORDER BY n DESC LIMIT 65\n  ) SELECT (SELECT CAST(n AS TEXT) FROM tail WHERE target=CAST(?2 AS INTEGER) ORDER BY n DESC LIMIT 1) AS n,\n    (SELECT COUNT(*) FROM tail) AS count",
+  )
+  let count = (e : Map[String, Json]?) => match e {
+    Some(r) => int(r, "count")
+    None => 0
+  }
+  let key = (e : Map[String, Json]?) => match e {
+    Some(r) => match get(r, "n") { String(s) => Some(s); _ => None }
+    None => None
+  }
+  if key(edit) is None && count(edit) == 65 {
+    let meta = if has_legacy_edits(db) {
+      first(db, "SELECT scanned,old_index FROM legacy_edit_meta WHERE id=1", [])
+    } else {
+      None
+    }
+    if meta is Some(m) && int(m, "scanned") == 0 && int(m, "old_index") == 1 && has_old_edit_index(db) {
+      edit = read(
+        "WITH edits AS MATERIALIZED (\n    SELECT x.n FROM entries x INDEXED BY entries_target WHERE x.thread=?1 AND x.target=CAST(?2 AS INTEGER)\n      ORDER BY x.rowid DESC LIMIT 65\n  ) SELECT CAST(MAX(n) AS TEXT) AS n,COUNT(*) AS count FROM edits",
+      )
+    }
+    if count(edit) == 65 {
+      raise Unprepared("legacy edits pending")
+    }
+  }
+  key(edit)
+}
+
+///|
+/// Old edits to be prepared before a message can be read merged (read/store.ts LegacyEditsUnavailable).
+pub(all) suberror Unprepared {
+  Unprepared(String)
+}

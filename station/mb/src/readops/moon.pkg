@@ -3,6 +3,7 @@ import {
   "station/wire",
   "station/sql",
   "station/cards",
+  "station/legacy",
   "station/jsjson",
   "moonbitlang/core/json",
 }
