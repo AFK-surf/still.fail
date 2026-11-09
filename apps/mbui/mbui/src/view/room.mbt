@@ -23,7 +23,8 @@ pub struct Room {
 /// made and said again by it there and laid out in that same layout, nothing laid out again afterwards. `make` is done
 /// once, as it is first laid out (its width known then). Its width is what holds it gives it (stretched across a
 /// column, its share of a row), never what it holds: `held` is as wide as its room, as tall as what it holds. What is
-/// made in it changes nothing outside it, nor its own box, by its room (a fault where it does). Where it is given
+/// made in it never says its own box by its room (a fault where it does); what reads it outside it (none should) is
+/// laid out after, as a change of its own. Where it is given
 /// another room in the same layout (measured in a row before its share is known), made by each in turn, laid out by
 /// the last.
 #callsite(autofill(loc))
@@ -123,39 +124,49 @@ fn Room::measure_one(self : Room, v : View, cell : @signals.Signal[Double], w : 
 }
 
 ///|
-/// How tall `v` comes to at room `w`: as wide as that less what is across it on its way there (its margins, and each
-/// holding it in the room's: their margins and padding), as each is stretched across what holds it.
+/// How tall `v` comes to at room `w` (Tree::height_in, from the room's own).
 fn Room::height_at(self : Room, v : View, w : Double) -> Double {
+  self.tree.height_in(v.at, self.at, w)
+}
+
+///|
+/// How tall node `at` comes to laid out whole where node `top`, holding it, gives what it holds `w` across: as wide as
+/// that less what is across it on its way there (its margins, and each holding it under `top`: their margins and
+/// padding), as each is stretched across what holds it. Measured, as it stands (@flex.measured_height).
+fn Tree::height_in(self : Tree, at : Int, top : Int, w : Double) -> Double {
   let pt = fn(k : Int, x : Double) { if k == @flex.LEN_PT { x } else { 0.0 } }
   let mut across = 0.0
-  let mut i = v.at
-  while i >= 0 && i != self.at {
-    let s = self.tree.nodes[i].flex.style
+  let mut i = at
+  while i >= 0 && i != top {
+    let s = self.nodes[i].flex.style
     across = across +
       pt(s.margin_left_kind(), s.margin_left_value()) +
       pt(s.margin_right_kind(), s.margin_right_value())
-    if i != v.at {
+    if i != at {
       across = across +
         pt(s.padding_left_kind(), s.padding_left_value()) +
         pt(s.padding_right_kind(), s.padding_right_value())
     }
-    i = self.tree.nodes[i].parent
+    i = self.nodes[i].parent
   }
-  @flex.measured_height(self.tree.nodes[v.at].flex, dmax(0.0, w - across))
+  @flex.measured_height(self.nodes[at].flex, dmax(0.0, w - across))
 }
 
 ///|
 /// `f` done as node `at`'s room is told (View::by_room), in its layout: what it marks laid out again marked in it alone
-/// (its own and what is outside it a fault), nothing laid out or settled meanwhile, of the logic's moment. Whether it
-/// marked anything.
+/// (its own and what is outside it a fault), nothing laid out or settled meanwhile, of the logic's moment, nothing due
+/// on the timeline done in it (what it makes said due now done in its turn as the layout is done, each a change of its
+/// own: Tree::advance). Whether it marked anything.
 fn Tree::in_room(self : Tree, at : Int, f : () -> Unit) -> Bool {
   let was_room = self.rooming
   let was_marks = self.room_marks
   let was_standing = self.standing
   let was_cause = self.cause_at
+  let was_advancing = self.advancing
   self.rooming = at
   self.room_marks = 0
   self.standing = true
+  self.advancing = true
   self.committing += 1
   self.cause_at = self.logic
   @signals.untracked(f)
@@ -163,9 +174,23 @@ fn Tree::in_room(self : Tree, at : Int, f : () -> Unit) -> Bool {
   let marked = self.room_marks > 0
   self.committing -= 1
   self.cause_at = was_cause
+  self.advancing = was_advancing
   self.standing = was_standing
   self.room_marks = was_marks
   self.rooming = was_room
+  // (what is bound outside it, told meanwhile, worked out once all of it is laid out, in this same pass; what was
+  // marked outside it marked then)
+  if self.rooming < 0 && (!self.bindings_due.is_empty() || !self.room_spill.is_empty()) {
+    let spill = self.room_spill.copy()
+    self.room_spill.clear()
+    self.once_laid_out(fn() {
+      for at in spill {
+        if at < self.nodes.length() && self.nodes[at].live {
+          self.layout_marked_at(at)
+        }
+      }
+    })
+  }
   // (what takes input changed by what it made, told once all of it is laid out, not in the middle of that layout)
   if self.committing == 0 && self.modals_due {
     self.once_laid_out(fn() { self.modals_settled() })
@@ -174,18 +199,43 @@ fn Tree::in_room(self : Tree, at : Int, f : () -> Unit) -> Bool {
 }
 
 ///|
-/// The bindings told by what a room told, worked out now, in its layout (Tree::in_room).
+/// The bindings told by what a room told, of nodes in it, worked out now, in its layout (Tree::in_room); the rest (of
+/// nodes outside it, told meanwhile by what else changed) left for once all of it is laid out, as they would be. Where
+/// what runs the queue (Tree::laid_out, Tree::measured_now) is in the middle of it, this layout come of a binding it
+/// ran, the queue is left as it stands, those run in it no more queued, for it to go on through from where it was.
 fn Tree::room_bindings_run(self : Tree) -> Unit {
+  let rest : Array[Bound] = []
   let mut i = 0
   while i < self.bindings_due.length() {
     let b = self.bindings_due[i]
-    if b.queued {
-      (b.run)()
-    }
     i = i + 1
+    if !b.queued {
+      continue
+    }
+    if b.at >= 0 && self.under_node(b.at, self.rooming) {
+      (b.run)()
+    } else {
+      rest.push(b)
+    }
   }
-  self.bindings_due.clear()
+  if self.draining == 0 {
+    self.bindings_due.clear()
+    self.bindings_due.append(rest)
+  }
   self.boxes_flushed()
+}
+
+///|
+/// Whether node `at` is node `top` or held by it.
+fn Tree::under_node(self : Tree, at : Int, top : Int) -> Bool {
+  let mut i = at
+  while i >= 0 {
+    if i == top {
+      return true
+    }
+    i = self.nodes[i].parent
+  }
+  false
 }
 
 ///|
@@ -195,16 +245,18 @@ fn Tree::room_marked_at(self : Tree, at : Int) -> Unit {
   if at == self.rooming {
     abort("View::by_room: its own box said by the room it is given, as it is laid out by it: say it of what it holds")
   }
-  let mut i = at
-  while i >= 0 {
-    if i == self.rooming {
-      self.room_marks = self.room_marks + 1
-      return
+  if self.under_node(at, self.rooming) {
+    let mut i = at
+    while i != self.rooming {
+      let n = self.nodes[i]
+      n.flex.dirty = true
+      n.flex.cache_gen = -1
+      i = n.parent
     }
-    let n = self.nodes[i]
-    n.flex.dirty = true
-    n.flex.cache_gen = -1
-    i = n.parent
+    self.room_marks = self.room_marks + 1
+    return
   }
-  abort("View::by_room: what is made by the room it is given changed something outside it as it was laid out")
+  // (outside it: what reads what it told and is not in it (a layer over it reading how far it scrolls), marked once all
+  // of it is laid out, a change of its own then)
+  self.room_spill.push(at)
 }

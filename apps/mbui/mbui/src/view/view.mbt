@@ -648,6 +648,9 @@ pub struct Tree {
   mut logic : Double
   /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
   bindings_due : Array[Bound]
+  /// how many runs through `bindings_due` are under way (Tree::laid_out, Tree::measured_now): while one is, a room's
+  /// layout come of a binding it ran leaves the queue as it stands (Tree::room_bindings_run)
+  mut draining : Int
   /// how many bindings it holds, while they live (let go as each stops)
   mut bindings : Int
   /// those marked as what they read changed, since they last ran: what is asked at once (View::laid_size,
@@ -892,10 +895,18 @@ pub struct Tree {
   alone_due : Array[Int]
   /// those laid out so and not yet placed by, each with its compute's number
   alone_laid : Array[(Int, Int)]
+  /// what is asked of one laid out alone once it is (View::scrolls_window's slots: whether what it shows came out
+  /// another height, the column marked laid out again then, before the layout of all of it), by its index
+  alone_asks : Map[Int, () -> Bool]
+  /// a page's list's scroll by the node it scrolls in (View::scrolls): how far it was put for what came out another
+  /// height over what shows, as what is drawn is held steady (Tree::scroll_corrected)
+  lists_scrolled : Map[Int, Scroll]
   /// the node whose room is being told as it is laid out (View::by_room: -1, none), and how many of what it holds were
   /// marked laid out again meanwhile (Tree::room_marked_at)
   mut rooming : Int
   mut room_marks : Int
+  /// what was marked outside a room as it was told (Tree::room_marked_at), marked once all of it is laid out
+  room_spill : Array[Int]
   /// how many device pixels a point what hosts it draws at (0: none said): what is drawn off where it is laid out drawn
   /// off by whole pixels (View::drawn_off), as an old view's look is
   mut pixel_grid : Double
@@ -936,6 +947,8 @@ pub struct Tree {
 /// A property's binding as it stands (Tree::queued): queued for a frame, marked as what it read changed, live, and what
 /// runs it.
 struct Bound {
+  /// the node it binds a property of (-1: none said)
+  at : Int
   mut queued : Bool
   mut marked : Bool
   mut live : Bool
@@ -1005,6 +1018,7 @@ pub fn Tree::new(
     looks_due: [],
     places_due: [],
     bindings_due: [],
+    draining: 0,
     bindings: 0,
     pulls_marked: [],
     timeline: [],
@@ -1112,8 +1126,11 @@ pub fn Tree::new(
     walk_from: -1,
     alone_due: [],
     alone_laid: [],
+    alone_asks: {},
+    lists_scrolled: {},
     rooming: -1,
     room_marks: 0,
+    room_spill: [],
     pixel_grid: 0.0,
     rows_grid: 0.0,
     rows_lists: [],
@@ -2000,12 +2017,33 @@ fn Tree::layout_marked_at(self : Tree, at : Int, within? : Bool = false) -> Unit
 /// was asked before (@flex.relayout), to be placed by as the rest is; before the layout of all of it, which keeps it as
 /// it is unless what holds it asks it otherwise now.
 fn Tree::alone_laid_out(self : Tree) -> Unit {
-  for at in self.alone_due {
+  // (by its index: one that what it holds asks to be laid out again (below) put after the rest, laid out in turn)
+  let mut j = 0
+  while j < self.alone_due.length() {
+    let at = self.alone_due[j]
+    j = j + 1
     let n = self.nodes[at]
     if n.live && n.flex.dirty && n.flex.laid_given() {
       self.work.computes = self.work.computes + 1
       @flex.relayout(n.flex)
       self.alone_laid.push((at, @flex.computes()))
+      // (what it holds came out another size than it is counted: what holds it laid out again, from the nearest that
+      // lays out alone above it as a change in it is (Tree::layout_marked_at), which measures it there)
+      match self.alone_asks.get(at) {
+        Some(ask) if ask() => {
+          let mut i = n.parent
+          while i >= 0 {
+            let m = self.nodes[i]
+            m.flex.dirty = true
+            if m.alone && m.flex.laid_given() {
+              self.alone_due.push(i)
+              break
+            }
+            i = m.parent
+          }
+        }
+        _ => ()
+      }
     } else if n.live && n.flex.dirty {
       // (no longer as it was asked: laid out with what holds it, by the layout of all of it after this)
       let mut i = n.parent
@@ -2016,6 +2054,11 @@ fn Tree::alone_laid_out(self : Tree) -> Unit {
     }
   }
   self.alone_due.clear()
+  // (what what was asked told meanwhile (a list's block measured as tall as it was counted, what shows under it worked
+  // out by that) worked out once all of it is laid out, and laid out in this same pass)
+  if !self.bindings_due.is_empty() {
+    self.once_laid_out(fn() {  })
+  }
 }
 
 ///|
@@ -2266,12 +2309,12 @@ priv enum Phase {
 /// A binding's work out of `read`, followed: run now, and as what it read changes, marked stale and queued for the
 /// next frame (Tree::frame runs the queue first), however often it changed meanwhile; there it is read anew and its
 /// value handed to `then`. What stops it (it follows nothing, runs no more, and lets go of what it holds).
-fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, at? : Int = -1) -> () -> Unit {
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
   // done with all of them. One object with its watch: a node's bindings are made and let go with it, each object more
   // an allocation and a free of every node)
-  let b : Bound = { queued: false, marked: false, live: true, told_at: -1.0, watch: None, run: bound_runs_not }
+  let b : Bound = { at, queued: false, marked: false, live: true, told_at: -1.0, watch: None, run: bound_runs_not }
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
@@ -2703,7 +2746,7 @@ pub fn[T : Eq] View::sets_together(self : View, read : () -> T, set : (T) -> Uni
     stop: fn() {  },
   }
   let last : Ref[T?] = Ref(None)
-  let stop = self.tree.queued(read, fn(v) {
+  let stop = self.tree.queued(at=self.at, read, fn(v) {
     if last.val == Some(v) {
       return
     }
@@ -2784,6 +2827,7 @@ fn[T : Eq] View::bind(
       let last : Ref[T?] = Ref(None)
       let gen = self.gen
     let stop = tree.queued(
+      at~,
       f,
       fn(v) {
         let n = tree.nodes[at]
@@ -3968,6 +4012,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
     self.clock_to(at)
     self.beat.set(at)
     self.pull()
+    self.draining += 1
     let mut i = 0
     while i < self.bindings_due.length() {
       let b = self.bindings_due[i]
@@ -3976,6 +4021,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
       }
       i = i + 1
     }
+    self.draining -= 1
     self.bindings_due.clear()
     if self.layout_due && self.measured_gen < 0 {
       self.alone_laid_out()
@@ -7447,6 +7493,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   }
   // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
   // what they set again marks what it marks)
+  self.draining += 1
   let mut i = 0
   while i < self.bindings_due.length() {
     // (one run already, pulled as something asked at once: not again)
@@ -7456,6 +7503,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
     i = i + 1
   }
+  self.draining -= 1
   self.bindings_due.clear()
   // (those marked that ran so, no longer to be pulled; one marked in a change not ended yet still is)
   let still = self.pulls_marked.filter(fn(b) { b.live && b.marked })

@@ -196,7 +196,7 @@ fn View::scroll_bar(
     bar_track_of(ends, vh - 2.0 * ends, vh - 2.0 * ends, content - 2.0 * ends, x, start, end, b.least, b.inset)
   }
   let track = fn(x : Double) {
-    let (vh, ends) = match self.laid_size_told() {
+    let (vh, ends) = match s.seen.get() {
       Some((w, h)) => if across { (w, dclamp(bar_in, 0.0, dmax(0.0, w / 2.0 - b.least))) } else { (h, 0.0) }
       None => (0.0, 0.0)
     }
@@ -272,7 +272,7 @@ fn View::scroll_bar(
       // (along its right; across, along its foot)
       (if across { thumb.height(thick).width(By(long)) } else { thumb.width(thick).height(By(long)) })
       .offset(By(fn() {
-        let (w, h) = self.laid_size_told().unwrap_or((0.0, 0.0))
+        let (w, h) = s.seen.get().unwrap_or((0.0, 0.0))
         if across {
           (track(0.0).0 - b.grab, h - b.inset - b.size - b.grab)
         } else {
