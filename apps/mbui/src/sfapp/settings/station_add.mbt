@@ -440,8 +440,8 @@ fn add_station_buttons(c : @ui.Ctx, core : Core, here : Here, done : () -> Unit,
 }
 
 ///|
-/// A command to run elsewhere, with a button that copies it: on surface2, a block of the
-/// ladder's (round by its row corner), its copy button the ladder's inset in from its top and end, as tall as two of
+/// A command to run elsewhere, with a button that copies it: on surface2 alone, no line round it (its ground sets it
+/// apart; the user, 2026-11-09), a block of the ladder's (round by its row corner), its copy button the ladder's inset in from its top and end, as tall as two of
 /// its lines and its inset under them (so with one or two lines as far from its foot too), round by the ladder's next
 /// step there (mbui works it out). `reach`: in a card's foot corners, how it reaches past the card's words
 /// (block_across).
@@ -463,8 +463,6 @@ fn command_box(c : @ui.Ctx, core : Core, words : String, reach? : @ui.Style) -> 
     gap=8.0,
     radius=@sf.command_box_corner,
     bg=t.p.card2,
-    border=1.0,
-    border_color=t.p.line,
     fn() {
       c.box(w=Fill(1.0), fn() { mono(c, words, size=12.0, line=command_line, wrap=true) }) |> ignore
       c.box(

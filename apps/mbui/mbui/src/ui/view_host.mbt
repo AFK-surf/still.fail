@@ -1487,9 +1487,20 @@ fn Ctx::view_drawn(
   turn : Double,
   ground_drawn : @view.GroundShape,
 ) -> Int {
-  // (its edge after what it holds, where it holds something drawn: border_over's, a clear one too: its ground inside
-  // it, its band left clear, as an old view's box with a border of no colour)
-  let edge_after = c.edge.0 > 0.0 && tree.holds_drawn(c.id)
+  // (its edge after what it holds and what it draws of its own over its ground (its picture, its words, its shapes, its
+  // field, an old view it hosts): border_over's, a clear one too: its ground inside it, its band left clear, as an old
+  // view's box with a border of no colour; with nothing over its ground, drawn with it)
+  let edge_after = c.edge.0 > 0.0 &&
+    (
+      tree.holds_drawn(c.id) ||
+      c.image is Some(_) ||
+      c.words != "" ||
+      !c.runs.is_empty() ||
+      !c.shapes.is_empty() ||
+      !c.lines.is_empty() ||
+      c.hosted ||
+      (!tree_fields.is_empty() && tree_fields.contains(c.id))
+    )
   let block = match view_blocks.get(c.id) {
     // (made as glass was drawn then: solid or not; a picture for the pixels it is drawn at now; its edge where it was)
     Some(b) if (c.glass is None || b.solid == glass_paint.solid) &&
@@ -1889,6 +1900,8 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
       each()
     }
     ring_at = self.ninst - start
+    // (as it shows over its own ground, whatever is under it: one colour all along it, as border_over's)
+    let ec = if (ground_c & 0xFFL) != 0L { over(ground_c, ec) } else { ec }
     self.emit_rect(0.0, 0.0, c.w, c.h, c.radius, 0L, ew, ec, 1.0)
     each()
   } else if (ground_c & 0xFFL) != 0L || edged {
