@@ -16,8 +16,14 @@ pub struct Tester {
   mut period : Double
   /// the display's frames to come, as a run's tape had them (Tester::set_frame_times): after the last, on its period
   mut times : Array[Double]
-  /// whether run_for draws the display's frames on its way (MBUI_TEST_FPS), or goes straight to its end
-  between : Bool
+  /// how far apart the frames run_for draws on its way are (ms; MBUI_TEST_FPS's), or 0: none, straight to its end;
+  /// drawn while the app asks for frames (not at rest), as a host draws them.
+  /// Only on run_for's way: what the test draws itself (an input's frames, `frame()`, a moment it says) is on the
+  /// display's frames as ever, so a run at another rate walks the same moments, only more or fewer frames between
+  between : Double
+  /// whether the frame being drawn is one of those (or what it left owed): how a motion goes frame to frame is not
+  /// judged on it (Tester::judges_motion), so a run at a rate judges the frames the default run does, no more
+  mut on_way : Bool
   /// a host's frames as its run had them (set_frame_times, set_frame_period): every frame on them, as the host drew
   /// it (an input's, a draw's, run_for's), not at the moments the test says
   mut host_frames : Bool
@@ -526,8 +532,8 @@ pub fn Tester::new(
     Some(make) => set_view_app(make, around=view)
     None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
   }
-  let (period, between) = test_frame_period()
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period, times: [], between, host_frames: false, each: None, before }
+  let between = test_frames_between()
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, host_frames: false, each: None, before }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {
@@ -654,15 +660,26 @@ pub fn Tester::finish_all(self : Tester) -> Unit {
 }
 
 ///|
-/// The display's frame period a Tester starts with, and whether run_for draws the display's frames on the way: by
-/// default frame_period_default and none (run_for goes straight to its end); MBUI_TEST_FPS (frames a second) that
-/// rate's, each drawn: a run of the tests at a frame rate, which must come out the same (scripts/fps_check.sh).
-fn test_frame_period() -> (Double, Bool) {
-  let fps = @hostapi.env("MBUI_TEST_FPS")
+/// How far apart the frames run_for draws on its way are (ms), or 0, none (run_for goes straight to its end, the
+/// default): MBUI_TEST_FPS (frames a second) that rate's, a run of the tests at a frame rate, which must come out the
+/// same (scripts/fps_check.sh). The test program's own environment, not the app's (the fake host's, a Tester's `env`):
+/// asked of the fake, it was never set, and every run at a frame rate went straight to its ends as the default's did.
+fn test_frames_between() -> Double {
+  let fps = @env.get_env_var("MBUI_TEST_FPS").unwrap_or("")
   match (try Some(@json.parse(fps)) catch { _ => None }) {
-    Some(Number(n, ..)) if n > 0.0 => (1000.0 / n, true)
-    _ => (frame_period_default, false)
+    Some(Number(n, ..)) if n > 0.0 => 1000.0 / n
+    _ => 0.0
   }
+}
+
+///|
+/// Whether how what moves goes from frame to frame is judged on the frame being drawn (words_over.mbt, rows_steady.mbt,
+/// sizes_steady.mbt: a step, a dead stop, words over words): on a display's own, 60 a second or more, and not on a
+/// frame a run at a rate (MBUI_TEST_FPS, scripts/fps_check.sh) draws on run_for's way. Such a run holds only that what a
+/// test asserts at its moments is the same however many frames came between; its judging is the default run's, on the
+/// same frames (the user, 2026-11-09: 7/24 帧只比结果；fps 跑法只比结果，平滑度另开一条线).
+pub fn Tester::judges_motion(self : Tester) -> Bool {
+  self.period <= frame_period_default + 1.0e-9 && !self.on_way
 }
 
 ///|
@@ -855,9 +872,12 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   self.frames = self.frames + 1
   // (each box's presses said to be another's that one's to take, where the box is: presses.mbt)
   g().check_press_owners()
-  self.hold_words_over()
-  self.hold_rows_steady()
-  self.hold_sizes_steady()
+  // (how what moves goes from frame to frame, judged on a display's own frames: Tester::judges_motion)
+  if self.judges_motion() {
+    self.hold_words_over()
+    self.hold_rows_steady()
+    self.hold_sizes_steady()
+  }
   self.hold_seen_whole_now()
   self.hold_corners()
   match self.each {
@@ -2049,7 +2069,8 @@ pub fn Tester::drawn_rect_corners(
 
 ///|
 /// The shadows drawn in the last frame (a blurred shape, kind 2): (x, y, w, h, its corner, its blur, colour
-/// RRGGBBAA with its opacity applied).
+/// RRGGBBAA with its opacity applied). One of no opacity left (under half a step of 255) draws nothing and is none: a
+/// shadow's last frame as what casts it goes, the frame its card was gone in.
 pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Double, Double, Double, Int64)] {
   ignore(self)
   let c = g()
@@ -2062,7 +2083,9 @@ pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Do
         (ch(c.inst[b + 9]) << 16) |
         (ch(c.inst[b + 10]) << 8) |
         ch(c.inst[b + 11])
-      out.push((c.inst[b], c.inst[b + 1], c.inst[b + 2], c.inst[b + 3], c.inst[b + 4], c.inst[b + 7], color))
+      if (color & 0xFFL) != 0L {
+        out.push((c.inst[b], c.inst[b + 1], c.inst[b + 2], c.inst[b + 3], c.inst[b + 4], c.inst[b + 7], color))
+      }
     }
   }
   out

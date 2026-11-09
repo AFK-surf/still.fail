@@ -786,12 +786,17 @@ fn Ctx::bar_let_go(self : Ctx) -> Unit {
 
 ///|
 /// As a frame ends, its bars drawn: what holds a thumb gone, it is let go; the pointer's bar found again where it
-/// rests (what moved under it).
+/// rests (what moved under it), once what moves has come to rest: found on the way, it was found by whichever frames
+/// came (a page sliding back under a still pointer drew its list's bar near it at 24 frames a second and not at 60,
+/// nav_test, MBUI_TEST_FPS=24), not by where things are at a moment.
 fn Ctx::bars_frame_end(self : Ctx) -> Unit {
   if self.bar_drag != 0 {
     if self.bar_drawn(self.bar_drag) is None {
       self.bar_let_go()
     }
+    return
+  }
+  if self.motion_owed() || self.motion_read {
     return
   }
   self.bar_pointer(self.px, self.py)

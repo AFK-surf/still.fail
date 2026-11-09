@@ -199,9 +199,12 @@ test "an animated value starts the frame it is asked in, and follows its target"
   assert_true(near(seen[seen.length() - 1], linear(), 1.0e-9))
   t.run_for(start + tween_ms / 2.0 - t.time())
   assert_true(near(seen[seen.length() - 1], linear(), 1.0e-9))
-  // turned back mid-way: from where it is in the frame it is told in, back from there on
-  shown.val = false
+  // turned back mid-way: from where it is in the frame it is told in, back from there on (said to that frame, the
+  // display's next: `shown` is no signal, and a frame drawn on the way (MBUI_TEST_FPS) would have been told it sooner)
   t.run_for(tween_ms / 10.0)
+  shown.val = false
+  t.stepped()
+  t.frame()
   let back = seen[seen.length() - 1]
   assert_true(near(back, linear(), 1.0e-9), msg="\{back}")
   t.run_for(tween_ms / 10.0)

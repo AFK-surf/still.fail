@@ -1066,8 +1066,10 @@ test "a login field in focus while driving a tab: 用 1Password 填入; its logi
   r.t.draw()
   r.t.draw()
   assert_true(r.t.find("1Password 里没有 example.org 的登录") is Some(_))
-  @ui.fake_op.val = None
   screen_done(r.t)
+  // (the host's 1Password let go of once the run is done: taken away before, the page lost its offer between two
+  // frames with nothing said, a frame painted from the last build showing it still, MBUI_TEST_FPS=24)
+  @ui.fake_op.val = None
 }
 
 ///|
