@@ -302,6 +302,34 @@ fn chats_pane_node(
     }
   })
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+  // (a chat's row in line `line`, its key as it is now (`key`: "r/" and its name, another's as the row is taken for
+  // another, View::scrolls_window's reused): as its chat is now, the last it was where it is gone from the list)
+  let row_line = fn(line : @view.View, key : () -> String) {
+    motion.line_node(line, key)
+    let name = fn() { key().view(start_offset=2).to_owned() }
+    guard @signals.untracked(fn() { item_of(name()) }) is Some(first) else { return }
+    let last : Ref[ChatItem] = Ref(first)
+    let item = fn() {
+      match item_of(name()) {
+        Some(i) => {
+          last.val = i
+          i
+        }
+        None => last.val
+      }
+    }
+    let on = fn() {
+      match open_chat() {
+        Some(r) => @sfbase.row_is(item(), r)
+        None => false
+      }
+    }
+    // (gone from the list: leaving as its room closes, drawn as it was, no longer pressed nor found)
+    line.show(fn() { !motion.going_now(key()) }, leave=row_size_ms, fn(r) {
+      chat_row_node(r, src, tips, item, @signals.untracked(lead), on, frame.at, stint, list_ground=frame.ground, more=true)
+      |> ignore
+    })
+  }
   // (its bar along its right, clear of what is over its top and at its foot: the band, the bars)
   v.scrolls_window(
     scroll,
@@ -338,17 +366,19 @@ fn chats_pane_node(
           }
         }
         _ if k.has_prefix("h/") => {
-          motion.line_node(line, k)
+          motion.line_node(line, fn() { k })
           @sf.list_heading_node(line, fn() { k.view(start_offset=2).to_owned().replace_all(old=moved_mark, new="") }, frame.at)
         }
         _ => {
-          motion.line_node(line, k)
-          let name = k.view(start_offset=2).to_owned()
           // (a row gone, or the copy of one gone ahead of others where it was: as it was, drawn only)
           match motion.gone_item(k) {
             // (swiped off: out of sight already, its room closing alone)
-            Some(gone) if swiped_gone(gone) => return
+            Some(gone) if swiped_gone(gone) => {
+              motion.line_node(line, fn() { k })
+              return
+            }
             Some(gone) => {
+              motion.line_node(line, fn() { k })
               line.box(fn(o) {
                 o.presses(Is(false)) |> ignore
                 chat_row_node(o, src, tips, fn() { gone }, @signals.untracked(lead), fn() { false }, frame.at, stint, list_ground=frame.ground, more=true)
@@ -359,33 +389,28 @@ fn chats_pane_node(
             }
             None => ()
           }
-          guard @signals.untracked(fn() { item_of(name) }) is Some(first) else { return }
-          let last : Ref[ChatItem] = Ref(first)
-          let item = fn() {
-            match item_of(name) {
-              Some(i) => {
-                last.val = i
-                i
-              }
-              None => last.val
-            }
-          }
-          let on = fn() {
-            match open_chat() {
-              Some(r) => @sfbase.row_is(item(), r)
-              None => false
-            }
-          }
-          // (gone from the list: leaving as its room closes, drawn as it was, no longer pressed nor found)
-          line.show(fn() { !motion.going_now(k) }, leave=row_size_ms, fn(r) {
-            chat_row_node(r, src, tips, item, @signals.untracked(lead), on, frame.at, stint, list_ground=frame.ground, more=true)
-            |> ignore
-          })
+          row_line(line, fn() { k })
         }
       }
     })
     |> ignore
   },
+    // (a chat's row, as it no more shows, taken by the next to come to show: its key that one's, not made and let go
+    // as the list is scrolled; one gone, as it was, not)
+    reused=fn(k) {
+      if k.has_prefix("r/") && !k.contains(moved_mark) && motion.gone_item(k) is None {
+        Some(0)
+      } else {
+        None
+      }
+    },
+    make_reused=fn(b, key) {
+      b.box(fn(line) {
+        @sf.style_node(line, fn() { @sf.list_line(frame.at) })
+        row_line(line, key)
+      })
+      |> ignore
+    },
   )
   |> ignore
 }
@@ -718,14 +743,14 @@ fn RowsMotion::gone_item(self : RowsMotion, key : String) -> ChatItem? {
 }
 
 ///|
-/// Line `key`'s node `line` coming or going (ListRows::enter, leave): its room opening or closing from its cause's
+/// Line `key`'s (its key as it is now) node `line` coming or going (ListRows::enter, leave): its room opening or closing from its cause's
 /// moment over row_size_ms, what it holds in the middle of it, as big as it is open and faded in from row_gone_at, cut
 /// softly at both ends.
-fn RowsMotion::line_node(self : RowsMotion, line : @view.View, key : String) -> Unit {
+fn RowsMotion::line_node(self : RowsMotion, line : @view.View, key : () -> String) -> Unit {
   let way = @sf.EdgeWay::new(1.0)
   let state = fn() {
     self.told.get() |> ignore
-    self.moving.get(key)
+    self.moving.get(key())
   }
   line.reacts(state, fn(m) {
     match m {
