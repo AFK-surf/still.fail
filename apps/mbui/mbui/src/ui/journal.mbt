@@ -40,6 +40,12 @@ pub(all) struct FrameDone {
   paint : Double
   nodes : Int
   insts : Int
+  /// what the window's tree did since the frame before (its Work's counts, an input's handler's between them too):
+  /// nodes made and let go, nodes laid out, words measured
+  made : Int
+  let_go : Int
+  laid : Int
+  measured : Int
   why : String
 } derive(Eq, Show, Debug)
 
@@ -234,6 +240,7 @@ fn journal_reset() -> Unit {
   hang_tell.val = None
   hang_summary_tell.val = None
   journal_notes.clear()
+  journal_tree_work.val = (0, 0, 0, 0)
   journal_listens()
 }
 
@@ -360,6 +367,16 @@ fn journal_frame(c : Ctx, tw : Double, t0 : Double, t3 : Double, t4 : Double) ->
     "looks" + journal_places(looks_why())
   }
   let msgs = probe_msgs_ms.val
+  // (what the window's tree did since the frame before: its counts now less those kept then)
+  let now = match view_app.val {
+    Some(tree) => {
+      let w = tree.work()
+      (w.made, w.let_go, w.laid, w.measured)
+    }
+    None => (0, 0, 0, 0)
+  }
+  let was = journal_tree_work.val
+  journal_tree_work.val = now
   journal_work(
     Frame({
       tree: t0 - tw,
@@ -369,6 +386,10 @@ fn journal_frame(c : Ctx, tw : Double, t0 : Double, t3 : Double, t4 : Double) ->
       paint: c.t_paint,
       nodes: c.count,
       insts: c.ninst,
+      made: journal_since(now.0, was.0),
+      let_go: journal_since(now.1, was.1),
+      laid: journal_since(now.2, was.2),
+      measured: journal_since(now.3, was.3),
       why,
     }),
     tw,
@@ -379,6 +400,17 @@ fn journal_frame(c : Ctx, tw : Double, t0 : Double, t3 : Double, t4 : Double) ->
   journal_seal(Presented, t4)
   journal_presented.val = true
   journal_dirty_at.val = -1.0
+}
+
+///|
+/// The window's tree's counts as the last frame was kept (journal_frame): nodes made, let go, laid out, words measured.
+// kept across runs: put back as a run begins (journal_reset), written as each frame is kept
+let journal_tree_work : Ref[(Int, Int, Int, Int)] = Ref((0, 0, 0, 0))
+
+///|
+/// A count's rise since it was `was`: all of it where it is below (another tree in the first's place counts from 0).
+fn journal_since(now : Int, was : Int) -> Int {
+  if now >= was { now - was } else { now }
 }
 
 ///|
@@ -653,6 +685,10 @@ pub fn Hang::json(self : Hang) -> Json {
       o["paint_ms"] = Json::number(journal_ms(f.paint))
       o["nodes"] = Json::number(f.nodes.to_double())
       o["insts"] = Json::number(f.insts.to_double())
+      o["made"] = Json::number(f.made.to_double())
+      o["let_go"] = Json::number(f.let_go.to_double())
+      o["laid"] = Json::number(f.laid.to_double())
+      o["measured"] = Json::number(f.measured.to_double())
       o["why"] = Json::string(f.why)
     }
     Json::object(o)

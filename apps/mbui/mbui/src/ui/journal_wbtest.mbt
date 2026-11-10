@@ -85,7 +85,7 @@ test "an event and the frame it asked for, each under the budget, together over 
   }, what="key")
   assert_eq(journal_dirty_at.val, 1015.0)
   assert_false(journal().any(fn(e) { e is Boundary(_, _) }))
-  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 12.0, layout: 1.0, paint: 1.0, nodes: 3, insts: 9, why: "built" }), 1020.0, 1034.0)
+  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 12.0, layout: 1.0, paint: 1.0, nodes: 3, insts: 9, made: 0, let_go: 0, laid: 0, measured: 0, why: "built" }), 1020.0, 1034.0)
   journal_work(Present, 1034.0, 1035.0)
   journal_seal(Presented, 1035.0)
   let h = hangs()
@@ -102,7 +102,7 @@ test "a frame whose work is under its budget is no hang, however long since it w
   let (_, _) = journal_start()
   defer set_work_clock(None)
   journal_dirty_at.val = 1000.0
-  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 8.0, layout: 1.0, paint: 1.0, nodes: 3, insts: 9, why: "" }), 1200.0, 1210.0)
+  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 8.0, layout: 1.0, paint: 1.0, nodes: 3, insts: 9, made: 0, let_go: 0, laid: 0, measured: 0, why: "" }), 1200.0, 1210.0)
   journal_work(Present, 1210.0, 1211.0)
   journal_seal(Presented, 1211.0)
   assert_eq(hangs(), [])
@@ -129,7 +129,7 @@ test "short events are folded, their count and work kept, and still count toward
     let s = 1000.0 + i.to_double()
     journal_work(Event("touch-move"), s, s + 0.5)
   }
-  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 4.0, layout: 0.0, paint: 1.0, nodes: 1, insts: 1, why: "" }), 1040.0, 1045.0)
+  journal_work(Frame({ tree: 0.0, messages: 0.0, build: 4.0, layout: 0.0, paint: 1.0, nodes: 1, insts: 1, made: 0, let_go: 0, laid: 0, measured: 0, why: "" }), 1040.0, 1045.0)
   journal_seal(Presented, 1045.0)
   let j = journal()
   assert_eq(j[0], Work({ what: Small(40, 20.0), start: 1000.0, end: 1039.5, notes: [] }))
@@ -198,7 +198,7 @@ test "of a frame's why, the code it names alone: no key of what is shown" {
 test "a hang as JSON: its rule, times from its start, each contributor's kind and a frame's parts" {
   let (_, _) = journal_start()
   defer set_work_clock(None)
-  journal_work(Frame({ tree: 1.0, messages: 2.0, build: 50.0, layout: 3.0, paint: 4.0, nodes: 7, insts: 8, why: "built a.mbt:1" }), 1000.0, 1060.0)
+  journal_work(Frame({ tree: 1.0, messages: 2.0, build: 50.0, layout: 3.0, paint: 4.0, nodes: 7, insts: 8, made: 0, let_go: 0, laid: 0, measured: 0, why: "built a.mbt:1" }), 1000.0, 1060.0)
   journal_seal(Presented, 1061.0)
   let j = hangs()[0].json().stringify()
   assert_true(j.contains("\"trigger\":\"stall\""), msg=j)

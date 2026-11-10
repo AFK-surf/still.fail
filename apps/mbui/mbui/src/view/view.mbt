@@ -981,6 +981,13 @@ pub struct Tree {
   /// rows_grid, followed (Tree::rows_slot)
   rows_grid_said : @signals.Signal[Double]
   work : Work
+  /// who times its work by part (Tree::timed_by): the clock (below 0 while nobody listens) and who is told each part
+  /// and its ms; none, nothing timed
+  mut timed : (() -> Double, (String, Double) -> Unit)?
+  /// the structures' changes being done now, one inside another: the outermost alone timed (Tree::structured)
+  mut structuring : Int
+  /// how long the words measured took since that was last told (Tree::laid_out), ms on that clock
+  mut measured_ms : Double
   /// how deep in a change that makes or moves many nodes at once (Tree::holding_boxes): while above 0, a holder whose
   /// boxes changed is only marked (Node's boxes_due, in boxes_held_at), its boxes put again once as the change ends
   mut boxes_held : Int
@@ -1221,6 +1228,9 @@ pub fn Tree::new(
     lifting: false,
     boxes_held: 0,
     boxes_held_at: [],
+    timed: None,
+    structuring: 0,
+    measured_ms: 0.0,
     work: {
       besides: 0,
       made: 0,
@@ -1908,6 +1918,44 @@ pub fn View::drawn_past(self : View, t : Double) -> Bool {
 }
 
 ///|
+/// The tree's work timed by part, for whoever looks into a slow frame (mbui's ui: a hang's parts, journal.mbt): `now`
+/// its clock (below 0 while nobody listens: nothing timed then) and `took` told each part and its ms. The parts: the
+/// structures' changes done (what a show, a pick or a list's rows make and let go: the outermost of them, wherever it
+/// runs, an input's handler or the frame), and of Tree::laid_out the bindings told, the layout, the placing with the
+/// looks and the order, and the words measured (inside the layout's time, said apart). None: none timed.
+pub fn Tree::timed_by(self : Tree, by : (() -> Double, (String, Double) -> Unit)?) -> Unit {
+  self.timed = by
+}
+
+///|
+/// A part of its work begins: the timing clock's now, below 0 where nothing is timed (Tree::part_ended).
+fn Tree::part_began(self : Tree) -> Double {
+  match self.timed {
+    Some((now, _)) => now()
+    None => -1.0
+  }
+}
+
+///|
+/// The part begun at `t0` (Tree::part_began) is done: who times it told it was `what` and how long.
+fn Tree::part_ended(self : Tree, what : String, t0 : Double) -> Unit {
+  guard t0 >= 0.0 else { return }
+  if self.timed is Some((now, took)) {
+    took(what, now() - t0)
+  }
+}
+
+///|
+/// `f`, a structure's change, done: timed as the tree's structures where it is the outermost.
+fn Tree::structure_done(self : Tree, f : () -> Unit) -> Unit {
+  let t0 = if self.structuring == 0 { self.part_began() } else { -1.0 }
+  self.structuring += 1
+  @signals.untracked(f)
+  self.structuring -= 1
+  self.part_ended("tree structures", t0)
+}
+
+///|
 /// What it did so far.
 pub fn Tree::work(self : Tree) -> Work {
   { ..self.work }
@@ -2521,7 +2569,7 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_
       if last.val != Some(v) {
         last.val = Some(v)
         if live.val {
-          @signals.untracked(fn() { then(v) })
+          self.structure_done(fn() { then(v) })
         }
         true
       } else {
@@ -2543,7 +2591,7 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_
   // (one change, as each after it is: Tree::at_cause)
   self.committing += 1
   @signals.start_batch()
-  @signals.untracked(fn() { then(v) })
+  self.structure_done(fn() { then(v) })
   @signals.end_batch()
   self.committing -= 1
   self.modals_settled()
@@ -4874,10 +4922,17 @@ pub fn View::words(
     tree.work.measured = tree.work.measured + 1
     let nd = tree.nodes[at]
     let look = nd.look
+    let t0 = tree.part_began()
     let (mw, mh) = if look.runs.is_empty() {
       (tree.measure)(look.words, look.words_look, offered)
     } else {
       (tree.measure_runs)(look.runs, look.words_look, look.runs_look, offered)
+    }
+    if t0 >= 0.0 {
+      let t1 = tree.part_began()
+      if t1 > t0 {
+        tree.measured_ms += t1 - t0
+      }
     }
     // (on one line wider than it may be, saying shorter ones: as wide as what of them would be drawn there, as an old
     // view's leaf_size has it; what is drawn chosen once it is laid out, Tree::shorter_in, not by this)
@@ -8050,6 +8105,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   }
   // the bindings whose reads changed since, each once, in the order they were told (what they make runs its own now,
   // what they set again marks what it marks)
+  let t_bound = self.part_began()
   self.draining += 1
   let mut i = 0
   while i < self.bindings_due.length() {
@@ -8066,6 +8122,8 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   let still = self.pulls_marked.filter(fn(b) { b.live && b.marked })
   self.pulls_marked.clear()
   self.pulls_marked.append(still)
+  self.part_ended("tree bindings", t_bound)
+  let t_laid = self.part_began()
   // (laid out in a change holding its boxes, a host drawing a frame at once as it is told of one: those put first)
   self.boxes_flushed()
   // (what goes beside another placed by it only where anything was laid out or placed again: View::beside)
@@ -8100,6 +8158,15 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     }
     self.alone_laid.clear()
   }
+  self.part_ended("tree layout", t_laid)
+  // (the words measured since this was last said, in that layout or as something asked a size: how long in all)
+  if self.measured_ms > 0.0 {
+    if self.timed is Some((_, took)) {
+      took("tree words measured", self.measured_ms)
+    }
+    self.measured_ms = 0.0
+  }
+  let t_placed = self.part_began()
   // (placed or faded by its own: it alone composed again)
   for at in self.places_due {
     let n = self.nodes[at]
@@ -8136,6 +8203,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
     self.work.orders = self.work.orders + 1
   }
   self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
+  self.part_ended("tree placing", t_placed)
   self.due = false
   // (what its rows left out told once all of it is laid out, and what that tells (a ⋯ saying how many) laid out in this
   // same pass: one result, the frame drawing all of it)
