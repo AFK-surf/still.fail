@@ -3259,11 +3259,12 @@ test("a session from before a change is told it once, and a new one never", asyn
   assert.ok(!r.claude.last().prompts[0]!.includes("still.fail changed how you work"), "a new session has today's instructions");
   await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
   r.claude.last().complete();
-  await settle();
+  await r.quiet();
   // As a session from before the notes: told them with its next turn, once.
   r.store.setToldNotes(key, 0);
   await r.accept(reply(m, "9999.1", "还有一件"));
-  await settle();
+  // Today's instructions are written down off the main thread before the turn is given them.
+  await r.quiet();
   const prompts = r.claude.last().prompts;
   assert.ok(prompts.at(-1)!.startsWith("[still.fail changed how you work"), prompts.at(-1));
   const full = join(r.session(key).workspace, ".stillfail-instructions.md");
@@ -3272,9 +3273,9 @@ test("a session from before a change is told it once, and a new one never", asyn
   assert.equal(r.store.toldNotes(key), latest());
   await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
   r.claude.last().complete();
-  await settle();
+  await r.quiet();
   await r.accept(reply(m, "9999.2", "再一件"));
-  await settle();
+  await r.quiet();
   assert.ok(!r.claude.last().prompts.at(-1)!.includes("still.fail changed how you work"));
   await r.close();
 });

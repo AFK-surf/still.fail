@@ -253,7 +253,7 @@ describe("allowances and renewing", { concurrency: true }, () => {
     const owner = await RefreshLock.acquire(path);
     rmdirSync(path);
     mkdirSync(path);
-    owner.release();
+    await owner.release();
     assert.ok(existsSync(path));
   });
 

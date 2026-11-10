@@ -90,7 +90,7 @@ export type OutsideChat = { workspace: string; workspaceName: string; station: s
 /// transcripts packed, and restored before its runtime starts again or when it is shown again. The station's is
 /// cold.ts; the default keeps nothing cold.
 export interface ColdStorage {
-  isCold(key: string): boolean;
+  isCold(key: string): Promise<boolean>;
   restore(key: string): void | Promise<void>;
   /// Packs what it can of an archived, idle session.
   pack(key: string): void | Promise<void>;
@@ -104,7 +104,7 @@ const MAX_INBOUND_FILE = 50 * 1024 * 1024;
 /// How long transcripts' lengths are gathered before they are written (`noteLength`).
 export const LENGTHS_GATHER_MS = 5_000;
 
-const NOTHING_COLD: ColdStorage = { isCold: () => false, restore: () => {}, pack: () => {} };
+const NOTHING_COLD: ColdStorage = { isCold: async () => false, restore: () => {}, pack: () => {} };
 
 /// What the hub hands to the next station: each actor's snapshot (handover.json).
 export type Handover = { sessions: Snapshot[] };
@@ -173,7 +173,7 @@ export class Hub {
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
   /// How a session's skills are linked where it runs before its process opens; none: on the disk (actor.ts
   /// `linkSkills`). A test's hub, whose sessions run nowhere, links none.
-  skillsLinker: ((row: SessionRow) => Promise<void>) | null = null;
+  skillsLinker: ((row: SessionRow) => Promise<string>) | null = null;
   /// What a week's checks say of a workspace's chats, counted by the readers (null: on the main thread, as the store is
   /// still preparing their lookups); none (tests): counted here.
   policyChecks: ((since: number, viewer: InWorkspace) => Promise<PolicyChecks | null>) | null = null;
@@ -553,8 +553,8 @@ export class Hub {
       try {
         const driver = this.sessionDriver(snap.runtime);
         const generation = actor.nextGeneration();
-        await this.deps.linkSkills(row);
-        agent = await driver.adopt(openOptions(row, this.accounts.profile(ranOn) ?? this.accounts.runOn(row.key), this.deps), snap.agent, actor.listener(generation));
+        const memory = await this.deps.linkSkills(row);
+        agent = await driver.adopt(openOptions(row, this.accounts.profile(ranOn) ?? this.accounts.runOn(row.key), this.deps, memory), snap.agent, actor.listener(generation));
       } catch (error) {
         log.warn("hub", "a session's runtime could not be taken up; it resumes the usual way", { session: row.key, error: (error as Error).message });
       }

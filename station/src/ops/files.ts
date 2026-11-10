@@ -93,6 +93,11 @@ export class PrivateFile {
     return (this.#writing ??= this.#flush());
   }
 
+  /// Once what was asked is written (or failed).
+  async written(): Promise<void> {
+    await this.#writing?.catch(() => undefined);
+  }
+
   async #flush(): Promise<void> {
     try {
       while (this.#latest !== null) {

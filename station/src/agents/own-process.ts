@@ -113,7 +113,7 @@ export abstract class OwnProcessDriver<S extends OwnProcessSession = OwnProcessS
     const kind = this.runtime();
     const handed = snapshot as ProcessSnapshot | null;
     const id = handed?.runner ?? runnerId(kind, options.key);
-    const info = findRunner(this.data, id);
+    const info = await findRunner(this.data, id);
     if (!info) throw new Error(`no runner keeps ${kind} for ${options.key}`);
     let session: S;
     if (handed) {

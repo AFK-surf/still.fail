@@ -71,7 +71,9 @@ export class ConfigFile {
     } catch {
       this.watcher = null;
     }
+    // What changed between its first read and its watch, read now (as the station starts), not at the next read.
     this.changed = true;
+    this.raw();
   }
 
   unwatch(): void {

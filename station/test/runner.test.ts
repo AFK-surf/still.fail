@@ -38,8 +38,8 @@ test("lines in order; a station that lets go and comes back reads on where it ac
   assert.equal(existingRunners(data).length, 1, "the runner outlives the connection");
   // As the watches read them, off the thread; and as a session finds its own, by its file alone.
   assert.deepEqual(await liveRunners(data), existingRunners(data));
-  assert.equal(findRunner(data, "t1")?.runner, info.runner);
-  assert.equal(findRunner(data, "t2"), undefined);
+  assert.equal((await findRunner(data, "t1"))?.runner, info.runner);
+  assert.equal((await findRunner(data, "t2")), undefined);
   const second: string[] = [];
   const b = new RunnerConnection(info, (stream, text) => void second.push(`${stream}:${text}`));
   await until(() => second.includes("out:line6"));

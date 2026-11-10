@@ -17,6 +17,8 @@ export type Timed = { take: () => Waits; stop: () => void };
 /// The functions of `target` that `wanted` names timed, in this thread (for the modules' named imports too).
 function timeCalls(target: Record<string, unknown>, wanted: (name: string) => boolean, now: () => number): Timed {
   let waits = noWaits();
+  // A call made inside another (readFileSync's own readSync, openSync, …) is the outer one's: put down once.
+  let depth = 0;
   const kept = new Map<string, (...args: unknown[]) => unknown>();
   for (const name of Object.keys(target)) {
     const call = target[name];
@@ -24,10 +26,13 @@ function timeCalls(target: Record<string, unknown>, wanted: (name: string) => bo
     const original = call as (...args: unknown[]) => unknown;
     kept.set(name, original);
     const timedCall = function (this: unknown, ...args: unknown[]) {
+      if (depth > 0) return original.apply(this, args);
       const at = now();
+      depth++;
       try {
         return original.apply(this, args);
       } finally {
+        depth--;
         waited(waits, now() - at, () => {
           const where: { stack?: string } = {};
           Error.captureStackTrace(where, timedCall);

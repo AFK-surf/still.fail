@@ -73,7 +73,7 @@ export type GateDeps = {
   table(): Promise<ProcessInfo[] | null>;
   /// The session's agent: the pids of its runner and the runtime it runs (a runtime shared by a profile's sessions is
   /// none's). What runs under them is the session's.
-  runners(id: string): number[];
+  runners(id: string): number[] | Promise<number[]>;
   /// The jobs running: what runs in a job's group is its session's.
   jobs(): { pgid: number; mine: (id: string) => boolean }[];
   cwds(pids: number[]): Promise<Map<number, string>>;
@@ -93,7 +93,7 @@ export async function gate(d: GateDeps, id: string, holders: number[]): Promise<
   if (table === null) return "could not tell who asks: the machine's processes were not read";
   const byPid = new Map(table.map((p) => [p.pid, p]));
   const jobs = d.jobs();
-  const runners = new Set(d.runners(id));
+  const runners = new Set(await d.runners(id));
   for (const pid of holders) {
     const row = byPid.get(pid);
     if (row === undefined) continue;

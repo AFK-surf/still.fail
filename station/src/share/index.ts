@@ -38,7 +38,7 @@ import type { Cloud } from "../cloud/state.ts";
 import { Refused } from "../mesh/bus.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { Fibers } from "../ops/fibers.ts";
-import { writePrivate } from "../ops/files.ts";
+import { PrivateFile, writePrivate } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { linkSync } from "../ops/links.ts";
 import { joinPath, portableName, relativeParts } from "../ops/paths.ts";
@@ -350,6 +350,7 @@ export class Sharing {
   /// The one copy of state.json in memory (read at the first use): every change is made to it and written through, so
   /// a request answered while the shares are brought in line changes the same one.
   private state: State | null = null;
+  private stateFile: PrivateFile | null = null;
 
   private readState(): State {
     if (this.state) return this.state;
@@ -362,9 +363,17 @@ export class Sharing {
     return this.state;
   }
 
-  private writeState(_s: State = this.readState()) {
-    mkdirSync(this.root, { recursive: true });
-    writePrivate(join(this.root, "state.json"), JSON.stringify(this.readState(), null, 2));
+  /// Written through off the station's thread, the latest only: a reader reading it from the disk (read/memory.ts) may
+  /// find the one before for as long as the write takes.
+  /// Once the state asked to be written is (what a reader of its file then finds).
+  stateWritten(): Promise<void> {
+    return this.stateFile?.written() ?? Promise.resolve();
+  }
+
+  private writeState(_s: State = this.readState()): void {
+    this.stateFile ??= new PrivateFile(join(this.root, "state.json"));
+    void this.stateFile.write(JSON.stringify(this.readState(), null, 2))
+      .catch((error) => log.warn("share", "the shares' state not written", { error: (error as Error).message }));
   }
 
   private profiles(): Json[] {
@@ -464,6 +473,7 @@ export class Sharing {
     for (const w of this.watchers.values()) w.close();
     this.watchers.clear();
     await this.time.close();
+    await this.stateWritten();
   }
 
   /// Brings what is here in line with what is configured and what the hosts say: one at a time, again if asked meanwhile.

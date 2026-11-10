@@ -12,7 +12,7 @@ import { createConnection } from "node:net";
 import { join } from "node:path";
 import { keyPart } from "./sandbox.ts";
 import { log } from "../ops/log.ts";
-import { RunnerConnection, leave, listening, runnerOf, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
+import { RunnerConnection, leave, listening, listeningSoon, runnerOf, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
 import type { RuntimeKind } from "./runtime.ts";
 
@@ -57,9 +57,9 @@ const pidAlive = (pid: number) => {
 };
 
 /// A runner of this id that keeps its process still (its socket there: one on its way out has let it go).
-export const findRunner = (data: string, id: string): RunnerInfo | undefined => {
-  const runner = runnerOf(data, id);
-  return runner !== undefined && runner.id === id && listening(runner) ? runner : undefined;
+export const findRunner = async (data: string, id: string): Promise<RunnerInfo | undefined> => {
+  const runner = await runnerOf(data, id);
+  return runner !== undefined && runner.id === id && (await listeningSoon(runner)) ? runner : undefined;
 };
 export const outFile = (data: string, id: string) => join(runnersDir(data), `${id}.out`);
 
@@ -225,7 +225,7 @@ export class AgentProcess {
 
 /// Ends a runner of this id left by an earlier station, and waits for it to go.
 export async function endRunner(data: string, id: string, label: string) {
-  const info = findRunner(data, id);
+  const info = await findRunner(data, id);
   if (!info) return;
   log.warn("agents::process", "ending a runtime process left by a previous run", { label, runner: info.runner, pgid: info.pgid });
   if (listening(info)) {

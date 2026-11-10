@@ -237,8 +237,8 @@ test("a session's runtime is given its workspace's memory and skills, never anot
   // The same profile runs both: what its home holds reaches both, so a workspace's are given with the session.
   const opened = async (key: string) => {
     const row = rig.store.getSession(key)!;
-    await linkSkills(row, rig.hub.deps);
-    return { row, options: openOptions(row, rig.hub.accounts.runOn(key), rig.hub.deps) };
+    const memory = await linkSkills(row, rig.hub.deps);
+    return { row, options: openOptions(row, rig.hub.accounts.runOn(key), rig.hub.deps, memory) };
   };
   const ofTwo = await opened(two);
   assert.ok(ofTwo.options.instructions.includes("# two's lessons") && !ofTwo.options.instructions.includes("# one's lessons"));
