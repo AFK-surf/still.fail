@@ -196,7 +196,7 @@ export const AgentsLive = (control: Control) =>
       // In the workspace its chat is in.
       const pageOf = (key: string) => {
         const s = place();
-        const ws = store.getSession(key)?.ws ?? s?.workspace;
+        const ws = store.sessionWs(key) ?? s?.workspace;
         return s && plane.spec().pages && (ws === s.workspace || cloud.membership(ws!) !== null) ? `${s.origin}/o/${ws}/${s.station}/${encode(key)}` : undefined;
       };
 
@@ -514,11 +514,11 @@ export const AgentsLive = (control: Control) =>
       // Outside a workspace its agents do not reach out of it: their outward tools are refused.
       // So are those of a session of a workspace the station has left.
       const inItsWorkspace = (session: string) => {
-        const ws = store.getSession(session)?.ws ?? null;
+        const ws = store.sessionWs(session) ?? null;
         return ws === null || cloud.membership(ws) !== null;
       };
       // The agents' tools, and those the station's parts add as they are made (parts.ts).
-      const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, () => [...tools, ...parts.allTools()], (session) => (bound() && inItsWorkspace(session) ? undefined : UNBOUND_REFUSAL));
+      const mcp = new McpEndpoint((token) => store.sessionKeyByToken(token) ?? undefined, () => [...tools, ...parts.allTools()], (session) => (bound() && inItsWorkspace(session) ? undefined : UNBOUND_REFUSAL));
 
       let taken = false;
 

@@ -28,6 +28,14 @@ import { linkSkills } from "../src/sessions/actor.ts";
 import { ColdRooms } from "../src/sessions/cold.ts";
 import { fingerprint, profileFilesRead } from "../src/sessions/decision.ts";
 import { LiveHub } from "../src/sessions/live.ts";
+import { sessionSeen } from "../src/api/seen.ts";
+import { autoArchive } from "../src/sessions/lifecycle.ts";
+import { iso } from "../src/read/transcript.ts";
+import { UsageCounter, claudeProject } from "../src/usage/counter.ts";
+import { usageTurns } from "../src/store/usage.ts";
+import { installCompactUsage } from "../src/store/usage-compact.ts";
+import { archiveLookOf } from "../src/store/store.ts";
+import { DatabaseSync } from "node:sqlite";
 
 type Counted = { files: number; processes: number; statements: number };
 
@@ -46,7 +54,15 @@ async function counted(work: () => Promise<unknown>): Promise<Counted> {
   files.take();
   processes.take();
   takeQueries();
-  await work();
+  // SHOW_SQL: each statement seen as slow, so that the log says its SQL and who asked (a look at what a count is).
+  const real = performance.now;
+  let clock = real.call(performance);
+  if (process.env.SHOW_SQL) performance.now = () => (clock += 1000);
+  try {
+    await work();
+  } finally {
+    performance.now = real;
+  }
   const f = files.take();
   const p = processes.take();
   const q = takeQueries();
@@ -62,12 +78,28 @@ const STATEMENTS = {
   // pool is not asked to pick and no longer reads each running session's row (hub.ts `running`, `getSession`).
   turn: 97,
   toolCall: 4,
-  usageRecord: 6,
+  // A call recorded with compact usage installed, as a station has it: BEGIN, whether it was recorded before, its
+  // session's context as kept, the call, its context, its file's position, COMMIT. (12 before: sqlite_master asked twice,
+  // the context read three times and its pointer written again unchanged.)
+  usageRecord: 7,
   remoteToolCall: 1,
   // task.files asks whether the task's job is running: the job by its primary key (store.getJob).
   remoteTask: 1,
   // The session's row by its primary key, for its workspace (store.getSession).
   coldAsked: 1,
+  // 50 before: each told change asked a session's row for its workspace.
+  seenTold: 0,
+  // 20 before: each tool call asked the session of its token.
+  tokenResolved: 0,
+  // The counter's cursor, the sessions in one statement, their runtime sources (one each), and one transaction: BEGIN,
+  // for each call as a usage record is (5), COMMIT; the turns are a reader's. (Before: a transaction for each transcript,
+  // each session's row read again for its sources, the turns of each part (5 statements) here, and a usage record's 11.)
+  usageRead: 16,
+  // 53 before (3 sessions archived, one at work): every session shown and chat of its own, and of each idle one its
+  // bindings, pin, chats, row, jobs, keeps and work, read here. Now the look is a reader's; here only the archiving of each
+  // session it archives: BEGIN, its row and its chat out of the lists, COMMIT, its chats and row for what is told, its
+  // last turn as its process is let go (7 each).
+  autoArchiveLook: 21,
 } as const;
 
 test("a transcript growing: read and told, its length gathered, written with the others' once LENGTHS_GATHER_MS is up", async () => {
@@ -119,6 +151,13 @@ test("a turn, a tool call and a usage record: no file, no process, their stateme
     assert.deepEqual(turn, { files: 0, processes: 0, statements: STATEMENTS.turn });
     const toolCall = await counted(() => r.call(key, "chat_history", { to }));
     assert.deepEqual(toolCall, { files: 0, processes: 0, statements: STATEMENTS.toolCall });
+    // Compact usage installed, as the usage module installs it as the station starts (usage/module.ts).
+    installCompactUsage(r.store.db, () => r.store.now());
+    // A call of its recorded already: its context kept, as a session at work has it.
+    r.store.recordUsage("/t.jsonl", { session: key, offset: 50, model: "opus" }, "claude", [[
+      { id: "call-0", at: r.store.now(), model: "opus", subagent: false, fast: false, input: 10, cacheRead: 100, cacheWrite: 5, cacheWriteLong: 0, output: 20, calls: 1, context: 110, window: 200_000 },
+      { turn: null, person: null, thread: null, profile: "cc" },
+    ]]);
     const usageRecord = await counted(async () => {
       r.store.recordUsage("/t.jsonl", { session: key, offset: 100, model: "opus" }, "claude", [[
         { id: "call-1", at: r.store.now(), model: "opus", subagent: false, fast: false, input: 10, cacheRead: 100, cacheWrite: 5, cacheWriteLong: 0, output: 20, calls: 1, context: 115, window: 200_000 },
@@ -300,6 +339,100 @@ test("an archived session's directory and transcripts are asked of as it opens, 
     const cold = new ColdRooms(() => r.hub);
     const asked = await counted(async () => assert.equal(await cold.isCold(key), false));
     assert.deepEqual(asked, { files: 0, processes: 0, statements: STATEMENTS.coldAsked });
+  } finally {
+    await r.close();
+  }
+});
+
+test("the changes told to each viewer ask each session's workspace of memory, and each tool call its token", async () => {
+  const r = new Rig();
+  try {
+    const m = message();
+    await r.accept(m);
+    await settle();
+    const key = sessionKey("cl", "C1", m.threadTs);
+    const token = r.store.getSession(key)!.token;
+    const viewer = { workspace: "", home: true };
+    // Asked once as the session is first told.
+    sessionSeen(r.store, viewer, key);
+    r.store.sessionKeyByToken(token);
+    const told = await counted(async () => {
+      for (let i = 0; i < 50; i++) assert.equal(sessionSeen(r.store, viewer, key), true);
+    });
+    assert.deepEqual(told, { files: 0, processes: 0, statements: STATEMENTS.seenTold });
+    const resolved = await counted(async () => {
+      for (let i = 0; i < 20; i++) assert.equal(r.store.sessionKeyByToken(token), key);
+    });
+    assert.deepEqual(resolved, { files: 0, processes: 0, statements: STATEMENTS.tokenResolved });
+  } finally {
+    await r.close();
+  }
+});
+
+test("the usage counter writes what it read of two sessions' transcripts in one transaction", async () => {
+  const dir = scratch();
+  const time = testClock();
+  await time.adjust(Date.parse("2026-11-10T08:00:00Z"));
+  const store = Store.open(join(dir, "stillfail.db"), null, time.clock);
+  // The turns its calls were made in, a reader's (its own connection, as the station's readers have).
+  const reader = new DatabaseSync(join(dir, "stillfail.db"), { readOnly: true });
+  const counter = new UsageCounter({ store, config: () => ({ dataDir: dir, profiles: [{ home: join(dir, "homes/cc") }] }), clock: time.clock,
+    turns: async (session, from, until) => usageTurns(reader, session, from, until) });
+  try {
+    installCompactUsage(store.db, () => store.now());
+    const now = store.now();
+    const call = (id: string, at: number) => `${JSON.stringify({ type: "assistant", timestamp: iso(at), isSidechain: false, message: { id, model: "claude-opus-5-5", usage: { input_tokens: 10, output_tokens: 2 } } })}\n`;
+    const paths: string[] = [];
+    for (const key of ["a", "b"]) {
+      const workspace = join(dir, key);
+      store.insertSession({ key, connect: "ember", createdBy: "x", runtime: "claude", profile: "cc", workspace, token: `t-${key}`, createdAt: now - 60_000, lastActiveAt: now - 60_000 });
+      store.startTurn(`turn-${key}`, key, "input");
+      const path = join(dir, "transcripts/claude", claudeProject(workspace), "r.jsonl");
+      mkdirSync(dirname(path), { recursive: true });
+      appendFileSync(path, call(`${key}-1`, now + 1));
+      paths.push(path);
+    }
+    await counter.read();
+    // A call more in each, read as they come (live.ts asks).
+    for (const [i, path] of paths.entries()) appendFileSync(path, call(`more-${i}`, now + 2));
+    const read = await counted(async () => assert.equal(await counter.read(new Set(["a", "b"])), 2));
+    assert.deepEqual(read, { files: 0, processes: 0, statements: STATEMENTS.usageRead });
+  } finally {
+    await counter.stop();
+    reader.close();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the auto-archive's look is a reader's: here only the sessions it archives cost anything", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const m = message();
+      await r.accept(m);
+      await settle();
+      const key = sessionKey("cl", "C1", m.threadTs);
+      // The last at work still (its turn not ended): it stays.
+      if (i < 3) {
+        await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
+        r.claude.last().complete();
+      }
+      await settle();
+      keys.push(key);
+    }
+    await time.adjust(r.hub.config().autoArchiveMs + 60_000);
+    // What a reader read for the look (read/ops-sessions.ts `archiveLook`), as the station has it carried over.
+    const { autoArchiveMs, slackArchiveMs } = r.hub.config();
+    const read = JSON.parse(JSON.stringify(archiveLookOf(r.store.db, r.hub.now(), autoArchiveMs, slackArchiveMs)));
+    const look = await counted(async () => {
+      autoArchive(r.hub, r.hub.now(), undefined, undefined, undefined, undefined, undefined, read);
+    });
+    assert.deepEqual(keys.map((key) => r.store.getSession(key)?.archivedAt !== null), [true, true, true, false], "the three done, not the one at work");
+    // For each session archived, its archiving; nothing for the one that stays, nor for the look itself.
+    assert.deepEqual(look, { files: 0, processes: 0, statements: STATEMENTS.autoArchiveLook });
   } finally {
     await r.close();
   }

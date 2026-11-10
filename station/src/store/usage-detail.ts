@@ -297,8 +297,25 @@ export function installIncrementalUsageTotals(db: DatabaseSync): void {
 
 /// A session total is complete if the total existed before the upgrade, or the new source saw no earlier calls of it.
 export function usageTotalsComplete(db: DatabaseSync, session: string): boolean {
-  if (!totalsStatement(db, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals_incremental'").get()) return true;
+  if (!incrementalTotals(db)) return true;
   return (totalsStatement(db, "SELECT done FROM usage_totals_source_sessions WHERE session = ?").get(session) as { done: number } | undefined)?.done === 1;
+}
+
+/// Whether the totals were made incremental by the upgrade (schema.ts): decided once, as the schema migrated when the
+/// store opened, and never changed after (the table is made then or never, and not dropped). Learned once a connection,
+/// not at each usage record.
+function incrementalTotals(db: DatabaseSync): boolean {
+  let known = incremental.get(db);
+  if (known === undefined) {
+    known = totalsStatement(db, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals_incremental'").get() !== undefined;
+    incremental.set(db, known);
+  }
+  return known;
+}
+const incremental = new WeakMap<DatabaseSync, boolean>();
+/// The upgrade decided it on this connection (schema.ts `addUsageTotals`): asked again.
+export function incrementalTotalsDecided(db: DatabaseSync): void {
+  incremental.delete(db);
 }
 
 /// usageTotalsComplete's statements, each prepared once a connection (it is asked at every usage record and summary).

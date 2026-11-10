@@ -107,7 +107,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
   }
   const counts = counted;
   const sessionsOf = (connect: unknown) => connect === null ? counts.total : typeof connect === "string" ? counts.byConnect.get(connect) ?? 0 : 0;
-  const states = [...d.hub.processes()].filter(([key]) => sees(viewer, d.store.getSession(key)?.ws ?? null)).map(([, state]) => state);
+  const states = [...d.hub.processes()].filter(([key]) => sees(viewer, d.store.sessionWs(key) ?? null)).map(([, state]) => state);
   // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs.
   const processes = d.store.listProcesses().filter((p) => p.runtime !== "job");
   const memory = await keptMemory(d, processes.map((p) => p.pgid));
@@ -279,7 +279,7 @@ async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> 
       d.store.db.exec("SAVEPOINT overview_chat_names");
       try {
         if (waited) for (const [session, was] of visible) {
-          if (sees(viewer, d.store.getSession(session)?.ws ?? null) !== was) { moved = true; break; }
+          if (sees(viewer, d.store.sessionWs(session) ?? null) !== was) { moved = true; break; }
         }
         if (!moved) for (const session of placeholders.keys()) {
           // A historical check can name a session deleted while the worker was preparing it. It has no scope to
@@ -321,7 +321,7 @@ function madeDecisionsView(d: OverviewDeps, viewer: Viewer, name: (session: stri
   const mine = (session: unknown) => {
     if (typeof session !== "string") return false;
     let isMine = visible.get(session);
-    if (isMine === undefined) visible.set(session, (isMine = sees(viewer, d.store.getSession(session)?.ws ?? null)));
+    if (isMine === undefined) visible.set(session, (isMine = sees(viewer, d.store.sessionWs(session) ?? null)));
     return isMine;
   };
   const titles = new Map<string, string>();

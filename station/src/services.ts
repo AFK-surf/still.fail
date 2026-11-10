@@ -248,7 +248,7 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
         tail,
         outputAt,
         sessionExists: (key) => store.getSession(key) !== null,
-        liveSeen: (viewer, key) => { const row = store.getSession(key); return row !== null && sees(viewer, row.ws); },
+        liveSeen: (viewer, key) => { const ws = store.sessionWs(key); return ws !== undefined && sees(viewer, ws); },
         seen: (viewer, of) => ("session" in of ? sessionSeen(store, viewer, of.session) : "thread" in of ? threadSeen(store, viewer, of.thread) : jobSeen(store, viewer, of.job)),
         handover: { file: eventsHandoverFile(data), previous },
       });

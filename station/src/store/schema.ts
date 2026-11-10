@@ -7,6 +7,7 @@ import { hasLegacyLoginCards, installLegacyLoginCards } from "./legacy-login-car
 import { hasLegacyEdits, hasOldEditIndex, installLegacyEdits, legacyEditLatest, legacyEditsUseOldIndex, usesLegacyEdits } from "./legacy-edits-build.ts";
 import { repairWidgetSourceBeforeAdd, widgetSourceBeforeAddNeedsRepair } from "./widget-sources.ts";
 import { COMPACTED_FROM, QUARTER_MS, STILLFAIL_SURFACE } from "./rows.ts";
+import { incrementalTotalsDecided } from "./usage-detail.ts";
 
 /// Bump on a change a station before it cannot open. 12 is the Rust station's, brought up on open (store.ts
 /// `#upgradeFrom12`); a database of another version is refused.
@@ -780,6 +781,7 @@ export function addUsageTotals(db: DatabaseSync): void {
       db.exec(old ? "CREATE TABLE usage_totals_incremental (id INTEGER PRIMARY KEY CHECK (id = 1)); INSERT INTO usage_totals_incremental VALUES (1);" : USAGE_TOTALS_NORMAL);
     }
     db.exec("COMMIT");
+    incrementalTotalsDecided(db);
   } catch (e) {
     db.exec("ROLLBACK");
     throw e;

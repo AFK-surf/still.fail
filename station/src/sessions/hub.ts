@@ -376,7 +376,7 @@ export class Hub {
   private inAWorkspace(key: string): boolean {
     const all = this.workspaces();
     if (all.length === 0) return true;
-    const ws = this.store.getSession(key)?.ws ?? null;
+    const ws = this.store.sessionWs(key) ?? null;
     return ws === null || all.includes(ws);
   }
 
@@ -385,7 +385,7 @@ export class Hub {
   async leftWorkspace(ws: string) {
     // Only actors and their eviction deadlines have anything to suspend. Historical sessions have neither.
     const candidates = new Set([...this.deadlines.keys(), ...this.actors.keys()]);
-    const keys = new Set([...candidates].filter((key) => this.store.getSession(key)?.ws === ws));
+    const keys = new Set([...candidates].filter((key) => this.store.sessionWs(key) === ws));
     for (const [key, fiber] of this.deadlines) if (keys.has(key)) (this.interrupt(fiber), this.deadlines.delete(key));
     await Promise.all([...this.actors.values()].filter((a) => keys.has(a.key)).map((a) => a.suspend()));
   }
