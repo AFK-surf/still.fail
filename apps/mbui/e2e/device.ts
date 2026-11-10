@@ -3,8 +3,10 @@
 // handlers are the module's), signed in with the dev cloud's mock account and keeping its keys in a file (a sealer
 // that asks no one, though it notes each time it would have asked: `Device.asked`), as a person uses the app; or, as
 // a device from before the update to a lock of one's own for everyone, with no sealer at all (`{ sealed: false }`:
-// the core then keeps its signing key in a plain file and makes no key of a person's lock). This file run as
-// `device NAME` is that process; imported, it gives the run its devices and its checks (PASS or FAIL each, counted).
+// the core then keeps its signing key in a plain file and makes no key of a person's lock); or a web page in a desktop
+// browser (`{ page: true }`: hosts/node.ts `page`, keeping no keys of an app and sealing nothing, as hosts/web.ts; it
+// signs nothing, keeps no vault, approves no one). This file run as `device NAME` is that process; imported, it gives
+// the run its devices and its checks (PASS or FAIL each, counted).
 // E2E_SF_SRC, E2E_ORIGIN, E2E_PEER_DATA as peer.ts.
 import { type ChildProcess, execFileSync, fork } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
@@ -45,8 +47,8 @@ export function whenChanged<T>(dirs: string[], ok: () => T | undefined | null | 
 /// Where a device notes each time its sealer was asked with the person present (`Device.asked`), in its data.
 const askedFile = (data: string) => join(data, "asked.log");
 
-// A device: this file run as `device NAME again|new sealed|plain`, its core's messages passed to and from the parent
-// as they are.
+// A device: this file run as `device NAME again|new sealed|plain|page`, its core's messages passed to and from the
+// parent as they are.
 if (process.argv[2] === "device") {
   const { start } = await import(pathToFileURL(join(src, "client/core-ts/src/hosts/node.ts")).href);
   const data = join(dir, process.argv[3]);
@@ -69,8 +71,9 @@ if (process.argv[2] === "device") {
     delete: async (key: string) => void (kept.delete(key), save()),
     ask: async (_reason: string) => noteAsked("ask"),
   };
-  // (`plain`: a device from before, whose host seals nothing: hosts/node.ts gives it no `secure*`)
-  const options = process.argv[5] === "plain" ? {} : { sealer };
+  // (`plain`: a device from before, whose host seals nothing: hosts/node.ts gives it no `secure*`; `page`: a web page's
+  // host, no app's keys and nothing sealed)
+  const options = process.argv[5] === "page" ? { page: true } : process.argv[5] === "plain" ? {} : { sealer };
   const core = start(join(data, "core"), origin, (_c: number, json: string) => process.send!(json), undefined, options);
   const client = core.connect();
   process.on("message", (m: J) => {
@@ -113,16 +116,26 @@ export class Device {
   sub = "";
   /// Whether its host seals what it keeps (an app of today); false: an app from before, with no sealer.
   sealed: boolean;
-  constructor(name: string, user = "alice", opts: { sealed?: boolean } = {}) {
+  /// A web page's, not an app's (no keys of an app, nothing sealed).
+  page: boolean;
+  constructor(name: string, user = "alice", opts: { sealed?: boolean; page?: boolean } = {}) {
     this.name = name;
     this.user = user;
-    this.sealed = opts.sealed ?? true;
+    this.page = opts.page ?? false;
+    this.sealed = !this.page && (opts.sealed ?? true);
     this.child = this.#fork(false);
   }
   #fork(again: boolean): ChildProcess {
-    const child = fork(fileURLToPath(import.meta.url), ["device", this.name, again ? "again" : "new", this.sealed ? "sealed" : "plain"], { stdio: ["ignore", "inherit", "inherit", "ipc"] });
+    const kind = this.page ? "page" : this.sealed ? "sealed" : "plain";
+    const child = fork(fileURLToPath(import.meta.url), ["device", this.name, again ? "again" : "new", kind], { stdio: ["ignore", "inherit", "inherit", "ipc"] });
     child.on("message", (json: J) => this.#got(JSON.parse(json)));
     return child;
+  }
+  /// What it says it is (`client.device`, prefs.ts `device`): a desktop app, or a web page in a desktop browser.
+  #about(): J {
+    return this.page
+      ? { client: "still.fail e2e", app: "web", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" }
+      : { client: "still.fail e2e", app: "desktop", model: this.name };
   }
   /// The app quit and started again: the same data, a core anew (what it was subscribed to forgotten). `sealed: true`
   /// on a device from before: the app updated, its host sealing now; left out, as it was.
@@ -132,7 +145,7 @@ export class Device {
     this.topics.clear();
     if (opts.sealed !== undefined) this.sealed = opts.sealed;
     this.child = this.#fork(true);
-    await this.call("client.device", { client: "still.fail e2e", app: "desktop", model: this.name });
+    await this.call("client.device", this.#about());
   }
   /// How many times its sealer was asked with the person present since the device was new: a value sealed for their
   /// presence read (`get` with `user`), or the person asked to say yes (`ask`). None while it had no sealer.
@@ -196,7 +209,7 @@ export class Device {
     });
   }
   async signIn(): Promise<{ workspace: string; station: string }> {
-    await this.call("client.device", { client: "still.fail e2e", app: "desktop", model: this.name });
+    await this.call("client.device", this.#about());
     // (the dev cloud's sign-in: one over the account's requests a minute is a finding, not tried again)
     const r = await fetch(`${origin}/__dev/account?user=${this.user}`);
     const text = await r.text();

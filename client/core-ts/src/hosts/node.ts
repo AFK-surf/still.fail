@@ -71,13 +71,15 @@ export class NodeHost implements Host {
   readonly secureAsk?: Host["secureAsk"];
 
   /// `sealer`: what seals values, where the app has one; without, the host has no `secure*` (tests, the side runs).
-  constructor(dataDir: string, cloudOrigin: string, beta: boolean, listener: Listener, sealer?: Sealer) {
+  /// `page`: it stands as a web page's host does for the lock (hosts/web.ts): no keys of an app, nothing sealed.
+  constructor(dataDir: string, cloudOrigin: string, beta: boolean, listener: Listener, sealer?: Sealer, page = false) {
     mkdirSync(dataDir, { recursive: true });
     this.#dir = dataDir;
     this.#origin = cloudOrigin.replace(/\/+$/, "");
     this.#beta = beta;
     this.#listener = listener;
-    if (sealer) {
+    this.appKeys = !page;
+    if (sealer && !page) {
       this.secureGet = (key, opts) => Effect.tryPromise({ try: () => sealer.get(key, opts.user, opts.reason ?? ""), catch: sealError });
       this.secureSet = (key, value, opts) => Effect.tryPromise({ try: () => sealer.set(key, value, opts.user), catch: sealError });
       this.secureDelete = (key) => Effect.tryPromise({ try: () => sealer.delete(key), catch: sealError });
@@ -315,8 +317,8 @@ export class NodeHost implements Host {
   utcOffsetMin(atMs: number): number {
     return -new Date(atMs).getTimezoneOffset();
   }
-  /// An app's: what it keeps is the device's, not code still.fail cloud serves (lock.ts).
-  readonly appKeys = true;
+  /// An app's: what it keeps is the device's, not code still.fail cloud serves (lock.ts). Not a page's (`page`).
+  readonly appKeys: boolean;
 
   randomBytes(buf: Uint8Array): void {
     webcrypto.getRandomValues(buf);
@@ -342,11 +344,12 @@ export class NodeHost implements Host {
 /// `hostWire`: its stations answer at the cloud's origin over plain HTTP, not on the mesh (the side-by-side run,
 /// harness/run.ts). `account`: who the accounts are with, when not still.fail cloud (an app embedding the core gives
 /// `commaAccountProvider({origin, bearer})`, "Account providers and embedding"). `sealer`: what seals
-/// values for it (an Electron app's main process).
-export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory; sealer?: Sealer } = {}) {
+/// values for it (an Electron app's main process). `page`: a web page's host for the end-to-end runs (e2e/device.ts),
+/// keeping no app's keys and sealing nothing, a `sealer` given or not.
+export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory; sealer?: Sealer; page?: boolean } = {}) {
   service.name = "stillfail-native";
   service.os = process.platform === "darwin" ? "macos" : process.platform;
-  const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener, options.sealer);
+  const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener, options.sealer, options.page === true);
   const clients = new Set<number>();
   let dead = false;
   let running: Core | null = null;
