@@ -816,6 +816,52 @@ test "words being picked on a page through an empty page over it, its layer said
 }
 
 ///|
+test "words picked in a modal layer over a page whose own words lie under them: the page's are no end of what is picked, none of them picked" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  // (the same lines, one over the other: the page's first among the paragraphs laid out)
+  let lines = fn(c : Ctx, one : String, two : String) {
+    c.mouse_drags_lists(false)
+    c.box(w=Fill(1.0), h=Fill(1.0), bg=0xFFFFFFFFL, fn() {
+      c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.selectable(fn() {
+          c.rich([plain(one)], size=15.0) |> ignore
+          c.rich([plain(two)], size=15.0) |> ignore
+        })
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  set_view_app(fn(root) {
+    old(root, fn(c) { lines(c, "under one", "under two") }).over(Is(true)) |> ignore
+    root.box(fn(l) {
+      l.over(Is(true)).modal(Is(true)) |> ignore
+      old(l, fn(c) { lines(c, "over one", "over two") }).over(Is(true)) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  let (_, y1, _, h1) = t.rect_of("over one").unwrap()
+  let (x2, y2, w2, h2) = t.rect_of("over two").unwrap()
+  // a press, the pointer taken from it to another place, let go there, from the moment `at` (each an input's step
+  // after the one before, a frame after each): what is picked then
+  let picks = fn(x0 : Double, y0 : Double, x1 : Double, y1 : Double, at : Double) -> String {
+    for k, p in [(0, x0, y0), (1, x1, y1), (2, x1, y1)] {
+      t.fake.time = at + k.to_double() * input_step_ms
+      finger(p.0, p.1, p.2)
+      t.frame_at(t.fake.time)
+    }
+    t.ctx().selected_text()
+  }
+  // from the second line's end up to the first's start; then (a press of its own: its moment past the one before's
+  // double click) from the first's start down to the second's end
+  let at = t.time()
+  assert_eq(picks(x2 + w2 - 1.0, y2 + h2 / 2.0, 1.0, y1 + h1 / 2.0, at), "over one\nover two")
+  assert_eq(picks(1.0, y1 + h1 / 2.0, x2 + w2 - 1.0, y2 + h2 / 2.0, at + 3.0 * input_step_ms + double_click_ms), "over one\nover two")
+}
+
+///|
 /// A page (an old view filling it: a stack of two pages, 1 over 0) and an empty old view over it in a layer that is
 /// modal while `on` holds; what its stack was told of a swipe back, by kind (0 begun, 1 moved, 3 called off, 4 done).
 fn stacked_under(on : @signals.Signal[Bool], platform : Int) -> (Tester, Nav[Int], Array[Int]) {
