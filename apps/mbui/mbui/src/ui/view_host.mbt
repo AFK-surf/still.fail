@@ -4136,6 +4136,17 @@ fn Ctx::island_said(self : Ctx) -> @view.NodeId? {
 }
 
 ///|
+/// The facts of a key with the focus on `focus` (view_key's, as the keymap matches it): in a field, `Field`, and
+/// `FieldEmpty` where nothing is written in it.
+fn view_key_facts(c : Ctx, focus : Int) -> Array[String] {
+  match c.editors.get(focus) {
+    Some(e) if e.text == "" => ["Field", "FieldEmpty"]
+    Some(_) => ["Field"]
+    None => []
+  }
+}
+
+///|
 /// A key (`code`, `mods` held) as the window's tree routes it: where the old views have what takes it first (the focus
 /// in a field or a key catcher of one that may take input, or on a widget that takes this key as its own:
 /// Ctx::focus_keeps; a layer of the old frame's open over all of it that takes the keys: a modal one, a menu, a
@@ -4149,8 +4160,13 @@ fn view_key(code : Int, mods : Int) -> Bool {
   let c = g()
   // (Tab and Shift+Tab, at the key's moment, among what can take the focus as the tree is then (Ctx::tab_stops), the
   // old views' as their last build said: where a field with the focus does not leave them to the app, a key catcher
-  // with it takes none)
+  // with it takes none. As any key, first what the keymap binds it to from where the focus is: an action that takes it
+  // (a list a field offers, picked from by Tab while it is open) has it; the focus moved where none does)
   if code == key_tab && (mods | mod_shift_key) == mod_shift_key && view_tab_ours(c, mods) {
+    let facts = view_key_facts(c, c.focus_allowed())
+    if tree.stroke(code, mods, view_moment(), from=focus_node_of(c.focus), facts~) {
+      return true
+    }
     tree.event(view_moment(), fn() { c.tab((mods & mod_shift_key) != 0) })
     h_frame_owed()
     return true
@@ -4195,11 +4211,7 @@ fn view_key(code : Int, mods : Int) -> Bool {
   // (what the keymap binds the key to, from where the focus is: the focus in a field a fact of the key, `Field`, and
   // `FieldEmpty` where nothing is written in it; a field's own keys and those with ⌘ or Ctrl held its where no action
   // takes them, as a field's in none of the tree: the old frame's)
-  let facts = match c.editors.get(focus) {
-    Some(e) if e.text == "" => ["Field", "FieldEmpty"]
-    Some(_) => ["Field"]
-    None => []
-  }
+  let facts = view_key_facts(c, focus)
   let actions = fn() { tree.stroke(code, mods, view_moment(), from=held, facts~) }
   if field_own || (field && held is None) {
     return actions()
