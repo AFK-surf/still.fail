@@ -142,16 +142,21 @@ pub fn rippled_node(
 }
 
 ///|
-/// Words of `style` in node `w`, `words` as they are said, cut short on their line where `style` says so.
+/// Words of `style` in node `w`, `words` as they are said, cut short on their line where `style` says so: `w=Cut`, or,
+/// on one line, filling it (`w=Full`), as an old view's line of `Fill` says it may be cut (ui's Ctx::squeeze_cut_said).
 fn styled_words(w : @view.View, words : () -> String, style : () -> @ui.TextStyle) -> @view.View {
   w
   .words(By(words))
   .words_look(By(fn() { @ui.style_words(style()) }))
   .ink(By(fn() { @ui.style_ink(style()) }))
   |> ignore
-  if @ui.style_cut(@signals.untracked(style)) {
+  let said = @signals.untracked(style)
+  if @ui.style_cut(said) {
     // (cut short where their line has not the room across: given way along a row, never squeezed down, View::cuts)
     w.cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true)) |> ignore
+  } else if @ui.style_fills(said) && !@ui.style_words(said).wrap {
+    // (its say alone, not how it is laid out: how wide it is is what holds it lays out, as it was)
+    w.allow_ellipsis(Is(true)) |> ignore
   }
   w
 }

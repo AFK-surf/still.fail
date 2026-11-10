@@ -81,6 +81,7 @@ let words_large_known : Map[String, Int] = {
     ("phone-en chat-publish", 1),
     ("phone-en chat-screens", 4),
     ("phone-en chat-station-sheet", 1),
+    ("phone-en history-details", 1),
     ("phone-en drive-upload", 1),
     ("phone-en place-stations", 1),
     ("phone-en share-card", 3),

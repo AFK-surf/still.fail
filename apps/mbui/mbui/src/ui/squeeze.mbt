@@ -4,9 +4,10 @@
 // short only for what shares their row.
 // Room runs short by design in four ways only, none of them a fault: words said a shorter way (Ctx::text's, a field's
 // placeholder's: `shorter`), words cut short with an ellipsis (keeping some of them; for what is beside them, only
-// those said to be: `w=Cut`), what a row says may go left out of it (Ctx::box `drop`, into its ⋯ where it has one),
-// what scrolls or is cut by its own box (a list, a scroll, `sideways`, `clip`). What overlaps on purpose says so: a
-// margin below 0 (faces in a stack), a layer, something put where it is said.
+// those said to be: `w=Cut`; the window tree's, Tree::allows_ellipsis, by the app alone, never by the bound the
+// framework puts on one line of words in a column), what a row says may go left out of it (Ctx::box `drop`, into its
+// ⋯ where it has one), what scrolls or is cut by its own box (a list, a scroll, `sideways`, `clip`). What overlaps on
+// purpose says so: a margin below 0 (faces in a stack), a layer, something put where it is said.
 //
 // Controls neither scroll sideways nor wrap (the user, 2026-10-25: both ugly). The last-resort cutting is so the
 // worst case stays readable (2026-10-26: 「保证在最差的情况下也没有现在这么差」). Words of uncertain length get
@@ -251,7 +252,8 @@ fn Ctx::squeeze_seen(self : Ctx) -> Array[Bool] {
 }
 
 ///|
-/// A line may be cut when it says `Cut` or `Fill`, or a containing box says `Cut` or a maximum width.
+/// A line may be cut when it says `Cut` or `Fill`, or a containing box says `Cut` or a maximum width (the window
+/// tree's the same: Tree::allows_ellipsis).
 fn Ctx::squeeze_cut_said(self : Ctx, i : Int) -> Bool {
   let mut k = i
   while k >= 0 && k < self.count {
@@ -306,13 +308,15 @@ fn Ctx::view_squeeze_faults(self : Ctx) -> Array[String] {
     if c.words == "" || c.words_look.wrap || c.w <= 0.0 || alpha <= 0.01 || !visible.get(c.id).unwrap_or(false) {
       return
     }
-    let say = fn(kept : Int, need : Double) {
+    let say = fn(kept : Int, need : Double, shown : String) {
       // (and where it was made: tester_sources.mbt)
       let src = tree_source_said(c.id, paren=true)
       if kept < squeeze_kept_chars {
         out.push("window tree ‘\{c.words}’: its words cut to \{kept} characters (they need \{need.round()})\{src}")
       } else if !tree.allows_ellipsis(c.id) {
-        out.push("window tree ‘\{c.words}’: its words cut short without saying they may be\{src}")
+        out.push(
+          "window tree ‘\{c.words}’: its words cut short without saying they may be (showing ‘\{shown}’)" + src,
+        )
       }
     }
     let k = c.words_look
@@ -322,7 +326,7 @@ fn Ctx::view_squeeze_faults(self : Ctx) -> Array[String] {
       let whole = layout_text(words, size, k.weight, 1.0e9, false, line~, style~, spacing~)
       if whole.w > c.w + 0.5 {
         let shown = ellipsized(words, whole, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
-        say(shown.shaped.starts.length() - 1, whole.w)
+        say(shown.shaped.starts.length() - 1, whole.w, shown.text)
       }
     } else {
       let rich = view_rich(c.runs, k, c.runs_look)
@@ -330,7 +334,7 @@ fn Ctx::view_squeeze_faults(self : Ctx) -> Array[String] {
       if whole.w > c.w + 0.5 {
         let cut = cut_rich({ ..rich, max_lines: 1 }, whole, c.w)
         let shown = layout_rich(cut, 1.0e9)
-        say(shown.starts.length() - 1, whole.w)
+        say(shown.starts.length() - 1, whole.w, shown.text)
       }
     }
   })
