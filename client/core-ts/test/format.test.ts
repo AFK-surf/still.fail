@@ -62,7 +62,8 @@ test("words_as_the_clients_had_them", () => {
   assert.equal(f.refillsIn(now + 185 * MINUTE, now), "3 小时 5 分钟后刷新");
   assert.equal(f.refillsIn(now + 48 * 60 * MINUTE, now), "2 天后刷新");
   assert.deepEqual(f.windowMark("5 hours"), ["5H", 0]);
-  assert.deepEqual(f.windowMark("Weekly · Opus"), ["W", 2]);
+  assert.deepEqual(f.windowMark("Weekly · Opus"), ["Opus", 2], "one model's, marked by the model: not a second W");
+  assert.deepEqual(f.windowMark("每周 · Fable"), ["Fable", 2]);
 });
 
 test("words_in_english", () => {

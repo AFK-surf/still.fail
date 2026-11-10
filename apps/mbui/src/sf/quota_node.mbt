@@ -129,19 +129,22 @@ pub fn quota_chips_node(
 /// Dials side by side (dials', as nodes): `dials` as they are said, `details` a quiet line under each where there is one
 /// (a GPU's model). Wide, each 96 wide at least (`columns` > 0: each 96), 36 apart, on as many lines as they take (12
 /// between). Narrow: sharing the line's width, 16 apart, their cells narrower; `columns` > 0, that many a line (the last
-/// line's room kept where it has fewer); else all in a line, in their full words where the line has the room for all of
-/// them so, else all in their short ones (one way for all).
+/// line's room kept where it has fewer); `lines` > 0, the same, a note longer than its dial going on under itself (an
+/// allowance's, two a line: its windows have no shorter words, and three in a line cut 每周 · Fable and 2 天 4 小时后刷新
+/// at a third of a phone's card; with its models' own weeks, five, they ran past the card); else all in a line, in
+/// their full words where the line has the room for all of them so, else all in their short ones (one way for all).
 #callsite(autofill(loc))
 pub fn dials_node(
   parent : @view.View,
   dials : () -> Array[Dial],
   details? : () -> Array[String] = fn() { [] },
   columns? : Int = 0,
+  lines? : Int = 0,
   loc~ : SourceLoc,
 ) -> Unit {
   let narrow = part_of(parent).look == Narrow
-  let dial = fn(d : @view.View, i : Int, short : Bool) {
-    dial_node(d, fn() { dials().get(i) }, fn() { details().get(i) }, fn() { !details().is_empty() }, short, narrow, columns)
+  let dial = fn(d : @view.View, i : Int, short : Bool, wraps : Bool) {
+    dial_node(d, fn() { dials().get(i) }, fn() { details().get(i) }, fn() { !details().is_empty() }, short, wraps, narrow, columns)
   }
   let line = fn(r : @view.View, short : Bool) {
     style_node(r, fn() { if narrow { dl_row_narrow } else { dl_row_wide } }, in_row=narrow)
@@ -149,26 +152,31 @@ pub fn dials_node(
       r.wraps(Is(Some(dl_lines))) |> ignore
     }
     r.each(fn() { Array::makei(dials().length(), fn(i) { i }) }, fn(i) { i }, fn(d, i) {
-      dial(d, i.untracked(), short)
+      dial(d, i.untracked(), short, false)
+    })
+  }
+  // (a line `per` of them, the last one's room kept where it has fewer)
+  let in_lines = fn(b : @view.View, per : Int, wraps : Bool) {
+    style_node(b, fn() { dl_rows })
+    b.each(fn() { Array::makei((dials().length() + per - 1) / per, fn(k) { k }) }, fn(k) { k }, fn(r, k) {
+      let start = k.untracked() * per
+      style_node(r, fn() { dl_row_narrow })
+      for i in start..<(start + per) {
+        r.pick(fn() { i < dials().length() }, fn(d, there) {
+          if there {
+            dial(d, i, false, wraps)
+          } else {
+            style_node(d, fn() { dl_dial_narrow }, in_row=true)
+          }
+        })
+      }
     })
   }
   parent.box(made_for=loc, fn(b) {
     if narrow && columns > 0 {
-      style_node(b, fn() { dl_rows })
-      // (a line a `columns` of them, the last one's room kept where it has fewer)
-      b.each(fn() { Array::makei((dials().length() + columns - 1) / columns, fn(k) { k }) }, fn(k) { k }, fn(r, k) {
-        let start = k.untracked() * columns
-        style_node(r, fn() { dl_row_narrow })
-        for i in start..<(start + columns) {
-          r.pick(fn() { i < dials().length() }, fn(d, there) {
-            if there {
-              dial(d, i, false)
-            } else {
-              style_node(d, fn() { dl_dial_narrow }, in_row=true)
-            }
-          })
-        }
-      })
+      in_lines(b, columns, false)
+    } else if narrow && lines > 0 {
+      in_lines(b, lines, true)
     } else if narrow {
       // all of them in their full words where the line has the room for all, else all in their short ones: the full
       // line left out of its row where it has not the room, the short one there only while it is (View::drops)
@@ -202,6 +210,7 @@ fn dial_node(
   detail : () -> String?,
   detailed : () -> Bool,
   short : Bool,
+  wraps : Bool,
   narrow : Bool,
   columns : Int,
   loc~ : SourceLoc,
@@ -250,7 +259,9 @@ fn dial_node(
     }
   })
   |> ignore
-  words_node(d, fn() { if short && now().label_short != "" { now().label_short } else { now().label } }, fn() { dl_label })
+  words_node(d, fn() { if short && now().label_short != "" { now().label_short } else { now().label } }, fn() {
+    if wraps { dl_label_lines } else { dl_label }
+  })
   |> ignore
   words_node(
     d,
@@ -264,7 +275,7 @@ fn dial_node(
         n.note
       }
     },
-    fn() { if detailed() { dl_detail } else { dl_reset } },
+    fn() { if detailed() { dl_detail } else if wraps { dl_reset_lines } else { dl_reset } },
   )
   |> ignore
   d.show(fn() { detail().unwrap_or("") != "" }, fn(s) { words_node(s, fn() { detail().unwrap_or("") }, fn() { dl_detail }) |> ignore })

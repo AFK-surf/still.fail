@@ -455,6 +455,27 @@ test "profiles on a phone: an allowance of three windows said one way for all, e
 }
 
 ///|
+test "a model's own week (Fable's) is a chip and a dial of its own, after the account's week" {
+  let t = settings_tester("profiles", shows="settings-profiles-fable")
+  // (its chips one way for all, the longest the row has the room for: each its name whole, then what is left)
+  let shown = fn(t : @ui.Tester) { t.words().filter(fn(w) { w.5 > 0.5 }) }
+  let at = fn(t : @ui.Tester, words : String) { shown(t).filter(fn(w) { w.0 == words })[0] }
+  for words in ["每周", "每周 · Fable"] {
+    assert_eq(shown(t).filter(fn(w) { w.0 == words }).length(), 1, msg="\{words}: \{shown(t).map(fn(w) { w.0 })}")
+  }
+  assert_true(shown(t).iter().any(fn(w) { w.0.has_suffix("46%") && w.1 > at(t, "每周 · Fable").1 }))
+  assert_true(at(t, "每周 · Fable").1 > at(t, "每周").1 && at(t, "每周 · Fable").2 == at(t, "每周").2)
+  assert_eq(t.squeeze_faults(), [])
+  // on its page a dial after the account's, under the same heading: beside them, or on the line under where one
+  // line has not the room for all three whole (dials_node's `lines`)
+  let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-fable")
+  let (week, fable) = (at(t, "每周"), at(t, "每周 · Fable"))
+  assert_true((fable.2 == week.2 && fable.1 > week.1) || (fable.2 > week.2 && fable.1 == at(t, "5 小时").1), msg="\{week} \{fable}")
+  assert_true(shown(t).iter().any(fn(w) { w.0.has_prefix("46") }), msg="\{shown(t).map(fn(w) { w.0 })}")
+  assert_eq(t.squeeze_faults(), [])
+}
+
+///|
 test "an account's stations appear once even with several copies" {
   for platform in [0, 2] {
     let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-hosts", platform~)

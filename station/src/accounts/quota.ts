@@ -5,6 +5,7 @@
 // - ChatGPT subscription (Codex): the app-server's account/rateLimits/read;
 // - Claude subscription: Claude Code's OAuth usage endpoint (what /usage shows), with the token Claude Code keeps in the
 //   profile's home (renewed first when about to run out, and once more when the provider says it is not good: oauth.ts);
+//   a model's own week under the account's (Fable's) apart from the account's windows, in `scoped`;
 // - Anthropic API keys and other providers bill per use and have no allowance to show.
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -150,8 +151,21 @@ async function claudeUsageResponse(base: string, token: string, lang: Lang): Pro
           .map((k) => ({ label: labels[k]!, usedPercent: percent(body[k].utilization), resetsAt: at(body[k].resets_at), minutes: k === "five_hour" ? 300 : WEEK_MINUTES }))
       : [];
   const q = quota("ok", windows, null);
+  const scoped = claudeScoped(body?.limits).filter((s) => !windows.some((w) => w.label === s.label));
+  if (scoped.length > 0) q.scoped = scoped;
   if (typeof body?.extra_usage?.is_enabled === "boolean") q.extraUsage = body.extra_usage.is_enabled;
   return [q, false];
+}
+
+/// The weeks one model has to itself under the account's (Fable's, 2026-11): the entries of `limits` scoped to a
+/// model, which no `seven_day_*` field says.
+function claudeScoped(limits: Json): QuotaWindow[] {
+  if (!Array.isArray(limits)) return [];
+  return limits.flatMap((l) => {
+    const name = l?.scope?.model?.display_name;
+    if (l?.group !== "weekly" || typeof name !== "string" || name.trim() === "") return [];
+    return [{ label: `每周 · ${name.trim()}`, usedPercent: percent(l.percent), resetsAt: at(l.resets_at), minutes: WEEK_MINUTES, scope: name.trim() }];
+  });
 }
 
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -467,10 +481,13 @@ export async function lentCodexUsage(home: string, now: number, urls: Urls = URL
 }
 
 /// The allowance of the machine's own login of a runtime, read without starting anything of the station's. Null when
-/// there is nothing to read it with.
+/// there is nothing to read it with. The account's own windows alone: what its models have to themselves shows on the
+/// profile it becomes, not on the offer to make it one.
 export async function machineUsage(runtime: "claude" | "codex", env: Env, urls: Urls = URLS, lang: Lang = stationLang()): Promise<ProfileQuota | null> {
   try {
-    return runtime === "codex" ? await codexUsage(codexAuthFile(env), urls, lang) : await claudeWithRefresh(env, null, urls, lang);
+    if (runtime === "codex") return await codexUsage(codexAuthFile(env), urls, lang);
+    const { scoped: _, ...own } = await claudeWithRefresh(env, null, urls, lang);
+    return own;
   } catch (e) {
     return failed(e, lang);
   }

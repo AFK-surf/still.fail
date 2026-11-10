@@ -591,6 +591,11 @@ test("what_the_clients_show_is_put_in_here", () => {
   assert.equal(v.time.createdAt.ago, "3 分钟前");
   const w = v.quota.windows;
   assert.deepEqual([w[0].mark, w[1].mark, w[1].level, w[1].refills], ["5H", "W", "red", "1 小时 5 分钟后刷新"]);
+  // What a model has to itself (Fable's week) is drawn with the account's windows, after the account's week.
+  const own: J = p.times({ quota: { state: "ok", windows: [{ label: "每周", usedPercent: 10, resetsAt: null }, { label: "5 小时", usedPercent: 0, resetsAt: null }], scoped: [{ label: "每周 · Fable", usedPercent: 92, resetsAt: c.now + 3_900_000, scope: "Fable" }] } }, c);
+  assert.deepEqual(own.quota.windows.map((w: J) => [w.label, w.mark, w.left, w.level, w.scope]), [["5 小时", "5H", 100, "ok", undefined], ["每周", "W", 90, "ok", undefined], ["每周 · Fable", "Fable", 8, "red", "Fable"]]);
+  assert.equal("scoped" in own.quota, false);
+  assert.deepEqual((p.times(own, c) as J).quota.windows.map((w: J) => w.mark), ["5H", "W", "Fable"], "put again, the same");
   const members = [{ email: "a@x.com", name: "阿一", picture: "https://p/a" }];
   assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"]], members), "@ds-ember 和 @U9 看下");
   assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"], ["U9", "Mia"]], members), "@ds-ember 和 @Mia 看下");

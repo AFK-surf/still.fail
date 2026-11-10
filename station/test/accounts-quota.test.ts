@@ -37,6 +37,35 @@ describe("allowances and renewing", { concurrency: true }, () => {
     await p.close();
   });
 
+  test("a model's own week under a Claude subscription's is read apart from the account's windows", async () => {
+    // As Anthropic answered on 2026-11-09 (the fields this reads).
+    const week = { utilization: 10, resets_at: "2026-11-16T11:59:59.936566+00:00" };
+    const limits = [
+      { kind: "weekly_all", group: "weekly", percent: 10, resets_at: week.resets_at, scope: null, is_active: true },
+      { kind: "weekly_scoped", group: "weekly", percent: 8, resets_at: "2026-11-16T11:59:59.936748+00:00", scope: { model: { id: null, display_name: "Fable" }, surface: null }, is_active: false },
+      { kind: "weekly_scoped", group: "weekly", percent: 40, resets_at: null, scope: { model: { id: null, display_name: "Opus" }, surface: null } },
+      { kind: "session_scoped", group: "session", percent: 1, resets_at: null, scope: { model: { id: null, display_name: "Fable" }, surface: null } },
+    ];
+    const p = await provider(() => ({ status: 200, body: { five_hour: null, seven_day: week, seven_day_opus: { utilization: 40, resets_at: null }, limits } }));
+    const quota = await claudeUsage(p.base, "t", "zh");
+    const resetsAt = Date.parse("2026-11-16T11:59:59.936Z");
+    assert.deepEqual(quota.windows, [
+      { label: "每周", usedPercent: 10, resetsAt, minutes: 10080 },
+      { label: "每周 · Opus", usedPercent: 40, resetsAt: null, minutes: 10080 },
+    ]);
+    assert.deepEqual(quota.scoped, [{ label: "每周 · Fable", usedPercent: 8, resetsAt, minutes: 10080, scope: "Fable" }], "Opus's said once, by its field; a group not known left out");
+    // A login of the machine's that is no profile yet is offered by the account's own windows alone.
+    const m = machine(); // (its `security` finds no keychain item: the login is the file's)
+    mkdirSync(join(m.home, ".claude"));
+    writeFileSync(join(m.home, ".claude", ".credentials.json"), JSON.stringify(credentials(Date.now() + 3_600_000)));
+    const offered = await machineUsage("claude", m.env, { ...URLS, anthropic: p.base }, "zh");
+    assert.deepEqual([offered!.windows.length, "scoped" in offered!], [2, false]);
+    await p.close();
+    const none = await provider(() => ({ status: 200, body: { seven_day: week, limits: [limits[0]] } }));
+    assert.equal("scoped" in (await claudeUsage(none.base, "t", "zh")), false);
+    await none.close();
+  });
+
   test("a codex login's allowance is read with its auth.json's tokens", async () => {
     const dir = temp("codex-usage");
     const file = join(dir, "auth.json");

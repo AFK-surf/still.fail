@@ -100,10 +100,13 @@ export function times(value: unknown, c: Clock): unknown {
         stamps[key] = stamp(v, c);
         any = true;
       }
-    } else if (key === "windows" && Array.isArray(v) && v.some((w) => get(w, "usedPercent") !== undefined)) {
-      map[key] = windows(v as Record<string, unknown>[], c);
+    } else if (key === "windows" && Array.isArray(v) && [v, map.scoped].some((l) => Array.isArray(l) && l.some((w) => get(w, "usedPercent") !== undefined))) {
+      // What its models have to themselves (`scoped`: Fable's week) drawn after the account's own. Where one model
+      // is asked about (a chat's agent, an account to run a model on), views/models.ts quotaFor has left only its.
+      map[key] = windows([...v, ...(Array.isArray(map.scoped) ? map.scoped : [])] as Record<string, unknown>[], c);
+      delete map.scoped;
       changed = true;
-    } else if (key !== "time") {
+    } else if (key !== "time" && !(key === "scoped" && Array.isArray(map.windows))) {
       const shown = times(v, c);
       if (shown !== v) {
         map[key] = shown;

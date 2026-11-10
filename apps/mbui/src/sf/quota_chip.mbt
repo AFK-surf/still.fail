@@ -20,7 +20,11 @@ pub fn has_quota(q : Json?) -> Bool {
 /// `gap` apart; nothing while the core cannot say (`state` not ok) or there is no window.
 /// Worded, the line said one way for all its chips, the longest that fits the room it is given whole (Ctx::box one_of): a
 /// phone's row has not the room for 5 小时剩 62%, 每周剩 95% and 每月剩 97%, so they say 5 小时 62%, 每周 95%…, then
-/// 5H 62%, W 95%…, never one chip a way of its own nor one cut short.
+/// 5H 62%, W 95%…, never one chip a way of its own nor one cut short. Where no line holds them (an account's windows
+/// and its models' own weeks, five: each was cut to …), the account's a line by their names and its models' own a line
+/// under it, each by its model, either going on in lines where it must (quota_chips_lines).
+/// `lines` (not worded): on a line of its own, as wide as what holds it (under a row's words: a station's account),
+/// where the line has not the room for its chips they go on so too, by their marks.
 /// Each says over it while it is pointed at what is left of it and when it fills again; `key` names them where the same
 /// allowance shows more than once in a place (a list's rows: each its profile's).
 pub fn quota_chips(
@@ -29,6 +33,7 @@ pub fn quota_chips(
   small? : Bool = false,
   marked? : Bool = true,
   worded? : Bool = false,
+  lines? : Bool = false,
   gap? : Double = 8.0,
   key? : String = "quota",
 ) -> Unit {
@@ -38,12 +43,23 @@ pub fn quota_chips(
     _ => []
   }
   if !worded {
-    c.box(style=quota_chips_row.then(@ui.style(gap=room(gap))), fn() {
-      for w in windows {
-        quota_chip(c, Some(w), small~, marked~, key~)
-      }
-    })
-    |> ignore
+    let row = fn() {
+      c.box(style=quota_chips_row.then(@ui.style(gap=room(gap))), fn() {
+        for w in windows {
+          quota_chip(c, Some(w), small~, marked~, key~)
+        }
+      })
+      |> ignore
+    }
+    if lines {
+      c.box(style=quota_chips_line, one_of=true, fn() {
+        row()
+        quota_chips_lines(c, windows, small, gap, key, 2)
+      })
+      |> ignore
+    } else {
+      row()
+    }
     return
   }
   // (its ways, each shorter than the one before, the first that fits the line's room shown: Ctx::box one_of)
@@ -66,9 +82,57 @@ pub fn quota_chips(
       })
       |> ignore
     }
+    quota_chips_lines(c, windows, small, gap, key, 1)
   })
   |> ignore
 }
+
+///|
+/// An allowance's chips where no one line holds them (quota_chips' last way): the account's windows a line, each said
+/// `account`'s way (quota_worded's: 1 its name and what is left, 5 小时 62%; 2 by its mark, where the line before was),
+/// what its models have to themselves (`scope`) a line under it, each by its model (Fable 46%: a model's name says
+/// whose it is, where W says little without a tip); a line going on in lines where even it has not the room, every
+/// chip whole.
+fn quota_chips_lines(c : @ui.Ctx, windows : Array[Json], small : Bool, gap : Double, key : String, account : Int) -> Unit {
+  let own = fn(w : Json) { chip_str(Some(w), "scope") != "" }
+  c.box(style=quota_chips_parts, fn() {
+    for part in [(windows.filter(fn(w) { !own(w) }), account), (windows.filter(own), 2)] {
+      if part.0.length() > 0 {
+        c.box(style=quota_chips_part.then(@ui.style(gap=room(gap))), flow=true, line_gap=quota_chips_part_lines, fn() {
+          for w in part.0 {
+            let (mark, words) = quota_worded(Some(w), part.1)
+            fill_chip(
+              c,
+              chip_left(Some(w)),
+              chip_str(Some(w), "level"),
+              mark,
+              words,
+              small~,
+              key=key + "/" + chip_str(Some(w), "mark") + "/lines",
+              said=quota_said(Some(w)),
+            )
+          }
+        })
+        |> ignore
+      }
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The lines of an allowance no one line holds: as wide as what holds them, a line under another as far as the lines
+/// a line goes on in.
+// kept across runs: a value (no field of it changes)
+let quota_chips_parts : @ui.Style = @ui.css("w=Full gap=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let quota_chips_part : @ui.Style = @ui.css("row w=Full align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let quota_chips_part_lines : Double = 6.0
 
 ///|
 /// A sidebar row's allowance starts with its text. If full chips need more room, they may extend under the mark. Where

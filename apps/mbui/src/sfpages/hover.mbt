@@ -241,15 +241,29 @@ pub fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, a : Json, across? : Bo
       c.box(style=agent_card_who, fn() {
         c.text(text(s, "agentText"), style=agent_card_label) |> ignore
         if account is Some(_) || windows.length() > 0 {
-          c.box(style=agent_card_account, fn() {
-            c.box(style=agent_card_name_room, fn() {
-              c.text(text(account, "name"), style=agent_card_line) |> ignore
+          // each with what is left of it over it while it is pointed at (the chips' own tips), 4 apart
+          let chips = fn(key : String) {
+            if windows.length() > 0 {
+              @sf.quota_chips(c, quota, small=true, marked=windows.length() > 1, gap=agent_card_chips_gap.px(), key~)
+            }
+          }
+          // beside its account's name where the line has the room for both whole; else under it, at the line's end as
+          // before (a third chip, its model's own week, left an account named by its email 98 of 246: Ctx::box one_of)
+          c.box(style=agent_card_account_ways, one_of=true, fn() {
+            c.box(style=agent_card_account, fn() {
+              c.box(style=agent_card_name_room, fn() {
+                c.text(text(account, "name"), style=agent_card_line) |> ignore
+              })
+              |> ignore
+              chips("agent-card/quota")
             })
             |> ignore
-            // each with what is left of it over it while it is pointed at (the chips' own tips), 4 apart
-            if windows.length() > 0 {
-              @sf.quota_chips(c, quota, small=true, marked=windows.length() > 1, gap=agent_card_chips_gap.px(), key="agent-card/quota")
-            }
+            c.box(style=agent_card_account_under, fn() {
+              c.box(style=agent_card_line_box, fn() { c.text(text(account, "name"), style=agent_card_line_cut) |> ignore })
+              |> ignore
+              chips("agent-card/quota/under")
+            })
+            |> ignore
           })
           |> ignore
         }
@@ -943,6 +957,24 @@ let agent_card_account : @ui.Style = @ui.css("row w=Full gap=S2 align=AEnd").the
 
 ///|
 let agent_card_chips_in : Double = @ui.capsule_in(@sf.row_corner, @sf.fill_chip_small_h) - agent_card_head_pad
+
+///|
+/// The ways its account's line is said: across the head.
+// kept across runs: a value (no field of it changes)
+let agent_card_account_ways : @ui.Style = @ui.css("row w=Full")
+
+///|
+/// Its account's name a line and what is left of it under it, at the line's end, where one line has not the room for
+/// both: the capsules in the ground's corner as agent_card_account has them.
+// kept across runs: a value (no field of it changes)
+let agent_card_account_under : @ui.Style = @ui.css("w=Full gap=S1 align=AEnd").then(
+  @ui.style(mb=@sf.room_of(agent_card_chips_in), mr=@sf.room_of(agent_card_chips_in)),
+)
+
+///|
+/// Its account's name on a line of its own: cut at its end only where the card itself is narrower than it.
+// kept across runs: a value (no field of it changes)
+let agent_card_line_cut : @ui.TextStyle = agent_card_line.then(@ui.text_style(w=Cut))
 
 ///|
 /// Words that lead somewhere: their whole line.
