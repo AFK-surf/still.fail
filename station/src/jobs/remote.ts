@@ -91,6 +91,8 @@ export type RemoteOptions = {
   diskFree?: (path: string) => number;
   /// Remove a mirror's tree. Tests can hold or fail the removal to exercise interrupted requests.
   removeMirror?: (path: string) => Promise<void>;
+  /// How a closed session's task directory is removed (tests hold it to come between).
+  removeTask?: (path: string) => Promise<void>;
   /// The last completed cleanup of files brought back. Tests can keep this across station restarts in memory.
   backTidy?: { read: () => Promise<number | null>; write: (at: number) => Promise<void> };
 };
@@ -381,6 +383,7 @@ export class Remote {
   private removeMirror: (path: string) => Promise<void>;
   private described: ((peer: string, workspace: string) => Json) | null = null;
   private rigs: ((workspace: string, session: string, rig: Json, described: Json | null) => Promise<Json>) | null = null;
+  private removeTask: (path: string) => Promise<void>;
 
   constructor(options: RemoteOptions) {
     this.data = options.data;
@@ -391,6 +394,7 @@ export class Remote {
     this.places = options.places ?? new Places();
     this.diskFree = options.diskFree ?? diskFree;
     this.removeMirror = options.removeMirror ?? ((path) => rm(path, { recursive: true, force: true }));
+    this.removeTask = options.removeTask ?? ((path) => rm(path, { recursive: true, force: true }));
     this.root = join(options.data, "remote");
     for (const name of ["incoming", "outgoing", "sessions", "used", "prepared"]) mkdirSync(join(this.root, name), { recursive: true });
     void readAllUsed(join(this.root, "used"));
@@ -647,7 +651,8 @@ export class Remote {
     const room = this.room(workspace, peer, session);
     const now = this.store.now();
     // Used within the minute: noted already (its record's write may still be on its way: `closeHere` asks this too).
-    if (now - (this.seenAt.get(room) ?? 0) < 60_000) return join(room, "work");
+    const last = this.seenAt.get(room);
+    if (last !== undefined && now - last < 60_000) return join(room, "work");
     mkdirSync(join(room, "work"), { recursive: true }); // sync: work() gives the directory at once; once a minute a room
     this.seenAt.set(room, now);
     void writeJson(join(room, "session.json"), { workspace, station: peer, session, seen: now }).catch(() => undefined);
@@ -782,34 +787,45 @@ export class Remote {
   private async closeHere(workspace: string, peer: string, session: string, idleAt?: number): Promise<boolean> {
     const tasks = await this.tasksOf(workspace, peer, session);
     const room = this.room(workspace, peer, session);
+    // work() can be called outside the task lane, at any await below. An idle room goes with its tasks' directories in
+    // one synchronous step, its use (`seenAt`) and its tasks' running asked again just before: a use that comes after
+    // finds neither and makes its room anew, none of what it makes removed; a room used before it stays whole.
+    const gone = (path: string) => `${path}.gone-${randomBytes(4).toString("hex")}`;
+    const aside: string[] = [];
     if (idleAt !== undefined) {
-      // work() can be called outside the task lane. Recheck after asynchronous reads, immediately before deleting;
-      // until the synchronous removal below completes, no new use can interleave with this decision.
       let seen: number;
-      await written(join(room, "session.json"));
       try {
-        seen = Math.max(asI64(field(readJson(join(room, "session.json")), "seen")) ?? idleAt, this.seenAt.get(room) ?? 0);
+        seen = Math.max(asI64(field(await readJsonSoon(join(room, "session.json")), "seen")) ?? idleAt, this.seenAt.get(room) ?? 0);
       } catch {
         return false;
       }
-      if (idleAt - seen < IDLE_MS || tasks.some(({ dir }) => this.running(dir))) return false;
-    }
-    for (const { dir } of tasks) {
-      if (this.running(dir)) await this.jobs.stop(this.jobOf(dir));
-      await rm(dir, { recursive: true, force: true });
+      if (idleAt - seen < IDLE_MS || (this.seenAt.get(room) ?? 0) > seen || tasks.some(({ dir }) => this.running(dir))) return false;
+      for (const { dir } of tasks) {
+        const to = gone(dir);
+        try {
+          renameSync(dir, to); // sync: the tasks' directories and the room go in one step after their use is asked again
+          aside.push(to);
+        } catch {}
+      }
+    } else {
+      for (const { dir } of tasks) {
+        if (this.running(dir)) await this.jobs.stop(this.jobOf(dir));
+        await this.removeTask(dir);
+      }
     }
     // Taken out of its place in one step, then removed off the thread (a session's whole directory, gigabytes of
     // mirrors: removed on the main thread, one held it 15 s on a station, 2026-11-02). A use after this makes it anew.
-    const gone = `${room}.gone-${randomBytes(4).toString("hex")}`;
+    const roomGone = gone(room);
     let moved = false;
     try {
-      renameSync(room, gone); // sync: one step, so that no work() comes between this decision and the room's going
+      renameSync(room, roomGone); // sync: in the same step as its tasks' directories (idle), so that no work() comes between
       moved = true;
     } catch {}
     this.seenAt.delete(room);
+    for (const dir of aside) await this.removeTask(dir).catch(() => undefined);
     if (moved) {
       log.info("remote", "remote session directory removed", { workspace, station: peer, session });
-      await rm(gone, { recursive: true, force: true }).catch(() => undefined);
+      await rm(roomGone, { recursive: true, force: true }).catch(() => undefined);
     }
     return true;
   }

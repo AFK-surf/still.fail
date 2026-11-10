@@ -74,13 +74,13 @@ async function rounds(_what: string, clock: ReturnType<typeof testClock>, by: Du
 
 type Station = { dir: string; store: Store; jobs: Jobs; remote: Remote; told: [string, string][] };
 
-function station(options: { clock?: Clock.Clock; jobsClock?: Clock.Clock; machine?: Machine; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void; removeMirror?: (path: string) => Promise<void> } = {}): Station {
+function station(options: { clock?: Clock.Clock; jobsClock?: Clock.Clock; machine?: Machine; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void; removeMirror?: (path: string) => Promise<void>; removeTask?: (path: string) => Promise<void> } = {}): Station {
   const dir = options.dir ?? tempdir();
   const store = options.store ?? Store.open(":memory:");
   const told: [string, string][] = [];
   const jobs = options.jobs ?? new Jobs({ store, data: dir, notify: () => {}, link: () => null, clock: options.jobsClock, machine: options.machine });
   const remote = new Remote({
-    data: dir, store, jobs, clock: options.clock, meshWaitMs: options.meshWaitMs, removeMirror: options.removeMirror,
+    data: dir, store, jobs, clock: options.clock, meshWaitMs: options.meshWaitMs, removeMirror: options.removeMirror, removeTask: options.removeTask,
     notify: options.notify ?? ((session, text) => void told.push([session, text])),
   });
   cleanup.push(async () => {
@@ -269,6 +269,72 @@ describe("remote", { concurrency: true }, () => {
     release();
     await sweeping;
     assert.equal(readFileSync(join(work, "keep"), "utf8"), "the session's work");
+  });
+
+  test("a session used again while its idle room's task directory is being removed has a room to work in", async () => {
+    // The station's time is the test's: the room's use, and its sweep, on the same clock.
+    const clock = testClock();
+    const store = Store.open(":memory:", null, clock);
+    cleanup.push(() => store.close());
+    let entered!: () => void;
+    let release!: () => void;
+    const removing = new Promise<void>((resolve) => (entered = resolve));
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const r = station({ store, removeTask: async (path) => {
+      entered();
+      await held;
+      await rm(path, { recursive: true, force: true });
+    } });
+    // The room, used, and a task of it that ended (its directory, nothing running).
+    r.remote.work("ws", "peer-a", "s");
+    const room = r.remote.room("ws", "peer-a", "s");
+    await written(join(room, "session.json"));
+    const task = join(r.remote.root, "incoming", hash(["ws", "peer-a", "s", "k"]));
+    mkdirSync(task, { recursive: true });
+    writeFileSync(join(task, "task.json"), JSON.stringify({ workspace: "ws", station: "peer-a", session: "s", key: "k", layout: "session", spec: { command: "true" } }));
+    // Unused for IDLE_MS: swept, held as its task's directory goes.
+    await Effect.runPromise(clock.adjust(`${IDLE_MS + 1000} millis`));
+    const sweeping = r.remote.sweep(store.now());
+    await removing;
+    // Used again meanwhile: a command is about to run there.
+    const work = r.remote.work("ws", "peer-a", "s");
+    release();
+    await sweeping;
+    assert.ok(existsSync(room), "a room");
+    assert.ok(existsSync(work), "and its work directory");
+  });
+
+  test("a use that comes while an idle room's task directories are being removed finds a whole room, never half of the old one", async () => {
+    const clock = testClock();
+    const store = Store.open(":memory:", null, clock);
+    cleanup.push(() => store.close());
+    let entered!: () => void;
+    let release!: () => void;
+    const removing = new Promise<void>((resolve) => (entered = resolve));
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const r = station({ store, removeTask: async (path) => {
+      entered();
+      await held;
+      await rm(path, { recursive: true, force: true });
+    } });
+    r.remote.work("ws", "peer-a", "s");
+    const room = r.remote.room("ws", "peer-a", "s");
+    await written(join(room, "session.json"));
+    // What the room held before it went idle, and a task of it that ended.
+    writeFileSync(join(room, "work", "before.txt"), "old");
+    const task = join(r.remote.root, "incoming", hash(["ws", "peer-a", "s", "k"]));
+    mkdirSync(task, { recursive: true });
+    writeFileSync(join(task, "task.json"), JSON.stringify({ workspace: "ws", station: "peer-a", session: "s", key: "k", layout: "session", spec: { command: "true" } }));
+    await Effect.runPromise(clock.adjust(`${IDLE_MS + 1000} millis`));
+    const sweeping = r.remote.sweep(store.now());
+    await removing;
+    // Used again (outside its lane) while the task's directory goes: the room it works in is a new one.
+    const work = r.remote.work("ws", "peer-a", "s");
+    release();
+    await sweeping;
+    assert.ok(existsSync(work), "a room to work in");
+    assert.ok(!existsSync(join(work, "before.txt")), "the old room went whole, with its tasks");
+    assert.ok(!existsSync(task), "its task's directory with it");
   });
 
   test("a remote workspace's size is measured for its owning chat, never another station's chat", async () => {
