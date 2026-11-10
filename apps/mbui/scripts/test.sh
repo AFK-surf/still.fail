@@ -163,7 +163,8 @@ for t in $targets; do
     # part's job by 110 s and more, the job 156-263 s of its 5 minutes, main d2791a7a 42719997459,
     # core/bound-devices-sign 42720203578, 2026-11-10)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
-      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4 src/sfapp/preview_tree_wbtest.mbt:2)
+      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4 src/sfapp/preview_tree_wbtest.mbt:2
+      src/sfapp/words_large_wbtest.mbt:1)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -270,6 +271,10 @@ for t in $targets; do
       "src/sfapp/corners_wbtest.mbt "*) echo corners ;;
       "src/sfapp/screens_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
+      # (words_large's sweep, every screen at the system's larger words, on the second, whose jobs had the most room
+      # at every rate: dealt with the pages by name it was the fourth's at 60 a second, one of its last files to start,
+      # 51-59 s of its 214-262, 2026-11-10)
+      "src/sfapp/words_large_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt --index 8-"*) echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
       # (preview_tree's two on the fourth, the one with the most programs: at 120 a second APP_PART gives each of its
