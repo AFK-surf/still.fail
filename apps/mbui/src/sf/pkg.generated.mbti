@@ -1424,6 +1424,8 @@ pub fn panel_held() -> Bool
 
 pub fn panel_icon_button(@ui.Ctx, String, String, String, disabled? : Bool, cornered? : Bool, on_press? : () -> Unit) -> Bool
 
+pub fn panel_icon_button_node(@view.View, String, () -> String, () -> Unit) -> @view.View
+
 pub let panel_icon_corner : @ui.Style
 
 pub let panel_icon_size : Double
