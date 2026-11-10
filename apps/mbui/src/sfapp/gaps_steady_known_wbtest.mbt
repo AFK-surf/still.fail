@@ -5,10 +5,14 @@
 ///|
 fn init {
   @ui.gaps_steady_known([
+    // (the same as send_steady_wbtest's, from #5256 on, in each file that sends twice in a chat)
+    ("src/sfapp/again_wbtest.mbt", 1),
     ("src/sfapp/composer_wbtest.mbt", 1),
     ("src/sfapp/desk_service_wbtest.mbt", 2),
-    // (send_steady_wbtest's, on host frames)
-    ("src/sfapp/emit_kept_wbtest.mbt", 1),
+    // (send_steady_wbtest's, on host frames, both sends)
+    ("src/sfapp/emit_kept_wbtest.mbt", 2),
+    // (send_steady_wbtest's, on its first send)
+    ("src/sfapp/linger_wbtest.mbt", 1),
     ("src/sfapp/quote_image_wbtest.mbt", 5),
     // (sent with a quote: the agent's row over it opens 82→91 and closes to 87 as the sent one comes; the quote over
     // its first line closes 40→18 and opens to 20)
