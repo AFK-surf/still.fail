@@ -338,6 +338,8 @@ test("what_a_chats_outline_finds_is_listed_by_the_day_with_the_line_that_has_the
   const found = (answers(host.takeEmitted(), 1) as J).ok;
   assert.deepEqual([found.words, found.total, found.more, found.held, found.of, found.whole], [["部署"], 3, 0, 4, 4, true]);
   assert.equal(found.days.length, 2);
+  // The index's kind of day: by its date, its heading.
+  assert.deepEqual(found.days.map((d: J) => [d.date, d.day, d.items.map((r: J) => r.seq)]), [["2026-01-05", "1月5日", [1, 2]], ["2026-01-06", "1月6日", [3]]]);
   const rows = found.days.flatMap((d: J) => d.items);
   assert.deepEqual(rows.map((r: J) => [r.seq, r.mine, r.agent, r.snippet]), [
     // The match at its line's start; one far into a line: its start cut, 12 before it.
@@ -375,6 +377,6 @@ test("a_chats_outline_finds_lists_the_newest_fifty_a_line_each_and_says_how_many
   assert.deepEqual(rows.map((r: J) => r.seq), Array.from({ length: 50 }, (_, i) => 101 + i));
   // Each one line, cut as a row's words are: 64 columns (a Chinese character two), then `…`.
   assert.equal(rows[0].snippet, `第 101 条：部署${"长".repeat(24)}…`);
-  assert.ok(found.days.every((d: J, i: number) => i === 0 || d.day !== found.days[i - 1].day));
+  assert.ok(found.days.every((d: J, i: number) => i === 0 || (d.date > found.days[i - 1].date && d.day !== found.days[i - 1].day)));
   core.close();
 });

@@ -36,7 +36,7 @@ import { archiveHintOf, badgeKindsOf, jobsSeenOf, type ArchiveHint } from "../pr
 import { markdown, type MdStore } from "../markdown.ts";
 import { heardFiles } from "../elsewhere.ts";
 import { isImage, near, placeFiles } from "../placed.ts";
-import { KINDS as THING_KINDS, OUTLINE_FOUND, inDays, isVideo, mediaDays, thingsHaving, thingsOf, wordsOf } from "../things.ts";
+import { KINDS as THING_KINDS, OUTLINE_FOUND, isVideo, mediaDays, thingsHaving, thingsOf, wordsOf } from "../things.ts";
 import { archive, archiveSearch } from "./archive.ts";
 import { Local, PENDING_PREFIX } from "./local.ts";
 import { askAnswers } from "./vault.ts";
@@ -2835,8 +2835,12 @@ export class Views implements Owner {
 
   /// What a chat's outline lists for what was looked for (`chat.outline.find`): the messages `found` (station/topics.ts
   /// `found`), agents' too but not what two chats' agents wrote each other (not in the chat), the newest
-  /// `OUTLINE_FOUND` of them by the day, oldest first, each with who said it and the line of it that has the words, cut
-  /// to one line of the panel as a row's are; `total` how many were found, `more` how many older ones are not listed.
+  /// `OUTLINE_FOUND` of them, each with who said it and the line of it that has the words, cut to one line of the panel
+  /// as a row's are; `total` how many were found, `more` how many older ones are not listed. Its `days` are the index's
+  /// kind of day (`OutlineDay`: `date` the local date, "" where when is not known, `day` its heading), oldest first,
+  /// each date once (one that came apart joined), with `items` its rows for `seqs`:
+  /// `{ words, days: [{ date, day, items: [{ seq, mine, author, by, agent, system, clock, snippet }] }], total, more,
+  /// held, of, whole }`.
   outlineFound(station: string, id: number, f: { words: string[]; found: { seq: number }[]; held: number; of: number; whole: boolean }): J {
     const summary = this.#core.data.thread(station, id) as J;
     const agents = this.#agentsOf(station, summary);
@@ -2857,7 +2861,18 @@ export class Views implements Owner {
         clock: at !== null ? format.clock(at, clock.offsetMin) : "", snippet: cutWords(refs.excerpt(str(m.text) ?? "", f.words, SNIPPET_LEAD, OUTLINE_WORDS + 1).text, OUTLINE_WORDS),
       };
     });
-    const days = inDays(rows, (r) => r.at, (ms) => format.dayLabel(ms, clock.now, clock.offsetMin)).map((d) => ({ day: d.day, items: d.items.map(({ at: _, ...row }) => row) }));
+    const days: { date: string; day: string; items: J[] }[] = [];
+    const byDate = new Map<string, { date: string; day: string; items: J[] }>();
+    for (const { at, ...row } of rows) {
+      const date = at !== null ? outlineDate(at, clock.offsetMin) : "";
+      let day = byDate.get(date);
+      if (day === undefined) {
+        day = { date, day: at !== null ? format.dayLabel(at, clock.now, clock.offsetMin) : "", items: [] };
+        byDate.set(date, day);
+        days.push(day);
+      }
+      day.items.push(row);
+    }
     return { words: f.words, days, total: all.length, more: all.length - listed.length, held: f.held, of: f.of, whole: f.whole };
   }
 
