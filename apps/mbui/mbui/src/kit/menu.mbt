@@ -202,8 +202,11 @@ fn menu_panel(
               _ => {
                 let iid = ids[n]
                 let r = c.interact(iid, disabled=e.disabled)
-                // the pointer moving onto it: the focus (unseen), and its submenu open or another's closed
-                if r.hovered && pointer_moved(c, iid) && !e.disabled {
+                // the pointer moving onto it: the focus (unseen), and its submenu open or another's closed; the focus
+                // only taken from within the menu (its panel, its items; a submenu's from what holds it) or from
+                // nowhere: not back from what took it at the cause that closed the menu (a dialog an item opened, its
+                // field given the focus as it opens), the pointer still resting on that item as the menu goes
+                if r.hovered && pointer_moved(c, iid) && !e.disabled && (mine || depth > 0 || c.focused_id() == 0) {
                   if !c.has_focus(iid) {
                     c.focus_on(iid)
                   }
