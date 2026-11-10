@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [bb7577768](https://github.com/AFK-surf/still.fail/commit/bb757776884b3ae1cd67c868e160dcd9e16ec64a) web: the core's worker gives the core its build, s | 1.78 | 2.38 | 9.91 | 28.54 | 34.71 | 25.48 | 46.89 | 94.21 | 175.79 |
 | [b590244da](https://github.com/AFK-surf/still.fail/commit/b590244da315d8f530efda565efd5c3de33fb558) sf: a panel's search at hand has the keys as it op | 1.78 | 2.38 | 9.91 | 28.53 | 34.71 | 25.48 | 46.89 | 93.44 | 126.79 |
 | [6fe59f6a9](https://github.com/AFK-surf/still.fail/commit/6fe59f6a9297bc81d55d767780f43bc8b3fd4139) fix: forward Windows shortcuts from the remote scr | 1.78 | 2.38 | 9.91 | 28.53 | 34.71 | 25.48 | 46.89 | 93.96 | 158.29 |
 | [b2fe04982](https://github.com/AFK-surf/still.fail/commit/b2fe04982d5071a1b4cc93e25598eeb1fbc0c9b5) core: a vault's items left under an earlier key ar | 1.78 | 2.38 | 9.91 | 28.53 | 34.71 | 25.48 | 46.89 | 94.11 | 178.87 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [cdddf8b29](https://github.com/AFK-surf/still.fail/commit/cdddf8b29c157a8faba875f93e46e893667e8f96) Station: cores before 0.1.6968 told to update; no  | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.32 | 170.66 |
 | [6575c0a28](https://github.com/AFK-surf/still.fail/commit/6575c0a28c9e3c8f6672eb3ffe617d0b2a30b609) mbui: a layer opened by a node gives the focus bac | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.62 | 159.22 |
 | [1c6ee92f5](https://github.com/AFK-surf/still.fail/commit/1c6ee92f50f3cb2fd8c149612b9dd13db7cf3923) app, core: to people there is one safe mode: no 个人 | 1.75 | 2.33 | 9.69 | 28.27 | 33.92 | 25.24 | 46.31 | 93.54 | 156.12 |
-| [5944ba7e0](https://github.com/AFK-surf/still.fail/commit/5944ba7e017b4c6e51ccaa31050d65689562e6cb) ci: the flows' default-rate run on replay-build's  | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.72 | 166.21 |
