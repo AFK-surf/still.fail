@@ -368,6 +368,8 @@ fn draw_svg(data : Bytes, px : Int) -> (Int, Int, FixedArray[Byte])? {
 
 ///|
 fn main {
+  // what the places open on is kept by the core's client as it is let go of, asked again with its version
+  @core.client.keep(@sfbase.lasting_kept)
   // SVG pictures (a chat's .svg files) drawn by mbui's own SVG renderer, whatever the system decodes
   @ui.set_vector_pictures(draw_svg)
   // MBUI_PLATFORM=android: run as a phone's system has it (a test's trace recorded again on a Mac on the system its

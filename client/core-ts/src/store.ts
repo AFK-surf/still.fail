@@ -25,6 +25,7 @@ import { readAfresh } from "./markdown.ts";
 import { spent, spentSince, timed } from "./spent.ts";
 import { equal, sharedValue } from "./util.ts";
 import { holds } from "./data.ts";
+import { version } from "./digest.ts";
 
 export const COALESCE_MS = 50;
 export const EVICT_AFTER_MS = 60_000;
@@ -132,6 +133,8 @@ export class Store {
   readonly #subscriptions = new Map<string, Topic>();
   /// A keyed subscriber's `from` (`client/id` to the id of the client's other subscription), till its first value goes.
   readonly #from = new Map<string, RequestId>();
+  /// A subscriber's `have` (`client/id` to the version of what it holds), till its first value goes (#same).
+  readonly #have = new Map<string, string>();
   #source: Source | null = null;
   #idleCount = 0;
   #watchCount = 0;
@@ -201,11 +204,12 @@ export class Store {
   }
 
   /// Adds a subscriber; sends the cached value at once if there is one, and starts the topic if it was not live.
-  subscribe(client: ClientId, id: RequestId, topic: Topic, keyed = false, from?: RequestId): void {
+  subscribe(client: ClientId, id: RequestId, topic: Topic, keyed = false, from?: RequestId, have?: string): void {
     this.unsubscribe(client, id);
     const key = topicKey(topic);
     this.#subscriptions.set(`${client}/${id}`, topic);
     if (keyed && from !== undefined) this.#from.set(`${client}/${id}`, from);
+    if (have !== undefined) this.#have.set(`${client}/${id}`, have);
     let entry = this.#topics.get(key);
     const started = entry === undefined;
     if (!entry) {
@@ -224,7 +228,7 @@ export class Store {
       this.#firstPending.set(key, entry);
       this.#wakePending(true);
     }
-    if (cached !== undefined) this.host.emit(client, this.#firstFrom(client, id, topic, cached) ?? to(whole(cached), id));
+    if (cached !== undefined) this.host.emit(client, this.#same(client, id, cached) ?? this.#firstFrom(client, id, topic, cached) ?? to(whole(cached), id));
     else {
       if (entry.waiting === true) this.host.emit(client, { id, waiting: true });
       if (entry.opening === undefined && this.#tracer !== null && OPENED.has(topic.topic)) {
@@ -308,13 +312,24 @@ export class Store {
     this.#scheduleEmit(entry.topic);
   }
 
-  unsubscribe(client: ClientId, id: RequestId): void {
+  /// `keep`: the client keeps what it holds of the topic (protocol.ts): answered `{id, v}`, the version of that, the
+  /// last message for `id`: what went to it before (a difference already on its way) it has applied by then.
+  unsubscribe(client: ClientId, id: RequestId, keep = false): void {
     const at = `${client}/${id}`;
     const topic = this.#subscriptions.get(at);
-    if (!topic) return;
+    if (!topic) {
+      if (keep) this.host.emit(client, { id, v: null });
+      return;
+    }
     this.#subscriptions.delete(at);
     this.#from.delete(at);
+    this.#have.delete(at);
     const entry = this.#topics.get(topicKey(topic));
+    if (keep) {
+      // (what went to it last: the value it holds, every message to it going out in order; none, where none went)
+      const had = entry?.subscribers.some(([c, i]) => c === client && i === id) ? entry.sent : undefined;
+      this.host.emit(client, { id, v: had !== undefined && "ok" in had ? version(had.ok) : null });
+    }
     if (!entry) return;
     entry.subscribers = entry.subscribers.filter(([c, i]) => !(c === client && i === id));
     if (entry.subscribers.length === 0 && entry.sent === undefined && this.#firstPending.get(topicKey(topic)) === entry) {
@@ -726,10 +741,20 @@ export class Store {
     for (const [client, id, keyed] of subscribers) {
       const o = keyed ? keyedOut : out;
       // (its first value: what changed from its `from`'s, where it has one)
-      const first = sent === undefined && keyed ? this.#firstFrom(client, id, topic, value) : null;
+      const first = sent === undefined ? (this.#same(client, id, value) ?? (keyed ? this.#firstFrom(client, id, topic, value) : null)) : null;
       if (first) this.host.emit(client, first);
       else if (o) this.host.emit(client, to(o, id));
     }
+  }
+
+  /// The first value `value` going to subscriber `id` of `client`, asked with `have`: `{id, same: true}` where `value`
+  /// is the one of that version (it holds it already), else none (it goes as it would). Its `have` forgotten either way.
+  #same(client: ClientId, id: RequestId, value: Value): CoreMessage | null {
+    const at = `${client}/${id}`;
+    const have = this.#have.get(at);
+    if (have === undefined) return null;
+    this.#have.delete(at);
+    return "ok" in value && version(value.ok) === have ? { id, same: true } : null;
   }
 
   /// The first value `value` of topic `topic` going to subscriber `id` of `client` as what changed from what its
