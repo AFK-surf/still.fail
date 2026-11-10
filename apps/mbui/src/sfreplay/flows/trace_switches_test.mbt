@@ -10,12 +10,18 @@
 // that had the old one on are recorded again with the new, and the old switch goes with its bar. So MBUI_PLACES_BAR
 // (#5227) in the place of MBUI_PLACES_AHEAD, whose read-ahead worked out frame by frame was taken out: its one trace
 // on (settings-run-settings) recorded again, the other 80 never had either.
+//
+// MBUI_STATION_ROWS (the stations a row each, `station`, `stationPart`), in all 81 as it came: unlike MBUI_PLACES_BAR
+// the app does not branch on it, its old way of asking the stations (whole, `brief`, `drive`) gone from it. Only the
+// replay reads it: a trace without it has its run's `stations` kept by the replay (@core.Replay::keep_stations) and the
+// app's new asks read out of them (sfreplay's source.mbt), so its replay is of today's app, its asks of the stations
+// aside; its bytes (topic_bytes) are still the old app's.
 
 ///|
 /// Each switch: how many traces may replay without it.
 /// MBUI_DEVICES (#5232, 2026-11-10: the stations' places and pages ask for the workspace's devices) off in all 81 as
 /// it came.
-let switches_known : Map[String, Int] = { "MBUI_PLACES_BAR": 80, "MBUI_DEVICES": 81 }
+let switches_known : Map[String, Int] = { "MBUI_PLACES_BAR": 80, "MBUI_DEVICES": 81, "MBUI_STATION_ROWS": 81 }
 
 ///|
 test "the released app's ways a replay takes from its trace: how many traces are without each, within its bar" {

@@ -468,6 +468,12 @@ pub let trace_switches : Array[String] = [
   "MBUI_PLACES_BAR",
   // (设备: the stations' places and pages ask for the workspace's devices)
   "MBUI_DEVICES",
+  // (the stations a row each, `station` one whole, `stationPart` one part of its overview, `connects`' Slack apps and
+  // `noProfile`, `profiles`' machine logins: what the app asks since the lists stopped taking the stations whole. Unlike
+  // the others, the app does not branch on it: its old way of asking (`stations` whole, `brief`, `drive`) is
+  // gone from it, so only the replay reads it. A trace without it has its run's `stations` kept by the replay itself
+  // (@core.Replay::keep_stations), the new asks read out of the stations whole it has (src/sfreplay/source.mbt))
+  "MBUI_STATION_ROWS",
 ]
 
 ///|

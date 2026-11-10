@@ -35,21 +35,17 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
   }
   place_page(c, core, tr("android-misc.bar.place.profiles"), back~, primary?=add, fn() {
     let blocks : Array[() -> Unit] = []
-    let offers = fn(sv : Json?) {
-      if flag(sv, "online") {
-        let station = text(sv, "station")
-        blocks.append(machine_login_offers(c, core, sv, fn(_) { (core.push)(NewProfile(station)) }))
-      }
+    let offers = fn(sv : Json?, logins : Array[Json]) {
+      let station = text(sv, "station")
+      blocks.append(machine_login_offers(c, core, sv, logins, fn(_) { (core.push)(NewProfile(station)) }))
     }
     if only == "" {
       blocks.append(workspace_profiles(c, core, here))
-      // the machine's own logins not used yet, each offered as a profile
-      match all {
-        Some(a) =>
-          for s in a {
-            offers(Some(s))
-          }
-        None => ()
+      // the machine's own logins not used yet, each offered as a profile: as the profiles' list says them, each
+      // station up that offers one (profiles_offers)
+      let said = (core.topic)("profiles", { "scope": str(here.workspace) }).get().value
+      for o in profiles_offers(said) {
+        offers(Some(o.0), o.1)
       }
     } else {
       match one {
@@ -76,12 +72,17 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
         Some(s) => {
           let sv = Some(s)
           let overview = field(sv, "overview")
-          let list = items(overview, "profiles")
+          // (its profiles, that part of its overview alone: the row says whether the overview is read)
+          let part = station_part(core, here, only, "profiles")
+          let list = match part {
+            Some(Array(a)) => a
+            _ => []
+          }
           if list.length() == 0 {
             blocks.push(fn() {
               list_card(c, fn() {
                 list_row(c, fn() {
-                  if overview is None && flag(sv, "online") {
+                  if (overview is None || part is None) && flag(sv, "online") {
                     wait_line(c, tr("common.reading"))
                   } else {
                     row_title(
@@ -113,7 +114,13 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
               ])
             }
           }
-          offers(sv)
+          // (one station's page holds no profiles' list: its logins that part of its overview alone, while it is up)
+          if flag(sv, "online") {
+            offers(sv, match station_part(core, here, only, "machineLogins") {
+              Some(Array(a)) => a
+              _ => []
+            })
+          }
         }
       }
     }

@@ -637,11 +637,47 @@ fn adb_state(c : @ui.Ctx, view : Json?, now : Double) -> String {
 }
 
 ///|
-/// The station at `address` as the workspace's `stations` has it.
+/// The station at `address` whole, as its own page shows it (`station`: its overview, machine, profiles' groups, the
+/// runtimes it runs and their models, …): no value while the workspace's stations are not known, null where it has no
+/// such station. Asked of the workspace the address is of (`here`'s for one without it).
+pub fn station_read(core : Core, here : Here, address : String) -> Read {
+  station_read_in(core, station_scope(here, address), address)
+}
+
+///|
+fn station_read_in(core : Core, scope : String, address : String) -> Read {
+  (core.topic)("station", { "scope": str(scope), "station": str(address) }).get()
+}
+
+///|
+/// The station at `address` whole (station_read), None while not known or where there is none.
 pub fn station_of(core : Core, here : Here, address : String) -> Json? {
-  match stations_of(core, here).value {
-    Some(Array(a)) => a.iter().find_first(fn(x) { text(Some(x), "station") == address })
+  match station_read(core, here, address).value {
+    Some(Object(_)) as s => s
     _ => None
+  }
+}
+
+///|
+/// One part of station `address`'s overview (`stationPart`: `archiving`, `automaticDecisions`, `profiles`,
+/// `machineLogins`, `logins`), for a page that shows that part of every station, each station's row asking its own:
+/// None while not answered, null while its overview is not read or has none.
+pub fn station_part(core : Core, here : Here, address : String, part : String) -> Json? {
+  station_part_in(core, station_scope(here, address), address, part)
+}
+
+///|
+fn station_part_in(core : Core, scope : String, address : String, part : String) -> Json? {
+  (core.topic)("stationPart", { "scope": str(scope), "station": str(address), "part": str(part) }).get().value
+}
+
+///|
+/// The workspace a station is asked of: its address's, `here`'s for one without it.
+fn station_scope(here : Here, address : String) -> String {
+  if address.contains("/") {
+    workspace_of(address)
+  } else {
+    here.workspace
   }
 }
 

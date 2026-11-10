@@ -130,9 +130,9 @@ pub fn dv_station(v : Json) -> DvStation {
 }
 
 ///|
-/// The workspace's stations (the `stations` topic), and why they could not be read.
+/// The workspace's stations (their rows: station_rows), and why they could not be read.
 pub fn dv_stations(src : Source, ws : String) -> (Array[DvStation]?, String?) {
-  let t = src.topic("stations", { "scope": Json::string(ws), "lean": Json::boolean(true) }).get().snapshot()
+  let t = station_rows(src, ws)
   let error = match t.error {
     Some(e) => Some(text(Some(e), "message"))
     None => None
@@ -140,6 +140,23 @@ pub fn dv_stations(src : Source, ws : String) -> (Array[DvStation]?, String?) {
   match t.value {
     Some(Array(a)) => (Some(a.map(dv_station)), error)
     _ => (None, error)
+  }
+}
+
+///|
+/// The workspace's stations with a drive (their overview says one; one from before the drive has none), this machine's
+/// (`here`) first, then as the workspace lists them (the core's drive-browse.ts withDrive), and why they could not be
+/// read: of the rows every list reads, not a list of the core's own for the files.
+pub fn dv_drive_stations(src : Source, ws : String, here? : String = "") -> (Array[DvStation]?, String?) {
+  let (all, error) = dv_stations(src, ws)
+  match all {
+    Some(a) => {
+      let drives = a.filter(fn(s) { s.drive })
+      let out = drives.filter(fn(s) { here != "" && s.station == here })
+      out.append(drives.filter(fn(s) { !(here != "" && s.station == here) }))
+      (Some(out), error)
+    }
+    None => (None, error)
   }
 }
 

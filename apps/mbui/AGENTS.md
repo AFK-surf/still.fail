@@ -154,11 +154,17 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   each topic's largest value). A page subscribes to what it shows, no more (the user, 2026-11-10); a trace recorded
   anew that is sent more fails, one sent less brings its bar down. These traces' workspace is one station and a few
   chats; what each topic weighs at a workspace's real size is measured by the core's
-  `client/core-ts/test/topic-bytes.test.ts`.
+  `client/core-ts/test/topic-bytes.test.ts`. Stations so: a list reads their rows (`@settings.stations_of`, sfbase's
+  `station_rows`, one ask everywhere), a station's own page that station (`@settings.station_of`), a page showing one
+  part of every station each row's own part (`@settings.station_part`); a list never takes a station whole, and a
+  field a row lacks is the core's to add, not the list's to ask whole.
 - A replay asks the core what its run's app asked, so a way of asking brought in after a trace was recorded is
   switched by the trace's head (`@sfcore.trace_switch`, one of `trace_switches`; a recording says all of them on), and
   how many traces still replay without each only falls (`src/sfreplay/flows/trace_switches_test.mbt`; the user,
-  2026-11-10): such a trace's replay and its bytes are of an app no device runs.
+  2026-11-10): such a trace's replay and its bytes are of an app no device runs. Where the old way is gone from the app,
+  the switch is the replay's alone, which gives the new asks out of what the trace has: without `MBUI_STATION_ROWS` the
+  run's `stations` are kept by the replay (`@core.Replay::keep_stations`) and the rows, a station and its parts read
+  out of them (`src/sfreplay/source.mbt`).
 - For development stills, prepare a `scripts/media-job.sh picture` job for each source state and reuse its Wasm
   renderer across scenes; use a `film` job for video (`scripts/media-job.sh` says how).
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture

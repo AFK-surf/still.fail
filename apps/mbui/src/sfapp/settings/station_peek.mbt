@@ -220,22 +220,12 @@ fn peek_down(s : Json?) -> String {
 }
 
 ///|
-/// The station of `address` in the workspace's stations, once they are read.
+/// The station of `address` as its own page has it (`station`, of that station alone), once it is read.
 fn peek_station(core : Core, address : String) -> Json? {
-  let ws = match address.find("/") {
-    Some(i) => address.view(end_offset=i).to_owned()
-    None => address
+  match station_read_in(core, workspace_of(address), address).value {
+    Some(Object(_)) as s => s
+    _ => None
   }
-  match (core.topic)("stations", { "scope": str(ws), "lean": Json::boolean(true) }).get().value {
-    Some(Array(a)) =>
-      for x in a {
-        if text(Some(x), "station") == address {
-          return Some(x)
-        }
-      }
-    _ => ()
-  }
-  None
 }
 
 ///|

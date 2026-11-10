@@ -72,9 +72,9 @@ fn place_route_first(src : Source, w : Workspace, place : String) -> @settings.R
 }
 
 ///|
-/// The workspace's stations, as the core lists them.
+/// The workspace's stations, their rows as the core lists them.
 fn stations_listed(src : Source, w : Workspace) -> Array[Json] {
-  match src.topic("stations", { "scope": Json::string(w.id), "lean": Json::boolean(true) }).get().value {
+  match @sfbase.station_rows(src, w.id).value {
     Some(Array(a)) => a
     _ => []
   }
@@ -356,16 +356,11 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             },
           )
       }
-      // each station's own logins, not profiles yet
-      for s in stations_listed(src, w) {
-        let s = Some(s)
-        if !flag(s, "online") {
-          continue
-        }
+      // each station's own logins, not profiles yet: as the profiles' list says them (each station up that offers one)
+      for o in @settings.profiles_offers(src.topic("profiles", { "scope": Json::string(w.id) }).get().value) {
+        let s = Some(o.0)
         let station = text(s, "station")
-        let offers = items(field(s, "overview"), "machineLogins").filter(fn(l) {
-          flag(Some(l), "offered") && text(field(Some(l), "quota"), "state") != "blocked"
-        })
+        let offers = o.1.filter(fn(l) { flag(Some(l), "offered") && text(field(Some(l), "quota"), "state") != "blocked" })
         if offers.length() == 0 {
           continue
         }
@@ -448,7 +443,7 @@ let place_use : @ui.TextStyle = @ui.text_style(color=AccentText)
 /// No station picked: while they are read, said so; none in the workspace, the first to add (its scene, 添加 station).
 fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  let read = src.topic("stations", { "scope": Json::string(w.id), "lean": Json::boolean(true) }).get().value is Some(_)
+  let read = @sfbase.station_rows(src, w.id).value is Some(_)
   // (while they are read: a station's page, the one picked once they are, in its bones)
   if !read {
     @sfpages.station_waiting(c, core, here, @sf.no_frame, "Station", @sf.t("common.readingStations"))

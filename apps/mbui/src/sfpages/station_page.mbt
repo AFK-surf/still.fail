@@ -23,17 +23,15 @@ let station_part_names : Array[String] = ["overview", "processes", "settings", "
 /// its list. Its parts each as wide as the page's column (narrow, 12 from its sides, as its cards are); its head, with
 /// its name, first (narrow: in place of the large title).
 pub fn station_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String) -> Unit {
-  let topic = @settings.stations_of(core, here)
+  // (that station alone, whole: its page's own ask)
+  let topic = @settings.station_read(core, here, address)
   let manager = { let r = role_of(core, here); r == "owner" || r == "admin" }
   let back = "Station"
   match topic.value {
-    Some(Array(list)) =>
-      match list.search_by(fn(s) { text(Some(s), "station") == address }) {
-        Some(i) => station_view(c, core, here, frame, Some(list[i]), manager)
-        // (removed, or a link from before: its list)
-        None => station_waiting(c, core, here, frame, back, "")
-      }
-    _ => station_waiting(c, core, here, frame, back, @sf.t("common.readingStations"))
+    Some(Object(_)) as s => station_view(c, core, here, frame, s, manager)
+    // (removed, or a link from before: its list)
+    Some(_) => station_waiting(c, core, here, frame, back, "")
+    None => station_waiting(c, core, here, frame, back, @sf.t("common.readingStations"))
   }
 }
 

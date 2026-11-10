@@ -72,6 +72,11 @@ pub fn Flow::start(
   @sfbase.reset()
   let r = @core.Replay::parse(trace)
   use_recorded_jobs(r)
+  // (a run from before the stations' rows: its `stations` the replay's own to keep, the app's asks of them read out of
+  // those, source.mbt)
+  if !switch_was_on(r, env, "MBUI_STATION_ROWS") {
+    r.keep_stations()
+  }
   // (asks the run's timing made, with what came for them: each test says which and why)
   for text in drop {
     if r.drop(text) == 0 {

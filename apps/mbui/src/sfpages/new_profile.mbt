@@ -188,6 +188,7 @@ fn new_profile_flow_node(
             core,
             station,
             s,
+            fn() { field(field(s(), "overview"), "machineLogins") },
             fn(rt) { edit([("provider", str(if rt == "claude" { "anthropic" } else { "openai" })), ("method", str("plan"))]) },
             tips,
           )
@@ -592,16 +593,23 @@ fn new_profile_form_node(
 /// The accounts this machine's own Claude Code and Codex are signed in with, not used yet (MachineLoginOffers), in node
 /// `b`: one kept in a file used as it is (a profile on the machine's login, `profile.useMachineLogin`), one kept only in
 /// the keychain offered as a sign-in with the same account (`sign_in`, by its runtime). A refused one is said so. Each a
-/// card: its mark, words and allowance in a row 20 in, its button across its foot corners.
+/// card: its mark, words and allowance in a row 20 in, its button across its foot corners. `logins`: those of station
+/// `s`'s overview (as its page has it, or that part alone where a list shows every station's).
 fn machine_offers_node(
   b : @view.View,
   core : Core,
   station : String,
   s : () -> Json?,
+  logins : () -> Json?,
   sign_in : (String) -> Unit,
   tips : @sf.TipLayer?,
 ) -> Unit {
-  let offers = fn() { items(field(s(), "overview"), "machineLogins").filter(fn(l) { flag(Some(l), "offered") }) }
+  let offers = fn() {
+    match logins() {
+      Some(Array(a)) => a.filter(fn(l) { flag(Some(l), "offered") })
+      _ => []
+    }
+  }
   b.show(fn() { offers().length() > 0 }, fn(x) {
     @sf.style_node(x, fn() { ap_offers })
     @sf.words_node(x, fn() {
@@ -726,6 +734,7 @@ pub fn profiles_first_node(
       _ => []
     }
   }
+  let profiles = fn() { (core.topic)("profiles", { "scope": str(here().workspace) }).get().value }
   @sf.page_node(v, fn() { "Profile" }, on_back~, frame~, said?, width?, tips?, fn() { ["first"] }, fn(b, _) {
     @sf.first_one_node(
       b,
@@ -761,7 +770,8 @@ pub fn profiles_first_node(
             })
             |> ignore
             row.show(online, fn(m) {
-              machine_offers_node(m, core, address, sv, fn(rt) {
+              // (its logins offered, as the profiles' list the place holds says them)
+              machine_offers_node(m, core, address, sv, fn() { Some(Json::array(@settings.profiles_offers_of(profiles(), address))) }, fn(rt) {
                 // the machine's login signed in again as its vendor's plan, on the add page
                 add_profile_start[address] = [("provider", str(if rt == "claude" { "anthropic" } else { "openai" })), ("method", str("plan"))]
                 (core.push)(NewProfile(address))

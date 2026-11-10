@@ -85,7 +85,12 @@ export const TOPICS: Record<string, Spec> = {
   adminOverview: { account: S },
   adminRelays: { account: S, range: ["string", "skip"] },
   chats: { scope: S, mine: ["bool", "def"], watching: ["bool", "skipFalse"], hidden: ["bool", "skipFalse"], limit: ["u32", "skip"] },
-  stations: { scope: S, drive: ["bool", "skipFalse"], here: ["string", "skip"], brief: ["bool", "skipFalse"], lean: ["bool", "skipFalse"] },
+  // A list's stations, each its row (StationRow); one station's page asks that station (StationView), one part of its
+  // overview `stationPart` (`part`: one of STATION_PARTS). (`stationsWhole`, the rows with the pages and the models
+  // each can run, is the core's own: views/views.ts; no UI asks it.)
+  stations: { scope: S },
+  station: { scope: S, station: S },
+  stationPart: { scope: S, station: S, part: S },
   profiles: { scope: S },
   connects: { scope: S, mine: ["bool", "def"] },
   chat: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], compact: ["bool", "skipFalse"] },
@@ -174,6 +179,11 @@ function fits(value: unknown, kind: Param): boolean {
   }
 }
 
+/// The parts of a station's overview `stationPart` gives, each as the `station` topic's `overview` has it: what a page
+/// showing a line of every station reads (权限's archiving, 自动决策's policy of each, the profiles' page), not each
+/// station's whole page.
+export const STATION_PARTS: readonly string[] = ["archiving", "automaticDecisions", "profiles", "machineLogins", "logins"];
+
 /// A topic as the UI said it, or null when it is none (the subscribe is then no message the core knows).
 export function parseTopic(raw: unknown): Topic | null {
   if (!isObject(raw) || typeof raw.topic !== "string") return null;
@@ -194,6 +204,7 @@ export function parseTopic(raw: unknown): Topic | null {
     if (how === "skipFalse" && value === false) continue;
     out[name] = value;
   }
+  if (out.topic === "stationPart" && !STATION_PARTS.includes(out.part as string)) return null;
   return out;
 }
 
@@ -207,7 +218,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
 }
 
 const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "linkPreview", "filePeek", "messagePeek"]);
-const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "chatThings", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEWS = new Set(["chats", "stations", "station", "stationPart", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "chatThings", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.
 export function topicStation(topic: Topic): string | null {

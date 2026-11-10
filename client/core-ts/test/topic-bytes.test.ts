@@ -44,9 +44,12 @@ const station = CHAT.station;
 const key = CHAT.keys[0];
 const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
   "stations": { topic: "stations", scope: "ws" },
-  "stations lean": { topic: "stations", scope: "ws", lean: true },
-  "stations drive lean": { topic: "stations", scope: "ws", drive: true, lean: true },
-  "stations brief": { topic: "stations", scope: "ws", brief: true },
+  "station": { topic: "station", scope: "ws", station },
+  "stationPart archiving": { topic: "stationPart", scope: "ws", station, part: "archiving" },
+  "stationPart automaticDecisions": { topic: "stationPart", scope: "ws", station, part: "automaticDecisions" },
+  "stationPart profiles": { topic: "stationPart", scope: "ws", station, part: "profiles" },
+  "stationPart machineLogins": { topic: "stationPart", scope: "ws", station, part: "machineLogins" },
+  "stationPart logins": { topic: "stationPart", scope: "ws", station, part: "logins" },
   "chats": { topic: "chats", scope: "ws", mine: false, limit: 50 },
   "chats mine": { topic: "chats", scope: "ws", mine: true, limit: 50 },
   "profiles": { topic: "profiles", scope: "ws" },
@@ -78,30 +81,28 @@ const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
 /// Those over `BAR_KB` now, by the name `ASKED` gives them: what each weighs, KB rounded up to a multiple of 8.
 const OVER: Record<string, number> = {
   "connects": 1560,
-  "newChat": 544,
-  "stations": 472,
   "chat": 344,
   "chat compact": 328,
-  "stations lean": 248,
-  "stations drive lean": 248,
   "profiles": 160,
   "usage": 144,
   "chats": 88,
   "chats mine": 88,
+  "newChat": 80,
   "pick": 64,
+  "station": 56,
   "history": 56,
 };
 
 /// Those over `DELTA_BAR_KB` as something changes, by `<name>/<cause>`: the heaviest message, KB as in `OVER`.
 const OVER_DELTA: Record<string, number> = {
-  "newChat/quota": 24,
+  "newChat/quota": 8,
   "chat/quota": 8,
   "chat compact/quota": 8,
-  "stations/quota": 8,
   "pick/quota": 8,
 };
 
-/// The topics measured nowhere here, and why.
+/// The topics measured nowhere here, and why. (Not `stationsWhole`, the stations each with its page and its models:
+/// the core's own, which no UI can ask, so it is no topic of `TOPICS`; views/views.ts.)
 const RAW = "a station's raw record, no UI asks it";
 const FORM = "a form's";
 const OWN = "the device's own, does not grow with the workspace";

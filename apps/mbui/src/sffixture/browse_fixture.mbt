@@ -274,27 +274,3 @@ pub fn fix_browse_do(f : Fixture?, mode : String, name : String, params : Json) 
     Err(e) => Err(e)
   }
 }
-
-///|
-/// The stations a workspace lists, those with a drive, this machine's (`here`) first: as the core gives the `stations`
-/// topic asked with `drive` (drive-browse.ts withDrive, kept).
-pub fn fix_browse_with_drive(f : Fixture, stations : Json?, here : String) -> Json? {
-  ignore(f)
-  let stations = match stations {
-    Some(s) => s
-    None => return None
-  }
-  let kept = match @sf.kept_call.val {
-    Some(k) => k
-    None => return None
-  }
-  let ask : Json = {
-    "op": {
-      "withDrive": { "stations": stations, "here": if here == "" { Json::null() } else { Json::string(here) } },
-    },
-  }
-  match kept("browse", ask, None) {
-    Some(Ok((answer, _))) => field(Some(answer), "value")
-    _ => None
-  }
-}

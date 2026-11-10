@@ -475,6 +475,7 @@ test("a_station_down_shows_it_is_tried_again_as_soon_as_a_person_asks", async ()
   apply(host, values);
   assert.equal(linkOf(values, 1), "offline");
   subscribe(core, ui, 3, { topic: "stations", scope: "ws" });
+  subscribe(core, ui, 4, { topic: "station", scope: "ws", station: ST });
   await host.settle();
   apply(host, values);
   const shown = () => (values.get(3) as J[]).find((s) => s.station === ST);
@@ -487,7 +488,7 @@ test("a_station_down_shows_it_is_tried_again_as_soon_as_a_person_asks", async ()
   apply(host, values);
   assert.equal(linkOf(values, 1), "connecting");
   assert.equal((values.get(1) as J).retrying, true);
-  assert.deepEqual([shown().online, shown().reconnecting, shown().link.retrying], [false, false, true]);
+  assert.deepEqual([shown().online, shown().reconnecting, (values.get(4) as J).link.retrying], [false, false, true]);
   core.close();
 });
 
@@ -517,7 +518,7 @@ test("a station's profile warning follows changes to its quota", async () => {
   const { host, core, push } = await started(base());
   const ui = core.connect();
   const values = new Map();
-  subscribe(core, ui, 1, { topic: "stations", scope: "ws" });
+  subscribe(core, ui, 1, { topic: "station", scope: "ws", station: ST });
   await host.settle();
   apply(host, values);
   const profile = {
@@ -526,7 +527,7 @@ test("a station's profile warning follows changes to its quota", async () => {
     check: { state: "ok", detail: "", checkedAt: 1 },
     quota: { state: "unavailable", windows: [], checkedAt: 1, detail: "No quota returned" },
   };
-  const shown = () => (v(values, 1) as J[]).find((s) => s.station === ST);
+  const shown = () => v(values, 1) as J;
   push("overview", { ...overview, profiles: [profile] });
   await host.settle();
   apply(host, values);
@@ -1763,7 +1764,7 @@ test("a_station_saying_what_this_core_cannot_read_keeps_its_row_and_says_so", as
   apply(host, values);
   const chats = () => core.inner.store.get({ topic: "chats", scope: "ws", mine: false }) as J;
   const station = () => (values.get(1) as J[]).find((s) => s.station === ST);
-  assert.equal(station().host.hostname, "studio");
+  assert.equal(station().host.os, "macOS 26");
   assert.deepEqual(station().problems, []);
   const { memory: _gone, ...unreadable } = reading;
   push("host", unreadable);
@@ -1781,7 +1782,7 @@ test("a_station_saying_what_this_core_cannot_read_keeps_its_row_and_says_so", as
   push("host", reading);
   await host.settle();
   apply(host, values);
-  assert.equal(station().host.hostname, "studio");
+  assert.equal(station().host.os, "macOS 26");
   assert.deepEqual(station().problems, []);
   assert.equal(chats().trouble ?? null, null);
   core.close();

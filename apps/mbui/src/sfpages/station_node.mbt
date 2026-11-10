@@ -24,10 +24,12 @@ pub fn station_node(
   tips? : @sf.TipLayer,
   stint? : () -> Int = fn() { 0 },
 ) -> Unit {
+  // (that station alone, whole: none while the stations are not known, null where the workspace has no such station)
   let listed = fn() {
-    match @settings.stations_of(core, here()).value {
-      Some(Array(list)) => Some(list.iter().any(fn(s) { text(Some(s), "station") == address }))
-      _ => None
+    match @settings.station_read(core, here(), address).value {
+      Some(Object(_)) => Some(true)
+      Some(_) => Some(false)
+      None => None
     }
   }
   let manager = fn() {

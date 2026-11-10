@@ -403,15 +403,11 @@ pub fn workspace_view(core : Core, here : Here) -> Read {
 }
 
 ///|
-/// The workspace's stations (`stations`: StationView), asked `lean`: without the models each can run, which only a
-/// model's choice reads (stations_with_models).
+/// The workspace's stations as a list's rows (`stations`: each one's mark, name, how it is, its machine's meters, how
+/// many agents run on it, its drive), asked one way wherever a list shows them, so the core is asked them once. What a
+/// row does not carry is one station's page (station_of) or a part of its overview (station_part): a list never holds
+/// each station whole (the user, 2026-11-10: only what the UI shows or may show is subscribed to).
 pub fn stations_of(core : Core, here : Here) -> Read {
-  (core.topic)("stations", { "scope": str(here.workspace), "lean": Json::boolean(true) }).get()
-}
-
-///|
-/// The workspace's stations with the models each can run (StationView `models`), for what picks one.
-pub fn stations_with_models(core : Core, here : Here) -> Read {
   (core.topic)("stations", { "scope": str(here.workspace) }).get()
 }
 

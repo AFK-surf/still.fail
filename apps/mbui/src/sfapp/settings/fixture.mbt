@@ -1382,7 +1382,8 @@ fn fx_station(address : String) -> Json {
           []
         },
       ),
-      ("runtimes", []),
+      // the runtimes it runs, each with its models (its page's: the connect page asks whether one runs on its runtime)
+      ("runtimes", [obj([("runtime", str("claude")), ("models", [str("claude-opus-5-5"), str("claude-sonnet-5")])])]),
       // what its profiles have turned on (Claude 主账号's: Opus 5.5 and Sonnet 5, on claude)
       (
         "models",

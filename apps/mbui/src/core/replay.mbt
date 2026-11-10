@@ -26,6 +26,20 @@ priv struct Ev {
   /// what the run's host said of its views (`{"view":…}`, `{"still":…}`, `{"info":…}`, a player's `{"read":…}`:
   /// mbui's trace_views), the line whole: given in its place like a message in, to the Tester's host (Replay::host)
   host : Bool
+  /// a message in for one of the run's `stations` the replay keeps itself (Replay::keep_stations): which, in `kept`
+  /// (-1: none)
+  mut kept : Int
+}
+
+///|
+/// One of the run's `stations` subscriptions a replay keeps itself (Replay::keep_stations): its scope (canon), how
+/// much of each station it says (`rank`: 2 whole, 1 whole but only those with a drive, 0 brief), its value so far
+/// (its deltas applied), and when it was last given one (the replay's count of them: the latest of a rank wins).
+priv struct KeptStations {
+  scope : String
+  rank : Int
+  mut value : Json?
+  mut given : Int
 }
 
 ///|
@@ -34,7 +48,7 @@ pub struct Replay {
   /// a recorded ask's id: the id the app gave the same ask now; and the other way
   priv ids : Map[Int, Int]
   priv back : Map[Int, Int]
-  /// a recorded subscription the app asks twice now (the stations whole and brief, a tape from before the brief ask):
+  /// a recorded subscription the app asks twice now (a chats' list whole and its first rows, a tape from before those):
   /// the other ids what comes for it goes to as well; what came for it so far (its value with its deltas); and what is
   /// to be given at the next delivery (its value so far, to the one asked after)
   priv copies : Map[Int, Array[Int]]
@@ -84,6 +98,14 @@ pub struct Replay {
   priv run_settings : Json?
   /// where what the run's host said of its views goes (Replay::host)
   priv mut host_said : ((String) -> Unit)?
+  /// the run's `stations` subscriptions, kept by the replay itself (Replay::keep_stations); how many of their values
+  /// were given so far; each scope's value as last given to the app; the app's asks for a scope's stations now (its
+  /// id: the scope)
+  priv mut stations_own : Bool
+  priv kept : Array[KeptStations]
+  priv mut kept_given : Int
+  priv scope_said : Map[String, Json]
+  priv stations_asked : Map[Int, String]
 }
 
 ///|
@@ -147,7 +169,7 @@ pub fn Replay::parse(log : String) -> Replay {
           Some(String(h)) => Some(@codec.from_hex(h))
           _ => None
         }
-        evs.push({ out: true, msg: o, bytes, wall, has_wall, done: false, at: -1.0, given: -1.0, host: false })
+        evs.push({ out: true, msg: o, bytes, wall, has_wall, done: false, at: -1.0, given: -1.0, host: false, kept: -1 })
       }
       (_, Some(i)) => {
         let (wall, has_wall) = match m.get("w") {
@@ -160,7 +182,7 @@ pub fn Replay::parse(log : String) -> Replay {
           (_, Some(Number(n, ..))) => Some(Bytes::new(n.to_int()))
           _ => None
         }
-        evs.push({ out: false, msg: i, bytes, wall, has_wall, done: false, at: -1.0, given: -1.0, host: false })
+        evs.push({ out: false, msg: i, bytes, wall, has_wall, done: false, at: -1.0, given: -1.0, host: false, kept: -1 })
       }
       _ =>
         if m.get("env") is Some(Object(vars)) {
@@ -190,7 +212,7 @@ pub fn Replay::parse(log : String) -> Replay {
             Some(Number(d, ..)) => (d, true)
             _ => (0.0, false)
           }
-          evs.push({ out: false, msg: j, bytes: None, wall, has_wall, done: false, at: -1.0, given: -1.0, host: true })
+          evs.push({ out: false, msg: j, bytes: None, wall, has_wall, done: false, at: -1.0, given: -1.0, host: true, kept: -1 })
         } else {
           match (m.get("step"), m.get("w")) {
             // (a step that acts, when its input was handed to the host (`"acted":true`): the step there, at that
@@ -221,6 +243,7 @@ pub fn Replay::parse(log : String) -> Replay {
                     at: -1.0,
                     given: -1.0,
                     host: false,
+                    kept: -1,
                   })
                 }
                 None => ()
@@ -239,6 +262,7 @@ pub fn Replay::parse(log : String) -> Replay {
                     at: -1.0,
                     given: -1.0,
                     host: false,
+                    kept: -1,
                   })
                 None => ()
               }
@@ -275,9 +299,86 @@ pub fn Replay::parse(log : String) -> Replay {
     run_text,
     run_local: run_local.val,
     run_settings: run_settings.val,
+    stations_own: false,
+    kept: [],
+    kept_given: 0,
+    scope_said: {},
+    stations_asked: {},
   }
   r.advance()
   r
+}
+
+///|
+/// A run whose app asked the stations as whole lists (`stations {scope}`, `brief`, `drive`: a trace from before the
+/// core sent them as rows, its head without sfcore's MBUI_STATION_ROWS), given to an app that asks only `stations
+/// {scope}` (sfreplay's source reads its rows, a station and its parts out of that): the run's `stations` subscriptions
+/// and their unsubscriptions are the replay's own, never matched to an ask of the app's. They count as made from the
+/// start (they hold back nothing, none is unmade); what came for them comes in the run's order and time as any message in
+/// (after what the run asked before it), kept for each (its deltas applied). A scope's value is, of those that said
+/// one, the latest of the richest kind (whole, over whole with a drive only, over brief); the app's `stations {scope}`
+/// is given it at once, and whole again each time it changes, until it is let go of. Said before anything is asked
+/// (as the replay is made, before `attach`).
+pub fn Replay::keep_stations(self : Replay) -> Unit {
+  // (a kept one by the id the run gave it, while the run had it: ids are given again after a client's reset)
+  self.stations_own = true
+  let owner : Map[Int, Int] = {}
+  for e in self.evs {
+    guard e.msg is Object(m) && !e.host && !is_step(e.msg) else { continue }
+    guard id_of(m) is Some(id) else { continue }
+    if e.out {
+      match kind_of(m) {
+        "subscribe" if name_of(m) == "stations" => {
+          let t = match m.get("subscribe") {
+            Some(Object(t)) => t
+            _ => {}
+          }
+          let rank = if t.get("brief") == Some(Json::boolean(true)) {
+            0
+          } else if t.get("drive") == Some(Json::boolean(true)) {
+            1
+          } else {
+            2
+          }
+          owner[id] = self.kept.length()
+          self.kept.push({ scope: canon(t.get("scope").unwrap_or(Json::null())), rank, value: None, given: 0 })
+          e.done = true
+        }
+        "subscribe" | "call" => owner.remove(id)
+        "unsubscribe" if owner.contains(id) => {
+          e.done = true
+          owner.remove(id)
+        }
+        _ => ()
+      }
+    } else {
+      match owner.get(id) {
+        Some(k) => e.kept = k
+        None => ()
+      }
+    }
+  }
+  self.advance()
+}
+
+///|
+/// The scope's value as the run's kept `stations` say it now (Replay::keep_stations): of those that said one, the
+/// latest of the richest kind.
+fn Replay::scope_value(self : Replay, scope : String) -> Json? {
+  let mut best : KeptStations? = None
+  for k in self.kept {
+    if k.scope != scope || k.value is None {
+      continue
+    }
+    best = match best {
+      Some(b) if b.rank > k.rank || (b.rank == k.rank && b.given > k.given) => Some(b)
+      _ => Some(k)
+    }
+  }
+  match best {
+    Some(b) => b.value
+    None => None
+  }
 }
 
 ///|
@@ -451,6 +552,51 @@ pub fn Replay::deliver(
       match self.host_said {
         Some(said) => said(e.msg.stringify())
         None => ()
+      }
+      n += 1
+      self.advance()
+      continue
+    }
+    // (for one of the run's stations the replay keeps: kept, and its scope's value given whole to what asks it now,
+    // where that changed: Replay::keep_stations)
+    if e.kept >= 0 {
+      let k = self.kept[e.kept]
+      match e.msg {
+        Object(m) =>
+          match (m.get("value"), m.get("delta"), k.value) {
+            (Some(v), _, _) => k.value = Some(v)
+            (_, Some(Array(ops)), Some(was)) => k.value = Some(apply_delta(was, ops))
+            _ => ()
+          }
+        _ => ()
+      }
+      self.kept_given += 1
+      k.given = self.kept_given
+      match self.scope_value(k.scope) {
+        Some(v) if !(self.scope_said.get(k.scope) is Some(was) && physical_equal(was, v)) => {
+          self.scope_said[k.scope] = v
+          for now, scope in self.stations_asked {
+            if scope == k.scope {
+              let msg = Json::object({ "id": Json::number(now.to_double()), "value": v })
+              match to {
+                Some(post) => {
+                  self.walls.push(e.wall)
+                  post(msg.stringify(), None)
+                }
+                None => {
+                  if e.wall > self.wall {
+                    self.wall = e.wall
+                  }
+                  match self.client {
+                    Some(c) => c.receive_json(msg)
+                    None => ()
+                  }
+                }
+              }
+            }
+          }
+        }
+        _ => ()
       }
       n += 1
       self.advance()
@@ -792,6 +938,7 @@ fn is_report(m : Json) -> Bool {
 fn Replay::ready(self : Replay) -> Array[Int] {
   let firsts : Array[Int] = []
   let seen : Array[Int] = []
+  let seen_kept : Array[Int] = []
   let from = if self.first_out < self.next_in { self.first_out } else { self.next_in }
   for i in from..<self.evs.length() {
     let e = self.evs[i]
@@ -803,6 +950,14 @@ fn Replay::ready(self : Replay) -> Array[Int] {
       continue
     }
     if e.out || e.done {
+      continue
+    }
+    // (for one of the run's stations the replay keeps: made from the start, its own first coming, Replay::keep_stations)
+    if e.kept >= 0 {
+      if !seen_kept.contains(e.kept) {
+        seen_kept.push(e.kept)
+        firsts.push(i)
+      }
       continue
     }
     match e.msg {
@@ -866,7 +1021,7 @@ fn Replay::pick(self : Replay, now : Double, host_by : Double) -> Int {
 pub fn Replay::unanswered(self : Replay) -> Int {
   let mut n = 0
   for e in self.evs {
-    if !e.out && !e.done && e.msg is Object(m) && id_of(m) is Some(id) && self.ids.contains(id) {
+    if !e.out && !e.done && e.kept < 0 && e.msg is Object(m) && id_of(m) is Some(id) && self.ids.contains(id) {
       n += 1
     }
   }
@@ -979,6 +1134,29 @@ fn Replay::out(self : Replay, text : String) -> Unit {
     return
   }
   let kind = kind_of(m)
+  // The stations of a run whose own the replay keeps (Replay::keep_stations): asked, given the scope's value at the
+  // next delivery and whole again as it changes; let go of, no more.
+  if self.stations_own {
+    match id_of(m) {
+      Some(now) if kind == "subscribe" && name_of(m) == "stations" => {
+        let scope = match m.get("subscribe") {
+          Some(Object(t)) => canon(t.get("scope").unwrap_or(Json::null()))
+          _ => canon(Json::null())
+        }
+        self.stations_asked[now] = scope
+        match self.scope_said.get(scope) {
+          Some(v) => self.owed.push({ "id": Json::number(now.to_double()), "value": v })
+          None => ()
+        }
+        return
+      }
+      Some(now) if kind == "unsubscribe" && self.stations_asked.contains(now) => {
+        self.stations_asked.remove(now)
+        return
+      }
+      _ => ()
+    }
+  }
   // One asked twice now and let go of (a copy of the tape's one, given what comes for that: the changelog's page
   // left, the chats' list's card still asking its news): no ask of the run's, whose one goes on.
   match id_of(m) {
@@ -1023,26 +1201,26 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       }
     }
   }
-  // The stations asked brief (a page that only names them) or lean (without their models), a chats' list asked for its
-  // first rows (`limit`) and the changelog asked for its news alone can be answered by the whole in an older tape.
+  // A chats' list asked for its first rows (`limit`) and the changelog asked for its news alone can be answered by the
+  // whole in an older tape.
   if found < 0 && kind == "subscribe" && twin_topic(name_of(m)) {
-    let same = sig(m, refers, ignore_brief=true)
+    let same = sig(m, refers, ignore_part=true)
     for i in self.first_out..<self.evs.length() {
       let e = self.evs[i]
-      if e.out && !e.done && e.msg is Object(r) && sig(r, ref_of(r), ignore_brief=true) == same {
+      if e.out && !e.done && e.msg is Object(r) && sig(r, ref_of(r), ignore_part=true) == same {
         found = i
         break
       }
     }
   }
-  // One asked after another the tape's one went to (the whole list after the brief, or the other way): given what
+  // One asked after another the tape's one went to (the whole list after its first rows, or the other way): given what
   // came for it so far, and what comes for it from now on, as the first is.
   if found < 0 && kind == "subscribe" && twin_topic(name_of(m)) {
-    let same = sig(m, refers, ignore_brief=true)
+    let same = sig(m, refers, ignore_part=true)
     for i in 0..<self.evs.length() {
       let e = self.evs[i]
       match (e.out && e.done, e.msg, id_of(m)) {
-        (true, Object(r), Some(now)) if kind_of(r) == "subscribe" && sig(r, ref_of(r), ignore_brief=true) == same =>
+        (true, Object(r), Some(now)) if kind_of(r) == "subscribe" && sig(r, ref_of(r), ignore_part=true) == same =>
           match id_of(r) {
             Some(then) if self.ids.contains(then) => {
               match self.copies.get(then) {
@@ -1206,11 +1384,12 @@ fn name_of(m : Map[String, Json]) -> String {
 }
 
 ///|
-/// Whether topic `name` is one a page may ask a part of (the stations brief or lean, a chats' list's first rows, the
-/// changelog's news alone) where an older tape asked the whole, or both are asked in a run: answered by the tape's one
-/// (sig's `ignore_brief`).
+/// Whether topic `name` is one a page may ask a part of (a chats' list's first rows, the changelog's news alone) where
+/// an older tape asked the whole, or both are asked in a run: answered by the tape's one (sig's `ignore_part`). The
+/// stations are not: a tape from before their rows keeps its own (Replay::keep_stations), a newer one is held to them
+/// as to any topic.
 fn twin_topic(name : String) -> Bool {
-  name == "stations" || name == "chats" || name == "changelog"
+  name == "chats" || name == "changelog"
 }
 
 ///|
@@ -1221,19 +1400,14 @@ fn sig(
   refers : Int?,
   ignore_compact? : Bool = false,
   ignore_summary? : Bool = false,
-  ignore_brief? : Bool = false,
+  ignore_part? : Bool = false,
 ) -> String {
   let copy : Map[String, Json] = {}
   for k, v in m {
     if k != "id" {
       match (k, v) {
-        ("subscribe", Object(t)) if ignore_brief &&
-          (t.get("topic") == Some(Json::string("stations")) ||
-          t.get("topic") == Some(Json::string("chats")) ||
-          t.get("topic") == Some(Json::string("changelog"))) => {
+        ("subscribe", Object(t)) if ignore_part && twin_topic(name_of(m)) => {
           let asked = t.copy()
-          asked.remove("brief")
-          asked.remove("lean")
           asked.remove("limit")
           asked.remove("news")
           copy[k] = Json::object(asked)

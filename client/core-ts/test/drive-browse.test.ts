@@ -238,13 +238,14 @@ test("the files' page's tabs: arrive, open, shown, closed; kept among the prefs"
   core.close();
 });
 
-test("a folder typed by its path, among the workspace's stations with a drive; those stations, this machine's first", async () => {
+test("a folder typed by its path, among the workspace's stations with a drive; their rows say the drive each lends", async () => {
   const { core, ask, watch } = await browsing();
   assert.deepEqual(await ask("files.go", { workspace: "ws", typed: "stu:~/Pro", station: ST, abs: ROOT }), { station: ST, abs: "/Users/a/Pro", parent: "/Users/a", partial: "Pro" });
   assert.deepEqual(await ask("files.go", { workspace: "ws", typed: "A/", station: ST, abs: ROOT }), { station: ST, abs: "/Users/a/A", parent: "/Users/a/A", partial: "" });
   assert.equal(await ask("files.go", { workspace: "ws", typed: "nobody:~", station: ST, abs: ROOT }), null);
-  const stations = await watch(1, { topic: "stations", scope: "ws", drive: true, here: ST });
-  assert.deepEqual(stations().map((s: any) => s.station), [ST]);
+  // (the files' sidebar keeps those with one: the list's rows say it)
+  const stations = await watch(1, { topic: "stations", scope: "ws" });
+  assert.deepEqual(stations().filter((s: any) => s.overview?.drive != null).map((s: any) => s.station), [ST]);
   core.close();
 });
 

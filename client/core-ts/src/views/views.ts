@@ -33,7 +33,6 @@ import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
 import { archiveHintOf, badgeKindsOf, jobsSeenOf, type ArchiveHint } from "../prefs.ts";
 import { markdown, type MdStore } from "../markdown.ts";
-import { withDrive } from "../drive-browse.ts";
 import { heardFiles } from "../elsewhere.ts";
 import { isImage, near, placeFiles } from "../placed.ts";
 import { KINDS as THING_KINDS, isVideo, mediaDays, thingsHaving, thingsOf } from "../things.ts";
@@ -72,7 +71,10 @@ const DAY_MS = 86_400_000;
 /// stations hold more (2026-10-29: on a phone's Hermes, 300 rows made at once kept the first page 150 ms; 80, 60).
 export const HEAD = 80;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+/// (`stationsWhole` is the core's own: a scope's stations, each its page with the models it can run, as `stations` was
+/// before its items were rows. choose.ts reads it for a model's choice and its borrowing; no UI asks it, and protocol.ts
+/// does not offer it.)
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them.
@@ -83,6 +85,9 @@ export const chatDerive: Derive = {
     return d !== null && !decisions.dismissed(d);
   },
 };
+
+/// A station's overview and host reading as its row and its page show them (Views `#stationShownOf`).
+type StationShown = { full: Derived<J>; profile: Derived<J>; host: Derived<J>; row: Derived<J>; hostRow: Derived<J>; unreadable: Derived<boolean>; offered: Derived<J[]> };
 
 /// A station of a scope, as the workspace lists it.
 /// `joined`: the station's home is another workspace, this one it joined.
@@ -226,15 +231,13 @@ function firstRows(chats: J, limit: number): J {
   return more === 0 ? chats : { ...chats, days, more };
 }
 
-/// A station as `stations` `brief` says it (StationBrief): what names it and how it is reached.
-function stationBrief(s: J): J {
-  return {
-    station: s.station, id: s.id, name: s.name,
-    ...(s.emoji ? { emoji: s.emoji } : {}), ...(s.icon ? { icon: s.icon } : {}),
-    online: s.online, reconnecting: s.reconnecting, way: s.way ?? null,
-    running: u64(get(get(s.overview, "counts"), "running")) ?? 0,
-  };
-}
+/// What a station's row reads of its overview (OverviewRow), picked from what it says (`undefined`: not read): its
+/// row is made again only as these change, not with each of its profiles' quota or its decisions.
+const overviewRowOf = (v: Value | undefined): J => {
+  if (v === undefined || !("ok" in v) || !isObject(v.ok)) return undefined;
+  const o = v.ok as J;
+  return { viewer: o.viewer, counts: o.counts, ...(o.disk != null ? { disk: o.disk } : {}), ...(o.drive != null ? { drive: o.drive } : {}) };
+};
 
 /// Whether a station's versions offer the 测试版 switch.
 export function betaOffered(overview: J, accountInBeta: () => boolean): boolean {
@@ -645,7 +648,7 @@ export class Views implements Owner {
   /// reads it), each a computed: made again only as the station said something new, or the overview's times in words
   /// changed (present.ts reads the clock by their grain): a host reading of one station, every few seconds from each,
   /// made every station's anew, the list and the new chat's view after it (50-80 ms a time on a phone, 2026-10-31).
-  readonly #stationShown = new Map<string, { full: Derived<J>; profile: Derived<J>; host: Derived<J> }>();
+  readonly #stationShown = new Map<string, StationShown>();
   /// What reads how the vault of a workspace answers agents' requests (a chat's cards): made again as it changes.
   readonly #vaultSeen = new Marks();
   /// What reads what the views keep of their own (an update notice open, copying to a thread, a scope's rows loaded).
@@ -820,9 +823,21 @@ export class Views implements Owner {
         break;
       }
       case "stations":
-      case "settings":
+      case "stationsWhole":
         scope = view.scope as string;
         perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }, { topic: "host", station: s }, { topic: "way", station: s }];
+        break;
+      case "station":
+        scope = view.scope as string;
+        perStation = (s) => (s === view.station ? [{ topic: "link", station: s }, { topic: "overview", station: s }, { topic: "host", station: s }, { topic: "way", station: s }] : []);
+        break;
+      case "stationPart":
+        scope = view.scope as string;
+        perStation = (s) => (s === view.station ? [{ topic: "overview", station: s }] : []);
+        break;
+      case "settings":
+        scope = view.scope as string;
+        perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }];
         break;
       case "profiles":
         scope = view.scope as string;
@@ -979,7 +994,8 @@ export class Views implements Owner {
     }
     if (view.topic === "chats" || view.topic === "longJobs") topics.push({ topic: "prefs" });
     topics.push({ topic: "workspace", workspace: scope });
-    if (view.topic === "stations") topics.push({ topic: "workspaces" });
+    // (a station another workspace lent: its home's name)
+    if (view.topic === "stations" || view.topic === "station" || view.topic === "stationsWhole") topics.push({ topic: "workspaces" });
     for (const s of this.stations(scope) ?? []) {
       topics.push({ topic: "link", station: s.address });
       if (s.online) topics.push(...perStation(s.address));
@@ -1235,22 +1251,30 @@ export class Views implements Owner {
         }
         return { ok: found };
       }
-      case "stations": {
-        // Asked with `drive`: those with a drive, this machine's (`here`) first (drive-browse.ts withDrive).
-        const stations = this.#stationsView(view.scope as string, view);
-        // Asked `brief`: each as a page that only names it shows it (its mark, how it is reached), not its overview
-        // and profiles: a chat's bar had each station's whole overview, and each change of it (2026-11-08).
-        if (view.brief === true && stations !== undefined && "ok" in stations) return { ok: (stations.ok as J[]).map(stationBrief) };
-        if (view.drive !== true || stations === undefined || !("ok" in stations)) return stations;
-        return { ok: withDrive(stations.ok as J[], typeof view.here === "string" ? view.here : null) };
+      case "stations":
+        return this.#stationsOf(view.scope as string, "row");
+      case "stationsWhole":
+        return this.#stationsOf(view.scope as string, "whole");
+      case "station": {
+        const one = this.#stationsOf(view.scope as string, "page", view.station as string);
+        if (one === undefined || !("ok" in one)) return one;
+        return { ok: (one.ok as J[])[0] ?? null };
+      }
+      case "stationPart": {
+        // As its page's overview has it: the same object, made once for both.
+        const stations = this.#stationsOr(view.scope as string);
+        if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+        if (!stations.some((s) => s.address === view.station)) return { ok: null };
+        return { ok: get(this.#stationShownOf(view.station as string).full.get(), view.part as string) ?? null };
       }
       case "profiles": {
         return this.#profilesView(view.scope as string);
       }
       case "settings": {
-        const stations = this.#stationsView(view.scope as string);
-        if (stations === undefined || !("ok" in stations)) return stations;
-        return { ok: settingsView(stations.ok as J[]) };
+        // Each station's name, whether it is up and its overview: what the settings say of them, not their pages.
+        const stations = this.#stationsOr(view.scope as string);
+        if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+        return { ok: settingsView(stations.map((s) => ({ name: s.name, online: s.online, overview: this.#stationShownOf(s.address).full.get() }))) };
       }
       case "connects":
         return this.#connects(view.scope as string, view.mine === true);
@@ -1958,14 +1982,21 @@ export class Views implements Owner {
   #profilesView(scope: string): Value | undefined {
     const stations = this.#stationsOr(scope);
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
-    return { ok: workspaceProfiles(stations.map((s) => ({
+    const listed = workspaceProfiles(stations.map((s) => ({
       station: s.address,
       id: s.id,
       name: s.name,
       online: s.online,
       joined: s.joined,
       overview: this.#stationShownOf(s.address).profile.get(),
-    }))) };
+    })));
+    // What the Profile place lists beside them: each up station's own logins it could take as a profile (it read them of
+    // every station's whole overview in the list, then asked each station for them after it had opened).
+    const machineLogins = stations.flatMap((s) => {
+      const logins = s.online ? this.#stationShownOf(s.address).offered.get() : [];
+      return logins.length > 0 ? [{ station: s.address, stationName: s.name, logins }] : [];
+    });
+    return { ok: { ...listed, machineLogins } };
   }
 
   /// Which of a workspace's stations the viewer may change the mode of, as the cloud has it (cloud/src/directory.ts
@@ -1984,20 +2015,28 @@ export class Views implements Owner {
     };
   }
 
-  /// `view`: the topic asking, computed again when one of its stations has been silent long enough to say so.
-  #stationsView(scope: string, view?: Topic): Value | undefined {
+  /// A scope's stations, made in one place for the three ways they are asked: `row`, each as a list shows it
+  /// (StationRow, the `stations` topic), of nothing a row does not send (its overview's four parts, its host's line and
+  /// meters: no profiles, no models, no quota by the minute); `page`, each as its page shows it (StationView, the `station`
+  /// topic, `only` that one), all but the models it can run; `whole`, a page with those (`stationsWhole`, the core's own).
+  /// Computed again when one of its stations has been silent long enough to say so.
+  #stationsOf(scope: string, kind: "row" | "page" | "whole", only?: string): Value | undefined {
     const stations = this.#stationsOr(scope);
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
     const c = this.#clock();
     let silentNext = Infinity;
     const byId = new Map(stations.map((s) => [String(s.id), s]));
     const mine = this.#mayChangeMode(scope);
-    const items = stations.map((s) => {
-      const read = this.ok({ topic: "overview", station: s.address });
-      const hostRaw = this.ok({ topic: "host", station: s.address });
+    const row = kind === "row";
+    const items = stations.filter((s) => only === undefined || s.address === only).map((s) => {
       const parts = this.#stationShownOf(s.address);
+      // A row reads only its overview's parts it shows (`undefined`: not read; null: not readable here), and whether
+      // this core can read the rest: it says so as its page does, its overview none, as before it was a row.
+      const rowOverview = row ? parts.row.get() : undefined;
+      const read = row ? rowOverview : this.ok({ topic: "overview", station: s.address });
+      const shown = row ? (parts.unreadable.get() ? null : (rowOverview ?? null)) : parts.full.get();
+      const hostRaw = this.ok({ topic: "host", station: s.address });
       const host = parts.host.get();
-      const shown = parts.full.get();
       // What it says that this core cannot read (a station newer than the app): the row stays, saying so, and the other
       // stations' are not lost with it.
       const unreadable = (read !== undefined && shown === null) || (isObject(hostRaw) && host === null);
@@ -2030,7 +2069,7 @@ export class Views implements Owner {
       } else this.#hostless.delete(s.address);
       const blocked = !s.online && cause === "lock" && typeof get(this.link(s.address), "message") === "string" ? (get(this.link(s.address), "message") as string) : null;
       const running = u64(get(get(overview, "counts"), "running")) ?? 0;
-      return {
+      const item: J = {
         station: s.address,
         id: s.id,
         name: s.name,
@@ -2047,21 +2086,24 @@ export class Views implements Owner {
         ...(blocked !== null ? { blocked } : {}),
         lastSeen: s.lastSeen,
         version: s.version,
-        link: this.link(s.address),
-        // What this workspace's chats run on: the profiles open to it.
-        runtimes: runtimes(overview !== undefined ? servingIn(overview, scope, s.joined === true) : overview),
-        // Asked `lean`: none, what only a model's choice reads (the connect page, the model control). With each of its
-        // accounts' quota by the minute it was most of the list's bytes (463 KB of a phone's, 2026-11-10), every one of
-        // them decoded on the app's thread each time it was said.
-        models: view?.lean === true ? [] : models(overview !== undefined ? servingIn(overview, scope, s.joined === true) : overview, c.now),
         overview: shown,
-        ...stationProfileSummary(shown, s, byId),
-        host,
+        host: row ? parts.hostRow.get() : host,
         way: way === undefined ? null : present.way(way, (h) => this.relayName(h)),
-        betaOffered: betaOffered(overview, () => this.#betaOf(scope)),
         ...(s.joined ? { joined: true, home: this.#core.homeName?.(scope, s.id) ?? null } : {}),
         mine: mine(s.id),
       };
+      if (row) return item;
+      const serving = overview !== undefined ? servingIn(overview, scope, s.joined === true) : overview;
+      item.link = this.link(s.address);
+      // What this workspace's chats run on: the profiles open to it.
+      item.runtimes = runtimes(serving);
+      Object.assign(item, stationProfileSummary(shown, s, byId));
+      item.betaOffered = betaOffered(overview, () => this.#betaOf(scope));
+      // The models it can run, each with each of its accounts' quota by the minute: only a model's choice reads them
+      // (choose.ts, through `stationsWhole`). In every list's item they were most of its bytes (463 KB of a phone's,
+      // 2026-11-10), each decoded on the app's frame thread each time it was said.
+      if (kind === "whole") item.models = models(serving, c.now);
+      return item;
     });
     this.#againIn(silentNext);
     return { ok: items };
@@ -2069,7 +2111,7 @@ export class Views implements Owner {
 
   /// A station's decorated overview (`profile`: as the profiles' page reads it), and its host reading, as its list's item
   /// shows them: made once for every view that shows them, again as they or their times in words change.
-  #stationShownOf(station: string): { full: Derived<J>; profile: Derived<J>; host: Derived<J> } {
+  #stationShownOf(station: string): StationShown {
     let kept = this.#stationShown.get(station);
     if (kept) return kept;
     const overview: Topic = { topic: "overview", station };
@@ -2087,6 +2129,28 @@ export class Views implements Owner {
         const h = this.ok({ topic: "host", station });
         return h === undefined ? null : asShaped("Host", present.host(h));
       }),
+      // What its row shows of them: its overview's parts (undefined: not read), its machine's line and meters.
+      row: computed(() => {
+        const o = this.#core.store.select(overview, overviewRowOf);
+        return o === undefined ? undefined : asShaped("OverviewRow", o);
+      }),
+      hostRow: computed(() => {
+        const h = kept!.host.get();
+        return h === null ? null : asShaped("HostRow", { identity: h.identity, os: h.os, meters: h.meters });
+      }),
+      // Its overview is read and this core cannot read it (its page says so): a boolean, so that what reads it is made
+      // again only as that changes (reactive.ts: a computed whose value is the same tells its readers nothing), not
+      // with each quota or decision of a station it can read.
+      unreadable: computed(() => this.ok(overview) !== undefined && kept!.full.get() === null),
+      // Its machine's own logins offered for a profile, as its page has them (the same list while they are equal: the
+      // profiles' page is not made again with each other change of its overview).
+      offered: (() => {
+        let last: J[] = [];
+        return computed(() => {
+          const next = arr(get(kept!.full.get(), "machineLogins")).filter((l) => get(l, "offered") === true);
+          return equal(last, next) ? last : (last = next);
+        });
+      })(),
     };
     this.#stationShown.set(station, kept);
     return kept;
@@ -2122,7 +2186,17 @@ export class Views implements Owner {
         items.push({ station: s.address, stationName: s.name, connect: shown, runtimeChanges: get(v.ok, "connectRuntimeChange") === true, ...connectSessions(connect, connects, sessions, threads, this.#clock()) });
       }
     }
-    return { ok: { me, items, wait: looks.waitNote(waiting, failing, items.length === 0) } };
+    // The Slack apps the viewer made that no connect has taken yet (a station's overview has those alone: one a connect
+    // takes is let go of there), each on its station; and whether the first step is a profile: a connect runs a
+    // profile's model, and no station has one (each read). Whatever `mine` is.
+    const slackApps: J[] = [];
+    let noProfile = stations.length > 0;
+    for (const s of stations) {
+      const overview = this.ok({ topic: "overview", station: s.address });
+      for (const app of arr(get(overview, "slackApps"))) slackApps.push({ station: s.address, stationName: s.name, app });
+      if (!isObject(overview) || arr(get(overview, "profiles")).length > 0) noProfile = false;
+    }
+    return { ok: { me, items, wait: looks.waitNote(waiting, failing, items.length === 0), slackApps, noProfile } };
   }
 
   // ── a chat ──
