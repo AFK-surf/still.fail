@@ -42,6 +42,9 @@ export const ACTIONS: Record<string, Spec> = {
   "chat.find": { group: "chat", keys: ["Mod+F"], typing: "yes" },
   // the chat's outline: what people said in it, to go to one
   "chat.outline": { group: "chat", keys: ["Mod+G"], typing: "yes" },
+  // the message a person said before (after) the one the chat's list is at (Alt+Up, Alt+Down are the chats')
+  "chat.said.prev": { group: "chat", keys: ["Alt+Shift+Up"], typing: "empty" },
+  "chat.said.next": { group: "chat", keys: ["Alt+Shift+Down"], typing: "empty" },
   "chat.archive": { group: "chat", keys: ["Mod+Shift+E"], typing: "yes" },
   "panel.close": { group: "chat", keys: ["Escape"], typing: "yes" },
   // the preview beside a folder's list, shown or not (as Finder's preview pane)

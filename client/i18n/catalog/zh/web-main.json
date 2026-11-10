@@ -699,6 +699,8 @@
   "web-main.keymap.chat.archive": "归档对话",
   "web-main.keymap.chat.find": "在对话中查找",
   "web-main.keymap.chat.outline": "目录",
+  "web-main.keymap.chat.said.prev": "上一条发言",
+  "web-main.keymap.chat.said.next": "下一条发言",
   "web-main.keymap.chat.history": "执行历史",
   "web-main.keymap.chat.jobs": "服务和后台任务",
   "web-main.keymap.chat.screen": "Station 屏幕",

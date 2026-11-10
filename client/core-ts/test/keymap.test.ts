@@ -48,6 +48,12 @@ test("the_keymap_is_the_actions_own_keys_and_on_the_desktop_those_changed_there"
   assert.deepEqual(of(km, "chat.find").keys, ["Mod+F"]);
   assert.deepEqual([of(km, "chat.outline").keys, of(km, "chat.outline").group, of(km, "chat.outline").typing], [["Mod+G"], "chat", "yes"]);
   assert.equal(of(km, "chat.outline").name, t("web-main.keymap.chat.outline"));
+  // A person's message before and after: not the chats' (Alt+Up, Alt+Down).
+  assert.deepEqual(["chat.said.prev", "chat.said.next"].map((a) => [of(km, a).keys, of(km, a).group, of(km, a).typing, of(km, a).name]), [
+    [["Alt+Shift+Up"], "chat", "empty", t("web-main.keymap.chat.said.prev")],
+    [["Alt+Shift+Down"], "chat", "empty", t("web-main.keymap.chat.said.next")],
+  ]);
+  assert.equal(of(km, "chat.said.prev").labels[0], "Alt+Shift+↑");
   assert.equal(of(km, "chat.find").changed, false);
   assert.equal(of(km, "nav.back").listed, false);
   assert.equal(of(km, "nav.back").text, t("web-main.shortcuts.unset"));

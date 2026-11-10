@@ -14,6 +14,7 @@ import type { Owner } from "../core/routing.ts";
 import * as chatTabs from "../chat-tabs.ts";
 import * as decisions from "../decisions.ts";
 import { merge } from "../entries.ts";
+import { lowerBound } from "../ordered.ts";
 import { CoreError } from "../error.ts";
 import * as format from "../format.ts";
 import { t } from "../i18n.ts";
@@ -616,6 +617,10 @@ export function envOf(core: Inner): ViewsEnv {
   };
 }
 
+/// What people said in a chat as far as it is on the device (`#peopleSaid`), as read at its log's change `rev`: their
+/// messages merged, by seq (`order`, in order), and the entries that edit each message held, by the message.
+type PeopleSaid = { rev: number; messages: Map<number, J>; order: number[]; edits: Map<number, number[]> };
+
 /// How much of a line of a message found goes before the words found in a chat's outline (`chat.outline.find`), at
 /// most, and how much after that.
 const SNIPPET_LEAD = 12;
@@ -645,6 +650,8 @@ export class Views implements Owner {
   readonly #thingsKept = new Map<string, Derived<{ messages: J[]; things: ReturnType<typeof thingsOf>; whole: boolean; title: unknown } | null>>();
   /// A chat's outline's items (`#chatOutline`), by the message each was made of, and what else it was made with.
   readonly #outlineMade = new WeakMap<object, { by: unknown; offset: number; item: J }>();
+  /// What people said in the chats whose outlines were made lately (`#peopleSaid`), by station and thread.
+  readonly #peopleKept = new Map<string, PeopleSaid>();
   readonly #updateNoticesOpen = new Set<string>();
   /// The threads chats copy what is sent from here to (`ccOn`), by `<station> <thread> <to>`.
   readonly #cc = new Set<string>();
@@ -1318,7 +1325,7 @@ export class Views implements Owner {
       case "chatThings":
         return this.#chatThings(view.station as string, view.thread as number, typeof view.q === "string" ? view.q : "");
       case "chatOutline":
-        return this.#chatOutline(view.station as string, view.thread as number);
+        return timed("chat.outline", () => this.#chatOutline(view.station as string, view.thread as number));
       case "history":
         return this.#history(view.station as string, view.key as string);
       case "stationNet": {
@@ -2655,6 +2662,60 @@ export class Views implements Owner {
     return merge([...held.keys()].sort((a, b) => a - b).map((n) => held.get(n)));
   }
 
+  /// What people said in a chat (`authorKind` person) as far as it is on the device, their messages merged (entries.ts),
+  /// in order. Read whole once; then only the entries put in its log since (`Data.logPutSince`), so an agent's message
+  /// changing as it works costs that entry, not the chat's every one; whole again where what changed is not known.
+  #peopleSaid(station: string, id: number, of: number): J[] {
+    const key = `${station}/${id}`;
+    const data = this.#core.data;
+    let kept = this.#peopleKept.get(key);
+    const since = data.logPutSince("entry", station, String(id), kept?.rev ?? 0);
+    const read = (n: number): J => data.logRange("entry", station, String(id), n, n).get(n);
+    // A message as its entry and its edits held make it; null for one not a person's (or not held).
+    const made = (seq: number, edits: Map<number, number[]>): J | null => {
+      const entry = read(seq);
+      if (get(entry, "kind") !== "message" || get(entry, "authorKind") !== "person") return null;
+      return merge([entry, ...(edits.get(seq) ?? []).map(read)])[0] ?? null;
+    };
+    if (kept === undefined || since.put === null) {
+      const held = data.logRange("entry", station, String(id), 1, of);
+      const edits = new Map<number, number[]>();
+      for (const [n, e] of held) {
+        const target = get(e, "kind") === "edit" ? get(e, "target") : undefined;
+        if (typeof target === "number") edits.set(target, [...(edits.get(target) ?? []), n]);
+      }
+      const people = merge([...held.keys()].sort((a, b) => a - b).map((n) => held.get(n))).filter((m) => m.authorKind === "person");
+      kept = { rev: since.rev, messages: new Map(people.map((m) => [m.seq as number, m])), order: people.map((m) => m.seq as number), edits };
+    } else if (since.rev !== kept.rev) {
+      const { messages, order, edits } = kept;
+      const again = new Set<number>();
+      for (const n of since.put) {
+        const e = read(n);
+        if (get(e, "kind") === "edit" && typeof get(e, "target") === "number") {
+          const of_ = edits.get(e.target) ?? [];
+          if (!of_.includes(n)) edits.set(e.target, [...of_, n].sort((a, b) => a - b));
+          again.add(e.target);
+        } else again.add(n);
+      }
+      for (const seq of again) {
+        const m = made(seq, edits);
+        const at = lowerBound(order, seq);
+        if (m === null) {
+          if (messages.delete(seq)) order.splice(at, 1);
+          continue;
+        }
+        if (!messages.has(seq)) order.splice(at, 0, seq);
+        messages.set(seq, m);
+      }
+      kept.rev = since.rev;
+    }
+    this.#peopleKept.delete(key);
+    this.#peopleKept.set(key, kept);
+    // (a few chats': those open, and the last ones left)
+    for (const k of this.#peopleKept.keys()) if (this.#peopleKept.size > 6) this.#peopleKept.delete(k);
+    return kept.order.map((seq) => kept.messages.get(seq));
+  }
+
   /// A chat's outline (`chatOutline`): what people said in it, the viewer and anyone else (`authorKind` person, as its
   /// page tells its rows apart: not an agent's, not still.fail's notice), an item each, by the day, oldest first, as far
   /// as the chat is on the device (`chat.bring` reads the rest; this asks for nothing). An item is made again only as
@@ -2667,7 +2728,7 @@ export class Views implements Owner {
     const { viewer, slackUsers, members_, bots } = this.#peopleOf(station, []);
     const by = this.#steady(`outline\u0001${station}\u0001${id}`, [viewer, slackUsers, members_, bots, get(summary, "creator") ?? null]);
     const clock = this.#clock();
-    const said = this.#heldMessages(station, id, held.of).filter((m) => m.authorKind === "person");
+    const said = this.#peopleSaid(station, id, held.of);
     const items = said.map((raw) => {
       const was = this.#outlineMade.get(raw);
       if (was !== undefined && was.by === by && was.offset === clock.offsetMin) return was.item;

@@ -197,6 +197,14 @@ test("a_chats_outline_is_what_people_said_by_the_day_oldest_first_and_asks_nothi
   assert.equal(v(values, 1).count, 4);
   const ops = JSON.stringify(sent.flatMap((m) => m.delta));
   assert.ok(ops.includes("还有一件") && !ops.includes("先看列表") && !ops.includes("第二天再说"), ops);
+  // An agent's message changing as it works changes nothing of it; a person's edited, that item.
+  push("thread", { id: 7, entries: [said(2, { text: "好，我看看，改了", at: AT + 1000 })] });
+  await host.time.pass(500, 10);
+  assert.equal(host.emitted.filter(([, m]) => (m as J).id === 1).length, 0, "nothing sent");
+  push("thread", { id: 7, entries: [{ thread: 7, n: 7, kind: "edit", target: 1, ts: "7.0", authorKind: "person", author: "a@x.com", text: "先看看列表", at: AT + DAY + 2000 }] });
+  await host.time.pass(500, 10);
+  apply(host, values);
+  assert.deepEqual(v(values, 1).days.map((d: J) => d.items.map((i: J) => [i.seq, i.words])), [[[1, "先看看列表"], [3, "（文件）"]], [[5, "第二天再说"], [6, "还有一件"]]]);
   core.close();
 });
 
