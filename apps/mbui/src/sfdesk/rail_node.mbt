@@ -636,7 +636,18 @@ fn rail_card_node(anchor : @view.View, src : Source, tips : @sf.TipLayer, place 
       // (its words 10 in: what reaches out to the panel's padding, 分享卡片, drawn there)
       k.box(fn(w) {
         @sf.style_node(w, fn() { rail_card_words })
-        @sfpages.rail_card_node(w, src, fn() { @sfbase.workspace_in_view(src).0 }, place)
+        // (a figure pressed: the chats it counts, the card gone)
+        @sfpages.rail_card_node(w, src, fn() { @sfbase.workspace_in_view(src).0 }, place, go=fn(to) {
+          stop()
+          open.set(false)
+          guard @sfbase.workspace_in_view(src).0 is Some(ws) else { return }
+          // (待处理 opened, never closed by it: the bell's own press toggles it)
+          if to == "attention" {
+            attention_set(true)
+          } else {
+            rail_go_told(src, ws, to, fn(_, f) { f() })
+          }
+        })
       })
       |> ignore
     })

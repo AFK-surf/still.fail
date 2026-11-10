@@ -18,6 +18,36 @@ test "wide: the rail's 对话 and 用量 places, the pointer resting on each, sa
 }
 
 ///|
+test "wide: a figure of 对话's card pressed opens the chats it counts (2026-11-10 用户「这里面不能点击跳转，光告诉我有几个没用啊」): 等你处理, 出错, 未读 待处理's panel, 今天归档 the archive; the card gone" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  t.host_says_finger(Some(false))
+  for figure in ["等你处理 2", "出错 1", "未读 4"] {
+    rail_card_figure_pressed(t, figure)
+    assert_true(@sfdesk.wide.attention_open.get(), msg=figure)
+    assert_true(t.find("3 个对话正在运行") is None, msg=figure + ": its card gone")
+    t.key_told(@ui.key_escape, 0, t.time())
+    t.draw()
+    assert_true(!@sfdesk.wide.attention_open.get(), msg=figure)
+  }
+  rail_card_figure_pressed(t, "今天归档 8")
+  assert_true(app.nav.top() == Archived)
+  assert_true(t.find("3 个对话正在运行") is None, msg="今天归档: its card gone")
+}
+
+///|
+/// 对话's card opened as the pointer rests on its place, its figure `figure` (as a screen reader names it) pressed.
+fn rail_card_figure_pressed(t : @ui.Tester, figure : String) -> Unit raise {
+  let (x, y, w, h) = t.query(Button, label="对话").unwrap().rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  let (fx, fy, fw, fh) = t.query(Button, label=figure).unwrap().rect
+  t.move(fx + fw / 2.0, fy + fh / 2.0)
+  t.tap(fx + fw / 2.0, fy + fh / 2.0)
+  t.draw()
+}
+
+///|
 /// The card over the rail's place `label` as the pointer rests on it: each of `words` in it, nothing of it against the
 /// corners' rule or too faint; gone once the pointer has left.
 fn rail_card_shown(t : @ui.Tester, label : String, words : Array[String]) -> Unit raise {

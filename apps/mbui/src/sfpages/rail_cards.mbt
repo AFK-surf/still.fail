@@ -7,8 +7,15 @@
 
 ///|
 /// Place `place`'s card of the workspace `ws` says (chats, usage) as nodes in `parent`, as its core says it now: its
-/// line, its figures side by side, the last 7 days as bars, its lines, 分享卡片 where the core offers it.
-pub fn rail_card_node(parent : @view.View, src : Source, ws : () -> Workspace?, place : String) -> Unit {
+/// line, its figures side by side, the last 7 days as bars, its lines, 分享卡片 where the core offers it. A figure the
+/// core says opens a place (`go`: 对话's, the chats it counts) is pressed for it: `go` given that place.
+pub fn rail_card_node(
+  parent : @view.View,
+  src : Source,
+  ws : () -> Workspace?,
+  place : String,
+  go? : (String) -> Unit = fn(_) {  },
+) -> Unit {
   let card = fn() {
     match ws() {
       Some(w) => src.topic("railCard", { "scope": Json::string(w.id), "place": Json::string(place) }).get().value
@@ -21,7 +28,27 @@ pub fn rail_card_node(parent : @view.View, src : Source, ws : () -> Workspace?, 
     b.show(fn() { items(card(), "stats").length() > 0 }, fn(row) {
       @sf.style_node(row, fn() { rc_stats })
       row.each(fn() { items(card(), "stats") }, fn(s) { text(Some(s), "label") }, fn(st, s) {
-        @sf.style_node(st, fn() { rc_stat }, in_row=true)
+        let to = fn() { text(Some(s.get()), "go") }
+        @sf.style_node(st, fn() { if to() == "" { rc_stat } else { rc_stat_go } }, in_row=true)
+        st
+        .presses(By(fn() { to() != "" }))
+        .focusable(By(fn() { to() != "" }))
+        .says(By(fn() {
+          if to() == "" {
+            None
+          } else {
+            Some(@view.said(Button, label=text(Some(s.get()), "label") + " " + text(Some(s.get()), "value")))
+          }
+        }))
+        .on_press(fn() {
+          let p = @signals.untracked(to)
+          if p != "" {
+            go(p)
+          }
+        })
+        // (its ground the hover's as the hand is on it)
+        .ground(By(fn() { if to() != "" && @sf.lit_node(st) { @sf.theme().p.hover } else { 0L } }))
+        |> ignore
         @sf.words_node(st, fn() { text(Some(s.get()), "value") }, fn() { rc_value.then(toned(text(Some(s.get()), "tone"))) })
         |> ignore
         @sf.words_node(st, fn() { text(Some(s.get()), "label") }, fn() { rc_label }) |> ignore
@@ -112,6 +139,14 @@ let rc_stats : @ui.Style = @ui.css("row w=Full gap=S3")
 ///|
 // kept across runs: a value (no field of it changes)
 let rc_stat : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
+
+///|
+/// A figure that opens the chats it counts: its ground out past its words, 6 at its sides (the figures 12 apart: the
+/// grounds of two side by side meet, never overlap) and 4 above and under, its words where they were.
+// kept across runs: a value (no field of it changes)
+let rc_stat_go : @ui.Style = rc_stat.then(@ui.css("px=S1_5 py=S1 radius=Inner")).then(
+  @ui.style(mx=@sf.room_of(-6.0), my=@sf.room_of(-4.0)),
+)
 
 ///|
 /// A figure's value, large as a title, over what it is of.

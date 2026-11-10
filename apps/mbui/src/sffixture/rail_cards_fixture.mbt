@@ -7,18 +7,26 @@ pub fn fixture_rail_card(params : Map[String, Json]) -> Json? {
     Some(String(p)) => p
     _ => ""
   }
-  let stat = fn(value : String, label : String, tone : String) -> Json {
-    if tone == "" {
-      { "value": Json::string(value), "label": Json::string(label) }
-    } else {
-      { "value": Json::string(value), "label": Json::string(label), "tone": Json::string(tone) }
+  let stat = fn(value : String, label : String, tone : String, go? : String = "") -> Json {
+    let s : Map[String, Json] = { "value": Json::string(value), "label": Json::string(label) }
+    if tone != "" {
+      s["tone"] = Json::string(tone)
     }
+    if go != "" {
+      s["go"] = Json::string(go)
+    }
+    Json::object(s)
   }
   match place {
     "chats" =>
       Some({
         "head": "3 个对话正在运行",
-        "stats": [stat("2", "等你处理", "amber"), stat("1", "出错", "red"), stat("4", "未读", ""), stat("8", "今天归档", "")],
+        "stats": [
+          stat("2", "等你处理", "amber", go="attention"),
+          stat("1", "出错", "red", go="attention"),
+          stat("4", "未读", "", go="attention"),
+          stat("8", "今天归档", "", go="archive"),
+        ],
         "rows": [],
       })
     "usage" => {
