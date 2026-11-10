@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [a657d7e50](https://github.com/AFK-surf/still.fail/commit/a657d7e50e1875f5ed9046a59f9a06bdb1b2e292) cloud: the feedback monitor's token marks a report | 1.75 | 2.33 | 9.7 | 28.26 | 33.94 | 25.23 | 46.33 | 93.28 | 184.86 |
 | [7d8b45941](https://github.com/AFK-surf/still.fail/commit/7d8b45941d08c6954c1a9a8d3a34a40d3f3de25c) sf: a sheet of nodes over another sheet dims what  | 1.75 | 2.33 | 9.7 | 28.26 | 33.93 | 25.23 | 46.33 | 92.96 | 182.39 |
 | [69498a638](https://github.com/AFK-surf/still.fail/commit/69498a6383679696333fbca1ed435e6aeff4203f) mbui: a field of the window's tree blinks its care | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.54 | 186.58 |
 | [7c61114b4](https://github.com/AFK-surf/still.fail/commit/7c61114b4838f8fd673ff6d330c04a8f7d388946) app: which station a favorite folder is chosen on  | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.62 | 131.92 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [181c034b0](https://github.com/AFK-surf/still.fail/commit/181c034b00968d3d452dea3090801c75f0825841) mbui: Anim and Way read the old view's Ctx they ar | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.17 | 46.1 | 93.36 | 140.6 |
 | [ddf2feea3](https://github.com/AFK-surf/still.fail/commit/ddf2feea390bf276ff74c483804ae88dd2251874) mbui: Home's news and update cards made once, as n | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 93.18 | 136.32 |
 | [1fd232e1f](https://github.com/AFK-surf/still.fail/commit/1fd232e1f0935aa7ee629680c5e10ee307f3cda3) app: the page that shares a chat as a picture come | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 93.49 | 143.42 |
-| [df36baaac](https://github.com/AFK-surf/still.fail/commit/df36baaacbb00f521e3df89269e30385f07b1ab0) app: a share card's night comes in with its pictur | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 93.49 | 155.56 |
