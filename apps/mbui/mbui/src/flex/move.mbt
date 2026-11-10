@@ -56,24 +56,183 @@ pub fn move_at(t : Double) -> Double {
 }
 
 ///|
+/// Where a Move is `t` ms into its `dur`: `d` off its end as it set out, going `v` (per ms, of the same units) then
+/// (what it was told to go on from: a move under way, the hand's speed as it let go). A critically damped spring's way
+/// (ω = move_k / dur), its rest at `dur` made exact by taking off what it would still have left there in the measure
+/// of a Move from rest (so from rest it is move_at's way, and it leaves as fast as `v`). Its offset from its end and how
+/// fast it goes (per ms).
+pub fn move_path(d : Double, v : Double, t : Double, dur : Double) -> (Double, Double) {
+  if dur <= 0.0 || t >= dur {
+    return (0.0, 0.0)
+  }
+  if t <= 0.0 {
+    return (d, v)
+  }
+  let w = move_k / dur
+  let b = v + w * d
+  let at = fn(t : Double) {
+    let e = @dmath.exp(-w * t)
+    ((d + b * t) * e, (b - w * (d + b * t)) * e)
+  }
+  let (x, xv) = at(t)
+  let (xt, _) = at(dur)
+  // a Move's way and speed at t (per ms)
+  let s = move_k * t / dur
+  let m = (1.0 - (1.0 + s) * @dmath.exp(-s)) / move_end
+  let mv = s * @dmath.exp(-s) * move_k / dur / move_end
+  (x - xt * m, xv - xt * mv)
+}
+
+///|
+/// How far (points) what goes `v` points a ms is carried as it is told to stop: as far as a Move from that speed
+/// slows to rest on its own way (move_path from `v` with nothing left of it then: ω·d + v = 0, as long as move_ms has a
+/// way that far), never past it and back.
+pub fn move_stop_points(v : Double) -> Double {
+  let speed = v.abs()
+  if speed <= 0.0 {
+    return 0.0
+  }
+  let mut d = speed * 200.0
+  for _ in 0..<8 {
+    d = speed * move_ms(d) / move_k
+  }
+  d
+}
+
+///|
+/// How slow (points a ms), at the least, a way set off again at speed has to have got, slowing, before it sets out for
+/// where it goes (come_turn_out): a hundredth of a point a ms, too slow to be seen turning; one set out no faster than
+/// that sets out for it at once, as one set out from rest does, so that a speed a little toward where it goes and a
+/// little away from it go nearly the same way.
+let come_turn_least : Double = 0.01
+
+///|
+/// What share of the speed it set out at a way set off again at speed has slowed to as it sets out for where it goes
+/// (come_turn_out), where that is more than come_turn_least: 2.5%, half way through its slowing (e^-move_k/2), so that
+/// what went fast turns back as soon as it is slow, not hanging near its turn on the long tail of its slowing (the
+/// coordinator of the migration, 2026-11-10).
+let come_turn_share : Double = 0.025
+
+///|
+/// When (ms after it set out) a way set off again at `v` turned away from where it goes sets out for it: once its
+/// slowing (come_turn, `t1` long, ω = move_k / t1) has brought it down to the more of come_turn_share of `v` and
+/// come_turn_least; at once where it went no faster than that. A moment of the way's own, worked out of its speed
+/// alone, and the same either side of where the two meet (|v| 0.4: ln 40 = 3.7 = move_k / 2).
+fn come_turn_out(v : Double, t1 : Double) -> Double {
+  let speed = v.abs()
+  let slow = fmax(come_turn_least, come_turn_share * speed)
+  if speed <= slow || t1 <= 0.0 {
+    0.0
+  } else {
+    fmin(t1, @dmath.ln(speed / slow) * t1 / move_k)
+  }
+}
+
+///|
+/// A way set off again at `v` (points a ms): how far it is carried on, slowing to rest (move_stop_points, signed as
+/// `v`), and how long that takes.
+fn come_turn(v : Double) -> (Double, Double) {
+  if v == 0.0 {
+    return (0.0, 0.0)
+  }
+  let d = move_stop_points(v)
+  (if v > 0.0 { d } else { -d }, move_ms(d))
+}
+
+///|
+/// Whether a way from `from` to `goal` set out at `v` goes toward `goal` already (so not turned: a Move on from that
+/// speed, come_way).
+fn come_toward(from : Double, v : Double, goal : Double) -> Bool {
+  v * (goal - from) > 0.0
+}
+
+///|
+/// How long (ms) a way from `from` tall to `goal`, set out at `v` (points a ms), takes: carried on slowing to rest
+/// (come_turn), and once slow (come_turn_out) a Move from rest to `goal`, as long as how far that is; set out toward
+/// `goal`, a Move on from `v` (come_toward).
+pub fn come_way_ms(from : Double, v : Double, goal : Double) -> Double {
+  if come_toward(from, v, goal) {
+    return move_ms((goal - from).abs())
+  }
+  let (s, t1) = come_turn(v)
+  let far = (goal - from - s).abs()
+  let t2 = if far < 0.5 { 0.0 } else { move_ms(far) }
+  if v == 0.0 {
+    t2
+  } else {
+    fmax(t1, come_turn_out(v, t1) + t2)
+  }
+}
+
+///|
+/// Where a way from `from` tall to `goal`, set out at `v` (points a ms), has got `t` ms on, and how fast it goes (points
+/// a ms): on from `v`, slowing to rest as far as that speed carries it (come_turn), and once slow (come_turn_out) a
+/// Move from rest to `goal` (none set out at speed: that Move alone; set out toward `goal`: a Move on from `v`,
+/// come_toward). Its speed the same as `v` as it sets out, whichever way that is (the coordinator of the migration,
+/// 2026-11-10: a show's node called back as it closes its room, on from as fast as it went), turning over frames, never
+/// within one; a little toward `goal` and a little away from it, nearly the same way.
+fn come_way(from : Double, v : Double, goal : Double, t : Double) -> (Double, Double) {
+  // (going toward where it goes already: a Move on from that speed, not slowed to rest on the way, stalling)
+  if come_toward(from, v, goal) {
+    let (off, ov) = move_path(from - goal, v, t, move_ms((goal - from).abs()))
+    return (goal + off, ov)
+  }
+  let (s, t1) = come_turn(v)
+  let (x, xv) = if v == 0.0 {
+    (from, 0.0)
+  } else {
+    let (off, ov) = move_path(-s, v, t, t1)
+    (from + s + off, ov)
+  }
+  let far = goal - from - s
+  let t2 = t - come_turn_out(v, t1)
+  if t2 <= 0.0 {
+    return (x, xv)
+  }
+  let dur = if far.abs() < 0.5 { 0.0 } else { move_ms(far.abs()) }
+  if dur <= 0.0 || t2 >= dur {
+    return (x + far, xv)
+  }
+  let (off, ov) = move_path(-far, 0.0, t2, dur)
+  (x + far + off, xv + ov)
+}
+
+///|
 /// How tall an item coming or going is laid out (Style's come_*), `natural` tall: where its way from `come_from` to
-/// `come_to` of `natural` has got at `come_now`, its end (`come_ends`) said by a Move as long as how far that is the
-/// first time it is laid out so, kept from then; NaN once it is there. `come_k` its share of `natural` (0 … 1), for the
-/// gap before it.
+/// `come_to` of `natural`, set out at `come_v` (come_way), has got at `come_now`, its end (`come_ends`) said as long as
+/// that way the first time it is laid out so, kept from then; NaN once it is there. `come_k` its share of `natural`
+/// (0 … 1), for the gap before it.
 fn come_height(s : Style, natural : Double) -> Double {
   let goal = s.come_to * natural
+  s.come_goal = goal
   if !known(s.come_ends) {
-    // (nowhere to go: there at once)
-    let far = (goal - s.come_from).abs()
-    s.come_ends = s.come_at + (if far < 0.5 { 0.0 } else { move_ms(far) })
+    s.come_ends = s.come_at + come_way_ms(s.come_from, s.come_v, goal)
   }
   let dur = s.come_ends - s.come_at
-  let t = if dur > 0.0 { (s.come_now - s.come_at) / dur } else { 1.0 }
-  if t >= 1.0 {
+  let t = s.come_now - s.come_at
+  if dur <= 0.0 || t >= dur {
     s.come_k = fmax(fmin(s.come_to, 1.0), 0.0)
     return if s.come_to >= 1.0 { 0.0 / 0.0 } else { goal }
   }
-  let tall = fmax(s.come_from + (goal - s.come_from) * move_at(t), 0.0)
+  let (tall, _) = come_way(s.come_from, s.come_v, goal, t)
+  let tall = fmax(tall, 0.0)
   s.come_k = if natural > 0.0 { fmax(fmin(tall / natural, 1.0), 0.0) } else { s.come_to }
   tall
+}
+
+///|
+/// How tall an item coming or going (Style's come_*) is at moment `at` on its way as it was last laid out, and how fast
+/// its height goes then (points a ms): what a way set off again then goes on from (come_way). None: on no way, or one
+/// not laid out yet.
+pub fn come_state(s : Style, at : Double) -> (Double, Double)? {
+  if !known(s.come_now) || !known(s.come_at) || !known(s.come_ends) || !known(s.come_goal) {
+    return None
+  }
+  let dur = s.come_ends - s.come_at
+  let t = at - s.come_at
+  if dur <= 0.0 || t >= dur {
+    return Some((s.come_goal, 0.0))
+  }
+  let (tall, v) = come_way(s.come_from, s.come_v, s.come_goal, t)
+  Some((fmax(tall, 0.0), v))
 }

@@ -6681,7 +6681,11 @@ pub fn[K : Eq] View::pick(
         let tall = match had.val {
           Some((_, v)) => {
             // (one over what holds it, or along a row, took none of the column's room)
-            let tall = if v.live() is Some(n) && slot.tree.in_column(v.at) { n.flex.height } else { 0.0 }
+            let tall = if v.live() is Some(n) && slot.tree.in_column(v.at) {
+              tall_now(n, slot.tree.cause_now())
+            } else {
+              0.0
+            }
             // (going in another's place: what it holds told it starts leaving, then let go)
             slot.tree.tell_leaving(v.at)
             slot.drop(v)
@@ -7049,7 +7053,7 @@ fn View::come_back(self : View, v : View) -> Unit {
       }
       None => ()
     }
-    self.comes(v, n.flex.height, 1.0) |> ignore
+    self.comes(v, tall_now(n, now), 1.0) |> ignore
   }
   self.tree.marked()
 }
@@ -7076,12 +7080,25 @@ fn View::comes(self : View, v : View, from : Double, to : Double) -> Bool {
   }
   let st = n.flex.style
   let at = tree.cause_now()
+  // (set off again on its way: from where that way had it at this moment and as fast, not from rest, stopped dead as
+  // it turned. Its end and how tall it goes to are known by then whether a frame was drawn since or not: going, it goes
+  // to nothing, said with it (below); coming, it is measured as the change that said it is over (after_flush, below).
+  // Only one said in this same change is not known yet: from where it was laid out last, at rest, as no frame can come
+  // between them. Nothing is laid out or measured here, in the middle of a change: that leaves stale measures or
+  // half-run bindings (the coordinator of the migration, 2026-11-10))
+  let (from, speed) = match (n.coming, @flex.come_state(st, at)) {
+    (true, Some((tall, speed))) => (tall, speed)
+    _ => (from, 0.0)
+  }
   st.come_from = from
+  st.come_v = speed
   st.come_to = to
+  // (how tall it goes to: nothing, or what it comes to, its layout's)
+  st.come_goal = if to <= 0.0 { 0.0 } else { 0.0 / 0.0 }
   st.come_at = at
   st.come_now = at
-  // (going: as long as a Move as tall as it is; coming, as far as what it comes to, the first time it is laid out)
-  st.come_ends = if to <= 0.0 { at + @flex.move_ms(from) } else { 0.0 / 0.0 }
+  // (going: as long as its way to nothing; coming, as far as what it comes to, the first time it is laid out)
+  st.come_ends = if to <= 0.0 { at + @flex.come_way_ms(from, speed, 0.0) } else { 0.0 / 0.0 }
   n.coming = true
   n.look.clips = true
   (n.come_off)()
@@ -7167,6 +7184,16 @@ fn View::comes(self : View, v : View, from : Double, to : Double) -> Bool {
 }
 
 ///|
+/// How tall node `n` is at moment `at`: on its way in or out, where that way has it then (flex's come_state), whether a
+/// frame has laid it out since the way was said or not; else as it was laid out last.
+fn tall_now(n : Node, at : Double) -> Double {
+  match (n.coming, @flex.come_state(n.flex.style, at)) {
+    (true, Some((h, _))) => h
+    _ => n.flex.height
+  }
+}
+
+///|
 /// Node `v`, one this slot's show or each lets go: down a column (View::comes) closing its way as it leaves over as
 /// long as that takes and no shorter than `ms` (View::leave), what it and what it holds bind at rest meanwhile where
 /// nothing of it was said to go over a time (`ms` 0: drawn as it was, nothing of it worked out again); else, or
@@ -7175,7 +7202,9 @@ fn View::goes(self : View, v : View, ms : Double, at_once : Bool, swaps? : Bool 
   // (it and what it holds told it starts leaving before any of it is put to rest (View::rests, below))
   self.tree.tell_leaving(v.at)
   if !at_once && v.live() is Some(n) {
-    let tall = n.flex.height
+    // (as tall as it is at this moment: on its way, where that way has it (flex's come_state), whether a frame has laid
+    // it out since or not; else as it was laid out last)
+    let tall = tall_now(n, self.tree.cause_now())
     // (nothing tall: nothing to close)
     if tall < 0.5 || !self.tree.in_column(v.at) {
       self.leave(v, ms)
@@ -7194,7 +7223,8 @@ fn View::goes(self : View, v : View, ms : Double, at_once : Bool, swaps? : Bool 
       }
     }
     if self.comes(v, tall, 0.0) {
-      let way = @flex.move_ms(tall)
+      // (as long as its way closing: on from as fast as it opened, where it was opening)
+      let way = n.flex.style.come_ends - self.tree.cause_now()
       if ms <= 0.0 && n.come_wake is None {
         n.come_wake = Some(v.rests())
       }

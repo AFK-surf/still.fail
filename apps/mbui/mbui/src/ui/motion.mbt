@@ -107,15 +107,7 @@ pub let move_most_ms : Double = @flex.move_most_ms
 /// slows to rest on its own way (move_path from `v` with nothing left of it then: ω·d + v = 0, as long as move_ms has a
 /// way that far), never past it and back.
 pub fn move_stop_points(v : Double) -> Double {
-  let speed = v.abs()
-  if speed <= 0.0 {
-    return 0.0
-  }
-  let mut d = speed * 200.0
-  for _ in 0..<8 {
-    d = speed * move_ms(d) / move_k
-  }
-  d
+  @flex.move_stop_points(v)
 }
 
 ///|
@@ -125,25 +117,7 @@ pub fn move_stop_points(v : Double) -> Double {
 /// of Ease::Move (so from rest it is Ease::Move's way, and it leaves as fast as `v`). Its offset from its end and how
 /// fast it goes (per ms).
 pub fn move_path(d : Double, v : Double, t : Double, dur : Double) -> (Double, Double) {
-  if dur <= 0.0 || t >= dur {
-    return (0.0, 0.0)
-  }
-  if t <= 0.0 {
-    return (d, v)
-  }
-  let w = move_k / dur
-  let b = v + w * d
-  let at = fn(t : Double) {
-    let e = @dmath.exp(-w * t)
-    ((d + b * t) * e, (b - w * (d + b * t)) * e)
-  }
-  let (x, xv) = at(t)
-  let (xt, _) = at(dur)
-  // Ease::Move's way and speed at t (per ms)
-  let s = move_k * t / dur
-  let m = (1.0 - (1.0 + s) * @dmath.exp(-s)) / move_end
-  let mv = s * @dmath.exp(-s) * move_k / dur / move_end
-  (x - xt * m, xv - xt * mv)
+  @flex.move_path(d, v, t, dur)
 }
 
 ///|
