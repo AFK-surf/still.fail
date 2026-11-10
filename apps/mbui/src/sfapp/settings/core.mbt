@@ -136,8 +136,6 @@ pub(all) enum Route {
   Archive
   /// this device's adb lent to a station's agents, by the station's address
   AdbShare(String)
-  /// the person's own lock, from 安全
-  PersonalLock
   /// a new profile on a station (NewProfileScreen), by its address
   NewProfile(String)
   /// an account on several stations (ProfileAccountScreen), by its key in the workspace's profiles
@@ -656,7 +654,9 @@ pub fn route_of(name : String) -> Route? {
           match what {
             "station" => Some(Station(arg))
             "adb" => Some(AdbShare(arg))
-            "personal-lock" => Some(PersonalLock)
+            // (the person's own lock's page of before: the devices that approve phone debugging are 共享调试's now,
+            // the user, 2026-11-10; its links keep working)
+            "personal-lock" => Some(AdbShare(""))
             "new-profile" => Some(NewProfile(arg))
             "vault-item" => Some(VaultItem(address, id))
             "policy" => Some(AutoPolicy(arg))

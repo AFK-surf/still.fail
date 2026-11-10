@@ -16,10 +16,12 @@ fn settings_rows_shown(t : @ui.Tester, labels : Array[String], edge : Double) ->
 
 ///|
 /// Every row's words in the list's order (the settings' fixture's: 林, 星火工作室) with keyboard and mouse.
+/// 共享调试 among them on a computer too (every app's but the web's, 2026-11-10: the devices that approve phone
+/// debugging are its page's, their own page under 安全 gone).
 // kept across runs: a table, never written
 let settings_list_order : Array[String] = [
   "林", "星火工作室", "安全", "密钥", "Station", "连接", "Profile", "自动决策", "记忆", "归档", "用量", "外观", "通知", "快捷键",
-  "本机 Station", "本机缓存", "关于",
+  "本机 Station", "共享调试", "本机缓存", "关于",
 ]
 
 ///|

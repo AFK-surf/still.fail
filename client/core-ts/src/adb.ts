@@ -845,7 +845,8 @@ export class Adb {
         ...shown,
         ...(sub !== null ? { sub } : {}),
         ...(whole.status === "granted" ? { held: this.#holds(whole) !== null, unsigned: whole.signed == null } : {}),
-        ...(whole.status === "pending" && standing !== "member" ? { join: true } : {}),
+        // (no lock yet is no step: allowing it begins the lock by itself, PersonalLock.signGrant)
+        ...(whole.status === "pending" && (standing === "outside" || standing === "replaced") ? { join: true } : {}),
         ...(this.#old.has(whole.station) ? { oldStation: true } : {}),
       };
       const key = JSON.stringify([g.station, grantChat(g)]);

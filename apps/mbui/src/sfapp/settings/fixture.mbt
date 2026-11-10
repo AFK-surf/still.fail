@@ -577,8 +577,8 @@ pub fn fixture_page(mode : String) -> String {
       "stations"
     "settings-adb" | "settings-adb-off" | "settings-adb-unpaired" | "settings-adb-pairing" | "settings-adb-connected" | "settings-adb-failed" =>
       "adb:ws1/st1"
-    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-unsigned" | "settings-adb-gate-none" | "settings-adb-gate-code" | "settings-adb-idle" => "adb:"
-    "settings-adb-lock-member" | "settings-adb-lock-outside" | "settings-adb-lock-code" | "settings-adb-lock-replaced" => "personal-lock:"
+    "settings-adb-chats" | "settings-adb-chats-off" | "settings-adb-chats-long" | "settings-adb-unsigned" | "settings-adb-gate-none" | "settings-adb-gate-code" | "settings-adb-idle" | "settings-adb-lock-member" | "settings-adb-lock-outside" =>
+      "adb:"
     // the second station a phone is lent to, its first paired already
     "settings-adb-second" => "adb:ws1/st2"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-share" | "settings-profile-login" | "settings-profile-login-station" =>
@@ -3410,7 +3410,7 @@ fn fx_adb_share() -> Json {
     )
   }
   match fx_adb.val {
-    // the person's own lock on the page: this device on it, outside it, or asked for a code
+    // the person's own lock on 共享调试: this device on it (its devices listed, two), or to be approved by one
     "lock-member" =>
       lent("connected", [
         ("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("member")), ("devices", Json::array([
@@ -3419,18 +3419,14 @@ fn fx_adb_share() -> Json {
         ]))])])),
         ("toConfirm", Json::number(2.0)),
       ])
-    // 共享调试 off the person's own lock: none yet, or this device joining one (the page is the lock's step alone)
+    // 共享调试 with no lock of the person's own yet (the page as it is: allowing a request begins it), or this device
+    // typing the code a trusted device of theirs shows (the page is that step alone)
     "gate-none" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("none")), ("devices", Json::array([]))])]))])
     "gate-code" =>
       lent("connected", [
         ("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("outside")), ("devices", Json::array([])), ("pair", obj([("state", str("code")), ("devices", Json::number(1.0)), ("untilText", str("14:05 前有效")), ("showing", Json::array([str("MacBook Pro")]))]))])])),
       ])
     "lock-outside" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("outside")), ("devices", Json::array([]))])]))])
-    "lock-code" =>
-      lent("connected", [
-        ("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("outside")), ("devices", Json::array([])), ("pair", obj([("state", str("code")), ("devices", Json::number(1.0)), ("untilText", str("14:05 前有效")), ("showing", Json::array([str("MacBook Pro")]))]))])])),
-      ])
-    "lock-replaced" => lent("connected", [("personal", Json::array([obj([("sub", str("s")), ("email", str("lin@example.com")), ("standing", str("replaced")), ("devices", Json::array([]))])]))])
     "unpaired" => lent("unpaired", [])
     "pairing" => lent("unpaired", [("pairPort", Json::number(37115.0))])
     "connected" => lent("connected", [("tunnels", Json::number(1.0))])

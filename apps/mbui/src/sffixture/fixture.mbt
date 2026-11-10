@@ -975,15 +975,32 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
       }
     // a chat's files downloaded (downloads_fixture.mbt)
     "downloads" => Some(fixture_downloads_topic())
-    // the phone's 共享调试 as a request's card for it goes by: its switch on (chat-phone-off: off)
+    // the phone's 共享调试 as a request's card for it goes by: its switch on (chat-phone-off: off); this device off the
+    // person's own lock, its request to be approved first (chat-phone-outside), or no lock of theirs yet, the request
+    // as the core says it then: nothing first (chat-phone-none)
     "adbShare" if f.mode.has_prefix("chat-phone") =>
       Some({
         "sharing": false,
         "phase": "off",
         "tunnels": 0,
         "on": f.mode != "chat-phone-off",
-        "personal": [{ "sub": "s", "email": "lin@example.com", "standing": if f.mode == "chat-phone-outside" { "outside" } else { "member" }, "devices": [] }],
-        "grants": if f.mode == "chat-phone-outside" { [{ "id": "p-1", "status": "pending", "sub": "s", "join": true }] } else { [] },
+        "personal": [
+          {
+            "sub": "s",
+            "email": "lin@example.com",
+            "standing": match f.mode {
+              "chat-phone-outside" => "outside"
+              "chat-phone-none" => "none"
+              _ => "member"
+            },
+            "devices": [],
+          },
+        ],
+        "grants": match f.mode {
+          "chat-phone-outside" => [{ "id": "p-1", "status": "pending", "sub": "s", "join": true }]
+          "chat-phone-none" => [{ "id": "p-1", "status": "pending", "sub": "s" }]
+          _ => []
+        },
       })
     // what a web link in a message is, as the link's station says it (the core's `linkPreview`: peeks.mbt)
     "linkPreview" => Some(fixture_link_preview(text(Some(Json::object(params)), "url")))

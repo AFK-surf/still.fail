@@ -57,8 +57,9 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
   let lacks = if flag(row, "oldStation") {
     Some(tr("android-misc.personal.updateStation"))
   } else if flag(row, "join") {
-    // (no lock of the person's own on this device: not allowed here until it has one, its page a tap away)
-    Some(tr("android-misc.personal.open"))
+    // (this device not approved by the person's trusted devices, or theirs set up again elsewhere: not allowed here
+    // until it is, settings' 共享调试 a tap away; with none yet, 允许 as anywhere: allowing begins them)
+    Some(tr("android-misc.adb.ask.approve"))
   } else { match adb_ready(c) {
     AdbLacks(step) => Some(step)
     // (a phone whose 共享调试 is off lends to no chat: turned on first, on its page)
@@ -105,7 +106,7 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
   }
   @sf.ask_buttons(c, fn() {
     if lacks is Some(_) {
-      @sf.button(c, if flag(row, "join") { tr("android-misc.personal.open") } else { tr("android-misc.adb.ask.how") }, key="phone/" + request + "/how", tone=Primary, on_press=how)
+      @sf.button(c, tr("android-misc.adb.ask.how"), key="phone/" + request + "/how", tone=Primary, on_press=how)
     } else {
       @sf.button(c, tr("android-settings.vault.act.allow"), key="phone/" + request + "/yes", tone=Primary, busy=pending == Some(true), disabled=under, on_press=fn() { decide(true) })
     }
@@ -190,12 +191,12 @@ pub fn phone_link(core : Core?, station : String, said : String) -> String {
 }
 
 ///|
-/// Where a request's 查看步骤 takes the person: settings' 共享调试 while the phone's switch is off (it is turned on
-/// there), else the 共享调试 of the chat's station (`station`), which says what is next for it, pairing with it too
+/// Where a request's 查看步骤 takes the person: settings' 共享调试 while this device is to be approved first (`join`:
+/// the step is that page's) or the phone's switch is off (it is turned on there), else the 共享调试 of the chat's station (`station`), which says what is next for it, pairing with it too
 /// (2026-10-30: it opened settings' page, which has nothing of any station, its pairing nowhere to be found).
 pub fn phone_steps(core : Core?, station : String, request? : String = "") -> Route {
   match core {
-    Some(core) if flag(phone_row(core, request), "join") => PersonalLock
+    Some(core) if flag(phone_row(core, request), "join") => AdbShare("")
     Some(core) if flag((core.topic)("adbShare", Map([])).get().value, "on") => AdbShare(station)
     _ => AdbShare("")
   }

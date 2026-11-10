@@ -254,7 +254,6 @@ pub fn panels_frame(Core) -> Unit
 
 pub fn pending_login(Core, String, String) -> @json.Json?
 
-pub fn personal_lock_page(@ui.Ctx, Core) -> Unit
 
 pub fn phone_card(@ui.Ctx, Core?, String, String, String, Bool, lasts? : String, who? : String?, ended? : (String, String, String)?, how? : () -> Unit) -> Unit
 
@@ -538,7 +537,6 @@ pub(all) enum Route {
   Usage
   Archive
   AdbShare(String)
-  PersonalLock
   NewProfile(String)
   ProfileAccount(String)
   VaultItems
