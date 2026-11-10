@@ -269,17 +269,12 @@ fn panel_centred_node(
       // taller than the dialog leaves it, laid out in that, its lists giving way and scrolling in themselves (old's
       // `gives`), nothing of it scrolling past it)
       if x.tall > 0.0 && !x.form && steps is None && x.nodes is Some(n) {
-        // (what it holds nodes: its share of the window less its frame, no taller than the dialog leaves it, what it holds
-        // filling that and laid out in it, scrolling as it does itself)
+        // (what it holds nodes: its share of the window less its frame, its body's own room over and under it outside
+        // that, as the old body's measured box stood in its padding (measured_body in `at`); no taller than the dialog
+        // leaves it, all of it giving way where it is short of room, what it holds filling that share and laid out in
+        // it, scrolling as it does itself)
         d.box(fn(b) {
           style_node(b, fn() { centred_part_in(0.0, 0.0) })
-          // (one as tall as what it holds up to that share (`hugs`): no taller than it, as tall as what it holds)
-          let share = fn() { Some(dmax(0.0, x.tall * layer.window().1 - dialog_frame_h)) }
-          if n.hugs {
-            b.max_height(By(share)) |> ignore
-          } else {
-            b.height(By(share)) |> ignore
-          }
           b
           .shrink(Is(1.0))
           .min_height(Is(Some(0.0)))
@@ -290,12 +285,24 @@ fn panel_centred_node(
             style_node(col, fn() {
               (if footed { dialog_body } else { dialog_body_end }).then(@ui.style(px=room(words_in))).then(body_top())
             })
-            col.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+            col.grow(Is(1.0)).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
             // (its rows out across the room the dialog leaves them, as far as an old body's: rows_out's)
             panel_in_lend(col, Wide, 0.0, rows_out=panel_words - panel_card_in, centred=true, clear=@signals.untracked(fn() {
               if untitled() { dialog_close_clear() } else { 0.0 }
             }))
-            (n.body)(col, close)
+            // (what it holds, together in one box as the old body's measured box held it (none of the body's gap
+            // between its parts): its share tall; one as tall as what it holds up to that share (`hugs`), no taller)
+            col.box(fn(held) {
+              let share = fn() { Some(dmax(0.0, x.tall * layer.window().1 - dialog_frame_h)) }
+              if n.hugs {
+                held.max_height(By(share)) |> ignore
+              } else {
+                held.height(By(share)) |> ignore
+              }
+              held.shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+              (n.body)(held, close)
+            })
+            |> ignore
           })
           |> ignore
         })

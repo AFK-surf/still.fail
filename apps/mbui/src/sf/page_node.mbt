@@ -785,21 +785,37 @@ pub fn link_row_node(
     )
     return
   }
+  // (where it stands across in a panel's body, row_line's: panel_row_at, not on a card; square there, as the old one's
+  // ground is, a small panel's inner corner in one; elsewhere a card's row, as ever)
+  let at = panel_in_of(parent)
+  let in_panel = panel_row_at(at, own=card_pad - corner_inset, card=on_card_node(parent))
+  let (out, side) = match in_panel {
+    Some(p) => (p.out, p.side)
+    None => (0.0, text_in)
+  }
+  let corner = if in_panel is None {
+    @ui.concentric(group_corner, list_pad)
+  } else if at.small {
+    small_panel_inner(r_menu)
+  } else {
+    0.0
+  }
   parent.box(made_for=loc, fn(r) {
     r
     .row(Is(true))
     .gap(Is(12.0))
+    .margin(Is((-out, 0.0, -out, 0.0)))
     // (a tile leading it: the row as tall as the tile and the ladder's inset over and under it, or its words and theirs,
     // both across its middle; at its top, a tile shorter than its words stood off the row's middle, the user,
     // 2026-11-08: 「workspace 怎么不居中」)
-    .padding(Is(if lead is LeadTile(_) { (text_in, corner_inset, text_in, corner_inset) } else { (text_in, text_in, text_in, text_in) }))
-    .radius(Is(@ui.concentric(group_corner, list_pad)))
+    .padding(Is(if lead is LeadTile(_) { (side, corner_inset, side, corner_inset) } else { (side, text_in, side, text_in) }))
+    .radius(Is(corner))
     .min_height(By(fn() { Some(theme().items.least) }))
     .lines_up(By(fn() { Some(if under() && !(lead is LeadTile(_)) && !face { Start } else { Middle }) }))
     |> ignore
     if goes {
       r.ground(By(fn() { if lit_node(r) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
-      pressed_node(r, press, Is(row_corner), Link, title)
+      pressed_node(r, press, Is(if in_panel is Some(_) { corner } else { row_corner }), Link, title)
       row_folds_said(r, title, folds)
     }
     // what it is by: on its first line where lines are under it (row_lead: as tall as that line at least, across its
