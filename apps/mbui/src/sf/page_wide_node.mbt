@@ -522,6 +522,12 @@ fn wide_link_row_node(
   // inset where it is first or last, the row itself where it stands, what is pressed: a press beside it its
   // neighbour's, none of the two drawn over each other; desk_list_link)
   let reach = at.list && goes && in_pane_node(parent)
+  // (where it stands across in a panel's body, row_line's: panel_row_at; elsewhere as ever)
+  let pin = panel_in_of(parent)
+  let (out, side) = match panel_row_at(pin, own=desk_list_out) {
+    Some(p) => (p.out, p.side)
+    None => (0.0, text_in)
+  }
   parent.box(made_for=loc, fn(o) {
     if reach {
       o
@@ -536,8 +542,17 @@ fn wide_link_row_node(
     .gap(Is(12.0))
     // (its words a row's room in at its sides, 10 over and under: the old view's wide_list_row_ground; in a panel's
     // card none of its own where it is not pressed, none in the card's corners: wide_list_row)
-    .padding(Is((text_in, wide_row_over, text_in, wide_row_over)))
-    .radius(By(fn() { if at.list { if (in_pane_node(r) && !goes) || reach { 0.0 } else { list_row_corner(r) } } else { @ui.tree_theme().corner(Xl2) } }))
+    .margin(Is((-out, 0.0, -out, 0.0)))
+    .padding(Is((side, wide_row_over, side, wide_row_over)))
+    .radius(By(fn() {
+      if pin.small {
+        small_panel_inner(r_menu)
+      } else if at.list {
+        if (in_pane_node(r) && !goes) || reach { 0.0 } else { list_row_corner(r) }
+      } else {
+        @ui.tree_theme().corner(Xl2)
+      }
+    }))
     .min_height(By(fn() { Some(theme().items.least) }))
     // (a face across its middle, as its words: the old view's, row_top only where it is not a face)
     .lines_up(By(fn() { Some(if under() && !face { Start } else { Middle }) }))

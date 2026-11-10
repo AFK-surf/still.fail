@@ -34,11 +34,13 @@ pub fn choice_row_node(
   // line where a note is under them)
   let under = fn() { body is None && note() != "" }
   let chevron = if narrow { pg_chevron } else { desk_chevron }
-  // (where it stands across, row_line's: in a small panel at its padding, its words a row's padding in; in a panel's
-  // body its words as far in as the panel's, or on the panel's line, its ground reaching out across the room the panel
-  // leaves as far as its own words are in from it (panel_rows_out); on a card none of that; on a page's list in a
-  // panel's card its ground reaching past it over and under: link_reach)
-  let out = if card { 0.0 } else { panel_rows_out(at, own=if narrow { card_pad - corner_inset } else { desk_list_out }) }
+  // (where it stands across in a panel's body, row_line's: panel_row_at, not on a card; elsewhere a page's row's; on a
+  // page's list in a panel's card its ground reaching past it over and under: link_reach)
+  let in_panel = panel_row_at(at, own=if narrow { card_pad - corner_inset } else { desk_list_out }, card~)
+  let out = match in_panel {
+    Some(p) => p.out
+    None => 0.0
+  }
   let reach = !narrow && part.list && in_pane_node(parent) && at.words == 0.0
   parent.box(made_for=loc, fn(o) {
     if reach {
@@ -49,12 +51,8 @@ pub fn choice_row_node(
       |> ignore
     }
     o.box(fn(r) {
-      let (side, over) = if at.small {
-        (text_in, if narrow { text_in } else { wide_row_over })
-      } else if at.words > 0.0 && !card {
-        (at.words, if narrow { text_in } else { wide_row_over })
-      } else if out > 0.0 {
-        (out, if narrow { text_in } else { wide_row_over })
+      let (side, over) = if in_panel is Some(p) {
+        (p.side, if narrow { text_in } else { wide_row_over })
       } else if narrow {
         (if card { text_in } else { pg_room_in }, text_in)
       } else {

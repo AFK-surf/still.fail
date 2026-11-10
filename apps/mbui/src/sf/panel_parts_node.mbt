@@ -47,15 +47,32 @@ fn panel_in_lend(
 let panel_tips_lent : @view.Lent[TipLayer] = @view.Lent::new()
 
 ///|
-/// How far a row of a panel's body laid out `at` reaches out of the column it is made in, its ground across the room
-/// the panel leaves at its sides, its words back on the column's line (row_reach's): that room (rows_out), no further
-/// than its own words are in from its ground (`own`, none said: all of it); none in a small panel (its rows at its
-/// padding) or outside a panel. The rule of every row of a panel's: panel_row_node's, choice_row_node's.
-fn panel_rows_out(at : PanelIn, own? : Double = @double.infinity) -> Double {
+/// Where a row of a panel's body stands across: how far its ground reaches out of the column it is made in (`out`) and
+/// how far in from its ground its words are (`side`).
+priv struct PanelRowAt {
+  out : Double
+  side : Double
+}
+
+///|
+/// Where a row of a panel's body laid out `at` stands across, row_line's, its ground's corner left to the row (each
+/// kind's ground its own): its ground out across the room the panel leaves at its sides (rows_out), no further than its
+/// own words are in from its ground (`own`, none said: all of it); its words in a small panel a row's padding in
+/// (text_in, its ground at the panel's padding, reaching none), else as far in as the panel says (`words`: a sheet a
+/// press opened, a panel's list), else back on the column's line (as far in as its ground reaches out). None outside a
+/// panel's body or on a group's card in one (`card`): the row stands as its kind does on a page. The rule of every row
+/// of a panel's: choice_row_node's, link_row_node's (narrow and wide), panel_row_node's reach.
+fn panel_row_at(at : PanelIn, own? : Double = @double.infinity, card? : Bool = false) -> PanelRowAt? {
+  guard !card else { return None }
+  let out = if at.small { 0.0 } else { dmin(at.rows_out, own) }
   if at.small {
-    0.0
+    Some({ out, side: text_in })
+  } else if at.words > 0.0 {
+    Some({ out, side: at.words })
+  } else if out > 0.0 {
+    Some({ out, side: out })
   } else {
-    dmin(at.rows_out, own)
+    None
   }
 }
 
@@ -168,7 +185,12 @@ fn panel_row_by(
     // (out across the room a large panel leaves, a card's corner there; else a capsule in a small panel's corners, past
     // its padding to where it is concentric with them: menu_item's)
     let reach = fn() { menu_row_reach(t().rows.pick) }
-    let across = panel_rows_out(at)
+    // (its reach alone the rows' rule's, panel_row_at: where that is none, a small panel's or a sheet's, a menu's row's
+    // capsule, menu_item's own, not a page row's padding)
+    let across = match panel_row_at(at) {
+      Some(p) => p.out
+      None => 0.0
+    }
     let out = fn() { if across > 0.0 { across } else { reach() } }
     let words_at = fn() { if across > 0.0 { across } else { text_in + reach() } }
     let corner = if across > 0.0 { card_corner } else { small_panel_inner(r_menu) }
