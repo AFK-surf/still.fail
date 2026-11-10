@@ -185,12 +185,17 @@ pub(all) struct Style {
   // out so (move_ms), ending at `come_ends` (NaN till then, kept from then), drawn at `come_now` (NaN: none); as tall as
   // its way has got, what it holds laid out whole from its top in that, the gap before it in its column its share of
   // it. `come_k`: the share of what it comes to its last layout was (1 none), read by the column for that gap.
+  // `come_v`: how fast (points a ms) its height went as it set out, its way a Move on from that speed (move_path), as
+  // one set out again while it went goes on from its way's (come_state); `come_goal`: how tall it went to, as last laid
+  // out (NaN none yet).
   mut come_from : Double
   mut come_to : Double
   mut come_at : Double
   mut come_now : Double
   mut come_ends : Double
   mut come_k : Double
+  mut come_v : Double
+  mut come_goal : Double
   // Not CSS's: a column whose items are a page's list's rows set on a host's pixels (this many a point; 0: anywhere): each
   // as tall as whole pixels, rounded up, what is under it lower by as much, the column as much taller (an old view's
   // list's rows', ui's Ctx::row_slot).
@@ -282,6 +287,8 @@ pub fn Style::new() -> Style {
     come_now: 0.0 / 0.0,
     come_ends: 0.0 / 0.0,
     come_k: 1.0,
+    come_v: 0.0,
+    come_goal: 0.0 / 0.0,
     rows_grid: 0.0,
     ver: 0,
     basis_v: 0.0,

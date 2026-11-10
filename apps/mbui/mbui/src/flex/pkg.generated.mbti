@@ -10,6 +10,10 @@ pub const LEN_PT : Int32 = 1
 
 pub const LEN_WITHIN : Int32 = 3
 
+pub fn come_state(Style, Double) -> (Double, Double)?
+
+pub fn come_way_ms(Double, Double, Double) -> Double
+
 pub fn compute(Node, width? : Double, height? : Double, round? : Bool, reuse? : Bool, grid? : Double) -> Unit
 
 pub fn computes() -> Int32
@@ -31,6 +35,10 @@ pub let move_least_ms : Double
 pub let move_most_ms : Double
 
 pub fn move_ms(Double) -> Double
+
+pub fn move_path(Double, Double, Double, Double) -> (Double, Double)
+
+pub fn move_stop_points(Double) -> Double
 
 pub let move_whole_frames_ms : Double
 
@@ -170,6 +178,8 @@ pub(all) struct Style {
   mut come_now : Double
   mut come_ends : Double
   mut come_k : Double
+  mut come_v : Double
+  mut come_goal : Double
   mut rows_grid : Double
   // private fields
 }
