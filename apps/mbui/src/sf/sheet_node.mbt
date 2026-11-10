@@ -59,6 +59,8 @@ fn sheet_node(
       // panel_search_at_hand_node's, not on a sheet)
       let field : Ref[PanelField?] = Ref(None)
       layer.lends(panel_field_lent, field) |> ignore
+      // (what its fields offer made in it: offers_layer_lent)
+      offers_layer_lend(layer)
       // (how far its scrim is in; how far below its place it is, in its own heights; how far a finger has its top down)
       // (in another's place: its scrim whole from the first, where that one stood, not below)
       let dim = EdgeWay::new(if in_place is Some(_) { 1.0 } else { 0.0 })
