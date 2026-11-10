@@ -89,6 +89,67 @@ let gif_frame : Double = 100.0
 let a_moment : Double = 10.0
 
 ///|
+/// A GIF of a screen 4000 by 4000 (16 M pixels, as large as a canvas is made) of two frames of 1 by 1 each: red, then
+/// blue (each frame's index coded as two_frames' are: clear, the index, end). Its frames are 32 M pixels together.
+fn two_frames_too_many_pixels() -> Bytes {
+  Bytes::from_array([
+    b'G', b'I', b'F', b'8', b'9', b'a', b'\xA0', b'\x0F', b'\xA0', b'\x0F', b'\x80', b'\x00', b'\x00',
+    // the colours: red, blue
+    b'\xFF', b'\x00', b'\x00', b'\x00', b'\x00', b'\xFF',
+    // a frame: its graphic control (100 ms), its place (1 by 1), its index [0]
+    b'\x21', b'\xF9', b'\x04', b'\x00', b'\x0A', b'\x00', b'\x00', b'\x00', b'\x2C', b'\x00', b'\x00', b'\x00', b'\x00',
+    b'\x01', b'\x00', b'\x01', b'\x00', b'\x00', b'\x02', b'\x02', b'\x44', b'\x01', b'\x00',
+    // the next: [1]
+    b'\x21', b'\xF9', b'\x04', b'\x00', b'\x0A', b'\x00', b'\x00', b'\x00', b'\x2C', b'\x00', b'\x00', b'\x00', b'\x00',
+    b'\x01', b'\x00', b'\x01', b'\x00', b'\x00', b'\x02', b'\x02', b'\x4C', b'\x01', b'\x00', b'\x3B',
+  ])
+}
+
+///|
+test "a GIF whose frames are too many pixels together is handed over as a still: its own bytes, none of its frames" {
+  let gif = two_frames_too_many_pixels()
+  // counted, not decoded
+  assert_eq(@ui.gif_frame_count(gif), 2)
+  assert_true(@ui.gif_frames(gif) is None)
+  let t = @ui.Tester::new(
+    fn(c) { c.image("mem:big-gif", w=Px(20.0), h=Px(10.0), fade=false) |> ignore },
+    w=100.0,
+    h=100.0,
+  )
+  // (handed over after the Tester is made: a Tester starts with no images)
+  @ui.add_image("mem:big-gif", gif)
+  t.draw()
+  let shown = fn() {
+    t.drawlist().split("\n").filter(fn(l) { l.has_prefix("image ") }).map(fn(l) { l.to_owned() }).to_array()
+  }
+  t.run_for(a_moment)
+  assert_true(shown().iter().any(fn(l) { l.contains("\"mem:big-gif\"") }))
+  // a frame's time on: the same picture, never a frame of it
+  t.run_for(gif_frame)
+  assert_true(shown().iter().any(fn(l) { l.contains("\"mem:big-gif\"") }))
+  assert_true(!shown().iter().any(fn(l) { l.contains("mem:big-gif#") }))
+  // the host given one picture, the GIF's own bytes, as it decodes any picture
+  let loads = t.image_loads()
+  assert_eq(loads.length(), 1)
+  assert_eq(loads[0].0, "bytes:\{gif.length()}")
+}
+
+///|
+test "a GIF's frames counted by its blocks are as many as it decodes, whole or cut short anywhere" {
+  let gif = two_frames()
+  assert_eq(@ui.gif_frame_count(gif), 2)
+  for l in 0..=gif.length() {
+    let cut = Bytes::from_array(Array::makei(l, fn(i) { gif[i] }))
+    let decoded = match @ui.gif_frames(cut) {
+      Some(g) => g.frames.length()
+      None => 0
+    }
+    assert_eq(@ui.gif_frame_count(cut), decoded)
+  }
+  assert_eq(@ui.gif_frame_count(b"\x89PNG"), 0)
+}
+
+///|
 test "an SVG handed over goes to the host drawn as a picture, at the size it is shown at" {
   let asked : Array[Int] = []
   @ui.set_vector_pictures(fn(data, px) {

@@ -1,7 +1,9 @@
 // GIFs that move: decoded here (not by a host, whose decoders give a still's first frame), each frame as the screen
 // shows it then (its canvas after the frames before it, as their disposal leaves it), with how long it stays. An
 // image handed over as a GIF of more than one frame (add_image) is shown as its frames in turn, a cycle of their
-// lengths (Ctx::cycle: a frame of each length, the same at any frame rate); `still` holds its first.
+// lengths (Ctx::cycle: a frame of each length, the same at any frame rate); `still` holds its first. One whose frames
+// come to more pixels than gif_moving_most does not move: its frames are counted by its blocks, none decoded, and it is
+// handed over as it is, a still (its first frame, as the host decodes it).
 
 ///|
 /// A GIF's frames as shown: each its pixels (RGBA, straight, the canvas's rows from the top) and how long it stays (ms).
@@ -17,6 +19,12 @@ pub(all) struct GifFrames {
 let gif_least_ms : Double = 100.0
 
 ///|
+/// The most pixels a GIF that moves has in its frames together (frames × width × height): ≈64 MB as RGBA, which each
+/// frame is held as twice, here (a PNG of it, png_of, stored, not compressed) and again by the host it is handed to (its
+/// decode, and on Android the PNG's bytes, kept to decode again). 132 frames of 360 × 734 took a phone's whole Java heap.
+let gif_moving_most : Int = 16_000_000
+
+///|
 /// Whether `data` is a GIF (its signature).
 pub fn is_gif(data : Bytes) -> Bool {
   data.length() >= 6 &&
@@ -29,31 +37,106 @@ pub fn is_gif(data : Bytes) -> Bool {
 }
 
 ///|
-/// The frames of GIF `data`, or None where it is not one or is cut short before its first frame.
-pub fn gif_frames(data : Bytes) -> GifFrames? {
+/// Byte `i` of `data`, 0 past its end (a GIF cut short reads as zeros).
+fn gif_u8(data : Bytes, i : Int) -> Int {
+  if i < data.length() {
+    data[i].to_int()
+  } else {
+    0
+  }
+}
+
+///|
+/// GIF `data`'s screen, its width and height, and where its blocks start (after its global colour table); None where it
+/// is not one, is cut short before its blocks' start can be read, or its screen is empty or larger than a canvas is made
+/// (16 M pixels).
+fn gif_screen(data : Bytes) -> (Int, Int, Int)? {
   if !is_gif(data) || data.length() < 13 {
     return None
   }
-  let n = data.length()
-  let u8 = fn(i : Int) { if i < n { data[i].to_int() } else { 0 } }
-  let u16 = fn(i : Int) { u8(i) | (u8(i + 1) << 8) }
-  let w = u16(6)
-  let h = u16(8)
-  if w <= 0 || h <= 0 || w * h > 16_000_000 {
+  let w = gif_u8(data, 6) | (gif_u8(data, 7) << 8)
+  let h = gif_u8(data, 8) | (gif_u8(data, 9) << 8)
+  // (w > 16 M / h, not w × h > 16 M: 65535 × 65535 is past an Int)
+  if w <= 0 || h <= 0 || w > 16_000_000 / h {
     return None
   }
-  let flags = u8(10)
-  let bg_index = u8(11)
-  let mut p = 13
-  let global : Array[Int] = []
-  if (flags & 0x80) != 0 {
-    let size = 1 << ((flags & 7) + 1)
-    for k in 0..<size {
-      global.push((u8(p + 3 * k) << 16) | (u8(p + 3 * k + 1) << 8) | u8(p + 3 * k + 2))
-    }
-    p = p + 3 * size
+  let flags = gif_u8(data, 10)
+  let at = if (flags & 0x80) != 0 { 13 + 3 * (1 << ((flags & 7) + 1)) } else { 13 }
+  Some((w, h, at))
+}
+
+///|
+/// The sub-blocks of GIF `data` from `p` (each its length's byte, then that many): each one's data given to `each`
+/// (where it starts, and how long it says it is: it may run past the end of `data`); where the block after them starts
+/// (past their terminator).
+fn gif_sub_blocks(data : Bytes, p : Int, each : (Int, Int) -> Unit) -> Int {
+  let n = data.length()
+  let mut p = p
+  while p < n && data[p] != b'\x00' {
+    let len = data[p].to_int()
+    each(p + 1, len)
+    p = p + len + 1
   }
-  ignore(bg_index)
+  p + 1
+}
+
+///|
+/// The blocks of GIF `data` from `p` (gif_screen's), in order until its trailer, a block it does not know or its end:
+/// each extension given to `extension` (where its label is), each image to `image` (where its descriptor is). The one
+/// walk gif_frames decodes by and gif_frame_count counts by.
+fn gif_blocks(data : Bytes, p : Int, extension : (Int) -> Unit, image : (Int) -> Unit) -> Unit {
+  let n = data.length()
+  let mut p = p
+  while p < n {
+    let b = data[p]
+    if b == b'\x21' {
+      extension(p + 1)
+      p = gif_sub_blocks(data, p + 2, fn(_, _) {  })
+    } else if b == b'\x2C' {
+      image(p)
+      let lf = gif_u8(data, p + 9)
+      p = p + 10
+      if (lf & 0x80) != 0 {
+        p = p + 3 * (1 << ((lf & 7) + 1))
+      }
+      // its LZW code size, then its data
+      p = gif_sub_blocks(data, p + 1, fn(_, _) {  })
+    } else {
+      // the trailer (0x3B), or what is not a block
+      break
+    }
+  }
+}
+
+///|
+/// How many frames GIF `data` has, counted by its blocks with none decoded (gif_frames' walk): 0 where it is not one or
+/// is cut short before its first.
+pub fn gif_frame_count(data : Bytes) -> Int {
+  guard gif_screen(data) is Some((_, _, p)) else { return 0 }
+  let mut count = 0
+  gif_blocks(data, p, fn(_) {  }, fn(_) { count = count + 1 })
+  count
+}
+
+///|
+/// The frames of GIF `data`, or None where it is not one, is cut short before its first frame, or its frames come to
+/// more pixels than gif_moving_most (counted first: then none is decoded).
+pub fn gif_frames(data : Bytes) -> GifFrames? {
+  guard gif_screen(data) is Some((w, h, start)) else { return None }
+  let count = gif_frame_count(data)
+  // (count × w × h > gif_moving_most, said so that it is never past an Int)
+  if count == 0 || count > gif_moving_most / (w * h) {
+    return None
+  }
+  let n = data.length()
+  let u8 = fn(i : Int) { gif_u8(data, i) }
+  let u16 = fn(i : Int) { u8(i) | (u8(i + 1) << 8) }
+  let global : Array[Int] = []
+  if (u8(10) & 0x80) != 0 {
+    for k in 0..<((start - 13) / 3) {
+      global.push((u8(13 + 3 * k) << 16) | (u8(13 + 3 * k + 1) << 8) | u8(13 + 3 * k + 2))
+    }
+  }
   let canvas = FixedArray::make(w * h * 4, b'\x00')
   let frames : Array[FixedArray[Byte]] = []
   let delays : Array[Double] = []
@@ -61,110 +144,95 @@ pub fn gif_frames(data : Bytes) -> GifFrames? {
   let mut delay = 0.0
   let mut transparent = -1
   let mut disposal = 0
-  while p < n {
-    let b = u8(p)
-    if b == 0x3B {
-      break
-    } else if b == 0x21 {
-      // an extension: a graphic control's delay, transparency and disposal; the rest passed over
-      let label = u8(p + 1)
-      p = p + 2
-      if label == 0xF9 && u8(p) >= 4 {
-        let f = u8(p + 1)
-        disposal = (f >> 2) & 7
-        delay = u16(p + 2).to_double() * 10.0
-        transparent = if (f & 1) != 0 { u8(p + 4) } else { -1 }
-      }
-      while p < n && u8(p) != 0 {
-        p = p + u8(p) + 1
-      }
-      p = p + 1
-    } else if b == 0x2C {
-      let fx = u16(p + 1)
-      let fy = u16(p + 3)
-      let fw = u16(p + 5)
-      let fh = u16(p + 7)
-      let lf = u8(p + 9)
-      p = p + 10
-      let table = if (lf & 0x80) != 0 {
-        let size = 1 << ((lf & 7) + 1)
-        let t = []
-        for k in 0..<size {
-          t.push((u8(p + 3 * k) << 16) | (u8(p + 3 * k + 1) << 8) | u8(p + 3 * k + 2))
-        }
-        p = p + 3 * size
-        t
-      } else {
-        global
-      }
-      let interlaced = (lf & 0x40) != 0
-      let min_code = u8(p)
-      p = p + 1
-      // the image's data, its sub-blocks joined
-      let lzw : Array[Byte] = []
-      while p < n && u8(p) != 0 {
-        let len = u8(p)
-        for k in 0..<len {
-          if p + 1 + k < n {
-            lzw.push(data[p + 1 + k])
-          }
-        }
-        p = p + len + 1
-      }
-      p = p + 1
-      let indices = lzw_decode(lzw, min_code, fw * fh)
-      // what the canvas goes back to once this frame has been shown (disposal 3)
-      let before = if disposal == 3 { Some(canvas.copy()) } else { None }
-      let rows = interlace_rows(fh, interlaced)
-      for r in 0..<fh {
-        let y = fy + rows[r]
-        if y >= h {
-          continue
-        }
-        for x in 0..<fw {
-          let k = r * fw + x
-          if k >= indices.length() {
-            break
-          }
-          let ci = indices[k]
-          if ci == transparent || ci >= table.length() || fx + x >= w {
-            continue
-          }
-          let rgb = table[ci]
-          let o = (y * w + fx + x) * 4
-          canvas[o] = ((rgb >> 16) & 0xFF).to_byte()
-          canvas[o + 1] = ((rgb >> 8) & 0xFF).to_byte()
-          canvas[o + 2] = (rgb & 0xFF).to_byte()
-          canvas[o + 3] = b'\xFF'
-        }
-      }
-      frames.push(canvas.copy())
-      delays.push(if delay < 20.0 { gif_least_ms } else { delay })
-      // after it is shown: its rect cleared (2), the canvas as it was before it (3), or left (0, 1)
-      if disposal == 2 {
-        for y in fy..<imin(fy + fh, h) {
-          for x in fx..<imin(fx + fw, w) {
-            let o = (y * w + x) * 4
-            for c in 0..<4 {
-              canvas[o + c] = b'\x00'
-            }
-          }
-        }
-      } else if before is Some(was) {
-        was.blit_to(canvas, len=canvas.length())
-      }
-      delay = 0.0
-      transparent = -1
-      disposal = 0
-    } else {
-      break
+  // an extension: a graphic control's delay, transparency and disposal; the rest passed over
+  let extension = fn(at : Int) {
+    let p = at + 1
+    if u8(at) == 0xF9 && u8(p) >= 4 {
+      let f = u8(p + 1)
+      disposal = (f >> 2) & 7
+      delay = u16(p + 2).to_double() * 10.0
+      transparent = if (f & 1) != 0 { u8(p + 4) } else { -1 }
     }
   }
-  if frames.length() == 0 {
-    None
-  } else {
-    Some({ w, h, frames, delays })
+  // an image: drawn onto the canvas, which is then its frame
+  let image = fn(at : Int) {
+    let fx = u16(at + 1)
+    let fy = u16(at + 3)
+    let fw = u16(at + 5)
+    let fh = u16(at + 7)
+    let lf = u8(at + 9)
+    let mut p = at + 10
+    let table = if (lf & 0x80) != 0 {
+      let size = 1 << ((lf & 7) + 1)
+      let t = []
+      for k in 0..<size {
+        t.push((u8(p + 3 * k) << 16) | (u8(p + 3 * k + 1) << 8) | u8(p + 3 * k + 2))
+      }
+      p = p + 3 * size
+      t
+    } else {
+      global
+    }
+    let interlaced = (lf & 0x40) != 0
+    let min_code = u8(p)
+    // the image's data, its sub-blocks joined
+    let lzw : Array[Byte] = []
+    gif_sub_blocks(data, p + 1, fn(s, len) {
+      for k in 0..<len {
+        if s + k < n {
+          lzw.push(data[s + k])
+        }
+      }
+    })
+    |> ignore
+    let indices = lzw_decode(lzw, min_code, fw * fh)
+    // what the canvas goes back to once this frame has been shown (disposal 3)
+    let before = if disposal == 3 { Some(canvas.copy()) } else { None }
+    let rows = interlace_rows(fh, interlaced)
+    for r in 0..<fh {
+      let y = fy + rows[r]
+      if y >= h {
+        continue
+      }
+      for x in 0..<fw {
+        let k = r * fw + x
+        if k >= indices.length() {
+          break
+        }
+        let ci = indices[k]
+        if ci == transparent || ci >= table.length() || fx + x >= w {
+          continue
+        }
+        let rgb = table[ci]
+        let o = (y * w + fx + x) * 4
+        canvas[o] = ((rgb >> 16) & 0xFF).to_byte()
+        canvas[o + 1] = ((rgb >> 8) & 0xFF).to_byte()
+        canvas[o + 2] = (rgb & 0xFF).to_byte()
+        canvas[o + 3] = b'\xFF'
+      }
+    }
+    frames.push(canvas.copy())
+    delays.push(if delay < 20.0 { gif_least_ms } else { delay })
+    // after it is shown: its rect cleared (2), the canvas as it was before it (3), or left (0, 1)
+    if disposal == 2 {
+      for y in fy..<imin(fy + fh, h) {
+        for x in fx..<imin(fx + fw, w) {
+          let o = (y * w + x) * 4
+          for c in 0..<4 {
+            canvas[o + c] = b'\x00'
+          }
+        }
+      }
+    } else if before is Some(was) {
+      was.blit_to(canvas, len=canvas.length())
+    }
+    delay = 0.0
+    transparent = -1
+    disposal = 0
   }
+  // (as many frames as were counted: the same walk)
+  gif_blocks(data, start, extension, image)
+  Some({ w, h, frames, delays })
 }
 
 ///|
@@ -276,7 +344,8 @@ let moving_images : Map[String, GifCycle] = {}
 
 ///|
 /// `data` handed over as `key` when it is a GIF of more than one frame: its frames each as a picture of its own, the
-/// first under `key` too (what a still shows); false when it is not one (handed over as it is).
+/// first under `key` too (what a still shows); false when it is not one, or its frames are more than gif_moving_most
+/// (gif_frames: none decoded), handed over as it is.
 fn add_gif(key : String, data : Bytes) -> Bool {
   if !is_gif(data) {
     return false
