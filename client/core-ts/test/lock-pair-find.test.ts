@@ -11,7 +11,6 @@ import { Deferred, Effect } from "effect";
 import { CoreError, HostError } from "../src/error.ts";
 import { type Entry, entryHash, next, signedBytes } from "../src/lock.ts";
 import { type Duplex, dialer, PAIR_DIAL_MS, PAIR_DIAL_TRIES, PAIR_REDIAL_MS, personalBegin, personalPairState, personalProve } from "../src/views/pair.ts";
-import { t } from "../src/i18n.ts";
 import { ME, elsewhere, genesis, pipe, rig } from "./lock-rig.ts";
 
 /// The owner's phone and computer, apps that sign: the devices that may approve this one.
@@ -219,23 +218,16 @@ test("a trusted device opened after the new device asked shows its code: dialled
   await w.ask("lock.pair", { workspace: "ws" });
   // 25 s on, neither reached: still looking (not "none", as when each was dialled once), each dialled three times.
   await w.host.time.pass(25_000);
-  const finding = await w.pair();
-  assert.equal(finding.state, "finding");
+  assert.equal((await w.pair()).state, "finding");
   assert.deepEqual([w.dials[PHONE_APP], w.dials[LAPTOP_APP]], [3, 3]);
-  // Its page says which to open, and that none shows a code yet.
-  assert.equal(finding.approversText, t("core-misc.lock.pairApprovers", { n: 2 }));
-  assert.deepEqual(finding.approvers.map((a: { showing: boolean }) => a.showing), [false, false]);
   // The person opens still.fail on their phone: it shows a code at the next dial.
   w.ways[PHONE_APP] = "code";
   await w.host.time.pass(PAIR_REDIAL_MS);
   const p = await w.pair();
   assert.equal(p.state, "code");
   assert.deepEqual(p.approvers.map((a: { id: string; showing: boolean }) => [a.id, a.showing]), [[PHONE_APP, true], [LAPTOP_APP, false]]);
-  // Each a row of its page's list: which machine, a phone or a computer, its app, and where the code shows.
-  assert.deepEqual(p.approvers.map((a: { kind: string; nameText: string; noteText: string }) => [a.kind, a.nameText, a.noteText]), [
-    ["phone", "Pixel 8", `Android · ${t("core-misc.lock.pairShowing")}`],
-    ["computer", "MacBook", "桌面版"],
-  ]);
+  // Each a row of its page's list: a phone or a computer, and which machine.
+  assert.deepEqual(p.approvers.map((a: { kind: string; nameText: string }) => [a.kind, a.nameText]), [["phone", "Pixel 8"], ["computer", "MacBook"]]);
   assert.equal((w.hellos[0] as { t: string }).t, "hello");
   // The phone kept, not dialled again; the laptop still is, a code shown elsewhere or not, PAIR_DIAL_TRIES times in all.
   await w.host.time.pass(10 * PAIR_REDIAL_MS);

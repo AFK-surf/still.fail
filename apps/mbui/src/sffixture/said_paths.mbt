@@ -705,8 +705,6 @@ pub let said_paths : Map[String, Array[String]] = {
     "me.pair.error",
     "me.pair.untilText",
     "me.pair.approvers.*.nameText",
-    "me.pair.approvers.*.noteText",
-    "me.pair.approversText",
     "members.*.email",
     "members.*.name",
     "members.*.nameText",

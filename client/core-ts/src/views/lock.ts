@@ -1080,30 +1080,25 @@ export function lockView(inner: Inner, ws: string): J {
   const unsigned = locked && mine !== undefined && mine.kind === "app" && inner.host.appKeys === true && signers.has(inner) && !signs;
   if (unsigned && typeof mine.sign_key === "string") recover(inner, mine.sign_key);
   const pair = locked && (mine === undefined || unsigned) ? pairs.mine(inner, ws) : null;
-  // The devices its try dials here, as people know them (which machine, its app and when it was last used), the most
-  // lately used first, those showing a code before them: the person opens still.fail on one of those (2026-11-05:
-  // "到底是哪个设备会弹出来呀？", a web page of theirs, or an app not approved, shows nothing). Each a row of the
-  // page's list (the user, #4213: joined into the words over them, a narrow page broke a name in two).
+  // The devices its try dials here, as people know them (which machine, a phone or a computer), the most lately used
+  // first, those showing a code before them: the person opens still.fail on one of those (2026-11-05: "到底是哪个设备会
+  // 弹出来呀？", a web page of theirs, or an app not approved, shows nothing). Each a row of the page's list, its name
+  // alone (the user, #4213: joined into a sentence, a narrow page broke a name in two; with its app and when it was
+  // used under each, 字还是很多).
   if (pair !== null && Array.isArray(pair.approvers)) {
     pair.approvers = pair.approvers
       .map((a: J) => {
         const d = f.devices.get(a.id);
         const v = d === undefined ? null : device(d);
-        const { group, app } = prefs.deviceParts(v?.label ?? "");
-        // (its app without the brand, the group's after its first word: the words over the card say still.fail already;
-        // the user, 2026-11-10: 字太多了不好读)
-        const words = group === null || app === null ? null : app.slice(group.length - group.indexOf(" ") - 1).trim() || null;
-        const showing = a.showing === true;
+        const { group } = prefs.deviceParts(v?.label ?? "");
         return {
-          id: a.id, showing,
+          id: a.id, showing: a.showing === true,
           kind: group !== null && /^(android|ios) /.test(group) ? "phone" : "computer",
           nameText: v?.nameText ?? t("web-pages.security.appDevice"),
-          noteText: [words, showing ? t("core-misc.lock.pairShowing") : (v?.usedText ?? null)].filter((x) => x !== null).join(" · "),
           lastSeen: v?.lastSeen ?? null,
         };
       })
       .sort((a: J, b: J) => Number(b.showing) - Number(a.showing) || (b.lastSeen ?? -1) - (a.lastSeen ?? -1));
-    if (pair.approvers.length > 0) pair.approversText = t("core-misc.lock.pairApprovers", { n: pair.approvers.length });
   }
   return {
     available: true,

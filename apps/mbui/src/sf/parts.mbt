@@ -4329,7 +4329,9 @@ let dialog_title_one : @ui.TextStyle = dialog_title.then(one_line)
 pub fn waiting_page(c : @ui.Ctx, mark : String, title : String, lead : String, body : () -> Unit) -> Unit {
   let touch = native_input() is Finger
   c.box(style=if touch { wait_room_touch } else { wait_room }, fn() {
-    if !touch {
+    if touch {
+      c.box(style=wait_spring, fn() {  }) |> ignore
+    } else {
       c.box(style=@ui.style(h=Fixed(wait_top)), fn() {  }) |> ignore
     }
     c.box(style=if touch { wait_column_touch } else { wait_column }, fn() {
@@ -4339,13 +4341,17 @@ pub fn waiting_page(c : @ui.Ctx, mark : String, title : String, lead : String, b
       body()
     })
     |> ignore
+    if touch {
+      c.box(style=wait_spring, fn() {  }) |> ignore
+    }
   })
   |> ignore
 }
 
 ///|
 /// The same page (waiting_page) as nodes of the window's tree, made once in `parent`: its mark, `title()` and `lead()`
-/// as they change, then what `body` makes in the column under them. The node.
+/// as they change, then what `body` makes in the column under them; `clear()` of the room's top is under something
+/// else (a bar over the page), which a touch screen's column never starts under. The node.
 #callsite(autofill(loc))
 pub fn waiting_page_node(
   parent : @view.View,
@@ -4353,13 +4359,22 @@ pub fn waiting_page_node(
   title : () -> String,
   lead : () -> String,
   body : (@view.View) -> Unit,
+  clear? : () -> Double = fn() { 0.0 },
   loc~ : SourceLoc,
 ) -> @view.View {
   // (the native input the app was started with: the same the whole run)
   let touch = @signals.untracked(native_input) is Finger
   parent.box(made_for=loc, fn(room) {
     style_node(room, fn() { if touch { wait_room_touch } else { wait_room } })
-    if !touch {
+    if touch {
+      // (no less than what is over the room's top: in the middle as before while there is room for both, then under
+      // the bar and down)
+      room.box(fn(spring) {
+        style_node(spring, fn() { wait_spring })
+        spring.min_height(By(fn() { Some(clear()) })) |> ignore
+      })
+      |> ignore
+    } else {
       room.box(fn(top) { top.height(Is(Some(wait_top))) |> ignore }) |> ignore
     }
     room.box(fn(col) {
@@ -4372,6 +4387,9 @@ pub fn waiting_page_node(
       body(col)
     })
     |> ignore
+    if touch {
+      room.box(fn(spring) { style_node(spring, fn() { wait_spring }) }) |> ignore
+    }
   })
 }
 
@@ -4386,7 +4404,15 @@ let wait_top : Double = 110.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_room_touch : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
+let wait_room_touch : @ui.Style = @ui.css("w=Full h=Full align=ACenter")
+
+///|
+/// What holds the touch screen's column in the middle of its height, one over it and one under: each takes half the
+/// room left, and none where the column is taller than the room, so it starts at the room's top and only its foot
+/// runs past (a column centred by `justify` loses its head as much as its foot: the lock's page with many trusted
+/// devices under its action, #4213).
+// kept across runs: a value (no field of it changes)
+let wait_spring : @ui.Style = @ui.style(h=grow)
 
 ///|
 /// The column: 460 wide at most, 24 in at its sides (waiting); a touch screen's 28 in (mWaiting); 14 apart.

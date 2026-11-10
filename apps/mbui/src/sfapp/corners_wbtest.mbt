@@ -47,7 +47,7 @@ let corner_modes : Array[String] = {
     "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
     "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
     "share-in-files", "share-in-stations", "lock-checking", "lock-code", "lock-failed", "lock-finding", "lock-nocode",
-    "lock-none", "lock-security", "lock-waiting", "lock-wrong", "screen-agent-driving",
+    "lock-none", "lock-security", "lock-upgrade", "lock-waiting", "lock-wrong", "screen-agent-driving",
     "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
     "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
     "screen-full-tools", "screen-gone", "screen-live", "screen-login-fill", "screen-login-pick", "screen-not-drivable", "screen-outdated", "screen-read-only",

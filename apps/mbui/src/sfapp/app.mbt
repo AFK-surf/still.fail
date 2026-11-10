@@ -767,7 +767,11 @@ fn lock_gate_node(q : @view.View, src : Source, core : @settings.Core) -> Unit {
       held.show(fn() { workspace() is Some(_) }, fn(p) {
         let w = @signals.untracked(workspace).unwrap()
         p.grow(Is(1.0)) |> ignore
-        @sfpages.lock_wait_node(p, core, @settings.here_of(core, w.id, w.name)) |> ignore
+        // (the top bar lies over the page's top: its column stays out from under it, home_top_bar_node's height)
+        @sfpages.lock_wait_node(p, core, @settings.here_of(core, w.id, w.name), clear=fn() {
+          status_top_now(p.window().0) + bar_h
+        })
+        |> ignore
       })
     })
     |> ignore

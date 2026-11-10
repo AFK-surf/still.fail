@@ -238,11 +238,6 @@
   "core-misc.lock.pairUnsigned": "The device showing the code couldn't approve this one: {error}",
   "core-misc.lock.pairElsewhere": "This device was approved in {names}; here it still needs approval from this workspace's admin or a trusted device of yours here",
   "core-misc.lock.pairJoins": " (not yet in {names}'s security mode; approving adds them as a member)",
-  "core-misc.lock.pairApprovers": {
-    "one": "Open still.fail on this device",
-    "other": "Open still.fail on any of these"
-  },
-  "core-misc.lock.pairShowing": "Showing the code now",
   "core-misc.lock.keyNotKept": "Couldn't read or save this device's security key: {error}",
   "core-misc.lock.inWorkspace": "“{name}”: {error}",
   "core-misc.lock.listSep": "; ",
