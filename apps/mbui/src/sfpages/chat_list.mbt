@@ -479,13 +479,14 @@ fn to_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, shown : Bool,
   let count = if v.newer && v.unread > 0.0 { Some(v.unread.to_int()) } else { None }
   let id = c.id("chat-jump")
   // (back first where a go-to kept where the reader was)
-  let back = @sfbase.place_kept(chat_key(r))
+  // (not in a replay of a run from before the outline, whose way to the newest went to the end alone: `asks_outline`)
+  let back = (src.asks_outline)() && @sfbase.place_kept(chat_key(r))
   let name = @sf.t(if back { "web-main.outline.back" } else { "web-main.chat.toLatest" })
   if shown && !coming {
     // (the list by its id here: the press is outside the scope it is built in)
     let list = c.list_reader(list_key(r))
     c.on_press(id, fn() {
-      if @sfbase.go_back_to(r) {
+      if (src.asks_outline)() && @sfbase.go_back_to(r) {
         ()
       } else if !v.newer {
         list.to_end()

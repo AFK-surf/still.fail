@@ -985,14 +985,15 @@ fn outline_entries_of(
   // its keys (keymap.ts's chat group): the outline, the message a person said before and after
   c.key_context("Chat")
   let stint = c.page_stint()
+  // (none of them in a replay of a run from before the outline, whose app had none: `offered`)
   c.on_action("chat.outline", fn() {
-    guard v.thread is Some(_) else { return false }
+    guard offered && v.thread is Some(_) else { return false }
     // (what asks the core told outside the build, at the key's moment: Ctx::tell)
     c.tell("chat.outline/" + k, fn() { outline_open_keys(src, r, v, stint~) |> ignore })
     true
   })
-  c.on_action("chat.said.prev", fn() { said_go(src, r, v, -1) })
-  c.on_action("chat.said.next", fn() { said_go(src, r, v, 1) })
+  c.on_action("chat.said.prev", fn() { offered && said_go(src, r, v, -1) })
+  c.on_action("chat.said.next", fn() { offered && said_go(src, r, v, 1) })
   floated
 }
 

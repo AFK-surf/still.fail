@@ -233,13 +233,14 @@ fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.
       let view = view_of_chat(src, r).0
       if view is Some({ thread: Some(_), .. }) {
         offer(action_offered("chat.find", "search", fn() { chat_find_open(c, r) }))
-        // (its outline: beside its rail or its round button where one shows, its field taking the keys)
+        // (its outline: beside its rail or its round button where one shows, its field taking the keys; not in a replay
+        // of a run from before the outline, whose app offered none: Source's `asks_outline`)
         match view {
-          Some(v) => {
+          Some(v) if (src.asks_outline)() => {
             let stint = c.page_stint()
             offer(action_offered("chat.outline", "list", fn() { @sfpages.outline_open_keys(src, r, v, stint~) |> ignore }))
           }
-          None => ()
+          _ => ()
         }
       }
       offer(action_offered("chat.jobs", "web", fn() { open_jobs_pop() }))
