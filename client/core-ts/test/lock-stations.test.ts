@@ -76,6 +76,9 @@ async function setUp(silent = false) {
     if (failed !== undefined) throw failed;
     return out as X;
   };
+  // (its key of its person's lock made before: alone in the workspace's lock and its station answering, this device
+  // would begin its person's lock by itself and bind it, views/lock.ts `ownLockFor`: entries these tests do not count)
+  await run(inner.adb.personal().makeKey());
   return { r, inner, st, cloud, run, asleep, signer: () => me! };
 }
 

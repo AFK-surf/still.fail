@@ -1,25 +1,31 @@
 // The locks end to end against the local still.fail (scripts/e2e-local.sh locks, after up; locks-all, the side run's):
 // alice's devices and bob's, each still.fail's TS core in Node in a process of its own (client/core-ts hosts/node.ts,
 // on the station's mesh addon: one core a process, as its calls' handlers are the module's), each signed in with the
-// dev cloud's mock account and keeping its keys in a file (a sealer that asks no one), as a person uses the app:
-//   1-3 A turns safe mode on and keeps an item in a vault; C is approved into the workspace's lock face to face (the
-//     old way) and given the vault; A opens alice's own lock: C, off it, keeps it from being bound until C joins it;
-//     A takes C off: C taken out, the vault keyed anew; B joins the own lock face to face, is let in and given the
-//     vault; A, its vault locked, takes B off: B refused, the vault keyed anew (the box key read); B joins again;
+// dev cloud's mock account and keeping its keys in a file (a sealer that asks no one, counting what it would have
+// asked), as a person uses the app (round 13's first three devices as apps from before, sealing nothing):
+//   1-3 A turns safe mode on: alice's own lock begun by A by itself and bound, nobody asked; A keeps an item in a
+//     vault; C, asking from its waiting page with A showing the code, lands on alice's own lock and is given the
+//     vault; A takes C off: C taken out, the vault keyed anew; B joins the own lock face to face, is let in and given
+//     the vault; A, its vault locked, takes B off: B refused, the vault keyed anew (the box key read); B joins again;
 //     D joins through B; the station restarted, D taken off while it is frozen, B taken off while its app is closed;
 //   4 B takes A, the first device, off; the last one left cannot take itself off;
 //   5 A's app installed anew (its data and keys gone): a new device, let in only as it joins again;
 //   6 the cloud frozen while a device joins and is taken off: the stations carry the locks;
 //   7 a second station in the lock, the first frozen while a device joins and is taken off through the second;
-//   8 bob, a member: his first device approved by the owner face to face, a vault of his own, his own lock and his
-//     second device on it; taken out of the workspace by the owner, out of its lock with his devices, refused;
+//   8 bob, a member: his first device approved by the owner face to face, which begins his own lock by itself (bound,
+//     nobody asked), a vault of his own, his second device on his own lock; taken out of the workspace by the owner,
+//     out of its lock with his devices, refused;
 //   9 a second workspace of alice's, safe mode on there too, its own station: a device joining her own lock once is let
 //     in by both, taken off it refused by both;
 //   10 safe mode turned off in the second: its station lets that device in again, the first still refuses it;
 //   11 round 7's second station taken out of the first workspace: out of its lock too;
 //   12 bob made a member again: his first device approved by the owner once more, his own lock bound again, his other
 //     device on it let in; then every device of his lost: a new one finds none to approve it, says so (his own lock
-//     begun anew), the owner takes him out and makes him a member again and approves it as his first.
+//     begun anew), the owner takes him out and makes him a member again and approves it as his first;
+//   13 carol, a member whose three devices are apps from before (they seal nothing): the first approved by the owner,
+//     each next by the one before, no lock of her own; two apps updated say their keys in the workspace's lock and
+//     nobody begins; the first updated begins her own lock with the three on it, the others take it, it is bound,
+//     nobody asked; a vault of hers then, and a new device of hers asking from its waiting page lands on her own lock.
 // Each check says PASS or FAIL; it goes on after a failure where it can, and exits 1 if any failed. E2E_SF_SRC,
 // E2E_ORIGIN, E2E_PEER_DATA as peer.ts; E2E_WORK, E2E_STATION as e2e-local.sh's.
 import { readFileSync, writeFileSync } from "node:fs";
@@ -40,6 +46,12 @@ const h = new Device("H", "bob");
 const i = new Device("I", "bob");
 const j = new Device("J");
 const k = new Device("K", "bob");
+// (round 13's: carol's apps from before the update, sealing nothing, and a new one of hers; named so as `l` and `n`
+// are the file's names for a lock and a length)
+const lDev = new Device("L", "carol", { sealed: false });
+const mDev = new Device("M", "carol", { sealed: false });
+const nDev = new Device("N", "carol", { sealed: false });
+const oDev = new Device("O", "carol");
 let dKey = "";
 let dBase = "";
 let sub = "";
@@ -59,6 +71,17 @@ try {
     await a.call("lock.open", { workspace });
     await a.lock(workspace, (l) => l.locked && l.signs);
     await a.stationState(workspace, (s) => s.state === "online");
+  });
+  // (everyone in safe mode comes to have a lock of their own with nobody asked: A, the only device of alice's there and
+  // sealing its keys, is the one to begin hers, once her stations answered a read of it; bound by A then)
+  await check("A began alice's own lock by itself and it is bound (the station's: one person), nobody asked", async () => {
+    const t1 = Date.now();
+    await a.personal((p) => p.standing === "member", 90_000);
+    const t2 = Date.now();
+    let said = "";
+    await whenChanged([stationData], () => /^PERSONS 1$/m.test((said = stationSays("lock-state"))), 60_000, () => `the station's lock: ${said.trim().split("\n").slice(-4).join("; ")}`);
+    log(`  A on alice's own lock after ${t2 - t1} ms, bound at the station ${Date.now() - t2} ms later`);
+    if (a.asked() !== 0) throw new Error(`A's sealer asked the person ${a.asked()} times`);
   });
 
   let vault = "";
@@ -101,18 +124,23 @@ try {
     })).id;
   });
 
-  // ── C: a device let into the workspace's lock the old way (face to face, before the own lock), given the vault ──
+  // ── C: a new device approved from its waiting page with A showing the code, as a person does it: with alice's own lock
+  // bound, the request lands on it (views/lock.ts `pair`), and C is let into the workspace's lock for being on it ──
   await c.signIn();
-  await must("C approved into the workspace's lock face to face by A (the old way)", async () => {
-    // (left out by the station first: then it waits in the workspace, to be approved)
+  let cKey = "";
+  await must("C asks from its waiting page, A shows the code: C on alice's own lock, in the workspace's lock signing, let in", async () => {
+    // (left out by the station first: then it waits in the workspace, to be approved, once it has heard the workspace's
+    // lock names alice's own: until then its request would go to the workspace's lock)
     await c.stationState(workspace, (s) => s.cause === "lock", 60_000);
-    await c.lock(workspace, (l) => l.me?.waiting, 60_000);
+    await c.lock(workspace, (l) => l.me?.waiting && l.me?.ownLock, 60_000);
     const shown = a.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
     await c.call("lock.pair", { workspace });
     const p = await shown;
     await c.call("lock.pairCode", { workspace, code: p.code });
     await c.lock(workspace, (l) => l.signs && l.me?.confirmed, 90_000);
     await c.stationState(workspace, (s) => s.state === "online", 90_000);
+    // (its key on alice's own lock, as it has itself there: what A takes off below)
+    cKey = (await c.personal((p) => p.standing === "member", 90_000)).devices.find((x: J) => x.me)?.key as string;
   });
   const cBase = await baseOf(c);
   await must("C sets up the vault, is given its key, opens the item", async () => {
@@ -120,13 +148,12 @@ try {
     await keyedFor(c);
     await opens(c);
   });
-
-  // ── the own lock opened: bound, and C (never on it) taken out of the workspace's lock by A ──
-  await must("A opens alice's own lock", async () => {
-    await a.call("adb.personalOpen", { sub });
-    await a.personal((p) => p.standing === "member");
+  await check("C in the workspace's lock, let in, opens the item", async () => {
+    const l = await a.lock(workspace, (l) => l.signs, 30_000);
+    if (!lockDevices(l).some((d) => d.id === cBase)) throw new Error("C not in the workspace's lock");
+    await c.stationState(workspace, (s) => s.state === "online", 30_000);
+    await opens(c);
   });
-  // ── C, of the workspace's lock but off alice's own, keeps it from being bound: C still let in, until it joins ──
   const join = async (d: Device) => {
     const shown = a.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
     await d.call("adb.personalJoin", { sub });
@@ -135,19 +162,7 @@ try {
     const mine = await d.personal((p) => p.standing === "member", 90_000);
     return mine.devices.find((x: J) => x.me)?.key as string;
   };
-  await check("C, off alice's own lock, keeps it from being bound: still in the workspace's lock, let in, opens the item", async () => {
-    const l = await a.lock(workspace, (l) => l.signs, 30_000);
-    if (!lockDevices(l).some((d) => d.id === cBase)) throw new Error("C taken out");
-    await c.stationState(workspace, (s) => s.state === "online", 30_000);
-    await opens(c);
-  });
-  let cKey = "";
-  await must("C joins alice's own lock face to face with A, and alice is bound to it then", async () => {
-    if (stationSays("lock-state").includes("PERSONS 1")) throw new Error("bound before C joined");
-    cKey = await join(c);
-    await whenChanged([stationData], () => stationSays("lock-state").includes("PERSONS 1"), 60_000, () => "not bound in 60 s");
-  });
-  await must("A removes C from alice's own lock (bound once C was on it)", async () => {
+  await must("A removes C from alice's own lock", async () => {
     await a.call("adb.personalRemove", { sub, key: cKey });
     await a.personal((p) => p.devices.length === 1, 60_000);
   });
@@ -505,8 +520,9 @@ try {
   const bId = await baseOf(b);
   const eId = await baseOf(e);
   // ── round 8: a second person, bob, a member: his first device let into the workspace's lock by the owner face to
-  // face, a vault of his own; his own lock opened and bound, his second device joining it; then the owner takes him
-  // out of the workspace: the cloud's to say (members are the account system's), his devices refused ──
+  // face, which begins his own lock by itself (nobody asked) and binds it, a vault of his own, his second device
+  // joining his own lock; then the owner takes him out of the workspace: the cloud's to say (members are the account
+  // system's), his devices refused ──
   let bobVault = "";
   let bobItem = "";
   const bobSecret = `ghp_bob_${Date.now()}`;
@@ -529,6 +545,12 @@ try {
     await h.lock(workspace, (l) => l.signs && l.me?.confirmed, 90_000);
     await h.stationState(workspace, (s) => s.state === "online", 90_000);
   });
+  // (before its vault: opening a vault's key reads the box key, which asks the person, and that is not what is counted
+  // here)
+  await check("H, once approved, began bob's own lock by itself, nobody asked", async () => {
+    await h.personal((p) => p.standing === "member", 90_000);
+    if (h.asked() !== 0) throw new Error(`H's sealer asked the person ${h.asked()} times`);
+  });
   await must("H sets up the vault, keeps an item in a vault of bob's own, opens it", async () => {
     await h.call("vault.setup", { workspace });
     await h.until({ topic: "vaults", workspace }, (v) => v?.setUp, 60_000);
@@ -544,10 +566,6 @@ try {
     const o = await b.call("vault.open", { workspace, item: bobItem }).then((o) => o, (x) => x);
     if (!(o instanceof Error)) throw new Error(`B opened bob's item: ${JSON.stringify(o)?.slice(0, 200)}`);
     await opens(b);
-  });
-  await must("H opens bob's own lock", async () => {
-    await h.call("adb.personalOpen", { sub: h.sub });
-    await h.personal((p) => p.standing === "member");
   });
   await check("bob bound to his own lock in the workspace's lock (the station's: two persons); H still let in", async () => {
     let said = "";
@@ -720,13 +738,14 @@ try {
   const bobAgain = async () => {
     await b.call("workspace.addMembers", { account: sub, workspace, role: "member", emails: ["bob@example.test"] });
   };
-  const approvedByB = async (x: Device) => {
+  /// `x` approved into the workspace's lock from its waiting page, the code shown on `approver` (round 13's too).
+  const approvedBy = async (approver: Device, x: Device) => {
     // (once it has heard the workspace's lock names no lock of its person's: until then its request would go to the
     // devices of the lock named before, not to the workspace's)
     const t1 = Date.now();
     const me = (await x.lock(workspace, (l) => l.me?.waiting && !l.me?.ownLock, 90_000)).me;
     log(`  ${x.name}'s page in Dev: ${JSON.stringify({ waiting: me.waiting, ownLock: me.ownLock ?? false })} after ${Date.now() - t1} ms`);
-    const shown = b.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
+    const shown = approver.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
     await x.call("lock.pair", { workspace });
     const p = await shown;
     await x.lock(workspace, (l) => l.me?.pair?.state === "code", 60_000);
@@ -734,6 +753,7 @@ try {
     await x.lock(workspace, (l) => l.signs && l.me?.confirmed, 90_000);
     await x.stationState(workspace, (s) => s.state === "online", 90_000);
   };
+  const approvedByB = (x: Device) => approvedBy(b, x);
   const persons = async (n: number) => {
     let said = "";
     await whenChanged([stationData], () => new RegExp(`^PERSONS ${n}$`, "m").test((said = stationSays("lock-state"))), 60_000, () => `the station's lock: ${said.trim().split("\n").slice(-4).join("; ")}`);
@@ -792,9 +812,149 @@ try {
       await opens(x);
     }
   });
+
+  // ── round 13: a person from before the update moved over with nobody asked. carol, a member, has three apps from
+  // before (L, M, N: they seal nothing, so make no key of a lock of her own, and sign the workspace's lock with a key
+  // kept in a plain file), each approved face to face in the workspace's lock, the first by the owner, each next by the
+  // one before. As each app updates (its host sealing now, the same data), it says in the workspace's lock the key it
+  // would be on her own lock with; the first of hers, updated last, begins that lock by itself once the others said
+  // theirs, puts on it those it approved and those they approved, they take it by themselves, and it is bound: nobody
+  // asked for anything (views/lock.ts `ownLockFor`). Then a new device of hers asks from its waiting page and lands on
+  // her own lock. ──
+  // H, J, K and A installed anew have no more part: closed. Each device of alice's reads her account again on every
+  // change to her workspaces (carol made a member is one), and still.fail cloud gives an account 120 requests a minute
+  // (account.ts); and every owner's device is dialled for a member's first device, so B alone shows the code for L.
+  await within(Promise.all([e, h, j, k].map((x) => x.close())), 5000);
+  const personsIn = (said: string) => Number(said.match(/^PERSONS (\d+)$/m)?.[1] ?? NaN);
+  const saidIn = (said: string) => (said.match(/^SAID(.*)$/m)?.[1] ?? "").trim().split(/\s+/).filter((x) => x !== "");
+  const before = personsIn(stationSays("lock-state"));
+  log(`  persons in the workspace's lock before carol: ${before}`);
+  let carolVault = "";
+  let carolItem = "";
+  const carolSecret = `ghp_carol_${Date.now()}`;
+  const carolOpens = async (x: Device) => {
+    const o = await x.call("vault.open", { workspace, item: carolItem });
+    if (o?.plain?.fields?.value !== carolSecret) throw new Error(`${x.name} opened: ${JSON.stringify(o)?.slice(0, 300)}`);
+  };
+  const carolKeyed = (x: Device, ms = 90_000) => x.until({ topic: "vaults", workspace }, (v) => (v?.vaults ?? []).find((y: J) => y.id === carolVault && y.keyed), ms);
+  await must("B adds carol to the workspace", async () => {
+    const r = await b.call("workspace.addMembers", { account: sub, workspace, role: "member", emails: ["carol@example.test"] });
+    log(`  added: ${JSON.stringify(r)?.slice(0, 200)}`);
+  });
+  await lDev.signIn();
+  await must("carol's first device L, an app from before, refused; B approves it face to face from its waiting page", async () => {
+    log(`  L sees the first: ${short(await lDev.stationState(workspace, (s) => s.cause === "lock", 90_000))}`);
+    await approvedBy(b, lDev);
+  });
+  await mDev.signIn();
+  await must("M, an app from before, refused; approved from its waiting page by L, the code shown on L", async () => {
+    log(`  M sees the first: ${short(await mDev.stationState(workspace, (s) => s.cause === "lock", 90_000))}`);
+    await approvedBy(lDev, mDev);
+  });
+  await nDev.signIn();
+  await must("N, an app from before, refused; approved from its waiting page by M, the code shown on M", async () => {
+    log(`  N sees the first: ${short(await nDev.stationState(workspace, (s) => s.cause === "lock", 90_000))}`);
+    await approvedBy(mDev, nDev);
+  });
+  // (as lock-state names them: the first 12 hex digits of each one's id in the workspace's lock)
+  const [lId, mId, nId] = (await Promise.all([lDev, mDev, nDev].map(baseOf))).map((x) => x.slice(0, 12));
+  log(`  L ${lId}, M ${mId}, N ${nId}`);
+  // (no vault of carol's yet: a host that seals nothing has no vault (views/vault.ts `able`), so hers is kept once her
+  // apps updated, below)
+  await check("carol has no lock of her own: none on L, the station's persons as before, none of L, M, N said a key", async () => {
+    await lDev.personal((p) => p.standing === "none", 30_000);
+    const said = stationSays("lock-state");
+    if (personsIn(said) !== before) throw new Error(`persons ${personsIn(said)}, not ${before}`);
+    const named = saidIn(said).filter((x) => [lId, mId, nId].includes(x));
+    if (named.length > 0) throw new Error(`said: ${named.join(" ")}`);
+  });
+  // ── N's and M's apps updated: they say their keys; nobody begins, L (the first of hers, the one to) not updated ──
+  await nDev.restart({ sealed: true });
+  await mDev.restart({ sealed: true });
+  await check("N and M updated: still let in, signing in the workspace's lock", async () => {
+    for (const x of [nDev, mDev]) {
+      await x.stationState(workspace, (s) => s.state === "online", 90_000);
+      await x.lock(workspace, (l) => l.signs && l.me?.confirmed, 90_000);
+    }
+  });
+  await check("N and M say in the workspace's lock the key they would be on carol's own lock with; L does not", async () => {
+    let said = "";
+    await whenChanged([stationData], () => {
+      const now = saidIn((said = stationSays("lock-state")));
+      return now.includes(nId) && now.includes(mId);
+    }, 90_000, () => `SAID ${saidIn(said).join(" ")}`);
+    if (saidIn(said).includes(lId)) throw new Error(`L said a key: SAID ${saidIn(said).join(" ")}`);
+  });
+  await check("nobody began carol's own lock: the station's persons as before", async () => {
+    const said = stationSays("lock-state");
+    if (personsIn(said) !== before) throw new Error(`persons ${personsIn(said)}, not ${before}`);
+  });
+  // ── L's app updated: it begins carol's own lock with the three on it, M and N take it, it is bound ──
+  await lDev.restart({ sealed: true });
+  await check("L, updated, began carol's own lock by itself with L, M and N on it", async () => {
+    const p = await lDev.personal((p) => p.standing === "member" && p.devices.length === 3, 90_000);
+    log(`  carol's own lock: ${JSON.stringify(p.devices.map((d: J) => d.label))}`);
+  });
+  await check("M and N took carol's own lock by themselves", async () => {
+    for (const x of [mDev, nDev]) await x.personal((p) => p.standing === "member", 90_000);
+  });
+  await check("carol bound to her own lock in the workspace's lock (the station's: one person more)", async () => {
+    let said = "";
+    await whenChanged([stationData], () => personsIn((said = stationSays("lock-state"))) === before + 1, 90_000, () => `the station's lock: ${said.trim().split("\n").slice(-4).join("; ")}`);
+  });
+  await check("L, M and N let in, signing in the workspace's lock", async () => {
+    for (const x of [lDev, mDev, nDev]) {
+      await x.stationState(workspace, (s) => s.state === "online", 90_000);
+      await x.lock(workspace, (l) => l.signs && l.me?.confirmed, 90_000);
+    }
+  });
+  // (before carol's vault: opening a vault's key given to a device reads its box key, which asks the person, and that
+  // is not what is counted here)
+  await check("nobody asked for anything on L, M or N", async () => {
+    const asked = lDev.asked() + mDev.asked() + nDev.asked();
+    if (asked !== 0) throw new Error(`asked: L ${lDev.asked()}, M ${mDev.asked()}, N ${nDev.asked()}`);
+  });
+  await must("L sets up the vault, keeps an item in a vault of carol's own, opens it", async () => {
+    await lDev.call("vault.setup", { workspace });
+    await lDev.until({ topic: "vaults", workspace }, (v) => v?.setUp, 60_000);
+    carolVault = (await lDev.call("vault.create", { workspace, name: "carol", station: station.split("/")[1] })).id;
+    carolItem = (await lDev.call("vault.putItem", {
+      workspace, vault: carolVault,
+      plain: { kind: "token", name: "carol-token", fields: { value: carolSecret }, domains: [], notes: "" },
+      listing: { name: "carol-token", kind: "token", modes: ["proxy"], hosts: ["api.example.test"] },
+    })).id;
+    await carolOpens(lDev);
+  });
+  await check("M and N set up the vault, are given the key of carol's, open her item", async () => {
+    for (const x of [mDev, nDev]) {
+      await x.call("vault.setup", { workspace });
+      await carolKeyed(x);
+      await carolOpens(x);
+    }
+  });
+  // ── O, a new device of carol's: from its waiting page it lands on her own lock, L showing the code ──
+  await oDev.signIn();
+  await must("O, a new device of carol's, refused; asks from its waiting page, L shows the code: O on carol's own lock", async () => {
+    log(`  O sees the first: ${short(await oDev.stationState(workspace, (s) => s.cause === "lock", 90_000))}`);
+    // (once it has heard the workspace's lock names carol's own: until then its request would go to the workspace's)
+    await oDev.lock(workspace, (l) => l.me?.waiting && l.me?.ownLock, 60_000);
+    const shown = lDev.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
+    await oDev.call("lock.pair", { workspace });
+    const p = await shown;
+    await oDev.lock(workspace, (l) => l.me?.pair?.state === "code", 60_000);
+    await oDev.call("lock.pairCode", { workspace, code: p.code });
+    await oDev.personal((p) => p.standing === "member", 90_000);
+  });
+  await check("O let in, signing in the workspace's lock, given the key of carol's vault, opens her item", async () => {
+    await oDev.stationState(workspace, (s) => s.state === "online", 90_000);
+    await oDev.lock(workspace, (l) => l.signs && l.me?.confirmed, 90_000);
+    await oDev.call("vault.setup", { workspace });
+    await carolKeyed(oDev);
+    await carolOpens(oDev);
+  });
 } catch (e) {
   fail("the run", e);
 }
 log(failures() === 0 ? "ALL PASSED" : `${failures()} FAILED`);
-await within(Promise.all([a, b, c, d, e, f, g, h, i, j, k].map((x) => x.close())), 5000);
+await within(Promise.all([a, b, c, d, e, f, g, h, i, j, k, lDev, mDev, nDev, oDev].map((x) => x.close())), 5000);
 process.exit(failures() === 0 ? 0 : 1);

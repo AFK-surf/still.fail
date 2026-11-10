@@ -44,7 +44,7 @@ import { unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
-import { type PersonalEnv, personOf } from "../personal-lock.ts";
+import { type Device as PersonDevice, type PersonalEnv, personOf } from "../personal-lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -67,6 +67,9 @@ export const TAKEN_MS = 15_000;
 const RECENT_SECS = 7 * 86400;
 /// Once one station answered a read of the locks, how much longer the others are waited for.
 export const OTHERS_MS = 2_000;
+/// How lately a device came to the stations, or a station to the control plane, for it to be waited for before a
+/// person's lock is begun with no one asked (station/src/mesh/seen-devices.ts SEEN_SECS, which its lists keep).
+const SEEN_SECS = 31 * 86400;
 
 /// Each of `asks` (one a station) at once, and what they answered once all have; or once one answered and the rest
 /// had what `after` says of that answer more (null: as if none came); or by TAKEN_MS whatever came. A station gone
@@ -525,6 +528,7 @@ function hold(inner: Inner, ws: string, sub: string, was: Held | null, head: Hea
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
     inner.runner.fork(bindPerson(inner, ws));
     inner.runner.fork(keepToPerson(inner, ws));
+    inner.runner.fork(ownLockFor(inner, ws));
     // The vault's too: whether it is locked, this device confirmed in it, whose vaults are trusted (views/vault.ts).
     lockSeen(inner).touch(`lock ${ws}`, `draft ${ws}`, "prompts");
     inner.views?.vaultChanged(ws);
@@ -620,7 +624,9 @@ function carried(inner: Inner, ws: string): Entry[] | null {
   const f = fold(h.entries);
   if (f.disabled || !f.devices.has(base)) return null;
   let at = h.entries.length - 1;
-  while (at >= 0 && !(h.entries[at]!.kind === "device" && get(h.entries[at]!.body, "id") === base)) at--;
+  // (not one it signed itself, saying itself again (ownLockFor): a station that has not heard of it takes none of its)
+  const putIn = (e: Entry) => e.kind === "device" && get(e.body, "id") === base && e.sig?.key !== get(e.body, "sign_key");
+  while (at >= 0 && !putIn(h.entries[at]!)) at--;
   if (at < 0 || now(inner) - h.entries[at]!.at > RECENT_SECS) return null;
   const sub = get(h.entries[at]!.body, "sub");
   for (let i = at - 1; i >= 0 && now(inner) - h.entries[i]!.at <= RECENT_SECS; i--) {
@@ -853,6 +859,315 @@ function signKeysElsewhere(inner: Inner, ws: string, sub: string): Map<string, {
   return keys;
 }
 
+/// A person's app device in a workspace's lock, as that lock (checked here) has it: theirs, their own, live, signing
+/// there with `sign_key`. `by`: the device whose key signed the entry that gave it that key (it approved it face to face),
+/// `bySub` whose that is, `byKey` the key it signed with; none for the genesis's signer, one a passkey put in, or where
+/// it is not plain which device signed (two held the key) or that one does not stand as it did then (taken out, put in
+/// again by someone else, signing with another key now: what the rules would not take from it now is not taken as its
+/// word). The genesis's other devices of the person's whose signer is theirs are put in by it. `since`: the entry its
+/// standing began at. `said`: the key it would be on the person's own lock with, as it last said itself there
+/// (`person_key` in an entry of its own, signed with its key; the rules read no more of a device than they know, and
+/// `fold` drops it), said since its standing began.
+export type OwnDevice = { id: string; label: string; sign_key: string; by: string | null; bySub: string | null; byKey: string | null; since: number; said: string | null };
+export type OwnStandings = { devices: ReadonlyMap<string, OwnDevice> };
+const PERSON_KEY = /^ed25519:[0-9a-f]{64}$/;
+
+/// The person `sub`'s devices in a workspace's lock (`entries`) at `at` (unix seconds), by id. None where the lock does
+/// not check out or is turned off.
+export function ownStandings(entries: readonly Entry[], sub: string, at: number): OwnStandings {
+  // (a lock held is replaced whole, never changed in place: what it said of a person at a second it says again, read
+  // only; each read of a lock, and each of its hooks, asks)
+  const was = standingsOf.get(entries);
+  if (was !== undefined && was.sub === sub && was.at === at) return was.out;
+  const out = standingsAt(entries, sub, at);
+  standingsOf.set(entries, { sub, at, out });
+  return out;
+}
+const standingsOf = new WeakMap<readonly Entry[], { sub: string; at: number; out: OwnStandings }>();
+
+function standingsAt(entries: readonly Entry[], sub: string, at: number): OwnStandings {
+  const devices = new Map<string, OwnDevice>();
+  let lock: Checked;
+  try {
+    lock = checkLock([...entries], at);
+  } catch {
+    return { devices };
+  }
+  if (lock.disabled) return { devices };
+  // Each device's key as the entries set it, in order: who gave it the one it has, and what it said of itself since.
+  const keys = new Map<string, { sub: unknown; kind: unknown; sign_key: string | null }>();
+  const put = new Map<string, { by: string | null; byKey: string | null; since: number }>();
+  const said = new Map<string, string>();
+  const holder = (key: unknown): string | null => {
+    const ids = [...keys].filter(([, d]) => d.kind === "app" && d.sign_key === key).map(([id]) => id);
+    return ids.length === 1 ? ids[0]! : null;
+  };
+  const gone = (id: string) => {
+    keys.delete(id);
+    put.delete(id);
+    said.delete(id);
+  };
+  entries.forEach((e, i) => {
+    const b = (e.body ?? {}) as J;
+    if (e.kind === "genesis") {
+      // The device whose key signed it (none where a passkey did): its person's other devices it names put in by it.
+      const signedWith = str(e.sig?.key);
+      const signer = arr(b.devices).find((d) => typeof d?.id === "string" && d.kind === "app" && signedWith !== null && str(d.sign_key) === signedWith);
+      for (const d of arr(b.devices)) {
+        if (typeof d?.id !== "string") continue;
+        keys.set(d.id, { sub: d.sub, kind: d.kind, sign_key: str(d.sign_key) });
+        if (str(d.sign_key) === null) continue;
+        const bySigner = signer !== undefined && d.sub === signer.sub && d.id !== signer.id;
+        put.set(d.id, { by: bySigner ? signer.id : null, byKey: bySigner ? signedWith : null, since: 0 });
+      }
+    } else if (e.kind === "device" && typeof b.id === "string") {
+      const was = keys.get(b.id)?.sign_key ?? null;
+      const key = str(b.sign_key);
+      // (itself, keeping its key: what it says of itself, its standing as it was)
+      if (key !== null && key === was && e.sig?.key === was) {
+        if (typeof b.person_key === "string" && PERSON_KEY.test(b.person_key)) said.set(b.id, b.person_key);
+      } else if (key !== was) {
+        put.delete(b.id);
+        said.delete(b.id);
+        if (key !== null) put.set(b.id, { by: holder(e.sig?.key), byKey: str(e.sig?.key), since: i });
+      }
+      keys.set(b.id, { sub: b.sub, kind: b.kind, sign_key: key });
+    } else if (e.kind === "device.remove" && typeof b.id === "string") gone(b.id);
+    else if (e.kind === "member.remove") for (const [id, d] of [...keys]) if (d.sub === b.sub) gone(id);
+  });
+  const labels = fold([...entries]).devices;
+  for (const d of lock.devices.values()) {
+    const p = put.get(d.id);
+    if (d.sub !== sub || d.kind !== "app" || !d.own || typeof d.sign_key !== "string" || live(d, at) === undefined || p === undefined || keys.get(d.id)?.sign_key !== d.sign_key) continue;
+    // (the device that signed, as the lock stands: its own, with the key it signed with)
+    const by = p.by === null ? undefined : lock.devices.get(p.by);
+    const vouched = by !== undefined && by.own && by.kind === "app" && by.sign_key === p.byKey;
+    devices.set(d.id, { id: d.id, label: str(get(labels.get(d.id), "label")) ?? "", sign_key: d.sign_key, by: vouched ? by.id : null, bySub: vouched ? by.sub : null, byKey: vouched ? p.byKey : null, since: p.since, said: said.get(d.id) ?? null });
+  }
+  return { devices };
+}
+
+/// The devices up the `by` links from `id` in what a workspace's lock says of a person's (ownStandings), nearest first,
+/// each the person's own; none past one that is not among them, or once one comes round again.
+export function ancestors(own: OwnStandings, id: string): OwnDevice[] {
+  const out: OwnDevice[] = [];
+  const passed = new Set([id]);
+  let d = own.devices.get(id);
+  while (d !== undefined && d.by !== null && !passed.has(d.by)) {
+    passed.add(d.by);
+    d = own.devices.get(d.by);
+    if (d !== undefined) out.push(d);
+  }
+  return out;
+}
+
+/// The workspaces' locks in safe mode this device holds for `sub`, each with what it says of their devices.
+function ownLocks(inner: Inner, sub: string): { ws: string; h: Held; f: Folded; own: OwnStandings }[] {
+  const out: { ws: string; h: Held; f: Folded; own: OwnStandings }[] = [];
+  for (const [ws, owner] of inner.workspaces.owned()) {
+    const h = held(inner, ws);
+    if (owner !== sub || !h?.head) continue;
+    const f = fold(h.entries);
+    if (!f.disabled) out.push({ ws, h, f, own: ownStandings(h.entries, sub, now(inner)) });
+  }
+  return out;
+}
+
+/// What a person's own lock reads of the workspaces' locks (personal-lock.ts `approved`, `vouchers`): the devices to
+/// put on it as it stands (`approvedIn`), this device's own id and signing key telling which is this one; the keys said
+/// up this device's lineages (`vouchersIn`).
+export function ownLockEnv(inner: Inner): Pick<PersonalEnv, "approved" | "vouchers"> {
+  return {
+    approved: (sub, chain) => approvedIn(ownLocks(inner, sub).map((l) => l.own), sub, { id: bases.get(inner) ?? null, signKey: signerOf(inner) }, chain),
+    vouchers: (sub) => {
+      const base = bases.get(inner) ?? null;
+      return base === null ? new Set<string>() : vouchersIn(ownLocks(inner, sub).map((l) => l.own), sub, base);
+    },
+  };
+}
+
+/// Of what workspaces' locks say of `sub`'s devices (ownStandings): those to put on their own lock as it stands
+/// (`chain`), each once (by id and by key). Each said the key it would be on it with; was put in by a device whose
+/// signing key, as it signed, is one the chain records for a device on it (`signers`: only that device's holder signs
+/// with it, while a device id is anyone's to write under a key of their own); and will take the chain once on it, as
+/// `vouchersIn` has it there: up its lineage is this device (`me`, by its id and the key it signs with) or one whose
+/// said key signed an entry of the chain (`signed`). One put on that would not take it would be let in by the stations
+/// once the lock is bound, yet hold itself as not let in. None whose id or key was `ever` on it.
+export function approvedIn(
+  locks: readonly OwnStandings[],
+  sub: string,
+  me: { id: string | null; signKey: string | null },
+  chain: { signers: ReadonlySet<string>; signed: ReadonlySet<string>; ever: { ids: ReadonlySet<string>; keys: ReadonlySet<string> } },
+): PersonDevice[] {
+  const out = new Map<string, PersonDevice>();
+  const keys = new Set<string>();
+  const takes = (a: OwnDevice) => (me.id !== null && me.signKey !== null && a.id === me.id && a.sign_key === me.signKey) || (a.said !== null && chain.signed.has(a.said));
+  for (const own of locks) {
+    for (const d of own.devices.values()) {
+      if (d.said === null || d.by === null || d.bySub !== sub || d.byKey === null || !chain.signers.has(d.byKey)) continue;
+      if (chain.ever.ids.has(d.id) || chain.ever.keys.has(d.said) || out.has(d.id) || keys.has(d.said)) continue;
+      if (!ancestors(own, d.id).some(takes)) continue;
+      out.set(d.id, { key: d.said, id: d.id, label: d.label, sign_key: d.sign_key });
+      keys.add(d.said);
+    }
+  }
+  return [...out.values()];
+}
+
+/// Of what workspaces' locks say of a person's devices (ownStandings, of `sub`'s): the keys said by the devices up
+/// `base`'s lineage in each (the one that put it in, the one that put that one in, and so on, each theirs). Every
+/// lineage of a person's own devices is taken as theirs, a member's too, so that nobody approves their devices again
+/// (the user, 2026-11-10). What that costs: a workspace's owner or admin who rewrites its lock (takes a member out and
+/// makes them one again, which clears the member's `signed` in rules/src/lock/lock.mbt, puts a device of their own in
+/// as the member's first and the member's real devices back in under it: their signing keys are public) gets that
+/// device taken as the member's by the member's devices that have no lock pinned yet; the entries that did it stay in
+/// the workspace's lock.
+export function vouchersIn(locks: readonly OwnStandings[], _sub: string, base: string): Set<string> {
+  const out = new Set<string>();
+  for (const own of locks) for (const a of ancestors(own, base)) if (a.said !== null) out.add(a.said);
+  return out;
+}
+
+/// Whether the stations of a workspace listed a device of `sub`'s as come to them lately (GET /lock/devices: the last
+/// SEEN_SECS, station/src/mesh/seen-devices.ts); not knowing (no list held) is as seen.
+const seenThere = (h: Held, sub: string, id: string): boolean => h.seen == null || h.seen.some((r) => r?.sub === sub && (r.base === id || r.device === id));
+
+/// The one of `sub`'s devices to begin their lock, of the workspaces' locks that hold devices of theirs (`relevant`), as
+/// this device (`base`) sees them: of the devices whose standing began first in one of them (since, then id; one that
+/// has not come to the stations in SEEN_SECS passed over: an old machine never taken out would keep the person from ever
+/// having a lock) that stand in every one, the one with the smallest id. Two devices, each first in a workspace of its
+/// own, would each begin a chain; every one counted holds the same locks, so they agree on one. None where no such
+/// device stands in them all: nobody begins then (a device approved into the others' workspaces later may).
+function firstToBegin(relevant: readonly { h: Held; own: OwnStandings }[], sub: string, base: string): string | null {
+  const tops = new Set<string>();
+  for (const l of relevant) {
+    let top: OwnDevice | null = null;
+    for (const d of l.own.devices.values()) {
+      if (d.id !== base && !seenThere(l.h, sub, d.id)) continue;
+      if (top === null || d.since < top.since || (d.since === top.since && d.id < top.id)) top = d;
+    }
+    if (top !== null) tops.add(top.id);
+  }
+  let first: string | null = null;
+  for (const id of tops) if (relevant.every((l) => l.own.devices.has(id)) && (first === null || id < first)) first = id;
+  return first;
+}
+
+/// Every person in safe mode comes to have a lock of their own holding their trusted app devices, nobody asked, and
+/// then bindPerson binds it by itself (people are never asked to tell the two apart: the root AGENTS.md, To people there
+/// is one safe mode). This device, one of the person's in a workspace's lock that signs for them there, on the
+/// still.fail cloud's account system, once every workspace of theirs has its lock read (one not read may hold a device
+/// of theirs that comes first, or a lock bound): where they have no lock of their own and none is bound in any of their
+/// workspaces, the one of their devices to begin it (`firstToBegin`) begins one (personal-lock.ts `beginQuietly`), its
+/// key made now and its seed in hand, once each other device of theirs in those locks said the key it would be on it
+/// with or has not come to the stations lately (one that has come and not said would be left off, and keep it from
+/// being bound), and once every station of theirs seen lately answered a read of their lock (`personalStations`
+/// `answered`). Every device, the one that began once it did too, says there the key it is or would be on that lock
+/// with (a device entry of its own, signed with the key the workspace's lock knows it by, `person_key`): the devices on
+/// the lock put on those below them in their lineage as they next hold their seed (personal-lock.ts `#addApproved`,
+/// `approvedIn`), and each takes the lock as it hears it where a device up its lineage signed an entry of it,
+/// knowing their keys by what they said here (`#putOnBy`, `vouchersIn`; a chain's own ids prove nothing). The one to
+/// begin says nothing while it waits to: its key made, it could not begin without asking; nor does anyone where they
+/// have no lock and no device of theirs is the one to begin, or the one to begin cannot with no one asked. The one that
+/// began says its key in each lock where another device of theirs stands, the devices it put on knowing its key only
+/// by that; once on the lock, others say it only where another device of theirs said its key, which may take the lock
+/// from it. Nothing is said where the
+/// person bound a lock of their own already: its stations go by that lock for their app devices, and an entry this
+/// device signed there since would keep keepToPerson from taking it out. Per person, once for each head of their locks
+/// and what holds the first back; one at a time, what asks meanwhile done after. No timer of its own.
+const owning = new WeakMap<Inner, Map<string, { again: boolean }>>();
+const ownTried = new WeakMap<Inner, Set<string>>();
+export function ownLockFor(inner: Inner, ws: string): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    const sub = inner.workspaces.owner(ws);
+    // (a host that seals nothing keeps no key of a person's lock: personal-lock.ts `#madeKey`)
+    if (inner.provider.kind !== "stillfail" || sub === null || !inner.host.appKeys || !inner.host.secureSet) return Effect.void;
+    let running = owning.get(inner);
+    if (running === undefined) owning.set(inner, (running = new Map()));
+    const was = running.get(sub);
+    if (was !== undefined) {
+      was.again = true;
+      return Effect.void;
+    }
+    const state = { again: true };
+    const all = running;
+    all.set(sub, state);
+    return Effect.ensuring(
+      Effect.gen(function* () {
+        while (state.again) {
+          state.again = false;
+          yield* Effect.ignore(ownLockOnce(inner, sub), { log: "Unhandled", message: "own lock for a person in safe mode" });
+        }
+      }),
+      Effect.sync(() => void all.delete(sub)),
+    );
+  });
+}
+
+function ownLockOnce(inner: Inner, sub: string): Effect.Effect<void, CoreError> {
+  return Effect.gen(function* () {
+    const signer = signerOf(inner);
+    const base = bases.get(inner) ?? null;
+    const personal = inner.adb.personal();
+    if (signer === null || base === null) return;
+    // (a workspace of theirs with no lock record is not known, not without a lock: read, it asks again, `hold`)
+    if (inner.workspaces.owned().some(([ws, owner]) => owner === sub && held(inner, ws) === null)) return;
+    const locks = ownLocks(inner, sub);
+    const mine = locks.filter((l) => l.own.devices.get(base)?.sign_key === signer);
+    if (mine.length === 0) return;
+    const relevant = locks.filter((l) => l.own.devices.size > 0);
+    // (on the lock already, with nothing to say where no other device of theirs said its key: nothing to do, nothing read)
+    const othersSaid = (l: (typeof locks)[number]) => !l.f.persons.has(sub) && [...l.own.devices.values()].some((d) => d.id !== base && d.said !== null);
+    if (personal.standing(sub) === "member" && !mine.some(othersSaid)) return;
+    // (once for each head of the locks, the person's own as read, and of the devices not said that came lately)
+    let tried = ownTried.get(inner);
+    if (tried === undefined) ownTried.set(inner, (tried = new Set()));
+    const waiting = (l: (typeof locks)[number]) => [...l.own.devices.values()].filter((d) => d.id !== base && d.said === null && seenThere(l.h, sub, d.id)).map((d) => d.id);
+    const key = [sub, personal.entries(sub).length, ...locks.map((l) => `${l.ws}:${l.h.head!.hash}:${waiting(l).join(",")}`)].join("/");
+    if (tried.has(key)) return;
+    tried.add(key);
+    const done = tried;
+    yield* Effect.tapError(
+      Effect.gen(function* () {
+        yield* personal.refresh(sub);
+        const bound = locks.some((l) => l.f.persons.has(sub));
+        let began = false;
+        const first = firstToBegin(relevant, sub, base);
+        const none = !bound && personal.standing(sub) === "none";
+        // (no lock of theirs and no one to begin it: nothing is said, as a key made to say it could begin none later,
+        // and no device would put this one on anything)
+        if (none && first === null) return;
+        if (none && first === base) {
+          // (the one to begin, unable to with no one asked, its key made before or the lock naming it by another: it
+          // begins as its person is next asked for something, personal-lock.ts `signGrant`; said meanwhile, its key
+          // would be read by no one)
+          if (mine.length !== relevant.length || !personal.mayBeginQuietly(sub)) return;
+          if (relevant.some((l) => waiting(l).length > 0)) return;
+          // (its stations not all answering yet, a lock of theirs not known to be none: tried again as a lock is next read)
+          if (!(yield* personal.beginQuietly(sub))) {
+            done.delete(key);
+            return;
+          }
+          began = true;
+        }
+        const said = yield* personal.makeKey();
+        const member = personal.standing(sub) === "member";
+        let failed: CoreError | null = null;
+        for (const l of mine) {
+          const me = l.own.devices.get(base)!;
+          // (having begun: said wherever another device of theirs stands, those it put on knowing its key only by that)
+          if (l.f.persons.has(sub) || me.said === said || (member && !(began ? l.own.devices.size > 1 : othersSaid(l)))) continue;
+          const put = new Lock(inner, l.ws, sub, null).append("device", { id: base, sub, kind: "app", label: me.label, sign_key: me.sign_key, person_key: said });
+          const r = yield* Effect.result(Effect.andThen(put, read(inner, l.ws)));
+          if (r._tag === "Failure") failed = r.failure;
+        }
+        if (failed !== null) return yield* Effect.fail(failed);
+      }),
+      () => Effect.sync(() => void done.delete(key)),
+    );
+  });
+}
+
 /// A person's own lock moved on (a device taken off): each station where it is bound told as it stands.
 export function tellStations(inner: Inner, sub: string, chain: Entry[]): void {
   for (const [ws, owner] of inner.workspaces.owned()) {
@@ -907,22 +1222,53 @@ function personStations(inner: Inner, sub: string): StationAddr[] {
   return [...out.values()];
 }
 
+/// The stations that answered a read of each person's own lock this run (`personalStations`), by id, per core.
+const answeredOf = new WeakMap<Inner, Map<string, Set<string>>>();
+
 /// A person's own lock as their stations keep it (personal-lock.ts `stations`), not the cloud: read of each station of
-/// their workspaces this device reaches, and brought to each.
+/// their workspaces this device reaches, and brought to each. Each station that answers a read is noted (an answer, or
+/// a refusal of this device, `lock_unconfirmed`: a station recent enough to keep such chains tells them as it refuses),
+/// as it comes, a late one too: `answered` is whether every station of theirs the control plane saw in SEEN_SECS did,
+/// and one at least. A lock of theirs kept only by a station that did not answer would get a second one begun beside
+/// it; one the control plane has not seen for a month is not waited for.
 export function personalStations(inner: Inner): NonNullable<PersonalEnv["stations"]> {
+  const heardOf = (sub: string): Set<string> => {
+    let m = answeredOf.get(inner);
+    if (m === undefined) answeredOf.set(inner, (m = new Map()));
+    let heard = m.get(sub);
+    if (heard === undefined) m.set(sub, (heard = new Set()));
+    return heard;
+  };
   return {
     read: (sub, only) => {
       const asked = personStations(inner, sub).filter((at) => only === undefined || at.toString() === only);
-      return Effect.map(
-        answersOf(inner, asked.map((at) => inner.stations.requests.call(at, "GET", "/lock/person", null, { quiet: true })), () => OTHERS_MS, asked.map(String)),
-        (answers) => {
-          const ok = answers.filter((r) => r._tag === "Success");
-          // Refused by them all (this device not let in yet): what their refusals told of it, not the cloud's.
-          const told = refusedChains.get(inner)?.get(sub);
-          if (ok.length === 0) return told !== undefined && answers.some((r) => r._tag === "Failure" && r.failure.code === "lock_unconfirmed") ? told : null;
-          return ok.flatMap((r) => arr(get(r.success, "chains")).map((c) => arr(get(c, "entries")) as Entry[]));
-        },
-      );
+      const heard = heardOf(sub);
+      const ask = (at: StationAddr) => {
+        const noted = Effect.sync(() => void heard.add(at.station));
+        return Effect.tapError(Effect.tap(inner.stations.requests.call(at, "GET", "/lock/person", null, { quiet: true }), () => noted), (e) => (e.code === "lock_unconfirmed" ? noted : Effect.void));
+      };
+      return Effect.map(answersOf(inner, asked.map(ask), () => OTHERS_MS, asked.map(String)), (answers) => {
+        const ok = answers.filter((r) => r._tag === "Success");
+        const refused = answers.some((r) => r._tag === "Failure" && r.failure.code === "lock_unconfirmed");
+        // What the refusals told of it (this device not let in there yet), not the cloud's: alone where all refused, else
+        // beside what the others kept, so a chain told only in a refusal is taken now.
+        const told = refused ? refusedChains.get(inner)?.get(sub) : undefined;
+        if (ok.length === 0) return told ?? null;
+        const kept = ok.flatMap((r) => arr(get(r.success, "chains")).map((c) => arr(get(c, "entries")) as Entry[]));
+        return told === undefined ? kept : [...kept, ...told];
+      });
+    },
+    answered: (sub) => {
+      const heard = answeredOf.get(inner)?.get(sub);
+      if (heard === undefined || heard.size === 0) return false;
+      const at = now(inner);
+      for (const [ws, owner] of inner.workspaces.owned()) {
+        if (owner !== sub) continue;
+        for (const s of arr(get(view(inner, ws), "stations"))) {
+          if (typeof s?.id === "string" && typeof s.last_seen === "number" && at - s.last_seen <= SEEN_SECS && !heard.has(s.id)) return false;
+        }
+      }
+      return true;
     },
     bring: (sub, chain) => {
       const asked = personStations(inner, sub);

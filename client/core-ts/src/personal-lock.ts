@@ -30,6 +30,8 @@ const KEY = "personal-signer";
 /// one budget a minute, which their reads as a lock moves can use up (as views/lock.ts `Lock` waits, by hand).
 const LIMITED_TRIES = 6;
 const LIMITED_WAIT = "10 seconds";
+/// How many devices approved in workspaces' locks are put on the lock at one time the seed is in hand (`#addApproved`).
+const APPROVED_AT_ONCE = 16;
 /// The key's public half, read without asking anyone.
 const KEY_ID = "personal-signer-id";
 const keptAs = (sub: string) => `personal-lock-${hex(utf8(sub))}`;
@@ -123,12 +125,25 @@ export type PersonalEnv = {
   signKey?: () => string | null;
   /// A device taken off: the stations where this lock is bound told, so an older chain brought there counts for nothing.
   told?: (sub: string, chain: Entry[]) => void;
+  /// The person's devices to put on their lock as it stands (`chain`), of what workspaces' locks in safe mode say
+  /// (views/lock.ts `ownLockEnv`, `approvedIn`): each said there the key it would be on it with, was put in there by a
+  /// device signing with one of the keys a device on the chain signs workspaces' locks with (`signers`, as the chain
+  /// records them: a device id is anyone's to write), and will take the chain once on it (put in under this device, or
+  /// under one whose said key signed an entry of it, `signed`). None whose id or key was `ever` on it.
+  approved?: (sub: string, chain: { signers: ReadonlySet<string>; signed: ReadonlySet<string>; ever: { ids: ReadonlySet<string>; keys: ReadonlySet<string> } }) => Device[];
+  /// The keys said in workspaces' locks by the devices that put this device in there, and those that put them in, up
+  /// to the first, each the person's own (views/lock.ts `vouchersIn`, which says what taking them so costs): a chain one
+  /// of those keys signed an entry of is its person's lock (`#putOnBy`).
+  vouchers?: (sub: string) => ReadonlySet<string>;
   /// The person's stations, where the lock is read and brought (the root AGENTS.md, The cloud is the account system):
   /// `read` the chains they keep of it (null when none this device reaches keeps any: older, offline or refusing it),
-  /// `bring` the chain as it is now, how many took it (null: none could be asked; a refusal fails).
+  /// `bring` the chain as it is now, how many took it (null: none could be asked; a refusal fails), `answered` whether
+  /// every station of theirs that may keep it answered a read of it this run (what alone lets a lock be begun with no
+  /// one asked, `beginQuietly`: a lock not known here is no lock not yet).
   stations?: {
     read: (sub: string, at?: string) => Effect.Effect<Entry[][] | null>;
     bring: (sub: string, chain: Entry[]) => Effect.Effect<number | null, CoreError>;
+    answered?: (sub: string) => boolean;
   };
 };
 
@@ -228,11 +243,34 @@ export class PersonalLock {
         // (the cloud, or the stations, lost it, or never had it: brought back)
         if (stations) yield* Effect.ignore(this.#env.stations!.bring(sub, pinned));
         else yield* this.#env.cloud(sub, "POST", PATH, { entries: pinned });
+      } else if (holds && entries.length > 0 && stations && pinned.length === 0 && (yield* this.#putOnBy(sub, entries))) {
+        yield* this.#pin(sub, entries);
+        this.#seen.delete(sub);
       } else if (holds && entries.length > 0) this.#seen.set(sub, entries);
       else this.#seen.delete(sub);
       // Told only when it changed: what is told retries the stations that refused this device, and each refusal brings
       // this same chain again (views/lock.ts heardRefused), so telling it unchanged would ask them again at once, endlessly.
       if (this.#stands(sub) !== was) this.#env.changed();
+    });
+  }
+
+  /// Whether `entries` (a chain that holds, heard of the stations by a device with none pinned) is its person's lock as
+  /// joining would have it: this device's key stands on it under this device's id, and some entry of it is signed by a
+  /// key a device that vouches for this one said in a workspace's lock (`vouchers`: those of the person's own up its
+  /// lineage there). That suffices: an entry signed by a device one trusts as its person's
+  /// shows that device took this chain as their lock, and only devices on a chain add to it. Not the entry that put this
+  /// device on: a sibling on the chain may have been the one to add it. A chain's ids are only what its entries say (this
+  /// device's key is no secret, anyone could make a chain naming it); the key that signed is what is checked. One pinned
+  /// already is never left this way.
+  #putOnBy(sub: string, entries: readonly Entry[]): Effect.Effect<boolean> {
+    const env = this.#env;
+    return Effect.gen({ self: this }, function* () {
+      const vouchers = env.vouchers?.(sub);
+      const mine = this.#myKey === null ? undefined : checkChain(entries, sub)?.devices.get(this.#myKey);
+      if (vouchers === undefined || vouchers.size === 0 || mine === undefined) return false;
+      const id = yield* Effect.orElseSucceed(env.device(), () => null);
+      if (mine.id !== id) return false;
+      return entries.some((e) => typeof e.sig?.key === "string" && vouchers.has(e.sig.key));
     });
   }
 
@@ -302,6 +340,44 @@ export class PersonalLock {
     if (signKey === null || mine === undefined || mine.said?.sign_key === signKey) return Effect.void;
     const { key, id, label } = mine.device;
     return Effect.ignore(this.#append(sub, seed, "device", { key, id, label, sign_key: signKey }, true), { log: "Unhandled", message: "personal lock: this device said again" });
+  }
+
+  /// With the seed in hand for something else: the person's devices that a device on the lock approved face to face in a
+  /// workspace's lock, and that said there the key they would be on it with (`approved`), put on it, each as it comes
+  /// (one put on, a device it approved comes next), at most APPROVED_AT_ONCE at a time. Nothing more is asked of the
+  /// person; a failure only leaves the rest for the next time. Only downward, and only by the key that signed: the device
+  /// that put one in is matched by its signing key, which only its holder signs with, against those the chain records
+  /// (`signers`), never by its id, which a workspace's manager may write under a key of their own: a device of theirs
+  /// carried onto the person's own lock would be trusted in the person's other workspaces and for their phone. Only one
+  /// that will take the lock once on it (`signed`: the keys that signed it, this device's too): put on and not taking it,
+  /// the stations would let it in once the lock is bound while it held itself as not let in. One whose id or key was
+  /// ever on the lock is not put back this way: taken off, it stays off.
+  #addApproved(sub: string, seed: Uint8Array): Effect.Effect<void> {
+    const approved = this.#env.approved;
+    if (approved === undefined) return Effect.void;
+    return Effect.gen({ self: this }, function* () {
+      for (let n = 0; n < APPROVED_AT_ONCE; n++) {
+        const entries = this.#pinned.get(sub) ?? [];
+        const chain = checkChain(entries, sub);
+        if (chain === null) return;
+        const ever = { ids: new Set<string>(), keys: new Set<string>() };
+        const signed = new Set<string>(this.#myKey === null ? [] : [this.#myKey]);
+        for (const e of entries) {
+          const said = e.kind === "genesis" ? (e.body as J)?.device : e.kind === "device" ? e.body : null;
+          if (typeof said?.id === "string") ever.ids.add(said.id);
+          if (typeof said?.key === "string") ever.keys.add(said.key);
+          if (typeof e.sig?.key === "string") signed.add(e.sig.key);
+        }
+        const signers = new Set([...this.signKeys(sub).values()].map((d) => d.sign_key));
+        const d = approved(sub, { signers, signed, ever }).find((x) => !ever.ids.has(x.id) && !ever.keys.has(x.key) && SIGN_KEY.test(x.key));
+        if (d === undefined) return;
+        const { key, id, label, sign_key } = d;
+        let failed = false;
+        const put = this.#append(sub, seed, "device", { key, id, label, ...(sign_key !== undefined && SIGN_KEY.test(sign_key) ? { sign_key } : {}) }, true);
+        yield* Effect.ignore(Effect.tapError(put, () => Effect.sync(() => void (failed = true))), { log: "Unhandled", message: "personal lock: a device approved in a workspace put on" });
+        if (failed) return;
+      }
+    });
   }
 
   standing(sub: string): Standing {
@@ -388,6 +464,35 @@ export class PersonalLock {
     });
   }
 
+  /// Whether this device could begin its person's lock with no one asked: it seals what it keeps, has made no key of its
+  /// own yet (made now, its seed is in hand once; made before, reading it asks the person), and knows of no lock of
+  /// theirs. What it read of the stations is `beginQuietly`'s to say.
+  mayBeginQuietly(sub: string): boolean {
+    const { host } = this.#env;
+    return host.appKeys === true && host.secureSet !== undefined && this.#loaded.has(sub) && this.#myKey === null && this.standing(sub) === "none";
+  }
+
+  /// The person's lock begun here with no one asked, where the caller found this device the one to (views/lock.ts
+  /// `ownLockFor`): only as `mayBeginQuietly` says, and once every station of theirs that may keep it answered a read
+  /// of it this run (`stations.answered`; one begun before they answered could be a second lock for someone who has
+  /// one). The key is made now and its seed, in hand, also puts on the devices approved in workspaces' locks
+  /// (`#addApproved`). Whether it began.
+  beginQuietly(sub: string): Effect.Effect<boolean, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      if (!this.mayBeginQuietly(sub) || this.#env.stations?.answered?.(sub) !== true) return false;
+      const { id: key, seed } = yield* this.#madeKey(null);
+      if (seed === null) return false;
+      const id = yield* this.#env.device();
+      const signKey = this.#mySignKey();
+      const begun = this.#append(sub, seed, "genesis", { sub, device: { key, id, label: this.#env.label(), ...(signKey !== null ? { sign_key: signKey } : {}) } });
+      // Not begun (no station nor the cloud took it): the key just made is forgotten, being on no chain and said
+      // nowhere, so the next try makes one and has its seed in hand; kept, this device could begin only by asking.
+      yield* Effect.tapError(begun, () => Effect.andThen(Effect.ignore(this.#env.host.storageDelete(KEY_ID)), Effect.sync(() => void (this.#myKey = null))));
+      yield* this.#addApproved(sub, seed);
+      return true;
+    });
+  }
+
   /// Turned on here, where the person has no lock yet (the cloud heard from: not knowing is not none).
   open(sub: string, reason: string): Effect.Effect<null, CoreError> {
     return Effect.gen({ self: this }, function* () {
@@ -410,6 +515,7 @@ export class PersonalLock {
       if (standing === "replaced") return yield* Effect.fail(new CoreError("personal_replaced", t("core-misc.personal.replaced")));
       const seed = standing === "none" ? yield* this.begin(sub, reason) : yield* this.#unseal(reason);
       yield* this.#restate(sub, seed);
+      yield* this.#addApproved(sub, seed);
       const whole: GrantBody = { v: 1, sub, ...body };
       return { body: whole, sig: { key: this.#myKey!, sig: hex(ed25519.sign(grantBytes(whole), seed)) } };
     });
@@ -436,6 +542,7 @@ export class PersonalLock {
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       const seed = yield* this.#unseal(reason);
       yield* this.#restate(sub, seed);
+      yield* this.#addApproved(sub, seed);
       return bodies.map((body) => {
         const whole: GrantBody = { v: 1, sub, ...body };
         return { body: whole, sig: { key: this.#myKey!, sig: hex(ed25519.sign(grantBytes(whole), seed)) } };
@@ -458,6 +565,7 @@ export class PersonalLock {
       const { key, id, label, sign_key } = device;
       // (a key not of the form is not written: nothing would read it, `signKeys`)
       yield* this.#append(sub, signed, "device", { key, id, label, ...(sign_key !== undefined && SIGN_KEY.test(sign_key) ? { sign_key } : {}) });
+      yield* this.#addApproved(sub, signed);
       return this.#pinned.get(sub) ?? [];
     });
   }
@@ -469,6 +577,7 @@ export class PersonalLock {
       // (not said again where it takes itself off)
       if (key !== this.#myKey) yield* this.#restate(sub, seed);
       yield* this.#append(sub, seed, "device.remove", { key });
+      if (key !== this.#myKey) yield* this.#addApproved(sub, seed);
       this.#env.told?.(sub, this.#pinned.get(sub) ?? []);
       return null;
     });

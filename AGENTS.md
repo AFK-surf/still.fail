@@ -69,6 +69,13 @@ chats, each conversation an agent session on a **station** (a machine of theirs)
   a workspace, or names it where the workspace's lock was named before.
 - A person's devices are theirs alone to change: owners and admins take a member out, never one device of someone
   else's (the user, 2026-11-10).
+- Everyone in safe mode comes to have a lock of their own with nobody asked (`client/core-ts/src/views/lock.ts`
+  `ownLockFor`): their devices trusted in a workspace's lock are put on it by the one of them that approved them
+  there, and take it from that one, a member's as an owner's, so that nobody approves a device again (the user,
+  2026-11-10). What that costs, known and taken: until a member's devices have a lock pinned, an owner or admin of a
+  workspace of theirs who rewrites its lock with a changed app can get a device of their own taken as that member's
+  (`vouchersIn` says how); the entries that did it stay in the lock. Do not widen it (never by a device id, never the
+  device that approved one already on the lock), and do not narrow it without the owner.
 
 ## No polling between still.fail's own parts
 
