@@ -80,7 +80,10 @@ let words_large_known : Map[String, Int] = {
     ("phone-en chat-preview-html", 1),
     ("phone-en chat-publish", 1),
     ("phone-en chat-screens", 4),
-    ("phone-en chat-station-sheet", 1),
+    // (phone-en chat-station-sheet, 1 to none as its panel became nodes: not mended. Its switch's title 「Send as file in
+    // this chat」 still goes on in two lines beside the switch (40,642 224×50, as the old panel's), but words broken onto
+    // lines only for what shares their row are told of the old view's alone (ui's squeeze.mbt, Ctx::beside_faults); the
+    // window tree's Ctx::view_squeeze_faults has no such rule. Once it has, this one is told again: it is that one.)
     ("phone-en history-details", 1),
     ("phone-en drive-upload", 1),
     ("phone-en place-stations", 1),
