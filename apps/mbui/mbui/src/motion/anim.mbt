@@ -384,6 +384,10 @@ pub fn Anim::stop_at(self : Anim, c : @ui.Ctx, at : Double, points~ : Double, lo
   if !self.running || points <= 0.0 {
     return
   }
+  // (a moment said after this frame's, as a press's is where the frame it is built in is drawn for an earlier vsync (a
+  // device behind its input: Android's, 2026-11-10, words sent again 118 ms after the frame's moment, abort in animate):
+  // now)
+  let at = if at > c.moment() { c.moment() } else { at }
   let (x, v) = self.state_at(at)
   let ahead = @ui.move_stop_points(v * points / 1000.0) / points
   let to = if v >= 0.0 {

@@ -1699,3 +1699,26 @@ test "a box growing told to stop for its cause: on from its speed, slowing to re
   assert_true((after_late - after).abs() < 0.001, msg="a frame after the moment, told of it then: \{after_late} / \{after}")
   assert_true((rest_late - rest).abs() < 0.001, msg="at rest, told of it a frame late: \{rest_late} / \{rest}")
 }
+
+///|
+test "a box growing told to stop at a moment after its frame's: stopped as at the frame's, no abort" {
+  // (a press's moment ahead of the frame it is built in, a device behind its input: Android's, 2026-11-10, words sent
+  // again 118 ms after the frame's moment aborted the app in Anim::animate)
+  let lines = Ref::new(1)
+  let stop = Ref::new(-1.0)
+  let t = lined_box(lines, stop)
+  let h = fn() { drawn_box(t, 0xFF0000FFL).3 }
+  lines.val = 3
+  t.frame()
+  t.run_for(turn_ms / 4.0)
+  let there = h()
+  stop.val = t.time() + 118.0
+  t.frame()
+  t.run_for(turn_frame_ms)
+  let after = h()
+  assert_true(after > there, msg="on from its speed: \{there} then \{after}")
+  t.run_for(@ui.move_most_ms)
+  t.assert_idle()
+  let rest = h()
+  assert_true(rest >= after && rest < 60.0, msg="slowing to rest short of its 60: \{after} then \{rest}")
+}
