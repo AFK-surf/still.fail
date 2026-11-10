@@ -648,7 +648,7 @@ export class Remote {
     const now = this.store.now();
     // Used within the minute: noted already (its record's write may still be on its way: `closeHere` asks this too).
     if (now - (this.seenAt.get(room) ?? 0) < 60_000) return join(room, "work");
-    mkdirSync(join(room, "work"), { recursive: true });
+    mkdirSync(join(room, "work"), { recursive: true }); // sync: work() gives the directory at once; once a minute a room
     this.seenAt.set(room, now);
     void writeJson(join(room, "session.json"), { workspace, station: peer, session, seen: now }).catch(() => undefined);
     return join(room, "work");
@@ -2227,7 +2227,7 @@ export class Remote {
       if (action === "prepare") {
         // Fence off any earlier spec before validation or a network request. If this attempt fails or the station
         // restarts, start must not quietly use the task the target kept from an earlier successful prepare.
-        mkdirSync(this.preparedDir(session), { recursive: true });
+        await mkdir(this.preparedDir(session), { recursive: true });
         const attempt = randomBytes(16).toString("hex");
         await writeJson(prepared, { workspace, session, station, key, preparing: attempt });
         const dir = field(args, "dir");

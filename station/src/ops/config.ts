@@ -61,7 +61,6 @@ export class ConfigFile {
   watch(): void {
     if (this.watcher !== null) return;
     try {
-      mkdirSync(dirname(this.path), { recursive: true });
       const name = basename(this.path);
       this.watcher = watch(dirname(this.path), { persistent: false }, (_, file) => {
         if (file !== null && file !== name) return;
