@@ -460,18 +460,21 @@ fn Tree::stroke_now(self : Tree, s : Stroke, t : Double, from : NodeId?, facts :
   let keys = [..under, s]
   let nodes = self.action_nodes(from)
   let bindings = book.map.bindings
-  // (whole: each node in turn, its later bindings first, the first that takes it)
-  for i in nodes {
-    let mut b = bindings.length() - 1
-    while b >= 0 {
-      let bd = bindings[b]
-      b = b - 1
-      guard bd.keys == keys && bd.when.holds(fn(name) { self.key_has(i, facts, name) }) else { continue }
-      for f in self.action_at(i, bd.action) {
-        guard self.nodes[i].live else { break }
-        if @signals.untracked(fn() { f({ action: bd.action, at: t, keys, by: Keys }) }) {
-          self.keys_end(Done(bd.action))
-          return true
+  // (whole: each node in turn, its later bindings first, the first that takes it; the app's, then where none of them
+  // took it a column's own keys, as an old view's list took what no action did: scroll_keys.mbt)
+  for pass in [bindings, scroll_bindings] {
+    for i in nodes {
+      let mut b = pass.length() - 1
+      while b >= 0 {
+        let bd = pass[b]
+        b = b - 1
+        guard bd.keys == keys && bd.when.holds(fn(name) { self.key_has(i, facts, name) }) else { continue }
+        for f in self.action_at(i, bd.action) {
+          guard self.nodes[i].live else { break }
+          if @signals.untracked(fn() { f({ action: bd.action, at: t, keys, by: Keys }) }) {
+            self.keys_end(Done(bd.action))
+            return true
+          }
         }
       }
     }

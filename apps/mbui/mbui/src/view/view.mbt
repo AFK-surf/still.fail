@@ -827,6 +827,15 @@ pub struct Tree {
   // where the pointer is in the window, as it is said (Tree::point_at; (-1, -1) none): what goes beside it is placed
   // by (View::beside's `at_pointer`)
   mut pointer_xy : (Double, Double)
+  /// whether an old view's list is under the pointer as a column's key comes, the focus in none of the tree's: the key
+  /// that list's, as ever (Tree::on_old_scroll, scroll_keys.mbt)
+  mut old_scroll_here : () -> Bool
+  /// where the pointer, a mouse's or a finger's, last was (Tree::key_point_is; (-1, -1) none): where a column's key
+  /// goes where nothing is hovered (a finger's), scroll_keys.mbt
+  mut key_point : (Double, Double)
+  /// whether the old view hosted in a node has something of its own at a point of the window (ui's old_wheel_there):
+  /// one with nothing there passed, to what is under it, as a wheel passes it (scroll_keys.mbt)
+  mut old_there : (NodeId, Double, Double) -> Bool
   /// what the pointer is over of what says it is pointed at alone (View::points), where that is over all that takes
   /// it there (Tree::points_over)
   mut points_hover : NodeId?
@@ -1127,6 +1136,9 @@ pub fn Tree::new(
     pointed: None,
     lit_every: false,
     pointer_xy: (-1.0, -1.0),
+    old_scroll_here: fn() { false },
+    key_point: (-1.0, -1.0),
+    old_there: fn(_, _, _) { true },
     points_hover: None,
     scrolls_at: {},
     bar_cols: [],
