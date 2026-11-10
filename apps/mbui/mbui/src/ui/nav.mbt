@@ -870,8 +870,7 @@ fn[P] Nav::gesture(
         // (Tracker::velocity_at)
         self.track.up(t, x)
         self.vel = self.track.velocity_at(t)
-        let flung = dx > 40.0 && self.vel > 0.6
-        if self.p > 1.0 / 3.0 || dx > back_far || flung {
+        if back_goes(dx, w, self.vel) {
           self.let_go(dmax(self.vel, 0.0) / w)
         } else {
           // back to rest, as fast as the finger let it go (its widths per ms)
@@ -1416,4 +1415,12 @@ pub fn[P] Ctx::nav_flat(
     self.owner = saved
     self.stint = saved_stint
   })
+}
+
+///|
+/// Whether a page a finger drew `dx` across of `w`, let go going `vel` (points a ms), goes back: landing a third across
+/// or back_far on from that speed (lands_past), or flung (past 40, faster than 0.6).
+fn back_goes(dx : Double, w : Double, vel : Double) -> Bool {
+  let flung = dx > 40.0 && vel > 0.6
+  lands_past(dx, vel, w / 3.0) || lands_past(dx, vel, back_far) || flung
 }

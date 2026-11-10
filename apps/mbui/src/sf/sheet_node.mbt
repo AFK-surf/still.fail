@@ -289,12 +289,12 @@ fn sheet_node(
                     let (lo, hi) = (sheet_grows_to[0], sheet_grows_to[1])
                     tall.go_by(sheet, if at > (lo + hi) / 2.0 * total { lo * total } else { hi * total }, @motion.move())
                   }
-                } else if at / total < sheet_close_below {
+                } else if @kit.sheet_goes_to(sheet_grows_to, at, speed, total, sheet_close_below) is None {
                   // (sinking away from where it is, as fast as it was going down)
                   let_go_speed.val = Some(dmax(0.0, speed))
                   cancel()
                 } else {
-                  let f = sheet_nearest(sheet_grows_to, at / total)
+                  let f = @kit.sheet_goes_to(sheet_grows_to, at, speed, total, sheet_close_below).unwrap_or(sheet_grows_to[0])
                   // (its height, up: its speed the other way, a second's)
                   tall.go_by(sheet, f * total, @motion.move(), velocity=-speed * 1000.0)
                 }
@@ -310,7 +310,7 @@ fn sheet_node(
               Up | Off => {
                 held.set(None)
                 back.put(down)
-                if d.kind == Up && down > sheet_drag_close {
+                if d.kind == Up && @kit.sheet_drag_closes(down, speed, sheet_drag_close) {
                   // (closed from where it is: it sinks away from there, as fast as it was going down)
                   let_go_speed.val = Some(dmax(0.0, speed))
                   cancel()
@@ -507,12 +507,6 @@ fn sheet_stretched_slope(h : Double, top : Double, room : Double) -> Double {
 ///|
 /// How much a sheet drawn past its top gives way (@kit.sheet's: UIScrollView's rubber band's constant).
 let sheet_give : Double = 0.55
-
-///|
-/// Which of `shares` `f` is nearest (@kit.sheet's).
-fn sheet_nearest(shares : Array[Double], f : Double) -> Double {
-  shares.fold(init=shares[0], fn(best, s) { if (s - f).abs() < (best - f).abs() { s } else { best } })
-}
 
 ///|
 /// How far a sheet is below its place, in its own heights (1: out of the window, 0: risen), as it rises and sinks: each
