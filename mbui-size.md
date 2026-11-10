@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [4d3e89971](https://github.com/AFK-surf/still.fail/commit/4d3e8997122c119275171876adefff623b546ad0) mbui: a come way that goes along with another way  | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 93.9 | 162.13 |
 | [5e6176182](https://github.com/AFK-surf/still.fail/commit/5e61761821eb6bb4a614aea56d73683aa4ef5e98) mbui: window tree words may be cut by their own sa | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 93.8 | 187.35 |
 | [c96bf86e3](https://github.com/AFK-surf/still.fail/commit/c96bf86e3fbeaa57e946050230a3f3475ddabe3a) mbui: a show's node called back as it closes goes  | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 94.26 | 152.04 |
 | [0c0ba9fb9](https://github.com/AFK-surf/still.fail/commit/0c0ba9fb9c1a585b4974a5e5438213727376188d) core: the device that began a person's lock says i | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 93.65 | 173.63 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [2dbd62daf](https://github.com/AFK-surf/still.fail/commit/2dbd62daffd926cff7d1fcad747b8323a37aaf97) core: to people there is one safe mode: approving  | 1.75 | 2.33 | 9.67 | 28.23 | 33.83 | 25.21 | 46.25 | 93.32 | 173.06 |
 | [9dfe391d0](https://github.com/AFK-surf/still.fail/commit/9dfe391d0ef9370b9e5d14815b83dba9b1c156d5) station, core, app: a model's own week under a Cla | 1.74 | 2.33 | 9.67 | 28.23 | 33.81 | 25.21 | 46.23 | 93.26 | 180.32 |
 | [5d36a3d7a](https://github.com/AFK-surf/still.fail/commit/5d36a3d7a8ae8ab74ae6fa48c091fc8b9dee731c) core: a device off the lock of their own its perso | 1.74 | 2.32 | 9.66 | 28.21 | 33.73 | 25.19 | 46.16 | 93.98 | 131.71 |
-| [e364d101c](https://github.com/AFK-surf/still.fail/commit/e364d101cac653bec49d48a8f705d42504d4d21c) app, core: the chats' list asks the changelog for  | 1.74 | 2.32 | 9.66 | 28.21 | 33.72 | 25.19 | 46.16 | 93.41 | 168.39 |
