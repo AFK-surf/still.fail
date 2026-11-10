@@ -133,6 +133,9 @@ pub(all) struct Source {
   /// nothing the reader does is told to the core (MBUI_READONLY=1): no read marks, no place kept, nothing sent, no
   /// draft kept, no file put up
   read_only : Bool
+  /// whether what the places open on is kept as last said (`lasting`) and asked ahead of them (places_ahead): not of
+  /// a run seen again that was recorded before the app did, whose core is asked only what the run asked
+  reads_ahead : () -> Bool
 }
 
 ///|
@@ -181,7 +184,86 @@ pub fn Source::prefetch(src : Source, name : String, params : Map[String, Json])
 ///|
 fn read_topic_state(src : Source, name : String, params : Map[String, Json]) -> TopicState {
   let topic = (src.topic_read)(name, params)
-  { value: topic.value, error: topic.error, version: topic.version, waiting: (src.waits)(name, params) }
+  let waiting = (src.waits)(name, params)
+  // (the accounts said anew, one signed in or out: nothing kept of what another's showed)
+  if name == "accounts" && src.topic_scope is None && topic.value is Some(now) {
+    if last_accounts.val != Some(now) {
+      last_accounts.val = Some(now)
+      last_said.val = last_said.val.filter(fn(l) { !physical_equal(l.source, src) })
+    }
+  }
+  // (a view's own source reads through the one it is of, which keeps them: topic_scope none)
+  if src.topic_scope is None && lasting.contains(name) && !params.contains("q") && !params.contains("brief") && (src.reads_ahead)() {
+    let key = name + "\u{1}" + Json::object(params).stringify()
+    match (topic.value, topic.error) {
+      (Some(value), _) => last_put(src, key, value)
+      (None, None) =>
+        match last_said.val.search_by(fn(l) { physical_equal(l.source, src) && l.key == key }) {
+          Some(i) => {
+            let l = last_said.val[i]
+            return { value: Some(l.value), error: None, version: l.version, waiting: false }
+          }
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  { value: topic.value, error: topic.error, version: topic.version, waiting }
+}
+
+///|
+/// The lists a place of the bar or the rail opens on: what the core last said of each is kept (last_said) and shown at
+/// once when it is asked again, until its answer comes. A place left lets go of what it read, and come back to drew
+/// its bones until the core answered across its thread (the user, 2026-11-10). Lists read only: nothing typed for
+/// (`q`), nothing written in (a form, a draft), no chat, nor the stations as a chat names its own (`brief`: what
+/// changed while nothing read it is never shown as it was, core_signal_wbtest.mbt).
+// kept across runs: a value (nothing of it changes)
+let lasting : Array[String] = ["workspace", "stations", "stationNet", "profiles", "connects", "vaults", "usage", "archive"]
+
+///|
+/// What a source last said of a lasting topic. `version` is below every core's (those count up from 0), another for
+/// each value kept: what is worked out of a topic by its version never takes this for the answer that follows it.
+priv struct LastSaid {
+  source : Source
+  key : String
+  value : Json
+  version : Int
+}
+
+///|
+/// The newest last (last_most of them: a list asked for many ways, the oldest forgotten).
+// kept across runs: put back as a run begins (reset)
+let last_said : Ref[Array[LastSaid]] = Ref([])
+
+///|
+let last_most : Int = 64
+
+///|
+// kept across runs: only counted on
+let last_count : Ref[Int] = Ref(0)
+
+///|
+fn last_put(src : Source, key : String, value : Json) -> Unit {
+  let at = last_said.val.search_by(fn(l) { physical_equal(l.source, src) && l.key == key })
+  match at {
+    Some(i) if physical_equal(last_said.val[i].value, value) => return
+    _ => ()
+  }
+  last_count.val += 1
+  let kept = last_said.val.filter(fn(l) { !(physical_equal(l.source, src) && l.key == key) })
+  kept.push({ source: src, key, value, version: -2 - last_count.val })
+  last_said.val = if kept.length() > last_most { kept[kept.length() - last_most:].to_array() } else { kept }
+}
+
+///|
+/// The accounts as last said (read_topic_state).
+// kept across runs: put back as a run begins (reset)
+let last_accounts : Ref[Json?] = Ref(None)
+
+///|
+fn last_reset() -> Unit {
+  last_said.val = []
+  last_accounts.val = None
 }
 
 ///|
@@ -393,6 +475,7 @@ pub fn made_source(
     release: fn(_, _) {  },
     refresh: fn(_, _) {  },
     read_only: false,
+    reads_ahead: fn() { true },
   }
 }
 

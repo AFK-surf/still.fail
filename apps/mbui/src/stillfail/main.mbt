@@ -301,6 +301,7 @@ let core_source : @sfapp.Source = {
   release: fn(name, params) { @core.release_topic(name, params=@sfbase.core_topic_params(name, params)) },
   refresh: fn(name, params) { @core.refresh_topic(name, params=@sfbase.core_topic_params(name, params)) },
   read_only,
+  reads_ahead: fn() { true },
 }
 
 ///|
@@ -401,6 +402,8 @@ fn main {
         started[name] = Json::string(v)
       }
     }
+    // (and that this app keeps its places' lists and asks them ahead: a replay's does as its trace's app did)
+    started["MBUI_PLACES_AHEAD"] = Json::string("1")
     @hostapi.log("CORETRACE " + Json::object({ "env": Json::object(started) }).stringify())
     // and which station this machine is, as its host says it (@ui.local_station: what the files' page lists first), for
     // a replay's host to say the same

@@ -2265,7 +2265,14 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
   // the ball taken by a finger held still on the bar (felt as a long press is)
   let mut took = false
   match how {
-    Pressed => pressed()
+    Pressed => {
+      pressed()
+      // a finger down on a place's tab, the panel shut: what the place opens on asked from now (sfbase's places_ahead)
+      if !m.mode.get() && py >= l.row_top - 4.0 && l.items.length() > 0 {
+        let cs = bar_centres(l.w, m.k_at(t), l.items.length())
+        @sfbase.place_pressed(l.items[imin(l.items.length() - 1, nearest(cs, 4, px))])
+      }
+    }
     Dragging => {
       if l.multi {
         let raw = m.o0 + (m.y0 - py - (if m.from_open { 0.0 } else { 8.0 })) / l.reach

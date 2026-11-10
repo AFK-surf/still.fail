@@ -1271,6 +1271,12 @@ pub fn place_key(String, String) -> String
 
 pub fn place_page(String) -> Page
 
+pub fn place_pressed(String) -> Unit
+
+pub fn places_ahead(Source, String) -> Unit
+
+pub fn places_ahead_open() -> Bool
+
 pub let place_pick : @sf.LiveMap[String, @settings.Route]
 
 pub let plain_small_foot : Double
@@ -3291,6 +3297,7 @@ pub(all) struct Source {
   release : (String, Map[String, @json.Json]) -> Unit
   refresh : (String, Map[String, @json.Json]) -> Unit
   read_only : Bool
+  reads_ahead : () -> Bool
 }
 pub fn Source::lease_topic(Self, String, Map[String, @json.Json]) -> TopicLease
 pub fn Source::owned_by(Self, @view.View) -> Self

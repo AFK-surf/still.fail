@@ -247,3 +247,109 @@ test "a place made once, its place tapped again on the bar (no switch), then mad
   let name = t.words().filter(fn(w) { w.0 == place_label("usage") })
   assert_true(name.length() == 1 && name[0].1 == 16.0 && name[0].5 == 1.0, msg="\{name}")
 }
+
+// A place of the bar shows what the device holds the frame it is switched to, never its bones first: the first time
+// since the app started (what it opens on asked ahead: sfbase's places_ahead) and each time after (what the core last
+// said of it kept: sfbase's `lasting`), over a core that answers late and is asked anew for what was let go of.
+
+///|
+/// How late the core's first value of a topic is here (round_trip_again): longer than a place takes to come in.
+let place_core_late_ms : Double = 600.0
+
+///|
+/// A phone signed in over a core answering `ms` late, Home shown and the core gone quiet.
+fn late_phone(ms : Double) -> @ui.Tester raise {
+  new_run()
+  let src = { ..round_trip_again(fixture("home"), ms), reads_ahead: fn() { true } }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
+  t.draw()
+  // (the accounts, the workspaces, the workspace's, Home's, then what the places open on: one after another)
+  t.run_for(ms * 8.0)
+  // (all of it answered and let go of: nothing of a place stays asked for while it is not shown)
+  assert_false(@sfbase.places_ahead_open())
+  t
+}
+
+///|
+/// Place `place` switched to: the most bones any frame draws as it comes in (the frame of the switch, the three after
+/// it, the one it is in by).
+fn bones_at(t : @ui.Tester, place : String) -> Int {
+  go_place(t.ctx().moment(), place, [], -1)
+  t.draw()
+  let mut most = t.bones_drawn()
+  for _ in 0..<3 {
+    t.run_for(@ui.frame_period_default)
+    most = @cmp.maximum(most, t.bones_drawn())
+  }
+  t.run_for(@ui.move_most_ms)
+  @cmp.maximum(most, t.bones_drawn())
+}
+
+///|
+test "a place of the bar in view shows what the device holds the first time it is switched to, and each time after" {
+  let t = late_phone(place_core_late_ms)
+  let bars = [["chats", "files", "profiles", "stations"], ["archive", "usage", "connects", "vault"]]
+  for bar in 0..<bars.length() {
+    // (the other bar brought into view: its places asked ahead in turn)
+    if bar > 0 {
+      @sfbase.bars_picked.set(Some((bars, bar)))
+      t.draw()
+      t.run_for(place_core_late_ms * 3.0)
+      assert_false(@sfbase.places_ahead_open())
+    }
+    for round in 0..<2 {
+      for place in bars[bar] {
+        if place == "chats" || place == "usage" || place == "archive" {
+          continue
+        }
+        assert_eq(bones_at(t, place), 0, msg="\{place}, time \{round + 1}")
+        // (left long enough for the core to have let go of it)
+        assert_eq(bones_at(t, "chats"), 0, msg="chats after \{place}")
+        t.run_for(place_core_late_ms)
+      }
+    }
+  }
+}
+
+///|
+/// How long a finger is on a tab here, tapping it: less than takes the ball (bar_hold_ms).
+let place_tap_ms : Double = 120.0
+
+///|
+/// How late the core answers in the test below: within a tap.
+let place_core_soon_ms : Double = 40.0
+
+///|
+test "用量 and 已归档, asked only as they are shown: from the finger going down on their tab, and what they last had after" {
+  let late = place_core_soon_ms
+  let t = late_phone(late)
+  @sfbase.bars_picked.set(Some(([["chats", "files", "profiles", "stations"], ["archive", "usage", "connects", "vault"]], 1)))
+  t.draw()
+  t.run_for(late * 4.0)
+  assert_false(@sfbase.places_ahead_open())
+  for label in ["用量", "已归档"] {
+    // a finger down on the tab, up a tap later: the core has answered meanwhile
+    let (x, y, w, h) = said_at(t, label).unwrap()
+    t.touch(0, x + w / 2.0, y + h / 2.0)
+    t.draw()
+    t.run_for(place_tap_ms)
+    assert_false(@sfbase.places_ahead_open(), msg=label)
+    t.touch(2, x + w / 2.0, y + h / 2.0)
+    t.draw()
+    let mut most = t.bones_drawn()
+    for _ in 0..<3 {
+      t.run_for(@ui.frame_period_default)
+      most = @cmp.maximum(most, t.bones_drawn())
+    }
+    t.run_for(@ui.move_most_ms)
+    assert_true(app.nav.top() == @sfbase.place_page(if label == "用量" { "usage" } else { "archive" }), msg=label)
+    assert_eq(@cmp.maximum(most, t.bones_drawn()), 0, msg="\{label} first")
+    assert_eq(bones_at(t, "connects"), 0, msg="连接 after \{label}")
+    t.run_for(late * 2.0)
+  }
+  for place in ["usage", "archive"] {
+    assert_eq(bones_at(t, place), 0, msg="\{place} again")
+    assert_eq(bones_at(t, "connects"), 0, msg="连接 after \{place}")
+    t.run_for(late * 2.0)
+  }
+}

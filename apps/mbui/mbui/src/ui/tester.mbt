@@ -3153,3 +3153,27 @@ pub fn Tester::scroll_all_to_end(self : Tester) -> Int {
   self.run_for(move_most_ms)
   at.length()
 }
+
+///|
+/// How many things are drawn in their bones now (Ctx::bones, View::bones): what a page shows of what it still waits
+/// for. None: nothing on screen waits.
+pub fn Tester::bones_drawn(self : Tester) -> Int {
+  let _ = self
+  let c = g()
+  let mut n = 0
+  for i in 0..<c.count {
+    if c.nodes[i].bones != 0L {
+      n += 1
+    }
+  }
+  match view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.bones != 0L && d.alpha > 0.0 {
+          n += 1
+        }
+      }
+    None => ()
+  }
+  n
+}
