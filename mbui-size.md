@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [081eff020](https://github.com/AFK-surf/still.fail/commit/081eff020f54f2731df7566cf9e8323ad4bb05c6) core, app: a list's stations are rows; one station | 1.78 | 2.37 | 9.9 | 28.52 | 34.69 | 25.45 | 46.78 | 93.9 | 181.79 |
 | [594d3a7a3](https://github.com/AFK-surf/still.fail/commit/594d3a7a3ff33bb8d36eedb0090ae1232b49374c) app: the workspaces and a new workspace in panels  | 1.78 | 2.37 | 9.9 | 28.52 | 34.68 | 25.45 | 46.78 | 93.9 | 174.54 |
 | [4d3e89971](https://github.com/AFK-surf/still.fail/commit/4d3e8997122c119275171876adefff623b546ad0) mbui: a come way that goes along with another way  | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 93.9 | 162.13 |
 | [5e6176182](https://github.com/AFK-surf/still.fail/commit/5e61761821eb6bb4a614aea56d73683aa4ef5e98) mbui: window tree words may be cut by their own sa | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 93.8 | 187.35 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [85413543f](https://github.com/AFK-surf/still.fail/commit/85413543f0d721c9ed49e826b71181ec7f058599) mbui: a wheel and a press 7 ms after it scroll as  | 1.75 | 2.33 | 9.68 | 28.25 | 33.88 | 25.23 | 46.28 | 93.67 | 176.03 |
 | [62fe6d55e](https://github.com/AFK-surf/still.fail/commit/62fe6d55efbe05394fc23efa89c2efd7312953f1) app: what scrolls in itself in a panel of nodes, a | 1.75 | 2.33 | 9.68 | 28.24 | 33.86 | 25.22 | 46.26 | 93.54 | 140.62 |
 | [2dbd62daf](https://github.com/AFK-surf/still.fail/commit/2dbd62daffd926cff7d1fcad747b8323a37aaf97) core: to people there is one safe mode: approving  | 1.75 | 2.33 | 9.67 | 28.23 | 33.83 | 25.21 | 46.25 | 93.32 | 173.06 |
-| [9dfe391d0](https://github.com/AFK-surf/still.fail/commit/9dfe391d0ef9370b9e5d14815b83dba9b1c156d5) station, core, app: a model's own week under a Cla | 1.74 | 2.33 | 9.67 | 28.23 | 33.81 | 25.21 | 46.23 | 93.26 | 180.32 |
