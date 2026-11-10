@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [cdddf8b29](https://github.com/AFK-surf/still.fail/commit/cdddf8b29c157a8faba875f93e46e893667e8f96) Station: cores before 0.1.6968 told to update; no  | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.32 | 170.66 |
 | [6575c0a28](https://github.com/AFK-surf/still.fail/commit/6575c0a28c9e3c8f6672eb3ffe617d0b2a30b609) mbui: a layer opened by a node gives the focus bac | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.62 | 159.22 |
 | [1c6ee92f5](https://github.com/AFK-surf/still.fail/commit/1c6ee92f50f3cb2fd8c149612b9dd13db7cf3923) app, core: to people there is one safe mode: no 个人 | 1.75 | 2.33 | 9.69 | 28.27 | 33.92 | 25.24 | 46.31 | 93.54 | 156.12 |
 | [5944ba7e0](https://github.com/AFK-surf/still.fail/commit/5944ba7e017b4c6e51ccaa31050d65689562e6cb) ci: the flows' default-rate run on replay-build's  | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.72 | 166.21 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [94512b59f](https://github.com/AFK-surf/still.fail/commit/94512b59f5983e916656a0f5e654351c64652e30) mbui: a panel whose body and foot are nodes has no | 1.73 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 92.96 | 169.65 |
 | [8cc3a8001](https://github.com/AFK-surf/still.fail/commit/8cc3a8001baf1ecca1e6652ebdeea5c88c38b085) mbui: sizes_steady and rows_steady take words made | 1.73 | 2.31 | 9.63 | 28.16 | 33.63 | 25.16 | 46.08 | 93.31 | 125.58 |
 | [89b5f3891](https://github.com/AFK-surf/still.fail/commit/89b5f3891b53ddf4476c1edfffedf38947420653) mbui: what show, pick and each make or let go down | 1.73 | 2.31 | 9.63 | 28.16 | 33.63 | 25.16 | 46.08 | 93.24 | 124.1 |
-| [cbcff387d](https://github.com/AFK-surf/still.fail/commit/cbcff387d28d7225739ad0383db1da794fd7bfd7) mbui: a list window tells only the rows that come  | 1.73 | 2.31 | 9.61 | 28.14 | 33.49 | 25.12 | 45.93 | 92.91 | 147.16 |
