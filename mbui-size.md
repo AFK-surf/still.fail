@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [994ca523b](https://github.com/AFK-surf/still.fail/commit/994ca523b8e2f79bb1f198d7167eaec088a2102a) mbui: what reads the time as a node's property is  | 1.78 | 2.38 | 9.91 | 28.52 | 34.71 | 25.47 | 46.89 | 94.03 | 162.93 |
 | [081eff020](https://github.com/AFK-surf/still.fail/commit/081eff020f54f2731df7566cf9e8323ad4bb05c6) core, app: a list's stations are rows; one station | 1.78 | 2.37 | 9.9 | 28.52 | 34.69 | 25.45 | 46.78 | 93.9 | 181.79 |
 | [594d3a7a3](https://github.com/AFK-surf/still.fail/commit/594d3a7a3ff33bb8d36eedb0090ae1232b49374c) app: the workspaces and a new workspace in panels  | 1.78 | 2.37 | 9.9 | 28.52 | 34.68 | 25.45 | 46.78 | 93.9 | 174.54 |
 | [4d3e89971](https://github.com/AFK-surf/still.fail/commit/4d3e8997122c119275171876adefff623b546ad0) mbui: a come way that goes along with another way  | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 93.9 | 162.13 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [ee40c4a4f](https://github.com/AFK-surf/still.fail/commit/ee40c4a4f96499aa12879f6fe6c574e50d75ac3c) mbui: a measured node read as a frame is painted i | 1.75 | 2.33 | 9.69 | 28.26 | 33.9 | 25.24 | 46.3 | 93.5 | 150.25 |
 | [85413543f](https://github.com/AFK-surf/still.fail/commit/85413543f0d721c9ed49e826b71181ec7f058599) mbui: a wheel and a press 7 ms after it scroll as  | 1.75 | 2.33 | 9.68 | 28.25 | 33.88 | 25.23 | 46.28 | 93.67 | 176.03 |
 | [62fe6d55e](https://github.com/AFK-surf/still.fail/commit/62fe6d55efbe05394fc23efa89c2efd7312953f1) app: what scrolls in itself in a panel of nodes, a | 1.75 | 2.33 | 9.68 | 28.24 | 33.86 | 25.22 | 46.26 | 93.54 | 140.62 |
-| [2dbd62daf](https://github.com/AFK-surf/still.fail/commit/2dbd62daffd926cff7d1fcad747b8323a37aaf97) core: to people there is one safe mode: approving  | 1.75 | 2.33 | 9.67 | 28.23 | 33.83 | 25.21 | 46.25 | 93.32 | 173.06 |
