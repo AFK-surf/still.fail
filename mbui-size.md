@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [e364d101c](https://github.com/AFK-surf/still.fail/commit/e364d101cac653bec49d48a8f705d42504d4d21c) app, core: the chats' list asks the changelog for  | 1.74 | 2.32 | 9.66 | 28.21 | 33.72 | 25.19 | 46.16 | 93.41 | 168.39 |
 | [e553b0a6e](https://github.com/AFK-surf/still.fail/commit/e553b0a6e7638c7b0db377f0a9bbe623948c9e53) mbui: a node drawn smaller than a press's room is  | 1.74 | 2.32 | 9.66 | 28.21 | 33.72 | 25.19 | 46.16 | 92.6 | 133.06 |
 | [28376c907](https://github.com/AFK-surf/still.fail/commit/28376c9071e24106660aea7233f0222d1f7340d2) cloud: the memberships test waits for its lock.get | 1.74 | 2.32 | 9.65 | 28.2 | 33.7 | 25.18 | 46.15 | 93.52 | 139.07 |
 | [a455a9c49](https://github.com/AFK-surf/still.fail/commit/a455a9c49d7c83da4700bff1436314eccb5e3745) cloud: signing in and a client's spans use up none | 1.74 | 2.32 | 9.65 | 28.2 | 33.68 | 25.18 | 46.13 | 93.55 | 168.29 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [05da8cd69](https://github.com/AFK-surf/still.fail/commit/05da8cd69b9c7e93ab19a11f8279c9f5d41add00) mbui: a node that draws nothing of its own makes a | 1.73 | 2.31 | 9.6 | 28.11 | 33.44 | 25.1 | 45.88 | 92.91 | 135.88 |
 | [097da8829](https://github.com/AFK-surf/still.fail/commit/097da88292160fb6ac0810b7bcda8ee79b0bb4be) mbui: a page's list made by an anchor, what shows  | 1.73 | 2.31 | 9.6 | 28.11 | 33.44 | 25.1 | 45.88 | 93 | 129.95 |
 | [f1d7ef363](https://github.com/AFK-surf/still.fail/commit/f1d7ef363367cb368666c8b785e2e123f8b1a7b0) mbui: two presses in a row are the window's tree's | 1.73 | 2.3 | 9.58 | 28.1 | 33.42 | 25.1 | 45.86 | 93.32 | 171.76 |
-| [0490574ec](https://github.com/AFK-surf/still.fail/commit/0490574ece26e7de539d2ea290ab95aa6ccb042c) app: what is worked out of a topic kept by the sou | 1.73 | 2.3 | 9.58 | 28.09 | 33.42 | 25.1 | 45.86 | 92.78 | 139.51 |
