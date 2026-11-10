@@ -107,3 +107,49 @@ test "a sheet of the tree's that grows let go above 30% of the window: closed fl
   let (open, _) = things_let_go(460.0, 80)
   assert_false(open, msg="let go slowly at 25%: closed")
 }
+
+///|
+/// A sheet held at its top, drawn `dy` down in `steps` moves (a frame apart: as fast as that), let go short of where it
+/// would close or go to its next height; from the finger's last move, a frame each `ms` till it is back where it stood:
+/// where its top was at each (the chat's things, as tall as it can grow, or a panel of nodes).
+fn let_go_back(grows : Bool, dy : Double, steps : Int, ms : Double) -> Array[Double] raise {
+  let t = if grows {
+    let (t, src, r) = things_chat()
+    open_things(src, r, 7.0)
+    t
+  } else {
+    let t = phone_tester()
+    @sf.panel_nodes("面板", from=Unanchored, foot=fn(v, _) { ink_node(v, 60.0, 36.0, foot_ink) }, fn(v, _) {
+      ink_node(v, 40.0, 36.0, body_ink)
+    })
+    t
+  }
+  t.run_for(sheet_way_ms(t))
+  let (x, y0, w, _) = let_go_dialog(t)
+  let (x, y) = (x + w / 2.0, y0 + 20.0)
+  t.press_at(x, y)
+  for i in 1..=steps {
+    t.hold_move(x, y + dy * i.to_double() / steps.to_double())
+  }
+  let tops = [let_go_dialog(t).1]
+  t.release(x, y + dy)
+  let end = t.time() + sheet_way_ms(t)
+  while t.time() < end {
+    t.frame(ms~)
+    tops.push(let_go_dialog(t).1)
+  }
+  tops
+}
+
+///|
+test "a sheet let go going down, short of closing or its next height: back where it stood never hanging near still at its turn, at 60 and 120 a second" {
+  // (what walks its own frames returns at once at a rate)
+  if @ui.test_at_a_rate() {
+    return
+  }
+  for ms in [1000.0 / 60.0, 1000.0 / 120.0] {
+    // (a panel drawn 40 down at 0.3 points a ms; the things' sheet, at its tallest, 380 down at 0.38)
+    assert_not_hung(let_go_back(false, 40.0, 8, ms), ms, "a panel, frames \{ms} ms apart")
+    assert_not_hung(let_go_back(true, 380.0, 60, ms), ms, "the things' sheet, frames \{ms} ms apart")
+  }
+}
