@@ -40,6 +40,8 @@ test("with_nothing_typed_the_list_offers_what_can_be_done_by_part_but_what_only_
 test("what_is_typed_finds_a_command_by_its_name_its_id_or_its_other_words", () => {
   // Its name.
   assert.deepEqual(shown(find("  查找 ", offered)), [["chat", "当前对话", ["chat.find"]]]);
+  // The chat's outline, as the list of shortcuts names it.
+  assert.deepEqual(shown(find("目录", [...offered, { id: "chat.outline" }])), [["chat", "当前对话", ["chat.outline"]]]);
   // Its id, without case.
   assert.deepEqual(shown(find("Chat.Arch", offered)), [["chat", "当前对话", ["chat.archive"]]]);
   // Its other words: one only found by typing too (looking for an update), a client's own (a settings page).

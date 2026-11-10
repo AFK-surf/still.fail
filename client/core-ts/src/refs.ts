@@ -217,8 +217,9 @@ const LEAD = 8;
 const LINE_MAX = 240;
 
 /// The line of a message's text that has what was looked for, as a found message shows it: Markdown's marks out, on one
-/// line, its start cut (`…`) when the word found lies far into it; and where the words are in it, as UTF-16 ranges.
-export function excerpt(text: string, words: string[]): { text: string; marks: { from: number; to: number }[] } {
+/// line, its start cut (`…`) when the word found lies far into it (more than `lead` before it), at most `max` long after
+/// that; and where the words are in it, as UTF-16 ranges.
+export function excerpt(text: string, words: string[], lead = LEAD, max = LINE_MAX): { text: string; marks: { from: number; to: number }[] } {
   const plain = text
     .replace(/^ {0,3}(```|~~~).*$/gm, "")
     .replace(/!?\[([^\]\n]*)\]\([^)\s]*\)/g, "$1")
@@ -231,15 +232,13 @@ export function excerpt(text: string, words: string[]): { text: string; marks: {
   const lower = line.toLowerCase();
   const first = Math.min(...words.map((w) => lower.indexOf(w)).filter((i) => i >= 0), Infinity);
   let start = 0;
-  if (first !== Infinity && first > LEAD) {
-    start = first - LEAD;
+  if (first !== Infinity && first > lead) {
+    start = first - lead;
     // At a word's start where there is one near.
     const space = line.indexOf(" ", start);
     if (space >= 0 && space < first) start = space + 1;
   }
-  const lead = start > 0 ? "…" : "";
-  const body = line.slice(start, start + LINE_MAX);
-  const shown = lead + body;
+  const shown = (start > 0 ? "…" : "") + line.slice(start, start + max);
   const low = shown.toLowerCase();
   const found: [number, number][] = [];
   if (low.length === shown.length) {

@@ -46,6 +46,8 @@ test("the_keymap_is_the_actions_own_keys_and_on_the_desktop_those_changed_there"
   assert.deepEqual(of(km, "chat.new").keys, ["Alt+Mod+N"]);
   assert.deepEqual(of(km, "chat.new").labels, ["Ctrl+Alt+N"]);
   assert.deepEqual(of(km, "chat.find").keys, ["Mod+F"]);
+  assert.deepEqual([of(km, "chat.outline").keys, of(km, "chat.outline").group, of(km, "chat.outline").typing], [["Mod+G"], "chat", "yes"]);
+  assert.equal(of(km, "chat.outline").name, t("web-main.keymap.chat.outline"));
   assert.equal(of(km, "chat.find").changed, false);
   assert.equal(of(km, "nav.back").listed, false);
   assert.equal(of(km, "nav.back").text, t("web-main.shortcuts.unset"));

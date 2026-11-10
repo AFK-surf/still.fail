@@ -40,6 +40,8 @@ export const ACTIONS: Record<string, Spec> = {
   "chat.screen": { group: "chat", keys: ["Mod+Shift+D"], typing: "yes" },
   "chat.latest": { group: "chat", keys: ["Mod+Down"], typing: "empty" },
   "chat.find": { group: "chat", keys: ["Mod+F"], typing: "yes" },
+  // the chat's outline: what people said in it, to go to one
+  "chat.outline": { group: "chat", keys: ["Mod+G"], typing: "yes" },
   "chat.archive": { group: "chat", keys: ["Mod+Shift+E"], typing: "yes" },
   "panel.close": { group: "chat", keys: ["Escape"], typing: "yes" },
   // the preview beside a folder's list, shown or not (as Finder's preview pane)

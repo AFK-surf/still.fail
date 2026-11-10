@@ -2324,7 +2324,7 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   KeyGroupName: words(["global","chat","files"], { doc: "Where an action works: anywhere in the app, in a chat, or in a folder of the files." }),
   KeyTyping: words(["yes","no","empty"], { doc: "Whether an action works with the cursor in a text field: always (a binding with ⌘ or ⌥ does nothing there),\nnever (it is a key the field types), or when the field is empty (the key moves the cursor in text)." }),
-  KeyActionName: words(["chat.switch","chat.new","chat.prev","chat.next","sidebar.toggle","nav.back","nav.forward","settings","shortcuts","zoom.in","zoom.out","zoom.reset","composer.focus","composer.file","chat.stop","chat.history","chat.jobs","chat.screen","chat.latest","chat.find","chat.archive","panel.close","files.preview"], { doc: "An action keys do (keymap.ts ACTIONS)." }),
+  KeyActionName: words(["chat.switch","chat.new","chat.prev","chat.next","sidebar.toggle","nav.back","nav.forward","settings","shortcuts","zoom.in","zoom.out","zoom.reset","composer.focus","composer.file","chat.stop","chat.history","chat.jobs","chat.screen","chat.latest","chat.find","chat.outline","chat.archive","panel.close","files.preview"], { doc: "An action keys do (keymap.ts ACTIONS)." }),
   KeyAction: struct([
     ["action", "KeyActionName"],
     ["group", "KeyGroupName"],
@@ -3048,6 +3048,25 @@ export const SHAPES: Record<string, Shape> = {
     ["pulls", vec("ChatThing"), { doc: "The pull requests linked in it (`url`, `repository`, `number`; `title`, `state` once its card is read), each once, the latest first." }],
     ["mediaDays", vec("ThingDay"), { doc: "`media` by the day and the message they were sent with, the latest first (what the page shows)." }],
   ], { doc: "What was said in a chat besides words (the `chatThings` view {station, thread, q}), as far as it is on the device;\neach kind those that have every word of `q`." }),
+  ChatOutlineView: struct([
+    ["days", vec("OutlineDay"), { doc: "Its days, the oldest first." }],
+    ["count", "u32", { doc: "How many items there are." }],
+    ["held", "u32", { doc: "How many of the chat's entries are on the device." }],
+    ["of", "u32", { doc: "How many entries the chat has." }],
+    ["whole", "bool", { doc: "All of the chat is on the device (as `chat.find` says it). Until then, what is held; `chat.bring` reads the rest." }],
+  ], { doc: "A chat's outline (the `chatOutline` view {station, thread}): what people said in it (the viewer and anyone else, not\nagents, not still.fail's notices), one item each, by the day, as far as it is on the device." }),
+  OutlineDay: struct([
+    ["day", "String", { doc: "Its heading: 今天, 昨天, 星期三, 9月20日 (empty where when is not known)." }],
+    ["items", vec("OutlineItem"), { doc: "What people said on it, the oldest first." }],
+  ], { doc: "A day of a chat's outline (`chatOutline`)." }),
+  OutlineItem: struct([
+    ["seq", "i64", { client: "I54", doc: "The message (where `chat.around` takes the chat)." }],
+    ["mine", "bool", { doc: "The viewer's own." }],
+    ["author", "String", { doc: "Who said it, as its message has it (`author`): with `by`, their face as a message's head draws it." }],
+    ["by", "MessageBy", { doc: "Who said it, as a chat's message says it: `name`, `picture`." }],
+    ["words", "String", { said: true, doc: "What it says, its first words on a line; for one with only files, what a chat's row says of it (（文件）)." }],
+    ["clock", "String", { doc: "When it was said: 14:05 (empty where not known)." }],
+  ], { doc: "What a person said in a chat, in its outline (`chatOutline`)." }),
   ThingDay: struct([
     ["day", "String", { doc: "Its heading: 今天, 昨天, 星期三, 9月20日 (empty where when is not known)." }],
     ["groups", vec("ThingGroup"), { doc: "Its messages' pictures and videos, the latest message first." }],
@@ -4276,6 +4295,7 @@ export const TOPIC_SHAPES: Record<string, Ty> = {
   chatLetters: "ChatLettersView",
   chatFeedback: "ChatFeedbackView",
   chatThings: "ChatThingsView",
+  chatOutline: "ChatOutlineView",
   imageNear: "ImageNear",
   agentCard: "AgentCardView",
   stationNet: { opt: "StationNet" },

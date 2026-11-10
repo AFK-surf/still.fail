@@ -255,6 +255,14 @@ export function install(): void {
     const c = call as Extract<Call, { kind: "chatFind" }>;
     return Effect.andThen(parse(c.station), inner.stationTopics.find(c.station, c.thread, c.query, c.bring));
   };
+  handlers.chatBring = (inner, call) => {
+    const c = call as Extract<Call, { kind: "chatBring" }>;
+    return Effect.andThen(parse(c.station), inner.stationTopics.bring(c.station, c.thread));
+  };
+  handlers.chatOutlineFind = (inner, call) => {
+    const c = call as Extract<Call, { kind: "chatOutlineFind" }>;
+    return Effect.andThen(parse(c.station), Effect.map(inner.stationTopics.found(c.station, c.thread, c.query, c.bring), (f) => inner.views.outlineFound(c.station, c.thread, f)));
+  };
   handlers.historyOlder = (inner, call) => {
     const c = call as Extract<Call, { kind: "historyOlder" }>;
     return Effect.andThen(parse(c.station), Effect.map(inner.stationTopics.historyOlder(c.station, c.key), (more) => ({ more })));

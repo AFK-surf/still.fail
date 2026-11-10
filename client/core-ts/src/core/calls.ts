@@ -67,6 +67,9 @@ export type Call =
   | { kind: "chatCc"; station: string; thread: number; to: number; on: boolean }
   | { kind: "chatAround"; station: string; thread: number; seq: number }
   | { kind: "chatFind"; station: string; thread: number; query: string; bring: boolean }
+  /// A chat's outline: the rest of the chat read onto the device; what it lists for words looked for.
+  | { kind: "chatBring"; station: string; thread: number }
+  | { kind: "chatOutlineFind"; station: string; thread: number; query: string; bring: boolean }
   | { kind: "historyOlder"; station: string; key: string }
   | { kind: "historyDetail"; station: string; key: string; from: number; to: number }
   | { kind: "stationMeasure"; station: string }
@@ -588,6 +591,22 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
         ["bring", "bool", "opt"],
       ]);
       return { kind: "chatFind", station: p.station as string, thread: p.thread as number, query: p.query as string, bring: p.bring === true };
+    }
+    case "chat.outline.find": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["query", S, "req"],
+        ["bring", "bool", "opt"],
+      ]);
+      return { kind: "chatOutlineFind", station: p.station as string, thread: p.thread as number, query: p.query as string, bring: p.bring === true };
+    }
+    case "chat.bring": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+      ]);
+      return { kind: "chatBring", station: p.station as string, thread: p.thread as number };
     }
     case "history.older": {
       const p = read(params, [

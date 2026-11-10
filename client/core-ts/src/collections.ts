@@ -38,6 +38,7 @@ const SPECS: Record<string, Spec> = {
   sessions: items("key"),
   jobs: items("id"),
   history: { fields: { items: items("key") } },
+  chatOutline: { fields: { days: { key: ["day"], item: { fields: { items: items("seq") } } } } },
   vaults: { fields: { vaults: items("id"), requests: items("id") } },
   vaultItems: { fields: { items: items("id") } },
   driveTransfers: { fields: { transfers: { key: ["station", "id"] } } },

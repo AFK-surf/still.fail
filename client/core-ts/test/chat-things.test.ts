@@ -3,7 +3,7 @@
 // request as its card says it; an image opened stepping through all of the chat's held.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, subscribe, v } from "./helpers.ts";
+import { answers, apply, call, subscribe, v } from "./helpers.ts";
 import { base, started, threadView } from "./station-fixture.ts";
 import { isMedia, isVideo, linksOf, pullOf, siteOf } from "../src/things.ts";
 
@@ -150,4 +150,88 @@ test("a_messages_links_are_those_drawn_and_a_pull_request_is_known_by_its_addres
   assert.equal(pullOf("https://github.com/acme/app/issues/3"), null);
   assert.equal(pullOf("https://github.com/acme/app/pull/12abc"), null);
   assert.equal(siteOf("https://www.example.com/a/b/?q=1#x"), "www.example.com/a/b");
+});
+
+// A chat's outline (the `chatOutline` view): what people said in it, by the day, as far as it is on the device.
+const DAY = 86_400_000;
+const AT = Date.UTC(2026, 0, 5, 9, 30);
+
+test("a_chats_outline_is_what_people_said_by_the_day_oldest_first_and_asks_nothing", async () => {
+  const { host, core, push } = await started({
+    ...base(),
+    "GET /threads": [threadView(7, 5)],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 5, entries: [
+      said(1, { authorKind: "person", author: "a@x.com", text: "\n  先看列表\n第二行", at: AT }),
+      // An agent's and still.fail's own: not listed.
+      said(2, { text: "好，我看看", at: AT + 1000 }),
+      said(3, { authorKind: "person", author: "b@x.com", authorName: "Bo", text: "", attachments: [file("shot.png")], at: AT + 2000 }),
+      said(4, { authorKind: "station", author: "station", text: "⚠️ 出错了", at: AT + 3000 }),
+      said(5, { authorKind: "person", author: "a@x.com", text: "第二天再说", at: AT + DAY }),
+    ] },
+  });
+  const ui = core.connect();
+  const values = new Map();
+  await host.time.pass(500, 10);
+  const asked = host.requests.length;
+  // Its parameters as a UI says them (protocol.ts TOPICS): one it does not take is left out.
+  core.receiveRaw(ui, { id: 1, subscribe: { topic: "chatOutline", station: S, thread: 7, q: "x" } });
+  await host.time.pass(500, 10);
+  apply(host, values);
+  assert.equal(host.requests.slice(asked).filter((r) => !r.url.includes("/timeline?")).length, 0, "subscribing asks nothing");
+  const outline = v(values, 1);
+  assert.deepEqual([outline.count, outline.whole, outline.held, outline.of], [3, true, 5, 5]);
+  assert.equal(outline.days.length, 2);
+  assert.ok(outline.days.every((d: J) => d.day !== ""));
+  assert.notEqual(outline.days[0].day, outline.days[1].day);
+  assert.deepEqual(outline.days.map((d: J) => d.items.map((i: J) => [i.seq, i.mine, i.author, i.by.name, i.words])), [
+    [[1, true, "a@x.com", "a@x.com", "先看列表"], [3, false, "b@x.com", "Bo", "（文件）"]],
+    [[5, true, "a@x.com", "a@x.com", "第二天再说"]],
+  ]);
+  assert.match(outline.days[0].items[0].clock, /^\d\d:\d\d$/);
+  // A message said later comes in by itself, only it sent (the rest as they were).
+  push("thread", { id: 7, entries: [said(6, { authorKind: "person", author: "b@x.com", authorName: "Bo", text: "还有一件", at: AT + DAY + 1000 })] });
+  await host.time.pass(500, 10);
+  const sent = host.emitted.map(([, m]) => m as J).filter((m) => m.id === 1 && "delta" in m);
+  apply(host, values);
+  assert.deepEqual(v(values, 1).days[1].items.map((i: J) => [i.seq, i.words]), [[5, "第二天再说"], [6, "还有一件"]]);
+  assert.equal(v(values, 1).count, 4);
+  const ops = JSON.stringify(sent.flatMap((m) => m.delta));
+  assert.ok(ops.includes("还有一件") && !ops.includes("先看列表") && !ops.includes("第二天再说"), ops);
+  core.close();
+});
+
+test("what_a_chats_outline_finds_is_listed_by_the_day_with_the_line_that_has_the_words", async () => {
+  const long = "这是一段很长很长很长很长很长的话，说了好多别的事情之后才说到部署的事";
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [threadView(7, 4)],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 4, entries: [
+      said(1, { authorKind: "person", author: "a@x.com", text: "部署之前先看一下", at: AT }),
+      said(2, { authorKind: "person", author: "b@x.com", text: long, at: AT + 1000 }),
+      said(3, { text: "第一行\n第二行说**部署**好了\n第三行", at: AT + DAY }),
+      said(4, { authorKind: "person", author: "a@x.com", text: "无关", at: AT + DAY + 1000 }),
+    ] },
+  });
+  const ui = core.connect();
+  await host.time.pass(500, 10);
+  call(core, ui, 1, "chat.outline.find", { station: S, thread: 7, query: "部署" });
+  await host.time.pass(500, 10);
+  const found = (answers(host.takeEmitted(), 1) as J).ok;
+  assert.deepEqual([found.words, found.total, found.held, found.of, found.whole], [["部署"], 3, 4, 4, true]);
+  assert.equal(found.days.length, 2);
+  const rows = found.days.flatMap((d: J) => d.items);
+  assert.deepEqual(rows.map((r: J) => [r.seq, r.mine, r.agent, r.snippet]), [
+    // The match at its line's start; one far into a line: its start cut, 12 before it.
+    [1, true, false, "部署之前先看一下"],
+    [2, false, false, `…${long.slice(long.indexOf("部署") - 12)}`],
+    // An agent's, on a later line of it, its marks out.
+    [3, false, true, "第二行说部署好了"],
+  ]);
+  assert.equal(rows[2].by.agent, "k1");
+  assert.match(rows[0].clock, /^\d\d:\d\d$/);
+  // A line is cut at 120 after where it starts, and never goes on to the next.
+  const { excerpt } = await import("../src/refs.ts");
+  const cut = excerpt(`${"字".repeat(20)}部署${"长".repeat(200)}\n下一行`, ["部署"], 12, 120).text;
+  assert.equal(cut, `…${"字".repeat(12)}部署${"长".repeat(106)}`);
+  core.close();
 });
