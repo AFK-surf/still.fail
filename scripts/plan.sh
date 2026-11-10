@@ -46,7 +46,7 @@ decide() {
   if has '^(station/(src|native|mb)/|client/shell/|apps/mbui/mbui/src/effect/|rules/js/|client/core-ts/src/(shapes/(dsl|schema|model)|lock-form|rig-form|whitespace|titles|chat-row|cache-policy|codex-quota|mediaFacts|digest|redact)\.ts$|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign|delta|release-deltas)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then station=true; fi
   # The beta Android app: mbui's in the Kotlin one's place (scripts/release.sh --beta android), released for a
   # change to what apps/mbui's beta is made of (scripts/beta.sh APP_SRC: its code, mbui's with its Android host's
-  # Java, the client's, media's, vendor's: JZlib among them), to the tool that packs and repacks its APK (mbui's
+  # Java, JZlib among it, the client's, media's, vendor's), to the tool that packs and repacks its APK (mbui's
   # tools/apk: the repacked APK is what the app's delta applier makes byte for byte), or to how it is released (its
   # deltas too).
   android_beta=false

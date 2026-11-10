@@ -30,7 +30,7 @@ import java.util.zip.Inflater;
  * entries inflated (`n_inflate`) into the new APK with its changed entries inflated, and the applier deflates those
  * ranges again (`n_deflate`) as it writes. That gives the released bytes (which its signature covers) only if this
  * deflater gives the bytes the release has: the system's (java.util.zip.Deflater, the platform's zlib) differs between
- * Android versions and CPUs, so the app carries its own, JZlib (vendor/jzlib), and the release's APK is repacked by this
+ * Android versions and CPUs, so the app carries its own, JZlib (mbui/android/jzlib), and the release's APK is repacked by this
  * very code before it is aligned and signed (tools/apk). Inflating is the same everywhere: the system's Inflater does it.
  *
  * Memory is bounded (a phone): the old blob is a temporary file read through a buffer, the delta is read as a stream a
