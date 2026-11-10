@@ -162,6 +162,8 @@ priv struct Rec {
   mut y : Double
   mut w : Double
   mut h : Double
+  /// the node it was laid out as, in the layout of the frame it was last seen in (`seen`)
+  mut node : Int
   /// How a measured node was drawn after all of its ancestors' looks were applied.
   mut drawn : @ui.DrawnState?
   mut ref : Int
@@ -260,6 +262,7 @@ fn Rec::new() -> Rec {
     y: 0.0,
     w: 0.0,
     h: 0.0,
+    node: -1,
     drawn: None,
     ref: 0,
     seen: -10,
@@ -812,13 +815,26 @@ pub fn reshape_way(c : @ui.Ctx, key : String) -> (Double, Double)? {
 }
 
 ///|
+/// The frame the measured nodes were last laid out in (after_layout): their records' nodes (Rec's `node`) are that
+/// layout's.
+// kept across runs: said as each frame is laid out
+let measures_laid_in : Ref[Int] = Ref(-1)
+
+///|
 /// Where the node kept as `key` (measure) was last laid out, in the window: x, y, w, h (None before it was, or once what
-/// lays it out is no longer built: rec_unbuilt).
+/// lays it out is no longer built: rec_unbuilt). Read as the frame is painted, where it is then: a frame painted alone
+/// places what the clock moves (Ctx::moved_by, a page sliding) where it is now, nothing laid out, and what reads it as
+/// it is painted (a look by Ctx::look_by, a glyph's by Ctx::glyphs_by) reads it there with what it is in, as laying
+/// the frame out there reads it.
 pub fn measured_rect(c : @ui.Ctx, key : String) -> (Double, Double, Double, Double)? {
-  ignore(c)
   measure_read(measure_at, motion_key("measure\u{1}" + key), name=key)
   measure_read(measure_size, motion_key("measure\u{1}" + key), name=key)
   match mo.recs.get(motion_key("measure\u{1}" + key)) {
+    // (its node the frame's: laid out in the layout the frame is painted from)
+    Some(r) if r.alive && r.node >= 0 && r.seen == measures_laid_in.val && c.painting() => {
+      let (x, y, _, _) = c.node_rect(r.node)
+      Some((x, y, r.w, r.h))
+    }
     Some(r) if r.alive => Some((r.x, r.y, r.w, r.h))
     _ => None
   }
@@ -1396,6 +1412,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
   // (the frame being made: each build of it lays it out from where the last frame drew it, and what changed in it (a
   // list's rows, a foot moved) changed for every build of it; what holds a frame's identity, none of its causes: kept)
   let frame = c.frame_number()
+  measures_laid_in.val = frame
   let still = c.still()
   let scrolled : Map[Int, Double] = {}
   // (shapes first: what is carried on one's ground is placed by where that is this frame)
@@ -1767,6 +1784,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       r.y = ny
       r.w = nw
       r.h = nh
+      r.node = e.node
       r.rad = radii
       r.seen = frame
       rec_built(c, e.kept, r)

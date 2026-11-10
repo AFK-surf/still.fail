@@ -1313,6 +1313,7 @@ pub fn Ctx::page_stint(Self) -> Int32
 pub fn Ctx::pager(Self, String, Int32, Int32, (Int32) -> Unit, w? : Size, h? : Size, on_edge? : (Int32) -> Unit, on_middle? : () -> Unit) -> Int32
 pub fn Ctx::pager_rest(Self, String) -> Double
 pub fn Ctx::paint_rect(Self, Double, Double, Double, Double, radius~ : Double, Int64) -> Unit
+pub fn Ctx::painting(Self) -> Bool
 pub fn Ctx::passes(Self, Int32) -> Unit
 pub fn Ctx::paths_into(Self, Int32, String) -> Array[DroppedPath]?
 pub fn Ctx::picture(Self, String, x~ : Double, y~ : Double, w~ : Double, h~ : Double, w_? : Size, h_? : Size, max_px? : Int32, bg? : Int64, matte? : Bool) -> Int32
