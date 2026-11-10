@@ -2,145 +2,25 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CoreError } from "../src/error.ts";
-import { Effect } from "effect";
-import { Data, holds } from "../src/data.ts";
-import { apply as applyOps, type Op } from "../src/delta.ts";
+import { apply as applyOps } from "../src/delta.ts";
 import * as format from "../src/format.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { merge } from "../src/entries.ts";
 import { topicKey, type Topic } from "../src/protocol.ts";
-import { Runner } from "../src/runtime.ts";
-import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
-import { FakeHost } from "../src/testing.ts";
+import { EVICT_AFTER_MS } from "../src/store.ts";
 import { attention, choices, models, runnableOn } from "../src/views/models.ts";
-import { Views, answeredAt, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
+import { answeredAt, betaOffered, blockedUnder, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
 import { localDay } from "../src/views/usage.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
 import { markdown } from "../src/markdown.ts";
+import { hostOf, link, overview, prefs, rows, sessions, setup, sorted, threads, ui, workspace, type Ui } from "./views-rig.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
 type J = any;
 const DAY_MS = 86_400_000;
 
-const VIEWS = new Set(["chats", "chatSearch", "stations", "stationNet", "connects", "chat", "history", "archive", "workspaceMarks", "chatJobs", "imageNear", "longJobs", "usage", "profiles"]);
-
-class Router implements Source {
-  views!: Views;
-  started: Topic[] = [];
-  stopped: Topic[] = [];
-  computed = 0;
-  /// What the station topics say of a held topic whose read failed while nothing is held (station/topics.ts).
-  failed = new Map<string, CoreError>();
-  start(topic: Topic): void {
-    if (VIEWS.has(topic.topic)) this.views.start(topic);
-    else this.started.push(topic);
-  }
-  stop(topic: Topic): void {
-    if (VIEWS.has(topic.topic)) this.views.stop(topic);
-    else this.stopped.push(topic);
-  }
-  compute(topic: Topic): Value | undefined {
-    const failed = this.failed.get(topicKey(topic));
-    if (failed) return { err: failed };
-    if (!VIEWS.has(topic.topic)) return undefined;
-    this.computed++;
-    return this.views.compute(topic);
-  }
-}
-
-type Ui = { value: J; error: J; messages: number };
-const ui = (): Ui => ({ value: undefined, error: undefined, messages: 0 });
-
-function setup() {
-  const host = new FakeHost();
-  const runner = new Runner(host.time.clock);
-  const store = new Store(host, runner);
-  store.setShaped();
-  // What the stations hold is in the account's database (data.ts), as in a core: the test writes it there.
-  const data = new Data(host, runner, { owner: () => "s1", derive: chatDerive });
-  Effect.runSync(data.open(["s1"]));
-  store.setHeld((topic) => data.shared(topic), (topic) => data.release(topic));
-  data.onChange((topic) => store.changed(topic));
-  const router = new Router();
-  const views = new Views({
-    host,
-    runner,
-    store,
-    data,
-    emailOf: (ws) => (ws === "ws" ? "Me@x.com" : null),
-    betaOf: (ws) => ws === "ws" && (data.record("me", "s1") as J)?.user?.beta === true,
-    subOf: (ws) => (ws === "ws" ? "s1" : null),
-    relayName: () => null,
-  });
-  router.views = views;
-  store.setSource(router);
-  const t = {
-    host,
-    data,
-    store,
-    router,
-    views,
-    subscribe: (id: number, topic: Topic) => store.subscribe(1, id, topic),
-    async readAll(uis: [Ui, number][]) {
-      await host.time.pass(100);
-      for (const [, message] of host.takeEmitted()) {
-        const m = message as J;
-        if (m.error?.code === "shape") throw new Error(m.error.message);
-        const found = uis.find(([, id]) => id === m.id);
-        if (!found) continue;
-        const [u] = found;
-        if ("value" in m) [u.value, u.error] = [m.value, undefined];
-        else if ("delta" in m) u.value = applyOps(u.value, m.delta as Op[]);
-        else if ("error" in m) u.error = m.error;
-        else continue;
-        u.messages++;
-      }
-    },
-    async read(u: Ui, id: number) {
-      await t.readAll([[u, id]]);
-    },
-    set: (topic: Topic, value: unknown) => {
-      router.failed.delete(topicKey(topic));
-      if (holds(topic)) data.set(topic, value);
-      else store.set(topic, { ok: value });
-    },
-    // A held topic's error shows while nothing is held of it (data.ts): what was held goes first, as the core has it
-    // go (a workspace gone, a session removed, a station's rows no longer reached); the station topics say why.
-    fail: (topic: Topic, error: CoreError) => {
-      if (!holds(topic)) return store.set(topic, { err: error });
-      if (topic.topic === "workspace") data.dropWorkspace(topic.workspace as string);
-      else if (topic.topic === "session") {
-        if (data.hasDetail(topic.station as string, topic.key as string)) data.dropSession(topic.station as string, topic.key as string);
-      } else data.retain((s) => s !== topic.station, null);
-      router.failed.set(topicKey(topic), error);
-      store.invalidate(topic);
-    },
-    started: () => {
-      const s = router.started;
-      router.started = [];
-      return s;
-    },
-    stopped: () => {
-      const s = router.stopped;
-      router.stopped = [];
-      return sorted(s);
-    },
-    nowS: () => host.nowMs() / 1000,
-  };
-  return t;
-}
-
-const workspace = (): Topic => ({ topic: "workspace", workspace: "ws" });
-const sessions = (st: string): Topic => ({ topic: "sessions", station: st });
-const overview = (st: string): Topic => ({ topic: "overview", station: st });
-const link = (st: string): Topic => ({ topic: "link", station: st });
-const threads = (st: string): Topic => ({ topic: "threads", station: st });
-const rows = (st: string): Topic => ({ topic: "chatRows", station: st });
-const hostOf = (st: string): Topic => ({ topic: "host", station: st });
-const prefs = (): Topic => ({ topic: "prefs" });
 const sortedKeys = (topics: Topic[]) => topics.map(topicKey).sort();
-const sorted = (topics: Topic[]) => [...topics].sort((a, b) => (topicKey(a) < topicKey(b) ? -1 : 1));
 const sameTopics = (a: Topic[], b: Topic[], message?: string) => assert.deepEqual(sortedKeys(a), sortedKeys(b), message);
 
 function stations(nowS: number): J {
