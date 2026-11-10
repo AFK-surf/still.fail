@@ -283,6 +283,30 @@ test "an ask the run's timing made, dropped with what came for it" {
 }
 
 ///|
+test "a watch the run let go of and asked again, both dropped: what came for it before stays, the watch goes on" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":1,"subscribe":{"topic":"a"},"keyed":true}}
+    #|{"in":{"id":1,"value":1},"w":10}
+    #|{"out":{"id":1,"unsubscribe":true}}
+    #|{"out":{"id":2,"subscribe":{"topic":"a"},"keyed":true}}
+    #|{"in":{"id":2,"value":1},"w":11}
+    #|{"out":{"id":3,"subscribe":{"topic":"b"},"keyed":true}}
+    #|{"in":{"id":3,"value":2},"w":12}
+  ))
+  assert_eq(r.drop("{\"id\":1,\"unsubscribe\":true}"), 1)
+  assert_eq(r.drop("{\"id\":2,\"subscribe\""), 1)
+  let c = r.client()
+  let a = c.subscribe("a")
+  assert_eq(r.deliver(), 1)
+  assert_eq(a.value.map(fn(v) { v.stringify() }), Some("1"))
+  let b = c.subscribe("b")
+  assert_eq(r.deliver(), 1)
+  assert_eq(b.value.map(fn(v) { v.stringify() }), Some("2"))
+  assert_eq(r.left(), 0)
+  assert_eq(r.unmade().length(), 0)
+}
+
+///|
 test "the bytes the run sent beside a call are the test's to give again" {
   let r = @core.Replay::parse(
     #|CORETRACE {"out":{"id":3,"call":"station.upload.part","params":{"name":"a.jpg","offset":0}},"w":10,"b":"ffd8ff"}

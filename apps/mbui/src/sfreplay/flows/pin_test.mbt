@@ -4,7 +4,12 @@
 ///|
 test "27-pin" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace("pin"), seed~)
+    // (the run's list of chats, under the chat, let go of the rows under the block that came as the chat was pinned
+    // (已固定) and made them again, their watch of `doing` let go of and asked again with them: a block that comes
+    // now leaves the rows that show as they are (mbui's list_window.mbt), and the watch goes on)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("pin"), seed~, drop=[
+      "{\"id\":11,\"unsubscribe\":true}", "{\"id\":47,\"subscribe\":{\"topic\":\"doing\"}",
+    ])
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
     f.see("=willow")

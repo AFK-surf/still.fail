@@ -7,6 +7,7 @@ import type { Inner } from "../core.ts";
 import { membersOf } from "../db/account.ts";
 import { CoreError } from "../error.ts";
 import { nOf } from "../entries.ts";
+import { beginsItem } from "../history.ts";
 import { t } from "../i18n.ts";
 import { topicKey, topicStation, type Topic } from "../protocol.ts";
 import { terms } from "../refs.ts";
@@ -431,29 +432,38 @@ export class StationTopics implements Owner {
     return { ok: value };
   }
 
-  /// The page of a transcript before what a `live` topic shows, into it: from what is held, else read now. One at a time
-  /// (asked again while it is read: nothing more); one that fails is said on the topic (`older`), and not asked for
-  /// again till a while after (less often each time it fails in a row), when the UI asks again if it is still near
-  /// the top. Whether there are pages before it still.
+  /// The page of a transcript before what a `live` topic shows, into it: from what is held, else read now; and the
+  /// pages before that, till one of the history's items begins in what came (history.ts `beginsItem`: a page that
+  /// only goes on with a group begun before it shows nothing more, and the UI, asking as it nears the top, would be
+  /// told nothing changed). One at a time (asked again while it is read: nothing more); one that fails is said on the
+  /// topic (`older`), and not asked for again till a while after (less often each time it fails in a row), when the UI
+  /// asks again if it is still near the top. Whether there are pages before it still.
   historyOlder(station: string, key: string): Effect.Effect<boolean, CoreError> {
     const topic: Topic = { topic: "live", station, key };
     const tk = topicKey(topic);
     return Effect.suspend(() => this.#older(topic, tk, Effect.gen({ self: this }, function* () {
-      const before = this.#firsts.get(tk);
-      if (before === undefined || before === 0) return false;
       const data = this.#core.data;
-      const from = Math.max(0, before - TRANSCRIPT_PAGE);
-      const held = () => data.logRange("transcript", station, key, from, before - 1);
-      // Read now unless held; its station not reached and it not held: not had now.
-      if (!held().has(before - 1)) {
-        if (!this.#sync.link(station) || !this.#sync.reachable(station)) return yield* Effect.fail(new CoreError("offline", downWords(this.#sync.link(station)?.state ?? { state: "offline" }, this.#core.views.stationName(station))));
-        yield* this.#sync.channels.older(transcriptOf(station, key), before, { quiet: false });
+      for (;;) {
+        const before = this.#firsts.get(tk);
+        if (before === undefined || before === 0) return false;
+        const from = Math.max(0, before - TRANSCRIPT_PAGE);
+        const held = () => data.logRange("transcript", station, key, from, before - 1);
+        // Read now unless held; its station not reached and it not held: not had now.
+        if (!held().has(before - 1)) {
+          if (!this.#sync.link(station) || !this.#sync.reachable(station)) return yield* Effect.fail(new CoreError("offline", downWords(this.#sync.link(station)?.state ?? { state: "offline" }, this.#core.views.stationName(station))));
+          yield* this.#sync.channels.older(transcriptOf(station, key), before, { quiet: false });
+        }
+        const items = held();
+        let first = before;
+        let begins = false;
+        while (first > from && items.has(first - 1)) {
+          first--;
+          if (beginsItem(items.get(first))) begins = true;
+        }
+        this.#firsts.set(tk, first);
+        // Nothing came (a read that brought none of it): as far as it goes for now.
+        if (first === 0 || first === before || begins) return first > 0;
       }
-      const items = held();
-      let first = before;
-      while (first > from && items.has(first - 1)) first--;
-      this.#firsts.set(tk, first);
-      return first > 0;
     })));
   }
 

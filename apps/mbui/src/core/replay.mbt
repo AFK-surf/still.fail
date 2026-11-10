@@ -317,16 +317,19 @@ pub fn Replay::skip_where(self : Replay, which : (String, Json) -> Bool) -> Unit
 ///|
 /// The run's asks whose message holds `text`, and what came for them, left out: an ask the run's timing made (a list
 /// off its end for a frame: `client.focus` with `"end":false`) that a test's frames need not make again. How many.
+/// A watch let go of or an ask cancelled names it by its id, and nothing came for that: what came for the watch stays.
 pub fn Replay::drop(self : Replay, text : String) -> Int {
   let gone : Array[Int] = []
+  let mut n = 0
   for e in self.evs {
     if e.out && !e.done && !is_step(e.msg) && e.msg.stringify().contains(text) {
       e.done = true
+      n += 1
       match e.msg {
         Object(m) =>
           match id_of(m) {
-            Some(id) => gone.push(id)
-            None => ()
+            Some(id) if !(kind_of(m) == "unsubscribe" || kind_of(m) == "cancel") => gone.push(id)
+            _ => ()
           }
         _ => ()
       }
@@ -338,7 +341,7 @@ pub fn Replay::drop(self : Replay, text : String) -> Int {
     }
   }
   self.advance()
-  gone.length()
+  n
 }
 
 ///|
