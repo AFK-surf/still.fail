@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [5d8ebf2e2](https://github.com/AFK-surf/still.fail/commit/5d8ebf2e2ca7c99a6d20c6ea990e6350f0d57b29) core test: the devices topic placed among those no | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 93.95 | 171.54 |
 | [6d985b7a7](https://github.com/AFK-surf/still.fail/commit/6d985b7a745263f260eb8c47a5e6cfc06dce56bb) mac: update in place where a translocated app was  | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 94.09 | 151.58 |
 | [351ef47b8](https://github.com/AFK-surf/still.fail/commit/351ef47b876954e1c506c5514ec2409c0b63720b) core: what each topic sends at a workspace's real  | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 94.09 | 185.99 |
 | [8b8145742](https://github.com/AFK-surf/still.fail/commit/8b8145742b38dd9215873c0705d546a6b3972890) mbui: words picked with the pointer never end on a | 1.78 | 2.37 | 9.84 | 28.49 | 34.6 | 25.45 | 46.86 | 93.96 | 171.75 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [e553b0a6e](https://github.com/AFK-surf/still.fail/commit/e553b0a6e7638c7b0db377f0a9bbe623948c9e53) mbui: a node drawn smaller than a press's room is  | 1.74 | 2.32 | 9.66 | 28.21 | 33.72 | 25.19 | 46.16 | 92.6 | 133.06 |
 | [28376c907](https://github.com/AFK-surf/still.fail/commit/28376c9071e24106660aea7233f0222d1f7340d2) cloud: the memberships test waits for its lock.get | 1.74 | 2.32 | 9.65 | 28.2 | 33.7 | 25.18 | 46.15 | 93.52 | 139.07 |
 | [a455a9c49](https://github.com/AFK-surf/still.fail/commit/a455a9c49d7c83da4700bff1436314eccb5e3745) cloud: signing in and a client's spans use up none | 1.74 | 2.32 | 9.65 | 28.2 | 33.68 | 25.18 | 46.13 | 93.55 | 168.29 |
-| [6f1305d96](https://github.com/AFK-surf/still.fail/commit/6f1305d9683c0b281d370ec470ba9b81cee6cf09) cloud: devices' and stations' sockets on their own | 1.74 | 2.32 | 9.65 | 28.2 | 33.68 | 25.18 | 46.13 | 93.28 | 144.49 |
