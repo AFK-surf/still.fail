@@ -1306,6 +1306,12 @@ pub let note : @ui.TextStyle
 
 pub fn note_link_node(@view.View, () -> String, () -> String, () -> Unit, inline? : Bool) -> Unit
 
+pub fn offers_bindings() -> Array[@view.Binding]
+
+pub let offers_most : Double
+
+pub fn offers_node(@view.View, @view.View, () -> Bool, () -> Array[String], @signals.Signal[Int32], (@view.View, String, () -> Bool) -> Unit, (String) -> String, (Int32) -> Unit, () -> Unit, String, head? : () -> (String, String), side? : @view.Side, offset? : Double, none? : (@view.View) -> Unit) -> Unit
+
 pub fn oklch(Double, Double, Double) -> Int64
 
 pub fn on_corner(Double, Double, room? : Double) -> Double

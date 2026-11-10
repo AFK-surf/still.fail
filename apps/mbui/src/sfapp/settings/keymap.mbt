@@ -177,6 +177,8 @@ pub fn keymap_of(prefs : Json?) -> @view.Keymap {
   bindings.append(@sf.reader_bindings())
   // (the files' own where they are: sfdesk's files.mbt)
   bindings.append(files_bindings())
+  // (what a field offers as it is typed in, where it is open: sf's offers_node.mbt)
+  bindings.append(@sf.offers_bindings())
   // (Escape where a search is up, with the cursor in a field too, or a picture's old viewer, not in a field: sfpages'
   // search.mbt, sfbase's viewer.mbt)
   bindings.push({ keys: [stroke(@ui.key_escape, 0)], action: "search.escape", when: In("Search") })

@@ -68,6 +68,8 @@ fn panel_centred_node(
     let opens_on : Ref[@view.View?] = Ref(None)
     // (and the field it opens to be typed in, before that: panel_opens_in_node, panel_search_at_hand_node)
     let field : Ref[PanelField?] = Ref(None)
+    // (what its fields offer made in its layer: offers_layer_lent)
+    offers_layer_lend(layer)
     across.box(fn(d) {
       d.lends(panel_opens_lent, opens_on) |> ignore
       d.lends(panel_field_lent, field) |> ignore
