@@ -16,7 +16,7 @@ import { workspaceAgentHome } from "../src/sessions/agent-home.ts";
 import { profilesFor } from "../src/sessions/config.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { newSession } from "../src/sessions/lifecycle.ts";
-import { openOptions } from "../src/sessions/actor.ts";
+import { linkSkills, openOptions } from "../src/sessions/actor.ts";
 import { fromPeer } from "../src/sessions/messages.ts";
 import { createForPeer } from "../src/sessions/opened.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
@@ -235,11 +235,12 @@ test("a session's runtime is given its workspace's memory and skills, never anot
   mkdirSync(join(home, "workspaces", W2, "skills", "two-project"), { recursive: true });
   writeFileSync(join(home, "workspaces", W2, "skills", "two-project", "SKILL.md"), "---\ndescription: 项目记忆：two\n---\n");
   // The same profile runs both: what its home holds reaches both, so a workspace's are given with the session.
-  const opened = (key: string) => {
+  const opened = async (key: string) => {
     const row = rig.store.getSession(key)!;
+    await linkSkills(row, rig.hub.deps);
     return { row, options: openOptions(row, rig.hub.accounts.runOn(key), rig.hub.deps) };
   };
-  const ofTwo = opened(two);
+  const ofTwo = await opened(two);
   assert.ok(ofTwo.options.instructions.includes("# two's lessons") && !ofTwo.options.instructions.includes("# one's lessons"));
   assert.equal(ofTwo.options.skills, join(home, "workspaces", W2, "skills"));
   for (const at of [join(".claude", "skills"), join(".agents", "skills")]) {
@@ -247,7 +248,7 @@ test("a session's runtime is given its workspace's memory and skills, never anot
     assert.deepEqual(readdirSync(join(ofTwo.row.workspace, at)).filter((n) => !n.startsWith("stillfail-")), ["two-project"], at);
     assert.ok(existsSync(join(ofTwo.row.workspace, at, "stillfail-jobs", "SKILL.md")), at);
   }
-  const ofOne = opened(one);
+  const ofOne = await opened(one);
   assert.ok(ofOne.options.instructions.includes("# one's lessons") && !ofOne.options.instructions.includes("# two's lessons"));
   assert.deepEqual(readdirSync(join(ofOne.row.workspace, ".claude", "skills")), ["one-project"]);
 }));

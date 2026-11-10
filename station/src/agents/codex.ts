@@ -855,7 +855,7 @@ export class CodexDriver implements AgentDriver {
     const recovered = new Map<string, Recovered>();
     const began = new Map<string, number>();
     let read = 0;
-    for (const { text: line, at: lineAt } of linesWithin(out, keep ?? 0, at)) {
+    for await (const { text: line, at: lineAt } of linesWithin(out, keep ?? 0, at)) {
       if (++read % TAKE_UP_LINES === 0) {
         this.options.taking?.();
         await new Promise((resolve) => setImmediate(resolve));

@@ -32,6 +32,19 @@ const canonical = (path: string): string | null => {
   return real;
 };
 
+/// Each session's own directory as last found (`roomOfSoon`, off the thread), for FOLLOWED_MS: `archiveRoom` is asked
+/// again before each step of packing one, and followed its paths on the station's thread at every ask.
+const rooms = new Map<string, { at: number; room: string | null }>();
+const keptRoom = (dataDir: string, workspace: string): string | null => {
+  const kept = rooms.get(workspace);
+  if (kept !== undefined && wall.now() - kept.at < FOLLOWED_MS) return kept.room;
+  return roomOf(dataDir, workspace);
+};
+async function findRoom(dataDir: string, workspace: string): Promise<void> {
+  rooms.set(workspace, { at: wall.now(), room: await roomOfSoon(dataDir, workspace) });
+  if (rooms.size > 1024) rooms.delete(rooms.keys().next().value!);
+}
+
 export class ColdRooms implements ColdStorage {
   /// The hub it works for (made after it).
   private readonly hub: () => Hub;
@@ -44,13 +57,19 @@ export class ColdRooms implements ColdStorage {
     return this.hub().config().dataDir;
   }
 
+  /// Its session's own directory found off the thread, for `archiveRoom` to ask again and again.
+  private async findRoom(key: string): Promise<void> {
+    const row = this.hub().store.getSession(key);
+    if (row) await findRoom(this.dataDir(), row.workspace);
+  }
+
   /// An archived session's own directory, while nothing needs it: not back in the lists or at work, and no other
   /// session or active job (running, or a service waiting to restart) using it.
   archiveRoom(key: string): string | null {
     const hub = this.hub();
     const row = hub.store.getSession(key);
     if (!row) return null;
-    const dir = roomOf(this.dataDir(), row.workspace);
+    const dir = keptRoom(this.dataDir(), row.workspace);
     if (dir === null || row.archivedAt === null || row.running || hub.processState(key) === "running") return null;
     // The sessions in use alone (by their indexes): this is asked again and again as a session is packed.
     const shared = hub.store
@@ -85,6 +104,7 @@ export class ColdRooms implements ColdStorage {
   /// an archived session's own directory: it may come back, and is built again then. Left as it is while the session is
   /// back in the lists or at work, or a session/job still uses its directory. Returns removed allocated file bytes.
   async cleanRebuildable(key: string): Promise<number> {
+    await this.findRoom(key);
     const dir = this.archiveRoom(key);
     if (dir === null) return 0;
     let freed = 0;
@@ -165,6 +185,7 @@ export class ColdRooms implements ColdStorage {
       const at = this.hub().store.getSession(key)?.archivedAt ?? null;
       return at !== null && at <= before && this.archiveRoom(key) !== null;
     };
+    await this.findRoom(key);
     const room = due() ? this.archiveRoom(key) : null;
     if (room === null) return;
     await archive.withLock(room, async () => {
@@ -184,6 +205,7 @@ export class ColdRooms implements ColdStorage {
   }
 
   async pack(key: string): Promise<void> {
+    await this.findRoom(key);
     const room = this.archiveRoom(key);
     if (room === null) return;
     const ready = () => this.archiveRoom(key) !== null;
@@ -257,6 +279,7 @@ export class ColdRooms implements ColdStorage {
     for (const name of names) {
       if (!name.endsWith(LEGACY)) continue;
       const key = name.slice(0, -LEGACY.length);
+      await this.findRoom(key);
       const room = this.archiveRoom(key);
       if (room === null) continue;
       const ready = () => this.archiveRoom(key) !== null;

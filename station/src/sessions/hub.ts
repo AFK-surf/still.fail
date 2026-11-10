@@ -38,7 +38,7 @@ import { runShown } from "./run-change.ts";
 import type { PolicyChecks } from "./archive-policy.ts";
 import type { RecentChatList } from "../store/chat-list.ts";
 import { Accounts } from "./accounts.ts";
-import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
+import { SessionActor, type SessionDeps, type Snapshot, linkSkills, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
 import { threadCommand, type Args } from "./args.ts";
 import type { CardPage } from "../logins/index.ts";
@@ -550,6 +550,7 @@ export class Hub {
       try {
         const driver = this.sessionDriver(snap.runtime);
         const generation = actor.nextGeneration();
+        await linkSkills(row, this.deps);
         agent = await driver.adopt(openOptions(row, this.accounts.profile(ranOn) ?? this.accounts.runOn(row.key), this.deps), snap.agent, actor.listener(generation));
       } catch (error) {
         log.warn("hub", "a session's runtime could not be taken up; it resumes the usual way", { session: row.key, error: (error as Error).message });

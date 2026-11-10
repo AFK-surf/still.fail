@@ -6,7 +6,8 @@
 // `freeze` stops handling lines (none more is acknowledged): what a snapshot says then matches where the next station
 // begins. After a crash there is no snapshot; `ackedOffset` and `linesBefore` let a driver read what the dead station
 // had handled (silently) to know where things stand before the rest comes.
-import { closeSync, openSync, readSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
+import { open } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { join } from "node:path";
 import { keyPart } from "./sandbox.ts";
@@ -289,14 +290,16 @@ const READ_CHUNK = 1 << 20;
 
 /// The whole lines of `file` before byte `end` (a line boundary: acknowledgements are at line ends), one at a time: an
 /// app-server's output holds days of its threads (hundreds of MB), more than one string can, so it is never held whole.
-export function* linesBefore(file: string, end: number, chunk = READ_CHUNK): Generator<string> {
-  for (const line of linesWithin(file, 0, end, chunk)) yield line.text;
+export async function* linesBefore(file: string, end: number, chunk = READ_CHUNK): AsyncGenerator<string> {
+  for await (const line of linesWithin(file, 0, end, chunk)) yield line.text;
 }
 
-/// The whole lines of `file` from byte `start` to byte `end` (both line boundaries), each with where it begins.
-export function* linesWithin(file: string, start: number, end: number, chunk = READ_CHUNK): Generator<{ text: string; at: number }> {
+/// The whole lines of `file` from byte `start` to byte `end` (both line boundaries), each with where it begins. Read off
+/// the station's thread: what a station taking up its runners reads, up to hundreds of MB, held it 33 s on one
+/// (2026-11-06).
+export async function* linesWithin(file: string, start: number, end: number, chunk = READ_CHUNK): AsyncGenerator<{ text: string; at: number }> {
   if (end <= start) return;
-  const fd = openSync(file, "r");
+  const fd = await open(file, "r");
   try {
     let carry = Buffer.alloc(0);
     let at = start;
@@ -304,7 +307,7 @@ export function* linesWithin(file: string, start: number, end: number, chunk = R
     let base = start;
     while (at < end) {
       const buf = Buffer.allocUnsafe(Math.min(chunk, end - at));
-      const n = readSync(fd, buf, 0, buf.length, at);
+      const { bytesRead: n } = await fd.read(buf, 0, buf.length, at);
       if (n <= 0) break;
       // Where the runner gave the disk back (what was acknowledged long before: native/runner `punch`) it reads as
       // zeros: skipped, with the line it cut (never carried on, a part at a time, as one line hundreds of MB long).
@@ -328,6 +331,6 @@ export function* linesWithin(file: string, start: number, end: number, chunk = R
       base += from;
     }
   } finally {
-    closeSync(fd);
+    await fd.close();
   }
 }

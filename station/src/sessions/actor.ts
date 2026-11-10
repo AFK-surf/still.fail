@@ -1402,6 +1402,7 @@ export class SessionActor {
     try {
       profile = row ? this.deps.runOn(this.key, this.holding()) : null;
     } catch {}
+    if (row && profile && !this.restart && profile.id === this.profile && agent.session.retune) await linkSkills(row, this.deps);
     if (!this.restart && row && profile && profile.id === this.profile && agent.session.retune?.(openOptions(row, profile, this.deps))) {
       this.stale = false;
       this.runningIdentity = { runtime: this.runtime, model: row.model ?? null, effort: row.effort ?? null };
@@ -1450,6 +1451,7 @@ export class SessionActor {
     this.runtime = runtime;
     const driver = this.deps.driver(this.runtime);
     const profile = this.deps.runOn(this.key);
+    await linkSkills(row, this.deps);
     const base = openOptions(row, profile, this.deps);
     // Its context cleared by hand (clear): no runtime session now, those before on record. A new one, told so; one
     // continued from a terminal is given still.fail's instructions as a new session is (no cache of its own to keep).
@@ -2021,17 +2023,19 @@ export class SessionActor {
 
 /// How a session's runtime session is opened (or taken up) on `profile`: its directory, model as the profile spells it,
 /// effort, instructions and MCP token.
-export function openOptions(row: any, profile: Profile & { spelling?(model: string): string | null }, deps: Pick<SessionDeps, "mcpUrl" | "reposDir" | "memoryPath">): OpenOptions {
-  // Its workspace's skills where it runs (agent-home.ts), kept up with each time it is opened or retuned; a session
-  // continued from a terminal runs in the person's own project, given none.
-  const skills = row.cwd ? undefined : join(dirname(deps.memoryPath(row.key)), "skills");
-  if (skills !== undefined) {
-    try {
-      sessionSkills(row.workspace, skills);
-    } catch (error) {
-      log.warn("session", "its workspace's skills not linked where it runs", { session: row.key, error: (error as Error).message });
-    }
+/// Its workspace's skills where it runs (agent-home.ts), kept up with each time it is opened or retuned (before
+/// `openOptions`); a session continued from a terminal runs in the person's own project, given none.
+export async function linkSkills(row: any, deps: Pick<SessionDeps, "memoryPath">): Promise<void> {
+  if (row.cwd) return;
+  try {
+    await sessionSkills(row.workspace, join(dirname(deps.memoryPath(row.key)), "skills"));
+  } catch (error) {
+    log.warn("session", "its workspace's skills not linked where it runs", { session: row.key, error: (error as Error).message });
   }
+}
+
+export function openOptions(row: any, profile: Profile & { spelling?(model: string): string | null }, deps: Pick<SessionDeps, "mcpUrl" | "reposDir" | "memoryPath">): OpenOptions {
+  const skills = row.cwd ? undefined : join(dirname(deps.memoryPath(row.key)), "skills");
   // The model as this profile spells it (openai/gpt-6-astra on a router for gpt-6-astra).
   const model = row.model ? (profile.spelling?.(row.model) ?? row.model) : undefined;
   // What its chat was opened with (presets.ts): told after the station's own instructions (its folders' skills are in
