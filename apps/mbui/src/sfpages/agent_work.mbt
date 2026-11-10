@@ -53,7 +53,7 @@ pub fn work_mark(
   let (whole, least) = (c.id("history/work-mark"), c.id("history/work-mark/least"))
   for id in [whole, least] {
     c.on_press(id, fn() {
-      open_work(src, params, id)
+      open_work(src, params, Of(id))
     })
   }
   let counts = text(card, "workMarkShort")
@@ -129,8 +129,8 @@ let work_mark_press : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 /// All of it in a panel beside what opened it (`from`): its card's tasks and checklist as they are now.
-fn open_work(src : Source, params : Map[String, Json], from : Int) -> Unit {
-  @sf.panel("", fn(c, _) { agent_work(c, src, src.topic("agentCard", params).get().value) }, from=Of(from), w=work_panel_w, along=End)
+fn open_work(src : Source, params : Map[String, Json], from : @sf.Anchor) -> Unit {
+  @sf.panel("", fn(c, _) { agent_work(c, src, src.topic("agentCard", params).get().value) }, from~, w=work_panel_w, along=End)
 }
 
 ///|
@@ -272,4 +272,115 @@ pub fn plan_list(c : @ui.Ctx, list : Array[Json]) -> Unit {
     }
   })
   |> ignore
+}
+
+///|
+/// work_mark as nodes in `parent`, a row that leaves it out (View::fits) before its own words are cut (they are kept
+/// whole first: View::fit_whole), as agent `key`'s card on `station` says it now: 后台 4 · 2/6, said 4 · 2/6 where it
+/// has not the room (View::shorter), then in place of it a mark with how many (there only while the whole is left out:
+/// View::drops -1); `smallest`, that one alone. Pressed, all of it in a panel beside it. Nothing when it has neither.
+pub fn work_mark_node(
+  parent : @view.View,
+  src : Source,
+  station : String,
+  key : String,
+  words : @ui.TextStyle,
+  hot : @ui.TextStyle,
+  lead? : String = "",
+  smallest? : Bool = false,
+) -> Unit {
+  let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
+  let card = fn() { src.topic("agentCard", params).get().value }
+  let mark = fn() { text(card(), "workMark") }
+  let count = fn() { text(card(), "workMarkCount") }
+  let running = fn() { items(card(), "tasks").length() > 0 }
+  let label = fn() {
+    match text(card(), "workLine") {
+      "" => mark()
+      line => line
+    }
+  }
+  let spokes = fn(x : @view.View) {
+    x.show(running, fn(s) { @sf.spokes_node(s, 10.0, fn() { @sf.mark_yellow }, box=12.0) |> ignore })
+  }
+  // (each form its separator and what is pressed, left out of the row whole: the separator goes with it)
+  let form = fn(r : @view.View, drop : Int, shown : () -> Bool, body : (@view.View) -> Unit) {
+    r.show(shown, fn(f) {
+      @sf.style_node(f, fn() { work_mark_form }, in_row=true)
+      f.drops(Is(drop)).shrink(Is(0.0)) |> ignore
+      if lead != "" {
+        @sf.words_node(f, fn() { lead }, fn() { words }) |> ignore
+      }
+      f.box(fn(p) {
+        @sf.style_node(p, fn() { work_mark_press }, in_row=true)
+        @sf.presses_node(p, fn() {
+          let (x, y, w, h) = p.placed_window_now()
+          open_work(src, params, At(x, y, w, h))
+        })
+        p.says(By(fn() { Some(@view.said(Button, label=label())) })) |> ignore
+        body(p)
+      })
+      |> ignore
+    })
+  }
+  parent.show(fn() { mark() != "" }, fn(o) {
+    // (its forms a row of their own that leaves them out as it would its own parts: work_mark's; the first in its
+    // row to give way)
+    o.row(Is(true)).fits(Is(true)).lines_up(Is(Some(Middle))).shrink(Is(work_mark_gives)).min_width(Is(Some(0.0))) |> ignore
+    if smallest {
+      form(o, 0, fn() { count() != "" }, fn(p) {
+        p.pick(running, fn(i, at_work) {
+          if at_work {
+            spokes(i)
+          } else {
+            @sf.icon_node(i, "wait", 12.0, By(fn() { if @sf.lit_node(p) { @sf.theme().p.accent } else { @sf.theme().p.muted } })) |> ignore
+          }
+        })
+        @sf.words_node(p, count, fn() { if @sf.lit_node(p) { hot } else { words } }) |> ignore
+      })
+      o.show(fn() { count() == "" }, fn(w) { work_mark_whole(w, form, spokes, mark, card, words, hot) })
+      return
+    }
+    work_mark_whole(o, form, spokes, mark, card, words, hot)
+    form(o, -1, fn() { count() != "" }, fn(p) {
+      p.pick(running, fn(i, at_work) {
+        if at_work {
+          spokes(i)
+        } else {
+          @sf.icon_node(i, "wait", 12.0, By(fn() { if @sf.lit_node(p) { @sf.theme().p.accent } else { @sf.theme().p.muted } })) |> ignore
+        }
+      })
+      @sf.words_node(p, count, fn() { if @sf.lit_node(p) { hot } else { words } }) |> ignore
+    })
+  })
+}
+
+///|
+/// How much more readily work_mark_node's row gives way in its line than what is beside it (its line's own words).
+let work_mark_gives : Double = 100.0
+
+///|
+/// work_mark_node's whole form: 后台 4 · 2/6, its counts alone where it has not the room; the first to leave its row.
+fn work_mark_whole(
+  o : @view.View,
+  form : (@view.View, Int, () -> Bool, (@view.View) -> Unit) -> Unit,
+  spokes : (@view.View) -> Unit,
+  mark : () -> String,
+  card : () -> Json?,
+  words : @ui.TextStyle,
+  hot : @ui.TextStyle,
+) -> Unit {
+  form(o, work_mark_drop, fn() { true }, fn(p) {
+    spokes(p)
+    @sf.words_node(p, mark, fn() { if @sf.lit_node(p) { hot } else { words } })
+    .shorter(By(fn() {
+      let counts = text(card(), "workMarkShort")
+      if counts != "" && counts != mark() {
+        [counts]
+      } else {
+        []
+      }
+    }))
+    |> ignore
+  })
 }

@@ -187,9 +187,9 @@ fn history_in_front(src : Source, r : ChatRef) -> String {
 }
 
 ///|
-/// Agent `agent`'s history in chat `r`'s panel, in node `q` (as large as the panel): its top an old view as tall as it
-/// is (history_top, as `island` hosts one); its steps the rest, nodes
-/// (sfpages' history_steps_node).
+/// Agent `agent`'s history in chat `r`'s panel, in node `q` (as large as the panel): the panel's bar an old view as tall
+/// as it is (side_bar_row, as `island` hosts one, every tab's), then its head (history_head_node) and its steps the
+/// rest (sfpages' history_steps_node), nodes.
 fn side_history_node(
   q : @view.View,
   src : Source,
@@ -202,15 +202,15 @@ fn side_history_node(
     q,
     fn(c) {
       match view_of_chat(src, r).0 {
-        Some(view) => history_top(c, src, r, view, side_shown(src, r).0, agent)
+        Some(view) => c.box(style=history_top_box, fn() { side_bar_row(c, src, r, view, side_shown(src, r).0, agent) }) |> ignore
         None => ()
       }
     },
     true,
   )
-  .shrink(Is(1.0))
-  .min_height(Is(Some(0.0)))
+  .shrink(Is(0.0))
   |> ignore
+  history_head_node(q, src, r, agent, tips)
   q.box(fn(s) {
     s.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
     @sfpages.history_steps_node(s, src, r.station, agent, tips)

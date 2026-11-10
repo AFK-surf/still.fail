@@ -52,8 +52,9 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
   // 详情 open to begin with: what runs it, its station, where its transcript is
   assert_true(t.find("Willow") is Some(_))
   assert_true(t.query(Button, label="复制路径") is Some(_))
+  // (folded on a Move, as what a column lets go)
   t.click(Button, label="详情")
-  t.frame()
+  t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="复制路径") is None)
   // its own steps there, then left out
   let steps = t.find("读了 src/ui/list.mbt 等 2 个文件，跑了测试")

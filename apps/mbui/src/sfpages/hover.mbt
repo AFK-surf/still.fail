@@ -998,3 +998,106 @@ let agent_card_stop_box : @ui.Style = @ui.css(
 
 ///|
 let agent_card_stop_icon : Double = 12.0
+
+///|
+/// usage_tiles' figures as nodes in `parent`, as `card` says them now: what it cost, the cache's hit rate, how full its
+/// context is (how much of how much over it while it is pointed at, in `tips`). With `context`, its context's tile
+/// opens what can be done to it beside itself (`busy`: a spinner, not pressed; `compacts`: that it can be compacted
+/// said once it is filling up). None before it has made a call.
+pub fn usage_tiles_node(
+  parent : @view.View,
+  card : () -> Json?,
+  tips : @sf.TipLayer,
+  context? : (@sf.Beside) -> Unit,
+  busy? : () -> Bool = fn() { false },
+  compacts? : () -> Bool = fn() { false },
+) -> Unit {
+  let cost = fn() { text(card(), "cost") }
+  let cache = fn() { field(card(), "cache") }
+  let ctx = fn() { field(card(), "context") }
+  let figure_style = fn(level : String) {
+    if level == "red" {
+      agent_card_figure_red
+    } else if level == "amber" {
+      agent_card_figure_amber
+    } else {
+      agent_card_figure
+    }
+  }
+  let plain = fn(t : @view.View, figure : () -> String, name : () -> String, level : () -> String) -> @view.View {
+    t.box(fn(b) {
+      @sf.style_node(b, fn() { agent_card_tile })
+      @sf.words_node(b, figure, fn() { figure_style(level()) }) |> ignore
+      @sf.words_node(b, name, fn() { agent_card_tile_name }) |> ignore
+    })
+  }
+  // (each tile's share of the row: what shows it takes it)
+  let across = fn(t : @view.View) { t.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore }
+  parent.show(fn() { cost() != "" || cache() is Some(_) || ctx() is Some(_) }, fn(o) {
+    o.box(fn(r) {
+      @sf.style_node(r, fn() { agent_card_tiles_row })
+      r.show(fn() { cost() != "" }, fn(t) {
+        across(t)
+        plain(t, cost, fn() { @sf.t("web-main.chat.agentCard.cost") }, fn() { "" }) |> ignore
+      })
+      r.show(fn() { cache() is Some(Object(_)) }, fn(t) {
+        across(t)
+        plain(t, fn() { text(cache(), "text") }, fn() { @sf.t("web-main.chat.agentCard.cache") }, fn() { "" }) |> ignore
+      })
+      let unknown = fn() { flag(ctx(), "unknown") }
+      let figure = fn() {
+        if unknown() {
+          text(ctx(), "text")
+        } else {
+          number(ctx(), "percent").round().to_int().to_string() + "%"
+        }
+      }
+      let level = fn() { if unknown() { "" } else { text(ctx(), "level") } }
+      r.show(fn() { ctx() is Some(Object(_)) }, fn(t) {
+        across(t)
+        match context {
+          Some(open) =>
+            t.box(fn(b) {
+              @sf.style_node(b, fn() { agent_card_tile_button })
+              @sf.presses_node(b, fn() {
+                if !@signals.untracked(busy) {
+                  let (x, y, w, h) = b.placed_window_now()
+                  open(At(x, y, w, h))
+                }
+              })
+              b.says(By(fn() { Some(@view.said(Button, label=@sf.t("web-pages.chat.contextActions"))) })) |> ignore
+              @sf.words_node(b, figure, fn() { figure_style(level()) }) |> ignore
+              b.box(fn(m) {
+                @sf.style_node(m, fn() { agent_card_tile_more })
+                @sf.words_node(m, fn() {
+                  if compacts() && (level() == "amber" || level() == "red") {
+                    @sf.t("web-mobile.agent.contextCompactable")
+                  } else {
+                    @sf.t("web-main.chat.agentCard.context")
+                  }
+                }, fn() { agent_card_tile_name })
+                |> ignore
+                m.pick(busy, fn(i, now) {
+                  if now {
+                    @sf.spinner_node(i, size=11.0) |> ignore
+                  } else {
+                    @sf.icon_node(i, "chevron-right", 11.0, By(fn() { @sf.theme().p.muted })) |> ignore
+                  }
+                })
+              })
+              |> ignore
+            })
+            |> ignore
+          None =>
+            t.pick(unknown, fn(k, unknown_now) {
+              let tile = plain(k, figure, fn() { @sf.t("web-main.chat.agentCard.context") }, level)
+              if !unknown_now {
+                @sf.tip_node(tips, tile, fn() { text(ctx(), "text") }) |> ignore
+              }
+            })
+        }
+      })
+    })
+    |> ignore
+  })
+}
