@@ -145,8 +145,15 @@ let rc_stat : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 /// grounds of two side by side meet, never overlap) and 4 above and under, its words where they were.
 // kept across runs: a value (no field of it changes)
 let rc_stat_go : @ui.Style = rc_stat.then(@ui.css("px=S1_5 py=S1 radius=Inner")).then(
-  @ui.style(mx=@sf.room_of(-6.0), my=@sf.room_of(-4.0)),
+  @ui.style(mx=@sf.room_of(-rc_stat_out), my=@sf.room_of(-rc_stat_over)),
 )
+
+///|
+/// How far a pressed figure's ground reaches past its words: its padding (px=S1_5 py=S1), its words left where they were.
+let rc_stat_out : Double = 6.0
+
+///|
+let rc_stat_over : Double = 4.0
 
 ///|
 /// A figure's value, large as a title, over what it is of.
