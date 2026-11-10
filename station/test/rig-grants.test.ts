@@ -52,6 +52,7 @@ async function world() {
   const busy = new Set<string>();
   const stopped: string[] = [];
   const ended: Ended[] = [];
+  const cuts: string[] = [];
   let changes = 0;
   const make = () => new RigGrants({
     path: join(dir, "grants.json"),
@@ -61,6 +62,7 @@ async function world() {
     running: () => [...busy].map((k) => ({ station: k.split("/")[0]!, session: k.split("/")[1]! })),
     ended: (e) => void ended.push(e),
     changed: () => void changes++,
+    cut: (device, station, session) => void cuts.push(`${device}:${station ?? "*"}/${session ?? "*"}`),
     fibers,
   });
   const now = () => Math.floor(fibers.now() / 1000);
@@ -69,7 +71,7 @@ async function world() {
     return owner.says("grant", { v: 1, sub: "pat", ws: WS, rig: RIG, station: STATION, session, chat: `CHAT/${session}`, request, title: `chat ${session}`, by: "lee@example.com", timeout, at, exp: latest(at, timeout), ...more } as GrantBody, by);
   };
   return {
-    owner, make, grant, busy, stopped, ended, now, changes: () => changes,
+    owner, make, grant, busy, stopped, ended, cuts, now, changes: () => changes,
     pass: (ms: number) => time.adjust(ms),
     close: async () => {
       await fibers.close();
@@ -278,5 +280,55 @@ test("what a machine is changes only by what was asked of it and the control pla
     s.close();
   } finally {
     rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("a device on the rig: attached and taken off only by what its person signed; a chat reaches it by a grant of it or of the rig, or 免批准", async () => {
+  const w = await world();
+  try {
+    const rig = w.make();
+    const cam = { id: "0123456789abcdef", name: "cam", kind: "tcp" as const, target: "192.168.1.20:554" };
+    const attach = (removed = false, at = w.now()) => w.owner.says("device", { v: 1, sub: "pat", ws: WS, rig: RIG, device: cam, removed, at });
+    rig.takeChain(w.owner.chain);
+    assert.match(rig.deviceRefusal(WS, STATION, "s1", cam.id)!, /no such device/);
+    // Someone else's signature attaches nothing.
+    const stranger = person("pat");
+    assert.throws(() => rig.device(stranger.says("device", { v: 1, sub: "pat", ws: WS, rig: RIG, device: cam, removed: false, at: w.now() })), /not on this rig's person's own lock/);
+    rig.device(attach());
+    assert.deepEqual(rig.devices().map((d) => d.name), ["cam"]);
+    assert.equal(rig.view()!.devices[0]!.open, false);
+    assert.match(rig.deviceRefusal(WS, STATION, "s1", cam.id)!, /no grant of this device: ask for one with device_use/);
+    // A grant of the device alone: that device, not the rig's tasks.
+    rig.grant(STATION, w.grant("d1", "s1", { kind: "fixed", seconds: 600 }, { device: cam.id }));
+    assert.equal(rig.deviceRefusal(WS, STATION, "s1", cam.id), null);
+    assert.match(rig.refusal(WS, STATION, "s1")!, /no grant of this station/);
+    assert.match(rig.stationRefusal(WS, STATION)!, /no chat of that station has a grant/);
+    // A grant of the rig gives its devices too.
+    rig.grant(STATION, w.grant("r2", "s2", { kind: "fixed", seconds: 600 }));
+    assert.equal(rig.deviceRefusal(WS, STATION, "s2", cam.id), null);
+    // A grant of a device the rig does not have is refused.
+    assert.throws(() => rig.grant(STATION, w.grant("d9", "s3", { kind: "fixed", seconds: 600 }, { device: "fedcba9876543210" })), /no such device/);
+    // 免批准 on the device alone: every chat; off again, those with no grant are looked at again.
+    const settings = (seq: number, open: boolean) => w.owner.says("settings", { v: 1, sub: "pat", ws: WS, rig: RIG, seq, open, at: w.now(), device: cam.id });
+    rig.settings(settings(1, true));
+    assert.equal(rig.deviceRefusal(WS, STATION, "s3", cam.id), null);
+    assert.equal(rig.refusal(WS, STATION, "s3") !== null, true);
+    rig.settings(settings(2, false));
+    assert.deepEqual(w.cuts, [`${cam.id}:*/*`]);
+    assert.throws(() => rig.settings(settings(1, true)), /older than the settings this device has/);
+    // Its grant over: that chat's connections looked at again.
+    await w.pass(601_000);
+    rig.view();
+    assert.ok(w.cuts.includes(`${cam.id}:${STATION}/s1`));
+    // Taken off: the grants of it end, and every connection is looked at again.
+    rig.grant(STATION, w.grant("d2", "s4", { kind: "fixed", seconds: 600 }, { device: cam.id }));
+    rig.device(attach(true));
+    assert.deepEqual(rig.devices(), []);
+    assert.ok(w.ended.some((e) => e.request === "d2" && e.why === "removed" && e.device === cam.id));
+    // Kept across a restart.
+    rig.device(attach(false, w.now() + 1));
+    assert.deepEqual(w.make().devices().map((d) => d.id), [cam.id]);
+  } finally {
+    await w.close();
   }
 });

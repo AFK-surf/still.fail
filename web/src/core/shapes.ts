@@ -1838,7 +1838,7 @@ export interface PhoneAsk {
 	lasts?: string;
 }
 
-/** An agent's request for a rig, as its card in the chat says it. */
+/** An agent's request for a rig, or for one of its devices, as its card in the chat says it. */
 export interface RigAsk {
 	/** Its id (`rig.decide`, `rig.revoke`). */
 	request: string;
@@ -1868,6 +1868,10 @@ export interface RigAsk {
 	/** Granted: for how long, as its person signed it (idle | fixed). */
 	grantedKind?: string;
 	grantedSeconds?: number;
+	/** One of the rig's devices alone (its id), not the rig: what is signed names it. */
+	device?: string;
+	/** That device, as it was named when asked. */
+	deviceName?: string;
 }
 
 /**

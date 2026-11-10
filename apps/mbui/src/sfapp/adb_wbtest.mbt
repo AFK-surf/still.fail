@@ -126,11 +126,14 @@ test "an agent's request for this phone while it lacks something to be lent: wha
   assert_true(t.find("需要先") is None)
   let only = fn(w : String) { t.words().filter(fn(x) { x.0 == w }).length() }
   assert_eq(only("允许"), 1)
+  // (an hour unused at first, as a device's grant: 2026-11-10)
+  assert_true(t.find("闲置 1 小时后失效") is Some(_))
   // (the button, not the title that asks 允许…)
   let allow = t.words().filter(fn(x) { x.0 == "允许" })[0]
   t.tap(allow.1 + allow.3 / 2.0, allow.2 + allow.4 / 2.0)
   t.draw()
   assert_eq(asked_native(t, "adb.switch").length(), 1)
+  assert_eq(@sffixture.fix_phone_scope.val, "idle")
 }
 
 ///|

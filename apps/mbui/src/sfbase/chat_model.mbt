@@ -162,6 +162,9 @@ pub(all) struct RigAsk {
   delivered : Bool
   granted_kind : String
   granted_seconds : Int
+  /// One of the rig's devices alone (设备), its id and name as asked: "" for the rig itself.
+  device : String
+  device_name : String
 }
 
 ///|
@@ -523,6 +526,8 @@ pub fn message_of(m : Json) -> Message {
                 delivered: flag(a, "delivered"),
                 granted_kind: text(a, "grantedKind"),
                 granted_seconds: count(a, "grantedSeconds"),
+                device: text(a, "device"),
+                device_name: text(a, "deviceName"),
               })
             _ => None
           },

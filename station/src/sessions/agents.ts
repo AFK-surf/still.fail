@@ -383,6 +383,8 @@ export const AgentsLive = (control: Control) =>
           }),
         },
         clock: hub.clock,
+        // (a device's forward lets only its chat's processes through: devices/)
+        holders: platform.os === "windows" ? undefined : (port) => platform.tcpPortPids(port),
       });
       hub.onClose((session) => {
         remote.closeSession(session);

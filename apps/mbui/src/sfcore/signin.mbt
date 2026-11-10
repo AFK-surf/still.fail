@@ -466,6 +466,8 @@ pub let trace_switches : Array[String] = [
   // sampled only from a finger on its tab. In the place of #5142's MBUI_PLACES_AHEAD, whose way of asking (worked out
   // frame by frame) is gone: the one trace recorded with it was recorded again with this one)
   "MBUI_PLACES_BAR",
+  // (设备: the stations' places and pages ask for the workspace's devices)
+  "MBUI_DEVICES",
 ]
 
 ///|

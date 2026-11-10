@@ -52,6 +52,7 @@ pub fn fixture_reset() -> Unit {
   fix_core_for.val = 0.0
   fix_vault.val = ""
   fix_phone.val = ""
+  fix_phone_scope.val = ""
   fix_phone_link.val = ""
   fix_rig.val = ""
   fix_rig_asked.clear()

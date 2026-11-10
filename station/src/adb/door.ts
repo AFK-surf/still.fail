@@ -79,14 +79,17 @@ export type GateDeps = {
   cwds(pids: number[]): Promise<Map<number, string>>;
   /// This station's process: the adb it runs itself (connecting the phone, the chat's own screen) is its direct child.
   self: number;
+  /// What a process of another chat is told (a phone's words when none given).
+  elsewhere?: string;
 };
 
-const ELSEWHERE = "this phone is granted to another chat: ask for it with phone_use in this chat";
+const PHONE_ELSEWHERE = "this phone is granted to another chat: ask for it with phone_use in this chat";
 
 /// Why `holders` may not use grant `id`'s server, or null: a process under the session's agent or in one of its jobs;
 /// the station's own adb; else (a runtime shared by sessions, a script left running on its own) one working in the
 /// session's own directory.
 export async function gate(d: GateDeps, id: string, holders: number[]): Promise<string | null> {
+  const ELSEWHERE = d.elsewhere ?? PHONE_ELSEWHERE;
   const session = d.session(id);
   if (session === null) return ELSEWHERE;
   const table = await d.table();

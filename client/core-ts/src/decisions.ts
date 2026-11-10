@@ -178,6 +178,11 @@ function rigAsk(v: J): J | null {
     const said = trimmed(get(outcome, field));
     if (said !== null) out[field] = said;
   }
+  const device = trimmed(get(v, "device"));
+  if (device !== null) {
+    out.device = device;
+    out.deviceName = text("deviceName");
+  }
   if (typeof get(outcome, "delivered") === "boolean") out.delivered = get(outcome, "delivered");
   if (typeof get(outcome, "until") === "number") out.until = get(outcome, "until");
   const granted = get(outcome, "timeout");

@@ -229,6 +229,7 @@ let fx_station_updated : Ref[Bool] = Ref(false)
 fn fixture_reset() -> Unit {
   fx.names.clear()
   rigs_fixture_reset()
+  devices_fixture_reset()
   fx_many_models.val = false
   fx_many_kept.val = false
   fx_station_many_profiles.val = false
@@ -623,7 +624,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
     "settings-security-join" | "settings-security-off" | "settings-security-protecting" => "security"
-    "settings-stations-tasks" | "settings-stations-tasks-outside" | "settings-stations-tasks-theirs" => "stations"
+    "settings-stations-tasks" | "settings-stations-tasks-outside" | "settings-stations-tasks-theirs" | "settings-stations-devices" => "stations"
+    "settings-station-devices" => "station:ws1/st1"
     "settings-station-tasks" | "settings-station-tasks-locked" => "station:ws1/aa11"
     "settings-station-tasks-other" => "station:ws1/bb22"
     "settings-notify-off" | "settings-lock-prompt" | "settings-lock-prompt-personal" | "settings-vault-prompt" => "home"
@@ -2053,6 +2055,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       )
     // the workspace's stations that only run tasks (rigs_fixture.mbt)
     "rigs" if rigs_fixture_mode(mode) => Some(rigs_fixture_topic(mode))
+    // the workspace's devices (devices_fixture.mbt)
+    "devices" if devices_fixture_mode(mode) => Some(devices_fixture_topic())
     // every way its devices reach its stations (the core's views/ways.ts), the punched path turned off
     "workspaceWays" =>
       Some(
@@ -2725,6 +2729,10 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
 pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
   match rigs_fixture_call(name, p) {
+    Some(r) => return Some(r)
+    None => ()
+  }
+  match devices_fixture_call(name, p) {
     Some(r) => return Some(r)
     None => ()
   }

@@ -4,9 +4,11 @@ import { Effect, Layer } from "effect";
 import { writeLine } from "../mesh/serve.ts";
 import { readOnly } from "../mesh/credential.ts";
 import { Agents } from "../sessions/agents.ts";
+import type { Json } from "../store/store.ts";
 import { wall } from "../ops/fibers.ts";
 import { AndroidScreens } from "../screens/android.ts";
-import { ControlPlane, Events, Parts, Paths, Previous, ScreenRegistry, Store } from "../services.ts";
+import { createHash } from "node:crypto";
+import { ControlPlane, type DeviceEntry, DeviceSources, Events, Parts, Paths, Previous, ScreenRegistry, Store } from "../services.ts";
 import { join } from "node:path";
 import { runnerId } from "../agents/process.ts";
 import { runnerOf } from "../agents/runner.ts";
@@ -14,7 +16,7 @@ import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { watchedJobs } from "../jobs/memory.ts";
 import { platform } from "../platform/index.ts";
 import { gate } from "./door.ts";
-import { type PhoneRequest, PhoneGrants, type Scope } from "./grants.ts";
+import { type PhoneRequest, PhoneGrants, type Scope, isScope, said, scopeSaid } from "./grants.ts";
 import { GrantServers } from "./servers.ts";
 import { PhoneDisplays } from "./displays.ts";
 import { grantChatTitle } from "./title.ts";
@@ -31,6 +33,7 @@ export const AdbLive = Layer.effectDiscard(
     const store = yield* Store;
     const events = yield* Events;
     const screens = yield* ScreenRegistry;
+    const sources = yield* DeviceSources;
     // The emulators and phones on this machine's own adb, each a screen while it is.
     yield* Effect.acquireRelease(
       Effect.sync(() => {
@@ -86,6 +89,7 @@ export const AdbLive = Layer.effectDiscard(
       title: (r) => grantChatTitle(store, r),
       told: (r: PhoneRequest, workspace, change) => {
         if (workspace !== null) events.tell("adb-grant", r, `adb-grant\0${r.id}`, { workspace, email: r.owner });
+        if (change === "grant") sources.changed?.(workspace);
         if (change !== "grant") return;
         if (r.status === "denied" || r.status === "ended") {
           // (its display's apps closed through the grant's adb server first)
@@ -106,7 +110,11 @@ export const AdbLive = Layer.effectDiscard(
             cloud: plane.state,
             servers,
             granted: (email) => grants.grantedOfOwner(email).map((r) => r.id),
-            stated: (email, state) => grants.linked(email, state),
+            stated: (email, state) => {
+              grants.linked(email, state);
+              // (the members' list of devices says the phones lent here: devices/module.ts)
+              sources.changed?.(null);
+            },
             used: (id, force) => grants.used(id, force),
           }),
       ),
@@ -136,7 +144,7 @@ export const AdbLive = Layer.effectDiscard(
           return why === null ? reply(200, { lasts: grants.lastsOf(email) }) : reply(422, { message: why });
         }
         const id = typeof ask.request === "string" ? ask.request : "";
-        const scope = ask.scope === "hour" || ask.scope === "chat" ? (ask.scope as Scope) : null;
+        const scope = isScope(ask.scope) ? (ask.scope as Scope) : null;
         const why = ask.op === "sign" ? grants.sign(email, id, ask.signed, viewer.workspace) : ask.op === "decide" ? grants.decide(email, id, scope, viewer.workspace, ask.signed) : grants.revoke(email, id, viewer.workspace);
         const request = grants.get(id);
         return why === null ? reply(200, { request: request === null ? null : grants.shown(request) }) : reply(422, { message: why });
@@ -148,17 +156,67 @@ export const AdbLive = Layer.effectDiscard(
       const r = grants.get(grant);
       return r === null ? "" : grants.shown(r).chatTitle || r.reason.slice(0, 40);
     };
-    parts.tools(
-      phoneTools(grants, async (owner, grant) => {
-        const phones = lent.list().filter((p) => p.owner.email.toLowerCase() === owner);
-        const server = phones.length > 0 ? await servers.ensure(grant) : null;
-        // Its own screen, made once the phone is in the grant's server (the first phone: one person lends one).
-        const phone = phones.find((p) => p.adb === "connected");
-        const display = server === null || phone === undefined ? null
-          : await displays.open(grant, owner, nameOf(grant), server.port, phone.serial).catch((error) => ({ failed: (error as Error).message }));
-        return reached(phones, server?.port ?? null, lent.gone.get(owner) ?? null, display);
+    const reach = async (owner: string, grant: string) => {
+      const phones = lent.list().filter((p) => p.owner.email.toLowerCase() === owner);
+      const server = phones.length > 0 ? await servers.ensure(grant) : null;
+      // Its own screen, made once the phone is in the grant's server (the first phone: one person lends one).
+      const phone = phones.find((p) => p.adb === "connected");
+      const display = server === null || phone === undefined ? null
+        : await displays.open(grant, owner, nameOf(grant), server.port, phone.serial).catch((error) => ({ failed: (error as Error).message }));
+      return reached(phones, server?.port ?? null, lent.gone.get(owner) ?? null, display);
+    };
+    parts.tools(phoneTools(grants, reach));
+    // The phones among the workspace's devices (devices/module.ts): those lent to this station now, any member's, each
+    // its person's to grant (device_use asks them, as phone_use asks the person the chat's agent works for).
+    const phoneId = (email: string, serial: string) => createHash("sha256").update(`${email.toLowerCase()}\0${serial}`).digest("hex").slice(0, 16);
+    const phoneEntries = (session: string): DeviceEntry[] => {
+      const self = plane.state.state?.station ?? "";
+      return lent.list().map((p): DeviceEntry => {
+        const email = String(p.owner?.email ?? "").toLowerCase();
+        const mine = grants.held(session).find((r) => r.owner === email);
+        const shared = grants.grantedOfOwner(email).length === 0;
+        const pending = grants.ofOwner(email).find((r) => r.session === session && r.status === "pending");
+        return {
+          id: phoneId(email, String(p.serial)), name: `${p.owner?.name || email} 的 ${p.device || "手机"}`, kind: "adb", target: String(p.serial),
+          via: "phone", station: self, stationName: "", owner: email, ownerEmail: email, ownerName: String(p.owner?.name ?? ""), online: p.adb === "connected",
+          thisChat: mine !== undefined ? `granted to this chat (${scopeSaid(mine.scope)}): device_use gives it`
+            : pending !== undefined ? `asked: waits for ${email} to approve request ${pending.id} on the card in your chat`
+            : shared ? "shared with every agent of this station by its app: adb -s <target> on this machine's own adb"
+            : `no grant: ask with device_use {device: "<its name>", reason}; its card goes to ${email}`,
+          hasAccess: shared ? "every agent of this station" : grants.ofOwner(email).filter((r) => r.status === "granted").map((r) => r.chatTitle ? `"${r.chatTitle}"` : r.chat),
+        };
+      });
+    };
+    sources.phones = {
+      list: async (_ws, session) => phoneEntries(session),
+      use: async (_ws, session, e, reason, _timeout, signal) => {
+        const owner = e.ownerEmail.toLowerCase();
+        let r = await grants.ask(session, reason, false, signal, owner === "" ? undefined : owner);
+        if (r.status === "pending") {
+          const pending = await grants.cardPending(r, signal);
+          r = grants.get(r.id) ?? r;
+          if (r.status === "pending" && pending === false) return `The phone request ${r.id} is still pending, but its card is no longer pending. If it is still needed, call phone_use again with the same reason and reask: true.`;
+        }
+        if (r.status === "granted") return await reach(r.owner, r.id);
+        return said(r);
+      },
+      done: (_ws, session, e) => grants.release(session, e === null ? undefined : e.ownerEmail).map((r) => `${r.owner} 的手机`),
+      // What the members are shown: each phone lent here, whose, and the chats of this workspace that hold it.
+      shown: (ws) => lent.list().map((p) => {
+        const email = String(p.owner?.email ?? "").toLowerCase();
+        const held = grants.ofOwner(email, ws).filter((r) => r.status === "granted");
+        return {
+          id: phoneId(email, String(p.serial)), name: `${p.owner?.name || email} 的 ${p.device || "手机"}`, target: String(p.serial), ownerEmail: email,
+          ownerName: String(p.owner?.name ?? ""), online: p.adb === "connected", open: grants.grantedOfOwner(email).length === 0,
+          grants: held.map((r) => ({
+            request: r.id, session: r.session, chat: r.chat, title: r.chatTitle ?? "", by: grants.starter(r.session) ?? "",
+            timeoutKind: r.scope === "idle" ? "idle" : r.scope === "chat" ? "chat" : "fixed", timeoutSeconds: r.scope === "hour" ? 3600 : r.scope === "eight" ? 28800 : r.scope === "idle" ? 3600 : 0, exp: r.exp ?? 0,
+            until: r.scope === "idle" ? Math.min(r.exp ?? 0, Math.floor((r.lastUsedAt ?? 0) / 1000) + 3600) : (r.exp ?? 0),
+          })),
+        } as unknown as Json;
       }),
-    );
+    };
+    yield* Effect.addFinalizer(() => Effect.sync(() => void (sources.phones = null)));
     parts.tools([
       {
         ...PHONE_SEND,

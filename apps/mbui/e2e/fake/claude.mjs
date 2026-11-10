@@ -21,6 +21,9 @@
 //   rigtask:<name>|<command>                    station_task <command> on the rig <name> (prepare, then start), then
 //                                               chat_post `rigtask <key>:` and what each answered: a task taken, or
 //                                               the rig's refusal
+//   devtalk:<device>|<reason>|<line>            device_use the device (or asks for it, a card for its owner); where it
+//                                               is put on a port here, sends <line> there and chat_posts `devtalk:`
+//                                               and what came back, else what device_use answered
 // What it writes of a turn goes to its transcript as the real claude's does (<config>/projects/<dir>/<session>.jsonl),
 // which is what the station reads an agent's execution history from.
 import fs from "node:fs";
@@ -157,6 +160,27 @@ async function turn(text) {
     said = /waits for its owner/.test(asked)
       ? await post(to, { text: `rig: ${asked}`, kind: "need_human", need: `批准使用 station「${rig}」` })
       : await post(to, { text: `rig: ${asked}`, kind: "all_done", done: "asked for the rig" });
+  } else if (/(^|\s)devtalk:/.test(text)) {
+    const [device, reason, sent] = line("devtalk:").split("|");
+    const asked = await tool("device_use", { device, reason: reason ?? "端到端测试" });
+    record("assistant", [{ type: "text", text: asked }]);
+    const port = /127\.0\.0\.1:(\d+)/.exec(asked)?.[1];
+    let heard = "";
+    if (port !== undefined) {
+      heard = await new Promise((done) => {
+        let got = "";
+        const socket = net.connect({ host: "127.0.0.1", port: Number(port) });
+        const stop = setTimeout(() => (socket.destroy(), done(got === "" ? "(nothing came back)" : got)), 5000);
+        socket.on("data", (c) => {
+          got += c.toString();
+          if (got.length >= (sent ?? "").length) (clearTimeout(stop), socket.end(), done(got));
+        });
+        socket.on("error", (e) => (clearTimeout(stop), done(`(cut off: ${e.message})`)));
+        socket.on("close", () => (clearTimeout(stop), done(got === "" ? "(closed)" : got)));
+        socket.once("connect", () => socket.write(sent ?? "ping"));
+      });
+    }
+    said = await post(to, { text: port === undefined ? `devtalk: ${asked}` : `devtalk heard: ${heard}`, kind: /waits for its owner/.test(asked) ? "need_human" : "all_done", ...(/waits for its owner/.test(asked) ? { need: `批准使用设备「${device}」` } : { done: "used the device, or was told why not" }) });
   } else if (/(^|\s)rigtask:/.test(text)) {
     const [rig, command] = line("rigtask:").split("|");
     const key = `e2e-${Date.now().toString(36)}`;
@@ -204,7 +228,7 @@ async function turn(text) {
   say({ type: "result", subtype: "success", is_error: false, duration_ms: 1, num_turns: 1, session_id: sessionId, result: said });
 }
 
-const ours = (text) => /(^|\s)(card:|text-card:|steps:|serve:|md:|secret:|rig:|rigtask:)/.test(text) || /Granted: 「[^」]*」, grant r_|\(r_[\w-]+\) was (refused|let go)/.test(text);
+const ours = (text) => /(^|\s)(card:|text-card:|steps:|serve:|md:|secret:|rig:|rigtask:|devtalk:)/.test(text) || /Granted: 「[^」]*」, grant r_|\(r_[\w-]+\) was (refused|let go)/.test(text);
 readline.createInterface({ input: process.stdin }).on("line", (line) => {
   let msg = null;
   try {

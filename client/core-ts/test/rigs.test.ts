@@ -13,6 +13,7 @@ import type { Entry } from "../src/lock.ts";
 import { shortCode } from "../src/lock.ts";
 import { PersonalLock } from "../src/personal-lock.ts";
 import { Rigs, parseRig } from "../src/rigs.ts";
+import { Devices, parseDevice } from "../src/devices.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { FakeHost } from "../src/testing.ts";
@@ -126,7 +127,8 @@ test("the topic: the cloud's list, with how the stations last said each rig is a
     w.rigs.heard(`${WS}/${ST2}`, "rigs", { workspace: WS, rigs: w.stations.get(ST2)!.rigs });
     w.rigs.heard(`${WS}/${ST2}`, "screens", { workspace: WS, rigs: [] });
     w.rigs.heard(`${WS}/${ST2}`, "rigs", { workspace: "another", rigs: [] });
-    assert.deepEqual(w.invalidated, [`rigs ${WS}`, `rigs ${WS}`]);
+    // (their devices are the `devices` topic's too)
+    assert.deepEqual(w.invalidated, [`rigs ${WS}`, `devices ${WS}`, `rigs ${WS}`, `devices ${WS}`]);
     v = w.rigs.value(WS);
     const mine = v.rigs[0];
     assert.deepEqual([mine.reached, mine.known, mine.open], [true, true, false]);
@@ -279,5 +281,71 @@ test("security mode: the rig's code compared, then signed for with the key the w
     assert.notEqual(w.asked.at(-1)!.body.signed.sig.key, "ed25519:lockkey");
   } finally {
     w.runner.shutdown();
+  }
+});
+
+test("devices: a whole station's added there; a rig's signed by its person and taken by the rig; granted alone, 免批准 on one; one list", async () => {
+  const w = world();
+  const dir = mkdtempSync(join(tmpdir(), "core-devices-"));
+  try {
+    await w.run(w.personal.open(SUB, "turn it on"));
+    const now = Math.floor(w.host.nowMs() / 1000);
+    const rig = new RigGrants({
+      path: join(dir, "grants.json"), self: () => ({ id: RIG, workspace: WS, owner: SUB, person: w.personal.root(SUB)! }),
+      busy: () => false, stop: () => {}, running: () => [], ended: () => {}, changed: () => {},
+      fibers: { now: () => now * 1000, after: () => () => {}, close: async () => {} } as any,
+    });
+    const devices = new Devices({
+      host: w.host, store: { invalidate: (topic: any) => void w.invalidated.push(`${topic.topic} ${topic.workspace}`) } as any,
+      rigs: () => w.rigs, personal: () => w.personal, subOf: () => SUB, emailOf: () => "pat@example.com", view: () => w.view,
+      call: (station, method, path, body) => Effect.sync(() => (w.asked.push({ station: station.station, method, path, body }), method === "GET" ? { workspace: WS, devices: [], phones: [] } : { ok: true, delivered: true })),
+    });
+    const dcall = (name: string, params: unknown) => parseDevice(name, params)!;
+    // On a whole station: asked of that station, which keeps it (no signature).
+    await w.run(devices.run(dcall("device.add", { workspace: WS, station: ST1, name: "cam", kind: "tcp", target: "10.0.0.5:554" })));
+    assert.deepEqual(w.asked.at(-1), { station: ST1, method: "POST", path: "/devices", body: { name: "cam", kind: "tcp", target: "10.0.0.5:554" } });
+    assert.throws(() => parseDevice("device.add", { workspace: WS, station: ST1, name: "x", kind: "usb", target: "a" }), /kind/);
+    const bad = await w.runner.run(Effect.result(devices.run(dcall("device.add", { workspace: WS, station: ST1, name: "x", kind: "tcp", target: "nohost" }))));
+    assert.ok(Result.isFailure(bad));
+    // On the rig: signed by its person, carried by a station; the rig takes it.
+    await w.run(devices.run(dcall("device.add", { workspace: WS, station: RIG, name: "board", kind: "serial", target: "/dev/ttyUSB0", baud: 9600 })));
+    const added = w.asked.at(-1)!;
+    assert.equal(added.path, `/rigs/${RIG}/devices`);
+    rig.device(JSON.parse(JSON.stringify(added.body.signed)), JSON.parse(JSON.stringify(added.body.chain)));
+    const board = rig.devices()[0]!;
+    assert.deepEqual([board.name, board.kind, board.target, board.baud], ["board", "serial", "/dev/ttyUSB0", 9600]);
+    // Another's rig: not theirs to attach to.
+    const theirs = await w.runner.run(Effect.result(devices.run(dcall("device.add", { workspace: WS, station: "bb".repeat(32), name: "x", kind: "tcp", target: "a:1" }))));
+    assert.ok(Result.isFailure(theirs) && theirs.failure.code === "rig_not_owner");
+    // The stations say what is attached: one list, whose each is.
+    devices.heard(`${WS}/${ST1}`, "devices", { workspace: WS, devices: [{ id: "0123456789abcdef", name: "cam", kind: "tcp", target: "10.0.0.5:554", owner: SUB, owner_email: "pat@example.com", owner_name: "Pat" }], phones: [] });
+    w.rigs.heard(`${WS}/${ST2}`, "rigs", { workspace: WS, rigs: [{ id: RIG, at: 10, reached: true, open: false, settings: 0, devices: [{ ...board, open: false, settings: 0 }], grants: [], requests: [{ id: "q1", session: "s1", chat: "CHAT/9", title: "Flash it", by: "lee@example.com", reason: "flash", timeout: { kind: "idle", seconds: 3600 }, at: 5, status: "pending", device: board.id, deviceName: "board" }] }] });
+    const v = devices.value(WS);
+    assert.deepEqual(v.devices.map((d: any) => [d.name, d.via, d.stationName, d.mine, d.open]), [["cam", "station", "willow", true, true], ["board", "rig", "build-box", true, false]]);
+    assert.deepEqual(v.devices[1].requests.map((q: any) => [q.id, q.station]), [["q1", `${WS}/${ST2}`]]);
+    // (the rig's own row does not list a request for one of its devices)
+    assert.deepEqual(w.rigs.value(WS).rigs[0].requests, []);
+    // A chat's grant of the device alone: what is signed names it, and the rig lets that chat reach it, not run tasks.
+    const ask = { rig: RIG, name: "build-box", session: "s1", chat: "CHAT/9", title: "Flash it", by: "lee@example.com", device: board.id, deviceName: "board" };
+    await w.run(w.rigs.run(call("rig.decide", { station: `${WS}/${ST2}`, request: "q1", allow: true, timeoutKind: "fixed", timeoutSeconds: 600, ask })));
+    const decided = JSON.parse(JSON.stringify(w.asked.at(-1)!.body));
+    assert.equal(decided.signed.body.device, board.id);
+    rig.grant(ST2, decided.signed, decided.chain);
+    assert.equal(rig.deviceRefusal(WS, ST2, "s1", board.id), null);
+    assert.notEqual(rig.refusal(WS, ST2, "s1"), null);
+    // 免批准 on the device alone.
+    await w.run(devices.run(dcall("device.setOpen", { workspace: WS, station: RIG, device: board.id, open: true })));
+    rig.settings(JSON.parse(JSON.stringify(w.asked.at(-1)!.body.signed)));
+    assert.equal(rig.view()!.devices[0]!.open, true);
+    assert.equal(rig.open(), false);
+    // Taken off: signed as removed; a whole station's, asked of it.
+    await w.run(devices.run(dcall("device.remove", { workspace: WS, station: RIG, device: board.id })));
+    rig.device(JSON.parse(JSON.stringify(w.asked.at(-1)!.body.signed)));
+    assert.deepEqual(rig.devices(), []);
+    await w.run(devices.run(dcall("device.remove", { workspace: WS, station: ST1, device: "0123456789abcdef" })));
+    assert.deepEqual([w.asked.at(-1)!.method, w.asked.at(-1)!.path], ["DELETE", "/devices/0123456789abcdef"]);
+  } finally {
+    w.runner.shutdown();
+    rmSync(dir, { recursive: true, force: true });
   }
 });

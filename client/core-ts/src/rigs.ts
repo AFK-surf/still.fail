@@ -14,7 +14,7 @@ import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import { shortCode } from "./lock.ts";
 import type { PersonalLock } from "./personal-lock.ts";
-import { type AddBody, type FullBody, type GrantBody, type RevokeBody, type SettingsBody, type Signed, type Timeout, TIMEOUT_DEFAULT, latest, signedBytes, timeoutRefusal } from "./rig-form.ts";
+import { type AddBody, type Device, type DeviceBody, type FullBody, type GrantBody, type RevokeBody, type SettingsBody, type Signed, type Timeout, TIMEOUT_DEFAULT, latest, signedBytes, timeoutRefusal } from "./rig-form.ts";
 import { StationAddr } from "./station/addr.ts";
 import type { Store } from "./store.ts";
 import { get } from "./util.ts";
@@ -116,6 +116,15 @@ export type RigsEnv = {
 const arr = (v: unknown): J[] => (Array.isArray(v) ? v : []);
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
+/// A chat's grant in force as a rig says it, as the app is given it (`RigGrant`).
+function grantRow(g: J, stationNames: Map<string, string>): J {
+  return {
+    request: str(g?.request), station: str(g?.station), stationName: str(g?.stationName) || stationNames.get(str(g?.station)) || str(g?.station).slice(0, 12),
+    session: str(g?.session), chat: str(g?.chat), title: str(g?.title), by: str(g?.by),
+    timeoutKind: str(g?.timeout?.kind), timeoutSeconds: Number(g?.timeout?.seconds ?? 0), exp: Number(g?.exp ?? 0), until: Number(g?.until ?? 0),
+  };
+}
+
 export class Rigs {
   readonly #env: RigsEnv;
   /// What each station last said of its workspace's rigs (`GET /rigs`, the `rigs` event), by the station's address.
@@ -155,6 +164,8 @@ export class Rigs {
     if (str(get(data, "workspace")) !== workspace) return;
     this.#said.set(station, { workspace, rigs: arr(get(data, "rigs")) });
     this.#env.store.invalidate({ topic: "rigs", workspace });
+    // (their devices are the `devices` topic's too: devices.ts)
+    this.#env.store.invalidate({ topic: "devices", workspace });
   }
 
   /// The person's own lock moved on (this device let in on it, or taken off): what each workspace's topic says of it too.
@@ -193,12 +204,9 @@ export class Rigs {
         reached: latest === null ? null : latest.reached === null || latest.reached === undefined ? null : latest.reached === true,
         open: latest !== null && latest.open === true,
         known: latest !== null && typeof latest.open === "boolean",
-        grants: arr(latest?.grants).map((g) => ({
-          request: str(g?.request), station: str(g?.station), stationName: str(g?.stationName) || stationNames.get(str(g?.station)) || str(g?.station).slice(0, 12),
-          session: str(g?.session), chat: str(g?.chat), title: str(g?.title), by: str(g?.by),
-          timeoutKind: str(g?.timeout?.kind), timeoutSeconds: Number(g?.timeout?.seconds ?? 0), exp: Number(g?.exp ?? 0), until: Number(g?.until ?? 0),
-        })),
-        requests: told.flatMap((x) => arr(x.r.requests).map((q) => ({
+        // (a grant of, or a request for, one of its devices is the `devices` topic's: devices.ts)
+        grants: arr(latest?.grants).filter((g) => g?.device === undefined).map((g) => grantRow(g, stationNames)),
+        requests: told.flatMap((x) => arr(x.r.requests).filter((q) => q?.device === undefined).map((q) => ({
           id: str(q?.id), station: x.station, session: str(q?.session), chat: str(q?.chat), title: str(q?.title), by: str(q?.by), reason: str(q?.reason),
           timeoutKind: str(q?.timeout?.kind), timeoutSeconds: Number(q?.timeout?.seconds ?? 0), at: Number(q?.at ?? 0), status: str(q?.status),
         }))),
@@ -211,6 +219,59 @@ export class Rigs {
       personal: standing,
       rigs,
     };
+  }
+
+  /// The devices attached to a workspace's rigs, as the station that heard each rig last says them, with the chats'
+  /// grants and requests of each (a grant of the rig itself counts for its devices: `whole`). For devices.ts.
+  devices(workspace: string): J[] {
+    const view = this.value(workspace);
+    const stationNames = new Map<string, string>(arr(get(this.#env.view(workspace), "stations")).map((s) => [str(s?.id), str(s?.name)]));
+    return arr(view.rigs).flatMap((rig: J) => {
+      const latest = [...this.#said].filter(([, s]) => s.workspace === workspace).flatMap(([, s]) => s.rigs.filter((r) => r?.id === rig.id))
+        .reduce<J | null>((best, r) => (best === null || (r.at ?? 0) > (best.at ?? 0) ? r : best), null);
+      return arr(latest?.devices).map((d) => ({
+        id: str(d?.id), name: str(d?.name), kind: str(d?.kind), target: str(d?.target), ...(typeof d?.baud === "number" ? { baud: d.baud } : {}),
+        via: "rig", station: rig.id, stationName: rig.name, owner: rig.owner, ownerEmail: rig.ownerEmail, ownerName: rig.ownerName, mine: rig.mine,
+        online: rig.reached, open: rig.open || d?.open === true, ownOpen: d?.open === true, settings: Number(d?.settings ?? 0),
+        grants: arr(latest?.grants).filter((g) => g?.device === undefined || g?.device === d?.id).map((g) => ({ ...grantRow(g, stationNames), whole: g?.device === undefined })),
+        requests: [...this.#said].filter(([, s]) => s.workspace === workspace).flatMap(([station, s]) => s.rigs.filter((r) => r?.id === rig.id)
+          .flatMap((r) => arr(r.requests).filter((q) => q?.device === d?.id).map((q) => ({
+            id: str(q?.id), station, session: str(q?.session), chat: str(q?.chat), title: str(q?.title), by: str(q?.by), reason: str(q?.reason),
+            timeoutKind: str(q?.timeout?.kind), timeoutSeconds: Number(q?.timeout?.seconds ?? 0), at: Number(q?.at ?? 0), status: str(q?.status),
+          })))),
+      }));
+    });
+  }
+
+  /// A device attached to a rig of this person's, or taken off it, as they sign it (rig-form.ts `DeviceBody`),
+  /// carried to the rig by a station.
+  device(workspace: string, rig: string, device: Device, removed: boolean): Effect.Effect<unknown, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const env = this.#env;
+      const { sub, name } = yield* this.#mine(workspace, rig);
+      const body: DeviceBody = { v: 1, sub, ws: workspace, rig, device, removed, at: this.#now() };
+      const signed: Signed<DeviceBody> = yield* env.personal().signRig(sub, "device", body, t(removed ? "core-misc.device.reason.remove" : "core-misc.device.reason.add", { name: device.name, station: name }));
+      yield* this.#viaStation(workspace, (at) => env.call(at, "POST", `/rigs/${rig}/devices`, { signed, chain: env.personal().entries(sub) }));
+      return { device: { ...device, station: rig } };
+    });
+  }
+
+  /// 免批准 on one device of a rig of this person's.
+  setDeviceOpen(workspace: string, rig: string, device: string, open: boolean): Effect.Effect<unknown, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const env = this.#env;
+      const { sub } = yield* this.#mine(workspace, rig);
+      const known = [...this.#said.values()].filter((s) => s.workspace === workspace).flatMap((s) => s.rigs.filter((r) => r?.id === rig))
+        .flatMap((r) => arr(r?.devices).filter((d) => d?.id === device)).reduce((m, d) => Math.max(m, Number(d?.settings ?? 0)), 0);
+      const now = this.#now();
+      const k = `${rig}\0${device}`;
+      const seq = Math.max(known + 1, (this.#numbered.get(k) ?? 0) + 1, now);
+      this.#numbered.set(k, seq);
+      const dev = this.devices(workspace).find((d) => d.station === rig && d.id === device);
+      const body: SettingsBody = { v: 1, sub, ws: workspace, rig, seq, open, at: now, device };
+      const signed: Signed<SettingsBody> = yield* env.personal().signRig(sub, "settings", body, t("core-misc.device.reason.settings", { name: str(dev?.name) }));
+      return yield* this.#viaStation(workspace, (at) => env.call(at, "POST", `/rigs/${rig}/settings`, { signed, chain: env.personal().entries(sub) }));
+    });
   }
 
   // ── the calls ──
@@ -351,6 +412,7 @@ export class Rigs {
       const body: GrantBody = {
         v: 1, sub, ws: at.workspace, rig, station: at.station, session: str(get(ask, "session")), chat: str(get(ask, "chat")), request: call.request,
         title: str(get(ask, "title")), by: str(get(ask, "by")), timeout: call.timeout, at: now, exp: latest(now, call.timeout),
+        ...(str(get(ask, "device")) !== "" ? { device: str(get(ask, "device")) } : {}),
       };
       const signed = yield* env.personal().signRig(sub, "grant", body, t("core-misc.rig.reason.grant", { name }), call.station);
       return yield* env.call(at, "POST", path, { allow: true, signed, chain: env.personal().entries(sub) });

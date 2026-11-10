@@ -19,6 +19,7 @@
 // Each check says PASS or FAIL; it stops at the first that failed (each needs the one before). E2E_SF_SRC, E2E_ORIGIN,
 // E2E_PEER_DATA as peer.ts; E2E_WORK, E2E_STATION as e2e-local.sh's.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { Device, dir, fail, failures, type J, log, must, stationDo, whenChanged, within } from "./device.ts";
 
 const a = new Device("A");
@@ -163,6 +164,57 @@ try {
       await rig((r) => r.open === false);
       await refused(NO_GRANT);
     });
+
+    // Devices (设备): one on the test station, every chat's; one on the rig, by its owner's grant alone. Each a TCP
+    // service of this machine's that answers a line upper-cased (a camera's, a router's).
+    if (!locked && !switched) {
+      const echo = createServer((s) => s.on("data", (c: Buffer) => s.write(c.toString().toUpperCase())));
+      await new Promise<void>((r) => echo.listen(0, "127.0.0.1", r));
+      const port = (echo.address() as { port: number }).port;
+      /// The chat's agent told to send `line` to `device`: what it posted of it (a post of its own, after this was said).
+      const talk = async (device: string, line: string) => {
+        const before = new Set<string>((await a.until({ topic: "chat", station, session }, (v) => v?.messages && v)).messages.map((m: J) => String(m.text ?? "")));
+        await says(`devtalk:${device}|端到端测试：连一下设备|${line}`);
+        return said((t) => (t.startsWith("devtalk heard: ") || t.startsWith("devtalk: ")) && !before.has(t));
+      };
+      const devices = <T>(ok: (v: J) => T | undefined | null | false) => a.until({ topic: "devices", workspace }, ok, 60_000);
+      try {
+        await must("a device on the test station: added by a member, every chat reaches it at once", async () => {
+          await a.call("device.add", { workspace, station: station.split("/")[1], name: "e2e-cam", kind: "tcp", target: `127.0.0.1:${port}` });
+          await devices((v) => (v?.devices ?? []).find((d: J) => d.name === "e2e-cam" && d.via === "station" && d.mine && d.open));
+          const heard = await talk("e2e-cam", "hello-whole");
+          if (!heard.includes("HELLO-WHOLE")) throw new Error(`not reached: ${heard.slice(0, 400)}`);
+        });
+        let request: J = null;
+        await must("a device on the rig: attached as its owner signed it; a chat asks, its owner grants it alone, the chat reaches it", async () => {
+          await a.call("device.add", { workspace, station: id, name: "e2e-board", kind: "tcp", target: `127.0.0.1:${port}` });
+          const d = await devices((v) => (v?.devices ?? []).find((x: J) => x.name === "e2e-board" && x.via === "rig"));
+          const asked = await talk("e2e-board", "hello-rig");
+          if (!/waits for its owner/.test(asked)) throw new Error(`not asked: ${asked.slice(0, 400)}`);
+          request = await devices((v) => (v?.devices ?? []).find((x: J) => x.id === d.id)?.requests?.find((q: J) => q.status === "pending"));
+          await a.call("rig.decide", {
+            station, request: request.id, allow: true, timeoutKind: "idle", timeoutSeconds: 600,
+            ask: { rig: id, name, session: request.session, chat: request.chat, title: request.title, by: request.by, device: d.id, deviceName: d.name },
+          });
+          await devices((v) => (v?.devices ?? []).find((x: J) => x.id === d.id)?.grants?.find((g: J) => g.request === request.id));
+          const heard = await talk("e2e-board", "hello-rig");
+          if (!heard.includes("HELLO-RIG")) throw new Error(`not reached: ${heard.slice(0, 400)}`);
+          // (a grant of the device is none of the rig: its tasks are still refused)
+          await refused(NO_GRANT);
+        });
+        await must("the rig's device taken off by its owner: the chat reaches it no more", async () => {
+          const d = await devices((v) => (v?.devices ?? []).find((x: J) => x.name === "e2e-board"));
+          await a.call("device.remove", { workspace, station: id, device: d.id });
+          await devices((v) => !(v?.devices ?? []).some((x: J) => x.name === "e2e-board") && v);
+          const heard = await talk("e2e-board", "hello-gone");
+          if (heard.includes("HELLO-GONE")) throw new Error(`still reached: ${heard.slice(0, 400)}`);
+          const cam = await devices((v) => (v?.devices ?? []).find((x: J) => x.name === "e2e-cam"));
+          await a.call("device.remove", { workspace, station: station.split("/")[1], device: cam.id });
+        });
+      } finally {
+        echo.close();
+      }
+    }
 
     if (switched) await must(`${mode}A makes it a whole station again: among the stations, the task runs with no grant`, async () => {
       await a.call("rig.setMode", { workspace, station: id, mode: "full" });

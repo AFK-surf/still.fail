@@ -5,7 +5,7 @@
 // for kept on the device: GRANTS_KEY). Only a host with TCP reaches adbd.
 import { Marks } from "./reactive.ts";
 import { Deferred, Effect, Fiber, Scope } from "effect";
-import type { AdbCall, Offer } from "./adb-parse.ts";
+import { type AdbCall, type Offer, type PhoneScope, SCOPE_SECONDS } from "./adb-parse.ts";
 import { CoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { current, t } from "./i18n.ts";
@@ -712,7 +712,7 @@ export class Adb {
         if (sub !== null) bySub.set(sub, [...(bySub.get(sub) ?? []), g]);
       }
       for (const [sub, grants] of bySub) {
-        const bodies = grants.map((g) => ({ station: g.station as string, request: g.id as string, session: g.session as string, chat: g.chat as string, scope: g.scope as "hour" | "chat", exp: g.exp as number }));
+        const bodies = grants.map((g) => ({ station: g.station as string, request: g.id as string, session: g.session as string, chat: g.chat as string, scope: g.scope as PhoneScope, exp: g.exp as number }));
         const signed = yield* this.#env.personal.signGrants(sub, bodies, t("core-misc.personal.reason.confirm"));
         for (const [i, g] of grants.entries()) {
           const r = yield* this.#legacy.askAt(g.station, { op: "sign", request: g.id, signed: signed[i] });
@@ -731,7 +731,7 @@ export class Adb {
   }
 
   /// What this device signs to allow a chat a phone.
-  #signed(station: string, request: string, scope: "hour" | "chat"): Effect.Effect<J, CoreError> {
+  #signed(station: string, request: string, scope: PhoneScope): Effect.Effect<J, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const sub = this.#subAt(station);
       if (sub === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noAccount")));
@@ -739,7 +739,7 @@ export class Adb {
       if (this.#grants.get(station)?.get(request) === undefined) yield* this.readGrants(station);
       const g = this.#grants.get(station)?.get(request);
       if (g === undefined) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
-      const exp = Math.floor(this.#env.host.nowMs() / 1000) + (scope === "hour" ? 3600 : 30 * 86400);
+      const exp = Math.floor(this.#env.host.nowMs() / 1000) + SCOPE_SECONDS[scope];
       return yield* this.#env.personal.signGrant(sub, { station, request, session: g.session, chat: g.chat, scope, exp }, t("core-misc.personal.reason.grant"));
     });
   }

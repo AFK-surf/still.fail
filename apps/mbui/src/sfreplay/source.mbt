@@ -216,6 +216,7 @@ pub fn source() -> @sfapp.Source {
     read_only: false,
     // (a run's core is asked what the run asked: as its app did, which says so in its trace's head since it does)
     reads_ahead: fn() { @sfcore.trace_switch("MBUI_PLACES_BAR") },
+    asks_devices: fn() { @sfcore.trace_switch("MBUI_DEVICES") },
   }
 }
 

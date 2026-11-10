@@ -206,6 +206,28 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           },
         )
       }
+      // the workspace's devices under their heading (设备: attached to a station, or a person's phone), each opening
+      // its panel
+      let devices = @settings.devices_listed(core, here)
+      if devices.length() > 0 {
+        @sf.list_heading(c, @sf.t("web-pages.devices.title"), side_at())
+      }
+      for d in devices {
+        let d = Some(d)
+        let t = @sf.theme()
+        nav_item(
+          c,
+          at=side_at(),
+          "devices/" + text(d, "station") + "/" + text(d, "id"),
+          false,
+          fn() { @sf.icon(c, @settings.device_icon(d), size=nav_mark_side, color=t.p.text) |> ignore },
+          fn() { nav_title(c, text(d, "name"), away=field(d, "online") is Some(False)) },
+          lines=fn() { c.text(@settings.device_said(d), style=nav_meta(), allow_ellipsis=true) |> ignore },
+          keep_lines=1,
+          more=false,
+          on_press=fn() { @settings.open_device(core, here, text(d, "station"), text(d, "id"), Unanchored) },
+        )
+      }
     })
   })
   |> ignore

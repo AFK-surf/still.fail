@@ -22,9 +22,16 @@ pub fn rig_card(
   who? : String? = None,
   ended? : (Bool, String)? = None,
   lock? : () -> Unit = fn() {  },
+  device? : String = "",
 ) -> Unit {
   @sf.card(c, fn() {
-    @sf.ask_words(c, fill("web-pages.rigs.ask.title", [("name", name)]), reason)
+    // (one of its devices alone: named, with the station it is on)
+    let title = if device == "" {
+      fill("web-pages.rigs.ask.title", [("name", name)])
+    } else {
+      fill("web-pages.devices.ask.title", [("device", device), ("name", name)])
+    }
+    @sf.ask_words(c, title, reason)
     match core {
       Some(core) if mine =>
         answered_in_place(c, "rig/" + request, ended.map(fn(e) { (e.0, [@ui.span(e.1)]) }), fn() {

@@ -31,7 +31,7 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
   // (`data`: where it keeps what the mesh keeps of the locks, mesh/person-chains.ts)
   const cloud = { state: { workspace_name: "ws" }, data: mkdtempSync(join(tmpdir(), "mesh-handover-")), relays: () => [], memberships: () => [], peersCurrent: false, listen: () => () => {}, toolCalls: null };
   const inputs = Layer.mergeAll(
-    Layer.succeed(MeshSide)({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [] }),
+    Layer.succeed(MeshSide)({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [], device: null }),
     Layer.succeed(Previous)({ pid: null, gone: previous.promise, exited: previous.promise }),
     Layer.succeed(Own)({ paths: () => [] } as never),
     Layer.succeed(Peers)({ attach: () => {} } as never),

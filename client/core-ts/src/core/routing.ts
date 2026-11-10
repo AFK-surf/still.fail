@@ -90,6 +90,8 @@ export class Router implements Source {
         return { ok: core.adb.card(String(topic.station)) };
       case "rigs":
         return { ok: core.rigs.value(String(topic.workspace)) };
+      case "devices":
+        return { ok: core.devices.value(String(topic.workspace)) };
       case "previewLoad":
         return { ok: core.workspaces.ofStation(topic.station as string).part("previewLoad", () => new Loads()).value(topic) };
       case "prefs":

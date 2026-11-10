@@ -10,7 +10,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import {
-  type AddBody, type GrantBody, type RevokeBody, type SettingsBody, type Signed, type Kind, TIMEOUT_MAX, signedBytes, wellFormed,
+  type AddBody, type DeviceBody, type Device, type GrantBody, type RevokeBody, type SettingsBody, type Signed, type Kind, TIMEOUT_MAX, signedBytes, wellFormed,
   FULL_FOR, type FullBody,
 } from "../../../client/core-ts/src/rig-form.ts";
 import { type Entry, entryHash, personFold, signatureOk } from "../cloud/lock.ts";
@@ -34,7 +34,7 @@ export type Self = { id: string; workspace: string; owner: string; person: strin
 
 /// A grant in force: what was signed, and when the chat last used the rig (ms).
 export type Live = { signed: Signed<GrantBody>; usedAt: number };
-export type Ended = { request: string; station: string; session: string; why: "expired" | "idle" | "revoked" | "released" | "closed" };
+export type Ended = { request: string; station: string; session: string; why: "expired" | "idle" | "revoked" | "released" | "closed" | "removed"; device?: string };
 
 type Kept = {
   /// The person's own lock, the longest chain of it seen (a device taken off it signs nothing from then on).
@@ -44,6 +44,9 @@ type Kept = {
   grants: Record<string, Live>;
   /// Grants taken back (their request → when they would have ended, unix seconds): one brought again counts for nothing.
   revoked: Record<string, number>;
+  /// The devices its person attached to it (rig-form.ts `DeviceBody`), by id, with each one's own settings (免批准).
+  devices: Record<string, Signed<DeviceBody>>;
+  deviceSettings: Record<string, Signed<SettingsBody>>;
 };
 
 export type GrantsDeps = {
@@ -58,6 +61,9 @@ export type GrantsDeps = {
   running: () => { station: string; session: string }[];
   /// A grant ended here: its station is told.
   ended: (ended: Ended) => void;
+  /// A chat (or every chat: none named) may have lost a device of this rig: its connections to it are looked at again
+  /// (`deviceRefusal` with no use), and those no longer let through cut.
+  cut?: (device: string, station: string | null, session: string | null) => void;
   /// Anything a station shows of this rig changed (grants, settings).
   changed: () => void;
   fibers?: Fibers;
@@ -68,7 +74,7 @@ export class Refusal extends Error {}
 export class RigGrants {
   readonly #d: GrantsDeps;
   readonly #fibers: Fibers;
-  #kept: Kept = { chain: [], settings: null, add: null, grants: {}, revoked: {} };
+  #kept: Kept = { chain: [], settings: null, add: null, grants: {}, revoked: {}, devices: {}, deviceSettings: {} };
   #armed: (() => void) | null = null;
 
   constructor(deps: GrantsDeps) {
@@ -83,6 +89,8 @@ export class RigGrants {
           add: wellFormed("add", raw?.add) ? raw.add : null,
           grants: Object.fromEntries(Object.entries((raw?.grants ?? {}) as Record<string, Live>).filter(([, g]) => wellFormed("grant", g?.signed) && Number.isSafeInteger(g.usedAt))),
           revoked: Object.fromEntries(Object.entries((raw?.revoked ?? {}) as Record<string, number>).filter(([, exp]) => Number.isSafeInteger(exp))),
+          devices: Object.fromEntries(Object.entries((raw?.devices ?? {}) as Record<string, Signed<DeviceBody>>).filter(([id, d]) => wellFormed("device", d) && d.body.device.id === id && !d.body.removed)),
+          deviceSettings: Object.fromEntries(Object.entries((raw?.deviceSettings ?? {}) as Record<string, Signed<SettingsBody>>).filter(([id, d]) => wellFormed("settings", d) && d.body.device === id)),
         };
       } catch (error) {
         // Unreadable: nobody is granted anything until the person signs again; 免批准 is off.
@@ -167,6 +175,7 @@ export class RigGrants {
     const now = this.#secs();
     if (b.exp <= now) throw new Refusal("the grant has expired");
     if (b.request in this.#kept.revoked) throw new Refusal("the grant was taken back");
+    if (b.device !== undefined && !(b.device in this.#kept.devices)) throw new Refusal("no such device on this rig");
     const was = this.#kept.grants[b.request];
     this.#kept.grants[b.request] = { signed: s, usedAt: was?.usedAt ?? this.#fibers.now() };
     this.#save();
@@ -199,6 +208,7 @@ export class RigGrants {
   settings(signed: unknown, chain?: unknown): void {
     this.takeChain(chain);
     const s = this.#checked<SettingsBody>("settings", signed);
+    if (s.body.device !== undefined) return this.#deviceSettings(s);
     const had = this.#kept.settings;
     if (had !== null && s.body.seq <= had.body.seq) {
       if (s.body.seq === had.body.seq && had.sig.sig === s.sig.sig) return;
@@ -208,8 +218,79 @@ export class RigGrants {
     this.#save();
     if (had?.body.open === true && !s.body.open) {
       for (const { station, session } of this.#d.running()) if (this.#grantOf(station, session) === null) void this.#d.stop(station, session);
+      for (const id of Object.keys(this.#kept.devices)) if (!this.#deviceOpen(id)) this.#d.cut?.(id, null, null);
     }
     this.#d.changed();
+  }
+
+  /// A device's own settings (免批准 on it alone): taken when newer than its kept ones. Off again, the chats with no
+  /// grant of it (or of the rig) lose their connections to it.
+  #deviceSettings(s: Signed<SettingsBody>): void {
+    const id = s.body.device!;
+    if (!(id in this.#kept.devices)) throw new Refusal("no such device on this rig");
+    const had = this.#kept.deviceSettings[id];
+    if (had !== undefined && s.body.seq <= had.body.seq) {
+      if (s.body.seq === had.body.seq && had.sig.sig === s.sig.sig) return;
+      throw new Refusal("older than the settings this device has");
+    }
+    this.#kept.deviceSettings[id] = s;
+    this.#save();
+    if (had?.body.open === true && !s.body.open && !this.open()) this.#d.cut?.(id, null, null);
+    this.#d.changed();
+  }
+
+  /// A device attached to this rig by its person, or (`removed`) taken off it: the grants of it end with it.
+  device(signed: unknown, chain?: unknown): void {
+    this.takeChain(chain);
+    const s = this.#checked<DeviceBody>("device", signed);
+    const id = s.body.device.id;
+    const had = this.#kept.devices[id];
+    if (had !== undefined && s.body.at < had.body.at) throw new Refusal("older than what this rig has of the device");
+    if (s.body.removed) {
+      delete this.#kept.devices[id];
+      delete this.#kept.deviceSettings[id];
+      this.#save();
+      for (const live of Object.values(this.#kept.grants)) if (live.signed.body.device === id) this.#end(live, "removed");
+      this.#d.cut?.(id, null, null);
+    } else {
+      this.#kept.devices[id] = s;
+      this.#save();
+    }
+    this.#d.changed();
+  }
+
+  /// The devices attached here.
+  devices(): Device[] {
+    return Object.values(this.#kept.devices).map((d) => d.body.device);
+  }
+
+  #deviceOpen(id: string): boolean {
+    const s = this.#kept.deviceSettings[id];
+    return s !== undefined && s.body.open;
+  }
+
+  /// Why a chat may not reach device `id` here now, or null: it may (a grant of the rig, or of the device; 免批准 on
+  /// either), and this is use.
+  /// `use`: false only to look again at a connection already open (`cut`), which is no use of it.
+  deviceRefusal(workspace: string, station: string, session: string, id: string, use = true): string | null {
+    const self = this.#d.self();
+    if (self === null) return "this machine is no rig of a workspace now";
+    if (workspace !== self.workspace) return "this rig is of another workspace";
+    if (!(id in this.#kept.devices)) return "no such device on this rig";
+    if (this.open() || this.#deviceOpen(id)) return null;
+    if (use) this.#look();
+    const live = this.#grantOf(station, session) ?? this.#deviceGrantOf(station, session, id);
+    if (live === null) return "this chat has no grant of this device: ask for one with device_use (its owner approves it in still.fail)";
+    if (use) this.#used(live);
+    return null;
+  }
+
+  #deviceGrantOf(station: string, session: string, id: string): Live | null {
+    for (const live of Object.values(this.#kept.grants)) {
+      const b = live.signed.body;
+      if (b.station === station && b.session === session && b.device === id) return live;
+    }
+    return null;
   }
 
   /// What the person signed taking this rig into a workspace in security mode (rig-form.ts `AddBody`): kept to show the
@@ -246,7 +327,8 @@ export class RigGrants {
   }
 
   #grantOf(station: string, session: string): Live | null {
-    for (const live of Object.values(this.#kept.grants)) if (live.signed.body.station === station && live.signed.body.session === session) return live;
+    // (a grant of one device alone is not one of the rig)
+    for (const live of Object.values(this.#kept.grants)) if (live.signed.body.station === station && live.signed.body.session === session && live.signed.body.device === undefined) return live;
     return null;
   }
 
@@ -281,14 +363,18 @@ export class RigGrants {
     if (self === null || workspace !== self.workspace) return "this rig is of another workspace";
     if (this.open()) return null;
     this.#look();
-    const lives = Object.values(this.#kept.grants).filter((g) => g.signed.body.station === station);
+    const lives = Object.values(this.#kept.grants).filter((g) => g.signed.body.station === station && g.signed.body.device === undefined);
     if (lives.length === 0) return "no chat of that station has a grant of this one";
     for (const live of lives) this.#used(live);
     return null;
   }
 
   /// What a station is told of this rig (`describe`): whose it is, whether 免批准 is on, and the grants in force.
-  view(): { owner: string; person: string; open: boolean; settings: number; grants: { request: string; station: string; session: string; chat: string; title: string; by: string; timeout: GrantBody["timeout"]; exp: number; until: number }[] } | null {
+  view(): {
+    owner: string; person: string; open: boolean; settings: number;
+    grants: { request: string; station: string; session: string; chat: string; title: string; by: string; timeout: GrantBody["timeout"]; exp: number; until: number; device?: string }[];
+    devices: (Device & { open: boolean; settings: number })[];
+  } | null {
     const self = this.#d.self();
     if (self === null) return null;
     this.#look();
@@ -299,8 +385,9 @@ export class RigGrants {
       settings: this.#kept.settings?.body.seq ?? 0,
       grants: Object.values(this.#kept.grants).map((g) => {
         const b = g.signed.body;
-        return { request: b.request, station: b.station, session: b.session, chat: b.chat, title: b.title, by: b.by, timeout: b.timeout, exp: b.exp, until: this.#until(g) };
+        return { request: b.request, station: b.station, session: b.session, chat: b.chat, title: b.title, by: b.by, timeout: b.timeout, exp: b.exp, until: this.#until(g), ...(b.device !== undefined ? { device: b.device } : {}) };
       }),
+      devices: Object.values(this.#kept.devices).map((d) => ({ ...d.body.device, open: this.#deviceOpen(d.body.device.id), settings: this.#kept.deviceSettings[d.body.device.id]?.body.seq ?? 0 })),
     };
   }
 
@@ -314,9 +401,14 @@ export class RigGrants {
     const b = live.signed.body;
     delete this.#kept.grants[b.request];
     this.#save();
-    // Another grant of the same chat keeps what it runs.
-    if (this.#grantOf(b.station, b.session) === null && !this.open()) void this.#d.stop(b.station, b.session);
-    this.#d.ended({ request: b.request, station: b.station, session: b.session, why });
+    if (b.device !== undefined) {
+      if (this.#grantOf(b.station, b.session) === null && !this.open() && !this.#deviceOpen(b.device)) this.#d.cut?.(b.device, b.station, b.session);
+    } else if (this.#grantOf(b.station, b.session) === null && !this.open()) {
+      // Another grant of the same chat keeps what it runs; its devices go with the rig's grant, but for one of their own.
+      void this.#d.stop(b.station, b.session);
+      for (const id of Object.keys(this.#kept.devices)) if (this.#deviceGrantOf(b.station, b.session, id) === null && !this.#deviceOpen(id)) this.#d.cut?.(id, b.station, b.session);
+    }
+    this.#d.ended({ request: b.request, station: b.station, session: b.session, why, ...(b.device !== undefined ? { device: b.device } : {}) });
     this.#d.changed();
     this.#look();
   }

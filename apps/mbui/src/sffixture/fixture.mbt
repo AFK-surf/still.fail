@@ -1894,6 +1894,7 @@ pub fn fixture(mode : String) -> Source {
     read_only: false,
     // (a made-up core's lists are set up as each test's page asks for them: asked ahead where a test says so)
     reads_ahead: fn() { false },
+    asks_devices: fn() { true },
   }
 }
 
