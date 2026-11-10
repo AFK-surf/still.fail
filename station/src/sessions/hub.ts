@@ -100,6 +100,8 @@ export interface ColdStorage {
 
 /// The most of a shared file the station fetches, as much as an agent may attach.
 const MAX_INBOUND_FILE = 50 * 1024 * 1024;
+/// How long transcripts' lengths are gathered before they are written (`noteLength`).
+export const LENGTHS_GATHER_MS = 5_000;
 
 const NOTHING_COLD: ColdStorage = { isCold: () => false, restore: () => {}, pack: () => {} };
 
@@ -292,8 +294,8 @@ export class Hub {
     );
     // The sessions at work are followed by the station itself (live.ts `running`): as the store says each starts and
     // stops, and those at work now. Each transcript's length goes where its summary reads it (its usage, the usage
-    // part keeps: usage/module.ts).
-    this.live.lengths = (key, n) => this.store.setTranscriptLength(key, n);
+    // part keeps: usage/module.ts), gathered (`noteLength`).
+    this.live.lengths = (key, n) => this.noteLength(key, n);
     this.unlistenRunning = this.store.subscribe((change) => {
       if (change.type === "session") this.live.running(change.key, this.store.getSession(change.key)?.running === true);
       else if (change.type === "sessionRemoved") this.live.running(change.key, false);
@@ -1141,7 +1143,36 @@ export class Hub {
     await Promise.all([...this.drivers.values()].map((d) => d.shutdown()));
   }
 
+  /// Transcripts' lengths not written yet, and whether their write is due (`noteLength`).
+  private lengths = new Map<string, number>();
+  private lengthsDue = false;
+
+  /// A transcript's length, written with the others' that come within LENGTHS_GATHER_MS: one statement of its own at each
+  /// read was one at every step of every agent at work, on the main thread. Only a session's summary reads it (its
+  /// entries told as they come say more): one read meanwhile says the length before. Written as the hub stops (a
+  /// handover, a shutdown); one lost in a crash is read again, as the next station follows its transcript from the
+  /// start (live.ts `begin`).
+  private noteLength(key: string, n: number) {
+    this.lengths.set(key, n);
+    if (this.lengthsDue) return;
+    this.lengthsDue = true;
+    this.fork(Effect.sleep(LENGTHS_GATHER_MS).pipe(Effect.andThen(Effect.sync(() => this.writeLengths()))));
+  }
+
+  private writeLengths() {
+    this.lengthsDue = false;
+    if (this.lengths.size === 0) return;
+    const lengths = this.lengths;
+    this.lengths = new Map();
+    try {
+      this.store.setTranscriptLengths(lengths);
+    } catch (error) {
+      log.warn("hub", "transcripts' lengths not written", { error: (error as Error).message });
+    }
+  }
+
   private stopTimers() {
+    this.writeLengths();
     for (const fiber of [...this.deadlines.values(), ...this.fibers]) this.interrupt(fiber);
     this.deadlines.clear();
     this.fibers.clear();

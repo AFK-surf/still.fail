@@ -1027,7 +1027,15 @@ export class Store {
   /// How many entries the session's transcript has, as just read (sessions/live.ts): its summary says it from then on.
   /// Not a change of the session (nothing is told for it): the summary told next carries it.
   setTranscriptLength(key: string, n: number): void {
-    this.#run("INSERT INTO transcript_lengths (session, n) VALUES (?1, ?2) ON CONFLICT (session) DO UPDATE SET n = excluded.n", key, n);
+    this.setTranscriptLengths(new Map([[key, n]]));
+  }
+
+  /// Several sessions' (`setTranscriptLength`), in one transaction.
+  setTranscriptLengths(lengths: ReadonlyMap<string, number>): void {
+    if (lengths.size === 0) return;
+    this.#tx(() => {
+      for (const [key, n] of lengths) this.#run("INSERT INTO transcript_lengths (session, n) VALUES (?1, ?2) ON CONFLICT (session) DO UPDATE SET n = excluded.n", key, n);
+    });
   }
 
   /// What a session's calls used, as just counted (usage/module.ts): its summary says it from then on. While it works
