@@ -669,6 +669,8 @@ pub fn foot_fit(Double, Double, Double, least? : Double) -> Double
 
 pub fn foot_pad(Double) -> @ui.Style
 
+pub fn foot_place_node(@view.View, () -> Bool, (@view.View) -> Unit) -> Unit
+
 pub fn foot_reach(Double, start? : Double, words_first? : Bool) -> @ui.Style
 
 pub fn foot_spacer_node(@view.View) -> Unit
