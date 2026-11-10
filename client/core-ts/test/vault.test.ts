@@ -313,7 +313,7 @@ async function rig(web = false, two = false, more: Answers = {}) {
   });
   const genesis = lockOf({ id: me.signer!.id, signBytes: (b) => me.signer!.signBytes(b) }, phone, other);
   const lock = { head: { seq: 0, hash: entryHash(genesis), genesis: entryHash(genesis) }, entries: [genesis], requests: [] };
-  const ui = s.core.connect();
+  let ui = s.core.connect();
   const values = new Map<number, unknown>();
   const done = new Map<number, Record<string, unknown>>();
   let id = 100;
@@ -354,7 +354,19 @@ async function rig(web = false, two = false, more: Answers = {}) {
       return values.get(n) as any;
     };
   };
-  return { ...s, st, st2, phone, other, lock, me, ask, watch, take, putLock: () => s.core.inner.data.put("lock", "ws", lock) };
+  /// The app started anew on the same host: what it keeps (its database, its secure storage) as it was, nothing of the
+  /// run before in memory (the keys unsealed). Topics watched before are not watched again.
+  const restart = async () => {
+    await Effect.runPromise(s.core.inner.data.written);
+    s.core.close();
+    s.host.takeEmitted();
+    s.core = await Core.create(s.host, { clock: s.host.time.clock, sample: 0, wire: () => (wire ? wire(s.host) : new HostWire(s.host)) });
+    await s.host.time.pass(500);
+    ui = s.core.connect();
+    r.core = s.core;
+  };
+  const r = { ...s, st, st2, phone, other, lock, me, ask, watch, take, restart, putLock: () => s.core.inner.data.put("lock", "ws", lock) };
+  return r;
 }
 
 /// One more entry of the rig's lock, signed by `by` (this device's signer, the owner's, by default), the lock put in
@@ -1097,6 +1109,159 @@ test("a device taken out of the lock that held a vault's key: the owner's device
   assert.equal(JSON.parse(new TextDecoder().decode(decrypt(fresh, item.ct, itemContext("ws", id, item.id, 1, 1)))).fields.value, "ghp_x", "written again under the new key");
   assert.equal(vaults().vaults.length, 1, "shown still");
   assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
+  r.core.close();
+});
+
+// A keying anew stopped half-way: the vault's next version written under a new key, an item not written again under
+// it (the device closed or cut off, or the station refused that write). Nothing wrote it again, and it could not be
+// opened anywhere: its key was forgotten here, and the version sealing it for this device let go.
+
+/// The rig's own vault, one item in it, the phone given its key and then taken out of the lock: keyed anew by this
+/// device, the station refusing the item's write under the new key once (`also`: what else is put in the vault
+/// first). The item left under the earlier key, as the station and this device hold it.
+async function keyedAnewHalfWay(r: Awaited<ReturnType<typeof rig>>, also?: (id: string) => Promise<void>) {
+  r.putLock();
+  const { made: id, words } = await r.ask("vault.setup", {});
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+  await also?.(id);
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(fill(7)), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(500);
+  r.take();
+  assert.equal(r.st.vaults.get(id)!.seq, 1, "the phone given the key");
+  const refuse = { left: 1 };
+  stationReplies(r.host, (req) => {
+    if (req.url.includes("/v1/workspaces/ws/lock")) return r.lock;
+    if (refuse.left > 0 && req.method === "PUT" && req.url.endsWith("/vault/items")) {
+      refuse.left--;
+      return status(500, { error: "the link went down" });
+    }
+    return r.st.reply(req);
+  });
+  grow(r, "device.remove", { id: r.phone.hex });
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.host.time.pass(500, 10);
+  r.take();
+  assert.equal(refuse.left, 0, "the item's write refused");
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.seq, v.epoch], [2, 1], "keyed anew");
+  const i = r.st.items.get(put.id)!;
+  assert.deepEqual([i.version, i.epoch], [0, 0], "the item left under the earlier key");
+  const fresh = openSeal(recoveryPair(fromWords(words)).priv, v.recovery!, keyContext("ws", id, 1));
+  return { id, item: put.id, fresh };
+}
+
+/// The vault's record as this device holds it.
+const heldVault = (r: Awaited<ReturnType<typeof rig>>) => r.core.inner.data.record("vault", "ws") as { before?: Record<string, Record<string, Vault>> };
+
+/// That the station holds `item` written again under the vault's new key (`fresh`, epoch 1) at its next version,
+/// signed by this device, its secret as it was.
+function carriedOn(r: Awaited<ReturnType<typeof rig>>, id: string, item: string, fresh: Uint8Array, value: string) {
+  const i = r.st.items.get(item)!;
+  assert.deepEqual([i.version, i.epoch], [1, 1], "written again under the new key, its next version");
+  assert.equal(i.sig.key, r.me.signer!.id);
+  assert.equal(JSON.parse(new TextDecoder().decode(decrypt(fresh, i.ct, itemContext("ws", id, item, 1, 1)))).fields.value, value);
+}
+
+test("a keying anew stopped half-way (an item's write under the new key refused): the item is carried on as it is opened, with the keys still unsealed here", async () => {
+  const r = await rig();
+  const { id, item, fresh } = await keyedAnewHalfWay(r);
+  const asked = r.host.secureAsked.length;
+  assert.equal((await r.ask("vault.open", { item })).plain.fields.value, "ghp_x");
+  assert.equal(r.host.secureAsked.length, asked, "the keys unsealed here: the person not asked");
+  carriedOn(r, id, item, fresh, "ghp_x");
+  r.core.close();
+});
+
+test("a keying anew stopped half-way, the app started anew since (no key unsealed): opening the item asks for the box key once, carries it on and opens it", async () => {
+  const r = await rig();
+  const { id, item, fresh } = await keyedAnewHalfWay(r);
+  await r.restart();
+  await r.host.time.pass(500);
+  assert.deepEqual([r.st.items.get(item)!.version, r.st.items.get(item)!.epoch], [0, 0], "nothing carried on with nobody asked: no key unsealed");
+  const asked = r.host.secureAsked.length;
+  assert.equal((await r.ask("vault.open", { item })).plain.fields.value, "ghp_x");
+  assert.deepEqual(r.host.secureAsked.slice(asked).map((a) => a.key), [BOX_KEY], "asked once");
+  carriedOn(r, id, item, fresh, "ghp_x");
+  r.core.close();
+});
+
+test("a member's device that did not key the vault anew (told the new version while an item is still under the earlier key) carries it on as it opens it", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const mine = r.st.boxes.get("ab".repeat(32))!;
+  const otherCert = sign({ v: 1 as const, ws: "ws", device: r.other.hex, box: boxPublic(fill(9)), at: 2000 }, TAG.box, r.other);
+  r.st.boxes.set(r.other.hex, otherCert);
+  r.push("vault-box", otherCert);
+  // s2's vault, this person in it, keyed for this device; an item s2's device wrote in it.
+  const id = "v_01M4871X3MTC0903ZX5CPB8JH9";
+  const [k0, k1] = [fill(11), fill(21)];
+  const seal = (c: BoxCert, key: Uint8Array, epoch: number, n: number) => ({ cert: c, wrapped: sealWith(c.box, key, keyContext("ws", id, epoch), fill(n)) });
+  const v0 = sign({ v: 1 as const, ws: "ws", id, seq: 0, owner: "s2", name: "Team", members: ["s2", "s1"], epoch: 0, keys: [seal(otherCert, k0, 0, 12), seal(mine, k0, 0, 13)], at: 2000 }, TAG.vault, r.other);
+  r.st.vaults.set(id, v0);
+  r.push("vault", v0);
+  await r.host.time.pass(200);
+  const itemId = "i_01JAKEEP000000000000000C4R";
+  const plain = { kind: "token", name: "Deploy", fields: { value: "dk_1" }, domains: [], notes: "" };
+  const i0 = sign({ v: 1 as const, ws: "ws", vault: id, id: itemId, version: 0, epoch: 0, ct: encryptWith(k0, utf8(JSON.stringify(plain)), itemContext("ws", id, itemId, 0, 0), fill(1, 12)), at: 2000 }, TAG.item, r.other);
+  r.st.items.set(itemId, i0);
+  r.push("vault-item", i0);
+  await r.host.time.pass(200);
+  // s2's device keys it anew and stops before writing the item again.
+  const v1 = sign({ v: 1 as const, ws: "ws", id, seq: 1, owner: "s2", name: "Team", members: ["s2", "s1"], epoch: 1, keys: [seal(otherCert, k1, 1, 14), seal(mine, k1, 1, 15)], at: 2001 }, TAG.vault, r.other);
+  r.st.vaults.set(id, v1);
+  r.push("vault", v1);
+  await r.host.time.pass(200);
+  const asked = r.host.secureAsked.length;
+  assert.equal((await r.ask("vault.open", { item: itemId })).plain.fields.value, "dk_1");
+  assert.deepEqual(r.host.secureAsked.slice(asked).map((a) => a.key), [BOX_KEY], "asked once");
+  carriedOn(r, id, itemId, k1, "dk_1");
+  r.core.close();
+});
+
+test("an item under the earlier key that the lock did not take then (made up by a station, signed by someone not in the vault) is not carried on: still refused, nothing written", async () => {
+  const r = await rig();
+  const forgedId = "i_01JAKEEP000000000000000F0G";
+  const { id, item, fresh } = await keyedAnewHalfWay(r, async (id) => {
+    const plain = { kind: "token", name: "x", fields: { value: "planted" }, domains: [], notes: "" };
+    const forged = sign({ v: 1 as const, ws: "ws", vault: id, id: forgedId, version: 0, epoch: 0, ct: encryptWith(fill(5), utf8(JSON.stringify(plain)), itemContext("ws", id, forgedId, 0, 0), fill(2, 12)), at: 2000 }, TAG.item, r.other);
+    r.st.items.set(forgedId, forged);
+    r.push("vault-item", forged);
+    await r.host.time.pass(200);
+  });
+  const forged = r.st.items.get(forgedId)!;
+  await fails(r.ask("vault.open", { item: forgedId }), "vault_untrusted");
+  assert.equal(r.st.items.get(forgedId), forged, "not written again");
+  // (the item its owner's device wrote, carried on as the vault was looked at)
+  carriedOn(r, id, item, fresh, "ghp_x");
+  assert.equal((await r.ask("vault.open", { item })).plain.fields.value, "ghp_x");
+  r.core.close();
+});
+
+test("the version kept of an earlier key is let go once the vault's items, read of its station again, show nothing under that key", async () => {
+  const r = await rig();
+  const { id, item } = await keyedAnewHalfWay(r);
+  const kept = heldVault(r).before?.[id]?.["0"];
+  assert.deepEqual([kept?.seq, kept?.epoch], [1, 0], "the last version of the earlier key kept, its item under it");
+  await r.ask("vault.open", { item });
+  // (not as it is carried on: an item another device wrote under that key meanwhile may be told only after)
+  assert.equal(heldVault(r).before?.[id]?.["0"]?.seq, 1, "kept until the station is read again");
+  r.core.inner.stations.snapshot("ws/st");
+  await r.host.time.pass(500, 10);
+  assert.equal(heldVault(r).before?.[id], undefined, "let go: nothing under it any more");
+  r.core.close();
+});
+
+test("a keying anew stopped half-way: the station read again (its connection opened) while the keys are unsealed here carries the item on, nobody asked", async () => {
+  const r = await rig();
+  const { id, item, fresh } = await keyedAnewHalfWay(r);
+  const asked = r.host.secureAsked.length;
+  r.core.inner.stations.snapshot("ws/st");
+  await r.host.time.pass(500, 10);
+  assert.equal(r.host.secureAsked.length, asked, "nobody asked");
+  carriedOn(r, id, item, fresh, "ghp_x");
   r.core.close();
 });
 
