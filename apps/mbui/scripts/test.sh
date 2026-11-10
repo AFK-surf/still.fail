@@ -193,6 +193,11 @@ for t in $targets; do
       # taken late by name, ran 162 s of its 265 at 120 fps, mbui-motion-layer3 42659257481, 2026-11-10) (six to the
       # fourth and four to the first since: at 60 a second the fourth's pages were 243 s, its job 254 of its 5 minutes,
       # the first's job 59 s, core-unheld-messages 42723740236, main 2c1c63b8 42723386381, 2026-11-10)
+      # (each run's files the largest first, as its programs take the next: by name, a group's longest files came
+      # last (tape_wbtest 110-138 s at 120 a second, quote_image 146 s, of the fourth's 140 the 121st and later) and ran
+      # on alone after the rest, app 1/4 at 120 fps 278 s and 283 s, delta-updates 42749767767,
+      # fix/cached-android-java-sources 42755835282, 2026-11-10; the files dealt to a group change as files come)
+      largest() { [ $# = 0 ] || ls -S "$@" | tr '\n' ' '; }
       if [ -n "${APP_GROUP:-}" ] && [ "${APP_GROUP#*/}" = 4 ]; then
         g1=() g2=() g3=() g4=()
         for i in "${!pages[@]}"; do
@@ -203,9 +208,9 @@ for t in $targets; do
             *) g3+=("${pages[i]}") ;;
           esac
         done
-        runs+=("@pages 1 $n ${g1[*]}" "@pages 2 2 ${g2[*]}" "@pages 3 1 ${g3[*]}" "@pages 4 $n ${g4[*]}")
+        runs+=("@pages 1 $n $(largest ${g1[*]})" "@pages 2 2 $(largest ${g2[*]})" "@pages 3 1 $(largest ${g3[*]})" "@pages 4 $n $(largest ${g4[*]})")
       else
-        runs+=("@pages 0 $n ${pages[*]}")
+        runs+=("@pages 0 $n $(largest ${pages[*]})")
       fi
       export APP_JOBS=$n
     else
