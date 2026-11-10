@@ -147,6 +147,56 @@ test("relaying starts the conversation there, makes it the agent's, says so wher
   await r.close();
 });
 
+test("the bot mentioned in a thread a chat was relayed to brings back that chat's agent, never a second one", async () => {
+  const { r } = relayRig();
+  const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+  await relay(r.hub, thread, ADA, { connect: "cl", channel: "C1" }, "");
+  await settle();
+  await r.call(key, "chat_state", { kind: "all_done", done: "relayed" });
+  r.claude.last().complete();
+  await settle();
+  const before = r.store.sessionKeys().length;
+  const there = r.thread("C1", "1700.000100");
+  await r.accept(message({ channel: "C1", threadTs: "1700.000100", ts: "1700.000200", user: "UBO", text: "<@UBOT> can we open the MR now?", addressed: true }));
+  await settle();
+  assert.equal(r.store.sessionKeys().length, before, "no session of the connect's own is made for the thread");
+  assert.deepEqual(r.store.threadSessions(there.id).map((m) => [m.session, m.connect]), [[key, "cl"]]);
+  assert.ok(r.claude.last().prompts.at(-1)!.includes("can we open the MR now?"));
+  // Left, the mention brings it back.
+  await r.call(key, "chat_state", { kind: "all_done", done: "answered" });
+  r.claude.last().complete();
+  await settle();
+  r.store.leaveThread(there.id, key);
+  await r.accept(message({ channel: "C1", threadTs: "1700.000100", ts: "1700.000300", user: "UBO", text: "<@UBOT> and the build?", addressed: true }));
+  await settle();
+  assert.equal(r.store.sessionKeys().length, before);
+  assert.ok(r.claude.last().prompts.at(-1)!.includes("and the build?"));
+  await r.close();
+});
+
+test("in a thread with two agents of the same bot, the one that left stays out when the bot is mentioned", async () => {
+  const { r } = relayRig();
+  const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+  await relay(r.hub, thread, ADA, { connect: "cl", channel: "C1" }, "");
+  await settle();
+  await r.call(key, "chat_state", { kind: "all_done", done: "relayed" });
+  r.claude.last().complete();
+  await settle();
+  // As stations before the fix did: the bot mentioned there made a session of the connect's own for the thread.
+  const there = r.thread("C1", "1700.000100");
+  const own = "cl:C1:1700.000100";
+  r.hub.createSession(r.hub.config(), own, r.config.connects.find((c) => c.id === "cl")!, "thread", null, null, "slack:cl:UBO");
+  r.store.joinThread(there.id, own, "cl");
+  r.store.leaveThread(there.id, own);
+  const before = r.store.sessionKeys().length;
+  await r.accept(message({ channel: "C1", threadTs: "1700.000100", ts: "1700.000200", user: "UBO", text: "<@UBOT> status?", addressed: true }));
+  await settle();
+  assert.equal(r.store.sessionKeys().length, before);
+  assert.deepEqual(r.store.threadSessions(there.id).map((m) => [m.session, m.leftAt === null]).sort(), [[key, true], [own, false]].sort());
+  assert.ok(r.claude.last().prompts.at(-1)!.includes("status?"));
+  await r.close();
+});
+
 test("a relayed chat's first post is a reply where it would not fit in the station's first message, carries files, or is not the relaying agent's", async () => {
   const { r } = relayRig();
   const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
