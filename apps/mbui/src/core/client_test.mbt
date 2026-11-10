@@ -422,6 +422,30 @@ test "a core started anew is told again where the app's attention is (client.foc
 }
 
 ///|
+test "a core started anew is told both the app's attention and the chat it shows, whichever was told last" {
+  let sent : Array[String] = []
+  let c = Client::new(fn(m) { sent.push(m) })
+  c.call("client.focus", params={ "visible": true, "focused": true, "workspace": "ws1" }) |> ignore
+  let chat : Json = { "station": "ws1/st1", "session": "s1", "thread": 7, "end": true }
+  c.call("client.focus", params={ "chat": chat }) |> ignore
+  sent.clear()
+  c.restarted()
+  assert_eq(sent.length(), 2)
+  assert_true(sent[0].contains("\"visible\":true"))
+  assert_true(sent[1].contains("\"session\":\"s1\""))
+  // another chat's leaving keeps the one shown; its own lets it go
+  c.call("client.focus", params={ "left": { "station": "ws1/st1", "session": "s0" } }) |> ignore
+  sent.clear()
+  c.restarted()
+  assert_eq(sent.length(), 2)
+  c.call("client.focus", params={ "left": { "station": "ws1/st1", "session": "s1" } }) |> ignore
+  sent.clear()
+  c.restarted()
+  assert_eq(sent.length(), 1)
+  assert_true(sent[0].contains("\"visible\":true"))
+}
+
+///|
 test "a computed keeps a subscription after a direct reader leaves, and its last reader ends it" {
   let (c, sent) = recorder()
   let s = c.subscribe("accounts")
