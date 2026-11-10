@@ -2383,7 +2383,12 @@ fn flow_children_gone(node : Node) -> Array[Node] {
 fn gone_there(flow : Array[Node], pool : Pool) -> Double {
   let mut most = 0.0
   for k in 0..<pool.count {
-    let cs = flow.unsafe_get(pool.at.unsafe_get(k)).style
+    let c = flow.unsafe_get(pool.at.unsafe_get(k))
+    // (a structure's box that made nothing: not there, Style's structural)
+    if nothing_made(c) {
+      continue
+    }
+    let cs = c.style
     let here = if (cs.come_fill && known(cs.come_now)) || cs.gone_empty { cs.come_k } else { 1.0 }
     if here >= 1.0 {
       return 1.0
@@ -2404,7 +2409,24 @@ fn laid_none(n : Node, gone : Bool) -> Bool {
 /// Whether all node `n` holds is laid out nowhere (laid_none), or it holds nothing.
 fn holds_none(n : Node) -> Bool {
   for c in n.children {
-    if !laid_none(c, n.holds_gone) {
+    if !laid_none(c, n.holds_gone) && !nothing_made(c) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Whether node `n` is a structure's box that made nothing (Style's structural): holding no box but such as this or
+/// those laid out nowhere so said, and on no way (one closing or opening is there as much as its way has it, gone_there).
+/// To a box that takes no room holding nothing (Style's gone_empty) it is not there.
+fn nothing_made(n : Node) -> Bool {
+  let s = n.style
+  if !s.structural || s.come_now == s.come_now {
+    return false
+  }
+  for c in n.children {
+    if c.style.display != DisplayNone && !nothing_made(c) {
       return false
     }
   }

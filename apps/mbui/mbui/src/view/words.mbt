@@ -574,7 +574,11 @@ pub fn View::aspect(self : View, wide_for_tall : Live[Double], loc~ : SourceLoc)
 /// the first to come, the last to go; not one in another's place), its padding top and foot and the gap before it open
 /// or close with that way, as much of them as the most of what it holds is there: called back half way, they turn with
 /// it; what comes or goes at once, at once. Only down a column: along a row, or as a row itself, all of its room is
-/// there till the frame it holds nothing, and none of it from that frame on. Layout's.
+/// there till the frame it holds nothing, and none of it from that frame on. What a structure makes for what it shows
+/// (a show's, a pick's, an each's row's box) is nothing to it where it made nothing: a pick of a case that makes
+/// nothing holds nothing so, and one changed to it closes the way of the one before, its padding with it. A box the
+/// app says itself holding nothing (`v.box(fn(_) {})`) is something: it may be as tall or as padded as it says; say
+/// `gone_empty` on it for it to be nothing too. Layout's.
 #callsite(autofill(loc))
 pub fn View::gone_empty(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
   self.bind(loc~, GoneEmpty, on, Layout, fn(on) {
