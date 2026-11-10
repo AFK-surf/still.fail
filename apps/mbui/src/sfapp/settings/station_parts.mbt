@@ -660,8 +660,9 @@ pub fn station_of(core : Core, here : Here, address : String) -> Json? {
 
 ///|
 /// One part of station `address`'s overview (`stationPart`: `archiving`, `automaticDecisions`, `profiles`,
-/// `machineLogins`, `logins`), for a page that shows that part of every station, each station's row asking its own:
-/// None while not answered, null while its overview is not read or has none.
+/// `machineLogins`, `logins`, `updates`), for a page that shows that part of every station, each station's row asking
+/// its own, or that part of one station that is not its page (关于's 本机 Station, its `updates`): None while not
+/// answered, null while its overview is not read or has none.
 pub fn station_part(core : Core, here : Here, address : String, part : String) -> Json? {
   station_part_in(core, station_scope(here, address), address, part)
 }

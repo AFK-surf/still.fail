@@ -1469,6 +1469,20 @@ test("a_profiles_resets_say_when_they_end_wherever_its_overview_goes_out_and_as_
   assert.deepEqual(await said(), [rows, rows, rows], "a minute on, its machine read");
 });
 
+test("a_stations_software_is_a_part_of_its_overview_as_its_page_says_it", async () => {
+  // 关于's 本机 Station: this machine's station's version and whether a newer one is out, not its whole page.
+  const t = setup({ all: true });
+  const [page, part] = [ui(), ui()];
+  t.subscribe(1, { topic: "station", scope: "ws", station: "ws/a" });
+  t.subscribe(2, { topic: "stationPart", scope: "ws", station: "ws/a", part: "updates" });
+  await allUp(t);
+  const station = { id: "station", installed: true, version: "0.1.1", latest: "0.1.2", newer: true, updatable: true, state: "idle", channel: "stable" };
+  t.set(overview("ws/a"), { ...busyOverview(20, false), updates: [station] });
+  await t.readAll([[page, 1], [part, 2]]);
+  assert.deepEqual(part.value, page.value.overview.updates);
+  assert.deepEqual(part.value.map((u: J) => [u.id, u.name, u.shownText, u.latest, u.newer]), [["station", "Station", "0.1.1", "0.1.2", true]]);
+});
+
 test("a_new_chats_stations_are_their_rows_without_models_or_profiles", async () => {
   // Its stations were the whole list's items (50-95 ms a value on a phone, 2026-11-10).
   // (its page made by choose.ts, as a core plugs it in)
