@@ -2307,7 +2307,6 @@ let zh : Map[String, String] = {
   "web-pages.profiles.recheckHint": "保存后会重新检查。",
   "web-pages.profiles.refresh": "刷新",
   "web-pages.profiles.replace": "更换",
-  "web-pages.profiles.reset": "重置额度",
   "web-pages.profiles.resetAction": "使用一次重置",
   "web-pages.profiles.resetBody": "将使用「{name}」的 1 次额度重置，剩余 {n} 次",
   "web-pages.profiles.resetConfirm": "重置额度？",

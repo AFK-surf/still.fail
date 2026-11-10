@@ -603,7 +603,6 @@ android-settings.quota.checkedAt
 android-settings.quota.checking
 android-settings.quota.credits
 android-settings.quota.none
-android-settings.quota.reset
 android-settings.quota.resetDone
 android-settings.quota.resetText
 android-settings.quota.resetTitle

@@ -649,7 +649,8 @@ export const SHAPES: Record<string, Shape> = {
     ["left", "u64", { client: "I54" }],
     ["usable", "bool", { doc: "One can be used now; else only once at a limit it refills." }],
     ["title", "String"],
-    ["text", "String", { doc: "How many are left, when they end, and why none can be used now." }],
+    ["leftText", "String", { doc: "How many are left, in words, shown on their own." }],
+    ["text", "String", { doc: "When they end, and why none can be used now (empty: nothing to say)." }],
     ["refills", opt("String"), { doc: "What one gives back, in words." }],
   ], { doc: "A kind of reset of a subscription's limits, as offered." }),
   Quota: struct([

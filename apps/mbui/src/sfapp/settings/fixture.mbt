@@ -1015,7 +1015,8 @@ fn fx_cc_resets() -> Array[(String, Json)] {
       ("left", Json::number(1.0)),
       ("usable", Json::boolean(false)),
       ("title", str("5 小时重置")),
-      ("text", str("剩余 1 次 · 到达它能恢复的上限后才能用")),
+      ("leftText", str("剩 1 次")),
+      ("text", str("到达它能恢复的上限后才能用")),
       ("refills", str("立即恢复 5 小时额度")),
     ]),
   ]
@@ -1027,7 +1028,8 @@ fn fx_cc_resets() -> Array[(String, Json)] {
         ("left", Json::number(1.0)),
         ("usable", Json::boolean(true)),
         ("title", str("Fable 重置")),
-        ("text", str("剩余 1 次 · 118 天后到期")),
+        ("leftText", str("剩 1 次")),
+        ("text", str("118 天后到期")),
         ("refills", str("把本周 Fable 用掉的额度还回每周额度")),
       ]),
     )
@@ -1072,7 +1074,16 @@ fn fx_cx_more() -> Array[(String, Json)] {
         ("resetText", str(fx_cx_reset_text(left))),
         // (one kind, which says nothing of what it gives back: as the core offers it, with no kind to ask for)
         ("resets", if left > 0 {
-          [obj([("kind", str("credit")), ("left", Json::number(left.to_double())), ("usable", Json::boolean(true)), ("title", str("额度重置")), ("text", str(fx_cx_reset_text(left)))])]
+          [
+            obj([
+              ("kind", str("credit")),
+              ("left", Json::number(left.to_double())),
+              ("usable", Json::boolean(true)),
+              ("title", str("额度重置")),
+              ("leftText", str("剩 \{left} 次")),
+              ("text", str(if fx.reset_expiry { if left == 2 { "6 小时 35 分钟后、3 天 19 小时后到期" } else { "3 天 19 小时后到期" } } else { "" })),
+            ]),
+          ]
         } else {
           []
         }),

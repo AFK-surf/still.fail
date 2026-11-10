@@ -319,6 +319,7 @@
   "core-views.present.reset.session": "5 小时重置",
   "core-views.present.reset.weekly": "每周重置",
   "core-views.present.reset.full": "完全重置",
+  "core-views.present.reset.left": "剩 {n} 次",
   "core-views.present.reset.model": "{model} 重置",
   "core-views.present.reset.credit": "额度重置",
   "core-views.present.reset.refills.session": "立即恢复 5 小时额度",

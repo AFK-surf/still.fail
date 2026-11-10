@@ -753,7 +753,9 @@ export interface QuotaReset {
 	/** One can be used now; else only once at a limit it refills. */
 	usable: boolean;
 	title: string;
-	/** How many are left, when they end, and why none can be used now. */
+	/** How many are left, in words, shown on their own. */
+	leftText: string;
+	/** When they end, and why none can be used now (empty: nothing to say). */
 	text: string;
 	/** What one gives back, in words. */
 	refills?: string;
