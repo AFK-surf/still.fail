@@ -12,7 +12,7 @@ import { type Clock, type Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { signalGroup } from "../src/ops/group.ts";
 import { Jobs, type Machine } from "../src/jobs/jobs.ts";
-import { GIVE_UP_MS, IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, hash, readJson, writeJson } from "../src/jobs/remote.ts";
+import { GIVE_UP_MS, IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, hash, readJson, writeJson, written } from "../src/jobs/remote.ts";
 import { type Load, OLDER } from "../src/jobs/load.ts";
 import { type Json, Store } from "../src/store/store.ts";
 import { remoteTools } from "../src/tools/remote.ts";
@@ -248,7 +248,8 @@ describe("remote", { concurrency: true }, () => {
     const room = r.remote.room("ws", "peer-a", "s");
     const record = join(room, "session.json");
     const now = Date.now();
-    writeJson(record, { ...readJson(record), seen: now - IDLE_MS - 1000 });
+    await written(record);
+    await writeJson(record, { ...readJson(record), seen: now - IDLE_MS - 1000 });
     writeFileSync(join(work, "keep"), "the session's work");
 
     const remote = r.remote as unknown as { tasksOf: (...args: [string, string, string]) => Promise<unknown[]> };
@@ -525,12 +526,13 @@ describe("remote", { concurrency: true }, () => {
     await run(r, "recent", "a", "touch made");
     const old = join(r.remote.root, "incoming", "from-before");
     mkdirSync(join(old, "work"), { recursive: true });
-    writeJson(join(old, "task.json"), { spec: { command: "true" }, workspace: "ws", station: "peer-a", session: "x", key: "k" });
+    await writeJson(join(old, "task.json"), { spec: { command: "true" }, workspace: "ws", station: "peer-a", session: "x", key: "k" });
     const later = Date.now() + IDLE_MS + 1000;
     const record = join(r.remote.room("ws", "peer-a", "recent"), "session.json");
+    await written(record);
     const seen = readJson(record);
     seen.seen = later;
-    writeJson(record, seen);
+    await writeJson(record, seen);
     await r.remote.sweep(later);
     assert.ok(!existsSync(r.remote.room("ws", "peer-a", "idle")));
     assert.ok(existsSync(r.remote.room("ws", "peer-a", "recent")));
@@ -545,6 +547,7 @@ describe("remote", { concurrency: true }, () => {
     r.remote.recordUse("ws", "s", "old");
     r.remote.recordUse("ws", "s", "down");
     r.remote.recordUse("ws", "other", "up");
+    await written(r.remote.usedPath("s"));
     const asked: string[] = [];
     let down = 0;
     r.remote.attach(async (station, _workspace, request) => {
@@ -572,7 +575,7 @@ describe("remote", { concurrency: true }, () => {
     const clock = testClock();
     const first = station();
     const path = first.remote.outgoing("ws", "original-session", "target", "stable-key");
-    writeJson(path, { workspace: "ws", session: "original-session", station: "target", key: "stable-key", delivered: false });
+    await writeJson(path, { workspace: "ws", session: "original-session", station: "target", key: "stable-key", delivered: false });
     await first.remote.close();
     const messages: [string, string][] = [];
     const restarted = station({ clock, dir: first.dir, store: first.store, jobs: first.jobs, notify: (s, t) => void messages.push([s, t]) });
@@ -665,7 +668,7 @@ describe("remote", { concurrency: true }, () => {
     await assert.rejects(use("station_task", { ...task, action: "prepare", command: "different" }), /different inputs/);
     // A pre-migration record found after the failure must not replace the newer fence.
     const name = `${hash(["ws", "s1", "B", "restart"])}.json`;
-    writeJson(join(a.dir, "remote", "prepared", name), { workspace: "ws", session: "s1", station: "B", key: "restart" });
+    await writeJson(join(a.dir, "remote", "prepared", name), { workspace: "ws", session: "s1", station: "B", key: "restart" });
     await a.remote["movePrepared"]();
     await a.remote.close();
     const next = station({ dir: a.dir, store: a.store, jobs: a.jobs, clock });
@@ -1010,6 +1013,7 @@ describe("remote", { concurrency: true }, () => {
     await until("its end is told", () => a.told.length === 1);
     assert.ok(a.told[0][1].includes('"state":"stopped"'), a.told[0][1]);
     assert.deepEqual(asked.slice(before).map((r) => r.method), ["task.gets"], "asked once, after it was told");
+    await written(a.remote.outgoing("ws", "s1", "B", "k"));
     assert.equal(readJson(a.remote.outgoing("ws", "s1", "B", "k")).delivered, true);
   });
 
@@ -1079,7 +1083,7 @@ describe("remote", { concurrency: true }, () => {
     const s = station({ clock });
     const paths = ["k1", "k2"].map((key) => {
       const path = s.remote.outgoing("ws", "s1", "old", key);
-      writeJson(path, { workspace: "ws", session: "s1", station: "old", key, delivered: false });
+      writeFileSync(path, JSON.stringify({ workspace: "ws", session: "s1", station: "old", key, delivered: false }));
       return path;
     });
     const asked: Json[] = [];
@@ -1089,6 +1093,7 @@ describe("remote", { concurrency: true }, () => {
     });
     await rounds("both told", clock, "1 second", () => s.told.length === 2);
     assert.ok(s.told.every(([session, text]) => session === "s1" && text.includes("is not followed")));
+    for (const path of paths) await written(path);
     for (const path of paths) assert.equal(readJson(path).delivered, true);
     const before = asked.length;
     for (let i = 0; i < 6; i++) {
@@ -1103,7 +1108,7 @@ describe("remote", { concurrency: true }, () => {
     const s = station({ clock });
     const paths = ["k1", "k2"].map((key) => {
       const path = s.remote.outgoing("ws", "s1", "old", key);
-      writeJson(path, { workspace: "ws", session: "s1", station: "old", key, delivered: false });
+      writeFileSync(path, JSON.stringify({ workspace: "ws", session: "s1", station: "old", key, delivered: false }));
       return path;
     });
     const methods: string[] = [];
@@ -1127,7 +1132,7 @@ describe("remote", { concurrency: true }, () => {
     const s = station({ clock, store });
     const record = (key: string) => {
       const path = s.remote.outgoing("ws", "s1", "B", key);
-      writeJson(path, { workspace: "ws", session: "s1", station: "B", key, delivered: false });
+      writeFileSync(path, JSON.stringify({ workspace: "ws", session: "s1", station: "B", key, delivered: false }));
       return path;
     };
     const [unknown, unstarted, running] = [record("unknown"), record("unstarted"), record("running")];
@@ -1143,6 +1148,7 @@ describe("remote", { concurrency: true }, () => {
     assert.deepEqual(s.told.map(([, text]) => text.split(":")[0]).sort(), ["Remote task unknown on B", "Remote task unstarted on B"]);
     assert.ok(s.told.some(([, text]) => text.includes("does not know it")));
     assert.ok(s.told.some(([, text]) => text.includes("never started")));
+    for (const path of [unknown, unstarted]) await written(path);
     for (const path of [unknown, unstarted]) assert.deepEqual([readJson(path).delivered, readJson(path).lost], [true, true]);
     assert.equal(readJson(running).delivered, false, "a running one is followed on");
   });

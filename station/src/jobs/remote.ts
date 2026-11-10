@@ -14,8 +14,8 @@
 // are Effect schedules; nothing here polls local state.
 import { createHash, randomBytes } from "node:crypto";
 import {
-  appendFileSync, closeSync, constants, existsSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, mkdirSync, openSync, readFileSync,
-  readSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync, writeSync,
+  appendFileSync, constants, existsSync, lstatSync, mkdirSync, readFileSync,
+  readdirSync, readlinkSync, renameSync, statSync,
 } from "node:fs";
 import { link, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
@@ -201,8 +201,12 @@ async function latestIn(path: string): Promise<number> {
   return latest;
 }
 
-/// readJson off the station's thread (fs/promises): what is read again on a schedule, or all the records at once.
-const readJsonSoon = async (path: string): Promise<Json> => JSON.parse(await readFile(path, "utf8"));
+/// readJson off the station's thread (fs/promises): what is read again on a schedule, or all the records at once. Read
+/// after what was asked to be written of it before (`writeJson`).
+const readJsonSoon = async (path: string): Promise<Json> => {
+  await written(path);
+  return JSON.parse(await readFile(path, "utf8"));
+};
 
 /// Path::with_extension: the file name's extension replaced (or added).
 function withExtension(path: string, ext: string): string {
@@ -212,19 +216,74 @@ function withExtension(path: string, ext: string): string {
   return join(dirname(path), `${stem}.${ext}`);
 }
 
-/// Written whole or not at all: a private temporary file, synced, renamed over.
-export function writeJson(path: string, value: Json): void {
+/// Each record's writes, in the order they were asked (`writeJson`, `updateJson`): one written before another is never
+/// renamed over by it.
+const writing = new Map<string, Promise<unknown>>();
+
+function inTurn<T>(path: string, work: () => Promise<T>): Promise<T> {
+  const mine = (writing.get(path) ?? Promise.resolve()).then(work, work);
+  const tail = mine.catch(() => undefined);
+  writing.set(path, tail);
+  void tail.then(() => {
+    if (writing.get(path) === tail) writing.delete(path);
+  });
+  return mine;
+}
+
+/// Once what was asked of `path` before is written (or failed).
+export async function written(path: string): Promise<void> {
+  await writing.get(path);
+}
+
+/// `json` written whole or not at all, off the station's thread: a private temporary file, synced, renamed over. The
+/// sync was the main thread's, every remote tool call's: on a disk kept busy, 1,600 of them held it 3 minutes on a
+/// station (2026-11-06).
+async function writeWhole(path: string, json: string): Promise<void> {
   const temp = withExtension(path, `${randomBytes(8).toString("hex")}.tmp`);
-  const fd = openSync(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+  const file = await open(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
   try {
-    writeSync(fd, Buffer.from(JSON.stringify(value)));
-    fsyncSync(fd);
+    await file.writeFile(json);
+    await file.sync();
   } finally {
-    closeSync(fd);
+    await file.close();
   }
-  renameSync(temp, path);
+  await rename(temp, path);
+}
+
+/// `value` as a record, written in its turn (`writeWhole`); what this station's reads keep of it (`readUsed`) is the new
+/// one from now.
+export function writeJson(path: string, value: Json): Promise<void> {
+  const json = JSON.stringify(value);
   writes.set(path, (writes.get(path) ?? 0) + 1);
-  if (used.has(path)) used.set(path, JSON.parse(JSON.stringify(value)));
+  if (used.has(path)) used.set(path, JSON.parse(json));
+  return inTurn(path, () => writeWhole(path, json));
+}
+
+/// A record read after what was written of it before, changed by `edit` and written in its turn: what `edit` gives is
+/// written (undefined: nothing; null: the record removed). False when it could not be read; one not there is `missing`
+/// where that is given.
+export function updateJson(path: string, edit: (v: Json) => Json | null | undefined, missing?: Json): Promise<boolean> {
+  return inTurn(path, async () => {
+    let v: Json;
+    try {
+      v = JSON.parse(await readFile(path, "utf8"));
+    } catch (error) {
+      if (missing === undefined || (error as NodeJS.ErrnoException).code !== "ENOENT") return false;
+      v = structuredClone(missing);
+    }
+    const next = edit(v);
+    if (next === undefined) return true;
+    writes.set(path, (writes.get(path) ?? 0) + 1);
+    if (next === null) {
+      used.delete(path);
+      await rm(path, { force: true });
+      return true;
+    }
+    const json = JSON.stringify(next);
+    if (used.has(path)) used.set(path, JSON.parse(json));
+    await writeWhole(path, json);
+    return true;
+  });
 }
 
 const isLink = (path: string): boolean => {
@@ -292,6 +351,8 @@ export class Remote {
   /// waited behind another chat's sync of a big directory on a loaded station, past its caller's 30 s, and the callers
   /// asked again into the same line (2026-10-21, one test host for another: a 1 KB file synced in 61 s).
   private lanes = new Map<string, Promise<unknown>>();
+  /// When each source session's room was last used here (`seen`), as its record says once written.
+  private seenAt = new Map<string, number>();
   /// The closing sessions whose stations are being asked to remove their directories.
   private watching = new Set<string>();
   /// The station is stopping: nothing more is followed.
@@ -463,11 +524,7 @@ export class Remote {
         // A refusal is final (the source no longer has the task); anything else is asked again.
         if (!(error instanceof Refused)) return false;
       }
-      try {
-        const now = readJson(record);
-        now.pushed = said;
-        writeJson(record, now);
-      } catch {}
+      await updateJson(record, (now) => ({ ...now, pushed: said })).catch(() => undefined);
       return true;
     });
     void this.run(
@@ -588,14 +645,12 @@ export class Remote {
   /// Makes a source session's shared directory and notes when it was last used (at most once a minute).
   private seen(workspace: string, peer: string, session: string): string {
     const room = this.room(workspace, peer, session);
-    mkdirSync(join(room, "work"), { recursive: true });
-    const record = join(room, "session.json");
     const now = this.store.now();
-    let fresh = false;
-    try {
-      fresh = now - (asI64(field(readJson(record), "seen")) ?? 0) < 60_000;
-    } catch {}
-    if (!fresh) writeJson(record, { workspace, station: peer, session, seen: now });
+    // Used within the minute: noted already (its record's write may still be on its way: `closeHere` asks this too).
+    if (now - (this.seenAt.get(room) ?? 0) < 60_000) return join(room, "work");
+    mkdirSync(join(room, "work"), { recursive: true });
+    this.seenAt.set(room, now);
+    void writeJson(join(room, "session.json"), { workspace, station: peer, session, seen: now }).catch(() => undefined);
     return join(room, "work");
   }
 
@@ -731,8 +786,9 @@ export class Remote {
       // work() can be called outside the task lane. Recheck after asynchronous reads, immediately before deleting;
       // until the synchronous removal below completes, no new use can interleave with this decision.
       let seen: number;
+      await written(join(room, "session.json"));
       try {
-        seen = asI64(field(readJson(join(room, "session.json")), "seen")) ?? idleAt;
+        seen = Math.max(asI64(field(readJson(join(room, "session.json")), "seen")) ?? idleAt, this.seenAt.get(room) ?? 0);
       } catch {
         return false;
       }
@@ -740,11 +796,20 @@ export class Remote {
     }
     for (const { dir } of tasks) {
       if (this.running(dir)) await this.jobs.stop(this.jobOf(dir));
-      rmSync(dir, { recursive: true, force: true });
+      await rm(dir, { recursive: true, force: true });
     }
-    if (existsSync(room)) {
-      rmSync(room, { recursive: true, force: true });
+    // Taken out of its place in one step, then removed off the thread (a session's whole directory, gigabytes of
+    // mirrors: removed on the main thread, one held it 15 s on a station, 2026-11-02). A use after this makes it anew.
+    const gone = `${room}.gone-${randomBytes(4).toString("hex")}`;
+    let moved = false;
+    try {
+      renameSync(room, gone); // sync: one step, so that no work() comes between this decision and the room's going
+      moved = true;
+    } catch {}
+    this.seenAt.delete(room);
+    if (moved) {
       log.info("remote", "remote session directory removed", { workspace, station: peer, session });
+      await rm(gone, { recursive: true, force: true }).catch(() => undefined);
     }
     return true;
   }
@@ -757,6 +822,7 @@ export class Remote {
       if (this.stopped) return;
       let meta: Json;
       try {
+        await written(join(sessions, name, "session.json"));
         meta = await readJsonSoon(join(sessions, name, "session.json"));
       } catch {
         continue;
@@ -766,7 +832,8 @@ export class Remote {
         // Asked again in its lane: used meanwhile, it stays.
         let seen: number;
         try {
-          seen = asI64(field(await readJsonSoon(join(sessions, name, "session.json")), "seen")) ?? now;
+          await written(join(sessions, name, "session.json"));
+          seen = Math.max(asI64(field(await readJsonSoon(join(sessions, name, "session.json")), "seen")) ?? now, this.seenAt.get(join(sessions, name)) ?? 0);
         } catch {
           return;
         }
@@ -816,10 +883,6 @@ export class Remote {
   private async mirrorsOf(workspace: string, peer: string, session: string, now: number): Promise<{ name: string; used: number; busy: boolean }[]> {
     const room = this.room(workspace, peer, session);
     const record = join(room, "mirrors-used.json");
-    let used: Json = {};
-    try {
-      used = readJson(record);
-    } catch {}
     // A task that ended counts as a use then: what it made is brought back after.
     const running = new Set<string>();
     const ended = new Map<string, number>();
@@ -830,22 +893,20 @@ export class Remote {
       if (job?.state === "running" || (job && meta.safe === true && meta.collected !== true)) running.add(mirror);
       if (job?.endedAt) ended.set(mirror, Math.max(ended.get(mirror) ?? 0, job.endedAt));
     }
-    const found: { name: string; used: number; busy: boolean }[] = [];
-    let changed = false;
-    for (const file of this.list(join(room, "mirrors"))) {
-      if (!file.endsWith(".json")) continue;
-      const name = file.slice(0, -".json".length);
-      const busy = running.has(name) || this.syncing(join(room, "sync", name), now);
-      let at = asI64(field(used, name));
-      if (at === null || busy) {
-        at = now;
-        used[name] = now;
-        changed = true;
-      }
-      found.push({ name, used: Math.max(at, ended.get(name) ?? 0), busy });
+    const mirrors = this.list(join(room, "mirrors")).filter((file) => file.endsWith(".json")).map((file) => file.slice(0, -".json".length));
+    const busy = new Set(mirrors.filter((name) => running.has(name) || this.syncing(join(room, "sync", name), now)));
+    // Read and marked in the record's turn (after what was written of it before), never over a newer use.
+    let used: Json = {};
+    await written(record);
+    try {
+      used = readJson(record);
+    } catch {}
+    const marked = mirrors.filter((name) => asI64(field(used, name)) === null || busy.has(name));
+    if (marked.length > 0) {
+      await updateJson(record, (kept) => ({ ...kept, ...Object.fromEntries(marked.map((name) => [name, now])) }), {}).catch(() => undefined);
+      for (const name of marked) used[name] = now;
     }
-    if (changed) writeJson(record, used);
-    return found;
+    return mirrors.map((name) => ({ name, used: Math.max(asI64(field(used, name)) ?? now, ended.get(name) ?? 0), busy: busy.has(name) }));
   }
 
   /// A sync to a mirror is under way: its directory there, it or what is in it touched within MIRROR_RECENT_MS (one
@@ -861,14 +922,10 @@ export class Remote {
   }
 
   /// A task ran in or synced `mirror` now. Callers are in the session's lane.
-  private usedMirror(workspace: string, peer: string, session: string, mirror: string): void {
+  private async usedMirror(workspace: string, peer: string, session: string, mirror: string): Promise<void> {
     const record = join(this.room(workspace, peer, session), "mirrors-used.json");
-    let used: Json = {};
-    try {
-      used = readJson(record);
-    } catch {}
-    used[mirror] = this.store.now();
-    writeJson(record, used);
+    const now = this.store.now();
+    await updateJson(record, (used) => ({ ...used, [mirror]: now }), {});
   }
 
   /// Removes a mirror and what its tasks made in it; its tasks that have not started sync again first. Callers are
@@ -883,18 +940,16 @@ export class Remote {
         const meta = await readJsonSoon(path);
         if (meta.mirror === mirror && meta.synced === true) {
           meta.synced = false;
-          writeJson(path, meta);
+          await writeJson(path, meta);
         }
       }
       await this.removeMirror(join(room, "work", mirror));
       await rm(join(room, "sync", mirror), { recursive: true, force: true });
       await rm(join(room, "mirrors", `${mirror}.json`), { force: true });
-      const record = join(room, "mirrors-used.json");
-      try {
-        const used = readJson(record);
-        delete used[mirror];
-        writeJson(record, used);
-      } catch {}
+      await updateJson(join(room, "mirrors-used.json"), (used) => {
+        const { [mirror]: _, ...rest } = used;
+        return rest;
+      }).catch(() => undefined);
       log.info("remote", "remote mirror removed", { workspace, station: peer, session, mirror, why });
       return true;
     } catch (error) {
@@ -1036,26 +1091,23 @@ export class Remote {
     v.closing = false;
     v.closed = [];
     v.workspace = workspace;
-    writeJson(path, v);
+    // Kept here at once (`readUsed`), on the disk in its turn.
+    void writeJson(path, v).catch((error) => log.warn("remote", "a session's use of a station not written", { session, error: (error as Error).message }));
   }
 
   /// A session was archived or deleted: its tasks on other stations stop and their directories are removed. Asked until
   /// each station has answered (CLOSE_FOR_MS at most), across restarts.
   closeSession(session: string): void {
     const path = this.usedPath(session);
-    let v: Json;
+    let had: Json | null;
     try {
-      v = readJson(path);
+      had = readUsed(path);
     } catch {
       return;
     }
-    v.closing = true;
-    v.since = this.store.now();
-    try {
-      writeJson(path, v);
-    } catch {
-      return;
-    }
+    if (had === null) return;
+    const v = { ...structuredClone(had), closing: true, since: this.store.now() };
+    const written = writeJson(path, v);
     // Their directories are going away: stop following this session's tasks. Every record is read to find them, off
     // the thread; one of theirs read again as it is changed (meanwhile written by its follower).
     const outgoing = join(this.root, "outgoing");
@@ -1065,16 +1117,14 @@ export class Remote {
         try {
           const seen = await readJsonSoon(file);
           if (text(seen, "session") !== session || seen.delivered === true) continue;
-          const entry = readJson(file);
-          if (entry.delivered === true) continue;
-          entry.delivered = true;
-          writeJson(file, entry);
+          await updateJson(file, (entry) => entry.delivered === true ? undefined : { ...entry, delivered: true });
         } catch {}
       }
     })();
     // Its prepared tasks are in a directory of their own: removed whole, off the thread.
     void rm(this.preparedDir(session), { recursive: true, force: true }).catch(() => undefined);
-    this.closer(path);
+    // Asked about once it is written closing (the closer reads it from the disk).
+    void written.then(() => this.closer(path), () => undefined);
   }
 
   /// Asks each station a closing session used to remove its directory, every minute until all have answered.
@@ -1092,13 +1142,7 @@ export class Remote {
       const closed = Array.isArray(v.closed) ? v.closed : [];
       const pending: string[] = (Array.isArray(v.stations) ? v.stations : []).filter((s: Json) => !closed.includes(s) && typeof s === "string");
       if (pending.length === 0 || this.store.now() - (asI64(v.since) ?? 0) > CLOSE_FOR_MS) {
-        try {
-          if (readJson(path).closing === true) {
-            rmSync(path, { force: true });
-            used.delete(path);
-            writes.set(path, (writes.get(path) ?? 0) + 1);
-          }
-        } catch {}
+        await updateJson(path, (now) => now.closing === true ? null : undefined).catch(() => undefined);
         return true;
       }
       for (const station of pending) {
@@ -1113,13 +1157,8 @@ export class Remote {
           done = error instanceof Refused;
         }
         if (done) {
-          try {
-            const now = readJson(path);
-            if (now.closing === true && Array.isArray(now.closed)) {
-              now.closed.push(station);
-              writeJson(path, now);
-            }
-          } catch {}
+          await updateJson(path, (now) => now.closing === true && Array.isArray(now.closed) ? { ...now, closed: [...now.closed, station] } : undefined)
+            .catch(() => undefined);
         }
       }
       return false;
@@ -1258,10 +1297,18 @@ export class Remote {
     return named;
   }
 
+  /// mesh/cloud.json as the station keeps it in memory (`followRoster`); read from the file where none is given (tests).
+  /// Read again at every task, the file held the main thread on a station whose disk was kept busy.
+  place: (() => Json | null) | null = null;
+
+  private cloudState(): Json {
+    return this.place !== null ? this.place() : readJson(join(this.data, "mesh", "cloud.json"));
+  }
+
   /// This station's id (mesh/cloud.json), "" when it has none.
   private ownId(): string {
     try {
-      return text(readJson(join(this.data, "mesh", "cloud.json")), "station");
+      return text(this.cloudState(), "station");
     } catch {
       return "";
     }
@@ -1334,6 +1381,7 @@ export class Remote {
     if (method === "session.size") {
       if (session === "" || bytes(session) > 256) throw new Error("session is required");
       const room = this.room(workspace, peer, session);
+      await written(join(room, "session.json"));
       if (!existsSync(join(room, "session.json"))) return { present: false };
       const path = join(room, "work");
       const cutoff = field(request, "limit") ?? DEFAULT_LIMIT;
@@ -1344,6 +1392,7 @@ export class Remote {
     if (method === "task.mirrors" || method === "task.clean") {
       if (session === "" || bytes(session) > 256) throw new Error("session is required");
       const room = this.room(workspace, peer, session);
+      await written(join(room, "session.json"));
       const mirrors = existsSync(join(room, "session.json")) ? await this.mirrorsOf(workspace, peer, session, this.store.now()) : [];
       // Unlike the automatic sweep's age-based recovery, an explicit cleanup must not interrupt even a slow sync.
       const inUse = (m: { name: string; busy: boolean }) => m.busy || existsSync(join(room, "sync", m.name));
@@ -1399,7 +1448,7 @@ export class Remote {
         meta = { spec, workspace, station: peer, session, key, layout: "session" };
         if (typeof from === "string") meta.mirror = await this.mirrorName(workspace, peer, session, from);
         mkdirSync(dir, { recursive: true });
-        writeJson(record, meta);
+        await writeJson(record, meta);
       }
       this.seen(workspace, peer, session);
       return typeof meta.mirror === "string" ? { key, prepared: true, dir: meta.mirror } : { key, prepared: true };
@@ -1454,7 +1503,7 @@ export class Remote {
         }
         if (mirror !== null) {
           cwd = filePath(work, mirror, false);
-          this.usedMirror(workspace, peer, session, mirror);
+          await this.usedMirror(workspace, peer, session, mirror);
         }
         const spec = field(meta, "spec");
         // Through the station's queue (jobs/admit.ts): started now if there is room, else when there is.
@@ -1465,7 +1514,7 @@ export class Remote {
         if (/^[0-9a-f]{64}$/.test(push) && meta.push !== push) {
           meta.push = push;
           meta.pushed = this.said(id);
-          writeJson(record, meta);
+          await writeJson(record, meta);
         }
         const queue = await this.queued(started.id, queueLoad);
         return { key, job: jobJson(this.store.getJob(jobId) ?? started), ...queue, ...(meta.push ? { push: true } : {}) };
@@ -1473,10 +1522,10 @@ export class Remote {
       case "sync.begin": {
         if (job) return { key, started: true };
         await refuseBusy();
-        rmSync(syncing, { recursive: true, force: true });
+        await rm(syncing, { recursive: true, force: true });
         mkdirSync(syncing, { recursive: true });
         mkdirSync(join(room, "mirrors"), { recursive: true });
-        this.usedMirror(workspace, peer, session, mirror!);
+        await this.usedMirror(workspace, peer, session, mirror!);
         const manifest = readManifest(manifestPath);
         const files = manifest === null ? {} : await actual(join(work, mirror!), manifest.files);
         const base = { ...(manifest?.files ?? {}) };
@@ -1487,12 +1536,12 @@ export class Remote {
           if (before && before[0] === current[0] && before[1] === current[1]) base[path] = current;
         }
         const id = randomBytes(12).toString("hex");
-        writeJson(join(syncing, "actual.json"), files);
-        writeJson(join(syncing, "base.json"), base);
-        writeJson(join(syncing, "state.json"), { id, key, version: manifest?.version ?? 0 });
+        await writeJson(join(syncing, "actual.json"), files);
+        await writeJson(join(syncing, "base.json"), base);
+        await writeJson(join(syncing, "state.json"), { id, key, version: manifest?.version ?? 0 });
         if (field(request, "safe") === 1) {
           meta.safe = true;
-          writeJson(record, meta);
+          await writeJson(record, meta);
         }
         return { key, id, dir: mirror, version: manifest?.version ?? 0, safe: 1 };
       }
@@ -1570,9 +1619,9 @@ export class Remote {
           writeManifest(manifestPath, { dir: text(field(meta, "spec"), "dir"), name: mirror!, version: version + 1, files: nextBase });
         }
         meta.synced = true;
-        writeJson(record, meta);
-        rmSync(syncing, { recursive: true, force: true });
-        this.usedMirror(workspace, peer, session, mirror!);
+        await writeJson(record, meta);
+        await rm(syncing, { recursive: true, force: true });
+        await this.usedMirror(workspace, peer, session, mirror!);
         return { key, ...done, version: version + 1 };
       }
       case "sync.changes": {
@@ -1598,7 +1647,7 @@ export class Remote {
       case "task.collected": {
         if (!job || job.state === "running") throw new Error("the task has not finished");
         meta.collected = true;
-        writeJson(record, meta);
+        await writeJson(record, meta);
         return { key, collected: true };
       }
       case "task.files": {
@@ -1645,7 +1694,7 @@ export class Remote {
           const path = filePath(work, name, true);
           if (meta.uploads === null || typeof meta.uploads !== "object" || Array.isArray(meta.uploads)) meta.uploads = {};
           meta.uploads[name] = false;
-          writeJson(record, meta);
+          await writeJson(record, meta);
           const file = await open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o666);
           try {
             if (!(await file.stat()).isFile()) throw new Error("only regular files can be transferred");
@@ -1656,7 +1705,7 @@ export class Remote {
             await file.close();
           }
           meta.uploads[name] = true;
-          writeJson(record, meta);
+          await writeJson(record, meta);
           return { bytes: size };
         }
         const offset = asU64(field(request, "offset"));
@@ -1667,32 +1716,32 @@ export class Remote {
         const path = filePath(work, name, true);
         if (meta.uploads === null || typeof meta.uploads !== "object" || Array.isArray(meta.uploads)) meta.uploads = {};
         meta.uploads[name] = false;
-        writeJson(record, meta);
-        const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o666);
+        await writeJson(record, meta);
+        const file = await open(path, constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o666);
         try {
-          const stat = fstatSync(fd);
+          const stat = await file.stat();
           if (!stat.isFile()) throw new Error("only regular files can be transferred");
           if (offset > stat.size) throw new Error("file offset leaves a gap");
-          for (let at = 0; at < data.length; ) at += writeSync(fd, data, at, data.length - at, offset + at);
+          for (let at = 0; at < data.length; ) at += (await file.write(data, at, data.length - at, offset + at)).bytesWritten;
           if (field(request, "final") === true) {
-            ftruncateSync(fd, offset + data.length);
-            fsyncSync(fd);
+            await file.truncate(offset + data.length);
+            await file.sync();
           }
         } finally {
-          closeSync(fd);
+          await file.close();
         }
         if (field(request, "final") === true) {
           meta.uploads[name] = true;
-          writeJson(record, meta);
+          await writeJson(record, meta);
         }
         return { bytes: data.length };
       }
       case "file.get": {
         if (job?.state === "running") throw new Error("wait for the task to finish before downloading artifacts");
         const path = filePath(work, text(request, "path"), false);
-        const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+        const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
         try {
-          const stat = fstatSync(fd);
+          const stat = await file.stat();
           if (!stat.isFile()) throw new Error("only regular files can be transferred");
           const size = stat.size;
           if (size > MAX_FILE) throw new Error("file limit exceeded");
@@ -1701,10 +1750,10 @@ export class Remote {
           // All of it from there, after the answer; a station from before asks for chunks.
           if (field(request, "whole") === true) return withBytes({ size }, fileBytes(path, offset, size));
           const buffer = Buffer.alloc(CHUNK);
-          const n = readSync(fd, buffer, 0, CHUNK, offset);
+          const { bytesRead: n } = await file.read(buffer, 0, CHUNK, offset);
           return { data: buffer.subarray(0, n).toString("base64"), size, eof: offset + n >= size };
         } finally {
-          closeSync(fd);
+          await file.close();
         }
       }
       default:
@@ -1740,8 +1789,9 @@ export class Remote {
   /// The workspace a session's tasks go in (mesh/cloud.json): its chat's, the home one for those from before; while the
   /// station is still in it.
   private workspace(own: string | null): string {
-    const state = readJson(join(this.data, "mesh", "cloud.json"));
-    if (field(state, "removed_at") !== null) throw new Error("station was removed from workspace");
+    const state = this.cloudState();
+    if (state === null) throw new Error("station has no workspace");
+    if ((field(state, "removed_at") ?? null) !== null) throw new Error("station was removed from workspace");
     const home = text(state, "workspace");
     if (home === "") throw new Error("station has no workspace");
     const ws = own ?? home;
@@ -1772,7 +1822,7 @@ export class Remote {
     }
     entry.delivered = true;
     try {
-      writeJson(path, entry);
+      await writeJson(path, entry);
     } catch {}
   }
 
@@ -1880,7 +1930,7 @@ export class Remote {
     if (typeof entry.since !== "number") {
       entry.since = now;
       try {
-        writeJson(path, entry);
+        await writeJson(path, entry);
       } catch {
         return "again";
       }
@@ -1901,7 +1951,7 @@ export class Remote {
       entry.delivered = true;
       entry.lost = true;
       try {
-        writeJson(path, entry);
+        await writeJson(path, entry);
       } catch {}
       return "over";
     }
@@ -1918,7 +1968,7 @@ export class Remote {
         entry.brought = { error: (error as Error).message };
       }
       try {
-        writeJson(path, entry);
+        await writeJson(path, entry);
       } catch {
         return "again";
       }
@@ -1953,7 +2003,7 @@ export class Remote {
       entry.notices = notices;
       entry.delivered = finished;
       try {
-        writeJson(path, entry);
+        await writeJson(path, entry);
       } catch {}
     }
     return finished ? "over" : "wait";
@@ -2179,7 +2229,7 @@ export class Remote {
         // restarts, start must not quietly use the task the target kept from an earlier successful prepare.
         mkdirSync(this.preparedDir(session), { recursive: true });
         const attempt = randomBytes(16).toString("hex");
-        writeJson(prepared, { workspace, session, station, key, preparing: attempt });
+        await writeJson(prepared, { workspace, session, station, key, preparing: attempt });
         const dir = field(args, "dir");
         const back = field(args, "back");
         const small = field(args, "small") === true;
@@ -2210,8 +2260,8 @@ export class Remote {
         }
         const answer = await this.ask(station, request);
         // A concurrent prepare may have begun while this one was away. Its result alone can release its fence.
-        if (text(readJson(prepared), "preparing") !== attempt) throw new Error("a newer prepare superseded this one; prepare again before starting");
-        writeJson(prepared, { workspace, session, station, key, dir: request.spec.dir ?? null, back: request.spec.back ?? null });
+        if (text(await readJsonSoon(prepared), "preparing") !== attempt) throw new Error("a newer prepare superseded this one; prepare again before starting");
+        await writeJson(prepared, { workspace, session, station, key, dir: request.spec.dir ?? null, back: request.spec.back ?? null });
         return answer;
       }
       let synced: Synced | null = null;
@@ -2264,7 +2314,7 @@ export class Remote {
         } catch {}
         if (!existsSync(path) || refused) {
           const more = local === null ? {} : { dir: local.dir ?? null, back: local.back ?? null, prefix: synced?.prefix ?? "" };
-          writeJson(path, { workspace, session, station, key, delivered: false, since: this.store.now(), ...more });
+          await writeJson(path, { workspace, session, station, key, delivered: false, since: this.store.now(), ...more });
         }
         // Its station tells this one when it changes (`task.changed`), naming this record.
         request.push = basename(path, ".json");
@@ -2282,12 +2332,7 @@ export class Remote {
         }
         if (action === "start" && error instanceof Refused) {
           const path = this.outgoing(workspace, session, station, key);
-          try {
-            const entry = readJson(path);
-            entry.delivered = true;
-            entry.refused = true;
-            writeJson(path, entry);
-          } catch {}
+          await updateJson(path, (entry) => ({ ...entry, delivered: true, refused: true })).catch(() => undefined);
         }
         throw error;
       }
@@ -2306,9 +2351,9 @@ export class Remote {
     const path = filePath(root, relative, direction === "download");
     request.path = field(args, "path");
     if (direction === "upload") {
-      const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
       try {
-        const stat = fstatSync(fd);
+        const stat = await file.stat();
         const size = stat.size;
         if (!stat.isFile() || size > MAX_FILE) throw new Error("input must be a regular file of at most 1 GiB");
         // Whole, after one request; to a station from before, in chunks.
@@ -2321,7 +2366,7 @@ export class Remote {
         let offset = 0;
         for (;;) {
           const chunk = Buffer.alloc(CHUNK);
-          const n = readSync(fd, chunk, 0, CHUNK, offset);
+          const { bytesRead: n } = await file.read(chunk, 0, CHUNK, offset);
           request.method = "file.put";
           request.offset = offset;
           request.data = chunk.subarray(0, n).toString("base64");
@@ -2333,7 +2378,7 @@ export class Remote {
         }
         return { uploaded: path, bytes: size };
       } finally {
-        closeSync(fd);
+        await file.close();
       }
     }
     if (direction === "download") {
@@ -2362,6 +2407,7 @@ export async function answerPeer(remote: Remote, workspace: string, peer: string
 /// Tasks of peers no longer in the workspace, or no longer allowed, stop: looked at whenever the roster or the config
 /// changes.
 export function followRoster(cloud: Cloud, remote: Remote, config: { listen(f: () => void): () => void }): () => void {
+  remote.place = () => cloud.state as unknown as Json;
   const look = () => {
     const rosters = cloud.memberships().map((m) => ({ workspace: m.workspace, peers: m.peers.flatMap((p) => (typeof p?.id === "string" ? [p.id as string] : [])) }));
     void remote
