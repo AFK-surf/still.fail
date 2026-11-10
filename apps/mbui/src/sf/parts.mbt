@@ -930,11 +930,6 @@ let panel_row_icon : @ui.Style = @ui.css("w=S5 align=ACenter")
 let panel_row_icon_w : Double = @ui.Space::px(S5)
 
 ///|
-/// How far in from its ground a row of a sheet's body has its words (rows_out's: the sheet's words' line less where its
-/// ground stands, panel_card_in in from its sides).
-let sheet_row_pad : Double = panel_words - panel_card_in
-
-///|
 // kept across runs: a value (no field of it changes)
 let panel_row_face : @ui.Style = @ui.css("align=AStart justify=JCenter")
 

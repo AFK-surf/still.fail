@@ -170,9 +170,6 @@ pub fn open_outline(
     lit: @signals.signal("", same=fn(a, b) { a == b }),
     current,
   }
-  if keys {
-    at.field.focus()
-  }
   // (words in its field as it opens, looked for at once: a screen's fixture)
   at.field.set(typed)
   // (what is not on the device yet read onto it: the outline fills in as it comes)
@@ -181,7 +178,7 @@ pub fn open_outline(
   }
   @sf.panel_nodes(
     @sf.t("web-main.outline.title"),
-    fn(v, close) { outline_body(v, src, r, thread, at, close, stint) },
+    fn(v, close) { outline_body(v, src, r, thread, at, close, stint, keys) },
     from~,
     side~,
     along~,
@@ -206,6 +203,7 @@ fn outline_body(
   at : OutlineAt,
   close : () -> Unit,
   stint : Int,
+  keyed : Bool,
 ) -> Unit {
   let params = outline_params(r, thread)
   let value = fn() { src.topic("chatOutline", params).get().value }
@@ -349,7 +347,13 @@ fn outline_body(
         @sf.words_node(e, fn() { outline_count(at, searching()) }, fn() { outline_count_words }) |> ignore
       },
     )
-    @sf.panel_opens_on_node(f)
+    // (the keys as it opens from ⌘G and the rail, however it is shown, the input method up; from the round button only
+    // where the panel takes the focus, beside it: not on a sheet, where the rows are what is read)
+    if keyed {
+      @sf.panel_opens_in_node(f)
+    } else {
+      @sf.panel_opens_on_node(f)
+    }
   })
   |> ignore
   // while not all of the chat is on the device (the outline's, or what is found's), said so over the rows, as the

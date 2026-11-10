@@ -250,14 +250,14 @@ fn panel_row_by(
     // room a large panel leaves, a card's corner there; else a capsule in a small panel's corners, past its padding to
     // where it is concentric with them: menu_item's)
     let reach = fn() { menu_row_reach(t().rows.pick) }
-    // (a row of a list in a sheet, its words said where the sheet's are and no room to reach: its ground in from the
-    // sheet's sides and its words on the sheet's words' line as a row of a sheet's body is (rows_out's: its ground
-    // panel_card_in in, its words sheet_row_pad in from it), not a small panel's capsule at the list's edge)
+    // (a row of a list in a sheet, its words said where the sheet's are and no room to reach: its ground panel_card_in in
+    // from the sheet's sides, as a card the body lays out itself is (panel_card_out_node: `sides`), its words on the
+    // sheet's words' line; not a small panel's capsule at the list's edge)
     let sheet_listed = at.listed && !at.small && at.words > 0.0 && (match panel_row_at(at) {
       Some(p) => p.out == 0.0
       None => false
     })
-    let sheet_in = if sheet_listed { dmax(0.0, at.words - sheet_row_pad) } else { 0.0 }
+    let sheet_in = if sheet_listed { dmax(0.0, panel_card_in - at.sides) } else { 0.0 }
     // (its reach alone the rows' rule's, panel_row_at: where that is none, a small panel's or a sheet's, a menu's row's
     // capsule, menu_item's own, not a page row's padding; at a dialog's foot, out to its foot corners: foot_rows_lent)
     let across = match panel_row_at(at) {
