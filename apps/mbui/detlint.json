@@ -509,7 +509,6 @@
       "src/sfpages/security.mbt": 1
     },
     "old-panel": {
-      "src/sfapp/context.mbt": 1,
       "src/sfapp/settings/run_more.mbt": 2,
       "src/sfapp/settings/station_add.mbt": 1,
       "src/sfapp/settings/station_mark.mbt": 1,
