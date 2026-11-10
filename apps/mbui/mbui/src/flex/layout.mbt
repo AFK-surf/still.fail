@@ -1917,11 +1917,14 @@ fn layout_flex(
       n.top = on_grid(oy + y + dy)
     }
     // (one laid out nowhere: left out as one its row has not the room for is, its last layout forgotten, what it holds
-    // of no size)
+    // of no size; one laid out over the rest (Absolute) back from that, in again: on no line of the flow, it is given
+    // none above, so nothing else says it is back)
     for c in node.children {
       if c.style.display == DisplayNone {
         left_out(c)
         zero(c)
+      } else if c.line < 0 && c.style.position == Absolute {
+        c.line = 0
       }
     }
     // what its row left out, nowhere (its line said so), the rest on theirs
