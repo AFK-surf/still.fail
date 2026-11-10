@@ -474,6 +474,8 @@ pub let trace_switches : Array[String] = [
   // gone from it, so only the replay reads it. A trace without it has its run's `stations` kept by the replay itself
   // (@core.Replay::keep_stations), the new asks read out of the stations whole it has (src/sfreplay/source.mbt))
   "MBUI_STATION_ROWS",
+  // (对话目录: an open chat's page on a page wide enough for its rail, and its outline's panel, ask for its outline)
+  "MBUI_OUTLINE",
 ]
 
 ///|

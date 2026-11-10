@@ -175,7 +175,7 @@ let rise_dy : Double = 14.0
 pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
   @sfbase.history_push()
   flash_held.val = held
-  go_to(r, seq)
+  go_to(r, seq, keep_place=false)
   app.nav.push(Chat(r))
 }
 

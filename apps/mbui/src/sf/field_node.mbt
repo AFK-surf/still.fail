@@ -12,8 +12,8 @@
 /// to what it offers as it is typed in; `edited`: its words as the person's edit changes them (ui's field's), never
 /// as the app puts words in it; `placeholder_by`: its placeholder as it is now, followed (in place of
 /// `placeholder`); `label`: what a screen reader calls it, where no placeholder does (it shows none). While
-/// `disabled()`, faded, taking no press nor the focus (losing it then). The field's node (what
-/// the focus is given to).
+/// `disabled()`, faded, taking no press nor the focus (losing it then). `end`: what stands in the capsule after what
+/// is typed (a search's count), made in a box at its end. The field's node (what the focus is given to).
 pub fn input_node(
   parent : @view.View,
   field : @ui.Field,
@@ -27,6 +27,7 @@ pub fn input_node(
   leaves? : Array[Int] = [],
   submitted? : (String) -> Unit = fn(_) {  },
   edited? : (String) -> Unit,
+  end? : (@view.View) -> Unit,
 ) -> @view.View {
   let line = @signals.untracked(fn() { theme().t.body_line })
   field_frame(parent, disabled, row=true, fn(f) {
@@ -39,7 +40,7 @@ pub fn input_node(
     } else {
       f.min_height(By(fn() { Some(theme().control_h) })).radius(By(fn() { field_round() })) |> ignore
     }
-    @ui.field(
+    let typed = @ui.field(
       f,
       field,
       placeholder~,
@@ -62,6 +63,12 @@ pub fn input_node(
     .grow(Is(1.0))
     .basis(Is(Some(0.0)))
     .shrink(Is(1.0))
+    // (what stands at its end, after what is typed, kept whole)
+    match end {
+      Some(e) => f.box(fn(b) { b.shrink(Is(0.0)) |> ignore; e(b) }) |> ignore
+      None => ()
+    }
+    typed
   })
 }
 

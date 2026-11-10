@@ -216,7 +216,7 @@ fn action_offered(id : String, icon : String, version? : String = "", station? :
 
 ///|
 /// What ⌘K offers of what the frame can do now (and its own): the
-/// open chat's (find, its services, into the archive, its agents' history, its agents stopped, a file into its draft,
+/// open chat's (find, its outline, its services, into the archive, its agents' history, its agents stopped, a file into its draft,
 /// relayed, its station updated: as its keys and its bar's offer them now), the app's newer build or looking for one, the app's (a new
 /// chat, the sidebar, settings, the shortcuts), settings' pages (only found by typing). The core names the keys'
 /// actions and finds what was typed among them (sfdesk/switcher.mbt).
@@ -226,13 +226,21 @@ fn switcher_offered(c : @ui.Ctx, src : Source, w : Workspace) -> Array[@sfpages.
   let keys = fn(action : String) { @settings.key_label(prefs, action) }
   let all : Array[@sfpages.Offered] = []
   let offer = fn(o : @sfpages.Offered) { all.push({ ..o, keys: keys(o.id) }) }
-  // the open chat's (ChatPage.tsx chat.find, chat.jobs, chat.archive, chat.history, chat.stop, composer.file; Relay.tsx
+  // the open chat's (ChatPage.tsx chat.find, the outline's chat.outline, chat.jobs, chat.archive, chat.history, chat.stop, composer.file; Relay.tsx
   // chat.relay; StationUpdate.tsx update.station)
   match app.nav.top() {
     Chat(r) => {
       let view = view_of_chat(src, r).0
       if view is Some({ thread: Some(_), .. }) {
         offer(action_offered("chat.find", "search", fn() { chat_find_open(c, r) }))
+        // (its outline: beside its rail or its round button where one shows, its field taking the keys)
+        match view {
+          Some(v) => {
+            let stint = c.page_stint()
+            offer(action_offered("chat.outline", "list", fn() { @sfpages.outline_open_keys(src, r, v, stint~) |> ignore }))
+          }
+          None => ()
+        }
       }
       offer(action_offered("chat.jobs", "web", fn() { open_jobs_pop() }))
       match view {

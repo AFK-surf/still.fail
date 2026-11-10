@@ -239,48 +239,69 @@ fn find_ask(src : Source, station : String, thread : Double, key : String, list 
     finding.bringing.set(false)
     return
   }
+  ask_bringing(
+    src,
+    "chat.find",
+    { "station": Json::string(station), "thread": Json::number(thread), "query": Json::string(q) },
+    // (typed on since, or closed: an answer to what is no longer asked)
+    fn() { finding.asked.get() == query && finding.chat == key },
+    fn(j, bring) {
+      let f = found_of(j)
+      // where the reader was, as a message of what is found now (gone: none)
+      let was = match finding.found.get() {
+        Some(o) if bring && finding.at.get() >= 0 && finding.at.get() < o.hits.length() => o.hits[finding.at.get()].0
+        _ => -1.0
+      }
+      finding.found.set(Some(f))
+      finding.bringing.set(false)
+      finding.at.set(f.hits.search_by(fn(h) { h.0 == was }).unwrap_or(-1))
+      if finding.at.get() < 0 {
+        finding.k.set(0)
+      }
+      finding.position.set(0)
+      finding.total.set(f.hits.fold(init=0, fn(n, h) { n + h.1 }))
+      // kept where it is still found, else where the reader starts (the core's)
+      find_move(src, key, list, 0)
+    },
+    bringing=fn() { finding.bringing.set(true) },
+    // its station away, or the core an older one: what was found stays as it is
+    failed=fn() { finding.bringing.set(false) },
+  )
+}
+
+///|
+/// A chat looked in for words as the chat's find and its outline look (`call`: `chat.find`, `chat.outline.find`, with
+/// `params`, its station, thread and query): at once in what the device holds, then, where that answer says it was not
+/// all of the chat (`whole`), again with what it does not (`bring`), `bringing` told as that is asked. Each answer given
+/// `answer` (with whether it was the one that brought the rest) while `still()` holds (typed on since, or closed: an
+/// answer to what is no longer asked, let be); `failed` as one fails (its station away, the core an older one).
+pub fn ask_bringing(
+  src : Source,
+  call : String,
+  params : Map[String, Json],
+  still : () -> Bool,
+  answer : (Json, Bool) -> Unit,
+  bringing? : () -> Unit = fn() {  },
+  failed? : () -> Unit = fn() {  },
+) -> Unit {
   fn ask(bring : Bool) {
-    (src.call)(
-      "chat.find",
-      {
-        "station": Json::string(station),
-        "thread": Json::number(thread),
-        "query": Json::string(q),
-        "bring": Json::boolean(bring),
-      },
-      fn(res) {
-        // (typed on since, or closed: an answer to what is no longer asked)
-        if finding.asked.get() != query || finding.chat != key {
-          return
-        }
-        match res {
-          Ok(j) => {
-            let f = found_of(j)
-            // where the reader was, as a message of what is found now (gone: none)
-            let was = match finding.found.get() {
-              Some(o) if bring && finding.at.get() >= 0 && finding.at.get() < o.hits.length() => o.hits[finding.at.get()].0
-              _ => -1.0
-            }
-            finding.found.set(Some(f))
-            finding.bringing.set(false)
-            finding.at.set(f.hits.search_by(fn(h) { h.0 == was }).unwrap_or(-1))
-            if finding.at.get() < 0 {
-              finding.k.set(0)
-            }
-            finding.position.set(0)
-            finding.total.set(f.hits.fold(init=0, fn(n, h) { n + h.1 }))
-            // kept where it is still found, else where the reader starts (the core's)
-            find_move(src, key, list, 0)
-            if !bring && !f.whole {
-              finding.bringing.set(true)
-              ask(true)
-            }
+    let p = params.copy()
+    p["bring"] = Json::boolean(bring)
+    (src.call)(call, Json::object(p), fn(res) {
+      if !still() {
+        return
+      }
+      match res {
+        Ok(j) => {
+          answer(j, bring)
+          if !bring && !flag(Some(j), "whole") {
+            bringing()
+            ask(true)
           }
-          // its station away, or the core an older one: what was found stays as it is
-          Err(_) => finding.bringing.set(false)
         }
-      },
-    )
+        Err(_) => failed()
+      }
+    })
   }
 
   ask(false)

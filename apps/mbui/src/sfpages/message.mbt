@@ -339,6 +339,17 @@ pub fn person_avatar(c : @ui.Ctx, src : Source, id : String, name : String, pict
 }
 
 ///|
+/// The runtime an agent's mark is drawn for: the one it says, Claude's where it says none (an agent's picture in a chat,
+/// a chat's outline's row).
+fn agent_runtime(runtime : String) -> String {
+  if runtime != "" {
+    runtime
+  } else {
+    "claude"
+  }
+}
+
+///|
 /// An agent's picture in a chat (AgentAvatar): its model's maker (still.fail's mark without one) on the neutral
 /// ground; what it said went elsewhere (`slack`: slack | feishu), that place's mark on its corner. One of the chat's
 /// (`agent`, its session's key) has its card while the pointer rests on it (AgentHover).
@@ -357,7 +368,7 @@ pub fn agent_avatar(
   // (in a page's bones, one disc)
   let b = c.box(style=agent_avatar_ground, id~, fn() {
     if maker != "" || runtime != "" {
-      @sf.maker_mark(c, maker, if runtime != "" { runtime } else { "claude" }, agent_mark_side) |> ignore
+      @sf.maker_mark(c, maker, agent_runtime(runtime), agent_mark_side) |> ignore
     } else {
       @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, agent_mark_side) |> ignore
     }

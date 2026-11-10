@@ -312,10 +312,14 @@ pub fn chat_list(
       found_centre(c, rd, key, list_box_id, pick, find_chat() == rk)
     }
     // the way to the newest: away from its end, or short of the chat's end
-    rd.jump = la.away || v.newer
-    to_latest(c, src, r, v, la.away || v.newer, room)
-    // what waits to be decided and does not show: a bell over the way to the end
-    rd.ask = to_ask(c, r, v, la.ask_rows, la.info, la.away || v.newer, room)
+    let jump = la.away || v.newer
+    rd.jump = jump
+    to_latest(c, src, r, v, jump, room)
+    // the ways into its outline (outline.mbt): its rail at its right where the page leaves it room, else a round button
+    // over the way to the newest, with it; its keys
+    let floated = outline_entries_of(c, src, r, v, key, list, lay_w, jump, bar, room)
+    // what waits to be decided and does not show: a bell over the way to the end (and the outline's, over that)
+    rd.ask = to_ask(c, r, v, la.ask_rows, la.info, if !jump { 0 } else if floated { 2 } else { 1 }, room)
     // the picture flying out of an activity to its message and back, over the list
     emit_flyer(c, rk, em, v, src, r)
     })
@@ -457,7 +461,9 @@ pub fn list_key(r : ChatRef) -> String {
 /// The way to the newest (ToLatest): over the list right over the send button, a round button with ↓ (and, short of
 /// the chat's end, how many new messages wait there), fading in and out; pressed, the list glides to its end and
 /// follows it again; short of the chat's end, the chat's latest page is put in place of what shows (`chat.latest`),
-/// turning while it comes, not pressed again meanwhile.
+/// turning while it comes, not pressed again meanwhile. Where a go-to in the chat kept where the reader was
+/// (@sfbase.go_back_to), pressed it goes back there first, not flashing, named so (回到刚才的位置); pressed again, to
+/// the end.
 fn to_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, shown : Bool, room : Double) -> Unit {
   let p = @sf.theme().p
   let look = match
@@ -472,18 +478,23 @@ fn to_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, shown : Bool,
   let coming = core_doing(src, ["chat.latest"], on)
   let count = if v.newer && v.unread > 0.0 { Some(v.unread.to_int()) } else { None }
   let id = c.id("chat-jump")
+  // (back first where a go-to kept where the reader was)
+  let back = @sfbase.place_kept(chat_key(r))
+  let name = @sf.t(if back { "web-main.outline.back" } else { "web-main.chat.toLatest" })
   if shown && !coming {
     // (the list by its id here: the press is outside the scope it is built in)
     let list = c.list_reader(list_key(r))
     c.on_press(id, fn() {
-      if !v.newer {
+      if @sfbase.go_back_to(r) {
+        ()
+      } else if !v.newer {
         list.to_end()
       } else {
         @sfbase.chat_latest(c, src, r, v, @sf.t("web-main.chat.toLatest"))
       }
     })
   }
-  @sf.tip(c, "chat-jump", id, @sf.t("web-main.chat.toLatest"), shortcut="chat.latest")
+  @sf.tip(c, "chat-jump", id, name, shortcut="chat.latest")
   c.layer(fn() {
     float_box(c, float_right(c), room + float_lift, fn() {
       let b = c.box(style=if c.hovered(id) { float_button_hot } else { float_button }, id~, fn() {
@@ -497,7 +508,7 @@ fn to_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, shown : Bool,
           None => ()
         }
       })
-      c.semantics(b, Button, id~, label=@sf.t("web-main.chat.toLatest"))
+      c.semantics(b, Button, id~, label=name)
       c.look(b, look)
       @motion.leaving(c, b, shown)
       b
@@ -508,15 +519,15 @@ fn to_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, shown : Bool,
 
 ///|
 /// The way to what waits to be decided in the chat (ToAsk: the core's `asks`) while its post does not show: a bell,
-/// over the way to the end when both show; pressed, the chat goes to the post, the next one's the next time. Whether it
-/// shows.
+/// over the round buttons that show under it (`under`: the way to the end, the outline's over that); pressed, the chat
+/// goes to the post, the next one's the next time. Whether it shows.
 fn to_ask(
   c : @ui.Ctx,
   r : ChatRef,
   v : ChatView,
   ask_rows : Array[Int],
   info : @ui.ListInfo?,
-  above : Bool,
+  under : Int,
   room : Double,
 ) -> Bool {
   let p = @sf.theme().p
@@ -543,7 +554,7 @@ fn to_ask(
   }
   @sf.tip(c, "chat-ask", id, @sf.t("web-main.chat.asks.go"))
   c.layer(fn() {
-    let lift = if above { float_above } else { 0.0 }
+    let lift = under.to_double() * float_above
     float_box(c, float_right(c), room + float_lift + lift, fn() {
       let b = c.box(style=if c.hovered(id) { float_button_hot } else { float_button }, id~, fn() {
         @sf.icon(c, "bell", size=float_icon, color=p.text) |> ignore
@@ -657,6 +668,8 @@ fn list_reset() -> Unit {
   flashing_now.val = ("", 0.0)
   ask_turns.clear()
   find_around.val = -1.0
+  outline_entries.clear()
+  outline_presets.clear()
 }
 
 ///|

@@ -121,6 +121,16 @@ pub fn open_fixture(mode : String) -> Unit {
     "chat-model-accounts" => @sfpages.open_triple_accounts(r.station, "session:s-c1")
     // (what is typed is looked for as the bar is first drawn)
     "chat-find" => @sfpages.find_preset(side_key(r), "截图")
+    // the long chat of two people (outline_fixture.mbt), the list away from its end, at a message of 昨天's; its
+    // outline opened from what shows (its rail on a wide page, else its round button), words typed in it
+    "chat-outline-away" | "chat-outline" | "chat-outline-find" | "chat-outline-bringing" => {
+      @sfbase.kept_places[side_key(r)] = { top: @sffixture.outline_away_seq, offset: 0.0, bottom: -1.0 }
+      match mode {
+        "chat-outline" | "chat-outline-bringing" => @sfpages.outline_preset(side_key(r), "")
+        "chat-outline-find" => @sfpages.outline_preset(side_key(r), "签名")
+        _ => ()
+      }
+    }
     // the sheet that publishes the chat, what a snapshot would hold read
     "chat-publish" => {
       @sfpages.publish_set(r, 7.0, @sffixture.fix_preview())

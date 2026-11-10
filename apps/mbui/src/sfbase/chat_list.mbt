@@ -97,6 +97,10 @@ pub(all) struct Reading {
   /// the jump button: shown since when (or hidden since when), and which
   mut jump : Bool
   mut jump_at : Double
+  /// more than the list's own height from the chat's end as its list was last laid out (its last row's bottom that far
+  /// under the view's, or the window short of the chat's end): where a go-to in the chat keeps where the reader was
+  /// (jump.mbt keep_place_of)
+  mut far : Bool
   /// the bell to what waits to be decided: shown
   mut ask : Bool
   /// a scripted scroll through it (MBUI_CHAT_BENCH): frames so far, their times
@@ -261,6 +265,7 @@ pub fn reading_of(key : String) -> Reading {
         told_at: "\u{0}",
         scale: 1.0,
         jump: false,
+        far: false,
         ask: false,
         jump_at: -1.0e9,
         bench: 0,
@@ -1914,6 +1919,7 @@ pub fn tell_focus(
 /// atLatest), its list at its end as it comes (list_after). Asked as the way to the newest is pressed, and as words are
 /// sent: they go at the chat's end, not after what was being read.
 pub fn chat_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, what : String) -> Unit {
+  place_forget(r.station + "\u{1}" + r.session)
   guard v.newer && v.thread is Some(th) else { return }
   let rd = reading_of(r.station + "\u{1}" + r.session)
   rd.latest_asked = true
@@ -2231,6 +2237,8 @@ pub fn list_after(
     // LaunchedEffect(host.goTo)
     match go_tos.get(gk) {
       Some(target) if rd.placed && !put_now => {
+        // (back to where the reader was, kept as a go-to took it away: there as it was, nothing flashing)
+        let back = go_back_offsets.get(gk)
         let mut at = -1
         let mut first = -1.0
         let mut found = false
@@ -2250,6 +2258,7 @@ pub fn list_after(
                     rd.found_words = words
                     found = true
                   }
+                  None if back is Some(_) => ()
                   None => {
                     rd.flash = m.ts
                     rd.flash_passage = go_to_passages.get(gk).unwrap_or("")
@@ -2265,12 +2274,16 @@ pub fn list_after(
         if at >= 0 {
           go_tos.remove(gk)
           go_to_passages.remove(gk)
+          go_back_offsets.remove(gk)
           if found {
             on_found(rd)
-          } else {
+          } else if back is None {
             flash_start(c, rd)
           }
-          c.list_scroll_to(key, at, offset=-top)
+          c.list_scroll_to(key, at, offset=match back {
+            Some(off) => -off
+            None => -top
+          })
           @hostapi.log("chat: gone to message \{target.to_int()}")
         } else {
           match v.thread {
@@ -2302,7 +2315,10 @@ pub fn list_after(
                   )
                 })
               }
-            _ => go_tos.remove(gk)
+            _ => {
+              go_tos.remove(gk)
+              go_back_offsets.remove(gk)
+            }
           }
         }
       }
@@ -2397,6 +2413,10 @@ pub fn list_after(
       None => false
     }
     rd.at_end = seen
+    // (at its end: where the reader was before a go-to forgotten)
+    if seen {
+      place_forget(gk)
+    }
     // where the reader is, worked out once the frame's builds are over from where its last layout left the list, never
     // read back: told the core (what was seen whole, the place), not drawn (tell_place, tell_focus, after it)
     let lr = c.list_reader(key)
@@ -2422,6 +2442,10 @@ pub fn list_after(
       Some(i) => i.first >= 0 && i.below > 120.0 && !i.gliding
       None => false
     }
+    rd.far = v.newer || (match info {
+      Some(i) => i.first >= 0 && !i.at_end && i.below > i.height
+      None => false
+    })
   { info, ask_rows, away }
 }
 

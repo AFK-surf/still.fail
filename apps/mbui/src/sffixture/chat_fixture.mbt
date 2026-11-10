@@ -451,7 +451,9 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         Some(kept_chat("long", fn() { long_chat(3000) }))
       } else if session == "s-c1" {
         let base = kept_chat("rich/\{f.older}/\{f.mode}/\{f.step}", fn() {
-          let v = if f.mode == "chat-overload-before" || f.mode == "chat-overload-after" {
+          let v = if outline_mode(f.mode) {
+            outline_chat()
+          } else if f.mode == "chat-overload-before" || f.mode == "chat-overload-after" {
             with_overload_notice(rich_chat(f.older), f.mode == "chat-overload-after", f.step > 0)
           } else if f.mode == "chat-model-limit-before" || f.mode == "chat-model-limit-after" {
             with_model_limit(rich_chat(f.older), f.mode == "chat-model-limit-after")
@@ -607,6 +609,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         },
       ])
     "chatJobs" => Some({ "jobs": [] })
+    // what people said in the chat, by the day (the core's `chatOutline`: outline_fixture.mbt)
+    "chatOutline" => fixture_outline(f, params)
     // what was said in the chat besides words (the core's `chatThings`: sfpages things.mbt)
     // (the chat's sheet with one pull request, as tall as the window holds: its others with chat-info-pulls)
     "chatThings" => Some(fixture_things(text(Some(Json::object(params)), "q"), many=f.mode != "chat-info"))
@@ -1171,6 +1175,11 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
 pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   // what is written, as the core's composers keep it (compose_fixture.mbt)
   match fix_compose_call(f, name, params) {
+    Some(r) => return Some(r)
+    None => ()
+  }
+  // a chat's outline's (outline_fixture.mbt)
+  match fixture_outline_call(f, name, params) {
     Some(r) => return Some(r)
     None => ()
   }

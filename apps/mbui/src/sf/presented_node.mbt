@@ -375,6 +375,18 @@ pub fn panel_words_in_node(v : @view.View) -> @ui.Style {
 }
 
 ///|
+/// How far in from the column a field over a panel's rows stands in node `v` of its body: in a small panel beside what
+/// opened it at the column, its capsule on the rows' grounds' line as a pick's search is (pick_node's); in a sheet or a
+/// dialog on its words' line, as a sheet's own field is (the things' 筛选); none outside a panel.
+pub fn panel_field_in_node(v : @view.View) -> @ui.Style {
+  let words = match v.lent(panel_in_lent) {
+    Some(p) if !p.small => p.words
+    _ => 0.0
+  }
+  @ui.style(px=room(words))
+}
+
+///|
 /// The same, in points (panel_words_in_node's).
 pub fn panel_words_at_node(v : @view.View) -> Double {
   match v.lent(panel_in_lent) {

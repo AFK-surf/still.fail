@@ -942,6 +942,12 @@ web-main.find.none
 web-main.find.partial
 web-main.find.placeholder
 web-main.find.prev
+web-main.outline.title
+web-main.outline.placeholder
+web-main.outline.count
+web-main.outline.none
+web-main.outline.back
+web-main.outline.bringing
 web-main.fold
 web-main.history.details
 web-main.history.ends.done
@@ -990,7 +996,10 @@ web-main.keymap.chat.jobs
 web-main.keymap.chat.latest
 web-main.keymap.chat.new
 web-main.keymap.chat.next
+web-main.keymap.chat.outline
 web-main.keymap.chat.prev
+web-main.keymap.chat.said.next
+web-main.keymap.chat.said.prev
 web-main.keymap.chat.screen
 web-main.keymap.chat.stop
 web-main.keymap.chat.switch

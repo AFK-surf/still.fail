@@ -100,11 +100,13 @@ fn panel_node(
       |> ignore
       // (what opened it, where it is drawn: what its panel goes beside)
       let at = anchor(layer)
-      // (what holds its body: what takes the focus as it opens)
+      // (what holds its body: what takes the focus as it opens; or the one of what it holds that says so, a search's
+      // field: panel_opens_on_node, as a dialog's)
       let body_box : Ref[@view.View?] = Ref(None)
       // (the field it opens to be typed in, where what it holds says one: panel_opens_in_node)
       let field : Ref[@view.View?] = Ref(None)
       layer.lends(panel_field_lent, field) |> ignore
+      let opens_on : Ref[@view.View?] = Ref(None)
       // (its old views' words as far in as its look says: on entering, its ground first, then they; read as they are
       // painted (Ctx::look_by), so that its way in and out paints them, nothing of them built again)
       // (`fits`: how wide what its head, its body and its foot each hold is laid out, out to the panel's sides: what it
@@ -138,6 +140,7 @@ fn panel_node(
         // (a press on it its own: not outside it)
         .presses(Is(true))
         .on_press(fn() {  })
+        .lends(panel_opens_lent, opens_on)
         |> ignore
         // (the side of what opened it it went on, as the tree placed it (@ui.old_went: flipped there for want of room,
         // its old views built again as it goes to the other): what its parts keep nearest what opened it is by that side
@@ -343,11 +346,13 @@ fn panel_node(
               None => ()
             }
         }
-        // (the focus on the field it opens to be typed in, where it says one; else what holds its body's as it opens
-        // where it takes it, else where it was; back to what had it as it goes)
-        match (field.val, body_box.val) {
-          (Some(f), _) => layer.focus_opens(f) |> ignore
-          (None, Some(b)) if x.focus => layer.focus_opens(b) |> ignore
+        // (the focus on the field it opens to be typed in, where it says one; else, where it takes the focus as it
+        // opens, on the one of what it holds that says so (panel_opens_on_node: a search's field), else on what holds
+        // its body; else where it was; back to what had it as it goes)
+        match (field.val, opens_on.val, body_box.val) {
+          (Some(f), _, _) => layer.focus_opens(f) |> ignore
+          (None, Some(f), _) if x.focus => layer.focus_opens(f) |> ignore
+          (None, None, Some(b)) if x.focus => layer.focus_opens(b) |> ignore
           _ => layer.focus_returns() |> ignore
         }
       })

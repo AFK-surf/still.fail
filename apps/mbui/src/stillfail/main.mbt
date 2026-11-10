@@ -303,6 +303,7 @@ let core_source : @sfapp.Source = {
   read_only,
   reads_ahead: fn() { true },
   asks_devices: fn() { true },
+  asks_outline: fn() { true },
 }
 
 ///|
