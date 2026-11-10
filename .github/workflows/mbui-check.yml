@@ -230,6 +230,7 @@ jobs:
           touch "$MOTION_OUT"
       - if: always() && env.MBUI_TEST_MOTION == 'count'
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with: { name: "${{ env.MOTION_NAME }}", path: "${{ env.MOTION_OUT }}", retention-days: 7 }
       # What failed, and in which commit, where everyone sees it (main is pushed to directly too: red, said whose)
       - name: What failed
@@ -314,6 +315,7 @@ jobs:
           touch "$MOTION_OUT"
       - if: always() && env.MBUI_TEST_MOTION == 'count'
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with: { name: "${{ env.MOTION_NAME }}", path: "${{ env.MOTION_OUT }}", retention-days: 7 }
       - name: What failed
         if: failure()
@@ -394,6 +396,7 @@ jobs:
           touch "$MOTION_OUT"
       - if: always() && env.MBUI_TEST_MOTION == 'count'
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with: { name: "${{ env.MOTION_NAME }}", path: "${{ env.MOTION_OUT }}", retention-days: 7 }
       - name: What failed
         if: failure()

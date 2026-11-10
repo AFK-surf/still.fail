@@ -122,6 +122,7 @@ jobs:
           [ $ok = 1 ]
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: host-windows
           path: apps/mbui/mbui/out/host/

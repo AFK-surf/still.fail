@@ -166,6 +166,7 @@ jobs:
           touch "$MOTION_OUT"
       - if: always() && env.MBUI_TEST_MOTION == 'count'
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with: { name: "motion-mbui-${{ matrix.fps }}", path: "${{ env.MOTION_OUT }}", retention-days: 7 }
       # (the units this run used, older ones gone (only after a run that went through: one stopped early used few), kept
       # under a key by what they are: main's, and a branch's for its next push)
@@ -222,6 +223,7 @@ jobs:
         run: scripts/ios.sh build
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: macos-shots
           path: |
@@ -295,6 +297,7 @@ jobs:
         run: APP=streamdemo scripts/android.sh build && APP=streamdemo bash scripts/android-streams.sh
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: android-devices
           path: |
@@ -369,6 +372,7 @@ jobs:
         run: REAL=1 APP=streamdemo bash scripts/android-streams.sh
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: android-streams-real
           path: apps/mbui/mbui/out/android/streams-real/

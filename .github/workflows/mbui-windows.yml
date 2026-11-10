@@ -100,6 +100,7 @@ jobs:
           key: mbui-windows-demo-${{ matrix.check }}-${{ github.sha }}
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: windows-shots-${{ matrix.check }}
           path: |
@@ -158,6 +159,7 @@ jobs:
           ls -la out/shot-sf
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: stillfail-windows-shots
           path: apps/mbui/mbui/out/shot-sf/
