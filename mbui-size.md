@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [da0d3f539](https://github.com/AFK-surf/still.fail/commit/da0d3f539c30bde5c7c79b246d6c353f27f0bfc7) app: how far a service page's resources came in a  | 1.78 | 2.38 | 9.93 | 28.55 | 34.77 | 25.49 | 46.94 | 94.27 | 161.73 |
 | [95aaca627](https://github.com/AFK-surf/still.fail/commit/95aaca627e60fcfd4220f740b5d8b53aca9c3686) mbui: what goes beside another may be as wide as i | 1.78 | 2.38 | 9.92 | 28.55 | 34.75 | 25.49 | 46.93 | 93.95 | 151.88 |
 | [fea8ca3d4](https://github.com/AFK-surf/still.fail/commit/fea8ca3d40f12d5161a5870b9cab507f1889a5e8) Fix pasted screenshots exceeding 8 MiB (#5299) | 1.78 | 2.38 | 9.92 | 28.55 | 34.74 | 25.49 | 46.93 | 94.01 | 129.35 |
 | [b0d44ea06](https://github.com/AFK-surf/still.fail/commit/b0d44ea06d3272db1fd2f1968efd9d00633d9e24) fix(sfdesk): avoid flooding the core while clearin | 1.78 | 2.38 | 9.92 | 28.54 | 34.74 | 25.49 | 46.93 | 94 | 143.22 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [cabc6d876](https://github.com/AFK-surf/still.fail/commit/cabc6d876242017694aa9b1130c9369a329c3574) station: a phone let go is disconnected after what | 1.76 | 2.35 | 9.76 | 28.37 | 34.14 | 25.32 | 46.48 | 93.9 | 175.67 |
 | [51d7c4e46](https://github.com/AFK-surf/still.fail/commit/51d7c4e469511a1ab1719decdac5f070a84c12c6) Core: the sidebar and the agents at work only as s | 1.76 | 2.35 | 9.75 | 28.35 | 34.11 | 25.32 | 46.46 | 93.11 | 153.59 |
 | [7c7349a14](https://github.com/AFK-surf/still.fail/commit/7c7349a14847966e17ed93c02629279494a30def) station: a stopped preparation of the Linux screen | 1.76 | 2.34 | 9.73 | 28.33 | 34.05 | 25.29 | 46.41 | 93.72 | 179.58 |
-| [a657d7e50](https://github.com/AFK-surf/still.fail/commit/a657d7e50e1875f5ed9046a59f9a06bdb1b2e292) cloud: the feedback monitor's token marks a report | 1.75 | 2.33 | 9.7 | 28.26 | 33.94 | 25.23 | 46.33 | 93.28 | 184.86 |
