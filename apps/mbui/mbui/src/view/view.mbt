@@ -314,6 +314,10 @@ pub(all) struct Work {
   mut drawn_boxes : Int
   /// where things stand laid out and placed once a change was told whole (Tree::settle_now: View::laid_before_causes)
   mut settles : Int
+  /// nodes a search for what a point is for went through (Tree::target_at's walk)
+  mut found_walked : Int
+  /// of them, those drawn smaller than a press's room near the point, kept to ask whether it reaches them (reach.mbt)
+  mut near_kept : Int
 } derive(Eq, Debug)
 
 ///|
@@ -489,6 +493,9 @@ struct Node {
   mut on_drag : ((Drag) -> Unit)?
   /// how many fingers held on it at once it takes (View::on_drag's `fingers`): one more calls the hold off
   mut fingers : Int
+  /// whether a drag anywhere on it is its own, whole (View::on_drag's `whole`): nothing drawn over it reached from round
+  /// where it is drawn by a press on it (reach.mbt)
+  mut drags_whole : Bool
   /// which saying of its on_drag it is (each said anew, or let go, another): what was told by one is that one's alone
   mut drag_said : Int
   /// where in it a finger is taken at a moment (View::takes, View::hosted_takes; none: all of it)
@@ -798,6 +805,9 @@ pub struct Tree {
   /// whether motion is reduced where what hosts the tree draws it (Tree::reduces_motion): what comes or goes there at
   /// once (View::comes)
   mut motion_reduced : () -> Bool
+  /// how far across each way the room a press has is at least where what hosts the tree draws it (Tree::press_least):
+  /// what is drawn smaller is reached from round it (reach.mbt)
+  mut press_least : () -> Double
   /// how soon (ms) and how near (points) a press let go after one of the same node's is its second, by the hand as it
   /// is now (Tree::twice_within); and the last press let go that may be a first: its node, moment and place in the
   /// window's terms (twice.mbt)
@@ -1108,6 +1118,7 @@ pub fn Tree::new(
     offset_moved: fn(_) {  },
     list_feel: fn() { (Desktop, 1.0) },
     motion_reduced: fn() { false },
+    press_least: fn() { 0.0 },
     twice_feel: fn() { (double_press_ms, double_press_slop) },
     last_press: None,
     env: Env::new(),
@@ -1205,6 +1216,8 @@ pub fn Tree::new(
       pulled: 0,
       drawn_boxes: 0,
       settles: 0,
+      found_walked: 0,
+      near_kept: 0,
     },
   }
   let root = t.made(-1)
@@ -1374,6 +1387,7 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
       n.key_said = 0
       n.wheel_said = 0
       n.on_drag = None
+      n.drags_whole = false
       n.takes = None
       if n.takes_units.length() > 0 {
         n.takes_units = []
@@ -1494,6 +1508,7 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
         focus_shown_cell: None,
         on_drag: None,
         fingers: 1,
+        drags_whole: false,
         drag_said: 0,
         takes: None,
         takes_units: [],
@@ -3210,21 +3225,43 @@ pub fn Tree::claimers_at(
   let start = match from {
     Some(id) => Some(id)
     None => {
-      let found : Ref[NodeId?] = Ref(None)
+      let found : Ref[(NodeId, Int, (Double, Double, Double, Double))?] = Ref(None)
       let at = self.logic_at()
+      // (what is drawn small near it reached from round it, as a press there reaches it: Tree::target_at's)
+      let least = self.least_now()
+      let near : Array[Near] = []
+      let order = Ref(0)
       self.each_drawn_scaled(fn(c, cx, cy, _, s) {
+        let o = order.val
+        order.val = o + 1
+        let n = self.nodes[c.id.at]
         if self.finger_on(c, cx, cy, s, x, y, at, tracked=false) {
-          let n = self.nodes[c.id.at]
           if n.on_drag is Some(_) ||
             n.on_press is Some(_) ||
             n.top_row ||
             n.claims is Some(_) ||
             (n.hosted && @signals.untracked(fn() { there(c.id) })) {
-            found.val = Some(c.id)
+            found.val = Some((c.id, o, (cx, cy, cx + c.w * s, cy + c.h * s)))
           }
+        } else {
+          self.near_said(n, c, cx, cy, s, x, y, least, o, near)
         }
       }, inputs_only=true)
-      found.val
+      match found.val {
+        Some((id, o, box)) => {
+          let n = self.nodes[id.at]
+          let top = if n.hosted { Hosted(id) } else if n.on_drag is Some(_) { Dragged(id) } else { Pressed(id) }
+          match self.reached(top, o, box, near, x, y, least) {
+            Pressed(r) | Dragged(r) => Some(r)
+            _ => Some(id)
+          }
+        }
+        None =>
+          match self.reached(Nothing, -1, (0.0, 0.0, 0.0, 0.0), near, x, y, least) {
+            Pressed(r) | Dragged(r) => Some(r)
+            _ => None
+          }
+      }
     }
   }
   guard start is Some(id) && self.alive_id(id) else { return out }
@@ -5372,9 +5409,12 @@ pub(all) struct Drag {
 /// called off (moved anywhere meanwhile), each event handled at its own moment as one change (Tree::event), outside
 /// any tracking. One let go meanwhile is told nothing more. Up to `fingers` held on it at once, each told by its own
 /// events (Drag's `finger`); one more down calls the hold off (each of those down told Off), the rest of it nobody's.
-pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> View {
+/// `whole`: a drag anywhere on it is its own (a picture a drag pans, as the old view's `capture`): a press on it takes
+/// nothing drawn over it smaller than its room from round where that is drawn (reach.mbt).
+pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1, whole? : Bool = false) -> View {
   guard self.live() is Some(n) else { return self }
   n.fingers = if fingers < 1 { 1 } else { fingers }
+  n.drags_whole = whole
   n.drag_said = n.drag_said + 1
   self.drag_ended()
   // (said anew: a finger held on it now is the one before's, ended)
@@ -6177,6 +6217,7 @@ fn View::let_go(self : View) -> Unit {
   n.bar_near_cell = None
   self.drag_ended()
   n.on_drag = None
+  n.drags_whole = false
   n.drag_said = n.drag_said + 1
   n.takes = None
   // (what holds it holds one taking a point the fewer: what it held let go of already, each so)
@@ -9731,7 +9772,10 @@ fn Tree::inputs_count(self : Tree, at : Int, d : Int) -> Unit {
 
 ///|
 /// What a press at (x, y) is for: the topmost node drawn there (by the order drawn, where the scene composed draws it:
-/// the same places as what is drawn) that is held (View::on_drag), does something when pressed or hosts the old view.
+/// the same places as what is drawn) that is held (View::on_drag), does something when pressed or hosts the old view;
+/// or one drawn over it smaller than a press's room whose room holds (x, y), the nearest (Tree::reached). The one
+/// answer of what a point is for: a press down, its let go landing on what it went down on, the pointer lighting what
+/// it is over (Tree::follow_point), View::finger_target.
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
   self.target_in(x, y, tracked=false)
 }
@@ -9775,23 +9819,45 @@ fn Tree::finger_on(
 fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Target {
   // (the logic's moment, what is where taken as of then: View::takes)
   let at = self.logic_at()
+  let least = self.least_now()
   let found : Array[Target] = []
+  // (each found's place in the walk and its box; what is drawn small near (x, y), passed: Tree::near_said, found in
+  // the same walk, none walked again)
+  let orders : Array[Int] = []
+  let boxes : Array[(Double, Double, Double, Double)] = []
+  let near : Array[Near] = []
+  let order = Ref(0)
   self.each_drawn_scaled(fn(c, cx, cy, _, s) {
+    let o = order.val
+    order.val = o + 1
+    self.work.found_walked = self.work.found_walked + 1
+    let n = self.nodes[c.id.at]
     if self.finger_on(c, cx, cy, s, x, y, at, tracked~) {
-      let n = self.nodes[c.id.at]
       // (one that takes over holds (View::claims) takes none at its own down: it is found as it moves)
-      if n.on_drag is Some(_) && n.claims is None {
-        found.push(Dragged(c.id))
+      let t = if n.on_drag is Some(_) && n.claims is None {
+        Dragged(c.id)
       } else if n.on_press is Some(_) {
-        found.push(Pressed(c.id))
+        Pressed(c.id)
       } else if n.hosted {
-        found.push(Hosted(c.id))
+        Hosted(c.id)
       } else if n.top_row {
-        found.push(TopRow(c.id))
+        TopRow(c.id)
+      } else {
+        return
       }
+      found.push(t)
+      orders.push(o)
+      boxes.push((cx, cy, cx + c.w * s, cy + c.h * s))
+    } else {
+      self.near_said(n, c, cx, cy, s, x, y, least, o, near)
     }
   }, inputs_only=true)
-  self.chosen(found, x, y)
+  let top = self.chosen(found, x, y)
+  let (top_order, top_box) = match found.search(top) {
+    Some(i) => (orders[i], boxes[i])
+    None => (-1, (0.0, 0.0, 0.0, 0.0))
+  }
+  self.reached(top, top_order, top_box, near, x, y, least)
 }
 
 ///|
