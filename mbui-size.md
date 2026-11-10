@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [2e1be559b](https://github.com/AFK-surf/still.fail/commit/2e1be559b17ed69cd2e5801958eb528fc58a5698) mbui: a stop told at a moment after its frame's is | 1.78 | 2.37 | 9.84 | 28.49 | 34.6 | 25.45 | 46.86 | 93.95 | 156.36 |
 | [e59dd4763](https://github.com/AFK-surf/still.fail/commit/e59dd4763d3287a63f65e07176d8853a701ff968) app: a station's card from a chat's agent as nodes | 1.77 | 2.36 | 9.82 | 28.46 | 34.51 | 25.42 | 46.79 | 93.93 | 173.66 |
 | [04cca9525](https://github.com/AFK-surf/still.fail/commit/04cca9525df9de721c3ebe1ddcd337d01bdb0bef) history: its head and details made once as nodes,  | 1.77 | 2.36 | 9.81 | 28.42 | 34.43 | 25.4 | 46.74 | 93.9 | 174.65 |
 | [482c5c57e](https://github.com/AFK-surf/still.fail/commit/482c5c57e528e14af1fe701638cff330c4492504) app, core: a kind of reset's count shown on its ow | 1.77 | 2.36 | 9.8 | 28.4 | 34.32 | 25.38 | 46.66 | 93.19 | 188.43 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [3aa5bc337](https://github.com/AFK-surf/still.fail/commit/3aa5bc33760adeb9a907f22174d9926f4d2c5e9a) app: every screen swept with the system's words at | 1.74 | 2.32 | 9.65 | 28.19 | 33.68 | 25.18 | 46.13 | 92.85 | 167.36 |
 | [4dbf2480e](https://github.com/AFK-surf/still.fail/commit/4dbf2480e18f8aca90bce52df5952c44c1cf3309) core: devices on a person's own lock sign in each  | 1.74 | 2.32 | 9.65 | 28.19 | 33.68 | 25.18 | 46.13 | 93.36 | 146.08 |
 | [d2791a7a8](https://github.com/AFK-surf/still.fail/commit/d2791a7a8217f3ab4a37cefb14d9cbc53b685771) app: what a message names in other workspaces is a | 1.74 | 2.32 | 9.65 | 28.19 | 33.68 | 25.18 | 46.13 | 93.19 | 178.92 |
-| [2b4e43342](https://github.com/AFK-surf/still.fail/commit/2b4e43342ea46682646295d6d263d70d0bcc0f22) mbui: a motion fault says what drew it: a node's p | 1.74 | 2.32 | 9.64 | 28.19 | 33.65 | 25.17 | 46.11 | 93.01 | 182.11 |
