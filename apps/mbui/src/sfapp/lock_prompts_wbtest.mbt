@@ -98,13 +98,15 @@ test "asked into one more workspace meanwhile: named too, its mark before it; th
 }
 
 ///|
-test "into the person's own lock: said so, no workspace named" {
+test "into the person's own lock bound in no workspace: what approving lets it do said, no workspace named, nor a lock of one's own" {
   new_run()
   let t = settings_tester("home", mode="settings-lock-prompt-personal", shows="settings-lock-prompt-personal", platform=2)
   t.run_for(@ui.move_most_ms)
   assert_true(@sf.presenting())
-  assert_true(t.find("它要加入你的个人锁") is Some(_))
+  // (to people there is one safe mode, the user, 2026-11-10: it said 它要加入你的个人锁)
+  assert_true(t.find("批准后，它可以批准手机调试") is Some(_))
   assert_true(t.find("申请访问") is None)
+  assert_eq(t.words().filter(fn(w) { w.0.contains("个人锁") }).length(), 0)
 }
 
 ///|
