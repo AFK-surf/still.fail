@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [28376c907](https://github.com/AFK-surf/still.fail/commit/28376c9071e24106660aea7233f0222d1f7340d2) cloud: the memberships test waits for its lock.get | 1.74 | 2.32 | 9.65 | 28.2 | 33.7 | 25.18 | 46.15 | 93.52 | 139.07 |
 | [a455a9c49](https://github.com/AFK-surf/still.fail/commit/a455a9c49d7c83da4700bff1436314eccb5e3745) cloud: signing in and a client's spans use up none | 1.74 | 2.32 | 9.65 | 28.2 | 33.68 | 25.18 | 46.13 | 93.55 | 168.29 |
 | [6f1305d96](https://github.com/AFK-surf/still.fail/commit/6f1305d9683c0b281d370ec470ba9b81cee6cf09) cloud: devices' and stations' sockets on their own | 1.74 | 2.32 | 9.65 | 28.2 | 33.68 | 25.18 | 46.13 | 93.28 | 144.49 |
 | [3aa5bc337](https://github.com/AFK-surf/still.fail/commit/3aa5bc33760adeb9a907f22174d9926f4d2c5e9a) app: every screen swept with the system's words at | 1.74 | 2.32 | 9.65 | 28.19 | 33.68 | 25.18 | 46.13 | 92.85 | 167.36 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f1d7ef363](https://github.com/AFK-surf/still.fail/commit/f1d7ef363367cb368666c8b785e2e123f8b1a7b0) mbui: two presses in a row are the window's tree's | 1.73 | 2.3 | 9.58 | 28.1 | 33.42 | 25.1 | 45.86 | 93.32 | 171.76 |
 | [0490574ec](https://github.com/AFK-surf/still.fail/commit/0490574ece26e7de539d2ea290ab95aa6ccb042c) app: what is worked out of a topic kept by the sou | 1.73 | 2.3 | 9.58 | 28.09 | 33.42 | 25.1 | 45.86 | 92.78 | 139.51 |
 | [048c87d3f](https://github.com/AFK-surf/still.fail/commit/048c87d3f25c4fcfe3db3c3b78e335b2b19dd61a) A station gone silent is not waited for again unti | 1.73 | 2.3 | 9.58 | 28.09 | 33.39 | 25.09 | 45.86 | 93.73 | 179.8 |
-| [84701dbdb](https://github.com/AFK-surf/still.fail/commit/84701dbdbef2700684a21f03900066a76a5dfa86) mbui: what is put by to be another's lets go at re | 1.72 | 2.3 | 9.56 | 28.08 | 33.32 | 25.07 | 45.8 | 93.68 | 161.13 |
