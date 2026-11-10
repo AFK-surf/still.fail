@@ -37,7 +37,6 @@ export const CHECKED = [
   "src/attend.ts",
   "src/entries.ts",
   "src/jobs.ts",
-  "src/footprint.ts",
   "src/output.ts",
 ];
 

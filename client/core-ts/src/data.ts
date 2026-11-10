@@ -37,7 +37,7 @@ export function num(n: number): string {
 export const SOON_MS = 300;
 
 /// The topics whose values are held here.
-const HELD = new Set(["workspace", "overview", "session", "chatRows", "sessions", "threads", "archivedRows", "jobs", "job", "slackApp", "stationUsage", "footprint", "loginSessions", "admin", "draft", "prefs", "drive", "drivePlace"]);
+const HELD = new Set(["workspace", "overview", "session", "chatRows", "sessions", "threads", "archivedRows", "jobs", "job", "slackApp", "stationUsage", "loginSessions", "admin", "draft", "prefs", "drive", "drivePlace"]);
 const LIST_TOPIC: Record<ListKind, string> = { chats: "chatRows", archived: "archivedRows", sessions: "sessions", threads: "threads", jobs: "jobs" };
 
 /// What a folder of a station's drive is kept as among the station's documents (the `drive` topic).
@@ -664,8 +664,6 @@ export class Data {
       case "overview":
         if ([...this.#modelEdits.keys(), ...this.#loginSteps.keys()].some((k) => k.startsWith(station + SEP))) return this.shown(topic);
         return db.stationDoc(station, "overview");
-      case "footprint":
-        return db.stationDoc(station, "footprint");
       case "stationUsage":
         return db.stationDoc(station, "usage");
       case "drive":
@@ -812,8 +810,6 @@ export class Data {
       case "overview":
         this.#loginsMoved(station, value);
         return db.putStationDoc(station, "overview", value, at, topic);
-      case "footprint":
-        return db.putStationDoc(station, "footprint", value, at, topic);
       case "stationUsage":
         return db.putStationDoc(station, "usage", value, at, topic);
       case "drive":

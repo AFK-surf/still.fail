@@ -157,7 +157,6 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     // What a chat can be kept to less context on (sessions/context-cap.ts): the runtimes that take it, and each model's
     // whole window as the model catalog says it, the most it can be. A station from before says none: none offered.
     contextCaps: { runtimes: CONTEXT_RUNTIMES, least: CONTEXT_LEAST, windows: modelWindows(profiles) },
-    footprint: null,
     processes: processes.map((p) => {
       const kb = memory.get(p.pgid);
       return { ...p, rssMb: kb === undefined ? null : Math.round(kb / 1024) };

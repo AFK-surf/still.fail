@@ -9,7 +9,6 @@ import * as brand from "./brand.ts";
 import * as decisions from "./decisions.ts";
 import * as drive from "./drive.ts";
 import * as prefsMod from "./prefs.ts";
-import * as footprint from "./footprint.ts";
 import * as jobsMod from "./jobs.ts";
 import { permissionsShown } from "./permissions.ts";
 import { elevationShown } from "./elevation.ts";
@@ -1158,8 +1157,6 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
   switch (topic.topic) {
     case "host":
       return host(value);
-    case "footprint":
-      return footprint.shown(value, c);
     case "drive":
       return drive.shown(value, c);
     case "prefs":
@@ -1245,7 +1242,6 @@ function overview(value: J, c: Clock, station: string | null): J {
         ? t("core-views.present.processes.none")
         : t("core-views.present.processes.running", { n: processes.length, size: mb >= 1024 ? `${format.fixed1(mb / 1024)} GB` : `${mb} MB` });
   }
-  if (isObject(v.footprint)) v.footprint = footprint.brief(v.footprint);
   const connects = arr(v.connects);
   if (connects) v.connects = connects.map(connect);
   const updates = arr(v.updates);

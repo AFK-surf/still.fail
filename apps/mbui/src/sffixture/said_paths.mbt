@@ -666,10 +666,6 @@ pub let said_paths : Map[String, Array[String]] = {
     "lines.text.*",
     "entries.*",
   ],
-  "footprint": [
-    "chats.*.title",
-    "memory.*.label",
-  ],
   "history": [
     "items.*.body.kind=received.content.note",
     "items.*.body.kind=received.content.tasks.*.text",

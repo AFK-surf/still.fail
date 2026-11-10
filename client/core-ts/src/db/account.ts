@@ -565,7 +565,7 @@ export class AccountDb {
     return this.sql.all("SELECT id FROM workspace").map((r) => String(r[0]));
   }
 
-  /// A station's overview, footprint or usage.
+  /// A station's overview or usage.
   stationDoc(station: string, kind: string): J {
     return this.#doc(K("st", station, kind), "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind]);
   }
@@ -2034,7 +2034,7 @@ export class AccountDb {
       this.#logSpans.clear();
       for (const key of [...this.#lists.keys()]) if (key.endsWith(`\u0001${station}`)) this.#lists.delete(key);
       this.#tell({ topic: "$station-reset", station });
-      for (const topic of ["overview", "footprint", "stationUsage", "chatRows", "archivedRows", "sessions", "threads", "jobs"]) this.#tell({ topic, station });
+      for (const topic of ["overview", "stationUsage", "chatRows", "archivedRows", "sessions", "threads", "jobs"]) this.#tell({ topic, station });
     });
   }
 

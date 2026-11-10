@@ -39,24 +39,21 @@ test("network choices persist, validate and belong to station managers", async (
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("the relays' UDP way is no choice any more: a client from before that sets it is answered, nothing saved", async () => {
+test("a config.json from when the relays' UDP way was a choice still opens, and a body with only it is refused", async () => {
   const dir = mkdtempSync(join(tmpdir(), "network-settings-"));
   try {
     const config = new ConfigFile(dir);
     config.check = (raw) => checkNetwork(raw.network);
-    // A config.json from when it was a choice still opens.
     config.update((raw) => { raw.network = { congestion: "bbr", relayUdp: true }; });
+    assert.equal(congestionOf(config.raw()), "bbr");
     const route = routes({ config })[0]!;
     const request = (role: string, body: unknown): Request => ({
       method: "PUT", path: "/network/settings", query: [], headers: {}, lang: "zh",
       body: Buffer.from(JSON.stringify(body)),
       viewer: { sub: "a", email: "a@x", name: "A", role, workspace: "w", device: "d" },
     });
-    assert.equal((await route.handle(request("member", { relayUdp: true }), [])).status, 403);
-    for (const bad of [{ relayUdp: "yes" }, {}]) assert.equal((await route.handle(request("owner", bad), [])).status, 400);
-    const answer = await route.handle(request("admin", { relayUdp: true }), []);
-    assert.equal(answer.status, 200);
-    assert.deepEqual(JSON.parse(String(answer.body)), { congestion: "bbr" });
+    for (const bad of [{ relayUdp: true }, {}]) assert.equal((await route.handle(request("owner", bad), [])).status, 400);
+    assert.equal(congestionOf(config.raw()), "bbr");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

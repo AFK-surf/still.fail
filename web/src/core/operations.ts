@@ -118,10 +118,6 @@ export interface OperationParams {
   "signin.deny": { id: string };
   "memory.get": {  };
   "process.end": { pid: number; session: string };
-  "footprint.scan": {  };
-  "footprint.rebuild": { keys?: string[] | null | undefined };
-  "footprint.delete": { keys?: string[] | null | undefined };
-  "footprint.evict": { keys?: string[] | null | undefined };
   "software.update": { id?: string | null | undefined; repair?: boolean | null | undefined };
   "software.updateAll": {  };
   "software.check": {  };
@@ -297,10 +293,6 @@ export function bindStationOperations(call: Call) {
     signinDeny: <T = unknown>(params: OperationParams["signin.deny"]) => call("signin.deny", params) as Promise<T>,
     memoryGet: <T = unknown>(params: OperationParams["memory.get"] = {}) => call("memory.get", params) as Promise<T>,
     processEnd: <T = unknown>(params: OperationParams["process.end"]) => call("process.end", params) as Promise<T>,
-    footprintScan: <T = unknown>(params: OperationParams["footprint.scan"] = {}) => call("footprint.scan", params) as Promise<T>,
-    footprintRebuild: <T = unknown>(params: OperationParams["footprint.rebuild"] = {}) => call("footprint.rebuild", params) as Promise<T>,
-    footprintDelete: <T = unknown>(params: OperationParams["footprint.delete"] = {}) => call("footprint.delete", params) as Promise<T>,
-    footprintEvict: <T = unknown>(params: OperationParams["footprint.evict"] = {}) => call("footprint.evict", params) as Promise<T>,
     softwareUpdate: <T = unknown>(params: OperationParams["software.update"] = {}) => call("software.update", params) as Promise<T>,
     softwareUpdateAll: <T = unknown>(params: OperationParams["software.updateAll"] = {}) => call("software.updateAll", params) as Promise<T>,
     softwareCheck: <T = unknown>(params: OperationParams["software.check"] = {}) => call("software.check", params) as Promise<T>,

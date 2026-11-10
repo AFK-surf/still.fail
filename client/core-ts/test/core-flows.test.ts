@@ -2036,8 +2036,8 @@ test("what_waited_for_a_new_chat_goes_as_soon_as_it_is_made_not_after_the_lists_
     return undefined;
   });
   const ui = core.connect();
-  // A slow link: what the new chat changes (its lists, the footprint) is not read back yet.
-  const release = [host.hold("/admin/api/chats"), host.hold("/admin/api/footprint")];
+  // A slow link: what the new chat changes (its lists) is not read back yet.
+  const release = [host.hold("/admin/api/chats?marks=1")];
   const key = String((await ask(host, core, ui, 1, "chat.create", { station: "ws/st", runtime: "claude", model: "opus" })).key);
   call(core, ui, 2, "chat.send", { station: "ws/st", session: key, text: "修一下登录" });
   await host.settle();

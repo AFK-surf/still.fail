@@ -83,7 +83,7 @@ const JOBS = "/jobs?chats=0";
 const SEARCHED = new Set(["session", "session-removed", "thread", "thread-removed", "job", "job-removed"]);
 /// The station's events that say what its reads bring too: told again on top of what a read asked before them brought
 /// (retold.ts).
-const RETOLD = new Set(["session", "session-pending", "session-removed", "thread-removed", "read", "chat-shared", "chat-shared-removed", "job", "job-removed", "overview", "footprint", "pin", "dismiss", "kept", "hidden", "muted"]);
+const RETOLD = new Set(["session", "session-pending", "session-removed", "thread-removed", "read", "chat-shared", "chat-shared-removed", "job", "job-removed", "overview", "pin", "dismiss", "kept", "hidden", "muted"]);
 const SHARED_RETOLD = new Set(["chat-shared", "chat-shared-removed"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
@@ -323,7 +323,6 @@ export class StationsSync {
       ...(link?.shared ? [this.#enqueue(address, "shared", p, this.#sharedWhole(address, ctx, unread))] : []),
       ...this.#archivedChanged(address, ctx),
       this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, JOBS)),
-      this.#enqueue(address, "footprint", Priority.background, read({ topic: "footprint", station: address }, "/footprint")),
       this.#enqueue(address, "screens", Priority.background, this.#screens(address, ctx)),
       this.#enqueue(address, "machineLogins", Priority.background, this.#machineLogins(address, ctx)),
       ...this.#usageChanged(address, ctx),
@@ -1719,7 +1718,6 @@ export class StationsSync {
         return;
       }
       case "overview":
-      case "footprint":
         return core.data.set({ topic: name, station: address }, data);
     }
   }
@@ -2123,7 +2121,6 @@ export class StationsSync {
           read("sessions", { topic: "sessions", station: address }, "/sessions");
           rows();
           archived();
-          read("footprint", { topic: "footprint", station: address }, "/footprint");
           const thread = get(answer, "thread");
           if (isObject(thread)) this.putThread(address, thread);
           break;
@@ -2155,10 +2152,6 @@ export class StationsSync {
           if (effect.id !== null) read(`slackApp/${effect.id}`, { topic: "slackApp", station: address, connect: effect.id }, `/connects/${encode(effect.id)}/slack-app`);
           break;
         case "overview":
-          read("overview", { topic: "overview", station: address }, "/overview");
-          break;
-        case "footprint":
-          read("footprint", { topic: "footprint", station: address }, "/footprint");
           read("overview", { topic: "overview", station: address }, "/overview");
           break;
         case "slack":

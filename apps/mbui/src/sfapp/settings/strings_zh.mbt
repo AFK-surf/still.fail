@@ -1580,7 +1580,6 @@ let zh : Map[String, String] = {
   "web-pages.stations.deviceOffline": "离线，暂无设备信息",
   "web-pages.stations.joinedElsewhere": "来自其他 workspace",
   "web-pages.stations.joinedFrom": "来自 {name}",
-  "web-pages.stations.page.footprint": "数据占用",
   "web-pages.stations.page.part.machine": "软件与设备",
   "web-pages.stations.page.part.overview": "概览",
   "web-pages.stations.page.part.settings": "设置",

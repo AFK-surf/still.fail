@@ -257,7 +257,6 @@ export function base(): Answers {
     "GET /threads": [{ ...threadView(7, 3), title: "部署" }],
     "GET /chats?archived=1": [],
     "GET /jobs": [],
-    "GET /footprint": {},
     "GET /threads/7/entries?limit=50": { last: 3, entries: entries(1, 3) },
     "GET /sessions/k1/timeline?before=1000000000000000&limit=200&brief=1": { start: 0, entries: [] },
   };
