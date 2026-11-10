@@ -164,10 +164,6 @@ fn hugging(t : @ui.Tester) -> Array[((Double, Double, Double, Double), (Double, 
 test "a panel a share of the window caps whose body is nodes, as tall as what it holds (hugs): its list's row and its foot where the old frame's are, as a sheet and in the middle of the window" {
   let sheet = hugging(menu_tester(390.0, 844.0, 2))
   assert_eq(sheet[1], sheet[0])
-  // (in the middle of the window: as tall, its foot where the old one's is; its list's row not reaching out across the
-  // dialog's room as the old one's does (the node dialog lends its body no rows' reach: panel_centred_node), so only
-  // how far down and how big it is said here)
   let dialog = hugging(menu_tester(1280.0, 800.0, 0))
-  let down = fn(r : (Double, Double, Double, Double)) { (r.1, r.2, r.3) }
-  assert_eq((down(dialog[1].0), dialog[1].1), (down(dialog[0].0), dialog[0].1))
+  assert_eq(dialog[1], dialog[0])
 }

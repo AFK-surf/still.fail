@@ -262,7 +262,10 @@ fn panel_centred_node(
               (if footed { dialog_body } else { dialog_body_end }).then(@ui.style(px=room(words_in))).then(body_top())
             })
             col.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-            panel_in_lend(col, Wide, 0.0, clear=@signals.untracked(fn() { if untitled() { dialog_close_clear() } else { 0.0 } }))
+            // (its rows out across the room the dialog leaves them, as far as an old body's: rows_out's)
+            panel_in_lend(col, Wide, 0.0, rows_out=panel_words - panel_card_in, clear=@signals.untracked(fn() {
+              if untitled() { dialog_close_clear() } else { 0.0 }
+            }))
             (n.body)(col, close)
           })
           |> ignore
@@ -332,8 +335,11 @@ fn panel_centred_node(
                     style_node(col, fn() {
                       (if footed { dialog_body } else { dialog_body_end }).then(@ui.style(px=room(words_in))).then(body_top())
                     })
-                    // (on its words' line already: none further in; clear of its close button while untitled)
-                    panel_in_lend(col, Wide, 0.0, clear=@signals.untracked(fn() { if untitled() { dialog_close_clear() } else { 0.0 } }))
+                    // (on its words' line already: none further in; its rows out across the room the dialog leaves them,
+                    // as far as an old body's (rows_out's); clear of its close button while untitled)
+                    panel_in_lend(col, Wide, 0.0, rows_out=panel_words - panel_card_in, clear=@signals.untracked(fn() {
+                      if untitled() { dialog_close_clear() } else { 0.0 }
+                    }))
                     (n.body)(col, close)
                   })
                   |> ignore
