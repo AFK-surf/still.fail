@@ -4,7 +4,7 @@
 // keeps in station storage are packed (archive.ts); they are restored before its runtime starts again, or when it is
 // shown again. The hub calls it (ColdStorage) from the session's queue, so no turn starts halfway through.
 import { existsSync, realpathSync, statSync } from "node:fs";
-import { access, readdir, realpath, unlink, writeFile } from "node:fs/promises";
+import { access, readdir, realpath, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -44,6 +44,9 @@ async function findRoom(dataDir: string, workspace: string): Promise<void> {
   rooms.set(workspace, { at: wall.now(), room: await roomOfSoon(dataDir, workspace) });
   if (rooms.size > 1024) rooms.delete(rooms.keys().next().value!);
 }
+
+/// Whether `path` is there, asked off the station's thread.
+const there = (path: string): Promise<boolean> => access(path).then(() => true, () => false);
 
 export class ColdRooms implements ColdStorage {
   /// The hub it works for (made after it).
@@ -151,16 +154,25 @@ export class ColdRooms implements ColdStorage {
     return files;
   }
 
-  isCold(key: string): boolean {
-    const row = this.hub().store.getSession(key);
-    const room = row ? roomOf(this.dataDir(), row.workspace) : null;
-    if (room !== null && (existsSync(join(room, "cold")) || existsSync(archive.workspaceArchive(room)) || existsSync(join(room, "workspace-locks.json"))))
+  /// Whether an archived session's directory or transcripts are put away: asked before each of its processes opens, so
+  /// off the station's thread, its transcripts found where the live view finds them (live.ts `locateAsync`, a worker's).
+  async isCold(key: string): Promise<boolean> {
+    const hub = this.hub();
+    const row = hub.store.getSession(key);
+    const room = row ? await roomOfSoon(this.dataDir(), row.workspace) : null;
+    if (room !== null && ((await there(join(room, "cold"))) || (await there(archive.workspaceArchive(room))) || (await there(join(room, "workspace-locks.json")))))
       return true;
+    let paths: string[];
     try {
-      return this.historyFiles(key, false).some((path) => !existsSync(path) && existsSync(archive.packed(path)));
+      const locate = hub.live.locateAsync;
+      paths = locate !== null
+        ? ((await locate(key, new AbortController().signal))?.paths ?? []).map((p) => (typeof p === "string" ? p : p.path))
+        : this.historyFiles(key, false);
     } catch {
       return false;
     }
+    for (const path of paths) if (!(await there(path)) && (await there(archive.packed(path)))) return true;
+    return false;
   }
 
   async restore(key: string): Promise<void> {
@@ -172,7 +184,7 @@ export class ColdRooms implements ColdStorage {
       await archive.restoreWorkspace(room);
       // Restoration must work even after the store has already brought this chat back.
       for (const path of this.historyFiles(key, false)) await archive.restoreFile(path);
-      if (existsSync(join(room, "cold"))) await unlink(join(room, "cold"));
+      await unlink(join(room, "cold")).catch(() => undefined);
     });
   }
 
@@ -189,7 +201,7 @@ export class ColdRooms implements ColdStorage {
     const room = due() ? this.archiveRoom(key) : null;
     if (room === null) return;
     await archive.withLock(room, async () => {
-      if (!due() || !existsSync(join(room, "cold")) || !(await archive.holdsMore(room))) return;
+      if (!due() || !(await there(join(room, "cold"))) || !(await archive.holdsMore(room))) return;
       await archive.emptyWorkspace(room);
       log.info("hub", "workspace of a long-archived session emptied", { session: key });
     });
@@ -253,9 +265,10 @@ export class ColdRooms implements ColdStorage {
     for (const path of files) {
       await archive.packFileIf(path, () => ready() && this.historyFiles(key, true).length > 0);
     }
-    if (files.length === 0 || !files.every((path) => !existsSync(path) && existsSync(archive.packed(path)))) return 0;
+    if (files.length === 0) return 0;
+    for (const path of files) if ((await there(path)) || !(await there(archive.packed(path)))) return 0;
     const copy = legacyCopy(this.hub().store.archiveDir(), key);
-    const size = statSync(copy, { throwIfNoEntry: false })?.size;
+    const size = await stat(copy).then((s) => s.size, () => undefined);
     if (size === undefined) return 0;
     await unlink(copy);
     return size;
