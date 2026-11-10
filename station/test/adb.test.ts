@@ -186,7 +186,7 @@ test("an ask about no offer, or an unknown one, is answered in the asker's langu
   assert.deepEqual(unknown.lines(), [{ status: 400, headers: { "content-type": "application/json" } }, { message: "无法识别的 adb 请求" }]);
   assert.ok(unknown.finished);
   const none = new Memory();
-  await answerAdb(shares, nowhere, viewer, asking({ op: "pair", code: "123456", phone: PHONE }, { "stillfail-lang": "en" }), none as unknown as Stream);
+  await answerAdb(shares, nowhere, viewer, asking({ op: "pair", code: "123456", phone: PHONE }, { "stillfail-lang": "en", "stillfail-build": "0.1.0" }), none as unknown as Stream);
   assert.deepEqual(none.lines(), [{ status: 409, headers: { "content-type": "application/json" } }, { message: "This device isn't sharing debugging" }]);
 });
 
@@ -582,7 +582,7 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
     assert.ok(adb.calls().some((c) => c.join(" ") === `-s ${serial} shell STILLFAIL_ADB_KEEP=1 pm grant fail.still.android android.permission.WRITE_SECURE_SETTINGS`));
     // and adbd's plain port is turned on, once a boot, for the phone to be held on off Wi-Fi
     await until(() => adb.calls().some((c) => c.join(" ") === `-s ${serial} tcpip 5555`));
-    const wrong = await mesh.answer({ op: "pair", code: "12345", phone: PHONE }, { "stillfail-lang": "en" });
+    const wrong = await mesh.answer({ op: "pair", code: "12345", phone: PHONE }, { "stillfail-lang": "en", "stillfail-build": "0.1.0" });
     assert.deepEqual(wrong, { head: { status: 422, headers: { "content-type": "application/json" } }, body: { message: "The pairing code is 6 digits" } });
     const granted = await mesh.answer({ op: "grant", phone: PHONE });
     assert.deepEqual(granted.body, { message: "app 现在可以自行开启无线调试" });
@@ -623,7 +623,7 @@ test("over the mesh: a phone adb is not paired with, or whose adbd turned the tu
   const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
   const mesh = await link(shares);
   try {
-    const { stream, reader } = await mesh.ask({ op: "share", phone: PHONE }, { "stillfail-lang": "en" });
+    const { stream, reader } = await mesh.ask({ op: "share", phone: PHONE }, { "stillfail-lang": "en", "stillfail-build": "0.1.0" });
     // `offline` after `connect`: looked at again until SETTLE is over.
     await time.asleep(500);
     await time.adjust(SETTLE);

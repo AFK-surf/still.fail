@@ -620,8 +620,20 @@ pub fn line_end_node(parent : @view.View, make : (@view.View) -> Unit, loc~ : So
 }
 
 ///|
+// kept across runs: what a narrow group's card lends what is made on it (group_node), let go with it
+let on_card_lent : @view.Lent[Bool] = @view.Lent::new()
+
+///|
+/// Whether node `v` is made on a narrow group's card (group_node's: lent it), its rows' grounds rounding in its corner
+/// and their words a row's padding in (the old one's in_card).
+fn on_card_node(v : @view.View) -> Bool {
+  v.lent(on_card_lent).unwrap_or(false)
+}
+
+///|
 /// Rows together on a list card (group's), `rows` made in it: narrow, ListCard (10 under it, its rows `list_pad` in, its
-/// corner the list card's); wide, wide_group_node's (a list card, or a `card` of words).
+/// corner the list card's; lent to them that they are on it: on_card_node); wide, wide_group_node's (a list card, or a
+/// `card` of words).
 #callsite(autofill(loc))
 pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool = false, loc~ : SourceLoc) -> Unit {
   let at = part_of(parent)
@@ -639,6 +651,7 @@ pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool
       .radius(Is(corner))
       .ground(By(fn() { @ui.tree_theme().color(Card) }))
       .clips(Is(true))
+      .lends(on_card_lent, true)
       |> ignore
       rows(card)
     })

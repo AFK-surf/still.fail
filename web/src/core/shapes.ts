@@ -34,7 +34,10 @@ export interface Attachment {
 	sub?: string;
 	/** Granted before signatures: nothing lends on it until it is signed. */
 	unsigned?: boolean;
-	/** Waiting, and this device is not on that account's own lock: it joins as it allows. */
+	/**
+	 * Waiting, and this device is off that account's own lock (outside it, or the lock begun again elsewhere):
+	 * it is approved before it allows. Absent with no lock yet: allowing begins it.
+	 */
 	join?: boolean;
 	/** Its station is from before signatures: nothing allowed there lends. */
 	oldStation?: boolean;

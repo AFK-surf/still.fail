@@ -2669,6 +2669,4 @@ let en : Map[String, String] = {
   "web-pages.screen.device.back": "Back",
   "web-pages.screen.debug.paneHide": "Hide the side panel",
   "web-pages.screen.debug.paneShow": "Show the side panel",
-  "android-misc.personal.heading": "Personal lock",
-  "android-misc.personal.note": "Which devices can approve as you, such as phone debugging",
 }

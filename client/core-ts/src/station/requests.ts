@@ -171,7 +171,8 @@ export class Requests {
     span.set("stillfail.station", station.station);
     if (bodySize > 0) span.set("http.request.body.size", bodySize);
     const h: [string, string][] = [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()]];
-    if (ownBuild() !== "") h.push([BUILD_HEADER, ownBuild()]);
+    // (a host that says none, a test's, a scripted run's: an unnumbered build, held to no floor)
+    h.push([BUILD_HEADER, ownBuild() || "0.1.0"]);
     if (!path.startsWith("/preview/")) h.push(["stillfail-runtimes", RUNTIMES.join(",")]);
     if (!path.startsWith("/preview/") && !headers.some(([k]) => k.toLowerCase() === "accept-encoding")) h.push(["accept-encoding", ZSTD]);
     // A write carries a key of its own: a station that keeps writes to once does it once however often it arrives.
@@ -214,7 +215,7 @@ export class Requests {
             const reply = yield* within(this.wire.request(station, head, body, gone), idleMs);
             span.set("stillfail.head_ms", Math.round(host.monotonicMs() - began));
             answered(span, reply);
-            const tooOld = stationTooOld(reply.headers);
+            const tooOld = stationTooOld(reply.headers, path);
             if (tooOld !== null) return yield* Effect.fail(tooOld);
             onHead?.(reply.status, reply.headers);
             // What came over the link is counted (and said in the span); what it says, decompressed.
@@ -298,7 +299,7 @@ export class Requests {
       const reply = opened.success;
       answered(span, reply);
       span.end();
-      const tooOld = stationTooOld(reply.headers);
+      const tooOld = stationTooOld(reply.headers, path);
       if (tooOld !== null) return yield* Effect.fail(tooOld);
       if (reply.status < 200 || reply.status >= 300) {
         const bytes = yield* Effect.orElseSucceed(readAll(yield* plain(this.#core.host, reply)), () => empty);

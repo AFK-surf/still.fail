@@ -259,6 +259,8 @@ pub let choice_gap : Double
 
 pub fn choice_row(@ui.Ctx, String, Bool, String, body? : () -> Unit, note? : String, lead? : () -> Unit, tag? : () -> Unit, trail? : () -> Unit, ink? : Int64, disabled? : Bool, busy? : Bool, on_press? : () -> Unit) -> Bool
 
+pub fn choice_row_node(@view.View, () -> String, () -> Bool, press? : () -> Unit, note? : () -> String, body? : (@view.View) -> Unit, lead? : (@view.View) -> Unit, tag? : (@view.View) -> Unit, trail? : (@view.View) -> Unit, ink? : () -> Int64, disabled? : () -> Bool) -> Unit
+
 pub fn choices(@ui.Ctx, String, String, Array[(String, String, String)], label? : String, icon? : (String) -> Unit, extra? : (String) -> (() -> Unit)?, disabled? : Array[String], note? : (String) -> Unit) -> String
 
 pub fn chooser(@ui.Ctx, String, String, Array[@kit.Entry], () -> Bool, (Bool) -> Unit, side? : @view.Side, lead? : (Int64) -> Unit, disabled? : Bool, capsule? : Bool, as_button? : Bool, on_pick? : (String) -> Unit) -> @kit.Menu
@@ -468,6 +470,8 @@ pub let dialog_margin : Double
 pub let dialog_r : Double
 
 pub fn dialog_rows(Double) -> (@ui.Style, @ui.Style)
+
+pub fn dialog_rows_node(@view.View, Double) -> (@ui.Style, @ui.Style)
 
 pub let dialog_shadow : Double
 

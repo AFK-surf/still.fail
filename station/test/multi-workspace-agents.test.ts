@@ -10,7 +10,7 @@ import { test } from "node:test";
 import { Cloud } from "../src/cloud/state.ts";
 import { Jobs } from "../src/jobs/jobs.ts";
 import { type PeerCall, Remote } from "../src/jobs/remote.ts";
-import { member } from "../src/mesh/peer.ts";
+import { member, roster } from "../src/mesh/peer.ts";
 import { memory } from "../src/read/memory.ts";
 import { workspaceAgentHome } from "../src/sessions/agent-home.ts";
 import { profilesFor } from "../src/sessions/config.ts";
@@ -46,10 +46,7 @@ async function twoWorkspaces() {
   const cloud = cloudOf(rig.dir);
   const asked: [string, string, any][] = [];
   const transport: PeerCall = async (target, workspace, request) => {
-    if (target === "" && request?.method === "peers") {
-      const of = workspace === null ? cloud.memberships()[0]! : cloud.membership(workspace)!;
-      return { workspace: of.workspace, stations: of.peers, current: true };
-    }
+    if (target === "" && request?.method === "peers") return roster(cloud, workspace);
     const ws = member(cloud, target, workspace);
     asked.push([target, ws, request]);
     if (request?.method === "describe") return { protocol: 1, tasks: true };
@@ -131,6 +128,25 @@ test("chat_list and chat_read show a session its own workspace's chats; another'
   assert.deepEqual(t.xshare.address("H", { method: "session.read", workspace: W2 }), { method: "session.read", workspace: "W9", as: W2 });
   assert.deepEqual(t.xshare.address("H", { method: "session.read", workspace: W1 }), { method: "session.read", workspace: W1 });
   assert.deepEqual(t.xshare.address("A", { method: "session.read", workspace: W1 }), { method: "session.read", workspace: W1 });
+}));
+
+test("station_list lists a station safe mode leaves out, saying why it cannot be called; naming it is refused the same", () => withTwo(async (t) => {
+  const { one, station, asked } = t;
+  // W1's lock names st and A; the control plane lists win too (offline or too old when safe mode was turned on).
+  const cloud: any = t.cloud;
+  cloud.lock = { entries: [], state: { stations: new Set(["st", "A"]), gateways: new Set() } };
+  cloud.planePeers = [{ id: "st", name: "st" }, { id: "A", name: "alpha" }, { id: "W", name: "win" }];
+  const listed = (await station(one, "station_list", {})).stations;
+  assert.deepEqual(listed.map((s: any) => [s.id, typeof s.unprotected]), [["st", "undefined"], ["A", "undefined"], ["W", "string"]]);
+  assert.match(listed[2].unprotected, /not protected by its safe mode[\s\S]*cannot be called from here[\s\S]*设置 → 安全/);
+  assert.equal(listed[2].load, undefined);
+  await assert.rejects(station(one, "station_list", { station: "win" }), /not protected by its safe mode/);
+  await assert.rejects(station(one, "station_task", { station: "WIN", action: "list" }), /not protected by its safe mode/);
+  await assert.rejects(station(one, "station_task", { station: "W", action: "list" }), /not protected by its safe mode/);
+  // One of no workspace of this station's: as before.
+  await assert.rejects(station(one, "station_task", { station: "nobody", action: "list" }), (e: Error) => e.message === "peer is not another station in this workspace");
+  // Only the protected one was asked.
+  assert.deepEqual(asked.map(([to, ws, r]) => [to, ws, r.method]), [["A", W1, "describe"]]);
 }));
 
 test("station_list, station_task and session_send reach the stations of the session's workspace only", () => withTwo(async (t) => {

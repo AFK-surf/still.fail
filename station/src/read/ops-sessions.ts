@@ -1,7 +1,7 @@
 // The reads of sessions, threads and jobs (src/api/routes/sessions.ts asks them), each with the request's `lang`.
 import type { ReadOp } from "./ops.ts";
 import { job, jobLog, openJobs } from "./jobs.ts";
-import { chatHistoryMessages, deliveryCardState, firstText, getSession, getThread, lastSaid, lastSaidText, LegacyEditsUnavailable, listThreads, messagesBefore, openedChatSaid, pendingCard, pendingCardNumber, pendingDeliveries, statePendingCard, stateQuestion, threadSessions } from "./store.ts";
+import { chatHistoryMessages, deliveryCardState, firstText, getSession, getThread, lastSaid, lastSaidText, listThreads, messagesBefore, openedChatSaid, pendingCard, pendingCardNumber, pendingDeliveries, statePendingCard, stateQuestion, threadSessions } from "./store.ts";
 import { searchChats } from "../store/chat-list.ts";
 import { legacyMergedReadReady } from "../store/legacy-edits-build.ts";
 import { recentChatPage } from "./recent-chat.ts";
@@ -69,17 +69,6 @@ export const sessionOps: Record<string, ReadOp> = {
   sessionPlace: (s, a) => sessionPlace(s, a.key, a.path ?? "", a.lang),
   threads: (s, a) => threads(s, a.viewer, a.session ?? null, a.lang),
   thread: (s, a) => thread(s, a.viewer, a.id, a.lang),
-  /// A thread as each of several viewers has it (`thread`), in one read: what is told to every one after each message.
-  /// None for one it is not for.
-  threadViews: (s, a) =>
-    a.viewers.map((v: { viewer: any; lang: any }) => {
-      try {
-        return thread(s, v.viewer, String(a.id), v.lang);
-      } catch (error) {
-        if (error instanceof LegacyEditsUnavailable) throw error;
-        return null;
-      }
-    }),
   openJobs: (s, a) => openJobs(s, a.viewer, a.lang, a.chats !== false),
   job: (s, a) => job(s, a.id),
   jobLog: (s, a) => jobLog(s, a.id, a.lines),

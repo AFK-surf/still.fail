@@ -74,3 +74,28 @@ test("a late whole read does not bring back a grant already taken back", async (
     runner.shutdown();
   }
 });
+
+test("a request waiting asks this device to be approved first only where it is off its person's own lock, not where there is none yet", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  const store = new Store(host, runner);
+  const mesh = { deviceId: () => "phone", link: () => Effect.never } as unknown as Mesh;
+  let standing: "none" | "member" | "outside" | "replaced" = "none";
+  const stub = personalStub();
+  const personal = { ...stub.personal, standing: () => standing } as unknown as typeof stub.personal;
+  const adb = new Adb({ ...stub, personal, host, runner, store, mesh: () => Effect.succeed(mesh), credentials: () => (() => Effect.succeed({} as never)), relays: () => [], lends: () => false });
+  try {
+    adb.heard("ws/st", { id: "p1", chat: "chat-a", session: "s1", reason: "debug", status: "pending", at: 1 });
+    const joins = () => adb.grants().map((g) => g.join ?? false);
+    // No lock yet: allowing it begins the lock (PersonalLock.signGrant), no step before it.
+    assert.deepEqual(joins(), [false]);
+    standing = "outside";
+    assert.deepEqual(joins(), [true]);
+    standing = "replaced";
+    assert.deepEqual(joins(), [true]);
+    standing = "member";
+    assert.deepEqual(joins(), [false]);
+  } finally {
+    runner.shutdown();
+  }
+});

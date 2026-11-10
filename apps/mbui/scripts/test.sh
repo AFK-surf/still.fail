@@ -273,8 +273,11 @@ for t in $targets; do
       "src/sfapp/kept_rows_kinds_wbtest.mbt --index 8-"*) echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
       # (preview_tree's two on the fourth, the one with the most programs: at 120 a second APP_PART gives each of its
-      # two halves one)
-      "src/sfapp/preview_tree_wbtest.mbt "*) echo 4 ;;
+      # two halves one; at 24 and at 7 the fourth has a runner for each. At the default rate and at 60 on the first:
+      # there the fourth's 138 files of pages and preview_tree's two, six processes on its four cores, were 214-273 s
+      # of its 5 minutes at 60, the same commit's runs 50 s apart by their runners alone, while the first's job was
+      # 54-124 s, main 85413543 42736997391, station-conversations-survive 42739107408, 2026-11-10)
+      "src/sfapp/preview_tree_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in "" | 60) echo 1 ;; *) echo 4 ;; esac ;;
       "src/sfapp/contrast_wbtest.mbt  ") echo contrast ;;
       "@pages "*) [ "$2" = 0 ] && echo 1 || echo "$2" ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;

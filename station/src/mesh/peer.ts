@@ -8,7 +8,7 @@
 // chunks of base64 inside it, one request each.
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
-import type { Cloud } from "../cloud/state.ts";
+import { type Cloud, UNPROTECTED } from "../cloud/state.ts";
 import { BYTES, CHECK_BYTES, type Bytes, NoBytes, type PeerBus, type PeerCall, Refused, bytesOf } from "./bus.ts";
 import type { Addr, Connection, Endpoint, Stream } from "./native.ts";
 import { answerLock } from "./lock-sync.ts";
@@ -47,8 +47,21 @@ export function member(cloud: Cloud, peer: string, workspace: string | null): st
     of = cloud.membership(workspace);
   }
   if (s === null || of === undefined || of === null) throw new Error("station is outside this workspace");
-  if (!of.peers.some((p) => p?.id === peer) || peer === s.station) throw new Error("peer is not another station in this workspace");
+  if (!of.peers.some((p) => p?.id === peer) || peer === s.station) {
+    // In the control plane's roster, left out only by safe mode: said so, not as if it were none of the workspace's.
+    const where = workspace === null ? cloud.memberships() : [of];
+    if (peer !== s.station && where.some((m) => cloud.unprotected(m.workspace).some((p) => p?.id === peer))) throw new Error(UNPROTECTED);
+    throw new Error("peer is not another station in this workspace");
+  }
   return of.workspace;
+}
+
+/// What `peers` answers (the transport's own roster): the stations of `workspace` (this station's first when null) it
+/// calls, and those of it safe mode leaves out (`unprotected`, only when there are any), which it cannot.
+export function roster(cloud: Cloud, workspace: string | null): { workspace: string; stations: any[]; current: boolean; unprotected?: any[] } {
+  const of = workspace === null ? (cloud.memberships()[0] ?? null) : cloud.membership(workspace);
+  const unprotected = of === null ? [] : cloud.unprotected(of.workspace);
+  return { workspace: of?.workspace ?? "", stations: of?.peers ?? [], current: cloud.peersCurrent, ...(unprotected.length > 0 ? { unprotected } : {}) };
 }
 
 /// All of a stream, at most `limit` bytes.
@@ -184,10 +197,7 @@ export function peerCall(
     conn.close(0, "not answering");
   };
   return async (target, workspace, request) => {
-    if (target === "" && request?.method === "peers") {
-      const of = workspace === null ? (cloud.memberships()[0] ?? null) : cloud.membership(workspace);
-      return { workspace: of?.workspace ?? "", stations: of?.peers ?? [], current: cloud.peersCurrent };
-    }
+    if (target === "" && request?.method === "peers") return roster(cloud, workspace);
     const ws = workspaceFor(cloud, target, workspace, outside);
     let conn: Connection | null = null;
     let dial: Promise<Connection> | null = null;
