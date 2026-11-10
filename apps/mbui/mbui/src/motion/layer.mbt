@@ -132,8 +132,6 @@ priv struct Moving {
   mut scope : Int
   /// flown from (x, y, scale), how far across, down and grown
   mut fly : (Double, Double, Double, Double, Double, Double)?
-  /// how far where it flies from has gone since it set out, as the frame is laid out (fly's `carried`)
-  mut fly_carried : (() -> Double)?
   /// placed by its own look but flying over rows, which must make room for it
   mut flying_placed : Bool
   /// its own ground changes shape for its cause (reshape), by `spec`
@@ -506,7 +504,6 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     kept_drawn: false,
     scope: 0,
     fly: None,
-    fly_carried: None,
     flying_placed: false,
     reshape: false,
     carry: false,
@@ -686,9 +683,7 @@ pub fn reshape(
 /// Node `i` flown from (`x`, `y`, at `scale`) to where it is laid out (a shared element: Motion's `layoutId`): its
 /// top left `px` of the way across, `py` of the way down and `ps` of the way grown (the words sent from the composer
 /// to their bubble), drawn as what flies is (@ui.Stratum's Flying). Only drawn so: it is where it is laid out for
-/// anything else. `carried`: how far down where it flies from has gone since it set out, read as the frame is laid out
-/// (what it flies from goes with what it lands among, a list going up under words sent: so the way left to its place
-/// only closes, however that moves meanwhile).
+/// anything else.
 pub fn fly(
   c : @ui.Ctx,
   i : Int,
@@ -698,14 +693,12 @@ pub fn fly(
   px~ : Double,
   py~ : Double,
   ps? : Double = 1.0,
-  carried? : () -> Double,
 ) -> Unit {
   let e = moving_of(c, i)
   if e.name == "" {
     e.name = "fly"
   }
   e.fly = Some((x, y, scale, px, py, ps))
-  e.fly_carried = carried
   c.stratum(i, Flying)
 }
 
@@ -2309,10 +2302,6 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
     }
     match e.fly {
       Some((fx, fy, fs, px, py, ps)) => {
-        let fy = match e.fly_carried {
-          Some(d) => fy + d()
-          None => fy
-        }
         let s = fs + (1.0 - fs) * ps
         let x = fx + (nx - fx) * px
         let y = fy + (ny - fy) * py
