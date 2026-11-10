@@ -120,7 +120,7 @@ copy() {
   # (WORK's mbui was once a link of its own, to a checkout beside it: mbui is apps/mbui/mbui's files now)
   [ ! -L "$WORK/mbui" ] || rm "$WORK/mbui"
   (cd "$A" && git ls-files -z) | python3 -c '
-import os, shutil, subprocess, sys
+import json, os, shutil, subprocess, sys
 src, dst = sys.argv[1:3]
 keep = {"out", "_build", ".mooncakes", "android/app/build", "android/app/src/main/jniLibs"}
 # (the folders the builds write into, wherever they are: in mbui too)
@@ -130,14 +130,28 @@ for f in files:
     a, b = os.path.join(src, f), os.path.join(dst, f)
     if os.path.islink(a) or not os.path.isfile(a):
         continue
-    same = os.path.isfile(b) and os.path.getsize(a) == os.path.getsize(b) and open(a, "rb").read() == open(b, "rb").read()
+    data = open(a, "rb").read()
+    # The copy has no repository above it. Java outside apps/mbui (vendor/jzlib) stays in the checkout, as the core
+    # parts do through SF_SRC; app-local roots still name the cached sources. Only the cached config is changed.
+    if f in {"android/apk.json", "mbui/android/apk.json"}:
+        cfg = json.loads(data)
+        java = cfg.get("java", [])
+        roots = [os.path.abspath(os.path.join(src, os.path.dirname(f), p)) for p in java]
+        paths = [root if os.path.commonpath([os.path.abspath(src), root]) != os.path.abspath(src) else p
+                 for p, root in zip(java, roots)]
+        if paths != java:
+            cfg["java"] = paths
+            data = (json.dumps(cfg, ensure_ascii=False, indent=2) + chr(10)).encode()
+    same = os.path.isfile(b) and os.path.getsize(b) == len(data) and data == open(b, "rb").read()
     if not same:
         os.makedirs(os.path.dirname(b), exist_ok=True)
-        shutil.copy2(a, b)
+        with open(b, "wb") as out:
+            out.write(data)
+        shutil.copystat(a, b)
         os.utime(b)
     if os.access(a, os.X_OK) != os.access(b, os.X_OK):
         os.chmod(b, os.stat(a).st_mode)
-tracked = set(files)
+tracked = {os.path.normpath(f) for f in files}
 gone = []
 for root, dirs, names in os.walk(dst):
     rel = os.path.relpath(root, dst)
