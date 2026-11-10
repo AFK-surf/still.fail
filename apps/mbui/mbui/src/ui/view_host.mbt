@@ -2654,6 +2654,21 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   if !(kind == 1 && view_held.val is Some(Dragging(_))) {
     old_hits_place(g(), Some(tree))
   }
+  // (where in the window's stack of layers what of the tree's it goes down on is, its topmost modal layer's at least, as
+  // it goes down, before anything closes for it: what of the old frame's layers it is outside of where the tree takes
+  // it, Ctx::layer_keys)
+  if kind == 0 {
+    let c = g()
+    c.press_tree_stack = @signals.untracked(fn() {
+      let on = tree.stack_takes(x, y)
+      let modal = tree.modal_stack()
+      if on > modal {
+        on
+      } else {
+        modal
+      }
+    })
+  }
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
   if kind == 0 {
     tree.went_down(at, x~, y~)
@@ -4161,12 +4176,12 @@ fn view_key(code : Int, mods : Int) -> Bool {
   // (where the focus is in the tree: its node, or the one an old view's stop or field with it is hosted in)
   let held = focus_node_of(c.focus)
   // (a modal layer of the tree's over where the focus is (one that leaves it in a field under it: a panel that does
-  // not take it) and over the old frame's layers that take the keys: the keys the field does not take its, before
-  // theirs)
+  // not take it; the focus in none of the tree, on what of the old frame's or nowhere) and over the old frame's layers
+  // that take the keys: the keys the field does not take its, before theirs)
   let modal = tree.modal_stack()
   let under_modal = match held {
     Some(nid) => modal > tree.stack_of(nid)
-    None => false
+    None => true
   }
   let over = match held {
     Some(nid) => tree.stack_of(nid) > old_keys

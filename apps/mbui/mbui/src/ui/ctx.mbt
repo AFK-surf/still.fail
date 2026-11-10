@@ -689,6 +689,9 @@ pub struct Ctx {
   mut press_down : (Double, Double)?
   // (the window's tree took that press: none of the old frame's targets did, whatever its targets lie under it)
   mut press_down_tree : Bool
+  // (where in the window's stack of layers what of the tree's a press went down on is, as it went down, its topmost
+  // modal layer's at least (view_pointer): the old frame's layers under that never saw it, as the tree took it)
+  mut press_tree_stack : Int
   // output
   mut inst : FixedArray[Double]
   mut ninst : Int
@@ -926,6 +929,7 @@ fn Ctx::new() -> Ctx {
     layer_return: Map::new(),
     press_down: None,
     press_down_tree: false,
+    press_tree_stack: -2,
     inst: FixedArray::make(inst_size * 4096, 0.0),
     ninst: 0,
     segs: [],
