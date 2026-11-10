@@ -247,7 +247,6 @@
       "src/sfapp/settings/profiles.mbt": 42,
       "src/sfapp/settings/run_more.mbt": 87,
       "src/sfapp/settings/station_add.mbt": 72,
-      "src/sfapp/settings/station_mark.mbt": 1,
       "src/sfapp/settings/station_parts.mbt": 9,
       "src/sfapp/settings/stations.mbt": 32,
       "src/sfapp/share.mbt": 36,
@@ -286,7 +285,6 @@
       "src/sfapp/settings/profiles.mbt": 23,
       "src/sfapp/settings/run_more.mbt": 45,
       "src/sfapp/settings/station_add.mbt": 32,
-      "src/sfapp/settings/station_mark.mbt": 2,
       "src/sfapp/settings/station_parts.mbt": 5,
       "src/sfapp/settings/stations.mbt": 24,
       "src/sfapp/share.mbt": 34,
@@ -508,7 +506,6 @@
     "old-panel": {
       "src/sfapp/settings/run_more.mbt": 2,
       "src/sfapp/settings/station_add.mbt": 1,
-      "src/sfapp/settings/station_mark.mbt": 1,
       "src/sfapp/settings/vault_ask.mbt": 1,
       "src/sfapp/sheet.mbt": 1,
       "src/sfapp/sheets.mbt": 4,
