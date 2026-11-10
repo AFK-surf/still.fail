@@ -101,3 +101,39 @@ test "a window tree's words that fit their column are no fault" {
   assert_false(unsaid_cut_drawn("fits"))
   assert_eq(t.squeeze_faults(), [])
 }
+
+///|
+/// A row 60 wide holding a box that gives way along it (`shrink(1)`, as narrow as nothing), the words on one line in
+/// that box, nothing said of them; `outer` says what else of the box.
+fn unsaid_cut_in_giving(outer : (@view.View) -> Unit) -> Tester {
+  Tester::new(fn(_c) {  }, w=400.0, h=100.0, tree=fn(root) {
+    root.box(fn(row) {
+      row.width(Is(Some(60.0))).row(Is(true)) |> ignore
+      row.box(fn(o) {
+        o.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        outer(o)
+        o.box(fn(v) { v.words(Is(unsaid_cut_long), look=unsaid_cut_look) |> ignore }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+}
+
+///|
+test "a window tree's words in a box that gives way along its row, nothing said of them, cut: a fault" {
+  let t = unsaid_cut_in_giving(fn(_o) {  })
+  t.draw()
+  assert_true(unsaid_cut_drawn(unsaid_cut_long))
+  let faults = t.squeeze_faults()
+  assert_eq(faults.length(), 1, msg=faults.join("\n"))
+  assert_true(faults[0].contains("cut short without saying they may be"), msg=faults[0])
+}
+
+///|
+test "a window tree's words in a box said to be cut short (View::cuts), cut: no fault" {
+  let t = unsaid_cut_in_giving(fn(o) { o.cuts(Is(true)) |> ignore })
+  t.draw()
+  assert_true(unsaid_cut_drawn(unsaid_cut_long))
+  assert_eq(t.squeeze_faults(), [])
+}

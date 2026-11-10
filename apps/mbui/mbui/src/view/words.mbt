@@ -357,11 +357,14 @@ pub fn View::allow_ellipsis(self : View, on : Live[Bool], loc~ : SourceLoc) -> V
 
 ///|
 /// Whether the app said a node's words may be cut, as an old view's line says it (ui's squeeze.mbt,
-/// Ctx::squeeze_cut_said): the words themselves (View::allow_ellipsis; a share of their holder's width, or growing into
-/// its room along a row: View::width_share, View::grow), or they or what holds them cut short (View::cuts), giving
-/// way along a row (View::shrink above 0) or held to a width at most (View::max_width). Only what the app said: the
-/// framework's own bound on one line of words in a column (Tree::capped_applied's), the giving way it makes of words
-/// said shorter ways (Tree::give_way_applied's) and a scroll's giving way down its column (View::scrolls') say nothing.
+/// Ctx::squeeze_cut_said): the words themselves (View::allow_ellipsis; a share of their holder's width, growing into
+/// its room or giving way along a row: View::width_share, View::grow, View::shrink above 0), or they or what holds
+/// them cut short (View::cuts) or held to a width at most (View::max_width). What holds them giving way along its row
+/// lays them out narrower, never says they may be cut (an old view's Auto box in a row gives way too, and says
+/// nothing): a row's part that says when its title may be cut (link_row_node's `title_cut`) says it so. Only what the
+/// app said: the framework's own bound on one line of words in a column (Tree::capped_applied's), the giving way it
+/// makes of words said shorter ways (Tree::give_way_applied's) and a scroll's giving way down its column
+/// (View::scrolls') say nothing.
 /// A fixed width is the boundary: a constraint on a more distant holder cannot allow cutting everything inside this
 /// one.
 pub fn Tree::allows_ellipsis(self : Tree, id : NodeId) -> Bool {
@@ -380,9 +383,9 @@ pub fn Tree::allows_ellipsis(self : Tree, id : NodeId) -> Bool {
     }
     let in_row = p >= 0 && self.nodes[p].flex.style.direction is (Row | RowReverse)
     let max_said = n.max_w_said is Some(Some(_)) || n.max_w_within
-    let gives_way = n.cut || (in_row && (match n.shrink_said { Some(s) => s > 0.0; None => false }))
-    if (own && n.allow_ellipsis) || gives_way || max_said ||
-      (own && (style.width_kind() == @flex.LEN_PCT || (in_row && style.grow > 0.0))) {
+    // (giving way or growing along its row: the words' own say alone)
+    let along = in_row && ((match n.shrink_said { Some(s) => s > 0.0; None => false }) || style.grow > 0.0)
+    if (own && (n.allow_ellipsis || along || style.width_kind() == @flex.LEN_PCT)) || n.cut || max_said {
       return true
     }
     if style.width_kind() == @flex.LEN_PT {
