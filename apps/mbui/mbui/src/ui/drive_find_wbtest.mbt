@@ -68,3 +68,56 @@ test "locate and reachable: an old view's words and the tree's, made transparent
 
 ///|
 let drive_find_leave_ms : Double = 100.0
+
+///|
+test "img: a picture by its source, shapes by what they are called, as an old view's and the tree's alike: found, reached and pressed; a name it is not, neither" {
+  let pressed = Ref(0)
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0, images=[
+    ("old/glyph/robot.png", 40, 40),
+    ("tree/glyph/robot.png", 40, 40),
+  ])
+  set_view_app(fn(root) {
+    old(root, fn(c) {
+      c.box(left=0.0, top=0.0, w=Px(400.0), h=Px(60.0), fn() {
+        c.image("old/glyph/robot.png", w=Px(40.0), h=Px(40.0)) |> ignore
+      })
+      |> ignore
+    })
+    .height(Is(Some(60.0)))
+    |> ignore
+    root.box(fn(row) {
+      row.row(Is(true)).height(Is(Some(60.0))) |> ignore
+      // (shapes called by a glyph's name, as a mark's are: pressed)
+      row.box(fn(g) {
+        g
+        .width(Is(Some(40.0)))
+        .height(Is(Some(40.0)))
+        .shapes(Is([@paint.shape_of([([0.0, 0.0, 40.0, 0.0, 40.0, 40.0], true)], fill=0x000000FFL)]))
+        .drawn_as(Is("sf/pic/glyph/rocket"))
+        .presses(Is(true))
+        .on_press(fn() { pressed.val += 1 })
+        |> ignore
+      })
+      |> ignore
+      // (a picture by its source)
+      row.box(fn(p) {
+        p.width(Is(Some(40.0))).height(Is(Some(40.0))).image(Is(Some(("tree/glyph/robot.png", "", 64)))) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let rocket = t.reachable("img:glyph/rocket")
+  let found = (
+    t.locate("img:glyph/rocket").length(),
+    rocket.length(),
+    t.locate("img:old/glyph/robot").length(),
+    t.locate("img:tree/glyph/robot").length(),
+    t.locate("img:glyph/robot").length(),
+    t.locate("img:glyph/rock").length(),
+    t.locate("img:glyph/tiger").length(),
+  )
+  t.tap(rocket[0].0, rocket[0].1)
+  assert_eq((found, pressed.val), ((1, 1, 1, 1, 2, 1, 0), 1))
+}

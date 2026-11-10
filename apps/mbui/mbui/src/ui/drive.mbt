@@ -313,7 +313,8 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
 
 ///|
 /// What of the window's tree shows `what` (its words, `=WORDS` exactly, `field:WORDS` a field by the words in it,
-/// `icon:NAME` what it draws is called so: View::drawn_as; or is called `what`, its label whole: View::says), the
+/// `icon:NAME` what it draws is called so: View::drawn_as; `img:NAME` a picture whose source, or shapes whose name,
+/// contains NAME, as on_screen_nodes' `img:`; or is called `what`, its label whole: View::says), the
 /// middle of each where it is drawn, in the window, as it is made, however faded this frame (made transparent, coming
 /// in), as on_screen_nodes finds an old view's laid out; not on its way out (View::leaving: drawn only, as an old layer leaving is, Ctx::overlay's inert);
 /// whether it takes a press or not, whatever lies over it (reachable says which of it a finger
@@ -336,6 +337,14 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
       (if what.has_prefix("=") { words == what.unsafe_substring(start=1, end=what.length()) } else { words.contains(what) })
     let hit = if what.has_prefix("icon:") {
       tree.drawn_name(d.id).contains("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
+    } else if what.has_prefix("img:") {
+      // a picture by its source, or shapes by what they are called (View::drawn_as: a glyph's "…/glyph/NAME"), its
+      // name containing what follows: on_screen_nodes' `img:` of an old view's image and drawable, the same rule
+      let name = what.unsafe_substring(start=4, end=what.length())
+      match d.image {
+        Some((src, _, _)) => src.contains(name)
+        None => d.shapes.length() > 0 && tree.drawn_name(d.id).contains(name)
+      }
     } else if what.has_prefix("switch:") {
       // a switch by what it turns (its label, whole), as on_screen_nodes finds an old view's: the switch alone
       let label = what.unsafe_substring(start=7, end=what.length())
@@ -530,7 +539,8 @@ fn on_screen_nodes(
   let icon = if what.has_prefix("icon:") {
     Some("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
   } else if what.has_prefix("img:") {
-    // an image by its source (a chat's file: its key ends with the file's name)
+    // an image by its source (a chat's file: its key ends with the file's name), or a drawable by its name (the window's
+    // tree's the same: tree_on_screen's `img:`)
     Some(what.unsafe_substring(start=4, end=what.length()))
   } else {
     None
