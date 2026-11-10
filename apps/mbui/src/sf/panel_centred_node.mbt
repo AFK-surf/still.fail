@@ -244,8 +244,14 @@ fn panel_centred_node(
         // filling that and laid out in it, scrolling as it does itself)
         d.box(fn(b) {
           style_node(b, fn() { centred_part_in(0.0, 0.0) })
+          // (one as tall as what it holds up to that share (`hugs`): no taller than it, as tall as what it holds)
+          let share = fn() { Some(dmax(0.0, x.tall * layer.window().1 - dialog_frame_h)) }
+          if n.hugs {
+            b.max_height(By(share)) |> ignore
+          } else {
+            b.height(By(share)) |> ignore
+          }
           b
-          .height(By(fn() { Some(dmax(0.0, x.tall * layer.window().1 - dialog_frame_h)) }))
           .shrink(Is(1.0))
           .min_height(Is(Some(0.0)))
           .margin(Is((-dialog_pad, 0.0, -dialog_pad, 0.0)))

@@ -150,6 +150,8 @@ priv struct PanelOf {
 priv struct PanelNodes {
   body : (@view.View, () -> Unit) -> Unit
   foot : ((@view.View, () -> Unit) -> Unit)?
+  /// a share of the window tall (`tall`): as tall as what it holds up to that share, not that share whatever it holds
+  hugs : Bool
 }
 
 ///|
@@ -509,9 +511,11 @@ pub fn panel(
 
 ///|
 /// A panel as @sf.panel's (`title`, `from`, `w`, `description`, `wide`, `live`, `gone`, `tall`, `focus`, `ruled`, `form`,
-/// `grows`, `side`, `along`, `offset` as there), what it holds (`body`) and what is at its foot (`foot`) made once as nodes of the window's
-/// tree, each in the node the panel gives it, laid out there as the old frame's body and foot are (beside what opened
-/// it: panel_node; in the middle of the window, opened by nothing or a form: panel_centred_node), given what closes it.
+/// `grows`, `side`, `along`, `offset` as there; `hugs`: one `tall` as tall as what it holds up to that share, as a sheet
+/// and a dialog in the middle of the window draw it, not that share whatever it holds), what it holds (`body`) and what
+/// is at its foot (`foot`) made once as nodes of the window's tree, each in the node the panel gives it, laid out there
+/// as the old frame's body and foot are (beside what opened it: panel_node; in the middle of the window, opened by
+/// nothing or a form: panel_centred_node), given what closes it.
 /// The window's tree draws it on every screen: on 小屏 a sheet from the window's foot (sheet_node), as the host draws an
 /// old-bodied panel there. Beside @sf.panel only while panels with old bodies are left (detlint's old-panel):
 /// as the last goes, the old body's path goes and this takes the name `panel`.
@@ -533,6 +537,7 @@ pub fn panel_nodes(
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Start,
   offset? : Double = panel_offset,
+  hugs? : Bool = false,
 ) -> Unit {
   present(
     Panel({
@@ -561,7 +566,7 @@ pub fn panel_nodes(
       offset,
       steps: false,
       on_back: None,
-      nodes: Some({ body, foot }),
+      nodes: Some({ body, foot, hugs }),
     }),
     from,
     gone~,
