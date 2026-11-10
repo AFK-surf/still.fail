@@ -1,6 +1,5 @@
 // An operator's network choice (the congestion controller). Saved, and taken by the running mesh as saved (mesh.ts
-// applyNetwork); a station started again (below) has it from its start. The relays' UDP way, a choice until
-// 2026-10-30, is no more: a client from before that still sets it is answered as if it did, nothing saved.
+// applyNetwork); a station started again (below) has it from its start.
 import { error, json } from "../request.ts";
 import type { Route } from "../admin.ts";
 import type { ConfigFile } from "../../ops/config.ts";
@@ -22,10 +21,7 @@ export const routes = ({ config, changed, restart }: { config: ConfigFile; chang
       if (body.congestion !== "cubic" && body.congestion !== "bbr") return error(400, "congestion: expected cubic or bbr");
       set.congestion = body.congestion;
     }
-    if (Object.keys(set).length === 0) {
-      if (body !== null && typeof body === "object" && typeof body.relayUdp === "boolean") return json(200, JSON.stringify(networkView(config.raw())));
-      return error(400, "expected congestion");
-    }
+    if (Object.keys(set).length === 0) return error(400, "expected congestion");
     config.update((raw) => { raw.network = { ...raw.network, ...set }; });
     changed?.();
     return json(200, JSON.stringify(networkView(config.raw())));
