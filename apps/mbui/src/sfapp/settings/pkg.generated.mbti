@@ -130,6 +130,8 @@ pub fn fixture_pair_ended() -> String
 
 pub fn fixture_profiles() -> Array[@json.Json]
 
+pub fn fixture_prompts_now(pairing~ : Bool, more? : Bool, key_ask~ : Bool, giving? : Bool) -> Unit
+
 pub fn fixture_topic(String, String, Map[String, @json.Json]) -> @json.Json?
 
 pub fn fixture_version() -> Int32
