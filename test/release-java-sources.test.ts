@@ -20,8 +20,8 @@ test("a warm release keeps external Java roots in the checkout and local roots i
     const app = join(repo, "apps/mbui");
     const work = join(dir, "cache/work");
     const vendor = join(repo, "vendor/jzlib/src");
-    const configs = ["android/apk.json", "mbui/android/apk.json"];
-    const files = [...configs, "android/app/src/main/java/App.java"];
+    const configs = ["android/apk.json", "mbui/android/apk.json"] as const;
+    const files = [...configs, "android/app/src/main/java/App.java"] as const;
     const put = (path: string, text: string) => {
       mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, text);
