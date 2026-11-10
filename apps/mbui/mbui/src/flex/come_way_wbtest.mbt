@@ -67,3 +67,59 @@ test "come_way turned back as fast either side of where its slowing's share and 
     assert_true((a - b).abs() <= near, msg="at \{t}: \{a} \{b}")
   }
 }
+
+///|
+/// A flight's way as words sent set out (at 50) and land (at 506): what goes with it (the room they open).
+let come_with_flight : ComeWith = { start: 50.0, ends: 506.0 }
+
+///|
+test "come_way going with another way: set out as it does, there as it ends, a Move all the way, whatever how far" {
+  let w = come_with_flight
+  let ms = w.ends - w.start
+  for far in [8.0, 64.0, 300.0] {
+    assert_eq(come_way_ms(0.0, 0.0, far, along=w), ms)
+    let mut was = 0.0
+    let mut t = 0.0
+    while t < ms {
+      let (x, _) = come_way(0.0, 0.0, far, t, along=w)
+      assert_true(x >= was && x <= far, msg="\{far} at \{t}: \{was} then \{x}")
+      // (a Move as long as the flight: move_path over its length)
+      let (off, _) = move_path(-far, 0.0, t, ms)
+      assert_eq(x, far + off)
+      was = x
+      t = t + 1.0
+    }
+    assert_eq(come_way(0.0, 0.0, far, ms, along=w).0, far)
+  }
+}
+
+///|
+test "come_way going with another way, set off again at speed: on from it, there as that way ends" {
+  let w = come_with_flight
+  // (toward it already: a Move on from that speed, as long as the flight)
+  assert_eq(come_way_ms(0.0, 0.3, 64.0, along=w), w.ends - w.start)
+  assert_eq(come_way(0.0, 0.3, 64.0, 0.0, along=w), (0.0, 0.3))
+  assert_eq(come_way(0.0, 0.3, 64.0, w.ends - w.start, along=w).0, 64.0)
+  // (turned back: its slowing as ever, then to where it goes by the flight's end, no shorter than its slowing)
+  let ms = come_way_ms(0.0, -0.3, 64.0, along=w)
+  assert_eq(ms, w.ends - w.start)
+  assert_eq(come_way(0.0, -0.3, 64.0, 0.0, along=w), (0.0, -0.3))
+  assert_eq(come_way(0.0, -0.3, 64.0, ms, along=w).0, 64.0)
+}
+
+///|
+test "come_way at speed toward where it goes, less than half a point from it: on from that speed on the least Move, never stopped dead" {
+  // (alone: as long as the least Move, however near; its speed as it sets out the one it went at)
+  assert_eq(come_way_ms(0.0, 0.3, 0.4), move_least_ms)
+  assert_eq(come_way(0.0, 0.3, 0.4, 0.0), (0.0, 0.3))
+  assert_eq(come_way_ms(0.0, -0.3, -0.4), move_least_ms)
+  assert_eq(come_way(0.0, -0.3, -0.4, 0.0), (0.0, -0.3))
+  assert_eq(come_way(0.0, 0.3, 0.4, move_least_ms).0, 0.4)
+  // (going with another way: a Move on from it as long as that way, there as it ends)
+  let w = come_with_flight
+  assert_eq(come_way_ms(0.0, 0.3, 0.4, along=w), w.ends - w.start)
+  assert_eq(come_way(0.0, 0.3, 0.4, 0.0, along=w), (0.0, 0.3))
+  assert_eq(come_way(0.0, 0.3, 0.4, w.ends - w.start, along=w).0, 0.4)
+  // (from rest, as near: there at once, no speed to lose)
+  assert_eq(come_way_ms(0.0, 0.0, 0.4), 0.0)
+}

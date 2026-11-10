@@ -147,20 +147,54 @@ fn come_toward(from : Double, v : Double, goal : Double) -> Bool {
 }
 
 ///|
+/// Another way a come way goes with (come_way's `along`): the moment it sets out and the moment it ends, as that way
+/// says them. Only for what goes together with another thing (the room words sent open as they fly there, set out
+/// and ended with their flight; an answer's room with the avatar's spit): it sets out with it and is there as it ends,
+/// on a Move all the same. Not a length of its own to be said instead of how far it goes (move_ms): there is none to
+/// give, only another way to go with (the coordinator of the migration, 2026-11-10).
+pub(all) struct ComeWith {
+  start : Double
+  ends : Double
+} derive(Eq, Show)
+
+///|
+/// How long its Move to `goal` takes, `far` points away, going along `along` from `t0` ms after the way set out (at
+/// `along.start`): to `along.ends`; else as long as how far that is (move_ms; none where it is there: 0).
+fn come_move_ms(far : Double, t0 : Double, along : ComeWith?) -> Double {
+  match along {
+    Some(w) => fmax(w.ends - w.start - t0, 0.0)
+    None => if far.abs() < 0.5 { 0.0 } else { move_ms(far.abs()) }
+  }
+}
+
+///|
+/// How long its Move on from its speed toward `goal`, `far` points away, takes (come_toward): to `along.ends`; else as
+/// long as how far that is, the least Move however near (move_ms), never none: what goes at speed half a point from
+/// where it goes is not stopped dead (the coordinator of the migration, 2026-11-10). None there only for a Move from
+/// rest (come_move_ms), which has no speed to lose.
+fn come_on_ms(far : Double, along : ComeWith?) -> Double {
+  match along {
+    Some(w) => fmax(w.ends - w.start, 0.0)
+    None => move_ms(far.abs())
+  }
+}
+
+///|
 /// How long (ms) a way from `from` tall to `goal`, set out at `v` (points a ms), takes: carried on slowing to rest
 /// (come_turn), and once slow (come_turn_out) a Move from rest to `goal`, as long as how far that is; set out toward
-/// `goal`, a Move on from `v` (come_toward).
-pub fn come_way_ms(from : Double, v : Double, goal : Double) -> Double {
+/// `goal`, a Move on from `v` (come_toward). Going `along` another way: there as that one ends (its slowing, turned, no
+/// shorter).
+pub fn come_way_ms(from : Double, v : Double, goal : Double, along? : ComeWith) -> Double {
   if come_toward(from, v, goal) {
-    return move_ms((goal - from).abs())
+    return come_on_ms(goal - from, along)
   }
   let (s, t1) = come_turn(v)
-  let far = (goal - from - s).abs()
-  let t2 = if far < 0.5 { 0.0 } else { move_ms(far) }
+  let t0 = come_turn_out(v, t1)
+  let t2 = come_move_ms(goal - from - s, t0, along)
   if v == 0.0 {
     t2
   } else {
-    fmax(t1, come_turn_out(v, t1) + t2)
+    fmax(t1, t0 + t2)
   }
 }
 
@@ -170,11 +204,12 @@ pub fn come_way_ms(from : Double, v : Double, goal : Double) -> Double {
 /// Move from rest to `goal` (none set out at speed: that Move alone; set out toward `goal`: a Move on from `v`,
 /// come_toward). Its speed the same as `v` as it sets out, whichever way that is (the coordinator of the migration,
 /// 2026-11-10: a show's node called back as it closes its room, on from as fast as it went), turning over frames, never
-/// within one; a little toward `goal` and a little away from it, nearly the same way.
-fn come_way(from : Double, v : Double, goal : Double, t : Double) -> (Double, Double) {
+/// within one; a little toward `goal` and a little away from it, nearly the same way. `t` from the moment it set out
+/// (before it, where it was); going `along` another way, set out as that one does and there as it ends (come_way_ms).
+pub fn come_way(from : Double, v : Double, goal : Double, t : Double, along? : ComeWith) -> (Double, Double) {
   // (going toward where it goes already: a Move on from that speed, not slowed to rest on the way, stalling)
   if come_toward(from, v, goal) {
-    let (off, ov) = move_path(from - goal, v, t, move_ms((goal - from).abs()))
+    let (off, ov) = move_path(from - goal, v, t, come_on_ms(goal - from, along))
     return (goal + off, ov)
   }
   let (s, t1) = come_turn(v)
@@ -185,11 +220,12 @@ fn come_way(from : Double, v : Double, goal : Double, t : Double) -> (Double, Do
     (from + s + off, ov)
   }
   let far = goal - from - s
-  let t2 = t - come_turn_out(v, t1)
+  let t0 = come_turn_out(v, t1)
+  let t2 = t - t0
   if t2 <= 0.0 {
     return (x, xv)
   }
-  let dur = if far.abs() < 0.5 { 0.0 } else { move_ms(far.abs()) }
+  let dur = come_move_ms(far, t0, along)
   if dur <= 0.0 || t2 >= dur {
     return (x + far, xv)
   }
