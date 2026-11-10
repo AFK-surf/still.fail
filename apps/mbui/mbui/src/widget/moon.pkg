@@ -1,0 +1,17 @@
+import {
+  "mbui/html",
+  "mbui/view",
+  "mbui/ui",
+  "mbui/flex",
+  "mbui/text",
+  "mbui/svg",
+  "mbui/signals",
+  "mbui/zip",
+  "moonbitlang/core/encoding/utf8",
+}
+
+import {
+  "mbui/ui",
+  "mbui/view",
+  "mbui/html",
+} for "test"

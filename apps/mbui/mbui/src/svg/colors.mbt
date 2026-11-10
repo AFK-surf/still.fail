@@ -1,7 +1,7 @@
 // svgtypes colors.rs: the CSS colour keywords.
 
 ///|
-fn named_color(name : String) -> (Int, Int, Int, Int)? {
+pub fn named_color(name : String) -> (Int, Int, Int, Int)? {
   match name {
     "aliceblue" => Some((240, 248, 255, 255))
     "antiquewhite" => Some((250, 235, 215, 255))
