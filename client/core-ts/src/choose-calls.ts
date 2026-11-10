@@ -59,6 +59,8 @@ export function installChoose(inner: Inner): Choose {
           return Effect.as(attempt(() => choose.set(field("station"), field("of"), params)), null);
         case "pick.like":
           return Effect.as(attempt(() => choose.like(field("station"), field("model"), params.liked === true)), null);
+        case "pick.forget":
+          return Effect.as(attempt(() => choose.forget(field("station"), params)), null);
         case "pick.repick":
           return Effect.gen(function* () {
             const [op, said] = yield* attempt(() => choose.repick(field("station"), field("of")));

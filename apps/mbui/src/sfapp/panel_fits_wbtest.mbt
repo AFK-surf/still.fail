@@ -68,6 +68,11 @@ test "panel fits, the model's (model_pop): where it is, its models and how hard 
     let t = model_pop(mode)
     let r = fn(role : @ui.Role, label : String) { t.query(role, label~).map(fn(s) { tenth4(s.rect) }) }
     out.push("\{mode}: dialog \{t.query(Dialog).map(fn(s) { tenth4(s.rect) })} opus \{r(Button, "Opus 5.5")} high \{r(Radio, "高")}")
+    // (the row it runs on, the configuration picked exactly, wholly in view as it opens: Opus above it a model scrolled
+    // past, not the one picked)
+    let runs_on = if mode == "newchat-model" { "Opus 5.5 · 高" } else { "DeepSeek V4.1 Flash · DSH · 高" }
+    let on = t.get(Button, label=runs_on)
+    assert_true(wholly_in_view(t, on.rect), msg="\{mode}: \{runs_on} at \{on.rect} out of view")
     drawn.push(tree_said(Dialog, t.query(Dialog).map(fn(s) { s.label }).unwrap_or("")) is Some(_))
     if mode == "newchat-crowded-model" {
       for label in ["低", "最高"] {
@@ -82,13 +87,18 @@ test "panel fits, the model's (model_pop): where it is, its models and how hard 
   // name, how hard it thinks a column beside the models, each titled, the runtime and how fast at the foot under a line;
   // since 2026-11-03 how much context at the foot too: a Claude model's panel as wide as its foot; since 2026-11-10
   // twelve models or fewer all in the one list, those used most titled under the rest, a star beside every row, and
-  // room for the widest level after each name: Opus among them in all three, each panel taller and the crowded wider)
+  // room for the widest level after each name: Opus among them in all three, each panel taller and the crowded wider;
+  // since the user, 2026-11-10 (「收藏跟常用不一样」「常用包括了思考深度和速度还有上下文长度」「是一种配置」), those used
+  // most a configuration a row each under 常用搭配, the starred models apart: each panel taller still, the plain one to
+  // its most, the tall and the crowded scrolling, opened at their foot where the configuration they run on is (held
+  // above: wholly in view), Opus a model scrolled past over the panel's top; how each runs said with its runtime's short
+  // name (「agent runtime 可以用缩写，比如 CC，DSH」): the crowded narrower than with DeepSeek Harness spelt out)
   assert_eq(out, [
-    "newchat-model: dialog Some((650, 287, 271, 239)) opus Some((656, 435, 146, 36)) high Some((843, 398, 72, 36))",
-    "newchat-tall-model: dialog Some((650, 65, 520, 461)) opus Some((656, 111, 394.5, 36)) high Some((1091.5, 213, 72.5, 36))",
-    "newchat-crowded-model: dialog Some((650, 139, 469, 387)) opus Some((656, 175, 344, 36)) high Some((1041, 250, 72, 36))",
-    "newchat-crowded-model 低: dialog Some((650, 139, 469, 387)) high Some((1041, 250, 72, 36))",
-    "newchat-crowded-model 最高: dialog Some((650, 139, 469, 387)) high Some((1041, 250, 72, 36))",
+    "newchat-model: dialog Some((650, 139, 313, 387)) opus Some((656, 175, 188, 36)) high Some((885, 250, 72, 36))",
+    "newchat-tall-model: dialog Some((650, 65, 520, 461)) opus Some((656, -47, 394.5, 36)) high Some((1091.5, 213, 72.5, 36))",
+    "newchat-crowded-model: dialog Some((650, 75, 379, 451)) opus Some((656, 27, 254, 36)) high Some((951, 186, 72, 36))",
+    "newchat-crowded-model 低: dialog Some((650, 75, 379, 451)) high Some((951, 186, 72, 36))",
+    "newchat-crowded-model 最高: dialog Some((650, 75, 379, 451)) high Some((951, 186, 72, 36))",
   ])
   assert_eq(drawn, [true, true, true])
 }

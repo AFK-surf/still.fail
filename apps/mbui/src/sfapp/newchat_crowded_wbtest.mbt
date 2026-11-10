@@ -1,6 +1,6 @@
 // A new chat on a narrow phone, what it runs on as crowded as a person's phone showed it (newchat_fixture.mbt
 // newchat-crowded, 2026-10-26): the station's and the model's controls over the composer, the model's panel and
-// the frequent combinations in it; each of their words whole, on one line, in the window.
+// the configurations used most in it; each of their words whole, on one line, in the window.
 
 ///|
 /// A phone as narrow as most get (`w` across), newchat-crowded's page (`mode`) risen over it.
@@ -93,35 +93,120 @@ test "narrower still: the preset's words and the station's name leave their cont
 }
 
 ///|
-test "narrow: the models used most under their title nearest how hard it thinks, the rest over them, each with how it runs on its line; few models, no step to all of them" {
+test "narrow: the configurations used most under their title nearest how hard it thinks, one model run two ways twice, the models over them, each with how it runs on its line; few models, no step to all of them" {
+  let held = crowded("newchat-crowded").audit()
   let t = crowded("newchat-crowded-model")
   run_to_sheet_rest(t)
   let (sx, _, sw, _) = t.get(@ui.Role::Dialog).rect
   let effort = t.get(Slider, label="思考深度").rect
   // (a sheet risen from the screen's foot: what is used most lowest, the most used of all nearest how hard it thinks;
-  // the rest over them, 常用搭配 between the two: the user, 2026-11-10, 「常用模型配置需要跟普通的收藏模型从 ui 上区分开」)
-  let rows = ["Opus 5.5", "SWE-2", "DeepSeek V4.1 Flash", "GPT-6 Astra"].map(fn(l) { t.get(Button, label=l) })
+  // the models over them, 常用搭配 between the two: the user, 2026-11-10, 「常用模型配置需要跟普通的收藏模型从 ui 上区分开」;
+  // each a configuration, the same model run two ways two of them: 「常用包括了思考深度和速度还有上下文长度」「是一种配置」)
+  let rows = [
+    "Opus 5.5", "SWE-2", "Kimi For Coding · 高", "GPT-6 Astra · 高", "DeepSeek V4.1 Flash · DSH · 高", "GPT-6 Astra · 中",
+  ].map(fn(l) raise { t.get(Button, label=l) })
   for i in 1..<rows.length() {
     assert_true(rows[i].rect.1 > rows[i - 1].rect.1, msg="\{rows[i - 1].label} \{rows[i].label}")
   }
-  assert_true(rows[3].rect.1 < effort.1)
+  assert_true(rows[5].rect.1 < effort.1)
   let head = t.find("常用搭配").unwrap()
-  assert_true(head.1 > rows[0].rect.1 && head.1 < rows[1].rect.1, msg="常用搭配 at \{head}")
+  assert_true(head.1 > rows[1].rect.1 && head.1 < rows[2].rect.1, msg="常用搭配 at \{head}")
   for row in rows {
     let (x, _, w, _) = row.rect
     assert_true(x >= sx && x + w <= sx + sw + 0.5, msg="\{row.label} \{row.rect}")
   }
   // (seven models: all of them in the one list, no way to all of them a step further)
   assert_true(t.query(Button, label="全部模型") is None)
-  // how each last ran right after its name, on its line: GPT-6 Astra's 中; nothing after the one picked, whose own is
-  // what the sheet says under the models
-  let runs_of = fn(r : (Double, Double, Double, Double)) {
-    runs_in(t, r).filter(fn(w) { w.x0 >= r.0 && w.x1 <= r.0 + r.2 }).map(fn(w) { w.text })
+  // how each last ran right after its name, on its line: SWE-2's 高, GPT-6 Astra's 中 (the models' words where they
+  // are laid out, scrolled out of sight or not); nothing after the one picked, whose own is what the sheet says under
+  // the models
+  let words_of = fn(label : String) -> Array[String] raise {
+    let (x, y, w, h) = t.get(Button, label~).rect
+    t.boxes().filter(fn(b) { b.kind == "text" && b.x >= x && b.x + b.w <= x + w + 0.5 && b.y >= y && b.y + b.h <= y + h + 0.5 }).map(fn(b) { b.text })
   }
-  assert_true(runs_of(rows[3].rect).contains("中"), msg="\{runs_of(rows[3].rect)}")
-  let deep = runs_of(rows[2].rect)
+  assert_true(words_of("SWE-2").contains("高"), msg="\{words_of("SWE-2")}")
+  assert_true(words_of("GPT-6 Astra").contains("中"), msg="\{words_of("GPT-6 Astra")}")
+  let deep = words_of("DeepSeek V4.1 Flash")
   assert_true(deep.contains("DeepSeek V4.1 Flash"), msg="\{deep}")
   assert_true(deep.iter().all(fn(w) { w == "DeepSeek V4.1 Flash" || w.has_prefix("DeepSeek H") }), msg="\{deep}")
+  // a configuration: how it runs in its capsule after its name
+  let (rx, ry, rw, rh) = rows[4].rect
+  assert_true(
+    t.boxes().iter().any(fn(b) { b.kind == "text" && b.text == "DSH · 高" && b.x >= rx && b.x < rx + rw && b.y >= ry && b.y < ry + rh }),
+    msg="DeepSeek V4.1 Flash's DSH · 高",
+  )
+  assert_eq(t.audit().filter(fn(f) { !held.contains(f) }), [])
+}
+
+///|
+test "narrow, models starred: a starred model's configuration under 常用搭配 and the model among the starred, its star there alone; the one it runs on drawn picked; one pressed, all of it made what it runs on" {
+  let held = crowded("newchat-crowded-liked").audit()
+  let t = crowded("newchat-crowded-model-liked")
+  run_to_sheet_rest(t)
+  let head = t.find("常用搭配").unwrap()
+  let combo = t.get(Button, label="Kimi For Coding · 高").rect
+  let model = t.get(Button, label="Kimi For Coding").rect
+  assert_true(combo.1 > head.1 && model.1 < head.1, msg="\{combo} \{model} 常用搭配 at \{head}")
+  // (the star a model's: beside the model's row, none beside the configuration's)
+  let star = t.get(Button, label="喜欢 Kimi For Coding").rect
+  assert_true(star.1 >= model.1 - 1.0 && star.1 + star.3 <= model.1 + model.3 + 1.0, msg="\{star} \{model}")
+  assert_true(
+    t.all(Button, has="喜欢").iter().all(fn(s) { s.rect.1 + s.rect.3 <= head.1 }),
+    msg="a star under 常用搭配",
+  )
+  // the one it runs on exactly drawn picked (its name the picked weight), the same model run another way not
+  let weight = fn(label : String, name : String) -> Int raise {
+    let (x, y, w, h) = t.get(Button, label~).rect
+    t.boxes().rev().iter().find_first(fn(b) { b.kind == "text" && b.text == name && b.x >= x && b.x < x + w && b.y >= y && b.y < y + h }).map(fn(b) { b.weight }).unwrap_or(0)
+  }
+  assert_true(
+    weight("DeepSeek V4.1 Flash · DSH · 高", "DeepSeek V4.1 Flash") > weight("GPT-6 Astra · 高", "GPT-6 Astra"),
+    msg="the picked one not drawn picked",
+  )
+  assert_true(weight("GPT-6 Astra · 中", "GPT-6 Astra") == weight("GPT-6 Astra · 高", "GPT-6 Astra"))
+  assert_eq(t.audit().filter(fn(f) { !held.contains(f) }), [])
+  t.click(Button, label="GPT-6 Astra · 高")
+  t.run_for(@ui.move_most_ms)
+  assert_eq((new_fix.model, new_fix.runtime, new_fix.effort), ("gpt-6-astra", "codex", "high"))
+}
+
+///|
+test "narrow, crowded: the configuration used most wholly in view nearest how hard it thinks as the sheet opens; pressed, all of it made what it runs on" {
+  let t = crowded("newchat-crowded-model")
+  t.run_for(@ui.move_most_ms)
+  let first = t.get(Button, label="GPT-6 Astra · 中").rect
+  let effort = t.get(Slider, label="思考深度").rect
+  assert_true(wholly_in_view(t, first), msg="\{first}")
+  assert_true(first.1 + first.3 <= effort.1, msg="\{first} \{effort}")
+  t.click(Button, label="GPT-6 Astra · 中")
+  t.run_for(@ui.move_most_ms)
+  assert_eq((new_fix.model, new_fix.runtime, new_fix.effort, new_fix.context), ("gpt-6-astra", "codex", "medium", ""))
+}
+
+///|
+test "narrow, crowded: a configuration taken out of those used most stays where it stood, the sheet open, the rest where they were" {
+  let t = crowded("newchat-crowded-model-liked")
+  t.run_for(@ui.move_most_ms)
+  for l in ["GPT-6 Astra · 中", "DeepSeek V4.1 Flash · DSH · 高", "GPT-6 Astra · 高", "Kimi For Coding · 高"] {
+    assert_true(t.query(Button, label="从常用搭配移除 " + l) is Some(_), msg="\{l} can not be taken out")
+  }
+  let row = t.get(Button, label="GPT-6 Astra · 高").rect
+  t.click(Button, label="从常用搭配移除 GPT-6 Astra · 高")
+  t.run_for(@ui.move_most_ms)
+  // (where it stood, nothing to press, till the sheet opens again)
+  assert_true(t.query(@ui.Role::Dialog) is Some(_) && t.query(Button, label="从常用搭配移除 GPT-6 Astra · 高") is None)
+  assert_true(t.query(Button, label="GPT-6 Astra · 高") is None, msg="a button still")
+  let (rx, ry, rw, rh) = row
+  assert_true(
+    t.boxes().iter().any(fn(b) { b.kind == "text" && b.text == "GPT-6 Astra" && b.x >= rx && b.x < rx + rw && b.y >= ry && b.y < ry + rh }),
+    msg="its words gone from where it stood",
+  )
+  // (its place pressed: nothing)
+  t.tap(rx + rw / 2.0, ry + rh / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(@ui.Role::Dialog) is Some(_), msg="the sheet closed")
+  assert_true(t.query(Button, label="GPT-6 Astra · 中") is Some(_) && t.query(Button, label="Kimi For Coding") is Some(_))
+  assert_eq(new_fix.model, "deepseek-v4-1-flash", msg="a configuration picked")
 }
 
 ///|
@@ -129,7 +214,7 @@ test "narrow: a frequent model is applied without rearranging the sheet as it le
   let t = crowded("newchat-crowded-model")
   let used = t.find("常用搭配").unwrap()
   let runtime = t.find_last("DeepSeek Harness").unwrap()
-  t.click(Button, label="GPT-6 Astra")
+  t.click(Button, label="GPT-6 Astra · 中")
   assert_eq(new_fix.model, "gpt-6-astra")
   assert_eq(t.find("常用搭配"), Some(used), msg="the rows stay where they were as the sheet starts to close")
   t.run_for(@kit.pop_out_ms / 2.0)
@@ -161,7 +246,7 @@ test "narrow, a short window, models starred and used most: they scroll, how it 
   // of them, the last of them
   let all = t.get(Button, label="全部模型").rect
   assert_true(all.1 >= sheet.1 && all.1 + all.3 <= effort.1, msg="全部模型 \{all}: the sheet \{sheet}, how hard it thinks \{effort}")
-  let models = t.get(Button, label="GPT-6 Astra").rect
+  let models = t.get(Button, label="GPT-6 Astra · 中").rect
   assert_true(models.1 < effort.1, msg="\{models} \{effort}")
 }
 
@@ -190,14 +275,14 @@ test "narrow: the model's panel has those used most across it, every name whole,
   let t = crowded("newchat-providers-model", h=crowded_short)
   run_to_sheet_rest(t)
   let sheet = t.get(@ui.Role::Dialog).rect
-  for name in ["GPT-6 Astra", "DeepSeek V4.1 Flash", "SWE-2"] {
+  for name in ["GPT-6 Astra", "DeepSeek V4.1 Flash", "Kimi For Coding", "DSH · 高"] {
     assert_true(words_whole(t, name, sheet) is Some(_), msg="\{name} not whole in the sheet")
   }
   // how hard it thinks under the models, the runtime at the foot, each saying the one picked, the others a pick away
   // (2026-11-02 用户「手机上只有模型是平铺的」); their words whole, in the sheet
   let runtime = t.get(Button, label="DeepSeek Harness").rect
   let effort = t.get(Slider, label="思考深度").rect
-  let model = t.get(Button, label="GPT-6 Astra").rect
+  let model = t.get(Button, label="GPT-6 Astra · 中").rect
   assert_true(effort.1 > model.1 && runtime.1 > effort.1 + effort.3, msg="\{model} \{effort} \{runtime}")
   assert_true(t.query(Radio, label="Claude Code") is None, msg="the runtimes not picked laid out")
   // (how hard it thinks: its stops on one line, the one it is at alone named)
@@ -215,7 +300,7 @@ test "narrow: the model's panel has those used most across it, every name whole,
   for name in ["Anthropic", "OpenAI", "DeepSeek"] {
     assert_true(words_whole(t, name, sheet) is Some(_), msg="\{name} not whole in the sheet")
   }
-  assert_true(t.query(Button, label="GPT-6 Astra") is None, msg="the step before still said")
+  assert_true(t.query(Button, label="GPT-6 Astra · 中") is None, msg="the step before still said")
   assert_true(t.query(Slider, label="思考深度") is Some(_) && t.query(Button, label="DeepSeek Harness") is Some(_))
   t.click(Button, label="Anthropic")
   t.run_for(@ui.move_most_ms)
@@ -232,7 +317,7 @@ test "narrow: the model's panel has those used most across it, every name whole,
   // and by the system's back: its first step, the sheet still open
   t.back()
   t.run_for(@ui.move_most_ms)
-  assert_true(t.query(Button, label="GPT-6 Astra") is Some(_) && t.query(Button, label="DeepSeek") is None)
+  assert_true(t.query(Button, label="GPT-6 Astra · 中") is Some(_) && t.query(Button, label="DeepSeek") is None)
 }
 
 ///|
@@ -272,10 +357,10 @@ test "wide: the model's panel beside its control has the models, how hard it thi
   let src = fixture_app("newchat-crowded-model")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(squeeze_opening)
-  // (the rest, then those used most at the foot of their column, then how it runs at the panel's foot; seven models:
-  // all of them in the one list)
+  // (the models, then the configurations used most at the foot of their column, then how it runs at the panel's foot;
+  // seven models: all of them in the one list)
   let model = t.get(Button, label="Opus 5.5").rect
-  let used = t.get(Button, label="SWE-2").rect
+  let used = t.get(Button, label="GPT-6 Astra · 中").rect
   let runtime = t.get(Button, label="DeepSeek Harness").rect
   let effort = t.get(Radio, label="高").rect
   assert_true(model.1 < used.1 && used.1 < runtime.1, msg="\{model} \{used} \{runtime}")
@@ -312,7 +397,7 @@ test "narrow, a short window, many models starred: the one picked in view as the
   let sheet = t.get(@ui.Role::Dialog).rect
   let picked = "Sonnet 5"
   let row = t.get(Button, label=picked).rect
-  // (those used most stay put under what scrolls: the one picked between the sheet's top and them)
-  let used = t.get(Button, label="GPT-6 Astra").rect
+  // (the configurations used most stay put under what scrolls: the one picked between the sheet's top and them)
+  let used = t.get(Button, label="GPT-6 Astra · 中").rect
   assert_true(row.1 >= sheet.1 && row.1 + row.3 <= used.1, msg="\{picked} \{row}: the sheet \{sheet}, those used most from \{used}")
 }

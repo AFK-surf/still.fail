@@ -110,9 +110,14 @@ test "an agent's model opens its model picker, where the context limit can be ch
   t.tap_text("模型")
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("完整 · 1M") is Some(_), msg="the model picker offers the current context limit")
-  t.tap_text("完整 · 1M")
+  t.click(Button, label="完整 · 1M")
   t.run_for(@ui.move_most_ms)
-  t.tap_text("300K")
+  // (the step by its name, as the pick has it on this screen: a configuration used most kept to 300K says it too,
+  // 「高 · 300K」, and is no step)
+  let roles : Array[@ui.Role] = [MenuItemRadio, MenuItem, Radio, Option, Button]
+  let role = roles.iter().find_first(fn(r) { t.query(r, label="300K") is Some(_) })
+  guard role is Some(role) else { fail("no step 300K: \{t.all(Button).map(fn(s) { s.label })}") }
+  t.click(role, label="300K")
   let saved = named(calls, "pick.save")
   assert_eq(saved.length(), 1)
   assert_eq(text(Some(saved[0].params), "station"), "ws1/st1")
