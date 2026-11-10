@@ -60,9 +60,11 @@ fn env_at_frame() -> Unit {
 
 ///|
 /// What a core trace is told of the host's settings (trace_settings), and what it was told last ("" nothing yet).
+// kept across runs: the app's own, set once as it starts (a Tester sets it only where it tests it)
 let settings_tracer : Ref[((Map[String, Json]) -> Unit)?] = Ref::new(None)
 
 ///|
+// kept across runs: settings_tracer's, put back as that is set (trace_settings)
 let settings_kept : Ref[String] = Ref::new("")
 
 ///|
@@ -90,7 +92,7 @@ fn settings_at_frame(w : Double, h : Double, scale : Double) -> Unit {
     "scale": Json::number(scale),
     "platform": Json::number(platform().to_double()),
     "pointing": Json::number(if native_pointing() is Finger { 1.0 } else { 0.0 }),
-    "utc": Json::number(h_utc_offset_min(@hostapi.wall_ms()).to_double()),
+    "utc": Json::number(h_utc_offset_now().to_double()),
     "motion": Json::number(if reduced_motion() { 1.0 } else { 0.0 }),
     "glass": Json::number(if h_reduce_transparency() { 1.0 } else { 0.0 }),
     "dark": Json::number(if system_dark() { 1.0 } else { 0.0 }),

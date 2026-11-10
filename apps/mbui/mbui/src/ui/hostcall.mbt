@@ -409,6 +409,13 @@ fn h_utc_offset_min(at_ms : Double) -> Int {
 }
 
 ///|
+/// How far the local time is ahead of UTC now, in minutes: what a core trace keeps of the host (envrec.mbt's
+/// settings_at_frame), the time of day read here where the host provides it.
+fn h_utc_offset_now() -> Int {
+  h_utc_offset_min(h_wall_ms())
+}
+
+///|
 /// How much later than its time the frame before this one reached the screen (@hostapi.frame_late).
 fn h_frame_late() -> Double {
   let late = @hostapi.frame_late()
