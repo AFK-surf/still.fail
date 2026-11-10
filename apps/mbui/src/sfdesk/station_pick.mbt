@@ -364,7 +364,8 @@ fn station_pick_folder(v : @view.View, src : Source, at : PickAt) -> Unit {
     },
     fn(b, shows) {
       match shows {
-        // (its 重试 does nothing, as the old one's: kept as it is)
+        // (重试: the folder read again as the files' page's 重试 reads it, the same topic said anew; meanwhile why and
+        // 重试 stay, as there)
         FolderFailed =>
           narrow_retry_node(
             b,
@@ -375,7 +376,7 @@ fn station_pick_folder(v : @view.View, src : Source, at : PickAt) -> Unit {
               }
             },
             narrow_failed_words,
-            fn() {  },
+            fn() { refresh_folder(src, { station: at.station, root: Some(at.root), path: at.path }) },
           )
         // (read the first time: made-up entries' rows, in their bones)
         FolderReading =>

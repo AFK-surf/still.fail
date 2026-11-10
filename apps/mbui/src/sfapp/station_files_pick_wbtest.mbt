@@ -167,7 +167,7 @@ test "Station 文件: 取消 closes it, nothing put into the draft" {
 }
 
 ///|
-test "Station 文件: a folder read the first time shows its bones, none of its entries; where reading it fails, why and 重试 (which does nothing)" {
+test "Station 文件: a folder read the first time shows its bones, none of its entries; where reading it fails, why and 重试" {
   for s in pick_screens {
     let about = "platform \{s.0}, wide \{s.1}"
     let (t, _) = pick_open(platform=s.0, wide=s.1, at=pick_docs(), src_of=fn(b) { @sffixture.held_topics(b, ["drive"]) })
@@ -182,10 +182,72 @@ test "Station 文件: a folder read the first time shows its bones, none of its 
     // (why, then 重试 at the end of its line)
     assert_true((why.1 + why.3 / 2.0 - (again.1 + again.3 / 2.0)).abs() < 1.0 && again.0 > why.0 + why.2, msg="\{about}: \{why} \{again}")
     assert_true(t.find("整个文件夹") is None, msg="\{about}")
-    // (the old one's 重试 does nothing: station_pick's narrow_retry is given fn() {}; kept as it is)
-    pick_press(t, "重试")
-    assert_true(t.find("无法读取：权限不足") is Some(_) && t.find("重试") is Some(_), msg="\{about}: as it was")
   }
+}
+
+///|
+/// `base` with Willow's folders failing to be read, the core saying why as `why`, till it is asked to read one again
+/// (drive.refresh): then, where it `reads`, they are read as the fixture has them, the topic said anew as the core says
+/// it (Fixture::changed's way); where not, they fail as before. Each call it is asked, by its name and parameters, in
+/// `asked`.
+fn pick_folder_failing(base : Source, why : String, reads : Bool, asked : Array[(String, Json)]) -> Source {
+  let read = Ref(false)
+  {
+    ..base,
+    topic_read: fn(name, params) {
+      @settings.fixture_followed()
+      if name == "drive" && !read.val {
+        { value: None, error: Some({ "message": Json::string(why) }), version: 1 }
+      } else {
+        base.topic(name, params).get().snapshot()
+      }
+    },
+    call: fn(name, params, done) {
+      asked.push((name, params))
+      if name == "drive.refresh" && reads {
+        read.val = true
+        @settings.fixture_changed()
+      }
+      (base.call)(name, params, done)
+    },
+  }
+}
+
+///|
+/// The drive.refresh calls of `asked`, each its parameters.
+fn pick_refreshes(asked : Array[(String, Json)]) -> Array[Json] {
+  asked.filter(fn(a) { a.0 == "drive.refresh" }).map(fn(a) { a.1 })
+}
+
+///|
+test "Station 文件: a folder that could not be read, 重试 pressed: the core asked to read it again; read, what is in it, why and 重试 gone" {
+  // (a sheet with touch, a dialog in the middle of a wide window)
+  for s in [(2, false), (0, true)] {
+    let about = "platform \{s.0}, wide \{s.1}"
+    let asked : Array[(String, Json)] = []
+    let (t, _) = pick_open(platform=s.0, wide=s.1, at=pick_docs(), src_of=fn(b) {
+      pick_folder_failing(b, "无法读取：权限不足", true, asked)
+    })
+    assert_true(t.find("无法读取：权限不足") is Some(_) && pick_refreshes(asked).length() == 0, msg="\{about}")
+    pick_press(t, "重试")
+    let folder : Json = { "station": "ws1/st1", "root": Json::string(fix_docs), "path": "" }
+    assert_eq(pick_refreshes(asked), [folder], msg="\{about}: Willow's 文档 read again, once")
+    assert_true(t.find("整个文件夹") is Some(_) && t.find("发布清单.md") is Some(_), msg="\{about}: what is in it")
+    assert_true(t.find("无法读取：权限不足") is None && t.find("重试") is None, msg="\{about}: why and 重试 gone")
+  }
+}
+
+///|
+test "Station 文件: a folder that could not be read, 重试 pressed and it still cannot be: why and 重试 as they were" {
+  let asked : Array[(String, Json)] = []
+  let (t, _) = pick_open(platform=0, at=pick_docs(), src_of=fn(b) {
+    pick_folder_failing(b, "无法读取：权限不足", false, asked)
+  })
+  let before = (pick_word(t, "无法读取：权限不足"), pick_word(t, "重试"))
+  pick_press(t, "重试")
+  assert_eq(pick_refreshes(asked).length(), 1, msg="asked again")
+  assert_eq((pick_word(t, "无法读取：权限不足"), pick_word(t, "重试")), before)
+  assert_true(t.find("整个文件夹") is None && t.find("发布清单.md") is None)
 }
 
 ///|

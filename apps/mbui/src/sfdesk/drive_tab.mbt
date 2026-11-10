@@ -382,7 +382,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
         copy_path(c, here)
       }) |> ignore
       @sf.icon_button(c, "refresh", key="files-tab/refresh", label=@sf.t("web-pages.drive.refresh"), on_press=fn() {
-        refresh_folder(c, src, at)
+        refresh_folder_told(c, src, at)
       }) |> ignore
     })
     |> ignore
@@ -477,7 +477,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
             c.box(style=ftab_problem, fn() {
               c.text(e, style=tab_trouble) |> ignore
               @sf.button(c, @sf.t("web-pages.drive.retry"), key="files-tab/retry", tone=Ghost, icon="retry", on_press=fn() {
-                refresh_folder(c, src, at)
+                refresh_folder_told(c, src, at)
               }) |> ignore
             })
             |> ignore

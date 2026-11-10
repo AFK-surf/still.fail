@@ -167,24 +167,30 @@ pub fn copy_path(c : @ui.Ctx, abs : String) -> Unit {
 }
 
 ///|
-/// The folder read again (drive.refresh), once at a time.
-pub fn refresh_folder(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
+/// The folder read again (drive.refresh), once at a time: the core reads it of the station and says the folder's
+/// topic (`drive`, by its station, root and path) anew, what is in it or why it could not be read, to what holds it.
+/// Said where nothing is being built (a node's handler); an old view's build says it by refresh_folder_told.
+pub fn refresh_folder(src : Source, at : DriveAt) -> Unit {
   let root = at.root.unwrap_or("")
   let key = at.station + "\n" + root + "\n" + at.path
   if held.refreshing.contains(key) {
     return
   }
   held.refreshing[key] = true
-  c.tell("refresh/" + key, fn() {
-    (src.call)(
-      "drive.refresh",
-      { "station": Json::string(at.station), "root": Json::string(root), "path": Json::string(at.path) },
-      fn(r) {
-        held.refreshing.remove(key)
-        (act_done(c, @sf.t("web-pages.drive.refreshWhat")))(r)
-      },
-    )
-  })
+  (src.call)(
+    "drive.refresh",
+    { "station": Json::string(at.station), "root": Json::string(root), "path": Json::string(at.path) },
+    fn(r) {
+      held.refreshing.remove(key)
+      (act_said(@sf.t("web-pages.drive.refreshWhat")))(r)
+    },
+  )
+}
+
+///|
+/// refresh_folder from an old view's build (a press it took): told once its frame's builds are over (Ctx::tell).
+pub fn refresh_folder_told(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
+  c.tell("refresh/" + at.station + "\n" + at.root.unwrap_or("") + "\n" + at.path, fn() { refresh_folder(src, at) })
 }
 
 ///|
@@ -469,7 +475,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
     menu.push(Some(@sf.menu_item_of(@sf.t(if a.hidden { "web-pages.drive.hideHidden" } else { "web-pages.drive.showHidden" }), fn() {
       b.arrange_as(c, src, hidden=!a.hidden)
     })))
-    menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.refresh"), icon="refresh", fn() { refresh_folder(c, src, at) })))
+    menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.refresh"), icon="refresh", fn() { refresh_folder_told(c, src, at) })))
     menu
   }
   // (short of room for the list beside the preview, the preview gives way: the list keeps a few names' width)
@@ -769,7 +775,7 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
   // Less frequent actions stay named in the folder's menu, apart from the view and creation controls in the bar.
   let more : Array[@sf.MenuItem?] = [
     Some(@sf.menu_item_of(@sf.t("web-pages.drive.refresh"), icon="refresh", disabled=refreshing(at), fn() {
-      refresh_folder(c, src, at)
+      refresh_folder_told(c, src, at)
     })),
     Some(@sf.menu_item_of(
       @sf.t(if kept { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, args=[("name", name)]),
