@@ -2681,6 +2681,7 @@ pub fn Tester::perf_said(Self) -> (Array[Bool], Array[String])
 pub fn Tester::periodic(Self) -> Array[String]
 pub fn Tester::pick_asks(Self) -> Array[@hostapi.PickKind]
 pub fn Tester::picks(Self, Array[(String, Bytes)]) -> Unit
+pub fn Tester::placed_faults(Self) -> Array[String]
 pub fn Tester::post(Self, String, String, bytes? : Bytes) -> Unit
 pub fn Tester::post_wakes(Self) -> Int32
 pub fn Tester::posted(Self) -> Int32

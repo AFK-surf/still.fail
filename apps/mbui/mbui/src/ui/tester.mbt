@@ -926,6 +926,8 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   self.hold_seen_whole_now()
   self.hold_corners()
+  // (what it drew was placed by the layout it drew by: tester_placed.mbt)
+  self.hold_placed()
   match self.each {
     Some(f) => f()
     None => ()
