@@ -93,11 +93,22 @@ fn reports_start() -> Unit {
         }
       } else if timed.contains(id) {
         timed.remove(id)
-        let bytes = match value {
-          Some(v) => utf8_length(v.stringify())
-          None => -1
+        // (what it weighs, and of one `weights_floor` heavy at least where its bytes are, by field: @core.weights,
+        // names and numbers alone; no text of it made to count them)
+        let (bytes, parts) = match value {
+          Some(v) => {
+            let (n, heavy) = @core.weights(v)
+            let said : Map[String, Json] = {}
+            if n >= weights_floor {
+              for p in heavy {
+                said[p.0] = Json::number(p.1.to_double())
+              }
+            }
+            (n, if said.is_empty() { "" } else { Json::object(said).stringify() })
+          }
+          None => (-1, "")
         }
-        host_tell("decoded", topic, "", id, bytes) |> ignore
+        host_tell("decoded", topic, parts, id, bytes) |> ignore
       }
     }),
   )
@@ -131,21 +142,5 @@ fn report_signed_in(c : @ui.Ctx, accounts : @core.Sub) -> Unit {
 }
 
 ///|
-/// How many bytes `s` is in UTF-8 (a value's JSON as the core sent it: BarTiming's `bytes`).
-fn utf8_length(s : String) -> Int {
-  let mut n = 0
-  for ch in s {
-    let u = ch.to_int()
-    let w = if u < 0x80 {
-      1
-    } else if u < 0x800 {
-      2
-    } else if u < 0x10000 {
-      3
-    } else {
-      4
-    }
-    n += w
-  }
-  n
-}
+/// A topic's first value this heavy (bytes) says where its bytes are with the bar's timing (BarTiming's `parts`).
+let weights_floor : Int = 32768
