@@ -187,6 +187,7 @@ pub fn presented_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
             shown~,
             gone~,
             covered_by=fn() { sheet_over(serial) },
+            in_place?=p.in_place,
           )
         Panel(x) if x.stage =>
           stage_node(

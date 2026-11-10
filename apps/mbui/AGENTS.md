@@ -113,6 +113,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   - No time window is a cause, and no logic reads whether a motion runs.
   - What comes or goes by its size keeps its whole scale, from where it starts, and is not seen at half its size or
     less, so it does not jump (the user, 2026-10-31, again 2026-11-08): its opacity is `@sf.seen_at(scale)`.
+  - On 小屏 a sheet opened by what was chosen in a sheet comes in that one's place: one sheet all along, from as tall
+    as that one stood to its own height, the scrim as it was; a menu a menu's item opens is a level of the same sheet,
+    back taking it off. Never one sheet sinking as the next rises (the user, 2026-11-09; `src/sf/presenters.mbt`).
 
 ## Running the app in development
 

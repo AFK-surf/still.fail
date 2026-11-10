@@ -656,6 +656,178 @@ test "one over another with a finger at Small: one scrim however many sheets, th
 }
 
 ///|
+/// The one sheet drawn in the last frame: its top and how tall (a failure where there is none, or more).
+fn one_sheet(t : @ui.Tester) -> (Double, Double) raise {
+  let sheets = t.drawn_glass().filter(fn(g) { g.3 > 100.0 })
+  guard sheets.length() == 1 else { fail("\{sheets.length()} sheets: \{sheets}") }
+  (sheets[0].1, sheets[0].3)
+}
+
+///|
+/// How dark the ground over the whole window dims what is under it in the last frame (`at`'s window; 0: none does).
+fn scrim_alpha(t : @ui.Tester, at : (Int, Double, Double)) -> Int64 {
+  let (_, w, h) = at
+  t.drawn_rects().iter().filter(fn(r) { r.0 <= 0.0 && r.1 <= 0.0 && r.2 >= w && r.3 >= h && (r.4 & 0xFFL) < 0xFFL }).fold(
+    init=0L,
+    fn(a, r) { a + (r.4 & 0xFFL) },
+  )
+}
+
+///|
+/// A menu (重命名, 归档, 固定, 分享…) whose 分享… opens a menu from the same place, 分享 (复制链接, 分享图片): each said as
+/// it is chosen, `gone` and `level gone` as each is let go of with nothing chosen.
+fn menu_with_more(said : Array[String]) -> (Anchor) -> Unit {
+  fn(from) {
+    let beside = beside_of(from)
+    menu(
+      [
+        Some(menu_item_of("重命名", fn() { said.push("rename") })),
+        Some(menu_item_of("归档", fn() { said.push("archive") })),
+        Some(menu_item_of("固定", fn() { said.push("pin") })),
+        Some(
+          menu_item_of("分享…", fn() {
+            menu(
+              [
+                Some(menu_item_of("复制链接", fn() { said.push("copy") })),
+                Some(menu_item_of("分享图片", fn() { said.push("image") })),
+              ],
+              from=beside,
+              title="分享",
+              gone=fn() { said.push("level gone") },
+            )
+          }),
+        ),
+      ],
+      from=beside,
+      gone=fn() { said.push("gone") },
+    )
+  }
+}
+
+///|
+/// The frames a sheet's way takes at most, each looked at.
+let way_frames : Int = 40
+
+///|
+test "a menu's item that opens a menu, with a finger at Small: a level of the same sheet, one sheet and the scrim as it was all the way; back is back to the menu" {
+  let said : Array[String] = []
+  let t = presenting_tester(phone, menu_with_more(said))
+  open_it(t)
+  let (top0, _) = one_sheet(t)
+  let dim = scrim_alpha(t, phone)
+  assert_true(dim > 0L)
+  t.tap_text("分享…")
+  // (the frame it was chosen in: the menu's sheet where it stood, the window as dim; nothing let go of)
+  assert_eq(presented_how, [AsSheet])
+  assert_true((one_sheet(t).0 - top0).abs() < 0.5, msg="\{one_sheet(t)} \{top0}")
+  assert_eq(scrim_alpha(t, phone), dim)
+  // (on its way to the level's height, shorter: down only, never two sheets, the window never brighter)
+  let mut last = top0
+  for _ in 0..<way_frames {
+    t.run_for(@ui.frame_period_default)
+    let (top, _) = one_sheet(t)
+    assert_eq(scrim_alpha(t, phone), dim)
+    assert_true(top >= last - 0.5, msg="\{top} after \{last}")
+    last = top
+  }
+  assert_true(last > top0 + 20.0, msg="\{last} \{top0}")
+  assert_true(t.find("复制链接") is Some(_) && t.find("重命名") is None)
+  // (its title over its rows)
+  assert_true(where_is(t, "分享").1 < where_is(t, "复制链接").1)
+  assert_eq(said, [])
+  // back: the menu again, as tall as it was; the level let go of, the menu not
+  t.back()
+  assert_true(presenting())
+  for _ in 0..<way_frames {
+    t.run_for(@ui.frame_period_default)
+    one_sheet(t) |> ignore
+    assert_eq(scrim_alpha(t, phone), dim)
+  }
+  assert_true(t.find("重命名") is Some(_) && t.find("复制链接") is None)
+  assert_true((one_sheet(t).0 - top0).abs() < 0.5, msg="\{one_sheet(t)} \{top0}")
+  assert_eq(said, ["level gone"])
+  t.back()
+  assert_true(!presenting())
+  t.run_for(@ui.move_most_ms)
+  assert_eq(said, ["level gone", "gone"])
+  // chosen in the level: done, all of it closed, nothing let go of unsaid
+  open_it(t)
+  t.tap_text("分享…")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("复制链接")
+  assert_true(!presenting())
+  t.run_for(@ui.move_most_ms)
+  assert_eq(said, ["level gone", "gone", "copy"])
+}
+
+///|
+test "a menu's item that opens a menu, with a mouse at Large: the next menu beside what opened it, the first gone" {
+  let said : Array[String] = []
+  let t = presenting_tester(desk, menu_with_more(said))
+  open_it(t)
+  t.tap_text("分享…")
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(presented_how, [AsPopover])
+  assert_true(t.find("复制链接") is Some(_))
+  assert_true(t.key_named("esc"))
+  assert_true(!presenting())
+  assert_eq(said, ["level gone"])
+}
+
+///|
+test "what a sheet's item opens with a finger at Small: a sheet in its place, from as tall as that one stood, the scrim as it was, never two" {
+  let said : Array[String] = []
+  let t = presenting_tester(phone, fn(from) {
+    menu(
+      [
+        Some(menu_item_of("重命名", fn() { ask("重命名", "保存", fn(line) { said.push(line) }, value="旧名字", from~) })),
+        Some(menu_item_of("归档", fn() { said.push("archive") })),
+        Some(menu_item_of("固定", fn() { said.push("pin") })),
+        Some(menu_item_of("静音", fn() { said.push("mute") })),
+        Some(menu_item_of("隐藏", fn() { said.push("hide") })),
+        Some(
+          menu_item_of(
+            "删掉",
+            fn() { confirm("删掉吗？", "删掉后不能恢复。", "删掉它", fn() { said.push("deleted") }, danger=true, from~) },
+            danger=true,
+          ),
+        ),
+      ],
+      from=beside_of(from),
+    )
+  })
+  for opened in [("删掉", "删掉吗？", "删掉它"), ("重命名", "保存", "保存")] {
+    let (item, words, action) = opened
+    open_it(t)
+    let (top0, _) = one_sheet(t)
+    let dim = scrim_alpha(t, phone)
+    assert_true(dim > 0L)
+    t.tap_text(item)
+    // (the frame it was chosen in: what it opened where the menu stood, the menu gone, the window as dim)
+    assert_eq(presented_how, [AsSheet], msg=item)
+    assert_true((one_sheet(t).0 - top0).abs() < 0.5, msg="\{item}: \{one_sheet(t)} \{top0}")
+    assert_eq(scrim_alpha(t, phone), dim, msg=item)
+    assert_true(t.find(words) is Some(_) && t.find("归档") is None, msg=item)
+    // (on its way to its own height, shorter: down only, never two sheets, the window never brighter)
+    let mut last = top0
+    for _ in 0..<way_frames {
+      t.run_for(@ui.frame_period_default)
+      let (top, _) = one_sheet(t)
+      assert_eq(scrim_alpha(t, phone), dim, msg=item)
+      assert_true(top >= last - 0.5, msg="\{item}: \{top} after \{last}")
+      last = top
+    }
+    assert_true(last > top0 + 20.0, msg="\{item}: \{last} \{top0}")
+    // (as tall as what it holds: its action over the window's foot)
+    assert_true(where_is(t, action).1 < phone.2, msg=item)
+    t.back()
+    assert_true(!presenting(), msg=item)
+    t.run_for(@ui.move_most_ms)
+  }
+  assert_eq(said, [])
+}
+
+///|
 test "one over another with a mouse at Large: a confirm over a dialog dims no darker" {
   let t = panel_with_confirm(desk, by_nothing=true)
   open_it(t)

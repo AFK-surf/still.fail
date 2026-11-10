@@ -24,7 +24,9 @@ let sheet_drag_h : Double = 64.0
 /// A sheet of panel `x` (its body and foot `n`) in `parent` while `open()`; `close`: what what it holds is given to
 /// close it; `cancel` as it is closed by Escape, the back, a press over it or its top dragged down. `shown`, `gone`: as
 /// dialog_layer_node's. `covered_by`: how tall the sheet over it is, while one is (it steps back under it, pushed up out
-/// of its way and dimmed, as the host's sheet does: present_sheet's recede).
+/// of its way and dimmed, as the host's sheet does: present_sheet's recede). `in_place`: presented in the place of a
+/// sheet that stood so tall, gone at that moment (what was chosen in that one opened this): there at once that tall, its
+/// scrim whole as that one's was, on a Move to its own height from there, not from below (@kit.sheet's `in_place`).
 fn sheet_node(
   parent : @view.View,
   open : () -> Bool,
@@ -36,6 +38,7 @@ fn sheet_node(
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
   covered_by? : () -> Double? = fn() { None },
+  in_place? : Double,
 ) -> Unit {
   parent.show(
     open,
@@ -43,8 +46,19 @@ fn sheet_node(
       shown()
       layer.owns(gone) |> ignore
       // (how far its scrim is in; how far below its place it is, in its own heights; how far a finger has its top down)
-      let dim = EdgeWay::new(0.0)
+      // (in another's place: its scrim whole from the first, where that one stood, not below)
+      let dim = EdgeWay::new(if in_place is Some(_) { 1.0 } else { 0.0 })
       let below = SheetRise::new()
+      let placed = match in_place {
+        Some(stood) => {
+          below.start = 0.0
+          Some((stood, layer.cause_at()))
+        }
+        None => None
+      }
+      // (how far its foot reaches on under the window's: by its corner; in the place of one that stood taller than
+      // it, drawn so tall at first, its foot that much under the window's as it is laid out)
+      let under = sheet_under + in_place.unwrap_or(0.0)
       let held : @signals.Signal[Double?] = @signals.signal(None)
       let back = EdgeWay::new(0.0)
       // (one that grows (`grows`): how tall it is where it was dragged or tapped to another height, or a finger has it;
@@ -119,23 +133,23 @@ fn sheet_node(
       layer.box(fn(sheet) {
         sheet
         // (its foot past the window's by its corner, as the host's: its round corners only at its top)
-        .margin(Is((0.0, 0.0, 0.0, -sheet_under)))
-        .padding(Is((0.0, 0.0, 0.0, sheet_under)))
+        .margin(Is((0.0, 0.0, 0.0, -under)))
+        .padding(Is((0.0, 0.0, 0.0, under)))
         .max_height(By(fn() {
           // (one that grows: up to the window's top as a finger draws it past its most, giving way; one as tall as what
           // it holds up to its share (`hugs`), no taller than that share)
-          let most = layer.window().1 * (if x.grows { 1.0 } else { sheet_most }) + sheet_under
-          Some(if capped && n.hugs { dmin(most, x.tall * layer.window().1 + sheet_under) } else { most })
+          let most = layer.window().1 * (if x.grows { 1.0 } else { sheet_most }) + under
+          Some(if capped && n.hugs { dmin(most, x.tall * layer.window().1 + under) } else { most })
         }))
         .height(By(fn() {
           match tall_held.get() {
-            Some(h) => Some(h + sheet_under)
+            Some(h) => Some(h + under)
             None =>
               if sized.get() {
-                Some(tall.shown(sheet) + sheet_under)
+                Some(tall.shown(sheet) + under)
               } else if capped && !n.hugs {
                 // (its share of the window, as the host's sheet is: present_sheet's)
-                Some(x.tall * layer.window().1 + sheet_under)
+                Some(x.tall * layer.window().1 + under)
               } else {
                 None
               }
@@ -152,9 +166,24 @@ fn sheet_node(
         // laid out in the frame drawing it; down where a finger has its top, or going back)
         // (what is leaving with it, its layer, kept till it has sunk away, however tall: as the host's is, gone once it
         // has sunk and its scrim faded)
+        // (in another's place: as tall as that one stood at its cause's moment, taller or shorter than it is by how
+        // far its foot is under or over its place, on a Move from there as long as that is far)
         .moved_by(
-          fn(_, h, t) { (0.0, below.shown(h - sheet_under, t)) },
-          fn(_, h) { below.ends(h - sheet_under) },
+          fn(_, h, t) {
+            let own = h - under
+            let off = match placed {
+              Some((stood, at)) => @ui.move_path(own - stood, 0.0, t - at, @ui.move_ms((own - stood).abs())).0
+              None => 0.0
+            }
+            (0.0, below.shown(own, t) + off)
+          },
+          fn(_, h) {
+            let own = h - under
+            match placed {
+              Some((stood, at)) => dmax(below.ends(own), at + @ui.move_ms((own - stood).abs()))
+              None => below.ends(own)
+            }
+          },
           holds_leaving=true,
         )
         .offset(By(fn() {
@@ -180,7 +209,7 @@ fn sheet_node(
           if d.kind == Down {
             // (its own height as laid out as of then, the drag's: its foot's room past the window taken off)
             from_y.val = if d.oy < sheet_drag_h { d.wy } else { -1.0 }
-            from_h.val = d.h - sheet_under
+            from_h.val = d.h - under
           }
           guard from_y.val >= 0.0 else { return }
           let dy = d.wy - from_y.val
