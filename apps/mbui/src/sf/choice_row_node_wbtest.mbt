@@ -262,7 +262,8 @@ fn panel_choice_rows(at : (Int, Double, Double), pressed : Bool, old : Bool, lis
         }
       })
     } else {
-      panel_nodes("选一个", from~, tall=if listed { 0.8 } else { 0.0 }, fn(v, _) {
+      // (as tall as what it holds up to its share, as the old one with a list is: hugs)
+      panel_nodes("选一个", from~, tall=if listed { 0.8 } else { 0.0 }, hugs=listed, fn(v, _) {
         if listed {
           panel_list_node(v, fn() { Array::makei(n, fn(i) { i }) }, fn(b, i) { node_choice_row(b, i, tally) }, est=60.0) |> ignore
         } else {
@@ -297,12 +298,6 @@ fn panel_choice_rows(at : (Int, Double, Double), pressed : Bool, old : Bool, lis
     // (each place to a thousandth of a point, as drawn_within has the draw list's: laid out by another sum, a place
     // the same differs in its last digits)
     let k = fn(v : Double) { (v * 1000.0).round() / 1000.0 }
-    // (in a list, across alone: where the list lays its rows down it is the list's (panel_list's, panel_list_node's),
-    // not the row's, and a row a fraction of a point off the pixels draws its words and marks a fraction off too)
-    if listed {
-      stood.push("\{s.label} at \{k(r.0)} \{k(r.2)}x\{k(r.3)} selected \{all[0].selected} unable \{all[0].disabled}")
-      continue
-    }
     stood.push("\{s.label} at \{k(r.0)},\{k(r.1)} \{k(r.2)}x\{k(r.3)} selected \{all[0].selected} unable \{all[0].disabled}")
     stood.push(drawn_within(t, r).join(" "))
     stood.push(
