@@ -32,8 +32,9 @@
 //   pasten N TEXT               TEXT repeated to N characters, pasted
 //   wheel DY [MODS]             the list under the middle of the window scrolled by DY (with MODS held: cmd, ctrl,
 //                               alt, shift joined by +; ⌘ and a wheel over a picture zoom it)
-//   wheelat DY TEXT             the list under the lowest TEXT scrolled by DY, a mouse wheel's notches (eased in)
-//   wheelxat DX TEXT            what scrolls sideways under the lowest TEXT scrolled by DX, a wheel's (a trackpad's)
+//   wheelat DY TEXT             the list under the lowest TEXT scrolled by DY at once, as a test's Flow::wheel_at
+//                               gives it (no notch eased in: what is pressed next finds it where it went)
+//   wheelxat DX TEXT            what scrolls sideways under the lowest TEXT scrolled by DX, the same
 //   move X Y                    the pointer moved there, no button down (negative: from the right, the bottom)
 //   hover TEXT                  the pointer moved onto the lowest TEXT, where the frame has it
 //   rightclick TEXT             a secondary click (a context menu's) on the lowest TEXT, where the frame has it
@@ -1373,8 +1374,10 @@ fn drive_steps(c : Ctx) -> Unit {
             on_pointer(0, x, y, 2)
             on_pointer(2, x, y, 2)
           }
-          "wheelxat" => on_wheel(x, y, dy, 0.0, 4)
-          _ => on_wheel(x, y, 0.0, dy, 4)
+          // (at once, as a test's replay gives the same step (src/sfreplay: Flow::wheel_at's t.wheel): a notch's ease
+          // under way when the next step presses would come out as far as the frames drawn meanwhile took it)
+          "wheelxat" => on_wheel(x, y, dy, 0.0, 0)
+          _ => on_wheel(x, y, 0.0, dy, 0)
         }
         acted()
         return
