@@ -540,7 +540,7 @@ pub fn reset() -> Unit {
   connects_mine.val = false
   chosen.clear()
   builtin_open.clear()
-  panels_core.val = None
+  panels_core.set(None)
   frame_core.val = None
   at_root.val = false
   root_top.val = 0.0

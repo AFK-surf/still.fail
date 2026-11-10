@@ -20,7 +20,10 @@
 /// it, lined up `along` it; `by_key`: opened by the keyboard (the focus on its first row); `keep_field`: opened by a
 /// finger with a field focused (kit's dropdown_menu: its input method left in place): the focus left in that field, what
 /// is typed still its (View::leaves_typing), every key, the wheel and every press the menu's as ever. `choose` with the item chosen, once,
-/// as it closes; `cancel` as it is closed unchosen. `shown`, `gone`: as dialog_layer_node's.
+/// as it closes; `cancel` as it is closed unchosen. `shown`, `gone`: as dialog_layer_node's. `side`: the side of what
+/// opened it it goes on (a submenu's beside its row: submenu_row_node). Not `modal` (a submenu's, as kit's
+/// dropdown_menu's `submenu`): what is under it its own as ever, a press outside its panel closing it as it goes down
+/// and going on to what it lands on; the arrow key back toward what opened it (away from `side`) closing it too.
 pub fn menu_node(
   parent : @view.View,
   open : () -> Bool,
@@ -37,6 +40,8 @@ pub fn menu_node(
   gone? : () -> Unit = fn() {  },
   extras? : (Int) -> MenuExtra = fn(_) { menu_no_extra },
   min_w? : Double = menu_w,
+  side? : @ui.Side = Bottom,
+  modal? : Bool = true,
 ) -> Unit {
   parent.show(
     open,
@@ -99,25 +104,61 @@ pub fn menu_node(
       // (letters typed together, and when the last was)
       let typed = Ref("")
       let typed_at = Ref(-1.0e9)
+      // (its panel, once made, and what opened it: what a press outside it is outside of, where it is not modal)
+      let panel : Ref[@view.View?] = Ref(None)
+      let opener : Ref[@view.View?] = Ref(None)
       layer
       .over(Is(true))
       // (modal while open: closing, what is under it its own again as it begins to go)
-      .modal(By(live))
+      .modal(By(fn() { modal && live() }))
       .held_back_goes_on()
       |> ignore
+      if !modal {
+        // (a press anywhere in the window outside its panel: closed as it goes down, the press what it lands on's as
+        // ever, at that moment)
+        layer.reacts(fn() { layer.window_downs() }, at_start=false, fn(_) {
+          let (x, y) = layer.window_down_point()
+          // (on its panel or on what it holds, or on what opened it (its own press its own): what a press there is for,
+          // as the tree is now)
+          let on = fn(v : @view.View?) {
+            match v {
+              Some(p) =>
+                match p.tree.target_at(x, y) {
+                  Pressed(id) | Dragged(id) => p.tree.holds(p.id(), id)
+                  _ => false
+                }
+              None => false
+            }
+          }
+          let inside = on(panel.val) || on(opener.val)
+          if @signals.untracked(live) && !inside {
+            cancel()
+          }
+        })
+      }
       if keep_field {
         // (what is typed the field's it leaves the focus in: kit's dropdown_menu's initial focus none)
         layer.leaves_typing() |> ignore
       }
+      // (not modal: the key back toward what opened it)
+      let back = match side {
+        Right => @ui.key_code_left
+        Left => @ui.key_code_right
+        _ => -1
+      }
+      if modal {
+        layer
+        // (a press outside its panel its own, nothing under it pressed: closing it as it goes down, as the old frame's
+        // menu is dismissed then; not modal, the press under it's, nothing said of presses on the layer)
+        .presses(Is(true))
+        .on_drag(fn(d) {
+          if d.kind == Down && @signals.untracked(live) {
+            cancel()
+          }
+        })
+        |> ignore
+      }
       layer
-      // (a press outside its panel its own, nothing under it pressed: closing it as it goes down, as the old frame's
-      // menu is dismissed then)
-      .presses(Is(true))
-      .on_drag(fn(d) {
-        if d.kind == Down && @signals.untracked(live) {
-          cancel()
-        }
-      })
       .on_key(fn(k) {
         if !@signals.untracked(live) {
           return false
@@ -125,6 +166,9 @@ pub fn menu_node(
         let now = @signals.untracked(lit)
         let items = @signals.untracked(content)
         if k.code == @ui.key_escape {
+          cancel()
+          true
+        } else if !modal && k.mods == 0 && k.code == back {
           cancel()
           true
         } else if keep_field && now < 0 {
@@ -183,6 +227,7 @@ pub fn menu_node(
       |> ignore
       // (what opened it, where it is drawn: what its panel goes beside)
       let at = anchor(layer)
+      opener.val = Some(at)
       // (a column before every item's words where one has an icon or is one of a choice: the web's dropdown)
       let iconed = fn() { content().iter().any(fn(x) { x is Some(i) && i.chosen is None && i.icon != "" }) }
       let lead = fn() { iconed() || content().iter().any(fn(x) { x is Some(i) && i.chosen is Some(_) }) }
@@ -212,8 +257,9 @@ pub fn menu_node(
         items.length() > 0 && (items[items.length() - 1] is Some(i) && !i.heading)
       }
       layer.box(fn(p) {
+        panel.val = Some(p)
         p
-        .beside(at.id(), side=Bottom, along=view_along(along), offset~, padding=8.0)
+        .beside(at.id(), side~, along=view_along(along), offset~, padding=8.0)
         .min_width(Is(Some(min_w)))
         .max_width(By(fn() { Some(layer.window().0 - 16.0) }))
         .max_height(By(fn() { Some(dmax(0.0, layer.window().1 - 16.0)) }))

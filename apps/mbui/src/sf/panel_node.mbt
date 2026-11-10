@@ -58,6 +58,8 @@ fn panel_node(
         }
       }
       let live = fn() { !layer.leaving() }
+      // (a submenu row's menu in what it holds made in it: submenu_layer_lent)
+      submenu_layer_lend(layer)
       layer
       .over(Is(true))
       // (modal while open: closing, what is under it its own again as it begins to go)

@@ -136,7 +136,8 @@ pub fn panel_note_node(parent : @view.View, words : () -> String, loc~ : SourceL
 /// A panel's row to press in `parent` (menu_item's `panel` row): its icon 18 in a column 20 wide, 10 from its words, in
 /// the red where `danger`, what it is at now (`note`) at its end, quiet, and `end` an icon after that; reaching past the
 /// panel's padding as a menu's row does (menu_row_reach), its words a row's padding in, its ground under the hand.
-/// Read out a button named by its words and its note; `press` as it is pressed.
+/// Read out a button named by its words and its note; `press` as it is pressed. `plain`: a menu's row (menu_item's,
+/// not its `panel` one: its icon 16 with no column, 8 from its words).
 #callsite(autofill(loc))
 pub fn panel_row_node(
   parent : @view.View,
@@ -146,9 +147,10 @@ pub fn panel_row_node(
   note? : () -> String = fn() { "" },
   end? : String = "",
   danger? : Bool = false,
+  plain? : Bool = false,
   loc~ : SourceLoc,
 ) -> Unit {
-  panel_row_by(loc~, parent, label, fn(_) { press() }, icon, note, end, danger)
+  panel_row_by(loc~, parent, label, fn(_) { press() }, icon, note, end, danger, plain~)
 }
 
 ///|
@@ -167,7 +169,16 @@ pub fn panel_row_opens_node(
 }
 
 ///|
-/// panel_row_node's row, `press` given the row itself as it is pressed.
+/// How far the rows at a dialog's foot reach out past its words (dialog_foot_rows_node's, foot_rows_out's): lent by it
+/// to what it holds, as it is now; none elsewhere.
+// kept across runs: what each dialog's foot rows are lent, let go with them
+let foot_rows_lent : @view.Lent[() -> Double] = @view.Lent::new()
+
+///|
+/// panel_row_node's row, `press` given the row itself as it is pressed. `plain`: a menu's row (menu_item's, not its
+/// `panel` one): its icon 16 with no column of its own, 8 from its words. At a dialog's foot (foot_rows_lent) a capsule
+/// out to where it is concentric with the dialog's foot corners, its words on the dialog's line. `made`: given the row
+/// as it is made.
 #callsite(autofill(loc))
 fn panel_row_by(
   parent : @view.View,
@@ -177,31 +188,49 @@ fn panel_row_by(
   note : () -> String,
   end : String,
   danger : Bool,
+  plain? : Bool = false,
+  made? : (@view.View) -> Unit = fn(_) {  },
   loc~ : SourceLoc,
 ) -> Unit {
   let at = panel_in_of(parent)
+  let foot = parent.lent(foot_rows_lent)
   parent.box(made_for=loc, fn(r) {
     let t = fn() { theme() }
-    // (out across the room a large panel leaves, a card's corner there; else a capsule in a small panel's corners, past
-    // its padding to where it is concentric with them: menu_item's)
+    // (at a dialog's foot, out to where it is concentric with its foot corners, its words on its line; out across the
+    // room a large panel leaves, a card's corner there; else a capsule in a small panel's corners, past its padding to
+    // where it is concentric with them: menu_item's)
     let reach = fn() { menu_row_reach(t().rows.pick) }
     // (its reach alone the rows' rule's, panel_row_at: where that is none, a small panel's or a sheet's, a menu's row's
-    // capsule, menu_item's own, not a page row's padding)
+    // capsule, menu_item's own, not a page row's padding; at a dialog's foot, out to its foot corners: foot_rows_lent)
     let across = match panel_row_at(at) {
       Some(p) => p.out
       None => 0.0
     }
-    let out = fn() { if across > 0.0 { across } else { reach() } }
-    let words_at = fn() { if across > 0.0 { across } else { text_in + reach() } }
+    let out = fn() {
+      match foot {
+        Some(f) => f()
+        None => if across > 0.0 { across } else { reach() }
+      }
+    }
+    let words_at = fn() {
+      match foot {
+        Some(f) => f()
+        None => if across > 0.0 { across } else { text_in + reach() }
+      }
+    }
     let corner = if across > 0.0 { card_corner } else { small_panel_inner(r_menu) }
+    if foot is Some(_) {
+      style_node(r, fn() { menu_row_capsule })
+    } else {
+      r.radius(Is(corner)) |> ignore
+    }
     r
     .row(Is(true))
     .min_height(By(fn() { Some(t().rows.pick) }))
     .margin(By(fn() { (-out(), 0.0, -out(), 0.0) }))
     .padding(By(fn() { (words_at(), menu_row_over, words_at(), menu_row_over) }))
-    .gap(Is(panel_row_gap))
+    .gap(Is(if plain { menu_row_gap } else { panel_row_gap }))
     .lines_up(Is(Some(Middle)))
-    .radius(Is(corner))
     .ground(By(fn() { if lit_node(r) { t().p.hover } else { 0L } }))
     .says(By(fn() {
       let n = note()
@@ -210,8 +239,14 @@ fn panel_row_by(
     |> ignore
     presses_node(r, fn() { press(r) })
     r.show(fn() { icon() != "" }, fn(col) {
-      style_node(col, fn() { panel_row_icon }, in_row=true)
-      icon_node(col, "", panel_icon, By(fn() { t().p.muted }), name_now=icon) |> ignore
+      if plain {
+        // (a menu's row's: the icon alone, 16, in the red where `danger`)
+        icon_node(col, "", menu_item_icon, By(fn() { if danger { t().p.red } else { t().p.muted } }), name_now=icon)
+        |> ignore
+      } else {
+        style_node(col, fn() { panel_row_icon }, in_row=true)
+        icon_node(col, "", panel_icon, By(fn() { t().p.muted }), name_now=icon) |> ignore
+      }
     })
     r.box(fn(w) {
       w
@@ -236,6 +271,7 @@ fn panel_row_by(
     if end != "" {
       icon_node(r, end, panel_end_icon, By(fn() { t().p.subtle })) |> ignore
     }
+    made(r)
   })
   |> ignore
 }
