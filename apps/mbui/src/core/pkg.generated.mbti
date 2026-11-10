@@ -52,6 +52,12 @@ pub fn said(String) -> Unit
 
 pub fn screen_ack(Int32, Double) -> Bool
 
+pub fn serve((String) -> Unit) -> Int32
+
+pub fn serve_end() -> Unit
+
+pub fn served() -> Int32
+
 pub fn sign_in((Result[@json.Json, @json.Json]) -> Unit) -> Unit
 
 pub fn start(data_dir? : String, cloud? : String, beta? : Bool) -> Bool

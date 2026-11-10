@@ -1243,39 +1243,136 @@ pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
 }
 
 ///|
-/// `base` answering as round_trip does, and as a core does a topic let go of: asked again, its first value `ms` late
-/// again (round_trip's comes at once from then on, as if nothing were ever let go).
-pub fn round_trip_again(base : Source, ms : Double) -> Source {
-  let asked : Map[String, (Int, Bool)] = {}
-  let count = Ref(0)
-  let key = fn(name : String, params : Map[String, Json]) { name + Json::object(params).stringify() }
+/// `base` answering through the app's own client of its core (src/core's Client), as a core across its thread does: a
+/// topic's first value `ms` late each time the client subscribes to it, what changes of it after told as it changes,
+/// and none of it after the client lets it go (its unsubscribe, sent once no reader of it is left anywhere); so what is
+/// asked again and when is the client's to say, as on a device, never this made-up core's own count of who reads what.
+/// Calls are `base`'s, as they were (the client carries them too: answered so). What the client sends and what is
+/// answered are the same messages a run's trace keeps (src/core's trace.mbt), told to `heard` as they go.
+pub fn round_trip_again(base : Source, ms : Double, heard? : (String) -> Unit = fn(_) {  }) -> Source {
+  // (the topic and params a page read, by what the client puts on the wire for them: what to answer it with)
+  let named : Map[String, (String, Map[String, Json])] = {}
+  // (what is answered for each subscription the client holds, by its id: called to stop)
+  let live : Map[Int, () -> Unit] = {}
+  let wire_key = fn(name : String, wire : Map[String, Json]) { @sfbase.wire_topic_key(name, wire) }
+  // (whether this one is the core still: one another took the core's place from (a test after, a kept conversation)
+  // says nothing more, all it answers stopped)
+  let mine = Ref(0)
+  let give = fn(m : Json) {
+    if mine.val == 0 || @core.served() != mine.val {
+      for _, stop in live {
+        stop()
+      }
+      live.clear()
+      return
+    }
+    let text = m.stringify()
+    heard("in " + text)
+    @core.receive(text, None)
+  }
+  let send = fn(text : String) {
+    heard("out " + text)
+    let j = @json.parse(text) catch { _ => return }
+    guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { return }
+    let id = n.to_int()
+    match (m.get("subscribe"), m.get("unsubscribe"), m.get("call")) {
+      (Some(Object(t)), _, _) => {
+        let topic = match t.get("topic") {
+          Some(String(x)) => x
+          _ => return
+        }
+        let wire : Map[String, Json] = {}
+        for k, v in t {
+          if k != "topic" {
+            wire[k] = v
+          }
+        }
+        let (name, params) = named.get(wire_key(topic, wire)).unwrap_or((topic, wire))
+        let on = Ref(true)
+        let stop : Ref[() -> Unit] = Ref(fn() {  })
+        live[id] = fn() {
+          on.val = false
+          (stop.val)()
+        }
+        // its first value `ms` late, each change after as it comes
+        fix_later(ms, fn() {
+          guard on.val else { return }
+          let owner = @signals.set_owner(None)
+          stop.val = @signals.effect(fn() {
+            let now = base.topic(name, params).get().snapshot()
+            let m : Json? = match (now.value, now.error) {
+              (Some(v), _) => Some({ "id": Json::number(id.to_double()), "value": v })
+              (_, Some(e)) => Some({ "id": Json::number(id.to_double()), "error": e })
+              _ => None
+            }
+            match m {
+              Some(m) => @signals.after_flush(fn() { if on.val { give(m) } })
+              None => ()
+            }
+          })
+          @signals.set_owner(owner) |> ignore
+        })
+      }
+      (_, Some(True), _) =>
+        match live.get(id) {
+          Some(stop) => {
+            stop()
+            live.remove(id)
+          }
+          None => ()
+        }
+      (_, _, Some(String(call))) =>
+        (base.call)(call, m.get("params").unwrap_or(Json::null()), fn(r) {
+          give(
+            match r {
+              Ok(v) => { "id": Json::number(id.to_double()), "ok": v }
+              Err(e) => { "id": Json::number(id.to_double()), "error": e }
+            },
+          )
+        })
+      _ => ()
+    }
+  }
+  // (the client's core this one from the first read on, once: given up for good once another takes the core's place
+  // (a Tester begun anew, a kept conversation), never taken back)
+  let serving = fn() {
+    if mine.val == 0 {
+      mine.val = @core.serve(send)
+    }
+  }
+
+  let wire = fn(name : String, params : Map[String, Json]) { @sfbase.core_topic_params(name, params) }
   {
     ..base,
     topic_read: fn(name, params) {
-      @settings.fixture_followed()
-      let t = base.topic(name, params).get().snapshot()
-      let k = key(name, params)
-      match asked.get(k) {
-        Some((_, true)) => t
-        Some(_) => { value: None, error: None, version: -1 }
-        None => {
-          count.val += 1
-          let n = count.val
-          asked[k] = (n, false)
-          fix_later(ms, fn() { if asked.get(k) is Some((m, _)) && m == n { asked[k] = (n, true) } })
-          { value: None, error: None, version: -1 }
-        }
-      }
+      serving()
+      let w = wire(name, params)
+      named[wire_key(name, w)] = (name, params)
+      let s = @core.follow_topic(name, params=w)
+      { value: s.value, error: s.error, version: s.version }
     },
-    release: fn(name, params) { asked.remove(key(name, params)) },
+    topic_key: fn(name, params) { wire_key(name, wire(name, params)) },
+    waits: fn(name, params) {
+      serving()
+      @core.follow_topic(name, params=wire(name, params)).waiting
+    },
+    generation: fn(name, params) { @core.client.topic_generation(name, params=wire(name, params)) },
+    release: fn(name, params) { @core.release_topic(name, params=wire(name, params)) },
     leave: fn(name, params, reason) {
       if reason is @sfbase.TopicLeave::Owned(stop) {
         stop()
         return
       }
-      asked.remove(key(name, params))
+      @core.leave_topic(name, params=wire(name, params))
     },
+    refresh: fn(name, params) { @core.refresh_topic(name, params=wire(name, params)) },
   }
+}
+
+///|
+fn init {
+  // (a made-up core's place given back as every run begins: the engine's, or what the run sets)
+  @ui.on_reset(fn() { @core.serve_end() })
 }
 
 ///|
