@@ -439,7 +439,7 @@ test "对话目录: ⌥⇧↑ and ⌥⇧↓ go to the message a person said befo
 }
 
 ///|
-test "对话目录: a go-to in the chat far from its end keeps where the reader was; ↓ goes back there first (no flash), then to the end; none kept from its end" {
+test "对话目录: a go-to in the chat far from its end keeps where the reader was; ↓ goes back there first (no flash), the place then forgotten" {
   let calls : Array[Made] = []
   let t = outline_tester(calls)
   let back = fn() { t.semantics().iter().any(fn(s) { s.role == Button && s.label == "回到刚才的位置" }) }
@@ -462,16 +462,7 @@ test "对话目录: a go-to in the chat far from its end keeps where the reader 
   assert_eq(outline_reading().top_seq, 22.0)
   assert_eq(outline_reading().flash_n, n)
   assert_false(back())
-  // pressed again: to the end, nothing kept
-  t.click(Button, label="跳到最新")
-  t.run_for(@ui.move_most_ms)
-  t.run_for(@ui.move_most_ms)
-  assert_true(outline_reading().at_end)
-  // at the end, a go-to keeps nothing
-  t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
-  t.run_for(@ui.move_most_ms)
-  t.run_for(@ui.move_most_ms)
-  assert_false(back())
+  // (↓ pressed again, gliding to the end, and sending: chat_wbtest.mbt's, where the glide is that file's motion)
 }
 
 ///|
@@ -654,7 +645,7 @@ test "对话目录: the reader's row in the accent's ink, it alone; each row's w
 }
 
 ///|
-test "对话目录: within a list's height of the chat's end a go-to keeps no place; with the window short of the chat's end it does; words sent forget it" {
+test "对话目录: within a list's height of the chat's end a go-to keeps no place; with the window short of the chat's end it does" {
   let calls : Array[Made] = []
   let back = fn(t : @ui.Tester) { t.semantics().iter().any(fn(s) { s.role == Button && s.label == "回到刚才的位置" }) }
   // (near the end, less than the list's height from it: Claude's 今天 09:05, seq 32)
@@ -671,19 +662,6 @@ test "对话目录: within a list's height of the chat's end a go-to keeps no pl
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_true(back(t))
-  // far from the end, kept; then words sent: forgotten
-  let t = outline_tester(calls)
-  t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
-  t.run_for(@ui.move_most_ms)
-  t.run_for(@ui.move_most_ms)
-  assert_true(back(t))
-  t.tap_text("发消息")
-  t.type_text("好的")
-  t.key(@ui.key_code_enter)
-  t.run_for(@ui.move_most_ms)
-  t.run_for(@ui.move_most_ms)
-  assert_true(named(calls, "composer.take").length() + named(calls, "chat.send").length() > 0)
-  assert_false(back(t))
 }
 
 ///|
@@ -951,4 +929,84 @@ test "对话目录: a go-to to a message of an older page, read first: the longe
   assert_true(named(calls, "chat.older").length() + named(calls, "chat.around").length() >= 1, msg="\{calls.map(fn(m) { m.name })}")
   assert_true(outline_panel(t) is None)
   assert_eq(outline_reading().flash, "ts1")
+}
+
+///|
+/// The rail's ticks (in its press `rail`), top to bottom: where each stands and whether it is the long one.
+fn outline_tick_places(t : @ui.Tester) -> Array[(Double, Bool)] {
+  let rail = outline_buttons(t).filter(fn(b) { b.2 >= 44.0 })
+  guard rail.length() == 1 else { return [] }
+  let (rx, ry, rw, rh) = rail[0]
+  let ticks = outline_drawn(t, "rect").filter(fn(r) {
+    r.0 >= rx && r.0 + r.2 <= rx + rw + 0.5 && r.1 >= ry && r.1 + r.3 <= ry + rh + 0.5 && r.3 <= 2.5
+  })
+  ticks.sort_by(fn(a, b) { a.1.compare(b.1) })
+  ticks.map(fn(r) { (r.1, r.2 > 8.5) })
+}
+
+///|
+/// Which of `m` ticks of the longer chat's map stands for its message `seq` (the reader's), its index's seqs as the
+/// fixture says them.
+fn outline_long_tick(m : Int, seq : Double) -> Int {
+  let index = ((fixture("chat-outline-long").topic_read)("chatOutline", {
+    "station": Json::string("ws1/st1"),
+    "thread": Json::number(7.0),
+  })).value
+  let seqs : Array[Double] = []
+  for d in items(index, "days") {
+    for q in items(Some(d), "seqs") {
+      seqs.push(q.as_number().unwrap_or(-1.0))
+    }
+  }
+  seqs.search(seq).unwrap_or(-1) * m / seqs.length()
+}
+
+///|
+test "对话目录: the longer chat's rail a steady map, its ticks where they were as the reader steps, scrolls or goes far; the long one the reader's part" {
+  let calls : Array[Made] = []
+  let t = outline_tester(calls, mode="chat-outline-long")
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
+  let first = outline_tick_places(t)
+  let m = first.length()
+  // (240 said, more than fit: as many as fit in half the list's height)
+  assert_true(m > 10 && m < 240, msg="\{m}")
+  let ys = fn(p : Array[(Double, Bool)]) { p.map(fn(x) { x.0 }) }
+  let long = fn(p : Array[(Double, Bool)]) { p.mapi(fn(i, x) { (i, x.1) }).filter(fn(x) { x.1 }).map(fn(x) { x.0 }) }
+  // (the reader's: the message the list stands at, 283; then the one ⌥⇧↓ goes to, flashing)
+  assert_eq(long(first), [outline_long_tick(m, @sffixture.outline_long_away_seq)])
+  t.key(@ui.key_code_down, mods=@ui.mod_alt | @ui.mod_shift_key)
+  t.run_for(@ui.move_most_ms)
+  let p = outline_tick_places(t)
+  assert_eq(ys(p), ys(first))
+  let went = (try Some(@json.parse(outline_reading().flash.view(start_offset=2).to_string())) catch { _ => None })
+    .bind(fn(j) { j.as_number() })
+    .unwrap_or(-1.0)
+  assert_eq(long(p), [outline_long_tick(m, went)])
+  // scrolled up through some messages by the hand: one long, all where they were
+  t.wheel(800.0, 400.0, -600.0)
+  t.run_for(@ui.move_most_ms)
+  let p = outline_tick_places(t)
+  assert_eq(ys(p), ys(first))
+  assert_eq(long(p).length(), 1)
+  // far: to the chat's first said, from its outline (its page before read first)
+  t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  let (px, py, pw, ph) = outline_panel(t).unwrap()
+  t.wheel(px + pw / 2.0, py + ph / 2.0, -100000.0)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("早，今天想把发布清单从头到尾过一遍：签名、更新日志、商店截图、深…")
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  let p = outline_tick_places(t)
+  assert_eq(ys(p), ys(first))
+  assert_eq(long(p), [0])
+  // to its end by the hand: the last
+  t.wheel(800.0, 400.0, 1000000.0)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  let p = outline_tick_places(t)
+  assert_eq(ys(p), ys(first))
+  assert_eq(long(p), [m - 1])
+  assert_eq(outline_faults(t), [])
 }

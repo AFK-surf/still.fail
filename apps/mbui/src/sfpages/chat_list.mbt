@@ -554,14 +554,18 @@ fn to_ask(
     })
   }
   @sf.tip(c, "chat-ask", id, @sf.t("web-main.chat.asks.go"))
+  // (over the round buttons under it: as one comes or goes, it moves there from where it is, a Move (sf/motion.mbt
+  // move_spring), set off as their coming and going is, as this is built for it; laid out where it goes, drawn the
+  // rest of its way short of there)
+  let lift = under.to_double() * float_above
+  let lifting = @motion.told(c, "chat-ask/lift", lift, spec=@sf.move_spring)
   c.layer(fn() {
-    let lift = under.to_double() * float_above
     float_box(c, float_right(c), room + float_lift + lift, fn() {
       let b = c.box(style=if c.hovered(id) { float_button_hot } else { float_button }, id~, fn() {
         @sf.icon(c, "bell", size=float_icon, color=p.text) |> ignore
       })
       c.semantics(b, Button, id~, label=@sf.t("web-main.chat.asks.go"))
-      c.look(b, look)
+      c.look_by(b, fn() { { ..look, dy: look.dy + lift - lifting.get(c) } })
       @motion.leaving(c, b, shown)
       b
     })

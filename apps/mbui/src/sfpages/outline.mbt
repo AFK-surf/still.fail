@@ -711,8 +711,8 @@ let rail_need : Double = rail_press_w + @ui.scroll_bar_room + rail_clear
 ///|
 /// A tick of the rail, drawn as the library's rules are (a line of the line's colour, square): S0_5 (2) thick, S1 apart,
 /// a day S3 from the one before; S2 long, the reader's S4 and in the ink; the press's room over and under them
-/// (rail_pad). The rail at most half the list's height, the ticks about the reader's where there are more. The styles
-/// and rail_window's sums are of these alone.
+/// (rail_pad). The rail at most half the list's height; where its ticks do not fit, a steady map of the whole chat
+/// (rail_ticks). The styles and rail_ticks' sums are of these alone.
 let tick_thick : Double = @ui.Space::px(S0_5)
 
 ///|
@@ -737,44 +737,37 @@ let rail_pad : @ui.Space = S2
 let rail_share : Double = 0.5
 
 ///|
-/// The ticks shown of `days` (how many said on each, oldest first) about the `at`th of them all, as many as `most` tall
-/// holds: each tick's index among all and whether a day begins at it (not the first shown).
-fn rail_window(days : Array[Int], at : Int, most : Double) -> Array[(Int, Bool)] {
-  let all : Array[(Int, Bool)] = []
-  let mut n = 0
-  for di, k in days {
-    for j in 0..<k {
-      all.push((n, di > 0 && j == 0))
-      n += 1
+/// The rail's ticks for `days` (how many people said on each, oldest first), the `at`th of them all the reader's, in
+/// `most` tall: where one a message fits, one each, a day's together, the days further apart; where they do not, a steady
+/// map of the whole chat: as many as fit, evenly, no days, tick i the messages [i·n/m, (i+1)·n/m) of the n in order, so
+/// nothing moves as the reader does (only which is long), nor as a message comes (only what each stands for) till how
+/// many fit changes. Each day's ticks (one group, the map's), each whether it is the reader's.
+fn rail_ticks(days : Array[Int], at : Int, most : Double) -> Array[Array[Bool]] {
+  let n = days.fold(init=0, fn(a, k) { a + k })
+  guard n > 0 else { return [] }
+  let at = if at < 0 || at >= n { n - 1 } else { at }
+  let groups = days.filter(fn(k) { k > 0 })
+  let whole = n.to_double() * tick_thick +
+    (n - groups.length()).to_double() * tick_gap.px() +
+    (groups.length() - 1).to_double() * tick_day_gap.px()
+  if whole <= most {
+    let out : Array[Array[Bool]] = []
+    let mut i = 0
+    for k in groups {
+      let g : Array[Bool] = []
+      for _ in 0..<k {
+        g.push(i == at)
+        i += 1
+      }
+      out.push(g)
     }
+    return out
   }
-  if all.is_empty() {
-    return []
-  }
-  let height = fn(from : Int, to : Int) {
-    let mut h = 0.0
-    for i in from..<to {
-      h += tick_thick + (if i > from { if all[i].1 { tick_day_gap.px() } else { tick_gap.px() } } else { 0.0 })
-    }
-    h
-  }
-  let at = if at < 0 || at >= all.length() { all.length() - 1 } else { at }
-  let mut from = at
-  let mut to = at + 1
-  // (grown a tick at a time either way about the reader's, as far as it holds)
-  let mut grew = true
-  while grew {
-    grew = false
-    if to < all.length() && height(from, to + 1) <= most {
-      to += 1
-      grew = true
-    }
-    if from > 0 && height(from - 1, to) <= most {
-      from -= 1
-      grew = true
-    }
-  }
-  all[from:to].to_array().mapi(fn(i, t) { (t.0, i > 0 && t.1) })
+  // (the map: m of them, each tick and the gap over it)
+  let m = ((most + tick_gap.px()) / (tick_thick + tick_gap.px())).to_int()
+  let m = if m < 1 { 1 } else if m > n { n } else { m }
+  let long = at * m / n
+  [Array::makei(m, fn(i) { i == long })]
 }
 
 ///|
@@ -800,27 +793,19 @@ fn outline_rail(
   let at = said.search(current).unwrap_or(said.length() - 1)
   // (its share of the list's height, less the press's own room over and under its ticks)
   let most = dmax(0.0, dmax(0.0, c.height - top - room) * rail_share - 2.0 * rail_pad.px())
-  let shown = rail_window(days, at, most)
+  let shown = rail_ticks(days, at, most)
   let id = c.id("chat-outline-rail")
   let stint = c.page_stint()
   c.on_press(id, fn() { open_outline(src, r, thread, current, from=Of(id), side=Left, along=Middle, keys=true, stint~) })
   @sf.tip(c, "chat-outline-rail", id, @sf.t("web-main.keymap.chat.outline"), shortcut="chat.outline", side=Left)
   c.layer(fn() {
     c.box(style=rail_place.then(@ui.style(pt=@sf.room_of(top), pb=@sf.room_of(room))), fn() {
-      // (a day's ticks together, the days further apart)
-      let days : Array[Array[Int]] = []
-      for t in shown {
-        let (n, day) = t
-        if day || days.is_empty() {
-          days.push([])
-        }
-        days[days.length() - 1].push(n)
-      }
       let b = c.box(style=rail_press, id~, fn() {
-        for ticks in days {
+        // (a day's ticks together, the days further apart; the map's, one group)
+        for ticks in shown {
           c.box(style=rail_day, fn() {
-            for n in ticks {
-              c.box(style=if n == at { tick_on } else { tick_off }, fn() {  }) |> ignore
+            for on in ticks {
+              c.box(style=if on { tick_on } else { tick_off }, fn() {  }) |> ignore
             }
           })
           |> ignore
