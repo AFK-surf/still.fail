@@ -1,7 +1,8 @@
 // A sheet from the bottom (not one of Radix's: Vaul's Drawer; still.fail's phone sheets, its Android Sheet.kt
 // SheetHost): whether it is open the view's. Modal: the page under it dimmed (its scrim in over 300 ms, CSS's ease),
 // out of the semantics tree and taking no press, Tab kept in it (no field given the focus as it opens: the keyboard
-// would come up over it), the focus back where it was as it goes. It rises on a
+// would come up over it; nor one under it left with it: its own ground has it while it is up), the focus back where it
+// was as it goes. It rises on a
 // spring (critically damped, a third of a second) and sinks away on it. Its top (`drag_h` high: the grabber and the
 // head) drags it: a sheet with `detents` (shares of the window) settles at the one it is let go nearer, going on at
 // the finger's speed, and closes let go under `close_below`; a tap on its grabber goes to the other end; one without
@@ -286,10 +287,12 @@ pub fn sheet(
     return { open: false, shown: false, dragged, stands: 0.0 }
   }
   // (Tab kept in it, but no field in it given the focus as it opens: a sheet is a touch screen's, where a field
-  // focused brings the keyboard up over what the sheet shows; one that asks for words gives its field the focus itself)
+  // focused brings the keyboard up over what the sheet shows; one that asks for words gives its field the focus itself.
+  // Nor one under it kept: what has the focus outside it gives it to the sheet's own ground (@ui.layer_ground), the
+  // keyboard put away and nothing typed reaching the page under it, given back as the sheet goes)
   // (the scrim as far as it has come, as it is drawn: Ctx::bg_by on the layer's ground)
   let scrim = scrim.unwrap_or(th.scrim)
-  let o = c.overlay(key, modal=true, initial_focus=0, on_escape?, scrim~, inert=!now, fn() {
+  let o = c.overlay(key, modal=true, initial_focus=@ui.layer_ground, on_escape?, scrim~, inert=!now, fn() {
     let i = c.box(w=Fill(1.0), h=Px(hx), ty=total - hx + bx - raised, fn() {
       // (its look given the scrim's share as it is built: the sheet's own glass drawn solid darkens with it, a colour
       // with no form read as it is drawn; the sheet is laid out again as it goes anyway, its height and place its

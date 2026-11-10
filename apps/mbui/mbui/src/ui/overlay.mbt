@@ -69,6 +69,12 @@ pub(all) struct Overlay {
 }
 
 ///|
+/// Ctx::overlay's `initial_focus` for a modal layer that gives none of what it holds the focus as it opens and keeps
+/// none under it either: its own ground takes it from what outside it has it (a sheet: a field in it focused would
+/// bring the keyboard up over it, one under it would go on taking what is typed while it is up), given back as it goes.
+pub let layer_ground : Int = -3
+
+///|
 /// A layer over the page (see the file's head), `key` its id's, built by `body`. `modal`: a ground (`scrim`, its
 /// colour; clear by default) under what it holds takes the presses and wheels it does not, and the page is hidden
 /// from the semantics tree; `trap` (with `modal` by default) keeps Tab in it. Dismissed by Escape and the back
@@ -78,7 +84,9 @@ pub(all) struct Overlay {
 /// view's own Ctx::dismiss not asked). A press on `anchor` (its trigger's id), or on what it holds, does not dismiss
 /// it; nor, its trigger a node of the window's tree (`anchor_node`: a rail's place, an old view's popover by it), one
 /// where that node is drawn (on it or what it holds). As it opens the focus goes to `initial_focus` (-1: its first focusable; 0: nowhere, it stays; -2, by
-/// default: the first focusable when it traps, else nowhere); as it goes, back to `return_focus` (0, by default: what
+/// default: the first focusable when it traps, else nowhere; -3: its own ground where what has it is outside it, none
+/// of what it holds given it, so a field under it keeps no keys and no input method (`layer_ground`: a sheet), it
+/// stays where nothing has it or it is in it already); as it goes, back to `return_focus` (0, by default: what
 /// had it as it opened). `inert`: leaving (its exit drawn): it takes no press, focus or key, is not dismissed, is
 /// hidden from the semantics tree, and the focus goes back as though it had gone; its scrim is still drawn (as it
 /// fades), taking nothing.
@@ -659,8 +667,21 @@ fn Ctx::layers_focus(self : Ctx) -> Unit {
     if was {
       continue
     }
+    // (its own ground in place of what outside it has the focus: nothing has it, or what is in it has it already, it
+    // stays)
+    if l.initial == layer_ground &&
+      (
+        self.focus == 0 ||
+        self.focus == l.id ||
+        self.focusables.iter().any(fn(f) { f.id == self.focus && self.layer_built_in(f.layer, l.id) })
+      ) {
+      self.layers_opened.push(l.id)
+      continue
+    }
     let target = if l.initial > 0 {
       l.initial
+    } else if l.initial == layer_ground {
+      l.id
     } else {
       let mut first = 0
       for f in self.focusables {
