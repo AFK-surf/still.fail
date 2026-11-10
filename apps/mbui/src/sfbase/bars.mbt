@@ -104,9 +104,10 @@ pub fn place_icon(place : String) -> String {
 
 ///|
 /// What place `place` opens on of the core's that the device holds (the lists `lasting` keeps), for workspace `ws`:
-/// 文件's stations with their drives, Station's with how each one up is reached (once they are known), Profile's,
-/// 连接's, 密钥's. 用量's and 已归档's only once a finger is on their tab (`shown`): theirs a station is asked for as
-/// they are shown (the core's rule 4), so never before.
+/// 文件's stations with their drives, Station's, Profile's, 连接's, 密钥's: what only the device's own data answers (the
+/// core's rule 4: no request of a station for it). 用量's and 已归档's, and how each station up is reached (Station's),
+/// only once a finger is on their tab (`shown`): theirs a station is asked for, or sampled, as they are shown (the
+/// core's rules 2 and 4), so never before.
 fn place_reads(src : Source, ws : String, scope : String, place : String, shown : Bool) -> Array[(String, Map[String, Json])] {
   let of = Json::string(ws)
   let stations : Map[String, Json] = { "scope": of }
@@ -114,7 +115,8 @@ fn place_reads(src : Source, ws : String, scope : String, place : String, shown 
     "files" => [("workspace", { "workspace": of }), ("stations", { "scope": of, "drive": Json::boolean(true) })]
     "stations" => {
       let reads : Array[(String, Map[String, Json])] = [("stations", stations)]
-      if hold(src, scope, "stations", stations).get().value is Some(Array(all)) {
+      // (each station up as it is reached: sampled while shown, the core's rule 2, so only with a finger on the tab)
+      if shown && hold(src, scope, "stations", stations).get().value is Some(Array(all)) {
         for s in all {
           if field(Some(s), "online") == Some(Json::boolean(true)) && field(Some(s), "station") is Some(String(address)) {
             reads.push(("stationNet", { "station": Json::string(address) }))
@@ -134,86 +136,192 @@ fn place_reads(src : Source, ws : String, scope : String, place : String, shown 
 }
 
 ///|
-/// Places read ahead: which (their workspace and names: "" none yet), under what name they are held (`hold`'s scope,
-/// "" none), and whether their answers are still on their way.
+/// Places read ahead: which (their workspace and names: "" none), under what name they are held (`hold`'s scope, ""
+/// none).
 priv struct Ahead {
   mut of : String
   mut scope : String
-  mut open : Bool
 }
 
 ///|
 /// Those of the bar in view, and the one a finger went down on.
 // kept across runs: put back as a run begins (ahead_reset)
-let ahead_bar : Ahead = { of: "", scope: "", open: false }
+let ahead_bar : Ahead = { of: "", scope: "" }
 
 ///|
 // kept across runs: put back as a run begins (ahead_reset)
-let ahead_press : Ahead = { of: "", scope: "", open: false }
+let ahead_press : Ahead = { of: "", scope: "" }
 
 ///|
-/// The place whose tab a finger went down on last ("" none yet): what it opens on is asked from then, so its tap, a
-/// moment later, finds it answered (as a chat's row asks for its chat as it is pressed: sfpages' chat_row_node).
+/// The place whose tab a finger went down on last ("" none, or let go of): what it opens on is asked from then, so its
+/// tap, a moment later, finds it answered (as a chat's row asks for its chat as it is pressed: sfpages' chat_row_node).
 // kept across runs: put back as a run begins (ahead_reset)
 let place_pressed_now : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
+/// When what the press asked is let go of (places_ahead_node): the moment the finger left the tab, or, where it switched
+/// to the place, the moment that place has come in (go_place's motion over); -1 while the finger is down.
+// kept across runs: put back as a run begins (ahead_reset)
+let place_press_ends : @signals.Signal[Double] = @signals.signal(-1.0, same=fn(a, b) { a == b })
+
+///|
 /// A finger went down on place `place`'s tab.
 pub fn place_pressed(place : String) -> Unit {
+  place_press_ends.set(-1.0)
   place_pressed_now.set(place)
 }
 
 ///|
-/// `places` of workspace `ws` asked ahead as `ahead` (place_reads), once for each `ws` and `places`: held under
-/// `scope` until all are answered, then let go of.
-fn Ahead::read(self : Ahead, src : Source, ws : String, scope : String, places : Array[String], shown : Bool) -> Unit {
+/// The finger on the bar let go at `at` (lifted, moved off, called off): what its press asked let go of then, or, where
+/// a place was switched to as it did (place_switched), once that place has come in.
+pub fn place_press_lifted(at : Double) -> Unit {
+  if place_pressed_now.untracked() != "" && place_press_ends.untracked() < at {
+    place_press_ends.set(at)
+  }
+}
+
+///|
+/// A place switched to, as a finger on the bar did it: come in by `until` (its motion's end, go_place's), what the
+/// press asked held till then, as the page it opens on is first built before.
+pub fn place_switched(until : Double) -> Unit {
+  if place_pressed_now.untracked() != "" && place_press_ends.untracked() < until {
+    place_press_ends.set(until)
+  }
+}
+
+///|
+/// `places` of workspace `ws` held under `scope` (place_reads; `shown`: a finger is on that place's tab), what was
+/// held before for others let go of first.
+fn Ahead::hold_places(self : Ahead, src : Source, ws : String, scope : String, places : Array[String], shown : Bool) -> Unit {
+  ahead_outside_build()
   let of = ws + " " + places.join(",")
+  // (others now: held under a name of their own first, then what was held let go of, so what both read stays read,
+  // never let go of and asked again between)
+  let was = if self.of != of { self.scope } else { "" }
   if self.of != of {
-    if self.open {
-      let_go(src, self.scope)
-    }
+    ahead_count.val += 1
     self.of = of
-    self.scope = scope
-    self.open = places.length() > 0
+    self.scope = scope + "#" + ahead_count.val.to_string()
   }
-  if !self.open {
-    return
-  }
-  let mut waits = false
+  // (owned by none of what asked: what is held lives till let go of, not till the reaction that asked runs again)
+  let owner = @signals.set_owner(None)
   for place in places {
-    for read in place_reads(src, ws, scope, place, shown) {
-      let said = hold(src, scope, read.0, read.1).get()
-      if said.value is None && said.error is None {
-        waits = true
-      }
+    for read in place_reads(src, ws, self.scope, place, shown) {
+      hold(src, self.scope, read.0, read.1) |> ignore
     }
   }
-  if !waits {
-    let_go(src, scope)
-    self.open = false
+  @signals.set_owner(owner) |> ignore
+  if was != "" {
+    let_go(src, was)
   }
 }
 
 ///|
-/// What the places of the bar in view open on (place_reads) asked of the core once, ahead of them, and again as another
-/// bar or workspace comes into view; what a place opens on asked as a finger goes down on its tab; each let go of as
-/// soon as it is answered. What the core said is kept (`lasting`), so a place shown the first time since the app
-/// started shows it at once, not its bones until the core answers (slowest as the app starts, the core busy catching
-/// up). Asked as a frame is built with the workspace in view, once its first page has shown.
-pub fn places_ahead(src : Source, ws : String) -> Unit {
-  if !(src.reads_ahead)() {
-    return
+/// What is held ahead is held and let go of at causes' moments (places_ahead_node's reactions, its timeline), never as
+/// a build runs: held.mbt's let_go defers what a build going on still reads, which would keep what was read ahead past
+/// its moment. Each time it was, counted (places_ahead_in_build), for the tests to hold at none.
+fn ahead_outside_build() -> Unit {
+  if held_building.val {
+    ahead_in_build.val += 1
   }
-  let (sets, cur) = bars_in(src, ws)
-  ahead_bar.read(src, ws, "ahead/" + ws, if cur >= 0 && cur < sets.length() { sets[cur] } else { [] }, false)
-  let pressed = place_pressed_now.get()
-  ahead_press.read(src, ws, "ahead-press/" + ws, if pressed == "" { [] } else { [pressed] }, true)
 }
 
 ///|
-/// Whether what the places open on is still being read ahead (places_ahead): held till then, let go of after.
+// kept across runs: only counted on
+let ahead_in_build : Ref[Int] = Ref(0)
+
+///|
+/// How many times what is read ahead was held or let go of as a build ran (ahead_outside_build): none, ever.
+pub fn places_ahead_in_build() -> Int {
+  ahead_in_build.val
+}
+
+///|
+/// How many sets of places have been held ahead: each its own name to be held under (Ahead::hold_places).
+// kept across runs: only counted on
+let ahead_count : Ref[Int] = Ref(0)
+
+///|
+/// What is held let go of.
+fn Ahead::release(self : Ahead, src : Source) -> Unit {
+  ahead_outside_build()
+  if self.scope != "" {
+    let_go(src, self.scope)
+  }
+  self.of = ""
+  self.scope = ""
+}
+
+///|
+/// What the places of the bar open on (place_reads) asked of the core ahead of them, for as long as the bar is there:
+/// from the moment `bar` says it is (the workspace whose bar shows: it came in, its page came back), held till it says
+/// none (its page gone from view under another, the stack at rest: Nav::root_shows), what changes of it meanwhile coming
+/// as what changed, not whole again; another bar or workspace in view, its places in their place. And what a place
+/// opens on that a station is asked for as it shows (用量, 已归档; Station's ways reached, sampled while shown: the
+/// core's rules 2 and 4), asked as a finger goes down on its tab and held till it leaves the tab, or, where it switched
+/// to it, till that place has come in (place_switched): never while the place is not to be shown. Both at their
+/// causes' moments, whatever frames are drawn: the page a place opens on is first built before either lets go, so it
+/// takes over what is held. What the core said is kept (`lasting`), so a place shows it at once, not its bones.
+pub fn places_ahead_node(v : @view.View, src : Source, bar : () -> String?) -> Unit {
+  v.reacts(
+    fn() {
+      guard @signals.untracked(fn() { (src.reads_ahead)() }) else { return None }
+      match bar() {
+        Some(ws) => {
+          let (sets, cur) = bars_in(src, ws)
+          Some((ws, if cur >= 0 && cur < sets.length() { sets[cur] } else { [] }))
+        }
+        None => None
+      }
+    },
+    fn(want) {
+      match want {
+        Some((ws, places)) => ahead_bar.hold_places(src, ws, "ahead/" + ws, places, false)
+        None => ahead_bar.release(src)
+      }
+    },
+  )
+  // (the pressed place's, while the finger is on it, till it lets go)
+  let off : Ref[() -> Unit] = Ref(fn() {  })
+  v.reacts(
+    fn() {
+      guard @signals.untracked(fn() { (src.reads_ahead)() }) else { return None }
+      let pressed = place_pressed_now.get()
+      let ends = place_press_ends.get()
+      match bar() {
+        Some(ws) if pressed != "" => {
+          // (Station's: each station up reached, as the stations come to be known)
+          if pressed == "stations" {
+            src.topic("stations", { "scope": Json::string(ws) }).get() |> ignore
+          }
+          Some((ws, pressed, ends))
+        }
+        _ => None
+      }
+    },
+    fn(want) {
+      (off.val)()
+      off.val = fn() {  }
+      match want {
+        Some((ws, pressed, ends)) => {
+          ahead_press.hold_places(src, ws, "ahead-press/" + ws, [pressed], true)
+          if ends >= 0.0 {
+            off.val = v.at_moment(ends, fn() {
+              ahead_press.release(src)
+              place_pressed_now.set("")
+            })
+          }
+        }
+        None => ahead_press.release(src)
+      }
+    },
+  )
+}
+
+///|
+/// Whether what the places open on is held ahead of them now (places_ahead_node).
 pub fn places_ahead_open() -> Bool {
-  ahead_bar.open || ahead_press.open
+  ahead_bar.scope != "" || ahead_press.scope != ""
 }
 
 ///|
@@ -221,7 +329,7 @@ fn ahead_reset() -> Unit {
   for a in [ahead_bar, ahead_press] {
     a.of = ""
     a.scope = ""
-    a.open = false
   }
   place_pressed_now.set("")
+  place_press_ends.set(-1.0)
 }

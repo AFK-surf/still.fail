@@ -215,7 +215,7 @@ pub fn source() -> @sfapp.Source {
     refresh: fn(name, params) { @core.refresh_topic(name, params=replay_topic_params(name, params)) },
     read_only: false,
     // (a run's core is asked what the run asked: as its app did, which says so in its trace's head since it does)
-    reads_ahead: fn() { @sfcore.trace_switch("MBUI_PLACES_AHEAD") },
+    reads_ahead: fn() { @sfcore.trace_switch("MBUI_PLACES_BAR") },
   }
 }
 

@@ -4,10 +4,16 @@
 // in 80 of the 81 (settings-run-settings recorded again in #5186). Each bar only falls: a trace recorded again
 // brings it down, and a switch none is without any more goes (from sfcore and from the replay's source: the app's way
 // is then every replay's). The user, 2026-11-10: 「加录像开关检查」.
+//
+// Where a way a switch keeps for old traces is itself taken out of the app as wrong (not only followed by a newer
+// one), there is no old way left to replay those that had it on: a new switch takes the old one's place, the traces
+// that had the old one on are recorded again with the new, and the old switch goes with its bar. So MBUI_PLACES_BAR
+// (#5227) in the place of MBUI_PLACES_AHEAD, whose read-ahead worked out frame by frame was taken out: its one trace
+// on (settings-run-settings) recorded again, the other 80 never had either.
 
 ///|
 /// Each switch: how many traces may replay without it.
-let switches_known : Map[String, Int] = { "MBUI_PLACES_AHEAD": 80 }
+let switches_known : Map[String, Int] = { "MBUI_PLACES_BAR": 80 }
 
 ///|
 test "the released app's ways a replay takes from its trace: how many traces are without each, within its bar" {

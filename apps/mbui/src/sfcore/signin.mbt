@@ -462,8 +462,10 @@ pub let started_by : Array[String] = [
 /// still replay without each is held to its bar and only falls (src/sfreplay/flows/trace_switches_test.mbt): a replay
 /// without one tests what no device does any more, its subscriptions' bytes (topic_bytes) included.
 pub let trace_switches : Array[String] = [
-  // (#5142: a place of the bar keeps its lists and they are asked ahead)
-  "MBUI_PLACES_AHEAD",
+  // (#5227: what the places of the bar open on is kept, and asked ahead for as long as the bar is there; a station
+  // sampled only from a finger on its tab. In the place of #5142's MBUI_PLACES_AHEAD, whose way of asking (worked out
+  // frame by frame) is gone: the one trace recorded with it was recorded again with this one)
+  "MBUI_PLACES_BAR",
 ]
 
 ///|

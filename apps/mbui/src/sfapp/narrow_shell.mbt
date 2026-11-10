@@ -114,6 +114,17 @@ fn narrow_shell(v : @view.View, src : Source) -> Unit {
     made=fn(page) { narrow_made(src, page) },
   )
   |> ignore
+  // what the places of the bar open on asked ahead of them from the moment it shows, held till its page is gone from
+  // view under another (the stack at rest: Nav::root_shows), at those moments whatever frames are drawn (sfbase's
+  // places_ahead_node)
+  @sfbase.places_ahead_node(v, src, fn() {
+    match workspace_in_view(src).0 {
+      // (its page shows, on top or beside a page sliding over it or off it: held across that slide, let go of as it
+      // is over with its page gone from view; another page sliding over one already over it is no cause of the bar's)
+      Some(w) if narrow_bar_shown(src, w) || app.nav.root_shows() => Some(w.id)
+      _ => None
+    }
+  })
   // the bottom bar told what the app's state and the window say of it as that changes, at the moment of what changed it
   // (a page put on the stack, a place come in, the bars' order, the window's width), whatever frames are drawn: the
   // frames only read where it is then (bar_tell)
@@ -262,10 +273,6 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
   first_waiting.val = !first_page_shown(c, src, w)
   first_hide(first_waiting.val)
-  // what the places of the bar in view open on, asked ahead of them once the first page has shown (sfbase's bars.mbt)
-  if !first_waiting.val {
-    @sfbase.places_ahead(src, w.id)
-  }
 }
 
 ///|

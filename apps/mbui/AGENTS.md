@@ -90,6 +90,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   - A place of the bar never opens on its bones when the device holds what it shows (the user, 2026-11-10): the list
     it opens on is one of sfbase's `lasting` (shown again at once) and of `place_reads` (asked ahead of it). A new
     place, or another list a place opens on, goes in both; `src/sfapp/place_first_wbtest.mbt` holds every place.
+    One exception (the user, 2026-11-10): how each station up is reached (`stationNet`, Station's network line) is
+    sampled of the stations, so it is asked only from a finger on Station's tab, never while Home sits; the first time
+    Station opens in a run, and before the core has said it, that line alone shows its bones.
   - A step further in is the presenters', never a page's (弹层里往里走: the user, 2026-11-02, and 2026-11-10 「系统性
     全修一下」 once the chat's own sheet and a menu's 分享… were found never to have had it). A page says `close()` and
     opens the next, and keeps no step number and no 返回 button of its own; `src/sf/presenters.mbt` does the rest on
