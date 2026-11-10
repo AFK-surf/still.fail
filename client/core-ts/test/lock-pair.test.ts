@@ -21,7 +21,7 @@ import { Bridge, BridgeHost } from "../src/hosts/bridge.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, signedBytes } from "../src/lock.ts";
 import { PersonalLock, checkChain } from "../src/personal-lock.ts";
-import { bindPerson, fold, held, keepToPerson, onBoundPerson, pairs, putOnBound, read, signerOf } from "../src/views/lock.ts";
+import { Lock, bindPerson, fold, held, keepToPerson, onBoundPerson, pairs, putOnBound, read, signerOf } from "../src/views/lock.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { keep, PAIR_GRACE_MS, PAIR_WAIT_MS, personalBegin, served, serveTrusted, streamDuplex, trying, tryOne } from "../src/views/pair.ts";
 import { run as runEffect } from "./run.ts";
@@ -1004,6 +1004,61 @@ test("a device on the person's own lock that a second workspace bound to it hold
   const length = held(inner, "ws")!.entries.length;
   await run(keepToPerson(inner, "ws"));
   assert.equal(held(inner, "ws")!.entries.length, length);
+});
+
+test("a device on the person's own lock that no workspace's lock holds with its key is put in with the one their lock records for it", async () => {
+  // A member taken out and added again: the device the owner approved bound their lock, and their second device, on it,
+  // was let in by the stations but signed nothing: no workspace's lock held its key (the locks' end to end, round 12,
+  // 2026-11-10).
+  const LAPTOP = "77".repeat(32), LAPTOP_SIGNS = "ed25519:" + "22".repeat(32), LAPTOP_KEY = "ed25519:" + "55".repeat(32);
+  const g = grant();
+  const m = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME, []) }));
+  await m.watch({ topic: "lock", workspace: "ws" });
+  const inner = m.core.inner;
+  const run = async <A>(e: Effect.Effect<A, any>) => {
+    const out: unknown[] = [];
+    inner.runner.fork(Effect.map(Effect.result(e), (x) => out.push(x)));
+    for (let i = 0; i < 500 && out.length === 0; i++) await m.host.time.pass(10);
+  };
+  const kept: { entries: Entry[] } = { entries: [] };
+  const personal = new PersonalLock({
+    host: m.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {}, signKey: () => signerOf(inner),
+    cloud: (_s, method, _p, body) => Effect.sync(() => {
+      if (method === "GET") return { entries: kept.entries };
+      kept.entries = (body as { entries: Entry[] }).entries;
+      return { entries: kept.entries };
+    }),
+  });
+  const sealed = new Map<string, Uint8Array>();
+  m.host.secureSet = (k: string, v: Uint8Array) => Effect.sync(() => void sealed.set(k, v));
+  const lockedGet = m.host.secureGet;
+  m.host.secureGet = (k: string, o: { user: boolean; reason?: string }) => (o.user ? Effect.succeed(sealed.get(k) ?? null) : lockedGet!.call(m.host, k, o));
+  inner.adb.personal = () => personal;
+  await run(read(inner, "ws"));
+  await run(personal.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  // Put on their lock where no workspace bound it: in no workspace's lock.
+  await run(personal.addDevice("s1", { key: LAPTOP_KEY, id: LAPTOP, label: "laptop", sign_key: LAPTOP_SIGNS }, "why"));
+  await run(read(inner, "ws"));
+  await run(bindPerson(inner, "ws"));
+  await run(read(inner, "ws"));
+  assert.ok(fold(held(inner, "ws")!.entries).persons.has("s1"), "bound");
+  // (the lock read, keepToPerson runs by itself as well: run here to have it done)
+  await run(keepToPerson(inner, "ws"));
+  assert.equal(fold(held(inner, "ws")!.entries).devices.get(LAPTOP)?.sign_key, LAPTOP_SIGNS, "put in with the key their lock records");
+  assert.equal(checkLock(held(inner, "ws")!.entries, 2_000).devices.get(LAPTOP)?.sign_key, LAPTOP_SIGNS, "as the lock's rules take it");
+  // Kept: nothing written again.
+  const length = held(inner, "ws")!.entries.length;
+  await run(keepToPerson(inner, "ws"));
+  assert.equal(held(inner, "ws")!.entries.length, length);
+  // The laptop signs with another key since, said in this lock (approved here again) and not yet on their chain: the
+  // key this lock holds is not written over with the chain's older one.
+  const NEWER = "ed25519:" + "23".repeat(32);
+  await run(new Lock(inner, "ws", "s1", null).append("device", { id: LAPTOP, sub: "s1", kind: "app", label: "laptop", sign_key: NEWER }));
+  await run(read(inner, "ws"));
+  const after = held(inner, "ws")!.entries.length;
+  await run(keepToPerson(inner, "ws"));
+  assert.equal(fold(held(inner, "ws")!.entries).devices.get(LAPTOP)?.sign_key, NEWER, "the newer key kept");
+  assert.equal(held(inner, "ws")!.entries.length, after, "nothing written over it");
 });
 
 test("a station of the lock that does not say it knows the entry, or does not answer, keeps the person's lock from being bound", async () => {

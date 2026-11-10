@@ -62,6 +62,8 @@ if (process.argv[2] === "device") {
     if (m === "close") void within(core.close(), 4000).then(() => process.exit(0));
     else core.receive(client, m);
   });
+  // (the driver gone without closing it, as when it fell: this device does not stay behind, holding its output open)
+  process.on("disconnect", () => process.exit(0));
   await new Promise(() => {});
 }
 const t0 = Date.now();
@@ -113,6 +115,9 @@ export class Device {
     await this.call("client.device", { client: "still.fail e2e", app: "desktop", model: this.name });
   }
   #send(m: J) {
+    // (a device closed while a wait on it was still counting, one of two a step raced: nothing is there to be told
+    // the wait is over, and sending to it would be an error of the driver's own)
+    if (!this.child.connected) return;
     this.child.send(JSON.stringify(m));
   }
   #got(m: J) {

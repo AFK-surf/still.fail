@@ -63,7 +63,7 @@ import { Adb } from "./adb.ts";
 import { Rigs } from "./rigs.ts";
 import { Signer } from "./lock.ts";
 import { PersonalLock } from "./personal-lock.ts";
-import { answersOf, bindPerson, enrolled, keepToPerson, lockSeen, personalStations, refusedAgain, signsAs, tellStations, tookOrRefused } from "./views/lock.ts";
+import { answersOf, bindPerson, enrolled, keepToPerson, lockSeen, personalStations, refusedAgain, signerOf, signsAs, tellStations, tookOrRefused } from "./views/lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -301,6 +301,7 @@ export class Core {
           cloud: (sub, method, path, body) => inner.provider.request(sub, method, path, body),
           device: () => Effect.map(inner.mesh(), (m) => m.deviceId()),
           label: () => prefs.deviceName(inner.data) ?? "",
+          signKey: () => signerOf(inner),
           changed: () => {
             inner.adb.touched();
             inner.rigs?.touched();
