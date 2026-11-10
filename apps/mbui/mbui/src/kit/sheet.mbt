@@ -34,11 +34,13 @@ pub(all) enum SheetDrag {
 
 ///|
 /// What a sheet reports: whether it is open now, whether it is drawn (open, or still sinking away), what a drag let go
-/// this frame came to.
+/// this frame came to, how tall it stands over the window's foot as it is drawn (0 not drawn: what comes in its place
+/// starts from).
 pub(all) struct Sheet {
   open : Bool
   shown : Bool
   dragged : SheetDrag?
+  stands : Double
 }
 
 ///|
@@ -73,6 +75,11 @@ priv struct SheetKept {
   mut shown : Bool
   mut asked : Double
   mut rising : Bool
+  /// opened in another's place (sheet's `in_place`): how tall that one stood and the moment (-1: not), and how much
+  /// taller than its own height it stands (shorter: less than none), from that at that moment on a Move to none
+  mut placed : Double
+  mut placed_at : Double
+  lag : @ui.SpringPath
 }
 
 ///|
@@ -81,8 +88,10 @@ priv struct SheetKept {
 /// `label` for the semantics tree; an Escape `on_escape` says it took a step back within it (Ctx::overlay's), not
 /// closing it. `raised`: how far over its place it is drawn (up out of the way of another over it); closed so, it
 /// sinks from there, as far as takes it out of sight. `sinks`: closed, how far it sinks at least (with others closing
-/// at once over it, as far as they all do, sinking as one with them). Whether it is open now, whether it is drawn,
-/// what a drag came to.
+/// at once over it, as far as they all do, sinking as one with them). `in_place`: opened in the place of another
+/// that stood so tall, gone at that moment (what was chosen in that one opened this): there at once that tall, its
+/// scrim whole as that one's was, on a Move to its own height from there, not from below (-1: not so). Whether it is
+/// open now, whether it is drawn, what a drag came to.
 pub fn sheet(
   c : @ui.Ctx,
   key : String,
@@ -99,6 +108,7 @@ pub fn sheet(
   on_escape? : () -> Bool,
   raised? : Double = 0.0,
   sinks? : Double = 0.0,
+  in_place? : Double = -1.0,
 ) -> Sheet {
   install()
   let th = c.theme()
@@ -118,6 +128,9 @@ pub fn sheet(
         shown: false,
         asked: -1.0,
         rising: false,
+        placed: -1.0,
+        placed_at: -1.0,
+        lag: sheet_spring(0.0),
       }
       kit.val.sheets[id] = s
       s
@@ -127,7 +140,22 @@ pub fn sheet(
   let mut dragged : SheetDrag? = None
   // opened: from below at its height; asked another height while open (what it holds laid out another height, the
   // window another): that height at once, as it is laid out (placed by its size, not chased to it)
-  if open && !s.was_open {
+  if open && !s.was_open && in_place >= 0.0 && !s.shown {
+    // (in another's place, that one gone as this comes: its scrim whole as that one's was, at its own height drawn
+    // as much taller as that one stood, on a Move to none)
+    s.h.put(target)
+    s.below.put(0.0)
+    s.lag.put(in_place - target)
+    s.lag.go_at(c, 0.0)
+    s.fade.snap(c, 1.0)
+    s.shown = true
+    s.asked = target
+    s.rising = false
+    s.placed = in_place
+    s.placed_at = c.moment()
+  } else if open && !s.was_open {
+    s.placed_at = -1.0
+    s.lag.put(0.0)
     if !s.shown || s.below.value_at(c) > 1.0 {
       s.h.put(target)
       s.below.put(target)
@@ -145,7 +173,13 @@ pub fn sheet(
     s.rising = false
   }
   if open && s.was_open && target != s.asked {
-    if s.rising {
+    if s.placed_at >= 0.0 && c.moment() == s.placed_at {
+      // (in another's place, its height told anew at the moment it came, as what it holds is first laid out: from
+      // where that one stood to this)
+      s.h.put(target)
+      s.lag.put(s.placed - target)
+      s.lag.go_at(c, 0.0)
+    } else if s.rising {
       // (opened and not risen yet, its height known only as what it holds is laid out: from below at that)
       s.h.put(target)
       s.below.put(target)
@@ -157,7 +191,7 @@ pub fn sheet(
   }
   if !s.shown {
     s.was_open = open
-    return { open, shown: false, dragged: None }
+    return { open, shown: false, dragged: None, stands: 0.0 }
   }
   // the top's drag
   let top_id = c.id(key + "/top")
@@ -166,8 +200,10 @@ pub fn sheet(
     Some(d) if open => {
       let (_, dy) = d.take_move()
       if dy != 0.0 {
-        // (`held`: where the finger has it, past its top too; drawn there, past its top given way to: stretched)
-        let from = if s.held >= 0.0 { s.held } else { s.h.value_at(c) }
+        // (`held`: where the finger has it, past its top too; drawn there, past its top given way to: stretched; from
+        // as tall as it is drawn, in another's place on its way still)
+        let from = if s.held >= 0.0 { s.held } else { s.h.value_at(c) + s.lag.value_at(c) }
+        s.lag.put(0.0)
         let top = if draggable { total * detents.fold(init=0.0, fn(a, b) { dmax(a, b) }) } else { target }
         // (one with detents no shorter than its least drag keeps; one without follows the finger down all the way,
         // however short it is: else one shorter than that and 80 could never be dragged closed)
@@ -181,7 +217,8 @@ pub fn sheet(
         s.h.put(stretched(to, top, total - top))
       }
       if d.take_end() {
-        let at = s.h.value_at(c)
+        let at = s.h.value_at(c) + s.lag.value_at(c)
+        s.lag.put(0.0)
         s.held = -1.0
         // up is more, per second
         let v = -d.vy * 1000.0
@@ -215,7 +252,8 @@ pub fn sheet(
   // was opened or while open, stops there: else it would sink to where it was and the rest of it stay up)
   if !now && s.was_open {
     s.held = -1.0
-    let at = s.h.value_at(c)
+    let at = s.h.value_at(c) + s.lag.value_at(c)
+    s.lag.put(0.0)
     s.h.put(at)
     s.below.go_at(c, dmax(at + raised, sinks))
     s.fade.animate(c, 0.0, scrim_fade())
@@ -227,9 +265,15 @@ pub fn sheet(
   if c.still() {
     s.h.put(s.h.target())
     s.below.put(s.below.target())
+    s.lag.put(0.0)
   }
-  let hx = s.h.value_at(c)
-  let bx = s.below.value_at(c)
+  // (in another's place, on its way to its own height: what it holds laid out at its own height all the way, nothing
+  // laid out again for the way; taller meanwhile, its glass that much taller under what it holds; shorter, as far
+  // below its place)
+  let own = s.h.value_at(c)
+  let lag = s.lag.value_at(c)
+  let hx = own + dmax(lag, 0.0)
+  let bx = s.below.value_at(c) + dmax(-lag, 0.0)
   // (shown is false only once it has sunk away and its scrim's fade is over, by its declared end, the sheet drawn until
   // then from what it is; sunk as far as it was told to go, not less: one closing with it gone first, the furthest they
   // went no more what it sinks to, it still goes on to where it set out for, not ending where the others' going leaves
@@ -239,7 +283,7 @@ pub fn sheet(
     s.shown = false
     s.fade.snap(c, 0.0)
     s.was_open = false
-    return { open: false, shown: false, dragged }
+    return { open: false, shown: false, dragged, stands: 0.0 }
   }
   // (Tab kept in it, but no field in it given the focus as it opens: a sheet is a touch screen's, where a field
   // focused brings the keyboard up over what the sheet shows; one that asks for words gives its field the focus itself)
@@ -259,7 +303,7 @@ pub fn sheet(
           c.presses_to(top_id)
         }
         c.layer(fn() { c.drag_area(top_id, axis=Vertical, w=Fill(1.0), h=Px(drag_h), fn() {  }) |> ignore }) |> ignore
-        body()
+        c.box(style=@ui.style(w=Full, h=Fixed(own)), fn() { body() }) |> ignore
       })
     })
     c.semantics(i, Dialog, label~, modal=true)
@@ -272,12 +316,13 @@ pub fn sheet(
   if now && o.dismissed is Some(_) {
     now = false
     s.held = -1.0
-    s.h.put(hx)
-    s.below.go_at(c, dmax(hx + raised, sinks))
+    s.lag.put(0.0)
+    s.h.put(own + lag)
+    s.below.go_at(c, dmax(own + lag + raised, sinks))
     s.fade.animate(c, 0.0, scrim_fade())
   }
   s.was_open = now
-  { open: now, shown: true, dragged }
+  { open: now, shown: true, dragged, stands: dmax(0.0, hx - bx + raised) }
 }
 
 ///|
@@ -330,7 +375,7 @@ pub fn sheet_rest(key : String) -> Double {
       match kit.val.sheets.get(id) {
         Some(s) => {
           let mut e = -1.0
-          for r in [s.h.end(), s.below.end(), s.fade.ends_at()] {
+          for r in [s.h.end(), s.below.end(), s.lag.end(), s.fade.ends_at()] {
             if r > e {
               e = r
             }

@@ -9,6 +9,15 @@
 //
 // A step further in changes page in the panel rather than stacking (the user, 2026-11-02: 「现有的多重弹窗太垃圾了」
 // ); stacking is for what is asked and returned from.
+// That is the host's to keep, not each page's (the user, 2026-11-09: 「小屏上多级抽屉感觉动效和交互有问题」, 2026-11-10:
+// 「系统性全修一下」: only two flows had been put on panel_go, the rest closed one and opened the next). What is
+// presented while one closed has had no frame drawn of its going is what that one closed for:
+// - on a sheet it comes in that one's place: one sheet all along, where that one stood, on to its own height, the
+//   scrim as it was, never one sinking as the next rises across it (`in_place`);
+// - a menu for a menu's item is a level of the same sheet, sliding in, back taking it off (menu_level);
+// - a panel for what a panel held is a step further in from it on every screen (`under`): a back key before its
+//   title, back, Escape and the system's back back to the one before (back_under, panel_back), a press outside, its
+//   close button or the sheet dragged down closing all of it.
 
 ///|
 /// What opened a presenter: the box pressed (its id, `c.id(key)`; a node of the window's tree, `Node`: a row of a
@@ -212,6 +221,30 @@ priv struct Presented {
   pushed : @signals.Signal[Double]
   /// as a sheet closing, how far it sinks at least: as far as every sheet closing with it, sinking as one with them
   mut sinks : Double
+  /// as a sheet: how tall it stood over the window's foot as last drawn (0 not drawn as one: @kit.sheet's `stands`);
+  /// a sheet of the window's tree (sheet_node), as it closed: what says so then (`stands_now`, asked by close_from)
+  mut stands : Double
+  mut stands_now : (() -> Double)?
+  /// closed, no frame drawn of it since (close_from; unsaid as presented draws it going): what is presented meanwhile
+  /// (what was chosen or pressed in it opened another) comes in its place
+  mut closed_now : Bool
+  /// presented as a sheet closed, none drawn of that going yet: how tall that one stood. As a sheet too, this one comes
+  /// in its place (present_sheet, sheet_node: there at once that tall, on to its own height, the scrim as it was), not
+  /// from below as that one sinks across it
+  in_place : Double?
+  /// the serial of the one presented in its place (`in_place`'s; 0 none): drawn no more once that one is a sheet in it
+  mut taken_by : Int
+  /// a menu on a sheet whose item opened a menu (分享…): that one a level of this, in the same sheet (menu_level), as
+  /// a panel's steps are (a stack's: each slides in over the one before, its back key, Escape, the system's back and
+  /// its left edge swiped take it off); the first its own. None: no level gone to yet
+  mut levels : @ui.Nav[PanelStep]?
+  /// closed by what was chosen in it (done_with), not unsaid: its levels' `gone` not told
+  mut chosen : Bool
+  /// a panel on a sheet presented by what a panel on a sheet held, which closed for it (a row of the chat's own sheet,
+  /// its agent's card): a step further in from that one (the file's head: 弹层里往里走), which is kept here, drawn no
+  /// more; back from this one (its back key, the system's back, Escape) puts that one back in its place (back_under),
+  /// a press outside or the sheet dragged down closes all of it
+  mut under : Presented?
 }
 
 ///|
@@ -268,6 +301,13 @@ fn presented_items_of(serial : Int, items : Array[MenuItem?]) -> Array[MenuItem?
 }
 
 ///|
+/// The serial of the sheet presented in the place of each sheet (present's `in_place`), by that one's serial: what is
+/// marked while one is drawn (a row held, lifted while its menu is up: presented_drawn_of) stays so while what took
+/// its place is, and what took that one's.
+// kept across runs: put back by presenters_reset; one let go as what it leads to is gone
+let took_place : Map[Int, Int] = {}
+
+///|
 /// Which are drawn (open, or going), by their serials: told each as it comes or is gone (presented_drawn_of).
 // kept across runs: put back by presenters_reset
 let presented_drawn_said : @signals.Keyed[Int] = @signals.keyed()
@@ -304,6 +344,7 @@ let presented_how : Array[How] = []
 /// Nothing presented (the app begun again).
 pub fn presenters_reset() -> Unit {
   presented_now.clear()
+  took_place.clear()
   tree_presented.clear()
   presented_drawn_said.set([])
   presented_items_said.clear()
@@ -316,7 +357,30 @@ pub fn presenters_reset() -> Unit {
 
 ///|
 fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit = fn() {  }) -> Unit {
+  // (presented as a sheet closed, none drawn of that going yet (what was chosen or pressed in it presents this): in
+  // that one's place, the topmost of them's; a menu by what was chosen in a menu, a level of that one)
+  let chosen_in = presented_now.iter().filter(fn(q) { q.closed_now && q.stands > 0.0 && q.taken_by == 0 }).last()
+  match (chosen_in, shows) {
+    (Some(old), Menu(items, title, _)) if old.chosen && old.shows is Menu(_, _, _) => {
+      menu_level(old, title, items, gone)
+      return
+    }
+    _ => ()
+  }
   presented_count.val += 1
+  match chosen_in {
+    Some(old) => {
+      old.taken_by = presented_count.val
+      took_place[old.serial] = presented_count.val
+    }
+    None => ()
+  }
+  // (a panel by what a panel held, which closed for it, no frame drawn of that going yet: a step further in from that
+  // one, on a sheet or not)
+  let under = match (presented_now.iter().filter(fn(q) { q.closed_now }).last(), shows) {
+    (Some(old), Panel(x)) if old.chosen && !x.stage && old.steps is None && old.shows is Panel(_) => Some(old)
+    _ => None
+  }
   // (a panel that goes in steps: its own the first of them)
   let steps = match shows {
     Panel(x) if x.steps =>
@@ -360,6 +424,14 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     receded: false,
     pushed: @signals.signal(0.0),
     sinks: 0.0,
+    stands: 0.0,
+    stands_now: None,
+    closed_now: false,
+    in_place: chosen_in.map(fn(old) { old.stands }),
+    taken_by: 0,
+    levels: None,
+    chosen: false,
+    under,
   })
   @signals.start_batch()
   presented_told()
@@ -618,7 +690,12 @@ pub fn panel_back(to? : Int) -> Bool {
         Some(d) => nav.pop_to(d)
         None => nav.pop()
       }
-    _ => false
+    // (a panel a step further in from another, which closed for it: back to that one)
+    _ =>
+      match presented_now.iter().filter(fn(q) { q.open && q.under is Some(_) }).last() {
+        Some(p) => back_under(p)
+        None => false
+      }
   }
 }
 
@@ -1172,9 +1249,20 @@ pub fn presented_open_of(serial : Int) -> Bool {
 ///|
 /// Whether the one presented as `serial` is still drawn (open, or going).
 pub fn presented_drawn_of(serial : Int) -> Bool {
-  // (read so: what reads it built again as it is presented or gone, not as others are)
-  presented_drawn_said.has(serial) |> ignore
-  presented_now.iter().any(fn(p) { p.serial == serial })
+  // (it, or the sheet that took its place, or the one that took that one's: a row's menu, then what its item opened)
+  let mut s = serial
+  while true {
+    // (read so: what reads it built again as it is presented or gone, not as others are)
+    presented_drawn_said.has(s) |> ignore
+    if presented_now.iter().any(fn(p) { p.serial == s }) {
+      return true
+    }
+    match took_place.get(s) {
+      Some(n) => s = n
+      None => break
+    }
+  }
+  false
 }
 
 ///|
@@ -1275,7 +1363,16 @@ pub fn close_presented() -> Unit {
 fn close_from(i : Int) -> Unit {
   // (what is closed written first, then told once: what reads it finds it whole)
   for k in i..<presented_now.length() {
-    presented_now[k].open = false
+    let q = presented_now[k]
+    if q.open {
+      q.open = false
+      q.closed_now = true
+      // (a sheet of the window's tree: how tall it stands now, for what comes in its place)
+      match q.stands_now {
+        Some(f) => q.stands = f()
+        None => ()
+      }
+    }
   }
   presented_told()
 }
@@ -1284,8 +1381,10 @@ fn close_from(i : Int) -> Unit {
 /// The one presented as `serial` dismissed by the hand at that moment (back, Escape, a press outside it: its layer told so,
 /// @ui.Ctx::with_dismissed): where it is open still, it closes, and what is over it, and what it holds is let go of, once,
 /// then; its view draws it going from the next frame on.
-fn dismissed_now(serial : Int) -> Unit {
+fn dismissed_now(serial : Int, back? : Bool = false) -> Unit {
   match presented_now.search_by(fn(q) { q.serial == serial }) {
+    // (a step further in from a panel, gone back from: that one back in its place)
+    Some(i) if back && presented_now[i].open && back_under(presented_now[i]) => ()
     Some(i) if presented_now[i].open => {
       // (it and what is over it, each closed unsaid let go of once, from the top)
       let closing = presented_now[i:].to_array().filter(fn(q) { q.open && !q.ended }).rev()
@@ -1297,6 +1396,31 @@ fn dismissed_now(serial : Int) -> Unit {
     }
     _ => ()
   }
+}
+
+///|
+/// Back from `p`, a step further in from a panel (`under`): `p` closes unsaid (what it holds let go of), and the panel
+/// it came from is presented again as it was presented (on a sheet, in `p`'s place), what that one came from under it
+/// still. Whether it went back so.
+fn back_under(p : Presented) -> Bool {
+  guard p.under is Some(u) && p.open else { return false }
+  guard presented_now.search_by(fn(q) { q.serial == p.serial }) is Some(i) else { return false }
+  let closing = presented_now[i:].to_array().filter(fn(q) { q.open && !q.ended }).rev()
+  // (closed and the one before presented as one change: what draws `p` going finds that one in its place already)
+  @signals.start_batch()
+  close_from(i)
+  for q in closing {
+    q.ended = true
+    (q.gone)()
+  }
+  let before = presented_count.val
+  present(u.shows, u.from, gone=u.gone)
+  match presented_now.last() {
+    Some(q) if presented_count.val > before => q.under = u.under
+    _ => ()
+  }
+  @signals.end_batch()
+  true
 }
 
 ///|
@@ -1366,6 +1490,16 @@ fn scrim_of(p : Presented, sheet : Bool) -> Int64? {
 }
 
 ///|
+/// Whether the one presented in sheet `p`'s place (`taken_by`) is a sheet too (the host's, present_sheet, or the
+/// tree's, sheet_node), so in its place indeed: `p` is drawn no more.
+fn taken_as_sheet(p : Presented) -> Bool {
+  p.taken_by != 0 &&
+  presented_now.iter().any(fn(q) {
+    q.serial == p.taken_by && q.in_place is Some(_) && how_of(q.shows, q.from, true) == AsSheet
+  })
+}
+
+///|
 /// The dimming over a sheet pushed up under another (present_sheet): all of it.
 // kept across runs: a value (no field of it changes)
 let sheet_veil_at : @ui.Style = @ui.css("w=Full h=Full")
@@ -1410,6 +1544,13 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
   }
   for i, p in presented_now.copy() {
     p.sinks = sinks
+    // (closed and drawn going from here on: what is presented later is no more in its place)
+    p.closed_now = false
+    // (a sheet another took the place of, that one a sheet here too: drawn no more from then, that one there)
+    if sheet && !p.open && p.stands > 0.0 && taken_as_sheet(p) {
+      gone.push(p.serial)
+      continue
+    }
     // (a sheet with another sheet open over it steps back, coming forward again as that one goes: its cause the one
     // over it opened or closed)
     let covered = if sheet {
@@ -1452,7 +1593,7 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
       // window's tree, at its own, over it or under it as each was presented)
       c.stacked(p.serial, fn() {
         // (dismissed by the hand, at that moment: dismissed_now)
-        c.with_dismissed(fn(_) { dismissed_now(p.serial) }, fn() {
+        c.with_dismissed(fn(why) { dismissed_now(p.serial, back=why is (Back | Escape)) }, fn() {
           let (o, b) = draw_presented(c, p, sheet)
           open = o
           built = b
@@ -1483,9 +1624,27 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
         Some(nav) if gone.contains(p.serial) => for st in nav.pages().rev() { (st.left)() }
         _ => ()
       }
+      // (a menu's levels the same)
+      match p.levels {
+        Some(nav) if gone.contains(p.serial) => for st in nav.pages().rev() { (st.left)() }
+        _ => ()
+      }
     }
     for serial in gone {
       presented_items_said.remove(serial)
+      // (gone with none in its place: what led to it leads nowhere)
+      if !took_place.contains(serial) {
+        let mut end = serial
+        while true {
+          match took_place.iter().find_first(fn(e) { e.1 == end }) {
+            Some((from, _)) => {
+              took_place.remove(from)
+              end = from
+            }
+            None => break
+          }
+        }
+      }
     }
     let left = presented_now.filter(fn(p) { !gone.contains(p.serial) })
     presented_now.clear()
@@ -1520,11 +1679,13 @@ fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
   let key = "sf-present"
   // (what the window's tree draws: its node's, open as said, drawn till its way out is over: presented_node.mbt)
   if tree_draws(p, sheet) {
+    p.stands = 0.0
     return (p.open, p.open || tree_presented.contains(p.serial))
   }
   if sheet {
     return present_sheet(c, key, p)
   }
+  p.stands = 0.0
   // (what is left of the web's here: a panel the tree does not draw yet, one that goes in steps or as wide as what it
   // holds)
   match p.shows {
@@ -1539,11 +1700,57 @@ fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
 /// handler's, outside any build).
 fn done_with(p : Presented, f : () -> Unit) -> Unit {
   p.ended = true
+  p.chosen = true
   match presented_now.search_by(fn(q) { q.serial == p.serial }) {
     Some(i) => close_from(i)
     None => ()
   }
+  // (on a sheet, what `f` presents comes in its place, a menu's menu as a level of it: present)
   f()
+}
+
+///|
+/// A menu (`title`, `items`, `gone` as menu's) presented by what was chosen in menu `p` on a sheet: a level of `p`, in
+/// the same sheet (a row held and its 分享…: the menu sank as the next rose across it, the scrim gone and back, and back
+/// closed both). `p`, closed as it was chosen in, is open again, what opened it marked still; back from the level is
+/// back to the one before.
+fn menu_level(p : Presented, title : String, items : Array[MenuItem?], gone : () -> Unit) -> Unit {
+  p.open = true
+  p.closed_now = false
+  p.ended = false
+  p.chosen = false
+  let level = fn(n : Int, title : String, items : Array[MenuItem?], gone : () -> Unit) -> PanelStep {
+    {
+      n,
+      title,
+      description: "",
+      body: fn(c, _) { menu_rows(c, "sf-present/\{n}", p, items) },
+      foot: None,
+      left: fn() {
+        if !p.chosen {
+          gone()
+        }
+      },
+      count: "",
+      on_back: None,
+      live: None,
+    }
+  }
+  let nav = match p.levels {
+    Some(nav) => nav
+    None => {
+      let (own_title, own) = match p.shows {
+        Menu(own, own_title, _) => (own_title, own)
+        _ => ("", [])
+      }
+      let nav = @ui.Nav::new(level(0, own_title, own, fn() {  }), on_leave=fn(s) { (s.left)() })
+      p.levels = Some(nav)
+      nav
+    }
+  }
+  p.steps_made += 1
+  nav.push(level(p.steps_made, title, items, gone))
+  presented_told()
 }
 
 ///|
@@ -1830,9 +2037,22 @@ fn dialog_page(
     words_in_now.val = 0.0
     column_given.val = true
     column_in_now.val = words
-    panel_whole_now.val += 1
-    draw_panel_body(x, c, close, keyed=p)
-    panel_whole_now.val -= 1
+    if x.tall > 0.0 && !x.form {
+      // (a share of the window tall, as a dialog that goes in no steps has it (panel_centred): each step that tall,
+      // or as tall as what it holds where its lists say so, laid out in it)
+      let (_, wh) = c.window_size()
+      let id = c.id("sf-present/capped/\{p.serial}/\{s.n}")
+      let share = x.tall * wh - dialog_frame_h
+      let h = match capped_want(c, p.serial, id) {
+        Some(want) => dmin(want, share)
+        None => share
+      }
+      measured_body(c, p.serial, id, @ui.style(w=Full, h=Fixed(h)), fn() { draw_panel_body(x, c, close, keyed=p) }) |> ignore
+    } else {
+      panel_whole_now.val += 1
+      draw_panel_body(x, c, close, keyed=p)
+      panel_whole_now.val -= 1
+    }
     panel_sides_in.val = was
     rows_out.val = rows_were
     words_in_now.val = words
@@ -2039,11 +2259,18 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
       None => true
     })
   // (Escape in one that goes in steps: back a step first)
-  let on_escape = if p.steps is Some(_) { Some(fn() { steps_escape(p) }) } else { None }
+  let on_escape = if p.steps is Some(_) {
+    Some(fn() { steps_escape(p) })
+  } else if p.levels is Some(nav) {
+    // (in a menu gone a level deeper: back a level)
+    Some(fn() { nav.depth() > 1 && nav.pop() })
+  } else {
+    None
+  }
   // (dimming what is under it only where nothing under it does: scrim_owner; pushed up out of the way of a sheet over
   // it, as far as it has gone, closing from there)
   let scrim = scrim_of(p, true).unwrap_or(sheet_scrim)
-  let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim~, look~, on_escape?, raised=p.recede.get(c) * p.pushed.get(), sinks=p.sinks, fn() {
+  let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim~, look~, on_escape?, raised=p.recede.get(c) * p.pushed.get(), sinks=p.sinks, in_place=p.in_place.unwrap_or(-1.0), fn() {
     match share {
       Some(_) =>
         c.box(style=sheet_whole, id=whole_id, fn() {
@@ -2069,6 +2296,8 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     Some(DraggedTo(f)) => @hostapi.log(if f > 0.72 { "SHEET dragged to 94%" } else { "SHEET dragged to 55%" })
     None => ()
   }
+  // (how tall it stands, for what comes in its place: present)
+  p.stands = r.stands
   (r.open && p.open, r.shown)
 }
 
@@ -2090,34 +2319,30 @@ fn sheet_foot(c : @ui.Ctx) -> Unit {
 /// What a sheet shows of `p` (`scrolls`: a panel's body scrolling in the room left it, its foot under it in reach).
 fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false) -> Unit {
   match p.shows {
-    Menu(items, title, _) => {
-      if title != "" {
-        sheet_title(c, title)
-      }
-      c.box(style=sheet_rows, fn() {
-        for i, x in items {
-          match x {
-            None => c.box(style=sheet_rule, fn() {  }) |> ignore
-            Some(item) =>
-              if item.heading {
-                sheet_title(c, item.label)
-              } else {
-                sheet_row(
-                  c,
-                  key + "/" + i.to_string(),
-                  item.label,
-                  icon=item.icon,
-                  on=item.chosen == Some(true),
-                  danger=item.danger,
-                  disabled=item.disabled,
-                  on_press=fn() { done_with(p, item.select) },
-                )
-              }
-          }
+    Menu(items, title, _) =>
+      match p.levels {
+        // (gone a level deeper: its levels a stack in the sheet, each its title, the first's as it was, a back key
+        // before those after it, as tall as the one on top, going there with the slide: a panel's steps')
+        Some(nav) =>
+          steps_shown(c, p, nav, false, 0.0, fn(s, back) {
+            if back is Some(_) {
+              step_head(c, "\{key}/\{s.n}", s.title, "", back, sheet_title_row, sheet_title_words, c.text_size(Title).1)
+            } else if s.title != "" {
+              sheet_title(c, s.title)
+            }
+            (s.body)(c, fn() { closed_by(p) })
+          })
+        None => {
+          // (how tall it is kept as its first level's: where its way to the next level's height sets out, steps_shown)
+          let own = c.box(style=full_width, fn() {
+            if title != "" {
+              sheet_title(c, title)
+            }
+            menu_rows(c, key, p, items)
+          })
+          @motion.measure(c, own, step_key(p, 0))
         }
-      })
-      |> ignore
-    }
+      }
     Pick(title, choices, chosen, choose, _, search) => {
       if title != "" {
         sheet_title(c, title)
@@ -2173,7 +2398,8 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       match p.steps {
         // (one that goes in steps: each its own title, what it holds and its foot, sliding in over the one before)
         Some(nav) =>
-          steps_shown(c, p, nav, scrolls, 0.0, fn(s, back) {
+          // (one a share of the window tall: its steps fill what the sheet leaves them, each laid out in it)
+          steps_shown(c, p, nav, scrolls || (x.tall > 0.0 && !x.form), 0.0, fn(s, back) {
             let (title, count, description) = words_of_step(s)
             sheet_step(c, key, p, { ..x, body: s.body, foot: s.foot }, title, description, close, scrolls, back?, count~)
           })
@@ -2182,7 +2408,9 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
             Some(f) => f()
             None => (x.title, "", x.description)
           }
-          sheet_step(c, key, p, x, title, description, close, scrolls)
+          // (a step further in from a panel: its back key before its title, back to that one)
+          let back = if p.under is Some(_) { Some(fn() { back_under(p) |> ignore }) } else { None }
+          sheet_step(c, key, p, x, title, description, close, scrolls, back?)
         }
       }
     }
@@ -2257,7 +2485,27 @@ fn sheet_step(
   back? : () -> Unit,
   count? : String = "",
 ) -> Unit {
-  if back is Some(_) || count != "" {
+  // (a step further in whose title's row is its own (an agent's mark, name and where it stands): that row after the
+  // back key, in the title's place, what it holds not drawing it again: title_row_given)
+  let own_row = match (back, x.title_row) {
+    (Some(b), Some(row)) => {
+      c.box(style=sheet_title_row.then(step_head_gap), fn() {
+        c.box(style=step_back_out, fn() {
+          icon_button(c, "chevron-left", key=key + "/back", size=step_back_side, round=true, label=t("common.back"), on_press=fn() {
+            b()
+          }) |> ignore
+        })
+        |> ignore
+        c.box(style=sheet_row_words_at, fn() { row(c) }) |> ignore
+      })
+      |> ignore
+      true
+    }
+    _ => false
+  }
+  if own_row {
+    ()
+  } else if back is Some(_) || count != "" {
     step_head(c, key, title, count, back, sheet_title_row, sheet_title_words, c.text_size(Title).1)
   } else if title != "" {
     sheet_title(c, title)
@@ -2300,6 +2548,8 @@ fn sheet_step(
       0.0
     }
     rule_over_now.val = if x.ruled && x.foot is Some(_) { sheet_rule_over } else { 0.0 }
+    let row_was = title_row_given.val
+    title_row_given.val = own_row
     // (as tall as what it holds, what would scroll in itself laid out whole, as a dialog's body: panel_whole)
     if capped {
       draw_panel_body(x, c, close)
@@ -2308,6 +2558,7 @@ fn sheet_step(
       draw_panel_body(x, c, close)
       panel_whole_now.val -= 1
     }
+    title_row_given.val = row_was
     panel_sides_in.val = 0.0
     rows_out.val = 0.0
     words_in_now.val = 0.0
@@ -2367,8 +2618,19 @@ fn steps_shown(
   draw : (PanelStep, (() -> Unit)?) -> Unit,
 ) -> Unit {
   // (each step's box measured by its count, as it is laid out: @motion.measure)
-  let key_of = fn(s : PanelStep) { "sf-present/step/\{p.serial}/\{s.n}" }
+  let key_of = fn(s : PanelStep) { step_key(p, s.n) }
   let top = nav.top()
+  // (a menu gone to its next level, its first drawn outside a stack till then: as tall as that was laid out, its way
+  // to the level's height from there)
+  if p.step_h_of < 0 && top.n != 0 {
+    match @motion.measured(c, step_key(p, 0)) {
+      Some(h) => {
+        p.step_h.snap(c, h)
+        p.step_h_of = 0
+      }
+      None => ()
+    }
+  }
   // (its height on its way with the slide: as long as the slide's way across the panel is far)
   let slide = @motion.move(over=c.width)
   match @motion.measured(c, key_of(top)) {
@@ -2413,11 +2675,48 @@ fn steps_shown(
         Some(f) if s.n == top.n => c.take_back(f)
         _ => ()
       }
-      let i = c.box(style=@ui.style(w=Full, px=room(out)), fn() { draw(s, back) })
+      // (filling what holds the stack, each step fills it too: what it holds laid out in that room)
+      let page = if fills { @ui.style(w=Full, h=Full, px=room(out)) } else { @ui.style(w=Full, px=room(out)) }
+      let i = c.box(style=page, fn() { draw(s, back) })
       @motion.measure(c, i, key_of(s))
       steps_drawn_now.val = was
     })
     |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// What step `n` of `p` (a panel's that goes in steps, a menu's levels) is measured as, as it is laid out.
+fn step_key(p : Presented, n : Int) -> String {
+  "sf-present/step/\{p.serial}/\{n}"
+}
+
+///|
+/// A menu's rows in a sheet (`items`: None a line between, a heading a title's): one pressed, the sheet `p` closes and
+/// what it does goes on (done_with).
+fn menu_rows(c : @ui.Ctx, key : String, p : Presented, items : Array[MenuItem?]) -> Unit {
+  c.box(style=sheet_rows, fn() {
+    for i, x in items {
+      match x {
+        None => c.box(style=sheet_rule, fn() {  }) |> ignore
+        Some(item) =>
+          if item.heading {
+            sheet_title(c, item.label)
+          } else {
+            sheet_row(
+              c,
+              key + "/" + i.to_string(),
+              item.label,
+              icon=item.icon,
+              on=item.chosen == Some(true),
+              danger=item.danger,
+              disabled=item.disabled,
+              on_press=fn() { done_with(p, item.select) },
+            )
+          }
+      }
+    }
   })
   |> ignore
 }
@@ -2496,6 +2795,17 @@ let step_back_side : Double = dialog_close
 
 ///|
 let step_back_in : Double = (dialog_close - 16.0) / 2.0
+
+///|
+/// A step's back key before a title's row of its own: as far out of the words' line as before a title (step_head).
+// kept across runs: a value (no field of it changes)
+let step_back_out : @ui.Style = @ui.style(ml=room(-step_back_in))
+
+///|
+/// A step's back key before a dialog's title in its head's row (dialog_head, its parts S3 apart): as far out of the
+/// words' line, its chevron as near the title as a step's head has it (step_head_gap).
+// kept across runs: a value (no field of it changes)
+let dialog_back_at : @ui.Style = @ui.style(ml=room(-step_back_in), mr=room(@ui.Space::px(S1) - @ui.Space::px(S3)))
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -404,7 +404,8 @@ pub fn open_machine_sessions(core : Core, station : String, name : String) -> Un
     from=Unanchored,
     wide=true,
     tall=0.75,
-    fn(c, close) {
+    steps=true,
+    fn(c, _) {
       let all = machine_sessions.get(station).unwrap_or([])
       // whether one is in the folder chosen
       let in_folder = fn(sv : Json?) {
@@ -542,11 +543,8 @@ pub fn open_machine_sessions(core : Core, station : String, name : String) -> Un
               trail=fn() {
                 c.text(text(sv, "when"), style=machine_when) |> ignore
               },
-              // (the look in its place)
-              on_press=fn() {
-                close()
-                look_at_machine_session(core, station, name, s)
-              },
+              // (the look a step further in, in the same dialog)
+              on_press=fn() { look_at_machine_session(core, station, s) },
             )
             // its first words whole while it is pointed at
             @sf.tip(c, key + "/tip", c.id(key), text(sv, "first"), repeats=text(sv, "title") == "")
@@ -612,7 +610,7 @@ let machine_own : String = "\u{0}own"
 ///|
 /// One of them looked at before going on with it (lookAtMachineSession): what was said in it, the latest at the bottom
 /// (`machineSessions.read`); 继续 makes the chat that goes on with it (`machineSessions.continue`) and opens it.
-fn look_at_machine_session(core : Core, station : String, name : String, s : Json) -> Unit {
+fn look_at_machine_session(core : Core, station : String, s : Json) -> Unit {
   let sv = Some(s)
   let said : @signals.Signal[(Array[Json], Int)?] = @signals.signal(None)
   let error : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
@@ -625,8 +623,9 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
       Err(e) => error.set(error_text(e))
     }
   })
-  // (as wide as the list it was opened from, in its place; where it ran and how long ago under its title)
-  @sf.panel(first_text(sv, ["title", "first"], ""), description=text(sv, "meta"), from=Unanchored, wide=true, tall=0.85, fn(c, close) {
+  // (a step of the list's dialog (open_machine_sessions): where it ran and how long ago under its title, back to the
+  // list its head's back key)
+  @sf.panel_go(first_text(sv, ["title", "first"], ""), description=text(sv, "meta"), fn(c, close) {
     let t = @sf.theme()
     c.box(style=@sf.panel_words_in(), w=Fill(1.0), h=Fill(1.0), fn() {
       match said.get() {
@@ -689,11 +688,6 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
     }
     let busy = is_doing(core, ["machineSessions.continue"], [("station", station), ("id", text(sv, "id"))])
     c.box(style=@sf.panel_words_in(), dir=Row, w=Fill(1.0), pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-      @sf.button(c, tr("common.back"), key="machine-back", on_press=fn() {
-        // (the list in its place)
-        close()
-        open_machine_sessions(core, station, name)
-      })
       @sf.button(c, tr(if has(sv, "session") { "android-chat.new.machine.open" } else { "android-chat.new.machine.continue" }), key="machine-go", tone=Primary, busy=busy, on_press=fn() {
         error.set("")
         (core.call)("machineSessions.continue", obj([("station", str(station)), ("runtime", str(text(sv, "runtime"))), ("id", str(text(sv, "id")))]), fn(r) {

@@ -137,6 +137,38 @@ test "the chat's own sheet: its agents, and on to the agent's card and its histo
 }
 
 ///|
+test "the chat's own sheet, on to its agent's card and to what was said in it: each a step further in, one sheet all the way; back is back to the chat's sheet" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-info")
+  t.run_for(@ui.move_most_ms)
+  let top0 = sheet_tops(t)
+  assert_eq(top0.length(), 1)
+  for further in [("Claude · Opus 5.5", "费用估算"), (@sf.t("web-main.things.title"), @sf.t("web-main.things.title"))] {
+    let (row, shown) = further
+    assert_true(t.find(row) is Some(_), msg=row)
+    t.tap_text(row)
+    assert_true(t.find(shown) is Some(_), msg=row)
+    for _ in 0..<40 {
+      t.run_for(@ui.frame_period_default)
+      assert_eq(sheet_tops(t).length(), 1, msg="\{row}: \{sheet_tops(t)}")
+    }
+    // back: the chat's own sheet again, as tall as it was, never two sheets on the way
+    t.back()
+    assert_true(@sf.presenting(), msg=row)
+    for _ in 0..<40 {
+      t.run_for(@ui.frame_period_default)
+      assert_eq(sheet_tops(t).length(), 1, msg="\{row}: \{sheet_tops(t)}")
+    }
+    assert_true(t.find("Claude · Opus 5.5") is Some(_), msg=row)
+    assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{row}: \{sheet_tops(t)} \{top0}")
+  }
+  // back from the chat's own sheet: closed
+  t.back()
+  t.run_for(@ui.move_most_ms * 2.0)
+  assert_true(!@sf.presenting())
+}
+
+///|
 test "the history: a group opens to its steps, a step to its call and what came back" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "history")

@@ -424,6 +424,73 @@ test "a row held long: its menu (固定, 重命名, 归档, 分享…), the chat
 }
 
 ///|
+/// Whether the row at `ry` is lifted in the last frame: a card of its own casting a shadow there.
+fn row_lifted(t : @ui.Tester, ry : Double) -> Bool {
+  t.drawn_shadows().iter().any(fn(s) { s.2 > 200.0 && s.1 < ry + 30.0 && s.1 + s.3 > ry - 20.0 && (s.6 & 0xFFL) > 0L })
+}
+
+///|
+/// The sheets drawn in the last frame (not the tab bar's glass): each its top.
+fn sheet_tops(t : @ui.Tester) -> Array[Double] {
+  t.drawn_glass().filter(fn(g) { g.3 > 100.0 }).map(fn(g) { g.1 })
+}
+
+///|
+test "a row held long, its 分享…: the next level in the menu's sheet, one sheet all the way, the row lifted still; back is back to its menu" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  let (_, ry) = t.find("夜里的构建又失败了").unwrap()
+  hold_row(t, "夜里的构建又失败了")
+  t.run_for(@ui.move_most_ms)
+  assert_true(row_lifted(t, ry))
+  let top0 = sheet_tops(t)
+  assert_eq(top0.length(), 1)
+  // (every rule the screen is held to, as the menu has it: its next level adds no fault)
+  let held = t.audit()
+  t.tap_text("分享…")
+  for _ in 0..<40 {
+    t.run_for(@ui.frame_period_default)
+    assert_eq(sheet_tops(t).length(), 1)
+    assert_true(row_lifted(t, ry))
+  }
+  assert_true(t.find("复制会话链接") is Some(_) && t.find("重命名") is None)
+  assert_true(sheet_tops(t)[0] > top0[0] + 20.0, msg="\{sheet_tops(t)} \{top0}")
+  let added = t.audit().filter(fn(f) { !held.contains(f) })
+  assert_eq(added, [])
+  t.back()
+  for _ in 0..<40 {
+    t.run_for(@ui.frame_period_default)
+    assert_eq(sheet_tops(t).length(), 1)
+    assert_true(row_lifted(t, ry))
+  }
+  assert_true(t.find("重命名") is Some(_) && t.find("复制会话链接") is None)
+  assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{sheet_tops(t)} \{top0}")
+  t.back()
+  t.run_for(@ui.move_most_ms * 2.0)
+  assert_true(!@sf.presenting() && !row_lifted(t, ry))
+}
+
+///|
+test "a row held long, its 重命名: the question in its menu's place, the row lifted still till that goes" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  let (_, ry) = t.find("夜里的构建又失败了").unwrap()
+  hold_row(t, "夜里的构建又失败了")
+  t.run_for(@ui.move_most_ms)
+  assert_true(row_lifted(t, ry))
+  t.tap_text("重命名")
+  for _ in 0..<40 {
+    t.run_for(@ui.frame_period_default)
+    assert_eq(sheet_tops(t).length(), 1)
+    assert_true(row_lifted(t, ry))
+  }
+  assert_true(t.find("保存") is Some(_))
+  t.back()
+  t.run_for(@ui.move_most_ms * 2.0)
+  assert_true(!@sf.presenting() && !row_lifted(t, ry))
+}
+
+///|
 test "a row held and let down as its menu goes: its shadow fades with its card, none without it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)

@@ -259,3 +259,55 @@ test "小屏: a sheet whose title is as it is now (`live`) and whose body is nod
   })
   assert_eq(live_trace(t, title), old)
 }
+
+///|
+test "小屏: a sheet whose body is nodes opened by what a sheet's button does as it closes: in that one's place, from as tall as it stood, one sheet and one scrim all the way" {
+  // (`tall`, `taller`: the first sheet's and the second's share of the window; 0 as tall as what it holds)
+  for case in [(0.0, 0.8), (0.8, 0.0)] {
+    let (tall, taller) = case
+    let t = phone_tester()
+    @sf.panel("面板", from=Unanchored, tall~, fn(c, close) {
+      @sf.button(c, "看更多", key="more", on_press=fn() {
+        close()
+        @sf.panel_nodes("更多", from=Unanchored, tall=taller, fn(v, _) { ink_node(v, 40.0, 36.0, body_ink) })
+      })
+    })
+    t.run_for(sheet_way_ms(t))
+    let top0 = sheet_tops(t)
+    assert_eq(top0.length(), 1, msg="\{case}")
+    assert_eq(scrim_drawn(t).length(), 1, msg="\{case}")
+    t.tap_text("看更多")
+    // (the frame it was pressed in: the next where the first stood, that one gone, the window as dim)
+    assert_true(t.find("更多") is Some(_) && t.find("看更多") is None, msg="\{case}")
+    assert_eq(sheet_tops(t).length(), 1, msg="\{case}: \{sheet_tops(t)}")
+    assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{case}: \{sheet_tops(t)} \{top0}")
+    assert_eq(scrim_drawn(t).length(), 1, msg="\{case}")
+    // (on its way to its own height, one way only, never two sheets, the window never brighter)
+    let up = taller > tall && tall == 0.0
+    let mut last = top0[0]
+    for _ in 0..<40 {
+      t.run_for(@ui.frame_period_default)
+      let tops = sheet_tops(t)
+      assert_eq(tops.length(), 1, msg="\{case}: \{tops}")
+      assert_eq(scrim_drawn(t).length(), 1, msg="\{case}")
+      assert_true(if up { tops[0] <= last + 0.5 } else { tops[0] >= last - 0.5 }, msg="\{case}: \{tops} after \{last}")
+      last = tops[0]
+    }
+    assert_true(if up { last < top0[0] - 100.0 } else { last > top0[0] + 100.0 }, msg="\{case}: \{last} \{top0}")
+    // (a step further in from the first: back is back to that one, in its place, from as tall as this stood, one
+    // sheet and one scrim all the way; back again closes it)
+    t.back()
+    assert_true(t.find("看更多") is Some(_), msg="\{case}")
+    assert_eq(sheet_tops(t).length(), 1, msg="\{case}: back \{sheet_tops(t)}")
+    assert_true((sheet_tops(t)[0] - last).abs() < 0.5, msg="\{case}: back \{sheet_tops(t)} from \{last}")
+    for _ in 0..<40 {
+      t.run_for(@ui.frame_period_default)
+      assert_eq(sheet_tops(t).length(), 1, msg="\{case}: back \{sheet_tops(t)}")
+      assert_eq(scrim_drawn(t).length(), 1, msg="\{case}: back")
+    }
+    assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{case}: \{sheet_tops(t)} \{top0}")
+    t.back()
+    t.run_for(sheet_way_ms(t))
+    assert_false(@sf.presenter_visible(), msg="\{case}")
+  }
+}
