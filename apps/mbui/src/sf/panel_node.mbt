@@ -102,8 +102,9 @@ fn panel_node(
       let at = anchor(layer)
       // (what holds its body: what takes the focus as it opens)
       let body_box : Ref[@view.View?] = Ref(None)
-      // (the field it opens to be typed in, where what it holds says one: panel_opens_in_node)
-      let field : Ref[@view.View?] = Ref(None)
+      // (the field it opens to be typed in, where what it holds says one: panel_opens_in_node,
+      // panel_search_at_hand_node)
+      let field : Ref[PanelField?] = Ref(None)
       layer.lends(panel_field_lent, field) |> ignore
       // (its old views' words as far in as its look says: on entering, its ground first, then they; read as they are
       // painted (Ctx::look_by), so that its way in and out paints them, nothing of them built again)
@@ -346,7 +347,7 @@ fn panel_node(
         // (the focus on the field it opens to be typed in, where it says one; else what holds its body's as it opens
         // where it takes it, else where it was; back to what had it as it goes)
         match (field.val, body_box.val) {
-          (Some(f), _) => layer.focus_opens(f) |> ignore
+          (Some(f), _) => layer.focus_opens(f.field) |> ignore
           (None, Some(b)) if x.focus => layer.focus_opens(b) |> ignore
           _ => layer.focus_returns() |> ignore
         }

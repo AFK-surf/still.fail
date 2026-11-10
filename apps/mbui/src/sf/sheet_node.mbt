@@ -55,8 +55,9 @@ fn sheet_node(
     fn(layer) {
       shown()
       layer.owns(gone) |> ignore
-      // (the field it opens to be typed in, where what it holds says one: panel_opens_in_node)
-      let field : Ref[@view.View?] = Ref(None)
+      // (the field it opens to be typed in, where what it holds says one: panel_opens_in_node; a search at hand,
+      // panel_search_at_hand_node's, not on a sheet)
+      let field : Ref[PanelField?] = Ref(None)
       layer.lends(panel_field_lent, field) |> ignore
       // (how far its scrim is in; how far below its place it is, in its own heights; how far a finger has its top down)
       // (in another's place: its scrim whole from the first, where that one stood, not below)
@@ -457,11 +458,11 @@ fn sheet_node(
         |> ignore
       })
       |> ignore
-      // (the keys on the field it opens to be typed in, where it says one, given back as it goes; else the focus left
-      // where it is: Enter its foot's action)
+      // (the keys on the field it opens to be typed in, where it says one, given back as it goes; else, a search at
+      // hand or none, the focus left where it is: Enter its foot's action)
       match field.val {
-        Some(f) => layer.focus_opens(f) |> ignore
-        None => layer.focus_returns() |> ignore
+        Some(f) if f.sheet => layer.focus_opens(f.field) |> ignore
+        _ => layer.focus_returns() |> ignore
       }
     },
     // (its scrim's fade; and its sinking away, which holds it: View::moved_by)

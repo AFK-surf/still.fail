@@ -1482,6 +1482,8 @@ pub fn panel_row_opens_node(@view.View, () -> String, (Anchor) -> Unit, icon? : 
 
 pub fn panel_rule_over() -> Double
 
+pub fn panel_search_at_hand_node(@view.View) -> Unit
+
 pub fn panel_switch_noted_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit, note? : () -> String, disabled? : () -> Bool) -> Unit
 
 pub fn panel_switch_row_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit) -> Unit
