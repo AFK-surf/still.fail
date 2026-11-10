@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [7c7349a14](https://github.com/AFK-surf/still.fail/commit/7c7349a14847966e17ed93c02629279494a30def) station: a stopped preparation of the Linux screen | 1.76 | 2.34 | 9.73 | 28.33 | 34.05 | 25.29 | 46.41 | 93.72 | 179.58 |
 | [a657d7e50](https://github.com/AFK-surf/still.fail/commit/a657d7e50e1875f5ed9046a59f9a06bdb1b2e292) cloud: the feedback monitor's token marks a report | 1.75 | 2.33 | 9.7 | 28.26 | 33.94 | 25.23 | 46.33 | 93.28 | 184.86 |
 | [7d8b45941](https://github.com/AFK-surf/still.fail/commit/7d8b45941d08c6954c1a9a8d3a34a40d3f3de25c) sf: a sheet of nodes over another sheet dims what  | 1.75 | 2.33 | 9.7 | 28.26 | 33.93 | 25.23 | 46.33 | 92.96 | 182.39 |
 | [69498a638](https://github.com/AFK-surf/still.fail/commit/69498a6383679696333fbca1ed435e6aeff4203f) mbui: a field of the window's tree blinks its care | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.54 | 186.58 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [9c17d8cb7](https://github.com/AFK-surf/still.fail/commit/9c17d8cb78abdf4d656cc465346c3cc9773dd2c7) mbui: a zoom is read by the old view's Ctx and tol | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.17 | 46.1 | 93.23 | 148.8 |
 | [181c034b0](https://github.com/AFK-surf/still.fail/commit/181c034b00968d3d452dea3090801c75f0825841) mbui: Anim and Way read the old view's Ctx they ar | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.17 | 46.1 | 93.36 | 140.6 |
 | [ddf2feea3](https://github.com/AFK-surf/still.fail/commit/ddf2feea390bf276ff74c483804ae88dd2251874) mbui: Home's news and update cards made once, as n | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 93.18 | 136.32 |
-| [1fd232e1f](https://github.com/AFK-surf/still.fail/commit/1fd232e1f0935aa7ee629680c5e10ee307f3cda3) app: the page that shares a chat as a picture come | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 93.49 | 143.42 |
