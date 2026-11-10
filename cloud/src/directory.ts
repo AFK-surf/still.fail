@@ -26,7 +26,7 @@ import { showsOf, type Shows } from "./noticeText";
 import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl, waysOf } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
-import type { AccountEvent, StationEvent, AddedView, Admission, AdminFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, RigView, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { AccountEvent, StationEvent, AddedView, Admission, AdminFeedback, FeedbackReply, WorkspaceFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, RigView, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 import { apply, asEntry, entryHash, extendLock, genesis, LockAppendRefused, shortCode, type Entry, type LockEntry, type LockState } from "./lock";
 export type { Role };
 
@@ -64,6 +64,10 @@ export const CLOSE = { replaced: 4000, removed: 4004, silent: 4008 } as const;
 /** Reports one sender may send in a day, and how many the console lists. */
 const FEEDBACK_PER_DAY = 20;
 const FEEDBACK_LISTED = 500;
+/** How many replies a station's agents may write on its reports a day. */
+const FEEDBACK_REPLIES_PER_DAY = 100;
+/** How many reports with replies a member's device is given of a workspace (feedbackOf). */
+const FEEDBACK_SHOWN = 200;
 
 const LIST: AccountEvent = { type: "workspaces" };
 /** The picture an account is shown with, of its row in users: the one it put up for itself (setOwnPicture), else its sign-in's. */
@@ -141,6 +145,8 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS feedback (id TEXT PRIMARY KEY, number INTEGER NOT NULL UNIQUE, key TEXT NOT NULL, channel TEXT NOT NULL, sender TEXT NOT NULL, station TEXT, workspace TEXT, account TEXT, title TEXT NOT NULL, body TEXT NOT NULL, area TEXT NOT NULL, reporter TEXT NOT NULL DEFAULT '', context TEXT, logs TEXT, status TEXT NOT NULL DEFAULT 'new', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
       CREATE UNIQUE INDEX IF NOT EXISTS feedback_by_key ON feedback (sender, key);
       CREATE INDEX IF NOT EXISTS feedback_by_sender ON feedback (sender, created_at);
+      CREATE TABLE IF NOT EXISTS feedback_replies (id TEXT PRIMARY KEY, feedback TEXT NOT NULL, author TEXT NOT NULL, by TEXT NOT NULL DEFAULT '', text TEXT NOT NULL, created_at INTEGER NOT NULL, delivered_at INTEGER);
+      CREATE INDEX IF NOT EXISTS feedback_replies_by_feedback ON feedback_replies (feedback, created_at);
       CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY, at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS lock_entries (workspace TEXT NOT NULL, seq INTEGER NOT NULL, hash TEXT NOT NULL, entry TEXT NOT NULL, PRIMARY KEY (workspace, seq));
       CREATE TABLE IF NOT EXISTS devices (workspace TEXT NOT NULL, sub TEXT NOT NULL, device TEXT NOT NULL, base TEXT, kind TEXT, label TEXT, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY (workspace, sub, device));
@@ -1212,6 +1218,7 @@ export class Directory extends DurableObject<Env> {
     }
     this.ctx.storage.transactionSync(() => {
       for (const table of ["push", "devices", "lock_requests"]) this.#run(`DELETE FROM ${table} WHERE sub = ?`, sub);
+      this.#run("DELETE FROM feedback_replies WHERE feedback IN (SELECT id FROM feedback WHERE account = ?)", sub);
       this.#run("DELETE FROM feedback WHERE account = ?", sub);
       if (email) {
         this.#run("DELETE FROM pending WHERE lower(email) = lower(?)", email);
@@ -1816,8 +1823,24 @@ export class Directory extends DurableObject<Env> {
     return { id, number, duplicate: false };
   }
 
-  /** The reports, newest first, with the station, workspace and account they came from. */
+  /** The reports, newest first, with the station, workspace and account they came from, and their replies. */
   adminFeedback(): AdminFeedback[] {
+    const replies = new Map<string, FeedbackReply[]>();
+    for (const r of this.#rows(`SELECT * FROM feedback_replies WHERE feedback IN (SELECT id FROM feedback ORDER BY number DESC LIMIT ${FEEDBACK_LISTED}) ORDER BY created_at, rowid`)) {
+      const team = r.author === "team";
+      const reply: FeedbackReply = {
+        id: r.id as string,
+        from: team ? "team" : "reporter",
+        by: r.by as string,
+        text: r.text as string,
+        created_at: r.created_at as number,
+        delivery: !team ? null : r.delivered_at !== null ? "delivered" : "pending",
+        delivered_at: (r.delivered_at as number | null) ?? null,
+      };
+      const list = replies.get(r.feedback as string) ?? [];
+      list.push(reply);
+      replies.set(r.feedback as string, list);
+    }
     const rows = this.#rows(`SELECT f.*, s.name AS station_name, w.name AS workspace_name, u.email AS account_email, u.name AS account_name
       FROM feedback f LEFT JOIN station_members s ON s.station = f.station AND s.workspace = f.workspace LEFT JOIN workspaces w ON w.id = f.workspace LEFT JOIN users u ON u.sub = f.account
       ORDER BY f.number DESC LIMIT ${FEEDBACK_LISTED}`);
@@ -1847,6 +1870,7 @@ export class Directory extends DurableObject<Env> {
         told_at: (r.told_at as number | null) ?? null,
         created_at: r.created_at as number,
         updated_at: r.updated_at as number,
+        replies: replies.get(r.id as string) ?? [],
       };
     });
   }
@@ -1889,6 +1913,108 @@ export class Directory extends DurableObject<Env> {
       const said = (v: unknown) => (typeof v === "string" && v ? v : null);
       return { id: r.id as string, number: r.number as number, title: r.title as string, channel: r.channel === "beta" ? "beta" : "stable", version: r.fixed_in as number, parts, session: said(context.session), thread: said(context.thread) };
     });
+  }
+
+  /**
+   * The workspace a station's report came from a chat of: the one the station said (context.workspace, from stations
+   * that say it), else the one its link names (context.link, `/o/<workspace>/…`); only while the station is in it.
+   * Not the report's `workspace`, which is the station's home where it said none. null: none to show it in.
+   */
+  #chatWorkspace(station: string | null, context: string | null): string | null {
+    if (!station) return null;
+    const said = contextOf(context);
+    const named = typeof said.workspace === "string" ? said.workspace : typeof said.link === "string" ? (/\/o\/([0-9A-HJKMNP-TV-Z]{26})\//.exec(said.link)?.[1] ?? null) : null;
+    return named && this.#memberships(station).includes(named) ? named : null;
+  }
+
+  /**
+   * The team's reply on a report (`by`: the admin's email or the feedback monitor), shown to the people of the chat it
+   * was reported from, in its workspace's members' apps (feedbackOf), never given to a station or its agents: each of
+   * them is told on its events socket. One with no such chat (an account's report, or one whose chat cannot be found)
+   * reaches no one: answered why (`undeliverable`), not kept.
+   */
+  replyToFeedback(id: string, by: string, text: string): { id: string; delivery: "pending" } | { undeliverable: "no_station" | "no_chat" } {
+    const report = this.#one("SELECT station, context FROM feedback WHERE id = ?", id);
+    if (!report) fail(404, "feedback_not_found");
+    if (!report!.station) return { undeliverable: "no_station" };
+    const workspace = this.#chatWorkspace(report!.station as string, report!.context as string | null);
+    if (!workspace || !sessionOf(report!.context as string | null)) return { undeliverable: "no_chat" };
+    const reply = ulid();
+    const now = nowSeconds();
+    this.#run("INSERT INTO feedback_replies (id, feedback, author, by, text, created_at) VALUES (?, ?, 'team', ?, ?, ?)", reply, id, by, text, now);
+    this.#run("UPDATE feedback SET updated_at = ? WHERE id = ?", now, id);
+    this.#tell(this.#members(workspace), { type: "feedback", workspace });
+    return { id: reply, delivery: "pending" };
+  }
+
+  /** The reporter's agent answers one of its station's reports (FB-`number`): kept with the team's replies. null: too many today. */
+  reporterReply(station: string, number: number, text: string, session: string | null): { id: string } | null {
+    const report = this.#one("SELECT id, context FROM feedback WHERE number = ? AND station = ?", number, station);
+    if (!report) fail(404, "feedback_not_found");
+    const now = nowSeconds();
+    const today = this.#one("SELECT COUNT(*) AS n FROM feedback_replies r JOIN feedback f ON f.id = r.feedback WHERE f.station = ? AND r.author = 'reporter' AND r.created_at > ?", station, now - 24 * 60 * 60);
+    if ((today?.n as number) >= FEEDBACK_REPLIES_PER_DAY) return null;
+    return { id: this.#reporterSaid(report!.id as string, session ? `session:${session}` : "", text, report!.context as string | null, station) };
+  }
+
+  /** A reply from the reporter's side (`by`: `session:<key>`, its agent's; `account:<sub>`, a person's in the app), told to the chat's people. */
+  #reporterSaid(id: string, by: string, text: string, context: string | null, station: string): string {
+    const reply = ulid();
+    const now = nowSeconds();
+    this.#run("INSERT INTO feedback_replies (id, feedback, author, by, text, created_at) VALUES (?, ?, 'reporter', ?, ?, ?)", reply, id, by, text, now);
+    this.#run("UPDATE feedback SET updated_at = ? WHERE id = ?", now, id);
+    const workspace = this.#chatWorkspace(station, context);
+    if (workspace) this.#tell(this.#members(workspace), { type: "feedback", workspace });
+    return reply;
+  }
+
+  /**
+   * The reports with a reply of the team's from chats of a workspace, for a member's device to show in each chat (by
+   * its station and session), newest first; the team's replies given are marked delivered. Who may read them is who
+   * may read those chats: the workspace's members.
+   */
+  feedbackOf(sub: string, workspace: string): { feedback: WorkspaceFeedback[] } {
+    this.#role(sub, workspace);
+    const rows = this.#rows(`SELECT f.id, f.number, f.title, f.station, f.context FROM feedback f JOIN station_members s ON s.station = f.station AND s.workspace = ?
+      WHERE EXISTS (SELECT 1 FROM feedback_replies r WHERE r.feedback = f.id AND r.author = 'team') ORDER BY f.number DESC LIMIT ${FEEDBACK_SHOWN}`, workspace)
+      .filter((r) => this.#chatWorkspace(r.station as string, r.context as string | null) === workspace);
+    const names = new Map<string, string>();
+    const nameOf = (by: string): string => {
+      if (!by.startsWith("account:")) return "";
+      if (!names.has(by)) {
+        const u = this.#one("SELECT name, email FROM users WHERE sub = ?", by.slice("account:".length));
+        names.set(by, u ? ((u.name as string) || (u.email as string)) : "");
+      }
+      return names.get(by)!;
+    };
+    const now = nowSeconds();
+    const feedback = rows.map((r): WorkspaceFeedback => {
+      const replies = this.#rows("SELECT id, author, by, text, created_at, delivered_at FROM feedback_replies WHERE feedback = ? ORDER BY created_at, rowid", r.id);
+      for (const reply of replies) if (reply.author === "team" && reply.delivered_at === null) this.#run("UPDATE feedback_replies SET delivered_at = ? WHERE id = ?", now, reply.id);
+      const context = contextOf(r.context as string | null);
+      return {
+        id: r.id as string,
+        number: r.number as number,
+        title: r.title as string,
+        station: r.station as string,
+        session: sessionOf(r.context as string | null) ?? "",
+        thread: typeof context.thread === "string" ? context.thread : null,
+        replies: replies.map((reply) => {
+          const by = reply.by as string;
+          const from = reply.author === "team" ? "team" : by.startsWith("account:") ? "person" : "agent";
+          return { id: reply.id as string, from, name: from === "person" ? nameOf(by) : "", text: reply.text as string, created_at: reply.created_at as number };
+        }),
+      };
+    });
+    return { feedback };
+  }
+
+  /** A member answers, in the app, a report shown in a chat of the workspace: kept as theirs. */
+  memberFeedbackReply(sub: string, workspace: string, id: string, text: string): { id: string } {
+    this.#role(sub, workspace);
+    const report = this.#one("SELECT station, context FROM feedback WHERE id = ?", id);
+    if (!report || this.#chatWorkspace(report.station as string | null, report.context as string | null) !== workspace) fail(404, "feedback_not_found");
+    return { id: this.#reporterSaid(id, `account:${sub}`, text, report!.context as string | null, report!.station as string) };
   }
 
   /** The station has told these of its reports' fixes. */
@@ -2096,15 +2222,15 @@ const FAMILIES: Record<string, string> = {
   isBeta: "beta",
   seen: "sockets", closed: "sockets", stationConnected: "sockets", stationState: "sockets", stationLeft: "sockets", stationSaid: "sockets",
   fetch: "sockets", webSocketMessage: "sockets", webSocketClose: "sockets", webSocketError: "sockets",
-  enroll: "stations", isStation: "stations", pushTargets: "stations", addFeedback: "stations", fixedUntold: "stations", toldFixed: "stations", markFixed: "stations",
+  enroll: "stations", isStation: "stations", pushTargets: "stations", addFeedback: "stations", fixedUntold: "stations", reporterReply: "stations", toldFixed: "stations", markFixed: "stations",
   registerPush: "push", unregisterPush: "push", dropPush: "push",
   tellAll: "broadcast", tellStations: "broadcast", modelsMade: "broadcast", tellAdmins: "broadcast", alarm: "broadcast",
 };
 for (const name of ["workspace", "createWorkspace", "updateWorkspace", "deleteWorkspace", "invite", "previewInvitation", "acceptInvitation", "acceptById", "declineById", "revokeInvitation",
-  "setRole", "removeMember", "addMembers", "removeAdded", "setRelays", "setWay", "manages", "createEnrollment", "createRigEnrollment", "updateStation", "setStationMode", "removeStation", "memberRole", "recordDevice", "devices",
+  "feedbackOf", "memberFeedbackReply", "setRole", "removeMember", "addMembers", "removeAdded", "setRelays", "setWay", "manages", "createEnrollment", "createRigEnrollment", "updateStation", "setStationMode", "removeStation", "memberRole", "recordDevice", "devices",
   "lock", "appendLock", "clearLock", "requestLock", "lockRequests", "dropLockRequest"]) FAMILIES[name] = "workspaces";
 for (const name of ["adminUsers", "setMayCreate", "adminPending", "setPending", "removePending", "setBlocked", "setBeta", "adminDeleteWorkspace", "adminCreateWorkspace", "adminSetLimits",
-  "adminEnrollment", "adminWorkspaces", "inviteCodes", "createInviteCode", "revokeInviteCode", "adminFeedback", "setFeedbackStatus", "adminLoad"]) FAMILIES[name] = "admin";
+  "adminEnrollment", "adminWorkspaces", "inviteCodes", "createInviteCode", "revokeInviteCode", "adminFeedback", "setFeedbackStatus", "replyToFeedback", "adminLoad"]) FAMILIES[name] = "admin";
 /** What it runs for itself rather than being called for. */
 const UNCOUNTED = new Set(["constructor", "handOff", "migrateStationMembers", "migrateFreePlan", "send", "settled", "sweep"]);
 
@@ -2182,3 +2308,19 @@ function cleanEmoji(value: unknown): string | null {
   const first = [...new Intl.Segmenter().segment(value.trim())][0]?.segment;
   return first && first.length <= 32 && /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(first) ? first : null;
 }
+
+/** A report's context as the station sent it; empty when it was cut at its limit. */
+function contextOf(text: string | null): Record<string, unknown> {
+  try {
+    const value = JSON.parse(text ?? "{}") as unknown;
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The session a report came from, which a reply goes to. */
+const sessionOf = (text: string | null): string | null => {
+  const session = contextOf(text).session;
+  return typeof session === "string" && session ? session : null;
+};

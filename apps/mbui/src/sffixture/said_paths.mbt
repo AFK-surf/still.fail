@@ -261,6 +261,14 @@ pub let said_paths : Map[String, Array[String]] = {
     "opened.*.note",
     "openedText",
   ],
+  "chatFeedback": [
+    "reports.*.title",
+    "reports.*.heading",
+    "reports.*.latest",
+    "reports.*.replies.*.who",
+    "reports.*.replies.*.text",
+    "reports.*.replies.*.when",
+  ],
   "chatJobs": [
     "jobs.*.name",
     "jobs.*.command",

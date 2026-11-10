@@ -49,6 +49,10 @@
   read of how to work is `src/agents/instructions.ts` and the skills in `src/skills/`. A change to the instructions, a
   tool's parameters or its rules adds a note at the end of `src/agents/migrations.ts` (the next number, a sentence),
   told once to sessions that began before it.
+- What the still.fail team replies on a bug report never reaches an agent by itself (the user, 2026-11-10: it would be
+  outside words in someone's session): still.fail cloud gives the replies only to the chat's workspace's members' apps
+  (`client/core-ts/src/feedback-replies.ts`), no station reads or holds them, and an agent sees one only as a person
+  quotes it into what they send. An agent may answer with `feedback_reply` when the person asks it to.
 - An agent's own answer is never forwarded: it posts with `chat_post` and ends each turn with a state (`all_done`,
   `need_human`, `waiting`); a turn ended without one is asked again.
 

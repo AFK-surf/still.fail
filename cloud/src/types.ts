@@ -43,7 +43,9 @@ export type AccountEvent =
   | { type: "workspaces" }
   | { type: "workspace"; id: string; lock?: { head: LockHead | null; locked: boolean } }
   | { type: "release" }
-  | { type: "relays" };
+  | { type: "relays" }
+  /** The team or someone of the chat replied on a bug report from a chat of the workspace: its replies read again (GET /v1/workspaces/<id>/feedback). */
+  | { type: "feedback"; workspace: string };
 
 /** What a station's presence socket is told besides its state: a release is out (its feed, and its reporters' fixed
  * reports, read again); the models' catalog changed (read again). */
@@ -133,7 +135,38 @@ export interface AdminFeedback {
   fixed_in?: number | null;
   told_at?: number | null;
   created_at: number;
+  /** Moves with a status, a fix or a reply either way: what the feedback monitor watches. */
   updated_at: number;
+  /** The replies on it, oldest first: the team's and the reporter's (feedback.ts). Missing from a cloud from before. */
+  replies?: FeedbackReply[];
+}
+
+/** A reply on a bug report: the team's (the console's admin, or the feedback monitor), or its reporter's agent's. */
+export interface FeedbackReply {
+  id: string;
+  from: "team" | "reporter";
+  /** The admin's email or `feedback-monitor`; of the reporter's side, `session:<key>` (its agent, feedback_reply) or `account:<sub>` (a person, in the app). */
+  by: string;
+  text: string;
+  created_at: number;
+  /** A team's reply: whether a device of the chat's workspace has it yet (it is shown there, never given to an agent). null: the reporter's. */
+  delivery: "pending" | "delivered" | null;
+  delivered_at: number | null;
+}
+
+/**
+ * A bug report sent from a chat of a workspace that the team replied on, as its members' apps show it in that chat
+ * (GET /v1/workspaces/<id>/feedback): which chat (its station and session), and the replies of both sides.
+ */
+export interface WorkspaceFeedback {
+  id: string;
+  number: number;
+  title: string;
+  station: string;
+  session: string;
+  thread: string | null;
+  /** Oldest first. `name`: the person's, for a person's reply; the team's and an agent's say none. */
+  replies: { id: string; from: "team" | "person" | "agent"; name: string; text: string; created_at: number }[];
 }
 
 export interface InviteCodeView {

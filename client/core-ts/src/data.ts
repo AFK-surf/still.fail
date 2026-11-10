@@ -954,6 +954,8 @@ export class Data {
       const ws = key.slice(6);
       return [this.#ofWorkspace(ws) ?? null, [ws, "links"]];
     }
+    // The team's replies on bug reports from the workspace's chats, as the cloud gives them (feedback-replies.ts).
+    if (table === "feedback") return [this.#ofWorkspace(key) ?? null, [key, "feedback"]];
     // A workspace's lock as the cloud keeps it (views/lock.ts): in the workspace's, by its id.
     if (table === "lock") return [this.#ofWorkspace(key) ?? null, [key, "lock"]];
     // A workspace's vaults as its stations hold them (views/vault.ts): the vaults, box certificates and requests by the

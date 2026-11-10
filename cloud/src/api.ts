@@ -15,7 +15,7 @@ import type { AdminFeedback, FeedbackStatus } from "./types";
 import { grantKeys, signCredential, validKeyHex, verifyAnySignature, verifyKeySignature } from "./grants";
 import { changelog, serveChangelog, serveFixed } from "./changelog";
 import { serveModels } from "./models";
-import { receiveFeedback } from "./feedback";
+import { FEEDBACK_LIMITS, receiveFeedback, receiveReply } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
 import { relays, relayUrls } from "./relays";
 import { receiveLoad, relaysLoad } from "./relay-load";
@@ -194,6 +194,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
 
   // Which of its reports are fixed and out, for a station to tell who reported them; what changed, for anyone (changelog.ts).
   if (path === "/v1/feedback/fixed" && method === "POST") return serveFixed(request, env);
+  // Its agents' answers on its reports (feedback.ts). A station reads none of the team's replies: they are the apps'.
+  if (path === "/v1/feedback/reply" && method === "POST") return receiveReply(request, env);
   if (path === "/v1/changelog" && method === "GET") return serveChangelog(request, env);
   // What models can do and cost, for stations (models.ts): models.dev's, as still.fail reads it. No secret.
   if (path === "/v1/models" && method === "GET") return serveModels(request);
@@ -308,6 +310,14 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       return { ...made, url: `${env.PUBLIC_ORIGIN}/invite#${made.token}` };
     });
   }
+  // The bug reports from the workspace's chats the team replied on, with the replies, for its members' apps to show in
+  // those chats; a member's answer on one: { text }.
+  if (kind === "feedback" && !target && method === "GET") return directory(() => dir.feedbackOf(sub, ws));
+  if (kind === "feedback" && target && action === "reply" && method === "POST") {
+    const said = text("text").trim().slice(0, FEEDBACK_LIMITS.reply);
+    if (!said || !/^[0-9A-Z]{26}$/.test(target)) return reply({ error: "invalid_request" }, 400);
+    return directory(() => dir.memberFeedbackReply(sub, ws, target, said));
+  }
   if (kind === "relays" && !target && method === "PUT") return directory(() => dir.setRelays(sub, ws, input.relays));
   if (kind === "ways" && !target && method === "PUT") return directory(() => dir.setWay(sub, ws, input.way, input.on));
   if (kind === "invitations" && target && method === "DELETE") return directory(() => dir.revokeInvitation(sub, ws, target));
@@ -400,6 +410,28 @@ export async function setFeedbackStatus(env: Env, id: string, status: unknown): 
   return directory(() => env.DIRECTORY.getByName("primary").setFeedbackStatus(id, status as FeedbackStatus));
 }
 
+/** Where the team replies to a report: the console's admin, and the feedback monitor with its token (index.ts). */
+export const FEEDBACK_REPLY_PATH = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/reply$/;
+
+/**
+ * The team's reply on a report, `by` the admin's email or the feedback monitor: { text } → 201 { id, delivery:
+ * "pending" }, shown to the people of the chat it came from in their apps, never to a station or its agents; 409 {
+ * error: "undeliverable", reason } where there is no such chat (`no_station`: an account's report; `no_chat`: one
+ * whose chat or its workspace cannot be told, or the station left it), not kept.
+ */
+export async function replyToFeedback(env: Env, id: string, by: string, text: unknown): Promise<Response> {
+  const said = typeof text === "string" ? text.trim().slice(0, FEEDBACK_LIMITS.reply) : "";
+  if (!said) return reply({ error: "invalid_request" }, 400);
+  try {
+    const made = await env.DIRECTORY.getByName("primary").replyToFeedback(id, by, said);
+    if ("undeliverable" in made) return reply({ error: "undeliverable", reason: made.undeliverable }, 409);
+    return reply(made, 201);
+  } catch (error) {
+    if (error instanceof Error && error.message === "feedback_not_found") return reply({ error: "feedback_not_found" }, 404);
+    throw error;
+  }
+}
+
 export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
   const claims = await account(bearerToken(request), env, request);
@@ -470,6 +502,9 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
   }
   const status = FEEDBACK_STATUS_PATH.exec(path);
   if (status && method === "POST") return setFeedbackStatus(env, status[1]!, input.status);
+  // A reply to the session that reported it: { text }.
+  const replied = FEEDBACK_REPLY_PATH.exec(path);
+  if (replied && method === "POST") return replyToFeedback(env, replied[1]!, claims.email, input.text);
   // How loaded the relays are (relay-load.ts).
   if (path === "/v1/admin/relays" && method === "GET") return reply(await relaysLoad(env));
   const revoke = /^\/v1\/admin\/invite-codes\/([A-Za-z0-9-]{1,32})\/revoke$/.exec(path);

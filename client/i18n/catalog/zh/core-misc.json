@@ -309,5 +309,9 @@
   "core-misc.personal.reason.restart": "把这台设备设为你唯一的受信任设备",
   "core-misc.personal.oldStation": "这台 station 版本太旧，批准了手机也不会出借。请先更新 station",
   "core-misc.personal.reason.confirm": "确认这些对话调试你的手机",
-  "core-misc.personal.reason.open": "确认这是你的设备"
+  "core-misc.personal.reason.open": "确认这是你的设备",
+  "core-misc.feedback.team": "still.fail 团队",
+  "core-misc.feedback.agent": "agent",
+  "core-misc.feedback.someone": "有人",
+  "core-misc.feedback.heading": "still.fail 团队回复了 FB-{number}"
 }
