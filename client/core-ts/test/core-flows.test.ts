@@ -1484,6 +1484,40 @@ test("the_chats_a_few_words_find_are_a_view_of_the_list", async () => {
   core.close();
 });
 
+// The owner found the `@` menu's order useless: the pinned chats always first, the rest by whichever an agent last
+// touched (the user, 2026-11-10).
+test("the_at_menu_lists_the_chats_opened_here_latest_first_then_the_rest_by_when_they_were_last_active_pinned_or_not", async () => {
+  const row = (id: string, title: string, at: number) => ({ id, session: id, thread: null, title, agents: [], last: null, unread: false, mine: true, lastActiveAt: at, connect: null, origin: null });
+  const answers: J = { ...base(), ...chatsOf([row("p", "置顶的部署", 1), row("a", "部署 甲", 2), row("b", "部署 乙", 4), row("c", "别的", 3)]) };
+  answers["GET /chats?marks=1"] = { ...answers["GET /chats?marks=1"], pins: { p: 9 } };
+  const { host, core } = await started(answers);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "", limit: 8 });
+  subscribe(core, ui, 2, { topic: "chatSearch", scope: "ws", query: "部署", limit: 8 });
+  subscribe(core, ui, 3, { topic: "chats", scope: "ws" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  const ids = (n: number) => v(values, n).items.map((i: J) => i.id);
+  // The pinned chat is pinned in the list, and in the menu as any other.
+  assert.deepEqual(v(values, 3).days[0].items.map((i: J) => i.id), ["p"]);
+  assert.deepEqual(ids(1), ["b", "c", "a", "p"]);
+  assert.deepEqual(ids(2), ["b", "a", "p"]);
+  // Opened: first, the latest first; the menu made again.
+  call(core, ui, 4, "client.focus", { visible: true, chat: { station: "ws/st", session: "a" } });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(ids(1), ["a", "b", "c", "p"]);
+  call(core, ui, 5, "client.focus", { chat: { station: "ws/st", session: "p" } });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(ids(1), ["p", "a", "b", "c"]);
+  assert.deepEqual(ids(2), ["p", "a", "b"]);
+  // Kept with the workspace, the latest last.
+  assert.deepEqual(core.inner.data.record("chat_ref", "opened:ws"), [["ws/st", "a"], ["ws/st", "p"]]);
+  core.close();
+});
+
 test("the_at_menu_written_on_one_station_finds_the_chats_of_every_station_of_its_workspace_the_others_saying_so", async () => {
   // `ws/st` (studio) and `ws/st2` (mini), both answering at the same origin: which one a request is for, as the wire says.
   const AT = "x-test-station";
