@@ -522,9 +522,10 @@ fn wide_link_row_node(
   // inset where it is first or last, the row itself where it stands, what is pressed: a press beside it its
   // neighbour's, none of the two drawn over each other; desk_list_link)
   let reach = at.list && goes && in_pane_node(parent)
-  // (where it stands across in a panel's body, row_line's: panel_row_at; elsewhere as ever)
+  // (where it stands across in a panel's body, row_line's: panel_row_at; on a group's card in one, as on a page's card,
+  // as the narrow row's; elsewhere as ever)
   let pin = panel_in_of(parent)
-  let (out, side) = match panel_row_at(pin, own=desk_list_out) {
+  let (out, side) = match panel_row_at(pin, own=desk_list_out, card=on_card_node(parent)) {
     Some(p) => (p.out, p.side)
     None => (0.0, text_in)
   }

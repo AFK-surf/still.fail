@@ -15,3 +15,14 @@ pub fn panel_card_out_node(v : @view.View) -> @ui.Style {
     _ => no_card_out
   }
 }
+
+///|
+/// Under the last of what a dialog in the window's middle holds where that is a card (panel_card_last's, where the body
+/// is nodes): the room its foot leaves less what a card at its foot stands in, so the card's foot corners are concentric
+/// with the dialog's; none elsewhere.
+pub fn panel_card_last_node(v : @view.View) -> @ui.Style {
+  match v.lent(panel_in_lent) {
+    Some(p) if p.centred && !p.small => @ui.style(mb=room(-(dialog_pad - panel_card_in)))
+    _ => no_card_out
+  }
+}
