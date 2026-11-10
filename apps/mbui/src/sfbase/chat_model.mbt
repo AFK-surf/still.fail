@@ -895,10 +895,29 @@ pub fn stations_of(v : Json?) -> Array[Station] {
 }
 
 ///|
-/// The workspace's stations as a page that only names them shows them (`stations` `brief`: each one's mark and how it
-/// is reached, not its overview and profiles, nor their changes).
+/// The workspace's stations as a list's rows (`stations {scope}`: what a row shows, never a station whole), asked one
+/// way wherever they are read so the core is asked them once (the settings' stations_of is the same ask).
+pub fn stations_asked(scope : String) -> Map[String, Json] {
+  { "scope": Json::string(scope) }
+}
+
+///|
+/// The workspace's stations' rows (stations_asked) as they are now.
+pub fn station_rows(src : Source, scope : String) -> TopicState {
+  src.topic("stations", stations_asked(scope)).get()
+}
+
+///|
+/// The workspace's stations as a page that only names them shows them: each one's mark and how it is reached, from
+/// their rows. Never what was last said while nothing read them (`lasting`'s, a place's to show at once): a chat
+/// names its station as it is now, or not yet (core_signal_wbtest.mbt).
 pub fn station_marks(src : Source, scope : String) -> Array[Station] {
-  stations_of(src.topic("stations", { "scope": Json::string(scope), "brief": Json::boolean(true) }).get().value)
+  let t = station_rows(src, scope)
+  if t.kept() {
+    []
+  } else {
+    stations_of(t.value)
+  }
 }
 
 ///|

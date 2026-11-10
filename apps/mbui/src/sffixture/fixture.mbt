@@ -867,12 +867,46 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
   let value = fixture_topic_inner(f, name, params)
   // a station's network as the core gives it: how this device reaches it (`way`) in the list, its figures in the
   // `stationNet` view of its own (the made-up stations say both as `net`)
+  // (the stations whole, as the made-up cores describe them, of which each of their topics is answered as the core
+  // answers it: the settings' fixture_stations.mbt)
+  let wholes = fn() {
+    match name {
+      // (files-reading: the stations not read yet, the files' sidebar waiting on them)
+      _ if f.mode == "files-reading" => None
+      "stations" => fixture_stations_way(value)
+      _ => fixture_stations_way(fixture_topic_inner(f, "stations", { "scope": Json::string(text(Some(Json::object(params)), "scope")) }))
+    }
+  }
   let value = match name {
-    // (files-reading: the stations with a drive not read yet, the files' sidebar waiting on them)
-    "stations" if params.get("drive") is Some(True) && f.mode == "files-reading" => None
-    "stations" if params.get("drive") is Some(True) =>
-      fix_browse_with_drive(f, fixture_stations_way(value), text(Some(Json::object(params)), "here"))
-    "stations" => fixture_stations_way(value)
+    "stations" =>
+      match wholes() {
+        Some(Array(a)) => Some(Json::array(a.map(@settings.station_row)))
+        v => v
+      }
+    "station" => @settings.station_said(wholes(), text(Some(Json::object(params)), "station"), "")
+    "stationPart" => {
+      let p = Some(Json::object(params))
+      @settings.station_said(wholes(), text(p, "station"), text(p, "part"))
+    }
+    "connects" => @settings.connects_of_stations(value, wholes())
+    "profiles" => @settings.profiles_of_stations(value, wholes())
+    // (where a new chat runs, a row each, as the stations' list has them)
+    "newChat" =>
+      match value {
+        Some(Object(o)) => {
+          let m = o.copy()
+          match o.get("stations") {
+            Some(Array(a)) => m["stations"] = Json::array(a.map(@settings.station_row))
+            _ => ()
+          }
+          match o.get("station") {
+            Some(Object(_) as s) => m["station"] = @settings.station_row(s)
+            _ => ()
+          }
+          Some(Json::object(m))
+        }
+        v => v
+      }
     "chat" if f.mode.has_prefix("chat-opened") && params.get("session") is Some(String("s-c1")) =>
       fixture_with_tabs(f, params, with_opened(value))
     "chat" if f.mode.has_prefix("chat-opener") && params.get("session") is Some(String("s-c1")) =>
@@ -1379,6 +1413,7 @@ fn init {
 /// `base` with the topics named in `held` never come (src/sffilm's MBUI_HOLD): what shows while they are read the
 /// first time, filmed.
 pub fn held_topics(base : Source, held : Array[String]) -> Source {
+  let held = of_stations(held)
   {
     ..base,
     topic_read: fn(name, params) {
@@ -1395,6 +1430,7 @@ pub fn held_topics(base : Source, held : Array[String]) -> Source {
 /// `base` with the topics named in `failed` failing to be read, the core saying why as `why` (src/sffilm's MBUI_FAILED):
 /// what shows when reading them fails, filmed.
 pub fn failed_topics(base : Source, failed : Array[String], why : String) -> Source {
+  let failed = of_stations(failed)
   {
     ..base,
     topic_read: fn(name, params) {
@@ -1404,6 +1440,20 @@ pub fn failed_topics(base : Source, failed : Array[String], why : String) -> Sou
         base.topic(name, params).get().snapshot()
       }
     },
+  }
+}
+
+///|
+/// Topics named, with a station's page and its parts where the stations are among them: "the stations not read" is
+/// each of their topics not read.
+fn of_stations(names : Array[String]) -> Array[String] {
+  if names.contains("stations") {
+    let out = names.copy()
+    out.push("station")
+    out.push("stationPart")
+    out
+  } else {
+    names
   }
 }
 

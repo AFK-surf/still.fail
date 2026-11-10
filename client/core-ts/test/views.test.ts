@@ -1,10 +1,12 @@
 // The Rust core's views.rs tests, ported: a store whose topics the test sets, the views routed as core.ts does.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Choose } from "../src/choose.ts";
+import { applyKeyed } from "../src/collections.ts";
 import { CoreError } from "../src/error.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import * as format from "../src/format.ts";
-import { holdLanguage } from "../src/i18n.ts";
+import { holdLanguage, t as words } from "../src/i18n.ts";
 import { merge } from "../src/entries.ts";
 import { topicKey, type Topic } from "../src/protocol.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
@@ -1255,47 +1257,207 @@ test("a station's mode is the viewer's to change where they added it, or no memb
   assert.deepEqual(mine(), [["a", true], ["b", false], ["c", true]], "the owner: one no member added as well, never another member's");
 });
 
-test("stations_asked_brief_say_what_names_each_and_how_it_is_reached_not_its_overview", async () => {
-  // A chat's bar asked the whole list for its station's name and mark: each station's overview came, and each of its
-  // changes (2026-11-08).
-  const t = setup();
-  const full = ui();
-  const brief = ui();
-  t.subscribe(1, { topic: "stations", scope: "ws" });
-  t.subscribe(2, { topic: "stations", scope: "ws", brief: true });
-  t.set(workspace(), stations(t.nowS()));
-  await t.readAll([[full, 1], [brief, 2]]);
-  t.set(link("ws/a"), { state: "online" });
-  t.set(overview("ws/a"), { ...overviewOf([], []), counts: { sessions: 3, running: 2, warm: 0 } });
-  await t.readAll([[full, 1], [brief, 2]]);
-  const a = (brief.value as J[]).find((s) => s.station === "ws/a");
-  assert.deepEqual(Object.keys(a).sort(), ["id", "name", "online", "reconnecting", "running", "station"]);
-  assert.deepEqual([a.name, a.online, a.running], ["alpha", true, 2]);
-  assert.ok((full.value as J[]).find((s) => s.station === "ws/a").overview !== undefined);
-  // what only the overview says changes: nothing goes to the brief
-  t.set(overview("ws/a"), { ...overviewOf([], []), counts: { sessions: 4, running: 2, warm: 1 } });
-  await t.host.time.pass(100);
-  assert.equal(t.host.takeEmitted().filter(([, m]) => (m as J).id === 2).length, 0);
+/// A station's overview with what changes most and no row shows: each profile's quota by the minute, its decisions.
+const busyOverview = (used: number, decided: boolean, running = 0): J => ({
+  ...overviewOf([], [profile("p", { model: "claude-opus-5-5", models: ["claude-opus-5-5"], quota: { state: "ok", windows: [{ label: "5h", usedPercent: used, resetsAt: 9_000_000_000_000 }], checkedAt: 1 } })]),
+  counts: { sessions: 3, running, warm: 0 },
+  disk: { freeBytes: 10, totalBytes: 100 },
+  drive: { roots: [{ path: "/Users/me", name: "me", state: "ok" }] },
+  automaticDecisions: { canEdit: true, settings: { completion: { enabled: decided, model: null } }, models: [], recent: [] },
+  archiving: { days: 7, slackDays: 0, reviewed: false, canEdit: true },
 });
 
-test("stations_asked_lean_are_the_whole_list_without_the_models_each_can_run", async () => {
-  // Each model with each of its accounts' quota was most of the list (463 KB of a phone's, 2026-11-10), decoded on the
-  // app's thread each time it was said; only a model's choice reads it.
-  const t = setup();
-  const full = ui();
-  const lean = ui();
+/// Every station of `stations` up, each with its host (once the views asked for it) and that overview.
+async function allUp(t: ReturnType<typeof setup>, ids = ["a", "b", "c"]): Promise<void> {
+  t.set(workspace(), ids.length === 3 ? stations(t.nowS()) : { id: "ws", stations: ids.map((id) => ({ id, name: id === "a" ? "alpha" : "beta", last_seen: null, version: null })) });
+  for (const id of ids) {
+    t.set(link(`ws/${id}`), { state: "online" });
+    t.set(overview(`ws/${id}`), busyOverview(20, false));
+  }
+  await t.host.time.pass(100);
+  for (const id of ids) t.set(hostOf(`ws/${id}`), hostInfo(id));
+}
+
+test("a_list_of_stations_is_rows_one_station_its_page_and_the_models_are_the_cores_own", async () => {
+  // Each model with each account's quota was most of a phone's list (463 KB, 25-86 ms each time it came, 2026-11-10):
+  // a list's item is what its row shows, a station's page asks that station.
+  const t = setup({ all: true });
+  const [list, page, whole] = [ui(), ui(), ui()];
   t.subscribe(1, { topic: "stations", scope: "ws" });
-  t.subscribe(2, { topic: "stations", scope: "ws", lean: true });
+  t.subscribe(2, { topic: "station", scope: "ws", station: "ws/a" });
+  t.subscribe(3, { topic: "stationsWhole", scope: "ws" });
+  await allUp(t);
+  await t.readAll([[list, 1], [page, 2], [whole, 3]]);
+  const a = (list.value as J[]).find((s) => s.station === "ws/a");
+  assert.deepEqual(Object.keys(a).sort(), ["face", "host", "id", "joined", "lastSeen", "line", "mine", "name", "online", "overview", "problems", "reconnecting", "stateBusy", "stateText", "station", "summary", "version"]);
+  const allowed = new Set(["station", "id", "name", "emoji", "icon", "summary", "face", "line", "online", "reconnecting", "blocked", "stateText", "stateBusy", "problems", "lastSeen", "version", "way", "joined", "home", "mine", "host", "overview"]);
+  for (const row of list.value as J[]) assert.deepEqual(Object.keys(row).filter((k) => !allowed.has(k)), [], row.station);
+  assert.deepEqual(Object.keys(a.overview).sort(), ["counts", "disk", "drive", "viewer"]);
+  assert.deepEqual(Object.keys(a.host).sort(), ["identity", "meters", "os"]);
+  assert.deepEqual([a.overview.counts.sessions, a.overview.drive.roots[0].path, a.host.os], [3, "/Users/me", "macOS 26"]);
+  // Its page: all of it but the models.
+  const p: J = page.value;
+  assert.equal(p.station, "ws/a");
+  assert.equal(p.models, undefined);
+  assert.equal(p.overview.profiles.length, 1);
+  assert.ok(Array.isArray(p.runtimes) && Array.isArray(p.profileGroups) && p.link !== undefined);
+  assert.equal(p.summary, a.summary);
+  // The core's own whole list: the models too.
+  const w = (whole.value as J[]).find((s) => s.station === "ws/a");
+  assert.ok((w.models as J[]).length > 0);
+  assert.equal(w.overview.profiles.length, 1);
+  // A station the workspace has not: null; the workspace not read yet: not known, as the list.
+  const none = ui();
+  t.subscribe(4, { topic: "station", scope: "ws", station: "ws/zzz" });
+  await t.read(none, 4);
+  assert.equal(none.value, null);
+  const t2 = setup({ all: true });
+  const [list2, page2] = [ui(), ui()];
+  t2.subscribe(1, { topic: "stations", scope: "ws" });
+  t2.subscribe(2, { topic: "station", scope: "ws", station: "ws/a" });
+  await t2.readAll([[list2, 1], [page2, 2]]);
+  assert.deepEqual([list2.messages, page2.messages], [0, 0]);
+});
+
+test("a_list_of_stations_says_nothing_of_what_its_rows_do_not_show", async () => {
+  const t = setup();
+  // (taking keyed ops, as the app does)
+  t.store.subscribe(1, 1, { topic: "stations", scope: "ws" }, true);
+  let list: J;
+  const said = async () => {
+    await t.host.time.pass(100);
+    const out = t.host.takeEmitted().map(([, m]) => m as J).filter((m) => m.id === 1);
+    for (const m of out) list = "value" in m ? m.value : applyKeyed(list, m.delta);
+    return out;
+  };
+  await allUp(t);
+  await said();
+  assert.deepEqual(await said(), []);
+  assert.equal(list.find((s: J) => s.station === "ws/a").host.os, "macOS 26");
+  // (a) a minute passes
+  await t.host.time.pass(60_000);
+  assert.deepEqual(await said(), [], "a minute");
+  // (b) a profile's quota changes on one station
+  t.set(overview("ws/b"), busyOverview(70, false));
+  assert.deepEqual(await said(), [], "a quota");
+  // (c) its automatic decisions change
+  t.set(overview("ws/b"), busyOverview(70, true));
+  assert.deepEqual(await said(), [], "its decisions");
+  // (d) one station's agents at work: that item alone, patched
+  t.set(overview("ws/a"), busyOverview(20, false, 2));
+  const out = await said();
+  assert.equal(out.length, 1);
+  assert.equal(out[0].delta.length, 1, JSON.stringify(out[0].delta));
+  assert.equal(out[0].delta[0].patch, "ws/a");
+  assert.equal(list.find((s: J) => s.station === "ws/a").overview.counts.running, 2);
+});
+
+test("a_station_whose_overview_this_core_cannot_read_says_so_in_its_row_as_on_its_page", async () => {
+  // What it cannot read is outside the row's four parts: the row says so all the same, as its page does.
+  const t = setup({ all: true });
+  const [list, page] = [ui(), ui()];
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  t.subscribe(2, { topic: "station", scope: "ws", station: "ws/a" });
+  await allUp(t);
+  t.set(overview("ws/a"), { ...busyOverview(20, false), processes: "a station newer than the app" });
+  await t.readAll([[list, 1], [page, 2]]);
+  const row = (list.value as J[]).find((s) => s.station === "ws/a");
+  const p: J = page.value;
+  assert.equal(row.summary, words("core-views.station.incompatible_short"));
+  assert.deepEqual([row.summary, row.line, row.problems], [p.summary, p.line, p.problems]);
+  assert.deepEqual(row.problems.map((x: J) => x.key), ["incompatible"]);
+  assert.equal(row.overview, undefined);
+  // Read again: as any other.
+  t.set(overview("ws/a"), busyOverview(20, false));
+  await t.readAll([[list, 1], [page, 2]]);
+  const again = (list.value as J[]).find((s) => s.station === "ws/a");
+  assert.deepEqual(again.problems, []);
+  assert.deepEqual(Object.keys(again.overview).sort(), ["counts", "disk", "drive", "viewer"]);
+});
+
+test("a_part_of_a_stations_overview_is_its_pages_and_changes_only_with_it", async () => {
+  const t = setup({ all: true });
+  const [page, part] = [ui(), ui()];
+  t.subscribe(1, { topic: "station", scope: "ws", station: "ws/a" });
+  t.subscribe(2, { topic: "stationPart", scope: "ws", station: "ws/a", part: "archiving" });
+  await allUp(t);
+  await t.readAll([[page, 1], [part, 2]]);
+  assert.ok(part.value !== null && part.value.days === 7);
+  assert.deepEqual(part.value, page.value.overview.archiving);
+  // Another part of its overview changes (a profile's quota): nothing on this one. (Its decisions are its own: its
+  // review's words are said in it.)
+  t.set(overview("ws/a"), busyOverview(70, false));
+  await t.host.time.pass(100);
+  assert.deepEqual(t.host.takeEmitted().filter(([, m]) => (m as J).id === 2), []);
+  // Not read, or a station it does not have: null.
+  const other = ui();
+  t.subscribe(3, { topic: "stationPart", scope: "ws", station: "ws/zzz", part: "profiles" });
+  await t.read(other, 3);
+  assert.equal(other.value, null);
+});
+
+test("a_new_chats_stations_are_their_rows_without_models_or_profiles", async () => {
+  // Its stations were the whole list's items (50-95 ms a value on a phone, 2026-11-10).
+  // (its page made by choose.ts, as a core plugs it in)
+  const t = setup({ all: true, owners: ({ host, store, data }) => [new Choose({ store, data, now: () => host.nowMs(), agent: () => null })] });
+  const u = ui();
+  t.subscribe(1, { topic: "newChat", scope: "ws" });
+  await allUp(t, ["a", "b"]);
+  await t.read(u, 1);
+  const v: J = u.value;
+  assert.ok(v !== undefined, JSON.stringify(u.error));
+  assert.deepEqual(v.stations.map((s: J) => s.station), ["ws/a", "ws/b"]);
+  for (const s of [...v.stations, v.station]) {
+    assert.equal(s.models, undefined, s.station);
+    assert.equal(s.overview.profiles, undefined, s.station);
+    assert.deepEqual(Object.keys(s.overview).sort(), ["counts", "disk", "drive", "viewer"]);
+  }
+  // what it runs is still the station's own
+  assert.equal(v.model?.model, "claude-opus-5-5");
+  assert.equal(v.waiting, false);
+});
+
+test("profiles_say_the_logins_each_up_station_offers_for_a_profile", async () => {
+  // The Profile place lists them with its profiles: it read them of every station's whole overview in the list.
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, { topic: "profiles", scope: "ws" });
   t.set(workspace(), stations(t.nowS()));
+  await t.read(u, 1);
+  const login = (runtime: string, loggedIn: boolean) => ({ runtime, installed: true, loggedIn, email: loggedIn ? "me@x.com" : null, plan: loggedIn ? "pro" : null, text: runtime });
   t.set(link("ws/a"), { state: "online" });
-  t.set(overview("ws/a"), overviewOf([], [profile("p", { model: "claude-opus-5-5", models: ["claude-opus-5-5"] })]));
-  await t.readAll([[full, 1], [lean, 2]]);
-  const of = (u: { value: unknown }) => (u.value as J[]).find((s) => s.station === "ws/a");
-  assert.ok((of(full).models as J[]).length > 0);
-  assert.deepEqual(of(lean).models, []);
-  const { models: _a, ...fullRest } = of(full);
-  const { models: _b, ...leanRest } = of(lean);
-  assert.deepEqual(leanRest, fullRest);
+  t.set(link("ws/b"), { state: "online" });
+  t.set(link("ws/c"), { state: "offline" });
+  t.set(overview("ws/a"), { ...overviewOf([], []), machineLogins: [login("codex", true), login("claude", false)] });
+  t.set(overview("ws/b"), overviewOf([], []));
+  t.set(overview("ws/c"), { ...overviewOf([], []), machineLogins: [login("codex", true)] });
+  await t.read(u, 1);
+  const v: J = u.value;
+  assert.deepEqual(v.machineLogins.map((m: J) => [m.station, m.stationName, m.logins.map((l: J) => [l.runtime, l.offered])]), [["ws/a", "alpha", [["codex", true]]]]);
+});
+
+test("connects_say_the_slack_apps_waiting_and_whether_the_first_step_is_a_profile", async () => {
+  const t = setup();
+  const [all, mine] = [ui(), ui()];
+  t.subscribe(1, { topic: "connects", scope: "ws" });
+  t.subscribe(2, { topic: "connects", scope: "ws", mine: true });
+  t.set(workspace(), stations(t.nowS()));
+  for (const st of ["ws/a", "ws/b", "ws/c"]) t.set(link(st), { state: "online" });
+  const app = (id: string) => ({ appId: id, name: id, teamId: "T1", team: null, created: 1, links: { settings: "s", install: "i", appToken: "a", oauth: "o" }, install: null, state: null, installed: false });
+  t.set(overview("ws/a"), { ...overviewOf([], []), slackApps: [app("A1"), app("A2")] });
+  t.set(overview("ws/b"), overviewOf([], []));
+  await t.readAll([[all, 1], [mine, 2]]);
+  // ws/c not read yet: not known to have none
+  assert.equal(all.value.noProfile, false);
+  t.set(overview("ws/c"), { ...overviewOf([], []), slackApps: [app("C1")] });
+  await t.readAll([[all, 1], [mine, 2]]);
+  for (const v of [all.value, mine.value]) {
+    assert.deepEqual(v.slackApps.map((w: J) => [w.station, w.stationName, w.app.appId]), [["ws/a", "alpha", "A1"], ["ws/a", "alpha", "A2"], ["ws/c", "gamma", "C1"]]);
+    assert.equal(v.noProfile, true);
+  }
+  t.set(overview("ws/b"), overviewOf([], [profile("p")]));
+  await t.readAll([[all, 1], [mine, 2]]);
+  assert.deepEqual([all.value.noProfile, mine.value.noProfile], [false, false]);
 });
 
 test("a_stopped_view_lets_its_topics_go", async () => {
@@ -1359,10 +1521,11 @@ test("a_held_topic_a_view_watches_goes_out_to_a_page_subscribing_later", async (
   assert.equal(page.value?.role, "owner");
 });
 
-test("stations_shows_each_station_with_its_models", async () => {
-  const t = setup();
+test("stations_whole_shows_each_station_with_its_models", async () => {
+  // (the core's own list, what a model's choice reads: as it is made, no shape between)
+  const t = setup({ all: true });
   const u = ui();
-  t.subscribe(1, { topic: "stations", scope: "ws" });
+  t.subscribe(1, { topic: "stationsWhole", scope: "ws" });
   t.set(workspace(), stations(t.nowS()));
   await t.read(u, 1);
   const quota = (windows: J[]) => ({ state: "ok", detail: null, checkedAt: 1, windows });
@@ -1384,7 +1547,7 @@ test("stations_shows_each_station_with_its_models", async () => {
   assert.ok(Math.abs(seen - v[0].lastSeen - 10) < 5);
   assert.equal(v[0].version, "0.4.0");
   assert.equal(v[0].online, true);
-  assert.deepEqual(v[0].link, { state: "error", message: "没有权限" });
+  assert.deepEqual(v[0].link, { state: "error", message: "没有权限", last: null });
   // Reached, if refused: not coming back.
   assert.equal(v[0].reconnecting, false);
   assert.deepEqual(v[0].overview.profiles.map((p: J) => p.id), ["p1", "p2", "p3", "p4", "p5", "p6"]);
@@ -1404,27 +1567,27 @@ test("stations_shows_each_station_with_its_models", async () => {
   assert.ok(gpt.spent.text.startsWith("额度已用完 · "));
   assert.deepEqual([gpt.name, gpt.ids], ["GPT-5", ["gpt-5", "openai/gpt-5"]]);
   assert.deepEqual(gpt.accounts.codex.map((a: J) => a.id), ["p1", "p6"]);
-  assert.deepEqual(plain(v[1]), { station: "ws/b", id: "b", name: "beta", online: false, reconnecting: false, lastSeen: v[1].lastSeen, link: { state: "offline" }, runtimes: [], models: [], profileGroups: [], profileStates: {}, betaOffered: false, joined: false, mine: false });
+  assert.deepEqual(plain(v[1]), { station: "ws/b", id: "b", name: "beta", online: false, reconnecting: false, lastSeen: v[1].lastSeen, link: { state: "offline" }, runtimes: [], models: [], profileGroups: [], profileStates: {}, betaOffered: false, mine: false });
   assert.ok(v[1].summary.startsWith("离线 · "));
-  assert.equal(v[2].lastSeen, undefined);
+  assert.equal(v[2].lastSeen, null);
 });
 
 test("the_beta_switch_follows_the_accounts_beta_at_once", async () => {
-  const t = setup();
+  const t = setup({ all: true });
   const watch = t.store.watch.bind(t.store);
   t.store.watch = (topic) => watch(topic, () => {});
   const u = ui();
-  t.subscribe(1, { topic: "stations", scope: "ws" });
+  t.subscribe(1, { topic: "station", scope: "ws", station: "ws/a" });
   t.set(workspace(), stations(t.nowS()));
   await t.read(u, 1);
   const o = overviewOf([], []);
   o.updates = [{ id: "station", name: "still.fail station", installed: true, version: "0.1.1", newer: false, updatable: true, state: "idle", channel: "stable" }];
   t.set(overview("ws/a"), o);
   await t.read(u, 1);
-  assert.equal(u.value[0].betaOffered, false);
+  assert.equal(u.value.betaOffered, false);
   t.data.put("me", "s1", { user: { beta: true } });
   await t.read(u, 1);
-  assert.equal(u.value[0].betaOffered, true);
+  assert.equal(u.value.betaOffered, true);
 });
 
 test("connects_lists_every_online_stations_connects", async () => {
@@ -1437,7 +1600,7 @@ test("connects_lists_every_online_stations_connects", async () => {
   sameTopics(t.started(), [workspace(), ...each("ws/a"), ...each("ws/b"), ...each("ws/c")]);
   t.set(link("ws/c"), { state: "offline" });
   const me = { id: "Me@x.com", email: "Me@x.com" };
-  assert.deepEqual(u.value as J, { me, items: [], wait: { reading: true, text: "正在从 3 台 station 读取", failing: [], empty: false } });
+  assert.deepEqual(u.value as J, { me, items: [], wait: { reading: true, text: "正在从 3 台 station 读取", failing: [], empty: false }, slackApps: [], noProfile: false });
   const c1 = { ...connect("c1", "one"), createdBy: { id: "me@x.com", name: "我" } };
   const c2 = connect("c2", "two");
   t.set(overview("ws/a"), overviewOf([c1, c2], []));

@@ -87,12 +87,13 @@ test "Home, then 设置 pressed and come in, then back: the bar's places held as
   assert_eq(
     soon,
     (
-      // (Home's bar: 文件's, Profile's, Station's; nothing a station is asked for or sampled)
-      ["sub workspace", "sub stations {\"drive\":true,\"lean\":true}", "sub profiles", "sub stations {\"lean\":true}"],
-      // (设置's own, then what only the bar held let go of, once: the rest 设置 reads as well)
-      ["sub connects {\"mine\":false}", "sub vaults", "unsub stations {\"drive\":true,\"lean\":true}"],
+      // (Home's bar: 文件's, Profile's, Station's, the stations' rows asked once for both; nothing a station is asked
+      // for or sampled)
+      ["sub workspace", "sub stations", "sub profiles"],
+      // (设置's own; what the bar held 设置 reads as well, none let go of)
+      ["sub connects {\"mine\":false}", "sub vaults"],
       // (the bar back with Home, then 设置's gone)
-      ["sub stations {\"drive\":true,\"lean\":true}", "unsub vaults", "unsub connects {\"mine\":false}"],
+      ["unsub vaults", "unsub connects {\"mine\":false}"],
     ),
   )
   assert_eq(late, soon)
@@ -100,7 +101,7 @@ test "Home, then 设置 pressed and come in, then back: the bar's places held as
 }
 
 ///|
-test "Home under 设置, then a page pushed over 设置 (安全) and back off it: nothing of the bar's places subscribed or let go of meanwhile (a slide not over Home is no cause of the bar's); then back to Home: subscribed again at that back, not once it is over" {
+test "Home under 设置, then a page pushed over 设置 (安全) and back off it: nothing of the bar's places subscribed or let go of meanwhile (a slide not over Home is no cause of the bar's); then back to Home: nothing asked again at that back (设置 held all the bar holds)" {
   let said : Array[String] = []
   let t = ahead_phone(place_core_soon_ms, said)
   let (x, y, w, h) = tab_named_at(t, "设置")
@@ -120,7 +121,8 @@ test "Home under 设置, then a page pushed over 设置 (安全) and back off it
   // (at the back itself, Home beside the page going: no frame of the slide run yet)
   let at_back = ahead_said(said[before_back:].to_array())
   t.run_for(@ui.move_most_ms)
-  assert_eq((over, at_back), ([], ["sub stations {\"drive\":true,\"lean\":true}"]))
+  // (设置 reads all the bar's places read, the stations' rows one ask for all: nothing to subscribe again at the back)
+  assert_eq((over, at_back), ([], []))
 }
 
 ///|
@@ -200,9 +202,6 @@ test "the other bar brought into view once: its places' own subscribed, what onl
   t.draw()
   t.run_for(place_core_soon_ms * 4.0)
   let now = ahead_said(said[before:].to_array())
-  assert_false(now.contains("unsub stations {\"lean\":true}") || now.contains("sub stations {\"lean\":true}"), msg="\{now}")
-  assert_eq(
-    now,
-    ["sub connects {\"mine\":false}", "sub vaults", "unsub workspace", "unsub stations {\"drive\":true,\"lean\":true}", "unsub profiles"],
-  )
+  assert_false(now.contains("unsub stations") || now.contains("sub stations"), msg="\{now}")
+  assert_eq(now, ["sub connects {\"mine\":false}", "sub vaults", "unsub workspace", "unsub profiles"])
 }

@@ -238,7 +238,7 @@ export class Choose implements Owner {
     this.#env.data.put(TABLE, `ws:${scope}:last`, id, false);
   }
 
-  /// The scope's stations up now; an error (null: not known yet; a string: why it failed).
+  /// The scope's stations up now, each its row (StationRow); an error (null: not known yet; a string: why it failed).
   #online(scope: string): [J[], boolean] | { error: string | null } {
     const v = this.#env.store.value({ topic: "stations", scope });
     if (v === undefined) return { error: null };
@@ -269,16 +269,20 @@ export class Choose implements Owner {
     // to another station up would start the chat where they did not choose. Only one never picked, or no longer the
     // workspace's, gives way to the first up.
     const held = this.#held(scope);
-    const station = structuredClone(held ?? online[0]);
+    const station = held ?? online[0];
     view.down = held !== undefined && held.online !== true;
     view.stations = view.down ? [...online, station] : online;
     if (station === undefined) return view;
     const id = typeof station.id === "string" ? station.id : "";
     const name = typeof station.name === "string" ? station.name : "";
-    const options = arr(station.models);
+    const addr = typeof station.station === "string" ? station.station : "";
+    // The page and the rows say the stations as a list does (StationRow); what it runs is worked out from the one it
+    // starts on alone: its page's overview, the models it serves this workspace (not every station's, by the minute).
+    const page: J = this.#env.store.get({ topic: "station", scope, station: addr });
+    const overview = isObject(get(page, "overview")) ? page.overview : null;
+    const options = overview !== null ? models(servingIn(this.#env.store.get({ topic: "overview", station: addr }), scope, station.joined === true), this.#env.now()) : [];
     const r = resolve(options, this.#choice(scope, id));
     view.frequent = frequentCombos(arr(this.#record(`ws:${scope}:frequent`)), options, r);
-    const overview = isObject(station.overview) ? station.overview : null;
     // A station this workspace joined runs its chats on the profiles open to it: with some, but
     // none open, one is turned on rather than added.
     const joined = station.joined === true;
@@ -288,7 +292,7 @@ export class Choose implements Owner {
     // No profile of its own, but another station of the workspace has models it could borrow: its model control
     // offers them (borrowed before the chat is made) rather than only adding a profile.
     const lends = overview !== null && profiles.length === 0 && !joined
-      && borrowable(this.#env.store.get({ topic: "stations", scope }), typeof station.station === "string" ? station.station : "", [], null, this.#env.now()).length > 0;
+      && borrowable(this.#env.store.get({ topic: "stationsWhole", scope }), addr, [], null, this.#env.now()).length > 0;
     const disabled = all.some((p) => get(p, "enabled") === false && profileServes(p, scope, joined));
     view.blocked = overview !== null && profiles.length === 0 ? (lends ? null : disabled ? "disabled" : joined && all.length > 0 ? "shared" : "profile") : overview !== null && options.length === 0 ? "models" : null;
     // This workspace's name: as it is held, else as an account's `/v1/me` lists it.
@@ -315,7 +319,6 @@ export class Choose implements Owner {
     view.profile = r.profile;
     view.efforts = r.efforts;
     view.accounts = r.accounts;
-    const addr = typeof station.station === "string" ? station.station : "";
     const pick = this.#pick({ topic: "pick", station: addr, of: "new" }, addr, "new");
     view.pick = pick !== undefined && "ok" in pick ? pick.ok : null;
     // The workspace's presets, every station's up now (each as it was read last), to pick from where the page's
@@ -541,7 +544,8 @@ export class Choose implements Owner {
   /// What a station's own options are, said where their accounts are, and the models the workspace's other stations
   /// could lend it after them (of `runtime` alone where it cannot change).
   #withWorkspace(station: string, own: J[], runtime: string | null): J[] {
-    const stations = this.#env.store.get({ topic: "stations", scope: ofAddress(station) });
+    // (every station's models: the core's own whole list, views.ts `stationsWhole`)
+    const stations = this.#env.store.get({ topic: "stationsWhole", scope: ofAddress(station) });
     const overview = this.#env.store.get({ topic: "overview", station });
     return [...sourced(own, overview, stations), ...borrowable(stations, station, own, runtime, this.#env.now())];
   }
@@ -819,8 +823,8 @@ export class Choose implements Owner {
     const kept = this.#record(`ws:${scope}:liked`);
     if (kept !== undefined) return arr(kept).filter((k): k is string => typeof k === "string");
     const out: string[] = [];
-    // (the control's own station's overview first, then the workspace's others as `stations` has them)
-    const overviews = [station !== null ? this.#env.store.get({ topic: "overview", station }) : undefined, ...arr(this.#env.store.get({ topic: "stations", scope })).map((s) => get(s, "overview"))];
+    // (the control's own station's overview first, then the workspace's others as `stationsWhole` has them)
+    const overviews = [station !== null ? this.#env.store.get({ topic: "overview", station }) : undefined, ...arr(this.#env.store.get({ topic: "stationsWhole", scope })).map((s) => get(s, "overview"))];
     for (const ov of overviews) {
       for (const p of arr(get(ov, "profiles"))) {
         // (a station of before `named`: what it ran was what was ticked on)

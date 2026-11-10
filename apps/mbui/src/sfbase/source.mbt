@@ -25,6 +25,13 @@ pub fn TopicState::snapshot(self : TopicState) -> Topic {
 }
 
 ///|
+/// Whether the value is what the core last said before it was let go of (`lasting`, shown again at once while its
+/// answer comes), not its answer now: its version is below every core's (LastSaid).
+pub fn TopicState::kept(self : TopicState) -> Bool {
+  self.version < -1
+}
+
+///|
 /// A legacy topic read leaves by name; an owned read releases only the supplied, independently owned reader.
 pub(all) enum TopicLeave {
   Legacy
@@ -196,7 +203,7 @@ fn read_topic_state(src : Source, name : String, params : Map[String, Json]) -> 
     }
   }
   // (a view's own source reads through the one it is of, which keeps them: topic_scope none)
-  if src.topic_scope is None && lasting.contains(name) && !params.contains("q") && !params.contains("brief") && (src.reads_ahead)() {
+  if src.topic_scope is None && lasting.contains(name) && !params.contains("q") && (src.reads_ahead)() {
     let key = name + "\u{1}" + Json::object(params).stringify()
     match (topic.value, topic.error) {
       (Some(value), _) => last_put(src, key, value)
@@ -218,8 +225,9 @@ fn read_topic_state(src : Source, name : String, params : Map[String, Json]) -> 
 /// The lists a place of the bar or the rail opens on: what the core last said of each is kept (last_said) and shown at
 /// once when it is asked again, until its answer comes. A place left lets go of what it read, and come back to drew
 /// its bones until the core answered across its thread (the user, 2026-11-10). Lists read only: nothing typed for
-/// (`q`), nothing written in (a form, a draft), no chat, nor the stations as a chat names its own (`brief`: what
-/// changed while nothing read it is never shown as it was, core_signal_wbtest.mbt).
+/// (`q`), nothing written in (a form, a draft), no chat. The stations' rows are one ask for every list, a chat's name of
+/// its station too, which takes no kept value (station_marks: what changed while nothing read it is never shown as it
+/// was, core_signal_wbtest.mbt).
 // kept across runs: a value (nothing of it changes)
 let lasting : Array[String] = ["workspace", "stations", "stationNet", "profiles", "connects", "vaults", "usage", "archive"]
 

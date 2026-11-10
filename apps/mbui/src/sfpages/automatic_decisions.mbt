@@ -161,7 +161,8 @@ pub fn completion_node(
               None => None
             }
           }
-          let view = fn() { field(field(s(), "overview"), "automaticDecisions") }
+          // (its rule, that part of its overview alone, asked by its own section)
+          let view = fn() { @settings.station_part(core, here(), station, "automaticDecisions") }
           @sf.section_node(b, fn() { text(s(), "name") }, fn(sec) {
             sec.pick(
               fn() {
@@ -169,7 +170,7 @@ pub fn completion_node(
                   ""
                 } else if !flag(s(), "online") {
                   "web-pages.automaticDecisions.offlineNote"
-                } else if !(field(s(), "overview") is Some(Object(_))) {
+                } else if !(field(s(), "overview") is Some(Object(_))) || view() is None {
                   "common.connecting"
                 } else {
                   "web-pages.automaticDecisions.upgrade"

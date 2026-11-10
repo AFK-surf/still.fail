@@ -1057,6 +1057,18 @@ test "wide: Station's page picked in one workspace: in another, that one's first
               }
             _ => t
           }
+        // (its page, the first's first station's as it is renamed)
+        ("station", Some(String("ws2"))) =>
+          match base.topic(name, { "scope": Json::string("ws1"), "station": Json::string("ws1/st1") }).get().value {
+            Some(Object(m)) => {
+              let s = Map::from_iter(m.iter())
+              s["station"] = Json::string("ws2/st9")
+              s["id"] = Json::string("st9")
+              s["name"] = Json::string("家里的 mini")
+              { ..t, value: Some(Json::object(s)) }
+            }
+            _ => t
+          }
         _ => t
       }
     },

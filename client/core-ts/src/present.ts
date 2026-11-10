@@ -4,7 +4,7 @@ import { conform, type Ty } from "./conform.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import { authorNameOf } from "./entries.ts";
-import type { Topic } from "./protocol.ts";
+import { STATION_PARTS, type Topic } from "./protocol.ts";
 import * as brand from "./brand.ts";
 import * as decisions from "./decisions.ts";
 import * as drive from "./drive.ts";
@@ -206,7 +206,11 @@ export function ticks(topic: Topic): boolean {
 /// it does not allow is an error naming the field.
 /// A topic's shape; undefined for one that goes out as it is.
 export function shapeOf(topic: Topic): Ty | undefined {
-  if (topic.topic === "stations" && topic.brief === true) return { vec: "StationBrief" };
+  // One part of a station's overview: that field's own shape in Overview, null while there is none.
+  if (topic.topic === "stationPart") {
+    const ty = typeof topic.part === "string" && STATION_PARTS.includes(topic.part) ? fieldOf("Overview", topic.part) : undefined;
+    return ty === undefined ? undefined : typeof ty === "object" && "opt" in ty ? ty : { opt: ty };
+  }
   return TOPIC_SHAPES[topic.topic];
 }
 
@@ -226,7 +230,8 @@ export function fieldOf(ty: Ty, field: string): Ty | undefined {
 
 /// An item of a keyed list as `decorate` would make it inside its whole (output.ts).
 export function decorateItem(topic: Topic, item: unknown, c: Clock): unknown {
-  if (!ticks(topic)) return item;
+  // (a list's station rows say their times in words themselves, views.ts: none put in to be dropped by their shape)
+  if (!ticks(topic) || topic.topic === "stations") return item;
   return times(topic.topic === "sessions" ? session(item as J) : item, c);
 }
 

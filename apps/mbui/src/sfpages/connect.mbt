@@ -404,21 +404,20 @@ fn cd_run_node(b : @view.View, src : Source, core : Core, here : () -> Here, sta
   let cv = fn() { field(item(), "connect") }
   let id = @signals.untracked(fn() { text(cv(), "id") })
   let changes = fn() { flag(item(), "runtimeChanges") }
-  // the models its station can run, each with the runtimes it runs on (the core's station view)
-  let models = fn() {
+  // whether its station runs a model on its runtime (on any, where its runtime may change): the runtimes its page says
+  // it runs, each with its models (the core's `station`)
+  let runs_none = fn() {
     let runtime = text(field(cv(), "bind"), "runtime")
-    let sv = match @settings.stations_with_models(core, here()).value {
-      Some(Array(a)) => a.iter().find_first(fn(s) { text(Some(s), "station") == station })
-      _ => None
-    }
-    items(sv, "models").filter(fn(m) { changes() || strings(Some(m), "runtimes").contains(runtime) })
+    !items(@settings.station_of(core, here(), station), "runtimes")
+    .iter()
+    .any(fn(r) { (changes() || text(Some(r), "runtime") == runtime) && strings(Some(r), "models").length() > 0 })
   }
   let bind_on = [("station", station), ("connect", id)]
   let binding = fn() { is_doing(core, ["connect.bindSession"], bind_on) }
   @sf.section_node(b, fn() { @sf.t("web-pages.connect.run") }, fn(sec) {
     @sf.group_node(sec, fn(g) {
       // its model: picked here, or none its station runs for its runtime (to the station's profiles)
-      g.pick(fn() { models().length() == 0 }, fn(p, none) {
+      g.pick(runs_none, fn(p, none) {
         if none {
           @sf.link_row_node(p, fn() { @sf.t("web-pages.profiles.models") }, fn() { (core.push)(Profiles(station)) }, note=fn() {
             @sf.t("web-pages.connect.noModelsFor", args=[("runtime", text(cv(), "runtimeText"))])

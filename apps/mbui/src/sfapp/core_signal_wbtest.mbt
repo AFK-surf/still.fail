@@ -982,7 +982,7 @@ test "reopening a chat reads the current station and follows later updates" {
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = fixture_app("home")
-  let params : Map[String, Json] = { "scope": "ws1", "brief": true }
+  let params : Map[String, Json] = { "scope": "ws1" }
   let src : Source = {
     ..base,
     topic_read: fn(name, p) {
@@ -1809,7 +1809,7 @@ test "a chat after closing the switcher reads station changes made in the gap" {
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = @sffixture.fixture("home")
-  let params : Map[String, Json] = { "scope": "ws1", "brief": true }
+  let params : Map[String, Json] = { "scope": "ws1" }
   let src : Source = {
     ..base,
     topic_read: fn(name, p) {
@@ -1822,7 +1822,7 @@ test "a chat after closing the switcher reads station changes made in the gap" {
       if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
       if name == "stations" { client.leave_topic(name, params=p) } else { (base.leave)(name, p, @sfbase.TopicLeave::Legacy) } },
     release: fn(name, p) { if name == "stations" { client.release_topic(name, params=p) } else { (base.release)(name, p) } },
-    // (as a device's core: the places' lists kept as last said, never the stations a chat names its own by)
+    // (as a device's core: the places' lists kept as last said, which the stations a chat names its own by never take)
     reads_ahead: fn() { true },
     asks_devices: fn() { true },
   }

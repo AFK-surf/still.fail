@@ -279,8 +279,9 @@ test "a station with many profiles can search within one kind" {
       topic_read: fn(name, params) {
         let read = base.topic(name, params).get().snapshot()
         match (name, read.value) {
-          ("stations", Some(Array(stations))) => {
-            let shaped = stations.map(fn(station) {
+          // (its page, whole: the station's own ask)
+          ("station", Some(station)) => {
+            let shaped = {
               match station {
                 Object(s) if text(Some(station), "station") == "ws1/st1" => {
                   let copy = s.copy()
@@ -315,8 +316,8 @@ test "a station with many profiles can search within one kind" {
                 }
                 _ => station
               }
-            })
-            { ..read, value: Some(Json::array(shaped)) }
+            }
+            { ..read, value: Some(shaped) }
           }
           _ => read
         }

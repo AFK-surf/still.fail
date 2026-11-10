@@ -17,3 +17,20 @@ pub fn switches_off(trace : String) -> Array[String] {
   }
   @sfcore.trace_switches.filter(fn(name) { env.get(name) != Some("1") })
 }
+
+///|
+/// Whether the run of replay `r` had switch `name` on (one of sfcore's trace_switches), its trace's head with what a
+/// test adds (`env`, as its Tester is started with both): what is told the replay before its Tester begins
+/// (@sfcore.trace_switch reads the Tester's).
+fn switch_was_on(r : @core.Replay, env : Array[(String, String)], name : String) -> Bool {
+  if !@sfcore.trace_switches.contains(name) {
+    abort("switch_was_on: \{name} is not one of sfcore's trace_switches")
+  }
+  let mut on = false
+  for kv in r.env() + env {
+    if kv.0 == name {
+      on = kv.1 == "1"
+    }
+  }
+  on
+}

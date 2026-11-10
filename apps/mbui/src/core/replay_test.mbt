@@ -531,3 +531,92 @@ test "the changelog asked for its news alone is answered by an older tape's whol
   assert_eq(r.fuzzy().length(), 0)
   assert_eq(r.diverged(), [])
 }
+
+///|
+/// A run from before the stations' rows: it asked them brief (a chat naming its station), then whole (a list), letting
+/// the brief go, then with a drive only (the files), between its other asks; values and a delta came for them.
+let whole_stations : String =
+  #|{"out":{"id":1,"subscribe":{"topic":"accounts"},"keyed":true}}
+  #|{"in":{"id":1,"value":{"a":1}},"w":10}
+  #|{"out":{"id":2,"subscribe":{"topic":"stations","scope":"w","brief":true},"keyed":true}}
+  #|{"in":{"id":2,"value":[{"station":"w/a","name":"A","online":true}]},"w":20}
+  #|{"out":{"id":3,"call":"chat.send","params":{"text":"hi"}}}
+  #|{"in":{"id":3,"ok":{}},"w":30}
+  #|{"out":{"id":4,"subscribe":{"topic":"stations","scope":"w"},"keyed":true}}
+  #|{"out":{"id":2,"unsubscribe":true}}
+  #|{"in":{"id":4,"value":[{"station":"w/a","name":"A","online":true,"overview":{"profiles":[]}}]},"w":40}
+  #|{"in":{"id":4,"delta":[{"path":[0,"name"],"set":"A2"}]},"w":50}
+  #|{"out":{"id":5,"subscribe":{"topic":"stations","scope":"w","drive":true},"keyed":true}}
+  #|{"in":{"id":5,"value":[]},"w":60}
+  #|{"out":{"id":4,"unsubscribe":true}}
+  #|{"out":{"id":5,"unsubscribe":true}}
+
+///|
+test "a run from before the stations' rows: its stations the replay's own, the app's ask given the richest so far" {
+  let r = @core.Replay::parse(whole_stations)
+  r.keep_stations()
+  let c = r.client()
+  // (the run's stations and their unsubscriptions made from the start: only its other asks are to be made again)
+  assert_eq(r.unmade().length(), 2)
+  let accounts = c.subscribe("accounts")
+  let p : Map[String, Json] = { "scope": "w" }
+  // asked before any came: given the brief, as it comes; then the call holds back what came after it in the run
+  let before = c.subscribe("stations", params=p)
+  assert_eq(r.deliver(), 2)
+  assert_eq(accounts.value.unwrap().stringify(), "{\"a\":1}")
+  assert_eq(before.value.unwrap().stringify(), "[{\"station\":\"w/a\",\"name\":\"A\",\"online\":true}]")
+  assert_eq(r.waiting(), Some("{\"id\":3,\"call\":\"chat.send\",\"params\":{\"text\":\"hi\"}}"))
+  c.call("chat.send", params={ "text": "hi" }, on_done=fn(_) {  }) |> ignore
+  // the answer, then the whole (richer than the brief): given whole
+  assert_eq(r.deliver(at_most=2), 2)
+  assert_eq(
+    before.value.unwrap().stringify(),
+    "[{\"station\":\"w/a\",\"name\":\"A\",\"online\":true,\"overview\":{\"profiles\":[]}}]",
+  )
+  c.unsubscribe(before)
+  // asked between: given the whole at once, and again as its delta comes
+  let between = c.subscribe("stations", params=p)
+  assert_eq(r.deliver(at_most=1), 1)
+  assert_eq(
+    between.value.unwrap().stringify(),
+    "[{\"station\":\"w/a\",\"name\":\"A2\",\"online\":true,\"overview\":{\"profiles\":[]}}]",
+  )
+  assert_eq(between.version, 2)
+  // with a drive only, poorer than the whole: nothing changes, nothing is given
+  assert_eq(r.deliver(), 1)
+  assert_eq(between.version, 2)
+  c.unsubscribe(between)
+  // asked after: the whole as it stands
+  let after = c.subscribe("stations", params=p)
+  assert_eq(r.deliver(), 0)
+  assert_eq(after.value.unwrap().stringify(), between.value.unwrap().stringify())
+  c.unsubscribe(after)
+  assert_eq(r.left(), 0)
+  assert_eq(r.unmade(), [])
+  assert_eq(r.diverged(), [])
+  assert_eq(r.fuzzy(), [])
+}
+
+///|
+test "a run with the stations' rows: its stations matched as any topic, a whole one never given for a brief" {
+  let r = @core.Replay::parse(
+    #|{"out":{"id":2,"subscribe":{"topic":"stations","scope":"w","brief":true},"keyed":true}}
+    #|{"in":{"id":2,"value":[{"station":"w/a"}]},"w":20}
+    #|{"out":{"id":4,"subscribe":{"topic":"station","scope":"w","station":"w/a"},"keyed":true}}
+    #|{"in":{"id":4,"value":{"station":"w/a"}},"w":30}
+  )
+  let c = r.client()
+  // asked as the run asked it: matched, answered
+  let one = c.subscribe("station", params={ "scope": "w", "station": "w/a" })
+  // another way of asking the stations than the run's: the run's next of its name, said
+  let rows = c.subscribe("stations", params={ "scope": "w" })
+  assert_eq(r.fuzzy().length(), 1)
+  assert_true(r.fuzzy()[0].contains("\"scope\":\"w\"}"))
+  assert_eq(r.deliver(), 2)
+  assert_eq(one.value.unwrap().stringify(), "{\"station\":\"w/a\"}")
+  assert_eq(rows.value.unwrap().stringify(), "[{\"station\":\"w/a\"}]")
+  // let go of and asked again, neither of which the run did: no copy of the run's given, where it went apart
+  c.unsubscribe(rows)
+  c.subscribe("stations", params={ "scope": "w", "x": true }) |> ignore
+  assert_eq(r.diverged().length(), 2)
+}

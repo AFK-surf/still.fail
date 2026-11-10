@@ -3,6 +3,7 @@ import {
   "moonbitlang/core/double",
   "stillfail/core",
   "stillfail/sfapp",
+  "stillfail/sfapp/settings",
   "stillfail/sf",
   "stillfail/sfcore",
   "stillfail/sfbase",
@@ -15,9 +16,8 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/env",
   "mbui/runfs",
+  "mbui/signals",
 }
-
-import { "mbui/signals" } for "wbtest"
 
 options(
   targets: {

@@ -105,11 +105,181 @@ fn replay_topic_params(name : String, params : Map[String, Json]) -> Map[String,
 }
 
 ///|
+/// Whether this Tester's run asked the stations whole (its trace's head without MBUI_STATION_ROWS): its replay keeps the
+/// run's `stations` itself (@core.Replay::keep_stations, Flow::start) and gives the app's `stations {scope}` the whole
+/// stations it has, out of which the app's asks of them are read here (stations_made), as the core makes them.
+fn stations_whole() -> Bool {
+  !@sfcore.trace_switch("MBUI_STATION_ROWS")
+}
+
+///|
+/// The app's topics read out of a scope's stations whole in such a run: the rows, one station, a part of one.
+fn of_stations(name : String) -> Bool {
+  name == "stations" || name == "station" || name == "stationPart"
+}
+
+///|
+/// The app's topics the core works a field of out of the stations (`connects`' Slack apps and `noProfile`, `profiles`'
+/// machine logins), which such a run's core had not: the run's value with it added.
+fn with_stations(name : String) -> Bool {
+  name == "connects" || name == "profiles"
+}
+
+///|
+/// The stations followed for topic `name` with `params` (of_stations, with_stations): `stations {scope}`.
+fn stations_params(params : Map[String, Json]) -> Map[String, Json] {
+  match params.get("scope") {
+    Some(s) => { "scope": s }
+    None => {}
+  }
+}
+
+///|
+/// Who holds a scope's stations without a graph (a read outside one: the client's `manual` hold, @core's Sub), by the
+/// app's topic (its wire key): let go of once the last of them leaves, as several of the app's topics are read out of
+/// one followed `stations` (a graph's readers are counted by the client itself, by its signal's watchers).
+// kept across runs: emptied as a Tester begins (on_reset)
+let stations_holders : Map[String, Map[String, Bool]] = {}
+
+///|
+/// A scope's stations followed for the app's topic `name` with `params` (a hold of it counted, stations_holders).
+fn follow_stations(name : String, params : Map[String, Json]) -> @core.Sub {
+  let p = stations_params(params)
+  if @signals.active_sub() is None {
+    let scope = @sfbase.wire_topic_key("stations", p)
+    let held = match stations_holders.get(scope) {
+      Some(h) => h
+      None => {
+        let h : Map[String, Bool] = {}
+        stations_holders[scope] = h
+        h
+      }
+    }
+    held[@sfbase.wire_topic_key(name, params)] = true
+  }
+  @core.follow_topic("stations", params=p)
+}
+
+///|
+/// The app's topic `name` with `params`, held outside a graph, left: its scope's stations left once none holds them so.
+fn leave_stations(name : String, params : Map[String, Json]) -> Unit {
+  let p = stations_params(params)
+  let scope = @sfbase.wire_topic_key("stations", p)
+  match stations_holders.get(scope) {
+    Some(held) => {
+      held.remove(@sfbase.wire_topic_key(name, params))
+      if held.is_empty() {
+        stations_holders.remove(scope)
+        @core.leave_topic("stations", params=p)
+      }
+    }
+    None => @core.leave_topic("stations", params=p)
+  }
+}
+
+///|
+/// A value read out of the stations (stations_made): what it was made of (the stations, the run's own topic), and it.
+priv struct Made {
+  stations : Json?
+  own : Json?
+  topic : @sfapp.Topic
+}
+
+///|
+/// Each made value by the app's topic (its wire key): made again only when what it is made of is another value, so a
+/// page reading it each frame gets the same object while nothing changed (its version too).
+// kept across runs: emptied as a Tester begins (on_reset)
+let made : Map[String, Made] = {}
+
+///|
+/// The versions given made values: one more for each made anew, so none is given twice.
+// kept across runs: only counted on
+let made_count : Ref[Int] = Ref(0)
+
+///|
+fn same_json(a : Json?, b : Json?) -> Bool {
+  match (a, b) {
+    (None, None) => true
+    (Some(x), Some(y)) => physical_equal(x, y)
+    _ => false
+  }
+}
+
+///|
+/// The app's topic `name` with `params` as the core makes it of the scope's stations whole (`stations`, in such a run)
+/// and, for with_stations, of the run's own value (`own`): the settings' fixture_stations.mbt, as the made-up cores do.
+fn stations_made(name : String, params : Map[String, Json], stations : @core.Sub, own : @core.Sub?) -> @sfapp.Topic {
+  let key = @sfbase.wire_topic_key(name, params)
+  let own_value = match own {
+    Some(s) => s.value
+    None => None
+  }
+  match made.get(key) {
+    Some(m) if same_json(m.stations, stations.value) && same_json(m.own, own_value) => {
+      let error = match own {
+        Some(s) => s.error
+        None => stations.error
+      }
+      return { ..m.topic, error }
+    }
+    _ => ()
+  }
+  let p = Some(Json::object(params))
+  let value = match name {
+    "stations" =>
+      match stations.value {
+        Some(Array(a)) => Some(Json::array(a.map(@settings.station_row)))
+        v => v
+      }
+    "station" => @settings.station_said(stations.value, @settings.text(p, "station"), "")
+    "stationPart" => @settings.station_said(stations.value, @settings.text(p, "station"), @settings.text(p, "part"))
+    "connects" =>
+      match own_value {
+        Some(Object(o)) if !o.contains("slackApps") => @settings.connects_of_stations(own_value, stations.value)
+        v => v
+      }
+    "profiles" =>
+      match own_value {
+        Some(Object(o)) if !o.contains("machineLogins") => @settings.profiles_of_stations(own_value, stations.value)
+        v => v
+      }
+    _ => None
+  }
+  let error = match own {
+    Some(s) => s.error
+    None => stations.error
+  }
+  let version = if value is None {
+    0
+  } else {
+    made_count.val += 1
+    made_count.val
+  }
+  let topic : @sfapp.Topic = { value, error, version }
+  made[key] = { stations: stations.value, own: own_value, topic }
+  topic
+}
+
+///|
+fn init {
+  @ui.on_reset(fn() {
+    stations_holders.clear()
+    made.clear()
+  })
+}
+
+///|
 /// The app's source over @core, as src/stillfail's (without its logs and its read-only runs).
 pub fn source() -> @sfapp.Source {
   {
     topic_read: fn(name, params) {
+      if stations_whole() && of_stations(name) {
+        return stations_made(name, params, follow_stations(name, params), None)
+      }
       let s = @core.follow_topic(name, params=replay_topic_params(name, params))
+      if stations_whole() && with_stations(name) {
+        return stations_made(name, params, follow_stations(name, params), Some(s))
+      }
       let value = if name == "prefs" { with_rail_view(s.value) } else { s.value }
       { value, error: s.error, version: s.version }
     },
@@ -117,8 +287,20 @@ pub fn source() -> @sfapp.Source {
     topic_scope: None,
     topic_alive: fn() { true },
     topic_lease_own: None,
-    waits: fn(name, params) { @core.follow_topic(name, params=replay_topic_params(name, params)).waiting },
-    generation: fn(name, params) { @core.client.topic_generation(name, params=replay_topic_params(name, params)) },
+    waits: fn(name, params) {
+      if stations_whole() && of_stations(name) {
+        follow_stations(name, params).waiting
+      } else {
+        @core.follow_topic(name, params=replay_topic_params(name, params)).waiting
+      }
+    },
+    generation: fn(name, params) {
+      if stations_whole() && of_stations(name) {
+        @core.client.topic_generation("stations", params=stations_params(params))
+      } else {
+        @core.client.topic_generation(name, params=replay_topic_params(name, params))
+      }
+    },
     // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
     // (src/sfkept): tapes older than a call have none of it, and it is a pure function of what is asked, not made up
     // here. Any other ask the tape does not have still diverges; ⌘K's `commands.find` is the tape's (it says it in the
@@ -210,9 +392,30 @@ pub fn source() -> @sfapp.Source {
     now: fn() { @ui.wall_ms() },
     leave: fn(name, params, __reason) {
       if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      if stations_whole() && (of_stations(name) || with_stations(name)) {
+        leave_stations(name, params)
+        if of_stations(name) {
+          return
+        }
+      }
       @core.leave_topic(name, params=replay_topic_params(name, params)) },
-    release: fn(name, params) { @core.release_topic(name, params=replay_topic_params(name, params)) },
-    refresh: fn(name, params) { @core.refresh_topic(name, params=replay_topic_params(name, params)) },
+    release: fn(name, params) {
+      // (a graph's readers of the scope's stations counted by the client: it lets them go once none watches them)
+      if stations_whole() && (of_stations(name) || with_stations(name)) {
+        @core.release_topic("stations", params=stations_params(params))
+        if of_stations(name) {
+          return
+        }
+      }
+      @core.release_topic(name, params=replay_topic_params(name, params))
+    },
+    refresh: fn(name, params) {
+      if stations_whole() && of_stations(name) {
+        @core.refresh_topic("stations", params=stations_params(params))
+      } else {
+        @core.refresh_topic(name, params=replay_topic_params(name, params))
+      }
+    },
     read_only: false,
     // (a run's core is asked what the run asked: as its app did, which says so in its trace's head since it does)
     reads_ahead: fn() { @sfcore.trace_switch("MBUI_PLACES_BAR") },

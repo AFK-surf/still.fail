@@ -202,25 +202,6 @@ pub fn dv_arrange(src : Source, by? : String, down? : Bool, hidden? : Bool) -> U
 }
 
 ///|
-/// The workspace's stations with a drive (`stations {scope, drive: true, here?}`: this machine's, `here`, first), and
-/// why they could not be read.
-pub fn dv_drive_stations(src : Source, ws : String, here? : String = "") -> (Array[DvStation]?, String?) {
-  let params : Map[String, Json] = { "scope": Json::string(ws), "drive": Json::boolean(true), "lean": Json::boolean(true) }
-  if here != "" {
-    params["here"] = Json::string(here)
-  }
-  let t = src.topic("stations", params).get().snapshot()
-  let error = match t.error {
-    Some(e) => Some(text(Some(e), "message"))
-    None => None
-  }
-  match t.value {
-    Some(Array(a)) => (Some(a.map(dv_station)), error)
-    _ => (None, error)
-  }
-}
-
-///|
 /// A folder's entries as the phone's pages show them: in the device's order, hidden ones as it says (the core's, as a
 /// list of the phone's own place shows it); as the station lists them while the core has not said it (what is there
 /// shown at once, as a page shows what it holds); None only where the core has the place but not the folder.
