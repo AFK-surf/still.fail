@@ -78,10 +78,14 @@ fn sheet_node(
       let tall_held : @signals.Signal[Double?] = @signals.signal(None)
       // (closed with another in its place: drawn no more)
       let vanished = fn() { layer.leaving() && taken() }
+      // (how fast a finger had it going down as it let it go, closing it: what it sinks away at from there; none, from
+      // rest)
+      let let_go_speed : Ref[Double?] = Ref(None)
       layer.reacts(fn() { layer.leaving() }, fn(going) {
         if going {
           dim.go(layer, 0.0, @kit.sheet_scrim_ms, ease=Out)
-          below.go(layer, 1.0)
+          below.go(layer, 1.0, speed?=let_go_speed.val)
+          let_go_speed.val = None
         } else {
           dim.go(layer, 1.0, @kit.sheet_scrim_ms, ease=Out)
           below.go(layer, 0.0)
@@ -219,7 +223,6 @@ fn sheet_node(
             None => (0.0, back.shown(layer) - raised)
           }
         }))
-        .says(By(fn() { Some(@view.said(Dialog, label=now().0)) }))
         // (a press on it its own: not over it)
         .presses(Is(true))
         .on_press(fn() {  })
@@ -240,10 +243,20 @@ fn sheet_node(
           guard from_y.val >= 0.0 else { return }
           let dy = d.wy - from_y.val
           let total = layer.window().1
+          // (let go: on from the speed it went at under the finger, whatever it goes to then, as the host's sheet hands
+          // the finger's to its spring; points a millisecond down)
+          let finger = if d.kind == Up { d.vy() } else { 0.0 }
           if x.grows {
             let top = total * sheet_most
             let to = dmax(from_h.val - dy, sheet_least_h)
             let now = sheet_stretched(to, top, total - top)
+            // (as fast as the finger where it follows it; drawn past its top, as much slower as it gives way; held at its
+            // least, still)
+            let speed = if from_h.val - dy < sheet_least_h {
+              0.0
+            } else {
+              finger * sheet_stretched_slope(to, top, total - top)
+            }
             match d.kind {
               Down => ()
               Moved => tall_held.set(Some(now))
@@ -259,15 +272,20 @@ fn sheet_node(
                     tall.go_by(sheet, if at > (lo + hi) / 2.0 * total { lo * total } else { hi * total }, @motion.move())
                   }
                 } else if at / total < sheet_close_below {
+                  // (sinking away from where it is, as fast as it was going down)
+                  let_go_speed.val = Some(dmax(0.0, speed))
                   cancel()
                 } else {
                   let f = sheet_nearest(sheet_grows_to, at / total)
-                  tall.go_by(sheet, f * total, @motion.move())
+                  // (its height, up: its speed the other way, a second's)
+                  tall.go_by(sheet, f * total, @motion.move(), velocity=-speed * 1000.0)
                 }
               }
             }
           } else {
             let down = dmax(0.0, dy)
+            // (as fast as the finger, down; held at its place, still)
+            let speed = if dy > 0.0 { finger } else { 0.0 }
             match d.kind {
               Down => held.set(Some(0.0))
               Moved => held.set(Some(down))
@@ -275,10 +293,12 @@ fn sheet_node(
                 held.set(None)
                 back.put(down)
                 if d.kind == Up && down > sheet_drag_close {
-                  // (closed from where it is: it sinks away from there)
+                  // (closed from where it is: it sinks away from there, as fast as it was going down)
+                  let_go_speed.val = Some(dmax(0.0, speed))
                   cancel()
                 } else {
-                  back.go_by(layer, 0.0, @motion.move())
+                  // (back from its speed, a second's)
+                  back.go_by(layer, 0.0, @motion.move(), velocity=speed * 1000.0)
                 }
               }
             }
@@ -288,118 +308,130 @@ fn sheet_node(
           }
         })
         |> ignore
-        // (the grabber: 38 × 5 in the line's colour, 12 over it and 8 under)
-        sheet.box(fn(g) {
-          style_node(g, fn() { sheet_grab_outer })
-          g.box(fn(i) {
-            style_node(i, fn() { sheet_grab_inner })
-            i.box(fn(b) { style_node(b, fn() { sheet_grabber.then(@ui.style(bg=Data(theme().p.line))) }) }) |> ignore
-          })
+        // all it shows, in the window: what it says it is to a screen reader, a dialog as tall as it stands there (as the
+        // host's sheet's: its foot's room past the window's, `under`, not of it)
+        sheet.box(fn(body) {
+          body
+          .grow(Is(1.0))
+          .shrink(Is(1.0))
+          .min_height(Is(Some(0.0)))
+          .says(By(fn() { Some(@view.said(Dialog, label=now().0)) }))
           |> ignore
-        })
-        |> ignore
-        // (its title, none where what it holds heads itself (`heads_itself`): its own title's row there; one as it is now
-        // (`live`), there while it has one)
-        let title_row = fn(r : @view.View) {
-          style_node(r, fn() { sheet_title_row })
-          words_node(r, fn() { now().0 }, fn() { sheet_title_words }) |> ignore
-        }
-        // (a step further in from a panel: its back key before its title, as a step's head has it (step_head), the row
-        // no taller for it)
-        let step_row = fn(r : @view.View) {
-          style_node(r, fn() { sheet_title_row.then(step_head_gap) })
-          r.box(fn(k) {
-            style_node(k, fn() {
-              in_line(step_back_side - @ui.tree_theme().text_size(Title).1).then(@ui.style(ml=room(-step_back_in)))
-            })
-            icon_button_node(k, "chevron-left", fn() { t("common.back") }, go_back, size=step_back_side) |> ignore
-          })
-          |> ignore
-          words_node(r, fn() { now().0 }, fn() { sheet_title_words }) |> ignore
-        }
-        if step_back is Some(_) && !x.heads_itself {
-          sheet.box(step_row) |> ignore
-        } else if x.heads_itself {
-          ()
-        } else if x.live is Some(_) {
-          sheet.show(fn() { now().0 != "" }, title_row)
-        } else if x.title != "" {
-          sheet.box(title_row) |> ignore
-        }
-        // (what it says, under its title, as it is now)
-        let said = fn(s : @view.View) {
-          s.show(fn() { now().2 != "" }, fn(w) {
-            style_node(w, fn() { sheet_words_at })
-            words_node(w, fn() { now().2 }, fn() { sheet_lead }) |> ignore
-          })
-        }
-        // what it holds, scrolling where the sheet is short of room for it; a share of the window tall, filling the room
-        // it leaves, laid out in it (sheet_capped_room: its words as far in as a sheet's, sheet_step's)
-        if capped {
-          sheet.box(fn(b) {
-            b.grow(Is(1.0)).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-            said(b)
-            b.box(fn(col) {
-              style_node(col, fn() { sheet_capped_room })
-              col.min_height(Is(Some(0.0))) |> ignore
-              // (laid out as the host's sheet lays out a capped panel's body: narrow, its words a sheet's own in, sheet_step's)
-              panel_in_lend(col, Narrow, sheet_panel_sides)
-              (n.body)(col, close)
+          // (the grabber: 38 × 5 in the line's colour, 12 over it and 8 under)
+          body.box(fn(g) {
+            style_node(g, fn() { sheet_grab_outer })
+            g.box(fn(i) {
+              style_node(i, fn() { sheet_grab_inner })
+              i.box(fn(b) { style_node(b, fn() { sheet_grabber.then(@ui.style(bg=Data(theme().p.line))) }) }) |> ignore
             })
             |> ignore
           })
           |> ignore
-        } else {
-        sheet.box(fn(b) {
-          let scroll = @view.Scroll::new()
-          b.shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-          b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
-            said(s)
-            // (in from its sides as the host's sheet has a panel's: opened by a press as far in as a pick's rows,
-            // else as its words)
-            let room = if from != Unanchored {
-              if n.foot is None { sheet_held } else { sheet_held_sides }
-            } else {
-              sheet_panel
-            }
-            s.box(fn(col) {
-              style_node(col, fn() { room })
-              // (laid out as the host's sheet lays out a panel's body, sheet_step's: narrow; its words what a sheet's rows
-              // leave of its words' in one a press opened, its rows out to its words' in one opened by nothing)
-              let pressed = from != Unanchored
-              panel_in_lend(
-                col,
-                Narrow,
-                if pressed { sheet_panel_sides - sheet_row_sides } else { 0.0 },
-                rows_out=dmax(0.0, (if pressed { sheet_row_sides } else { sheet_panel_sides }) - panel_card_in),
-              )
-              (n.body)(col, close)
-            })
-            |> ignore
-          })
-          .clips(By(fn() { scroll.goes() }))
-          .bounds_input(By(fn() { scroll.goes() }))
-          |> ignore
-        })
-        |> ignore
-        }
-        match n.foot {
-          Some(f) => {
-            if x.ruled {
-              sheet.box(fn(r) { style_node(r, fn() { sheet_foot_rule }) }) |> ignore
-            }
-            sheet.box(fn(row) {
-              style_node(row, fn() { sheet_foot_at })
-              // (its buttons across it, each its share, in a thumb's reach: the host's sheet's foot_fills)
-              row.lends(foot_fills_lent, true) |> ignore
-              f(row, close)
-            })
-            |> ignore
+          // (its title, none where what it holds heads itself (`heads_itself`): its own title's row there; one as it is now
+          // (`live`), there while it has one)
+          let title_row = fn(r : @view.View) {
+            style_node(r, fn() { sheet_title_row })
+            words_node(r, fn() { now().0 }, fn() { sheet_title_words }) |> ignore
           }
-          None => ()
-        }
-        // (under it, the navigation bar's room: sheet_foot)
-        sheet.box(fn(nav) { nav.height(By(fn() { Some(@ui.system_bars().bottom) })) |> ignore }) |> ignore
+          // (a step further in from a panel: its back key before its title, as a step's head has it (step_head), the row
+          // no taller for it)
+          let step_row = fn(r : @view.View) {
+            style_node(r, fn() { sheet_title_row.then(step_head_gap) })
+            r.box(fn(k) {
+              style_node(k, fn() {
+                in_line(step_back_side - @ui.tree_theme().text_size(Title).1).then(@ui.style(ml=room(-step_back_in)))
+              })
+              icon_button_node(k, "chevron-left", fn() { t("common.back") }, go_back, size=step_back_side) |> ignore
+            })
+            |> ignore
+            words_node(r, fn() { now().0 }, fn() { sheet_title_words }) |> ignore
+          }
+          if step_back is Some(_) && !x.heads_itself {
+            body.box(step_row) |> ignore
+          } else if x.heads_itself {
+            ()
+          } else if x.live is Some(_) {
+            body.show(fn() { now().0 != "" }, title_row)
+          } else if x.title != "" {
+            body.box(title_row) |> ignore
+          }
+          // (what it says, under its title, as it is now)
+          let said = fn(s : @view.View) {
+            s.show(fn() { now().2 != "" }, fn(w) {
+              style_node(w, fn() { sheet_words_at })
+              words_node(w, fn() { now().2 }, fn() { sheet_lead }) |> ignore
+            })
+          }
+          // what it holds, scrolling where the sheet is short of room for it; a share of the window tall, filling the room
+          // it leaves, laid out in it (sheet_capped_room: its words as far in as a sheet's, sheet_step's)
+          if capped {
+            body.box(fn(b) {
+              b.grow(Is(1.0)).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+              said(b)
+              b.box(fn(col) {
+                style_node(col, fn() { sheet_capped_room })
+                col.min_height(Is(Some(0.0))) |> ignore
+                // (laid out as the host's sheet lays out a capped panel's body: narrow, its words a sheet's own in, sheet_step's)
+                // (sheet_capped_room: none in from its sides)
+                panel_in_lend(col, Narrow, sheet_panel_sides)
+                (n.body)(col, close)
+              })
+              |> ignore
+            })
+            |> ignore
+          } else {
+          body.box(fn(b) {
+            let scroll = @view.Scroll::new()
+            b.shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+            b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
+              said(s)
+              // (in from its sides as the host's sheet has a panel's: opened by a press as far in as a pick's rows,
+              // else as its words)
+              let room = if from != Unanchored {
+                if n.foot is None { sheet_held } else { sheet_held_sides }
+              } else {
+                sheet_panel
+              }
+              s.box(fn(col) {
+                style_node(col, fn() { room })
+                // (laid out as the host's sheet lays out a panel's body, sheet_step's: narrow; its words what a sheet's rows
+                // leave of its words' in one a press opened, its rows out to its words' in one opened by nothing)
+                let pressed = from != Unanchored
+                panel_in_lend(
+                  col,
+                  Narrow,
+                  if pressed { sheet_panel_sides - sheet_row_sides } else { 0.0 },
+                  rows_out=dmax(0.0, (if pressed { sheet_row_sides } else { sheet_panel_sides }) - panel_card_in),
+                )
+                (n.body)(col, close)
+              })
+              |> ignore
+            })
+            .clips(By(fn() { scroll.goes() }))
+            .bounds_input(By(fn() { scroll.goes() }))
+            |> ignore
+          })
+          |> ignore
+          }
+          match n.foot {
+            Some(f) => {
+              if x.ruled {
+                body.box(fn(r) { style_node(r, fn() { sheet_foot_rule }) }) |> ignore
+              }
+              body.box(fn(row) {
+                style_node(row, fn() { sheet_foot_at })
+                // (its buttons across it, each its share, in a thumb's reach: the host's sheet's foot_fills)
+                row.lends(foot_fills_lent, true) |> ignore
+                f(row, close)
+              })
+              |> ignore
+            }
+            None => ()
+          }
+          // (under it, the navigation bar's room: sheet_foot)
+          body.box(fn(nav) { nav.height(By(fn() { Some(@ui.system_bars().bottom) })) |> ignore }) |> ignore
+        })
+        |> ignore
         // (stepped back under a sheet over it: dimmed all over as far as it has gone, the host's sheet_veil_at)
         sheet.box(fn(v) { v.over(Is(true)).ground(By(fn() { @ui.alpha(sheet_scrim, recede.shown(layer)) })) |> ignore })
         |> ignore
@@ -437,6 +469,17 @@ fn sheet_stretched(h : Double, top : Double, room : Double) -> Double {
 }
 
 ///|
+/// How fast a sheet drawn `h` high under a finger (sheet_stretched's) goes for each point the finger goes: as fast up to
+/// its top, slower past it the further it is drawn.
+fn sheet_stretched_slope(h : Double, top : Double, room : Double) -> Double {
+  if h <= top || room <= 0.0 {
+    return if h <= top { 1.0 } else { 0.0 }
+  }
+  let k = (h - top) * sheet_give / room + 1.0
+  sheet_give / (k * k)
+}
+
+///|
 /// How much a sheet drawn past its top gives way (@kit.sheet's: UIScrollView's rubber band's constant).
 let sheet_give : Double = 0.55
 
@@ -453,9 +496,10 @@ fn sheet_nearest(shares : Array[Double], f : Double) -> Double {
 /// how far and when are said; where it is is worked out as it is drawn, by how tall it is laid out then
 /// (View::moved_by), so a way under way follows the height it comes to.
 struct SheetRise {
-  /// where it was before its first way, and its ways (their cause's moment, where to)
+  /// where it was before its first way, and its ways (their cause's moment, where to, and how fast it set out, points a
+  /// millisecond down: a hand's as it let it go; NaN, as fast as the way before had it then)
   mut start : Double
-  ways : Array[(Double, Double)]
+  ways : Array[(Double, Double, Double)]
   /// told as a way is said
   said : @signals.Signal[Int]
 }
@@ -466,20 +510,21 @@ fn SheetRise::new() -> SheetRise {
 }
 
 ///|
-/// Off to `to` (in its heights) from `n`'s cause's moment, from where it is then.
-fn SheetRise::go(self : SheetRise, n : @view.View, to : Double) -> Unit {
+/// Off to `to` (in its heights) from `n`'s cause's moment, from where it is then, as fast as it went then; `speed`: as
+/// fast as that instead (points a millisecond down: what a finger let it go at).
+fn SheetRise::go(self : SheetRise, n : @view.View, to : Double, speed? : Double) -> Unit {
   let at = n.cause_at()
   // (the ways before over, however tall it is: from where the last of them went)
   match self.ways.last() {
-    Some((_, last_to)) if last_to == to => return
-    Some((last_at, last_to)) if at >= last_at + @ui.move_most_ms => {
+    Some((_, last_to, _)) if last_to == to => return
+    Some((last_at, last_to, _)) if at >= last_at + @ui.move_most_ms => {
       self.start = last_to
       self.ways.clear()
     }
     None if self.start == to => return
     _ => ()
   }
-  self.ways.push((at, to))
+  self.ways.push((at, to, speed.unwrap_or(@double.not_a_number)))
   self.said.set(self.said.untracked() + 1)
 }
 
@@ -492,7 +537,11 @@ fn SheetRise::at(self : SheetRise, d : Double, t : Double) -> (Double, Double) {
   let mut v = 0.0
   let mut end = -1.0
   for i, w in self.ways {
-    let (from_at, to) = w
+    let (from_at, to, speed) = w
+    // (let go by a hand: as fast as it went)
+    if !speed.is_nan() && d > 0.0 {
+      v = speed / d
+    }
     let last = i + 1 >= self.ways.length()
     let until = if last { t } else { self.ways[i + 1].0 }
     let dur = if (x == to && v == 0.0) || d <= 0.0 { 0.0 } else { @ui.move_ms((x - to).abs() * d) }
