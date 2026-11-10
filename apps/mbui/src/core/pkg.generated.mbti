@@ -76,6 +76,8 @@ pub fn trace_to((String) -> Unit, bytes_max? : Int32) -> Unit
 
 pub fn track((String) -> Int32, (Int32) -> Unit) -> Unit
 
+pub fn unheld_said() -> Array[(String, Int32, Int32)]
+
 pub fn unread(String) -> Unit
 
 pub fn unsubscribe(Sub) -> Unit
@@ -118,6 +120,8 @@ pub fn Client::time_topics(Self, ((Int32, String, @json.Json?, Bool) -> Unit)?) 
 pub fn Client::topic_generation(Self, String, params? : Map[String, @json.Json]) -> (Int32, Bool)
 pub fn Client::topic_said(Self, Map[String, @json.Json]) -> Bool
 pub fn Client::track(Self, (String) -> Int32, (Int32) -> Unit) -> Unit
+pub fn Client::unheld(Self, String) -> Bool
+pub fn Client::unheld_said(Self) -> Array[(String, Int32, Int32)]
 pub fn Client::unread(Self, String) -> Unit
 pub fn Client::unsubscribe(Self, Sub) -> Unit
 pub fn Client::unsubscribe_topic(Self, String, params? : Map[String, @json.Json]) -> Unit
