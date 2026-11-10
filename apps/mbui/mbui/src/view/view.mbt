@@ -2903,14 +2903,18 @@ fn Prop::ord(self : Prop) -> Int {
 ///|
 /// Properties set together on one node (View::sets_together): each set as what sets them says it now (Is), all of them
 /// set again in one binding as what that read changes; one bound again by another (By or Is) is theirs no more, and the
-/// binding goes with the last of them. Which are theirs: a bit each, by its Prop::ord (two words: up to 128).
+/// binding goes with the last of them. Which are theirs: a bit each, by its Prop::ord (two words: up to 128); which
+/// were theirs and are no more (`gone_*`: never taken again).
 priv struct SetsTogether {
   at : Int
   gen : Int
-  /// whether it is setting them the first time (each it sets taken as its), else again (only those still its)
+  /// whether it is setting them the first time (each it sets taken as its), else again (those still its, and one it
+  /// sets for the first time that nothing else binds and that was never its)
   mut first : Bool
   mut owned_lo : Int64
   mut owned_hi : Int64
+  mut gone_lo : Int64
+  mut gone_hi : Int64
   mut left : Int
   mut stop : () -> Unit
 }
@@ -2925,16 +2929,32 @@ fn SetsTogether::owns(self : SetsTogether, k : Int) -> Bool {
 }
 
 ///|
-/// Property `k` its (first set by it), or no more its (bound by another, or the node let go): the binding stopped with
-/// the last of them.
+/// Whether property `k` was its and is no more (bound by another).
+fn SetsTogether::gone(self : SetsTogether, k : Int) -> Bool {
+  if k < 64 {
+    (self.gone_lo & (1L << k)) != 0L
+  } else {
+    (self.gone_hi & (1L << (k - 64))) != 0L
+  }
+}
+
+///|
+/// Property `k` its (set by it for the first time), or no more its (bound by another, or the node let go: never its
+/// again): the binding stopped with the last of them.
 fn SetsTogether::own(self : SetsTogether, k : Int, on : Bool) -> Unit {
   if on == self.owns(k) {
     return
   }
   if k < 64 {
     self.owned_lo = self.owned_lo ^ (1L << k)
+    if !on {
+      self.gone_lo = self.gone_lo | (1L << k)
+    }
   } else {
     self.owned_hi = self.owned_hi ^ (1L << (k - 64))
+    if !on {
+      self.gone_hi = self.gone_hi | (1L << (k - 64))
+    }
   }
   self.left = self.left + (if on { 1 } else { -1 })
   if !on && self.left == 0 {
@@ -2950,8 +2970,12 @@ let setting_together : Ref[SetsTogether?] = Ref(None)
 /// What `set` sets on this node (its properties, each said Is: View::width and the like) out of what `read` says, set
 /// together: now, and again, all of them, in the frame after what `read` read changed, where it came out otherwise
 /// (Tree::queued): one binding for all, where each bound By is a binding of its own (a style: what it says changes with
-/// the theme alone). One bound again afterwards, by another, is that one's and set by this no more; what `set` sets on
-/// another node is set alone, once.
+/// the theme alone). One it sets for the first time only later is its from then as one set the first time is, where
+/// nothing else binds it (By) and it was never its before; one set once by another with Is leaves nothing on the node,
+/// so it is taken so too (the later said wins). One bound again afterwards, by another, is that one's and set by this
+/// no more (By or Is: never taken again); one it sets no more stays as it last set it (what it is then is the caller's
+/// to set). Once none is its (none set the first time, or all bound by others) the binding is let go. What `set` sets
+/// on another node is set alone, once.
 pub fn[T : Eq] View::sets_together(self : View, read : () -> T, set : (T) -> Unit) -> View {
   guard self.live() is Some(_) else { return self }
   let g : SetsTogether = {
@@ -2960,6 +2984,8 @@ pub fn[T : Eq] View::sets_together(self : View, read : () -> T, set : (T) -> Uni
     first: true,
     owned_lo: 0L,
     owned_hi: 0L,
+    gone_lo: 0L,
+    gone_hi: 0L,
     left: 0,
     stop: fn() {  },
   }
@@ -3017,8 +3043,13 @@ fn[T : Eq] View::bind(
       if g.owns(prop.ord()) {
         apply(v)
         tree.bound_marked(at, phase)
+        return
       }
-      return
+      // (one it sets for the first time now: taken as one set the first time is, below, where nothing binds it and it
+      // was never its; else left)
+      if g.gone(prop.ord()) || n.props.get(prop.ord()) is Some(_) {
+        return
+      }
     }
     _ => ()
   }
