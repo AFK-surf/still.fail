@@ -969,6 +969,10 @@ test("the pool skips broken, spent and unfit profiles, then prefers headroom, th
   assert.equal(pickProfile([a], "m1", signals(), true).id, "a", "nothing healthy: still one, so the failure shows");
   assert.throws(() => pickProfile([a, b], "m2", signals(), true), /no profile has m2 enabled/);
   assert.equal(pickProfile([a, c], "m9", signals(), false).id, "c", "a connect's binding still runs on its healthy profiles");
+  // A used-up window whose refill is due runs again, before its allowance is read again.
+  health.b = { check: ok("ok"), quota: { ...quota(100), windows: [{ label: "5 小时", usedPercent: 100, resetsAt: 10 }] } };
+  assert.equal(pickProfile([a, b], "m1", { ...signals(), now: () => 9 }, true).id, "a", "neither can run: still one");
+  assert.equal(pickProfile([a, b], "m1", { ...signals(), now: () => 10 }, true).id, "b");
 });
 
 test("the pool runs sessions on subscriptions, however full, and on an account billed per use only when none can", () => {

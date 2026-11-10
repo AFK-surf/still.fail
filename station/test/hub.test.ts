@@ -2813,6 +2813,65 @@ test("an account spent with none to move to is said once; what wakes it waits fo
   await r.close();
 });
 
+test("every account spent, a session stays on its own, and goes on on the first that refills or is reset", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "second" }, { ...raw.profiles[0], id: "cc3", name: "third" });
+  });
+  const HOUR = 60 * 60 * 1000;
+  const now = time.clock.currentTimeMillisUnsafe();
+  const spent = { kind: "failed" as const, reason: "rate_limit" as const, message: "usage limit reached" };
+  const moves = () => r.chat.texts().filter((t) => t.startsWith("已切换账号："));
+  const name = (id: string) => r.config.profiles.find((p: any) => p.id === id)!.name;
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const first = r.claude.last();
+  const key = first.options.route;
+  const on = r.session(key).profile;
+  const [soon, late] = ["cc", "cc2", "cc3"].filter((id) => id !== on) as [string, string];
+  // Its own week used up, as another's; a third's five hours, which refill first.
+  const full = (label: string, minutes: number, resetsAt: number) => ({ quota: { state: "ok", windows: [{ label, usedPercent: 100, resetsAt, minutes }], detail: null, checkedAt: now } });
+  r.hub.accounts.setHealth((id) => (id === soon ? full("5 小时", 300, now + 2 * HOUR) : full("每周", 10080, now + (id === on ? 72 : 120) * HOUR)));
+  first.end(spent);
+  await settle();
+  assert.equal(r.chat.lastText().split("\n\n")[0], "⚠️ 额度已用完，恢复后自动继续");
+  // A person's message is tried where it is: asked again and again which account it runs on (before each turn, three
+  // times), it is not handed from one spent account to the next (2026-11-10).
+  await r.accept(reply(m, "9999.3", "<@UBOT> 还在吗", { addressed: true }));
+  await settle();
+  assert.equal(r.claude.count(), 1, "no process on another account");
+  assert.equal(first.prompts.length, 2);
+  for (let i = 0; i < 3; i++) assert.equal(r.hub.accounts.runOn(key).id, on);
+  first.end(spent);
+  await settle();
+  assert.equal(r.session(key).profile, on);
+  assert.deepEqual(moves(), []);
+  // Not its own week, days away: the first of the accounts to refill wakes it, and it goes on there.
+  await time.adjust(2 * HOUR);
+  await settle();
+  const second = r.claude.last();
+  assert.equal(r.claude.count(), 2);
+  assert.equal(second.options.profile.id, soon);
+  assert.ok(second.prompts[0]!.includes(GO_ON_AFTER_REFILL), second.prompts[0]);
+  assert.deepEqual(moves(), [`已切换账号：${name(on)} → ${name(soon)}`]);
+  // That one spent again, all are: it waits there. The third reset by hand (its allowance read again first): it goes on.
+  r.hub.accounts.setHealth((id) => (id === soon ? full("5 小时", 300, now + 9 * HOUR) : full("每周", 10080, now + (id === on ? 72 : 120) * HOUR)));
+  second.end(spent);
+  await settle();
+  assert.equal(r.session(key).profile, soon);
+  r.hub.accounts.setHealth((id) => (id === late ? {} : id === soon ? full("5 小时", 300, now + 9 * HOUR) : full("每周", 10080, now + 72 * HOUR)));
+  await r.hub.allowanceReset(late);
+  await time.adjust(1);
+  await settle();
+  assert.equal(r.claude.count(), 3);
+  assert.equal(r.claude.last().options.profile.id, late);
+  assert.equal(moves().length, 2);
+  await r.close();
+});
+
 test("a manual allowance reset wakes only waiting sessions on that account, including a second profile", async () => {
   const time = testClock();
   const r = new Rig({ clock: time.clock });
