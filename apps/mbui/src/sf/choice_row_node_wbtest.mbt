@@ -58,24 +58,7 @@ fn choice_rows_tester(look : Look, platform : Int, pressed : Map[String, Int], c
       h.width(Is(Some(360.0))) |> ignore
       @ui.old(h, fn(c) {
         with_look(look, fn() {
-          let rows = fn() {
-            for i, s in choice_rows {
-              choice_row(
-                c,
-                "choice/\{i}",
-                s.chosen,
-                s.label,
-                note=s.note,
-                lead?=if s.lead { Some(fn() { icon(c, "folder", size=18.0, color=theme().p.muted) |> ignore }) } else { None },
-                ink?=if s.red { Some(theme().p.red) } else { None },
-                disabled=s.disabled,
-                tag?=if s.tag != "" { Some(fn() { c.text(s.tag, style=secondary) |> ignore }) } else { None },
-                trail?=if s.trail != "" { Some(fn() { c.text(s.trail, style=secondary) |> ignore }) } else { None },
-                body?=if s.body != "" { Some(fn() { c.text(s.body, style=body) |> ignore }) } else { None },
-                on_press=fn() { count("old " + s.label) },
-              )
-            }
-          }
+          let rows = fn() { old_choice_rows(c, count) }
           // (on a card: a group's, its rows on it)
           if card {
             group(c, rows)
@@ -91,23 +74,7 @@ fn choice_rows_tester(look : Look, platform : Int, pressed : Map[String, Int], c
     root.box(fn(col) {
       col.width(Is(Some(360.0))) |> ignore
       look_lent(col, look)
-      let rows = fn(col : @view.View) {
-      for s in choice_rows {
-        choice_row_node(
-          col,
-          fn() { s.label },
-          fn() { s.chosen },
-          press=fn() { count("new " + s.label) },
-          note=fn() { s.note },
-          lead?=if s.lead { Some(fn(l : @view.View) { icon_node(l, "folder", 18.0, By(fn() { theme().p.muted })) |> ignore }) } else { None },
-          ink?=if s.red { Some(fn() { theme().p.red }) } else { None },
-          disabled=fn() { s.disabled },
-          tag?=if s.tag != "" { Some(fn(v : @view.View) { words_node(v, fn() { s.tag }, fn() { secondary }) |> ignore }) } else { None },
-          trail?=if s.trail != "" { Some(fn(v : @view.View) { words_node(v, fn() { s.trail }, fn() { secondary }) |> ignore }) } else { None },
-          body?=if s.body != "" { Some(fn(v : @view.View) { words_node(v, fn() { s.body }, fn() { body }) |> ignore }) } else { None },
-        )
-      }
-      }
+      let rows = fn(col : @view.View) { node_choice_rows(col, count) }
       if card {
         group_node(col, rows)
       } else {
@@ -213,3 +180,180 @@ test "a choice's row as a node beside the old one, narrow, on a card (a group's)
   choice_rows_same(Narrow, 2, card=true)
   choice_rows_same(Narrow, 0, card=true)
 }
+
+///|
+/// The old rows (choice_row's) in an old view `c`, each pressed told `count` as "old " and its label.
+fn old_choice_rows(c : @ui.Ctx, count : (String) -> Unit) -> Unit {
+  for i in 0..<choice_rows.length() {
+    old_choice_row(c, i, count)
+  }
+}
+
+///|
+/// The old row (choice_row's) of `choice_rows[i]` in an old view `c`, pressed told `count` as "old " and its label.
+fn old_choice_row(c : @ui.Ctx, i : Int, count : (String) -> Unit) -> Unit {
+  let s = choice_rows[i]
+  {
+    choice_row(
+      c,
+      "choice/\{i}",
+      s.chosen,
+      s.label,
+      note=s.note,
+      lead?=if s.lead { Some(fn() { icon(c, "folder", size=18.0, color=theme().p.muted) |> ignore }) } else { None },
+      ink?=if s.red { Some(theme().p.red) } else { None },
+      disabled=s.disabled,
+      tag?=if s.tag != "" { Some(fn() { c.text(s.tag, style=secondary) |> ignore }) } else { None },
+      trail?=if s.trail != "" { Some(fn() { c.text(s.trail, style=secondary) |> ignore }) } else { None },
+      body?=if s.body != "" { Some(fn() { c.text(s.body, style=body) |> ignore }) } else { None },
+      on_press=fn() { count("old " + s.label) },
+    )
+    |> ignore
+  }
+}
+
+///|
+/// The node rows (choice_row_node's) in `col`, each pressed told `count` as "new " and its label.
+fn node_choice_rows(col : @view.View, count : (String) -> Unit) -> Unit {
+  for i in 0..<choice_rows.length() {
+    node_choice_row(col, i, count)
+  }
+}
+
+///|
+/// The node row (choice_row_node's) of `choice_rows[i]` in `col`, pressed told `count` as "new " and its label.
+fn node_choice_row(col : @view.View, i : Int, count : (String) -> Unit) -> Unit {
+  let s = choice_rows[i]
+  {
+    choice_row_node(
+      col,
+      fn() { s.label },
+      fn() { s.chosen },
+      press=fn() { count("new " + s.label) },
+      note=fn() { s.note },
+      lead?=if s.lead { Some(fn(l : @view.View) { icon_node(l, "folder", 18.0, By(fn() { theme().p.muted })) |> ignore }) } else { None },
+      ink?=if s.red { Some(fn() { theme().p.red }) } else { None },
+      disabled=fn() { s.disabled },
+      tag?=if s.tag != "" { Some(fn(v : @view.View) { words_node(v, fn() { s.tag }, fn() { secondary }) |> ignore }) } else { None },
+      trail?=if s.trail != "" { Some(fn(v : @view.View) { words_node(v, fn() { s.trail }, fn() { secondary }) |> ignore }) } else { None },
+      body?=if s.body != "" { Some(fn(v : @view.View) { words_node(v, fn() { s.body }, fn() { body }) |> ignore }) } else { None },
+    )
+  }
+}
+
+///|
+/// What each row stood as in a panel's body (its label: where and how big, read out, drawn at rest, its words), and
+/// how many times each was pressed: the rows the old panel holds (`old`), else the node panel's (panel_nodes), opened
+/// on a window `at` by its 打开 (`pressed`: a sheet a press opened, a small panel beside it) or by nothing (a sheet, a
+/// dialog in the middle of the window), at rest; each tapped once in its middle.
+fn panel_choice_rows(at : (Int, Double, Double), pressed : Bool, old : Bool, listed? : Bool = false) -> (Array[String], Map[String, Int]) raise {
+  let count : Map[String, Int] = {}
+  let tally = fn(k : String) { count[k] = count.get(k).unwrap_or(0) + 1 }
+  let open = fn(from : Anchor) {
+    let from = if pressed { from } else { Unanchored }
+    let n = choice_rows.length()
+    if old {
+      // (a list in a panel a share of the window tall, as the app's lists in panels are)
+      panel("选一个", from~, tall=if listed { 0.8 } else { 0.0 }, fn(c, _) {
+        if listed {
+          panel_list(c, "choices", n, 60.0, fn(i) { old_choice_row(c, i, tally) }) |> ignore
+        } else {
+          old_choice_rows(c, tally)
+        }
+      })
+    } else {
+      panel_nodes("选一个", from~, tall=if listed { 0.8 } else { 0.0 }, fn(v, _) {
+        if listed {
+          panel_list_node(v, fn() { Array::makei(n, fn(i) { i }) }, fn(b, i) { node_choice_row(b, i, tally) }, est=60.0) |> ignore
+        } else {
+          node_choice_rows(v, tally)
+        }
+      })
+    }
+  }
+  presenters_reset()
+  let (platform, w, h) = at
+  // (every old view in still.fail's theme, as the app's window builds them (its view's with_theme round all of it): a
+  // panel beside what opened it or in the middle of the window is an old view of its own, its head and body, which the
+  // page's with_theme does not reach)
+  let t = @ui.Tester::new(
+    fn(c) { c.with_theme(ui_theme(), fn() { @ui.old_views_here(c) }) },
+    tree=presented_tree(presenting_view(open)),
+    w~,
+    h~,
+    platform~,
+  )
+  t.check_looks(false)
+  t.draw()
+  open_it(t)
+  t.run_for(@ui.move_most_ms)
+  t.leave()
+  t.draw()
+  let stood : Array[String] = []
+  for s in choice_rows {
+    let all = t.all(Button, label=s.label)
+    guard all.length() == 1 else { fail("\{s.label}: \{all.length()} rows") }
+    let r = all[0].rect
+    // (each place to a thousandth of a point, as drawn_within has the draw list's: laid out by another sum, a place
+    // the same differs in its last digits)
+    let k = fn(v : Double) { (v * 1000.0).round() / 1000.0 }
+    // (in a list, across alone: where the list lays its rows down it is the list's (panel_list's, panel_list_node's),
+    // not the row's, and a row a fraction of a point off the pixels draws its words and marks a fraction off too)
+    if listed {
+      stood.push("\{s.label} at \{k(r.0)} \{k(r.2)}x\{k(r.3)} selected \{all[0].selected} unable \{all[0].disabled}")
+      continue
+    }
+    stood.push("\{s.label} at \{k(r.0)},\{k(r.1)} \{k(r.2)}x\{k(r.3)} selected \{all[0].selected} unable \{all[0].disabled}")
+    stood.push(drawn_within(t, r).join(" "))
+    stood.push(
+      t
+      .words()
+      .filter(fn(w) { w.1 >= r.0 - 0.5 && w.2 >= r.1 - 0.5 && w.1 <= r.0 + r.2 + 0.5 && w.2 <= r.1 + r.3 + 0.5 })
+      .map(fn(w) { "\{w.0}@\{k(w.1 - r.0)},\{k(w.2 - r.1)} \{k(w.3)}x\{k(w.4)} a\{w.5}" })
+      .join(" "),
+    )
+  }
+  for s in choice_rows {
+    let all = t.all(Button, label=s.label)
+    guard all.length() == 1 else { fail("\{s.label}: \{all.length()} rows to tap") }
+    let r = all[0].rect
+    t.tap(r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
+    t.run_for(@ui.move_most_ms)
+  }
+  (stood, count)
+}
+
+///|
+test "a choice's row as a node in a panel's body where the old one stands: a sheet opened by nothing and by a press, a small panel beside what opened it, a dialog in the middle of the window, and in a panel's list" {
+  for screen in [
+    ("sheet opened by nothing", phone, false, false),
+    ("sheet opened by a press", phone, true, false),
+    ("small panel", (0, 800.0, 600.0), true, false),
+    ("dialog", (0, 800.0, 600.0), false, false),
+    ("a list in a sheet opened by nothing", phone, false, true),
+    ("a list in a sheet opened by a press", phone, true, true),
+  ] {
+    let (about, at, pressed, listed) = screen
+    let (old_stood, old_count) = panel_choice_rows(at, pressed, true, listed~)
+    let (new_stood, new_count) = panel_choice_rows(at, pressed, false, listed~)
+    assert_eq(new_stood.length(), old_stood.length(), msg=about)
+    let differs : Array[String] = []
+    for i, line in old_stood {
+      if new_stood[i] != line {
+        differs.push("\{about}: line \{i}:\n  old \{line}\n  new \{new_stood[i]}")
+      }
+    }
+    if !differs.is_empty() {
+      fail(differs.join("\n"))
+    }
+    for s in choice_rows {
+      let want = if s.disabled { 0 } else { 1 }
+      assert_eq(
+        (old_count.get("old " + s.label).unwrap_or(0), new_count.get("new " + s.label).unwrap_or(0)),
+        (want, want),
+        msg="\{about}: \{s.label} pressed",
+      )
+    }
+  }
+}
+

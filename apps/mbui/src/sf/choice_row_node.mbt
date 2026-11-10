@@ -34,8 +34,11 @@ pub fn choice_row_node(
   // line where a note is under them)
   let under = fn() { body is None && note() != "" }
   let chevron = if narrow { pg_chevron } else { desk_chevron }
-  // (where it stands across: in a small panel at its padding, its words a row's padding in; in a panel's body its words
-  // as far in as the panel's; on a page's list in a panel's card its ground reaching past it: row_line, link_reach)
+  // (where it stands across, row_line's: in a small panel at its padding, its words a row's padding in; in a panel's
+  // body its words as far in as the panel's, or on the panel's line, its ground reaching out across the room the panel
+  // leaves as far as its own words are in from it (panel_rows_out); on a card none of that; on a page's list in a
+  // panel's card its ground reaching past it over and under: link_reach)
+  let out = if card { 0.0 } else { panel_rows_out(at, own=if narrow { card_pad - corner_inset } else { desk_list_out }) }
   let reach = !narrow && part.list && in_pane_node(parent) && at.words == 0.0
   parent.box(made_for=loc, fn(o) {
     if reach {
@@ -48,8 +51,10 @@ pub fn choice_row_node(
     o.box(fn(r) {
       let (side, over) = if at.small {
         (text_in, if narrow { text_in } else { wide_row_over })
-      } else if at.words > 0.0 {
+      } else if at.words > 0.0 && !card {
         (at.words, if narrow { text_in } else { wide_row_over })
+      } else if out > 0.0 {
+        (out, if narrow { text_in } else { wide_row_over })
       } else if narrow {
         (if card { text_in } else { pg_room_in }, text_in)
       } else {
@@ -69,6 +74,7 @@ pub fn choice_row_node(
       r
       .row(Is(true))
       .gap(Is(12.0))
+      .margin(Is((-out, 0.0, -out, 0.0)))
       .padding(Is((side, over, side, over)))
       .radius(Is(corner))
       .min_height(By(fn() { Some(t().items.least) }))
@@ -162,9 +168,13 @@ pub fn choice_row_node(
               first.box(fn(line) {
                 line.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))).grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
                 let w = words_node(line, label, fn() { (if narrow { pg_row_title } else { desk_list_title }).then(in_lines) })
-                // (as wide as its line leaves it narrow, pg_row_title's w=Full; wide as its words, desk_list_title's)
+                // (as wide as its line leaves it narrow, pg_row_title's w=Full; wide as its words, desk_list_title's,
+                // giving way with what follows it on its line where the row has not the room for them, its words then
+                // on more lines, as an old view's words in a row do)
                 if narrow {
                   w.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
+                } else {
+                  w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
                 }
                 w
                 .ink(By(fn() {
@@ -179,7 +189,14 @@ pub fn choice_row_node(
                 }))
                 |> ignore
                 match tag {
-                  Some(f) => f(line)
+                  Some(f) if narrow => f(line)
+                  // (giving way with its label, as wide as it is given: its words on more lines where that is less)
+                  Some(f) =>
+                    line.box(fn(g) {
+                      g.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+                      f(g)
+                    })
+                    |> ignore
                   None => ()
                 }
               })

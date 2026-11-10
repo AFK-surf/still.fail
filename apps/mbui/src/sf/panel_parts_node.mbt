@@ -43,6 +43,19 @@ fn panel_in_lend(
 let panel_tips_lent : @view.Lent[TipLayer] = @view.Lent::new()
 
 ///|
+/// How far a row of a panel's body laid out `at` reaches out of the column it is made in, its ground across the room
+/// the panel leaves at its sides, its words back on the column's line (row_reach's): that room (rows_out), no further
+/// than its own words are in from its ground (`own`, none said: all of it); none in a small panel (its rows at its
+/// padding) or outside a panel. The rule of every row of a panel's: panel_row_node's, choice_row_node's.
+fn panel_rows_out(at : PanelIn, own? : Double = @double.infinity) -> Double {
+  if at.small {
+    0.0
+  } else {
+    dmin(at.rows_out, own)
+  }
+}
+
+///|
 /// Which of what a dialog in the middle of the window holds takes the keyboard's focus as the dialog opens, where what
 /// it holds says one (panel_opens_on_node): lent by panel_centred_node to its dialog, read as all it holds is made.
 // kept across runs: what each dialog lends, let go with it
@@ -151,9 +164,10 @@ fn panel_row_by(
     // (out across the room a large panel leaves, a card's corner there; else a capsule in a small panel's corners, past
     // its padding to where it is concentric with them: menu_item's)
     let reach = fn() { menu_row_reach(t().rows.pick) }
-    let out = fn() { if !at.small && at.rows_out > 0.0 { at.rows_out } else { reach() } }
-    let words_at = fn() { if !at.small && at.rows_out > 0.0 { at.rows_out } else { text_in + reach() } }
-    let corner = if !at.small && at.rows_out > 0.0 { card_corner } else { small_panel_inner(r_menu) }
+    let across = panel_rows_out(at)
+    let out = fn() { if across > 0.0 { across } else { reach() } }
+    let words_at = fn() { if across > 0.0 { across } else { text_in + reach() } }
+    let corner = if across > 0.0 { card_corner } else { small_panel_inner(r_menu) }
     r
     .row(Is(true))
     .min_height(By(fn() { Some(t().rows.pick) }))
