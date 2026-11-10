@@ -80,13 +80,15 @@ test "panel fits, the model's (model_pop): where it is, its models and how hard 
   // (as main has it, a4c845604; since 2026-11-02 the tall and the crowded open on those used most and starred alone, the
   // rest a step further, room between its parts: Opus not among them; since 2026-11-02 how each runs right after its
   // name, how hard it thinks a column beside the models, each titled, the runtime and how fast at the foot under a line;
-  // since 2026-11-03 how much context at the foot too: a Claude model's panel as wide as its foot)
+  // since 2026-11-03 how much context at the foot too: a Claude model's panel as wide as its foot; since 2026-11-10
+  // twelve models or fewer all in the one list, those used most titled under the rest, a star beside every row, and
+  // room for the widest level after each name: Opus among them in all three, each panel taller and the crowded wider)
   assert_eq(out, [
-    "newchat-model: dialog Some((650, 566, 264, 212)) opus Some((656, 602, 172, 36)) high Some((836, 677, 72, 36))",
-    "newchat-tall-model: dialog Some((650, 176, 520, 350)) opus None high Some((1091.5, 324, 72.5, 36))",
-    "newchat-crowded-model: dialog Some((650, 277, 420, 249)) opus None high Some((992, 388, 72, 36))",
-    "newchat-crowded-model 低: dialog Some((650, 277, 420, 249)) high Some((992, 388, 72, 36))",
-    "newchat-crowded-model 最高: dialog Some((650, 277, 420, 249)) high Some((992, 388, 72, 36))",
+    "newchat-model: dialog Some((650, 287, 271, 239)) opus Some((656, 435, 146, 36)) high Some((843, 398, 72, 36))",
+    "newchat-tall-model: dialog Some((650, 65, 520, 461)) opus Some((656, 111, 394.5, 36)) high Some((1091.5, 213, 72.5, 36))",
+    "newchat-crowded-model: dialog Some((650, 139, 469, 387)) opus Some((656, 175, 344, 36)) high Some((1041, 250, 72, 36))",
+    "newchat-crowded-model 低: dialog Some((650, 139, 469, 387)) high Some((1041, 250, 72, 36))",
+    "newchat-crowded-model 最高: dialog Some((650, 139, 469, 387)) high Some((1041, 250, 72, 36))",
   ])
   assert_eq(drawn, [true, true, true])
 }

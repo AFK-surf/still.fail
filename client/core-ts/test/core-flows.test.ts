@@ -1183,6 +1183,45 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   core.close();
 });
 
+test("a_model_never_run_here_takes_what_is_set_by_hand_in_its_panel_and_one_that_ran_here_keeps_its_own", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "new" });
+  subscribe(core, ui, 3, { topic: "newChat", scope: "ws" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  const option = (model: string) => v(values, 1).options.find((o: J) => o.model === model);
+  core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(option("claude-sonnet-5").usual ?? null, null, "never run here");
+  // its panel opened, how hard it thinks set by hand in it
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "new", open: true });
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", effort: "high" });
+  apply(host, values);
+  assert.equal(v(values, 3).effort, "high");
+  assert.equal(option("gpt-6-astra").usual.effort, "medium", "one that ran here keeps its own");
+  assert.equal(option("gpt-6-astra").usualText, "中");
+  assert.equal(option("claude-sonnet-5").usual.effort, "high", "one that never did takes it");
+  assert.equal(option("claude-sonnet-5").usualText, "高");
+  // opened again: nothing set by hand in it yet
+  await ask(host, core, ui, 5, "pick.set", { station: "ws/st", of: "new", open: true });
+  apply(host, values);
+  assert.equal(option("claude-sonnet-5").usual ?? null, null);
+  // set to what it already runs with: set by hand all the same
+  await ask(host, core, ui, 6, "pick.save", { station: "ws/st", of: "new", effort: "high" });
+  apply(host, values);
+  assert.equal(option("claude-sonnet-5").usual.effort, "high");
+  // picked as the panel says it runs
+  const u = option("claude-sonnet-5").usual;
+  await ask(host, core, ui, 7, "pick.save", { station: "ws/st", of: "new", model: "claude-sonnet-5", runtime: u.runtime, effort: u.effort, fast: u.fast, context: u.context });
+  apply(host, values);
+  assert.equal(v(values, 3).model.model, "claude-sonnet-5");
+  assert.equal(v(values, 3).effort, "high");
+  core.close();
+});
+
 test("the_model_control_lists_the_starred_after_those_used_most_and_every_model_by_its_maker", async () => {
   const { host, core } = await choosing();
   const ui = core.connect();

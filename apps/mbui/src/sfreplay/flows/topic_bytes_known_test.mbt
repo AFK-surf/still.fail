@@ -65,7 +65,7 @@ fn init {
     ("settings-decisions", 37, 1, 0),
     ("settings-device-pages", 41, 0, 0),
     ("settings-profile", 51, 2, 0),
-    ("settings-run-settings", 64, 5, 0),
+    ("settings-run-settings", 57, 5, 0),
     ("settings-sheet-sinking", 41, 0, 0),
     ("settings-station-mark", 41, 2, 0),
     ("settings-station-settings", 41, 5, 0),

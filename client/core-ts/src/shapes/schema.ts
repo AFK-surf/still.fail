@@ -3652,7 +3652,7 @@ export const SHAPES: Record<string, Shape> = {
     ["fromText", opt("String"), { said: true, doc: "Where it comes from, in words (借自 Willow, 在 Willow 上: what its mark is said as); none for one of this\nstation's own." }],
     ["fromStation", opt("ModelStation"), { doc: "The station it comes from, after its name: its mark where it has one, else its name." }],
     ["borrow", opt("ModelBorrow"), { doc: "A borrowable one: the profile that would be shared with this station." }],
-    ["usual", opt("ModelUsual"), { default: true, doc: "In a model control (`pick`): what it runs with picked in the panel (the one picked, as drafted; another,\nas it last ran here); none, never used here." }],
+    ["usual", opt("ModelUsual"), { default: true, doc: "In a model control (`pick`): what it runs with picked in the panel (the one picked, as drafted; another,\nas it last ran here; one never run here, with what was set by hand in the panel since it opened, where it takes\nit); none, never used here and nothing set by hand that it takes." }],
     ["usualText", opt("String"), { default: true, said: true, doc: "That in words after its name (DeepSeek Harness · 高 · Fast): the runtime where it runs on more than\none, how hard it thinks unless the model's own, Fast; none, nothing to say." }],
     ["uses", opt("u32"), { default: true, doc: "In a model control: how many new chats here started on it." }],
     ["liked", "bool", { default: true, doc: "In a model control: starred (`pick.like`), kept on this device for the workspace." }],
