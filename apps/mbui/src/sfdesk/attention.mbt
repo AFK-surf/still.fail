@@ -16,15 +16,19 @@
 priv struct Attention {
   gone : Array[String]
   mut trouble_seen : String?
+  /// A clearing already asked of this core, until its prefs change or the station has trouble again. A call's
+  /// answer can arrive before the prefs topic; no frame in between sends the same write again.
+  trouble_forgotten : Map[String, (Int, String, String)]
 }
 
 ///|
-let attention : Attention = { gone: [], trouble_seen: None }
+let attention : Attention = { gone: [], trouble_seen: None, trouble_forgotten: {} }
 
 ///|
 fn attention_reset() -> Unit {
   attention.gone.clear()
   attention.trouble_seen = None
+  attention.trouble_forgotten.clear()
 }
 
 ///|
@@ -155,10 +159,23 @@ fn trouble_keep(src : Source, w : Workspace, what : String, words : Json) -> Uni
 ///|
 /// The stations all reached: what was kept of their trouble let go.
 fn trouble_forget(src : Source, w : Workspace) -> Unit {
-  if station_trouble_words(src, w) == "" && (trouble_kept(src, w, "seen") != "" || trouble_kept(src, w, "gone") != "") {
-    trouble_keep(src, w, "seen", Json::null())
-    trouble_keep(src, w, "gone", Json::null())
+  // No value yet (for example just after switching workspaces) says nothing about whether its stations recovered.
+  let chats = @sfbase.chats_topic(src, w.id)
+  guard chats.error is None && chats.value is Some(value) else { return }
+  let seen = trouble_kept(src, w, "seen")
+  let gone = trouble_kept(src, w, "gone")
+  if text(field(Some(value), "trouble"), "text") != "" || (seen == "" && gone == "") {
+    attention.trouble_forgotten.remove(w.id)
+    return
   }
+  let (generation, _) = (src.generation)("prefs", {})
+  let clearing = (generation, seen, gone)
+  if attention.trouble_forgotten.get(w.id) == Some(clearing) { return }
+  attention.trouble_forgotten[w.id] = clearing
+  let patch : Map[String, Json] = {}
+  patch[w.id + "\nseen"] = Json::null()
+  patch[w.id + "\ngone"] = Json::null()
+  (src.call)("prefs.set", { "trouble": Json::object(patch) }, fn(_) {  })
 }
 
 ///|
