@@ -124,6 +124,14 @@ fn station_view_node(
       "profiles" => station_profiles_node(b, core, here, s)
       "connects" => station_connects_node(b, core, s)
       "drive" => station_drive_node(b, s)
+      // its devices, and adding one: any member but one who only reads (a whole station's are every chat's)
+      "devices" => {
+        let id = text(@signals.untracked(s), "id")
+        @settings.station_devices_node(b, core, here, id, false, fn() {
+          let role = text(workspace_view(core, here()).value, "role")
+          role != "" && role != "viewer"
+        })
+      }
       "more" => station_more_node(b, core, address)
       "processes" => station_processes_node(b, core, here, s)
       "offline" => @sf.group_node(b, fn(g) { said_row_node(g, fn() { @sf.t("web-pages.stations.settingsOffline") }) })
@@ -193,6 +201,10 @@ fn station_overview_keys(core : Core, s : Json?) -> Array[String] {
   }
   if field(o, "drive") is Some(Object(_)) {
     out.push("drive")
+  }
+  // its devices while it is up (one is added there)
+  if flag(s, "online") {
+    out.push("devices")
   }
   out.push("more")
   out

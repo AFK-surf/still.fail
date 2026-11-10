@@ -11,7 +11,7 @@
 import { Effect, Layer } from "effect";
 import type { Route } from "../api/admin.ts";
 import { type Answer, type Request, error, json } from "../api/request.ts";
-import type { GrantBody, Timeout } from "../../../client/core-ts/src/rig-form.ts";
+import type { Device, GrantBody, Timeout } from "../../../client/core-ts/src/rig-form.ts";
 import { wellFormed } from "../../../client/core-ts/src/rig-form.ts";
 import { grantChatTitle } from "../adb/title.ts";
 import { shortCode } from "../cloud/lock.ts";
@@ -22,7 +22,7 @@ import { nameOf } from "../mesh/peer-http.ts";
 import { personChainsOf } from "../mesh/serve.ts";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
-import { ControlPlane, Events, Parts, Store } from "../services.ts";
+import { ControlPlane, type DeviceEntry, DeviceSources, Events, Parts, Store } from "../services.ts";
 import { Agents } from "../sessions/agents.ts";
 import type { Json } from "../store/store.ts";
 import { RigAdds } from "./adds.ts";
@@ -32,7 +32,9 @@ import { rigTools } from "./tool.ts";
 /// What a rig says of itself (rig/module.ts `described`): who may use it.
 type Described = {
   owner: string; person: string; open: boolean; settings: number; owner_email?: string; owner_name?: string; proof?: boolean;
-  grants: { request: string; station: string; session: string; chat: string; title: string; by: string; timeout: Timeout; exp: number; until: number }[];
+  grants: { request: string; station: string; session: string; chat: string; title: string; by: string; timeout: Timeout; exp: number; until: number; device?: string }[];
+  /// Its devices (rig/grants.ts), each with its own 免批准; none from a rig from before devices.
+  devices?: (Device & { open: boolean; settings: number })[];
 };
 /// A rig as this station last heard it (`rig`: null, it answered as no rig), and whether it was reached then.
 type Heard = { workspace: string; rig: Described | null; load?: Json; at: number; reached: boolean };
@@ -65,7 +67,8 @@ export const RigsLive = Layer.effectDiscard(
     const parts = yield* Parts;
     const store = yield* Store;
     const events = yield* Events;
-    const { hub, cardOutcomes, remote } = yield* Agents;
+    const { hub, cardOutcomes, remote, forwards } = yield* Agents;
+    const sources = yield* DeviceSources;
     const db = store.db;
     db.exec(SCHEMA);
     const self = () => cloud.state?.station ?? "";
@@ -81,7 +84,7 @@ export const RigsLive = Layer.effectDiscard(
     const ask = (rig: string, request: Json): Promise<Json> => remote.ask(rig, request);
 
     // What waits for a rig that was away: brought in order as it is heard, each gone once the rig took or refused it.
-    const queue = (ws: string, rig: string, kind: "revoke" | "release" | "settings" | "added", body: Json) => {
+    const queue = (ws: string, rig: string, kind: "revoke" | "release" | "settings" | "added" | "device", body: Json) => {
       // The settings are whole each time: only the latest are brought.
       if (kind === "settings") db.prepare("DELETE FROM rig_outbox WHERE ws = ? AND rig = ? AND kind = 'settings'").run(ws, rig);
       db.prepare("INSERT INTO rig_outbox (ws, rig, kind, body) VALUES (?, ?, ?, ?)").run(ws, rig, kind, JSON.stringify(body));
@@ -127,7 +130,14 @@ export const RigsLive = Layer.effectDiscard(
         queue(r.ws, r.rig, revoke === null ? "release" : "revoke", (revoke === null ? { request: r.id } : { signed: revoke.signed, chain: revoke.chain ?? null }) as unknown as Json);
         void flush(r.ws, r.rig);
       },
-      told: (r) => tell(r.ws),
+      told: (r) => {
+        // A chat's grant of a device (or of the rig, with its devices) over: its ports here close.
+        if (r.status === "ended" || r.status === "denied") {
+          if (r.device !== undefined) forwards.closeDevice(r.session, r.device, "its grant ended");
+          else for (const d of heard.get(key(r.ws, r.rig))?.rig?.devices ?? []) if (requests.of(r.session, r.rig, d.id).length === 0) forwards.closeDevice(r.session, d.id, "its station's grant ended");
+        }
+        tell(r.ws);
+      },
     });
 
     /// A workspace's rigs as the app shows them: what the control plane names, whether each is taken here (security
@@ -141,9 +151,12 @@ export const RigsLive = Layer.effectDiscard(
           id: rig.id, name: rig.name, owner: rig.owner, owner_email: rig.owner_email, owner_name: rig.owner_name, code: shortCode(rig.id),
           ...(vouched === undefined ? {} : { vouched }),
           reached: h === undefined ? null : h.reached, at: h?.at ?? null,
-          ...(d === null ? {} : { open: d.open, settings: d.settings, person: d.person, grants: d.grants.map((g) => ({ ...g, stationName: nameOf(cloud, g.station) })) }),
+          ...(d === null ? {} : { open: d.open, settings: d.settings, person: d.person, grants: d.grants.map((g) => ({ ...g, stationName: nameOf(cloud, g.station) })), devices: d.devices ?? [] }),
           requests: requests.ofRig(ws, rig.id).filter((r) => r.status === "pending" || r.delivered !== true)
-            .map((r) => ({ id: r.id, station: self(), session: r.session, chat: r.chat, title: r.title, by: r.by, reason: r.reason, timeout: r.signed?.body.timeout ?? r.timeout, at: r.at, status: r.status })),
+            .map((r) => ({
+              id: r.id, station: self(), session: r.session, chat: r.chat, title: r.title, by: r.by, reason: r.reason, timeout: r.signed?.body.timeout ?? r.timeout, at: r.at, status: r.status,
+              ...(r.device !== undefined ? { device: r.device, deviceName: r.deviceName ?? "" } : {}),
+            })),
         } as Json;
       });
     const tell = (ws: string) => events.tell("rigs", { workspace: ws, rigs: listed(ws) }, `rigs\0${ws}`, { workspace: ws });
@@ -250,7 +263,8 @@ export const RigsLive = Layer.effectDiscard(
       },
       done: (session, rigName) => {
         const ws = workspaceOf(session);
-        const ended = requests.release(session, rigName === "" ? null : named(ws, rigName).id);
+        // (the rig's own grants: its devices' are device_use's to hand back)
+        const ended = requests.release(session, rigName === "" ? null : named(ws, rigName).id, undefined);
         return ended.length === 0 ? "This chat holds no grant of a tasks-only station and asks for none." : `Handed back: ${ended.map((r) => `${r.rigName} (${r.id})`).join(", ")}. What this chat ran there is stopped.`;
       },
     }));
@@ -276,6 +290,54 @@ export const RigsLive = Layer.effectDiscard(
         }),
       } as Json;
     });
+
+    // The devices attached to the rigs, as device_list shows them and device_use asks for them (devices/module.ts).
+    const deviceEntries = (ws: string, session: string): DeviceEntry[] =>
+      cloud.rigsNamed(ws).flatMap((rig) => {
+        if (cloud.rigOf(rig.id, ws) === null) return [];
+        const h = heard.get(key(ws, rig.id));
+        const d = h?.rig ?? null;
+        const whole = requests.of(session, rig.id).find((r) => r.status === "granted" && r.delivered === true);
+        return (d?.devices ?? []).map((dev): DeviceEntry => {
+          const mine = requests.of(session, rig.id, dev.id);
+          const pending = mine.find((r) => r.status === "pending");
+          const granted = mine.find((r) => r.status === "granted");
+          const thisChat = d!.open || dev.open ? "open to every chat of the workspace (免批准): device_use gives it at once"
+            : whole !== undefined ? `this chat holds a grant of ${rig.name}, its station: device_use gives it at once`
+            : granted?.delivered === true ? `granted to this chat (${lasting(granted.signed?.body.timeout ?? granted.timeout)}): device_use gives it`
+            : granted !== undefined ? "approved for this chat; its station has not taken the grant yet (it was away): you are told when it has"
+            : pending !== undefined ? `asked: waits for its owner to approve request ${pending.id} on the card in your chat`
+            : `no grant: ask with device_use {device: "${dev.name}", reason}; its card goes to ${rig.owner_email || rig.owner}`;
+          const holders = d!.grants.filter((g) => g.device === undefined || g.device === dev.id).map((g) => `${g.title ? `"${g.title}"` : g.chat}${g.by ? ` (started by ${g.by})` : ""} on ${nameOf(cloud, g.station)}${g.device === undefined ? " (a grant of the station)" : ""}`);
+          return {
+            id: dev.id, name: dev.name, kind: dev.kind, target: dev.target, ...(dev.baud !== undefined ? { baud: dev.baud } : {}),
+            via: "rig", station: rig.id, stationName: rig.name, owner: rig.owner, ownerEmail: rig.owner_email, ownerName: rig.owner_name,
+            online: h?.reached === true, thisChat, hasAccess: d!.open || dev.open ? "every chat of the workspace" : holders,
+          };
+        });
+      });
+    const mayUse = (ws: string, session: string, e: DeviceEntry): boolean => {
+      const d = heard.get(key(ws, e.station))?.rig ?? null;
+      const dev = d?.devices?.find((x) => x.id === e.id);
+      if (d === null || dev === undefined) return false;
+      if (d.open || dev.open) return true;
+      return [...requests.of(session, e.station), ...requests.of(session, e.station, e.id)].some((r) => r.status === "granted" && r.delivered === true);
+    };
+    sources.rigs = {
+      list: async (ws, session) => deviceEntries(ws, session),
+      use: async (ws, session, e, reason, timeout, signal) => {
+        if (mayUse(ws, session, e)) {
+          if (sources.forward === null) return "Devices cannot be forwarded on this station yet.";
+          return sources.forward(session, e);
+        }
+        const rig = named(ws, e.station);
+        const t = timeout !== null && typeof timeout === "object" ? ({ kind: (timeout as Json).kind, seconds: (timeout as Json).seconds } as Timeout) : undefined;
+        return said(await requests.ask(session, rig, ws, reason, t, signal, { id: e.id, name: e.name }));
+      },
+      // (a grant of a rig itself is station_use's to hand back)
+      done: (_ws, session, e) => requests.release(session, e === null ? null : e.station, e === null ? "*" : e.id).map((r) => r.deviceName ?? r.device ?? ""),
+    };
+    yield* Effect.addFinalizer(() => Effect.sync(() => void (sources.rigs = null)));
 
     // A rig its person signed for here is signed for at the workspace's other stations too: each checks it itself.
     const vouchedElsewhere = (ws: string, rig: string, signed: Json) => {
@@ -376,6 +438,21 @@ export const RigsLive = Layer.effectDiscard(
           if (rig.owner !== r.viewer.sub) return error(403, "only the rig's owner changes its settings");
           if (!wellFormed("settings", op.signed) || op.signed.body.rig !== rig.id || op.signed.body.ws !== ws || op.signed.body.sub !== r.viewer.sub) return error(422, "not this rig's settings");
           queue(ws, rig.id, "settings", { signed: op.signed, chain: op.chain ?? null });
+          return answered({ delivered: await flush(ws, rig.id) });
+        }),
+      },
+      {
+        // A device attached to the rig, or taken off it, as its person signed it: `{signed, chain}`. Kept for a rig
+        // that is away; the rig checks it itself.
+        method: "POST", pattern: /^\/rigs\/([0-9a-f]{64})\/devices$/,
+        handle: (r, [id]) => refusing(async () => {
+          const op = body(r);
+          const ws = r.viewer.workspace;
+          if (r.body.length > SIGNED_MAX) return error(413, "too large");
+          const rig = named(ws, id!);
+          if (rig.owner !== r.viewer.sub) return error(403, "only the station's owner attaches devices to it");
+          if (!wellFormed("device", op.signed) || op.signed.body.rig !== rig.id || op.signed.body.ws !== ws || op.signed.body.sub !== r.viewer.sub) return error(422, "not this station's device");
+          queue(ws, rig.id, "device", { signed: op.signed, chain: op.chain ?? null });
           return answered({ delivered: await flush(ws, rig.id) });
         }),
       },

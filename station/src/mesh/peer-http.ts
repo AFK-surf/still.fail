@@ -238,12 +238,22 @@ export class PeerHttp implements PeerRoute {
   /// saying why. `probe`: only whether that station would take one (it knows forwards, the port is not one it refuses),
   /// nothing connected; resolves with no stream then.
   async tunnel(given: string, port: number, probe = false): Promise<Tunnel | null> {
+    return this.#tunnel(given, { port }, probe);
+  }
+
+  /// A connection to a device attached to `station` (devices/, 2026-11-10), for chat `session` of this station: once
+  /// that station has reached the device and let the chat through, the stream its bytes go on; else an HttpRefusal.
+  async tunnelDevice(given: string, device: string, session: string, probe = false): Promise<Tunnel | null> {
+    return this.#tunnel(given, { device, session }, probe);
+  }
+
+  async #tunnel(given: string, to: { port: number } | { device: string; session: string }, probe: boolean): Promise<Tunnel | null> {
     const peer = peerNamed(this.cloud, given);
     // Named in what it says by its name (a forward asks by the id).
     const station = nameOf(this.cloud, peer.id);
     const s = await this.stream(peer.id, station);
     try {
-      await writeLine(s, { workspace: peer.workspace, port, tcp: true, ...(probe ? { probe: true } : {}) });
+      await writeLine(s, { workspace: peer.workspace, ...to, tcp: true, ...(probe ? { probe: true } : {}) });
       if (probe) await s.finish();
       const reader = new Reader(s, MAX_HEAD);
       const answer = await reader.line();
@@ -343,7 +353,21 @@ export class PeerHttp implements PeerRoute {
 /// reaching another would carry it on, around in a loop when two stations forward to each other).
 /// `allowed`: why a station of the workspace may not reach this machine's services now, or null (a rig: only a station
 /// with a chat its person granted, rig/grants.ts; a station refuses none of its workspace's).
-export type HereLocal = { reach?: (port: number) => Promise<Socket>; forwarded?: (port: number) => boolean; allowed?: (peer: string, workspace: string) => string | null };
+/// `device`: a connection to a device attached to this machine for a chat of that station (devices/), or a
+/// `DeviceRefused` saying why not.
+export type HereLocal = {
+  reach?: (port: number) => Promise<Socket>; forwarded?: (port: number) => boolean; allowed?: (peer: string, workspace: string) => string | null;
+  device?: (peer: string, workspace: string, session: string, device: string, probe: boolean) => Promise<Duplex | null>;
+};
+
+/// Why a chat may not reach a device here (its HTTP status: 403 not let through, 404 no such device).
+export class DeviceRefused extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
 
 /// Another station's connection on this protocol: each stream a request to a web service on this machine, while that
 /// station is in a workspace with this one. Out of it, its connection ends; a roster not current ends nothing (losing
@@ -411,6 +435,27 @@ async function answer(cloud: Cloud, peer: string, stream: Stream, local: HereLoc
     member(cloud, peer, typeof head.workspace === "string" ? head.workspace : "");
   } catch (error) {
     return refusal(stream, (error as Error).message);
+  }
+  // A device's connection: let through by the device's own rules, not by what a station may reach of this machine.
+  if (typeof head.device === "string" && head.tcp === true) {
+    if (local.device === undefined) return refuse(404, "that station has no devices: it may need an update");
+    let socket: Duplex | null;
+    try {
+      socket = await local.device(peer, typeof head.workspace === "string" ? head.workspace : "", typeof head.session === "string" ? head.session : "", head.device, head.probe === true);
+    } catch (error) {
+      return refuse(error instanceof DeviceRefused ? error.status : 502, error instanceof DeviceRefused ? `that machine refused: ${error.message}` : `the device could not be reached there: ${(error as Error).message}`);
+    }
+    if (socket === null) {
+      await writeLine(stream, { status: 200 });
+      return ended(stream);
+    }
+    try {
+      await writeLine(stream, { status: 200 });
+    } catch (error) {
+      socket.destroy();
+      throw error;
+    }
+    return pipeTcp(socket, stream, reader.carry);
   }
   const barred = local.allowed?.(peer, typeof head.workspace === "string" ? head.workspace : "") ?? null;
   if (barred !== null) return refuse(403, `that machine refused: ${barred}`);

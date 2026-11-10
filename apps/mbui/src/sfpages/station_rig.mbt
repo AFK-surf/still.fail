@@ -46,11 +46,20 @@ fn rig_station_node(
     width?,
     tips~,
     lead=fn() { @settings.rig_whose(rig()) + " · " + @settings.rig_state(rig()) },
-    fn() { ["mode", "use", "more"] },
+    // (its devices' own section once it has any; adding one is in its more's rows: rig_more_node)
+    fn() {
+      if @settings.devices_listed(core, here()).iter().any(fn(d) { text(Some(d), "station") == id && text(Some(d), "via") == "rig" }) {
+        ["mode", "use", "devices", "more"]
+      } else {
+        ["mode", "use", "more"]
+      }
+    },
     fn(b, key) {
       match key {
         "mode" => rig_mode_node(b, core, here, rig, id)
         "use" => rig_use_node(b, core, here, rig, id, tips)
+        // its devices: attached by its person, as they sign it
+        "devices" => @settings.station_devices_node(b, core, here, id, true, fn() { false })
         _ => rig_more_node(b, core, here, rig, id)
       }
     },
@@ -319,6 +328,22 @@ fn rig_more_node(b : @view.View, core : Core, here : () -> Here, rig : () -> Jso
             )
           },
         )
+        // a device attached to it: its person's, as they sign it (settings devices.mbt)
+        g.show(fn() { mine() && vouched() }, fn(o) {
+          o.box(fn(holder) {
+            @sf.link_row_node(
+              holder,
+              fn() { @sf.t("web-pages.devices.add") },
+              fn() {
+                let (x, y, w, h) = holder.placed_window_now()
+                @settings.add_device(core, @signals.untracked(here), id, true, At(x, y, w, h))
+              },
+              note=fn() { @sf.t("web-pages.devices.rigNote") },
+              chevron=false,
+            )
+          })
+          |> ignore
+        })
         // taking it out: its person's, and the workspace's managers'
         g.show(fn() { mine() || manager() }, fn(o) {
           @sf.link_row_node(

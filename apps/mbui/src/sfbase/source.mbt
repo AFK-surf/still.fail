@@ -136,6 +136,9 @@ pub(all) struct Source {
   /// whether what the places open on is kept as last said (`lasting`) and asked ahead of them (places_ahead): not of
   /// a run seen again that was recorded before the app did, whose core is asked only what the run asked
   reads_ahead : () -> Bool
+  /// whether the stations' places and pages ask for the workspace's devices (`devices`): not of a run seen again that
+  /// was recorded before the app did
+  asks_devices : () -> Bool
 }
 
 ///|
@@ -476,6 +479,7 @@ pub fn made_source(
     refresh: fn(_, _) {  },
     read_only: false,
     reads_ahead: fn() { true },
+    asks_devices: fn() { true },
   }
 }
 

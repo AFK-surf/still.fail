@@ -4,7 +4,8 @@
 import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readSync, renameSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 
-export type Command = { at: number; station: string; session: string; key: string; name: string; command: string; kind: "task" | "secret" };
+/// `device`: a chat's connection to one of the rig's devices (`name` the device's, `command` how it was reached).
+export type Command = { at: number; station: string; session: string; key: string; name: string; command: string; kind: "task" | "secret" | "device" };
 
 /// The file goes to `.1` past this, the one before it gone.
 const FILE_MAX = 4 * 1024 * 1024;

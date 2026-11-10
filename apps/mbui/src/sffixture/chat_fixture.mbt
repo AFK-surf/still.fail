@@ -1548,6 +1548,10 @@ pub fn vault_post(typed : Bool, file? : Bool = false, use_secret? : Bool = false
 pub let fix_phone : Ref[String] = Ref("")
 
 ///|
+/// The length chat-phone's request was last allowed for (`adb.decide`'s scope): "" none yet.
+pub let fix_phone_scope : Ref[String] = Ref("")
+
+///|
 /// Granted, how its station's adb holds the phone, as the station says it on the card ("": not said).
 pub let fix_phone_link : Ref[String] = Ref("")
 
@@ -1583,7 +1587,8 @@ pub let fix_rig_asked : Array[Json] = []
 ///|
 /// chat-rig's last post: an agent asking for the rig build-box (a station that only runs tasks), its card as the core says it, answered here
 /// by its person; decided, how it went. `mine`: whether the rig is the viewer's (chat-rig-other: 陈's, who is asked).
-pub fn rig_post(mine : Bool) -> Json {
+/// `device`: for one of its devices alone (chat-rig-device: 开发板).
+pub fn rig_post(mine : Bool, device? : Bool = false) -> Json {
   let ask : Map[String, Json] = {
     "request": "r-1",
     "rig": "aa11",
@@ -1596,6 +1601,11 @@ pub fn rig_post(mine : Bool) -> Json {
     "chat": "CHAT/1",
     "title": "修 CI",
     "by": "lin@example.com",
+  }
+  if device {
+    ask["device"] = "1b2c3d4e5f607182"
+    ask["deviceName"] = "开发板"
+    ask["reason"] = "给开发板刷新固件，看串口输出"
   }
   match fix_rig.val {
     "" => ()
@@ -1750,7 +1760,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       }
       // chat-rig's request for a rig, last
       if rig {
-        all.push(rig_post(f.mode != "chat-rig-other"))
+        all.push(rig_post(f.mode != "chat-rig-other", device=f.mode == "chat-rig-device"))
       }
       // chat-ask-end's card, last of what was there: what was sent since comes after it, as it was said after it (put
       // at the end, words sent under it came to stand over it once the station had them, a whole row up in one frame)
@@ -1829,6 +1839,7 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
     }
     // chat-vault's request decided: how it went on its card at once, as the core puts it
     "adb.decide" if text(p, "request") == "p-1" => {
+      fix_phone_scope.val = text(p, "scope")
       fix_phone.val = if text(p, "scope") != "" { "granted" } else { "denied" }
       f.changed()
       Some(Ok(Json::object({})))

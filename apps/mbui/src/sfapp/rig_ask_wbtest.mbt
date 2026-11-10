@@ -85,3 +85,18 @@ test "a request for a rig decided before it is seen: a line in its place, by how
   let t = chat_tester("chat-rig-ended")
   assert_true(t.find("这台 station 的授权已结束：所有者已收回") is Some(_))
 }
+
+///|
+test "a request for one device of the viewer's rig: the card names the device and its station; allowed, what is signed names the device" {
+  let t = chat_tester("chat-rig-device")
+  assert_true(t.find("允许这个对话的 agent 使用设备「开发板」（在 station「build-box」上）？") is Some(_))
+  assert_true(t.find("给开发板刷新固件，看串口输出") is Some(_))
+  let allow = t.words().filter(fn(x) { x.0 == "允许" })[0]
+  t.tap(allow.1 + allow.3 / 2.0, allow.2 + allow.4 / 2.0)
+  t.draw()
+  let asked = @sffixture.fix_rig_asked
+  assert_eq(asked.length(), 1)
+  let ask = field(Some(asked[0]), "ask")
+  assert_eq(text(ask, "device"), "1b2c3d4e5f607182")
+  assert_eq(text(ask, "deviceName"), "开发板")
+}

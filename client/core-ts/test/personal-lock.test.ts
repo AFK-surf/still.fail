@@ -230,6 +230,10 @@ test("a grant holds only for what was signed, by a key on the lock, in its time,
     const flipped = (t.sig.sig[0] === "0" ? "1" : "0") + t.sig.sig.slice(1);
     assert.equal(holds(grantOf({ ...t, sig: { ...t.sig, sig: flipped } })), null, "its signature changed, the right one checked before");
     assert.equal(holds(grantOf(signed)), 2_000_000_000, "and the right one still holds");
+    // An hour unused or eight hours (2026-11-10): signed as such, held as such, and no other.
+    const idle = await a.runner.run(a.lock.signGrant(SUB, body({ scope: "idle" }), "why"));
+    assert.equal(holds({ ...grantOf(idle), scope: "idle" }), 2_000_000_000);
+    assert.equal(holds({ ...grantOf(idle), scope: "eight" }), null, "another length");
   } finally {
     a.runner.shutdown();
     b.runner.shutdown();

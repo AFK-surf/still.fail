@@ -32,6 +32,8 @@ export type RigRequest = {
   delivered?: boolean; until?: number;
   /// Its agent was told the rig was away as it was approved (told once).
   toldAway?: boolean;
+  /// One of the rig's devices alone (devices/), and its name as asked: none, the rig itself.
+  device?: string; deviceName?: string;
   thread?: number; cardTs?: string;
 };
 
@@ -149,9 +151,9 @@ export class RigRequests {
     return r.status === "pending" || r.status === "granted";
   }
 
-  /// A chat's requests for `rig` still open (asked, or granted).
-  of(session: string, rig: string): RigRequest[] {
-    return this.#bySession(session).filter((r) => r.rig === rig && this.#live(r));
+  /// A chat's requests for `rig` (or, `device` named, for that device of it alone) still open (asked, or granted).
+  of(session: string, rig: string, device?: string): RigRequest[] {
+    return this.#bySession(session).filter((r) => r.rig === rig && r.device === device && this.#live(r));
   }
 
   /// The requests of a workspace's rig still open, every chat's (who lists the rig shows them).
@@ -166,12 +168,12 @@ export class RigRequests {
 
   /// station_use: a request asked in the session's chat, of the rig's person; not waited for (the agent's turn goes on),
   /// its decision told to the session. One already open for the rig is said again, not asked twice.
-  async ask(session: string, rig: { id: string; name: string; owner: string; owner_email: string }, ws: string, reason: string, timeout: Timeout | undefined, signal?: AbortSignal): Promise<RigRequest> {
+  async ask(session: string, rig: { id: string; name: string; owner: string; owner_email: string }, ws: string, reason: string, timeout: Timeout | undefined, signal?: AbortSignal, device?: { id: string; name: string }): Promise<RigRequest> {
     signal?.throwIfAborted();
     if (this.#gone(session)) throw new Refused("this chat is archived or gone");
-    const open = this.of(session, rig.id)[0];
+    const open = this.of(session, rig.id, device?.id)[0];
     if (open !== undefined) return open;
-    if (reason.trim() === "") throw new Refused("say what you will run on that station and why (reason)");
+    if (reason.trim() === "") throw new Refused(device === undefined ? "say what you will run on that station and why (reason)" : "say what you will do with the device and why (reason)");
     if (timeout !== undefined) {
       const why = timeoutRefusal(timeout);
       if (why !== null) throw new Refused(why);
@@ -185,7 +187,7 @@ export class RigRequests {
         await prepare([session], signal);
         signal?.throwIfAborted();
         if (this.#gone(session)) throw new Refused("this chat is archived or gone");
-        return this.ask(session, rig, ws, reason, timeout, signal);
+        return this.ask(session, rig, ws, reason, timeout, signal, device);
       }
       thread = found;
     } else thread = this.#d.hub.store.latestThread(session);
@@ -196,6 +198,7 @@ export class RigRequests {
       ws, session, chat, rig: rig.id, rigName: rig.name, owner: rig.owner, ownerEmail: rig.owner_email.toLowerCase(), reason: reason.trim(),
       timeout: timeout ?? TIMEOUT_DEFAULT, at: this.#secs(), status: "pending",
       title: this.#d.title({ session, chat }) ?? "", by: this.#d.hub.store.starter(session) ?? "",
+      ...(device !== undefined ? { device: device.id, deviceName: device.name } : {}),
     };
     this.#save(r);
     const posted = await this.#post(session, thread, r, signal);
@@ -211,15 +214,19 @@ export class RigRequests {
   async #post(session: string, thread: SessionThread, r: RigRequest, signal?: AbortSignal): Promise<string | null> {
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
     const whose = r.ownerEmail || r.owner;
-    const text = [`申请使用 station「${r.rigName}」：${r.reason}`, ...(stillfail ? [] : [`请它的所有者 ${whose} 在 still.fail app 中批准。`])].join("\n\n");
+    const what = r.device === undefined ? ` station「${r.rigName}」` : `设备「${r.deviceName ?? r.device}」（在 station「${r.rigName}」上）`;
+    const text = [`申请使用${what}：${r.reason}`, ...(stillfail ? [] : [`请它的所有者 ${whose} 在 still.fail app 中批准。`])].join("\n\n");
     const card = stillfail
       ? {
           type: "options",
-          options: [{ label: "允许", detail: "这个对话的 agent 可以在这台 station 上运行任务", recommended: true }, { label: "拒绝", detail: "通知 agent 已拒绝" }],
+          options: [{ label: "允许", detail: r.device === undefined ? "这个对话的 agent 可以在这台 station 上运行任务" : "这个对话的 agent 可以连接这台设备", recommended: true }, { label: "拒绝", detail: "通知 agent 已拒绝" }],
           assignee: r.ownerEmail,
           // The request as the app draws it, with what its person's device signs to approve it; its outcome added
           // once decided.
-          rig: { request: r.id, rig: r.rig, name: r.rigName, owner: r.owner, reason: r.reason, timeout: r.timeout, ws: r.ws, station: this.#d.self(), session: r.session, chat: r.chat, title: r.title, by: r.by },
+          rig: {
+            request: r.id, rig: r.rig, name: r.rigName, owner: r.owner, reason: r.reason, timeout: r.timeout, ws: r.ws, station: this.#d.self(), session: r.session, chat: r.chat, title: r.title, by: r.by,
+            ...(r.device !== undefined ? { device: r.device, deviceName: r.deviceName ?? "" } : {}),
+          },
         }
       : null;
     return postCard(this.#d.hub, session, thread, text, card, null, undefined, signal);
@@ -268,7 +275,7 @@ export class RigRequests {
     if (!wellFormed("grant", signed) || JSON.stringify([signed, chain ?? null]).length > SIGNED_MAX) return "not a rig's grant";
     const s = signed as Signed<GrantBody>;
     const b = s.body;
-    if (b.sub !== sub || b.ws !== r.ws || b.rig !== r.rig || b.station !== this.#d.self() || b.session !== r.session || b.chat !== r.chat || b.request !== r.id || b.title !== r.title || b.by !== r.by) return "signed for something else than this request";
+    if (b.sub !== sub || b.ws !== r.ws || b.rig !== r.rig || b.station !== this.#d.self() || b.session !== r.session || b.chat !== r.chat || b.request !== r.id || b.title !== r.title || b.by !== r.by || b.device !== r.device) return "signed for something else than this request";
     if (b.exp > latest(b.at, b.timeout)) return "signed for longer than its timeout";
     if (b.exp <= this.#secs()) return "the grant has expired";
     r.signed = s;
@@ -331,8 +338,10 @@ export class RigRequests {
   }
 
   /// The chat's agent is done with the rig (`station_use {done: true}`): its grant, or a request still asked, ends.
-  release(session: string, rig: string | null): RigRequest[] {
-    const ended = this.#bySession(session).filter((r) => (rig === null || r.rig === rig) && this.#live(r));
+  /// `device`: that device's alone (undefined: the rig's, with no device; null: either; "*": any device's, none of a
+  /// rig itself).
+  release(session: string, rig: string | null, device: string | null | undefined = null): RigRequest[] {
+    const ended = this.#bySession(session).filter((r) => (rig === null || r.rig === rig) && (device === null || (device === "*" ? r.device !== undefined : r.device === device)) && this.#live(r));
     for (const r of ended) this.#end(r, "agent 已交还", true, false);
     return ended;
   }
@@ -391,6 +400,7 @@ export function lasting(t: Timeout): string {
 /// What the agent is told of its request.
 export function said(r: RigRequest): string {
   const whose = r.ownerEmail || r.owner;
+  if (r.device !== undefined) return deviceSaid(r, whose);
   switch (r.status) {
     case "granted":
       if (r.delivered !== true) return `Your request ${r.id} for the tasks-only station ${r.rigName} was approved by ${whose}, but it is not reached now: the grant is brought to it when it is back, and you are told then. Do not ask again.`;
@@ -401,5 +411,21 @@ export function said(r: RigRequest): string {
       return `Your grant ${r.id} of the tasks-only station ${r.rigName} ended (${r.why ?? "ended"}): what this chat ran there was stopped, and it takes nothing more from this chat. What a task left there (its log, files to bring back) is still read with station_task and station_file. Ask again with station_use if it is still needed.`;
     default:
       return `Your request ${r.id} for the tasks-only station ${r.rigName} waits for its owner ${whose} to approve it on the card in your chat. ${UNDECIDED}`;
+  }
+}
+
+/// What the agent is told of its request for one of a rig's devices.
+function deviceSaid(r: RigRequest, whose: string): string {
+  const what = `the device ${r.deviceName ?? r.device} (on the tasks-only station ${r.rigName})`;
+  switch (r.status) {
+    case "granted":
+      if (r.delivered !== true) return `Your request ${r.id} for ${what} was approved by ${whose}, but that station is not reached now: the grant is brought to it when it is back, and you are told then. Do not ask again.`;
+      return `Your request ${r.id} for ${what} was granted by ${whose} (${lasting(r.signed?.body.timeout ?? r.timeout)}): call device_use again with the device for where it is reached here. Done with it, call device_use with done: true.`;
+    case "denied":
+      return `Your request ${r.id} for ${what} was refused${r.why ? ` (${r.why})` : ""}.`;
+    case "ended":
+      return `Your grant ${r.id} of ${what} ended (${r.why ?? "ended"}): its port here is closed. Ask again with device_use if it is still needed.`;
+    default:
+      return `Your request ${r.id} for ${what} waits for its owner ${whose} to approve it on the card in your chat. ${UNDECIDED}`;
   }
 }

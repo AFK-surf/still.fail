@@ -130,6 +130,7 @@ export const TOPICS: Record<string, Spec> = {
   adbShare: {},
   adbCard: { station: S },
   rigs: { workspace: S },
+  devices: { workspace: S },
   previewLoad: { station: S, port: ["u16", "req"] },
   slackTokens: { station: S, form: S },
   connectFlow: { station: S, form: S },

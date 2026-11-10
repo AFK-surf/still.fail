@@ -302,6 +302,7 @@ let core_source : @sfapp.Source = {
   refresh: fn(name, params) { @core.refresh_topic(name, params=@sfbase.core_topic_params(name, params)) },
   read_only,
   reads_ahead: fn() { true },
+  asks_devices: fn() { true },
 }
 
 ///|

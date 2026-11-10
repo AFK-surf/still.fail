@@ -154,6 +154,7 @@ fn settings_core_of(
     face_failed: face_failed,
     own_code_face: own_code_preview,
     read_only: if src.read_only { read_only_words } else { "" },
+    devices_on: src.asks_devices,
   }
 }
 

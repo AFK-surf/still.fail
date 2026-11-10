@@ -16,7 +16,7 @@ import { lanAddrs } from "../mesh/lan.ts";
 import { applyNetwork } from "../mesh/mesh.ts";
 import { bindStation } from "../mesh/native.ts";
 import { PEER_ALPN, PEER_BYTES_ALPN, peerCall, servePeer } from "../mesh/peer.ts";
-import { PEER_HTTP_ALPN, serveHttp } from "../mesh/peer-http.ts";
+import { DeviceRefused, PEER_HTTP_ALPN, serveHttp } from "../mesh/peer-http.ts";
 import { keepRelays } from "../mesh/relays.ts";
 import { congestionOf } from "../mesh/settings.ts";
 import { DISK_EVERY_MS, DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
@@ -245,7 +245,10 @@ export const RigMeshLive = Layer.effectDiscard(
           connections,
           Effect.tryPromise(() =>
             conn.alpn().equals(PEER_HTTP_ALPN)
-              ? serveHttp(conn, cloud, { allowed: (peer, workspace) => rig.current?.stationRefusal(peer, workspace) ?? "the rig is starting" })
+              ? serveHttp(conn, cloud, {
+                  allowed: (peer, workspace) => rig.current?.stationRefusal(peer, workspace) ?? "the rig is starting",
+                  device: (peer, workspace, session, device, probe) => rig.current === null ? Promise.reject(new DeviceRefused(503, "the rig is starting")) : rig.current.device(peer, workspace, session, device, probe),
+                })
               : servePeer(conn, cloud, peers),
           ).pipe(
             Effect.catch((e) => Effect.sync(() => log.info("mesh", "connection ended", { error: String((e as Error).cause ?? e) }))),

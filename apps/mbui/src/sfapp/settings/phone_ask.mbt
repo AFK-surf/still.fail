@@ -66,11 +66,11 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
     AdbLends if !flag((core.topic)("adbShare", Map([])).get().value, "on") => Some(tr("android-misc.adb.step.on"))
     _ => None
   } }
-  // (up to its owner's 默认最长授权, starting at the longest)
-  let scopes = if lasts == "hour" { ["hour"] } else { ["hour", "chat"] }
+  // (up to its owner's 默认最长授权, starting at an hour unused where it may be that: a device's timeouts, 2026-11-10)
+  let scopes = if lasts == "hour" { ["hour"] } else { ["hour", "idle", "eight", "chat"] }
   let scope = match vault_picked.get("phone/" + request) {
     Some(s) if scopes.contains(s) => s
-    _ => scopes[scopes.length() - 1]
+    _ => if scopes.contains("idle") { "idle" } else { scopes[scopes.length() - 1] }
   }
   let on = [("station", station), ("request", request)]
   let pending = vault_pending.get("phone/" + request)
@@ -215,7 +215,7 @@ pub fn phone_lends(c : @ui.Ctx) -> Bool {
 ///|
 /// How a request ended, in words (phone_outcome's).
 pub fn phone_outcome_words(status : String, scope : String, why : String) -> String {
-  let scope = if scope == "hour" { "hour" } else { "chat" }
+  let scope = if scope == "hour" || scope == "idle" || scope == "eight" { scope } else { "chat" }
   match status {
     "granted" => fill("android-misc.adb.ask.granted", [("scope", tr("android-settings.vault.scope." + scope))])
     "denied" if why == "" => tr("android-misc.adb.ask.denied")

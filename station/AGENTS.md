@@ -92,6 +92,18 @@
   behind a grant unless `UNGATED` (`src/rig/module.ts`) lists it, which is for reading back and stopping what a chat
   already ran there; a new method is not added to it to make something work.
 
+## Devices (设备)
+
+- A device is what agents use that runs no station (the user, 2026-11-10): attached to a station (on its USB, in its
+  network, a serial port: `src/devices/`, `connect.ts` reaches it) or a member's phone lent by its app (`src/adb/`).
+  One list (`device_list`), one way to ask (`device_use`), each its person's. A chat gets a port of 127.0.0.1 on its
+  own station that only its processes connect to (`src/adb/door.ts`'s gate), carried over the mesh to the device's station
+  (`src/mesh/peer-http.ts`, a tunnel's `device`).
+- On a whole station a device is every chat's, with no grant: the station is every chat's, so none would guard it. One
+  that needs its owner's approval is attached to a station that only runs tasks, by that station's owner, as they sign
+  it (`client/core-ts/src/rig-form.ts` `DeviceBody`), kept and checked by the rig itself (`src/rig/grants.ts`), granted alone or with the
+  rig, or 免批准 on it.
+
 ## Tests
 
 - `pnpm exec tsgo --noEmit` types; one test file is `node ../scripts/native.ts run mesh runner archive-rs reader --

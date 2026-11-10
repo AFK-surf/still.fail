@@ -42,6 +42,8 @@ import { PeerBus } from "./mesh/bus.ts";
 import type { Outside } from "./mesh/peer.ts";
 import { Net } from "./jobs/load.ts";
 import type { PeerRoute } from "./tools/http.ts";
+import type { HereLocal } from "./mesh/peer-http.ts";
+import type { Json } from "./store/store.ts";
 import { StationParts } from "./parts.ts";
 import { wall } from "./ops/fibers.ts";
 
@@ -332,9 +334,44 @@ export type MeshSideShape = {
   outside: Outside | null;
   forwarded: (port: number) => boolean;
   runtimes: () => string[];
+  /// A connection to a device attached here, for a chat of another station (devices/module.ts): what peer-http.ts's
+  /// `HereLocal.device` is; none until the devices' part is up.
+  device: HereLocal["device"] | null;
 };
 export class MeshSide extends Context.Service<MeshSide, MeshSideShape>()("stillfail/MeshSide") {
-  static readonly layer = Layer.sync(MeshSide, (): MeshSideShape => ({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [] }));
+  static readonly layer = Layer.sync(MeshSide, (): MeshSideShape => ({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [], device: null }));
+}
+
+/// A device as an agent is shown it (devices/, 2026-11-10): what it is, where it is attached, whose it is, and whether
+/// this chat may use it now and who may.
+export type DeviceEntry = {
+  id: string; name: string; kind: string; target: string; baud?: number;
+  /// Where it is attached: a station's id and name (`via: station`), a tasks-only station's (`rig`), or its person's
+  /// phone itself (`phone`, its app lending it).
+  via: "station" | "rig" | "phone"; station: string; stationName: string;
+  owner: string; ownerEmail: string; ownerName: string;
+  online?: boolean; thisChat: string; hasAccess: string | string[];
+};
+/// Where devices come from besides this station's own whole ones (devices/module.ts): the tasks-only stations'
+/// (rigs/module.ts) and the members' phones (adb/module.ts), each filled by its part.
+export type DeviceSource = {
+  list(workspace: string, session: string): Promise<DeviceEntry[]>;
+  /// What the agent is told of asking for `device` (its id or name, as found by `list`).
+  use(workspace: string, session: string, device: DeviceEntry, reason: string, timeout: unknown, signal?: AbortSignal): Promise<string>;
+  /// The chat's grants (or requests) of devices of this source handed back (one, or every one: none named): their names.
+  done(workspace: string, session: string, device: DeviceEntry | null): string[];
+  /// What the members' apps are shown of them (the phones lent here, with the chats that hold each); none: nothing.
+  shown?(workspace: string): Json[];
+};
+/// `forward`: the devices' part's, a device a chat may use put on a port here for it (what the agent is told of it).
+export type DeviceSourcesShape = {
+  rigs: DeviceSource | null; phones: DeviceSource | null;
+  forward: ((session: string, device: DeviceEntry) => Promise<string>) | null;
+  /// What the members' apps are shown changed (a phone lent or gone, a grant of it): told again.
+  changed: ((workspace: string | null) => void) | null;
+};
+export class DeviceSources extends Context.Service<DeviceSources, DeviceSourcesShape>()("stillfail/DeviceSources") {
+  static readonly layer = Layer.sync(DeviceSources, (): DeviceSourcesShape => ({ rigs: null, phones: null, forward: null, changed: null }));
 }
 
 /// The station's parts in its own process (parts.ts): what each adds to the admin API, the overview and the agents'

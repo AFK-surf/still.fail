@@ -1,6 +1,7 @@
 // Named calls and their input validation; execution stays in the core (execute.ts).
 import { parseAdb, type AdbCall } from "../adb-parse.ts";
 import { parseRig, type RigCall } from "../rigs.ts";
+import { parseDevice, type DeviceCall } from "../devices.ts";
 import { parseAsk, type Ask } from "../asks-parse.ts";
 import { parseAttend, type AttendCall } from "../attend-parse.ts";
 import { parseScreen, type ScreenCall } from "../screens.ts";
@@ -154,6 +155,8 @@ export type Call =
   | { kind: "adb"; call: AdbCall }
   /// A workspace's rigs (rigs.ts): `rig.<name>`.
   | { kind: "rig"; call: RigCall }
+  /// A workspace's devices (devices.ts): `device.<name>`.
+  | { kind: "device"; call: DeviceCall }
   /// A station's screen seen and driven (screens.ts): `screen.view` and what goes on it.
   | { kind: "screen"; call: ScreenCall }
   /// The workspace lock (views/lock.ts): `lock.<name>` on a workspace, with what it takes.
@@ -1154,6 +1157,8 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
   if (adb) return { kind: "adb", call: adb };
   const rig = parseRig(name, p);
   if (rig) return { kind: "rig", call: rig };
+  const device = parseDevice(name, p);
+  if (device) return { kind: "device", call: device };
   const screen = parseScreen(name, p, bytes);
   if (screen) return { kind: "screen", call: screen };
   const ask = parseAsk(name, p);

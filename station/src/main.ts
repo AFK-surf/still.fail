@@ -31,7 +31,7 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdminApi, AgentsSide, AdminHost, CheckpointsLive, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, Own, Parts, Paths, Peers, Previous, Readers, ReadersAndStore, ScreenRegistry, StationConfig, StationDrive, Up } from "./services.ts";
+import { AdminApi, AgentsSide, AdminHost, CheckpointsLive, ControlPlane, DeviceSources, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, Own, Parts, Paths, Peers, Previous, Readers, ReadersAndStore, ScreenRegistry, StationConfig, StationDrive, Up } from "./services.ts";
 import { VaultLive } from "./vault/module.ts";
 import { AdbLive } from "./adb/module.ts";
 import { BrowserLive } from "./browser/module.ts";
@@ -60,6 +60,7 @@ import { keepRunnerIn } from "./platform/processes.ts";
 import { becomeOther } from "./ops/restart.ts";
 import { RigLive, RigMeshLive, RigSide } from "./rig/main.ts";
 import { RigsLive } from "./rigs/module.ts";
+import { DevicesLive } from "./devices/module.ts";
 
 // What reads HOME (the machine's logins, its transcripts) finds the user's home there, where the machine names it
 // otherwise (Windows: USERPROFILE).
@@ -212,7 +213,7 @@ function run() {
   );
   const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, CheckpointsLive, BecameRig).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
-    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, LoginsLive, DriveTransfersLive, UsageLive, ElevationLive, ResourcesLive, SearchLive, SlackLive, FeishuLive, CommaLive, WorkspaceConnectsLive, ModelsLive, RigsLive)),
+    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, LoginsLive, DriveTransfersLive, UsageLive, ElevationLive, ResourcesLive, SearchLive, SlackLive, FeishuLive, CommaLive, WorkspaceConnectsLive, ModelsLive, RigsLive, DevicesLive)),
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
     // The drive, the admin API's: the platform's, before the agents.
@@ -229,6 +230,8 @@ function run() {
     Layer.provideMerge(Peers.layer),
     // What the mesh and the agents' side share, each filling in its own (services.ts MeshSide).
     Layer.provideMerge(MeshSide.layer),
+    // Where devices come from besides the whole stations' (services.ts DeviceSources): the rigs' and phones' parts.
+    Layer.provideMerge(DeviceSources.layer),
     Layer.provideMerge(Parts.layer),
     // The agents' side, once made (the admin API asks for it as a request comes).
     Layer.provideMerge(AgentsSide.layer),

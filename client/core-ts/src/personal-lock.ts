@@ -81,7 +81,7 @@ export function checkChain(entries: readonly Entry[], sub: string): Chain | null
 const folded = new WeakMap<readonly Entry[], { sub: string; chain: Chain | null }>();
 
 /// What a person's device signs for a chat's grant of their phone.
-export type GrantBody = { v: 1; sub: string; station: string; request: string; session: string; chat: string; scope: "hour" | "chat"; exp: number };
+export type GrantBody = { v: 1; sub: string; station: string; request: string; session: string; chat: string; scope: "hour" | "idle" | "eight" | "chat"; exp: number };
 export type SignedGrant = { body: GrantBody; sig: { key: string; sig: string } };
 const grantBytes = (body: unknown) => {
   const tag = utf8("stillfail-phone-grant/1\0");

@@ -73,6 +73,14 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     for r in rigs {
       blocks.push(fn() { rig_station_card(c, core, here, r) })
     }
+    // the workspace's devices after its stations (设备: attached to one, or a person's phone), under their heading
+    let devices = if list is Some(_) { devices_listed(core, here) } else { [] }
+    if devices.length() > 0 {
+      blocks.push(fn() { @sf.heading(c, @sf.t("web-pages.devices.title")) })
+    }
+    for d in devices {
+      blocks.push(fn() { device_card(c, core, here, d) })
+    }
     blocks.push(fn() { gap(c, 30.0) })
     // (each block by what it is: a station by its id, so one joining or leaving comes and goes where it is)
     let keys = match list {
@@ -83,8 +91,14 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     for r in rigs {
       keys.push("rig/" + text(Some(r), "id"))
     }
+    if devices.length() > 0 {
+      keys.push("devices")
+    }
+    for d in devices {
+      keys.push("device/" + text(Some(d), "station") + "/" + text(Some(d), "id"))
+    }
     keys.push("foot")
-    scroll_page(c, "stations", blocks, keys~, continuity=fn(k) { k.has_prefix("st/") || k.has_prefix("rig/") })
+    scroll_page(c, "stations", blocks, keys~, continuity=fn(k) { k.has_prefix("st/") || k.has_prefix("rig/") || k.has_prefix("device/") })
   })
 }
 
@@ -158,6 +172,18 @@ fn rig_station_card(c : @ui.Ctx, core : Core, here : Here, r : Json) -> Unit {
     card_head(c, fn() { @sf.icon(c, "boxes", size=card_mark, color=t.p.text) |> ignore }, text(Some(r), "name"), Some(rig_said(Some(r))), fn() { chevron(c) })
   }, on_press=fn() {
     (core.push)(Station(address))
+  })
+}
+
+///|
+/// A device in the list (设备): its mark, its name, what it is, where, whose and how chats use it; its panel a press away.
+fn device_card(c : @ui.Ctx, core : Core, here : Here, d : Json) -> Unit {
+  let t = @sf.theme()
+  let key = "device/" + text(Some(d), "station") + "/" + text(Some(d), "id")
+  card(c, key~, fn() {
+    card_head(c, fn() { @sf.icon(c, device_icon(Some(d)), size=card_mark, color=t.p.text) |> ignore }, text(Some(d), "name"), Some(device_said(Some(d))), fn() { chevron(c) })
+  }, on_press=fn() {
+    open_device(core, here, text(Some(d), "station"), text(Some(d), "id"), Unanchored)
   })
 }
 

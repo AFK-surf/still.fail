@@ -568,6 +568,45 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
     }
     _ => ()
   }
+  // its devices (设备: every chat's, as it is), and adding one: any member but one who only reads
+  let id = text(s, "id")
+  let devices = @settings.devices_listed(core, here).filter(fn(d) { text(Some(d), "station") == id && text(Some(d), "via") == "station" })
+  let role = role_of(core, here)
+  let can_add = role != "" && role != "viewer"
+  // (while it is up: one is added there)
+  if online && (devices.length() > 0 || can_add) {
+    out.push(fn() {
+      st_section(c, @sf.t("web-pages.devices.title"), count=devices.length(), description=@sf.t("web-pages.devices.stationNote"), fn() {
+        @sf.group(c, fn() {
+          for d in devices {
+            let dv = Some(d)
+            let row = "station-device/" + address + "/" + text(dv, "id")
+            let from = c.id(row)
+            @sf.link_row(
+              c,
+              row,
+              text(dv, "name"),
+              note=join([@settings.device_kind_words(dv), text(dv, "target"), @settings.device_whose(dv)], " · "),
+              lead=fn() { st_row_mark(c, @settings.device_icon(dv)) },
+              on_press=fn() { @settings.open_device(core, here, id, text(dv, "id"), @sf.Beside::Of(from).anchor()) },
+            ) |> ignore
+          }
+          if can_add {
+            let row = "station-device-add/" + address
+            let from = c.id(row)
+            @sf.link_row(
+              c,
+              row,
+              @sf.t("web-pages.devices.add"),
+              note=@sf.t("web-pages.devices.addNote"),
+              lead=fn() { st_row_mark(c, "plus") },
+              on_press=fn() { @settings.add_device(core, here, id, false, @sf.Beside::Of(from)) },
+            ) |> ignore
+          }
+        })
+      })
+    })
+  }
   // what else of it has a page of its own: its memory, this device's adb lent to its agents (AdbShare)
   out.push(fn() {
     st_section(c, @sf.t("web-pages.stations.page.more"), fn() {

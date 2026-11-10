@@ -96,6 +96,8 @@ pub(all) struct Core {
   now : () -> Double
   /// run with MBUI_READONLY=1: what is said in place of an answer sent (a vault request's); "" where answers go
   read_only : String
+  /// whether the workspace's devices are asked for (the source's `asks_devices`: not in a replay of a run from before)
+  devices_on : () -> Bool
 }
 
 ///|

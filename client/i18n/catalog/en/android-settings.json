@@ -758,6 +758,8 @@
   "android-settings.vault.scope.once": "Just this once",
   "android-settings.vault.scope.hour": "For 1 hour",
   "android-settings.vault.scope.chat": "In this chat",
+  "android-settings.vault.scope.idle": "Until idle for 1 hour",
+  "android-settings.vault.scope.eight": "For 8 hours",
   "android-settings.vault.timeout.idle": "Expire after inactivity",
   "android-settings.vault.timeout.fixed": "Expire after a fixed time",
   "android-settings.vault.timeout.minutes": "Minutes",

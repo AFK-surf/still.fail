@@ -62,6 +62,7 @@ import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
 import { Rigs } from "./rigs.ts";
+import { Devices } from "./devices.ts";
 import { Signer } from "./lock.ts";
 import { PersonalLock } from "./personal-lock.ts";
 import { answersOf, bindPerson, enrolled, keepToPerson, lockSeen, ownLockEnv, ownLockFor, personalStations, refusedAgain, signerOf, signsAs, tellStations, tookOrRefused } from "./views/lock.ts";
@@ -141,6 +142,8 @@ export class Inner {
   adb!: Adb;
   /// The workspaces' rigs (rigs.ts).
   rigs!: Rigs;
+  /// The workspaces' devices (devices.ts).
+  devices!: Devices;
   viewCalls!: ViewCalls;
   /// This device's downloads of chats' files (views/downloads.ts).
   downloads!: downloads.Downloads;
@@ -352,6 +355,22 @@ export class Core {
       // (read whole as a station is first read; after that its `rigs` event says each change, a stream that was away
       // told the last of them as it goes on)
       inner.stations.also.push({ read: (address) => inner.rigs.read(address), event: (address, name, data) => inner.rigs.heard(address, name, data) });
+      // The workspaces' devices: the whole stations' own, the rigs' (as the rigs say them), the phones lent to stations.
+      inner.devices = new Devices({
+        host: inner.host,
+        store: inner.store,
+        rigs: () => inner.rigs,
+        personal: () => inner.adb.personal(),
+        subOf: (workspace) => inner.workspaces.owner(workspace),
+        emailOf: (workspace) => {
+          const sub = inner.workspaces.owner(workspace);
+          return sub === null ? null : (inner.accounts.list().find((a) => a.sub === sub)?.email ?? null);
+        },
+        view: (workspace) => inner.data.shared({ topic: "workspace", workspace }),
+        call: (station, method, path, body) => inner.stations.requests.call(station, method, path, body, { quiet: true }),
+      });
+      handlers.device = (_i, call) => inner.devices.run((call as Extract<Call, { kind: "device" }>).call);
+      inner.stations.also.push({ read: (address) => inner.devices.read(address), event: (address, name, data) => inner.devices.heard(address, name, data) });
       // This person's chats' grants of their phone, as each station says them.
       inner.stations.also.push({ read: (address) => inner.adb.readGrants(address), event: (address, name, data) => (name === "adb-grant" ? inner.adb.heard(address, data) : undefined), resume: true });
       handlers.ask = (_i, call) => asks.run((call as Extract<Call, { kind: "ask" }>).ask, inner.accounts);

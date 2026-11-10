@@ -13,7 +13,9 @@
 
 ///|
 /// Each switch: how many traces may replay without it.
-let switches_known : Map[String, Int] = { "MBUI_PLACES_BAR": 80 }
+/// MBUI_DEVICES (#5232, 2026-11-10: the stations' places and pages ask for the workspace's devices) off in all 81 as
+/// it came.
+let switches_known : Map[String, Int] = { "MBUI_PLACES_BAR": 80, "MBUI_DEVICES": 81 }
 
 ///|
 test "the released app's ways a replay takes from its trace: how many traces are without each, within its bar" {

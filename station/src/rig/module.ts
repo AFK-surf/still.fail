@@ -9,6 +9,9 @@
 // here (`rig.hello`, as it comes on the mesh and as the roster changes) and that its grants or settings changed
 // (`rig.changed`), each with what `describe` says of it, so a station shows it without asking again.
 import { join } from "node:path";
+import type { Duplex } from "node:stream";
+import { reachDevice } from "../devices/connect.ts";
+import { DeviceRefused } from "../mesh/peer-http.ts";
 import type { Json } from "../store/store.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { Refused, type PeerBus } from "../mesh/bus.ts";
@@ -53,6 +56,8 @@ export class Rig {
   readonly #untold = new Map<string, { wait: number; until: number; stop: () => void }>();
   #unlisten: (() => void) | null = null;
   #known = new Set<string>();
+  /// The chats' connections to this rig's devices open now.
+  readonly #wired = new Set<{ device: string; station: string; session: string; socket: Duplex }>();
 
   constructor(deps: RigDeps) {
     this.#d = deps;
@@ -68,6 +73,7 @@ export class Rig {
       running: () => deps.running().filter((r) => r.workspace === ws()),
       ended: (ended) => this.#tell(ended.station, { ended }),
       changed: () => this.#tellAll(),
+      cut: (device, station, session) => this.#cut(device, station, session),
       fibers: this.#fibers,
     });
     bus.guarded((workspace, peer, request) => this.#guard(workspace, peer, request));
@@ -95,6 +101,33 @@ export class Rig {
       sessions: false, messages: false, reads: false, chats: false,
       rig: view === null ? null : { ...view, owner_email: s?.rig?.owner_email ?? "", owner_name: s?.rig?.owner_name ?? "", ...(this.grants.proof() !== null ? { proof: true } : {}) },
     };
+  }
+
+  /// A connection to device `id` here for a chat (`session` of station `peer`): let through by a grant of the rig or of
+  /// the device, or 免批准, else a DeviceRefused saying why. `probe`: only whether it would be (no use, nothing opened).
+  async device(peer: string, workspace: string, session: string, id: string, probe: boolean): Promise<Duplex | null> {
+    const why = this.grants.deviceRefusal(workspace, peer, session, id, !probe);
+    if (why !== null) throw new DeviceRefused(/no such device/.test(why) ? 404 : 403, why);
+    if (probe) return null;
+    const d = this.grants.devices().find((x) => x.id === id);
+    if (d === undefined) throw new DeviceRefused(404, "no such device on this rig");
+    const socket = await reachDevice(d);
+    const wire = { device: id, station: peer, session, socket };
+    this.#wired.add(wire);
+    socket.once("close", () => this.#wired.delete(wire));
+    this.commands.add({ at: this.#fibers.now(), station: peer, session, key: id, name: d.name, command: `${d.kind} ${d.target}`, kind: "device" });
+    return socket;
+  }
+
+  /// The connections to `device` (of one chat, or of all) looked at again: those no longer let through are cut.
+  #cut(device: string, station: string | null, session: string | null): void {
+    const self = this.self();
+    for (const w of [...this.#wired]) {
+      if (w.device !== device || (station !== null && w.station !== station) || (session !== null && w.session !== session)) continue;
+      if (self !== null && this.grants.deviceRefusal(self.workspace, w.station, w.session, device, false) === null) continue;
+      this.#wired.delete(w);
+      w.socket.destroy();
+    }
   }
 
   /// Why a station may not reach this rig's services now (mesh/peer-http.ts), or null.
@@ -134,6 +167,9 @@ export class Rig {
           return { released: this.grants.release(peer, String(request.request ?? "")) };
         case "rig.settings":
           this.grants.settings(request.signed, request.chain);
+          return { ok: true };
+        case "rig.device":
+          this.grants.device(request.signed, request.chain);
           return { ok: true };
         case "rig.added":
           this.grants.added(request.signed);
@@ -212,6 +248,8 @@ export class Rig {
   async close(): Promise<void> {
     this.#unlisten?.();
     for (const waiting of this.#untold.values()) waiting.stop();
+    for (const w of this.#wired) w.socket.destroy();
+    this.#wired.clear();
     this.#untold.clear();
     await this.grants.close();
     if (this.#d.fibers === undefined) await this.#fibers.close();

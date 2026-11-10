@@ -698,6 +698,8 @@
   "android-settings.vault.scope.once": "仅这一次",
   "android-settings.vault.scope.hour": "1 小时内",
   "android-settings.vault.scope.chat": "本对话内",
+  "android-settings.vault.scope.idle": "闲置 1 小时后失效",
+  "android-settings.vault.scope.eight": "8 小时内",
   "android-settings.vault.timeout.idle": "闲置后到期",
   "android-settings.vault.timeout.fixed": "固定时间后到期",
   "android-settings.vault.timeout.minutes": "分钟",
