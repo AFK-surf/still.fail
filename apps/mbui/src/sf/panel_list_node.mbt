@@ -41,7 +41,7 @@ pub fn[K : Hash + Eq] panel_list_node(
       keys,
       fn(b, k) {
         // (its rows laid out as the panel's are, their words further in by as far as it reaches out)
-        panel_in_lend(b, look, at.words + out, small=at.small, clear=at.clear)
+        panel_in_lend(b, look, at.words + out, sides=at.sides - out, small=at.small, clear=at.clear)
         row(b, k)
       },
       est~,

@@ -66,8 +66,11 @@ fn panel_centred_node(
     }
     // (which of what it holds takes the focus as it opens, where what it holds says one: panel_opens_on_node)
     let opens_on : Ref[@view.View?] = Ref(None)
+    // (and the field it opens to be typed in, before that: panel_opens_in_node)
+    let field : Ref[@view.View?] = Ref(None)
     across.box(fn(d) {
       d.lends(panel_opens_lent, opens_on) |> ignore
+      d.lends(panel_field_lent, field) |> ignore
       d
       .width(By(fn() { Some(w()) }))
       // (no taller than the window leaves it, dialog_room: what it holds scrolls in itself past that)
@@ -287,7 +290,7 @@ fn panel_centred_node(
             })
             col.grow(Is(1.0)).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
             // (its rows out across the room the dialog leaves them, as far as an old body's: rows_out's)
-            panel_in_lend(col, Wide, 0.0, rows_out=panel_words - panel_card_in, centred=true, clear=@signals.untracked(fn() {
+            panel_in_lend(col, Wide, 0.0, sides=dialog_pad + words_in, rows_out=panel_words - panel_card_in, centred=true, clear=@signals.untracked(fn() {
               if untitled() { dialog_close_clear() } else { 0.0 }
             }))
             // (what it holds, together in one box as the old body's measured box held it (none of the body's gap
@@ -373,7 +376,7 @@ fn panel_centred_node(
                     })
                     // (on its words' line already: none further in; its rows out across the room the dialog leaves them,
                     // as far as an old body's (rows_out's); clear of its close button while untitled)
-                    panel_in_lend(col, Wide, 0.0, rows_out=panel_words - panel_card_in, centred=true, clear=@signals.untracked(fn() {
+                    panel_in_lend(col, Wide, 0.0, sides=dialog_pad + words_in, rows_out=panel_words - panel_card_in, centred=true, clear=@signals.untracked(fn() {
                       if untitled() { dialog_close_clear() } else { 0.0 }
                     }))
                     (n.body)(col, close)
@@ -497,10 +500,12 @@ fn panel_centred_node(
     |> ignore
     // (the focus on its own ground as it opens, the first of what it holds that takes it once that is built
     // (first_stop; not one in steps, whose steps keep it on its ground as they come), as kit's dialog's: back to what
-    // had it as it goes; on the one of what it holds that said so, where one did: panel_opens_on_node)
-    match opens_on.val {
-      Some(first) => first
-      None => layer
+    // had it as it goes; on the field it opens to be typed in, or the one of what it holds that said so, where one did:
+    // panel_opens_in_node, panel_opens_on_node)
+    match (field.val, opens_on.val) {
+      (Some(f), _) => f
+      (None, Some(first)) => first
+      (None, None) => layer
     }
   })
 }

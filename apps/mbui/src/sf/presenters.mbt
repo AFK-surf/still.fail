@@ -353,6 +353,8 @@ pub fn presenters_reset() -> Unit {
   presented_count.val = 0
   presented_alone.val = false
   presented_how.clear()
+  presented_sheet_rests.clear()
+  presented_sheet_next.val = 0
 }
 
 ///|

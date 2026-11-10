@@ -1314,6 +1314,8 @@ pub let one_line : @ui.TextStyle
 
 pub fn one_of(@ui.Ctx, String, String, Array[(String, String)], (String) -> Unit, label? : String, placeholder? : String, disabled? : Bool) -> Unit
 
+pub fn one_of_node(@view.View, () -> String, () -> Array[(String, String)], (String) -> Unit, label? : () -> String, disabled? : () -> Bool) -> Unit
+
 pub let option_check_share : Double
 
 pub fn options_card(@ui.Ctx, String, Array[(String, String, Bool)], Bool, Int32?, chosen? : Int32?, wide? : Bool, history? : Bool) -> Int32?
@@ -1418,6 +1420,8 @@ pub fn panel_button(@ui.Ctx, String, String, tone? : PanelTone, disabled? : Bool
 
 pub fn panel_button_node(@view.View, () -> String, () -> Unit, tone? : PanelTone) -> @view.View
 
+pub fn panel_card_out_node(@view.View) -> @ui.Style
+
 pub fn panel_column(@ui.Ctx, String, Double, @ui.Style, () -> Unit) -> Unit
 
 pub fn panel_corner_foot() -> @ui.Style
@@ -1457,6 +1461,8 @@ pub fn panel_note(@ui.Ctx, String) -> Unit
 pub fn panel_note_node(@view.View, () -> String) -> Unit
 
 pub let panel_offset : Double
+
+pub fn panel_opens_in_node(@view.View) -> Unit
 
 pub fn panel_opens_on_node(@view.View) -> Unit
 
@@ -1649,6 +1655,8 @@ pub fn presented_drawn_of(Int32) -> Bool
 pub fn presented_nodes(@view.View) -> Unit
 
 pub fn presented_open_of(Int32) -> Bool
+
+pub fn presented_rest() -> Double
 
 pub fn presented_tree((@ui.Ctx) -> Unit) -> (@view.View) -> Unit
 

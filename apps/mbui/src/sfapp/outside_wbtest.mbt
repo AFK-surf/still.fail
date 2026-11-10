@@ -336,6 +336,22 @@ test "分享对话 on a wide window: a dialog in the middle; Enter says yes, onc
 }
 
 ///|
+test "分享对话: the focus on 分享并发送 as it opens in the middle of a wide window, never on it on a sheet (by touch or with keyboard and mouse)" {
+  for screen in [(2, false), (0, false), (0, true)] {
+    let (platform, wide) = screen
+    let at = "platform \{platform} wide \{wide}"
+    let calls : Array[Made] = []
+    let t = outside_asked(calls, outside_two(), platform~, wide~)
+    let said = t.focus_said()
+    if wide {
+      assert_true(said.contains("分享并发送"), msg="\{at}: \{said}")
+    } else {
+      assert_true(!said.contains("分享并发送"), msg="\{at}: \{said}")
+    }
+  }
+}
+
+///|
 test "分享对话 on a wide window: 取消, Escape and a press outside it send nothing" {
   let calls : Array[Made] = []
   let t = outside_asked(calls, outside_two(), platform=0, wide=true)

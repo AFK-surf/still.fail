@@ -319,7 +319,7 @@ fn go_body(v : @view.View, src : Source, ws : String, here : DriveAt, to : (Driv
     )
     f.grow(Is(1.0)).basis(Is(Some(0.0))).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
     // (a dialog's only field: it has the keys as it opens)
-    @sf.panel_opens_on_node(f)
+    @sf.panel_opens_in_node(f)
   })
   |> ignore
   v.show(fn() { resolved() is Some(_) && named() is Some(_) }, fn(w) {
