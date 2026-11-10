@@ -578,3 +578,54 @@ test "a station's card put up while the settings' core is not said yet: nothing 
   assert_true(t.find("Birch") is Some(_) && t.find("Willow") is None, msg="its name as the other's stations say it")
   assert_true(t.find("另一处说的它") is Some(_) && t.find("直连") is None, msg="what it says, as the other's stations say it")
 }
+
+///|
+test "a station's card in a phone's window, the system's words at 1.3: each way's speed drawn whole, before its total and inside the card, ↑'s and ↓'s in one column, in both languages" {
+  guard corner_windows.search_by(w => w.0 == "phone") is Some(i) else { fail("no phone window in corner_windows") }
+  for lang in ["zh", "en"] {
+    let t = screen_in("chat-peek", corner_windows[i], lang, font_scale=words_large_scale)
+    let found = t.drawn_words_found()
+    // (the first of what is drawn that says `words`, on the line at `on` where one is said)
+    let drawn = fn(words : String, on : Double?) -> @view.Drawn? {
+      found
+      .filter(fn(e) {
+        e.3 == words &&
+        (match on {
+          Some(y) => (e.0.y - y).abs() < 1.0
+          None => true
+        })
+      })
+      .get(0)
+      .map(fn(e) { e.0 })
+    }
+    let speeds : Array[@view.Drawn] = []
+    let totals : Array[@view.Drawn] = []
+    for way in [("↑", "96 KB/s", "9.6 MB"), ("↓", "1.4 MB/s", "212 MB")] {
+      let at = "\{lang} \{way.0}"
+      guard drawn(way.0, None) is Some(arrow) else { fail("\{at}: no arrow drawn") }
+      guard drawn(way.1, Some(arrow.y)) is Some(speed) else { fail("\{at}: no ‘\{way.1}’ on its line") }
+      guard found.search_by(fn(e) { e.3.contains(way.2) && (e.0.y - arrow.y).abs() < 1.0 }) is Some(k) else {
+        fail("\{at}: no total on its line")
+      }
+      let total = found[k].0
+      // (the card: what holds it with a ground of its own)
+      let mut p = found[k].1
+      while p >= 0 && found[p].0.ground == 0L {
+        p = found[p].1
+      }
+      guard p >= 0 else { fail("\{at}: nothing with a ground holds it") }
+      let card = found[p].0
+      assert_true(t.words().any(fn(w) { w.0 == way.1 }), msg="\{at}: its speed among the words drawn")
+      // (whole: as wide as its words are at the size they are drawn, not cut short to an ellipsis)
+      let need = @ui.text_advance(way.1, size=@ui.sp_at(words_large_scale, speed.words_look.size), weight=speed.words_look.weight)
+      assert_true(need <= speed.w + 0.5, msg="\{at}: its speed whole (needs \{need}, has \{speed.w})")
+      assert_true(speed.x >= arrow.x + arrow.w, msg="\{at}: its speed after its arrow")
+      assert_true(speed.x + speed.w <= total.x + 0.5, msg="\{at}: its speed before its total (\{speed.x + speed.w}, \{total.x})")
+      assert_true(total.x + total.w <= card.x + card.w + 0.5, msg="\{at}: inside the card (\{total.x + total.w}, \{card.x + card.w})")
+      speeds.push(speed)
+      totals.push(total)
+    }
+    assert_true((speeds[0].x - speeds[1].x).abs() < 0.5, msg="\{lang}: ↑'s and ↓'s speeds in one column (\{speeds[0].x}, \{speeds[1].x})")
+    assert_true((totals[0].x - totals[1].x).abs() < 0.5, msg="\{lang}: their totals in one column (\{totals[0].x}, \{totals[1].x})")
+  }
+}

@@ -603,9 +603,17 @@ fn net_line_node(p : @view.View, net : () -> Json?) -> Unit {
         right.box(fn(l) {
           @sf.style_node(l, fn() { net_way })
           net_words_node(l, fn() { way.0 }, muted)
-          // (5 before it, then 68 for it: Stations.kt padding(start = 5.dp).width(68.dp))
+          // (5 before it, then 68 for it: Stations.kt padding(start = 5.dp).width(68.dp); the 68 as much wider as its
+          // words are drawn bigger by the system's size of words, so ↑'s and ↓'s stay whole and in one column, the
+          // totals in one after them)
           l.box(fn(sp) {
-            sp.width(Is(Some(73.0))).padding(Is((5.0, 0.0, 0.0, 0.0))) |> ignore
+            sp
+            .width(By(fn() {
+              let size = @sf.theme().t.meta
+              Some(net_speed_pad + net_speed_w * @sf.node_sp(sp, size) / size)
+            }))
+            .padding(Is((net_speed_pad, 0.0, 0.0, 0.0)))
+            |> ignore
             net_words_node(sp, fn() { text(n(), way.1) }, fn() { @sf.theme().p.text }, weight=500)
           })
           |> ignore
@@ -649,6 +657,16 @@ let net_right : @ui.Style = @ui.css("gap=S0_5")
 ///|
 // kept across runs: a value (no field of it changes)
 let net_way : @ui.Style = @ui.css("row align=ACenter")
+
+///|
+/// How far a speed is from its arrow (net_line's 5).
+// kept across runs: a value
+let net_speed_pad : Double = 5.0
+
+///|
+/// How wide a speed is at the system's default size of words (net_line's 68), wider as its words are drawn bigger.
+// kept across runs: a value
+let net_speed_w : Double = 68.0
 
 ///|
 /// Words of it (net_line's) in `p`: the meta's size on a line of 18, `weight`, in `ink`; `cut`: cut short where the
