@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [04cca9525](https://github.com/AFK-surf/still.fail/commit/04cca9525df9de721c3ebe1ddcd337d01bdb0bef) history: its head and details made once as nodes,  | 1.77 | 2.36 | 9.81 | 28.42 | 34.43 | 25.4 | 46.74 | 93.9 | 174.65 |
 | [482c5c57e](https://github.com/AFK-surf/still.fail/commit/482c5c57e528e14af1fe701638cff330c4492504) app, core: a kind of reset's count shown on its ow | 1.77 | 2.36 | 9.8 | 28.4 | 34.32 | 25.38 | 46.66 | 93.19 | 188.43 |
 | [0f96ed1e8](https://github.com/AFK-surf/still.fail/commit/0f96ed1e8401cf9bfba0026bb3641bdca312f64a) ci: words_large's sweep in two runs, a language ea | 1.76 | 2.36 | 9.8 | 28.4 | 34.32 | 25.38 | 46.64 | 93.55 | 181.79 |
 | [fc221c3fe](https://github.com/AFK-surf/still.fail/commit/fc221c3fefc93a91693ad68795951fa6666a6506) kit: a menu's item the pointer rests on takes the  | 1.76 | 2.35 | 9.79 | 28.4 | 34.31 | 25.38 | 46.64 | 93.82 | 169.65 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [d2791a7a8](https://github.com/AFK-surf/still.fail/commit/d2791a7a8217f3ab4a37cefb14d9cbc53b685771) app: what a message names in other workspaces is a | 1.74 | 2.32 | 9.65 | 28.19 | 33.68 | 25.18 | 46.13 | 93.19 | 178.92 |
 | [2b4e43342](https://github.com/AFK-surf/still.fail/commit/2b4e43342ea46682646295d6d263d70d0bcc0f22) mbui: a motion fault says what drew it: a node's p | 1.74 | 2.32 | 9.64 | 28.19 | 33.65 | 25.17 | 46.11 | 93.01 | 182.11 |
 | [e5d0782dd](https://github.com/AFK-surf/still.fail/commit/e5d0782dd97234ad36ee335f7064fc47527e297b) app: four files mended to no motion fault at 60 an | 1.74 | 2.32 | 9.64 | 28.18 | 33.63 | 25.16 | 46.1 | 93 | 145.19 |
-| [3800c90ad](https://github.com/AFK-surf/still.fail/commit/3800c90ad7d720ab03e1fe41e069648af348a571) station: the queue no longer holds tasks back for  | 1.74 | 2.32 | 9.64 | 28.17 | 33.63 | 25.16 | 46.1 | 93.19 | 181.3 |
