@@ -286,7 +286,7 @@
   "core-misc.reader.gone": "That book is no longer open; open it again",
   "core-misc.personal.noKey": "This device can't keep a personal key. Use the desktop or Android app",
   "core-misc.personal.outside": "This device isn't on your personal lock yet. Join it first in Settings › Security › Personal lock",
-  "core-misc.personal.replaced": "The cloud's personal lock differs from the one this device remembers. Confirm in Settings › Security › Personal lock first",
+  "core-misc.personal.replaced": "The personal lock on your other devices differs from the one this device remembers. Confirm in Settings › Security › Personal lock first",
   "core-misc.personal.noAccount": "This device isn't signed in to that account",
   "core-misc.personal.noRequest": "This request can't be found. It may have ended",
   "core-misc.personal.reason.grant": "Allow this chat to debug your phone",

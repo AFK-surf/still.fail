@@ -293,7 +293,7 @@ fn adb_lock_first(c : @ui.Ctx, core : Core, p : Json?) -> Unit {
           personal_join(c, core, p, "adb/" + sub, centred=true)
         }
         if state == "" || state == "none" || state == "failed" || state == "done" {
-          primary("adb-lock-join", tr("android-misc.personal.open"), "adb.personalJoin")
+          primary("adb-lock-join", tr("android-misc.personal.join"), "adb.personalJoin")
         }
         // (no device of theirs to be found: only then)
         if state == "none" || state == "failed" {

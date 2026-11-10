@@ -1753,6 +1753,7 @@ android-misc.personal.forget
 android-misc.adb.lock.join
 android-misc.adb.lock.open
 android-misc.personal.heading
+android-misc.personal.join
 android-misc.personal.me
 android-misc.personal.none.found
 android-misc.personal.open

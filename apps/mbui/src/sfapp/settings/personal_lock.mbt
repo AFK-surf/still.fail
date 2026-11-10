@@ -138,9 +138,10 @@ fn personal_card(c : @ui.Ctx, core : Core, view : Json?) -> Unit {
       "outside" => {
         let state = text(field(view, "pair"), "state")
         if state == "" || state == "none" || state == "failed" || state == "done" {
-          @sf.link_row(c, "personal-join/" + sub, tr("android-misc.personal.open"), note=if state == "" { tr("android-misc.personal.outside.note") } else { "" }, lacks=true, on_press=fn() {
+          // (加入, not 开启: the lock is there already; why it did not begin said, a tap that did nothing before, 2026-11-10)
+          @sf.link_row(c, "personal-join/" + sub, tr("android-misc.personal.join"), note=if state == "" { tr("android-misc.personal.outside.note") } else { "" }, lacks=true, on_press=fn() {
             if !doing {
-              (core.call)("adb.personalJoin", obj([("sub", said)]), fn(_) {  })
+              act(core, tr("android-misc.personal.join"), "adb.personalJoin", obj([("sub", said)]))
             }
           })
         }
