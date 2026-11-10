@@ -18,7 +18,7 @@ async function key() {
 }
 type Key = Awaited<ReturnType<typeof key>>;
 
-/** A socket and what came on it: `take` what arrived since the last take (after the barrier, a pong after all of it), `closed` its code. */
+/** A socket and what came on it: `take` what arrived since the last take (after the barrier, h.heard), `closed` its code. */
 function received(h: Harness, ws: NonNullable<Awaited<ReturnType<Harness["fetch"]>>["webSocket"]>) {
   const got: any[] = [];
   let pong: (() => void) | null = null;
@@ -37,8 +37,8 @@ function received(h: Harness, ws: NonNullable<Awaited<ReturnType<Harness["fetch"
     closed,
     now,
     async take(): Promise<any[]> {
-      await h.settled();
-      return now();
+      await h.heard(ws);
+      return got.splice(0);
     },
   };
 }

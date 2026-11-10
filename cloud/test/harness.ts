@@ -278,6 +278,27 @@ export async function harness(
    * deliveries go out as the change answers): the barrier a test waits at instead of waiting a while.
    */
   const settled = async () => (await object("DIRECTORY", "primary")).settled();
+  /**
+   * Once everything still.fail cloud sends on a socket for what was done or said before now has arrived: where a test
+   * reads a socket. The runtime answers "ping" itself, in the socket's order. By the first pong, what the socket said
+   * before has reached its object; `settled` then waits for that to be answered and for what the Directory tells; the
+   * second pong comes after everything those sent.
+   */
+  const heard = async (ws: { send(data: string): void; addEventListener(type: "message", on: (event: { data: unknown }) => void): void; removeEventListener(type: "message", on: (event: { data: unknown }) => void): void }) => {
+    const pong = () =>
+      new Promise<void>((resolve) => {
+        const on = (event: { data: unknown }) => {
+          if (event.data !== "pong") return;
+          ws.removeEventListener("message", on);
+          resolve();
+        };
+        ws.addEventListener("message", on);
+        ws.send("ping");
+      });
+    await pong();
+    await settled();
+    await pong();
+  };
   async function begin(sub = "google-test-user", invalid?: string, callback = "http://127.0.0.1:32145/oauth/callback") {
     const verifier = randomSecret(),
       state = randomSecret();
@@ -380,6 +401,7 @@ export async function harness(
     fetchWorker,
     object,
     settled,
+    heard,
     begin,
     complete,
     exchange,

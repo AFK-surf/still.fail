@@ -41,10 +41,31 @@ class Leaving {
   }
 }
 
+/**
+ * What a socket said that is not answered yet, on the object that holds it. The runtime starts a message's handler
+ * before it reads the socket's next one, so one said before a ping is counted here by the ping's pong.
+ */
+class Saying {
+  #open = new Set<Promise<void>>();
+  through(handled: Promise<void>): Promise<void> {
+    this.#open.add(handled);
+    const over = () => void this.#open.delete(handled);
+    handled.then(over, over);
+    return handled;
+  }
+  async answered(): Promise<void> {
+    while (this.#open.size > 0) await Promise.allSettled([...this.#open]);
+  }
+}
+
 export class Directory extends ProductionDirectory {
   /** The presence alarm's check, as if it ran at `ms` (the sockets held here, while rolled back). */
   sweepAt(ms: number) {
     return this.sweep(ms);
+  }
+  #saying = new Saying();
+  override webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    return this.#saying.through(super.webSocketMessage(ws, message));
   }
   #leaving = new Leaving();
   override async webSocketClose(ws: WebSocket, code: number): Promise<void> {
@@ -56,8 +77,15 @@ export class Directory extends ProductionDirectory {
   left(station: string) {
     return this.#leaving.left(station);
   }
-  /** Every delivery under way has got there or failed. */
-  override settled() {
+  /**
+   * Everything a station said on its socket, here or on its object, is answered (an answer takes its object a call
+   * to the Directory, and may be a change the Directory then tells), and every delivery under way has got there or
+   * failed.
+   */
+  override async settled() {
+    await this.#saying.answered();
+    const holding = this.ctx.storage.sql.exec("SELECT key FROM live WHERE kind = 'station'").toArray();
+    await Promise.all(holding.map((row) => (this.env.STATIONS.getByName(row.key as string) as unknown as { answered(): Promise<void> }).answered()));
     return super.settled();
   }
   /** Deliveries to these objects (`kind key`) fail, as if the network between them broke; none given, none do. */
@@ -245,6 +273,14 @@ export class Station extends ProductionStation {
   /** Once its socket has closed and its close been handled. */
   left() {
     return this.#leaving.left("socket");
+  }
+  #saying = new Saying();
+  override webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    return this.#saying.through(super.webSocketMessage(ws, message));
+  }
+  /** Once everything its socket said, that got here, is answered (the Directory's `settled` asks). */
+  answered() {
+    return this.#saying.answered();
   }
   /** What the constructor does as a deploy that rolls the sockets back starts it. */
   handBackNow() {
