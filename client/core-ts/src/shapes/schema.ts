@@ -1586,7 +1586,7 @@ export const SHAPES: Record<string, Shape> = {
     ["recent", "bool", { doc: "One of the viewer's own, added lately (shown on their other devices)." }],
     ["lastSeen", opt("i64"), { client: opt("I54"), doc: "When it last asked the cloud for a credential (s; at most a day before it was last used): none where the viewer\nmay not know, or it has not in 31 days." }],
     ["usedText", opt("String"), { doc: "This device, or when it was last used, in words (一天内使用过, 3 天前使用过, 超过一个月未使用); none where the\nviewer may not know." }],
-    ["removable", "bool", { doc: "This device may take it out of the lock (`lock.removeDevice`): it signs, the device is another, and the\nviewer's own or the viewer manages the workspace." }],
+    ["removable", "bool", { doc: "This device may take it out (`lock.removeDevice`): it signs, and the device is another of the viewer's own\n(someone else's is theirs alone to take out; owners and admins take the member out)." }],
     ["nameText", "String", { said: true, doc: "Which machine it is (its group says the app): what it calls itself now, else its label, else what kind\nof client it is." }],
     ["fullText", "String", { said: true, doc: "Its machine and its app in a line (asked about it: 移除「…」？)." }],
     ["metaText", "String", { doc: "The rest in a line: this device or when it was last used, whether it signs, days left, new." }],

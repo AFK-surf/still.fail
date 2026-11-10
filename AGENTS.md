@@ -59,6 +59,17 @@ chats, each conversation an agent session on a **station** (a machine of theirs)
   check that fails and then passes on the same commit let something uncontrolled in: find it and take it out, never
   rerun it green or call it flaky.
 
+## To people there is one safe mode
+
+- A person's own lock (which devices are theirs) is the root of trust; a workspace's lock is going away as a thing
+  of its own (the user, 2026-11-05): it keeps the roster (members, stations) and follows each person's own lock for
+  their devices.
+- People are never asked to tell the two apart (the user, 2026-11-10): 安全模式, 受信任设备 and 批准 look and work as
+  they did before there was a lock of one's own. No page, prompt or refusal sends someone to 个人锁 to be let in to
+  a workspace, or names it where the workspace's lock was named before.
+- A person's devices are theirs alone to change: owners and admins take a member out, never one device of someone
+  else's (the user, 2026-11-10).
+
 ## No polling between still.fail's own parts
 
 The client core (`client/core-ts`), the station (`station/`) and the cloud (`cloud/`) never read something of another

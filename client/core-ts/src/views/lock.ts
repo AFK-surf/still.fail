@@ -642,6 +642,18 @@ export function onBoundPerson(inner: Inner, ws: string): boolean {
   return personal.standing(sub) === "member" && personal.root(sub) === fold(h.entries).persons.get(sub);
 }
 
+/// An app device of this person's in the workspace's lock that is on the lock of their own they bound there, as this
+/// device (on it too) has it: whose, and its key on that lock. None otherwise.
+function onOwnLock(inner: Inner, ws: string, id: string): { sub: string; key: string } | null {
+  const sub = inner.workspaces.owner(ws);
+  const h = held(inner, ws);
+  if (sub === null || !h?.head || !onBoundPerson(inner, ws)) return null;
+  const d = fold(h.entries).devices.get(id);
+  if (d === undefined || d.sub !== sub || d.kind !== "app") return null;
+  const on = [...(inner.adb.personal().chain(sub)?.devices.values() ?? [])].find((x) => x.id === id);
+  return on === undefined ? null : { sub, key: on.key };
+}
+
 /// Whether this app device's person bound a lock of their own in the workspace's, and this device is not on it.
 export function offOwnLock(inner: Inner, ws: string): boolean {
   const sub = inner.workspaces.owner(ws);
@@ -1039,9 +1051,10 @@ export function lockView(inner: Inner, ws: string): J {
       id: d.id, kind, label, signs: trusted, older, mine, daysLeft: left,
       renewSoon: typeof d.exp === "number" && d.exp - at < RENEW_SECS,
       recent, lastSeen, usedText: used,
-      // taken out of the lock by this device, where it signs and may (owners and admins any but this one, members
-      // their own others)
-      removable: signs && !mine && (manages || d.sub === sub),
+      // taken out by this device, where it signs: the viewer's own others. Someone else's is theirs alone to take out
+      // (owners and admins take the member out; the user, 2026-11-10: a person's devices are their own lock's, which
+      // no one else changes, and 移除 beside another's did nothing where they had bound it)
+      removable: signs && !mine && d.sub === sub,
       // which machine (its group says the app), and both in a line (asked about it)
       nameText: machineText({ kind, label, older }),
       fullText: deviceText({ kind, label, older }),
@@ -1294,9 +1307,20 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       case "renew":
         result = yield* lock.renew(param("device"));
         break;
-      case "removeDevice":
+      case "removeDevice": {
+        // Their own app device, where they bound a lock of their own: that lock is what lets it in, so it is taken off
+        // that one, and out of this one after it (keepToPerson). Taken out of this lock alone it was let in still, and
+        // put back from another workspace's (2026-11-10: 移除 on 设置 › 安全 did nothing that lasted).
+        const own = onOwnLock(inner, c.workspace, param("device"));
+        if (own !== null) {
+          yield* inner.adb.personal().removeDevice(own.sub, own.key, t("core-misc.personal.reason.remove"));
+          yield* keepToPerson(inner, c.workspace);
+          result = null;
+          break;
+        }
         result = yield* lock.append("device.remove", { id: param("device") });
         break;
+      }
       case "disable": {
         // The person's own secrets opened while the lock still says whose they are ( 一个库): once it is
         // off they go into the plain library, as the dialog said. Turned down there, nothing is turned off.
