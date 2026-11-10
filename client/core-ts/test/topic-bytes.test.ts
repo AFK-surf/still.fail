@@ -115,6 +115,7 @@ const NOT_MEASURED: Record<string, string> = {
   presets: PAGE, linkPreview: PAGE, filePeek: PAGE, messagePeek: PAGE, screenCard: PAGE, job: PAGE, shareIn: PAGE, chatFeedback: PAGE, imageNear: PAGE,
   live: LATER, jobLog: LATER, drive: LATER, driveBrowse: LATER, notices: LATER, lock: LATER, vaults: LATER, vaultItems: LATER, vaultUses: LATER,
   joinable: LATER, memberships: LATER, screens: LATER, workspaceWays: LATER, stationNet: LATER, chatLetters: LATER, chatThings: LATER,
+  devices: LATER,
 };
 
 // ── weighing ──
