@@ -114,3 +114,24 @@ test "wide: the Station place with none in the workspace is the first to add, no
   // its scene and its one thing to do (the sidebar's 添加 station too)
   assert_true(t.find_last("添加 station") is Some(_))
 }
+
+///|
+/// The profiles' place opened on 大屏 by touch (a tablet's window), a profile's page in its pane as it opens: the pane's
+/// coming reads the layout for its size before any frame, and the page's blocks, made as that layout comes to them,
+/// each read theirs. Begun inside it, that second layout left what the first laid out unplaced (mbui's
+/// Tree::measured_now, #5245, whose own ways in were a phone's): the page's head and its sections' titles drawn where
+/// and as big as whatever had their nodes before, a title 18 wide a letter a line. With a mouse a change is laid out as
+/// it ends, for what is under the pointer, so the same steps there read no layout still to be done. Every frame is held
+/// placed as laid out (Tester::hold_placed); said here of the first as well.
+test "wide, by touch: the profiles' place opens on a page placed as it is laid out" {
+  let t = wide_tester([], mode="settings-profile-fable", w=1100.0, h=700.0, platform=2)
+  @settings.fixture_page("settings-profile-fable") |> ignore
+  app.nav.replace(Place("profiles"))
+  t.draw()
+  assert_eq(t.placed_faults(), [])
+  // (its sections' titles each across the page's column, none in a box of a few points)
+  for words in ["额度", "可使用的 station"] {
+    let wide = t.words().filter(fn(w) { w.0 == words }).map(fn(w) { w.3 })
+    assert_true(wide.length() == 1 && wide[0] > 200.0, msg="\{words}: \{wide} wide")
+  }
+}
