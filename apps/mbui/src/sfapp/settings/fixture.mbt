@@ -94,6 +94,9 @@ priv struct SettingsFixture {
   /// that subscription with no 5 小时 window (…-week-fable: the account's week and Fable's alone, as an account says
   /// them whose short window has not begun)
   mut no_hours : Bool
+  /// five Claude subscription accounts, by their e-mails, each its own windows as a report showed them
+  /// (settings-profiles-several: one row's figures a point wider than the others')
+  mut several : Bool
   /// The same subscription independently signed in and borrowed on several stations.
   mut profile_hosts : Bool
   /// Only one station is signed in; another borrows it.
@@ -157,6 +160,7 @@ let fx : SettingsFixture = {
   monthly: false,
   own: 0,
   no_hours: false,
+  several: false,
   profile_hosts: false,
   profile_one_owner: false,
   profile_away: false,
@@ -279,6 +283,7 @@ fn fixture_reset() -> Unit {
   fx.monthly = false
   fx.own = 0
   fx.no_hours = false
+  fx.several = false
   fx.profile_hosts = false
   fx.profile_one_owner = false
   fx.profile_away = false
@@ -500,6 +505,7 @@ pub fn fixture_page(mode : String) -> String {
       fx.own = 1
       fx.no_hours = true
     }
+    "settings-profiles-several" => fx.several = true
     "settings-stations-existing" => up("add-existing", "", 0)
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
@@ -642,7 +648,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-quota-kinds" => "profile:ws1/st1#cc"
     "settings-me-reading" => "me"
     "settings-usage-details-pending" => "usage"
-    "settings-profiles-pick" | "settings-profiles-monthly" | "settings-profiles-fable" | "settings-profiles-own3" | "settings-profiles-week-fable" => "profiles"
+    "settings-profiles-pick" | "settings-profiles-monthly" | "settings-profiles-fable" | "settings-profiles-own3" | "settings-profiles-week-fable" | "settings-profiles-several" => "profiles"
     "settings-connect" | "settings-connect-borrow" => "connect:ws1/st1#k1"
     _ =>
       if m.has_prefix("settings-") {
@@ -785,7 +791,7 @@ pub fn fixture_profiles() -> Array[Json] {
 
 ///|
 fn fx_profiles() -> Array[Json] {
-  [
+  let profiles = [
     fx_profile("cc", "Claude 主账号", "subscription", fx_cc_tone(), "可用", "claude", "Claude 订阅", fx_cc_with([
       ("share", obj([("id", str("sh1")), ("role", str("host")), ("host", str("st1")), ("users", ["st2"])])),
       ("fast", Json::boolean(false)),
@@ -818,6 +824,67 @@ fn fx_profiles() -> Array[Json] {
       ("usedBy", []),
     ]),
   ]
+  if fx.several {
+    fx_several(profiles)
+  }
+  profiles
+}
+
+///|
+/// The Claude subscription five accounts (settings-profiles-several): the first of them its own (cc), the rest copies,
+/// each by its e-mail with what is left of its windows by mark (Fable's a model's own week).
+fn fx_several(profiles : Array[Json]) -> Unit {
+  let accounts : Array[Array[(String, Int)]] = [
+    [("5H", 26), ("W", 17), ("Fable", 52)],
+    [("5H", 0), ("W", 13), ("Fable", 74)],
+    [("W", 0), ("Fable", 100)],
+    [("W", 48), ("Fable", 26)],
+    [("5H", 0), ("W", 5), ("Fable", 70)],
+  ]
+  guard profiles[0] is Object(cc) else { return }
+  for i, windows in accounts {
+    let p = cc.copy()
+    if i > 0 {
+      p["id"] = str("claude-" + (i + 1).to_string())
+    }
+    p["name"] = str("claude" + (i + 1).to_string() + "@example.com")
+    p["quota"] = obj([
+      ("state", str("ok")),
+      (
+        "windows",
+        Json::array(
+          windows.map(fn(w) {
+            let (mark, left) = w
+            let level = if left <= 10 { "red" } else if left <= 20 { "amber" } else { "ok" }
+            let (label, refills) = match mark {
+              "5H" => ("5 小时", "3 小时 5 分钟后刷新")
+              "W" => ("每周", "2 天 4 小时后刷新")
+              _ => ("每周 · " + mark, "2 天 4 小时后刷新")
+            }
+            let fields = [
+              ("label", str(label)),
+              ("usedPercent", Json::number((100 - left).to_double())),
+              ("mark", str(mark)),
+              ("left", Json::number(left.to_double())),
+              ("level", str(level)),
+              ("refills", str(refills)),
+            ]
+            if mark == "Fable" {
+              fields.push(("scope", str(mark)))
+            }
+            obj(fields)
+          }),
+        ),
+      ),
+      ("checkedAt", Json::number(0.0)),
+      ("time", obj([("checkedAt", stamp_of("3 分钟前"))])),
+    ])
+    if i == 0 {
+      profiles[0] = Json::object(p)
+    } else {
+      profiles.insert(i, Json::object(p))
+    }
+  }
 }
 
 ///|

@@ -135,12 +135,22 @@ let quota_chips_part : @ui.Style = @ui.css("row w=Full align=ACenter")
 let quota_chips_part_lines : Double = 6.0
 
 ///|
-/// A sidebar row's allowance starts with its text. If full chips need more room, they may extend under the mark. Where
-/// even those do not fit, each window's mark stands over its figure, keeping the figures together in one line. More
-/// windows form balanced rows, each still whole. Its nav_item gives it the whole row as `foot` and says
+/// A sidebar row's allowance starts under the mark, in every row of every list (the user, 2026-11-10: 「全跟 logo
+/// 对齐」, after rows of one list started some at the mark and some at the text). It takes the first way it has the
+/// room for: full chips in a line; each window's mark over its figure, keeping the figures together in one line; more
+/// windows in balanced rows, each still whole. A list's rows take one way: `widest`, the room the list's widest
+/// line of full chips needs (nav_quota_line of each row's, the most), so no row of it is laid out another way than
+/// the rest (the user, 2026-11-10: rows of one list laid out each its own way read as a fault). Every way stands from the start, its chips the same gap apart, never
+/// spread to the row's ends (the user, 2026-11-10: 「怎么一会儿左对齐一会儿两端对齐」). Its nav_item gives it the whole row as `foot` and says
 /// foot_capsule=fill_chip_small_h so the capsules are at the same inset from the row's foot. `at`: where its row's list
 /// stands (its words' room: band_pad_in).
-pub fn nav_quota_chips(c : @ui.Ctx, q : Json?, key? : String = "quota", at? : ListAt = Side) -> Unit {
+pub fn nav_quota_chips(
+  c : @ui.Ctx,
+  q : Json?,
+  key? : String = "quota",
+  at? : ListAt = Side,
+  widest? : Double = 0.0,
+) -> Unit {
   guard has_quota(q) else { return }
   let windows = match chip_field(q, "windows") {
     Some(Array(a)) => a
@@ -150,8 +160,6 @@ pub fn nav_quota_chips(c : @ui.Ctx, q : Json?, key? : String = "quota", at? : Li
   let side = band_pad_in(at)
   // A capsule reaches the corner until it is past the outer corner's circle-equivalent radius.
   let clear = dmax(0.0, inset + fill_chip_small_h / 2.0 - side)
-  // A line that starts with the words is in past the mark and the row's gap (item's S2).
-  let text_in = nav_mark_side + @ui.Space::S2.px()
   let columns = fn(first : Int, last : Int, suffix : String) {
     for i in first..<last {
       let w = windows[i]
@@ -166,28 +174,19 @@ pub fn nav_quota_chips(c : @ui.Ctx, q : Json?, key? : String = "quota", at? : Li
     }
   }
   // Keep the rows balanced: four windows are two and two, five are three and two, never three with one left alone.
-  let grid = fn(limit : Int, indented : Bool) {
+  let grid = fn(limit : Int) {
     let count = windows.length()
     let rows = (count + limit - 1) / limit
     let each = count / rows
     let extra = count % rows
-    let style = if indented {
-      @ui.style(pl=room(text_in), pr=room(clear), gap=S1)
-    } else {
-      @ui.style(w=Full, mx=room(inset - side), gap=S1)
-    }
-    c.box(style~, keep=true, fn() {
+    c.box(style=@ui.style(w=Full, mx=room(inset - side), mb=room(clear), gap=S1), keep=true, fn() {
       for row in 0..<rows {
         let first = row * each + (if row < extra { row } else { extra })
         let last = first + each + (if row < extra { 1 } else { 0 })
-        let line = if indented {
-          @ui.style(row=true, gap=S1)
-        } else {
-          @ui.style(row=true, w=Full, gap=S1, justify=JBetween)
-        }
+        let line = @ui.style(row=true, w=Full, gap=S1)
         let line = if limit == 2 { line.then(@ui.style(h=Fixed(theme().chat_list.meta_h), align=ACenter)) } else { line }
         c.box(style=line, keep=true, fn() {
-          let suffix = "/grid/" + limit.to_string() + (if indented { "/text" } else { "/full" })
+          let suffix = "/grid/" + limit.to_string()
           if limit == 2 {
             // Two full, marked chips per line are shorter than labels over figures and keep each pair together.
             for i in first..<last {
@@ -203,23 +202,19 @@ pub fn nav_quota_chips(c : @ui.Ctx, q : Json?, key? : String = "quota", at? : Li
     }) |> ignore
   }
   c.box(style=quota_chips_line, one_of=true, fn() {
-    c.box(style=@ui.style(row=true, pl=room(text_in), pr=room(clear)), keep=true, fn() {
-      quota_chips(c, q, small=true, gap=4.0, key=key + "/start")
-    }) |> ignore
-    // There may be room for whole marked chips under the mark, even if there is not room beside it.
-    c.box(style=@ui.style(row=true, w=Full, ml=room(inset - side), mr=room(clear), gap=S1), keep=true, fn() {
+    // (as wide as the list's widest needs, so a list's rows take one way, not each its own)
+    let line = dmax(widest, nav_quota_line(c, q)) + clear
+    c.box(style=@ui.style(row=true, min_w=Fixed(line), ml=room(inset - side), pr=room(clear), gap=S1), keep=true, fn() {
       for i in 0..<windows.length() {
         c.box(keep=true, fn() {
           quota_chip(c, Some(windows[i]), small=true, key=key + "/under/" + i.to_string())
         }) |> ignore
       }
     }) |> ignore
-    c.box(style=@ui.style(row=true, pl=room(text_in), pr=room(clear), gap=S0_5), keep=true, fn() {
-      columns(0, windows.length(), "/columns")
-    }) |> ignore
     c.box(
-      // The end capsules sit in the row's foot corners: put them at the same inset from each side as from the foot.
-      style=@ui.style(row=true, w=Full, mx=room(inset - side), gap=S0_5, justify=JBetween),
+      // (from the start as the line before, its last capsule anywhere along the row: lifted clear of the row's foot
+      // corner, as the line before keeps clear of its end)
+      style=@ui.style(row=true, w=Full, mx=room(inset - side), mb=room(clear), gap=S0_5),
       keep=true,
       fn() {
         columns(0, windows.length(), "/wide-columns")
@@ -231,16 +226,32 @@ pub fn nav_quota_chips(c : @ui.Ctx, q : Json?, key? : String = "quota", at? : Li
       let each = windows.length() / rows
       let widest = each + (if windows.length() % rows > 0 { 1 } else { 0 })
       if rows > 1 && widest == limit && (each >= 2 || limit == 1) {
-        grid(limit, true)
-        grid(limit, false)
+        grid(limit)
       }
     }
   }) |> ignore
 }
 
 ///|
+/// The room an allowance's full chips need in one line of a sidebar's row, as quota_chip says them: what a list
+/// gives its rows as `widest` (nav_quota_chips), the most of them; 0 where it shows none.
+pub fn nav_quota_line(c : @ui.Ctx, q : Json?) -> Double {
+  guard has_quota(q) else { return 0.0 }
+  let windows = match chip_field(q, "windows") {
+    Some(Array(a)) => a
+    _ => []
+  }
+  let mut sum = 0.0
+  for i, w in windows {
+    sum += fill_chip_wide(c, chip_str(Some(w), "mark"), chip_left(Some(w)).to_string() + "%", small=true) +
+      (if i > 0 { @ui.Space::S1.px() } else { 0.0 })
+  }
+  sum
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let nav_quota_column : @ui.Style = @ui.css("align=ACenter gap=S0_5")
+let nav_quota_column : @ui.Style = @ui.css("align=AStart gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
