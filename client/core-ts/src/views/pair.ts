@@ -50,7 +50,7 @@ import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { Priority } from "../sync/scheduler.ts";
-import { Lock, baseOf, deviceText, fold, held, live, lockSeen, nameOf, onBoundPerson, pairs, putOnBound, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
+import { Lock, baseOf, deviceText, fold, held, live, lockSeen, nameOf, offOwnLock, onBoundPerson, pairs, putOnBound, read, signerKnown, signerLoading, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -449,7 +449,10 @@ function mine(inner: Inner, ws: string): J | null {
 }
 
 const changed = (inner: Inner, y: Trying) => {
-  lockSeen(inner).touch(...y.workspaces.map((ws) => `lock ${ws}`), "prompts");
+  // (a person's own lock tried: their workspaces' locks show it too, where that lock is what lets this device in and the
+  // page that waits there asked for it, views/lock.ts lockView's `pair`)
+  const theirs = y.workspaces.some(isPerson) ? [...inner.workspaces.owned()].map(([ws]) => `lock ${ws}`) : [];
+  lockSeen(inner).touch(...y.workspaces.map((ws) => `lock ${ws}`), ...theirs, "prompts");
   inner.adb.touched();
 };
 
@@ -483,7 +486,9 @@ function waitingIn(inner: Inner, base: string): { workspaces: string[]; approver
     const f = fold(h.entries);
     const had = live(f.devices.get(base), Math.floor(inner.host.nowMs() / 1000));
     const unsigned = had !== undefined && had.kind === "app" && inner.host.appKeys === true && (signer === null || had.sign_key !== signer);
-    if (f.disabled || (had !== undefined && !unsigned) || onBoundPerson(inner, ws)) continue;
+    // (nor where its person bound a lock of their own that it is not on: approved into this one it would still be
+    // refused, the stations letting their app devices in on that lock alone; it joins that one, views/lock.ts `run`)
+    if (f.disabled || (had !== undefined && !unsigned) || onBoundPerson(inner, ws) || offOwnLock(inner, ws)) continue;
     workspaces.push(ws);
     let checked: Checked | null = null;
     try {

@@ -840,8 +840,17 @@ try {
     for (const ws of [workspace, two]) log(`  J in ${ws === two ? "Two" : "Dev"}: ${short(await j.stationState(ws, (s) => s.state !== "online" && s.state !== "connecting", 90_000))}`);
   });
   let jKey = "";
-  await must("J joins alice's own lock once, face to face with B", async () => {
-    jKey = await joinVia(b, j);
+  // (as a person does it on a new phone: 发送批准请求 on the page that waits in the workspace, not the settings' 个人锁.
+  // Approved into the workspace's lock that way, as it was before, every station went on refusing it: 2026-11-10)
+  await must("J asks from the page that waits in Dev: it joins alice's own lock, face to face with B", async () => {
+    const me = (await j.lock(workspace, (l) => l.me?.waiting && l.me?.ownLock, 60_000)).me;
+    log(`  J's page in Dev: ${JSON.stringify({ waiting: me.waiting, ownLock: me.ownLock, pair: me.pair?.state ?? null })}`);
+    const shown = b.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
+    await j.call("lock.pair", { workspace });
+    const p = await shown;
+    await j.lock(workspace, (l) => l.me?.pair?.state === "code", 60_000);
+    await j.call("lock.pairCode", { workspace, code: p.code });
+    jKey = (await j.personal((p) => p.standing === "member", 90_000)).devices.find((x: J) => x.me)?.key as string;
   });
   await check("J let in by both workspaces' stations, in both workspaces' locks signing", async () => {
     for (const ws of [workspace, two]) {
