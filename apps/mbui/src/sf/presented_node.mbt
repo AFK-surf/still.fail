@@ -89,6 +89,13 @@ pub fn presented_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
       let p = presented_now[i]
       // (the root's node it is in at its place in the window's stack of layers: its serial, as the host's presented are)
       row.over(Is(true)).stacked(Is(serial)) |> ignore
+      // (what opened it, for every kind it is drawn as: the focus given back to that as it goes, where it still takes
+      // it, not to what had the focus as it opened: View::opened_by)
+      match p.from {
+        Node(v) => row.opened_by(@view.ByNode(v.id())) |> ignore
+        Of(id) => row.opened_by(@view.ByOld(id)) |> ignore
+        At(_, _, _, _) | Unanchored => ()
+      }
       // (the tips of what its body and its foot are made of: the window's layer of them, panel_tips_lent)
       row.lends(panel_tips_lent, tips) |> ignore
       let open = fn() {

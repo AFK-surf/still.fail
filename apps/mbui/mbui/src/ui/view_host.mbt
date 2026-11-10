@@ -5132,6 +5132,11 @@ priv struct LayerFocus {
   mut fresh : Bool
   /// to give the focus to the first of what it holds that takes it, once that is built (View::focus_opens_first)
   mut first : Bool
+  /// what opened it (View::opened_by), given the focus back as it goes in the place of `back` where it still takes it
+  mut opener : @view.Opener?
+  /// the layer of these that held what opened it as it opened: gone with it, what opened it gone too, given back as what
+  /// that one gives back
+  mut opener_in : @view.NodeId?
 }
 
 ///|
@@ -5184,6 +5189,30 @@ fn focus_node_of(id : Int) -> @view.NodeId? {
 }
 
 ///|
+/// What a layer of tree `t` opened by `opener` (View::opened_by) gives the focus back to as it goes, as Ctx's focus names
+/// it, and the layer of layer_focus_open that holds that: the node that opened it where it still takes the focus
+/// (Tree::focus_back_takes), something of an old view where that was built in the last frame; else none (what had it as
+/// it opened, then).
+fn layer_opener_back(t : @view.Tree, opener : @view.Opener?) -> (Int, @view.NodeId?)? {
+  let k = match opener {
+    Some(@view.ByNode(n)) if t.focus_back_takes(n) => tree_said_id(n)
+    Some(@view.ByOld(k)) if g().last_focusables.iter().any(fn(f) { f.id == k }) => k
+    _ => return None
+  }
+  Some((k, layer_focus_holding(t, k)))
+}
+
+///|
+/// The layer of layer_focus_open that holds what opened a layer (`opener`, View::opened_by), as it opens.
+fn layer_opener_in(t : @view.Tree, opener : @view.Opener?) -> @view.NodeId? {
+  match opener {
+    Some(@view.ByNode(n)) => layer_focus_open.iter().find_first(fn(l) { t.holds(l.layer, n) }).map(fn(l) { l.layer })
+    Some(@view.ByOld(k)) => layer_focus_holding(t, k)
+    None => None
+  }
+}
+
+///|
 /// The layers of tree `t` that give the focus gone (`gone`) and opened (`opened`, the lowest first, each with the node
 /// it gives it to) in a change committed whole (Tree::on_layers_focus), at that moment. Gone: what gives the focus back
 /// to something in one of them gives it back to what that one would have instead (whatever went first, whatever was
@@ -5194,6 +5223,19 @@ fn focus_node_of(id : Int) -> @view.NodeId? {
 fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[(@view.NodeId, @view.NodeId?)]) -> Unit {
   let c = g()
   let going = layer_focus_open.filter(fn(l) { gone.contains(l.layer) })
+  // (what opened each, where it still takes the focus: given it back in the place of what had it as it opened, and
+  // what it is in given back through as what that had is: View::opened_by)
+  for l in going {
+    match layer_opener_back(t, l.opener) {
+      Some((k, k_in)) => {
+        l.back = k
+        l.back_in = k_in
+      }
+      // (what opened it gone with the layer it was in, going now too: given back as that one gives back)
+      None if l.opener_in is Some(o) && gone.contains(o) => l.back_in = Some(o)
+      None => ()
+    }
+  }
   // (given back through what goes: each in it given back to what it would have, till none is)
   for l in going {
     for m in layer_focus_open {
@@ -5234,8 +5276,21 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
         layer_focus_open[i].back_in = had_in
         layer_focus_open[i].fresh = true
         layer_focus_open[i].first = t.opens_first(layer)
+        layer_focus_open[i].opener = t.opener_of(layer)
+        layer_focus_open[i].opener_in = layer_opener_in(t, layer_focus_open[i].opener)
       }
-      None => layer_focus_open.push({ layer, back: had, back_in: had_in, fresh: true, first: t.opens_first(layer) })
+      None => {
+        let opener = t.opener_of(layer)
+        layer_focus_open.push({
+          layer,
+          back: had,
+          back_in: had_in,
+          fresh: true,
+          first: t.opens_first(layer),
+          opener,
+          opener_in: layer_opener_in(t, opener),
+        })
+      }
     }
     // (one that gives the focus nothing as it opens (View::focus_returns): what had it before it still what had it, for
     // what opens over it)

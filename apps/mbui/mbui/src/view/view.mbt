@@ -871,6 +871,8 @@ pub struct Tree {
   focus_gone : Array[NodeId]
   /// the layers that give the focus to the first of what they hold that takes it as they open (View::focus_opens_first)
   focus_firsts : Set[NodeId]
+  /// what opened the layers in a node (View::opened_by), by that node: what they give the focus back to as they go
+  layer_openers : Map[NodeId, Opener]
   mut on_layers_focus : (Array[NodeId], Array[(NodeId, NodeId?)]) -> Unit
   /// what follows what is under the pointer, while it is over the window (Tree::point_at)
   mut point_stop : (() -> Unit)?
@@ -1153,6 +1155,7 @@ pub fn Tree::new(
     focus_opened: [],
     focus_gone: [],
     focus_firsts: Set::new(),
+    layer_openers: {},
     on_layers_focus: fn(_, _) {  },
     point_stop: None,
     gone: false,

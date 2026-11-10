@@ -442,6 +442,55 @@ pub fn View::focus_returns(self : View) -> View {
 }
 
 ///|
+/// What opened a layer (View::opened_by): a node of the tree's, or something of an old view its host keeps by its key
+/// (the old frame's widget's id, as Ctx::overlay's `return_focus` names it).
+pub(all) enum Opener {
+  ByNode(NodeId)
+  ByOld(Int)
+} derive(Eq, Debug)
+
+///|
+/// The layers that give the focus (View::focus_opens, focus_opens_first, focus_returns) that are `self` or in it opened
+/// by `opener`: each gives the focus back to it as it goes, not to what had the focus as it opened (a row a pointer
+/// opened a menu from had none: Radix's and the old kit's `return_focus=trigger`), where it can still take it then;
+/// where it cannot (let go meanwhile, leaving, taking no focus), back to what had it as it opened, as one opened by
+/// nothing does. Said once where what is presented is made (a presented one's own node, whatever kind it is drawn as),
+/// the nearest said of it holding for a layer (Tree::opener_of). Said again, the last said holds.
+pub fn View::opened_by(self : View, opener : Opener) -> View {
+  guard self.live() is Some(_) else { return self }
+  let id = self.id()
+  let tree = self.tree
+  let first = !tree.layer_openers.contains(id)
+  tree.layer_openers[id] = opener
+  if first {
+    self.owns(fn() { tree.layer_openers.remove(id) }) |> ignore
+  }
+  self
+}
+
+///|
+/// What opened layer `layer` (View::opened_by): the nearest said of it or of what holds it; none where none was.
+pub fn Tree::opener_of(self : Tree, layer : NodeId) -> Opener? {
+  guard self.alive_id(layer) else { return None }
+  let mut i = layer.at
+  while i >= 0 {
+    match self.layer_openers.get({ at: i, gen: self.nodes[i].gen }) {
+      Some(o) => return Some(o)
+      None => ()
+    }
+    i = self.nodes[i].parent
+  }
+  None
+}
+
+///|
+/// Whether node `id` could be given the focus as a layer over it goes (View::opened_by): it lives, is not leaving and
+/// takes the focus (View::focusable); what a modal layer over it keeps from input may still be given it, as that goes.
+pub fn Tree::focus_back_takes(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && !self.leaving_at(id.at) && self.nodes[id.at].focusable
+}
+
+///|
 /// Layer `self` told as giving the focus to `target` as it opens (none: nothing), giving back as it goes.
 fn View::layer_focus(self : View, target : NodeId?) -> View {
   guard self.live() is Some(_) else { return self }
