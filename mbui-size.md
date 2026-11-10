@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [69498a638](https://github.com/AFK-surf/still.fail/commit/69498a6383679696333fbca1ed435e6aeff4203f) mbui: a field of the window's tree blinks its care | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.54 | 186.58 |
 | [7c61114b4](https://github.com/AFK-surf/still.fail/commit/7c61114b4838f8fd673ff6d330c04a8f7d388946) app: which station a favorite folder is chosen on  | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.62 | 131.92 |
 | [cdddf8b29](https://github.com/AFK-surf/still.fail/commit/cdddf8b29c157a8faba875f93e46e893667e8f96) Station: cores before 0.1.6968 told to update; no  | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.32 | 170.66 |
 | [6575c0a28](https://github.com/AFK-surf/still.fail/commit/6575c0a28c9e3c8f6672eb3ffe617d0b2a30b609) mbui: a layer opened by a node gives the focus bac | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.62 | 159.22 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [1fd232e1f](https://github.com/AFK-surf/still.fail/commit/1fd232e1f0935aa7ee629680c5e10ee307f3cda3) app: the page that shares a chat as a picture come | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 93.49 | 143.42 |
 | [df36baaac](https://github.com/AFK-surf/still.fail/commit/df36baaacbb00f521e3df89269e30385f07b1ab0) app: a share card's night comes in with its pictur | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 93.49 | 155.56 |
 | [94512b59f](https://github.com/AFK-surf/still.fail/commit/94512b59f5983e916656a0f5e654351c64652e30) mbui: a panel whose body and foot are nodes has no | 1.73 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 92.96 | 169.65 |
-| [8cc3a8001](https://github.com/AFK-surf/still.fail/commit/8cc3a8001baf1ecca1e6652ebdeea5c88c38b085) mbui: sizes_steady and rows_steady take words made | 1.73 | 2.31 | 9.63 | 28.16 | 33.63 | 25.16 | 46.08 | 93.31 | 125.58 |
