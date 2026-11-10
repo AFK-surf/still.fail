@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0f96ed1e8](https://github.com/AFK-surf/still.fail/commit/0f96ed1e8401cf9bfba0026bb3641bdca312f64a) ci: words_large's sweep in two runs, a language ea | 1.76 | 2.36 | 9.8 | 28.4 | 34.32 | 25.38 | 46.64 | 93.55 | 181.79 |
 | [fc221c3fe](https://github.com/AFK-surf/still.fail/commit/fc221c3fefc93a91693ad68795951fa6666a6506) kit: a menu's item the pointer rests on takes the  | 1.76 | 2.35 | 9.79 | 28.4 | 34.31 | 25.38 | 46.64 | 93.82 | 169.65 |
 | [e77e01edf](https://github.com/AFK-surf/still.fail/commit/e77e01edf003bfdc0ecce3a73d255420e6f91453) ci: the app's page files handed to their programs  | 1.76 | 2.35 | 9.79 | 28.4 | 34.29 | 25.38 | 46.63 | 93.64 | 146.17 |
 | [a7b60f6b2](https://github.com/AFK-surf/still.fail/commit/a7b60f6b22673771b8f1cfe19bfd7e5b67dcb910) mbui: a stack's pages put in place, or gone back t | 1.76 | 2.35 | 9.79 | 28.4 | 34.29 | 25.38 | 46.63 | 94.03 | 162.11 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [e5d0782dd](https://github.com/AFK-surf/still.fail/commit/e5d0782dd97234ad36ee335f7064fc47527e297b) app: four files mended to no motion fault at 60 an | 1.74 | 2.32 | 9.64 | 28.18 | 33.63 | 25.16 | 46.1 | 93 | 145.19 |
 | [3800c90ad](https://github.com/AFK-surf/still.fail/commit/3800c90ad7d720ab03e1fe41e069648af348a571) station: the queue no longer holds tasks back for  | 1.74 | 2.32 | 9.64 | 28.17 | 33.63 | 25.16 | 46.1 | 93.19 | 181.3 |
 | [aed2ce44e](https://github.com/AFK-surf/still.fail/commit/aed2ce44eeecab50b9506dc391349e29d8d7bb81) mbui: 页面列表行里的内容也让出空间（展开、收起），列表自己的行照样立刻出现 (#5112) | 1.74 | 2.32 | 9.64 | 28.17 | 33.63 | 25.15 | 46.1 | 93.72 | 182.52 |
-| [2a31b314f](https://github.com/AFK-surf/still.fail/commit/2a31b314fb3486b36e023a5d682710dcbc9ed548) mbui: hang reports keep the heaviest past the cap, | 1.74 | 2.32 | 9.63 | 28.17 | 33.62 | 25.15 | 46.08 | 92.77 | 131.2 |
