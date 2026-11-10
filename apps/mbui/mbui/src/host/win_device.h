@@ -23,7 +23,8 @@ int32_t mb_host_copy_shown(void) { return 0; }
 // a thread of their own, told as the next frame after begins (device_tell).
 enum { CLIP_NONE = 0, CLIP_PNG = 1, CLIP_TOO_LARGE = 2, CLIP_UNREADABLE = 3 };
 #define CLIP_READS 8
-#define CLIP_PNG_MOST (8u * 1024 * 1024)
+// A pasted picture is an attachment, as a copied picture file is. A screen's transport checks its own bound.
+#define CLIP_PNG_MOST FILE_MOST
 typedef struct {
   int32_t id;
   volatile LONG done;    // all of it read

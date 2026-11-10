@@ -36,7 +36,30 @@ on:
 
 
 jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/msvc
+      - uses: ./.github/actions/mbui-moonbit
+      - name: The renderer and its draw lists
+        run: scripts/render_windows.sh build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-render-build
+          path: |
+            apps/mbui/mbui/out/render/
+            apps/mbui/mbui/out/win/mod/_build/native/release/build/render/render.exe
+
   offscreen:
+    needs: build
     strategy:
       fail-fast: false
       matrix:
@@ -54,8 +77,12 @@ jobs:
       - uses: ./.github/actions/msvc
       - uses: ./.github/actions/mbui-moonbit
       - uses: ./.github/actions/mbui-warp
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-render-build
+          path: apps/mbui/mbui/out/
       - name: Drawn offscreen, twice (scripts/render_windows.sh)
-        run: scripts/render_windows.sh
+        run: scripts/render_windows.sh draw
       - uses: actions/upload-artifact@v4
         if: always()
         with:
