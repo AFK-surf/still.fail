@@ -2966,7 +2966,7 @@ test("a model at capacity is no account's limit: said once, tried again after lo
   await time.adjust(60_000);
   await settle();
   assert.equal(agent.prompts.length, 3);
-  assert.equal(said().length, 1);
+  assert.equal(said().length, 1, r.chat.texts().join("\n---\n"));
   // Stopped while it waits to try again: it tries no more, and its jobs go on.
   r.store.insertJob({ ...watchJob(key), id: "build", token: "tbuild", port: null, watch: false });
   agent.end(full);

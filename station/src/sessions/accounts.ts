@@ -189,7 +189,10 @@ export class Accounts {
     const current = candidates.find((p) => p.id === row.profile);
     const now = this.deps.clock.currentTimeMillisUnsafe();
     const crowded = (p: Profile) => urgency(this.healthOf(p.id).quota, now).crowded;
-    const keeps = current && (row.profilePinned || (usable(this.healthFor(current.id, row.model)) && serves(current, row.model)));
+    // (Its model counts only where one of them has it enabled, as in `spend` and the pool: else each call would move it
+    // to the least loaded, its own process counted where it is, back and forth.)
+    const strict = candidates.some((p) => serves(p, row.model));
+    const keeps = current && (row.profilePinned || (usable(this.healthFor(current.id, row.model)) && (!strict || serves(current, row.model))));
     let among = candidates;
     if (current && keeps) {
       if (row.profilePinned) return withSpelling(current);
@@ -198,7 +201,7 @@ export class Accounts {
       // little.
       const paid = (p: Profile) => !billedPerUse(p);
       const better = (p: Profile) =>
-        p.id !== current.id && serves(p, row.model) && usable(this.healthFor(p.id, row.model)) && (paid(p) === paid(current) ? crowded(current) && !crowded(p) : paid(p));
+        p.id !== current.id && (!strict || serves(p, row.model)) && usable(this.healthFor(p.id, row.model)) && (paid(p) === paid(current) ? crowded(current) && !crowded(p) : paid(p));
       among = candidates.filter(better);
       if (among.length === 0 || holding || !this.cheapToLeave(key)) return withSpelling(current);
     }
