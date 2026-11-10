@@ -26,7 +26,13 @@ pub fn rail_card_node(
     @sf.style_node(b, fn() { rc_box })
     @sf.words_node(b, fn() { text(card(), "head") }, fn() { rc_head }) |> ignore
     b.show(fn() { items(card(), "stats").length() > 0 }, fn(row) {
-      @sf.style_node(row, fn() { rc_stats })
+      @sf.style_node(row, fn() {
+        if items(card(), "stats").iter().any(fn(s) { text(Some(s), "go") != "" }) {
+          rc_stats_go
+        } else {
+          rc_stats
+        }
+      })
       row.each(fn() { items(card(), "stats") }, fn(s) { text(Some(s), "label") }, fn(st, s) {
         let to = fn() { text(Some(s.get()), "go") }
         @sf.style_node(st, fn() { if to() == "" { rc_stat } else { rc_stat_go } }, in_row=true)
@@ -48,6 +54,7 @@ pub fn rail_card_node(
         })
         // (its ground the hover's as the hand is on it)
         .ground(By(fn() { if to() != "" && @sf.lit_node(st) { @sf.theme().p.hover } else { 0L } }))
+        .radius(By(fn() { if to() == "" { 0.0 } else { rc_stat_corner() } }))
         |> ignore
         @sf.words_node(st, fn() { text(Some(s.get()), "value") }, fn() { rc_value.then(toned(text(Some(s.get()), "tone"))) })
         |> ignore
@@ -137,23 +144,36 @@ let rc_head : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg,
 let rc_stats : @ui.Style = @ui.css("row w=Full gap=S3")
 
 ///|
+/// The same of figures that are pressed, 20 apart: a pressed one's ground (rc_stat_go) reaches 10 past its words.
+// kept across runs: a value (no field of it changes)
+let rc_stats_go : @ui.Style = @ui.css("row w=Full gap=S5")
+
+///|
 // kept across runs: a value (no field of it changes)
 let rc_stat : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
-/// A figure that opens the chats it counts: its ground out past its words, 6 at its sides (the figures 12 apart: the
-/// grounds of two side by side meet, never overlap) and 4 above and under, its words where they were.
+/// A figure that opens the chats it counts: its ground out past its words to the card's padding, 10 all round (the
+/// figures 20 apart: the grounds of two side by side meet, never overlap), its words where they were; its corner
+/// rc_stat_corner's.
 // kept across runs: a value (no field of it changes)
-let rc_stat_go : @ui.Style = rc_stat.then(@ui.css("px=S1_5 py=S1 radius=Inner")).then(
-  @ui.style(mx=@sf.room_of(-rc_stat_out), my=@sf.room_of(-rc_stat_over)),
+let rc_stat_go : @ui.Style = rc_stat.then(@ui.css("p=S2_5")).then(
+  @ui.style(mx=@sf.room_of(-rc_stat_out), my=@sf.room_of(-rc_stat_out)),
 )
 
 ///|
-/// How far a pressed figure's ground reaches past its words: its padding (px=S1_5 py=S1), its words left where they were.
-let rc_stat_out : Double = 6.0
+/// A pressed figure's corner: concentric with the card's (a small panel's, @sf.r_menu) at its padding, where its ground
+/// lies (as 分享卡片's, rc_share), where the theme's ranges let it be; else its own (Md).
+fn rc_stat_corner() -> Double {
+  let t = @ui.tree_theme()
+  @ui.CornerOf::Follow(@ui.CornerOf::Own(@sf.r_menu), @sf.panel_pad, t.corner(Md)).radius(
+    @ui.tree_corner_roots_now(),
+  )
+}
 
 ///|
-let rc_stat_over : Double = 4.0
+/// How far a pressed figure's ground reaches past its words: its padding (p=S2_5), its words left where they were.
+let rc_stat_out : Double = hover_words_in
 
 ///|
 /// A figure's value, large as a title, over what it is of.

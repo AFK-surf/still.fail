@@ -36,13 +36,17 @@ test "wide: a figure of 对话's card pressed opens the chats it counts (2026-11
 }
 
 ///|
-/// 对话's card opened as the pointer rests on its place, its figure `figure` (as a screen reader names it) pressed.
+/// 对话's card opened as the pointer rests on its place, its figure `figure` (as a screen reader names it) pointed at,
+/// nothing of it against the corners' rule, then pressed.
 fn rail_card_figure_pressed(t : @ui.Tester, figure : String) -> Unit raise {
   let (x, y, w, h) = t.query(Button, label="对话").unwrap().rect
   t.move(x + w / 2.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   let (fx, fy, fw, fh) = t.query(Button, label=figure).unwrap().rect
   t.move(fx + fw / 2.0, fy + fh / 2.0)
+  t.draw()
+  // (its ground lit under the pointer, in the card's corner: concentric with it)
+  assert_eq(t.corner_faults(), [], msg=figure)
   t.tap(fx + fw / 2.0, fy + fh / 2.0)
   t.draw()
 }
