@@ -122,6 +122,8 @@ export type Surface = {
 /// What a session needs of the station; the hub gives it.
 export type SessionDeps = {
   store: SessionStore;
+  /// Its workspace's skills linked where it runs, before its process opens (`linkSkills`).
+  linkSkills(row: any): Promise<void>;
   /// Pending messages and letters, merged as they are now, read off the station thread.
   pendingDeliveries(key: string, signal?: AbortSignal): Promise<PendingMessage[]>;
   /// Card state for a person's delivery, read off the station thread.
@@ -1402,7 +1404,7 @@ export class SessionActor {
     try {
       profile = row ? this.deps.runOn(this.key, this.holding()) : null;
     } catch {}
-    if (row && profile && !this.restart && profile.id === this.profile && agent.session.retune) await linkSkills(row, this.deps);
+    if (row && profile && !this.restart && profile.id === this.profile && agent.session.retune) await this.deps.linkSkills(row);
     if (!this.restart && row && profile && profile.id === this.profile && agent.session.retune?.(openOptions(row, profile, this.deps))) {
       this.stale = false;
       this.runningIdentity = { runtime: this.runtime, model: row.model ?? null, effort: row.effort ?? null };
@@ -1451,7 +1453,7 @@ export class SessionActor {
     this.runtime = runtime;
     const driver = this.deps.driver(this.runtime);
     const profile = this.deps.runOn(this.key);
-    await linkSkills(row, this.deps);
+    await this.deps.linkSkills(row);
     const base = openOptions(row, profile, this.deps);
     // Its context cleared by hand (clear): no runtime session now, those before on record. A new one, told so; one
     // continued from a terminal is given still.fail's instructions as a new session is (no cache of its own to keep).

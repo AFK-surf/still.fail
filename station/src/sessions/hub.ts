@@ -171,6 +171,9 @@ export class Hub {
   /// A thread's latest `limit` messages, oldest first, read by the readers (agents.ts sets it): the archive review's
   /// (review.ts), up to 400 of them through the merged view, 3 seconds held on a station. Unset (tests): the store.
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
+  /// How a session's skills are linked where it runs before its process opens; none: on the disk (actor.ts
+  /// `linkSkills`). A test's hub, whose sessions run nowhere, links none.
+  skillsLinker: ((row: SessionRow) => Promise<void>) | null = null;
   /// What a week's checks say of a workspace's chats, counted by the readers (null: on the main thread, as the store is
   /// still preparing their lookups); none (tests): counted here.
   policyChecks: ((since: number, viewer: InWorkspace) => Promise<PolicyChecks | null>) | null = null;
@@ -550,7 +553,7 @@ export class Hub {
       try {
         const driver = this.sessionDriver(snap.runtime);
         const generation = actor.nextGeneration();
-        await linkSkills(row, this.deps);
+        await this.deps.linkSkills(row);
         agent = await driver.adopt(openOptions(row, this.accounts.profile(ranOn) ?? this.accounts.runOn(row.key), this.deps), snap.agent, actor.listener(generation));
       } catch (error) {
         log.warn("hub", "a session's runtime could not be taken up; it resumes the usual way", { session: row.key, error: (error as Error).message });
@@ -1361,6 +1364,7 @@ export class Hub {
   private sessionDeps(): SessionDeps {
     return {
       store: this.store,
+      linkSkills: (row) => this.skillsLinker ? this.skillsLinker(row) : linkSkills(row, this.deps),
       pendingDeliveries: async (key, signal) => this.pendingDeliveries
         ? this.pendingDeliveries(key, signal) : this.store.pendingMessages(key),
       deliveryCardState: async (thread, n, signal) => {

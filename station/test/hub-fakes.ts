@@ -382,6 +382,9 @@ export class Rig {
         void work.then(() => this.background.delete(work), () => this.background.delete(work));
       },
     });
+    // Its sessions' processes are fakes that load no skills: a hub's tests open them at once (tests of the skills
+    // link them themselves: hub-parts, multi-workspace-agents).
+    hub.skillsLinker = async () => {};
     const cc = new CcIndexPreparation();
     hub.prepareCcSessions = async (sessions) => {
       for (const session of sessions) while (!cc.step(this.store.db, session).done) {}

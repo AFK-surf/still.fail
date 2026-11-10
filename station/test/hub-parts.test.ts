@@ -801,7 +801,7 @@ test("what stations before linked into the profile homes (the home workspace's m
   rmSync(root, { recursive: true, force: true });
 });
 
-test("a session's workspace has its workspace's skills where it runs: one gone is taken away, a preset's of the same name left", () => {
+test("a session's workspace has its workspace's skills where it runs: one gone is taken away, a preset's of the same name left", async () => {
   const root = temp();
   const [skills, workspace] = [join(root, "agent", "skills"), join(root, "workspace")];
   for (const name of ["team", "gone", "both"]) {
@@ -810,9 +810,9 @@ test("a session's workspace has its workspace's skills where it runs: one gone i
   }
   mkdirSync(join(skills, "notes"));
   mkdirSync(join(workspace, ".claude", "skills", "both"), { recursive: true });
-  sessionSkills(workspace, skills);
+  await sessionSkills(workspace, skills);
   rmSync(join(skills, "gone"), { recursive: true });
-  sessionSkills(workspace, skills);
+  await sessionSkills(workspace, skills);
   assert.deepEqual(readdirSync(join(workspace, ".claude", "skills")).sort(), ["both", "team"]);
   assert.ok(!lstatSync(join(workspace, ".claude", "skills", "both")).isSymbolicLink());
   assert.deepEqual(readdirSync(join(workspace, ".agents", "skills")).sort(), ["both", "team"]);
