@@ -912,6 +912,48 @@ test("an app device of theirs off the person's own lock keeps it from being boun
   assert.equal(said!.message, t("core-misc.lock.offOwnLock", { name: "W" }));
 });
 
+test("where they bound a lock of their own, people are shown one thing: a new device's prompt names the workspaces it is let in to, and 移除 on the workspace's page takes a device of theirs off that lock", async () => {
+  // (the user, 2026-11-10: nobody is to tell the person's own lock from the workspace's. The prompt said only 它要加入
+  // 你的个人锁; a device taken out of the workspace's lock alone was let in still, on their own, and put back)
+  const NEW = "88".repeat(32), NEW_KEY = "ed25519:" + "44".repeat(32);
+  const m = await met();
+  const inner = m.core.inner;
+  const kept: { entries: Entry[] } = { entries: [] };
+  const personal = new PersonalLock({
+    host: m.host, runner: inner.runner, device: () => Effect.succeed(ME), label: () => "this", changed: () => {},
+    cloud: (_s, method, _p, body) => Effect.sync(() => {
+      if (method === "GET") return { entries: kept.entries };
+      kept.entries = (body as { entries: Entry[] }).entries;
+      return { entries: kept.entries };
+    }),
+  });
+  const sealed = new Map<string, Uint8Array>();
+  m.host.secureSet = (k: string, v: Uint8Array) => Effect.sync(() => void sealed.set(k, v));
+  const lockedGet = m.host.secureGet;
+  m.host.secureGet = (k: string, o: { user: boolean; reason?: string }) => (o.user ? Effect.succeed(sealed.get(k) ?? null) : lockedGet!.call(m.host, k, o));
+  inner.adb.personal = () => personal;
+  await m.run(personal.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
+  await m.run(read(inner, "ws"));
+  await m.run(bindPerson(inner, "ws"));
+  await m.run(read(inner, "ws"));
+  assert.ok(fold(held(inner, "ws")!.entries).persons.has("s1"), "bound");
+
+  // A new device of theirs asks (into their own lock, as the page that waits has it ask): the prompt on this one names
+  // the workspace, as for one approved into the workspace's lock.
+  const asked = await m.run(Effect.andThen(m.phone.send({ t: "hello", v: 1, workspaces: [], kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "33".repeat(32), personal: { subs: ["s1"], key: NEW_KEY } }), m.phone.next()));
+  assert.deepEqual(asked, { ok: { t: "code", workspaces: ["person:s1"] } });
+  assert.deepEqual((await m.prompts()).pairing.map((p: { workspaces: { id: string; name: string }[] }) => p.workspaces.map((w) => [w.id, w.name])), [[["ws", "W"]]]);
+
+  // One of theirs on that lock and in the workspace's: 移除 there (lock.removeDevice) takes it off their own lock, and
+  // out of the workspace's with it.
+  await m.run(personal.addDevice("s1", { key: NEW_KEY, id: NEW, label: "new" }, "why"));
+  await m.run(putOnBound(inner, "s1", { id: NEW, label: "new", signKey: "ed25519:" + "33".repeat(32) }));
+  assert.ok(fold(held(inner, "ws")!.entries).devices.has(NEW));
+  await m.ask("lock.removeDevice", { workspace: "ws", device: NEW });
+  assert.equal([...personal.chain("s1")!.devices.values()].some((d) => d.id === NEW), false, "off their own lock");
+  assert.equal(fold(held(inner, "ws")!.entries).devices.has(NEW), false, "and out of the workspace's");
+});
+
 test("a device on the person's own lock that a second workspace bound to it holds as not signing is put in there with the key it signs with in the first", async () => {
   // Safe mode turned on in a second workspace: the person's other devices went into its lock as the draft had them,
   // signing nothing there (no vault, no entries signed), and one they approved since was put in none where they did

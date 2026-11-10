@@ -385,12 +385,27 @@ function shown(inner: Inner): J[] {
         device: a.device, name: a.name, email: a.email, kind: a.kind, label: a.label, code: a.code, created_at: a.at,
         deviceText: deviceText(a) + (joins.length > 0 ? t("core-misc.lock.pairJoins", { names: joins.join(t("core-misc.lock.listSep")) }) : ""),
         until: a.until, untilText: untilText(inner, a.until),
-        workspaces: a.places.map((p) => {
-          const v = view(inner, p.ws);
-          return { id: p.ws, name: nameOf(inner, p.ws), emoji: str(get(v, "emoji")), icon: str(get(v, "icon")) };
+        // (asked into the person's own lock: the workspaces that lock lets it in to, as one approved into theirs is
+        // shown: people are not asked to tell the two apart, the user, 2026-11-10)
+        workspaces: (a.personal ? boundTo(inner, a.personal.subs) : a.places.map((p) => p.ws)).map((ws) => {
+          const v = view(inner, ws);
+          return { id: ws, name: nameOf(inner, ws), emoji: str(get(v, "emoji")), icon: str(get(v, "icon")) };
         }),
       };
     });
+}
+
+/// The workspaces where the lock of their own that `subs` have here is the one their member bound: what a device put on
+/// it is let in to.
+function boundTo(inner: Inner, subs: string[]): string[] {
+  const personal = inner.adb.personal();
+  return inner.workspaces.owned().flatMap(([ws, sub]) => {
+    const h = held(inner, ws);
+    if (!subs.includes(sub) || !h?.head) return [];
+    const f = fold(h.entries);
+    const bound = f.persons.get(sub);
+    return !f.disabled && bound !== undefined && bound === personal.root(sub) ? [ws] : [];
+  });
 }
 
 /// 14:05 前有效: when a code is too old, as the clock says it here.

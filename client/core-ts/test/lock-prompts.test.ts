@@ -327,7 +327,8 @@ test("the people's devices by app say which machine each is and when it was last
     ["still.fail Android", [["OPPO Find N5", "一天内使用过 · 受信任", true], ["Pixel 9", "一天内使用过 · 受信任", true]]],
     ["still.fail 网页版", [["Chrome · macOS", "3 天前使用过", true]]],
   ]);
-  assert.deepEqual(groups("s2"), [["其他", [["旧版客户端", "1 天前使用过", true], ["Pixel 8", "2 天前使用过", true]]]]);
+  // (someone else's: theirs alone to take out, an owner too takes the member out, not one device of theirs)
+  assert.deepEqual(groups("s2"), [["其他", [["旧版客户端", "1 天前使用过", false], ["Pixel 8", "2 天前使用过", false]]]]);
   // (asked about in a line of its own: which machine, then which app)
   const phoneRow = v.members.find((m: { sub: string }) => m.sub === "s1").groups[1].devices[0] as Row;
   assert.equal(phoneRow.fullText, "OPPO Find N5 · still.fail Android");

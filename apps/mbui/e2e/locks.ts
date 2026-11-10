@@ -852,6 +852,9 @@ try {
     const shown = b.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
     await j.call("lock.pair", { workspace });
     const p = await shown;
+    // (B's prompt names the workspaces J is let in to by it, as one approved into a workspace's lock is shown)
+    const named = (p.workspaces ?? []).map((w: J) => w.id).sort();
+    if (JSON.stringify(named) !== JSON.stringify([workspace, two].sort())) throw new Error(`B's prompt names ${JSON.stringify(p.workspaces)}`);
     await j.lock(workspace, (l) => l.me?.pair?.state === "code", 60_000);
     await j.call("lock.pairCode", { workspace, code: p.code });
     jKey = (await j.personal((p) => p.standing === "member", 90_000)).devices.find((x: J) => x.me)?.key as string;
@@ -864,8 +867,10 @@ try {
       log(`  J in ${ws === two ? "Two" : "Dev"} after ${Date.now() - t1} ms`);
     }
   });
-  await must("B takes J off alice's own lock", async () => {
-    await b.call("adb.personalRemove", { sub, key: jKey });
+  // (as a person does it: 移除 beside the device on 设置 › 安全 of a workspace, not the page of their own lock. That
+  // took it out of the workspace's lock alone, and it was let in still: 2026-11-10)
+  await must("B removes J on Dev's security page: off alice's own lock", async () => {
+    await b.call("lock.removeDevice", { workspace, device: await baseOf(j) });
     await b.personal((p) => !p.devices.some((x: J) => x.key === jKey), 60_000);
   });
   await check("J refused by both workspaces' stations, out of both workspaces' locks", async () => {
