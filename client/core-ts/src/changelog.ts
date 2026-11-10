@@ -2,7 +2,9 @@
 // changelog with what each part has out on this app's channel, one tab a part (this app's first; this app's alone where
 // they would all be the same, as the stable channel's are: a release an entry, each every part's), by day, newest first;
 // and what this app got since it
-// was last shown here (`news`, until `changelog.seen`). Kept on the device (table `changelog`). The sync reads it as
+// was last shown here (`news`, until `changelog.seen`). Asked with `news`, that alone, no tab made: what the chats'
+// list reads of it for its card (the whole was 125 KB on a phone, sent again each time the list came back,
+// 2026-11-10). Kept on the device (table `changelog`). The sync reads it as
 // the core starts and each time still.fail cloud's events socket opens (rule 6: never because it is shown); `app.update`
 // reads it too when it finds a build of this app the changelog kept was read before (`brings`).
 import { Effect } from "effect";
@@ -93,12 +95,13 @@ export class Changelog implements Owner {
     return topic.topic === "changelog";
   }
 
-  compute(): Value {
-    return { ok: this.value() };
+  compute(topic: Topic): Value {
+    return { ok: this.value(topic.news === true) };
   }
 
+  /// Both go out again: the whole, and its news alone.
   #changed(): void {
-    this.#store.invalidate({ topic: "changelog" });
+    this.#store.invalidateAll((topic) => topic.topic === "changelog");
   }
 
   /// What the device's host said it is: its app, and its build's number.
@@ -159,7 +162,9 @@ export class Changelog implements Owner {
     return typeof app === "string" ? app : "";
   }
 
-  value(): J {
+  /// The changelog as this app shows it; `newsOnly`: what it got since it was last shown alone (`changelog` asked with
+  /// `news`), its tabs none.
+  value(newsOnly: boolean = false): J {
     const device: J = this.#data.record(TABLE, "device") ?? null;
     const app = this.#app();
     const build = int(get(device, "build"));
@@ -170,12 +175,13 @@ export class Changelog implements Owner {
     const now = this.#host.nowMs();
     const offset = this.#host.utcOffsetMin(now);
     const news: J[] = [];
-    const tabs = tabsOf(app).map((part) => ({ part, label: t(`core-misc.changelog.tab.${part}`), days: [] as J[] }));
+    const tabs = newsOnly ? [] : tabsOf(app).map((part) => ({ part, label: t(`core-misc.changelog.tab.${part}`), days: [] as J[] }));
     for (const entry of arr(get(feed, "entries")).slice(0, SHOWN)) {
       const it = item(entry, app, build, released);
       if (it === null) continue;
       const version = it.version as number;
       if (it.mine && build !== null && version <= build && seen !== null && version > seen && news.length < NEWS) news.push(it);
+      if (newsOnly) continue;
       const ms = (typeof get(entry, "at") === "number" ? entry.at : 0) * 1000;
       const label = format.dayLabel(ms, now, offset);
       // the day it is of where the device is: which day of the list it is, the same whatever else that day lists or
@@ -193,6 +199,8 @@ export class Changelog implements Owner {
     // A tab a part only where they part what is said: where each would list the same changes, this app's alone.
     const listed = tabs.map((tab) => tab.days.flatMap((d) => d.entries.map((e: J) => e.version)).join(","));
     const parted = listed.every((l) => l === listed[0]) ? tabs.slice(0, 1) : tabs;
-    return { app, build, tabs: parted, news: news.length > 0 ? { build: build !== null ? `0.1.${build}` : null, entries: news } : null, loading: false };
+    const said = news.length > 0 ? { build: build !== null ? `0.1.${build}` : null, entries: news } : null;
+    if (newsOnly) return { app, build, tabs: [], news: said, loading: false };
+    return { app, build, tabs: parted, news: said, loading: false };
   }
 }

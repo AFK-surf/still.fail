@@ -2213,14 +2213,20 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   ui = core.connect();
   await ask(host, core, ui, 3, "client.device", { app: "android", build: "0.1.1335" });
   subscribe(core, ui, 2, { topic: "changelog" });
+  // Asked with `news` (the chats' list's card): that alone, no tab made.
+  subscribe(core, ui, 5, { topic: "changelog", news: true });
   await host.settle();
   answersOf(host, values);
   const news = v(values, 2).news;
   assert.equal(news.build, "0.1.1335");
   assert.deepEqual(news.entries.map((e: J) => e.text[0]), ["修复：列表跳动"]);
+  assert.equal(v(values, 2).tabs.length, 5);
+  assert.deepEqual(v(values, 5).news, news);
+  assert.deepEqual([v(values, 5).app, v(values, 5).build, v(values, 5).tabs, v(values, 5).loading], ["android", 1335, [], false]);
   await ask(host, core, ui, 4, "changelog.seen", {});
   answersOf(host, values);
   assert.equal(v(values, 2).news, undefined);
+  assert.equal(v(values, 5).news, undefined);
   // Read once at each start (the TS core reads it then and as the cloud's socket opens).
   assert.equal(host.requests.filter((r) => r.url.endsWith("/v1/changelog")).length, 2);
   core.close();
