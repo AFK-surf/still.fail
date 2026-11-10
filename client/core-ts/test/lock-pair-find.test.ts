@@ -233,8 +233,8 @@ test("a trusted device opened after the new device asked shows its code: dialled
   assert.deepEqual(p.approvers.map((a: { id: string; showing: boolean }) => [a.id, a.showing]), [[PHONE_APP, true], [LAPTOP_APP, false]]);
   // Each a row of its page's list: which machine, a phone or a computer, its app, and where the code shows.
   assert.deepEqual(p.approvers.map((a: { kind: string; nameText: string; noteText: string }) => [a.kind, a.nameText, a.noteText]), [
-    ["phone", "Pixel 8", `still.fail Android · ${t("core-misc.lock.pairShowing")}`],
-    ["computer", "MacBook", "still.fail 桌面版"],
+    ["phone", "Pixel 8", `Android · ${t("core-misc.lock.pairShowing")}`],
+    ["computer", "MacBook", "桌面版"],
   ]);
   assert.equal((w.hellos[0] as { t: string }).t, "hello");
   // The phone kept, not dialled again; the laptop still is, a code shown elsewhere or not, PAIR_DIAL_TRIES times in all.

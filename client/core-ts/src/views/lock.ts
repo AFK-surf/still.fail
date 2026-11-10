@@ -1090,12 +1090,15 @@ export function lockView(inner: Inner, ws: string): J {
         const d = f.devices.get(a.id);
         const v = d === undefined ? null : device(d);
         const { group, app } = prefs.deviceParts(v?.label ?? "");
+        // (its app without the brand, the group's after its first word: the words over the card say still.fail already;
+        // the user, 2026-11-10: 字太多了不好读)
+        const words = group === null || app === null ? null : app.slice(group.length - group.indexOf(" ") - 1).trim() || null;
         const showing = a.showing === true;
         return {
           id: a.id, showing,
           kind: group !== null && /^(android|ios) /.test(group) ? "phone" : "computer",
           nameText: v?.nameText ?? t("web-pages.security.appDevice"),
-          noteText: [app, showing ? t("core-misc.lock.pairShowing") : (v?.usedText ?? null)].filter((x) => x !== null).join(" · "),
+          noteText: [words, showing ? t("core-misc.lock.pairShowing") : (v?.usedText ?? null)].filter((x) => x !== null).join(" · "),
           lastSeen: v?.lastSeen ?? null,
         };
       })
