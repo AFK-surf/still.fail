@@ -1665,8 +1665,9 @@ export const SHAPES: Record<string, Shape> = {
   LockApprover: struct([
     ["id", "String", { doc: "Its key (its iroh id)." }],
     ["showing", "bool", { doc: "It shows a code for this device now (to type here)." }],
-    ["nameText", "String", { said: true, doc: "Its machine and its app in a line, as people know it (LockDevice `fullText`)." }],
-    ["usedText", opt("String"), { doc: "When it was last used, in words (LockDevice `usedText`)." }],
+    ["kind", "String", { doc: "What it is, for its mark: `phone`, `computer`." }],
+    ["nameText", "String", { said: true, doc: "Which machine it is, as people know it (LockDevice `nameText`)." }],
+    ["noteText", "String", { said: true, doc: "Under that: its app, then that it shows the code now, else when it was last used (still.fail Android · 一天内使用过); empty where neither is known." }],
     ["lastSeen", opt("i64"), { client: opt("I54"), doc: "When it last asked the cloud for a credential (s)." }],
   ], { doc: "A trusted device that may approve this one, which this one dials while it waits: those showing a code\nfirst, then the most lately used." }),
   LockPair: struct([
@@ -1677,8 +1678,7 @@ export const SHAPES: Record<string, Shape> = {
     ["until", opt("i64"), { client: opt("I54"), doc: "While a code is typed: when the last trusted device's code is too old (ms)." }],
     ["untilText", opt("String"), { said: true, doc: "That, in words (14:05 前有效)." }],
     ["approvers", opt(vec("LockApprover")), { doc: "The trusted devices it dials here: open still.fail on one of those (none from a core of before)." }],
-    ["approversText", opt("String"), { said: true, doc: "Those in words, for its page (在任意一台上打开 still.fail 就会弹出安全码：…); none where it dials none." }],
-    ["showingText", opt("String"), { said: true, doc: "Those showing a code now, in words (安全码弹在：…); none where none does." }],
+    ["approversText", opt("String"), { said: true, doc: "What to do with those, over their list on its page (在其中任意一台上打开 still.fail，就会弹出安全码); none where it dials none." }],
   ], { doc: "This device's try to be approved face to face (views/pair.ts)." }),
   LockDraftDevice: struct([
     ["id", "String"],

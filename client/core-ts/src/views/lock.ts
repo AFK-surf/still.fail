@@ -1079,23 +1079,27 @@ export function lockView(inner: Inner, ws: string): J {
   const unsigned = locked && mine !== undefined && mine.kind === "app" && inner.host.appKeys === true && signers.has(inner) && !signs;
   if (unsigned && typeof mine.sign_key === "string") recover(inner, mine.sign_key);
   const pair = locked && (mine === undefined || unsigned) ? pairs.mine(inner, ws) : null;
-  // The devices its try dials here, as people know them (which machine and app, when last used), the most lately used
-  // first, those showing a code before them: the person opens still.fail on one of those (2026-11-05: "到底是哪个设备会
-  // 弹出来呀？", a web page of theirs, or an app not approved, shows nothing).
+  // The devices its try dials here, as people know them (which machine, its app and when it was last used), the most
+  // lately used first, those showing a code before them: the person opens still.fail on one of those (2026-11-05:
+  // "到底是哪个设备会弹出来呀？", a web page of theirs, or an app not approved, shows nothing). Each a row of the
+  // page's list (the user, #4213: joined into the words over them, a narrow page broke a name in two).
   if (pair !== null && Array.isArray(pair.approvers)) {
     pair.approvers = pair.approvers
       .map((a: J) => {
         const d = f.devices.get(a.id);
         const v = d === undefined ? null : device(d);
-        return { id: a.id, showing: a.showing === true, nameText: v?.fullText ?? t("web-pages.security.appDevice"), usedText: v?.usedText ?? null, lastSeen: v?.lastSeen ?? null };
+        const { group, app } = prefs.deviceParts(v?.label ?? "");
+        const showing = a.showing === true;
+        return {
+          id: a.id, showing,
+          kind: group !== null && /^(android|ios) /.test(group) ? "phone" : "computer",
+          nameText: v?.nameText ?? t("web-pages.security.appDevice"),
+          noteText: [app, showing ? t("core-misc.lock.pairShowing") : (v?.usedText ?? null)].filter((x) => x !== null).join(" · "),
+          lastSeen: v?.lastSeen ?? null,
+        };
       })
       .sort((a: J, b: J) => Number(b.showing) - Number(a.showing) || (b.lastSeen ?? -1) - (a.lastSeen ?? -1));
-    // In words, for the page: which to open (all of them, while it looks), which show a code now. A device to a line:
-    // joined on one, a narrow page broke a name in two (Pixel / 9 · still.fail Android; the user, #4213).
-    const names = (list: J[]) => list.map((a) => a.nameText).join("\n");
-    const showing = pair.approvers.filter((a: J) => a.showing);
-    if (pair.approvers.length > 0) pair.approversText = t("core-misc.lock.pairApprovers", { names: names(pair.approvers) });
-    if (showing.length > 0) pair.showingText = t("core-misc.lock.pairShowingOn", { names: names(showing) });
+    if (pair.approvers.length > 0) pair.approversText = t("core-misc.lock.pairApprovers", { n: pair.approvers.length });
   }
   return {
     available: true,

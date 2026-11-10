@@ -223,17 +223,19 @@ test("a trusted device opened after the new device asked shows its code: dialled
   assert.equal(finding.state, "finding");
   assert.deepEqual([w.dials[PHONE_APP], w.dials[LAPTOP_APP]], [3, 3]);
   // Its page says which to open, and that none shows a code yet.
-  assert.equal(finding.approversText, t("core-misc.lock.pairApprovers", { names: finding.approvers.map((a: { nameText: string }) => a.nameText).join("\n") }));
-  assert.match(finding.approversText, /Pixel 8/);
-  assert.equal(finding.showingText, undefined);
+  assert.equal(finding.approversText, t("core-misc.lock.pairApprovers", { n: 2 }));
+  assert.deepEqual(finding.approvers.map((a: { showing: boolean }) => a.showing), [false, false]);
   // The person opens still.fail on their phone: it shows a code at the next dial.
   w.ways[PHONE_APP] = "code";
   await w.host.time.pass(PAIR_REDIAL_MS);
   const p = await w.pair();
   assert.equal(p.state, "code");
   assert.deepEqual(p.approvers.map((a: { id: string; showing: boolean }) => [a.id, a.showing]), [[PHONE_APP, true], [LAPTOP_APP, false]]);
-  assert.match(p.approvers[0].nameText, /Pixel 8/);
-  assert.equal(p.showingText, t("core-misc.lock.pairShowingOn", { names: p.approvers[0].nameText }), "where the code shows");
+  // Each a row of its page's list: which machine, a phone or a computer, its app, and where the code shows.
+  assert.deepEqual(p.approvers.map((a: { kind: string; nameText: string; noteText: string }) => [a.kind, a.nameText, a.noteText]), [
+    ["phone", "Pixel 8", `still.fail Android · ${t("core-misc.lock.pairShowing")}`],
+    ["computer", "MacBook", "still.fail 桌面版"],
+  ]);
   assert.equal((w.hellos[0] as { t: string }).t, "hello");
   // The phone kept, not dialled again; the laptop still is, a code shown elsewhere or not, PAIR_DIAL_TRIES times in all.
   await w.host.time.pass(10 * PAIR_REDIAL_MS);

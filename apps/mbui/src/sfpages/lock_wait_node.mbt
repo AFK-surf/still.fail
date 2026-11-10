@@ -43,11 +43,11 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
       _ => Asked
     }
   }
-  // (the core's words for the devices it dials, approversText: which to open, and those showing a code now,
-  // showingText: where to look; a line under what is so where it says any, a device to a line: pair_steps' `said`)
-  let said_node = fn(v : @view.View, key : String, when : () -> Bool) {
-    v.show(fn() { when() && text(pair(), key) != "" }, fn(n) { lock_note_node(n, fn() { text(pair(), key) }) })
-  }
+  // (the devices it dials, the core's rows: which to open, under the core's words for that; typing, those showing
+  // the code alone, each saying so: pair_steps' `devices`)
+  let dialled = fn() { items(pair(), "approvers") }
+  let showing = fn() { dialled().filter(fn(d) { flag(Some(d), "showing") }) }
+  let open_which = fn() { text(pair(), "approversText") }
   // (what is typed, kept while the page shows: emptied as a code is refused or a new one asked for)
   let typed = @ui.Field::new()
   col.pick(shows, fn(v, shown) {
@@ -55,7 +55,7 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
     match shown {
       Typing => {
         lock_note_node(v, fn() { @sf.t("web-pages.security.pairEnter") })
-        said_node(v, "showingText", fn() { true })
+        lock_devices_node(v, fn() { "" }, showing)
         @ui.code_field_node(
           v,
           typed,
@@ -102,7 +102,7 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
       }
       Finding => {
         lock_note_node(v, fn() { @sf.t("web-pages.security.pairFinding") }, turning=true)
-        said_node(v, "approversText", fn() { true })
+        lock_devices_node(v, open_which, dialled)
         // asked again while it looks: the person opened a trusted device and nothing came up (2026-11-06 the user:
         // 「直接加个没收到重新申请的按钮」)
         v.show(fn() { !asking() }, fn(n) {
@@ -126,7 +126,8 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
             }
           })
         })
-        said_node(v, "approversText", fn() { state() == "none" })
+        // (none found: which they are, its note having said to open one)
+        lock_devices_node(v, fn() { "" }, fn() { if state() == "none" { dialled() } else { [] } })
         lock_actions_node(v, fn(a) {
           @sf.button_node(a, fn() { @sf.t("web-pages.security.request") }, fn() {
             @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.request"), [])
@@ -161,6 +162,39 @@ fn lock_note_node(parent : @view.View, words : () -> String, turning? : Bool = f
     @sf.words_node(row, words, fn() { lock_note_words }).words_centered(Is(true)) |> ignore
   })
   |> ignore
+}
+
+///|
+/// The trusted devices it dials (`list()`, the core's LockApprover rows) on a quiet card, `caption()` over it where it
+/// says any; nothing where the list is empty. A device to a row: its mark (a phone, a computer), which machine, and
+/// under that its app and when it was last used, or that it shows the code now (the user, #4213: three grey lines of
+/// names read as one sentence).
+fn lock_devices_node(parent : @view.View, caption : () -> String, list : () -> Array[Json]) -> Unit {
+  parent.show(fn() { list().length() > 0 }, fn(room) {
+    @sf.style_node(room, fn() { lock_devices })
+    room.show(fn() { caption() != "" }, fn(n) { lock_note_node(n, caption) })
+    room.box(fn(card) {
+      @sf.style_node(card, fn() { lock_devices_card })
+      // (as wide as its rows, no wider than the steps: a long name goes on in another line)
+      card.max_width(Is(Some(lock_devices_most)), within=true) |> ignore
+      card.each(fn() { indexed(list()) }, fn(e) { e.0 }, fn(row, e) {
+        let d = fn() { Some(e.get().1) }
+        let kind = fn() { lock_device_icon(d()) }
+        @sf.style_node(row, fn() { lock_device })
+        @sf.icon_node(row, @signals.untracked(kind), lock_device_glyph, By(fn() { @sf.theme().p.muted }), name_now=kind) |> ignore
+        row.box(fn(lines) {
+          // (as wide as its words, giving way where the card has not the room: they go on in another line)
+          lines.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+          @sf.words_node(lines, fn() { text(d(), "nameText") }, fn() { lock_device_name }) |> ignore
+          lines.show(fn() { text(d(), "noteText") != "" }, fn(n) {
+            @sf.words_node(n, fn() { text(d(), "noteText") }, fn() { lock_device_note }) |> ignore
+          })
+        })
+        |> ignore
+      })
+    })
+    |> ignore
+  })
 }
 
 ///|

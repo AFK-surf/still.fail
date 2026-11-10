@@ -42,17 +42,42 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     })
     |> ignore
   }
-  // the core's words for the devices it dials (approversText: which to open) and those showing a code now
-  // (showingText: where to look), each a line of its own where it says any (2026-11-05: 「到底是哪个设备会弹出来呀？」)
-  let said = fn(key : String) {
-    match text(pair, key) {
-      "" => ()
-      words => note(words, false)
+  // the devices it dials (the core's rows: 2026-11-05, 「到底是哪个设备会弹出来呀？」) on a quiet card, `caption` over
+  // it where it says any: a device to a row, its mark (a phone, a computer), which machine, under that its app and
+  // when it was last used, or that it shows the code now
+  let devices = fn(caption : String, list : Array[Json]) {
+    if list.is_empty() {
+      return
     }
+    c.box(style=lock_devices, fn() {
+      if caption != "" {
+        note(caption, false)
+      }
+      c.box(style=lock_devices_card, fn() {
+        for d in list {
+          let d = Some(d)
+          c.box(style=lock_device, fn() {
+            @sf.icon(c, lock_device_icon(d), size=lock_device_glyph, color=@sf.theme().p.muted) |> ignore
+            c.box(style=@sf.pg_row_words, fn() {
+              c.text(text(d, "nameText"), style=lock_device_name) |> ignore
+              match text(d, "noteText") {
+                "" => ()
+                words => c.text(words, style=lock_device_note) |> ignore
+              }
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    })
+    |> ignore
   }
+  let dialled = items(pair, "approvers")
   if state == "code" || state == "wrong" || state == "checking" {
     note(@sf.t("web-pages.security.pairEnter"), false)
-    said("showingText")
+    devices("", dialled.filter(fn(d) { flag(Some(d), "showing") }))
     let key = "lock-code/" + ws
     // six boxes, three and three (CodeEntry), handed on once a code is typed; refused, they empty for the next try
     let typed = c.code_field(
@@ -101,7 +126,7 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     }
   } else if state == "finding" || asking {
     note(@sf.t("web-pages.security.pairFinding"), true)
-    said("approversText")
+    devices(text(pair, "approversText"), dialled)
     // asked again while it looks: the person opened a trusted device and nothing came up, so it looks again now
     // rather than once its dials run out (2026-11-06 the user: 「直接加个没收到重新申请的按钮」)
     if !asking {
@@ -118,7 +143,8 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     match state {
       "none" => {
         note(@sf.t("web-pages.security.pairNone"), false)
-        said("approversText")
+        // (which they are: its note has said to open one)
+        devices("", dialled)
       }
       "failed" => c.text(text(pair, "error"), style=lock_failed) |> ignore
       _ =>
@@ -154,6 +180,47 @@ let lock_failed : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Da
 
 ///|
 let lock_spin : Double = 12.0
+
+///|
+/// The trusted devices it dials: what to do with them (its note's words) 10 over their card, as wide as the steps.
+// kept across runs: a value (no field of it changes)
+let lock_devices : @ui.Style = @ui.css("w=Full gap=S2_5 align=ACenter")
+
+///|
+/// Their card: a quiet ground over whatever it is on (the page, 设置 › 安全's card), 16 and 12 in, its rows 12 apart;
+/// as wide as its rows, no wider than the steps (lock_devices_most, and the room there is).
+// kept across runs: a value (no field of it changes)
+let lock_devices_card : @ui.Style = @ui.css("px=S4 py=S3 gap=S3 radius=Xl bg=Tint").then(@ui.style(max_w=Fixed(lock_devices_most)))
+
+///|
+let lock_devices_most : Double = 412.0
+
+///|
+/// A device's row: its mark, 12, its two lines, from the card's start.
+// kept across runs: a value (no field of it changes)
+let lock_device : @ui.Style = @ui.css("row gap=S3 align=ACenter")
+
+///|
+/// Which machine it is, and what is said of it under that.
+// kept across runs: a value (no field of it changes)
+let lock_device_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let lock_device_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
+
+///|
+let lock_device_glyph : Double = 18.0
+
+///|
+/// A device's mark by what the core says it is (LockApprover `kind`): a phone, else a computer.
+fn lock_device_icon(d : Json?) -> String {
+  if text(d, "kind") == "phone" {
+    "phone"
+  } else {
+    "monitor"
+  }
+}
 
 ///|
 /// 发送批准请求's row (actions: 10 apart).
