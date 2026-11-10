@@ -54,6 +54,8 @@
 #   scripts/e2e-local.sh second-station FILE [third]   a second station enrolled with the command the app made (its log,
 #                                   FILE); `third`: another beside it
 #   scripts/e2e-local.sh second-down [third]   that station stopped, its directory gone
+#   scripts/e2e-local.sh second-stop [third]   that station stopped, its directory kept (its machine switched off)
+#   scripts/e2e-local.sh second-again [third]  that station started again on its directory, nothing enrolled
 #   scripts/e2e-local.sh connects [WORDS]   the test station's connects as its config has them (CONNECT id enabled=
 #                                       mode=), once a line has WORDS
 #   scripts/e2e-local.sh profiles [WORDS]   its profiles as its config has them (PROFILE id name), once a line has WORDS
@@ -351,7 +353,7 @@ peer() {
 }
 
 # e2e/locks.ts beside this run, from this directory (it says scripts/e2e-local.sh's words itself: freeze, thaw,
-# cloud-freeze, second-station), its devices' data under $WORK/locks
+# cloud-freeze, second-station, second-stop, second-again), its devices' data under $WORK/locks
 locks() {
   (export E2E_HOME=$HOME; . $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/locks-home; mkdir -p $HOME
    E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/locks E2E_WORK=$WORK E2E_STATION=$STATION E2E_PORT=$PORT \
@@ -645,7 +647,13 @@ second_station() {
   (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && \
     node $E/station/dist/main.js enroll $ORIGIN $token ${lock:+--lock $lock} ${rig:+--rig $rig} --data $B/data >$RUN/$n-enroll.log 2>&1) \
     || { cat $RUN/$n-enroll.log; die "enrolling the $n station failed"; }
-  # (started as start_station starts the first: up once its launcher says a Node has taken over)
+  more_launch $n
+  say "$n station up ($(cat $RUN/$n.pid)), enrolled: $(tr '\n' ' ' < $RUN/$n-enroll.log)"
+}
+# a station beside the test station's (NAME) started on its directory as start_station starts the first: up once its
+# launcher says a Node has taken over (its log $RUN/NAME.log, a minute at most), its pid in $RUN/NAME.pid
+more_launch() {
+  local n=$1 B=$(more_dir $1)
   local launcher=$(native launcher)
   rm -f "$RUN/$n.ready"
   mkfifo "$RUN/$n.ready"
@@ -661,7 +669,6 @@ second_station() {
   fi
   exec 9>&-
   rm -f "$RUN/$n.ready"
-  say "$n station up ($(cat $RUN/$n.pid)), enrolled: $(tr '\n' ' ' < $RUN/$n-enroll.log)"
 }
 # the directory of a station beside the test station's: the second's $STATION-b, another's $STATION-<name>
 more_dir() { [ "$1" = second ] && echo $STATION-b || echo $STATION-$1; }
@@ -671,6 +678,21 @@ second_down() {
   pkill -9 -f "$(more_dir $n)/data" 2>/dev/null || true
   rm -rf "$(more_dir $n)"
   say "$n station down"
+}
+# that station's machine switched off: its processes ended as `stop` ends them, whatever is left on its data directory
+# too, its directory and data kept for `second-again`
+second_stop() {
+  local n=${1:-second}
+  stop $n
+  pkill -9 -f "$(more_dir $n)/data" 2>/dev/null || true
+  say "$n station stopped ($(more_dir $n) kept)"
+}
+# and switched on again: started on the same data as second_station starts it once enrolled, nothing enrolled
+second_again() {
+  local n=${1:-second}
+  [ -d "$(more_dir $n)/data" ] || die "no $n station to start again ($(more_dir $n)/data is not there)"
+  more_launch $n
+  say "$n station up again ($(cat $RUN/$n.pid))"
 }
 
 # the test station's connects as its config.json has them: CONNECT <id> enabled=<on> mode=<mode>, a line each
@@ -798,6 +820,8 @@ case "${1:-all}" in
   release-seed) release_seed ;;
   second-station) shift; second_station "$@" ;;
   second-down) shift; second_down "$@" ;;
+  second-stop) shift; second_stop "$@" ;;
+  second-again) shift; second_again "$@" ;;
   mac) shift; "$ROOT/e2e/run.sh" mac "$@" ;;
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
   ios) shift; "$ROOT/e2e/run.sh" ios "$@" ;;
