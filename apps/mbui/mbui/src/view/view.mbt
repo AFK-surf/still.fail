@@ -5246,7 +5246,9 @@ pub fn Tree::menu_at(self : Tree, x : Double, y : Double, at : Double) -> Bool {
 
 ///|
 /// A wheel turned over a node at (x, y): how far across and down (`dx`, `dy`, as the host says it), what was held
-/// with it (`mods`, the host's wheel_mod_*), in the node's own terms as it is drawn then, in the window's, and when.
+/// with it (`mods`, the host's wheel_mod_*), in the node's own terms as it is drawn then, in the window's, and when;
+/// how wide and how tall the node is laid out as of then, in its own terms (`w`, `h`: a Drag's, what the wheel zooms or
+/// pans within, nothing of its layout read back for it).
 pub(all) struct Wheel {
   x : Double
   y : Double
@@ -5256,6 +5258,8 @@ pub(all) struct Wheel {
   dy : Double
   mods : Int
   at : Double
+  w : Double
+  h : Double
 } derive(Eq, Show, Debug)
 
 ///|
@@ -5350,7 +5354,9 @@ pub fn Tree::wheel_at(
       guard n.wheel_said == said && n.on_wheel is Some(f) else { continue }
       theirs.val = true
       let (nx, ny, ns) = self.placed(id.at)
-      if @signals.untracked(fn() { f({ x: (x - nx) / ns, y: (y - ny) / ns, wx: x, wy: y, dx, dy, mods, at: t }) }) {
+      if @signals.untracked(fn() {
+          f({ x: (x - nx) / ns, y: (y - ny) / ns, wx: x, wy: y, dx, dy, mods, at: t, w: n.flex.width, h: n.flex.height })
+        }) {
         break
       }
     }

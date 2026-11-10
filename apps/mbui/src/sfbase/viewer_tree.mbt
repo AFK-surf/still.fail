@@ -1244,7 +1244,7 @@ fn image_steps(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
 }
 
 ///|
-/// A picture's tools in a bar's row `row` (then copy and download): mark and copy once its picture is all here (copied:
+/// A picture's tools in a bar's row `row` (then copy, 移到侧边 and download): mark and copy once its picture is all here (copied:
 /// a check for copied_ms, from the press's moment); download (unable while there is nothing to save; a ring while the
 /// core downloads it; none while it comes). Each `corner` round, in `ink`, its tip in `tips`; each press done at its
 /// moment, what a download asks for told once, as it is asked.
@@ -1324,6 +1324,19 @@ fn image_tools(
     )
     ignore(t)
     r.owns(fn() { (copied_end.val)() }) |> ignore
+  })
+  // 移到侧边: where the shell has a side panel for the page under it, a file that opens there (beside_offered): the
+  // whole window closed for its tab
+  row.show(fn() { beside_offered(vw.file.path, vw.file.name) }, fn(r) {
+    @sf.tool_node(
+      r,
+      fn() { { icon: "panel-open", label: @sf.t("web-main.preview.moveBeside"), on: false, disabled: false } },
+      ink,
+      corner,
+      fn() { vw.move_beside() },
+      tip=tips,
+    )
+    |> ignore
   })
   // download: what is here saved at once; one told of, read whole first; a ring while the core downloads it
   row.show(fn() { !vw.coming() && !downloading(dl()) }, fn(r) {
@@ -1556,35 +1569,7 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
       .over(Is(true))
       |> ignore
     })
-    s.show(fn() { stage() != Hosted }, fn(note) {
-      note.over(Is(true)).padding(Is((24.0, 24.0, 24.0, 24.0))).gap(Is(14.0)).lines_up(Is(Some(Middle))) |> ignore
-      // (coming or failed, a tap on its stage shows or hides its bars, as the old stage's did: tap_stage; told of,
-      // none)
-      note.presses(Is(true)).on_press(fn() {
-        let now = @signals.untracked(stage)
-        if now == Coming || now == Failed {
-          vw.toggle()
-        }
-      })
-      |> ignore
-      note.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
-      note.show(fn() { stage() == Facts }, fn(f) { viewer_facts_node(f, src, vw) })
-      note.show(fn() { stage() == Coming }, fn(f) { viewer_coming_node(f, vw) })
-      note.show(fn() { stage() == Failed }, fn(f) {
-        f.box(fn(w) {
-          w
-          .words(By(fn() { pv_fill("android-chat.file.loadFailed", [("error", vw.error.get().unwrap_or(""))]) }))
-          .words_look(By(fn() {
-            let size = @sf.theme().t.body
-            { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false }
-          }))
-          .ink(By(fn() { @sf.theme().p.muted }))
-          |> ignore
-        })
-        |> ignore
-      })
-      note.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
-    })
+    s.show(fn() { stage() != Hosted }, fn(note) { viewer_note_node(note, src, vw, stage) })
   })
   |> ignore
   // 下载 asked on it (Viewer::ask_save): the core told at that change, on by itself whatever becomes of this viewer;
@@ -1595,6 +1580,47 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
       vw.ask_install()
     }
   })
+}
+
+///|
+/// What the stage of viewer `vw` says in its middle in `note` (24 in, 14 apart) where it shows nothing else (`stage`):
+/// told of, coming, failed, its nodes; a tap on it, coming or failed, shows or hides the bars, as the old stage's did
+/// (tap_stage; told of, none). The whole window's (viewer_hosted) and a tab's beside a chat (viewer_tab_node: `bars`
+/// false, no bars to show or hide, so no press of its own either).
+fn viewer_note_node(
+  note : @view.View,
+  src : Source,
+  vw : Viewer,
+  stage : () -> OuterStage,
+  bars? : Bool = true,
+) -> Unit {
+  note.over(Is(true)).padding(Is((24.0, 24.0, 24.0, 24.0))).gap(Is(14.0)).lines_up(Is(Some(Middle))) |> ignore
+  if bars {
+    note.presses(Is(true)).on_press(fn() {
+      let now = @signals.untracked(stage)
+      if now == Coming || now == Failed {
+        vw.toggle()
+      }
+    })
+    |> ignore
+  }
+  note.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+  note.show(fn() { stage() == Facts }, fn(f) { viewer_facts_node(f, src, vw) })
+  note.show(fn() { stage() == Coming }, fn(f) { viewer_coming_node(f, vw) })
+  note.show(fn() { stage() == Failed }, fn(f) {
+    f.box(fn(w) {
+      w
+      .words(By(fn() { pv_fill("android-chat.file.loadFailed", [("error", vw.error.get().unwrap_or(""))]) }))
+      .words_look(By(fn() {
+        let size = @sf.theme().t.body
+        { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false }
+      }))
+      .ink(By(fn() { @sf.theme().p.muted }))
+      |> ignore
+    })
+    |> ignore
+  })
+  note.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
 }
 
 ///|

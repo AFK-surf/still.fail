@@ -280,6 +280,26 @@ test "wide: the side panel slides in from the pane's right edge over 280 ms and 
 }
 
 ///|
+test "wide: in a window wide enough for the chat's rows to keep their width as the panel slides in, the page is at rest again as the slide ends, whichever frames are drawn (24 a second: one just short of its end)" {
+  new_run()
+  let src = fixture("chat")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=2400.0, h=1000.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  // (every frame on the slide's way and after it the one built whole: the Tester's own check of each, frame_watch.mbt)
+  t.click(Button, label="打开侧栏")
+  t.run_for(@ui.move_most_ms)
+  let (end, _) = t.find("只看收发").unwrap()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.find("只看收发").map(fn(at) { at.0 }), Some(end))
+  // and out again
+  t.click(Button, label="收起侧栏")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("只看收发") is None)
+}
+
+///|
 test "wide: an agent's history asked as a page (a link's ?history=…&entry=…) is its chat with the history beside it (ChatPage.tsx history)" {
   new_run()
   let src = fixture("chat")

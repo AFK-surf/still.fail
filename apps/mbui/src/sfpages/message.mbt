@@ -665,7 +665,14 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
             }
         }
       },
-      on_link_hold=Some(fn(href, _) { if @sf.path_of_link(href) is None { link_held(c, href) } }),
+      on_link_hold=Some(fn(href, _) {
+        match @sf.path_of_link(href) {
+          // a file its path names: 在侧边打开 where it is offered (its card is the pointer's, or a finger's as it holds
+          // the chip)
+          Some((path, _)) => path_held(c, src, here.station, m.by.agent, path)
+          None => link_held(c, href)
+        }
+      }),
       on_link_shown=link_peeks(c, src, here, agent=m.by.agent, chats=m.chats, link_to=link_to_in(m)),
       chat_title=chat_title_of(m),
       // the files its paths name are its agent's (Chat.tsx ProseWithFiles' PathSession): their chips

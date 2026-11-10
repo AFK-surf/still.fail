@@ -136,8 +136,9 @@ fn reset() -> Unit {
 
 ///|
 /// What the app's own doings ask of the pages (sfbase shell.mbt): home and what is over the pages put their sheets
-/// down too, an invitation's link shows its sheet, the screens live in their cards stop as the app goes behind.
-fn pages_shell(src : Source) -> Shell {
+/// down too, an invitation's link shows its sheet, the screens live in their cards stop as the app goes behind; a file
+/// asked beside, in the side panel of the chat in view where the frame is the wide one (`wide`, this frame's).
+fn pages_shell(src : Source, wide : Bool) -> Shell {
   {
     home,
     close_overlays,
@@ -146,6 +147,8 @@ fn pages_shell(src : Source) -> Shell {
     open: fn(p) { open_where(src, p) },
     open_over: fn(p) { open_over_where(src, p) },
     detail: detail_where,
+    beside: fn(tab) { beside_where(src, wide, tab) },
+    beside_room: fn() { wide && app.nav.top() is Chat(_) },
     back: fn() { back_where(src) },
     show: fn() {
       if @sfdesk.is_wide(@ui.current()) {
@@ -270,6 +273,19 @@ fn detail_where(src : Source, r : ChatRef, tab : String) -> Unit {
 }
 
 ///|
+/// A file's tab `tab` asked beside (Shell's `beside`): on the wide frame, in the side panel of the chat in view, in
+/// front (that file's tab there already, brought to the front); else nowhere (false: it opens over the whole window).
+fn beside_where(src : Source, wide : Bool, tab : String) -> Bool {
+  match app.nav.top() {
+    Chat(r) if wide => {
+      @sfdesk.view_beside(src, r, tab)
+      true
+    }
+    _ => false
+  }
+}
+
+///|
 /// Back to Home (the stack's root), what is over the pages put down (close_overlays: a file open over the window too,
 /// as a notification tapped opens its chat over Home).
 fn home() -> Unit {
@@ -323,7 +339,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   (@sfbase.made_frame.val)(c)
   @sfbase.held_build()
   c.after_build("held/end", fn() { @sfbase.held_end() })
-  shell.val = pages_shell(src)
+  shell_set(pages_shell(src, @sfdesk.is_wide(c)))
   // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is done as its action is, at
   // that moment (@settings.ask_action)
   menu_bar(c, src)

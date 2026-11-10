@@ -1104,6 +1104,9 @@ web-main.preview.closeKey
 web-main.preview.comments
 web-main.preview.copyPath
 web-main.preview.download
+web-main.preview.fullWindow
+web-main.preview.moveBeside
+web-main.preview.openBeside
 web-main.preview.files
 web-main.preview.fitKey
 web-main.preview.issue.closed

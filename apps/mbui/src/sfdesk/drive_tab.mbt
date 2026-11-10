@@ -431,6 +431,10 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
         if !e.dir {
           out.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.open"), icon="external", fn() { open(in_, e) })))
         }
+        match entry_beside(in_, e) {
+          Some(f) => out.push(Some(@sf.menu_item_of(@sf.t("web-main.preview.openBeside"), icon="panel-open", f)))
+          None => ()
+        }
         out.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sendToChat"), icon="send", fn() { files_into(ftab.chat, dragged(in_, e)) })))
         out.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.copyPath"), icon="copy", fn() { copy_path(c, abs) })))
         if !e.dir {
