@@ -6,18 +6,19 @@
 /// column, its size (`in_row`: what holds it lays what it holds in a row, so `w=Full` takes what is left along it, else
 /// across it; `h=Full` the other way), its least and most, its padding and margin, the room between what it holds and
 /// how that lines up across it and lies along it, its corner, its ground and whether it cuts what it holds. What it
-/// says nothing of is left as the node has it.
+/// has never said is left as the node has it; what it said once and says no more is put back to none (no ground, a
+/// corner of 0, ...).
 #callsite(autofill(loc))
 pub fn style_node(v : @view.View, look : () -> @ui.Style, in_row? : Bool = false, loc~ : SourceLoc) -> Unit {
   // (all of it set together, in one binding, set again where it comes out otherwise as what it reads changes (the
   // theme, mostly): a binding each would be made and let go with every node for what changes with the theme alone.
-  // What it says as the node is made decides what it sets)
+  // What it has said so far, at any time, decides what it sets: `was`'s `says`)
   let was : Ref[StyleSet?] = Ref(None)
   v
   .sets_together(fn() { style_of(look().base, in_row) }, fn(s) {
     style_set(v, was.val, s, loc)
     was.val = Some(match was.val {
-      Some(w) => { ..s, says: w.says }
+      Some(w) => { ..s, says: w.says.joined(s.says) }
       None => s
     })
   })
@@ -60,6 +61,29 @@ priv struct StyleSays {
   ground : Bool
   clip : Bool
 } derive(Eq)
+
+///|
+/// What `self` says and what `more` says (the same `self` where `more` says nothing it does not: made anew only as a
+/// style says something for the first time).
+fn StyleSays::joined(self : StyleSays, more : StyleSays) -> StyleSays {
+  let all : StyleSays = {
+    w: self.w || more.w,
+    h: self.h || more.h,
+    grow: self.grow || more.grow,
+    min_w: self.min_w || more.min_w,
+    max_w: self.max_w || more.max_w,
+    min_h: self.min_h || more.min_h,
+    margin: self.margin || more.margin,
+    corner: self.corner || more.corner,
+    ground: self.ground || more.ground,
+    clip: self.clip || more.clip,
+  }
+  if all == self {
+    self
+  } else {
+    all
+  }
+}
 
 ///|
 /// Style `q` worked out (`in_row`: what holds it lays what it holds in a row), its corner and ground as the theme makes
@@ -124,38 +148,41 @@ fn style_of(q : @ui.Patch, in_row : Bool) -> StyleSet {
 }
 
 ///|
-/// Style `s` set on node `v`, each property said Is (View::sets_together): what it says (as it said it the first time,
-/// `was`'s) where it differs from what it was (`was`; all of it the first time), said at `loc`
-/// (style_node's caller's: what a test finds said there, view's source.mbt).
+/// Style `s` set on node `v`, each property said Is (View::sets_together), said at `loc` (style_node's caller's: what a
+/// test finds said there, view's source.mbt): all it says the first time (`was` None); then what it says where it
+/// differs from what it was (`was`), what it says for the first time whatever it was, and what it said before (`was`'s
+/// `says`, all it has said) and says no more put back to none (`s` has none there: style_of's).
 fn style_set(v : @view.View, was : StyleSet?, s : StyleSet, loc : SourceLoc) -> Unit {
-  let says = match was {
+  let new = was is None
+  let w = was.unwrap_or(s)
+  // (said now or before: set where it differs; said now for the first time: set)
+  let before = match was {
     Some(w) => w.says
     None => s.says
   }
-  let new = was is None
-  let w = was.unwrap_or(s)
+  let now = s.says
   if new || w.row != s.row {
     v.row(loc~, Is(s.row)) |> ignore
   }
-  if says.w && (new || w.w != s.w) {
+  if style_first(new, before.w, now.w) || (before.w && w.w != s.w) {
     v.width(loc~, Is(s.w)) |> ignore
   }
-  if says.h && (new || w.h != s.h) {
+  if style_first(new, before.h, now.h) || (before.h && w.h != s.h) {
     v.height(loc~, Is(s.h)) |> ignore
   }
-  if says.grow && (new || w.grow != s.grow) {
+  if style_first(new, before.grow, now.grow) || (before.grow && w.grow != s.grow) {
     v.grow(loc~, Is(s.grow)) |> ignore
-    if new {
+    if style_first(new, before.grow, now.grow) {
       v.basis(loc~, Is(Some(0.0))) |> ignore
     }
   }
-  if says.min_w && (new || w.min_w != s.min_w) {
+  if style_first(new, before.min_w, now.min_w) || (before.min_w && w.min_w != s.min_w) {
     v.min_width(loc~, Is(s.min_w)) |> ignore
   }
-  if says.max_w && (new || w.max_w != s.max_w) {
+  if style_first(new, before.max_w, now.max_w) || (before.max_w && w.max_w != s.max_w) {
     v.max_width(loc~, Is(s.max_w)) |> ignore
   }
-  if says.min_h && (new || w.min_h != s.min_h) {
+  if style_first(new, before.min_h, now.min_h) || (before.min_h && w.min_h != s.min_h) {
     v.min_height(loc~, Is(s.min_h)) |> ignore
   }
   if new || w.padding != s.padding {
@@ -170,18 +197,24 @@ fn style_set(v : @view.View, was : StyleSet?, s : StyleSet, loc : SourceLoc) -> 
   if new || w.lies_along != s.lies_along {
     v.lies_along(loc~, Is(s.lies_along)) |> ignore
   }
-  if says.margin && (new || w.margin != s.margin) {
+  if style_first(new, before.margin, now.margin) || (before.margin && w.margin != s.margin) {
     v.margin(loc~, Is(s.margin)) |> ignore
   }
-  if says.corner && (new || w.corner != s.corner) {
+  if style_first(new, before.corner, now.corner) || (before.corner && w.corner != s.corner) {
     v.radius(loc~, Is(s.corner)) |> ignore
   }
-  if says.ground && (new || w.ground != s.ground) {
+  if style_first(new, before.ground, now.ground) || (before.ground && w.ground != s.ground) {
     v.ground(loc~, Is(s.ground)) |> ignore
   }
-  if says.clip && (new || w.clip != s.clip) {
+  if style_first(new, before.clip, now.clip) || (before.clip && w.clip != s.clip) {
     v.clips(loc~, Is(s.clip)) |> ignore
   }
+}
+
+///|
+/// Whether a property is said for the first time: said `now`, the style `new` or not said `before`.
+fn style_first(new : Bool, before : Bool, now : Bool) -> Bool {
+  now && (new || !before)
 }
 
 ///|
