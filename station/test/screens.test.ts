@@ -168,7 +168,7 @@ async function link() {
 async function open(hub: ScreenHub, viewer: Viewer, screen: unknown = { maxWidth: 1920, maxHeight: 1080, codecs: ["h264", "jpeg"], control: true }, path = "/admin/api/screens/fake/view", clock?: Clock.Clock) {
   const { conn, theirs } = await link();
   const stream = await conn.openBi();
-  await writeLine(stream, { method: "POST", path, headers: { "stillfail-lang": "en" }, screen });
+  await writeLine(stream, { method: "POST", path, headers: { "stillfail-lang": "en", "stillfail-build": "0.1.0" }, screen });
   const incoming = (await theirs.acceptBi())!;
   const heard = new Reader(incoming);
   const head = await heard.line();

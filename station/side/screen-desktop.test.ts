@@ -76,7 +76,7 @@ type Measured = { frames: number; keys: number; sizes: number[]; fps: number; mb
 /// screen change). The stream kept as `<label>.h264`.
 async function view(link: Awaited<ReturnType<typeof linked>>, label: string, move?: (n: number) => unknown): Promise<Measured> {
   const stream = await link.conn.openBi();
-  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "en" }, screen: { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: move !== undefined } });
+  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "en", "stillfail-build": "0.1.0" }, screen: { maxWidth: 1920, maxHeight: 1080, codecs: ["h264"], control: move !== undefined } });
   const heard = new Reader(stream);
   const answer = await heard.line();
   assert.equal(answer.status, 200, `${JSON.stringify(answer)} ${answer.status === 200 ? "" : (await heard.rest()).toString()}`);

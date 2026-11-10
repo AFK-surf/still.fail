@@ -28,7 +28,7 @@ async function until(check: () => boolean | Promise<boolean>, what: string, time
 type OpenView = { stream: Stream; served: Promise<void>; frames: FrameIn };
 async function open(conn: Connection, theirs: Connection, hub: ScreenHub, role: "member" | "viewer", bounds = { maxWidth: 640, maxHeight: 400 }): Promise<OpenView> {
   const stream = await conn.openBi();
-  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "en" }, screen: { ...bounds, codecs: ["jpeg"], control: true, fps: 15 } });
+  await writeLine(stream, { method: "POST", path: "/admin/api/screens/desktop/view", headers: { "stillfail-lang": "en", "stillfail-build": "0.1.0" }, screen: { ...bounds, codecs: ["jpeg"], control: true, fps: 15 } });
   const incoming = (await theirs.acceptBi())!;
   const request = new Reader(incoming);
   const head = await request.line();

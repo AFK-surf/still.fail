@@ -151,17 +151,17 @@ for (const kind of ["lastSaid", "firstText"] as const)
     } finally { writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
   });
 
-test("a multi-viewer thread read propagates the pending lookup and retries after handover", async () => {
+test("a thread read propagates the pending lookup and retries after handover", async () => {
   const dir = mkdtempSync(join(tmpdir(), "sidebar-legacy-edit-reader-")), path = join(dir, "stillfail.db");
   const { store, db, thread } = oldSidebar(150, false, path);
-  const args = { id: thread, viewers: [{ viewer, lang: "en" }] };
+  const args = { id: String(thread), viewer, lang: "en" };
   const previous = Promise.withResolvers<void>();
   const readers = new Readers(dir, 1, undefined, 1, { previousGone: previous.promise });
   const controller = new AbortController();
   try {
-    assert.throws(() => sessionOps.threadViews!(makeStore(db, dir), args), { status: 503, message: "legacy edit lookup pending" });
-    const abandoned = readers.read("threadViews", args, "en", { signal: controller.signal });
-    const waiting = readers.read("threadViews", args, "en");
+    assert.throws(() => sessionOps.thread!(makeStore(db, dir), args), { status: 503, message: "legacy edit lookup pending" });
+    const abandoned = readers.read("thread", args, "en", { signal: controller.signal });
+    const waiting = readers.read("thread", args, "en");
     const empty = store.openThread("ember", "CHAT", "empty-sidebar-edit", null, null).id;
     assert.deepEqual(JSON.parse(await readers.read("latestMessages", { thread: empty, limit: 2 }, "en")), []);
     assert.equal(db.prepare("SELECT scanned FROM legacy_edit_meta WHERE id=1").get()?.scanned, 0);
@@ -169,7 +169,7 @@ test("a multi-viewer thread read propagates the pending lookup and retries after
     await assert.rejects(abandoned, /read cancelled/);
     previous.resolve();
     const result = JSON.parse(await waiting);
-    assert.equal(result[0]?.lastMessage?.text, "original");
-    assert.equal(result[0]?.firstText, "original");
+    assert.equal(result?.lastMessage?.text, "original");
+    assert.equal(result?.firstText, "original");
   } finally { previous.resolve(); readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });

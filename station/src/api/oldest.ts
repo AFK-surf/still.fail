@@ -8,8 +8,13 @@ import { version } from "../ops/version.ts";
 
 export const BUILD_HEADER = "stillfail-build";
 
-/// The oldest core build answered; 0: any.
-export const OLDEST_CORE = 0;
+/// The oldest core build answered; 0: any. 6968 said its build first (#3612), and made its sidebar and a thread's
+/// summary itself (`rows=1`, `views=1`): api/events.ts makes them for no stream since.
+export const OLDEST_CORE = 6968;
+
+/// A build under this is no release's count of commits, and is not held to the floor: a development build's (`0.1.0`,
+/// `0.1.1`) and an iOS app's, whose number is its TestFlight build's (apps/mbui/mbui/scripts/ios.sh MBUI_IOS_BUILD).
+export const COUNTED_FROM = 1000;
 
 /// The build in `0.<m>.<n>` (or `<n>`), null for none: n, the commits up to it; m, the stable releases up to it, only
 /// said (`0.1.` until it was counted, the user, 2026-11-09).
@@ -18,12 +23,15 @@ export function buildOf(said: string | undefined): number | null {
   return m ? Number(m[1]) : null;
 }
 
-/// Whether a core asking with these headers is older than OLDEST_CORE (`oldest`, a test's).
+/// Whether a core asking with these headers is older than OLDEST_CORE (`oldest`, a test's). One saying no build is a
+/// core from before it said one where it says its language (`stillfail-lang`, every core's since languages); what
+/// says neither is no core (a test's own request, a tool's).
 export function coreTooOld(headers: Record<string, unknown>, oldest = OLDEST_CORE): boolean {
   if (oldest <= 0) return false;
-  const said = Object.entries(headers).find(([k]) => k.toLowerCase() === BUILD_HEADER)?.[1];
-  const build = buildOf(typeof said === "string" ? said : undefined);
-  return build === null || build < oldest;
+  const said = (name: string) => Object.entries(headers).find(([k]) => k.toLowerCase() === name)?.[1];
+  const build = buildOf(typeof said(BUILD_HEADER) === "string" ? (said(BUILD_HEADER) as string) : undefined);
+  if (build === null) return said("stillfail-lang") !== undefined;
+  return build >= COUNTED_FROM && build < oldest;
 }
 
 /// This station's build, as answers say it.
