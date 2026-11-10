@@ -210,6 +210,7 @@ export const PARAMS: Record<string, string> = {
   "workspace.enroll": "workspace:string name?:string",
   "workspace.renameStation": "workspace:string station:string name?:string emoji?:string icon?:string",
   "workspace.removeStation": "workspace:string station:string",
+  "workspace.feedbackReply": "workspace:string id:string text:string",
   "invitation.preview": "token?:string",
   "invitation.accept": "id?:string token?:string",
   "invitation.decline": "id:string",
@@ -738,6 +739,10 @@ function cloudOp(name: string, params: unknown): Request | null {
       return op("PATCH", () => `${ws()}/stations/${p.at("station")}`, p.pick(["name", "emoji", "icon"]));
     case "workspace.removeStation":
       return op("DELETE", () => `${ws()}/stations/${p.at("station")}`, null);
+    // A person's answer, as themselves, on a bug report the still.fail team replied on, from a chat of the workspace
+    // (feedback-replies.ts): kept with the team's replies.
+    case "workspace.feedbackReply":
+      return op("POST", () => `${ws()}/feedback/${p.at("id")}/reply`, p.pick(["text"]));
     case "invitation.preview":
       return op("POST", () => "/v1/invitations/preview", p.pick(["token"]));
     case "invitation.accept":

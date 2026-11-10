@@ -1085,5 +1085,11 @@
   "web-main.preset.browse": "浏览文件夹…",
   "web-main.preset.pickFolder": "选择文件夹",
   "web-main.preset.useFolder": "用这个文件夹",
-  "web-main.preset.search": "搜仓库或目录"
+  "web-main.preset.search": "搜仓库或目录",
+  "web-main.feedback.open": "查看",
+  "web-main.feedback.lead": "只有这个对话里的人能看到 still.fail 团队的回复，agent 看不到。点「交给 agent」，回复会作为引用放进输入框，你发送后 agent 才读到。",
+  "web-main.feedback.handOn": "交给 agent",
+  "web-main.feedback.placeholder": "回复 still.fail 团队…",
+  "web-main.feedback.send": "回复",
+  "web-main.feedback.sending": "回复 still.fail 团队"
 }

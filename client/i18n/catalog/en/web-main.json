@@ -1124,5 +1124,11 @@
   "web-main.preset.browse": "Browse folders…",
   "web-main.preset.pickFolder": "Choose a folder",
   "web-main.preset.useFolder": "Use this folder",
-  "web-main.preset.search": "Search repositories and folders"
+  "web-main.preset.search": "Search repositories and folders",
+  "web-main.feedback.open": "View",
+  "web-main.feedback.lead": "Only the people in this chat see the still.fail team's replies; its agents don't. Hand one to the agent and it goes into the composer as a quote: the agent reads it once you send it.",
+  "web-main.feedback.handOn": "Hand to agent",
+  "web-main.feedback.placeholder": "Reply to the still.fail team…",
+  "web-main.feedback.send": "Reply",
+  "web-main.feedback.sending": "Reply to the still.fail team"
 }

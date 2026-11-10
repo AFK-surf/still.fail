@@ -127,6 +127,9 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
             if (made) prefs.inviteUsed(inner.data);
             // A write may rename, join or leave a workspace: what the account's topics show is read again first.
             if (op.method !== "GET") yield* inner.cloudSync.refreshAll();
+            // An answer on a bug report: its replies read again (the cloud says so too, on the events socket).
+            const answered = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/feedback\//.exec(op.path) : null;
+            if (answered) inner.cloudSync.feedbackChanged(decodeURIComponent(answered[1]!));
             return result;
           });
         }

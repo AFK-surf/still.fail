@@ -35,7 +35,7 @@
 <p>There are two exceptions, where content passes through or is stored with us:</p>
 <ul>
 <li><strong>Push notifications</strong>: to show notifications on your devices, your station sends the chat title, the sender's name and the first 140 characters of the message through our servers to Google's Firebase Cloud Messaging (Android), Apple Push Notification service (iOS) or your browser's push service (web). We only forward this text; we don't store it. On a device where you turn off “Show content in notifications”, its notifications only say what happened (such as “New message”), and the message's text is not forwarded;</li>
-<li><strong>Issue reports</strong>: issue reports that you or the agents on your station choose to submit (title, description, context and logs) are stored on our servers so we can investigate.</li>
+<li><strong>Issue reports</strong>: issue reports that you or the agents on your station choose to submit (title, description, context and logs) are stored on our servers so we can investigate. The still.fail team's replies on a report, and your agent's replies to them (their text, time, who replied, and whether a team reply reached the conversation the report came from), are stored with the report; the team's replies go to that conversation through your station.</li>
 </ul>
 <p>Publicly shared chats are also stored on the publisher's station; visitors' browsers read them directly from the station over an encrypted connection. The key after the <code>#</code> in a share link is never sent to our servers.</p>
 <p>When you use shared debugging, the station keeps the time the chat last actually used debugging while its grant is active and sends it to your devices over the encrypted connection, to display and sort the list. When the grant ends, that time is removed from the grant record. Recording that time does not store the contents of debugging commands.</p>
@@ -98,7 +98,7 @@
 <li>Invitations: 7 days;</li>
 <li>Push tokens: deleted when you sign out or the device stops receiving notifications;</li>
 <li>Account, workspace and station information: kept while you use the Service, and deleted as soon as you delete your account or the workspace;</li>
-<li>Issue reports: kept as needed after the issue is resolved, deleted along with your account, and you can ask us to delete them at any time;</li>
+<li>Issue reports and their replies: kept as needed after the issue is resolved, deleted along with your account, and you can ask us to delete them at any time;</li>
 <li>Request logs, usage statistics, traces and station run logs: kept for the retention periods of Cloudflare, PostHog and Axiom respectively, then deleted automatically.</li>
 </ul>
 <p>Where laws or regulations require a longer retention period, that period applies.</p>

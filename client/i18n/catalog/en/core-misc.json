@@ -309,5 +309,9 @@
   "core-misc.personal.reason.restart": "Make this your only trusted device",
   "core-misc.personal.oldStation": "This station is too old: even if allowed, your phone won't lend itself. Update the station first",
   "core-misc.personal.reason.confirm": "Confirm these chats may debug your phone",
-  "core-misc.personal.reason.open": "Confirm this is your device"
+  "core-misc.personal.reason.open": "Confirm this is your device",
+  "core-misc.feedback.team": "The still.fail team",
+  "core-misc.feedback.agent": "Agent",
+  "core-misc.feedback.someone": "Someone",
+  "core-misc.feedback.heading": "The still.fail team replied on FB-{number}"
 }

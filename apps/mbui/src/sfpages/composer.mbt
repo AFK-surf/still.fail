@@ -2472,14 +2472,16 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
     }
     composer_notice(c, width, "unplug", said, None, icon=if v.updating { "updating" } else { "unplug" }, chat=key) |> ignore
   }
-  notices_gone(c, width, key, [v.archived, v.cache_cold is Some(_) && !v.archived, v.offline])
+  // the still.fail team's reply on a bug report sent from it: the chat's people's to read, never its agents'
+  let replied = feedback_notice(c, src, r, width, key)
+  notices_gone(c, width, key, [v.archived, v.cache_cold is Some(_) && !v.archived, v.offline, replied])
 }
 
 ///|
-/// The notices over chat `chat`'s composer no longer said (`now`: whether each of archive, wait, unplug is), drawn as
-/// they were while they leave (composer_notice).
+/// The notices over chat `chat`'s composer no longer said (`now`: whether each of archive, wait, unplug, feedback is),
+/// drawn as they were while they leave (composer_notice).
 fn notices_gone(c : @ui.Ctx, width : Double, chat : String, now : Array[Bool]) -> Unit {
-  for i, mark in ["archive", "wait", "unplug"] {
+  for i, mark in ["archive", "wait", "unplug", "feedback"] {
     if now[i] {
       continue
     }

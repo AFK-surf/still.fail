@@ -148,6 +148,7 @@ export interface OperationParams {
   "workspace.enroll": { workspace: string; name?: string | null | undefined };
   "workspace.renameStation": { workspace: string; station: string; name?: string | null | undefined; emoji?: string | null | undefined; icon?: string | null | undefined };
   "workspace.removeStation": { workspace: string; station: string };
+  "workspace.feedbackReply": { workspace: string; id: string; text: string };
   "invitation.preview": { token?: string | null | undefined };
   "invitation.accept": { id?: string | null | undefined; token?: string | null | undefined };
   "invitation.decline": { id: string };
@@ -328,6 +329,7 @@ export function bindCloudOperations(call: Call) {
     workspaceEnroll: <T = unknown>(params: OperationParams["workspace.enroll"]) => call("workspace.enroll", params) as Promise<T>,
     workspaceRenameStation: <T = unknown>(params: OperationParams["workspace.renameStation"]) => call("workspace.renameStation", params) as Promise<T>,
     workspaceRemoveStation: <T = unknown>(params: OperationParams["workspace.removeStation"]) => call("workspace.removeStation", params) as Promise<T>,
+    workspaceFeedbackReply: <T = unknown>(params: OperationParams["workspace.feedbackReply"]) => call("workspace.feedbackReply", params) as Promise<T>,
     invitationPreview: <T = unknown>(params: OperationParams["invitation.preview"] = {}) => call("invitation.preview", params) as Promise<T>,
     invitationAccept: <T = unknown>(params: OperationParams["invitation.accept"] = {}) => call("invitation.accept", params) as Promise<T>,
     invitationDecline: <T = unknown>(params: OperationParams["invitation.decline"]) => call("invitation.decline", params) as Promise<T>,

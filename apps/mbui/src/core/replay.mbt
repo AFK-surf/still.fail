@@ -113,10 +113,10 @@ let reports : Array[String] = [
 
 ///|
 /// Topics the app watches from its start whatever the person does (the device's downloads, sfbase/downloads.mbt; the
-/// copies between the workspace's stations, listed with them: sfdesk transfers.mbt): a run from before the app watched
-/// one has none of it, and that is not where the two went apart; it is answered nothing (the run had none of it), and
+/// copies between the workspace's stations, listed with them: sfdesk transfers.mbt; the team's replies on a chat's bug
+/// reports, watched with its composer: sfpages feedback_replies.mbt): a run from before the app watched one has none of it, and that is not where the two went apart; it is answered nothing (the run had none of it), and
 /// let go of as it was watched.
-let ambient : Array[String] = ["downloads", "driveTransfers"]
+let ambient : Array[String] = ["downloads", "driveTransfers", "chatFeedback"]
 
 ///|
 /// The conversation in `log`: a trace's lines (`{"out":…}`, `{"in":…}`), or a log with them after CORETRACE. Other

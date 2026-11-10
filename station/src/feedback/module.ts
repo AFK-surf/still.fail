@@ -1,7 +1,8 @@
 // Bug reports to the still.fail team as a part of the station (parts.ts): from stations on the stable channel
 // , in still.fail cloud only (feedback is no part of the control plane: another provider's
-// stations send none). The agents' tool to send one, and each session told when one it sent is fixed and out: a few
-// minutes after the start and every hour (the cloud has no way to say so as it happens). A failure notice in a chat
+// stations send none). The agents' tools to send one and to answer on one, and each session told when one it sent is
+// fixed and out: a few minutes after the start, then as each release is out. The team's replies on one are not the
+// station's: people read them in the app, from the cloud. A failure notice in a chat
 // reported by a person (its 上报, feedback/notice.ts), and the overview's `feedback` saying the station takes them.
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -26,16 +27,23 @@ export const FeedbackLive = Layer.effectDiscard(
     if (!(updates.channel() === "stable" && plane.spec().feedback)) return;
     const sendReport = async (report: any) => {
       if (cloud.removed()) throw new Error("this station was removed from its workspace");
-      report.context = { ...(report.context ?? {}), version: version() };
+      // The workspace its chat is in (a joined one's, else the home's): where the team's replies are shown.
+      const session = typeof report.context?.session === "string" ? store.getSession(report.context.session) : null;
+      const workspace = session?.ws ?? cloud.state?.workspace;
+      report.context = { ...(report.context ?? {}), version: version(), ...(workspace ? { workspace } : {}) };
       return signedPost(cloud, key, "/v1/feedback", "stillfail-station-feedback-v1", report);
     };
     const fixed = async (told: string[]) => {
       if (cloud.removed()) return { fixed: [] };
       return { ...(await signedPost(cloud, key, "/v1/feedback/fixed", "stillfail-station-feedback-fixed-v1", { told })), station: version() };
     };
+    const answer = async (body: unknown) => {
+      if (cloud.removed()) throw new Error("this station was removed from its workspace");
+      return signedPost(cloud, key, "/v1/feedback/reply", "stillfail-station-feedback-reply-v1", body);
+    };
     const parts = yield* Parts;
     const { data } = yield* Paths;
-    parts.tools(feedbackTools(store, (k) => pageOf(k) ?? null, () => (cloud.state ? sendReport : null)));
+    parts.tools(feedbackTools(store, (k) => pageOf(k) ?? null, () => (cloud.state ? sendReport : null), () => (cloud.state ? answer : null)));
     parts.routes(reportRoutes(store, {
       logTail: (most) => readTail(join(data, "stillfail.log"), most),
       versions: () => Object.fromEntries(updates.get("en").flatMap((v) => (v.installed && v.version ? [[v.id, v.version]] : []))),

@@ -62,6 +62,7 @@ pub fn reset() -> Unit {
   workspace_reset()
   rigs_reset()
   outside_reset()
+  feedback_reset()
   new_chat_reset()
   changelog_reset()
   share_looks_reset()

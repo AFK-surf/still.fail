@@ -706,7 +706,44 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
     // chat-working: its agent's step, said in more words than a phone's line has room for
     "live" if f.mode == "chat-working" && text(Some(Json::object(params)), "key") == "s-c1" =>
       Some({ "loaded": true, "activity": { "now": { "key": fix_working_now.val.0, "text": fix_working_now.val.1, "important": fix_working_important.val } } })
+    // chat-feedback: the still.fail team replied on a bug report sent from the chat (sfpages feedback_replies.mbt);
+    // chat-feedback-answered: and someone of the chat answered them
+    "chatFeedback" if session == "s-c1" && (f.mode == "chat-feedback" || f.mode == "chat-feedback-answered") =>
+      Some(fix_feedback(f.mode == "chat-feedback-answered"))
     _ => fixture_drive_topic(f, name, params)
+  }
+}
+
+///|
+/// The chat's bug report the still.fail team replied on, as the core's `chatFeedback` gives it; `answered`: and Ada
+/// answered them in the app.
+fn fix_feedback(answered : Bool) -> Json {
+  let replies : Array[Json] = [
+    {
+      "id": "r1",
+      "from": "team",
+      "who": "still.fail 团队",
+      "text": "谢谢反馈！能再说一下出错时 Willow 在跑什么吗？我们在日志里看到那会儿它重启过一次。\n\n临时绕过：把这条对话归档再恢复，消息就会补上。",
+      "when": "14:05",
+    },
+  ]
+  if answered {
+    replies.push({ "id": "r2", "from": "person", "who": "Ada", "text": "那会儿在跑 pnpm build，重启前内存快满了。", "when": "14:12" })
+  }
+  {
+    "reports": [
+      {
+        "id": "FB0000000000000000000000012",
+        "workspace": "ws1",
+        "account": "u1",
+        "number": 12,
+        "label": "FB-12",
+        "title": "chat_post 偶尔发不出去",
+        "heading": "still.fail 团队回复了 FB-12",
+        "latest": "谢谢反馈！能再说一下出错时 Willow 在跑什么吗？我们在日志里看到那会儿它重启过一次。",
+        "replies": Json::array(replies),
+      },
+    ],
   }
 }
 

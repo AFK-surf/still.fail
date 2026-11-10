@@ -30,7 +30,13 @@ Exclude conversation text, files, code, customer names and secrets (tokens, keys
 default. If a short excerpt is essential, include only that and point it out when showing the report.
 
 Show the exact title, body and logs, then ask for confirmation. Revise and show again if requested. Only after
-approval call `feedback_send` with this thread as `to`. Tell the user its FB number and that a fix will be reported
-here. When the station announces that fix, relay it briefly in the same thread.
+approval call `feedback_send` with this thread as `to`. Tell the user its FB number and that a fix, or the team's
+questions, will be reported here. When the station announces that fix, relay it briefly in the same thread.
+
+## The team's replies
+
+People read the still.fail team's replies in the app, beside the chat, and may hand one to you quoted in a message.
+When they ask you to answer the team, use `feedback_reply` {number, text}: what the team asked for, or what the
+person says, only what they agreed to send (show it first, as for a report).
 
 If sending fails, say so and provide the report for the user to pass on.
