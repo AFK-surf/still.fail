@@ -74,7 +74,7 @@ jobs:
           grep -q 'handle line https://a.example/p?token=hunter3' out/logs/stderr.txt
           grep -q 'after the stall' out/logs/stderr.txt
 
-  contracts:
+  kitdemo:
     runs-on: windows-latest
     timeout-minutes: 5
     defaults:
@@ -89,6 +89,30 @@ jobs:
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh windows build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-kitdemo
+          path: apps/mbui/mbui/out/win/mod/_build/native/release/build/kitdemo/kitdemo.exe
+
+  # The host's app built above; this job's time belongs to running its contracts and replaying its tape.
+  contracts:
+    needs: kitdemo
+    runs-on: windows-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/msvc
+      - uses: ./.github/actions/mbui-moonbit
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-kitdemo
+          path: apps/mbui/mbui/out/win/mod/_build/native/release/build/kitdemo/
       - name: "The host's contract: a run's tape = a Tester's frames"
         run: scripts/host_contract.sh windows record
       - name: "The text's contract: windows_controls = DirectWrite's"
