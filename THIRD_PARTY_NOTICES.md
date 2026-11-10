@@ -20,7 +20,7 @@ still.fail Helper (the station's macOS app) builds in the simulator capture and 
 
 ## Vendored Java sources
 
-The Android app builds in [JZlib](https://github.com/ymnk/jzlib) 1.1.3 (Copyright (c) 2000-2011 ymnk, JCraft, Inc.; based on zlib by Jean-loup Gailly and Mark Adler), unmodified, under its [BSD-style license](vendor/jzlib/LICENSE); where it came from is in [vendor/jzlib/README.md](vendor/jzlib/README.md).
+The Android app builds in [JZlib](https://github.com/ymnk/jzlib) 1.1.3 (Copyright (c) 2000-2011 ymnk, JCraft, Inc.; based on zlib by Jean-loup Gailly and Mark Adler), unmodified, under its [BSD-style license](apps/mbui/mbui/android/jzlib/LICENSE); where it came from is in [apps/mbui/mbui/android/jzlib/README.md](apps/mbui/mbui/android/jzlib/README.md).
 
 ## scrcpy's server in the station's release
 

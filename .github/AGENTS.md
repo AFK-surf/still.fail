@@ -18,6 +18,6 @@
 - A release's deltas (`scripts/release-deltas.ts`: the `deltas` job, `put_feed` in `scripts/release.sh`) never fail
   or hold back a release: what goes wrong is a warning and that delta is left out, the feed whole without it. Their
   time is bounded by `--deadline` inside the job's own 5 minutes; a part that needs more gets fewer bases, not longer.
-- The Android delta's deflater is part of the format: JZlib's version (`vendor/jzlib`) and the level and settings
+- The Android delta's deflater is part of the format: JZlib's version (`apps/mbui/mbui/android/jzlib`) and the level and settings
   `Delta.java` deflates with must be what every installed app carries, or what it makes no longer is the release's APK
   (each delta is checked by the Java applier before it is published, so such a change only stops Android's deltas).

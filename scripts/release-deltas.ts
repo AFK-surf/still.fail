@@ -534,7 +534,7 @@ class Run {
   private javaClasses(): string | null {
     if (this.classes !== undefined) return this.classes;
     const root = fileURLToPath(new URL("..", import.meta.url));
-    const jz = join(root, "vendor/jzlib/src/com/jcraft/jzlib");
+    const jz = join(root, "apps/mbui/mbui/android/jzlib/src/com/jcraft/jzlib");
     const out = join(this.work, "classes");
     try {
       const srcs = [join(root, "apps/mbui/mbui/android/app/src/main/java/dev/mbui/Delta.java"), ...readdirSync(jz).filter((f) => f.endsWith(".java")).map((f) => join(jz, f))];

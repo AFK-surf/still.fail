@@ -13,7 +13,7 @@ import { crc32, deflateRawSync, inflateRawSync } from "node:zlib";
 // With DELTA_APK_OLD and DELTA_APK_NEW (two released APKs), the same on them, with what it took said.
 const root = fileURLToPath(new URL("..", import.meta.url));
 const deltaJava = join(root, "apps/mbui/mbui/android/app/src/main/java/dev/mbui/Delta.java");
-const jzlib = join(root, "vendor/jzlib/src/com/jcraft/jzlib");
+const jzlib = join(root, "apps/mbui/mbui/android/jzlib/src/com/jcraft/jzlib");
 const has = (cmd: string) => spawnSync(cmd, ["-version"], { encoding: "utf8" }).status === 0;
 const skip = has("javac") && has("java") ? false : "no javac or java here: the Java applier is not tested";
 

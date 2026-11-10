@@ -7,9 +7,6 @@ our changes, its tests in its own CI; STILLFAIL.md there), taken by commit in `[
 same commit (its v1.3.0, with the relay's UDP way). Each change is marked `stillfail:` in the source. Drop one here once upstream has
 the same.
 
-- **JZlib 1.1.3** (Java, unmodified; jzlib/README.md): the Android app's own deflater, which an update's delta and
-  the release's APK are made with.
-
 - **libadb 0.7.0** (src/keys/store.rs; client/): Android's sandbox denies hard links. Publish a new private adb key
   with `renameat2(RENAME_NOREPLACE)` there, so the complete key appears atomically without overwriting an existing
   identity that may already be trusted. Other platforms keep upstream's hard-link publication.
