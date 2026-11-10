@@ -94,6 +94,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let ways : Map[K, BlockWay] = Map([])
   let going : Map[K, (Array[K], Int, Int)] = Map([])
   let goes = Ref(0)
+  // (what wakes a block going (View::rests): what it binds at rest as it closes its way, drawn as it was, nothing of it
+  // worked out again nor held (a topic it read let go then, as a block let go is); its slot's way its own still)
+  let woken : Map[K, () -> Unit] = Map([])
   let ways_told : @signals.Signal[Int] = @signals.signal(0)
   // (the moment a way is read at: the frame's (Tree's frame_ms), not the clock set to a change's moment and back as it
   // is measured, as what comes in a column reads it (View::comes); followed by the clock, read again as frames come)
@@ -458,6 +461,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     for i, k in p {
       before[k] = i
     }
+    // (what shows all of it taken out and another put in its place (a page's part for another): one for the other,
+    // there at once, as a page is; only beside what stays does one make its way)
+    guard shown_now.iter().any(fn(k) { now.contains(k) }) else { return }
     let counted = fn(k : K) { heights.get(k).unwrap_or(est) }
     let set_way = fn(k : K, from : Double, to : Double) {
       let far = (to - from).abs() * counted(k)
@@ -468,6 +474,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         guard ways.get(k) is Some(v) && physical_equal(v, w) else { return }
         ways.remove(k)
         going.remove(k) |> ignore
+        woken.remove(k)
         heights_changed.push(k)
         ways_told.set(ways_told.untracked() + 1)
         tell()
@@ -489,6 +496,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           goes.val = goes.val + 1
           going[k] = (over, goes.val, i)
           set_way(k, way_k(k, at), 0.0)
+          match blocks.iter().find_first(fn(b) { b.0.alive() && @signals.untracked(b.1) == k }) {
+            Some((v, _)) => woken[k] = v.rests()
+            None => ()
+          }
           changed = true
         } else if ways.contains(k) {
           ways.remove(k)
@@ -506,6 +517,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       if going.contains(k) {
         let from = way_k(k, at)
         going.remove(k) |> ignore
+        match woken.get(k) {
+          Some(wake) => {
+            woken.remove(k)
+            wake()
+          }
+          None => ()
+        }
         set_way(k, from, 1.0)
         changed = true
       } else if beside {
@@ -574,6 +592,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let (out, _) = now
     // (as the column is laid out: its fill shows what shows, by what it measures; never laid out yet, nothing shows)
     guard self.tree.rooming != self.at && s.seen.untracked() is Some((_, vh)) else { return }
+    // (blocks on their ways: the column laid out each frame meanwhile, its fill saying what shows by where the anchor
+    // puts it; not here as well by where it was drawn before that, the two a block apart and each undoing the other)
+    if !ways.is_empty() {
+      if out {
+        laid_again()
+      }
+      return
+    }
     // (put at its foot: where that is the column's layout says, its fill making what shows there)
     if s.at_foot() {
       if out {
