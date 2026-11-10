@@ -17,6 +17,9 @@
 #                                   bob's devices, each still.fail's core in Node; it freezes and starts anew the
 #                                   station and the cloud, and enrolls a second station), pass/fail per step
 #   scripts/e2e-local.sh locks-all  up, locks, down (the side run's, scripts/side.sh locks)
+#   scripts/e2e-local.sh rigs       a rig end to end against what `up` started (e2e/rigs.ts: a machine enrolled as
+#                                   alice's rig beside the test station, asked for, granted, used, taken back)
+#   scripts/e2e-local.sh rigs-all   up, rigs, down (the side run's, scripts/side.sh rigs)
 #   scripts/e2e-local.sh snapshot NAME [CORE]   a starting point: the cloud's, the station's, the peer's and the app's
 #                                   core data (CORE) as they are now ($E2E_WORK/snapshots/NAME)
 #   scripts/e2e-local.sh restore NAME          back to it (the station and the cloud stopped, put back, started)
@@ -124,7 +127,10 @@ sources() {
     git clone -q "$SF_SRC" $E
   fi
   if [ "$(git -C $E rev-parse HEAD)" != "$want" ]; then
-    git -C $E fetch -q origin && git -C $E -c advice.detachedHead=false checkout -q --detach $want
+    # (the revision wanted alone: a checkout that shares its repository with others has branches whose objects it may
+    # lack, and fetching them all fails; failed, the run stops, never going on with the revision before)
+    git -C $E fetch -q "$SF_SRC" HEAD || die "the source revision could not be fetched from $SF_SRC"
+    git -C $E -c advice.detachedHead=false checkout -q --detach $want || die "no source revision $want in $E"
     rm -f $WORK/stillfail.ready
   fi
   if [ "$(cat $WORK/stillfail.ready 2>/dev/null)" != "$want" ]; then
@@ -306,11 +312,11 @@ stop() {
 down() {
   # (the station's directory another run's: only what this run started, by its own pids)
   if held_by_other; then
-    stop second; stop third; stop station; stop cloud; stop relay
+    stop second; stop third; stop rig; stop station; stop cloud; stop relay
     say "down ($STATION left to the run of $(readlink "$HELD"))"
     return 0
   fi
-  for n in second third; do second_down $n >/dev/null 2>&1 || true; done
+  for n in second third rig; do second_down $n >/dev/null 2>&1 || true; done
   stop station
   # whatever of the test station is left (its node, runner): only processes on its own data directory
   pkill -f "$STATION/data" 2>/dev/null || true
@@ -349,6 +355,13 @@ locks() {
   (export E2E_HOME=$HOME; . $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/locks-home; mkdir -p $HOME
    E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/locks E2E_WORK=$WORK E2E_STATION=$STATION E2E_PORT=$PORT \
      E2E_RELAY=$RELAY_PORT node $ROOT/e2e/locks.ts </dev/null)
+}
+# e2e/rigs.ts the same way (a rig enrolled beside the test station, asked for, granted, used, taken back), its devices'
+# data under $WORK/rigs
+rigs() {
+  (export E2E_HOME=$HOME; . $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/rigs-home; mkdir -p $HOME
+   E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/rigs E2E_WORK=$WORK E2E_STATION=$STATION E2E_PORT=$PORT \
+     E2E_RELAY=$RELAY_PORT node $ROOT/e2e/rigs.ts </dev/null)
 }
 
 # a device the cloud signed in as alice on its own (what a cloud that is not to be trusted can do: mint her a credential)
@@ -594,7 +607,9 @@ second_station() {
   local cmd=$(grep 'ANSWER workspace.enroll ok' "${1:?the log of the flow}" | tail -1 | sed 's/.*"command":"\([^"]*\)".*/\1/')
   # (a locked workspace's: the lock's hash after --lock, which it pins)
   local lock=$(echo "$cmd" | sed -n 's/.*--lock \([0-9a-f]*\).*/\1/p')
-  local token=$(echo "$cmd" | sed 's/ --lock [0-9a-f]*//' | awk '{print $NF}')
+  # (a rig's, e2e/rigs.ts: its person's own lock's hash after --rig; enrolled so, it starts as a rig)
+  local rig=$(echo "$cmd" | sed -n 's/.*--rig \([0-9a-f]*\).*/\1/p')
+  local token=$(echo "$cmd" | sed 's/ --lock [0-9a-f]*//; s/ --rig [0-9a-f]*//' | awk '{print $NF}')
   [ -n "$token" ] || die "no command made in $1"
   # (`third`: another beside it, of the same kind: its files under that name, its directory $STATION-third)
   local n=${2:-second}
@@ -605,7 +620,7 @@ second_station() {
   ln -s "$(command -v node)" $B/app/node/bin/node
   echo '{"autoUpdate":false}' > $B/data/config.json
   (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && \
-    node $E/station/dist/main.js enroll $ORIGIN $token ${lock:+--lock $lock} --data $B/data >$RUN/$n-enroll.log 2>&1) \
+    node $E/station/dist/main.js enroll $ORIGIN $token ${lock:+--lock $lock} ${rig:+--rig $rig} --data $B/data >$RUN/$n-enroll.log 2>&1) \
     || { cat $RUN/$n-enroll.log; die "enrolling the $n station failed"; }
   # (started as start_station starts the first: up once its launcher says a Node has taken over)
   local launcher=$(native launcher)
@@ -768,6 +783,11 @@ case "${1:-all}" in
     trap down EXIT
     up
     locks ;;
+  rigs) rigs ;;
+  rigs-all)
+    trap down EXIT
+    up
+    rigs ;;
   all)
     trap down EXIT
     up

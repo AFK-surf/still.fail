@@ -45,7 +45,7 @@ let place_across : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 fn place_route(src : Source, w : Workspace, place : String) -> @settings.Route? {
   match place_pick.get(place_key(w.id, place)) {
     // (a station gone from the list: the first, not its page waiting for it)
-    Some(Station(a)) if !stations_listed(src, w).iter().any(fn(s) { text(Some(s), "station") == a }) =>
+    Some(Station(a)) if !stations_listed(src, w).iter().any(fn(s) { text(Some(s), "station") == a }) && place_rig_at(src, w, a) is None =>
       place_route_first(src, w, place)
     Some(r) => Some(r)
     None => place_route_first(src, w, place)
@@ -77,6 +77,34 @@ fn stations_listed(src : Source, w : Workspace) -> Array[Json] {
   match src.topic("stations", { "scope": Json::string(w.id) }).get().value {
     Some(Array(a)) => a
     _ => []
+  }
+}
+
+///|
+/// The station at `address` picked in the stations' place of workspace `ws`, as a press on its row picks it (a made-up
+/// run opened on it).
+pub fn place_pick_station(ws : String, address : String) -> Unit {
+  place_pick[place_key(ws, "stations")] = Route::Station(address)
+}
+
+///|
+/// The workspace's station that only runs tasks at `address`, if it is one (the settings' rig_at).
+fn place_rig_at(src : Source, w : Workspace, address : String) -> Json? {
+  let core = settings_core(src, w)
+  @settings.rig_at(core, @settings.here_of(core, w.id, w.name), address)
+}
+
+///|
+/// The address of the station picked in the stations' place of the workspace in view where it is one that only runs
+/// tasks, else "": its page is made once as nodes (pane_made's, tape_made's), in the place of the old view's.
+fn place_rig(src : Source) -> String {
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) =>
+      match place_route(src, w, "stations") {
+        Some(Station(a)) if place_rig_at(src, w, a) is Some(_) => a
+        _ => ""
+      }
+    None => ""
   }
 }
 
@@ -156,6 +184,27 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           place_pick[place_key(w.id, "stations")] = Route::Station(address)
           @sfbase.show_chosen()
         })
+      }
+      // those that only run tasks after the whole ones: whose each is and how it is, in the figures' place
+      for r in @settings.rigs_listed(core, here) {
+        let r = Some(r)
+        let address = w.id + "/" + text(r, "id")
+        let t = @sf.theme()
+        nav_item(
+          c,
+          at=side_at(),
+          "stations/" + address,
+          picked == Some(Route::Station(address)),
+          fn() { @sf.icon(c, "boxes", size=nav_mark_side, color=t.p.text) |> ignore },
+          fn() { nav_title(c, text(r, "name")) },
+          lines=fn() { @sfpages.rig_figures(c, r) },
+          keep_lines=2,
+          more=false,
+          on_press=fn() {
+            place_pick[place_key(w.id, "stations")] = Route::Station(address)
+            @sfbase.show_chosen()
+          },
+        )
       }
     })
   })

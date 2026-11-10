@@ -52,6 +52,33 @@
 - An agent's own answer is never forwarded: it posts with `chat_post` and ends each turn with a state (`all_done`,
   `need_human`, `waiting`); a turn ended without one is asked again.
 
+## A station's mode: whole, or only tasks (a rig)
+
+- A station is whole, or it only runs tasks (只执行任务; `rig` in the code: `src/rig/`; the user, 2026-11-04 and
+  2026-11-10): no agents, no chats kept in sight, no device served, only what the workspace's stations send it. One
+  release and one list: it is added as either (`enroll --rig <the hash of its person's own lock>`) and changed in the
+  app, never reinstalled. The app is not linked to one that only runs tasks: the stations say how it is (`src/rigs/`).
+- A station is its owner's, the member who added it, whatever its mode, and only they change its mode, either way
+  (the user, 2026-11-10): being a workspace's owner or admin is neither needed nor enough. Whole again only where
+  they manage the workspace, as a member adds no whole station. One whose adder is no member (they left, or the
+  operator enrolled it) the workspace's owner may make one that only runs tasks, and it is theirs then. The control
+  plane holds this (`cloud/src/directory.ts` `setStationMode`): the machine does not know who added it.
+- One that only runs tasks is its person's (its owner). A chat uses it only by a statement that person's own lock
+  signed (`client/core-ts/src/rig-form.ts`: a grant with its timeout, idle or fixed, as a vault's secret; a grant
+  taken back; 免批准, which opens it to every chat of the workspace), and the machine checks the signature itself against
+  the lock it pinned: the cloud or a station that says otherwise lets no chat in. In security mode a station takes it
+  only once that person signed for it (`src/rigs/adds.ts`), or the lock already lists it as a station.
+- What a machine is changes only when two agree, neither alone: what was asked of the machine over a way the control
+  plane has no part in (whole to tasks: a member's device that reached it, `POST /mode`, with their lock to pin, kept
+  as theirs; tasks to whole: its person's signature, `rig.full`), kept there for an hour, and the control plane
+  listing it so, as that same person's (`src/cloud/presence.ts`). A whole station ends its agents, connects and jobs
+  before it is one that only runs tasks (`src/sessions/agents.ts`); its chats stay in its database, out of sight until
+  it is whole again. Whole again is its person's to say where they manage the workspace: an admin cannot open
+  someone's machine to every chat.
+- It asks nothing of a station: it only tells (`RIG_TELLS` and `task.changed`, `src/mesh/peer.ts`). What it serves is
+  behind a grant unless `UNGATED` (`src/rig/module.ts`) lists it, which is for reading back and stopping what a chat
+  already ran there; a new method is not added to it to make something work.
+
 ## Tests
 
 - `pnpm exec tsgo --noEmit` types; one test file is `node ../scripts/native.ts run mesh runner archive-rs reader --

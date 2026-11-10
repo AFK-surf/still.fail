@@ -17,7 +17,17 @@ export type Revocation = { kind: string; id: string; at: number };
 /// stations there and what that workspace takes back.
 /// `locked`: that workspace is in security mode, as the control plane says (its lock is pinned here before any of its
 /// members is taken).
-export type Joined = { workspace: string; workspace_name: string; name: string; peers: any[]; revocations: Revocation[]; locked?: true };
+export type Joined = { workspace: string; workspace_name: string; name: string; peers: any[]; revocations: Revocation[]; locked?: true; rigs?: Rig[] };
+
+/// A rig of a workspace (a station that only runs tasks): a machine that only runs what the workspace's stations send it, its person's
+/// (`owner`, who added it), as the control plane names it. In security mode that is not taken on the plane's word:
+/// `Cloud.rigVouched` says which of them its person signed for (rigs/adds.ts).
+export type Rig = { id: string; name: string; owner: string; owner_email: string; owner_name: string; version?: string | null };
+
+/// What this machine is when it is a rig: whose (`owner`, as the control plane said when it joined), and the hash of
+/// that person's own lock, which the command that added it named (`person`: the rig takes only what a key on it
+/// signed, rig/grants.ts).
+export type RigSelf = { owner: string; owner_email: string; owner_name: string; person: string };
 
 /// One of the workspaces the station is in, its home one (cloud.json's top level) or a joined one.
 /// Why a station `Cloud.unprotected` names cannot be called (its refusal, and its line in station_list): an agent took
@@ -49,7 +59,29 @@ export type CloudState = {
   /// The workspaces it joined besides its home one (the top level), as the control plane's `state` frame said last;
   /// absent from files of before, and from stations in one workspace.
   joined?: Joined[];
+  /// The home workspace's rigs, as the control plane said last; absent from planes of before them.
+  rigs?: Rig[];
+  /// This machine is a rig, not a whole station: a station that only runs tasks (set by `enroll --rig`, or by
+  /// `rig_due` below; never by the control plane's word alone).
+  rig?: RigSelf;
+  /// A whole station asked to run only tasks from now on, by a member's device that reached it itself (rigs/module.ts
+  /// `POST /mode`): whose it will be (who asked; the control plane lets only its owner list it so), and their own
+  /// lock to pin. Good for `MODE_PENDING_S` from `at`.
+  rig_pending?: RigSelf & { at: number };
+  /// The control plane lists it as that person's rig now (cloud/presence.ts): it stops what it runs as a station and
+  /// becomes one (sessions/agents.ts).
+  rig_due?: true;
+  /// A rig its person signed whole again (rig/module.ts `rig.full`), at `at`: it becomes a station once the control
+  /// plane lists it as one.
+  full_pending?: { at: number };
 };
+
+/// How long a change of a station's mode asked of the machine waits for the control plane to list it so.
+export const MODE_PENDING_S = 3600;
+
+/// What a rig keeps of its person's grants (rig/grants.ts): gone with every change of what the machine is, so one
+/// person's are never read under another's lock.
+export const rigGrantsPath = (data: string) => join(data, "rig", "grants.json");
 
 export const meshDir = (data: string) => join(data, "mesh");
 const statePath = (data: string) => join(meshDir(data), "cloud.json");
@@ -118,7 +150,36 @@ export function readState(data: string): CloudState | null {
   const state: CloudState = { ...raw, relay_urls: raw.relay_urls ?? [], peers: raw.peers ?? [], revocations: raw.revocations ?? [] };
   if (raw.joined !== undefined) state.joined = joinedOf(raw.joined);
   if (raw.provider !== undefined) state.provider = providerOf(raw.provider);
+  if (raw.rigs !== undefined) state.rigs = rigsOf(raw.rigs);
+  const rig = rigSelfOf(raw.rig);
+  if (rig !== null) state.rig = rig;
+  else delete state.rig;
+  const at = (v: any) => Number.isSafeInteger(v?.at);
+  const pending = rigSelfOf(raw.rig_pending);
+  if (pending !== null && at(raw.rig_pending)) state.rig_pending = { ...pending, at: raw.rig_pending.at };
+  else delete state.rig_pending;
+  if (raw.rig_due !== true || state.rig_pending === undefined) delete state.rig_due;
+  if (at(raw.full_pending)) state.full_pending = { at: raw.full_pending.at };
+  else delete state.full_pending;
   return state;
+}
+
+const HEX32 = /^[0-9a-f]{64}$/;
+
+/// The rigs a file or a `state` frame names, what is malformed in them left out.
+export function rigsOf(raw: unknown): Rig[] {
+  if (!Array.isArray(raw)) return [];
+  const text = (v: unknown) => (typeof v === "string" ? v : "");
+  return raw.flatMap((r: any) =>
+    typeof r?.id === "string" && HEX32.test(r.id) && typeof r.owner === "string" && r.owner !== ""
+      ? [{ id: r.id, name: text(r.name), owner: r.owner, owner_email: text(r.owner_email), owner_name: text(r.owner_name), ...(typeof r.version === "string" ? { version: r.version } : {}) }]
+      : [],
+  );
+}
+
+function rigSelfOf(raw: any): RigSelf | null {
+  if (raw === null || typeof raw !== "object" || typeof raw.owner !== "string" || raw.owner === "" || typeof raw.person !== "string" || !HEX32.test(raw.person)) return null;
+  return { owner: raw.owner, owner_email: typeof raw.owner_email === "string" ? raw.owner_email : "", owner_name: typeof raw.owner_name === "string" ? raw.owner_name : "", person: raw.person };
 }
 
 /// Pretty JSON, field order as the Rust struct's, the removal only while there is one; the provider and the gateways
@@ -133,6 +194,11 @@ export function writeState(data: string, s: CloudState) {
   if (s.removed_at !== undefined) out.removed_at = s.removed_at;
   if (s.removed_code !== undefined) out.removed_code = s.removed_code;
   if (s.joined !== undefined && s.joined.length > 0) out.joined = s.joined;
+  if (s.rigs !== undefined && s.rigs.length > 0) out.rigs = s.rigs;
+  if (s.rig !== undefined) out.rig = s.rig;
+  if (s.rig_pending !== undefined) out.rig_pending = s.rig_pending;
+  if (s.rig_due === true) out.rig_due = true;
+  if (s.full_pending !== undefined) out.full_pending = s.full_pending;
   writePrivate(statePath(data), JSON.stringify(out, null, 2));
 }
 
@@ -148,6 +214,7 @@ export function joinedOf(raw: unknown): Joined[] {
           peers: Array.isArray(j.peers) ? j.peers : [],
           revocations: Array.isArray(j.revocations) ? j.revocations.filter(isRevocation) : [],
           ...(j.locked === true ? { locked: true as const } : {}),
+          ...(Array.isArray(j.rigs) && j.rigs.length > 0 ? { rigs: rigsOf(j.rigs) } : {}),
         }]
       : [],
   );
@@ -180,6 +247,9 @@ export class Cloud {
   planeLockSeq: number | null = null;
   /// The same of each joined workspace's lock.
   planeLockSeqs = new Map<string, number | null>();
+  /// Which of a locked workspace's rigs its person signed for (rigs/adds.ts sets it): until then none of them is
+  /// taken, the control plane's word counting for nothing there.
+  rigVouched: (workspace: string, rig: Rig) => boolean = () => false;
   /// What the control plane last said of the roster and gateways, before the lock filtered them (this run only).
   private planePeers: any[] | null = null;
   private planeGateways: string[] | undefined;
@@ -497,6 +567,34 @@ export class Cloud {
     if (this.pendingLock(ws) !== null) return "pending";
     if (j.locked === true) return "unpinned";
     return this.locked() !== null ? "home" : null;
+  }
+
+  /// The rigs of `workspace` this station sends work to: those the control plane names, in security mode only those
+  /// their person signed for (`rigVouched`). None while the roster is not current, none for a rig (it asks nothing of
+  /// another), none outside the workspace.
+  rigs(workspace: string): Rig[] {
+    const s = this.state;
+    if (s === null || s.rig !== undefined || this.membership(workspace) === null) return [];
+    const named = workspace === s.workspace ? (s.rigs ?? []) : ((s.joined ?? []).find((j) => j.workspace === workspace)?.rigs ?? []);
+    const mine = named.filter((r) => r.id !== s.station);
+    return this.locked(workspace) === null ? mine : mine.filter((r) => this.rigVouched?.(workspace, r) === true);
+  }
+
+  /// The rigs of `workspace` as the control plane names them, signed for or not (what a person is shown to sign for).
+  rigsNamed(workspace: string): Rig[] {
+    const s = this.state;
+    if (s === null || s.rig !== undefined || this.membership(workspace) === null) return [];
+    return (workspace === s.workspace ? (s.rigs ?? []) : ((s.joined ?? []).find((j) => j.workspace === workspace)?.rigs ?? [])).filter((r) => r.id !== s.station);
+  }
+
+  /// The workspace `id` is a rig of, of those this station is in (`workspace`: that one alone); null when of none.
+  rigOf(id: string, workspace: string | null = null): { workspace: string; rig: Rig } | null {
+    for (const m of this.memberships()) {
+      if (workspace !== null && m.workspace !== workspace) continue;
+      const rig = this.rigs(m.workspace).find((r) => r.id === id);
+      if (rig !== undefined) return { workspace: m.workspace, rig };
+    }
+    return null;
   }
 
   /// The station in `workspace`, if it is in it now.

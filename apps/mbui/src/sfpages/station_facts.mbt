@@ -75,3 +75,11 @@ let station_dot_on : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Positive"
 /// Down: a ring in the quiet words' grey (parts.css.ts statusDot: inset 1.5 of --muted), seen on any ground.
 // kept across runs: a value (no field of it changes)
 let station_dot_off : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full border=B1_5 border_color=Muted")
+
+///|
+/// Under the name of a station that only runs tasks (rig `r`: the core's `rigs`), in its figures' place: that it only
+/// runs tasks, then whose it is and how it is.
+pub fn rig_figures(c : @ui.Ctx, r : Json?) -> Unit {
+  @sf.list_row_line(c, fn() { c.text(@sf.t("web-pages.rigs.mode.tasks"), style=station_words()) |> ignore })
+  @sf.list_row_line(c, fn() { c.text(@settings.rig_whose(r) + " · " + @settings.rig_state(r), style=station_words()) |> ignore })
+}

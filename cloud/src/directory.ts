@@ -26,7 +26,7 @@ import { showsOf, type Shows } from "./noticeText";
 import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl, waysOf } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
-import type { AccountEvent, StationEvent, AddedView, Admission, AdminFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { AccountEvent, StationEvent, AddedView, Admission, AdminFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, RigView, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 import { apply, asEntry, entryHash, extendLock, genesis, LockAppendRefused, shortCode, type Entry, type LockEntry, type LockState } from "./lock";
 export type { Role };
 
@@ -189,6 +189,11 @@ export class Directory extends DurableObject<Env> {
     }
     this.migrateFreePlan();
     this.migrateStationMembers();
+    // A rig (a station that only runs tasks, 2026-11-10): a machine that only runs what the workspace's stations send it, its person's (the one
+    // who added it: `enrolled_by`). `rig` is 1 on its row and on the enrollment that makes one; absent before them.
+    for (const table of ["station_members", "enrollments"]) {
+      if (!this.#rows(`PRAGMA table_info(${table})`).some((r) => r.name === "rig")) this.#run(`ALTER TABLE ${table} ADD COLUMN rig INTEGER`);
+    }
     if (sockets.where(env) === "objects") this.handOff();
     // What deliveries a restart cut short still owe.
     if (this.#one("SELECT 1 AS x FROM outbox LIMIT 1")) void ctx.blockConcurrencyWhile(() => this.#arm());
@@ -463,7 +468,7 @@ export class Directory extends DurableObject<Env> {
     return this.#rows("SELECT sub FROM members WHERE workspace = ?", workspace).map((r) => r.sub as string);
   }
 
-  /** The stations in a workspace. */
+  /** The stations in a workspace, its rigs among them (each holds a presence socket and is told its state). */
   #stationsIn(workspace: string): string[] {
     return this.#rows("SELECT station FROM station_members WHERE workspace = ?", workspace).map((r) => r.station as string);
   }
@@ -626,7 +631,7 @@ export class Directory extends DurableObject<Env> {
     const user = row ? { sub: row.sub as string, email: row.email as string, name: row.name as string, picture: row.picture as string, ...(row.own_picture ? { own_picture: true as const } : {}), ...(row.beta ? { beta: true as const } : {}) } : undefined;
     const workspaces = this.#rows(`
       SELECT w.id, w.name, m.role, w.created_at,
-        (SELECT COUNT(*) FROM station_members s WHERE s.workspace = w.id) AS stations,
+        (SELECT COUNT(*) FROM station_members s WHERE s.workspace = w.id AND s.rig IS NULL) AS stations,
         (SELECT COUNT(*) FROM members x WHERE x.workspace = w.id) AS members, w.relays, w.ways_off, w.emoji, w.icon
       FROM members m JOIN workspaces w ON w.id = m.workspace WHERE m.sub = ? ORDER BY w.created_at`, sub)
       .map(({ relays, ways_off, emoji, icon, ...w }) => ({ ...w, relays: parseRelays(relays), ...offOf(ways_off), ...marks(emoji, icon) })) as unknown as WorkspaceSummary[];
@@ -719,13 +724,14 @@ export class Directory extends DurableObject<Env> {
       SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(${SHOWN_PICTURE}, '') AS picture, m.role, m.added_at
       FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
     const stations = this.#stationViews(id).map(({ workspace: _, ...station }) => station);
+    const rigs = this.#rigViews(id);
     const invitations = MANAGERS.includes(role)
       ? this.#rows("SELECT id, role, email, created_by, expires_at FROM invitations WHERE workspace = ? AND expires_at > ? ORDER BY expires_at", id, nowSeconds()) as unknown as InvitationView[]
       : [];
     const added = MANAGERS.includes(role)
       ? this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[]
       : [];
-    return { id, name: w.name as string, ...marks(w.emoji, w.icon), role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), ...offOf(w.ways_off), ways: waysOf(this.env, parseRelays(w.relays), parseRelays(w.ways_off)), lock: this.#lockHead(id), ...(this.#locked(id) ? { locked: true } : {}), lock_requests: this.#lockRequestCount(id, sub, role) };
+    return { id, name: w.name as string, ...marks(w.emoji, w.icon), role, created_at: w.created_at as number, members, stations, ...(rigs.length ? { rigs } : {}), invitations, added, relays: parseRelays(w.relays), ...offOf(w.ways_off), ways: waysOf(this.env, parseRelays(w.relays), parseRelays(w.ways_off)), lock: this.#lockHead(id), ...(this.#locked(id) ? { locked: true } : {}), lock_requests: this.#lockRequestCount(id, sub, role) };
   }
 
   /**
@@ -735,8 +741,20 @@ export class Directory extends DurableObject<Env> {
   #stationViews(workspace: string | null): (StationView & { workspace: string })[] {
     return this.#rows(`SELECT m.workspace, m.station AS id, m.name, m.emoji, m.icon, m.enrolled_at, m.enrolled_by, s.last_seen, s.version,
         EXISTS (SELECT 1 FROM station_members o WHERE o.station = m.station AND (o.enrolled_at < m.enrolled_at OR (o.enrolled_at = m.enrolled_at AND o.rowid < m.rowid))) AS joined
-      FROM station_members m LEFT JOIN stations s ON s.id = m.station WHERE ? IS NULL OR m.workspace = ? ORDER BY m.enrolled_at, m.rowid`, workspace, workspace)
+      FROM station_members m LEFT JOIN stations s ON s.id = m.station WHERE (? IS NULL OR m.workspace = ?) AND m.rig IS NULL ORDER BY m.enrolled_at, m.rowid`, workspace, workspace)
       .map(({ joined, ...row }) => ({ ...row, ...(joined ? { joined: true } : {}) })) as unknown as (StationView & { workspace: string })[];
+  }
+
+  /** A workspace's rigs as its stations are told them (`rigs`); nothing said with none, as before there were any. */
+  #rigsTold(workspace: string): { rigs?: Pick<RigView, "id" | "name" | "owner" | "owner_email" | "owner_name" | "version">[] } {
+    const rigs = this.#rigViews(workspace).map(({ id, name, owner, owner_email, owner_name, version }) => ({ id, name, owner, owner_email, owner_name, version }));
+    return rigs.length ? { rigs } : {};
+  }
+
+  /** The rigs of a workspace, each with its person (who added it). */
+  #rigViews(workspace: string): RigView[] {
+    return this.#rows(`SELECT m.station AS id, m.name, m.enrolled_at, m.enrolled_by AS owner, COALESCE(u.email, '') AS owner_email, COALESCE(u.name, '') AS owner_name, s.last_seen, s.version
+      FROM station_members m LEFT JOIN stations s ON s.id = m.station LEFT JOIN users u ON u.sub = m.enrolled_by WHERE m.workspace = ? AND m.rig = 1 ORDER BY m.enrolled_at, m.rowid`, workspace) as unknown as RigView[];
   }
 
   // ── the workspace lock (lock.ts): kept and carried, not trusted ─────────────────────────
@@ -1152,9 +1170,20 @@ export class Directory extends DurableObject<Env> {
     }
     if (row!.role === "owner") this.#keepAnOwner(workspace);
     this.#run("DELETE FROM members WHERE workspace = ? AND sub = ?", workspace, target);
+    this.#rigsGone(workspace, target);
     this.#revoke(workspace, "sub", target);
     this.#changed(workspace, true, [target]);
     await this.#delivered();
+  }
+
+  /** A person no longer in a workspace: the rigs they added there leave it with them. */
+  #rigsGone(workspace: string, sub: string): void {
+    for (const r of this.#rows("SELECT station FROM station_members WHERE workspace = ? AND rig = 1 AND enrolled_by = ?", workspace, sub)) {
+      const station = r.station as string;
+      const home = this.#memberships(station)[0]!;
+      this.#run("DELETE FROM station_members WHERE station = ? AND workspace = ?", station, workspace);
+      this.#left(station, home);
+    }
   }
 
   /**
@@ -1177,6 +1206,7 @@ export class Directory extends DurableObject<Env> {
     }
     for (const { workspace } of memberships.filter((m) => !alone.includes(m.workspace))) {
       this.#run("DELETE FROM members WHERE workspace = ? AND sub = ?", workspace, sub);
+      this.#rigsGone(workspace, sub);
       this.#revoke(workspace, "sub", sub);
       this.#changed(workspace, true);
     }
@@ -1206,13 +1236,22 @@ export class Directory extends DurableObject<Env> {
     return this.#enrollment(sub, workspace, name);
   }
 
-  async #enrollment(sub: string, workspace: string, name: unknown): Promise<{ token: string; expires_at: number }> {
+  /**
+   * A rig's enrollment: any member adds one, which is theirs (a rig holds nothing of the workspace and asks nothing
+   * of its stations; what runs on it is its person's to grant). A station is its managers' to add.
+   */
+  async createRigEnrollment(sub: string, workspace: string, name: string): Promise<{ token: string; expires_at: number }> {
+    this.#role(sub, workspace);
+    return this.#enrollment(sub, workspace, name, true);
+  }
+
+  async #enrollment(sub: string, workspace: string, name: unknown, rig = false): Promise<{ token: string; expires_at: number }> {
     const clean = cleanName(name) ?? fail(400, "invalid_name");
     if (this.#stationsFull(workspace)) fail(429, "too_many_stations");
     const token = randomSecret();
     const expires = nowSeconds() + ENROLLMENT_TTL_SEC;
     this.#run("DELETE FROM enrollments WHERE expires_at <= ?", nowSeconds());
-    this.#run("INSERT INTO enrollments (token_hash, workspace, name, created_by, expires_at) VALUES (?, ?, ?, ?, ?)", await digest(token), workspace, clean, sub, expires);
+    this.#run("INSERT INTO enrollments (token_hash, workspace, name, created_by, expires_at, rig) VALUES (?, ?, ?, ?, ?, ?)", await digest(token), workspace, clean, sub, expires, rig ? 1 : null);
     return { token, expires_at: expires };
   }
 
@@ -1227,13 +1266,20 @@ export class Directory extends DurableObject<Env> {
    * it stays in them and joins this one too; a station whose home is locked joins locked
    * workspaces only (an unlocked one's members are this cloud's word, which the home's lock took away). It pins each
    * locked workspace's lock there. `home` is the workspace it joined first, whose say goes for the machine.
+   * `rig`: the machine enrolls as a rig, which a rig's token alone makes (a station's program from before rigs would
+   * serve the workspace as a station under a rig's name) and no other does; a rig is in one workspace, so it never
+   * joins. Its answer names its person (`rig`).
    */
-  async enroll(token: string, station: string, version: string | null, join = false, locks = false): Promise<{ workspace: string; workspace_name: string; name: string; home: string }> {
+  async enroll(token: string, station: string, version: string | null, join = false, locks = false, rig = false): Promise<{ workspace: string; workspace_name: string; name: string; home: string; rig?: { owner: string; owner_email: string; owner_name: string } }> {
     const hash = await digest(token);
-    const row = this.#one("SELECT workspace, name, created_by FROM enrollments WHERE token_hash = ? AND expires_at > ?", hash, nowSeconds());
+    const row = this.#one("SELECT workspace, name, created_by, rig FROM enrollments WHERE token_hash = ? AND expires_at > ?", hash, nowSeconds());
     if (!row) fail(404, "enrollment_not_found");
+    if ((row!.rig === 1) !== rig) fail(409, row!.rig === 1 ? "rig_enrollment" : "station_enrollment");
+    if (rig && join) fail(409, "rig_enrollment");
     const workspace = row!.workspace as string;
     const was = this.#memberships(station);
+    // A rig stays one, a station a station, where it is: its kind changes only by removing it first.
+    if (join && this.#one("SELECT 1 AS x FROM station_members WHERE station = ? AND rig = 1", station)) fail(409, "rig_enrollment");
     const member = was.includes(workspace);
     // Across a lock: a locked home into an unlocked workspace; or into a locked one, by a station that would not pin it.
     if (join && !member && was.length > 0 && (this.#locked(was[0]!) ? !this.#locked(workspace) : this.#locked(workspace) && !locks)) fail(409, "locked_workspace");
@@ -1247,9 +1293,9 @@ export class Directory extends DurableObject<Env> {
       if (join && member) this.#run("UPDATE station_members SET name = ? WHERE workspace = ? AND station = ?", row!.name, workspace, station);
       else {
         // Enrolled again where it is (moving), it keeps its emoji and icon there.
-        this.#run(`INSERT INTO station_members (workspace, station, name, enrolled_at, enrolled_by) VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT (workspace, station) DO UPDATE SET name = excluded.name, enrolled_at = excluded.enrolled_at, enrolled_by = excluded.enrolled_by`,
-          workspace, station, row!.name, nowSeconds(), row!.created_by);
+        this.#run(`INSERT INTO station_members (workspace, station, name, enrolled_at, enrolled_by, rig) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT (workspace, station) DO UPDATE SET name = excluded.name, enrolled_at = excluded.enrolled_at, enrolled_by = excluded.enrolled_by, rig = excluded.rig`,
+          workspace, station, row!.name, nowSeconds(), row!.created_by, rig ? 1 : null);
       }
     });
     const w = this.#one("SELECT name FROM workspaces WHERE id = ?", workspace)!;
@@ -1258,13 +1304,17 @@ export class Directory extends DurableObject<Env> {
     // Already connected (re-enrolled while running): it learns where it is now, before the answer when it left some.
     this.#sendState(station, left.length > 0);
     const home = this.#memberships(station)[0]!;
+    const owner = rig ? this.#one("SELECT email, name FROM users WHERE sub = ?", row!.created_by) : undefined;
     await this.#delivered();
-    return { workspace, workspace_name: w.name as string, name: row!.name as string, home };
+    return {
+      workspace, workspace_name: w.name as string, name: row!.name as string, home,
+      ...(rig ? { rig: { owner: row!.created_by as string, owner_email: (owner?.email as string | undefined) ?? "", owner_name: (owner?.name as string | undefined) ?? "" } } : {}),
+    };
   }
 
   /** A new name, a new emoji, a new icon (null or "" takes either away), or several; what is not given stays. */
   updateStation(sub: string, workspace: string, station: string, input: { name?: unknown; emoji?: unknown; icon?: unknown }): WorkspaceView {
-    this.#role(sub, workspace, MANAGERS);
+    if (!MANAGERS.includes(this.#role(sub, workspace)) && !this.#one("SELECT 1 AS x FROM station_members WHERE station = ? AND workspace = ? AND rig = 1 AND enrolled_by = ?", station, workspace, sub)) fail(403, "forbidden");
     const name = input.name === undefined ? undefined : cleanName(input.name) ?? fail(400, "invalid_name");
     const emoji = input.emoji === undefined ? undefined : input.emoji === null || input.emoji === "" ? null : cleanEmoji(input.emoji) ?? fail(400, "invalid_emoji");
     const icon = input.icon === undefined ? undefined : input.icon === null || input.icon === "" ? null : cleanIcon(input.icon, this.env.PUBLIC_ORIGIN) ?? fail(400, "invalid_icon");
@@ -1277,11 +1327,46 @@ export class Directory extends DurableObject<Env> {
     return this.#view(sub, workspace);
   }
 
-  /** Takes a station out of this workspace only; it stays in the others it is in. */
+  /**
+   * What a station is here: a whole one (`full`), or one that only runs tasks (`tasks`: a rig). It stays whose it is,
+   * the member who added it (`enrolled_by`), and only they change its mode, either way (the user, 2026-11-10); whole
+   * again only where they manage the workspace, as a member adds no whole station. One no member added (its adder
+   * left, or the operator enrolled it) a workspace owner may make one that runs tasks, and it is theirs then. The
+   * machine itself becomes it only by what that person's device asked of it (tasks) or they signed (full), which the
+   * app brings it first: this lists it so. A station in several workspaces stays whole (a rig is in one), and a
+   * workspace keeps one whole station at least.
+   */
+  async setStationMode(sub: string, workspace: string, station: string, mode: unknown): Promise<WorkspaceView> {
+    const role = this.#role(sub, workspace);
+    if (mode !== "full" && mode !== "tasks") fail(400, "invalid_name");
+    const row = this.#one("SELECT rig, enrolled_by FROM station_members WHERE station = ? AND workspace = ?", station, workspace) ?? fail(404, "station_not_found");
+    if ((row.rig === 1) !== (mode === "tasks")) {
+      const mine = row.enrolled_by === sub;
+      if (mode === "tasks") {
+        const nobodys = !mine && !this.#one("SELECT 1 AS x FROM members WHERE workspace = ? AND sub = ?", workspace, row.enrolled_by ?? "");
+        if (!mine && !(nobodys && role === "owner")) fail(403, "forbidden");
+        if (this.#memberships(station).length !== 1) fail(409, "station_in_others");
+        if (!this.#one("SELECT 1 AS x FROM station_members WHERE workspace = ? AND rig IS NULL AND station != ?", workspace, station)) fail(409, "last_station");
+        // Theirs already, or (no member's) theirs now.
+        this.#run("UPDATE station_members SET rig = 1, enrolled_by = ? WHERE station = ? AND workspace = ?", sub, station, workspace);
+      } else {
+        if (!mine || !MANAGERS.includes(role)) fail(403, "forbidden");
+        this.#run("UPDATE station_members SET rig = NULL WHERE station = ? AND workspace = ?", station, workspace);
+      }
+      this.#changed(workspace, true);
+      this.#sendState(station, true);
+      await this.#delivered();
+    }
+    return this.#view(sub, workspace);
+  }
+
+  /** Takes a station out of this workspace only; it stays in the others it is in. A rig: its person may too. */
   async removeStation(sub: string, workspace: string, station: string): Promise<void> {
-    this.#role(sub, workspace, MANAGERS);
+    const mine = this.#role(sub, workspace);
+    const row = this.#one("SELECT rig, enrolled_by FROM station_members WHERE station = ? AND workspace = ?", station, workspace);
+    if (!MANAGERS.includes(mine) && !(row?.rig === 1 && row.enrolled_by === sub)) fail(403, "forbidden");
     const home = this.#memberships(station)[0];
-    if (!this.#one("SELECT 1 AS x FROM station_members WHERE station = ? AND workspace = ?", station, workspace)) return;
+    if (!row) return;
     this.#run("DELETE FROM station_members WHERE station = ? AND workspace = ?", station, workspace);
     this.#changed(workspace, true);
     this.#left(station, home!);
@@ -1883,13 +1968,17 @@ export class Directory extends DurableObject<Env> {
 
   /** A station's state frame (#sendState); null for one in no workspace. */
   #frame(station: string): string | null {
-    const found = this.#rows(`SELECT m.workspace, w.name AS workspace_name, m.name, w.relays FROM station_members m JOIN workspaces w ON w.id = m.workspace
+    const found = this.#rows(`SELECT m.workspace, w.name AS workspace_name, m.name, w.relays, m.rig, m.enrolled_by FROM station_members m JOIN workspaces w ON w.id = m.workspace
       WHERE m.station = ? ORDER BY m.enrolled_at, m.rowid`, station);
     if (!found.length) return null;
     const since = nowSeconds() - REVOCATION_DAYS * 86400;
-    const [home, ...joined] = found.map(({ relays: _, ...row }) => ({
+    // The rigs apart from the stations (`rigs`): a station from before them reads no such field and so takes no rig
+    // for a station (which it would let ask anything of it). A rig is told the stations (they alone ask of it), not
+    // the other rigs, and whose it is (`rig`).
+    const [home, ...joined] = found.map(({ relays: _, rig, enrolled_by, ...row }) => ({
       ...(row as { workspace: string; workspace_name: string; name: string }),
-      peers: this.#rows("SELECT m.station AS id, m.name, s.version FROM station_members m LEFT JOIN stations s ON s.id = m.station WHERE m.workspace = ? ORDER BY m.enrolled_at, m.rowid", row.workspace),
+      peers: this.#rows("SELECT m.station AS id, m.name, s.version FROM station_members m LEFT JOIN stations s ON s.id = m.station WHERE m.workspace = ? AND m.rig IS NULL ORDER BY m.enrolled_at, m.rowid", row.workspace),
+      ...(rig === 1 ? { rig: { owner: enrolled_by as string } } : this.#rigsTold(row.workspace as string)),
       revocations: this.#rows("SELECT kind, id, at FROM revocations WHERE workspace = ? AND at >= ?", row.workspace, since),
       lock: this.#lockHead(row.workspace as string),
       ...(this.#locked(row.workspace as string) ? { locked: true } : {}),
@@ -2012,7 +2101,7 @@ const FAMILIES: Record<string, string> = {
   tellAll: "broadcast", tellStations: "broadcast", modelsMade: "broadcast", tellAdmins: "broadcast", alarm: "broadcast",
 };
 for (const name of ["workspace", "createWorkspace", "updateWorkspace", "deleteWorkspace", "invite", "previewInvitation", "acceptInvitation", "acceptById", "declineById", "revokeInvitation",
-  "setRole", "removeMember", "addMembers", "removeAdded", "setRelays", "setWay", "manages", "createEnrollment", "updateStation", "removeStation", "memberRole", "recordDevice", "devices",
+  "setRole", "removeMember", "addMembers", "removeAdded", "setRelays", "setWay", "manages", "createEnrollment", "createRigEnrollment", "updateStation", "setStationMode", "removeStation", "memberRole", "recordDevice", "devices",
   "lock", "appendLock", "clearLock", "requestLock", "lockRequests", "dropLockRequest"]) FAMILIES[name] = "workspaces";
 for (const name of ["adminUsers", "setMayCreate", "adminPending", "setPending", "removePending", "setBlocked", "setBeta", "adminDeleteWorkspace", "adminCreateWorkspace", "adminSetLimits",
   "adminEnrollment", "adminWorkspaces", "inviteCodes", "createInviteCode", "revokeInviteCode", "adminFeedback", "setFeedbackStatus", "adminLoad"]) FAMILIES[name] = "admin";

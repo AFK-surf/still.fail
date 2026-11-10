@@ -59,7 +59,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     return
   }
   // an agent's request about a vault item that says what it is: its card is in place of the words (message.mbt)
-  if m.card is Some({ ask: Some(_), .. }) || m.card is Some({ phone: Some(_), .. }) || m.card is Some({ signin: Some(_), .. }) {
+  if m.card is Some({ ask: Some(_), .. }) || m.card is Some({ phone: Some(_), .. }) || m.card is Some({ signin: Some(_), .. }) || m.card is Some({ rig: Some(_), .. }) {
     return
   }
   let resolved = match m.decision {
@@ -371,6 +371,83 @@ fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
           ended(Some(("phone/" + key, fn(id) {
             card_history(c, "phone/" + key, id, fn(p) {
               @sf.ask_words(p, @sf.t("android-misc.adb.ask.chat.title"), ask.reason)
+            })
+          })))
+        },
+      )
+    }
+    None => if decided { ended(None) } else { asking() }
+  }
+}
+
+///|
+/// An agent's request for a rig of the workspace in place of its post's words (a station that only runs tasks): its card while it waits
+/// (answered by the rig's person with `rig.decide` on the chat's station), then a line saying how it went: decided on
+/// screen, the card stays, the answer given marked, till it is out of sight (phone_ask_card's).
+fn rig_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : RigAsk) -> Unit {
+  let decided = ask.status != ""
+  let granted = (ask.granted_kind, ask.granted_seconds)
+  let words = fn() { @settings.rig_outcome_words(ask.status, ask.why, ask.delivered, granted) }
+  let asking = fn() {
+    c.box(style=@sf.ask_card_room.then(ask_card_under_head), fn() {
+      @settings.rig_card(
+        c,
+        here.core,
+        here.station,
+        ask.request,
+        ask.name,
+        ask.reason,
+        (ask.timeout_kind, ask.timeout_seconds),
+        {
+          "rig": Json::string(ask.rig),
+          "name": Json::string(ask.name),
+          "session": Json::string(ask.session),
+          "chat": Json::string(ask.chat),
+          "title": Json::string(ask.title),
+          "by": Json::string(ask.by),
+        },
+        mine_to(here, card.assignee),
+        who=card.assignee_text,
+        ended=if decided { Some((ask.status == "granted", words())) } else { None },
+        lock=fn() { open_page(Setting(@settings.Route::AdbShare(""))) },
+      )
+    })
+    |> ignore
+  }
+  let ended = fn(history : (String, (Int) -> Unit)?) {
+    @settings.rig_outcome(c, ask.status, ask.why, ask.delivered, granted, inline=here.inline, history~)
+  }
+  match here.list {
+    Some(l) => {
+      let key = here.station + "/" + m.ts
+      let open = l.turns.in_turn(c, "rig/" + m.ts, !decided, close_turn_ms, seen=seen_in(c, here, Some(m.seq)))
+      let start_at = l.turns.start("rig/" + m.ts)
+      under_post(
+        c,
+        "rig-card/" + key,
+        open,
+        exit=@motion.trans(fade=0.0, scale=options_scale, spec=@motion.tween(options_out_ms, ease=options_ease)),
+        close=close_gap,
+        start_at?,
+        asking,
+      )
+      under_post(
+        c,
+        "rig-ended/" + key,
+        decided && !open,
+        start_at?,
+        enter=@motion.trans(
+          fade=0.0,
+          spec=@motion.Snap(0.0),
+          fade_spec=@motion.tween(options_out_ms, ease=Leave, delay=options_out_ms),
+        ),
+        open=close_gap,
+        exit=@motion.trans(spec=@motion.Snap(0.0)),
+        close=@motion.Snap(0.0),
+        fn() {
+          ended(Some(("rig/" + key, fn(id) {
+            card_history(c, "rig/" + key, id, fn(p) {
+              @sf.ask_words(p, @sf.t("web-pages.rigs.ask.title", args=[("name", ask.name)]), ask.reason)
             })
           })))
         },

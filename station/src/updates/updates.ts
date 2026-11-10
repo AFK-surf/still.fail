@@ -124,6 +124,8 @@ export type UpdatesOptions = {
   nodeDist?: string;
   /// How many turns run now (the hub's), for what a drain waits on and an automatic update waits for.
   running?: () => number;
+  /// The station's own release only (a rig runs no runtime: rig/main.ts): the runtimes' versions are not read.
+  stationOnly?: boolean;
   /// Told when a runtime was installed or updated here (the machine's logins read again), and whether it is there now.
   runtimeChanged?: (kind: RuntimeKind, installed: boolean, replaced: boolean) => void;
   /// The Codex installation's code-mode host (tests can supply a probe).
@@ -256,6 +258,9 @@ export class Updates {
   /// The update of the station followed now: what ends following it.
   private following: (() => void) | null = null;
 
+  /// The runtimes whose versions are read (none on a rig).
+  private readonly kinds: readonly RuntimeKind[];
+
   constructor(o: UpdatesOptions) {
     this.app = o.app;
     this.data = o.data;
@@ -272,6 +277,7 @@ export class Updates {
     this.timing = { ...TIMING, ...o.timing };
     this.trusted = o.trusted;
     this.running = o.running ?? (() => 0);
+    this.kinds = o.stationOnly === true ? [] : RUNTIMES;
     this.runtimeChanged = o.runtimeChanged ?? (() => {});
     this.codexHostProbe = o.codexHostProbe ?? missingCodexHost;
     // Read before an update can replace the release.
@@ -460,10 +466,10 @@ export class Updates {
 
   private async read(withStation: boolean) {
     const held = this.items.station;
-    let [station, ...runtimes] = await Promise.all([withStation ? this.readStation(this.channel()) : Promise.resolve(held), ...RUNTIMES.map((kind) => this.readRuntime(kind))]);
+    let [station, ...runtimes] = await Promise.all([withStation ? this.readStation(this.channel()) : Promise.resolve(held), ...this.kinds.map((kind) => this.readRuntime(kind))]);
     // Put on another channel while it was read: read from that one.
     while (station.channel !== this.channel()) station = await this.readStation(this.channel());
-    for (const [kind, read] of [["station", station] as const, ...RUNTIMES.map((kind, i) => [kind, runtimes[i]!] as const)]) {
+    for (const [kind, read] of [["station", station] as const, ...this.kinds.map((kind, i) => [kind, runtimes[i]!] as const)]) {
       const item = this.items[kind];
       // One that is updating keeps what it was until it is done; but one not yet read (an update this process took
       // over following) is read.

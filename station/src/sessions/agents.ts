@@ -32,7 +32,7 @@ import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.t
 import { permissionsView } from "../api/routes/permissions.ts";
 import { Net, measure } from "../jobs/load.ts";
 import { Notifier } from "../cloud/notify.ts";
-import type { Cloud as CloudState } from "../cloud/state.ts";
+import { type Cloud as CloudState, rigGrantsPath } from "../cloud/state.ts";
 import { screenTools } from "../tools/screen.ts";
 import { permissionTools } from "../tools/permissions.ts";
 import { HelperFiles } from "../helper/files.ts";
@@ -656,6 +656,30 @@ export const AgentsLive = (control: Control) =>
       let joinedNow = new Set(cloud.memberships().filter((m) => !m.home).map((m) => m.workspace));
       let homeNow = cloud.home();
       const follow = async () => {
+        // Listed as a rig now, as its owner's device asked of this station (cloud/state.ts `rig_due`): it ends what it
+        // runs as a station (the agents' runtimes, the connects, the chats' jobs and services), then says it is one,
+        // at which this process ends for the rig's (main.ts). Its chats stay in its database, unseen until it is a
+        // whole station again.
+        if (cloud.state?.rig_due === true) {
+          const due = cloud.state.rig_pending;
+          if (due === undefined) {
+            cloud.update((st) => void delete st.rig_due);
+            return;
+          }
+          log.warn("station", "this station only runs tasks from now on: ending the agents' runtimes, stopping jobs and services", { owner: due.owner });
+          hub.hold("unbound");
+          await hub.suspendAll();
+          for (const a of along) await a.left?.();
+          await jobs.stopAll("this station only runs tasks now");
+          rmSync(rigGrantsPath(data), { force: true });
+          cloud.update((st) => {
+            st.rig = { owner: due.owner, owner_email: due.owner_email, owner_name: due.owner_name, person: due.person };
+            delete st.rig_pending;
+            delete st.rig_due;
+            delete st.rigs;
+          });
+          return;
+        }
         const now = bound();
         const joined = new Set(cloud.memberships().filter((m) => !m.home).map((m) => m.workspace));
         // A new home workspace. One it had joined took over from a home it was taken out of: the old home's chats
@@ -769,6 +793,8 @@ export const AgentsLive = (control: Control) =>
           // Removed, and the station stopped before it stopped its jobs (or crashed): what still runs is ended now.
           await jobs.stopAll("the station was removed from its workspace");
         }
+        // (due to become a rig when it stopped, before it had: now)
+        if (cloud.state?.rig_due === true) await follow();
       };
       yield* Effect.forkScoped(Effect.promise(() => start().catch((e) => {
         log.error("hub", "the agents' side did not start", { error: (e as Error).message });

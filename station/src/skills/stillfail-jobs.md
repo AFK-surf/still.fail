@@ -67,6 +67,15 @@ not wait for, ask for or announce a "lock" on a machine, and do not queue behind
 load, and if a machine is busy pick another or start anyway when nothing better is free: the station queues it when
 it must.
 
+A station whose `mode` in `station_list` is `tasks` only runs tasks: it runs no agents and holds no chats, and it is
+its owner's. It says whose it is, whether this chat may use it (`thisChat`) and who has access. Unless it is open to
+every chat, ask with `station_use {station, reason}` (and `timeout` when an hour idle is not what the work needs); a
+card in your chat goes to its owner, who may not be the person you work for, and you are told when it is decided.
+Once this chat may use it, it is named as `station` as any other is, in `station_task`, `station_file`,
+`peer_forward` and `secret_use`. When the grant ends (its time up, idle, taken back, the chat archived) what this
+chat runs there is stopped; a task's log and files are still read afterwards. `station_use {station, done: true}`
+hands it back.
+
 A station runs other stations' tasks through its own queue. Busy CPUs never hold a task back; when one must wait,
 `start` answers with `queue` (its place and why it waits: memory under pressure, the screen another task's or a
 person's, the small-task slot taken) and the task starts by itself when that passes. A task is not told how many CPUs

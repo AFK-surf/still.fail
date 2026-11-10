@@ -16,11 +16,20 @@ const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((s): s is
 /// Joins a workspace with a one-time token: proves this station holds its key, writes cloud.json. `provider`: whose
 /// control plane it is (still.fail cloud unless told; cloud/provider.ts). `lock`: the workspace lock's hash (a locked
 /// workspace's command names it): pinned once the control plane brings a lock holding that entry. A lock pinned before
-/// is let go: joining (again) is the machine's own say, as `lock reset` is.
-export async function enroll(data: string, origin: string, token: string, provider: Provider = "stillfail", lock?: string) {
+/// is let go: joining (again) is the machine's own say, as `lock reset` is. `rig`: the machine joins as a rig (a station that only runs tasks),
+/// whose person is the one the token is of, their own lock's hash (`rig`, which the command that adds it names) pinned:
+/// who that person is, the control plane says once, here; what they signed is checked against that lock from then on.
+export async function enroll(data: string, origin: string, token: string, provider: Provider = "stillfail", lock?: string, rig?: string) {
   const plane = specOf(provider);
   const key = loadKey(data);
-  const body = await redeem(data, origin, token, provider, plane.enrollPath);
+  // A machine is a station or a rig, and changes only once taken out of its workspace: a station's chats would be
+  // left with no agent, a rig's grants with a machine that asks nobody.
+  const was = existsSync(join(data, "mesh", "cloud.json")) ? readState(data) : null;
+  if (was !== null && was.workspace && was.removed_at === undefined && (was.rig !== undefined) !== (rig !== undefined)) {
+    throw new Error(tr(stationLang(), was.rig !== undefined ? "station.cli.rig.isRig" : "station.cli.rig.isStation", { workspace: was.workspace_name || was.workspace }));
+  }
+  const body = await redeem(data, origin, token, provider, plane.enrollPath, rig !== undefined);
+  if (rig !== undefined && typeof body.rig?.owner !== "string") throw new Error(`${plane.name} did not say whose rig this is`);
   const text = (k: string) => (typeof body[k] === "string" ? body[k] : "");
   const relays = strings(body.relay_urls);
   const state: CloudState = {
@@ -32,12 +41,14 @@ export async function enroll(data: string, origin: string, token: string, provid
     state.provider = provider;
     state.gateway_keys = strings(body.gateway_keys);
   }
+  if (rig !== undefined) state.rig = { owner: body.rig.owner, owner_email: typeof body.rig.owner_email === "string" ? body.rig.owner_email : "", owner_name: typeof body.rig.owner_name === "string" ? body.rig.owner_name : "", person: rig };
   writeState(data, state);
   if (readLock(data) !== null) Cloud.resetLock(data);
   rmSync(pendingLockPath(data), { force: true });
   if (lock !== undefined) writePrivate(pendingLockPath(data), JSON.stringify({ hash: lock }));
-  console.log(tr(stationLang(), "station.cli.joined", { workspace: state.workspace_name, name: state.name, id: key.id.slice(0, 12) }));
-  if (lock !== undefined) console.log(tr(stationLang(), "station.cli.lock.pending", { code: shortCode(key.id) }));
+  if (state.rig !== undefined) console.log(tr(stationLang(), "station.cli.rig.joined", { workspace: state.workspace_name, name: state.name, id: key.id.slice(0, 12), owner: state.rig.owner_email || state.rig.owner }));
+  else console.log(tr(stationLang(), "station.cli.joined", { workspace: state.workspace_name, name: state.name, id: key.id.slice(0, 12) }));
+  if (lock !== undefined) console.log(tr(stationLang(), state.rig !== undefined ? "station.cli.rig.pending" : "station.cli.lock.pending", { code: shortCode(key.id) }));
 }
 
 /// Whether `enroll --stay` (what the installers run) joins rather than enrolls: the station is in a workspace and not
@@ -48,6 +59,12 @@ export function staysIn(data: string): boolean {
   return state !== null && !!state.workspace && state.removed_at === undefined;
 }
 
+/// Whether this machine is a rig now (in a workspace as one).
+export function isRig(data: string): boolean {
+  const state = readState(data);
+  return state !== null && !!state.workspace && state.removed_at === undefined && state.rig !== undefined;
+}
+
 /// Joins one more workspace with its one-time token, staying in those the station is in:
 /// at the control plane it is enrolled with, which then names it in its `state` frames. Kept in cloud.json's `joined`
 /// at once, so `status` says it before the running station hears. A locked station joins none: its lock is one
@@ -55,6 +72,7 @@ export function staysIn(data: string): boolean {
 export async function joinWorkspace(data: string, token: string, lock?: string): Promise<{ workspace: string; workspace_name: string; name: string }> {
   const state = readState(data);
   if (state === null || !state.workspace || state.removed_at !== undefined) throw new Error("this station is in no workspace: enroll it first");
+  if (state.rig !== undefined) throw new Error(tr(stationLang(), "station.cli.rig.isRig", { workspace: state.workspace_name || state.workspace }));
   // A locked station joins locked workspaces only: an unlocked one's members are the control plane's word, which its
   // home's lock took away. Which lock to pin is the joining device's word (`lock`, the head it has), as `enroll --lock`.
   const home = readLock(data);
@@ -80,7 +98,7 @@ export async function joinWorkspace(data: string, token: string, lock?: string):
 }
 
 /// A one-time token redeemed at `path` (enroll or join): proves this station holds its key; the control plane's answer.
-async function redeem(data: string, origin: string, token: string, provider: Provider, path: string): Promise<any> {
+async function redeem(data: string, origin: string, token: string, provider: Provider, path: string, rig = false): Promise<any> {
   const plane = specOf(provider);
   const key = loadKey(data);
   let response: Response | undefined;
@@ -92,7 +110,8 @@ async function redeem(data: string, origin: string, token: string, provider: Pro
       headers: { "content-type": "application/json" },
       // Joining: it pins the lock of a locked workspace it joins, which the plane asks before
       // letting it into one.
-      body: JSON.stringify({ token, station: key.id, signature, version: version(), ...(path === plane.joinPath ? { locks: true } : {}) }),
+      // `rig`: it enrolls as a rig, which a rig's token alone makes.
+      body: JSON.stringify({ token, station: key.id, signature, version: version(), ...(path === plane.joinPath ? { locks: true } : {}), ...(rig ? { rig: true } : {}) }),
       signal: AbortSignal.timeout(20_000),
     });
     if (prefix === plane.enrollPrefixes.at(-1) || response.status !== 401) break;
@@ -152,6 +171,7 @@ export function status(data: string): string {
   }
   out.push(say("station.cli.status.workspace", { name: state.workspace_name, id: state.workspace }));
   out.push(say("station.cli.status.name", { name: state.name, id: state.station.slice(0, 12) }));
+  if (state.rig !== undefined) out.push(say("station.cli.rig.status", { owner: state.rig.owner_email || state.rig.owner, person: state.rig.person.slice(0, 16) }));
   out.push(say("station.cli.status.cloud", { origin: state.origin }));
   if (readLock(data) !== null) out.push(lockCommand(data, "status"));
   if (state.removed_at !== undefined) {
@@ -166,7 +186,7 @@ export function status(data: string): string {
   else if (presence) out.push(say("station.cli.status.offlineWhy", { why: typeof presence.error === "string" ? presence.error : say("station.cli.status.notConnectedYet") }));
   else if (!running) out.push(say("station.cli.status.offlineNotRunning"));
   else out.push(say("station.cli.status.offline"));
-  if (state.removed_at === undefined) out.push(say("station.cli.status.working"));
+  if (state.removed_at === undefined) out.push(say(state.rig !== undefined ? "station.cli.rig.working" : "station.cli.status.working"));
   return out.join("\n");
 }
 

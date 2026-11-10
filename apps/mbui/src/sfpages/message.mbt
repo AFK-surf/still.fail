@@ -614,6 +614,10 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       signin_ask_card(c, here, m, card, ask)
       return
     }
+    Some({ rig: Some(ask), .. } as card) => {
+      rig_ask_card(c, here, m, card, ask)
+      return
+    }
     _ => ()
   }
   let placed : Map[String, Attachment] = {}

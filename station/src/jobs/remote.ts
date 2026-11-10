@@ -318,6 +318,8 @@ export class Remote {
   private run: (effect: Effect.Effect<void>) => Promise<void>;
   private diskFree: (path: string) => number;
   private removeMirror: (path: string) => Promise<void>;
+  private described: ((peer: string, workspace: string) => Json) | null = null;
+  private rigs: ((workspace: string, session: string, rig: Json, described: Json | null) => Promise<Json>) | null = null;
 
   constructor(options: RemoteOptions) {
     this.data = options.data;
@@ -346,7 +348,7 @@ export class Remote {
     });
     this.bus = options.bus ?? new PeerBus({ waitMs: options.meshWaitMs ?? MESH_WAIT_MS, sleep: (ms) => this.run(Effect.sleep(Duration.millis(ms))).catch(() => undefined) });
     // What this answers: how this station is and what it takes, and the tasks (whatever no other part answers).
-    this.bus.on("describe", () => this.describe());
+    this.bus.on("describe", (peer, _request, workspace) => this.describe(peer, workspace ?? ""));
     this.bus.otherwise((peer, request, workspace) => {
       const ws = workspace ?? "";
       const method = text(request, "method");
@@ -1156,6 +1158,18 @@ export class Remote {
     this.load = load;
   }
 
+  /// What is said of a workspace's rig in station_list besides how busy it is (rigs/module.ts): whose it is, whether
+  /// the asking chat may use it and who may. `described`: its `describe` answer, null when it was not reached.
+  setRigs(said: (workspace: string, session: string, rig: Json, described: Json | null) => Promise<Json>): void {
+    this.rigs = said;
+  }
+
+  /// What this machine says of itself besides (`describe`), to the station asking: a rig says it is one, what of a
+  /// station it is not (no chats, no sessions), and who may use it (rig/module.ts).
+  setDescribed(more: (peer: string, workspace: string) => Json): void {
+    this.described = more;
+  }
+
   /// `what`, or null when it has not settled within `ms` on the clock (it goes on); its rejection as `error`.
   private async bounded<T>(what: Promise<T>, ms: number): Promise<{ ok: T } | { error: Error } | null> {
     let out: { ok: T } | { error: Error } | null = null;
@@ -1176,16 +1190,16 @@ export class Remote {
   }
 
   /// `describe`'s answer: what this station takes, and how busy it is (`load`, LOAD_WAIT_MS at most).
-  private async describe(): Promise<Json> {
+  private async describe(peer = "", workspace = ""): Promise<Json> {
     const answer: Json = { protocol: 1, os: OS, arch: ARCH, tasks: true, sessions: true, messages: true, reads: true, files: true, chats: true, sync: 1, smallTasks: 1, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
     if (this.load !== null) answer.load = await this.measuredLoad();
-    return answer;
+    return this.described === null ? answer : { ...answer, ...this.described(peer, workspace) };
   }
 
   /// station_list: the stations of `workspace`, each asked how busy it is at once (this one answers itself); one that
   /// has not answered within LIST_WAIT_MS is listed as offline, one that refused says why, one safe mode leaves out
   /// (the roster's `unprotected`) after them, not asked, saying why it cannot be called.
-  private async listStations(workspace: string): Promise<Json> {
+  private async listStations(workspace: string, session: string): Promise<Json> {
     const { unprotected, ...roster } = (await this.ask("", { method: "peers", workspace })) ?? {};
     const own = this.ownId();
     const stations = Array.isArray(roster?.stations) ? roster.stations : [];
@@ -1201,7 +1215,22 @@ export class Remote {
         return { ...entry, load: summary(field(got.ok, "load")) };
       }),
     );
-    return { ...roster, stations: [...listed, ...left] };
+    // Its stations that only run tasks (rigs: rigs/module.ts says whose each is and who may use it) after the whole
+    // ones, in the same list, `mode: "tasks"`: asked the same way, at once.
+    const rigs = Array.isArray(roster?.rigs) ? (roster.rigs as Json[]) : [];
+    const said = this.rigs;
+    if (rigs.length === 0 || said === null) return { ...roster, stations: [...listed, ...left], rigs: undefined, rigsWaiting: undefined };
+    const listedRigs = await Promise.all(
+      rigs.map(async (rig: Json) => {
+        const entry = { id: text(rig, "id"), name: text(rig, "name") };
+        const got = await this.bounded(this.ask(entry.id, { method: "describe", workspace }), LIST_WAIT_MS);
+        if (got === null) return { ...entry, ...(await said(workspace, session, rig, null)), offline: `did not answer within ${LIST_WAIT_MS / 1000} s` };
+        if ("error" in got) return { ...entry, ...(await said(workspace, session, rig, null)), ...(got.error instanceof Refused ? { refused: got.error.message } : { offline: got.error.message }) };
+        return { ...entry, ...(await said(workspace, session, rig, got.ok)), load: summary(field(got.ok, "load")) };
+      }),
+    );
+    const { rigs: _, rigsWaiting: __, ...rest } = roster as Record<string, Json>;
+    return { ...rest, stations: [...listed, ...listedRigs, ...left] };
   }
 
   /// The id of the station an agent names: station_list shows each by its name and its id, and either is taken. A name
@@ -1210,17 +1239,23 @@ export class Remote {
   private async stationNamed(workspace: string, named: string): Promise<string> {
     if (named === "") return named;
     let stations: Json[] = [];
+    let roster: Json;
     try {
-      const roster = await this.ask("", { method: "peers", workspace });
+      roster = await this.ask("", { method: "peers", workspace });
       // One safe mode leaves out too: named, it is refused saying why (peer.ts `member`).
-      stations = [roster?.stations, roster?.unprotected].flatMap((list) => (Array.isArray(list) ? list : []));
+      stations = [roster?.stations, roster?.rigs, roster?.unprotected].flatMap((list) => (Array.isArray(list) ? list : []));
     } catch {
       return named;
     }
     if (stations.some((s) => text(s, "id") === named)) return named;
+    // (a rig is named as a station is: what runs on one is asked of it the same way)
     const same = stations.filter((s) => text(s, "name").toLowerCase() === named.toLowerCase());
     if (same.length > 1) throw new Error(`${same.length} stations are named ${named}; give the id station_list shows for the one meant`);
-    return same.length === 1 ? text(same[0], "id") : named;
+    if (same.length === 1) return text(same[0], "id");
+    // A rig of a workspace in security mode its person has not signed for: no station sends it anything, said so.
+    const waiting = (Array.isArray(roster?.rigsWaiting) ? (roster.rigsWaiting as Json[]) : []).find((r) => text(r, "id") === named || text(r, "name").toLowerCase() === named.toLowerCase());
+    if (waiting !== undefined) throw new Error(`the station ${text(waiting, "name") || named} is not taken into this workspace yet: its owner ${text(waiting, "owner_email") || text(waiting, "owner")} has to check its security code in still.fail first`);
+    return named;
   }
 
   /// This station's id (mesh/cloud.json), "" when it has none.
@@ -2115,7 +2150,7 @@ export class Remote {
     const workspace = this.workspace(row.ws ?? null);
     const station = await this.stationNamed(workspace, text(args, "station"));
     if (tool === "station_list") {
-      if (station === "") return this.listStations(workspace);
+      if (station === "") return this.listStations(workspace, session);
       return detailed(station === this.ownId() ? await this.describe() : await this.ask(station, { method: "describe", workspace }));
     }
     const key = text(args, "key");

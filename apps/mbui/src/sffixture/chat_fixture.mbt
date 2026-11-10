@@ -1535,6 +1535,56 @@ pub fn phone_post() -> Json {
 }
 
 ///|
+/// How chat-rig's request for a rig, at the chat's end, went once decided here ("": waiting; granted; away: approved,
+/// the rig not reached yet; denied; ended).
+pub let fix_rig : Ref[String] = Ref("")
+
+///|
+/// What `rig.decide` was asked with here, each time (a test reads what the card sent).
+pub let fix_rig_asked : Array[Json] = []
+
+///|
+/// chat-rig's last post: an agent asking for the rig build-box (a station that only runs tasks), its card as the core says it, answered here
+/// by its person; decided, how it went. `mine`: whether the rig is the viewer's (chat-rig-other: 陈's, who is asked).
+pub fn rig_post(mine : Bool) -> Json {
+  let ask : Map[String, Json] = {
+    "request": "r-1",
+    "rig": "aa11",
+    "name": "build-box",
+    "owner": if mine { "s" } else { "u-chen" },
+    "reason": "在 Linux 上跑一遍完整的 station 测试",
+    "timeoutKind": "idle",
+    "timeoutSeconds": 3600,
+    "session": "s-c1",
+    "chat": "CHAT/1",
+    "title": "修 CI",
+    "by": "lin@example.com",
+  }
+  match fix_rig.val {
+    "" => ()
+    "granted" | "away" => {
+      ask["status"] = "granted"
+      ask["delivered"] = Json::boolean(fix_rig.val == "granted")
+      ask["grantedKind"] = "fixed"
+      ask["grantedSeconds"] = 28800
+    }
+    "ended" => {
+      ask["status"] = "ended"
+      ask["why"] = "所有者已收回"
+    }
+    s => ask["status"] = Json::string(s)
+  }
+  let card : Map[String, Json] = { "type": "options", "rigAsk": Json::object(ask), "assignee": if mine { "lin@example.com" } else { "chen@example.com" } }
+  if !mine {
+    card["assigneeText"] = "等 陈 决定"
+  }
+  msg(63, "agent", by_agent("Anthropic", "claude", "s-c1"), "申请使用 station「build-box」：在 Linux 上跑一遍完整的 station 测试", "刚刚", {
+    "card": Json::object(card),
+    "createdAt": Json::number(1.0e9),
+  })
+}
+
+///|
 /// chat-signin's last post: an agent asking the person to sign in to github.com on the chat's tab ( 登录态),
 /// its card as the core says it; how it stands by the mode (chat-signin-code: a code asked; -person: a captcha, the
 /// person's; -done: signed in, its keeping waiting for this device; -kept: kept).
@@ -1590,6 +1640,12 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file" || f.mode == "chat-vault-use" || f.mode == "chat-vault-timeout" || f.mode == "chat-vault-before"
   let linked = f.mode.has_prefix("chat-phone-linked-")
   let signin = f.mode.has_prefix("chat-signin")
+  // (chat-rig: an agent's request for the viewer's rig, waiting; -other: someone else's rig; -web: on a web page;
+  // -outside: on a device not on its person's own lock; -granted, -away, -ended: decided so already)
+  let rig = f.mode.has_prefix("chat-rig")
+  if fix_rig.val == "" && (f.mode == "chat-rig-granted" || f.mode == "chat-rig-away" || f.mode == "chat-rig-ended") {
+    fix_rig.val = f.mode.unsafe_substring(start="chat-rig-".length(), end=f.mode.length())
+  }
   let phone = f.mode == "chat-phone" || f.mode == "chat-phone-outside" || f.mode == "chat-phone-none" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked
   // (chat-phone-granted: its request approved already; chat-phone-lacks: waiting, on a phone without Developer options;
   // chat-phone-linked-<link>[-desk]: approved, its station holding the phone as <link> says, on the phone or (-desk)
@@ -1607,7 +1663,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       None => rest
     }
   }
-  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone && !signin && !ask_end) {
+  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone && !signin && !ask_end && !rig) {
     return v
   }
   match v {
@@ -1654,6 +1710,10 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       }
       if signin {
         all.push(signin_post(f.mode))
+      }
+      // chat-rig's request for a rig, last
+      if rig {
+        all.push(rig_post(f.mode != "chat-rig-other"))
       }
       // chat-ask-end's card, last of what was there: what was sent since comes after it, as it was said after it (put
       // at the end, words sent under it came to stand over it once the station had them, a whole row up in one frame)
@@ -1733,6 +1793,13 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
     // chat-vault's request decided: how it went on its card at once, as the core puts it
     "adb.decide" if text(p, "request") == "p-1" => {
       fix_phone.val = if text(p, "scope") != "" { "granted" } else { "denied" }
+      f.changed()
+      Some(Ok(Json::object({})))
+    }
+    // chat-rig's request decided: how it went on its card at once, as the core puts it
+    "rig.decide" if text(p, "request") == "r-1" => {
+      fix_rig_asked.push(params)
+      fix_rig.val = if flag(p, "allow") { "granted" } else { "denied" }
       f.changed()
       Some(Ok(Json::object({})))
     }

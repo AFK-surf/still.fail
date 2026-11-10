@@ -16,6 +16,11 @@
 //                                               in the app); its decision, told in the session, answered here: granted,
 //                                               secret_run <command> with the grant and chat_post what it printed all
 //                                               done; refused, chat_post so
+//   rig:<name>|<reason>                         station_use the rig <name> (a card for its owner in the app), then chat_post
+//                                               what the station answered
+//   rigtask:<name>|<command>                    station_task <command> on the rig <name> (prepare, then start), then
+//                                               chat_post `rigtask <key>:` and what each answered: a task taken, or
+//                                               the rig's refusal
 // What it writes of a turn goes to its transcript as the real claude's does (<config>/projects/<dir>/<session>.jsonl),
 // which is what the station reads an agent's execution history from.
 import fs from "node:fs";
@@ -145,6 +150,20 @@ async function turn(text) {
     } else {
       said = await post(kept.to, { text: "密钥申请被拒绝了", kind: "all_done", done: "the request was refused" });
     }
+  } else if (/(^|\s)rig:/.test(text)) {
+    const [rig, reason] = line("rig:").split("|");
+    const asked = await tool("station_use", { station: rig, reason: reason ?? "端到端测试" });
+    record("assistant", [{ type: "text", text: asked }]);
+    said = /waits for its owner/.test(asked)
+      ? await post(to, { text: `rig: ${asked}`, kind: "need_human", need: `批准使用 station「${rig}」` })
+      : await post(to, { text: `rig: ${asked}`, kind: "all_done", done: "asked for the rig" });
+  } else if (/(^|\s)rigtask:/.test(text)) {
+    const [rig, command] = line("rigtask:").split("|");
+    const key = `e2e-${Date.now().toString(36)}`;
+    const prepared = await tool("station_task", { station: rig, action: "prepare", key, name: key, command, small: true });
+    const started = await tool("station_task", { station: rig, action: "start", key });
+    record("assistant", [{ type: "text", text: `${prepared}\n${started}` }]);
+    said = await post(to, { text: `rigtask ${key}: ${prepared} // ${started}`, kind: "all_done", done: "ran the task on the rig, or was refused" });
   } else if (text.includes("serve:")) {
     const [name, port, words] = line("serve:").split("|");
     // a port another process holds (another run's service on the same machine) is said, not served over: the page
@@ -185,7 +204,7 @@ async function turn(text) {
   say({ type: "result", subtype: "success", is_error: false, duration_ms: 1, num_turns: 1, session_id: sessionId, result: said });
 }
 
-const ours = (text) => /(^|\s)(card:|text-card:|steps:|serve:|md:|secret:)/.test(text) || /Granted: 「[^」]*」, grant r_|\(r_[\w-]+\) was (refused|let go)/.test(text);
+const ours = (text) => /(^|\s)(card:|text-card:|steps:|serve:|md:|secret:|rig:|rigtask:)/.test(text) || /Granted: 「[^」]*」, grant r_|\(r_[\w-]+\) was (refused|let go)/.test(text);
 readline.createInterface({ input: process.stdin }).on("line", (line) => {
   let msg = null;
   try {

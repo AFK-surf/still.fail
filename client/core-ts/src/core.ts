@@ -60,8 +60,10 @@ import { installForms, type Forms } from "./forms-calls.ts";
 import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
+import { Rigs } from "./rigs.ts";
+import { Signer } from "./lock.ts";
 import { PersonalLock } from "./personal-lock.ts";
-import { bindPerson, keepToPerson, lockSeen, personalStations, refusedAgain, tellStations } from "./views/lock.ts";
+import { answersOf, bindPerson, enrolled, keepToPerson, lockSeen, personalStations, refusedAgain, signsAs, tellStations, tookOrRefused } from "./views/lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -74,7 +76,7 @@ import * as transferCalls from "./views/transfers.ts";
 import * as browseCalls from "./views/browse.ts";
 import * as downloads from "./views/downloads.ts";
 import * as fill from "./fill.ts";
-import { get, isObject } from "./util.ts";
+import { get, isObject, sha256 } from "./util.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
 export const CREDENTIAL_KEY = "credential";
@@ -136,6 +138,8 @@ export class Inner {
   changelog!: Changelog;
   forms!: Forms;
   adb!: Adb;
+  /// The workspaces' rigs (rigs.ts).
+  rigs!: Rigs;
   viewCalls!: ViewCalls;
   /// This device's downloads of chats' files (views/downloads.ts).
   downloads!: downloads.Downloads;
@@ -299,6 +303,7 @@ export class Core {
           label: () => prefs.deviceName(inner.data) ?? "",
           changed: () => {
             inner.adb.touched();
+            inner.rigs?.touched();
             for (const [ws] of inner.workspaces.owned()) {
               lockSeen(inner).touch(`lock ${ws}`);
               inner.runner.fork(bindPerson(inner, ws));
@@ -319,6 +324,30 @@ export class Core {
         },
       });
       handlers.adb = (_i, call) => inner.adb.run((call as Extract<Call, { kind: "adb" }>).call);
+      // The workspaces' rigs (a station that only runs tasks), as their stations say them; what their person signs for them.
+      inner.rigs = new Rigs({
+        host: inner.host,
+        store: inner.store,
+        personal: () => inner.adb.personal(),
+        subOf: (workspace) => inner.workspaces.owner(workspace),
+        view: (workspace) => inner.data.shared({ topic: "workspace", workspace }),
+        call: (station, method, path, body) => inner.stations.requests.call(station, method, path, body, { quiet: true }),
+        cloud: (sub, method, path, body) => inner.provider.request(sub, method, path, body),
+        first: (asks, at) => answersOf(inner, asks, tookOrRefused, at),
+        lock: {
+          locked: (workspace) => signsAs(inner, workspace).locked,
+          enrolled: (sub, workspace, made) => enrolled(inner, sub, workspace, made),
+          signsAs: (workspace) => signsAs(inner, workspace).as,
+          signAdd: (_workspace, bytes) =>
+            Effect.flatMap(Signer.load(inner.host), (signer) =>
+              signer === null ? Effect.fail(new CoreError("lock_no_signer", t("core-misc.rig.notSigner"))) : Effect.succeed({ key: signer.id, sig: signer.signBytes(bytes) })),
+        },
+        sha256,
+      });
+      handlers.rig = (_i, call) => inner.rigs.run((call as Extract<Call, { kind: "rig" }>).call);
+      // (read whole as a station is first read; after that its `rigs` event says each change, a stream that was away
+      // told the last of them as it goes on)
+      inner.stations.also.push({ read: (address) => inner.rigs.read(address), event: (address, name, data) => inner.rigs.heard(address, name, data) });
       // This person's chats' grants of their phone, as each station says them.
       inner.stations.also.push({ read: (address) => inner.adb.readGrants(address), event: (address, name, data) => (name === "adb-grant" ? inner.adb.heard(address, data) : undefined), resume: true });
       handlers.ask = (_i, call) => asks.run((call as Extract<Call, { kind: "ask" }>).ask, inner.accounts);

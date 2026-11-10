@@ -70,6 +70,7 @@ function setup() {
     data,
     emailOf: (ws) => (ws === "ws" ? "Me@x.com" : null),
     betaOf: (ws) => ws === "ws" && (data.record("me", "s1") as J)?.user?.beta === true,
+    subOf: (ws) => (ws === "ws" ? "s1" : null),
     relayName: () => null,
   });
   router.views = views;
@@ -1342,6 +1343,33 @@ test("a_station_refusing_for_a_security_mode_says_why_in_place_of_offline", asyn
   assert.equal(chats.value.trouble.text, "无法连接 beta");
 });
 
+test("a station's mode is the viewer's to change where they added it, or no member did and they own the workspace", async () => {
+  // Its owner is who added it, whatever the viewer's role (the user, 2026-11-10; cloud/src/directory.ts setStationMode).
+  const t = setup();
+  const list = ui();
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  const of = (role: string): J => ({
+    id: "ws",
+    role,
+    members: [{ sub: "s1", role }, { sub: "s2", role: "admin" }],
+    stations: [
+      { id: "a", name: "alpha", enrolled_by: "s1", last_seen: null, version: null },
+      { id: "b", name: "beta", enrolled_by: "s2", last_seen: null, version: null },
+      { id: "c", name: "gamma", enrolled_by: "gone", last_seen: null, version: null },
+    ],
+  });
+  const mine = () => (list.value as J[]).map((s) => [s.id, s.mine]);
+  t.set(workspace(), of("admin"));
+  await t.read(list, 1);
+  assert.deepEqual(mine(), [["a", true], ["b", false], ["c", false]], "an admin: only what they added");
+  t.set(workspace(), of("member"));
+  await t.read(list, 1);
+  assert.deepEqual(mine(), [["a", true], ["b", false], ["c", false]], "a member: what they added too");
+  t.set(workspace(), of("owner"));
+  await t.read(list, 1);
+  assert.deepEqual(mine(), [["a", true], ["b", false], ["c", true]], "the owner: one no member added as well, never another member's");
+});
+
 test("stations_asked_brief_say_what_names_each_and_how_it_is_reached_not_its_overview", async () => {
   // A chat's bar asked the whole list for its station's name and mark: each station's overview came, and each of its
   // changes (2026-11-08).
@@ -1471,7 +1499,7 @@ test("stations_shows_each_station_with_its_models", async () => {
   assert.ok(gpt.spent.text.startsWith("额度已用完 · "));
   assert.deepEqual([gpt.name, gpt.ids], ["GPT-5", ["gpt-5", "openai/gpt-5"]]);
   assert.deepEqual(gpt.accounts.codex.map((a: J) => a.id), ["p1", "p6"]);
-  assert.deepEqual(plain(v[1]), { station: "ws/b", id: "b", name: "beta", online: false, reconnecting: false, lastSeen: v[1].lastSeen, link: { state: "offline" }, runtimes: [], models: [], profileGroups: [], profileStates: {}, betaOffered: false, joined: false });
+  assert.deepEqual(plain(v[1]), { station: "ws/b", id: "b", name: "beta", online: false, reconnecting: false, lastSeen: v[1].lastSeen, link: { state: "offline" }, runtimes: [], models: [], profileGroups: [], profileStates: {}, betaOffered: false, joined: false, mine: false });
   assert.ok(v[1].summary.startsWith("离线 · "));
   assert.equal(v[2].lastSeen, undefined);
 });

@@ -1829,6 +1829,38 @@ export interface PhoneAsk {
 	lasts?: string;
 }
 
+/** An agent's request for a rig, as its card in the chat says it. */
+export interface RigAsk {
+	/** Its id (`rig.decide`, `rig.revoke`). */
+	request: string;
+	/** The rig's id. */
+	rig: string;
+	/** The rig, as it was named when asked. */
+	name: string;
+	/** The rig's person (their account): the one who decides. */
+	owner: string;
+	reason: string;
+	/** What the agent asked for: idle | fixed. */
+	timeoutKind: string;
+	timeoutSeconds: number;
+	/** The chat's session on its station, its thread and its title and who started it, as the card said them: what the person's device signs with the grant. */
+	session: string;
+	chat: string;
+	title: string;
+	by: string;
+	/** Decided: granted | denied | ended. Absent while it waits. */
+	status?: string;
+	/** Ended or refused: why (所有者已收回, 对话已归档, 授权已到期, 闲置超时…). */
+	why?: string;
+	/** Granted: whether the rig took the grant (false: approved while the rig was away; brought when it is back). */
+	delivered?: boolean;
+	/** Granted and taken: until when it holds if the chat uses the rig no more (unix seconds). */
+	until?: number;
+	/** Granted: for how long, as its person signed it (idle | fixed). */
+	grantedKind?: string;
+	grantedSeconds?: number;
+}
+
 /**
  * What an agent asks to keep in the person's vault (secret_save agent 存入): approving it writes it into their
  * vault (`vault.approve`, turning it on first where it is not).
@@ -1933,6 +1965,8 @@ export interface MessageCard {
 	vault?: string;
 	/** An agent's request for its person's phone (station/src/adb/grants.ts): drawn in place of the post's words, answered with `adb.decide` (the chat's station). */
 	phoneAsk?: PhoneAsk;
+	/** An agent's request for a rig of the workspace (station/src/rigs/requests.ts): drawn in place of the post's words, answered by the rig's person with `rig.decide` (the chat's station). */
+	rigAsk?: RigAsk;
 	/**
 	 * With `vault`: the request as the card says it, drawn in place of the post's words. Absent on a card
 	 * from before it did (the words say it).
