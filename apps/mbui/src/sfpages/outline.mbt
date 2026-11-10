@@ -441,7 +441,7 @@ fn outline_body(
     }
   }
   v.show(bringing, fn(n) { @sf.panel_note_node(n, fn() { @sf.t("web-main.outline.bringing") }) })
-  // (more found than are listed, the newest of them: how many older are not, over the rows)
+  // (more found than are listed, the newest fifty: how many older are not, over the rows)
   let more = fn() {
     match at.found.get() {
       Some(f) if searching() => number(Some(f), "more").to_int()

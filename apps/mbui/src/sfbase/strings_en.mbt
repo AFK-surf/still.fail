@@ -968,6 +968,7 @@ let en : Map[String, String] = {
   "web-main.outline.none": "Nothing found",
   "web-main.outline.back": "Back to where you were",
   "web-main.outline.bringing": "Loading the rest of the chat",
+  "web-main.outline.more": "{n} earlier ones are not listed; try more specific words",
   "web-main.fold": "Less",
   "web-main.history.details": "Details",
   "web-main.history.ends.done": "Marked as done",

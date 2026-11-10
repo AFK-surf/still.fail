@@ -948,6 +948,7 @@ web-main.outline.count
 web-main.outline.none
 web-main.outline.back
 web-main.outline.bringing
+web-main.outline.more
 web-main.fold
 web-main.history.details
 web-main.history.ends.done

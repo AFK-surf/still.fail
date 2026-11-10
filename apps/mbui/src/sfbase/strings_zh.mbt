@@ -956,6 +956,7 @@ let zh : Map[String, String] = {
   "web-main.outline.none": "没有找到",
   "web-main.outline.back": "回到刚才的位置",
   "web-main.outline.bringing": "正在读取其余消息",
+  "web-main.outline.more": "更早的 {n} 条没有列出，换个更具体的词",
   "web-main.fold": "收起",
   "web-main.history.details": "详情",
   "web-main.history.ends.done": "标记为已完成",

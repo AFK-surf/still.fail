@@ -379,7 +379,7 @@ test "对话目录: words typed find in all of the chat (chat.outline.find, 120 
   }
   t.run_for(@sfpages.find_typing_ms)
   t.run_for(@ui.move_most_ms)
-  t.tap_text("签名证书下周三过期，我建议这次发布前就换新证书，不然商店那边会拒收更新包")
+  t.tap_text("签名证书下周三过期，我建议这次发布前就换新证书，不然商店那边会拒…")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_true(outline_panel(t) is None)
@@ -644,7 +644,8 @@ test "对话目录: the reader's row in the accent's ink, it alone; each row's w
   let inked = outline_drawn(t, "glyphs").filter(fn(g) {
     g.4 == accent && g.0 >= px && g.0 < px + pw && g.1 >= py && g.1 < py + ph
   })
-  assert_eq(inked.map(fn(g) { g.5 }), ["截图初稿我看了，iPad 那几张字还是小，第三张的状态栏也没隐藏，我标出来发你"])
+  // (its words as the core cuts a row's, 64 columns: views.ts OUTLINE_WORDS)
+  assert_eq(inked.map(fn(g) { g.5 }), ["截图初稿我看了，iPad 那几张字还是小，第三张的状态栏也没隐藏，我…"])
   // (and each row's words drawn once: its label read out, not drawn beside them)
   let drawn = outline_drawn(t, "glyphs").filter(fn(g) {
     g.5.contains("截图初稿我看了") && g.0 >= px && g.0 < px + pw && g.1 >= py && g.1 < py + ph
@@ -695,7 +696,7 @@ test "对话目录: a found row gone to marks its words in its message, nothing 
   t.run_for(@sfpages.find_typing_ms)
   t.run_for(@ui.move_most_ms)
   let n = outline_reading().flash_n
-  t.tap_text("签名证书下周三过期，我建议这次发布前就换新证书，不然商店那边会拒收更新包")
+  t.tap_text("签名证书下周三过期，我建议这次发布前就换新证书，不然商店那边会拒…")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_eq(outline_reading().found_at, "ts3")
@@ -754,7 +755,7 @@ test "对话目录: opened, its rows filled from the chunk the reader's is in, a
   assert_eq(t.bones_drawn(), 0)
   let (px, py, pw, ph) = outline_panel(t).unwrap()
   let reader = outline_drawn(t, "glyphs").filter(fn(g) {
-    g.5 == "截图初稿我看了，iPad 那几张字还是小，第三张的状态栏也没隐藏，我标出来发你" && g.0 >= px && g.0 < px + pw && g.1 >= py && g.1 < py + ph
+    g.5 == "截图初稿我看了，iPad 那几张字还是小，第三张的状态栏也没隐藏，我…" && g.0 >= px && g.0 < px + pw && g.1 >= py && g.1 < py + ph
   })
   assert_eq(reader.length(), 1, msg="\{reader}")
   t.run_for(@ui.move_most_ms)
@@ -839,7 +840,11 @@ test "对话目录: a person's message said while it is open adds its row, askin
   t.run_for(@ui.move_most_ms)
   assert_eq(outline_rows_asked(calls).length(), 1)
   let row = "还有深色模式也看一下，启动画面那张图在深色模式下边缘有一圈白，挺显眼的"
-  let shows = fn() { outline_drawn(t, "glyphs").filter(fn(g) { g.5 == row }).length() }
+  // (its words in the panel, as the core cuts a row's: they begin as it does)
+  let shows = fn() {
+    let (px, _, _, _) = outline_panel(t).unwrap()
+    outline_drawn(t, "glyphs").filter(fn(g) { g.0 >= px && g.5.has_prefix(row.view(end_offset=20).to_string()) }).length()
+  }
   assert_eq(shows(), 0)
   live.set(Some(full))
   t.run_for(@ui.move_most_ms)
@@ -854,7 +859,7 @@ test "对话目录: a person's message said while it is open adds its row, askin
 }
 
 ///|
-test "对话目录: more found than it lists: the newest hundred, how many older not listed said over the rows" {
+test "对话目录: more found than it lists: the newest fifty, how many older not listed said over the rows" {
   let calls : Array[Made] = []
   let heard : Array[(String, Json)] = []
   let t = outline_tester(calls, mode="chat-outline-long", heard~)
@@ -867,7 +872,7 @@ test "对话目录: more found than it lists: the newest hundred, how many older
     Some((_, j)) => (number(Some(j), "total").to_int(), number(Some(j), "more").to_int())
     None => (0, 0)
   }
-  assert_true(more > 0 && total == more + 100, msg="\{(total, more)}")
+  assert_true(more > 0 && total == more + 50, msg="\{(total, more)}")
   let note = @sf.t("web-main.outline.more", args=[("n", more.to_string())])
   assert_true(t.find(note) is Some(_), msg="\{note} \{t.words().map(fn(w) { w.0 })}")
   assert_true(t.find(@sf.t("web-main.outline.count", args=[("n", total.to_string())])) is Some(_))

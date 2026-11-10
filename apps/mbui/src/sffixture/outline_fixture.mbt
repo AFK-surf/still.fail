@@ -1,7 +1,8 @@
 // A chat's outline as the made-up core says it (the core's `chatOutline`, `chat.outline.rows`, `chat.bring`,
 // `chat.outline.find`: views.ts #chatOutline, outlineRows, outlineFound): the outline an index of what people said in
 // the chat's thread (7), by the day, oldest first (each day's key, its heading, its messages' seqs; whether someone
-// other than the viewer said one), the rows' words asked for by their seqs, a hundred at most. The modes
+// other than the viewer said one), the rows' words asked for by their seqs, a hundred at most, each one line of 64
+// columns; what is found the newest fifty, `more` the rest. The modes
 // "chat-outline…" (sfapp fixture_open.mbt) open the fixture's first chat as a long one of two people over four days
 // (outline_chat: 林, the viewer, and Ana; Claude answering between), some forty things each said at length, as people
 // write them; "chat-outline-long…" as one of three hundred over twelve days (outline_long: 240 said by people), its
@@ -228,7 +229,8 @@ fn outline_item_of(m : Json, found : String?) -> Json {
       o["system"] = Json::boolean(kind == "ember")
       o["snippet"] = Json::string(snippet)
     }
-    None => o["words"] = Json::string(text(v, "text").split("\n").next().map(fn(l) { l.to_string() }).unwrap_or(""))
+    None =>
+      o["words"] = Json::string(outline_cut(text(v, "text").split("\n").next().map(fn(l) { l.to_string() }).unwrap_or("")))
   }
   Json::object(o)
 }
@@ -311,8 +313,32 @@ fn outline_days_of(dated : Array[(Int, Json)], f : Fixture) -> Json {
 }
 
 ///|
-/// How many rows `chat.outline.rows` gives at most, and `chat.outline.find` lists (its newest; `more` the rest).
+/// How many rows `chat.outline.rows` gives at most (OUTLINE_ROWS), and how many `chat.outline.find` lists (its newest;
+/// `more` the rest: OUTLINE_FOUND).
 let outline_rows_most : Int = 100
+
+///|
+let outline_found_most : Int = 50
+
+///|
+/// How many columns a row's words and a found line are cut to (OUTLINE_WORDS: a character from U+1100 on two), and how
+/// far before the words a found line starts at most (SNIPPET_LEAD).
+let outline_words_most : Int = 64
+
+///|
+/// Words cut to outline_words_most columns, `…` after where cut (views.ts cutWords).
+fn outline_cut(words : String) -> String {
+  let out = StringBuilder::new()
+  let mut columns = 0
+  for c in words {
+    columns += if c.to_int() >= 0x1100 { 2 } else { 1 }
+    if columns > outline_words_most {
+      return out.to_string() + "…"
+    }
+    out.write_char(c)
+  }
+  words
+}
 
 ///|
 /// The fixture's `chat.bring`, `chat.outline.rows` and `chat.outline.find`, as the core answers them (None: another
@@ -351,8 +377,12 @@ pub fn fixture_outline_call(f : Fixture, name : String, params : Json) -> Result
     let said = text(Some(dm.1), "text").to_lower()
     words.length() > 0 && words.iter().all(fn(w) { said.contains(w) })
   })
-  // (the newest found listed, a hundred at most, oldest first; how many older are not)
-  let listed = if found.length() > outline_rows_most { found[found.length() - outline_rows_most:].to_array() } else { found }
+  // (the newest found listed, fifty at most, oldest first; how many older are not)
+  let listed = if found.length() > outline_found_most {
+    found[found.length() - outline_found_most:].to_array()
+  } else {
+    found
+  }
   // (with `bring` the rest of it: all on the device here, but "chat-outline-bringing"'s first answer is of what is held)
   let whole = f.mode != "chat-outline-bringing" || flag(Some(params), "bring")
   Some(
@@ -370,7 +400,7 @@ pub fn fixture_outline_call(f : Fixture, name : String, params : Json) -> Result
 
 ///|
 /// The line of `said` with the first of `words` in it, as the core cuts it (refs.ts excerpt): from a few letters before
-/// the words (at a word's start where one is near), "…" where it is cut.
+/// the words (at a word's start where one is near), "…" where it is cut, one line of outline_words_most columns.
 fn outline_snippet(said : String, words : Array[String]) -> String {
   let line = said.split("\n").find_first(fn(l) { words.iter().any(fn(w) { l.to_string().to_lower().contains(w) }) })
   let line = line.map(fn(l) { l.to_string() }).unwrap_or(said)
@@ -380,19 +410,19 @@ fn outline_snippet(said : String, words : Array[String]) -> String {
       _ => m
     }
   })
-  if at > outline_snippet_lead + 4 && at < line.length() {
+  if at > outline_snippet_lead && at < line.length() {
     // (at a word's start where there is one near, as the core's: not in a word's middle)
     let from = at - outline_snippet_lead
     let from = match line.view(start_offset=from).find(" ") {
       Some(i) if from + i < at => from + i + 1
       _ => from
     }
-    "…" + line.view(start_offset=from).to_string()
+    outline_cut("…" + line.view(start_offset=from).to_string())
   } else {
-    line
+    outline_cut(line)
   }
 }
 
 ///|
-/// How many letters before the words a found line keeps (SNIPPET_LEAD's, about).
-let outline_snippet_lead : Int = 8
+/// How many letters before the words a found line keeps at most (SNIPPET_LEAD's).
+let outline_snippet_lead : Int = 12

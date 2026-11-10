@@ -140,7 +140,10 @@ fn Tester::gaps_steady_faults(self : Tester, now : Double, period : Double) -> A
       }
     }
     guard under is Some(b) else { continue }
-    let key = gaps_said(a.0) + " | " + gaps_said(b.0)
+    // (each pair by its whole words: two pairs whose words begin alike, a message in a list and its row in a panel over
+    // it cut short otherwise, are two ways, not one seen to jump between them)
+    let key = a.0 + "\u{1}" + b.0
+    let said = gaps_said(a.0) + " | " + gaps_said(b.0)
     here.add(key)
     let room = b.2 - (a.2 + a.4)
     let w = match gaps_steady.ways.get(key) {
@@ -184,7 +187,7 @@ fn Tester::gaps_steady_faults(self : Tester, now : Double, period : Double) -> A
       if w.went >= gaps_back_least && w.back >= gaps_back_least {
         let peak = w.from + w.way * w.went
         out.push(
-          key + ": the room between them went \{w.from} to \{peak} and back to \{room} at \{now}, both moving (" +
+          said + ": the room between them went \{w.from} to \{peak} and back to \{room} at \{now}, both moving (" +
           (if w.way > 0.0 { "opened, then closed" } else { "closed, then opened" }) +
           ")",
         )
