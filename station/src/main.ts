@@ -52,7 +52,7 @@ import { ModelsLive } from "./models/module.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
 import { answerHeapRequests, heapCommand } from "./ops/heap.ts";
-import { timeFiles } from "./ops/file-waits.ts";
+import { timeFiles, timeProcesses } from "./ops/file-waits.ts";
 import { longestWaits } from "./ops/waits.ts";
 import { takeQueries } from "./store/timed.ts";
 import { platform } from "./platform/index.ts";
@@ -169,18 +169,20 @@ function run() {
   // Read the essential files before telling the launcher this process is ready. In particular, do not start with
   // defaults when another program has made config.json unreadable.
   const settings = new ConfigFile(data);
+  settings.watch();
   readState(data);
   const control = launcher(args);
   // Runners (agents', jobs') from copies under the data directory on Windows, out of reach of the app's installer.
   keepRunnerIn(join(data, "run", "bin"));
   // Error lines to still.fail's error tracking, while config.json says so (telemetry.errors) and the build has a key.
-  const stationId = () => {
-    try {
-      return JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8")).station ?? null;
-    } catch {
-      return null;
-    }
-  };
+  // The station's id as cloud.json says it, held here: read once before the station serves, then as the control plane's
+  // state says it changed (`main`). Read from the disk at each of the log's batches (every 5 s), a file of 3 KB held the
+  // main thread a second at a time on a station whose disk was kept busy (2026-11-02).
+  let stationKey: string | null = null;
+  try {
+    stationKey = JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8")).station ?? null; // sync: before it serves
+  } catch {}
+  const stationId = () => stationKey;
   const reports = new ErrorReports({
     key: builtKey(join(app, "dist", "admin")),
     enabled: () => settings.raw()?.telemetry?.errors === true,
@@ -237,6 +239,9 @@ function run() {
   const running = Effect.gen(function* () {
     yield* SubscriptionRef.set(yield* Up, true);
     const stationParts = yield* Parts;
+    const plane = yield* ControlPlane;
+    stationKey = plane.state.state?.station ?? null;
+    plane.state.listen((s) => void (stationKey = s?.station ?? null));
     control.carried((what) => stationParts.takeUp(what));
     carry = () => control.carry(stationParts.carried());
     control.ready(version());
@@ -246,13 +251,20 @@ function run() {
     const readers = yield* Readers;
     // `stillfail heap`: a snapshot of this thread's heap, asked for from the command line.
     answerHeapRequests(data);
-    // The main thread held (a query of seconds, a long parse): said as it is let go, with how long. Every device's
-    // requests wait meanwhile; the slow queries say what held it (store/timed.ts). With no slow query, what the
-    // process did meanwhile says whether it worked (`cpuMs`, all its threads'), collected its garbage (`gcMs`, this
-    // thread's, and the longest pause), waited on pages of its memory read back from the disk (`pageFaults`), on files
-    // (`filesMs`, its synchronous calls of node:fs: ops/file-waits.ts) or on its statements (`queriesMs`, all of them,
-    // none slow: store/timed.ts); the longest of each by who made them.
+    // The main thread held (a query of seconds, a long parse): said as it is let go, with how long (`heldMs`, the
+    // longest one hold of the window). Every device's requests wait meanwhile. What may have held it is said two ways,
+    // never to be added up against `heldMs`:
+    // - the longest single wait of each kind in the window (`longestQueryMs`, `longestFileMs`, `longestProcessMs`,
+    //   `gcLongestMs`): one of these as long as the hold was that hold, or in it;
+    // - all of the window's (`window*`, over `windowMs`, some 10 s): the process's CPU (all its threads') and this
+    //   thread's own, its garbage collected, pages of its memory read back from the disk, the times the system took its
+    //   CPUs from it (`windowSwitches`: another process's work wanted them), its synchronous calls of node:fs and its
+    //   statements (store/timed.ts) and the processes it waited on (ops/file-waits.ts), many short ones as much as a
+    //   long one, with the longest by who made them.
+    // Its own CPU near `heldMs` is work of its own; neither that nor a wait near it: it was not given a CPU, or waited on
+    // what is timed nowhere.
     const files = timeFiles();
+    const processes = timeProcesses();
     const held = monitorEventLoopDelay({ resolution: 50 });
     held.enable();
     const gc = { ms: 0, longest: 0 };
@@ -263,23 +275,36 @@ function run() {
       }
     }).observe({ entryTypes: ["gc"] });
     let cpu = process.cpuUsage();
-    let faults = process.resourceUsage().majorPageFault;
-    wall.every(HELD_EVERY_MS, () => {
+    let ownCpu = process.threadCpuUsage();
+    let usage = process.resourceUsage();
+    let sampled = wall.now();
+    wall.every(HELD_EVERY_MS, () => { // timer: a sample of this thread
       const ms = held.max / 1e6;
+      const now = wall.now();
       const used = process.cpuUsage(cpu);
-      const faulted = process.resourceUsage().majorPageFault;
+      const own = process.threadCpuUsage(ownCpu);
+      const nowUsage = process.resourceUsage();
       const waited = files.take();
+      const spawned = processes.take();
       const queried = takeQueries();
       if (ms >= HELD_MS) {
         log.warn("station", "the main thread was held", {
-          ms: Math.round(ms), cpuMs: Math.round((used.user + used.system) / 1000), gcMs: Math.round(gc.ms), gcLongestMs: Math.round(gc.longest), pageFaults: faulted - faults,
-          filesMs: Math.round(waited.ms), files: waited.calls, ...(waited.by.size > 0 ? { waitedOn: longestWaits(waited) } : {}),
-          queriesMs: Math.round(queried.ms), queries: queried.calls, ...(queried.by.size > 0 ? { queriedBy: longestWaits(queried) } : {}),
+          heldMs: Math.round(ms),
+          longestQueryMs: Math.round(queried.longest), longestFileMs: Math.round(waited.longest), longestProcessMs: Math.round(spawned.longest), gcLongestMs: Math.round(gc.longest),
+          windowMs: now - sampled,
+          windowCpuMs: Math.round((used.user + used.system) / 1000), windowThreadCpuMs: Math.round((own.user + own.system) / 1000),
+          windowGcMs: Math.round(gc.ms), windowPageFaults: nowUsage.majorPageFault - usage.majorPageFault,
+          windowSwitches: nowUsage.involuntaryContextSwitches - usage.involuntaryContextSwitches,
+          windowFilesMs: Math.round(waited.ms), windowFiles: waited.calls, ...(waited.by.size > 0 ? { waitedOn: longestWaits(waited) } : {}),
+          windowQueriesMs: Math.round(queried.ms), windowQueries: queried.calls, ...(queried.by.size > 0 ? { queriedBy: longestWaits(queried) } : {}),
+          windowProcessesMs: Math.round(spawned.ms), windowProcesses: spawned.calls, ...(spawned.by.size > 0 ? { spawnedBy: longestWaits(spawned) } : {}),
         });
       }
       held.reset();
       cpu = process.cpuUsage();
-      faults = faulted;
+      ownCpu = process.threadCpuUsage();
+      usage = nowUsage;
+      sampled = now;
       gc.ms = 0;
       gc.longest = 0;
     });
