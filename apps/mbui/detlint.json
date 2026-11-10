@@ -256,7 +256,7 @@
       "src/sfbase/viewer_marks.mbt": 14,
       "src/sfkit/glass.mbt": 49,
       "src/sfkit/kit.mbt": 29,
-      "src/sfpages/service.mbt": 13,
+      "src/sfpages/service.mbt": 4,
       "src/stillfail/main.mbt": 3
     },
     "box-loose": {
@@ -295,7 +295,7 @@
       "src/sfdesk/switcher.mbt": 1,
       "src/sfkit/glass.mbt": 17,
       "src/sfkit/kit.mbt": 20,
-      "src/sfpages/service.mbt": 14,
+      "src/sfpages/service.mbt": 3,
       "src/sfpages/service_marks.mbt": 1,
       "src/stillfail/main.mbt": 2
     },
@@ -523,7 +523,7 @@
       "src/sfpages/screen_debug.mbt": 1,
       "src/sfpages/screen_panel.mbt": 1,
       "src/sfpages/screen_view.mbt": 1,
-      "src/sfpages/service.mbt": 2,
+      "src/sfpages/service.mbt": 1,
       "src/sfpages/settings_page.mbt": 1,
       "src/sfpages/station_page.mbt": 1,
       "src/sfpages/stations_now.mbt": 1

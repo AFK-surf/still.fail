@@ -3,6 +3,7 @@
 
 ///|
 fn service_tester(mode : String) -> @ui.Tester {
+  @sf.presenters_reset()
   new_run()
   let src = fixture(mode)
   open_drive_fixture(mode)
@@ -156,10 +157,15 @@ test "how far the resources came, from a phone's ⋯: their list in a sheet as t
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   t.tap_text("资源加载 75% · 3/4")
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  presented_rested(t)
   assert_true(t.find("/app.css") is Some(_), msg="its rows")
   // the last of them where the sheet ends: under it only the sheet's own foot (its padding, the home bar's room)
   let (_, y, _, h) = t.rect_of("/api/builds").unwrap()
   assert_true(844.0 - (y + h) < 80.0, msg="room left under the list: \{844.0 - (y + h)}")
   assert_eq(t.squeeze_faults(), [])
+  // (closed by a press over it, nothing left up)
+  t.tap(195.0, 60.0)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_false(@sf.presenter_visible())
 }

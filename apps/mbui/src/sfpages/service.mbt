@@ -1140,61 +1140,93 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
 }
 
 ///|
-/// How the page's resources came, each of them: as tall as they are, scrolled past the web's
-/// most (Preview.css.ts loadList: min(320px, 55vh)) on every screen.
-fn load_list(c : @ui.Ctx, src : Source, station : String, port : Int) -> Unit {
-  let t = @sf.theme()
-  let v = src.topic("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).get().value
-  let all = items(v, "resources")
-  let row = fn(rr : Json?) {
-    let failed = text(rr, "error") != "" || number(rr, "status") >= 400.0
-    let color = if failed { t.p.red } else { t.p.muted }
-    let ended = field(rr, "ended") is Some(Number(_, ..))
-    c.box(w=Fill(1.0), pt=6.0, pb=6.0, fn() {
-      c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
-        c.box(w=Fill(1.0), fn() { c.text(text(rr, "path"), size=@sf.theme().t.meta, color~, max_lines=1) |> ignore }) |> ignore
-        c.text(
-          if !ended {
-            svc("common.reading")
-          } else if text(rr, "error") != "" {
-            svc("android-chat.load.failed")
-          } else {
-            number(rr, "status").to_int().to_string()
-          },
-          size=@sf.theme().t.caption,
-          color~,
-          wrap=false,
-        )
-        |> ignore
-        if ended {
-          let ms = dmax(0.0, number(rr, "ended") - number(rr, "since")).to_int64()
-          c.text("\{ms} ms", size=@sf.theme().t.caption, color~, wrap=false) |> ignore
-        }
-      })
-      |> ignore
-      if text(rr, "error") != "" {
-        c.text(text(rr, "error"), size=@sf.theme().t.caption, color~) |> ignore
-      }
-    })
-    |> ignore
-  }
-  let rows = fn() {
-    for r in all {
-      row(Some(r))
-    }
+/// How the page's resources came, each of them, in node `v` (the panel's body): as tall as they are, scrolled past the
+/// web's most (Preview.css.ts loadList: min(320px, 55vh)) on every screen. Each resource a row of its own by its id
+/// (the core's, never used again), made as it comes and let go as the core lists it no more (the page loaded anew),
+/// what it says bound to what the core says of it now.
+fn load_list(v : @view.View, src : Source, station : String, port : Int) -> Unit {
+  let load = fn() {
+    src.topic("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).get().value
   }
   // (its words on the panel's words' line wherever it is drawn)
-  c.box(style=@sf.panel_words_in(), w=Fill(1.0), fn() {
-    c.text(svc("android-chat.load.note"), size=t.t.caption, color=t.p.muted) |> ignore
-    c.box(w=Fill(1.0), pt=12.0, fn() {
-      if number(v, "total") <= 0.0 {
-        c.text(svc("android-chat.load.waiting"), size=t.t.meta, color=t.p.muted) |> ignore
-      }
-      c.capped("service/load", dmin(load_list_most, load_list_share * c.window_size().1), rows) |> ignore
+  v.box(fn(o) {
+    @sf.style_node(o, fn() { @sf.panel_words_in_node(o) })
+    @sf.sized_words_node(o, fn() { svc("android-chat.load.note") }, fn() { @sf.theme().t.caption }, fn() { @sf.theme().p.muted }) |> ignore
+    o.box(fn(l) {
+      l.padding(Is((0.0, 12.0, 0.0, 0.0))) |> ignore
+      l.show(fn() { number(load(), "total") <= 0.0 }, fn(w) {
+        @sf.sized_words_node(w, fn() { svc("android-chat.load.waiting") }, fn() { @sf.theme().t.meta }, fn() { @sf.theme().p.muted })
+        |> ignore
+      })
+      // (the old view's capped box's: no taller than its most, what it holds scrolling in it)
+      @sf.capped_node(l, fn() { dmin(load_list_most, load_list_share * l.window().1) }, fn(b) {
+        b.each(fn() { items(load(), "resources") }, fn(r) { number(Some(r), "id").to_int() }, fn(row, r) {
+          // (in a box of no padding of its own: a row that comes or goes closes its way to none of it)
+          row.box(fn(b) { load_row(b, fn() { Some(r.get()) }) }) |> ignore
+        })
+      })
+      |> ignore
     })
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// A resource's row in node `b`, `rr` what the core says of it now: its path, what came of it (正在读取 till it ended,
+/// then its status or 失败) and how long it took on its line, why it failed under it; red where it failed.
+fn load_row(b : @view.View, rr : () -> Json?) -> Unit {
+  let error = fn() { text(rr(), "error") }
+  let ink = fn() {
+    let t = @sf.theme()
+    if error() != "" || number(rr(), "status") >= 400.0 {
+      t.p.red
+    } else {
+      t.p.muted
+    }
+  }
+  let ended = fn() { field(rr(), "ended") is Some(Number(_, ..)) }
+  let caption = fn() { @sf.theme().t.caption }
+  b.padding(Is((0.0, 6.0, 0.0, 6.0))) |> ignore
+  b.box(fn(line) {
+    line.row(Is(true)).gap(Is(10.0)).lines_up(Is(Some(Middle))) |> ignore
+    // (its path on its one line, cut short where the line leaves it less: the old one's max_lines=1)
+    @sf.sized_words_node(line, fn() { text(rr(), "path") }, fn() { @sf.theme().t.meta }, ink, cut=true)
+    .grow(Is(1.0))
+    .basis(Is(Some(0.0)))
+    |> ignore
+    @sf.sized_words_node(
+      line,
+      fn() {
+        if !ended() {
+          svc("common.reading")
+        } else if error() != "" {
+          svc("android-chat.load.failed")
+        } else {
+          number(rr(), "status").to_int().to_string()
+        }
+      },
+      caption,
+      ink,
+      wrap=false,
+    )
+    |> ignore
+    line.show(ended, fn(m) {
+      @sf.sized_words_node(
+        m,
+        fn() {
+          let ms = dmax(0.0, number(rr(), "ended") - number(rr(), "since")).to_int64()
+          "\{ms} ms"
+        },
+        caption,
+        ink,
+        wrap=false,
+      )
+      |> ignore
+    })
+  })
+  |> ignore
+  b.show(fn() { error() != "" }, fn(e) { @sf.sized_words_node(e, error, caption, ink) |> ignore })
 }
 
 ///|
@@ -1247,7 +1279,7 @@ fn service_load_panel(src : Source, station : String, port : Int, from : @sf.Anc
   let words = fn() {
     load_label(src.topic("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).get().value)
   }
-  @sf.panel(words(), fn(c, _) { load_list(c, src, station, port) }, from~, live=fn() { (words(), "", "") })
+  @sf.panel_nodes(words(), fn(v, _) { load_list(v, src, station, port) }, from~, live=fn() { (words(), "", "") })
 }
 
 ///|
