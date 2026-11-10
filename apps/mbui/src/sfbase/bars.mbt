@@ -110,9 +110,9 @@ pub fn place_icon(place : String) -> String {
 /// core's rules 2 and 4), so never before.
 fn place_reads(src : Source, ws : String, scope : String, place : String, shown : Bool) -> Array[(String, Map[String, Json])] {
   let of = Json::string(ws)
-  let stations : Map[String, Json] = { "scope": of }
+  let stations : Map[String, Json] = { "scope": of, "lean": Json::boolean(true) }
   match place {
-    "files" => [("workspace", { "workspace": of }), ("stations", { "scope": of, "drive": Json::boolean(true) })]
+    "files" => [("workspace", { "workspace": of }), ("stations", { "scope": of, "drive": Json::boolean(true), "lean": Json::boolean(true) })]
     "stations" => {
       let reads : Array[(String, Map[String, Json])] = [("stations", stations)]
       // (each station up as it is reached: sampled while shown, the core's rule 2, so only with a finger on the tab)
@@ -292,7 +292,7 @@ pub fn places_ahead_node(v : @view.View, src : Source, bar : () -> String?) -> U
         Some(ws) if pressed != "" => {
           // (Station's: each station up reached, as the stations come to be known)
           if pressed == "stations" {
-            src.topic("stations", { "scope": Json::string(ws) }).get() |> ignore
+            src.topic("stations", { "scope": Json::string(ws), "lean": Json::boolean(true) }).get() |> ignore
           }
           Some((ws, pressed, ends))
         }

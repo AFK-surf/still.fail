@@ -407,7 +407,7 @@ fn cd_run_node(b : @view.View, src : Source, core : Core, here : () -> Here, sta
   // the models its station can run, each with the runtimes it runs on (the core's station view)
   let models = fn() {
     let runtime = text(field(cv(), "bind"), "runtime")
-    let sv = match @settings.stations_of(core, here()).value {
+    let sv = match @settings.stations_with_models(core, here()).value {
       Some(Array(a)) => a.iter().find_first(fn(s) { text(Some(s), "station") == station })
       _ => None
     }

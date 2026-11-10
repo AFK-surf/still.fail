@@ -205,7 +205,7 @@ pub fn dv_arrange(src : Source, by? : String, down? : Bool, hidden? : Bool) -> U
 /// The workspace's stations with a drive (`stations {scope, drive: true, here?}`: this machine's, `here`, first), and
 /// why they could not be read.
 pub fn dv_drive_stations(src : Source, ws : String, here? : String = "") -> (Array[DvStation]?, String?) {
-  let params : Map[String, Json] = { "scope": Json::string(ws), "drive": Json::boolean(true) }
+  let params : Map[String, Json] = { "scope": Json::string(ws), "drive": Json::boolean(true), "lean": Json::boolean(true) }
   if here != "" {
     params["here"] = Json::string(here)
   }

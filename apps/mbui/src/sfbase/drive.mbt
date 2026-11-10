@@ -132,7 +132,7 @@ pub fn dv_station(v : Json) -> DvStation {
 ///|
 /// The workspace's stations (the `stations` topic), and why they could not be read.
 pub fn dv_stations(src : Source, ws : String) -> (Array[DvStation]?, String?) {
-  let t = src.topic("stations", { "scope": Json::string(ws) }).get().snapshot()
+  let t = src.topic("stations", { "scope": Json::string(ws), "lean": Json::boolean(true) }).get().snapshot()
   let error = match t.error {
     Some(e) => Some(text(Some(e), "message"))
     None => None

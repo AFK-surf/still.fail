@@ -2048,7 +2048,10 @@ export class Views implements Owner {
         link: this.link(s.address),
         // What this workspace's chats run on: the profiles open to it.
         runtimes: runtimes(overview !== undefined ? servingIn(overview, scope, s.joined === true) : overview),
-        models: models(overview !== undefined ? servingIn(overview, scope, s.joined === true) : overview, c.now),
+        // Asked `lean`: none, what only a model's choice reads (the connect page, the model control). With each of its
+        // accounts' quota by the minute it was most of the list's bytes (463 KB of a phone's, 2026-11-10), every one of
+        // them decoded on the app's thread each time it was said.
+        models: view?.lean === true ? [] : models(overview !== undefined ? servingIn(overview, scope, s.joined === true) : overview, c.now),
         overview: shown,
         ...stationProfileSummary(shown, s, byId),
         host,

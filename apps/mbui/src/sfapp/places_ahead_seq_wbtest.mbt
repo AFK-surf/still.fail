@@ -88,11 +88,11 @@ test "Home, then 设置 pressed and come in, then back: the bar's places held as
     soon,
     (
       // (Home's bar: 文件's, Profile's, Station's; nothing a station is asked for or sampled)
-      ["sub workspace", "sub stations {\"drive\":true}", "sub profiles", "sub stations"],
+      ["sub workspace", "sub stations {\"drive\":true,\"lean\":true}", "sub profiles", "sub stations {\"lean\":true}"],
       // (设置's own, then what only the bar held let go of, once: the rest 设置 reads as well)
-      ["sub connects {\"mine\":false}", "sub vaults", "unsub stations {\"drive\":true}"],
+      ["sub connects {\"mine\":false}", "sub vaults", "unsub stations {\"drive\":true,\"lean\":true}"],
       // (the bar back with Home, then 设置's gone)
-      ["sub stations {\"drive\":true}", "unsub vaults", "unsub connects {\"mine\":false}"],
+      ["sub stations {\"drive\":true,\"lean\":true}", "unsub vaults", "unsub connects {\"mine\":false}"],
     ),
   )
   assert_eq(late, soon)
@@ -120,7 +120,7 @@ test "Home under 设置, then a page pushed over 设置 (安全) and back off it
   // (at the back itself, Home beside the page going: no frame of the slide run yet)
   let at_back = ahead_said(said[before_back:].to_array())
   t.run_for(@ui.move_most_ms)
-  assert_eq((over, at_back), ([], ["sub stations {\"drive\":true}"]))
+  assert_eq((over, at_back), ([], ["sub stations {\"drive\":true,\"lean\":true}"]))
 }
 
 ///|
@@ -200,9 +200,9 @@ test "the other bar brought into view once: its places' own subscribed, what onl
   t.draw()
   t.run_for(place_core_soon_ms * 4.0)
   let now = ahead_said(said[before:].to_array())
-  assert_false(now.contains("unsub stations") || now.contains("sub stations"), msg="\{now}")
+  assert_false(now.contains("unsub stations {\"lean\":true}") || now.contains("sub stations {\"lean\":true}"), msg="\{now}")
   assert_eq(
     now,
-    ["sub connects {\"mine\":false}", "sub vaults", "unsub workspace", "unsub stations {\"drive\":true}", "unsub profiles"],
+    ["sub connects {\"mine\":false}", "sub vaults", "unsub workspace", "unsub stations {\"drive\":true,\"lean\":true}", "unsub profiles"],
   )
 }

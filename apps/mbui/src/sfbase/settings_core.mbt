@@ -72,7 +72,7 @@ fn settings_core_of(
     home,
     open_chat: fn(station, session, title) {
       // its station's name, as the chats' rows have it
-      let stations = src.topic("stations", { "scope": Json::string(w.id) }).get().snapshot()
+      let stations = src.topic("stations", { "scope": Json::string(w.id), "lean": Json::boolean(true) }).get().snapshot()
       let mut name = ""
       match stations.value {
         Some(Array(a)) =>

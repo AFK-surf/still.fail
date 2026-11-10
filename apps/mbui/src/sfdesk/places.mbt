@@ -74,7 +74,7 @@ fn place_route_first(src : Source, w : Workspace, place : String) -> @settings.R
 ///|
 /// The workspace's stations, as the core lists them.
 fn stations_listed(src : Source, w : Workspace) -> Array[Json] {
-  match src.topic("stations", { "scope": Json::string(w.id) }).get().value {
+  match src.topic("stations", { "scope": Json::string(w.id), "lean": Json::boolean(true) }).get().value {
     Some(Array(a)) => a
     _ => []
   }
@@ -421,7 +421,7 @@ let place_use : @ui.TextStyle = @ui.text_style(color=AccentText)
 /// No station picked: while they are read, said so; none in the workspace, the first to add (its scene, 添加 station).
 fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  let read = src.topic("stations", { "scope": Json::string(w.id) }).get().value is Some(_)
+  let read = src.topic("stations", { "scope": Json::string(w.id), "lean": Json::boolean(true) }).get().value is Some(_)
   // (while they are read: a station's page, the one picked once they are, in its bones)
   if !read {
     @sfpages.station_waiting(c, core, here, @sf.no_frame, "Station", @sf.t("common.readingStations"))

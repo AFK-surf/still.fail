@@ -1398,6 +1398,26 @@ test("stations_asked_brief_say_what_names_each_and_how_it_is_reached_not_its_ove
   assert.equal(t.host.takeEmitted().filter(([, m]) => (m as J).id === 2).length, 0);
 });
 
+test("stations_asked_lean_are_the_whole_list_without_the_models_each_can_run", async () => {
+  // Each model with each of its accounts' quota was most of the list (463 KB of a phone's, 2026-11-10), decoded on the
+  // app's thread each time it was said; only a model's choice reads it.
+  const t = setup();
+  const full = ui();
+  const lean = ui();
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  t.subscribe(2, { topic: "stations", scope: "ws", lean: true });
+  t.set(workspace(), stations(t.nowS()));
+  t.set(link("ws/a"), { state: "online" });
+  t.set(overview("ws/a"), overviewOf([], [profile("p", { model: "claude-opus-5-5", models: ["claude-opus-5-5"] })]));
+  await t.readAll([[full, 1], [lean, 2]]);
+  const of = (u: { value: unknown }) => (u.value as J[]).find((s) => s.station === "ws/a");
+  assert.ok((of(full).models as J[]).length > 0);
+  assert.deepEqual(of(lean).models, []);
+  const { models: _a, ...fullRest } = of(full);
+  const { models: _b, ...leanRest } = of(lean);
+  assert.deepEqual(leanRest, fullRest);
+});
+
 test("a_stopped_view_lets_its_topics_go", async () => {
   const t = setup();
   const u = ui();

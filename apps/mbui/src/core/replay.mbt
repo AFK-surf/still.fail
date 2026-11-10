@@ -1023,8 +1023,8 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       }
     }
   }
-  // The stations asked brief (a page that only names them), a chats' list asked for its first rows (`limit`) and the
-  // changelog asked for its news alone can be answered by the whole in an older tape.
+  // The stations asked brief (a page that only names them) or lean (without their models), a chats' list asked for its
+  // first rows (`limit`) and the changelog asked for its news alone can be answered by the whole in an older tape.
   if found < 0 && kind == "subscribe" && twin_topic(name_of(m)) {
     let same = sig(m, refers, ignore_brief=true)
     for i in self.first_out..<self.evs.length() {
@@ -1206,9 +1206,9 @@ fn name_of(m : Map[String, Json]) -> String {
 }
 
 ///|
-/// Whether topic `name` is one a page may ask a part of (the stations brief, a chats' list's first rows, the changelog's
-/// news alone) where an older tape asked the whole, or both are asked in a run: answered by the tape's one (sig's
-/// `ignore_brief`).
+/// Whether topic `name` is one a page may ask a part of (the stations brief or lean, a chats' list's first rows, the
+/// changelog's news alone) where an older tape asked the whole, or both are asked in a run: answered by the tape's one
+/// (sig's `ignore_brief`).
 fn twin_topic(name : String) -> Bool {
   name == "stations" || name == "chats" || name == "changelog"
 }
@@ -1233,6 +1233,7 @@ fn sig(
           t.get("topic") == Some(Json::string("changelog"))) => {
           let asked = t.copy()
           asked.remove("brief")
+          asked.remove("lean")
           asked.remove("limit")
           asked.remove("news")
           copy[k] = Json::object(asked)

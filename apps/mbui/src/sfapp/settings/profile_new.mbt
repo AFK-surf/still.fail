@@ -85,7 +85,7 @@ pub fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
 ///|
 /// A sign-in under way on a station, by its id (its overview's `logins`).
 pub fn pending_login(core : Core, station : String, id : String) -> Json? {
-  let all = (core.topic)("stations", { "scope": str(workspace_of(station)) }).get().value
+  let all = (core.topic)("stations", { "scope": str(workspace_of(station)), "lean": Json::boolean(true) }).get().value
   match all {
     Some(Array(a)) =>
       match a.iter().find_first(fn(s) { text(Some(s), "station") == station }) {
