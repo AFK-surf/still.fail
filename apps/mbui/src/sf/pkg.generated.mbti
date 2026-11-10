@@ -1486,6 +1486,8 @@ pub fn panel_words_in_node(@view.View) -> @ui.Style
 
 pub fn panel_words_out_by(Double) -> @ui.Style
 
+pub fn panel_words_out_by_node(@view.View, Double) -> @ui.Style
+
 pub fn paper_viewer_ink(ReaderPaper) -> ViewerInk
 
 pub let paragraph : @ui.TextStyle
