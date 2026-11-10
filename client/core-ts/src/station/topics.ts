@@ -100,12 +100,11 @@ export class StationTopics implements Owner {
     return STATION_TOPICS.has(topic.topic);
   }
 
-  /// What the station topics shown want of each station's stream: host samples, the sessions shown, the logs shown.
-  #wanted(address: string): { host: boolean; live: string[]; logs: [string, number][]; logins: string[] } {
+  /// What the station topics shown want of each station's stream: host samples, the logs shown.
+  #wanted(address: string): { host: boolean; logs: [string, number][]; logins: string[] } {
     const topics = this.#core.store.liveTopics().filter((t) => t.station === address);
     return {
       host: topics.some((t) => t.topic === "host"),
-      live: topics.filter((t) => t.topic === "live").map((t) => t.key as string),
       logs: topics.filter((t) => t.topic === "jobLog").map((t) => [t.job as string, t.lines as number] as [string, number]),
       logins: [...new Set(topics.filter((t) => t.topic === "machineLoginScreen").map((t) => t.id as string))],
     };
@@ -156,11 +155,10 @@ export class StationTopics implements Owner {
       for (const key of membersOf(this.summary(station, id))) this.#wholeHistory(station, key);
     }
     // Shown: what the sync would bring of it next (its latest page, what came after what is held, a hole) comes first,
-    // nothing it would not read anyway; let go for room before, it is the sync's again from now on. A station whose
-    // stream does not follow the sessions at work itself is told it on the stream instead (`live` named there).
+    // nothing it would not read anyway; let go for room before, it is the sync's again from now on.
     if (topic.topic === "live") {
-      const evicted = this.#core.data.opened("transcript", station, topic.key as string, true);
-      const shown = evicted || this.#sync.link(station)?.followsRunning === true ? this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown, "latest") : null;
+      this.#core.data.opened("transcript", station, topic.key as string, true);
+      const shown = this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown, "latest");
       this.#wholeHistory(station, topic.key as string, shown);
     }
     if (topic.topic === "net" || topic.topic === "way") this.#sampleNet(station, topic.topic);
@@ -497,10 +495,9 @@ export class StationTopics implements Owner {
 
   /// The thread's summary as the station's lists say.
   /// A session used now: its history brought whole in the background, down to its first entry, as the sync keeps it so
-  /// while it is used lately (a station whose stream follows its sessions at work: it says how far each goes).
+  /// while it is used lately (the station says how far each goes).
   /// `after`: what is shown of it is brought first (one task a channel: asked for while that one waits, this would be it).
   #wholeHistory(station: string, key: string, after: Deferred.Deferred<void, CoreError> | null = null): void {
-    if (this.#sync.link(station)?.followsRunning !== true) return;
     const whole = () => void this.#sync.channels.bring(transcriptOf(station, key), Priority.background, "whole");
     if (after === null) whole();
     else this.#core.runner.fork(Effect.ignore(Deferred.await(after)).pipe(Effect.andThen(Effect.sync(whole))));

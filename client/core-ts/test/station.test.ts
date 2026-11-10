@@ -22,7 +22,7 @@ test("a_reached_station_is_linked_read_as_its_stream_opens_and_its_topics_read_o
   const read = host.requests.find(r => r.url.endsWith("/admin/api/overview"));
   assert.equal(read?.headers.find(([key]) => key === "stillfail-runtimes")?.[1], RUNTIMES.join(","));
   assert.equal(streams[0].path, "/events?running=1&views=1&rows=1&shared=1");
-  for (const path of ["/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats"]) assert.equal(gets(host, path), 1, path);
+  for (const path of ["/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats?marks=1"]) assert.equal(gets(host, path), 1, path);
   // Its chats' entries are brought onto the device, nobody looking.
   assert.equal(gets(host, "/admin/api/threads/7/entries?limit=50"), 1);
   const before = host.requests.length;
@@ -33,7 +33,8 @@ test("a_reached_station_is_linked_read_as_its_stream_opens_and_its_topics_read_o
   subscribe(core, ui, 3, { topic: "thread", station: "ws/st", thread: 7 });
   await host.settle();
   apply(host, values);
-  assert.equal(host.requests.length, before, "subscribing asks nothing");
+  // (but its agent's history brought whole behind every other read, the sync's: topics.ts `#wholeHistory`)
+  assert.equal(host.requests.slice(before).filter((r) => !r.url.includes("/timeline?")).length, 0, "subscribing asks nothing");
   assert.deepEqual(v(values, 1).connects, []);
   assert.equal(v(values, 2).state, "online");
   assert.deepEqual(v(values, 3).entries.map((e: { n: number }) => e.n), [1, 2, 3]);
@@ -70,7 +71,7 @@ test("events_keep_the_records_current", async () => {
   assert.equal(v(values, 1)[0].title, "改了");
   assert.deepEqual(v(values, 2).entries.map((e: { n: number }) => e.n), [1, 2, 3, 4]);
   assert.equal(v(values, 2).caught, 3, "said as it came: it comes in with a motion");
-  assert.deepEqual(v(values, 3).map((r: { id: string }) => r.id), ["7"]);
+  assert.deepEqual(v(values, 3).map((r: { id: string }) => r.id), ["k1"]);
   // Its summary made from what was said (station/thread-after.ts), not read.
   assert.equal(gets(host, "/admin/api/threads/7"), 0);
   assert.equal((core.inner.data.of("ws/st")!.thread("ws/st", 7) as { last: number }).last, 4);
@@ -249,9 +250,8 @@ test("a_write_answers_once_what_it_touched_is_read_again", async () => {
 test("a_session_at_work_is_followed_live", async () => {
   const answers = base();
   answers["GET /chats"] = [{ id: "7", thread: 7, session: "k1", title: "部署", agents: [{ key: "k1", process: "running" }], lastActiveAt: 1 }];
-  const { host, core, streams, push } = await started(answers);
+  const { host, core, push } = await started(answers);
   await host.time.pass(200);
-  assert.ok(streams[streams.length - 1].path.includes("live=k1&from=0&last=200"), streams.map((s) => s.path).join(" "));
   const ui = core.connect();
   const values = new Map();
   subscribe(core, ui, 1, { topic: "live", station: "ws/st", key: "k1" });

@@ -924,11 +924,6 @@ export class AccountDb {
       .map((r) => [String(r[0]), this.#chatRow(String(r[0]), 0, String(r[1]), r[2], r[3])]);
   }
 
-  /// The rows of a station whose agents are at work.
-  running(station: string): J[] {
-    return this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND running = 1", [station]).map((r) => this.#chatRow(station, 0, String(r[0]), r[1], r[2]));
-  }
-
   /// The viewer read a thread up to `n`: its rows unread no more where that covers their last message.
   #readRows(station: string, thread: number, n: number): void {
     for (const r of this.sql.all("SELECT id, ord, json, unread FROM chat WHERE station = ? AND archived = 0 AND thread = ? AND unread = 1", [station, thread])) {

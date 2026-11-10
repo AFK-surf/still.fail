@@ -1190,10 +1190,6 @@ export class Data {
     }));
   }
 
-  running(station: string): unknown[] {
-    return this.of(station)?.running(station) ?? [];
-  }
-
   putSummary(station: string, summary: unknown): boolean {
     return this.of(station)?.putSummary(station, summary) ?? false;
   }

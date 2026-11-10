@@ -282,7 +282,7 @@ test("a_tab_says_the_chat_that_opened_it_and_is_closed_by_a_member_not_a_reader"
   const [desktop, tab, other] = (values.get(1) as J).screens;
   assert.equal(desktop.closable, false, "the desktop is not closed from here");
   assert.equal(tab.closable, true);
-  assert.deepEqual(tab.chat, { id: "7", title: "部署", link: "/w/ws/s/st/chats/7" });
+  assert.deepEqual(tab.chat, { id: "k1", title: "部署", link: "/w/ws/s/st/chats/k1" });
   assert.equal(tab.line, "浏览器标签页 · 1280×800 · 由「部署」打开");
   assert.equal(other.chat, undefined, "a session none of the viewer's chats has");
   call(core, ui, 2, "screen.close", { station: "ws/st", screen: "browser:T1" });

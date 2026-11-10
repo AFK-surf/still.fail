@@ -6,7 +6,7 @@ import type { Core } from "../src/core.ts";
 import { messageOf, siteOf, splitShared } from "../src/share-in.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
-import { base, overview, started, threadView } from "./station-fixture.ts";
+import { base, chatsOf, overview, started } from "./station-fixture.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -44,12 +44,11 @@ function answers(): J {
   return {
     ...base(),
     "GET /overview": { ...overview, profiles: [profile] },
-    "GET /threads": [threadView(7, 3), threadView(8, 1), threadView(9, 1)],
-    "GET /chats": [
-      row("k9", 9, "Slack 里的", 30, { origin: { channel: "C1", threadTs: "1.0" }, connect: "slack" }),
-      row("k8", 8, "读书笔记", 20),
-      row("k7", 7, "视频管理", 10),
-    ],
+    ...chatsOf([
+      { ...row("k9", 9, "Slack 里的", 30, { origin: { channel: "C1", threadTs: "1.0" }, connect: "slack" }), last: { seq: 1 } },
+      { ...row("k8", 8, "读书笔记", 20), last: { seq: 1 } },
+      { ...row("k7", 7, "视频管理", 10), last: { seq: 3 } },
+    ]),
     "POST /threads/7/messages": { n: 4 },
     "POST /threads/8/messages": { n: 2 },
     "POST /sessions": { key: "k10", thread: { id: 10 } },

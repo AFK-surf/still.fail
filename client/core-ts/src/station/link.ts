@@ -17,10 +17,9 @@ import { laterSleep, type Scoped } from "../runtime.ts";
 import { equal, get, isObject, parseJson } from "../util.ts";
 import { GONE, NETWORK } from "../wake.ts";
 import { StationAddr } from "./addr.ts";
-import { TRANSCRIPT_PAGE } from "./channel-kinds.ts";
 import { Cursor } from "./cursor.ts";
 import { type Keeper, Memory } from "./memory.ts";
-import { FOLLOWS, RESUMED, type Requests } from "./requests.ts";
+import { RESUMED, type Requests } from "./requests.ts";
 import { SseParser } from "./sse.ts";
 import { replyHeader } from "./wire.ts";
 
@@ -104,13 +103,13 @@ export const UPDATE_DOWN_MS = 20 * 60_000;
 /// Whether a station's refusal is for a security mode (DownCause `lock`).
 export const lockRefusal = (e: { code: string }) => e.code === "lock_unconfirmed" || e.code === "lock_station";
 
-/// What a station's `/events` stream is opened for: host samples, the sessions followed as they run, the jobs' logs.
-export type EventsFor = { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] };
+/// What a station's `/events` stream is opened for beyond the sessions at work (which every station since 0.1.6968
+/// follows itself, FOLLOWS): host samples, the jobs' logs, the logins' terminals.
+export type EventsFor = { host: boolean; logs: [string, number][]; logins?: string[] };
 
-/// Whether a stream opened for `open` gives what `wants` asks: the same host samples and logs, and every session it
-/// asks among those it follows. One that follows more is kept: a session no longer at work or shown says little more.
+/// Whether a stream opened for `open` gives what `wants` asks: the same host samples, logs and logins.
 function covers(open: EventsFor, wants: EventsFor): boolean {
-  return open.host === wants.host && equal(open.logs, wants.logs) && equal(open.logins ?? [], wants.logins ?? []) && wants.live.every((key) => open.live.includes(key));
+  return open.host === wants.host && equal(open.logs, wants.logs) && equal(open.logins ?? [], wants.logins ?? []);
 }
 
 /// A read of a station's history (sync.ts `#history`): its path, how much of a batch it takes, and what its answer
@@ -147,9 +146,6 @@ export class Link {
   readonly viewed = new Map<number, number>();
   /// Whether it follows jobs' logs on its stream (as it said); null until one is read.
   followsLogs: boolean | null = null;
-  /// Whether its stream follows the sessions at work itself (FOLLOWS: it said so as the last stream opened): then none
-  /// is named on it, and one starting opens no stream; null until a stream opened.
-  followsRunning: boolean | null = null;
   /// What a read of a topic failed with while nothing is held of it.
   readonly errors = new Map<string, CoreError>();
   /// What the station said that its pages show beyond the database's tables (its host's figures, its screens, its
@@ -161,7 +157,7 @@ export class Link {
   /// read again of it, from that day on); null where it said a change without when (all of it), none where it said none.
   usageFrom: number | null | undefined = undefined;
   /// What the station keeps beside the summaries that the sidebar is made of here (rows-made.ts): null while it is not
-  /// read, or the station answers its sidebar made (one from before).
+  /// read.
   marks: Marks | null = null;
   /// Whether its sidebar is made of the chat list the station makes once for everyone (`shared`, chat-row.ts), as its
   /// stream said; and that list as read and told since, by row id (null till read).
@@ -461,29 +457,15 @@ export class Links {
 
   // ── the events stream ──
 
-  /// What the stream is to be opened for now: host samples while shown; the logs shown; and of a station whose stream
-  /// does not follow the sessions at work itself (one from before, or not known yet), those at work (as the rows say)
-  /// and those shown, by name.
+  /// What the stream is to be opened for now: host samples while shown; the logs and logins' terminals shown.
   #wants(address: string): EventsFor {
     const shown = this.#told.wanted(address);
-    const live = new Set<string>();
-    if (this.#links.get(address)?.followsRunning !== true) {
-      for (const key of shown.live) live.add(key);
-      for (const row of this.#core.data.running(address)) {
-        for (const agent of (get(row, "agents") as unknown[] | undefined) ?? []) {
-          const key = str(get(agent, "key"));
-          if (key && get(agent, "process") === "running") live.add(key);
-        }
-      }
-    }
-    return { host: shown.host, live: [...live].sort(), logs: [...shown.logs].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1])), logins: [...(shown.logins ?? [])].sort() };
+    return { host: shown.host, logs: [...shown.logs].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1])), logins: [...(shown.logins ?? [])].sort() };
   }
 
   /// Opens the station's stream for what it is wanted for now, unless the one open gives that (or `anew`): the new one
-  /// opens first, and the old one goes once it has. An agent ending its turn opens none: as agents started and ended
-  /// turns, a client's stream to a busy station was opened anew some 90 times an hour. Nor does one starting, where the
-  /// station follows the sessions at work itself (`followsRunning`): only what a page shows of the host, a job's log or a
-  /// login does.
+  /// opens first, and the old one goes once it has. An agent starting or ending its turn opens none (the station follows
+  /// the sessions at work itself): only what a page shows of the host, a job's log or a login does.
   openEvents(address: string, anew: boolean): void {
     const link = this.#links.get(address);
     if (!link || !this.reachable(address)) return;
@@ -505,18 +487,11 @@ export class Links {
   /// The stream's path for `wants`, each session asked for from the transcript items held; `since`: the last event the
   /// stream it takes over from gave (what was told after it comes first, else `missed`).
   #path(address: string, wants: EventsFor, since: string | null = null): string {
-    // The sessions at work followed by the station itself, those named ignored where it does (FOLLOWS); a thread's
-    // summary made here from what is said in it (thread-after.ts), not told; and the sidebar's rows (rows-made.ts). A
-    // station since 0.1.6968 needs neither said; one from before #5187 makes them for a stream that does not say so.
+    // The sessions at work followed by the station itself (FOLLOWS); a thread's summary made here from what is said in
+    // it (thread-after.ts), not told; and the sidebar's rows (rows-made.ts). A station since #5187 needs none of it
+    // said; one from before then makes them for a stream that does not say so.
     const query: string[] = ["running=1", "views=1", "rows=1", "shared=1"];
     if (wants.host) query.push("host=1");
-    for (const key of wants.live) {
-      const held = this.#core.data.logSpan("transcript", address, key);
-      const from = held ? held.max + 1 : 0;
-      query.push(`live=${encode(key)}&from=${from}&last=${TRANSCRIPT_PAGE}`);
-    }
-    // Their transcript entries in brief: what a history shows before a step is opened (`detail` reads it whole then).
-    if (wants.live.length > 0) query.push("brief=1");
     for (const [job, lines] of wants.logs) query.push(`job=${encode(job)}&lines=${lines}`);
     // The logins' terminals shown.
     for (const id of wants.logins ?? []) query.push(`login=${encode(id)}`);
@@ -625,12 +600,6 @@ export class Links {
             // its connecting; unless this stream took over from one still open (a station from before resuming says
             // `missed` when it cannot tell all it missed).
             const resumed = since !== null && replyHeader(opened.success, RESUMED) === "1";
-            // Following the sessions at work itself (FOLLOWS): none is named from now on. One that stopped saying so (a
-            // station gone back to an older version) has them named again, on a stream of their own.
-            const follows = replyHeader(opened.success, FOLLOWS) === "running";
-            const followed = link.followsRunning;
-            link.followsRunning = follows;
-            if (followed === true && !follows) self.openEvents(address, false);
             span.set("stillfail.resumed", resumed);
             if (link.cursor.restored) span.set("stillfail.restored", true);
             span.end();
