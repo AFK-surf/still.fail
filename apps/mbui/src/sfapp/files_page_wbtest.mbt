@@ -388,12 +388,12 @@ test "the files' keys: ⌘⇧G (the keymap's) opens 前往文件夹; in its fiel
     }
   }
   // (a station's name begun: the station chosen; Tab puts its home in, its folders offered then, the first chosen; ↓
-  // the next, ↑ back)
+  // the next, ↑ back; each looked at once the rows it changed have come and gone)
   t.type_text("wil")
-  t.frame()
+  t.run_for(@ui.move_most_ms)
   let first = chosen()
   t.key(@ui.key_tab)
-  t.frame()
+  t.run_for(@ui.move_most_ms)
   let completed = chosen()
   t.key(@ui.key_code_down)
   t.frame()
@@ -406,5 +406,187 @@ test "the files' keys: ⌘⇧G (the keymap's) opens 前往文件夹; in its fiel
   )
   t.key(@ui.key_escape)
   t.run_for(@ui.move_most_ms)
+  assert_true(t.find("前往文件夹…") is None)
+}
+
+// 前往文件夹 (sfdesk's files_go.mbt go_to) on each screen it opens on: a dialog in the middle of the window, with
+// keyboard and mouse on a wide one (⌘⇧G), with touch on a wide one and on a Medium one (its folder's ⋯: go_to_open);
+// its rows pressed and pointed at, Escape and a press outside it, where its parts stand.
+
+///|
+/// The files' page on a window `w`×`h` of `platform`, 前往文件夹 opened on it (⌘⇧G with keyboard and mouse, else its
+/// folder's ⋯'s), come to rest (with `rest`, else at the frame it opened in).
+fn go_up(platform : Int, w : Double, h : Double, rest? : Bool = true) -> @ui.Tester {
+  let t = files_page_tester(w, h, platform)
+  if platform == 0 {
+    t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key)
+  } else {
+    @sfdesk.go_to_open()
+    t.draw()
+  }
+  if rest {
+    t.run_for(@ui.move_most_ms)
+  }
+  t
+}
+
+///|
+/// The screens 前往文件夹 opens on: keyboard and mouse on a wide window, touch on one, touch on a Medium one.
+fn go_screens() -> Array[(Int, Double, Double)] {
+  [(0, 1280.0, 800.0), (2, 1280.0, 800.0), (2, 768.0, 1024.0)]
+}
+
+///|
+/// The row 前往文件夹 has chosen: the one its Tab is drawn after.
+fn go_chosen(t : @ui.Tester) -> String {
+  let words = t.words().map(fn(w) { w.0 })
+  match words.search("Tab") {
+    Some(i) if i > 0 => words[i - 1]
+    _ => ""
+  }
+}
+
+///|
+test "前往文件夹 on each screen: a dialog in the middle, its field focused; a station's name typed offers it, Tab its folders" {
+  for sc in go_screens() {
+    let about = "\{sc}"
+    let t = go_up(sc.0, sc.1, sc.2)
+    let (x, y, w, _) = t.rect_of("前往文件夹…").unwrap()
+    let (dx, _, dw, _) = t.get(@ui.Role::Dialog).rect
+    assert_true((dx + dw / 2.0 - sc.1 / 2.0).abs() < 1.0 && x >= dx && x + w <= dx + dw && y > 0.0, msg="\{about}: its title \{(x, y, w)}")
+    assert_true(t.focused() is Some(n) && n.role is TextField, msg="\{about}: the field focused")
+    assert_true(t.find("↑↓ 选择 · Tab 补全 · ⏎ 前往") is Some(_), msg=about)
+    t.type_text("wil")
+    t.run_for(@ui.move_most_ms)
+    assert_eq(go_chosen(t), "Willow", msg=about)
+    t.key(@ui.key_tab)
+    t.run_for(@ui.move_most_ms)
+    assert_eq(t.focused().map(fn(n) { n.value }), Some("willow:~/"), msg=about)
+    assert_eq(go_chosen(t), "Willow › /Users/lin/文档", msg=about)
+    assert_true(t.find("Willow › /Users/lin/项目") is Some(_), msg=about)
+    assert_true(t.find("Willow › /Users/lin/下载") is Some(_), msg=about)
+  }
+}
+
+///|
+test "前往文件夹 on each screen: a folder's row pressed goes there, the dialog gone" {
+  for sc in go_screens() {
+    let about = "\{sc}"
+    let t = go_up(sc.0, sc.1, sc.2)
+    t.type_text("willow:~/")
+    t.run_for(@ui.move_most_ms)
+    t.tap_text("Willow › /Users/lin/项目")
+    t.run_for(@ui.move_most_ms)
+    match app.nav.top() {
+      Drive(at) => assert_eq(at.root, Some("/Users/lin/项目"), msg=about)
+      _ => fail("\{about}: no folder open")
+    }
+    assert_true(t.find("前往文件夹…") is None, msg="\{about}: closed")
+  }
+}
+
+///|
+test "前往文件夹 with a mouse: the row pointed at is the one chosen; Enter goes where is typed, a folder's whole path" {
+  let t = go_up(0, 1280.0, 800.0)
+  t.type_text("willow:~/")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(go_chosen(t), "Willow › /Users/lin/文档")
+  let (x, y) = t.find("Willow › /Users/lin/项目").unwrap()
+  t.move(x, y)
+  t.frame()
+  assert_eq(go_chosen(t), "Willow › /Users/lin/项目")
+  // (chosen as the pointer moves onto it, not while it stays there: ↓ leaves it, the pointer still on it)
+  t.key(@ui.key_code_down)
+  t.frame()
+  assert_eq(go_chosen(t), "Willow › /Users/lin/下载")
+  t.key(@ui.key_code_up)
+  t.frame()
+  assert_eq(go_chosen(t), "Willow › /Users/lin/项目")
+  // (nothing typed of a last part: the folder typed itself, not the one chosen under it)
+  t.enter()
+  t.run_for(@ui.move_most_ms)
+  match app.nav.top() {
+    Drive(at) => assert_eq(at.root, Some("/Users/lin"))
+    _ => fail("no folder open")
+  }
+  assert_true(t.find("前往文件夹…") is None)
+}
+
+///|
+test "前往文件夹 with keyboard and mouse: Escape and a press outside it close it, going nowhere" {
+  for how in ["escape", "outside"] {
+    let t = go_up(0, 1280.0, 800.0)
+    t.type_text("willow:~/")
+    t.run_for(@ui.move_most_ms)
+    if how == "escape" {
+      t.key(@ui.key_escape)
+    } else {
+      t.tap(20.0, 780.0)
+    }
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("前往文件夹…") is None, msg=how)
+    match app.nav.top() {
+      Drive(at) => assert_eq(at.root, Some(fix_docs), msg=how)
+      _ => fail("\{how}: the folder left")
+    }
+  }
+}
+
+///|
+/// Where the last of the words `words` are drawn: left, top, width, height.
+fn go_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Double) {
+  match t.words().iter().filter(fn(w) { w.0 == words }).last() {
+    Some(w) => (w.1, w.2, w.3, w.4)
+    None => abort("\{words} is not drawn")
+  }
+}
+
+///|
+test "前往文件夹 on each screen: its note, its field, its rows a row apart, Tab at the chosen one's end, its keys under them" {
+  for sc in go_screens() {
+    let about = "\{sc}"
+    let t = go_up(sc.0, sc.1, sc.2)
+    t.type_text("willow:~/")
+    t.run_for(@ui.move_most_ms)
+    let field = t.focused().unwrap().rect
+    let note = go_word(t, "输入路径，可以带 station 名，例如 mba:~/Projects；Tab 补全")
+    let first = go_word(t, "Willow › /Users/lin/文档")
+    let second = go_word(t, "Willow › /Users/lin/项目")
+    let third = go_word(t, "Willow › /Users/lin/下载")
+    let tab = go_word(t, "Tab")
+    let keys = go_word(t, "↑↓ 选择 · Tab 补全 · ⏎ 前往")
+    let mid = fn(r : (Double, Double, Double, Double)) { r.1 + r.3 / 2.0 }
+    // top to bottom: the note, the field, the rows, the keys
+    assert_true(note.1 + note.3 <= field.1, msg="\{about}: \{note}, \{field}")
+    assert_true(field.1 + field.3 <= first.1, msg="\{about}: \{field}, \{first}")
+    assert_true(third.1 + third.3 <= keys.1, msg="\{about}: \{third}, \{keys}")
+    // the rows' words lined up, as far apart each from the next
+    assert_true((first.0 - second.0).abs() < 1.0 && (second.0 - third.0).abs() < 1.0, msg=about)
+    assert_true(((second.1 - first.1) - (third.1 - second.1)).abs() < 1.0, msg=about)
+    // Tab on the chosen one's line, after its words; the keys where the note starts
+    assert_true((mid(tab) - mid(first)).abs() < 1.0 && tab.0 > first.0 + first.2, msg="\{about}: \{tab}, \{first}")
+    assert_true((keys.0 - note.0).abs() < 1.0, msg="\{about}: \{keys}, \{note}")
+  }
+}
+
+///|
+test "前往文件夹: keys pressed one after another, nothing waited for between them, do what the state says" {
+  let t = go_up(0, 1280.0, 800.0)
+  t.type_text("wil")
+  t.run_for(@ui.move_most_ms)
+  // Tab, then ↓ at once, while the station's row goes and its folders come: the second of its folders chosen
+  t.key(@ui.key_tab)
+  t.key(@ui.key_code_down)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.focused().map(fn(n) { n.value }), Some("willow:~/"))
+  assert_eq(go_chosen(t), "Willow › /Users/lin/项目")
+  // Enter at once after ↑: where is typed (its last part empty), whatever is chosen
+  t.key(@ui.key_code_up)
+  t.enter()
+  t.run_for(@ui.move_most_ms)
+  match app.nav.top() {
+    Drive(at) => assert_eq(at.root, Some("/Users/lin"))
+    _ => fail("no folder open")
+  }
   assert_true(t.find("前往文件夹…") is None)
 }
