@@ -40,7 +40,6 @@ import { Retold } from "./retold.ts";
 import { Seen } from "./seen.ts";
 import { dayOf, holdsWhole, sameDetailCoverage, usageHistoryRange, withPart } from "./usage-part.ts";
 import { threadAfter, threadAfterLetters } from "./thread-after.ts";
-import { type After, rowAfterDismiss, rowAfterKept, rowAfterPin, rowAfterSaid, rowAfterSession } from "./rows-after.ts";
 import { type Marks, marksOf, marksWith, rowsMade, rowsShared } from "./rows-made.ts";
 import { current, tr } from "../i18n.ts";
 import { timed } from "../spent.ts";
@@ -81,10 +80,10 @@ export const RECHECKING = "等它回来确认";
 /// The station's open jobs, without the chat each is in: named here from the sidebar held (views.ts `longJobs`); a
 /// station from before names them all the same.
 const JOBS = "/jobs?chats=0";
-const SEARCHED = new Set(["session", "session-removed", "thread", "thread-removed", "chat", "chat-removed", "job", "job-removed"]);
+const SEARCHED = new Set(["session", "session-removed", "thread", "thread-removed", "job", "job-removed"]);
 /// The station's events that say what its reads bring too: told again on top of what a read asked before them brought
 /// (retold.ts).
-const RETOLD = new Set(["session", "session-pending", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "chat-shared", "chat-shared-removed", "job", "job-removed", "overview", "footprint", "pin", "dismiss", "kept", "hidden", "muted"]);
+const RETOLD = new Set(["session", "session-pending", "session-removed", "thread-removed", "read", "chat-shared", "chat-shared-removed", "job", "job-removed", "overview", "footprint", "pin", "dismiss", "kept", "hidden", "muted"]);
 const SHARED_RETOLD = new Set(["chat-shared", "chat-shared-removed"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
@@ -1424,8 +1423,6 @@ export class StationsSync {
     if (RETOLD.has(name)) {
       this.#retold.told(address, name, data);
       this.#held(address, name, data);
-      // A sidebar row: an agent starting or ending its turn, which a stream to a station from before follows by name.
-      if (name === "chat") this.openEvents(address, false);
       return;
     }
     switch (name) {
@@ -1446,9 +1443,8 @@ export class StationsSync {
         // was told left is read. A chat let go for room (and not opened since) is not kept current: what it said is
         // read when it is opened. History older than what is held comes with the station's (#history).
         this.channels.told(entriesOf(address, id), items);
-        // Its summary for the viewer, brought on by what was said (thread-after.ts): the station leaves it to the device
-        // (`views=1`); one from before tells it after (`thread-view`), in place of this. Where it cannot be made here,
-        // read.
+        // Its summary for the viewer, brought on by what was said (thread-after.ts): the station leaves it to the device.
+        // Where it cannot be made here, read.
         const link = this.#links.get(address);
         const me = this.#me(address);
         const next = me === null ? null : threadAfter(before, entries, me);
@@ -1464,7 +1460,7 @@ export class StationsSync {
       }
       case "letters": {
         // A thread's letters kept in their own log (channel-kinds.ts LETTERS): into it, as entries into theirs; how many
-        // it has, its summary (`thread-view`, told with it).
+        // it has, its summary.
         const id = u64(get(data, "id"));
         if (id === null) return;
         this.channels.told(lettersOf(address, id), LETTERS.items(data, { latest: true }));
@@ -1570,23 +1566,12 @@ export class StationsSync {
         if (key) this.#onSessionRemoved(address, key);
         return;
       }
-      case "thread-view": {
-        // A thread as GET /threads/:id has it for this viewer, told after something was said in it: in place, and not
-        // read again.
-        const id = u64(get(data, "id"));
-        const link = this.#links.get(address);
-        if (id === null || !link) return;
-        link.viewed.set(id, u64(get(data, "last")) ?? 0);
-        link.dirty.delete(id);
-        this.putThread(address, data);
-        return;
-      }
       case "thread-removed": {
         const id = u64(get(data, "id"));
         if (id === null) return;
         this.#threadGone(address, id);
-        // Its rows go with it, where the station leaves them to the device.
-        if (this.#links.get(address)?.makesRows) for (const row of core.data.chatsOf(address, { thread: id })) this.#dropRow(address, row);
+        // Its rows go with it.
+        for (const row of core.data.chatsOf(address, { thread: id })) this.#dropRow(address, row);
         return;
       }
       case "read": {
@@ -1626,7 +1611,7 @@ export class StationsSync {
         return;
       }
       case "pin": {
-        // What the viewer pinned (or let go), into its row (rows-after.ts).
+        // What the viewer pinned (or let go), into the marks the sidebar is made of.
         const session = str(get(data, "session"));
         const at = u64(get(data, "at"));
         const marks = this.#links.get(address)?.marks;
@@ -1635,9 +1620,6 @@ export class StationsSync {
           else marks.pins[session] = at;
           return this.#remake(address);
         }
-        const row = session === null ? undefined : core.data.chat(address, session);
-        const after = rowAfterPin(row, at);
-        if (after !== null && after !== "read") core.data.putChat(address, after);
         return;
       }
       case "dismiss": {
@@ -1654,10 +1636,6 @@ export class StationsSync {
           }
           return this.#remake(address);
         }
-        for (const row of core.data.chatsOf(address, { thread })) {
-          const after = rowAfterDismiss(row, n);
-          if (after !== null && after !== "read") core.data.putChat(address, after);
-        }
         return;
       }
       case "kept": {
@@ -1669,17 +1647,12 @@ export class StationsSync {
           marks.kept = [...marks.kept.filter((t) => t !== thread), ...(get(data, "kept") === true ? [thread] : [])];
           return this.#remake(address);
         }
-        for (const row of core.data.chatsOf(address, { thread })) {
-          const after = rowAfterKept(row, get(data, "kept") === true);
-          if (after !== null && after !== "read") core.data.putChat(address, after);
-        }
         return;
       }
       case "said": {
-        // What was said in a chat, into the rows it touches (rows-after.ts), where the station leaves them to the device.
+        // What was said in a chat: the marks it changes, and the sidebar made again (rows-made.ts).
         const link = this.#links.get(address);
         const id = u64(get(data, "id"));
-        const me = this.#me(address);
         if (link?.marks && id !== null) {
           const entries = ((get(data, "entries") as unknown[] | undefined) ?? []).filter(isObject);
           // The review's marks hold while the chat stands as it looked at it; a card posted, or a person writing (what
@@ -1688,29 +1661,13 @@ export class StationsSync {
           delete link.marks.verdicts[String(id)];
           if (entries.some((e) => get(e, "card") !== undefined || get(e, "authorKind") === "person" || get(e, "kind") === "edit")) this.#marksRead(address, { threads: [id] });
           this.#remake(address);
-          return;
         }
-        if (!link?.makesRows || id === null || me === null) return;
-        const entries = (get(data, "entries") as unknown[] | undefined) ?? [];
-        const rows = core.data.chatsOf(address, { thread: id });
-        // A chat new to the list, or one whose rows only lend their title (a Slack thread): the station's to say, once
-        // a person wrote in it.
-        if (rows.length === 0) {
-          const own = isOwnSurface(get(core.data.of(address)?.thread(address, id), "surface"));
-          if (own || entries.some((e) => get(e, "authorKind") === "person")) this.#rowsRead(address, { threads: [id] });
-          return;
-        }
-        for (const row of rows) this.#rowAfter(address, row, rowAfterSaid(row, entries, me), { threads: [id] });
         return;
       }
-      case "chat":
-        return core.data.putChat(address, data);
       case "made": {
-        // The station leaves its sidebar rows' changes to the device (`rows=1`): made here from now (rows-after.ts); one
-        // that keeps the marks beside the summaries (`marks`), the whole sidebar made here (rows-made.ts).
+        // The station keeps the marks beside the summaries (`marks`): the whole sidebar made here (rows-made.ts).
         const link = this.#links.get(address);
         if (!link) return;
-        link.makesRows = get(data, "rows") === true;
         if (this.#core.data.record("keepsMarks", address) !== (get(data, "marks") === true)) this.#core.data.put("keepsMarks", address, get(data, "marks") === true);
         if (get(data, "marks") === true && link.marks === null) this.#enqueue(address, "chats", Priority.shown, this.#marksWhole(address));
         // The chat list the station makes once for everyone: the sidebar made of it and what is the viewer's own.
@@ -1743,9 +1700,8 @@ export class StationsSync {
           this.#markDirty(address, thread);
           return this.#marksRead(address, { threads: [thread] });
         }
-        if (!this.#links.get(address)?.makesRows) return;
-        if (thread !== null) this.#rowsRead(address, { threads: [thread] });
-        else this.#enqueue(address, "chats", Priority.shown, this.#chats(address));
+        // Its marks not read yet: all of it read as they are.
+        this.#enqueue(address, "chats", Priority.shown, this.#chats(address));
         return;
       }
       case "chat-mark": {
@@ -1753,13 +1709,7 @@ export class StationsSync {
         // from it): its rows as the station has them now, where it leaves them to the device.
         const session = str(get(data, "session"));
         const thread = u64(get(data, "thread"));
-        if (this.#links.get(address)?.marks && session !== null) return this.#marksRead(address, { sessions: [session], threads: thread === null ? [] : [thread] });
-        if (this.#links.get(address)?.makesRows && session !== null) this.#rowsRead(address, { sessions: [session], threads: thread === null ? [] : [thread] });
-        return;
-      }
-      case "chat-removed": {
-        const id = str(get(data, "id"));
-        if (id) core.data.dropChat(address, id);
+        if (this.#links.get(address)?.marks && session !== null) this.#marksRead(address, { sessions: [session], threads: thread === null ? [] : [thread] });
         return;
       }
       case "job":
@@ -1800,8 +1750,8 @@ export class StationsSync {
     if (length !== null && length > 0) this.channels.goesTo(transcriptOf(address, key), length - 1);
   }
 
-  /// A session's summary into the rows it is among the agents of, where the station leaves them to the device
-  /// (rows-after.ts); a session listed and in none is new to the list: its row is the station's to say.
+  /// A session's summary into the sidebar made here (rows-made.ts): the station's marks of it read where they may
+  /// have changed.
   #rowsAfterSession(address: string, key: string, before: unknown, summary: unknown): void {
     const link = this.#links.get(address);
     if (link?.marks) {
@@ -1814,53 +1764,7 @@ export class StationsSync {
         this.#marksRead(address, { sessions: [key], threads });
       }
       this.#remake(address);
-      return;
     }
-    if (!link?.makesRows) return;
-    const rows = this.#core.data.chatsOf(address, { session: key });
-    const archived = (get(summary, "archivedAt") ?? null) !== null;
-    if (rows.length === 0) {
-      if (!archived && JSON.stringify(before ?? null) !== JSON.stringify(summary)) this.#rowsRead(address, { sessions: [key] });
-      return;
-    }
-    for (const row of rows) this.#rowAfter(address, row, rowAfterSession(row, before, summary), { sessions: [key] });
-  }
-
-  /// A row as a change of the station's makes it (rows-after.ts): in place, read where only the station can say it
-  /// (`of`: what changed).
-  #rowAfter(address: string, row: unknown, after: After, of: { sessions?: string[]; threads?: number[] }): void {
-    if (after === "read") this.#rowsRead(address, of);
-    else if (after !== null) this.#core.data.putChat(address, after);
-  }
-
-  /// The rows a change of these sessions and threads touches, read from the station (GET /chats?sessions=&threads=,
-  /// read/views.ts `chatRows`): what it asks is gathered while the read waits, one read for all of it.
-  #rowsRead(address: string, of: { sessions?: string[]; threads?: number[] }): void {
-    const link = this.#links.get(address);
-    if (!link) return;
-    for (const key of of.sessions ?? []) link.rowsWanted.sessions.add(key);
-    for (const id of of.threads ?? []) link.rowsWanted.threads.add(id);
-    this.#enqueue(address, "rows", Priority.shown, this.#asked((asked) => Effect.gen({ self: this }, function* () {
-      const link = this.#links.get(address);
-      if (!link || !this.reachable(address)) return;
-      const sessions = [...link.rowsWanted.sessions];
-      const threads = [...link.rowsWanted.threads];
-      link.rowsWanted.sessions.clear();
-      link.rowsWanted.threads.clear();
-      if (sessions.length === 0 && threads.length === 0) return;
-      const query = [...sessions.map((k) => `session=${encode(k)}`), ...threads.map((id) => `thread=${id}`)].join("&");
-      const answer = yield* this.requests.call(link.addr, "GET", `/chats?${query}`, null, { quiet: true });
-      // A station from before answers its whole list: as such.
-      if (Array.isArray(answer)) {
-        this.#core.data.set({ topic: "chatRows", station: address }, answer);
-      } else {
-        const rows = arr(get(answer, "rows"));
-        const now = new Set(rows.map((r) => str(get(r, "id"))));
-        for (const row of rows) this.#core.data.putChat(address, row);
-        for (const id of arr(get(answer, "scope"))) if (typeof id === "string" && !now.has(id)) this.#core.data.dropChat(address, id);
-      }
-      this.#retell(address, asked);
-    })));
   }
 
   /// The station's sidebar: made here (rows-made.ts) from the summaries held and what the station keeps beside them
@@ -1977,15 +1881,6 @@ export class StationsSync {
 
   #onSessionRemoved(address: string, key: string): void {
     const core = this.#core;
-    // Where the station leaves the rows to the device: its own goes, and those it was among the agents of are read
-    // (where it makes the sidebar itself, made again below).
-    if (this.#links.get(address)?.makesRows && !this.#links.get(address)?.marks) {
-      for (const row of core.data.chatsOf(address, { session: key })) {
-        const thread = u64(get(row, "thread"));
-        if (str(get(row, "id")) === key) this.#dropRow(address, row);
-        if (thread !== null) this.#rowsRead(address, { threads: [thread] });
-      }
-    }
     core.data.dropSession(address, key);
     this.#remake(address);
     const link = this.#links.get(address);

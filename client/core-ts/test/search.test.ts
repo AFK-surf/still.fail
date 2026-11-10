@@ -123,9 +123,9 @@ test("a_search_shown_is_asked_again_when_its_station_says_a_chat_changed", async
   await host.settle();
   // Archived on the station: it says so, and finds it so (asked again: `again=1`).
   replies["GET /search?q=%E9%83%A8%E7%BD%B2&limit=6&again=1"] = { building: false, groups: [{ kind: "chat", more: false, hits: [{ kind: "chat", key: "c:7", title: "部署页", text: "", at: 9, thread: 7, chat: "a", archived: true }] }] };
-  push("chat", { ...row("a", 7, "部署页"), lastActiveAt: 8 });
+  push("thread", { id: 7, entries: [] });
   // Told again and again meanwhile (a busy station): asked again once.
-  push("chat", { ...row("a", 7, "部署页"), lastActiveAt: 8 });
+  push("thread", { id: 7, entries: [] });
   await host.settle();
   await host.time.pass(SEARCH_STALE_MS + SEARCH_SETTLE_MS + 10);
   await host.settle();
@@ -181,7 +181,7 @@ test("a_search_typed_on_asks_its_stations_for_the_last_words_alone_and_again_onl
   const asked = (from: number) => host.requests.slice(from).map((r: J) => r.url as string).filter((u) => u.includes("/search?")).map((u) => u.split("q=")[1]);
   assert.deepEqual(asked(0), ["upd&limit=6"]);
   const before = host.requests.length;
-  push("chat", { ...row("a", 7, "部署页"), lastActiveAt: 8 });
+  push("thread", { id: 7, entries: [] });
   await host.settle();
   await host.time.pass(SEARCH_STALE_MS + SEARCH_SETTLE_MS + 10);
   await host.settle();

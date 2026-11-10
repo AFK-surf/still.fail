@@ -142,7 +142,8 @@ export class Link {
   /// Threads whose summaries are read again once a burst of events is over.
   readonly dirty = new Set<number>();
   flushing = false;
-  /// How far each thread went as its station last told its summary (a `thread-view`): told so, it is not read again.
+  /// How far each thread's summary goes as it was made here from what was said in it (thread-after.ts): so far, it is
+  /// not read again.
   readonly viewed = new Map<number, number>();
   /// Whether it follows jobs' logs on its stream (as it said); null until one is read.
   followsLogs: boolean | null = null;
@@ -159,9 +160,6 @@ export class Link {
   /// Since the usage held was read: when the earliest call the station recorded since was made, as it said (what is
   /// read again of it, from that day on); null where it said a change without when (all of it), none where it said none.
   usageFrom: number | null | undefined = undefined;
-  /// Whether the station leaves its sidebar rows' changes to the device (`rows=1`, rows-after.ts: it said so as its
-  /// stream opened): what only it can say of them is read, the rows that change alone (`rowsWanted`).
-  makesRows = false;
   /// What the station keeps beside the summaries that the sidebar is made of here (rows-made.ts): null while it is not
   /// read, or the station answers its sidebar made (one from before).
   marks: Marks | null = null;
@@ -171,7 +169,6 @@ export class Link {
   sharedRows: Map<string, Record<string, any>> | null = null;
   /// The marks to read again: those of some chats, or all of them (`whole`).
   readonly marksWanted = { sessions: new Set<string>(), threads: new Set<number>(), whole: false };
-  readonly rowsWanted = { sessions: new Set<string>(), threads: new Set<number>() };
   /// Whether the archived chats held are as the station has them: read since anything could have changed them.
   archivedCurrent = false;
   /// The archive's pages are being read: what it holds is not all of it yet.
@@ -509,7 +506,8 @@ export class Links {
   /// stream it takes over from gave (what was told after it comes first, else `missed`).
   #path(address: string, wants: EventsFor, since: string | null = null): string {
     // The sessions at work followed by the station itself, those named ignored where it does (FOLLOWS); a thread's
-    // summary made here from what is said in it (thread-after.ts), not told; and the sidebar's rows (rows-after.ts).
+    // summary made here from what is said in it (thread-after.ts), not told; and the sidebar's rows (rows-made.ts). A
+    // station since 0.1.6968 needs neither said; one from before #5187 makes them for a stream that does not say so.
     const query: string[] = ["running=1", "views=1", "rows=1", "shared=1"];
     if (wants.host) query.push("host=1");
     for (const key of wants.live) {
