@@ -18,9 +18,9 @@ test("the grants' adb servers a station before left are stopped by the next; a p
     await new Promise((r) => setTimeout(r, 200));
     const exited = new Promise<number | null>((resolve) => left.once("exit", (code, signal) => resolve(signal === "SIGTERM" ? 15 : code)));
     writeFileSync(record, JSON.stringify([
-      { pid: left.pid, port: 1, started: platform.startTimeOf(left.pid!) },
+      { pid: left.pid, port: 1, started: await platform.startTimeOf(left.pid!) },
       // As written down, started long before: not this process.
-      { pid: other.pid, port: 2, started: (platform.startTimeOf(other.pid!) ?? 0) - 3_600_000 },
+      { pid: other.pid, port: 2, started: ((await platform.startTimeOf(other.pid!)) ?? 0) - 3_600_000 },
     ]));
     const servers = new GrantServers(() => null, record);
     assert.equal(await servers.reap(), 1);

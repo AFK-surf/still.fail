@@ -1,7 +1,7 @@
 // Windows: no process groups or signals (a job's group is the job object of the `stillfail-runner --job` it runs
 // under), Git for Windows' sh for what agents write, `\` and drives in paths, links that take a privilege, PATHEXT and
 // .cmd shims, a scheduled task where Unix starts things in the background.
-import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process";
+import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { copyFileSync, existsSync, linkSync, lstatSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { cpus as cpuList, freemem, release, totalmem, uptime as osUptime, version as osVersion } from "node:os";
 import { delimiter, dirname, join, win32 } from "node:path";
@@ -200,14 +200,14 @@ function signalGroup(pgid: number) {
 }
 
 /// When `pid` started, as Windows records it (to the millisecond).
-function startTimeOf(pid: number): number | null {
+async function startTimeOf(pid: number): Promise<number | null> {
   if (!Number.isInteger(pid) || pid <= 0) return null;
   try {
-    const text = execFileSync(
+    const text = (await run(
       "powershell",
       ["-NoProfile", "-NonInteractive", "-Command", `(Get-Process -Id ${pid} -ErrorAction Stop).StartTime.ToUniversalTime().ToString('o')`],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], windowsHide: true },
-    ).trim();
+      { encoding: "utf8", windowsHide: true },
+    )).stdout.trim();
     const at = Date.parse(text);
     return Number.isNaN(at) ? null : at;
   } catch {
@@ -475,12 +475,12 @@ export const windows: Platform = {
 
   host,
 
-  isLauncher(pid) {
+  async isLauncher(pid) {
     if (!Number.isInteger(pid) || pid <= 0) return false;
     try {
-      const name = execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", `(Get-Process -Id ${pid} -ErrorAction Stop).ProcessName`], {
-        encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], windowsHide: true,
-      }).trim();
+      const name = (await run("powershell", ["-NoProfile", "-NonInteractive", "-Command", `(Get-Process -Id ${pid} -ErrorAction Stop).ProcessName`], {
+        encoding: "utf8", windowsHide: true,
+      })).stdout.trim();
       return /^stillfail-station(-w)?$/i.test(name);
     } catch {
       return false;

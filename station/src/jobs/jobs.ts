@@ -903,7 +903,7 @@ export class Jobs {
       // and this one does not follow (it started out of its workspace, so took nothing up): its group is ended too.
       const entry = job.pgid !== null ? this.leftBehind(job.pgid) : null;
       if (entry) {
-        if (stillOurs(entry)) {
+        if (await stillOurs(entry)) {
           log.warn("jobs", "ending a job an earlier station left running", { job: job.id, pgid: entry.pgid });
           await this.timed(endGroup(entry.pgid, STOP_GRACE_MS));
         }
@@ -968,8 +968,10 @@ export class Jobs {
   /// After a start of the station: what still runs is followed again; what ended meanwhile is told as ended; what was
   /// running and is gone without a word (the machine restarted, or an older station ended it) runs again, and its agent
   /// is told; a service waiting to start again starts. Groups of jobs no longer running are ended.
-  relaunch(): void {
+  async relaunch(): Promise<void> {
     const recorded = new Map<number, ProcessRow>(this.store.listProcesses().filter((p) => p.runtime === "job").map((p) => [p.pgid, p]));
+    // Each group asked after together, none waited on (stillOurs starts a process).
+    const ours = new Set((await Promise.all([...recorded.values()].map(async (p) => (await stillOurs(p)) ? [p.pgid] : []))).flat());
     const followed = new Set<number>();
     const jobs = this.store.jobsUp();
     for (const job of jobs.filter((j) => j.state === "running")) {
@@ -977,7 +979,7 @@ export class Jobs {
       if (job.queued === true) continue;
       const entry = job.pgid !== null ? recorded.get(job.pgid) : undefined;
       if (entry) {
-        if (stillOurs(entry)) {
+        if (ours.has(entry.pgid)) {
           log.info("jobs", "job went on through the restart; following it again", { job: job.id, pgid: entry.pgid });
           this.follow(job, entry.pgid);
           followed.add(entry.pgid);
@@ -1021,7 +1023,7 @@ export class Jobs {
     }
     for (const [pgid, entry] of recorded) {
       if (followed.has(pgid)) continue;
-      if (stillOurs(entry)) {
+      if (ours.has(pgid)) {
         log.warn("jobs", "ending the group of a job no longer running", { pgid, label: entry.label });
         void this.timed(endGroup(pgid, STOP_GRACE_MS));
       }

@@ -709,7 +709,7 @@ export const AgentsLive = (control: Control) =>
           log.info("station", "in a workspace: connects, turns and jobs go on");
           for (const a of along) await a.joined?.();
           hub.recover();
-          jobs.relaunch();
+          await jobs.relaunch();
           hub.release("unbound");
         } else {
           const why = cloud.removed() ? "the station was removed from its workspace" : "the station is in no workspace";
@@ -788,7 +788,7 @@ export const AgentsLive = (control: Control) =>
         if (inWorkspace) {
           for (const a of along) await a.taken?.();
           hub.recover();
-          jobs.relaunch();
+          await jobs.relaunch();
         } else if (cloud.removed()) {
           // Removed, and the station stopped before it stopped its jobs (or crashed): what still runs is ended now.
           await jobs.stopAll("the station was removed from its workspace");
