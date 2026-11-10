@@ -152,7 +152,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - What the core sends for what the app subscribes to, in each flow's trace, keeps to its bar
   (`src/sfreplay/topic_bytes.mbt`: KB of values sent whole, values sent whole again, messages for what was let go of;
   each topic's largest value). A page subscribes to what it shows, no more (the user, 2026-11-10); a trace recorded
-  anew that is sent more fails, one sent less brings its bar down.
+  anew that is sent more fails, one sent less brings its bar down. These traces' workspace is one station and a few
+  chats; what each topic weighs at a workspace's real size is measured by the core's
+  `client/core-ts/test/topic-bytes.test.ts`.
 - A replay asks the core what its run's app asked, so a way of asking brought in after a trace was recorded is
   switched by the trace's head (`@sfcore.trace_switch`, one of `trace_switches`; a recording says all of them on), and
   how many traces still replay without each only falls (`src/sfreplay/flows/trace_switches_test.mbt`; the user,
