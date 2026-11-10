@@ -376,6 +376,18 @@ export async function feedbackList(env: Env): Promise<AdminFeedback[]> {
   return dir.adminFeedback();
 }
 
+/** Where a report's status is marked: the console's admin's, and the feedback monitor's with its token (index.ts). */
+export const FEEDBACK_STATUS_PATH = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/status$/;
+
+/**
+ * Marks where a report is. Only its status: a station is told of a fix only once the changelog marks it (markFixed,
+ * fixedUntold), and a report marked otherwise is not told of until it is marked fixed again.
+ */
+export async function setFeedbackStatus(env: Env, id: string, status: unknown): Promise<Response> {
+  if (!FEEDBACK_STATUSES.includes(status as FeedbackStatus)) return reply({ error: "invalid_request" }, 400);
+  return directory(() => env.DIRECTORY.getByName("primary").setFeedbackStatus(id, status as FeedbackStatus));
+}
+
 export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
   const claims = await account(bearerToken(request), env, request);
@@ -444,11 +456,8 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
   if (path === "/v1/admin/feedback" && method === "GET") {
     return directory(async () => ({ feedback: await feedbackList(env) }));
   }
-  const status = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/status$/.exec(path);
-  if (status && method === "POST") {
-    if (!FEEDBACK_STATUSES.includes(input.status as FeedbackStatus)) return reply({ error: "invalid_request" }, 400);
-    return directory(() => dir.setFeedbackStatus(status[1]!, input.status as FeedbackStatus));
-  }
+  const status = FEEDBACK_STATUS_PATH.exec(path);
+  if (status && method === "POST") return setFeedbackStatus(env, status[1]!, input.status);
   // How loaded the relays are (relay-load.ts).
   if (path === "/v1/admin/relays" && method === "GET") return reply(await relaysLoad(env));
   const revoke = /^\/v1\/admin\/invite-codes\/([A-Za-z0-9-]{1,32})\/revoke$/.exec(path);

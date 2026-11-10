@@ -39,8 +39,9 @@ else ~/stillfail-deploy:
             Without it the cloud takes no traces.
   review    <deploy>/review-accounts.json, [{"email", "password", "name"}]: the accounts that sign in with a
             password (cloud/src/password.ts), App Store review's. Without it nobody signs in that way.
-  feedback  <deploy>/feedback-token: the token that reads the console's bug reports and nothing else
-            (POST /v1/admin/feedback/list, the team's feedback monitor's). Without it nobody reads them so.
+  feedback  <deploy>/feedback-token: the token that reads the console's bug reports and marks their status, and
+            nothing else (POST /v1/admin/feedback/list and /v1/admin/feedback/<id>/status, the team's feedback
+            monitor's). Without it nobody reads or marks them so.
   admin     STILLFAIL_ADMIN_EMAIL, or <deploy>/admin-email: the operator console's Google account.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """

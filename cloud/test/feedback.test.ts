@@ -117,6 +117,37 @@ test("the feedback monitor reads the console's list with its token, and that tok
   }
 });
 
+test("the feedback monitor marks where a report is with its token, as the console does", async () => {
+  const h = await harness();
+  try {
+    const { station, aliceTokens } = await workspace(h);
+    assert.equal((await send(h, station, report())).status, 201);
+    const admin = h.as(aliceTokens, "admin");
+    const id = ((await (await admin("GET", "/v1/admin/feedback")).json()) as any).feedback[0].id as string;
+    const mark = (token: string, status: unknown, which = id) =>
+      h.fetch(`/v1/admin/feedback/${which}/status`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ status }) });
+    const now = async () => ((await (await admin("GET", "/v1/admin/feedback")).json()) as any).feedback[0].status;
+
+    assert.equal((await mark(h.feedbackToken, "triaged")).status, 200);
+    assert.equal(await now(), "triaged");
+    assert.equal((await mark(h.feedbackToken, "gone")).status, 400);
+    assert.equal((await mark(h.feedbackToken, undefined)).status, 400);
+    assert.equal((await mark(h.feedbackToken, "fixed", "0".repeat(26))).status, 404);
+    assert.equal(await now(), "triaged");
+
+    // Not the admin token's, nor a made-up one's: they fall to the console's sign-in, which they are not.
+    assert.notEqual((await mark(h.adminToken, "wontfix")).status, 200, "not the admin token");
+    assert.notEqual((await mark("x".repeat(43), "wontfix")).status, 200);
+    assert.equal(await now(), "triaged");
+
+    // The console's admin marks it as before.
+    assert.equal((await admin("POST", `/v1/admin/feedback/${id}/status`, { status: "wontfix" })).status, 200);
+    assert.equal(await now(), "wontfix");
+  } finally {
+    await h.close();
+  }
+});
+
 test("reports signed wrong, not signed, by a station not enrolled, or without a title are refused", async () => {
   const h = await harness();
   try {
