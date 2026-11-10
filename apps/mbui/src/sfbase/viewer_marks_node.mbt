@@ -476,13 +476,8 @@ fn NotePop::again(self : NotePop, n : @view.View) -> Unit {
 ///|
 /// How far it has come in as `n` is drawn: at the moment it is drawn at while it comes, all of it once it is there.
 fn NotePop::shown(self : NotePop, n : @view.View) -> Double {
-  self.way.said()
   self.ended.get() |> ignore
-  if self.way.goes_at(n.logic_at()) {
-    self.way.value_at(n.drawn_at())
-  } else {
-    self.way.target()
-  }
+  self.way.shown_on(n)
 }
 
 ///|
@@ -822,8 +817,7 @@ fn marks_pins_node(h : @view.View, vw : Viewer) -> Unit {
 fn Viewer::marks_rect_on(self : Viewer, n : @view.View) -> (Double, Double, Double, Double)? {
   self.zoom.told()
   self.lift.said()
-  let now = n.logic_at()
-  let t = if self.zoom.goes_at(now) || self.lift.goes_at(now) { n.drawn_at() } else { @double.infinity }
+  let t = n.drawn_while(fn(at) { self.zoom.goes_at(at) || self.lift.goes_at(at) })
   self.marks_rect(t)
 }
 

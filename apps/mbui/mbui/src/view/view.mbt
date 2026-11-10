@@ -950,6 +950,9 @@ pub struct Tree {
   /// Whether a layout of all of it is under way as of the logic's moment (Tree::measured_now): what is made in it and
   /// reads how big it is laid out reads that layout as it stands, none begun inside it
   mut measuring : Bool
+  /// the node whose property's binding is being worked out now (-1: none): what reads the time in it is said
+  /// (Tree::clock_read_in_binding)
+  mut binding_reading : Int
   /// what lays out alone (View::lays_out_alone) with something under it to be laid out again, nothing above it: laid
   /// out from it as the rest is (Tree::alone_laid_out)
   alone_due : Array[Int]
@@ -1205,6 +1208,7 @@ pub fn Tree::new(
     measured_gen: -1,
     walk_from: -1,
     measuring: false,
+    binding_reading: -1,
     alone_due: [],
     alone_laid: [],
     alone_asks: {},
@@ -1674,6 +1678,14 @@ pub fn Tree::root(self : Tree) -> View {
 /// moment its logic has come to): followed by nothing; what is to happen at a moment is said once, on the timeline
 /// (View::at_moment, View::steps), never found by watching the clock. For a look, Tree::drawn_at.
 pub fn Tree::logic_at(self : Tree) -> Double {
+  self.clock_read_in_binding("logic_at")
+  self.logic_said()
+}
+
+///|
+/// The logic's moment, as Tree::logic_at says it, not said to be read in a binding: the tree's own work's (a layout, a
+/// scroll, what a pointer is over) and View::goes_now's.
+fn Tree::logic_said(self : Tree) -> Double {
   if self.cause_at >= 0.0 {
     self.cause_at
   } else {
@@ -1685,7 +1697,42 @@ pub fn Tree::logic_at(self : Tree) -> Double {
 /// The moment what is drawn is drawn at (a frame's, to be shown then; an input's, as it is pressed), followed: for a
 /// look worked out from the time (a fade, a place by the time), worked out again as it goes. Never for what is done.
 pub fn Tree::drawn_at(self : Tree) -> Double {
+  self.clock_read_in_binding("drawn_at")
   self.clock.get()
+}
+
+///|
+/// The moment what is drawn is drawn at, as Tree::drawn_at says it, followed, not said to be read in a binding: the
+/// tree's own ways that follow the clock only while they go (a scroll on by itself, its bar coming and going), as
+/// View::drawn_while's.
+fn Tree::drawn_said(self : Tree) -> Double {
+  self.clock.get()
+}
+
+///|
+/// Whether what `goes` says of the logic's moment holds (a way that goes then: one way, or any of several), the clock
+/// not followed: only true or false, never the moment itself. What a binding asks whether a way goes by
+/// (`n.goes_now(way.goes_at)`), worked out again only as what says it changes. So its caller is told at both ends of
+/// it, or it stands as it was: as the way is said (its signal read in the same binding) and at its declared end (a
+/// moment of the timeline, View::at_moment, setting what the binding reads). The check of what reads the time in a
+/// binding (clock_read.mbt) cannot see a caller told at neither; the tests of what reads it (motion's
+/// node_way_goes_wbtest) hold it. The one place a binding asks with the logic's moment (View::drawn_while is built on it).
+pub fn View::goes_now(self : View, goes : (Double) -> Bool) -> Bool {
+  goes(self.tree.logic_said())
+}
+
+///|
+/// The moment what is drawn is drawn at while what `goes` says of the logic's moment holds (View::goes_now), followed;
+/// once it no longer does, past every end (+inf: a way read at it is where it went), the clock no longer followed. What
+/// a binding reads a way by (`way.value_at(n.drawn_while(way.goes_at))`): worked out again as the clock goes while it
+/// goes, and not after.
+pub fn View::drawn_while(self : View, goes : (Double) -> Bool) -> Double {
+  if self.goes_now(goes) {
+    // (the clock followed, read so: what a way that goes is drawn by, not a read of the time of a binding's own)
+    self.tree.clock.get()
+  } else {
+    @double.infinity
+  }
 }
 
 ///|
@@ -1693,6 +1740,7 @@ pub fn Tree::drawn_at(self : Tree) -> Double {
 /// it as long as it shows (a spinner's turn, a band of progress not known), which never ends and is no motion
 /// (Tree::cycle_read); as Ctx::cycle is an old view's.
 pub fn View::cycle(self : View, period : Double) -> Double {
+  self.tree.clock_read_in_binding("cycle")
   let t = self.tree.beat.get()
   if period <= 0.0 {
     return 0.0
@@ -2489,7 +2537,10 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, at? : Int = 
     if !b.live || w.resting() {
       return
     }
+    let reading_was = self.binding_reading
+    self.binding_reading = at
     let v = w.read(read)
+    self.binding_reading = reading_was
     let was = self.cause_at
     self.cause_at = b.told_at
     b.told_at = -1.0
@@ -3302,7 +3353,7 @@ pub fn Tree::claimers_at(
     Some(id) => Some(id)
     None => {
       let found : Ref[(NodeId, Int, (Double, Double, Double, Double))?] = Ref(None)
-      let at = self.logic_at()
+      let at = self.logic_said()
       // (what is drawn small near it reached from round it, as a press there reaches it: Tree::target_at's)
       let least = self.least_now()
       let near : Array[Near] = []
@@ -4197,7 +4248,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
   }
   // (asked in a change holding its boxes: those put first)
   self.boxes_flushed()
-  let at = self.logic_at()
+  let at = self.logic_said()
   let shown = self.clock.untracked()
   // (its clock set to the moment and back: what that tells is no change of its own to settle after)
   let was_standing = self.standing
@@ -5204,7 +5255,7 @@ pub fn Tree::wheel_at(
     // (where things are as of then, what the change under way set before it counted: Tree::asked_at's)
     self.laid_now()
     let found : Ref[NodeId?] = Ref(None)
-    let now = self.logic_at()
+    let now = self.logic_said()
     self.each_drawn_scaled(fn(c, cx, cy, _, s) {
       if self.finger_on(c, cx, cy, s, x, y, now, tracked=false) {
         let n = self.nodes[c.id.at]
@@ -5364,7 +5415,7 @@ fn Tree::asked_at(
     // (where things are as of then, what the change under way set before it counted)
     self.laid_now()
     let found : Ref[NodeId?] = Ref(None)
-    let now = self.logic_at()
+    let now = self.logic_said()
     self.each_drawn_scaled(fn(c, cx, cy, _, s) {
       if self.finger_on(c, cx, cy, s, x, y, now, tracked=false) {
         let n = self.nodes[c.id.at]
@@ -5758,7 +5809,7 @@ fn Tree::laid_now(self : Tree) -> Unit {
   if self.last_w <= 0.0 {
     return
   }
-  let at = self.logic_at()
+  let at = self.logic_said()
   let shown = self.clock.untracked()
   // (its clock set to the moment and back: what that tells is no change of its own to settle after)
   let was_standing = self.standing
@@ -9901,7 +9952,7 @@ fn Tree::areas_of(self : Tree, n : Node, x : Double, y : Double, w : Double, h :
   match n.takes {
     Some(Areas(_)) => {
       // (read by what the node owns for it: Tree::takes_rects)
-      let rs = self.takes_rects(n, w, h, self.logic_at())
+      let rs = self.takes_rects(n, w, h, self.logic_said())
       InWindow(
         rs
         .iter()
@@ -10035,7 +10086,7 @@ fn Tree::finger_on(
 /// or not.
 fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Target {
   // (the logic's moment, what is where taken as of then: View::takes)
-  let at = self.logic_at()
+  let at = self.logic_said()
   let least = self.least_now()
   let found : Array[Target] = []
   // (each found's place in the walk and its box; what is drawn small near (x, y), passed: Tree::near_said, found in
@@ -10104,7 +10155,7 @@ pub fn Tree::points_now(self : Tree) -> NodeId? {
 /// What says it is pointed at alone (View::points) the pointer at (x, y) is over, where that is drawn over all that
 /// takes it there (what target_in finds: what presses, what is held, an old view, a top row): followed, as target_in.
 fn Tree::points_over(self : Tree, x : Double, y : Double) -> NodeId? {
-  let at = self.logic_at()
+  let at = self.logic_said()
   let found : Ref[NodeId?] = Ref(None)
   self.each_drawn_scaled(fn(c, cx, cy, _, s) {
     if self.finger_on(c, cx, cy, s, x, y, at, tracked=true) {

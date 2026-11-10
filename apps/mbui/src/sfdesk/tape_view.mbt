@@ -286,11 +286,7 @@ fn tape_x_at(r : TapeRoom, t : Double) -> Double {
 fn tape_drawn_at(n : @view.View) -> Double {
   tape_goes.said.get() |> ignore
   tape_goes.way.said()
-  if tape_goes.way.goes_at(n.logic_at()) {
-    n.drawn_at()
-  } else {
-    @double.infinity
-  }
+  n.drawn_while(fn(t) { tape_goes.way.goes_at(t) })
 }
 
 ///|

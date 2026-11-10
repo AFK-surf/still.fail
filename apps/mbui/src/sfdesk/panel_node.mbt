@@ -84,11 +84,9 @@ fn side_col(src : Source, n : @view.View, key : String, open : Bool) -> Double {
   match panel_own.goes.get(key) {
     Some(way) => {
       way.said()
-      if way.goes_at(n.logic_at()) {
-        let t = n.drawn_at()
-        if way.goes_at(t) {
-          return way.value_at(t)
-        }
+      let t = n.drawn_while(fn(at) { way.goes_at(at) })
+      if t != @double.infinity && way.goes_at(t) {
+        return way.value_at(t)
       }
     }
     None => ()

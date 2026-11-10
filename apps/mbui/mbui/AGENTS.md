@@ -26,7 +26,10 @@ yet and you can add one, add it.
   handler (`on_press`, `on_key`, `on_drag`), run outside tracking, writing state; a shortcut is an action
   (`on_action`), its keys the tree's keymap's (`View::keymap`: `src/view/keymap.mbt`), never a key read as a build
   runs (detlint `key-read`); time is read where it is drawn (`moved_by`, a look's closure), never as a frame is built.
-  `src/view/view.mbt`'s head says the model whole.
+  A binding reads a way only through the framework's entries, following the clock while it goes and reading its end once
+  it is there (`Way::shown_on`, `View::drawn_while`, `View::goes_now`); a Tester fails the rest
+  (`src/view/clock_read.mbt`; the coordinator of the migration, 2026-11-10). `src/view/view.mbt`'s head says the model
+  whole.
 - What a structure makes or lets go down a column makes its way in or closes it on a Move, what is under it going with
   it (`View::comes`, flex's `come_*`): the framework's, not each page's (the user, 2026-11-09: 方案 A). A show in its
   opposite's place, or a pick, is one in the other's place, its way from as tall as that one was. Say `at_once=true`

@@ -292,7 +292,7 @@ fn Scroll::where_at(self : Scroll, t : Double) -> Double {
 ///|
 /// How far it is scrolled at the logic's moment of `tree` (the one it is in: what an event, a step or a test reads).
 pub fn Scroll::at(self : Scroll, tree : Tree) -> Double {
-  @signals.untracked(fn() { self.where_at(tree.logic_at()) })
+  @signals.untracked(fn() { self.where_at(tree.logic_said()) })
 }
 
 ///|
@@ -301,7 +301,7 @@ pub fn Scroll::at(self : Scroll, tree : Tree) -> Double {
 /// it holds to make as it scrolls (a page's list built by the rows in sight) reads it so, never its own copy of how it
 /// moves. Not what shows past an end (iOS's rubber band, Android's stretch: Scroll::past).
 pub fn Scroll::drawn(self : Scroll, tree : Tree) -> Double {
-  self.where_at(if self.goes_on() { tree.drawn_at() } else { 0.0 })
+  self.where_at(if self.goes_on() { tree.drawn_said() } else { 0.0 })
 }
 
 ///|
@@ -319,7 +319,7 @@ pub fn Scroll::grew_above(self : Scroll, d : Double) -> Unit {
   }
   @signals.untracked(fn() {
     let t = match self.host {
-      Some(v) => v.logic_at()
+      Some(v) => v.tree.logic_said()
       None => 0.0
     }
     self.x.set(self.x.get() + d)
@@ -357,7 +357,7 @@ pub fn Scroll::grew_above(self : Scroll, d : Double) -> Unit {
             // (still scrolling in it, as it was: not let go meanwhile, nor said to scroll in another)
             match self.host {
               Some(h) if physical_equal(h.tree, v.tree) && h.live() is Some(_) && h.at == v.at && h.gen == v.gen =>
-                self.foot_moved(v, v.logic_at(), self.most(), laid=true)
+                self.foot_moved(v, v.tree.logic_said(), self.most(), laid=true)
               _ => ()
             }
           })
@@ -438,7 +438,7 @@ fn Scroll::stopped(self : Scroll, t : Double) -> Double {
 /// there, no scroll of the hand's (nothing told as scrolled: its bar). Not scrolling in a node yet, there as it comes to.
 pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
   match self.host {
-    Some(v) if v.alive() => self.stopped(v.tree.logic_at()) |> ignore
+    Some(v) if v.alive() => self.stopped(v.tree.logic_said()) |> ignore
     _ => ()
   }
   self.x.set(dmax(to, 0.0))
@@ -643,7 +643,7 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
 pub fn Scroll::edge_toward(self : Scroll, speed : Double) -> Unit {
   guard self.host is Some(v) else { return }
   @signals.untracked(fn() {
-    let t = v.logic_at()
+    let t = v.tree.logic_said()
     let x0 = self.stopped(t)
     if speed == 0.0 {
       return
@@ -921,7 +921,7 @@ pub fn View::scrolls(
       held
       .shrink(Is(0.0))
       .offset(By(fn() {
-        let t = if s.goes_on() { held.drawn_at() } else { 0.0 }
+        let t = if s.goes_on() { held.tree.drawn_said() } else { 0.0 }
         if across {
           (-s.where_at(t), 0.0)
         } else {
@@ -973,11 +973,11 @@ pub fn View::scrolls(
   // (a page's list's not, as an old view's list's is not; stretched instead where Android's is past an end, as it is
   // drawn: View::stretches)
   if s.as_list {
-    self.stretches(By(fn() { s.stretch_drawn(if s.goes_on() { self.drawn_at() } else { 0.0 }) })) |> ignore
+    self.stretches(By(fn() { s.stretch_drawn(if s.goes_on() { self.tree.drawn_said() } else { 0.0 }) })) |> ignore
   } else {
     self.fades(By(fn() {
       // (where it is as drawn, the time read while what it is on by itself has an end said: Scroll::rest_now)
-      let x = s.where_at(if s.rest_now() is Some(_) { self.drawn_at() } else { 0.0 })
+      let x = s.where_at(if s.rest_now() is Some(_) { self.tree.drawn_said() } else { 0.0 })
       let most = s.most_now()
       let (a, b) = (dclamp(x, 0.0, scroll_soft_most), dclamp(most - x, 0.0, scroll_soft_most))
       // (across: towards its start and its end)
@@ -994,7 +994,7 @@ pub fn View::scrolls(
   // (not laid out yet: how far it can go not known, nothing put)
   self.reacts(fn() { (s.room)().map(fn(r) { dmax(r, 0.0) }) }, fn(known) {
     guard known is Some(most) else { return }
-    let t = self.tree.logic_at()
+    let t = self.tree.logic_said()
     // (the hand past its edge: on from where it has it now as far as it can go now, its end then; parked at its end, on
     // again where it can go further)
     match s.edge.untracked() {
@@ -1024,14 +1024,14 @@ pub fn View::scrolls(
     match s.edge.untracked() {
       Some(e) => {
         s.edge.set(None)
-        s.x.set(e.at(self.tree.logic_at()))
+        s.x.set(e.at(self.tree.logic_said()))
       }
       None => ()
     }
     // (a fling under way at rest where it was then: nothing reads the time for it after)
     match s.fling.untracked() {
       Some(f) => {
-        let t = self.tree.logic_at()
+        let t = self.tree.logic_said()
         let at = if t >= f.end_t {
           f.end_x
         } else {
@@ -1049,7 +1049,7 @@ pub fn View::scrolls(
     s.past.set(None)
     // (a page's list's notches easing in at rest where they had come to)
     if s.notch.untracked() is Some(_) {
-      let at = @signals.untracked(fn() { s.where_at(self.tree.logic_at()) })
+      let at = @signals.untracked(fn() { s.where_at(self.tree.logic_said()) })
       s.notch.set(None)
       s.x.set(at)
     }
@@ -1168,7 +1168,7 @@ pub fn View::scrolls(
   })
   // (a part of what it holds brought into sight: its top or its foot to its own, as little as that takes)
   .shows(fn(top, foot) {
-    let t = self.logic_at()
+    let t = self.tree.logic_said()
     // (across: its start and its end, as wide as it is)
     let vh = if across { self.tree.nodes[self.at].flex.width } else { self.tree.nodes[self.at].flex.height }
     let x = s.stopped(t)

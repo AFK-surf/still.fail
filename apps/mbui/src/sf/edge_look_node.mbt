@@ -95,13 +95,8 @@ pub fn EdgeWay::target(self : EdgeWay) -> Double {
 ///|
 /// Where it is as `n` is drawn: at the moment it is drawn at while it goes, where it went once it is there.
 pub fn EdgeWay::shown(self : EdgeWay, n : @view.View) -> Double {
-  self.way.said()
   self.ended.get() |> ignore
-  if self.way.goes_at(n.logic_at()) {
-    self.way.value_at(n.drawn_at())
-  } else {
-    self.way.target()
-  }
+  self.way.shown_on(n)
 }
 
 ///|

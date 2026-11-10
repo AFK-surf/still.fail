@@ -672,13 +672,8 @@ fn place_comes_in(v : @view.View) -> Unit {
     }
   })
   let shown = fn() {
-    w.said()
     ended.get() |> ignore
-    if w.goes_at(v.logic_at()) {
-      w.value_at(v.drawn_at())
-    } else {
-      w.target()
-    }
+    w.shown_on(v)
   }
   v.alpha(By(shown)).offset(By(fn() { (app.switch_way.to_double() * switch_slide * (1.0 - shown()), 0.0) })) |> ignore
 }
