@@ -452,7 +452,7 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
       } else if session == "s-c1" {
         let base = kept_chat("rich/\{f.older}/\{f.mode}/\{f.step}", fn() {
           let v = if outline_mode(f.mode) {
-            outline_chat(f.mode)
+            outline_chat(f.mode, around=f.older > 0)
           } else if f.mode == "chat-overload-before" || f.mode == "chat-overload-after" {
             with_overload_notice(rich_chat(f.older), f.mode == "chat-overload-after", f.step > 0)
           } else if f.mode == "chat-model-limit-before" || f.mode == "chat-model-limit-after" {

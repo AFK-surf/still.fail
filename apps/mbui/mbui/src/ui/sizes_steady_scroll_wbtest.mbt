@@ -61,3 +61,74 @@ test "sizes steady in what a node of the tree's scrolls: a box gone at once over
   assert_true(gone.length() > 0, msg="gone at once over its rows: no jolt found")
   assert_eq((scroll.at(view_tree().unwrap()), wheeled), (100.0, []))
 }
+
+// An old list put elsewhere at once by the app (Ctx::list_scroll_to: put_at): what its rows hold at its top, a head
+// stuck under its edge (Ctx::stick), steps in its row with the list's put, for no cause of its own; that same head
+// stepping in its row with the list where it was is a jolt, as is a step of it a few frames after a put.
+
+///|
+/// An old list 300 tall in a window 400 by 300, ten rows 200 tall, each a head stuck at the list's top (`gap` over it
+/// in its row) over its words; put at row `put` (its top 100 over the list's) as the next frame is built where `put` says
+/// one: sizes steady said but not held (its faults read here, steady_faults).
+fn steady_stuck_case(put : Ref[Int], gap : Ref[Double]) -> Tester {
+  let t = Tester::new(
+    fn(c) {
+      c.list("stuck", 10, 200.0, fn(i) {
+        c.column(h=Px(200.0), fn() {
+          c.box(h=Px(gap.val), fn() {  }) |> ignore
+          let head = c.column(fn() { c.text("第\{i}行的头", size=14.0, line=20.0) |> ignore })
+          c.stick(head, 0.0)
+          c.text("第\{i}行", size=14.0, line=20.0) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      if put.val >= 0 {
+        c.list_scroll_to("stuck", put.val, offset=100.0)
+        put.val = -1
+      }
+    },
+    w=400.0,
+    h=300.0,
+    words_over_held=false,
+  )
+  t.check_looks(false)
+  t.draw()
+  t
+}
+
+///|
+test "sizes steady in an old list put elsewhere at once: its rows' stuck heads stepping with the put none; a head stepping with no put, or a few frames after one, a jolt" {
+  // (put at row 0, its top 100 over the list's: row 0's head held at the list's top, 100 down in its row, in the put's
+  // frame)
+  let put = Ref(-1)
+  let gap = Ref(0.0)
+  let t = steady_stuck_case(put, gap)
+  let rest = steady_faults(t, 4)
+  put.val = 0
+  t.stepped()
+  let put_faults = steady_faults(t, 6)
+  assert_eq((rest, put_faults), ([], []))
+  // (the list where it was, a head 30 down in its row at once: its own step)
+  let put = Ref(-1)
+  let gap = Ref(0.0)
+  let t = steady_stuck_case(put, gap)
+  steady_faults(t, 4) |> ignore
+  gap.val = 30.0
+  t.stepped()
+  let stepped = steady_faults(t, 4)
+  assert_true(stepped.length() > 0, msg="a head stepping in its row with the list where it was: no jolt found")
+  // (put, then four frames on a head 30 down in its row with no put: that one a jolt)
+  let put = Ref(-1)
+  let gap = Ref(0.0)
+  let t = steady_stuck_case(put, gap)
+  steady_faults(t, 4) |> ignore
+  put.val = 0
+  t.stepped()
+  let after_put = steady_faults(t, 4)
+  gap.val = 30.0
+  t.stepped()
+  let later = steady_faults(t, 4)
+  assert_eq(after_put, [])
+  assert_true(later.length() > 0, msg="a step a few frames after a put: no jolt found")
+}

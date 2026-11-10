@@ -298,8 +298,17 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           // down in it as far, held where it was)
           row_at[i] = ya[i] * (n.y + pn.tree_corrected) + yb[i]
           in_row[i] = true
+          // (the moment its rows' way set out; or an old list's put elsewhere at once, Ctx::app_scrolled's `put_at`, as
+          // rows_steady.mbt has it for the rows themselves: what it holds at its top, a head stuck under its edge
+          // (Node::stick), steps in its row then for no cause of its own)
           set_out[i] = match self.lists.get(pn.id) {
-            Some({ causes: Some(c), .. }) if pn.kind == kind_list => c.start
+            Some(st) if pn.kind == kind_list => {
+              let rows = match st.causes {
+                Some(c) => c.start
+                None => -1.0
+              }
+              dmax(rows, st.put_at)
+            }
             _ => -1.0
           }
         } else {

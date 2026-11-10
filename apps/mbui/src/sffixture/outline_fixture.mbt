@@ -165,10 +165,12 @@ fn outline_all(mode : String) -> Array[(Int, Json)] {
 
 ///|
 /// The long chat (the fixture's first, 整理发布清单) of mode `mode`: what it says as its messages (the longer one's
-/// last forty, the rest before them not in its window), its people the viewer and Ana.
-pub fn outline_chat(mode : String) -> Json {
+/// last forty, the rest before them not in its window, till the page before or one round a message of them is asked
+/// for: `around`, all of it), its
+/// people the viewer and Ana.
+pub fn outline_chat(mode : String, around? : Bool = false) -> Json {
   let all = outline_all(mode).map(fn(dm) { dm.1 })
-  let long = outline_long_mode(mode)
+  let long = outline_long_mode(mode) && !around
   let messages = if long { all[all.length() - outline_long_held:].to_array() } else { all }
   match rich_chat(0) {
     Object(m) => {
@@ -346,6 +348,12 @@ fn outline_cut(words : String) -> String {
 pub fn fixture_outline_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   match name {
     "chat.bring" | "chat.outline.rows" | "chat.outline.find" => ()
+    // (the longer chat's window round a message it does not hold: all of it, as the core reads the page it is in)
+    "chat.around" if outline_long_mode(f.mode) && f.older == 0 => {
+      f.older = 1
+      f.changed()
+      return Some(Ok(Json::object({})))
+    }
     _ => return None
   }
   guard outline_asked(params) is Some(_) else {

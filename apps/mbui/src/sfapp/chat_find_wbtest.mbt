@@ -909,3 +909,46 @@ test "对话目录: words found stand at the list's start, the first found whole
   t.run_for(@ui.move_most_ms)
   assert_eq(reader(), 1)
 }
+
+///|
+test "对话目录: a go-to on a wide page as the bell's runs, with the outline off and on: far, flashing; then ↓ back (on) or to the end (off)" {
+  for asks in [false, true] {
+    let calls : Array[Made] = []
+    let t = outline_tester(calls, asks~)
+    t.click(Button, label="跳转到待决策的消息")
+    t.run_for(@ui.move_most_ms)
+    t.run_for(@ui.move_most_ms)
+    // (what waits to be decided first: the post at seq 8, not laid out from 22)
+    assert_eq(outline_reading().flash, "ts8", msg="asks \{asks}")
+    let back = t.semantics().iter().any(fn(s) { s.role == Button && s.label == "回到刚才的位置" })
+    assert_eq(back, asks)
+    if asks {
+      t.click(Button, label="回到刚才的位置")
+      t.run_for(@ui.move_most_ms)
+      t.run_for(@ui.move_most_ms)
+      assert_eq(outline_reading().top_seq, 22.0)
+    } else {
+      t.click(Button, label="跳到最新")
+      t.run_for(@ui.move_most_ms)
+      t.run_for(@ui.move_most_ms)
+      assert_true(outline_reading().at_end)
+    }
+  }
+}
+
+///|
+test "对话目录: a go-to to a message of an older page, read first: the longer chat's first said, from its outline" {
+  let calls : Array[Made] = []
+  let t = outline_tester(calls, mode="chat-outline-long")
+  let (px, py, pw, ph) = outline_panel(t).unwrap()
+  t.wheel(px + pw / 2.0, py + ph / 2.0, -100000.0)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("早，今天想把发布清单从头到尾过一遍：签名、更新日志、商店截图、深…")
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
+  // (the page before asked for (chat.older, or round it: chat.around), then gone to: flashing, the panel closed)
+  assert_true(named(calls, "chat.older").length() + named(calls, "chat.around").length() >= 1, msg="\{calls.map(fn(m) { m.name })}")
+  assert_true(outline_panel(t) is None)
+  assert_eq(outline_reading().flash, "ts1")
+}
