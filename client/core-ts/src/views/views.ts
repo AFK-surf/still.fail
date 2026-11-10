@@ -2257,14 +2257,24 @@ export class Views implements Owner {
     // said at the end of its messages too. A card waiting is not: it shows in the chat itself; nor what an agent waits
     // on: its activity under the messages says it, with how long it has waited. An agent this page's summary has at
     // work (it says at once that it took a message) is at work, whatever the shared row read after says; and nothing
-    // is said while the viewer's words are on their way: the turn it tells of no longer stands.
+    // is said while the viewer's words are on their way: the turn it tells of no longer stands. Nor once they are in
+    // the chat, until one of its agents has had a turn since (`unheard`): that an agent took them comes by another
+    // read than the chat's page, and between the two the line of the turn before came back, gone again as the agent
+    // set to work (the user, 2026-11-10: 「有个结束的提示，发消息后会出现，然后 agent 开始行动就消失」). Their
+    // station's times both: a message's, a turn's.
     const sending = outbox.some((m) => m.state !== "failed");
     const held = (a: J) => {
       const s = agents.find((b) => get(b.session, "key") === a.key)?.session;
       const status = s !== undefined ? present.shownStatus(s) : null;
       return status === "queued" || (status === "running" && present.waiting(s) === null) ? s : present.session(a);
     };
-    const shown = seen !== undefined && Array.isArray(seen.agents) && !sending ? { ...seen, agents: seen.agents.map(held) } : null;
+    const sentAt = messages.reduce((at: number, m) => (typeof m.outgoing === "string" ? Math.max(at, u64(m.createdAt) ?? 0) : at), 0);
+    const since = (s: unknown): boolean => {
+      const turn = get(s, "lastTurn");
+      return (u64(get(turn, "startedAt")) ?? 0) >= sentAt || (u64(get(turn, "endedAt")) ?? 0) >= sentAt;
+    };
+    const unheard = sentAt > 0 && !agents.some((a) => since(a.session)) && !(seen !== undefined && arr(seen.agents).some(since));
+    const shown = seen !== undefined && Array.isArray(seen.agents) && !sending && !unheard ? { ...seen, agents: seen.agents.map(held) } : null;
     const line = shown !== null ? present.rowStateLine(shown, false, (agent) => {
       const status = present.shownStatus(agent);
       // A stop is already announced in the conversation; its status still remains on the list row.
