@@ -78,3 +78,32 @@ test "a sheet of the tree's said to a screen reader as a dialog as tall as it is
   assert_eq((x, w), (0.0, 390.0))
   assert_true((h - 844.0 * things_share).abs() < 0.5 && (y + h - 844.0).abs() < 0.5, msg="\{(x, y, w, h)}")
 }
+
+///|
+/// The chat's things opened and at rest (675.2 tall), its top drawn `dy` down in `steps` moves a frame apart and let
+/// go: whether it is open once it has had its way, and how tall it is then.
+fn things_let_go(dy : Double, steps : Int) -> (Bool, Double) raise {
+  let (t, src, r) = things_chat()
+  open_things(src, r, 7.0)
+  t.run_for(sheet_way_ms(t))
+  let (x, y0, w, _) = let_go_dialog(t)
+  let (x, y) = (x + w / 2.0, y0 + 20.0)
+  t.drag(x, y, x, y + dy, steps~)
+  t.run_for(sheet_way_ms(t))
+  (@sf.presenting(), let_go_dialog(t).3)
+}
+
+///|
+test "a sheet of the tree's that grows let go above 30% of the window: closed flicked down, at 55% let go slowly" {
+  // (drawn 380 down: 295.2, 35%; in 4 moves a frame apart, 5.7 points a ms: flicked, no detent under it, closed)
+  let (open, _) = things_let_go(380.0, 4)
+  assert_false(open, msg="flicked down to 35%: closed")
+  // (in 60, 0.38 points a ms: landing at 34%, the nearest detent 55%)
+  let (open, tall) = things_let_go(380.0, 60)
+  assert_true(open && (tall - 844.0 * 0.55).abs() < 1.0, msg="let go slowly at 35%: at 55% (\{open}, \{tall})")
+  // (either side of 30% slowly: 400 and 460 down in 80 moves, landing at 32% and 25%)
+  let (open, _) = things_let_go(400.0, 80)
+  assert_true(open, msg="let go slowly at 33%: open")
+  let (open, _) = things_let_go(460.0, 80)
+  assert_false(open, msg="let go slowly at 25%: closed")
+}

@@ -449,11 +449,7 @@ fn tape_let_go(p : TapePane, v : Double, at : Double) -> Unit {
   @signals.untracked(fn() {
     let ends = tape_ends(tape_room_now())
     let span = tape_x_of(ends, p) - tape_x_of(ends, wide.tape_at.get())
-    let k = if span == 0.0 { 0.0 } else { tape_pull_clamp(ends, p, wide.tape_drag.get()) / span }
-    let fling = v.abs() > tape_fling
-    let toward = fling && (v > 0.0) == (span > 0.0)
-    let away = fling && !toward
-    if toward || (k > tape_pull_over && !away) {
+    if tape_goes_over(tape_pull_clamp(ends, p, wide.tape_drag.get()), span, v) {
       tape_to(p, at)
     } else {
       tape_moves_from(at, fn() {
@@ -1438,4 +1434,15 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
 /// the chat's actions in a Duo's system bars read as another thing's, so there too it is the bar's own).
 fn screen_tab_alone(tabs : Array[String]) -> Bool {
   wide.tape && tabs.length() == 1 && station_tab(tabs[0]) is Some(("screen", _, _))
+}
+
+///|
+/// Whether the one pulled `pulled` of its way `span` over, let go going `v` (px a second), is brought over: flung toward
+/// it, or landing past tape_pull_over of the way on from that speed (@ui.lands_past) and not flung away.
+fn tape_goes_over(pulled : Double, span : Double, v : Double) -> Bool {
+  let fling = v.abs() > tape_fling
+  let toward = fling && (v > 0.0) == (span > 0.0)
+  let away = fling && !toward
+  let over = span != 0.0 && @ui.lands_past(pulled, v / 1000.0, tape_pull_over * span)
+  toward || (over && !away)
 }
