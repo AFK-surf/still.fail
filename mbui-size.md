@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [7e073ec98](https://github.com/AFK-surf/still.fail/commit/7e073ec9853b3f7dc4f357f909696b840c28d459) mbui: a box gone_empty takes no room holding nothi | 1.78 | 2.38 | 9.92 | 28.54 | 34.74 | 25.49 | 46.91 | 94.13 | 179.72 |
 | [39bcd19a7](https://github.com/AFK-surf/still.fail/commit/39bcd19a7d08bed6546e1d1419d3d3e203850874) mbui: a way set off again turns back while it is s | 1.78 | 2.38 | 9.91 | 28.54 | 34.72 | 25.48 | 46.89 | 94.52 | 169.68 |
 | [40f35d3be](https://github.com/AFK-surf/still.fail/commit/40f35d3be2e7c649b0f7d2ffadc3961fb30a3dfd) mbui: a scripted run's img: finds a picture or sha | 1.78 | 2.38 | 9.91 | 28.54 | 34.72 | 25.48 | 46.89 | 94.32 | 137.98 |
 | [bb7577768](https://github.com/AFK-surf/still.fail/commit/bb757776884b3ae1cd67c868e160dcd9e16ec64a) web: the core's worker gives the core its build, s | 1.78 | 2.38 | 9.91 | 28.54 | 34.71 | 25.48 | 46.89 | 94.21 | 175.79 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [7d8b45941](https://github.com/AFK-surf/still.fail/commit/7d8b45941d08c6954c1a9a8d3a34a40d3f3de25c) sf: a sheet of nodes over another sheet dims what  | 1.75 | 2.33 | 9.7 | 28.26 | 33.93 | 25.23 | 46.33 | 92.96 | 182.39 |
 | [69498a638](https://github.com/AFK-surf/still.fail/commit/69498a6383679696333fbca1ed435e6aeff4203f) mbui: a field of the window's tree blinks its care | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.54 | 186.58 |
 | [7c61114b4](https://github.com/AFK-surf/still.fail/commit/7c61114b4838f8fd673ff6d330c04a8f7d388946) app: which station a favorite folder is chosen on  | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.62 | 131.92 |
-| [cdddf8b29](https://github.com/AFK-surf/still.fail/commit/cdddf8b29c157a8faba875f93e46e893667e8f96) Station: cores before 0.1.6968 told to update; no  | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.32 | 170.66 |
