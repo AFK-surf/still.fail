@@ -2312,6 +2312,16 @@ let dl_label : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium
 let dl_reset : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
+/// A dial's name and its note in lines of dials (dials_node's `lines`): as wide as its dial, going on under themselves
+/// where they are longer, never cut.
+// kept across runs: a value (no field of it changes)
+let dl_label_lines : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dl_reset_lines : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
+
+///|
 // kept across runs: a value (no field of it changes)
 let dl_detail : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 

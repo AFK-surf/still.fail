@@ -7,6 +7,7 @@ fn profile_quota_tester(
   wider_digits? : Double = 0.0,
   two? : Bool = false,
   fourth? : Bool = false,
+  own? : Bool = false,
 ) -> (@ui.Tester, @signals.Signal[Bool]) {
   new_run()
   let base = fixture("settings")
@@ -21,6 +22,10 @@ fn profile_quota_tester(
   }
   if two {
     windows.pop() |> ignore
+  }
+  // (a model's own week in the month's place: marked by the model, wider than a length's mark)
+  if own {
+    windows[2] = { "mark": "Fable", "scope": "Fable", "left": Json::number(if maximum { 100.0 } else { 46.0 }), "level": "ok" }
   }
   let src : Source = {
     ..base,
@@ -90,6 +95,24 @@ test "three full allowance windows still fit in the narrowest sidebar" {
     // A short line must not leave one window stranded below the others. In a compact arrangement the marks may be
     // above the figures, but the figures themselves stay in one aligned row.
     let values = runs.filter(fn(r) { r.text == "100%" })
+    assert_true(values.iter().all(fn(r) { r.top == values[0].top }), msg="\{platform}, \{digits}: \{values}")
+    assert_eq(t.squeeze_faults(), [])
+  }
+}
+
+///|
+test "a model's own week, marked by the model, still fits beside the account's windows in the narrowest sidebar" {
+  for (platform, digits) in [(0, 0.0), (2, 0.0), (2, 0.3)] {
+    let (t, _) = profile_quota_tester(platform, maximum=true, wider_digits=digits, own=true)
+    @sfdesk.wide.side_w.set(@sfdesk.side_min)
+    t.draw()
+    let runs = t.text_runs().filter(fn(r) { r.x0 < 300.0 })
+    let shown = runs.map(fn(r) { r.text })
+    for mark in ["5H", "W", "Fable"] {
+      assert_eq(shown.filter(fn(s) { s == mark }).length(), 1, msg="\{platform}, \{digits}: \{mark}: \{shown}")
+    }
+    let values = runs.filter(fn(r) { r.text == "100%" })
+    assert_eq(values.length(), 3, msg="\{platform}, \{digits}: \{shown}")
     assert_true(values.iter().all(fn(r) { r.top == values[0].top }), msg="\{platform}, \{digits}: \{values}")
     assert_eq(t.squeeze_faults(), [])
   }

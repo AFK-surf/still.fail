@@ -207,8 +207,11 @@ export function windowName(label: string, lang: Lang = current()): string {
   return label;
 }
 
-/// A quota window marked by its length (5H, W, M, 3D), and where it goes among the others.
+/// A quota window marked by its length (5H, W, M, 3D), and where it goes among the others. One that is a single
+/// model's (每周 · Fable) is marked by the model, after the account's of its length: two chips both W told nothing apart.
 export function windowMark(label: string): [string, number] {
+  const of = label.indexOf(" · ");
+  if (of >= 0 && label.slice(of + 3).trim() !== "") return [label.slice(of + 3).trim(), windowMark(label.slice(0, of))[1]];
   if (label.startsWith("每月") || label.startsWith("Monthly")) return ["M", 3];
   if (label.startsWith("每周") || label.startsWith("Weekly")) return ["W", 2];
   const lead = (unit: string) => {

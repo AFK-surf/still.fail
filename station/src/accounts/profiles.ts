@@ -44,7 +44,8 @@ export type ProfileCheck = {
 };
 
 /// `minutes`: how long the window is, where known (the pool weighs what is left by how soon it is lost).
-export type QuotaWindow = { label: string; usedPercent: number; resetsAt: number | null; minutes?: number | null };
+/// `scope`: the one model it is the allowance of (its series as the provider names it: Fable).
+export type QuotaWindow = { label: string; usedPercent: number; resetsAt: number | null; minutes?: number | null; scope?: string };
 export type QuotaCredits = { hasCredits: boolean; unlimited: boolean; balance: string | null };
 
 /// How much of a profile's allowance is used, where the provider says.
@@ -53,6 +54,9 @@ export type ProfileQuota = {
   /// refuses the account.
   state: string;
   windows: QuotaWindow[];
+  /// What one model has to itself under the account's windows (each its `scope`'s). Apart from `windows`: one used up
+  /// stops that model alone, so nothing that weighs the account (sessions/pool.ts, a core from before it) counts it.
+  scoped?: QuotaWindow[];
   credits?: QuotaCredits;
   resetCount?: number;
   /// Expiries of available reset credits for which the provider returned details, in epoch milliseconds.

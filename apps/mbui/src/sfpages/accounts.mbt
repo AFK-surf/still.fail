@@ -962,7 +962,7 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
         })
         g.show(fn() { what() == 2 }, fn(x) {
           @sf.block_node(x, fn(bl) {
-            @sf.dials_node(bl, fn() { quota_dials_of(windows()) })
+            @sf.dials_node(bl, fn() { quota_dials_of(windows()) }, lines=2)
             bl.show(fn() { text(field(field(quota(), "time"), "checkedAt"), "ago") != "" }, fn(w) {
               @sf.words_node(w, fn() {
                 @sf.t("android-settings.quota.checkedAt", args=[("ago", text(field(field(quota(), "time"), "checkedAt"), "ago"))])
