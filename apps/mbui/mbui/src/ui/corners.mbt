@@ -217,8 +217,9 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
 /// opaque, what holds it as drawn, whether it takes a press, its words in it; each old view's box held by the tree's node it is drawn in. The frame as it was after. Where
 /// the old view is the whole window (old_whole), none: the tree draws nothing else. `laid`: each where it is laid out instead, as
 /// big, the old views where they are laid out (Tree::laid_held): what is worked out of them before they are drawn
-/// (Ctx::corners_after_layout).
-fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
+/// (Ctx::corners_after_layout). `facts`: each besides as it is said to be laid out and its words as drawn (Ctx::tree_facts,
+/// Ctx::tree_words_facts), for the squeeze (Ctx::tree_squeeze_said); none of it else.
+fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false, facts? : Bool = false) -> T {
   let tree = match view_app.val {
     Some(t) if !old_whole.val => t
     _ => return f()
@@ -243,6 +244,12 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
   // lies laid out where that does, as big (a ground laid beside it as a layer, Ctx::layer_grounds); what else of the
   // tree there is no container of any of theirs, and what it works out of the tree's own nodes is let go with them)
   let held = if laid { tree.laid_held_toward(fn(c) { c.hosted }) } else { tree.drawn_held() }
+  // (what each draws as it is drawn, and how big: what the squeeze reads of its words, View::shorter's and its scale)
+  let contents : Map[Int, (@view.Content, Double)] = {}
+  if facts {
+    tree.each_drawn_scaled(fn(c, _, _, _, s) { contents[c.id.at] = (c, s) })
+    tree_nodes_from.val = count
+  }
   // (each drawn one's node here, and the last of what it holds so far: what follows it among them)
   let at : Array[Int] = Array::make(held.length(), -1)
   let last : Map[Int, Int] = Map([])
@@ -299,9 +306,18 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
       n.id = -(k + 1)
     }
     let i = add(n)
+    if facts {
+      self.tree_facts(i, n, d, if holder >= 0 { Some(held[holder].0) } else { None }, contents, tree)
+    }
     tree_frame_ids[i] = d.id
     at[k] = i
     link(parent, i)
+    if facts && n.kind == kind_editor {
+      self.tree_field_facts(i, d, contents)
+    }
+    if facts && holder >= 0 && self.tree_scaled(d.id, held[holder].0.id, contents) {
+      tree_scaled_at.add(i)
+    }
     // (said to be a picture, as an old view's box is by its semantics: Ctx::pictures)
     if tree.says_picture(d.id) {
       tree_pictures.add(i)
@@ -317,6 +333,9 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
       w.x = d.x
       w.y = d.y
       w.parent = i
+      if facts {
+        self.tree_words_facts(w, d, contents, tree)
+      }
       link(i, add(w))
     }
     // (an old view drawn here: its box held by this node)
@@ -334,6 +353,11 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
   // their nodes are laid out, as the tree's: each old view's carried back from where it is drawn, Ctx::moved_carries)
   let out = if laid { self.with_old_laid(count, f) } else { self.with_old_drawn(f) }
   tree_pictures.clear()
+  tree_field_boxes.clear()
+  tree_scaled_at.clear()
+  tree_draws_at.clear()
+  tree_moved_at.clear()
+  tree_nodes_from.val = -1
   for r in reparented {
     self.nodes[r.0].parent = r.1
   }
