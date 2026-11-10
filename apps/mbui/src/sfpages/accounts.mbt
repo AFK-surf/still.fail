@@ -979,7 +979,8 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
           let rv = fn() { Some(rs.get()) }
           let busy = fn() { is_doing(core, ["profile.resetQuota"], on) }
           let usable = fn() { count(rv(), "left") > 0 && flag(rv(), "usable") }
-          x.pick(fn() { (count(rv(), "left") > 0, usable() && !busy()) }, fn(r, k) {
+          // (lit only when one can be used now: one usable only at a limit says why under it, unpressed)
+          x.pick(fn() { (usable(), usable() && !busy()) }, fn(r, k) {
             let (lit, goes) = k
             @sf.link_row_node(
               r,
