@@ -530,8 +530,7 @@
       "src/sfpages/service.mbt": 2,
       "src/sfpages/settings_page.mbt": 1,
       "src/sfpages/station_page.mbt": 1,
-      "src/sfpages/stations_now.mbt": 1,
-      "src/sfpages/workspace.mbt": 2
+      "src/sfpages/stations_now.mbt": 1
     },
     "click-read": {},
     "key-read": {},

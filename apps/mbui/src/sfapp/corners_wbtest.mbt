@@ -30,7 +30,7 @@ let corner_windows : Array[(String, Double, Double, Int, String)] = [
 let corner_modes : Array[String] = {
   let modes = [
     // (webdemo: the web's demo workspace, its chats' rows with people's faces, which chat's fixture has none)
-    "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "rail-menu", "landing", "landing-invited", "blocked", "place",
+    "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "new-workspace", "new-workspace-code", "rail-menu", "landing", "landing-invited", "blocked", "place",
     "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
     "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose", "chat-download", "chat-failed",
     "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-history-side", "chat-info", "chat-job",

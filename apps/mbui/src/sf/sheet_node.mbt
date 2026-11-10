@@ -55,6 +55,9 @@ fn sheet_node(
     fn(layer) {
       shown()
       layer.owns(gone) |> ignore
+      // (the field it opens to be typed in, where what it holds says one: panel_opens_in_node)
+      let field : Ref[@view.View?] = Ref(None)
+      layer.lends(panel_field_lent, field) |> ignore
       // (how far its scrim is in; how far below its place it is, in its own heights; how far a finger has its top down)
       // (in another's place: its scrim whole from the first, where that one stood, not below)
       let dim = EdgeWay::new(if in_place is Some(_) { 1.0 } else { 0.0 })
@@ -227,6 +230,21 @@ fn sheet_node(
         .presses(Is(true))
         .on_press(fn() {  })
         |> ignore
+        // (when its motions end, as presented_rest asks: its rise or sink as long as its own height makes it, from where
+        // it stood in another's place, its scrim, a height it goes to, its way back from under a finger: each said with
+        // its cause's moment and its length)
+        presented_sheet_rest(layer, fn() {
+          let own = dmax(0.0, sheet.placed_window_now().3 - under)
+          let mut e = below.ends(own)
+          match placed {
+            Some((stood, at)) => e = dmax(e, at + @ui.move_ms((own - stood).abs()))
+            None => ()
+          }
+          for w in [dim, back, tall, recede] {
+            e = dmax(e, w.end())
+          }
+          e
+        })
         // its top (sheet_drag_h: the grabber and the head) drags it: what a finger put down there does, as the host's
         // (@kit.sheet's): one that grows taller or shorter, settling at the detent it is let go nearer, closing let go
         // under sheet_close_below of the window, a tap on its grabber to the other end; one that does not only down,
@@ -373,7 +391,7 @@ fn sheet_node(
                 col.min_height(Is(Some(0.0))) |> ignore
                 // (laid out as the host's sheet lays out a capped panel's body: narrow, its words a sheet's own in, sheet_step's)
                 // (sheet_capped_room: none in from its sides)
-                panel_in_lend(col, Narrow, sheet_panel_sides)
+                panel_in_lend(col, Narrow, sheet_panel_sides, sides=0.0)
                 (n.body)(col, close)
               })
               |> ignore
@@ -401,6 +419,8 @@ fn sheet_node(
                   col,
                   Narrow,
                   if pressed { sheet_panel_sides - sheet_row_sides } else { 0.0 },
+                  // (sheet_held's, sheet_panel's px)
+                  sides=if pressed { sheet_row_sides } else { sheet_panel_sides },
                   rows_out=dmax(0.0, (if pressed { sheet_row_sides } else { sheet_panel_sides }) - panel_card_in),
                 )
                 (n.body)(col, close)
@@ -437,7 +457,12 @@ fn sheet_node(
         |> ignore
       })
       |> ignore
-      layer.focus_returns() |> ignore
+      // (the keys on the field it opens to be typed in, where it says one, given back as it goes; else the focus left
+      // where it is: Enter its foot's action)
+      match field.val {
+        Some(f) => layer.focus_opens(f) |> ignore
+        None => layer.focus_returns() |> ignore
+      }
     },
     // (its scrim's fade; and its sinking away, which holds it: View::moved_by)
     leave=@kit.sheet_scrim_ms,

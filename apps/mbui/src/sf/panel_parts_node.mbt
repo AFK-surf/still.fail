@@ -13,6 +13,9 @@
 /// a dialog's wide), so what the body makes reads them however late it is made.
 priv struct PanelIn {
   words : Double
+  /// how far in from the panel's sides the column is (its presenter's own room at its sides): what a card a page lays
+  /// out itself in the body stands `panel_card_in` from the sides by (panel_card_out_node)
+  sides : Double
   rows_out : Double
   small : Bool
   centred : Bool
@@ -24,20 +27,21 @@ priv struct PanelIn {
 let panel_in_lent : @view.Lent[PanelIn] = @view.Lent::new()
 
 ///|
-/// The column `col` a panel's body is made in by its presenter, laid out `look`, its words `words` in, its rows out
-/// `rows_out`, in a small panel where `small`, in a dialog in the middle of the window where `centred`, `clear` clear of
-/// an untitled dialog's close button.
+/// The column `col` a panel's body is made in by its presenter, laid out `look`, `sides` in from the panel's sides, its
+/// words `words` in, its rows out `rows_out`, in a small panel where `small`, in a dialog in the middle of the window
+/// where `centred`, `clear` clear of an untitled dialog's close button.
 fn panel_in_lend(
   col : @view.View,
   look : Look,
   words : Double,
+  sides~ : Double,
   rows_out? : Double = 0.0,
   small? : Bool = false,
   centred? : Bool = false,
   clear? : Double = 0.0,
 ) -> Unit {
   look_lent(col, look)
-  col.lends(panel_in_lent, { words, rows_out, small, centred, clear }) |> ignore
+  col.lends(panel_in_lent, { words, sides, rows_out, small, centred, clear }) |> ignore
 }
 
 ///|
@@ -78,7 +82,8 @@ fn panel_row_at(at : PanelIn, own? : Double = @double.infinity, card? : Bool = f
 
 ///|
 /// Which of what a dialog in the middle of the window holds takes the keyboard's focus as the dialog opens, where what
-/// it holds says one (panel_opens_on_node): lent by panel_centred_node to its dialog, read as all it holds is made.
+/// it holds says one (panel_opens_on_node): lent by panel_centred_node to its dialog, read as all it holds is made. A
+/// field it opens to be typed in is panel_field_lent's, on every way a panel is shown.
 // kept across runs: what each dialog lends, let go with it
 let panel_opens_lent : @view.Lent[Ref[@view.View?]] = @view.Lent::new()
 
@@ -86,7 +91,8 @@ let panel_opens_lent : @view.Lent[Ref[@view.View?]] = @view.Lent::new()
 /// `v`, a part of what a panel's body or foot is made of, takes the keyboard's focus as its panel opens in the middle
 /// of the window, in place of the first of what it holds that takes it: what Enter does there at once (a question's
 /// yes). Said as the panel's body or foot is made. Nothing where the panel gives the focus to none of what it holds (a
-/// sheet, a panel beside what opened it).
+/// sheet, a panel beside what opened it): there Enter is the foot's action. A field to be typed in as it opens is
+/// panel_opens_in_node's.
 pub fn panel_opens_on_node(v : @view.View) -> Unit {
   match v.lent(panel_opens_lent) {
     Some(r) => r.val = Some(v)
@@ -95,9 +101,28 @@ pub fn panel_opens_on_node(v : @view.View) -> Unit {
 }
 
 ///|
+/// Which field of what a panel holds has the keys as the panel opens, however it is presented (panel_opens_in_node):
+/// lent by each of the panel's ways (panel_centred_node, sheet_node, panel_node) to what it holds, read as all it holds
+/// is made.
+// kept across runs: what each panel lends, let go with it
+let panel_field_lent : @view.Lent[Ref[@view.View?]] = @view.Lent::new()
+
+///|
+/// `field`, a field of what a panel's body is made of, has the keyboard's focus as its panel opens, however the
+/// presenters show it (in the window's middle, a sheet from its foot, beside what opened it), the input method up for it
+/// with a finger: given it by the panel's layer as it opens (View::focus_opens), as anything a layer opens on is, given
+/// back as it goes. Said once as the panel's body is made; a page never says how its panel is shown.
+pub fn panel_opens_in_node(field : @view.View) -> Unit {
+  match field.lent(panel_field_lent) {
+    Some(r) => r.val = Some(field)
+    None => ()
+  }
+}
+
+///|
 /// Where node `v` of a panel's body is laid out (none outside a panel).
 fn panel_in_of(v : @view.View) -> PanelIn {
-  v.lent(panel_in_lent).unwrap_or({ words: 0.0, rows_out: 0.0, small: false, centred: false, clear: 0.0 })
+  v.lent(panel_in_lent).unwrap_or({ words: 0.0, sides: 0.0, rows_out: 0.0, small: false, centred: false, clear: 0.0 })
 }
 
 ///|

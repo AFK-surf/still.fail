@@ -1132,7 +1132,7 @@ test "the workspaces' sheet: more workspaces than it holds are reached by scroll
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@sf.later_ms + @kit.presence_in_ms)
   t.tap_text("工作区 1")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  presented_rested(t)
   assert_true(@sf.presenting())
   let last = "工作区 20"
   let (_, foot_y) = t.find("登录其他账号").unwrap()
@@ -1151,7 +1151,7 @@ test "the workspaces' sheet: more workspaces than it holds are reached by scroll
       break
     }
     held_drag(t, x, from_y, from_y - 60.0)
-    sheet_rested(t, "sf-present")
+    presented_rested(t)
   }
   assert_true(in_view(), msg="the last workspace scrolled into the sheet")
   t.tap_text(last)
