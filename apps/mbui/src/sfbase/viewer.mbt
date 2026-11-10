@@ -750,12 +750,13 @@ let lift_gap : Double = 12.0
 /// share and the growing the rest, on one curve, so that nothing stops between them (the user, 2026-10-29: 「前段避让跟
 /// 后段放大之间…顿一下…应该浑然一体」); its edges no quicker as it goes out than as it then grows (a picture mostly hidden
 /// goes out far, the user, 2026-10-29: 「从上往下的还有问题」); a Move as long as it all is far. `to` not known: as far as
-/// to the middle of the window, `window` (w, h).
+/// to the middle of the window, `window` (w, h); zoomed past the window, as far as what the window shows of it (its
+/// edges out there are never seen going: one zoomed closes as quick as one fitted).
 fn fly_way(t : Thumb, to : (Double, Double, Double, Double)?, window : (Double, Double)) -> (Double, Double) {
   let lift = lift_of(t).abs()
   let lift = if lift < 0.5 { 0.0 } else { lift }
   let y = t.y + (if lift > 0.0 { lift_of(t) } else { 0.0 })
-  let grow = match to {
+  let grow = match to.map(fn(r) { seen_of(r, window.0, window.1) }) {
     Some((tx, ty, tw, th)) =>
       dmax(dmax((tx - t.x).abs(), (tx + tw - t.x - t.w).abs()), dmax((ty - y).abs(), (ty + th - y - t.h).abs()))
     None => {
@@ -1687,6 +1688,10 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
     // closed at once: the one going is only drawn (what was going before it, gone)
     marks_leave()
     leaving_done()
+    // (an image's zoom on its way, a double tap's glide or a fling, stops where it is: what it goes back from)
+    if self.shown_kind() == Some(KImage) {
+      self.zoom.stop_glide(at=viewer_moment(c))
+    }
     // an image shrinks back into its thumbnail when the chat shows it (from where a flight in has got to), else
     // it fades out
     match (thumb_of(c, self.thumb_id()), self.shown_kind(), self.zoom.rect_at(viewer_moment(c))) {
@@ -1700,12 +1705,10 @@ pub fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
       // it, and where it was), else with its still (FilePreview.kt close: flight.frame())
       (Some(t), Some(KVideo), _) if self.chat_file() && self.video_rect(c) is Some(_) => {
         self.fly_from = Some(t)
-        self.fly_to = match self.media {
-          Some(m) => @sf.player_picture_at(m.key())
-          None => None
-        }
+        self.fly_to = self.player_place()
         match self.view() {
-          Some(n) if n.here() && n.shown() && !n.grabbing() => {
+          // (still flying in: back from where that has got to at once, its player's picture not seen whole meanwhile)
+          Some(n) if !self.flies && n.here() && n.shown() && !n.grabbing() => {
             self.grab_set(true)
             self.left_at = n.position()
             c.tell("preview-grab", fn() { n.grab_shown(kept_frame_side) })
@@ -1738,15 +1741,28 @@ fn viewer_moment(c : @ui.Ctx) -> Double {
 
 ///|
 /// A video back into its thumbnail with `picture` (from where a flight in has got to, in as much of its time), from the
-/// moment `at`, in a window `window` (w, h).
+/// moment `at`, in a window `window` (w, h): from where its player draws it now (flung, it went on while its frame was
+/// grabbed).
 pub fn Viewer::fly_home(self : Viewer, picture : String, at : Double, window : (Double, Double)) -> Unit {
   self.fly_pic = picture
+  if self.player_place() is Some(r) {
+    self.fly_to = Some(r)
+  }
   self.fly_back = true
   match self.fly_from {
     Some(t) => self.fly_home_from(t, self.fly_to, at, window)
     None => ()
   }
   pv_hidden.set(self.thumb_id())
+}
+
+///|
+/// Where its player draws a film's picture (@sf.player_picture_at: zoomed, moved, as it was last drawn).
+fn Viewer::player_place(self : Viewer) -> (Double, Double, Double, Double)? {
+  match self.media {
+    Some(m) => @sf.player_picture_at(m.key())
+    None => None
+  }
 }
 
 ///|
@@ -2133,13 +2149,26 @@ pub fn Viewer::shown_picture(self : Viewer, c : @ui.Ctx, src : Source, r : (Doub
 /// Where the picture in flight is drawn (viewer_tree.mbt's flight nodes, an image's and a film's): `cut`, what shows
 /// of it, on the window (from what showed of the thumbnail, cut by what it is in, to the whole stage); `box`, the box
 /// it is cut to, its corners `radius` round (from the thumbnail's box and corners, each as the thumbnail resolves it,
-/// to the picture's place and none); `picture`, the picture in it (from where it lies in the box, covering it or fitted
-/// inside it, to its place), at its own proportions all the way.
+/// to the picture's place, what the stage shows of it where it is zoomed past it, and none); `picture`, the picture in
+/// it (from where it lies in the box, covering it or fitted inside it, to its place), at its own proportions all the
+/// way.
 struct FlightBox {
   cut : (Double, Double, Double, Double)
   box : (Double, Double, Double, Double)
   corners : (Double, Double, Double, Double)
   picture : (Double, Double, Double, Double)
+}
+
+///|
+/// What a stage `w` × `h` shows of `r` (x, y, w, h); `r` itself where it shows none of it.
+fn seen_of(r : (Double, Double, Double, Double), w : Double, h : Double) -> (Double, Double, Double, Double) {
+  let (x0, y0) = (dmax(r.0, 0.0), dmax(r.1, 0.0))
+  let (x1, y1) = (dmin(r.0 + r.2, w), dmin(r.1 + r.3, h))
+  if x1 > x0 && y1 > y0 {
+    (x0, y0, x1 - x0, y1 - y0)
+  } else {
+    r
+  }
 }
 
 ///|
@@ -2176,11 +2205,14 @@ fn flight_box(
   let (pw0, ph0) = (tw * k, th * k)
   let (px0, py0) = (from.x + (from.w - pw0) / 2.0, from.y + (if from.top_crop { 0.0 } else { (from.h - ph0) / 2.0 }))
   let along = fn(a : Double, b : Double) { a + (b - a) * p }
+  // (the box to what the stage shows of a picture zoomed past it: its round corners on what is seen all the way; out
+  // past the stage's cut they were square till it landed)
+  let (bx, by, bw, bh) = seen_of(to, stage_w, stage_h)
   // cut, at the thumbnail, as the thumbnail is by what it is in (its card's edge), the stage whole at the other end
   let (cx, cy) = (along(sx, 0.0), along(sy, 0.0))
   Some({
     cut: (cx, cy, along(sx + sw, stage_w) - cx, along(sy + sh, stage_h) - cy),
-    box: (along(from.x, tx), along(from.y, ty), along(from.w, tw), along(from.h, th)),
+    box: (along(from.x, bx), along(from.y, by), along(from.w, bw), along(from.h, bh)),
     corners: {
       let (tl, tr, br, bl) = from.corners.each()
       let k = 1.0 - p

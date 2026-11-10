@@ -27,18 +27,12 @@ async function listen(h: Harness, token: string) {
   const ws = response.webSocket!;
   ws.accept();
   const got: AccountEvent[] = [];
-  let pong: (() => void) | null = null;
-  ws.addEventListener("message", (event) => (event.data === "pong" ? pong?.() : got.push(JSON.parse(event.data as string))));
+  ws.addEventListener("message", (event) => void (event.data === "pong" || got.push(JSON.parse(event.data as string))));
   return {
     ws,
-    // Once what the call before told the account's object has got there (h.settled), a pong comes after everything
-    // sent before it, so this sees every event of that call.
+    // Every event of the calls before (h.heard).
     async take(): Promise<string[]> {
-      await h.settled();
-      await new Promise<void>((resolve) => {
-        pong = resolve;
-        ws.send("ping");
-      });
+      await h.heard(ws);
       return got.splice(0).map((e) => JSON.stringify(e)).sort();
     },
   };
@@ -68,13 +62,9 @@ async function connectStation(h: Harness, station: Awaited<ReturnType<typeof key
   const ws = response.webSocket!;
   const frames: any[] = [];
   const closed = new Promise<number>((resolve) => ws.addEventListener("close", (event) => resolve(event.code), { once: true }));
-  let pong: (() => void) | null = null;
-  ws.addEventListener("message", (event) => (event.data === "pong" ? pong?.() : frames.push(JSON.parse(event.data as string))));
+  ws.addEventListener("message", (event) => void (event.data === "pong" || frames.push(JSON.parse(event.data as string))));
   ws.accept();
-  const ping = async () => {
-    await h.settled();
-    await new Promise<void>((resolve) => { pong = resolve; ws.send("ping"); });
-  };
+  const ping = () => h.heard(ws);
   return { status: 101, ws, frames, closed, ping };
 }
 

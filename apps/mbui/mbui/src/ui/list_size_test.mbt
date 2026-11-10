@@ -181,6 +181,42 @@ test "list: a row gone down past others is the one that moves: it leaves where i
 }
 
 ///|
+test "list: a row gone and given again elsewhere while its room still closes leaves where it was and comes where it is" {
+  // (where a chat stands, gone as its agent set to work and back at the list's end as the turn was over a moment
+  // after, rows come since between: taken up at the end as tall as it had closed to, its room went from over those
+  // rows to under them in one frame, each a step up)
+  for in_place in [false, true] {
+    let ids = [Array::makei(10, fn(i) { i }) + [100]]
+    let t = @ui.Tester::new(sized_rows(fn() { ids[0] }, in_place~), w=300.0, h=400.0)
+    assert_eq(bottom_of(t, 10), 400.0)
+    // it goes
+    ids[0] = Array::makei(10, fn(i) { i })
+    t.draw()
+    t.run_for(@ui.row_size_ms / 3.0)
+    let (_, _, _, closing) = t.row(10).unwrap()
+    assert_true(closing > 5.0 && closing < 45.0, msg="in place \{in_place}: closing, \{closing} tall")
+    let (_, over, _, _) = t.row(9).unwrap()
+    // two rows come at the end, and it again after them
+    ids[0] = Array::makei(12, fn(i) { i }) + [100]
+    t.draw()
+    // where it stood, a copy of it as tall as it had closed to, closing on; the rows come after it; itself from nothing
+    let (_, _, _, copy) = t.row(10).unwrap()
+    assert_true((copy - closing).abs() < 1.0, msg="in place \{in_place}: \{copy} tall where it stood, \{closing} before")
+    let (_, _, _, anew) = t.row(13).unwrap()
+    assert_true(anew < 1.0, msg="in place \{in_place}: \{anew} tall where it is now")
+    // (what is over them not stepped)
+    let (_, over_now, _, _) = t.row(9).unwrap()
+    assert_true((over_now - over).abs() < 1.0, msg="in place \{in_place}: the row over them from \{over} to \{over_now}")
+    rows_end_to_end(t, 5, 14)
+    // at their end: the copy gone, the rows as given
+    t.run_for(@ui.row_size_ms)
+    assert_eq(t.row(12).unwrap().3, 50.0)
+    assert_eq(bottom_of(t, 12), 400.0)
+    assert_true(t.row(13) is None)
+  }
+}
+
+///|
 test "list: keys changed in place and given with new items still move their rows" {
   let keys = ["r0", "r1", "r2"]
   let items = Ref([0, 1, 2])

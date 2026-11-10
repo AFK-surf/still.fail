@@ -486,3 +486,24 @@ test "frame_period: the run's frames as its host's lines space them, two lines a
   assert_eq(r.frame_period(), Some(16.625))
   assert_eq(@core.Replay::parse(paced).frame_period(), None)
 }
+
+///|
+test "the changelog asked for its news alone is answered by an older tape's whole, and the whole asked after it too" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":7,"subscribe":{"topic":"changelog"},"keyed":true}}
+    #|{"in":{"id":7,"value":{"tabs":[{"part":"android"}],"news":{"build":"0.1.1310"}}},"w":1}
+  ))
+  let c = r.client()
+  // (the chats' list's card: its news alone)
+  let news = c.subscribe("changelog", params={ "news": true })
+  assert_eq(r.deliver(), 1)
+  assert_eq(news.value.unwrap().stringify(), "{\"tabs\":[{\"part\":\"android\"}],\"news\":{\"build\":\"0.1.1310\"}}")
+  // (the changelog's page opened after: the whole, what came for the tape's one so far)
+  let whole = c.subscribe("changelog")
+  r.deliver() |> ignore
+  assert_eq(whole.value.unwrap().stringify(), news.value.unwrap().stringify())
+  // (the page left: its ask let go of, no ask of the run's; the card's goes on)
+  c.unsubscribe(whole)
+  assert_eq(r.fuzzy().length(), 0)
+  assert_eq(r.diverged(), [])
+}

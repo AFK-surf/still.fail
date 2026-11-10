@@ -361,6 +361,8 @@ pub fn new_profile_node(@view.View, @settings.Core, () -> @settings.Here, String
 
 pub fn news_of(@sfbase.Source) -> @json.Json?
 
+pub fn news_params() -> Map[String, @json.Json]
+
 pub fn no_workspace_node(@view.View, @sfbase.Source, () -> @json.Json?, () -> Unit) -> @view.View
 
 pub fn notify_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, stint~ : () -> Int32, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit

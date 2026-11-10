@@ -401,6 +401,48 @@ fn answered_at(v : ChatView, all : Array[Entry]) -> Array[Agent] {
 }
 
 ///|
+/// Chat `r`'s view `v` and its entries `list` as the core will say them once it has the words sent from here that it
+/// does not have yet (sent.mbt's local_sending: in the list from the frame they are sent, LocalSent), where the chat's
+/// last card still waits: they answer it at once, and the core says so from the moment it has them, all in one word
+/// of its own (decisions.ts inMessages: what is sending answers the last card; views.ts: the card no more asked, the
+/// chat's asks without it, where it stands gone as its agent has words to take). That word comes a few frames after
+/// the press, more on a phone: till then the words' row came in alone, the list going up for it, and the card folded,
+/// the line of where the chat stands went and the room kept clear of the bell closed only then, the list turning
+/// back down under the hand (the user, 2026-11-10: 「现在发一条消息都会有奇怪的跳动」). Said so from the frame they are
+/// sent, all of it goes on one way with them (their agent's line too: answered_at). Not sent after all, their row
+/// gone, the core's word stands again: the card waits.
+fn sent_here_view(r : ChatRef, v : ChatView, list : Array[Entry]) -> (ChatView, Array[Entry]) {
+  guard local_sending.get(r.station + "\u{1}" + r.session) is Some(sending) && !sending.is_empty() else {
+    return (v, list)
+  }
+  let mut at = -1
+  for i, m in v.messages {
+    if m.card is Some(_) {
+      at = i
+    }
+  }
+  guard at >= 0 else { return (v, list) }
+  let m = v.messages[at]
+  // (answered already, or a person's words after it in the chat: the core's word stands)
+  guard m.decision is Some(d) && !d.resolved else { return (v, list) }
+  // (there as they were sent: a card come since, their agent's answer to them, is not what they answer; the frame the
+  // core has them, its view read before their row is taken over, would have said that one answered for a frame)
+  guard sending.iter().any(fn(l) { m.seq <= l.newest }) else { return (v, list) }
+  for i in (at + 1)..<v.messages.length() {
+    if v.messages[i].author_kind == "person" {
+      return (v, list)
+    }
+  }
+  let said = @sf.t("core-logic.decisions.replied", args=[("name", @sf.t("core-logic.decisions.you"))])
+  let messages = v.messages.copy()
+  // (no more asked: letting it go is not offered under it)
+  messages[at] = { ..m, asked: false, decision: Some({ resolved: true, dismissed: false, text: Some(said), chosen: None }) }
+  let asks = v.asks.filter(fn(seq) { seq != m.seq })
+  let v = { ..v, messages, asks, ask_clear: v.ask_clear && !asks.is_empty(), state: None, state_ask: None }
+  (v, chat_entries(v).0)
+}
+
+///|
 /// The entries and where their messages end, before the live rows at the foot.
 fn chat_entries(v : ChatView) -> (Array[Entry], Int) {
   let out : Array[Entry] = [Top]
@@ -490,7 +532,11 @@ pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json
     // sent_local, while the core has it made and not yet sent to)
     (Some(c), Some(Object(_)), Some(_)) if c.list.iter().any(fn(e) { e is Empty }) =>
       (Some(c.view), c.list.filter(fn(e) { !(e is Empty) }), topic.error)
-    (Some(c), Some(Object(_)), _) => (Some(c.view), c.list, topic.error)
+    (Some(c), Some(Object(_)), _) => {
+      // (what was sent from here and the core does not have yet answers the last card waiting: sent_here_view)
+      let (view, list) = sent_here_view(r, c.view, c.list)
+      (Some(view), list, topic.error)
+    }
     // the chat a new chat became as its first words were sent, till the core's view of it is read: a chat with
     // nothing in it yet but what was sent from here (its own first view, as the core's will be: views.ts pendingChat)
     (_, _, Some((v, list))) => (Some(v), list, None)

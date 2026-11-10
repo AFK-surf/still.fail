@@ -8,7 +8,7 @@
 //   press on it is the row's, where in the row the pointer let go: Ctx::pointer, as its handler runs), no target of its own. Drawn smaller, a press
 //   reaches it from round it, by a finger or a pointer alike (Ctx's press_reach): its room is it grown so round its
 //   middle, moved in from the window's edge rather than cut short there, within what holds it that takes presses (a
-//   row's button: in the row's room, not its neighbour's) (press_room); where two rooms meet, each has the part
+//   row's button: in the row's room, not its neighbour's) (@view.press_room); where two rooms meet, each has the part
 //   nearer it, as the hit test gives it. A ground is no control (Ctx::cursor's Arrow: a stage a click shows the bars
 //   on, the room round a list's rows, a message's words a hold picks in): no room of its own, none it cuts.
 // apart: two such in one layer, neither holding the other, are never drawn over each other: a press there would be
@@ -125,8 +125,8 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
       }
     }
   }
-  // each one's room as the hit test reaches it (press_room): grown round its middle, moved in from the window's edge
-  // rather than cut short there, cut to what holds it that takes presses
+  // each one's room as the hit test reaches it (@view.press_room): grown round its middle, moved in from the window's
+  // edge rather than cut short there, cut to what holds it that takes presses
   let window = (0.0, 0.0, self.width, self.height)
   let boxes = targets.map(fn(i) {
     let b = self.nodes[i]
@@ -177,8 +177,8 @@ fn Ctx::room_faults(self : Ctx) -> Array[String] {
 }
 
 ///|
-/// The rooms of the targets drawn as `boxes` (x0, y0, x1, y1), each as the hit test reaches it (press_room, within its
-/// `cuts` and the window), parted where two meet that `meet` says may (in one layer, neither holding the other): each
+/// The rooms of the targets drawn as `boxes` (x0, y0, x1, y1), each as the hit test reaches it (@view.press_room,
+/// within its `cuts` and the window), parted where two meet that `meet` says may (in one layer, neither holding the other): each
 /// has the part nearer what it is drawn as (press_reach: the nearest), the two cut where the gap between them is
 /// halved, across the way they stand apart most. Drawn over each other, a press there would be either's: told to
 /// `over` (by how far across and down), their rooms left. Which side each is on by their middles: two that meet, the
@@ -191,7 +191,8 @@ fn rooms_parted(
   meet : (Int, Int) -> Bool,
   over : (Int, Int, Double, Double) -> Unit,
 ) -> Array[(Double, Double, Double, Double)] {
-  let rooms = boxes.mapi(fn(j, b) { press_room(b.0, b.1, b.2, b.3, cuts[j], window) })
+  let least = room_least()
+  let rooms = boxes.mapi(fn(j, b) { @view.press_room(b.0, b.1, b.2, b.3, cuts[j], window, least) })
   for j in 0..<boxes.length() {
     for k in (j + 1)..<boxes.length() {
       if !meet(j, k) {

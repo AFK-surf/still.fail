@@ -188,13 +188,15 @@ for t in $targets; do
       # long, three short), the third three for 90, 2026-11-05: of each fifteen, seven to the fourth with four
       # programs, three to the first and four to the second with two each, one to the third with one) (the first's
       # with four since: on a runner of its own, nothing beside them, two of its cores stood idle while preview_tree,
-      # taken late by name, ran 162 s of its 265 at 120 fps, mbui-motion-layer3 42659257481, 2026-11-10)
+      # taken late by name, ran 162 s of its 265 at 120 fps, mbui-motion-layer3 42659257481, 2026-11-10) (six to the
+      # fourth and four to the first since: at 60 a second the fourth's pages were 243 s, its job 254 of its 5 minutes,
+      # the first's job 59 s, core-unheld-messages 42723740236, main 2c1c63b8 42723386381, 2026-11-10)
       if [ -n "${APP_GROUP:-}" ] && [ "${APP_GROUP#*/}" = 4 ]; then
         g1=() g2=() g3=() g4=()
         for i in "${!pages[@]}"; do
           case $((i % 15)) in
-            0 | 2 | 4 | 6 | 8 | 10 | 12) g4+=("${pages[i]}") ;;
-            1 | 7 | 13) g1+=("${pages[i]}") ;;
+            0 | 2 | 4 | 6 | 8 | 10) g4+=("${pages[i]}") ;;
+            1 | 7 | 12 | 13) g1+=("${pages[i]}") ;;
             3 | 9 | 11 | 14) g2+=("${pages[i]}") ;;
             *) g3+=("${pages[i]}") ;;
           esac

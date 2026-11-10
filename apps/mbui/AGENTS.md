@@ -135,6 +135,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - Every screen is swept at the default size of words (corners_wbtest.mbt) and, in a phone's window, at the system's
   words set to 1.3 (`src/sfapp/words_large_wbtest.mbt`: what fits and words over words at rest; the user, 2026-11-10).
   A new state a report shows gets a fixture mode in `corner_modes`, so both sweeps see it.
+- What the core sends for what the app subscribes to, in each flow's trace, keeps to its bar
+  (`src/sfreplay/topic_bytes.mbt`: KB of values sent whole, values sent whole again, messages for what was let go of;
+  each topic's largest value). A page subscribes to what it shows, no more (the user, 2026-11-10); a trace recorded
+  anew that is sent more fails, one sent less brings its bar down.
 - For development stills, prepare a `scripts/media-job.sh picture` job for each source state and reuse its Wasm
   renderer across scenes; use a `film` job for video (`scripts/media-job.sh` says how).
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture

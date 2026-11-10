@@ -12,7 +12,11 @@
 //   6 the cloud frozen while a device joins and is taken off: the stations carry the locks;
 //   7 a second station in the lock, the first frozen while a device joins and is taken off through the second;
 //   8 bob, a member: his first device approved by the owner face to face, a vault of his own, his own lock and his
-//     second device on it; taken out of the workspace by the owner, his devices refused.
+//     second device on it; taken out of the workspace by the owner, out of its lock with his devices, refused;
+//   9 a second workspace of alice's, safe mode on there too, its own station: a device joining her own lock once is let
+//     in by both, taken off it refused by both;
+//   10 safe mode turned off in the second: its station lets that device in again, the first still refuses it;
+//   11 round 7's second station taken out of the first workspace: out of its lock too.
 // Each check says PASS or FAIL; it goes on after a failure where it can, and exits 1 if any failed. E2E_SF_SRC,
 // E2E_ORIGIN, E2E_PEER_DATA as peer.ts; E2E_WORK, E2E_STATION as e2e-local.sh's.
 import { type ChildProcess, execFileSync, fork } from "node:child_process";
@@ -840,8 +844,17 @@ try {
     for (const ws of [workspace, two]) log(`  J in ${ws === two ? "Two" : "Dev"}: ${short(await j.stationState(ws, (s) => s.state !== "online" && s.state !== "connecting", 90_000))}`);
   });
   let jKey = "";
-  await must("J joins alice's own lock once, face to face with B", async () => {
-    jKey = await joinVia(b, j);
+  // (as a person does it on a new phone: 发送批准请求 on the page that waits in the workspace, not the settings' 个人锁.
+  // Approved into the workspace's lock that way, as it was before, every station went on refusing it: 2026-11-10)
+  await must("J asks from the page that waits in Dev: it joins alice's own lock, face to face with B", async () => {
+    const me = (await j.lock(workspace, (l) => l.me?.waiting && l.me?.ownLock, 60_000)).me;
+    log(`  J's page in Dev: ${JSON.stringify({ waiting: me.waiting, ownLock: me.ownLock, pair: me.pair?.state ?? null })}`);
+    const shown = b.until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], 90_000);
+    await j.call("lock.pair", { workspace });
+    const p = await shown;
+    await j.lock(workspace, (l) => l.me?.pair?.state === "code", 60_000);
+    await j.call("lock.pairCode", { workspace, code: p.code });
+    jKey = (await j.personal((p) => p.standing === "member", 90_000)).devices.find((x: J) => x.me)?.key as string;
   });
   await check("J let in by both workspaces' stations, in both workspaces' locks signing", async () => {
     for (const ws of [workspace, two]) {
@@ -864,6 +877,37 @@ try {
   await check("B and A installed anew still let in by both, alice's item opened", async () => {
     for (const x of [b, e]) {
       for (const ws of [workspace, two]) await x.stationState(ws, (s) => s.state === "online", 60_000);
+      await opens(x);
+    }
+  });
+  // ── round 10: safe mode turned off in the second workspace by its owner: its station lets in any device of its
+  // members again, J too; the first workspace's lock, and alice's own lock bound there, still keep J out ──
+  await must("A installed anew turns safe mode off in Two", async () => {
+    await e.call("lock.disable", { workspace: two });
+    await e.lock(two, (l) => !l.locked, 60_000);
+  });
+  await check("J, off alice's own lock, let in by Two's station now; still refused in Dev", async () => {
+    const t1 = Date.now();
+    await j.stationState(two, (s) => s.state === "online", 90_000);
+    log(`  J in Two after ${Date.now() - t1} ms`);
+    log(`  J in Dev: ${short(await j.stationState(workspace, (s) => s.state !== "online" && s.state !== "connecting", 30_000))}`);
+  });
+  await check("B and A installed anew go on in both", async () => {
+    for (const x of [b, e]) for (const ws of [workspace, two]) await x.stationState(ws, (s) => s.state === "online", 60_000);
+    await opens(b);
+  });
+  // ── round 11: the second station of round 7 taken out of the first workspace by alice: out of its lock too, by her
+  // device's signature, not the cloud's word alone; the first station and her devices go on ──
+  await must("B takes the second station out of Dev", async () => {
+    await b.call("workspace.removeStation", { account: sub, workspace, station: secondId });
+  });
+  await check("the first station's lock names it no more", async () => {
+    let said = "";
+    await whenChanged([stationData], () => /^STATIONS 1$/m.test((said = stationSays("lock-state"))), 60_000, () => `the station's lock: ${said.trim().split("\n").slice(-3).join("; ")}`);
+  });
+  await check("B and A installed anew go on in Dev, alice's item opened", async () => {
+    for (const x of [b, e]) {
+      await x.stationState(workspace, (s) => s.state === "online", 60_000);
       await opens(x);
     }
   });

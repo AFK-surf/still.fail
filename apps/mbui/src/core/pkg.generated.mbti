@@ -86,6 +86,8 @@ pub fn unsubscribe_topic(String, params? : Map[String, @json.Json]) -> Unit
 
 pub fn wall_ms() -> Double
 
+pub fn weights(@json.Json, most? : Int32) -> (Int32, Array[(String, Int32)])
+
 // Errors
 
 // Types and methods

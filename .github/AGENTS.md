@@ -12,3 +12,6 @@
   `check-station`: more test files, more slices).
 - A check that failed and passed on the same commit is never rerun green (the root AGENTS.md). Do not rerun an old
   commit's main pipeline: it deploys that commit's beta over the newer one.
+- An artifact uploaded for people to look at (pictures, logs, what moved) says `continue-on-error: true`: a runner's
+  connection to GitHub's artifact service reset fails a check that had passed (main acb00686, 2026-11-01; #5157's
+  `offscreen`, 2026-11-10). One a later job downloads does not: there the upload's failure is the job's.

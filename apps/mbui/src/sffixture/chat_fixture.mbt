@@ -1655,9 +1655,12 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       if signin {
         all.push(signin_post(f.mode))
       }
-      // chat-ask-end's card, last
+      // chat-ask-end's card, last of what was there: what was sent since comes after it, as it was said after it (put
+      // at the end, words sent under it came to stand over it once the station had them, a whole row up in one frame)
       if ask_end {
-        all.push(ask_end_post())
+        let card = ask_end_post()
+        let at = all.search_by(fn(x) { number(Some(x), "seq") > number(Some(card), "seq") }).unwrap_or(all.length())
+        all.insert(at, card)
       }
       // each answer's message, after the rest
       for seq, label in fix_replied {

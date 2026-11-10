@@ -60,6 +60,8 @@ priv struct SettingsFixture {
   /// prompt closed
   mut pairing : Bool
   mut pairing_personal : Bool
+  /// asked into one more workspace meanwhile (开源, its mark an emoji): fixture_prompts_now
+  mut pairing_more : Bool
   /// Maple is being added to security mode (settings-security-protecting).
   mut protecting : Bool
   /// how its prompt went: "deny" (turned away), "hide" (closed, the code still good), "" while it is up
@@ -69,6 +71,8 @@ priv struct SettingsFixture {
   mut key_ask : Bool
   /// how that went: "give" (授权), "hide" (稍后, or closed), "" while it is up
   mut key_ask_ended : String
+  /// the key being given it (the core's `doing`: vault.addDevice under way): fixture_prompts_now
+  mut key_giving : Bool
   /// Maple online too (settings-profiles-pick: Profile's ＋ asks which station)
   mut mba_online : Bool
   // (settings-station-away: Willow away, what it last said of itself kept)
@@ -125,10 +129,12 @@ let fx : SettingsFixture = {
   key_enabled: true,
   pairing: false,
   pairing_personal: false,
+  pairing_more: false,
   protecting: false,
   pair_ended: "",
   key_ask: false,
   key_ask_ended: "",
+  key_giving: false,
   mba_online: false,
   willow_away: false,
   willow_incompatible: false,
@@ -238,10 +244,12 @@ fn fixture_reset() -> Unit {
   fx.plain_left = 0
   fx.pairing = false
   fx.pairing_personal = false
+  fx.pairing_more = false
   fx.protecting = false
   fx.pair_ended = ""
   fx.key_ask = false
   fx.key_ask_ended = ""
+  fx.key_giving = false
   fx.mba_online = false
   fx.willow_away = false
   fx.willow_incompatible = false
@@ -367,6 +375,18 @@ pub fn fixture_pair_ended() -> String {
 /// How the prompt for a vault's key went (`vault.addDevice` "give", `vault.hidePrompt` "hide"; "" while it is up).
 pub fn fixture_key_ask_ended() -> String {
   fx.key_ask_ended
+}
+
+///|
+/// What the made-up core's `lockPrompts` holds now, as another device changed it (lock_prompts.mbt, vault_prompts.mbt):
+/// the new device asking (`pairing`; into one more workspace meanwhile, `more`), the device waiting for the vault's key
+/// (`key_ask`; the key being given it, `giving`), told to what follows its topics.
+pub fn fixture_prompts_now(pairing~ : Bool, more? : Bool = false, key_ask~ : Bool, giving? : Bool = false) -> Unit {
+  fx.pairing = pairing
+  fx.pairing_more = more
+  fx.key_ask = key_ask
+  fx.key_giving = giving
+  fx_changed()
 }
 
 ///|
@@ -1833,6 +1853,17 @@ fn fx_memory() -> Json {
 }
 
 ///|
+/// The workspaces the new device asks into (settings-lock-prompt): 星火工作室 and 个人, and 开源 once it asked there
+/// too (fx's `pairing_more`).
+fn pairing_places() -> Array[Json] {
+  let places = [obj([("id", str("ws1")), ("name", str("星火工作室"))]), obj([("id", str("ws2")), ("name", str("个人"))])]
+  if fx.pairing_more {
+    places.push(obj([("id", str("ws3")), ("name", str("开源")), ("emoji", str("🌲"))]))
+  }
+  places
+}
+
+///|
 /// A made-up settings topic, None for one these do not make.
 pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -> Json? {
   if name == "lock" && mode.has_prefix("lock-") {
@@ -1963,7 +1994,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                   ("deviceText", str("Pixel 9")),
                   ("created_at", Json::number(0.0)),
                   ("untilText", str("14:05 前有效")),
-                  ("workspaces", if fx.pairing_personal { [] } else { [obj([("id", str("ws1")), ("name", str("星火工作室"))]), obj([("id", str("ws2")), ("name", str("个人"))])] }),
+                  ("workspaces", if fx.pairing_personal { [] } else { Json::array(pairing_places()) }),
                 ]),
               ]
             } else {
@@ -2539,6 +2570,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
     }
     "doing" => Some(obj([("doing", if fx.protecting {
       [obj([("call", str("lock.joinStation")), ("stage", str("running")), ("params", obj([("workspace", str("ws1")), ("station", str("st2"))]))])]
+    } else if fx.key_giving {
+      [obj([("call", str("vault.addDevice")), ("stage", str("running")), ("params", obj([("workspace", str("ws1")), ("vault", str("v1")), ("device", str("d-new"))]))])]
     } else {
       []
     })]))

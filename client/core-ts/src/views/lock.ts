@@ -44,7 +44,7 @@ import { unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
 import { ofAddress } from "../workspace.ts";
-import type { PersonalEnv } from "../personal-lock.ts";
+import { type PersonalEnv, personOf } from "../personal-lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -643,7 +643,7 @@ export function onBoundPerson(inner: Inner, ws: string): boolean {
 }
 
 /// Whether this app device's person bound a lock of their own in the workspace's, and this device is not on it.
-function offOwnLock(inner: Inner, ws: string): boolean {
+export function offOwnLock(inner: Inner, ws: string): boolean {
   const sub = inner.workspaces.owner(ws);
   const h = held(inner, ws);
   if (sub === null || !h?.head || !inner.host.appKeys) return false;
@@ -997,7 +997,12 @@ export function lockView(inner: Inner, ws: string): J {
   const at = now(inner);
   const signer = signers.get(inner) ?? null;
   const people = new Map<string, J>(arr(get(v, "members")).map((m) => [m.sub, m]));
-  const mine = base ? (live(f.devices.get(base), at) ?? (onBoundPerson(inner, ws) ? { id: base, sub: inner.workspaces.owner(ws), kind: "app" } : undefined)) : undefined;
+  // Its person bound a lock of their own here, and this app is not on it as far as it knows (`own`): what it asks to
+  // join is that lock (`run`'s pair). Known to be off it (`off`: their lock read, this device not on it; not merely not
+  // read yet, as an app just started is), it waits here whatever this lock names: the stations let it in on that alone.
+  const own = base !== null && locked && offOwnLock(inner, ws);
+  const off = own && sub !== null && inner.adb.personal().standing(sub) === "outside";
+  const mine = off ? undefined : base ? (live(f.devices.get(base), at) ?? (onBoundPerson(inner, ws) ? { id: base, sub: inner.workspaces.owner(ws), kind: "app" } : undefined)) : undefined;
   const role = str(get(v, "role")) ?? "member";
   const manages = role === "owner" || role === "admin";
   const signs = mine !== undefined && typeof mine.sign_key === "string" && mine.sign_key === signer;
@@ -1079,7 +1084,7 @@ export function lockView(inner: Inner, ws: string): J {
   // was turned on were; or its key since lost): it may be made one that signs, approved face to face as a new one is.
   const unsigned = locked && mine !== undefined && mine.kind === "app" && inner.host.appKeys === true && signers.has(inner) && !signs;
   if (unsigned && typeof mine.sign_key === "string") recover(inner, mine.sign_key);
-  const pair = locked && (mine === undefined || unsigned) ? pairs.mine(inner, ws) : null;
+  const pair = locked && (mine === undefined || unsigned) ? pairs.mine(inner, own && sub !== null ? personOf(sub) : ws) : null;
   // The devices its try dials here, as people know them (which machine, a phone or a computer), the most lately used
   // first, those showing a code before them: the person opens still.fail on one of those (2026-11-05: "到底是哪个设备会
   // 弹出来呀？", a web page of theirs, or an app not approved, shows nothing). Each a row of the page's list, its name
@@ -1117,6 +1122,8 @@ export function lockView(inner: Inner, ws: string): J {
       // Not in the lock: it waits to be confirmed, and asks by hand.
       waiting: locked && base !== null && mine === undefined,
       ...(unsigned ? { unsigned: true } : {}),
+      // (its person's own lock is what it joins: the pair below is that one's)
+      ...(own && (mine === undefined || unsigned) ? { ownLock: true } : {}),
       // Its try to be approved face to face (views/pair.ts), once it began.
       pair,
     },
@@ -1275,6 +1282,14 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         break;
       // Approved face to face (views/pair.ts): asked, the code typed, given up.
       case "pair":
+        // Its person bound a lock of their own here that this device is not on: approved into this one it would still be
+        // refused (the stations let their app devices in on that lock alone), so it asks to join that one instead, the
+        // same code shown on a device on it (2026-11-10: a new phone approved here went on being refused, 「已经批过了啊」).
+        if (offOwnLock(inner, c.workspace)) {
+          const sub = inner.workspaces.owner(c.workspace);
+          if (sub !== null) return yield* inner.adb.run({ kind: "personalJoin", sub });
+        }
+        return yield* pairs.run(inner, c.name, c.workspace, c.params);
       case "pairCode":
       case "pairCancel":
         return yield* pairs.run(inner, c.name, c.workspace, c.params);

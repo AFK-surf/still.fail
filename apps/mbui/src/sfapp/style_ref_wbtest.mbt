@@ -57,14 +57,14 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|waiting wide 58561:95cb81f6
     #|waiting-dark narrow 28193:277c0cc7
     #|waiting-dark wide 58388:a2810814
-    #|finding narrow 50144:9a7f2448
-    #|finding wide 80992:95a603e8
-    #|finding-dark narrow 50156:cbcbdeb8
-    #|finding-dark wide 80913:848e7e06
-    #|code narrow 33554:9c15c965
-    #|code wide 63933:fae0f85f
-    #|code-dark narrow 33414:cc74586b
-    #|code-dark wide 63702:ec8409c9
+    #|finding narrow 44483:4f8a0e44
+    #|finding wide 75292:aa5ff171
+    #|finding-dark narrow 44536:e796be88
+    #|finding-dark wide 75254:678ac02d
+    #|code narrow 31619:9deffdf
+    #|code wide 61977:d3d20b74
+    #|code-dark narrow 31494:1c8c4705
+    #|code-dark wide 61761:b97b01c
     #|wrong narrow 28240:97d2f231
     #|wrong wide 58675:b9440a2a
     #|wrong-dark narrow 28342:6b141516
@@ -73,10 +73,10 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|checking wide 66422:4a6b188c
     #|checking-dark narrow 35413:be05c142
     #|checking-dark wide 66423:3eb6872b
-    #|none narrow 40672:a310c470
-    #|none wide 70859:149a9acf
-    #|none-dark narrow 40526:8ae504ab
-    #|none-dark wide 70622:45327f2
+    #|none narrow 37542:1dbb1867
+    #|none wide 67714:168f01d1
+    #|none-dark narrow 37420:fd5a9a96
+    #|none-dark wide 67501:fd9fa742
     #|failed narrow 23502:ede593dd
     #|failed wide 53789:444ff120
     #|failed-dark narrow 23504:9d059bad

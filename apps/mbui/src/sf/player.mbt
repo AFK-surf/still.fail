@@ -1826,6 +1826,10 @@ fn phone_gestures(
       v.drag_dy = 0.0
     }
     if !down {
+      // pinched smaller than fitted and let go: back to fitted, as an image is
+      if v.pinched && z.scale_at(c.moment()) < z.fit() {
+        z.reset(at=c.moment())
+      }
       v.pinched = false
     }
     // a tap or a double tap (none of the above)

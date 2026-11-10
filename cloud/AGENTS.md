@@ -26,5 +26,7 @@
   A change to a station-facing route keeps both working.
 - Tests run in Miniflare with everything outside mocked: `pnpm run types && pnpm run check && pnpm test`, one file
   `pnpm exec tsx --test test/<file>.test.ts`. What the Directory tells after a change answers is waited for with
-  `h.settled()` (test/harness.ts), never a while. `test/dev.ts` runs every Worker locally (`docs/development.md`).
-  Deploying is main's pipeline's, never by hand from a branch.
+  `h.settled()` (test/harness.ts), never a while; a socket is read after `h.heard(ws)`, never after a ping of a
+  test's own (what a station says on its socket is answered by a call to the Directory, later than a pong).
+  `test/dev.ts` runs every Worker locally (`docs/development.md`). Deploying is main's pipeline's, never by hand
+  from a branch.

@@ -40,7 +40,7 @@ pub fn vault_prompts(core : Core, free : Bool) -> Unit {
 ///|
 /// The sheet of a device asking for a key: which device and which vault (its workspace named too), that giving it
 /// unlocks here once; 授权 (primary) and 稍后. Gone by itself once that device has the key (given here or elsewhere) or
-/// asks no more.
+/// asks no more. What it holds is nodes of the window's tree, made once as it opens (@sf.panel_nodes).
 fn key_ask_sheet(core : Core, r : Json) -> Unit {
   let rv = Some(r)
   let ws = text(rv, "workspace")
@@ -53,27 +53,40 @@ fn key_ask_sheet(core : Core, r : Json) -> Unit {
   let hide = fn() {
     (core.call)("vault.hidePrompt", obj([("workspace", str(ws)), ("device", str(device)), ("at", Json::number(count(rv, "at").to_double()))]), fn(_) {  })
   }
-  @sf.panel(fill("web-pages.vault.promptTitle", [("device", text(rv, "deviceText"))]), from=Unanchored, gone=hide, fn(c, close) {
-    // given the key elsewhere, or put away there: gone here too
-    let prompts = (core.topic)("lockPrompts", Map::new()).get().value
-    let now = items(prompts, "asks").iter().find_first(fn(x) { key_ask_of(x) == ask })
-    if prompts is Some(_) && now is None {
-      close()
-      return
-    }
-    c.box(style=key_ask_column, fn() {
-      c.text(fill("web-pages.vault.promptBody", [("vault", text(rv, "vaultName")), ("at", text(rv, "atText"))]), style=key_ask_body)
+  @sf.panel_nodes(fill("web-pages.vault.promptTitle", [("device", text(rv, "deviceText"))]), from=Unanchored, gone=hide, fn(v, close) {
+    // given the key elsewhere, or put away there: gone here too, as the core says so
+    prompt_goes(v, fn() { prompt_now(core, "asks", fn(x) { key_ask_of(x) == ask }) }, close)
+    v.box(fn(col) {
+      @sf.style_node(col, fn() { key_ask_column })
+      @sf.words_node(col, fn() { fill("web-pages.vault.promptBody", [("vault", text(rv, "vaultName")), ("at", text(rv, "atText"))]) }, fn() {
+        key_ask_body
+      })
       |> ignore
-      c.text(text(rv, "workspaceName") + " · " + text(rv, "vaultName"), style=key_ask_where) |> ignore
-      c.box(style=key_ask_buttons, fn() {
-        let giving = is_doing(core, ["vault.addDevice"], on)
-        wide_button(c, "vault-key-give", tr("web-pages.vault.promptGive"), true, busy=giving, on_press=fn() {
-          act(core, tr("web-pages.vault.addDeviceWhat"), "vault.addDevice", obj([("workspace", str(ws)), ("vault", str(vault)), ("device", str(device))]), done=tr("web-pages.vault.addedDevice"))
-        })
-        wide_button(c, "vault-key-later", tr("web-pages.vault.promptLater"), false, enabled=!giving, on_press=fn() {
-          close()
-          hide()
-        })
+      @sf.words_node(col, fn() { text(rv, "workspaceName") + " · " + text(rv, "vaultName") }, fn() { key_ask_where }) |> ignore
+      col.box(fn(b) {
+        @sf.style_node(b, fn() { key_ask_buttons })
+        let giving = fn() { is_doing(core, ["vault.addDevice"], on) }
+        @sf.wide_button_node(
+          b,
+          fn() { tr("web-pages.vault.promptGive") },
+          fn() {
+            act(core, tr("web-pages.vault.addDeviceWhat"), "vault.addDevice", obj([("workspace", str(ws)), ("vault", str(vault)), ("device", str(device))]), done=tr("web-pages.vault.addedDevice"))
+          },
+          true,
+          busy=giving,
+        )
+        |> ignore
+        @sf.wide_button_node(
+          b,
+          fn() { tr("web-pages.vault.promptLater") },
+          fn() {
+            close()
+            hide()
+          },
+          false,
+          enabled=fn() { !giving() },
+        )
+        |> ignore
       })
       |> ignore
     })

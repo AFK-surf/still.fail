@@ -693,32 +693,41 @@ test "a tool as a node's tip held open by a finger, as kit's tooltip: shown once
 }
 
 ///|
-/// Tool "复制 new" pressed 1 in from its right edge (`platform`: 0 a mouse's, 1 a touch screen's), moved `out` points
-/// right, let go there; held `hold` ms first: how many times it was pressed.
-fn let_go_beside(platform : Int, out : Double, hold? : Double = 0.0) -> Int raise {
+/// Tool "复制 new" (drawn tool_side across) pressed 1 in from its right edge (`platform`: 0 a mouse's, 1 a touch
+/// screen's), moved right to `past` points past that edge, let go there (`past` -1: let go where it went down); held
+/// `hold` ms first: how many times it was pressed.
+fn let_go_past(platform : Int, past : Double, hold? : Double = 0.0) -> Int raise {
   let said = @signals.signal({ icon: "copy", label: "复制", on: false, disabled: false }, same=fn(a, b) { a == b })
   let pressed : Map[String, Int] = {}
   let t = tools_tester(said, @signals.signal(page_viewer_ink()), pressed, platform~)
   let n = t.get(Button, label="复制 new")
-  let (x, y) = (n.rect.0 + n.rect.2 - 1.0, n.rect.1 + 16.0)
-  t.touch(0, x, y)
+  assert_eq(n.rect.2, tool_side, msg="the tool drawn tool_side across")
+  let (edge, y) = (n.rect.0 + n.rect.2, n.rect.1 + 16.0)
+  t.touch(0, edge - 1.0, y)
   if hold > 0.0 {
     t.run_for(hold)
   }
-  t.touch(1, x + out, y)
-  t.touch(2, x + out, y)
+  t.touch(1, edge + past, y)
+  t.touch(2, edge + past, y)
   t.draw()
   pressed.get("new").unwrap_or(0)
 }
 
 ///|
-test "a tool as a node pressed only as it is let go on it: from inside its edge moved out a little and let go, no press, by a mouse or a finger; let go where it went down, a press; a mouse held past long_press_ms, a press let go on it, none moved off it" {
-  for p in [0, 1] {
-    assert_eq(let_go_beside(p, 3.0), 0, msg="platform \{p}: let go beside it")
-    assert_eq(let_go_beside(p, 0.0), 1, msg="platform \{p}: let go on it")
+test "a tool as a node pressed only as it is let go on it, its room round it its own: from inside its edge moved out within its room (a mouse's 36 across, a finger's 44) and let go, a press; moved out of its room, none; let go where it went down, a press; a mouse held past long_press_ms, a press let go on it, none moved off it" {
+  // (what a press reaches past each edge of it: half of what its room is wider than it is drawn, the rule's numbers
+  // written here, not asked of what works the room out)
+  for pr in [(0, 36.0), (1, 44.0)] {
+    let (p, room) = pr
+    let reach = (room - tool_side) / 2.0
+    assert_true(reach >= 2.0, msg="platform \{p}: drawn smaller than its room, \{reach} to reach past its edge")
+    assert_eq(let_go_past(p, reach - 1.0), 1, msg="platform \{p}: let go past its edge, in its room")
+    assert_eq(let_go_past(p, reach + 1.0), 0, msg="platform \{p}: let go out of its room")
+    assert_eq(let_go_past(p, -1.0), 1, msg="platform \{p}: let go on it")
   }
-  assert_eq(let_go_beside(0, 10.0, hold=@ui.long_press_ms + 50.0), 0, msg="a mouse held, let go off it")
-  assert_eq(let_go_beside(0, 0.0, hold=@ui.long_press_ms + 50.0), 1, msg="a mouse held, let go on it")
+  assert_eq(let_go_past(0, 9.0, hold=@ui.long_press_ms + 50.0), 0, msg="a mouse held, let go off it")
+  assert_eq(let_go_past(0, -1.0, hold=@ui.long_press_ms + 50.0), 1, msg="a mouse held, let go on it")
+  assert_eq(let_go_past(0, 1.0, hold=@ui.long_press_ms + 50.0), 1, msg="a mouse held, let go in its room")
 }
 
 ///|
