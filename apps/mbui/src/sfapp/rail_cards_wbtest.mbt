@@ -31,7 +31,7 @@ test "wide: a figure of 对话's card pressed opens the chats it counts (2026-11
     assert_true(!@sfdesk.wide.attention_open.get(), msg=figure)
   }
   rail_card_figure_pressed(t, "今天归档 8")
-  assert_true(app.nav.top() == Archived)
+  assert_eq(@sfdesk.side_place(), "archive")
   assert_true(t.find("3 个对话正在运行") is None, msg="今天归档: its card gone")
 }
 

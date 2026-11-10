@@ -7,7 +7,7 @@ pub fn fixture_rail_card(params : Map[String, Json]) -> Json? {
     Some(String(p)) => p
     _ => ""
   }
-  let stat = fn(value : String, label : String, tone : String, go? : String = "") -> Json {
+  let stat = fn(value : String, label : String, tone : String, go : String) -> Json {
     let s : Map[String, Json] = { "value": Json::string(value), "label": Json::string(label) }
     if tone != "" {
       s["tone"] = Json::string(tone)
@@ -22,10 +22,10 @@ pub fn fixture_rail_card(params : Map[String, Json]) -> Json? {
       Some({
         "head": "3 个对话正在运行",
         "stats": [
-          stat("2", "等你处理", "amber", go="attention"),
-          stat("1", "出错", "red", go="attention"),
-          stat("4", "未读", "", go="attention"),
-          stat("8", "今天归档", "", go="archive"),
+          stat("2", "等你处理", "amber", "attention"),
+          stat("1", "出错", "red", "attention"),
+          stat("4", "未读", "", "attention"),
+          stat("8", "今天归档", "", "archive"),
         ],
         "rows": [],
       })
@@ -34,7 +34,7 @@ pub fn fixture_rail_card(params : Map[String, Json]) -> Json? {
       let labels = ["10/20", "10/21", "10/22", "10/23", "10/24", "10/25", "10/26"]
       Some({
         "head": "近 7 天折合 $1,911",
-        "stats": [stat("$362", "今天", ""), stat("3.1 亿", "输入 token", "")],
+        "stats": [stat("$362", "今天", "", ""), stat("3.1 亿", "输入 token", "", "")],
         "rows": [
           { "name": "Opus 5.5", "value": "$1,207 · 63%" },
           { "name": "GPT-6", "value": "$412 · 22%" },

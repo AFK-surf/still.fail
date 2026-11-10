@@ -473,7 +473,7 @@ pub fn pull_title(@json.Json?) -> String
 
 pub fn quotes(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Quote], Array[@sfbase.Attachment], mine? : Bool, at? : String) -> Unit
 
-pub fn rail_card_node(@view.View, @sfbase.Source, () -> @sfbase.Workspace?, String) -> Unit
+pub fn rail_card_node(@view.View, @sfbase.Source, () -> @sfbase.Workspace?, String, go? : (String) -> Unit) -> Unit
 
 pub fn reader_page(@ui.Ctx, @sfbase.Source, @sfbase.DriveAt) -> Unit
 
