@@ -175,6 +175,11 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
   // with it, on from where it is, below; taken for its content's own going, the list put that whole room on in one
   // frame and all over the row went up by it, rows_steady.mbt's rows_step_least)
   let own = c.own.contains(key) && !(cause is Comes(_))
+  // (gone and back elsewhere: new where it is now, from nothing, not on from as tall as it had closed to)
+  if c.anew.contains(key) {
+    c.anew.remove(key)
+    self.sizes.remove(key)
+  }
   c.way_begun(frame)
   let r = match self.sizes.get(key) {
     Some(r) => r
@@ -182,8 +187,8 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
       let from = match cause {
         Comes(_) => 0.0
         // (as tall as it was last laid out, by its key: what is had by its place in the list may be another row's as
-        // the rows given change)
-        _ => self.shown_h.get(key).unwrap_or(natural)
+        // the rows given change; a copy of a row gone and back elsewhere, as tall as that row stood)
+        _ => c.carried.get(key).unwrap_or(self.shown_h.get(key).unwrap_or(natural))
       }
       // (off as the way set out: laid out first a while on, it is where the way has it by then)
       let r = {
@@ -299,6 +304,7 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
   } else if cause is Comes(_) {
     c.not_by_room.add(key)
   }
+  c.stood[key] = shown
   shown
 }
 
@@ -488,6 +494,13 @@ pub struct RowCauses {
   /// of them turns so on its way (ListState::row_sized)
   priv not_by_room : Set[String]
   priv opened : Map[String, (Double, Double)]
+  /// how tall each row on the way was last laid out, by its key (ListState::row_sized)
+  priv stood : Map[String, Double]
+  /// a row gone that came back elsewhere while its room still closed (ListRows::rows): the copy of it left closing
+  /// where it stood, by its key, as tall as the row stood then (`stood`); and the row itself, new where it is now,
+  /// from nothing
+  priv carried : Map[String, Double]
+  priv anew : Set[String]
   /// of those, the room over what each holds, at its top (its gap to the row before: ListRows::enter's `lead`)
   priv leads : Map[String, Double]
   /// the frame its list was last laid out in (shown): one not shown the frame before is shown anew, as it is
@@ -591,7 +604,7 @@ pub struct ListRows[T] {
 
 ///|
 pub fn[T] ListRows::new() -> ListRows[T] {
-  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), not_by_room: Set::new(), opened: {}, leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
+  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), not_by_room: Set::new(), opened: {}, stood: {}, carried: {}, anew: Set::new(), leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
 }
 
 ///|
@@ -663,6 +676,9 @@ pub fn[T] ListRows::rows(
     self.causes.by_room.clear()
     self.causes.not_by_room.clear()
     self.causes.opened.clear()
+    self.causes.stood.clear()
+    self.causes.carried.clear()
+    self.causes.anew.clear()
     self.causes.leads.clear()
   }
   // (whether a row sets out now: the rows' way sets out again from here)
@@ -672,6 +688,8 @@ pub fn[T] ListRows::rows(
   } else if self.given && watched {
     for i, k in keys {
       let v = version(items[i])
+      // (gone, its room still closing, and given again: where it went by, before it is said to come)
+      let went_by = if self.going.contains(k) { self.causes.by.get(k) } else { None }
       match self.was.get(k) {
         None =>
           if comes(items[i]) {
@@ -693,9 +711,32 @@ pub fn[T] ListRows::rows(
           }
         _ => ()
       }
-      if self.going.contains(k) {
-        self.going.remove(k)
-        moved = true
+      match self.going.get(k) {
+        Some(g) => {
+          // back elsewhere than it stood (rows come since between: where a chat stands, gone as its agent set to
+          // work, back at the list's end as the turn was over a moment after): it leaves where it was, a copy of it
+          // as it was, and comes where it is from nothing, as a row gone ahead of others does (`moves`). Taken up
+          // where it is now as tall as it had closed to, that room went from over the rows between to under them in
+          // one frame, all of them a step up (rows_steady.mbt's rows_step_least). Back where it stood, it turns
+          // back from where it is
+          let copy = k + row_moved_mark
+          let stood_after = if i > 0 { keys[i - 1] } else { "" }
+          if g.after != stood_after && !self.going.contains(copy) && self.causes.by.get(k) is Some((Comes(_), _)) {
+            self.going[copy] = g
+            self.causes.by[copy] = match went_by {
+              Some((Goes(at), dur)) => (Goes(at), dur)
+              _ => (Goes(g.at), row_size_ms)
+            }
+            match self.causes.stood.get(k) {
+              Some(h) => self.causes.carried[copy] = h
+              None => ()
+            }
+            self.causes.anew.add(k)
+          }
+          self.going.remove(k)
+          moved = true
+        }
+        None => ()
       }
     }
     // the rows gone ahead of others (`moves`: a chat with news to its list's top): each leaves where it was, a copy of
@@ -794,6 +835,9 @@ pub fn[T] ListRows::rows(
     self.causes.by_room.clear()
     self.causes.not_by_room.clear()
     self.causes.opened.clear()
+    self.causes.stood.clear()
+    self.causes.carried.clear()
+    self.causes.anew.clear()
     self.causes.leads.clear()
   }
   self.causes.end = end

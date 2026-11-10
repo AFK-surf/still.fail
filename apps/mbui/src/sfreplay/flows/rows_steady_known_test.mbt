@@ -14,8 +14,5 @@ fn init {
     ("src/sfreplay/flows/bar_archive_test.mbt", 1),
     ("src/sfreplay/flows/drive_upload_test.mbt", 1),
     ("src/sfreplay/flows/share_test.mbt", 1),
-    // (where the chat stands gone as its agent set to work and back as its turn ended a moment after, its room still
-    // closing where it was: put at the end at once, what came between a step up; rows_step_least's first finding)
-    ("src/sfreplay/flows/wide_answer_reply_test.mbt", 1),
   ])
 }
