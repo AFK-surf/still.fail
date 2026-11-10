@@ -1071,7 +1071,7 @@ function firstToBegin(relevant: readonly { h: Held; own: OwnStandings }[], sub: 
 /// have no lock and no device of theirs is the one to begin, or the one to begin cannot with no one asked. The one that
 /// began says its key in each lock where another device of theirs stands, the devices it put on knowing its key only
 /// by that; once on the lock, others say it only where another device of theirs said its key, which may take the lock
-/// from it. Nothing is said where the
+/// from it. A device not on their lock says nothing where the
 /// person bound a lock of their own already: its stations go by that lock for their app devices, and an entry this
 /// device signed there since would keep keepToPerson from taking it out. Per person, once for each head of their locks
 /// and what holds the first back; one at a time, what asks meanwhile done after. No timer of its own.
@@ -1117,7 +1117,7 @@ function ownLockOnce(inner: Inner, sub: string): Effect.Effect<void, CoreError> 
     if (mine.length === 0) return;
     const relevant = locks.filter((l) => l.own.devices.size > 0);
     // (on the lock already, with nothing to say where no other device of theirs said its key: nothing to do, nothing read)
-    const othersSaid = (l: (typeof locks)[number]) => !l.f.persons.has(sub) && [...l.own.devices.values()].some((d) => d.id !== base && d.said !== null);
+    const othersSaid = (l: (typeof locks)[number]) => [...l.own.devices.values()].some((d) => d.id !== base && d.said !== null);
     if (personal.standing(sub) === "member" && !mine.some(othersSaid)) return;
     // (once for each head of the locks, the person's own as read, and of the devices not said that came lately)
     let tried = ownTried.get(inner);
@@ -1155,8 +1155,11 @@ function ownLockOnce(inner: Inner, sub: string): Effect.Effect<void, CoreError> 
         let failed: CoreError | null = null;
         for (const l of mine) {
           const me = l.own.devices.get(base)!;
-          // (having begun: said wherever another device of theirs stands, those it put on knowing its key only by that)
-          if (l.f.persons.has(sub) || me.said === said || (member && !(began ? l.own.devices.size > 1 : othersSaid(l)))) continue;
+          // (having begun: said wherever another device of theirs stands, those it put on knowing its key only by that.
+          // Off their lock, nothing said where it is bound: as said above. On it, said there too: bound before the one
+          // that began had said its key (the entry that binds taken first, this one refused for it), the devices it put
+          // on never knew the chain theirs, and held themselves as not let in.)
+          if (me.said === said || (!member && l.f.persons.has(sub)) || (member && !(began ? l.own.devices.size > 1 : othersSaid(l)))) continue;
           const put = new Lock(inner, l.ws, sub, null).append("device", { id: base, sub, kind: "app", label: me.label, sign_key: me.sign_key, person_key: said });
           const r = yield* Effect.result(Effect.andThen(put, read(inner, l.ws)));
           if (r._tag === "Failure") failed = r.failure;

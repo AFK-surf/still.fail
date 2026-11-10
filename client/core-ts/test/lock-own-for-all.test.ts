@@ -197,6 +197,38 @@ test("the owner's devices: B (put in by A) and C (put in by B) say their keys, A
   }
 });
 
+test("bound before the one that began said its key: it says it there all the same, and the one it put on takes the lock", async () => {
+  const kB = wsKey(2);
+  const B = idOf("b");
+  const s = await first(undefined, ({ A, put }) => {
+    put(A, "device", app(B, "b", kB));
+    put(kB, "device", app(B, "b", kB, { person_key: keyOf("b") }));
+  });
+  const b = device("b", s.pc, s.st, (id) => ({ vouchers: () => vouchersIn([ownStandings(s.chain(), SUB, NOW)], SUB, id) }));
+  try {
+    assert.equal(await b.runner.run(b.lock.makeKey()), keyOf("b"));
+    // Begun here with B on it, and the workspace's lock bound to it before this device's key was said there (as when
+    // the entry that binds is taken first, and the one saying the key refused for it): written as the cloud keeps it.
+    s.st.answered.value = true;
+    assert.equal(await s.run(s.personal.beginQuietly(SUB)), true);
+    assert.deepEqual(idsOn(s.personal.entries(SUB)), [ME, B].sort());
+    s.put(s.A, "person", { sub: SUB, person: s.personal.root(SUB) });
+    assert.equal(s.standing().devices.get(ME)?.said ?? null, null, "not said yet");
+    // B hears the chain and cannot know it theirs: no key said up its lineage signed it.
+    await b.runner.run(b.lock.refresh(SUB));
+    assert.equal(b.lock.standing(SUB), "outside");
+    await s.go();
+    assert.equal(fold(held(s.inner, "ws")!.entries).persons.get(SUB), s.personal.root(SUB), "bound, as read");
+    await s.until(() => s.standing().devices.get(ME)?.said != null, "this device said its key there, bound as it is");
+    await b.runner.run(b.lock.refresh(SUB));
+    assert.equal(b.lock.standing(SUB), "member", "and the one it put on takes the lock");
+    assert.equal(s.r.host.secureAsked.length, s.asked, "nothing asked here");
+    assert.deepEqual(b.host.secureAsked, [], "nor there");
+  } finally {
+    b.runner.shutdown();
+  }
+});
+
 test("the one to begin waits while a device of theirs that came lately has not said its key; begins once it did, or where it is not listed as come; one first but not come lately is passed over", async () => {
   const kB = wsKey(2), kC = wsKey(3);
   const seenRow = (base: string) => ({ sub: SUB, email: "a@x.com", device: base, base, kind: "app", label: "x", first_seen: 1, last_seen: 1 });
