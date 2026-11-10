@@ -17,6 +17,7 @@ import * as ops from "../ops.ts";
 import type { Topic } from "../protocol.ts";
 import { LOOK_COLOURS, type MermaidLook } from "../mermaid.ts";
 import { draftAt } from "../refs.ts";
+import { OUTLINE_ROWS } from "../things.ts";
 import { StationAddr } from "../station/addr.ts";
 import type { FindAt, FindHit } from "../chat-find.ts";
 import { readConnects, readPeople, type RelayConnect, type RelayPerson } from "../relay-pick.ts";
@@ -70,6 +71,7 @@ export type Call =
   /// A chat's outline: the rest of the chat read onto the device; what it lists for words looked for.
   | { kind: "chatBring"; station: string; thread: number }
   | { kind: "chatOutlineFind"; station: string; thread: number; query: string; bring: boolean }
+  | { kind: "chatOutlineRows"; station: string; thread: number; seqs: number[] }
   | { kind: "historyOlder"; station: string; key: string }
   | { kind: "historyDetail"; station: string; key: string; from: number; to: number }
   | { kind: "stationMeasure"; station: string }
@@ -600,6 +602,16 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
         ["bring", "bool", "opt"],
       ]);
       return { kind: "chatOutlineFind", station: p.station as string, thread: p.thread as number, query: p.query as string, bring: p.bring === true };
+    }
+    case "chat.outline.rows": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["seqs", "u64s", "req"],
+      ]);
+      const seqs = p.seqs as number[];
+      if (seqs.length > OUTLINE_ROWS) throw CoreError.invalid(t("core-misc.params.invalid", { error: `invalid length ${seqs.length}, expected at most ${OUTLINE_ROWS} seqs` }));
+      return { kind: "chatOutlineRows", station: p.station as string, thread: p.thread as number, seqs };
     }
     case "chat.bring": {
       const p = read(params, [

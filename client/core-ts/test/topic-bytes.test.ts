@@ -26,7 +26,8 @@ import type { PersonalLock } from "../src/personal-lock.ts";
 import type { Rigs } from "../src/rigs.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { parseTopic, TOPICS, type Topic } from "../src/protocol.ts";
-import { CHAT, UP, devicesSaid, fixture, hostReading, messageAdded, quotaChanged } from "./real-size.ts";
+import { OUTLINE_ROWS } from "../src/things.ts";
+import { CHAT, OUTLINED, OUTLINED_ENTRIES, UP, devicesSaid, fixture, hostReading, messageAdded, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, quotaChanged } from "./real-size.ts";
 import { hostOf, overview, setup } from "./views-rig.ts";
 
 holdLanguage();
@@ -76,6 +77,8 @@ const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
   "changelog": { topic: "changelog" },
   "changelog news": { topic: "changelog", news: true },
   "devices": { topic: "devices", workspace: "ws" },
+  // (of the chat of four weeks held whole: what it is made of is all of a chat held)
+  "chatOutline": { topic: "chatOutline", station: OUTLINED.station, thread: OUTLINED.thread },
 };
 
 /// Those over `BAR_KB` now, by the name `ASKED` gives them: what each weighs, KB rounded up to a multiple of 8.
@@ -255,6 +258,7 @@ async function held() {
   // topic nothing watches is not kept: the core's station topics read what is watched).
   for (let round = 0; round < 2; round++) {
     for (const [topic, value] of fixture(base)) t.set(topic, value);
+    t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), outlinedLog(base));
     for (const [i, station] of UP.entries()) devices!.heard(station, "devices", devicesSaid(base, i));
     await t.host.time.pass(100);
   }
@@ -316,6 +320,14 @@ test("what each topic the app asks is sent as the workspace changes holds to its
     causes.push(["message", await during(() => {
       for (const [topic, value] of messageAdded(base, t.host.nowMs())) t.set(topic, value);
     }, 1000)]);
+    // The chat of four weeks: its agent writing on (twice), a person's words edited, a person saying something.
+    const log = (item: [number, unknown]) => t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), [item]);
+    causes.push(["agent", await during(() => {
+      log(outlinedWorking(base, 1));
+      log(outlinedWorking(base, 2));
+    }, 1000)]);
+    causes.push(["edit", await during(() => log(outlinedEdit(base, t.host.nowMs())), 1000)]);
+    causes.push(["said", await during(() => log(outlinedSaid(base, t.host.nowMs())), 1000)]);
     causes.push(["minute", await during(() => {}, 60_000)]);
     const heaviestOf = new Map<string, number>();
     const rows: { name: string; bytes: number; bar: number; value?: unknown }[] = [];
@@ -332,6 +344,66 @@ test("what each topic the app asks is sent as the workspace changes holds to its
     const faults = judge(heaviestOf, DELTA_BAR_KB, OVER_DELTA, "OVER_DELTA");
     if (print || faults.length > 0) console.log(table(`What goes out as the workspace changes, its heaviest message (bar ${DELTA_BAR_KB} KB):`, rows));
     assert.deepEqual(faults, []);
+  } finally {
+    t.store.runner.shutdown();
+  }
+});
+
+// ── what a chat's outline answers ──
+
+/// What looking in a chat's outline finds of the words of `queries` (as station/topics.ts `found` gives the messages that
+/// have them, all held), each answer.
+function outlineFinds(t: ReturnType<typeof setup>, queries: string[]): [string, J][] {
+  return queries.map((q) => {
+    const found = t.data.findInThread(OUTLINED.station, OUTLINED.thread, [q]).map((f) => ({ ...f, count: 1 }));
+    return [q, t.views.outlineFound(OUTLINED.station, OUTLINED.thread, { words: [q], found, held: OUTLINED_ENTRIES, of: OUTLINED_ENTRIES, whole: true })];
+  });
+}
+/// The words that are in most of the long chat's messages, its people's and its agent's.
+const COMMON = ["的", "，", "。", "e", "a", "i", "1"];
+
+test("the rows a chat's outline gives at once hold to the bar on a chat of real size", async () => {
+  const { t, first } = await held();
+  try {
+    const seqs: number[] = first.get("chatOutline").value.days.flatMap((d: J) => d.seqs);
+    const newest = t.views.outlineRows(OUTLINED.station, OUTLINED.thread, seqs.slice(-OUTLINE_ROWS));
+    // (the hundred heaviest of all its people's messages, as one answer)
+    const all = t.views.outlineRows(OUTLINED.station, OUTLINED.thread, seqs).rows as J[];
+    const heaviest = { rows: [...all].sort((a, b) => bytes(b) - bytes(a)).slice(0, OUTLINE_ROWS) };
+    if (print) {
+      console.log(`The chat of four weeks: ${seqs.length} messages of people of ${OUTLINED_ENTRIES} entries, over ${first.get("chatOutline").value.days.length} days; its outline ${bytes(first.get("chatOutline"))} B whole`);
+      console.log(`chat.outline.rows: the newest ${newest.rows.length} ${bytes(newest)} B, the heaviest ${heaviest.rows.length} ${bytes(heaviest)} B`);
+    }
+    assert.equal(newest.rows.length, OUTLINE_ROWS);
+    assert.ok(bytes(newest) <= BAR_KB * 1024, `${bytes(newest)} B`);
+    assert.ok(bytes(heaviest) <= BAR_KB * 1024, `${bytes(heaviest)} B`);
+  } finally {
+    t.store.runner.shutdown();
+  }
+});
+
+test("what looking in a chat's outline finds lists a hundred at most, and says how many more", async () => {
+  const { t } = await held();
+  try {
+    const finds = outlineFinds(t, COMMON);
+    if (print) for (const [q, a] of finds) console.log(`chat.outline.find "${q}": ${a.total} found, ${a.total - a.more} listed, ${bytes(a)} B`);
+    for (const [q, a] of finds) {
+      assert.ok(a.total > OUTLINE_ROWS, q);
+      assert.equal(a.days.flatMap((d: J) => d.items).length, OUTLINE_ROWS, q);
+      assert.equal(a.more, a.total - OUTLINE_ROWS, q);
+    }
+  } finally {
+    t.store.runner.shutdown();
+  }
+});
+
+// Not met (2026-11-10): with a snippet as it is (12 characters before the words and 120 after, views.ts SNIPPET_LEAD,
+// SNIPPET_MAX) a hundred found weigh 28-33 KB here, and a hundred long ones (an agent's `by`, a line of Chinese) some
+// 60 KB. Its bound is to be decided.
+test("what looking in a chat's outline finds holds to the bar on a chat of real size", { todo: "a snippet's bound to be decided: 120 characters after the words is over the bar" }, async () => {
+  const { t } = await held();
+  try {
+    for (const [q, a] of outlineFinds(t, COMMON)) assert.ok(bytes(a) <= BAR_KB * 1024, `"${q}": ${bytes(a)} B`);
   } finally {
     t.store.runner.shutdown();
   }

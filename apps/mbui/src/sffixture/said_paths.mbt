@@ -329,11 +329,6 @@ pub let said_paths : Map[String, Array[String]] = {
     "chats.*.letters.*.elsewhere.*.by.name",
     "chats.*.letters.*.elsewhere.*.by.agent",
   ],
-  "chatOutline": [
-    "days.*.items.*.by.name",
-    "days.*.items.*.by.agent",
-    "days.*.items.*.words",
-  ],
   "chatSearch": [
     "items.*.title",
     "items.*.agents.*.agentText",

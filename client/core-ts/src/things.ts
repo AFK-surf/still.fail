@@ -146,6 +146,11 @@ export function thingsHaving(things: readonly Thing[], words: readonly string[])
   });
 }
 
+/// How many messages a chat's outline gives at once, at most: the rows asked (`chat.outline.rows`), those found
+/// (`chat.outline.find`). A panel shows fewer; a hundred rows of long words stay under what a value may weigh (32 KB:
+/// test/topic-bytes.test.ts).
+export const OUTLINE_ROWS = 100;
+
 /// Items in the order given, by the day each was said (`day`: its heading, 今天, 昨天, 9月20日; "" where when is not
 /// known), a day's in that order: a day for each run of them said on it.
 export function inDays<T>(items: readonly T[], createdAt: (item: T) => number | null, day: (ms: number) => string): { day: string; items: T[] }[] {

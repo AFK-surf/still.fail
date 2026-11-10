@@ -124,6 +124,7 @@
   "web-main.outline.placeholder": "Find messages",
   "web-main.outline.count": "{n} found",
   "web-main.outline.none": "Nothing found",
+  "web-main.outline.more": "{n} earlier ones are not listed; try more specific words",
   "web-main.outline.back": "Back to where you were",
   "web-main.outline.bringing": "Loading the rest of the chat",
   "web-main.letters.back": "All agent messages",

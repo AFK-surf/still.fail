@@ -36,7 +36,7 @@ import { archiveHintOf, badgeKindsOf, jobsSeenOf, type ArchiveHint } from "../pr
 import { markdown, type MdStore } from "../markdown.ts";
 import { heardFiles } from "../elsewhere.ts";
 import { isImage, near, placeFiles } from "../placed.ts";
-import { KINDS as THING_KINDS, inDays, isVideo, mediaDays, thingsHaving, thingsOf, wordsOf } from "../things.ts";
+import { KINDS as THING_KINDS, OUTLINE_ROWS, inDays, isVideo, mediaDays, thingsHaving, thingsOf, wordsOf } from "../things.ts";
 import { archive, archiveSearch } from "./archive.ts";
 import { Local, PENDING_PREFIX } from "./local.ts";
 import { askAnswers } from "./vault.ts";
@@ -619,7 +619,36 @@ export function envOf(core: Inner): ViewsEnv {
 
 /// What people said in a chat as far as it is on the device (`#peopleSaid`), as read at its log's change `rev`: their
 /// messages merged, by seq (`order`, in order), and the entries that edit each message held, by the message.
-type PeopleSaid = { rev: number; messages: Map<number, J>; order: number[]; edits: Map<number, number[]> };
+/// `changed` counts the times what it holds changed (a message come, gone or edited), so what is made of it is made
+/// again only then.
+type PeopleSaid = { rev: number; changed: number; messages: Map<number, J>; order: number[]; edits: Map<number, number[]> };
+
+/// A chat's outline as last made (`#chatOutline`): of what, and its days.
+type OutlineIndex = { kept: PeopleSaid; changed: number; mine: unknown; offset: number; today: number; days: J[]; count: number; others: boolean };
+
+/// How long a row of a chat's outline says what was said (`chat.outline.rows` `words`), in columns at most (a character
+/// from U+1100 on, Chinese, Japanese, Korean, an emoji, two; then `…`): one line of its panel (420 pt less its margins,
+/// at 13 pt: some 30 Chinese characters, 60 Latin ones), a little over so it ends at the panel's edge. So its words are
+/// a few bytes a column at most as UTF-8 (a line of Chinese 99), and a hundred rows of long ones stay under 32 KB as JSON.
+const OUTLINE_WORDS = 64;
+
+/// A local day as a chat's outline knows it (`OutlineDay` `date`): 2026-11-09.
+function outlineDate(ms: number, offsetMin: number): string {
+  const [y, m, d] = format.local(ms, offsetMin);
+  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/// Words cut to `max` columns (`OUTLINE_WORDS`: a character from U+1100 on two), `…` after where cut.
+function cutWords(words: string, max: number): string {
+  let columns = 0;
+  let at = 0;
+  for (const c of words) {
+    columns += c.codePointAt(0)! >= 0x1100 ? 2 : 1;
+    if (columns > max) return `${words.slice(0, at)}…`;
+    at += c.length;
+  }
+  return words;
+}
 
 /// How much of a line of a message found goes before the words found in a chat's outline (`chat.outline.find`), at
 /// most, and how much after that.
@@ -648,8 +677,13 @@ export class Views implements Owner {
   readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch> }>();
   /// The latest chats' things read (`#things`), by station and thread, with what they were read from.
   readonly #thingsKept = new Map<string, Derived<{ messages: J[]; things: ReturnType<typeof thingsOf>; whole: boolean; title: unknown } | null>>();
-  /// A chat's outline's items (`#chatOutline`), by the message each was made of, and what else it was made with.
+  /// A chat's outline's rows (`outlineRows`), by the message each was made of, and what else it was made with.
   readonly #outlineMade = new WeakMap<object, { by: unknown; offset: number; item: J }>();
+  /// A chat's outline's message's day and whether it is the viewer's (`#chatOutline`), by the message, and what else
+  /// it was made with.
+  readonly #outlineDay = new WeakMap<object, { mine: unknown; offset: number; date: string; ms: number | null; viewer: boolean }>();
+  /// The chats' outlines last made (`#chatOutline`), by station and thread.
+  readonly #outlineKept = new Map<string, OutlineIndex>();
   /// What people said in the chats whose outlines were made lately (`#peopleSaid`), by station and thread.
   readonly #peopleKept = new Map<string, PeopleSaid>();
   readonly #updateNoticesOpen = new Set<string>();
@@ -2665,7 +2699,7 @@ export class Views implements Owner {
   /// What people said in a chat (`authorKind` person) as far as it is on the device, their messages merged (entries.ts),
   /// in order. Read whole once; then only the entries put in its log since (`Data.logPutSince`), so an agent's message
   /// changing as it works costs that entry, not the chat's every one; whole again where what changed is not known.
-  #peopleSaid(station: string, id: number, of: number): J[] {
+  #peopleSaid(station: string, id: number, of: number): PeopleSaid {
     const key = `${station}/${id}`;
     const data = this.#core.data;
     let kept = this.#peopleKept.get(key);
@@ -2685,7 +2719,7 @@ export class Views implements Owner {
         if (typeof target === "number") edits.set(target, [...(edits.get(target) ?? []), n]);
       }
       const people = merge([...held.keys()].sort((a, b) => a - b).map((n) => held.get(n))).filter((m) => m.authorKind === "person");
-      kept = { rev: since.rev, messages: new Map(people.map((m) => [m.seq as number, m])), order: people.map((m) => m.seq as number), edits };
+      kept = { rev: since.rev, changed: (kept?.changed ?? 0) + 1, messages: new Map(people.map((m) => [m.seq as number, m])), order: people.map((m) => m.seq as number), edits };
     } else if (since.rev !== kept.rev) {
       const { messages, order, edits } = kept;
       const again = new Set<number>();
@@ -2701,11 +2735,16 @@ export class Views implements Owner {
         const m = made(seq, edits);
         const at = lowerBound(order, seq);
         if (m === null) {
-          if (messages.delete(seq)) order.splice(at, 1);
+          if (messages.delete(seq)) {
+            order.splice(at, 1);
+            kept.changed++;
+          }
           continue;
         }
+        if (messages.get(seq) === m) continue;
         if (!messages.has(seq)) order.splice(at, 0, seq);
         messages.set(seq, m);
+        kept.changed++;
       }
       kept.rev = since.rev;
     }
@@ -2713,44 +2752,90 @@ export class Views implements Owner {
     this.#peopleKept.set(key, kept);
     // (a few chats': those open, and the last ones left)
     for (const k of this.#peopleKept.keys()) if (this.#peopleKept.size > 6) this.#peopleKept.delete(k);
-    return kept.order.map((seq) => kept.messages.get(seq));
+    return kept;
   }
 
-  /// A chat's outline (`chatOutline`): what people said in it, the viewer and anyone else (`authorKind` person, as its
-  /// page tells its rows apart: not an agent's, not still.fail's notice), an item each, by the day, oldest first, as far
-  /// as the chat is on the device (`chat.bring` reads the rest; this asks for nothing). An item is made again only as
-  /// its message or who it is shown by changes. (Its people's mentions named without its agents' bots: what a session
-  /// says as it works would make it all again.)
+  /// A chat's outline (`chatOutline`): which messages people said in it, the viewer and anyone else (`authorKind`
+  /// person, as its page tells its rows apart: not an agent's, not still.fail's notice), by the local day, oldest first,
+  /// as far as the chat is on the device (`chat.bring` reads the rest; this asks for nothing). An index only: what each
+  /// says and who said it are `chat.outline.rows`', so an agent at work, or a message's words edited, changes nothing
+  /// of it. Made again only as a person's message comes or goes, the viewer or the zone changes, or a day goes by.
   #chatOutline(station: string, id: number): Value | undefined {
     const held = this.#core.held?.(station, id);
     const summary = this.#core.data.thread(station, id) as J;
     if (held === undefined || (summary === undefined && held.held === 0)) return undefined;
-    const { viewer, slackUsers, members_, bots } = this.#peopleOf(station, []);
-    const by = this.#steady(`outline\u0001${station}\u0001${id}`, [viewer, slackUsers, members_, bots, get(summary, "creator") ?? null]);
+    const { viewer, slackUsers } = this.#peopleOf(station, []);
+    const mine = this.#steady(`outline\u0001${station}\u0001${id}`, [viewer, slackUsers]);
     const clock = this.#clock();
-    const said = this.#peopleSaid(station, id, held.of);
-    const items = said.map((raw) => {
+    const today = format.localDay(clock.now, clock.offsetMin);
+    const kept = this.#peopleSaid(station, id, held.of);
+    const key = `${station}/${id}`;
+    let index = this.#outlineKept.get(key);
+    if (index === undefined || index.kept !== kept || index.changed !== kept.changed || index.mine !== mine || index.offset !== clock.offsetMin || index.today !== today) {
+      const days: { date: string; day: string; seqs: number[] }[] = [];
+      const byDate = new Map<string, { date: string; day: string; seqs: number[] }>();
+      let others = false;
+      for (const seq of kept.order) {
+        const raw = kept.messages.get(seq) as J;
+        let d = this.#outlineDay.get(raw);
+        if (d === undefined || d.mine !== mine || d.offset !== clock.offsetMin) {
+          const ms = u64(raw.createdAt);
+          d = { mine, offset: clock.offsetMin, date: ms !== null ? outlineDate(ms, clock.offsetMin) : "", ms, viewer: present.isViewer(viewer, str(raw.author) ?? "", slackUsers) };
+          this.#outlineDay.set(raw, d);
+        }
+        if (!d.viewer) others = true;
+        // (a day once, though what was said on it came apart: its key is its date)
+        let day = byDate.get(d.date);
+        if (day === undefined) {
+          day = { date: d.date, day: d.ms !== null ? format.dayLabel(d.ms, clock.now, clock.offsetMin) : "", seqs: [] };
+          byDate.set(d.date, day);
+          days.push(day);
+        }
+        day.seqs.push(seq);
+      }
+      // (what is sent is never written: the store keeps it)
+      index = { kept, changed: kept.changed, mine, offset: clock.offsetMin, today, days: days.map((d) => sharedValue(d)), count: kept.order.length, others };
+      this.#outlineKept.delete(key);
+      this.#outlineKept.set(key, index);
+      for (const k of this.#outlineKept.keys()) if (this.#outlineKept.size > 6) this.#outlineKept.delete(k);
+    }
+    return { ok: { days: index.days, count: index.count, others: index.others, ...held } };
+  }
+
+  /// The rows of a chat's outline for `seqs` (`chat.outline.rows`): each a person's message as the outline shows it
+  /// (who, when, its first words on a line cut to `OUTLINE_WORDS`), in the order asked, read from what the device holds
+  /// (it asks nothing); one not held, or not a person's, left out. A row is made again only as its message or who it is
+  /// shown by changes.
+  outlineRows(station: string, id: number, seqs: readonly number[]): J {
+    const of = this.#core.held?.(station, id).of ?? this.#core.data.logSpan("entry", station, String(id))?.max ?? 0;
+    const kept = this.#peopleSaid(station, id, of);
+    const summary = this.#core.data.thread(station, id) as J;
+    const { viewer, slackUsers, members_, bots } = this.#peopleOf(station, []);
+    const by = this.#steady(`outlineRows\u0001${station}\u0001${id}`, [viewer, slackUsers, members_, bots, get(summary, "creator") ?? null]);
+    const clock = this.#clock();
+    const rows = seqs.flatMap((seq) => {
+      const raw = kept.messages.get(seq);
+      if (raw === undefined) return [];
       const was = this.#outlineMade.get(raw);
-      if (was !== undefined && was.by === by && was.offset === clock.offsetMin) return was.item;
+      if (was !== undefined && was.by === by && was.offset === clock.offsetMin) return [was.item];
       const m = shownMessage(raw, [], viewer, slackUsers, members_, bots, get(summary, "creator"));
       const at = u64(m.createdAt);
       const words = wordsOf(m);
       const item = sharedValue({
         seq: m.seq, mine: m.mine === true, author: str(m.author) ?? "", by: m.by,
-        words: words === "" && arr(m.attachments).length > 0 ? t("core-views.file") : words,
+        words: words === "" && arr(m.attachments).length > 0 ? t("core-views.file") : cutWords(words, OUTLINE_WORDS),
         clock: at !== null ? format.clock(at, clock.offsetMin) : "",
       });
       this.#outlineMade.set(raw, { by, offset: clock.offsetMin, item });
-      return item;
+      return [item];
     });
-    const at = new Map(said.map((m, i) => [items[i], u64(m.createdAt)]));
-    const days = inDays(items, (i) => at.get(i) ?? null, (ms) => format.dayLabel(ms, clock.now, clock.offsetMin));
-    return { ok: { days, count: items.length, ...held } };
+    return { rows };
   }
 
   /// What a chat's outline lists for what was looked for (`chat.outline.find`): the messages `found` (station/topics.ts
-  /// `found`), agents' too but not what two chats' agents wrote each other (not in the chat), by the day, oldest
-  /// first, each with who said it and the line of it that has the words.
+  /// `found`), agents' too but not what two chats' agents wrote each other (not in the chat), the newest
+  /// `OUTLINE_ROWS` of them by the day, oldest first, each with who said it and the line of it that has the words;
+  /// `total` how many were found, `more` how many older ones are not listed.
   outlineFound(station: string, id: number, f: { words: string[]; found: { seq: number }[]; held: number; of: number; whole: boolean }): J {
     const summary = this.#core.data.thread(station, id) as J;
     const agents = this.#agentsOf(station, summary);
@@ -2758,18 +2843,21 @@ export class Views implements Owner {
     const { viewer, slackUsers, members_, bots } = this.#peopleOf(station, agents);
     const messages = new Map(this.#heldMessages(station, id, f.of).map((m) => [m.seq as number, m]));
     const clock = this.#clock();
-    const rows = f.found.flatMap(({ seq }) => {
+    const all = f.found.flatMap(({ seq }) => {
       const raw = messages.get(seq);
-      if (raw === undefined || isLetter(raw, keys)) return [];
+      return raw === undefined || isLetter(raw, keys) ? [] : [raw];
+    });
+    const listed = all.slice(Math.max(0, all.length - OUTLINE_ROWS));
+    const rows = listed.map((raw) => {
       const m = shownMessage(raw, agents, viewer, slackUsers, members_, bots, get(summary, "creator"));
       const at = u64(m.createdAt);
-      return [{
-        at, seq, mine: m.mine === true, author: str(m.author) ?? "", by: m.by, agent: m.authorKind === "agent", system: m.system === true,
+      return {
+        at, seq: m.seq, mine: m.mine === true, author: str(m.author) ?? "", by: m.by, agent: m.authorKind === "agent", system: m.system === true,
         clock: at !== null ? format.clock(at, clock.offsetMin) : "", snippet: refs.excerpt(str(m.text) ?? "", f.words, SNIPPET_LEAD, SNIPPET_MAX).text,
-      }];
+      };
     });
     const days = inDays(rows, (r) => r.at, (ms) => format.dayLabel(ms, clock.now, clock.offsetMin)).map((d) => ({ day: d.day, items: d.items.map(({ at: _, ...row }) => row) }));
-    return { words: f.words, days, total: rows.length, held: f.held, of: f.of, whole: f.whole };
+    return { words: f.words, days, total: all.length, more: all.length - listed.length, held: f.held, of: f.of, whole: f.whole };
   }
 
   /// What a chat's agents said in Slack and were given from it (not this chat's own thread), each after the message it

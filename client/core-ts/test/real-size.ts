@@ -6,7 +6,8 @@
 // Claude's and ChatGPT's subscriptions with their allowances and a done check, Devin, DeepSeek, and in turn
 // OpenRouter, an Anthropic key, OpenCode Go, SuperGrok, Cursor. With them connects, Slack apps, automatic decisions
 // with a policy, the machine's own logins and a host reading; some 400 chats across the stations with their titles,
-// last lines and people; one chat of 300 messages of every length; a week of usage, the jobs at work, the archive.
+// last lines and people; one chat of 300 messages of every length, another of four weeks held whole on the device
+// (`OUTLINED`); a week of usage, the jobs at work, the archive.
 // Every family of fields is filled as a station fills it, none made larger than a station makes it. Made of the
 // test's clock and indexes alone: the same every run.
 import type { Topic } from "../src/protocol.ts";
@@ -567,6 +568,55 @@ function entryOf(now: number, n: number): J {
 
 export function chatPage(now: number, count = CHAT_MESSAGES): J {
   return { first: 1, last: count, entries: Array.from({ length: count }, (_, i) => entryOf(now, i + 1)), end: true, thread: null };
+}
+
+// ── a chat of four weeks, held whole ──
+
+/// A chat of four weeks held whole on the device, as the sync puts what it reads in its log (`outlinedLog`), for what
+/// is made of all of a chat held (its outline, `chatOutline`): 1,600 entries a message 25 minutes apart, every third a
+/// person's (533 of them: the viewer, three others and one from Slack with its picture; most a long line, some a few
+/// words, a page or only a picture), the rest its agent's.
+export const OUTLINED = { station: "ws/maple", thread: threadIdOf(0, 2), key: keyOf(0, 2) } as const;
+export const OUTLINED_ENTRIES = 1600;
+const OUTLINED_EVERY = 25 * MIN;
+/// One of Slack who is not the viewer (whose Slack ids are the overview's `slackUsers`).
+const SLACK_OTHER = { id: "U07Z1X2Y3W4", name: "aiko.t", picture: slackPicture(2) };
+
+/// The long chat's entry `n` (said at `at`).
+function outlinedEntry(now: number, n: number, at = now - (OUTLINED_ENTRIES - n + 1) * OUTLINED_EVERY): J {
+  const head = { thread: OUTLINED.thread, n, kind: "message", ts: `${OUTLINED.thread}.${String(n).padStart(6, "0")}`, at };
+  if (n % 3 !== 0) return { ...head, authorKind: "agent", author: OUTLINED.key, authorName: null, text: words(n) };
+  const k = n / 3;
+  const who = k % 4 === 3
+    ? { author: SLACK_OTHER.id, authorName: SLACK_OTHER.name, authorPicture: SLACK_OTHER.picture }
+    : { author: pick(PEOPLE, k % 4).email, authorName: pick(PEOPLE, k % 4).name };
+  if (k % 19 === 0) return { ...head, authorKind: "person", ...who, text: "", attachments: [{ name: `photo-${n}.jpg`, path: `.stillfail/uploads/${n}-photo.jpg`, size: 812_331 + n, width: 3024, height: 4032 }] };
+  const text = k % 6 === 0 ? pick(SHORT, k) : k % 6 === 1 ? pick(MEDIUM, k) : k % 6 === 5 ? pick(LONG, k) : pick(LINES, k);
+  return { ...head, authorKind: "person", ...who, text };
+}
+
+/// What the device holds of the long chat (made at `now`): its entries by number.
+export function outlinedLog(now: number): [number, J][] {
+  return Array.from({ length: OUTLINED_ENTRIES }, (_, i) => [i + 1, outlinedEntry(now, i + 1)]);
+}
+
+/// The long chat's next entry, a person's long line said at `at` (the chat made at `base`).
+export function outlinedSaid(base: number, at: number): [number, J] {
+  const n = OUTLINED_ENTRIES + 2;
+  return [n, { ...outlinedEntry(base, n, at), text: pick(LINES, 0) }];
+}
+
+/// The long chat's newest entry, its agent's, as it goes on writing it (`more` words more of it).
+export function outlinedWorking(base: number, more: number): [number, J] {
+  const entry = outlinedEntry(base, OUTLINED_ENTRIES);
+  return [OUTLINED_ENTRIES, { ...entry, text: `${entry.text}\n\n${pick(LINES, more).slice(0, 20 * more)}` }];
+}
+
+/// A person's message of the long chat (the newest of the viewer's) with its words edited at `at`.
+export function outlinedEdit(base: number, at: number): [number, J] {
+  const n = OUTLINED_ENTRIES + 1;
+  const target = OUTLINED_ENTRIES - (OUTLINED_ENTRIES % 12);
+  return [n, { thread: OUTLINED.thread, n, kind: "edit", target, ts: `${OUTLINED.thread}.${String(n).padStart(6, "0")}`, authorKind: "person", author: PEOPLE[0].email, text: "改一下：这一条说错了，按下面那条来", at }];
 }
 
 function detailOf(now: number, key: string, i: number): J {

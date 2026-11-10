@@ -511,13 +511,13 @@ test("a_chat_is_brought_whole_onto_the_device_for_its_outline_which_fills_in_by_
   await host.time.pass(500);
   apply(host, values);
   assert.deepEqual([v(values, 1).count, v(values, 1).held, v(values, 1).of, v(values, 1).whole], [50, 50, 300, false]);
-  assert.equal(v(values, 1).days[0].items[0].seq, 251);
+  assert.equal(v(values, 1).days[0].seqs[0], 251);
   // The station holds more than the device: read now, the outline has all of it.
   for (let from = 201; from >= 1; from -= 50) answers[`GET /threads/7/entries?from=${from}&to=${from + 49}`] = { last: 300, entries: entries(from, from + 49) };
   call(core, ui, 2, "chat.bring", { station: "ws/st", thread: 7 });
   await host.time.pass(500);
   assert.deepEqual(answered(host.emitted.slice(), 2)?.ok, { held: 300, of: 300, whole: true });
   apply(host, values);
-  assert.deepEqual([v(values, 1).count, v(values, 1).whole, v(values, 1).days[0].items[0].seq], [300, true, 1]);
+  assert.deepEqual([v(values, 1).count, v(values, 1).whole, v(values, 1).days[0].seqs[0]], [300, true, 1]);
   core.close();
 });
