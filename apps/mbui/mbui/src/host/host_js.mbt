@@ -1,6 +1,8 @@
 // Browser host: web/host.js defines globalThis.__mbhost (canvas, WebGL2,
 // canvas-2D text, a hidden textarea for input methods).
 
+fn work_stage(_stage : Int) -> Int { 0 }
+
 extern "js" fn js_run(
   title : String,
   frame : FuncRef[(Double, Double, Double, Double) -> Unit],

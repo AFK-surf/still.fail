@@ -1477,6 +1477,8 @@ void mb_host_set_perf(int32_t on) {
 }
 
 // A line of the app's into the record (@hostapi.perf_line).
+int32_t mb_host_work_stage(int32_t stage) { (void)stage; return 0; }
+
 void mb_host_perf_line(moonbit_string_t line) {
   if (perf_on_now) mb_perf_note(mb_ns_from_string(line).UTF8String);
 }

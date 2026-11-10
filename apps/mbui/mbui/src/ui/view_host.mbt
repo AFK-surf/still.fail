@@ -3395,6 +3395,7 @@ let event_depth : Ref[Int] = Ref(0)
 /// One event (view_event's) whose own facts (`said`: what the host says it came by) are so as of its moment, told
 /// before it is taken (Tree::event_said).
 fn view_event_said(said : () -> Unit, f : () -> Unit, what? : String = "event") -> Unit {
+  let previous_work = @hostapi.work_stage(@hostapi.work_event)
   let recording = event_depth.val == 0 && @hostapi.perf_recording()
   // (the outermost event between frames, into the window thread's journal: journal.mbt; one in a frame is the frame's)
   let journaled = event_depth.val == 0 && !frame_running.val
@@ -3441,6 +3442,7 @@ fn view_event_said(said : () -> Unit, f : () -> Unit, what? : String = "event") 
       )
     }
   }
+  @hostapi.work_stage(previous_work) |> ignore
 }
 
 ///|

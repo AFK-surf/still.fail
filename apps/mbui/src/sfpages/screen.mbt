@@ -705,6 +705,7 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
   if self.call != 0 || own_screen(self.station, self.screen) {
     return
   }
+  let previous_work = @hostapi.work_stage(@hostapi.work_screen_open)
   // again after it ended (重新打开): on its way, not still saying how the last one ended
   if self.finished.get() || self.failure.get() is Some(_) {
     self.state = None
@@ -763,6 +764,7 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     None,
     fn(value, bytes) { me.take(value, bytes) },
     fn(r) {
+      let previous_work = @hostapi.work_stage(@hostapi.work_screen_state)
       me.call = 0
       me.audio_ready.set(false)
       match me.stream { Some(st) => st.audio(Bytes::new(0)); None => () }
@@ -770,8 +772,10 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
         Ok(_) => me.finished.set(true)
         Err(e) => me.failure.set(Some(text(Some(e), "message")))
       }
+      @hostapi.work_stage(previous_work) |> ignore
     },
   )
+  @hostapi.work_stage(previous_work) |> ignore
 }
 
 ///|
@@ -811,6 +815,7 @@ fn ScreenSess::pause(self : ScreenSess, src : Source) -> Unit {
 ///|
 /// Ends it for good: the view, the decoder, the files still going up.
 fn ScreenSess::close(self : ScreenSess, src : Source) -> Unit {
+  let previous_work = @hostapi.work_stage(@hostapi.work_screen_close)
   self.pause(src)
   self.drops.clear()
   match self.stream {
@@ -821,6 +826,7 @@ fn ScreenSess::close(self : ScreenSess, src : Source) -> Unit {
     Some(st) => st.close()
     None => ()
   }
+  @hostapi.work_stage(previous_work) |> ignore
 }
 
 ///|
@@ -981,6 +987,8 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
     Some(Object(_) as s) => {
       // the pointer alone moved, drawn on a picture's layer: the host told, nothing built (screen_value_quiet)
       let moved = self.pointer_layer is Some(_) && cursor_moved_only(self.state, s)
+      // Pointer packets must not evict the open/close/switch history from the hang watcher's lifecycle ring.
+      let previous_work = if moved { None } else { Some(@hostapi.work_stage(@hostapi.work_screen_state)) }
       // made to only look from elsewhere: 只看 as if chosen, 控制 a tap away
       if number(self.state, "watchOnly") != number(Some(s), "watchOnly") {
         self.wants_control = Some(false)
@@ -991,6 +999,10 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
         self.pointer_moved()
       } else {
         self.said.set(self.said.untracked() + 1)
+      }
+      match previous_work {
+        Some(stage) => @hostapi.work_stage(stage) |> ignore
+        None => ()
       }
     }
     _ => ()

@@ -1165,14 +1165,17 @@ static int submit(const double *inst, int32_t count, double r, double g, double 
 }
 
 void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
+  wh_scope work = mb_win_hang_enter(WH_GPU_SUBMIT, count);
   int n = -1;
   D3D11_RECT parts[MB_PARTS];
   if (!submit(inst, count, r, g, b, &n, parts) || !chain) {
     commit_presented();
+    mb_win_hang_leave(work);
     return;
   }
   // a hidden or minimized window does not wait for vsync; pace it as if it did. A flip model's swap chain is told the
   // parts that changed (what the compositor takes again; none: a pixel's), all of its buffer the canvas's
+  mb_win_hang_enter(WH_GPU_PRESENT, count);
   HRESULT hr;
   if (flip_chain && n >= 0) {
     RECT dr[MB_PARTS];
@@ -1187,6 +1190,7 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
   }
   commit_presented();
   if (hr == DXGI_STATUS_OCCLUDED) Sleep(16);
+  mb_win_hang_leave(work);
 }
 
 // Without a window (mbui-render, src/render): WARP's device whatever the machine has (the same rasterizer on every

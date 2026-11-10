@@ -30,6 +30,8 @@ fn ffi_run(title : String, frame : FuncRef[(Double, Double, Double, Double) -> U
 
 fn ffi_now() -> Double = "mbhost" "mb_host_now"
 
+fn work_stage(stage : Int) -> Int = "mbhost" "mb_host_work_stage"
+
 fn ffi_event_time() -> Double = "mbhost" "mb_host_event_time"
 
 fn ffi_event_finger() -> Int = "mbhost" "mb_host_event_finger"

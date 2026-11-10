@@ -17,6 +17,7 @@ on:
       - "apps/mbui/mbui/src/host/win.h"
       - "apps/mbui/mbui/src/host/log_files.h"
       - "apps/mbui/mbui/scripts/win_logs_test.c"
+      - "apps/mbui/mbui/scripts/win_hang_test.c"
       - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/host/done_watch.h"
       - "apps/mbui/mbui/src/ui/drive.mbt"
@@ -52,6 +53,11 @@ jobs:
         working-directory: ${{ github.workspace }}
       - uses: actions/checkout@v4
       - uses: ./.github/actions/msvc
+      - name: "Live hang breadcrumbs survive an unfinished operation without waiting for the window"
+        run: |
+          mkdir -p out/hang
+          cl.exe -nologo -W3 -D_CRT_SECURE_NO_WARNINGS -Isrc/host scripts/win_hang_test.c -Foout/hang/ -Feout/hang/win_hang_test.exe
+          timeout 30 out/hang/win_hang_test.exe
       - name: "The log files: stderr kept in rotating files, nothing of a secret, nobody waiting for a stalled disk (src/host/win_logs.h)"
         run: |
           mkdir -p out/logs

@@ -557,6 +557,38 @@ pub fn window_zoomed() -> Bool
 
 pub fn word_at(String, Int32) -> (Int32, Int32)
 
+pub let work_after_build : Int32
+
+pub let work_after_frame : Int32
+
+pub let work_build : Int32
+
+pub let work_chat_switch : Int32
+
+pub fn[T] work_during(Int32, () -> T) -> T
+
+pub let work_event : Int32
+
+pub let work_frame_start : Int32
+
+pub let work_layout : Int32
+
+pub let work_messages : Int32
+
+pub let work_paint : Int32
+
+pub let work_present : Int32
+
+pub let work_screen_close : Int32
+
+pub let work_screen_open : Int32
+
+pub let work_screen_state : Int32
+
+pub fn work_stage(Int32) -> Int32
+
+pub let work_tree : Int32
+
 // Errors
 
 // Types and methods
@@ -859,6 +891,7 @@ pub(open) trait Host {
   fn reduce_transparency(Self) -> Bool = _
   fn gpu_ms(Self) -> Double = _
   fn cpu_ms(Self) -> Double = _
+  fn work_stage(Self, Int32) -> Int32 = _
   fn env(Self, String) -> String = _
   fn set_app_state(Self, FuncRef[(Int32) -> Unit]) -> Unit = _
   fn system_dark(Self) -> Bool = _

@@ -927,7 +927,9 @@ static bool drawn_ahead(int key, Drawn *d) {
     LeaveCriticalSection(&ahead_lock);
     return false;
   }
+  wh_scope work = mb_win_hang_enter(WH_GLYPH_WAIT, key);
   while (a->state == AHEAD_DRAWING) SleepConditionVariableCS(&ahead_done, &ahead_lock, INFINITE);
+  mb_win_hang_leave(work);
   LeaveCriticalSection(&ahead_lock);
   bool ok = a->scale == text_scale;
   if (ok) {
@@ -1018,8 +1020,10 @@ static void rasterize(int key) {
   e->w = e->h = 0;
   Drawn d = {};
   if (!drawn_ahead(key, &d)) {
+    wh_scope work = mb_win_hang_enter(WH_GLYPH_DRAW, key);
     IDWriteTextLayout *l = make_layout(pool + e->off, e->len, e->size, e->weight, e->style);
     draw_layout(l, text_scale, &main_target, &d);
+    mb_win_hang_leave(work);
     l->Release();
   }
   if (d.px) {

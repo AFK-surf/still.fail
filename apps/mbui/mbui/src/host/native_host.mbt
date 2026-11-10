@@ -420,6 +420,11 @@ impl @hostapi.Host for Native with gpu_ms(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with work_stage(_, stage) {
+  work_stage(stage)
+}
+
+///|
 impl @hostapi.Host for Native with cpu_ms(_) {
   cpu_ms()
 }

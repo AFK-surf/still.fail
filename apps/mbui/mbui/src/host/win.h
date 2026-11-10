@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <wchar.h>
 #include "moonbit.h"
+#include "win_hang.h"
 
 #ifdef __cplusplus
 extern "C" {

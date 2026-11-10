@@ -319,6 +319,7 @@ pub fn Tester::new(
 ) -> Tester {
   let f = {
     time,
+    work_stage: 0,
     late: 0.0,
     late_after: -1.0,
     late_frame: -1,

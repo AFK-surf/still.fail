@@ -5,6 +5,7 @@
 ///|
 struct FakeHost {
   mut time : Double
+  mut work_stage : Int
   /// how late the frame drawn at `late_after` reached the screen, as said of it (Tester::frame_late, a run's LATE line):
   /// what the first frame drawn after then says (frame `late_frame`, once it is drawn); every other frame's was on time
   mut late : Double

@@ -4,6 +4,13 @@
 // answers (hostapi's defaults). A test's program has no other host: it links no host's code.
 
 ///|
+impl @hostapi.Host for FakeHost with work_stage(self, stage) {
+  let previous = self.work_stage
+  self.work_stage = stage
+  previous
+}
+
+///|
 /// A package handed to the system's installer: kept by its name (Tester::installs).
 impl @hostapi.Host for FakeHost with install_package(self, name, _) {
   self.installs.push(name)

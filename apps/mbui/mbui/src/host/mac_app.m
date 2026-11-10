@@ -3203,6 +3203,7 @@ int32_t mb_host_set_turnable(int32_t on) { (void)on; return 0; }
 int32_t mb_host_perf_state(void) { return -1; }
 void mb_host_set_perf(int32_t on) { (void)on; }
 void mb_host_perf_line(moonbit_string_t line) { (void)line; }
+int32_t mb_host_work_stage(int32_t stage) { (void)stage; return 0; }
 moonbit_string_t mb_host_perf_where(void) { return moonbit_make_string_raw(0); }
 int32_t mb_host_perf_open(int32_t go) { (void)go; return 0; }
 double mb_host_perf_size(void) { return 0; }

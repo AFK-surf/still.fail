@@ -891,7 +891,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   let paint_told = paint_said.val
   paint_said.val = ""
   // (what was posted since the last frame taken: come from outside, it is handed on as the frame is built)
-  messages_arrive()
+  @hostapi.work_during(@hostapi.work_messages, fn() { messages_arrive() })
   // (a Tester's fake host's answers come by the frame, told as it begins: what waits on them reads them)
   answers_by_the_frame()
   // (what the host says of the streams and the native views, read of it each frame: what changed come from outside)
@@ -901,7 +901,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   notices_arrive()
   // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old
   // views are placed part of that, and what a still pointer is over found so before the hand is said: view_host.mbt)
-  view_arrived()
+  @hostapi.work_during(@hostapi.work_tree, fn() { view_arrived() })
   // (the hand as the frame sees it: what read what changed of it told, hand.mbt)
   hand_arrive(c)
   // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or

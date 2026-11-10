@@ -93,6 +93,7 @@ pub(open) trait Host {
   reduce_transparency(Self) -> Bool = _
   gpu_ms(Self) -> Double = _
   cpu_ms(Self) -> Double = _
+  work_stage(Self, Int) -> Int = _
   env(Self, String) -> String = _
   set_app_state(Self, FuncRef[(Int) -> Unit]) -> Unit = _
   system_dark(Self) -> Bool = _
@@ -659,6 +660,9 @@ impl Host with reduce_transparency(_) {
 impl Host with gpu_ms(_) {
   -1.0
 }
+
+///|
+impl Host with work_stage(_, _) { 0 }
 
 ///|
 impl Host with cpu_ms(_) {

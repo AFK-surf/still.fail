@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#define MB_WIN_HANG_IMPLEMENTATION
 #include "win.h"
 #include <dwmapi.h>
 #include "post.h"
@@ -176,13 +177,15 @@ static void told_between(int kind, int id) {
   }
   int was = want_frame;
   want_frame = 0;
+  wh_scope work = mb_win_hang_enter(WH_OUTSIDE, kind);
   outside_cb(kind, id, 0);
+  mb_win_hang_leave(work);
   if (want_frame) outside_asked = 1;
   want_frame |= was;
 }
 static int presenting = 1;  // the frame under way is put on the screen
 
-static void draw_frame(void) {
+static void draw_frame_body(void) {
   RECT rc;
   GetClientRect(hwnd, &rc);
   want_frame = 0;
@@ -317,6 +320,12 @@ static int mods_now(void) {
 // the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake
 #include "win_device.h"
 // its log files: what it says on stderr, its performance record
+static void draw_frame(void) {
+  wh_scope work = mb_win_hang_enter(WH_FRAME, 0);
+  draw_frame_body();
+  mb_win_hang_leave(work);
+}
+
 #include "win_logs.h"
 // the app's life: once for its person, put away to the notification area, links, in front or not, light or dark
 #include "win_life.h"
@@ -546,7 +555,7 @@ static void wheel(WPARAM wp, LPARAM lp, int horizontal) {
   else mb_cb.wheel(p.x / scale, p.y / scale, 0, -d, 4 | (mods << 4));
 }
 
-static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+static LRESULT window_message(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
   // the app's maximize button pressed (snap_held): the mouse the host's till it is let go, there or elsewhere
   if (snap_held && (msg == WM_MOUSEMOVE || msg == WM_LBUTTONUP)) {
     POINT p = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
@@ -656,7 +665,12 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_APP: want_frame = 1; outside_asked = 1; return 0;  // mb_app_wake
     case WM_MB_POSTED: told_between(MB_OUTSIDE_POSTED, 0); return 0;
     case WM_MB_STREAMED: told_between(MB_OUTSIDE_STREAMED, (int)wp); return 0;
-    case WM_MB_CALL: ((void (*)(void *))wp)((void *)lp); return 0;  // mb_app_call
+    case WM_MB_CALL: {
+      wh_scope work = mb_win_hang_enter(WH_CALLBACK, 0);
+      ((void (*)(void *))wp)((void *)lp);
+      mb_win_hang_leave(work);
+      return 0;
+    }
     case WM_MB_DRAG:
       if (GetKeyState(VK_LBUTTON) < 0) {
         ReleaseCapture();
@@ -775,6 +789,13 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
   return DefWindowProcW(h, msg, wp, lp);
 }
 
+static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+  wh_scope work = mb_win_hang_enter(WH_MESSAGE, (int)msg);
+  LRESULT result = window_message(h, msg, wp, lp);
+  mb_win_hang_leave(work);
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Scripted runs (MBUI_SCRIPT=ime|shot): drive the same paths an input method
 // takes and save snapshots, as the macOS host does.
@@ -875,6 +896,7 @@ static void run_script_step(int step) {
 
 void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointer_fn,
                  mb_wheel_fn wheel_fn, mb_key_fn key, mb_text_fn text) {
+  wh_begin();
   mb_cb = (mb_callbacks){frame, pointer_fn, wheel_fn, key, text};
   script = getenv("MBUI_SCRIPT");
   shot_dir = _wgetenv(L"MBUI_SHOT_DIR");

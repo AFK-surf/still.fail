@@ -117,6 +117,7 @@ fn frame_afters_run() -> Unit {
 
 ///|
 fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
+  let previous_work = @hostapi.work_stage(@hostapi.work_frame_start)
   // (what the host gives the frame, as it gives it: kept on a core trace as it changes, envrec.mbt)
   settings_at_frame(w, h, scale)
   let z = window_zoom_wanted.get()
@@ -154,8 +155,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // (what comes before the frame's own work, timed for the probe: the window's tree brought, its nodes built and laid
   // out, and what came from outside handed on as the frame begins, frame_drawn's start)
   let tw = work_now()
-  view_frame(w, h, scale, t)
-  let t0 = frame_drawn(c, w, h, scale, t)
+  @hostapi.work_during(@hostapi.work_tree, fn() { view_frame(w, h, scale, t) })
+  let t0 = @hostapi.work_during(@hostapi.work_build, fn() { frame_drawn(c, w, h, scale, t) })
   in_frame.val = false
   // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`), built where
   // what is built took them (inputs_taken), else as what it read changed (frame_watch.mbt)
@@ -164,7 +165,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     c.wants_frame = true
   }
   let t3 = work_now()
-  h_present(c.inst, c.ninst)
+  @hostapi.work_during(@hostapi.work_present, fn() { h_present(c.inst, c.ninst) })
+  @hostapi.work_stage(@hostapi.work_after_frame) |> ignore
   if perf_touch_at.val >= 0.0 {
     perf_touch_submitted(work_now())
   }
@@ -246,6 +248,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   frame_running.val = false
   frame_moment.val = -1.0
   frame_built.val = false
+  @hostapi.work_stage(previous_work) |> ignore
 }
 
 ///|
@@ -325,6 +328,7 @@ fn frame_hook_told(c : Ctx) -> Unit {
 /// Builds, lays out and paints a frame; returns when it started. `tell` false: what its builds say to tell outside is
 /// not told (a frame built again only to be looked at: tester_looks.mbt).
 fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell? : Bool = true) -> Double {
+  let previous_work = @hostapi.work_stage(@hostapi.work_frame_start)
   c.width = w
   c.height = h
   c.window_w = w
@@ -366,7 +370,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
   let t0 = work_now()
   // what was posted from outside since the last frame (a core's answers), all of it, handed to its handlers in the
   // order it came, before anything reads it (messages.mbt)
-  take_messages()
+  @hostapi.work_during(@hostapi.work_messages, fn() { take_messages() })
   // (the probe's: how long the messages took, slow_probe)
   probe_msgs_ms.val = work_now() - t0
   // the runtime's fibers run up to this frame's time (fx.mbt): the view reads what they left
@@ -400,6 +404,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
   let mut pass = 0
   c.layers_opened.clear()
   while true {
+    @hostapi.work_stage(@hostapi.work_build) |> ignore
     pass = pass + 1
     // (built again in the frame, from what changed as it was built or laid out: what built its lists' rows may build
     // them otherwise, none kept, kept_nodes.mbt; a row that shows only what it read too, as what it read of the layout
@@ -427,6 +432,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
     // laid out under a watch of its own: what only its layout reads (a list's place, its motions by the clock) lays
     // the next frame out again, its lists' rows kept where nothing they show changed (frame_watch.mbt, kept_nodes.mbt)
     laying.val = true
+    @hostapi.work_stage(@hostapi.work_layout) |> ignore
     layout_clock_at.val = ""
     layout_watch_of().read(fn() {
       // lists build their rows while laid out, and those see clicks too
@@ -470,6 +476,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
       old_natural_after_layout(c)
     })
     laying.val = false
+    @hostapi.work_stage(@hostapi.work_after_build) |> ignore
     layout_coming.val = false
     // the focus into the layers that opened, back from those that went (overlay.mbt)
     c.layers_focus()
@@ -559,6 +566,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
   c.t_build = t1 - t0
   c.t_layout = t2 - t1
   c.t_paint = t3 - t2
+  @hostapi.work_stage(previous_work) |> ignore
   t0
 }
 
@@ -568,6 +576,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
 /// build the last one's (frame_watch.mbt): what that build made for the frames after it (its layers, what takes the
 /// focus) is as it left it.
 fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
+  let previous_work = @hostapi.work_stage(@hostapi.work_paint)
   paint_phase.val = 1
   paint_base.wake = -1.0
   paint_clock_at.val = ""
@@ -689,6 +698,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.sync_edit_can()
   frame_hook_told(c)
   paint_phase.val = 2
+  @hostapi.work_stage(previous_work) |> ignore
 }
 
 ///|

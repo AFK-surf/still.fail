@@ -398,25 +398,40 @@ static void life_perf_written(void) {
 // Each few seconds, whatever the window's thread is doing (the writer's thread): a line for the record of what the
 // process takes; and, record or none, the window no longer answering and answering again (the system's own test: its
 // messages unread for 5 s), so that a freeze has left its time in the log without anyone having caught it live.
+static void life_hang_line(const char *line, size_t n) { logs_line(LOGS_LOG, line, n); }
+
 static void life_logs_tick(void) {
   static double cpu_was = -1;
+  static double main_was = -1;
   static ULONGLONG at_was, hung_at;
+  static int hang_samples;
   double cpu = mb_host_cpu_ms();
+  double main_cpu = wh_cpu_ms();
   ULONGLONG at = GetTickCount64();
   double share = cpu_was >= 0 && at > at_was ? (cpu - cpu_was) * 100.0 / (double)(at - at_was) : 0;
+  double main_share = main_was >= 0 && main_cpu >= 0 && at > at_was
+                        ? (main_cpu - main_was) * 100.0 / (double)(at - at_was) : -1;
   cpu_was = cpu;
+  main_was = main_cpu;
   at_was = at;
   int hung = hwnd && IsHungAppWindow(hwnd);
   char line[160];
   int n = 0;
   if (hung && !hung_at) {
     hung_at = at;
-    n = snprintf(line, sizeof line, "win: the window is not answering: cpu=%.0f%% mem=%.0fMB", share, mb_host_mem_bytes() / 1048576.0);
+    hang_samples = 0;
+    n = snprintf(line, sizeof line, "win: the window is not answering: cpu=%.0f%% main_cpu=%.0f%% mem=%.0fMB", share, main_share, mb_host_mem_bytes() / 1048576.0);
   } else if (!hung && hung_at) {
     n = snprintf(line, sizeof line, "win: the window answers again, %.0f s on", (double)(at - hung_at) / 1000.0);
     hung_at = 0;
   }
   if (n > 0) logs_line(LOGS_LOG, line, (size_t)n);
+  // Three bounded snapshots distinguish a stuck operation from work still progressing. No call to the UI thread,
+  // no symbol lookup and no suspend; recovery re-arms the next incident. Existing log rotation bounds retention.
+  if (hung && hang_samples < 3) {
+    wh_report(at, life_hang_line);
+    hang_samples++;
+  }
   if (logs_perf_on) {
     n = snprintf(line, sizeof line, "win: cpu=%.0f%% mem=%.0fMB hung=%d", share, mb_host_mem_bytes() / 1048576.0, hung);
     logs_line(LOGS_PERF, line, (size_t)n);

@@ -1408,6 +1408,7 @@ void mb_stream_placed(int sid, double w, double h, double scale) {
 extern "C" {
 
 int32_t mb_host_stream_open(void) {
+  wh_scope work = mb_win_hang_enter(WH_STREAM_OPEN, 0);
   setup();
   // (the GPU's video side looked for here, on the UI thread, before any decoder's thread reads it)
   video_here();
@@ -1423,6 +1424,7 @@ int32_t mb_host_stream_open(void) {
   streams[nstreams] = s;
   int id = nstreams++;
   ReleaseSRWLockExclusive(&streams_lock);
+  mb_win_hang_leave(work);
   return id;
 }
 
@@ -1663,8 +1665,9 @@ static void sound_take(Stream *s, const uint8_t *bytes, size_t len) {
 }
 
 void mb_host_stream_close(int32_t id) {
+  wh_scope work = mb_win_hang_enter(WH_STREAM_CLOSE, id);
   Stream *s = stream_of(id);
-  if (!s) return;
+  if (!s) { mb_win_hang_leave(work); return; }
   unroute(id, 3);
   AcquireSRWLockExclusive(&sound_lock);
   s->sound_gone = 1;
@@ -1708,6 +1711,7 @@ void mb_host_stream_close(int32_t id) {
   s->vpe = NULL;
   mb_render_commit_soon();
   // (the stream itself kept: a decode under way still holds it; it does nothing more)
+  mb_win_hang_leave(work);
 }
 
 int32_t mb_host_h264_here(void) { return h264_decoder_here(); }

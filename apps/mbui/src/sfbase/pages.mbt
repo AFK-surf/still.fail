@@ -655,7 +655,11 @@ pub fn open_page(p : Page) -> Unit {
   if window_front(p) {
     return
   }
-  history_act(fn() { (shell.val.open)(p) })
+  if p is Chat(_) {
+    @hostapi.work_during(@hostapi.work_chat_switch, fn() { history_act(fn() { (shell.val.open)(p) }) })
+  } else {
+    history_act(fn() { (shell.val.open)(p) })
+  }
 }
 
 ///|

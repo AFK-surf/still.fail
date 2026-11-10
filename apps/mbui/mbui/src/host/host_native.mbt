@@ -19,6 +19,8 @@ extern "C" fn ffi_run(
 
 extern "C" fn ffi_now() -> Double = "mb_host_now"
 
+extern "C" fn work_stage(stage : Int) -> Int = "mb_host_work_stage"
+
 extern "C" fn ffi_event_time() -> Double = "mb_host_event_time"
 
 extern "C" fn ffi_event_finger() -> Int = "mb_host_event_finger"
