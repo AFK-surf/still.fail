@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [e6400c684](https://github.com/AFK-surf/still.fail/commit/e6400c684933bf0db7e641ff35c05904458fbb58) app: the update dialog (检查更新) as nodes (#5306) | 1.78 | 2.38 | 9.93 | 28.56 | 34.78 | 25.5 | 46.96 | 94.14 | 180.44 |
 | [da1d0b203](https://github.com/AFK-surf/still.fail/commit/da1d0b2036a3012eca5ef47277f8adbf06526026) sf: a panel's body of nodes holding nothing takes  | 1.78 | 2.38 | 9.93 | 28.56 | 34.77 | 25.49 | 46.94 | 93.9 | 177.94 |
 | [da0d3f539](https://github.com/AFK-surf/still.fail/commit/da0d3f539c30bde5c7c79b246d6c353f27f0bfc7) app: how far a service page's resources came in a  | 1.78 | 2.38 | 9.93 | 28.55 | 34.77 | 25.49 | 46.94 | 94.27 | 161.73 |
 | [95aaca627](https://github.com/AFK-surf/still.fail/commit/95aaca627e60fcfd4220f740b5d8b53aca9c3686) mbui: what goes beside another may be as wide as i | 1.78 | 2.38 | 9.92 | 28.55 | 34.75 | 25.49 | 46.93 | 93.95 | 151.88 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [1de5f9b47](https://github.com/AFK-surf/still.fail/commit/1de5f9b47794f98dd2b48fa2088b7d88c08eb692) Core: a session new to the device has its detail r | 1.76 | 2.35 | 9.77 | 28.38 | 34.21 | 25.34 | 46.54 | 93.37 | 138.22 |
 | [259b3e01f](https://github.com/AFK-surf/still.fail/commit/259b3e01f0bb530386174319d8213d3cf5275c20) core test: the pages before a history counted apar | 1.76 | 2.35 | 9.76 | 28.37 | 34.14 | 25.32 | 46.48 | 93.68 | 172.71 |
 | [cabc6d876](https://github.com/AFK-surf/still.fail/commit/cabc6d876242017694aa9b1130c9369a329c3574) station: a phone let go is disconnected after what | 1.76 | 2.35 | 9.76 | 28.37 | 34.14 | 25.32 | 46.48 | 93.9 | 175.67 |
-| [51d7c4e46](https://github.com/AFK-surf/still.fail/commit/51d7c4e469511a1ab1719decdac5f070a84c12c6) Core: the sidebar and the agents at work only as s | 1.76 | 2.35 | 9.75 | 28.35 | 34.11 | 25.32 | 46.46 | 93.11 | 153.59 |
