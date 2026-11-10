@@ -1101,9 +1101,10 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
   let x = x + picked.grab_x
   let y = y + picked.grab_y
   // the paragraphs laid out: their words and where they stand in the page, now (a finger's: of the old view it picked
-  // in, as a dialog's selection stays in it)
+  // in, as a dialog's selection stays in it); only those a press may pick (Ctx::sel_at's old_owner_open): a page's
+  // words lying under a modal layer's (a file read over its chat) are no end of what is picked in it, nor between
   let laid = (self.sel_laid() + tree_sels()).filter(fn(t) {
-    t.layer == picked.layer && (!picked.finger || t.island == picked.island)
+    t.layer == picked.layer && (!picked.finger || t.island == picked.island) && old_owner_open(t.island)
   })
   let drawn : Map[SelKey, SelSpan] = {}
   for t in laid {
