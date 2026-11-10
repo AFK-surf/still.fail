@@ -301,6 +301,13 @@ fn presented_items_of(serial : Int, items : Array[MenuItem?]) -> Array[MenuItem?
 }
 
 ///|
+/// The serial of the sheet presented in the place of each sheet (present's `in_place`), by that one's serial: what is
+/// marked while one is drawn (a row held, lifted while its menu is up: presented_drawn_of) stays so while what took
+/// its place is, and what took that one's.
+// kept across runs: put back by presenters_reset; one let go as what it leads to is gone
+let took_place : Map[Int, Int] = {}
+
+///|
 /// Which are drawn (open, or going), by their serials: told each as it comes or is gone (presented_drawn_of).
 // kept across runs: put back by presenters_reset
 let presented_drawn_said : @signals.Keyed[Int] = @signals.keyed()
@@ -337,6 +344,7 @@ let presented_how : Array[How] = []
 /// Nothing presented (the app begun again).
 pub fn presenters_reset() -> Unit {
   presented_now.clear()
+  took_place.clear()
   tree_presented.clear()
   presented_drawn_said.set([])
   presented_items_said.clear()
@@ -361,7 +369,10 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
   }
   presented_count.val += 1
   match chosen_in {
-    Some(old) => old.taken_by = presented_count.val
+    Some(old) => {
+      old.taken_by = presented_count.val
+      took_place[old.serial] = presented_count.val
+    }
     None => ()
   }
   // (a panel by what a panel held, which closed for it, no frame drawn of that going yet: a step further in from that
@@ -1238,9 +1249,20 @@ pub fn presented_open_of(serial : Int) -> Bool {
 ///|
 /// Whether the one presented as `serial` is still drawn (open, or going).
 pub fn presented_drawn_of(serial : Int) -> Bool {
-  // (read so: what reads it built again as it is presented or gone, not as others are)
-  presented_drawn_said.has(serial) |> ignore
-  presented_now.iter().any(fn(p) { p.serial == serial })
+  // (it, or the sheet that took its place, or the one that took that one's: a row's menu, then what its item opened)
+  let mut s = serial
+  while true {
+    // (read so: what reads it built again as it is presented or gone, not as others are)
+    presented_drawn_said.has(s) |> ignore
+    if presented_now.iter().any(fn(p) { p.serial == s }) {
+      return true
+    }
+    match took_place.get(s) {
+      Some(n) => s = n
+      None => break
+    }
+  }
+  false
 }
 
 ///|
@@ -1610,6 +1632,19 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
     }
     for serial in gone {
       presented_items_said.remove(serial)
+      // (gone with none in its place: what led to it leads nowhere)
+      if !took_place.contains(serial) {
+        let mut end = serial
+        while true {
+          match took_place.iter().find_first(fn(e) { e.1 == end }) {
+            Some((from, _)) => {
+              took_place.remove(from)
+              end = from
+            }
+            None => break
+          }
+        }
+      }
     }
     let left = presented_now.filter(fn(p) { !gone.contains(p.serial) })
     presented_now.clear()
@@ -2002,9 +2037,22 @@ fn dialog_page(
     words_in_now.val = 0.0
     column_given.val = true
     column_in_now.val = words
-    panel_whole_now.val += 1
-    draw_panel_body(x, c, close, keyed=p)
-    panel_whole_now.val -= 1
+    if x.tall > 0.0 && !x.form {
+      // (a share of the window tall, as a dialog that goes in no steps has it (panel_centred): each step that tall,
+      // or as tall as what it holds where its lists say so, laid out in it)
+      let (_, wh) = c.window_size()
+      let id = c.id("sf-present/capped/\{p.serial}/\{s.n}")
+      let share = x.tall * wh - dialog_frame_h
+      let h = match capped_want(c, p.serial, id) {
+        Some(want) => dmin(want, share)
+        None => share
+      }
+      measured_body(c, p.serial, id, @ui.style(w=Full, h=Fixed(h)), fn() { draw_panel_body(x, c, close, keyed=p) }) |> ignore
+    } else {
+      panel_whole_now.val += 1
+      draw_panel_body(x, c, close, keyed=p)
+      panel_whole_now.val -= 1
+    }
     panel_sides_in.val = was
     rows_out.val = rows_were
     words_in_now.val = words
@@ -2350,7 +2398,8 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       match p.steps {
         // (one that goes in steps: each its own title, what it holds and its foot, sliding in over the one before)
         Some(nav) =>
-          steps_shown(c, p, nav, scrolls, 0.0, fn(s, back) {
+          // (one a share of the window tall: its steps fill what the sheet leaves them, each laid out in it)
+          steps_shown(c, p, nav, scrolls || (x.tall > 0.0 && !x.form), 0.0, fn(s, back) {
             let (title, count, description) = words_of_step(s)
             sheet_step(c, key, p, { ..x, body: s.body, foot: s.foot }, title, description, close, scrolls, back?, count~)
           })
@@ -2626,7 +2675,9 @@ fn steps_shown(
         Some(f) if s.n == top.n => c.take_back(f)
         _ => ()
       }
-      let i = c.box(style=@ui.style(w=Full, px=room(out)), fn() { draw(s, back) })
+      // (filling what holds the stack, each step fills it too: what it holds laid out in that room)
+      let page = if fills { @ui.style(w=Full, h=Full, px=room(out)) } else { @ui.style(w=Full, px=room(out)) }
+      let i = c.box(style=page, fn() { draw(s, back) })
       @motion.measure(c, i, key_of(s))
       steps_drawn_now.val = was
     })

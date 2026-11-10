@@ -471,6 +471,26 @@ test "a row held long, its 分享…: the next level in the menu's sheet, one sh
 }
 
 ///|
+test "a row held long, its 重命名: the question in its menu's place, the row lifted still till that goes" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  let (_, ry) = t.find("夜里的构建又失败了").unwrap()
+  hold_row(t, "夜里的构建又失败了")
+  t.run_for(@ui.move_most_ms)
+  assert_true(row_lifted(t, ry))
+  t.tap_text("重命名")
+  for _ in 0..<40 {
+    t.run_for(@ui.frame_period_default)
+    assert_eq(sheet_tops(t).length(), 1)
+    assert_true(row_lifted(t, ry))
+  }
+  assert_true(t.find("保存") is Some(_))
+  t.back()
+  t.run_for(@ui.move_most_ms * 2.0)
+  assert_true(!@sf.presenting() && !row_lifted(t, ry))
+}
+
+///|
 test "a row held and let down as its menu goes: its shadow fades with its card, none without it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
