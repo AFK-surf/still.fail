@@ -2235,6 +2235,11 @@ fn bar_finger_at(src : Source, ws : Workspace, d : @view.Drag, how : BarFingerIs
       m.mode.set(true)
     }
   }
+  // the finger off the bar (lifted, called off): what its press asked ahead let go of now, or once the place it switches
+  // to below has come in (sfbase's place_press_lifted, place_switched)
+  if how is (Tapped | Ended) {
+    @sfbase.place_press_lifted(t)
+  }
   if m.swap_at(t) is Some(_) {
     match how {
       Pressed => m.waits = true

@@ -1271,9 +1271,15 @@ pub fn place_key(String, String) -> String
 
 pub fn place_page(String) -> Page
 
+pub fn place_press_lifted(Double) -> Unit
+
 pub fn place_pressed(String) -> Unit
 
-pub fn places_ahead(Source, String) -> Unit
+pub fn place_switched(Double) -> Unit
+
+pub fn places_ahead_in_build() -> Int32
+
+pub fn places_ahead_node(@view.View, Source, () -> String?) -> Unit
 
 pub fn places_ahead_open() -> Bool
 

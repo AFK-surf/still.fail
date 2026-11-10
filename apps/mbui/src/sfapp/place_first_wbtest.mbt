@@ -265,8 +265,8 @@ fn late_phone(ms : Double) -> @ui.Tester raise {
   t.draw()
   // (the accounts, the workspaces, the workspace's, Home's, then what the places open on: one after another)
   t.run_for(ms * 8.0)
-  // (all of it answered and let go of: nothing of a place stays asked for while it is not shown)
-  assert_false(@sfbase.places_ahead_open())
+  // (all of it answered, and held while the bar is there: sfbase's places_ahead_node)
+  assert_true(@sfbase.places_ahead_open())
   t
 }
 
@@ -295,20 +295,41 @@ test "a place of the bar in view shows what the device holds the first time it i
       @sfbase.bars_picked.set(Some((bars, bar)))
       t.draw()
       t.run_for(place_core_late_ms * 3.0)
-      assert_false(@sfbase.places_ahead_open())
+      assert_true(@sfbase.places_ahead_open())
     }
     for round in 0..<2 {
       for place in bars[bar] {
         if place == "chats" || place == "usage" || place == "archive" {
           continue
         }
-        assert_eq(bones_at(t, place), 0, msg="\{place}, time \{round + 1}")
+        // (Station's ways reached, asked only from its tab (bars.mbt place_reads): the first time this run, its network
+        // line alone in its bones, stayed on till the core answered; after, what it said then, at once)
+        let first_station = place == "stations" && round == 0
+        assert_eq(bones_at(t, place), if first_station { station_net_bones } else { 0 }, msg="\{place}, time \{round + 1}")
+        if first_station {
+          t.run_for(place_core_late_ms * 2.0)
+        }
         // (left long enough for the core to have let go of it)
         assert_eq(bones_at(t, "chats"), 0, msg="chats after \{place}")
         t.run_for(place_core_late_ms)
       }
     }
   }
+}
+
+///|
+/// What Station draws in its bones when all but how each station up is reached is held (stationNet, asked only from its
+/// tab: bars.mbt place_reads): the network line of each online station of the fixture's, its bars, nothing else.
+let station_net_bones : Int = 16
+
+///|
+test "Station left before the core said how its stations are reached: come back to, its network line still alone in its bones (nothing said to keep), the rest as the device holds it" {
+  let t = late_phone(place_core_late_ms)
+  // (left at once: switched to and away within a slide, the core answering later)
+  assert_eq(bones_at(t, "stations"), station_net_bones, msg="first")
+  assert_eq(bones_at(t, "chats"), 0)
+  t.run_for(place_core_late_ms)
+  assert_eq(bones_at(t, "stations"), station_net_bones, msg="second")
 }
 
 ///|
@@ -326,14 +347,14 @@ test "用量 and 已归档, asked only as they are shown: from the finger going 
   @sfbase.bars_picked.set(Some(([["chats", "files", "profiles", "stations"], ["archive", "usage", "connects", "vault"]], 1)))
   t.draw()
   t.run_for(late * 4.0)
-  assert_false(@sfbase.places_ahead_open())
+  assert_true(@sfbase.places_ahead_open())
   for label in ["用量", "已归档"] {
     // a finger down on the tab, up a tap later: the core has answered meanwhile
     let (x, y, w, h) = said_at(t, label).unwrap()
     t.touch(0, x + w / 2.0, y + h / 2.0)
     t.draw()
     t.run_for(place_tap_ms)
-    assert_false(@sfbase.places_ahead_open(), msg=label)
+    assert_true(@sfbase.places_ahead_open(), msg=label)
     t.touch(2, x + w / 2.0, y + h / 2.0)
     t.draw()
     let mut most = t.bones_drawn()
