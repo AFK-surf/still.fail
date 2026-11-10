@@ -135,7 +135,11 @@ let attention_off_side : Double = 6.0
 ///|
 /// What is wrong with the workspace's stations, in words (the chats' `trouble`, useStationTrouble); "" none.
 fn station_trouble_words(src : Source, w : Workspace) -> String {
-  let chats = @sfbase.chats_topic(src, w.id).value
+  chats_trouble_words(@sfbase.chats_topic(src, w.id).value)
+}
+
+///|
+fn chats_trouble_words(chats : Json?) -> String {
   text(field(chats, "trouble"), "text")
 }
 
@@ -164,7 +168,7 @@ fn trouble_forget(src : Source, w : Workspace) -> Unit {
   guard chats.error is None && chats.value is Some(value) else { return }
   let seen = trouble_kept(src, w, "seen")
   let gone = trouble_kept(src, w, "gone")
-  if text(field(Some(value), "trouble"), "text") != "" || (seen == "" && gone == "") {
+  if chats_trouble_words(Some(value)) != "" || (seen == "" && gone == "") {
     attention.trouble_forgotten.remove(w.id)
     return
   }
