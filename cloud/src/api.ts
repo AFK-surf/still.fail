@@ -67,9 +67,16 @@ async function directory<T>(run: () => Promise<T> | T): Promise<Response> {
 export const onTestChannel = new WeakSet<Request>();
 /** What a request's account's object said of its token, asked once a request (index.ts asks first on the test channel). */
 const said = new WeakMap<Request, Promise<Live>>();
+/**
+ * The locks' routes (the workspace's lock, the person's own, the devices that came): kept here only for the stations
+ * and devices from before the stations carried them (the root AGENTS.md, The cloud is the account system), and counted
+ * apart from the account system's requests a minute (account.ts `charge`), which they are not to use up. They go with
+ * what they serve.
+ */
+const LOCK_ROUTE = /^\/v1\/(me\/personal-lock|workspaces\/[^/]+\/(lock(\/.*)?|devices))$/;
 export function liveOf(request: Request, env: Env, claims: Claims): Promise<Live> {
   let live = said.get(request);
-  if (!live) said.set(request, (live = env.ACCOUNTS.getByName(claims.sub).live(claims, onTestChannel.has(request))));
+  if (!live) said.set(request, (live = env.ACCOUNTS.getByName(claims.sub).live(claims, onTestChannel.has(request), LOCK_ROUTE.test(new URL(request.url).pathname))));
   return live;
 }
 
