@@ -61,7 +61,7 @@ pub fn find_spring(Double, Double) -> (Double, Double, Double)
 
 pub fn flight_by(Spec) -> @view.Flight
 
-pub fn fly(@ui.Ctx, Int32, Double, Double, scale? : Double, px~ : Double, py~ : Double, ps? : Double, carried? : () -> Double) -> Unit
+pub fn fly(@ui.Ctx, Int32, Double, Double, scale? : Double, px~ : Double, py~ : Double, ps? : Double) -> Unit
 
 pub fn flying_placed(@ui.Ctx, Int32) -> Unit
 

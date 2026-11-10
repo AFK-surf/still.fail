@@ -206,7 +206,6 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
     from_top: 640.0,
     ms: @sfbase.flight_len(false),
     timed: false,
-    to_y: None,
     set_out: -1.0,
     after: 0.0,
   }
@@ -277,7 +276,6 @@ test "a tall sent picture moves its crop to the top as it lands" {
     from_top: 640.0,
     ms: @sfbase.flight_len(false),
     timed: false,
-    to_y: None,
     set_out: -1.0,
     after: 0.0,
   }
@@ -362,7 +360,6 @@ test "an image sent while it goes up flies on to its place once it is up: its me
     from_top: 640.0,
     ms: @sfbase.flight_len(false),
     timed: false,
-    to_y: None,
     set_out: -1.0,
     after: 0.0,
   }

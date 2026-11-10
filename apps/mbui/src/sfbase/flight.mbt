@@ -105,9 +105,6 @@ pub(all) struct SendFlight {
   /// when they set out (the moment their row was first in the list), after how long
   mut ms : Double
   mut timed : Bool
-  /// where their words were laid out as they were timed (in the window: their row as it stood as they set out), what
-  /// what they fly from goes on from with the list as it moves under them (flight_gone_with)
-  mut to_y : Double?
   mut set_out : Double
   mut after : Double
 }
@@ -304,7 +301,6 @@ pub fn flight_start(
         from_top: y - 8.0,
         ms: flight_len(desk),
         timed: false,
-        to_y: None,
         set_out: -1.0,
         after: 0.0,
       }))
@@ -395,7 +391,6 @@ pub fn flight_carry_start(
         carried: true,
         ms: flight_carry_ms,
         timed: false,
-        to_y: None,
         set_out: -1.0,
         after: 0.0,
         from_top,
@@ -713,9 +708,6 @@ fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
   f.timed = true
   match @motion.measured_rect(c, to) {
     Some((x, y, _, _)) => {
-      if f.text != "" {
-        f.to_y = Some(y)
-      }
       match c.list_info(flight_list_key(f)) {
         // (read up the list so far that its end is not laid out, gliding to it as they go, list_to_end: where their row
         // comes to stand is not known of its layout, as long as words sent take over their usual way)
@@ -1102,12 +1094,9 @@ fn flight_pieces_drawn(
         Some((wx, wy, _, _)) if bubble.val >= 0 => {
           let (x, y, _, _) = c.node_rect(cut)
           let (bx, by, _, _) = c.node_rect(bubble.val)
-          // (from where they were typed gone with the list since they set out, as their bubble: flight_gone_with)
-          let gone = flight_gone_with(c, f)
           let ox = (f.from_x - bubble_in_x - bx) * (1.0 - across)
-          let oy = (f.from_y + gone - bubble_in_y - by) * (1.0 - up)
+          let oy = (f.from_y - bubble_in_y - by) * (1.0 - up)
           let (fx, fy) = p.from
-          let fy = fy + gone
           @ui.look(dx=fx + (wx + ax - fx) * across - x - ox, dy=fy + (wy + ay - fy) * up - y - oy)
         }
         _ => @ui.look(alpha=0.0)
@@ -1165,28 +1154,7 @@ pub fn flight_bubble(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
     return
   }
   let p = flight_p(c, f)
-  @motion.fly(
-    c,
-    i,
-    f.from_x - bubble_in_x,
-    f.from_y - bubble_in_y,
-    px=flight_across(p, f.desk),
-    py=flight_up(p, f.desk),
-    carried=fn() { flight_gone_with(c, f) },
-  )
-}
-
-///|
-/// How far up or down the words' row has gone since they were timed (their row as it stood as they set out: `to_y`),
-/// as this frame lays it out: the list going up under them as their row opens and what is under it comes and goes.
-/// Where they fly from goes with it, so that how far they are from the rows over them only closes on their way
-/// (the user, 2026-11-10: 「新消息距离上一条 agent 消息的距离能突变三次」: the rows over them went up at once on their
-/// own way while the words rose late on theirs, the room between opening by 22 and closing again).
-fn flight_gone_with(c : @ui.Ctx, f : SendFlight) -> Double {
-  match (f.to_y, @motion.measured_rect(c, flight_words_key(f))) {
-    (Some(y0), Some((_, y, _, _))) => y - y0
-    _ => 0.0
-  }
+  @motion.fly(c, i, f.from_x - bubble_in_x, f.from_y - bubble_in_y, px=flight_across(p, f.desk), py=flight_up(p, f.desk))
 }
 
 ///|
