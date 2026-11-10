@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [d2247c1b5](https://github.com/AFK-surf/still.fail/commit/d2247c1b58fac7c5cd9117925a7a1d8f4462362f) feedback: the still.fail team replies on a bug rep | 1.76 | 2.35 | 9.78 | 28.38 | 34.26 | 25.35 | 46.59 | 93.7 | 173.58 |
 | [87bc79faf](https://github.com/AFK-surf/still.fail/commit/87bc79faf1131dbca3843f025a7644b17f1c090c) mbui: the Wasm film's host answers the core's call | 1.76 | 2.35 | 9.78 | 28.38 | 34.21 | 25.34 | 46.58 | 93.54 | 138.22 |
 | [28b5d3654](https://github.com/AFK-surf/still.fail/commit/28b5d3654b4f043a1bd96331fc27ee0f0b6a9b42) app: 重试 where the station files picker could not r | 1.76 | 2.35 | 9.78 | 28.38 | 34.21 | 25.34 | 46.56 | 93.68 | 138.22 |
 | [911cee5fc](https://github.com/AFK-surf/still.fail/commit/911cee5fc42925fde948f7ce69d9b5b7c8bd84b2) core: a device's signing key is said on its person | 1.76 | 2.35 | 9.78 | 28.38 | 34.21 | 25.35 | 46.56 | 93.19 | 138.22 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [ca2d39363](https://github.com/AFK-surf/still.fail/commit/ca2d39363c12612addb0481ba8b0b9c8a49edde5) core: a vault's version told before the lock that  | 1.74 | 2.32 | 9.63 | 28.16 | 33.61 | 25.15 | 46.06 | 93.05 | 179.11 |
 | [18b961167](https://github.com/AFK-surf/still.fail/commit/18b9611671c1e66191592f06ba0aa57168989345) app: a software's update said under its version, n | 1.74 | 2.32 | 9.63 | 28.16 | 33.61 | 25.15 | 46.06 | 93.13 | 173.67 |
 | [c5c819d5e](https://github.com/AFK-surf/still.fail/commit/c5c819d5e2dcc6a340954fc4b1e84e05642f3543) mbui: Signal::untracked and Computed::untracked re | 1.74 | 2.32 | 9.63 | 28.16 | 33.61 | 25.15 | 46.06 | 93.16 | 182.35 |
-| [f4f1041cf](https://github.com/AFK-surf/still.fail/commit/f4f1041cf8e2f9d4ca25acfaebb15be87e4c2ad2) mbui: Ctx::pager goes, with the Photos page nothin | 1.74 | 2.32 | 9.63 | 28.17 | 33.67 | 25.17 | 46.11 | 93 | 126.39 |
