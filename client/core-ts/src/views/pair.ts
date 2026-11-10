@@ -348,7 +348,7 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
       const chains: Record<string, Entry[]> = {};
       const failed: { ws: string; error: string }[] = [];
       for (const sub of subs) {
-        const added = yield* Effect.result(inner.adb.personal().addDevice(sub, { key, id: a.device, label: a.label }, t("core-misc.personal.reason.add"), seed));
+        const added = yield* Effect.result(inner.adb.personal().addDevice(sub, { key, id: a.device, label: a.label, ...(a.signKey !== null ? { sign_key: a.signKey } : {}) }, t("core-misc.personal.reason.add"), seed));
         if (added._tag === "Success") {
           chains[sub] = added.success;
           yield* putOnBound(inner, sub, { id: a.device, label: a.label, signKey: a.signKey });

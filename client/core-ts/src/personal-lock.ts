@@ -33,6 +33,10 @@ const LIMITED_WAIT = "10 seconds";
 /// The key's public half, read without asking anyone.
 const KEY_ID = "personal-signer-id";
 const keptAs = (sub: string) => `personal-lock-${hex(utf8(sub))}`;
+/// The roots (genesis hashes) of the chains this device left behind when it began the lock anew, kept beside it.
+const leftAs = (sub: string) => `personal-lock-left-${hex(utf8(sub))}`;
+/// The form of the key a device signs workspaces' locks with (its signer, views/lock.ts `signerOf`).
+const SIGN_KEY = /^ed25519:[0-9a-f]{64}$/;
 const unhex = (h: string) => (/^([0-9a-f]{2})*$/.test(h) ? Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16)) : new Uint8Array());
 const asKey = (id: string) => (id.startsWith("ed25519:") ? unhex(id.slice(8)) : new Uint8Array());
 
@@ -47,7 +51,9 @@ const verifies = (id: string, sig: string, bytes: Uint8Array) => {
   }
 };
 
-export type Device = { key: string; id: string; label: string };
+/// `sign_key`: the key the device signs workspaces' locks with, as its entry on the chain says it (the rules' fold reads
+/// only key, id and label: `signKeys` reads it of the entries).
+export type Device = { key: string; id: string; label: string; sign_key?: string };
 export type Chain = { readonly devices: ReadonlyMap<string, Device>; readonly hash: string | null };
 
 const crypto = {
@@ -112,6 +118,9 @@ export type PersonalEnv = {
   device: () => Effect.Effect<string, CoreError>;
   label: () => string;
   changed: () => void;
+  /// The key this device signs workspaces' locks with (its signer), none while it has none: its entry on the chain
+  /// says it, so any device of the person's that signs in a workspace can put the others in there (`signKeys`).
+  signKey?: () => string | null;
   /// A device taken off: the stations where this lock is bound told, so an older chain brought there counts for nothing.
   told?: (sub: string, chain: Entry[]) => void;
   /// The person's stations, where the lock is read and brought (the root AGENTS.md, The cloud is the account system):
@@ -131,6 +140,9 @@ export class PersonalLock {
   readonly #pinned = new Map<string, Entry[]>();
   readonly #seen = new Map<string, Entry[]>();
   readonly #loaded = new Set<string>();
+  /// The roots of the chains this device left behind as it began anew, each person's: the stations may keep one still
+  /// (they refused this device then, so the new chain reached only the cloud), and it is no lock begun elsewhere.
+  readonly #left = new Map<string, Set<string>>();
   #myKey: string | null = null;
 
   constructor(env: PersonalEnv) {
@@ -152,6 +164,7 @@ export class PersonalLock {
         const kept = yield* Effect.orElseSucceed(env.host.storageGet(keptAs(sub)), () => null);
         const said = kept === null ? null : (parseJson(kept) as Entry[] | null);
         if (Array.isArray(said) && checkChain(said, sub) !== null) this.#pinned.set(sub, said);
+        this.#left.set(sub, yield* this.#leftKept(sub));
         const id = yield* Effect.orElseSucceed(env.host.storageGet(KEY_ID), () => null);
         if (id !== null) this.#myKey = fromUtf8(id);
         this.#loaded.add(sub);
@@ -170,23 +183,40 @@ export class PersonalLock {
     return chains.length === 0 || !this.#loaded.has(sub) ? Effect.void : this.#heard(sub, this.#best(sub, chains), true);
   }
 
+  /// The roots of the chains this device left behind, as kept on it (none kept, or unreadable: none).
+  #leftKept(sub: string): Effect.Effect<Set<string>> {
+    return Effect.map(Effect.orElseSucceed(this.#env.host.storageGet(leftAs(sub)), () => null), (kept) => {
+      const said = parseJson(kept) as unknown;
+      return new Set(Array.isArray(said) ? said.filter((r): r is string => typeof r === "string") : []);
+    });
+  }
+
+  /// Whether `chain` is one this device left behind as it began anew: it counts for nothing here.
+  #isLeft(sub: string, chain: readonly Entry[]): boolean {
+    const left = this.#left.get(sub);
+    return left !== undefined && left.size > 0 && chain[0] !== undefined && left.has(entryHash(chain[0]));
+  }
+
   /// Of the chains the stations keep (each one a person's lock begun anew): the longest that goes on from the one pinned
-  /// here; none such, the one a station kept last (its latest), as the cloud's would be.
+  /// here; none such, the one a station kept last (its latest), as the cloud's would be. One this device left behind as
+  /// it began anew is none of them.
   #best(sub: string, chains: Entry[][]): Entry[] {
     const pinned = this.#pinned.get(sub) ?? [];
     const root = pinned[0] === undefined ? null : entryHash(pinned[0]);
     let best: Entry[] | null = null;
     for (const c of chains) {
-      if (root === null || c[0] === undefined || entryHash(c[0]) !== root || checkChain(c, sub) === null) continue;
+      if (root === null || c[0] === undefined || entryHash(c[0]) !== root || this.#isLeft(sub, c) || checkChain(c, sub) === null) continue;
       if (best === null || c.length > best.length) best = c;
     }
     if (best !== null) return best;
-    for (const c of chains) if (c.length > 0 && checkChain(c, sub) !== null) best = c;
+    for (const c of chains) if (c.length > 0 && !this.#isLeft(sub, c) && checkChain(c, sub) !== null) best = c;
     return best ?? [];
   }
 
-  #heard(sub: string, entries: Entry[], stations = false): Effect.Effect<void, CoreError> {
+  #heard(sub: string, heard: Entry[], stations = false): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      // (a chain this device left behind as it began anew: none heard, so the one pinned is brought where it is not)
+      const entries = this.#isLeft(sub, heard) ? [] : heard;
       const was = this.#stands(sub);
       const pinned = this.#pinned.get(sub) ?? [];
       const holds = checkChain(entries, sub) !== null;
@@ -215,6 +245,63 @@ export class PersonalLock {
   #pin(sub: string, entries: Entry[]): Effect.Effect<void, CoreError> {
     this.#pinned.set(sub, entries);
     return Effect.mapError(this.#env.host.storageSet(keptAs(sub), utf8(JSON.stringify(entries))), asCoreError);
+  }
+
+  /// `roots` kept as left behind (beside the pinned chain, its write failing as the pin's does), never the root of the
+  /// chain pinned now: one begun again in the same second, by the same device, is the same.
+  #leave(sub: string, roots: string[]): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const now = this.root(sub);
+      const had = this.#left.get(sub) ?? (this.#loaded.has(sub) ? new Set<string>() : yield* this.#leftKept(sub));
+      const left = new Set([...had, ...roots].filter((r) => r !== now));
+      this.#left.set(sub, left);
+      if (left.size === had.size && [...left].every((r) => had.has(r))) return;
+      yield* Effect.mapError(this.#env.host.storageSet(leftAs(sub), utf8(JSON.stringify([...left]))), asCoreError);
+    });
+  }
+
+  /// This device's signer, where it has one of the form a chain keeps.
+  #mySignKey(): string | null {
+    const k = this.#env.signKey?.() ?? null;
+    return k !== null && SIGN_KEY.test(k) ? k : null;
+  }
+
+  /// What the chain pinned here last said of each device still on it, by its key: the last entry naming the key (the
+  /// genesis's `device`, or a `device` entry).
+  #lastSaid(sub: string): Map<string, { device: Device; said: J }> {
+    const entries = this.#pinned.get(sub) ?? [];
+    const chain = checkChain(entries, sub);
+    const out = new Map<string, { device: Device; said: J }>();
+    if (chain === null) return out;
+    for (const e of entries) {
+      const said = e.kind === "genesis" ? (e.body as J)?.device : e.kind === "device" ? e.body : null;
+      const d = typeof said?.key === "string" ? chain.devices.get(said.key) : undefined;
+      if (d !== undefined) out.set(d.key, { device: d, said });
+    }
+    return out;
+  }
+
+  /// The keys the person's devices on the chain pinned here sign workspaces' locks with, as each one's last entry says
+  /// it, by the device's id (its base key, what a workspace's lock goes by); a device whose last entry says none, or one
+  /// not of the form, has none.
+  signKeys(sub: string): Map<string, { sign_key: string; label: string }> {
+    const out = new Map<string, { sign_key: string; label: string }>();
+    for (const { device, said } of this.#lastSaid(sub).values()) {
+      const k = said?.sign_key;
+      if (typeof k === "string" && SIGN_KEY.test(k)) out.set(device.id, { sign_key: k, label: device.label });
+    }
+    return out;
+  }
+
+  /// With the seed in hand for something else: this device said again on the chain with the key it signs workspaces'
+  /// locks with, where its entry lacks it or names another (the rules take a device entry for a key on the chain as that
+  /// device said again). Nothing more is asked of the person; a failure only leaves it unsaid until the next time.
+  #restate(sub: string, seed: Uint8Array): Effect.Effect<void> {
+    const signKey = this.#mySignKey();
+    const mine = this.#myKey === null ? undefined : this.#lastSaid(sub).get(this.#myKey);
+    if (signKey === null || mine === undefined || mine.said?.sign_key === signKey) return Effect.void;
+    const { key, id, label } = mine.device;
+    return Effect.ignore(this.#append(sub, seed, "device", { key, id, label, sign_key: signKey }, true), { log: "Unhandled", message: "personal lock: this device said again" });
   }
 
   standing(sub: string): Standing {
@@ -268,12 +355,15 @@ export class PersonalLock {
   /// One entry more, signed here, brought to the person's stations and pinned once one took it; to the cloud too, for
   /// the stations and devices from before that read it there, not waited on. Only when no station could be asked
   /// (older ones, offline), the cloud is what takes it.
-  #append(sub: string, seed: Uint8Array, kind: string, body: unknown): Effect.Effect<void, CoreError> {
+  /// `once`: the cloud, where it is what takes it, asked once and not again when it limits (an entry that rides on
+  /// another act, which is not to wait a minute for it: `#restate`).
+  #append(sub: string, seed: Uint8Array, kind: string, body: unknown, once = false): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const e = this.#entry(sub, seed, this.#myKey!, kind, body);
       const toCloud = this.#env.cloud(sub, "POST", PATH, { entries: [e] });
       const taken = this.#env.stations ? yield* this.#env.stations.bring(sub, [...(e.seq === 0 ? [] : (this.#pinned.get(sub) ?? [])), e]) : null;
       if (taken !== null && taken > 0) this.#env.runner.fork(Effect.ignore(toCloud));
+      else if (once) yield* toCloud;
       else yield* Effect.retry(toCloud, { times: LIMITED_TRIES, schedule: Schedule.spaced(LIMITED_WAIT), while: (e) => e.code === "rate_limited" }); // timer: a retry after a failure (429)
       yield* this.#pin(sub, [...(this.#pinned.get(sub) ?? []), e]);
       this.#seen.delete(sub);
@@ -287,8 +377,13 @@ export class PersonalLock {
       const { id: key, seed: made } = yield* this.#madeKey(reason);
       const id = yield* this.#env.device();
       const seed = made ?? (yield* this.#unseal(reason));
+      // The chains it leaves behind: the one pinned, and one seen where this device was outside it (a station that
+      // refused this device keeps it still, and is to be brought the new one, not taken for a lock begun elsewhere).
+      const leaving = [this.#pinned.get(sub), this.#seen.get(sub)].flatMap((c) => (c?.[0] === undefined ? [] : [entryHash(c[0])]));
       this.#pinned.delete(sub);
-      yield* this.#append(sub, seed, "genesis", { sub, device: { key, id, label: this.#env.label() } });
+      const signKey = this.#mySignKey();
+      yield* this.#append(sub, seed, "genesis", { sub, device: { key, id, label: this.#env.label(), ...(signKey !== null ? { sign_key: signKey } : {}) } });
+      yield* this.#leave(sub, leaving);
       return seed;
     });
   }
@@ -314,6 +409,7 @@ export class PersonalLock {
       if (standing === "outside") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       if (standing === "replaced") return yield* Effect.fail(new CoreError("personal_replaced", t("core-misc.personal.replaced")));
       const seed = standing === "none" ? yield* this.begin(sub, reason) : yield* this.#unseal(reason);
+      yield* this.#restate(sub, seed);
       const whole: GrantBody = { v: 1, sub, ...body };
       return { body: whole, sig: { key: this.#myKey!, sig: hex(ed25519.sign(grantBytes(whole), seed)) } };
     });
@@ -339,6 +435,7 @@ export class PersonalLock {
     return Effect.gen({ self: this }, function* () {
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
       const seed = yield* this.#unseal(reason);
+      yield* this.#restate(sub, seed);
       return bodies.map((body) => {
         const whole: GrantBody = { v: 1, sub, ...body };
         return { body: whole, sig: { key: this.#myKey!, sig: hex(ed25519.sign(grantBytes(whole), seed)) } };
@@ -352,11 +449,15 @@ export class PersonalLock {
   }
 
   /// A new device let in here, face to face, signed with `seed` (else the person is asked now): the whole lock then, for
-  /// it to pin.
+  /// it to pin. `device.sign_key`, the key it signs workspaces' locks with as its hello said, goes into its entry.
   addDevice(sub: string, device: Device, reason: string, seed: Uint8Array | null = null): Effect.Effect<Entry[], CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
-      yield* this.#append(sub, seed ?? (yield* this.#unseal(reason)), "device", device);
+      const signed = seed ?? (yield* this.#unseal(reason));
+      yield* this.#restate(sub, signed);
+      const { key, id, label, sign_key } = device;
+      // (a key not of the form is not written: nothing would read it, `signKeys`)
+      yield* this.#append(sub, signed, "device", { key, id, label, ...(sign_key !== undefined && SIGN_KEY.test(sign_key) ? { sign_key } : {}) });
       return this.#pinned.get(sub) ?? [];
     });
   }
@@ -364,7 +465,10 @@ export class PersonalLock {
   removeDevice(sub: string, key: string, reason: string): Effect.Effect<null, CoreError> {
     return Effect.gen({ self: this }, function* () {
       if (this.standing(sub) !== "member") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
-      yield* this.#append(sub, yield* this.#unseal(reason), "device.remove", { key });
+      const seed = yield* this.#unseal(reason);
+      // (not said again where it takes itself off)
+      if (key !== this.#myKey) yield* this.#restate(sub, seed);
+      yield* this.#append(sub, seed, "device.remove", { key });
       this.#env.told?.(sub, this.#pinned.get(sub) ?? []);
       return null;
     });

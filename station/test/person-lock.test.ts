@@ -6,6 +6,7 @@ import { generateKeyPairSync, sign as nodeSign } from "node:crypto";
 import { test } from "node:test";
 import { type Entry, LockRefusal, admit, admitPerson, apply, endpointBytes, entryHash, genesis, personFold, signedBytes } from "../src/cloud/lock.ts";
 import { PersonChains } from "../src/mesh/person-chains.ts";
+import { checkChain } from "../src/mesh/person-sync.ts";
 
 const WS = "w1";
 
@@ -129,4 +130,33 @@ test("a device is let in on the lock its member bound, and no other way", () => 
   const last = fork[fork.length - 1]!;
   fork.push(signed({ v: 1, ws: "person:carol", seq: fork.length, prev: entryHash(last), at: 1000, kind: "device", body: { key: third.key.id, id: ed().hex, label: "x" } }, lock.first.key));
   assert.throws(() => kept.newest(pin, "carol", fork), LockRefusal);
+});
+
+test("a chain whose entries say the key each device signs workspaces' locks with is taken, and lets its devices in", () => {
+  // (a device's entry on its person's lock carries `sign_key` beside key, id and label, signed with the rest: the rules
+  // go by key, id and label alone; client/core-ts/src/personal-lock.ts `signKeys`)
+  const w = workspace();
+  const sub = "carol";
+  const first = { key: ed(), base: ed(), signs: ed() };
+  const second = { key: ed(), base: ed(), signs: ed() };
+  const chain: Entry[] = [];
+  const add = (kind: string, body: unknown, by: Key) => {
+    const last = chain[chain.length - 1];
+    chain.push(signed({ v: 1, ws: `person:${sub}`, seq: chain.length, prev: last ? entryHash(last) : null, at: 1000, kind, body }, by));
+  };
+  add("genesis", { sub, device: { key: first.key.id, id: first.base.hex, label: "first", sign_key: first.signs.id } }, first.key);
+  add("device", { key: second.key.id, id: second.base.hex, label: "second", sign_key: second.signs.id }, first.key);
+  // The first said again with another key it signs with: the same device.
+  add("device", { key: first.key.id, id: first.base.hex, label: "first", sign_key: ed().id }, first.key);
+  assert.deepEqual(personFold(chain, sub).devices.map((d) => d.label).sort(), ["first", "second"]);
+  const chains = new PersonChains();
+  const { genesis, chain: taken } = checkChain(chains, chain, sub);
+  chains.keep(genesis, taken, WS);
+  assert.equal(chains.kept(genesis)?.length, 3, "kept as brought");
+  const bound = apply(w.state, signed(next(w.state, "person", { sub, person: genesis }), w.carol.signer), 2000);
+  for (const d of [first, second]) assert.equal(admitPerson(bound, who(sub, d.base), chains.kept(genesis)!).device, d.base.hex);
+  // What it says of the key is signed with the rest: changed, the chain holds no more.
+  const changed = [...chain];
+  changed[1] = { ...changed[1]!, body: { key: second.key.id, id: second.base.hex, label: "second", sign_key: ed().id } };
+  assert.throws(() => personFold(changed, sub), /signature invalid/);
 });

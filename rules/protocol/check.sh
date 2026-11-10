@@ -39,8 +39,12 @@ plantp() { # name lemma from to
 plantp "a station takes a binding unsigned" bound_as_its_device_said \
   "In(<'person', root, pk(d), sign(<'person', root>, d)>)" "In(<'person', root, pk(d)>)"
 plantp "a station goes along a chain unsigned" each_key_as_its_signer_approved \
-  "In(<'pdevice', root, pkNew, pk(s), sign(<'pdevice', root, pkNew>, s)>)" "In(<'pdevice', root, pkNew, pk(s)>)"
+  "In(<'pdevice', root, pkNew, wk, pk(s), sign(<'pdevice', root, pkNew, wk>, s)>)" "In(<'pdevice', root, pkNew, wk, pk(s)>)"
+plantp "a signer taken of an entry unsigned" signer_as_its_approver_said \
+  "In(<'pdevice', root, pkNew, wk, pk(s), sign(<'pdevice', root, pkNew, wk>, s)>)" "In(<'pdevice', root, pkNew, wk, pk(s)>)"
 plantp "a device approves a key it was shown no code of" approved_only_as_shown \
-  "In(pkNew), !Shown(h(pkNew)) ]" "In(pkNew) ]"
+  "In(<pkNew, wk>), !Shown(h(<pkNew, wk>)) ]" "In(<pkNew, wk>) ]"
+plantp "a device approves a signer the code it was shown was not of" approved_only_as_shown \
+  "In(<pkNew, wk>), !Shown(h(<pkNew, wk>)) ]" "In(<pkNew, wk>), !Shown(h(<pkNew, other>)) ]"
 rm -rf "$work"
 exit $bad

@@ -772,8 +772,11 @@ export function putOnBound(inner: Inner, sub: string, device: { id: string; labe
 /// off their lock, or there from before the binding and never put on it, is taken out of the workspace's lock, so it
 /// neither signs there nor has its vault's box taken as theirs (a web page holds no key of their lock: kept); one on
 /// their lock that this one lacks, or holds as not signing, is put in with the key it signs with in another workspace
-/// of theirs bound to it (`signKeysElsewhere`), so it signs here too. Their lock is read first, so a device just put on
-/// it is not taken for gone. Done by a device on it that signs for them; tried as bindPerson is, no timer of its own.
+/// of theirs bound to it (`signKeysElsewhere`), or else with the one their lock's chain records for it (each device
+/// says it there as it is put on, and says it again when it signs there next: `PersonalLock.signKeys`), so it signs
+/// here too: one no workspace's lock ever held with its key (approved where the person had bound none, or before this
+/// workspace bound it) is not left signing nothing. Their lock is read first, so a device just put on it is not taken
+/// for gone. Done by a device on it that signs for them; tried as bindPerson is, no timer of its own.
 const keeping = new WeakMap<Inner, Set<string>>();
 export function keepToPerson(inner: Inner, ws: string): Effect.Effect<void> {
   return Effect.gen(function* () {
@@ -807,8 +810,14 @@ export function keepToPerson(inner: Inner, ws: string): Effect.Effect<void> {
         // (a second workspace bound to the lock: its devices there as the lock was turned on signed nothing, nor did a
         // device one of those approved since; the locks' end to end, round 9, 2026-11-10)
         const inLock = fold(entries).devices;
+        // (what their chain records, only for a device this lock lacks or holds as not signing: a key it holds may be
+        // newer than the chain's, said there since and not yet said again on the chain, and is not written over)
+        const keys = signKeysElsewhere(inner, ws, at.sub);
+        for (const [id, d] of personal.signKeys(at.sub)) {
+          if (!keys.has(id) && typeof live(inLock.get(id), now(inner))?.sign_key !== "string") keys.set(id, d);
+        }
         let put = 0;
-        for (const [id, d] of signKeysElsewhere(inner, ws, at.sub)) {
+        for (const [id, d] of keys) {
           if (!on.has(id) || live(inLock.get(id), now(inner))?.sign_key === d.sign_key) continue;
           yield* new Lock(inner, ws, at.sub, null).append("device", { id, sub: at.sub, kind: "app", label: d.label, sign_key: d.sign_key });
           put++;
@@ -822,6 +831,7 @@ export function keepToPerson(inner: Inner, ws: string): Effect.Effect<void> {
 
 /// The keys the person's app devices sign with in the locks of their other workspaces bound to their own lock, as those
 /// locks (checked here) took them, by device: theirs and signing for themselves, put in face to face or by one of theirs.
+/// Taken before what the person's own chain records (keepToPerson): a workspace's lock is what its stations go by.
 function signKeysElsewhere(inner: Inner, ws: string, sub: string): Map<string, { sign_key: string; label: string }> {
   const keys = new Map<string, { sign_key: string; label: string }>();
   const at = now(inner);
