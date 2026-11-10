@@ -22,6 +22,8 @@ pub fn e2e_photo() -> Bytes
 
 pub let frame_ms : Double
 
+pub fn kb_within(Int32, Int32) -> Bool
+
 pub fn orders((UInt32) -> String raise) -> Unit raise
 
 pub fn read_trace(String) -> String?
@@ -31,6 +33,14 @@ pub fn screen_sum(@ui.Tester) -> String
 pub let seeds : Array[UInt32]
 
 pub fn source() -> @sfbase.Source
+
+pub fn tape_bar(String) -> (Int32, Int32, Int32)?
+
+pub fn tape_barred() -> Array[String]
+
+pub fn tape_topics(String) -> TapeTopics
+
+pub fn tape_topics_known(Array[(String, Int32, Int32, Int32)]) -> Unit
 
 pub fn trace(String) -> String
 
@@ -98,6 +108,13 @@ pub fn Flow::until_moving(Self, String) -> Double
 pub fn Flow::wheel(Self, Double) -> Unit
 pub fn Flow::wheel_aligned(Self, Double) -> Unit
 pub fn Flow::wheel_at(Self, String, Double) -> Unit
+
+pub(all) struct TapeTopics {
+  whole_kb : Int32
+  again : Int32
+  unheld : Int32
+  topics : Map[String, Int32]
+}
 
 // Type aliases
 
