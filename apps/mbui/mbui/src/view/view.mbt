@@ -885,6 +885,9 @@ pub struct Tree {
   mut gone : Bool
   /// the nodes said to go beside another (View::beside), as said (each let go is passed over, and dropped as placed)
   besides_at : Array[Int]
+  /// how wide each of them that is as wide as its anchor was made, by its index (View::beside's `Anchor`:
+  /// Tree::beside_widened): the layout's own, never read by a binding; only those so in it
+  beside_widths : Map[Int, Double]
   /// the nodes whose being under the pointer is read (View::pointer_within: their cells), each as it was made (its
   /// index and generation), told again as the pointer moves and as what is placed changes
   withins_at : Array[(Int, Int)]
@@ -1178,6 +1181,7 @@ pub fn Tree::new(
     point_stop: None,
     gone: false,
     besides_at: [],
+    beside_widths: {},
     withins_at: [],
     withins_passing: false,
     inputs_at: [],
@@ -2201,6 +2205,15 @@ fn Tree::layout_marked_at(self : Tree, at : Int, within? : Bool = false) -> Unit
     }
     i = n.parent
   }
+}
+
+///|
+/// Node `at` laid out alone, nothing above it, as the layout of all of it lays it out over the rest in node `holder`
+/// (absolute in it: a width said of it since, Tree::beside_widened): @flex.absolute_relaid, so it comes out the same
+/// whichever of the two lays it out. Which compute it was, for Tree::walk to place by.
+fn Tree::laid_over_alone(self : Tree, at : Int, holder : Int) -> Int {
+  self.work.computes = self.work.computes + 1
+  @flex.absolute_relaid(self.nodes[holder].flex, self.nodes[at].flex)
 }
 
 ///|
