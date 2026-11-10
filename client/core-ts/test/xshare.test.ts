@@ -10,7 +10,7 @@ import type { StationAddr } from "../src/station/addr.ts";
 import { HostWire, type RequestHead, type StationWire, type WireReply } from "../src/station/wire.ts";
 import { jsonResponse, type FakeHost } from "../src/testing.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
-import { base, started, stationReplies, status, threadView } from "./station-fixture.ts";
+import { base, chatsOf, started, stationReplies, status, threadView } from "./station-fixture.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -50,7 +50,7 @@ class Wire implements StationWire {
 /// (`wc`, two, one of still.fail's icons its mark).
 async function setUp(role = "admin", thread: J = threadView(7, 3), chats?: J[], roleC = "member") {
   let wire: Wire | null = null;
-  const s = await started({ ...base(), "GET /threads": [thread], ...(chats ? { "GET /chats": chats } : {}) }, 0, (host) => (wire = new Wire(host)), ({ host, cloud }) => {
+  const s = await started({ ...base(), "GET /threads": [thread], ...(chats ? chatsOf(chats) : {}) }, 0, (host) => (wire = new Wire(host)), ({ host, cloud }) => {
     cloud.role = role;
     const fetch = host.fetch.bind(host);
     host.fetch = (req: HttpRequest) => {
@@ -301,7 +301,7 @@ test("a_chat_already_shared_with_the_workspace_written_in_asks_nothing", async (
 });
 
 
-/// A chat's row as its station lists it (`GET /chats`).
+/// A chat's row as its station's sessions, threads and marks make it (station-fixture.ts `chatsOf`).
 const row = (more: J = {}) => ({ id: "k1", session: "k1", thread: 7, title: "部署", agents: [], last: null, unread: false, mine: true, lastActiveAt: 1, connect: null, origin: null, ...more });
 
 test("what_a_message_refers_to_is_shared_by_the_core_those_the_viewer_may_and_none_else", async () => {

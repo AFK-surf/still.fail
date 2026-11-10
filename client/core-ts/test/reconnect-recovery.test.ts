@@ -79,9 +79,9 @@ test("a_core_started_again_while_its_station_was_read_afresh_reads_it_again", as
   const s = await started(answers);
   let again: Core | undefined;
   try {
-    // Read afresh, the chats not yet answered, as the stream tells on: where it is is not written down meanwhile.
-    answers["GET /chats"] = [{ id: "7", thread: 7, session: "k1", title: "UPDATED", agents: [], lastActiveAt: 2 }];
-    const release = s.host.hold("/admin/api/changed/chats");
+    // Read afresh, the chats' marks not yet answered, as the stream tells on: where it is is not written down meanwhile.
+    answers["GET /threads"] = [{ ...threadView(7, 3), title: "UPDATED" }];
+    const release = s.host.hold("/admin/api/chats?marks=1");
     s.core.inner.stations.snapshot(ST);
     await s.host.settle();
     Queue.offerUnsafe(s.streams.at(-1)!.queue, new TextEncoder().encode("id: abcdef.50\nevent: overview\ndata: {}\n\n"));
@@ -114,7 +114,7 @@ test("a_station_read_afresh_that_could_not_be_read_whole_is_not_taken_up_from_it
   try {
     // The chats not answered (the station failing as they were asked): nothing is written down, though the stream tells on.
     let down = true;
-    stationReplies(s.host, (req) => (down && /\/admin\/api\/(changed\/)?chats$/.test(req.url) ? status(503, { error: "down" }) : undefined));
+    stationReplies(s.host, (req) => (down && /\/admin\/api\/chats\?marks=1$/.test(req.url) ? status(503, { error: "down" }) : undefined));
     s.core.inner.stations.snapshot(ST);
     await s.host.time.pass(1000, 50);
     Queue.offerUnsafe(s.streams.at(-1)!.queue, new TextEncoder().encode("id: abcdef.60\nevent: overview\ndata: {}\n\n"));

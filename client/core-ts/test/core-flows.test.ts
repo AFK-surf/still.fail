@@ -18,7 +18,7 @@ import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { SOCKET_RETRY_MS } from "../src/sync/cloud.ts";
 import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { base, entry, overview, session, started, stationHost, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
+import { base, chatsOf, entry, overview, session, started, stationHost, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
@@ -338,8 +338,9 @@ test("a_chat_opening_is_one_trace_its_requests_carry_and_ember_cloud_gets", asyn
   await host.settle();
   const said = host.takeEmitted().map(([, m]) => m as J);
   assert.ok(said.some((m) => m.id === 1 && "value" in m), JSON.stringify(said).slice(0, 500));
-  assert.equal(host.requests.length, before, "opening a chat asks nothing");
-  const reads = ["/events?running=1&views=1&rows=1&shared=1", "/overview", "/sessions", "/threads", "/chats", "/jobs?chats=0"].map((p) => host.requests.find((r) => r.url === `https://stillfail.test/admin/api${p}`)!);
+  // (but its agent's history brought whole behind every other read, the sync's: topics.ts `#wholeHistory`)
+  assert.equal(host.requests.slice(before).filter((r) => !r.url.includes("/timeline?")).length, 0, "opening a chat asks nothing");
+  const reads = ["/events?running=1&views=1&rows=1&shared=1", "/overview", "/sessions", "/threads", "/chats?marks=1", "/jobs?chats=0"].map((p) => host.requests.find((r) => r.url === `https://stillfail.test/admin/api${p}`)!);
   const parents = reads.map((r) => header(r, "traceparent")!);
   const trace = parents[0].slice(3, 35);
   assert.ok(parents.every((p) => p.slice(3, 35) === trace && p.endsWith("-01")), JSON.stringify(parents));
@@ -576,7 +577,7 @@ test("a_decision_is_answered_in_its_chat_and_dismissed_on_the_station", async ()
 test("what_an_agent_needs_let_go_in_its_chat_is_said_let_go_at_once_and_back_when_its_station_refuses", async () => {
   const agent = { ...session("k1"), status: "idle", lastTurn: { id: "t", kind: "input", startedAt: 1, endedAt: 2, outcome: "completed", declared: "block", ending: "need_help", need: "在手机上试新列表" } };
   const need = { seq: 3, message: { seq: 3, thread: 7, ts: "9.000003", authorKind: "agent", author: "k1", authorName: "Claude", text: "你试一下", attachments: [], quotes: [], declared: null, createdAt: 1, editedAt: null }, before: [] };
-  const { host, core } = await started({ ...base(), "GET /chats": [{ id: "7", thread: 7, session: "k1", title: "部署", agents: [agent], lastActiveAt: 1, need }] });
+  const { host, core } = await started({ ...base(), ...chatsOf([{ thread: 7, session: "k1", title: "部署", agents: [agent], lastActiveAt: 1, need }]) });
   // The station's answer held until told: what is said meanwhile is the core's own.
   let answer: (res: ReturnType<typeof jsonResponse>) => void = () => {};
   stationLater(host, (req) => (req.method === "PUT" && req.url.endsWith("/threads/7/dismissed") ? new Promise((r) => (answer = r)) : undefined));
@@ -1472,7 +1473,7 @@ test("an_address_of_a_stations_own_page_kept_from_before_is_said_gone", async ()
 
 test("the_chats_a_few_words_find_are_a_view_of_the_list", async () => {
   const row = (id: string, title: string, at: number) => ({ id, session: id, thread: null, title, agents: [], last: null, unread: false, mine: true, lastActiveAt: at, connect: null, origin: null });
-  const { host, core } = await started({ ...base(), "GET /chats": [row("a", "别的", 3), row("b", "登录页", 2), row("c", "修登录", 1)] });
+  const { host, core } = await started({ ...base(), ...chatsOf([row("a", "别的", 3), row("b", "登录页", 2), row("c", "修登录", 1)]) });
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "chatSearch", scope: "ws", query: "登录", exclude: "c" });
   await host.settle();
@@ -1494,9 +1495,9 @@ test("the_at_menu_written_on_one_station_finds_the_chats_of_every_station_of_its
   const { host, core } = await started(base(), 0, wire, (x) => {
     x.cloud.also = { stations: [{ id: "st", name: "studio", online: true, last_seen: null }, { id: "st2", name: "mini", online: true, last_seen: null }] };
     stationReplies(x.host, (req: HttpRequest) => {
-      const [path, query] = req.url.replace("https://stillfail.test/admin/api", "").split("?");
-      if (path !== "/chats" || (query ?? "").includes("archived")) return undefined;
-      return req.headers.some(([k, v]) => k === AT && v === "st2") ? [row("b", "部署 mini", 2)] : [row("a", "部署 studio", 3), row("c", "写在这里", 1)];
+      const asked = `${req.method} ${req.url.replace("https://stillfail.test/admin/api", "")}`;
+      const of = chatsOf(req.headers.some(([k, v]) => k === AT && v === "st2") ? [row("b", "部署 mini", 2)] : [row("a", "部署 studio", 3), row("c", "写在这里", 1)]);
+      return asked in of ? of[asked] : undefined;
     });
   });
   const ui = core.connect();
@@ -1552,8 +1553,7 @@ test("the_messages_a_few_words_find_are_those_of_the_chats_listed_newest_first_a
   const said = (thread: number, n: number, text: string, at: number) => ({ thread, n, kind: "message", ts: `${n}.0`, authorKind: "person", author: "a@x", authorName: "阿甲", text, at });
   const { host, core } = await started({
     ...base(),
-    "GET /chats": [row("a", 7, "别的"), row("b", 8, "登录页")],
-    "GET /threads": [threadView(7, 4, 4, 0), threadView(8, 1, 1, 0)],
+    ...chatsOf([{ ...row("a", 7, "别的"), last: { seq: 4 } }, { ...row("b", 8, "登录页"), last: { seq: 1 } }]),
     "GET /threads/7/entries?limit=50": {
       first: 1,
       last: 4,
@@ -2052,11 +2052,12 @@ test("what_waited_for_a_new_chat_goes_as_soon_as_it_is_made_not_after_the_lists_
 test("a_chat_being_archived_leaves_the_list_at_once_and_comes_back_if_it_could_not_be", async () => {
   let archived = false;
   let refused = true;
-  const row = (id: string, thread: number) => ({ id, session: id, thread, title: id, agents: [], last: null, unread: false, mine: true, lastActiveAt: 1, connect: null, origin: null });
-  const { host, core } = await started({ ...base(), "GET /chats": [row("k1", 7), row("k2", 8)] });
+  const row = (id: string, thread: number) => ({ id, session: id, thread, title: id, agents: [], last: { seq: 1 }, unread: false, mine: true, lastActiveAt: 15 - thread, connect: null, origin: null });
+  const { host, core } = await started({ ...base(), ...chatsOf([row("k1", 7), row("k2", 8)]) });
   stationReplies(host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
-    if (req.method === "GET" && path === "/chats" && archived) return [row("k2", 8)];
+    const left = chatsOf([row("k2", 8)]);
+    if (req.method === "GET" && archived && `GET ${path}` in left) return left[`GET ${path}`];
     if (req.method === "POST" && path === "/threads/7/archive" && !refused) {
       archived = true;
       return { ok: true };
@@ -2083,7 +2084,7 @@ test("a_chat_being_archived_leaves_the_list_at_once_and_comes_back_if_it_could_n
   await host.settle();
   assert.ok("err" in answersOf(host, values).get(2)!);
   assert.deepEqual(ids(), ["k1", "k2"]);
-  // Archived: its station's rows, read again before the answer, no longer have it.
+  // Archived: gone at once, and the station takes it.
   refused = false;
   release = host.hold("/threads/7/archive");
   archive(3);
@@ -2093,7 +2094,6 @@ test("a_chat_being_archived_leaves_the_list_at_once_and_comes_back_if_it_could_n
   release();
   await host.settle();
   assert.ok("ok" in answersOf(host, values).get(3)!);
-  assert.deepEqual(ids(), ["k2"]);
   assert.ok(archived);
   core.close();
 });

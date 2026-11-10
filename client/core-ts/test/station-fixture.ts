@@ -120,8 +120,8 @@ export function stationHost(answers: Answers) {
     if (!(key in answers) && /^GET \/sessions\/[^/?]+\?turns=\d+(&jobs=now)?$/.test(key)) key = key.split("?")[0]!;
     // The archive a page at a time (`&page=`): as a station from before, the whole list, unless the test answers pages.
     if (!(key in answers) && /^GET \/chats\?archived=1&page=/.test(key)) key = "GET /chats?archived=1";
-    // The sidebar's marks (`marks=1`): as a station from before, the sidebar made, unless the test answers marks.
-    if (!(key in answers) && /^GET \/chats\?marks=1/.test(key)) key = "GET /chats";
+    // The sidebar's marks (`marks=1`): none, unless the test answers them (the sidebar made here of the summaries held).
+    if (!(key in answers) && /^GET \/chats\?marks=1/.test(key)) return jsonResponse(200, MARKS);
     // The open jobs without their chats (`chats=0`): as a station from before, the list as the test answers it.
     if (!(key in answers) && key === "GET /jobs?chats=0") key = "GET /jobs";
     if (key in answers) return answers[key] instanceof Status ? jsonResponse((answers[key] as Status).code, (answers[key] as Status).body) : jsonResponse(200, answers[key]);
@@ -133,7 +133,7 @@ export function stationHost(answers: Answers) {
   // one asked `since` an event says it was told first what came after it; `marks`: one not resumed is told where the
   // log is, an id alone (station/src/api/events.ts); `follows`: one asked `running=1` says it follows the sessions at work
   // itself (FOLLOWS).
-  const gate: { stream: "open" | "fail" | "hang" | number | CoreError; resumes: boolean; marks: boolean; follows: boolean } = { stream: "open", resumes: false, marks: false, follows: false };
+  const gate: { stream: "open" | "fail" | "hang" | number | CoreError; resumes: boolean; marks: boolean; follows: boolean; shared: boolean } = { stream: "open", resumes: false, marks: false, follows: true, shared: false };
   let marked = 0;
   // What it tells as events besides its events stream (GET /resources asked as events), by path: those named here tell
   // what is offered on them (`tell`); one it has an answer for answers that whole, as a station from before does.
@@ -173,6 +173,9 @@ export function stationHost(answers: Answers) {
       // It opens as the station's does (a reader of zstd starts once it has 18 bytes), and asked compressed, each chunk
       // goes as it comes.
       Queue.offerUnsafe(queue, new TextEncoder().encode("retry: 3000\n\n"));
+      // As every station's since 0.1.6968: it leaves the sidebar to the device and keeps its marks (`shared`: makes the
+      // chat list once for everyone).
+      Queue.offerUnsafe(queue, new TextEncoder().encode(`event: made\ndata: ${JSON.stringify({ rows: true, marks: true, ...(gate.shared ? { shared: true } : {}) })}\n\n`));
       const resumed = gate.resumes && path.includes("since=");
       if (gate.marks && !resumed) Queue.offerUnsafe(queue, new TextEncoder().encode(`id: abcdef.${++marked}\n\n`));
       const compress = asksCompressed(req) ? zstdBlocks() : null;
@@ -194,6 +197,44 @@ export function stationHost(answers: Answers) {
   return { host, streams, push, end, gate, changes, batches, cloud, told, tell };
 }
 
+/// What a station keeps beside the summaries, none of it (GET /chats?marks=1).
+export const MARKS = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], hidden: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [] };
+
+/// What makes the sidebar rows `rows` (as they were once told whole: `id`, `thread`, `session`, `title`, `agents`,
+/// `lastActiveAt`, `last`, `unread`, `need`, `card`), as a station since 0.1.6968 gives them: its sessions, its threads
+/// and its marks (station/rows-made.ts). A row made so is named by its first agent's session.
+export function chatsOf(rows: { id?: string; thread: number | null; session?: string; title?: string | null; agents?: { key: string; process?: string; [k: string]: unknown }[]; lastActiveAt?: number; last?: { seq: number; text?: string } | null; unread?: boolean; mine?: boolean; connect?: string | null; origin?: { channel?: string; threadTs?: string } | null; need?: unknown; card?: unknown; xshare?: unknown; creator?: { id: string; [k: string]: unknown } }[]): Answers {
+  const sessions = new Map<string, unknown>();
+  const threads: unknown[] = [];
+  const need: Record<string, unknown> = {}, card: Record<string, unknown> = {}, shares: Record<string, unknown> = {};
+  for (const r of rows) {
+    const at = r.lastActiveAt ?? 1;
+    const agents = r.agents && r.agents.length > 0 ? r.agents : [{ key: r.session ?? r.id ?? "k1" }];
+    if (r.xshare !== undefined) shares[agents[0]!.key] = r.xshare;
+    for (const a of agents) {
+      const { key, ...rest } = a;
+      // (the viewer's, started by them, unless it says otherwise; one in no chat titled as its row)
+      const own = r.creator !== undefined ? { creator: r.creator } : r.mine === false ? {} : { creator: { id: "a@x.com", name: "A", email: "a@x.com", via: "cloud" } };
+      if (!sessions.has(key)) sessions.set(key, { ...session(key), lastActiveAt: at, ...own, ...(r.thread === null ? { title: r.title ?? null } : {}), ...rest });
+    }
+    if (r.thread === null) continue;
+    const last = r.last?.seq ?? 0;
+    const view = threadView(r.thread, last, r.unread ? Math.max(0, last - 1) : last, r.unread ? 1 : 0);
+    // (a Slack thread its agents came from: theirs is a row of no chat, titled after it)
+    const slack = typeof r.connect === "string" && r.connect !== "ember";
+    threads.push({
+      ...view, title: r.title ?? null,
+      ...(r.creator !== undefined ? { creator: r.creator, createdBy: r.creator.id } : {}),
+      ...(slack ? { surface: "slack:T1", channel: r.origin?.channel ?? "C1", threadTs: r.origin?.threadTs ?? "1.0" } : {}),
+      sessions: agents.map((a) => ({ thread: r.thread, session: a.key, connect: slack ? r.connect : "ember", joinedAt: 1 })),
+      lastMessage: view.lastMessage === null ? null : { ...view.lastMessage, text: r.last?.text ?? "…", createdAt: at },
+    });
+    if (r.need !== undefined) need[String(r.thread)] = r.need;
+    if (r.card !== undefined) card[String(r.thread)] = r.card;
+  }
+  return { "GET /sessions": [...sessions.values()], "GET /threads": threads, "GET /chats?marks=1": { ...MARKS, need, card, shares } };
+}
+
 /// A session as the station lists it (core/tests.rs `session`).
 export const session = (key: string, turns = 0) => ({
   key, connect: "ember", scope: "thread", title: null, createdBy: null, boundTo: [], creator: null, participants: [], runtime: "claude", profile: "p1",
@@ -213,8 +254,7 @@ export function base(): Answers {
     "GET /overview": overview,
     "GET /sessions": [session("k1")],
     "GET /sessions/k1": { session: session("k1"), threads: [], turns: [], jobs: [] },
-    "GET /threads": [threadView(7, 3)],
-    "GET /chats": [{ id: "7", thread: 7, session: "k1", title: "部署", agents: [], lastActiveAt: 1 }],
+    "GET /threads": [{ ...threadView(7, 3), title: "部署" }],
     "GET /chats?archived=1": [],
     "GET /jobs": [],
     "GET /footprint": {},

@@ -157,7 +157,7 @@ export class StationsSync {
   /// A usage preparation can take many bounded batches; it has its own cancellable stream, outside the sync lane.
   readonly #usageReading = new Map<string, { link: Link; fiber: Fiber.Fiber<void, never> | null }>();
   /// What the station topics want of a stream beyond what the sync wants (host samples, logs, sessions shown).
-  wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] } = () => ({ host: false, live: [], logs: [] });
+  wanted: (address: string) => { host: boolean; logs: [string, number][]; logins?: string[] } = () => ({ host: false, logs: [] });
   /// What a station holds beyond the records (link, live views, host, logs), as its readers see it change.
   readonly seen = new Seen();
   /// Told when what a station holds beyond the records changed, after its readers (`seen`).
@@ -214,7 +214,7 @@ export class StationsSync {
     this.requests.onAnswered = (station) => this.#links.answered(station.toString());
     this.relays = new Relays(core);
     this.relays.onChange = (station) => this.onChange(station, "logins");
-    this.channels = new Channels(heldIn(core.data, (station) => this.#links.get(station)?.followsRunning === true), {
+    this.channels = new Channels(heldIn(core.data), {
       read: (station, path, options) => Effect.suspend(() => this.requests.call(this.#links.get(station)?.addr ?? StationAddr.parse(station), "GET", path, null, options)),
       reached: (station) => this.#links.has(station) && this.reachable(station),
       enqueue: (station, task, priority, work) => this.#enqueue(station, task, priority, work),
@@ -386,8 +386,8 @@ export class StationsSync {
 
   /// A push came of a chat (`notice.bring`, `seq` the message it is about): what it says is brought onto the device now,
   /// whether the station's stream is there or not, so its notification opens on what is held. A chat the device does
-  /// not hold yet is found in the station's chats; of a station not linked, nothing is read. Done once it is held, or
-  /// could not be read.
+  /// not hold yet is found in its session's detail (its threads); of a station not linked, nothing is read. Done once
+  /// it is held, or could not be read.
   bringPushed(address: string, session: string, seq: number | null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const bound = () => {
@@ -396,8 +396,9 @@ export class StationsSync {
       };
       let thread = bound();
       if (thread === null) {
-        yield* this.ask(address, "chats", this.#chats(address));
-        thread = bound();
+        yield* this.ask(address, `session/${session}`, this.#session(address, session));
+        const threads = get(this.#core.data.get({ topic: "session", station: address, key: session }), "threads");
+        thread = bound() ?? (Array.isArray(threads) ? threads.map((t) => u64(get(t, "id"))).find((id) => id !== null) ?? null : null);
       }
       if (thread !== null) yield* this.channels.pushed(entriesOf(address, thread), seq, Priority.focused);
     });
@@ -414,9 +415,9 @@ export class StationsSync {
         // so its failed range read is asked again, independently of whether the catch-up read brings anything new.
         this.#core.store.invalidate(topic);
       }
-      // A history shown: its first read may have failed while the stream was away, and a station that follows the
-      // sessions at work tells nothing of one at rest, so it would wait for ever.
-      else if (topic.topic === "live" && this.#links.get(address)?.followsRunning === true) this.channels.bring(transcriptOf(address, String(topic.key)), Priority.shown, "latest");
+      // A history shown: its first read may have failed while the stream was away, and the station tells nothing of one
+      // at rest, so it would wait for ever.
+      else if (topic.topic === "live") this.channels.bring(transcriptOf(address, String(topic.key)), Priority.shown, "latest");
       else if (topic.topic === "drive" && this.#core.store.inUse(topic)) this.driveShown(address, String(topic.root), String(topic.path));
     }
   }
@@ -1662,8 +1663,7 @@ export class StationsSync {
         // The station keeps the marks beside the summaries (`marks`): the whole sidebar made here (rows-made.ts).
         const link = this.#links.get(address);
         if (!link) return;
-        if (this.#core.data.record("keepsMarks", address) !== (get(data, "marks") === true)) this.#core.data.put("keepsMarks", address, get(data, "marks") === true);
-        if (get(data, "marks") === true && link.marks === null) this.#enqueue(address, "chats", Priority.shown, this.#marksWhole(address));
+        if (link.marks === null) this.#enqueue(address, "chats", Priority.shown, this.#marksWhole(address));
         // The chat list the station makes once for everyone: the sidebar made of it and what is the viewer's own.
         link.shared = get(data, "shared") === true;
         if (link.shared && link.sharedRows === null) this.#enqueue(address, "shared", Priority.shown, this.#sharedWhole(address));
@@ -1762,11 +1762,9 @@ export class StationsSync {
   }
 
   /// The station's sidebar: made here (rows-made.ts) from the summaries held and what the station keeps beside them
-  /// (GET /chats?marks=1), once its stream said it keeps them (`made`); else read made, as from a station from before.
+  /// (GET /chats?marks=1).
   #chats(address: string, ctx: SpanContext | null = null, unread?: () => void): Effect.Effect<void, CoreError> {
-    // Said so by its stream before (kept: a device started again reads the station whole, as each did, some 2 min on a station).
-    const keeps = () => this.#links.get(address)?.marks || this.#core.data.record("keepsMarks", address) === true;
-    return Effect.suspend(() => (keeps() ? this.#marksWhole(address, ctx, unread) : this.#read(address, { topic: "chatRows", station: address }, "/chats", undefined, ctx, 0, unread)));
+    return this.#marksWhole(address, ctx, unread);
   }
 
   /// The chat list as the station makes it for everyone (GET /chats?shared=1), what the viewer sees of it; the sidebar
@@ -1803,14 +1801,9 @@ export class StationsSync {
         return yield* Effect.fail(answer.failure);
       }
       const marks = marksOf(answer.success);
-      if (marks === null) {
-        link.marks = null;
-        this.#core.data.put("keepsMarks", address, false);
-        this.#core.data.set({ topic: "chatRows", station: address }, answer.success);
-      } else {
-        link.marks = marks;
-        this.#made(address);
-      }
+      if (marks === null) return yield* Effect.fail(new CoreError("bad_response", t("station.core.invalidReply")));
+      link.marks = marks;
+      this.#made(address);
       this.#retell(address, asked);
     }));
   }
