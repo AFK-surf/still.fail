@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [1c6ee92f5](https://github.com/AFK-surf/still.fail/commit/1c6ee92f50f3cb2fd8c149612b9dd13db7cf3923) app, core: to people there is one safe mode: no 个人 | 1.75 | 2.33 | 9.69 | 28.27 | 33.92 | 25.24 | 46.31 | 93.54 | 156.12 |
 | [5944ba7e0](https://github.com/AFK-surf/still.fail/commit/5944ba7e017b4c6e51ccaa31050d65689562e6cb) ci: the flows' default-rate run on replay-build's  | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.72 | 166.21 |
 | [ee40c4a4f](https://github.com/AFK-surf/still.fail/commit/ee40c4a4f96499aa12879f6fe6c574e50d75ac3c) mbui: a measured node read as a frame is painted i | 1.75 | 2.33 | 9.69 | 28.26 | 33.9 | 25.24 | 46.3 | 93.5 | 150.25 |
 | [85413543f](https://github.com/AFK-surf/still.fail/commit/85413543f0d721c9ed49e826b71181ec7f058599) mbui: a wheel and a press 7 ms after it scroll as  | 1.75 | 2.33 | 9.68 | 28.25 | 33.88 | 25.23 | 46.28 | 93.67 | 176.03 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [89b5f3891](https://github.com/AFK-surf/still.fail/commit/89b5f3891b53ddf4476c1edfffedf38947420653) mbui: what show, pick and each make or let go down | 1.73 | 2.31 | 9.63 | 28.16 | 33.63 | 25.16 | 46.08 | 93.24 | 124.1 |
 | [cbcff387d](https://github.com/AFK-surf/still.fail/commit/cbcff387d28d7225739ad0383db1da794fd7bfd7) mbui: a list window tells only the rows that come  | 1.73 | 2.31 | 9.61 | 28.14 | 33.49 | 25.12 | 45.93 | 92.91 | 147.16 |
 | [541192be2](https://github.com/AFK-surf/still.fail/commit/541192be278e41b968f11c1cd699fab0219bc61c) mbui: the reader's keys are the keymap's actions,  | 1.73 | 2.31 | 9.62 | 28.14 | 33.49 | 25.12 | 45.93 | 93.14 | 133.53 |
-| [c1c5a1b0f](https://github.com/AFK-surf/still.fail/commit/c1c5a1b0f0bd25823209dab601ffdf216353c636) mbui: 60/120 帧下逐帧判平滑度（MBUI_TEST_MOTION），先在 CI 计数 ( | 1.73 | 2.31 | 9.61 | 28.13 | 33.49 | 25.12 | 45.93 | 93.55 | 147.47 |
