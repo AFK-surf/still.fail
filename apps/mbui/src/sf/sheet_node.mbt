@@ -413,6 +413,9 @@ fn sheet_node(
               }
               s.box(fn(col) {
                 style_node(col, fn() { room })
+                // (holding nothing laid out, none of its room: its title and what it says straight over its foot, as the
+                // old sheet's body's box gone_empty)
+                col.gone_empty(Is(true)) |> ignore
                 // (laid out as the host's sheet lays out a panel's body, sheet_step's: narrow; its words what a sheet's rows
                 // leave of its words' in one a press opened, its rows out to its words' in one opened by nothing)
                 let pressed = from != Unanchored

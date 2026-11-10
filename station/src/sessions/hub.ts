@@ -1004,12 +1004,13 @@ export class Hub {
     await this.actors.get(key)?.changed(restart);
   }
 
-  /// A manual allowance reset lets every waiting session on the same account go on now.
+  /// A manual allowance reset lets every waiting session on the same account, or left to the station and able to move
+  /// to it, go on now.
   allowanceReset(profile: string) {
     this.accounts.resetAllowance(profile);
     const waiting = [...this.actors.values()].filter((actor) => {
       const row = this.store.getSession(actor.key);
-      return row !== null && this.accounts.sameAccount(profile, row.profile);
+      return row !== null && this.accounts.goesOnWith(row, profile);
     });
     for (const actor of waiting) void actor.allowanceReset().catch((error) => {
       log.warn("hub", "could not resume a session after its allowance was reset", { session: actor.key, error: (error as Error).message });

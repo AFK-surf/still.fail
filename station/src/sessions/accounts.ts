@@ -10,7 +10,7 @@ import type { Store } from "../store/store.ts";
 import type { SessionRow } from "../store/rows.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
 import { modelKey } from "../read/usage.ts";
-import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, reportedEfforts, serves, urgency, usable, windowsOf } from "./pool.ts";
+import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, reportedEfforts, serves, signsIn, urgency, usable, windowsOf } from "./pool.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 import { billedPerUse, FAST_RUNTIMES } from "../agents/profiles.ts";
 
@@ -134,6 +134,21 @@ export class Accounts {
     return this.modelSpentAt(id, model) !== undefined ? { ...health, spent: true } : health;
   }
 
+  /// Whether profile `id` can run `model` now (pool.ts `usable`).
+  private can(id: string, model: string | null | undefined): boolean {
+    return usable(this.healthFor(id, model), this.deps.clock.currentTimeMillisUnsafe());
+  }
+
+  /// The profiles session `row` could go on on other than its own, left to the station: those of its runtime allowed in
+  /// its workspace that run its model, or, when none does, all of them (as `runOn` and `spend`). Kept to its own: none.
+  private others(row: SessionRow): Profile[] {
+    const runtime = runtimeNamed(row.runtime);
+    if (!runtime || row.profilePinned) return [];
+    const all = this.deps.config().profiles.filter((p) => p.runtimes.includes(runtime) && this.allows(row.key, p));
+    const strict = all.some((p) => serves(p, row.model));
+    return all.filter((p) => p.id !== row.profile && (!strict || serves(p, row.model)));
+  }
+
   /// When `model` (null: profile `id`'s default) ran into its own limit on `id`'s account, while it is passed over.
   private modelSpentAt(id: string, model: string | null | undefined): number | undefined {
     const key = this.accountKey(id);
@@ -173,7 +188,9 @@ export class Accounts {
   /// per use it leaves for one paid for already that can run it, and one whose short window is nearly full for one paid
   /// for alike that is not, when that loses little (pool.ts `cheapToLeave`): its context was just compacted, or is about
   /// to be, and not while its process has work going in the background (`holding`: commands and subagents, which end
-  /// with it). A move is told (`moved`, said in its chat) unless `quiet`: a change by hand says its own.
+  /// with it). Its own unable to run it and no other able either (every allowance used up), it stays where it is and
+  /// waits there (`refillsAt`); its own unable even to sign in, it moves once to one that signs in. A move is told
+  /// (`moved`, said in its chat) unless `quiet`: a change by hand says its own.
   runOn(key: string, holding = false, quiet = false): RunOn {
     const { store } = this.deps;
     const row = store.getSession(key);
@@ -192,7 +209,8 @@ export class Accounts {
     // (Its model counts only where one of them has it enabled, as in `spend` and the pool: else each call would move it
     // to the least loaded, its own process counted where it is, back and forth.)
     const strict = candidates.some((p) => serves(p, row.model));
-    const keeps = current && (row.profilePinned || (usable(this.healthFor(current.id, row.model)) && (!strict || serves(current, row.model))));
+    const fits = (p: Profile) => !strict || serves(p, row.model);
+    const keeps = current && (row.profilePinned || (this.can(current.id, row.model) && fits(current)));
     let among = candidates;
     if (current && keeps) {
       if (row.profilePinned) return withSpelling(current);
@@ -201,9 +219,20 @@ export class Accounts {
       // little.
       const paid = (p: Profile) => !billedPerUse(p);
       const better = (p: Profile) =>
-        p.id !== current.id && (!strict || serves(p, row.model)) && usable(this.healthFor(p.id, row.model)) && (paid(p) === paid(current) ? crowded(current) && !crowded(p) : paid(p));
+        p.id !== current.id && fits(p) && this.can(p.id, row.model) && (paid(p) === paid(current) ? crowded(current) && !crowded(p) : paid(p));
       among = candidates.filter(better);
       if (among.length === 0 || holding || !this.cheapToLeave(key)) return withSpelling(current);
+    } else {
+      // It goes to those that can run it now; none can: to those that at least sign in (it waits for their refill).
+      // When its own is as good as any, it stays. The pool, given none that can run, picks the one picked least
+      // recently, so each asking moved it on to the next spent account (2026-11-10: asked three times before a turn,
+      // a session was moved three times in a second, each a notice in its chat, and waited for the refill of the
+      // account it ended on, days away, while another's five hours refilled).
+      const standing = (p: Profile) => (this.can(p.id, row.model) ? 2 : signsIn(this.healthOf(p.id)) ? 1 : 0);
+      const fit = candidates.filter(fits);
+      const best = Math.max(...fit.map(standing));
+      if (current && fits(current) && standing(current) >= best) return withSpelling(current);
+      if (fit.length > 0) among = fit.filter((p) => standing(p) === best);
     }
     if (candidates.length === 0) throw new Error(`session ${key}: no profile runs ${row.runtime}`);
     const next = this.pick(among, row.model, false);
@@ -274,7 +303,7 @@ export class Accounts {
     // enabled), all of its runtime's.
     const all = config.profiles.filter((p) => p.runtimes.includes(runtime) && this.allows(key, p));
     const strict = all.some((p) => serves(p, row.model));
-    const candidates = all.filter((p) => p.id !== left && (!strict || serves(p, row.model)) && usable(this.healthFor(p.id, row.model)));
+    const candidates = all.filter((p) => p.id !== left && (!strict || serves(p, row.model)) && this.can(p.id, row.model));
     if (candidates.length === 0) return null;
     const next = this.pick(candidates, row.model, false);
     store.setSessionProfile(key, next.id, false);
@@ -283,15 +312,31 @@ export class Accounts {
     return [name(left), next.name];
   }
 
-  /// When the profile of session `key`, which ran into its allowance (or its model into its own limit), is expected to run
-  /// again: the last refill of its used-up windows, or, none known, when it stops being passed over.
+  /// When session `key`, which ran into its allowance (or its model into its own limit), is expected to run again: when
+  /// its own profile is (`refillOf`), or, left to the station, the first of those it could go on on (`runOn` moves it
+  /// there as it wakes): one that can run it now at once, one that cannot sign in never.
   refillsAt(key: string): number {
     const row = this.deps.store.getSession(key);
     const now = this.deps.clock.currentTimeMillisUnsafe();
     if (!row) return now + SPENT_FOR_MS;
-    const full = windowsOf(this.healthOf(row.profile).quota).filter((w) => Number(w.usedPercent) >= 100 && typeof w.resetsAt === "number" && w.resetsAt > now);
+    const own = this.refillOf(row.profile, row.model, this.deps.store.lastTurn(key)?.endedAt ?? now);
+    const others = this.others(row).filter((p) => signsIn(this.healthOf(p.id)));
+    return Math.min(own, ...others.map((p) => (this.can(p.id, row.model) ? now : this.refillOf(p.id, row.model, now))));
+  }
+
+  /// When profile `id`, unable to run `model` now, is expected to: the last refill of its used-up windows, or, none
+  /// known, when it stops being passed over (`since`: when it ran into its allowance, where that is not kept).
+  private refillOf(id: string, model: string | null, since: number): number {
+    const now = this.deps.clock.currentTimeMillisUnsafe();
+    const full = windowsOf(this.healthOf(id).quota).filter((w) => Number(w.usedPercent) >= 100 && typeof w.resetsAt === "number" && w.resetsAt > now);
     if (full.length > 0) return Math.max(...full.map((w) => w.resetsAt as number));
-    return (this.spent.get(this.accountKey(row.profile)) ?? this.modelSpentAt(row.profile, row.model) ?? this.deps.store.lastTurn(key)?.endedAt ?? now) + SPENT_FOR_MS;
+    return (this.spent.get(this.accountKey(id)) ?? this.modelSpentAt(id, model) ?? since) + SPENT_FOR_MS;
+  }
+
+  /// Whether session `row`, waiting for an allowance, could go on once profile `id`'s is reset: on its own account, or,
+  /// left to the station, on one it could move to.
+  goesOnWith(row: SessionRow, id: string): boolean {
+    return this.sameAccount(id, row.profile) || this.others(row).some((p) => this.sameAccount(id, p.id));
   }
 
   /// The reasoning levels every eligible account that has said offers for a model (a pinned account may offer more):

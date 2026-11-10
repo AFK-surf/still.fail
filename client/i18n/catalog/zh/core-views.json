@@ -383,6 +383,8 @@
   "core-views.station.retrying": "无法连接 {name}，正在重试",
   "core-views.station.running": "{n} 个 agent 正在运行",
   "core-views.station.troubles": "{n} 台 station 异常",
+  "core-views.station.appOld": "这个 app 版本太旧，station 已不再支持：请更新 app",
+  "core-views.station.pageOld": "这个页面版本太旧，station 已不再支持：请刷新页面",
   "core-views.station.unreachable": "无法连接 {name}",
   "core-views.station.unreachable_short": "连不上",
   "core-views.station.lock": "安全模式未放行 {name}",

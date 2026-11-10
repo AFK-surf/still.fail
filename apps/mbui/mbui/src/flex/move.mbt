@@ -108,16 +108,19 @@ let come_turn_least : Double = 0.01
 
 ///|
 /// What share of the speed it set out at a way set off again at speed has slowed to as it sets out for where it goes
-/// (come_turn_out), where that is more than come_turn_least: 2.5%, half way through its slowing (e^-move_k/2), so that
-/// what went fast turns back as soon as it is slow, not hanging near its turn on the long tail of its slowing (the
+/// (come_turn_out), where that is more than come_turn_least: 15%, while what it set off on is still seen going (a point
+/// or more a frame where it went fast), so that the two, added, round its turn: the way out slowing as the way back
+/// gains, never a frame of each seen still together, hanging at the turn (2.5%, set out once it was all but still, hung
+/// there 33 ms and more); no earlier, where the way back, gaining, all but cancels the way out still going fast, a frame
+/// of it stopped dead (25% did: come_back_wbtest). Held by come_back_wbtest's and sheet_let_go_wbtest's hung_at_turn (the
 /// coordinator of the migration, 2026-11-10).
-let come_turn_share : Double = 0.025
+let come_turn_share : Double = 0.15
 
 ///|
 /// When (ms after it set out) a way set off again at `v` turned away from where it goes sets out for it: once its
 /// slowing (come_turn, `t1` long, ω = move_k / t1) has brought it down to the more of come_turn_share of `v` and
 /// come_turn_least; at once where it went no faster than that. A moment of the way's own, worked out of its speed
-/// alone, and the same either side of where the two meet (|v| 0.4: ln 40 = 3.7 = move_k / 2).
+/// alone, and the same either side of where the two meet (|v| 1/15: ln(1/0.15) = 1.9, about a quarter of move_k).
 fn come_turn_out(v : Double, t1 : Double) -> Double {
   let speed = v.abs()
   let slow = fmax(come_turn_least, come_turn_share * speed)
@@ -252,7 +255,15 @@ fn come_height(s : Style, natural : Double) -> Double {
   }
   let (tall, _) = come_way(s.come_from, s.come_v, goal, t)
   let tall = fmax(tall, 0.0)
-  s.come_k = if natural > 0.0 { fmax(fmin(tall / natural, 1.0), 0.0) } else { s.come_to }
+  // (holding nothing it is laid out by, closing to nothing from as tall as one before it was (a pick's case that made
+  // nothing): its share of that)
+  s.come_k = if natural > 0.0 {
+    fmax(fmin(tall / natural, 1.0), 0.0)
+  } else if s.come_to <= 0.0 && s.come_from > 0.0 {
+    fmax(fmin(tall / s.come_from, 1.0), 0.0)
+  } else {
+    s.come_to
+  }
   tall
 }
 

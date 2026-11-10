@@ -433,6 +433,10 @@ let started : Ref[Bool] = Ref::new(false)
 ///|
 fn init {
   @ui.on_reset(fn() { started.val = false })
+  // (kept as src/stillfail's main has it, where the run's app did: its trace's head)
+  @core.client.keep(fn(name, params) {
+    @sfcore.trace_switch("MBUI_HAVE_SAME") && @sfbase.lasting_kept(name, params)
+  })
 }
 
 ///|

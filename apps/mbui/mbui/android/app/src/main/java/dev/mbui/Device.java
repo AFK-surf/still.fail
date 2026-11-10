@@ -33,8 +33,8 @@ final class Device {
     /** The focus is a key catcher's (@hostapi.key_catch): MBView's keys and input connection are the catcher's. */
     static volatile boolean catching;
 
-    // ScreenClips.kt's bounds (device.mbt's clip_*_max)
-    static final int PNG_MAX = 8 * 1024 * 1024;
+    // A pasted picture is an attachment (device.mbt's clip_*_max); a screen checks its transport's own bound.
+    static final int PNG_MAX = 1 << 30;
     static final int SOURCE_MAX = 32 * 1024 * 1024;
     static final long PIXELS_MAX = 16L * 1024 * 1024;
     /** What a picture on the clipboard is (device.mbt's clip_*). */
@@ -185,12 +185,19 @@ final class Device {
             }
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buf = new byte[64 * 1024];
+            boolean kindRead = false;
+            int max = SOURCE_MAX;
             for (int n; (n = in.read(buf)) >= 0; ) {
-                if (out.size() + n > SOURCE_MAX) {
+                out.write(buf, 0, n);
+                // A PNG is handed over as it is; the smaller source bound is for pictures that need decoding.
+                if (!kindRead && out.size() >= 8) {
+                    kindRead = true;
+                    if (isPng(out.toByteArray())) max = PNG_MAX;
+                }
+                if (out.size() > max) {
                     r.picture = TOO_LARGE;
                     return;
                 }
-                out.write(buf, 0, n);
             }
             bytes = out.toByteArray();
         } catch (Exception e) {
