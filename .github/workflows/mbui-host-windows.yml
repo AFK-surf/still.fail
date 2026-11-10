@@ -18,6 +18,7 @@ on:
       - "apps/mbui/mbui/src/host/log_files.h"
       - "apps/mbui/mbui/scripts/win_logs_test.c"
       - "apps/mbui/mbui/scripts/win_keys_test.c"
+      - "apps/mbui/mbui/scripts/win_clip_test.c"
       - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/host/done_watch.h"
       - "apps/mbui/mbui/src/ui/drive.mbt"
@@ -58,6 +59,11 @@ jobs:
           mkdir -p out/keys
           cl.exe -nologo -W4 -Isrc/host scripts/win_keys_test.c -Foout/keys/ -Feout/keys/win_keys_test.exe
           out/keys/win_keys_test.exe
+      - name: "Pasted screenshots over 8 MiB are attachments, as copied image files are"
+        run: |
+          mkdir -p out/clip
+          cl.exe -nologo -W4 -Isrc/host scripts/win_clip_test.c -Foout/clip/ -Feout/clip/win_clip_test.exe -link user32.lib shell32.lib ole32.lib
+          out/clip/win_clip_test.exe
       - name: "The log files: stderr kept in rotating files, nothing of a secret, nobody waiting for a stalled disk (src/host/win_logs.h)"
         run: |
           mkdir -p out/logs

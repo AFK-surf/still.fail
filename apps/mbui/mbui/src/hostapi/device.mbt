@@ -46,8 +46,9 @@ pub let clip_too_large : Int = 2
 pub let clip_unreadable : Int = 3
 
 ///|
-/// The most a picture read off the clipboard is as PNG.
-pub let clip_png_max : Int = 8 * 1024 * 1024
+/// The most a picture read off the clipboard is as PNG: as a file attached to a message. A transport (a remote
+/// screen's clipboard, for example) checks its own bound when it sends one; it is not the reader's bound.
+pub let clip_png_max : Int = clip_file_max
 
 ///|
 /// The most of a picture of another kind read to make it a PNG (CLIP_SOURCE_MAX).

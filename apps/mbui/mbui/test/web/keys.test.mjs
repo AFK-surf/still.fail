@@ -6,7 +6,7 @@ import vm from 'node:vm';
 
 const source = readFileSync(new URL('../../web/host.js', import.meta.url), 'utf8');
 
-function browser(platform) {
+function browser(platform, clipboard) {
   const element = () => ({
     style: {}, listeners: new Map(),
     addEventListener(name, f) { this.listeners.set(name, [...(this.listeners.get(name) || []), f]); },
@@ -22,7 +22,7 @@ function browser(platform) {
   const document = { createElement: () => ({ ...element(), getContext: () => ({}) }),
     getElementById: (id) => id === 'c' ? canvas : ime,
     addEventListener() {} };
-  const win = { ...element(), document, navigator: { platform }, location: { search: '' }, URLSearchParams, Intl,
+  const win = { ...element(), document, navigator: { platform, clipboard }, location: { search: '' }, URLSearchParams, Intl, queueMicrotask,
     devicePixelRatio: 1, performance: { now: () => 0 }, requestAnimationFrame() {} };
   win.window = win;
   vm.runInNewContext(source, win, { filename: 'host.js' });
@@ -41,6 +41,33 @@ function browser(platform) {
     },
   };
 }
+
+test('a clipboard PNG over 8 MiB is read as an attachment; the file bound still applies', async () => {
+  const bytes = new Uint8Array(9 << 20);
+  bytes[0] = 137;
+  bytes[bytes.length - 1] = 255;
+  for (const [size, expected] of [[bytes.length, 1], [(1 << 30) + 1, 2]]) {
+    let read = false;
+    const b = browser('Win32', { read: async () => [{ types: ['image/png'], getType: async () => ({
+      type: 'image/png', size,
+      arrayBuffer: async () => { read = true; return bytes.buffer; },
+    }) }] });
+    const answered = new Promise((resolve) => b.host.setOutside((kind, id, state) => resolve([kind, id, state])));
+    const id = b.host.clipRead();
+    assert.deepEqual(await answered, [9, id, 1]);
+    assert.equal(b.host.clipState(id), 1);
+    assert.equal(b.host.clipPicture(id), expected);
+    assert.equal(read, expected === 1);
+    const got = b.host.clipPng(id);
+    assert.equal(got.length, expected === 1 ? bytes.length : 0);
+    if (expected === 1) {
+      assert.equal(got[0], 137);
+      assert.equal(got[got.length - 1], 255);
+    }
+    b.host.clipEnd(id);
+    assert.equal(b.host.clipState(id), -1);
+  }
+});
 
 for (const [platform, command, other] of [['Win32', 'ctrlKey', 'metaKey'], ['MacIntel', 'metaKey', 'ctrlKey']]) {
   test(`${platform}: browser zoom keys pass through the page, the input and the shortcut recorder`, () => {
