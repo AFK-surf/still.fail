@@ -108,9 +108,13 @@ pub struct Client {
   /// Told of each subscription made (its id, its topic's name, None) and of its first message (its value, or None
   /// when it could not be read): Client::time_topics
   priv mut timing : ((Int, String, Json?, Bool) -> Unit)?
-  /// where the app's attention is, as told last (`client.focus`): told again to a core started anew
-  /// , which would else take the app for out of view
+  /// where the app's attention is, as told last (`client.focus`): told again to a core started anew, which would else
+  /// take the app for out of view. The app's own (shown, in front, the workspace) and the chat it shows are told by
+  /// separate calls and kept apart: keeping only the last call lost the other, and a chat's call alone left a new core
+  /// taking the app for out of view, so nothing it showed was read again (未读消不掉, 2026-11-10)
   priv mut focus : Json?
+  /// the chat shown, as told last (`client.focus {chat}`; none once it is left): told again after `focus`
+  priv mut focus_chat : Json?
   /// While the device's performance record is kept (@hostapi.perf_recording): each call's name by its id until it is
   /// answered, so what the core says of it is put to its name (Client::perf_name)
   priv perf_calls : Map[Int, String]
@@ -152,6 +156,7 @@ pub fn Client::new(
     start_wait: fn(_) { 0 },
     end_wait: fn(_) {  },
     focus: None,
+    focus_chat: None,
     call_waits: {},
     sub_waits: {},
     echo_waits: {},
@@ -543,7 +548,21 @@ pub fn Client::call(
   on_done? : (Result[Json, Json]) -> Unit = fn(_) {  },
 ) -> Int {
   if name == "client.focus" {
-    self.focus = Some(params)
+    match params {
+      Object(o) if o.contains("chat") => self.focus_chat = Some(params)
+      // (left: only the chat it names, as the core lets go only of that one; another may have been told since)
+      Object(o) if o.contains("left") =>
+        match (self.focus_chat, o.get("left")) {
+          (Some(Object(was)), Some(Object(left))) =>
+            match was.get("chat") {
+              Some(Object(c)) if c.get("station") == left.get("station") &&
+                c.get("session") == left.get("session") => self.focus_chat = None
+              _ => ()
+            }
+          _ => ()
+        }
+      _ => self.focus = Some(params)
+    }
   }
   let id = self.next_id
   self.next_id += 1
@@ -1048,9 +1067,11 @@ pub fn Client::restarted(self : Client) -> Unit {
     s.from = None
     self.ask(s)
   }
-  match self.focus {
-    Some(p) => self.call("client.focus", params=p) |> ignore
-    None => ()
+  for focus in [self.focus, self.focus_chat] {
+    match focus {
+      Some(p) => self.call("client.focus", params=p) |> ignore
+      None => ()
+    }
   }
   @signals.end_batch()
 }
@@ -1080,6 +1101,7 @@ pub fn Client::reset(self : Client) -> Unit {
   self.call_waits.clear()
   self.sub_waits.clear()
   self.focus = None
+  self.focus_chat = None
   self.next_id = 1
   self.beside = None
   self.version = 0

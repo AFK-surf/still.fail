@@ -1578,12 +1578,6 @@ export class StationsSync {
         const thread = u64(get(data, "thread"));
         const n = u64(get(data, "n"));
         if (thread !== null && n !== null) this.putRead(address, thread, n);
-        // Where the viewer read to, theirs on the chat list's rows.
-        const link = this.#links.get(address);
-        if (thread !== null && n !== null && link?.shared && link.marks) {
-          link.marks.reads[String(thread)] = Math.max(link.marks.reads[String(thread)] ?? 0, n);
-          this.#remake(address);
-        }
         return;
       }
       case "hidden": {
@@ -1932,6 +1926,10 @@ export class StationsSync {
   /// entry (otherwise the count is read again).
   putRead(address: string, thread: number, n: number): void {
     if (this.#core.data.setRead(address, thread, n)) this.#markDirty(address, thread);
+    // Where the viewer read to, theirs on the chat list's rows: as it is read here, not only once the station's stream
+    // says it again (a read whose event never came left its row unread, 2026-11-10).
+    const link = this.#links.get(address);
+    if (link?.shared && link.marks) link.marks.reads[String(thread)] = Math.max(link.marks.reads[String(thread)] ?? 0, n);
     this.#remake(address);
   }
 

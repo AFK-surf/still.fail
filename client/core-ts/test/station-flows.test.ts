@@ -1394,6 +1394,30 @@ test("a_station_that_makes_the_chat_list_for_everyone_has_the_sidebar_made_of_it
   core.close();
 });
 
+test("a_shared_row_read_here_is_read_at_once_without_waiting_for_the_streams_read", async () => {
+  // Read on this device, its row unread till the station's stream said the read again: a read whose event never came
+  // left the row unread for good (未读消不掉, 2026-11-10).
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], hidden: [], muted: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: { 7: 2 } };
+  const shared = {
+    id: "k1", session: "k1", thread: 7, title: "", agents: [{ key: "k1", runtime: "claude" }], last: { seq: 3, authorKind: "agent", author: "k1", text: "好", createdAt: 3 },
+    unread: false, mine: false, lastActiveAt: 3, connect: null, origin: null, creator: null, people: [],
+    ws: null, named: { thread: { surface: "ember", title: null, autoTitle: "部署" }, firstText: null, channelName: null },
+    mineOf: [], said: { n: 3, authorKind: "agent", author: "k1", other: 3 }, pinned: null,
+  };
+  const answers: J = { ...base(), "GET /chats?marks=1": marks, "GET /threads": [], "GET /chats?shared=1": [shared], "PUT /threads/7/read": { n: 3 } };
+  answers["GET /chats"] = [];
+  const { host, core, push, read } = await ui(answers);
+  await read();
+  push("made", { rows: true, marks: true, shared: true });
+  await coalesce(host);
+  const held = () => core.inner.data.chat(ST, "k1") as J;
+  assert.equal(held().unread, true);
+  await Effect.runPromise(core.inner.stations.read(ST, 7, 3, null));
+  await coalesce(host);
+  assert.equal(held().unread, false);
+  core.close();
+});
+
 test("a_shared_chat_created_while_the_stream_is_away_is_listed_when_it_cannot_resume", async () => {
   const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [], dismissed: [], reads: {} };
   const row = {
