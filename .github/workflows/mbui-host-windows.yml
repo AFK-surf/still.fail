@@ -17,6 +17,7 @@ on:
       - "apps/mbui/mbui/src/host/win.h"
       - "apps/mbui/mbui/src/host/log_files.h"
       - "apps/mbui/mbui/scripts/win_logs_test.c"
+      - "apps/mbui/mbui/scripts/win_keys_test.c"
       - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/host/done_watch.h"
       - "apps/mbui/mbui/src/ui/drive.mbt"
@@ -52,6 +53,11 @@ jobs:
         working-directory: ${{ github.workspace }}
       - uses: actions/checkout@v4
       - uses: ./.github/actions/msvc
+      - name: "A screen's Windows shortcuts stay on its canvas; the shell gets its keys back as it leaves"
+        run: |
+          mkdir -p out/keys
+          cl.exe -nologo -W4 -Isrc/host scripts/win_keys_test.c -Foout/keys/ -Feout/keys/win_keys_test.exe
+          out/keys/win_keys_test.exe
       - name: "The log files: stderr kept in rotating files, nothing of a secret, nobody waiting for a stalled disk (src/host/win_logs.h)"
         run: |
           mkdir -p out/logs
