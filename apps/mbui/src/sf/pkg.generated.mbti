@@ -1486,6 +1486,8 @@ pub fn panel_words_in_node(@view.View) -> @ui.Style
 
 pub fn panel_words_out_by(Double) -> @ui.Style
 
+pub fn panel_words_out_by_node(@view.View, Double) -> @ui.Style
+
 pub fn paper_viewer_ink(ReaderPaper) -> ViewerInk
 
 pub let paragraph : @ui.TextStyle
@@ -2419,6 +2421,8 @@ pub fn way_in_page_node(@view.View, () -> String, (@view.View) -> Unit) -> @view
 pub fn way_in_title_node(@view.View, () -> String) -> @view.View
 
 pub fn way_line(@ui.Ctx, String, Array[String], WayLook, (Int32) -> Unit, last_link? : Bool) -> Unit
+
+pub fn way_line_node(@view.View, () -> Array[String], () -> WayLook, (Int32) -> Unit) -> @view.View
 
 pub let way_more : String
 

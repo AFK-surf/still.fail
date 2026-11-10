@@ -553,6 +553,7 @@ pub(all) struct NarrowOf {
   back : () -> Unit
 }
 
+#derive(Eq)
 pub(all) struct PickAt {
   station : String
   station_name : String
