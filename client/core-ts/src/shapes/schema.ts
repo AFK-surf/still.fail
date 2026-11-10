@@ -2624,7 +2624,7 @@ export const SHAPES: Record<string, Shape> = {
     ["items", vec("ChatItem")],
     ["words", vec("String"), { default: true, doc: "The words looked for, as a found message marks them in its chat when opened (with `messages`)." }],
     ["messages", vec("FoundMessage"), { default: true, doc: "The messages that have the words (asked for by `messages`, at most that many), newest first: only in the chats\nlisted. Empty when not asked for." }],
-  ], { doc: "The chats a few words find (the `chatSearch` topic): as the sidebar has them, those whose title has the words\nfirst. What the composer's `@` menu and the switcher list.", keepNone: true }),
+  ], { doc: "The chats a few words find (the `chatSearch` topic): those whose title has the words first, then those found\nby what else they say; each the chats opened on this device first, the latest first, then the rest by when they\nwere last active, pinned chats as any other (refs.ts). What the composer's `@` menu and the switcher list.", keepNone: true }),
   StationNetwork: struct([
     ["congestion", "String", { doc: "The saved congestion controller: cubic (default) or experimental bbr." }],
   ], { doc: "A station's advanced network settings, read when it starts." }),

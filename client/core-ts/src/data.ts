@@ -907,9 +907,9 @@ export class Data {
 
   // ── records by table and key: the account's own and the device's ──
 
-  /// A value the core keeps itself: `me` by account; a new chat's picks (`choice`) and chats' links (`chat_ref`), a
-  /// workspace's in its account's database (`ws:<id>:…`, `links:<id>`), a station's (`place`, `link`) too; the rest the
-  /// device's; the changelog's.
+  /// A value the core keeps itself: `me` by account; a new chat's picks (`choice`), chats' links and the chats opened
+  /// (`chat_ref`), a workspace's in its account's database (`ws:<id>:…`, `links:<id>`, `opened:<id>`), a station's
+  /// (`place`, `link`) too; the rest the device's; the changelog's.
   record(table: string, key: string): unknown {
     const [db, k] = this.#recordAt(table, key);
     this.#readQuery(this.#recordTopic(table, key, db, k));
@@ -953,6 +953,11 @@ export class Data {
     if (table === "chat_ref" && key.startsWith("links:")) {
       const ws = key.slice(6);
       return [this.#ofWorkspace(ws) ?? null, [ws, "links"]];
+    }
+    // The chats opened on this device in a workspace, the latest last (refs.ts opened).
+    if (table === "chat_ref" && key.startsWith("opened:")) {
+      const ws = key.slice(7);
+      return [this.#ofWorkspace(ws) ?? null, [ws, "opened"]];
     }
     // The team's replies on bug reports from the workspace's chats, as the cloud gives them (feedback-replies.ts).
     if (table === "feedback") return [this.#ofWorkspace(key) ?? null, [key, "feedback"]];

@@ -1214,7 +1214,9 @@ export class Views implements Owner {
         if (listed === undefined || !("ok" in listed)) return listed;
         const chats = { ok: stationsOn(listed.ok) };
         const elsewhere = view.elsewhere === true && String(view.query ?? "").trim() !== "";
-        const found = refs.search(chats.ok, view.query as string, view.station as string | undefined, view.exclude as string | undefined, elsewhere ? undefined : (view.limit as number | undefined));
+        // The chats opened on this device first, the latest first, then the rest by when they were last active (refs.ts).
+        const opened = refs.openedIn(this.#core.data, view.scope as string);
+        const found = refs.search(chats.ok, view.query as string, view.station as string | undefined, view.exclude as string | undefined, elsewhere ? undefined : (view.limit as number | undefined), opened);
         // With something typed (`elsewhere`, the `@` menu), those of the viewer's other workspaces whose title has it
         // too, each saying whose, ranked so as not to crowd this workspace's (refs.ts withOutside).
         if (elsewhere) {
@@ -1223,7 +1225,7 @@ export class Views implements Owner {
             if (place.id === view.scope) continue;
             const theirs = this.#chats(place.id, false, false, "all");
             if (theirs === undefined || !("ok" in theirs)) continue;
-            for (const item of arr(refs.search(stationsOn(theirs.ok), view.query as string, undefined, undefined, undefined).items)) others.push({ ...item, outside: place.name, ...xshare.markOf(place, "outside") });
+            for (const item of arr(refs.search(stationsOn(theirs.ok), view.query as string, undefined, undefined, undefined, refs.openedIn(this.#core.data, place.id)).items)) others.push({ ...item, outside: place.name, ...xshare.markOf(place, "outside") });
           }
           found.items = refs.withOutside(arr(found.items), others, view.query as string, view.scope as string, view.limit as number | undefined);
         }
