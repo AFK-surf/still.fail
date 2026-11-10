@@ -4801,6 +4801,13 @@ pub fn Tree::typing_left_under(self : Tree) -> Bool {
 }
 
 ///|
+/// Whether layer `layer`, opened, takes the keyboard's focus from what under it has it (a modal layer's: one that leaves
+/// what is typed to a field under it (View::leaves_typing) does not, nor one not modal).
+pub fn Tree::takes_focus_under(self : Tree, layer : NodeId) -> Bool {
+  self.alive_id(layer) && self.nodes[layer.at].modal && !self.nodes[layer.at].leaves_typing
+}
+
+///|
 /// Whether the topmost modal layer now lets a back gesture under way go on (View::held_back_goes_on).
 pub fn Tree::modal_top_lets_back(self : Tree) -> Bool {
   match self.modal_top() {

@@ -5336,6 +5336,19 @@ fn view_layers_focus(t : @view.Tree, gone : Array[@view.NodeId], opened : Array[
     Some(top) if t.can_focus(top) => c.focus_moved(tree_said_id(top))
     _ => ()
   }
+  // (the topmost opened a modal layer giving the focus nothing: what under it has the focus gives it up to it, as an
+  // old modal layer's ground takes it, Ctx::focus_taken_under: the one rule)
+  match opened.last() {
+    Some((layer, None)) if t.takes_focus_under(layer) => {
+      let inside = match focus_node_of(c.focus) {
+        Some(n) => t.holds(layer, n)
+        None => false
+      }
+      let ground = if t.can_focus(layer) { tree_said_id(layer) } else { 0 }
+      c.focus_taken_under(ground, inside)
+    }
+    _ => ()
+  }
 }
 
 ///|
