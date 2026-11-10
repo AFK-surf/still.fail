@@ -3805,7 +3805,9 @@ test("the_page_before_a_history_is_read_on_till_an_item_begins_in_what_came", as
   assert.equal(await run(core.inner.stationTopics.historyOlder(ST, "k1")), true);
   await read();
   assert.equal(liveOf(core).first, 100);
-  assert.equal(host.requests.filter((r) => r.url.includes("/sessions/k1/timeline?before=")).length, 2);
+  // (the pages before alone: the transcript's channel reads its latest page as well, before=1000000000000000)
+  const pages = host.requests.map((r) => r.url).filter((u) => u.includes("/sessions/k1/timeline?before=") && !u.includes("before=1000000000000000"));
+  assert.deepEqual(pages.map((u) => u.replace(/.*timeline\?/, "")), ["before=500&limit=200&brief=1", "before=300&limit=200&brief=1"]);
   core.close();
 });
 
