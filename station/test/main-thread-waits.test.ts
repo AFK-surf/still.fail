@@ -5,9 +5,9 @@
 // takes now (STATEMENTS): a change may lower them, never raise them; its files and processes, where they are fixed at
 // their cause, none.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { after, test } from "node:test";
 import { Jobs } from "../src/jobs/jobs.ts";
 import { Remote, written } from "../src/jobs/remote.ts";
@@ -18,6 +18,16 @@ import { WAITED_MS } from "../src/ops/waits.ts";
 import { takeQueries } from "../src/store/timed.ts";
 import { LENGTHS_GATHER_MS, sessionKey } from "../src/sessions/hub.ts";
 import { Rig, message, reply, settle, testClock } from "./hub-fakes.ts";
+import { claudeOAuthToken } from "../src/accounts/oauth.ts";
+import { findRunner } from "../src/agents/process.ts";
+import { install } from "../src/helper/app.ts";
+import { WorkspaceWatch } from "../src/jobs/workspace-size.ts";
+import { ConfigFile } from "../src/ops/config.ts";
+import { LogExport } from "../src/ops/log-export.ts";
+import { linkSkills } from "../src/sessions/actor.ts";
+import { ColdRooms } from "../src/sessions/cold.ts";
+import { fingerprint, profileFilesRead } from "../src/sessions/decision.ts";
+import { LiveHub } from "../src/sessions/live.ts";
 
 type Counted = { files: number; processes: number; statements: number };
 
@@ -39,18 +49,25 @@ async function counted(work: () => Promise<unknown>): Promise<Counted> {
   await work();
   const f = files.take();
   const p = processes.take();
-  if (process.env.SHOW_WAITS) console.log([...f.by.keys(), ...p.by.keys()].join("\n"));
-  return { files: f.calls, processes: p.calls, statements: takeQueries().calls };
+  const q = takeQueries();
+  if (process.env.SHOW_WAITS) console.log([...f.by.keys(), ...p.by.keys(), ...q.by.keys()].join("\n"));
+  return { files: f.calls, processes: p.calls, statements: q.calls };
 }
 
 /// The statements each scenario takes now: lower one where a change lowers it.
 const STATEMENTS = {
   transcriptGrowing: 0,
   lengthsWritten: 4,
-  turn: 98,
+  // 98 until #5188 (6810813bf): a session whose model no account enables is kept on its account before each turn, so the
+  // pool is not asked to pick and no longer reads each running session's row (hub.ts `running`, `getSession`).
+  turn: 97,
   toolCall: 4,
   usageRecord: 6,
   remoteToolCall: 1,
+  // task.files asks whether the task's job is running: the job by its primary key (store.getJob).
+  remoteTask: 1,
+  // The session's row by its primary key, for its workspace (store.getSession).
+  coldAsked: 1,
 } as const;
 
 test("a transcript growing: read and told, its length gathered, written with the others' once LENGTHS_GATHER_MS is up", async () => {
@@ -157,5 +174,133 @@ test("a station's start follows its jobs again, and the memory watch reads the m
     await jobs.shutdown();
     store.close();
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/// A directory of its own for a scenario, removed after it.
+const scratch = () => mkdtempSync(join(tmpdir(), "main-thread-waits-"));
+
+test("a followed transcript growing is read and told off the main thread, its file looked at nowhere on it", async () => {
+  const dir = scratch();
+  const time = testClock();
+  const path = join(dir, "t.jsonl");
+  const said = (text: string, id: string) => `${JSON.stringify({ type: "assistant", timestamp: "2026-11-10T00:00:00Z", message: { id, content: [{ type: "text", text }] } })}\n`;
+  writeFileSync(path, said("one", "m1"));
+  const live = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  // Where the station finds transcripts: off the main thread (agents.ts: the live locator).
+  live.locateAsync = async () => ({ runtime: "claude", paths: [path], current: true });
+  const told: string[] = [];
+  live.heldTold = (_key, m) => void (m.type === "timeline" && told.push(...m.entries.map((e) => e.text ?? "")));
+  try {
+    live.running("s", true);
+    await live.idle();
+    const grew = await counted(async () => {
+      appendFileSync(path, said("two", "m2")); // (the agent's write, not the station's)
+      files.take();
+      await time.adjust(100);
+      await settle();
+      await live.idle();
+      await live.turnEnded("s");
+      await live.idle();
+    });
+    assert.ok(told.includes("two"), told.join());
+    assert.deepEqual(grew, { files: 0, processes: 0, statements: 0 });
+  } finally {
+    live.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("what the station keeps of its files in memory is read off the main thread: the log's batches, its runners, a login, a profile's files, the helper's copy, a workspace's limits, a session's memory and skills", async () => {
+  const dir = scratch();
+  try {
+    // The log's batches: config.json watched, the station's id held (main.ts).
+    const config = new ConfigFile(dir);
+    config.watch();
+    const logs = new LogExport();
+    logs.configure({ enabled: () => config.raw()?.telemetry?.logs !== false, station: () => "station", version: () => "v" });
+    logs.sendWith(async () => {});
+    // A login's token, the refresh not due.
+    const home = join(dir, "claude");
+    mkdirSync(home);
+    writeFileSync(join(home, ".credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "token", expiresAt: Date.now() + 86_400_000 } }));
+    // A Codex profile's files.
+    const codex = join(dir, "codex");
+    mkdirSync(codex);
+    writeFileSync(join(codex, "config.toml"), 'model_provider = "openai"\n');
+    const profile = { id: "cx", name: "cx", runtime: "codex", runtimes: ["codex"], home: codex, models: [], named: [], env: {}, backgroundOnMessage: true } as any;
+    await profileFilesRead(profile);
+    // The helper's copy of the release's app, the same as it.
+    const app = join(dir, "app", "still.fail Helper.app");
+    for (const f of ["Contents/MacOS/stillfail-helper", "Contents/Info.plist", "Contents/_CodeSignature/CodeResources"]) {
+      mkdirSync(dirname(join(app, f)), { recursive: true });
+      writeFileSync(join(app, f), f);
+    }
+    await install(app, join(dir, "helper"));
+    // A workspace's limits, read as it starts.
+    const watch = new WorkspaceWatch({ data: dir, readings: async () => [], working: () => false, notify: () => {} });
+    await watch.ready();
+    // A session's agent home: its memory and a skill.
+    const agent = join(dir, "agent");
+    mkdirSync(join(agent, "skills", "one"), { recursive: true });
+    writeFileSync(join(agent, "MEMORY.md"), "# lessons\n");
+    writeFileSync(join(agent, "skills", "one", "SKILL.md"), "one");
+    const row = { key: "s", workspace: join(dir, "workspace"), cwd: null };
+    mkdirSync(row.workspace);
+    const kept = await counted(async () => {
+      logs.add({ ms: 0, level: "INFO", at: "station", message: "a line", fields: {} });
+      await logs.flush();
+      await claudeOAuthToken({}, home, null, "http://127.0.0.1:9/token");
+      await findRunner(dir, "claude-s");
+      fingerprint(profile);
+      await install(app, join(dir, "helper"));
+      await watch.setLimit("s", "", 20);
+      watch.limit("s", "");
+      assert.equal(await linkSkills(row, { memoryPath: () => join(agent, "MEMORY.md") }), "# lessons");
+    });
+    assert.deepEqual(kept, { files: 0, processes: 0, statements: 0 });
+    await logs.shutdown();
+    config.unwatch();
+    await watch.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a task on this station for another's chat: prepared and its files listed off the main thread", async () => {
+  const dir = scratch();
+  const store = Store.open(":memory:");
+  const jobs = new Jobs({ store, data: dir, notify: () => {}, link: () => null });
+  const remote = new Remote({ data: dir, store, jobs, notify: () => {} });
+  try {
+    // The session's room made, at its first task (its directory, once a minute).
+    await remote.handle("ws", "peer", { method: "task.prepare", session: "s", key: "first", spec: { command: "true" } });
+    const task = await counted(async () => {
+      await remote.handle("ws", "peer", { method: "task.prepare", session: "s", key: "second", spec: { command: "true" } });
+      await remote.handle("ws", "peer", { method: "task.files", session: "s", key: "second", paths: ["missing.txt"] });
+      await remote.handle("ws", "peer", { method: "task.mirrors", session: "s" });
+    });
+    assert.deepEqual(task, { files: 0, processes: 0, statements: STATEMENTS.remoteTask });
+  } finally {
+    await remote.close();
+    await jobs.shutdown();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("an archived session's directory and transcripts are asked of as it opens, off the main thread", async () => {
+  const r = new Rig();
+  r.hub.live.locateAsync = async () => ({ runtime: "claude", paths: [join(r.dir, "nowhere.jsonl")], current: true });
+  try {
+    const m = message();
+    await r.accept(m);
+    await settle();
+    const key = sessionKey("cl", "C1", m.threadTs);
+    const cold = new ColdRooms(() => r.hub);
+    const asked = await counted(async () => assert.equal(await cold.isCold(key), false));
+    assert.deepEqual(asked, { files: 0, processes: 0, statements: STATEMENTS.coldAsked });
+  } finally {
+    await r.close();
   }
 });
