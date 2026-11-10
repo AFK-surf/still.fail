@@ -581,6 +581,7 @@ fn Ctx::focus_keeps(self : Ctx, code : Int, mods : Int) -> Bool {
 /// focus_to: one focus, read on either side); a node's no longer able to take it (let go, another tree's, leaving,
 /// taking no press, under a modal layer), the focus to none.
 fn Ctx::focus_moved(self : Ctx, id : Int, visible? : Bool) -> Unit {
+  let was = self.focus
   self.focus = id
   match visible {
     Some(v) => self.focus_visible = v
@@ -589,6 +590,10 @@ fn Ctx::focus_moved(self : Ctx, id : Int, visible? : Bool) -> Unit {
   // (both sides told as one change)
   @signals.start_batch()
   focus_told_tree(self)
+  // (come to a field of the tree's: its caret blinking from this moment, tree_field_focus_came)
+  if self.focus != was {
+    tree_field_focus_came(self)
+  }
   // (what of the old views reads it told now, with the tree's, in a build too: what read it as it was before (a field
   // read without it, given it back in the same build) built again from it, nothing else; between builds, the host owing
   // a frame for it)
