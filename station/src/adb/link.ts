@@ -110,6 +110,10 @@ export class Share {
   failures = 0;
   /// How many of its offers' streams are open: tried again only while one is (not in GRACE).
   streams = 0;
+  /// What keeps it lending (keepLending), each pass after the one before: the phone let go waits for it before adb
+  /// is told to disconnect, so nothing is asked of it after (a pass begun as adb connected again after pairing asked
+  /// its boot after the disconnect, main 7c7349a1, 2026-11-10).
+  keeping: Promise<void> = Promise.resolve();
   readonly server: net.Server;
   private sockets = new Map<net.Socket, AbortController>();
   private closing = false;
@@ -128,6 +132,11 @@ export class Share {
 
   serial(): string {
     return `127.0.0.1:${this.port}`;
+  }
+
+  /// Whether it is being let go (close): nothing more is asked of the phone for it.
+  ending(): boolean {
+    return this.closing;
   }
 
   /// Every accepted socket belongs to this offer, including one still being checked for a grant.
@@ -440,6 +449,8 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     shares.gone.set(viewer.email.toLowerCase(), { at: wall.now(), ended: String(ended) });
     shares.options.stated?.(viewer.email, null);
     const adb = shares.adb();
+    // (after what was keeping it lending: closing, it asks nothing more, and what it had asked is done)
+    await share.keeping;
     if (adb) for (const server of (await serversOf(shares, share)) ?? [[]]) await run(adb, [...server, "disconnect", share.serial()], shares.limits.quick).catch(() => {});
   }
   await stream.finish().catch(() => {});
@@ -755,13 +766,14 @@ function keepLending(shares: Shares, share: Share, server: string[]): void {
     ["shell", KEEP_LENDING, "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"],
     ["shell", KEEP_LENDING, "cmd", "deviceidle", "whitelist", `+${pkg}`],
   ];
-  void (async () => {
+  share.keeping = share.keeping.then(async () => {
     for (const ask of asks) {
+      if (share.ending()) return;
       const said = await run(adb, [...server, "-s", share.serial(), ...ask], shares.limits.long).catch((error: Error) => error.message);
       log.info("adb", "adb kept the phone lending", { ask: ask.slice(2, 4).join(" "), said: said.split("\n")[0]!.trim().slice(0, 160), ...about(share.conn) });
     }
-    await keepTcp(shares, share, adb, server);
-  })();
+    if (!share.ending()) await keepTcp(shares, share, adb, server);
+  }).catch(() => {});
 }
 
 /// adbd's plain port, `TCP_PORT`, on: what the app holds its session to once Wi-Fi is gone, which Wireless debugging
