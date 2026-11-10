@@ -643,6 +643,15 @@ export const SHAPES: Record<string, Shape> = {
     ["unlimited", "bool"],
     ["balance", opt("String")],
   ]),
+  QuotaReset: struct([
+    ["id", opt("String"), { doc: "What `profile.resetQuota` is asked for as `reset`; none: any of the account's." }],
+    ["kind", "String", { doc: "session | weekly | full | model (what one model used of the week) | credit (a provider's own, saying nothing more)" }],
+    ["left", "u64", { client: "I54" }],
+    ["usable", "bool", { doc: "One can be used now; else only once at a limit it refills." }],
+    ["title", "String"],
+    ["text", "String", { doc: "How many are left, when they end, and why none can be used now." }],
+    ["refills", opt("String"), { doc: "What one gives back, in words." }],
+  ], { doc: "A kind of reset of a subscription's limits, as offered." }),
   Quota: struct([
     ["credits", opt("QuotaCredits")],
     ["plan", opt("String"), { doc: "The subscription tier, when reported with the allowance." }],
@@ -650,6 +659,7 @@ export const SHAPES: Record<string, Shape> = {
     ["resetExpiries", opt(vec("i64")), { client: opt(vec("I54")), doc: "Expiry times of the available reset credits whose details are known, in milliseconds." }],
     ["creditsText", opt("String")],
     ["resetText", opt("String")],
+    ["resets", opt(vec("QuotaReset")), { doc: "Each kind of reset it holds, as offered (all of them together, as one, where the provider has one kind or its station tells no kinds); present with `resetCount`." }],
     ["state", "String", { doc: "ok | unsupported | unavailable | blocked (the provider refuses the account)" }],
     ["windows", vec("QuotaWindow")],
     ["detail", opt("String"), { said: true }],

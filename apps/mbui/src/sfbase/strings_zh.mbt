@@ -2311,6 +2311,7 @@ let zh : Map[String, String] = {
   "web-pages.profiles.resetAction": "使用一次重置",
   "web-pages.profiles.resetBody": "将使用「{name}」的 1 次额度重置，剩余 {n} 次",
   "web-pages.profiles.resetConfirm": "重置额度？",
+  "web-pages.profiles.resetKindBody": "将使用「{name}」的 1 次 {kind}：{refills}",
   "web-pages.profiles.resets": "额度重置 {resets}",
   "web-pages.profiles.restart": "重新开始",
   "web-pages.profiles.run": "运行",

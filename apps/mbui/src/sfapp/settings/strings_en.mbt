@@ -632,7 +632,6 @@ let en : Map[String, String] = {
   "android-settings.quota.resetTitle": "Reset allowance?",
   "android-settings.quota.resetUse": "Use a reset",
   "android-settings.quota.resetWhat": "reset the allowance",
-  "android-settings.quota.resets": "Resets",
   "android-settings.quota.title": "Allowance",
   "android-settings.quota.unavailable": "Unavailable",
   "android-settings.quota.updated": "Allowance updated",

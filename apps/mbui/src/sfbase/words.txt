@@ -2290,6 +2290,7 @@ web-pages.profiles.reset
 web-pages.profiles.resetAction
 web-pages.profiles.resetBody
 web-pages.profiles.resetConfirm
+web-pages.profiles.resetKindBody
 web-pages.profiles.resets
 web-pages.profiles.restart
 web-pages.profiles.run

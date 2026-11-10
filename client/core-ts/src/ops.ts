@@ -141,7 +141,7 @@ export const PARAMS: Record<string, string> = {
   "profile.share": "id:string on?:boolean allow?:strings",
   "profile.move": "id:string to:string",
   "skill.share": "name:string on?:boolean allow?:strings",
-  "profile.resetQuota": "id:string",
+  "profile.resetQuota": "id:string reset?:string",
   "profile.quota": "id:string",
   "profile.check": "id:string",
   "profile.login": "id:string",
@@ -549,7 +549,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "skill.share":
       return op("POST", () => `/skills/${p.at("name")}/share`, { on: p.bool("on"), allow: p.has("allow") ? p.v.allow : null }, { kind: "memory" });
     case "profile.resetQuota":
-      return op("POST", () => `/profiles/${p.at("id")}/reset-quota`, null, OVERVIEW);
+      return op("POST", () => `/profiles/${p.at("id")}/reset-quota`, p.has("reset") ? p.pick(["reset"]) : null, OVERVIEW);
     case "profile.quota":
       return op("POST", () => `/profiles/${p.at("id")}/quota`, null, OVERVIEW);
     case "profile.check":

@@ -72,6 +72,48 @@ function windows(list: Record<string, unknown>[], c: Clock): Record<string, unkn
   return out.sort((a, b) => (u64(a.order) ?? 1) - (u64(b.order) ?? 1));
 }
 
+/// So many resets left, and when they end.
+function resetsText(count: number, expiries: unknown, c: Clock): string {
+  const expiry: string[] = [];
+  if (count > 0 && Array.isArray(expiries)) {
+    const ends = expiries.filter((at: unknown): at is number => typeof at === "number" && Number.isSafeInteger(at) && at > 0)
+      .sort((a: number, b: number) => a - b).slice(0, count);
+    if (ends.some((at: number) => at <= c.now)) expiry.push(t("core-views.present.resets_expired"));
+    const future = ends.filter((at: number) => at > c.now).map((at: number) => format.preciseTimeUntil(at, c.now));
+    if (future.length) expiry.push(t("core-views.present.resets_expire", { when: future.join(t("core-views.present.resets_separator")) }));
+  }
+  return [t("core-views.present.resets_left", { n: count }), ...expiry].join(" · ");
+}
+
+/// Each kind's name, and what one gives back (a provider's own reset, `credit`, says nothing of it).
+const RESET_KINDS: Record<string, [string, string | null]> = {
+  session: ["core-views.present.reset.session", "core-views.present.reset.refills.session"],
+  weekly: ["core-views.present.reset.weekly", "core-views.present.reset.refills.weekly"],
+  full: ["core-views.present.reset.full", "core-views.present.reset.refills.full"],
+  model: ["core-views.present.reset.model", "core-views.present.reset.refills.model"],
+  credit: ["core-views.present.reset.credit", null],
+};
+
+/// A kind of reset as it is offered: its name, what one gives back, how many are left and till when, and whether one
+/// can be used now (else only once at a limit it refills). `id`, what the station is asked for (none: any).
+function presentReset(r: Record<string, unknown>, c: Clock): Record<string, unknown> {
+  const kind = Object.prototype.hasOwnProperty.call(RESET_KINDS, str(r.kind) ?? "") ? str(r.kind)! : "credit";
+  const [name, gives] = RESET_KINDS[kind]!;
+  const model = str(r.model) ?? "Fable";
+  const left = u64(r.left) ?? 0;
+  const usable = r.usable !== false;
+  const refills = gives === null ? null : t(gives, { model });
+  return {
+    ...(typeof r.id === "string" ? { id: r.id } : {}),
+    kind,
+    left,
+    usable,
+    title: t(name, { model }),
+    text: [resetsText(left, r.expiries, c), ...(usable ? [] : [t("core-views.present.reset.needsLimit")])].join(" · "),
+    ...(refills !== null ? { refills } : {}),
+  };
+}
+
 /// Every time in a value, in words beside it: an object with some gets `time: { <field>: stamp }`; a quota's windows
 /// are put as they are drawn. A new value where anything is put; a part with nothing put is the part as it was.
 export function times(value: unknown, c: Clock): unknown {
@@ -130,15 +172,11 @@ export function times(value: unknown, c: Clock): unknown {
     }
     const count = u64(map.resetCount);
     if (count !== undefined) {
-      const expiry: string[] = [];
-      if (count > 0 && Array.isArray(map.resetExpiries)) {
-        const expiries = map.resetExpiries.filter((at: unknown): at is number => typeof at === "number" && Number.isSafeInteger(at) && at > 0)
-          .sort((a: number, b: number) => a - b).slice(0, count);
-        if (expiries.some((at: number) => at <= c.now)) expiry.push(t("core-views.present.resets_expired"));
-        const future = expiries.filter((at: number) => at > c.now).map((at: number) => format.preciseTimeUntil(at, c.now));
-        if (future.length) expiry.push(t("core-views.present.resets_expire", { when: future.join(t("core-views.present.resets_separator")) }));
-      }
-      map.resetText = [t("core-views.present.resets_left", { n: count }), ...expiry].join(" · ");
+      map.resetText = resetsText(count, map.resetExpiries, c);
+      // Each kind of reset it holds, as it is offered: a station from before kinds, or a provider with one kind (a
+      // ChatGPT subscription's), all of them as one with no kind to ask for.
+      const kinds = Array.isArray(map.resets) ? map.resets.filter(isObject) : count > 0 ? [{ kind: "credit", left: count, expiries: map.resetExpiries, usable: true }] : [];
+      map.resets = kinds.map((r) => presentReset(r, c));
       changed = true;
     }
   }

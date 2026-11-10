@@ -11,6 +11,7 @@ import { fileCredentials, takeBack } from "../agents/no-keychain.ts";
 import { type AccessKind, OPENCODE, profileRuntimes, type Runtime, type Via } from "../agents/profiles.ts";
 import { type Endpoints, endpoints, find, type Source } from "../agents/providers.ts";
 import type { Capability } from "../sessions/decision.ts";
+import type { QuotaReset } from "./claude-reset.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeOAuthToken, claudeToken as tokenOf } from "./oauth.ts";
 import { CONSOLE, RenewRefused } from "./console.ts";
@@ -61,6 +62,9 @@ export type ProfileQuota = {
   resetCount?: number;
   /// Expiries of available reset credits for which the provider returned details, in epoch milliseconds.
   resetExpiries?: number[];
+  /// The resets held, a kind each, where the provider tells them apart by what they give back (a Claude subscription's:
+  /// claude-reset.ts); `resetCount` and `resetExpiries` are all of them together. None: one kind (a ChatGPT one's).
+  resets?: QuotaReset[];
   /// The subscription tier, when the provider reports it with the allowance.
   plan?: string;
   /// Whether a Claude subscription has usage credits (extra usage) turned on: what its Fast is billed to, so only then

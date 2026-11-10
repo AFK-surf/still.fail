@@ -140,7 +140,13 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
       answer(async (a) => {
         const key = idempotencyKey(r);
         if (key === undefined) throw new Refusal(400, "reset requires an idempotency key");
-        return ok(await a.resetQuota(segment(id!), key, r.lang));
+        // Which kind of the allowance's resets (`{reset}`), when it lists kinds.
+        let kind: string | null = null;
+        try {
+          const said = JSON.parse(r.body.toString("utf8") || "null")?.reset;
+          kind = typeof said === "string" && /^[a-z]{1,20}$/.test(said) ? said : null;
+        } catch {}
+        return ok(await a.resetQuota(segment(id!), key, r.lang, kind));
       }),
     ),
     route("POST", /^\/*profiles\/+([^/]+)\/+quota(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.refreshQuota(segment(id!))))),

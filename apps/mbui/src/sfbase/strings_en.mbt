@@ -2336,6 +2336,7 @@ let en : Map[String, String] = {
   "web-pages.profiles.resetBody": "Uses 1 quota reset of “{name}”. {n} left",
   "web-pages.profiles.resetBody.one": "Uses 1 quota reset of “{name}”. 1 left",
   "web-pages.profiles.resetConfirm": "Reset quota?",
+  "web-pages.profiles.resetKindBody": "Uses one {kind} of “{name}”: {refills}",
   "web-pages.profiles.resets": "Quota resets {resets}",
   "web-pages.profiles.restart": "Start over",
   "web-pages.profiles.run": "Run",

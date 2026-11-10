@@ -7,8 +7,8 @@
 //   now or once at a limit (`usable_now`); used with `{program, grant_id, request_id}`, the request id making a
 //   retry after a lost reply harmless.
 // Both are used at POST /api/organizations/<organization>/reset_rate_limits, its organization as /api/oauth/profile
-// says. The one used is the weekly 5-hour reset when it is there (it comes back each week), else the grant the
-// provider names next.
+// says. They differ by what they give back (Claude Code's kinds: the 5-hour limit, the week, all, or what Fable used
+// of the week): the station lists them a kind each and a person picks which kind to use.
 import { createHash } from "node:crypto";
 import { profileFetch } from "../ops/agent-env.ts";
 
@@ -37,43 +37,68 @@ function time(v: unknown): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-/// A grant still holding resets.
 /// The weekly 5-hour reset there to use (as Claude Code reads it: in the experiment's reset arm, and available).
 const tideReady = (tide: Json) => isObject(tide) && tide.eligible === true && tide.arm === "reset" && tide.available === true;
 
+/// A grant still holding resets.
 const live = (g: Json) => isObject(g) && typeof g.id === "string" && count(g.resets_left) > 0 && g.paused !== true;
 
-/// The resets a usage answer says the account holds, and when the granted ones end (one date per reset), or null when
-/// it holds none to show (none offered: another surface, an older Claude Code, a plan without them; or all used).
-export function claudeResets(body: Json): { count: number; expiries: number[] } | null {
-  const tide = body?.juniper_tide;
-  const ember = body?.cedar_ember;
-  const tideOffered = isObject(tide) && tide.eligible === true;
-  const emberOffered = isObject(ember) && ember.eligible === true;
-  if (!tideOffered && !emberOffered) return null;
-  let n = tideReady(tide) ? 1 : 0;
-  const expiries: number[] = [];
-  for (const g of emberOffered && Array.isArray(ember.grants) ? ember.grants : []) {
-    if (!live(g)) continue;
-    n += count(g.resets_left);
-    const ends = time(g.ends_at);
-    if (ends !== null) for (let i = 0; i < count(g.resets_left); i++) expiries.push(ends);
-  }
-  return n === 0 ? null : { count: n, expiries: expiries.sort((a, b) => a - b) };
+/// A grant's kind, as Claude Code names it: one that gives back to the week what a model used (Fable's launch) is that
+/// model's; else the kind the provider says; else by the limits it clears.
+export function grantKind(g: Json): ResetKind {
+  if (g?.gives_back_weekly === true || g?.type === "fable") return "model";
+  if (g?.type === "session" || g?.type === "weekly" || g?.type === "full") return g.type;
+  const clears: unknown[] = Array.isArray(g?.clears) ? g.clears : [];
+  const session = clears.includes("five_hour");
+  const other = clears.some((c) => c !== "five_hour");
+  return session && !other ? "session" : other && !session ? "weekly" : "full";
 }
 
-/// The claim a usage answer allows now: the weekly 5-hour reset, else the grant named next (or the first usable one);
-/// "none" when it holds resets that cannot be used now, "noCredit" when it holds none.
-export function claudeClaim(body: Json, key: string): { program: string; grant_id?: string; request_id?: string } | "none" | "noCredit" {
+/// The kinds of a subscription's resets, by what one gives back: the 5-hour limit, the week's, all of them, what one
+/// model used of the week (`model` says which), or a provider's own reset that says no more (a ChatGPT one: `credit`).
+export type ResetKind = "session" | "weekly" | "full" | "model" | "credit";
+
+/// One kind of reset an account holds, as the station tells it (ProfileQuota.resets): `id` what a reset of it is asked
+/// by, how many are left, when each ends, and whether one can be used now (else only once at a limit it refills).
+export type QuotaReset = { id: string; kind: ResetKind; model?: string; left: number; expiries?: number[]; usable: boolean };
+
+const ORDER: ResetKind[] = ["session", "weekly", "model", "full", "credit"];
+
+/// The resets a usage answer says the account holds, one entry a kind (its weekly 5-hour reset among the 5-hour ones),
+/// in Claude Code's order. `model`: the one model a model's reset gives back to (the account's own week of it; Fable
+/// when it says none, as Claude Code does).
+export function claudeResets(body: Json, model: string | null = null): QuotaReset[] {
   const tide = body?.juniper_tide;
-  if (tideReady(tide)) return { program: "juniper_tide" };
   const ember = body?.cedar_ember;
-  const grants: Json[] = isObject(ember) && ember.eligible === true && Array.isArray(ember.grants) ? ember.grants.filter(live) : [];
-  const usable = grants.filter((g) => g.usable_now === true);
+  const kinds = new Map<ResetKind, QuotaReset>();
+  const add = (kind: ResetKind, left: number, usable: boolean, ends: number | null) => {
+    const r = kinds.get(kind) ?? { id: kind, kind, ...(kind === "model" ? { model: model ?? "Fable" } : {}), left: 0, usable: false };
+    r.left += left;
+    r.usable ||= usable;
+    if (ends !== null) r.expiries = [...(r.expiries ?? []), ...Array.from({ length: left }, () => ends)].sort((a, b) => a - b);
+    kinds.set(kind, r);
+  };
+  if (tideReady(tide)) add("session", 1, true, null);
+  for (const g of isObject(ember) && ember.eligible === true && Array.isArray(ember.grants) ? ember.grants : []) {
+    if (live(g)) add(grantKind(g), count(g.resets_left), g.usable_now === true, time(g.ends_at));
+  }
+  return ORDER.flatMap((k) => (kinds.has(k) ? [kinds.get(k)!] : []));
+}
+
+/// The claim a usage answer allows now for a reset of `kind` (none: any, the weekly 5-hour reset first, as before
+/// there were kinds): the weekly 5-hour reset for the 5-hour kind when it is there (it comes back each week), else of
+/// that kind's grants the one the provider names next, else the one that ends first. "none" when resets of it are
+/// held that cannot be used now, "noCredit" when none are.
+export function claudeClaim(body: Json, key: string, kind: string | null = null): { program: string; grant_id?: string; request_id?: string } | "none" | "noCredit" {
+  const tide = body?.juniper_tide;
+  if ((kind === null || kind === "session") && tideReady(tide)) return { program: "juniper_tide" };
+  const ember = body?.cedar_ember;
+  const grants: Json[] = (isObject(ember) && ember.eligible === true && Array.isArray(ember.grants) ? ember.grants.filter(live) : []).filter((g: Json) => kind === null || grantKind(g) === kind);
+  const usable = grants.filter((g) => g.usable_now === true).sort((a, b) => (time(a.ends_at) ?? Infinity) - (time(b.ends_at) ?? Infinity));
   const grant = usable.find((g) => g.id === ember?.next_grant_id) ?? usable[0];
   // Claude Code's request id: [A-Za-z0-9_-]{1,64}; the station's idempotency key, made to fit and the same each retry.
   if (grant) return { program: "cedar_ember", grant_id: grant.id, request_id: createHash("sha256").update(key).digest("hex") };
-  return grants.length > 0 || (isObject(tide) && tide.eligible === true) ? "none" : "noCredit";
+  return grants.length > 0 || ((kind === null || kind === "session") && isObject(tide) && tide.eligible === true) ? "none" : "noCredit";
 }
 
 /// What a claim's answer means to the station (the outcomes of Accounts.resetQuota, Codex's words).
@@ -104,7 +129,8 @@ const json = async (response: Response): Promise<Json> => {
 
 /// Uses one of the account's resets with `token`. `{outcome}`, or `{unauthorized: true}` when the provider said the
 /// token is not good (it is renewed and asked again by the caller).
-export async function claudeResetWith(base: string, token: string, version: string, key: string): Promise<Json> {
+/// `kind`: of the resets the allowance listed (none: any).
+export async function claudeResetWith(base: string, token: string, version: string, key: string, kind: string | null = null): Promise<Json> {
   const headers = claudeHeaders(token, version);
   const ask = (path: string, body?: Json) =>
     profileFetch(`${base}${path}`, {
@@ -115,7 +141,7 @@ export async function claudeResetWith(base: string, token: string, version: stri
   const usage = await ask(USAGE_PATH);
   if (usage.status === 401) return { unauthorized: true };
   if (!usage.ok) throw new Error(`Anthropic ${usage.status}`);
-  const claim = claudeClaim(await json(usage), key);
+  const claim = claudeClaim(await json(usage), key, kind);
   if (claim === "none") return { outcome: "nothingToReset" };
   if (claim === "noCredit") return { outcome: "noCredit" };
   const profile = await ask("/api/oauth/profile");

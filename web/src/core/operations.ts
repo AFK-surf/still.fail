@@ -79,7 +79,7 @@ export interface OperationParams {
   "profile.share": { id: string; on?: boolean | null | undefined; allow?: string[] | null | undefined };
   "profile.move": { id: string; to: string };
   "skill.share": { name: string; on?: boolean | null | undefined; allow?: string[] | null | undefined };
-  "profile.resetQuota": { id: string };
+  "profile.resetQuota": { id: string; reset?: string | null | undefined };
   "profile.quota": { id: string };
   "profile.check": { id: string };
   "profile.login": { id: string };
