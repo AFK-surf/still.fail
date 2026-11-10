@@ -234,6 +234,40 @@ describe("allowances and renewing", { concurrency: true }, () => {
     claudeAiOauth: { accessToken: "old", refreshToken: "refresh-old", expiresAt: expires, scopes: ["user:profile", "user:inference"], subscriptionType: "max", clientId: "test-client" },
   });
 
+  test("a confirmed Claude session exemption changes only that dedicated profile's successful display", async (t) => {
+    const home = temp("session-exemption");
+    writeFileSync(join(home, ".credentials.json"), JSON.stringify(credentials(4_102_444_800_000)));
+    let status = 200;
+    const body = {
+      five_hour: { utilization: 20, resets_at: "2026-11-10T07:00:00Z" },
+      seven_day: { utilization: 6, resets_at: "2026-11-16T08:00:00Z" },
+      extra_usage: { is_enabled: true },
+      limits: [{ kind: "weekly_scoped", group: "weekly", percent: 11, scope: { model: { display_name: "Fable" } }, is_active: false }],
+      cedar_ember: { eligible: true, grants: [{ id: "grant", type: "weekly", resets_left: 1, usable_now: true }] },
+    };
+    const p = await provider(() => ({ status, body: status === 200 ? body : { error: { message: "This organization has been disabled." } } }));
+    t.after(() => p.close());
+    const profile = hubConfig({ profiles: [{ id: "confirmed", runtime: "claude", home, access: { kind: "subscription" }, claudeFiveHourLimit: false }] }, home).profiles[0]!;
+    const urls = { ...URLS, anthropic: p.base };
+    const ask = (override: unknown) => checkQuota({ ...profile, claudeFiveHourLimit: override } as typeof profile, {}, undefined, urls, "zh", "2.1.310");
+    const original = await ask(undefined);
+    assert.deepEqual(original.windows.map((w) => w.minutes), [300, 10080]);
+    const corrected = await ask(false);
+    assert.deepEqual(corrected, { ...original, windows: original.windows.filter((w) => w.minutes !== 300) });
+    assert.equal(corrected.scoped?.[0]?.scope, "Fable");
+    assert.equal(corrected.extraUsage, true);
+    assert.equal(corrected.resets?.[0]?.kind, "weekly");
+    for (const value of [true, "false", null]) assert.deepEqual(await ask(value), original);
+    const local = machine();
+    mkdirSync(join(local.home, ".claude"));
+    writeFileSync(join(local.home, ".claude", ".credentials.json"), JSON.stringify(credentials(4_102_444_800_000)));
+    assert.deepEqual(await checkQuota({ ...profile, machine: true }, local.env, undefined, urls, "zh", "2.1.310"), original, "a machine login can switch accounts independently");
+    status = 403;
+    assert.deepEqual(await ask(false), await ask(undefined), "provider refusals are never hidden");
+    const missing = await checkQuota({ ...profile, home: join(home, "missing") }, {}, undefined, urls, "zh");
+    assert.equal(missing.state, "unavailable");
+  });
+
   /// The token endpoint (POST) answers `status` with new tokens; usage (GET) answers the new token 42%, others 401.
   const oauthProvider = (status: number) =>
     provider((asked) => {

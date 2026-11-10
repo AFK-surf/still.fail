@@ -103,6 +103,18 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
 }
 
 describe("the accounts routes", { concurrency: true }, () => {
+  test("editing a dedicated profile preserves its configured Claude session display correction", async (t) => {
+    const s = await rig();
+    t.after(() => s.close());
+    s.config.update((raw) => {
+      raw.profiles.push({ id: "confirmed", runtime: "claude", access: { kind: "subscription" }, home: "homes/confirmed", claudeFiveHourLimit: false });
+    });
+    assert.equal((await s.call("PUT", "/profiles/confirmed", { name: "Renamed", models: ["claude-fable-5-2"] }))[0], 200);
+    assert.equal(s.profile("confirmed")!.claudeFiveHourLimit, false);
+    assert.equal((await s.call("PUT", "/profiles/confirmed", { runtime: "codex" }))[0], 200);
+    assert.equal(s.profile("confirmed")!.claudeFiveHourLimit, undefined, "the confirmation belongs to the Claude login");
+  });
+
   test("an API key can be disabled and re-enabled without losing the key or its settings", async () => {
     const moved: string[] = [];
     let checks = 0;

@@ -25,6 +25,10 @@ export type Profile = RuntimeProfile & {
   backgroundOnMessage: boolean;
   /// A stopped profile keeps its credentials and models but cannot be chosen for work.
   enabled?: boolean;
+  /// Explicit display correction for a dedicated Claude subscription whose owner confirmed that Claude's Usage
+  /// page has no Current session bar. Set false in config.json; absent/true preserves the provider's windows.
+  /// Remove it if the login changes. Ignored for the machine login, which can change accounts outside this profile.
+  claudeFiveHourLimit?: boolean;
   /// The joined workspaces kept from it: every workspace the station is in runs on it but these.
   withheld?: string[];
 };

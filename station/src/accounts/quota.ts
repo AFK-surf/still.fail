@@ -284,7 +284,15 @@ export async function checkQuota(profile: Profile, env: Env, codexRateLimits: Co
     if (profile.runtime === "devin") return quota("unsupported", [], tr(lang, "station.quota.devinUnsupported"));
     // Nor the Antigravity CLI.
     if (profile.runtime === "agy") return quota("unsupported", [], tr(lang, "station.quota.agyUnsupported"));
-    if (profile.runtime === "claude") return await claudeWithRefresh(env, profile.machine === true ? null : profile.home, urls, lang, claudeVersion);
+    if (profile.runtime === "claude") {
+      const q = await claudeWithRefresh(env, profile.machine === true ? null : profile.home, urls, lang, claudeVersion);
+      // Verified Ultra accounts can retain a legacy five_hour meter in OAuth usage. Neither the plan name nor
+      // limits[].is_active proves exemption: only an explicit, account-local confirmation changes the display.
+      if (profile.claudeFiveHourLimit === false && profile.machine !== true && q.state === "ok") {
+        return { ...q, windows: q.windows.filter((w) => w.minutes !== 300) };
+      }
+      return q;
+    }
     try {
       if (!codexRateLimits) throw new Error("no codex app-server to ask");
       const q = codexQuota(await codexRateLimits(profile), lang);

@@ -553,6 +553,8 @@ export class Accounts {
       }
       next.home = home;
       next.env = env;
+      // A display correction confirmed in config.json survives ordinary edits, only for the same dedicated login.
+      if (runtime === "claude" && kind === "subscription" && !machine && home === existing?.home && existing?.claudeFiveHourLimit === false) next.claudeFiveHourLimit = false;
       if (model !== undefined) next.model = model;
       if (models !== undefined) next.models = models;
       if (machine) next.machine = true;
