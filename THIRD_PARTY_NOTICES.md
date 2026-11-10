@@ -18,6 +18,10 @@ These patched crates come from the corresponding crates.io releases. The iroh an
 
 still.fail Helper (the station's macOS app) builds in the simulator capture and input of [serve-sim](https://github.com/EvanBacon/serve-sim) (Evan Bacon, `packages/serve-sim/Sources` at `0193e65c481fc9b64a62427f32fcf143dbc3d2c0`), under its [Apache-2.0 license](vendor/serve-sim/LICENSE); the files taken and the local changes are listed in [vendor/README.md](vendor/README.md). The station's `station/src/screens/sim-chrome.ts` is ported from serve-sim's `packages/serve-sim/src/devicekit-chrome.ts` and `device-displays.ts`, under the same license; the Apple artwork it reads stays on the Mac it is read on, in no repository or app.
 
+## Vendored Java sources
+
+The Android app builds in [JZlib](https://github.com/ymnk/jzlib) 1.1.3 (Copyright (c) 2000-2011 ymnk, JCraft, Inc.; based on zlib by Jean-loup Gailly and Mark Adler), unmodified, under its [BSD-style license](vendor/jzlib/LICENSE); where it came from is in [vendor/jzlib/README.md](vendor/jzlib/README.md).
+
 ## scrcpy's server in the station's release
 
 The station puts [scrcpy](https://github.com/Genymobile/scrcpy)'s server, the unmodified `scrcpy-server-v5.0.1` of its release (Genymobile and contributors, Apache-2.0), on an Android device for as long as a person views it (`station/src/screens/scrcpy-server`).

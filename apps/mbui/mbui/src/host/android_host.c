@@ -118,7 +118,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_over_done = (*env)->GetStaticMethodID(env, host_cls, "overDone", "(Z)V");
   updates_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Updates"));
   m_up_version = (*env)->GetStaticMethodID(env, updates_cls, "versionCode", "()I");
-  m_up_fetch = (*env)->GetStaticMethodID(env, updates_cls, "fetch", "(Ljava/lang/String;Ljava/lang/String;DLjava/lang/String;Z)V");
+  m_up_fetch = (*env)->GetStaticMethodID(env, updates_cls, "fetch", "(Ljava/lang/String;Ljava/lang/String;DLjava/lang/String;ZLjava/lang/String;)V");
   m_up_apply = (*env)->GetStaticMethodID(env, updates_cls, "apply", "(Ljava/lang/String;)V");
   m_up_package = (*env)->GetStaticMethodID(env, updates_cls, "installPackage", "(Ljava/lang/String;[B)V");
   m_up_state = (*env)->GetStaticMethodID(env, updates_cls, "state", "()Ljava/lang/String;");
@@ -711,10 +711,13 @@ int32_t mb_host_app_version(void) {
   return (*env)->CallStaticIntMethod(env, updates_cls, m_up_version);
 }
 
-void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now) {
+// (`delta`: "" or the delta for this build, as JSON: Updates.fetch tries it before the whole package)
+void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now,
+                          moonbit_string_t delta) {
   JNIEnv *env = env_();
-  jstring u = jstr(env, url), h = jstr(env, sha256), n = jstr(env, name);
-  (*env)->CallStaticVoidMethod(env, updates_cls, m_up_fetch, u, h, size, n, (jboolean)(now != 0));
+  jstring u = jstr(env, url), h = jstr(env, sha256), n = jstr(env, name), d = jstr(env, delta);
+  (*env)->CallStaticVoidMethod(env, updates_cls, m_up_fetch, u, h, size, n, (jboolean)(now != 0), d);
+  (*env)->DeleteLocalRef(env, d);
   (*env)->DeleteLocalRef(env, u);
   (*env)->DeleteLocalRef(env, h);
   (*env)->DeleteLocalRef(env, n);

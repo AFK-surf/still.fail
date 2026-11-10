@@ -14,7 +14,8 @@
 #                                        (.github/mac_signing.py), zipped, into $RELEASE_DIR as mac/app-<variant>.zip
 #   apps/mbui/scripts/beta.sh win        the Windows app's installer (scripts/win.sh setup: the build, its engine, shell
 #                                        and core.hbc packed in it), signed, into $RELEASE_DIR as
-#                                        win/stillfail-mbui-<n>-x64-win.exe and win/mbui/latest.json (carrying its .sig)
+#                                        win/stillfail-mbui-<n>-x64-win.exe and win/mbui/latest.json (carrying its .sig),
+#                                        its raw form beside it (.raw.zst: what its deltas make, scripts/release.sh's)
 #   apps/mbui/scripts/beta.sh linux      the Linux app (scripts/linux.sh's build, its engine, shell and core.hbc beside it),
 #                                        with its icon and linux/install.sh, in still.fail-mbui/, into $RELEASE_DIR as
 #                                        linux/stillfail-mbui-<n>-<x64|arm64>-linux.tar.gz and its machine's feed: x64's
@@ -24,8 +25,10 @@
 #                                        scripts or CI) changed since the build that feed names now (or it has none),
 #                                        else no: main's push makes and puts a package only then
 #   apps/mbui/scripts/beta.sh publish win|linux|linux-arm64
-#                                        what `win` or `linux` made put (scripts/release-put.sh), fetched back from where
-#                                        it is served and checked (size, SHA-256), then its feed: https://app.still.fail/
+#                                        what `win` or `linux` made put (scripts/release-put.sh) with the deltas to it
+#                                        from the builds before (scripts/release-deltas.ts, STILLFAIL_DELTAS_SECONDS: 60 s
+#                                        at most, never a reason not to put it), fetched back from where it is served and
+#                                        checked (size, SHA-256), then its feed: https://app.still.fail/
 #                                        releases/latest/win-mbui (linux-mbui) is the newest from then on
 # MBUI_FRESH=1 (GitHub's runners, .github/workflows/preview.yml): the checkout built in place (WORK=apps/mbui), what stays
 # between runs the Actions cache's (MBC_STORE, MBC_LTO_CACHE, HBC_CACHE, the core's parts in out/core), the release in
@@ -254,8 +257,13 @@ win() {
   name=win/stillfail-mbui-$n-x64-win.exe
   exe=$C/win-sig/$(basename "$name")
   cp "$setup" "$exe"
-  node "$REPO/scripts/release-sign.ts" file "$exe" --kind stillfail-desktop-win --build "$n"
+  # its raw form (setup.c --raw), its hash in the signed words, beside it zstd'd, as scripts/release.sh desktop-win's;
+  # without it, put all the same, with no deltas
+  local raw=
+  if "$exe" --raw "$exe.raw" && [ -s "$exe.raw" ]; then raw=$exe.raw; else echo "beta: warning: $name --raw made nothing: no deltas to it" >&2; fi
+  node "$REPO/scripts/release-sign.ts" file "$exe" --kind stillfail-desktop-win --build "$n" ${raw:+--raw "$raw"}
   cp "$exe" "$RELEASE_DIR/win/$name"
+  [ -z "$raw" ] || { node "$REPO/scripts/release-deltas.ts" --zst "$raw" "$RELEASE_DIR/win/$name.raw.zst" && rm -f "$raw"; }
   feed win "$n" "$name" "$exe" "$exe.sig"
   summary "- Windows app 0.1.$n: its installer $(wc -c < "$exe" | tr -d ' ') bytes, signed in $(secs $t0) s"
 }
@@ -332,6 +340,7 @@ publish() {
   # (wrangler's, when Cloudflare's API cannot be used: without the token)
   [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || (cd "$REPO/cloud" && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
   rm -rf "$C/put-receipts"
+  node "$REPO/scripts/release-deltas.ts" "$dir" --releases "$ORIGIN/releases" --deadline "${STILLFAIL_DELTAS_SECONDS:-60}" || echo "beta: no deltas" >&2
   STILLFAIL_PUT_RECEIPTS="$C/put-receipts" sh "$REPO/scripts/release-put.sh" --files "$dir"
   local tp=$(secs $t0)
   check_put "$name" "$C/last-$part" || { echo "beta: $name did not come back as made: the feed stays as it was" >&2; exit 1; }

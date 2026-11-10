@@ -90,6 +90,10 @@ jobs:
       - name: "The notifications' contract: one shown, kept, and clicked"
         if: success() || failure()
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux notices
+      # (the update's contract makes its delta with still.fail's scripts/delta.ts, which needs the repository's Node)
+      - uses: actions/setup-node@v5
+        if: success() || failure()
+        with: { node-version-file: .node-version, package-manager-cache: false }
       - name: "The update's contract: another machine's build refused, this machine's put in place and opened"
         if: success() || failure()
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux update

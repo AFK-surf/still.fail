@@ -266,8 +266,16 @@ pub fn GalleryRead::photos(self : GalleryRead) -> Array[@hostapi.GalleryPhoto]? 
 /// once, not on its event a frame or more later: until then it said nothing was under way, and what shows how it goes
 /// went from nothing to 下载中 a frame late (the update dialog's bar gone and back, its sheet shorter and taller
 /// again, 2026-10-28).
-pub fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool) -> Unit {
-  @hostapi.update_fetch(url, sha256, size, name, now)
+/// `delta`: "" or a delta to make the build of (@hostapi.update_fetch's).
+pub fn update_fetch(
+  url : String,
+  sha256 : String,
+  size : Double,
+  name : String,
+  now : Bool,
+  delta : String,
+) -> Unit {
+  @hostapi.update_fetch(url, sha256, size, name, now, delta)
   update_told.set(@hostapi.update_state())
 }
 
@@ -279,7 +287,8 @@ pub fn update_apply(said : String) -> Unit {
 }
 
 ///|
-/// What the app asked of the host's updates under a Tester ("fetch <name> <now>", "apply"), in order.
+/// What the app asked of the host's updates under a Tester ("fetch <name> <now>", with " delta <json>" where it gave
+/// one; "apply"), in order.
 pub fn Tester::update_asked(self : Tester) -> Array[String] {
   ignore(self)
   update_asked.copy()

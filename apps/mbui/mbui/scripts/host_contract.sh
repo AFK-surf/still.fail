@@ -26,9 +26,11 @@
 #   scripts/host_contract.sh HOST kinds         the kinds of what the host tells done (outside) named as
 #        src/ui/hostcall.mbt's outside_kinds numbers them, none told as a bare number (scripts/chk outside-kinds)
 #   scripts/host_contract.sh mac update         a newer build of the app put in its place by the host and opened
-#        (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/updatecheck.mbt), one signed otherwise refused (below)
-#   scripts/host_contract.sh linux update       (a session bus) the same on Linux: its build for this machine put in
-#        place by its own installer and opened, another machine's refused
+#        (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/updatecheck.mbt), made from a delta from this one (still.fail's
+#        scripts/delta.ts, Node 24), one signed otherwise refused (below)
+#   scripts/host_contract.sh linux update       (a session bus) the same on Linux: its build for this machine made from a
+#        delta, put in place by its own installer and opened; with a delta not as it is said, downloaded whole; another
+#        machine's refused
 #   scripts/host_contract.sh mac links          a link of a scheme the app's Info.plist names, opened while it runs, said to the app
 #        (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt)
 #   scripts/host_contract.sh linux notices      (a session bus) a notification the app shows kept, and clicked by the
@@ -502,6 +504,25 @@ s.listen(0, "127.0.0.1", () => console.log(s.address().port));' "$1" > "$1/port"
       SRV=$!
       read -r PORT < "$1/port"
     }
+    # delta_for PACKAGE OLD: PACKAGE's raw form (U/PACKAGE.raw: a .tar.gz's tar, a .zip stored) made from the folder OLD
+    # by a delta (U/PACKAGE.from-1.delta), as still.fail's releases make them (scripts/delta.ts, on Node 24: the
+    # repository's .node-version); DELTA what the core would hand the host with it (served by `serve`, at PORT),
+    # DELTA_WRONG the same saying another sha256, DELTA_SIZE its size, RAW_SHA what it makes
+    delta_for() {
+      local tool=$D/../../../../scripts/delta.ts
+      node -e 'process.exit(+process.versions.node.split(".")[0] >= 24 ? 0 : 1)' ||
+        { echo "update contract: scripts/delta.ts needs Node 24 (.node-version), this is $(node --version)"; return 1; }
+      node "$tool" raw "$U/$1" "$U/$1.raw" && node "$tool" make --old "$2" --new "$U/$1.raw" --out "$U/$1.from-1.delta" || return 1
+      set -- $(node -e '
+const { createHash } = require("crypto"), { readFileSync } = require("fs");
+const [port, delta, raw] = process.argv.slice(1), d = readFileSync(delta), r = readFileSync(raw);
+const said = (sha256) => JSON.stringify({ url: `http://127.0.0.1:${port}/${require("path").basename(delta)}`, sha256, size: d.length,
+  makes_sha256: createHash("sha256").update(r).digest("hex"), makes_size: r.length });
+console.log(said(createHash("sha256").update(d).digest("hex")), said("0".repeat(64)), d.length, createHash("sha256").update(r).digest("hex"));' \
+        "$PORT" "$U/$1.from-1.delta" "$U/$1.raw")
+      DELTA=$1 DELTA_WRONG=$2 DELTA_SIZE=$3 RAW_SHA=$4
+      [ -n "$RAW_SHA" ]
+    }
     if [ "$H" = linux ]; then
       # (Linux, a session bus: dbus-run-session's) a newer build put in the app's place by the host (kitdemo's
       # MBUI_UPDATECHECK; src/host/linux_update.h): kitdemo installed as an app of its own (dev.mbui.kitdemo.update: a
@@ -547,17 +568,37 @@ INSTALL
       if ! grep -aq '"phase":"failed".*another machine' "$U/refused.log"; then
         kill $SRV; wait $SRV 2> /dev/null || true; echo "update contract (linux): another machine's build was not refused"; exit 1
       fi
-      # (2 opened again with this run's environment: handed 2 again, not newer, it ends itself)
-      MBUI_UPDATECHECK="$(asked "kitdemo-2-$arch-linux.tar.gz")" timeout 60 "$EXE" > "$U/updated.log" 2>&1 || true
+      # 2 handed with a delta from 1 (still.fail's scripts/delta.ts: 1's installed folder to 2's raw tar, the tar in
+      # its .tar.gz), as the core hands one the feed lists: the host makes the raw tar from it and the installed files,
+      # checks it against the sha256 it is told, installs it as the .tar.gz; then, 1 put back, the same with a delta
+      # whose sha256 is wrong: not used, said so, and 2 downloaded whole (mbui's src/host/linux_update.h)
+      delta_for "kitdemo-2-$arch-linux.tar.gz" "$U/v1/kitdemo" || { kill $SRV; exit 1; }
       ok=1
-      scripts/chk logwait --log "$U/updated.log" --line "UPDATECHECK version 2" --deadline 60 > /dev/null || ok=0
+      # (2 opened again with this run's environment: handed 2 again, not newer, it ends itself: its `failed`, waited
+      # for before 1 is put back, so it reads 1's VERSION no more)
+      updated() {
+        MBUI_UPDATECHECK="$2" timeout 60 "$EXE" > "$U/$1" 2>&1 || true
+        scripts/chk logwait --log "$U/$1" --line "UPDATECHECK version 2" --deadline 60 > /dev/null || ok=0
+        [ $ok = 0 ] || scripts/chk logwait --log "$U/$1" --line '"phase":"failed"' --deadline 60 > /dev/null || ok=0
+        grep -a "UPDATECHECK\|^update:" "$U/$1"
+        cat "$CACHE/update.log" 2> /dev/null || true
+        [ "$(cat "$U/app/VERSION")" = 0.1.2 ] || { kill $SRV; echo "update contract (linux): the app at 1's place is $(cat "$U/app/VERSION"), not 0.1.2 ($1)"; exit 1; }
+        [ $ok = 1 ] || { kill $SRV; echo "update contract (linux): 2 was put in place but did not run ($1)"; exit 1; }
+        rm -rf "$CACHE"
+      }
+      updated updated.log "$(asked "kitdemo-2-$arch-linux.tar.gz")|$DELTA"
+      # (1's own line: 2, opened again, has no delta to make, its installed files not 1's)
+      if ! grep -aq "^update: kitdemo-2-$arch-linux.tar.gz.raw made from a delta of $DELTA_SIZE bytes, sha256 $RAW_SHA as the feed says" "$U/updated.log"; then
+        kill $SRV; echo "update contract (linux): 2 was not made from the delta"; exit 1
+      fi
+      sh "$U/v1/kitdemo/install.sh"
+      updated whole.log "$(asked "kitdemo-2-$arch-linux.tar.gz")|$DELTA_WRONG"
       kill $SRV; wait $SRV 2> /dev/null || true
-      grep -a "UPDATECHECK\|^update:" "$U/updated.log"
-      cat "$CACHE/update.log" 2> /dev/null || true
-      [ "$(cat "$U/app/VERSION")" = 0.1.2 ] || { echo "update contract (linux): the app at 1's place is $(cat "$U/app/VERSION"), not 0.1.2"; exit 1; }
-      [ $ok = 1 ] || { echo "update contract (linux): 2 was put in place but did not run"; exit 1; }
-      rm -rf "$CACHE"
-      echo "update contract (linux): refused another machine's build; put 2 in 1's place and opened it"
+      if ! grep -aq "^update: delta not used: not downloaded (incomplete)" "$U/whole.log" ||
+        ! grep -aq "^update: kitdemo-2-$arch-linux.tar.gz downloaded, sha256 " "$U/whole.log"; then
+        echo "update contract (linux): with a delta whose sha256 is wrong, 2 was not downloaded whole"; exit 1
+      fi
+      echo "update contract (linux): refused another machine's build; put 2 in 1's place, made from a delta, and opened it; a delta not as the feed says not used, 2 downloaded whole"
       exit 0
     fi
     # (macOS) a newer build put in the app's place by the host (kitdemo's MBUI_UPDATECHECK, src/kitdemo/gallery/
@@ -606,9 +647,15 @@ INSTALL
     if ! grep -aq '"phase":"failed".*not signed as this app' "$U/refused.log"; then
       kill $SRV; wait $SRV 2> /dev/null || true; echo "update contract: a build signed otherwise was not refused"; exit 1
     fi
-    env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_UPDATECHECK="$(asked 2)" "$EXE" > "$U/updated.log" 2>&1 || true
+    # 2 handed with a delta from 1 (1's bundle to 2's raw zip, its entries stored), as the core hands one the feed
+    # lists: the host makes the raw zip from it and 1's files, checks it against the sha256 it is told and goes on with
+    # it as with the zip (mac_app.m's update_by_delta)
+    delta_for kitdemo-2.zip "$U/v1/kitdemo.app" || { kill $SRV; exit 1; }
+    env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_UPDATECHECK="$(asked 2)|$DELTA" "$EXE" > "$U/updated.log" 2>&1 || true
     kill $SRV; wait $SRV 2> /dev/null || true
     grep -a "UPDATECHECK\|^update:" "$U/updated.log"
+    grep -aq "^update: kitdemo-2.zip.raw made from a delta of $DELTA_SIZE bytes, sha256 $RAW_SHA as the feed says" "$U/updated.log" ||
+      { echo "update contract: 2 was not made from the delta"; exit 1; }
     v=$(plutil -extract CFBundleVersion raw "$U/v1/kitdemo.app/Contents/Info.plist")
     [ "$v" = 2 ] || { echo "update contract: the app at 1's place is $v, not 2"; exit 1; }
     # opened again (by `open`, once 1 had ended), as the shell that did it says on the update's log; then its process,
@@ -620,7 +667,7 @@ INSTALL
     pid=$(pgrep -f "^$EXE") || { echo "update contract: 2 was opened but is not running"; exit 1; }
     kill $pid
     rm -rf "$HOME/Library/Caches/dev.mbui.kitdemo.update"
-    echo "update contract (mac): refused one signed otherwise; put 2 in 1's place and opened it" ;;
+    echo "update contract (mac): refused one signed otherwise; put 2 in 1's place, made from a delta, and opened it" ;;
   badge)
     [ "$H" = linux ] || { echo "badge contract: Linux's"; exit 1; }
     # a dock's side: what is said on the bus heard from before the app starts, and what the app gives when asked

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { harness } from "./harness.ts";
-import { groupReads, parseRanges } from "../src/releases.ts";
+import { releaseType, sharedRelease } from "../src/install.ts";
+import { VERSIONED, groupReads, parseRanges } from "../src/releases.ts";
 
 // The releases bucket's files at /releases/<file>: whole, or the ranges asked for (one, or many as
 // multipart/byteranges, as the desktop app's updater asks for what changed between two zips).
@@ -181,4 +182,44 @@ test("a cloud of its own reads the station's releases from still.fail's when its
   } finally {
     await h.close();
   }
+});
+
+// A release's deltas (scripts/release-deltas.ts), the Windows installer's raw form and the station's archives kept under
+// names of their own: served by those names alone, each with its type, cached for good (named by version or content).
+test("the deltas, raw installers and kept station archives are served by their names, for good", () => {
+  const sha = "0123456789abcdef".repeat(4);
+  const served: [string, string][] = [
+    ["desktop/stillfail-beta-0.1.8147-arm64-mac.zip.from-8142.delta", "application/octet-stream"],
+    ["desktop/stillfail-0.1.8147-x64-win.exe.from-8146.delta", "application/octet-stream"],
+    ["desktop/monoid-beta-0.1.8147-x64-win.exe.raw.zst", "application/zstd"],
+    ["android/stillfail-beta-8147.apk.from-8146.delta", "application/octet-stream"],
+    ["win/stillfail-mbui-8147-x64-win.exe.from-8146.delta", "application/octet-stream"],
+    ["win/stillfail-mbui-8147-x64-win.exe.raw.zst", "application/zstd"],
+    ["linux/stillfail-mbui-8147-arm64-linux.tar.gz.from-8146.delta", "application/octet-stream"],
+    [`station/archive/beta/8164-${sha}-linux-x64.tar.gz`, "application/gzip"],
+    [`station/archive/stable/8100-${sha}-win32-x64.zip`, "application/zip"],
+    [`station/archive/beta/8164-${sha}-darwin-arm64.from-8163-${sha.slice(0, 16)}.delta`, "application/octet-stream"],
+  ];
+  for (const [file, type] of served) {
+    assert.equal(releaseType(file), type, file);
+    assert.ok(VERSIONED.test(file), `${file}: cached for good`);
+  }
+  // still.fail's stations' files: another cloud's (monoid's) reads them from still.fail's, its apps' never
+  assert.ok(sharedRelease(`station/archive/beta/8164-${sha}-linux-x64.tar.gz`));
+  assert.ok(!sharedRelease("desktop/monoid-beta-0.1.8147-x64-win.exe.raw.zst"));
+  for (const file of [
+    "desktop/stillfail-beta-0.1.8147-arm64-mac.zip.from-x.delta",
+    "desktop/stillfail-beta-0.1.8147-arm64-mac.zip.raw.zst",
+    "android/stillfail-beta-8147.apk.from-8146.delta.sig",
+    "win/stillfail-mbui-8147-x64-win.exe.sig",
+    "linux/stillfail-mbui-8147-x64-linux.tar.gz.raw.zst",
+    `station/archive/beta/8164-${sha.slice(1)}-linux-x64.tar.gz`,
+    `station/archive/nightly/8164-${sha}-linux-x64.tar.gz`,
+    `station/archive/beta/8164-${sha}-linux-x64.zip`,
+    `station/archive/beta/8164-${sha}-linux-x64.from-8163.delta`,
+    `station/archive/beta/../8164-${sha}-linux-x64.tar.gz`,
+    `station/8164-${sha}-linux-x64.tar.gz`,
+  ]) assert.equal(releaseType(file), null, file);
+  // what changes stays uncached
+  for (const file of ["station-beta.json", "mac/beta/latest.json", "beta/stillfail-station-linux-x64.tar.gz"]) assert.ok(!VERSIONED.test(file), file);
 });

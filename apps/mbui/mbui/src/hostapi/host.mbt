@@ -116,7 +116,7 @@ pub(open) trait Host {
   shared_in(Self) -> String = _
   shared_in_file(Self, Int) -> Bytes = _
   app_version(Self) -> Int = _
-  update_fetch(Self, String, String, Double, String, Bool) -> Unit = _
+  update_fetch(Self, String, String, Double, String, Bool, String) -> Unit = _
   update_apply(Self, String) -> Unit = _
   update_state(Self) -> String = _
   install_package(Self, String, Bytes) -> Unit = _
@@ -781,7 +781,7 @@ impl Host with app_version(_) {
 }
 
 ///|
-impl Host with update_fetch(_, _, _, _, _, _) {
+impl Host with update_fetch(_, _, _, _, _, _, _) {
   ()
 }
 
@@ -2337,9 +2337,19 @@ pub fn app_version() -> Int {
 /// in this app's place (`update_apply`; Android's Updates.java puts it in place by itself once the app has been out of
 /// sight a while). `now`: asked by the person, downloaded at once; else it may wait for a network that costs nothing
 /// (Android's: none metered). One already ready, or coming, by that name: nothing more. Nothing where the app does
-/// not update itself. How it goes: `update_state`.
-pub fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool) -> Unit {
-  current.val.update_fetch(url, sha256, size, name, now)
+/// not update itself. How it goes: `update_state`. `delta`: "" or the JSON `{"url","sha256","size","makes_sha256",
+/// "makes_size"}` of a delta from this build that makes the package (`makes_sha256`, `makes_size`: the made bytes, which
+/// `sha256`, `size` say where the made package is the file itself) out of what is installed: a host that takes it
+/// downloads it, applies it and checks what it made, and downloads the whole package as before on any failure.
+pub fn update_fetch(
+  url : String,
+  sha256 : String,
+  size : Double,
+  name : String,
+  now : Bool,
+  delta : String,
+) -> Unit {
+  current.val.update_fetch(url, sha256, size, name, now, delta)
 }
 
 ///|

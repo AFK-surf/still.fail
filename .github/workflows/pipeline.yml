@@ -682,11 +682,12 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with: { name: "monoid-android-${{ github.sha }}", path: "${{ runner.temp }}/monoid" }
-      - name: Put it in monoid's bucket (its files, then its feed)
+      - name: Put it in monoid's bucket (its files and deltas, then its feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/release-deltas.ts "$RUNNER_TEMP/monoid" --releases https://app.monoid.build/releases --deadline 150
           sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
   # The Mac app (fail.still.desktop.beta: mbui's, apps/mbui, in the Electron app's place), on mac/beta/latest.json and
@@ -1060,15 +1061,67 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with: { name: "monoid-desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/monoid" }
-      - name: Put it in monoid's bucket (its files, then its feed)
+      - name: Put it in monoid's bucket (its files and deltas, then its feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/release-deltas.ts "$RUNNER_TEMP/monoid" --releases https://app.monoid.build/releases --deadline 150
           sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
+  # The deltas of each release (scripts/release-deltas.ts: from the builds before, at https://app.still.fail/releases),
+  # a job a part, beside the checks: one part's, 3 bases, takes up to ~2 minutes of a runner's 4 cores (the station's 4
+  # archives ×3, ~100 s; Android's 3 with the Java applier's check, ~100 s), all four parts in put's job were ~5 minutes
+  # more. Each takes its part's release as put will (its hand, its artifact; the station's archives taken back from
+  # staged/), puts the deltas (and the station's archives under their own names: nothing points at them until put
+  # writes the feed) and hands put the amended feeds (deltas-<part>-<sha>). Never a reason to hold a release back:
+  # put goes on without what this did not make.
+  deltas:
+    needs: [plan, station, android, desktop, desktop-win]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [station, android, desktop, desktop-win]
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - if: needs[matrix.part].result == 'success'
+        uses: actions/checkout@v5
+      - if: needs[matrix.part].result == 'success'
+        uses: ./.github/actions/setup
+      - if: needs[matrix.part].result == 'success' && matrix.part == 'desktop-win'
+        uses: actions/download-artifact@v4
+        with: { name: "release-desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/release" }
+      - name: Its release, as put will have it
+        if: needs[matrix.part].result == 'success' && matrix.part != 'desktop-win'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          HANDED: ${{ needs[matrix.part].outputs.hand }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          # shellcheck disable=SC2086 # names, one word each
+          sh scripts/release-put.sh --unhand "$RUNNER_TEMP/release" $HANDED
+          sh scripts/release-put.sh --unstage "$RUNNER_TEMP/release"
+      # (a deadline of its own, inside the job's: what is not made by then is left out, the job green)
+      - name: Its deltas
+        if: needs[matrix.part].result == 'success'
+        run: node scripts/release-deltas.ts "$RUNNER_TEMP/release" --into "$RUNNER_TEMP/deltas" --deadline 200
+      - name: Put them (nothing points at them until put writes the feeds)
+        if: needs[matrix.part].result == 'success'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          [ -d cloud/node_modules ] || (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release-put.sh --files "$RUNNER_TEMP/deltas"
+      - if: needs[matrix.part].result == 'success'
+        uses: actions/upload-artifact@v4
+        with: { name: "deltas-${{ matrix.part }}-${{ github.sha }}", path: "${{ runner.temp }}/deltas", if-no-files-found: ignore, retention-days: 1 }
+
   put:
-    needs: [plan, check, check-linux, check-station, api, static, station, android, desktop-build, desktop, desktop-win]
+    needs: [plan, check, check-linux, check-station, api, static, station, android, desktop-build, desktop, desktop-win, deltas]
     if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && (needs.plan.outputs.station_tests != 'true' || needs.check-station.result == 'success') && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-build.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-win.result == 'success')
     runs-on: ubuntu-24.04
     environment: production
@@ -1092,6 +1145,10 @@ jobs:
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           # shellcheck disable=SC2086 # names, one word each
           sh scripts/release-put.sh --unhand "$RUNNER_TEMP/release" $HANDED
+      # the feeds with their deltas (the deltas job's), over the ones handed; none, and they go out without
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { pattern: "deltas-*-${{ github.sha }}", path: "${{ runner.temp }}/release", merge-multiple: true }
       - name: Put the releases (their files, then their feeds)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -1170,7 +1227,7 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, check-linux, check-station, bundle, mac-build, api, static, monoid-api, monoid-static, station, station-update, android, desktop-build, desktop, desktop-win, put, changelog, done]
+    needs: [plan, natives, check, check-linux, check-station, bundle, mac-build, api, static, monoid-api, monoid-static, station, station-update, android, desktop-build, desktop, desktop-win, deltas, put, changelog, done]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

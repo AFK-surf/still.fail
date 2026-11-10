@@ -18,7 +18,9 @@
 // most hourly unless asked now: /releases/<feed>/latest.json, an AppRelease; its `file` under /releases/). No source
 // is given by default: src/stillfail gives the cloud's for MBUI_UPDATE_FEED=<feed> (the local cloud's in e2e). A
 // source of a release elsewhere answers the same AppRelease (versionCode, versionName, file: a path under the source's
-// releases or a whole https URL, sha256, size, news).
+// releases or a whole https URL, sha256, size, news) and may say a delta from this build (`delta`, the core's pick of the
+// feed's): handed to the host beside the build, which makes the build of it and downloads it whole if that fails, and
+// what the app says is downloaded is the delta's size, since that is what comes.
 //
 // A person wants the latest version; checking and fetching are not their business (the user, 2026-10-31: 「从第一性
 // 原理出发」).
@@ -280,9 +282,49 @@ fn update_fetch_found(v : Json, now : Bool) -> Unit {
   match update.source {
     Some(source) => {
       let file = text(Some(v), "file")
-      @ui.update_fetch((source.url)(file), text(Some(v), "sha256"), number(Some(v), "size"), update_file_name(v), now)
+      let delta = match update_delta(v) {
+        Some(d) =>
+          Json::object({
+            "url": Json::string((source.url)(text(Some(d), "file"))),
+            "sha256": Json::string(text(Some(d), "sha256")),
+            "size": Json::number(number(Some(d), "size")),
+            "makes_sha256": Json::string(text(Some(d), "makesSha256")),
+            "makes_size": Json::number(number(Some(d), "makesSize")),
+          }).stringify()
+        None => ""
+      }
+      @ui.update_fetch(
+        (source.url)(file),
+        text(Some(v), "sha256"),
+        number(Some(v), "size"),
+        update_file_name(v),
+        now,
+        delta,
+      )
     }
     None => ()
+  }
+}
+
+///|
+/// The delta from this build the build `v` (an AppRelease) comes with, none where it has none.
+fn update_delta(v : Json) -> Json? {
+  match v {
+    Object(o) =>
+      match o.get("delta") {
+        Some(Object(_) as d) => Some(d)
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
+/// How many bytes the build `v` downloads: its delta's where it comes with one, else its package's.
+fn update_size(v : Json) -> Double {
+  match update_delta(v) {
+    Some(d) => number(Some(d), "size")
+    None => number(Some(v), "size")
   }
 }
 
@@ -485,7 +527,7 @@ fn update_stands_of(now : UpdateNow) -> @settings.VersionNow {
     Quiet | Latest | CouldNot(_) => (check, "", false, None)
     Checking => (check, @sf.t("android-settings.version.checking"), true, None)
     Offered(v, waiting~) => {
-      let size = number(Some(v), "size")
+      let size = update_size(v)
       (
         // (the first of the update's three stages, 有新版本, 正在下载, 重启以更新到: 2026-11-03 the user, 「所有能看到更新的
         // 地方，一定要有三个阶段」; pressed, downloaded now)
@@ -505,7 +547,7 @@ fn update_stands_of(now : UpdateNow) -> @settings.VersionNow {
     Coming(v, part) => {
       // (how far and how big, or that it goes on once the network is back: a line there all the way it comes, the
       // row as tall)
-      let size = number(Some(v), "size")
+      let size = update_size(v)
       let said = [
         match part {
           Some(p) => "\{(p * 100.0).floor().to_int()}%"

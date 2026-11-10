@@ -49,7 +49,8 @@
 #   scripts/e2e-local.sh drive-photo TAG [renamed]  the run's photo, as 18's upload or 19's rename left it
 #   scripts/e2e-local.sh android-stage FILE…  files to attach put where the app's provider serves them (a share's intent)
 #   scripts/e2e-local.sh android-gallery FILE…  files put in the emulator's gallery, the app let read it
-#   scripts/e2e-local.sh release-seed     a newer build of the app (the APK as built) in the local cloud's releases
+#   scripts/e2e-local.sh release-seed     a newer build of the app (the APK built again as build 2) and a delta to it
+#                                   from the installed one in the local cloud's releases
 #   scripts/e2e-local.sh second-station FILE [third]   a second station enrolled with the command the app made (its log,
 #                                   FILE); `third`: another beside it
 #   scripts/e2e-local.sh second-down [third]   that station stopped, its directory gone
@@ -585,16 +586,33 @@ drive_media() {
   say "drive media $d"
 }
 
-# a newer build of the app in the local cloud's releases (the updates' flow, 49): the APK as built, as android/stillfail-2.apk,
-# and the feed's latest.json naming it (version code 2, 0.1.1; its sha256 and size), served by the dev cloud from the
-# clone's dist/releases; on the emulator, the app given leave to install apps (安装未知应用), as the person would
+# a newer build of the app in the local cloud's releases (the updates' flow, 49): the APK installed (E2E_APK, else the
+# debug build) built again as build 2 (mbui's scripts/apk: its dex and libraries kept, only its manifest linked again
+# with the new version code and the APK packed, repacked and signed: android/stillfail-2.apk), a delta from the
+# installed one to it (scripts/delta.ts make --old-apk: the manifest differs, so at least one deflated entry is inflated,
+# patched and deflated again by the device's own deflater, Delta.java), and the feed's latest.json naming both (version
+# code 2, 0.1.1; their sha256 and size, the delta's from build 1), served by the dev cloud from the clone's
+# dist/releases; on the emulator, the app given leave to install apps (安装未知应用), as the person would
 release_seed() {
-  local apk=$ROOT/android/app/build/outputs/apk/debug/app-debug.apk d=$E/dist/releases/android
+  local apk=${E2E_APK:-$ROOT/android/app/build/outputs/apk/debug/app-debug.apk} d=$E/dist/releases/android
   [ -f "$apk" ] || die "no APK built ($apk)"
-  mkdir -p $d && cp "$apk" $d/stillfail-2.apk
+  mkdir -p $d && rm -f $d/stillfail-2.apk*
+  # (the installed one's ABI and variant: the same app but for its version code)
+  local abi=$(unzip -Z1 "$apk" 'lib/*' 2>/dev/null | sed -n 's|^lib/\([^/]*\)/.*|\1|p' | head -1)
+  [ -z "${JAVA_HOME:-}" ] && [ -x /usr/libexec/java_home ] && export JAVA_HOME=$(/usr/libexec/java_home -v 20 2>/dev/null || /usr/libexec/java_home)
+  ANDROID_HOME=${ANDROID_HOME:-$HOME/Library/Android/sdk} "$MBUI_DIR/scripts/apk" build $ROOT/android/apk.json \
+    --variant ${VARIANT:-debug} --version-code 2 --version-name 0.1.1 ${abi:+--abi $abi} --out $d/stillfail-2.apk \
+    > $RUN/release-seed.log 2>&1 || { tail -20 $RUN/release-seed.log; die "the next build not made"; }
+  (cd $SF_SRC && node scripts/delta.ts make --old-apk "$apk" --new $d/stillfail-2.apk --out $d/stillfail-2.apk.from-1.delta \
+    --deflate-check none && node scripts/delta.ts info $d/stillfail-2.apk.from-1.delta > $RUN/release-seed-delta.json) \
+    >> $RUN/release-seed.log 2>&1 || { tail -20 $RUN/release-seed.log; die "no delta made"; }
+  node -e 'const i = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.exit(i.inflate.length > 0 && i.deflate.length > 0 ? 0 : 1)' \
+    $RUN/release-seed-delta.json || die "the delta inflates or deflates nothing ($RUN/release-seed-delta.json): the next build differs in no deflated entry"
   local sum=$(shasum -a 256 $d/stillfail-2.apk | cut -d' ' -f1) size=$(wc -c < $d/stillfail-2.apk | tr -d ' ')
   printf '{"versionCode":2,"versionName":"0.1.1","file":"android/stillfail-2.apk","sha256":"%s","size":%s}\n' $sum $size > $d/latest.json
-  say "release android/stillfail-2.apk ($size bytes, $sum) in $d"
+  node "$ROOT/e2e/feed-delta.mjs" $d/latest.json - 1 android/stillfail-2.apk.from-1.delta $d/stillfail-2.apk.from-1.delta >/dev/null ||
+    die "the feed not given its delta"
+  say "release android/stillfail-2.apk ($size bytes, $sum) and its delta from 1 ($(wc -c < $d/stillfail-2.apk.from-1.delta | tr -d ' ') bytes) in $d"
   local adb=${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb
   [ -n "${EMU_PORT:-}" ] && $adb -s emulator-$EMU_PORT shell appops set ${E2E_PKG:-dev.mbui.demo} REQUEST_INSTALL_PACKAGES allow && say "the app may install apps"
   return 0

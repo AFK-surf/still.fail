@@ -1350,7 +1350,15 @@ export const SHAPES: Record<string, Shape> = {
     ["sha256", "String"],
     ["size", "i64", { client: "I54" }],
     ["news", vec("String"), { default: true, doc: "What it brings this app: the changelog's lines for it after the build asking, newest first (the core's; the feed\nhas none). The home screen offers the build only with some; the settings offer any." }],
+    ["delta", opt("AppDelta"), { doc: "The delta from the build asking, where the feed offers one (the core's: picked from the feed's `deltas`)." }],
   ], { doc: "A build of the app on still.fail cloud (`app.update`; scripts/release.sh puts it in /releases/<platform>/latest.json):\n`file` is under /releases/.", keepNone: true }),
+  AppDelta: struct([
+    ["file", "String"],
+    ["sha256", "String"],
+    ["size", "i64", { client: "I54" }],
+    ["makesSha256", "String"],
+    ["makesSize", "i64", { client: "I54" }],
+  ], { doc: "A delta that makes an AppRelease's package out of the build asking (scripts/delta.ts): `file` under /releases/, what\nit makes `makesSha256`, `makesSize` bytes (the release's raw package, or its file itself)." }),
   Buddy: struct([
     ["id", "String"],
     ["label", "String"],
