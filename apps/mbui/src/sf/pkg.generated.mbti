@@ -1462,7 +1462,7 @@ pub fn panel_row_in() -> @ui.Style
 
 pub fn panel_row_reach() -> @ui.Style
 
-pub fn panel_row_node(@view.View, () -> String, () -> Unit, icon? : () -> String, note? : () -> String, end? : String, danger? : Bool) -> Unit
+pub fn panel_row_node(@view.View, () -> String, () -> Unit, icon? : () -> String, note? : () -> String, end? : String, danger? : Bool, plain? : Bool) -> Unit
 
 pub fn panel_row_opens_node(@view.View, () -> String, (Anchor) -> Unit, icon? : () -> String, note? : () -> String) -> Unit
 
@@ -2101,6 +2101,8 @@ pub let strong : @ui.TextStyle
 pub fn style_node(@view.View, () -> @ui.Style, in_row? : Bool) -> Unit
 
 pub fn submenu_row(@ui.Ctx, String, String, Array[MenuItem?], icon? : String, side? : @view.Side) -> Unit
+
+pub fn submenu_row_node(@view.View, () -> String, () -> Array[MenuItem?], icon? : () -> String, side? : @view.Side) -> Unit
 
 pub fn surface(Double, Double) -> Surface
 

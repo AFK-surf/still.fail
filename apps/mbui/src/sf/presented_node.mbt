@@ -100,6 +100,8 @@ pub fn presented_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
       }
       // (the tips of what its body and its foot are made of: the window's layer of them, panel_tips_lent)
       row.lends(panel_tips_lent, tips) |> ignore
+      // (which of its submenu rows has its menu open, one at a time, its own: panel_submenus_lent)
+      panel_submenus_lend(row)
       let open = fn() {
         presented_said.get() |> ignore
         presented_open_of(serial)
