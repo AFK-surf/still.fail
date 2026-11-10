@@ -11,7 +11,7 @@ import { Store } from "../src/store/store.ts";
 import { Rig } from "./hub-fakes.ts";
 
 function fromBefore(store: Store, name = "old"): number {
-  const thread = store.openThread("ember", "EMBER", name, null, null).id;
+  const thread = store.openThread("ember", "CHAT", name, null, null).id;
   const put = store.db.prepare("INSERT INTO entries (thread,n,kind,author_kind,author,ts,at) VALUES (?,?,'message','agent',?,?,?)");
   store.db.exec("BEGIN");
   for (let n = 1; n <= 200; n++) put.run(thread, n, n === 180 ? "wanted" : "other", `m${n}`, n);

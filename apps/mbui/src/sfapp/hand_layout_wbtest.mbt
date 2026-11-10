@@ -1,4 +1,4 @@
-// The layout is the screen's, never the hand's (docs/architecture.md): each page with touch and with keyboard and mouse,
+// The layout is the screen's, never the hand's: each page with touch and with keyboard and mouse,
 // in a window of each tier, drawn pointed at by a finger and by a mouse, lays out the same boxes; only how they answer
 // the hand differs.
 

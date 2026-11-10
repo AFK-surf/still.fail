@@ -1,4 +1,4 @@
-// An app being debugged on an iOS Simulator (docs/remote-screens.md "Simulators"): what its page is about is the device
+// An app being debugged on an iOS Simulator: what its page is about is the device
 // and the app, not the link, so these are beside the picture and not in 控制中心: its device's buttons (Simulator.app's
 // shortcuts, as the station takes them: sim-input.ts), 截图, 重启 App (the apps installed on it), 日志 (the apps' log, asked
 // again every moment while it shows, the newest first) and 设备 (how it is set). What is done with it comes round what a
@@ -59,6 +59,10 @@ let sim_bezel : Double = 8.0
 let corner_cut_steps : Int = 24
 
 ///|
+/// How far past the picture's edges a cut goes.
+let corner_cut_over : Double = 2.0
+
+///|
 // kept across runs: a value (no field of it changes)
 let device_body : @ui.Color = Data(0x1C1C1EFFL)
 
@@ -101,24 +105,30 @@ fn screen_content(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Un
 /// The room the stage keeps for what the device has itself, out of what the picture is fitted into (the picture and it
 /// then lie in the middle as one, not a pixel between them): by a device taller than wide, a column at its side; under
 /// one wider than tall (an unfolded one, one turned), a row. None but on a wide page.
-fn debug_room(u : ScreenUi, size : (Int, Int)?) -> (Double, Double) {
+fn debug_room(u : ScreenUi, size : (Int, Int)?, cased : DeviceCase?) -> (Double, Double) {
+  let reach = if cased is Some(_) { case_reach } else { 0.0 }
   match size {
-    Some((w, h)) if u.logs.by_device => if w > h { (0.0, debug_row_h) } else { (debug_rail_w + debug_rail_gap, 0.0) }
+    Some((w, h)) if u.logs.by_device => if w > h { (0.0, debug_row_h + reach) } else { (debug_rail_w + debug_rail_gap + reach, 0.0) }
     _ => (0.0, 0.0)
   }
 }
 
 ///|
 /// What the device has itself, where debug_room kept room for it by the picture.
-fn debug_by_device(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect, size : (Int, Int)?) -> Unit {
+fn debug_by_device(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect, size : (Int, Int)?, cased : DeviceCase?) -> Unit {
   guard u.logs.by_device && size is Some((w, h)) else { return }
+  // (clear of the body round the picture, and of where its buttons are pressed)
+  let (body_w, body_h) = match cased {
+    Some(_) => (shown.w * u.case_x + case_reach, shown.h * u.case_y + case_reach)
+    None => (sim_bezel, sim_bezel)
+  }
   c.layer(fn() {
     if w > h {
-      c.box(style=debug_row_place, ty=shown.y + shown.h + sim_bezel, fn() { debug_row(c, s, u, false) }) |> ignore
+      c.box(style=debug_row_place, ty=shown.y + shown.h + body_h, fn() { debug_row(c, s, u, false) }) |> ignore
     } else {
       c.box(
         style=@ui.style(w=Fixed(debug_rail_w)),
-        tx=shown.x + shown.w + sim_bezel + debug_rail_gap,
+        tx=shown.x + shown.w + body_w + debug_rail_gap,
         ty=shown.y,
         fn() { debug_row(c, s, u, true) },
       )
@@ -139,37 +149,41 @@ fn debug_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, column : Bool) -> Unit {
   debug_record_saved(c, s, d)
   if d.shot_said {
     d.shot_said = false
-    d.acted = @sf.t("web-pages.screen.debug.shotCopied")
+    d.acted.set(@sf.t("web-pages.screen.debug.shotCopied"))
   }
   c.box(style=if column { debug_tools_column } else { debug_tools_bar }, fn() {
     if s.driving() {
-      for k in device_combos(s) {
-        if round_button(c, "screen-device/" + k.keys, k.icon, k.name) {
-          debug_press(c, s, k)
-        }
+      let cased = device_case(c, s, s.frame_size())
+      for k in device_combos(s, cased) {
+        round_button(c, "screen-device/" + k.keys, k.icon, k.name, on_press=fn() {
+          debug_press(s, k)
+        })
       }
-      if round_button(c, "screen-volume-up", "volume", @sf.t("web-pages.screen.debug.volumeUp")) {
-        debug_device_input(c, s, "volume_up")
+      // (the case's own where it has them)
+      if !(cased is Some(_)) {
+        round_button(c, "screen-volume-up", "volume", @sf.t("web-pages.screen.debug.volumeUp"), on_press=fn() {
+          debug_device_input(s, "volume_up")
+        })
+        round_button(c, "screen-volume-down", "volume-x", @sf.t("web-pages.screen.debug.volumeDown"), on_press=fn() {
+          debug_device_input(s, "volume_down")
+        })
       }
-      if round_button(c, "screen-volume-down", "volume-x", @sf.t("web-pages.screen.debug.volumeDown")) {
-        debug_device_input(c, s, "volume_down")
-      }
-      if round_button(c, "screen-rotate", "screen-rotate", @sf.t("web-pages.screen.device.rotate")) {
-        debug_device_input(c, s, "rotate")
-      }
+      round_button(c, "screen-rotate", "screen-rotate", @sf.t("web-pages.screen.device.rotate"), on_press=fn() {
+        debug_device_input(s, "rotate")
+      })
       if flag(s.state, "poses") {
         debug_poses(c, s, u, icons=column)
       }
     }
     if flag(s.state, "debug") {
-      if round_button(c, "screen-shot", "camera", @sf.t("web-pages.screen.device.shot")) {
+      round_button(c, "screen-shot", "camera", @sf.t("web-pages.screen.device.shot"), on_press=fn() {
         debug_shot(s, d)
-      }
-      let going = d.recording || flag(d.settings, "recording")
+      })
+      let going = debug_going(d)
       let word = @sf.t(if going { "web-pages.screen.debug.recordStop" } else { "web-pages.screen.debug.recordStart" })
-      if round_button(c, "screen-record", if going { "stop" } else { "play" }, word, on=going) {
+      round_button(c, "screen-record", if going { "stop" } else { "play" }, word, on=going, on_press=fn() {
         debug_record_pressed(s, d, going)
-      }
+      })
       debug_pane_button(c, d)
     }
   })
@@ -180,9 +194,9 @@ fn debug_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, column : Bool) -> Unit {
 /// What is done with the device put away for it to have all the room, or brought back.
 fn debug_pane_button(c : @ui.Ctx, d : DebugLogs) -> Unit {
   let word = @sf.t(if d.shown { "web-pages.screen.debug.paneHide" } else { "web-pages.screen.debug.paneShow" })
-  if round_button(c, "screen-pane", if d.shown { "shrink" } else { "expand" }, word) {
+  round_button(c, "screen-pane", if d.shown { "shrink" } else { "expand" }, word, on_press=fn() {
     d.shown = !d.shown
-  }
+  })
 }
 
 ///|
@@ -193,17 +207,14 @@ fn ScreenSess::android(self : ScreenSess) -> Bool {
 
 ///|
 /// A press of one of the device's buttons.
-fn debug_press(c : @ui.Ctx, s : ScreenSess, k : Combo) -> Unit {
-  let n = c.frame_number()
-  c.tell("screen-device/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods) })
+fn debug_press(s : ScreenSess, k : Combo) -> Unit {
+  stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods)
 }
 
 ///|
 /// A press of what only the device's own side knows (its volume, a memory warning).
-fn debug_device_input(c : @ui.Ctx, s : ScreenSess, name : String) -> Unit {
-  c.tell("screen-device-act/" + name, fn() {
-    s.input(s.src, Json::object({ "t": Json::string("device"), "name": Json::string(name) }))
-  })
+fn debug_device_input(s : ScreenSess, name : String) -> Unit {
+  s.input(s.src, Json::object({ "t": Json::string("device"), "name": Json::string(name) }))
 }
 
 ///|
@@ -219,40 +230,42 @@ fn debug_tools(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     u.logs.relaunch_said = ""
   }
   if s.driving() {
-    for k in device_combos(s) {
-      if round_button(c, "screen-device/" + k.keys, k.icon, k.name) {
-        debug_press(c, s, k)
-      }
+    for k in device_combos(s, device_case(c, s, s.frame_size())) {
+      round_button(c, "screen-device/" + k.keys, k.icon, k.name, on_press=fn() {
+        debug_press(s, k)
+      })
     }
-    if round_button(c, "screen-rotate", "screen-rotate", @sf.t("web-pages.screen.device.rotate")) {
-      debug_device_input(c, s, "rotate")
-    }
+    round_button(c, "screen-rotate", "screen-rotate", @sf.t("web-pages.screen.device.rotate"), on_press=fn() {
+      debug_device_input(s, "rotate")
+    })
     // (one without the panel its volume is in)
     if !flag(s.state, "debug") && s.android() {
-      if round_button(c, "screen-volume-up", "volume", @sf.t("web-pages.screen.debug.volumeUp")) {
-        debug_device_input(c, s, "volume_up")
-      }
-      if round_button(c, "screen-volume-down", "volume-x", @sf.t("web-pages.screen.debug.volumeDown")) {
-        debug_device_input(c, s, "volume_down")
-      }
+      round_button(c, "screen-volume-up", "volume", @sf.t("web-pages.screen.debug.volumeUp"), on_press=fn() {
+        debug_device_input(s, "volume_up")
+      })
+      round_button(c, "screen-volume-down", "volume-x", @sf.t("web-pages.screen.debug.volumeDown"), on_press=fn() {
+        debug_device_input(s, "volume_down")
+      })
     }
   }
   if flag(s.state, "debug") {
-    if round_button(c, "screen-shot", "camera", @sf.t("web-pages.screen.device.shot")) {
+    round_button(c, "screen-shot", "camera", @sf.t("web-pages.screen.device.shot"), on_press=fn() {
       debug_shot(s, u.logs)
-    }
+    })
     // the app last started again, at one press: what is restarted over and over while debugging (another: App)
     let relaunch = "screen-relaunch"
-    if round_button(c, relaunch, "refresh", @sf.t("web-pages.screen.debug.relaunch")) {
-      match u.logs.last_app {
+    let relaunch_id = c.id(relaunch)
+    round_button(c, relaunch, "refresh", @sf.t("web-pages.screen.debug.relaunch"), on_press=fn() {
+      match u.logs.last_app.get() {
         Some((id, name)) => debug_relaunch(s, u.logs, id, name)
-        None => debug_apps_open(s, u, Of(c.id(relaunch)))
+        None => debug_apps_open(s, u, Of(relaunch_id))
       }
-    }
+    })
     let shown = "screen-logs"
-    if round_button(c, shown, "file-text", @sf.t("web-pages.screen.debug.logs")) {
-      debug_logs_open(s, u, Of(c.id(shown)))
-    }
+    let shown_id = c.id(shown)
+    round_button(c, shown, "file-text", @sf.t("web-pages.screen.debug.logs"), on_press=fn() {
+      debug_logs_open(c, s, u, Of(shown_id))
+    })
   }
 }
 
@@ -284,25 +297,22 @@ fn debug_poses(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, icons? : Bool = false)
     @sf.t("web-pages.screen.device.pose.book"),
     @sf.t("web-pages.screen.device.pose.open"),
   ]
-  let pick = if icons {
-    // (each its own button, in a column of them)
-    let mut pressed = chosen
-    for i, icon in ["phone", "panel-open", "landscape"] {
-      if round_button(c, "screen-pose/\{i}", icon, words[i], on=i == chosen) {
-        pressed = i
-      }
+  // (another chosen: asked of the device as it is pressed)
+  let picked = fn(pick : Int) {
+    if pick != chosen {
+      u.logs.half_open = pick == 1
+      u.logs.pose_asked = pick
+      s.input(s.src, Json::object({ "t": Json::string("pose"), "name": Json::string(names[pick]) }))
     }
-    pressed
-  } else {
-    @sf.segmented(c, "screen-pose", words, chosen, bar=true, said=@sf.t("web-pages.screen.device.pose"))
   }
-  if pick != chosen {
-    u.logs.half_open = pick == 1
-    u.logs.pose_asked = pick
-    let name = names[pick]
-    c.tell("screen-pose/" + s.view + "/" + name, fn() {
-      s.input(s.src, Json::object({ "t": Json::string("pose"), "name": Json::string(name) }))
-    })
+  if icons {
+    // (each its own button, in a column of them)
+    for i, icon in ["phone", "panel-open", "landscape"] {
+      round_button(c, "screen-pose/\{i}", icon, words[i], on=i == chosen, on_press=fn() { picked(i) })
+    }
+  } else {
+    @sf.segmented(c, "screen-pose", words, chosen, bar=true, said=@sf.t("web-pages.screen.device.pose"), on_pick=picked)
+    |> ignore
   }
 }
 
@@ -311,30 +321,13 @@ fn debug_poses(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, icons? : Bool = false)
 /// the picture is of. The picture is square on its layer under the canvas; the body's edge is painted over what lies
 /// outside the screen's corners. Not while zoomed in: what shows is then a part of the screen.
 fn device_round(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect) -> Unit {
-  if !s.simulator() || u.zoom.zoomed() || shown.w <= 0.0 {
+  if !s.simulator() || u.zoom.zoomed(c) || shown.w <= 0.0 {
     return
   }
   let (tl, tr, br, bl) = panel_corners(field(s.state, "panels"), shown.w, shown.h)
   let body_w = shown.w + sim_bezel + sim_bezel
   let body_h = shown.h + sim_bezel + sim_bezel
-  // the picture's own corners, square, cut off where the body's curve leaves them showing: it lies on the system's video
-  // layer, under all this, where a box can round nothing
-  let ground = c.color(if u.full { Theater } else { Bg })
-  let cuts = [
-    (0.0, 0.0, 1.0, 1.0, tl),
-    (shown.w, 0.0, -1.0, 1.0, tr),
-    (shown.w, shown.h, -1.0, -1.0, br),
-    (0.0, shown.h, 1.0, -1.0, bl),
-  ].filter(fn(k) { k.4 > 0.0 }).map(fn(k) { (corner_cut(k.0, k.1, k.2, k.3, k.4), true) })
-  if cuts.length() > 0 {
-    c.layer(fn() {
-      c.box(style=@ui.style(w=Fixed(shown.w), h=Fixed(shown.h)), tx=shown.x, ty=shown.y, fn() {
-        c.shapes([@ui.shape_of(cuts, fill=ground)], w=Px(shown.w), h=Px(shown.h), name="device-corners") |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  }
+  device_corners(c, u, shown, tl, tr, br, bl)
   c.layer(fn() {
     c.box(
       style=@ui.style(
@@ -355,15 +348,43 @@ fn device_round(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect) -> Uni
 }
 
 ///|
+/// The picture's own corners, square, cut off in the page's ground where what is round it leaves them showing: it lies on the
+/// system's video layer, under all this, where a box can round nothing.
+fn device_corners(c : @ui.Ctx, u : ScreenUi, shown : SRect, tl : Double, tr : Double, br : Double, bl : Double) -> Unit {
+  let ground = c.color(if u.full.get() { Theater } else { Bg })
+  let e = corner_cut_over
+  let cuts = [
+    (e, e, 1.0, 1.0, tl),
+    (e + shown.w, e, -1.0, 1.0, tr),
+    (e + shown.w, e + shown.h, -1.0, -1.0, br),
+    (e, e + shown.h, 1.0, -1.0, bl),
+  ].filter(fn(k) { k.4 > 0.0 }).map(fn(k) { (corner_cut(k.0, k.1, k.2, k.3, k.4), true) })
+  if cuts.length() > 0 {
+    c.layer(fn() {
+      // (a little past the picture's edges, which may fall between two pixels: nothing of them left to show)
+      let over = corner_cut_over * 2.0
+      c.box(style=@ui.style(w=Fixed(shown.w + over), h=Fixed(shown.h + over)), tx=shown.x - corner_cut_over, ty=shown.y - corner_cut_over, fn() {
+        c.shapes([@ui.shape_of(cuts, fill=ground)], w=Px(shown.w + over), h=Px(shown.h + over), name="device-corners") |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
 /// What lies outside a corner's curve of radius `r`, as an outline: from the corner at (`x`, `y`) round the curve, (`dx`, `dy`)
 /// the way into the picture from it.
 fn corner_cut(x : Double, y : Double, dx : Double, dy : Double, r : Double) -> Array[Double] {
-  let points = [x, y]
+  let e = corner_cut_over
+  let points = [x - dx * e, y - dy * e, x + dx * r, y - dy * e]
   for i in 0..=corner_cut_steps {
     let a = i.to_double() / corner_cut_steps.to_double() * @math.PI / 2.0
     points.push(x + dx * r * (1.0 - @dmath.sin(a)))
     points.push(y + dy * r * (1.0 - @dmath.cos(a)))
   }
+  points.push(x - dx * e)
+  points.push(y + dy * r)
   points
 }
 
@@ -408,7 +429,7 @@ fn panel_corners(panels : Json?, w : Double, h : Double) -> (Double, Double, Dou
 ///|
 /// `id` started again, said when it was; the next press is for it too.
 fn debug_relaunch(s : ScreenSess, d : DebugLogs, id : String, name : String) -> Unit {
-  d.last_app = Some((id, name))
+  d.last_app.set(Some((id, name)))
   let params = { "station": Json::string(s.station), "screen": Json::string(s.screen), "app": Json::string(id) }
   (s.src.call)("screen.relaunch", Json::object(params), fn(r) {
     d.relaunch_said = match r {
@@ -439,8 +460,9 @@ fn debug_shot(s : ScreenSess, d : DebugLogs) -> Unit {
 
 ///|
 /// A device's buttons, as combos are: each Simulator.app's shortcut for it (screens/android.ts takes them too). An
-/// Android device has its back (Escape there) and shows its own software keyboard.
-fn device_combos(s : ScreenSess) -> Array[Combo] {
+/// Android device has its back (Escape there) and shows its own software keyboard. What the device's case has itself
+/// (`cased`: its power button, a home button) is pressed there.
+fn device_combos(s : ScreenSess, cased : DeviceCase?) -> Array[Combo] {
   let c = fn(name : String, keys : String, key : String, code : String, mods : Int, icon : String) -> Combo {
     { name: @sf.t(name), keys, key, code, mods, icon }
   }
@@ -450,7 +472,11 @@ fn device_combos(s : ScreenSess) -> Array[Combo] {
   if s.android() {
     [c("web-pages.screen.device.back", "Esc", "Escape", "Escape", 0, "arrow-left"), home, tasks, lock]
   } else {
-    [home, tasks, lock, c("web-pages.screen.device.softKeyboard", "⌘K", "k", "KeyK", mod_meta, "keyboard")]
+    let keyboard = c("web-pages.screen.device.softKeyboard", "⌘K", "k", "KeyK", mod_meta, "keyboard")
+    match cased {
+      Some(k) => if k.has("home") { [tasks, keyboard] } else { [home, tasks, keyboard] }
+      None => [home, tasks, lock, keyboard]
+    }
   }
 }
 
@@ -461,22 +487,25 @@ priv struct DebugLine {
   level : String
   app : String
   words : String
-}
+} derive(Eq)
 
 ///|
+/// What debugs an app holds, the pane beside the device's and the 日志 panel's alike: what the panel's nodes read of it
+/// told as it changes (a signal each).
 priv struct DebugLogs {
   /// where the next look asks from (`next` of the last answer)
   mut after : Double
-  /// the newest last
-  mut lines : Array[DebugLine]
+  /// the newest last (told as they come: what shows them reads them), and how many older were let go
+  lines : @signals.Signal[Array[DebugLine]]
+  mut dropped : Int
   mut asks : Int
   mut asking : Bool
-  mut failed : String
-  mut copies : Int
+  failed : @signals.Signal[String]
+  copies : @signals.Signal[Int]
   /// which of 日志 and 设备 shows
-  mut tab : Int
+  tab : @signals.Signal[Int]
   /// how the device is set, as it last said (`screen.settings`); asked for as 设备 first shows
-  mut settings : Json?
+  settings : @signals.Signal[Json?]
   mut settings_asked : Bool
   mut shot_said : Bool
   /// what is done with the device is beside it, its foot saying what came of it (the files gone up to it among that)
@@ -486,22 +515,25 @@ priv struct DebugLogs {
   /// what is done with it shows beside the device, or is put away for the device to have the room
   mut shown : Bool
   /// the app 重启 App is for (id, name), once one was chosen
-  mut last_app : (String, String)?
+  last_app : @signals.Signal[(String, String)?]
   mut relaunch_said : String
   /// asked here for an iPhone Duo's half open (the inner panel's picture says the rest)
   mut half_open : Bool
   /// the pose last pressed, until the picture says it (-1: none)
   mut pose_asked : Int
   /// what the last of debug_actions came to
-  mut acted : String
+  acted : @signals.Signal[String]
   /// whether its status bar was made tidy here (simctl does not say)
-  mut tidy_bar : Bool
+  tidy_bar : @signals.Signal[Bool]
   /// started here and not ended yet (`settings` says one started before this page)
-  mut recording : Bool
+  recording : @signals.Signal[Bool]
   /// the movie of a recording ended, to download (the drive's root and path)
-  mut to_save : (String, String)?
+  to_save : @signals.Signal[(String, String)?]
   /// set here (none yet: as `settings` says)
-  mut enrolled : Bool?
+  enrolled : @signals.Signal[Bool?]
+  /// the buttons of the device's case a hand pressed here, by their names: held down (true), or let go and its press
+  /// still to come (false)
+  buttons_held : Map[String, Bool]
 }
 
 ///|
@@ -525,25 +557,29 @@ fn debug_line_of(v : Json) -> DebugLine {
 /// What came in a `screen.logs` answer, added to what is held.
 fn DebugLogs::took(self : DebugLogs, answer : Json) -> Unit {
   let lines = items(Some(answer), "lines").map(debug_line_of)
-  let all = self.lines
+  // (a new array told: what reads the lines reads them again)
+  let all = self.lines.untracked().copy()
   all.append(lines)
   if all.length() > debug_logs_kept {
-    self.lines = all[all.length() - debug_logs_kept:].to_owned()
+    self.dropped += all.length() - debug_logs_kept
+    self.lines.set(all[all.length() - debug_logs_kept:].to_owned())
+  } else if lines.length() > 0 {
+    self.lines.set(all)
   }
   self.after = number(Some(answer), "next")
 }
 
 ///|
 fn DebugLogs::copied_text(self : DebugLogs) -> String {
-  self.lines.map(fn(l) { l.at + " " + l.app + " " + l.words }).join("\n")
+  self.lines.get().map(fn(l) { l.at + " " + l.app + " " + l.words }).join("\n")
 }
 
 ///|
-/// 日志 from 控制中心.
-fn debug_logs_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor) -> Unit {
+/// 日志 from 控制中心 or the tools under the device (`c` the screen page's), its body nodes (screen_debug_node.mbt).
+fn debug_logs_open(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, from : @sf.Anchor) -> Unit {
   let open = fn() {
-    @sf.panel(@sf.t("web-pages.screen.debug.logs"), fn(c, _) { debug_logs(c, s, u) }, from~, side=screen_panel_side(),
-      w=debug_panel_w, tall=0.7, grows=true, focus=false)
+    @sf.panel_nodes(@sf.t("web-pages.screen.debug.logs"), fn(v, _) { debug_logs_node(c, v, s, u) }, from~,
+      side=screen_panel_side(), w=debug_panel_w, tall=0.7, grows=true, focus=false)
   }
   if @sf.native_on() && !u.in_tab {
     screen_native_panel(u, "logs", open)
@@ -556,27 +592,29 @@ fn debug_logs_open(s : ScreenSess, u : ScreenUi, from : @sf.Anchor) -> Unit {
 fn debug_logs_new() -> DebugLogs {
   {
     after: 0.0,
-    lines: [],
+    lines: @signals.signal([]),
+    dropped: 0,
     asks: 0,
     asking: false,
-    failed: "",
-    copies: 0,
-    tab: 0,
-    settings: None,
+    failed: @signals.signal("", same=fn(a, b) { a == b }),
+    copies: @signals.signal(0, same=fn(a, b) { a == b }),
+    tab: @signals.signal(0, same=fn(a, b) { a == b }),
+    settings: @signals.signal(None),
     settings_asked: false,
     beside: false,
     by_device: false,
     shown: true,
     shot_said: false,
-    last_app: None,
+    last_app: @signals.signal(None, same=fn(a, b) { a == b }),
     relaunch_said: "",
     half_open: false,
     pose_asked: -1,
-    acted: "",
-    tidy_bar: false,
-    recording: false,
-    to_save: None,
-    enrolled: None,
+    acted: @signals.signal("", same=fn(a, b) { a == b }),
+    tidy_bar: @signals.signal(false, same=fn(a, b) { a == b }),
+    recording: @signals.signal(false, same=fn(a, b) { a == b }),
+    to_save: @signals.signal(None, same=fn(a, b) { a == b }),
+    enrolled: @signals.signal(None, same=fn(a, b) { a == b }),
+    buttons_held: {},
   }
 }
 
@@ -586,31 +624,37 @@ fn debug_logs_asked(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
   let due = d.asks == 0 || @kit.after(c, "screen-logs/" + s.screen + "/\{d.asks}", true, debug_logs_ms, later=true)
   if due && !d.asking {
     d.asking = true
-    let n = d.asks
-    c.tell("screen-logs/" + s.screen + "/\{n}/ask", fn() {
-      let params = { "station": Json::string(s.station), "screen": Json::string(s.screen), "after": Json::number(d.after) }
-      (s.src.call)("screen.logs", Json::object(params), fn(r) {
-        match r {
-          Ok(v) => {
-            d.failed = ""
-            d.took(v)
-          }
-          Err(e) => d.failed = text(Some(e), "message")
-        }
-        d.asking = false
-        d.asks = n + 1
-      })
-    })
+    c.tell("screen-logs/" + s.screen + "/\{d.asks}/ask", fn() { debug_logs_ask(s, d, fn() {  }) })
   }
+}
+
+///|
+/// What came since the last answer asked for (`screen.logs`), taken; `answered` once it is.
+fn debug_logs_ask(s : ScreenSess, d : DebugLogs, answered : () -> Unit) -> Unit {
+  d.asking = true
+  let n = d.asks
+  let params = { "station": Json::string(s.station), "screen": Json::string(s.screen), "after": Json::number(d.after) }
+  (s.src.call)("screen.logs", Json::object(params), fn(r) {
+    match r {
+      Ok(v) => {
+        d.failed.set("")
+        d.took(v)
+      }
+      Err(e) => d.failed.set(text(Some(e), "message"))
+    }
+    d.asking = false
+    d.asks = n + 1
+    answered()
+  })
 }
 
 ///|
 /// What is said over the log: why it failed, what it holds until something comes.
 fn debug_logs_head(c : @ui.Ctx, d : DebugLogs) -> Unit {
-  if d.failed != "" {
-    @sf.panel_note(c, d.failed)
+  if d.failed.get() != "" {
+    @sf.panel_note(c, d.failed.get())
   }
-  if d.lines.is_empty() {
+  if d.lines.get().is_empty() {
     @sf.panel_note(c, @sf.t("web-pages.screen.debug.logsNone"))
   }
 }
@@ -618,15 +662,18 @@ fn debug_logs_head(c : @ui.Ctx, d : DebugLogs) -> Unit {
 ///|
 /// 复制日志, once there is something to copy.
 fn debug_logs_copy(c : @ui.Ctx, d : DebugLogs) -> Unit {
-  let copied = d.copies > 0 && !@kit.after(c, "screen-logs-copied/\{d.copies}", true, diag_said_ms, later=true)
-  if !d.lines.is_empty() && @sf.panel_button(
+  let copied = d.copies.get() > 0 && !@kit.after(c, "screen-logs-copied/\{d.copies.get()}", true, diag_said_ms, later=true)
+  if !d.lines.get().is_empty() {
+    @sf.panel_button(
       c,
       "screen-logs-copy",
       @sf.t(if copied { "web-pages.screen.stat.copied" } else { "web-pages.screen.debug.logsCopy" }),
       tone=Quiet,
-    ) {
-    @ui.clipboard_set(d.copied_text(), label="still.fail")
-    d.copies += 1
+      on_press=fn() {
+        @ui.clipboard_set(d.copied_text(), label="still.fail")
+        d.copies.set(d.copies.get() + 1)
+      },
+    ) |> ignore
   }
 }
 
@@ -640,49 +687,75 @@ fn debug_line_row(c : @ui.Ctx, l : DebugLine) -> Unit {
 ///|
 /// App, 日志 or 设备, chosen.
 fn debug_tab(c : @ui.Ctx, d : DebugLogs) -> Unit {
-  let labels = [
-    @sf.t("web-pages.screen.debug.app"),
-    @sf.t("web-pages.screen.debug.logs"),
-    @sf.t("web-pages.screen.debug.device"),
-  ]
-  d.tab = @sf.segmented(c, "screen-debug-tab", labels, d.tab)
+  d.tab.set(@sf.segmented(c, "screen-debug-tab", debug_tab_labels(), d.tab.get()))
+}
+
+///|
+/// App, 日志 and 设备, in the words of the language now.
+fn debug_tab_labels() -> Array[String] {
+  [@sf.t("web-pages.screen.debug.app"), @sf.t("web-pages.screen.debug.logs"), @sf.t("web-pages.screen.debug.device")]
 }
 
 ///|
 /// One setting of the device among what is offered, as it is now; chosen, set, and how it is then taken from the answer.
 fn debug_setting(c : @ui.Ctx, s : ScreenSess, d : DebugLogs, label : String, name : String, options : Array[(String, String)]) -> Unit {
   @sf.panel_group(c, label~, fn() {
-    let now = text(d.settings, name)
+    let now = text(d.settings.get(), name)
     let at = options.search_by(fn(o) { o.0 == now }).unwrap_or(-1)
     let chosen = @sf.segmented(c, "screen-setting/" + name, options.map(fn(o) { @sf.t(o.1) }), at)
     if chosen != at && chosen >= 0 {
-      let value = options[chosen].0
-      let params = { "station": Json::string(s.station), "screen": Json::string(s.screen), "name": Json::string(name), "value": Json::string(value) }
-      (s.src.call)("screen.setSetting", Json::object(params), fn(r) {
-        match r {
-          Ok(v) => d.settings = Some(v)
-          Err(e) => d.failed = text(Some(e), "message")
-        }
-      })
+      debug_setting_chosen(s, d, name, options[chosen].0)
     }
   })
 }
+
+///|
+/// Setting `name` of the device set to `value`, how it is then taken from the answer.
+fn debug_setting_chosen(s : ScreenSess, d : DebugLogs, name : String, value : String) -> Unit {
+  let params = { "station": Json::string(s.station), "screen": Json::string(s.screen), "name": Json::string(name), "value": Json::string(value) }
+  (s.src.call)("screen.setSetting", Json::object(params), fn(r) {
+    match r {
+      Ok(v) => d.settings.set(Some(v))
+      Err(e) => d.failed.set(text(Some(e), "message"))
+    }
+  })
+}
+
+///|
+/// 外观's choices: the value set, its words' key.
+// kept across runs: a table, never written
+let debug_appearances : Array[(String, String)] = [("light", "web-pages.screen.debug.light"), ("dark", "web-pages.screen.debug.dark")]
+
+///|
+/// 文字大小's choices: the value set, its words' key.
+// kept across runs: a table, never written
+let debug_text_sizes : Array[(String, String)] = [
+  ("small", "web-pages.screen.debug.textSmall"),
+  ("large", "web-pages.screen.debug.textDefault"),
+  ("extra-extra-large", "web-pages.screen.debug.textLarge"),
+  ("accessibility-large", "web-pages.screen.debug.textLargest"),
+]
 
 ///|
 /// How the device is set, asked once.
 fn debug_settings_asked(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
   if !d.settings_asked {
     d.settings_asked = true
-    c.tell("screen-settings/" + s.screen, fn() {
-      let params = { "station": Json::string(s.station), "screen": Json::string(s.screen) }
-      (s.src.call)("screen.settings", Json::object(params), fn(r) {
-        match r {
-          Ok(v) => d.settings = Some(v)
-          Err(e) => d.failed = text(Some(e), "message")
-        }
-      })
-    })
+    c.tell("screen-settings/" + s.screen, fn() { debug_settings_ask(s, d) })
   }
+}
+
+///|
+/// How the device is set, asked (`screen.settings`).
+fn debug_settings_ask(s : ScreenSess, d : DebugLogs) -> Unit {
+  d.settings_asked = true
+  let params = { "station": Json::string(s.station), "screen": Json::string(s.screen) }
+  (s.src.call)("screen.settings", Json::object(params), fn(r) {
+    match r {
+      Ok(v) => d.settings.set(Some(v))
+      Err(e) => d.failed.set(text(Some(e), "message"))
+    }
+  })
 }
 
 ///|
@@ -692,23 +765,28 @@ fn debug_app(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, beside : Bool) -> Unit {
   debug_settings_asked(c, s, d)
   @sf.panel_group(c, fn() {
     let other = "screen-relaunch-other"
-    match d.last_app {
+    let from = c.id(other)
+    match d.last_app.get() {
       Some((id, name)) => {
-        if @sf.menu_item(c, @sf.t("web-pages.screen.debug.relaunch"), key="screen-relaunch-last", panel=true, icon="refresh", note=name) {
+        @sf.menu_item(c, @sf.t("web-pages.screen.debug.relaunch"), key="screen-relaunch-last", panel=true, icon="refresh", note=name, on_press=fn() {
           debug_relaunch(s, d, id, name)
-        }
-        if @sf.menu_item(c, @sf.t("web-pages.screen.debug.relaunchOther", args=[("name", name)]), key=other, panel=true, icon="refresh", end="chevron-right") {
-          debug_apps_open(s, u, Of(c.id(other)))
-        }
+        })
+        |> ignore
+        @sf.menu_item(c, @sf.t("web-pages.screen.debug.relaunchOther", args=[("name", name)]), key=other, panel=true, icon="refresh", end="chevron-right", on_press=fn() {
+          debug_apps_open(s, u, Of(from))
+        })
+        |> ignore
       }
       None =>
-        if @sf.menu_item(c, @sf.t("web-pages.screen.debug.relaunch"), key=other, panel=true, icon="refresh", end="chevron-right") {
-          debug_apps_open(s, u, Of(c.id(other)))
-        }
+        @sf.menu_item(c, @sf.t("web-pages.screen.debug.relaunch"), key=other, panel=true, icon="refresh", end="chevron-right", on_press=fn() {
+          debug_apps_open(s, u, Of(from))
+        })
+        |> ignore
     }
-    if text(s.state, "install") != "" &&
-      @sf.menu_item(c, @sf.t("web-pages.screen.debug.install"), key="screen-install", panel=true, icon="upload", note=@sf.t("web-pages.screen.debug.installKinds")) {
-      install_asked(c, s, u)
+    if text(s.state, "install") != "" {
+      @sf.menu_item(c, @sf.t("web-pages.screen.debug.install"), key="screen-install", panel=true, icon="upload", note=@sf.t("web-pages.screen.debug.installKinds"), on_press=fn() {
+        install_asked(c, s, u)
+      }) |> ignore
     }
     // (beside the device it is by the device)
     if !beside {
@@ -717,24 +795,34 @@ fn debug_app(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, beside : Bool) -> Unit {
   })
   let done = @sf.t("web-pages.screen.debug.done")
   @sf.panel_group(c, label=@sf.t("web-pages.screen.debug.openUrl"), fn() {
-    let url = @sf.input(c, "screen-open-url", placeholder="https://", small=true)
-    let go = @sf.menu_item(c, @sf.t("web-pages.screen.debug.openUrlGo"), key="screen-open-url-go", panel=true, icon="external")
-    if (go || url.submitted) && url.text != "" {
-      debug_act(s, d, "screen.openUrl", { "url": Json::string(url.text) }, done)
+    let open = fn(url : String) {
+      if url != "" {
+        debug_act(s, d, "screen.openUrl", { "url": Json::string(url) }, done)
+      }
     }
+    let url = @sf.input(c, "screen-open-url", placeholder="https://", small=true, on_submit=open)
+    @sf.menu_item(c, @sf.t("web-pages.screen.debug.openUrlGo"), key="screen-open-url-go", panel=true, icon="external", on_press=fn() {
+      open(url.text)
+    })
+    |> ignore
   })
   @sf.panel_group(c, label=@sf.t("web-pages.screen.debug.push"), fn() {
     let said = @sf.input(c, "screen-push", placeholder=@sf.t("web-pages.screen.debug.pushHint"), small=true)
     let key = "screen-push-go"
-    if @sf.menu_item(c, @sf.t("web-pages.screen.debug.pushGo"), key~, panel=true, icon="bell", end="chevron-right") && said.text != "" {
-      debug_apps_open(s, u, Of(c.id(key)), push=said.text)
-    }
+    let from = c.id(key)
+    @sf.menu_item(c, @sf.t("web-pages.screen.debug.pushGo"), key~, panel=true, icon="bell", end="chevron-right", on_press=fn() {
+      if said.text != "" {
+        debug_apps_open(s, u, Of(from), push=said.text)
+      }
+    }) |> ignore
   })
   @sf.panel_group(c, fn() {
     let key = "screen-uninstall"
-    if @sf.menu_item(c, @sf.t("web-pages.screen.debug.uninstall"), key~, panel=true, icon="trash", end="chevron-right") {
-      debug_apps_open(s, u, Of(c.id(key)), uninstall=true)
-    }
+    let from = c.id(key)
+    @sf.menu_item(c, @sf.t("web-pages.screen.debug.uninstall"), key~, panel=true, icon="trash", end="chevron-right", on_press=fn() {
+      debug_apps_open(s, u, Of(from), uninstall=true)
+    })
+    |> ignore
   })
 }
 
@@ -744,94 +832,123 @@ fn debug_device(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, beside : Bool) -> Uni
   let d = u.logs
   debug_settings_asked(c, s, d)
   let done = @sf.t("web-pages.screen.debug.done")
-  debug_setting(c, s, d, @sf.t("web-pages.screen.debug.appearance"), "appearance", [
-    ("light", "web-pages.screen.debug.light"),
-    ("dark", "web-pages.screen.debug.dark"),
-  ])
-  debug_setting(c, s, d, @sf.t("web-pages.screen.debug.textSize"), "textSize", [
-    ("small", "web-pages.screen.debug.textSmall"),
-    ("large", "web-pages.screen.debug.textDefault"),
-    ("extra-extra-large", "web-pages.screen.debug.textLarge"),
-    ("accessibility-large", "web-pages.screen.debug.textLargest"),
-  ])
+  debug_setting(c, s, d, @sf.t("web-pages.screen.debug.appearance"), "appearance", debug_appearances)
+  debug_setting(c, s, d, @sf.t("web-pages.screen.debug.textSize"), "textSize", debug_text_sizes)
   @sf.panel_group(c, label=@sf.t("web-pages.screen.debug.location"), fn() {
-    let at = @sf.input(c, "screen-location", placeholder=@sf.t("web-pages.screen.debug.locationHint"), small=true)
-    let go = @sf.menu_item(c, @sf.t("web-pages.screen.debug.locationSet"), key="screen-location-go", panel=true, icon="move")
-    if (go || at.submitted) && at.text != "" {
-      debug_act(s, d, "screen.location", { "at": Json::string(at.text) }, done)
+    let set = fn(at : String) {
+      if at != "" {
+        debug_act(s, d, "screen.location", { "at": Json::string(at) }, done)
+      }
     }
-    if @sf.menu_item(c, @sf.t("web-pages.screen.debug.locationClear"), key="screen-location-clear", panel=true, icon="close") {
+    let at = @sf.input(c, "screen-location", placeholder=@sf.t("web-pages.screen.debug.locationHint"), small=true, on_submit=set)
+    @sf.menu_item(c, @sf.t("web-pages.screen.debug.locationSet"), key="screen-location-go", panel=true, icon="move", on_press=fn() {
+      set(at.text)
+    })
+    |> ignore
+    @sf.menu_item(c, @sf.t("web-pages.screen.debug.locationClear"), key="screen-location-clear", panel=true, icon="close", on_press=fn() {
       debug_act(s, d, "screen.location", {}, done)
-    }
+    })
+    |> ignore
   })
   @sf.panel_group(c, label=@sf.t("web-pages.screen.debug.statusBar"), fn() {
-    let at = if d.tidy_bar { 1 } else { 0 }
-    let chosen = @sf.segmented(
-      c,
-      "screen-status-bar",
-      [@sf.t("web-pages.screen.debug.statusReal"), @sf.t("web-pages.screen.debug.statusTidy")],
-      at,
-    )
+    let at = if d.tidy_bar.get() { 1 } else { 0 }
+    let chosen = @sf.segmented(c, "screen-status-bar", debug_status_labels(), at)
     if chosen != at && chosen >= 0 {
-      d.tidy_bar = chosen == 1
-      debug_act(s, d, "screen.statusBar", { "tidy": Json::boolean(d.tidy_bar) }, done)
+      debug_tidy_chosen(s, d, chosen == 1)
     }
   })
   @sf.panel_group(c, label=@sf.t("web-pages.screen.debug.biometrics"), fn() {
-    let at = if d.enrolled.unwrap_or(flag(d.settings, "enrolled")) { 1 } else { 0 }
-    let chosen = @sf.segmented(
-      c,
-      "screen-enrolled",
-      [@sf.t("web-pages.screen.debug.notEnrolled"), @sf.t("web-pages.screen.debug.enrolled")],
-      at,
-    )
+    let at = if debug_enrolled(d) { 1 } else { 0 }
+    let chosen = @sf.segmented(c, "screen-enrolled", debug_enrolled_labels(), at)
     if chosen != at && chosen >= 0 {
-      d.enrolled = Some(chosen == 1)
-      debug_act(s, d, "screen.biometrics", { "what": Json::string(if chosen == 1 { "enrol" } else { "unenrol" }) }, done)
+      debug_enrolled_chosen(s, d, chosen == 1)
     }
     if at == 1 {
-      if @sf.menu_item(c, @sf.t("web-pages.screen.debug.bioMatch"), key="screen-bio-match", panel=true, icon="check") {
+      @sf.menu_item(c, @sf.t("web-pages.screen.debug.bioMatch"), key="screen-bio-match", panel=true, icon="check", on_press=fn() {
         debug_act(s, d, "screen.biometrics", { "what": Json::string("match") }, done)
-      }
-      if @sf.menu_item(c, @sf.t("web-pages.screen.debug.bioNoMatch"), key="screen-bio-nomatch", panel=true, icon="close") {
+      })
+      |> ignore
+      @sf.menu_item(c, @sf.t("web-pages.screen.debug.bioNoMatch"), key="screen-bio-nomatch", panel=true, icon="close", on_press=fn() {
         debug_act(s, d, "screen.biometrics", { "what": Json::string("nomatch") }, done)
-      }
+      })
+      |> ignore
     }
   })
   @sf.panel_group(c, fn() {
     // (beside the device its volume is by the device)
     if !beside {
-      if @sf.menu_item(c, @sf.t("web-pages.screen.debug.volumeUp"), key="screen-volume-up", panel=true, icon="volume") {
-        debug_device_input(c, s, "volume_up")
-      }
-      if @sf.menu_item(c, @sf.t("web-pages.screen.debug.volumeDown"), key="screen-volume-down", panel=true, icon="volume-x") {
-        debug_device_input(c, s, "volume_down")
-      }
+      @sf.menu_item(c, @sf.t("web-pages.screen.debug.volumeUp"), key="screen-volume-up", panel=true, icon="volume", on_press=fn() {
+        debug_device_input(s, "volume_up")
+      })
+      |> ignore
+      @sf.menu_item(c, @sf.t("web-pages.screen.debug.volumeDown"), key="screen-volume-down", panel=true, icon="volume-x", on_press=fn() {
+        debug_device_input(s, "volume_down")
+      })
+      |> ignore
     }
-    if @sf.menu_item(c, @sf.t("web-pages.screen.debug.memoryWarning"), key="screen-memory", panel=true, icon="info") {
-      debug_device_input(c, s, "memory_warning")
-      d.acted = done
-    }
+    @sf.menu_item(c, @sf.t("web-pages.screen.debug.memoryWarning"), key="screen-memory", panel=true, icon="info", on_press=fn() {
+      debug_device_input(s, "memory_warning")
+      d.acted.set(done)
+    })
+    |> ignore
   })
+}
+
+///|
+/// 状态栏's choices: as it is, made tidy (9:41).
+fn debug_status_labels() -> Array[String] {
+  [@sf.t("web-pages.screen.debug.statusReal"), @sf.t("web-pages.screen.debug.statusTidy")]
+}
+
+///|
+/// Its status bar made tidy (9:41), or as it is again.
+fn debug_tidy_chosen(s : ScreenSess, d : DebugLogs, tidy : Bool) -> Unit {
+  d.tidy_bar.set(tidy)
+  debug_act(s, d, "screen.statusBar", { "tidy": Json::boolean(tidy) }, @sf.t("web-pages.screen.debug.done"))
+}
+
+///|
+/// 面容 / 指纹's choices: not enrolled, enrolled.
+fn debug_enrolled_labels() -> Array[String] {
+  [@sf.t("web-pages.screen.debug.notEnrolled"), @sf.t("web-pages.screen.debug.enrolled")]
+}
+
+///|
+/// Whether a face or a finger is enrolled: as set here, else as the device says.
+fn debug_enrolled(d : DebugLogs) -> Bool {
+  d.enrolled.get().unwrap_or(flag(d.settings.get(), "enrolled"))
+}
+
+///|
+/// A face or a finger enrolled, or not.
+fn debug_enrolled_chosen(s : ScreenSess, d : DebugLogs, on : Bool) -> Unit {
+  d.enrolled.set(Some(on))
+  debug_act(s, d, "screen.biometrics", { "what": Json::string(if on { "enrol" } else { "unenrol" }) }, @sf.t("web-pages.screen.debug.done"))
+}
+
+///|
+/// Whether 录屏 is going: started here, or before this page as the device says.
+fn debug_going(d : DebugLogs) -> Bool {
+  d.recording.get() || flag(d.settings.get(), "recording")
 }
 
 ///|
 /// What the last thing done came to, and why what was asked failed.
 fn debug_said(c : @ui.Ctx, d : DebugLogs) -> Unit {
-  if d.failed != "" {
-    @sf.panel_note(c, d.failed)
+  if d.failed.get() != "" {
+    @sf.panel_note(c, d.failed.get())
   }
-  if d.acted != "" {
-    @sf.panel_note(c, d.acted)
+  if d.acted.get() != "" {
+    @sf.panel_note(c, d.acted.get())
   }
 }
 
 ///|
 /// A recording's movie, once it has ended, downloaded.
 fn debug_record_saved(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
-  match d.to_save {
+  match d.to_save.get() {
     Some((root, path)) => {
-      d.to_save = None
+      d.to_save.set(None)
       @sfbase.download_drive_file(c, s.src, s.station, root, path, "recording.mp4")
     }
     None => ()
@@ -842,12 +959,13 @@ fn debug_record_saved(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
 /// 录屏: started and ended here, its movie downloaded as a file of the station's once it has ended.
 fn debug_record(c : @ui.Ctx, s : ScreenSess, d : DebugLogs) -> Unit {
   debug_record_saved(c, s, d)
-  let going = d.recording || flag(d.settings, "recording")
+  let going = debug_going(d)
   let label = @sf.t(if going { "web-pages.screen.debug.recordStop" } else { "web-pages.screen.debug.recordStart" })
   let note = if going { @sf.t("web-pages.screen.debug.recordNote") } else { "" }
-  if @sf.menu_item(c, label, key="screen-record", panel=true, icon=if going { "stop" } else { "play" }, note~) {
+  @sf.menu_item(c, label, key="screen-record", panel=true, icon=if going { "stop" } else { "play" }, note~, on_press=fn() {
     debug_record_pressed(s, d, going)
-  }
+  })
+  |> ignore
 }
 
 ///|
@@ -862,31 +980,31 @@ fn debug_record_pressed(s : ScreenSess, d : DebugLogs, going : Bool) -> Unit {
       }
       params["panel"] = Json::string(if cover { "cover" } else { "inner" })
     }
-    d.recording = true
-    d.acted = ""
+    d.recording.set(true)
+    d.acted.set("")
     (s.src.call)("screen.recordStart", Json::object(params), fn(r) {
       match r {
         Ok(_) => ()
         Err(e) => {
-          d.recording = false
-          d.acted = text(Some(e), "message")
+          d.recording.set(false)
+          d.acted.set(text(Some(e), "message"))
         }
       }
     })
     return
   }
-  d.recording = false
-  d.settings = None
+  d.recording.set(false)
+  d.settings.set(None)
   d.settings_asked = false
-  d.acted = @sf.t("web-pages.screen.debug.recordSaving")
+  d.acted.set(@sf.t("web-pages.screen.debug.recordSaving"))
   (s.src.call)("screen.recordStop", Json::object(params), fn(r) {
     match r {
       Ok(v) if text(Some(v), "path") != "" => {
-        d.acted = @sf.t("web-pages.screen.debug.recordSaved")
-        d.to_save = Some((text(Some(v), "root"), text(Some(v), "path")))
+        d.acted.set(@sf.t("web-pages.screen.debug.recordSaved"))
+        d.to_save.set(Some((text(Some(v), "root"), text(Some(v), "path"))))
       }
-      Ok(_) => d.acted = ""
-      Err(e) => d.acted = text(Some(e), "message")
+      Ok(_) => d.acted.set("")
+      Err(e) => d.acted.set(text(Some(e), "message"))
     }
   })
 }
@@ -896,38 +1014,15 @@ fn debug_record_pressed(s : ScreenSess, d : DebugLogs, going : Bool) -> Unit {
 fn debug_act(s : ScreenSess, d : DebugLogs, op : String, more : Map[String, Json], done : String) -> Unit {
   let params : Map[String, Json] = { "station": Json::string(s.station), "screen": Json::string(s.screen) }
   more.each(fn(k, v) { params[k] = v })
-  d.acted = ""
+  d.acted.set("")
   (s.src.call)(op, Json::object(params), fn(r) {
-    d.acted = match r {
-      Ok(_) => done
-      Err(e) => text(Some(e), "message")
-    }
+    d.acted.set(
+      match r {
+        Ok(_) => done
+        Err(e) => text(Some(e), "message")
+      },
+    )
   })
-}
-
-///|
-/// In a panel: its body scrolls as one.
-fn debug_logs(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
-  let d = u.logs
-  c.box(style=debug_body, fn() {
-    debug_tab(c, d)
-    if d.tab == debug_tab_logs {
-      debug_logs_asked(c, s, d)
-      debug_logs_copy(c, d)
-      debug_logs_head(c, d)
-      for i = d.lines.length() - 1; i >= 0; i = i - 1 {
-        debug_line_row(c, d.lines[i])
-      }
-    } else {
-      if d.tab == debug_tab_device {
-        debug_device(c, s, u, false)
-      } else {
-        debug_app(c, s, u, false)
-      }
-      debug_said(c, d)
-    }
-  })
-  |> ignore
 }
 
 ///|
@@ -936,30 +1031,30 @@ fn debug_pane(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let d = u.logs
   if d.shot_said {
     d.shot_said = false
-    d.acted = @sf.t("web-pages.screen.debug.shotCopied")
+    d.acted.set(@sf.t("web-pages.screen.debug.shotCopied"))
   }
   if d.relaunch_said != "" {
-    d.acted = d.relaunch_said
+    d.acted.set(d.relaunch_said)
     d.relaunch_said = ""
   }
   c.box(style=@ui.style(w=Fixed(debug_pane_w), h=Full).then(debug_pane_box), fn() {
     c.box(style=debug_pane_head, fn() {
       debug_tab(c, d)
-      if d.tab == debug_tab_logs {
+      if d.tab.get() == debug_tab_logs {
         debug_logs_copy(c, d)
       }
     })
     |> ignore
-    if d.tab == debug_tab_logs {
+    if d.tab.get() == debug_tab_logs {
       debug_logs_asked(c, s, d)
       debug_logs_head(c, d)
-      let n = d.lines.length()
-      c.list("screen-logs/" + s.screen, n, 20.0, fn(i) { debug_line_row(c, d.lines[n - 1 - i]) }) |> ignore
+      let n = d.lines.get().length()
+      c.list("screen-logs/" + s.screen, n, 20.0, fn(i) { debug_line_row(c, d.lines.get()[n - 1 - i]) }) |> ignore
     } else {
       // (scrolls as one: all of it is taller than a window may be)
-      c.list("screen-pane/" + s.screen + "/\{d.tab}", 1, debug_device_est, fn(_) {
+      c.list("screen-pane/" + s.screen + "/\{d.tab.get()}", 1, debug_device_est, fn(_) {
         c.box(style=debug_device_box, fn() {
-          if d.tab == debug_tab_device {
+          if d.tab.get() == debug_tab_device {
             debug_device(c, s, u, true)
           } else {
             debug_app(c, s, u, true)
@@ -1024,42 +1119,45 @@ fn debug_apps(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, d : DebugApps) -> Unit 
         for app in apps {
           let id = text(Some(app), "id")
           let name = text(Some(app), "name")
-          if @sf.menu_item(
-              c,
-              name,
-              key="screen-relaunch/" + id,
-              panel=true,
-              icon="phone",
-              under=id,
-              note=if flag(Some(app), "running") { @sf.t("web-pages.screen.debug.appRunning") } else { "" },
-            ) && !d.going {
-            d.going = true
-            let params = { "station": Json::string(s.station), "screen": Json::string(s.screen), "app": Json::string(id) }
-            let (op, done) = match d.push {
-              Some(words) => {
-                params["text"] = Json::string(words)
-                ("screen.push", @sf.t("web-pages.screen.debug.pushed", args=[("name", name)]))
-              }
-              None if d.uninstall => ("screen.uninstall", @sf.t("web-pages.screen.debug.uninstalled", args=[("name", name)]))
-              None => {
-                u.logs.last_app = Some((id, name))
-                ("screen.relaunch", @sf.t("web-pages.screen.debug.relaunched", args=[("name", name)]))
-              }
-            }
-            (s.src.call)(op, Json::object(params), fn(r) {
-              d.going = false
-              d.said = match r {
-                Ok(_) => {
-                  // (one taken off the device is not offered again)
-                  if d.uninstall {
-                    d.apps = d.apps.map(fn(a) { a.filter(fn(x) { text(Some(x), "id") != id }) })
+          @sf.menu_item(
+            c,
+            name,
+            key="screen-relaunch/" + id,
+            panel=true,
+            icon="phone",
+            under=id,
+            note=if flag(Some(app), "running") { @sf.t("web-pages.screen.debug.appRunning") } else { "" },
+            on_press=fn() {
+              if !d.going {
+                d.going = true
+                let params = { "station": Json::string(s.station), "screen": Json::string(s.screen), "app": Json::string(id) }
+                let (op, done) = match d.push {
+                  Some(words) => {
+                    params["text"] = Json::string(words)
+                    ("screen.push", @sf.t("web-pages.screen.debug.pushed", args=[("name", name)]))
                   }
-                  done
+                  None if d.uninstall => ("screen.uninstall", @sf.t("web-pages.screen.debug.uninstalled", args=[("name", name)]))
+                  None => {
+                    u.logs.last_app.set(Some((id, name)))
+                    ("screen.relaunch", @sf.t("web-pages.screen.debug.relaunched", args=[("name", name)]))
+                  }
                 }
-                Err(e) => text(Some(e), "message")
+                (s.src.call)(op, Json::object(params), fn(r) {
+                  d.going = false
+                  d.said = match r {
+                    Ok(_) => {
+                      // (one taken off the device is not offered again)
+                      if d.uninstall {
+                        d.apps = d.apps.map(fn(a) { a.filter(fn(x) { text(Some(x), "id") != id }) })
+                      }
+                      done
+                    }
+                    Err(e) => text(Some(e), "message")
+                  }
+                })
               }
-            })
-          }
+            },
+          ) |> ignore
         }
     }
     if d.said != "" {

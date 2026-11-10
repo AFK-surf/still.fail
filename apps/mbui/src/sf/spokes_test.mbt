@@ -1,4 +1,4 @@
-// What is at work steps round (Spokes.kt): a step every 100 ms, the brightest a step further, the same again after
+// What is at work steps round: a step every 100 ms, the brightest a step further, the same again after
 // eight; nothing drawn between the steps.
 
 ///|

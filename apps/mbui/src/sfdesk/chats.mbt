@@ -1,8 +1,8 @@
-// The band over the sidebar's chats' lists (ember web/src/SidebarList.tsx NavTop; SidebarActions.tsx): 新建对话 and the
+// The band over the sidebar's chats' lists: 新建对话 and the
 // filter; the lists under it are sfpages' (sidebar.mbt).
 
 ///|
-/// The band over the lists (SidebarList.tsx NavTop): its top row, then 新建对话 and the filter (SidebarActions.tsx),
+/// The band over the lists: its top row, then 新建对话 and the filter,
 /// then 待处理 where the rail has no bell; on the sidebar's own ground, whole (no glass: asked, 2026-10-24), the closed
 /// bar's as it closes (moved with it).
 fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
@@ -23,11 +23,11 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         if @sf.native_on() {
           // (as high as 新建对话's row, the filter beside it on the tape's line: band_new_tape_over)
           workspace_heading(c, src, w)
-        } else if band_row(c, "side/new", is_new, fn() {
+        } else {
+          band_row(c, "side/new", is_new, fn() {
             band_mark(c, "compose", t.p.muted)
             band_words(c, @sf.t("web-main.sidebar.newChat"))
-          }) {
-          new_chat()
+          }, at=side_at(), on_press=new_chat)
         }
       })
       |> ignore
@@ -51,7 +51,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
     })
     |> ignore
-    // with no bell in the rail: 待处理 under 新建对话 (cloud/workspace.tsx SidebarTodo); the column's beside the system's
+    // with no bell in the rail: 待处理 under 新建对话; the column's beside the system's
     if !@sf.native_on() {
       side_todo(c, src, w)
     }
@@ -156,7 +156,7 @@ fn band_new_tape(at? : BandAt = band_at_old()) -> @ui.Style {
     // The glass's outside edge follows the day heading's words, including the
     // list row's inner padding, not just the card's outer content margin.
     let list = @sf.theme().chat_list
-    let inset = @sf.room_of(list.band_in + list.heading_in)
+    let inset = @sf.room_of(list.band_in + @sf.heading_in_at(Tape))
     return nav_new().then(@ui.style(pl=inset, pr=inset, pt=S1))
   }
   let corner = @sf.tape_side_corners()[1].radius(at.roots)
@@ -274,7 +274,7 @@ let side_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=
 let side_words_bad : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, leading=L6)
 
 ///|
-/// The list's filter (components.tsx MineFilter, compact): a circle 32 across, unmarked whichever list is shown, its tip 筛选会话; pressed, its menu (filter_menu).
+/// The list's filter (compact): a circle 32 across, unmarked whichever list is shown, its tip 筛选会话; pressed, its menu (filter_menu).
 fn filter_button(
   c : @ui.Ctx,
   src : Source,
@@ -284,7 +284,7 @@ fn filter_button(
 ) -> Unit {
   if @sf.native_on() {
     let rows = [("all", "web-main.filter.chats.all"), ("mine", "web-main.filter.chats.mine"),
-      ("watching", "web-main.filter.watching"), ("archive", "web-main.filter.archived")].map(fn(p) {
+      ("watching", "web-main.filter.watching"), ("hidden", "web-main.filter.hidden"), ("archive", "web-main.filter.archived")].map(fn(p) {
         ("sidebar/filter/" + p.0, @sf.t(p.1), p.0 == (if shown == "chats" { "all" } else { shown }), "")
       })
     sidebar_glass(c, "sidebar/filter", @sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown))]), "filter", rows)
@@ -293,22 +293,30 @@ fn filter_button(
   let t = @sf.theme()
   let id = c.id("side/filter")
   // its menu (sfpages' filter_menu): a filter its list, 已归档 the archive's list (rail_go)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sfpages.filter_menu(Of(id), if shown == "chats" { "all" } else { shown }, fn(f) {
       match f {
         "all" => rail_go(c, src, w, "chats")
         f => rail_go(c, src, w, f)
       }
     })
-  }
+  })
   // its ground and colour moved over 140 ms (page.css.ts iconBtn: transition background, color)
-  let hot = @kit.animate(c, "side/filter/hover", if c.lit(id) || @sfpages.filter_menu_open() { 1.0 } else { 0.0 }, transition=nav_fade)
-  let ground = @sf.alpha(t.p.hover, hot)
+  // (its ground and its icon's colour eased as they are painted: the icon in the words' colour over itself in the
+  // muted one, each as far as it is lit and not, the same at either end)
+  let hot = @motion.told(c, "side/filter/hover", if c.lit(id) || @sfpages.filter_menu_open() { 1.0 } else { 0.0 }, spec=nav_fade)
+  let hover = t.p.hover
   // (in the closed bar's corner, concentric with it as the rail's places are: Sidebar.css.ts navNew, closed)
   let look = if in_bar { filter_box_bar() } else { filter_box }
-  let b = c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
-    @sf.icon(c, "filter", size=side_icon, color=@sf.mix(t.p.text, hot, t.p.muted)) |> ignore
+  let b = c.box(style=look, id~, fn() {
+    let plain = @sf.icon(c, "filter", size=side_icon, color=t.p.muted)
+    c.look_by(plain, fn() { @ui.look(alpha=1.0 - dmax(0.0, dmin(1.0, hot.get(c)))) })
+    let lit = c.layer(fn() {
+      c.box(style=filter_lit_at, fn() { @sf.icon(c, "filter", size=side_icon, color=t.p.text) |> ignore }) |> ignore
+    })
+    c.look_by(lit, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, hot.get(c)))) })
   })
+  c.bg_by(b, fn() { @sf.alpha(hover, hot.get(c)) })
   c.semantics(b, Button, id~, label=@sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown))]))
   @sf.tip(c, "side/filter-tip", id, @sf.t("web-main.filter.chats"))
 }
@@ -320,6 +328,7 @@ fn filter_named(filter : String) -> String {
     "archive" => @sf.t("web-main.filter.archived")
     "mine" => @sf.t("web-main.filter.chats.mine")
     "watching" => @sf.t("web-main.filter.watching")
+    "hidden" => @sf.t("web-main.filter.hidden")
     _ => @sf.t("web-main.filter.all")
   }
 }
@@ -327,6 +336,11 @@ fn filter_named(filter : String) -> String {
 ///|
 // kept across runs: a value (no field of it changes)
 let filter_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
+
+///|
+/// Where the filter's icon lit is drawn over the plain one: in the middle of its ground, as that one is.
+// kept across runs: a value (no field of it changes)
+let filter_lit_at : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 /// In the closed bar's top right corner, its ground's corner linked to that corner (filter_bar_link: concentric with it,

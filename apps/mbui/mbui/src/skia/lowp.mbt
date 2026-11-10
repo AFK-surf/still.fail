@@ -1,4 +1,4 @@
-// tiny-skia's low precision pipeline (src/pipeline/lowp.rs): 16 pixels at a time in u16 lanes holding 0..=255,
+// tiny-skia's low precision pipeline: 16 pixels at a time in u16 lanes holding 0..=255,
 // wrapping as Rust's u16 does in release. Where Rust keeps two float vectors in the bits of the u16 registers (split
 // and join: x in r and g, y in b and a) they are kept as floats beside them.
 

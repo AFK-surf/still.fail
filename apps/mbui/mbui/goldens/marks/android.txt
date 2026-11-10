@@ -1,4 +1,4 @@
-# The marks' reference on Android (docs/determinism.md, the marks' contract; scripts/host_contract.sh android marks):
+# The marks' reference on Android (the marks' contract; scripts/host_contract.sh android marks):
 # made in host-android's x86_64 emulator (API 34, AOSP's default image since #939; google_apis' drew it the same to
 # the byte, run 39603181198) on GitHub's ubuntu-24.04 (its artifact). Checked: system
 # (the system image's build: Skia's Canvas draws it) and fonts (fonts' list and Roboto's bytes); the rest is said.

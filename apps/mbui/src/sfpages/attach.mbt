@@ -1,4 +1,4 @@
-// ＋ pressed on a touch system (still.fail's Android app, chat/screens/Attach.kt): the library's panel, a sheet from the foot,
+// ＋ pressed on a touch system (still.fail's Android app): the library's panel, a sheet from the foot,
 // of the gallery's recent photos across its top (the camera first: recent.mbt), then 照片, 文件 and Station 文件 (添加 n 个
 // in their place while photos are chosen in the strip). A tile
 // picked asks the system (held by the host where it is big: writing_add_held), what it answers coming into the draft as
@@ -8,12 +8,7 @@
 ///|
 /// ＋'s panel for draft `key`, opened by ＋ (`plus`): the gallery's recent photos read again as it opens.
 fn attach_open(plus : Int, src : Source, key : String) -> Unit {
-  attach_open_from(Of(plus), src, key)
-}
-
-///|
-fn attach_open_from(from : @sf.Anchor, src : Source, key : String) -> Unit {
-  @sf.panel("", fn(c, close) { attach_body(c, src, key, close) }, from~, w=attach_w)
+  @sf.panel("", fn(c, close) { attach_body(c, src, key, close) }, from=Of(plus), w=attach_w)
   recent_opened()
 }
 
@@ -24,7 +19,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
   let ask = fn(kind : @hostapi.PickKind) {
     close()
     match @ui.pick(kind, hold=true) {
-      Some(pick) => composing.picking.set(Some((key, pick)))
+      Some(pick) => composing.picking = Some((key, pick))
       None =>
         say(c, @sf.t(if kind == Camera { "android-chat.composer.noCamera" } else { "android-chat.composer.noFiles" }))
     }
@@ -37,7 +32,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
     } else if i > 0 {
       close()
       match recent_photo(i - 1).map(fn(photo) { @ui.pick_photos([photo.src]) }) {
-        Some(Some(pick)) => composing.picking.set(Some((key, pick)))
+        Some(Some(pick)) => composing.picking = Some((key, pick))
         _ => ()
       }
     } else {
@@ -54,21 +49,21 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
   let photos = c.id("attach/photos")
   let files = c.id("attach/files")
   let station = c.id("attach/station")
-  if c.clicked(photos) {
+  c.on_press(photos, fn() {
     ask(Photos)
-  }
-  if c.clicked(files) {
+  })
+  c.on_press(files, fn() {
     ask(Files)
-  }
-  if c.clicked(station) {
+  })
+  c.on_press(station, fn() {
     close()
     (@sfbase.station_files_asked.val)(src, key)
-  }
+  })
   recent_strip(c, tapped)
   // photos chosen in the strip: 添加 n 个 where the tiles were
   let adding = recent_adding(c, fn(pick) {
     close()
-    composing.picking.set(Some((key, pick)))
+    composing.picking = Some((key, pick))
   })
   if adding {
     return
@@ -94,7 +89,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
 }
 
 ///|
-/// The tiles' row (Attach.kt: 12 from the sides, the panel's room there; attach_foot under them, 8 between).
+/// The tiles' row (the panel's room there; attach_foot under them, 8 between).
 // kept across runs: a value (no field of it changes)
 let attach_tiles : @ui.Style = @ui.css("row w=Full gap=S2")
 

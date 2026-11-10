@@ -1,4 +1,4 @@
-// The workspace's profiles in one list (the `profiles` view, docs/station-share.md), grouped by the kind of account
+// The workspace's profiles in one list (the `profiles` view), grouped by the kind of account
 // (Claude's subscriptions, ChatGPT's, SuperGrok's, Cursor's, Devin's, keys), one row an account: the same
 // subscription (by its runtime and the address signed in) or the same key (by its provider and key), whether shared
 // between stations or signed in on several of them each, is one row; its stations are its members, each with what it
@@ -48,6 +48,20 @@ export const groupTitle = (kind: (typeof GROUPS)[number]) => t(`core-views.profi
 export function workspaceProfiles(stations: J[]): J {
   const byId = new Map(stations.map((s) => [String(s.id), s]));
   const name = (id: string) => String(byId.get(id)?.name ?? id.slice(0, 8));
+  // A host and its copies are one share even when an older station did not tell a copy the account's email. The
+  // host's account is authoritative: a copy can still carry the email from before the host signed in again.
+  const identities = new Map<string, { host: boolean; account: string | null; copies: Set<string> }>();
+  for (const s of stations) for (const p of Array.isArray(s.overview?.profiles) ? s.overview.profiles : []) {
+    const share = isObject(p.share) ? p.share : null;
+    if (typeof share?.id !== "string") continue;
+    const identity = identities.get(share.id) ?? { host: false, account: null, copies: new Set<string>() };
+    const key = account(p);
+    if (share.role === "host") {
+      identity.host = true;
+      identity.account = key;
+    } else if (key !== null) identity.copies.add(key);
+    identities.set(share.id, identity);
+  }
   const groups = new Map<string, [J, J][]>();
   const waiting: string[] = [];
   for (const s of stations) {
@@ -60,7 +74,9 @@ export function workspaceProfiles(stations: J[]): J {
     }
     for (const p of Array.isArray(overview.profiles) ? overview.profiles : []) {
       const share = isObject(p.share) ? p.share : null;
-      const key = account(p) ?? (share ? `share:${share.id}` : `${s.station}/${p.id}`);
+      const identity = typeof share?.id === "string" ? identities.get(share.id) : undefined;
+      const sharedAccount = identity?.host ? identity.account : identity?.copies.size === 1 ? [...identity.copies][0] : null;
+      const key = identity ? (sharedAccount ?? `share:${share.id}`) : (account(p) ?? `${s.station}/${p.id}`);
       const list = groups.get(key) ?? [];
       list.push([s, p]);
       groups.set(key, list);
@@ -76,7 +92,7 @@ export function workspaceProfiles(stations: J[]): J {
     const owns = (m: J) => m.role !== "user";
     const troubled = (i: number) => isObject(list[i]![1].trouble);
     const first = (ok: (m: J, i: number) => boolean) => members.findIndex(ok);
-    const at = [first((m, i) => owns(m) && m.online && !troubled(i)), first((m) => owns(m) && m.online), first(owns), 0].find((i) => i >= 0)!;
+    const at = [first((m, i) => owns(m) && m.usable && !troubled(i)), first((m) => owns(m) && m.usable), first((m) => owns(m) && m.online), first(owns), 0].find((i) => i >= 0)!;
     const [s, p] = list[at]!;
     const subscription = p.access?.kind === "subscription" || p.access?.login === true;
     const servesHere = list.map(([station, profile]) => profileServes(profile, String(station.station).split("/")[0] ?? "", station.joined === true));
@@ -146,7 +162,8 @@ export function workspaceProfiles(stations: J[]): J {
     const host = share ? String(share.host) : String(s.id);
     // Where it can be used: every station that has it, signed in or borrowing (how each has it is the account's page's,
     // who may borrow its sharing's).
-    const where = t("core-views.profiles.usableOn", { stations: stationsOf(members).join(t("core-views.list_separator")) });
+    const availableAt = stationsOf(members.filter((m) => m.enabled));
+    const where = availableAt.length > 0 ? t("core-views.profiles.usableOn", { stations: availableAt.join(t("core-views.list_separator")) }) : "";
     const kind = group(p);
     const usable = members.some((m) => m.usable);
     items.push({
@@ -228,6 +245,7 @@ function profileAvailability(s: J, p: J, byId: Map<string, J>): { usable: boolea
 /// `on`: of an account signed in on several stations, the trouble of those of its copies that have one, said with
 /// where (the row's own copy may be one that works).
 function stateOf(usable: boolean, hostName: string, p: J, on: { stations: string[]; p: J } | null): { state: J; look: boolean } {
+  if (p.enabled === false && !usable) return { state: { text: t("core-views.present.profile.disabled"), tone: "neutral" }, look: false };
   if (!usable) return { state: { text: t("core-views.profiles.away", { station: hostName }), tone: "red" }, look: true };
   if (on !== null) {
     const { state, look } = stateOf(true, hostName, on.p, null);
@@ -253,7 +271,8 @@ function member(s: J, p: J, name: (id: string) => string, byId: Map<string, J>):
   const subscription = p.access?.kind === "subscription";
   const online = s.online === true;
   // A borrowed subscription: as good as its host is reachable (the cloud's word, and the borrower's).
-  const { usable } = profileAvailability(s, p, byId);
+  const { usable: reachable } = profileAvailability(s, p, byId);
+  const usable = reachable && p.enabled !== false;
   const users: string[] = role === "host" && Array.isArray(share.users) ? share.users.map((u: string) => name(u)) : [];
   let about: string;
   if (role === "user") about = t(subscription ? "core-views.profiles.borrows" : "core-views.profiles.copyOf", { station: name(String(share.host)) });
@@ -265,6 +284,7 @@ function member(s: J, p: J, name: (id: string) => string, byId: Map<string, J>):
     stationName: String(s.name),
     title: String(s.name),
     online,
+    enabled: p.enabled !== false,
     profileId: String(p.id),
     profileName: String(p.name ?? ""),
     role,

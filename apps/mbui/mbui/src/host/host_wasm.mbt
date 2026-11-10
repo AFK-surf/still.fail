@@ -40,6 +40,8 @@ fn ffi_platform() -> Int = "mbhost" "mb_host_platform"
 
 fn ffi_request_frame() = "mbhost" "mb_host_request_frame"
 
+fn ffi_frames_paced(hz : Double) = "mbhost" "mb_host_frames_paced"
+
 fn ffi_wake_after(ms : Double) = "mbhost" "mb_host_wake_after"
 
 fn mbw_mb_host_font_metrics(size : Double, weight : Int, style : Int, out : Int) = "mbhost" "mb_host_font_metrics"
@@ -121,6 +123,20 @@ fn mbw_mb_host_present(buf : Int, count : Int, r : Double, g : Double, b : Doubl
 fn ffi_present(buf : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Unit {
   mbw_mb_host_present(@wasmrt.doubles_addr(buf), count, r, g, b)
 }
+
+///|
+fn ffi_groups_here() -> Int = "mbhost" "mb_host_groups_here"
+
+///|
+fn mbw_mb_host_group_set(id : Int, inst : Int, moves : Int, n : Int) = "mbhost" "mb_host_group_set"
+
+///|
+fn ffi_group_set(id : Int, inst : FixedArray[Double], moves : FixedArray[Double], n : Int) -> Unit {
+  mbw_mb_host_group_set(id, @wasmrt.doubles_addr(inst), @wasmrt.doubles_addr(moves), n)
+}
+
+///|
+fn ffi_group_drop(id : Int) = "mbhost" "mb_host_group_drop"
 
 ///|
 fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h : Double, can : Int) = "mbhost" "mb_host_text_menu"
@@ -215,6 +231,9 @@ fn mbw_mb_host_perf_where() -> Int = "mbhost" "mb_host_perf_where"
 fn ffi_perf_where() -> String {
   @wasmrt.take_string(mbw_mb_host_perf_where())
 }
+
+///|
+fn ffi_perf_open(go : Int) -> Int = "mbhost" "mb_host_perf_open"
 
 fn ffi_perf_size() -> Double = "mbhost" "mb_host_perf_size"
 
@@ -389,6 +408,9 @@ fn ffi_full_screen() -> Int = "mbhost" "mb_host_full_screen"
 fn ffi_set_full_screen(on : Int) = "mbhost" "mb_host_set_full_screen"
 
 ///|
+fn ffi_window_buttons_down(by : Double, ms : Double) = "mbhost" "mb_host_window_buttons_down"
+
+///|
 fn ffi_window_corner() -> Double = "mbhost" "mb_host_window_corner"
 
 ///|
@@ -452,6 +474,12 @@ fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? :
 }
 
 ///|
+/// (a window's wheel is the app's alone: no page under it zooms by one it kept nothing of)
+fn wheel_kept(_kept : Bool) -> Unit {
+  ()
+}
+
+///|
 fn window_hold() -> Unit {
   ffi_window_hold()
 }
@@ -478,6 +506,12 @@ fn full_screen() -> Bool {
 /// The window made to fill the screen, or back (macOS's full screen).
 fn set_full_screen(on : Bool) -> Unit {
   ffi_set_full_screen(if on { 1 } else { 0 })
+}
+
+///|
+/// The window's buttons moved `by` lower in the app's top row over `ms` (macOS's).
+fn window_buttons_down(by : Double, ms : Double) -> Unit {
+  ffi_window_buttons_down(by, ms)
 }
 
 ///|
@@ -660,6 +694,12 @@ fn request_frame() -> Unit {
 }
 
 ///|
+/// The frame asked for what moves on by the clock needs only `hz` frames a second (@hostapi.frames_paced).
+fn frames_paced(hz : Double) -> Unit {
+  ffi_frames_paced(hz)
+}
+
+///|
 fn wake_after(ms : Double) -> Unit {
   ffi_wake_after(ms)
 }
@@ -767,6 +807,21 @@ fn present(
   b : Double,
 ) -> Unit {
   ffi_present(buf, count, r, g, b)
+}
+
+///|
+fn groups_here() -> Bool {
+  ffi_groups_here() != 0
+}
+
+///|
+fn group_set(id : Int, inst : FixedArray[Double], moves : FixedArray[Double], n : Int) -> Unit {
+  ffi_group_set(id, inst, moves, n)
+}
+
+///|
+fn group_drop(id : Int) -> Unit {
+  ffi_group_drop(id)
 }
 
 ///|
@@ -934,6 +989,11 @@ fn perf_line(line : String) -> Unit {
 ///|
 fn perf_where() -> String {
   ffi_perf_where()
+}
+
+///|
+fn perf_open(go : Bool) -> Bool {
+  ffi_perf_open(if go { 1 } else { 0 }) != 0
 }
 
 ///|

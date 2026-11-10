@@ -15,10 +15,10 @@ test "chat neighbours: a list held under the pointer is traversed in its display
   // The core moves CI to the top, while the list keeps it below the current row under the pointer.
   fix_clock_set(clock, 2001.0)
   t.frame()
-  let core = (src.topic)("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).value
+  let core = src.topic("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).get().value
   let first_day = items(core, "days")[0]
   assert_eq(text(Some(items(Some(first_day), "items")[0]), "id"), "c5")
-  assert_true(t.get(Link, label="给设置页加一个深色模式开关").rect.1 < t.get(Link, label="盯着 CI，绿了告诉我").rect.1)
+  assert_true(t.find("给设置页加一个深色模式开关").unwrap().1 < t.find("盯着 CI，绿了告诉我").unwrap().1)
   // A menu action stays asked throughout the frame. Even if it is built more than once, it moves just one row.
   @settings.ask_action("chat.next")
   t.frame()
@@ -52,8 +52,8 @@ test "chat neighbours: the chosen filter determines which rows are traversed" {
   let base = fixture("home")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       match (name, got.value) {
         ("chats", Some(v)) if params.get("mine") is Some(True) => {
           let days = items(Some(v), "days").map(fn(day) {
@@ -88,8 +88,8 @@ test "chat neighbours: a newly made chat still matches the client key its page o
   let base = fixture("home")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       match (name, got.value) {
         ("chats", Some(v)) => {
           let days = items(Some(v), "days").map(fn(day) {

@@ -4,7 +4,11 @@
 ///|
 /// Whether times say when (pressed, every one in the app says the other: the web's ui.tsx useAbsoluteTime), not how
 /// long ago.
-pub let absolute_times : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
+pub let absolute_times : Ref[Bool] = { val: false }
+
+///|
+/// How much of `accent` a reference's `@` has.
+let ref_at_alpha : Double = 0.7
 
 ///|
 /// A person's words in the runs the core read them in (a message's `words`: refLinks.ts personWords; what was sent from
@@ -19,11 +23,22 @@ pub fn words_runs(parts : Array[Json], accent : Int64, chat_title? : (String) ->
     match field(Some(p), "ref") {
       Some(True) => {
         let title = if words == link { chat_title(link).unwrap_or(link) } else { words }
-        out.push(@ui.span("@", link~, color=@sf.alpha(accent, 0.7)))
+        out.push(@ui.span("@", link~, color=@sf.alpha(accent, ref_at_alpha)))
         out.push(@ui.span(title, link~, color=accent))
       }
       _ => out.push(if link != "" { @ui.link(words, link) } else { @ui.plain(words) })
     }
   }
   out
+}
+
+///|
+/// What a person wrote as every place draws it, in a message, on its way there: the core's runs of it (`runs`, words_runs),
+/// else the words as they are. Nothing makes up runs the core did not give: a row without them draws its words as
+/// written in a test as on a device (a fixture's rows carry them as the core's do).
+pub fn person_runs(words : String, runs : Json?, accent : Int64, chat_title? : (String) -> String? = fn(_) { None }) -> Array[@ui.Run] {
+  match runs {
+    Some(Array(parts)) => words_runs(parts, accent, chat_title~)
+    _ => [@ui.plain(words)]
+  }
 }

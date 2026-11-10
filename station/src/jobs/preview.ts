@@ -1,4 +1,4 @@
-// A web service on this machine, reached through the admin API (the Rust station's preview.rs): GET
+// A web service on this machine, reached through the admin API: GET
 // /admin/api/preview/<port>/<path> is <path> of http://localhost:<port>, passed through as it is. It is how a client
 // shows a page an agent serves here (a dev server, a report): its requests come over the mesh like any other admin
 // call, so they need no port open to anyone. The HTTP wiring is the admin API's: this takes the request's parts and
@@ -10,7 +10,7 @@ import WebSocket from "ws";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { wall } from "../ops/fibers.ts";
 
-/// The header a core names its person's language in (lang.rs HEADER).
+/// The header a core names its person's language in.
 const LANG_HEADER = "stillfail-lang";
 /// Headers that belong to the hop to here (and the admin call's own), not to the service.
 const HOP = ["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host", "authorization", "traceparent", "tracestate", LANG_HEADER];
@@ -51,7 +51,7 @@ export function proxyPreview(method: string, headers: [string, string][], body: 
   const sent: Record<string, string | string[]> = {};
   for (const [name, value] of headers) {
     if (peer ? HOP.includes(name) && name !== "authorization" : HOP.includes(name) || name === "accept-encoding") continue;
-    if (name.startsWith("x-stillfail-") || name.startsWith("x-ember-")) continue;
+    if (name.startsWith("x-stillfail-")) continue;
     const was = sent[name];
     sent[name] = was === undefined ? value : [...(Array.isArray(was) ? was : [was]), value];
   }

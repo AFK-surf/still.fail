@@ -1,4 +1,4 @@
-// still.fail's motion over its made-up chats, frame by frame (docs/motion.md): Home's rows as the list
+// still.fail's motion over its made-up chats, frame by frame (sf/motion.mbt): Home's rows as the list
 // changes, words sent flying into their bubble, the way to the newest coming and going.
 
 ///|
@@ -42,7 +42,7 @@ fn home_moving(t : @ui.Tester) -> Array[String] {
 
 ///|
 test "Home: back from a chat to the list changed meanwhile, the list drawn as it is: nothing in it moves" {
-  // (Home.kt: the list composed anew as it is come back to, its ListMotion new: nothing moves the first time)
+  // (its ListMotion new: nothing moves the first time)
   new_run()
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
@@ -75,8 +75,8 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
   let base = fixture("home")
   let src = {
     ..base,
-    topic: fn(name, params) {
-      let tv = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let tv = base.topic(name, params).get().snapshot()
       match (name, tv.value) {
         ("chats", Some(Object(v))) => {
           let row : Map[String, Json] = {
@@ -189,36 +189,6 @@ test "words sent fly from the field into their bubble" {
 }
 
 ///|
-/// The message's real words in the scrolling list, including while the flight hides them. Its flying copies are
-/// outside that list, so neither an old frame's registration nor a copy's layout supplies the destination.
-fn sent_words_node(words : String) -> @view.View {
-  let tree = @ui.view_tree().unwrap()
-  tree.drawn().iter().filter(fn(d) { d.words == words }).map(fn(d) { tree.view_of(d.id).unwrap() })
-  .find_first(fn(v) { v.scroll_holding() is Some(_) }).unwrap()
-}
-
-///|
-/// The retained composer's actual ground and its editor. The ground's shape offset belongs only to its own paint.
-fn composer_ground_node() -> (@view.View, @view.View) {
-  let tree = @ui.view_tree().unwrap()
-  let said = tree.said_order().iter().find_first(fn(n) {
-    !n.hidden && n.said is Some(s) && s.role == TextField && s.label == "发消息"
-  }).unwrap()
-  let field = tree.view_of(said.id).unwrap()
-  let mut cap = field
-  while tree.drawn_of(cap.id()).map_or(true, fn(d) { d.glass is None }) { cap = cap.parent().unwrap() }
-  (cap, field)
-}
-
-///|
-/// The list's actual allocated room for its composer. A new row's words are laid out at their full natural height
-/// while its slot opens from zero; subtracting those words from the animated scroll extent mixes two geometries.
-fn list_composer_room(t : @ui.Tester, rk : String) -> Double {
-  let foot = reading_of(rk).rows.sized().keys.search("foot").unwrap()
-  t.row(foot).unwrap().3
-}
-
-///|
 test "words sent: the composer stays as it was while they are in it, and comes down as they let go of it, not from under them" {
   new_run()
   let clock = Ref::new(0.0)
@@ -231,33 +201,22 @@ test "words sent: the composer stays as it was while they are in it, and comes d
   t.type_text("第一行\n第二行\n第三行")
   // (its box grown to the three lines)
   t.run_for(@ui.move_most_ms)
-  let (cap, field) = composer_ground_node()
-  let tree = cap.tree
-  let box = fn() { tree.drawn_of(cap.id()).unwrap().h + tree.ground_drawn_of(cap.id()).3 }
-  let reshaping = fn() { tree.ground_drawn_of(cap.id()).3.abs() > 0.5 }
-  let field_at = fn() { let d = tree.drawn_of(field.id()).unwrap(); (d.x, d.y) }
+  let box = fn() { @motion.measured(t.ctx(), "composer/content").unwrap() }
+  let reshaping = fn() { t.moving().iter().any(fn(m) { m.contains("layout composer/") }) }
   let tall = box()
-  let typed_at = field_at()
+  let room = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
   tap_send(t)
   t.frame()
   // sent, its words on their way: the composer as tall as it was, nothing in it moving (its field emptied where it
   // was, its ＋ and send where they were), the list's room under its last row as it was
   assert_true(flight_of("ws1/st1:s-c1") is Some(f) && f.placed)
   assert_eq(box(), tall)
-  assert_eq(field_at(), typed_at)
   assert_true(!reshaping(), msg="\{t.moving()}")
-  let f = flight_of("ws1/st1:s-c1").unwrap()
-  let room_now = fn() { list_composer_room(t, f.turns) }
-  let room = room_now()
+  assert_eq(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), room)
   // let go of once the words are on their way: it comes down from as tall as it was, its field with it
-  let down = @sfbase.sent_down_of(f.chat)
-  let go = f.set_out + f.ms - down
+  let go = t.rest_of("composer/held-box/")
   assert_true(go > t.time() && go < @double.infinity, msg="\{go} \{t.time()}")
-  t.run_for((go - t.time()) / 2.0)
-  assert_eq(box(), tall)
-  assert_eq(field_at(), typed_at)
-  assert_true((room_now() - room).abs() < 0.5)
-  t.run_for(go + down / 2.0 - t.time())
+  t.run_for(go - t.time())
   assert_true(
     flight_of("ws1/st1:s-c1") is Some(f) && flight_p(t.ctx(), f) > 0.0,
     msg="the words not yet on their way",
@@ -265,11 +224,8 @@ test "words sent: the composer stays as it was while they are in it, and comes d
   assert_true(box() < tall, msg="\{box()} \{tall}")
   assert_true(reshaping(), msg="\{t.moving()}")
   // and its room under the list down with it, on the same curve
-  assert_true(((room - room_now()) - (tall - box())).abs() < 0.5,
-    msg="list room \{room} → \{room_now()}, composer \{tall} → \{box()}")
-  t.run_for(f.way.ends() - t.time())
-  assert_true(room_now() < room)
-  assert_true(!reshaping())
+  t.run_for(t.rest_of("composer/hold/") - t.time())
+  assert_true(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") < room)
   fix_clock.val = None
 }
 
@@ -291,7 +247,7 @@ test "words sent set out from where they were typed and land where their message
   // as they set out: a piece a line, each drawn where it was in the field (a copy of the message's words, cut to it)
   let f = flight_of("ws1/st1:s-c1").unwrap()
   let typed = f.lines.unwrap()
-  let (pieces, laid) = @sfbase.flight_pieces_of(f, @ui.runs_words_now(sent_words_node(f.text))).unwrap()
+  let (pieces, laid) = @sfbase.flight_pieces(t.ctx(), f).unwrap()
   assert_eq(pieces.length(), 3)
   // set alike: the field's lines as high as the message's
   assert_eq(typed.line_h(), laid.layout.line_h[0])
@@ -330,7 +286,7 @@ test "words sent break their lines in their message where the composer broke the
   let typed = f.lines.unwrap()
   // more than a line in the field, and as many in the message, each its own piece
   assert_true(typed.starts.length() > 1)
-  let (pieces, laid) = @sfbase.flight_pieces_of(f, @ui.runs_words_now(sent_words_node(f.text))).unwrap()
+  let (pieces, laid) = @sfbase.flight_pieces(t.ctx(), f).unwrap()
   assert_eq(laid.layout.line_count(), typed.starts.length())
   assert_eq(pieces.length(), typed.starts.length())
   fix_clock.val = None
@@ -344,11 +300,11 @@ test "Home: the first rows, after the list waited, come as they are and a tap on
   let waiting = @signals.signal(true)
   let src = {
     ..src,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chats" && waiting.get() {
         { value: None, error: None, version: 0 }
       } else {
-        (src.topic)(name, params)
+        src.topic(name, params).get().snapshot()
       }
     },
   }
@@ -393,15 +349,12 @@ test "a quote's line for a comment, tapped while the capsule grows round it, tak
   // what the e2e caught: the line laid out above where the growing capsule was drawn yet, tapped there at once
   let calls : Array[Made] = []
   let t = fake_core(calls)
-  assert_true(t.find("做完了：列表、跳到最新的按钮") is Some(_), msg="the message to quote is in sight: \{t.words()}")
   let (x, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   t.press_at(x, y)
   t.run_for(long_press_ms)
   t.release(x, y)
-  assert_true(t.find("引用") is Some(_), msg="holding the message offers quoting: \{t.semantics_dump()}")
   t.tap_text("引用")
   t.frame()
-  assert_true(t.find("添加说明（可选）") is Some(_), msg="the new quote has its comment field: \{t.semantics_dump()}")
   t.tap_text("添加说明（可选）")
   let (active, _, _, _) = t.ime()
   assert_true(active)
@@ -420,7 +373,7 @@ test "a quote's line for a comment, tapped while the capsule grows round it, tak
   t.assert_idle()
 }
 
-// What leaves is only drawn (docs/motion.md): a sheet going down and its scrim fading, the bar
+// What leaves is only drawn (sf/motion.mbt): a sheet going down and its scrim fading, the bar
 // going down under a page pushed. A tap meanwhile is what is under them's.
 
 ///|

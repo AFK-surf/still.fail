@@ -1,4 +1,4 @@
-// harfrust's vowel constraints (ot/shaper/vowel_constraints.rs, from HarfBuzz's gen-vowel-constraints.py): pairs
+// harfrust's vowel constraints: pairs
 // of vowels that would look like another vowel get a dotted circle between them.
 
 ///|

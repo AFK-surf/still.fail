@@ -53,6 +53,13 @@ struct Task {
   /// Inside `uninterruptible` (finalizers, acquisition): not cut.
   mut shield : Int
   mut queued : Bool
+  /// When it became ready: a frame's turn runs it at that moment, in its place among the timers due by then
+  /// (Runtime::make_ready).
+  mut since : Int64
+  /// Where it was made ready among what was set (the timers' `seq`): at one moment, what was set first goes first.
+  mut seq : Int
+  /// The host's event it was made ready in between frames (Runtime::outside_event): those of one are ready together.
+  mut event : Int
   watchers : Map[Int, () -> Unit]
 }
 
@@ -141,6 +148,9 @@ pub struct Runtime {
   priv mut time : Int64
   priv clock : (() -> Int64)?
   priv ready : Array[Task]
+  /// Tasks made ready between frames (Runtime::make_ready), in the order they were: ready all the same, run by a frame's
+  /// turn at their moment among the timers.
+  priv later : Array[Task]
   priv timers : Heap
   priv mut seq : Int
   priv shuffle : Bool
@@ -167,8 +177,15 @@ pub struct Runtime {
   /// Told when a task becomes ready outside a turn (a host's callback gave a
   /// Deferred its value): the host then schedules a `tick`.
   priv mut waker : () -> Unit
-  /// Told of each timer set, at its moment (Runtime::on_timer): the host then wakes at it, whoever set it.
-  priv mut timed : (Int64) -> Unit
+  /// Told of a timer set while no turn runs (a test's or a host's callback between frames: Runtime::on_timer), its
+  /// moment: the host then wakes for it, as for the next timer a turn leaves.
+  priv mut timer_waker : (Int64) -> Unit
+  /// The clock as it stands between frames, where what owns the runtime has one (Runtime::outside_clock): what is set
+  /// then (a timer, a sleep) starts from it, not from the last frame's time, however long ago that was; a negative
+  /// answer: none (in a frame, its time)
+  priv mut outside : () -> Int64
+  /// The host's event a task made ready between frames comes in (Runtime::outside_event), -1: one of its own.
+  priv mut outside_event : () -> Int
   priv mut turning : Bool
   /// What failed, as said, when nobody else was told.
   defects : Array[String]
@@ -197,6 +214,7 @@ fn Runtime::make(seed : Int, shuffle : Bool, start : Int64, clock : (() -> Int64
     time: start,
     clock,
     ready: [],
+    later: [],
     timers: { items: [] },
     seq: 0,
     shuffle,
@@ -211,7 +229,9 @@ fn Runtime::make(seed : Int, shuffle : Bool, start : Int64, clock : (() -> Int64
     frames: 0,
     defect: e => defects.push(e.to_string()),
     waker: () => (),
-    timed: _ => (),
+    timer_waker: _ => (),
+    outside: () => -1L,
+    outside_event: () => -1,
     turning: false,
     defects,
     log: [],
@@ -260,10 +280,25 @@ pub fn Runtime::on_wake(self : Runtime, f : () -> Unit) -> Unit {
 }
 
 ///|
-/// Who is told of each timer set, at its moment (a test's step or a host's callback setting one between frames: the
-/// host wakes then, as for one set in a frame).
+/// Who is told of a timer set while no turn runs, at its moment (`f(at)`): what owns the runtime wakes then (a UI's
+/// frame at it), as for the next timer a turn leaves (Runtime::next_timer).
 pub fn Runtime::on_timer(self : Runtime, f : (Int64) -> Unit) -> Unit {
-  self.timed = f
+  self.timer_waker = f
+}
+
+///|
+/// The clock between frames (ms; negative: none, as in a frame), for what is set while no turn runs: a host's callback
+/// come long after the last frame starts its timers from its own moment, as the host's clock has it.
+pub fn Runtime::outside_clock(self : Runtime, f : () -> Int64) -> Unit {
+  self.outside = f
+}
+
+///|
+/// Which of the host's events a task made ready between frames comes in (-1: one of its own, as a callback of its own
+/// is). What one event makes ready (a frame's view forking two fibers) is ready together, the seed choosing among them;
+/// what two do keeps their order, a host's frame able to come between them (Runtime::fire_until).
+pub fn Runtime::outside_event(self : Runtime, f : () -> Int) -> Unit {
+  self.outside_event = f
 }
 
 ///|
@@ -278,7 +313,15 @@ pub fn Runtime::root(self : Runtime) -> Scope {
 pub fn Runtime::now(self : Runtime) -> Int64 {
   match self.clock {
     Some(f) => f()
-    None => self.time
+    None if self.turning => self.time
+    None => {
+      let t = (self.outside)()
+      if t > self.time {
+        t
+      } else {
+        self.time
+      }
+    }
   }
 }
 
@@ -332,6 +375,9 @@ fn Runtime::start(self : Runtime, name : String, body : async () -> Unit) -> Tas
     interrupted: false,
     shield: 0,
     queued: false,
+    since: 0L,
+    seq: 0,
+    event: 0,
     watchers: {},
   }
   t.state = Parked(fn(r) {
@@ -352,13 +398,32 @@ fn Runtime::start(self : Runtime, name : String, body : async () -> Unit) -> Tas
       t.finish()
     })
   })
-  t.queued = true
   self.live_tasks += 1
-  self.ready.push(t)
+  self.make_ready(t)
+  t
+}
+
+///|
+/// `t` ready: it runs at the moment it became so. One made ready between frames (a host's callback, come long after
+/// the last frame or not: Runtime::outside_clock) runs at that moment, in its place among the timers set then, by the
+/// order they were set (Runtime::fire_until), as a timer set then would: not before them at the last frame's time,
+/// whatever frames came. It is ready all the same (idle, wants_frame, run_ready, holding, unsettled say so).
+fn Runtime::make_ready(self : Runtime, t : Task) -> Unit {
+  t.queued = true
+  t.since = if self.turning { self.time } else { self.now() }
+  if self.clock is None && !self.turning {
+    self.seq += 1
+    t.seq = self.seq
+    let e = (self.outside_event)()
+    // (one of its own: the seq, negative, no event's)
+    t.event = if e >= 0 { e } else { -self.seq }
+    self.later.push(t)
+  } else {
+    self.ready.push(t)
+  }
   if !self.turning {
     (self.waker)()
   }
-  t
 }
 
 ///|
@@ -382,11 +447,7 @@ fn Task::watch(self : Task, f : () -> Unit) -> Int {
 ///|
 fn Task::wake(self : Task) -> Unit {
   if !self.queued && self.state is Parked(_) {
-    self.queued = true
-    self.rt.ready.push(self)
-    if !self.rt.turning {
-      (self.rt.waker)()
-    }
+    self.rt.make_ready(self)
   }
 }
 
@@ -439,6 +500,7 @@ pub async fn pause() -> Unit noraise {
   let r : Resume = suspend_raw(k => {
     t.state = Parked(k)
     t.queued = true
+    t.since = t.rt.time
     t.rt.ready.push(t)
   })
   if r is Stop {
@@ -457,7 +519,9 @@ fn Runtime::add_timer(
   self.seq += 1
   let t = { at, seq: self.seq, fire, live: true, later, who }
   self.timers.push(t)
-  (self.timed)(at)
+  if !self.turning {
+    (self.timer_waker)(at)
+  }
   t
 }
 
@@ -508,6 +572,36 @@ fn Runtime::pick(self : Runtime) -> Task? {
 }
 
 ///|
+/// When the first task made ready between frames did, if one is waiting (Runtime::make_ready).
+fn Runtime::ready_later(self : Runtime) -> Int64? {
+  let mut first : Int64? = None
+  if self.clock is None {
+    for t in self.later {
+      match first {
+        Some(f) if f <= t.since => ()
+        _ => first = Some(t.since)
+      }
+    }
+  }
+  first
+}
+
+///|
+/// Runs the ready tasks that became so by the clock's time, and what they make ready, until none is (a frame's turn:
+/// Runtime::fire_until); those made ready later than it (Runtime::make_ready) are left ready, in their order.
+fn Runtime::run_ready_now(self : Runtime) -> Unit {
+  if !self.later.is_empty() {
+    for t in self.later {
+      if t.since <= self.time {
+        self.ready.push(t)
+      }
+    }
+    self.later.retain(t => t.since > self.time)
+  }
+  ignore(self.run_tasks())
+}
+
+///|
 fn Runtime::step_task(self : Runtime, t : Task) -> Unit {
   t.queued = false
   guard t.state is Parked(k) else { return }
@@ -535,8 +629,19 @@ fn Runtime::dropped(self : Runtime) -> Unit {
 }
 
 ///|
-/// Runs ready tasks until none is; returns how many resumptions that took.
+/// Runs ready tasks until none is, those made ready between frames at a later moment too (at the clock's time: only a
+/// frame's turn, advance or tick runs them at theirs, Runtime::make_ready); returns how many resumptions that took.
 pub fn Runtime::run_ready(self : Runtime) -> Int {
+  for t in self.later {
+    self.ready.push(t)
+  }
+  self.later.clear()
+  self.run_tasks()
+}
+
+///|
+/// Runs what is ready until none is; how many resumptions that took.
+fn Runtime::run_tasks(self : Runtime) -> Int {
   let outer = self.turning
   self.turning = true
   defer {
@@ -583,29 +688,103 @@ pub fn Runtime::next_timer(self : Runtime) -> Int64? {
 
 ///|
 /// Fires the timers due by `until`, one instant at a time, running what each
-/// instant wakes before the next.
+/// instant wakes before the next; a task made ready between frames
+/// (Runtime::make_ready) runs at its instant among the timers due then, in the
+/// order they were set.
 fn Runtime::fire_until(self : Runtime, until : Int64) -> Unit {
   let outer = self.turning
   self.turning = true
   defer {
     self.turning = outer
   }
-  ignore(self.run_ready())
-  while self.next_timer() is Some(at) && at <= until {
+  ignore(self.run_tasks())
+  // (the next instant: a timer's, or a task's made ready between frames at its own moment, the earlier)
+  while self.next_instant() is Some(at) && at <= until {
     if self.clock is None && at > self.time {
       self.time = at
     }
-    while self.timers.peek() is Some(t) && t.at <= at {
-      ignore(self.timers.pop())
-      if t.live {
-        t.live = false
-        self.steps += 1
-        (t.fire)()
-      } else {
-        self.dead -= 1
+    // (at one instant the timers due and the tasks made ready then, in the order they were set: what was set first
+    // goes first, whatever frames came between, Runtime::make_ready)
+    // (each found again after each: a timer's callback may make ready, or run what is ready, Runtime::run_ready)
+    while true {
+      let task = self.later_due()
+      match self.timers.peek() {
+        Some(t) if t.at <= at &&
+          (match task {
+            Some(i) => t.seq < self.later[i].seq
+            None => true
+          }) => {
+          ignore(self.timers.pop())
+          if t.live {
+            t.live = false
+            self.steps += 1
+            (t.fire)()
+          } else {
+            self.dead -= 1
+          }
+        }
+        _ =>
+          match task {
+            Some(i) => {
+              // (the first set and those its host's event made ready with it, before the next timer set at this
+              // instant, together, each with what it makes ready: which runs first among them is the scheduler's,
+              // drawn from the seed if the runtime has one, as among any ready; what another event made ready after
+              // goes after, a host's frame able to come between the two, the first run in it before the second was)
+              // (they lie together in later from the first: one event's are made ready one after the other, at its one
+              // moment, none of another's between; so as many looked at as go)
+              let event = self.later[i].event
+              let before = match self.timers.peek() {
+                Some(t) if t.at <= at => Some(t.seq)
+                _ => None
+              }
+              let mut end = i
+              while end < self.later.length() &&
+                    self.later[end].event == event &&
+                    self.later[end].since <= self.time &&
+                    (match before {
+                      Some(b) => self.later[end].seq < b
+                      None => true
+                    }) {
+                self.ready.push(self.later[end])
+                end += 1
+              }
+              let n = end - i
+              for k in i..<(self.later.length() - n) {
+                self.later[k] = self.later[k + n]
+              }
+              for _ in 0..<n {
+                ignore(self.later.pop())
+              }
+              ignore(self.run_tasks())
+            }
+            None => break
+          }
       }
     }
-    ignore(self.run_ready())
+    ignore(self.run_tasks())
+  }
+}
+
+///|
+/// Of the tasks made ready between frames (Runtime::make_ready), where the first set of those due by now is, if one is:
+/// they lie in the order they were set.
+fn Runtime::later_due(self : Runtime) -> Int? {
+  for i, t in self.later {
+    if t.since <= self.time {
+      return Some(i)
+    }
+  }
+  None
+}
+
+///|
+/// The next instant a frame's turn comes to: the next timer's, or a task's made ready between frames
+/// (Runtime::make_ready), the earlier.
+fn Runtime::next_instant(self : Runtime) -> Int64? {
+  match (self.next_timer(), self.ready_later()) {
+    (Some(a), Some(b)) => Some(if a < b { a } else { b })
+    (Some(a), None) => Some(a)
+    (None, b) => b
   }
 }
 
@@ -629,9 +808,9 @@ pub fn Runtime::tick(self : Runtime) -> Unit {
 /// A frame at `at` (ms, the frame's time on a UI's clock; virtual time): the
 /// clock moves there as `advance` moves it, each timer due firing at its own
 /// time; then the fibers waiting for a frame (`next_frame`) go on, all at `at`,
-/// with what is ready. A frame at or before the clock's time only runs what is
-/// ready and what waits for a frame. What starts waiting for a frame in it waits
-/// for the next one.
+/// with what is ready. A frame at or before the clock's time runs what is due by
+/// the clock's time, what is ready and what waits for a frame. What starts
+/// waiting for a frame in it waits for the next one.
 pub fn Runtime::frame(self : Runtime, at : Int64) -> Unit {
   guard self.clock is None else { abort("effect: frame on the host's clock") }
   let outer = self.turning
@@ -640,20 +819,27 @@ pub fn Runtime::frame(self : Runtime, at : Int64) -> Unit {
     self.turning = outer
   }
   self.frames += 1
+  // (what is due by the frame's time, or by the clock's for a frame at or before it: the clock never goes back, and a
+  // frame at the clock's time takes what was set at it between frames in the order it was set)
+  let moment = if at > self.time { at } else { self.time }
+  self.fire_until(moment - 1L)
+  // (those that waited before it, or since at a moment before its own: one run at its moment, there when the host's
+  // frame came or not, that waits for a frame waits for the next)
+  let waited = self.frame_waiters.next
+  self.fire_until(moment)
   if at > self.time {
-    self.fire_until(at)
     self.time = at
   }
-  // (those that waited before it: one forked or woken in it that waits for a frame waits for the next)
-  self.frame_waiters.wake_all()
-  ignore(self.run_ready())
+  self.frame_waiters.wake_until(waited)
+  // (one made ready later than the frame, between frames on a clock ahead of it, at a frame to come: Runtime::make_ready)
+  self.run_ready_now()
 }
 
 ///|
 /// Whether it needs another frame: a fiber waits for one, or one is ready (forked
 /// between frames, by a frame's handler).
 pub fn Runtime::wants_frame(self : Runtime) -> Bool {
-  !self.ready.is_empty() || !self.frame_waiters.is_empty()
+  !self.idle() || !self.frame_waiters.is_empty()
 }
 
 ///|
@@ -669,7 +855,7 @@ pub async fn next_frame() -> Unit noraise {
 pub fn Runtime::holding(self : Runtime) -> (Int, Int, Int, Int, Int, Int) {
   (
     self.live_tasks,
-    self.ready.length(),
+    self.ready.length() + self.later.length(),
     self.timers.items.filter(t => t.live).length(),
     self.root_state.children.length(),
     self.root_state.finalizers.length(),
@@ -686,7 +872,7 @@ pub fn Runtime::timer_slots(self : Runtime) -> Int {
 ///|
 /// Nothing is ready to run.
 pub fn Runtime::idle(self : Runtime) -> Bool {
-  self.ready.is_empty()
+  self.ready.is_empty() && self.later.is_empty()
 }
 
 ///|

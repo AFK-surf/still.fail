@@ -1,4 +1,4 @@
-// A chat's way to the screens of the station it runs on (docs/remote-screens.md, "A chat's screens"): from its bar
+// A chat's way to the screens of the station it runs on ("A chat's screens"): from its bar
 // (the wide frame's chat page) and its agent's card (the phone's), the same for both. One screen alone opens at once;
 // more, a menu of them, the machine's own display first (the core's order). Opened as any screen is (open_screen): the
 // shell puts it beside the chat where the frame has room, over it where not.

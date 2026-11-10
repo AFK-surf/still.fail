@@ -1,4 +1,4 @@
-// Styles (docs/style.md): what a box or a line of words looks like, said once as a value and named, built of the
+// Styles (mbui's ui/style.mbt): what a box or a line of words looks like, said once as a value and named, built of the
 // theme's tokens, not of numbers. A style says token names (`px=S4`, `bg=Card`, `radius=Xl2`); what they come to is
 // looked up in the theme in force as the node is built (Ctx::box, Ctx::text), so one style is a constant, right in
 // light and dark, wide and narrow. Its states (pressed, hovered, focused, selected, disabled, dark, narrow) are blocks
@@ -564,7 +564,7 @@ pub(all) enum Color {
   Scrim
   Link
   ShadowC
-  /// someone else at the controls, a wait to look at (still.fail's Theme.kt C.warn)
+  /// someone else at the controls, a wait to look at
   Warn
   /// words in warn's colour: its amber dark enough to read (Theme's `warn_ink`, as AccentText is the accent's)
   WarnInk
@@ -573,7 +573,7 @@ pub(all) enum Color {
   /// (Theme's `line`, contrast.mbt)
   Tint
   TintStrong
-  /// what floats still over the page, nothing blurred under it (Glass.kt floatingStill: Raised at 72% over the page)
+  /// what floats still over the page, nothing blurred under it
   Floating
   /// what a picture gone dark is under (a remote screen ended: black at 62% over its last frame, 92% over none), and
   /// what is said on it (white)
@@ -588,10 +588,10 @@ pub(all) enum Color {
   /// before its picture, ScreenLinks.kt; the offline note, Chat.kt), the same on every width
   Wash
   /// a sidebar's ground beside the page (still.fail's Sidebar.css.ts vars.sidebar): what stands in it is cut out of it
-  /// (a row's people's pictures, RowPicture.css.ts --mark-around)
+  /// (a row's people's pictures)
   Sidebar
   /// a list's ground, a step off the page (still.fail's --list): what a row of words to press lights to under the
-  /// pointer (AutomaticDecisions.css.ts policyWords)
+  /// pointer
   ListGround
   /// a field's edge pointed at or written in, a column's edge in hand (still.fail's --field-hover)
   FieldHover

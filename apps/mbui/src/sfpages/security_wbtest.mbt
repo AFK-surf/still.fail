@@ -16,8 +16,8 @@ test "安全码: a wrong code keeps the keyboard for another try; approval puts 
           (base.call)(name, params, done)
         }
       },
-      topic: fn(name, params) {
-        let topic = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let topic = base.topic(name, params).get().snapshot()
         if name == "lock" && approved.val {
           {
             ..topic,
@@ -125,8 +125,8 @@ test "a station's protect button follows its request through failure, retry and 
             (base.call)(name, params, done)
           }
         },
-        topic: fn(name, params) {
-          let read = (base.topic)(name, params)
+        topic_read: fn(name, params) {
+          let read = base.topic(name, params).get().snapshot()
           if name == "doing" && running.val {
             { ..read, value: Some({ "doing": [{ "call": "lock.joinStation", "stage": "running", "params": { "workspace": "ws1", "station": "st2" } }] }) }
           } else if name == "lock" && joined.val {
@@ -187,15 +187,15 @@ test "a station's protect button follows its request through failure, retry and 
 }
 
 ///|
-test "安全, at each width and with either hand: another device taken out of the lock, asked first; not this one" {
+test "安全, at each width and with either hand: another device of one's own taken out, asked first; not this one, nor someone else's" {
   for case in page_cases {
     let (w, platform) = case
     let t = setting_tester(Security, w, platform~)
     let at = "\{w} platform \{platform}"
-    let name = "Ana 的 MacBook Air"
+    let name = "林的 MacBook Pro"
     scrolled_to(t, w, name)
-    // (移除 on each but this device's: Ana's MacBook's, the first not above its name, at its end wide, under its
-    // words narrow)
+    // (移除 on each of the viewer's own but this device's: their MacBook's, the first not above its name, at its end
+    // wide, under its words narrow)
     let (_, y) = t.find(name).unwrap()
     let shown = t.words().filter(fn(x) { x.0 == "移除" && x.5 > 0.5 && x.2 + x.4 > y })
     guard shown.length() > 0 else { fail("no 移除 drawn") }
@@ -208,10 +208,18 @@ test "安全, at each width and with either hand: another device taken out of th
     t.tap(near.1 + near.3 / 2.0, near.2 + near.4 / 2.0)
     t.frame()
     assert_true(@sf.presenting(), msg=at)
-    assert_true(t.find("移除「Ana 的 MacBook Air · still.fail 桌面版」？") is Some(_), msg=at)
+    assert_true(t.find("移除「林的 MacBook Pro · still.fail 桌面版」？") is Some(_), msg=at)
     assert_true(t.find("该设备将无法再访问受保护的 station，重新批准后才能使用") is Some(_), msg=at)
     @sf.close_presented()
     t.frame()
+    // (someone else's device, the last of the people's: theirs alone to take out, so no 移除 from its name down,
+    // though the viewer owns the workspace; the user, 2026-11-10)
+    // (the page opened anew: the dialog just closed is not what is looked at)
+    let t = setting_tester(Security, w, platform~)
+    scrolled_to(t, w, "Ana 的 MacBook Air")
+    let (_, theirs) = t.find("Ana 的 MacBook Air").unwrap()
+    let under = t.words().filter(fn(x) { x.0 == "移除" && x.5 > 0.5 && x.2 + x.4 > theirs })
+    assert_eq(under.length(), 0, msg="\{at}: \{under.map(fn(x) { (x.1, x.2) })} under \{theirs}")
   }
 }
 

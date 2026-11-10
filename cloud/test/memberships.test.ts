@@ -1,4 +1,4 @@
-// One station in several workspaces (docs/multi-workspace.md): `stations` keeps the machine, `station_members` each
+// One station in several workspaces: `stations` keeps the machine, `station_members` each
 // workspace it is in. Enrolling moves a station as it always did; joining (/v1/stations/join) adds a workspace. Its
 // state says its home (the workspace it joined first) at the top, as before, and the others in `workspaces`.
 import assert from "node:assert/strict";
@@ -57,16 +57,12 @@ async function connect(h: Harness, station: Station) {
   assert.equal(response.status, 101);
   const ws = response.webSocket!;
   const frames: any[] = [];
-  let pong: (() => void) | null = null;
   const closed = new Promise<number>((resolve) => ws.addEventListener("close", (event) => resolve(event.code), { once: true }));
-  ws.addEventListener("message", (event) => (event.data === "pong" ? pong?.() : frames.push(JSON.parse(event.data as string))));
+  ws.addEventListener("message", (event) => void (event.data === "pong" || frames.push(JSON.parse(event.data as string))));
   ws.accept();
-  /** Everything it was told since the last time (a pong comes after everything sent before it). */
+  /** Everything it was told since the last time, what it said answered (h.heard). */
   const told = async () => {
-    await new Promise<void>((resolve) => {
-      pong = resolve;
-      ws.send("ping");
-    });
+    await h.heard(ws);
     return frames.splice(0);
   };
   /** The last state it was told since the last time. */

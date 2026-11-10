@@ -1,4 +1,4 @@
-// How a page's list moves as each platform's own lists do, as data (docs/determinism.md, "Motion is data"): Android's
+// How a page's list moves as each platform's own lists do, as data ("Motion is data"): Android's
 // fling (Compose's FlingCalculator over AndroidFlingSpline), its stretch at the ends (EdgeEffect's intensity, HWUI's
 // mapping, its spring back), iOS's deceleration and rubber band, the desktop's coast; each a function of what it set out
 // from and the time alone. One for both of what draws lists: an old view's (ui's scroll.mbt, Ctx::list) and a column of
@@ -376,3 +376,7 @@ pub fn ease_end(total : Double, v0 : Double) -> Double {
 /// A wheel's notch (what hosts the tree adds to a wheel's `mods` for one: a mouse's wheel, not a trackpad's fingers
 /// nor their momentum): a page's list eases it in (Scroll::list), as an old view's list does (ui's Ctx::ease_list).
 pub let wheel_notch : Int = 32
+
+///|
+/// A trackpad's pinch (ui's wheel_mod_pinch, in a wheel's `mods`): what zooms takes it, no list scrolls by it.
+pub let wheel_pinch : Int = 16

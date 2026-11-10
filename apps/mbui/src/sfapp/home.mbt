@@ -1,4 +1,4 @@
-// Home (ember apps/android chat/screens/Home.kt, web/src/mobile/Home.tsx): the workspace's chats' lists (sfpages'
+// Home: the workspace's chats' lists (sfpages'
 // sidebar.mbt, every tier's) under a top bar (the filter · the workspace's switcher and settings).
 
 ///|
@@ -26,8 +26,9 @@ fn top_bar(
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
       // the filter, and the archive in its menu: nothing to narrow or look back on with no station
       match view {
-        Some(v) if v.stations > 0 =>
-          if nav_button(
+        Some(v) if v.stations > 0 => {
+          let from = c.id("home-filter")
+            nav_button(
               c,
               "filter",
               20.0,
@@ -41,14 +42,17 @@ fn top_bar(
                     match filter {
                       "mine" => "android-chat.home.filter.mine"
                       "watching" => "android-chat.home.filter.watching"
+                      "hidden" => "web-main.filter.hidden"
                       _ => "android-chat.home.filter.all"
                     },
                   ),
                 ),
               ]),
-            ) {
-            @sfpages.filter_menu(Of(c.id("home-filter")), filter, fn(f) { home_filter_go(src, w, f) })
-          }
+              on_press=fn() {
+                @sfpages.filter_menu(Of(from), filter, fn(f) { home_filter_go(src, w, f) })
+              },
+            )
+        }
         _ => ()
       }
       // Catching up and transfers stay beside the filter.
@@ -61,9 +65,14 @@ fn top_bar(
       c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, justify=JEnd, fn() {
         let wid = c.id("home-workspace")
         // (the fixture's home-sheet: opened by it, as the app starts)
-        if c.clicked(wid) || home_sheet_at_start.val {
+        let go = fn() {
           home_sheet_at_start.val = false
           @sfpages.open_workspaces(src, Of(wid))
+        }
+        c.on_press(wid, go)
+        // (asked from elsewhere: done as it is seen)
+        if home_sheet_at_start.val {
+          go()
         }
         c.box(dir=Row, h=Px(34.0), gap=6.0, align=ACenter, id=wid, fn() {
           @sf.icon(c, "chevron-down", size=16.0, color=t.p.muted) |> ignore
@@ -74,7 +83,7 @@ fn top_bar(
           }
           // A long name gives way to the controls actually present, including the sync mark while it exits.
           top_bar_title(c, w.name, look=@sf.home_workspace_title_look, cut=true) |> ignore
-          let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
+          let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().snapshot()
           match field(marks.value, "others") {
             // what the others have waiting, as their rows' marks (sfpages' chat_mark), said as the core says it; else an
             // invitation waiting (sfpages' workspace_mark.mbt)
@@ -85,10 +94,10 @@ fn top_bar(
           }
         })
         |> ignore
-        if nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings")) {
+        nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings"), on_press=fn() {
           @sfbase.history_push()
           app.nav.push(Settings)
-        }
+        })
       })
       |> ignore
     })
@@ -99,7 +108,7 @@ fn top_bar(
 }
 
 ///|
-/// The name in a top bar (PlacePage.kt TopBarTitle): 24 bold, its letters 0.4 closer, on one line.
+/// The name in a top bar: 24 bold, its letters 0.4 closer, on one line.
 fn top_bar_title(c : @ui.Ctx, s : String, look? : @view.WordsLook = @sf.top_bar_title_look, cut? : Bool = false) -> Int {
   // (said as it is: Ctx::text makes it larger at the system's size of words, as view_spacing does a ScaledPoints)
   guard look.tracking is ScaledPoints(tracking) else { abort("top_bar_title_look's tracking: ScaledPoints") }
@@ -115,8 +124,8 @@ fn top_bar_title(c : @ui.Ctx, s : String, look? : @view.WordsLook = @sf.top_bar_
 let nav_key_side : Double = 34.0
 
 ///|
-/// A round button in a bar (Parts.kt NavButton): 34 across, the icon alone, no disc behind it (a ground while
-/// pressed). True on the frame after it was pressed.
+/// A round button in a bar: 34 across, the icon alone, no disc behind it (a ground while
+/// pressed). `on_press` as it is pressed.
 fn nav_button(
   c : @ui.Ctx,
   icon : String,
@@ -124,7 +133,8 @@ fn nav_button(
   key~ : String,
   color? : Int64,
   said? : String,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   let b = c.box(
@@ -145,25 +155,11 @@ fn nav_button(
     Some(s) => c.semantics(b, Button, id~, label=s)
     None => ()
   }
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
-
-///|
-/// A day's heading (Parts.kt SectionHeader).
-fn section_header(c : @ui.Ctx, label : String) -> Int {
-  let t = @sf.theme()
-  c.box(pl=20.0, pr=20.0, pt=14.0, pb=6.0, fn() {
-    c.text(label, size=t.t.ui, weight=600, color=t.p.text, wrap=false, line=21.0)
-    |> ignore
-  })
-}
-
-///|
-/// The marks' colours (SettingParts.kt MarkBlue, MarkRed; Home.kt MarkYellow).
-let mark_blue : Int64 = 0x3B82F6FFL
-
-///|
-let mark_red : Int64 = 0xE5484DFFL
 
 ///|
 let mark_yellow : Int64 = 0xF2B01EFFL
@@ -174,7 +170,7 @@ let mark_yellow : Int64 = 0xF2B01EFFL
 let others_mark : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
-/// The filter's menu chosen on Home (mobile/Home.tsx FilterButton): a filter its list, 已归档 its page.
+/// The filter's menu chosen on Home: a filter its list, 已归档 its page.
 fn home_filter_go(src : Source, w : Workspace, f : String) -> Unit {
   match f {
     "archive" => open_page(Archived)
@@ -188,5 +184,5 @@ fn home_filter_go(src : Source, w : Workspace, f : String) -> Unit {
 let home_sheet_at_start : Ref[Bool] = Ref(false)
 
 ///|
-/// The workspace's mark before its name in Home's bar (Home.tsx WorkspaceBadge: 20).
+/// The workspace's mark before its name in Home's bar.
 let home_ws_mark : Double = 20.0

@@ -71,9 +71,9 @@ fn fake_core(
     // the draft's files in the core's composer, as the test moves them on (`ups`: going_up, upped)
     // (what the test makes over the made-up core's: what `over` reads of the test's own is a signal it sets, so what
     // reads the topic follows it as it follows the core's)
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       ignore(ups)
-      over(name, (base.topic)(name, params))
+      over(name, base.topic(name, params).get().snapshot())
     },
     now: fn() { now },
     read_only,
@@ -241,7 +241,7 @@ test "refused before the outbox, the words come back and why is said" {
   t.draw()
   // sent, then refused: felt each
   assert_eq(t.haptics(), [@ui.KeyboardTap, @ui.Reject])
-  assert_true(t.find("发不出去的话") is Some(_))
+  assert_true(t.dump().contains("发不出去的话"))
   assert_true(t.find("没有这个对话") is Some(_))
   // the words sent wait over the field for their row, which this core never gives; the composer's room held as
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
@@ -492,11 +492,11 @@ test "a video picked or pasted that the host has no picture of shows its first f
   let w = @sfbase.writing(src, draft_key(r))
   // (macOS's pasteboard and pickers, Windows', iOS's say no address for a file: no still of the host's)
   let clip = b"\x00\x00\x00\x14ftypqt  \x00\x00\x00\x08wide"
-  let before = t.views().length()
   @sfbase.writing_add(src, w, r.station, "录屏.mov", clip)
   let id = text(Some(w.files.get()[0]), "id")
   assert_eq(@sfbase.writing_pictures.get(id), None)
   // the composer built: a player of it made out of sight, reading the bytes from here, its frame at 0 grabbed
+  let before = t.views().length()
   t.draw()
   // (a player's open: "open <id> 1 <its type's length>", video/quicktime)
   let opened = t.views()[before:].to_array().filter(fn(l) { l.has_prefix("open ") && l.has_suffix(" 1 15") })
@@ -655,7 +655,7 @@ test "at its end, a row that comes at it: the core told the end is not in view w
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
-  assert_eq(ends, [true], msg="focus read from initial layout: \{told}")
+  assert_eq(ends, [true])
   // someone says something: it comes at the end, the list gliding to it (list_to_end, the frame it comes)
   said_by_ana(171, "我也来看看")
   fix_clock_set(clock, clock.val + fix_said_ms)
@@ -665,10 +665,10 @@ test "at its end, a row that comes at it: the core told the end is not in view w
   if rest > t.time() && rest < @double.infinity {
     t.run_for(rest - t.time())
   }
-  // (Android's Chat.kt: rows that came are not read before they are in view) told end:false as it comes, its room
+  //  told end:false as it comes, its room
   // opening, end:true once it is open; at its end as it rests
   assert_true(ends.contains(false))
-  assert_eq(ends[ends.length() - 1], true, msg="at \{t.time()} after list rest=\{rest}; moving=\{t.moving()}; focus=\{told}")
+  assert_eq(ends[ends.length() - 1], true)
   // words sent, then the agent's answer (in over the agent's line, what is at the end: the list at its end at once, the
   // rows over it going up for it): at its end again as it rests
   t.tap_text("发消息")
@@ -819,4 +819,18 @@ test "lines typed while words sent let go of the composer: the list's foot goes 
   t.run_for(draft_keep_ms)
   assert_eq(foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), over)
   t.assert_idle()
+}
+
+///|
+test "send pressed before a frame has shown the words typed: they go all the same" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  // (the words told by the input method and send pressed before the composer was built again: the button as it was
+  // with the field empty, as a scripted run's type and tap a few milliseconds apart)
+  t.text_told("马上发出去", t.time())
+  tap_send(t)
+  let sent = named(calls, "chat.send")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "text"), "马上发出去")
 }

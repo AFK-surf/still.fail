@@ -1,4 +1,4 @@
-// A station's screens seen and driven (docs/remote-screens.md; src/screens.ts, src/screen-frames.ts): the `screens`
+// A station's screens seen and driven (src/screens.ts, src/screen-frames.ts): the `screens`
 // topic from the station's GET /screens and its `screens` events, and a view's stream as a fake station answers it.
 // What varies is how the station's bytes are cut on the way (each seed its own cuts; a failure names its seed, and
 // SIM_SEED=<seed> runs it again); nothing waits for real time.
@@ -721,6 +721,82 @@ each("a_read_only_member_only_looks", async (seed) => {
   assert.deepEqual(views[0]!.got, []);
   const s = lastState(log, 1);
   assert.deepEqual([s.may, s.control, s.line], [false, false, "只看"]);
+  core.close();
+});
+
+each("each_view_of_a_screen_says_its_device_and_a_member_lets_it_go_a_reader_does_not", async (seed) => {
+  const mine = { id: "v1", name: "a@x.com", control: true, at: 1000, device: "cb93bcd36171ffff", client: "youdid.wtf 桌面版 · pengx17", app: "desktop" };
+  const older = { id: "v2", name: "Bob", control: false, at: 2000, device: "abcdef0123456789" };
+  const agent = { id: "v3", name: "agent: 部署", control: true, at: 3000, agent: true };
+  // (a person's name alone does not make a view an agent's: it stays theirs to let go of)
+  const named = { id: "v4", name: "agent: Eve", control: false, at: 4000 };
+  const answers = { ...base(), "GET /screens": { screens: [{ ...SCREENS.screens[0], viewers: ["a@x.com", "Bob", "agent: 部署"], controlledBy: ["a@x.com", "agent: 部署"], views: [mine, older, agent, named, { id: "", name: "broken" }] }] }, "POST /screens/desktop/views/v1/end": {}, "POST /screens/desktop/views/v1/watch": {}, "POST /screens/desktop/views/end": { ended: 2 } };
+  const { host, core, ui, views } = await viewing(seed, answers);
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "screens", station: "ws/st" });
+  await host.settle();
+  apply(host, values);
+  const [desktop] = (values.get(1) as J).screens;
+  assert.deepEqual(desktop.views.map((v: J) => [v.id, v.name, v.device, v.app, v.control, v.may === true, v.agent === true]), [
+    ["v1", "a@x.com", "youdid.wtf 桌面版 · pengx17", "desktop", true, true, false],
+    ["v2", "Bob", "设备 abcdef01", "", false, true, false],
+    ["v3", "Agent「部署」", "", "", true, false, true],
+    ["v4", "Agent「Eve」", "", "", false, true, false],
+  ]);
+  call(core, ui, 2, "screen.watchOnly", { station: "ws/st", screen: "desktop", view: "v1" });
+  call(core, ui, 3, "screen.endView", { station: "ws/st", screen: "desktop", view: "v1" });
+  call(core, ui, 4, "screen.endViews", { station: "ws/st", screen: "desktop" });
+  await host.settle();
+  for (const path of ["/screens/desktop/views/v1/watch", "/screens/desktop/views/v1/end", "/screens/desktop/views/end"]) assert.ok(host.requests.some((r: J) => r.method === "POST" && String(r.url).endsWith(path)), path);
+
+  // Open here too: the bar says where else it is open, what it may let go of beside it.
+  const log: J[] = [];
+  call(core, ui, 5, "screen.view", { station: "ws/st", screen: "desktop", view: "v", control: true });
+  await host.settle();
+  views[0]!.send(stateFrame({ control: true, viewers: ["a@x.com", "a@x.com"], controlledBy: ["a@x.com", "a@x.com"], views: [mine, { ...mine, id: "v9", device: "elsewhere", client: "still.fail iOS" }] }));
+  await host.settle();
+  said(host, log);
+  const s = lastState(log, 5);
+  assert.match(s.line, /还开在 youdid\.wtf 桌面版 · pengx17、still\.fail iOS/);
+  assert.deepEqual(s.otherViews.map((v: J) => v.id), ["v1", "v9"]);
+  core.close();
+
+  const reader = await viewing(seed, answers, "viewer");
+  const seen = new Map<number, unknown>();
+  subscribe(reader.core, reader.ui, 1, { topic: "screens", station: "ws/st" });
+  await reader.host.settle();
+  apply(reader.host, seen);
+  assert.equal((seen.get(1) as J).screens[0].views.some((v: J) => v.may), false, "a read-only member only sees who is on it");
+  reader.core.close();
+});
+
+each("a_view_made_to_only_look_from_elsewhere_stays_so_when_it_opens_again", async (seed) => {
+  const { host, core, ui, views } = await viewing(seed);
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", control: true });
+  await host.settle();
+  views[0]!.send(join([stateFrame({ title: "t", control: true }), configFrame({ codec: "jpeg", width: 640, height: 480 }), videoFrame(true, 1, bytesOf(100, seed))]));
+  await host.settle();
+  views[0]!.send(stateFrame({ control: false, login: null, passkey: null }));
+  await host.settle();
+  said(host, log);
+  assert.equal(lastState(log, 1).control, false);
+  call(core, ui, 2, "screen.input", { view: "v", input: { t: "text", text: "x" } });
+  await host.settle();
+  assert.deepEqual(views[0]!.got, [], "no input once it only looks");
+  // The station updates: the view opens again, and does not take the screen back.
+  views[0]!.end();
+  await host.settle();
+  await host.time.pass(1_000);
+  assert.equal(views.length, 2);
+  assert.equal(views[1]!.ask.control, false);
+  assert.equal(views[1]!.ask.taken, undefined);
+  said(host, log);
+  assert.equal(lastState(log, 1).watchOnly, 1);
+  // Its person takes it back themselves, saying so to the station, which holds it otherwise.
+  call(core, ui, 3, "screen.control", { view: "v", control: true });
+  await host.settle();
+  assert.deepEqual([views.at(-1)!.ask.control, views.at(-1)!.ask.taken], [true, true]);
   core.close();
 });
 

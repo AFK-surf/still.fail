@@ -1,4 +1,4 @@
-// Execution of named client calls (core/execute.rs), as Effects. What changes something takes effect in the core at
+// Execution of named client calls, as Effects. What changes something takes effect in the core at
 // once and answers when its source has it (rule 4); a write to still.fail cloud answers once what it changed is read
 // again (the account topics show it).
 import { Effect } from "effect";
@@ -18,6 +18,7 @@ import { t } from "../i18n.ts";
 import { isObject } from "../util.ts";
 import { Wake } from "../wake.ts";
 import type { Call } from "./calls.ts";
+import { UI_FAULT_CATEGORIES, UI_FAULT_OTHER } from "../ui-faults.ts";
 
 export type Handler = (inner: Inner, call: Call, progress: Progress, at: [ClientId, RequestId], ctx: SpanContext) => Effect.Effect<unknown, CoreError>;
 
@@ -32,12 +33,27 @@ export const hooks: {
   enrolled?: (inner: Inner, sub: string, workspace: string, made: unknown) => Effect.Effect<unknown, CoreError>;
   /// A station refused this device for the workspace lock (what to say of it); why a station is not asked now
   /// (views/lock.ts).
-  lockRefused?: (inner: Inner, workspace: string, station: string, theirs: unknown) => CoreError | null;
+  lockRefused?: (inner: Inner, workspace: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown }) => CoreError | null;
   lockWaiting?: (inner: Inner, workspace: string, station: string) => CoreError | null;
+  /// A member about to be taken out of a workspace or given another role, or a station taken out: so in its lock
+  /// first, by this device's signature where it signs there (views/lock.ts).
+  roster?: (inner: Inner, sub: string, workspace: string, what: Roster) => Effect.Effect<unknown, CoreError>;
   /// A new device's connection, met face to face (views/pair.ts).
   lockPair?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;
   deviceCache?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;
 } = {};
+
+/// What a write to still.fail cloud changes of a workspace's roster, as its lock has one: a member out, a member's
+/// role, a station out.
+export type Roster = { member: string; gone: true } | { member: string; role: string } | { station: string };
+function rosterOf(method: string, path: string, body: unknown): { ws: string; what: Roster } | null {
+  const m = /^\/v1\/workspaces\/([^/]+)\/(members|stations)\/([^/]+)$/.exec(path);
+  if (m === null) return null;
+  const [ws, kind, id] = [m[1]!, m[2]!, m[3]!].map((x) => decodeURIComponent(x)) as [string, string, string];
+  if (method === "DELETE") return { ws, what: kind === "members" ? { member: id, gone: true } : { station: id } };
+  const role = isObject(body) ? body.role : undefined;
+  return method === "PATCH" && kind === "members" && typeof role === "string" ? { ws, what: { member: id, role } } : null;
+}
 
 /// Runs a call; `at` is the client and id it came with, `ctx` its trace.
 export function execute(inner: Inner, call: Call, progress: Progress, at: [ClientId, RequestId], ctx: SpanContext): Effect.Effect<unknown, CoreError> {
@@ -69,7 +85,10 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         return Effect.succeed({});
       }
       case "clientError": {
-        const key = `${call.source}\u0000${call.message}`;
+        // A UI fault's text can hold editor keys made from file paths: only its category leaves (ui-faults.ts), whatever
+        // an app sends, an older one's original text too.
+        const message = call.source === "ui_fault" && !UI_FAULT_CATEGORIES.includes(call.message) ? UI_FAULT_OTHER : call.message;
+        const key = `${call.source}\u0000${message}`;
         const now = inner.host.nowMs();
         const was = inner.reported.get(key);
         if (was === undefined || now - was > 60_000) {
@@ -77,7 +96,7 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
           const span = inner.tracer.always("client.error", Kind.Internal);
           span.set("stillfail.source", call.source);
           span.set("error.type", "client");
-          span.set("exception.message", [...call.message].slice(0, 1000).join(""));
+          span.set("exception.message", [...message].slice(0, 1000).join(""));
           span.fail();
           span.end();
         }
@@ -96,6 +115,11 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
           const sub = call.op.target.cloud;
           return Effect.gen(function* () {
             const made = op.method === "POST" && op.path === "/v1/workspaces";
+            // Taken out of a locked workspace, or a member's role changed: so in its lock too, or it would be the cloud's
+            // word alone (it could hold back a credential's end, let one back in, and the lock would still take them as
+            // it says, an admin made a member signing as an admin there still).
+            const roster = rosterOf(op.method, op.path, op.body);
+            if (roster && hooks.roster) yield* hooks.roster(inner, sub, roster.ws, roster.what);
             let result = yield* inner.provider.request(sub, op.method, op.path, op.body, ctx);
             // A locked workspace's station joins with the lock's hash, to pin it (views/lock.ts).
             const enrolling = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/enrollments$/.exec(op.path) : null;
@@ -135,7 +159,6 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       case "stationUpdateNotice":
         if (call.action === "dismiss") {
           prefs.dismissStationUpdate(inner.data, call.station, call.version!);
-          inner.store.invalidate({ topic: "prefs" });
         }
         hooks.updateNoticeOpen?.(inner, call.station, call.action === "open");
         return Effect.succeed({});
@@ -163,8 +186,6 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       case "draftGet": {
         return Effect.succeed(inner.composers.readDraft(call.station, call.chat));
       }
-      case "module":
-        return call.call.def.run(call.call.params, { progress, client: at[0], id: at[1], trace: ctx });
       case "migrate":
         return Effect.gen(function* () {
           if (call.accounts !== null) yield* inner.accounts.migrate(call.accounts);

@@ -1,5 +1,5 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
-# The host's and the text's contracts on Android (docs/determinism.md, "What is compared, and where"; scripts/
+# The host's and the text's contracts on Android ("What is compared, and where"; scripts/
 # host_contract.sh): kitdemo's controls page run on an x86_64 emulator with its scripted taps, its tape made a
 # Tester's test and run here (every frame the same), then the committed tape's text (android_controls) asked of the
 # emulator's text system again (every answer the same). When Android's host changes.
@@ -88,6 +88,7 @@ jobs:
         run: if [ "$HOST" != false ]; then bash scripts/host_contract.sh android record && bash scripts/host_contract.sh android text && bash scripts/host_contract.sh android views && bash scripts/host_contract.sh android site && bash scripts/host_contract.sh android runner && bash scripts/host_contract.sh android play; fi; h=$?; m=0; if [ "$MARKS" != false ]; then bash scripts/host_contract.sh android marks || m=1; fi; [ $h = 0 ] && [ $m = 0 ]
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: host-android
           path: apps/mbui/mbui/out/host/

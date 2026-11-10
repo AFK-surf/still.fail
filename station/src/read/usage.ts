@@ -21,6 +21,7 @@ import { facts } from "../accounts/catalog.ts";
 import { log } from "../ops/log.ts";
 import type { ContextCall } from "../store/usage.ts";
 import { key as modelKey } from "../../../client/core-ts/src/shapes/model.ts";
+import { STILLFAIL_CONNECT } from "../store/rows.ts";
 
 // ── prices (usage.rs) ──
 
@@ -38,6 +39,7 @@ const PRICES: [string, Price][] = [
   ["gpt-6-sol", { input: 2.0, output: 10.0, cacheRead: 0.2 }],
   ["gpt-6-luna", { input: 0.1, output: 0.5, cacheRead: 0.01 }],
   ["gpt-5.6-sol", { input: 4.0, output: 20.0, cacheRead: 0.4 }],
+  ["claude-fable-5-2", { input: 8.0, output: 40.0, cacheRead: 0.2 }],
   ["claude-fable-5-1", { input: 10.0, output: 50.0, cacheRead: 0.25 }],
   ["claude-mythos-5-1", { input: 10.0, output: 50.0, cacheRead: 0.25 }],
   ["claude-fable-5", { input: 10.0, output: 50.0, cacheRead: 1.0 }],
@@ -217,7 +219,7 @@ export function configProfiles(dataDir: string): Record<string, Json> {
   return out;
 }
 
-// ── people (views.rs `creator`, as views.ts has it) ──
+// ── people (as views.ts has it) ──
 
 /// A creator reference in words. No Slack connection knows anyone: a Slack user goes by their id, with no email.
 function creator(s: Store, lang: Lang, reference: string): Json {
@@ -233,7 +235,7 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// admin/views.rs `usage`: what the agents spent from `from` until `to` (ms), by day in the asker's time zone
 /// (`utcOffsetMin`), with the threads, people and profiles the rows name. `from`/`to` are i64s, written as such.
 /// `reading`: whether the counter is still reading everything for the first time (UsageCounter.readingAll). `viewer`:
-/// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
+/// only the calls of their workspace's chats (those of sessions gone, the home one's); all of
 /// them for a read made for no one.
 // A reader says once when its cache actually serves a request. Fast reads otherwise leave no trace in the slow-read
 // log, so the absence of that warning alone cannot show whether the cache is used.
@@ -241,8 +243,11 @@ let reportedSummaryReuse = false;
 let reportedCleanSummaryReuse = false;
 
 export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false,
-  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage } = {}): Json {
+  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage; detailsPreparing?: boolean; metadata?: boolean } = {}): Json {
   const includeRemoteRuns = options.remoteRuns !== false;
+  // A program's usage export needs the rows and their costs, but constructs its own people and does not send the
+  // usage page's chat titles, price table or profile details.
+  const includeMetadata = options.metadata !== false;
   // Keep the stages of a slow read: a reader has only one request at a time, and a slow aggregate can hold up other
   // reads. Only durations are logged, never the request's arguments or the rows it reads.
   const started = performance.now() - (options.batched?.ms ?? 0);
@@ -256,7 +261,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   let summaryParts: number | undefined;
   let summaryCandidates: number | undefined;
   let summarySqlSlowOp: string | undefined;
-  const groups = summary(s, from, to, utcOffsetMin, viewer, (ms, diagnostics) => {
+  const groups = options.detailsPreparing ? [] : summary(s, from, to, utcOffsetMin, viewer, (ms, diagnostics) => {
     stages.summaryQuery = ms;
     if (diagnostics.selectedMs !== undefined) stages.summarySelected = diagnostics.selectedMs;
     if (diagnostics.selectedRestMs !== undefined) stages.summarySelectedRestMs = diagnostics.selectedRestMs;
@@ -283,7 +288,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   const seen = viewer === null || hasCompactUsage(s.db) ? null : seenBy(s, viewer, groups.map((r) => r.session));
   const rows = seen === null ? groups : groups.filter((r) => seen(r.session));
   mark("visibility");
-  const wanted = [...new Set(rows.map((r) => r.thread).filter((t): t is number => t !== null))];
+  const wanted = includeMetadata ? [...new Set(rows.map((r) => r.thread).filter((t): t is number => t !== null))] : [];
   const threads: Record<string, Json> = {};
   for (const [t, first] of usageThreads(s, wanted)) {
     // A Slack channel's name, as far as known (`known_channel`).
@@ -291,15 +296,15 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     threads[String(t.id)] = { title, surface: t.surface, home: t.home, archived: t.hiddenAt !== null };
   }
   mark("threads");
-  const refs = [...new Set(rows.map((r) => r.person).filter((p): p is string => p !== null))].sort(byBytes);
+  const refs = includeMetadata ? [...new Set(rows.map((r) => r.person).filter((p): p is string => p !== null))].sort(byBytes) : [];
   const people: Record<string, Json> = {};
   for (const r of refs) people[r] = creator(s, lang, r);
   mark("people");
   const i64 = (n: bigint) => (JSON as any).rawJSON(String(n));
   const since = usageSince(s);
-  const detailSince = usageDetailSince(s.db);
-  const prices = priceTable(lang, rows.map((r) => r.model));
-  const profiles = configProfiles(s.dataDir);
+  const detailSince = includeMetadata ? usageDetailSince(s.db) : null;
+  const prices = includeMetadata ? priceTable(lang, rows.map((r) => r.model)) : undefined;
+  const profiles = includeMetadata ? configProfiles(s.dataDir) : undefined;
   // An older station may not have complete historical statistics. Leave the unavailable part absent so clients can
   // still show the complete details and distinguish missing history from an actual zero.
   let remoteRuns: Json | undefined = [];
@@ -318,11 +323,10 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
     since,
     ...(detailSince !== null ? { detailSince } : {}),
     reading,
-    prices,
+    ...(options.detailsPreparing ? { detailsPreparing: true } : {}),
+    ...(includeMetadata ? { prices } : {}),
     rows,
-    threads,
-    people,
-    profiles,
+    ...(includeMetadata ? { threads, people, profiles } : {}),
     // the tasks the viewer's workspace's chats on other stations ran here since `from` (the card's 跨设备执行): the
     // workspace their key names (`remote:<workspace>:…`)
     ...(remoteRuns !== undefined ? { remoteRuns } : {}),
@@ -432,6 +436,6 @@ export function resourceChats(s: Store, sessions: string[], viewer: InWorkspace 
 
 /// The connect a Slack thread came in through: the first of its sessions' that is not the station's own.
 function threadConnect(s: Store, thread: number): string | null {
-  const row = s.db.prepare("SELECT connect FROM thread_sessions WHERE thread = ? AND connect != 'ember' ORDER BY joined_at, rowid LIMIT 1").get(thread) as { connect: string } | undefined;
+  const row = s.db.prepare(`SELECT connect FROM thread_sessions WHERE thread = ? AND connect != '${STILLFAIL_CONNECT}' ORDER BY joined_at, rowid LIMIT 1`).get(thread) as { connect: string } | undefined;
   return row?.connect ?? null;
 }

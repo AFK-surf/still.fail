@@ -1,4 +1,4 @@
-// The workspace's lock (docs/workspace-lock.md) as station/src/cloud/lock.ts has it, entry by entry: which entries
+// The workspace's lock as station/src/cloud/lock.ts has it, entry by entry: which entries
 // follow, who signed them, what they change, who a connection is. The same answers, the same words: rules/test runs
 // both on the same chains. What takes keys (hashing, signatures, a key's form) is the caller's (`Crypto`): node's on the
 // stations, @noble's on devices.
@@ -82,6 +82,8 @@ pub(all) struct LockState {
   signed : Map[String, Unit]
   stations : Map[String, Station]
   gateways : Map[String, Unit]
+  /// The person's own lock each member bound themselves to (`person` entries): its genesis's hash.
+  persons : Map[String, String]
   disabled : Bool
 }
 
@@ -293,10 +295,8 @@ pub fn signer(s : LockState, key : String, now : Double?) -> Signer? {
       Some(f) => f.own
       None => false
     }
-    if d.sign_key == Some(key) && d.kind == "app" && live && !own_found {
-      if with_role(s, d.sub, false, d.own) is Some(w) {
-        found = Some(w)
-      }
+    if @role.replaces(own_found, d.sign_key == Some(key) && d.kind == "app", live, s.members.contains(d.sub)) {
+      found = with_role(s, d.sub, false, d.own)
     }
   }
   found
@@ -306,13 +306,11 @@ pub fn signer(s : LockState, key : String, now : Double?) -> Signer? {
 /// Whether a device or passkey of `sub` an entry signed by `by` puts in is the person's own: put in by an own one of
 /// theirs, or by an owner or admin while they have had none that signs (`was`: the same device as it stood).
 fn own_of(s : LockState, sub : String, by : Signer, was : Device?, key : String?) -> Bool {
-  if by.sub == sub {
-    return true
+  let kept = match was {
+    Some(w) => w.own && w.sign_key == key
+    None => false
   }
-  if was is Some(w) && w.own && w.sign_key == key {
-    return true
-  }
-  managing(by.role) && !s.signed.contains(sub)
+  @role.own_device(by.sub == sub, kept, role_named(by.role), s.signed.contains(sub))
 }
 
 ///|
@@ -412,6 +410,7 @@ pub fn genesis(e : Json, c : &Crypto) -> LockState raise LockError {
     signed: Map([]),
     stations: Map([]),
     gateways: Map([]),
+    persons: Map([]),
     disabled: false,
   }
   for m in arr(field(b, "members")) {
@@ -507,6 +506,7 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
     signed: copy(prev.signed),
     stations: copy(prev.stations),
     gateways: copy(prev.gateways),
+    persons: copy(prev.persons),
   }
   let b = match field(v, "body") {
     None | Some(Null) => Some(Json::object(Map([])))
@@ -524,15 +524,17 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
         None => false
       }
       need(@role.may(who, MemberSet(was_owner, m.role == "owner")), if @role.rank(who) >= 2 { "only owners make or change owners" } else { "only owners and admins change members" })
+      let kept = @role.keeps_owner(owners(s), was_owner, m.role == "owner")
       s.members[m.sub] = m
-      need(owners(s) > 0, "a lock keeps an owner")
+      need(kept, "a lock keeps an owner")
     }
     "member.remove" => {
       let sub = str(field(b, "sub"))
       guard sub is Some(sub) && s.members.contains(sub) else { raise Refused("no such member") }
-      need(@role.may(who, MemberRemove(s.members.get(sub).unwrap().role == "owner")), "only owners and admins remove members, owners owners")
+      let was_owner = s.members.get(sub).unwrap().role == "owner"
+      need(@role.may(who, MemberRemove(was_owner)), "only owners and admins remove members, owners owners")
+      need(@role.keeps_owner(owners(s), was_owner, false), "a lock keeps an owner")
       s.members.remove(sub)
-      need(owners(s) > 0, "a lock keeps an owner")
       for k in s.devices.keys().collect() {
         if s.devices.get(k).unwrap().sub == sub {
           s.devices.remove(k)
@@ -545,6 +547,7 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
       }
       // (made a member again, their first device is put in by an owner or admin as anyone's first is)
       s.signed.remove(sub)
+      s.persons.remove(sub)
     }
     "device" => {
       let d = device(b, at, c)
@@ -574,6 +577,14 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
       guard p is Some(p) else { raise Refused("no such passkey") }
       need(@role.may(who, Own(p.sub == by.sub)), "members remove only their own passkeys")
       s.passkeys.remove(p.key)
+    }
+    "person" => {
+      let sub = text_of(field(b, "sub"))
+      guard sub is Some(sub) && s.members.contains(sub) else { raise Refused("a person's lock is a member's") }
+      guard text_of(field(b, "person")) is Some(person) && is_hex32(person) else { raise Refused("a person's lock is named by its genesis's hash") }
+      // (their own device or passkey, not a manager's: no one binds someone else to a lock)
+      need(@role.binds(sub == by.sub, by.own), "members bind only themselves to a lock of their own, from their own device")
+      s.persons[sub] = person
     }
     "station" => {
       need(@role.may(who, Roster), "only owners and admins add stations")
@@ -608,7 +619,7 @@ pub fn apply(prev : LockState, e : Json, now : Double?, c : &Crypto) -> LockStat
   }
   // Signed with a device or passkey someone else put in under the signer's name: it stays in the chain, as the rules
   // let its signer's role make it (so a lock with one from before keeps folding), and changes nothing.
-  if by.own {
+  if @role.takes_effect(by.own) {
     out
   } else {
     { ..prev, seq: prev.seq + 1.0, head: hash }
@@ -663,13 +674,23 @@ pub fn admit(s : LockState, sub : String, endpoint : String, base : String?, pro
       }
     }
   }
-  guard d is Some(d) else { raise Refusal("this device is not confirmed in the workspace's lock") }
-  if d.sub != sub {
-    raise Refusal("this device is someone else's in the workspace's lock")
+  let theirs = match d {
+    Some(d) => d.sub == sub
+    None => false
   }
-  if !@history.unexpired(d.exp is Some(_), d.exp.unwrap_or(0.0).to_int64(), now.to_int64()) {
-    raise Refusal("this device's confirmation ran out")
+  let live = match d {
+    Some(d) => @history.unexpired(d.exp is Some(_), d.exp.unwrap_or(0.0).to_int64(), now.to_int64())
+    None => false
   }
-  guard s.members.get(d.sub) is Some(m) else { raise Refusal("not a member in the workspace's lock") }
-  (d, m.role)
+  let role = match d {
+    Some(d) => s.members.get(d.sub).map(fn(m) { m.role })
+    None => None
+  }
+  match @role.admission(d is Some(_), theirs, live, role is Some(_)) {
+    Admitted => (d.unwrap(), role.unwrap())
+    Unknown => raise Refusal("this device is not confirmed in the workspace's lock")
+    Others => raise Refusal("this device is someone else's in the workspace's lock")
+    RanOut => raise Refusal("this device's confirmation ran out")
+    NoMember => raise Refusal("not a member in the workspace's lock")
+  }
 }

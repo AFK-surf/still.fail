@@ -52,3 +52,71 @@ test "an allowance's windows in words: one way for them all, the longest that fi
   assert_eq(said[3], 2)
   set_words(fn(key, _) { key })
 }
+
+///|
+/// A Claude subscription's windows with its models' own weeks (present.ts: each its `scope`), in a line `room` wide:
+/// worded (a profile's row), or by their marks on a line of their own (`lines`: a station's account).
+fn own_tester(room : Double, worded : Bool) -> @ui.Tester {
+  let q = Json::object({
+    "state": "ok",
+    "windows": [
+      { "label": "5 小时", "mark": "5H", "left": 62.0, "level": "ok" },
+      { "label": "每周", "mark": "W", "left": 19.0, "level": "amber" },
+      { "label": "每周 · Fable", "mark": "Fable", "scope": "Fable", "left": 46.0, "level": "ok" },
+      { "label": "每周 · Opus", "mark": "Opus", "scope": "Opus", "left": 8.0, "level": "red" },
+      { "label": "每周 · Sonnet", "mark": "Sonnet", "scope": "Sonnet", "left": 100.0, "level": "ok" },
+    ],
+  })
+  set_words(fn(key, args) {
+    let said = if key == "web-main.quota.figure" { "剩 {left}%" } else { key }
+    args.fold(init=said, fn(said, a) { said.replace_all(old="{" + a.0 + "}", new=a.1) })
+  })
+  let t = @ui.Tester::new(
+    fn(c) {
+      begin(c) |> ignore
+      c.with_theme(ui_theme(), fn() {
+        c.box(w=Px(room), fn() { quota_chips(c, Some(q), worded~, lines=!worded, small=!worded) }) |> ignore
+      })
+    },
+    w=900.0,
+    h=300.0,
+    platform=2,
+  )
+  t.draw()
+  t
+}
+
+///|
+test "an account's windows and its models' own, five: where no line holds them the account's a line and its models' under it, every chip whole" {
+  // (a phone's row cut all five to 5H …, W 1…, … …; a station's account's the same, 2026-11-10)
+  for worded in [true, false] {
+    let mut lined = 0
+    for room in [900.0, 420.0, 342.0, 300.0, 240.0, 180.0, 130.0] {
+      let t = own_tester(room, worded)
+      let shown = t.words().filter(fn(w) { w.5 > 0.5 })
+      // (the one of `words` it is said by, there once)
+      let at = fn(words : Array[String]) {
+        match shown.filter(fn(w) { words.contains(w.0) }) {
+          [w] => w
+          found => abort("\{room}: one of \{words}: \{found} in \{shown.map(fn(w) { w.0 })}")
+        }
+      }
+      // every window said once, whole, within the line's room
+      let week = at(["每周", "W"])
+      let fable = at(["每周 · Fable", "Fable"])
+      let sonnet = at(["每周 · Sonnet", "Sonnet"])
+      assert_eq(t.squeeze_faults(), [], msg="\{worded} \{room}")
+      assert_true(shown.iter().all(fn(w) { w.1 + w.3 <= room + 0.01 }), msg="\{worded} \{room}: past the line's end: \{shown}")
+      if fable.2 > week.2 {
+        // (in lines: its models' own by the model, under the account's; the account's by their names where worded)
+        lined += 1
+        assert_eq([fable.0, sonnet.0, week.0], ["Fable", "Sonnet", if worded { "每周" } else { "W" }], msg="\{worded} \{room}")
+        assert_true(sonnet.2 >= fable.2)
+      } else {
+        assert_true(sonnet.2 == week.2, msg="\{worded} \{room}: one line")
+      }
+    }
+    assert_true(lined >= 2 && lined < 7, msg="\{worded}: in a line where it has the room, in lines where not: \{lined}")
+  }
+  set_words(fn(key, _) { key })
+}

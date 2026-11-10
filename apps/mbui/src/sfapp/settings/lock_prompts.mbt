@@ -1,4 +1,4 @@
-// A new device showing this one's code (Security.kt LockPrompts, pairSheet; the core's `lockPrompts`, views/pair.ts):
+// A new device showing this one's code (pairSheet; the core's `lockPrompts`, views/pair.ts):
 // put up over whichever page is open, in any workspace of the person's, once (the library's panel: what is put up
 // after it stands over it), until it is done or turned away. Nothing here approves it, only the code typed on the new device; turned away (拒绝),
 // it is denied (`lockPrompt.deny`) and its code is worth nothing; closed by hand (a tap beside it, back), it is no
@@ -24,7 +24,7 @@ fn lock_prompts_reset() -> Unit {
 /// The oldest device waiting on this one's code, put up in a sheet when nothing else is (`free`: no sheet of the
 /// app's up): call each frame, over the pages.
 pub fn lock_prompts(core : Core, free : Bool) -> Unit {
-  let prompts = (core.topic)("lockPrompts", Map::new()).value
+  let prompts = (core.topic)("lockPrompts", Map::new()).get().value
   let pairing = items(prompts, "pairing")
   if prompts is Some(_) {
     prompts_closed.retain(fn(d) { pairing.iter().any(fn(r) { ask_of(r) == d }) })
@@ -37,8 +37,9 @@ pub fn lock_prompts(core : Core, free : Bool) -> Unit {
 }
 
 ///|
-/// The sheet of a new device asking (Security.kt pairSheet): whose it is and what, where it asks to be let in, the code
-/// large, that it is shown only here, 拒绝. Gone by itself once that device is done or turned away elsewhere.
+/// The sheet of a new device asking: whose it is and what, where it asks to be let in, the code
+/// large, that it is shown only here, 拒绝. Gone by itself once that device is done or turned away elsewhere. What it
+/// holds is nodes of the window's tree, made once as it opens (@sf.panel_nodes).
 fn pair_sheet(core : Core, r : Json) -> Unit {
   let rv = Some(r)
   let device = text(rv, "device")
@@ -54,46 +55,65 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
     "" => text(rv, "email")
     n => n
   }
-  @sf.panel(fill("web-pages.security.pairTitle", [("name", who)]), from=Unanchored, gone=hide, fn(c, close) {
-    // done or turned away on another device: gone here too; asked in one more workspace meanwhile, named too
-    let prompts = (core.topic)("lockPrompts", Map::new()).value
-    let now = items(prompts, "pairing").iter().find_first(fn(x) { text(Some(x), "device") == device })
-    if prompts is Some(_) && now is None {
-      close()
-      return
+  @sf.panel_nodes(fill("web-pages.security.pairTitle", [("name", who)]), from=Unanchored, gone=hide, fn(v, close) {
+    // done or turned away on another device: gone here too, as the core says so; asked in one more workspace
+    // meanwhile, named too (what it shows bound to the ask as the core holds it now, as it was put up till then)
+    let now = fn() { prompt_now(core, "pairing", fn(x) { text(Some(x), "device") == device }) }
+    prompt_goes(v, now, close)
+    let shown = fn() -> Json? {
+      match now() {
+        Some(Some(x)) => Some(x)
+        _ => rv
+      }
     }
-    let shown = match now {
-      Some(x) => Some(x)
-      None => rv
-    }
-    c.box(style=pair_column, fn() {
-      c.text(fill("web-pages.security.pairBody", [("device", text(rv, "deviceText"))]), style=pair_body)
-      |> ignore
-      c.box(style=pair_places, fn() {
-        c.text(tr("web-pages.security.promptFor"), style=pair_places_head) |> ignore
-        for w in items(shown, "workspaces") {
-          let wv = Some(w)
+    let places = fn() { items(shown(), "workspaces") }
+    v.box(fn(col) {
+      @sf.style_node(col, fn() { pair_column })
+      @sf.words_node(col, fn() { fill("web-pages.security.pairBody", [("device", text(rv, "deviceText"))]) }, fn() { pair_body }) |> ignore
+      // (asked into the person's own lock, no workspace's: said so)
+      col.show(fn() { places().is_empty() }, fn(p) {
+        @sf.words_node(p, fn() { tr("web-pages.security.pairPersonal") }, fn() { pair_places_head }) |> ignore
+      })
+      col.show(fn() { !places().is_empty() }, fn(p) {
+        @sf.style_node(p, fn() { pair_places })
+        @sf.words_node(p, fn() { tr("web-pages.security.promptFor") }, fn() { pair_places_head }) |> ignore
+        p.each(places, fn(w) { text(Some(w), "id") }, fn(line, w) {
+          let wv = fn() { Some(w.get()) }
           // its mark before its name, its letter where it has none
-          c.box(style=pair_place_line, fn() {
-            @sf.workspace_badge(c, text(wv, "name"), text(wv, "emoji"), text(wv, "icon"), pair_place_mark)
-            c.text(text(wv, "name"), style=pair_place) |> ignore
-          })
+          @sf.style_node(line, fn() { pair_place_line })
+          @sf.workspace_badge_node(line, fn() { text(wv(), "name") }, fn() { text(wv(), "emoji") }, fn() { text(wv(), "icon") }, pair_place_mark)
+          @sf.words_node(line, fn() { text(wv(), "name") }, fn() { pair_place }) |> ignore
+        })
+      })
+      // the code, large, in the code face, in the middle
+      col.box(fn(mid) {
+        @sf.style_node(mid, fn() { centre_column })
+        mid.box(fn(m) {
+          m
+          .words_runs(By(fn() { [@ui.span(spaced(text(shown(), "code")), mono=true)] }), look=pair_code_look)
+          .ink(By(fn() { @sf.theme().p.text }))
           |> ignore
-        }
+        })
+        |> ignore
       })
       |> ignore
-      mono(c, spaced(text(shown, "code")), size=34.0, weight=600, line=44.0, center=true)
       // until when it holds (gone from here then)
-      match text(shown, "untilText") {
-        "" => ()
-        until => c.text(until, style=pair_until) |> ignore
-      }
-      note(c, tr("web-pages.security.pairNote"))
-      c.box(style=pair_deny_room, fn() {
-        if wide_button(c, "lock-pair-deny", tr("web-pages.security.pairDeny"), false) {
-          close()
-          deny()
-        }
+      col.show(fn() { text(shown(), "untilText") != "" }, fn(u) {
+        @sf.words_node(u, fn() { text(shown(), "untilText") }, fn() { pair_until }) |> ignore
+      })
+      @sf.words_node(col, fn() { tr("web-pages.security.pairNote") }, fn() { @sf.note.then(@sf.full_words) }) |> ignore
+      col.box(fn(room) {
+        @sf.style_node(room, fn() { pair_deny_room })
+        @sf.wide_button_node(
+          room,
+          fn() { tr("web-pages.security.pairDeny") },
+          fn() {
+            close()
+            deny()
+          },
+          false,
+        )
+        |> ignore
       })
       |> ignore
     })
@@ -102,12 +122,12 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
 }
 
 ///|
-/// What the panel holds, 12 apart (Security.kt:372).
+/// What the panel holds, 12 apart.
 // kept across runs: a value (no field of it changes)
 let pair_column : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
-/// Whose device it is and what (14 in the muted: Security.kt:373).
+/// Whose device it is and what.
 // kept across runs: a value (no field of it changes)
 let pair_body : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
@@ -133,12 +153,24 @@ let pair_place_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 let pair_place_mark : Double = 20.0
 
 ///|
+/// The code: 34 semibold in the code face, 44 a line, on one line (mono's, as it was said: size=34, weight=600, line=44).
+// kept across runs: a value (no field of it changes)
+let pair_code_look : @view.WordsLook = {
+  size: 34.0,
+  weight: 600,
+  line: 44.0,
+  wrap: false,
+  tracking: @view.letters_own,
+  balance: false,
+}
+
+///|
 /// Until when the code holds, under it (13 muted, centred).
 // kept across runs: a value (no field of it changes)
 let pair_until : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
 
 ///|
-/// 拒绝, as wide as the sheet, 4 under the note and 16 over the sheet's foot (Security.kt:381).
+/// 拒绝, as wide as the sheet, 4 under the note and 16 over the sheet's foot.
 // kept across runs: a value (no field of it changes)
 let pair_deny_room : @ui.Style = @ui.css("w=Full pt=S1 pb=S4")
 

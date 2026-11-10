@@ -48,7 +48,7 @@ const traces = (got: { body: any }[]) => got.map((g) => g.body.resourceSpans[0].
 const batch = (name = "chat.open", spans = 1) => JSON.stringify({
   resourceSpans: [{
     resource: { attributes: [{ key: "service.name", value: { stringValue: "ember-web" } }] },
-    scopeSpans: [{ scope: { name: "ember-core" }, spans: Array.from({ length: spans }, () => ({ traceId: "4bf92f3577b34da6a3ce929d0e0e4736", spanId: "00f067aa0ba902b7", name, kind: 1, startTimeUnixNano: "1", endTimeUnixNano: "2" })) }],
+    scopeSpans: [{ scope: { name: "stillfail-core" }, spans: Array.from({ length: spans }, () => ({ traceId: "4bf92f3577b34da6a3ce929d0e0e4736", spanId: "00f067aa0ba902b7", name, kind: 1, startTimeUnixNano: "1", endTimeUnixNano: "2" })) }],
   }],
 });
 
@@ -192,6 +192,22 @@ test("a station's log goes on to Axiom's logs, signed with its key; a member's a
     const alice = await h.login("alice");
     assert.equal((await logs(body, { authorization: `Bearer ${alice.access_token}` })).status, 401);
     assert.equal(axiom.got.length, 1);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a signed-in client's spans use up none of its account's requests a minute, and a token not good is refused", async () => {
+  // (they have their own budget, by sender: a person's devices sending theirs had the account system refuse the rest)
+  const axiom = fakeAxiom();
+  const h = await harness({ axiom: axiom.answer });
+  try {
+    const tokens = await h.login("alice");
+    const alice = h.as(tokens);
+    for (let i = 0; i < 100; i++) assert.equal((await alice("GET", "/v1/me")).status, 200);
+    for (let i = 0; i < 30; i++) assert.equal((await post(h, batch(), { authorization: `Bearer ${tokens.access_token}` })).status, 202);
+    assert.equal((await alice("GET", "/v1/me")).status, 200, "the account's own still answered");
+    assert.equal((await post(h, batch(), { authorization: "Bearer not-a-token" })).status, 401);
   } finally {
     await h.close();
   }

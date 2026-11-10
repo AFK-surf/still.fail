@@ -1,4 +1,4 @@
-// What was opened and let go is brought whole all the same, after everything else (docs/core-ts.md, rule 6): a chat's
+// What was opened and let go is brought whole all the same, after everything else (rule 6): a chat's
 // file or a drive's video or song a viewer read a part of (drive-kept.ts `chat`, `played`), saying where it was opened
 // (`from`: written down beside it, `origin`; a still read off a film in its message says none, and is not brought),
 // and let go of (a preview
@@ -14,6 +14,7 @@
 // all else and at once: not after what is waited on, not bound by the prefs, whether or not any of it was read. It is
 // one thing whichever way it began: what was read of it, what was brought of it, however sparse, is never asked again;
 // only what is not kept is. Stopped (`fill.stop`), it is no longer brought; what came of it stays kept.
+import { Marks } from "./reactive.ts";
 import { Effect } from "effect";
 import type { Inner } from "./core.ts";
 import { handlers } from "./core/execute.ts";
@@ -68,6 +69,8 @@ function bounds(inner: Inner): { on: boolean; most: number } {
 
 export class Fill {
   readonly #inner: Inner;
+  /// What reads what is being brought (`shown`: the downloads page) is made again as it changes.
+  readonly #seen = new Marks();
   /// Stations not reached as a part was asked of them: none of theirs until they are (`stationBack`).
   readonly #away = new Set<string>();
   /// Files the station could not give for another reason: not again in this run.
@@ -124,6 +127,7 @@ export class Fill {
 
   /// What is left to bring as the pages list it, the one coming first (`downloads`' `keeping`).
   shown(): Record<string, unknown>[] {
+    this.#seen.read();
     const out: Record<string, unknown>[] = [];
     for (const f of this.#list) {
       const going = this.#going?.id === f.id ? this.#going : null;
@@ -186,7 +190,7 @@ export class Fill {
   }
 
   #changed(): void {
-    this.#inner.store.invalidateAll((topic) => topic.topic === "downloads");
+    this.#seen.touch();
   }
 
   /// Told again as one moves on a whole percent, or what it is doing changes.

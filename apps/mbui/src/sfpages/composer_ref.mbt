@@ -6,12 +6,7 @@
 ///|
 /// The card of file `id` in draft `w` pressed: its panel up, by `card` (its card's id).
 fn ref_panel(src : Source, w : Writing, station : String, id : String, name : String, card : Int) -> Unit {
-  ref_panel_from(src, w, station, id, name, Of(card))
-}
-
-///|
-fn ref_panel_from(src : Source, w : Writing, station : String, id : String, name : String, from : @sf.Anchor) -> Unit {
-  @sf.panel(name, fn(c, _) { ref_panel_body(c, src, w.key, station, id) }, from~)
+  @sf.panel(name, fn(c, _) { ref_panel_body(c, src, w.key, station, id) }, from=Of(card))
 }
 
 ///|
@@ -69,7 +64,7 @@ fn ref_panel_body(c : @ui.Ctx, src : Source, key : String, station : String, id 
 /// Draft `key`'s chat set to take them as files or not (AppState.setDropsAsFiles): its own say dropped when it is the
 /// device's anyway (prefs `dropAs`).
 fn set_drops_as_files(src : Source, key : String, on : Bool) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   let own : Json = if on == (text(prefs, "dropAs") == "file") { Json::null() } else { Json::boolean(on) }
   let files : Map[String, Json] = {}
   files[key] = own

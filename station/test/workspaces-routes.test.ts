@@ -1,4 +1,4 @@
-// One station in two workspaces (docs/multi-workspace.md), as the pages see it: a member of one workspace sees, reads and
+// One station in two workspaces, as the pages see it: a member of one workspace sees, reads and
 // changes only its chats; another workspace's sessions, chats and jobs are none for them (404), its changes are not told
 // on their event streams, and each workspace keeps its own archive policy. Chats from before (no workspace) are the
 // home workspace's. A real store and readers in a temporary data directory, a hub with runtimes scripted in-process.
@@ -120,7 +120,6 @@ test("another workspace's session, chat or job is none: 404 for each route that 
       ["POST", `/threads/${c.b.thread}/messages`, { text: "hello" }],
       ["PUT", `/threads/${c.b.thread}/read`, { n: 1 }],
       ["POST", `/threads/${c.b.thread}/archive`],
-      ["POST", `/threads/${c.b.thread}/publish/preview`, {}],
       ["GET", "/jobs/jb"],
       ["GET", "/jobs/jb/log"],
       ["POST", "/jobs/jb/stop"],

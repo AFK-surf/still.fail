@@ -1,4 +1,5 @@
 import {
   "stillfail/rules/form",
   "stillfail/rules/history",
+  "stillfail/rules/role",
 }

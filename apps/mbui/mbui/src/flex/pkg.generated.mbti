@@ -18,10 +18,29 @@ pub let counters : FixedArray[Int32]
 
 pub fn measured_height(Node, Double) -> Double
 
+pub fn measured_width(Node, Double) -> Double
+
+pub fn move_at(Double) -> Double
+
+pub let move_end : Double
+
+pub let move_k : Double
+
+pub let move_least_ms : Double
+
+pub let move_most_ms : Double
+
+pub fn move_ms(Double) -> Double
+
+pub let move_whole_frames_ms : Double
+
+pub fn performing() -> Bool
+
+pub fn relayout(Node) -> Unit
+
 // Errors
 
 // Types and methods
-#derive(Eq)
 pub(all) enum Align {
   Auto
   FlexStart
@@ -32,52 +51,46 @@ pub(all) enum Align {
   SpaceBetween
   SpaceAround
   SpaceEvenly
-}
+} derive(Eq)
 
 type Box
 
-#derive(Eq)
 pub(all) enum BoxSizing {
   BorderBox
   ContentBox
-}
+} derive(Eq)
 
-#derive(Eq)
 pub(all) enum Dim {
   Auto
   Pt(Double)
   Pct(Double)
   Within(Double)
-}
+} derive(Eq)
 
-#derive(Eq)
 pub(all) enum Display {
   Flex
   DisplayNone
   Contents
-}
+} derive(Eq)
 
-#derive(Eq)
 pub(all) enum FlexDirection {
   Column
   Row
   ColumnReverse
   RowReverse
-}
+} derive(Eq)
 
-#derive(Eq)
 pub(all) enum FlexWrap {
   NoWrap
   Wrap
   WrapReverse
-}
+} derive(Eq)
 
-#derive(Eq)
 pub(all) enum MeasureMode {
   Undefined
   Exactly
   AtMost
-}
+} derive(Eq)
 
 pub(all) struct Node {
   style : Style
@@ -98,6 +111,7 @@ pub(all) struct Node {
   mut box_ver : Int32
   mut dirty : Bool
   mut p_ok : Bool
+  mut room : Bool
   mut p_kw : Double
   mut p_kh : Double
   mut p_cbw : Double
@@ -109,24 +123,23 @@ pub(all) struct Node {
   mut skip_gen : Int32
 }
 pub fn Node::add(Self, Self) -> Unit
+pub fn Node::laid_given(Self) -> Bool
 pub fn Node::laid_out(Self) -> Bool
 pub fn Node::laid_out_at(Self) -> Int32
 pub fn Node::left_out(Self) -> Bool
 pub fn Node::new() -> Self
 
-#derive(Eq)
 pub(all) enum Overflow {
   Visible
   Hidden
   Scroll
-}
+} derive(Eq)
 
-#derive(Eq)
 pub(all) enum PositionType {
   Relative
   Absolute
   Static
-}
+} derive(Eq)
 
 pub(all) struct Style {
   mut display : Display
@@ -145,12 +158,18 @@ pub(all) struct Style {
   mut fits : Bool
   mut one_of : Bool
   mut fit_need : Double
-  mut fit_held : Bool
+  mut fit_whole : Bool
   mut soft_min : Double
   mut stretch_past_max : Bool
   mut min_held : Bool
   mut wrap_least : Bool
   mut content_share : Double
+  mut come_from : Double
+  mut come_to : Double
+  mut come_at : Double
+  mut come_now : Double
+  mut come_ends : Double
+  mut come_k : Double
   mut rows_grid : Double
   // private fields
 }

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { harness } from "./harness.ts";
 import type { AccountEvent } from "../src/types.ts";
+import { entryHash } from "../src/lock.ts";
+import { signer } from "./lock-signer.ts";
 
 type Harness = Awaited<ReturnType<typeof harness>>;
 const hex = (bytes: ArrayBuffer) => Buffer.from(bytes).toString("hex");
@@ -24,16 +27,12 @@ async function listen(h: Harness, token: string) {
   const ws = response.webSocket!;
   ws.accept();
   const got: AccountEvent[] = [];
-  let pong: (() => void) | null = null;
-  ws.addEventListener("message", (event) => (event.data === "pong" ? pong?.() : got.push(JSON.parse(event.data as string))));
+  ws.addEventListener("message", (event) => void (event.data === "pong" || got.push(JSON.parse(event.data as string))));
   return {
     ws,
-    // A pong comes after everything sent before it, so this sees every event of the call before.
+    // Every event of the calls before (h.heard).
     async take(): Promise<string[]> {
-      await new Promise<void>((resolve) => {
-        pong = resolve;
-        ws.send("ping");
-      });
+      await h.heard(ws);
       return got.splice(0).map((e) => JSON.stringify(e)).sort();
     },
   };
@@ -41,10 +40,9 @@ async function listen(h: Harness, token: string) {
 
 type Listener = Awaited<ReturnType<typeof listen>>;
 
-/** The Directory object (test/worker.ts): its presence sweep, and when a station's socket closing has been handled. */
-async function directory(h: Harness): Promise<{ sweepAt(ms: number): Promise<boolean>; left(station: string): Promise<void> }> {
-  const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
-  return directories.get(directories.idFromName("primary"));
+/** A station's object (test/worker.ts): its presence sweep, and when its socket closing has been handled. */
+async function stationObject(h: Harness, station: string): Promise<{ sweepAt(ms: number): Promise<boolean>; left(): Promise<void> }> {
+  return h.object("STATIONS", station);
 }
 
 /** Each listener got exactly these events (in any order); the rest got none. */
@@ -64,10 +62,9 @@ async function connectStation(h: Harness, station: Awaited<ReturnType<typeof key
   const ws = response.webSocket!;
   const frames: any[] = [];
   const closed = new Promise<number>((resolve) => ws.addEventListener("close", (event) => resolve(event.code), { once: true }));
-  let pong: (() => void) | null = null;
-  ws.addEventListener("message", (event) => (event.data === "pong" ? pong?.() : frames.push(JSON.parse(event.data as string))));
+  ws.addEventListener("message", (event) => void (event.data === "pong" || frames.push(JSON.parse(event.data as string))));
   ws.accept();
-  const ping = () => new Promise<void>((resolve) => { pong = resolve; ws.send("ping"); });
+  const ping = () => h.heard(ws);
   return { status: 101, ws, frames, closed, ping };
 }
 
@@ -83,7 +80,7 @@ async function enrollStation(h: Harness, owner: ReturnType<Harness["as"]>, works
   return station;
 }
 
-test("every change reaches exactly the accounts it affects", { timeout: 30000 }, async () => {
+test("every change reaches exactly the accounts it affects", async () => {
   const h = await harness();
   try {
     const tokens = { alice: await h.login("alice"), bob: await h.login("bob"), carol: await h.login("carol"), dave: await h.login("dave") };
@@ -208,10 +205,17 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     assert.deepEqual([seen.icon, seen.emoji], [null, null]);
 
     first.ws!.close(1000);
-    await (await directory(h)).left(station.id);
+    await (await stationObject(h, station.id)).left();
     await expect(on, {}, "nor does leaving");
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.equal(seen.last_seen, h.now(), "last here at");
+
+    // A picture of its own put up or taken away (own-picture.test.ts): its `/v1/me` changed, and the members lists it
+    // is in.
+    await bob("PUT", "/v1/me/picture", { picture: `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xe0]).toString("base64")}` });
+    await expect(on, { alice: [ws], bob: [list, ws] }, "own picture");
+    await bob("DELETE", "/v1/me/picture");
+    await expect(on, { alice: [ws], bob: [list, ws] }, "own picture taken away");
 
     // A leaver and a removed member hear of it too.
     assert.equal((await bob("DELETE", `/v1/workspaces/${w}/members/${bobSub}`)).status, 200);
@@ -244,7 +248,7 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
   }
 });
 
-test("a reconnect replaces the old station socket; a silent one is dropped", { timeout: 20000 }, async () => {
+test("a reconnect replaces the old station socket; a silent one is dropped", async () => {
   const h = await harness();
   try {
     const tokens = await h.login("alice");
@@ -257,8 +261,8 @@ test("a reconnect replaces the old station socket; a silent one is dropped", { t
     const first = await connectStation(h, station);
     const second = await connectStation(h, station);
     assert.equal(await first.closed, 4000);
-    const objects = await directory(h);
-    await objects.left(station.id);
+    const objects = await stationObject(h, station.id);
+    await objects.left();
     assert.deepEqual(await events.take(), [], "a station's socket tells no one");
 
     // The runtime answers a ping itself and notes when, on the machine's clock (as the sockets' times are): after
@@ -275,7 +279,7 @@ test("a reconnect replaces the old station socket; a silent one is dropped", { t
   }
 });
 
-test("sockets refuse bad credentials", { timeout: 20000 }, async () => {
+test("sockets refuse bad credentials", async () => {
   const h = await harness();
   try {
     const tokens = await h.login("alice");
@@ -328,7 +332,7 @@ test("station rosters stay workspace scoped and update when peers join or leave"
   } finally { await h.close(); }
 });
 
-test("a workspace's own relays: set by its managers, told to its stations and members after still.fail's, kept from others", { timeout: 20000 }, async () => {
+test("a workspace's own relays: set by its managers, told to its stations and members after still.fail's, kept from others", async () => {
   const h = await harness();
   try {
     const tokens = { alice: await h.login("alice"), bob: await h.login("bob") };
@@ -391,6 +395,49 @@ test("a workspace's own relays: set by its managers, told to its stations and me
     assert.deepEqual(((await (await alice("PUT", `/v1/workspaces/${w}/relays`, { relays: [] })).json()) as any).relays, []);
     await socket.ping!();
     assert.deepEqual(socket.frames!.at(-1).relay_urls, ours);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a release out, as the repository's releasing workflows say, is told to every device; nobody else can say it", async () => {
+  const { publicKey, privateKey } = await generateKeyPair("RS256");
+  const jwk = { ...(await exportJWK(publicKey)), kid: "actions", alg: "RS256", use: "sig" };
+  const h = await harness({ statusRepo: "o/r", push: () => ({ status: 200, body: JSON.stringify({ keys: [jwk] }) }) });
+  try {
+    const token = (claims: Record<string, unknown>, audience = h.origin) => new SignJWT({ repository: "o/r", workflow_ref: "o/r/.github/workflows/pipeline.yml@refs/heads/main", ...claims })
+      .setProtectedHeader({ alg: "RS256", kid: "actions" }).setIssuer("https://token.actions.githubusercontent.com").setAudience(audience).setIssuedAt().setExpirationTime("10 years").sign(privateKey);
+    const send = async (bearer: string | null) => (await h.fetch("/v1/releases/out", { method: "POST", headers: bearer ? { authorization: `Bearer ${bearer}` } : {} })).status;
+    const on = { alice: await listen(h, (await h.login("alice")).access_token), bob: await listen(h, (await h.login("bob")).access_token) };
+    await expect(on, {}, "signed in");
+    assert.equal(await send(null), 401);
+    assert.equal(await send(await token({ repository: "fork/r" })), 401);
+    assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/status-incidents.yml@refs/heads/main" })), 401);
+    assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/pipeline.yml@refs/heads/mine" })), 401);
+    assert.equal(await send(await token({}, "https://elsewhere.example")), 401);
+    await expect(on, {}, "refused");
+    assert.equal(await send(await token({})), 200);
+    assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/stable.yml@refs/heads/main" })), 200);
+    await expect(on, { alice: [{ type: "release" }, { type: "release" }], bob: [{ type: "release" }, { type: "release" }] }, "told");
+  } finally {
+    await h.close();
+  }
+});
+
+test("a workspace whose lock alone moved on says so in its event, its head with it: nothing for a device to ask again", async () => {
+  const h = await harness();
+  try {
+    const token = await h.login("alice");
+    const alice = h.as(token);
+    const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
+    const on = { alice: await listen(h, token.access_token) };
+    const g = await signer("alice").genesis(w);
+    assert.equal((await alice("POST", `/v1/workspaces/${w}/lock`, { entries: [g] })).status, 200);
+    const hash = await entryHash(g);
+    await expect(on, { alice: [{ type: "workspace", id: w, lock: { head: { seq: 0, hash, genesis: hash }, locked: true } }] }, "lock turned on");
+    // What else changes is told as before, to be read again.
+    await alice("PATCH", `/v1/workspaces/${w}`, { name: "House" });
+    await expect(on, { alice: [{ type: "workspaces" }, { type: "workspace", id: w }] }, "rename");
   } finally {
     await h.close();
   }

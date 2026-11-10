@@ -33,7 +33,7 @@ import java.util.UUID;
 
 /**
  * How long a switch between places on the bottom bar takes, and where the time goes, as still.fail's Android app times
- * it (BarTiming.kt; docs/telemetry.md → 安卓 {@code bar_switch}): from the finger lifted to the place's page on the
+ * it: from the finger lifted to the place's page on the
  * stack (src/sfapp go_place, told by src/stillfail/reports.mbt), to the end of the first frame's build that had it and
  * the frame after (handed to the display); and for each topic the page subscribed anew, how long the core took to give
  * its first value (taken and decoded on the UI's thread) and how big it was. Logged on the device ({@code adb logcat -s
@@ -70,6 +70,8 @@ final class BarTiming {
         final long at;
         long arrived;
         int bytes = -1;
+        /** Of a heavy value, where its bytes are: {path: bytes} as JSON (src/core/weights.mbt); "" none. */
+        String parts = "";
         boolean failed;
 
         Topic(String name, long at) {
@@ -187,8 +189,9 @@ final class BarTiming {
         }
     }
 
-    /** Its first message taken (decoded) at {@code now}: its value's size in bytes, or -1 (it could not be read). */
-    static void decoded(int id, int bytes, long now) {
+    /** Its first message taken (decoded) at {@code now}: its value's size in bytes, or -1 (it could not be read);
+     *  {@code parts}: of a heavy one, where its bytes are. */
+    static void decoded(int id, int bytes, String parts, long now) {
         synchronized (lock) {
             Switch s = on;
             if (s == null) return;
@@ -196,6 +199,7 @@ final class BarTiming {
             if (t == null || t.arrived != 0L) return;
             t.arrived = now;
             t.bytes = bytes;
+            t.parts = parts == null ? "" : parts;
             t.failed = bytes < 0;
             settle(s);
         }
@@ -254,6 +258,7 @@ final class BarTiming {
                     put(j, "core_ms", ms(t.at, t.arrived));
                     put(j, "tap_shown_ms", ms(s.tap, t.arrived));
                     if (t.bytes >= 0) j.put("bytes", t.bytes);
+                    if (!t.parts.isEmpty()) j.put("parts", new JSONObject(t.parts));
                     if (t.failed) j.put("failed", true);
                     ts.put(j);
                 }

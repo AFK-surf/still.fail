@@ -1,10 +1,10 @@
-// A chat's own find on the desktop (ember web/src/ChatFind.tsx, ChatFind.css.ts): ⌘F opens its bar in the chat's
+// A chat's own find on the desktop: ⌘F opens its bar in the chat's
 // bar, in place of its buttons, so it covers nothing of the chat. The core looks in all the chat's messages
 // (`chat.find`: those not in the window shown too, and with `bring` those not on the device), 120 ms after the last
 // key, answering which have the words and how many times; the list goes to the one the reader is at (the window moved
-// about it first where it is outside: `chat.around`), the words bold and a stroke under each, the one gone to drawn
-// in, the others' lighter. Enter the next, ⇧Enter the one before, Esc closes it; closed, what was looked for is
-// forgotten. The list it goes along is the page's (FindList).
+// about it first where it is outside: `chat.around`), the words bold, each coloured in with a highlighter and the
+// time the reader is at stroked under (search_marks.mbt). Enter the next, ⇧Enter the one before, Esc closes it;
+// closed, what was looked for is forgotten. The list it goes along is the page's (FindList).
 
 ///|
 /// What the core found (`chat.find`): the words looked for, the messages that have them (oldest first, each with how
@@ -22,7 +22,7 @@ pub(all) struct Found {
 /// was last asked of the core, what the core found (None nothing asked yet), the time the reader is at (which of its
 /// messages, which time in it), whether what is not on the device is being read.
 pub(all) struct Finding {
-  chat : @signals.Signal[String]
+  mut chat : String
   field : @ui.Field
   mut query : String
   asked : @signals.Signal[String]
@@ -37,7 +37,7 @@ pub(all) struct Finding {
 
 ///|
 pub let finding : Finding = {
-  chat: @signals.signal("", same=fn(a, b) { a == b }),
+  chat: "",
   field: @ui.Field::new(),
   query: "",
   asked: @signals.signal("", same=fn(a, b) { a == b }),
@@ -51,7 +51,7 @@ pub let finding : Finding = {
 }
 
 ///|
-/// The list the find goes along (the page's message list, ChatFind.tsx `virtual`): the messages showing (the first's
+/// The list the find goes along (the page's message list): the messages showing (the first's
 /// and the last's seq; -1 none), the list to a message with the words marked in it, its marks let go.
 pub(all) struct FindList {
   showing : () -> (Double, Double)
@@ -68,15 +68,15 @@ pub fn chat_key(r : ChatRef) -> String {
 ///|
 /// The chat ⌘F's bar is open in ("" none).
 pub fn find_chat() -> String {
-  finding.chat.get()
+  finding.chat
 }
 
 ///|
 /// ⌘F's bar open in the chat `key` (opened again: its field takes the keyboard again).
 pub fn find_open(c : @ui.Ctx, key : String) -> Unit {
-  if finding.chat.get() != key {
+  if finding.chat != key {
     find_close()
-    finding.chat.set(key)
+    finding.chat = key
   }
   c.focus_field(finding.field)
 }
@@ -84,7 +84,7 @@ pub fn find_open(c : @ui.Ctx, key : String) -> Unit {
 ///|
 /// ⌘F's bar closed: what it looked for forgotten (what the list marked for it is the page's to let go: FindList).
 pub fn find_close() -> Unit {
-  finding.chat.set("")
+  finding.chat = ""
   finding.field.set("")
   finding.query = ""
   finding.asked.set("")
@@ -100,7 +100,7 @@ pub fn find_close() -> Unit {
 ///|
 /// ⌘F's bar open in chat `key` with `words` typed (a screen's fixture).
 pub fn find_preset(key : String, words : String) -> Unit {
-  finding.chat.set(key)
+  finding.chat = key
   finding.field.set(words)
 }
 
@@ -108,7 +108,7 @@ pub fn find_preset(key : String, words : String) -> Unit {
 /// The words to mark in every message of chat `key` drawn now: what ⌘F found while its bar is open in it.
 pub fn find_words_in(key : String) -> Array[String] {
   match finding.found.get() {
-    Some(f) if finding.chat.get() == key => f.words
+    Some(f) if finding.chat == key => f.words
     _ => []
   }
 }
@@ -188,7 +188,7 @@ fn find_move(src : Source, key : String, list : FindList, by : Int) -> Unit {
   let n = finding.moves
   (src.call)("chat.find.go", Json::object(params), fn(res) {
     // (closed, typed on, or moved again since: an answer to what is no longer asked)
-    if finding.chat.get() != key || finding.moves != n {
+    if finding.chat != key || finding.moves != n {
       return
     }
     match (res, finding.found.get()) {
@@ -221,7 +221,7 @@ fn find_move(src : Source, key : String, list : FindList, by : Int) -> Unit {
 }
 
 ///|
-/// How long after the last key the chat is looked in (ChatFind.tsx TYPING_MS).
+/// How long after the last key the chat is looked in.
 pub let find_typing_ms : Double = 120.0
 
 ///|
@@ -250,7 +250,7 @@ fn find_ask(src : Source, station : String, thread : Double, key : String, list 
       },
       fn(res) {
         // (typed on since, or closed: an answer to what is no longer asked)
-        if finding.asked.get() != query || finding.chat.get() != key {
+        if finding.asked.get() != query || finding.chat != key {
           return
         }
         match res {
@@ -296,7 +296,7 @@ pub fn find_position() -> (Int, Int) {
 pub let find_key : String = "find/field"
 
 ///|
-/// How wide its field is (ChatFind.css.ts field: 320, less where the bar has less: 160 at least), and each of its
+/// How wide its field is (less where the bar has less: 160 at least), and each of its
 /// buttons (button: 26 square).
 let find_field_w : Double = 320.0
 
@@ -311,14 +311,14 @@ let find_button_w : Double = 26.0
 pub let find_field_h : Double = 32.0
 
 ///|
-/// How light the strokes under the words in the messages other than the one the reader is at are (ChatFind.css.ts: .45).
+/// How light the strokes under the words in the messages other than the one the reader is at are.
 pub let find_faint : Double = 0.45
 
 ///|
-/// The bar (ChatFind.css.ts bar): before the field what it did not look in, said while it is so; the field 320 wide, 32
+/// The bar: before the field what it did not look in, said while it is so; the field 320 wide, 32
 /// high, a line round it on the raised ground, a capsule (so in a panel's corner where its shape is concentric); the
 /// words typed in 14, which of how many in 12, the one before, the next, close: 26 round, concentric in its end, the
-/// ground on hover. Opened, it fades in (kit's tip_in, ChatFind.css.ts bar's 120 ms); closed, it goes at once.
+/// ground on hover. Opened, it fades in (kit's tip_in); closed, it goes at once.
 pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : FindList) -> Unit {
   let t = @sf.theme()
   let key = chat_key(r)
@@ -337,8 +337,12 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
       _ => ()
     }
     c.box(style=find_field_style, fn() {
-      // ⇧Enter: the one before (read before the field takes it as its Enter)
-      let back = c.key_pressed(@ui.key_code_enter, mods=@ui.mod_shift_key, in_field=true)
+      // ⇧Enter: the one before, as it comes, before the field takes it as its Enter (Ctx::on_key)
+      c.on_key(c.id(find_key), fn(code, mods) {
+        guard code == @ui.key_code_enter && mods == @ui.mod_shift_key else { return false }
+        find_move(src, key, list, -1)
+        true
+      })
       let res = c.editor(
         find_key,
         placeholder=@sf.t("web-main.find.placeholder"),
@@ -351,8 +355,10 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
         caret_color=t.p.accent,
         enter_sends=true,
         field=finding.field,
+        // Enter: the next one, as it is pressed
+        on_submit=fn(_) { find_move(src, key, list, 1) },
       )
-      // (⇧Enter put a new line in it: taken out)
+      // (a new line put in it otherwise: taken out)
       let typed = res.text.replace_all(old="\n", new="")
       finding.query = typed
       // looked for 120 ms after the last key; none typed, nothing found at once
@@ -361,13 +367,6 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
         // (asked once the frame's builds are over)
         finding.asked.set(typed)
         c.tell("find/ask/" + typed, fn() { find_ask(src, r.station, thread, key, list, typed) })
-      }
-      if back || res.submitted is Some(_) {
-        if back {
-          finding.field.set(typed)
-        }
-        let by = if back { -1 } else { 1 }
-        c.tell("find/move", fn() { find_move(src, key, list, by) })
       }
       let (at, total) = find_position()
       match finding.found.get() {
@@ -383,16 +382,12 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
       }
       // (as far apart as makes each a press's room across: @sf.keys_row)
       c.box(style=@sf.keys_row(size=find_button_w), fn() {
-        if find_button(c, "find/prev", "chevron-up", @sf.t("web-main.find.prev"), total > 0) {
-          c.tell("find/move", fn() { find_move(src, key, list, -1) })
-        }
-        if find_button(c, "find/next", "chevron-down", @sf.t("web-main.find.next"), total > 0) {
-          c.tell("find/move", fn() { find_move(src, key, list, 1) })
-        }
-        if find_button(c, "find/close", "close", @sf.t("web-main.find.close"), true) {
+        find_button(c, "find/prev", "chevron-up", @sf.t("web-main.find.prev"), total > 0, fn() { find_move(src, key, list, -1) })
+        find_button(c, "find/next", "chevron-down", @sf.t("web-main.find.next"), total > 0, fn() { find_move(src, key, list, 1) })
+        find_button(c, "find/close", "close", @sf.t("web-main.find.close"), true, fn() {
           (list.forget)()
           find_close()
-        }
+        })
       })
       |> ignore
     })
@@ -403,8 +398,8 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
 
 ///|
 /// One of the bar's buttons, named for a screen reader and in its tip under it; not pressed while `on` is false (drawn
-/// fainter). True on the frame after a press.
-fn find_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bool) -> Bool {
+/// fainter); pressed, `on_press` (as it is let go: Ctx::on_press).
+fn find_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bool, on_press : () -> Unit) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   let b = c.box(style=if on { find_button_style } else { find_button_off }, id~, fn() {
@@ -412,7 +407,9 @@ fn find_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bo
   })
   c.semantics(b, Button, id~, label~)
   @sf.tip(c, key, id, label, side=Bottom)
-  on && c.clicked(id)
+  if on {
+    c.on_press(id, on_press)
+  }
 }
 
 ///|

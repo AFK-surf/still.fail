@@ -1,4 +1,4 @@
-// Approving a new device face to face (docs/workspace-lock.md 新设备): a code shown on a trusted device, typed on the
+// Approving a new device face to face ( 新设备): a code shown on a trusted device, typed on the
 // new one, proved over the connection between them without being sent. The two run CPace (draft-irtf-cfrg-cpace) on
 // ristretto255: each picks a secret, sends its share of a generator made from the code and from who the two are as
 // each sees the connection; the same code and the same two ends give the same key, which each proves with a MAC.

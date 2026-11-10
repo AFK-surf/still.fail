@@ -1,10 +1,10 @@
-// The agents' tools for their conversations (the Rust station's hub.rs `tools`): chat_post, chat_state, chat_history,
+// The agents' tools for their conversations: chat_post, chat_state, chat_history,
 // chat_leave, chat_list, chat_read, session_send, session_history, and chat_create (sessions/opened.ts), which came after the Rust.
 // Names, descriptions and input schemas are the Rust station's, byte for byte (test/hub-tools.test.ts reads them from
 // hub.rs and compares); what they do is src/sessions/.
 import { sandboxed } from "../agents/sandbox.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
-import { chatHistory, chatLeave, chatPost, chatState, mayStage, fromSandbox, staged, target } from "../sessions/conversations.ts";
+import { chatHistory, chatLeave, chatPost, chatState, mayStage, fromSandbox, staged, target, unheld, NOT_POSTED } from "../sessions/conversations.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { sessionSend } from "../sessions/messages.ts";
 import { chatCreate } from "../sessions/opened.ts";
@@ -18,13 +18,17 @@ import { slackTools } from "./slack.ts";
 export const CHAT_POST = {
   name: "chat_post",
   description:
-    "Post a message to one of your conversations, in Markdown (a Slack thread and a Feishu chat draw it too; mentions and files differ: see Formatting in your instructions). With only to and title, name the conversation without posting a message or ending the turn. Users always have a chat input box and can reply freely. When you ask people to choose among answers you can name or to confirm one, carry it as a card (options, a single one is fine), and a field (text) when they must write a value; no filler options or unnecessary questions. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished: done says why, with the evidence) or need_human (a person has to give, do or decide something: need says what; after posting a card, this is how the turn ends).",
+    "Post a message to one of your conversations, in Markdown (a Slack thread and a Feishu chat draw it too; mentions and files differ: see Formatting in your instructions). With only to and title, name the conversation without posting a message or ending the turn. Users always have a chat input box and can reply freely. When you ask people to choose among answers you can name or to confirm one, carry it as a card (options, a single one is fine), and a field (text) when they must write a value; no filler options or unnecessary questions. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished: done says why, with the evidence) or need_human (a person has to give, do or decide something: need says what; after posting a card, this is how the turn ends). If messages you had not read came in that thread first, the post is held back, not sent: read them, then send it as written by its id (send) or post what fits now.",
   inputSchema: {
     "type": "object",
     "properties": {
       "to": {
         "type": "string",
         "description": "CHANNEL/THREAD_TS: the thread attribute of the message you are answering."
+      },
+      "send": {
+        "type": "string",
+        "description": "Send a post held back as written: the id its chat_post answered when messages you had not read came in its thread first. Give only to, send and the state the turn now ends with (kind, need, done, about); its text, files, card and title are the held post's. If more unread messages came meanwhile, it is held again under the same id."
       },
       "withdraw": {
         "type": "string",
@@ -67,7 +71,7 @@ export const CHAT_POST = {
       },
       "card": {
         "type": "object",
-        "description": "What people answer this message with, shown in the chat and in their 待处理 until they look at it. {\"type\": \"options\", \"options\": [...]} offers 1 to 6 choices (recommend one if you can); the recommended one is shown last. Keep any choices listed in the message in the same order. {\"type\": \"text\", \"placeholder\": \"…\"} asks for a value or name. {\"type\": \"login\", \"login\": \"<id>\"} is for a login started by the login tool. An option with action=close ends the wait silently; other card answers reach you as a message quoting the question. Any later message from a person also closes the card, but can be a clarification rather than a decision: the station tells you which card ended. If the decision is still needed, ask it again with a new card. A newer card replaces the previous one. The card does not end your turn: record need_human (with need) when a person must decide.",
+        "description": "What people answer this message with, shown in the chat and in their 待处理 until they look at it. {\"type\": \"options\", \"options\": [...]} offers 1 to 6 choices (recommend one if you can); the recommended one is shown last. Keep any choices listed in the message in the same order. {\"type\": \"text\", \"placeholder\": \"…\"} asks for a value or name. {\"type\": \"login\", \"login\": \"<id>\"} is for a login started by the login tool. An option with action=close ends the wait silently (the choice is told to you with what you are next handed, as an earlier one); other card answers reach you as a message quoting the question. Any later message from a person also closes the card, but can be a clarification rather than a decision: the station tells you which card ended. If the decision is still needed, ask it again with a new card. A newer card replaces the previous one. The card does not end your turn: record need_human (with need) when a person must decide.",
         "properties": {
           "type": {
             "type": "string",
@@ -109,7 +113,7 @@ export const CHAT_POST = {
                     "reply",
                     "close"
                   ],
-                  "description": "Default reply sends the selected label to you. close ends this need_human without a message or waking you; use only when choosing it needs no further work (e.g. 不需要部署)."
+                  "description": "Default reply sends the selected label to you. close ends this need_human without a message or waking you: you are told the choice later, with what you are next handed, so use it only when choosing it needs no further work (e.g. 不需要部署)."
                 }
               },
               "required": [
@@ -156,7 +160,7 @@ export const CHAT_POST = {
                 "reply",
                 "close"
               ],
-              "description": "Default reply sends the selected label to you. close ends this need_human without a message or waking you; use only when choosing it needs no further work (e.g. 不需要部署)."
+              "description": "Default reply sends the selected label to you. close ends this need_human without a message or waking you: you are told the choice later, with what you are next handed, so use it only when choosing it needs no further work (e.g. 不需要部署)."
             }
           },
           "required": [
@@ -393,7 +397,7 @@ export const CHAT_CREATE = {
       },
       "effort": {
         "type": "string",
-        "description": "Its agent's reasoning effort. Default: its model's."
+        "description": "Its agent's reasoning effort. Default: the one the person it goes to has opened most chats with on that runtime and model there lately, else its model's."
       },
       "files": {
         "type": "array",
@@ -487,9 +491,11 @@ export function chatTools(hub: Hub): Tool[] {
         try {
           stillfail = target(hub, key, args.to).thread.surface === STILLFAIL_SURFACE;
         } catch {}
-        const said = await withStaged(hub, key, args, stillfail, (a) => chatPost(hub, key, a));
+        // A held post sent by its id is staged again, as it was written.
+        const held = unheld(hub, key, args);
+        const said = await withStaged(hub, key, held.args, stillfail, (a) => chatPost(hub, key, a, held));
         // A turn ended all_done (or final from before): whether the chat is finished is asked in the background.
-        if (args.kind === "all_done" || args.kind === "final") suggestArchive(hub, key);
+        if ((args.kind === "all_done" || args.kind === "final") && !said.startsWith(NOT_POSTED)) suggestArchive(hub, key);
         return said;
       },
     },
@@ -497,7 +503,7 @@ export function chatTools(hub: Hub): Tool[] {
     { ...CHAT_STATE, run: (key, args) => chatState(hub, key, args) },
     { ...CHAT_LEAVE, run: async (key, args) => chatLeave(hub, key, args) },
     { ...CHAT_HISTORY, run: (key, args) => chatHistory(hub, key, args) },
-    { ...CHAT_LIST, run: async (key, args) => chatList(hub, key, args) },
+    { ...CHAT_LIST, run: async (key, args, signal) => chatList(hub, key, args, signal) },
     { ...CHAT_READ, run: (key, args) => afar(hub, key, "chat_read", args) ?? chatRead(hub, key, args, undefined, scopeOf(hub, key)) },
     { ...SESSION_SEND, run: (key, args) => withStaged(hub, key, args, false, (a) => sessionSend(hub, key, a)) },
     { ...CHAT_CREATE, run: (key, args) => withStaged(hub, key, args, false, (a) => chatCreate(hub, key, a)) },

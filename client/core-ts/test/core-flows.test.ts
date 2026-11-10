@@ -1,5 +1,5 @@
 // The Rust core's core/tests.rs, the rest ported (same names; the checks as the TS core's design has them, its
-// deliberate differences in docs/core-ts.md): workspaces kept apart, the beta channel, previews, traces, choices,
+// deliberate differences): workspaces kept apart, the beta channel, previews, traces, choices,
 // drafts, decisions, the chat list's local overlays, jobs, the archive, forms, the changelog.
 import assert from "node:assert/strict";
 import { Effect, Queue } from "effect";
@@ -15,19 +15,21 @@ import { name as brandName } from "../src/brand.ts";
 import { Core } from "../src/core.ts";
 const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
+import { SOCKET_RETRY_MS } from "../src/sync/cloud.ts";
 import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
 import { base, entry, overview, session, started, stationHost, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
-import { tokensOf } from "../src/forms.ts";
+import { ConnectFlows, pickOf, tokensOf } from "../src/forms.ts";
 import * as present from "../src/present.ts";
 import { PUSH_KEY } from "../src/attention.ts";
 import { dbName, SOON_MS } from "../src/data.ts";
 import { PENDING_PREFIX } from "../src/views/local.ts";
 import { encode } from "../src/ops.ts";
 import { EXPORT_MS } from "../src/trace.ts";
+import { takeAll } from "./adb-personal-stub.ts";
 
 /// A draft as written, without the name the core gives it (its own test: draft-id.test.ts).
 const noId = ({ id: _, ...d }: any) => d;
@@ -175,6 +177,78 @@ test("a_beta_app_says_so_and_an_account_not_let_in_is_blocked", async () => {
   core.close();
 });
 
+test("the_list_changed_reads_the_account_and_the_workspaces_new_to_it_alone", async () => {
+  // A member added: the cloud tells the list changed and the workspace changed. Each of the person's devices read
+  // /v1/me, its sign-ins, an operator's lists and the workspace twice more besides: seven of them used up the
+  // account's 120 requests a minute, and the owner's next call was refused (the locks' end to end, 2026-11-10).
+  const host = new FakeHost();
+  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "a", "r", nowS(host) + 3600)]);
+  let listed = [{ id: "ws", name: "W" }];
+  host.onFetch((req) => {
+    const path = req.url.replace("https://stillfail.test", "");
+    if (path === "/v1/me") return jsonResponse(200, { user: { sub: "s1" }, workspaces: listed, invitations: [], relay_url: "https://relay.test" });
+    if (path.startsWith("/v1/workspaces/")) return jsonResponse(200, { id: path.split("/")[3], name: "W", role: "owner", members: [], stations: [], invitations: [] });
+    if (path === "/v1/auth/sessions") return jsonResponse(200, { sessions: [] });
+    return jsonResponse(404, { error: "not_found" });
+  });
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "workspaces" });
+  await host.settle();
+  const asked = () => host.requests.splice(0).map((r) => `${r.method} ${r.url.replace("https://stillfail.test", "")}`).filter((r) => r.includes("/v1/") && !r.includes("/v1/telemetry") && !r.includes("/v1/events")).sort();
+  assert.ok(asked().includes("GET /v1/workspaces/ws"), "read as it was first shown");
+  // A member added to ws: the list and the workspace told.
+  host.socketSend("/v1/events", '{"type":"workspaces"}');
+  host.socketSend("/v1/events", '{"type":"workspace","id":"ws"}');
+  await host.settle();
+  assert.deepEqual(asked(), ["GET /v1/me", "GET /v1/workspaces/ws"]);
+  // A workspace made: the one new to the list read too.
+  listed = [...listed, { id: "ws2", name: "W2" }];
+  host.socketSend("/v1/events", '{"type":"workspaces"}');
+  await host.settle();
+  assert.deepEqual(asked(), ["GET /v1/me", "GET /v1/workspaces/ws2"]);
+  core.close();
+});
+
+test("a_release_missed_while_the_events_socket_was_closed_is_read_again_and_the_app_told", async () => {
+  // A Mac asleep through a release: the feed's newest was kept from before, so the app got that build ready, put it in
+  // as it quit, and updated again once the new one read the feed (2026-11-09, pengxiao).
+  const host = new FakeHost();
+  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "a", "r", nowS(host) + 3600)]);
+  let out = 1200;
+  host.onFetch((req) => {
+    const path = req.url.replace("https://stillfail.test", "");
+    if (path === "/v1/me") return jsonResponse(200, { user: { sub: "s1" }, workspaces: [], invitations: [], relay_url: "https://relay.test" });
+    if (path === "/releases/mac/latest.json") return jsonResponse(200, { versionCode: out, versionName: `0.1.${out}`, file: `mac/stillfail-${out}.zip`, sha256: "ab", size: 9 });
+    return jsonResponse(404, { error: "not_found" });
+  });
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "releases" });
+  await host.settle();
+  apply(host, values);
+  const told = v(values, 1).told;
+  assert.equal((await ask(host, core, ui, 2, "app.update", { platform: "mac", versionCode: 1100 })).versionCode, 1200);
+  // Told of a release: read again, and the app told.
+  out = 1250;
+  host.socketSend("/v1/events", '{"type":"release"}');
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).told, told + 1);
+  assert.equal((await ask(host, core, ui, 3, "app.update", { platform: "mac", versionCode: 1100 })).versionCode, 1250);
+  // The socket closed through the next release: none said, so read again as it opens again.
+  host.socketClose("/v1/events");
+  out = 1300;
+  await host.time.pass(SOCKET_RETRY_MS * 2, 50);
+  await host.settle();
+  apply(host, values);
+  assert.equal(host.openSockets("/v1/events"), 1);
+  assert.equal(v(values, 1).told, told + 2);
+  assert.equal((await ask(host, core, ui, 4, "app.update", { platform: "mac", versionCode: 1100 })).versionCode, 1300);
+  core.close();
+});
+
 test("an_app_of_its_own_on_the_test_channel_reads_its_changelog_is_named_still_fail_and_takes_its_own_feed", async () => {
   // still.fail mbui: a build of every commit, the test channel's, but not youdid.wtf
   const host = new FakeHost();
@@ -254,7 +328,7 @@ test("a capacity notice and its cancel action pass through the real core", async
 });
 
 test("a_chat_opening_is_one_trace_its_requests_carry_and_ember_cloud_gets", async () => {
-  // Deliberately otherwise (docs/core-ts.md, rule 6): a chat opening reads only what is held, so it asks the station
+  // Deliberately otherwise (rule 6): a chat opening reads only what is held, so it asks the station
   // nothing; what the Rust core's chat.open traced is the station's own reading, one trace from its connecting on.
   const { host, core } = await started({ ...base(), "GET /memory": { global: "" } }, 1);
   const ui = core.connect();
@@ -626,6 +700,27 @@ test("sending_to_an_archived_chat_restores_it_before_delivery_and_keeps_a_failed
   core.close();
 });
 
+test("a_message_in_the_outbox_carries_its_words_in_runs_as_its_message_will", async () => {
+  const thread = threadView(7, 0);
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [thread],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [], thread },
+  });
+  stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? status(500, { error: "busy" }) : undefined));
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", session: "k1" });
+  await host.settle();
+  call(core, ui, 2, "chat.send", { station: "ws/st", thread: 7, text: "看 [首页](https://app.still.fail/w/ws/s/st/chats/s-c2) 吧" });
+  await host.settle();
+  apply(host, values);
+  // What the page draws while it is in the outbox: the reference, never `[首页](…)` as written.
+  const pending = v(values, 1).outbox[0];
+  assert.deepEqual(pending.words.map((r: J) => [r.text, r.ref ?? false]), [["看 ", false], ["首页", true], [" 吧", false]]);
+  core.close();
+});
+
 test("two_messages_sent_during_a_restore_do_not_lose_the_second_if_the_first_restore_fails", async () => {
   const thread: J = { ...threadView(7, 0), hiddenAt: 42 };
   const { host, core } = await started({
@@ -938,6 +1033,8 @@ async function choosing(speed = false, profileFast = false, sessionFast: boolean
     "GET /overview": {
       ...overview,
       sessionRuntimeChange: switchRuntime,
+      connectRuntimeChange: switchRuntime,
+      connects: [{ id: "c1", name: "c1", kind: "slack", mode: "multi-session", requireMention: true, enabled: true, bind: { runtime: "claude", model: "claude-opus-5-5" }, connection: { state: "connected" }, slack: { appToken: "", botToken: "" }, sessions: 0 }],
       profiles: [
         profile("p1", "claude", ["claude-opus-5-5", "claude-sonnet-5"], false, 10),
         profile("p2", "claude", ["claude-opus-5-5"], true, 80),
@@ -949,8 +1046,27 @@ async function choosing(speed = false, profileFast = false, sessionFast: boolean
     "GET /machine-sessions": { sessions: [{ runtime: "codex", id: "m1", cwd: "/Users/bob/src/x", updatedAt: 0 }] },
     "POST /profiles/p1/check": { state: "ok", detail: "", checkedAt: 2 },
     "POST /sessions/k1/settings": { ok: true },
+    "PUT /connects/c1": { ok: true },
   });
 }
+
+test("a disabled unchecked profile is checked only once it is enabled", async () => {
+  const p = profile("p1", "claude", ["claude-opus-5-5"], false, 0, { enabled: false });
+  const { host, core } = await started({
+    ...base(),
+    "GET /overview": { ...overview, profiles: [p] },
+    "POST /profiles/p1/check": { state: "ok", detail: "", checkedAt: 2 },
+  });
+  try {
+    const ui = core.connect();
+    subscribe(core, ui, 1, { topic: "newChat", scope: "ws" });
+    await host.settle();
+    assert.equal(stationPosted(host, "/profiles/p1/check").length, 0);
+    core.inner.data.set({ topic: "overview", station: "ws/st" }, { ...overview, profiles: [{ ...p, enabled: true }] });
+    await host.settle();
+    assert.equal(stationPosted(host, "/profiles/p1/check").length, 1);
+  } finally { core.close(); }
+});
 
 test("a_new_chat_is_made_under_the_key_its_page_had_before_it_was_made_and_its_page_reads_it_so_at_once", async () => {
   const { host, core } = await choosing();
@@ -1032,6 +1148,11 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   const option = (n: number, model: string) => v(values, n).options.find((o: J) => o.model === model);
   // (as it last ran: a field none is left out of the topic)
   const ran = (o: J) => ["runtime", "effort", "fast"].map((f) => o.usual?.[f] ?? null);
+  // (none starred: a starred one is listed among those starred, not here)
+  for (const [n, m] of [[7, "claude-opus-5-5"], [8, "claude-sonnet-5"], [9, "gpt-6-astra"]] as const) {
+    await ask(host, core, ui, n, "pick.like", { station: "ws/st", of: "new", model: m, liked: false });
+  }
+  apply(host, values);
   assert.deepEqual(v(values, 1).near, [], "nothing used here yet");
   assert.equal(option(1, "gpt-6-astra").usual ?? null, null);
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
@@ -1080,7 +1201,7 @@ test("the_model_control_lists_the_starred_after_those_used_most_and_every_model_
   assert.deepEqual(v(values, 1).liked, [], "once changed, as changed");
   // the makers of its models, in their models' order, each with how many
   assert.deepEqual(v(values, 1).makers.map((k: J) => [k.id, k.title, k.count]), [["anthropic", "Anthropic", 2], ["openai", "OpenAI", 1]]);
-  // starred, in the order starred; one used most is not listed again
+  // starred, in the order starred; one used most stays among them and is not listed among those used most again
   await ask(host, core, ui, 2, "pick.like", { station: "ws/st", of: "new", model: "claude-sonnet-5", liked: true });
   await ask(host, core, ui, 3, "pick.like", { station: "ws/st", of: "new", model: "gpt-6-astra", liked: true });
   apply(host, values);
@@ -1090,13 +1211,14 @@ test("the_model_control_lists_the_starred_after_those_used_most_and_every_model_
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: null });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 1).near, ["gpt-6-astra"]);
-  assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5"]);
-  // unstarred
-  await ask(host, core, ui, 4, "pick.like", { station: "ws/st", of: "new", model: "claude-sonnet-5", liked: false });
+  assert.deepEqual(v(values, 1).near, []);
+  assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5", "gpt-6-astra"]);
+  // unstarred: back among those used most
+  await ask(host, core, ui, 4, "pick.like", { station: "ws/st", of: "new", model: "gpt-6-astra", liked: false });
   apply(host, values);
-  assert.deepEqual(v(values, 1).liked, []);
-  assert.equal(option("gpt-6-astra").liked, true, "still starred, listed among those used most");
+  assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5"]);
+  assert.deepEqual(v(values, 1).near, ["gpt-6-astra"]);
+  assert.equal(option("gpt-6-astra").liked, false);
   core.close();
 });
 
@@ -1186,6 +1308,36 @@ test("a chat can switch runtime through its model control when its station suppo
   assert.equal(v(values, 1).draft.runtime, "codex");
   await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "session:k1" });
   assert.deepEqual(stationPosted(host, "/sessions/k1/settings"), [{ runtime: "codex", model: "gpt-6-astra", effort: null, profile: null }]);
+  core.close();
+});
+
+test("a connect can switch runtime through its model control when its station supports it", async () => {
+  const { host, core } = await choosing(false, false, null, true);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "connect:c1" });
+  subscribe(core, ui, 2, { topic: "connects", scope: "ws" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).runtimeFixed, false);
+  assert.ok(v(values, 1).options.some((o: J) => o.model === "gpt-6-astra"), "the other runtime's models are offered");
+  assert.equal(v(values, 2).items[0].runtimeChanges, true);
+  await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "connect:c1", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "connect:c1" });
+  const put = host.requests.filter((r) => r.method === "PUT" && r.url.endsWith("/admin/api/connects/c1")).map((r) => JSON.parse(new TextDecoder().decode(r.body!)));
+  assert.deepEqual(put, [{ bind: { model: "gpt-6-astra", effort: "", profile: null, runtime: "codex" } }]);
+  core.close();
+});
+
+test("a connect stays on its runtime on a station from before", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "connect:c1" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.equal(v(values, 1).runtimeFixed, true);
+  assert.ok(!v(values, 1).options.some((o: J) => o.model === "gpt-6-astra"));
   core.close();
 });
 
@@ -1484,7 +1636,7 @@ test("a_workspace_goes_back_to_its_new_chat_once_one_shows_after_a_chat_and_so_w
 test("what_two_chats_agents_wrote_each_other_is_not_in_the_chat_but_on_its_letters_page_by_the_other_chat", async () => {
   const said = (n: number, over: J = {}) => ({ thread: 7, n, kind: "message", ts: `${n}.0`, authorKind: "agent", author: "k1", authorName: null, text: "好", at: n, ...over });
   const backups = { title: "备份", link: "https://x/o/w/s/b" };
-  const coming = (n: number, text: string) => said(n, { author: "peer/ember:c-9", text: `来自 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "in", ...backups } });
+  const coming = (n: number, text: string) => said(n, { author: "peer/chat:c-9", text: `来自 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "in", ...backups } });
   const going = (n: number, text: string) => said(n, { text: `发给 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "out", ...backups } });
   const { host, core } = await started({
     ...base(),
@@ -1492,7 +1644,7 @@ test("what_two_chats_agents_wrote_each_other_is_not_in_the_chat_but_on_its_lette
     "GET /threads/7/entries?limit=50": { first: 1, last: 8, entries: [
       said(1, { authorKind: "person", author: "me@x", text: "改备份" }), coming(2, "脚本放好了"), going(3, "已替换"), said(4),
       // From a station before letters were marked: known by its heading.
-      said(5, { author: "peer/ember:c-8", text: "来自 [部署](https://x/o/w/s/d)：\n\n部署好了" }),
+      said(5, { author: "peer/chat:c-8", text: "来自 [部署](https://x/o/w/s/d)：\n\n部署好了" }),
       coming(6, "**补充**一点\n\n第二段"),
       // The chat's own agent quoting one in the chat says it in the chat.
       said(7, { text: "来自 [备份](https://x/o/w/s/b)：\n\n它的 agent 说了这句" }), said(8),
@@ -1533,7 +1685,7 @@ test("letters_kept_in_their_own_log_are_no_entries_of_the_chat_and_its_letters_p
   // the chat's entries are what it shows, its latest page its latest messages.
   const said = (n: number, over: J = {}) => ({ thread: 7, n, kind: "message", ts: `${n}.0`, authorKind: "agent", author: "k1", authorName: null, text: "好", at: n * 10, ...over });
   const backups = { title: "备份", link: "https://x/o/w/s/b" };
-  const coming = (n: number, at: number, text: string) => ({ ...said(n, { author: "peer/ember:c-9", text: `来自 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "in", ...backups } }), ts: `l${n}`, at });
+  const coming = (n: number, at: number, text: string) => ({ ...said(n, { author: "peer/chat:c-9", text: `来自 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "in", ...backups } }), ts: `l${n}`, at });
   const going = (n: number, at: number, text: string) => ({ ...said(n, { text: `发给 [备份](https://x/o/w/s/b)：\n\n${text}`, letter: { way: "out", ...backups } }), ts: `l${n}`, at });
   const s = await started({
     ...base(),
@@ -1719,7 +1871,7 @@ test("a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_statio
     const path = req.url.replace("https://stillfail.test/admin/api", "");
     if (req.method === "POST" && path === "/sessions") {
       if (!up) return undefined;
-      return { key: "ember:c-1", thread: { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "ember:c-1", connect: "ember", joinedAt: 1 }] } };
+      return { key: "chat:c-1", thread: { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "chat:c-1", connect: "ember", joinedAt: 1 }] } };
     }
     if (req.method === "POST" && path === "/threads/9/messages") return { n: 1 };
     return undefined;
@@ -1747,7 +1899,7 @@ test("a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_statio
   assert.deepEqual([sent.text, sent.client], ["修一下登录", "android 0.1.1123"]);
   // The page is the station's chat now, under the key it was opened with, and says the one the station gave it.
   apply(host, values);
-  assert.deepEqual([v(values, 2).pending, v(values, 2).key], [false, "ember:c-1"]);
+  assert.deepEqual([v(values, 2).pending, v(values, 2).key], [false, "chat:c-1"]);
   core.close();
 });
 
@@ -1787,8 +1939,8 @@ test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_a
   // What a new chat changes is read again as its first message goes: the station as it was then, its agent not at work
   // yet. On a slow link that came after the station told the agent at work, and had it at rest again: no activity, no
   // mark, for the whole of its turn (2026-10-25). What was told after a read was asked is no older than what it brings.
-  const made = { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "ember:c-1", connect: "ember", joinedAt: 1 }] };
-  const atRest = session("ember:c-1");
+  const made = { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "chat:c-1", connect: "ember", joinedAt: 1 }] };
+  const atRest = session("chat:c-1");
   const working = { ...atRest, process: "running", running: true, turns: 1, lastTurn: { id: "t1", kind: "input", startedAt: 5, endedAt: null } };
   const row = (id: string, session: string, thread: number, agents: J[]) => ({ id, session, thread, title: "新对话", agents, last: null, unread: false, mine: true, lastActiveAt: thread, connect: null, origin: null });
   const answers: J = { ...base(), "GET /chats": [row("7", "k1", 7, [])] };
@@ -1797,13 +1949,13 @@ test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_a
   // The station as it is at each moment: what a read is answered with is what it had as it was asked.
   const now = (agent: J) => {
     answers["GET /sessions"] = [session("k1"), agent];
-    answers["GET /sessions/ember%3Ac-1"] = { session: agent, threads: [], turns: agent.lastTurn ? [agent.lastTurn] : [], jobs: [] };
-    answers["GET /chats"] = [row("7", "k1", 7, []), row("9", "ember:c-1", 9, [agent])];
+    answers["GET /sessions/chat%3Ac-1"] = { session: agent, threads: [], turns: agent.lastTurn ? [agent.lastTurn] : [], jobs: [] };
+    answers["GET /chats"] = [row("7", "k1", 7, []), row("9", "chat:c-1", 9, [agent])];
   };
   answers["GET /threads/9"] = { ...made, last: 1 };
   stationReplies(host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
-    if (req.method === "POST" && path === "/sessions") return { key: "ember:c-1", thread: made };
+    if (req.method === "POST" && path === "/sessions") return { key: "chat:c-1", thread: made };
     if (req.method === "POST" && path === "/threads/9/messages") return { n: 1 };
     return undefined;
   });
@@ -1821,7 +1973,7 @@ test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_a
   // Its agent begins: the station tells it, and has it so from now.
   now(working);
   s.push("session", working);
-  s.push("chat", row("9", "ember:c-1", 9, [working]));
+  s.push("chat", row("9", "chat:c-1", 9, [working]));
   await host.settle();
   subscribe(core, ui, 4, { topic: "chat", station: "ws/st", thread: 9 });
   await host.settle();
@@ -1838,7 +1990,7 @@ test("what_waited_for_a_new_chat_goes_as_soon_as_it_is_made_not_after_the_lists_
   const { host, core } = await started();
   stationReplies(host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
-    if (req.method === "POST" && path === "/sessions") return { key: "ember:c-1", thread: { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "ember:c-1", connect: "ember", joinedAt: 1 }] } };
+    if (req.method === "POST" && path === "/sessions") return { key: "chat:c-1", thread: { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "chat:c-1", connect: "ember", joinedAt: 1 }] } };
     if (req.method === "POST" && path === "/threads/9/messages") return { n: 1 };
     return undefined;
   });
@@ -2061,15 +2213,21 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   ui = core.connect();
   await ask(host, core, ui, 3, "client.device", { app: "android", build: "0.1.1335" });
   subscribe(core, ui, 2, { topic: "changelog" });
+  // Asked with `news` (the chats' list's card): that alone, no tab made.
+  subscribe(core, ui, 5, { topic: "changelog", news: true });
   await host.settle();
   answersOf(host, values);
   const news = v(values, 2).news;
   assert.equal(news.build, "0.1.1335");
   assert.deepEqual(news.entries.map((e: J) => e.text[0]), ["修复：列表跳动"]);
+  assert.equal(v(values, 2).tabs.length, 5);
+  assert.deepEqual(v(values, 5).news, news);
+  assert.deepEqual([v(values, 5).app, v(values, 5).build, v(values, 5).tabs, v(values, 5).loading], ["android", 1335, [], false]);
   await ask(host, core, ui, 4, "changelog.seen", {});
   answersOf(host, values);
   assert.equal(v(values, 2).news, undefined);
-  // Read once at each start (the TS core reads it then and as the cloud's socket opens: docs/core-ts.md).
+  assert.equal(v(values, 5).news, undefined);
+  // Read once at each start (the TS core reads it then and as the cloud's socket opens).
   assert.equal(host.requests.filter((r) => r.url.endsWith("/v1/changelog")).length, 2);
   core.close();
 });
@@ -2285,6 +2443,8 @@ test("connect_wizard_offers_feishu_where_its_station_has_it_and_adds_a_scanned_b
   await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "connect-new:feishu" });
   flow.go(topic, ui, "feishuWay");
   await ask(host, core, ui, 4, "connect.flow.register", form);
+  const registrationRequest = stationPosted(host, "/feishu/registrations")[0];
+  assert.deepEqual([registrationRequest.bind.runtime, registrationRequest.bind.model, registrationRequest.mode], ["codex", "gpt-6-astra", "multi-session"], "the station has the chosen settings before the scan");
   view = flow.value(topic);
   assert.equal(view.step, "feishuScan");
   assert.equal(view.feishu.registration.id, "r1");
@@ -2307,6 +2467,44 @@ test("connect_wizard_offers_feishu_where_its_station_has_it_and_adds_a_scanned_b
   view = flow.value(topic);
   assert.deepEqual([view.step, view.feishu.connect, view.feishu.creating], ["done", "codex-bot", false]);
   assert.equal(host.requests.filter((r) => r.method === "DELETE").length, 0, "a bot made is not let go of");
+  core.close();
+});
+
+test("connect_wizard_offers_comma_where_its_station_has_it_and_adds_a_connect_of_the_line_comma_shows", async () => {
+  const { host, core } = await choosing();
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/comma/connects") return { id: "comma" };
+    return undefined;
+  });
+  const ui = core.connect();
+  const topic = connectTopic("comma");
+  const form = { station: "ws/st", form: "comma" };
+  await ask(host, core, ui, 1, "connect.flow.open", form);
+  const flow = core.inner.forms.connects;
+  withFeishu(core, []);
+  assert.deepEqual(flow.value(topic).platforms, ["slack", "feishu"], "a station from before the Comma connect does not offer it");
+  const at = { topic: "overview", station: "ws/st" };
+  core.inner.data.set(at, { ...(structuredClone(core.inner.store.get(at)) as J), comma: true });
+  assert.deepEqual(flow.value(topic).platforms, ["slack", "feishu", "comma"]);
+  flow.go(topic, ui, "commaBind");
+  let view = flow.value(topic);
+  assert.deepEqual([view.step, view.platform, view.back, view.number, view.total], ["commaBind", "comma", "platform", 2, 3]);
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "connect-new:comma", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "connect-new:comma" });
+  flow.go(topic, ui, "commaLine");
+  flow.edit(topic, ui, { comma: { line: "tailcat 1.2.3.4 4750" } });
+  assert.equal(flow.value(topic).comma.ready, false);
+  assert.throws(() => flow.begin(topic, ui, "create", {}, false), "not a line Comma shows");
+  flow.edit(topic, ui, { comma: { line: " comma https://api.comma.surf salix_conn_abc12345 " } });
+  view = flow.value(topic);
+  assert.deepEqual([view.step, view.back, view.comma.ready], ["commaLine", "commaBind", true]);
+  const shaped = present.decorate(topic, structuredClone(view), { now: 0, offsetMin: 0 });
+  assert.ok("ok" in conform("ConnectFlowView", shaped), JSON.stringify(conform("ConnectFlowView", shaped)));
+  await ask(host, core, ui, 4, "connect.flow.create", form);
+  const sent = stationPosted(host, "/comma/connects");
+  assert.deepEqual([sent.length, sent[0].line, sent[0].bind.runtime, sent[0].bind.model], [1, "comma https://api.comma.surf salix_conn_abc12345", "codex", "gpt-6-astra"]);
+  assert.equal(flow.value(topic).step, "done");
   core.close();
 });
 
@@ -2364,7 +2562,78 @@ test("connect_wizard_checks_a_feishu_app_of_ones_own_and_lets_go_of_a_bot_not_ma
   assert.equal(flow.value(connectTopic("gone")).feishu.registration.state, "waiting", "as it was started, before the overview says");
   await ask(host, core, ui, 17, "connect.flow.drop", other);
   await host.settle();
-  assert.deepEqual(host.requests.filter((r) => r.method === "DELETE").map((r) => r.url.replace("https://stillfail.test/admin/api", "")), ["/feishu/registrations/r2"]);
+  assert.deepEqual(host.requests.filter((r) => r.method === "DELETE").map((r) => r.url.replace("https://stillfail.test/admin/api", "")), [], "closing the form does not cancel an already opened scan");
+  core.close();
+});
+
+test("connect_wizard_rechecks_a_scan_done_before_the_register_request_finishes", async () => {
+  const { host, core } = await choosing();
+  const done = { id: "quick", url: "https://accounts.feishu.cn/x", expiresAt: 1_790_000_600_000, state: "done", appId: "cli_quick", domain: "feishu" };
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/feishu/registrations") return { id: done.id, url: done.url, expiresAt: done.expiresAt, overview: { ...(structuredClone(core.inner.store.get({ topic: "overview", station: "ws/st" })) as J), feishuRegistrations: [done] } };
+    if (path === "/feishu/connects") return { id: "quick-bot" };
+    return undefined;
+  });
+  withFeishu(core, []);
+  const ui = core.connect();
+  const form = { station: "ws/st", form: "quick" };
+  await ask(host, core, ui, 1, "connect.flow.open", form);
+  await ask(host, core, ui, 2, "connect.flow.go", { ...form, input: { to: "feishuBind" } });
+  await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "connect-new:quick", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "connect-new:quick" });
+  await ask(host, core, ui, 5, "connect.flow.go", { ...form, input: { to: "feishuWay" } });
+  await ask(host, core, ui, 6, "connect.flow.register", form);
+  await host.settle();
+  assert.equal(stationPosted(host, "/feishu/connects").length, 1);
+  assert.equal(core.inner.forms.connects.value(connectTopic("quick")).feishu.connect, "quick-bot");
+  core.close();
+});
+
+test("connect_wizard_rechecks_a_finished_scan_when_the_model_becomes_available", async () => {
+  const { core } = await choosing();
+  withFeishu(core, []);
+  const ui = core.connect();
+  const topic = connectTopic("late-model");
+  const selected = { valueOption: { model: "gpt-6-astra" }, value: { runtime: "codex", model: "gpt-6-astra" } };
+  let picked: { valueOption: { model: string } | null; value: { runtime: string; model: string } } = selected;
+  let ready = 0;
+  const flow = new ConnectFlows(core.inner.store, () => ({ ok: picked }), () => {}, { ready: (t) => { if (flow.ready(t)) ready++; } });
+  flow.open(topic, ui, {});
+  flow.go(topic, ui, "feishuBind");
+  flow.go(topic, ui, "feishuWay");
+  const [generation] = flow.begin(topic, ui, "register", {}, false);
+  flow.finish(topic, generation, "register", { ok: { id: "late", url: "https://accounts.feishu.cn/x", expiresAt: 1_790_000_600_000 } });
+  picked = { ...selected, valueOption: null };
+  withFeishu(core, [{ id: "late", url: "https://accounts.feishu.cn/x", expiresAt: 1_790_000_600_000, state: "done", appId: "cli_late", domain: "feishu" }]);
+  assert.equal(ready, 0, "the scan finished before the model was available");
+  picked = selected;
+  core.inner.store.set(pickOf("ws/st", "late-model"), { ok: selected });
+  assert.equal(ready, 1, "the picker change causes another readiness check");
+  flow.drop(topic, ui);
+  core.close();
+});
+
+test("connect_wizard_shows_a_station_saved_scan_even_if_the_model_is_no_longer_available", async () => {
+  const { host, core } = await choosing();
+  withFeishu(core, []);
+  const ui = core.connect();
+  const topic = connectTopic("saved-scan");
+  const selected = { valueOption: { model: "gpt-6-astra" }, value: { runtime: "codex", model: "gpt-6-astra" } };
+  let picked: { valueOption: { model: string } | null; value: { runtime: string; model: string } } = selected;
+  let createRequests = 0;
+  const flow = new ConnectFlows(core.inner.store, () => ({ ok: picked }), () => {}, { ready: (t) => { if (flow.ready(t)) createRequests++; } });
+  flow.open(topic, ui, {});
+  flow.go(topic, ui, "feishuBind");
+  flow.go(topic, ui, "feishuWay");
+  const [generation] = flow.begin(topic, ui, "register", {}, false);
+  flow.finish(topic, generation, "register", { ok: { id: "saved", url: "https://accounts.feishu.cn/x", expiresAt: 1_790_000_600_000 } });
+  picked = { ...selected, valueOption: null };
+  const at = { topic: "overview", station: "ws/st" };
+  core.inner.data.set(at, { ...(structuredClone(core.inner.store.get(at)) as J), feishuRegistrations: [{ id: "saved", url: "", expiresAt: 1_790_000_600_000, state: "done", appId: "cli_saved", domain: "feishu" }], connects: [{ id: "bot", kind: "feishu", feishu: { appId: "cli_saved" } }] });
+  await host.settle(); // The overview's database write notifies its watchers on commit.
+  assert.deepEqual([flow.value(topic).step, flow.value(topic).feishu.connect, createRequests], ["done", "bot", 0]);
+  flow.drop(topic, ui);
   core.close();
 });
 
@@ -2540,13 +2809,15 @@ test("lends_the_phone_s_adb_through_its_calls_and_topic", async () => {
   await host.settle();
   apply(host, values);
   // Off again, every field of the offer gone (the clients' shape takes their absence).
-  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [], screens: [] });
+  assert.deepEqual(v(values, 1), { sharing: false, phase: "off", on: false, tunnels: 0, grants: [], wanted: [], known: true, lasts: "chat", lends: [], screens: [], personal: v(values, 1).personal, toConfirm: 0 });
+  assert.deepEqual(v(values, 1).personal.map((p: J) => [p.standing, p.devices]), [["none", []]]);
   core.close();
 });
 
 test("a_phone_s_ports_are_taken_before_its_app_says_it_is_a_phone_and_lent_once_it_does", async () => {
   // (a process the phone started for a grant: its service gives the ports before the app has said what it is)
   const { host, core } = await started();
+  takeAll(core.inner.adb);
   const exp = Math.floor(host.nowMs() / 1000) + 3600;
   core.inner.adb.heard("ws1/st1", { id: "g1", session: "ember:c1", chat: "c1", reason: "调试", status: "granted", scope: "chat", exp, at: 1 });
   const ui = core.connect();
@@ -2567,6 +2838,7 @@ test("a_phone_s_ports_are_taken_before_its_app_says_it_is_a_phone_and_lent_once_
 test("a_phone_lends_for_its_chats_grants_only_while_its_switch_is_on_and_the_switch_outlives_its_core", async () => {
   // (2026-10-30, user: 「全局的 adb 开关，默认关闭，开启后永远开启，不会因为更新或者重启关掉」)
   const { host, core } = await started();
+  takeAll(core.inner.adb);
   const exp = Math.floor(host.nowMs() / 1000) + 3600;
   const ui = core.connect();
   await ask(host, core, ui, 1, "client.device", { app: "android", build: "1" });
@@ -2587,6 +2859,7 @@ test("a_phone_lends_for_its_chats_grants_only_while_its_switch_is_on_and_the_swi
   core.close();
   // the app's process gone and back (updated, the phone started again): on as it was
   const again = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  takeAll(again.inner.adb);
   const ui2 = again.connect();
   subscribe(again, ui2, 1, { topic: "adbShare" });
   await host.time.pass(500);
@@ -2604,12 +2877,14 @@ test("a_phone_lends_for_its_chats_grants_only_while_its_switch_is_on_and_the_swi
 test("a_phone_s_grants_kept_on_the_device_lend_it_from_a_core_started_anew", async () => {
   // (lent for a chat's grant; the app's process gone and back, the phone started again: no station reached yet)
   const { host, core } = await started();
+  takeAll(core.inner.adb);
   const exp = Math.floor(host.nowMs() / 1000) + 3600;
   core.inner.adb.heard("ws1/st1", { id: "g1", session: "ember:c1", chat: "c1", reason: "调试", status: "granted", scope: "chat", exp, at: 1 });
   await host.settle();
   host.takeEmitted();
   core.close();
   const again = await Core.create(host, { clock: host.time.clock, sample: 0, wire: () => new HostWire(host) });
+  takeAll(again.inner.adb);
   const ui = again.connect();
   subscribe(again, ui, 1, { topic: "adbShare" });
   await host.time.pass(500);
@@ -2636,7 +2911,8 @@ test("a_phone_shows_each_chat_once_ordered_by_the_last_actual_use", async () => 
   assert.deepEqual(core.inner.adb.grants().map((g: J) => [g.id, g.chat, g.lastUsedAt]), [
     ["new", "chat-a", at - 60_000], ["other", "chat-b", at - 90_000], ["unknown", "chat-c", undefined],
   ]);
-  assert.deepEqual(core.inner.adb.wanted(), ["ws1/st1"]);
+  // (a station's word alone, nothing signed: shown, and lends nothing)
+  assert.deepEqual(core.inner.adb.wanted(), []);
   // The view has the title and relative time, and that time advances while the page remains open.
   core.keepTime();
   const ui = core.connect();

@@ -1,9 +1,21 @@
 name: mbui TestFlight (manual)
+# Its environment `ios-testflight` is held to main by a deployment rule (no tags; a second person's approval where set).
+# Variables: IOS_TEAM_ID, IOS_APP_GROUP, IOS_RELEASE_REVIEWED (true only once the release is reviewed). monoid uses
+# MONOID_IOS_APP_GROUP, MONOID_IOS_RELEASE_REVIEWED and MONOID_IOS_{APP,SHARE}_PROFILE_B64.
+# Secrets:
+# IOS_DISTRIBUTION_P12_B64 and _PASSWORD, IOS_SIGNING_SHA1, IOS_APP_PROFILE_B64, IOS_SHARE_PROFILE_B64, ASC_KEY_ID,
+# ASC_ISSUER_ID, ASC_PRIVATE_KEY_B64: credentials made for CI alone.
 # The build number in the run's name: the next dispatch takes one above every number any run was given, failed ones too.
-run-name: mbui TestFlight ${{ inputs.version }} (${{ inputs.build }})
+run-name: ${{ inputs.product || 'stillfail' }} TestFlight ${{ inputs.version }} (${{ inputs.build }})
 on:
   workflow_dispatch:
     inputs:
+      product:
+        description: App identity (TestFlight and App Store share the same app)
+        default: stillfail
+        required: true
+        type: choice
+        options: [stillfail, monoid]
       sha:
         description: Full main SHA captured by this manual dispatch (tested and released unchanged)
         required: true
@@ -19,11 +31,15 @@ on:
         type: string
       external:
         description: Also add this build to the external group and submit it to Beta App Review
+        default: true
+        type: boolean
+      skip_tests:
+        description: Upload whatever this run's tests say (they still run, and fail the run)
         default: false
         type: boolean
 # All versions of this app share one upload lock. Other uploaders must coordinate manually.
 concurrency:
-  group: mbui-testflight-6818750243
+  group: mbui-testflight-${{ inputs.product == 'monoid' && 'monoid' || '6818750243' }}
   cancel-in-progress: false
 permissions:
   contents: read
@@ -37,6 +53,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - run: bash apps/mbui/scripts/testflight-guard-test.sh
+      - run: bash apps/mbui/scripts/testflight-product-test.sh
       - run: bash apps/mbui/scripts/testflight-sign-test.sh
       - run: bash scripts/testflight-distribute-test.sh
       - run: bash apps/mbui/scripts/testflight-guard.sh checkout
@@ -68,6 +85,8 @@ jobs:
       RELEASE_SHA: ${{ inputs.sha }}
       RELEASE_VERSION: ${{ inputs.version }}
       RELEASE_BUILD: ${{ inputs.build }}
+      RELEASE_PRODUCT: ${{ inputs.product || 'stillfail' }}
+      RELEASE_SKIP_TESTS: ${{ inputs.skip_tests }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -96,6 +115,7 @@ jobs:
           case "$v" in 2[0-6].*|27.0*) echo "::error::iOS SDK $v: an iPhone Duo letterboxes an app built before 27.1"; exit 1 ;; esac
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/mbui-moonbit
+      - run: bash apps/mbui/scripts/ios-product-test.sh
       - run: bash apps/mbui/scripts/moon-mtimes.sh
       - name: Device build dependencies
         run: |
@@ -104,16 +124,18 @@ jobs:
       - name: Validate identity and profiles, build, sign, validate and upload
         env:
           IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
-          IOS_APP_GROUP: ${{ vars.IOS_APP_GROUP }}
-          IOS_RELEASE_REVIEWED: ${{ vars.IOS_RELEASE_REVIEWED }}
+          IOS_APP_GROUP: ${{ vars[inputs.product == 'monoid' && 'MONOID_IOS_APP_GROUP' || 'IOS_APP_GROUP'] }}
+          IOS_RELEASE_REVIEWED: ${{ vars[inputs.product == 'monoid' && 'MONOID_IOS_RELEASE_REVIEWED' || 'IOS_RELEASE_REVIEWED'] }}
           IOS_DISTRIBUTION_P12_B64: ${{ secrets.IOS_DISTRIBUTION_P12_B64 }}
           IOS_DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
-          IOS_APP_PROFILE_B64: ${{ secrets.IOS_APP_PROFILE_B64 }}
-          IOS_SHARE_PROFILE_B64: ${{ secrets.IOS_SHARE_PROFILE_B64 }}
+          IOS_APP_PROFILE_B64: ${{ secrets[inputs.product == 'monoid' && 'MONOID_IOS_APP_PROFILE_B64' || 'IOS_APP_PROFILE_B64'] }}
+          IOS_SHARE_PROFILE_B64: ${{ secrets[inputs.product == 'monoid' && 'MONOID_IOS_SHARE_PROFILE_B64' || 'IOS_SHARE_PROFILE_B64'] }}
           IOS_SIGNING_SHA1: ${{ secrets.IOS_SIGNING_SHA1 }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY_B64: ${{ secrets.ASC_PRIVATE_KEY_B64 }}
+          # (PostHog's key its crash reports go with: none, and the build sends nothing; testflight.sh warns)
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           GH_TOKEN: ${{ github.token }}
         run: |
           bash apps/mbui/scripts/testflight.sh
@@ -136,9 +158,10 @@ jobs:
     permissions:
       actions: write
     steps:
-      - run: gh workflow run mbui-testflight-distribute.yml --repo "$GITHUB_REPOSITORY" --ref main -f version="$RELEASE_VERSION" -f build="$RELEASE_BUILD" -f external="$RELEASE_EXTERNAL" -f round=1
+      - run: gh workflow run mbui-testflight-distribute.yml --repo "$GITHUB_REPOSITORY" --ref main -f product="$RELEASE_PRODUCT" -f version="$RELEASE_VERSION" -f build="$RELEASE_BUILD" -f external="$RELEASE_EXTERNAL" -f round=1
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_BUILD: ${{ inputs.build }}
+          RELEASE_PRODUCT: ${{ inputs.product || 'stillfail' }}
           RELEASE_EXTERNAL: ${{ inputs.external }}

@@ -43,6 +43,7 @@ fn init {
     // as long ones', the new chat's lines over them as it fades (as over any long chat's): the leaving page's to mend)
     ("src/sfreplay/flows/wide_newline_test.mbt", 1),
     ("src/sfreplay/flows/wide_resize_test.mbt", 1),
+    ("src/sfreplay/flows/wide_answer_reply_test.mbt", 1),
     ("src/sfreplay/flows/wide_send_test.mbt", 1),
   ])
 }

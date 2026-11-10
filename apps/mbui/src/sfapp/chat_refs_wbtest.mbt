@@ -50,8 +50,8 @@ test "`@` and words: the chats they find over the composer; one picked goes in a
   t.draw()
   let (_, words, _, _) = t.ime()
   assert_eq(words, "看 @[首页的列表改成按天分组] ")
-  // Closed for this `@`: no menu offered to input or a screen reader, even while its last drawing fades out.
-  assert_true(t.query(Group, label="引用对话") is None)
+  // the menu closed for this `@`
+  assert_true(t.find("引用对话") is None)
   t.backspace()
   let (_, words, _, _) = t.ime()
   assert_eq(words, "看 @[首页的列表改成按天分组]")
@@ -71,11 +71,8 @@ test "`@` and words: the workspace's other stations' chats too, each with its st
   // (then when it was last active)
   assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["Maple", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
   assert_true(after_on_its_row(t, "首页的列表改成按天分组") == ["8 分钟前"], msg=about_its_row(t, "首页的列表改成按天分组"))
-  // A finger's row is laid out at least 44 high (Theme::rows pick). Its pop-in scales the drawing, and therefore
-  // the semantics rectangle, on this first frame; that is not the room the row asks for.
-  let tree = @ui.view_tree().unwrap()
-  let row = tree.said_order().iter().find_first(fn(n) { n.said is Some({ label, .. }) && label == "夜里的构建又失败了" }).unwrap()
-  let high = tree.view_of(row.id).unwrap().laid_size().1
+  // a finger's row: 44 high at least (Theme::rows pick)
+  let (_, _, _, high) = t.get(Button, label="夜里的构建又失败了").rect
   assert_true(high >= 44.0, msg="\{high}")
   t.tap_text("夜里的构建又失败了")
   t.draw()
@@ -256,6 +253,49 @@ test "words with a mark sent before the core has read them: their row has the ma
 }
 
 ///|
+test "words with a mark leave the field as they stand: the same inks from the frame sent, in pieces, as their message has them" {
+  new_run()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    // (the words sent stay what was sent from here)
+    call: fn(name, params, done) {
+      if name != "chat.send" {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0, pointing=Mouse)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.paste("[首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2)")
+  t.type_text(" 吧")
+  t.draw()
+  t.draw()
+  t.draw()
+  let inks = fn() {
+    let out : Array[Int64] = []
+    for g in t.drawn_glyphs() {
+      if g.1 > 700.0 && g.0 > 390.0 && g.0 < 500.0 && g.2 != 0L && !out.contains(g.2) {
+        out.push(g.2)
+      }
+    }
+    out.sort()
+    out
+  }
+  let field = inks()
+  assert_eq(field.length(), 3)
+  tap_send(t)
+  t.draw()
+  assert_eq(inks(), field)
+  let f = flight_of("ws1/st1:s-c1").unwrap()
+  assert_true(@sfbase.flight_said(f) == "@首页 吧")
+  t.draw()
+  assert_true(t.run_rects("吧").length() == 1)
+}
+
+///|
 test "a link to an execution history: its mark once the core keeps that link, else the link as it is" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
@@ -308,7 +348,7 @@ test "a chat picked the core cannot make a mark of: a toast says why, the `@word
   let (_, words, _, _) = t.ime()
   assert_eq(words, "@首页")
   // closed for this `@` until its words are gone
-  assert_true(t.query(Group, label="引用对话") is None)
+  assert_true(t.find("引用对话") is None)
   t.clear()
   t.type_text("@")
   assert_true(t.find("引用对话") is Some(_))

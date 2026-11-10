@@ -464,7 +464,7 @@ export const unix: Platform = {
   isLauncher(pid) {
     try {
       const command = execFileSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-      return command.includes("stillfail-station") || command.includes("ember-station");
+      return command.includes("stillfail-station");
     } catch {
       return false;
     }
@@ -567,7 +567,12 @@ export const unix: Platform = {
   },
   async memoryPressure() {
     try {
-      if (MACOS) return pressureOfLevel((await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"])).stdout);
+      if (MACOS) {
+        const level = (await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"])).stdout;
+        if (trim(level) !== "2") return pressureOfLevel(level);
+        const mem = host.memory();
+        return mem.known === false ? pressureOfLevel(level) : pressureOfLevel(level, mem.totalBytes - mem.usedBytes, mem.totalBytes);
+      }
       const info = readFileSync("/proc/meminfo", "utf8");
       return pressureOfAvailable(fieldOrNull(info, "MemAvailable"), fieldOrNull(info, "MemTotal"));
     } catch {

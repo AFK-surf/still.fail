@@ -1,4 +1,4 @@
-// A visualization's file as both frames show it (ember apps/android shared/ui/Viz.kt, chat/screens/VizFiles.kt; web
+// A visualization's file as both frames show it (still.fail apps/android shared/ui/Viz.kt, chat/screens/VizFiles.kt; web
 // Viz.tsx): the web's stylesheet and bridge and tokens round it, its CSP, what its widget keeps (`widget.state`,
 // `widget.setState`), fetched once a file (`station.file`); served to a page of its own (a service's page's `file:`,
 // service_page.mbt) with what it kept. Drawing it is each frame's own.
@@ -10,7 +10,7 @@ pub fn viz_tr(key : String, args? : Array[(String, String)] = []) -> String {
 }
 
 ///|
-/// A fragment's frame is as tall as its content, however tall (web Viz.tsx RUNAWAY): content sized to its window
+/// A fragment's frame is as tall as its content, however tall: content sized to its window
 /// (100vh, min-height:100%) grows with each height it is given; grown a little each time this many times running, it
 /// is held where it got to.
 pub let viz_runaway : Int = 60
@@ -20,11 +20,11 @@ pub let viz_runaway : Int = 60
 pub let viz_max_state : Int = 16 * 1024
 
 ///|
-/// The height a page that has not said its own takes (Viz.kt: 120).
+/// The height a page that has not said its own takes.
 pub let viz_first_height : Int = 120
 
 ///|
-/// The tokens a page is given, as --e-<name> (the web's names, web/src/styles/global.css.ts; Viz.tsx TOKENS), for the
+/// The tokens a page is given, as --e-<name> (the web's names, web/src/styles/global.css.ts), for the
 /// theme shown: the app's own palette and sizes of type, as the rest of the app draws them, not a copy of the web's.
 pub fn viz_tokens(dark : Bool) -> Array[(String, String)] {
   let p = @sf.palette_of(dark)
@@ -166,8 +166,8 @@ pub fn viz_csp(sheets? : Array[String] = []) -> String {
 
 ///|
 /// What the bridge says to its page (it posts to its parent, which in a view of its own is itself), handed to the
-/// app: its height, what it keeps, a failure, words to send (Viz.kt RELAY, to mbuiHost in StillFailViz's place).
-pub let viz_relay : String = "addEventListener(\"message\",function(e){if(e.source===window&&e.data&&e.data.emberViz&&e.data.type!==\"theme\"){try{mbuiHost.post(JSON.stringify(e.data))}catch(_){}}});"
+/// app: its height, what it keeps, a failure, words to send (to mbuiHost in StillFailViz's place).
+pub let viz_relay : String = "addEventListener(\"message\",function(e){if(e.source===window&&e.data&&e.data.vizMessage&&e.data.type!==\"theme\"){try{mbuiHost.post(JSON.stringify(e.data))}catch(_){}}});"
 
 ///|
 /// What shows under a page that draws nothing there (the message's ground, as the Android app's WebView, which is
@@ -214,7 +214,7 @@ pub fn viz_is_fragment(html : String) -> Bool {
 
 ///|
 /// The page: the content in the stylesheet, the bridge (and what the widget kept) ahead of it, the theme as the app
-/// shows it now (Viz.kt documentOf).
+/// shows it now.
 pub fn viz_document(
   html : String,
   state : Json?,
@@ -244,7 +244,7 @@ pub fn viz_document(
   "</style>" +
   (if scroll { "<style>html{overflow:auto}</style>" } else { "" }) +
   viz_ground_style(ground) +
-  "<script type=\"application/json\" id=\"ember-viz-state\">" +
+  "<script type=\"application/json\" id=\"viz-state\">" +
   kept +
   "</script>" +
   "<script type=\"application/json\" id=\"viz-icons\">" +
@@ -284,7 +284,7 @@ pub fn viz_tag_end(html : String, tag : String) -> Int {
 ///|
 /// A whole page's document (a file that is not a fragment: a player, an app, a page made to fill a window), drawn as
 /// written: only the sandbox's CSP and the bridge (with the relay) go into its head, after its doctype, html or head
-/// tag so it keeps its mode (Viz.kt pageDocument).
+/// tag so it keeps its mode.
 pub fn viz_page_document(html : String) -> String {
   let head = "<meta http-equiv=\"Content-Security-Policy\" content=\"" +
     viz_csp() +
@@ -309,7 +309,7 @@ pub fn viz_page_document(html : String) -> String {
 }
 
 ///|
-/// A visualization's document as a page of the preview serves it (Viz.kt vizServed): the file in the stylesheet with
+/// A visualization's document as a page of the preview serves it: the file in the stylesheet with
 /// what its widget kept (a whole page as written), and `script` (the preview's own page script) inline ahead of the
 /// rest, as the page's CSP lets no script of the page's host in.
 pub fn viz_served(html : String, state : Json?, dark : Bool, ground : Int64, script : String) -> String {
@@ -327,7 +327,7 @@ pub fn viz_served(html : String, state : Json?, dark : Bool, ground : Int64, scr
 }
 
 ///|
-/// Whether a file is a visualization (an HTML file: Prose.kt HTML).
+/// Whether a file is a visualization.
 pub fn is_viz(name : String) -> Bool {
   let n = name.to_lower()
   n.has_suffix(".html") || n.has_suffix(".htm")
@@ -336,7 +336,7 @@ pub fn is_viz(name : String) -> Bool {
 // ── a visualization's file: fetched with what its widget kept ──────────
 
 ///|
-/// A visualization's page and what its widget kept (VizFiles.kt Loaded), fetched once per file: a file sent never
+/// A visualization's page and what its widget kept, fetched once per file: a file sent never
 /// changes.
 pub(all) struct VizLoad {
   html : @signals.Signal[String?]
@@ -370,42 +370,7 @@ pub fn viz_load(
   size? : Double = 0.0,
 ) -> Result[(String, Json?), Unit]? {
   let id = viz_id(station, key, path)
-  let l = viz_load_of(id)
-  if !l.asked {
-    l.asked = true
-    c.tell("viz/load/" + id, fn() { viz_ask(src, station, key, path, size, l) })
-  }
-  l.result()
-}
-
-///|
-/// What is fetched of the file `path` of session `key` on `station` (viz_load's), asked of the core the first time,
-/// at once: for a node of the window's tree, made as it is (none of it while a frame builds). Read by VizLoad::result.
-pub fn viz_asked(src : Source, station : String, key : String, path : String, size? : Double = 0.0) -> VizLoad {
-  let l = viz_load_of(viz_id(station, key, path))
-  if !l.asked {
-    l.asked = true
-    viz_ask(src, station, key, path, size, l)
-  }
-  l
-}
-
-///|
-/// The file's page and what it kept as they are now (viz_load's answer): None while it comes, Some(Err) where it
-/// cannot be read. Read where it is followed as it comes.
-pub fn VizLoad::result(self : VizLoad) -> Result[(String, Json?), Unit]? {
-  if self.failed.get() {
-    return Some(Err(()))
-  }
-  match self.html.get() {
-    Some(h) if self.state_read.get() => Some(Ok((h, self.state.get())))
-    _ => None
-  }
-}
-
-///|
-fn viz_load_of(id : String) -> VizLoad {
-  match viz_loads.get(id) {
+  let l = match viz_loads.get(id) {
     Some(l) => l
     None => {
       let l : VizLoad = { html: @signals.signal(None), state: @signals.signal(None), state_read: @signals.signal(false), failed: @signals.signal(false), asked: false }
@@ -413,46 +378,53 @@ fn viz_load_of(id : String) -> VizLoad {
       l
     }
   }
-}
-
-///|
-/// The core asked for the file's page and what its widget kept (`station.file`, `widget.state`), into `l`.
-fn viz_ask(src : Source, station : String, key : String, path : String, size : Double, l : VizLoad) -> Unit {
-  let p : Map[String, Json] = {
-    "station": Json::string(station),
-    "key": Json::string(key),
-    "name": Json::string(viz_base_name(path)),
+  if !l.asked {
+    l.asked = true
+    c.tell("viz/load/" + id, fn() {
+      let p : Map[String, Json] = {
+        "station": Json::string(station),
+        "key": Json::string(key),
+        "name": Json::string(viz_base_name(path)),
+      }
+      chat_keep(p, size)
+      (src.read_bytes)(
+        "station.file",
+        Json::object(p),
+        fn(r) {
+          match r {
+            Ok((_, bytes)) => l.html.set(Some(@utf8.decode_lossy(bytes)))
+            Err(_) => l.failed.set(true)
+          }
+        },
+      )
+      (src.call)(
+        "widget.state",
+        Json::object({ "station": Json::string(station), "key": Json::string(key), "path": Json::string(path) }),
+        fn(r) {
+          match r {
+            Ok(v) =>
+              l.state.set(match field(Some(v), "state") {
+                Some(Null) | None => None
+                Some(s) => Some(s)
+              })
+            Err(_) => ()
+          }
+          l.state_read.set(true)
+        },
+      )
+    })
   }
-  chat_keep(p, size)
-  (src.read_bytes)(
-    "station.file",
-    Json::object(p),
-    fn(r) {
-      match r {
-        Ok((_, bytes)) => l.html.set(Some(@utf8.decode_lossy(bytes)))
-        Err(_) => l.failed.set(true)
-      }
-    },
-  )
-  (src.call)(
-    "widget.state",
-    Json::object({ "station": Json::string(station), "key": Json::string(key), "path": Json::string(path) }),
-    fn(r) {
-      match r {
-        Ok(v) =>
-          l.state.set(match field(Some(v), "state") {
-            Some(Null) | None => None
-            Some(s) => Some(s)
-          })
-        Err(_) => ()
-      }
-      l.state_read.set(true)
-    },
-  )
+  if l.failed.get() {
+    return Some(Err(()))
+  }
+  match l.html.get() {
+    Some(h) if l.state_read.get() => Some(Ok((h, l.state.get())))
+    _ => None
+  }
 }
 
 ///|
-/// Keeps what a visualization's widget keeps next: here at once, on its station after (VizFiles.kt keepViz).
+/// Keeps what a visualization's widget keeps next: here at once, on its station after.
 pub fn viz_keep(src : Source, station : String, key : String, path : String, state : Json) -> Unit {
   match viz_loads.get(viz_id(station, key, path)) {
     Some(l) => {
@@ -487,7 +459,7 @@ pub fn viz_base_name(path : String) -> String {
 }
 
 ///|
-/// A request of a visualization's page answered from here (Preview.kt's serve): its page (any path with no
+/// A request of a visualization's page answered from here: its page (any path with no
 /// extension, reloaded with what it kept since), and nothing else there is.
 pub fn file_serve(f : FilePage, req : @ui.SiteRequest, reply : @ui.SiteReply) -> Unit {
   let bare = match req.path.find("?") {
@@ -512,7 +484,7 @@ pub fn file_serve(f : FilePage, req : @ui.SiteRequest, reply : @ui.SiteReply) ->
 }
 
 ///|
-/// What a visualization's page says to the app (its bridge's relay: Viz.kt VizKeeper): here only what its widget keeps.
+/// What a visualization's page says to the app: here only what its widget keeps.
 pub fn file_said(src : Source, f : FilePage, words : String) -> Unit {
   match (try Some(@json.parse(words)) catch { _ => None }) {
     Some(Object(m)) if m.get("type") == Some(Json::string("state")) => {

@@ -199,9 +199,12 @@ test "an animated value starts the frame it is asked in, and follows its target"
   assert_true(near(seen[seen.length() - 1], linear(), 1.0e-9))
   t.run_for(start + tween_ms / 2.0 - t.time())
   assert_true(near(seen[seen.length() - 1], linear(), 1.0e-9))
-  // turned back mid-way: from where it is in the frame it is told in, back from there on
-  shown.val = false
+  // turned back mid-way: from where it is in the frame it is told in, back from there on (said to that frame, the
+  // display's next: `shown` is no signal, and a frame drawn on the way (MBUI_TEST_FPS) would have been told it sooner)
   t.run_for(tween_ms / 10.0)
+  shown.val = false
+  t.stepped()
+  t.frame()
   let back = seen[seen.length() - 1]
   assert_true(near(back, linear(), 1.0e-9), msg="\{back}")
   t.run_for(tween_ms / 10.0)
@@ -366,35 +369,35 @@ test "a keyed node on its way, moved by what holds it, goes on with its own move
 
 ///|
 test "a keyed node driven to its place, moved again on the way, goes on from where it is drawn" {
-  let above = Ref::new(40.0)
-  let drive = Ref::new(-1.0)
+  let above = @signals.signal(40.0)
+  let drive = @signals.signal(-1.0)
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
-      c.box(w=Px(50.0), h=Px(above.val), fn() {  }) |> ignore
+      c.box(w=Px(50.0), h=Px(above.get()), fn() {  }) |> ignore
       let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
-      @motion.layout(c, i, "driven", drive=drive.val)
+      @motion.layout(c, i, "driven", drive=drive.get())
     })
     |> ignore
   })
   assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
   // put up by 40: drawn where it was, half way there as the app's progress goes
-  above.val = 0.0
-  drive.val = 0.0
+  above.set(0.0)
+  drive.set(0.0)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
-  drive.val = 0.5
+  drive.set(0.5)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 20.0)
   // its place moves down 10 on the way (what is over it grown back a little): drawn where it was, not put by the move
   // as if it began there
-  above.val = 10.0
+  above.set(10.0)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 20.0)
   // the rest of its way to its new place by what is left of the progress
-  drive.val = 0.75
+  drive.set(0.75)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 15.0)
-  drive.val = 1.0
+  drive.set(1.0)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 10.0)
 }
@@ -471,11 +474,11 @@ fn trans_ms(tr : @motion.Trans) -> Double {
 
 ///|
 test "a list's row gone leaves by a copy; the rest close over it, late" {
-  let keys = Ref::new(["a", "b", "c", "d"])
+  let keys = @signals.signal(["a", "b", "c", "d"])
   let ids : Map[String, Int] = {}
   let t = @ui.Tester::new(
     fn(c) {
-      let ks = keys.val
+      let ks = keys.get()
       @motion.list_keys(c, "rows", ks.map(fn(k) { "row/" + k })) |> ignore
       c.list("rows", ks.length(), 40.0, fn(i) {
         let k = ks[i]
@@ -498,7 +501,7 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
     h=400.0,
   )
   let before = t.instances()
-  keys.val = ["a", "c", "d"]
+  keys.set(["a", "c", "d"])
   t.frame()
   // the copy of b drawn as the rest: more drawn than the three rows
   assert_true(t.instances() > before - 1, msg="\{t.instances()} \{before}")
@@ -515,7 +518,7 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
   assert_eq(t.drawn_of("c").unwrap().1, 40.0)
   assert_eq(@motion.layout_rest("row/d"), -1.0)
   // a row new to the list comes in
-  keys.val = ["e", "a", "c", "d"]
+  keys.set(["e", "a", "c", "d"])
   t.frame()
   // (their motions start in that frame) to the end of e's entrance and of a's move
   let e_end = @motion.layout_rest("row/e")
@@ -524,7 +527,7 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
   assert_eq(t.drawn_of("a").unwrap().1, 40.0)
   // one going ahead of the others goes from where it was and comes in where it is, never across them: drawn at its
   // place from the first frame (coming in there), a copy of it leaving where it was
-  keys.val = ["d", "e", "a", "c"]
+  keys.set(["d", "e", "a", "c"])
   t.frame()
   assert_eq(@motion.lifted(t.ctx(), t.ctx().id("rows"), "row/d"), -1.0)
   // (its copy leaving and its coming in, by its key)
@@ -591,10 +594,10 @@ test "a list held at its end, a row gone: what is over it comes down over its pl
 
 ///|
 test "a list's rows alike at its start and its end are none of its change: only those between come, go and go ahead" {
-  let keys = Ref::new(["p", "q", "x", "y", "r", "s"])
+  let keys = @signals.signal(["p", "q", "x", "y", "r", "s"])
   let t = @ui.Tester::new(
     fn(c) {
-      let ks = keys.val
+      let ks = keys.get()
       @motion.list_keys(c, "rows", ks.map(fn(k) { "row/" + k })) |> ignore
       c.list("rows", ks.length(), 40.0, fn(i) {
         let k = ks[i]
@@ -617,7 +620,7 @@ test "a list's rows alike at its start and its end are none of its change: only 
   let list = t.ctx().id("rows")
   // y goes ahead of x: it alone comes in anew where it is (at its place at once, never across x), x alone moves; none
   // before them nor after
-  keys.val = ["p", "q", "y", "x", "r", "s"]
+  keys.set(["p", "q", "y", "x", "r", "s"])
   t.frame()
   assert_true(@motion.layout_rest("row/x") > t.time())
   for k in ["p", "q", "r", "s"] {
@@ -632,7 +635,7 @@ test "a list's rows alike at its start and its end are none of its change: only 
   t.run_for((if x_end > y_end { x_end } else { y_end }) - t.time())
   t.assert_idle()
   // between them x goes and n comes: n comes in, x's copy leaves, the rest stay where they are
-  keys.val = ["p", "q", "y", "n", "r", "s"]
+  keys.set(["p", "q", "y", "n", "r", "s"])
   t.frame()
   assert_true(@motion.layout_rest("row/n") > t.time())
   assert_true(@motion.layout_rest("row/x") > t.time())
@@ -673,14 +676,14 @@ test "an action can take a measured node from where it was drawn with its parent
 
 ///|
 test "a node flown from a rect is drawn there first, then at its place" {
-  let p = Ref::new(0.0)
+  let p = @signals.signal(0.0)
   let mut id = 0
   let t = @ui.Tester::new(fn(c) {
     id = c.id("flown")
     c.column(fn() {
       c.box(h=Px(100.0), fn() {  }) |> ignore
       let i = c.box(w=Px(30.0), h=Px(10.0), id~, bg=0x00FF00FFL, fn() {  })
-      @motion.fly(c, i, 5.0, 300.0, px=p.val, py=p.val)
+      @motion.fly(c, i, 5.0, 300.0, px=p.get(), py=p.get())
     })
     |> ignore
   })
@@ -689,11 +692,11 @@ test "a node flown from a rect is drawn there first, then at its place" {
   // tapped where it is laid out, not where it flies
   let (lx, ly, _, _) = t.ctx().rect_of(id).unwrap()
   assert_eq((lx, ly), (0.0, 100.0))
-  p.val = 0.5
+  p.set(0.5)
   t.frame()
   let (x2, y2) = drawn_xy(t, 0x00FF00FFL)
   assert_eq((x2, y2), (2.5, 200.0))
-  p.val = 1.0
+  p.set(1.0)
   t.frame()
   let (x3, y3) = drawn_xy(t, 0x00FF00FFL)
   assert_eq((x3, y3), (0.0, 100.0))
@@ -798,9 +801,9 @@ test "a look moves what is drawn, never where it is tapped" {
     c.box(w=Px(200.0), h=Px(100.0), clip=true, fn() {
       c.box(h=Px(40.0), min_h=40.0, fn() {  }) |> ignore
       let id = c.id("button")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps.val = taps.val + 1
-      }
+      })
       let b = c.box(w=Px(200.0), h=Px(30.0), min_h=30.0, bg=0x336699FFL, id~, fn() {  })
       c.look(b, @ui.look(dy=20.0))
     })
@@ -824,9 +827,9 @@ test "what is faded to nothing is tapped where it is laid out" {
   let taps = Ref::new(0)
   let t = @ui.Tester::new(fn(c) {
     let id = c.id("faded")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       taps.val = taps.val + 1
-    }
+    })
     let b = c.box(w=Px(100.0), h=Px(40.0), bg=0x123456FFL, id~, fn() {  })
     c.look(b, @ui.look(alpha=0.0, scale=0.9))
   })
@@ -847,13 +850,13 @@ test "what leaves is drawn, and a tap meanwhile goes to what is under it" {
   let sheet_ms = 300.0
   let t = @ui.Tester::new(fn(c) {
     let u = c.id("under")
-    if c.clicked(u) {
+    c.on_press(u, fn() {
       under.val = under.val + 1
-    }
+    })
     let o = c.id("over")
-    if c.clicked(o) {
+    c.on_press(o, fn() {
       over.val = over.val + 1
-    }
+    })
     c.box(w=Px(200.0), h=Px(100.0), bg=0x112233FFL, id=u, fn() {  }) |> ignore
     match @motion.presence(c, "sheet", shown.val, enter=@motion.trans(fade=0.0, spec=@motion.tween(sheet_ms, ease=Out))) {
       Some(look) => {
@@ -891,9 +894,9 @@ test "what is drawn cut while it opens is tapped whole, where it is laid out" {
   let taps = Ref::new(0)
   let t = @ui.Tester::new(fn(c) {
     let id = c.id("line")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       taps.val = taps.val + 1
-    }
+    })
     let b = c.box(w=Px(200.0), fn() {
       c.box(w=Px(200.0), h=Px(40.0), min_h=40.0, bg=0x0A0B0CFFL, id~, fn() {  }) |> ignore
       c.box(w=Px(200.0), h=Px(60.0), min_h=60.0, bg=0x0D0E0FFFL, fn() {  }) |> ignore
@@ -918,9 +921,9 @@ test "what is moved into a box that cuts it from outside it is drawn there" {
     c.box(w=Px(200.0), h=Px(100.0), clip=true, fn() {
       c.box(h=Px(110.0), min_h=110.0, fn() {  }) |> ignore
       let id = c.id("button")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps.val = taps.val + 1
-      }
+      })
       c.box(dir=Row, h=Px(30.0), min_h=30.0, fn() {
         let b = c.box(w=Px(200.0), h=Px(30.0), min_h=30.0, bg=0x336699FFL, id~, fn() {  })
         c.look(b, @ui.look(dy=-40.0))
@@ -961,16 +964,16 @@ fn told_once(ask : Bool, fade_ms : Double, kept : Ref[@motion.Anim?]) -> @ui.Tes
     let v = @motion.anim(c, "a", 0.0)
     if go.val {
       go.val = false
-      v.animate(100.0, @motion.tween(fade_ms, ease=Out))
+      v.animate(c, 100.0, @motion.tween(fade_ms, ease=Out))
       kept.val = Some(v)
       if ask {
         // started here, at this frame's time: its end said at once
-        if v.ends_at() != c.now() + fade_ms {
+        if v.ends_at() != c.moment() + fade_ms {
           abort("an Anim told in a frame did not say its end there")
         }
       }
     }
-    ignore(v.get())
+    ignore(v.get(c))
   })
 }
 
@@ -1009,15 +1012,15 @@ let just_after_ms : Double = 50.0
 
 ///|
 test "a list's row moved by something else just after its rows changed is in its new place at once" {
-  let keys = Ref::new(["a", "b", "c"])
-  let tall_a = Ref::new(false)
+  let keys = @signals.signal(["a", "b", "c"])
+  let tall_a = @signals.signal(false)
   let t = @ui.Tester::new(
     fn(c) {
-      let ks = keys.val
+      let ks = keys.get()
       @motion.list_keys(c, "rows", ks.map(fn(k) { "row/" + k })) |> ignore
       c.list("rows", ks.length(), 40.0, fn(i) {
         let k = ks[i]
-        let h = if k == "a" && tall_a.val { 80.0 } else { 40.0 }
+        let h = if k == "a" && tall_a.get() { 80.0 } else { 40.0 }
         let n = c.box(w=Fill(1.0), h=Px(h), bg=if k == "c" { 0xFF0000FFL } else { 0x202020FFL }, fn() {
           c.text(k) |> ignore
         })
@@ -1030,16 +1033,16 @@ test "a list's row moved by something else just after its rows changed is in its
   )
   assert_eq(drawn_y(t, 0xFF0000FFL), 80.0)
   // b goes: c closes over it, on its way for the list's change
-  keys.val = ["a", "c"]
+  keys.set(["a", "c"])
   t.draw()
   t.run_for(@motion.layout_rest("row/c") - t.time())
   assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
   // the rows change again, and just after a row over c grows (its words came, not the list's change): c is pushed
   // down by those 40 at once
-  keys.val = ["a", "c", "d"]
+  keys.set(["a", "c", "d"])
   t.draw()
   t.run_for(just_after_ms)
-  tall_a.val = true
+  tall_a.set(true)
   t.frame()
   assert_eq(drawn_y(t, 0xFF0000FFL), 80.0)
   assert_eq(@motion.layout_rest("row/c"), -1.0)
@@ -1092,11 +1095,11 @@ test "run_for: what its last frame says starts there is drawn at that moment, it
     let a = @motion.anim(c, "toast-fade", 1.0)
     fade.val = Some(a)
     if begun.val < 0.0 {
-      begun.val = c.now()
+      begun.val = c.moment()
     }
-    // (a toast's deadline: it goes once shown that long, from the first frame)
-    if c.now() >= begun.val + shown && a.target() != 0.0 {
-      a.animate(0.0, @motion.tween(200.0, ease=Out))
+    // (a toast's deadline: it goes once shown that long, from the first frame: a frame at that moment, Ctx::every)
+    if c.every(shown, from=begun.val) >= 1 && a.target() != 0.0 {
+      a.animate(c, 0.0, @motion.tween(200.0, ease=Out))
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
@@ -1120,19 +1123,19 @@ test "a chain of tweens each from the one before's declared end, whichever frame
     let i = k.val
     if i < 0 {
       k.val = 0
-      segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
-    } else if i < 3 && !segs[i].moving() {
+      segs[0].animate(c, 1.0, @motion.tween(lengths[0], ease=Linear))
+    } else if i < 3 && segs[i].over(c) {
       if !seen_end.val {
         // seen at its end: the next told only the frame after
         seen_end.val = true
       } else if i < 2 {
         seen_end.val = false
         k.val = i + 1
-        segs[i + 1].animate(1.0, @motion.tween(lengths[i + 1], ease=Linear), start_at=segs[i].ends())
+        segs[i + 1].animate(c, 1.0, @motion.tween(lengths[i + 1], ease=Linear), start_at=segs[i].ends())
       }
     }
     let j = k.val
-    seen.push((c.now(), j, segs[j].get()))
+    seen.push((c.moment(), j, segs[j].get(c)))
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   t.draw()
@@ -1168,15 +1171,15 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   let t = @ui.Tester::new(fn(c) {
     if k.val < 0 {
       k.val = 0
-      segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
+      segs[0].animate(c, 1.0, @motion.tween(lengths[0], ease=Linear))
     }
     if shown.val {
       // in the same build, each over one followed by the next from its declared end, till one is under way
-      while k.val < 2 && !segs[k.val].moving() {
-        segs[k.val + 1].animate(1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
+      while k.val < 2 && segs[k.val].over(c) {
+        segs[k.val + 1].animate(c, 1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
         k.val += 1
       }
-      segs[k.val].get() |> ignore
+      segs[k.val].get(c) |> ignore
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
@@ -1190,9 +1193,9 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   shown.val = true
   t.draw()
   assert_eq(k.val, 1)
-  assert_true(near(segs[1].get(), (t.time() - (start + lengths[0])).floor() / lengths[1], 1.0e-9))
-  assert_false(segs[0].moving())
-  assert_true(segs[1].moving())
+  assert_true(near(segs[1].get(t.ctx()), (t.time() - (start + lengths[0])).floor() / lengths[1], 1.0e-9))
+  assert_true(segs[0].over(t.ctx()))
+  assert_false(segs[1].over(t.ctx()))
   // (said to move: only the one under way)
   assert_eq(t.moving().length(), 1)
   // unseen past the whole chain's end, seen again: caught up in one build, at the last one's end, nothing moving
@@ -1202,8 +1205,8 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   shown.val = true
   t.draw()
   assert_eq(k.val, 2)
-  assert_eq(segs[2].get(), 1.0)
-  assert_false(segs[2].moving())
+  assert_eq(segs[2].get(t.ctx()), 1.0)
+  assert_true(segs[2].over(t.ctx()))
   assert_true(near(segs[2].ends(), start + lengths[0] + lengths[1] + lengths[2], 1.0e-9))
   t.assert_idle()
 }
@@ -1216,11 +1219,11 @@ test "a chain with motion reduced: each there at once, its end the moment it was
   let t = @ui.Tester::new(fn(c) {
     if k.val < 0 {
       k.val = 0
-      segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
+      segs[0].animate(c, 1.0, @motion.tween(lengths[0], ease=Linear))
     }
     // each at its end followed by the next from its declared end, in the same build
-    while k.val < 2 && !segs[k.val].moving() {
-      segs[k.val + 1].animate(1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
+    while k.val < 2 && segs[k.val].over(c) {
+      segs[k.val + 1].animate(c, 1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
       k.val += 1
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
@@ -1230,8 +1233,8 @@ test "a chain with motion reduced: each there at once, its end the moment it was
   t.draw()
   assert_eq(k.val, 2)
   for s in segs {
-    assert_eq(s.get(), 1.0)
-    assert_false(s.moving())
+    assert_eq(s.get(t.ctx()), 1.0)
+    assert_true(s.over(t.ctx()))
     assert_true(s.ends() <= t.time())
   }
   t.assert_idle()
@@ -1512,7 +1515,7 @@ test "an Anim is over at the end it declared as it was told, whoever asks and ho
   let seen : Array[Bool] = []
   let t = @ui.Tester::new(fn(c) {
     ignore(c)
-    seen.push(a.over())
+    seen.push(a.over(c))
     c.box(fn() {  }) |> ignore
   })
   // never told: over
@@ -1522,15 +1525,66 @@ test "an Anim is over at the end it declared as it was told, whoever asks and ho
   let t2 = @ui.Tester::new(fn(c) {
     if !told.val {
       told.val = true
-      a.animate(1.0, @motion.tween(reshape_ms, ease=Linear))
+      a.animate(c, 1.0, @motion.tween(reshape_ms, ease=Linear))
     }
-    seen.push(a.over())
+    seen.push(a.over(c))
     c.box(fn() {  }) |> ignore
   })
   assert_false(seen[seen.length() - 1])
   t2.run_for(reshape_midway_ms)
-  assert_false(a.over())
+  assert_false(a.over(t2.ctx()))
   t2.run_for(reshape_ms - reshape_midway_ms)
-  assert_true(a.over())
+  assert_true(a.over(t2.ctx()))
   ignore(t)
 }
+
+///|
+/// Words in a box sliding across by the clock (Ctx::moved_by, a page going), each glyph drawn by a look worked out from
+/// where it is in its measured words (measured_rect, as a message's glyphs come out: emit's): the frames of the slide
+/// painted alone, nothing built nor laid out, each drawn as building it whole draws it (the Tester's own check, as in
+/// every test), the measured words' place where they are drawn. Found in a replay (new_chat_test: a glyph drawn 0.03
+/// off as the page it was in slid away).
+test "a measured node in what slides by the clock: read where it is drawn as each frame is painted alone" {
+  let go = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let slide = @motion.anim(c, "slide", 0.0)
+      if go.val {
+        go.val = false
+        slide.animate(c, 1.0, @motion.tween(slide_ms, ease=Out))
+      }
+      let page = c.box(w=Px(300.0), h=Px(100.0), fn() {
+        let words = c.text("a line of words")
+        @motion.measure(c, words, "slid-words")
+        c.glyphs_by(words, fn(at) {
+          let dy = match @motion.measured_rect(c, "slid-words") {
+            Some((x, _, _, _)) => (at.x - x) * 0.013
+            None => 0.0
+          }
+          { alpha: 1.0, dx: 0.0, dy, scale: 1.0, sx: 1.0 }
+        })
+      })
+      c.moved_by(page, fn(w, _) { (slide.get(c) * w * 0.731, 0.0) })
+    },
+    w=400.0,
+    h=200.0,
+  )
+  t.draw()
+  t.frame()
+  go.val = true
+  t.draw()
+  // (the slide's frames as a display draws them, each painted alone: what is checked against building it whole)
+  let ends = t.time() + slide_ms
+  let mut alone = 0
+  while t.time() < ends {
+    t.frame()
+    if t.built_why() == "" && t.painted_why() != "" {
+      alone = alone + 1
+    }
+  }
+  assert_true(alone > 3, msg="painted alone: \{alone}")
+}
+
+///|
+/// How long the slide above takes.
+let slide_ms : Double = 300.0

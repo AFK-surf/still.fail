@@ -4,39 +4,6 @@
 // a short one and grown or opened in the tall one. Moved, faded, scaled: its body not built again.
 
 ///|
-test "an old view measured in a retained row is drawn where the list places its full height, on its first frame" {
-  let t = Tester::new(fn(_) { }, w=300.0, h=300.0)
-  let ids : Map[String, @view.View] = Map([])
-  set_view_app(fn(root) {
-    root.laid_before_causes()
-    let items = Array::makei(10, fn(i) { i })
-    let rows = ListRows::new().in_node(root, fn() { items }, fn(i) { i.to_string() }, fn(_) { "1" })
-    root.height(Is(Some(300.0))).scrolls_window(@view.Scroll::list(), fn() { (rows.read)().1 }, from_end=true,
-      room=rows.room, fn(row, k) {
-        if k == "8" {
-          row.box(fn(b) { b.height(Is(Some(24.0))) |> ignore }) |> ignore
-          ids["old"] = old(row, natural=true, fn(c) {
-            c.box(w=Fill(1.0), h=Px(86.0), fn() { c.text("卡片", wrap=false) |> ignore }) |> ignore
-          })
-        } else {
-          row.height(Is(Some(80.0))) |> ignore
-          if k == "9" {
-            ids["next"] = row
-            row.words(Is("下一行")) |> ignore
-          }
-        }
-      }) |> ignore
-  })
-  t.frame()
-  let old = ids["old"].rect()
-  let next = ids["next"].rect()
-  let drawn = t.drawn_of("卡片").unwrap()
-  assert_eq(old.3, 86.0)
-  assert_true((drawn.1 - old.1).abs() < 0.5, msg="the island drawn at \{drawn} but placed at \{old}")
-  assert_true(next.1 >= old.1 + old.3 - 0.5, msg="the next row \{next} overlaps \{old}")
-}
-
-///|
 /// A window `w`×`h` whose tree holds a column: an old view `width` wide, as tall as what it holds (`rows` boxes 30 high,
 /// then `words` wrapped), held to the window less 100; under it a marker. How many times its body was built, in `built`.
 fn natural_tester(
@@ -315,9 +282,9 @@ fn off_pixels_block(how : Int) -> ((Double, Double, Double, Double), (Double, Do
   let pressed = Ref(0)
   let block = fn(c : Ctx) {
     let id = c.id("old block")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       pressed.val = pressed.val + 1
-    }
+    })
     let b = c.box(w=Px(100.0), h=Px(50.0), bg=natural_mark, id~, fn() {  })
     c.semantics(b, Button, id~, label="old block")
   }

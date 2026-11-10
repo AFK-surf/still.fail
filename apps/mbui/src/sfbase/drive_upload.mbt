@@ -1,9 +1,9 @@
-// Files going up into a folder of a drive (web/src/drive/model.ts upload, DriveScreen.kt DriveUpload): picked from
+// Files going up into a folder of a drive (web/src/drive/model.ts upload): picked from
 // the system's picker or dropped, each a row of the folder until it is there, one at a time whatever page is shown; a
 // name taken there asked about on its row. The phone's drive pages and the desktop's files' page show them.
 
 ///|
-/// A file going up into a folder of a drive (DriveScreen.kt DriveUpload): its row in the folder's list until it is
+/// A file going up into a folder of a drive: its row in the folder's list until it is
 /// there.
 pub(all) struct DvUpload {
   serial : Int
@@ -13,7 +13,8 @@ pub(all) struct DvUpload {
   name : @signals.Signal[String]
   bytes : Bytes
   sent : @signals.Signal[Int]
-  /// waiting | going | taken (asked: 替换 or 保留两者) | naming (kept beside: its name asked of the core) | failed
+  /// waiting | going | taken (asked: 替换 or 保留两者) | naming (kept beside: its name asked of the core) | failed | done
+  /// (up, its row kept till the folder's own comes: dv_up_listed)
   state : @signals.Signal[String]
   error : @signals.Signal[String]
   mut replace : Bool
@@ -53,7 +54,7 @@ fn ups_reset() -> Unit {
 pub let dv_part_first : Int = 256 * 1024
 
 ///|
-/// The part a file goes up in at most (Calls.kt UPLOAD_PART); the first is a quarter of a megabyte, doubling while
+/// The part a file goes up in at most; the first is a quarter of a megabyte, doubling while
 /// parts go through, so a name taken is told early.
 pub let dv_part_max : Int = 4 * 1024 * 1024
 
@@ -107,6 +108,10 @@ pub fn dv_take_picked(src : Source, at : DriveAt, entries : Array[DvEntry]) -> U
 ///|
 /// The next file waiting, up (one at a time, whatever page is shown).
 pub fn dv_pump(src : Source) -> Unit {
+  // (those up whose folder has them now: let go)
+  if ups.uploads.iter().any(fn(x) { x.state.get() == "done" && dv_up_listed(src, x) }) {
+    ups.uploads.retain(fn(x) { !(x.state.get() == "done" && dv_up_listed(src, x)) })
+  }
   if ups.pumping.get() {
     return
   }
@@ -131,13 +136,24 @@ pub fn dv_pump(src : Source) -> Unit {
 
 ///|
 pub fn dv_up_done(src : Source, u : DvUpload) -> Unit {
-  ups.uploads.retain(fn(x) { x.serial != u.serial })
+  // (its row kept till the folder's own row of it comes, told by the core's drive topic, a message of its own: the
+  // one taking the other's place as it comes, not the list's room going back a moment before it comes (rows_steady.mbt))
+  u.state.set("done")
   ups.pumping.set(false)
   dv_pump(src)
 }
 
 ///|
-/// One part of a file up from `have` (Calls.kt driveUpload): the station answers with what it has (`have`), the last
+/// Whether file `u`, up, is in its folder's entries as the core has them now.
+pub fn dv_up_listed(src : Source, u : DvUpload) -> Bool {
+  match dv_entries(src, u.station, u.root, u.dir) {
+    Some(es) => es.iter().any(fn(e) { e.name == u.name.get() })
+    None => false
+  }
+}
+
+///|
+/// One part of a file up from `have`: the station answers with what it has (`have`), the last
 /// part in with the entry it now has; a name taken refuses the first part (409), asked in its row.
 pub fn dv_up_part(src : Source, u : DvUpload, have : Int, planned : Int) -> Unit {
   if !ups.uploads.iter().any(fn(x) { x.serial == u.serial }) {

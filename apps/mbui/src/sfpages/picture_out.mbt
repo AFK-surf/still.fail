@@ -3,10 +3,11 @@
 // as the app starts (pages.mbt).
 
 ///|
-/// The picture `png` handed out as its button says (@sf.picture_out_way), what came of it said (that it was copied, not
-/// where the button says so itself: `copy_said`); None: it could not be made. True once it is out.
-pub fn picture_out(c : @ui.Ctx, png : Bytes?, copy_said? : Bool = false) -> Bool {
-  let album = @sf.picture_to_album()
+/// The picture `png` handed out as its button says (@sf.picture_out_way; `copy`: copied whatever it says, a phone's
+/// 复制图片 beside its 保存到相册), what came of it said (that it was copied, not where the button says so itself:
+/// `copy_said`); None: it could not be made. True once it is out.
+pub fn picture_out(c : @ui.Ctx, png : Bytes?, copy_said? : Bool = false, copy? : Bool = false) -> Bool {
+  let album = !copy && @sf.picture_to_album()
   match png {
     None => {
       say(c, @sf.t(if album { "web-main.stations.saveToPhotosFailed" } else { "web-main.stations.shareFailed" }))

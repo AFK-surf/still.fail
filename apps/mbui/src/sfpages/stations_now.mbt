@@ -36,9 +36,9 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
       let (label, icon) = @sf.picture_out_way()
       match share_stand(src) {
         LooksReady =>
-          if @sf.button(c, label, key="share-card/copy", tone=Primary, icon~) {
+          @sf.button(c, label, key="share-card/copy", tone=Primary, icon~, on_press=fn() {
             c.take_shot(share_shot, fn(png) { picture_out(c, png) |> ignore }, scale=share_scale)
-          }
+          }) |> ignore
         LooksGoing(part) => {
           let going = match part {
             Some(p) => @sf.t("web-main.stations.shareFetching", args=[("percent", (p * 100.0).to_int().to_string())])
@@ -47,9 +47,9 @@ pub fn share_card_open(src : Source, w : Workspace) -> Unit {
           @sf.button(c, going, key="share-card/copy", tone=Primary, busy=true, disabled=true) |> ignore
         }
         LooksNotHad(_) =>
-          if @sf.button(c, @sf.t("web-main.stations.shareFetchFailed"), key="share-card/copy", tone=Primary, icon="retry") {
+          @sf.button(c, @sf.t("web-main.stations.shareFetchFailed"), key="share-card/copy", tone=Primary, icon="retry", on_press=fn() {
             share_fetch_again(src)
-          }
+          }) |> ignore
       }
     },
   )
@@ -146,7 +146,7 @@ fn share_stand(src : Source) -> @sfbase.LooksStand {
 ///|
 /// What the card to share of workspace `w` says (the core's `fleet` view), whatever look draws it.
 fn share_fleet(src : Source, w : Workspace) -> Json? {
-  (src.topic)("fleet", { "scope": Json::string(w.id) }).value
+  src.topic("fleet", { "scope": Json::string(w.id) }).get().value
 }
 
 ///|

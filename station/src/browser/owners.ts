@@ -1,4 +1,4 @@
-// Which session opened each tab of the station's browser (docs/remote-screens.md, "Whose a tab is"): learnt from the
+// Which session opened each tab of the station's browser ("Whose a tab is"): learnt from the
 // session's own connection to it (proxy.ts) and from a tab's opener, kept in <data>/browser/owners.json as Chrome keeps
 // its tabs, so the next station process that takes the browser up still knows them. A tab gone is forgotten. These are
 // the station's own context's tabs: one in a chat's own context (browsers.ts) is that chat's, by its context.

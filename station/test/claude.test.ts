@@ -11,7 +11,9 @@ import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ClaudeDriver, type Turn, backgroundOf, classifyResult, onFrame } from "../src/agents/claude.ts";
+import { REPO_RULES_HOOK } from "../src/agents/repo-rules.ts";
 import { allLeft, existingRunners } from "../src/agents/runner.ts";
+import { modelLimitOf } from "../src/agents/runtime.ts";
 import type { AgentSession, OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
@@ -207,11 +209,17 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.equal(settings.skillOverrides.loop, "off");
     assert.equal(settings.skillOverrides["anthropic-skills:computer-use"], "off");
     assert.equal(settings.skillOverrides["anthropic-skills:docx"], "name-only");
+    // A repository's rules told as its tools first touch it (test/repo-rules-hook.test.ts).
+    const [rules] = settings.hooks.PostToolUse;
+    assert.match(rules.matcher, /^Bash\|Read\|/);
+    assert.ok(rules.hooks[0].command.includes(REPO_RULES_HOOK), rules.hooks[0].command);
+    const [compacted] = settings.hooks.SessionStart;
+    assert.equal(compacted.matcher, "compact");
+    assert.ok(compacted.hooks[0].command.includes(REPO_RULES_HOOK), compacted.hooks[0].command);
     const env = started.env;
     assert.equal(env.CLAUDE_CONFIG_DIR, o.profile.home);
     assert.equal(env.STILLFAIL_MCP_TOKEN, "tok");
     assert.equal(env.STILLFAIL_RUNTIME_SESSION_ID, session.id());
-    assert.equal(env.EMBER_RUNTIME_SESSION_ID, session.id());
     assert.equal(env.CLAUDE_CODE_CERT_STORE, "bundled");
     assert.equal(env.CLAUDE_CODE_SILENT_TURN_REMINDER, "0");
     assert.equal(env.CLAUDECODE, undefined);
@@ -245,6 +253,42 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await session.dispose();
   });
 
+  test("Fast on an Anthropic key or a Claude subscription is Claude Code's fastMode, as the session is set else as its profile is, and needs a new process", async () => {
+    const d = driver();
+    const fastMode = async (o: OpenOptions & { dump: string }) => {
+      const { push, until } = listen();
+      const session = await d.open(o, push);
+      await session.prompt("say:hi");
+      await until(ended(1));
+      const started = JSON.parse(readFileSync(o.dump, "utf8").trim());
+      const at = started.argv.indexOf("--settings");
+      return [session, at < 0 ? undefined : JSON.parse(started.argv[at + 1]).fastMode] as const;
+    };
+    const keyed = (extra: Partial<OpenOptions> = {}, fast?: boolean) => {
+      const base = options(extra);
+      return { ...base, profile: { ...base.profile, access: { kind: "anthropic-api", key: "sk-ant-1" }, ...(fast === undefined ? {} : { fast }) } };
+    };
+    const [onProfile, profileFast] = await fastMode(keyed({}, true));
+    assert.equal(profileFast, true, "its profile's default");
+    const [standard, sessionOff] = await fastMode(keyed({ fast: false }, true));
+    assert.equal(sessionOff, false, "the session's own over its profile's, said so a /fast in its home does not stay on");
+    const [, off] = await fastMode(keyed());
+    assert.equal(off, false);
+    // A Claude subscription's goes to Claude Code too: it runs Fast while the account's usage credits are on.
+    const sub = options({ fast: true });
+    const [onSubscription, subscriptionFast] = await fastMode({ ...sub, profile: { ...sub.profile, access: { kind: "subscription" } } });
+    assert.equal(subscriptionFast, true);
+    const [notKeyed, other] = await fastMode(options({ fast: true }));
+    assert.equal(other, undefined, "not an account that takes it");
+    // Another Fast is not taken in place; the same is, with another model.
+    const o = keyed({ fast: false }, true);
+    assert.equal(standard.retune?.({ ...o, model: "m2" }), true);
+    assert.equal(standard.retune?.({ ...o, model: "m2", fast: true }), false);
+    assert.equal(standard.retune?.({ ...o, model: "m2", fast: undefined }), false, "back to its profile's, which is on");
+    assert.equal(notKeyed.retune?.({ ...options({ fast: false }), model: "m2" }), true);
+    await Promise.all([onProfile, standard, onSubscription, notKeyed].map((s) => s.dispose()));
+  });
+
   test("a Kimi Code sign-in's key is read from its home by Claude Code's key helper, not given it", async () => {
     const d = driver();
     const base = options();
@@ -276,6 +320,11 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.deepEqual(outcome(events, 2), { kind: "failed", reason: "context", message: "prompt is too long" });
     assert.deepEqual(outcome(events, 3), { kind: "completed" }, "a successful text saying a limit is no failure");
     assert.equal(classifyResult("Claude AI usage limit reached"), "rate_limit");
+    assert.equal(classifyResult("You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage?from=cc_cli_limit_message, to continue."), "rate_limit");
+    // A model's own limit names the model; an account's window is no model (#4365).
+    assert.equal(modelLimitOf("You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage, to continue."), "Fable");
+    assert.equal(modelLimitOf("Claude usage limit reached: you have reached your weekly usage limit"), null);
+    assert.equal(modelLimitOf("You've hit your session limit · resets 3:40am"), null);
     assert.equal(classifyResult("session limit configuration is invalid"), "model");
     assert.equal(classifyResult('API Error: 403 {"error":{"type":"forbidden","message":"Request not allowed"}}'), "refused");
     assert.equal(classifyResult("API Error: 403 OAuth token does not meet scope requirement"), "auth");

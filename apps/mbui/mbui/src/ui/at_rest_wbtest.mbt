@@ -68,24 +68,14 @@ test "a runtime's timer said once is a wake a run's end sees, with who said it; 
 }
 
 ///|
-test "a Tester asked whether the app is at rest: not while a frame is asked for, at rest once the frames it said are drawn" {
-  // (a frame grabbed, then kept, then said: each step in the frame after the last, as still.fail's "save this frame")
-  let step = Ref(0)
-  let t = Tester::new(fn(c) {
-    if step.val > 0 && step.val < 3 {
-      step.val += 1
-      c.request_frame()
-    }
-    c.text(if step.val >= 3 { "saved" } else { "x" }, wrap=false) |> ignore
-  })
+test "a Tester asked whether the app is at rest: not while a frame is owed for what the view read, at rest once it is drawn" {
+  // (a frame saved, said between frames, as still.fail's "save this frame": a signal the view reads)
+  let saved = @signals.signal(false)
+  let t = Tester::new(fn(c) { c.text(if saved.get() { "saved" } else { "x" }, wrap=false) |> ignore })
   assert_true(t.at_rest(), msg=t.rest_why())
-  step.val = 1
-  t.frame()
+  saved.set(true)
   assert_false(t.at_rest())
   assert_true(t.rest_why().contains("a frame asked for"), msg=t.rest_why())
-  // (steps 2 and 3: the two frames it asks for, then none)
-  t.frame()
-  assert_false(t.at_rest())
   t.frame()
   assert_true(t.at_rest(), msg=t.rest_why())
   assert_true(t.find("saved") is Some(_))

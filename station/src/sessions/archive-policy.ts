@@ -108,7 +108,7 @@ export function changeSummary(before: ArchivePolicy, after: ArchivePolicy): stri
 
 type Kept = { archivePolicy(ws?: string | null): { policy: unknown; change: any } | null; setArchivePolicy(policy: unknown, author: unknown, summary: string, ws?: string | null): void };
 
-/// The policy in force in a workspace (docs/multi-workspace.md: one each; null, or absent, the station's home one): the
+/// The policy in force in a workspace (one each; null, or absent, the station's home one): the
 /// last one saved there, else the default.
 export function currentPolicy(store: Kept, ws: string | null = null): ArchivePolicy {
   return policyFrom(store.archivePolicy(ws));
@@ -141,7 +141,7 @@ const VIEW_CHATS = 20;
 
 type Viewed = Kept & { latestDecisionsSince(since: number, viewer?: InWorkspace): any[]; now(): number; getSession(key: string): { runtime: string } | null };
 
-/// A workspace's archive policy as the pages show it (accounts' `policyView`, for one workspace: docs/multi-workspace.md):
+/// A workspace's archive policy as the pages show it (accounts' `policyView`, for one workspace):
 /// its words, its options each with the chats of that workspace (`mine`) the checks of the last days put there (by
 /// their latest check), who changed it last, and how many checks failed.
 export function policyView(store: Viewed, ws: string | null, mine: (session: string) => boolean, title: (session: string) => string, viewer: InWorkspace): any {

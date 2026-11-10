@@ -103,10 +103,22 @@ pub fn track(start : (String) -> Int, end : (Int) -> Unit) -> Unit {
 }
 
 ///|
-/// The subscription to `topic` (see Client::subscribe): the same one each time it is asked, so a view can call it
-/// every frame.
+/// The subscription to `topic` (see Client::subscribe): repeated reads share one Sub and one direct hold, so a view
+/// can call it every frame. They are not independently releasable direct handles.
 pub fn subscribe(topic : String, params? : Map[String, Json] = {}) -> Sub {
   client.subscribe(topic, params~)
+}
+
+///|
+/// Read a source topic as a signal dependency, or as a legacy untracked source hold.
+pub fn follow_topic(topic : String, params? : Map[String, Json] = {}) -> Sub {
+  client.follow_topic(topic, params~)
+}
+
+///|
+/// Refresh an existing topic without interrupting its readers.
+pub fn refresh_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
+  client.refresh_topic(topic, params~)
 }
 
 ///|
@@ -166,6 +178,13 @@ pub fn unread(name : String) -> Unit {
 }
 
 ///|
+/// The answer of call `name` changes only signals: taken as it comes, what read them is built again, nothing else
+/// (Client::said). Said once, as the app starts.
+pub fn said(name : String) -> Unit {
+  client.said(name)
+}
+
+///|
 /// Calls `name` and hears how it goes, for an answer with bytes beside it (see Client::stream_bytes); the call's id,
 /// for `cancel`.
 pub fn stream_bytes(
@@ -194,7 +213,7 @@ pub fn wall_ms() -> Double {
 }
 
 ///|
-/// Ends a subscription.
+/// Releases a direct subscription; other readers keep it until they leave.
 pub fn unsubscribe(s : Sub) -> Unit {
   client.unsubscribe(s)
 }
@@ -203,6 +222,18 @@ pub fn unsubscribe(s : Sub) -> Unit {
 /// Ends a topic if it was asked, without starting a new subscription for it.
 pub fn unsubscribe_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
   client.unsubscribe_topic(topic, params~)
+}
+
+///|
+/// A graph-owned reader ended; keep a topic still held by another reader.
+pub fn release_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
+  client.release_topic(topic, params~)
+}
+
+///|
+/// A legacy source reader ended; a direct subscription remains held.
+pub fn leave_topic(topic : String, params? : Map[String, Json] = {}) -> Unit {
+  client.leave_topic(topic, params~)
 }
 
 ///|
@@ -219,9 +250,56 @@ pub fn fatal() -> String? {
 /// frame sees depends on frames, not on when the core's thread answered. A kept conversation given again (replay.mbt)
 /// comes this way too.
 pub fn receive(text : String, bytes : Bytes?) -> Unit {
+  // (for an id nothing holds: let be, unread)
+  if unheld(text) {
+    return
+  }
   let t0 = if perf_counts() { ffi_now() } else { -1.0 }
-  let msg = @json.parse(text) catch { _ => return }
-  let what = if t0 >= 0.0 { client.perf_name(msg) } else { "" }
+  // (how long it took, parsed and taken, by what it was (never what it said), for a hang it is in:
+  // @hostapi.work_part)
+  let name = Ref("?")
+  @hostapi.work_part(fn() { "core " + name.val }, fn() { receive_taken(text, bytes, t0, name) })
+}
+
+///|
+/// Whether message `text` is for an id nothing holds (Client::unheld): let be unread, a kept conversation's clock told
+/// it came all the same (receive_hook).
+fn unheld(text : String) -> Bool {
+  guard client.unheld(text) else { return false }
+  match receive_hook.val {
+    Some(f) => f()
+    None => ()
+  }
+  true
+}
+
+///|
+/// The messages let be unread since this was last asked, for ids nothing held, by what the ids were (`topic stations`,
+/// `call screen.view`; `?` one let go of longer ago), the most first: how many, their length in all
+/// (Client::unheld_said).
+pub fn unheld_said() -> Array[(String, Int, Int)] {
+  client.unheld_said()
+}
+
+///|
+/// The message receive_said read and left for the frame, with what it read of it: `receive`, handed the same text as
+/// the frame is built, reads it no second time.
+// kept across runs: taken by the `receive` it was left for, another's put in its place
+let parsed_left : Ref[(String, Json)?] = Ref(None)
+
+///|
+/// Message `text` parsed and taken (receive's), what it was said in `name`; its counts kept where `t0` (the record's
+/// clock as it came) is not below 0.
+fn receive_taken(text : String, bytes : Bytes?, t0 : Double, name : Ref[String]) -> Unit {
+  let msg = match parsed_left.val {
+    Some((t, m)) if physical_equal(t, text) => {
+      parsed_left.val = None
+      m
+    }
+    _ => @json.parse(text) catch { _ => return }
+  }
+  let what = client.perf_name(msg)
+  name.val = what
   take(msg, bytes)
   if t0 >= 0.0 {
     perf_in(what, text, bytes, ffi_now() - t0)
@@ -317,21 +395,35 @@ pub fn perf_said(span : Double) -> String {
 /// answer nobody reads), before the frame decides what it does: what read the topic is built again, nothing else
 /// (@ui.on_message_said, "core"). Whether it was; else it is left for `receive`, as the frame is built.
 pub fn receive_said(text : String, bytes : Bytes?) -> Bool {
-  let t0 = if perf_counts() { ffi_now() } else { -1.0 }
-  let msg = @json.parse(text) catch { _ => return false }
-  match msg {
-    Object(m) if !m.contains("mbui_auth") &&
-      !m.contains("clocked") &&
-      (client.topic_said(m) || client.call_said(m)) => {
-      let what = if t0 >= 0.0 { client.perf_name(msg) } else { "" }
-      take(msg, bytes)
-      if t0 >= 0.0 {
-        perf_in(what, text, bytes, ffi_now() - t0)
-      }
-      true
-    }
-    _ => false
+  // (for an id nothing holds: taken as it comes, unread, nothing built for it)
+  if unheld(text) {
+    return true
   }
+  let t0 = if perf_counts() { ffi_now() } else { -1.0 }
+  // (how long it took, parsed and taken, by what it was, for a hang it is in: @hostapi.work_part; one left for
+  // `receive` is said parsed: taken there, read here)
+  let name = Ref("parsed")
+  @hostapi.work_part(fn() { "core " + name.val }, fn() {
+    let msg = @json.parse(text) catch { _ => return false }
+    match msg {
+      Object(m) if !m.contains("mbui_auth") &&
+        !m.contains("clocked") &&
+        (client.topic_said(m) || client.call_said(m)) => {
+        let what = client.perf_name(msg)
+        name.val = what
+        take(msg, bytes)
+        if t0 >= 0.0 {
+          perf_in(what, text, bytes, ffi_now() - t0)
+        }
+        true
+      }
+      _ => {
+        // (left for `receive`, which reads it no second time)
+        parsed_left.val = Some((text, msg))
+        false
+      }
+    }
+  })
 }
 
 ///|
@@ -363,7 +455,7 @@ fn take(msg : Json, bytes : Bytes?) -> Unit {
 
 ///|
 /// Told as the core fails, with its reason, before it is started again (or stopped, a third time in a minute): still.fail's
-/// Android app reports it as CoreFailed (StillFailCore.onFailed, Crashes.kt), as src/stillfail's host does.
+/// Android app reports it as CoreFailed (StillFailCore.onFailed), as src/stillfail's host does.
 pub let on_failed : Ref[((String) -> Unit)?] = { val: None }
 
 ///|
@@ -401,8 +493,8 @@ fn restart() -> Unit {
 
 ///|
 /// Signs a person in with still.fail cloud: `auth.begin` for the login page, the system's browser session for it
-/// (ASWebAuthenticationSession on iOS), which brings back the `stillfail://auth/callback` URL the cloud
-/// sends the browser to, then `auth.complete` with its query. `on_done` gets `auth.complete`'s answer
+/// (ASWebAuthenticationSession on iOS; a Custom Tab on Android), which brings back the `<scheme>://auth/callback` URL
+/// the cloud sends the browser to (`auth_redirect`: stillfail, or the app's own where its engine has one), then `auth.complete` with its query. `on_done` gets `auth.complete`'s answer
 /// (`{account, return_to}`) or why not (the person closed the page, or an error of the core's).
 pub fn sign_in(on_done : (Result[Json, Json]) -> Unit) -> Unit {
   let params : Map[String, Json] = {
@@ -428,7 +520,7 @@ pub fn sign_in(on_done : (Result[Json, Json]) -> Unit) -> Unit {
                 Err(why) => on_done(Err(error_json("auth", why)))
               }
             }
-            if ffi_web_auth(token, url, "stillfail") == 0 {
+            if ffi_web_auth(token, url, auth_scheme()) == 0 {
               engine.auths.remove(token)
               on_done(Err(error_json("auth", "no browser session in this build")))
             }
@@ -443,8 +535,9 @@ pub fn sign_in(on_done : (Result[Json, Json]) -> Unit) -> Unit {
 }
 
 ///|
-/// Whether this build has the system's browser session `sign_in` needs (ASWebAuthenticationSession on iOS); where it
-/// has not (Android, macOS, Windows), an app signs in on `@hostapi.browser_login` (a loopback address) instead.
+/// Whether this build has the system's browser session `sign_in` needs (ASWebAuthenticationSession on iOS, a Custom Tab
+/// coming back on the app's scheme on Android); where it has not (macOS, Windows), an app signs in on
+/// `@hostapi.browser_login` (a loopback address) instead.
 pub fn has_browser_session() -> Bool {
   ffi_has_web_auth() != 0
 }

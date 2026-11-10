@@ -47,23 +47,6 @@ using @sfpages {
 }
 
 ///|
-/// What the option chosen above it does (chat.css.ts appearanceHint: 8 under it, the meta's 12 muted, 52em at most).
-fn desk_hint(c : @ui.Ctx, words : String) -> Unit {
-  c.box(style=desk_hint_box, fn() { c.text(words, style=desk_hint_words) |> ignore }) |> ignore
-}
-
-///|
-/// A choice of a few (Segmented) as wide as its options, at the column's start.
-fn desk_choice(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=desk_choice_row, fn() { body() }) |> ignore
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_choice_row : @ui.Style = @ui.css("row w=Full")
-
-
-///|
 /// A page of the desktop's settings still drawn with its desktop pieces alone: the library's page laid out wide (counted
 /// by page-look where a page asks for it), back over it on a page under another (`back` where it goes; `on_back`, else
 /// the page popped).
@@ -91,42 +74,3 @@ fn desk_page(
 }
 
 // ── one arrangement's pieces, as pages still draw them ──────────────────
-
-///|
-let narrow_most : Double = @sf.narrow_most
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_lead_box : @ui.Style = @sf.pg_lead_box
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_lead : @ui.TextStyle = @sf.pg_lead
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_card_room : @ui.Style = @sf.pg_card_room
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_said_row : @ui.Style = @sf.pg_said_row
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_row_words : @ui.Style = @sf.pg_row_words
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_value : @ui.TextStyle = @sf.pg_value
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_link_note : @ui.TextStyle = @sf.pg_link_note
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_heading : @ui.TextStyle = @sf.wide_heading
-
-///|
-// kept across runs: a value (no field of it changes)
-let wide_value : @ui.TextStyle = @sf.wide_value

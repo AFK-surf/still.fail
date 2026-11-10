@@ -1,5 +1,5 @@
-// The files' page on a wide screen (ember web/src/pages/Files.tsx FilesShell, Files.css.ts), as Finder's window: a row
-// of tabs, each a folder of a station of the workspace (tabs.mbt: the core keeps them), the one shown below; a tab split
+// The files' page on a wide screen (Files.css.ts), as Finder's window: a row
+// of tabs, each a folder of a station of the workspace, the one shown below; a tab split
 // in two shows two folders side by side, of one station or two, to drag from one to the other. The side in front (its
 // top lined in the accent) is what the page's address says and what the keys work on; a press in the other one puts it
 // in front. Each side is a folder's page (its head, then FolderView) under its own station.
@@ -69,8 +69,6 @@ pub fn files_shell(
   here : DriveAt,
   room : Double,
 ) -> Unit {
-  // what is dragged moved on or let go, before what it goes over is drawn
-  drag_frame(c, src, ws)
   // the address moved (a link, the sidebar, history): the side in front follows it
   let arrive = ws + "\n" + here.station + "\n" + here.root.unwrap_or("") + "\n" + here.path
   if shell.arrived != arrive {
@@ -117,17 +115,19 @@ pub fn files_shell(
     let n = tabs.tabs.length()
     show("show", None, Some(tabs.tabs[(at + step + n) % n].id), None)
   }
-  if c.shortcut('t') {
-    show("open", Some(here), None, None)
-  } else if c.key_pressed(@ui.key_tab, mods=@ui.mod_ctrl) || c.shortcut(']', shift=true) {
-    along(1)
-  } else if c.key_pressed(@ui.key_tab, mods=@ui.mod_ctrl + @ui.mod_shift_key) || c.shortcut('[', shift=true) {
-    along(-1)
-  } else if c.key_pressed(@ui.key_of_char('d'), mods=@ui.mod_cmd + @ui.mod_alt) {
-    show("split", None, None, None)
-  } else if c.key_pressed(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key) {
-    go_to_open()
+  // (the keymap's files.* where the files are (settings' files_bindings), done at their key's moment)
+  c.key_context("Files")
+  let on = fn(action : String, f : () -> Unit) {
+    c.on_action("files." + action, fn() {
+      f()
+      true
+    })
   }
+  on("tab_new", fn() { show("open", Some(here), None, None) })
+  on("tab_next", fn() { along(1) })
+  on("tab_back", fn() { along(-1) })
+  on("split", fn() { show("split", None, None, None) })
+  on("go_to", go_to_open)
   // a side's folder, as the folder's own parts take it (drive.mbt), in its side's room; a folder opened in a new tab
   // or on the other side
   let side_room = if split_on { room / 2.0 - body_in_half } else { room - body_in }
@@ -142,7 +142,8 @@ pub fn files_shell(
           at: p,
           front: i == tab.front,
           room: side_room,
-          go: fn(to, _) { files_go(to) },
+          // (its operation state handed to the folder it opens, read on as that one loads: open_handing)
+          go: fn(to, _) { @sfbase.open_handing(src, "doing", {}, fn() { files_go(to) }) },
           open_in: Some(fn(to, beside) { show(if beside { "besides" } else { "open" }, Some(to), None, None) }),
           go_to: Some(go_to_open),
         })
@@ -150,6 +151,8 @@ pub fn files_shell(
     }
   }
   let page = c.id("files-page")
+  // files from the computer let go on a folder drawn in it go up into it
+  fdrag_files(c, page)
   c.box(style=page_box, id=page, fn() {
     let bar = c.id("files-bar")
     if @ui.window_inset() {
@@ -171,21 +174,22 @@ pub fn files_shell(
       let lit = @sf.theme().p.accent
       // (as a bar's buttons are: round on the tape, the last in the panel's corner concentric with it; at the window's
       // corner the corner they share, following it: @sf.bar_keys_link)
-      if @sf.icon_button(
-          c,
-          "view-columns",
-          key="files/split",
-          on=split_on,
-          round=true,
-          linked?=@sf.bar_keys_link(),
-          ink?=if split_on { Some(lit) } else { None },
-          label=@sf.t(if split_on { "web-pages.files.unsplit" } else { "web-pages.files.split" }),
-        ) {
-        show("split", None, None, None)
-      }
-      if @sf.icon_button(c, "plus", key="files/new-tab", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.files.newTab")) {
+      @sf.icon_button(
+        c,
+        "view-columns",
+        key="files/split",
+        on=split_on,
+        round=true,
+        linked?=@sf.bar_keys_link(),
+        ink?=if split_on { Some(lit) } else { None },
+        label=@sf.t(if split_on { "web-pages.files.unsplit" } else { "web-pages.files.split" }),
+        on_press=fn() {
+          show("split", None, None, None)
+        },
+      ) |> ignore
+      @sf.icon_button(c, "plus", key="files/new-tab", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.files.newTab"), on_press=fn() {
         show("open", Some(here), None, None)
-      }
+      }) |> ignore
     })
     |> ignore
     // the tab shown: a side each, split the one in front lined at its top
@@ -211,7 +215,7 @@ pub fn files_shell(
 }
 
 ///|
-/// The tabs (Files.tsx): one groove, each tab an equal share of it, the one shown raised; its folder first, its station
+/// The tabs: one groove, each tab an equal share of it, the one shown raised; its folder first, its station
 /// after it, small, a dot of its station's colour before; its close at its left while pointed at. `show`: a tab shown
 /// or closed.
 fn tab_row(
@@ -227,10 +231,11 @@ fn tab_row(
       let on = x.id == tabs.current
       let id = c.id("files/tab/" + x.id)
       let cid = c.id("files/tab-close/" + x.id)
-      if c.clicked(cid) {
-        show("close", x.id)
-      } else if !on && c.clicked(id) {
-        show("show", x.id)
+      c.on_press(cid, fn() { show("close", x.id) })
+      if !on {
+        c.on_press(id, fn() {
+          show("show", x.id)
+        })
       }
       // (its ✕ always to a finger, which hovers over nothing)
       let hot = @sf.pointed_or_finger(c, c.lit(id) || c.lit(cid))

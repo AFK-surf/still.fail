@@ -14,6 +14,7 @@
 ///|
 /// A shot being taken: what is told once it is, the frame it was asked in, since when it has waited for its pictures;
 /// as the frame built and painted it, its layer and its root, its instances, whether a picture in it is still coming.
+/// A picture made as nodes (take_picture): its tree; its layer and root then say it was laid out this frame.
 struct Shot {
   done : (Bytes?) -> Unit
   asked : Int
@@ -25,6 +26,9 @@ struct Shot {
   mut inst : FixedArray[Double]
   mut ninst : Int
   mut waits : Bool
+  tree : ShotTree?
+  /// where its root was painted and how big (x, y, w, h), as the frame painted it
+  mut rect : (Double, Double, Double, Double)
 }
 
 ///|
@@ -73,55 +77,112 @@ pub fn Ctx::shot(self : Ctx, key : String, w : Double, body : () -> Unit) -> Uni
   s.layer = o.node
   s.node = root
 }
-
 ///|
-/// The pictures asked of what is drawn apart from any view's build (take_picture): each shot's key, how wide it is
-/// built, what builds it, built while it is being taken, let go as it is told.
-// kept across runs: put back as a run begins (on_reset)
-let pictures_asked : Map[Int, (String, Double, (Ctx) -> Unit)] = {}
-
-///|
-fn init {
-  on_reset(fn() { pictures_asked.clear() })
+/// A picture made as nodes (take_picture): its tree, made apart from the window's (its nodes' indexes its own), and
+/// the box its picture is of, as wide as it was asked.
+priv struct ShotTree {
+  tree : @view.Tree
+  held : @view.View
+  w : Double
 }
 
 ///|
-/// A picture of what `body` builds (as an old view builds it: what a shot draws is the old drawing's, whoever asks),
-/// `w` wide and as tall as it is, taken once from now as a shot is (Ctx::take_shot: built apart, never seen, at `scale`
-/// pixels a point, its bands and the pictures in it waited for as a shot's), `done` told its PNG: asked at a cause (a
-/// press) by what has no build of its own to say it in each frame (a node of the window's tree), `body` built in the
-/// frames it is being taken alone. Taken again under the same `key` while it is, it begins again.
+/// How tall a picture made as nodes may come to (take_picture): the room its tree is laid out in, its box as tall as
+/// what it holds within it.
+let shot_tree_room : Double = 1000000.0
+
+///|
+/// A picture of what `make` makes as nodes, `w` wide and as tall as it is, taken once from now as a shot is
+/// (Ctx::take_shot: never seen, pressed or read out, at `scale` pixels a point, its bands and the pictures in it waited
+/// for as a shot's), `done` told its PNG: asked at a cause (a press's handler). What `make` makes is a tree of its own,
+/// made now, laid out at each frame till the picture is taken (its words and pictures as the window's tree's are, at
+/// the shot's pixels a point), painted apart (Ctx::tree_shot_paint), let go as it is told. Taken again under the same
+/// `key` while it is, it begins again (the one before let go untold).
 pub fn take_picture(
   key : String,
   w : Double,
-  body : (Ctx) -> Unit,
+  make : (@view.View) -> Unit,
   done : (Bytes?) -> Unit,
   scale? : Double = 0.0,
 ) -> Unit {
+  let c = g()
   let id = shot_id(key)
-  pictures_asked[id] = (key, w, body)
-  g().take_shot(
-    key,
-    fn(png) {
-      pictures_asked.remove(id)
+  match c.shots.get(id) {
+    Some({ tree: Some(st), .. }) => st.tree.dispose()
+    _ => ()
+  }
+  let held : Ref[@view.View?] = Ref(None)
+  let tree = @signals.untracked(fn() {
+    @view.Tree::new(
+      fn(root) {
+        root.tree.drawn_by(
+          words_scale=fn() { font_scale() },
+          pixel_scale=fn() { if scale > 0.0 { scale } else { g().scale } },
+          glass_solid=fn() { true },
+          image_ready=fn(src, px) { g().image_ready(src, px) },
+        )
+        root.box(fn(b) {
+          b.width(Is(Some(w))) |> ignore
+          held.val = Some(b)
+          make(b)
+        })
+        |> ignore
+      },
+      measure=view_words_measure,
+      measure_runs=view_runs_measure,
+      measure_shorter=view_shorter_measure,
+      time=fn() { h_event_time() },
+    )
+  })
+  let st = { tree, held: held.val.unwrap(), w }
+  c.shots[id] = {
+    done: fn(png) {
+      tree.dispose()
       done(png)
     },
-    scale~,
-  )
+    asked: c.frame_no,
+    since: c.clock,
+    scale,
+    layer: -1,
+    node: -1,
+    inst: FixedArray::make(0, 0.0),
+    ninst: 0,
+    waits: false,
+    tree: Some(st),
+    rect: (0.0, 0.0, 0.0, 0.0),
+  }
+  c.read_changed("a picture taken")
 }
 
 ///|
-/// The pictures asked (take_picture) built in this frame, each as its shot (Ctx::shot), while it is being taken: in the
-/// theme the window's tree is drawn in (tree_theme), what asks them its nodes, not in what the frame's build left.
+/// The pictures made as nodes (take_picture) laid out in this frame, at its moment, while each is being taken: built
+/// so, as a shot built in it is (Ctx::shot).
 fn Ctx::pictures_built(self : Ctx) -> Unit {
-  if pictures_asked.is_empty() {
-    return
+  for _, s in self.shots {
+    match s.tree {
+      Some(st) => {
+        @signals.untracked(fn() {
+          st.tree.at(view_logic_at.val)
+          st.tree.frame(st.w, shot_tree_room, now=view_logic_at.val) |> ignore
+        })
+        s.layer = 0
+        s.node = 0
+      }
+      None => ()
+    }
   }
-  let theme = @signals.untracked(tree_theme)
-  for _, p in pictures_asked {
-    let (key, w, body) = p
-    self.with_theme(theme, fn() { self.shot(key, w, fn() { body(self) }) })
+}
+
+///|
+/// Every shot let go untold (a run's end): the trees of the pictures made as nodes with them.
+fn Ctx::shots_let_go(self : Ctx) -> Unit {
+  for _, s in self.shots {
+    match s.tree {
+      Some(st) => st.tree.dispose()
+      None => ()
+    }
   }
+  self.shots.clear()
 }
 
 ///|
@@ -130,6 +191,10 @@ fn Ctx::pictures_built(self : Ctx) -> Unit {
 /// screen of one pixel a point as from one of three); the window's where not said. Taken again while it is being
 /// taken, it begins again (only the later told).
 pub fn Ctx::take_shot(self : Ctx, key : String, done : (Bytes?) -> Unit, scale? : Double = 0.0) -> Unit {
+  match self.shots.get(shot_id(key)) {
+    Some({ tree: Some(st), .. }) => st.tree.dispose()
+    _ => ()
+  }
   self.shots[shot_id(key)] = {
     done,
     asked: self.frame_no,
@@ -140,6 +205,8 @@ pub fn Ctx::take_shot(self : Ctx, key : String, done : (Bytes?) -> Unit, scale? 
     inst: FixedArray::make(0, 0.0),
     ninst: 0,
     waits: false,
+    tree: None,
+    rect: (0.0, 0.0, 0.0, 0.0),
   }
   self.read_changed("a shot taken")
 }
@@ -172,17 +239,28 @@ fn Ctx::paint_shots(self : Ctx) -> Unit {
   }
   let inst = self.inst
   let ninst = self.ninst
+  // (the frame's headers where they are in its instances, none in a shot's: Ctx::ride_copy)
+  let spans = ride_spans.copy()
+  ride_spans.clear()
   let segs = self.segs.copy()
+  let runs = seg_runs.copy()
   let tops = dr.tops.copy()
   let window_scale = self.scale
   for _, s in self.shots {
     if s.layer < 0 || s.node < 0 {
       continue
     }
-    let n = self.nodes[s.node]
+    let (x, y, w, h) = match s.tree {
+      Some(st) => st.held.rect()
+      None => {
+        let n = self.nodes[s.node]
+        (n.x, n.y, n.fw, n.fh)
+      }
+    }
+    s.rect = (x, y, w, h)
     self.inst = if s.inst.length() >= inst_size * 64 { s.inst } else { FixedArray::make(inst_size * 1024, 0.0) }
     self.ninst = 0
-    self.segs.clear()
+    self.segs_cut(0)
     dr.tops.clear()
     shooting.val = true
     shot_waits.val = false
@@ -190,8 +268,11 @@ fn Ctx::paint_shots(self : Ctx) -> Unit {
       self.scale = s.scale
       words_zoom.val = s.scale / window_scale
     }
-    push_clip(n.x, n.y, n.x + n.fw, n.y + n.fh)
-    self.paint(s.layer, 1.0)
+    push_clip(x, y, x + w, y + h)
+    match s.tree {
+      Some(st) => self.tree_shot_paint(st.tree)
+      None => self.paint(s.layer, 1.0)
+    }
     self.land_flying()
     pop_clip()
     self.raise_tops()
@@ -206,18 +287,21 @@ fn Ctx::paint_shots(self : Ctx) -> Unit {
   }
   self.inst = inst
   self.ninst = ninst
-  self.segs.clear()
+  ride_spans.clear()
+  ride_spans.append(spans)
+  self.segs_cut(0)
   self.segs.append(segs)
+  seg_runs.append(runs)
   dr.tops.clear()
   dr.tops.append(tops)
 }
 
 ///|
-/// Once the frame is presented, each shot built and painted in it with nothing in it still coming (or waited for long
-/// enough) taken whole and told: drawn by the host a window's height at a time, moved up by what is taken, its rows
-/// read back into its PNG. One with a picture still coming waits for the frame that brings it (the host's), or its
-/// time's end. One not built in this frame (what built it is gone) is let go untold.
-fn Ctx::shots_after_present(self : Ctx) -> Unit {
+/// Once the frame drawn at `at` (its moment) is presented, each shot built and painted in it with nothing in it still
+/// coming (or waited for long enough by then) taken whole and told: drawn by the host a window's height at a time,
+/// moved up by what is taken, its rows read back into its PNG. One with a picture still coming waits for the frame that
+/// brings it (the host's), or its time's end. One not built in this frame (what built it is gone) is let go untold.
+fn Ctx::shots_after_present(self : Ctx, at : Double) -> Unit {
   if self.shots.is_empty() {
     return
   }
@@ -242,27 +326,31 @@ fn Ctx::shots_after_present(self : Ctx) -> Unit {
       continue
     }
     let end = s.since + shot_wait_most
-    if s.waits && self.now() < end {
+    if s.waits && at < end {
       // (the host's frame as a picture comes; its time's end at the latest)
       if self.wake_at < 0.0 || end < self.wake_at {
         self.wake_at = end
       }
       continue
     }
-    let n = self.nodes[node]
-    match fake.val {
-      Some(f) => {
-        f.shots.push(self.shot_words(node))
-        // (how big a picture it makes and what it drew: a test's, Tester::shot_drawn)
-        let sc = if s.scale > 0.0 { s.scale } else { self.scale }
-        f.shot_sizes.push(((n.fw * sc).round().to_int(), (n.fh * sc).round().to_int()))
-        f.shot_drawn.push(shot_drawn_of(s.inst, s.ninst, n.x, n.y))
+    // (told what watches the shots taken: a Tester's, Tester::shot_drawn)
+    match shot_watch.val {
+      Some(w) => {
+        let words = match s.tree {
+          Some(st) => tree_shot_words(st.tree)
+          None => self.shot_words(node)
+        }
+        w(words, s)
       }
       None => ()
     }
-    ended.push((id, self.shot_png(s, n)))
+    ended.push((id, self.shot_png(s)))
   }
   for id in gone {
+    match self.shots.get(id) {
+      Some({ tree: Some(st), .. }) => st.tree.dispose()
+      _ => ()
+    }
     self.shots.remove(id)
   }
   for e in ended {
@@ -279,12 +367,13 @@ fn Ctx::shots_after_present(self : Ctx) -> Unit {
 }
 
 ///|
-/// Shot `s` as painted, its root `n`, drawn by the host shot_band_most rows at a time at its pixels a point and read
+/// Shot `s` as painted (its root where `rect` says), drawn by the host shot_band_most rows at a time at its pixels a point and read
 /// back into a PNG of them; None where the host cannot.
-fn Ctx::shot_png(self : Ctx, s : Shot, n : Node) -> Bytes? {
+fn Ctx::shot_png(self : Ctx, s : Shot) -> Bytes? {
+  let (nx, ny, nw, nh) = s.rect
   let sc = if s.scale > 0.0 { s.scale } else { self.scale }
-  let rows = (n.fh * sc).round().to_int()
-  let cols = (n.fw * sc).round().to_int()
+  let rows = (nh * sc).round().to_int()
+  let cols = (nw * sc).round().to_int()
   let win = shot_band_most
   if rows <= 0 || cols <= 0 {
     return None
@@ -300,9 +389,9 @@ fn Ctx::shot_png(self : Ctx, s : Shot, n : Node) -> Bytes? {
   let mut taken = 0
   while taken < rows {
     let band = if rows - taken < win { rows - taken } else { win }
-    // what reaches into the band, moved up so its first row is the picture's top (n's corner at its own)
-    let dx = -n.x
-    let dy = -n.y - taken.to_double() / sc
+    // what reaches into the band, moved up so its first row is the picture's top (its root's corner at its own)
+    let dx = -nx
+    let dy = -ny - taken.to_double() / sc
     let top = -dy
     let bottom = top + band.to_double() / sc
     let mut k = 0
@@ -410,4 +499,141 @@ fn shot_drawn_of(inst : FixedArray[Double], n : Int, x : Double, y : Double) -> 
 /// root's corner (shot_drawn_of).
 pub fn Tester::shot_drawn(self : Tester) -> Array[((Int, Int), Array[String])] {
   Array::makei(self.fake.shot_sizes.length(), fn(i) { (self.fake.shot_sizes[i], self.fake.shot_drawn[i]) })
+}
+
+///|
+/// Who is told of each shot taken, as it is taken (the words it shows in the order they are painted, the shot): a Tester's, which keeps what it
+/// says and drew (Tester::shot_drawn).
+// kept across runs: set by each Tester as it is made, let go as its run ends
+let shot_watch : Ref[((Array[String], Shot) -> Unit)?] = Ref(None)
+
+///|
+/// A picture's tree (take_picture's) painted into the instances being painted now (a shot's: Ctx::paint_shots), in
+/// the order the scene draws it, as the window's tree is (Ctx::view_paint): each node's own drawing made (Ctx::view_drawn),
+/// what it holds cut to it where it clips, its edge drawn after what it holds. Made apart from what the window's tree
+/// keeps of its nodes (their indexes the window's), and let go after: nothing of it kept from one frame to the next.
+/// Not here, as nothing a picture is made of has it: old views, lists drawn by their offset alone, what fades or
+/// stretches at its edges, layers.
+fn Ctx::tree_shot_paint(self : Ctx, tree : @view.Tree) -> Unit {
+  // (what the window's tree keeps of its nodes, by their indexes, put aside while this one's are painted)
+  let blocks : ByNode[ViewBlock] = ByNode::new()
+  let pictures : ByNode[ViewPicture] = ByNode::new()
+  let bands : ByNode[ShapeBands] = ByNode::new()
+  view_blocks.swap(blocks)
+  view_pictures.swap(pictures)
+  view_shape_bands.swap(bands)
+  let fields = tree_fields.copy()
+  tree_fields.clear()
+  let words = inst_owners.tree_words.copy()
+  let work = { ..view_paint_work }
+  tree.set_pixel_grid(self.scale)
+  let clipping : Array[@view.NodeId] = []
+  let rings : Array[(@view.NodeId, FixedArray[Double])] = []
+  let close_to = fn(next : @view.NodeId?) {
+    let open = fn(id : @view.NodeId) {
+      match next {
+        Some(n) => tree.holds_in_order(id, n)
+        None => false
+      }
+    }
+    while true {
+      let clip_out = clipping.length() > 0 && !open(clipping[clipping.length() - 1])
+      let ring_out = rings.length() > 0 && !open(rings[rings.length() - 1].0)
+      if !clip_out && !ring_out {
+        break
+      }
+      // (the inner of the two first, as the window's tree's are closed)
+      let clip_first = clip_out &&
+        (!ring_out || tree.holds_in_order(rings[rings.length() - 1].0, clipping[clipping.length() - 1]))
+      if clip_first {
+        clipping.pop() |> ignore
+        pop_clip()
+      } else {
+        let (_, held) = rings.pop().unwrap()
+        self.shot_ring_put(held)
+      }
+    }
+  }
+  tree.each_drawn_laid(fn(c, x, y, a, s, ux, uy) {
+    close_to(Some(c.id))
+    // (the root draws nothing of its own)
+    if c.id.at == 0 {
+      return
+    }
+    let ring_at = self.view_drawn(
+      tree,
+      c,
+      x,
+      y,
+      a,
+      s,
+      ux,
+      uy,
+      tree.turn_angle_of(c.id),
+      tree.ground_drawn_of(c.id),
+    )
+    if c.clips {
+      let r = c.radius * s
+      match c.corners {
+        Some((tl, tr, br, bl)) => push_box_clip(x, y, c.w * s, c.h * s, tl * s, tr * s, br * s, bl * s)
+        None => push_box_clip(x, y, c.w * s, c.h * s, r, r, r, r)
+      }
+      clipping.push(c.id)
+    }
+    if ring_at >= 0 && ring_at < self.ninst {
+      rings.push((c.id, self.shot_ring_take(ring_at)))
+    }
+  })
+  close_to(None)
+  view_blocks.swap(blocks)
+  view_pictures.swap(pictures)
+  view_shape_bands.swap(bands)
+  tree_fields.clear()
+  for id, f in fields {
+    tree_fields[id] = f
+  }
+  inst_owners.tree_words.clear()
+  for id, w in words {
+    inst_owners.tree_words[id] = w
+  }
+  view_paint_work.made = work.made
+  view_paint_work.copied = work.copied
+  view_paint_work.handed = work.handed
+}
+
+///|
+/// Instance `k` of a shot's taken out (those after it one back): a node's edge, held till what it holds is drawn.
+fn Ctx::shot_ring_take(self : Ctx, k : Int) -> FixedArray[Double] {
+  let held = FixedArray::make(inst_size, 0.0)
+  self.inst.blit_to(held, len=inst_size, src_offset=k * inst_size)
+  let n = self.ninst
+  if k + 1 < n {
+    self.inst.blit_to(self.inst, len=(n - k - 1) * inst_size, src_offset=(k + 1) * inst_size, dst_offset=k * inst_size)
+  }
+  self.ninst = n - 1
+  held
+}
+
+///|
+/// A held instance (shot_ring_take's) put at the shot's end.
+fn Ctx::shot_ring_put(self : Ctx, held : FixedArray[Double]) -> Unit {
+  while (self.ninst + 1) * inst_size > self.inst.length() {
+    self.grow()
+  }
+  held.blit_to(self.inst, len=inst_size, dst_offset=self.ninst * inst_size)
+  self.ninst = self.ninst + 1
+}
+
+///|
+/// The words a picture's tree shows, in the order they are painted (a test's: Tester::shots).
+fn tree_shot_words(tree : @view.Tree) -> Array[String] {
+  let out = []
+  tree.each_drawn(fn(c, _, _, _) {
+    if c.words != "" {
+      out.push(c.words)
+    } else if !c.runs.is_empty() {
+      out.push(c.runs.map(fn(r) { r.text }).join(""))
+    }
+  })
+  out
 }

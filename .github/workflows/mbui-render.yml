@@ -1,5 +1,5 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
-# The renderer's pixels (docs/determinism.md, "Pixel references belong to one machine"): a Tester's draw list drawn
+# The renderer's pixels ("Pixel references belong to one machine"): a Tester's draw list drawn
 # offscreen on macos-ci (mbui's runner there, label mbui-render), against its reference (goldens/render/macos-ci-*.png) to
 # the byte, on the macOS and GPU the references were made on (goldens/render/macos-ci.txt). The pictures drawn are the
 # artifact: what a PR that changes them commits, saying which and why.
@@ -61,6 +61,7 @@ jobs:
         run: scripts/render_offscreen.sh
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: render
           path: apps/mbui/mbui/out/render/

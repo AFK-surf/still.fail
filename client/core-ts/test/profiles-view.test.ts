@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
 import { profile as shownProfile } from "../src/present.ts";
-import { runtimes } from "../src/views/models.ts";
+import { choices, models, runtimes, runnableOn, servingIn } from "../src/views/models.ts";
 import { stationProfileSummary, workspaceProfiles } from "../src/views/profiles.ts";
 
 holdLanguage();
@@ -13,6 +13,21 @@ const A = "a".repeat(64);
 const B = "b".repeat(64);
 const profile = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: id, access: { kind: "subscription" }, checkTone: "green", ...extra });
 const station = (id: string, name: string, online: boolean, profiles: unknown[] | null) => ({ id, station: `w/${id}`, name, online, overview: profiles === null ? undefined : { sharing: true, profiles } });
+
+test("a disabled key remains in the account list but is absent from model and account choices", () => {
+  const off = shownProfile(profile("off", { access: { kind: "anthropic-api", key: "sk-1…2345" }, enabled: false, runtimes: ["claude"], models: ["opus", "sonnet"], check: { state: "ok", detail: "Works" } }));
+  const on = shownProfile(profile("on", { runtimes: ["claude"], models: ["sonnet"], check: { state: "ok", detail: "Works" } }));
+  const overview = { profiles: [off, on] };
+  const row = workspaceProfiles([station(A, "office", true, [off])]).items[0];
+  assert.deepEqual([row.state.text, row.look, row.where, row.usable], ["已停用", false, "", false]);
+  assert.deepEqual(runtimes(overview), [{ runtime: "claude", models: ["sonnet"] }]);
+  assert.deepEqual(models(overview, 0).map((m: any) => m.model), ["sonnet"]);
+  assert.deepEqual(choices(overview, { runtime: "claude" }, 0).map((m: any) => m.model), ["sonnet"]);
+  assert.deepEqual(runnableOn(overview, { runtime: "claude", model: "sonnet" }, 0).map((p: any) => p.id), ["on"]);
+  assert.deepEqual(servingIn(overview, "w", false).profiles.map((p: any) => p.id), ["on"]);
+  assert.equal(off.trouble, null);
+  assert.equal(off.checkLine, "");
+});
 
 test("a station's profile count uses the profile list's needs-a-look rule", () => {
   const shown = (id: string, extra: Record<string, unknown>) => shownProfile(profile(id, { runtime: "claude", ...extra }));
@@ -76,6 +91,38 @@ test("a shared profile is listed once, from its host, with where it is signed in
   const local = view.items.find((e: any) => !e.shared);
   assert.equal(local.where, "office 可用");
   assert.equal(local.canShare, true);
+});
+
+test("a shared subscription stays one row when older copies have no account identity", () => {
+  const C = "c".repeat(64);
+  const share = { id: "sh-1", host: A, allow: [A, B, C] };
+  const host = station(A, "host", true, [profile("max", { name: "same name", runtime: "claude", email: "a@x.test", share: { ...share, role: "host" } })]);
+  const copy = (id: string) => profile(id, { name: "same name", runtime: "claude", share: { ...share, role: "user", reachable: true } });
+  const b = station(B, "mini", true, [copy("b")]);
+  const c = station(C, "laptop", true, [copy("c")]);
+  for (const stations of [[b, c, host], [host, b, c]]) {
+    const view = workspaceProfiles(stations);
+    assert.equal(view.items.length, 1);
+    assert.equal(view.items[0].profile.id, "max");
+    assert.equal(view.items[0].members.length, 3);
+    assert.deepEqual(new Set(view.items[0].places.map((p: any) => p.stationName)), new Set(["host", "mini", "laptop"]));
+  }
+  const offline = workspaceProfiles([station(A, "host", false, null), b, c]);
+  assert.equal(offline.items.length, 1, "copies still group by share while their host is offline");
+  assert.equal(offline.items[0].usable, false);
+});
+
+test("a shared account uses its host's identity when a copy has an old email", () => {
+  const C = "c".repeat(64);
+  const share = { id: "sh-1", host: A, allow: null };
+  const view = workspaceProfiles([
+    station(B, "mini", true, [profile("copy", { name: "same name", runtime: "claude", email: "old@x.test", share: { ...share, role: "user" } })]),
+    station(A, "host", true, [profile("max", { runtime: "claude", email: "new@x.test", share: { ...share, role: "host" } })]),
+    station(C, "other", true, [profile("other", { name: "same name", runtime: "claude", email: "old@x.test" })]),
+  ]);
+  assert.equal(view.items.length, 2);
+  assert.deepEqual(view.items.find((e: any) => e.key === "sub:claude:new@x.test").members.map((m: any) => m.stationName), ["mini", "host"]);
+  assert.deepEqual(view.items.find((e: any) => e.key === "sub:claude:old@x.test").members.map((m: any) => m.stationName), ["other"]);
 });
 
 test("a shared subscription whose host is away comes from a copy, unusable, first", () => {

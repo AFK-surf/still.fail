@@ -1,4 +1,4 @@
-// What a chat's agent may do over its connection to the station's browser (docs/remote-screens.md, "A chat's own
+// What a chat's agent may do over its connection to the station's browser ("A chat's own
 // environment"): the browser is one Chrome for every chat, each chat's pages in a browser context of its own (in memory:
 // browsers.ts), and the gate between the agent's connection and Chrome's DevTools lets through only what touches that
 // context. It reads every message the agent sends: one on a target session goes only to a session of a target of its

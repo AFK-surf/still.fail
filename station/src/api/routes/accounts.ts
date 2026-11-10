@@ -1,4 +1,4 @@
-// The accounts' part of the admin API (admin/mod.rs, admin/edits.rs, admin/decision.rs): profiles made, edited,
+// The accounts' part of the admin API (admin/mod.rs): profiles made, edited,
 // checked, signed in and deleted; allowances read and reset; sign-ins for new profiles; the automatic decisions'
 // settings. Edits answer with the overview, as the Rust station's do.
 import { type Request, type Answer, error, segment, ok, input } from "../request.ts";
@@ -29,13 +29,13 @@ export type AccountsRouteDeps = {
   sharing?: Sharing;
   /// GET /overview's answer for the request's viewer, in its language: what edits answer with.
   overview(r: Request): Promise<unknown> | unknown;
-  /// Where a joined workspace's archive policy is kept (docs/multi-workspace.md: one each), and the review of the done
+  /// Where a joined workspace's archive policy is kept (one each), and the review of the done
   /// chats asked again once it changed. The home workspace's is the accounts'.
   policies?: { store: Parameters<typeof savePolicy>[0]; review(): void };
 };
 
 
-/// The key a write is asked under (once.rs KEY), when it has a usable one.
+/// The key a write is asked under, when it has a usable one.
 const idempotencyKey = (r: Request): string | undefined => {
   const found = Object.entries(r.headers).find(([k]) => k.toLowerCase() === "idempotency-key")?.[1];
   return found !== undefined && found !== "" && found.length <= 200 ? found : undefined;
@@ -67,7 +67,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
     }
     if (changed !== null) policies.review();
   };
-  // The station's accounts are every workspace's it is in alike (docs/multi-workspace.md); the archive policy is each
+  // The station's accounts are every workspace's it is in alike; the archive policy is each
   // workspace's own.
   const route = (method: string, pattern: RegExp, handle: (r: Request, args: string[]) => Promise<Answer>): Route => ({ method, pattern, handle });
 
@@ -109,7 +109,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
     ),
     route("POST", /^\/*automatic-decisions\/+review\/*$/, (r) =>
       answer(async (a) => {
-        const queued = a.reviewUndecided(r.viewer, r.lang);
+        const queued = await a.reviewUndecided(r.viewer, r.lang);
         return ok({ queued, overview: await view(r) });
       }),
     ),

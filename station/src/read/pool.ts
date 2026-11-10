@@ -12,14 +12,34 @@ import { Worker } from "node:worker_threads";
 import { log } from "../ops/log.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { MinuteReader } from "../usage/minute-reader.ts";
-import { OutflowChatIndex } from "../outflow/chat-index-builder.ts";
+import { OutflowChatIndex } from "./chat-index-builder.ts";
 import { SaidBuilder } from "./said-builder.ts";
+import { RequestedBuilder } from "./requested-builder.ts";
 import { TurnBuilder } from "./turn-builder.ts";
+import { RecentChatBuilder } from "./recent-chat-builder.ts";
+import { RECENT_CHAT_PENDING } from "./recent-chat.ts";
+import { SessionListBuilder } from "./session-list-builder.ts";
+import { SESSION_LIST_PENDING } from "../store/session-list-index.ts";
+import { SessionBindingsBuilder } from "./session-bindings-builder.ts";
+import { ArchiveMarkBuilder } from "./archive-mark-builder.ts";
+import { SessionUpJobsBuilder } from "./session-up-jobs-builder.ts";
+import { WorkspaceUpJobsBuilder } from "./workspace-up-jobs-builder.ts";
+import { WidgetSourcesBuilder } from "./widget-sources-builder.ts";
+import { CcIndexBuilder } from "./cc-index-builder.ts";
+import { CardPostsBuilder, ClosedCardsBuilder, PeopleSinceBuilder } from "./card-posts-builder.ts";
+import { CC_SESSIONS_PENDING } from "../store/cc-thread-index.ts";
+import { JOB_NAME_FIRST_PENDING } from "../store/job-name-first.ts";
+import { CARD_POSTS_PENDING } from "../store/card-post-index.ts";
+import { CLOSED_CARDS_PENDING } from "../store/legacy-closed-cards.ts";
+import { PEOPLE_TIME_PENDING } from "../store/legacy-people-since.ts";
+import { SESSION_BINDINGS_PENDING } from "../store/session-bindings-index.ts";
 import { OUTFLOW_CHATS_PENDING } from "./outflow.ts";
 import type { Answer, Ask, Ready } from "./worker.ts";
-import { REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
+import { LAST_MESSAGE_PENDING, LEGACY_EDITS_PENDING, LEGACY_SAID_PENDING, PAGE_LETTER_PENDING, REMOTE_RUNS_PENDING, SAID_PENDING, TURN_COUNT_PENDING, USAGE_CHATS_PENDING, USAGE_DETAIL_PENDING } from "./store.ts";
 import { HttpError } from "./views.ts";
+import { MbReader, type ReaderLike, mbReaderBinary } from "./mb-reader.ts";
 import { wall } from "../ops/fibers.ts";
+import type { CardEditPage, CardMessagePage } from "../store/card-outbox.ts";
 
 /// How long a reader with nothing to do is kept.
 const IDLE_MS = 60_000;
@@ -27,7 +47,7 @@ const IDLE_MS = 60_000;
 const SLOW_MS = 2_000;
 
 /// `held`: the read it is answering, if any.
-type Slot = { worker: Worker; held: Asked | null; idle?: () => void; retiring?: boolean };
+type Slot = { worker: ReaderLike; held: Asked | null; idle?: () => void; retiring?: boolean };
 
 /// A read in line or being answered: when it was asked and when a reader took it, and the reader it is best read in (a
 /// session's history, where its reading stands in memory).
@@ -63,7 +83,7 @@ const cancelled = () => new HttpError(503, "read cancelled");
 /// including new kinds not yet classified, leave room for these, and these go before them: a slow transcript or resource
 /// snapshot can block just as a slow aggregate can. A machine sample (api/host.ts), one job, and the jobs up without
 /// their chats are interactive too; jobs with their chats (an older device's, the sidebar made for it) are a bulk read.
-const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "host", "hostTicks", "job"]);
+const INTERACTIVE = new Set(["thread", "chats", "chatMarks", "session", "summary", "latestMessages", "openedChatSaid", "chatHistoryMessages", "historyPendingCard", "stateQuestion", "statePendingCard", "deliveryCardState", "host", "hostTicks", "job"]);
 
 /// One thread's current or older page is interactive. An `after` or explicit range can ask for an unbounded amount on
 /// older clients, so it remains in the background until that request is paged end to end.
@@ -89,6 +109,9 @@ function filling(op: string, args: unknown): boolean {
 /// of every Claude and Codex project there, 14 s on a station, 2026-11-03), each of the files on the disk rather than the
 /// database.
 const PAGES = new Set(["timeline", "machineSessions"]);
+/// The reads the MoonBit reader answers itself (station/mb src/readops), on readers of their own (`moved`) where its
+/// program is there; every other read is a worker's.
+const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile"]);
 
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
@@ -100,6 +123,8 @@ export class Readers {
   private told: Line;
   /// The store's log written into the database (CHECKPOINT), by a reader of its own.
   private log: Line;
+  /// The reads the MoonBit reader answers (MOVED), for devices and streams alike.
+  private moved: Line;
   /// The reader each session's history was last read in (`timeline`).
   private homes = new Map<string, Slot>();
   private next = 0;
@@ -107,7 +132,26 @@ export class Readers {
   private minutes: MinuteReader | null = null;
   private outflowChats: OutflowChatIndex | null = null;
   private said: SaidBuilder | null = null;
+  private archiveLast: RequestedBuilder<number> | null = null;
+  private legacyEdits: RequestedBuilder<number> | null = null;
+  private legacySaid: RequestedBuilder<number> | null = null;
+  private pageLetters: RequestedBuilder<number> | null = null;
   private turns: TurnBuilder | null = null;
+  private recentChats: RecentChatBuilder | null = null;
+  private sessionList: SessionListBuilder | null = null;
+  private sessionBindings: SessionBindingsBuilder | null = null;
+  private archiveMarks: ArchiveMarkBuilder | null = null;
+  private sessionUpJobs: SessionUpJobsBuilder | null = null;
+  private workspaceUpJobs: WorkspaceUpJobsBuilder | null = null;
+  private jobNameFirst: RequestedBuilder<string> | null = null;
+  private preparingWorkspaceUpJobs = false;
+  /// Reads of the same old session share one unattended preparation, including during handover.
+  private preparingUpJobs = new Set<string>();
+  private widgetSources: WidgetSourcesBuilder | null = null;
+  private cardPosts: CardPostsBuilder | null = null;
+  private closedCards: ClosedCardsBuilder | null = null;
+  private peopleSince: PeopleSinceBuilder | null = null;
+  private ccIndex: CcIndexBuilder | null = null;
   /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
   private checkpointing = false;
   private again = false;
@@ -117,6 +161,9 @@ export class Readers {
   private readonly backfill: { previousGone?: Promise<void>; priority?: SharedArrayBuffer };
   /// People's names as their credentials say them (the admin API's `deps.names`), given to every read.
   readonly names = new Map<string, string>();
+  /// The MoonBit reader's program (read/mb-reader.ts), which writes the store's log into it (`log`); none: a worker
+  /// does, as it does every other read (and with a worker of its own given, `workerFile`, that one).
+  mbReader: string | null;
   /// What only the hub knows, given to every read: sessions' process states and client keys (the hub sets these).
   processes: () => Map<string, string> = () => new Map();
   clientKeys: () => Map<string, string> = () => new Map();
@@ -125,18 +172,20 @@ export class Readers {
   constructor(data: string, size = Number(process.env.STILLFAIL_READERS) || Math.min(2, Math.max(1, availableParallelism() - 1)), workerFile?: URL, tellers = 1, backfill: { previousGone?: Promise<void>; priority?: SharedArrayBuffer } = {}) {
     this.data = data;
     this.workerFile = workerFile;
+    this.mbReader = workerFile === undefined ? mbReaderBinary() : null;
     this.backfill = backfill;
     this.asked = { told: false, size, room: true, slots: [], waiting: [] };
     // Two: one a background page (a history brought on, a stretch filled) may hold, one left for a page someone waits on.
     this.pages = { told: false, size: 2, room: false, slots: [], waiting: [] };
     this.told = { told: true, size: tellers, room: false, slots: [], waiting: [] };
     this.log = { told: true, size: 1, room: false, slots: [], waiting: [] };
+    this.moved = { told: false, size, room: true, slots: [], waiting: [] };
   }
 
   /// Check statistical coverage without occupying a device reader or writing old history.
   startUsageIndex() {
     if (this.closed) return;
-    if (this.minutes === null) this.minutes = new MinuteReader(join(this.data, "stillfail.db"), this.backfill);
+    if (this.minutes === null) this.minutes = new MinuteReader(join(this.data, "stillfail.db"), this.backfill, this.mbReader);
     this.minutes.start();
   }
 
@@ -144,7 +193,8 @@ export class Readers {
     // From source: worker.ts beside this; bundled (this inside dist/main.js): dist/read/worker.js.
     const file = this.workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./read/worker.js", import.meta.url);
     // A reader's heap stays small: what it builds is answered and dropped.
-    const worker = new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
+    const worker: ReaderLike = (line === this.log || line === this.moved) && this.mbReader !== null ? new MbReader(this.mbReader, this.data)
+      : new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     const slot: Slot = { worker, held: null };
     const begun = wall.now();
     worker.on("message", (answer: Answer | Ready) => {
@@ -152,7 +202,7 @@ export class Readers {
       // a station short of memory, 2026-11-03, a reader started for it).
       if ("ready" in answer) {
         const ms = wall.now() - begun;
-        if (ms >= 1_000) log.warn("readers", "a reader started slowly", { ms, line: line === this.asked ? "asked" : line === this.pages ? "pages" : line === this.log ? "log" : "told", ...answer.ready });
+        if (ms >= 1_000) log.warn("readers", "a reader started slowly", { ms, line: line === this.asked ? "asked" : line === this.pages ? "pages" : line === this.log ? "log" : line === this.moved ? "moved" : "told", ...answer.ready });
         return;
       }
       // An abandoned read may finish while its worker is being stopped. Do not give that worker another read until it exits.
@@ -166,7 +216,22 @@ export class Readers {
         // read 40 MB of a transcript in 10 s on a station short of memory (2026-11-03), every write and read waiting on the
         // disk meanwhile.
         if (asked.background) line.rested = now + (now - asked.took);
-        if (answer.text !== undefined) asked.resolve(answer.text);
+        if (answer.text !== undefined) {
+          const session = answer.prepareUpJobs;
+          if (session !== undefined && !this.preparingUpJobs.has(session)) {
+            this.preparingUpJobs.add(session);
+            void this.prepareSessionUpJobs([session]).catch((error) => {
+              if (!this.closed) log.warn("readers", "preparing a session's up jobs failed", { error: (error as Error).message });
+            }).finally(() => this.preparingUpJobs.delete(session));
+          }
+          if (answer.prepareWorkspaceUpJobs && !this.preparingWorkspaceUpJobs) {
+            this.preparingWorkspaceUpJobs = true;
+            void this.prepareWorkspaceUpJobs().catch((error) => {
+              if (!this.closed) log.warn("readers", "preparing workspace up jobs failed", { error: (error as Error).message });
+            }).finally(() => { this.preparingWorkspaceUpJobs = false; });
+          }
+          asked.resolve(answer.text);
+        }
         else asked.reject(new HttpError(answer.status ?? 500, answer.error ?? "read failed"));
       }
       this.pump(line);
@@ -216,6 +281,8 @@ export class Readers {
     if (op === "usage") return this.usageRead(args, lang, told, signal);
     if (op === "outflowUsage") return this.outflowUsageRead(args, lang, told, signal);
     if (op === "outflowChats") return this.outflowChatsRead(args, lang, told, signal);
+    if (op === "recentChatList") return this.recentChatRead(args, lang, told, signal);
+    if (op === "sessions") return this.sessionListRead(args, lang, told, background, signal);
     return this.saidRead(op, args, lang, told, background || filling(op, args), signal);
   }
 
@@ -226,11 +293,212 @@ export class Readers {
     return this.covered(this.said.ready(threads, signal), signal);
   }
 
+  /// Prepare only the requested chats' last messages in bounded slices for the archive and notices.
+  prepareArchiveLast(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    // (by the MoonBit builder, station/mb's src/archivelast, where its program is there; else by the worker)
+    const path = join(this.data, "stillfail.db"), mb = this.mbReader;
+    this.archiveLast ??= new RequestedBuilder(path, this.backfill, undefined, "thread",
+      "archive last message", (thread, cancel) => ({ thread, archiveLast: true, cancel }),
+      mb === null ? null : { binary: mb, args: ["--builder", "archive-last", "--db", path] });
+    return this.covered(this.archiveLast.ready(threads, signal), signal);
+  }
+
+  /// Share the bounded old-edit preparation between notices, and leave a cancelled request unattended.
+  prepareLegacyEdits(signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    // (by the MoonBit builder, station/mb's src/legacy, where its program is there; else, and for a store whose merged
+    // view must be switched first, by the worker)
+    const path = join(this.data, "stillfail.db"), mb = this.mbReader;
+    this.legacyEdits ??= new RequestedBuilder(path, this.backfill, undefined, "thread",
+      "legacy edits", (thread, cancel) => ({ thread, legacyEdits: true, cancel }),
+      mb === null ? null : { binary: mb, args: ["--builder", "legacy-edits", "--db", path] });
+    return this.covered(this.legacyEdits.ready([0], signal), signal);
+  }
+
+  /// Read only one page for a guarded card outcome, behind interactive work and without a long-lived snapshot.
+  async cardEditPage(thread: number, target: string, before: string | null, signal?: AbortSignal): Promise<CardEditPage> {
+    return JSON.parse(await this.read("internalCardEditPage", { thread, target, before }, "zh", { background: true, signal })) as CardEditPage;
+  }
+
+  async cardMessagePage(thread: number, target: string, before: string | null, signal?: AbortSignal): Promise<CardMessagePage> {
+    return JSON.parse(await this.read("internalCardMessagePage", { thread, target, before }, "zh", { background: true, signal })) as CardMessagePage;
+  }
+
+  /// Share the initial old-message scan between pages waiting for it.
+  prepareLegacySaid(signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    // (by the MoonBit builder, station/mb's src/legacy, where its program is there; else by the worker)
+    const path = join(this.data, "stillfail.db"), mb = this.mbReader;
+    this.legacySaid ??= new RequestedBuilder(path, this.backfill, undefined, "thread",
+      "legacy said", (thread, cancel) => ({ thread, legacySaid: true, cancel }),
+      mb === null ? null : { binary: mb, args: ["--builder", "legacy-said", "--db", path] });
+    return this.covered(this.legacySaid.ready([0], signal), signal);
+  }
+
+  /// Prepare only the requested old chats' letter-message keys, sharing progress and handover with other readers.
+  preparePageLetters(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    // (by the MoonBit builder, station/mb's src/letters, where its program is there; else by the worker)
+    const path = join(this.data, "stillfail.db"), mb = this.mbReader;
+    this.pageLetters ??= new RequestedBuilder(path, this.backfill, undefined, "thread",
+      "old page letters", (thread, cancel) => ({ thread, pageLetters: true, cancel }),
+      mb === null ? null : { binary: mb, args: ["--builder", "page-letters", "--db", path] });
+    return this.covered(this.pageLetters.ready(threads, signal), signal);
+  }
+
+  /// Prepare the old connection bindings for session reads and auto-archiving together.
+  prepareSessionBindings(signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.sessionBindings ??= new SessionBindingsBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.sessionBindings.readyIndex(signal), signal);
+  }
+
+  /// Prepare old pin and keep marks before automatic archiving.
+  prepareArchiveMarks(signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.archiveMarks ??= new ArchiveMarkBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.archiveMarks.readyIndex(signal), signal);
+  }
+
+  /// Prepare the jobs of the sessions an archive check is waiting on.
+  prepareSessionUpJobs(sessions: readonly string[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.sessionUpJobs ??= new SessionUpJobsBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.sessionUpJobs.ready(sessions, signal), signal);
+  }
+
+  /// Prepare old up jobs without holding the reader that supplied a fallback answer.
+  prepareWorkspaceUpJobs(signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.workspaceUpJobs ??= new WorkspaceUpJobsBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.workspaceUpJobs.ready(["all"], signal), signal);
+  }
+
+  /// Prepare a requested own chat's first member after handover, sharing and cancelling its bounded batches.
+  prepareJobNameFirst(owner: string, thread: number, signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    const file = new URL(import.meta.url.endsWith(".ts") ? "./session-up-jobs-worker.ts" : "./read/session-up-jobs-worker.js", import.meta.url);
+    this.jobNameFirst ??= new RequestedBuilder(join(this.data, "stillfail.db"), this.backfill, file, "scope", "job name first member",
+      (key, cancel) => { const [session, first] = JSON.parse(key) as [string, number]; return { session, first, ...(cancel ? { cancel: true } : {}) }; });
+    return this.covered(this.jobNameFirst.ready([JSON.stringify([owner, thread])], signal), signal);
+  }
+
+  /// Prepare only old threads whose widget sources a delivery needs.
+  prepareWidgetSources(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.widgetSources ??= new WidgetSourcesBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.widgetSources.ready(threads, signal), signal);
+  }
+
+  /// Prepare old card posts requested by a read; concurrent reads share this work.
+  prepareCardPosts(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.cardPosts ??= new CardPostsBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.cardPosts.ready(threads, signal), signal);
+  }
+
+  /// Prepare only the old closed cards requested by the read.
+  prepareClosedCards(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.closedCards ??= new ClosedCardsBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.closedCards.ready(threads, signal), signal);
+  }
+
+  /// Prepare only the old people-time lookups requested by the read.
+  preparePeopleSince(threads: readonly number[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.peopleSince ??= new PeopleSinceBuilder(join(this.data,"stillfail.db"),this.backfill);
+    return this.covered(this.peopleSince.ready(threads,signal),signal);
+  }
+
+  /// Prepare the sessions needed to choose a chat's copy destinations.
+  prepareCcSessions(sessions: readonly string[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.ccIndex ??= new CcIndexBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.ccIndex.ready(sessions, signal), signal);
+  }
+
+  /// Prepare the ordered chat names for only the sessions a caller needs.
+  prepareSessionChatNames(sessions: readonly string[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.ccIndex ??= new CcIndexBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.ccIndex.readyNames(sessions, signal), signal);
+  }
+
+  /// Prepare the latest conversation for only the old sessions a caller needs.
+  prepareLatestThreads(sessions: readonly string[], signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.ccIndex ??= new CcIndexBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.ccIndex.readyLatest(sessions, signal), signal);
+  }
+
   private async saidRead(op: string, args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
     while (!this.closed) {
       try { return await this.enqueue(op, args, lang, told, op === CHECKPOINT, background, signal); }
       catch (error) {
         if (!(error instanceof HttpError)) throw error;
+        if (error.message === LEGACY_EDITS_PENDING) {
+          await this.prepareLegacyEdits(signal);
+          continue;
+        }
+        if (error.message === LEGACY_SAID_PENDING) {
+          await this.prepareLegacySaid(signal);
+          continue;
+        }
+        if (error.message.startsWith(PAGE_LETTER_PENDING)) {
+          let threads: unknown;
+          try { threads = JSON.parse(error.message.slice(PAGE_LETTER_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
+          await this.preparePageLetters(threads, signal);
+          continue;
+        }
+        if (error.message.startsWith(LAST_MESSAGE_PENDING)) {
+          let threads: unknown;
+          try { threads = JSON.parse(error.message.slice(LAST_MESSAGE_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
+          await this.prepareArchiveLast(threads, signal);
+          continue;
+        }
+        if (error.message === SESSION_BINDINGS_PENDING) {
+          await this.prepareSessionBindings(signal);
+          continue;
+        }
+        if (error.message.startsWith(CC_SESSIONS_PENDING)) {
+          let sessions: unknown;
+          try { sessions = JSON.parse(error.message.slice(CC_SESSIONS_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(sessions) || sessions.length === 0 || !sessions.every((key) => typeof key === "string")) throw error;
+          await this.prepareCcSessions(sessions, signal);
+          continue;
+        }
+        if (error.message.startsWith(JOB_NAME_FIRST_PENDING)) {
+          let key: unknown;
+          try { key = JSON.parse(error.message.slice(JOB_NAME_FIRST_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(key) || key.length !== 2 || typeof key[0] !== "string" || !Number.isSafeInteger(key[1])) throw error;
+          await this.prepareJobNameFirst(key[0], key[1], signal);
+          continue;
+        }
+        if (error.message.startsWith(CARD_POSTS_PENDING)) {
+          let threads: unknown;
+          try { threads = JSON.parse(error.message.slice(CARD_POSTS_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
+          await this.prepareCardPosts(threads, signal);
+          continue;
+        }
+        if (error.message.startsWith(CLOSED_CARDS_PENDING)) {
+          let threads: unknown;
+          try { threads = JSON.parse(error.message.slice(CLOSED_CARDS_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
+          await this.prepareClosedCards(threads, signal);
+          continue;
+        }
+        if (error.message.startsWith(PEOPLE_TIME_PENDING)) {
+          let threads: unknown;
+          try { threads = JSON.parse(error.message.slice(PEOPLE_TIME_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(threads) || threads.length === 0 || !threads.every(Number.isSafeInteger)) throw error;
+          await this.preparePeopleSince(threads,signal);
+          continue;
+        }
         if (error.message.startsWith(TURN_COUNT_PENDING)) {
           let sessions: unknown;
           try { sessions = JSON.parse(error.message.slice(TURN_COUNT_PENDING.length)); } catch { throw error; }
@@ -321,11 +589,39 @@ export class Readers {
     throw new HttpError(502, "station stopping");
   }
 
+  private async recentChatRead(args: unknown, lang: Ask["lang"], told: boolean, signal?: AbortSignal): Promise<string> {
+    const a = args as { ws?: unknown; home?: unknown } | null;
+    const ws = a?.ws, home = a?.home;
+    if ((ws !== null && typeof ws !== "string") || (home !== null && typeof home !== "string"))
+      throw new HttpError(400, "invalid recent chat scope");
+    while (!this.closed) {
+      try { return await this.saidRead("recentChatList", args, lang, told, false, signal); }
+      catch (error) {
+        if (!(error instanceof HttpError) || error.message !== RECENT_CHAT_PENDING) throw error;
+        this.recentChats ??= new RecentChatBuilder(join(this.data, "stillfail.db"), this.backfill);
+        await this.covered(this.recentChats.readyScope({ ws, home }, signal), signal);
+      }
+    }
+    throw new HttpError(502, "station stopping");
+  }
+
+  private async sessionListRead(args: unknown, lang: Ask["lang"], told: boolean, background: boolean, signal?: AbortSignal): Promise<string> {
+    while (!this.closed) {
+      try { return await this.saidRead("sessions", args, lang, told, background, signal); }
+      catch (error) {
+        if (!(error instanceof HttpError) || error.message !== SESSION_LIST_PENDING) throw error;
+        this.sessionList ??= new SessionListBuilder(join(this.data, "stillfail.db"), this.backfill);
+        await this.covered(this.sessionList.readyIndex(signal), signal);
+      }
+    }
+    throw new HttpError(502, "station stopping");
+  }
+
   /// `first`: before the reads waiting (CHECKPOINT).
   private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false, signal?: AbortSignal): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     if (signal?.aborted) return Promise.reject(cancelled());
-    const line = op === CHECKPOINT ? this.log : told ? this.told : PAGES.has(op) ? this.pages : this.asked;
+    const line = op === CHECKPOINT ? this.log : this.mbReader !== null && MOVED.has(op) ? this.moved : told ? this.told : PAGES.has(op) ? this.pages : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
     // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
@@ -432,7 +728,7 @@ export class Readers {
 
   /// Each running reader's JS heap in use, in bytes (for the memory log).
   heaps(): Promise<number[]> {
-    return Promise.all([...this.asked.slots, ...this.told.slots, ...this.log.slots, ...this.pages.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
+    return Promise.all([...this.asked.slots, ...this.told.slots, ...this.log.slots, ...this.pages.slots, ...this.moved.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
   }
 
   close() {
@@ -440,8 +736,24 @@ export class Readers {
     if (this.minutes !== null) void this.minutes.close();
     if (this.outflowChats !== null) void this.outflowChats.close();
     if (this.said !== null) void this.said.close();
+    if (this.archiveLast !== null) void this.archiveLast.close();
+    if (this.legacyEdits !== null) void this.legacyEdits.close();
+    if (this.legacySaid !== null) void this.legacySaid.close();
+    if (this.pageLetters !== null) void this.pageLetters.close();
     if (this.turns !== null) void this.turns.close();
-    for (const line of [this.asked, this.told, this.log, this.pages]) {
+    if (this.recentChats !== null) void this.recentChats.close();
+    if (this.sessionList !== null) void this.sessionList.close();
+    if (this.sessionBindings !== null) void this.sessionBindings.close();
+    if (this.archiveMarks !== null) void this.archiveMarks.close();
+    if (this.sessionUpJobs !== null) void this.sessionUpJobs.close();
+    if (this.workspaceUpJobs !== null) void this.workspaceUpJobs.close();
+    if (this.jobNameFirst !== null) void this.jobNameFirst.close();
+    if (this.widgetSources !== null) void this.widgetSources.close();
+    if (this.cardPosts !== null) void this.cardPosts.close();
+    if (this.closedCards !== null) void this.closedCards.close();
+    if (this.peopleSince !== null) void this.peopleSince.close();
+    if (this.ccIndex !== null) void this.ccIndex.close();
+    for (const line of [this.asked, this.told, this.log, this.pages, this.moved]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();
     }

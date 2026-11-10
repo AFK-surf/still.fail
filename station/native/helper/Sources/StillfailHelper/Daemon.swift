@@ -106,7 +106,7 @@ final class Daemon {
     }
     switch request["op"] as? String {
     case "hello":
-      channel.line(["ok": true, "v": 1, "pid": Int(getpid()), "app": Bundle.main.bundlePath, "capabilities": ["screen", "files", "simulator", "outflow", "ui"]])
+      channel.line(["ok": true, "v": 1, "pid": Int(getpid()), "app": Bundle.main.bundlePath, "capabilities": ["screen", "files", "simulator", "ui"]])
     case "status":
       var status = Status.fresh() ?? Status.now()
       status["live"] = ["capture": CGPreflightScreenCaptureAccess(), "control": Status.inputAllowed()]
@@ -128,9 +128,6 @@ final class Daemon {
         return
       }
       channel.line(Ui.run(arguments))
-    case "outflow.identify":
-      // Who a program at the other end of the station's outflow socket is (docs/data-outflow.md).
-      channel.line(Outflow.identify(request["auditToken"] as? String ?? ""))
     case "screen.view":
       // Granted since this process started: it starts again to have it (the station asks again once it is back).
       if !CGPreflightScreenCaptureAccess() && request["synthetic"] == nil {

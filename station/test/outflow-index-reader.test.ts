@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import { Store } from "../src/store/store.ts";
 import { Readers } from "../src/read/pool.ts";
-import { OutflowChatIndex } from "../src/outflow/chat-index-builder.ts";
+import { OutflowChatIndex } from "../src/read/chat-index-builder.ts";
 import { installOutflowChatIndex, outflowChatIndexStep } from "../src/store/outflow-index.ts";
 import { openStore } from "../src/read/store.ts";
 import { outflowChats } from "../src/read/outflow.ts";
@@ -16,7 +16,7 @@ function fixture() {
   const path = join(dir, "stillfail.db");
   const store = Store.open(path);
   store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", createdAt: 1, lastActiveAt: 1, ws: "A" });
-  const thread = store.openThreadOf("ember", "EMBER", "chat", "A chat", "ann@x", "a");
+  const thread = store.openThreadOf("ember", "CHAT", "chat", "A chat", "ann@x", "a");
   store.joinThread(thread.id, "a", "ember");
   store.db.prepare("UPDATE threads SET created_at=10 WHERE id=?").run(thread.id);
   const say = (n: number, at: number) => store.db.prepare("INSERT INTO entries (thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message','person','ann@x','body',?)").run(thread.id, n, at);
@@ -32,8 +32,7 @@ test("a reader builds chat ordering on demand, then settles new messages before 
     assert.equal(f.store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='outflow_chat_progress'").get(), undefined);
     const pending = readers.read("outflowChats", { since: 0, ws: { workspace: "A", home: false }, limit: 1 }, "en");
     // An unrelated read can use the reader while the requested index waits for the previous station.
-    const message = JSON.parse(await readers.read("outflowMessages", { thread: f.thread.id, after: 0, limit: 1, ws: { workspace: "A", home: false } }, "en"));
-    assert.equal(message.messages.length, 1);
+    assert.ok(JSON.parse(await readers.read("resourceChats", { sessions: ["a"] }, "en")));
     assert.equal(f.store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='outflow_chat_progress'").get(), undefined);
     previous.resolve();
     const first = JSON.parse(await pending);
@@ -51,7 +50,7 @@ test("an abandoned chat export does not start an old-chat build after handover",
   const controller = new AbortController();
   try {
     const pending = readers.read("outflowChats", { since: 0, ws: { workspace: "A", home: false }, limit: 1 }, "en", { signal: controller.signal });
-    await readers.read("outflowMessages", { thread: f.thread.id, after: 0, limit: 1, ws: { workspace: "A", home: false } }, "en");
+    await readers.read("resourceChats", { sessions: ["a"] }, "en");
     controller.abort();
     await assert.rejects(pending, /read cancelled/);
     previous.resolve();
@@ -63,7 +62,7 @@ test("an abandoned chat export does not start an old-chat build after handover",
 test("a stopped chat order worker resumes its pending request", async () => {
   const f = fixture();
   const file = join(f.dir, "worker.mjs"), marker = join(f.dir, "exited");
-  const real = new URL("../src/outflow/chat-index-worker.ts", import.meta.url).href;
+  const real = new URL("../src/read/chat-index-worker.ts", import.meta.url).href;
   writeFileSync(file, `import { existsSync, writeFileSync } from 'node:fs';\nif (!existsSync(${JSON.stringify(marker)})) { writeFileSync(${JSON.stringify(marker)}, '1'); process.exit(1); }\nawait import(${JSON.stringify(real)});\n`);
   const builder = new OutflowChatIndex(f.path, {}, pathToFileURL(file));
   try {
@@ -76,7 +75,7 @@ test("a stopped chat order worker resumes its pending request", async () => {
 test("nearby chat exports reuse their index worker", async () => {
   const f = fixture();
   const file = join(f.dir, "worker.mjs"), starts = join(f.dir, "starts");
-  const real = new URL("../src/outflow/chat-index-worker.ts", import.meta.url).href;
+  const real = new URL("../src/read/chat-index-worker.ts", import.meta.url).href;
   writeFileSync(file, `import { appendFileSync } from 'node:fs';\nappendFileSync(${JSON.stringify(starts)}, 'x');\nawait import(${JSON.stringify(real)});\n`);
   const builder = new OutflowChatIndex(f.path, {}, pathToFileURL(file));
   try {

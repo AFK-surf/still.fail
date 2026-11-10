@@ -17,8 +17,6 @@ test("claude: a call to the station's tools that cannot connect, or its server f
   // As seen in the field (a station started again on another port, the process taken up told the old one).
   assert.equal(toolsLostIn(call("a", "mcp__stillfail__chat_post"), calls), null);
   assert.ok(toolsLostIn(result("a", "ECONNREFUSED: Unable to connect. Is the computer able to access the url?"), calls)?.includes("ECONNREFUSED"));
-  toolsLostIn(call("b", "mcp__ember__chat_state"), calls);
-  assert.ok(toolsLostIn(result("b", 'MCP server "ember" is not connected'), calls)?.includes("not connected"));
   // The tool answered, refusing: it is reached.
   toolsLostIn(call("c", "mcp__stillfail__chat_post"), calls);
   assert.equal(toolsLostIn(result("c", "text is empty"), calls), null);
@@ -38,7 +36,6 @@ test("claude: a call to the station's tools that cannot connect, or its server f
 test("claude: the address a process was started with is read from its arguments", () => {
   const config = (name: string) => JSON.stringify({ mcpServers: { [name]: { type: "http", url: "http://127.0.0.1:12671/mcp", headers: {} } } });
   assert.equal(mcpUrlOf(["-p", "--mcp-config", config("stillfail")]), "http://127.0.0.1:12671/mcp");
-  assert.equal(mcpUrlOf(["--mcp-config", config("ember")]), "http://127.0.0.1:12671/mcp");
   assert.equal(mcpUrlOf(["-p"]), null);
   assert.equal(mcpUrlOf(["--mcp-config", "{not json"]), null);
 });
@@ -63,6 +60,6 @@ test("on its own, a station tries the port named, else the one it had, the usual
   assert.deepEqual(portsToTry(undefined, 12671, 4750, false), [12671, 0]);
   const home = join("/", "home", "u");
   assert.ok(ownData(join(home, ".stillfail"), home));
-  assert.ok(ownData(join(home, ".ember"), home));
+  assert.ok(!ownData(join(home, ".ember"), home));
   assert.ok(!ownData(join("/", "tmp", "scratchpad", "inst"), home));
 });

@@ -31,8 +31,8 @@ pub(crate) struct Actor {
 
     put_senders: HashMap<Id, Vec<oneshot::Sender<Result<Id, PutError>>>>,
     get_senders: HashMap<Id, Vec<ResponseSender>>,
-    /// ember: the lookups going, for the app's record.
-    lookups: crate::ember::Lookups,
+    /// stillfail: the lookups going, for the app's record.
+    lookups: crate::stillfail::Lookups,
 }
 
 impl Actor {

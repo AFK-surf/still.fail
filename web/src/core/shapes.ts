@@ -5,52 +5,86 @@
 /** Whose account a profile runs on. */
 export type AccessKind = "subscription" | "opencode-go" | "anthropic-api" | "env" | "api-provider";
 
-export interface Access {
-	/** subscription | opencode-go | anthropic-api | env | api-provider */
-	kind: AccessKind;
-	key: string;
-	/** The provider of an `api-provider` (shapes/providers.ts); an older core reads such a profile as `env` and drops this. */
-	provider?: string;
-	/** Its address, where the provider has none of its own (Azure, Cloudflare, custom). */
-	endpoint?: string;
-	/** At such an address, the protocol it speaks there: chat_completions, responses or anthropic. */
-	protocol?: string;
+/** How the pages look: as the system does (the default), or always light, or always dark. */
+export type Appearance = "system" | "light" | "dark";
+
+export interface Attachment {
+	name: string;
+	path: string;
+	size: number;
+	width?: number;
+	height?: number;
+	/** An image's ThumbHash (base64): a blurred likeness of it, shown until it loads. */
+	thumbhash?: string;
+	/** A film's length in ms, as the station read it from its header: said before the film is read. */
+	duration?: number;
+	/** How many frames a film's picture has, as the station read them from its header. */
+	frames?: number;
 	/**
-	 * A profile signed in to an account rather than given a key: an OpenCode Go one to the OpenCode Console (its key
-	 * the sign-in's token), a Kimi Code one to Kimi (its token in its home): signed in again, not given a key (false from a
-	 * station older than it).
+	 * In a chat's page: the session whose workspace keeps it (its agent's, else the chat's first agent's), which
+	 * its preview and download go through. Absent elsewhere.
 	 */
-	login?: boolean;
+	owner?: string;
+	/**
+	 * In a chat's page: the id of this device's upload it is (`composer.add`), while this device still has its
+	 * picture; absent for every other file.
+	 */
+	upload?: string;
+	/** Whose: the account of its workspace. */
+	sub?: string;
+	/** Granted before signatures: nothing lends on it until it is signed. */
+	unsigned?: boolean;
+	/** Waiting, and this device is not on that account's own lock: it joins as it allows. */
+	join?: boolean;
+	/** Its station is from before signatures: nothing allowed there lends. */
+	oldStation?: boolean;
+	/**
+	 * In a chat's page: its picture (an image's thumbnail, a video's still) is kept on this device, a decode away
+	 * (the app's first page waits for it); absent for every other file.
+	 */
+	held?: boolean;
+}
+
+/** A person as the core names them: `display` is 你 for the viewer. */
+export interface PersonShown {
+	name: string;
+	display: string;
+	picture?: string;
+	mine: boolean;
 }
 
 /**
- * What an agent at work does now (activity.ts): `key` names the thing (a step, or where the turn stands), `text` says
- * it; the same thing keeps its key while its words change.
+ * Who started a session or chat, or added a connect: an email, or "slack:<connect>:<user>"; "local" in records from
+ * a station's own page, before it went.
  */
-export interface ActivityNow {
-	key: string;
+export interface Creator {
+	id: string;
+	name: string;
+	email?: string;
+	/** local | cloud | slack | feishu */
+	via: string;
+	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
+	picture?: string;
+	/** As the core names them. */
+	shown?: PersonShown;
+}
+
+export interface Membership {
+	thread: number;
+	session: string;
+	connect: string;
+	joinedAt: number;
+}
+
+export interface Quote {
+	author: string;
 	text: string;
-	/** A tool call, shown in a monospaced font like its execution history summary. */
-	mono?: boolean;
-	/** A consequential step: show it even if it finishes quickly, ahead of routine work. */
-	important?: boolean;
-}
-
-/** What an agent at work is doing, as a chat shows it (activity.ts). */
-export interface Activity {
-	now: ActivityNow;
-}
-
-/** A link to a station's 共享调试 as a message shows it (the `adbCard` topic; client/core-ts/src/adb.ts `card`). */
-export interface AdbCard {
-	/** What the link opens: the station's 共享调试. */
-	title: string;
-	/** Under it: how this phone's adb stands with that station (not shared, shared with another, connecting, the agents able to use it and the minutes left, what is missing); on a core that cannot lend it (the web), that only the Android app can. */
-	line: string;
-	/** This phone's adb is lent to that station now. */
-	sharing: boolean;
-	/** This app can lend its adb (a native core, the Android app's); not the web's, where the link opens nothing. */
-	lendable: boolean;
+	comment: string;
+	ts?: string;
+	/** agent | person | page (a mark on a previewed page) | image (a numbered mark on an image) */
+	role?: string;
+	/** The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot; an image of the quoted message, sent again with this one). */
+	file?: string;
 }
 
 /** A moment in words, fresh each minute: 3 分钟前 (`ago`), 9/20 14:05:09 (`full`), 3 小时后 (`until`), whether it has come. */
@@ -62,303 +96,354 @@ export interface Stamp {
 	past: boolean;
 }
 
-/** A chat's grant of this person's phone, or its request waiting (the `adbShare` topic's `grants`). */
-export interface AdbGrant {
-	/** Its station's address. */
-	station: string;
-	/** The request's id (`adb.decide`, `adb.revoke`). */
-	id: string;
-	session: string;
-	/** Its chat's address on the station. */
-	chat: string;
-	/** The chat's current title, when named. */
-	chatTitle?: string;
-	/** Why the agent asked (its words). */
-	reason: string;
-	/** `pending` (waiting for the person) or `granted`. */
-	status: string;
-	/** Granted: `hour` or `chat`. */
-	scope?: string;
-	/** Granted: when it ends at the latest (unix seconds). */
-	exp?: number;
-	at: number;
-	/** The last actual adb activity, in milliseconds; absent before it was recorded. */
-	lastUsedAt?: number;
-	/** Last use in words, refreshed each minute. */
+/** A message as merged from its thread's entries. In a chat, the core says whose it is and who said it. */
+export interface Message {
+	seq: number;
+	thread: number;
+	ts: string;
+	/** person | agent | the station (ember, as the station stores it) */
+	authorKind: string;
+	author: string;
+	authorName?: string;
+	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
+	authorPicture?: string;
+	/**
+	 * An agent's: its session's model, for its mark before the session is read. Absent for others, for one on the
+	 * runtime's default model and from a station that does not say.
+	 */
+	authorModel?: string;
+	/**
+	 * An agent's: its session's runtime, for its mark before the session is read. Absent for others and from a
+	 * station that does not say.
+	 */
+	authorRuntime?: string;
+	text: string;
+	attachments: Attachment[];
+	quotes: Quote[];
+	/** An agent's post that ended its turn: final, block (the words from before; `ending` has today's). */
+	declared?: string;
+	/** all_done, need_decision, need_help: how the post ended its agent's turn. A station yet to update says nothing. */
+	ending?: string;
+	createdAt: number;
+	editedAt?: number;
+	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
 }
 
-/** This phone lent to one station for its chats' grants (the `adbShare` topic's `lends`): as `phase`, `adb`, `serial` and `message` are for the switch's. */
-export interface AdbLend {
-	station: string;
-	phase: string;
-	adb?: string;
-	serial?: string;
-	message?: string;
-	tunnels: number;
+/** A thread: a Slack thread or a chat on still.fail's page. */
+export interface ChatThread {
+	id: number;
+	/** "slack:<team id>", "feishu:<connect>", or the station's own (titles.ts OWN_SURFACES). */
+	surface: string;
+	channel: string;
+	channelName?: string;
+	threadTs: string;
+	title?: string;
+	createdBy?: string;
+	creator?: Creator;
+	createdAt: number;
+	sessions: Membership[];
+	last: number;
+	lastMessage?: Message;
+	read: number;
+	unread: number;
+	people: Creator[];
+	firstText?: string;
+	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
+	time?: Record<string, Stamp>;
+}
+
+/** How a connect's conversations become sessions. */
+export type ConnectMode = "multi-session" | "single-session";
+
+/** What this device is, as its host told the core at start (`client.device`), and what follows from it. */
+export interface DeviceView {
+	/** `web`, `desktop` or `android`; empty until told. */
+	app?: string;
+	/** A phone (the Android app, or a phone's browser). */
+	phone?: boolean;
+	/** An item's link from outside is offered to the desktop app first (a computer's browser). */
+	handoff?: boolean;
+	/** The device's language as its host says (`zh-CN`, `en-US`, …); none until told. */
+	locale?: string;
 }
 
 /**
- * This phone's adb as lent to a station's agents (the `adbShare` topic; client/core-ts/src/adb.ts, docs/adb-share.md).
- * `phase`: `off`, `connecting` (the link opening, or opening again after it went: `message` says why) or `offered`;
- * `adb`, as the station's adb holds the phone once offered: `connecting`, `connected`, `unpaired`, `unauthorized`,
- * `off` (Wireless debugging is), `missing` (no adb there) or `failed`, `message` saying more. Stopped by itself (its hour up, a station too old), it
- * is off with why in `message`. `serial`: what the agents reach it at on the station; `until`: when it stops.
+ * A call under way: its name (`job.stop`), its params that are words, numbers or yes/no, as words (what a page
+ * matches it by), and since when; `stage` running, rechecking (its station went quiet before it answered: asked again
+ * once it is back, `note` saying so), or failed (kept a few seconds, `error` saying why). A core from before stages
+ * gives none: running.
  */
-export interface AdbShareView {
-	sharing: boolean;
-	station?: string;
-	phase: string;
-	serial?: string;
-	adb?: string;
-	message?: string;
-	until?: number;
-	tunnels: number;
-	connectPort?: number;
-	pairPort?: number;
-	/** `connectPort`, when a tunnel to it found nothing listening there: the app looks for adbd's ports anew. */
-	refusedPort?: number;
-	/** This phone's 共享调试 switch (`adb.on`, kept on the device; off at first): it lends to no chat while off. */
-	on?: boolean;
-	/** This person's chats' grants of their phone live now, and their requests waiting, every station's (docs/adb-share.md). */
-	grants?: AdbGrant[];
-	/** The stations a live grant lends this phone to now. */
-	wanted?: string[];
-	/** Whether the grants kept on the device were read: before, `wanted` empty says nothing of them (a core just started). */
-	known?: boolean;
-	/** This person's 默认最长授权 for their phone: `hour` or `chat` (the longest a chat's grant may last; `adb.setLasts`). */
-	lasts?: string;
-	/** This phone lent to each station a grant wants it on (`adb.ports` given): how each stands. */
-	lends?: AdbLend[];
-	/** The titles of the chats whose own screens (virtual displays) are up on this phone now, every station's: its notification names them. */
-	screens?: string[];
-}
-
-export interface AgentCardLine {
-	/** Its entry in the transcript; `now` for what it does now. */
-	key: string;
-	text: string;
-	/** What it does now, not a thing done. */
-	now?: boolean;
-}
-
-/** How full something is. */
-export type Level = "ok" | "amber" | "red";
-
-export interface AgentCardMeter {
-	percent: number;
-	text: string;
-	level: Level;
-	/** Its whole is not known (a context whose window the runtime does not tell): `text` alone. */
-	unknown?: boolean;
-}
-
-export interface AgentCardNote {
-	text: string;
-	level: Level;
-}
-
-/** An item of an agent's checklist, drawn as a plan's in its execution history (✓ › ·). */
-export interface AgentCardStep {
-	text: string;
-	/** completed | in_progress | anything else: still to do. */
-	status: string;
-}
-
-/** A subagent or a command an agent has going in the background past its turns. */
-export interface AgentCardTask {
-	id: string;
-	/** agent | command */
-	kind: string;
-	/** What it is: its description's first line, else its kind's word. */
-	text: string;
-	/** 子代理 | 命令 */
-	kindText: string;
-	/** Since when it has run, on this device's clock. */
+export interface DoingItem {
+	call: string;
+	params: Record<string, string>;
 	since: number;
+	stage?: string;
+	error?: string;
+	note?: string;
 }
 
 /**
- * A chat's agent in brief, for its card (the `agentCard` view, views/brief.ts): each part only when it
- * has one. Its account and what is left of it are the chat's agent's (`ChatAgent::account`).
+ * What people set going on this device and the core has not finished (the `doing` topic; client/core-ts/src/doing.ts),
+ * oldest first.
  */
-export interface AgentCardView {
-	/** Its turns, and how long the finished ones took: 8 轮 · 共干了 1 小时 12 分. */
-	work?: string;
-	/** What its calls would cost at API prices ($4.20, ≥$4.20 with some unpriced). */
-	cost?: string;
-	/** Its tokens in and out: 输入 1.2M · 输出 34K. */
-	tokens?: string;
-	/** How much of what it sent was read from the cache. */
-	cache?: AgentCardMeter;
-	/** The context it carries on with, against its model's window (amber from 80%, red from 95%). */
-	context?: AgentCardMeter;
-	/** Its jobs at work now: 服务在线：web · 在盯着：CI. */
-	jobs?: string;
-	/** Its latest lines, oldest first (three at most): the things it did, each as its execution history names it, then what it does now while it works. */
-	latest: AgentCardLine[];
-	/** What is wrong (an account that cannot run, the disk filling up); a quota running out is its account's windows'. */
-	attention: AgentCardNote[];
-	/** What it has going in the background past its turns (its subagents and commands), as its station says them; none from a station from before. */
-	tasks: AgentCardTask[];
-	/** Its checklist as it wrote it last (Claude Code's todos or tasks, Codex's plan, an ACP plan), in order. */
-	plan: AgentCardStep[];
-	/** How much of its checklist is done: 已完成 2/5. Absent without one. */
-	planText?: string;
-	/** Both in one line, each part only where it has one: 后台 4 · 清单 2/6：<the item under way>. Absent with neither. */
-	workLine?: string;
-	/** Both shorter, its execution history's mark: 后台 4 · 2/6 (后台 4; 清单 2/6). Absent with neither. */
-	workMark?: string;
-	/** The mark where its row has less room: the counts alone (4 · 2/6). */
-	workMarkShort?: string;
-	/** The mark with less room still, beside an icon: how many tasks (4), else the checklist's done/all (2/6). */
-	workMarkCount?: string;
+export interface DoingView {
+	doing: DoingItem[];
 }
 
-export interface AgentEnvPart {
-	/** name | value | comment | other: how it is coloured. */
-	kind: string;
+/** What kind an entry of the drive is (its mark; what opens it: `DriveOpener`). */
+export type DriveKind = "folder" | "video" | "audio" | "image" | "markdown" | "text" | "code" | "csv" | "html" | "pdf" | "subtitle" | "other";
+
+/**
+ * What a press on an entry of the drive does: a folder entered, a text read, a video or a song played,
+ * the rest previewed as a chat's files are, or saved to the device.
+ */
+export type DriveOpener = "folder" | "read" | "play" | "preview" | "save";
+
+export interface DriveEntry {
+	name: string;
+	dir: boolean;
+	size: number;
+	/** When it last changed (ms). */
+	mtime: number;
+	/** A file's media type, by its name (empty for a folder). */
+	type: string;
+	kind: DriveKind;
+	opens: DriveOpener;
+	/** Its size in words (empty for a folder). */
+	sizeText: string;
+	/** Its time in words: 14:05 today, 9/27 this year, 2024/9/27 before. */
+	timeText: string;
+}
+
+/** Something a job said, and when; `ago` (3 分钟前) and `clock` (13:04, 9/27 13:04) put in by the core. */
+export interface JobNotice {
+	at: number;
+	text: string;
+	ago?: string;
+	clock?: string;
+}
+
+/**
+ * A part of a job's line: `word` its state's word (coloured as its dot), `notice` what it said (in the text's colour),
+ * none the rest.
+ */
+export interface JobPart {
+	text: string;
+	kind?: string;
+}
+
+/** The chat an open job is in. */
+export interface JobChat {
+	id: string;
+	title?: string;
+	archived?: boolean;
+	/** The station the chat is on, when not the job's: a task another station's chat runs there. */
+	station?: string;
+}
+
+/** How one of the open ones that is not a job is stopped (`Job.stop`). */
+export interface JobStop {
+	/** `screen.close` (a simulator shut down) or `screen.endView` (a person's view ended), with its station and these. */
+	call: string;
+	screen: string;
+	view?: string;
+	/** What its button says: 关闭, 断开. */
+	word: string;
+}
+
+/**
+ * A background job an agent started (a web service when it has a port): shown by its name; the port is how the
+ * station reaches a service, not for people.
+ */
+export interface Job {
+	id: string;
+	/** The session that started it (a chat's agents each have their own). */
+	session?: string;
+	name: string;
+	/** running | exited | stopped | failed (a service that exited is being started again) */
+	state: string;
+	port?: number;
+	exitCode?: number;
+	startedAt: number;
+	endedAt?: number;
+	/** What it runs (sh -c). */
+	command?: string;
+	/** How often a service was started again after it ended. */
+	restarts?: number;
+	/** What it said lately (`stillfail-job notify`), newest first: how people see what a long-running job is up to. */
+	notices?: JobNotice[];
+	/** Started to keep watch (`job_start` watch). A station from before watches says none. */
+	watch?: boolean;
+	/** When its output last grew; absent when it has none. */
+	outputAt?: number;
+	/** Its dot: up (a service up), live (a job alive), restart (a service being started again), fail, off (over). */
+	tone?: string;
+	/** A web service (it has a port). */
+	service?: boolean;
+	/** A service whose page can be opened: up, or being started again. */
+	open?: boolean;
+	/** Its state in a word (在线, 在盯着, 意外退出…), coloured as its dot. */
+	word?: string;
+	/** The line under its name, in parts (see `JobPart`). */
+	meta?: JobPart[];
+	/** Its state, how long, and how many notices, as a detail's head says it: 在盯着 · 3 分钟 · 2 条通知. */
+	detail?: string;
+	/** When its output last grew, in words: 最后输出 · 3 分钟前. */
+	outputSaid?: string;
+	/** How long it has been up: 3 小时. */
+	age?: string;
+	/**
+	 * Among the open ones (`longJobs`): its station, that station's name when there are several, the chat it is in as
+	 * the viewer's sidebar has it, and all that in a line (willow · 修登录 · 已归档).
+	 */
+	station?: string;
+	stationName?: string;
+	chat?: JobChat;
+	whereText?: string;
+	/** Among the open ones (`longJobs`), a simulator or a view of a screen in a job's shape: how it is stopped, in place of `job.stop`. */
+	stop?: JobStop;
+}
+
+/** An action keys do (keymap.ts ACTIONS). */
+export type KeyActionName = "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings" | "shortcuts" | "zoom.in" | "zoom.out" | "zoom.reset" | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.screen" | "chat.latest" | "chat.find" | "chat.archive" | "panel.close" | "files.preview";
+
+/** Where an action works: anywhere in the app, in a chat, or in a folder of the files. */
+export type KeyGroupName = "global" | "chat" | "files";
+
+/**
+ * Whether an action works with the cursor in a text field: always (a binding with ⌘ or ⌥ does nothing there),
+ * never (it is a key the field types), or when the field is empty (the key moves the cursor in text).
+ */
+export type KeyTyping = "yes" | "no" | "empty";
+
+export interface KeyAction {
+	action: KeyActionName;
+	group: KeyGroupName;
+	/** What it does, in words. */
+	name: string;
+	typing: KeyTyping;
+	/**
+	 * The bindings that do it here: modifiers in the order Ctrl, Alt, Shift, Mod, then the key, joined by `+`
+	 * (`Shift+Mod+H`). The key is where it is on the keyboard: a letter, a digit, F1…, Up/Down/Left/Right, Space, Escape,
+	 * Enter, or one of \ [ ] . , / ;.
+	 */
+	keys: string[];
+	/** Each of `keys` as a key cap shows it here: ⌘⇧H on a Mac, Ctrl+Shift+H elsewhere. */
+	labels: string[];
+	/** Its keys in words, as the list of shortcuts says them (`labels` with " / ", or 未设置). */
+	text: string;
+	/** Its keys were changed on this device. */
+	changed: boolean;
+	/** Listed among the shortcuts here: those only the desktop app has keys for are not shown elsewhere. */
+	listed: boolean;
+}
+
+export interface KeyGroup {
+	group: KeyGroupName;
+	/** Its name, as the list of shortcuts heads it. */
+	name: string;
+}
+
+/** Enter sends (⇧Enter a new line), or ⌘Enter (Ctrl+Enter elsewhere) sends (Enter a new line). */
+export type SendKey = "enter" | "mod";
+
+export interface SendKeyChoice {
+	by: SendKey;
+	/** The way in words, as the choice says it (Enter 发送, ⌘ Enter 发送). */
+	name: string;
+}
+
+/** How the composer sends (keymap.ts sendView). */
+export interface SendKeys {
+	by: SendKey;
+	/** The two ways, in the order 快捷键 offers them. */
+	choices: SendKeyChoice[];
+	/** The keys that send, as a key cap shows them here (↩, ⌘↩, Ctrl+↩). */
+	send: string;
+	/** The keys that make a new line, as shown (⇧↩, or ↩ / ⇧↩). */
+	newline: string;
+	/** Both in a line of words, under the choice. */
 	text: string;
 }
 
-export interface AgentEnvLine {
-	/** Together, the line as written. */
-	parts: AgentEnvPart[];
-	/** What is wrong with it, in a few words. */
-	problem?: string;
-	/** It keeps the variables from being saved (else the problem is only said). */
-	error: boolean;
-}
-
-/** A station's variables for its agents as one page edits them (agentEnvForm, docs/agent-env.md). */
-export interface AgentEnvDraft {
-	/** As written: `NAME=value` a line; a secret masked as the station shows it (left so, it is kept). */
-	text: string;
-	/** The text's lines in order, each read. */
-	lines: AgentEnvLine[];
-	/** How many lines keep it from being saved. */
-	errors: number;
-	dirty: boolean;
-	pending: boolean;
+/** The app's keyboard shortcuts (client/core-ts/src/keymap.ts): a client turns a key press into a binding and looks it up here. */
+export interface KeymapView {
+	/** Keys can be changed here (`keys.set`): the desktop app; elsewhere `keys` is not gone by. */
+	changeable: boolean;
+	/** Keys are said as on a Mac: Mod is ⌘ and Ctrl a key of its own (else Mod is Ctrl). */
+	mac: boolean;
+	/** Where the actions work, in the order they are listed. */
+	groups: KeyGroup[];
+	/** Every action, in the order they are listed. */
+	actions: KeyAction[];
+	/**
+	 * The keys that switch to the workspace at each place (from 0) of its menu, as shown: ⌃1…⌃9, Alt+1…9 elsewhere
+	 * (not changeable).
+	 */
+	workspace: string[];
+	/** The composer's keys, as `sendKey` chooses them (none from a core before it). */
+	send?: SendKeys;
 }
 
 /** A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor, Devin, Hermes Agent or Antigravity CLI. */
 export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes" | "agy";
 
-export interface AgentProcess {
-	pgid: number;
-	startedAt: number;
+export interface LoginJob {
+	profile: string;
 	runtime: RuntimeKind;
-	label: string;
-	rssMb?: number;
+	/**
+	 * opencode: a sign-in to the OpenCode Console (an OpenCode Go profile); kimi: to Kimi (a Kimi Code profile); none: the
+	 * runtime's subscription.
+	 */
+	provider?: string;
+	/** starting | needs_code | needs_approval | verifying | done | failed | cancelled */
+	state: string;
+	url?: string;
+	/**
+	 * needs_approval: the code to enter on `url` (Codex, Grok, OpenCode); none where the page only asks to confirm
+	 * (Cursor).
+	 */
+	userCode?: string;
+	error?: string;
+	startedAt: number;
+	expiresAt: number;
+	/**
+	 * Its page can be opened in the station's own browser now (`profile.loginBrowser`, `login.browser`); absent from a
+	 * station that cannot (no Chrome, or from before).
+	 */
+	browser?: boolean;
+	/** The screen of the tab its page is open in, in the station's browser, while it is: 回到 … 的浏览器. */
+	screen?: string;
 }
 
-/**
- * An agent waiting on work it started, which brings it back: since its turn ended, and at most how many seconds
- * until it is asked again (absent from a station yet to update).
- */
-export interface AgentWait {
-	since: number;
-	seconds?: number;
-	/** What it waits for in words, as its activity line says it (在等：CI 跑完; 等待中 from a station that does not say). */
-	text?: string;
+export interface AutomaticDecisionRule {
+	enabled: boolean;
+	model?: string;
 }
 
-/**
- * A provider a key can be added for (shapes/providers.ts); a station lists its ids (`id`, `name`, `group`), the core fills the
- * rest in as the picker's tiles.
- */
-export interface ApiProvider {
+export interface AutomaticDecisionSettings {
+	completion?: AutomaticDecisionRule;
+}
+
+export interface AutomaticDecisionModel {
 	id: string;
 	name: string;
-	/** labs | china | gateways | cloud | inference | local */
-	group: string;
-	/** The mark of its maker; none: the generic one. */
-	mark?: string;
-	/** How a profile on it is made: api-provider | opencode-go | anthropic-api | env (variables by hand). */
-	kind?: string;
-	/** It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude; xAI: SuperGrok; Cursor, Devin: its account, a plan alone). */
-	hasKey?: boolean;
-	hasPlan?: boolean;
-	/** Of its subscription, or of the variables: the runtime (claude | codex | dsh | grok | cursor | devin). */
-	runtime?: string;
-	/** Its address is the person's own: asked for with the key. */
-	endpointRequired?: boolean;
-	/** An example of such an address. */
-	endpointExample?: string;
-	/** At such an address, the protocols it can speak there (more than one: asked which). */
-	protocols?: string[];
-	/** Works without a key. */
-	keyOptional?: boolean;
-	/** What a profile on it can do: `claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`, `decision`. */
-	uses?: string[];
-	/** What the core says of it: what it can do, in words. */
-	usesText?: string;
+	profiles: string[];
 }
 
-/**
- * A build of the app on still.fail cloud (`app.update`; scripts/release.sh puts it in /releases/<platform>/latest.json):
- * `file` is under /releases/.
- */
-export interface AppRelease {
-	versionCode: number;
-	versionName: string;
-	file: string;
-	sha256: string;
-	size: number;
-	/**
-	 * What it brings this app: the changelog's lines for it after the build asking, newest first (the core's; the feed
-	 * has none). The home screen offers the build only with some; the settings offer any.
-	 */
-	news?: string[];
-}
-
-/**
- * An archived chat: its thread (or, an agent with no chat, only its session), its title and last line, when it was
- * archived (`at`, and `clock` 14:05) and how (`how`: 手动归档, 空闲后自动归档). `place`: its station's name, where there
- * is more than one to tell apart. Not `deletable` when archived alone (its agents still at work elsewhere).
- */
-export interface ArchiveItem {
-	station: string;
-	/** Its chat's key in its station's list, as ChatItem `id`: its page is `chats/<id>`. */
-	id: string;
+export interface AutomaticDecisionCheck {
+	id: number;
 	session: string;
-	thread?: number;
 	title: string;
-	last: string;
 	at: number;
-	clock: string;
-	how: string;
-	deletable: boolean;
-	place?: string;
-	/** Its station's emoji, as ChatItem's: only with more stations than it. */
-	stationEmoji?: string;
-	/** Its station's icon, as ChatItem's: only with more stations than it. */
-	stationIcon?: string;
-}
-
-/** A day of the archive, headed as the chat list's (今天, 昨天, 星期三, 9月20日). */
-export interface ArchiveDay {
+	stamp?: Stamp;
 	label: string;
-	items: ArchiveItem[];
-}
-
-export interface ArchiveError {
-	station: string;
-	text: string;
-}
-
-/** A way a station may archive on its own, as 设置 › 归档 offers it (core: present.ts archiving). */
-export interface ArchiveModeChoice {
-	/** off | idle | reviewed */
-	mode: string;
-	label: string;
-	/** What choosing it saves: its days (off: 0; else those kept, or one). */
-	days: number;
-	/** What choosing it saves: whether only the reviewed go. */
-	reviewed: boolean;
-	/** Whether it may be chosen: not to go by a review that is off (unless already so). */
-	allowed: boolean;
+	accepted: boolean;
+	model: string;
+	profile?: string;
+	elapsedMs: number;
+	error?: string;
 }
 
 export interface ArchiveOptionChat {
@@ -366,15 +451,6 @@ export interface ArchiveOptionChat {
 	title: string;
 	at: number;
 	recommended: boolean;
-}
-
-export interface ArchiveOptionDraft {
-	/** Stable while the draft lasts, for the list's keys. */
-	key: string;
-	id?: string;
-	name: string;
-	rubric: string;
-	archive: boolean;
 }
 
 export interface ArchiveOptionView {
@@ -404,14 +480,6 @@ export interface ArchivePolicyChange {
 	by: ArchivePolicyAuthor;
 }
 
-/** The archive policy as one page edits it (policyForm). */
-export interface ArchivePolicyDraft {
-	policy: string;
-	options: ArchiveOptionDraft[];
-	dirty: boolean;
-	pending: boolean;
-}
-
 export interface ArchivePolicyView {
 	/** The policy in words: what the decision model is told. */
 	text: string;
@@ -430,41 +498,28 @@ export interface ArchivePolicyView {
 	changeText?: string;
 }
 
-export interface StationFailing {
-	station: string;
-	text: string;
-	message?: string;
+export interface AutomaticDecisionView {
+	canEdit: boolean;
+	/** The station reviews the done chats no decision has answered when asked (automaticDecisions.review). */
+	canReview?: boolean;
+	settings: AutomaticDecisionSettings;
+	models: AutomaticDecisionModel[];
+	recent: AutomaticDecisionCheck[];
+	/** The archive policy the completion check follows. Absent from stations before it. */
+	policy?: ArchivePolicyView;
 }
 
-/**
- * What a list with no rows to show says in their place: it is still reading, the stations it cannot reach (`text`
- * says so, `message` why), or there is nothing (`empty`). All false and none with rows to show.
- */
-export interface ListNote {
-	reading: boolean;
-	/** While reading, what it waits on (正在连接 Willow, 正在读取会话); absent from a core before it. */
-	text?: string;
-	failing: StationFailing[];
-	empty: boolean;
-}
-
-/**
- * The archive of a scope's stations online (the `archive` topic): chats archived by hand or by their station once
- * idle, newest first by the day they were archived; what could not be read of it; and what the page says in place
- * of rows (reading, none), if anything. Restored (`chat.archive` with `archived` false) or deleted (`session.delete`),
- * a chat leaves it.
- */
-export interface ArchiveView {
-	days: ArchiveDay[];
-	/** A station's archive that could not be read, in a line (named where there are several). */
-	errors: ArchiveError[];
-	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
-	wait: ListNote;
-	note?: string;
-	/** How many archived chats there are (with `q`, that have it), shown or not. */
-	total?: number;
-	/** Older ones past the topic's `limit` are left out. */
-	more?: boolean;
+/** A way a station may archive on its own, as 设置 › 归档 offers it (core: present.ts archiving). */
+export interface ArchiveModeChoice {
+	/** off | idle | reviewed */
+	mode: string;
+	label: string;
+	/** What choosing it saves: its days (off: 0; else those kept, or one). */
+	days: number;
+	/** What choosing it saves: whether only the reviewed go. */
+	reviewed: boolean;
+	/** Whether it may be chosen: not to go by a review that is off (unless already so). */
+	allowed: boolean;
 }
 
 export interface ArchivingView {
@@ -505,425 +560,15 @@ export interface ArchivingView {
 	modeNote?: string;
 }
 
-export interface Attachment {
-	name: string;
-	path: string;
-	size: number;
-	width?: number;
-	height?: number;
-	/** An image's ThumbHash (base64): a blurred likeness of it, shown until it loads. */
-	thumbhash?: string;
-	/** A film's length in ms, as the station read it from its header: said before the film is read. */
-	duration?: number;
-	/** How many frames a film's picture has, as the station read them from its header. */
-	frames?: number;
-	/**
-	 * In a chat's page: the session whose workspace keeps it (its agent's, else the chat's first agent's), which
-	 * its preview and download go through. Absent elsewhere.
-	 */
-	owner?: string;
-	/**
-	 * In a chat's page: the id of this device's upload it is (`composer.add`), while this device still has its
-	 * picture; absent for every other file.
-	 */
-	upload?: string;
-	/**
-	 * In a chat's page: its picture (an image's thumbnail, a video's still) is kept on this device, a decode away
-	 * (the app's first page waits for it); absent for every other file.
-	 */
-	held?: boolean;
-}
-
-/** A window of a session's account running out, as its ring draws it. */
-export interface QuotaAttention {
-	left: number;
-	mark: string;
-	level: Level;
-	until?: number;
-}
-
-/**
- * What is worth a look about a session now (account | quota | disk): what it says (`text`; for a quota, its tip's
- * first line, `more` the rest), and a quota's ring.
- */
-export interface Attention {
-	kind: string;
-	text: string;
-	more?: string;
-	quota?: QuotaAttention;
-}
-
-export interface AutomaticDecisionCheck {
-	id: number;
-	session: string;
-	title: string;
-	at: number;
-	stamp?: Stamp;
-	label: string;
-	accepted: boolean;
-	model: string;
-	profile?: string;
-	elapsedMs: number;
-	error?: string;
-}
-
-/** Who made a model, for its mark; absent when the marks do not know it (the runtime's stands in). */
-export interface Maker {
-	id: string;
-	name: string;
-}
-
-/** Used up until a time (or no one knows when), in words. */
-export interface Spent {
-	until?: number;
-	text: string;
-	back?: string;
-}
-
-export interface QuotaCredits {
-	hasCredits: boolean;
-	unlimited: boolean;
-	balance?: string;
-}
-
-/** A quota window, as drawn: its mark (5H, W), what is left, how full (ok | amber | red), when it refills in words. */
-export interface QuotaWindow {
-	label: string;
-	usedPercent: number;
-	resetsAt?: number;
-	mark: string;
-	left: number;
-	level: Level;
-	refills?: string;
-	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
-	time?: Record<string, Stamp>;
-}
-
-/** An allowance: its windows shortest first. */
-export interface Quota {
-	credits?: QuotaCredits;
-	/** The subscription tier, when reported with the allowance. */
-	plan?: string;
-	resetCount?: number;
-	/** Expiry times of the available reset credits whose details are known, in milliseconds. */
-	resetExpiries?: number[];
-	creditsText?: string;
-	resetText?: string;
-	/** ok | unsupported | unavailable | blocked (the provider refuses the account) */
-	state: string;
-	windows: QuotaWindow[];
-	detail?: string;
-	checkedAt: number;
-	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
-	time?: Record<string, Stamp>;
-}
-
-/**
- * What is left of an account's allowance, in a few words: every window in gray, or only the one running low, with
- * its level.
- */
-export interface QuotaLine {
-	text: string;
-	level?: Level;
-}
-
-/** A profile that can run a model: `current` it runs on it now. */
-export interface RunnableProfile {
-	/** The chosen model’s reasoning levels on this account. */
-	efforts?: string[];
-	id: string;
-	name: string;
-	current: boolean;
-	spent?: Spent;
-	kind?: AccessKind;
-	/** The mark of its provider's maker (a key on a listed provider); none: the kind's own. */
-	mark?: string;
-	runtime?: RuntimeKind;
-	quota?: Quota;
-	/** What is left of its allowance, in a few words (a core from before it says nothing). */
-	quotaLine?: QuotaLine;
-}
-
-/** A station as a model option names it. */
-export interface ModelStation {
-	name: string;
-	emoji?: string;
-	/** As StationView's. */
-	icon?: string;
-}
-
-/** Where a model this station cannot run yet would be borrowed from (`pick.borrow`). */
-export interface ModelBorrow {
-	/** The station that has it (address). */
-	station: string;
-	stationName: string;
-	/** Its profile there. */
-	profile: string;
-	profileName: string;
-	/** A subscription: borrowed for each agent started, so not while that station is off. */
-	subscription: boolean;
-	/** Shared with every station already: its copy is on its way here, nothing to ask. */
-	pending: boolean;
-	/** The stations it is shared with now (this one is added). */
-	allow: string[];
-}
-
-/** What a model runs with when it is picked in a model control's panel. */
-export interface ModelUsual {
-	runtime?: RuntimeKind;
-	effort?: string;
-	fast?: boolean;
-	context?: number;
-}
-
-/** A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it. */
-export interface ModelOption {
-	/** The spelling a client sends: the one that is its key when a profile has that, else the first. */
-	model: string;
-	/** As people call it (Opus 5.5). */
-	name: string;
-	/** Its series (Opus, GPT), what a list groups it under; none when not known. Lists come by series, newest first. */
-	family?: string;
-	/** Every spelling of it the station's profiles run (openai/gpt-6-astra, gpt-6-astra): one model. */
-	ids: string[];
-	maker?: Maker;
-	runtimes: RuntimeKind[];
-	efforts: Record<string, string[]>;
-	/** By runtime, how much less context than its whole window it can be kept to, in tokens, the most first. */
-	contexts?: Record<string, number[]>;
-	/** Its whole context window, as its station's model catalog says it. */
-	contextWindow?: number;
-	accounts: Record<string, RunnableProfile[]>;
-	spent?: Spent;
-	/**
-	 * In a model control (`pick`): here (a profile of this station's own runs it), borrowed (only copies another
-	 * station shares with this one), borrowable (only another station of the workspace has it: `borrow`).
-	 */
-	availability?: string;
-	/**
-	 * Where it comes from, in words (借自 Willow, 在 Willow 上: what its mark is said as); none for one of this
-	 * station's own.
-	 */
-	fromText?: string;
-	/** The station it comes from, after its name: its mark where it has one, else its name. */
-	fromStation?: ModelStation;
-	/** A borrowable one: the profile that would be shared with this station. */
-	borrow?: ModelBorrow;
-	/**
-	 * In a model control (`pick`): what it runs with picked in the panel (the one picked, as drafted; another,
-	 * as it last ran here); none, never used here.
-	 */
-	usual?: ModelUsual;
-	/**
-	 * That in words after its name (DeepSeek Harness · 高 · Fast): the runtime where it runs on more than
-	 * one, how hard it thinks unless the model's own, Fast; none, nothing to say.
-	 */
-	usualText?: string;
-	/** In a model control: how many new chats here started on it. */
-	uses?: number;
-	/** In a model control: starred (`pick.like`), kept on this device for the workspace. */
-	liked?: boolean;
-}
-
-/**
- * What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
- * station's pick.
- */
-export interface Picked {
-	model?: string;
-	runtime: RuntimeKind;
-	effort?: string;
-	fast?: boolean;
-	/** The most context it runs with, in tokens; none its model's whole window. */
-	context?: number;
-	profile?: string;
-}
-
-/** The account a model control names: kept to (`auto` false), or the station's pick; `level` its window running low. */
-export interface PickAccount {
-	text: string;
-	auto: boolean;
-	level?: Level;
-	profile?: RunnableProfile;
-}
-
-/** How much context a model control offers to keep a chat to. */
-export interface ContextLevel {
-	/** Its tokens in digits; "" the model's whole window. */
-	id: string;
-	/** In words: 完整 · 1M, 500K. */
-	text: string;
-}
-
-/** A model control's picked model that another station has: borrowing it, confirmed first. */
-export interface PickBorrow {
-	/** In a line: this station cannot use it yet. */
-	note: string;
-	title: string;
-	/** What borrowing does, its account's kind, and that the stations' environments differ: the confirmation's text. */
-	lines: string[];
-	action: string;
-	/** The viewer may borrow it now (a manager, and not on its way already). */
-	allowed: boolean;
-	/** Why not, where not allowed. */
-	why?: string;
-}
-
-/** A maker a model control's panel lists all its models by. */
-export interface ModelMaker {
-	/** As ModelOption `maker.id` names it; "" for those of none known. */
-	id: string;
-	/** In words: Anthropic, OpenAI, 其他. */
-	title: string;
-	/** How many of the control's models it makes. */
-	count: number;
-}
-
-/**
- * A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
- * until `pick.save`), and what they say. An account kept to that does not run the model picked gives way to the
- * station's pick, said so (`dropped`, `force`).
- */
-export interface PickView {
-	fastAvailable?: boolean;
-	/** The model's own reasoning level where none is picked (the draft's `effort` null), where its runtime says one. */
-	effortDefault?: string;
-	/** How fast it runs where none is picked (the draft's `fast` null): its account's own, true Fast. */
-	fastPlan?: boolean;
-	fastText?: string;
-	options: ModelOption[];
-	runtimeFixed: boolean;
-	value: Picked;
-	valueOption?: ModelOption;
-	/** The account the control names; none: it names none (a new chat's, while the station's pick is fine). */
-	account?: PickAccount;
-	draft: Picked;
-	/** The option picked in the panel, by its `model`. */
-	option?: string;
-	/** The runtimes offered for it (none: not asked), how hard it can think there, who can run it. */
-	runtimes: RuntimeKind[];
-	efforts: string[];
-	/**
-	 * How much context it can be kept to (a new chat's or a chat's), its whole window first; none: not
-	 * offered (a runtime that cannot, a model whose window is not known, a station from before).
-	 */
-	contexts?: ContextLevel[];
-	/** The one of `contexts` picked, by its `id`. */
-	contextNow?: string;
-	accounts: RunnableProfile[];
-	dropped?: string;
-	/**
-	 * The way to the accounts in the panel's foot: the one kept to, short, or 账号; amber when one gave way or the
-	 * station's pick runs low.
-	 */
-	who: string;
-	whoLevel?: Level;
-	/** The station's pick, said: who it is on now, or what it does. */
-	autoNote: string;
-	/**
-	 * Beside 自动, the words of what has the station pick a chat's account again now (`pick.repick`);
-	 * none where no other account could take it (not a chat's, or one account).
-	 */
-	repick?: string;
-	changed: boolean;
-	/**
-	 * Full screen (the phone's): the model, depth and account as they were and as they become; why the account
-	 * must change; the model and account picked in words; what the button says.
-	 */
-	was: string[];
-	becomes: string[];
-	force?: string;
-	modelText: string;
-	maker?: Maker;
-	accountText: string;
-	accountNote: string;
-	accountWarn: boolean;
-	saveText: string;
-	/** The picked model is another station's: borrowed first (`pick.borrow`), confirmed; saving waits for it. */
-	borrow?: PickBorrow;
-	/**
-	 * A new chat's or a chat's: the models (their `model`) new chats here started on most, most first, at most
-	 * four, the station's own: kept nearest what opened its panel, the rest past them.
-	 */
-	near?: string[];
-	/**
-	 * The models (their `model`) starred (`pick.like`), the first starred first, those in `near` left out:
-	 * past them, before the rest.
-	 */
-	liked?: string[];
-	/**
-	 * The makers of its options, in the order their models come, none known last: what the list of
-	 * them all is grouped by.
-	 */
-	makers?: ModelMaker[];
-}
-
-export interface AutomaticDecisionDraft {
-	enabled: boolean;
-	model: string;
-	dirty: boolean;
-	pending: boolean;
-	/** The shared model selector, restricted to verified decision candidates. */
-	pick?: PickView;
-}
-
-export interface AutomaticDecisionModel {
-	id: string;
-	name: string;
-	profiles: string[];
-}
-
-export interface AutomaticDecisionRule {
-	enabled: boolean;
-	model?: string;
-}
-
-export interface AutomaticDecisionSettings {
-	completion?: AutomaticDecisionRule;
-}
-
-export interface AutomaticDecisionView {
-	canEdit: boolean;
-	/** The station reviews the done chats no decision has answered when asked (automaticDecisions.review). */
-	canReview?: boolean;
-	settings: AutomaticDecisionSettings;
-	models: AutomaticDecisionModel[];
-	recent: AutomaticDecisionCheck[];
-	/** The archive policy the completion check follows. Absent from stations before it. */
-	policy?: ArchivePolicyView;
-}
-
-/** What the badge counts (`prefs.set {badgeKinds}`, always whole): each kind of chat that wants them, on or off. */
-export interface BadgeKinds {
-	/** The badge shown at all. */
-	on?: boolean;
-	/** A card waits for them, or an agent needs them. */
-	wait?: boolean;
-	/** A chat of theirs went wrong. */
-	failed?: boolean;
-	/** An agent said something they have not read. */
-	done?: boolean;
-	/** Someone else said something they have not read. */
-	message?: boolean;
-	/**
-	 * Services and jobs left up long (an hour) light the rail's bell until it has shown them; never
-	 * counted in the app's number.
-	 */
-	services?: boolean;
-}
-
-/**
- * A phone's bottom bars (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt): several bars of up to four places,
- * one of them in view; with more than one, a swipe up on the bar shows the others.
- */
-export interface BarPrefs {
-	/**
-	 * The bars, each its places in order (one to four of chats, files, stations, profiles, connects,
-	 * usage, archive).
-	 */
-	sets: string[][];
-	/** The bar in view: an index into `sets`. */
-	current: number;
+/** Who is looking: local | access (`email`) | mesh (`email`, `name`, `sub`, `role`, `workspace`, `device`). */
+export interface Viewer {
+	via: string;
+	email?: string;
+	name?: string;
+	sub?: string;
+	role?: string;
+	workspace?: string;
+	device?: string;
 }
 
 export interface Bind {
@@ -932,260 +577,6 @@ export interface Bind {
 	effort?: string;
 	profile?: string;
 }
-
-/** A buddy a Slack app can wear (`buddies`): its picture is avatars/<id>.webp (and .thumb.webp), on `bg`. */
-export interface Buddy {
-	id: string;
-	label: string;
-	bg: string;
-}
-
-/**
- * A change's line: its kind (`new`, `improve` or `fix`, from how it was written: 新功能：, 改进：, 修复：) and the
- * kind's name, then the rest; no kind, and all of it, when it starts otherwise.
- */
-export interface ChangelogLine {
-	kind?: string;
-	label: string;
-	text: string;
-}
-
-/**
- * One change: its lines for people (`text` as written, `lines` with their kind apart), the version it came in,
- * whether this app has it (`has`: absent in another tab, or when it is not this app's), and what is not out yet
- * (`note`: 更新到 0.1.n 后就有, 刷新页面后就有, 还没发布; empty when it is out); `mine`: it is this app's.
- */
-export interface ChangelogItem {
-	version: number;
-	versionName: string;
-	text: string[];
-	lines: ChangelogLine[];
-	has?: boolean;
-	note: string;
-	mine: boolean;
-}
-
-/**
- * A day's changes, under its heading (今天, 昨天, 9月20日): which day it is where the device is (`day`: days since
- * 1970 there, the same day whatever else it lists or the list leaves off; its heading only says it).
- */
-export interface ChangelogDay {
-	day: number;
-	label: string;
-	entries: ChangelogItem[];
-}
-
-/** What this app got since the changelog was last shown here: its `build` (0.1.n) and those changes. */
-export interface ChangelogNews {
-	build?: string;
-	entries: ChangelogItem[];
-}
-
-/**
- * A part's changes (`part`: desktop, web, android, station or cloud; the desktop's include the web's), under
- * its name.
- */
-export interface ChangelogTab {
-	part: string;
-	label: string;
-	days: ChangelogDay[];
-}
-
-/**
- * What changed in still.fail, as this app shows it (the `changelog` topic; client/core-ts/src/changelog.ts): `app`
- * (web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes in a tab a part,
- * this app's first (this app's alone where each would list the same: the stable channel's), by day, newest first; what
- * this app got since the changelog was last shown here (`news`, until `changelog.seen`); `loading` while first read,
- * `error` when it could not be and none was kept.
- */
-export interface ChangelogView {
-	app?: string;
-	build?: number;
-	tabs: ChangelogTab[];
-	news?: ChangelogNews;
-	loading?: boolean;
-	error?: string;
-}
-
-/** A person as the core names them: `display` is 你 for the viewer. */
-export interface PersonShown {
-	name: string;
-	display: string;
-	picture?: string;
-	mine: boolean;
-}
-
-/**
- * Who started a session or chat, or added a connect: an email, or "slack:<connect>:<user>"; "local" in records from
- * a station's own page, before it went.
- */
-export interface Creator {
-	id: string;
-	name: string;
-	email?: string;
-	/** local | cloud | slack | feishu */
-	via: string;
-	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
-	picture?: string;
-	/** As the core names them. */
-	shown?: PersonShown;
-}
-
-/** The message a turn's state is about: its thread, its seq there, its ts. */
-export interface TurnAbout {
-	thread: number;
-	seq: number;
-	ts: string;
-}
-
-export interface TurnSummary {
-	/**
-	 * The turn's (as a session's turns list it): a summary's last turn put in place there. A station from before says
-	 * none.
-	 */
-	id?: string;
-	kind: string;
-	outcome?: string;
-	declared?: string;
-	/** For waiting: at most how long, in seconds, until the agent is asked again (a station yet to update says none). */
-	waitSeconds?: number;
-	/** For waiting: what it waits for, in the agent's words (a station yet to update says nothing). */
-	waitFor?: string;
-	/**
-	 * For waiting: whether what it waits on is only its session's watch keeping on (the agent's `watch`). A station
-	 * before it says nothing: taken as its watch while one runs.
-	 */
-	waitWatch?: boolean;
-	/**
-	 * How the agent ended it in today's words: all_done, need_help or waiting (`declared` keeps the words from before:
-	 * final, block; a station before cards may say need_decision, which the core reads as need_help). A station yet to
-	 * update says nothing.
-	 */
-	ending?: string;
-	/**
-	 * For need_help: what a person has to give, do or decide, in the agent's words; for all_done, what the chat ends
-	 * with.
-	 */
-	need?: string;
-	/**
-	 * The message its state is about (the agent's `about`; for need_help, the card waiting by default). A station
-	 * before it says nothing.
-	 */
-	about?: TurnAbout;
-	detail?: string;
-	startedAt: number;
-	endedAt?: number;
-}
-
-/**
- * What leads a state line, for a client to say as a mark of its own in its words' place: needs the viewer (a bell),
- * done (a check), waiting (the waiting arc), watching (the watch's radar); a card waiting for the viewer (待处理 · …: its
- * lead word in bold); what an agent needed, let go by the viewer (已忽略：…, a chat's end only: quiet, no mark).
- */
-export type StateLead = "need" | "done" | "wait" | "watch" | "decision" | "dismissed";
-
-/** A colour of meaning. */
-export type Tone = "accent" | "green" | "blue" | "red" | "amber" | "neutral";
-
-/** An agent's mark: at work, blocked, failed. */
-export type Badge = "run" | "block" | "failed";
-
-/**
- * What a session keeps watch with (its watches running): their names, oldest first; since when the first runs; when
- * one last gave word (a notice, else its start).
- */
-export interface Watching {
-	names: string[];
-	since: number;
-	at: number;
-}
-
-/**
- * A session, with what the clients show of it. Before its details are read an agent is only what the sidebar's rows
- * say of it (key, runtime, model, effort, process, pending, last turn): the rest is absent then.
- */
-export interface Session {
-	key: string;
-	connect?: string;
-	/** thread | all */
-	scope?: string;
-	title?: string;
-	createdBy?: string;
-	boundTo?: string[];
-	creator?: Creator;
-	participants?: Creator[];
-	/** claude | codex | dsh | grok | cursor | devin */
-	runtime: RuntimeKind;
-	profile?: string;
-	profilePinned?: boolean;
-	model?: string;
-	effort?: string;
-	fast?: boolean;
-	/**
-	 * Whether it goes on afresh once its prompt cache is over, as chosen in its chat (`session.settings`);
-	 * absent: as its station is set (`StationContext::afreshWhenCold`).
-	 */
-	afresh?: boolean;
-	/**
-	 * The most context it runs with, in tokens: its runtime compacts at it (`session.settings`); absent, the
-	 * model's whole window.
-	 */
-	context?: number;
-	runtimeSessionId?: string;
-	/** What its station can do to its context by hand: compact, clear (one from before says none). */
-	contextActions?: string[];
-	workspace?: string;
-	running?: boolean;
-	createdAt?: number;
-	lastActiveAt?: number;
-	archivedAt?: number;
-	/** running | warm | cold */
-	process: string;
-	turns?: number;
-	pending: number;
-	firstText?: string;
-	lastTurn?: TurnSummary;
-	statusText: string;
-	/** What leads `statusText` (need, done, wait, watch), said by a client as a mark of its own. Absent when nothing does. */
-	statusLead?: StateLead;
-	/** What follows the lead in `statusText` (watching: the whole line). Absent with `statusLead`. */
-	statusRest?: string;
-	/** accent | green | blue | red | neutral */
-	tone: Tone;
-	/** Its mark (run | block | failed), and in words. */
-	mark?: Badge;
-	badgeText?: string;
-	titleText: string;
-	agentText: string;
-	/** Its model as people call it (Opus 5.5). */
-	modelName?: string;
-	maker?: Maker;
-	runtimeText: string;
-	processText?: string;
-	/** How hard its runtime can think, lowest first. */
-	efforts: string[];
-	/** Its context can be compacted by hand now (`session.compact`): between turns, once it has one. */
-	canCompact?: boolean;
-	/** Its context can be cleared by hand now (`session.clear`): between turns, once it has one. */
-	canClear?: boolean;
-	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
-	time?: Record<string, Stamp>;
-	/**
-	 * On a connect's page: the chat it was last talked in; as a candidate to deliver into, described, and whether it
-	 * is the one now.
-	 */
-	chat?: number;
-	description?: string;
-	current?: boolean;
-	/** Keeping watch (a `job_start` watch of its runs): its chat is a watching one. A station from before watches says none. */
-	watch?: Watching;
-}
-
-/** Where an agent stands. */
-export type Status = "running" | "queued" | "final" | "block" | "decision" | "failed" | "aborted" | "unexpected" | "idle";
-
-/** How a connect's conversations become sessions. */
-export type ConnectMode = "multi-session" | "single-session";
 
 export interface SlackTokens {
 	appToken: string;
@@ -1199,6 +590,8 @@ export interface FeishuApp {
 	appSecret: string;
 	/** feishu | lark */
 	domain: string;
+	/** Thread mode: each thread of a group its own conversation, answered in it. */
+	threads?: boolean;
 	/** The app's page in the developer console (core). */
 	console?: string;
 }
@@ -1243,6 +636,8 @@ export interface ModeWord {
 /** How a connect of a kind says the ways its conversations become sessions (a Feishu one in its groups' words). */
 export interface ModeWords {
 	multi: ModeWord;
+	/** A Feishu connect's thread mode: one each by thread, not by group. */
+	threads?: ModeWord;
 	single: ModeWord;
 	/** What waiting for an @ does, on. */
 	mentionOn: string;
@@ -1265,7 +660,7 @@ export interface Connect {
 	bind: Bind;
 	/** A Slack connect's tokens, masked (empty for another kind: a station sends them for clients from before). */
 	slack: SlackTokens;
-	/** A Feishu (Lark) connect's app (docs/feishu.md); absent for another kind. */
+	/** A Feishu (Lark) connect's app; absent for another kind. */
 	feishu?: FeishuApp;
 	connection: ConnectState;
 	createdBy?: Owner;
@@ -1288,6 +683,24 @@ export interface Connect {
 	modeSentence: string;
 	/** Where people reach it: its Slack workspace, else its platform (Slack, 飞书, Lark) (core). */
 	placeText: string;
+}
+
+export interface Access {
+	/** subscription | opencode-go | anthropic-api | env | api-provider */
+	kind: AccessKind;
+	key: string;
+	/** The provider of an `api-provider` (shapes/providers.ts); an older core reads such a profile as `env` and drops this. */
+	provider?: string;
+	/** Its address, where the provider has none of its own (Azure, Cloudflare, custom). */
+	endpoint?: string;
+	/** At such an address, the protocol it speaks there: chat_completions, responses or anthropic. */
+	protocol?: string;
+	/**
+	 * A profile signed in to an account rather than given a key: an OpenCode Go one to the OpenCode Console (its key
+	 * the sign-in's token), a Kimi Code one to Kimi (its token in its home): signed in again, not given a key (false from a
+	 * station older than it).
+	 */
+	login?: boolean;
 }
 
 export interface EnvVar {
@@ -1321,33 +734,51 @@ export interface ProfileCheck {
 	time?: Record<string, Stamp>;
 }
 
-export interface LoginJob {
-	profile: string;
-	runtime: RuntimeKind;
-	/**
-	 * opencode: a sign-in to the OpenCode Console (an OpenCode Go profile); kimi: to Kimi (a Kimi Code profile); none: the
-	 * runtime's subscription.
-	 */
-	provider?: string;
-	/** starting | needs_code | needs_approval | verifying | done | failed | cancelled */
-	state: string;
-	url?: string;
-	/**
-	 * needs_approval: the code to enter on `url` (Codex, Grok, OpenCode); none where the page only asks to confirm
-	 * (Cursor).
-	 */
-	userCode?: string;
-	error?: string;
-	startedAt: number;
-	expiresAt: number;
-	/**
-	 * Its page can be opened in the station's own browser now (`profile.loginBrowser`, `login.browser`); absent from a
-	 * station that cannot (no Chrome, or from before).
-	 */
-	browser?: boolean;
-	/** The screen of the tab its page is open in, in the station's browser, while it is: 回到 … 的浏览器. */
-	screen?: string;
+export interface QuotaCredits {
+	hasCredits: boolean;
+	unlimited: boolean;
+	balance?: string;
 }
+
+/** How full something is. */
+export type Level = "ok" | "amber" | "red";
+
+/** A quota window, as drawn: its mark (5H, W; its model where it is one model's: Fable), what is left, how full (ok | amber | red), when it refills in words. */
+export interface QuotaWindow {
+	label: string;
+	usedPercent: number;
+	resetsAt?: number;
+	/** The one model it is the allowance of (its series: Fable); none: the account's. */
+	scope?: string;
+	mark: string;
+	left: number;
+	level: Level;
+	refills?: string;
+	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
+	time?: Record<string, Stamp>;
+}
+
+/** An allowance: its windows shortest first. */
+export interface Quota {
+	credits?: QuotaCredits;
+	/** The subscription tier, when reported with the allowance. */
+	plan?: string;
+	resetCount?: number;
+	/** Expiry times of the available reset credits whose details are known, in milliseconds. */
+	resetExpiries?: number[];
+	creditsText?: string;
+	resetText?: string;
+	/** ok | unsupported | unavailable | blocked (the provider refuses the account) */
+	state: string;
+	windows: QuotaWindow[];
+	detail?: string;
+	checkedAt: number;
+	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
+	time?: Record<string, Stamp>;
+}
+
+/** A colour of meaning. */
+export type Tone = "accent" | "green" | "blue" | "red" | "amber" | "neutral";
 
 export interface ProfileTrouble {
 	title: string;
@@ -1358,13 +789,19 @@ export interface ProfileTrouble {
 	label: string;
 }
 
+/** Who made a model, for its mark; absent when the marks do not know it (the runtime's stands in). */
+export interface Maker {
+	id: string;
+	name: string;
+}
+
 /** Models of one series (Opus), newest first. */
 export interface ModelSeries {
 	name: string;
 	models: string[];
 }
 
-/** How a profile is shared between the workspace's stations (docs/station-share.md). */
+/** How a profile is shared between the workspace's stations. */
 export interface ProfileShare {
 	/** The share's id: the same on every station that has the profile. */
 	id: string;
@@ -1411,6 +848,8 @@ export interface Profile {
 	 * station older than the setting.
 	 */
 	backgroundOnMessage?: boolean;
+	/** Whether this profile may be used; absent on stations from before disabling profiles. */
+	enabled?: boolean;
 	fast?: boolean;
 	check?: ProfileCheck;
 	login?: LoginJob;
@@ -1466,7 +905,7 @@ export interface Profile {
 	/** Shared with the workspace's other stations, or another station's (absent: neither, or a station older than sharing). */
 	share?: ProfileShare;
 	/**
-	 * The workspaces the station joined whose chats may run on it too (docs/multi-workspace.md; none: its home's
+	 * The workspaces the station joined whose chats may run on it too (none: its home's
 	 * only), as its home's managers set it (`profile.put` `input.workspaces`); to a member of a joined one, that one.
 	 */
 	workspaces?: string[];
@@ -1485,319 +924,871 @@ export interface Profile {
 	checkLine?: string;
 }
 
-export interface TurnRecord {
-	id: string;
-	kind: string;
-	outcome?: string;
-	declared?: string;
-	/** In today's words (TurnSummary::ending). */
-	ending?: string;
-	/** For waiting: at most how long, in seconds, until the agent is asked again (a station yet to update says none). */
-	waitSeconds?: number;
-	detail?: string;
+export interface AgentProcess {
+	pgid: number;
 	startedAt: number;
-	endedAt?: number;
-}
-
-export interface Membership {
-	thread: number;
-	session: string;
-	connect: string;
-	joinedAt: number;
-}
-
-export interface Quote {
-	author: string;
-	text: string;
-	comment: string;
-	ts?: string;
-	/** agent | person | page (a mark on a previewed page) | image (a numbered mark on an image) */
-	role?: string;
-	/** The name of the file, among the message's attachments, that goes with it (a preview mark's screenshot; an image of the quoted message, sent again with this one). */
-	file?: string;
-}
-
-/** A message as merged from its thread's entries. In a chat, the core says whose it is and who said it. */
-export interface Message {
-	seq: number;
-	thread: number;
-	ts: string;
-	/** person | agent | ember */
-	authorKind: string;
-	author: string;
-	authorName?: string;
-	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
-	authorPicture?: string;
-	/**
-	 * An agent's: its session's model, for its mark before the session is read. Absent for others, for one on the
-	 * runtime's default model and from a station that does not say.
-	 */
-	authorModel?: string;
-	/**
-	 * An agent's: its session's runtime, for its mark before the session is read. Absent for others and from a
-	 * station that does not say.
-	 */
-	authorRuntime?: string;
-	text: string;
-	attachments: Attachment[];
-	quotes: Quote[];
-	/** An agent's post that ended its turn: final, block (the words from before; `ending` has today's). */
-	declared?: string;
-	/** all_done, need_decision, need_help: how the post ended its agent's turn. A station yet to update says nothing. */
-	ending?: string;
-	createdAt: number;
-	editedAt?: number;
-	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
-	time?: Record<string, Stamp>;
-}
-
-/** A thread: a Slack thread or a chat on still.fail's page. */
-export interface ChatThread {
-	id: number;
-	/** "slack:<team id>" or "ember". */
-	surface: string;
-	channel: string;
-	channelName?: string;
-	threadTs: string;
-	title?: string;
-	createdBy?: string;
-	creator?: Creator;
-	createdAt: number;
-	sessions: Membership[];
-	last: number;
-	lastMessage?: Message;
-	read: number;
-	unread: number;
-	people: Creator[];
-	firstText?: string;
-	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
-	time?: Record<string, Stamp>;
-}
-
-/** Something a job said, and when; `ago` (3 分钟前) and `clock` (13:04, 9/27 13:04) put in by the core. */
-export interface JobNotice {
-	at: number;
-	text: string;
-	ago?: string;
-	clock?: string;
-}
-
-/**
- * A part of a job's line: `word` its state's word (coloured as its dot), `notice` what it said (in the text's colour),
- * none the rest.
- */
-export interface JobPart {
-	text: string;
-	kind?: string;
-}
-
-/** The chat an open job is in. */
-export interface JobChat {
-	id: string;
-	title?: string;
-	archived?: boolean;
-	/** The station the chat is on, when not the job's: a task another station's chat runs there. */
-	station?: string;
-}
-
-/**
- * A background job an agent started (a web service when it has a port): shown by its name; the port is how the
- * station reaches a service, not for people.
- */
-export interface Job {
-	id: string;
-	/** The session that started it (a chat's agents each have their own). */
-	session?: string;
-	name: string;
-	/** running | exited | stopped | failed (a service that exited is being started again) */
-	state: string;
-	port?: number;
-	exitCode?: number;
-	startedAt: number;
-	endedAt?: number;
-	/** What it runs (sh -c). */
-	command?: string;
-	/** How often a service was started again after it ended. */
-	restarts?: number;
-	/** What it said lately (`ember-job notify`), newest first: how people see what a long-running job is up to. */
-	notices?: JobNotice[];
-	/** Started to keep watch (`job_start` watch). A station from before watches says none. */
-	watch?: boolean;
-	/** When its output last grew; absent when it has none. */
-	outputAt?: number;
-	/** Its dot: up (a service up), live (a job alive), restart (a service being started again), fail, off (over). */
-	tone?: string;
-	/** A web service (it has a port). */
-	service?: boolean;
-	/** A service whose page can be opened: up, or being started again. */
-	open?: boolean;
-	/** Its state in a word (在线, 在盯着, 意外退出…), coloured as its dot. */
-	word?: string;
-	/** The line under its name, in parts (see `JobPart`). */
-	meta?: JobPart[];
-	/** Its state, how long, and how many notices, as a detail's head says it: 在盯着 · 3 分钟 · 2 条通知. */
-	detail?: string;
-	/** When its output last grew, in words: 最后输出 · 3 分钟前. */
-	outputSaid?: string;
-	/** How long it has been up: 3 小时. */
-	age?: string;
-	/**
-	 * Among the open ones (`longJobs`): its station, that station's name when there are several, the chat it is in as
-	 * the viewer's sidebar has it, and all that in a line (willow · 修登录 · 已归档).
-	 */
-	station?: string;
-	stationName?: string;
-	chat?: JobChat;
-	whereText?: string;
-}
-
-/** An agent of a chat: its session, the connect that started it, its profile, and what it can move to. */
-export interface ChatAgent {
-	session: Session;
-	status: Status;
-	badge?: Badge;
-	connect?: Connect;
-	profile?: Profile;
-	profiles: RunnableProfile[];
-	/** The models it can move to, as its model control offers them; the account it runs on now. */
-	choices: ModelOption[];
-	account?: RunnableProfile;
-	attention: Attention[];
-	/** When its running turn began; absent when none runs. */
-	since?: number;
-	/** While it waits on work it started (its turn ended as waiting): since when, and for how long at most. */
-	wait?: AgentWait;
-	/** Seen starting its turn while the chat shows (not at work already when first seen): its activity comes in. */
-	started?: boolean;
-	turns: TurnRecord[];
-	threads: ChatThread[];
-	/** Its background jobs, newest first; those with a port are web services, shown by their names. */
-	jobs: Job[];
-	/** On a compact chat, whether it has jobs; their details are in chatJobs. */
-	hasJobs?: boolean;
-}
-
-/** A decision waiting in a chat (`ChatView.asks`). */
-export interface ChatAsk {
-	/** The post it is about (`decision.dismiss`, and where the bar jumps to). */
-	seq: number;
-	/** A card: its options are on that post. */
-	card: boolean;
-	/** The viewer is the one to decide it. */
-	mine: boolean;
-	/** What is wanted, in a line: the agent's need as it said it, else the post's first line. */
-	text: string;
-}
-
-/** A chat's agent whose prompt cache is over (ChatView::cacheCold). */
-export interface ChatCacheCold {
-	/** The agent's session: `session.settings` with `afresh` switches whether it goes on afresh. */
-	session: string;
-	/** The cache's state, separately from its reread cost, for a compact notice. */
-	status: string;
-	/** What rereading costs, or how many tokens it takes when it cannot be priced. */
-	detail: string;
-	/**
-	 * It goes on afresh as it is next started (by a message or a notice): its context cleared, told to read
-	 * back what it needs. As chosen in its chat (`Session::afresh`), or else as its station is set
-	 * (`StationContext::afreshWhenCold`); switched any time with `session.settings` `afresh`.
-	 */
-	afresh: boolean;
-}
-
-/** A thread a chat's messages can be copied to (docs/relay.md "抄送"). */
-export interface ChatCcTo {
-	/** The thread's id: `chat.cc`'s `to`. */
-	thread: number;
-	/** Where it is: #channel, 私信, the Feishu group. */
-	place: string;
-	/** Its platform, for its mark: "slack" or "feishu". */
-	via: string;
-	/**
-	 * Ticked: what is sent from here is copied there too, the station's bot saying there who wrote it on still.fail,
-	 * and what. Off until ticked, for as long as the app runs.
-	 */
-	on: boolean;
-}
-
-/** An agent of a sidebar row, with what its mark shows. */
-export interface RowAgent {
-	key: string;
 	runtime: RuntimeKind;
-	model?: string;
-	effort?: string;
-	process: string;
-	pending: number;
-	lastTurn?: TurnSummary;
-	agentText: string;
-	maker?: Maker;
-	mark?: Badge;
-	statusText: string;
-	/** What leads `statusText`, as a session's. */
-	statusLead?: StateLead;
-	/** What follows the lead, as a session's. */
-	statusRest?: string;
-	badgeText?: string;
-	/** Keeping watch, as its session's `watch`. */
-	watch?: Watching;
-}
-
-/** Who said a row's last thing: an agent (its state riding on its picture), a person, or ember. */
-export interface LastBy {
-	/** agent | person | ember */
-	kind: string;
-	name: string;
-	mine: boolean;
-	model?: string;
-	runtime?: RuntimeKind;
-	/** block | run | failed */
-	state?: Badge;
-	id?: string;
-	picture?: string;
-	/** What its picture says when pointed at: who, and an agent's state. */
 	label: string;
-	maker?: Maker;
+	rssMb?: number;
 }
 
-/** A row's last message, its text cut to 200 characters; `preview` its line. */
-export interface RowMessage {
-	seq: number;
-	authorKind: string;
-	author: string;
-	authorName?: string;
-	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
-	authorPicture?: string;
-	text: string;
-	createdAt: number;
-	by?: LastBy;
-	preview: string;
-	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
-	time?: Record<string, Stamp>;
+export interface Counts {
+	sessions: number;
+	running: number;
+	warm: number;
 }
 
-export interface Origin {
-	teamName?: string;
-	channel: string;
-	channelName?: string;
-	threadTs: string;
+export interface MeshStatus {
+	/** off | missing | running | restarting */
+	state: string;
+	origin?: string;
+	station?: string;
+	workspace?: string;
+	workspaceId?: string;
+	name?: string;
+	/**
+	 * Whether it knows the workspace's stations now, from still.fail cloud (false: cut off from it, it takes no shared
+	 * Profile's copy). Absent from stations before it.
+	 */
+	reached?: boolean;
 }
 
-/** Someone in a chat, named as the core names them. */
-export interface Person {
-	id: string;
-	name: string;
+export interface ConfigTokenOwner {
+	team: string;
+	teamDomain?: string;
+	teamIcon?: string;
+	user: string;
 	email?: string;
-	via: string;
-	shown: PersonShown;
+	image?: string;
+}
+
+export interface SlackTeam {
+	teamId: string;
+	name: string;
+	owner?: ConfigTokenOwner;
+}
+
+export interface SlackAppLinks {
+	settings: string;
+	install: string;
+	appToken: string;
+	oauth: string;
+}
+
+/** A Slack app still.fail made that no connect has taken yet, as its maker sees it (never its secrets or tokens). */
+export interface MadeSlackApp {
+	appId: string;
+	name: string;
+	teamId: string;
+	/** The Slack workspace's name, when its configuration token says. */
+	team?: string;
+	created: number;
+	links: SlackAppLinks;
+	/** The link that installs it through Slack's OAuth (a station in still.fail cloud); none when its tokens are copied by hand. */
+	install?: string;
+	/** Its install's state, what a connect names it by. */
+	state?: string;
+	installed: boolean;
+	installedTeam?: string;
+}
+
+/** A Feishu bot being made by scanning, as its station follows it: only its starter sees it. */
+export interface FeishuRegistration {
+	id: string;
+	/** The page that creates the app, opened on a phone signed in to Feishu (its QR code). */
+	url: string;
+	expiresAt: number;
+	/** waiting | done | denied | expired | failed */
+	state: string;
+	error?: string;
+	appId?: string;
+	/** feishu | lark: where the app was made (Lark once its tenant says so). */
+	domain?: string;
+}
+
+export interface DiskRoom {
+	freeBytes: number;
+	totalBytes: number;
+}
+
+export interface PendingLogin {
+	id: string;
+	runtime: RuntimeKind;
+	job?: LoginJob;
+	created?: string;
+	/** Why a sign-in that succeeded made no profile. */
+	error?: string;
+}
+
+/** Who the station machine's own Claude Code or Codex is signed in as (only read: still.fail never takes the login over). */
+export interface MachineLogin {
+	runtime: RuntimeKind;
+	installed: boolean;
+	loggedIn: boolean;
+	email?: string;
+	plan?: string;
+	/** Its plan as a name, for its tag (pro: Pro; none: ""). */
+	planText?: string;
+	/** A profile can use it as it is (kept in a file, not only in the keychain). */
+	usable?: boolean;
+	/** Its allowance, as a profile on it would show (none until read, or when it cannot be). */
+	quota?: Quota;
+	/** In a line, as the pages show it. */
+	text: string;
+	/** Offered for a profile: signed in, on a plan, and no profile on it yet. */
+	offered?: boolean;
 }
 
 /**
- * A watching chat (core, present.ts): what it watches in words (监控中：盯 CI), and what archiving it by hand asks
- * first (`ask`: archiving stops its watch).
+ * A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a
+ * runtime (`claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`).
  */
-export interface RowWatch {
-	text: string;
-	ask: string;
+export interface SoftwareVersion {
+	/** station | claude | codex | dsh | grok | cursor | devin */
+	id: string;
+	name: string;
+	/** On the machine (a runtime may not be: then `updatable` says it can be installed from here). */
+	installed: boolean;
+	/** What runs now; none when it is not installed, or not a release (a clone). */
+	version?: string;
+	/** The latest out, when it could be read. */
+	latest?: string;
+	/** The latest is newer than what runs. */
+	newer: boolean;
+	/**
+	 * The station's, switched back from the test channel: the latest is the stable release, older than the beta that
+	 * runs, and going back to it is offered (回到正式版). False from a station older than channels.
+	 */
+	downgrade?: boolean;
+	/**
+	 * The station's: which releases it is updated to, `stable` or `beta`; none where it cannot be updated from here,
+	 * and from a station older than channels.
+	 */
+	channel?: string;
+	/**
+	 * The station's: whether it updates itself when a newer release of its channel is out (自动更新); none where it
+	 * cannot be updated from here, and from a station older than it.
+	 */
+	auto?: boolean;
+	/** Automatic updates wait for clients and running turns to leave, then five quiet minutes. */
+	idleOnly?: boolean;
+	/** The pages can update it (or install it, when it is not installed). */
+	updatable: boolean;
+	/** An incomplete Codex can be repaired with npm after a person chooses it; the existing command is backed up. */
+	repairable?: boolean;
+	/** Why it cannot be updated from here (the desktop app's station, a runtime installed another way…). */
+	note?: string;
+	/** idle | updating | failed */
+	state: string;
+	/**
+	 * The station's, while it is updating: where the update is, in a line (正在下载新版本…). None from a station
+	 * older than it, or an installer that does not say.
+	 */
+	progress?: string;
+	/**
+	 * A runtime's, while what its install or update downloads comes in: how much of it is, 0–100 (drawn as a bar
+	 * beside `progress`). None when that is not known, and from a station older than it.
+	 */
+	percent?: number;
+	/** The station's, for a while after an update ended well: how it went (已更新到 0.1.1300，agent 没有中断). */
+	done?: string;
+	/** What the last update that failed said. */
+	message?: string;
+	/** When what is out was last read. */
+	checkedAt?: number;
+	/** Its version as shown: not installed, a clone's (开发版), or one not read. */
+	shownText?: string;
+	/** What is said of it on hover: up to date, or that the last check failed ("" nothing). */
+	tipText?: string;
+	/** While it updates, where that is (its `progress`, else 正在更新/正在安装). */
+	updatingText?: string;
+	/** Its last update or install failed, in words. */
+	failedText?: string;
+}
+
+/** How much of the disk a station takes, for the row that opens its footprint page. */
+export interface FootprintBrief {
+	/** None before its first measure. */
+	bytes?: number;
+	scanning?: boolean;
+	/** What the core says of it: 12.3 GB, 正在统计…. */
+	text?: string;
+}
+
+/** Whether a folder of the drive can be browsed now. */
+export type DriveRootState = "ok" | "missing" | "not_a_directory" | "unreadable";
+
+export interface DriveRoot {
+	/** Where it is on the station; what the drive's calls name it by. */
+	path: string;
+	name: string;
+	/**
+	 * Whether it can be browsed now (`unreadable`: there, but the station may not list it, as macOS keeps some folders from a
+	 * station it did not ask).
+	 */
+	state: DriveRootState;
+}
+
+/** A station's drive: the folders pinned, and how far the viewer reaches. */
+export interface DriveRoots {
+	/** The folders pinned: the list everyone sees first, and all a read-only member reaches. */
+	roots: DriveRoot[];
+	/**
+	 * The viewer browses every folder of the machine (a member who may write); absent from a station from
+	 * before, which lends only the folders pinned.
+	 */
+	anywhere?: boolean;
+	/** Where browsing starts, with `anywhere`: the home of the station's machine. */
+	home?: string;
+	/**
+	 * What is deleted goes to the machine's trash (`drive.remove`; `permanent` for good); absent where there
+	 * is none, or from a station from before, which deletes for good.
+	 */
+	trash?: boolean;
+	/** The station says when something in a folder shown changes (GET /drive/watch). */
+	watch?: boolean;
+	/** A folder can be zipped to download (`drive.zip`). */
+	zip?: boolean;
+	/**
+	 * Files can be copied and moved into it, from its own folders or another station's, and it grants another
+	 * station reads of its own (`drive.transfer` "Copying between stations"); absent from a station from before.
+	 */
+	transfers?: boolean;
+}
+
+/** What a station's search finds of its machine (`Overview.search`). */
+export interface StationSearch {
+	/** spotlight (macOS: Spotlight finds the machine's files) | walk (its folders walked as a search comes) */
+	files: string;
+	/** The machine's person's own mail, messages, calendars, contacts, notes and photos are found too. */
+	personal: boolean;
+}
+
+/** A station's advanced network settings, read when it starts. */
+export interface StationNetwork {
+	/** The saved congestion controller: cubic (default) or experimental bbr. */
+	congestion: string;
+}
+
+/** How a station goes on with a session whose prompt cache is over (`Overview.context`). */
+export interface StationContext {
+	/**
+	 * A person's message to an agent at rest whose large context's prompt cache is over starts it afresh (its
+	 * context cleared, told to read back what it needs), as 换新上下文 does by hand (`context.setAfresh`).
+	 */
+	afreshWhenCold: boolean;
+	/**
+	 * The estimated USD cost of rereading a cold context at or above which the station starts it afresh.
+	 * Absent on an older station, whose on/off setting applies regardless of cost.
+	 */
+	afreshAbove?: number;
+}
+
+/** What a station sends still.fail to find its problems by (`Overview.diagnostics`). */
+export interface StationDiagnostics {
+	/**
+	 * It sends its log to still.fail, scrubbed (no paths under home directories, emails, keys, quoted text or what
+	 * people wrote), for problems to be found from our side (`diagnostics.setLogs`).
+	 */
+	logs: boolean;
+}
+
+/** One of a station's grants. */
+export interface StationGrant {
+	/**
+	 * capture | control | documents | desktop | downloads | removable | network | localNetwork: what
+	 * `permissions.request` takes (localNetwork's opens System Settings' Local Network list on the Mac).
+	 */
+	id: string;
+	name: string;
+	/**
+	 * What it is for; while its window is up on the Mac, how it is given there; Local Network not had, where it is
+	 * switched on.
+	 */
+	line: string;
+	granted: boolean;
+	/** Its window is up on the Mac now, asking for it. */
+	asking: boolean;
+}
+
+/** What macOS lets a Mac station's still.fail Helper do ( "Grants"), as its page shows it. */
+export interface StationPermissions {
+	/**
+	 * Screen Recording, Accessibility, the folders macOS protects, then Local Network (the station's own), in that
+	 * order.
+	 */
+	grants: StationGrant[];
+	/** What is unavailable now for want of a grant, in a line; none when every one is granted. */
+	note?: string;
+	/**
+	 * The desktop's page in the app, where a person grants from wherever they are (its screen can be seen and
+	 * driven): opened once a grant is asked for. None: they go to the Mac.
+	 */
+	screen?: string;
+	/** The viewer may ask for a grant (`permissions.request`; not a read-only member). */
+	canRequest: boolean;
+}
+
+/** Whether a Windows station runs as the machine's administrator, as its page shows it. */
+export interface StationElevation {
+	/** Where its switch stands: the setting, or what a change under way goes to (`elevation.set`). */
+	on: boolean;
+	/** A change is under way (Windows' prompt up, the station restarting): the switch waits. */
+	busy: boolean;
+	/** What it means, or how the change under way goes. */
+	line: string;
+	/** How the last change failed (nothing changed then), in a line; none when it did not. */
+	failed?: string;
+	/**
+	 * The viewer may switch it now (one of the workspace's owners and admins, its Windows user an administrator,
+	 * no change under way).
+	 */
+	canChange: boolean;
+}
+
+/** A station's overview, with what the clients show of its connects and profiles. */
+export interface Overview {
+	automaticDecisions?: AutomaticDecisionView;
+	/** How its chats go to the archive on their own (`archiving.save`). Absent from stations before it. */
+	archiving?: ArchivingView;
+	viewer: Viewer;
+	connects: Connect[];
+	profiles: Profile[];
+	processes: AgentProcess[];
+	counts: Counts;
+	mesh?: MeshStatus;
+	slackUsers: string[];
+	slackTeams: SlackTeam[];
+	slackApps?: MadeSlackApp[];
+	/** The station has the Comma connect: Comma is offered as a platform. Absent from one without it. */
+	comma?: boolean;
+	/**
+	 * The Feishu bots the viewer is making by scanning. Absent from a station without the Feishu
+	 * connect, which is then not offered.
+	 */
+	feishuRegistrations?: FeishuRegistration[];
+	disk?: DiskRoom;
+	logins: PendingLogin[];
+	/** This machine's own logins (none from a station older than them). */
+	machineLogins?: MachineLogin[];
+	/** It can share profiles and skills with the workspace's other stations. */
+	sharing?: boolean;
+	/**
+	 * An OpenCode Go profile can be signed in to the OpenCode Console rather than given a key (false from a station
+	 * older than it: not offered).
+	 */
+	consoleSignIn?: boolean;
+	/** The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them). */
+	updates?: SoftwareVersion[];
+	/** Its agents' processes, in a line. */
+	processesText: string;
+	/** How much of the disk it takes (none from a station older than the footprint page, which then is not offered). */
+	footprint?: FootprintBrief;
+	/**
+	 * The variables everything it starts for its agents runs with, by name, a secret's value
+	 * masked (none from a station older than them, which then does not offer them).
+	 */
+	agentEnv?: EnvVar[];
+	/**
+	 * Its files: the folders pinned, and whether the viewer browses every folder (none from a station older
+	 * than the drive, which then is not offered).
+	 */
+	drive?: DriveRoots;
+	/** What its search finds of the machine. None from a station older than it. */
+	search?: StationSearch;
+	/** Advanced network settings, applied on station restart. Absent on older stations. */
+	network?: StationNetwork;
+	/**
+	 * How it goes on with a session whose prompt cache is over. None from a station older than it, which then
+	 * does not offer it.
+	 */
+	context?: StationContext;
+	/** Whether it sends its log to still.fail. None from a station older than it, which then does not offer it. */
+	diagnostics?: StationDiagnostics;
+	/**
+	 * What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then
+	 * shows nothing).
+	 */
+	permissions?: StationPermissions;
+	/**
+	 * Whether it runs as the machine's administrator (a Windows station only; none from one older than it, which
+	 * then shows nothing).
+	 */
+	elevation?: StationElevation;
+}
+
+/** What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), the viewer's hidden chats (已隐藏), or archived chats (已归档). */
+export type ListFilter = "all" | "mine" | "watching" | "hidden" | "archive";
+
+/**
+ * Whose pictures lead a chat's row: by how many people the scope has (the default), or always the agents', or the
+ * people's.
+ */
+export type RowPictureSetting = "auto" | "agents" | "people";
+
+/** A chat to go back to: its station's address and the key its page goes by. */
+export interface OpenChat {
+	station: string;
+	key: string;
+}
+
+/** A chat's history tabs as last left: which are open, which is in front. */
+export interface KeptTabs {
+	tabs: string[];
+	active?: string;
+}
+
+/** What the badge counts (`prefs.set {badgeKinds}`, always whole): each kind of chat that wants them, on or off. */
+export interface BadgeKinds {
+	/** The badge shown at all. */
+	on?: boolean;
+	/** A card waits for them, or an agent needs them. */
+	wait?: boolean;
+	/** A chat of theirs went wrong. */
+	failed?: boolean;
+	/** An agent said something they have not read. */
+	done?: boolean;
+	/** Someone else said something they have not read. */
+	message?: boolean;
+	/**
+	 * Services and jobs left up long (an hour) light the rail's bell until it has shown them; never
+	 * counted in the app's number.
+	 */
+	services?: boolean;
+}
+
+export type ReaderFace = "serif" | "sans";
+
+/** The reader's paper: as the app looks (`follow`), or one of its own. */
+export type ReaderPaper = "follow" | "white" | "green" | "grey" | "night";
+
+/** How the drive's reader lays text out on this device (`prefs.set {reader: {…}}`, one setting or several). */
+export interface ReaderPrefs {
+	/** The text's size (sp/px), 12 to 32. */
+	size: number;
+	/** Line height as a multiple of the size, 1.2 to 2.4. */
+	line: number;
+	/** Room either side (dp/px), 8 to 44. */
+	margin: number;
+	face: ReaderFace;
+	/** Paragraphs start indented two characters. */
+	indent: boolean;
+	paper: ReaderPaper;
+}
+
+/**
+ * A phone's bottom bars (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt): several bars of up to four places,
+ * one of them in view; with more than one, a swipe up on the bar shows the others.
+ */
+export interface BarPrefs {
+	/**
+	 * The bars, each its places in order (one to four of chats, files, stations, profiles, connects,
+	 * usage, archive).
+	 */
+	sets: string[][];
+	/** The bar in view: an index into `sets`. */
+	current: number;
+}
+
+/** The faces chosen on this device, by place (client/core-ts/src/fonts.ts, sf/faces.mbt). */
+export interface FontChoices {
+	/** The app's own words: a face's id, or `local:<family>` for one installed on the device; none: the app's own face. */
+	ui?: string;
+	/** What people and agents wrote (messages, the composer); none: as `ui`. */
+	text?: string;
+	/** Code; none: the app's own (the Android app's JetBrains Mono, the system's monospace on a page). */
+	code?: string;
+}
+
+/** A face's file for the Android app. */
+export interface FontFile {
+	/** The weight it is (400, 500, …); 0: one variable file for every weight. */
+	weight: number;
+	/** Where it is, gzipped. */
+	url: string;
+	/** Its size gzipped. */
+	bytes: number;
+	/** The hash of it unzipped. */
+	sha256: string;
+	/**
+	 * Where this device keeps it, unzipped, as a file its host reads there itself (a place's face only: font-files.ts);
+	 * absent where it keeps none, or not as a file.
+	 */
+	path?: string;
+}
+
+export interface FontFace {
+	/** Its id (`local:<family>` for one installed on the device); empty: the app's own face. */
+	id: string;
+	/** Its name as people know it, in their language (empty: the app's own). */
+	name: string;
+	/** Its characters are all one width: a face for code. */
+	mono: boolean;
+	/** The family a page sets it by (its stylesheet's, or the one installed); empty: the app's own. */
+	family: string;
+	/** A page's stylesheet for it: its slices, fetched as their characters are shown. */
+	css?: string;
+	/** What the Android app fetches and keeps for it, a file for each weight (none: one installed, or the app's own). */
+	files?: FontFile[];
+	/** Its preview for the Android app: the fonts page's characters alone (tens of KB), to show it in itself before it is fetched. */
+	preview?: string;
+	/** What `files` come to. */
+	bytes: number;
+}
+
+/** The faces a device's pages are set in, each place's whole (text, none chosen: as ui's), and those there are. */
+export interface FontsView {
+	ui: FontFace;
+	text: FontFace;
+	code: FontFace;
+	/** The faces there are to choose, beside the app's own and those installed on the device. */
+	list: FontFace[];
+}
+
+/**
+ * A place the wide screen's rail can show: a list of chats (对话, 我参与的, 监控中, 已隐藏, 已归档), 待处理's panel, or a page
+ * (文件, Station, Profile, 连接, 用量).
+ */
+export type RailPlaceId = "chats" | "mine" | "watching" | "hidden" | "archive" | "attention" | "files" | "stations" | "profiles" | "connects" | "usage";
+
+/** What kind of place: a page of its own, one of the chats' lists, 待处理. */
+export type RailKind = "places" | "lists" | "attention";
+
+/** A place the rail can show. */
+export interface RailPlace {
+	id: RailPlaceId;
+	/** Its name, as the rail's tip and its settings say it. */
+	label: string;
+	kind: RailKind;
+	/** The list of chats it shows in the sidebar (`listFilter`'s word); none for a place that is not one. */
+	list?: ListFilter;
+}
+
+/** The places of one kind, as the panel that adds them to the rail groups them. */
+export interface RailGroup {
+	kind: RailKind;
+	label: string;
+	/** Its places, in the settings' order. */
+	places: RailPlaceId[];
+}
+
+/** One workspace's rail. */
+export interface RailOf {
+	/** What the rail shows, in its order: as kept, those this build does not know left out; none kept, `default`. */
+	items: RailPlaceId[];
+	/** The places left out of it, in the settings' order. */
+	hidden: RailPlaceId[];
+	/** It is other than `default` (恢复默认 offered). */
+	changed: boolean;
+}
+
+/** The wide screen's rail (prefs `railView`, rail.ts railView): which places, in what order, their words and kinds. */
+export interface RailView {
+	/** Every place it can show, in the order its settings list them. */
+	places: RailPlace[];
+	/** What can be put in it, by kind, in the panel's order. */
+	groups: RailGroup[];
+	/** What it shows when none was chosen. */
+	default: RailPlaceId[];
+	/** The rail of a workspace with none of its own (`rail`). */
+	all: RailOf;
+	/** Each workspace's own (`rails`), by workspace; one not there goes by `all`. */
+	by: Record<string, RailOf>;
+}
+
+/** What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is. */
+export interface PrefsView {
+	/** The lists show only the chats and connects the viewer takes part in. */
+	onlyMine?: boolean;
+	/** The chat list shows only the watching chats (监控中); never with `only_mine`. */
+	onlyWatching?: boolean;
+	/**
+	 * The list filter chosen in each workspace, by workspace; one not there goes by `only_mine` and `only_watching`
+	 * (one filter for all, as devices kept it before).
+	 */
+	listFilter?: Record<string, ListFilter>;
+	appearance?: Appearance;
+	/**
+	 * The app's colour theme on this device: `blue`, `teal`, `purple`, `pink`, `custom:<hue>` (0 to 359: a theme the app
+	 * makes of that hue), or none for still.fail's orange.
+	 */
+	accent?: string;
+	/** The window's content size on this device, as a percentage; none means 100%. */
+	windowZoom?: string;
+	/**
+	 * Motion on this device's pages: `reduce` (what moves only fades or is there at once), `full`, or none to
+	 * follow the system's setting.
+	 */
+	motion?: string;
+	/**
+	 * Haptics on this device: `off`, or none for on (a long press taken, a card answered, what is copied, a
+	 * chat open in front coming to need the viewer).
+	 */
+	haptics?: string;
+	/**
+	 * This app keeping itself current on this device: `off` (a newer build is said, and downloaded and put in
+	 * place only at the person's word), or none for on (downloaded by itself, put in place while the app is not in use).
+	 */
+	appUpdate?: string;
+	rowPicture?: RowPictureSetting;
+	/** Times are shown as dates rather than "3 分钟前". */
+	absoluteTime?: boolean;
+	/** The language chosen: `zh`, `en`, or none to follow the device's (its `locale`). */
+	language?: string;
+	/**
+	 * The language things are said in, as chosen or else as the device is: `zh` or `en` (the core's; none from a core
+	 * before languages, when the clients go by the device themselves).
+	 */
+	lang?: string;
+	/** Keys changed for an action (the desktop app's), by action. */
+	keys?: Record<string, string[]>;
+	/** The workspace last open, as the apps keep it: the one they open at start (the first one when it is gone). */
+	workspace?: string;
+	/** The chat page last open, by scope (a workspace; `local` in what a station's own page kept, before it went). */
+	lastChat?: Record<string, string>;
+	/**
+	 * The chat last open, by workspace, as the core keeps it from `client.focus` (a settings page leaves it as it
+	 * was; a new chat shown, none): what the workspace's page goes back to.
+	 */
+	openChat?: Record<string, OpenChat>;
+	/** Each chat's history tabs, by `<station>:<chat>` (the latest 200). */
+	chatTabs?: Record<string, KeptTabs>;
+	/**
+	 * Chats whose files dragged in go otherwise than `dropAs` says, by `<station>:<chat>`: true as files, false
+	 * named by their path (folders are named all the same).
+	 */
+	dropFiles?: Record<string, boolean>;
+	/**
+	 * How a station's files are listed on this device: each place's view (`page`: the files' page, `tab`: a
+	 * chat's 文件 tab; tree, columns or list, none: list for the page and columns for the tab), their order (`sort`: name, time, size or kind, `-down`
+	 * after it for the other way; none: name), whether hidden files show (`hidden`: shown) and how wide columns are
+	 * (`column`: in pixels; none: 240).
+	 */
+	driveViews?: Record<string, string>;
+	/**
+	 * The files' page's tabs on this device, by workspace: what each shows (one folder, or two side by side), which
+	 * is in front, kept as `files.tabs` writes it (JSON; the `filesTabs` topic reads it).
+	 */
+	filesTabs?: Record<string, string>;
+	/**
+	 * Folders this person keeps at hand on the files' page, by workspace, on this device: each a station's folder
+	 * (JSON: [{station, path, name}]), whoever else browses there.
+	 */
+	driveFavorites?: Record<string, string>;
+	/**
+	 * Formerly pinned folders the person removed from their shortcuts on this device, by workspace (JSON places).
+	 * This leaves the station's existing pinned folders and access rules unchanged.
+	 */
+	driveFavoritesHidden?: Record<string, string>;
+	/**
+	 * The look the card shared of the agents at work is drawn in, as last chosen under it on this device: the app's
+	 * key for it (`night`, `poster`, …; none or one the app does not know: its first).
+	 */
+	shareLook?: string;
+	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
+	dropAs?: string;
+	/**
+	 * How the composer sends on this device (快捷键): `mod`, ⌘Enter (Ctrl+Enter elsewhere), Enter and ⇧Enter a new
+	 * line; or (none) Enter, ⇧Enter a new line. A screen's keyboard's Enter is a new line whatever this says.
+	 */
+	sendKey?: string;
+	/**
+	 * When a done chat is offered to archive (drawn faded): `off`, never;
+	 * `reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it
+	 * (where its station's review is on, once it recommended it). Archiving with one tap is there whatever this says.
+	 */
+	archiveHint?: string;
+	/**
+	 * How a finger drives a station's screen on a phone: `direct` (a tap clicks where it is), or (none) as a
+	 * trackpad (the finger moves the pointer, a tap clicks where it points).
+	 */
+	screenTouch?: string;
+	/**
+	 * How large a picture of a station's screen this device asks for: `smooth` (at most 1280×720), `hd` (at
+	 * most 1920×1080), `original` (the screen's own size), or (none) as the window is (at most 1920×1080, 2560×1440 on
+	 * a screen that has more).
+	 */
+	screenQuality?: string;
+	/**
+	 * The most frames a second a station's screen is asked to send this device: 120, 90, 60, 30 or 15, or
+	 * (none) as many as the station and the link give.
+	 */
+	screenFps?: number;
+	/**
+	 * The codec a station's screen is asked in on this device: `h264` (H.264 only), or (none) the best both ends
+	 * have (H.265 where they do).
+	 */
+	screenCodec?: string;
+	/**
+	 * Whether the mouse's left and right buttons show over a station's screen driven by touch (the keys row's,
+	 * and the floating pair in 全屏 and sideways): `off` hidden, or (none) shown.
+	 */
+	screenMouse?: string;
+	/**
+	 * The size a service's page is shown at on this device (its preview's 尺寸), by its station and job
+	 * (`<station>\n<job>`): its width, or `<width>x<height>`; none: as big as the preview.
+	 */
+	previewSizes?: Record<string, string>;
+	/**
+	 * Each sidebar of the wide frame as it was left on this device, by its group
+	 * (`<chats|settings|files|profiles|stations|tabs>`): its width, the person's in every workspace, by `\n<group>`; folded, each
+	 * workspace's own, `closed` by `<workspace>\n<group>` (a width kept there before, `<width>` or `<width>,closed`, is read where
+	 * none is kept by the group alone).
+	 */
+	sidebars?: Record<string, string>;
+	/**
+	 * What this device did with a workspace's stations' trouble in the rail's bell, by `<workspace>\n<seen|gone>`:
+	 * the trouble's words as they were when it was looked at (no longer lighting the bell) or let go (no longer listed).
+	 */
+	trouble?: Record<string, string>;
+	/**
+	 * The jobs left up long the rail's bell has shown, by workspace: each `<station>/<id>`, as the
+	 * `longJobs` view's `ids` were when it opened. They no longer light it.
+	 */
+	jobsSeen?: Record<string, string[]>;
+	/**
+	 * The failures let go in 待处理, by workspace: each as its item's `failure` said it. `prefs.set
+	 * {failsGone: {<workspace>: [failure]}}` adds to those kept. Gone from 待处理 and the workspace's mark until it fails again.
+	 */
+	failsGone?: Record<string, string[]>;
+	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
+	resume?: Record<string, string>;
+	/** Versions dismissed on this device, by workspace/station. */
+	stationUpdatesDismissed?: Record<string, string>;
+	/**
+	 * What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of
+	 * theirs that went wrong), all (those and the unread; none: this). `badgeKinds`, when kept, says it instead.
+	 */
+	badge?: string;
+	/** What the app's badge counts, kind by kind (the notifications page); none: as `badge` says. */
+	badgeKinds?: BadgeKinds;
+	/** The invite code a page was opened with, kept through signing in until a workspace is made with it. */
+	invite?: string;
+	/**
+	 * Files opened and let go before all of them came are not brought whole after everything else on this
+	 * device (fill.ts); none: they are.
+	 */
+	fillOff?: boolean;
+	/** The most a file opened and let go is brought whole by itself on this device, in bytes: 0 any; none: 1 GB. */
+	fillMax?: number;
+	device?: DeviceView;
+	/** The product's name on this app's channel: still.fail or youdid.wtf (monoid or monoid.zone on monoid's cloud). */
+	productName?: string;
+	/**
+	 * The product the core's cloud is, whatever the channel: still.fail, or monoid (client/i18n/brand.ts): the name
+	 * the app's words say for still.fail's.
+	 */
+	product?: string;
+	/** How the drive's reader lays text out (always whole: the core fills in what is not kept). */
+	reader?: ReaderPrefs;
+	/**
+	 * What the wide screen's rail shows, in its order (rail.ts RAIL_PLACES: chats, mine, watching, archive,
+	 * attention, files, stations, profiles, connects, usage); none: its default ones. `railView` says it as drawn.
+	 */
+	rail?: string[];
+	/**
+	 * The rail as each workspace has it, by workspace (as `rail`); one not there goes by `rail` (one rail for all,
+	 * as devices kept it before).
+	 */
+	rails?: Record<string, string[]>;
+	/** A phone's bottom bars (always whole: the core fills in what is not kept). */
+	bars?: BarPrefs;
+	/**
+	 * A phone's bottom bars as each workspace has them, by workspace (each whole, as `bars`); one not there goes
+	 * by `bars` (one set for all, as devices kept it before).
+	 */
+	barsBy?: Record<string, BarPrefs>;
+	/** The face chosen for each place on this device (`prefs.set {fonts: {…}}`, one place or several; null: the app's own). */
+	fonts?: FontChoices;
+	/** The faces each place is set in and those there are to choose (the core's, from `fonts`; none from a core before them). */
+	faces?: FontsView;
+	/** The keyboard shortcuts here (the core's, from `keys` and `device`; none from a core before it). */
+	keymap?: KeymapView;
+	/** The wide screen's rail as clients draw it (the core's, from `rail` and `rails`; none from a core before it). */
+	railView?: RailView;
+}
+
+/**
+ * A runtime the station does not have (a chat's notice says so, or a plan's sign-in needs it), and installing it there
+ * (core present.ts `installView`): once installed, the station gives the chat's waiting messages to the agent.
+ */
+export interface RuntimeInstall {
+	/** claude | codex | dsh | grok | cursor | devin: what `software.update` installs ({station, id: runtime}). */
+	runtime: string;
+	/** missing | installing | failed | installed */
+	state: string;
+	/** How it stands, in a line: 此 station 尚未安装 X, 正在安装 X, 无法安装 X, 已安装 X. */
+	title: string;
+	/** Why the install failed. Absent otherwise. */
+	detail?: string;
+	/** Not installable by the viewer from here: who can, or why the station cannot. */
+	note?: string;
+	/** The button's label (安装, 重试) when the viewer can install it now. Absent otherwise. */
+	action?: string;
+	/** While installing, how much of its download is in, 0–100, when known. */
+	percent?: number;
+}
+
+/** A chat a message links to (views.ts #linkedChats). */
+export interface LinkedChat {
+	/** The link as it is written in the message. */
+	href: string;
+	/** The chat's title as its list says it: what a link to it written bare reads as. */
+	title: string;
+	/** It is archived (its station's archivedRows). Absent otherwise. */
+	archived?: boolean;
+	/** Where it stands in words, where its list's row is not there to say it: 已归档. Absent otherwise. */
+	note?: string;
+	/** Its thread, for a link to one of its messages (`messagePeek`). Absent for a chat with none. */
+	thread?: number;
+}
+
+/** still.fail's notice as a chat shows it (core views.ts noticeOf). */
+export interface NoticeShown {
+	/** It says something failed (the station began it with ⚠️): drawn in red. */
+	failed: boolean;
+	/** What it says, ⚠️ and a closing 。 left out. */
+	words: string;
+	/** The session waiting to retry at capacity, while this exact notice can cancel its retry. */
+	retrySession?: string;
+	/**
+	 * One about a profile: where in `words` (UTF-16 units) what went wrong begins, after its ：: the link to that
+	 * profile's page. Absent otherwise.
+	 */
+	linkAt?: number;
+	/**
+	 * A failure's own words, as what failed said them (a provider's, a process's): shown when the notice is
+	 * opened, under `words`. Absent otherwise.
+	 */
+	detail?: string;
+	/**
+	 * A chat's run changed (run-change.ts): what it runs on now in what changed alone (换成 Codex · GPT-6), said in
+	 * place of `words` where they have not the room on their line. Absent otherwise.
+	 */
+	short?: string;
+	/**
+	 * A chat's run changed: how it ran and how it runs, whole (之前：…, 现在：…), shown in place of `words` once
+	 * the notice is opened. Absent otherwise.
+	 */
+	lines?: string[];
+	/**
+	 * `words` read as Markdown (markdown.ts), its runs of words in `words`: what the clients draw (a chat it opened is
+	 * a link to it). Absent where a view reads none of its messages' words (a decision's).
+	 */
+	md?: unknown;
+}
+
+/** Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture. */
+export interface MessageBy {
+	name: string;
+	agent?: string;
+	maker?: Maker;
+	runtime?: RuntimeKind;
+	picture?: string;
+	/** Another chat's agent (session_send): that chat's link, its name opens it. */
+	from?: string;
+	/** In a chat's page: its agent is one of the chat's, its name opens its execution history. Absent otherwise. */
+	here?: boolean;
 }
 
 /**
@@ -1836,7 +1827,7 @@ export interface PhoneAsk {
 }
 
 /**
- * What an agent asks to keep in the person's vault (secret_save, docs/vault.md agent 存入): approving it writes it into their
+ * What an agent asks to keep in the person's vault (secret_save agent 存入): approving it writes it into their
  * vault (`vault.approve`, turning it on first where it is not).
  */
 export interface VaultSave {
@@ -1931,7 +1922,7 @@ export interface MessageCard {
 	options?: DecisionOption[];
 	placeholder?: string;
 	/**
-	 * An agent's request to use a vault item (docs/vault.md): the request's id. An app shows approving it (the options,
+	 * An agent's request to use a vault item: the request's id. An app shows approving it (the options,
 	 * then the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;
 	 * a web page says to approve it in the app. Absent where a later post of the chat asks the same request again (its card
 	 * alone).
@@ -1959,300 +1950,6 @@ export interface MessageCard {
 }
 
 /**
- * A chat's card still pending (a row's, a chat page's; named for when the only cards were decisions): its post's entry,
- * the card as shown, an options card's options in the order they are shown (the recommended one last; empty for a
- * text card), whether the viewer dismissed it, and its line (待处理 · …) while it is the viewer's.
- */
-export interface RowDecision {
-	seq: number;
-	options: DecisionOption[];
-	/** The card itself. A core before cards says none: an options card. */
-	card?: MessageCard;
-	dismissed?: boolean;
-	/** 待处理 · <the post's first line, kept whole>. Absent once dismissed. */
-	text?: string;
-}
-
-/** Whom a chat is shared with, as its row says (`ChatItem.xshare`). */
-export interface RowShare {
-	/** The workspaces' ids. */
-	to: string[];
-	/** Their agents may send messages in it. */
-	write: boolean;
-}
-
-/**
- * The chat an agent opened a chat from (chat_create), for the way back to it: a link only, nothing of the list
- * goes by it (its order, its archiving).
- */
-export interface Opener {
-	/** Its station's address. */
-	station: string;
-	/** Its key: the list's id of it. */
-	session: string;
-	/** Its title as its list says it, else as it was called when it opened this one. */
-	title: string;
-	/** It is not in its station's list (archived, or gone): drawn faded, said so. Absent otherwise. */
-	archived?: boolean;
-	/** With `archived`: 已归档. */
-	note?: string;
-	/** What it is to the chat it opened, in words (由「RPG 演示」创建), for a mark's tip. */
-	text: string;
-}
-
-/** A range of a text, `from` to `to` (UTF-16 units). */
-export interface TextMark {
-	from: number;
-	to: number;
-}
-
-/** An item of the sidebar, as its station puts it together for the viewer, and where it is. */
-export interface ChatItem {
-	id: string;
-	session: string;
-	thread?: number;
-	title: string;
-	agents: RowAgent[];
-	last?: RowMessage;
-	unread: boolean;
-	mine: boolean;
-	lastActiveAt: number;
-	connect?: string;
-	origin?: Origin;
-	station: string;
-	stationName: string;
-	/** Its station's emoji, when its workspace gave it one and has more stations than it. */
-	stationEmoji?: string;
-	/** Its station's icon, when its workspace gave it one and has more stations than it: as StationView `icon`. */
-	stationIcon?: string;
-	/** block | run | failed */
-	state?: Badge;
-	/** Where it came from (Slack · workspace · #channel), for a Slack chat; a Feishu one's (飞书 · tenant · group). */
-	originText?: string;
-	/** slack | feishu: the kind of connect it came from (its mark). */
-	originKind?: string;
-	/** Its station is offline, in words ("Willow 离线"): the row is shown greyed and marked. Absent while online. */
-	offline?: string;
-	/** Its station gone for its update: marked with the update's mark in place of the unplugged one. Absent otherwise. */
-	updating?: boolean;
-	/**
-	 * Its station's link coming back, or failing and retried, in words ("正在重连 Willow…"): the row is marked with a
-	 * turning ring. Absent while linked (and while offline).
-	 */
-	reconnecting?: string;
-	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
-	time?: Record<string, Stamp>;
-	/** A new chat asked for here that its station has not made yet. Absent otherwise. */
-	pending?: boolean;
-	/**
-	 * Who is in it, for its pictures: who started it first, then everyone who wrote in it, each once. From a
-	 * station that does not say: absent.
-	 */
-	people?: Person[];
-	/** Who started it, as in `people`. */
-	creator?: Creator;
-	/** Its people in words, who started it said ("小王 发起 · Lina、你"), with `people`. */
-	peopleText?: string;
-	/** The key a chat asked for here went by before its station made it: the list keeps it one row throughout. Older stations do not say it. */
-	clientKey?: string;
-	/** Pinned by the viewer to the top of their list. Absent when its station does not know pins (it cannot be pinned). */
-	pinned?: boolean;
-	/** A watching chat (one of its agents keeps watch): archiving it by hand asks first. Absent otherwise. */
-	watch?: RowWatch;
-	/**
-	 * The card it waits on (an agent's post with a card no one has answered yet), as the viewer sees it. Absent when
-	 * there is none (and from a station before decisions).
-	 */
-	decision?: RowDecision;
-	/**
-	 * Nothing is left in it: each of its agents ended all_done, nothing at work, no card waiting for the viewer,
-	 * nothing unread; where its station's archive review is on, only once the review recommended archiving it; and the
-	 * viewer's `archiveHint` offers it. Drawn faded. Absent otherwise.
-	 */
-	settled?: boolean;
-	/**
-	 * Nothing is left in it, whatever the viewer's `archiveHint` says: offer to archive it with one tap
-	 * (`chat.archive`). Absent otherwise.
-	 */
-	archivable?: boolean;
-	/**
-	 * A made chat whose station is online: a finger's swipe left archives it (`chat.archive`), whatever its state,
-	 * unread, pinned, kept or not recommended by its station's archive review alike. Absent otherwise.
-	 */
-	swipeArchive?: boolean;
-	/**
-	 * Swiped away, asked first in these words (only the swipe asks so): its watch's while one of its agents keeps
-	 * watch, else while one is at work or waits on work it started. Absent otherwise.
-	 */
-	swipeAsk?: string;
-	/** The viewer kept it (`chat.keep`): never offered for archiving, nor archived on its own; `chat.keep {kept: false}` lets it go. Absent otherwise. */
-	kept?: boolean;
-	/**
-	 * Where it stands, in words, for its second line, its agents' states first: 要你帮忙：…, 出问题：…; then 待处理 · … (a
-	 * card waiting for the viewer, even while an agent works); then 在等：…, 做完了(：…). Absent while it is at work with
-	 * no card waiting, or with nothing to say.
-	 */
-	stateText?: string;
-	/**
-	 * What leads `stateText`, for a client to say as a mark of its own (a bell, a check, the waiting arc, the radar;
-	 * 待处理 · …'s word in bold), not read back out of its words. Absent when nothing does (an agent's failure, an unsent message).
-	 */
-	stateLead?: StateLead;
-	/** A card's line's lead word (待处理, Needs attention), drawn in bold before the rest of `stateText`. Absent otherwise. */
-	stateLeadText?: string;
-	/** What follows the lead in `stateText` (watching: the whole line). Absent with `stateLead`. */
-	stateRest?: string;
-	/**
-	 * A message sent here into it did not go (it waits in the chat to be sent again or dropped): `stateText` says
-	 * which (未发送：…), drawn in red, and `tone` is alert. Absent otherwise.
-	 */
-	unsent?: boolean;
-	/**
-	 * The message `stateText` is about (a seq in this chat): the one the agent's state names. Opening the chat from
-	 * the line may go to it. Absent when none, and for a line that asks for a decision (its chat leads to it: `ChatView.asks`).
-	 */
-	stateAbout?: number;
-	/**
-	 * Its mark, the most urgent first: alert (an agent failed), wait (a card waits, not dismissed by the viewer; or an
-	 * agent needs them: need_help), busy (at work), done (something unread). Absent for none.
-	 */
-	tone?: string;
-	/** The other workspaces it is shared with (docs/chat-share.md). Absent when none, and from stations before sharing. */
-	xshare?: RowShare;
-	/**
-	 * The chat an agent opened it from: its row's way back there. Absent for one a person started, and from a
-	 * station before it.
-	 */
-	opener?: Opener;
-	/**
-	 * Another workspace's chat, its name: the `@` menu's `elsewhere` lists them after the workspace's own. Absent for
-	 * the workspace's own.
-	 */
-	outside?: string;
-	/** With `outside`: that workspace's mark (as a station's), shown before its name; none when none. */
-	outsideEmoji?: string;
-	/** With `outside`: as a station's icon, shown before the emoji. */
-	outsideIcon?: string;
-	/**
-	 * A chat of another of the workspace's stations than the one the `@` menu is written on (`chatSearch`
-	 * `station`): its station's mark and name go after its title. Absent otherwise.
-	 */
-	otherStation?: boolean;
-	/** A chat a search found in its station's archive (`search`). Absent otherwise. */
-	archived?: boolean;
-	/**
-	 * A chat a search found by words its title shows late or not at all: the part of it that has them, on one line
-	 * (`search`: listed first, its title under it). Absent otherwise.
-	 */
-	foundText?: string;
-	/** Where the words are in `foundText`. */
-	foundMarks?: TextMark[];
-}
-
-/**
- * A day of the list, with its heading (今天, 昨天, 星期三, 9月20日); or, above them all, the chats the viewer pinned
- * (`pinned`, `daysAgo` -1, headed 已固定).
- */
-export interface ChatDay {
-	daysAgo: number;
-	at: number;
-	label: string;
-	items: ChatItem[];
-	pinned?: boolean;
-}
-
-/**
- * A chat's services and background jobs as its pages show them (the `chatJobs` view): those that matter now, the
- * ones over left out (died lately, restarting, up and alive; newest first within each); what the button's dot says;
- * each group's head's note.
- */
-export interface ChatJobsView {
-	jobs: Job[];
-	/** On a summary, whether there are jobs; their details are read separately. */
-	hasJobs?: boolean;
-	/** fail: one died lately; restart: a service is being started again. */
-	alarm?: string;
-	/** 2 个在线，1 个在重启; 1 个在盯着 (empty: nothing to say). */
-	servicesNote: string;
-	jobsNote: string;
-	/** 全部 5 个. */
-	allText: string;
-}
-
-/**
- * A runtime the station does not have (a chat's notice says so, or a plan's sign-in needs it), and installing it there
- * (core present.ts `installView`): once installed, the station gives the chat's waiting messages to the agent.
- */
-export interface RuntimeInstall {
-	/** claude | codex | dsh | grok | cursor | devin: what `software.update` installs ({station, id: runtime}). */
-	runtime: string;
-	/** missing | installing | failed | installed */
-	state: string;
-	/** How it stands, in a line: 此 station 尚未安装 X, 正在安装 X, 无法安装 X, 已安装 X. */
-	title: string;
-	/** Why the install failed. Absent otherwise. */
-	detail?: string;
-	/** Not installable by the viewer from here: who can, or why the station cannot. */
-	note?: string;
-	/** The button's label (安装, 重试) when the viewer can install it now. Absent otherwise. */
-	action?: string;
-	/** While installing, how much of its download is in, 0–100, when known. */
-	percent?: number;
-}
-
-/** A chat a message links to (views.ts #linkedChats). */
-export interface LinkedChat {
-	/** The link as it is written in the message. */
-	href: string;
-	/** The chat's title as its list says it: what a link to it written bare reads as. */
-	title: string;
-	/** It is archived (its station's archivedRows). Absent otherwise. */
-	archived?: boolean;
-	/** Where it stands in words, where its list's row is not there to say it: 已归档. Absent otherwise. */
-	note?: string;
-	/** Its thread, for a link to one of its messages (`messagePeek`). Absent for a chat with none. */
-	thread?: number;
-}
-
-/** still.fail's notice as a chat shows it (core views.ts noticeOf). */
-export interface NoticeShown {
-	/** It says something failed (the station began it with ⚠️): drawn in red. */
-	failed: boolean;
-	/** What it says, ⚠️ and a closing 。 left out. */
-	words: string;
-	/** The session waiting to retry at capacity, while this exact notice can cancel its retry. */
-	retrySession?: string;
-	/**
-	 * One about a profile: where in `words` (UTF-16 units) what went wrong begins, after its ：: the link to that
-	 * profile's page. Absent otherwise.
-	 */
-	linkAt?: number;
-	/**
-	 * A failure's own words, as what failed said them (a provider's, a process's): shown when the notice is
-	 * opened, under `words`. Absent otherwise.
-	 */
-	detail?: string;
-	/**
-	 * `words` read as Markdown (markdown.ts), its runs of words in `words`: what the clients draw (a chat it opened is
-	 * a link to it). Absent where a view reads none of its messages' words (a decision's).
-	 */
-	md?: unknown;
-}
-
-/** Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture. */
-export interface MessageBy {
-	name: string;
-	agent?: string;
-	maker?: Maker;
-	runtime?: RuntimeKind;
-	picture?: string;
-	/** Another chat's agent (session_send): that chat's link, its name opens it. */
-	from?: string;
-	/** In a chat's page: its agent is one of the chat's, its name opens its execution history. Absent otherwise. */
-	here?: boolean;
-}
-
-/**
  * Where a decision in a chat's messages stands (core, decisions.ts): still waiting (no person has written since it was
  * asked, and no newer one replaced it), or `resolved`, with who answered and whether by picking an option.
  */
@@ -2260,12 +1957,6 @@ export interface MessageDecision {
 	resolved: boolean;
 	/** Still waiting, and the viewer dismissed it (off their list; the options still work). */
 	dismissed?: boolean;
-	/**
-	 * Still waiting, and the agent that asked is in a turn (its session's latest has not ended, whichever chat it is
-	 * for): an option that closes the card (its `closes`) is refused by the station until it ends, so the clients draw it
-	 * as not answerable yet.
-	 */
-	locked?: boolean;
 	/**
 	 * Who answered it (the first person to write after it), by name; absent while it waits, or when a newer decision
 	 * replaced it.
@@ -2281,7 +1972,7 @@ export interface MessageDecision {
 export interface Place {
 	/** A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`). */
 	name: string;
-	/** ember | slack | feishu */
+	/** chat (the station's own) | slack | feishu */
 	surface: string;
 	session?: string;
 	/** A Slack thread's link in Slack, while a connect is signed in to its workspace; a Feishu chat's in Feishu. */
@@ -2329,7 +2020,7 @@ export interface ChatMessage {
 	seq: number;
 	thread: number;
 	ts: string;
-	/** person | agent | ember */
+	/** person | agent | the station (ember, as the station stores it) */
 	authorKind: string;
 	author: string;
 	authorName?: string;
@@ -2445,3924 +2136,6 @@ export interface ChatMessage {
 	way?: string;
 }
 
-/** The letters between a chat and another: a row of the page's list, its letters once it is opened. */
-export interface LettersChat {
-	/** Which it is, among the page's (its link, else its title). */
-	key: string;
-	title: string;
-	/** Its link, opened as a chat link is. Absent when its station gave none. */
-	link?: string;
-	/**
-	 * Its last letter in brief, on a line, for the page's list: by this chat's agent, its name before it
-	 * (Opus 5.5：…).
-	 */
-	last: string;
-	/** When its last letter was written. */
-	lastActiveAt: number;
-	/** `lastActiveAt` in words. */
-	time?: Record<string, Stamp>;
-	/**
-	 * Both ways, in the order written (`way`): one coming in by that chat's agent, named by the chat; one going out by
-	 * this chat's agent.
-	 */
-	letters: ChatMessage[];
-}
-
-/**
- * What a chat's agents and other chats' agents wrote each other (session_send): not said in the chat, read on a page of
- * its own (the `chatLetters` view {station, thread}).
- */
-export interface ChatLettersView {
-	/** The chat's title. */
-	title: string;
-	/** By the other chat, the one written with last first: the page lists them, one opened shows its letters. */
-	chats: LettersChat[];
-	/** All of the chat is on the device: no letter is missing. Until then, those held, more coming. */
-	whole: boolean;
-}
-
-/** A snapshot of a chat its station keeps for anyone with its link (`chat.publish` answers one too). */
-export interface ChatPublished {
-	/** `chat.unpublish` names it. */
-	id: string;
-	/** Its whole link (`https://share.still.fail/#<station key>.<id>.<key>`): anyone who has it can read it. */
-	link: string;
-	/** When it was published. */
-	createdAt: number;
-	/** Who published it. */
-	byName: string;
-	/** Their email, when the station says (what their tile is coloured by). */
-	by?: string;
-	/** Their picture, as the workspace has it; none: their letter on their colour. */
-	byPicture?: string;
-	/** The viewer may revoke it (who published it, or an owner or admin). */
-	mayRevoke: boolean;
-	/** Its times in words (`createdAt`). */
-	time?: Record<string, Stamp>;
-}
-
-/** A chat made public, for its "…": what it has published, and whether the viewer may publish it. */
-export interface ChatPublish {
-	/** The viewer may publish it (not a read-only member). */
-	may: boolean;
-	/** The snapshots its station keeps of it, the newest first (without those being revoked here). */
-	links: ChatPublished[];
-}
-
-/** One of the screens of a chat's station (`ChatView.screens`). */
-export interface ChatScreen {
-	/** The station's id of it (`desktop`, `browser:<targetId>`, `simulator:<udid>`). */
-	id: string;
-	/** `desktop`, `browser` or `simulator`. */
-	kind: string;
-	title: string;
-	/** What it is and who is on it, as its station's list says (`ScreenItem.line`). */
-	line: string;
-	/** An agent drives it now. */
-	agent?: boolean;
-}
-
-/** A message a search's words found (`ChatSearchView.messages`): its chat opens at it (thread, seq). */
-export interface FoundMessage {
-	station: string;
-	thread: number;
-	seq: number;
-	/** Its chat, as the sidebar lists it. */
-	chat: ChatItem;
-	/** Who said it, as a chat names them (empty when not known). */
-	by: string;
-	/** The line of it that has the words, on one line, Markdown's marks out; `…` first when cut to the words. */
-	text: string;
-	/** Where the words are in `text` (UTF-16 ranges), in order. */
-	marks: TextMark[];
-	createdAt?: number;
-	/** Its times in words, by field (`createdAt`). */
-	time?: Record<string, Stamp>;
-}
-
-/**
- * The chats a few words find (the `chatSearch` topic): as the sidebar has them, those whose title has the words
- * first. What the composer's `@` menu and the switcher list.
- */
-export interface ChatSearchView {
-	items: ChatItem[];
-	/** The words looked for, as a found message marks them in its chat when opened (with `messages`). */
-	words?: string[];
-	/**
-	 * The messages that have the words (asked for by `messages`, at most that many), newest first: only in the chats
-	 * listed. Empty when not asked for.
-	 */
-	messages?: FoundMessage[];
-}
-
-/** A workspace a chat is shared with. */
-export interface ChatShareTo {
-	workspace: string;
-	name: string;
-	/** Its mark as its managers gave it (as a station's), shown before its name; none when none, or not one of the viewer's. */
-	emoji?: string;
-	/** As a station's icon: shown before the emoji. */
-	icon?: string;
-}
-
-/** One of the viewer's other workspaces, and whether the chat is shared with it. */
-export interface ChatSharePlace {
-	workspace: string;
-	name: string;
-	/** Its mark as its managers gave it (as a station's), shown before its name; none when none, or not one of the viewer's. */
-	emoji?: string;
-	/** As a station's icon: shown before the emoji. */
-	icon?: string;
-	/** The chat is shared with it. */
-	on: boolean;
-}
-
-/** A chat's sharing with other workspaces, for its "…": its line, and what changing it offers. */
-export interface ChatShare {
-	/** The session its station keeps its sharing by (its thread's own, else its first): `chat.xshare` names it. */
-	session: string;
-	/** Where it is shared, in a line: 未分享, or the workspaces and 只读/可发消息 (`A、C · 只读`). */
-	text: string;
-	/** The workspaces it is shared with (what was asked here, until its station has it). */
-	to: ChatShareTo[];
-	/** Their agents may send messages in it, not only read it. */
-	write: boolean;
-	/** The viewer may change it (the chat's starter, or an owner or admin of its workspace); else it is only shown. */
-	may: boolean;
-	/** The viewer's other workspaces, to tick (`chat.xshare` takes those ticked). */
-	places: ChatSharePlace[];
-}
-
-/** A chat's side panel (`chat.tabs.open/close/front/clear` change it). */
-export interface ChatTabs {
-	/**
-	 * The tabs open beside it, in their order, of those kept the ones it has (an agent's history by its session's key,
-	 * `service:<job>` one of its agents' services, `jobs`, `files`, `letters`, `file:[…]` a visualization, `screen:[…]` a station's
-	 * screen); all kept while its
-	 * agents are not known. None kept: none, or where its agent has no chat yet its history (`auto`).
-	 */
-	open: string[];
-	/** The one in front: as kept, else the first; none with none open. */
-	shown?: string;
-	/**
-	 * None kept: `open` is what the chat opens by itself (its agent's history, it having no chat yet). A client where
-	 * the panel would lie over the chat shows none, and changes them with `auto: false`.
-	 */
-	auto?: boolean;
-}
-
-/** A pull request's checks, by how they stand. */
-export interface LinkChecks {
-	passed: number;
-	failed: number;
-	pending: number;
-}
-
-/** A thing of a chat's (`chatThings`). */
-export interface ChatThing {
-	/** Which it is among its kind's. */
-	key: string;
-	/** The message it was last said in (where 在对话里看 goes). */
-	seq: number;
-	/** When that was said. */
-	createdAt?: number;
-	/** `createdAt`, `updatedAt` in words. */
-	time?: Record<string, Stamp>;
-	/** Who said it then. */
-	by: string;
-	/** A picture's, a video's, a file's: as its message has it (its `owner`). */
-	file?: Attachment;
-	/** A picture's, a video's, a file's: what its message says, its first words on a line. */
-	words?: string;
-	/** A link's, a pull request's: its address. */
-	url?: string;
-	/** A link's host and path, as its card says where it goes. */
-	site?: string;
-	/** A link's words where they are not its address; a pull request's title once its card is read. */
-	title?: string;
-	/** A link's, a pull request's: how many times it was said. */
-	count?: number;
-	/** A pull request's repository (owner/name). */
-	repository?: string;
-	/** A pull request's number. */
-	number?: number;
-	/** A pull request's: open | closed | merged | draft, once its card is read. */
-	state?: string;
-	/** A pull request's checks, once its card is read and where it has some. */
-	checks?: LinkChecks;
-	/** When a pull request last changed, once its card is read. */
-	updatedAt?: number;
-}
-
-/** How many of each kind a chat has (`chatThings`). */
-export interface ThingCounts {
-	media: number;
-	files: number;
-	links: number;
-	pulls: number;
-}
-
-/** The pictures and videos a message was sent with (`chatThings` `mediaDays`). */
-export interface ThingGroup {
-	/** The message they were sent with. */
-	seq: number;
-	/** When it was said: 14:05 (empty where not known). */
-	clock: string;
-	/** Who said it. */
-	by: string;
-	/** What it says, its first words on a line (empty for none). */
-	words: string;
-	/** Its pictures and videos, in the order it has them. */
-	items: ChatThing[];
-}
-
-/** A day's pictures and videos of a chat's (`chatThings`). */
-export interface ThingDay {
-	/** Its heading: 今天, 昨天, 星期三, 9月20日 (empty where when is not known). */
-	day: string;
-	/** Its messages' pictures and videos, the latest message first. */
-	groups: ThingGroup[];
-}
-
-/**
- * What was said in a chat besides words (the `chatThings` view {station, thread, q}), as far as it is on the device;
- * each kind those that have every word of `q`.
- */
-export interface ChatThingsView {
-	/** The chat's title. */
-	title: string;
-	/** All of the chat is on the device: nothing is missing. Until then, what is held, more coming. */
-	whole: boolean;
-	/** How many of each there are in the chat, whatever `q` is. */
-	counts: ThingCounts;
-	/** Its pictures and videos (`file`), one per message it was sent with, the latest first. */
-	media: ChatThing[];
-	/** Its other files (`file`), the same. */
-	files: ChatThing[];
-	/** The web links in its messages (`url`, `site`, `title`) other than pull requests, each once, the latest first. */
-	links: ChatThing[];
-	/** The pull requests linked in it (`url`, `repository`, `number`; `title`, `state` once its card is read), each once, the latest first. */
-	pulls: ChatThing[];
-	/** `media` by the day and the message they were sent with, the latest first (what the page shows). */
-	mediaDays: ThingDay[];
-}
-
-/** Who is looking: the account that reaches the workspace, by its email. */
-export interface Me {
-	id?: string;
-	email?: string;
-}
-
-/** Long words pasted into a composer, kept as a file: how they are named there, and how many characters they are. */
-export interface PastedInfo {
-	preview: string;
-	characters: number;
-	/** The words pasted, while they can still be put back into the text. */
-	text?: string;
-}
-
-/** Whether a file dragged in is named by its path or sent. */
-export type ComposerRefMode = "path" | "file";
-
-/**
- * A file or folder dragged in from where it is: named by its path (the message says which station has it and where),
- * or sent as a file to the chat's station (`composer.mode`).
- */
-export interface ComposerRef {
-	/** The station it is on (its address). */
-	station: string;
-	stationName: string;
-	/** Its absolute path there. */
-	path: string;
-	/** A folder: only ever named by its path. */
-	dir: boolean;
-	mode: ComposerRefMode;
-}
-
-/** A link in what is being written, as a file is. */
-export interface ComposerLink {
-	url: string;
-	/** What the app that shared it called it. */
-	title?: string;
-	/** Its site (`youtube.com`). */
-	site?: string;
-}
-
-/** A file in what is being written: waiting to go with its message (a new chat's), going up, up, or failed; or a link. */
-export interface ComposerFile {
-	/** The page's id for it (`composer.add`). */
-	id: string;
-	name: string;
-	size: number;
-	/** How much of it the station has, while it goes up. */
-	sent?: number;
-	/**
-	 * An image's size, read here as soon as it is added (before it is up): where it is shown takes its
-	 * shape at once.
-	 */
-	width?: number;
-	height?: number;
-	/** Up: as the station keeps it (in no chat until a message takes it). */
-	done?: Attachment;
-	error?: string;
-	/** A new chat's, not gone up: it goes up with its message, to the station the message goes to. */
-	waits?: boolean;
-	pasted?: PastedInfo;
-	/** Dragged in from where it is (a station's files, or Finder on a machine that is a station). */
-	ref?: ComposerRef;
-	/**
-	 * A link shared into the chat (docs/share-in.md): drawn as a file is, sent as words after what is written
-	 * (its title on a line, then the link); nothing goes up. Removed as a file is (`composer.remove`).
-	 */
-	link?: ComposerLink;
-}
-
-/**
- * A message sent from here that the chat does not show yet: sending, sent (the station has it as `seq`; its entry not here
- * yet) or failed.
- */
-export interface Outgoing {
-	/**
-	 * Its files still going up before it goes, but its images: each drawn as a card saying how far. Absent
-	 * when there are none.
-	 */
-	uploads?: ComposerFile[];
-	id: string;
-	text: string;
-	/**
-	 * Its files as its message will draw them, an image still going up among them already (its `upload`; its
-	 * `path` `upload:<id>` until it is up, no station having it yet).
-	 */
-	attachments: Attachment[];
-	quotes: Quote[];
-	createdAt: number;
-	state: string;
-	error?: string;
-	/**
-	 * Failed for good: the station refused it as it is (a file it does not have), and sending it again would not
-	 * change that; it goes back to be written again. Absent otherwise.
-	 */
-	final?: boolean;
-	seq?: number;
-	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
-	time?: Record<string, Stamp>;
-	/** Another sent soon after it: as a message's `followed` (sending, it says so under the last only). */
-	followed?: boolean;
-	/** Sent soon after the viewer's message or outgoing one before it: as a message's `joined`. */
-	joined?: boolean;
-	/**
-	 * Sending, why it has not reached the station yet (its station is updating, its files still going up), in
-	 * words: under it in place of 正在发送. Absent otherwise.
-	 */
-	waits?: string;
-	/**
-	 * Its files going up (`waits` says so, 正在上传 42%): how much of them all the station has, 0 to 1. Absent
-	 * while one has not said yet (a station's file copied across), and otherwise.
-	 */
-	progress?: number;
-}
-
-/** A station's mesh link: connecting | online | offline | error. */
-export interface Link {
-	state: string;
-	message?: string;
-	/**
-	 * Found offline and tried again just now (a person's 重试, or the device back): still taken for down
-	 * until the try reaches it, its 重试 turning meanwhile.
-	 */
-	retrying?: boolean;
-	/**
-	 * Taken for down, why as the device can tell: network (still.fail cloud not reached either) | station (the
-	 * cloud says it is not online) | unreached (the cloud says it is) | lock (it refused this device, or the
-	 * workspace's members, for a security mode: `message` says why) | updating (it went down while updating itself). Absent otherwise, and from a core
-	 * before it.
-	 */
-	cause?: string;
-}
-
-/**
- * A chat's link to its station while it is not as it should be: `tone` trouble (down; `detail` why) | busy (coming
- * back), and the line that says it.
- */
-export interface LinkShown {
-	tone: string;
-	text: string;
-	detail?: string;
-}
-
-/** The station update control beside a chat title. Additions default for older cores. */
-export interface StationUpdateNotice {
-	tone: string;
-	text: string;
-	detail?: string;
-	label?: string;
-	/** The station's name as its workspace has it ("station" when it has none). Absent from older cores. */
-	station?: string;
-	/** The version it runs. */
-	from?: string;
-	/** The version it is going to, when known and not the one it runs. */
-	to?: string;
-	/** How far an update is, 0–100, when the station says. */
-	percent?: number;
-	version?: string;
-	open?: boolean;
-	canUpdate?: boolean;
-	dismissible?: boolean;
-}
-
-/** A chat a chat's agent opened (chat_create), as the chat that opened it lists them (`ChatView.opened`). */
-export interface OpenedChat {
-	/** Its station's address. */
-	station: string;
-	session: string;
-	/** As its list names it, else as it was given when opened. */
-	title: string;
-	/** Its agents' mark (run | block | failed). Absent when none. */
-	mark?: Badge;
-	/** Where it stands, as its row's second line says it. Absent with nothing to say. */
-	stateText?: string;
-	/** What leads `stateText`, for a mark of a client's own. */
-	stateLead?: StateLead;
-	/** It is in its station's archive. Absent otherwise. */
-	archived?: boolean;
-	/** With `archived`: 已归档. */
-	note?: string;
-}
-
-/** An item's page: its chat (with the viewer's read position), or its agent before it has one. */
-export interface ChatView {
-	/** The chat is archived; sending a message restores it. */
-	archived?: boolean;
-	/** Pinned to the top of the viewer's list. Absent when its station does not know pins (it cannot be pinned). */
-	pinned?: boolean;
-	me: Me;
-	thread?: ChatThread;
-	/**
-	 * Its agent has no chat yet, here or in Slack, and is not archived: its page opens its execution history beside
-	 * it. Absent otherwise, and while its detail is not read.
-	 */
-	noChat?: boolean;
-	title: string;
-	/** Where a Slack chat is (#channel, 私信), and its link in Slack while its connect is signed in. */
-	place?: string;
-	slackUrl?: string;
-	/** The same thread's link into Slack's app (slack://), which opens without a browser's page first. */
-	slackApp?: string;
-	/** A Feishu (Lark) chat's link in Feishu. */
-	feishuUrl?: string;
-	/**
-	 * Its agents' Slack and Feishu threads, the one said in last first: what is sent from here can be copied to
-	 * those ticked (`chat.cc`). Empty in a chat whose agents are in none, and from a core before it.
-	 */
-	cc?: ChatCcTo[];
-	people: Person[];
-	agents: ChatAgent[];
-	messages: ChatMessage[];
-	/**
-	 * What its agents said in Slack and were given from it before its first message (not in this chat): what came
-	 * after a message is that message's `elsewhere`. Not kept in it.
-	 */
-	elsewhere?: ChatSentElsewhere[];
-	more: boolean;
-	/** The first entry loaded (letters and edits are not messages): the cursor for loading older pages. */
-	firstEntry?: number;
-	/** The last entry loaded: the cursor for loading newer pages. */
-	lastEntry?: number;
-	/**
-	 * How many letters its agents and other chats' wrote each other (not in `messages`; the `chatLetters` view shows
-	 * them). Absent when none.
-	 */
-	letters?: number;
-	/**
-	 * Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,
-	 * `chat.latest` goes to the end). What is said meanwhile waits there, counted in its thread's `unread`.
-	 */
-	newer?: boolean;
-	/**
-	 * The entry the chat opened at when not at its end (its first unread, or where it was left): the list shows it
-	 * at its top. Absent when it opened at its end.
-	 */
-	at?: number;
-	/**
-	 * Opened where it was left (`at`): how far below the top of the list that entry's top was then, as the client
-	 * that left it said (`chat.place`). Absent otherwise, and from a core before it.
-	 */
-	atOffset?: number;
-	/**
-	 * The last message caught up on (read: kept on the device, a page, what was missed) rather than said while the
-	 * chat is open. The core decides from it which come in (`ChatMessage::said`); clients go by that.
-	 */
-	caught?: number;
-	/**
-	 * The message the unread line goes over: the first the viewer had not read when the chat was opened (not
-	 * theirs); none while older pages are loaded to find it, or with nothing unread. Absent from a core before it.
-	 */
-	unreadLine?: number;
-	/** The unread line lies above the messages loaded: older pages are being loaded to find it. */
-	unreadAbove?: boolean;
-	outbox: Outgoing[];
-	link: Link;
-	offline: boolean;
-	/**
-	 * Its station taken for down, the line over the composer: why, and that what is sent goes once it is
-	 * reached (the composer stays open). Absent otherwise, and from a core before it.
-	 */
-	offlineNote?: string;
-	/**
-	 * Its station gone for its update: the line over the composer marked with the update's mark in place of the
-	 * unplugged one. Absent otherwise.
-	 */
-	updating?: boolean;
-	/** One of its agents keeps watch: archiving it by hand asks first. Absent otherwise. */
-	watch?: RowWatch;
-	/** A new chat asked for here that its station has not made yet: what is sent to it waits in its outbox. */
-	pending?: boolean;
-	/** The key its station gave a chat asked for here, once made: the page, opened under the core's key, goes by it. */
-	key?: string;
-	/** Why the station could not make it, the last time it was tried. */
-	failed?: string;
-	/** Its link while it is down or coming back, in words; absent while it is up (and from a core before it). */
-	connection?: LinkShown;
-	/** Station update availability or progress, including the local outbox while reconnecting. */
-	stationUpdate?: StationUpdateNotice;
-	/**
-	 * The screens of the station it runs on (the `screens` topic's), its own display first, for its bar's
-	 * way to them. Empty while it has none to show (offline, a station from before screens, a machine without a display).
-	 */
-	screens?: ChatScreen[];
-	/** The card it waits on, as its row has it. Absent when there is none. */
-	decision?: RowDecision;
-	/**
-	 * What is asked in it that no one has decided and the viewer has not let go (a card, or an agent needing a
-	 * person), the oldest first, for the bar above the composer that leads to each. Empty when nothing is.
-	 */
-	asks?: ChatAsk[];
-	/**
-	 * Where it stands, in words, as its row's second line (`ChatItem.stateText`) without a card waiting (the
-	 * card is in the chat): what an agent needs, why it stopped, what it waits on, done; drawn at the end of its messages.
-	 * Absent while it is at work, or with nothing to say.
-	 */
-	stateText?: string;
-	/**
-	 * What leads `stateText` (need, done, wait, watch; dismissed: what an agent needs, let go by the viewer,
-	 * kept as 已忽略：…), for a client to say as a mark of its own. Absent when nothing does (an agent's failure).
-	 */
-	stateLead?: StateLead;
-	/** What follows the lead in `stateText` (watching: the whole line). Absent without `stateLead`. */
-	stateRest?: string;
-	/**
-	 * One of `asks` is not at the end of its messages (something comes after its post): the bell leading to it
-	 * may float over the list's end while the end shows, so the end keeps clear of it. Absent when every ask is the end
-	 * itself (`stateAsk`'s line, or the last post with nothing after it), which shows whenever the end does.
-	 */
-	askClear?: boolean;
-	/**
-	 * What an agent needs a person for, as `stateText` says it (lead need), not decided and not let go by the
-	 * viewer: the post that asks it (a seq), let go (`decision.dismiss`) right after the line rather than under that post.
-	 * Absent otherwise.
-	 */
-	stateAsk?: number;
-	/**
-	 * Its agent at rest has a large context whose prompt cache is over: the line over the composer that says what
-	 * going on would cost and offers a fresh context instead. Absent otherwise, and from a core before it.
-	 */
-	cacheCold?: ChatCacheCold;
-	/**
-	 * Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
-	 * (`chat.archive`). Absent otherwise.
-	 */
-	archivable?: boolean;
-	/**
-	 * Its sharing with the viewer's other workspaces (docs/chat-share.md); absent while it has no chat or agent, or
-	 * the viewer is in no other workspace.
-	 */
-	xshare?: ChatShare;
-	/** Its public snapshots (docs/public-share.md); absent while it has no chat. */
-	publish?: ChatPublish;
-	/**
-	 * The chat an agent opened it from, as its row's (`ChatItem.opener`): the way back there over its messages.
-	 * Absent otherwise.
-	 */
-	opener?: Opener;
-	/** The chats its agent opened, the first first, for its bar's list of them. Empty when none. */
-	opened?: OpenedChat[];
-	/** With `opened`: how many, in words (创建了 3 个对话). Absent otherwise. */
-	openedText?: string;
-	/**
-	 * Its side panel's tabs as this device keeps them for it (prefs `chatTabs`, chat-tabs.ts); absent from a core
-	 * before it.
-	 */
-	tabs?: ChatTabs;
-}
-
-export interface StationState {
-	station: string;
-	id: string;
-	name: string;
-	/** online | connecting | offline | error */
-	state: string;
-	message?: string;
-	/** Offline, why as the device can tell (Link's `cause`). Absent otherwise. */
-	cause?: string;
-	/**
-	 * Its agents at work, as it counts them (its overview's `counts.running`); 0 while it is not up. Absent from a
-	 * core before it.
-	 */
-	running?: number;
-	/**
-	 * What it is doing in a few words, as the stations' card says it: 3 个正在运行 | 空闲 | 正在连接 | 离线…
-	 * Absent from a core before it.
-	 */
-	doing?: string;
-}
-
-/**
- * What is wrong with the workspace's stations, in a line, and the worst of it: offline | error | reconnecting.
- * `retry`: always false now (a station down is tried again from the stations' page); true from older cores while down.
- */
-export interface StationTrouble {
-	text: string;
-	state: string;
-	retry?: boolean;
-	/** The station's address when one alone is in trouble (its mark is shown with the line); absent with several, or from a core before it. */
-	station?: string;
-}
-
-/** Whose pictures lead the rows of a list (`ChatsView::leading`). */
-export type Lead = "agents" | "people";
-
-/**
- * The stations at a glance (the glyph): how many are online, offline or connecting (`dim`), failing, and at work; the
- * line beside it while all is well (the one station by name, else how many; and who works), and all of it in words.
- */
-export interface StationsGlyph {
-	online: number;
-	dim: number;
-	/** Of `dim`, those whose link is on its way: they pulse. Absent from a core before it. */
-	connecting?: number;
-	failing: number;
-	working: number;
-	/**
-	 * Every station down as the device's network is (their `cause` network): the glyph sleeps and fades. Absent
-	 * from a core before it.
-	 */
-	asleep?: boolean;
-	summary: string;
-	label: string;
-	/** The agents at work on them all (their `running`). Absent from a core before it. */
-	running?: number;
-	/** That in a line, the stations' card's head: 8 个 agent 正在运行 | 暂无 agent 在运行. Absent from a core before it. */
-	now?: string;
-	/**
-	 * What follows the number of them on the card shared (个 agent 正在运行, agents running). Absent from a core
-	 * before it.
-	 */
-	unit?: string;
-}
-
-export interface ChatsView {
-	me: Me;
-	stations: StationState[];
-	loading: boolean;
-	days: ChatDay[];
-	/**
-	 * The stations not working as they should, in a line ("Maple 离线", "正在重连 Willow", "2 台 station 异常"), for a
-	 * corner of the list; absent while all are (a station first connecting is not one).
-	 */
-	trouble?: StationTrouble;
-	/** How many people the scope has, for how rows are pictured; absent until known. */
-	members?: number;
-	/** Whose pictures lead the rows: the device's setting (`prefs`), 自动 by `members` (unknown: as if alone). */
-	leading?: Lead;
-	/** The stations at a glance, and what the list says with no rows; absent from a core before them. */
-	glyph?: StationsGlyph;
-	note?: ListNote;
-	/**
-	 * While what changed since the device was last with the stations is still being brought (station/sync.ts
-	 * `#catching`), what the mark at the list's top beside its filter says (its tip, and to a screen reader): 正在同步 while a
-	 * station has yet to say what changed, then how many chats are left (正在同步 · 还剩 12 个对话). Stations not reached are
-	 * left out (the list says so where it says what is wrong with them). Absent once all is here, and from a core before it.
-	 */
-	syncing?: string;
-}
-
-export interface FoundCommand {
-	/** As offered: what the client does when it is picked. */
-	id: string;
-	label: string;
-}
-
-export interface CommandGroup {
-	/** chat | update | global | settings */
-	group: string;
-	/** Its heading. */
-	title: string;
-	commands: FoundCommand[];
-}
-
-/**
- * What ⌘K's list offers of what a client can do now (`commands.find`), by part in the list's order; a part with
- * none is left out.
- */
-export interface CommandsFound {
-	groups: CommandGroup[];
-}
-
-/** A passage quoted in what is being written, with what is said about it. */
-export interface ComposerQuote {
-	/** Names it while it is written (`composer.comment`, `composer.unquote`). */
-	id: string;
-	author: string;
-	text: string;
-	comment: string;
-	ts?: string;
-	role?: string;
-	/**
-	 * Its picture (an image of a message quoted, a mark's screenshot): shown in its card, not among the files;
-	 * out of the draft with it (`composer.unquote`). The message names it in this quote.
-	 */
-	own?: ComposerFile;
-}
-
-/** What is being written in a chat (the `composer` topic, by the draft's key), as the core keeps it (composer.ts). */
-export interface ComposerView {
-	/**
-	 * The words as written: what the page typed (`composer.text`), or the core's own (read back, taken, put back,
-	 * carried on), which come with a new `rev` for the page to show.
-	 */
-	text: string;
-	rev: number;
-	quotes: ComposerQuote[];
-	/** The quote just added: its comment takes the focus (`composer.focused` once it has). */
-	focus?: string;
-	files: ComposerFile[];
-	/** A file still going up; sending queues the message until it is there. */
-	uploading: boolean;
-	/** Something to send, and nothing holding it: words, a file that is up, or a quote. */
-	ready: boolean;
-	/** A new chat being made for the message. */
-	starting: boolean;
-	error?: string;
-	/** Every change, counted: each `composer.*` call answers the one it made. */
-	version: number;
-}
-
-export interface ConfigTokenOwner {
-	team: string;
-	teamDomain?: string;
-	teamIcon?: string;
-	user: string;
-	email?: string;
-	image?: string;
-}
-
-export interface ConnectAppSettings {
-	name: string;
-	displayName: string;
-	description: string;
-	longDescription: string;
-	backgroundColor: string;
-	groups: Record<string, boolean>;
-}
-
-export interface FeishuTenant {
-	key?: string;
-	name?: string;
-}
-
-export interface FeishuIdentity {
-	botName: string;
-	botImage?: string;
-	botOpenId?: string;
-	tenant?: FeishuTenant;
-}
-
-/** A Feishu bot being made by scanning (docs/feishu.md), as its station follows it: only its starter sees it. */
-export interface FeishuRegistration {
-	id: string;
-	/** The page that creates the app, opened on a phone signed in to Feishu (its QR code). */
-	url: string;
-	expiresAt: number;
-	/** waiting | done | denied | expired | failed */
-	state: string;
-	error?: string;
-	appId?: string;
-	/** feishu | lark: where the app was made (Lark once its tenant says so). */
-	domain?: string;
-}
-
-/** A text as a QR code (qr.ts). */
-export interface QrCode {
-	size: number;
-	/** Each row's modules: 1 dark, 0 light; no quiet zone (drawn with four modules' margin). */
-	rows: string[];
-}
-
-/** The Feishu path of the connect wizard. */
-export interface ConnectFeishuFlow {
-	/** scan | app: how the bot is to be had, made by scanning or an app of one's own. */
-	way: string;
-	appId: string;
-	appSecret: string;
-	/** Lark, the international version: its own domain. */
-	lark: boolean;
-	canVerify: boolean;
-	/** Verified as typed, with nothing wrong: the connect can be added. */
-	verified: boolean;
-	/** The bot the App ID and Secret were verified as; absent until they are, or once they change. */
-	identity?: FeishuIdentity;
-	/** What the verification found wrong. */
-	errors: string[];
-	/** The bot being made by scanning (as the overview has it, else as it was started). */
-	registration?: FeishuRegistration;
-	/** Its link as a QR code, while it waits. */
-	qr?: QrCode;
-	/** Where the scanning stands, in words. */
-	stateText?: string;
-	/** It ended without an app (denied, expired, failed): started again with `register`. */
-	failed: boolean;
-	/** The connect is being added (on its own once the app is made). */
-	creating: boolean;
-	/** Why adding it failed: tried again with `create`. */
-	error?: string;
-	/** The connect added: its page is opened. */
-	connect?: string;
-}
-
-export interface SlackTeam {
-	teamId: string;
-	name: string;
-	owner?: ConfigTokenOwner;
-}
-
-export interface SlackAppLinks {
-	settings: string;
-	install: string;
-	appToken: string;
-	oauth: string;
-}
-
-/** A Slack app still.fail made that no connect has taken yet, as its maker sees it (never its secrets or tokens). */
-export interface MadeSlackApp {
-	appId: string;
-	name: string;
-	teamId: string;
-	/** The Slack workspace's name, when its configuration token says. */
-	team?: string;
-	created: number;
-	links: SlackAppLinks;
-	/** The link that installs it through Slack's OAuth (a station in still.fail cloud); none when its tokens are copied by hand. */
-	install?: string;
-	/** Its install's state, what a connect names it by. */
-	state?: string;
-	installed: boolean;
-	installedTeam?: string;
-}
-
-export interface SlackGroupWord {
-	id: string;
-	label: string;
-	description: string;
-	/** What Slack's admins must allow, for a group only they allow. */
-	admin?: string;
-	/** Its description and that, as its tip says them. */
-	tip: string;
-	/** Always on. */
-	fixed: boolean;
-}
-
-/** A section of a Slack app's permissions, as its form shows them (core). */
-export interface SlackGroupSection {
-	title: string;
-	groups: SlackGroupWord[];
-}
-
-/** One transient connect wizard. Decisions and navigation come from the core on every client. */
-export interface ConnectFlowView {
-	step: string;
-	title: string;
-	back: string;
-	number: number;
-	total: number;
-	resume?: string;
-	mobile: boolean;
-	team?: string;
-	adding: boolean;
-	settings: ConnectAppSettings;
-	icon?: string;
-	iconError?: string;
-	madeId?: string;
-	config: string;
-	configReady: boolean;
-	configError?: string;
-	mode: ConnectMode;
-	requireMention: boolean;
-	gettingToken: boolean;
-	noProfile: boolean;
-	canMake: boolean;
-	canCreate: boolean;
-	teams: SlackTeam[];
-	chosen?: SlackTeam;
-	made?: MadeSlackApp;
-	pick?: PickView;
-	/** slack | feishu, once chosen. */
-	platform?: string;
-	/** What the station connects to (feishu only where it has the Feishu connect). */
-	platforms: string[];
-	feishu?: ConnectFeishuFlow;
-	/** How the ways its conversations become sessions are said, as its platform says them. */
-	modeWords: ModeWords;
-	/** The app's permissions as its form shows them. */
-	sections: SlackGroupSection[];
-}
-
-/** A way a connect could be switched to (core). */
-export interface ModeChange {
-	mode: ConnectMode;
-	requireMention: boolean;
-	/** Whether switching to it changes anything. */
-	changed: boolean;
-	/** What switching to it does to the connect's conversations, in plain words. */
-	effects: string[];
-	/** Its button's words. */
-	action: string;
-}
-
-export interface ConnectItem {
-	station: string;
-	stationName: string;
-	connect: Connect;
-	/** Its latest dozen; the one it delivers into; those it could deliver into instead. */
-	sessions: Session[];
-	bound?: Session;
-	candidates: Session[];
-	running: number;
-	/** The ways it could be switched to: every session in one, one each, and one waiting for an @ or not. */
-	changes: ModeChange[];
-}
-
-/** One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble. */
-export interface StatusItem {
-	state: string;
-	text: string;
-	detail: string;
-}
-
-/**
- * What a chat says of its connection (the `connection` topic; client/core-ts/src/pill.ts), all decided in the core:
- * `tone` busy (its link coming back, or something of its workspace waited on a while) | trouble (down) | back (up
- * again, for a moment after a busy or trouble was shown), absent while there is nothing to say; `text` the line,
- * `detail` beside it, `items` each thing waited on (on hover).
- */
-export interface ConnectionView {
-	tone?: string;
-	text?: string;
-	detail?: string;
-	items: StatusItem[];
-}
-
-export interface ConnectsView {
-	me: Me;
-	items: ConnectItem[];
-	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
-	wait: ListNote;
-}
-
-export interface Counts {
-	sessions: number;
-	running: number;
-	warm: number;
-}
-
-/** What this device is, as its host told the core at start (`client.device`), and what follows from it. */
-export interface DeviceView {
-	/** `web`, `desktop` or `android`; empty until told. */
-	app?: string;
-	/** A phone (the Android app, or a phone's browser). */
-	phone?: boolean;
-	/** An item's link from outside is offered to the desktop app first (a computer's browser). */
-	handoff?: boolean;
-	/** The device's language as its host says (`zh-CN`, `en-US`, …); none until told. */
-	locale?: string;
-}
-
-export interface Disk {
-	path: string;
-	totalBytes: number;
-	freeBytes: number;
-}
-
-export interface DiskRoom {
-	freeBytes: number;
-	totalBytes: number;
-}
-
-/**
- * A call under way: its name (`job.stop`), its params that are words, numbers or yes/no, as words (what a page
- * matches it by), and since when; `stage` running, rechecking (its station went quiet before it answered: asked again
- * once it is back, `note` saying so), or failed (kept a few seconds, `error` saying why). A core from before stages
- * gives none: running.
- */
-export interface DoingItem {
-	call: string;
-	params: Record<string, string>;
-	since: number;
-	stage?: string;
-	error?: string;
-	note?: string;
-}
-
-/**
- * What people set going on this device and the core has not finished (the `doing` topic; client/core-ts/src/doing.ts),
- * oldest first.
- */
-export interface DoingView {
-	doing: DoingItem[];
-}
-
-/** How a download stands: coming, waiting for its station to be reached (it goes on once it is), all here to be saved, being saved, or failed. */
-export type DownloadState = "going" | "waiting" | "ready" | "saving" | "failed";
-
-/**
- * Where a file was opened, as what opened it said (`station.file`, `station.file.part`, `drive.read`,
- * `download.start`'s `from`): what is brought after everything else is only what was opened so, and from where it is
- * listed it is opened again there.
- */
-export interface KeptFrom {
-	/** A chat's file's: the chat it was opened in, where there is one. */
-	thread?: number;
-	/** A chat's file's: the chat's session (its files are stepped through as its page has them). */
-	session?: string;
-	/** A chat's file's: the file as its message has it. */
-	file?: Attachment;
-	/** A drive's file's: the root it is in (it is played where it is). */
-	root?: string;
-	/** A drive's file's: where it is in its root. */
-	path?: string;
-}
-
-/** A chat's file, a drive's file or a folder of it being downloaded to this device, as the pages show it. */
-export interface DownloadShown {
-	/** Its own (`download.take`, `download.cancel`). */
-	id: string;
-	station: string;
-	/** A chat's file's: the session that keeps it. */
-	key?: string;
-	/** A drive's file's or folder's: the root it is in. */
-	root?: string;
-	/** A drive's file's or folder's: where it is in its root. */
-	path?: string;
-	/** A folder, zipped on the station to be downloaded. */
-	zip?: boolean;
-	/** A chat's file's name as the station keeps it (the last part of its path); a drive's file's name, a folder's zip's. */
-	name: string;
-	/**
-	 * What it is called to people: `name`, but a file sent up as its sender named it (without the time and
-	 * mark the station put before it).
-	 */
-	title: string;
-	size: number;
-	/** How much of it is here. */
-	loaded: number;
-	/** How much of it is here, 0 to 1. */
-	progress: number;
-	state: DownloadState;
-	/** Not failed: its progress shown, and it can be called off (`download.cancel`). */
-	active: boolean;
-	/** How it stands, in a line: 正在下载 42% · 18.3 MB · 等待连接 station · 正在保存 · 下载失败：… . */
-	statusText: string;
-	error?: string;
-	startedAt: number;
-	/** A chat's file's: where it was opened, as the page that asked said it. */
-	from?: KeptFrom;
-}
-
-/** How a file brought after everything else stands: coming now, given way to what is waited on, waiting for its station to be reached, or after the others. */
-export type KeepingState = "going" | "yielding" | "waiting" | "queued";
-
-/**
- * A file opened and let go before all of it came, brought whole after everything else, or one a person asked to load,
- * brought before it (fill.ts), as the pages show it.
- */
-export interface KeepingShown {
-	/** Its own (`fill.stop`). */
-	id: string;
-	station: string;
-	/** A chat's file's: the session that keeps it. */
-	key?: string;
-	/** A drive's file's: the root it is in. */
-	root?: string;
-	/** A drive's file's: where it is in its root. */
-	path?: string;
-	/** A chat's file's name as the station keeps it; a drive's file's name. */
-	name: string;
-	/** What it is called to people (as a download's). */
-	title: string;
-	size: number;
-	/** How much of it is here. */
-	loaded: number;
-	/** How much of it is here, 0 to 1. */
-	progress: number;
-	state: KeepingState;
-	/** A person asked to load it (加载, `fill.want`): brought before everything else, at once. */
-	wanted?: boolean;
-	/** A chat's file's: where it was opened, as the viewer said it. */
-	from?: KeptFrom;
-	/** How it stands, in a line: 正在加载 42% · 18.3 MB · 后台缓存 42% · 18.3 MB · 后台缓存排队中 · 12% . */
-	statusText: string;
-}
-
-/** The files being downloaded to this device (the `downloads` topic): under way, ready to be saved, or failed. */
-export interface DownloadsView {
-	/** This device's, newest first. */
-	downloads: DownloadShown[];
-	/**
-	 * What was opened and let go, being brought after everything else: the one coming first, then in the
-	 * order it comes.
-	 */
-	keeping?: KeepingShown[];
-}
-
-/**
- * What is being written to a chat on this device (the `draft` topic, `draft.put`): its text as typed, the passages
- * it quotes with what is said about them, and the files already up (the station keeps them in no chat until a
- * message takes them). Files still going up are the page's own.
- */
-export interface DraftView {
-	text: string;
-	quotes: Quote[];
-	files: Attachment[];
-	/** Links shared into it (docs/share-in.md): drawn as files are, sent as words after the text. */
-	links?: ComposerLink[];
-	/**
-	 * The draft's own name, the core's (`draft.get` gives it, `draft.put` answers it): what is written between two
-	 * sends is one draft; taken to send, or put back empty, the next is another. What goes up from it is named by it
-	 * (the station gives back an upload it finished within the hour by its id), so the same file in the next message,
-	 * or in another new chat, is another upload. Said by `draft.put`, it is not taken: the core keeps its own.
-	 */
-	id?: string;
-}
-
-/** What a folder's entries are ordered by (folders first). */
-export type DriveSortBy = "name" | "time" | "size" | "kind";
-
-/** How the files are ordered and whether hidden ones show: one for every place, on this device (the prefs' `driveViews`). */
-export interface DriveArrangement {
-	by: DriveSortBy;
-	/** The other way: the oldest, the smallest first, names Z to A. */
-	down: boolean;
-	/** Hidden files (a name starting with `.`) shown. */
-	hidden: boolean;
-}
-
-/** What is chosen in a place of a drive. */
-export interface DriveChosen {
-	/** The folder they are in, relative to the root. */
-	folder: string;
-	names: string[];
-	/** The one ⇧ chooses from. */
-	anchor?: string;
-	/** The one the keys move from (focused). */
-	lead?: string;
-}
-
-/**
- * A folder of a station's drive as a place on this device shows it (the `driveBrowse` topic): its order, what is
- * chosen, a tree's folders open, its columns' widths.
- */
-export interface DriveBrowseView {
-	arrangement: DriveArrangement;
-	/**
-	 * Each folder the place shows (its path relative to the root), its entries' names in the order shown: the folder,
-	 * and in columns those before it, in a tree those open under it; one not read yet is not here.
-	 */
-	folders: Record<string, string[]>;
-	/** The current folder's visible files and folders in words; absent while it is read. */
-	countText?: string;
-	chosen: DriveChosen;
-	/** The folders a tree has open under the folder shown (relative to the root). */
-	open: string[];
-	/** The columns dragged to a width of their own, by folder (the rest as every column is). */
-	widths: Record<string, number>;
-	/**
-	 * The keys that do something now (`ArrowDown`, `mod+a`, `mod+shift+Period`…: `drive.browse`'s `key`); the rest are
-	 * the page's. Letters typed go to `type`.
-	 */
-	keys: string[];
-}
-
-/** What kind an entry of the drive is (its mark; what opens it: `DriveOpener`). */
-export type DriveKind = "folder" | "video" | "audio" | "image" | "markdown" | "text" | "code" | "csv" | "html" | "pdf" | "subtitle" | "other";
-
-/**
- * What a press on an entry of the drive does: a folder entered, a text read, a video or a song played,
- * the rest previewed as a chat's files are, or saved to the device.
- */
-export type DriveOpener = "folder" | "read" | "play" | "preview" | "save";
-
-export interface DriveEntry {
-	name: string;
-	dir: boolean;
-	size: number;
-	/** When it last changed (ms). */
-	mtime: number;
-	/** A file's media type, by its name (empty for a folder). */
-	type: string;
-	kind: DriveKind;
-	opens: DriveOpener;
-	/** Its size in words (empty for a folder). */
-	sizeText: string;
-	/** Its time in words: 14:05 today, 9/27 this year, 2024/9/27 before. */
-	timeText: string;
-}
-
-/** A folder of a station's drive (the `drive` topic). */
-export interface DriveFolder {
-	/** Relative to its root, `/` between its components; empty for the root itself. */
-	path: string;
-	/** Folders first, then files, each by name (numbers by their value). */
-	entries: DriveEntry[];
-	/** More than a listing gives (50 000). */
-	truncated?: boolean;
-	folders: number;
-	files: number;
-	/** 3 个文件夹 · 12 个文件. */
-	countText: string;
-}
-
-/** Where a file of a drive was left on this device (the `drivePlace` topic; none before it was opened). */
-export interface DrivePlace {
-	/** Where: a text's offset (UTF-16 units), a video's or a song's time (ms). */
-	at: number;
-	/** Of how much, when told (its length, its duration): for a fraction read. */
-	of?: number;
-	changed: number;
-}
-
-/** Whether a folder of the drive can be browsed now. */
-export type DriveRootState = "ok" | "missing" | "not_a_directory" | "unreadable";
-
-export interface DriveRoot {
-	/** Where it is on the station; what the drive's calls name it by. */
-	path: string;
-	name: string;
-	/**
-	 * Whether it can be browsed now (`unreadable`: there, but the station may not list it, as macOS keeps some folders from a
-	 * station it did not ask).
-	 */
-	state: DriveRootState;
-}
-
-/** A station's drive (docs/drive.md): the folders pinned, and how far the viewer reaches. */
-export interface DriveRoots {
-	/** The folders pinned: the list everyone sees first, and all a read-only member reaches. */
-	roots: DriveRoot[];
-	/**
-	 * The viewer browses every folder of the machine (a member who may write); absent from a station from
-	 * before, which lends only the folders pinned.
-	 */
-	anywhere?: boolean;
-	/** Where browsing starts, with `anywhere`: the home of the station's machine. */
-	home?: string;
-	/**
-	 * What is deleted goes to the machine's trash (`drive.remove`; `permanent` for good); absent where there
-	 * is none, or from a station from before, which deletes for good.
-	 */
-	trash?: boolean;
-	/** The station says when something in a folder shown changes (GET /drive/watch). */
-	watch?: boolean;
-	/** A folder can be zipped to download (`drive.zip`). */
-	zip?: boolean;
-	/**
-	 * Files can be copied and moved into it, from its own folders or another station's, and it grants another
-	 * station reads of its own (`drive.transfer`; docs/drive.md "Copying between stations"); absent from a station from before.
-	 */
-	transfers?: boolean;
-}
-
-/**
- * Where a copy into a drive is: waiting its turn, finding what
- * it copies, copying, or ended.
- */
-export type DriveTransferState = "queued" | "walking" | "copying" | "done" | "failed" | "cancelled";
-
-/** A copy (or move) into a station's drive, as the transfers' list shows it. */
-export interface DriveTransferShown {
-	id: string;
-	/** The station the files go to (its address), which runs it. */
-	station: string;
-	stationName: string;
-	/** The station the files are on (its address; the same as `station` for a copy within one). */
-	fromStation: string;
-	fromStationName: string;
-	fromRoot: string;
-	/** The folder the names are in, relative to `fromRoot`. */
-	fromPath: string;
-	names: string[];
-	toRoot: string;
-	toPath: string;
-	/** Where they go, in words: Maple › 照片. */
-	toText: string;
-	/** What is copied, in words: 首页截图.png, or 首页截图.png 等 2 项. */
-	title: string;
-	move: boolean;
-	state: DriveTransferState;
-	/** Not ended: waiting, finding what it copies, or copying. */
-	active: boolean;
-	/** How much is copied, 0 to 1 (bytes; by files for files without bytes). */
-	progress: number;
-	total: number;
-	copied: number;
-	/** Folders and files it copies, once found. */
-	count: number;
-	files: number;
-	/** The file being copied, relative to the folder the names are in. */
-	current?: string;
-	/** How it stands, in a line: 17.5 / 46.0 MB · 排队中 · 已完成 · 失败：… . */
-	statusText: string;
-	error?: string;
-	createdAt: number;
-	endedAt?: number;
-}
-
-/** The copies into a station's drive the viewer asked (the `driveTransfers` topic). */
-export interface DriveTransfersView {
-	/** False for a station from before copies (it answers 404). */
-	supported: boolean;
-	/** What the station has was read (or told) at least once. */
-	loaded: boolean;
-	/** The viewer's own, newest first. */
-	transfers: DriveTransferShown[];
-}
-
-/** A few of a text file's lines: around the one a message points at, else its first. */
-export interface FilePeekLines {
-	/** The first line's number. */
-	start: number;
-	text: string[];
-	/** The line the message points at. */
-	at?: number;
-}
-
-/** An image file's picture (its thumbnail where it is big). */
-export interface FilePeekImage {
-	type: string;
-	/** Base64. */
-	data: string;
-}
-
-/**
- * What a file a message names by its path is, for its card (the `filePeek` topic, GET /sessions/:key/peek): its
- * path, size and when it changed, and a glimpse of it.
- */
-export interface FilePeek {
-	/** text | image | binary | dir. */
-	kind: string;
-	/** Where it is on the station's machine, whole. */
-	path: string;
-	name: string;
-	size: number;
-	/** When it was last written (ms). */
-	mtime: number;
-	/** Its content type. */
-	type: string;
-	lines?: FilePeekLines;
-	image?: FilePeekImage;
-	/** A directory's first entries, a directory's ending in /. */
-	entries?: string[];
-	/** How many entries a directory has. */
-	count?: number;
-	/** Its times in words, by field (`mtime`). */
-	time?: Record<string, Stamp>;
-}
-
-/** A side of a tab of the files' page: a folder of a station. */
-export interface FilesPane {
-	station: string;
-	root: string;
-	path: string;
-}
-
-export interface FilesTab {
-	id: string;
-	/** One, or two side by side. */
-	panes: FilesPane[];
-	/** The side in front. */
-	front: number;
-}
-
-/** The files' page's tabs in a workspace, on this device (the `filesTabs` topic; none before any). */
-export interface FilesTabsView {
-	tabs: FilesTab[];
-	/** The tab shown. */
-	current: string;
-	/** The side in front of the tab shown: what the page's address says. */
-	front: FilesPane;
-}
-
-export interface FleetDay {
-	label: string;
-	/** Its chats archived as a share of the most on a day (0 to 1). */
-	share: number;
-	/** Its chats archived, said (3 个): a receipt's line of the day. */
-	value: string;
-	today: boolean;
-}
-
-export interface FleetModel {
-	/** The model as people call it: Opus 5.5 (or the rest's: 其他 3 个模型). */
-	name: string;
-	/** Its tokens, read and written, the cache's too. */
-	tokens: number;
-	/** Those, short: 2.1 亿. */
-	tokensText: string;
-	/** What they would cost at API prices: $1,420 (≥ with calls without a price; empty with none priced). */
-	costText: string;
-	/** Both, as a line ends: 2.1 亿 · $1,420. */
-	lineText: string;
-	/** What says it after its tokens and its name: token，折合 $1,420 (token, none priced). */
-	of: string;
-}
-
-export interface FleetSpent {
-	/** The kind of account (the profiles' group: claude, chatgpt…, key). */
-	kind: string;
-	/** Its name: Claude 订阅. */
-	name: string;
-	/** Its accounts the chats used. */
-	accounts: number;
-	/** Its accounts in words: 6 个账号. */
-	accountsText: string;
-	/** The tokens its calls read and wrote, the cache's too (what ranks the kinds; never said: one model's tokens are not another's). */
-	tokens: number;
-	/** Its tokens as a share of all kinds', what its ring draws (0 to 1). */
-	share: number;
-	/** What says it before its first model's tokens: 用 6 个 Claude 订阅账号消耗了. */
-	lead: string;
-	/** Its models, the most tokens first; past four, the first three and the rest together (其他 3 个模型). */
-	models: FleetModel[];
-}
-
-export interface FleetStat {
-	label: string;
-	value: string;
-}
-
-export interface FleetToday {
-	title: string;
-	/** Its chats archived and cost. */
-	stats: FleetStat[];
-}
-
-export interface FleetWeek {
-	title: string;
-	/** Its chats archived; its input tokens and cost, as the usage page's tiles say them. */
-	stats: FleetStat[];
-	days: FleetDay[];
-}
-
-/** The card shared of a workspace's agents at work (the `fleet` view, views/fleet.ts). */
-export interface FleetView {
-	/** When this is, in words: 10月26日 04:12. */
-	at: string;
-	/**
-	 * What its chats used over the last 7 days, by kind of account, the most tokens first; nothing used:
-	 * empty.
-	 */
-	spent: FleetSpent[];
-	/** The chats at work now: their agents running, or a task of theirs running on another station. */
-	chats: number;
-	/** That in words: 9 个对话正在运行. */
-	chatsText: string;
-	/**
-	 * How many stations were used today: those of today's chats (at work, or their last letter written, or archived,
-	 * today), and those that ran their tasks today: 今天用了 3 台设备.
-	 */
-	where: string;
-	/** That as a number: 3 (a look of the card says it alone, 千恋＊万花's). */
-	devices: number;
-	/** The chats archived and what was spent today; absent while it is read, or with nothing spent nor archived. */
-	today?: FleetToday;
-	/** The same over the last 7 days, each day's chats archived; absent with it. */
-	week?: FleetWeek;
-	/**
-	 * How many tasks chats ran on other stations over the last 7 days: 近 7 天 agent 跨设备执行了 312 个任务;
-	 * absent with none, or with the days.
-	 */
-	tasksText?: string;
-	/** That as a number: 312; absent with it. */
-	tasks?: number;
-	/** How many each chat that ran any did, on average: 平均每个对话 5.2 个. */
-	tasksPer?: string;
-}
-
-export interface FlowChoice {
-	id: string;
-	title: string;
-	hint: string;
-}
-
-export interface FlowOption {
-	id: string;
-	label: string;
-}
-
-/** A sign-in the add-profile pages start. */
-export interface FlowSignIn {
-	/** The runtime whose subscription is signed in to (`login.new` runtime). */
-	runtime: RuntimeKind;
-	/** opencode-go: the OpenCode Console instead; kimi-code: Kimi (`login.new` access). */
-	access?: string;
-	/** Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode, Kimi, Grok, Cursor, Devin. */
-	provider: string;
-}
-
-/** The faces chosen on this device, by place (client/core-ts/src/fonts.ts, docs/fonts.md). */
-export interface FontChoices {
-	/** The app's own words: a face's id, or `local:<family>` for one installed on the device; none: the app's own face. */
-	ui?: string;
-	/** What people and agents wrote (messages, the composer); none: as `ui`. */
-	text?: string;
-	/** Code; none: the app's own (the Android app's JetBrains Mono, the system's monospace on a page). */
-	code?: string;
-}
-
-/** A face's file for the Android app. */
-export interface FontFile {
-	/** The weight it is (400, 500, …); 0: one variable file for every weight. */
-	weight: number;
-	/** Where it is, gzipped. */
-	url: string;
-	/** Its size gzipped. */
-	bytes: number;
-	/** The hash of it unzipped. */
-	sha256: string;
-	/**
-	 * Where this device keeps it, unzipped, as a file its host reads there itself (a place's face only: font-files.ts);
-	 * absent where it keeps none, or not as a file.
-	 */
-	path?: string;
-}
-
-export interface FontFace {
-	/** Its id (`local:<family>` for one installed on the device); empty: the app's own face. */
-	id: string;
-	/** Its name as people know it, in their language (empty: the app's own). */
-	name: string;
-	/** Its characters are all one width: a face for code. */
-	mono: boolean;
-	/** The family a page sets it by (its stylesheet's, or the one installed); empty: the app's own. */
-	family: string;
-	/** A page's stylesheet for it: its slices, fetched as their characters are shown. */
-	css?: string;
-	/** What the Android app fetches and keeps for it, a file for each weight (none: one installed, or the app's own). */
-	files?: FontFile[];
-	/** Its preview for the Android app: the fonts page's characters alone (tens of KB), to show it in itself before it is fetched. */
-	preview?: string;
-	/** What `files` come to. */
-	bytes: number;
-}
-
-/** The faces a device's pages are set in, each place's whole (text, none chosen: as ui's), and those there are. */
-export interface FontsView {
-	ui: FontFace;
-	text: FontFace;
-	code: FontFace;
-	/** The faces there are to choose, beside the app's own and those installed on the device. */
-	list: FontFace[];
-}
-
-export interface FootprintConfirm {
-	title: string;
-	text: string;
-	action: string;
-	danger: boolean;
-}
-
-/**
- * One way to clean: `call` (footprint.rebuild, footprint.delete, footprint.evict) with `keys`, after each of `confirms` is agreed
- * to in turn; `done` is said after.
- */
-export interface FootprintChoice {
-	label: string;
-	call: string;
-	keys: string[];
-	confirms: FootprintConfirm[];
-	done: string;
-}
-
-/** A clean-up offered: its line, and the choices it has (one, or several: all archived chats, or the older ones). */
-export interface FootprintAction {
-	id: string;
-	title: string;
-	note: string;
-	/** The button's words. */
-	action: string;
-	danger: boolean;
-	/** Asked first when there are several: which one. */
-	pick?: string;
-	choices: FootprintChoice[];
-}
-
-/** How much of the disk a station takes, for the row that opens its footprint page. */
-export interface FootprintBrief {
-	/** None before its first measure. */
-	bytes?: number;
-	scanning?: boolean;
-	/** What the core says of it: 12.3 GB, 正在统计…. */
-	text?: string;
-}
-
-/** A chat's directory: its size, what can be made again in it, how long since it was used, and what can be done. */
-export interface FootprintChat {
-	key: string;
-	/** The chat to open, by its id in the list. */
-	chat?: string;
-	title: string;
-	archived: boolean;
-	text: string;
-	note: string;
-	choices: FootprintChoice[];
-}
-
-export interface FootprintLegend {
-	text: string;
-	/** Its dot's colour (as FootprintSegment's), or none for words alone. */
-	tone: string;
-	level: Level;
-}
-
-/** A part of the data directory (or a place beside it): `chats` opens the list of chats. */
-export interface FootprintPart {
-	id: string;
-	label: string;
-	note: string;
-	text: string;
-	tone: string;
-	opens: boolean;
-}
-
-/** A line of the memory part: the station, the agents together, or one agent's process (`key`: its chat's session). */
-export interface FootprintRow {
-	label: string;
-	text: string;
-	note?: string;
-	/** Under the line before it (an agent's process under the agents). */
-	nested: boolean;
-	chat?: string;
-	choice?: FootprintChoice;
-}
-
-/** A piece of the disk's bar: `tone` is the part's colour (chart-1…6), `rest` (used by others) or `free`. */
-export interface FootprintSegment {
-	id: string;
-	percent: number;
-	tone: string;
-}
-
-/**
- * How much of the machine a station takes, as its footprint page shows it: everything in words, with what can be cleaned
- * and how (each clean a choice: the call, the chats it is for and the questions asked before it, in order).
- */
-export interface FootprintView {
-	/** Measured at least once: before, the page says it is being measured. */
-	measured: boolean;
-	scanning: boolean;
-	/** The viewer may clean up (an owner or admin). */
-	manage: boolean;
-	/** 3 分钟前统计, 正在统计…. */
-	checkedText: string;
-	/** still.fail 在这台机器上占用. */
-	lead: string;
-	totalText: string;
-	/** The disk in one bar: the station's parts, the rest that is used, and what is free (percent of the disk). */
-	bar: FootprintSegment[];
-	legend: FootprintLegend[];
-	parts: FootprintPart[];
-	/** Beside the data directory: shown, not counted or cleaned. */
-	elsewhere: FootprintPart[];
-	elsewhereNote: string;
-	/** What can be cleaned up (only for those who may). */
-	actions: FootprintAction[];
-	/** Why there is nothing to clean, or why the viewer cannot. */
-	actionsNote?: string;
-	chats: FootprintChat[];
-	/** 213 个 chat · 8.6 GB. */
-	chatsText: string;
-	/** Chats of others the viewer cannot see, counted. */
-	unseenText?: string;
-	/** 内存 · 共 6 GB，已用 5.2 GB. */
-	memoryTitle: string;
-	memory: FootprintRow[];
-}
-
-/** One-click model and depth for a new chat; ranked and labelled by the core. */
-export interface FrequentCombo {
-	fast?: boolean;
-	/** Explicit speed (Fast / Standard); absent for the account default. */
-	speedText?: string;
-	model: string;
-	runtime: RuntimeKind;
-	effort?: string;
-	/** All of it in a line: the model, the runtime where it shows, the effort. */
-	label: string;
-	/** The model as people call it. */
-	name: string;
-	/** The runtime by name, only where the model runs on more than one. */
-	runtimeText?: string;
-	/** How hard it thinks as the model's picker says it (High / 高), or the default's words. */
-	effortText: string;
-	selected: boolean;
-}
-
-export interface HistoryFrom {
-	name: string;
-	slackUser?: string;
-	bound: boolean;
-}
-
-/** A line of a group: a thought or a call. */
-export type HistoryRow = 
-	| { kind: "thought", content: HistoryThought }
-	| { kind: "step", content: HistoryStep };
-
-/**
- * Tool calls and thinking between two boundaries, in the order they came (`rows`): named by its latest call, what it
- * did by kind (`title`), how many failed and are running.
- */
-export interface HistoryGroup {
-	summary: string;
-	title: string;
-	failures: number;
-	pending: number;
-	rows: HistoryRow[];
-}
-
-/** What an item of the history is. */
-export type HistoryBody = 
-	| { kind: "received", content: HistoryReceived }
-	| { kind: "text", content: HistoryText }
-	| { kind: "post", content: HistoryPost }
-	| { kind: "mark", content: HistoryMark }
-	| { kind: "group", content: HistoryGroup };
-
-/** A turn of an agent's history: from a prompt that woke it until the next. */
-export interface HistoryTurn {
-	/** When the prompt came, in ms; absent when its transcript did not say. */
-	at?: number;
-	/** `at` as people read it: 14:05 today, 9/27 14:05 before. */
-	time?: string;
-	/** What the turn did, in a line: 3 步 · 发出 1 条, or 没发消息. */
-	text: string;
-}
-
-/** One item of an execution history, and the transcript entries it draws (`entries`: first, last). */
-export interface HistoryItem {
-	key: string;
-	entries: number[];
-	body: HistoryBody;
-	/** On the item a turn begins with (the prompt that woke the agent); left out of the others. */
-	turn?: HistoryTurn;
-	/**
-	 * The agent's own work (its steps and thoughts, and the words it says to itself): what 只看收发 leaves out.
-	 * Absent otherwise.
-	 */
-	work?: boolean;
-}
-
-export interface HistoryLive {
-	id: string;
-	text: string;
-}
-
-/**
- * A wait in an agent's history: from its mark (`since`) until what moved it on (`until`: a prompt bringing it back, or
- * a call of its own after the mark; absent while it still waits: count on from `since`), at most `seconds`.
- */
-export interface HistoryWait {
-	since: number;
-	until?: number;
-	seconds?: number;
-	/** What it waited for, in its own words (chat_state's `for`); absent when it did not say. */
-	what?: string;
-}
-
-/** A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with its waiting mark). */
-export interface HistoryMark {
-	text: string;
-	wait?: HistoryWait;
-	/**
-	 * The state it marked: `done`, `human` (waiting on a person) or `waiting` (on work it started); absent for words
-	 * the station no longer uses.
-	 */
-	ends?: string;
-}
-
-export interface HistoryMessage {
-	key: string;
-	from: HistoryFrom;
-	text: string;
-	/**
-	 * An agent's words (another chat's letter, a bot in the thread) read as Markdown (markdown.ts), its runs of
-	 * words in `text`: what the clients draw. Absent for a person's, drawn as they wrote them, and for a notice.
-	 */
-	md?: unknown;
-	place?: Place;
-	/**
-	 * A notice of the station's own, not a person's message: `job` (a job's words to its agent: `from` is its
-	 * name, `text` what it said as it wrote it, drawn in a monospaced font) or `stillfail` (still.fail's words of no kind
-	 * the history knows; a job's or a chat's events are `tasks`).
-	 */
-	notice?: string;
-}
-
-export interface HistoryPhase {
-	phase: string;
-	text: string;
-	since: number;
-}
-
-/** A message the agent posted: where to, whether it ended its work blocked, whether it failed. */
-export interface HistoryPost {
-	text: string;
-	/** `text` read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw. */
-	md: unknown;
-	place?: Place;
-	block: boolean;
-	failed: boolean;
-	/** The state it ended its turn in: `done` or `human` (waiting on a person); absent for a progress post. */
-	ends?: string;
-}
-
-/** Work the agent started in the background telling it how it ended (a task notification). */
-export interface HistoryTask {
-	/** In a line: what it was, how it ended, its name. */
-	text: string;
-	/** A sub-agent's; otherwise a background command's. */
-	agent: boolean;
-	/** It failed or was stopped. */
-	failed: boolean;
-	/** What a sub-agent answered. */
-	result?: string;
-	/** `result` read as Markdown (markdown.ts), its runs of words in `result`: what the clients draw. */
-	md?: unknown;
-	/** `result`'s first line of words, without the marks (markdown.ts lineOf): what its line shows closed. */
-	line?: string;
-}
-
-/**
- * What a prompt carried: still.fail's own words around them (`note`), how work the agent started ended (`tasks`),
- * then the messages.
- */
-export interface HistoryReceived {
-	note?: string;
-	tasks: HistoryTask[];
-	messages: HistoryMessage[];
-}
-
-export interface HistoryStep {
-	said?: string;
-	name: string;
-	hint: string;
-	meta: string;
-	failed: boolean;
-	call: string;
-	result?: string;
-	/** Its call's transcript entry and its result's: what `history.detail` reads whole while it is `brief`. */
-	entries: number[];
-	/** `call` is only what says what it does and `result` empty (a station's in brief): opened, `history.detail` reads them whole. */
-	brief: boolean;
-}
-
-/** The agent's own words; `subagent`: a sub-agent's. */
-export interface HistoryText {
-	text: string;
-	/** `text` read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw. */
-	md: unknown;
-	/** Its first line of words, without the marks (markdown.ts lineOf): what its line shows closed. */
-	line: string;
-	subagent: boolean;
-}
-
-export interface HistoryThought {
-	text: string;
-	/** `text` read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw. */
-	md: unknown;
-	/** Its first line of words, without the marks (markdown.ts lineOf): what its line shows closed. */
-	first: string;
-	/** Its transcript entry: what `history.detail` reads whole while it is `brief`. */
-	entries: number[];
-	/** `text` is its first line only (a station's in brief): opened, `history.detail` reads it whole. */
-	brief: boolean;
-}
-
-export interface UsageLine {
-	label: string;
-	value: string;
-}
-
-/** An agent's execution history, read for people (history.ts). */
-export interface HistoryView {
-	items: HistoryItem[];
-	live: HistoryLive[];
-	phase?: HistoryPhase;
-	usage?: UsageLine[];
-	usageLine?: string;
-	/** What shows at its top: where the session begins, or why there is nothing (yet). */
-	edge: string;
-	empty: boolean;
-	loaded: boolean;
-	/** Older entries exist: `history.older` loads the page before them. */
-	more?: boolean;
-}
-
-export interface Memory {
-	totalBytes: number;
-	usedBytes: number;
-	swapUsedBytes?: number;
-}
-
-/** CPU, memory or disk: how full (and how bad: ok | amber | red), in words. */
-export interface Meter {
-	label: string;
-	short: string;
-	percent: number;
-	/** How much is left, 0–100: what its edge and cells are drawn to, as an allowance's. */
-	left: number;
-	level: Level;
-	value: string;
-	/** What is left in words, in its chip: 剩 6.0 G, 空闲 89%. */
-	remaining: string;
-	/** What is left, large on the machine's own page: 22.8, 89. */
-	big: string;
-	/** Beside `big`, small: GB, %. */
-	unit: string;
-	/** Under `big`: 内存剩, CPU 空闲. */
-	title: string;
-	/** Under `title`, quiet: 共 64 GB, 负载 1.4. */
-	total: string;
-	note?: string;
-}
-
-/** One GPU's resource dial and model on the station's overview. */
-export interface HostGpu {
-	big: string;
-	unit: string;
-	left: number;
-	level: Level;
-	title: string;
-	total: string;
-	model: string;
-}
-
-/** A fact of a machine, a row of its details: 主机名 willow. */
-export interface HostDetail {
-	label: string;
-	value: string;
-}
-
-/** The machine a station runs on, with it in words. */
-export interface Host {
-	hostname: string;
-	os: string;
-	arch: string;
-	cpus: number;
-	cpuModel: string;
-	/** 1-minute load average divided by CPU count, 0–1+. */
-	load: number;
-	/** How busy the CPUs are, all together, 0–1 (stations before it: absent). */
-	cpuBusy?: number;
-	uptimeSec: number;
-	memory: Memory;
-	disk: Disk;
-	emberRssBytes: number;
-	checkedAt: number;
-	summary: string;
-	line: string;
-	facts: string[];
-	meters: Meter[];
-	/** The machine's GPUs, each with the figures it can report. */
-	gpus?: HostGpu[];
-	/** What the machine is, the same line wherever it is named: Apple M1 Pro · 32 GB · macOS 26. */
-	identity: string;
-	/** The rest, a row each, where the machine is looked at closely: its hostname, chip, uptime, the process. */
-	details: HostDetail[];
-	/** Memory and disk in a line, what is used and what is left: 内存 12.3 / 32 GB · 磁盘 剩 45.2 / 460 GB. */
-	usage: string;
-	emberText: string;
-}
-
-/**
- * An image of a chat opened in the preview (the `imageNear` view): the ones beside it in the order its page shows them
- * (quotes, placed ones, then those below; the outbox's last), to step to (arrows, a swipe).
- */
-export interface ImageNear {
-	/** The image shown just before it, with its `owner`. Absent for the first (or one not among them). */
-	before?: Attachment;
-	/** The one just after it. Absent for the last. */
-	after?: Attachment;
-	/** The previous image's place in its message, when a place was requested. */
-	beforeAt?: string;
-	/** The next image's place in its message, when a place was requested. */
-	afterAt?: string;
-	/** Where it is among them (0: the first), for `2 / 5`. Absent when it is not among them. */
-	index?: number;
-	/** How many images the chat shows. */
-	count: number;
-}
-
-/** Text of a command's output in one style (its SGR codes). */
-export interface TermRun {
-	text: string;
-	/**
-	 * One of the 16 colours of the client's terminal palette for its theme by number (`0`…`15`), or `#rrggbb`;
-	 * absent: the text's colour.
-	 */
-	fg?: string;
-	/** As `fg`; absent: none. */
-	bg?: string;
-	bold?: boolean;
-	dim?: boolean;
-	italic?: boolean;
-	underline?: boolean;
-}
-
-/**
- * A job's output as it grows (the `jobLog` topic): its last lines as a terminal shows them (control sequences done
- * or dropped, src/terminal.ts), when it last grew, its state (absent from a station yet to say), and, put in by the core,
- * its last line and when in words (absent: nothing to say).
- */
-export interface JobLogView {
-	text: string;
-	outputAt?: number;
-	state?: string;
-	last?: string;
-	said?: string;
-	/** `text` in runs of one style, as a terminal colours it; absent when none of it is styled (show `text`). */
-	runs?: TermRun[];
-}
-
-/** A station that could be added to a workspace. */
-export interface JoinableStation {
-	/** Its address in its home workspace: what `station.join` names. */
-	station: string;
-	id: string;
-	name: string;
-	emoji?: string;
-	icon?: string;
-	/** Its home workspace. */
-	workspace: string;
-	workspaceName: string;
-	/** Its workspace's mark as its managers gave it (as a station's), shown before its name; none when none. */
-	workspaceEmoji?: string;
-	/** As a station's icon: shown before the emoji. */
-	workspaceIcon?: string;
-	online: boolean;
-	/** Its home workspace and whether it is up, in a line: Acme · 在线; with `needsLock`, why it cannot be added. */
-	line: string;
-	/**
-	 * Its home is in security mode and this workspace is not: it joins only one in it too, so it is shown
-	 * but not to be picked (docs/multi-workspace.md).
-	 */
-	needsLock?: boolean;
-}
-
-/**
- * The stations that could be added to a workspace as they are (the `joinable` topic; views/memberships.ts): those
- * whose home workspace the viewer is an owner or admin of, not in this one already.
- */
-export interface JoinableView {
-	/** The viewer is an owner or admin of another workspace: picking a station of one of those is offered. */
-	offered: boolean;
-	/** This workspace or one of those has not been read yet: more may come. */
-	loading: boolean;
-	items: JoinableStation[];
-}
-
-/** A chat's history tabs as last left: which are open, which is in front. */
-export interface KeptTabs {
-	tabs: string[];
-	active?: string;
-}
-
-/** An action keys do (keymap.ts ACTIONS). */
-export type KeyActionName = "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings" | "shortcuts" | "zoom.in" | "zoom.out" | "zoom.reset" | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.screen" | "chat.latest" | "chat.find" | "chat.archive" | "panel.close" | "files.preview";
-
-/** Where an action works: anywhere in the app, in a chat, or in a folder of the files. */
-export type KeyGroupName = "global" | "chat" | "files";
-
-/**
- * Whether an action works with the cursor in a text field: always (a binding with ⌘ or ⌥ does nothing there),
- * never (it is a key the field types), or when the field is empty (the key moves the cursor in text).
- */
-export type KeyTyping = "yes" | "no" | "empty";
-
-export interface KeyAction {
-	action: KeyActionName;
-	group: KeyGroupName;
-	/** What it does, in words. */
-	name: string;
-	typing: KeyTyping;
-	/**
-	 * The bindings that do it here: modifiers in the order Ctrl, Alt, Shift, Mod, then the key, joined by `+`
-	 * (`Shift+Mod+H`). The key is where it is on the keyboard: a letter, a digit, F1…, Up/Down/Left/Right, Space, Escape,
-	 * Enter, or one of \ [ ] . , / ;.
-	 */
-	keys: string[];
-	/** Each of `keys` as a key cap shows it here: ⌘⇧H on a Mac, Ctrl+Shift+H elsewhere. */
-	labels: string[];
-	/** Its keys in words, as the list of shortcuts says them (`labels` with " / ", or 未设置). */
-	text: string;
-	/** Its keys were changed on this device. */
-	changed: boolean;
-	/** Listed among the shortcuts here: those only the desktop app has keys for are not shown elsewhere. */
-	listed: boolean;
-}
-
-export interface KeyGroup {
-	group: KeyGroupName;
-	/** Its name, as the list of shortcuts heads it. */
-	name: string;
-}
-
-/** The app's keyboard shortcuts (client/core-ts/src/keymap.ts): a client turns a key press into a binding and looks it up here. */
-export interface KeymapView {
-	/** Keys can be changed here (`keys.set`): the desktop app; elsewhere `keys` is not gone by. */
-	changeable: boolean;
-	/** Keys are said as on a Mac: Mod is ⌘ and Ctrl a key of its own (else Mod is Ctrl). */
-	mac: boolean;
-	/** Where the actions work, in the order they are listed. */
-	groups: KeyGroup[];
-	/** Every action, in the order they are listed. */
-	actions: KeyAction[];
-	/**
-	 * The keys that switch to the workspace at each place (from 0) of its menu, as shown: ⌃1…⌃9, Alt+1…9 elsewhere
-	 * (not changeable).
-	 */
-	workspace: string[];
-}
-
-/** Who opened a pull request or an issue. */
-export interface LinkPerson {
-	login: string;
-	/** Inline (a data: URL). */
-	avatar?: string;
-}
-
-/**
- * What a web link in a message is, for its card (the `linkPreview` topic, GET /link-preview): a page by its title,
- * site, icon and picture; a GitHub pull request or issue as GitHub says it.
- */
-export interface LinkPreview {
-	/** page | github_pull_request | github_issue | none (nothing to show of it). */
-	kind: string;
-	url?: string;
-	title?: string;
-	description?: string;
-	site?: string;
-	/** The page's icon, inline (a data: URL). */
-	icon?: string;
-	/** The page's picture (og:image), inline, as its thumbnail where it is big. */
-	image?: string;
-	/** A pull request's or issue's: owner/name. */
-	repository?: string;
-	number?: number;
-	/** A pull request's: open | closed | merged | draft; an issue's: open | completed | not_planned | closed. */
-	state?: string;
-	author?: LinkPerson;
-	additions?: number;
-	deletions?: number;
-	changedFiles?: number;
-	comments?: number;
-	labels?: string[];
-	checks?: LinkChecks;
-	updatedAt?: number;
-	/** Its times in words, by field (`updatedAt`). */
-	time?: Record<string, Stamp>;
-}
-
-/**
- * What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
- * item (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution
- * history (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in; `screen`, one of a
- * station's screens (docs/remote-screens.md); `login`, a login an agent started (docs/remote-login.md). The call answers
- * null for any other link.
- */
-export interface LinkTarget {
-	opens: string;
-	token?: string;
-	workspace?: string;
-	station?: string;
-	chat?: string;
-	session?: string;
-	service?: string;
-	history?: string;
-	entry?: number;
-	/** The chat message to scroll to, from ?message=<seq>. */
-	message?: number;
-	/** For `screen`: the screen's id on the station (`/w/<workspace>/s/<station>/screen/<id>`). */
-	screen?: string;
-	/** For `login`: the login's id on the station (`/w/<workspace>/s/<station>/login/<id>`), its card on the station's page. */
-	login?: string;
-}
-
-export interface TimelineEntry {
-	at?: string;
-	/** user | assistant | thinking | tool_call | tool_result */
-	kind: string;
-	text: string;
-	tool?: string;
-	ok?: boolean;
-	callId?: string;
-	subagent?: boolean;
-}
-
-export interface TranscriptUsage {
-	modelCalls: number;
-	inputTokens: number;
-	cachedTokens: number;
-	outputTokens: number;
-	model?: string;
-	/** The prompt the last call sent: the context the session carries on with. */
-	contextTokens?: number;
-	/** The model's context window, when the runtime tells it (Codex). */
-	contextWindow?: number;
-	/** What the calls would cost at API list prices, in dollars; those of unpriced models left out. */
-	cost?: number;
-	unpricedCalls?: number;
-	/** When its last main-thread call was made (ms). */
-	lastCallAt?: number;
-	/**
-	 * How long what that call left in the prompt cache is kept after it (5 minutes, or an hour), where its
-	 * runtime tells what it wrote (Claude's). Absent otherwise.
-	 */
-	cacheMs?: number;
-	/**
-	 * What sending its context again once its cache is over would cost at API list prices, in dollars (all of it
-	 * written to the cache again). Absent for an unpriced model.
-	 */
-	rereadCost?: number;
-}
-
-/** A step in flight; an ended one stays until the transcript entry that records it arrives. */
-export interface LiveStep {
-	id: string;
-	/** text | thinking | tool */
-	step: string;
-	tool?: string;
-	subagent?: boolean;
-	parent?: string;
-	input: string;
-	startedAt: number;
-	ended?: boolean;
-}
-
-/** Where the turn stands with the model (starting | requesting | responding | working), since when. */
-export interface Phase {
-	phase: string;
-	since: number;
-}
-
-/**
- * A session as it runs: its transcript (its latest entries once `loaded`, from entry `first`; `history.older` loads
- * those before), the model's use, the steps in flight, where the turn stands, how fast it writes, and its activity.
- */
-export interface Live {
-	loaded: boolean;
-	first?: number;
-	timeline: TimelineEntry[];
-	usage?: TranscriptUsage;
-	steps: LiveStep[];
-	phase?: Phase;
-	rate?: number;
-	activity?: Activity;
-	/** Its station is offline: this is what was kept. */
-	offline?: boolean;
-}
-
-/** A device in the workspace's lock: this one first, then the most lately used. */
-export interface LockDevice {
-	id: string;
-	/** `app` (desktop, Android: it may sign) or `web` (a page: 30 days at a time). */
-	kind: string;
-	label: string;
-	signs: boolean;
-	/** An older client, known by the endpoint it connects with. */
-	older: boolean;
-	/** This device. */
-	mine: boolean;
-	/** A web page's: days until it runs out. */
-	daysLeft?: number;
-	renewSoon: boolean;
-	/** One of the viewer's own, added lately (shown on their other devices). */
-	recent: boolean;
-	/**
-	 * When it last asked the cloud for a credential (s; at most a day before it was last used): none where the viewer
-	 * may not know, or it has not in 31 days.
-	 */
-	lastSeen?: number;
-	/**
-	 * This device may take it out of the lock (`lock.removeDevice`): it signs, the device is another, and the
-	 * viewer's own or the viewer manages the workspace.
-	 */
-	removable: boolean;
-	/**
-	 * Which machine it is (its group says the app): what it calls itself now, else its label, else what kind
-	 * of client it is.
-	 */
-	nameText: string;
-	/** Its machine and its app in a line (asked about it: 移除「…」？). */
-	fullText: string;
-	/** The rest in a line: this device or when it was last used, whether it signs, days left, new. */
-	metaText: string;
-}
-
-/** A device turning the lock on would sign. */
-export interface LockDraftDevice {
-	id: string;
-	person: string;
-	kind: string;
-	label: string;
-	older: boolean;
-	/** This device: always in, the first signer. */
-	current: boolean;
-	last_seen: number;
-	on: boolean;
-	fixed: boolean;
-	/** Whose and which, in a line (this device said so). */
-	nameText: string;
-	/** What it is: an older client's way in, a web page or an app (this app: it signs). */
-	howText: string;
-	time?: Record<string, Stamp>;
-}
-
-export interface LockDraftMember {
-	sub: string;
-	email: string;
-	name: string;
-	role: string;
-	/** Their name, or their email. */
-	nameText: string;
-	/** Their role as the security pages name it. */
-	roleText: string;
-}
-
-/** A station turning the lock on would sign, or why not. */
-export interface LockDraftStation {
-	id: string;
-	name: string;
-	version?: string;
-	/** `ok` (it understands a lock), `old` (too old), `offline`, `other` (it keeps another lock: reset it first), `asking`. */
-	state: string;
-	on: boolean;
-	fixed: boolean;
-	/** Why it cannot be signed yet, in words (none when `ok`). */
-	stateText?: string;
-}
-
-/** What turning the workspace's lock on would sign (the `lockDraft` topic): what is left out is `on: false`. */
-export interface LockDraftView {
-	available: boolean;
-	loading: boolean;
-	canSign: boolean;
-	owner: boolean;
-	ready: boolean;
-	members: LockDraftMember[];
-	devices: LockDraftDevice[];
-	stations: LockDraftStation[];
-}
-
-/** A member's devices of one app: the group with this device first, then the one used most lately. */
-export interface LockGroup {
-	/**
-	 * The app its devices are, its brand's (still.fail 桌面版, still.fail 网页版), or 其他: those whose
-	 * name says none.
-	 */
-	appText: string;
-	devices: LockDevice[];
-}
-
-/** This device's try to be approved face to face (views/pair.ts). */
-export interface LockPair {
-	/**
-	 * `finding` (dialling the person's trusted devices), `code` (one shows a code: type it), `checking`,
-	 * `wrong` (that code was not it), `none` (no trusted device answered), `failed` (`error`), `done`.
-	 */
-	state: string;
-	/** How many trusted devices show a code now. */
-	devices: number;
-	/** Tries left, after a wrong code. */
-	left?: number;
-	/** Why it `failed`; `wrong`, what to say of it (that code not it, or the device showing it gone). */
-	error?: string;
-	/** While a code is typed: when the last trusted device's code is too old (ms). */
-	until?: number;
-	/** That, in words (14:05 前有效). */
-	untilText?: string;
-}
-
-/** This device in the workspace's lock. */
-export interface LockMe {
-	device?: string;
-	code?: string;
-	kind: string;
-	confirmed: boolean;
-	daysLeft?: number;
-	/** Not in the lock: it waits to be approved face to face (`lock.pair`). */
-	waiting: boolean;
-	/**
-	 * In the lock, an app, but not signing with this device's key (let in before it kept one, or its key since
-	 * lost): it may be made one that signs (a trusted device), approved as a new one is (`lock.pair`).
-	 */
-	unsigned?: boolean;
-	/** Its try to be approved face to face (or made one that signs), once it began (`lock.pair`). */
-	pair?: LockPair;
-}
-
-/** A workspace a device waits in, named as the person knows it. */
-export interface LockPromptWorkspace {
-	id: string;
-	name: string;
-	emoji?: string;
-	icon?: string;
-}
-
-/** A new device met face to face, showing a code of this one's to type there (views/pair.ts). */
-export interface LockPairing {
-	/** The new device's key (its iroh id): what `lockPrompt.deny` names. */
-	device: string;
-	name: string;
-	email: string;
-	kind: string;
-	label: string;
-	/** The code to type on the new device: shown here only, never sent. */
-	code: string;
-	/** Its name as people know it (LockDevice `fullText`). */
-	deviceText: string;
-	/** Where it asks to be let in and this device approves it. */
-	workspaces: LockPromptWorkspace[];
-	/** When it asked. */
-	created_at: number;
-	/** Its times in words (`created_at`). */
-	time?: Record<string, Stamp>;
-	/** When the code is too old (ms): no longer shown then. */
-	until: number;
-	/** That, in words (14:05 前有效). */
-	untilText: string;
-}
-
-/** A member in the workspace's lock, with their devices by app. */
-export interface LockPerson {
-	sub: string;
-	email: string;
-	name: string;
-	role: string;
-	you: boolean;
-	/** Their name, or their email. */
-	nameText: string;
-	/** Their role as the security pages name it. */
-	roleText: string;
-	groups: LockGroup[];
-}
-
-/** A member's device set up that waits on this one for a vault's key (views/vault.ts `vaultAsks`, LockPromptsView `asks`). */
-export interface VaultKeyAsk {
-	workspace: string;
-	workspaceName: string;
-	/** The vault whose key it lacks, one of the viewer's own that this device holds the key to. */
-	vault: string;
-	vaultName: string;
-	/** The device set up without the key (its id in the lock): what `vault.addDevice {vault, device}` gives it to, and `vault.hidePrompt {device}` puts away. */
-	device: string;
-	/** Its name as people know it (LockDevice `fullText`). */
-	deviceText: string;
-	/** When it was set up, or last asked (its certificate's date, unix seconds). */
-	at: number;
-	/** That, in words (3 分钟前). */
-	atText: string;
-}
-
-/** What waits on this device from new devices: to approve them face to face (views/pair.ts), to give them a vault's key (the `lockPrompts` topic). */
-export interface LockPromptsView {
-	/** The new devices showing this one's code now, wherever the person is. */
-	pairing: LockPairing[];
-	/** The members' devices set up that wait on this one for a vault's key, the latest asking first, wherever the person is; none put away (views/vault.ts `vaultAsks`; none from a core of before). */
-	asks?: VaultKeyAsk[];
-}
-
-/** A station of the workspace and whether the lock protects it. */
-export interface LockStation {
-	id: string;
-	name: string;
-	version?: string;
-	online: boolean;
-	/** The lock names it: it holds the lock. */
-	protected: boolean;
-}
-
-/** The workspace's security mode, its lock (the `lock` topic; client/core-ts/src/views/lock.ts, docs/workspace-lock.md). */
-export interface LockView {
-	/** Whether the control plane keeps locks (still.fail cloud's does; Comma's not). */
-	available: boolean;
-	locked: boolean;
-	/** The one-line notice that it is off: the owner's, until closed (`lock.dismiss`). */
-	notice: boolean;
-	role: string;
-	manages: boolean;
-	owner: boolean;
-	/** An app: it may sign (a web page may not). */
-	canSign: boolean;
-	/** This device signs for the lock. */
-	signs: boolean;
-	me?: LockMe;
-	signers: number;
-	members: LockPerson[];
-	stations: LockStation[];
-	protected: number;
-	/** The viewer's own web devices running out soon. */
-	renew: LockDevice[];
-	attention: number;
-}
-
-export interface LongJobsGroup {
-	/** services | jobs */
-	key: string;
-	/** 开了很久的网页服务 · 3 */
-	head: string;
-	jobs: Job[];
-}
-
-/**
- * The services and jobs left up a long while (an hour) on a scope's stations that are up (the `longJobs` view),
- * oldest first, in groups: web services, then background jobs; none while empty.
- */
-export interface LongJobsView {
-	groups: LongJobsGroup[];
-	/**
-	 * They light the rail's bell: one is there it has not shown yet (`prefs.jobsSeen`), and the
-	 * bell is lit by them (`badgeKinds.services`).
-	 */
-	lit?: boolean;
-	/**
-	 * Each of them as `<station>/<id>`: what to keep as shown (`prefs.set {jobsSeen: {<workspace>: ids}}`)
-	 * once the bell opens.
-	 */
-	ids?: string[];
-}
-
-/** Who the station machine's own Claude Code or Codex is signed in as (only read: still.fail never takes the login over). */
-export interface MachineLogin {
-	runtime: RuntimeKind;
-	installed: boolean;
-	loggedIn: boolean;
-	email?: string;
-	plan?: string;
-	/** Its plan as a name, for its tag (pro: Pro; none: ""). */
-	planText?: string;
-	/** A profile can use it as it is (kept in a file, not only in the keychain). */
-	usable?: boolean;
-	/** Its allowance, as a profile on it would show (none until read, or when it cannot be). */
-	quota?: Quota;
-	/** In a line, as the pages show it. */
-	text: string;
-	/** Offered for a profile: signed in, on a plan, and no profile on it yet. */
-	offered?: boolean;
-}
-
-/** A login's terminal as its station keeps it (the `machineLoginScreen` topic), in memory only. */
-export interface MachineLoginScreen {
-	/** The terminal's lines, top to bottom (200 columns: a UI wraps them to its width). */
-	rows: string[];
-	cursorX: number;
-	cursorY: number;
-	/** False while the command reads without echo (a password): the input is a password field. */
-	echo: boolean;
-	/** The command still runs. */
-	live: boolean;
-}
-
-/** One login on a station (a command run in a terminal there, finished by a person from their client). */
-export interface MachineLoginShown {
-	id: string;
-	station: string;
-	stationName: string;
-	/** Its command's program (gh, gcloud). */
-	name: string;
-	/** 在 willow 上登录 gh. */
-	title: string;
-	/** The command it runs, as one line. */
-	command: string;
-	/** starting | browser | code | input | verifying | done | failed | cancelled */
-	state: string;
-	/**
-	 * What a person has to do now: loopback (open the browser here, its callback relayed), device (a code to enter at a page),
-	 * open (a page to open), terminal (the command waits for typing). Absent: nothing yet, or it ended. A step a core does not
-	 * know reads as open + terminal.
-	 */
-	step?: string;
-	/** Under way (not ended). */
-	active: boolean;
-	/** The page to open (https only); absent for viewers. */
-	url?: string;
-	/** The page's host, always shown beside its button. */
-	domain?: string;
-	/** A device code to enter. */
-	code?: string;
-	/** The page with the code already in it, where the service gives one. */
-	codeUrl?: string;
-	/** Loopback: the port its callback comes to. */
-	port?: number;
-	/**
-	 * Its browser step can be done in the station's own browser (`machineLogin.browser`); absent where it cannot (no
-	 * Chrome there, a station from before, a read-only viewer).
-	 */
-	browser?: boolean;
-	/** The screen of the tab its page is open in, in the station's browser, while it is. */
-	screen?: string;
-	/**
-	 * What the button to the station's browser says: 在 dev-prod 的浏览器中打开, or 回到 dev-prod 的浏览器 while its tab is
-	 * open. Absent with `browser`.
-	 */
-	browserText?: string;
-	/** The command waits on a prompt: its agent answers it (等 agent 回答命令的问题). */
-	waiting: boolean;
-	/**
-	 * Open: after its page, the command waits for what the page gives (gcloud --no-launch-browser's verification code):
-	 * the person enters it on the card (`machineLogin.answer`). Then `waiting` is false.
-	 */
-	paste?: boolean;
-	/** This device listens for its loopback callback now (opened here, in the desktop or Android app): 等浏览器回来. */
-	listening: boolean;
-	/**
-	 * Loopback: why this device could not listen for its callback when it was last opened here (本机 8085 端口被占用),
-	 * said on its card until it is opened again.
-	 */
-	relayText?: string;
-	/** How it stands, in a line: 等你打开浏览器, 验证码 ABCD-1234, 命令在等你输入, 登录完成, 超时了… */
-	statusText: string;
-	/** Failed: why (the command's last lines). */
-	error?: string;
-	/** Whose chat it was started for (the chat's starter). */
-	byText?: string;
-	/** The session of the agent that started it (its chat opens by it). */
-	chat?: string;
-	/** That chat's title, when it began. */
-	chatTitle?: string;
-	/**
-	 * Who ended it and how, in words: 张三 完成 (their browser came back through their client), 张三 取消; it says the
-	 * outcome then. Absent when nobody is known, or it failed.
-	 */
-	doneByText?: string;
-	/**
-	 * Ended: how, in a line, as its card shows it then: 已在 willow 上登录 gh, 张三 取消了在 willow 上登录 gh,
-	 * 在 willow 上登录 gh 失败：<why>, …超时了.
-	 */
-	endedText?: string;
-	/** When it started, in words: 14:05 today, 10/16 14:05 before. */
-	whenText: string;
-	startedAt: number;
-	expiresAt: number;
-	endedAt?: number;
-}
-
-/** A program logged in to (or tried) on a station, its tries that ended together (`MachineLoginsView.tools`). */
-export interface MachineLoginTool {
-	/** The program (gh, gcloud). */
-	name: string;
-	/**
-	 * The mark it is drawn with, its maker's or its service's (github, google-cloud: web/public/tools); none: a
-	 * terminal's.
-	 */
-	mark?: string;
-	/**
-	 * Its latest login that went through, who and when (张三 登录 · 10/30 16:04); else that none has and how the
-	 * latest ended (没有登录成功过 · 最近一次已取消 · 03:12).
-	 */
-	summaryText: string;
-	/** None went through and the latest failed (or timed out): said in red. */
-	failed: boolean;
-	/** The session of the agent that started the login the summary is of. */
-	chat?: string;
-	/** That chat's title, when it began. */
-	chatTitle?: string;
-	/** How many tries ended: 11 次 (the core's words). */
-	countText: string;
-	/** Each try that ended, newest first. */
-	tries: MachineLoginShown[];
-}
-
-/**
- * A station's logins to the command-line tools its agents use (the `machineLogins` topic; docs/remote-login.md): any
- * login command, run one way; those under way and those done here.
- */
-export interface MachineLoginsView {
-	/** False for a station from before remote login (it answers 404): the page offers none, or says to update it. */
-	supported: boolean;
-	/** What the station has was read (or told) at least once. */
-	loaded: boolean;
-	/** The viewer may start, cancel and complete logins here (a read-only member only sees how they stand). */
-	canLogin: boolean;
-	/**
-	 * This device can take a login's loopback callback for its station (the desktop and Android apps): web pages
-	 * cannot listen.
-	 */
-	canRelay: boolean;
-	/** The logins done through still.fail on this station: under way first, then those ended, newest first. */
-	logins: MachineLoginShown[];
-	/**
-	 * Those ended, a row per program, the one tried latest first: what the station page lists under the cards of
-	 * those under way.
-	 */
-	tools: MachineLoginTool[];
-}
-
-/** A chat in 待处理 (`WorkspaceMark.items`). */
-export interface MarkItem {
-	/** alert (an agent of a chat they started went wrong) | wait (a card or need waiting for them) */
-	kind: string;
-	workspace: string;
-	workspaceName: string;
-	/** Its workspace's mark as its managers gave it (as a station's), shown before its name; none when none. */
-	workspaceEmoji?: string;
-	/** As a station's icon: shown before the emoji. */
-	workspaceIcon?: string;
-	station: string;
-	stationName: string;
-	session?: string;
-	thread?: number;
-	title: string;
-	/** Its row's state line: 待处理 · …, 要你帮忙：…, 出问题：… */
-	text: string;
-	/** The same without its lead (待处理 · , 需要你处理：, 出错：): what it asks, what it needs, why it stopped. */
-	what: string;
-	/** The waiting card's post (`decision.dismiss`), for `wait`. */
-	seq?: number;
-	/**
-	 * This failure, for `alert`: what to keep as let go (忽略: `prefs.set {failsGone: {<workspace>: [failure]}}`).
-	 * The same chat failing again is another.
-	 */
-	failure?: string;
-	at: number;
-}
-
-/** A workspace a station is in. */
-export interface StationMembership {
-	workspace: string;
-	/** The workspace's name. */
-	name: string;
-	/** Its mark as its managers gave it (as a station's), shown before its name; none when none, or not one of the viewer's. */
-	emoji?: string;
-	/** As a station's icon: shown before the emoji. */
-	icon?: string;
-	/** What the station is called there. */
-	stationName: string;
-	/** Its home workspace, whose owners and admins manage the machine. */
-	home: boolean;
-	/** The workspace the page is in. */
-	here: boolean;
-	/** What it is to the station, in a line: 主 workspace, or 加入的 workspace. */
-	line: string;
-}
-
-/** The workspaces a station is in (the `memberships` topic; views/memberships.ts), for its home workspace's owners and admins. */
-export interface MembershipsView {
-	/** The viewer is an owner or admin of its home workspace (the one the page is in): only they see this. */
-	manages: boolean;
-	/** Not read yet. */
-	loading: boolean;
-	/** Why it could not be read (a station from before several workspaces is in its home one alone). */
-	error?: string;
-	/** It may join another workspace (not while a workspace lock holds it to one). */
-	canJoin: boolean;
-	/** The workspaces it is in, its home one first. */
-	workspaces: StationMembership[];
-}
-
-/** A part of the global memory, under one of its headings (the text before the first, if any, as 开头). */
-export interface MemorySection {
-	title: string;
-	/** What is under its heading. */
-	text: string;
-	/** How much is in it: 10 条, or its size when it is no list. */
-	note: string;
-}
-
-export interface MemoryFile {
-	path: string;
-	text: string;
-	/** Its parts by their `##` headings, as people find their way in it (the core's). */
-	sections?: MemorySection[];
-	/** How long it is: 12 KB (the core's). */
-	size?: string;
-}
-
-/** A page of a skill, as its page picks between them. */
-export interface MemoryPage {
-	/** "" its SKILL.md; else the file's name. */
-	key: string;
-	label: string;
-	size?: string;
-	/** What it says (（空） when nothing). */
-	text: string;
-}
-
-export interface MeshStatus {
-	/** off | missing | running | restarting */
-	state: string;
-	origin?: string;
-	station?: string;
-	workspace?: string;
-	workspaceId?: string;
-	name?: string;
-	/**
-	 * Whether it knows the workspace's stations now, from still.fail cloud (false: cut off from it, it takes no shared
-	 * Profile's copy). Absent from stations before it.
-	 */
-	reached?: boolean;
-}
-
-/**
- * One message of a chat a link names, for the link's card (the `messagePeek` topic, GET /threads/:id/entries of
- * that entry alone): as first said, an edit made since on Slack or Feishu not in it.
- */
-export interface MessagePeek {
-	/** Who said it. */
-	author: string;
-	/** Its words as a chat's row has them; a file's word for one without any. */
-	text: string;
-	/** When it was said, in words (`at`). */
-	time?: Record<string, Stamp>;
-}
-
-/** A figure in words, and how bad it is. */
-export interface NetFigure {
-	text: string;
-	level: Level;
-}
-
-/** The way through one relay: its round trip, or none if it was not reached in time. */
-export interface NetRelay {
-	/** What still.fail calls it (北京), or its host. */
-	name: string;
-	rtt?: NetFigure;
-	/** The connection goes through it now. */
-	current: boolean;
-}
-
-/** A station's ways through each relay as last measured, and whether they are being measured again. */
-export interface NetMeasured {
-	measuring: boolean;
-	relays: NetRelay[];
-	/** The relay the connection moved to as they were measured (its name), if it did. */
-	moved?: string;
-}
-
-/** A folder of a preset as its mark shows it: its picture, else its initial on its colour. */
-export interface PresetMark {
-	name: string;
-	/** Its repository's address (its colour where it has no picture); "" for a folder of none. */
-	repo: string;
-	/** Its own picture, a data URL. */
-	icon?: string;
-}
-
-/** A preset a new chat can be opened with, as its page lists them. */
-export interface NewChatPreset {
-	id: string;
-	name: string;
-	/** How many folders it names. */
-	dirs: number;
-	/** The station it is of (its address): its folders are there. */
-	station: string;
-	stationName: string;
-	marks?: PresetMark[];
-}
-
-/** Something wrong with a station, in words (StationView `problems`). */
-export interface StationProblem {
-	/** silent | blocked | away */
-	key: string;
-	/** amber | red */
-	level: string;
-	text: string;
-}
-
-export interface RuntimeModels {
-	runtime: RuntimeKind;
-	models: string[];
-}
-
-/** Who is looking: local | access (`email`) | mesh (`email`, `name`, `sub`, `role`, `workspace`, `device`). */
-export interface Viewer {
-	via: string;
-	email?: string;
-	name?: string;
-	sub?: string;
-	role?: string;
-	workspace?: string;
-	device?: string;
-}
-
-export interface PendingLogin {
-	id: string;
-	runtime: RuntimeKind;
-	job?: LoginJob;
-	created?: string;
-	/** Why a sign-in that succeeded made no profile. */
-	error?: string;
-}
-
-/**
- * A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a
- * runtime (`claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`).
- */
-export interface SoftwareVersion {
-	/** station | claude | codex | dsh | grok | cursor | devin */
-	id: string;
-	name: string;
-	/** On the machine (a runtime may not be: then `updatable` says it can be installed from here). */
-	installed: boolean;
-	/** What runs now; none when it is not installed, or not a release (a clone). */
-	version?: string;
-	/** The latest out, when it could be read. */
-	latest?: string;
-	/** The latest is newer than what runs. */
-	newer: boolean;
-	/**
-	 * The station's, switched back from the test channel: the latest is the stable release, older than the beta that
-	 * runs, and going back to it is offered (回到正式版). False from a station older than channels.
-	 */
-	downgrade?: boolean;
-	/**
-	 * The station's: which releases it is updated to, `stable` or `beta`; none where it cannot be updated from here,
-	 * and from a station older than channels.
-	 */
-	channel?: string;
-	/**
-	 * The station's: whether it updates itself when a newer release of its channel is out (自动更新); none where it
-	 * cannot be updated from here, and from a station older than it.
-	 */
-	auto?: boolean;
-	/** Automatic updates wait for clients and running turns to leave, then five quiet minutes. */
-	idleOnly?: boolean;
-	/** The pages can update it (or install it, when it is not installed). */
-	updatable: boolean;
-	/** An incomplete Codex can be repaired with npm after a person chooses it; the existing command is backed up. */
-	repairable?: boolean;
-	/** Why it cannot be updated from here (the desktop app's station, a runtime installed another way…). */
-	note?: string;
-	/** idle | updating | failed */
-	state: string;
-	/**
-	 * The station's, while it is updating: where the update is, in a line (正在下载新版本…). None from a station
-	 * older than it, or an installer that does not say.
-	 */
-	progress?: string;
-	/**
-	 * A runtime's, while what its install or update downloads comes in: how much of it is, 0–100 (drawn as a bar
-	 * beside `progress`). None when that is not known, and from a station older than it.
-	 */
-	percent?: number;
-	/** The station's, for a while after an update ended well: how it went (已更新到 0.1.1300，agent 没有中断). */
-	done?: string;
-	/** What the last update that failed said. */
-	message?: string;
-	/** When what is out was last read. */
-	checkedAt?: number;
-	/** Its version as shown: not installed, a clone's (开发版), or one not read. */
-	shownText?: string;
-	/** What is said of it on hover: up to date, or that the last check failed ("" nothing). */
-	tipText?: string;
-	/** While it updates, where that is (its `progress`, else 正在更新/正在安装). */
-	updatingText?: string;
-	/** Its last update or install failed, in words. */
-	failedText?: string;
-}
-
-/** What a station's search finds of its machine (`Overview.search`). */
-export interface StationSearch {
-	/** spotlight (macOS: Spotlight finds the machine's files) | walk (its folders walked as a search comes) */
-	files: string;
-	/** The machine's person's own mail, messages, calendars, contacts, notes and photos are found too. */
-	personal: boolean;
-}
-
-/** A station's advanced network settings, read when it starts. */
-export interface StationNetwork {
-	/** The saved congestion controller: cubic (default) or experimental bbr. */
-	congestion: string;
-}
-
-/** How a station goes on with a session whose prompt cache is over (`Overview.context`). */
-export interface StationContext {
-	/**
-	 * A person's message to an agent at rest whose large context's prompt cache is over starts it afresh (its
-	 * context cleared, told to read back what it needs), as 换新上下文 does by hand (`context.setAfresh`).
-	 */
-	afreshWhenCold: boolean;
-	/**
-	 * The estimated USD cost of rereading a cold context at or above which the station starts it afresh.
-	 * Absent on an older station, whose on/off setting applies regardless of cost.
-	 */
-	afreshAbove?: number;
-}
-
-/** What a station sends still.fail to find its problems by (`Overview.diagnostics`). */
-export interface StationDiagnostics {
-	/**
-	 * It sends its log to still.fail, scrubbed (no paths under home directories, emails, keys, quoted text or what
-	 * people wrote), for problems to be found from our side (`diagnostics.setLogs`).
-	 */
-	logs: boolean;
-}
-
-/** One of a station's grants. */
-export interface StationGrant {
-	/**
-	 * capture | control | documents | desktop | downloads | removable | network | localNetwork: what
-	 * `permissions.request` takes (localNetwork's opens System Settings' Local Network list on the Mac).
-	 */
-	id: string;
-	name: string;
-	/**
-	 * What it is for; while its window is up on the Mac, how it is given there; Local Network not had, where it is
-	 * switched on.
-	 */
-	line: string;
-	granted: boolean;
-	/** Its window is up on the Mac now, asking for it. */
-	asking: boolean;
-}
-
-/** What macOS lets a Mac station's still.fail Helper do (docs/remote-screens.md "Grants"), as its page shows it. */
-export interface StationPermissions {
-	/**
-	 * Screen Recording, Accessibility, the folders macOS protects, then Local Network (the station's own), in that
-	 * order.
-	 */
-	grants: StationGrant[];
-	/** What is unavailable now for want of a grant, in a line; none when every one is granted. */
-	note?: string;
-	/**
-	 * The desktop's page in the app, where a person grants from wherever they are (its screen can be seen and
-	 * driven): opened once a grant is asked for. None: they go to the Mac.
-	 */
-	screen?: string;
-	/** The viewer may ask for a grant (`permissions.request`; not a read-only member). */
-	canRequest: boolean;
-}
-
-/** Whether a Windows station runs as the machine's administrator (docs/station-ts-native.md), as its page shows it. */
-export interface StationElevation {
-	/** Where its switch stands: the setting, or what a change under way goes to (`elevation.set`). */
-	on: boolean;
-	/** A change is under way (Windows' prompt up, the station restarting): the switch waits. */
-	busy: boolean;
-	/** What it means, or how the change under way goes. */
-	line: string;
-	/** How the last change failed (nothing changed then), in a line; none when it did not. */
-	failed?: string;
-	/**
-	 * The viewer may switch it now (one of the workspace's owners and admins, its Windows user an administrator,
-	 * no change under way).
-	 */
-	canChange: boolean;
-}
-
-/** A station's Tailcat link of data outflow (`Overview.outflowTailcat`). */
-export interface OutflowTailcat {
-	/** An admin turned it on (`outflow.tailcat`). */
-	on: boolean;
-	/** off | starting (getting tailcat, its key or its address) | running | failed (why in `error`) */
-	state: string;
-	/** Running: the Tailcat address to give the program on the other machine. */
-	address?: string;
-	/** Running: the port to ask at, at that address. */
-	port?: number;
-	/** Failed: why. */
-	error?: string;
-}
-
-/** A station's overview, with what the clients show of its connects and profiles. */
-export interface Overview {
-	automaticDecisions?: AutomaticDecisionView;
-	/** How its chats go to the archive on their own (`archiving.save`). Absent from stations before it. */
-	archiving?: ArchivingView;
-	viewer: Viewer;
-	connects: Connect[];
-	profiles: Profile[];
-	processes: AgentProcess[];
-	counts: Counts;
-	mesh?: MeshStatus;
-	slackUsers: string[];
-	slackTeams: SlackTeam[];
-	slackApps?: MadeSlackApp[];
-	/**
-	 * The Feishu bots the viewer is making by scanning (docs/feishu.md). Absent from a station without the Feishu
-	 * connect, which is then not offered.
-	 */
-	feishuRegistrations?: FeishuRegistration[];
-	disk?: DiskRoom;
-	logins: PendingLogin[];
-	/** This machine's own logins (none from a station older than them). */
-	machineLogins?: MachineLogin[];
-	/** It can share profiles and skills with the workspace's other stations (docs/station-share.md). */
-	sharing?: boolean;
-	/**
-	 * An OpenCode Go profile can be signed in to the OpenCode Console rather than given a key (false from a station
-	 * older than it: not offered).
-	 */
-	consoleSignIn?: boolean;
-	/**
-	 * The providers a key can be added for (none from a station older than them: they are then not offered), as the
-	 * station lists them.
-	 */
-	apiProviders?: ApiProvider[];
-	/** The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them). */
-	updates?: SoftwareVersion[];
-	/** Its agents' processes, in a line. */
-	processesText: string;
-	/** How much of the disk it takes (none from a station older than the footprint page, which then is not offered). */
-	footprint?: FootprintBrief;
-	/**
-	 * The variables everything it starts for its agents runs with (docs/agent-env.md), by name, a secret's value
-	 * masked (none from a station older than them, which then does not offer them).
-	 */
-	agentEnv?: EnvVar[];
-	/**
-	 * Its files: the folders pinned, and whether the viewer browses every folder (none from a station older
-	 * than the drive, which then is not offered).
-	 */
-	drive?: DriveRoots;
-	/** What its search finds of the machine (docs/search.md). None from a station older than it. */
-	search?: StationSearch;
-	/** Advanced network settings, applied on station restart. Absent on older stations. */
-	network?: StationNetwork;
-	/**
-	 * How it goes on with a session whose prompt cache is over. None from a station older than it, which then
-	 * does not offer it.
-	 */
-	context?: StationContext;
-	/** Whether it sends its log to still.fail. None from a station older than it, which then does not offer it. */
-	diagnostics?: StationDiagnostics;
-	/**
-	 * What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then
-	 * shows nothing).
-	 */
-	permissions?: StationPermissions;
-	/**
-	 * Whether it runs as the machine's administrator (a Windows station only; none from one older than it, which
-	 * then shows nothing).
-	 */
-	elevation?: StationElevation;
-	/**
-	 * How many programs of its machine hold or ask for a grant of its data (docs/data-outflow.md): its page reads
-	 * them (`outflowGrants`) only when there are some. None from a station older than them.
-	 */
-	outflowGrants?: number;
-	/**
-	 * The viewer answers those asking (an owner or admin of its home workspace); none from a station older than
-	 * that.
-	 */
-	outflowAnswers?: boolean;
-	/**
-	 * Its Tailcat link, which lets programs of other machines ask for its data (docs/data-outflow.md): for an
-	 * admin of its home workspace only. None for others, or from a station older than it.
-	 */
-	outflowTailcat?: OutflowTailcat;
-}
-
-export interface StationProfileGroup {
-	/** The account kind used by the workspace's profile list. */
-	group: string;
-	/** The account kind in the viewer's language. */
-	title: string;
-	/** The station's profile ids in this kind, those needing a look first. */
-	profiles: string[];
-	/** How many of these profiles need a look. */
-	attention: number;
-}
-
-/** How a profile of the workspace's list is, in a few words and their tone. */
-export interface ProfileState {
-	/** willow 离线; 需要登录; 额度查询失败; 未检查. */
-	text: string;
-	/** red or amber: it needs a look; neutral: it does not (a check not made yet). */
-	tone: Tone;
-}
-
-/** How a connection to a station goes: straight there, through a relay, or still being chosen. */
-export type NetVia = "direct" | "relay" | "choosing";
-
-/** How this device reaches a station, without its figures: what changes seldom, for the places that name it. */
-export interface StationWay {
-	/** 直连, 北京中继 (the relay's name, or 中继 host), or 正在选路. */
-	path: string;
-	/** The same as a word to tell apart (a chat's bar marks it with a dot). */
-	via?: NetVia;
-}
-
-export interface StationView {
-	station: string;
-	id: string;
-	name: string;
-	/** The one its workspace gave it (the settings), shown where it is named; none when none. */
-	emoji?: string;
-	/**
-	 * The icon its workspace gave it, shown before the emoji: glyph:<name> (one of still.fail's, design/station-icons, or glyph:<name>:<colour>
-	 * in a colour; a client that does not know it shows the emoji) or a picture put up, as a data URL; none when none.
-	 */
-	icon?: string;
-	/** Its line in a list: offline since when, or what it is and whether its agents work. */
-	summary: string;
-	/** Its buddy's face: offline | working | idle; and what it is under its name (its processor, else 在线/离线). */
-	face?: string;
-	line?: string;
-	online: boolean;
-	/** Up, but not reached just now (connecting or coming back): its figures are from before. */
-	reconnecting?: boolean;
-	/**
-	 * Down for a security mode (it refused this device, or takes none of this workspace's members yet): why, in
-	 * words, in place of the page's 离线 note. Absent otherwise.
-	 */
-	blocked?: string;
-	/**
-	 * How it is in a few words, as its page's head and its card say it: down for a security mode, its line;
-	 * away, when it was last online (or never); up, connecting until its overview is read, then its agents at work or idle.
-	 */
-	stateText: string;
-	/** Its agents are at work (`stateText` says how many): said in the accent. */
-	stateBusy?: boolean;
-	/**
-	 * What may be wrong with it, worst first: silent though up (no host reading for 15 s), down for a
-	 * security mode (why), away (red once it has been online, else amber: never connected). None while all is well.
-	 */
-	problems: StationProblem[];
-	/** Seconds, from still.fail cloud. */
-	lastSeen?: number;
-	version?: string;
-	link: Link;
-	runtimes: RuntimeModels[];
-	models: ModelOption[];
-	overview?: Overview;
-	/** Its profiles by account kind, those needing a look first. */
-	profileGroups?: StationProfileGroup[];
-	/** Each of its profile rows' state, keyed by profile id, using the profiles list's rule. */
-	profileStates?: Record<string, ProfileState>;
-	/**
-	 * Its versions offer the 测试版 switch: it can be put on a channel (its station's version says one), and the
-	 * account that reaches it is in the beta or it is on the test channel already (to be switched back).
-	 */
-	betaOffered?: boolean;
-	host?: Host;
-	/**
-	 * How this device reaches it; none for a station reached without a connection of its own (the page's own)
-	 * or before one is open. Its figures are the `stationNet` view's.
-	 */
-	way?: StationWay;
-	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
-	time?: Record<string, Stamp>;
-	/**
-	 * Its home is another workspace (docs/multi-workspace.md): this one it joined, and only the owners and
-	 * admins of that one manage the machine.
-	 */
-	joined?: boolean;
-	/** With `joined`: its home workspace's name, when the viewer is in that one too. */
-	home?: string;
-}
-
-/**
- * A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs
- * there, as last picked on this device (`newChat.pick`); what the station no longer has gives way to the first it has.
- */
-export interface NewChatView {
-	/**
-	 * The station last started on (or picked) in the scope, its id: the page holds its place with it until the
-	 * stations are known.
-	 */
-	kept: string;
-	/**
-	 * The key its next chat is to be made under (`newChat.create` `key`): the page becomes that chat as its first
-	 * words are sent, not once the core has made it.
-	 */
-	next: string;
-	/** The scope's stations up now; none until its workspace has been read (`error`: why it could not be). */
-	stations?: StationView[];
-	error?: string;
-	/** Whether the scope has any station, up or not. */
-	any: boolean;
-	/**
-	 * The one it starts on: the one kept, else the first up; none when none is up but the one kept, which stays
-	 * while it is down (`down`).
-	 */
-	station?: StationView;
-	/**
-	 * `station` is the one kept, down now: the page stays as it was, said to be waiting for it; what is sent goes
-	 * once it is reached again.
-	 */
-	down?: boolean;
-	model?: ModelOption;
-	runtime?: RuntimeKind;
-	effort?: string;
-	fast?: boolean;
-	/** The account kept to, while it still runs the model there; none: the station's pick. */
-	profile?: string;
-	/** How hard it can think there, and who can run it (offered when more than one can: `pickAccount`). */
-	efforts: string[];
-	accounts: RunnableProfile[];
-	pickAccount: boolean;
-	/** Its profiles are being read. */
-	waiting: boolean;
-	/**
-	 * What keeps a chat from starting: `profile` (none added), `shared` (a station this workspace joined, none of
-	 * whose profiles its home's managers opened to it: asked of them, not added here; `problem` says so) or `models` (none enabled).
-	 */
-	blocked?: string;
-	/** In a line under the page's words: the profiles being read, or no model enabled. */
-	problem?: string;
-	/** Every account of the model has used up its allowance: what is sent waits for it. */
-	spent?: string;
-	/** Its model control (the `pick` topic of `new` on the station), with the page. */
-	pick?: PickView;
-	/** Up to four combinations used on this device in this workspace, filtered to this station. */
-	frequent?: FrequentCombo[];
-	/**
-	 * The preset its chat is opened with on the station (one of the `presets` topic's ids), as last picked
-	 * there on this device (`newChat.pick` `preset`); "" for none.
-	 */
-	preset?: string;
-	/** The station the preset picked is of (its address): any of the workspace's, not only the one it runs on. */
-	presetStation?: string;
-	/** Its name, as the station's presets say it ("" until they are read). */
-	presetName?: string;
-	/** The workspace's presets, every station's up now, to pick from (a station's none until they are read). */
-	presets?: NewChatPreset[];
-	/** The picked preset's first folders' marks, its control's look. */
-	presetMarks?: PresetMark[];
-}
-
-/**
- * A chat that wants its person: its agent is blocked on them (`block`), failed (`failed`), finished with something
- * new to read (`done`), or someone else said something (`message`). `tag` names the chat (one notification each),
- * `url` opens it.
- */
-export interface Notice {
-	id: string;
-	kind: string;
-	station: string;
-	workspace: string;
-	stationId: string;
-	session: string;
-	thread?: number;
-	/** The message it is about (its card for `wait`), which a notification opens the chat at. */
-	seq?: number;
-	title: string;
-	body: string;
-	tag: string;
-	url: string;
-	at: number;
-}
-
-/** What a person hears about while the client runs (the `notices` topic; docs/notifications.md), oldest first. */
-export interface NoticesView {
-	items: Notice[];
-}
-
-/** Which notices this device shows (`notify.set` `kinds`); what is not given is on (`done`: away). */
-export interface NotifyKinds {
-	/** A card waits for them, or an agent needs them (wait, block). */
-	wait?: boolean;
-	failed?: boolean;
-	/** off | away (only while no page of the app is in front) | always */
-	done?: string;
-	/** Someone else said something. */
-	message?: boolean;
-}
-
-/** A workspace on the notifications page (`notify` `workspaces`). */
-export interface NotifyWorkspace {
-	id: string;
-	name: string;
-	emoji?: string;
-	icon?: string;
-	/** Heard of on this device (not in `muted`). */
-	on: boolean;
-}
-
-/**
- * Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the
- * system was asked to allow them, whether the device should hold a push registration, and the notices a page is to
- * show now, each taken by one page (`notice.claim`).
- */
-export interface NotifyView {
-	on: boolean;
-	asked: boolean;
-	push: boolean;
-	kinds?: NotifyKinds;
-	/** Notices say what was said (on by default); off, only what kind of thing happened. */
-	preview?: boolean;
-	/**
-	 * The workspaces not heard of on this device (`notify.set {workspaces}`): no notice of theirs
-	 * shown or pushed, nothing of theirs on the app's badge. Each one is heard of unless turned off.
-	 */
-	muted?: string[];
-	/** The workspaces the accounts are in, in the order their `/v1/me` list them, each heard of or not. */
-	workspaces?: NotifyWorkspace[];
-	/**
-	 * Whether the system lets this device show them, as its app found (`notify.permission`): granted | denied |
-	 * default (not asked yet) | unknown (none said, or no way to tell).
-	 */
-	permission?: string;
-	show: Notice[];
-}
-
-/** A chat to go back to: its station's address and the key its page goes by. */
-export interface OpenChat {
-	station: string;
-	key: string;
-}
-
-/**
- * What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide
- * screen the archived chats (已归档) in place of the chats.
- */
-export type ListFilter = "all" | "mine" | "watching" | "archive";
-
-/** How the pages look: as the system does (the default), or always light, or always dark. */
-export type Appearance = "system" | "light" | "dark";
-
-/**
- * Whose pictures lead a chat's row: by how many people the scope has (the default), or always the agents', or the
- * people's.
- */
-export type RowPictureSetting = "auto" | "agents" | "people";
-
-export type ReaderFace = "serif" | "sans";
-
-/** The reader's paper: as the app looks (`follow`), or one of its own. */
-export type ReaderPaper = "follow" | "white" | "green" | "grey" | "night";
-
-/** How the drive's reader lays text out on this device (`prefs.set {reader: {…}}`, one setting or several). */
-export interface ReaderPrefs {
-	/** The text's size (sp/px), 12 to 32. */
-	size: number;
-	/** Line height as a multiple of the size, 1.2 to 2.4. */
-	line: number;
-	/** Room either side (dp/px), 8 to 44. */
-	margin: number;
-	face: ReaderFace;
-	/** Paragraphs start indented two characters. */
-	indent: boolean;
-	paper: ReaderPaper;
-}
-
-/**
- * A place the wide screen's rail can show: a list of chats (对话, 我参与的, 监控中, 已归档), 待处理's panel, or a page
- * (文件, Station, Profile, 连接, 用量).
- */
-export type RailPlaceId = "chats" | "mine" | "watching" | "archive" | "attention" | "files" | "stations" | "profiles" | "connects" | "usage";
-
-/** What kind of place: a page of its own, one of the chats' lists, 待处理. */
-export type RailKind = "places" | "lists" | "attention";
-
-/** A place the rail can show. */
-export interface RailPlace {
-	id: RailPlaceId;
-	/** Its name, as the rail's tip and its settings say it. */
-	label: string;
-	kind: RailKind;
-	/** The list of chats it shows in the sidebar (`listFilter`'s word); none for a place that is not one. */
-	list?: ListFilter;
-}
-
-/** The places of one kind, as the panel that adds them to the rail groups them. */
-export interface RailGroup {
-	kind: RailKind;
-	label: string;
-	/** Its places, in the settings' order. */
-	places: RailPlaceId[];
-}
-
-/** One workspace's rail. */
-export interface RailOf {
-	/** What the rail shows, in its order: as kept, those this build does not know left out; none kept, `default`. */
-	items: RailPlaceId[];
-	/** The places left out of it, in the settings' order. */
-	hidden: RailPlaceId[];
-	/** It is other than `default` (恢复默认 offered). */
-	changed: boolean;
-}
-
-/** The wide screen's rail (prefs `railView`, rail.ts railView): which places, in what order, their words and kinds. */
-export interface RailView {
-	/** Every place it can show, in the order its settings list them. */
-	places: RailPlace[];
-	/** What can be put in it, by kind, in the panel's order. */
-	groups: RailGroup[];
-	/** What it shows when none was chosen. */
-	default: RailPlaceId[];
-	/** The rail of a workspace with none of its own (`rail`). */
-	all: RailOf;
-	/** Each workspace's own (`rails`), by workspace; one not there goes by `all`. */
-	by: Record<string, RailOf>;
-}
-
-/** What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is. */
-export interface PrefsView {
-	/** The lists show only the chats and connects the viewer takes part in. */
-	onlyMine?: boolean;
-	/** The chat list shows only the watching chats (监控中); never with `only_mine`. */
-	onlyWatching?: boolean;
-	/**
-	 * The list filter chosen in each workspace, by workspace; one not there goes by `only_mine` and `only_watching`
-	 * (one filter for all, as devices kept it before).
-	 */
-	listFilter?: Record<string, ListFilter>;
-	appearance?: Appearance;
-	/** The window's content size on this device, as a percentage; none means 100%. */
-	windowZoom?: string;
-	/**
-	 * Motion on this device's pages: `reduce` (what moves only fades or is there at once), `full`, or none to
-	 * follow the system's setting.
-	 */
-	motion?: string;
-	/**
-	 * Haptics on this device: `off`, or none for on (a long press taken, a card answered, what is copied, a
-	 * chat open in front coming to need the viewer).
-	 */
-	haptics?: string;
-	/**
-	 * This app keeping itself current on this device: `off` (a newer build is said, and downloaded and put in
-	 * place only at the person's word), or none for on (downloaded by itself, put in place while the app is not in use).
-	 */
-	appUpdate?: string;
-	rowPicture?: RowPictureSetting;
-	/** Times are shown as dates rather than "3 分钟前". */
-	absoluteTime?: boolean;
-	/** The language chosen: `zh`, `en`, or none to follow the device's (its `locale`). */
-	language?: string;
-	/**
-	 * The language things are said in, as chosen or else as the device is: `zh` or `en` (the core's; none from a core
-	 * before languages, when the clients go by the device themselves).
-	 */
-	lang?: string;
-	/** Keys changed for an action (the desktop app's), by action. */
-	keys?: Record<string, string[]>;
-	/** The workspace last open, as the apps keep it: the one they open at start (the first one when it is gone). */
-	workspace?: string;
-	/** The chat page last open, by scope (a workspace; `local` in what a station's own page kept, before it went). */
-	lastChat?: Record<string, string>;
-	/**
-	 * The chat last open, by workspace, as the core keeps it from `client.focus` (a settings page leaves it as it
-	 * was; a new chat shown, none): what the workspace's page goes back to.
-	 */
-	openChat?: Record<string, OpenChat>;
-	/** Each chat's history tabs, by `<station>:<chat>` (the latest 200). */
-	chatTabs?: Record<string, KeptTabs>;
-	/**
-	 * Chats whose files dragged in go otherwise than `dropAs` says, by `<station>:<chat>`: true as files, false
-	 * named by their path (folders are named all the same).
-	 */
-	dropFiles?: Record<string, boolean>;
-	/**
-	 * How a station's files are listed on this device: each place's view (`page`: the files' page, `tab`: a
-	 * chat's 文件 tab; tree, columns or list, none: list for the page and columns for the tab), their order (`sort`: name, time, size or kind, `-down`
-	 * after it for the other way; none: name), whether hidden files show (`hidden`: shown) and how wide columns are
-	 * (`column`: in pixels; none: 240).
-	 */
-	driveViews?: Record<string, string>;
-	/**
-	 * The files' page's tabs on this device, by workspace: what each shows (one folder, or two side by side), which
-	 * is in front, kept as `files.tabs` writes it (JSON; the `filesTabs` topic reads it).
-	 */
-	filesTabs?: Record<string, string>;
-	/**
-	 * Folders this person keeps at hand on the files' page, by workspace, on this device: each a station's folder
-	 * (JSON: [{station, path, name}]), whoever else browses there.
-	 */
-	driveFavorites?: Record<string, string>;
-	/**
-	 * Formerly pinned folders the person removed from their shortcuts on this device, by workspace (JSON places).
-	 * This leaves the station's existing pinned folders and access rules unchanged.
-	 */
-	driveFavoritesHidden?: Record<string, string>;
-	/**
-	 * The look the card shared of the agents at work is drawn in, as last chosen under it on this device: the app's
-	 * key for it (`night`, `poster`, …; none or one the app does not know: its first).
-	 */
-	shareLook?: string;
-	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
-	dropAs?: string;
-	/**
-	 * When a done chat is offered to archive (drawn faded): `off`, never;
-	 * `reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it
-	 * (where its station's review is on, once it recommended it). Archiving with one tap is there whatever this says.
-	 */
-	archiveHint?: string;
-	/**
-	 * How a finger drives a station's screen on a phone: `direct` (a tap clicks where it is), or (none) as a
-	 * trackpad (the finger moves the pointer, a tap clicks where it points).
-	 */
-	screenTouch?: string;
-	/**
-	 * How large a picture of a station's screen this device asks for: `smooth` (at most 1280×720), `hd` (at
-	 * most 1920×1080), `original` (the screen's own size), or (none) as the window is (at most 1920×1080, 2560×1440 on
-	 * a screen that has more).
-	 */
-	screenQuality?: string;
-	/**
-	 * The most frames a second a station's screen is asked to send this device: 120, 90, 60, 30 or 15, or
-	 * (none) as many as the station and the link give.
-	 */
-	screenFps?: number;
-	/**
-	 * The codec a station's screen is asked in on this device: `h264` (H.264 only), or (none) the best both ends
-	 * have (H.265 where they do).
-	 */
-	screenCodec?: string;
-	/**
-	 * Whether the mouse's left and right buttons show over a station's screen driven by touch (the keys row's,
-	 * and the floating pair in 全屏 and sideways): `off` hidden, or (none) shown.
-	 */
-	screenMouse?: string;
-	/**
-	 * The size a service's page is shown at on this device (its preview's 尺寸), by its station and job
-	 * (`<station>\n<job>`): its width, or `<width>x<height>`; none: as big as the preview.
-	 */
-	previewSizes?: Record<string, string>;
-	/**
-	 * Each sidebar of the wide frame as it was left on this device, by its group
-	 * (`<chats|settings|files|profiles|stations|tabs>`): its width, the person's in every workspace, by `\n<group>`; folded, each
-	 * workspace's own, `closed` by `<workspace>\n<group>` (a width kept there before, `<width>` or `<width>,closed`, is read where
-	 * none is kept by the group alone).
-	 */
-	sidebars?: Record<string, string>;
-	/**
-	 * What this device did with a workspace's stations' trouble in the rail's bell, by `<workspace>\n<seen|gone>`:
-	 * the trouble's words as they were when it was looked at (no longer lighting the bell) or let go (no longer listed).
-	 */
-	trouble?: Record<string, string>;
-	/**
-	 * The jobs left up long the rail's bell has shown, by workspace: each `<station>/<id>`, as the
-	 * `longJobs` view's `ids` were when it opened. They no longer light it.
-	 */
-	jobsSeen?: Record<string, string[]>;
-	/**
-	 * The failures let go in 待处理, by workspace: each as its item's `failure` said it. `prefs.set
-	 * {failsGone: {<workspace>: [failure]}}` adds to those kept. Gone from 待处理 and the workspace's mark until it fails again.
-	 */
-	failsGone?: Record<string, string[]>;
-	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
-	resume?: Record<string, string>;
-	/** Versions dismissed on this device, by workspace/station. */
-	stationUpdatesDismissed?: Record<string, string>;
-	/**
-	 * What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of
-	 * theirs that went wrong; none: this), all (those and the unread). `badgeKinds`, when kept, says it instead.
-	 */
-	badge?: string;
-	/** What the app's badge counts, kind by kind (the notifications page); none: as `badge` says. */
-	badgeKinds?: BadgeKinds;
-	/** The invite code a page was opened with, kept through signing in until a workspace is made with it. */
-	invite?: string;
-	/**
-	 * Files opened and let go before all of them came are not brought whole after everything else on this
-	 * device (fill.ts); none: they are.
-	 */
-	fillOff?: boolean;
-	/** The most a file opened and let go is brought whole by itself on this device, in bytes: 0 any; none: 1 GB. */
-	fillMax?: number;
-	device?: DeviceView;
-	/** The product's name on this app's channel: still.fail or youdid.wtf (monoid or monoid.zone on monoid's cloud). */
-	productName?: string;
-	/**
-	 * The product the core's cloud is, whatever the channel: still.fail, or monoid (client/i18n/brand.ts): the name
-	 * the app's words say for still.fail's.
-	 */
-	product?: string;
-	/** How the drive's reader lays text out (always whole: the core fills in what is not kept). */
-	reader?: ReaderPrefs;
-	/**
-	 * What the wide screen's rail shows, in its order (rail.ts RAIL_PLACES: chats, mine, watching, archive,
-	 * attention, files, stations, profiles, connects, usage); none: its default ones. `railView` says it as drawn.
-	 */
-	rail?: string[];
-	/**
-	 * The rail as each workspace has it, by workspace (as `rail`); one not there goes by `rail` (one rail for all,
-	 * as devices kept it before).
-	 */
-	rails?: Record<string, string[]>;
-	/** A phone's bottom bars (always whole: the core fills in what is not kept). */
-	bars?: BarPrefs;
-	/**
-	 * A phone's bottom bars as each workspace has them, by workspace (each whole, as `bars`); one not there goes
-	 * by `bars` (one set for all, as devices kept it before).
-	 */
-	barsBy?: Record<string, BarPrefs>;
-	/** The face chosen for each place on this device (`prefs.set {fonts: {…}}`, one place or several; null: the app's own). */
-	fonts?: FontChoices;
-	/** The faces each place is set in and those there are to choose (the core's, from `fonts`; none from a core before them). */
-	faces?: FontsView;
-	/** The keyboard shortcuts here (the core's, from `keys` and `device`; none from a core before it). */
-	keymap?: KeymapView;
-	/** The wide screen's rail as clients draw it (the core's, from `rail` and `rails`; none from a core before it). */
-	railView?: RailView;
-}
-
-export interface PresetDir {
-	path: string;
-	/** The repository a clone there is of: github.com/acme/app. */
-	repo?: string;
-	/** Another station of the workspace's it is on (its address); none: the preset's own station's. */
-	station?: string;
-	stationName?: string;
-}
-
-/** What a chat starts knowing, chosen as it is opened: the directories it works with, what people want there. */
-export interface Preset {
-	id: string;
-	name: string;
-	dirs: PresetDir[];
-	/** What people want of its chats, as they wrote it. */
-	instructions: string;
-	createdBy: string;
-	createdAt: number;
-	updatedAt: number;
-}
-
-/** A directory offered for a new preset: a clone of the station's repository cache, or one a preset names. */
-export interface PresetCandidate {
-	path: string;
-	name: string;
-	repo?: string;
-	/** How many of the station's chats made worktrees of it. */
-	chats: number;
-	lastAt: number;
-	/** Where it is as people read it: ~/code/app; a repository only the station's cache has, its address. */
-	where?: string;
-	/** Only the station's cache has it (no checkout of the person's on the machine). */
-	cached?: boolean;
-	/** Its own picture (its favicon, its logo), a data URL. */
-	icon?: string;
-}
-
-/** Providers of one group, as the picker lists them. */
-export interface ProviderGroup {
-	id: string;
-	title: string;
-	providers: ApiProvider[];
-}
-
-/**
- * The add-profile pages, as the core keeps them for one device: the picker, how to connect what was picked (a plan or
- * a key), and the form with what it will be usable for. The views draw it and name what changed (`profile.flow.edit`).
- */
-export interface ProfileFlowView {
-	/** pick | method | connect */
-	step: string;
-	station: string;
-	title: string;
-	hint: string;
-	groups: ProviderGroup[];
-	tile?: ApiProvider;
-	/** plan | key, once chosen. */
-	method?: string;
-	/** At the method step: the two cards. */
-	choices: FlowChoice[];
-	showEndpoint: boolean;
-	endpoint: string;
-	/** An example of the address, for the protocol chosen. */
-	endpointExample?: string;
-	endpointHint?: string;
-	/** Asked only when there are more than one. */
-	protocols: FlowOption[];
-	protocol?: string;
-	/** Asked only for a provider that runs in more than one region (international and China). */
-	regions?: FlowOption[];
-	region?: string;
-	showKey: boolean;
-	key: string;
-	keyLabel: string;
-	keyHint?: string;
-	/** Shown under the key. */
-	error?: string;
-	canSubmit: boolean;
-	pending: boolean;
-	submitLabel: string;
-	/** What the profile will be usable for, in words (the line under the page). */
-	usesLine: string;
-	/** At a plan's connect step: the sign-in to start. Absent while its runtime is to be installed (`install`). */
-	signIn?: FlowSignIn;
-	/**
-	 * At a plan's connect step on a station without the runtime it signs in with: installing it there; the sign-in
-	 * starts once it is installed. Absent otherwise.
-	 */
-	install?: RuntimeInstall;
-}
-
-/** One station's copy of an account in the workspace's list. */
-export interface ProfileMember {
-	station: string;
-	stationId: string;
-	stationName: string;
-	/** What its row is called: its station's name, and its profile's (willow · 工作) where that station has two copies. */
-	title: string;
-	online: boolean;
-	/** Its id on that station (its page there). */
-	profileId: string;
-	/** Its profile's name on that station. */
-	profileName: string;
-	/** host: has it and lends it; user: borrows it (or a copy of a key); own: signed in there on its own. */
-	role: string;
-	/** What it is there, in words: 借给 birch / 向 willow 借 / 自己登录. */
-	about: string;
-	usable: boolean;
-	checkText: string;
-	checkTone: string;
-	/** How many connects use it there. */
-	usedBy: number;
-}
-
-/** One station where an account is available, even when several profiles there have it. */
-export interface ProfilePlace {
-	station: string;
-	stationId: string;
-	stationName: string;
-	/** The profile to open on this station; empty until its profile is known. */
-	profileId: string;
-	online: boolean;
-	usable: boolean;
-	/** For a borrowed subscription, the station it came from; otherwise empty. */
-	sourceName: string;
-	/** The chosen profile's status when it needs a look or has not been checked. */
-	state?: ProfileState;
-}
-
-export interface ShareStation {
-	id: string;
-	station: string;
-	name: string;
-	online: boolean;
-	allowed: boolean;
-}
-
-/** An account in the workspace's list: the same subscription or key on several stations (shared or each signed in) is one. */
-export interface WorkspaceProfile {
-	/** The share's id, or station/profile for one on a station only. */
-	key: string;
-	/** The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), kimi (Kimi Code signed in), opencode (OpenCode Go signed in), cursor (Cursor), devin (Devin), key (the rest). */
-	group: string;
-	/** That kind in words: Claude 订阅. */
-	groupTitle: string;
-	/** The station whose copy this is (its page is there). */
-	station: string;
-	stationId: string;
-	stationName: string;
-	profile: Profile;
-	/** What its row is called: a subscription by the account signed in (its email), a key by its profile's name. */
-	title: string;
-	shared: boolean;
-	/** The station that has it (its id). */
-	host: string;
-	hostName: string;
-	hostOnline: boolean;
-	/** False for a shared subscription while the station signed in to it is away. */
-	usable: boolean;
-	/** How it is where that is not simply fine, as its row says it; absent: fine. */
-	state?: ProfileState;
-	/**
-	 * It needs a look: nobody can use it now, or it has trouble (its profile's `trouble`). Counted where the list is
-	 * entered (`attention`), first in its kind, its state in colour.
-	 */
-	look: boolean;
-	/** Where it can be used, in words: every station that has it, signed in or borrowing: willow、birch 可用. */
-	where: string;
-	/** The stations that may use a shared one; absent: every one. */
-	allow?: string[];
-	/** For a shared one: the workspace's stations and whether each may use it. */
-	stations: ShareStation[];
-	/** Its page is on the station that has it (its sharing can be changed there). */
-	editable: boolean;
-	/** Its station can share it (one older than sharing cannot). */
-	canShare: boolean;
-	/** Each profile on each station that has this account. */
-	members?: ProfileMember[];
-	/** Each station allowed this account once, choosing a working profile where it has several; pending copies remain visible. */
-	places?: ProfilePlace[];
-}
-
-/**
- * The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with
- * the station they are on; by kind of account (`group`, in its order), those that need a look first in each.
- */
-export interface ProfilesView {
-	items: WorkspaceProfile[];
-	/** How many of them need a look (`look`): what the settings' row says. */
-	attention: number;
-	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
-	wait: ListNote;
-}
-
 /** An attachment a snapshot may take. */
 export interface PublishFile {
 	/** Its number in the snapshot (`f0`, `f1`…). */
@@ -6410,7 +2183,7 @@ export interface PublishMessage {
 
 /** What a picture of a chat holds now (`chat.publishPreview`), made of what the device holds of it: nothing is asked of its station or kept. */
 export interface PublishPreview {
-	/** The last message it holds: `chat.publish` takes it, so what is kept is what was seen. */
+	/** The last message it holds. */
 	upto: number;
 	title: string;
 	/**
@@ -6419,1255 +2192,15 @@ export interface PublishPreview {
 	 */
 	list: ChatMessage[];
 	/**
-	 * Each as a snapshot would hold it, and how many things in it were hidden (by its `n`, a `list` message's
+	 * Each as a picture holds it, and how many things in it were hidden (by its `n`, a `list` message's
 	 * `seq`).
 	 */
 	messages: PublishMessage[];
-	/**
-	 * Its messages' attachments, to tick (`chat.publish` takes those ticked by `k`; a `list` message's by its `n`
-	 * and `file.path`).
-	 */
+	/** Its messages' attachments, to tick (a `list` message's by its `n` and `file.path`). */
 	files: PublishFile[];
 	/** How many things in all were hidden as looking secret. */
 	hidden: number;
 	/** That in words (隐藏了 3 处); absent when none. */
 	hiddenText?: string;
-}
-
-export interface RailStat {
-	value: string;
-	label: string;
-	/** red (gone wrong, used up) | amber (wants a look); absent: as it should be. */
-	tone?: string;
-}
-
-export interface RailRow {
-	name: string;
-	/** At its end: what a model cost. */
-	value: string;
-}
-
-export interface RailDay {
-	label: string;
-	/** Of the most on a day, 0 to 1. */
-	share: number;
-	today: boolean;
-}
-
-/**
- * The card over a rail's place as the pointer rests on it (the `railCard` view, views/rail-cards.ts): 对话 (chats), 用量
- * (usage).
- */
-export interface RailCard {
-	/** How the place stands, in a line: 9 个 agent 正在运行, 近 7 天折合 $1,911. */
-	head: string;
-	/** A few figures, each its value over what it is of. */
-	stats: RailStat[];
-	/** What it is made of, a line each (the models that cost most). */
-	rows: RailRow[];
-	/** The last 7 days as bars (用量's: each day's cost); absent elsewhere. */
-	days?: RailDay[];
-	/** 用量's: 分享卡片 is offered (something was spent). Absent otherwise. */
-	share?: boolean;
-}
-
-/** Where a chat in the usage lists opens: its station, and its thread, or its agent's session. */
-export interface UsageChat {
-	station: string;
-	thread?: number;
-	session?: string;
-}
-
-/** What a process, or a whose's processes together, use now, and each said. */
-export interface ResourceUse {
-	/** 100 a whole core. */
-	cpu: number;
-	/** Its footprint, in bytes. */
-	memory: number;
-	/** Bytes taken in over the network, a second. */
-	netIn: number;
-	/** Bytes sent out, a second. */
-	netOut: number;
-	/** In and out together. */
-	net: number;
-	/** Bytes read from disk, a second. */
-	diskRead: number;
-	/** Bytes written, a second. */
-	diskWrite: number;
-	/** Read and written together. */
-	disk: number;
-	cpuText: string;
-	memoryText: string;
-	netText: string;
-	diskText: string;
-}
-
-export interface ResourceProcess {
-	key: string;
-	pid: number;
-	name: string;
-	/** A chat's, not its agent's own: the page may end it (`process.end`). */
-	endable: boolean;
-	use: ResourceUse;
-}
-
-/** Whose uses what: a chat, the agents (no one chat's), the desktop app, the station. */
-export interface ResourceGroup {
-	key: string;
-	/** Its ResourceKind's key. */
-	kind: string;
-	title: string;
-	/**
-	 * What it is where its title does not say it (对话), after its station's name when there are
-	 * several; empty for the app and the station of a lone station.
-	 */
-	kindText: string;
-	/** A chat's page. */
-	chat?: UsageChat;
-	/** Its station's address. */
-	station: string;
-	/** A chat's session: what ending one of its processes names (`process.end`). */
-	session?: string;
-	use: ResourceUse;
-	/** The most CPU first. */
-	processes: ResourceProcess[];
-}
-
-/** A kind of whose to filter by: chats (the agents' with them), the app, the station. */
-export interface ResourceKind {
-	key: string;
-	label: string;
-}
-
-/** What still.fail uses of one station's machine now. */
-export interface ResourceStation {
-	station: string;
-	/** Whether it reads the network. */
-	net: boolean;
-	use: ResourceUse;
-}
-
-/** A total now (CPU, memory, power, wakeups), said, and how it went. */
-export interface ResourceTile {
-	key: string;
-	label: string;
-	value: string;
-	sub: string;
-	/** The last minutes' values, the oldest first, for a line. */
-	points: number[];
-}
-
-/**
- * What of the machines of a workspace's stations still.fail uses now, as Activity Monitor says it (the `resources` view,
- * client/core-ts/src/views/resources.ts): CPU, memory and network in total, with the last minutes' line, and by
- * whose (a chat, the agents, the desktop app, the station), each with its processes.
- */
-export interface ResourcesView {
-	/** What it still waits on (looks.ts waitNote): the stations not read yet, those that could not be. */
-	wait: ListNote;
-	/** No station reads what its processes use (none answered yet, none on macOS, all from before). */
-	empty: boolean;
-	/** Some station reads their network traffic: the page has its column. */
-	net: boolean;
-	/** Some station reads what they read from and write to disk: the page has its column. */
-	disk: boolean;
-	/** How often it is read again while shown, for the page to say. */
-	everyMs: number;
-	tiles: ResourceTile[];
-	/** What the page filters the groups by, in its order. */
-	kinds: ResourceKind[];
-	/** Whose uses what, the most CPU first. */
-	groups: ResourceGroup[];
-	/** Each station's total, for its card (the stations' settings page); the stations not read left out. */
-	stations: ResourceStation[];
-	notes: string[];
-	basis: string;
-}
-
-/**
- * What a screen's station lacks for it (docs/remote-screens.md `access`): macOS's Screen Recording and Accessibility
- * grants, or a machine it is not supported on.
- */
-export interface ScreenAccess {
-	/** It can be seen. */
-	capture: boolean;
-	/** It can be driven. */
-	control: boolean;
-	/** What to turn on where, in the viewer's words (the station's). */
-	message?: string;
-	app?: string;
-	path?: string;
-}
-
-/** A link to one of a station's screens as a message shows it (the `screenCard` topic; client/core-ts/src/screens.ts). */
-export interface ScreenCard {
-	/** `desktop` or `browser`, as the screen is (or, not in its station's list, as its id says). */
-	kind: string;
-	/** Its title in its station's list; else what kind of screen it is. */
-	title: string;
-	/** Under the title: what the list's row says of it (core); else that it is gone, or that it is a remote screen. */
-	line: string;
-	/** Its page in the app (`ScreenItem.link`). */
-	link: string;
-	/** Its station is reached and no longer has it. */
-	gone: boolean;
-	/** It can be previewed: the card shows it live (`screen.view` with `peek`, docs/remote-screens.md). */
-	peek: boolean;
-	/** Its size in its station's list (0 when not known): the card's picture keeps its shape. */
-	width: number;
-	height: number;
-}
-
-/** The chat whose agent opened a screen (a tab of the station's browser). */
-export interface ScreenChat {
-	/** The chat's id on its station. */
-	id: string;
-	/** Its title, or words saying it has none. */
-	title: string;
-	/** Its page in the app: `/w/<workspace>/s/<station>/chats/<id>`. */
-	link: string;
-}
-
-/** Where a screen's pointer is, as its station says. */
-export interface ScreenCursor {
-	/** 0..1 of the frame's width. */
-	x: number;
-	/** 0..1 of the frame's height. */
-	y: number;
-	/** A CSS cursor name (`default`, `pointer`, `text`…). */
-	shape?: string;
-}
-
-/** Where a file a person drops into a screen's view goes (docs/remote-screens.md `drop`): the machine's Downloads, else its home. */
-export interface ScreenDrop {
-	/** The folder on the station's machine (absolute): the drive's upload puts a file there with it as `root`. */
-	folder: string;
-	/** The view can show the file there in the machine's file manager (`screen.input` `{t: "reveal", path}`). */
-	reveal: boolean;
-}
-
-/** One panel of a simulator's device, as its device type's mask draws it. */
-export interface ScreenPanel {
-	/** As wide as its mask, whose height says which panel a picture is of. */
-	width: number;
-	/** As high. */
-	height: number;
-	/** Its corners' radii as shares of its width: top left, then round it. */
-	corners: number[];
-}
-
-/** A screen of a station a person can see and drive (docs/remote-screens.md). */
-export interface ScreenItem {
-	/** The station's: `desktop`, `browser:<targetId>`. */
-	id: string;
-	/** `desktop` (the station machine's display) or `browser` (a tab of the station's browser). */
-	kind: string;
-	title: string;
-	width: number;
-	height: number;
-	/** Who is on it now, by name. */
-	viewers?: string[];
-	/** Those of them whose input is taken. */
-	controlledBy?: string[];
-	/** An agent drives it now (one of `controlledBy` is an agent's view). */
-	agent?: boolean;
-	/** What is missing for it to be seen or driven (macOS's grants), when something is. */
-	access?: ScreenAccess;
-	/** The clipboard types a view that drives it carries both ways (`text`, `png`); none from a station before them. */
-	clipboard?: string[];
-	/** Where a file dropped into a view of it is put on the station's machine; none from a station before files. */
-	drop?: ScreenDrop;
-	/** It can be previewed (`screen.view` with `peek`): a tab of the station's browser; none from a station before previews. */
-	peek?: boolean;
-	/** The viewer may close it (`screen.close`): a tab of the station's browser, for a member who may drive it; none from a station before it. */
-	closable?: boolean;
-	/** The viewer may read its apps' logs and restart them (`screen.logs`, `screen.apps`, `screen.relaunch`): a simulator's, for a member who may drive it. */
-	debug?: boolean;
-	/** Where a file to install on it goes up to (`screen.install`). */
-	install?: string;
-	/** It folds (an iPhone Duo's simulator): `screen.input` `{t: "pose", name}`, for a member who may drive it. */
-	poses?: boolean;
-	/** A simulator's panels (an iPhone Duo's two), for the device body drawn round its picture. */
-	panels?: ScreenPanel[];
-	/** The chat that opened it (an agent's tab), when it is one of the viewer's chats of the station. */
-	chat?: ScreenChat;
-	/**
-	 * What the core says of it under its title: what it is, its size, the chat that opened it, who is on it; or, while its
-	 * station lacks a grant for it, what cannot be done now (core).
-	 */
-	line: string;
-	/** Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it. */
-	link: string;
-}
-
-/** How late a screen view's frames are, as its station measures them from their acknowledgements. */
-export interface ScreenLatency {
-	/** From a picture's capture to its drawing on this device, in ms (the median of the last 2 s). */
-	frame: number;
-	/** Of it, from the capture to its going out of the station: waiting to be asked for, encoded. */
-	before: number;
-}
-
-/** A login field in focus on a screen (a tab of the station's browser). */
-export interface ScreenLogin {
-	/** The site's host, as the station's browser has the tab's address (not as the page says it). */
-	host: string;
-	/** `username` or `password`: which of its fields the focus is in. */
-	field: string;
-}
-
-/** A page's sign-in with a passkey on a screen (a tab of the station's browser), for this device to sign. */
-export interface ScreenPasskey {
-	/** The page's own, answered with `screen.input` `{t: "passkey", id, …}`. */
-	id: string;
-	/** The site's host, as the station's browser has the tab's address. */
-	host: string;
-	/** The relying party it asks for: the host, or a domain the host is under. */
-	rpId: string;
-	/** The client data to sign as it is (JSON: the challenge, the tab's origin), the station's own. */
-	clientData: string;
-	/** The credentials the site takes (base64url ids); none: any of this device's for `rpId`. */
-	allow: string[];
-	/** `required`, `preferred` or `discouraged`. */
-	userVerification: string;
-}
-
-/** A display mode's size, in pixels. */
-export interface ScreenSize {
-	width: number;
-	height: number;
-}
-
-/** A screen's display resolution (docs/remote-screens.md `resolution`). */
-export interface ScreenResolution {
-	/** Now, in pixels (Windows' Settings › Display › Display resolution). */
-	width: number;
-	height: number;
-	/** Those it takes, landscape, the largest first. */
-	modes: ScreenSize[];
-}
-
-/** A screen's display scale (docs/remote-screens.md `scale`): what makes its windows and text larger or smaller on it. */
-export interface ScreenScale {
-	/** Now, in percent (Windows' Settings › Display › Scale). */
-	percent: number;
-	/** The one its system recommends. */
-	recommended: number;
-	/** Those it takes, lowest first. */
-	steps: number[];
-}
-
-/** How a screen view's pictures are made (docs/remote-screens.md `video`), as its statistics show it. */
-export interface ScreenVideo {
-	/** What captures the screen's pictures: ScreenCaptureKit, Windows.Graphics.Capture, Chrome screencast. */
-	capture: string;
-	/** The encoder as the station names it. */
-	encoder?: string;
-	/** Whether that encoder is the hardware's; none: a JPEG a picture. */
-	hardware?: boolean;
-}
-
-/** A screen view as its page draws it (`screen.view`'s `{state}` values): each one whole, the latest is how it is. */
-export interface ScreenViewState {
-	/**
-	 * `connecting`, `live`, `reconnecting`, `ended` (the station ended it, or the screen went), `outdated` (the
-	 * station is from before screens), `gone` (no such screen), `denied` (it cannot be seen now: no permission to
-	 * capture, no display) or `failed`.
-	 */
-	phase: string;
-	/** Why, in the viewer's words, for a phase that is not `connecting` or `live`. */
-	message?: string;
-	title: string;
-	kind?: string;
-	/** May read its apps' logs and restart them (`ScreenItem.debug`). */
-	debug?: boolean;
-	/** Its `ScreenItem.install`, empty for none. */
-	install?: string;
-	/** May fold it (`ScreenItem.poses`). */
-	poses?: boolean;
-	/** Its panels (`ScreenItem.panels`). */
-	panels?: ScreenPanel[];
-	/** Driving it now: input goes to the station (else only seen). */
-	control: boolean;
-	/** May drive it (not a read-only member). */
-	may: boolean;
-	/** The other people on it now, by name (an agent's as its chat: Agent「…」). */
-	others: string[];
-	/** Those of them who drive it now (an agent at work among them). */
-	controllers?: string[];
-	/**
-	 * Someone else drives it and this view only looks: 接管 switches to 控制 (an agent's input then
-	 * waits).
-	 */
-	takeOver?: boolean;
-	/** What the viewer's bar says: 只看 or 控制, and who else is on it (core). */
-	line: string;
-	/** `h264` or `jpeg`, once the first config came. */
-	codec?: string;
-	width?: number;
-	height?: number;
-	cursor?: ScreenCursor;
-	/** What the station lacks for it, when it says (with `denied`, or while it is seen but cannot be driven). */
-	access?: ScreenAccess;
-	/**
-	 * While driving it: the clipboard types it carries both ways (`text`, `png`): a paste goes with
-	 * `screen.clipboard`, a copy made on it comes as the call's `{clipboard}` value. None while only looking.
-	 */
-	clipboard?: string[];
-	/** While driving it: where a file dropped into the view goes (none while only looking, or from a station before files). */
-	drop?: ScreenDrop;
-	/** How late its frames are, said each second while they come (none from a station before it). */
-	latency?: ScreenLatency;
-	/** How its pictures are made, as the station said as the view opened (none from a station before it). */
-	video?: ScreenVideo;
-	/**
-	 * While driving it: its display's scale, set with `screen.input` `{t: "scale", percent}` and put back as it was
-	 * once nobody views it (a Windows station's desktop; none elsewhere, or while only looking).
-	 */
-	scale?: ScreenScale;
-	/**
-	 * While driving it: its display's resolution, set with `screen.input` `{t: "resolution", width, height}`
-	 * and put back as it was once nobody views it (a Windows station's desktop; none elsewhere, or while only looking).
-	 */
-	resolution?: ScreenResolution;
-	/**
-	 * While driving it: the login field in focus (a tab of the browser), for this device's password manager to
-	 * fill with `screen.input` `{t: "fill", host, username?, password?}`; none when the focus is in none.
-	 */
-	login?: ScreenLogin;
-	/**
-	 * While driving it: a page's sign-in with a passkey (a tab of the browser), for this device to sign and
-	 * answer with `screen.input` `{t: "passkey", id, credential, authenticatorData, signature, userHandle?}` (base64url) or
-	 * `{t: "passkey", id, error}`; none when none is asked.
-	 */
-	passkey?: ScreenPasskey;
-}
-
-/** A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts). */
-export interface ScreensView {
-	screens: ScreenItem[];
-	/** The station is from before screens: it has none to show until it is updated. */
-	outdated: boolean;
-	/** The viewer may drive them (a read-only member only sees). */
-	control: boolean;
-	/** The station said which it has (false while it has not been reached since the core started). */
-	known: boolean;
-	/** Why there are none to show, when there is a reason (the station needs an update, is offline). */
-	note?: string;
-}
-
-/**
- * Where something found opens, as every client has a page for it (views/search.ts `openOf`); each client
- * goes there its own way.
- */
-export interface SearchOpen {
-	/**
-	 * chat | service (its chat, its page over it) | task (its chat, it picked) | station (its page) | members (the
-	 * workspace's) | files (its station's)
-	 */
-	to: string;
-	/** Its station's address (empty: the members). */
-	station: string;
-	/** The chat (its key in its station's list): its page is `chats/<chat>`. */
-	chat?: string;
-	/** A service's or task's id. */
-	job?: string;
-	/** Files: the folder they are under, `path` where under it. */
-	root?: string;
-	path?: string;
-	/** Files: read (a text) | play (a video, a song); absent, the folder `path` is shown. */
-	how?: string;
-}
-
-/** A thing a search found besides chats and messages (`SearchGroup.items`), and what opens it. */
-export interface SearchItem {
-	kind: string;
-	/** Unique among all found. */
-	key: string;
-	/** The station it is on (empty: a member). */
-	station: string;
-	stationName: string;
-	stationEmoji?: string;
-	stationIcon?: string;
-	/** What it is called: a file's name, a service's, a station's, a member's… */
-	title: string;
-	/** The part of it that has the words, on one line. */
-	text: string;
-	/** Where the words are in `text`. */
-	marks: TextMark[];
-	/** The chat it is in (its key in its station's list): its page is `chats/<chat>`. */
-	chat?: string;
-	chatTitle?: string;
-	thread?: number;
-	/** A service or task: its id; `port` a service's. */
-	job?: string;
-	port?: number;
-	/** A file: where it is on its station (absolute). */
-	path?: string;
-	/** A file found in a folder pinned (a read-only member's): that folder, `rel` the file under it. */
-	root?: string;
-	rel?: string;
-	/** A file that is a folder. */
-	dir?: boolean;
-	/** What opens a file, as a drive's entry says (`DriveEntry.kind`: folder, video, text…). */
-	fileKind?: string;
-	size?: number;
-	sizeText?: string;
-	/** A member: their email (their place is the workspace's settings). */
-	email?: string;
-	archived?: boolean;
-	createdAt?: number;
-	/** Its times in words, by field (`createdAt`). */
-	time?: Record<string, Stamp>;
-	/** Where it opens; absent where it opens nowhere (no chat, no path), and from older cores. */
-	open?: SearchOpen;
-}
-
-export interface SearchGroup {
-	/** file | job | station | member */
-	kind: string;
-	/** Its heading. */
-	title: string;
-	items: SearchItem[];
-	/** More of this kind were found than are listed: the kind alone lists them. */
-	more: boolean;
-}
-
-/**
- * What a few words find in a workspace (the `search` topic, docs/search.md): ⌘K and the phones' search list it. With
- * `kind`, that kind alone, more of it.
- */
-export interface SearchView {
-	/**
-	 * The chats found: those the sidebar has whose title (or else agent, station, line) has the words, then those
-	 * the stations found (archived ones too, `archived`); with nothing typed, the latest chats. At most 8 with every kind.
-	 */
-	items: ChatItem[];
-	/** More chats than `items` were found: the kind alone (`kind: chat`) lists them. */
-	chatsMore?: boolean;
-	/** The words looked for, as a found message marks them in its chat when opened. */
-	words?: string[];
-	/** The messages found, on the device and on the stations, each once, newest first. */
-	messages?: FoundMessage[];
-	/** More messages than these were found. */
-	messagesMore?: boolean;
-	/**
-	 * What else was found, by kind (files, services and tasks, stations, members), in that order; a kind with
-	 * none is left out.
-	 */
-	groups?: SearchGroup[];
-	/** The stations not answered yet, and those that could not be searched. */
-	wait: ListNote;
-	/** What the list says under it: stations offline or too old to search. */
-	note?: string;
-}
-
-/** A session with its threads and turns (`session` topic). */
-export interface SessionDetail {
-	session: Session;
-	threads: ChatThread[];
-	turns: TurnRecord[];
-}
-
-/** What the settings say of the workspace as a whole (the `settings` view), over its stations. */
-export interface SettingsView {
-	/** How many of the workspace's stations have the automatic decisions' completion rule on. */
-	decisionsOn: number;
-	/** That in words, for 自动决策's row: 2 台 station 已启用, 未启用. */
-	decisionsText: string;
-	/** No station known has its archive review on: the hint 按模型判断 can suggest nothing. */
-	hintNoReview?: boolean;
-	/**
-	 * What the stations' archive reviews mean for 按模型判断 (none on, or whose are off); ""
-	 * while none is known or every one has it on.
-	 */
-	hintReviewText?: string;
-}
-
-export interface ShareInKept {
-	station: string;
-	/** Its row's `id`. */
-	id: string;
-	/** Why it is first, for its second line: youtube.com 的链接上次发到这里. */
-	text: string;
-}
-
-export interface ShareInStation {
-	/** Its address. */
-	station: string;
-	name: string;
-}
-
-/** Where something another app shares into still.fail goes (the `shareIn` topic; docs/share-in.md). */
-export interface ShareInView {
-	/** The site of the link shared (`youtube.com`, its www./m. left out); none for text without one. */
-	site?: string;
-	/**
-	 * The chats it can go to: the workspace's own on still.fail's page, newest first, the one `kept` first; those
-	 * the query finds when one is given. At most 30.
-	 */
-	items: ChatItem[];
-	/** The chat what came from the same site went to last time, in `items`. Absent when none (or it is gone). */
-	kept?: ShareInKept;
-	/** The workspace's stations up now: where a new chat can start. */
-	stations: ShareInStation[];
-	/** Where a new chat starts unless another is picked (its address): where the workspace's new chats last started. */
-	newOn?: string;
-	/** The chats are not known yet. */
-	loading: boolean;
-	/** Why it can go nowhere (no chat, no station up), in words. */
-	note?: string;
-}
-
-/** Another file of a skill beside its SKILL.md: a topic it points to. */
-export interface SkillDoc {
-	/** design.md. */
-	name: string;
-	text: string;
-	/** Its name as people read it: design (the core's). */
-	label?: string;
-	/** 34 KB (the core's). */
-	size?: string;
-}
-
-/** A station that may use a shared skill and does not. */
-export interface SkillShareMissing {
-	station: string;
-	/** name | same-name | refused (share/index.ts Missing). */
-	why: string;
-	/** Why, in words. */
-	whyText?: string;
-}
-
-/** How a skill is shared between the workspace's stations. */
-export interface SkillShare {
-	id: string;
-	/** host: shared from this station; user: a copy of another station's. */
-	role: string;
-	host: string;
-	allow?: string[];
-	/** Edits made on an older copy, kept beside the skill (SKILL.conflict-*.md), on its host. */
-	conflicts?: string[];
-	/** On its host: the stations that have it. */
-	users?: string[];
-	/** On its host: the stations that may use it and do not, and why. */
-	missing?: SkillShareMissing[];
-	/** On its host: why it is not being shared now (too large, unreadable), in words; absent while it is. */
-	unreadText?: string;
-}
-
-/**
- * A skill: `body` its text as people read it (no frontmatter), `about` when it applies (a project's without its
- * 项目记忆：); both absent from a core before them.
- */
-export interface SkillFile {
-	name: string;
-	description: string;
-	project: boolean;
-	builtin: boolean;
-	text: string;
-	body?: string;
-	about?: string;
-	/** `about` in a line, without what is in parentheses, for its row (the core's). */
-	brief?: string;
-	/** Its text and files together: 51 KB (the core's). */
-	size?: string;
-	/** Its other files (absent from a station before them). */
-	files?: SkillDoc[];
-	/** Shared with the workspace's other stations, or another station's (absent: neither). */
-	share?: SkillShare;
-	/** What kind it is, in words: 项目记忆, station 内置, Skill. */
-	kindText?: string;
-	/**
-	 * Which part of the memory's list it is under: "project" (项目记忆), "skill" (其他 skill), "builtin"
-	 * (the station's own, folded under them).
-	 */
-	group?: string;
-	/** When it is read, for its page (`about`, else that it does not say). */
-	whenText?: string;
-	/** Its row's line (`brief`, else that it does not say when it is used). */
-	line?: string;
-	/** Its pages to pick between: its SKILL.md (总览), then each other file. */
-	pages?: MemoryPage[];
-}
-
-/** Address of a transient Slack token form, shared by calls and topic subscriptions. */
-export interface SlackTokenForm {
-	station: string;
-	form: string;
-}
-
-/** A Slack token form: a transient core draft, never saved to device storage. */
-export interface SlackTokensView {
-	appToken: string;
-	botToken: string;
-	verified?: SlackIdentity;
-	errors: string[];
-	ready: boolean;
-}
-
-/**
- * The agents' memory on a station (the `memory` topic, and `memory.get`): the global one, and the skills (projects'
- * memories among them).
- */
-export interface StationMemory {
-	global: MemoryFile;
-	skills: SkillFile[];
-}
-
-/**
- * This device's connection to a station, in words (its card's network line): how it goes, its round trip now and
- * over the last minute, and what goes over it (the `stationNet` view: sampled while shown; none before a connection
- * of its own is open).
- */
-export interface StationNet {
-	/** 直连, 北京中继 (the relay's name, or 中继 host), or 正在选路. */
-	path: string;
-	/** The same as a word to tell apart (a chat's bar marks it with a dot). Missing from a core from before. */
-	via?: NetVia;
-	rtt?: NetFigure;
-	/** Round trips over the last minute, oldest first, in milliseconds. */
-	rttHistory: number[];
-	/** Bytes a second now, each way: 1.4 MB/s. */
-	down: string;
-	up: string;
-	/** What went over it today on this device: 今天共 ↓ 212 MB · ↑ 9.6 MB (a core from before: 本次共, since it opened). */
-	total: string;
-	/** The same each way: 212 MB. Missing from a core from before. */
-	downTotal?: string;
-	upTotal?: string;
-	/** Packets lost over the last minute, when some were. */
-	loss?: NetFigure;
-	/**
-	 * The way through each relay as last measured, once it was (natively and in the browser: the mesh). Missing from
-	 * a core from before.
-	 */
-	measured?: NetMeasured;
-	/**
-	 * Where the station said it is on its LAN (`ip:port`, docs/mesh-lan.md): the desktop app sends there to tell
-	 * whether macOS lets it reach them (Local Network).
-	 */
-	lan?: string[];
-}
-
-/**
- * A workspace's presets on a station (the `presets` topic, docs/presets.md), and the directories offered for a
- * new one.
- */
-export interface StationPresets {
-	presets: Preset[];
-	candidates: PresetCandidate[];
-}
-
-/**
- * What the core is waiting on (the `status` topic), when it is worth saying: `state` slow (something has taken a
- * while) | trouble (a connection down), absent while all goes as it should; `text` says it in one line.
- */
-export interface StatusView {
-	state?: string;
-	text?: string;
-	items: StatusItem[];
-	/**
-	 * What a page still loading says under its words, a line each: what lasts and is why it is slow (the device's
-	 * data not opened, still.fail cloud down); what is read is not said.
-	 */
-	lines?: string[];
-}
-
-/** A subscription on the usage page: its allowance as its profile shows it, what its copies spent in the days. */
-export interface UsageAccount {
-	key: string;
-	title: string;
-	quota: Quota;
-	cost: number;
-	costText: string;
-}
-
-export interface UsageMonth {
-	week: number;
-	label: string;
-}
-
-export interface UsageActivity {
-	title: string;
-	sub: string;
-	/** 按天, 按周, 累计: what the year can be drawn as. */
-	views: string[];
-	/** The rows' names, Sunday first. */
-	weekdays: string[];
-	/** Each month's name over the week its first days are in. */
-	months: UsageMonth[];
-	/**
-	 * The year's 364 days, a week of seven a column, Sunday first, the last week today's: each its level of the
-	 * most of a day, 0 none to 4 (Codex's graded levels); -1 a day after today.
-	 */
-	cells: number[];
-	/** Each of the 52 weeks' tokens as how many of seven rows its bar fills, of the tallest. */
-	weekly: number[];
-	/** The weeks' running total as the same. */
-	cumulative: number[];
-	/** Each of `cells` said as the pointer rests on it: its date and tokens; "" a day after today. */
-	tips: string[];
-	/** Each of the 52 weeks said so: its first day and tokens. */
-	weekTips: string[];
-	/** Each week's running total said so: as of its last day so far. */
-	runningTips: string[];
-	less: string;
-	more: string;
-	/** Under each view: none under the days (their legend instead), what a column is under the others. */
-	captions: string[];
-}
-
-/**
- * A day (`day` 2026-10-01, `label` 10/1): what it cost, split as `series` (`parts`, in dollars, and in words), and its
- * calls.
- */
-export interface UsageDay {
-	day: string;
-	label: string;
-	today: boolean;
-	cost: number;
-	costText: string;
-	calls: number;
-	callsText: string;
-	parts: number[];
-	partsText: string[];
-	/** What the day is called where it is picked: 今天, else `label`. */
-	name?: string;
-	/**
-	 * What its bar says under it: its `name`, or "" where days are many (`many`) and it is not
-	 * today nor a week back from the last.
-	 */
-	tick?: string;
-	/** Each of `parts` as a share of the day's cost (0 to 1; 0.01 at least for one spent at all). */
-	shares?: number[];
-	/** Each of `parts` as a share of the day's cost in words: 60%, <1%. */
-	sharesText?: string[];
-}
-
-export interface UsageFigure {
-	label: string;
-	value: string;
-}
-
-export interface UsageNamed {
-	label?: string;
-	/** A station's name, or where chats came from. */
-	name?: string;
-	value: string;
-}
-
-export interface UsageFigures {
-	title: string;
-	items: UsageNamed[];
-}
-
-/**
- * A person, chat, account or model, and what it spent: `share` of the total cost (of the calls, when nothing was
- * priced), `detail` its calls and tokens in a line (`callsText`, `tokensText` each alone: 1,204 · 3.2 万). A person's `person` (with `shown`); a chat's page (`chat`), when
- * it is still there; an account's `topModel`, the model it used the most tokens of, in words (最多 Opus 5.5).
- */
-export interface UsageItem {
-	key: string;
-	title: string;
-	sub?: string;
-	cost: number;
-	costText: string;
-	share: number;
-	shareText: string;
-	calls: number;
-	callsText: string;
-	tokensText: string;
-	detail: string;
-	person?: Creator;
-	chat?: UsageChat;
-	topModel?: string;
-}
-
-/** One of a list's first few, or the rest of it, as its share of the whole. */
-export interface UsagePart {
-	/** Its item's `key`; empty for the rest (其他). */
-	key: string;
-	title: string;
-	cost: number;
-	costText: string;
-	share: number;
-	shareText: string;
-}
-
-/** 按人 / 按对话 / 按账号 / 按模型 (`key` people, chats, profiles, models), the most spent first. */
-export interface UsageList {
-	key: string;
-	title: string;
-	items: UsageItem[];
-	/**
-	 * Its first three and the rest (其他), or its first four: what it is made of at a glance; none
-	 * with one item (one person, one model: nothing to tell apart).
-	 */
-	parts?: UsagePart[];
-}
-
-/** The one the usage page shows alone: 只看 林. */
-export interface UsageOnly {
-	/** people, profiles or models */
-	list: string;
-	/** Its item's `key` in that list. */
-	key: string;
-	title: string;
-}
-
-export interface UsageRate {
-	label: string;
-	value: string;
-}
-
-export interface UsagePriceRow {
-	model: string;
-	rates: UsageRate[];
-}
-
-/** A station's own price table; its note explains missing data on older/offline stations. */
-export interface UsagePriceTable {
-	station: string;
-	note: string;
-	rows: UsagePriceRow[];
-}
-
-/** A part of each day's bar: an item of the list it is split by (`key` its key there), or the rest (`key` empty). */
-export interface UsageSeries {
-	key: string;
-	name: string;
-}
-
-/** What a workspace's agents used since each station began counting (the usage page's summary). */
-export interface UsageSummary {
-	/** Whose it is: the workspace's name. */
-	title: string;
-	/** 累计 token, 归档的对话, 跨设备任务, 决策点击率, 一起干活的设备. */
-	figures: UsageFigure[];
-	activity: UsageActivity;
-	/** Each station's tokens and their share, the most first. */
-	stations: UsageFigures;
-	/** How many chats came from each place (still.fail, Slack, Feishu); absent with one place. */
-	places?: UsageFigures;
-	/** 统计截至 11月2日. */
-	asOf: string;
-	/** Some stations told no history (from before, or not read): said under it. */
-	partial?: string;
-}
-
-/** A line of the scale the bars stand in, at `value` dollars. */
-export interface UsageTick {
-	value: number;
-	/** 2k */
-	label: string;
-}
-
-/** 折合费用 $1,911 (按 API 价算). */
-export interface UsageTile {
-	label: string;
-	value: string;
-	sub: string;
-	/** Against the days before as many (`versus`): ↑18%, 持平; none where they spent nothing or are not all read. */
-	change?: string;
-	/** Which way `change` goes: up, down, or "" (the same, or none). */
-	trend?: string;
-}
-
-/**
- * What the agents of a workspace spent over its last `days` (the `usage` view, client/core-ts/src/views/usage.ts): a few
- * totals (`tiles`), each day's cost split by the people who spent most (`series`, the rest as 其他), and lists of who,
- * which chats, which accounts and which models spent the most, at the providers' API prices (`basis` says what that
- * means). `notes`: what is missing or still being read, in lines; `loading` while a station has not answered.
- */
-export interface UsageView {
-	days: number;
-	/**
-	 * The list each day's bar is split by (people, chats, profiles, models): the one asked for, else
-	 * the people's where several spent, the models' where one did.
-	 */
-	split?: string;
-	/** The one person, account or model everything is of, when one was asked for. */
-	only?: UsageOnly;
-	/** The one day (2026-10-01) everything but the days' bars is of, when one was asked for. */
-	day?: string;
-	/** Each subscription with an allowance the core can read: what is left of it, and what it spent in the days. */
-	accounts?: UsageAccount[];
-	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
-	wait: ListNote;
-	empty: boolean;
-	tiles: UsageTile[];
-	/** What each tile's `change` is against: 比前 7 天. */
-	versus?: string;
-	/** The days counted, as said over them: 近 7 天. */
-	period?: string;
-	series: UsageSeries[];
-	daily: UsageDay[];
-	/** Days too many for each to say its date under its bar (more than 10): narrower bars, a date a week. */
-	many?: boolean;
-	/** The most a day cost. */
-	max: number;
-	/** What the bars are drawn against: a round number at or above `max` (views/usage.ts scale), 0 when nothing was spent. */
-	top: number;
-	/** The scale's lines, the last at `top`. */
-	ticks: UsageTick[];
-	lists: UsageList[];
-	notes: string[];
-	basis: string;
-	/** Each station's own calculation table; absent with older cores. */
-	prices?: UsagePriceTable[];
-	/**
-	 * Everything since counting began, as Codex's usage summary (views/usage-summary.ts); absent where no station
-	 * has told its history (stations from before).
-	 */
-	summary?: UsageSummary;
-}
-
-/** A field of an item as its page shows it (vault-words.ts shownFields): `vault.open` answers `shown`, a row says `shut`. */
-export interface VaultField {
-	key: string;
-	/** What it is called (值, 私钥, 用户名…). */
-	label: string;
-	value: string;
-	/** Masked until shown. */
-	secret: boolean;
-	/** In a fixed width. */
-	mono: boolean;
-}
-
-/** An agent's use of an item (the station's `vault_audit`): when, in which chat, how. */
-export interface VaultUse {
-	at: Stamp;
-	session: string;
-	/** The station of the chat (its id). */
-	station?: string;
-	chatTitle?: string;
-	/** `proxy`, `ssh` or `env`. */
-	mode: string;
-	command?: string;
-	hosts: string[];
-	/** Asked for and turned down. */
-	denied?: boolean;
-	/** How, in a line: the command it ran and its way, else how it was given. */
-	howText?: string;
-}
-
-/** An item of a vault. */
-export interface VaultItemRow {
-	id: string;
-	version: number;
-	at: number;
-	/** Its name: what it holds once the vault is unlocked, else its listing's (none: unlisted, locked). */
-	name?: string;
-	/** `token`, `ssh_key`, `login` or `file`, where known. */
-	kind?: string;
-	/** Agents see it (it has a listing). */
-	listed: boolean;
-	modes: string[];
-	hosts: string[];
-	/** The variable its listing suggests the command gets it in (`GH_TOKEN`). */
-	env?: string;
-	/** The longest grant it is given for, its own: `once`, `hour` or `chat` (none: its vault's, VaultRow `lasts`). */
-	lasts?: string;
-	/** The last time an agent used it. */
-	lastUse?: VaultUse;
-	/** Its kind in a word (Token, SSH 密钥, 登录); "" unknown. */
-	kindText?: string;
-	/** Whether agents may ask for it and how (允许 agent 申请 · 代理 · api.github.com), or 仅自己可见. */
-	agentText?: string;
-	/** Its line in a list: how an agent gets it (or that it is only the person's), when and in which chat it was last used. */
-	lineText?: string;
-	/** How agents are given it, a line each way joined by 、 (代理 · 限 api.github.com). */
-	howText?: string;
-	/** Its longest grant in words: its own, or 跟随默认 · its vault's. */
-	lastsText?: string;
-	/** Its fields before it is opened: what each is called over dots. */
-	shut?: VaultField[];
-}
-
-/** A vault's items (the `vaultItems` topic). */
-export interface VaultItemsView {
-	vault: string;
-	name: string;
-	open: boolean;
-	items: VaultItemRow[];
-}
-
-/** A member of a vault: their name as the workspace has it (or their email). */
-export interface VaultMember {
-	sub: string;
-	name: string;
-}
-
-/** A station of the workspace that holds no vault. */
-export interface VaultRefusal {
-	station: string;
-	name: string;
-	/** Why it holds no vault: `vault_needs_lock` (it has not pinned the lock), `http_404` (too old). */
-	code: string;
-}
-
-/** An agent's request to use an item, or to keep one, waiting on the viewer (`vault.approve`, `vault.deny`). */
-export interface VaultRequest {
-	id: string;
-	vault: string;
-	vaultName: string;
-	item: string;
-	itemName?: string;
-	/** The longest grant its item allows: `once`, `hour` or `chat`; the approval offers those up to it. */
-	lasts?: string;
-	session: string;
-	chat: string;
-	/** The station that asked (its id): the chat is its, `/w/<workspace>/s/<station>/chats/<session>`. */
-	station?: string;
-	/** `proxy`, `ssh` or `env`. */
-	mode: string;
-	reason: string;
-	timeoutKind?: string;
-	timeoutSeconds?: number;
-	command?: string;
-	hosts: string[];
-	at: number;
-	/** A request to keep a secret rather than use one: `vault.approve` keeps it (its scope unused). */
-	save?: VaultSave;
-	/** A secret to keep its station sealed to the person's devices set up then, this device not among them: approved on one of those, or here once the station has this device's certificate (the core brings it as the station is read) and seals it again. */
-	notHere?: boolean;
-	/** How it would be given, in a line (代理 · 限 api.github.com). */
-	howText?: string;
-}
-
-/** A vault the viewer is a member of. */
-export interface VaultRow {
-	id: string;
-	name: string;
-	owner: string;
-	ownerName: string;
-	/** The viewer owns it: they add devices and people to it. */
-	mine: boolean;
-	members: VaultMember[];
-	/** The station that holds it. */
-	station: string;
-	stationName: string;
-	items: number;
-	/** How many devices hold its key. */
-	devices: number;
-	/** Unlocked on this device now (its key kept a few minutes): item names shown, opened without asking. */
-	open: boolean;
-	/** This device holds its key. */
-	keyed: boolean;
-	/** Members' devices set up since that hold no key yet (`vault.addDevice`, by its owner). */
-	missing: number;
-	/** Its key is also sealed to its owner's recovery words. */
-	recoverable: boolean;
-	/** The longest grant of its items that say none (`vault.setLasts`): `once`, `hour` or `chat`. */
-	lasts?: string;
-}
-
-/** An item's uses, the latest first (the `vaultUses` topic). */
-export interface VaultUsesView {
-	item: string;
-	uses: VaultUse[];
-}
-
-/** The workspace's vaults as the viewer sees them (the `vaults` topic; client/core-ts/src/views/vault.ts, docs/vault.md). */
-export interface VaultsView {
-	/** An app keeping keys in the system's secure storage (a web page is not). */
-	available: boolean;
-	/** The workspace's lock is on and checks out: the vault needs it. */
-	locked: boolean;
-	/** This device signs in the lock. */
-	canSign: boolean;
-	/** This device's box key is published (`vault.setup`). */
-	setUp: boolean;
-	vaults: VaultRow[];
-	requests: VaultRequest[];
-	refused: VaultRefusal[];
-	/** No lock in the workspace: the library is kept in the clear on its station (its one vault, id `plain`), and any item but a subscription or a model's key is said to be at risk (docs/vault.md 不加锁的库). */
-	plain?: boolean;
-	/** Security mode on, items of the viewer's still kept in plain text from before: `vault.migrate` encrypts them into their own vault. */
-	plainLeft?: number;
-	/** What the settings say of it at their row's end: how many wait to be approved, else how many items, else 未开启. */
-	statusText?: string;
-	/** `statusText` says some wait to be approved. */
-	statusBad?: boolean;
-}
-
-/** One way to a workspace's stations. */
-export interface WayRow {
-	/** A relay's URL, or the kind (lan, tailnet, direct): what `workspace.setWay` is given. */
-	id: string;
-	/** relay | lan | tailnet | direct */
-	kind: string;
-	/** A relay's: what still.fail calls it (北京), or its host. Empty for a kind. */
-	name: string;
-	/** A relay of the workspace's own. */
-	own: boolean;
-	on: boolean;
-}
-
-/**
- * A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
- * have something unread; of all its chats, how many have a decision waiting (`wait`); its `tone` (alert | wait | done, as a
- * chat's mark) and in words, none when it is 0 and 0; the chat last
- * open in it.
- */
-export interface WorkspaceMark {
-	alert: number;
-	unread: number;
-	/**
-	 * How many have a card waiting (not dismissed by them) or an agent needing them (need_help), not counted in
-	 * `alert`. Absent for 0.
-	 */
-	wait?: number;
-	tone?: string;
-	/** 1 个出错了 · 2 个在等你 · 3 个有新消息 */
-	label?: string;
-	chat?: OpenChat;
-	/**
-	 * What it adds to the badge, as the prefs' `badge` counts: `wait` (decisions), and `alert` (attention, the
-	 * default), and `unread` (all).
-	 */
-	badge?: number;
-	/**
-	 * 待处理, of the kinds the badge counts (`badgeKinds` wait, failed): the chats of theirs that went wrong
-	 * (`alert`), read or not, until they run again, are archived or the failure is let go (`failsGone`); the cards and needs
-	 * waiting for them (`wait`) not looked at since they came (one looked at: its row still says it). The failed
-	 * first, the latest first within. `alert` counts the same failures.
-	 */
-	items?: MarkItem[];
-	/** Chats they take part in whose agent waits for someone else (not counted). Absent for 0. */
-	elsewhere?: number;
-	/** `tone` of only the chats they take part in (the 我参与的 list's; the whole list's is `tone`). */
-	mineTone?: string;
-	/** `tone` of only the watching chats (the 监控中 list's). */
-	watchingTone?: string;
-}
-
-/**
- * What each workspace has waiting for its person, for where workspaces are switched (the `workspaceMarks` view):
- * by workspace id; and of those other than the one in view, the most urgent.
- */
-export interface WorkspaceMarksView {
-	workspaces: Record<string, WorkspaceMark>;
-	/** alert | wait | done: the others' mark; none when nothing there wants anyone. */
-	others?: string;
-	/** 其他 workspace：1 个出错了 · 2 个有新消息 */
-	othersLabel?: string;
-	/** What the app's badge says (the Dock's): every workspace's `badge`. */
-	badge?: number;
-	/** What the badge counts, kind by kind: the prefs' `badgeKinds`, or as their `badge` says. */
-	badgeKinds?: BadgeKinds;
-}
-
-/**
- * How a workspace's members' devices reach its stations (the `workspaceWays` view, views/ways.ts): still.fail's relays,
- * the workspace's own, the ways straight to a station; each on or turned off. From `/v1/me`, kept on the device.
- */
-export interface WorkspaceWaysView {
-	ways: WayRow[];
-	/** How many are turned off. */
-	off: number;
-	/** 全部开启, 已关闭 2 项: the workspace page's 连接方式 row says it. */
-	offLabel: string;
 }
 

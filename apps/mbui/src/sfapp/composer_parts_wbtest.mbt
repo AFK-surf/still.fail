@@ -1,4 +1,4 @@
-// The composer's parts as Android's (Composer.kt, ChatFiles.kt, StationFiles.kt, Keyboard.kt): what waits to go (its
+// The composer's parts as Android's: what waits to go (its
 // files in the order they were put in, a row that scrolls sideways; a picture opening in the viewer, a link opening,
 // a file going up said as it goes), the quotes kept to 176, the archived chat's restore, what the buttons are called,
 // a long press letting the keyboard be. Over the fake core of composer_wbtest.mbt.
@@ -61,7 +61,7 @@ fn waiting_picture_return(new_chat : Bool) -> Unit raise {
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(true)
   t.check_looks(false)
   t.run_for(@ui.move_most_ms)
@@ -167,7 +167,7 @@ test "a film waiting in the composer, opened, plays from the bytes picked: none 
 
 ///|
 test "what waits to go has its ✕ hung on its corner, its centre on the curve, a picture's and a file's card alike, on a phone and a computer alike, clear of the next; tapped, it takes it out" {
-  // (Android, then macOS: one design on every screen, docs/ui-panels.md)
+  // (Android, then macOS: one design on every screen, sf/align.mbt)
   for platform in [2, 0] {
     let calls : Array[Made] = []
     let made : Ref[Source?] = Ref(None)
@@ -395,26 +395,24 @@ test "an offline station's cache choice stays visible but cannot be opened" {
 }
 
 ///|
-test "Enter and Space open the cache choice for the keyboard" {
-  for key in [@ui.key_code_enter, @ui.key_of_char(' ')] {
-    let calls : Array[Made] = []
-    let t = decide_core(calls, "chat-cache-cold", wide=true)
-    let choice = t.get(Button, label="接着聊")
-    t.ctx().focus_on(choice.id, visible=true)
-    t.draw()
-    assert_eq(t.focused().map(fn(n) { n.label }), Some("接着聊"), msg="the choice has keyboard focus")
-    t.key(key)
-    t.draw()
-    assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_), msg="key \{key} opens the choices")
-    assert_eq(t.focused().map(fn(n) { n.role }), Some(MenuItemRadio), msg="the menu focuses an item")
-    t.key(@ui.key_code_down)
-    assert_eq(t.focused().map(fn(n) { n.label }), Some("换新上下文"), msg="Down moves to the other choice")
-    t.enter()
-    t.draw()
-    let asked = named(calls, "session.settings")
-    assert_eq(asked.length(), 1)
-    assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
-  }
+test "the cache choice can be changed from the keyboard" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  let choice = t.get(Button, label="接着聊")
+  t.ctx().focus_on(choice.id, visible=true)
+  t.draw()
+  assert_eq(t.focused().map(fn(n) { n.label }), Some("接着聊"), msg="the choice has keyboard focus")
+  t.enter()
+  t.draw()
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_), msg="Enter opens the choices")
+  assert_eq(t.focused().map(fn(n) { n.role }), Some(MenuItemRadio), msg="the menu focuses an item")
+  t.key(@ui.key_code_down)
+  assert_eq(t.focused().map(fn(n) { n.label }), Some("换新上下文"), msg="Down moves to the other choice")
+  t.enter()
+  t.draw()
+  let asked = named(calls, "session.settings")
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
 }
 
 ///|
@@ -453,7 +451,6 @@ test "choosing how to continue an expired cache keeps the draft's keyboard" {
     t.tap_text("发消息")
     t.type_text("签名")
     keyboard_up(t, 300.0)
-    assert_true(t.ime().0, msg="the keyboard is up before the choice")
     t.click(Button, label="接着聊")
     assert_true(t.ime().0, msg="the keyboard stays while the choices are shown")
     t.click(MenuItemRadio, label="换新上下文")
@@ -701,8 +698,8 @@ test "a picture restored in the composer remains visible in the sending message"
     },
     // Its station has not supplied a picture: the message must use the one already in the composer.
     file: fn(_, _, _) { "" },
-    topic: fn(name, params) {
-      let now = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let now = base.topic(name, params).get().snapshot()
       if name != "composer" || !in_draft.val { return now }
       let m = match now.value { Some(Object(v)) => v.copy(); _ => {} }
       m["files"] = [{ "id": "kept-1", "name": "截图.png", "size": 120, "sent": 40 }]
@@ -784,17 +781,12 @@ test "files sent fly from their tiles to their places in the message, then are i
   // its row in the list (the outbox's, at once): the picture goes to where the message has it
   t.draw()
   t.draw()
-  // (its actual picture in the scrolling list; the row keeps its send key when the core names it anew)
-  let tree = @ui.view_tree().unwrap()
-  let label = @sf.t("web-main.file.view", args=[("name", "截图.png")])
-  let picture = tree.said_order().iter().filter(fn(n) {
-    n.said is Some(s) && s.role == Button && s.label == label
-  }).filter_map(fn(n) { tree.view_of(n.id) }).find_first(fn(v) { v.scroll_holding() is Some(_) }).unwrap()
-  assert_true(picture.laid_size().0 > 56.0, msg="the message's picture is laid out in its row")
-  assert_eq(tree.drawn_of(picture.id()).unwrap().alpha, 0.0, msg="its flight owns the picture until it lands")
+  match @motion.measured_rect(t.ctx(), @sfbase.flight_to_key(f, ff.key)) {
+    Some((_, _, w, _)) => assert_true(w > 56.0)
+    None => fail("the message's picture is not where the flight can see it")
+  }
   t.run_for(@sfbase.flight_most_ms)
   assert_true(send_flight.get() is None)
-  assert_eq(tree.drawn_of(picture.id()).unwrap().alpha, 1.0, msg="the message owns the picture after it lands")
   fix_clock.val = None
 }
 

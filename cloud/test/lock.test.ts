@@ -1,4 +1,4 @@
-// The workspace lock as still.fail cloud keeps it (docs/workspace-lock.md, src/lock.ts): one chain, each entry following
+// The workspace lock as still.fail cloud keeps it (src/lock.ts): one chain, each entry following
 // the last and signed by whom it may be, as a station checks it (station/test/lock.test.ts tests those rules); carried
 // to the stations on their presence sockets and to members; the devices that asked for credentials, for the owner to
 // check; devices waiting to be confirmed.
@@ -24,7 +24,7 @@ test("the hash is the stations' and the core's (the same values in their tests)"
   assert.throws(() => canonical(0.5));
 });
 
-test("one chain per workspace: kept for members, carried to stations, healed by them", { timeout: 20000 }, async () => {
+test("one chain per workspace: kept for members, carried to stations, healed by them", async () => {
   const h = await harness();
   try {
     const alice = h.as(await h.login("alice"));
@@ -112,7 +112,7 @@ test("one chain per workspace: kept for members, carried to stations, healed by 
   }
 });
 
-test("a chain kept before the cloud checked entries is cut back to where the stations take it", { timeout: 20000 }, async () => {
+test("a chain kept before the cloud checked entries is cut back to where the stations take it", async () => {
   const h = await harness();
   try {
     const alice = h.as(await h.login("alice"));
@@ -137,7 +137,7 @@ test("a chain kept before the cloud checked entries is cut back to where the sta
   }
 });
 
-test("devices that asked for credentials, for the owner to check; devices waiting to be confirmed", { timeout: 20000 }, async () => {
+test("devices that asked for credentials, for the owner to check; devices waiting to be confirmed", async () => {
   const h = await harness();
   try {
     const alice = h.as(await h.login("alice"));

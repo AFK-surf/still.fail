@@ -26,9 +26,13 @@ libc = "0.2"
 iroh = { version = "=1.0.3" }
 iroh-mdns-address-lookup = "=0.4.0"
 iroh-mainline-address-lookup = "=0.5.0"
-# Its DHT, for what its socket and lookups went through (`dht.said`: vendor/n0-mainline's `ember`).
+# Its DHT, for what its socket and lookups went through (`dht.said`: vendor/n0-mainline's `stillfail`).
 n0-mainline = "=0.6.0"
 noq-proto = { version = "1", default-features = false }
+# The lock's and the vault's signatures checked here (`crypto.verify`) by formally verified implementations (Cryspen's
+# libcrux: HACL*'s Ed25519 and P-256, proved in F*), not the core's JS (@noble's), and off Hermes' slow arithmetic.
+libcrux-ed25519 = { version = "=0.0.10", default-features = false }
+libcrux-ecdsa = { version = "=0.0.9", default-features = false }
 # A station's replies are decompressed here, off the core's JS thread (zstd.*).
 zstd = { version = "0.13", default-features = false }
 # The phone's own adb session (src/adb.rs): pairing with its adbd and the TLS it speaks, on rustls with ring as here.

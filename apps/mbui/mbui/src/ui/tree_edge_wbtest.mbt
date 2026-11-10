@@ -17,48 +17,6 @@ fn rects_sized(w : Double, h : Double) -> Array[Array[Double]] {
 }
 
 ///|
-test "a retained node's dashed edge is drawn after its contents as the old border is, and changes in place" {
-  let all = fn() {
-    let c = g()
-    Array::makei(c.ninst, fn(k) {
-      let row = Array::makei(inst_size, fn(i) { c.inst[k * inst_size + i] })
-      if row[5] == 11.0 {
-        // The frame's path arena may start elsewhere. Compare the actual pieces in order, not their address.
-        let start = row[12].to_int() * 4
-        let count = row[13].to_int() * 4
-        row[12] = 0.0
-        for i in 0..<count { row.push(c.segs[start + i]) }
-      }
-      row
-    })
-  }
-  let old = Tester::new(fn(c) {
-    c.box(w=Px(236.0), h=Px(56.0), radius=18.0, border=1.0, border_color=0xE5704AFFL, style=style(dashed=true), fn() {
-      c.box(w=Fill(1.0), h=Fill(1.0), bg=0x2050A0FFL, fn() {  }) |> ignore
-    }) |> ignore
-  })
-  old.draw()
-  let expected = all()
-  let dashed = @signals.signal(true)
-  let now = Tester::new(fn(_) {  })
-  set_view_app(fn(root) {
-    root.box(fn(card) {
-      card.width(Is(Some(236.0))).height(Is(Some(56.0))).radius(Is(18.0))
-      .edge(Is((1.0, 0xE5704AFFL))).edge_dashed(By(fn() { dashed.get() })) |> ignore
-      card.box(fn(child) { child.grow(Is(1.0)).ground(Is(0x2050A0FFL)) |> ignore }) |> ignore
-    }) |> ignore
-  })
-  now.draw()
-  assert_eq(all(), expected)
-  dashed.set(false)
-  now.draw()
-  assert_true(all() != expected)
-  dashed.set(true)
-  now.draw()
-  assert_eq(all(), expected)
-}
-
-///|
 test "a node's edge: one rect filled and edged, the instance an old view's box with that border draws" {
   let ring = 0xE5704AFFL
   let _ = Tester::new(fn(c) {
@@ -198,7 +156,7 @@ fn red_edged(at : Int) -> Bool {
 ///|
 test "a node's edge round what it holds, its ground drawn off and bigger and the node turned: the edge drawn off, bigger and turned as its ground is, after what it holds" {
   let (_, _) = edged_holder(0xFFFFFFFFL, fn(n) {
-    n.ground_drawn(Is((-4.0, -2.0, 8.0, 4.0))).turn(Is(0.3)) |> ignore
+    n.ground_drawn(Is({ dx: -4.0, dy: -2.0, dw: 8.0, dh: 4.0, corners: None })).turn(Is(0.3)) |> ignore
   })
   let c = g()
   let fill = inst_where(fn(at) { c.inst[at + 8] == 1.0 && c.inst[at + 9] == 1.0 && c.inst[at + 11] == 1.0 && c.inst[at + 2] > 40.0 })

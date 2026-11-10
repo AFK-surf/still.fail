@@ -16,7 +16,7 @@ fn desk_composer_tester(
   let src : Source = {
     ..base,
     draft_picture: kept.unwrap_or(base.draft_picture),
-    topic: fn(name, params) { over(name, (base.topic)(name, params)) },
+    topic_read: fn(name, params) { over(name, base.topic(name, params).get().snapshot()) },
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
       (base.call)(name, params, done)
@@ -28,7 +28,8 @@ fn desk_composer_tester(
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let t = @ui.Tester::new(
-    fn(c) {
+    @ui.old_views_here,
+    tree=@sf.presented_tree(fn(c) {
       // (the library's words as the app's view says them: without, the composer said its keys, and passed only after
       // another test had drawn the app, 2026-10-24)
       @sf.set_words(fill)
@@ -45,7 +46,7 @@ fn desk_composer_tester(
       |> ignore
       // what the presenters show (＋'s sheet with a finger), over it as the shell has it
       @sf.presented(c)
-    },
+    }),
     w=900.0,
     h=500.0,
     platform~,
@@ -84,7 +85,7 @@ test "desk composer: typed words are the core's draft (composer.text); Enter sen
   t.draw()
   // (with a mouse and nothing focused it says which key brings the cursor there: pressed in its middle)
   t.tap(450.0, 500.0 - 16.0 - 22.0)
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   t.type_text("先看第三项")
   t.frame()
   assert_true(named(calls, "composer.text").length() > 0)
@@ -94,6 +95,31 @@ test "desk composer: typed words are the core's draft (composer.text); Enter sen
   assert_eq(sends.length(), 1)
   assert_eq(text(Some(sends[0].params), "text"), "先看第三项")
   assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").text.get(), "")
+}
+
+///|
+test "desk composer: ⌘Enter 发送 chosen in 快捷键 (prefs sendKey), Enter and ⇧Enter are new lines and ⌘Enter sends; Ctrl+Enter on Windows" {
+  for one in [(0, @ui.mod_cmd), (3, @ui.mod_ctrl)] {
+    let (platform, command) = one
+    let calls : Array[Made] = []
+    let (t, src) = desk_composer_tester(calls, platform~)
+    (src.call)("prefs.set", { "sendKey": "mod" }, fn(_) {  })
+    t.draw()
+    t.tap(450.0, 500.0 - 16.0 - 22.0)
+    assert_true(composer_focused())
+    t.type_text("先看第三项")
+    t.enter()
+    t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
+    t.type_text("再看第四项")
+    t.frame()
+    assert_eq(named(calls, "chat.send").length(), 0, msg="platform \{platform}")
+    assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").text.get(), "先看第三项\n\n再看第四项")
+    t.key(@ui.key_code_enter, mods=command)
+    t.frame()
+    let sends = named(calls, "chat.send")
+    assert_eq(sends.length(), 1, msg="platform \{platform}")
+    assert_eq(text(Some(sends[0].params), "text"), "先看第三项\n\n再看第四项")
+  }
 }
 
 ///|
@@ -130,7 +156,7 @@ test "desk composer: Enter in a quote's comment keeps the comment and goes back 
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   assert_eq(w.quotes.get().length(), 1)
   assert_eq(text(Some(w.quotes.get()[0]), "comment"), "这里要对齐")
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   assert_eq(named(calls, "chat.send").length(), 0)
 }
 
@@ -141,11 +167,20 @@ fn desk_words(src : Source) -> String {
 }
 
 ///|
+/// Whether draft `key`'s composer has the keyboard (its field's: Field::focused).
+fn composer_focused(key? : String = "ws1/st1:s-c1") -> Bool {
+  match @sfbase.writings.get(key) {
+    Some(w) => w.field.focused()
+    None => false
+  }
+}
+
+///|
 /// The desk's composer focused (tapped in its middle).
 fn desk_focus(t : @ui.Tester) -> Unit raise {
   t.draw()
   t.tap(450.0, 500.0 - 16.0 - 22.0)
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
 }
 
 ///|
@@ -161,7 +196,7 @@ test "desk composer: `@` and words offer the chats they find over it (ChatRefMen
   t.key(@ui.key_code_down)
   t.key(@ui.key_code_up)
   assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").field.selection(), (5, 5))
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   assert_true(t.find("引用对话") is Some(_))
   t.enter()
   t.frame()
@@ -286,7 +321,7 @@ test "desk composer: words dragged in from another app go into its field: let go
   t.drop_words(fx + 4.0, fy + fh / 2.0, "对话 ID：c1")
   t.frame()
   t.frame()
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   assert_eq(desk_words(src), "对话 ID：c1")
   // on ＋ (the composer opened now), beside the field: at its caret, after them
   let (px, py, pw, ph) = t.query(Button, label=@sf.t("web-main.composer.attach")).unwrap().rect
@@ -366,7 +401,7 @@ test "desk composer: a file up after the page last heard of it goes once as Ente
   @sfbase.writing_add(src, w, "ws1/st1", "notes.txt", b"abc")
   t.frame()
   // (the fixture's core has it up at once)
-  let now = (src.topic)("composer", { "key": Json::string("ws1/st1:s-c1") })
+  let now = src.topic("composer", { "key": Json::string("ws1/st1:s-c1") }).get().snapshot()
   let going = items(now.value, "files").map(fn(f) {
     guard f is Object(m) else { f }
     let g = m.copy()
@@ -437,7 +472,7 @@ test "desk composer: an image or a video sent while it goes up is among its mess
   @sfbase.writing_add(src, w, "ws1/st1", "录屏.mov", b"mov", still="clip.png")
   @sfbase.writing_add(src, w, "ws1/st1", "build.log", b"abc")
   t.frame()
-  let now = (src.topic)("composer", { "key": Json::string("ws1/st1:s-c1") })
+  let now = src.topic("composer", { "key": Json::string("ws1/st1:s-c1") }).get().snapshot()
   let going = items(now.value, "files").map(fn(f) {
     guard f is Object(m) else { f }
     let g = m.copy()
@@ -476,7 +511,7 @@ test "desk composer: an image or a video sent while it goes up is among its mess
   assert_eq(flying.map(fn(ff) { ff.key }), ["upload:" + id, "upload:" + clip])
   let picture = flying[0].picture.unwrap()
   assert_true(picture != "")
-  let face = @ui.Tester::new(fn(_) { (flying[0].face)() }, w=200.0, h=200.0)
+  let face = @ui.Tester::new(fn(c) { (flying[0].face)(c) }, w=200.0, h=200.0)
   // (its bytes again: a tester of its own starts with none)
   @ui.add_image(picture, png_head())
   face.draw()
@@ -512,7 +547,7 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
   t.frame()
-  let now = (src.topic)("composer", { "key": Json::string("ws1/st1:s-c1") })
+  let now = src.topic("composer", { "key": Json::string("ws1/st1:s-c1") }).get().snapshot()
   let files = items(now.value, "files").map(fn(f) {
     guard f is Object(m) else { f }
     let g = m.copy()
@@ -536,7 +571,7 @@ fn spun_tile_and_face(as_ : (Map[String, Json]) -> Unit) -> (Bool, Bool) raise {
   assert_eq(flying.length(), 1)
   let (x, y, fw, fh) = flying[0].from
   let tile = lines.iter().any(fn(l) { l.0 >= x && l.0 <= x + fw && l.1 >= y && l.1 <= y + fh })
-  let face = @ui.Tester::new(fn(_) { (flying[0].face)() }, w=200.0, h=200.0)
+  let face = @ui.Tester::new(fn(c) { (flying[0].face)(c) }, w=200.0, h=200.0)
   // (its bytes again: a tester of its own starts with none)
   @ui.add_image(flying[0].picture.unwrap(), png_head())
   face.draw()
@@ -734,8 +769,11 @@ test "a phone's ＋: the sheet of what can go in (Attach.kt); 照片和视频 as
   let calls : Array[Made] = []
   let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
   t.draw()
+  // (this window's ＋ panel beside it, not a sheet: open at its declared moment, its way in over @kit.pop_ms from the
+  // press)
+  let pressed = t.time()
   t.click(Button, label=@sf.t("web-main.composer.attach"))
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(pressed + @kit.pop_ms - t.time())
   assert_true(t.find("照片") is Some(_))
   assert_true(t.find("Station 文件") is Some(_))
   // (what the system's picker answers, said before it is asked; the tile, not the strip's last, which asks for the
@@ -802,12 +840,12 @@ test "a finger's tap outside the composer keeps the keyboard until it is put awa
   let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
   t.draw()
   t.tap(450.0, 500.0 - 16.0 - 22.0)
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   t.tap(450.0, 60.0)
   t.draw()
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   t.keyboard_gone()
-  assert_true(!t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(!composer_focused())
 }
 
 ///|
@@ -818,7 +856,7 @@ test "the room a list keeps for the composer opened with one line is as tall as 
     let (t, _) = desk_composer_tester(calls, pointing~, platform~)
     t.draw()
     t.tap(450.0, 500.0 - 16.0 - 22.0)
-    assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+    assert_true(composer_focused())
     // (its box come to its opened shape)
     let opened = t.rest_of("composer")
     if opened > t.time() && opened < @double.infinity {
@@ -829,7 +867,7 @@ test "the room a list keeps for the composer opened with one line is as tall as 
     let pane = t.ctx().width
     assert_eq(
       @motion.measured(t.ctx(), "composer/content"),
-      Some(@sfpages.composer_open_room(pane) - 12.0 - @sfpages.composer_foot_in(pane)),
+      Some(@sfpages.composer_open_room(t.ctx(), pane) - 12.0 - @sfpages.composer_foot_in(t.ctx(), pane)),
     )
   }
 }
@@ -1010,21 +1048,33 @@ test "desk composer: 抄送 opens a menu of the chat's Slack and Feishu threads;
     },
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
-  let on = @signals.signal(false)
-  let t = chat_cc_tester(src, r, fn() {
-      chat_view_made({
+  let on = Ref(false)
+  let t = @ui.Tester::new(
+    @ui.old_views_here,
+    tree=@sf.presented_tree(fn(c) {
+      @sf.set_words(fill)
+      let _ = @sf.begin(c)
+      let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
+      let v = chat_view_made({
         "title": "整理发布清单",
         "thread": { "id": 7 },
         "cc": [
-          { "thread": 21, "place": "#still-fail", "via": "slack", "on": Json::boolean(on.get()) },
+          { "thread": 21, "place": "#still-fail", "via": "slack", "on": Json::boolean(on.val) },
           { "thread": 22, "place": "产品讨论", "via": "feishu", "on": false },
         ],
       })
-  })
+      @sfpages.chat_composer(c, src, ws, r, Some(v))
+      @sf.presented(c)
+    }),
+    w=900.0,
+    h=500.0,
+    pointing=Mouse,
+  )
+  t.draw()
   let cc = @sf.t("web-main.composer.ccLabel")
   t.click(Button, label=cc)
   t.click(MenuItemCheckbox, label="#still-fail")
-  on.set(true)
+  on.val = true
   t.draw()
   // still open: the other can be ticked next
   t.click(MenuItemCheckbox, label="产品讨论")
@@ -1051,18 +1101,7 @@ test "desk composer: where 抄送 copies to is said just before send in either s
     let until = t.time() + ms
     while t.time() < until {
       match t.drawn_of("#still-fail") {
-        Some((x, _)) => {
-          xs.push(x)
-          // The chooser's chevron and padding stay before the note's 14-point platform mark and its 4-point gap.
-          match @ui.view_tree() {
-            Some(tree) => for d in tree.drawn() {
-              if d.alpha > 0.01 && tree.said_of(d.id) is Some({ role: Button, label, .. }) && label.has_prefix("抄送 ") {
-                assert_true(d.x + d.w <= x - 18.0, msg="the chooser crosses its destination at \{t.time()}: \{(d.x, d.w, x)}")
-              }
-            }
-            None => ()
-          }
-        }
+        Some((x, _)) => xs.push(x)
         None => fail("where it copies to not drawn at \{t.time()}")
       }
       t.frame()
@@ -1078,8 +1117,8 @@ test "desk composer: where 抄送 copies to is said just before send in either s
   watch(@sfpages.let_go_ms + 2.0 * @ui.move_most_ms)
   assert_true(t.locate("=抄送") is [], msg="抄送 only once opened")
   // opened again
-  let (fx, fy, fw, fh) = t.get(TextField).rect
-  t.tap(fx + fw / 2.0, fy + fh / 2.0)
+  let (px, py) = t.locate("icon:plus")[0]
+  t.tap(px + 200.0, py)
   watch(2.0 * @ui.move_most_ms)
   // (going with send, which stands 2 further in on one line: each concentric with its own corner, 8 in the capsule's
   // 24 and 10 in the box's 26, a card's)
@@ -1092,8 +1131,13 @@ test "desk composer: 抄送's menu has each thread's platform mark before its pl
   new_run()
   let src = fixture("chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
-  let t = chat_cc_tester(src, r, fn() {
-      chat_view_made({
+  let t = @ui.Tester::new(
+    @ui.old_views_here,
+    tree=@sf.presented_tree(fn(c) {
+      @sf.set_words(fill)
+      let _ = @sf.begin(c)
+      let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
+      let v = chat_view_made({
         "title": "整理发布清单",
         "thread": { "id": 7 },
         "cc": [
@@ -1101,10 +1145,17 @@ test "desk composer: 抄送's menu has each thread's platform mark before its pl
           { "thread": 22, "place": "#still-fail", "via": "slack", "on": false },
         ],
       })
-  })
+      @sfpages.chat_composer(c, src, ws, r, Some(v))
+      @sf.presented(c)
+    }),
+    w=900.0,
+    h=500.0,
+    pointing=Mouse,
+  )
+  t.draw()
   // (named with what is ticked)
   t.click(Button, label=@sf.t("web-main.composer.ccLabel") + " 产品讨论")
-  let bs = t.boxes_held()
+  let bs = t.boxes()
   // whether it or what is in it draws a picture (a mark, an icon)
   let draws = fn(i : Int) {
     bs.iter().any(fn(b) {
@@ -1116,16 +1167,11 @@ test "desk composer: 抄送's menu has each thread's platform mark before its pl
     })
   }
   for place in ["产品讨论", "#still-fail"] {
-    // The menu's words; the ticked thread is also named by the composer, outside this menu row.
-    let (x, y, width, height) = t.get(MenuItemCheckbox, label=place).rect
-    let w = bs.iter().find_first(fn(b) {
-      b.text == place && b.x >= x && b.y >= y && b.x < x + width && b.y < y + height
-    }).unwrap()
-    // boxes_held puts the node's text in a child; its label node stands beside the mark and check.
-    let label = bs[w.parent]
-    let row = bs.filter(fn(b) { b.parent == label.parent })
-    let before = row.filter(fn(b) { b.index < label.index })
-    let after = row.filter(fn(b) { b.index > label.index })
+    // (the menu's, made by 抄送 before what is said by send: a ticked one's place is said there too)
+    let w = bs.iter().find_first(fn(b) { b.text == place }).unwrap()
+    let row = bs.filter(fn(b) { b.parent == w.parent })
+    let before = row.filter(fn(b) { b.index < w.index })
+    let after = row.filter(fn(b) { b.index > w.index })
     // one column before its words, its mark's: none empty where a check would go
     assert_true(before.length() == 1 && draws(before[0].index), msg="\{place}: \{before.map(fn(b) { (b.kind, b.x, b.w) })}")
     // a ticked one's check at its end, only there

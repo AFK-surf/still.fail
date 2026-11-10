@@ -2,10 +2,11 @@
 // The core itself is linked into the app (its native stub includes apple_engine.m or android_engine.c from here);
 // this is what the app's MoonBit does with it.
 //
-// Signing in: where the host has a browser session (iOS's ASWebAuthenticationSession), through it (@core.sign_in);
-// elsewhere (Android, macOS, Windows) as a command-line tool does (@hostapi.browser_login, which knows nothing of
-// still.fail): auth.begin with a loopback address, the page in the browser (a Custom Tab; the default browser),
-// auth.complete with what comes back.
+// Signing in: where the host has a browser session (iOS's ASWebAuthenticationSession; Android's Custom Tab coming back
+// on the app's own scheme), through it (@core.sign_in); elsewhere (macOS, Windows) as a command-line tool does
+// (@hostapi.browser_login, which knows nothing of still.fail): auth.begin with a loopback address, the page in the
+// default browser, auth.complete with what comes back. (Android signed in on the loopback too until a vendor's freezer,
+// ColorOS's, was seen leaving the browser's way back to a backgrounded app unanswered.)
 //
 // The environment's say, read once at `start`:
 // - MBUI_CORE_SIGNIN=1 presses 登录 once the accounts are read (scripted runs; with MBUI_AUTH_DRY=1 the browser
@@ -20,7 +21,7 @@
 //   local cloud's mock login hands it out (/__dev/account?user=alice). Only with MBUI_CLOUD: never on the real cloud.
 // - MBUI_AUTH_LOGIN=1 (`scripts/mac.sh login`) signs in as a login command: the app listens on 127.0.0.1, hands the
 //   login page to $BROWSER (else `open`), and exits 0 once the browser has come back and the sign-in is done (1 when
-//   it failed). A station's remote login runs it as its login command (ember docs/remote-login.md).
+//   it failed). A station's remote login runs it as its login command.
 
 ///|
 /// How signing in stands: what to say of it, and whether one is under way.
@@ -61,7 +62,7 @@ pub fn sign_in_now() -> SignIn {
 ///|
 /// `state` changed: told.
 fn told() -> Unit {
-  changed.set(@signals.untracked(fn() { changed.get() }) + 1)
+  changed.set(changed.untracked() + 1)
 }
 
 ///|

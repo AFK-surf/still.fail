@@ -1,4 +1,4 @@
-// A service's page and what serves it, as both frames show one (ember apps/android chat/screens/Preview.kt, PreviewWeb.kt;
+// A service's page and what serves it, as both frames show one (still.fail apps/android chat/screens/Preview.kt, PreviewWeb.kt;
 // web Preview.tsx, PreviewStage.tsx): found by its job, known by its name, never its port. Its page is a site view
 // (src/ui/native.mbt `NativeView::site`) whose every request is answered here from the station through the core
 // (`station.preview` with `stream`), redirects followed here (to the service only, 5 at most) and its cookies kept here
@@ -20,7 +20,7 @@ pub(all) struct Viewport {
 } derive(Eq)
 
 ///|
-/// The sizes offered (Preview.kt PRESETS).
+/// The sizes offered.
 // kept across runs: a table, never written
 pub let svc_presets : Array[(String, Int, Int)] = [
   ("phone", 390, 844),
@@ -57,7 +57,6 @@ pub(all) struct ServicePage {
   mut moving : Bool
   mut placed : Placed?
   mut hold : StageHold?
-  mut tapped_at : Double
   /// its name and its chat's agent (marks go into that chat's draft: none, nothing to mark for), its marks
   mut name : String
   mut session : String
@@ -157,7 +156,6 @@ pub fn service_page_for(station : String, job : String, prefs? : Json? = None) -
         moving: false,
         placed: None,
         hold: None,
-        tapped_at: -1.0e9,
         name: "",
         session: "",
         marks: page_marks_new(),
@@ -577,7 +575,7 @@ pub fn split_cookies(header : String) -> Array[String] {
 }
 
 ///|
-/// Where a redirect goes, as a path of the service (PreviewWeb.kt follow: java.net.URI's resolve): relative to `path`
+/// Where a redirect goes, as a path of the service: relative to `path`
 /// (its dot segments taken out), or an address of the service itself (localhost, 127.0.0.1); anywhere else refused,
 /// as the Android app's.
 pub fn service_redirect(path : String, location : String) -> Result[String, String] {
@@ -680,7 +678,7 @@ pub fn dots_out(path : String) -> String {
 
 ///|
 /// Where the page is drawn on the stage, from the stage's top left: its top left, its scale, the size it is laid out
-/// at (Preview.kt Placed).
+/// at.
 pub(all) struct Placed {
   x : Double
   y : Double
@@ -690,24 +688,23 @@ pub(all) struct Placed {
 }
 
 ///|
-/// A finger (or two) on the stage, from where it went down (Preview.kt Stage's gesture): where they were the frame
-/// before (or when one came or went), how far one finger went, when it went down, whether on the page.
+/// A finger (or two) on the stage, from where it went down: where they were the frame
+/// before (or when one came or went), how far one finger went, whether on the page.
 pub(all) struct StageHold {
   mut was : Array[(Double, Double)]
   mut travelled : Double
-  down_at : Double
   on_page : Bool
 }
 
 ///|
-/// How far the page can be zoomed by hand (Preview.kt StageState.zoom, pinch).
+/// How far the page can be zoomed by hand (pinch).
 pub let stage_min_scale : Double = 0.05
 
 ///|
 pub let stage_max_scale : Double = 4.0
 
 ///|
-/// A sized page's place on its canvas (Preview.kt StageState): fitted 16 in, never enlarged, by thousandths; dragged
+/// A sized page's place on its canvas: fitted 16 in, never enlarged, by thousandths; dragged
 /// anywhere; zoomed by hand within `stage_min_scale` … `stage_max_scale`.
 pub fn stage_zoom() -> @kit.Zoom {
   @kit.Zoom::new(
@@ -720,7 +717,7 @@ pub fn stage_zoom() -> @kit.Zoom {
 }
 
 ///|
-/// The smallest and largest a size may be (Preview.kt LIMIT_MIN, LIMIT_MAX).
+/// The smallest and largest a size may be (LIMIT_MAX).
 pub let size_min : Int = 240
 
 ///|

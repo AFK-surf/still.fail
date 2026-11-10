@@ -18,7 +18,7 @@ import {
 }
 
 // Values
-pub let absolute_times : @signals.Signal[Bool]
+pub let absolute_times : @ref.Ref[Bool]
 
 pub fn act(@sfbase.Source, String, String, String, @json.Json, done? : String, done_action? : String, done_run? : () -> Unit, at_once? : Bool, ok? : (@json.Json) -> Unit, failed? : () -> Unit) -> Unit
 
@@ -38,7 +38,7 @@ pub fn app_link(String) -> String
 
 pub fn app_tree(@sfbase.Source) -> (@view.View) -> Unit
 
-pub fn appearance(@sfbase.Source, Bool?) -> Unit
+pub fn appearance(@ui.Ctx, @sfbase.Source, Bool?) -> Unit
 
 pub let archive_ease : @ui.Ease
 
@@ -80,7 +80,7 @@ pub let bars_picked : @signals.Signal[(Array[Array[String]], Int32)?]
 
 pub fn base_name(String) -> String
 
-pub fn became_starts(wide~ : Bool) -> Unit
+pub fn became_starts(@ui.Ctx, wide~ : Bool) -> Unit
 
 pub let big_file : Double
 
@@ -110,13 +110,15 @@ pub fn chat_ref_of(@sfbase.ChatItem) -> @sfbase.ChatRef
 
 pub fn chat_screens_driven(Array[@sfbase.ChatScreen]) -> Bool
 
-pub fn chat_screens_open(@sfbase.ChatRef, Array[@sfbase.ChatScreen], from~ : @sf.Beside, along? : @view.Along) -> Unit
+pub fn chat_screens_open(@sfbase.ChatRef, Array[@sfbase.ChatScreen], from~ : @sf.Beside, along? : @ui.Along) -> Unit
 
 pub fn chat_tick(@ui.Ctx, String, @sfbase.Reading, @sfbase.ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
 pub fn chat_view_made(@json.Json) -> @sfbase.ChatView
 
 pub fn chats_of(@sfbase.Source, String, String) -> (@sfbase.ChatsView?, String?)
+
+pub fn chats_topic(@sfbase.Source, String) -> @sfbase.Topic
 
 pub fn choices_of(@json.Json?, String) -> Array[@sfbase.Choice]?
 
@@ -138,7 +140,7 @@ pub fn cloud_updates(@sfbase.Source, String, String) -> @sfbase.UpdateSource
 
 pub fn cookie_jar(String, Array[(String, String)]) -> String
 
-pub fn copy_chat_link(@ui.Ctx, String, String) -> Unit
+pub fn copy_chat_link(String, String) -> Unit
 
 pub fn core_pictures((String, (Bytes?) -> Unit) -> Unit) -> (String, Int32) -> String
 
@@ -294,11 +296,9 @@ pub fn emit_out(@ui.Ctx, Int32, Int32, @sfbase.Emits, Double) -> Unit
 
 pub let emit_out_ms : Double
 
-pub fn emit_place(@ui.Ctx, String) -> (Double, Double, Double, Double)?
-
 pub fn emit_release(@sfbase.Emits) -> Unit
 
-pub fn emit_step(@ui.Ctx, @sfbase.Emits, @sfbase.Turns, Double) -> Unit
+pub fn emit_step(@ui.Ctx, @sfbase.Emits, @sfbase.Turns, () -> Double) -> Unit
 
 pub fn emit_take(@ui.Ctx, @sfbase.Emits, @sfbase.ChatView, Map[String, Bool]) -> Unit
 
@@ -338,7 +338,7 @@ pub fn files_can_lend(@sfbase.Source, @sfbase.Workspace) -> Bool
 
 pub fn files_into(String, @sfbase.Dragged) -> Unit
 
-pub fn files_lend(@ui.Ctx, @sfbase.Source, @sfbase.Workspace) -> Unit
+pub fn files_lend(@sfbase.Source, @sfbase.Workspace) -> Unit
 
 pub fn files_page(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, place? : Bool) -> Unit
 
@@ -351,8 +351,6 @@ pub fn first_frame(@ui.Ctx, @sfbase.Source, String, String, @sfbase.Attachment, 
 pub fn fixture_app(String) -> @sfbase.Source
 
 pub fn fixture_json(String) -> @sfbase.Source
-
-pub fn fixture_json_app(String) -> @sfbase.Source
 
 pub fn flag(@json.Json?, String) -> Bool
 
@@ -380,11 +378,11 @@ pub let flight_carry_after_ms : Double
 
 pub fn flight_carry_gone(String) -> Unit
 
-pub fn flight_carry_into(String, String, String, String, hold~ : (Double) -> Unit) -> Unit
+pub fn flight_carry_into(@ui.Ctx, String, String, String, String, hold~ : (@ui.Ctx, Double) -> Unit) -> Unit
 
 pub let flight_carry_ms : Double
 
-pub fn flight_carry_start(@ui.Ctx, String, String, Array[@sfbase.FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
+pub fn flight_carry_start(@ui.Ctx, String, String, Array[@sfbase.FlyingFile], field~ : String, hold~ : (@ui.Ctx, Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
 
 pub fn flight_carry_waiting(@ui.Ctx) -> Unit
 
@@ -412,7 +410,7 @@ pub fn flight_placed(@ui.Ctx, @sfbase.SendFlight) -> Unit
 
 pub fn flight_settled_of(@ui.Ctx, @sfbase.SendFlight) -> Double
 
-pub fn flight_start(@ui.Ctx, String, String, String, String, Double, Array[@sfbase.FlyingFile], field~ : String, hold~ : (Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
+pub fn flight_start(@ui.Ctx, String, String, String, String, Double, Array[@sfbase.FlyingFile], field~ : String, hold~ : (@ui.Ctx, Double) -> Unit, desk~ : Bool, marks? : Array[(Int32, Int32)], runs? : @json.Json?) -> Unit
 
 pub fn flight_takes(String, String) -> Bool
 
@@ -478,8 +476,6 @@ pub let kept_places : Map[String, @sfbase.KeptPlace]
 
 pub let left_pages : Array[@sfbase.Page]
 
-pub let linger_ms : Double
-
 pub fn linger_tick(@ui.Ctx, @sfbase.Source, in_front~ : Bool) -> Unit
 
 pub fn link_headers(@json.Json?) -> Array[(String, String)]?
@@ -522,6 +518,8 @@ pub fn local_sent(@sfbase.Outgoing) -> Bool
 
 pub fn long_jobs(@sfbase.Source, @sfbase.Workspace) -> Int32
 
+pub fn long_stop(String, @json.Json?) -> (String, @json.Json, Array[(String, String)])
+
 pub fn mark_numbers(Array[@sfbase.Mark]) -> Map[Int32, Int32]
 
 pub fn mark_where(@sfbase.PageMark, String) -> String
@@ -551,8 +549,6 @@ pub fn menu_bar_json(@json.Json?, Bool) -> String
 pub fn message_of(@json.Json) -> @sfbase.Message
 
 pub fn nav_home() -> Unit
-
-pub fn nav_over_home(Array[@sfbase.Page]) -> Unit
 
 pub fn near_left(@sfbase.Source, String) -> Unit
 
@@ -738,7 +734,7 @@ pub let quoted_into : Map[String, Array[(String, String, String, @json.Json)]]
 
 pub let read_only_words : String
 
-pub fn read_place(@sfbase.Reading, @sfbase.ChatView, Array[@sfbase.Entry], @ui.ListReader, Double, Double, Int32) -> Unit
+pub fn read_place(@sfbase.Reading, @sfbase.ChatView, Array[@sfbase.Entry], @ui.ListReader, Double, Double) -> Unit
 
 pub fn reader_key(@sfbase.DriveAt) -> String
 
@@ -790,7 +786,7 @@ pub fn sending_of(String) -> Array[@sfbase.LocalSent]
 
 pub fn sent_key(String, String) -> String
 
-pub fn sent_local(String, @sfbase.ChatView?, String, Array[@json.Json], going? : Array[@json.Json], quotes? : Array[@json.Json], runs? : @json.Json?) -> String
+pub fn sent_local(@ui.Ctx, String, @sfbase.ChatView?, String, Array[@json.Json], going? : Array[@json.Json], quotes? : Array[@json.Json], runs? : @json.Json?, now~ : Double) -> String
 
 pub fn sent_local_gone(String, String) -> Unit
 
@@ -876,6 +872,8 @@ pub fn split_cookies(String) -> Array[String]
 
 pub fn split_query(String) -> (String, String)
 
+pub let splash_label_ms : Double
+
 pub let src_now : @ref.Ref[() -> Double]
 
 pub fn stack_open(@sfbase.Page) -> Unit
@@ -889,6 +887,8 @@ pub fn stage_zoom() -> @kit.Zoom
 pub fn stamp_of(@json.Json?, String) -> @sfbase.Stamp?
 
 pub let station_files_asked : @ref.Ref[(@sfbase.Source, String) -> Unit]
+
+pub fn station_marks(@sfbase.Source, String) -> Array[@sfbase.Station]
 
 pub fn stations_at_glance(@sfbase.Source, String) -> (@sf.GlyphCounts, String)
 
@@ -922,7 +922,7 @@ pub fn tape_differences(String, base~ : @sfbase.Source, trace? : Array[String]) 
 
 pub fn tell_focus(@sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, @sfbase.Reading, Bool, Double) -> Unit
 
-pub fn tell_place(@sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, @sfbase.Reading) -> Unit
+pub fn tell_place(@sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, @sfbase.Reading, exact? : Bool) -> Unit
 
 pub fn term_color(String, Bool) -> Int64
 
@@ -958,6 +958,8 @@ pub let unseen_at : Double
 
 pub let update : @sfbase.Update
 
+pub fn update_again(@ui.Ctx, @sfbase.Source) -> Unit
+
 pub fn update_asks() -> Bool
 
 pub fn update_check(@sfbase.Source, Bool, done? : (String) -> Unit) -> Unit
@@ -975,6 +977,8 @@ pub fn update_from_menu(@sfbase.Source) -> Unit
 pub fn update_go(@sfbase.Source) -> Unit
 
 pub fn update_now() -> @sfbase.UpdateNow
+
+pub fn update_on_release(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn update_reset() -> Unit
 

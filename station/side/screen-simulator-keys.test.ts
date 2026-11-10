@@ -1,4 +1,4 @@
-// What a person's keys do on an iOS Simulator (docs/remote-screens.md "Simulators") on a real Mac with Xcode: a simulator
+// What a person's keys do on an iOS Simulator on a real Mac with Xcode: a simulator
 // of this test's own, a small app whose focused field logs what it holds, keys and pasted text sent through still.fail
 // Helper's view as a person's are, with no window of Device Hub's and none of its permissions needed (vendor/serve-sim
 // DTUHIDKeys). STILLFAIL_HELPER and STILLFAIL_HELPER_DIR: another helper. A side test.
@@ -102,7 +102,10 @@ test("keys and text on a simulator, with and without its Device Hub window", { s
     debug.logs(0);
     await sleep(1500);
     assert.equal(await debug.relaunch(APP), true);
-    assert.ok((await said(6000)).includes("side-ready"), "the app came up");
+    // Waited for, not a fixed 6 s (side run 41810080693): how long a device just booted takes is not this test's.
+    let up = false;
+    for (const asked = Date.now(); !up && Date.now() - asked < 60_000;) up = (await said(500)).includes("side-ready");
+    assert.ok(up, "the app came up");
 
     await simulators.start();
     for (let i = 0; i < 10 && !hub.get(`simulator:${udid}`); i++) await simulators.refresh();

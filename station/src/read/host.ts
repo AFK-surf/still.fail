@@ -11,7 +11,7 @@ import { platform } from "../platform/index.ts";
 import { cpuShare, type Ticks } from "../platform/cpu-share.ts";
 
 export type { Ticks };
-/// The ticks last seen, and when (host.rs TICKS).
+/// The ticks last seen, and when.
 export type Seen = { at: number; ticks: Ticks } | null;
 
 /// hostname, without a `.local`.
@@ -49,7 +49,7 @@ export function hostInfo(dataDir: string, last: Seen): { info: unknown; seen: Se
       loadAvg: [1, 1, 1], cpuBusy: 0.25, uptimeSec: 3600,
       memory: { totalBytes: 8_000_000_000, usedBytes: 4_000_000_000, swapUsedBytes: 0 },
       disk: { path: "/test-station/data", totalBytes: 100_000_000_000, freeBytes: 50_000_000_000 },
-      emberRssBytes: 100_000_000, checkedAt: wall.now(),
+      stationRssBytes: 100_000_000, checkedAt: wall.now(),
     }, seen: null, needsTicks: false };
   }
   const { host } = platform;
@@ -73,6 +73,8 @@ export function hostInfo(dataDir: string, last: Seen): { info: unknown; seen: Se
     uptimeSec: uptime,
     memory: mem,
     disk: disk(dataDir),
+    stationRssBytes: rss,
+    // Clients from before the name need this field, and refuse the whole station list without it.
     emberRssBytes: rss,
     checkedAt: wall.now(),
   };

@@ -153,8 +153,8 @@ test "editing another station's preset still starts browsing on the composer's s
   let base = fixture("newchat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       match got.value {
         Some(Object(m)) if name == "newChat" => {
           let v = m.copy()
@@ -182,4 +182,82 @@ test "editing another station's preset still starts browsing on the composer's s
   t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="选择文件夹所在的 station: Maple") is Some(_), msg=t.semantics_dump())
   assert_eq(text(Some(named(calls, "drive.folders")[0].params), "station"), "ws1/st2")
+}
+
+///|
+/// 浏览文件夹 on a Windows station with four disks, the folders it is asked for kept in `asked`.
+fn preset_browse_disks(asked : Array[String], wide : Bool) -> @ui.Tester raise {
+  new_run()
+  let base = fixture("newchat-preset-new-add")
+  let home = "C:\\Users\\lin"
+  let place = fn(name : String, path : String, disk : Bool) {
+    Json::object({ "name": Json::string(name), "path": Json::string(path), "disk": Json::boolean(disk) })
+  }
+  let places = [
+    place("主目录", home, false),
+    place("桌面", home + "\\Desktop", false),
+    place("文档", home + "\\Documents", false),
+    place("下载", home + "\\Downloads", false),
+    place("视频", home + "\\Videos", false),
+    place("音乐", home + "\\Music", false),
+    place("图片", home + "\\Pictures", false),
+    place("C:", "C:\\", true),
+    place("D:", "D:\\", true),
+    place("E:", "E:\\", true),
+    place("F:", "F:\\", true),
+  ]
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name != "drive.folders" {
+        (base.call)(name, params, done)
+        return
+      }
+      let at = text(Some(params), "path")
+      asked.push(at)
+      done(Ok(Json::object({
+        "path": Json::string(if at == "" { home } else { at }),
+        "home": Json::string(home),
+        "entries": Json::array([]),
+        "crumbs": Json::array([]),
+        "places": Json::array(places),
+      })))
+    },
+  }
+  let t = if wide {
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  } else {
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  }
+  open_mode("newchat-preset-new-add")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="浏览文件夹…")
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+test "wide, a machine's last disk is reached in the picker's places (the column's room ended at D:)" {
+  let asked : Array[String] = []
+  let t = preset_browse_disks(asked, true)
+  let (x, y) = t.find("桌面").unwrap()
+  t.wheel(x, y, 2000.0)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("F:")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(asked.last(), Some("F:\\"))
+}
+
+///|
+test "narrow, a machine's last disk is reached in the picker's places, its folders keeping room under them" {
+  let asked : Array[String] = []
+  let t = preset_browse_disks(asked, false)
+  let (x, y) = t.find("桌面").unwrap()
+  t.wheel(x, y, 2000.0)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("F:")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(asked.last(), Some("F:\\"))
+  assert_true(shows(t, "此处没有文件夹"), msg="\{t.text_runs().map(fn(r) { r.text })}")
 }

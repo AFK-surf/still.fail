@@ -154,11 +154,11 @@ test "panel a form at a point, its field holding the focus, its own button closi
   @sf.panel("面板", from=At(600.0, 100.0, 0.0, 0.0), form=true, field="form field", fn(c, close) {
     c.editor("form field", field=pf, placeholder="填一下") |> ignore
     @sf.panel_foot(c, fn() {
-      if @sf.panel_button(c, "ok", "好的", tone=Filled) {
+      @sf.panel_button(c, "ok", "好的", tone=Filled, on_press=fn() {
         said.push("ok")
         close()
         @sf.panel("另一个", next, from=At(600.0, 100.0, 0.0, 0.0), form=true, field="next field")
-      }
+      }) |> ignore
     })
   })
   t.run_for(@ui.move_most_ms)

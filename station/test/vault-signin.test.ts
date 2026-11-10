@@ -1,4 +1,4 @@
-// Signing in to a site from a card (vault/signin.ts, docs/vault.md 登录态 "Signing in from a card"): one call of the
+// Signing in to a site from a card (vault/signin.ts 登录态 "Signing in from a card"): one call of the
 // agent's, the vault's sign-in asked for where it keeps one; else a card the person answers from their app, what their
 // password manager gave typed in by the station step by step, a code asked on the card, a person given the tab where
 // only they can go on, the agent told when the page left its sign-in and kept in the vault, with no card of its own,
@@ -9,6 +9,7 @@ import { test } from "node:test";
 import type { Driven, FormField, FormValues } from "../src/browser/signin-form.ts";
 import type { Request } from "../src/vault/crypto.ts";
 import { SignIns, siteOf } from "../src/vault/signin.ts";
+import { vaultTools } from "../src/vault/tool.ts";
 import { installSigninSaveIndex, queueSigninSave, stepSigninSaveIndex } from "../src/vault/signin-save-index.ts";
 import { STILLFAIL_SURFACE } from "../src/store/store.ts";
 
@@ -33,14 +34,14 @@ function world(o: { listed?: string; held?: string; surface?: string; db?: Datab
     store: {
       getSession: (k: string) => sessions.get(k) ?? null,
       starter: () => "pat@example.com",
-      latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }) as any,
-      sessionThreads: () => [{ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }] as any,
+      latestThread: () => ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }) as any,
+      sessionThreadById: () => ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }) as any,
       insertMessage: (m: any) => {
         cards.push({ ts: m.ts, card: m.card, text: m.text });
         hidden = false;
         return [++n];
       },
-      pendingCard: (): [{ ts: string }, unknown] | null => hidden || cards.length === 0 ? null : [{ ts: cards.at(-1)!.ts }, cards.at(-1)!.card],
+      pendingCardHeader: (): [{ ts: string }, unknown] | null => hidden || cards.length === 0 ? null : [{ ts: cards.at(-1)!.ts }, cards.at(-1)!.card],
       withdrawCard: (_a: string, _t: number, ts: string) => (withdrawn.push(ts), true),
       restateCard: (_a: string, _t: number, ts: string, f: (was: any) => any) => {
         const c = cards.find((x) => x.ts === ts)!;
@@ -81,7 +82,7 @@ function world(o: { listed?: string; held?: string; surface?: string; db?: Datab
     },
   });
   return {
-    db, signIns, cards, withdrawn, told, driven, kept, used, answers, timers, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; }, pass: (ms: number) => { now += ms; },
+    db, hub, signIns, cards, withdrawn, told, driven, kept, used, answers, timers, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; }, pass: (ms: number) => { now += ms; },
     setTabs: (t: typeof tabs) => void (tabs = t), setForm: (f: typeof form) => void (form = f),
     archive: (s: string) => {
       sessions.set(s, { archivedAt: 1 });
@@ -113,6 +114,65 @@ test("an active sign-in is found without reading the session's completed sign-in
   w.archive("s1");
   assert.equal(read, 1, "archiving also reads only active sign-ins");
   assert.equal(w.signIns.get("g1")!.status, "ended");
+});
+
+test("a sign-in reask does not post after its chat is archived during old card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  try {
+    await w.signIns.ask("s1", { site: "github.com", reason: "look" });
+    w.hideCard();
+    let ready = false;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async () => { started.resolve(); await release.promise; ready = true; };
+    const reask = w.signIns.ask("s1", { site: "github.com", reask: true });
+    void reask.catch(() => {});
+    const waiting = await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]);
+    assert.equal(waiting, true, "the reask waits for old card preparation");
+    w.archive("s1");
+    release.resolve();
+    await assert.rejects(reask, /archived or gone/);
+    assert.equal(w.cards.length, 1);
+  } finally { release.resolve(); await w.signIns.close(); w.db.close(); }
+});
+
+test("a cancelled sign-in reask does not post after old card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  try {
+    await w.signIns.ask("s1", { site: "github.com", reason: "look" });
+    w.hideCard();
+    let ready = false, passed: AbortSignal | undefined;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async (_threads: number[], signal?: AbortSignal) => { passed = signal; started.resolve(); await release.promise; ready = true; };
+    const tool = vaultTools(null as never, () => "/chat/s1", w.signIns).find((t) => t.name === "sign_in")!;
+    const reask = tool.run("s1", { site: "github.com", reask: true }, controller.signal);
+    void reask.catch(() => {});
+    assert.equal(await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]), true);
+    assert.equal(passed, controller.signal);
+    controller.abort();
+    release.resolve();
+    const error = await reask.then(() => null, (e: Error) => e);
+    assert.equal(w.cards.length, 1, "the cancelled call did not issue a new card");
+    assert.equal(error?.name, "AbortError");
+  } finally { release.resolve(); await w.signIns.close(); w.db.close(); }
+});
+
+test("a sign-in reask does not record a card after final old-card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  try {
+    await w.signIns.ask("s1", { site: "github.com", reason: "look" });
+    w.hideCard();
+    let reads = 0, ready = false;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ++reads === 1 || ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async () => { started.resolve(); await release.promise; ready = true; };
+    const reask = w.signIns.ask("s1", { site: "github.com", reask: true });
+    const waiting = await Promise.race([started.promise.then(() => true), reask.then(() => false)]);
+    assert.equal(waiting, true, "the final card check waits for preparation");
+    w.archive("s1");
+    release.resolve();
+    await reask;
+    assert.equal(w.cards.length, 1, "an archived chat did not get another card");
+  } finally { release.resolve(); await w.signIns.close(); w.db.close(); }
 });
 
 test("a vault decision finds its sign-in without reading the session's completed sign-ins", async () => {

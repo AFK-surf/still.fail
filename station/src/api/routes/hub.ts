@@ -1,4 +1,4 @@
-// What the pages ask of the hub, the jobs and the files (admin/mod.rs `route`, admin/files.rs): new chats and sessions,
+// What the pages ask of the hub, the jobs and the files (admin/mod.rs `route`): new chats and sessions,
 // uploads, messages, adding a session to a chat, archiving, deleting, stopping, evicting, warming, a session's settings,
 // clearing a chat's ended jobs, stopping a job. What is only written to the store is routes/marks.ts's; the reads are
 // routes/chats.ts's and routes/sessions.ts's (GET /sessions/:key/files among them).
@@ -340,8 +340,8 @@ export const routes = (tools: Tools): Route[] => {
 
   /// admin/mod.rs Input::text: JavaScript's String(x ?? "").
   const said = (v: unknown) => (v === undefined || v === null ? "" : typeof v === "string" ? v : JSON.stringify(v));
-  /// A development station's (STILLFAIL_DEV=1, else EMBER_DEV=1): only there is /dev/inject a route.
-  const dev = (process.env.STILLFAIL_DEV || process.env.EMBER_DEV) === "1";
+  /// A development station's (STILLFAIL_DEV=1): only there is /dev/inject a route.
+  const dev = process.env.STILLFAIL_DEV === "1";
   return [
     {
       method: "POST",
@@ -608,12 +608,22 @@ export const routes = (tools: Tools): Route[] => {
           const quotes = quotesOf(i.quotes);
           if (said === "" && files.length === 0 && quotes.length === 0) throw new Refused(400, tr(r.lang, "station.admin.emptyMessage"));
           let answeredCard: number | null = null;
-          const pending = s.pendingCard(t.id);
+          // Only a quote naming a message can match a pending card. Use the original input here, as the legacy
+          // option check also considers quotes that quotesOf omits (including ones beyond its display limit).
+          const originalQuotes: unknown[] = Array.isArray(i.quotes) ? i.quotes : [];
+          const named = originalQuotes.some((q: any) => q !== null && typeof q === "object" && typeof q.ts === "string");
+          let pending = named ? s.pendingCardHeaderIfReady(t.id) : null;
+          while (pending === undefined) {
+            if (!a.hub.prepareCardPosts) throw new Refused(503, "card lookup is not ready");
+            await a.hub.prepareCardPosts([t.id]);
+            if (s.getThread(t.id) === null) throw new Refused(404, `unknown thread ${t.id}`);
+            pending = s.pendingCardHeaderIfReady(t.id);
+          }
           if (pending !== null) {
             const [asked, card] = pending;
             const options: unknown[] = Array.isArray(card?.options) ? card.options : [];
             const selected = options.some((o: any) => o !== null && typeof o === "object" && o.label === said && o.action === "close");
-            const quoted = Array.isArray(i.quotes) && i.quotes.some((q: any) => q !== null && typeof q === "object" && q.ts === asked.ts);
+            const quoted = originalQuotes.some((q: any) => q !== null && typeof q === "object" && q.ts === asked.ts);
             if (files.length === 0 && selected && quoted) throw new Refused(409, tr(r.lang, "station.admin.updateClientForOption"));
             if (quoted) answeredCard = asked.n;
           }
@@ -621,7 +631,7 @@ export const routes = (tools: Tools): Route[] => {
           const client = typeof i.client === "string" ? chars([...i.client.trim()].filter((c) => !/\p{Cc}/u.test(c)).join(""), 80) : "";
           const kept = await keep(files, thumbsDir(a.hub.config().dataDir));
           const n = say(a.hub, t.id, r.viewer.email, said, kept, quotes, client === "" ? null : client);
-          // Copied to the Slack and Feishu threads of the chat its sender picked (docs/relay.md "抄送"): after the answer,
+          // Copied to the Slack and Feishu threads of the chat its sender picked: after the answer,
           // not waited on.
           const ccTo = Array.isArray(i.cc) ? i.cc.filter((x: unknown): x is number => typeof x === "number") : [];
           if (ccTo.length > 0) void cc(a.hub, t.id, r.viewer.name.trim() || r.viewer.email, r.viewer.email, said, kept, ccTo);
@@ -645,7 +655,7 @@ export const routes = (tools: Tools): Route[] => {
         }),
     },
     // The people of where the chat would be relayed (`?connect=&channel=`, or `?link=` of a Slack message), for its note
-    // to mention (docs/relay.md「附言里 @ 人」).
+    // to mention (「附言里 @ 人」).
     {
       method: "GET",
       pattern: /^\/*threads\/+([^/]+)\/+relay\/+people\/*$/,
@@ -659,7 +669,7 @@ export const routes = (tools: Tools): Route[] => {
           return ok({ people: await as(400, () => relayPeople(a.hub, t, target)) });
         }),
     },
-    // Where the chat can be relayed (docs/relay.md): each connect's channels and groups its bot is in.
+    // Where the chat can be relayed: each connect's channels and groups its bot is in.
     {
       method: "GET",
       pattern: /^\/*threads\/+([^/]+)\/+relay(?:\/.*)?$/,

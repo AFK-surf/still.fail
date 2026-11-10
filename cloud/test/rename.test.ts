@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import test from "node:test";
 import { decodeJwt, SignJWT } from "jose";
 import { harness } from "./harness.ts";
 import { previewFiles } from "../src/preview.ts";
 
-// still.fail was called ember (docs/rename-still-fail.md). What was installed and opened before the rename keeps
-// working: the hosts' old names, the old request headers, subprotocols and signed messages, the old paths.
+// still.fail was called ember. Its hosts' old names still answer (stations enrolled then
+// may have one in their settings); the old request headers, subprotocols and signed messages no longer do.
 
 type Harness = Awaited<ReturnType<typeof harness>>;
 const hex = (bytes: ArrayBuffer) => Buffer.from(bytes).toString("hex");
@@ -54,7 +53,7 @@ test("each host's old name serves the same: static sites, the API, the relay, th
     // Both apps' App Links, on both hosts.
     for (const fetch of [h.fetch, (path: string) => h.fetchOld("main", path)]) {
       const links = (await (await fetch("/.well-known/assetlinks.json")).json()) as { target: { package_name: string } }[];
-      assert.deepEqual(links.map((l) => l.target.package_name), ["fail.still.android", "dev.ember.android"]);
+      assert.deepEqual(links.map((l) => l.target.package_name), ["fail.still.android"]);
     }
     // Still no wildcard.
     assert.equal((await h.fetchWorker("api", "https://other.relay.example/v1/me", { headers: { authorization: `Bearer ${tokens.access_token}` } })).status, 421);
@@ -89,16 +88,12 @@ test("signing in on an old host goes on to the new one, which Google calls back,
       const exchanged = await h.fetchOld(back.startsWith(h.oldAdminOrigin) ? "admin" : "main", "/v1/auth/token", { method: "POST", headers: json, body: JSON.stringify({ code, code_verifier: flow.verifier, redirect_uri: back }) });
       assert.equal(exchanged.status, 200, back);
     }
-    // The Android app from before the rename.
-    const flow = await h.begin("google-android-user", undefined, "ember://auth/callback");
-    const { code } = await h.complete(flow);
-    assert.equal((await h.exchange(flow, code)).status, 200);
   } finally {
     await h.close();
   }
 });
 
-test("new tokens use stillfail while tokens issued for the old origin stay good", async () => {
+test("tokens are stillfail's: one issued under the old name is refused", async () => {
   const h = await harness();
   try {
     const tokens = await h.login("alice");
@@ -108,19 +103,13 @@ test("new tokens use stillfail while tokens issued for the old origin stay good"
     const old = await new SignJWT({ sub: tokens.subject, sid: tokens.session_id, email: tokens.email, type: "access" })
       .setProtectedHeader({ alg: "HS256", typ: "JWT" }).setIssuer("ember-cloud").setAudience(h.oldOrigin).setIssuedAt(now - 1).setExpirationTime(now + 240)
       .sign(new TextEncoder().encode(h.signingKey));
-    for (const fetch of [h.fetch, (path: string, init?: RequestInit) => h.fetchOld("main", path, init)]) {
-      assert.equal((await fetch("/v1/me", { headers: { authorization: `Bearer ${old}` } })).status, 200);
-    }
-    const other = await new SignJWT({ sub: tokens.subject, sid: tokens.session_id, email: tokens.email, type: "access" })
-      .setProtectedHeader({ alg: "HS256", typ: "JWT" }).setIssuer("ember-cloud").setAudience("https://elsewhere.example").setIssuedAt(now - 1).setExpirationTime(now + 240)
-      .sign(new TextEncoder().encode(h.signingKey));
-    assert.equal((await h.fetch("/v1/me", { headers: { authorization: `Bearer ${other}` } })).status, 401);
+    assert.equal((await h.fetch("/v1/me", { headers: { authorization: `Bearer ${old}` } })).status, 401);
   } finally {
     await h.close();
   }
 });
 
-/** Enrolls a station as one from before the rename would, or as a new one. */
+/** Enrolls a station signing under `prefix` over `origin`. */
 async function enroll(h: Harness, fetch: Harness["fetch"], origin: string, prefix: "ember" | "stillfail") {
   const alice = h.as(await h.login("alice"));
   const w = ((await (await alice("POST", "/v1/workspaces", { name: `Home ${prefix} ${origin}` })).json()) as { id: string }).id;
@@ -134,84 +123,43 @@ async function enroll(h: Harness, fetch: Harness["fetch"], origin: string, prefi
   return { alice, w, station, status: response.status };
 }
 
-test("stations from before the rename: old host, old headers, old signed messages, old grant keys path", async () => {
+test("a station signs under stillfail, over either host's origin; the old name's signatures and headers are refused", async () => {
   const h = await harness();
   try {
     const old = (path: string, init?: RequestInit) => h.fetchOld("main", path, init);
-    // Enrolling: the old name signed over the old origin on the old host, and each mix (a station moved over).
-    for (const [fetch, origin, prefix] of [[old, h.oldOrigin, "ember"], [h.fetch, h.origin, "ember"], [h.fetch, h.oldOrigin, "stillfail"], [old, h.origin, "stillfail"]] as const) {
-      assert.equal((await enroll(h, fetch, origin, prefix)).status, 200, `${prefix} ${origin}`);
+    for (const [fetch, origin, prefix, status] of [[h.fetch, h.origin, "stillfail", 200], [old, h.oldOrigin, "stillfail", 200], [h.fetch, h.origin, "ember", 401]] as const) {
+      assert.equal((await enroll(h, fetch, origin, prefix)).status, status, `${prefix} ${origin}`);
     }
-    const { alice, w, station } = await enroll(h, old, h.oldOrigin, "ember");
-    const forged = await key();
-    assert.equal((await enroll(h, old, "https://elsewhere.example", "ember")).status, 401, "another cloud's");
-
-    // Its presence socket with the x-ember-* headers and message.
-    const ts = h.now();
-    const connect = async (signer: Awaited<ReturnType<typeof key>>) => old("/v1/stations/connect", {
-      headers: { upgrade: "websocket", "x-ember-station": station.id, "x-ember-ts": String(ts), "x-ember-signature": await signer.sign(`ember-station-connect-v1:${h.oldOrigin}:${station.id}:${ts}`), "x-ember-version": "0.1.900" },
-    });
-    assert.equal((await connect(forged)).status, 401);
-    const presence = await connect(station);
-    assert.equal(presence.status, 101);
-    presence.webSocket!.accept();
-    const view = (await (await alice("GET", `/v1/workspaces/${w}`)).json()) as { stations: { id: string; version: string | null }[] };
-    assert.equal(view.stations.find((s) => s.id === station.id)?.version, "0.1.900", "x-ember-version is read");
-    presence.webSocket!.close();
-
-    // The new headers win over old ones when both are there.
-    const both = await h.fetch("/v1/stations/connect", {
-      headers: { upgrade: "websocket", "x-stillfail-station": station.id, "x-ember-station": forged.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-connect-v1:${h.origin}:${station.id}:${ts}`) },
-    });
-    assert.equal(both.status, 101);
-    both.webSocket!.accept();
-    both.webSocket!.close();
-
-    // The grant keys, where old stations fetch them and where new ones do.
-    const keys = await Promise.all(["/.well-known/ember-grant-keys", "/.well-known/stillfail-grant-keys"].map(async (path) => (await (await old(path)).json()) as { keys: unknown[] }));
-    assert.deepEqual(keys[0], keys[1]);
-    assert.equal(keys[0]!.keys.length, 1);
-  } finally {
-    await h.close();
-  }
-});
-
-test("a station's traces with the old headers and message", async () => {
-  const got: unknown[] = [];
-  const h = await harness({ axiom: async (request) => (got.push(await request.text()), new Response("{}")) });
-  try {
     const { station } = await enroll(h, h.fetch, h.origin, "stillfail");
-    const body = JSON.stringify({ resourceSpans: [{ scopeSpans: [{ spans: [{ name: "x" }] }] }] });
-    const digest = createHash("sha256").update(body).digest("hex");
     const ts = h.now();
-    const post = async (headers: Record<string, string>) => h.fetchOld("main", "/v1/telemetry/traces", { method: "POST", headers: { ...json, ...headers }, body });
-    assert.equal((await post({ "x-ember-station": station.id, "x-ember-ts": String(ts), "x-ember-signature": await station.sign(`ember-station-telemetry-v1:${h.oldOrigin}:${station.id}:${ts}:${digest}`) })).status, 202);
-    assert.equal((await post({ "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-telemetry-v1:${h.origin}:${station.id}:${ts}:${digest}`) })).status, 202);
-    assert.equal((await post({ "x-ember-station": station.id, "x-ember-ts": String(ts), "x-ember-signature": await station.sign(`ember-station-telemetry-v1:https://elsewhere.example:${station.id}:${ts}:${digest}`) })).status, 401);
-    assert.equal(got.length, 2);
+    const before = await old("/v1/stations/connect", {
+      headers: { upgrade: "websocket", "x-ember-station": station.id, "x-ember-ts": String(ts), "x-ember-signature": await station.sign(`ember-station-connect-v1:${h.oldOrigin}:${station.id}:${ts}`) },
+    });
+    assert.equal(before.status, 400);
+    const now = await old("/v1/stations/connect", {
+      headers: { upgrade: "websocket", "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-connect-v1:${h.oldOrigin}:${station.id}:${ts}`) },
+    });
+    assert.equal(now.status, 101);
+    now.webSocket!.accept();
+    now.webSocket!.close();
+    assert.equal((await h.fetch("/.well-known/stillfail-grant-keys")).status, 200);
+    assert.notEqual((await h.fetch("/.well-known/ember-grant-keys")).status, 200);
   } finally {
     await h.close();
   }
 });
 
-test("a device's events socket: the old subprotocols are answered with the old one, the new with the new", async () => {
+test("a device's events socket takes only the stillfail subprotocols", async () => {
   const h = await harness();
   try {
     const tokens = await h.login("alice");
     const events = (protocols: string) => h.fetchOld("main", "/v1/events", { headers: { upgrade: "websocket", "sec-websocket-protocol": protocols } });
-    for (const [offered, selected] of [
-      [`ember-events, ember-token.${tokens.access_token}`, "ember-events"],
-      [`stillfail-events, stillfail-token.${tokens.access_token}`, "stillfail-events"],
-      [`stillfail-events, ember-events, stillfail-token.${tokens.access_token}`, "stillfail-events"],
-    ]) {
-      const response = await events(offered!);
-      assert.equal(response.status, 101, offered);
-      assert.equal(response.headers.get("sec-websocket-protocol"), selected, offered);
-      response.webSocket!.accept();
-      response.webSocket!.close();
-    }
-    assert.equal((await events(`ember-token.${tokens.access_token}`)).status, 401, "must ask for the events protocol");
-    assert.equal((await events(`other-events, stillfail-token.${tokens.access_token}`)).status, 401);
+    const response = await events(`stillfail-events, stillfail-token.${tokens.access_token}`);
+    assert.equal(response.status, 101);
+    assert.equal(response.headers.get("sec-websocket-protocol"), "stillfail-events");
+    response.webSocket!.accept();
+    response.webSocket!.close();
+    assert.equal((await events(`ember-events, ember-token.${tokens.access_token}`)).status, 401);
   } finally {
     await h.close();
   }

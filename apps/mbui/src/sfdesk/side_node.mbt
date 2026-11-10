@@ -4,9 +4,11 @@
 
 ///|
 /// The sidebar the block holds now in node `n` (as large as what holds the block, over it), where `at` says the block
-/// has it: cut to the block's room inside its line, its corners the block's; shown while what is in it is drawn.
+/// has it: cut to the block's room, its corners the block's (its line over it, dock_edge_node's); shown while what is in
+/// it is drawn.
 fn side_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideAt) -> Unit {
-  n.show(fn() { side_made(side_place()) }, fn(cut) {
+  // (in the place of an old view's sidebar drawn where it is (sidebar's): at once, as one sidebar for another)
+  n.show(at_once=true, fn() { side_made(side_place()) }, fn(cut) {
     cut
     // (not shown, as the device waits in the lock: laid out nowhere, the same nodes, what had the focus in it given
     // it back as it is shown again, as an old view's focus waits for its node)
@@ -15,7 +17,6 @@ fn side_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideA
     .width(By(fn() { Some(at().block.2) }))
     .height(By(fn() { Some(at().block.3) }))
     .offset(By(fn() { (at().block.0, at().block.1) }))
-    .edge(By(fn() { (at().edge.0, 0L) }))
     |> ignore
     dock_round_node(cut, at)
     cut.box(fn(side) {
@@ -47,6 +48,8 @@ fn side_made(place : String) -> Bool {
 /// foot and 已归档's list their old views, hosted.
 fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideAt) -> Unit {
   let workspace = fn() { @sfbase.workspace_in_view(src).0 }
+  // (the tape's side column or one beside the page: the block's, each its own sidebar made once)
+  let list_at = side_list_at(@signals.untracked(at))
   let mode = fn() {
     match workspace() {
       Some(w) => list_mode(src, w)
@@ -71,7 +74,16 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
       list_top_h()
     },
     foot: fn() { 0.0 },
-    ground: fn() { if side_folded() || wide.tape { apart_ground() } else { @sf.theme().p.sidebar } },
+    // (on the tape the block's, a step darker behind the panel in use: tape_side_at)
+    ground: fn() {
+      if wide.tape {
+        at().ground
+      } else if side_folded() {
+        apart_ground()
+      } else {
+        @sf.theme().p.sidebar
+      }
+    },
     before: fn(_, _) { [] },
     after: fn(_, _) { [] },
     others: [
@@ -88,7 +100,7 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
       },
     ],
     shown: mode,
-    at: Side,
+    at: list_at,
     watched: fn() { true },
   }
   // (while the app's first page waits for what it shows: drawn at none, the splash in its place, as the old views are)
@@ -143,7 +155,7 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
   })
   |> ignore
   s.show(@sfpages.search_on_lists, fn(k) {
-    @sfpages.search_page_node(k, src, workspace, side_top_h, Side)
+    @sfpages.search_page_node(k, src, workspace, side_top_h, list_at)
   })
 }
 
@@ -158,6 +170,7 @@ fn lists_band_node(
   workspace : () -> Workspace?,
   at : () -> SideAt,
 ) -> Unit {
+  let list_at = side_list_at(@signals.untracked(at))
   let band_at = fn() {
     let a = at()
     ({ brand: a.brand, band: a.band, tape: a.tape, in_bar: a.bar, roots: @ui.tree_corner_roots_now() } : BandAt)
@@ -169,7 +182,12 @@ fn lists_band_node(
     }
   }
   o.box(fn(band) {
-    band.ground(By(fn() { @sf.mix(apart_ground(), band_at().band, @sf.theme().p.sidebar) })) |> ignore
+    // (on the tape the block's ground, a step darker behind the panel in use as the lists under it are: tape_side_at)
+    band.ground(By(fn() {
+      let a = at()
+      @sf.mix(if a.tape { a.ground } else { apart_ground() }, a.band, @sf.theme().p.sidebar)
+    }))
+    |> ignore
     side_top_node(band, fn() { band_at().brand })
     band.box(fn(line) {
       @sf.style_node(line, fn() {
@@ -182,31 +200,20 @@ fn lists_band_node(
       })
       line.box(fn(full) {
         full.row(Is(true)).grow(Is(1.0)) |> ignore
-        @sf.band_row_node(full, fn() { app.nav.top() is NewChat }, fn() { @sf.t("web-main.sidebar.newChat") }, new_chat, fn(r) {
+        @sf.band_row_node(full, fn() { app.nav.top() is NewChat }, fn() { @sf.t("web-main.sidebar.newChat") }, new_chat, list_at, fn(r) {
           @sf.icon_node(r, "compose", @sf.theme().chat_list.band_icon, By(fn() { @sf.theme().p.muted })) |> ignore
           @sf.nav_words_node(r, fn() { @sf.t("web-main.sidebar.newChat") })
         })
       })
       |> ignore
-      // catching up on what changed while away (its old view)
+      // catching up on what changed while away
       line.show(fn() { view().map(fn(v) { v.syncing is Some(_) }).unwrap_or(false) }, fn(k) {
-        // (as wide as it is laid out, told by the old frame)
-        let wide : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-        k.shrink(Is(0.0)).width(By(fn() { wide.get() })) |> ignore
-        @ui.old(
-          k,
-          fn(c) {
-            let said = match view() {
-              Some({ syncing: Some(y), .. }) => y
-              _ => ""
-            }
-            @sf.sync_key(c, "side/syncing", update_key_side, update_key_mark, true, said)
-          },
-          natural=true,
-          fits=(update_key_side, wide),
-        )
-        |> @ui.old_takes_own
-        |> ignore
+        @sf.sync_key_node(k, tips, update_key_side, update_key_mark, fn() {
+          match view() {
+            Some({ syncing: Some(y), .. }) => Some(y)
+            _ => None
+          }
+        })
       })
       // 更新 before the filter where one is offered (brand.mbt update_in_row)
       line.show(update_shown, fn(k) {
@@ -288,8 +295,8 @@ fn lists_band_node(
         @sf.style_node(t, fn() { todo_box })
         let n = fn() { workspace().map(fn(w) { todo_all(src, w) }).unwrap_or(0) }
         @sf.band_row_node(t, fn() { wide.attention_open.get() }, fn() { @sf.t("web-main.attention.entry") }, fn() {
-          attention_set(!@signals.untracked(fn() { wide.attention_open.get() }))
-        }, fn(r) {
+          attention_set(!wide.attention_open.untracked())
+        }, list_at, fn(r) {
           @sf.icon_node(r, "bell", @sf.theme().chat_list.band_icon, By(fn() { @sf.theme().p.muted })) |> ignore
           @sf.nav_words_node(r, fn() { @sf.t("web-main.attention.entry") })
           r.box(fn(slot) {

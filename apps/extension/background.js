@@ -1,4 +1,4 @@
-// still.fail's browser extension (docs/share-in.md): the toolbar button and the context menu hand what is in front of
+// still.fail's browser extension: the toolbar button and the context menu hand what is in front of
 // the person (the page, a link, a video, the words selected) to one of their still.fail chats. Each opens the page's
 // /share in a small window of its own, signed in as the person's still.fail page is (the same browser); that page lists
 // the chats, and the one picked has it in its composer. The page then asks here to open that chat in the browser's

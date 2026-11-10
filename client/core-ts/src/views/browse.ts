@@ -1,4 +1,4 @@
-// A station's files as they are browsed on this device (docs/drive.md "Clients"): the core's part of drive-browse.ts's
+// A station's files as they are browsed on this device: the core's part of drive-browse.ts's
 // `Browsing` — the prefs it keeps and reads, the folders held, the workspace's stations with a drive — and the topics and
 // calls it answers. A client draws what it is told and does what a call answers (another folder shown, an entry
 // opened…).
@@ -93,9 +93,4 @@ function run(inner: Inner, c: Of): Effect.Effect<unknown, CoreError> {
 export function install(inner: Inner): void {
   handlers.browse = (core, call) => run(core, call as Of);
   inner.router.owners.push(owner(inner));
-  // A folder read again changes what the places that show it show; the prefs, the order and the tabs.
-  inner.data.onChange((topic) => {
-    if (topic.topic === "drive") inner.store.invalidateAll((x) => x.topic === "driveBrowse" && x.station === topic.station && x.root === topic.root);
-    else if (topic.topic === "prefs" || topic.topic === "*") inner.store.invalidateAll((x) => x.topic === "driveBrowse" || x.topic === "filesTabs");
-  });
 }

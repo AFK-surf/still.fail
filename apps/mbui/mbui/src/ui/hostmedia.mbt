@@ -1,5 +1,5 @@
 // What the system's media and sharing do for the app (as @hostapi's views, share-in and marks have them), through the
-// framework, so that under a Tester they are the test's: a player's reads of the app's bytes and its state
+// framework; under a Tester the test's (its fake host's, fake_host.mbt): a player's reads of the app's bytes and its state
 // (Tester::view_reads, set_player), what another app shares in (Tester::share_in) and what the app shares out
 // (Tester::shared_out), the marks drawn onto an image (Tester::marks_drawn), each at the next frame, as a host's event
 // comes at a frame's boundary.
@@ -175,10 +175,18 @@ fn mime_of(name : String) -> String {
     "image/heic"
   } else if ends(".pdf") {
     "application/pdf"
-  } else if ends(".mp4") {
+  } else if ends(".mp4") || ends(".m4v") {
     "video/mp4"
   } else if ends(".mov") {
     "video/quicktime"
+  } else if ends(".webm") {
+    "video/webm"
+  } else if ends(".ogv") {
+    "video/ogg"
+  } else if ends(".3gp") {
+    "video/3gpp"
+  } else if ends(".3g2") {
+    "video/3gpp2"
   } else if ends(".mp3") {
     "audio/mpeg"
   } else if ends(".txt") || ends(".md") {
@@ -221,40 +229,19 @@ pub fn Tester::share_in(
 /// What another app shared into this one since last asked (@hostapi.shared_in: JSON text `{"text","title","files"}`, each
 /// file `{"name","type","size"}`), "" when nothing was. Under a Tester, what the test shared in (Tester::share_in).
 pub fn shared_in() -> String {
-  match fake.val {
-    Some(f) =>
-      match f.share {
-        Some((said, frame)) if g().frame_no > frame => {
-          f.share = None
-          said
-        }
-        _ => ""
-      }
-    None => @hostapi.shared_in()
-  }
+  @hostapi.shared_in()
 }
 
 ///|
 /// The i-th of the files shared in (`shared_in`'s `files`), taken once: empty after, or where there is none.
 pub fn shared_in_file(i : Int) -> Bytes {
-  match fake.val {
-    Some(f) =>
-      if i >= 0 && i < f.share_files.length() {
-        let b = f.share_files[i]
-        f.share_files[i] = b""
-        b
-      } else {
-        b""
-      }
-    None => @hostapi.shared_in_file(i)
-  }
+  @hostapi.shared_in_file(i)
 }
 
 ///|
 /// Marks being drawn onto an image (@hostapi.MarkedImage).
 pub struct MarkedImage {
-  priv host : @hostapi.MarkedImage?
-  priv fake : Int
+  priv host : @hostapi.MarkedImage
 }
 
 ///|
@@ -265,47 +252,27 @@ let marked_png : Bytes = b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A\x00\x00\x00\x0D\x49\
 /// `image` with `marks` drawn on it (@hostapi.draw_marks: their JSON as marks.mbt says it), None where the host cannot.
 /// Under a Tester the marks are kept (Tester::marks_drawn) and a PNG is made by the next frame.
 pub fn draw_marks(image : Bytes, marks : String) -> MarkedImage? {
-  match fake.val {
-    Some(f) => {
-      ignore(image)
-      f.marks.push((marks, g().frame_no))
-      f.marks_out.push(f.marks_next.unwrap_or(marked_png))
-      f.marks_next = None
-      f.wants = true
-      let m : MarkedImage = { host: None, fake: f.marks.length() - 1 }
+  match @hostapi.draw_marks(image, marks) {
+    Some(h) => {
+      let m : MarkedImage = { host: h }
       outside_start(outside_marks, m.outside_id(), "marks drawn \{m.outside_id()}")
       Some(m)
     }
-    None =>
-      match @hostapi.draw_marks(image, marks) {
-        Some(h) => {
-          let m : MarkedImage = { host: Some(h), fake: -1 }
-          outside_start(outside_marks, m.outside_id(), "marks drawn \{m.outside_id()}")
-          Some(m)
-        }
-        None => None
-      }
+    None => None
   }
 }
 
 ///|
 /// Its id as the host's event names it (outside_marks), a Tester's its place, from 1.
 fn MarkedImage::outside_id(self : MarkedImage) -> Int {
-  match self.host {
-    Some(h) => h.id()
-    None => self.fake + 1
-  }
+  self.host.id()
 }
 
 ///|
 /// Whether the host has said it is drawn (or could not be), the PNG not taken: read as the host's word comes (its
 /// answers' signal, answer_here), what takes it (MarkedImage::made) then done once by whoever follows this.
 pub fn MarkedImage::ready(self : MarkedImage) -> Bool {
-  answer_here(outside_marks, self.outside_id()) &&
-  (match self.host {
-    Some(h) => h.drawn()
-    None => self.png() is Some(_)
-  })
+  answer_here(outside_marks, self.outside_id()) && self.host.drawn()
 }
 
 ///|
@@ -320,29 +287,12 @@ pub fn MarkedImage::made(self : MarkedImage) -> Bytes? {
   if !answer_here(outside_marks, self.outside_id()) {
     return None
   }
-  let got = self.png()
+  let got = self.host.made()
   if got is Some(_) {
     answer_taken(outside_marks, self.outside_id())
     outside_end(outside_marks, self.outside_id())
   }
   got
-}
-
-///|
-fn MarkedImage::png(self : MarkedImage) -> Bytes? {
-  match self.host {
-    Some(m) => m.made()
-    None =>
-      match fake.val {
-        Some(f) if self.fake >= 0 && self.fake < f.marks.length() =>
-          if f.marks_by_hand || g().frame_no > f.marks[self.fake].1 {
-            Some(f.marks_out[self.fake])
-          } else {
-            None
-          }
-        _ => Some(b"")
-      }
-  }
 }
 
 ///|
@@ -363,13 +313,7 @@ pub fn Tester::marks_drawn(self : Tester) -> Array[String] {
 /// Words (`text`), or a file of `data` named `name` (`mime`), handed to another app through the system's share sheet
 /// (@hostapi.share): false where there is none. Under a Tester the sheet takes it, kept for the test (Tester::shared_out).
 pub fn share(text : String, name : String, mime : String, data : Bytes) -> Bool {
-  match fake.val {
-    Some(f) => {
-      f.shares.push((text, name, mime, data))
-      true
-    }
-    None => @hostapi.share(text, name, mime, data)
-  }
+  @hostapi.share(text, name, mime, data)
 }
 
 ///|
@@ -473,7 +417,7 @@ fn fake_view_said(f : FakeHost, line : String) -> Bool {
           }
           f.view_infos[id] = (state, at)
           // (as the host told it: how it stands changed, a frame asked for by the app as it hears it)
-          on_outside(outside_stood, id, 0)
+          on_outside(outside_stood, id, if state == 2 { 2 } else { 0 })
           true
         }
         _ => false

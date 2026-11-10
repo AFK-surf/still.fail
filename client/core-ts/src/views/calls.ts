@@ -1,4 +1,4 @@
-// The calls that change a chat (core/execute.rs, the views' part): sending, making a chat, answering a card, renaming,
+// The calls that change a chat (the views' part): sending, making a chat, answering a card, renaming,
 // pinning, archiving. Each takes effect here at once (local.ts: the outbox, a chat asked for, a change laid over its
 // row) and answers once its station has it; nothing a person does waits on the network to show (rule 4). What was on
 // its way when the core stopped goes on as it starts again, under the same idempotency key.
@@ -397,6 +397,8 @@ export class ViewCalls {
         if (c.title !== null) row.title = c.title;
         if (c.pinned !== null) row.pinned = c.pinned ? inner.host.nowMs() : null;
         if (c.keep !== null) row.archiveReminderDismissed = c.keep;
+        if (c.hidden !== null) row.hidden = c.hidden;
+        if (c.muted !== null) row.muted = c.muted;
         const change = local.changing(station, c.thread, c.session, row, null);
         const result = yield* Effect.result(handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx));
         local.changed(change, result._tag === "Success", inner.data.rowsRev(station));

@@ -19,7 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Holds the app up while the phone is lent (a foreground service; still.fail's AdbShareService, AdbShare.kt): finds
+ * Holds the app up while the phone is lent (a foreground service; still.fail's AdbShareService): finds
  * Wireless debugging's ports and tells the core each time they change, says in its notification how it stands, takes
  * the pairing code typed there (or read off the dialog, AdbCodeReader), and ends when the core's `adbShare` says the
  * phone is lent no longer (stopped, its hour up, the station too old). The core asked through AdbCore, which goes on
@@ -53,6 +53,9 @@ public final class AdbShareService extends Service {
     private boolean idle;
     /** For the switch: Wi-Fi coming, Wireless debugging turned on again (Android turns it off as the Wi-Fi goes). */
     private android.net.ConnectivityManager.NetworkCallback wifi;
+    /** What each notification says as last posted: posted again only as it changes, or as it was swiped away. */
+    private String said;
+    private String pairSaid;
     /** 还剩 N 分钟, as the minutes go. */
     private final Runnable minute = new Runnable() {
         @Override
@@ -82,6 +85,7 @@ public final class AdbShareService extends Service {
                     : AdbShare.notification(this, null, name, null);
             if (Build.VERSION.SDK_INT >= 34) startForeground(AdbShare.ID, shown, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
             else startForeground(AdbShare.ID, shown);
+            said = null;
             begin(s);
         } else if (AdbShare.STOP.equals(action) && AdbShare.GRANTS.equals(station)) {
             // 关闭共享调试: the switch turned off (the service ends as the core says so; the grants stay, lent to none)
@@ -128,6 +132,7 @@ public final class AdbShareService extends Service {
     private void pair(String code) {
         // said back at once: the notification's field waits (spinning) until it is posted again
         pairNote = AdbShare.t("android-misc.adb.pairing");
+        pairSaid = null;
         say();
         StringBuilder digits = new StringBuilder();
         for (char ch : code.toCharArray()) if (ch >= '0' && ch <= '9') digits.append(ch);
@@ -154,7 +159,7 @@ public final class AdbShareService extends Service {
     /** The notifications again, as it stands now (or as `note` and `pairNote` say). */
     private void say() {
         NotificationManager manager = getSystemService(NotificationManager.class);
-        manager.notify(AdbShare.ID, AdbShare.GRANTS.equals(station)
+        said = post(manager, AdbShare.ID, said, AdbShare.GRANTS.equals(station)
                 ? AdbShare.notificationTitled(this, view, name, note != null ? note : idle ? AdbShare.t("android-misc.adb.notify.idle") : AdbShare.screens(view), AdbShare.t("android-misc.adb.turnOff"))
                 : AdbShare.notification(this, view, name, note));
         boolean pairing = AdbShare.pairing(view);
@@ -165,13 +170,35 @@ public final class AdbShareService extends Service {
             if (pairShown != port) {
                 manager.cancel(AdbShare.PAIR_ID);
                 pairNote = null;
+                pairSaid = null;
             }
             pairShown = port;
-            manager.notify(AdbShare.PAIR_ID, AdbShare.pairNotification(this, pairNote));
+            pairSaid = post(manager, AdbShare.PAIR_ID, pairSaid, AdbShare.pairNotification(this, pairNote));
         } else if (pairShown >= 0) {
             manager.cancel(AdbShare.PAIR_ID);
             pairShown = -1;
+            pairSaid = null;
         }
+    }
+
+    /**
+     * `shown` posted unless it says what `before` said and is still up: the core's view changes with what no notification
+     * says (a tunnel opened, a grant), and each one posted gets a new time, which can move its icon among the status bar's.
+     * What it says now, for the next one.
+     */
+    private static String post(NotificationManager manager, int id, String before, android.app.Notification shown) {
+        StringBuilder now = new StringBuilder();
+        now.append(shown.extras.getCharSequence(android.app.Notification.EXTRA_TITLE)).append('\n');
+        now.append(shown.extras.getCharSequence(android.app.Notification.EXTRA_TEXT));
+        if (shown.actions != null) for (android.app.Notification.Action a : shown.actions) now.append('\n').append(a.title);
+        String text = now.toString();
+        if (text.equals(before)) {
+            for (android.service.notification.StatusBarNotification up : manager.getActiveNotifications()) {
+                if (up.getId() == id) return text;
+            }
+        }
+        manager.notify(id, shown);
+        return text;
     }
 
     private void begin(String to) {

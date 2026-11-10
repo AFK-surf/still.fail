@@ -1,4 +1,4 @@
-// What a link in a message is, while it is pointed at (ember web/src/Peeks.tsx LinkHover, LinkCard; ChatRef.tsx
+// What a link in a message is, while it is pointed at (still.fail web/src/Peeks.tsx LinkHover, LinkCard; ChatRef.tsx
 // RefChip's RefPreview; Hover.css.ts): a small card over it. A web link's as the core reads it from the link's station
 // (the `linkPreview` topic: GET /link-preview, kept, read again each time a card shows it): a page by its title, its
 // site and icon, its picture over them; a GitHub pull request or issue as GitHub says it: its state, where it is and
@@ -87,7 +87,7 @@ fn peek_read(
 ) -> Unit {
   let drawn = Ref(false)
   if c.hovered(id) {
-    ignore(@sfbase.hold(src, scope, name, params))
+    ignore(@sfbase.hold(src, scope, name, params).get().snapshot())
   }
   card(fn() { drawn.val = true })
   if !c.hovered(id) && !drawn.val {
@@ -100,19 +100,13 @@ fn peek_read(
 /// file's path is copied (file_foot).
 fn link_copy(c : @ui.Ctx, href : String) -> Unit {
   let key = "link-peek/copy/" + href
-  let said = copied_paths.contains(href) &&
-    (if @kit.after(c, key + "/said", true, @sf.copied_ms) {
-      copied_paths.remove(href)
-      false
-    } else {
-      true
-    })
+  let said_id = c.id(key + "/said")
+  let said = c.within(said_id, @sf.copied_ms)
   // (its words, as a file's path's copy: the user, 2026-10-29: 图标改成文字复制链接吧)
-  if @sf.panel_button(c, key, @sf.t(if said { "common.copied" } else { "common.link.copy" }), tone=Quiet) {
+  @sf.panel_button(c, key, @sf.t(if said { "common.copied" } else { "common.link.copy" }), tone=Quiet, on_press=fn() {
     c.copy_text(href)
-    @kit.after(c, key + "/said", false, @sf.copied_ms) |> ignore
-    copied_paths.add(href)
-  }
+    c.mark(said_id)
+  }) |> ignore
 }
 
 ///|
@@ -134,7 +128,7 @@ fn link_card(
   peek? : String = "",
   copy? : () -> Unit = fn() {  },
 ) -> Unit {
-  let read = @sfbase.hold(src, scope, "linkPreview", params)
+  let read = @sfbase.hold(src, scope, "linkPreview", params).get().snapshot()
   let v = match read.value {
     Some(Object(_)) as v => v
     _ => None
@@ -182,7 +176,7 @@ fn destination(href : String) -> String {
 }
 
 ///|
-/// A page's tile (Hover.css.ts tile): its icon in a 36 square on the hover's ground (GitHub's mark for a GitHub page,
+/// A page's tile: its icon in a 36 square on the hover's ground (GitHub's mark for a GitHub page,
 /// the globe for any other), 10 from its title (two lines at most, 500) over where it goes (its site's name before it,
 /// muted, one line); the page's picture over it, 16:9, where it has one.
 fn page_tile(c : @ui.Ctx, href : String, words : String, page : Json?, copy : () -> Unit) -> Unit {
@@ -321,13 +315,13 @@ fn change_card(c : @ui.Ctx, v : Json?, pr : Bool, copy : () -> Unit) -> Unit {
 }
 
 ///|
-/// A fact in a pill on the hover's ground (Hover.css.ts chip).
+/// A fact in a pill on the hover's ground.
 fn fact_chip(c : @ui.Ctx, words : String) -> Unit {
   c.box(style=peek_chip, fn() { c.text(words, style=peek_meta_words) |> ignore }) |> ignore
 }
 
 ///|
-/// A state in a tinted pill (Hover.css.ts state): its glyph (GitHub's, 12) and its name, 500, in the state's colours:
+/// A state in a tinted pill: its glyph (GitHub's, 12) and its name, 500, in the state's colours:
 /// open and passed green, merged and completed purple, closed and failed red, pending amber, a draft or not planned
 /// grey.
 fn state_pill(c : @ui.Ctx, state : String, glyph : String?, words : String) -> Unit {
@@ -343,7 +337,7 @@ fn state_pill(c : @ui.Ctx, state : String, glyph : String?, words : String) -> U
 }
 
 ///|
-/// A state's ink and ground (Hover.css.ts state's data-state).
+/// A state's ink and ground.
 fn state_colours(state : String) -> (Int64, Int64) {
   let p = @sf.theme().p
   match state {
@@ -359,7 +353,7 @@ fn state_colours(state : String) -> (Int64, Int64) {
 }
 
 ///|
-/// GitHub's purple for what was merged or completed (Hover.css.ts), each theme's a step deeper or lighter than GitHub's
+/// GitHub's purple for what was merged or completed, each theme's a step deeper or lighter than GitHub's
 /// (#8250df, #a371f7) to read on its ground, the purple at the theme's tone opacity (@sf.tone_ground).
 let merged_light : Int64 = 0x6830BFFFL
 
@@ -460,7 +454,7 @@ fn file_peek(
       hovered_file.val = Some(visit)
       // A card can stay open as the pointer leaves its chip. Subscribe again even in that case: the file may have
       // been written or removed since the last time the pointer was here.
-      (src.leave)("filePeek", params)
+      (src.refresh)("filePeek", params)
     }
   } else if hovered_file.val is Some((key, _)) && key == hover_key {
     hovered_file.val = None
@@ -495,7 +489,7 @@ fn file_peek_params(station : String, session : String, path : String, line : In
 /// directory's first entries; and its foot: how big it is (or how many entries), and its path to copy. Why not, read
 /// and refused; bars while it is read.
 fn file_card(c : @ui.Ctx, src : Source, scope : String, params : Map[String, Json], path : String) -> Unit {
-  let read = @sfbase.hold(src, scope, "filePeek", params)
+  let read = @sfbase.hold(src, scope, "filePeek", params).get().snapshot()
   let v = match read.value {
     Some(Object(_)) as v => v
     _ => None
@@ -699,19 +693,12 @@ fn file_foot(c : @ui.Ctx, path : String, what : String) -> Unit {
     c.box(style=peek_ref, fn() { c.text(what, style=peek_meta_words) |> ignore }) |> ignore
     let key = "file-peek/copy/" + path
     // (saying so a moment once copied: code_block's copied)
-    let said = copied_paths.contains(path) &&
-      (if @kit.after(c, key + "/said", true, @sf.copied_ms) {
-        copied_paths.remove(path)
-        false
-      } else {
-        true
-      })
-    if @sf.panel_button(c, key, @sf.t(if said { "common.copied" } else { "web-main.preview.copyPath" }), tone=Quiet) {
+    let said_id = c.id(key + "/said")
+    let said = c.within(said_id, @sf.copied_ms)
+    @sf.panel_button(c, key, @sf.t(if said { "common.copied" } else { "web-main.preview.copyPath" }), tone=Quiet, on_press=fn() {
       c.copy_text(path)
-      // pressed again while it says so: its time starts again
-      @kit.after(c, key + "/said", false, @sf.copied_ms) |> ignore
-      copied_paths.add(path)
-    }
+      c.mark(said_id)
+    }) |> ignore
   })
   |> ignore
 }
@@ -722,12 +709,7 @@ fn mono(c : @ui.Ctx, words : String, style : @ui.TextStyle) -> Unit {
   c.rich([@ui.span(words, mono=true)], style~) |> ignore
 }
 
-///|
-/// The paths (and web links) copied from a card a moment ago (saying so: 已复制).
-// kept across runs: a moment's words, gone as the moment is
-let copied_paths : Set[String] = Set::new()
-
-// ── a chat's (ChatRef.tsx RefPreview) ───────────────────────────────────
+// ── a chat's ───────────────────────────────────
 
 ///|
 /// What the core reads a chat's link as (`link.parse`): asked; the chat's station, its key (its id, or its agent's
@@ -921,7 +903,7 @@ fn chat_card_of(c : @ui.Ctx, item : ChatItem, elsewhere : Bool, history : Bool, 
 /// its words (six lines at most). That it can't be read, for one gone or a station that won't say; bones while it is read.
 fn message_said(c : @ui.Ctx, src : Source, scope : String, station : String, thread : Double, seq : Double) -> Unit {
   let params : Map[String, Json] = { "station": Json::string(station), "thread": Json::number(thread), "seq": Json::number(seq) }
-  let read = @sfbase.hold(src, scope, "messagePeek", params)
+  let read = @sfbase.hold(src, scope, "messagePeek", params).get().snapshot()
   match read.value {
     Some(Object(_)) as v => {
       let ago = text(field(field(v, "time"), "at"), "ago")
@@ -949,7 +931,7 @@ fn chat_card_sample(c : @ui.Ctx) -> Unit {
   })
 }
 
-// ── its look (Hover.css.ts) ──────────────────────────────────────────────
+// ── its look ──────────────────────────────────────────────
 
 ///|
 /// A tile: its thumb and its words, 10 apart, at their tops: the thumb in the card's corner as far from its top as
@@ -960,7 +942,7 @@ let peek_tile : @ui.Style = @ui.css("row w=Full gap=S2_5 align=AStart")
 ///|
 /// Its thumb: 36 square on the hover's ground, what it shows in its middle (20); in the card's corner as far in as makes
 /// the small block's corner concentric with the card's there (24 less 10: 14), out past the card's words to there
-/// (Hover.css.ts's 9).
+/// .
 // kept across runs: a value (no field of it changes)
 let peek_thumb : @ui.Style = @ui.css("w=S9 h=S9 bg=Hover align=ACenter justify=JCenter clip=true").then(
   @ui.style(radius=@sf.small_radius, ml=@sf.room_of(peek_thumb_out), mt=@sf.room_of(peek_thumb_out)),
@@ -990,7 +972,7 @@ let peek_tile_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, col
 let peek_tile_url : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
-/// A page's picture over its tile: as wide as the card, 16:9 (Hover.css.ts tileWithPicture: 296 wide); 10 over the
+/// A page's picture over its tile: as wide as the card, 16:9; 10 over the
 /// tile.
 // kept across runs: a value (no field of it changes)
 let peek_with_picture : @ui.Style = @ui.style(w=Fixed(peek_picture_w), gap=S2_5)
@@ -1002,7 +984,7 @@ let peek_picture_w : Double = 296.0
 let peek_picture_h : Double = peek_picture_w * 9.0 / 16.0
 
 ///|
-/// Its corner: in the card's top corners 16 in, concentric with its 23 there (Hover.css.ts's 8), as the tile's thumb.
+/// Its corner: in the card's top corners 16 in, concentric with its 23 there, as the tile's thumb.
 let peek_picture_r : Double = @sf.small_corner
 
 ///|
@@ -1026,7 +1008,7 @@ let peek_change_meta : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter").th
 ///|
 /// How far a capsule 20 high in a card's corner (a state's pill, a fact's, a face) stands from where its words start,
 /// out past them: concentric with the card's corner.
-let peek_capsule_in : Double = @sf.capsule_in(@sf.r_menu, peek_capsule_h) - @sf.panel_pad - hover_words_in
+let peek_capsule_in : Double = @ui.capsule_in(@sf.r_menu, peek_capsule_h) - @sf.panel_pad - hover_words_in
 
 ///|
 /// A capsule's height: a state's, a fact's, a face.
@@ -1045,7 +1027,7 @@ let peek_meta_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wra
 let peek_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false, w=Cut)
 
 ///|
-/// Its facts: in a line that goes on to another, 8 apart across and between its lines (Hover.css.ts facts' gap); its
+/// Its facts: in a line that goes on to another, 8 apart across and between its lines; its
 /// first (who opened it, or a fact's pill) in the card's bottom left corner, concentric with it as its state is in its
 /// top left.
 // kept across runs: a value (no field of it changes)
@@ -1214,5 +1196,4 @@ let peek_file_foot : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter").then
 )
 
 ///|
-let peek_button_in : Double = @sf.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - hover_words_in
-
+let peek_button_in : Double = @ui.capsule_in(@sf.r_menu, 24.0) - @sf.panel_pad - hover_words_in

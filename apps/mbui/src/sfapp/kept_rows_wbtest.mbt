@@ -6,31 +6,39 @@
 let kept_rows_step_ms : Double = 120.0
 
 ///|
-/// A long chat's messages dragged back through and flung, then dragged the other way: what is drawn at each moment
-/// after (its instances), and how many rows were drawn again then (an old view's list's kept, or a list of the window's
-/// tree's rows kept as their nodes); the rows drawn again where they can be (`again`) or built every frame.
+/// A long chat's messages scrolled back through, then the other way: by a finger, dragged and flung; on 大屏 (keyboard
+/// and mouse: kept_rows_open) by the wheel, as a mouse drags no list (@ui.Ctx::mouse_drags_lists). What is drawn at
+/// each moment after (its instances), and how many rows were drawn again then; the rows drawn again where they can be
+/// (`again`) or built every frame.
 fn kept_rows_scrolled(again : Bool, w : Double, h : Double, a11y? : Bool = false) -> (Array[Array[String]], Int) {
   let t = kept_rows_open("chat-long", w, h)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(again)
   t.set_a11y(a11y)
   t.said() |> ignore
-  // (the window's tree's rows as they are now: those still there at each moment after are its rows kept)
-  t.tree_rows_kept() |> ignore
   let out = []
   let mut kept = 0
   let x = w * 0.7
-  t.drag(x, h * 0.25, x, h * 0.75, steps=8)
+  let wheel = w >= 1000.0
+  if wheel {
+    t.wheel(x, h * 0.5, -(h * 0.5))
+  } else {
+    t.drag(x, h * 0.25, x, h * 0.75, steps=8)
+  }
   for _ in 0..<6 {
     t.run_for(kept_rows_step_ms)
     out.push(drawn_from(t, -1000.0) + kept_rows_read_out(t, a11y) + kept_rows_said(t))
-    kept = kept + t.rows_kept() + t.tree_rows_kept()
+    kept = kept + t.rows_kept()
   }
-  t.drag(x, h * 0.7, x, h * 0.4, steps=12)
+  if wheel {
+    t.wheel(x, h * 0.5, h * 0.3)
+  } else {
+    t.drag(x, h * 0.7, x, h * 0.4, steps=12)
+  }
   for _ in 0..<4 {
     t.run_for(kept_rows_step_ms)
     out.push(drawn_from(t, -1000.0) + kept_rows_read_out(t, a11y) + kept_rows_said(t))
-    kept = kept + t.rows_kept() + t.tree_rows_kept()
+    kept = kept + t.rows_kept()
   }
   (out, kept)
 }

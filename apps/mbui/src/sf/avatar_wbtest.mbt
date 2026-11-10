@@ -8,6 +8,18 @@ test "a person's colour as Android's avatarColor picks it: Java's hashCode of th
 }
 
 ///|
+test "a picture picked as one's own: made a square face_picture_px across whatever its shape, a JPEG as a data URL" {
+  for side in [(8, 4), (3, 9), (5, 5)] {
+    let (w, h) = side
+    let url = face_picture(w, h, FixedArray::make(w * h * 4, b'\xFF'))
+    let head = "data:image/jpeg;base64,"
+    assert_true(url.has_prefix(head), msg="\{side}")
+    let jpeg = @codec.from_base64(url.unsafe_substring(start=head.length(), end=url.length()))
+    assert_eq(@pixels.image_size(jpeg), Some((face_picture_px, face_picture_px)), msg="\{side}")
+  }
+}
+
+///|
 test "a name's initial: its first letter upper case, ? for none" {
   assert_eq(initial("  lin"), "L")
   assert_eq(initial("林"), "林")

@@ -1,8 +1,9 @@
 // What the core keeps in sync with still.fail cloud (or the account provider in its place: account-provider.ts), by
-// itself, whatever the UI shows (docs/core-ts.md, rule 6): each signed-in account's `/v1/events` socket, held for as long as the account is signed in; its `/v1/me` (whom it
+// itself, whatever the UI shows (rule 6): each signed-in account's `/v1/events` socket, held for as long as the account is signed in; its `/v1/me` (whom it
 // reaches), each workspace it reaches, its signed-in devices, and an operator's lists. The topics that show them only
 // read the records (data.ts). Every time a socket opens, the account is read again (nothing is replayed); its events
 // say what changed. A write to still.fail cloud answers once what it changed is read again.
+import { SignalMap } from "../reactive.ts";
 import { record, said } from "../record.ts";
 import { Effect, Exit, Fiber, Scope } from "effect";
 import type { AccountView } from "../accounts.ts";
@@ -16,13 +17,15 @@ import { topicKey, type Topic } from "../protocol.ts";
 import { CLOUD } from "../status.ts";
 import { GONE, NETWORK } from "../wake.ts";
 import { equal, isObject, parseJson, pointer, toJsonBytes } from "../util.ts";
-import type { LockClaim } from "../lock.ts";
+import { CARRY_BYTES, type LockClaim } from "../lock.ts";
 import * as prefs from "../prefs.ts";
 import { Priority } from "./scheduler.ts";
 
 /// The first wait before an events socket is opened again; it doubles up to a minute, back to the first after one
 /// held a minute.
 export const SOCKET_RETRY_MS = 1_000;
+/// How long a read the cloud turned away for too many asks (429) waits to be asked again.
+export const LIMITED_MS = 10_000;
 export const SOCKET_RETRY_MAX_MS = 60_000;
 /// An events socket that heard nothing this long is opened again, including before its first heartbeat.
 export const SOCKET_IDLE_MS = 2 * 25_000 + 10_000;
@@ -33,11 +36,11 @@ export const ADMIN_LISTS = ["users", "workspaces", "invite-codes", "feedback"];
 export class CloudSync {
   readonly #core: Inner;
   /// Whether each account's latest `/v1/me` answered this run (null), or why it failed.
-  readonly mes = new Map<string, CoreError | null>();
+  readonly mes = new SignalMap<string, CoreError | null>();
   /// Told each time an account's events socket opens (what else is read again then).
   onOpen: () => void = () => {};
   /// What a workspace read last failed with, while nothing is held of it.
-  readonly errors = new Map<string, CoreError>();
+  readonly errors = new SignalMap<string, CoreError>();
   /// Each account's socket, while it is signed in.
   readonly #sockets = new Map<string, Fiber.Fiber<void, never>>();
   /// The relays the mesh uses, as the first `/v1/me` of this run or the kept one said.
@@ -48,10 +51,21 @@ export class CloudSync {
   onRelays: ((relays: string[], entries: string[], targets: Record<string, string>) => void) | null = null;
   /// Told when the stations each account reaches may have changed (the station sync follows).
   onReach: (() => void) | null = null;
+  /// Told when still.fail cloud says a release is out (asks.ts reads the newest again when next asked).
+  onRelease: () => void = () => {};
+  /// Told when still.fail cloud says it sampled its relays, to an operator's account (sync/admin-relays.ts).
+  onRelayLoad: (sub: string) => void = () => {};
   /// The lock entries a hello to a station of the workspace brings (views/lock.ts `carried`): none, null.
   carry: ((workspace: string) => import("../lock.ts").Entry[] | null) | null = null;
+  /// The chain of the person's own lock a hello brings to a station (views/lock.ts `carriedPerson`).
+  carryPerson: ((workspace: string) => import("../lock.ts").Entry[] | null) | null = null;
   /// Whose operator lists are synced (as `admin.me` answered).
   readonly #admins = new Set<string>();
+  /// An operator's lists that failed to come (the network, still.fail cloud's 5xx): the wait before they are asked
+  /// again, by account, and the retry waiting.
+  readonly #adminRetry = new Map<string, { ms: number; fiber: Fiber.Fiber<unknown, unknown> | null }>();
+  /// A workspace's view to read again, the cloud having turned it away for too many asks.
+  readonly #workspaceRetry = new Map<string, Fiber.Fiber<unknown, unknown>>();
   /// The kept credentials being renewed beside their use (`#credential`), by device and key.
   readonly #renewing = new Set<string>();
 
@@ -99,6 +113,8 @@ export class CloudSync {
         loaded: this.mes.has(account.sub) && this.mes.get(account.sub) === null,
       };
       if (pointer(record, "/user/beta") === true) entry.beta = true;
+      // Its picture is one it put up for itself (account.setPicture), which it may take away.
+      if (pointer(record, "/user/own_picture") === true) entry.ownPicture = true;
       const error = this.mes.get(account.sub);
       if (error) {
         entry.error = error;
@@ -137,6 +153,23 @@ export class CloudSync {
       // What only some providers have: login sessions, an operator's lists.
       if (this.#core.provider.supports("loginSessions")) scheduler.enqueue("cloud", `sessions/${sub}`, Priority.background, this.#loginSessions(sub));
       if (this.#core.provider.supports("admin")) scheduler.enqueue("cloud", `admin/${sub}`, Priority.background, this.#admin(sub));
+    });
+  }
+
+  /// The account's list changed (`workspaces`): its `/v1/me` again, and the workspaces new to it. One already held is
+  /// told on its own (a `workspace` event comes with each change to it), and its sign-ins and an operator's lists are
+  /// not what the list tells: read with the rest as the socket opens. (A member added had each device of the person's
+  /// ask the cloud six things, its workspace three times: seven devices used up the account's 120 a minute, and the
+  /// next member taken out was refused, the locks' end to end, 2026-11-10.)
+  #listed(sub: string): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.#me(sub);
+      const me = this.#core.data.record("me", sub);
+      const ids = (isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []).flatMap((w) => (isObject(w) && typeof w.id === "string" ? [w.id] : []));
+      for (const id of ids) {
+        if (this.#core.workspaces.owner(id) !== sub || isObject(this.#core.data.shared({ topic: "workspace", workspace: id }))) continue;
+        this.#core.scheduler.enqueue("cloud", `workspace/${id}`, Priority.background, this.#workspace(id));
+      }
     });
   }
 
@@ -188,10 +221,6 @@ export class CloudSync {
       }
       this.recomputeOwners();
       this.forgetUnreachable();
-      core.store.invalidate({ topic: "workspaces" });
-      core.store.invalidateAll((t) => t.topic === "workspace");
-      // (the notifications page lists them, a notice of another says its name)
-      core.store.invalidateAll((t) => t.topic === "notify");
     });
   }
 
@@ -222,9 +251,24 @@ export class CloudSync {
           core.data.dropWorkspace(id);
           this.errors.set(id, error);
         } else if (core.data.get(topic) === undefined) this.errors.set(id, error);
+        // Turned away for the account's asks this minute (its devices all read at once as its lock moves): read again
+        // a little later, else what it says (how far the lock goes) stayed behind until it changed once more.
+        if (error.status === 429) this.#workspaceLater(id);
         core.store.invalidate(topic);
       }
     });
+  }
+
+  #workspaceLater(id: string): void {
+    const core = this.#core;
+    if (this.#workspaceRetry.has(id)) return;
+    const again = Effect.sleep(LIMITED_MS).pipe( // timer: a retry after a failure (429)
+      Effect.andThen(Effect.sync(() => {
+        this.#workspaceRetry.delete(id);
+        if (core.workspaces.owner(id) !== null) core.scheduler.enqueue("cloud", `workspace/${id}`, Priority.shown, this.#workspace(id));
+      })),
+    );
+    this.#workspaceRetry.set(id, core.runner.fork(again) as Fiber.Fiber<unknown, unknown>);
   }
 
   #loginSessions(sub: string): Effect.Effect<void, CoreError> {
@@ -243,22 +287,45 @@ export class CloudSync {
     });
   }
 
-  /// An operator's lists, for an account still.fail cloud says is one (`/v1/admin/me`).
+  /// An operator's lists, for an account still.fail cloud says is one (`/v1/admin/me`). One that failed for a reason
+  /// other than the account's (the network, a 5xx) is asked again after a wait: nothing else would ask while the
+  /// events socket stays open, and the console would wait on it until reloaded.
   #admin(sub: string): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const core = this.#core;
       const me = yield* Effect.result(core.provider.request(sub, "GET", "/v1/admin/me", null));
       if (me._tag === "Failure") {
         this.#admins.delete(sub);
+        if (passing(me.failure)) this.#adminAgain(sub);
         return;
       }
       this.#admins.add(sub);
-      yield* Effect.all(ADMIN_LISTS.map((list) => this.adminList(sub, list)), { concurrency: "unbounded" });
+      const failed = yield* Effect.all(ADMIN_LISTS.map((list) => this.adminList(sub, list)), { concurrency: "unbounded" });
+      if (failed.some((e) => e !== null && passing(e))) this.#adminAgain(sub);
+      else this.#adminRetry.delete(sub);
     });
   }
 
-  /// One of an operator's lists read again (`/v1/admin/<list>`); what was read before stays when it fails.
-  adminList(sub: string, list: string): Effect.Effect<void> {
+  #adminAgain(sub: string): void {
+    const core = this.#core;
+    let retry = this.#adminRetry.get(sub);
+    if (!retry) this.#adminRetry.set(sub, (retry = { ms: SOCKET_RETRY_MS, fiber: null }));
+    if (retry.fiber !== null) return;
+    const wait = retry.ms;
+    retry.ms = Math.min(retry.ms * 2, SOCKET_RETRY_MAX_MS);
+    const again = Effect.sleep(wait).pipe( // timer: a retry after a failure, with a backoff
+      Effect.andThen(Effect.sync(() => {
+        retry.fiber = null;
+        if (this.#adminRetry.get(sub) !== retry || !core.accounts.list().some((a) => a.sub === sub)) return;
+        core.scheduler.enqueue("cloud", `admin/${sub}`, Priority.background, this.#admin(sub));
+      })),
+    );
+    retry.fiber = core.runner.fork(again) as Fiber.Fiber<unknown, unknown>;
+  }
+
+  /// One of an operator's lists read again (`/v1/admin/<list>`); what was read before stays when it fails. What it
+  /// failed with, or null.
+  adminList(sub: string, list: string): Effect.Effect<CoreError | null> {
     return Effect.gen({ self: this }, function* () {
       const core = this.#core;
       const topic: Topic = { topic: "admin", account: sub, list };
@@ -266,10 +333,13 @@ export class CloudSync {
       if (answer._tag === "Success") {
         this.errors.delete(topicKey(topic));
         core.data.set(topic, answer.success);
-      } else if (core.data.get(topic) === undefined) {
+        return null;
+      }
+      if (core.data.get(topic) === undefined) {
         this.errors.set(topicKey(topic), answer.failure);
         core.store.invalidate(topic);
       }
+      return answer.failure;
     });
   }
 
@@ -287,7 +357,6 @@ export class CloudSync {
       }
     }
     core.workspaces.setOwners(owners);
-    core.store.invalidateAll((t) => t.topic === "status" && typeof t.workspace === "string");
     this.onReach?.();
   }
 
@@ -412,7 +481,13 @@ export class CloudSync {
   /// (it lists the devices for a lock's owner to check) and to the station with the credential.
   credential(workspace: string, device: string, fresh: boolean, main: string | null, claim: LockClaim | null = null): Effect.Effect<Credential, CoreError> {
     const entries = claim === null ? null : (this.carry?.(workspace) ?? null);
-    const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: entries ? { ...claim, entries } : claim });
+    // (both, only as they fit a station's head together: the entries then, which a station that has not heard of this
+    // device yet needs to let it in at all)
+    const chain = claim === null ? null : (this.carryPerson?.(workspace) ?? null);
+    const person = chain !== null && entries !== null && JSON.stringify(entries).length + JSON.stringify(chain).length > CARRY_BYTES ? null : chain;
+    // (and what the device is: the station lists it for the lock's owner, as the cloud did from the ask)
+    const about = { kind: this.#core.host.appKeys ? "app" : "web", label: prefs.deviceName(this.#core.data) ?? "" };
+    const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: { ...claim, ...about, ...(entries ? { entries } : {}), ...(person ? { person } : {}) } });
     return Effect.map(this.#credential(workspace, device, fresh, main, claim), claimed);
   }
 
@@ -508,10 +583,6 @@ export class CloudSync {
     core.shownAccounts = list;
     this.recomputeOwners();
     this.forgetUnreachable();
-    core.store.invalidate({ topic: "accounts" });
-    core.store.invalidate({ topic: "workspaces" });
-    core.store.invalidateAll((t) => t.topic === "workspace");
-    core.store.invalidateAll((t) => t.topic === "notify");
     this.syncSockets();
     void before;
     // Someone signed in: their devices hear pushes too.
@@ -543,11 +614,26 @@ export class CloudSync {
     const core = this.#core;
     const event = parseJson(text);
     if (!isObject(event)) return;
-    if (event.type === "workspaces") core.scheduler.enqueue("cloud", `me/${sub}`, Priority.shown, this.#account(sub));
+    if (event.type === "workspaces") core.scheduler.enqueue("cloud", `me/${sub}`, Priority.shown, this.#listed(sub));
+    else if (event.type === "release") this.onRelease();
+    else if (event.type === "relays") this.onRelayLoad(sub);
     else if (event.type === "workspace" && typeof event.id === "string") {
-      if (core.workspaces.owner(event.id) !== null) core.scheduler.enqueue("cloud", `workspace/${event.id}`, Priority.shown, this.#workspace(event.id));
+      if (core.workspaces.owner(event.id) === null) return;
+      const lock = event.lock;
+      const topic = { topic: "workspace", workspace: event.id } as const;
+      // Only its lock moved on, as the event says: in place, no request (the lock itself is read of the stations,
+      // views/lock.ts; each entry signed had every device of its members ask for the workspace again, using up the
+      // account's budget).
+      if (isObject(lock) && "head" in lock && isObject(core.data.shared(topic))) {
+        const head = isObject(lock.head) ? lock.head : null;
+        core.data.update(topic, (w) => {
+          if (!isObject(w)) return w;
+          const { locked: _, ...rest } = w;
+          return { ...rest, lock: head, ...(lock.locked === true ? { locked: true } : {}) };
+        });
+      } else core.scheduler.enqueue("cloud", `workspace/${event.id}`, Priority.shown, this.#workspace(event.id));
     } else if (event.type === "station" && typeof event.workspace === "string" && typeof event.id === "string" && typeof event.online === "boolean") {
-      // A station came online or went: in place, no request (docs/client-core.md).
+      // A station came online or went: in place, no request.
       const online = event.online;
       const id = event.id;
       core.data.update({ topic: "workspace", workspace: event.workspace }, (w) => {
@@ -697,4 +783,9 @@ function readKept(v: unknown): KeptCredential | null {
 
 function strip(k: KeptCredential): Credential {
   return { credential: k.credential, issued_at: k.issued_at, expires_at: k.expires_at, relay_url: k.relay_url };
+}
+
+/// A failure that may pass if asked again: no answer, or still.fail cloud's own trouble (a 5xx, 429), not the account's.
+function passing(e: CoreError): boolean {
+  return e.code !== "signed_out" && (e.status === undefined || e.status === 429 || e.status >= 500);
 }

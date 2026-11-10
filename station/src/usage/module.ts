@@ -4,6 +4,8 @@
 // on its live stream and in its session's summary, `usage`) and the usage page (GET /usage).
 import { Clock, Effect, Layer } from "effect";
 import { Worker } from "node:worker_threads";
+import { MbBackfill, mbReaderBinary } from "../read/mb-reader.ts";
+import { wall } from "../ops/fibers.ts";
 import { usageRoutes } from "../api/routes/usage.ts";
 import { usageNow } from "../read/usage.ts";
 import { Agents } from "../sessions/agents.ts";
@@ -17,6 +19,7 @@ import type { InWorkspace } from "../store/rows.ts";
 import { giveBackfill, releaseStoppedBackfill, takeBackfill } from "../store/backfill.ts";
 import { retireUsageIndexes, stopUsageIndexes } from "../store/usage-retire.ts";
 import { hasCompactUsage, installCompactUsage, installUsageSummaryChanges } from "../store/usage-compact.ts";
+import { hasUsageSummaryBlocks, installUsageSummaryBlocks, type UsageSummaryKey, type UsageSummaryRange } from "../store/usage-summary-blocks.ts";
 import { installUsageHistory } from "../store/usage-history.ts";
 import { UsageCounter } from "./counter.ts";
 
@@ -52,6 +55,7 @@ function tryStopUsageIndexes(store: StationStore): boolean {
       try {
         installCompactUsage(store.db, () => store.now());
         installUsageSummaryChanges(store.db);
+        installUsageSummaryBlocks(store.db);
       } catch (error) {
         const code = (error as { errcode?: number }).errcode;
         if (code !== undefined && [5, 6].includes(code & 255)) throw error;
@@ -85,22 +89,30 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
       yield* Effect.sleep(50);
     }
     stopped = true;
-    if (hasCompactUsage(store.db)) {
+    if (hasCompactUsage(store.db) && hasUsageSummaryBlocks(store.db)) {
       installed();
       // A page may have opened before handover and received unavailable statistics. Wake it even if no call follows.
       store.usageChanged([], undefined, true);
     }
     const path = store.db.location();
-    if (path === null) { retireUsageIndexes(store.db); return; }
+    if (path === null) { retireUsageIndexes(store.db); return hasCompactUsage(store.db) && hasUsageSummaryBlocks(store.db); }
     const file = workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./retire-worker.ts" : "./usage/retire-worker.js", import.meta.url);
-    yield* Effect.tryPromise({ try: async () => {
+    // (by the MoonBit builder, station/mb's src/usagefill, where its program is there: a step at a time, the permit
+    // taken for each, as retire-worker.ts takes it)
+    const mb = workerFile === undefined ? mbReaderBinary() : null;
+    if (mb !== null) yield* Effect.tryPromise({ try: () => retireByProgram(store, mb, path), catch: (error) => error });
+    else yield* Effect.tryPromise({ try: async () => {
       const worker = new Worker(file, { workerData: { path, priority: store.backfillPriority } });
       const owner = worker.threadId;
       worker.unref();
       await new Promise<void>((resolve, reject) => {
         let failure: Error | null = null;
         let complete = false;
-        worker.on("message", (answer: { complete?: boolean }) => { complete ||= answer.complete === true; });
+        worker.on("message", (answer: { complete?: boolean; filled?: boolean }) => {
+          complete ||= answer.complete === true;
+          // The days before the statistics began have just come in: pages open now read them again.
+          if (answer.filled) store.usageChanged([], undefined, true);
+        });
         worker.once("error", (error) => { failure = error; });
         worker.once("exit", (code) => {
           releaseStoppedBackfill(store.backfillPriority, owner);
@@ -109,39 +121,93 @@ export function retireAfterPrevious(store: StationStore, exited: Promise<void>, 
         });
       });
     }, catch: (error) => error });
+    return hasCompactUsage(store.db) && hasUsageSummaryBlocks(store.db);
   }).pipe(Effect.catch((error) => Effect.sync(() => {
     log.warn("usage", stopped ? "usage indexes could not be removed" : "usage index writers could not be stopped", { error: (error as Error).message });
+    return false;
   })));
+}
+
+/// What retire-worker.ts does, by the MoonBit program: the retired indexes freed, then the old calls taken in, newest
+/// first, with at most about a tenth of the time going to them; pages open read again once old days came in.
+async function retireByProgram(store: StationStore, mb: string, path: string): Promise<void> {
+  const program = new MbBackfill(mb, ["--builder", "usage-retire", "--db", path], store.backfillPriority, 20);
+  const ask = (message: object) => new Promise<{ done: boolean; error?: string }>((resolve, reject) => {
+    const exit = (code: number) => reject(new Error(`usage retirement stopped (exit ${code})`));
+    program.once("exit", exit);
+    program.once("message", (answer: { done: boolean; error?: string }) => {
+      program.off("exit", exit);
+      if (answer.error) reject(new Error(answer.error)); else resolve(answer);
+    });
+    program.postMessage(message);
+  });
+  try {
+    while (!(await ask({ drop: true })).done);
+    let filled = false;
+    for (;;) {
+      const started = performance.now();
+      if ((await ask({})).done) break;
+      filled = true;
+      await wall.sleep(Math.max(200, (performance.now() - started) * 9));
+    }
+    // The days before the statistics began have just come in: pages open now read them again.
+    if (filled) store.usageChanged([], undefined, true);
+  } finally { await program.terminate(); }
+}
+
+/// Retry temporary installation or cleanup failures after stopping the old writers.
+export function retireUntilComplete(store: StationStore, exited: Promise<void>, workerFile?: URL, installed: () => void = () => {}) {
+  return Effect.gen(function* () {
+    let retryMs = 250;
+    while (!(yield* retireAfterPrevious(store, exited, workerFile, installed))) {
+      yield* Effect.sleep(retryMs);
+      retryMs = Math.min(retryMs * 2, 30_000);
+    }
+  });
 }
 
 /// A worker moves changed ownership and accounts a workspace's totals when that workspace asks for them.
 export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
-  wake: () => void; read: (viewer: InWorkspace | null) => void; close: () => Promise<void>;
+  wake: () => void; read: (viewer: InWorkspace | null) => void;
+  waitSummary: (viewer: InWorkspace | null, range: UsageSummaryRange, signal?: AbortSignal) => Promise<void>; close: () => Promise<void>;
 } {
   const path = store.db.location();
   const retries = new Fibers("usage workspace", store.clock);
   let closed = false;
   let ready = false;
   let moves = true;
-  const scopes = new Set<string>();
+  type Work = { scope?: string; range?: UsageSummaryRange };
+  const scopes = new Map<string, Work>();
+  const workId = (work: Work) => work.range === undefined ? work.scope! : JSON.stringify([work.scope, String(work.range.from), String(work.range.to)]);
+  const waiting = new Set<{ scopes: Set<string>; finish: (error?: Error) => void }>();
+  const scopesOf = (viewer: InWorkspace | null) => viewer === null ? ["G"]
+    : viewer.home === false ? [`W${viewer.workspace}`] : [`W${viewer.workspace}`, "H"];
   // A page cannot use a total until all its pending buckets are accounted. Remember only the earliest changed time
   // for each requested scope, so intermediate batches do not send it back to read an unavailable total again.
   const totals = new Map<string, { from: number | undefined }>();
-  let held: { scope?: string } | null = null;
+  let held: Work | null = null;
   let preferMoves = false;
   let retryMs = 250;
   let cancelRetry: (() => void) | null = null;
-  let worker: Worker | null = null;
-  const requeue = (work: { scope?: string }) => { if (work.scope === undefined) moves = true; else scopes.add(work.scope); };
+  let worker: Worker | MbBackfill | null = null;
+  const interested = (id: string) => [...waiting].some((waiter) => waiter.scopes.has(id));
+  const requeue = (work: Work) => {
+    if (work.scope === undefined) moves = true;
+    else if (work.range === undefined || interested(workId(work))) scopes.set(workId(work), work);
+  };
+  const enqueue = (work: Work) => {
+    const id = workId(work);
+    if ((held === null || workId(held) !== id) && !scopes.has(id)) scopes.set(id, work);
+  };
   const dispatch = () => {
     if (worker === null || held !== null || cancelRetry !== null) return;
-    let work: { scope?: string };
+    let work: Work;
     if (moves && (preferMoves || scopes.size === 0)) { moves = false; preferMoves = false; work = {}; }
     else if (scopes.size > 0) {
-      const scope = scopes.values().next().value!;
-      scopes.delete(scope);
+      const [id, next] = scopes.entries().next().value!;
+      scopes.delete(id);
       preferMoves = true;
-      work = { scope };
+      work = next;
     } else return;
     held = work;
     worker.postMessage({ wake: true, ...work });
@@ -159,16 +225,25 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
   const start = () => {
     if (closed || !ready || path === null || worker !== null) return;
     const file = new URL(import.meta.url.endsWith(".ts") ? "./scope-worker.ts" : "./usage/scope-worker.js", import.meta.url);
-    const current = new Worker(file, { workerData: { path, priority: store.backfillPriority } });
+    // (by the MoonBit builder, station/mb's src/usagefill scope.mbt, where its program is there: `MbBackfill`)
+    const mb = mbReaderBinary();
+    const current = mb !== null ? new MbBackfill(mb, ["--builder", "usage-scope", "--db", path], store.backfillPriority, 20)
+      : new Worker(file, { workerData: { path, priority: store.backfillPriority } });
     const owner = current.threadId;
     worker = current;
     current.unref();
-    current.on("message", (answer: { done: boolean; session?: string; sessions?: string[]; from?: number; error?: string }) => {
+    current.on("message", (answer: { done: boolean; session?: string; sessions?: string[]; from?: number; after?: UsageSummaryKey; converted?: boolean; error?: string }) => {
       if (closed) return;
       const work = held;
       held = null;
       if (work === null) return;
-      if (!answer.done) requeue(work);
+      if (!answer.done) {
+        if (work.range !== undefined) {
+          if (answer.after !== undefined) work.range.after = answer.after;
+          if (answer.converted) work.range.converted = true;
+        }
+        requeue(work);
+      }
       if (answer.error) {
         log.warn("usage", "a usage statistics batch stopped", { error: answer.error });
         retry();
@@ -176,16 +251,22 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
       }
       if (answer.session) store.usageChanged([answer.session], undefined, true);
       if (work.scope !== undefined) {
-        if (answer.sessions?.length) {
-          const prior = totals.get(work.scope);
-          const from = prior === undefined ? answer.from : prior.from === undefined || answer.from === undefined
-            ? undefined : Math.min(prior.from, answer.from);
-          totals.set(work.scope, { from });
+        if (work.range === undefined) {
+          if (answer.sessions?.length) {
+            const prior = totals.get(work.scope);
+            const from = prior === undefined ? answer.from : prior.from === undefined || answer.from === undefined
+              ? undefined : Math.min(prior.from, answer.from);
+            totals.set(work.scope, { from });
+          }
+          const complete = answer.done ? totals.get(work.scope) : undefined;
+          if (complete !== undefined) {
+            totals.delete(work.scope);
+            store.usageChanged([], complete.from, true);
+          }
         }
-        const complete = answer.done ? totals.get(work.scope) : undefined;
-        if (complete !== undefined) {
-          totals.delete(work.scope);
-          store.usageChanged([], complete.from, true);
+        if (answer.done) for (const waiter of waiting) {
+          waiter.scopes.delete(workId(work));
+          if (waiter.scopes.size === 0) waiter.finish();
         }
       }
       retryMs = 250;
@@ -215,22 +296,46 @@ export function watchCompactMoves(store: StationStore, exited: Promise<void>): {
   const read = (viewer: InWorkspace | null) => {
     cancelRetry?.();
     cancelRetry = null;
-    if (viewer === null) scopes.add("G");
-    else {
-      scopes.add(`W${viewer.workspace}`);
-      if (viewer.home !== false) scopes.add("H");
-    }
+    for (const scope of scopesOf(viewer)) enqueue({ scope });
     start();
     dispatch();
   };
+  const waitSummary = (viewer: InWorkspace | null, range: UsageSummaryRange, signal?: AbortSignal): Promise<void> => {
+    if (closed || path === null) return Promise.reject(new Error("station stopping"));
+    if (signal?.aborted) return Promise.reject(new Error("read cancelled"));
+    return new Promise<void>((resolve, reject) => {
+      const work = scopesOf(viewer).map((scope) => ({ scope, range: { from: range.from, to: range.to } }));
+      const waiter = { scopes: new Set(work.map(workId)), finish: (error?: Error) => {
+        waiting.delete(waiter);
+        signal?.removeEventListener("abort", abort);
+        for (const id of waiter.scopes) if (!interested(id)) scopes.delete(id);
+        if (error) reject(error); else resolve();
+      } };
+      const abort = () => waiter.finish(new Error("read cancelled"));
+      waiting.add(waiter);
+      signal?.addEventListener("abort", abort, { once: true });
+      try { for (const item of work) enqueue(item); start(); dispatch(); }
+      catch (cause) { waiter.finish(cause instanceof Error ? cause : new Error(String(cause))); }
+    });
+  };
   const unsubscribe = store.onSessionWorkspaceChange(wake);
-  void exited.then(() => { ready = true; start(); }).catch((error) => log.warn("usage", "could not start usage workspace worker", { error: (error as Error).message }));
+  const unsubscribeUsage = store.subscribe((change) => {
+    if (change.type === "usage" && !change.statisticsOnly) wake();
+  });
+  void exited.then(() => { ready = true; start(); }).catch((cause) => {
+    const error = cause instanceof Error ? cause : new Error(String(cause));
+    log.warn("usage", "could not start usage workspace worker", { error: error.message });
+    for (const waiter of waiting) waiter.finish(error);
+  });
   return {
     wake,
     read,
+    waitSummary,
     close: async () => {
       closed = true;
+      for (const waiter of waiting) waiter.finish(new Error("station stopping"));
       unsubscribe();
+      unsubscribeUsage();
       await retries.close();
       if (worker !== null) await worker.terminate();
     },
@@ -248,7 +353,7 @@ export const UsageLive = Layer.effectDiscard(
       Effect.sync(() => watchCompactMoves(store, previous.exited)),
       (m) => Effect.promise(() => m.close()),
     );
-    yield* Effect.forkScoped(retireAfterPrevious(store, previous.exited, undefined, mover.wake).pipe(Effect.provideService(Clock.Clock, hub.clock)));
+    yield* Effect.forkScoped(retireUntilComplete(store, previous.exited, undefined, mover.wake).pipe(Effect.provideService(Clock.Clock, hub.clock)));
     const usage = yield* Effect.acquireRelease(
       Effect.sync(() => new UsageCounter({ store, config: () => ({ dataDir: data, profiles: hubConfig(config.raw(), data).profiles }), clock: hub.clock })),
       (u) => Effect.promise(() => u.stop()),
@@ -258,6 +363,6 @@ export const UsageLive = Layer.effectDiscard(
       Effect.sync(() => keepCounted(store, hub.live, usage)),
       (unsubscribe) => Effect.sync(unsubscribe),
     );
-    (yield* Parts).routes((tools) => usageRoutes(tools, () => usage.readingAll(), mover.read));
+    (yield* Parts).routes((tools) => usageRoutes(tools, () => usage.readingAll(), mover.read, mover.waitSummary));
   }),
 );

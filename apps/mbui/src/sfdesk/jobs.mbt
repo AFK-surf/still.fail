@@ -1,4 +1,4 @@
-// A chat's web services and background jobs on the desktop (ember web/src/Jobs.tsx, Jobs.css.ts): status a small dot
+// A chat's web services and background jobs on the desktop: status a small dot
 // before the name and a word on the line under it; the chat bar's popover shows what matters now (JobsPopover), the
 // 任务 tab beside the chat everything (JobsTab). What a job's dot says, its word, the line under its name and every
 // time in words are the core's (its `chatJobs` view, `jobLog`); what is done goes through its calls.
@@ -101,7 +101,7 @@ fn job_meta(c : @ui.Ctx, job : Json?) -> Unit {
 ///|
 /// A job's row (JobRow): its dot, its name, what it is up to; what is at its end (`end`: a service's arrow, a job's
 /// chevron); picked (`selected`), over (faded); on a ground not its own (`grounded`: a job opened in the popover, its
-/// row the top of the one piece it and its body are), no ground of its own. True on the frame after a press (`press`:
+/// row the top of the one piece it and its body are), no ground of its own. `on_press` as it is pressed (`press`:
 /// none for a row that does nothing).
 fn job_row(
   c : @ui.Ctx,
@@ -112,7 +112,8 @@ fn job_row(
   press? : Bool = true,
   inset? : Bool = false,
   grounded? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let off = text(job, "tone") == "off"
   let id = c.id(key)
   let style = match (press && !grounded, inset) {
@@ -144,7 +145,10 @@ fn job_row(
     }
   })
   c.semantics(b, Button, id~, label=text(job, "name"))
-  press && c.clicked(id)
+  match on_press {
+    Some(f) if press => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
@@ -193,7 +197,7 @@ fn job_last(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit {
     "station": Json::string(station),
     "job": Json::string(text(job, "id")),
     "lines": Json::number(1.0),
-  }).value
+  }).get().value
   let read = log is Some(Object(_))
   let said = if read { text(log, "said") } else { text(job, "outputSaid") }
   if said == "" {
@@ -273,13 +277,13 @@ pub fn jobs_popover(
           let jv = Some(j)
           let id = text(jv, "id")
           let failed = text(jv, "tone") == "fail"
-          if job_row(c, "jobs-pop/" + id, jv, end=if failed { "chevron-right" } else { "arrow-right" }, inset=true) {
+          job_row(c, "jobs-pop/" + id, jv, end=if failed { "chevron-right" } else { "arrow-right" }, inset=true, on_press=fn() {
             if failed {
               tab(id)
             } else {
               service(id)
             }
-          }
+          })
         }
       })
       |> ignore
@@ -292,17 +296,18 @@ pub fn jobs_popover(
           let id = text(jv, "id")
           let open = jobs_own.open == id
           c.box(style=if open { jobs_fold_open } else { jobs_fold }, fn() {
-            if job_row(
-                c,
-                "jobs-pop/" + id,
-                jv,
-                end=if open { "chevron-down" } else { "chevron-right" },
-                selected=open,
-                inset=true,
-                grounded=open,
-              ) {
-              jobs_own.open = if open { "" } else { id }
-            }
+            job_row(
+              c,
+              "jobs-pop/" + id,
+              jv,
+              end=if open { "chevron-down" } else { "chevron-right" },
+              selected=open,
+              inset=true,
+              grounded=open,
+              on_press=fn() {
+                jobs_own.open = if open { "" } else { id }
+              },
+            )
             if open {
               c.box(style=jobs_fold_body, fn() {
                 job_notices(c, jv, limit=3)
@@ -310,21 +315,25 @@ pub fn jobs_popover(
                 c.box(style=job_actions, fn() {
                   if text(jv, "state") == "running" {
                     let (stopping, failed) = job_stopping(src, station, jv)
-                    if job_action(c, "jobs-pop/stop/" + id, fn() {
-                        if stopping || failed is Some(_) {
-                          @settings.doing_mark(c, stopping, failed, inline=true)
-                        } else {
-                          @sf.icon(c, "stop", size=14.0, color=@sf.theme().p.muted) |> ignore
-                        }
-                      }, @sf.t("web-main.jobs.stop"), !stopping) {
-                      job_stop(src, station, jv)
-                    }
+                    job_action(c, "jobs-pop/stop/" + id, fn() {
+                      if stopping || failed is Some(_) {
+                        @settings.doing_mark(c, stopping, failed, inline=true)
+                      } else {
+                        @sf.icon(c, "stop", size=14.0, color=@sf.theme().p.muted) |> ignore
+                      }
+                    }, @sf.t("web-main.jobs.stop"), !stopping,
+                      on_press=fn() {
+                        job_stop(src, station, jv)
+                      },
+                    )
                   }
-                  if job_action(c, "jobs-pop/tab/" + id, fn() {
-                      @sf.icon(c, "panel-open", size=14.0, color=@sf.theme().p.muted) |> ignore
-                    }, @sf.t("web-main.jobs.inPanel"), true) {
-                    tab(id)
-                  }
+                  job_action(c, "jobs-pop/tab/" + id, fn() {
+                    @sf.icon(c, "panel-open", size=14.0, color=@sf.theme().p.muted) |> ignore
+                  }, @sf.t("web-main.jobs.inPanel"), true,
+                    on_press=fn() {
+                      tab(id)
+                    },
+                  )
                 })
                 |> ignore
               })
@@ -340,9 +349,9 @@ pub fn jobs_popover(
   |> ignore
   c.box(style=jobs_foot, fn() {
     let all = c.id("jobs-pop/all")
-    if c.clicked(all) {
+    c.on_press(all, fn() {
       tab("")
-    }
+    })
     let words = text(view, "allText") + " · " + @sf.t("web-main.jobs.inPanel")
     let b = c.box(style=jobs_all, id=all, fn() {
       c.text(words, style=if c.lit(all) { jobs_all_hot } else { jobs_all_words }) |> ignore
@@ -355,14 +364,17 @@ pub fn jobs_popover(
 ///|
 /// A small action of a job's (jobAction): its mark and words, 26 high; the picked ground and the words' ink on hover.
 /// True on the frame after a press (none while `on` is false).
-fn job_action(c : @ui.Ctx, key : String, mark : () -> Unit, words : String, on : Bool) -> Bool {
+fn job_action(c : @ui.Ctx, key : String, mark : () -> Unit, words : String, on : Bool, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(style=job_action_style, id~, fn() {
     mark()
     c.text(words, style=if on && c.lit(id) { job_action_hot } else { job_action_words }) |> ignore
   })
   c.semantics(b, Button, id~, label=words)
-  on && c.clicked(id)
+  match on_press {
+    Some(f) if on => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
@@ -398,9 +410,9 @@ pub fn jobs_tab(c : @ui.Ctx, src : Source, station : String, chat : String, view
               for j in services {
                 let jv = Some(j)
                 let opens = text(jv, "tone") == "up" || text(jv, "tone") == "restart"
-                if job_row(c, "jobs-tab/" + text(jv, "id"), jv, end=if opens { "arrow-right" } else { "" }, press=opens) {
+                job_row(c, "jobs-tab/" + text(jv, "id"), jv, end=if opens { "arrow-right" } else { "" }, press=opens, on_press=fn() {
                   service(text(jv, "id"))
-                }
+                })
               }
             })
             |> ignore
@@ -415,9 +427,9 @@ pub fn jobs_tab(c : @ui.Ctx, src : Source, station : String, chat : String, view
                   Some(p) => text(Some(p), "id") == id
                   None => false
                 }
-                if job_row(c, "jobs-tab/" + id, jv, selected=on) {
+                job_row(c, "jobs-tab/" + id, jv, selected=on, on_press=fn() {
                   jobs_own.picked = id
-                }
+                })
               }
             })
             |> ignore
@@ -459,9 +471,11 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
       if running {
         let (stopping, failed) = job_stopping(src, station, job)
         let sid = c.id("jobs-tab/stop")
-        if !stopping && c.clicked(sid) {
-          job_stop(src, station, job)
-        }
+        c.on_press(sid, fn() {
+          if !stopping {
+            job_stop(src, station, job)
+          }
+        })
         let b = c.box(style=job_detail_stop, id=sid, fn() {
           if stopping || failed is Some(_) {
             @settings.doing_mark(c, stopping, failed)
@@ -596,7 +610,7 @@ let job_row_static_inset : @ui.Style = @ui.css("row w=Full py=S1_5 px=S2_5 gap=S
 
 ///|
 /// Its dot and words; over, its name stepped back to the muted grey (data-off), not faded (at 55% its words were 2.3 to
-/// 1: docs/ui-panels.md 对比度).
+/// 1: mbui ui/contrast.mbt).
 // kept across runs: a value (no field of it changes)
 let job_row_on : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S3, align=AStart)
 
@@ -679,7 +693,7 @@ let job_last_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wr
 
 ///|
 /// Its actions (jobActions): 2 apart, 6 under what is over them, 8 out at their start; each 26 high, 8 in, its mark and
-/// words 5 apart, the pointer's ground on hover (over the row's, lit with it: docs/ui-panels.md 悬停).
+/// words 5 apart, the pointer's ground on hover (over the row's, lit with it: mbui ui/hand_moves.mbt).
 // kept across runs: a value (no field of it changes)
 let job_actions : @ui.Style = @ui.css("row pt=S1_5 gap=S0_5").then(@sf.outset_start(8.0))
 
@@ -828,7 +842,7 @@ fn job_detail_at(running : Bool) -> @ui.Style {
   if !running {
     return job_detail_alone
   }
-  let d = @sf.capsule_in(@sf.card_corner, job_stop_side)
+  let d = @ui.capsule_in(@sf.card_corner, job_stop_side)
   // (the head's middle the stop's: as much less over it as the choice is taller)
   let over = d - (dmax(@sf.segmented_height(), job_stop_side) - job_stop_side) / 2.0
   @ui.style(pt=@sf.room_of(over), pr=@sf.room_of(d))

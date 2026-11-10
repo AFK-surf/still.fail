@@ -1,5 +1,15 @@
 #!/bin/bash
 # Render a scripted mbui scene and keep the inputs and fingerprints needed to identify the result.
+#   media.sh picture OUT.png DRIVE [PREPARE] | film OUT.mp4 DRIVE [PREPARE] | preview DRIVE [PREPARE], from apps/mbui
+#   on an Apple Silicon Mac, e.g. MBUI_FIXTURE=home MBUI_WIN=320x560 MBUI_FILM_SCALE=1 bash scripts/media.sh picture
+#   out/home.png out/home.drive. PREPARE is a drive run before the recorded actions (`image_ready SRC` waits for an image).
+#   Scene: MBUI_WIN, MBUI_FILM_SCALE, MBUI_FILM_PLATFORM, MBUI_NATIVE_INPUT, MBUI_POINTING, MBUI_KEYBOARD, MBUI_DARK,
+#   MBUI_LOCALE, MBUI_FONT_SCALE and the fixture's (all of film's: mbui/src/film/film.mbt). A picture: MBUI_PICTURE_FRAME=K
+#   or MBUI_PICTURE_AT=MS, MBUI_PICTURE_TRANSPARENT=1. A film: MBUI_FILM_FPS (60), also OUT.last.png and OUT.textrec.
+#   Beside each result OUT.scene.json records the scripts, settings and hashes. It fails rather than omit what mbui
+#   cannot draw (a native view, an image not decoded, a corner fault) unless MBUI_FILM_ALLOW_INCOMPLETE=1 or
+#   MBUI_FILM_ALLOW_CORNER_FAULTS=1, which the record says. A failure leaves an existing output in place.
+#   Several pictures or films on another station without building there: media-job.sh.
 set -eu
 D="$(cd "$(dirname "$0")" && pwd)"
 portable=0

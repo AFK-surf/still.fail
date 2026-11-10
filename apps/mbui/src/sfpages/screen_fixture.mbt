@@ -1,7 +1,8 @@
-// A station's screen over the fixture (APP=sffix MBUI_FIXTURE=screen-…; ember apps/android ScreenViewerTest's shots,
+// A station's screen over the fixture (APP=sffix MBUI_FIXTURE=screen-…; still.fail apps/android ScreenViewerTest's shots,
 // the same states said the same way): the screen's view opened over the chats, its states and frames (a JPEG of a
 // browser's tab: screen_fixture_frame.mbt) as the core would say them, each mode one of the Android test's pictures.
 //
+//   chat-screen-tab                     live, the only tab of a chat's side panel
 //   screen-audio                        live with system audio available (no sound emitted by the fixture)
 //   screen-connecting                   nothing said yet
 //   screen-live, -live-dark             live, driven, 李雷 also on it (the landscape one: the same, its window sideways)
@@ -53,6 +54,11 @@ let screen_fix_at : ScreenAt = { station: "ws-1/st-1", screen: "browser:tab-1", 
 ///|
 /// MBUI_FIXTURE=screen-…: the screen's viewer over the chats.
 pub fn open_screen_fixture(mode : String) -> Unit {
+  // (a chat's side panel showing it, as fixture_tabs_shown keeps it)
+  if mode == "chat-screen-tab" {
+    screen_fix_mode.val = "screen-live"
+    return
+  }
   if !mode.has_prefix("screen-") {
     return
   }
@@ -73,9 +79,9 @@ pub fn open_screen_fixture(mode : String) -> Unit {
         u.held.mods = mod_meta
       }
     }
-    "screen-full" => u.full = true
+    "screen-full" => u.full.set(true)
     "screen-full-tools" => {
-      u.full = true
+      u.full.set(true)
       u.tools_open = true
     }
     "screen-center" => u.asked_panel = "center"
@@ -84,7 +90,7 @@ pub fn open_screen_fixture(mode : String) -> Unit {
     "screen-simulator-logs" => u.asked_panel = "logs"
     "screen-simulator-apps" => u.asked_panel = "apps"
     "screen-simulator-device" => {
-      u.logs.tab = 1
+      u.logs.tab.set(1)
       u.asked_panel = "logs"
     }
     _ => ()

@@ -23,6 +23,9 @@ test "made: a node is filled once, and anew only as what its fill read changes; 
   t.draw()
   assert_true(t.find("one") is Some(_))
   assert_true(t.find("still") is Some(_))
+  // (the fills counted the app's own: no frame drawn whole again by the Tester to hold it to, which fills every node
+  // anew)
+  t.check_looks(false)
   let (a, b) = (fills[0], fills[1])
   t.frame()
   t.frame()

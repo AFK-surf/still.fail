@@ -1,5 +1,5 @@
-// Files picked on the device that go onto the machine of a screen being driven (ember apps/android
-// app/remote/ScreenDrops.kt; docs/remote-screens.md "Clipboard and files"): each up with the drive's upload
+// Files picked on the device that go onto the machine of a screen being driven (still.fail apps/android
+// app/remote/ScreenDrops.kt): each up with the drive's upload
 // (`drive.upload.part`), its root the folder the screen's state names (`drop`), one after another, under a free name
 // beside one already there; once there, where it is, for the viewer to paste its path or show it in the machine's file
 // manager. They go on past 只看 and the view opening again; the page's end ends them.
@@ -149,7 +149,7 @@ fn ScreenSess::still_going(self : ScreenSess, d : ScreenDropItem) -> Bool {
 }
 
 ///|
-/// One part of a file up from `have` (Calls.kt driveUpload: small first, doubling while parts go through): the
+/// One part of a file up from `have` (doubling while parts go through): the
 /// station answers with what it has (`have`), the last part in with the entry it now has; a name taken refuses the
 /// first part (409 `exists`), and the file goes up again under the next free name.
 fn ScreenSess::drop_part(self : ScreenSess, d : ScreenDropItem, have : Int, planned : Int) -> Unit {

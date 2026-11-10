@@ -40,7 +40,7 @@ pub fn preview_files() -> Array[(Attachment, () -> Bytes)] {
 }
 
 ///|
-/// A picture coming, never whole (MBUI_FIXTURE=chat-preview-coming, -coming-part): its name, and what the core says of
+/// A file coming, never whole (MBUI_FIXTURE=chat-preview-coming, -coming-part, -apk-reading): its name, and what the core says of
 /// how much has come of it, once, as it is asked for (None: nothing); none coming (None): every file whole at once.
 pub let preview_coming : Ref[(String, Json?)?] = Ref(None)
 
@@ -62,7 +62,7 @@ pub fn fixture_preview(mode : String) -> Unit {
     "chat-preview-md" => "说明.md"
     "chat-preview-csv" => "数据.csv"
     "chat-preview-none" => "备份.bin"
-    "chat-preview-apk" => "测试版.apk"
+    "chat-preview-apk" | "chat-preview-apk-reading" => "测试版.apk"
     // (a picture whose name is far longer than a phone's bar has room for: the name cut short, the tools whole)
     "chat-preview-long" => "首页改版第三轮评审定稿前的对照截图（含深色与浅色两套）.png"
     _ => return
@@ -73,6 +73,8 @@ pub fn fixture_preview(mode : String) -> Unit {
       preview_coming.val = match mode {
         "chat-preview-coming" => Some((which, None))
         "chat-preview-coming-part" => Some((which, Some({ "loaded": 6000.0, "total": 18000.0 })))
+        // (an APK asked to 安装, read as far as 25.7 MB of 40.9 MB)
+        "chat-preview-apk-reading" => Some((which, Some({ "loaded": 26948403.0, "total": 42886758.0 })))
         _ => None
       }
       // (its bytes read whole, no picture in them: the host says it cannot decode them)
@@ -206,8 +208,24 @@ pub fn fixture_named(path : String, p : Json?, done : (Result[(Json, Bytes), Jso
 }
 
 ///|
-/// The long log: 12000 lines, each saying which it is (and some Chinese, cut across parts' ends).
+// kept across runs: the log and the PDF as made once, the same bytes whoever asks (each is made of nothing else)
+let fixture_made : Map[String, Bytes] = {}
+
+///|
+/// The long log: 12000 lines, each saying which it is (and some Chinese, cut across parts' ends). Made once: it is read
+/// a part at a time, the whole of it asked for each part.
 pub fn fixture_log() -> Bytes {
+  match fixture_made.get("log") {
+    Some(b) => return b
+    None => ()
+  }
+  let b = fixture_log_made()
+  fixture_made["log"] = b
+  b
+}
+
+///|
+fn fixture_log_made() -> Bytes {
   let sb = StringBuilder()
   for i in 1..=12000 {
     sb.write_string("[build] 第 \{i} 行：编译 src/module_\{i % 97}.mbt 完成，用时 \{i % 13} ms\n")
@@ -216,8 +234,24 @@ pub fn fixture_log() -> Bytes {
 }
 
 ///|
-/// A picture of its own: a soft gradient with a few shapes on it, as a sketch of a screen.
+// kept across runs: each picture as made once, the same bytes whoever asks (a picture is its size and side alone)
+let fixture_pngs : Map[(Int, Int, Bool), Bytes] = {}
+
+///|
+/// A picture of its own: a soft gradient with a few shapes on it, as a sketch of a screen. Made once for each size and
+/// side: every preview test opens these, and encoding one is a quarter-million pixels drawn and compressed again.
 pub fn fixture_png(w : Int, h : Int, mirrored? : Bool = false) -> Bytes {
+  match fixture_pngs.get((w, h, mirrored)) {
+    Some(b) => return b
+    None => ()
+  }
+  let b = fixture_png_made(w, h, mirrored)
+  fixture_pngs[(w, h, mirrored)] = b
+  b
+}
+
+///|
+fn fixture_png_made(w : Int, h : Int, mirrored : Bool) -> Bytes {
   let rgba = FixedArray::make(w * h * 4, b'\x00')
   for y in 0..<h {
     for at in 0..<w {
@@ -256,8 +290,20 @@ pub fn fixture_png(w : Int, h : Int, mirrored? : Bool = false) -> Bytes {
 }
 
 ///|
-/// A PDF of two pages (US Letter), shapes and a few lines in Helvetica, its cross-reference table counted exactly.
+/// A PDF of two pages (US Letter), shapes and a few lines in Helvetica, its cross-reference table counted exactly. Made
+/// once, as the log is.
 pub fn fixture_pdf() -> Bytes {
+  match fixture_made.get("pdf") {
+    Some(b) => return b
+    None => ()
+  }
+  let b = fixture_pdf_made()
+  fixture_made["pdf"] = b
+  b
+}
+
+///|
+fn fixture_pdf_made() -> Bytes {
   let page1 =
     #|0.898 0.439 0.290 rg 56 680 500 56 re f
     #|BT /F1 28 Tf 1 1 1 rg 72 700 Td (Design notes) Tj ET

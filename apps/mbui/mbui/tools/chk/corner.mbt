@@ -92,6 +92,73 @@ fn corner_web(text : String, lines : Array[String]) -> String? {
 }
 
 ///|
+/// The numbers written in `s`, in order: what is no part of a name, comments left out.
+fn numbers_in(s : String) -> Array[String] {
+  let t = s.to_array()
+  let out = []
+  let mut i = 0
+  while i < t.length() {
+    let c = t[i]
+    if c == '/' && i + 1 < t.length() && t[i + 1] == '/' {
+      while i < t.length() && t[i] != '\n' {
+        i += 1
+      }
+    } else if c >= '0' && c <= '9' {
+      let at = i
+      while i < t.length() && ((t[i] >= '0' && t[i] <= '9') || t[i] == '.') {
+        i += 1
+      }
+      out.push(chars(t, at, i))
+    } else if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' {
+      while i < t.length() &&
+        ((t[i] >= 'a' && t[i] <= 'z') || (t[i] >= 'A' && t[i] <= 'Z') || (t[i] >= '0' && t[i] <= '9') || t[i] == '_') {
+        i += 1
+      }
+    } else {
+      i += 1
+    }
+  }
+  out
+}
+
+///|
+/// The text in `s` from `head` to `tail` after it, "" when not there
+fn span_of(s : String, head : String, tail : String) -> String {
+  let t = s.to_array()
+  let a = find_in(t, head, 0)
+  if a < 0 {
+    return ""
+  }
+  let b = find_in(t, tail, a)
+  if b < 0 {
+    ""
+  } else {
+    chars(t, a + head.to_array().length(), b)
+  }
+}
+
+///|
+/// What smooth.mbt and corner.sl each write out (two languages, no way to share them) whose numbers differ, by name.
+fn numbers_unlike(mbt : String, sl : String) -> Array[String] {
+  let bad = []
+  let pairs = [
+    ("smoothness", "pub fn smoothness(", "\n}\n", "float mb_smoothness(", "\n}\n"),
+    ("capsule_room", "fn capsule_room(", "\n}\n", "float mb_capsule_room(", "\n}\n"),
+    ("capsule_ease", "fn capsule_ease(", "\n}\n", "float mb_capsule_ease(", "\n}\n"),
+    ("smooth_a", "fn smooth_a(", "\n}\n", "float A =", ";"),
+    ("smooth_b", "fn smooth_b(", "\n}\n", "float B =", ";"),
+  ]
+  for p in pairs {
+    let a = numbers_in(span_of(mbt, p.1, p.2))
+    let b = numbers_in(span_of(sl, p.3, p.4))
+    if a.length() == 0 || a != b {
+      bad.push(p.0)
+    }
+  }
+  bad
+}
+
+///|
 fn corner_sl(args : Array[String]) -> Int {
   let r = root()
   let src_path = @sys.join(r, "src/host/corner.sl")
@@ -134,6 +201,14 @@ fn corner_sl(args : Array[String]) -> Int {
     }
     if js != want_js {
       bad.push("web/host.js")
+    }
+    let unlike = numbers_unlike(
+      @sys.read_text(@sys.join(r, "src/paint/smooth.mbt")).unwrap_or(""),
+      @sys.read_text(src_path).unwrap_or(""),
+    )
+    if unlike.length() > 0 {
+      say("smooth.mbt and corner.sl differ in the numbers of: " + unlike.join(", "))
+      return 1
     }
     if bad.length() > 0 {
       say(

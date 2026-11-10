@@ -24,7 +24,7 @@ import { claudePlan, codexClaims } from "./machine.ts";
 
 type Json = any;
 
-/// Whether a profile works, and what models it offers (profiles.rs ProfileCheck, the same JSON).
+/// Whether a profile works, and what models it offers (the same JSON).
 export type ProfileCheck = {
   decision?: Capability;
   /// The subscription tier as reported by its login; absent when the runtime does not say.
@@ -44,21 +44,28 @@ export type ProfileCheck = {
 };
 
 /// `minutes`: how long the window is, where known (the pool weighs what is left by how soon it is lost).
-export type QuotaWindow = { label: string; usedPercent: number; resetsAt: number | null; minutes?: number | null };
+/// `scope`: the one model it is the allowance of (its series as the provider names it: Fable).
+export type QuotaWindow = { label: string; usedPercent: number; resetsAt: number | null; minutes?: number | null; scope?: string };
 export type QuotaCredits = { hasCredits: boolean; unlimited: boolean; balance: string | null };
 
-/// How much of a profile's allowance is used, where the provider says (profiles.rs ProfileQuota).
+/// How much of a profile's allowance is used, where the provider says.
 export type ProfileQuota = {
   /// ok: windows filled; unsupported: nothing to show for this kind; unavailable: could not ask; blocked: the provider
   /// refuses the account.
   state: string;
   windows: QuotaWindow[];
+  /// What one model has to itself under the account's windows (each its `scope`'s). Apart from `windows`: one used up
+  /// stops that model alone, so nothing that weighs the account (sessions/pool.ts, a core from before it) counts it.
+  scoped?: QuotaWindow[];
   credits?: QuotaCredits;
   resetCount?: number;
   /// Expiries of available reset credits for which the provider returned details, in epoch milliseconds.
   resetExpiries?: number[];
   /// The subscription tier, when the provider reports it with the allowance.
   plan?: string;
+  /// Whether a Claude subscription has usage credits (extra usage) turned on: what its Fast is billed to, so only then
+  /// can it run Fast.
+  extraUsage?: boolean;
   detail: string | null;
   checkedAt: number;
   /// Asked with a login that turned out to be over: its profile's check is updated. Not kept in the allowance.
@@ -117,7 +124,7 @@ export const keyed = (kind: AccessKind) => kind === "opencode-go" || kind === "a
 export const needsKey = (kind: AccessKind, provider: string | undefined): boolean =>
   keyed(kind) && !(kind === "api-provider" && provider !== undefined && find(provider)?.keyOptional === true);
 
-/// The runtimes an access kind runs without its provider (profiles.rs runtimes_of): a provider's follow from where it
+/// The runtimes an access kind runs without its provider: a provider's follow from where it
 /// speaks (`runtimesFor`).
 export function runtimesOf(kind: AccessKind, runtime: Runtime | undefined): Runtime[] {
   if (kind === "opencode-go") return ["claude", "codex", "dsh"];

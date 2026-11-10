@@ -28,13 +28,20 @@ final class SimulatorView: ScreenView {
   var followed: AsyncStream<Bool>.Continuation?
   var coverShown: Bool?
   var hinge = 0.0
+  /// The picture held while the device turns (settleTurn), and when it last drew something meanwhile.
+  var held = false
+  var heldAt = ContinuousClock.now
   /// How far the picture is turned to stand as its panel's UI does, clockwise in quarter turns (an iPhone Duo's inner panel
   /// has its framebuffer upright and its UI on its side); under `scaling`, what a finger or a part asked for is turned back by.
   var turn = 0
+  /// As the station was last told (message 10): a client draws the device's case turned with its picture.
+  var toldTurn: Int?
   var rotation: VTPixelRotationSession?
   var rotationTurn = 0
   var rotationPool: CVPixelBufferPool?
   var rotationSize = (0, 0)
+  /// When a button of the device last went down (`hid`), until it comes up.
+  var buttonDown: ContinuousClock.Instant?
   /// The ops posted, one after another.
   var ops: AsyncStream<[String: Any]>.Continuation?
   /// The bounds and the part of the device's screen as the capture reads them (on its own queue), and the part the
@@ -74,6 +81,8 @@ final class SimulatorView: ScreenView {
           guard let self else { return }
           let size = (CVPixelBufferGetWidth(buffer), CVPixelBufferGetHeight(buffer))
           first.continuation.yield(size)
+          // (while it turns: what it draws is seen again once it has, as it stands: settleTurn)
+          if self.heldForTurn(buffer) { return }
           // The framebuffer is the device's, used again for its next picture: scaled into one of ours now.
           guard let got = self.scaled(buffer) else { return }
           let at = Int64(CMTimeGetSeconds(time) * 1_000_000)
@@ -271,6 +280,16 @@ final class SimulatorView: ScreenView {
       case let name? where ["home", "lock", "siri", "side_button", "app_switcher", "volume_up", "volume_down"].contains(name): await injector.sendButton(button: name, deviceUDID: udid)
       default: return
       }
+    case "hid":
+      guard let page = (op["page"] as? NSNumber)?.uint32Value, let usage = (op["usage"] as? NSNumber)?.uint32Value, let down = op["down"] as? Bool else { return }
+      // (a press as short as a click's is not seen as one by the device: held as long as injector.sendButton holds its own)
+      if down {
+        buttonDown = .now
+      } else if let at = buttonDown {
+        buttonDown = nil
+        try? await Task.sleep(until: at + .milliseconds(80), clock: .continuous)
+      }
+      await injector.sendHardwareButton(page: page, usage: usage, down: down)
     case "memory_warning":
       await injector.simulateMemoryWarning()
     case "pose":
@@ -283,8 +302,12 @@ final class SimulatorView: ScreenView {
       let orientation = [HIDInjector.orientationPortrait, HIDInjector.orientationLandscapeRight, HIDInjector.orientationPortraitUpsideDown, HIDInjector.orientationLandscapeLeft][turned]
       guard await injector.sendOrientation(orientation: orientation) else { return }
       KnownTurns.shared[udid] = turned
-      // (a device under load is seconds behind the turn it was told of)
-      Task { await lookTurn(cover: coverShown, waits: [0] + Array(repeating: 1, count: 12)) }
+      let cover = coverShown
+      Task {
+        await settleTurn(cover: cover)
+        // (a device under load is seconds behind the turn it was told of)
+        await lookTurn(cover: cover, waits: Array(repeating: 1, count: 12))
+      }
     case "paste":
       guard let text = op["text"] as? String, !text.isEmpty else { return }
       guard await pasteboard(text) else { return }
@@ -389,6 +412,59 @@ final class SimulatorView: ScreenView {
     Task { await lookTurn(cover: cover) }
   }
 
+  /// A device told to turn draws its UI going round inside its framebuffer, a turned picture of which would go round inside the
+  /// case, which has turned at once. The picture is held as it is for that long: the next one is of the device turned, the
+  /// case with it. Let go of when CoreSimulator has not said it turned by then (a screen that stays upright).
+  func settleTurn(cover: Bool?) async {
+    let panel = cover == false ? "primary-1" : "primary"
+    let was = turnNow()
+    setHeld(true)
+    var now = was
+    for _ in 0..<15 where now == was {
+      try? await Task.sleep(for: .milliseconds(100))
+      if let said = await enumerated() { now = Self.turnOf(said, panel: panel) }
+    }
+    if now != was {
+      // until it has drawn nothing new for a moment
+      for _ in 0..<15 {
+        try? await Task.sleep(for: .milliseconds(100))
+        if ContinuousClock.now - heldLast() > .milliseconds(150) { break }
+      }
+      _ = setTurn(now)
+    }
+    setHeld(false)
+    queue.async {
+      if let source = self.source, let got = self.scaled(source) {
+        self.latestPart = got.1
+        self.took(got.0, self.now())
+      }
+    }
+  }
+
+  func setHeld(_ on: Bool) {
+    scaling.lock()
+    defer { scaling.unlock() }
+    held = on
+    heldAt = .now
+  }
+
+  /// When the device last drew something while its picture is held.
+  func heldLast() -> ContinuousClock.Instant {
+    scaling.lock()
+    defer { scaling.unlock() }
+    return heldAt
+  }
+
+  /// Whether the picture is held for a turn: what the device drew kept for when it is let go of. On the capture's queue.
+  func heldForTurn(_ buffer: CVPixelBuffer) -> Bool {
+    scaling.lock()
+    defer { scaling.unlock() }
+    guard held else { return false }
+    heldAt = .now
+    queue.async { self.source = buffer }
+    return true
+  }
+
   /// How the panel's UI stands as CoreSimulator says it, the picture turned to match. Asked as a panel comes up, and again
   /// once it has settled (its orientation follows the panel by a moment).
   func lookTurn(cover: Bool?, waits: [Int] = [0, 1, 2]) async {
@@ -420,6 +496,10 @@ final class SimulatorView: ScreenView {
     defer { scaling.unlock() }
     let changed = turn != now
     turn = now
+    if toldTurn != now {
+      toldTurn = now
+      channel.sendJSON(10, ["turn": now])
+    }
     return changed
   }
 

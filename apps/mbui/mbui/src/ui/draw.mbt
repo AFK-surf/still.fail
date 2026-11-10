@@ -31,7 +31,7 @@ pub(all) struct Look {
   /// the opacity of all it holds over its own (`alpha`), past its own ground, edge and shadow: its words, its drawing,
   /// every box in it and what they draw, as one (words_alpha). A panel coming in whole under what it holds before that
   /// shows (motion's Trans `ground_first`), so that what it is put over is hidden under it before its own words are
-  /// over that's (docs/motion.md rule 4); then all it holds at once, never its words after its icons and pictures
+  /// over that's (sf/motion.mbt rule 4); then all it holds at once, never its words after its icons and pictures
   words : Double
 } derive(Show, Eq, Debug)
 
@@ -153,6 +153,8 @@ priv struct Drawn {
   /// (start, top, end, foot: Ctx::fade_to)
   mut fade_of : Int
   mut fades : (Double, Double, Double, Double)
+  /// those worked out as it is painted (Ctx::fade_to_by), in place of `fades`
+  mut fades_by : (() -> (Double, Double, Double, Double))?
   /// how far before where it is cut it fades out to the cut (0: cut hard)
   mut cut_soft : Double
   /// its own ground (its colour, glass, shadow, border and corners) drawn in this box (x, y, w, h, its corners: top
@@ -169,6 +171,8 @@ priv struct Drawn {
   mut bg_by : (() -> Int64)?
   /// each glyph of the words it holds drawn with what this gives as it is painted (Ctx::glyphs_by)
   mut glyphs_by : ((GlyphAt) -> GlyphLook)?
+  /// the ink its words, lines and shapes are drawn in, worked out as it is painted (Ctx::ink_by), in place of theirs
+  mut ink_by : (() -> Int64)?
   /// its notch (Ctx::box notch_y, notch_r, notch_fillet) worked out as it is painted (Ctx::notch_by), in place of its own
   mut notch_by : (() -> (Double, Double, Double))?
   /// where across it is drawn, worked out as it is painted (Ctx::cut_across_by): from and to, in its own terms
@@ -417,6 +421,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     left: -1.0,
     fade_of: -1,
     fades: (0.0, 0.0, 0.0, 0.0),
+    fades_by: None,
     cut_soft: 0.0,
     ground: None,
     ground_bg: None,
@@ -424,10 +429,11 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     look_by: None,
     bg_by: None,
     glyphs_by: None,
+    ink_by: None,
     notch_by: None,
     cut_by: None,
   }
-  // (held by the node: docs/retained.md, the way there's 1; in the build's entries too, for a row's build to know what
+  // (held by the node, the way there's 1; in the build's entries too, for a row's build to know what
   // it said a look of: Ctx::nodes_end)
   if dr.framing {
     n.drawn = Some(e)
@@ -542,11 +548,21 @@ pub fn Ctx::glyphs_by(self : Ctx, i : Int, f : (GlyphAt) -> GlyphLook) -> Unit {
 
 ///|
 /// Node `i`'s ground drawn in the colour `f` gives as it is painted (RRGGBBAA), in place of its own: read as it is
-/// drawn, not as it is built (a control's ground easing as the pointer comes and goes: docs/retained.md, motion in what
+/// drawn, not as it is built (a control's ground easing as the pointer comes and goes, motion in what
 /// is made once). What `f` reads (where a motion is, read by the clock; a signal) paints the frame again as it changes,
 /// nothing built or laid out (frame_watch.mbt). `f` works out the same for the same state and time.
 pub fn Ctx::bg_by(self : Ctx, i : Int, f : () -> Int64) -> Unit {
   self.drawn_of(i).bg_by = Some(f)
+}
+
+///|
+/// What node `i` holds drawn in the ink `f` gives as it is painted (RRGGBBAA): its words' glyphs (not a colour emoji's),
+/// its lines and its shapes (an icon's), in place of the ink each was built with; its grounds, edges, shadows and
+/// pictures as they are. Read as it is drawn, not as it is built, as Ctx::bg_by (words or an icon easing to another ink
+/// as the pointer comes and goes, motion in what is made once): what `f` reads paints the frame again as it changes,
+/// nothing built or laid out; `f` works out the same for the same state and time.
+pub fn Ctx::ink_by(self : Ctx, i : Int, f : () -> Int64) -> Unit {
+  self.drawn_of(i).ink_by = Some(f)
 }
 
 ///|
@@ -716,11 +732,19 @@ pub fn Ctx::cut_to_bottom(self : Ctx, i : Int, h : Double, soft? : Double = 0.0)
 
 ///|
 /// Node `i` drawn only as its top `h` (what is below cut off, as something unrolling from its top shows it), and tapped
-/// whole, where it is laid out. `soft`: as cut_to_bottom's.
+/// whole, where it is laid out. `soft`: as cut_to_bottom's. One laid out as nothing (a room shut, what it holds drawn
+/// past it as it goes) has what it holds drawn only as far as `h` below its top.
 pub fn Ctx::cut_to_top(self : Ctx, i : Int, h : Double, soft? : Double = 0.0) -> Unit {
   let e = self.drawn_of(i)
   e.top = dmax(h, 0.0)
   e.cut_soft = soft
+}
+
+///|
+/// Whether a cut `top` down from a node's top (Ctx::cut_to_top; < 0 none) cuts what a node `fh` tall draws: above its
+/// foot, or anywhere where it is laid out as nothing (what it holds drawn past it).
+fn cuts_foot(top : Double, fh : Double) -> Bool {
+  top >= 0.0 && (top < fh || fh <= 0.5)
 }
 
 ///|
@@ -745,6 +769,16 @@ pub fn Ctx::fade_to(
     e.fade_of = -1
     e.fades = (0.0, 0.0, 0.0, 0.0)
   }
+  e.fades_by = None
+}
+
+///|
+/// Node `i` faded out towards the edges of node `of` as Ctx::fade_to has it, how far before each (start, top, end,
+/// foot) worked out by `f` as it is painted: what moves with nothing built (a box scrolled sideways, Ctx::sideways).
+fn Ctx::fade_to_by(self : Ctx, i : Int, of : Int, f : () -> (Double, Double, Double, Double)) -> Unit {
+  let e = self.drawn_of(i)
+  e.fade_of = of
+  e.fades_by = Some(f)
 }
 
 ///|
@@ -942,6 +976,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
         dr.bypass = -1
       }
       dr.cycling = was
+      self.flat_from(i0)
       cycle_tag(self.inst, i0, self.ninst, cy)
       return true
     }
@@ -973,7 +1008,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   let cutting = cut_empty ||
     (e.bottom >= 0.0 && e.bottom < self.nodes[i].fh) ||
-    (e.top >= 0.0 && e.top < self.nodes[i].fh) ||
+    cuts_foot(e.top, self.nodes[i].fh) ||
     (cut_right >= 0.0 && cut_right < self.nodes[i].fw) ||
     (cut_left >= 0.0 && cut_left < self.nodes[i].fw)
   if look.is_still() && e.z < z_flying && !keep && !e.only && !cutting && e.fade_of < 0 {
@@ -994,6 +1029,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       dr.bypass = -1
       dr.mode = 0
       self.ninst = i0
+      self.spans_cut()
       glass_paint.run = run
       glass_paint.frost_run = frost_run
       glass_paint.run_start = run_start
@@ -1122,6 +1158,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   // (only cut, or faded: where it is drawn is where it was painted, its clips as pushed)
   if dx != 0.0 || dy != 0.0 || look.sx != 1.0 || look.sy != 1.0 || look.rot != 0.0 {
+    self.flat_from(i0)
     self.transform_insts(i0, self.ninst, ox, oy, look.sx, look.sy, dx, dy, outer, outer_r, outer_s)
     if look.rot != 0.0 {
       turn_insts(self.inst, i0, self.ninst, look.rot, ox + dx, oy + dy, outer)
@@ -1131,9 +1168,10 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   // that a line of words half out shows its half, fading to the cut, not the whole line fainter (2026-10-30: 「带渐隐，
   // 但不是整行渐隐」)
   if cutting && e.cut_soft > 0.0 {
+    self.flat_from(i0)
     let a = self.inst
     let top = e.bottom >= 0.0 && e.bottom < n.fh
-    let foot = e.top >= 0.0 && e.top < n.fh
+    let foot = cuts_foot(e.top, n.fh)
     let start = cut_right >= 0.0 && cut_right < n.fw
     let end = cut_left >= 0.0 && cut_left < n.fw
     for k in i0..<self.ninst {
@@ -1162,9 +1200,13 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   // fading towards the edges of what cuts it, where they are (laid out: what moves them moves it after)
   if e.fade_of >= 0 && e.fade_of < self.count {
+    self.flat_from(i0)
     let a = self.inst
     let o = self.nodes[e.fade_of]
-    let (start, top, end, foot) = e.fades
+    let (start, top, end, foot) = match e.fades_by {
+      Some(f) => f()
+      None => e.fades
+    }
     for k in i0..<self.ninst {
       let b = k * inst_size
       inst_fade(a, b, o.y, top, o.y + o.fh, foot)
@@ -1173,6 +1215,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   match e.keep {
     Some(d) if e.keep_rel >= 0 => {
+      self.flat_from(i0)
       let l = self.nodes[e.keep_rel]
       d.segs.clear()
       // (copied whole, not a number at a time: every row of a list that may leave is kept so on every frame)
@@ -1482,6 +1525,7 @@ fn Ctx::paint_overlays(self : Ctx) -> Unit {
     for k = moves.length() - 1; k >= base; k = k - 1 {
       let m = moves[k]
       if m.dx != 0.0 || m.dy != 0.0 || m.sx != 1.0 || m.sy != 1.0 || m.rot != 0.0 {
+        self.flat_from(i0)
         self.transform_insts(i0, self.ninst, m.ox, m.oy, m.sx, m.sy, m.dx, m.dy, outer, outer_r, outer_s)
       }
       if m.rot != 0.0 {
@@ -1536,6 +1580,7 @@ fn Ctx::raise_tops(self : Ctx) -> Unit {
 ///|
 /// Instances in `ranges` (in order, apart) moved after all the rest painted so far, the rest closed up in its order.
 fn Ctx::raise_ranges(self : Ctx, ranges : Array[(Int, Int)]) -> Unit {
+  self.flat_from(ranges[0].0)
   let a = self.inst
   let raised : Array[Double] = []
   for r in ranges {
@@ -1696,6 +1741,15 @@ pub fn Ctx::in_frame(self : Ctx) -> Bool {
 }
 
 ///|
+/// Whether the frame is being painted now (frame_paint): its nodes those of the layout it is painted from, each where
+/// it is drawn (what the clock moves placed where it is now, Ctx::moved_place), as what is worked out as it is painted
+/// (Ctx::look_by, Ctx::glyphs_by) reads them.
+pub fn Ctx::painting(self : Ctx) -> Bool {
+  ignore(self)
+  paint_phase.val == 1
+}
+
+///|
 /// Where node `i` is laid out (x, y, w, h).
 pub fn Ctx::node_rect(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
   let n = self.nodes[i]
@@ -1849,11 +1903,14 @@ pub fn Ctx::list_pinned_by(self : Ctx, li : Int) -> Double {
 
 ///|
 /// Whether motion is reduced (the app's own choice, else the host's setting; or MBUI_REDUCE_MOTION=1): every motion at
-/// its end at once.
+/// its end at once. As the frame has it, followed (host_said.mbt): what read it built again as it changes.
 pub fn reduced_motion() -> Bool {
-  if fake.val is Some(f) {
-    return f.env.get("MBUI_REDUCE_MOTION") == Some("1") || motion_chosen.val.unwrap_or(f.reduce_motion)
-  }
+  motion_reduced_said.now()
+}
+
+///|
+/// Whether motion is reduced, asked of the host and the app's choice as they are now (reduced_motion's).
+fn motion_reduced_asked() -> Bool {
   if reduce_env.val < 0 {
     reduce_env.val = if @hostapi.env("MBUI_REDUCE_MOTION") == "1" { 1 } else { 0 }
   }
@@ -1868,6 +1925,8 @@ let reduce_env : Ref[Int] = { val: -1 }
 /// None to follow the system's.
 pub fn set_motion_chosen(reduce : Bool?) -> Unit {
   motion_chosen.val = reduce
+  // (what reads it told at once: chosen as a frame is built, what reads it after reads the choice)
+  motion_reduced_said.arrive()
 }
 
 ///|
@@ -1889,30 +1948,20 @@ pub fn Ctx::still(self : Ctx) -> Bool {
 }
 
 ///|
-/// Where the words of editor `key` start (their first line's top left, as last laid out, scrolled as it shows them),
-/// and the room they show in (x, y, w, h): where words sent from it take off.
-pub fn Ctx::field_words(
-  self : Ctx,
-  key : String,
-) -> ((Double, Double), (Double, Double, Double, Double))? {
-  let id = self.id(key)
-  match self.editors.get(id) {
-    Some(st) =>
-      match st.tl {
-        // its room as it showed last frame (it may not be built yet this one)
-        Some(_) =>
-          match self.rect_of(id) {
-            Some(r) => Some(((st.ox, st.oy), r))
-            None => Some(((st.ox, st.oy), (st.ox, st.oy, 0.0, 0.0)))
-          }
-        None => None
-      }
-    None => None
-  }
+/// Where its words start (their first line's top left, as last laid out, scrolled as it shows them) and the room they
+/// show in (x, y, w, h), in the window as it is drawn now: where words sent from it take off. Read on the Field
+/// itself, whichever holds it (an old view's editor or a field of the window's tree: both lay it out and place it,
+/// Ctx::lay_out_field, EditorState::placed_in); None before it has been laid out.
+pub fn Field::words_at(self : Field) -> ((Double, Double), (Double, Double, Double, Double))? {
+  let st = self.st
+  guard st.tl is Some(_) else { return None }
+  let (rx, ry, rw, rh) = st.room
+  let (x, y, _, _) = st.drawn_box(st.ox, st.oy, 0.0, 0.0)
+  Some(((x, y), st.drawn_box(rx, ry, rw, rh)))
 }
 
 ///|
-/// A field's words as it last laid them out, scrolled as it showed them (Ctx::field_lines): what words taken from it
+/// A field's words as it last laid them out, scrolled as it showed them (Field::lines): what words taken from it
 /// go from, line by line.
 pub struct FieldLines {
   /// its words, where each of its lines starts and ends in them (UTF-16), and the room it showed them in (x, y, w, h,
@@ -1922,10 +1971,10 @@ pub struct FieldLines {
   ends : Array[Int]
   room : (Double, Double, Double, Double)
   layout : TextLayout
-  /// its words' top left in the window
+  /// its words' top left in the window, and how big they are drawn there against how they were laid out
   x : Double
   y : Double
-  priv scale : Double
+  scale : Double
 }
 
 ///|
@@ -1936,40 +1985,35 @@ pub fn FieldLines::place(self : FieldLines, off : Int) -> (Double, Double) {
 }
 
 ///|
-/// How high each of its lines is.
+/// How high each of its lines is, as drawn.
 pub fn FieldLines::line_h(self : FieldLines) -> Double {
   self.layout.line_h * self.scale
 }
 
 ///|
-/// The words of editor `key` as it last laid them out (FieldLines), None before it has.
-pub fn Ctx::field_lines(self : Ctx, key : String) -> FieldLines? {
-  let id = self.id(key)
-  match self.editors.get(id) {
-    Some(st) =>
-      match st.tl {
-        Some(tl) => {
-          let n = tl.shaped.starts.length()
-          let at = fn(c : Int) { if c < n { tl.shaped.starts[c] } else { tl.text.length() } }
-          Some({
-            text: tl.text,
-            starts: tl.line_start.map(at),
-            ends: tl.line_end.map(at),
-            // its room as it showed last frame (it may not be built yet this one)
-            room: match self.rect_of(id) {
-              Some(r) => r
-              None => (st.ox, st.oy, 0.0, 0.0)
-            },
-            layout: tl,
-            x: st.ox,
-            y: st.oy,
-            scale: 1.0,
-          })
-        }
-        None => None
-      }
-    None => None
+/// Its words as it last laid them out (FieldLines), where it is drawn now, whichever holds it (Field::words_at); None
+/// before it has been laid out.
+pub fn Field::lines(self : Field) -> FieldLines? {
+  let st = self.st
+  guard st.tl is Some(tl) else { return None }
+  let n = tl.shaped.starts.length()
+  let at = fn(c : Int) { if c < n { tl.shaped.starts[c] } else { tl.text.length() } }
+  let (rx, ry, rw, rh) = st.room
+  let (x, y, _, _) = st.drawn_box(st.ox, st.oy, 0.0, 0.0)
+  let scale = match st.drawn_now() {
+    Some((_, _, _, _, s)) => s
+    None => 1.0
   }
+  Some({
+    text: tl.text,
+    starts: tl.line_start.map(at),
+    ends: tl.line_end.map(at),
+    room: st.drawn_box(rx, ry, rw, rh),
+    layout: tl,
+    x,
+    y,
+    scale,
+  })
 }
 
 ///|

@@ -1,5 +1,5 @@
-// The conformance suite (conformance_graph_wbtest.mbt): Effect Lifecycle (effectLifecycle.ts) and Nested Effects &
-// Ordering (nestedEffects.ts). An effect disposed from within itself holds its dispose in a Ref, as the cases' `let`.
+// The conformance suite (conformance_graph_wbtest.mbt): Effect Lifecycle and Nested Effects &
+// Ordering. An effect disposed from within itself holds its dispose in a Ref, as the cases' `let`.
 
 ///|
 test "effects #35 effect runs callback immediately on creation" {

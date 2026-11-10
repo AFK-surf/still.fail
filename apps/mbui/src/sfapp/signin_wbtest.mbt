@@ -1,4 +1,4 @@
-// An agent's ask to sign in to a site, answered on its card in the chat (sfpages signin_card.mbt, ember docs/vault.md
+// An agent's ask to sign in to a site, answered on its card in the chat (sfpages signin_card.mbt
 // 登录态 "Signing in from a card"): on a device with no password manager to ask, on the tab's screen; a code the page
 // asks typed on the card; a person's step a tap from the screen, and said done; signed in and to be kept, approved here
 // in place, then one line once out of sight.

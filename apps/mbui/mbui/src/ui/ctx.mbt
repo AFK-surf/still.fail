@@ -74,12 +74,19 @@ struct ListState {
   /// whether what built it last may have built its rows otherwise (the frame built anew, or the part it is in built
   /// for what it read: kept_nodes.mbt): its rows built again, none kept
   mut fresh : Bool
+  /// how far its rows were moved onto the device's pixels as they were last set there (Ctx::rows_on_pixels): where
+  /// they would be off them is where they are less that, set there again as what holds the list carries it
+  /// (Ctx::rows_carried)
+  mut on_pixels_by : Double
   /// whether its rows show only what they read (Ctx::list's `rows_read`): kept as what builds it is built again,
   /// built again only where what they read changed
   mut rows_read : Bool
   /// the part it is in whose lists' rows go on as it does (Ctx::kept_part's `rows_stay`, its id), 0 none: built from that
   /// part's key and what it reads alone, whatever else the frame built anew
   mut island : Int
+  /// whether the part it is in goes on through what was typed into a field elsewhere alone (Ctx::kept_part's
+  /// `typed_stays`): its rows with it
+  mut typed_stays : Bool
   // gliding to its end where it showed as the glide set out: its scroll bar shows meanwhile (not where it is put)
   mut glide_shows : Bool
   // its key and where Ctx::list was said, as the last frame built it: what the performance record names a row of it by
@@ -112,6 +119,9 @@ struct ListState {
   mut fling_dist : Double
   mut fling_dur : Double
   mut fling_done : Double
+  /// where the fling set out from (anchor, its offset, what was still to scroll), as its laid rows had it: each frame
+  /// placed from there as far on as it has come, not each frame's step added on (Ctx::step_scroll)
+  mut fling_from : (Int, Double, Double)?
   // what a finger scrolled since the last layout, and whether one drags it
   mut drag_pending : Double
   mut held : Bool
@@ -164,6 +174,8 @@ struct ListState {
   mut put_at : Double
   /// how tall each row was last laid out, by its key (list_size.mbt)
   shown_h : Map[String, Double]
+  /// the room over what each row holds (its lead: ListRows::enter) as it was last laid out, by its key
+  shown_lead : Map[String, Double]
   sizes_mover : Mover
 }
 
@@ -206,6 +218,14 @@ struct EditorState {
   mut ox : Double
   mut oy : Double
   mut submitted : String?
+  /// what giving its words up does (Ctx::editor's `on_submit`), as Enter is taken: said by its last build, none where
+  /// it said none (its words then the build's to read, `submitted`)
+  mut on_submit : ((String) -> Unit)?
+  /// what typing in it does (Ctx::editor's `on_change`), as its words change by the person's edit (a key, the input
+  /// method's text, a paste, an undo): said by its last build
+  mut on_change : ((String) -> Unit)?
+  /// what the person's edit of its words or its selection does (Ctx::editor's `on_edit`): said by its last build
+  mut on_edit : ((FieldEdit) -> Unit)?
   mut pref_x : Double
   /// the caret, where one line wraps into the next at it, shows at the end of the line before (a move to a line's end
   /// or the pointer past it put it there), not at the next one's start: while the caret is at this offset; -1 none
@@ -227,6 +247,8 @@ struct EditorState {
   mut limit : Int
   /// Enter sends (the words go to `submitted`, none too, and stay in it); else it is a new line
   mut enter_sends : Bool
+  /// where Enter is a new line, ⌘Enter (Ctrl+Enter elsewhere) sends
+  mut command_sends : Bool
   /// the keys it leaves to the app, pressed with nothing held (a menu the field offers, chosen in by ↑ / ↓, picked
   /// from by Enter: the web's preventDefault on them)
   mut leaves : Array[Int]
@@ -267,11 +289,16 @@ struct EditorState {
   mut focus_asked : Bool
   mut placed_x : Double
   mut placed_y : Double
+  /// the box it was last placed in (x, y, w, h, in the terms st.ox, st.oy are in), by whichever holds it (an old
+  /// view's editor or a field of the window's tree): the room its words show in (EditorState::placed_in)
+  mut room : (Double, Double, Double, Double)
   /// what its words are told as, as they change (a Field's: Field::text followed), none for an editor of its own
   mut said_words : @signals.Signal[String]?
   /// its words with what the input method composes in them told as, as that changes (Field::composed_said), once
   /// asked for
   mut said_composed : @signals.Signal[String]?
+  /// whether the input method has marked text, followed independently of the words it displays
+  mut said_composing : @signals.Signal[Bool]?
   /// how many times the app wrote it (Field::set, Field::pick), read by its editor as it is built: one kept as it was
   /// drawn (a list's row, a part, kept_part.mbt) is built again to show what was written
   written : @signals.Signal[Int]
@@ -298,8 +325,6 @@ pub struct Ctx {
   mut dt : Double
   mut last_now : Double
   mut frame_no : Int
-  /// the system's size of words this frame (font_scale): every word's size and line times it, as Compose's sp
-  mut font_scale : Double
   /// how much smaller words are drawn where they are now (Ctx::words_smaller: 1 none), times the system's size
   mut words_k : Double
   /// the build's number (frame_body's passes, over every frame, counted over the program: app.mbt builds_made): what is
@@ -309,9 +334,6 @@ pub struct Ctx {
   mut sideways_depth : Int
   /// the colour what is built now is drawn in as its bones (Ctx::bones), 0 none: what is made is marked so
   mut bones : Int64
-  // the layout epoch: when it moves on, nothing laid out before is reused
-  // (Ctx::flex_tree)
-  mut epoch : Int
   mut wants_frame : Bool
   mut wake_at : Double
   /// the earliest wake asked for this frame that what is shown waits for (not `later`): -1 none
@@ -377,8 +399,6 @@ pub struct Ctx {
   // pointer
   mut px : Double
   mut py : Double
-  /// an old view's pointer event still to be read by its next frame, including where a tap or drag was let go
-  mut pointer_pending : Bool
   mut down : Bool
   mut hover : Int
   /// what holds the one under the pointer (`hover`), as the last frame drew them, outermost first (Ctx::hovered)
@@ -390,12 +410,9 @@ pub struct Ctx {
   mut focus : Int
   clicked : Array[Int]
   /// what was clicked twice since the last frame, the second within double_click_ms of the first and where it was
-  /// (Ctx::double_clicked); the last click (its id, when, where), for the next to be the second of two
+  /// (Ctx::on_double_press, hand's `double`); the last click (its id, when, where), for the next to be the second of two
   double_clicked : Array[Int]
   mut last_click : (Int, Double, Double, Double)
-  /// where the pointer let go of the last click since the last frame (none: a key's, a reader's Activate), for where in
-  /// what was clicked it was (Ctx::clicked_on)
-  mut click_at : (Double, Double)?
   /// how many presses in a row the last one was (NSEvent's clickCount: 2 a double click's second), and how many, when
   /// and where, for the next to count on from
   mut clicks : Int
@@ -406,6 +423,8 @@ pub struct Ctx {
   mut press_chain : Array[Int]
   mut claimed : Bool
   mut dragging : Bool
+  /// the press drags a list by the finger, a second finger the newest leading it (old_pointer_now)
+  mut following : Bool
   mut press_x : Double
   /// when the press under way went down (ms), and the press a link's hold was last told of
   mut press_at : Double
@@ -417,6 +436,8 @@ pub struct Ctx {
   mut press_late : Bool
   /// when the pointer's latest event (down, moved, up) came, its own time (Ctx::pointer_at)
   mut pointer_t : Double
+  /// whether the pointer's latest event came after the latest key (Ctx::pointer_after_keys)
+  priv mut pointer_after_keys : Bool
   mut held_told : Double
   /// what a press told held long (Ctx::long_press) was on, and in which build (frame_body's pass: one built again sees
   /// it no more, as it sees no click)
@@ -618,9 +639,6 @@ pub struct Ctx {
   // every id lit by the hand at once (Ctx::lit, and Ctx::hovered where the pointing is a mouse's): a test's, to hold
   // that the hand changes looks alone (Tester::hand_moves)
   mut lit_every : Bool
-  /// whether something reads the widgets out this frame (a screen reader, any service of the system's accessibility:
-  /// @hostapi.a11y_on), asked once as the frame begins
-  mut reads_out : Bool
   mut window_corner : Double
   /// each of the window's corners as the system draws them (top left, then round it), window_corner the roundest
   window_corners : FixedArray[Double]
@@ -632,8 +650,8 @@ pub struct Ctx {
   mut sem_hide : Int
   asked_actions : Array[(Int, Action)]
   actions : Array[(Int, Action)]
-  // what the system's accessibility was last told the widgets are (a11y.mbt; "" nothing yet, or it is off)
-  mut a11y_sent : String
+  // what the system's accessibility was told the widgets are, as it has them (a11y.mbt; nothing while it is off)
+  a11y : A11yTold
   // the keyboard's focus beyond a field's (focus.mbt): whether it shows (it came by the keyboard), what had it as the
   // frame started; what can take it, as this frame builds it and as the last one did; roving groups' state, and the
   // group being built
@@ -705,12 +723,10 @@ fn Ctx::new() -> Ctx {
     dt: 16.0,
     last_now: -1.0,
     frame_no: 0,
-    font_scale: 1.0,
     words_k: 1.0,
     build_no: 0,
     sideways_depth: 0,
     bones: 0L,
-    epoch: 0,
     wants_frame: false,
     wake_at: -1.0,
     wake_waited: -1.0,
@@ -758,19 +774,19 @@ fn Ctx::new() -> Ctx {
     clicked: [],
     double_clicked: [],
     last_click: (0, 0.0, 0.0, 0.0),
-    click_at: None,
     clicks: 0,
     press_run: (0, -1.0e9, 0.0, 0.0),
     drag_scroll: 0,
     press_chain: [],
     claimed: true,
     dragging: false,
+    following: false,
     press_x: 0.0,
     press_at: -1.0,
     press_strayed: false,
     press_late: false,
     pointer_t: 0.0,
-    pointer_pending: false,
+    pointer_after_keys: true,
     held_told: -1.0,
     held_on: 0,
     held_build: -1,
@@ -880,7 +896,6 @@ fn Ctx::new() -> Ctx {
     lit_reach: 0.0,
     lit_all: false,
     lit_every: false,
-    reads_out: false,
     window_corner: 0.0,
     window_corners: FixedArray::make(4, 0.0),
     inner_faults: [],
@@ -889,7 +904,7 @@ fn Ctx::new() -> Ctx {
     sem_hide: 0,
     asked_actions: [],
     actions: [],
-    a11y_sent: "",
+    a11y: A11yTold::new(),
     focus_visible: false,
     focus_roved: false,
     focus_before: 0,
@@ -933,6 +948,7 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   // (built into still by what kept it, nothing of that drawn: as a first frame's, from nothing, on as little room)
   self.inst = FixedArray::make(inst_size, 0.0)
   self.ninst = 0
+  self.spans_cut()
   self.count = 0
   self.cur = -1
   self.back = None
@@ -1058,6 +1074,7 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.focusables.shrink_to_fit()
   self.last_focusables.clear()
   self.last_focusables.shrink_to_fit()
+  atlas_said.val = None
   self.groups.clear()
   self.layers.clear()
   self.layers.shrink_to_fit()
@@ -1069,10 +1086,10 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.tells.shrink_to_fit()
   self.told.clear()
   self.told.shrink_to_fit()
-  self.shots.clear()
+  self.shots_let_go()
   self.dismissals.clear()
   self.layer_return.clear()
-  self.segs.clear()
+  self.segs_cut(0)
   self.segs.shrink_to_fit()
 }
 
@@ -1220,7 +1237,7 @@ fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool, key? : Int
 }
 
 ///|
-/// The key of what holds a list's item `k` (a row, a pager's page), who it is by its item (Ctx::node_known).
+/// The key of what holds a list's item `k` (a row), who it is by its item (Ctx::node_known).
 fn item_key(k : Int) -> Int {
   mix(0x6974656d, k + 1)
 }
@@ -1350,7 +1367,7 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 ///|
 /// A box laying out its children in a row or a column, flexbox style. `notch_r` > 0 cuts a notch into its top edge
 /// (its ground, border and glass alike): a circle of that radius about the middle of its top, `notch_y` below the edge
-/// (above it when negative), met by the edge through fillets of `notch_fillet` (Bar.kt's notch). `aspect` > 0: its
+/// (above it when negative), met by the edge through fillets of `notch_fillet`. `aspect` > 0: its
 /// width over its height, the side not said following the other (CSS's aspect-ratio). Built where the direction is
 /// right to left (Ctx::rtl), a row runs from the right and its left and right padding swap. `keep`: in a row, as wide
 /// as its content even where the row is short of room, its siblings squeezed instead (as Compose's Row measures what
@@ -1884,6 +1901,7 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 ///|
 /// Words, in the theme's colour unless `color`. `style` (style.mbt) says how they look, its dark and narrow blocks by
 /// the theme; what is said here besides wins over the style's same property (a size said here keeps the style's line).
+/// `line_em` sets the line height as a multiple of the drawn text size, after the system's text scaling.
 /// `tracking`: letter spacing in pixels; `max_lines`: wrapped words cut after that many lines, ending in an ellipsis;
 /// `tabular`: digits all one width, a number keeping its width as it changes (the theme's `tabular` where unsaid).
 /// `balance`: wrapped words broken where their lines come out even, on as many lines as they would take (CSS's
@@ -1908,6 +1926,7 @@ pub fn Ctx::text(
   wrap? : Bool,
   w? : Size,
   line? : Double,
+  line_em? : Double,
   trim? : Bool = false,
   center? : Bool,
   tracking? : Double,
@@ -1947,12 +1966,16 @@ pub fn Ctx::text(
       None => s_size.unwrap_or(15.0)
     },
   )
-  n.line_h = match line {
-    Some(l) => self.sp(l)
+  n.line_h = match line_em {
+    Some(em) => n.font_size * em
     None =>
-      match s_line {
+      match line {
         Some(l) => self.sp(l)
-        None => self.theme.text_line * n.font_size
+        None =>
+          match s_line {
+            Some(l) => self.sp(l)
+            None => self.theme.text_line * n.font_size
+          }
       }
   }
   n.line_trim = trim
@@ -2100,46 +2123,12 @@ let no_text_patch : TextPatch = text_patch()
 // Interaction
 
 ///|
-/// Whether `id` was clicked twice in a row since the last frame (a desktop's double click: the second within
-/// double_click_ms of the first, both on it, as near as double_click_slop). Its first click was `clicked` too.
-pub fn Ctx::double_clicked(self : Ctx, id : Int) -> Bool {
-  if id == 0 {
-    return false
-  }
-  // (read so: what reads it is built again as it is clicked twice, hand.mbt)
-  hand.double.has(id) |> ignore
-  self.double_clicked.contains(id)
-}
+/// How soon after the first the second of two clicks is (macOS's default: 500 ms), and how near it (4): the window's
+/// tree's (@view.double_press_ms).
+pub let double_click_ms : Double = @view.double_press_ms
 
 ///|
-/// How soon after the first the second of two clicks is (macOS's default: 500 ms), and how near it (4).
-pub let double_click_ms : Double = 500.0
-
-///|
-pub let double_click_slop : Double = 4.0
-
-///|
-/// Whether `id` was clicked since the last frame (pressed and let go on it, not dragged; Enter or Space while it has
-/// the focus; the Activate a screen reader asks). Asked, `id` takes presses: the pointer is a hand over it (desktop.mbt
-/// show_cursor). What only watches it pressed (a tip that shuts as its trigger is) asks Ctx::watch_press.
-pub fn Ctx::clicked(self : Ctx, id : Int) -> Bool {
-  self.takes_presses(id)
-  self.click_seen(id)
-}
-
-///|
-/// Whether `id` was clicked since the last frame on `part`, a box in it only pointed at (Ctx::box's `points`: a press
-/// on it is `id`'s): where in it the pointer let go, for what a click there does more (a chat's row opens at the message
-/// its state line is about). A key's click or a reader's Activate is on none of its parts.
-pub fn Ctx::clicked_on(self : Ctx, id : Int, part : Int) -> Bool {
-  if !self.clicked(id) {
-    return false
-  }
-  match (self.click_at, self.rect_of(part)) {
-    (Some((x, y)), Some((px, py, pw, ph))) => x >= px && x < px + pw && y >= py && y < py + ph
-    _ => false
-  }
-}
+pub let double_click_slop : Double = @view.double_press_slop
 
 ///|
 /// Whether `id` was clicked since the last frame, asked by nothing that takes the click.
@@ -2153,7 +2142,7 @@ fn Ctx::click_seen(self : Ctx, id : Int) -> Bool {
 
 ///|
 /// Whether `id` is pressed or was clicked since the last frame, as what stands beside it sees it (a tip that shuts as
-/// its trigger is pressed, an edge's tip that goes): asked so, `id` is not taken to take presses (Ctx::clicked).
+/// its trigger is pressed, an edge's tip that goes): asked so, `id` is not taken to take presses (Ctx::takes_presses).
 pub fn Ctx::watch_press(self : Ctx, id : Int) -> Bool {
   self.pressed(id) || self.click_seen(id)
 }
@@ -2272,7 +2261,8 @@ fn Ctx::point_at(self : Ctx, x : Double, y : Double) -> Unit {
 
 ///|
 /// Whether the press (Ctx::press) went down on `id` or on what is in it, as the last frame drew them: what lies over it
-/// (a layer over the page, a viewer over the chat) took a press there, not it, though it is under the place.
+/// (a layer over the page, a viewer over the chat) took a press there, not it, though it is under the place. A key's
+/// press or a screen reader's Activate is on what it presses and what holds that, on no part of it (press_on_key).
 pub fn Ctx::press_within(self : Ctx, id : Int) -> Bool {
   if id == 0 {
     return false
@@ -2280,6 +2270,23 @@ pub fn Ctx::press_within(self : Ctx, id : Int) -> Bool {
   // (read so: what reads it is built again as a press goes down on it or is let go, hand.mbt)
   hand.press_on.has(id) |> ignore
   self.press_on.contains(id)
+}
+
+///|
+/// A press made by a key or asked by a screen reader (Enter or Space on what has the focus, Activate) on `target`:
+/// the press now, on it and what holds it as the last frame drew them, on no part of it (Ctx::press_within), whatever
+/// a pointer's press went down on before it.
+fn Ctx::press_on_key(self : Ctx, target : Int) -> Unit {
+  self.press_on.clear()
+  if target == 0 {
+    return
+  }
+  let mut k = self.hit_ids.length() - 1
+  while k >= 0 && self.hit_ids[k] != target {
+    k = k - 1
+  }
+  self.holders(k, self.press_on)
+  self.press_on.push(target)
 }
 
 ///|
@@ -2292,6 +2299,14 @@ fn Ctx::press_on_at(self : Ctx, target : Int, x : Double, y : Double) -> Unit {
   let k = self.hit_of(target, x, y)
   self.holders(k, self.press_on)
   self.press_on.push(target)
+  // a part of it only pointed at (Ctx::box's `points`: a row's state line) that it went down on, within it: in it too
+  let part = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y)
+  if k >= 0 && part > k && k < self.hit_ends.length() && self.hit_ends[k] > part {
+    self.holders(part, self.press_on)
+    if !self.press_on.contains(self.hit_ids[part]) {
+      self.press_on.push(self.hit_ids[part])
+    }
+  }
   // a cover a finger is held through (Ctx::holds_through): what lies under it, and what holds that, too
   if k >= 0 && (hit_marks(target) & mark_holds) != 0 {
     let mut j = k - 1
@@ -2444,13 +2459,17 @@ fn Ctx::owe_next(self : Ctx) -> Unit {
 }
 
 ///|
+/// A frame owed, by the frame scheduler alone: what the view reads changed between frames (Ctx::read_changed), a fiber
+/// ready as a frame ends (fx_frame_end). Not the app's: a frame is due because what it reads changed (a signal, a
+/// part's state) or a motion or a timer said its moment, never because something asks to be drawn again.
 #callsite(autofill(loc))
-pub fn Ctx::request_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
+fn Ctx::request_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
   self.wants_frame = true
   part_live()
   // asked between frames (a host's callback, a timer's): the frame's own asking (on_frame's end) is past, so the
-  // host is told now, else nothing comes (the next frame's start clears wants_frame)
-  if !in_frame.val {
+  // host is told now, else nothing comes (the next frame's start clears wants_frame); an offscreen frame asks it for
+  // none (frame_offscreen)
+  if !in_frame.val && !offscreen_frame() {
     h_request_frame()
   }
   if self.frame_by is None {
@@ -2467,22 +2486,28 @@ pub fn Ctx::window_size(self : Ctx) -> (Double, Double) {
 ///|
 /// The frames' clock (ms): this frame's time, followed (frame_watch.mbt): what reads it as it is built or drawn is built
 /// and drawn again each frame. What only changes at a moment says so (Ctx::wake_in, Ctx::every, a cycle's step) and
-/// is not built again till then.
+/// is not built again till then. The framework's own (its old parts that still move as they are built, detlint's
+/// `build-clock`): what is built outside it reads no clock. A look by the clock is given where its cycle is
+/// (Ctx::cycle_look); a stamp, or a moment to be woken at, is the moment (Ctx::moment).
 #callsite(autofill(loc))
-pub fn Ctx::now(self : Ctx, loc~ : SourceLoc) -> Double {
+fn Ctx::now(self : Ctx, loc~ : SourceLoc) -> Double {
   clock_read(loc)
   self.clock
 }
 
 ///|
-/// The moment now: the frame's time in a frame (Ctx::now), else the clock's as it stands between frames (an input's
-/// handler, a fiber, a test's change): where what is told now starts from. Read as it is, not followed (frame_watch.mbt):
-/// for a stamp, or a moment what reads it asks to be woken at (Ctx::wake_in), never for what shows the time going.
+/// The moment now: the frame's time in a frame (Ctx::now); in an event's handler (a press's, a key's: Ctx::on_press),
+/// the event's, as the window's tree took it (Tree::moment); else the clock's as it stands between frames (a fiber, a
+/// test's change): where what is told now starts from. Read as it is, not followed (frame_watch.mbt): for a stamp, or a
+/// moment what reads it asks to be woken at (Ctx::wake_in), never for what shows the time going.
 pub fn Ctx::moment(self : Ctx) -> Double {
   if self.in_frame() {
     self.clock
   } else {
-    h_now()
+    match tree_cause() {
+      Some(m) => m
+      None => h_now()
+    }
   }
 }
 
@@ -2518,13 +2543,23 @@ pub fn Ctx::pointer_at(self : Ctx) -> Double {
 }
 
 ///|
+/// Whether the pointer's latest event (pressed, moved, let go) came after the latest key, each as it came: what the keys
+/// did since (a menu's highlight moved under a pointer at rest), the pointer has not undone yet.
+pub fn Ctx::pointer_after_keys(self : Ctx) -> Bool {
+  self.pointer_after_keys
+}
+
+///|
 /// How fast the pointer went at its latest event (points per ms, across and down; at most a fling's fastest): what a
 /// list let go flings at (Compose's VelocityTracker over the press's events, by their own times), for what else a
-/// finger lets go of moving (a picture zoomed in).
+/// finger lets go of moving (a picture zoomed in). None where it stood still longer than tracker_gap_ms before that
+/// event (Tracker::velocity_at): held still, then let go, it was not flung.
 pub fn Ctx::pointer_velocity(self : Ctx) -> (Double, Double) {
-  ignore(self)
   hand.pointer.get() |> ignore
-  (dclamp(track_x.velocity(), -max_fling, max_fling), dclamp(track_y.velocity(), -max_fling, max_fling))
+  (
+    dclamp(track_x.velocity_at(self.pointer_t), -max_fling, max_fling),
+    dclamp(track_y.velocity_at(self.pointer_t), -max_fling, max_fling),
+  )
 }
 
 ///|
@@ -2632,63 +2667,14 @@ pub fn finger_target() -> Double {
 }
 
 ///|
-/// The room a press has round what is drawn (x0, y0)–(x1, y1): each way it is drawn smaller than `room_least()`, it
-/// grown to it round its middle (not drawn so, nor laid out); moved in where that passes an edge past which nothing is pressed
-/// (`edge`: the window, what cuts it) rather than cut short there; cut where it passes what holds it that takes presses
-/// (`cut`: a row's small button keeps to its row, the row's own room round it the row's). What the hit test reaches
-/// (press_reach) and the room rules measure (rooms.mbt), one.
-fn press_room(
-  x0 : Double,
-  y0 : Double,
-  x1 : Double,
-  y1 : Double,
-  cut : (Double, Double, Double, Double),
-  edge : (Double, Double, Double, Double),
-) -> (Double, Double, Double, Double) {
-  let (ax0, ax1) = room_across(x0, x1, cut.0, cut.2, edge.0, edge.2)
-  let (ay0, ay1) = room_across(y0, y1, cut.1, cut.3, edge.1, edge.3)
-  (ax0, ay0, ax1, ay1)
-}
-
-///|
-/// One way of press_room: `lo`–`hi` grown to room_least() round its middle where shorter, moved in from `elo`–`ehi`'s
-/// ends, cut to `clo`–`chi`.
-fn room_across(
-  lo : Double,
-  hi : Double,
-  clo : Double,
-  chi : Double,
-  elo : Double,
-  ehi : Double,
-) -> (Double, Double) {
-  let mut a = lo
-  let mut b = hi
-  let least = room_least()
-  if hi - lo < least {
-    let mid = (lo + hi) / 2.0
-    a = mid - least / 2.0
-    b = mid + least / 2.0
-    // (moved in from an edge it passes, not cut short at it)
-    if a < elo {
-      b = b + (elo - a)
-      a = elo
-    }
-    if b > ehi {
-      a = a - (b - ehi)
-      b = ehi
-    }
-  }
-  (dmax(a, dmax(clo, elo)), dmin(b, dmin(chi, ehi)))
-}
-
-///|
 /// What a press (or the pointer) at (x, y) is on: `top` (the topmost target there, its index; -1 none), or a target
-/// drawn over it and within it smaller than its room whose room (press_room, cut to `top`, moved in from what cuts it
-/// and the window) holds (x, y), the nearest of several (where rooms meet, each has the part nearer it): a row's small
-/// button from round it, not the row's neighbour's. On what takes the pointer (`capture`: a picture a drag pans) the
-/// press is its own, nothing over it reached (a viewer's 下一张 over the picture: a drag beside it pans). By a finger
-/// and a pointer alike (the user, 2026-10-26: drawn small with a keyboard and mouse, a press's room is not), so what
-/// lights under the pointer is what a click there presses. What is only pointed at is never reached for.
+/// drawn over it and within it smaller than its room whose room (@view.press_room, cut to `top`, moved in from what
+/// cuts it and the window) holds (x, y), the nearest of several (where rooms meet, each has the part nearer it): a row's
+/// small button from round it, not the row's neighbour's (@view.press_reaches: the window's tree's hit test's too, one
+/// way of working it out). On what takes the pointer (`capture`: a picture a drag pans) the press is its own, nothing
+/// over it reached (a viewer's 下一张 over the picture: a drag beside it pans). By a finger and a pointer alike (the
+/// user, 2026-10-26: drawn small with a keyboard and mouse, a press's room is not), so what lights under the pointer is
+/// what a click there presses. What is only pointed at is never reached for.
 fn press_reach(
   ids : Array[Int],
   rects : Array[Double],
@@ -2709,14 +2695,11 @@ fn press_reach(
   for k in (top + 1)..<ids.length() {
     let r = k * 4
     let (x0, y0, x1, y1) = (rects[r], rects[r + 1], rects[r + 2], rects[r + 3])
-    let (w, h) = (x1 - x0, y1 - y0)
     if points.contains(ids[k]) ||
       g().passes.contains(ids[k]) ||
       as_drawn(ids[k]) ||
       (hits && !old_hit_open(k)) ||
-      w <= 0.0 ||
-      h <= 0.0 ||
-      (w >= least && h >= least) {
+      !@view.press_small(x0, y0, x1, y1, least) {
       continue
     }
     // cut to what the press is on (drawn in it), moved in from what cuts it (a list's edge) and the window
@@ -2733,17 +2716,13 @@ fn press_reach(
     if b + clip_n <= clips.length() {
       edge = (dmax(0.0, clips[b]), dmax(0.0, clips[b + 1]), dmin(ww, clips[b + 2]), dmin(wh, clips[b + 3]))
     }
-    let (rx0, ry0, rx1, ry1) = press_room(x0, y0, x1, y1, cut, edge)
     // (and within the rounded corners of what cuts it, as a press on it is)
-    if x < rx0 || x >= rx1 || y < ry0 || y >= ry1 || !in_round_clip(clips, k, x, y) {
-      continue
-    }
-    let dx = dmax(0.0, dmax(x0 - x, x - x1))
-    let dy = dmax(0.0, dmax(y0 - y, y - y1))
-    let d = dx * dx + dy * dy
-    if d < best_d {
-      best_d = d
-      best = k
+    match @view.press_reaches(x0, y0, x1, y1, cut, edge, least, x, y) {
+      Some(d) if d < best_d && in_round_clip(clips, k, x, y) => {
+        best_d = d
+        best = k
+      }
+      _ => ()
     }
   }
   best
@@ -2910,13 +2889,7 @@ pub fn Ctx::rect_of(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double, 
     y1 = dmax(y1, self.hit_rects[j * 4 + 3])
     j = j - 1
   }
-  // A kept target whose holder takes no input has an empty rectangle. It has no place to report until it takes
-  // input again; callers following it (a menu or a returning picture) keep their last visible place meanwhile.
-  if x1 <= x0 || y1 <= y0 {
-    None
-  } else {
-    Some((x0, y0, x1 - x0, y1 - y0))
-  }
+  Some((x0, y0, x1 - x0, y1 - y0))
 }
 
 ///|
@@ -2939,39 +2912,27 @@ pub fn Ctx::open_url(self : Ctx, url : String) -> Bool {
 ///|
 /// The number on the app's icon (@hostapi.set_badge: macOS's Dock tile), 0 none. Under a Tester: kept (Tester::badge).
 pub fn set_badge(n : Int) -> Unit {
-  match fake.val {
-    Some(f) => f.badge = n
-    None => @hostapi.set_badge(n)
-  }
+  @hostapi.set_badge(n)
 }
 
 ///|
 /// This machine's station as the system says it (@hostapi.local_station), JSON; "" none. Under a Tester: as it is set
 /// (Tester::set_local_station).
 pub fn local_station() -> String {
-  match fake.val {
-    Some(f) => f.local_station
-    None => @hostapi.local_station()
-  }
+  @hostapi.local_station()
 }
 
 ///|
 /// Something done to this machine's station (@hostapi.local_station_act). Under a Tester: kept (Tester::local_acts).
 pub fn local_station_act(action : String) -> Unit {
-  match fake.val {
-    Some(f) => f.local_acts.push(action)
-    None => @hostapi.local_station_act(action)
-  }
+  @hostapi.local_station_act(action)
 }
 
 ///|
 /// The keys held down now (@hostapi.mods_held: mod_shift_key, mod_ctrl, mod_alt, mod_cmd). Under a Tester: as it holds
 /// them (Tester::hold_mods).
 pub fn mods_held() -> Int {
-  match fake.val {
-    Some(f) => f.mods
-    None => @hostapi.mods_held()
-  }
+  @hostapi.mods_held()
 }
 
 ///|
@@ -2985,33 +2946,21 @@ pub fn open_url(url : String) -> Bool {
 /// (@hostapi.install_package); what comes of it when it is not installed comes on @hostapi.system_channel. Under a Tester:
 /// kept (Tester::installs); the test posts what the system says (Tester::post).
 pub fn install_package(name : String, data : Bytes) -> Unit {
-  match fake.val {
-    Some(f) => {
-      ignore(data)
-      f.installs.push(name)
-    }
-    None => @hostapi.install_package(name, data)
-  }
+  @hostapi.install_package(name, data)
 }
 
 ///|
 /// The app over another app (@hostapi.system_channel `over`) done (@hostapi.over_done): back to the app it was over, or on
 /// into the app's own window (`open_app`). Under a Tester: kept (Tester::overs_done).
 pub fn over_done(open_app~ : Bool) -> Unit {
-  match fake.val {
-    Some(f) => f.overs_done.push(open_app)
-    None => @hostapi.over_done(open_app~)
-  }
+  @hostapi.over_done(open_app~)
 }
 
 ///|
 /// What the notice says that holds the app up while it listens for a browser coming back (@hostapi.hold_words), said
 /// before the browser opens. Under a Tester: kept (Tester::hold_words).
 pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit {
-  match fake.val {
-    Some(f) => f.hold_words = Some((channel, title, body))
-    None => @hostapi.hold_words(channel~, title~, body~)
-  }
+  @hostapi.hold_words(channel~, title~, body~)
 }
 
 ///|

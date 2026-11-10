@@ -233,7 +233,10 @@ test("a_session_stands_where_its_process_and_last_turn_say", () => {
   said = p.session(said);
   assert.equal(said.statusText, "等待：CI 跑完");
   assert.equal(p.waiting({ process: "running", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5 } }), null);
-  assert.equal(p.waiting({ process: "warm", pending: 1, lastTurn: { declared: "waiting", endedAt: 5 } }), null);
+  // Given a message while it waits: still at what it waits on until the turn the message begins, not queued between.
+  assert.deepEqual(p.waiting({ process: "warm", pending: 1, lastTurn: { declared: "waiting", endedAt: 5 } }), { since: 5, seconds: null, text: "等待中" });
+  assert.equal(st({ process: "warm", pending: 1, lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5 } }), "running");
+  assert.equal(st({ process: "warm", pending: 1, lastTurn: { declared: "final", outcome: "completed", endedAt: 5 } }), "queued");
   assert.equal(st({}), "idle");
 });
 
@@ -331,6 +334,8 @@ test("how_a_turn_ended_says_itself_in_words", () => {
   assert.equal(words({ declared: "block", outcome: "completed" }), "需要你处理");
   assert.equal(words({ declared: "block", ending: "need_decision", outcome: "completed" }), "需要你处理");
   assert.equal(words({ outcome: "failed", detail: "rate_limit: You've hit your limit" }), "出错：额度已用完");
+  // A model's own limit is the model's: the account's quota bars still show room (#4365).
+  assert.equal(words({ outcome: "failed", detail: "rate_limit: You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage, to continue." }), "出错：Fable 自身限额已用完");
   assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：账号认证失败");
   assert.equal(words({ outcome: "aborted" }), "已停止");
   assert.equal(words({ outcome: "completed" }), "出错：意外停止");
@@ -350,7 +355,7 @@ test("how_a_turn_ended_says_itself_in_words", () => {
 });
 
 test("a_decision_agent_passes_the_chat_shape", () => {
-  let s: J = { key: "ember:c-decision", runtime: "codex", process: "warm", pending: 0, lastTurn: { kind: "message", startedAt: 1, declared: "block", ending: "need_decision", outcome: "completed" } };
+  let s: J = { key: "chat:c-decision", runtime: "codex", process: "warm", pending: 0, lastTurn: { kind: "message", startedAt: 1, declared: "block", ending: "need_decision", outcome: "completed" } };
   s = p.session(s);
   const agent = { status: p.shownStatus(s), badge: p.markOf(s), session: s, profiles: [], choices: [], attention: [], turns: [], threads: [], jobs: [] };
   const checked = conform("ChatAgent", agent) as J;
@@ -586,6 +591,11 @@ test("what_the_clients_show_is_put_in_here", () => {
   assert.equal(v.time.createdAt.ago, "3 分钟前");
   const w = v.quota.windows;
   assert.deepEqual([w[0].mark, w[1].mark, w[1].level, w[1].refills], ["5H", "W", "red", "1 小时 5 分钟后刷新"]);
+  // What a model has to itself (Fable's week) is drawn with the account's windows, after the account's week.
+  const own: J = p.times({ quota: { state: "ok", windows: [{ label: "每周", usedPercent: 10, resetsAt: null }, { label: "5 小时", usedPercent: 0, resetsAt: null }], scoped: [{ label: "每周 · Fable", usedPercent: 92, resetsAt: c.now + 3_900_000, scope: "Fable" }] } }, c);
+  assert.deepEqual(own.quota.windows.map((w: J) => [w.label, w.mark, w.left, w.level, w.scope]), [["5 小时", "5H", 100, "ok", undefined], ["每周", "W", 90, "ok", undefined], ["每周 · Fable", "Fable", 8, "red", "Fable"]]);
+  assert.equal("scoped" in own.quota, false);
+  assert.deepEqual((p.times(own, c) as J).quota.windows.map((w: J) => w.mark), ["5H", "W", "Fable"], "put again, the same");
   const members = [{ email: "a@x.com", name: "阿一", picture: "https://p/a" }];
   assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"]], members), "@ds-ember 和 @U9 看下");
   assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"], ["U9", "Mia"]], members), "@ds-ember 和 @Mia 看下");
@@ -597,7 +607,7 @@ test("what_the_clients_show_is_put_in_here", () => {
   let h: J = {
     hostname: "willow", os: "macOS 26", arch: "arm64", cpus: 8, load: 0.5, uptimeSec: 90_000,
     memory: { usedBytes: 8 * GIB, totalBytes: 32 * GIB, swapUsedBytes: null },
-    disk: { totalBytes: 1000 * GIB, freeBytes: 50 * GIB }, emberRssBytes: 100 * 1024 ** 2,
+    disk: { totalBytes: 1000 * GIB, freeBytes: 50 * GIB }, stationRssBytes: 100 * 1024 ** 2,
   };
   h = p.host(h);
   assert.ok(Number.isInteger(h.meters[0].percent) && Number.isInteger(v.quota.windows[0].left));
@@ -608,13 +618,14 @@ test("what_the_clients_show_is_put_in_here", () => {
   h = p.host(h);
   const cpu = h.meters[0];
   assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M1 Pro"]);
-  assert.deepEqual([h.meters[2].level, h.meters[2].value, h.emberText], ["red", "剩余 50.0 GB / 1000 GB", "still.fail 100 MB"]);
+  assert.deepEqual([h.meters[2].level, h.meters[2].value, h.stationText], ["red", "剩余 50.0 GB / 1000 GB", "still.fail 100 MB"]);
   assert.match(h.usage, /^内存 .+ · 磁盘 剩余 50\.0 GB \/ 1000 GB$/);
   assert.equal(h.identity, "Apple M1 Pro · 32 GB · macOS 26");
   assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 willow", "芯片 Apple M1 Pro · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占用 100 MB"]);
-  assert.deepEqual([cpu.left, cpu.remaining, cpu.big, cpu.unit, cpu.title, cpu.total], [7, "空闲 7%", "7", "%", "CPU 空闲", "负载 4.0"]);
+  assert.deepEqual([cpu.left, cpu.remaining, cpu.big, cpu.unit, cpu.title, cpu.total], [7, "空闲 7%", "7", "%", "CPU 空闲率", "负载 4.0"]);
   const left = h.meters[2];
-  assert.deepEqual([left.left, left.big, left.unit, left.title, left.total], [5, "50.0", "GB", "磁盘剩", "共 1000 GB"]);
+  assert.deepEqual([left.left, left.big, left.unit, left.title, left.total], [5, "50.0", "GB", "可用磁盘", "总磁盘 1000 GB"]);
+  assert.deepEqual([cpu.titleShort, left.totalShort], ["CPU 空闲", "总 1000 GB"]);
 });
 
 test("a_watching_chat_says_what_it_watches_and_what_archiving_it_means", () => {
@@ -638,25 +649,25 @@ test("a_meter_is_drawn_as_an_allowance_to_what_is_left", () => {
 
 test("a station's GPUs are shown separately with only measurements that are known", () => {
   const one = p.host({ gpus: [{ name: "Apple M1 Pro", cores: 16, busy: 0.21 }] });
-  assert.deepEqual(one.gpus, [{ big: "79", unit: "%", left: 79, level: "ok", title: "GPU 空闲", total: "16 核", model: "Apple M1 Pro" }]);
+  assert.deepEqual(one.gpus, [{ big: "79", unit: "%", left: 79, level: "ok", title: "GPU 空闲率", titleShort: "GPU 空闲", total: "16 核", model: "Apple M1 Pro" }]);
   const several = p.host({ gpus: [
     { name: "NVIDIA RTX 4090", busy: 0.37, memoryUsedBytes: 4 * GIB, memoryTotalBytes: 24 * GIB },
     { name: "Tesla T4", busy: 0, memoryTotalBytes: 16 * GIB },
     { name: "GPU without metrics" },
   ] });
   assert.deepEqual(several.gpus, [
-    { big: "63", unit: "%", left: 63, level: "ok", title: "GPU 1 空闲", total: "显存剩 20/24G", model: "NVIDIA RTX 4090" },
-    { big: "100", unit: "%", left: 100, level: "ok", title: "GPU 2 空闲", total: "显存 16G", model: "Tesla T4" },
-    { big: "—", unit: "", left: 100, level: "ok", title: "GPU 3 空闲", total: "", model: "GPU without metrics" },
+    { big: "63", unit: "%", left: 63, level: "ok", title: "GPU 1 空闲率", titleShort: "GPU 1 空闲", total: "显存剩 20/24G", model: "NVIDIA RTX 4090" },
+    { big: "100", unit: "%", left: 100, level: "ok", title: "GPU 2 空闲率", titleShort: "GPU 2 空闲", total: "显存 16G", model: "Tesla T4" },
+    { big: "—", unit: "", left: 100, level: "ok", title: "GPU 3 空闲率", titleShort: "GPU 3 空闲", total: "", model: "GPU without metrics" },
   ]);
   assert.deepEqual(p.host({}).gpus, [], "older stations do not say GPUs");
   assert.deepEqual(p.host({ gpus: null }).gpus, [], "none detected");
   assert.deepEqual(p.host({ gpus: [{ name: "GPU", busy: -1, memoryUsedBytes: 2 * GIB }] }).gpus,
-    [{ big: "—", unit: "", left: 100, level: "ok", title: "GPU 空闲", total: "显存已用 2G", model: "" }]);
+    [{ big: "—", unit: "", left: 100, level: "ok", title: "GPU 空闲率", titleShort: "GPU 空闲", total: "显存已用 2G", model: "" }]);
   assert.deepEqual(p.host({ gpus: [{ name: "AMD Radeon", memoryUsedBytes: 4 * GIB, memoryTotalBytes: 16 * GIB }] }).gpus,
-    [{ big: "12.0", unit: "GB", left: 75, level: "ok", title: "GPU 显存剩", total: "共 16 GB", model: "AMD Radeon" }]);
+    [{ big: "12.0", unit: "GB", left: 75, level: "ok", title: "GPU 可用显存", titleShort: "可用显存", total: "总显存 16 GB", model: "AMD Radeon" }]);
   assert.deepEqual(p.host({ gpus: [{ name: "AMD Radeon", memoryUsedBytes: 17 * GIB, memoryTotalBytes: 16 * GIB }] }).gpus,
-    [{ big: "—", unit: "", left: 100, level: "ok", title: "GPU 空闲", total: "显存 16G", model: "AMD Radeon" }]);
+    [{ big: "—", unit: "", left: 100, level: "ok", title: "GPU 空闲率", titleShort: "GPU 空闲", total: "显存 16G", model: "AMD Radeon" }]);
 });
 
 test("loss_is_counted_on_the_way_in_use_and_not_across_a_change_of_it", () => {
@@ -765,6 +776,18 @@ test("a_connect_says_where_it_is_reached_how_it_runs_and_what_switching_it_does"
   assert.deepEqual([same.changed, same.effects, same.action], [false, [], "确认更改"]);
   const all = changes.find((x: J) => x.mode === "single-session" && !x.requireMention);
   assert.equal(all.effects[0], "无需 @：它所在的所有群和私聊中的每条消息都会发送给 agent，用量会明显增加。");
+  // thread mode: a way of its own for a Feishu connect, switched to and from one each by group; Slack's has none
+  const groups = { ...base, mode: "multi-session", feishu: { appId: "cli_1", domain: "feishu" } };
+  const threads = { ...groups, feishu: { ...groups.feishu, threads: true } };
+  assert.equal(p.connect(threads).modeLabel, "每个 thread 一个会话");
+  assert.equal(p.connect(groups).modeLabel, "每个群一个会话");
+  assert.equal(p.modeWords("slack").threads, undefined);
+  const way = (c: J, on: boolean) => p.modeChanges(c, 0).find((x: J) => x.mode === "multi-session" && x.threads === on);
+  assert.deepEqual([way(groups, true).changed, way(groups, false).changed], [true, false]);
+  assert.ok(way(groups, true).effects[0].includes("回复留在 thread 里"));
+  assert.ok(way(threads, false).effects[0].includes("回复发在群里"));
+  assert.ok(way(base, true).effects[0].includes("回复留在 thread 里"));
+  assert.equal(p.modeChanges({ ...base, kind: "slack", feishu: undefined }, 0).length, 3);
 });
 
 test("a_slack_apps_permissions_are_said_in_sections_those_only_admins_allow_marked", () => {

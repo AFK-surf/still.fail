@@ -1,0 +1,111 @@
+/* ---------- Footer ----------
+   The dark band continued, under a dashed rule: inside the container, 22 columns with no gutter; the identity takes
+   10, the four lists 3 each, their heads in mono capitals. */
+.foot { padding-block: clamp(56px, 5.6vw, 88px) calc(28px + env(safe-area-inset-bottom, 0px)); }
+.foot-grid { display: grid; grid-template-columns: repeat(22, minmax(0, 1fr)); row-gap: 40px; align-items: start; }
+.foot-id { grid-column: 1 / span 10; display: flex; flex-direction: column; gap: 16px; padding-right: var(--gap); }
+.foot-grid > :nth-child(2) { grid-column: 11 / span 3; }
+.foot-grid > :nth-child(3) { grid-column: 14 / span 3; }
+.foot-grid > :nth-child(4) { grid-column: 17 / span 3; }
+.foot-grid > :nth-child(5) { grid-column: 20 / span 3; }
+.foot-grid > :not(.foot-id) { padding-right: 12px; }
+.foot-id .brand { align-self: flex-start; margin-block: -9px; color: var(--fg); } /* its 44 px hit area, without moving the drawing */
+.foot-id .brand img { box-shadow: 0 0 0 1px rgba(255,255,255,.18); } /* the dark mark's square, on the dark band */
+.foot-tag { color: var(--mut); font-size: var(--t-small); line-height: 1.55; letter-spacing: var(--tr-small); max-width: 22em; text-wrap: pretty; }
+.foot-grid .fh { font-family: var(--mono); font-size: 11px; line-height: 18px; font-weight: 400; letter-spacing: .06em; text-transform: uppercase; color: var(--mut); margin: 4px 0 14px; }
+.foot-grid ul { display: flex; flex-direction: column; gap: 4px; }
+.foot-grid li a {
+  display: inline-flex; align-items: center; min-height: 30px; text-decoration: none; font-size: 14.5px; line-height: 1.3; color: var(--fg);
+  transition: color var(--dur-ui) ease;
+}
+.foot-grid li a:focus-visible { outline-offset: 1px; }
+@media (hover: hover) and (pointer: fine) {
+  .foot-grid li a:hover { color: #fff; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .22em; text-decoration-color: rgba(244,243,240,.4); }
+}
+.foot-base {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px 24px; flex-wrap: wrap;
+  margin-top: clamp(56px, 5.6vw, 88px); padding-top: 20px; background: var(--dash-x); background-position: left top;
+  font-family: var(--mono); font-size: 12px; line-height: 18px; letter-spacing: 0; color: var(--mut);
+}
+/* Language: a pill (globe, the language, a chevron) opening a menu of the pages in other languages, above it (below
+   when there is no room), drawn from the trigger's corner. Positioned by CSS anchor positioning; where that is missing,
+   main.js places it (data-placed). */
+.footer-prefs { display: flex; align-items: center; }
+.language-trigger {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 7px 0 9px; border: 1px solid var(--hair); border-radius: 6px;
+  background: transparent; color: var(--fg); cursor: pointer;
+  font-family: var(--font); font-size: 13px; font-weight: 500; line-height: 1; letter-spacing: .01em; white-space: nowrap;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation; anchor-name: --language;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, scale var(--dur-press) ease-out;
+}
+.language-trigger::after { content: ""; position: absolute; inset: -7px -3px; } /* a 44 px hit area */
+.language-trigger .ico { width: 16px; height: 16px; flex: none; color: var(--mut); stroke-width: 3; } /* 2 px drawn, beside Book */
+.language-trigger .chev { width: 14px; height: 14px; stroke-width: 3.43; transition: transform var(--dur-ui) var(--ease-out); }
+.language-trigger[aria-expanded=true] { border-color: rgba(244,243,240,.4); background: rgba(244,243,240,.08); }
+.language-trigger[aria-expanded=true] .chev { transform: rotate(180deg); }
+@media (prefers-reduced-motion: no-preference) { .language-trigger:active { scale: .96; } }
+.language-menu {
+  /* A white sheet over the dark band, with paper's own colours. */
+  --ring: var(--brand-deep);
+  inset: auto; margin: 0; padding: 5px; min-width: 196px; border: 1px solid transparent; border-radius: 12px; /* option 6 + 5 + 1 */
+  background: #fff; color: var(--ink); font-family: var(--font);
+  box-shadow: 0 0 0 1px rgba(28,27,26,.08), 0 18px 40px -14px rgba(28,27,26,.3), 0 4px 12px -4px rgba(28,27,26,.1);
+  position-anchor: --language; bottom: anchor(top); right: anchor(right); margin-bottom: 8px;
+  /* Above, else below, else the other side; on a screen too short for either, pinned 8px from the top over the button
+     (scrolling inside if it must). */
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --language-fit, --language-fit-left;
+  max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain;
+  transform-origin: 100% 100%;
+  /* Out: quicker than in. */
+  opacity: 0; transform: translateY(4px) scale(.97);
+  transition: opacity 120ms ease, transform 120ms ease, overlay 120ms allow-discrete, display 120ms allow-discrete;
+}
+.language-menu:popover-open {
+  opacity: 1; transform: none;
+  transition: opacity 160ms ease, transform 240ms var(--ease-out), overlay 240ms allow-discrete, display 240ms allow-discrete;
+}
+@position-try --language-fit { top: 8px; bottom: auto; right: anchor(right); left: auto; margin: 0; }
+@position-try --language-fit-left { top: 8px; bottom: auto; left: anchor(left); right: auto; margin: 0; }
+@starting-style { .language-menu:popover-open { opacity: 0; transform: translateY(4px) scale(.97); } }
+/* Reduced motion: it only fades, in and (quicker) out. */
+@media (prefers-reduced-motion: reduce) {
+  .language-menu { transform: none !important; transition: opacity 120ms ease, overlay 120ms allow-discrete, display 120ms allow-discrete !important; }
+  .language-menu:popover-open { transition: opacity 160ms ease, overlay 160ms allow-discrete, display 160ms allow-discrete !important; }
+}
+@supports not (anchor-name: --x) {
+  .language-menu { margin: 0; }
+  .language-menu:not([data-placed]) { visibility: hidden; }
+}
+.language-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 38px; padding: 0 10px 0 12px;
+  border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 15px; line-height: 1.3; outline-offset: -2px;
+  transition: background-color 120ms ease, scale var(--dur-press) ease-out;
+}
+.language-option .ico { width: 16px; height: 16px; flex: none; color: var(--ink); visibility: hidden; stroke-width: 3; }
+.language-option[aria-checked=true] { font-weight: 500; }
+.language-option[aria-checked=true] .ico { visibility: visible; }
+.language-option:focus-visible { background: var(--panel); outline: 2px solid var(--ring); }
+.language-option:active { background: var(--panel); }
+@media (prefers-reduced-motion: no-preference) { .language-option:active { scale: .98; } } /* a row in a menu: a lighter press */
+@media (hover: hover) and (pointer: fine) {
+  .language-trigger:hover { background: rgba(244,243,240,.08); }
+  .language-option:hover { background: var(--panel); }
+}
+@media (pointer: coarse) {
+  .language-trigger { height: 40px; padding: 0 11px 0 13px; }
+  .language-option { min-height: 44px; }
+}
+@media (max-width: 1120px) {
+  .foot-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); column-gap: var(--gap); }
+  .foot-grid > :nth-child(n) { grid-column: auto; padding-right: 0; }
+  .foot-grid > .foot-id { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .foot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 36px; }
+}
+/* Touch: each link a full 44 px row, the rows touching, so a thumb can tell them apart (portrait and landscape). */
+@media (pointer: coarse) {
+  .foot-grid ul { gap: 0; }
+  .foot-grid li a { min-height: 44px; }
+  .foot-grid .fh { margin-bottom: 6px; }
+}

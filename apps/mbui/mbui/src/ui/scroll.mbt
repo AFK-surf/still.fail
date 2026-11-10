@@ -17,7 +17,7 @@
 //   mouse drag coasts, slowing 0.997 per ms, and stops at the ends (a
 //   trackpad's momentum comes from the system as wheel events).
 //
-// Each is said once as it sets out and is a function of the time from there (docs/determinism.md, "Motion is data"):
+// Each is said once as it sets out and is a function of the time from there ("Motion is data"):
 // the curves, the springs and the stretch's mapping are @view's (list_motion.mbt), one for these lists and the window's
 // tree's columns that scroll as a page's list does (@view.Scroll::list).
 
@@ -79,7 +79,7 @@ let max_fling : Double = 8.0
 /// The hand moved the list between frames (a finger dragging it, a wheel): what lays it out (Ctx::place_list) is told,
 /// so that the next frame lays it out again, nothing built for it.
 fn ListState::hand_moved(self : ListState) -> Unit {
-  self.hand_said.set(@signals.untracked(fn() { self.hand_said.get() }) + 1)
+  self.hand_said.set(self.hand_said.untracked() + 1)
 }
 
 ///|
@@ -302,6 +302,7 @@ fn Ctx::release(self : Ctx, st : ListState, v : Double, at : Double) -> Unit {
       st.fling_dist = dist / self.scale
       st.fling_dur = dur
       st.fling_done = 0.0
+      st.fling_from = None
       st.vel = v
       self.moving(st.ease_mover, st as &Moving, what="a list's fling")
     } else if st.over_state == 1 {
@@ -319,6 +320,7 @@ fn Ctx::release(self : Ctx, st : ListState, v : Double, at : Double) -> Unit {
       st.fling_v = v
       st.fling_t0 = -1.0
       st.fling_done = 0.0
+      st.fling_from = None
       st.vel = v
       self.moving(st.ease_mover, st as &Moving, what="a list's fling")
     }
@@ -328,6 +330,7 @@ fn Ctx::release(self : Ctx, st : ListState, v : Double, at : Double) -> Unit {
     st.fling_v = v
     st.fling_t0 = at
     st.fling_done = 0.0
+    st.fling_from = None
     st.vel = v
     self.moving(st.ease_mover, st as &Moving, what="a list's coast")
   }
@@ -363,8 +366,25 @@ fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
       }
     }
     let d = pos - st.fling_done
+    // where it is, put from where it set out as far on as it has come, as long as nothing else moved it since and no end
+    // took any of it: each frame's step added on, frames at another rate added up to a rounding apart (a fling's rest
+    // a bit off at 60 against at 120 frames a second, let_go_test, MBUI_TEST_FPS)
+    let here = (st.anchor, st.anchor_off, st.pending)
+    let from = match st.fling_from {
+      Some(f) if here == (st.left.0, st.left.1, st.left.2) => f
+      _ => (st.anchor, st.anchor_off, st.pending - st.fling_done)
+    }
+    st.fling_from = Some(from)
     st.fling_done = pos
-    self.feed(st, d, 2)
+    if st.over == 0.0 && st.over_state == 0 {
+      st.put_at = self.clock
+      st.anchor = from.0
+      st.anchor_off = from.1
+      st.pending = from.2 + pos
+    } else {
+      st.fling_from = None
+      self.feed(st, d, 2)
+    }
     if self.clock >= end {
       st.stop()
       // its scroll bar fades from the fling's end
@@ -506,10 +526,7 @@ let scroll_log : Ref[Int] = { val: -1 }
 ///|
 fn scroll_logging() -> Bool {
   if scroll_log.val < 0 {
-    scroll_log.val = match fake.val {
-      Some(_) => 0
-      None => if @hostapi.env("MBUI_SCROLL_LOG") == "1" { 1 } else { 0 }
-    }
+    scroll_log.val = if @hostapi.env("MBUI_SCROLL_LOG") == "1" { 1 } else { 0 }
   }
   scroll_log.val == 1
 }
@@ -562,7 +579,22 @@ pub fn Velocity::add(self : Velocity, t : Double, x : Double, y : Double) -> Uni
 }
 
 ///|
+/// The finger lifted at (x, y) at `t`: a sample only where it says a place anew (Tracker::up).
+pub fn Velocity::up(self : Velocity, t : Double, x : Double, y : Double) -> Unit {
+  self.x.up(t, x)
+  self.y.up(t, y)
+}
+
+///|
 /// How fast it goes as of its newest sample, across and down (points per ms), held to what a fling takes.
 pub fn Velocity::get(self : Velocity) -> (Double, Double) {
   (dclamp(self.x.velocity(), -max_fling, max_fling), dclamp(self.y.velocity(), -max_fling, max_fling))
+}
+
+///|
+/// How fast it goes as of a moment `t` (an event's: a move, a lift), across and down (points per ms), held to what a
+/// fling takes: none where it stood still longer than tracker_gap_ms first, nor where its own last moves do not bear
+/// it out (Tracker::velocity_at).
+pub fn Velocity::get_at(self : Velocity, t : Double) -> (Double, Double) {
+  (dclamp(self.x.velocity_at(t), -max_fling, max_fling), dclamp(self.y.velocity_at(t), -max_fling, max_fling))
 }

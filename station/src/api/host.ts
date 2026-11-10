@@ -1,4 +1,4 @@
-// The machine's state (host.rs `info`), read in a reader and kept here: given again within ten seconds, and the CPU
+// The machine's state, read in a reader and kept here: given again within ten seconds, and the CPU
 // ticks last seen kept across reads (readers come and go). GET /host, the events' `host` samples and what other stations
 // are told of this one's load (station_list, jobs/load.ts) share it.
 import type { Lang } from "../ops/i18n.ts";

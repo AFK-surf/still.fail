@@ -43,6 +43,8 @@ export type RuntimeEvent =
   /// The station's tools (its MCP endpoint) failed it as unreachable: what it says through them reaches nobody until its
   /// process starts again.
   | { type: "toolsLost"; why: string }
+  /// It compacted its context (on its own as it filled, or asked for by hand): what it had read is now a summary.
+  | { type: "compacted" }
   | { type: "live"; event: LiveEvent };
 
 export type Profile = {
@@ -67,6 +69,8 @@ export type OpenOptions = {
   /// The most context it runs with, in tokens: it compacts on its own at it (sessions/context-cap.ts); none, the
   /// model's whole window. Taken by Claude Code and Codex alone, as they start.
   context?: number;
+  /// Fast as the session is set (none: as its profile is), for a runtime that takes it as it starts (Claude Code).
+  fast?: boolean;
   /// Appended to the runtime's own system prompt.
   instructions: string;
   /// The skills of the session's workspace (its agent home's skills/, sessions/agent-home.ts), for a runtime that
@@ -84,6 +88,10 @@ export type OpenOptions = {
 export interface AgentSession {
   /// Runtime-native id: claude session id, codex thread id, dsh, grok or Devin session id, Cursor's agent id. Persist it to resume.
   id(): string;
+  /// The version of the runtime serving this session, when it reports one (it may predate the installed binary).
+  runtimeVersion?(): string | null;
+  /// Whether the software page updates the executable serving this session.
+  runtimeUpdateMatchesStation?(): Promise<boolean>;
   busy(): boolean;
   /// Starts a turn. Fails when a turn is already running (or the runtime cannot take one as it is).
   prompt(text: string): Promise<void>;
@@ -122,8 +130,8 @@ export type BackgroundTask = { id: string; kind: "agent" | "command"; descriptio
 /// where it stands (completed, in_progress, or anything else: still to do).
 export type PlanItem = { text: string; status: string };
 
-/// The station's tools by their server's name (before the rename: ember).
-export const TOOL_SERVERS = ["stillfail", "ember"];
+/// The station's tools by their server's name.
+export const TOOL_SERVERS = ["stillfail"];
 
 /// A tool call's error that says the station's tools could not be reached at all (not that the tool refused).
 export function unreachable(text: string): boolean {
@@ -154,6 +162,15 @@ export const OVERLOADED = ["overloaded", "at capacity"];
 const CONTEXT = ["context window", "context length", "context_length", "prompt is too long", "maximum context", "too many tokens", "input is too long"];
 /// What they say when the way to the provider broke: the request not sent, its answer cut off.
 const NETWORK = /stream disconnected|error sending request|connection (?:reset|refused|closed|error|failed)|network error|timed out|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EPIPE|socket hang up|fetch failed|dns error|tls handshake/i;
+
+/// The model whose own allowance a limit was, as the runtime named it (Claude Code's "You've reached your Fable limit.
+/// Switch to another model…": Fable has a weekly cap of its own, under the account's), so it is told apart from the
+/// account's limit, whose quota then still shows room (#4365); null for the account's own ("your weekly usage limit").
+export function modelLimitOf(text: string): string | null {
+  const name = /\breached your ([\w.\- ]+?) limit\b/i.exec(text)?.[1]?.trim();
+  return name && !ACCOUNT_LIMIT.test(name) ? name : null;
+}
+const ACCOUNT_LIMIT = /\b(?:usage|session|weekly|daily|monthly|spend|rate|\d+[- ]hour)\b/i;
 
 /// The rest of a failure, once neither the account, the provider nor a limit: the network, the conversation's size,
 /// else the model.

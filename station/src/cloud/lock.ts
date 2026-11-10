@@ -1,4 +1,4 @@
-// The workspace's lock (docs/workspace-lock.md): a hash-chained record of who belongs, each entry signed by a device or
+// The workspace's lock: a hash-chained record of who belongs, each entry signed by a device or
 // passkey the record itself names. Once a station pins it, the control plane only stores and carries it: who may
 // connect, with what role, which stations are peers, which gateways and grant keys count, all come from here. Pure:
 // what is kept and when it is told is cloud/state.ts's.
@@ -18,7 +18,7 @@ export type Member = { sub: string; email: string; role: Role };
 /// A device: its base iroh key (`id`), whose person, the client it is, the key it signs with (an app's only), the
 /// endpoint ids an older client connects with (it proves none), until when (a web page's).
 /// `by`: whose signature put it in the lock (the genesis's devices the owner's). `own`: the person's own, which alone
-/// signs anything (docs/workspace-lock.md 本人的设备): named in the genesis, put in by an own device or passkey of the
+/// signs anything ( 本人的设备): named in the genesis, put in by an own device or passkey of the
 /// same person, or put in by an owner or admin while the person had never had an own one that signs (their first,
 /// approved face to face). An admin may put a device or passkey in under anyone's name: that one connects, but its
 /// signature counts for nothing, in the lock or the vault, so it can neither act as the person nor be given their keys.
@@ -50,6 +50,8 @@ export type LockState = {
   signed: Set<string>;
   stations: Map<string, Station>;
   gateways: Set<string>;
+  /// The person's own lock each member bound themselves to (`person` entries): its genesis's hash.
+  persons: Map<string, string>;
   disabled: boolean;
 };
 
@@ -84,8 +86,22 @@ export const signedBytes = (hash: string) => Buffer.concat([Buffer.from("stillfa
 /// asks for a credential for that endpoint).
 export const endpointBytes = (ws: string, endpoint: string) => Buffer.from(`stillfail-lock-endpoint/1\0${ws}\0${endpoint}`);
 
+/// Keys already made, by id: a chain's few keys check every entry they signed (a lock folded again, each device's
+/// hello), and making node's key object from its JWK costs more than the check itself. Bounded: cleared when full.
+const made = new Map<string, ReturnType<typeof makePublicKey>>();
+const MADE_MAX = 1024;
+
 /// A signing key's public half by its id: `ed25519:<hex>` or `p256:<base64url of the uncompressed point>`.
 export function publicKey(id: string) {
+  const known = made.get(id);
+  if (known !== undefined) return known;
+  const key = makePublicKey(id);
+  if (made.size >= MADE_MAX) made.clear();
+  made.set(id, key);
+  return key;
+}
+
+function makePublicKey(id: string) {
   if (id.startsWith("ed25519:") && isId(id.slice(8))) {
     return { alg: "Ed25519" as const, key: createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: Buffer.from(id.slice(8), "hex").toString("base64url") }, format: "jwk" }) };
   }
@@ -107,10 +123,27 @@ export const validKeyId = (id: unknown): id is string => {
   }
 };
 
+/// The station's own check of a signature, where it has one (native/mesh `verify`: libcrux, HACL*'s Ed25519 and P-256
+/// proved in F*, as a native app's shell checks them), set as the station starts (services.ts); none (cloud, a test, a
+/// mesh addon from before): node's.
+export type Verify = (alg: "Ed25519" | "ES256" | "ES256-der", key: Buffer, signature: Buffer, message: Buffer) => boolean;
+let native: Verify | null = null;
+export function verifyWith(v: Verify | null): void {
+  native = v;
+}
+
+/// Whether `signature` is the key `id`'s over `message` (`der`: a P-256 one DER-encoded, as WebAuthn gives it).
+export function signatureOk(id: string, signature: Buffer, message: Buffer, der = false): boolean {
+  const { alg, key } = publicKey(id);
+  if (native !== null) return native(alg === "Ed25519" ? "Ed25519" : der ? "ES256-der" : "ES256", Buffer.from(alg === "Ed25519" ? id.slice(8) : id.slice(5), alg === "Ed25519" ? "hex" : "base64url"), signature, message);
+  if (alg === "Ed25519") return verify(null, message, key, signature);
+  return verify("sha256", message, { key, dsaEncoding: der ? "der" : "ieee-p1363" }, signature);
+}
+
 /// Whether `sig` is the key's over the entry `hash`; a passkey's also on one of `origins` for `rp_id`.
 export function sigValid(sig: Sig, hash: string, origins: string[], rp_id: string, passkey: boolean): boolean {
   try {
-    const { alg, key } = publicKey(sig.key);
+    const { alg } = publicKey(sig.key);
     if (sig.alg === "webauthn") {
       if (!passkey || alg !== "ES256") return false;
       const client = Buffer.from(sig.client_data, "base64url");
@@ -119,11 +152,10 @@ export function sigValid(sig: Sig, hash: string, origins: string[], rp_id: strin
       const auth = Buffer.from(sig.authenticator_data, "base64url");
       // rpIdHash, then flags: user present.
       if (auth.length < 37 || !auth.subarray(0, 32).equals(sha256(rp_id)) || (auth[32]! & 1) === 0) return false;
-      return verify("sha256", Buffer.concat([auth, sha256(client)]), { key, dsaEncoding: "der" }, Buffer.from(sig.sig, "base64url"));
+      return signatureOk(sig.key, Buffer.from(sig.sig, "base64url"), Buffer.concat([auth, sha256(client)]), true);
     }
     if (sig.alg !== alg || passkey) return false;
-    if (alg === "Ed25519") return verify(null, signedBytes(hash), key, Buffer.from(sig.sig, "hex"));
-    return verify("sha256", signedBytes(hash), { key, dsaEncoding: "ieee-p1363" }, Buffer.from(sig.sig, "base64url"));
+    return signatureOk(sig.key, Buffer.from(sig.sig, alg === "Ed25519" ? "hex" : "base64url"), signedBytes(hash));
   } catch {
     return false;
   }
@@ -132,31 +164,72 @@ export function sigValid(sig: Sig, hash: string, origins: string[], rp_id: strin
 /// Whether a device's base key says `endpoint` is its own in workspace `ws`.
 export function endpointProof(ws: string, base: string, endpoint: string, proof: string): boolean {
   try {
-    return isId(base) && verify(null, endpointBytes(ws, endpoint), publicKey(`ed25519:${base}`).key, Buffer.from(proof, "hex"));
+    return isId(base) && signatureOk(`ed25519:${base}`, Buffer.from(proof, "hex"), endpointBytes(ws, endpoint));
   } catch {
     return false;
   }
 }
 
-// The rules themselves (who may sign what, what each entry does) are rules/'s, in MoonBit (docs/rules.md): what they
+// The rules themselves (who may sign what, what each entry does) are rules/'s, in MoonBit: what they
 // hold for each state is theirs, given back to them for the next entry; the state here is a copy to read.
 const crypto = { sha256Hex: (s: string) => sha256(s).toString("hex"), sigValid, validKeyId, endpointProof };
 const held = new WeakMap<LockState, unknown>();
+// A lock state is a snapshot: apply makes a new one. These groups are made as its maps are copied, not at a lookup.
+const people = new WeakMap<LockState, { emails: Map<string, Member[]>; devices: Map<string, string[]> }>();
 
 type Pairs<T> = [string, T][];
-type Told = Omit<LockState, "members" | "devices" | "signKeys" | "passkeys" | "signed" | "stations" | "gateways"> & {
-  members: Pairs<Member>; devices: Pairs<Device>; signKeys: Pairs<string[]>; passkeys: Pairs<Passkey>; signed: string[]; stations: Pairs<Station>; gateways: string[];
+type Told = Omit<LockState, "members" | "devices" | "signKeys" | "passkeys" | "signed" | "stations" | "gateways" | "persons"> & {
+  members: Pairs<Member>; devices: Pairs<Device>; signKeys: Pairs<string[]>; passkeys: Pairs<Passkey>; signed: string[]; stations: Pairs<Station>; gateways: string[]; persons: Pairs<string>;
 };
 
 function taken(out: { state: Told; rules: unknown } | { error: string }): LockState {
   if ("error" in out) throw new Error(out.error);
   const t = out.state;
+  const members = new Map<string, Member>(), devices = new Map<string, Device>();
+  const emails = new Map<string, Member[]>(), byPerson = new Map<string, string[]>();
+  for (const [sub, member] of t.members) {
+    members.set(sub, member);
+    const email = member.email.toLowerCase();
+    const group = emails.get(email) ?? [];
+    group.push(member);
+    emails.set(email, group);
+  }
+  for (const [id, device] of t.devices) {
+    devices.set(id, device);
+    const group = byPerson.get(device.sub) ?? [];
+    group.push(id);
+    byPerson.set(device.sub, group);
+  }
   const s: LockState = {
-    ...t, members: new Map(t.members), devices: new Map(t.devices), signKeys: new Map(t.signKeys), passkeys: new Map(t.passkeys),
-    signed: new Set(t.signed), stations: new Map(t.stations), gateways: new Set(t.gateways),
+    ...t, members, devices, signKeys: new Map(t.signKeys), passkeys: new Map(t.passkeys),
+    signed: new Set(t.signed), stations: new Map(t.stations), gateways: new Set(t.gateways), persons: new Map(t.persons),
   };
   held.set(s, out.rules);
+  people.set(s, { emails, devices: byPerson });
   return s;
+}
+
+/// The first member with this lower-case email, in the lock's existing order.
+export function memberWithEmail(s: LockState, email: string): Member | null {
+  const index = people.get(s);
+  if (index) return index.emails.get(email)?.[0] ?? null;
+  // A caller may construct a lock view itself, rather than taking a rules snapshot.
+  for (const member of s.members.values()) if (member.email.toLowerCase() === email) return member;
+  return null;
+}
+
+/// Every member with this lower-case email, in the lock's existing order.
+export function membersWithEmail(s: LockState, email: string): readonly Member[] {
+  const index = people.get(s);
+  if (index) return index.emails.get(email) ?? [];
+  return [...s.members.values()].filter((member) => member.email.toLowerCase() === email);
+}
+
+/// Device ids of a person in this lock snapshot.
+export function devicesFor(s: LockState, sub: string): readonly string[] {
+  const index = people.get(s);
+  if (index) return index.devices.get(sub) ?? [];
+  return [...s.devices].flatMap(([id, device]) => device.sub === sub ? [id] : []);
 }
 
 function rulesOf(s: LockState): unknown {
@@ -193,6 +266,25 @@ export function admit(s: LockState, who: { sub: string; endpoint: string; base?:
   const out = rules.admit_one_js(rulesOf(s), who, now, crypto);
   if ("refusal" in out) throw new LockRefusal(out.refusal);
   return { device: s.devices.get(out.device)!, role: out.role };
+}
+
+/// A person's own lock as its chain says it (rules/src/lock/person.mbt).
+export type PersonDevice = { key: string; id: string; label: string };
+export type Person = { sub: string; genesis: string; head: string; seq: number; devices: PersonDevice[] };
+
+/// What a person's chain says, each entry checked. Throws why it does not hold.
+export function personFold(entries: unknown[], sub: string): Person {
+  const out = rules.person_fold_js(entries, sub, crypto);
+  if ("error" in out) throw new Error(out.error);
+  return out;
+}
+
+/// The device a connection is by a person's own lock (`entries`, the chain it brought), and that member's role in the
+/// workspace's lock. Throws a LockRefusal why it may not connect.
+export function admitPerson(s: LockState, who: { sub: string; endpoint: string; base?: string; proof?: string }, entries: unknown[]): { device: string; role: Role; person: Person } {
+  const out = rules.admit_person_js(rulesOf(s), who, entries, crypto);
+  if ("refusal" in out) throw new LockRefusal(out.refusal);
+  return out;
 }
 
 /// A refusal by the lock (the client asks to be confirmed), not a bad credential.

@@ -4,6 +4,7 @@ import { sessionOps } from "../src/read/ops-sessions.ts";
 import { makeStore } from "../src/read/store.ts";
 import type { Hub } from "../src/sessions/hub.ts";
 import { chatList } from "../src/sessions/others.ts";
+import { RecentChatPreparation } from "../src/store/chat-list-prepare.ts";
 import { Store } from "../src/store/store.ts";
 
 for (const reader of [false, true]) test(`a recent chat list reads details only for its displayed chats (reader ${reader})`, async () => {
@@ -14,7 +15,7 @@ for (const reader of [false, true]) test(`a recent chat list reads details only 
       workspace: "/work", token: "token", createdAt: 1, lastActiveAt: 1 });
     const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person',?,'hello',?)");
     for (let i = 0; i < 250; i++) {
-      const thread = store.openThread("ember", "EMBER", `chat-${i}`, `Title ${i}`, null).id;
+      const thread = store.openThread("ember", "CHAT", `chat-${i}`, `Title ${i}`, null).id;
       store.joinThread(thread, "agent", "ember");
       put.run(thread, `person-${i}`, i);
     }
@@ -23,6 +24,10 @@ for (const reader of [false, true]) test(`a recent chat list reads details only 
     const old = { ...common, threadList: async () => sessionOps.threadList!(plain, {}) } as unknown as Hub;
     const expected = await chatList(old, "agent", { limit: 5 });
     assert.match(expected, /\(245 more; raise limit or narrow query\)/);
+    if (reader) {
+      const prep = new RecentChatPreparation(db);
+      while (!prep.step({ ws: null, home: null }).done) { /* Prepare the reader's global page. */ }
+    }
 
     let visited = 0;
     let details = 0;
@@ -64,7 +69,7 @@ test("recent chat selection keeps workspace rules, ordering and the number left 
     }
     const put = db.prepare("INSERT INTO entries(thread,n,kind,target,author_kind,author,text,at) VALUES (?,?,?,?,?,?,?,?)");
     const make = (name: string, home: string | null, members: string[], created: number, said: number | null) => {
-      const thread = store.openThread("ember", "EMBER", name, name, null).id;
+      const thread = store.openThread("ember", "CHAT", name, name, null).id;
       db.prepare("UPDATE threads SET home = ?, created_at = ? WHERE id = ?").run(home, created, thread);
       for (const member of members) store.joinThread(thread, member, "ember");
       if (said !== null) put.run(thread, 1, "message", null, "person", "person", `words ${name}`, said);
@@ -94,6 +99,8 @@ test("recent chat selection keeps workspace rules, ordering and the number left 
       recentChatList: async (ws: string | null, home: string | null, limit: number) => sessionOps.recentChatList!(read, { ws, home, limit }),
       searchChatList: async (ws: string | null, home: string | null, limit: number, query: string) => sessionOps.searchChatList!(read, { ws, home, limit, query }),
     } as unknown as Hub;
+    const prep = new RecentChatPreparation(db);
+    while (!prep.step({ ws: "here", home: "home" }).done) { /* Prepare the reader's workspace page. */ }
     for (const limit of [1, 2, 5, 100, "not-a-number"]) {
       assert.equal(await chatList(recent, "agent", { limit }), await chatList(old, "agent", { limit }), `limit ${limit}`);
     }

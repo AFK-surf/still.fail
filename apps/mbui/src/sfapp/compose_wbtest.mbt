@@ -1,4 +1,4 @@
-// What is written as the core keeps it (sfbase's compose.mbt, the web's draft.ts): over the fixture core's composers
+// What is written as the core keeps it (sfbase's compose.mbt): over the fixture core's composers
 // (compose_fixture.mbt).
 
 ///|
@@ -13,7 +13,7 @@ test "a draft as the core keeps it: its kept words read back into the field; wha
   @sfbase.writing_text(src, w, "先看第三项")
   let w2 = @sfbase.writing(src, "ws1/st1:s-c1")
   assert_eq(w2.text.get(), "先看第三项")
-  assert_eq(text((src.topic)("composer", { "key": Json::string("ws1/st1:s-c1") }).value, "text"), "先看第三项")
+  assert_eq(text(src.topic("composer", { "key": Json::string("ws1/st1:s-c1") }).get().value, "text"), "先看第三项")
   assert_true(w2.ready.get())
 }
 

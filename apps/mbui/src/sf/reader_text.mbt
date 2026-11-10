@@ -1,10 +1,10 @@
-// The text a reader shows (web/ui viewer/Reader.tsx's Book, lineAt, TextBody; decode.ts): the file decoded here
+// The text a reader shows (lineAt, TextBody): the file decoded here
 // (@hostapi.decode_text: the system's tables, as the web's are the browser's), then read by the page's core as a reader
 // shows it (viewer_host.mbt read_book: `reader.book`, client/core-ts/src/reader.ts: a hard-wrapped novel joined into its
 // paragraphs, its chapters, the lines that are headings; a Markdown file's tree, the same Markdown a chat's words are);
 // here only what is laid out: the text cut into blocks a list lays out one at a time (the web's pieces, laid out only
 // near the screen; a Markdown file's at its tree's blocks), the paragraphs' indent. Where the reader is, is an offset
-// into the text it shows (file.ts Place `at`), as the core's are (UTF-16).
+// into the text it shows, as the core's are (UTF-16).
 
 ///|
 /// How much text one block holds (2–3 phone pages; the web's pieces are 1500, laid out by the browser as they come near:
@@ -16,7 +16,7 @@ let chunk_chars : Int = 1000
 let indent_text : String = "\u{3000}\u{3000}"
 
 ///|
-/// The most of a file the reader holds (Reader.tsx MOST): a bigger one opens with its front, saying so.
+/// The most of a file the reader holds: a bigger one opens with its front, saying so.
 pub let reader_most : Int = 32 * 1024 * 1024
 
 ///|
@@ -46,7 +46,7 @@ fn tx_sub(s : String, from : Int, to : Int) -> String {
 // ── chunking ─────────────────────────────────────────────────────────────
 
 ///|
-/// Cut into contiguous blocks of at most `budget`, at paragraph ends where it can (TextModel.kt chunkText); a longer
+/// Cut into contiguous blocks of at most `budget`, at paragraph ends where it can; a longer
 /// paragraph after punctuation within reach. The blocks and where each starts.
 pub fn chunk_text(text : String, budget? : Int = chunk_chars) -> (Array[String], Array[Int]) {
   let chunks = []
@@ -137,7 +137,7 @@ fn tx_lead(chunk : String, start : Int, end : Int) -> Int {
 }
 
 ///|
-/// A block as it is laid out (TextModel.kt renderChunk): each paragraph's own leading spacing replaced by two
+/// A block as it is laid out: each paragraph's own leading spacing replaced by two
 /// ideographic spaces (not a heading's: `heads`, where the core says the text's heading lines start; the block starts at
 /// `start` of it), a line of spacing alone drawn empty.
 fn render_chunk(chunk : String, start : Int, heads : Map[Int, Bool], indent : Bool) -> String {
@@ -167,7 +167,7 @@ fn render_chunk(chunk : String, start : Int, heads : Map[Int, Bool], indent : Bo
 }
 
 ///|
-/// An offset of the raw block where it is in render_chunk's text (TextModel.kt renderOffset).
+/// An offset of the raw block where it is in render_chunk's text.
 fn render_offset(chunk : String, start : Int, heads : Map[Int, Bool], raw : Int, indent : Bool) -> Int {
   if !indent || raw <= 0 {
     return raw
@@ -207,7 +207,7 @@ pub(all) struct TextMatch {
 } derive(Eq, Debug)
 
 ///|
-/// A book as the reader draws it (Reader.tsx Book): the core's (its id, for a search), the text, its blocks and where
+/// A book as the reader draws it: the core's (its id, for a search), the text, its blocks and where
 /// each starts (a Markdown file's: its tree's nodes too), its length, its chapters (by block and offset in it), the
 /// heading lines' starts, how it was decoded, whether it was cut.
 pub struct Book {

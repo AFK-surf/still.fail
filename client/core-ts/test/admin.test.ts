@@ -33,7 +33,7 @@ const reports = (): J => ({
   feedback: [
     {
       id: "F2", number: 2, channel: "beta", station: { id: "s1", name: "studio" }, workspace: { id: "w1", name: "产品" }, account: null,
-      title: "发送后消息消失", body: "## 步骤\n1. 发一条", area: "web", reporter: "Ann (Slack)", context: { version: "0.1.1212", session: "ember:c-1", extra: { a: 1 } },
+      title: "发送后消息消失", body: "## 步骤\n1. 发一条", area: "web", reporter: "Ann (Slack)", context: { version: "0.1.1212", session: "chat:c-1", extra: { a: 1 } },
       logs: "line 1\nline 2", status: "new", created_at: NOW - 60, updated_at: NOW - 60,
     },
     {
@@ -158,7 +158,7 @@ test("a_bug_reports_page_has_all_of_it_in_text_too", () => {
   assert.ok(context.some(([k, v]: J) => k === "version" && v === "0.1.1212") && context.some(([k, v]: J) => k === "extra" && v === '{"a":1}'), JSON.stringify(context));
   const text: string = page.text;
   assert.ok(text.startsWith("FB-2 发送后消息消失\n"), text);
-  for (const part of ["渠道: 测试版 (beta)", "Station: studio (s1)", "Workspace: 产品 (w1)", "反馈人: Ann (Slack)", "## 步骤", "session: ember:c-1", "```\nline 1\nline 2\n```"]) assert.ok(text.includes(part), `${part} in ${text}`);
+  for (const part of ["渠道: 测试版 (beta)", "Station: studio (s1)", "Workspace: 产品 (w1)", "反馈人: Ann (Slack)", "## 步骤", "session: chat:c-1", "```\nline 1\nline 2\n```"]) assert.ok(text.includes(part), `${part} in ${text}`);
   page = feedback("F1", reports());
   assert.deepEqual([page.logs, page.context.length, page.account.title], [null, 0, "ann@x.io"]);
   assert.ok(!page.text.includes("## 日志"));
@@ -205,6 +205,40 @@ test("the_relays_page_says_each_relays_load_now_and_over_the_range", () => {
   assert.equal(w.range, "week");
   assert.equal(w.relays[0].charts[0].series[0].values.length, 168);
   assert.ok(w.relays[0].ticks.every((tick: J) => /^\d+\/\d+$/.test(tick.label)));
+});
+
+test("the_relays_page_has_a_card_of_the_directorys_own_load_its_calls_an_hour_and_the_sockets_still_on_it", () => {
+  const now = NOW - (NOW % 3600);
+  const hours = (f: (i: number) => number) => Array.from({ length: 168 }, (_, i) => f(i));
+  const directory = {
+    at: now,
+    calls: { start: now - 167 * 3600, step: 3600, families: { workspaces: hours((i) => i), sockets: hours(() => 2), push: hours(() => 0) } },
+    held: { devices: 3, stations: 0 }, live: { accounts: 40, stations: 7 }, waiting: 0, bytes: 5 * 1024 ** 2,
+  };
+  const card = relays({ relays: [], directory }, null, now, 480).relays.at(-1)!;
+  assert.deepEqual([card.name, card.state], ["目录对象 primary", "online"]);
+  assert.deepEqual(card.numbers, [
+    { label: "近一小时调用", value: String(167 + 2) },
+    { label: "仍在它上面的连接", value: "设备 3 · 站点 0", tone: "amber" },
+    { label: "持有连接的对象", value: "账号 40 · 站点 7" },
+    { label: "待重试的通知", value: "0" },
+    { label: "存储", value: "5.0 MB" },
+  ]);
+  // All of its calls first, then a chart for each family that served some, the most first (one that served nothing
+  // has none): a line each, so each can be read. The day is the last 24 hours, marked every six.
+  assert.deepEqual(card.charts.map((c: J) => [c.id, c.label, c.peak, c.series.length, c.series[0].values.length, c.series[0].values.at(-1)]), [
+    ["calls", "每小时调用", "峰值 169", 1, 24, 169],
+    ["workspaces", "工作区", "峰值 167", 1, 24, 167],
+    ["sockets", "连接", "峰值 2", 1, 24, 2],
+  ]);
+  assert.equal(card.ticks.length, 4);
+  const week = relays({ relays: [], directory }, "week", now, 480).relays.at(-1)!;
+  assert.deepEqual(week.charts.map((c: J) => c.series[0].values.length), [168, 168, 168]);
+  // The most in what is shown comes first, whatever the order they are counted in.
+  const busy = { ...directory, calls: { ...directory.calls, families: { workspaces: hours(() => 1), sockets: hours(() => 2) } } };
+  assert.deepEqual(relays({ relays: [], directory: busy }, null, now, 480).relays.at(-1)!.charts.map((c: J) => c.id), ["calls", "sockets", "workspaces"]);
+  // A still.fail cloud from before says nothing of it: no card.
+  assert.equal(relays({ relays: [] }, null, now, 480).relays.length, 0);
 });
 
 test("a_bug_making_a_view_is_thrown_for_the_store_to_report_and_a_core_error_is_the_views", () => {

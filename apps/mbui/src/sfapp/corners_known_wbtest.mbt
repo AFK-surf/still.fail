@@ -1,4 +1,4 @@
-// The corner rule (mbui's Tester::corner_faults, still.fail docs/ui-panels.md「所有带圆角的东西」) as each screen keeps it
+// The corner rule (mbui's Tester::corner_faults, mbui's ui/corners.mbt) as each screen keeps it
 // now: how many faults it still has, the bar they may only fall from (screen_check fails on one more, and on one less
 // until the bar is lowered here). A screen not listed has none.
 
@@ -7,5 +7,81 @@ let corners_known : Map[String, Int] = Map::new()
 
 ///|
 /// Every screen in every window (corners_wbtest.mbt), by window, language and screen: the bar it may only fall from. A
-/// screen not listed has none; none is listed now.
-let corners_everywhere_known : Map[String, Int] = Map::new()
+/// screen not listed has none. Listed: the rail on the tape (corners_tape_rail).
+let corners_everywhere_known : Map[String, Int] = {
+  let known = Map::new()
+  for win in ["touch", "desk-win"] {
+    for lang in ["zh", "en"] {
+      for mode in corners_tape_rail {
+        known["\{win}-\{lang} \{mode}"] = 1
+      }
+    }
+  }
+  known
+}
+
+///|
+/// The screens whose rail stands on the tape (its 600 wide windows, a tablet's and Windows'), one fault each: the
+/// ground of its first place, 30 square and 15 round, in the corner of the sidebar's panel (42 round): 13 in from its
+/// left, as the rail's places stand, and 27 under its top, that place's middle on the line of the sidebar's first row
+/// beside it, 新建对话's (pengxiao, 2026-10-25). The tablet is kept so for now (the user, 2026-11-09, moving the Mac window's up into its
+/// corner alone). On main the rail was an old view's island, measured against the island's own square box, so the rule
+/// never saw it; as nodes of the window's tree it is measured against the panel.
+let corners_tape_rail : Array[String] = [
+  "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "rail-menu", "place", "switcher",
+  "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
+  "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose",
+  "chat-download", "chat-failed", "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine",
+  "chat-history-side", "chat-info", "chat-job", "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters",
+  "chat-letters-info", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-things",
+  "chat-things-side", "chat-info-pulls", "chat-link-menu", "chat-loading", "chat-login", "chat-long", "chat-md",
+  "chat-model-pop", "chat-model-accounts", "chat-need", "chat-peek", "chat-pick", "chat-preview-apk",
+  "chat-preview-audio", "chat-preview-code", "chat-preview-csv", "chat-preview-html", "chat-preview-image",
+  "chat-preview-md", "chat-preview-none", "chat-preview-pdf", "chat-preview-step", "chat-preview-swipe",
+  "chat-preview-video", "chat-publish", "chat-quote", "chat-screens", "chat-sending", "chat-service-side",
+  "chat-station-file", "chat-station-files", "chat-station-ref", "chat-station-sheet", "chat-tabs-side",
+  "chat-update", "chat-vault-typed", "chat-viz", "chat-working", "archived", "history", "history-details", "drive",
+  "drive-roots", "drive-download", "drive-empty", "drive-loading", "drive-sub", "drive-upload", "files",
+  "files-add-folder", "files-clash", "files-columns", "files-list", "files-preview", "files-split",
+  "files-transfers", "files-tree", "place-stations", "place-profiles", "reader", "reader-bars", "reader-contents",
+  "reader-layout", "reader-md", "newchat", "newchat-files", "newchat-lend", "share-card", "share-card-dark",
+  "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
+  "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized",
+  "service-stopped", "share-in", "share-in-files", "share-in-stations", "lock-security", "lock-upgrade", "screen-agent-driving",
+  "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
+  "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
+  "screen-full-tools", "screen-gone", "screen-live", "screen-login-fill", "screen-login-pick",
+  "screen-not-drivable", "screen-outdated", "screen-read-only", "screen-reconnecting", "screen-trackpad",
+  "screen-trackpad-command", "settings-home", "settings-appearance", "settings-me", "settings-me-reading",
+  "settings-workspace", "settings-security", "settings-vault", "settings-vault-items", "settings-vault-item",
+  "settings-stations", "settings-station", "settings-station-offline", "settings-station-env",
+  "settings-station-processes", "settings-station-mark", "settings-station-lower", "settings-station-versions",
+  "settings-station-updated",
+  "settings-station-network", "settings-stations-add", "settings-stations-existing", "settings-stations-command",
+  "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing",
+  "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long",
+  "settings-profiles", "settings-profiles-monthly", "settings-profiles-fable", "settings-profiles-own3",
+  "settings-profiles-week-fable", "settings-profile", "settings-profile-fable", "settings-profile-own3",
+  "settings-profile-week-fable", "settings-profile-quota",
+  "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed",
+  "settings-profile-quota-failed", "settings-profile-blocked", "settings-profile-signin", "settings-profile-key",
+  "settings-new-profile", "settings-connects", "settings-connect", "settings-connect-menu", "settings-connect-mode",
+  "settings-connect-run", "settings-new-connect", "settings-new-connect-platform", "settings-new-connect-scan",
+  "settings-new-connect-app", "settings-slack-app", "settings-memory", "settings-memory-doc", "settings-usage",
+  "settings-archive", "settings-kept", "settings-kept-many", "settings-vault-off", "settings-vault-plain",
+  "settings-vault-words", "settings-vault-add", "settings-vault-editor", "settings-vault-recover",
+  "settings-lock-prompt", "settings-add-people", "settings-workspace-mark", "settings-local-fonts",
+  "settings-policy", "settings-policy-text", "settings-policy-option", "settings-security-join",
+  "settings-security-off", "settings-run", "settings-run-models", "settings-run-accounts", "settings-fonts",
+  "settings-fonts-code", "settings-decisions", "settings-completion", "settings-bars", "settings-about",
+  "settings-changelog", "settings-prices", "settings-notify-off", "settings-notify-denied", "share-card-poster",
+  "share-card-receipt", "share-card-senren-adv", "share-card-senren-affection", "share-card-senren-cg",
+  "share-card-senren-chat", "share-card-senren-chibi", "share-card-senren-ciallo", "share-card-senren-class",
+  "share-card-senren-ema", "share-card-senren-gacha", "share-card-senren-gahou-koharu",
+  "share-card-senren-gahou-lena", "share-card-senren-gahou-mako", "share-card-senren-gahou-murasame",
+  "share-card-senren-gahou-roka", "share-card-senren-gahou-roka2", "share-card-senren-inumimi",
+  "share-card-senren-kagura", "share-card-senren-ledger", "share-card-senren-map", "share-card-senren-menu",
+  "share-card-senren-night", "share-card-senren-ninja", "share-card-senren-omikuji", "share-card-senren-parfait",
+  "share-card-senren-party", "share-card-senren-photo", "share-card-senren-ryokan", "share-card-senren-staff",
+  "share-card-senren-sword", "share-card-senren-title", "share-card-terminal",
+]

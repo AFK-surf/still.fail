@@ -34,6 +34,9 @@ case "${1:-run}" in
     "$D/chk" contained $O/contained.png
     MBUI_DL_FROM="$PWD/$O/partial-a.dl" MBUI_DL="$PWD/$O/partial-b.dl" MBUI_DL_PNG="$PWD/$O/partial.png" ./$EXE
     render_partial linux
+    MBUI_DL="$PWD/$O/strips.dl" MBUI_DL_PNG="$PWD/$O/strips.png" ./$EXE
+    MBUI_STRIPS=0 MBUI_DL="$PWD/$O/strips.dl" MBUI_DL_PNG="$PWD/$O/strips.whole.png" ./$EXE
+    render_strips linux
     for k in matte-fill matte-fill-reference matte-contain matte-contain-reference matte-inset matte-inset-reference; do
       MBUI_DL="$PWD/$O/$k.dl" MBUI_DL_PNG="$PWD/$O/$k.png" ./$EXE
     done

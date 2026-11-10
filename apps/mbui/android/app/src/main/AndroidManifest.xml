@@ -52,12 +52,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- A browser login's page, once the browser has come back, links here: <package>://back (the build's own package) -->
+            <!-- The build's own scheme, its package: still.fail cloud's sign-in comes back on <package>://auth/callback (mbui's
+                 WebAuth, the core's auth_redirect), and a browser login's page, once the browser has come back, links
+                 to <package>://back -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="${applicationId}" android:host="back" />
+                <data android:scheme="${applicationId}" android:host="auth" />
             </intent-filter>
             <!-- still.fail's links, as still.fail's Android app takes them (apps/android/app/src/main/AndroidManifest.xml):
                  an item's link (a session's link in Slack), verified by still.fail cloud's assetlinks.json (served on both
@@ -142,19 +145,6 @@
         <!-- This phone's adb lent to a station's agents (AdbShare.java): held up meanwhile, saying so. -->
         <service android:name=".AdbShareService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Lends this phone's own adb (Wireless debugging) to the user's coding agents over the app's connection, while the user shares it." />
-        </service>
-        <!-- The app's keyboard, for typing in any app (mbui's Keyboard.java; src/keyboard): in a process of its own, the
-             keyboard's program apart from the app's (StillfailApp starts nothing of the app's there). -->
-        <service
-            android:name=".Keyboard"
-            android:label="${appLabel}"
-            android:exported="true"
-            android:process=":keyboard"
-            android:permission="android.permission.BIND_INPUT_METHOD">
-            <intent-filter>
-                <action android:name="android.view.InputMethod" />
-            </intent-filter>
-            <meta-data android:name="android.view.im" android:resource="@xml/keyboard" />
         </service>
         <!-- Reads the Wireless debugging pairing dialog's code off Settings while 共享调试 pairs (AdbCodeReader.java), once
              the person turns it on in Accessibility; only the system binds it. -->

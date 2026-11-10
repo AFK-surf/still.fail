@@ -1,0 +1,199 @@
+# arch/next's compiled units and core bytecode kept where every branch's preview can take them. A branch's push reads
+# its own caches and main's alone (GitHub's), never arch/next's: off arch/next its first push compiled near all the
+# app's units (Linux 1046 of 1232, Windows 1056 of 1238) and made the core's bytecode again, and was stopped by the 5
+# minutes (#4141, #4143, #4146, #4167). So after each preview run of arch/next, this builds its commit on main's ref and
+# keeps what it compiled as `a-` (as mbui-check's own, #4006); a branch's preview takes main's, arch/next's and its own
+# together. It builds and keeps caches, nothing else: no package, no put, no feed. The older `a-` ones of a kind are
+# deleted as cache-prune deletes any replaced one (the newest of each kind on each ref kept).
+name: preview-arch
+on:
+  workflow_run:
+    workflows: [preview]
+    types: [completed]
+    branches: [arch/next]
+# (one at a time, the one running let finish: a newer one waits, and one newer still takes its place. Cancelled as each
+# merge came, arch/next's merges minutes apart and a run 3-4 minutes long, none of four in a row finished, 2026-11-05
+# (42064784077, 42064968220, 42065096144): a branch took an `a-` some merges old and compiled 92 of 631 units again)
+concurrency:
+  group: preview-arch
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  linux:
+    if: github.repository == 'AFK-surf/still.fail'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, os: ubuntu-24.04 }
+          - { arch: arm64, os: ubuntu-24.04-arm }
+    name: linux (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    env:
+      MBUI_FRESH: 1
+      MBUI_CACHE: ${{ github.workspace }}/.ci/release
+      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+    steps:
+      - uses: actions/checkout@v5
+        # (arch/next's commit, on main's ref)
+        with: { ref: "${{ github.event.workflow_run.head_sha }}", fetch-depth: 0, filter: "blob:none" }
+      - uses: ./.github/actions/apt
+        with:
+          name: mbui-linux-${{ matrix.arch }}
+          packages: libgtk-4-dev libepoxy-dev libsoup-3.0-dev libsecret-1-dev clang
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/mbui-moonbit
+      # (its own last over main's newest: as the branches' preview takes them)
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-linux-${{ matrix.arch }}-m-${{ github.event.workflow_run.head_sha }}
+          restore-keys: mbui-linux-${{ matrix.arch }}-m-
+      - run: mkdir -p .ci && mv .ci "$RUNNER_TEMP/ci-main"
+      - uses: actions/cache/restore@v4
+        id: own
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-linux-${{ matrix.arch }}-a-${{ github.event.workflow_run.head_sha }}
+          restore-keys: mbui-linux-${{ matrix.arch }}-a-
+      - run: |
+          mkdir -p .ci && cp -a -n "$RUNNER_TEMP/ci-main/." .ci/ && rm -rf "$RUNNER_TEMP/ci-main"
+          echo "units: $(find .ci/mbc-store -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l)"
+      - name: Tools (the Linux engine and shell prebuilt, the core's packages)
+        run: |
+          sh apps/mbui/scripts/mbui.sh > /dev/null
+          node scripts/native.ts fetch engine linux-${{ matrix.arch }}
+          node scripts/native.ts fetch shell linux-${{ matrix.arch }}
+          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          touch "$RUNNER_TEMP/start"
+      # (its own 3 minutes inside the job's 5, as the preview's: stopped, what it compiled is kept below and the next run
+      # goes on from it)
+      - name: Build (APP=stillfail)
+        id: build
+        timeout-minutes: 3
+        run: bash apps/mbui/scripts/linux.sh build
+      - name: The caches' keys, by what they hold
+        if: always() && steps.build.outcome != 'skipped'
+        run: |
+          [ "${{ steps.build.outcome }}" != success ] || sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
+          find .ci/mbc-store -name '*.lock' -delete 2>/dev/null || true
+          echo "STORE_KEY=mbui-linux-${{ matrix.arch }}-a-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
+      - if: always() && env.STORE_KEY != '' && env.STORE_KEY != steps.own.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: ${{ env.STORE_KEY }}
+
+  windows:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: windows-2025
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    env:
+      MSYS: winsymlinks:nativestrict
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
+    steps:
+      - shell: pwsh
+        run: Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE, $env:RUNNER_TEMP, $env:RUNNER_TOOL_CACHE, $env:LOCALAPPDATA
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+        with: { ref: "${{ github.event.workflow_run.head_sha }}", fetch-depth: 0, filter: "blob:none" }
+      - uses: ./.github/actions/node
+      - uses: ./.github/actions/msvc
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Tools (MSVC's link.exe for cargo, which Git Bash's /usr/bin/link shadows)
+        run: echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(which cl)")/link.exe")" >> "$GITHUB_ENV"
+      - name: The Windows natives' keys
+        id: native-keys
+        run: echo "key=natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/stillfail-native
+          key: ${{ steps.native-keys.outputs.key }}
+      - name: The Windows engine and shell, prebuilt
+        run: |
+          node scripts/native.ts fetch shell win32-x64
+          node scripts/native.ts fetch engine win32-x64
+      # (its own build last kept, else main's, under its own units)
+      - uses: actions/cache/restore@v4
+        id: build-cache
+        with:
+          path: |
+            apps/mbui/mbui/_build
+            apps/mbui/mbui/out
+          key: mbui-win-build-a-${{ github.event.workflow_run.head_sha }}
+          restore-keys: |
+            mbui-win-build-a-
+            mbui-win-build-mono-
+      - uses: actions/cache/restore@v4
+        id: own
+        with:
+          path: .ci/mbc-store
+          key: mbui-win-store-a-${{ github.event.workflow_run.head_sha }}
+          restore-keys: mbui-win-store-a-
+      - uses: actions/cache/restore@v4
+        id: hbc
+        with:
+          path: .ci/hbc
+          key: mbui-win-hbc-a-${{ github.event.workflow_run.head_sha }}
+          restore-keys: mbui-win-hbc-a-
+      - uses: ./.github/actions/setup
+      - name: The core's packages
+        run: (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+      - name: The core's bytecode (Hermes)
+        run: bash apps/mbui/scripts/win.sh core | tee "$RUNNER_TEMP/core.log"
+      - run: touch "$RUNNER_TEMP/start"
+      - name: Build (APP=stillfail)
+        id: build
+        timeout-minutes: 3
+        run: MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build
+      - name: The caches' keys, by what they hold
+        if: always() && steps.build.outcome != 'skipped'
+        run: |
+          [ "${{ steps.build.outcome }}" != success ] || sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
+          find .ci/mbc-store -name '*.lock' -delete 2>/dev/null || true
+          echo "STORE_KEY=mbui-win-store-a-$(sh apps/mbui/scripts/held.sh .ci/mbc-store)" >> "$GITHUB_ENV"
+          k=$(grep -o 'kept as [0-9a-f]*' "$RUNNER_TEMP/core.log" | head -1 | cut -d' ' -f3)
+          if [ -n "$k" ] && [ -f ".ci/hbc/$k.hbc" ]; then
+            find .ci/hbc -type f ! -name "$k.hbc" -delete
+            echo "HBC_A_KEY=mbui-win-hbc-a-$k" >> "$GITHUB_ENV"
+          fi
+      - if: always() && env.STORE_KEY != '' && env.STORE_KEY != steps.own.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: .ci/mbc-store
+          key: ${{ env.STORE_KEY }}
+      # arch/next's build itself (moon's _build, the split C and its objects, the .exe), by its C as preview's main build
+      # is kept: a branch off arch/next took main's, and moon made the C of every package arch/next had changed again,
+      # some 70 s of the 139 its build took after the units came from `a-` (42066369298, 2026-11-05); preview.yml's
+      # (arch/next's) takes this one before main's
+      - name: arch/next's build, by its C
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          d=$(sh apps/mbui/scripts/mbui.sh)
+          c=$(sha256sum "$d/out/win/app/_build/native/release/build/stillfail/stillfail/stillfail.c" | cut -c1-16)
+          echo "BUILD_A_KEY=mbui-win-build-a-$c" >> "$GITHUB_ENV"
+      - if: always() && env.BUILD_A_KEY != '' && env.BUILD_A_KEY != steps.build-cache.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/mbui/mbui/_build
+            apps/mbui/mbui/out
+          key: ${{ env.BUILD_A_KEY }}
+      - if: always() && env.HBC_A_KEY != '' && env.HBC_A_KEY != steps.hbc.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: .ci/hbc
+          key: ${{ env.HBC_A_KEY }}

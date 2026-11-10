@@ -1,4 +1,4 @@
-// A simulator's logs and apps (screens/sim-debug.ts, docs/remote-screens.md "Simulators") on a real Mac with Xcode: a
+// A simulator's logs and apps (screens/sim-debug.ts) on a real Mac with Xcode: a
 // simulator of this test's own made and booted (deleted afterwards), a small app built for it that logs twice a second,
 // installed, found, started again, and its lines read as a person's 日志 reads them. Real time, a real device: a side test.
 import assert from "node:assert/strict";
@@ -108,8 +108,12 @@ test("a simulator's app found, started again and its log read", { skip: !hasSimc
 
     // Started again: still running, the log going on.
     assert.equal(await debug.relaunch(APP), true);
-    await sleep(2000);
-    assert.ok(debug.logs(after).lines.length > 0, "its log goes on after the restart");
+    let more = 0;
+    for (const asked = Date.now(); more === 0 && Date.now() - asked < 60_000;) {
+      await sleep(500);
+      more = debug.logs(after).lines.length;
+    }
+    assert.ok(more > 0, "its log goes on after the restart");
   } finally {
     debug.close();
     try {

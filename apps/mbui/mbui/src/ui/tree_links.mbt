@@ -10,8 +10,6 @@
 /// moves onto one and off it.
 pub struct RunsLinks {
   pointed : @signals.Signal[Int]
-  /// where the piece of line the pointer is on is drawn (in the window: x, y, w, h), as it moves onto one; None off them
-  pointed_at : @signals.Signal[(Double, Double, Double, Double)?]
 }
 
 ///|
@@ -27,7 +25,6 @@ pub fn runs_links(
   shown? : (Array[(String, String, Int)]) -> Unit,
 ) -> RunsLinks {
   let pointed = @signals.signal(-1)
-  let pointed_at : @signals.Signal[(Double, Double, Double, Double)?] = @signals.signal(None, same=fn(a, b) { a == b })
   let held = @signals.signal(-1)
   v.runs_pressed(By(fn() { held.get() })) |> ignore
   // (where its links' pieces are as it is laid out now, in its own terms: its words and how they are set as it holds
@@ -108,7 +105,7 @@ pub fn runs_links(
           // (a mouse's click let go on the link it went down on, however long held: as a tap)
           if pointing() is Mouse && !was_held.val {
             match piece_at(d.x, d.y) {
-              Some(p) if p.0 == @signals.untracked(fn() { held.get() }) => tap(href(p.0))
+              Some(p) if p.0 == held.untracked() => tap(href(p.0))
               _ => ()
             }
           }
@@ -134,52 +131,35 @@ pub fn runs_links(
   }
   // (the pointer onto a link and off it, as it moves)
   let point = fn() {
-    let (k, at) = match v.pointer_here() {
+    let k = match v.pointer_here() {
       Some((x, y)) =>
         match piece_at(x, y) {
-          Some(p) => (p.0, Some(in_window(p)))
-          None => (-1, None)
+          Some(p) => p.0
+          None => -1
         }
-      None => (-1, None)
+      None => -1
     }
     pointed.set(k)
-    pointed_at.set(at)
   }
   v.on_pointer_moved(point) |> ignore
-  // (the pointer's shape over it: the hand over a link, the I-beam over the rest of its words where they are picked with
-  // the pointer (words_picked), as an old view's paragraph's (Ctx::rich))
-  v.cursor(By(fn() {
-    if pointed.get() >= 0 {
-      Some(Hand)
-    } else if v.lent(words_picks) == Some(true) {
-      Some(IBeam)
-    } else {
-      None
-    }
-  }))
-  |> ignore
   // (what changes which piece is under a pointer that stays where it is: what lies over it come or gone (whether it is
-  // pointed at), where the pointer is in it as it or what holds it moves or grows (View::pointer_here_told), how its
-  // words are set and how big it is laid out; worked out again as each is told, at the change's end)
+  // pointed at), it or what holds it moved, grown or its words set again: which one the tree works out as it places
+  // things, View::pointer_piece; told as that changes)
   v.reacts(
     fn() {
-      // (only while it is pointed at: none of its links pointed at otherwise, nothing else of it followed, a node not
-      // pointed at following no pointer's place)
+      // (only while it is pointed at: none of its links pointed at otherwise)
       if v.pointed() {
-        // (its words measured again in the faces or at the size of words the window has now: Tree::words_again)
-        Some((v.pointer_here_told(), v.words_said(), v.laid_size_told(), v.words_redone()))
+        v.pointer_piece(fn(x, y) {
+          match piece_at(x, y) {
+            Some(p) => p.0
+            None => -1
+          }
+        })
       } else {
-        None
+        -1
       }
     },
-    fn(now) {
-      if now is Some(_) {
-        point()
-      } else {
-        pointed.set(-1)
-        pointed_at.set(None)
-      }
-    },
+    fn(k) { pointed.set(k) },
   )
   // (each link told as the runs are: its way, its words, its first run)
   match shown {
@@ -205,5 +185,5 @@ pub fn runs_links(
       )
     None => ()
   }
-  { pointed, pointed_at }
+  { pointed, }
 }

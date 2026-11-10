@@ -1,4 +1,4 @@
-// A service's page speaking with the app (ember apps/android chat/screens/PreviewWeb.kt PreviewLink, page.js): page.js
+// A service's page speaking with the app (page.js): page.js
 // first in each of its pages (/_stillfail/page.js, its tag put in each of the service's HTML pages), behind a script of
 // the app's that gives it there what the Android app's JavascriptInterface (StillFailPreviewNative) gives it: its
 // WebSockets carried through the core (preview.socket), its requests' bodies left here before they go (stash), its top
@@ -54,7 +54,7 @@ pub let page_bridge_js : String =
   #|})();
 
 ///|
-/// page.js as served: the language said first (PreviewWeb.kt pageScript), behind the app's StillFailPreviewNative;
+/// page.js as served: the language said first, behind the app's StillFailPreviewNative;
 /// `fetches` whether the top page's fetch() comes here on its port (not where the host keeps the cookies: the app has
 /// none of them to send along).
 pub fn page_script_served(fetches : Bool) -> String {
@@ -219,7 +219,12 @@ pub fn link_js(f : String, args : Array[Json]) -> String {
 pub fn link_open(src : Source, p : ServicePage, site : @ui.NativeView, sid : String, path : String, protocols : String) -> Unit {
   let l = p.link
   let event = fn(kind : String, args : Array[Json]) {
-    site.script(link_js("__stillfailSocketEvent", [Json::string(sid), Json::string(kind)] + args))
+    let said = [Json::string(sid), Json::string(kind)] + args
+    if site.framed() {
+      site.tell_frame(Json::array(said).stringify())
+    } else {
+      site.script(link_js("__stillfailSocketEvent", said))
+    }
   }
   let headers = if protocols != "" {
     [Json::array([Json::string("sec-websocket-protocol"), Json::string(protocols)])]
@@ -292,7 +297,7 @@ pub fn link_send(src : Source, l : PageLink, sid : String, message : Map[String,
 }
 
 ///|
-/// What the page says on its port (PreviewWeb.kt fetchSaid): `go` (a fetch), `stop` (one it gave up); anything else let
+/// What the page says on its port: `go` (a fetch), `stop` (one it gave up); anything else let
 /// go. Each fetch asks the service at the page's port only, as the page's other requests do; its answer goes back on
 /// the port as it comes: its head, each piece of its body (base64), its end or why it broke off.
 pub fn link_port(src : Source, p : ServicePage, site : @ui.NativeView, m : Json) -> Unit {
@@ -464,11 +469,11 @@ pub fn status_reason(status : Int) -> String {
 // ── a page's HTML with page.js's tag in it ─
 
 ///|
-/// The tag put in each of the service's HTML pages (PreviewWeb.kt WithTag.TAG).
+/// The tag put in each of the service's HTML pages.
 pub let page_js_tag : String = "<script src=\"/_stillfail/page.js\"></script>"
 
 ///|
-/// A page's body on its way with page.js's tag in it (PreviewWeb.kt WithTag, as the web's service worker puts it):
+/// A page's body on its way with page.js's tag in it (as the web's service worker puts it):
 /// after the <head> tag, else after <html>, else after the doctype, else first; its first bytes wait until <head> or
 /// <html> is there (or 4 KB, or its end), so it never goes before a doctype cut in two.
 pub(all) struct Tagging {

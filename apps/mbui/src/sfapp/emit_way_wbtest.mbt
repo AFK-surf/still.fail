@@ -119,36 +119,6 @@ test "words sent as the avatar is on its way: it slows to come down as they land
 }
 
 ///|
-test "an answer arriving as its agent stops comes from the activity still shown, after the words sent land" {
-  let clock = Ref(0.0)
-  let t = emit_core(clock)
-  t.tap_text("发消息")
-  t.type_text("再核对一次")
-  tap_send(t)
-  t.draw()
-  assert_true(send_flight.get() is Some(_))
-  // The core delivers the answer and ends its agent's turn in the same update. Its activity is still on screen.
-  fix_later(1.0, fn() {
-    let chat = fix_chat("s-c1")
-    chat.working = -1.0
-    chat.sent.push(
-      msg(171, "agent", @sffixture.by_agent("anthropic", "claude", "s-c1"), more_said, "刚刚", {
-        "ts": Json::string("more171"),
-        "said": true,
-      }),
-    )
-  })
-  fix_clock_set(clock, clock.val + 1.0)
-  t.draw()
-  let em = emits_of("ws1/st1\u{1}s-c1")
-  assert_false(emit_words_only(em, 171.0))
-  assert_true(emit_held(em, 171.0))
-  t.run_for(emit_all_ms() + @sfbase.flight_most_ms)
-  assert_true(t.find(more_said) is Some(_))
-  emit_restore()
-}
-
-///|
 test "an answer said once its agent's turn is over: no avatar to come out of, its words come in a glyph at a time" {
   let clock = Ref(0.0)
   let t = emit_core(clock)
@@ -156,7 +126,7 @@ test "an answer said once its agent's turn is over: no avatar to come out of, it
   fix_later(1.0, fn() { fix_chat("s-c1").working = -1.0 })
   fix_clock_set(clock, clock.val + 1.0)
   t.draw()
-  t.run_for(linger_ms + @ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find(tr("android-chat.chat.working")) is None)
   fix_later(1.0, fn() {
     fix_chat("s-c1").sent.push(

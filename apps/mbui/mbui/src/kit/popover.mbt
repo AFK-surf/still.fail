@@ -77,7 +77,8 @@ pub let tip_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(120.
 
 ///|
 /// `key`'s popover (see the file's head), `open` or not, by the trigger `anchor` (its id; or by the rectangle `at`, a
-/// Radix Popover.Anchor apart from its trigger), on its `side` (lined up `along` it, `offset` away), named `label` for
+/// Radix Popover.Anchor apart from its trigger; its trigger a node of the window's tree, `anchor_node`, a press there
+/// none outside it: Ctx::overlay's), on its `side` (lined up `along` it, `offset` away), named `label` for
 /// the semantics tree; `modal`: the page under it takes no press and Tab stays in it; not `focus`: the focus stays
 /// where it is as it opens (Radix's onOpenAutoFocus prevented: what a field offers as it is typed in, the field keeping
 /// the keys). It comes by `enter` and goes by `exit`. Whether it is open now.
@@ -94,13 +95,14 @@ pub fn popover(
   focus? : Bool = true,
   look? : (@ui.Ctx, PopState, () -> Unit) -> Unit = popover_look,
   at? : (Double, Double, Double, Double),
+  anchor_node? : @view.View,
   enter? : @motion.Trans = pop_in,
   exit? : @motion.Trans = pop_out,
   body : () -> Unit,
 ) -> @ui.Changed[Bool] {
   let mut now = open
   if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter~, exit~) is Some(shows) {
-    let o = c.overlay(key, modal~, anchor~, initial_focus=if focus { -1 } else { 0 }, inert=!open, fn() {
+    let o = c.overlay(key, modal~, anchor~, anchor_node?, initial_focus=if focus { -1 } else { 0 }, inert=!open, fn() {
       beside(c, key, anchor, side, along, offset, shows, Dialog, label, look, body, at?)
     })
     if o.dismissed is Some(_) {
@@ -123,7 +125,8 @@ pub let hover_card_close_ms : Double = 300.0
 /// trigger `open_delay` ms (its button up: one held, dragging something across it, rests on nothing), closed `close_delay` ms after it has left both, and by Escape and a press outside. A finger
 /// rests on nothing: it holds the trigger (long_press_ms) to open it, or with `tap` (a trigger that does nothing else
 /// when tapped) taps it, and it stays until a press outside or another tap on the trigger. `held`: kept open by the app
-/// while it is (what was pressed in it opened something beside it, which the pointer goes on to). Whether it is open.
+/// while it is (what was pressed in it opened something beside it, which the pointer goes on to). `along_offset`: moved
+/// that much further along its side (Ctx::place). Whether it is open.
 pub fn hover_card(
   c : @ui.Ctx,
   key : String,
@@ -132,6 +135,7 @@ pub fn hover_card(
   close_delay? : Double = hover_card_close_ms,
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Middle,
+  along_offset? : Double = 0.0,
   offset? : Double = 6.0,
   tap? : Bool = false,
   held? : Bool = false,
@@ -142,12 +146,14 @@ pub fn hover_card(
 ) -> Bool {
   install()
   let id = c.id(key)
+  // (a finger's tap on a `tap` trigger opens it or shuts it as it is let go, beside what the trigger's own press does:
+  // Ctx::on_press_beside)
+  if tap && @ui.pointing() is Finger {
+    c.on_press_beside(trigger, fn() { kit.val.opens[id] = !kit.val.opens.get(id).unwrap_or(false) })
+  }
   let was = kit.val.opens.get(id).unwrap_or(false)
   let mut open = match @ui.pointing() {
-    Finger => {
-      let tapped = tap && c.clicked(trigger)
-      if was { !tapped } else { tapped || c.held_long(trigger) }
-    }
+    Finger => was || c.held_long(trigger)
     Mouse => {
       let on_trigger = c.hovered(trigger)
       let on_card = was && (c.hovered(c.id(key + "/panel")) || c.pointer_in_overlay(id) || c.keyboard_in_overlay(id))
@@ -183,7 +189,7 @@ pub fn hover_card(
   }
   if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter~, exit~) is Some(shows) {
     let o = c.overlay(key, anchor=trigger, initial_focus=0, inert=!open, fn() {
-      beside(c, key, trigger, side, along, offset, shows, Group, "", look, body)
+      beside(c, key, trigger, side, along, offset, shows, Group, "", look, body, along_offset~)
     })
     if o.dismissed is Some(_) && !(held && was) {
       open = false
@@ -234,7 +240,7 @@ pub fn tip_node_owner() -> TipOwner {
 /// Give the window's tooltip slot to `owner` as it is newly shown. The views and nodes that read it follow the signal.
 pub fn tip_claim(owner : TipOwner) -> Unit {
   install()
-  if @signals.untracked(fn() { kit.val.tip_owner.get() }) != Some(owner) {
+  if kit.val.tip_owner.untracked() != Some(owner) {
     kit.val.tip_owner.set(Some(owner))
   }
 }
@@ -247,10 +253,10 @@ pub fn tip_owns(owner : TipOwner) -> Bool {
 }
 
 ///|
-/// An old view's last opening causes and the build that still held it (kept parts mark it used as they are put back).
+/// An old view's last opening causes, kept while what builds the tooltip is built (forgotten as it is no longer:
+/// @ui.Ctx::on_unbuilt; come again, each of them is a new cause).
 priv struct TipReady {
   mut causes : (Bool, Bool, Bool, Bool)
-  mut build : Int
 }
 
 ///|
@@ -327,15 +333,14 @@ pub fn tooltip(
   // every build while it remains eligible, so the displaced tip cannot immediately take the slot back.
   let ready = (!shut && focused, !shut && rested, held, shown)
   let state = match kit.val.tip_ready.get(id) {
-    Some(s) if s.build >= c.build_number() - 1 => s
-    _ => {
-      let s = { causes: (false, false, false, false), build: c.build_number() }
+    Some(s) => s
+    None => {
+      let s = { causes: (false, false, false, false) }
       kit.val.tip_ready[id] = s
       s
     }
   }
-  state.build = c.build_number()
-  @ui.built_used(fn() { state.build = @ui.current().build_number() })
+  ignore(c.on_unbuilt(unbuilt_id(id, 1), fn() { kit.val.tip_ready.remove(id) }))
   let (old_focus, old_rest, old_held, old_shown) = state.causes
   let (by_focus, by_rest, by_hand, by_app) = ready
   if (by_focus && !old_focus) || (by_rest && !old_rest) || (by_hand && !old_held) || (by_app && !old_shown) {
@@ -380,6 +385,7 @@ fn beside(
   look : (@ui.Ctx, PopState, () -> Unit) -> Unit,
   body : () -> Unit,
   at? : (Double, Double, Double, Double),
+  along_offset? : Double = 0.0,
 ) -> Unit {
   let pid = c.id(key + "/panel")
   let ar = match at {
@@ -395,7 +401,7 @@ fn beside(
   let went = went_side(c, pid, ar, side, along, offset)
   let i = c.box(id=pid, fn() { look(c, { side: went, room: c.place_most(), panel: pid }, body) })
   c.place_by_size(i, fn(pw, ph) {
-    let (x, y, _) = c.place(ar, pw, ph, side~, along~, offset~)
+    let (x, y, _) = c.place(ar, pw, ph, side~, along~, offset~, along_offset~)
     (x, y)
   })
   c.semantics(i, role, label~)
@@ -410,21 +416,20 @@ fn beside(
 }
 
 ///|
-/// Where the trigger `anchor` of panel `pid` was drawn last frame (Ctx::rect_of), else, while the panel was put by it
-/// the frame before, where it was then (a tip going out as its trigger goes, a row's button pressed away); else
+/// Where the trigger `anchor` of panel `pid` was drawn last frame (Ctx::rect_of), else, while the panel has been built
+/// since it was put by it, where it was then (a tip going out as its trigger goes, a row's button pressed away); else
 /// nowhere yet.
 fn anchor_of(c : @ui.Ctx, pid : Int, anchor : Int) -> (Double, Double, Double, Double)? {
-  let frame = c.frame_number()
   let r = match c.rect_of(anchor) {
     Some(r) => Some(r)
-    None =>
-      match kit.val.anchors.get(pid) {
-        Some((r, at)) if at == frame || at == frame - 1 => Some(r)
-        _ => None
-      }
+    None => kit.val.anchors.get(pid)
   }
   match r {
-    Some(r) => kit.val.anchors[pid] = (r, frame)
+    Some(r) => {
+      kit.val.anchors[pid] = r
+      // (let go with the panel: no longer built, its trigger's place is none of its)
+      ignore(c.on_unbuilt(unbuilt_id(pid, 2), fn() { kit.val.anchors.remove(pid) }))
+    }
     None => ()
   }
   r

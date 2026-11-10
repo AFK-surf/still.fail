@@ -1,4 +1,4 @@
-// An agent's line coming in, each turn of its agent's (Chat.kt Activity): its room opens under its words, carrying
+// An agent's line coming in, each turn of its agent's: its room opens under its words, carrying
 // what is above it up, its second turn as its first. Its key is its agent's, the same each turn: gone from the chat,
 // it is new to the list again.
 
@@ -8,7 +8,7 @@
 fn activity_opening(t : @ui.Tester, words : String) -> (Double, Double, Double) raise {
   t.run_for(fix_deliver_ms)
   // (in the list as it came: its room opening from then, Ctx::row_size)
-  let at = reading_of("ws1/st1\u{1}s-c1").rows.came("act:s-c1").unwrap_or(@double.infinity)
+  let at = turns_of("ws1/st1\u{1}s-c1").start_of("act:s-c1")
   assert_true(at >= 0.0 && at < @double.infinity, msg="\{at} \{t.time()}")
   t.run_for(dmax(at - t.time(), 0.0))
   let (_, from) = t.drawn_of(words).unwrap()
@@ -24,8 +24,8 @@ test "an agent's line comes in each turn as in its first: its room opening, carr
   let t = linger_core()
   let (from1, mid1, end1) = activity_opening(t, "看一下列表")
   assert_true(mid1 < from1 - 1.0 && mid1 > end1 + 1.0, msg="\{from1} \{mid1} \{end1}")
-  // its answer out of its avatar, its turn over, its line stayed its moment and gone
-  t.run_for(fix_answer_ms + fix_turn_end_ms + emit_all_ms() + linger_ms)
+  // its answer out of its avatar, its turn over, its line gone as the answer came into the list
+  t.run_for(fix_answer_ms + fix_turn_end_ms + emit_all_ms() + @ui.move_most_ms)
   assert_true(t.find(tr("android-chat.chat.working")) is None)
   // words sent again: its agent at work again, its line coming in as it did the first time
   t.tap_text("发消息")
@@ -40,7 +40,6 @@ test "an agent's line comes in each turn as in its first: its room opening, carr
 ///|
 test "a finger holding the list holds nothing back: the agent's line comes in in its turn (the list's glide alone waits)" {
   let t = linger_core()
-  let sent = t.time()
   // the words landed, a finger down on the list, pulled up a little at its end and held there
   t.run_for(flight_carry_ms)
   t.touch(0, 195.0, 400.0)
@@ -49,9 +48,8 @@ test "a finger holding the list holds nothing back: the agent's line comes in in
   t.frame()
   t.touch(1, 195.0, 376.0)
   t.frame()
-  // (to when they are delivered, the finger still held: the line comes in then, its room opening from then)
-  t.run_for(sent + fix_deliver_ms - t.time())
-  let at = reading_of("ws1/st1\u{1}s-c1").rows.came("act:s-c1").unwrap_or(@double.infinity)
+  t.run_for(fix_deliver_ms)
+  let at = turns_of("ws1/st1\u{1}s-c1").start_of("act:s-c1")
   assert_true(at >= 0.0 && at < @double.infinity, msg="held back by the finger: \{at}")
   t.run_for(dmax(at - t.time(), 0.0) + working_turn_ms)
   assert_true(t.find(tr("android-chat.chat.working")) is Some(_))

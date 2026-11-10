@@ -93,6 +93,8 @@ test "a long profile check keeps its refresh button beside it" {
 ///|
 test "a long chat and activity time both have room on their row" {
   let t = screen_in("settings-connect", corner_windows[1], "zh", said=true)
+  // (its recent chats last on the page: scrolled to)
+  t.scroll_all_to_end() |> ignore
   let chat = t.lines_of("Slack 里问的报销流程 — 后面")
   let time = t.lines_of("昨天 — 后面")
   assert_eq(chat.length(), 1, msg="\{chat}")
@@ -113,4 +115,11 @@ test "a short status stays on one line beside a chat title" {
     let t = screen_in("settings-vault-item", corner_windows[0], lang)
     assert_eq(t.lines_of(status), [status], msg=lang)
   }
+}
+
+///|
+test "a station this core cannot read says so, and shows no reading as on its way" {
+  let t = screen_in("settings-stations-incompatible", corner_windows[0], "zh")
+  assert_true(shows(t, "版本不兼容，需要更新"))
+  assert_true(shows(t, "Maple"), msg="the other stations stay")
 }

@@ -1,9 +1,9 @@
 // Which versions this station and the machine's runtimes (Claude Code, Codex) are, whether newer ones are out, and
-// updating them from the pages (the Rust station's updates.rs, whose rules this keeps):
+// updating them from the pages (whose rules this keeps):
 // - The station: its release says its version in BUILD (`0.1.<n>`); the latest is what still.fail cloud serves as
 //   releases/station.json, or on the test channel (`updateChannel: "beta"` in config.json; a release installed from the
 //   beta and not told otherwise is on it) releases/station-beta.json, only as its signature verifies (signed.ts,
-//   docs/release-signing.md: a feed that does not is no newer release). Switched back from the beta, the older stable
+//   scripts/release-sign.ts: a feed that does not is no newer release). Switched back from the beta, the older stable
 //   release is offered as going back (`downgrade`), only then. It is updated as `stillfail update` does (release.ts):
 //   by the installer this release carries, told what the new one must hash to, run apart from the station; only a
 //   release the installer put in <data>/app is (the desktop app's comes with the desktop app, a clone's with the clone). With `autoUpdate: true` it does so by itself once the
@@ -12,13 +12,11 @@
 //   the way each was installed.
 //   Cursor is no command: its SDK's package, in the station's own npm prefix (agents/cursor.ts), its version the package's.
 //   Running agents go on with what they started with; the next process starts the new one.
-// - Software wired in after (`add`): the packages of the modules the station installs itself (modules/packages.ts),
-//   read when the rest is, a line each after the others'.
 //
-// The TS release (docs/station-ts-native.md) is updated by the same files as the Rust one was:
+// The TS release is updated by the same files as the Rust one was:
 // run/update.started (this side's, so the process that runs after a handover or restart follows the update to its
 // end), run/update.step (download | handoff | drain | restart, the installer's), run/update.log and run/update.exit,
-// and the installer is given STILLFAIL_CHANNEL, STILLFAIL_DATA and EMBER_DATA as it was (and now what release.ts
+// and the installer is given STILLFAIL_CHANNEL and STILLFAIL_DATA as it was (and now what release.ts
 // gives it). Where it
 // differs (see also the report in the station-ts work):
 // - The release is `--app` (Paths.app), not two up from dist/admin; BUILD and CHANNEL are read from it the same way.
@@ -85,25 +83,11 @@ export type SoftwareVersion = {
   checkedAt?: number;
 };
 
-/// Software read and updated with the station's own and the runtimes, wired in after the updates are made (the packages
-/// of the modules the station installs itself: modules/packages.ts): its lines follow the others'.
-export type MoreSoftware = {
-  /// Reads what is out (and installs what it takes by itself).
-  read(): Promise<void>;
-  /// Its lines, in `lang` (when what is out was read is the updates').
-  get(lang: Lang): SoftwareVersion[];
-  /// Whether `id` is one of its lines; updating one, as someone asked.
-  has(id: string): boolean;
-  update(id: string, lang: Lang): Promise<void>;
-  /// Hears each change of what `get` says; gives the function that stops it.
-  changes(listener: () => void): () => void;
-};
-
 /// How long things take, given so tests can be quick.
 export type Timing = {
-  /// How often what is out is read again, and while the station updates itself.
+  /// How often the runtimes' latest versions (other registries': npm, Devin's manifest) are read again. The station's
+  /// own release is read as still.fail cloud says one is out (`check`), never on a timer.
   every: number;
-  autoEvery: number;
   /// How long a runtime's update may take; the station's installer.
   runtimeLimit: number;
   stationLimit: number;
@@ -115,7 +99,6 @@ export type Timing = {
 
 export const TIMING: Timing = {
   every: 6 * 3600_000,
-  autoEvery: 10 * 60_000,
   runtimeLimit: 10 * 60_000,
   stationLimit: 20 * 60_000,
   doneShown: 10 * 60_000,
@@ -251,8 +234,10 @@ export class Updates {
   private items: Record<Kind, Item> = { station: empty(), claude: empty(), codex: empty(), dsh: empty(), grok: empty(), cursor: empty(), devin: empty(), hermes: empty(), agy: empty() };
   private checkedAt: number | null = null;
   private checking: Promise<void> | null = null;
+  /// Version refusals from several conversations join one update of the machine's Codex.
+  private codexRecovery: Promise<void> | null = null;
+  private codexUpdateSerial = 0;
   private listeners = new Set<() => void>();
-  private more: MoreSoftware[] = [];
   /// The version the station's last update in this process went for: updating by itself, not tried again.
   tried: string | null = null;
   private lastCheck: number | null = null;
@@ -304,18 +289,6 @@ export class Updates {
   /// What to do when a runtime was installed or updated from here.
   onRuntimeChanged(f: (kind: RuntimeKind, installed: boolean, replaced: boolean) => void) {
     this.runtimeChanged = f;
-  }
-
-  /// Software read and updated with the rest from now on; gives the function that leaves it out again.
-  add(more: MoreSoftware): () => void {
-    this.more.push(more);
-    const unlisten = more.changes(() => this.changed());
-    this.changed();
-    return () => {
-      unlisten();
-      this.more = this.more.filter((m) => m !== more);
-      this.changed();
-    };
   }
 
   /// A runtime a session found not on PATH: read again when the pages still say it is there (removed since the last
@@ -398,17 +371,19 @@ export class Updates {
   private schedule() {
     if (this.closed || !this.started) return;
     if (this.tick) void Effect.runFork(Fiber.interrupt(this.tick));
-    const due = this.lastCheck === null ? 0 : Math.max(0, this.lastCheck + (this.auto() ? this.timing.autoEvery : this.timing.every) - this.fibers.now());
+    const due = this.lastCheck === null ? 0 : Math.max(0, this.lastCheck + this.timing.every - this.fibers.now());
     this.tick = this.fibers.fork(Effect.sleep(due).pipe(Effect.andThen(Effect.promise(() => this.look()))));
   }
 
   private async look() {
     this.tick = null;
     try {
-      const every = this.auto() ? this.timing.autoEvery : this.timing.every;
-      // A reading under way (asked from a page) is waited for, not looked at again and again.
+      const every = this.timing.every;
+      // A reading under way (asked from a page) is waited for, not looked at again and again. The first reads the
+      // station's release too; those after, the runtimes'.
       if (this.checking) await this.checking;
-      else if (this.lastCheck === null || this.fibers.now() - this.lastCheck >= every) await this.check();
+      else if (this.lastCheck === null) await this.check();
+      else if (this.fibers.now() - this.lastCheck >= every) await this.check(false);
       this.autoUpdate("a newer release read");
     } catch (e) {
       // Not read: tried again when the next reading is due, not at once.
@@ -470,22 +445,22 @@ export class Updates {
       for (const k of Object.keys(line) as (keyof SoftwareVersion)[]) if (line[k] === undefined) delete line[k];
       return line;
     });
-    const more = this.more.flatMap((m) => m.get(lang)).map((line) => (this.checkedAt === null ? line : { ...line, checkedAt: this.checkedAt }));
-    return [...own, ...more];
+    return own;
   }
 
   /// Reads every version and what is out, now (once at a time: asked while a reading goes on, it is that reading);
-  /// a newer release of the station's channel is installed when it updates itself.
-  check(): Promise<void> {
+  /// a newer release of the station's channel is installed when it updates itself. `station`: its own release read
+  /// too (at the start, asked from a page, a release said to be out), else the runtimes' only.
+  check(station = true): Promise<void> {
     if (this.checking) return Promise.resolve();
     forgetShellPaths();
-    this.checking = this.read().finally(() => (this.checking = null));
+    this.checking = this.read(station).finally(() => (this.checking = null));
     return this.checking;
   }
 
-  private async read() {
-    const more = Promise.all(this.more.map((m) => m.read().catch((e) => log.warn("updates", "software beside the station's not read", { error: (e as Error).message }))));
-    let [station, ...runtimes] = await Promise.all([this.readStation(this.channel()), ...RUNTIMES.map((kind) => this.readRuntime(kind))]);
+  private async read(withStation: boolean) {
+    const held = this.items.station;
+    let [station, ...runtimes] = await Promise.all([withStation ? this.readStation(this.channel()) : Promise.resolve(held), ...RUNTIMES.map((kind) => this.readRuntime(kind))]);
     // Put on another channel while it was read: read from that one.
     while (station.channel !== this.channel()) station = await this.readStation(this.channel());
     for (const [kind, read] of [["station", station] as const, ...RUNTIMES.map((kind, i) => [kind, runtimes[i]!] as const)]) {
@@ -495,7 +470,6 @@ export class Updates {
       if (item.updating === null) this.items[kind] = { ...read, failed: item.failed, done: item.done };
       else if (!item.installed) this.items[kind] = { ...read, updating: item.updating, progress: item.progress, step: item.step, percent: item.percent };
     }
-    await more;
     this.checkedAt = this.fibers.now();
     this.lastCheck = this.fibers.now();
     this.changed();
@@ -668,11 +642,10 @@ export class Updates {
 
   // ---- updating ----
 
-  /// Updates one (`station`, `claude`, `codex`, `dsh`, or software added: `module:<id>`), or installs a runtime the machine has not: answers once it has
+  /// Updates one (`station`, `claude`, `codex`, `dsh`), or installs a runtime the machine has not: answers once it has
   /// started; how it goes shows in `get`. Refusals are said in `lang`.
   async update(id: string, lang: Lang = stationLang()): Promise<void> {
-    const more = this.more.find((m) => m.has(id));
-    if (more !== undefined) return more.update(id, lang);
+    if (this.closed) throw new Error("updates are closed");
     const kind = KINDS.find((k) => k === id);
     if (kind === undefined) throw refused(lang, "station.updates.noSuchItem", { id });
     const item = this.items[kind];
@@ -687,6 +660,7 @@ export class Updates {
     if (this.items.station.updating !== null) throw refused(lang, item.installed ? "station.updates.stationBusyUpdate" : "station.updates.stationBusyInstall", { name });
     const how = item.how;
     if (how === null) throw refused(lang, "station.updates.notHere", { name });
+    if (kind === "codex") this.codexUpdateSerial++;
     this.set(kind, (i) => {
       i.updating = this.fibers.now();
       i.progress = null;
@@ -695,6 +669,53 @@ export class Updates {
       i.done = null;
     });
     this.spawn(() => this.updateRuntime(kind, how));
+  }
+
+  /// Updates the same installation and through the same path as the software page, or joins its update. A stale
+  /// app-server may have failed after someone already updated the binary; in that case no second install is needed.
+  async updateOldCodex(runningVersion: string | null, lang: Lang = stationLang()): Promise<void> {
+    if (this.codexRecovery === null) {
+      const work = this.updateOldCodexOnce(runningVersion, lang);
+      this.codexRecovery = work;
+      void work.finally(() => { if (this.codexRecovery === work) this.codexRecovery = null; }).catch(() => {});
+    }
+    await this.codexRecovery;
+    const actual = this.items.codex.version;
+    if (actual === null) throw refused(lang, "station.notice.codexVersionUnknown");
+    if (runningVersion !== null && !newer(runningVersion, actual)) throw refused(lang, "station.notice.codexNoNewVersion");
+  }
+
+  private async updateOldCodexOnce(runningVersion: string | null, lang: Lang) {
+    if (this.items.codex.updating !== null) return this.waitForCodexUpdate(lang);
+    // The page's last check may be hours old. Do not overwrite an update that starts while this reading is in flight.
+    const serial = this.codexUpdateSerial;
+    const read = await this.readRuntime("codex");
+    if (this.items.codex.updating !== null) return this.waitForCodexUpdate(lang);
+    if (serial === this.codexUpdateSerial) this.set("codex", (item) => Object.assign(item, read));
+    const item = this.items.codex;
+    if (!item.installed) throw refused(lang, "station.updates.notHere", { name: "Codex" });
+    if (item.note) throw new Error(say(item.note, lang));
+    if (runningVersion !== null && item.version !== null && newer(runningVersion, item.version)) return;
+    const before = item.version;
+    await this.update("codex", lang);
+    await this.waitForCodexUpdate(lang);
+    const after = this.items.codex.version;
+    if (after === null) throw refused(lang, "station.notice.codexVersionUnknown");
+    if (before !== null && !newer(before, after)) throw refused(lang, "station.notice.codexNoNewVersion");
+  }
+
+  private waitForCodexUpdate(lang: Lang): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const inspect = () => {
+        const item = this.items.codex;
+        if (item.updating !== null) return;
+        unlisten();
+        if (item.failed) reject(new Error(say(item.failed, lang)));
+        else resolve();
+      };
+      const unlisten = this.changes(inspect);
+      inspect();
+    });
   }
 
   /// A person chose to replace an incomplete Codex with an npm installation. Unknown installations are never changed
@@ -792,10 +813,22 @@ export class Updates {
       failed = e instanceof NotFinished ? { key: "station.updates.timedOut" } : e instanceof Failed ? e.words : { text: (e as Error).message };
     }
     if (failed) log.warn("updates", "the runtime not updated", { runtime: kind, failed: say(failed, "en") });
-    let read = await this.readRuntime(kind);
+    let read: Item;
+    try {
+      read = await this.readRuntime(kind);
+    } catch (error) {
+      this.set(kind, (item) => { item.updating = null; item.progress = null; item.percent = null; item.failed = failed ?? { text: (error as Error).message }; });
+      this.autoUpdate("a runtime update ended without a version reading");
+      return;
+    }
     if (failed === null && !read.installed && (await linkBesideNpm(kind, how, this.env).catch(() => false))) {
       log.info("updates", "the runtime npm installed off PATH linked beside npm", { runtime: kind, npm: how.program });
-      read = await this.readRuntime(kind);
+      try { read = await this.readRuntime(kind); }
+      catch (error) {
+        this.set(kind, (item) => { item.updating = null; item.progress = null; item.percent = null; item.failed = { text: (error as Error).message }; });
+        this.autoUpdate("a runtime update ended without a version reading");
+        return;
+      }
     }
     // Done without an error but not there, or not newer: installed somewhere the station's PATH does not find.
     if (failed === null) {
@@ -1036,8 +1069,7 @@ export class Updates {
     }
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(this.env)) if (v !== undefined) env[k] = v;
-    // Under both names, as installers from before the rename read the old one.
-    Object.assign(env, { STILLFAIL_DATA: this.data, EMBER_DATA: this.data }, plan.env);
+    Object.assign(env, { STILLFAIL_DATA: this.data }, plan.env);
     const ok = await startInstaller(plan.script, runDir, env, this.app);
     if (!ok) {
       Object.assign(station, before);
@@ -1137,7 +1169,9 @@ export class Updates {
       end();
       if (this.following === end) this.following = null;
       for (const f of ["update.started", "update.step"]) rmSync(join(runDir, f), { force: true });
-      log.info("updates", "the station's update ended", { failed: failed !== null });
+      // With what the installer said last when it failed (as a runtime's failure is said): the station's own pages
+      // are where else it shows, and only to whoever looks at them.
+      log.info("updates", "the station's update ended", failed !== null ? { failed: true, why: say(failed, "en") } : { failed: false });
       this.set("station", (i) => {
         i.updating = null;
         i.step = null;

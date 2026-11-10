@@ -69,7 +69,7 @@ sync() {
   # macOS link flags (the core's Apple shell among them) stay as they are
 }
 
-# the photos app's pictures (see pictures/android.mbt): copied into the
+# the photos app's pictures: copied into the
 # app's files, and one served over http to the emulator's 10.0.2.2 (on 5590:
 # the emulator itself takes 5580 and 5581)
 photos() {
@@ -236,9 +236,11 @@ case "${1:-build}" in
       echo "creating $AVD from $PKG"
       echo no | $(ls -d $SDK/cmdline-tools/*/bin | tail -1)/avdmanager create avd -n $AVD -k "$PKG" -d pixel_7 >/dev/null
     fi
+    # (EMU_FLAGS: the emulator's own besides, still.fail's idle memory's: its data wiped, a small data partition)
     if ! $ADB devices | grep -q "^$SERIAL"; then
+      mkdir -p $OUT
       nohup $SDK/emulator/emulator -avd $AVD -port $PORT -no-window -no-audio -no-boot-anim \
-        -gpu swiftshader_indirect -no-snapshot >$OUT/emu.log 2>&1 &
+        -gpu swiftshader_indirect -no-snapshot ${EMU_FLAGS:-} >$OUT/emu.log 2>&1 &
     fi
     $ADB -s $SERIAL wait-for-device
     # booted: init's own word as the system sets sys.boot_completed (its actions for it, on the log from the boot's
@@ -254,6 +256,12 @@ case "${1:-build}" in
     # only when it changed)
     [ "${INSTALL:-1}" = 0 ] || $ADB -s $SERIAL install -r ${APK:-$APK_FILE} >/dev/null
     $ADB -s $SERIAL shell am force-stop $APP_ID
+    # (a phone takes an intent's script and env only in a debug build the shell opened them in: MainActivity.testHooks)
+    case "$($ADB -s $SERIAL shell getprop ro.hardware | tr -d '\r')" in
+      ranchu | goldfish) ;;
+      *) [ "$($ADB -s $SERIAL shell getprop debug.mbui.hooks | tr -d '\r')" = 1 ] \
+           || echo "android.sh: $SERIAL is a phone: its app takes no script or env (adb shell setprop debug.mbui.hooks 1 opens them in a debug build)" >&2 ;;
+    esac
     if [ $PKG = photos ]; then photos; fi
     if [ -n "${2:-}" ]; then
       $ADB -s $SERIAL shell am start -n $APP_ID/dev.mbui.MainActivity --es script "$2" ${ENV:+--es env "'$ENV'"} >/dev/null

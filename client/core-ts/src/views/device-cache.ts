@@ -322,5 +322,12 @@ export function install(inner: Inner): void {
   const questions = new Asking(inner);
   inner.stations.linkChanged = (station) => questions.linkChanged(station);
   inner.stations.chatOpened = (station) => questions.chatOpened(station);
-  inner.runner.fork(Effect.forever(Effect.map(inner.wakes.next, () => questions.woken())));
+  inner.runner.fork(
+    Effect.gen(function* () {
+      for (;;) {
+        yield* inner.wakes.next;
+        questions.woken();
+      }
+    }),
+  );
 }

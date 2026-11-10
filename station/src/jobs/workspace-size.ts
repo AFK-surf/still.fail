@@ -8,11 +8,32 @@ import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { measuredUpTo } from "../sessions/footprint.ts";
+import type { Store } from "../store/store.ts";
 
 export const GIB = 1024 ** 3;
 export const DEFAULT_LIMIT = 10 * GIB;
 export const CHECK_MS = 5 * 60_000;
 export const REMIND_MS = 60 * 60_000;
+
+/// Recheck the chat when its workspace reading comes back: its turn or jobs may have ended meanwhile.
+export function workspaceWorking(store: Pick<Store, "getSession" | "runningJobsAtLeast" | "lastTurn">,
+  processState: (key: string) => string, key: string): boolean {
+  const row = store.getSession(key);
+  if (row === null) return false;
+  return row.archivedAt === null && (row.running || processState(key) === "running"
+    || store.runningJobsAtLeast(key, 1) || store.lastTurn(key)?.declared === "waiting");
+}
+
+/// The live sessions whose workspaces should be measured this round.
+export function workspaceSessionsToMeasure(store: Pick<Store, "liveSessions" | "runningJobSessions" | "waitingOf">,
+  processState: (key: string) => string): ReturnType<Store["liveSessions"]> {
+  const live = store.liveSessions();
+  const idle = live.filter((s) => s.archivedAt === null && !s.running && processState(s.key) !== "running");
+  const jobsRunning = store.runningJobSessions(idle.map((s) => s.key));
+  const waiting = store.waitingOf(idle.filter((s) => !jobsRunning.has(s.key)).map((s) => s.key));
+  return live.filter((s) => s.archivedAt === null && (s.running || processState(s.key) === "running"
+    || jobsRunning.has(s.key) || waiting.has(s.key)));
+}
 
 export type WorkspaceSize = { bytes: number; complete: boolean };
 type Measurement = { size: WorkspaceSize | null; at: number; pending: boolean; limit: number };

@@ -22,6 +22,10 @@ pub struct ReactiveNode {
   priv update : ((ReactiveNode) -> Bool)?
   /// an effect's cleanup, as its fn returned it (EffectNode.cleanup)
   priv mut cleanup : (() -> Unit)?
+  /// not alien-signals': whether what it reads, or it, holds something outside while it is read (a resource told as
+  /// its last reader leaves: Signal::on_unwatched, computed_scoped), once it has; so what reads it does (holds_up). For
+  /// rest: what holds nothing keeps what it read at rest
+  priv mut holds : Bool
 }
 
 ///|
@@ -63,11 +67,11 @@ struct Link {
 /// The frames checkDirty and propagate stack up as they go down (index.ts's Stack, a list of them): an array each,
 /// kept, where index.ts makes a frame an object, under reference counting a malloc and a free a level. A call works
 /// above where it found its array's end and leaves it there (what checkDirty updates may check again, inside).
-let check_frames : Array[Link] = []
+let check_frames : Array[Link?] = []
 
 ///|
 /// (propagate's frames that would hold no link, which it would only step over, left out)
-let propagate_frames : Array[Link] = []
+let propagate_frames : Array[Link?] = []
 
 ///|
 /// ReactiveFlags.
@@ -98,11 +102,15 @@ fn ReactiveNode::new(
   own? : Own = NoOwn,
   update? : (ReactiveNode) -> Bool,
 ) -> ReactiveNode {
-  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None }
+  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None, holds: false }
 }
 
 ///|
 fn link(dep : ReactiveNode, sub : ReactiveNode, version : Int) -> Unit {
+  // (not alien-signals': what reads what holds, holds)
+  if dep.holds && !sub.holds {
+    holds_up(sub)
+  }
   let prev_dep = sub.deps_tail
   if prev_dep is Some(p) && physical_equal(p.dep, dep) {
     return
@@ -134,6 +142,19 @@ fn link(dep : ReactiveNode, sub : ReactiveNode, version : Int) -> Unit {
   match prev_sub {
     Some(p) => p.next_sub = Some(new_link)
     None => dep.subs = Some(new_link)
+  }
+}
+
+///|
+/// Not alien-signals': `node` holds (ReactiveNode's `holds`), and so does what reads it, and what reads that.
+fn holds_up(node : ReactiveNode) -> Unit {
+  node.holds = true
+  let mut l = node.subs
+  while l is Some(link) {
+    if !link.sub.holds {
+      holds_up(link.sub)
+    }
+    l = link.next_sub
   }
 }
 
@@ -203,7 +224,7 @@ fn propagate(start : Link, inner_write : Bool) -> Unit {
           let next_sub = sub_subs.next_sub
           if next_sub is Some(_) {
             if next is Some(n) {
-              propagate_frames.push(n)
+              propagate_frames.push(Some(n))
             }
             next = next_sub
           }
@@ -221,7 +242,10 @@ fn propagate(start : Link, inner_write : Bool) -> Unit {
       None => ()
     }
     if propagate_frames.length() > base {
-      let l = propagate_frames.pop().unwrap()
+      let i = propagate_frames.length() - 1
+      let l = propagate_frames[i].unwrap()
+      propagate_frames[i] = None
+      propagate_frames.pop() |> ignore
       link = l
       next = l.next_sub
       continue
@@ -252,7 +276,7 @@ fn check_dirty(start : Link, start_sub : ReactiveNode) -> Bool {
         dirty = true
       }
     } else if (flags & (MUTABLE | PENDING)) == (MUTABLE | PENDING) {
-      check_frames.push(link)
+      check_frames.push(Some(link))
       link = dep.deps.unwrap()
       sub = dep
       check_depth += 1
@@ -270,10 +294,17 @@ fn check_dirty(start : Link, start_sub : ReactiveNode) -> Bool {
     let mut to_top = false
     while check_depth > 0 {
       check_depth -= 1
-      link = check_frames.pop().unwrap()
+      let i = check_frames.length() - 1
+      link = check_frames[i].unwrap()
+      check_frames[i] = None
+      check_frames.pop() |> ignore
       if dirty {
         let subs = sub.subs
-        if update(sub) {
+        // The update below may have disconnected this entire computed chain. Do not run a computed that no longer
+        // has a reader just because check_dirty still has one of its old links on the traversal stack.
+        if subs is None {
+          dirty = false
+        } else if update(sub) {
           if subs is Some(subs) && subs.next_sub is Some(_) {
             shallow_propagate(subs)
           }

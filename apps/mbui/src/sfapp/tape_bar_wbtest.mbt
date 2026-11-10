@@ -9,7 +9,7 @@
 /// core's prefs saying the words' language `lang` as it is now (none: the device's, Chinese).
 fn tape_bar_in(
   mode : String,
-  lang : Ref[String],
+  lang : @signals.Signal[String],
   platform? : Int = 2,
   w? : Double = 600.0,
   h? : Double = 900.0,
@@ -23,16 +23,16 @@ fn tape_bar_in(
         let base = wrap(fixture_app(mode))
         let s : Source = {
           ..base,
-          topic: fn(name, params) {
-            let got = (base.topic)(name, params)
-            if name != "prefs" || lang.val == "" {
+          topic_read: fn(name, params) {
+            let got = base.topic(name, params).get().snapshot()
+            if name != "prefs" || lang.get() == "" {
               return got
             }
             let o = match got.value {
               Some(Object(m)) => m.copy()
               _ => {}
             }
-            o["lang"] = Json::string(lang.val)
+            o["lang"] = Json::string(lang.get())
             { ..got, value: Some(Json::object(o)) }
           },
         }
@@ -96,14 +96,16 @@ fn bar_words_old(t : @ui.Tester, words : String) -> Array[(Double, Double)] {
 
 ///|
 test "on the tape a settings page's bar is the tree's: its title the same node as the core's language changes it; one with a head of its own, what it is of" {
-  let lang = Ref("")
+  let lang = @signals.signal("")
   let t = tape_bar_in("settings-appearance", lang)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   let zh = bar_words_drawn(t, "外观")
   assert_eq(zh.length(), 1, msg="外观 in the bar: \{zh.length()}")
   // (the old view's none: one bar)
   assert_eq(bar_words_old(t, "外观").length(), 0)
-  lang.val = "en"
+  lang.set("en")
+  // The made-up prefs notify readers as the core would when the language changes.
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   let en = bar_words_drawn(t, "Appearance")
   assert_eq(en.length(), 1, msg="Appearance in the bar: \{en.length()}")
@@ -111,7 +113,7 @@ test "on the tape a settings page's bar is the tree's: its title the same node a
   assert_eq(bar_words_drawn(t, "外观").length(), 0)
   // a head of its own: the bar says what it is of
   for page in [("settings-station", "Station"), ("settings-profile", "Profile")] {
-    let t = tape_bar_in(page.0, Ref(""))
+    let t = tape_bar_in(page.0, @signals.signal(""))
     assert_eq(bar_words_drawn(t, page.1).length(), 1, msg="\{page.0}")
     assert_eq(bar_words_old(t, page.1).length(), 0, msg="\{page.0}")
   }
@@ -128,11 +130,11 @@ test "on the tape 用量 made once: its bar the tree's, its title where a chat's
   defer { @sfbase.share_card_of.val = share_card_before }
   @sfbase.share_card_of.val = fn(_, w) { shared.push(w.id) }
   let src : Ref[Source?] = Ref(None)
-  let t = tape_bar_in("settings-usage", Ref(""), wrap=fn(base) {
+  let t = tape_bar_in("settings-usage", @signals.signal(""), wrap=fn(base) {
     let s : Source = {
       ..base,
-      topic: fn(name, params) {
-        let got = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let got = base.topic(name, params).get().snapshot()
         if name == "workspaces" && !listed.get() {
           return { ..got, value: Some(Json::array([])) }
         }
@@ -182,7 +184,7 @@ fn about_shows() -> Bool {
 
 ///|
 test "on the tape a finger's tap on the bar's mark shows what the page is for till the next tap: on it, on the bar, on the page; held, dragged or called off it stays" {
-  let t = tape_bar_in("settings-local-station", Ref(""))
+  let t = tape_bar_in("settings-local-station", @signals.signal(""))
   let marks = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "说明" && !s.hidden })
   assert_eq(marks.length(), 1)
   let (mx, my, mw, mh) = marks[0].rect
@@ -239,7 +241,7 @@ test "on the tape a finger's tap on the bar's mark shows what the page is for ti
   let press = fn() {
     let id = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "说明" && !s.hidden })[0].id
     t.advance(between_frames_ms)
-    @ui.current().ask_action(id, Activate)
+    t.ctx().ask_action(id, Activate)
     t.run_for(@ui.move_most_ms)
   }
   press()
@@ -333,7 +335,7 @@ test "on the tape back in a page's bar pressed, or a swipe from its edge over th
 
 ///|
 test "on the tape a page's bar read out while its panel is the one in use, none of it while another is" {
-  let t = tape_bar_in("settings-local-station", Ref(""))
+  let t = tape_bar_in("settings-local-station", @signals.signal(""))
   let said = fn() {
     t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "说明" && !s.hidden }).length()
   }
@@ -383,7 +385,7 @@ fn page_words_made(t : @ui.Tester, words : String) -> Int {
 test "on the tape 关于 made once under the tape's bar, its page narrow or wider: its rows the tree's, its title the bar's alone" {
   // (600 across: its page 530, narrow; 839: wider than a narrow page is, laid out wide)
   for win in [600.0, 839.0] {
-    let t = tape_bar_in("settings-about", Ref(""), w=win, h=900.0)
+    let t = tape_bar_in("settings-about", @signals.signal(""), w=win, h=900.0)
     assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
     assert_eq(page_words_made(t, "更新日志"), 1, msg="\{win}: its rows the tree's")
     assert_eq(bar_words_drawn(t, "关于").length(), 1, msg="\{win}: the bar's title")
@@ -393,7 +395,7 @@ test "on the tape 关于 made once under the tape's bar, its page narrow or wide
 
 ///|
 test "on the tape 关于 as the window is made wider and narrower, its page told nothing: the same nodes while its arrangement stays, laid out again only as it changes (narrow, wide, narrow)" {
-  let t = tape_bar_in("settings-about", Ref(""), w=600.0, h=900.0)
+  let t = tape_bar_in("settings-about", @signals.signal(""), w=600.0, h=900.0)
   let rows = fn() { @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == "更新日志" }).map(fn(d) { d.id }) }
   assert_eq(page_words_made(t, "更新日志"), 1)
   let narrow = rows()
@@ -421,7 +423,7 @@ test "on the tape 关于 as the window is made wider and narrower, its page told
 ///|
 test "on the tape 关于 made once scrolled: what it holds goes under nothing of the bar, cut at the bar's foot" {
   // (a window too short for all it holds, its words twice as large: it scrolls)
-  let t = tape_bar_in("settings-about", Ref(""), w=600.0, h=420.0)
+  let t = tape_bar_in("settings-about", @signals.signal(""), w=600.0, h=420.0)
   t.set_font_scale(2.0)
   t.run_for(@ui.move_most_ms)
   guard tape_page_panel(t) is Some(p) else { fail("no page") }
@@ -456,8 +458,8 @@ test "on the tape 关于 made once scrolled: what it holds goes under nothing of
 fn station_named(base : Source, name : @signals.Signal[String]) -> Source {
   {
     ..base,
-    topic: fn(topic, params) {
-      let r = (base.topic)(topic, params)
+    topic_read: fn(topic, params) {
+      let r = base.topic(topic, params).get().snapshot()
       let n = name.get()
       match (topic, r.value) {
         ("stations", Some(Array(a))) if n != "" =>
@@ -488,7 +490,7 @@ fn station_named(base : Source, name : @signals.Signal[String]) -> Source {
 /// 归档 on a tablet's tape 600 across (its page narrow), the core's prefs saying the language `lang` as it is now, a
 /// station's row pressed: its own archiving, made once, its page in use.
 fn tape_station_archiving(
-  lang : Ref[String],
+  lang : @signals.Signal[String],
   platform? : Int = 2,
   name? : @signals.Signal[String] = @signals.signal(""),
 ) -> @ui.Tester raise {
@@ -503,7 +505,7 @@ fn tape_station_archiving(
 
 ///|
 test "on the tape a station's own archiving made once under the tape's bar: its title as the page says it, the same node as the language changes it; back to 归档 in the bar" {
-  let lang = Ref("")
+  let lang = @signals.signal("")
   let t = tape_station_archiving(lang)
   assert_eq(page_words_made(t, @sf.t("web-pages.archiving.mode")), 1, msg="its rows the tree's")
   let zh = bar_words_drawn(t, "自动归档 · Willow")
@@ -511,7 +513,9 @@ test "on the tape a station's own archiving made once under the tape's bar: its 
   assert_eq(bar_words_old(t, "自动归档 · Willow").length(), 0)
   let backs = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "归档" && !s.hidden })
   assert_eq(backs.length(), 1, msg="back to 归档")
-  lang.val = "en"
+  lang.set("en")
+  // The made-up prefs notify readers as the core would when the language changes.
+  t.stepped()
   t.run_for(@ui.move_most_ms)
   let en = bar_words_drawn(t, "Automatic archiving · Willow")
   assert_eq(en.length(), 1, msg="the bar's title in English")
@@ -521,7 +525,7 @@ test "on the tape a station's own archiving made once under the tape's bar: its 
 ///|
 test "on the tape a station's own archiving made once, its station renamed as the core tells it: its title anew in the same bar, the page and the bar not made again" {
   let name = @signals.signal("")
-  let t = tape_station_archiving(Ref(""), name~)
+  let t = tape_station_archiving(@signals.signal(""), name~)
   let title = bar_words_drawn(t, "自动归档 · Willow")
   assert_eq(title.length(), 1)
   let rows = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == @sf.t("web-pages.archiving.mode") }).map(fn(d) { d.id })
@@ -538,7 +542,7 @@ test "on the tape a station's own archiving made once, its station renamed as th
 
 ///|
 test "on the tape a station's own archiving made once: back in its bar pressed, or a swipe from its edge over the bar (an iPad's), 归档 again" {
-  let t = tape_station_archiving(Ref(""))
+  let t = tape_station_archiving(@signals.signal(""))
   let depth = app.nav.depth()
   match said_at(t, "归档") {
     Some((x, y, w, h)) => t.tap(x + w / 2.0, y + h / 2.0)
@@ -547,7 +551,7 @@ test "on the tape a station's own archiving made once: back in its bar pressed, 
   t.run_for(@ui.move_most_ms)
   assert_eq(app.nav.depth(), depth - 1)
   assert_true(app.nav.top() == Setting(@settings.Route::Archiving))
-  let t = tape_station_archiving(Ref(""), platform=1)
+  let t = tape_station_archiving(@signals.signal(""), platform=1)
   guard tape_page_panel(t) is Some(p) else { fail("no page") }
   t.drag(p.x + 6.0, p.y + 20.0, p.x + 400.0, p.y + 20.0, steps=10)
   t.run_for(@ui.move_most_ms)
@@ -556,7 +560,7 @@ test "on the tape a station's own archiving made once: back in its bar pressed, 
 
 ///|
 test "on the tape a station's own archiving become another station's in its place: that one's page made anew, its title in the bar" {
-  let t = tape_station_archiving(Ref(""))
+  let t = tape_station_archiving(@signals.signal(""))
   let rows = @ui.view_tree().unwrap().drawn().filter(fn(d) { !d.hosted && d.words == @sf.t("web-pages.archiving.mode") }).map(fn(d) { d.id })
   app.nav.become(Setting(@settings.Route::StationArchiving("ws1/st2")))
   t.run_for(@ui.move_most_ms)
@@ -573,7 +577,7 @@ test "on the tape a station's own archiving become another station's in its plac
 ///|
 test "on the tape 记忆, 归档 and 自动决策 made once under the tape's bar where their page is narrow: their title the bar's alone, what they hold the tree's" {
   for page in [("settings-memories", "记忆"), ("settings-archiving", "归档"), ("settings-decisions", "自动决策")] {
-    let t = tape_bar_in(page.0, Ref(""), w=600.0, h=900.0)
+    let t = tape_bar_in(page.0, @signals.signal(""), w=600.0, h=900.0)
     assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page, msg="\{page.0}")
     assert_eq(bar_words_drawn(t, page.1).length(), 1, msg="\{page.0}: the bar's title")
     assert_eq(bar_words_old(t, page.1).length(), 0, msg="\{page.0}: no old bar")

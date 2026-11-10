@@ -1,4 +1,4 @@
-// Slack as a chat surface (chat/slack.rs, chat/names.rs, chat/status.rs tests, ported), against a stand-in for Slack
+// Slack as a chat surface (ported), against a stand-in for Slack
 // (test/slack-fake.ts): events taken from Socket Mode, the socket given up when it goes quiet, posting, history, the
 // Web API as the bot, token checks, names kept on disk, and the status line in a thread.
 import assert from "node:assert/strict";
@@ -365,6 +365,14 @@ describe("slack", { concurrency: true }, () => {
       await fake.until("done said", () => fake.calls("chat.update").length === 4);
       assert.deepEqual(blocks(fake.calls("chat.update")[3]!).map((b: any) => b.type), ["markdown", "actions", "context"]);
       assert.equal(fake.calls("chat.postMessage").length, 4, "nothing posted for the question");
+      // Left the thread (chat_leave): said under its goodbye, whatever the turn ended as.
+      const bye = await surface.post(thread, "好，需要时再 @ 我", []);
+      surface.standsAt(thread, { kind: "left", words: null });
+      await fake.until("left said", () => fake.calls("chat.update").some((c) => c.params.ts === bye));
+      assert.deepEqual(blocks(fake.calls("chat.update").filter((c) => c.params.ts === bye).at(-1)!).at(-1), {
+        type: "context",
+        elements: [{ type: "mrkdwn", text: "🔕 已退出这个 thread，@ 我即可回来" }],
+      });
     } finally {
       await surface.stop();
       await fake.close();
@@ -448,6 +456,37 @@ describe("slack", { concurrency: true }, () => {
       assert.equal(fake.calls("chat.postEphemeral")[1]!.params.text, "这个问题已经回答过了");
       assert.equal(heard.length, 1);
       assert.deepEqual(fake.acks.map((a) => a.envelope_id).sort(), ["i1", "i2", "i3", "i4"], "each acknowledged at once");
+    } finally {
+      await surface.stop();
+      await fake.close();
+    }
+  });
+
+  test("a card answer that cannot be accepted tells the person and can be tried again", async () => {
+    const fake = await FakeSlack.start();
+    bot(fake);
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5 });
+    const heard: ChatEvent[] = [];
+    let attempts = 0;
+    try {
+      const handle = async (event: ChatEvent) => {
+        if (++attempts === 1) throw new Error("old edit preparation failed");
+        heard.push(event);
+      };
+      const asked = await surface.post({ channel: "C1", threadTs: "1.1" }, "选一个", [], { type: "options", options: [{ label: "合并" }] });
+      const press = (ts: string) => ({
+          type: "block_actions", user: { id: "U1" }, channel: { id: "C1" },
+          message: { ts: asked, thread_ts: "1.1", text: "选一个" },
+          actions: [{ action_id: "sf_answer", value: '{"l":["合并"]}', action_ts: ts }],
+          state: { values: { b1: { sf_pick: { selected_option: { value: "0" } } } } },
+      });
+      await assert.rejects((surface as any).answer(press("9.5"), handle), /old edit preparation failed/);
+      assert.equal(fake.calls("chat.postEphemeral")[0]?.params.text, "回答未能确认，请检查后重试");
+      assert.equal(fake.calls("chat.update").length, 0);
+      await (surface as any).answer(press("9.6"), handle);
+      assert.equal(fake.calls("chat.update").length, 1);
+      assert.equal(heard.length, 1);
+      assert.equal((heard[0] as any).message.text, "合并");
     } finally {
       await surface.stop();
       await fake.close();
@@ -576,6 +615,48 @@ describe("slack", { concurrency: true }, () => {
       await surface.cardEnded({ channel: "C1", threadTs: "1.1" }, again, "再登录：https://x/login/l2", { type: "login", login: "l2" }, { why: "withdrawn" });
       const ended = fake.calls("chat.update")[1]!.params;
       assert.deepEqual([ended.ts, JSON.parse(ended.blocks!).map((b: any) => b.type)], [again, ["markdown", "context"]]);
+    } finally {
+      await surface.stop();
+      await fake.close();
+    }
+  });
+
+  test("a login card opens its page from a button, with the field for its code or the device code to enter there; not in a channel shared outside", async () => {
+    const fake = await FakeSlack.start();
+    bot(fake);
+    fake.answer("conversations.info", (s) => ({ ok: true, channel: { id: s.params.channel, name: "x", ...(s.params.channel === "CX" ? { is_ext_shared: true } : {}) } }));
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5 });
+    const google = { url: "https://accounts.google.com/o/oauth2/auth?client_id=1&state=s", domain: "accounts.google.com", paste: true };
+    const github = { url: "https://github.com/login/device", domain: "github.com", code: "ABCD-1234", paste: false };
+    const blocksOf = (n: number) => JSON.parse(fake.calls("chat.postMessage")[n]!.params.blocks!);
+    try {
+      await surface.start(quiet);
+      await fake.until("a socket", () => fake.sockets.length === 1 && surface.socket().connected);
+      // A page that gives a code: its button, then the field.
+      await surface.post({ channel: "C1", threadTs: "1.1" }, "https://x/login/l1", [], { type: "login", login: "l1", page: google });
+      const paste = blocksOf(0);
+      assert.deepEqual(paste.map((b: any) => b.type), ["markdown", "actions", "input", "actions"]);
+      assert.equal(paste[1].elements[0].url, google.url);
+      assert.match(paste[1].elements[0].text.text, /accounts\.google\.com/);
+      // A device code: the code and its page's button, no field.
+      const asked = await surface.post({ channel: "C1", threadTs: "1.1" }, "https://x/login/l2", [], { type: "login", login: "l2", page: github });
+      const device = blocksOf(1);
+      assert.deepEqual(device.map((b: any) => b.type), ["markdown", "section", "actions"]);
+      assert.match(device[1].text.text, /`ABCD-1234`/);
+      assert.equal(device[2].elements[0].url, github.url);
+      // Pressing the page's button hands nothing over.
+      fake.send({ type: "interactive", envelope_id: "i1", payload: { type: "block_actions", user: { id: "U1" }, channel: { id: "C1" }, message: { ts: asked, thread_ts: "1.1" }, actions: [{ action_id: "sf_login_page", action_ts: "9.5" }] } });
+      // Its end leaves only the words: the code goes.
+      await surface.cardEnded({ channel: "C1", threadTs: "1.1" }, asked, "https://x/login/l2", { type: "login", login: "l2" }, { why: "withdrawn" });
+      const ended = fake.calls("chat.update").at(-1)!.params;
+      assert.doesNotMatch(ended.blocks!, /ABCD-1234/);
+      // A channel shared with another organization: neither page nor code, the link alone (and the field for a code).
+      await surface.post({ channel: "CX", threadTs: "2.1" }, "https://x/login/l3", [], { type: "login", login: "l3", page: github });
+      assert.deepEqual(blocksOf(2).map((b: any) => b.type), ["markdown"]);
+      await surface.post({ channel: "CX", threadTs: "2.1" }, "https://x/login/l4", [], { type: "login", login: "l4", page: google });
+      assert.deepEqual(blocksOf(3).map((b: any) => b.type), ["markdown", "input", "actions"]);
+      assert.doesNotMatch(JSON.stringify(fake.calls("chat.postMessage").slice(2)), /ABCD-1234|accounts\.google/);
+      assert.equal(fake.calls("chat.postEphemeral").length, 0);
     } finally {
       await surface.stop();
       await fake.close();

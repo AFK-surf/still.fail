@@ -42,6 +42,8 @@ let glass_window_h : Double = 700.0
 test "29-glass" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("glass"), seed~, h=glass_window_h)
+    // The recording used a Mac window whose buttons occupy the app's top row.
+    f.t.set_window_inset(true)
     f.tap("端到端测试")
     f.run_to(@ui.nav_rest())
     f.see("发消息")
@@ -56,7 +58,7 @@ test "29-glass" {
       // its answer come (in the words sent and in the agent's message)
       f.see_n(2, glass_reply(i))
     }
-    // (what came with them in the list in its turn: turns.mbt, one at a time)
+    // (one at a time)
     let turns = f.t.rest_of("a chat's list turns")
     if turns > f.t.time() && turns < @double.infinity {
       f.run_to(turns)
@@ -89,7 +91,7 @@ test "29-glass" {
         // (whole points: as the scripted run is told it)
         let down = (top_y + top_h / 2.0 - (y + h / 2.0)).to_int().to_double()
         if down.abs() >= 1.0 {
-          f.wheel(-down)
+          f.wheel_aligned(-down)
           let eased = f.t.rest_of("wheel ease")
           if eased > f.t.time() && eased < @double.infinity {
             f.run_to(eased)
@@ -112,7 +114,7 @@ test "29-glass" {
       Some((_, y, _, h)) => {
         let down = (bottom_y + bottom_h / 2.0 - (y + h / 2.0)).to_int().to_double()
         if down.abs() >= 1.0 {
-          f.wheel(-down)
+          f.wheel_aligned(-down)
           let rest = f.t.rest_of("wheel ease")
           if rest > f.t.time() && rest < @double.infinity {
             f.run_to(rest)

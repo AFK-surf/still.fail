@@ -1,4 +1,4 @@
-// A station in security mode joins a workspace also in it, end to end (docs/multi-workspace.md, docs/workspace-lock.md),
+// A station in security mode joins a workspace also in it, end to end (),
 // on a dev cloud (cloud/test/dev.ts), a real station and the owner's real core (desktop's Node host): alice locks her
 // workspace Dev, whose station pins that lock; she locks Lab too and adds the station to it from her app (station.join):
 // the station pins Lab's lock there, is taken into it by her signature, and her device reaches it in Lab; joining an

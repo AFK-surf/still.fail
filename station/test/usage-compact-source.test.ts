@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { constants } from "node:sqlite";
 import { mock, test } from "node:test";
 import { Worker } from "node:worker_threads";
+import { MbBackfill } from "../src/read/mb-reader.ts";
 import { Effect, Fiber } from "effect";
 import { usageRoutes } from "../src/api/routes/usage.ts";
 import { makeStore, USAGE_CALLS_EARLIER, USAGE_CALLS_SAME, usageCallsPage, usageGroups, usageSince } from "../src/read/store.ts";
@@ -558,17 +559,21 @@ test("a stopped workspace worker retries a pending move without another change",
   const time = testClock();
   const store = Store.open(join(dir, "station.db"), null, time.clock);
   let mover: ReturnType<typeof watchCompactMoves> | null = null;
-  const post = Worker.prototype.postMessage;
   let wakes = 0;
   let stopped!: () => void;
   const firstExit = new Promise<void>((resolve) => { stopped = resolve; });
-  const interception = mock.method(Worker.prototype, "postMessage", function (this: Worker, message: unknown) {
-    if (message !== null && typeof message === "object" && "wake" in message) {
-      wakes++;
-      if (wakes === 1) { this.once("exit", stopped); void this.terminate(); return; }
-    }
-    return post.call(this, message);
-  });
+  // (the worker, or the MoonBit builder in its place: the first wake stops it instead)
+  const stop = (self: Worker | MbBackfill, message: unknown): boolean => {
+    if (message === null || typeof message !== "object" || !("wake" in message) || ++wakes !== 1) return false;
+    self.once("exit", stopped);
+    void self.terminate();
+    return true;
+  };
+  const postWorker = Worker.prototype.postMessage, postMb = MbBackfill.prototype.postMessage;
+  const interceptions = [
+    mock.method(Worker.prototype, "postMessage", function (this: Worker, message: unknown) { if (!stop(this, message)) postWorker.call(this, message); }),
+    mock.method(MbBackfill.prototype, "postMessage", function (this: MbBackfill, message: unknown) { if (!stop(this, message)) postMb.call(this, message); }),
+  ];
   try {
     store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "a", ws: "A", createdAt: 0, lastActiveAt: 0 });
     compactUsage(store);
@@ -590,7 +595,7 @@ test("a stopped workspace worker retries a pending move without another change",
     assert.equal(compactScopeReady(store.db, { workspace: "B", home: false }), true);
     assert.equal(usageGroups(makeStore(store.db, dir), 0n, 120_000n, 0n, { workspace: "B", home: false })[0]!.calls, 1);
   } finally {
-    interception.mock.restore();
+    for (const interception of interceptions) interception.mock.restore();
     if (mover !== null) await mover.close();
     store.close();
     rmSync(dir, { recursive: true, force: true });
@@ -959,13 +964,13 @@ test("the optional usage chart range reaches the reader and wakes pending totals
     captured = args;
     return Promise.resolve({ status: 200, headers: {}, body: Buffer.alloc(0) });
   } } as never, () => false, (viewer) => { wakes++; woken = viewer; })[1]!;
-  const request = { lang: "en", query: [["history", "1"], ["historyFrom", "0"], ["historyTo", "86400000"]], viewer: { workspace: "A", home: false } };
+  const request = { lang: "en", headers: {}, query: [["history", "1"], ["historyFrom", "0"], ["historyTo", "86400000"]], viewer: { workspace: "A", home: false } };
   await route.handle(request as never, []);
   assert.deepEqual((captured as { historyRange: unknown }).historyRange, { from: "0", to: "86400000" });
   assert.equal(wakes, 1);
   assert.deepEqual(woken, request.viewer);
-  assert.throws(() => route.handle({ ...request, query: [["historyFrom", "0"]] } as never, []), /both bounds/);
-  assert.throws(() => route.handle({ ...request, query: [["historyFrom", "0"], ["historyTo", "60000"]] } as never, []), /invalid history range/);
+  await assert.rejects(() => route.handle({ ...request, query: [["historyFrom", "0"]] } as never, []), /both bounds/);
+  await assert.rejects(() => route.handle({ ...request, query: [["historyFrom", "0"], ["historyTo", "60000"]] } as never, []), /invalid history range/);
   assert.equal(wakes, 1);
 });
 
@@ -978,16 +983,16 @@ test("an unbounded usage history asks its workspace to settle pending new statis
   const route = usageRoutes({ read: () => pending } as never,
     () => false, noteWake)[1]!;
   const viewer = { workspace: "A", home: false };
-  const result = route.handle({ lang: "en", query: [["history", "1"]], viewer } as never, []);
+  const result = route.handle({ lang: "en", headers: {}, query: [["history", "1"]], viewer } as never, []);
   assert.equal(woken.length, 0, "accounting waits for the current usage read to finish");
   finish(answer);
   await result;
   assert.deepEqual(woken, [viewer]);
-  await route.handle({ lang: "en", query: [], viewer } as never, []);
+  await route.handle({ lang: "en", headers: {}, query: [], viewer } as never, []);
   assert.deepEqual(woken, [viewer], "a summary without history does not cause extra accounting");
   const failed = usageRoutes({ read: () => Promise.resolve({ ...answer, status: 503 }) } as never,
     () => false, noteWake)[1]!;
-  await failed.handle({ lang: "en", query: [["history", "1"]], viewer } as never, []);
+  await failed.handle({ lang: "en", headers: {}, query: [["history", "1"]], viewer } as never, []);
   assert.deepEqual(woken, [viewer], "a failed read does not start accounting");
 });
 

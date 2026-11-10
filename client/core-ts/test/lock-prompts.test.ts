@@ -11,7 +11,7 @@ import { CoreError, HostError } from "../src/error.ts";
 import { t } from "../src/i18n.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import { utf8 } from "../src/util.ts";
-import { BEHIND_MS, BEHIND_TRIES, read, signerKnown } from "../src/views/lock.ts";
+import { BEHIND_MS, BEHIND_TRIES, held, read, refusedAgain, signerKnown } from "../src/views/lock.ts";
 import { ME, PHONE, elsewhere, genesis, rig, unhex } from "./lock-rig.ts";
 import { stationLater, stationReplies, status } from "./station-fixture.ts";
 
@@ -232,6 +232,12 @@ test("a hello brings what put this device in the lock lately, for a station that
   r.cloud.chains.set("ws", [g, old]);
   r.core.inner.data.put("lock", "ws", { head: head(old), entries: [g, old] });
   assert.equal(r.core.inner.cloudSync.carry!("ws"), null);
+  // Its person made a member lately too (their first device): a station takes no device of someone it has not heard of.
+  const made = sign(next("ws", head(g), r.host.nowMs() / 1000, "member", { sub: "s3", email: "c@x.com", role: "member" }));
+  const first = sign(next("ws", head(made), r.host.nowMs() / 1000, "device", { id: ME, sub: "s3", kind: "app", label: "this" }));
+  r.cloud.chains.set("ws", [g, made, first]);
+  r.core.inner.data.put("lock", "ws", { head: head(first), entries: [g, made, first] });
+  assert.deepEqual(r.core.inner.cloudSync.carry!("ws"), [made, first], "from the one that made them a member on");
 });
 
 test("a change the cloud answers too many requests for is asked again a while later, not failed at once", async () => {
@@ -241,6 +247,37 @@ test("a change the cloud answers too many requests for is asked again a while la
   stationReplies(r.host, (req) => (req.url.includes("/lock") && limited-- > 0 ? status(429, { error: "rate_limited" }) : r.cloud.reply(req)));
   await r.ask("lock.removeDevice", { workspace: "ws", device: PHONE });
   assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device.remove", PHONE]]);
+});
+
+test("the lock moved on while the cloud answers too many requests: read again a while later, not left behind until it moves again", async () => {
+  const owner = elsewhere();
+  const r = await rig(() => ({ ws: genesis("ws", owner, false, [], {}, ME, [phone]) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const g = r.cloud.chains.get("ws")![0]!;
+  const sign = (e: ReturnType<typeof next>): Entry => ({ ...e, sig: { key: owner.id, alg: "Ed25519", sig: owner.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(e))])) } });
+  // This device put in by the owner, the cloud turning the next read of the lock away (the account's budget spent).
+  const approval = sign(next("ws", { seq: 0, hash: entryHash(g), genesis: entryHash(g) }, r.host.nowMs() / 1000, "device", { id: ME, sub: "s1", kind: "app", label: "this" }));
+  r.cloud.chains.set("ws", [g, approval]);
+  let limited = 1;
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock?") && limited-- > 0 ? status(429, { error: "rate_limited" }) : r.cloud.reply(req)));
+  r.core.inner.data.update({ topic: "workspace", workspace: "ws" }, (w) => ({ ...(w as object), lock: r.cloud.head("ws") }));
+  await r.host.time.pass(1_000);
+  assert.equal(limited, 0, "turned away once");
+  assert.equal(held(r.core.inner, "ws")?.head?.seq, 0, "not read yet");
+  await r.host.time.pass(10_000);
+  assert.equal(held(r.core.inner, "ws")?.head?.seq, 1, "read again, and this device in the lock");
+});
+
+test("a station that refused this device is tried again as its person's own lock moves on, not only the workspace's", async () => {
+  const r = await rig((_me) => ({ ws: genesis("ws", elsewhere(), false) }));
+  await r.watch({ topic: "lock", workspace: "ws" });
+  const woke: string[] = [];
+  r.core.inner.stations.cameOnline = (address: string) => void woke.push(address);
+  hooks.lockRefused!(r.core.inner, "ws", "st", null);
+  assert.notEqual(hooks.lockWaiting!(r.core.inner, "ws", "st"), null, "not asked again by itself");
+  refusedAgain(r.core.inner, "ws");
+  assert.deepEqual(woke, ["ws/st"]);
+  assert.equal(hooks.lockWaiting!(r.core.inner, "ws", "st"), null);
 });
 
 test("the lock says its devices and people in words, as every page shows them", async () => {
@@ -290,7 +327,8 @@ test("the people's devices by app say which machine each is and when it was last
     ["still.fail Android", [["OPPO Find N5", "一天内使用过 · 受信任", true], ["Pixel 9", "一天内使用过 · 受信任", true]]],
     ["still.fail 网页版", [["Chrome · macOS", "3 天前使用过", true]]],
   ]);
-  assert.deepEqual(groups("s2"), [["其他", [["旧版客户端", "1 天前使用过", true], ["Pixel 8", "2 天前使用过", true]]]]);
+  // (someone else's: theirs alone to take out, an owner too takes the member out, not one device of theirs)
+  assert.deepEqual(groups("s2"), [["其他", [["旧版客户端", "1 天前使用过", false], ["Pixel 8", "2 天前使用过", false]]]]);
   // (asked about in a line of its own: which machine, then which app)
   const phoneRow = v.members.find((m: { sub: string }) => m.sub === "s1").groups[1].devices[0] as Row;
   assert.equal(phoneRow.fullText, "OPPO Find N5 · still.fail Android");
@@ -309,4 +347,53 @@ test("turning the lock on says what it would sign in words: this device first, i
   assert.equal(mine.nameText, `${mine.person} · 此设备`);
   assert.equal(mine.howText, "客户端 · 受信任");
   assert.ok(d.members.every((m: { roleText: string }) => m.roleText !== ""));
+});
+
+test("a member or a station taken out of a locked workspace, or a member given another role, is so in its lock first, by this device; the cloud's word alone where it signs nothing there", async () => {
+  // (the locks' end to end, 2026-11-10: bob taken out of the workspace kept his devices in its lock, so a credential
+  // the cloud went on giving him, or did not say it had ended, let him in still)
+  const said: string[] = [];
+  const answer = (r: Awaited<ReturnType<typeof rig>>) => {
+    stationReplies(r.host, (req) => {
+      if ((req.method === "DELETE" || req.method === "PATCH") && /\/v1\/workspaces\/[^/]+\/(members|stations)\/[^/]+$/.test(req.url)) {
+        said.push(`cloud ${req.method} ${new URL(req.url).pathname}`);
+        return { ok: true };
+      }
+      if (req.method === "POST" && /\/v1\/workspaces\/[^/]+\/lock$/.test(req.url)) said.push("lock");
+      return r.cloud.reply(req);
+    });
+  };
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [{ key: ST, name: "studio" }], {}, ME, [phone]) }), (host) => {
+    stationLater(host, (req) => (req.method === "POST" && req.url.endsWith("/admin/api/lock") ? new Promise(() => {}) : undefined));
+  }, ST);
+  answer(r);
+  await r.watch({ topic: "lock", workspace: "ws" });
+  // (an admin the cloud made a member would still sign as one in the lock)
+  await r.ask("workspace.setRole", { account: "s1", workspace: "ws", member: "s2", role: "admin" });
+  assert.deepEqual([r.cloud.chains.get("ws")!.at(-1)!.kind, r.cloud.chains.get("ws")!.at(-1)!.body], ["member", { sub: "s2", email: "b@x.com", role: "admin" }]);
+  assert.deepEqual(said, ["lock", "cloud PATCH /v1/workspaces/ws/members/s2"]);
+  said.length = 0;
+  await r.ask("workspace.removeMember", { account: "s1", workspace: "ws", member: "s2" });
+  const after = r.cloud.chains.get("ws")!;
+  assert.deepEqual([after.at(-1)!.kind, after.at(-1)!.body], ["member.remove", { sub: "s2" }]);
+  assert.deepEqual(said, ["lock", "cloud DELETE /v1/workspaces/ws/members/s2"], "out of the lock before the cloud is asked");
+  said.length = 0;
+  await r.ask("workspace.removeStation", { account: "s1", workspace: "ws", station: ST });
+  assert.deepEqual([r.cloud.chains.get("ws")!.at(-1)!.kind, r.cloud.chains.get("ws")!.at(-1)!.body], ["station.remove", { key: ST }]);
+  assert.deepEqual(said, ["lock", `cloud DELETE /v1/workspaces/ws/stations/${ST}`]);
+  // One the lock does not name: the cloud's alone.
+  said.length = 0;
+  const length = r.cloud.chains.get("ws")!.length;
+  await r.ask("workspace.removeStation", { account: "s1", workspace: "ws", station: OLDER });
+  assert.deepEqual(said, [`cloud DELETE /v1/workspaces/ws/stations/${OLDER}`]);
+  assert.equal(r.cloud.chains.get("ws")!.length, length);
+
+  // A device the lock does not let sign: the cloud's word, as before.
+  said.length = 0;
+  const s = await rig(() => ({ ws: genesis("ws", elsewhere(), false, [], {}, ME, [phone]) }));
+  answer(s);
+  await s.watch({ topic: "lock", workspace: "ws" });
+  await s.ask("workspace.removeMember", { account: "s1", workspace: "ws", member: "s2" });
+  assert.deepEqual(said, ["cloud DELETE /v1/workspaces/ws/members/s2"]);
+  assert.equal(s.cloud.chains.get("ws")!.length, 1);
 });

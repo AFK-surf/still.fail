@@ -1,0 +1,115 @@
+/*
+ * The workspace lock, face-to-face approval and the vault's key, as messages between devices and stations
+ * (), for the Tamarin prover. rules/src proves what each check decides; this
+ * proves that the checks, put together and run over a network the adversary holds, keep what they are for. The
+ * adversary is the control plane and every station but the one asked: it reads, drops, replays and makes up any
+ * message, and learns the keys of any device it takes (Reveal).
+ *
+ * What is modelled:
+ *   - a station pins a lock's genesis (its hash brought on enrolment, out of the adversary's hands) and takes a device
+ *     only on an entry signed by a device the lock already has;
+ *   - a new device shows a code, which a device of the lock is given face to face (an authentic channel: `!Shown`)
+ *     before it signs the new device in;
+ *   - a device certifies its box key with its signing key; a device of the lock seals a vault's key only to a box key
+ *     whose certificate a device of the lock signed.
+ * Each step is proved on its own (the lemmas below); the whole chain follows by induction on it, outside the tool,
+ * which does not end searching the chain itself: the first key in a lock that is no device's own came by a step whose
+ * signer is a device's own key, so (each_key_taken_as_its_signer_approved) that device approved it, which it does only
+ * for the key whose code it was shown (approved_only_as_shown), a device's own; or the adversary took a device. So
+ * with no device taken every key in the lock is a device's own, and a vault's key sealed to one is learned by no one
+ * else (sealed_to_certified, vault_key_secret).
+ * What is not: roles and who may sign which entry (proved in rules/src/role), entries taking devices or members out,
+ * versions and epochs (rules/src/history), passkeys, the cryptography itself (perfect here).
+ *
+ * tamarin-prover --prove rules/protocol/lock.spthy   (CI: .github/workflows/rules.yml `protocol`)
+ */
+theory StillfailLock
+begin
+
+builtins: signing, asymmetric-encryption, hashing
+
+restriction Eq:
+  "All x y #i. Eq(x, y) @ i ==> x = y"
+
+// One workspace, one lock: its stations all pin the one genesis (one station stands for them all).
+restriction one_lock:
+  "All s1 s2 o1 o2 #i #j. Genesis(s1, o1) @ i & Genesis(s2, o2) @ j ==> #i = #j"
+
+// The owner's first device turns the lock on: its key the genesis's; a station enrolled with the lock's hash pins it.
+rule Genesis:
+    [ Fr(~owner), Fr(~station) ]
+  --[ Genesis(~station, pk(~owner)), Honest(pk(~owner)), Locked(~station, pk(~owner)) ]->
+    [ !Signer(~owner), !InLock(~station, pk(~owner)), Out(pk(~owner)) ]
+
+// A new device makes its signing key and shows the code of it.
+rule Device_Made:
+    [ Fr(~k) ]
+  --[ Made(pk(~k)), Honest(pk(~k)) ]->
+    [ !Signer(~k), !Shown(h(pk(~k))), Out(pk(~k)) ]
+
+// A device of the lock, given the code face to face, signs in the key whose code it is.
+rule Approve:
+    [ !Signer(~a), !InLock(st, pk(~a)), In(pkNew), !Shown(h(pkNew)) ]
+  --[ Approved(st, pk(~a), pkNew) ]->
+    [ Out(<'device', pkNew, pk(~a), sign(<'device', pkNew>, ~a)>) ]
+
+// A station takes an entry signed by a device its lock has.
+// (the signature as the signer's key makes it: what verifies is what this key signed)
+rule Station_Takes:
+    [ !InLock(st, pk(signer)), In(<'device', pkNew, pk(signer), sign(<'device', pkNew>, signer)>) ]
+  --[ Admits(st, pkNew, pk(signer)), Locked(st, pkNew) ]->
+    [ !InLock(st, pkNew) ]
+
+// A device certifies its box key.
+rule Box_Cert:
+    [ !Signer(~k), Fr(~b) ]
+  --[ Box(pk(~k), pk(~b)) ]->
+    [ !BoxKey(~k, ~b), Out(<'box', pk(~b), pk(~k), sign(<'box', pk(~b)>, ~k)>) ]
+
+// A device of the lock seals a fresh vault key to a box key certified by a device of the lock.
+rule Seal:
+    [ !Signer(~o), !InLock(st, pk(~o)), !InLock(st, pk(d)), In(<'box', boxPub, pk(d), sign(<'box', boxPub>, d)>), Fr(~key) ]
+  --[ Sealed(st, ~key, pk(d), boxPub) ]->
+    [ Out(aenc(~key, boxPub)) ]
+
+// The adversary takes a device: its signing key and its box keys.
+rule Reveal_Signer:
+    [ !Signer(~k) ] --[ Reveal(pk(~k)) ]-> [ Out(~k) ]
+rule Reveal_Box:
+    [ !BoxKey(~k, ~b) ] --[ Reveal(pk(~k)) ]-> [ Out(~b) ]
+
+// ── what runs at all ─────────────────────────────────────────────────────────────────────────────────────────────
+
+lemma a_device_can_be_approved_in: exists-trace
+  "Ex st pk by #i. Admits(st, pk, by) @ i & not (Ex d #r. Reveal(d) @ r)"
+
+lemma a_vault_key_can_be_sealed: exists-trace
+  "Ex st key pk b #i. Sealed(st, key, pk, b) @ i & not (Ex d #r. Reveal(d) @ r)"
+
+// ── what holds ───────────────────────────────────────────────────────────────────────────────────────────────────
+// Each step of the lock's chain on its own (a chain of them follows by induction, outside the tool: Tamarin does not
+// end searching the chain itself). Honest(k): k is a device's own key (the genesis's or one a device made).
+
+// A station takes a key signed by a device's own key only where that device approved it, or the adversary took it.
+// (The first key in a lock that is no device's must so have come by a device approving it, which it does only for a
+// key whose code it was shown, approved_only_as_shown, or by a device taken: the control plane alone puts in none.)
+lemma each_key_taken_as_its_signer_approved:
+  "All st pk by #i. Admits(st, pk, by) @ i & (Ex #h. Honest(by) @ h) ==>
+      (Ex #j. Approved(st, by, pk) @ j & j < i) | (Ex #r. Reveal(by) @ r & r < i)
+    | (Ex st2 #j. Approved(st2, by, pk) @ j & j < i)"
+
+// A key approved in is a device's that showed its code: no one in the middle of the approval swaps in their own.
+lemma approved_only_as_shown:
+  "All st a pk #i. Approved(st, a, pk) @ i ==> Ex #j. Made(pk) @ j & j < i"
+
+// A box key sealed to under a device's own key is one that device certified, unless the adversary took it.
+lemma sealed_to_certified:
+  "All st key pk b #i. Sealed(st, key, pk, b) @ i & (Ex #h. Honest(pk) @ h) ==>
+      (Ex #j. Box(pk, b) @ j) | (Ex #r. Reveal(pk) @ r)"
+
+// A vault's key sealed to a device's own, not taken, is learned by no one else.
+lemma vault_key_secret:
+  "All st key pk b #i. Sealed(st, key, pk, b) @ i & (Ex #h. Honest(pk) @ h) & not (Ex #r. Reveal(pk) @ r) ==>
+      not (Ex #j. K(key) @ j)"
+
+end

@@ -58,7 +58,7 @@
           this.draw();
         } catch (e) {
           put(this, h("p.text-small.text-muted", {}, `${this.localName}: ${e.message}`));
-          postMessage({ emberViz: true, type: "error", message: `${this.localName}: ${e.message}` }, "*");
+          postMessage({ vizMessage: true, type: "error", message: `${this.localName}: ${e.message}` }, "*");
         }
       };
       if (document.readyState === "loading") addEventListener("DOMContentLoaded", go, { once: true });
@@ -313,7 +313,7 @@
       svg.innerHTML = OWN[name];
       el.replaceWith(svg);
     }
-    // which end of a button an icon is at (ember-viz.css sets it in by less there): what is first or last in it, words
+    // which end of a button an icon is at (viz.css sets it in by less there): what is first or last in it, words
     // aside from blank ones
     for (const b of document.querySelectorAll(".btn")) {
       const parts = [...b.childNodes].filter((n) => n.nodeType === 1 || n.textContent.trim());

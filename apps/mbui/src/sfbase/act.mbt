@@ -22,6 +22,19 @@ pub fn acting_reset() -> Unit {
 }
 
 ///|
+/// `text` put on the system's clipboard, felt as a copy is (a key's light tap), and `said` in the toast where it is
+/// given: for an event's handler (a menu's item chosen, a press's confirm), outside a build, as Ctx::copy_text has it
+/// there.
+pub fn copy_out(text : String, said? : String) -> Unit {
+  @hostapi.clipboard_set(text)
+  @ui.haptic(KeyboardTap)
+  match said {
+    Some(words) => toast_later(words)
+    None => ()
+  }
+}
+
+///|
 /// Says `words` in the toast from the next frame on (from a call's answer, between frames), with a button of
 /// `action`'s words on it doing `run` ("" none).
 pub fn toast_later(words : String, action? : String = "", run? : () -> Unit = fn() {  }) -> Unit {
@@ -138,7 +151,7 @@ pub fn failed_lately(c : @ui.Ctx, key : String) -> Bool {
 /// Whether one of `calls` about what `on` names is under way, as the core's `doing` says (doing.ts useDoing: its
 /// params as words).
 pub fn core_doing(src : Source, calls : Array[String], on : Array[(String, String)]) -> Bool {
-  items((src.topic)("doing", {}).value, "doing").iter().any(fn(d) {
+  items(src.topic("doing", {}).get().value, "doing").iter().any(fn(d) {
     text(Some(d), "stage") != "failed" && doing_of(d, calls, on)
   })
 }
@@ -148,7 +161,7 @@ pub fn core_doing(src : Source, calls : Array[String], on : Array[(String, Strin
 /// useDoingFailed), if it did.
 pub fn core_failed(src : Source, calls : Array[String], on : Array[(String, String)]) -> String? {
   let mut why : String? = None
-  for d in items((src.topic)("doing", {}).value, "doing") {
+  for d in items(src.topic("doing", {}).get().value, "doing") {
     if text(Some(d), "stage") == "failed" && doing_of(d, calls, on) {
       why = Some(
         match text(Some(d), "error") {

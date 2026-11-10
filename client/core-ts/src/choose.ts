@@ -1,4 +1,4 @@
-// What a chat runs on, chosen (choose.rs). A new chat's page (`newChat`): the station it starts on and the model,
+// What a chat runs on, chosen. A new chat's page (`newChat`): the station it starts on and the model,
 // runtime, depth and account it runs there, as last picked on this device (records in the data center's `choice`
 // table, each workspace's apart). A model control (`pick`): what a chat, a connect or a new chat runs on now, what is
 // picked in its panel until saved, and what that means. Profiles a station has not checked since it started are
@@ -12,9 +12,11 @@ import * as ops from "./ops.ts";
 import type { Owner } from "./core/routing.ts";
 import { topicKey, type Topic } from "./protocol.ts";
 import * as model from "./shapes/model.ts";
-import type { Store, Value, Watch } from "./store.ts";
+import { Marks } from "./reactive.ts";
+import type { Store, Value } from "./store.ts";
 import { arr as arrU, equal, get as getU, isObject } from "./util.ts";
 import { borrowable, effortDefault, models, quotaLine, servingIn, sourced } from "./views/models.ts";
+import { profileServes } from "./views/profile-scope.ts";
 import { pendingKeyMade } from "./views/local.ts";
 import { ofAddress } from "./workspace.ts";
 
@@ -67,6 +69,10 @@ function optionOf(options: J[], m: string | null): J {
   return options.find((o) => o.model === m) ?? options.find((o) => arr(o.ids).some((i) => i === m));
 }
 
+/// The runtimes a chat can be set to Fast on (Codex on an OpenAI subscription, Claude Code on an Anthropic key: the
+/// station's takesFast); the accounts that take it say so with their overview's `fast`.
+const fastRuntime = (runtime: unknown): boolean => runtime === "codex" || runtime === "claude";
+
 /// A choice as the station has it now.
 export type Resolved = { entry: J; runtime: string | null; effort: string | null; fast: boolean | null; context: number | null; profile: string | null; efforts: J[]; contexts: number[]; accounts: J[] };
 
@@ -84,7 +90,7 @@ export function resolve(options: J[], choice: J): Resolved {
   if (Array.isArray(levels)) efforts = levels;
   const e = text(get(choice, "effort"));
   const effort = e !== null && efforts.some((x) => x === e) ? e : null;
-  const fast = typeof get(choice, "fast") === "boolean" && runtime === "codex" ? choice.fast : null;
+  const fast = typeof get(choice, "fast") === "boolean" && fastRuntime(runtime) ? choice.fast : null;
   const contexts = at("contexts").filter((n): n is number => typeof n === "number");
   const c = contextOf(get(choice, "context"));
   const context = c !== null && contexts.includes(c) ? c : null;
@@ -95,7 +101,7 @@ function picked(r: Resolved): J {
   return { model: r.entry !== null ? r.entry.model : null, runtime: r.runtime ?? "claude", effort: r.effort, fast: r.fast, context: r.context, profile: r.profile };
 }
 
-const comboFast = (v: J): boolean | null => get(v, "runtime") === "codex" && typeof get(v, "fast") === "boolean" ? v.fast : null;
+const comboFast = (v: J): boolean | null => fastRuntime(get(v, "runtime")) && typeof get(v, "fast") === "boolean" ? v.fast : null;
 
 /// Usage stays bounded on the device; ties favour the most recently started chat.
 export function recordCombo(history: J[], choice: J, now: number): J[] {
@@ -154,13 +160,12 @@ export type ChooseEnv = {
 
 export class Choose implements Owner {
   readonly #env: ChooseEnv;
-  readonly #watches = new Map<string, { topic: Topic; watches: Watch[] }>();
+  /// What its pages read of what is chosen here (drafts, choices, what is being added): made again as it changes.
+  readonly #chosen = new Marks();
   readonly #drafts = new Map<string, Record<string, J>>();
   readonly #adding = new Map<string, J>();
   /// The key each scope's next new chat is to be made under (`next`), until one is made under it.
   readonly #next = new Map<string, string>();
-  /// The presets of each scope's stations, followed while its new chat page is (docs/presets.md): by station address.
-  readonly #presets = new Map<string, Map<string, Watch>>();
 
   constructor(env: ChooseEnv) {
     this.#env = env;
@@ -170,43 +175,12 @@ export class Choose implements Owner {
     return topic.topic === "newChat" || topic.topic === "pick";
   }
 
-  start(topic: Topic): void {
-    let sources: Topic[];
-    if (topic.topic === "newChat") sources = [{ topic: "stations", scope: topic.scope }];
-    else {
-      const station = topic.station as string;
-      const overview: Topic = { topic: "overview", station };
-      let o: Of | null = null;
-      try {
-        o = of(topic.of as string);
-      } catch {
-        o = null;
-      }
-      // The workspace's stations too: what the others have that this one could borrow.
-      const stations: Topic = { topic: "stations", scope: ofAddress(station) };
-      sources =
-        o?.kind === "session"
-          ? [{ topic: "session", station, key: o.key }, { topic: "sessions", station }, { topic: "chatRows", station }, overview, stations]
-          : [overview, stations];
-    }
-    const store = this.#env.store;
-    const watches = sources.map((s) => store.watch(s, () => store.invalidate(topic)));
-    this.#watches.set(topicKey(topic), { topic, watches });
-    store.invalidate(topic);
-  }
-
   stop(topic: Topic): void {
-    const live = this.#watches.get(topicKey(topic));
-    this.#watches.delete(topicKey(topic));
     this.#drafts.delete(topicKey(topic));
-    for (const w of live?.watches ?? []) w.drop();
-    if (topic.topic === "newChat") {
-      for (const w of this.#presets.get(topic.scope as string)?.values() ?? []) w.drop();
-      this.#presets.delete(topic.scope as string);
-    }
   }
 
   compute(topic: Topic): Value | undefined {
+    this.#chosen.read();
     try {
       if (topic.topic === "newChat") return { ok: this.#newChat(topic.scope as string) };
       return this.#pick(topic, topic.station as string, topic.of as string);
@@ -217,7 +191,7 @@ export class Choose implements Owner {
   }
 
   #changed(): void {
-    for (const { topic } of this.#watches.values()) this.#env.store.invalidate(topic);
+    this.#chosen.touch();
   }
 
   // ── a new chat ──
@@ -293,7 +267,7 @@ export class Choose implements Owner {
     const r = resolve(options, this.#choice(scope, id));
     view.frequent = frequentCombos(arr(this.#record(`ws:${scope}:frequent`)), options, r);
     const overview = isObject(station.overview) ? station.overview : null;
-    // A station this workspace joined runs its chats on the profiles open to it (docs/multi-workspace.md): with some, but
+    // A station this workspace joined runs its chats on the profiles open to it: with some, but
     // none open, one is turned on rather than added.
     const joined = station.joined === true;
     const all = overview !== null ? arr(overview.profiles) : [];
@@ -303,7 +277,8 @@ export class Choose implements Owner {
     // offers them (borrowed before the chat is made) rather than only adding a profile.
     const lends = overview !== null && profiles.length === 0 && !joined
       && borrowable(this.#env.store.get({ topic: "stations", scope }), typeof station.station === "string" ? station.station : "", [], null, this.#env.now()).length > 0;
-    view.blocked = overview !== null && profiles.length === 0 ? (joined && all.length > 0 ? "shared" : lends ? null : "profile") : overview !== null && options.length === 0 ? "models" : null;
+    const disabled = all.some((p) => get(p, "enabled") === false && profileServes(p, scope, joined));
+    view.blocked = overview !== null && profiles.length === 0 ? (lends ? null : disabled ? "disabled" : joined && all.length > 0 ? "shared" : "profile") : overview !== null && options.length === 0 ? "models" : null;
     // This workspace's name: as it is held, else as an account's `/v1/me` lists it.
     const here = get(this.#env.data.shared({ topic: "workspace", workspace: scope }), "name")
       ?? this.#env.data.mes().flatMap(([, me]) => arr(get(me, "workspaces"))).find((w) => get(w, "id") === scope)?.name;
@@ -312,6 +287,7 @@ export class Choose implements Owner {
       : t("core-logic.choose.problem.not_shared_elsewhere", { name, workspace: typeof here === "string" ? here : "" });
     view.problem = overview === null ? t("core-logic.choose.problem.loading", { name })
       : lends ? t("core-logic.choose.problem.borrow_only", { name })
+      : view.blocked === "disabled" ? t("core-logic.choose.problem.disabled_profiles", { name })
       : view.blocked === "shared" ? notShared()
       : profiles.length > 0 && options.length === 0 ? t("core-logic.choose.problem.no_models") : null;
     if (r.entry !== null && isObject(r.entry.spent)) {
@@ -332,7 +308,7 @@ export class Choose implements Owner {
     view.pick = pick !== undefined && "ok" in pick ? pick.ok : null;
     // The workspace's presets, every station's up now (each as it was read last), to pick from where the page's
     // control opens; the one picked whichever station it is of.
-    const listed = this.#workspacePresets(scope, online);
+    const listed = this.#workspacePresets(online);
     view.presets = listed.map(({ p, station: at, stationName }) => ({ id: text(get(p, "id")) ?? "", name: text(get(p, "name")) ?? "", dirs: arr(get(p, "dirs")).length, station: at, stationName, marks: this.#marks(p, at) }));
     const picked = this.#picked(scope, listed);
     view.preset = picked === undefined ? "" : (text(get(picked.p, "id")) ?? "");
@@ -349,18 +325,14 @@ export class Choose implements Owner {
     return [options, resolve(options, this.#choice(ofAddress(addr), stationId(addr)))];
   }
 
-  /// The presets of the scope's stations `online` (their addresses' `presets` topics), followed while its page is: as
-  /// each station said them last, with the station each is of.
-  #workspacePresets(scope: string, online: J[], follow = true): { p: J; station: string; stationName: string }[] {
-    const page: Topic = { topic: "newChat", scope };
-    const held = this.#presets.get(scope) ?? new Map<string, Watch>();
-    if (follow) this.#presets.set(scope, held);
+  /// The presets of the scope's stations `online` (their addresses' `presets` topics), as each station said them last,
+  /// with the station each is of.
+  #workspacePresets(online: J[]): { p: J; station: string; stationName: string }[] {
     const out: { p: J; station: string; stationName: string }[] = [];
     for (const s of online) {
       const at = typeof s.station === "string" ? s.station : "";
       if (at === "") continue;
       const topic: Topic = { topic: "presets", station: at };
-      if (follow && !held.has(at)) held.set(at, this.#env.store.watch(topic, () => this.#env.store.invalidate(page)));
       for (const p of arr(get(this.#env.store.get(topic), "presets"))) out.push({ p, station: at, stationName: typeof s.name === "string" ? s.name : "" });
     }
     return out;
@@ -446,7 +418,7 @@ export class Choose implements Owner {
       const v = this.#env.store.value({ topic: "stations", scope });
       return v !== undefined && "ok" in v ? arr(v.ok) : [];
     })();
-    const picked = this.#picked(scope, this.#workspacePresets(scope, online, false));
+    const picked = this.#picked(scope, this.#workspacePresets(online));
     if (picked !== undefined) {
       if (picked.station === station) ask.preset = get(picked.p, "id");
       else {
@@ -532,8 +504,10 @@ export class Choose implements Owner {
         const connect = arr(get(ov, "connects")).find((c) => c.id === o.id);
         if (connect === undefined) throw new CoreError("http_404", t("core-logic.choose.error.no_connect"), 404);
         const bind = connect.bind;
-        const options = models(ov, now).filter((m) => arr(m.runtimes).some((r) => equal(r, get(bind, "runtime"))));
-        return [options, { model: text(get(bind, "model")), runtime: get(bind, "runtime") ?? null, effort: text(get(bind, "effort")), profile: text(get(bind, "profile")) }, null, true, false, 0];
+        // (a station from before keeps a connect on the runtime it was made with)
+        const switchable = get(ov, "connectRuntimeChange") === true;
+        const options = models(ov, now).filter((m) => switchable || arr(m.runtimes).some((r) => equal(r, get(bind, "runtime"))));
+        return [options, { model: text(get(bind, "model")), runtime: get(bind, "runtime") ?? null, effort: text(get(bind, "effort")), profile: text(get(bind, "profile")) }, null, !switchable, false, 0];
       }
       case "session": {
         const agent = this.#env.agent(station, o.key);
@@ -560,7 +534,7 @@ export class Choose implements Owner {
     return [...sourced(own, overview, stations), ...borrowable(stations, station, own, runtime, this.#env.now())];
   }
 
-  /// Whether the viewer may have another station share a profile with this one (docs/station-share.md: managers).
+  /// Whether the viewer may have another station share a profile with this one (managers).
   #manages(station: string): boolean {
     const role = get(this.#env.data.shared({ topic: "workspace", workspace: ofAddress(station) }), "role");
     return role === "owner" || role === "admin";
@@ -621,7 +595,7 @@ export class Choose implements Owner {
     const nextModel = option !== undefined && (valueOption === undefined || valueOption.model !== option.model) ? option.model : (value.model ?? null);
     const overview = this.#env.store.get({ topic: "overview", station });
     const fastAvailable =
-      onName === "codex" &&
+      fastRuntime(onName) &&
       (o.kind === "new" || o.kind === "session") &&
       arr(get(overview, "profiles")).some((p) => typeof p.fast === "boolean" && (profile === null || p.id === profile) && accounts.some((a) => a.id === p.id));
     // How fast it runs where none is picked: its account's own (the one drafted, else the one it is on), said as what
@@ -629,7 +603,7 @@ export class Choose implements Owner {
     const planFastOf = profile ?? (typeof get(current, "id") === "string" ? current.id : null);
     const fastPlan = arr(get(overview, "profiles")).some((p) => planFastOf !== null && p.id === planFastOf && p.fast === true);
     const fastRaw = "fast" in draft ? draft.fast : get(value, "fast");
-    const fast = typeof fastRaw === "boolean" && onName === "codex" ? fastRaw : null;
+    const fast = typeof fastRaw === "boolean" && fastRuntime(onName) ? fastRaw : null;
     const speedText = (f: boolean | null) => (f === true ? "Fast" : f === false ? t("core-logic.choose.speed.standard") : t("core-logic.choose.speed.plan"));
     const next = { model: nextModel, runtime: on ?? null, effort, profile, fast, context };
     const changed = FIELDS.some((f) => !equal((next as J)[f], value[f] ?? null));
@@ -638,7 +612,7 @@ export class Choose implements Owner {
     if (kept !== null && valueOption !== undefined) shown = arr(get(get(valueOption, "accounts"), typeof value.runtime === "string" ? value.runtime : "")).find((a) => a.id === kept) ?? null;
     if (shown === null) shown = current;
     const effectiveFast =
-      value.runtime === "codex" &&
+      fastRuntime(value.runtime) &&
       (o.kind === "new" || o.kind === "session") &&
       (typeof value.fast === "boolean"
         ? value.fast
@@ -733,15 +707,15 @@ export class Choose implements Owner {
       const usual = r === null ? null : { runtime: r.runtime, effort: r.effort, fast: r.fast, context: o.kind === "new" || o.kind === "session" ? r.context : null };
       return { ...opt, usual, usualText: parts.length > 0 ? parts.join(" · ") : null, uses: uses.get(id) ?? 0, liked: likedKeys.includes(model.key(id)) };
     });
-    const near = o.kind === "new" || o.kind === "session"
-      ? annotated.filter((x: J) => x.uses > 0 && x.availability !== "borrowable").sort((a: J, b: J) => b.uses - a.uses).slice(0, NEAR).map((x: J) => x.model)
-      : [];
-    // The starred, in the order they were starred, past those used most (not twice); then every model, by its maker
-    // (`makers`).
+    // The starred, in the order they were starred, every one of them: what the person keeps at hand stays put however
+    // often it is used. Those used most leave them out (not twice); then every model, by its maker (`makers`).
     const liked = likedKeys.flatMap((k) => {
       const found = annotated.find((x: J) => model.key(x.model) === k);
-      return found !== undefined && !near.includes(found.model) ? [found.model] : [];
+      return found !== undefined ? [found.model] : [];
     });
+    const near = o.kind === "new" || o.kind === "session"
+      ? annotated.filter((x: J) => x.uses > 0 && x.availability !== "borrowable" && !liked.includes(x.model)).sort((a: J, b: J) => b.uses - a.uses).slice(0, NEAR).map((x: J) => x.model)
+      : [];
     const makers = this.#makers(annotated);
     let saveText = changed ? t("core-logic.choose.save", { model: modelName ?? t("core-logic.format.default_model"), effort: effortText, account: chosenText }) : t("core-logic.choose.save.unchanged");
     if (changed && fastAvailable) saveText = `${saveText} · ${speedText(fast)}`;
@@ -909,7 +883,9 @@ export class Choose implements Owner {
         break;
       }
       case "connect": {
-        const op = ops.request("connect.put", { station, id: o.id, input: { bind: { model: next.model, effort: textOf("effort"), profile: next.profile } } });
+        const bind: J = { model: next.model, effort: textOf("effort"), profile: next.profile };
+        if (next.runtime !== v.value.runtime) bind.runtime = next.runtime;
+        const op = ops.request("connect.put", { station, id: o.id, input: { bind } });
         if (op === null) throw CoreError.invalid("connect.put");
         saved = { op };
         break;
@@ -975,7 +951,7 @@ export class Choose implements Owner {
     return op;
   }
 
-  /// What a connect being added will run on (connect_flow.rs).
+  /// What a connect being added will run on.
   adding(station: string, form: string): J {
     return this.#adding.get(`${station}\u0001${form}`);
   }

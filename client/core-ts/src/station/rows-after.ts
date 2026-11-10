@@ -1,7 +1,7 @@
 // A station's sidebar rows (GET /chats, station/src/read/views.ts `chats`) as the device holds them, brought on here by
 // what the station's stream says changed: what was said in a chat, a session's summary, what the viewer pinned or
 // dismissed. The station tells what it writes as it writes it, and leaves what a row makes of that to the device
-// (`rows=1`, docs/core-ts.md, sync). Made by the station, each change read every row it could touch again for every
+// (`rows=1`, sync). Made by the station, each change read every row it could touch again for every
 // viewer, from the disk while its machine was short of memory: 3 to 5 s each on a station (2026-11-03).
 //
 // What only the station can say (a card waiting and the messages before it, what an agent's need asks with, a chat

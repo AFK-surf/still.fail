@@ -16,11 +16,11 @@ fn over_source(answered : @signals.Signal[Bool], also? : Array[(ChatRef, @signal
   }
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chat" && held.get(Json::object(params).stringify()).map(fn(a) { !a.get() }).unwrap_or(false) {
         return { value: None, error: None, version: 0 }
       }
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
   }
 }

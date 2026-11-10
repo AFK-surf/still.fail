@@ -244,7 +244,7 @@ test "a button shown at 10, pressed at 20: pressed, with a frame between or none
     let pressed = Ref(0)
     let t = @view.Tree::new(
       fn(root) {
-        root.show(fn() { on.get() }, fn(b) {
+        root.show(at_once=true, fn() { on.get() }, fn(b) {
           b.width(Is(Some(40.0))).height(Is(Some(20.0))).on_press(fn() { pressed.val = pressed.val + 1 }) |> ignore
         })
       },
@@ -425,13 +425,14 @@ test "steps said for a stretch: none before it or after it, 60 within it, none a
   let stop : Ref[() -> Unit] = Ref(fn() {  })
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { going.get() }, fn(b) {
+      root.show(at_once=true, fn() { going.get() }, fn(b) {
         stop.val = b.steps(60, 60, fn(_, m) {
           at.push(m)
           order.push("step")
         })
       })
       root.show(
+        at_once=true,
         fn() { card.get() },
         fn(c) {
           c.height(Is(Some(10.0))) |> ignore
@@ -482,7 +483,7 @@ test "two steppers due together, the first one's step letting the second go: the
         |> ignore
       })
       |> ignore
-      root.show(fn() { on_b.get() }, fn(b) { b.steps(10, 5, fn(k, _) { log.push(("B", k)) }) |> ignore })
+      root.show(at_once=true, fn() { on_b.get() }, fn(b) { b.steps(10, 5, fn(k, _) { log.push(("B", k)) }) |> ignore })
     },
     time=fn() { now.val },
   )

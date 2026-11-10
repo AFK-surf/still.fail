@@ -1,4 +1,4 @@
-// The one way a model is chosen (ember web/src/ModelTriple.tsx, ModelTriple.css.ts; NewChat.kt's run picker said the
+// The one way a model is chosen (still.fail web/src/ModelTriple.tsx, ModelTriple.css.ts; NewChat.kt's run picker said the
 // same): a control that says the model, the runtime (where it can still change and the model runs on more than one),
 // how hard it thinks and who runs it, in one line; pressed, its panel through the presenters (beside it with keyboard and mouse,
 // a sheet with touch): the models, each saying how it runs picked (as it last ran here), the ones used most nearest
@@ -6,6 +6,9 @@
 // effort and the speed, every name whole; at its foot who runs it (the accounts in a panel of their own, from it).
 // Its rows are the screen's (Theme::rows pick). Each pick is made what it runs on as it is picked (`pick.save`), a
 // model closing the panel; a model another station has is drafted (`pick.set`) and borrowed first, asked in a dialog.
+//
+// Laid out by use, not by our controls (the user, 2026-10-30: 「不要被我们现在的控件束缚住了」): what is used more
+// stands nearer the button (2026-11-01: 「那它就不应该跑到离按钮很远的最顶上去啊」).
 
 ///|
 /// What the control keeps of its own (the pick is the core's): the one whose panel is open (its station and pick, ""
@@ -37,12 +40,23 @@ priv struct TriplePanel {
   mut pick : Json?
   /// whether its body was drawn last as a sheet's (its foot then leaves the runtime to the body: triple_foot)
   mut sheet : Bool
+  /// the level the model picked was last brought into view in (its first, all of them, a kind's; "" none yet): once
+  /// as each is come to, not each frame, so what the person scrolled stays where they left it
+  mut shown : String
+  /// how its borrowing is asked, where what opened it asks it itself (a control made once: model_triple_node), given
+  /// what the pick says of it; None, its control's build's dialog (borrow_dialog)
+  asks : ((Json?) -> Unit)?
 }
 
 ///|
 fn TriplePanel::pick_now(self : TriplePanel, src : Source, station : String, of : String) -> Json? {
   if @sf.presented_open_of(self.serial) {
-    self.pick = (src.topic)("pick", pick_params(station, of)).value
+    // (until its own is read, what the page that opened it has: the same pick, so it opens as it stays, not first
+    // in its bones somewhere else)
+    match src.topic("pick", pick_params(station, of)).get().value {
+      Some(_) as v => self.pick = v
+      None => ()
+    }
   }
   self.pick
 }
@@ -111,6 +125,7 @@ fn pick_save(src : Source, station : String, of : String, patch : Map[String, Js
 /// The panel of the pick `of` on `station` (the control's: see model_triple) opened beside `from`: from the control,
 /// or from elsewhere that says what runs (an agent's card's account: `side` Right, beside the card). Opened already,
 /// it closes (a trigger toggles it: one the panel does not cover, the card's, stays pressable while it is open).
+/// `page`: the pick as the page that opened it has it (a new chat's), shown until the panel's own is read.
 pub fn open_triple_panel(
   src : Source,
   station : String,
@@ -118,6 +133,9 @@ pub fn open_triple_panel(
   from : @sf.Anchor,
   saved? : String = "",
   side? : @ui.Side = Bottom,
+  page? : Json? = None,
+  gone? : () -> Unit = fn() {  },
+  asks? : (Json?) -> Unit,
 ) -> Unit {
   let me = station + "\u{1}" + of
   if triple.open == me {
@@ -125,7 +143,7 @@ pub fn open_triple_panel(
     return
   }
   triple.open = me
-  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: "", all: false, pick: None, sheet: false }
+  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: "", all: false, pick: page, sheet: false, shown: "", asks }
   pick_draft(src, station, of, { "open": Json::boolean(true) })
   @sf.panel(
     @sf.t("android-chat.new.model"),
@@ -138,7 +156,10 @@ pub fn open_triple_panel(
     // (beside what opened it, its title over its models' column, its search beside it, how hard it thinks titled over
     // its own: triple_body's; 2026-11-02 用户「搜索在左边区域，思考深度和模型在同一个层级」)
     heads_itself=true,
-    gone=fn() { triple.open = "" },
+    gone=fn() {
+      triple.open = ""
+      gone()
+    },
     focus=false,
     // (the models scroll by themselves, what goes with the one picked beside them in view)
     lists=true,
@@ -154,7 +175,7 @@ pub fn open_triple_panel(
 ///|
 /// The control of the pick `of` on `station` (ModelTriple): its line, and its panel under it while open (above it with
 /// `up`). `page`: the control as a page has it with itself (a new chat's: its `pick`), not read on its own; `small`: in
-/// a composer's row (ModelTriple.css.ts in newChat: 28 high, its words 12). `saved`: what is said once a model picked
+/// a composer's row (its words 12). `saved`: what is said once a model picked
 /// (onConfirm's toast: a chat's, from its next turn; a connect's, its model bound; nothing where nothing runs on it yet,
 /// a new chat's or a new connect's). `floating`: over a page rather than in a row (a new chat's over its
 /// composer, narrow): a capsule of the composer's glass.
@@ -172,7 +193,7 @@ pub fn model_triple(
   let t = @sf.theme()
   let v = match page {
     Some(_) => page
-    None => (src.topic)("pick", pick_params(station, of)).value
+    None => src.topic("pick", pick_params(station, of)).get().value
   }
   guard v is Some(Object(_)) else { return }
   let value = field(v, "value")
@@ -185,9 +206,18 @@ pub fn model_triple(
   let id = c.id("triple/" + me)
   let can = options.length() > 0 && !saving
   let open = triple.open == me
-  if can && !open && (c.clicked(id) || triple.asked == me) {
+  let go = fn() {
     triple.asked = ""
-    open_triple_panel(src, station, of, Of(id), saved~)
+    open_triple_panel(src, station, of, Of(id), saved~, page~)
+  }
+  if can && !open {
+    c.on_press(id, fn() {
+      go()
+    })
+  }
+  // (asked from elsewhere: opened as it is seen)
+  if can && !open && triple.asked == me {
+    go()
   }
   let runtime = text(value, "runtime")
   let (words, muted) = if small { (triple_words_xs, triple_muted_xs) } else { (triple_words, triple_muted) }
@@ -296,6 +326,141 @@ pub fn model_triple(
 }
 
 ///|
+/// The control of the pick `of` on `station` (model_triple's, as nodes, made once) in `parent`, its words as the core's
+/// pick says them now: the model's mark and name, then (each left out where the line has not the room, what matters
+/// least first) its runtime, how hard it thinks, how fast, who runs it (its mark, its name, its allowance's chips); a
+/// ring in place of its chevron while what was picked is on its way; on its hover's ground while the hand is on it and
+/// while its panel is open. Pressed, its panel opens beside it (open_triple_panel); borrowing a model from there is
+/// asked in the presenters' confirm. `saved`: as model_triple's. Nothing while the pick is not read.
+fn model_triple_node(parent : @view.View, src : Source, station : String, of : String, saved? : String = "") -> Unit {
+  let me = station + "\u{1}" + of
+  let dkey = "pick.save/" + station + "/" + of
+  let v = fn() { src.topic("pick", pick_params(station, of)).get().value }
+  let value = fn() { field(v(), "value") }
+  let vo = fn() { field(v(), "valueOption") }
+  let account = fn() { field(v(), "account") }
+  let runtime = fn() { text(value(), "runtime") }
+  let opened = @signals.signal(false, same=fn(a, b) { a == b })
+  // borrowing a model of another station's, asked first (borrow_dialog's, put up by the presenters)
+  let asks = fn(borrow : Json?) { borrow_ask(src, station, of, borrow) }
+  parent.show(fn() { v() is Some(Object(_)) }, fn(o) {
+    o.box(fn(b) {
+      @sf.style_node(b, fn() { triple_style }, in_row=true)
+      // (no wider than its row leaves it: what it says given way within it, its parts left out, its name cut last)
+      b
+      .shrink(Is(1.0))
+      .min_width(Is(Some(0.0)))
+      .ground(By(fn() { if @sf.lit_node(b) || opened.get() { @ui.tree_theme().color(Hover) } else { 0L } }))
+      |> ignore
+      let can = fn() { items(v(), "options").length() > 0 && !doing(dkey) }
+      @sf.presses_node(b, fn() {
+        guard @signals.untracked(can) && triple.open != me else { return }
+        triple.asked = ""
+        let (x, y, w, h) = b.placed_window_now()
+        opened.set(true)
+        open_triple_panel(src, station, of, At(x, y, w, h), saved~, gone=fn() { opened.set(false) }, asks~)
+      }, on=can)
+      // (each part what its row holds itself, so the row leaves it out where it has not the room: View::drops)
+      let part = fn(r : @view.View, drop : Int, shown : () -> Bool, body : (@view.View) -> Unit) {
+        r.show(shown, fn(x) {
+          @sf.style_node(x, fn() { triple_part }, in_row=true)
+          x.drops(Is(drop)) |> ignore
+          body(x)
+        })
+      }
+      let dot = fn(x : @view.View) { @sf.words_node(x, fn() { "·" }, fn() { triple_muted }) |> ignore }
+      b.pick(fn() { items(v(), "options").length() == 0 }, fn(r, none) {
+        // (its parts in a row, as the capsule's: what has not the room left out of it, View::drops)
+        r
+        .row(Is(true))
+        .gap(Is(triple_gap))
+        .lines_up(Is(Some(Middle)))
+        .fits(Is(true))
+        .shrink(Is(1.0))
+        .min_width(Is(Some(0.0)))
+        |> ignore
+        if none {
+          @sf.words_node(r, fn() { @sf.t("web-main.model.none") }, fn() { triple_muted }) |> ignore
+          return
+        }
+        r.pick(fn() { (text(field(vo(), "maker"), "id"), runtime()) }, fn(m, k) { @sf.maker_mark_node(m, k.0, k.1, 14.0) |> ignore })
+        // (within the room it has, the most it can say: model_triple's; the model never, its name cut short last)
+        @sf.words_node(r, fn() {
+          let model = text(value(), "model")
+          if model == "" {
+            @sf.t("web-main.model.pick")
+          } else {
+            match text(vo(), "name") {
+              "" => model
+              n => n
+            }
+          }
+        }, fn() { triple_name })
+        .shrink(Is(1.0))
+        .min_width(Is(Some(0.0)))
+        .cuts(Is(true))
+        .allow_ellipsis(Is(true))
+        // (what may be left out leaving for it first, its name cut short only then: View::fit_whole)
+        .fit_whole(Is(true))
+        |> ignore
+        part(r, triple_drop_runtime, fn() { !flag(v(), "runtimeFixed") && items(vo(), "runtimes").length() > 1 }, fn(x) {
+          dot(x)
+          @sf.words_node(x, fn() { @settings.runtime_label(runtime()) }, fn() { triple_words }) |> ignore
+        })
+        part(r, triple_drop_effort, fn() { text(value(), "effort") != "" || items(v(), "efforts").length() > 0 }, fn(x) {
+          dot(x)
+          @sf.words_node(x, fn() {
+            let effort = text(value(), "effort")
+            if effort == "" {
+              @sf.t("web-main.model.defaultEffort")
+            } else {
+              effort_text(effort)
+            }
+          }, fn() { triple_words })
+          |> ignore
+        })
+        part(r, triple_drop_effort, fn() { text(v(), "fastText") != "" }, fn(x) {
+          dot(x)
+          @sf.words_node(x, fn() { text(v(), "fastText") }, fn() { triple_words }) |> ignore
+        })
+        // (who runs it: its mark where it has one, then its name, then its allowance's chips: model_triple's)
+        let profile = fn() { field(account(), "profile") }
+        let marked = fn() { profile() is Some(Object(_)) }
+        part(r, triple_drop_account, fn() { account() is Some(Object(_)) && marked() }, fn(x) {
+          dot(x)
+          x.pick(fn() { (text(profile(), "mark"), runtime()) }, fn(m, k) { @sf.maker_mark_node(m, k.0, k.1, 14.0) |> ignore })
+        })
+        r.show(fn() { account() is Some(Object(_)) }, fn(x) {
+          @sf.style_node(x, fn() { if marked() { triple_alone } else { triple_part } }, in_row=true)
+          x.drops(Is(triple_drop_name)) |> ignore
+          x.show(fn() { !marked() }, dot)
+          @sf.words_node(x, fn() { text(account(), "text") }, fn() {
+            match text(account(), "level") {
+              "amber" => triple_amber
+              "red" => triple_red
+              _ => triple_words
+            }
+          })
+          |> ignore
+        })
+        part(r, triple_drop_account, fn() { account() is Some(Object(_)) && marked() }, fn(x) {
+          @sf.quota_chips_node(x, fn() { field(profile(), "quota") }, small=true)
+        })
+      })
+      // what was picked on its way: a ring in place of the chevron
+      b.pick(fn() { doing(dkey) }, fn(e, saving) {
+        if saving {
+          @sf.spinner_node(e, size=12.0) |> ignore
+        } else {
+          @sf.icon_node(e, "chevron-down", 12.0, By(fn() { @sf.theme().p.muted })) |> ignore
+        }
+      })
+    })
+    |> ignore
+  })
+}
+
+///|
 /// What a model is picked from, made up, for what the panel shows while it is read (triple_body in its bones): a few
 /// models of two series, two runtimes, how hard it thinks.
 fn triple_sample() -> Json {
@@ -323,8 +488,11 @@ fn triple_sample() -> Json {
 fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String, contents : TriplePanel, saved : String, close : () -> Unit) -> Unit {
   let v = contents.pick_now(src, station, of)
   if v is None {
-    // (read the first time: the panel of made-up models, in its bones)
+    // (read the first time: the panel of made-up models, in its bones; the model picked brought into view once its own
+    // are read)
+    let shown = contents.shown
     @sf.waiting(c, fn() { triple_body(c, @sfbase.sample_source, station, of, contents, Some(triple_sample()), saved, close) })
+    contents.shown = shown
     return
   }
   triple_body(c, src, station, of, contents, v, saved, close)
@@ -507,21 +675,22 @@ fn triple_body(
           Some(Number(n, ..)) => n.to_int().to_string()
           _ => ""
         }
-        if triple_option(
-            c,
-            "triple/kind/" + id,
-            text(kv, "title"),
-            on,
-            fn() {
-              c.box(style=triple_kind_mark, fn() { @sf.maker_mark(c, id, "", 14.0) |> ignore }) |> ignore
-              c.text(text(kv, "title"), style=if on { triple_picked } else { triple_words }) |> ignore
-            },
-            trail=fn() { c.text(count, style=triple_usual) |> ignore },
-            // (a maker is browsed, not picked: lit, no check)
-            checks=false,
-          ) {
-          contents.kind = id
-        }
+        triple_option(
+          c,
+          "triple/kind/" + id,
+          text(kv, "title"),
+          on,
+          fn() {
+            c.box(style=triple_kind_mark, fn() { @sf.maker_mark(c, id, "", 14.0) |> ignore }) |> ignore
+            c.text(text(kv, "title"), style=if on { triple_picked } else { triple_words }) |> ignore
+          },
+          trail=fn() { c.text(count, style=triple_usual) |> ignore },
+          // (a maker is browsed, not picked: lit, no check)
+          checks=false,
+          on_press=fn() {
+            contents.kind = id
+          },
+        )
       }
     })
   }
@@ -538,16 +707,18 @@ fn triple_body(
       ""
     }
     if back_to != "" {
-      if triple_option(c, "triple/back", back_to, false, fn() {
-          @sf.icon(c, "chevron-left", size=14.0, color=@sf.theme().p.muted) |> ignore
-          c.text(back_to, style=triple_picked) |> ignore
-        }) {
-        if sheet && contents.kind != "" {
-          contents.kind = ""
-        } else {
-          contents.all = false
-        }
-      }
+      triple_option(c, "triple/back", back_to, false, fn() {
+        @sf.icon(c, "chevron-left", size=14.0, color=@sf.theme().p.muted) |> ignore
+        c.text(back_to, style=triple_picked) |> ignore
+      },
+        on_press=fn() {
+          if sheet && contents.kind != "" {
+            contents.kind = ""
+          } else {
+            contents.all = false
+          }
+        },
+      )
     }
     if searching || kinds.length() < 2 {
       model_rows()
@@ -584,20 +755,21 @@ fn triple_body(
   let starred = fn() { section("", liked, true) }
   // the way to all of them, farthest from what opened the panel
   let to_all = fn() {
-    if triple_option(
-        c,
-        "triple/all",
-        @sf.t("web-main.model.allModels"),
-        false,
-        // (its chevron right after its words: 「全部模型的箭头跟在文字后面」)
-        fn() {
-          c.text(@sf.t("web-main.model.allModels"), style=triple_words) |> ignore
-          @sf.icon(c, "chevron-right", size=14.0, color=@sf.theme().p.muted) |> ignore
-        },
-        checks=false,
-      ) {
-      contents.all = true
-    }
+    triple_option(
+      c,
+      "triple/all",
+      @sf.t("web-main.model.allModels"),
+      false,
+      // (its chevron right after its words: 「全部模型的箭头跟在文字后面」)
+      fn() {
+        c.text(@sf.t("web-main.model.allModels"), style=triple_words) |> ignore
+        @sf.icon(c, "chevron-right", size=14.0, color=@sf.theme().p.muted) |> ignore
+      },
+      checks=false,
+      on_press=fn() {
+        contents.all = true
+      },
+    )
   }
   // how hard it thinks beside what opened the panel: its own column at the panel's right, beside the models, its
   // levels one under another (2026-11-02 用户「思考深度放在整个面板的右边」「模型跟思考深度的并排的」); in a sheet
@@ -745,6 +917,13 @@ fn triple_body(
       |> ignore
     }
   }
+  // the model picked in view as the panel opens and as each level is come to (2026-11-05 用户「模型选择面板打开不会自动
+  // 滚动到能看见已选择模型的地方」), not while what is typed filters them
+  let level = if !all { "first" } else if kind_open { "all/" + kind } else { "all" }
+  if !searching && contents.shown != level {
+    contents.shown = level
+    c.show(c.id("triple/model/" + picked))
+  }
   // the model picked is another station's: said over the foot, which borrows it rather than confirming
   let borrow = field(v, "borrow")
   if borrow is Some(Object(_)) {
@@ -794,7 +973,7 @@ fn triple_find_input(c : @ui.Ctx, t : @sf.Theme, contents : TriplePanel) -> Unit
 fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
   let draft = field(v, "draft")
   let who = c.id("triple/who")
-  if c.clicked(who) || triple.accounts_asked {
+  let go = fn() {
     triple.accounts_asked = false
     @sf.panel(
       @sf.t("web-main.model.account"),
@@ -802,6 +981,11 @@ fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v :
       from=Of(who),
       focus=false,
     )
+  }
+  c.on_press(who, go)
+  // (asked from elsewhere: opened as it is seen)
+  if triple.accounts_asked {
+    go()
   }
   c.box(style=triple_who(), id=who, fn() {
       c.text(@sf.t("web-main.model.account"), style=triple_who_lead) |> ignore
@@ -831,9 +1015,9 @@ fn triple_runtime(c : @ui.Ctx, src : Source, station : String, of : String, v : 
     if r is String(r) { Some(@sf.choice(r, @settings.runtime_label(r), icon="runtime:" + r)) } else { None }
   })
   let id = c.id("triple/runtime")
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sf.pick(head, choices, now, fn(r) { pick_save(src, station, of, { "runtime": Json::string(r) }) }, from=Of(id), search=false)
-  }
+  })
   let b = c.box(style=triple_who(), id~, fn() {
     c.text(head, style=triple_who_lead) |> ignore
     @sf.maker_mark(c, "", now, triple_pick_mark) |> ignore
@@ -855,11 +1039,11 @@ fn triple_speed(c : @ui.Ctx, src : Source, station : String, of : String, v : Js
   }
   let choices = [
     @sf.choice("standard", @sf.t("web-main.model.standard")),
-    // (Fast its bolt, and what it costs: ModelTriple.tsx's fastNote)
+    // (Fast its bolt)
     @sf.choice("fast", "Fast", note=@sf.t("web-main.model.fastNote"), icon="zap"),
   ]
   let id = c.id("triple/fast")
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sf.pick(
       head,
       choices,
@@ -870,7 +1054,7 @@ fn triple_speed(c : @ui.Ctx, src : Source, station : String, of : String, v : Js
       from=Of(id),
       search=false,
     )
-  }
+  })
   let words = choices.search_by(fn(ch) { ch.key == now }).map(fn(i) { choices[i].label }).unwrap_or("")
   let b = c.box(style=triple_who(), id~, fn() {
     c.text(head, style=triple_who_lead) |> ignore
@@ -888,7 +1072,7 @@ fn triple_context(c : @ui.Ctx, src : Source, station : String, of : String, v : 
   let now = text(v, "contextNow")
   let choices = items(v, "contexts").map(fn(o) { @sf.choice(text(Some(o), "id"), text(Some(o), "text")) })
   let id = c.id("triple/context")
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sf.pick(
       head,
       choices,
@@ -897,7 +1081,7 @@ fn triple_context(c : @ui.Ctx, src : Source, station : String, of : String, v : 
       from=Of(id),
       search=false,
     )
-  }
+  })
   let words = choices.search_by(fn(ch) { ch.key == now }).map(fn(i) { choices[i].label }).unwrap_or("")
   let b = c.box(style=triple_who(), id~, fn() {
     c.text(head, style=triple_who_lead) |> ignore
@@ -935,11 +1119,16 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, content
     }
   })
   |> ignore
-  if borrow is Some(Object(_)) &&
-    @sf.button(c, text(borrow, "action"), key="triple/borrow", tone=Primary, disabled=!flag(borrow, "allowed")) {
-    triple.open = ""
-    triple.borrow_asking = station + "\u{1}" + of
-    close()
+  if borrow is Some(Object(_)) {
+    @sf.button(c, text(borrow, "action"), key="triple/borrow", tone=Primary, disabled=!flag(borrow, "allowed"), on_press=fn() {
+      triple.open = ""
+      // (the panel shut first: shutting it shuts what is over it, the ask put up after it is not)
+      close()
+      match contents.asks {
+        Some(ask) => ask(borrow)
+        None => triple.borrow_asking = station + "\u{1}" + of
+      }
+    }) |> ignore
   }
 }
 
@@ -968,7 +1157,7 @@ fn triple_model_row(
     Some(String(r)) => r
     _ => text(field(v, "value"), "runtime")
   }
-  // (its ids, a line each, over it while it is pointed at: ModelTriple.tsx's tip)
+  // (its ids, a line each)
   let ids = items(o, "ids").filter_map(fn(i) { if i is String(s) { Some(s) } else { None } }).join("\n")
   let usual = text(o, "usualText")
   let from_station = match field(o, "fromStation") {
@@ -1018,9 +1207,30 @@ fn triple_model_row(
       )
     }
   }
-  let mut pressed = false
+  // pressed: picked
+  let go = fn() {
+    if text(o, "availability") == "borrowable" {
+      // (another station's: borrowed first, from the foot)
+      pick_draft(src, station, of, { "model": Json::string(model) })
+    } else {
+      // made what it runs on at once, as it last ran here, and the panel closed: nothing of it left to confirm
+      triple.open = ""
+      close()
+      if !picked || text(field(v, "value"), "model") != model {
+        let p : Map[String, Json] = { "model": Json::string(model) }
+        match field(o, "usual") {
+          Some(Object(u)) =>
+            for k in ["runtime", "effort", "fast", "context"] {
+              p[k] = u.get(k).unwrap_or(Json::null())
+            }
+          _ => ()
+        }
+        pick_save(src, station, of, p, done=saved)
+      }
+    }
+  }
   let row = fn() {
-    pressed = triple_option(c, "triple/model/" + model, text(o, "name"), picked, trail~, tip=ids, fn() {
+    triple_option(c, "triple/model/" + model, text(o, "name"), picked, trail~, tip=ids, fn() {
       @sf.maker_mark(c, text(field(o, "maker"), "id"), runs, 14.0) |> ignore
       // (all of its name in the room its column leaves it, on a second line where one is not enough: what goes with
       // the model picked beside the models takes the room its words need first)
@@ -1047,7 +1257,7 @@ fn triple_model_row(
         }
       })
       |> ignore
-    })
+    }, on_press=go)
   }
   if likes {
     c.box(style=triple_liking, fn() {
@@ -1057,27 +1267,6 @@ fn triple_model_row(
     |> ignore
   } else {
     row()
-  }
-  if pressed {
-    if text(o, "availability") == "borrowable" {
-      // (another station's: borrowed first, from the foot)
-      pick_draft(src, station, of, { "model": Json::string(model) })
-    } else {
-      // made what it runs on at once, as it last ran here, and the panel closed: nothing of it left to confirm
-      triple.open = ""
-      close()
-      if !picked || text(field(v, "value"), "model") != model {
-        let p : Map[String, Json] = { "model": Json::string(model) }
-        match field(o, "usual") {
-          Some(Object(u)) =>
-            for k in ["runtime", "effort", "fast", "context"] {
-              p[k] = u.get(k).unwrap_or(Json::null())
-            }
-          _ => ()
-        }
-        pick_save(src, station, of, p, done=saved)
-      }
-    }
   }
 }
 
@@ -1113,9 +1302,9 @@ fn triple_pick_row(
     @sf.icon(c, "chevron-down", size=triple_pick_chevron, color=t.p.muted) |> ignore
   })
   c.semantics(b, Button, id~, label=words)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sf.pick(head, choices, now, pick, from=Of(id), search=false)
-  }
+  })
 }
 
 ///|
@@ -1157,9 +1346,9 @@ fn triple_choices(
       |> ignore
     })
     c.semantics(b, Radio, id~, label=words, check=if on { On } else { Off })
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       pick(value)
-    }
+    })
   }
 }
 
@@ -1187,7 +1376,8 @@ fn triple_option(
   checks? : Bool = true,
   corner? : Bool = false,
   at_foot? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   let reach = if corner { @sf.menu_row_reach(t.rows.pick) } else { 0.0 }
@@ -1216,7 +1406,10 @@ fn triple_option(
   })
   c.semantics(b, Button, id~, label~)
   @sf.tip(c, key + "/tip", id, tip)
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
@@ -1224,7 +1417,7 @@ fn triple_option(
 /// now (and at its end, a chat's, what has the station pick again now: `pick.repick`, which account it took said in a
 /// toast), then each account with what is left of it; picked, back to the pick's panel.
 fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, close : () -> Unit) -> Unit {
-  let v = (src.topic)("pick", pick_params(station, of)).value
+  let v = src.topic("pick", pick_params(station, of)).get().value
   let draft = field(v, "draft")
   c.box(style=triple_accounts_box, fn() {
     match text(v, "dropped") {
@@ -1234,27 +1427,28 @@ fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, clo
     let mine = text(draft, "profile")
     let repick = text(v, "repick")
     let repicking = "pick.repick/" + station + "/" + of
-    if triple_option(
-        c,
-        "triple/account/",
-        @sf.t("web-main.model.auto"),
-        mine == "",
-        fn() {
-          c.box(style=triple_option_text, fn() {
-            c.text(@sf.t("web-main.model.auto"), style=if mine == "" { triple_picked } else { triple_words }) |> ignore
-            c.text(text(v, "autoNote"), style=triple_note_cut) |> ignore
-          })
-          |> ignore
-        },
-        trail?=if repick == "" {
-          None
-        } else {
-          Some(fn() {
-            let busy = doing(repicking)
-            if busy {
-              @sf.spinner(c, size=14.0) |> ignore
-            }
-            if @sf.panel_button(c, "triple/repick", repick) && !busy {
+    triple_option(
+      c,
+      "triple/account/",
+      @sf.t("web-main.model.auto"),
+      mine == "",
+      fn() {
+        c.box(style=triple_option_text, fn() {
+          c.text(@sf.t("web-main.model.auto"), style=if mine == "" { triple_picked } else { triple_words }) |> ignore
+          c.text(text(v, "autoNote"), style=triple_note_cut) |> ignore
+        })
+        |> ignore
+      },
+      trail?=if repick == "" {
+        None
+      } else {
+        Some(fn() {
+          let busy = doing(repicking)
+          if busy {
+            @sf.spinner(c, size=14.0) |> ignore
+          }
+          @sf.panel_button(c, "triple/repick", repick, on_press=fn() {
+            if !busy {
               act(src, repick, repicking, "pick.repick", Json::object(pick_params(station, of)), ok=fn(r) {
                 match text(Some(r), "said") {
                   "" => ()
@@ -1262,48 +1456,52 @@ fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, clo
                 }
               })
             }
-          })
-        },
-      ) {
-      pick_save(src, station, of, { "profile": Json::null() })
-      close()
-    }
+          }) |> ignore
+        })
+      },
+      on_press=fn() {
+        pick_save(src, station, of, { "profile": Json::null() })
+        close()
+      },
+    )
     let accounts = items(v, "accounts")
     for i, a in accounts {
       let a = Some(a)
       let id = text(a, "id")
       // (one line where nothing is said of what is left of it: a capsule, standing so in the panel's foot corners)
       let one_line = text(field(a, "quotaLine"), "text") == ""
-      if triple_option(c, "triple/account/" + id, text(a, "name"), mine == id, fn() {
-          c.box(style=triple_option_text, fn() {
-            c.text(text(a, "name"), style=if mine == id { triple_picked } else { triple_words }) |> ignore
-            let line = field(a, "quotaLine")
-            match text(line, "text") {
-              "" => ()
-              q =>
-                c.text(
-                  q,
-                  style=match text(line, "level") {
-                    "amber" => triple_amber_sm
-                    "red" => triple_red_sm
-                    _ => triple_note
-                  },
-                )
-                |> ignore
-            }
-          })
-          |> ignore
-        }, corner=one_line, at_foot=i == accounts.length() - 1) {
-        pick_save(src, station, of, { "profile": Json::string(id) })
-        close()
-      }
+      triple_option(c, "triple/account/" + id, text(a, "name"), mine == id, fn() {
+        c.box(style=triple_option_text, fn() {
+          c.text(text(a, "name"), style=if mine == id { triple_picked } else { triple_words }) |> ignore
+          let line = field(a, "quotaLine")
+          match text(line, "text") {
+            "" => ()
+            q =>
+              c.text(
+                q,
+                style=match text(line, "level") {
+                  "amber" => triple_amber_sm
+                  "red" => triple_red_sm
+                  _ => triple_note
+                },
+              )
+              |> ignore
+          }
+        })
+        |> ignore
+      }, corner=one_line, at_foot=i == accounts.length() - 1,
+        on_press=fn() {
+          pick_save(src, station, of, { "profile": Json::string(id) })
+          close()
+        },
+      )
     }
   })
   |> ignore
 }
 
 ///|
-/// Borrowing the picked model's account from another station, asked first (ModelTriple.tsx's Dialog): what it does,
+/// Borrowing the picked model's account from another station, asked first: what it does,
 /// 取消 and its action.
 fn borrow_dialog(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
   let me = station + "\u{1}" + of
@@ -1316,20 +1514,70 @@ fn borrow_dialog(c : @ui.Ctx, src : Source, station : String, of : String, v : J
       _ => ""
     }
   })
-  match wide_confirm(c, "borrow/" + me, open, text(borrow, "title"), lines, text(borrow, "action"), doing(dkey), flag(borrow, "allowed")) {
-    Some(true) =>
+  wide_confirm(c, "borrow/" + me, open, text(borrow, "title"), lines, text(borrow, "action"), doing(dkey), flag(borrow, "allowed"), fn(
+    yes,
+  ) {
+    if yes {
       act(src, text(borrow, "action"), dkey, "pick.borrow", Json::object(pick_params(station, of)), done=@sf.t("web-main.model.borrowed"), ok=fn(_) {
         triple.borrow_asking = ""
       })
-    Some(false) => triple.borrow_asking = ""
-    None => ()
-  }
+    } else {
+      triple.borrow_asking = ""
+    }
+  })
+}
+
+///|
+/// Borrowing a model of another station's asked first (borrow_dialog's), put up by the presenters as its panel's 借用 is
+/// pressed (open_triple_panel's `asks`), what it holds nodes: its title, its lines, 取消 and its action at its foot (a
+/// ring before them while it borrows), closed once it has borrowed it.
+fn borrow_ask(src : Source, station : String, of : String, borrow : Json?) -> Unit {
+  let dkey = "pick.borrow/" + station + "/" + of
+  let lines = items(borrow, "lines").map(fn(l) {
+    match l {
+      String(s) => s
+      _ => ""
+    }
+  })
+  let action = text(borrow, "action")
+  let allowed = flag(borrow, "allowed")
+  @sf.panel_nodes(
+    text(borrow, "title"),
+    from=Unanchored,
+    w=confirm_w,
+    fn(b, _) {
+      for l in lines {
+        @sf.words_node(b, fn() { l }, fn() { confirm_line }) |> ignore
+      }
+    },
+    foot=fn(f, shut) {
+      f.box(fn(r) {
+        @sf.style_node(r, fn() { confirm_foot })
+        @sf.button_node(r, fn() { @sf.t("common.cancel") }, shut, tone=Ghost) |> ignore
+        r.show(fn() { doing(dkey) }, fn(s) { @sf.spinner_node(s, size=14.0) |> ignore })
+        @sf.button_node(
+          r,
+          fn() { action },
+          fn() {
+            act(src, action, dkey, "pick.borrow", Json::object(pick_params(station, of)), done=@sf.t("web-main.model.borrowed"), ok=fn(_) {
+              shut()
+            })
+          },
+          tone=Primary,
+          busy=fn() { doing(dkey) },
+          disabled=fn() { !allowed },
+        )
+        |> ignore
+      })
+      |> ignore
+    },
+  )
 }
 
 ///|
 /// A dialog that asks before something is done (the web's Confirm, Dialog): its title, its lines, 取消 and `action`
-/// (`danger`: in red). Some(true) on the frame after the action was pressed, Some(false) after 取消, Esc or a press
-/// outside; None meanwhile.
+/// (`danger`: in red). `said` told true as the action is pressed, false as 取消 is, or as Esc or a press outside closes
+/// it.
 fn wide_confirm(
   c : @ui.Ctx,
   key : String,
@@ -1339,8 +1587,8 @@ fn wide_confirm(
   action : String,
   busy : Bool,
   allowed : Bool,
-) -> Bool? {
-  let mut said : Bool? = None
+  said : (Bool) -> Unit,
+) -> Unit {
   let d = @sf.dialog(
     c,
     key,
@@ -1348,34 +1596,31 @@ fn wide_confirm(
     title,
     w=dmin(confirm_w, c.width - 32.0),
     close_label=@sf.t("common.close"),
+    on_close=fn() { said(false) },
     fn() {
       for l in lines {
         c.text(l, style=confirm_line) |> ignore
       }
       c.box(style=confirm_foot, fn() {
-        if small_button(c, key + "/cancel", @sf.t("common.cancel"), false, true) {
-          said = Some(false)
-        }
+        small_button(c, key + "/cancel", @sf.t("common.cancel"), false, true, on_press=fn() { said(false) })
         if busy {
           @sf.spinner(c, size=14.0) |> ignore
         }
-        if small_button(c, key + "/ok", action, true, allowed && !busy) {
-          said = Some(true)
-        }
+        small_button(c, key + "/ok", action, true, allowed && !busy, on_press=fn() { said(true) })
       })
       |> ignore
     },
   )
-  if open && !d && said is None {
-    said = Some(false)
+  // (closed by Esc or a press outside: what the dialog says as it is built)
+  if open && !d {
+    said(false)
   }
-  said
 }
 
 ///|
-/// A small panel's small pill (ModelTriple.css.ts btnSm): 24 high, 10 in, its words in 12; `primary` dark with light
-/// words, else quiet with the ground on hover; not pressed while `on` is false. True on the frame after a press.
-fn small_button(c : @ui.Ctx, key : String, words : String, primary : Bool, on : Bool) -> Bool {
+/// A small panel's small pill: 24 high, 10 in, its words in 12; `primary` dark with light
+/// words, else quiet with the ground on hover; not pressed while `on` is false. `on_press` as it is pressed.
+fn small_button(c : @ui.Ctx, key : String, words : String, primary : Bool, on : Bool, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(
     style=match (primary, on) {
@@ -1387,7 +1632,10 @@ fn small_button(c : @ui.Ctx, key : String, words : String, primary : Bool, on : 
     fn() { c.text(words, style=if primary { small_primary_words } else { small_quiet_words }) |> ignore },
   )
   c.semantics(b, Button, id~, label=words)
-  on && c.clicked(id)
+  match on_press {
+    Some(f) if on => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
@@ -1405,7 +1653,7 @@ let triple_part : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 let triple_alone : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
-/// The order the control's line leaves its parts out in, short of room (ModelTriple.tsx DROPS): who runs it by name
+/// The order the control's line leaves its parts out in, short of room: who runs it by name
 /// (in its part), who runs it, the runtime, how hard it thinks and how fast.
 let triple_drop_name : Int = 1
 
@@ -1424,6 +1672,10 @@ let triple_drop_effort : Int = 4
 /// a finger's taller row, its own 8 in neither).
 // kept across runs: a value (no field of it changes)
 let triple_style : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Full hovered{bg=Hover}")
+
+///|
+/// The room between a model control's parts (triple_style's gap=S1_5), as nodes: the row of them in the capsule.
+let triple_gap : Double = 6.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1520,11 +1772,6 @@ let triple_tray_first : @ui.Style = @ui.css("w=Full mb=S2 gap=SPx")
 let triple_pick_value : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("row gap=S1_5 align=ACenter"))
 
   .then(@ui.style(w=@sf.grow))
-
-///|
-/// A select's share of their line: its name over it.
-// kept across runs: a value (no field of it changes)
-let triple_select_box : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 
 ///|
 /// A column's rows, 1 apart.

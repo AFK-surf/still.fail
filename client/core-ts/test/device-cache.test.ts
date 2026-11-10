@@ -37,7 +37,7 @@ async function holder(sub = "s1") {
 test("a device answers only its own person's device, named by the lock, whose session stands", async () => {
   const r = await holder();
   const inner = r.core.inner;
-  const token = (o: { device?: string; sub?: string; sid?: string; ws?: string } = {}) => r.g.credential(o.ws ?? "ws", o.device ?? PHONE, o.sub ?? "s1", 4102444800, "sid" in o ? o.sid : "live");
+  const token = (o: { device?: string; sub?: string; sid?: string; ws?: string } = {}) => r.g.credential(o.ws ?? "ws", o.device ?? PHONE, o.sub ?? "s1", 4102444800, "member", "sid" in o ? o.sid : "live");
   assert.equal(allowed(inner, "ws", token(), PHONE), true);
   assert.equal(allowed(inner, "ws", token({ sid: "gone" }), PHONE), false, "its login session gone");
   assert.equal(allowed(inner, "ws", r.g.credential("ws", PHONE, "s1"), PHONE), false, "no session said");
@@ -51,7 +51,7 @@ test("a device answers only its own person's device, named by the lock, whose se
 
 test("another member's device, though the lock names it, is told nothing", async () => {
   const r = await holder("s2");
-  assert.equal(allowed(r.core.inner, "ws", r.g.credential("ws", PHONE, "s2", 4102444800, "live"), PHONE), false);
+  assert.equal(allowed(r.core.inner, "ws", r.g.credential("ws", PHONE, "s2", 4102444800, "member", "live"), PHONE), false);
   r.core.close();
 });
 
@@ -65,7 +65,7 @@ test("what it asks is answered only of the workspace it proved itself in", async
     for (let i = 0; i < 200 && out.length === 0; i++) await r.host.time.pass(5);
     return out[0] as Record<string, any>;
   };
-  assert.deepEqual(await say({ t: "hello", ws: "ws", credential: r.g.credential("ws", PHONE, "s1", 4102444800, "live") }), { t: "ok" });
+  assert.deepEqual(await say({ t: "hello", ws: "ws", credential: r.g.credential("ws", PHONE, "s1", 4102444800, "member", "live") }), { t: "ok" });
   const list = await say({ t: "list", station: ST });
   assert.deepEqual(list.rows.map((x: any) => x.id), ["7"]);
   const page = await say({ t: "entries", station: ST, thread: 7, after: 100, limit: 500 });
@@ -80,7 +80,7 @@ test("a stranger's first word ends it", async () => {
   const [server, client] = await pipe();
   r.core.inner.runner.fork(Effect.ignore(serveCache(r.core.inner, "ee".repeat(32), server)));
   const out: unknown[] = [];
-  r.core.inner.runner.fork(Effect.ignore(Effect.map(Effect.andThen(client.send({ t: "hello", ws: "ws", credential: r.g.credential("ws", "ee".repeat(32), "s1", 4102444800, "live") }), client.next()), (x) => out.push(x))));
+  r.core.inner.runner.fork(Effect.ignore(Effect.map(Effect.andThen(client.send({ t: "hello", ws: "ws", credential: r.g.credential("ws", "ee".repeat(32), "s1", 4102444800, "member", "live") }), client.next()), (x) => out.push(x))));
   for (let i = 0; i < 200 && out.length === 0; i++) await r.host.time.pass(5);
   assert.deepEqual(out[0], { t: "no" });
   r.core.close();
@@ -96,7 +96,7 @@ test("the device away takes what it lacks, before and after what it holds, and s
   const [server, client] = await pipe();
   r.core.inner.runner.fork(Effect.ignore(serveCache(r.core.inner, PHONE, server)));
   const done: { brought: boolean; upTo: number | null }[] = [];
-  const hello = Effect.andThen(client.send({ t: "hello", ws: "ws", credential: r.g.credential("ws", PHONE, "s1", 4102444800, "live") }), client.next());
+  const hello = Effect.andThen(client.send({ t: "hello", ws: "ws", credential: r.g.credential("ws", PHONE, "s1", 4102444800, "member", "live") }), client.next());
   s.core.inner.runner.fork(Effect.ignore(Effect.map(Effect.andThen(hello, fillOver(s.core.inner, ST, client, () => true)), (c) => done.push(c))));
   for (let i = 0; i < 500 && done.length === 0; i++) {
     await r.host.time.pass(5);
@@ -138,7 +138,7 @@ test("over iroh: a station down, the phone asks its person's other device, and i
   await phone.watch({ topic: "lock", workspace: "ws" });
   const inner = phone.core.inner;
   inner.mesh = () => Effect.succeed({ deviceId: () => phoneEnd.id(), endpoint: () => phoneEnd, lockClaim: () => null } as never);
-  inner.cloudSync.credential = () => Effect.succeed({ credential: g.credential("ws", phoneEnd.id(), "s1", 4102444800, "live") }) as never;
+  inner.cloudSync.credential = () => Effect.succeed({ credential: g.credential("ws", phoneEnd.id(), "s1", 4102444800, "member", "live") }) as never;
   const chat = await phone.watch({ topic: "chat", station: ST, thread: 7 });
   await phone.host.time.pass(100);
   assert.notEqual(inner.data.logSpan("entry", ST, "7")?.max, 120, "not there yet");

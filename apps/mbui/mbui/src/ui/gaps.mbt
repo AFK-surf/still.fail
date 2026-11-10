@@ -288,7 +288,7 @@ fn gap_between(
 ///|
 /// Whether each node of the frame just built shows whole, and the layer it is in. A node's parent comes before it in
 /// the pool. Shown whole: drawn, not moved off its place, in the window and in what cuts it (a row scrolled half under
-/// a list's edge is measured nowhere). Its layer: a layer, a page of a pager, one put where it is said, over the whole
+/// a list's edge is measured nowhere). Its layer: a layer, one put where it is said, over the whole
 /// window: what lies over another on purpose.
 fn Ctx::shown_whole(self : Ctx) -> (Array[Bool], Array[Int]) {
   let n = self.count
@@ -301,7 +301,7 @@ fn Ctx::shown_whole(self : Ctx) -> (Array[Bool], Array[Int]) {
       b.y >= -gap_slack &&
       b.x + b.fw <= self.width + gap_slack &&
       b.y + b.fh <= self.height + gap_slack
-    let aside = b.layer || b.portal || b.pager != 0 || b.placed_at()
+    let aside = b.layer || b.portal || b.placed_at()
     let moved = b.moved_off()
     if p < 0 || p >= n {
       whole[i] = b.opacity > 0.01 && inside && !moved

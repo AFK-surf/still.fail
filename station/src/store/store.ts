@@ -19,16 +19,22 @@ import { log } from "../ops/log.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { readArchive, threadFile } from "./archive.ts";
 import {
-  type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
-  type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Handed, type Letter, type AuthorKind, type Published, type ProcessRow, type ProfileStatus,
+  type Attachment, type AutoTitle, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
+  type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Handed, type Letter, type AuthorKind, type ProcessRow, type ProfileStatus,
   type SessionBusy, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
-  type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, type InWorkspace, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
+  type CardChoice, type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, type InWorkspace, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STATION_AUTHOR, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
-  CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
+  LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, LETTER_SQL, MESSAGES_BEFORE, MESSAGE_PAGE_ENTRIES, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addEditIndex, repairMergedEditLookup, addRuntimeSessionRuntime, hasRuntimeOrderIndex, addCardOutcomes, addListState, addLetters, addPendingCards, addSessionTurns, addSessionWork, addTellIndexes, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addSmallJobColumn, addUsageColumns, addUsageQuarters, addUsageTotals, addWaitWatchColumn, addWatchColumn, addWorkspaceColumns, addOpenerTitle, addLeftColumn } from "./schema.ts";
 import { installUsageCompactions, usageCompactionsReady } from "./usage-compactions.ts";
+import { installPeopleSinceIndex } from "./legacy-people-since.ts";
+import { ARCHIVE_POLICY, LEGACY_ARCHIVE_POLICY, hasLegacyArchivePolicy, installArchivePolicyIndex } from "./archive-policy-index.ts";
+import { hasLegacyDecisionTime, installDecisionTimeIndex } from "./legacy-decision-time.ts";
+import { hasDecisionSessionRepair, hasLegacyDecisionSession, hasSharedDecisionSession, installDecisionSessionIndex,
+  DecisionSessionsUnavailable, LEGACY_LAST_DECISION_SHARED, LEGACY_LAST_DECISION_SEPARATE, LEGACY_LAST_DECISION_REPAIR } from "./legacy-decision-session.ts";
 import { retiredUsage } from "./usage-retire.ts";
+import { findRuntimeSource, type RuntimeSource } from "./runtime-source.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 import { installUsageMinutes } from "./usage-minutes.ts";
@@ -39,35 +45,79 @@ import { retireDuplicateUsage } from "./usage-unified.ts";
 import { installEmptyUsageHistory, moveUsageHistory } from "./usage-history.ts";
 import { compactRecentlyCompacted, hasCompactUsage, savedCompactContext } from "./usage-compact.ts";
 import { DELETE_EXPIRED_REMOTE_RUNS, installRemoteRuns } from "./remote-runs.ts";
-import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, installActiveWatches } from "./watch-jobs.ts";
-import { RUNNING_LIMIT, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, installOtherActiveJobs } from "./active-jobs.ts";
+import { HAS_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH, HAS_ACTIVE_WATCH_BEFORE_UPGRADE, HAS_SESSION_ACTIVE_WATCH_BEFORE_UPGRADE, installActiveWatches } from "./watch-jobs.ts";
+import { AWAKE_JOBS, REMOTE_QUEUE_JOBS, RUNNING_LIMIT, RUNNING_JOB_SESSIONS, RUNNING_WAIT_JOBS, UP_JOBS_OF_SESSION, AWAKE_JOBS_BEFORE_UPGRADE, REMOTE_QUEUE_BEFORE_UPGRADE, RUNNING_LIMIT_BEFORE_UPGRADE, RUNNING_JOB_SESSIONS_BEFORE_UPGRADE, RUNNING_WAIT_JOBS_BEFORE_UPGRADE, UP_JOBS_BEFORE_UPGRADE, installOtherActiveJobs, installRemoteQueueIndex } from "./active-jobs.ts";
+import { activeRemoteJobsAvailable, REMOTE_QUEUE_PREPARED } from "./active-jobs-upgrade.ts";
 import { installWorkspaceActivity, workspaceActivityReady, WORKSPACE_ACTIVITY } from "./workspace-activity.ts";
+import { installRecoverWaits, recoverWaitsReady, RECOVER_AWAKE_WAITS, RECOVER_WAITS } from "./recover-waits.ts";
+import { AWAKE_WAIT_STATUS, awakeWaitsReady, exactAwakeTime } from "./awake-waits.ts";
+import { installSessionListIndex } from "./session-list-index.ts";
+import { installSessionBindingsIndex, SESSION_BINDINGS_DELETE, SESSION_BINDINGS_EXISTS, sessionBindingsReady } from "./session-bindings-index.ts";
+import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS, archiveMarksReady, installArchiveMarkIndex } from "./archive-mark-index.ts";
+import { installSessionUpJobs, SESSION_UP_JOB, SESSION_UP_JOBS, sessionUpJobsReady } from "./session-up-jobs.ts";
+import { installWorkspaceUpJobs } from "./workspace-up-jobs.ts";
+import { installJobNameFirst } from "./job-name-first.ts";
+import { installSessionCounts, sessionCountsReady, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT,
+  SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME } from "./session-counts.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
+import { checkWidgetSources, installWidgetSources, widgetSourceBeforeAddNeedsRepair, WIDGET_SOURCE, WIDGET_SOURCE_MISSING, WIDGET_SOURCE_ORIGINAL,
+  WIDGET_SOURCE_UNUSUAL, WidgetSourcesUnavailable } from "./widget-sources.ts";
+import { indexedCcThreads, installCcIndex } from "./cc-thread-index.ts";
+import { indexedSessionChat, installSessionChatIndex, SESSION_CHAT_SMALL, SESSION_CHAT_VERSION, SessionChatUnavailable } from "./session-chat-index.ts";
+import { installLatestThreadIndex, LATEST_THREAD_ATTEMPT, LATEST_THREAD_VERSION } from "./latest-thread-index.ts";
+import { CARD_POST_BEFORE, CARD_POST_LATEST, cardPostsReady, installCardPosts } from "./card-post-index.ts";
+import { installClosedCardsIndex } from "./legacy-closed-cards.ts";
 import { installSaidState, SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "./said-state.ts";
+import { archiveLastRead, installArchiveLast } from "./archive-last.ts";
+import { hasLegacySaid, legacySaidReadBoundary, legacySaidReadHead, legacySaidThreadNeedsDrain, LEGACY_SAID_SCAN, LEGACY_UNREAD } from "./legacy-said-build.ts";
+import { hasLegacyAgent, LEGACY_ASKED_DURING } from "./legacy-agent-build.ts";
+import { hasLegacyLoginCards, LEGACY_LOGIN_CARDS, LEGACY_LOGIN_CARDS_FALLBACK, LEGACY_LOGIN_CARDS_NATIVE } from "./legacy-login-cards.ts";
+import { legacyEditLatest, legacyMergedEditMode, legacyMergedNeedsRepair, legacyMergedReadReady } from "./legacy-edits-build.ts";
+import { boundedCardEdit, boundedEditKey, LAST_MESSAGE_WITH_EDIT } from "./legacy-edits-read.ts";
+import { ensureRestateGuard, restateGuardSchema } from "./restate-guard.ts";
+import { ensureCardScanGuard } from "./card-scan-guard.ts";
+import { completeCardOutcome, saveWithCardOutcome, type CardEditScan, type CardOutcome } from "./card-outbox.ts";
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
+import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
 export { JOBS_RUNNING, SESSION_JOBS };
 export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL ORDER BY last_active_at DESC";
-export const SESSION_COUNTS = "SELECT connect, ws, COUNT(*) AS n FROM sessions GROUP BY connect, ws";
-// The existing index starts with connect. Seek each distinct connect, then count only the requested workspace's rows;
-// a home workspace also includes rows from before workspaces were kept (ws IS NULL).
-const sessionCountsVisible = (home: boolean) => `WITH RECURSIVE connects(connect) AS (
-  VALUES ((SELECT connect FROM sessions INDEXED BY sessions_by_connect ORDER BY connect LIMIT 1))
-  UNION ALL SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1)
-    FROM connects c WHERE c.connect IS NOT NULL
-), workspaces(ws) AS (VALUES (?)${home ? ", (NULL)" : ""})
-SELECT c.connect, w.ws,
-  (SELECT COUNT(*) AS n FROM sessions s INDEXED BY sessions_by_connect WHERE s.connect = c.connect AND s.ws IS w.ws) AS n
-FROM connects c CROSS JOIN workspaces w
-WHERE c.connect IS NOT NULL AND EXISTS
-  (SELECT 1 FROM sessions s INDEXED BY sessions_by_connect WHERE s.connect = c.connect AND s.ws IS w.ws)
-ORDER BY c.connect, w.ws`;
-export const SESSION_COUNTS_VISIBLE = sessionCountsVisible(false);
-export const SESSION_COUNTS_HOME = sessionCountsVisible(true);
+export { SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME };
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
 export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
+/// The closest failure in a notice's time window, breaking ties in listTurns' order.
+export const FAILED_TURN_NEAR = `SELECT * FROM turns INDEXED BY turns_by_end
+  WHERE session_key = ?1 AND ended_at >= ?2 AND ended_at <= ?3 AND outcome = 'failed'
+  ORDER BY ABS(ended_at - ?4), started_at, rowid LIMIT 1`;
+export const PROCESS_BY_GROUP = "SELECT * FROM processes WHERE pgid = ?";
+export const SESSION_THREAD_BY_ID = `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
+  WHERE ts.thread = ?1 AND ts.session = ?2`;
+export const THREAD_INSERT_IF_ABSENT = `INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at, home)
+  SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE NOT EXISTS
+    (SELECT 1 FROM threads WHERE surface = ?1 AND channel = ?2 AND thread_ts = ?3)`;
+export const MEMBER_JOIN_IF_NEEDED = `INSERT INTO thread_sessions (thread, session, connect, joined_at)
+  SELECT ?1, ?2, ?3, ?4 WHERE NOT EXISTS
+    (SELECT 1 FROM thread_sessions WHERE thread = ?1 AND session = ?2 AND left_at IS NULL)
+  ON CONFLICT (thread, session) DO UPDATE SET left_at = NULL WHERE thread_sessions.left_at IS NOT NULL`;
+export const DELIVERY_INSERT_IF_ABSENT = `INSERT OR IGNORE INTO deliveries (thread, n, session)
+  SELECT ?1, ?2, ?3 WHERE NOT EXISTS
+    (SELECT 1 FROM deliveries WHERE thread = ?1 AND n = ?2 AND session = ?3)`;
+// A Router write keeps its original targets across a retry. Check they still exist, belong to the chat and can hear it
+// in the same statement as the insertion, so a concurrent deletion cannot recreate a delivery for a removed session.
+export const DELIVERY_INSERT_IF_MEMBER = `INSERT OR IGNORE INTO deliveries (thread, n, session)
+  SELECT ?1, ?2, ?3 WHERE EXISTS
+    (SELECT 1 FROM thread_sessions ts JOIN sessions s ON s.key = ts.session
+     WHERE ts.thread = ?1 AND ts.session = ?3 AND ts.left_at IS NULL AND (s.archived_by IS NULL OR s.archived_by <> ?4))
+  AND EXISTS (SELECT 1 FROM entries WHERE thread = ?1 AND n = ?2 AND kind = 'message')
+  AND NOT EXISTS (SELECT 1 FROM deliveries WHERE thread = ?1 AND n = ?2 AND session = ?3)`;
+// A Router may only deliver while the whole chat still belongs to the requesting workspace.
+export const ROUTER_WORKSPACE_MISMATCH = `SELECT 1 FROM thread_sessions ts LEFT JOIN sessions s ON s.key = ts.session
+  WHERE ts.thread = ?1 AND (s.key IS NULL OR COALESCE(s.ws, ?2) IS NOT ?3) LIMIT 1`;
+export const SESSION_HOME_THREAD = `SELECT t.*, ts.connect FROM threads t INDEXED BY threads_home
+  CROSS JOIN thread_sessions ts WHERE t.home = ?1 AND ts.thread = t.id AND ts.session = ?1
+  ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT 1`;
 // Ordering still considers every thread, but it reads only its latest message's time; people and full summaries are
 // needed only after the limit. Applying the connect filter outside the limit preserves the prior cross-connect order.
 export const RECENT_CONNECT_THREADS = `WITH recent AS MATERIALIZED (
@@ -145,7 +195,7 @@ export const LAST_KNOWN = `SELECT MAX(n) AS n FROM (${lastRead("n")} UNION ALL S
 // These marks are keyed by viewer first. For a large table seek once per viewer instead of scanning everybody's other
 // chats. On a small table a scan can be cheaper, especially when most viewers have one mark. A rowid span bounds the
 // number of rows without counting them; the viewer probes are capped so choosing a plan does not scan a long history.
-function deleteViewerMarks(table: "reads" | "dismissed" | "kept_chats" | "pins", key: "thread" | "session") {
+function deleteViewerMarks(table: "reads" | "dismissed" | "kept_chats" | "hidden_chats" | "muted_chats" | "pins", key: "thread" | "session") {
   const choice = `WITH RECURSIVE few(viewer, count) AS (
     SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
     UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.count + 1
@@ -171,6 +221,8 @@ function deleteViewerMarks(table: "reads" | "dismissed" | "kept_chats" | "pins",
 export const READ_MARKS = deleteViewerMarks("reads", "thread");
 const DISMISSED_MARKS = deleteViewerMarks("dismissed", "thread");
 const KEPT_MARKS = deleteViewerMarks("kept_chats", "thread");
+const HIDDEN_MARKS = deleteViewerMarks("hidden_chats", "thread");
+const MUTED_MARKS = deleteViewerMarks("muted_chats", "thread");
 const PIN_MARKS = deleteViewerMarks("pins", "session");
 export const DELETE_READS_OF_THREAD = READ_MARKS.indexed;
 export const DELETE_DISMISSED_OF_THREAD = DISMISSED_MARKS.indexed;
@@ -178,15 +230,14 @@ export const DELETE_KEPT_CHAT = KEPT_MARKS.indexed;
 export const DELETE_PINS_OF_SESSION = PIN_MARKS.indexed;
 
 // Each session's latest check of the last days (the archive policy's view) and a login's end (closeLoginCards), each by
-// an index of its own (and rows.ts CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE: each list of chats', the readers' too).
+// an index of its own (and rows.ts CARD_BEFORE and OPTIONS_BEFORE: each list of chats', the readers' too).
 // The checks are grouped by `+session`: by `session`, the station's SQLite went over every check in order of session.
 // The login cards are read by their own index, named: with no statistics to go by, SQLite took the index of every
 // agent's message by time (schema.ts entries_agent_at) for them once there was one.
-export { CARD_BEFORE, CLOSED_SINCE, OPTIONS_BEFORE };
+export { CARD_BEFORE, OPTIONS_BEFORE };
 export const LATEST_DECISIONS =
   "SELECT id, session, created_at, result FROM decision_checks WHERE id IN (SELECT MAX(id) FROM decision_checks WHERE created_at >= ? GROUP BY +session) ORDER BY created_at, id";
-// Keep the grouping on the recent covering index, but fetch result text only after the session's workspace is known.
-export const LATEST_DECISIONS_SCOPED = `WITH latest AS MATERIALIZED (
+const LATEST_DECISIONS_SCOPED_FALLBACK = `WITH latest AS MATERIALIZED (
   SELECT MAX(id) AS id, session FROM decision_checks WHERE created_at >= ?1 GROUP BY +session
 )
 SELECT d.id, d.session, d.created_at, d.result FROM latest l
@@ -194,6 +245,137 @@ LEFT JOIN sessions s ON s.key = l.session
 CROSS JOIN decision_checks d ON d.id = l.id
 WHERE s.ws = ?2 OR (?3 AND s.ws IS NULL)
 ORDER BY d.created_at, d.id`;
+// Both arms are guarded outside their index loops. The old source stays exact during preparation; after publication
+// only the covering lookup is grouped. The readiness check and both reads share the same SQLite snapshot.
+const LEGACY_DECISION_LATEST = `index_state AS MATERIALIZED (SELECT complete FROM legacy_decision_time_meta WHERE id=1),
+latest AS MATERIALIZED (
+  SELECT MAX(d.id) AS id, d.session FROM index_state i CROSS JOIN decision_checks d
+    WHERE i.complete=0 AND d.created_at>=?1 GROUP BY +d.session
+  UNION ALL
+  SELECT MAX(d.id) AS id, d.session FROM index_state i CROSS JOIN legacy_decision_time d INDEXED BY legacy_decision_time_at
+    WHERE i.complete=1 AND d.created_at>=?1 GROUP BY +d.session
+)`;
+export const LEGACY_LATEST_DECISIONS = `WITH ${LEGACY_DECISION_LATEST}
+SELECT d.id,d.session,d.created_at,d.result FROM latest l CROSS JOIN decision_checks d ON d.id=l.id
+ORDER BY d.created_at,d.id`;
+export const LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK = `WITH ${LEGACY_DECISION_LATEST}
+SELECT d.id,d.session,d.created_at,d.result FROM latest l
+LEFT JOIN sessions s ON s.key=l.session CROSS JOIN decision_checks d ON d.id=l.id
+WHERE s.ws=?2 OR (?3 AND s.ws IS NULL) ORDER BY d.created_at,d.id`;
+// With a small non-home workspace, seek its sessions by connect and inspect only the last few checks of each. If a
+// check has an out-of-order time beyond that bound, or the workspace is large, retain the exact recent-index grouping.
+// Home also uses the grouping because it includes checks for sessions no longer in the sessions table.
+// The fallback's CROSS JOIN puts mode outside the index loop, so a disabled fallback does not traverse recent checks.
+// While preparing without the older time index, treat the recent window as large without scanning it: try the bounded
+// session lookups first, and group the source only if those lookups cannot answer exactly.
+const DECISION_SCOPE_BATCH = 64;
+/// Before the old session index is complete, the last 64 checks can prove a session's most recent check, or that the
+/// whole table has no check for it. A missing session in a full tail stays unknown until preparation finishes.
+export const RECENT_LAST_DECISION = `WITH
+recent AS MATERIALIZED (SELECT id,session FROM decision_checks NOT INDEXED ORDER BY id DESC LIMIT ${DECISION_SCOPE_BATCH}),
+chosen AS MATERIALIZED (SELECT id FROM recent WHERE session=?1 ORDER BY id DESC LIMIT 1)
+SELECT (SELECT COUNT(*) FROM recent) AS n, EXISTS(SELECT 1 FROM chosen) AS found,
+  (SELECT d.result FROM chosen c CROSS JOIN decision_checks d ON d.id=c.id) AS result`;
+// If an old store's session lookup is not ready, a small recent time range can still answer exactly. Select at most
+// 65 keys, then group only when that proves the complete range has at most 64; the count and answers share a snapshot.
+const smallDecisionScope = (table: "decision_checks" | "legacy_decision_time", index: string) => `WITH
+recent AS MATERIALIZED (SELECT id,session FROM ${table} INDEXED BY ${index} WHERE created_at>=?1 LIMIT ${DECISION_SCOPE_BATCH + 1}),
+size AS MATERIALIZED (SELECT COUNT(*) AS n FROM recent),
+latest AS MATERIALIZED (SELECT MAX(id) AS id,session FROM recent WHERE (SELECT n FROM size)<=${DECISION_SCOPE_BATCH} GROUP BY +session),
+selected AS MATERIALIZED (
+  SELECT d.id,d.session,d.created_at,d.result FROM latest l
+  CROSS JOIN sessions s ON s.key=l.session AND s.ws=?2
+  CROSS JOIN decision_checks d ON d.id=l.id
+)
+SELECT size.n,selected.id,selected.session,selected.created_at,selected.result FROM size
+LEFT JOIN selected ON 1 ORDER BY selected.created_at,selected.id`;
+export const SMALL_DECISION_SCOPE = {
+  native: smallDecisionScope("decision_checks", "decision_checks_lately"),
+  old: smallDecisionScope("decision_checks", "decision_checks_at"),
+  prepared: smallDecisionScope("legacy_decision_time", "legacy_decision_time_at"),
+};
+const decisionScoped = (legacy: boolean, withoutTime = false, sessionIndex: "shared" | "separate" | "repair" | null = null) => {
+const sessionTable = sessionIndex === "shared" ? "legacy_decision_time"
+  : sessionIndex === "repair" ? "legacy_decision_session_repair" : "legacy_decision_session";
+const sessionMeta = `${sessionTable}_meta`;
+const sessionKey = `${sessionTable}_by_session`;
+const source = sessionIndex ? `SELECT d.id,d.created_at FROM session_state i CROSS JOIN ${sessionTable} p INDEXED BY ${sessionKey}
+  CROSS JOIN decision_checks d ON d.id=p.id WHERE i.complete=1 AND p.session=c.key ORDER BY p.id DESC`
+  : "SELECT id, created_at FROM decision_checks INDEXED BY decision_checks_session WHERE session = c.key ORDER BY id DESC";
+const remaining = sessionIndex ? `SELECT 1 FROM session_state i CROSS JOIN ${sessionTable} p INDEXED BY ${sessionKey}
+  WHERE i.complete=1 AND p.session=l.key ORDER BY p.id DESC LIMIT 1 OFFSET ${DECISION_SCOPE_BATCH}`
+  : `SELECT 1 FROM decision_checks INDEXED BY decision_checks_session WHERE session = l.key ORDER BY id DESC LIMIT 1 OFFSET ${DECISION_SCOPE_BATCH}`;
+return `WITH RECURSIVE
+${sessionIndex ? `session_state AS MATERIALIZED (SELECT complete FROM ${sessionMeta} WHERE id=1),` : ""}
+${legacy ? `index_state AS MATERIALIZED (
+  SELECT complete, EXISTS (SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_at') AS has_old
+  FROM legacy_decision_time_meta WHERE id=1
+),` : ""}
+recent AS MATERIALIZED (
+  ${withoutTime ? "SELECT NULL AS id WHERE 0" : legacy ? `SELECT id FROM (SELECT d.id FROM index_state i CROSS JOIN decision_checks d
+    WHERE i.complete=0 AND i.has_old AND ?3=0 AND d.created_at>=?1 LIMIT ${DECISION_SCOPE_BATCH + 1})
+  UNION ALL SELECT id FROM (SELECT d.id FROM index_state i CROSS JOIN legacy_decision_time d INDEXED BY legacy_decision_time_at
+    WHERE i.complete=1 AND ?3=0 AND d.created_at>=?1 LIMIT ${DECISION_SCOPE_BATCH + 1})`
+    : `SELECT id FROM decision_checks INDEXED BY decision_checks_lately WHERE ?3 = 0 AND created_at >= ?1 LIMIT ${DECISION_SCOPE_BATCH + 1}`}
+),
+${legacy ? `recent_count AS MATERIALIZED (
+  SELECT CASE WHEN i.complete=0 AND NOT i.has_old AND ?3=0 THEN ${DECISION_SCOPE_BATCH + 1}
+    ELSE (SELECT COUNT(*) FROM recent) END AS n FROM index_state i
+),` : ""}
+connects(connect, n) AS (
+  SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect ORDER BY connect LIMIT 1), 1
+  WHERE ${withoutTime ? DECISION_SCOPE_BATCH + 1 : legacy ? "(SELECT n FROM recent_count)" : "(SELECT COUNT(*) FROM recent)"} = ${DECISION_SCOPE_BATCH + 1}
+  UNION ALL
+  SELECT (SELECT connect FROM sessions INDEXED BY sessions_by_connect WHERE connect > c.connect ORDER BY connect LIMIT 1), n + 1
+  FROM connects c WHERE c.connect IS NOT NULL AND n < ${DECISION_SCOPE_BATCH + 1}
+),
+chosen AS MATERIALIZED (
+  SELECT s.key FROM connects c CROSS JOIN sessions s INDEXED BY sessions_by_connect
+  WHERE c.connect IS NOT NULL AND s.connect = c.connect AND s.ws = ?2 LIMIT ${DECISION_SCOPE_BATCH + 1}
+),
+lookups AS MATERIALIZED (
+  SELECT c.key, (SELECT id FROM (
+    ${source} LIMIT ${DECISION_SCOPE_BATCH + 1}
+  ) WHERE created_at >= ?1 ORDER BY id DESC LIMIT 1) AS id
+  FROM chosen c WHERE (SELECT COUNT(connect) FROM connects) <= ${DECISION_SCOPE_BATCH} AND (SELECT COUNT(*) FROM chosen) <= ${DECISION_SCOPE_BATCH}
+),
+mode AS MATERIALIZED (
+  SELECT ${sessionIndex ? "(SELECT complete FROM session_state)=0 OR " : ""}${withoutTime ? DECISION_SCOPE_BATCH + 1 : legacy ? "(SELECT n FROM recent_count)" : "(SELECT COUNT(*) FROM recent)"} < ${DECISION_SCOPE_BATCH + 1} OR (SELECT COUNT(connect) FROM connects) > ${DECISION_SCOPE_BATCH}
+    OR (SELECT COUNT(*) FROM chosen) > ${DECISION_SCOPE_BATCH} OR EXISTS (
+      SELECT 1 FROM lookups l WHERE l.id IS NULL AND EXISTS (
+        ${remaining}
+      )
+    ) AS use_global
+),
+latest AS MATERIALIZED (
+  ${legacy ? `SELECT MAX(d.id) AS id,d.session FROM mode CROSS JOIN index_state i CROSS JOIN decision_checks d
+    WHERE use_global AND i.complete=0 AND d.created_at>=?1 GROUP BY +d.session
+  UNION ALL SELECT MAX(d.id) AS id,d.session FROM mode CROSS JOIN index_state i
+    CROSS JOIN legacy_decision_time d INDEXED BY legacy_decision_time_at
+    WHERE use_global AND i.complete=1 AND d.created_at>=?1 GROUP BY +d.session`
+    : "SELECT MAX(id) AS id, session FROM mode CROSS JOIN decision_checks WHERE use_global AND created_at >= ?1 GROUP BY +session"}
+  UNION ALL
+  SELECT id, key AS session FROM lookups WHERE id IS NOT NULL AND NOT (SELECT use_global FROM mode)
+)
+SELECT d.id, d.session, d.created_at, d.result FROM latest l
+LEFT JOIN sessions s ON s.key = l.session
+CROSS JOIN decision_checks d ON d.id = l.id
+WHERE s.ws = ?2 OR (?3 AND s.ws IS NULL)
+ORDER BY d.created_at, d.id`;
+};
+export const LATEST_DECISIONS_SCOPED = decisionScoped(false);
+export const LEGACY_LATEST_DECISIONS_SCOPED = decisionScoped(true);
+export const LATEST_DECISIONS_SCOPED_NO_TIME = decisionScoped(false, true);
+const sessionDecisionQueries = {
+  shared: { native: decisionScoped(false, false, "shared"), legacy: decisionScoped(true, false, "shared"),
+    noTime: decisionScoped(false, true, "shared") },
+  separate: { native: decisionScoped(false, false, "separate"), legacy: decisionScoped(true, false, "separate"),
+    noTime: decisionScoped(false, true, "separate") },
+  repair: { native: decisionScoped(false, false, "repair"), legacy: decisionScoped(true, false, "repair"),
+    noTime: decisionScoped(false, true, "repair") },
+};
+export const decisionScopedWithSession = (legacy: boolean, withoutTime: boolean, session: "shared" | "separate" | "repair") =>
+  sessionDecisionQueries[session][withoutTime ? "noTime" : legacy ? "legacy" : "native"];
 /// Whether a session has read something from a thread (`heardThreads`): by its deliveries there, named (SQLite took the
 /// index of all it was given by when, from the first).
 export const HEARD_IN = "SELECT 1 FROM deliveries INDEXED BY deliveries_session WHERE session = ? AND thread = ? AND delivered_at IS NOT NULL LIMIT 1";
@@ -203,6 +385,22 @@ export const CLOSED_CARD_AFTER = `SELECT
   EXISTS (SELECT 1 FROM entries INDEXED BY entries_people_by_n WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND author_kind = 'person')
   OR EXISTS (SELECT 1 FROM entries INDEXED BY entries_cards WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND card IS NOT NULL)
   OR EXISTS (SELECT 1 FROM entries INDEXED BY entries_options WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND options IS NOT NULL) AS ended`;
+export const CLOSED_CARD_AFTER_POSTS = `SELECT
+  EXISTS (SELECT 1 FROM entries INDEXED BY entries_people_by_n WHERE thread = ?1 AND n > ?2 AND kind = 'message' AND author_kind = 'person')
+  OR EXISTS (SELECT 1 FROM card_posts WHERE thread = ?1 AND n > ?2) AS ended`;
+// An older card before the latest person has already ended. Keep that person's own card at the boundary: the person
+// who posted it does not answer it. Both card formats and the boundary are read in the same SQLite snapshot.
+export const CARD_BEFORE_LATEST_PERSON = `WITH person(n) AS MATERIALIZED (
+  SELECT COALESCE((SELECT n FROM entries WHERE thread = ?1 AND n < ?2 AND kind = 'message' AND author_kind = 'person'
+    ORDER BY n DESC LIMIT 1), -9223372036854775808)
+)
+SELECT MAX(n) AS n FROM (
+  SELECT (SELECT MAX(n) FROM entries WHERE thread = ?1 AND n < ?2 AND n >= (SELECT n FROM person)
+    AND kind = 'message' AND card IS NOT NULL) AS n
+  UNION ALL
+  SELECT (SELECT MAX(n) FROM entries WHERE thread = ?1 AND n < ?2 AND n >= (SELECT n FROM person)
+    AND kind = 'message' AND options IS NOT NULL)
+)`;
 /// Whether a pending delivery can actually be read by the session, without loading the message's text or edits.
 export const HAS_PENDING_MESSAGE = `SELECT 1 FROM deliveries d INDEXED BY deliveries_pending
   JOIN entries m ON m.thread = d.thread AND m.n = d.n AND m.kind = 'message'
@@ -214,6 +412,18 @@ export const HAS_PENDING_LETTER = `SELECT 1 FROM letter_deliveries d INDEXED BY 
   JOIN threads t ON t.id = d.thread
   JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
   WHERE d.session = ? AND d.delivered_at IS NULL LIMIT 1`;
+/// Count what pendingMessages can read, with both kinds in one snapshot and without loading messages or edits.
+export const PENDING_COUNT = `SELECT
+  (SELECT COUNT(*) FROM deliveries d INDEXED BY deliveries_pending
+    JOIN entries m ON m.thread = d.thread AND m.n = d.n AND m.kind = 'message'
+    JOIN threads t ON t.id = d.thread
+    JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+    WHERE d.session = ?1 AND d.delivered_at IS NULL)
+  + (SELECT COUNT(*) FROM letter_deliveries d INDEXED BY letter_deliveries_pending
+    JOIN letters l ON l.thread = d.thread AND l.n = d.n
+    JOIN threads t ON t.id = d.thread
+    JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+    WHERE d.session = ?1 AND d.delivered_at IS NULL) AS n`;
 /// Seek to each next session in the partial indexes, rather than visiting all of a session's pending deliveries.
 export const PENDING_SESSIONS = `WITH RECURSIVE
   said(session) AS (
@@ -233,6 +443,12 @@ export const PENDING_SESSIONS = `WITH RECURSIVE
 /// How many chats someone started since a time, by runtime and model (`modelsUsedBy`): from the index of them alone
 /// (schema.ts sessions_models), not each session's row (1.2 s on a station, as an agent opened a chat).
 export const MODELS_USED_BY = "SELECT runtime, model, COUNT(*) AS n FROM sessions INDEXED BY sessions_models WHERE created_by = ? AND created_at >= ? GROUP BY runtime, model";
+/// How many of someone's chats on a runtime and model (`IS`: null for its default) since a time ran at each effort they
+/// named, the most used first, then the latest (`effortsUsedBy`).
+export const EFFORTS_USED_BY =
+  "SELECT effort, COUNT(*) AS n, MAX(created_at) AS last FROM sessions INDEXED BY sessions_efforts WHERE created_by = ? AND runtime = ? AND model IS ? AND created_at >= ? AND effort IS NOT NULL AND effort != '' GROUP BY effort ORDER BY n DESC, last DESC";
+/// Large old stores without that index seek the same person's recent sessions using their existing model lookup.
+export const EFFORTS_USED_BY_BEFORE_INDEX = EFFORTS_USED_BY.replace("INDEXED BY sessions_efforts", "INDEXED BY sessions_models");
 export const LOGIN_CARDS =
   "SELECT thread, n, author FROM entries INDEXED BY entries_login_cards WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
 export const PEOPLE_SAID_AFTER =
@@ -288,19 +504,33 @@ type Arg = SQLInputValue;
 const flag = (b: boolean): number => (b ? 1 : 0);
 const optFlag = (b: boolean | null | undefined): number | null => (b === null || b === undefined ? null : flag(b));
 
+/// A guarded message could not start its transaction because another connection is writing. Nothing was written.
+export class MessageWriteBusy extends Error {}
+
 export class Store {
   readonly db: DatabaseSync;
   readonly backfillPriority: SharedArrayBuffer;
+  readonly #effortsIndex: boolean;
+  readonly #legacySaid: boolean;
+  readonly #legacyAgent: boolean;
+  readonly #legacyLoginCards: boolean;
+  readonly #legacyArchivePolicy: boolean;
+  readonly #legacyDecisionTime: boolean;
+  #legacyDecisionSession: "shared" | "separate" | "repair" | null;
+  #decisionSessionIndexWasMissing = false;
   /// Where archived threads (and sessions' transcript copies) are written.
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
   readonly #temp: string | null;
-  /// Where published snapshots are kept (docs/public-share.md): published/ beside the database (in an in-memory store's
-  /// archive directory).
-  readonly publishedDir: string;
   #listeners: ((change: StoreChange) => void)[] = [];
   #workspaceListeners = new Set<() => void>();
   #statements = new Map<string, StatementSync>();
+  /// Ask for the old members of a session to be prepared without delaying a synchronous notification.
+  requestSessionChat: ((session: string) => void) | null = null;
+  /// Request bounded preparation while a synchronous caller keeps its immediate answer for an old session.
+  requestLatestThread: ((session: string) => void) | null = null;
+  /// Wait for a missing older decision-session lookup without scanning the source on the calling thread.
+  waitForDecisionSessions: (() => Promise<boolean>) | null = null;
   /// How many times the decision checks or the archive policy were written in this process (decisionsVersion).
   #decisions = 0;
   /// Hand-written title changes in this process, for requests that must not overwrite a later rename.
@@ -311,11 +541,21 @@ export class Store {
 
   private constructor(db: DatabaseSync, archiveDir: string, temp: string | null, clock: Clock.Clock, backfillPriority: SharedArrayBuffer) {
     this.db = db;
+    this.#effortsIndex = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'sessions_efforts'").get() !== undefined;
+    this.#legacySaid = hasLegacySaid(db);
+    this.#legacyAgent = hasLegacyAgent(db);
+    this.#legacyLoginCards = hasLegacyLoginCards(db);
+    this.#legacyArchivePolicy = hasLegacyArchivePolicy(db);
+    this.#legacyDecisionTime = hasLegacyDecisionTime(db);
+    this.#legacyDecisionSession = db.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_session'").get()
+      ? null : hasSharedDecisionSession(db) ? "shared" : hasLegacyDecisionSession(db) ? "separate"
+        : hasDecisionSessionRepair(db) ? "repair" : null;
     this.backfillPriority = backfillPriority;
     this.clock = clock;
     this.#archiveDir = archiveDir;
     this.#temp = temp;
-    this.publishedDir = temp !== null ? join(temp, "published") : join(dirname(archiveDir), "published");
+    // Chats published as snapshots (gone with public sharing): what a station from before kept of them.
+    if (temp === null) rmSync(join(dirname(archiveDir), "published"), { recursive: true, force: true });
   }
 
   /// Opens the store at `path` (":memory:" for one of its own); archived threads go to `archive`, else `archive/`
@@ -352,6 +592,11 @@ export class Store {
         }
       }
       db.exec(SCHEMA);
+      installDecisionTimeIndex(db, true);
+      installDecisionSessionIndex(db);
+      installPeopleSinceIndex(db);
+      installClosedCardsIndex(db);
+      addEditIndex(db);
       addArchiveColumns(db);
       addRuntimeSessionRuntime(db);
       addThreadIndexes(db);
@@ -361,11 +606,13 @@ export class Store {
       addWatchColumn(db);
       installActiveWatches(db);
       installOtherActiveJobs(db);
+      installRemoteQueueIndex(db);
       addQueueColumns(db);
       addSizeColumn(db);
       addSmallJobColumn(db);
       addWaitWatchColumn(db);
       addWorkspaceColumns(db);
+      installArchivePolicyIndex(db);
       addOpenerTitle(db);
       addLeftColumn(db);
       addUsageColumns(db);
@@ -383,6 +630,14 @@ export class Store {
       addLetters(db);
       installPostBlocks(db);
       installWorkspaceActivity(db);
+      installRecoverWaits(db);
+      installSessionCounts(db);
+      installSessionListIndex(db);
+      installSessionBindingsIndex(db);
+      installArchiveMarkIndex(db);
+      installSessionUpJobs(db);
+      installWorkspaceUpJobs(db);
+      installJobNameFirst(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
       installEmptyUsageHistory(db);
@@ -391,6 +646,12 @@ export class Store {
       addPendingCards(db);
       addTellIndexes(db);
       installSaidState(db);
+      installArchiveLast(db);
+      installWidgetSources(db);
+      installCcIndex(db);
+      installSessionChatIndex(db);
+      installLatestThreadIndex(db);
+      installCardPosts(db);
     } catch (e) {
       db.close();
       throw e;
@@ -474,12 +735,28 @@ export class Store {
   }
 
   /// A transaction that writes, committed when `run` returns, rolled back when it throws: it takes the database's writing
-  /// from its start, waiting its turn as long as busy_timeout says. Begun deferred (rusqlite's transaction()), it read
+  /// from its start, waiting its turn as long as busy_timeout says, unless tryWrite asks to retry elsewhere. Begun
+  /// deferred (rusqlite's transaction()), it read
   /// first and took the writing at its first write: where the station's other writers (the usage worker's backfills, a
   /// reader's checkpoint) had written meanwhile, SQLite refused it at once, no wait ("database is locked": a person's
   /// message not sent, on a station 2026-11-03, while the usage worker filled its statistics).
-  #tx<T>(run: () => T): T {
-    this.db.exec("BEGIN IMMEDIATE");
+  #tx<T>(run: () => T, tryWrite = false): T {
+    if (tryWrite) {
+      const timeout = Number(this.db.prepare("PRAGMA busy_timeout").get()!.timeout);
+      this.db.exec("PRAGMA busy_timeout=0");
+      let begun = false;
+      try {
+        try { this.db.exec("BEGIN IMMEDIATE"); begun = true; }
+        catch (error) {
+          const code = (error as { errcode?: number }).errcode;
+          if (code !== undefined && [5, 6].includes(code & 255)) throw new MessageWriteBusy();
+          throw error;
+        }
+      } finally {
+        try { this.db.exec(`PRAGMA busy_timeout=${timeout}`); }
+        catch (error) { if (begun) { try { this.db.exec("ROLLBACK"); } catch {} } throw error; }
+      }
+    } else this.db.exec("BEGIN IMMEDIATE");
     let result: T;
     try {
       result = run();
@@ -495,6 +772,18 @@ export class Store {
     return result;
   }
 
+  /// Background queue work yields when a different connection has the write lock, including while installing its guard.
+  #tryNow<T>(run: () => T): T {
+    const timeout = Number(this.db.prepare("PRAGMA busy_timeout").get()!.timeout);
+    this.db.exec("PRAGMA busy_timeout=0");
+    try { return run(); }
+    catch (error) {
+      const code = (error as { errcode?: number }).errcode;
+      if (code !== undefined && [5, 6].includes(code & 255)) throw new MessageWriteBusy();
+      throw error;
+    } finally { this.db.exec(`PRAGMA busy_timeout=${timeout}`); }
+  }
+
   #stmt(sql: string): StatementSync {
     let s = this.#statements.get(sql);
     if (s === undefined) {
@@ -508,6 +797,17 @@ export class Store {
   }
   #all(sql: string, ...args: Arg[]): Json[] {
     return this.#stmt(sql).all(...args);
+  }
+  #active(sql: string, before: string, ...args: Arg[]): Json[] {
+    try { return this.#all(sql, ...args); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!message.includes("no such table: active_watch_jobs") && !message.includes("no such table: active_other_jobs")
+        && !message.includes("no such index: active_other_remote_jobs")) throw error;
+      if (sql === REMOTE_QUEUE_JOBS && message.includes("no such index: active_other_remote_jobs")
+        && activeRemoteJobsAvailable(this.db)) return this.#all(REMOTE_QUEUE_PREPARED, ...args);
+      return this.#all(before, ...args);
+    }
   }
   /// How many rows it changed.
   #run(sql: string, ...args: Arg[]): number {
@@ -565,6 +865,24 @@ export class Store {
     return this.#all(LIVE_SESSIONS).map(toSession);
   }
 
+  /// Waits needing recovery, or null while an older store is still being prepared in the background.
+  recoveryWaits(): { row: SessionRow; refill: boolean }[] | null {
+    if (!recoverWaitsReady(this.db)) return null;
+    return this.#all(RECOVER_WAITS).map((r) => ({
+      row: toSession(r), refill: r.recovery_outcome === "failed" && typeof r.recovery_detail === "string" && r.recovery_detail.startsWith("rate_limit:"),
+    }));
+  }
+
+  /// Whether a live recorded wait is still within its awake interval; null while an older lookup is being prepared.
+  awakeWait(now: number, lingerMs: number): boolean | null {
+    if (!recoverWaitsReady(this.db)) return null;
+    if (awakeWaitsReady(this.db) && exactAwakeTime(now, lingerMs)) {
+      const state = this.#one(AWAKE_WAIT_STATUS, now - lingerMs)!;
+      if (state.uncertain === 0) return state.awake === 1;
+    }
+    return this.#all(RECOVER_AWAKE_WAITS).some((r) => now < r.ended_at + (r.wait_seconds ?? 0) * 1000 + lingerMs);
+  }
+
   /// The sessions running a turn now (archived ones too).
   runningSessions(): SessionRow[] {
     return this.#all(RUNNING_SESSIONS).map(toSession);
@@ -580,9 +898,31 @@ export class Store {
   /// How many sessions each connect has, including archived ones. A viewer's count seeks only their workspace; null
   /// asks for the whole station (including the pre-workspace rows).
   sessionCounts(viewer: InWorkspace | null = null): { connect: string; ws: string | null; n: number }[] {
-    const rows = viewer === null ? this.#all(SESSION_COUNTS)
-      : this.#all(viewer.home === false ? SESSION_COUNTS_VISIBLE : SESSION_COUNTS_HOME, viewer.workspace);
-    return rows.map((r) => ({ connect: r.connect, ws: r.ws ?? null, n: r.n }));
+    this.db.exec("SAVEPOINT session_counts");
+    try {
+      if (!sessionCountsReady(this.db)) throw new Error("session counts are not ready");
+      const rows = viewer === null ? this.#all(SESSION_COUNTS)
+        : this.#all(viewer.home === false ? SESSION_COUNTS_VISIBLE : SESSION_COUNTS_HOME, viewer.workspace);
+      return rows.map((r) => ({ connect: r.connect, ws: r.ws ?? null, n: r.n }));
+    } finally { this.db.exec("RELEASE session_counts"); }
+  }
+
+  /// Only the totals an overview will show: one per visible workspace and one per displayed connection. The scope and
+  /// connection counts share one snapshot, even while another connection changes sessions.
+  overviewSessionCounts(viewer: InWorkspace, connects: readonly unknown[]): { total: number; byConnect: Map<string, number> } | null {
+    this.db.exec("SAVEPOINT overview_session_counts");
+    try {
+      if (!sessionCountsReady(this.db)) return null;
+      const scopes: [number, string][] = [[1, viewer.workspace]];
+      if (viewer.home !== false) scopes.push([0, ""]);
+      const total = scopes.reduce((n, [kind, ws]) => n + (this.#one(SESSION_COUNT_TOTAL, kind, ws)?.n ?? 0), 0);
+      const byConnect = new Map<string, number>();
+      for (const connect of connects) {
+        if (typeof connect !== "string" || byConnect.has(connect)) continue;
+        byConnect.set(connect, scopes.reduce((n, [kind, ws]) => n + (this.#one(SESSION_COUNT_CONNECT, kind, ws, connect)?.n ?? 0), 0));
+      }
+      return { total, byConnect };
+    } finally { this.db.exec("RELEASE overview_session_counts"); }
   }
 
   /// Whether any session runs a turn now.
@@ -591,7 +931,7 @@ export class Store {
   }
 
   /// Says the sessions of workspace `from` (null: those that say none, the home one's) are `to`'s (null: the home
-  /// one's): when the station's home workspace changes (docs/multi-workspace.md).
+  /// one's): when the station's home workspace changes.
   setSessionsWs(from: string | null, to: string | null): void {
     this.#with((changes) => {
       const keys = (from === null ? this.#all("SELECT key FROM sessions WHERE ws IS NULL") : this.#all("SELECT key FROM sessions WHERE ws = ?", from)).map((r) => r.key as string);
@@ -645,6 +985,12 @@ export class Store {
   /// The most context it runs with from its next start on (null: the model's whole window).
   setSessionContext(key: string, context: number | null): void {
     this.#updateSession(key, "UPDATE sessions SET context = ?1 WHERE key = ?2", context, key);
+  }
+
+  /// The most context it ran with while what it holds is over its new most, until compacted (0: the model's whole
+  /// window; null: none over).
+  setSessionContextBefore(key: string, before: number | null): void {
+    this.#updateSession(key, "UPDATE sessions SET context_before = ?1 WHERE key = ?2", before, key);
   }
 
   /// Whether it goes on afresh once its prompt cache is over (null: as the station is set).
@@ -736,7 +1082,9 @@ export class Store {
   /// Every chat shared with another workspace now, by its session key.
   chatShares(): Map<string, ChatShare> {
     const now = this.now();
-    return new Map(this.#all("SELECT * FROM chat_shares").flatMap((r) => {
+    let indexed: Json[] | null = null;
+    try { indexed = liveChatShareRows(this.db, now); } catch { /* Keep the original read if the lookup is unavailable. */ }
+    return new Map((indexed ?? this.#all("SELECT * FROM chat_shares")).flatMap((r) => {
       const share = liveShare(toChatShare(r), now);
       return share === null ? [] : [[r.session, share] as const];
     }));
@@ -750,9 +1098,17 @@ export class Store {
   }
 
   /// The workspaces some chat's share with lapsed: their stations are still answered why they read it no more.
-  lapsedShareWorkspaces(): Set<string> {
+  lapsedShareWorkspaces(workspaces: readonly string[] | null = null): Set<string> {
     const now = this.now();
-    return new Set(this.#all("SELECT * FROM chat_shares").flatMap((r) => toChatShare(r).to.filter((t) => !shareLive(t, now)).map((t) => t.workspace)));
+    if (workspaces !== null) {
+      try {
+        const indexed = lapsedChatShareWorkspaces(this.db, workspaces, now);
+        if (indexed !== null) return indexed;
+      } catch { /* Keep the original read if the lookup is unavailable. */ }
+    }
+    const wanted = workspaces === null ? null : new Set(workspaces);
+    return new Set(this.#all("SELECT * FROM chat_shares").flatMap((r) => toChatShare(r).to
+      .filter((t) => !shareLive(t, now) && (wanted === null || wanted.has(t.workspace))).map((t) => t.workspace)));
   }
 
   /// The agents of `workspaces` read a chat or wrote to it: its share with them goes on from now (one lapsed stays
@@ -771,9 +1127,11 @@ export class Store {
   /// it no longer). Answers when the next one lapses, null when none will.
   lapseChatShares(since: number): number | null {
     const now = this.now();
-    let next: number | null = null;
+    let indexed: ReturnType<typeof dueChatShareRows> = null;
+    try { indexed = dueChatShareRows(this.db, since, now); } catch { /* Keep the original read if the lookup is unavailable. */ }
+    let next: number | null = indexed?.next ?? null;
     this.#with((changes) => {
-      for (const r of this.#all("SELECT * FROM chat_shares")) {
+      for (const r of indexed?.rows ?? this.#all("SELECT * FROM chat_shares")) {
         const ends = toChatShare(r).to.map((t) => t.used + XSHARE_IDLE_MS);
         if (ends.some((end) => end > since && end <= now)) {
           for (const t of this.sessionThreads(r.session)) changes.push({ type: "thread", id: t.thread.id, entries: [] });
@@ -803,47 +1161,6 @@ export class Store {
     });
   }
 
-  // ── chats published as snapshots (published; publish/) ──
-
-  /// A chat's published snapshots, the latest first.
-  publishedOf(thread: number): Published[] {
-    return this.#all("SELECT * FROM published WHERE thread = ? ORDER BY created_at DESC, id", thread).map(toPublished);
-  }
-
-  /// A published snapshot by its id.
-  published(id: string): Published | null {
-    const r = this.#one("SELECT * FROM published WHERE id = ?", id);
-    return r ? toPublished(r) : null;
-  }
-
-  /// Records a snapshot written out to `publishedDir/<id>`; its chat's views change.
-  addPublished(p: Published): void {
-    this.#with((changes) => {
-      this.#run(
-        "INSERT INTO published (id, thread, key, title, created_by, by_name, created_at, upto, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        p.id, p.thread, p.key, p.title, p.by, p.byName, p.at, p.upto, p.size,
-      );
-      changes.push({ type: "thread", id: p.thread, entries: [] });
-    });
-  }
-
-  /// Takes a snapshot down: its row and its files; its chat's views change. Whether there was one.
-  removePublished(id: string): boolean {
-    const p = this.published(id);
-    if (p === null) return false;
-    this.#with((changes) => {
-      this.#run("DELETE FROM published WHERE id = ?", id);
-      changes.push({ type: "thread", id: p.thread, entries: [] });
-    });
-    this.#removeSnapshot(id);
-    return true;
-  }
-
-  #removeSnapshot(id: string): void {
-    // An id is the station's own (base64url); anything else never names a directory here.
-    if (/^[A-Za-z0-9_-]+$/.test(id)) rmSync(join(this.publishedDir, id), { recursive: true, force: true });
-  }
-
   // ── chats agents opened (opened_chats; sessions/opened.ts) ──
 
   /// Records a chat opened for a session: by its station and key, and its parent's ('' for this station).
@@ -866,6 +1183,13 @@ export class Store {
   openedWith(parentStation: string, parent: string, key: string, childStation: string): Opened | null {
     const r = this.#one("SELECT * FROM opened_chats WHERE parent_station = ? AND parent = ? AND key = ? AND child_station = ?", parentStation, parent, key, childStation);
     return r ? toOpened(r) : null;
+  }
+
+  /// The efforts `createdBy`'s chats on `runtime` and `model` here since `since` ran at, the most used first (what
+  /// chat_create runs when it is told no effort).
+  effortsUsedBy(createdBy: string, runtime: string, model: string | null, since: number): { effort: string; n: number }[] {
+    return this.#all(this.#effortsIndex ? EFFORTS_USED_BY : EFFORTS_USED_BY_BEFORE_INDEX, createdBy, runtime, model, since)
+      .map((r) => ({ effort: r.effort as string, n: Number(r.n) }));
   }
 
   /// Who opened session `child` of this station, if another agent did.
@@ -919,6 +1243,12 @@ export class Store {
     if (current === null) return sources;
     const entry = sources.find((s) => s.id === current) ?? { id: current, runtime: row.runtime, profile: row.profile };
     return [...sources.filter((s) => s.id !== current), entry];
+  }
+
+  /// One transcript's source, with the same identity and fallback rules as the ordered list.
+  runtimeSessionSource(key: string, id: string): RuntimeSource | null {
+    return findRuntimeSource(key, id, (sql, ...args) => this.#one(sql, ...args),
+      () => this.runtimeSessionSources(key).find((source) => source.id === id) ?? null);
   }
 
   /// A transcript is left unpacked while another shown or running session can still write it.
@@ -1090,7 +1420,6 @@ export class Store {
       const ws: string | null = session?.ws ?? null;
       const kept: number[] = [];
       const removed: number[] = [];
-      const unpublished: string[] = [];
       this.#tx(() => {
         const threads: number[] = this.#all("SELECT thread FROM thread_sessions WHERE session = ?", key).map((r) => r.thread);
         this.#run("DELETE FROM thread_sessions WHERE session = ?", key);
@@ -1098,12 +1427,14 @@ export class Store {
         // All of this session's deliveries go: clear its first one once instead of finding the next after every deletion.
         this.#run("DELETE FROM session_first WHERE session = ?", key);
         this.#run("DELETE FROM deliveries WHERE session = ?", key);
+        this.#run("DELETE FROM comma_router_once_targets WHERE session = ?", key);
         this.#run("DELETE FROM letter_deliveries WHERE session = ?", key);
         this.#run("DELETE FROM turns WHERE session_key = ?", key);
         this.#run("DELETE FROM runtime_sessions WHERE session_key = ?", key);
-        this.#run("DELETE FROM bindings WHERE session_key = ?", key);
+        this.#run(sessionBindingsReady(this.db) ? SESSION_BINDINGS_DELETE : "DELETE FROM bindings WHERE session_key = ?", key);
         this.#run("DELETE FROM job_notices WHERE job_id IN (SELECT id FROM jobs WHERE session_key = ?)", key);
         this.#run("DELETE FROM jobs WHERE session_key = ?", key);
+        this.#run("DELETE FROM session_up_job_scopes WHERE session = ?", key);
         this.#run("DELETE FROM widget_states WHERE session = ?", key);
         this.#deleteMarks(PIN_MARKS, key);
         this.#run("DELETE FROM transcript_lengths WHERE session = ?", key);
@@ -1115,6 +1446,8 @@ export class Store {
             continue;
           }
           removed.push(thread);
+          this.#run("DELETE FROM comma_router_once_targets WHERE id IN (SELECT id FROM comma_router_once WHERE thread = ?)", thread);
+          this.#run("DELETE FROM comma_router_once WHERE thread = ?", thread);
           this.#run("DELETE FROM deliveries WHERE thread = ?", thread);
           this.#run("DELETE FROM entries WHERE thread = ?", thread);
           this.#run("DELETE FROM letter_deliveries WHERE thread = ?", thread);
@@ -1122,15 +1455,14 @@ export class Store {
           this.#deleteMarks(READ_MARKS, thread);
           this.#deleteMarks(DISMISSED_MARKS, thread);
           this.#run("DELETE FROM closed_cards WHERE thread = ?", thread);
+          this.#run("DELETE FROM card_choices WHERE thread = ?", thread);
           this.#deleteMarks(KEPT_MARKS, thread);
-          // Its published snapshots go with it.
-          for (const r of this.#all("SELECT id FROM published WHERE thread = ?", thread)) unpublished.push(r.id);
-          this.#run("DELETE FROM published WHERE thread = ?", thread);
+          this.#deleteMarks(HIDDEN_MARKS, thread);
+          this.#deleteMarks(MUTED_MARKS, thread);
           this.#run("DELETE FROM threads WHERE id = ?", thread);
         }
       });
       if (session !== undefined) this.#sessionWorkspaceChanged();
-      for (const id of unpublished) this.#removeSnapshot(id);
       changes.push({ type: "sessionRemoved", key, ws });
       // Clients drop what they keep of the threads that went with it.
       for (const id of removed) changes.push({ type: "threadRemoved", id, ws });
@@ -1164,6 +1496,9 @@ export class Store {
     return new Map([...out].sort(([a], [b]) => byBytes(a, b)));
   }
 
+  /// Whether a session has a binding, after the session-binding lookup is ready.
+  preparedSessionBound(key: string): boolean { return this.#one(SESSION_BINDINGS_EXISTS, key) !== undefined; }
+
   // ── threads ──
 
   getThread(id: number): ThreadRow | null {
@@ -1189,7 +1524,7 @@ export class Store {
   /// The thread at this address, made if new as `home`'s own chat (ThreadRow.home).
   openThreadOf(surface: string, channel: string, threadTs: string, title: string | null, createdBy: string | null, home: string | null): ThreadRow {
     this.#run(
-      "INSERT OR IGNORE INTO threads (surface, channel, thread_ts, title, created_by, created_at, home) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      THREAD_INSERT_IF_ABSENT,
       surface, channel, threadTs, title, createdBy, this.now(), home,
     );
     const thread = this.threadAt(surface, channel, threadTs);
@@ -1211,8 +1546,7 @@ export class Store {
   joinThread(thread: number, session: string, connect: string): boolean {
     return this.#with((changes) => {
       const joined = this.#run(
-        `INSERT INTO thread_sessions (thread, session, connect, joined_at) VALUES (?, ?, ?, ?)
-         ON CONFLICT (thread, session) DO UPDATE SET left_at = NULL WHERE thread_sessions.left_at IS NOT NULL`,
+        MEMBER_JOIN_IF_NEEDED,
         thread, session, connect, this.now(),
       ) > 0;
       if (joined) {
@@ -1233,18 +1567,29 @@ export class Store {
     });
   }
 
+  /// Whether a session left a thread it takes part in through `connect` (leaveThread) and was not mentioned there since.
+  leftThread(session: string, connect: string, channel: string, threadTs: string): boolean {
+    return (
+      this.#one(
+        `SELECT 1 FROM thread_sessions m JOIN threads t ON t.id = m.thread
+         WHERE m.session = ? AND m.connect = ? AND t.channel = ? AND t.thread_ts = ? AND m.left_at IS NOT NULL LIMIT 1`,
+        session, connect, channel, threadTs,
+      ) !== undefined
+    );
+  }
+
   threadSessions(thread: number): Membership[] {
     return this.#all("SELECT * FROM thread_sessions WHERE thread = ? ORDER BY joined_at, rowid", thread).map(toMembership);
   }
 
   /// Whether an agent in this thread has a watch running, without reading its completed jobs.
   hasActiveWatch(thread: number): boolean {
-    return this.#one(HAS_ACTIVE_WATCH, thread) !== undefined;
+    return this.#active(HAS_ACTIVE_WATCH, HAS_ACTIVE_WATCH_BEFORE_UPGRADE, thread).length !== 0;
   }
 
   /// Whether this session has a watch running, without reading its completed jobs.
   hasSessionActiveWatch(session: string): boolean {
-    return this.#one(HAS_SESSION_ACTIVE_WATCH, session) !== undefined;
+    return this.#active(HAS_SESSION_ACTIVE_WATCH, HAS_SESSION_ACTIVE_WATCH_BEFORE_UPGRADE, session).length !== 0;
   }
 
   /// A thread of this session by the address the agent names it with, and how the session posts there.
@@ -1256,9 +1601,21 @@ export class Store {
     return r ? toSessionThread(r) : null;
   }
 
+  /// One thread of a session, by its id, and the connect it posts through there.
+  sessionThreadById(session: string, thread: number): SessionThread | null {
+    const r = this.#one(SESSION_THREAD_BY_ID, thread, session);
+    return r ? toSessionThread(r) : null;
+  }
+
+  /// A session's own chat among those it joined, with the same order as sessionThreads.
+  sessionHomeThread(session: string): SessionThread | null {
+    const r = this.#one(SESSION_HOME_THREAD, session);
+    return r ? toSessionThread(r) : null;
+  }
+
   /// The threads a still.fail chat can copy people's messages to (rows.ts CC_THREADS_SQL).
   ccThreads(thread: number): SessionThread[] {
-    return this.#all(CC_THREADS_SQL, thread).map(toSessionThread);
+    return indexedCcThreads(this.db, thread).map(toSessionThread);
   }
 
   /// The threads a session takes part in, most recently joined first, with the connect it posts through in each.
@@ -1269,12 +1626,23 @@ export class Store {
     ).map(toSessionThread);
   }
 
+  /// The latest thread when its order is ready, or undefined while an old multi-chat session needs preparation.
+  /// Read readiness and the answer together so another writer cannot change them between the two.
+  latestThreadIfReady(session: string): SessionThread | null | undefined {
+    const attempt = this.#one(LATEST_THREAD_ATTEMPT, session)!;
+    if (attempt._latest_version !== LATEST_THREAD_VERSION)
+      throw new Error(`latest thread index version ${attempt._latest_version ?? "missing"} is incompatible with ${LATEST_THREAD_VERSION}`);
+    if (attempt._latest_ready !== 1 && attempt._latest_members > 1) return undefined;
+    return attempt.id === null ? null : toSessionThread(attempt);
+  }
+
   /// The thread a session last heard from: where the station's own notices go and whose connect's name the agent goes
   /// by. Falls back to the thread it joined last when it has heard nothing yet.
   latestThread(session: string): SessionThread | null {
-    // The delivery index groups by session and thread. Seek the last row within each joined thread rather than sort
-    // every delivery the session has ever received. A null last row sorts after a delivery, then the join order is the
-    // same fallback as sessionThreads. This still visits each joined thread, but writes no per-delivery summary.
+    const ready = this.latestThreadIfReady(session);
+    if (ready !== undefined) return ready;
+    // A synchronous caller keeps its exact immediate answer until the old session is prepared.
+    this.requestLatestThread?.(session);
     const latest = this.#one(
       `SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
        WHERE ts.session = ?
@@ -1292,11 +1660,27 @@ export class Store {
   /// come from them (not a still.fail chat's: read/views.ts `titleOf`), its first person's words. Null when it has none.
   /// A row's lookups, not a list's: titles are asked of every chat a list of checks names.
   sessionChat(session: string): { thread: ThreadRow; firstText: string | null } | null {
-    const r = this.#one(
-      `SELECT t.* FROM thread_sessions m JOIN threads t ON t.id = m.thread WHERE m.session = ?
-       ORDER BY (SELECT e.at FROM entries e WHERE e.thread = t.id ORDER BY e.n DESC LIMIT 1) DESC, t.created_at DESC, t.id DESC LIMIT 1`,
-      session,
-    );
+    // Most sessions have just their own chat. This one cached statement reads the version, at most two memberships,
+    // and the answer in one snapshot, without starting a transaction or preparing an order for that common case.
+    const small = this.#one(SESSION_CHAT_SMALL, session)!;
+    if (small._session_chat_version !== SESSION_CHAT_VERSION)
+      throw new Error(`session chat index version ${small._session_chat_version ?? "missing"} is incompatible with ${SESSION_CHAT_VERSION}`);
+    let r: Json | null;
+    if (small._member_count < 2) r = small.id === null ? null : small;
+    else {
+      try { r = indexedSessionChat(this.db, session); }
+      catch (error) {
+        if (!(error instanceof SessionChatUnavailable)) throw error;
+        this.requestSessionChat?.(session);
+        // This synchronous path also names phone-grant events: while an old session is prepared it must say the title
+        // at once, as before, rather than delay or invent it. Prepared sessions use the bounded lookup above.
+        r = this.#one(
+          `SELECT t.* FROM thread_sessions m JOIN threads t ON t.id = m.thread WHERE m.session = ?
+           ORDER BY (SELECT e.at FROM entries e WHERE e.thread = t.id ORDER BY e.n DESC LIMIT 1) DESC, t.created_at DESC, t.id DESC LIMIT 1`,
+          session,
+        ) ?? null;
+      }
+    }
     if (!r) return null;
     const thread = toThread(r);
     return { thread, firstText: thread.surface === STILLFAIL_SURFACE ? null : this.firstText(thread.id) };
@@ -1363,8 +1747,13 @@ export class Store {
 
   /// The thread's latest message as merged, for lists.
   lastMessage(thread: number): MessageRow | null {
-    const r = this.#one("SELECT * FROM merged WHERE thread = ? ORDER BY n DESC LIMIT 1", thread);
+    const r = this.#one(this.#legacySaid ? LEGACY_LAST_MESSAGE : LAST_MESSAGE, thread);
     return r ? toMessage(r) : null;
+  }
+
+  /// The time used by auto-archive; an unknown answer waits for the requested chat's bounded preparation.
+  lastMessageAtForArchive(thread: number): { known: boolean; at: number | null } {
+    return archiveLastRead(this.db, thread);
   }
 
   /// How many letters the thread has (rows.ts isLetter), in either way.
@@ -1386,18 +1775,30 @@ export class Store {
     return this.#unreadCount(viewer, thread, this.readPosition(viewer, thread));
   }
 
+  /// How many messages the thread has, everyone's, less letters (rows.ts isLetter).
+  messageCount(thread: number): number {
+    return this.#unreadCount("", thread, -1);
+  }
+
   /// Whether a still.fail chat's starter has anything unread. Null asks the sidebar state worker to finish an old run.
   unreadForArchive(viewer: string, thread: number): boolean | null {
     // The read position, last message and its boundary must describe the same snapshot while other stations write.
     this.db.exec("SAVEPOINT archive_unread");
     try {
       const read = this.readPosition(viewer, thread);
-      const latest = this.#one(SAID_LATEST, thread);
+      const head = this.#legacySaid ? legacySaidReadHead(this.db, thread)
+        : { known: true, row: this.#one(SAID_LATEST, thread) };
+      if (!head.known) return null;
+      const latest = head.row;
       if (!latest || latest.n <= read) return false;
       if (latest.author_kind !== "person" || latest.author !== viewer) return true;
       const boundary = saidBoundary(this.#one(SAID_STATE, thread), latest);
       if (boundary.known) return boundary.other !== null && boundary.other > read;
-      const previous = this.#all(SAID_SCAN, thread, latest.n, SAID_BATCH_SIZE);
+      if (this.#legacySaid && legacySaidThreadNeedsDrain(this.db, thread)) {
+        const near = legacySaidReadBoundary(this.db, thread, latest.n, latest.author);
+        return near.known ? near.other !== null && near.other > read : null;
+      }
+      const previous = this.#all(this.#legacySaid ? LEGACY_SAID_SCAN : SAID_SCAN, thread, latest.n, SAID_BATCH_SIZE);
       if (previous.some((p) => p.n > read && (p.author_kind !== "person" || p.author !== viewer))) return true;
       if (previous.length < SAID_BATCH_SIZE || previous.at(-1)!.n <= read) return false;
       return null;
@@ -1407,11 +1808,14 @@ export class Store {
   // ── entries ──
 
   /// Records something said. A message already recorded in that thread (Slack delivers to every connect in the channel,
-  /// and redelivers) is the same message: its n comes back with `fresh` false and nothing changes.
-  insertMessage(m: NewMessage): [number, boolean] {
+  /// and redelivers) is the same message: its n comes back with `fresh` false and nothing changes. For a new message,
+  /// `before` runs under the write lock; `inserted` runs there after the new entry has its number. Either may throw
+  /// to roll back, and must only do bounded, synchronous work. If another writer has the lock, MessageWriteBusy says
+  /// nothing was written and the caller may retry later.
+  insertMessage(m: NewMessage, before?: () => void, inserted?: (n: number) => void): [number, boolean] {
     return this.#with((changes) => {
-      const existing = this.#messageAt(m.thread, m.ts);
-      if (existing !== null) return [existing.n, false];
+      const existing = this.messageNumberAt(m.thread, m.ts);
+      if (existing !== null) return [existing, false];
       const card = m.card ?? undefined;
       const options = m.options ?? undefined;
       const entry = this.#append(
@@ -1424,8 +1828,13 @@ export class Store {
           card: card ?? (options === undefined ? undefined : optionsCard(options)),
           at: m.at ?? this.now(),
           ...(m.letter !== undefined ? { letter: m.letter } : {}),
+          ...(m.change !== undefined ? { change: m.change } : {}),
         },
         changes,
+        before,
+        before !== undefined,
+        undefined,
+        inserted,
       );
       return [entry.n, true];
     });
@@ -1434,10 +1843,20 @@ export class Store {
   /// A platform edit: an edit entry with the message's new words. The thread, or null for a message the station never
   /// recorded or one whose words did not change.
   editMessage(surface: string, channel: string, threadTs: string, ts: string, text: string): number | null {
+    return this.#editMessage(surface, channel, threadTs, ts, text, false) ?? null;
+  }
+
+  /// The same edit, or undefined when its old edit lookup must first be prepared off the station thread.
+  editMessageIfReady(surface: string, channel: string, threadTs: string, ts: string, text: string): number | null | undefined {
+    return this.#editMessage(surface, channel, threadTs, ts, text, true);
+  }
+
+  #editMessage(surface: string, channel: string, threadTs: string, ts: string, text: string, bounded: boolean): number | null | undefined {
     return this.#with((changes) => {
       const thread = this.threadAt(surface, channel, threadTs);
       if (thread === null) return null;
-      const message = this.#messageAt(thread.id, ts);
+      const message = bounded ? this.messageAtIfReady(thread.id, ts) : this.#messageAt(thread.id, ts);
+      if (message === undefined) return undefined;
       if (message === null || message.text === text) return null;
       this.#append(
         {
@@ -1472,17 +1891,165 @@ export class Store {
     });
   }
 
+  /// Select the lookup visible in this connection's snapshot. Another opener may have built the native index while
+  /// our old lookup was still being prepared; use it without publishing or completing the partial lookup.
+  #useDecisionSession(lookup: "native" | "shared" | "separate" | "repair"): void {
+    this.#legacyDecisionSession = lookup === "native" ? null : lookup;
+    this.#decisionSessionIndexWasMissing = false;
+  }
+
+  #decisionSessionLookup(verifyNative = false): "native" | "shared" | "separate" | "repair" | "pending" {
+    // Normal new stores use a named index in the actual query. An unexpected removal makes that query fail and
+    // switches this connection to the checked path; readiness checks must also notice a removal before any read.
+    if (!this.#decisionSessionIndexWasMissing && !verifyNative) {
+      const legacy = this.#legacyDecisionSession;
+      if (legacy === null) return "native";
+      const table = legacy === "shared" ? "legacy_decision_time_meta"
+        : legacy === "repair" ? "legacy_decision_session_repair_meta" : "legacy_decision_session_meta";
+      try {
+        const state = this.#one(`SELECT complete, CASE WHEN complete=0 THEN EXISTS (
+          SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_session') ELSE 0 END AS native
+          FROM ${table} WHERE id=1`);
+        if (state?.complete === 1) return legacy;
+        if (state?.native === 1) { this.#useDecisionSession("native"); return "native"; }
+        // The first lookup may have lost its index while it was still preparing. Another opener can finish a
+        // replacement without changing that old metadata, so only the pending path needs the full recheck.
+        const current = this.#decisionSessionLookup(true);
+        if (current !== "pending") this.#useDecisionSession(current);
+        return current;
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.includes(`no such table: ${table}`)) throw error;
+        this.#decisionSessionIndexWasMissing = true;
+      }
+    }
+    const indexes = this.#one(`SELECT
+      EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='decision_checks_session') AS native,
+      EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='legacy_decision_time_by_session') AS shared,
+      EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='legacy_decision_session_by_session') AS separate,
+      EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='legacy_decision_session_repair_by_session') AS repair`);
+    if (indexes?.native === 1) return "native";
+    for (const [kind, table] of [["shared", "legacy_decision_time_meta"], ["separate", "legacy_decision_session_meta"],
+      ["repair", "legacy_decision_session_repair_meta"]] as const) {
+      if (indexes?.[kind] !== 1) continue;
+      try { if (this.#one(`SELECT complete FROM ${table} WHERE id=1`)?.complete === 1) return kind; }
+      catch (error) {
+        if (!(error instanceof Error) || !error.message.includes(`no such table: ${table}`)) throw error;
+      }
+    }
+    return "pending";
+  }
+
+  /// Whether a session lookup can answer without reading the old source table.
+  decisionSessionsReady(): boolean {
+    const current = this.#decisionSessionLookup(true);
+    if (current !== "pending") this.#useDecisionSession(current);
+    return current !== "pending";
+  }
+
+  async prepareDecisionSessions(): Promise<void> {
+    if (this.decisionSessionsReady()) return;
+    if (this.waitForDecisionSessions === null) throw new DecisionSessionsUnavailable();
+    await this.waitForDecisionSessions();
+    if (!this.decisionSessionsReady()) throw new DecisionSessionsUnavailable();
+  }
+
+  /// A complete small recent range can be read through a time index without the still-preparing session index.
+  #smallRecentDecisionScope(since: number, workspace: string | null): Json[] | null {
+    const timeIndex = this.#one(`SELECT name FROM sqlite_master WHERE type='index'
+      AND name IN ('decision_checks_lately','decision_checks_at') ORDER BY name='decision_checks_lately' DESC LIMIT 1`)?.name;
+    const source = timeIndex === "decision_checks_lately" ? "native" : timeIndex === "decision_checks_at" ? "old"
+      : this.#legacyDecisionTime && this.#one("SELECT complete FROM legacy_decision_time_meta WHERE id=1")?.complete === 1 ? "prepared" : null;
+    if (source === null) return null;
+    let rows: Json[];
+    try { rows = this.#all(SMALL_DECISION_SCOPE[source], since, workspace); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!/no such (?:index|table): (?:main\.)?(?:decision_checks_lately|decision_checks_at|legacy_decision_time(?:_at)?)$/.test(message)) throw error;
+      return null;
+    }
+    if (rows[0]?.n > DECISION_SCOPE_BATCH) return null;
+    return rows.filter((row) => row.id !== null).map((row) => ({
+      id: row.id, session: row.session, at: row.created_at, detail: parsed(row.result) ?? null,
+    }));
+  }
+
   /// The session's latest decision record, if any.
   lastDecision(session: string): Json | null {
-    const row = this.#one("SELECT result FROM decision_checks WHERE session = ? ORDER BY id DESC LIMIT 1", session);
+    const lookup = this.#decisionSessionLookup();
+    if (lookup === "pending") {
+      const recent = this.#one(RECENT_LAST_DECISION, session);
+      if (recent?.found === 1) return parsed(recent.result) ?? null;
+      if (recent && recent.n < DECISION_SCOPE_BATCH) return null;
+      throw new DecisionSessionsUnavailable();
+    }
+    const source = () => this.#one("SELECT result FROM decision_checks INDEXED BY decision_checks_session WHERE session = ? ORDER BY id DESC LIMIT 1", session);
+    let row: Json | undefined;
+    try { row = lookup === "native" ? source() : this.#one(
+      lookup === "shared" ? LEGACY_LAST_DECISION_SHARED
+        : lookup === "repair" ? LEGACY_LAST_DECISION_REPAIR : LEGACY_LAST_DECISION_SEPARATE, session); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!/no such (?:index|table): (?:main\.)?(?:decision_checks_session|legacy_decision_(?:time|session)(?:_repair)?(?:_meta|_by_session)?)$/.test(message)) throw error;
+      if (!this.#decisionSessionIndexWasMissing) {
+        this.#decisionSessionIndexWasMissing = true;
+        return this.lastDecision(session);
+      }
+      const recent = this.#one(RECENT_LAST_DECISION, session);
+      if (recent?.found === 1) return parsed(recent.result) ?? null;
+      if (recent && recent.n < DECISION_SCOPE_BATCH) return null;
+      throw new DecisionSessionsUnavailable();
+    }
+    if (this.#decisionSessionIndexWasMissing) this.#useDecisionSession(lookup);
     return row ? (parsed(row.result) ?? null) : null;
   }
 
   /// Each session's latest check of those recorded since `since` (ms), the oldest first: what the archive policy's view
   /// counts (accounts/index.ts, sessions/archive-policy.ts).
   latestDecisionsSince(since: number, viewer?: InWorkspace): Json[] {
-    const rows = viewer === undefined ? this.#all(LATEST_DECISIONS, since)
-      : this.#all(LATEST_DECISIONS_SCOPED, since, viewer.workspace, viewer.home !== false ? 1 : 0);
+    const lookup = viewer?.home === false ? this.#decisionSessionLookup() : "native";
+    const missingSession = () => {
+      this.#decisionSessionIndexWasMissing = true;
+      const current = this.#decisionSessionLookup(true);
+      if (current !== "pending" && current !== lookup) return this.latestDecisionsSince(since, viewer);
+      const small = this.#smallRecentDecisionScope(since, viewer!.workspace);
+      if (small !== null) return small;
+      throw new DecisionSessionsUnavailable();
+    };
+    const isMissingSession = (message: string) => /no such (?:index|table): (?:main\.)?(?:decision_checks_session|legacy_decision_time_by_session|legacy_decision_session(?:_repair)?(?:_meta|_by_session)?)$/.test(message);
+    if (viewer?.home === false && lookup === "pending") {
+      const small = this.#smallRecentDecisionScope(since, viewer.workspace);
+      if (small !== null) return small;
+      throw new DecisionSessionsUnavailable();
+    }
+    let rows: Json[];
+    try {
+      if (viewer === undefined) rows = this.#all(this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS : LATEST_DECISIONS, since);
+      else if (viewer.home !== false) rows = this.#all(this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS_SCOPED_FALLBACK : LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, 1);
+      else rows = this.#all(lookup === "shared" || lookup === "separate" || lookup === "repair"
+        ? decisionScopedWithSession(this.#legacyDecisionTime, false, lookup)
+        : this.#legacyDecisionTime ? LEGACY_LATEST_DECISIONS_SCOPED : LATEST_DECISIONS_SCOPED, since, viewer.workspace, 0);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!/no such index: (sessions_by_connect|decision_checks_session|decision_checks_lately|legacy_decision_time_at|legacy_decision_time_by_session|legacy_decision_session_by_session|legacy_decision_session_repair_by_session)$/.test(message)
+        && !/no such table: (?:main\.)?legacy_decision_(?:time|session(?:_repair)?)(?:_meta)?$/.test(message)) throw error;
+      if (viewer?.home === false && isMissingSession(message)) return missingSession();
+      const fallback = () => viewer === undefined ? this.#all(LATEST_DECISIONS, since)
+        : this.#all(LATEST_DECISIONS_SCOPED_FALLBACK, since, viewer.workspace, flag(viewer.home !== false));
+      if (viewer?.home === false && (/no such index: (decision_checks_lately|legacy_decision_time_at)$/.test(message)
+        || /no such table: (?:main\.)?legacy_decision_time(?:_meta)?$/.test(message))) {
+        // A time index can disappear after this store opened. Keep the bounded session path if its indexes remain.
+        try { rows = this.#all(lookup === "shared" || lookup === "separate" || lookup === "repair"
+          ? decisionScopedWithSession(false, true, lookup)
+          : LATEST_DECISIONS_SCOPED_NO_TIME, since, viewer.workspace, 0); }
+        catch (retryError) {
+          const retryMessage = retryError instanceof Error ? retryError.message : "";
+          if (isMissingSession(retryMessage)) return missingSession();
+          if (!/no such (?:index|table): (?:main\.)?(?:sessions_by_connect|legacy_decision_time(?:_meta)?)$/.test(retryMessage)) throw retryError;
+          rows = fallback();
+        }
+      } else rows = fallback();
+    }
+    if (viewer?.home === false && lookup !== "pending" && this.#decisionSessionIndexWasMissing) this.#useDecisionSession(lookup);
     return rows.map((r) => ({
       id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,
     }));
@@ -1491,7 +2058,7 @@ export class Store {
   /// A workspace's archive policy as last saved, and who saved it (`ws` null, or absent: the station's home workspace's);
   /// null until anyone has (the default then).
   archivePolicy(ws: string | null = null): { policy: Json; change: Json } | null {
-    const r = this.#one("SELECT id, at, policy, author, summary FROM archive_policy WHERE ws IS ? ORDER BY id DESC LIMIT 1", ws);
+    const r = this.#one(this.#legacyArchivePolicy ? LEGACY_ARCHIVE_POLICY : ARCHIVE_POLICY, ws);
     if (!r) return null;
     const policy = parsed(r.policy);
     if (!policy) return null;
@@ -1570,9 +2137,40 @@ export class Store {
     return this.#all("SELECT * FROM entries WHERE thread = ? AND n >= ? AND n <= ? ORDER BY n", thread, from, to).map(toEntry);
   }
 
+  /// The entries for a message page, oldest first, without reading events between the page's messages.
+  messagePageEntries(thread: number, numbers: readonly number[]): EntryRow[] {
+    if (numbers.length === 0) return [];
+    // Consecutive keys leave no room for intervening entries, so the existing range read is already bounded.
+    const first = numbers[0]!;
+    if (Number.isSafeInteger(first) && numbers.every((n, i) => Number.isSafeInteger(n) && n === first + i))
+      return this.entriesBetween(thread, first, numbers.at(-1)!);
+    return this.#all(MESSAGE_PAGE_ENTRIES, thread, JSON.stringify(numbers)).map(toEntry);
+  }
+
   /// A message of the thread by its platform id, as merged.
   messageAt(thread: number, ts: string): MessageRow | null {
     return this.#messageAt(thread, ts);
+  }
+
+  /// A message as edited, or undefined when its old edit lookup needs preparation first.
+  messageAtIfReady(thread: number, ts: string): MessageRow | null | undefined {
+    // Read the readiness and the message in one snapshot; a missing message needs no old-index preparation.
+    this.db.exec("SAVEPOINT bounded_message_at");
+    try {
+      if (legacyMergedReadReady(this.db)) return this.#messageAt(thread, ts);
+      const found = this.#one("SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread = ? AND ts = ? AND kind = 'message'", thread, ts);
+      if (!found) return null;
+      if (legacyMergedNeedsRepair(this.db)) return undefined;
+      const edit = boundedEditKey(this.db, thread, found.n);
+      if (edit === undefined) return undefined;
+      const row = this.#one(LAST_MESSAGE_WITH_EDIT, thread, found.n, edit);
+      return row ? toMessage(row) : null;
+    } finally { this.db.exec("RELEASE bounded_message_at"); }
+  }
+
+  /// A message's number without reading its text or edits.
+  messageNumberAt(thread: number, ts: string): number | null {
+    return this.#one("SELECT n FROM entries WHERE thread = ? AND ts = ? AND kind = 'message'", thread, ts)?.n ?? null;
   }
 
   /// The card the message at `ts` in a thread was posted with, if any (a Slack login card's field answered: whose login).
@@ -1584,7 +2182,7 @@ export class Store {
   /// The latest `limit` messages before n (the latest of all without it), as merged, oldest first.
   messagesBefore(thread: number, n: number | null, limit: number): MessageRow[] {
     const before = n ?? I64_MAX;
-    return this.#all("SELECT * FROM merged WHERE thread = ? AND n < ? ORDER BY n DESC LIMIT ?", thread, before, limit).map(toMessage).reverse();
+    return this.#all(this.#legacySaid ? LEGACY_MESSAGES_BEFORE : MESSAGES_BEFORE, thread, before, limit).map(toMessage).reverse();
   }
 
   // ── letters ──
@@ -1631,17 +2229,48 @@ export class Store {
   // ── deliveries ──
 
   /// Hands a message to sessions. Those that did not have it yet.
-  deliver(thread: number, n: number, sessions: string[]): string[] {
+  deliver(thread: number, n: number, sessions: string[], workspace?: { expected: string | null; fallback: string | null }): string[] {
     return this.#with((changes) => {
-      const added: string[] = [];
-      for (const s of sessions) {
-        if (this.#run("INSERT OR IGNORE INTO deliveries (thread, n, session) VALUES (?, ?, ?)", thread, n, s) > 0) {
-          added.push(s);
-          changes.push({ type: "session", key: s });
+      if (workspace === undefined) {
+        const added: string[] = [];
+        for (const s of sessions) {
+          if (this.#run(DELIVERY_INSERT_IF_ABSENT, thread, n, s) > 0) {
+            added.push(s);
+            changes.push({ type: "session", key: s });
+          }
         }
+        return added;
       }
+      // The workspace check and all Router deliveries see one write-locked snapshot. A concurrent move must not
+      // happen between authorization and inserting the deliveries.
+      const added = this.#tx(() => {
+        if (
+          this.#one("SELECT 1 FROM thread_sessions WHERE thread = ? LIMIT 1", thread) === undefined ||
+          this.#one(ROUTER_WORKSPACE_MISMATCH, thread, workspace.fallback, workspace.expected) !== undefined
+        ) throw new Error("no such chat of the workspace");
+        const added: string[] = [];
+        for (const s of sessions) {
+          if (this.#run(DELIVERY_INSERT_IF_MEMBER, thread, n, s, MANUAL) > 0) added.push(s);
+        }
+        return added;
+      }, true);
+      for (const s of added) changes.push({ type: "session", key: s });
       return added;
     });
+  }
+
+  /// Whether this exact message was handed to the session and still waits to be read.
+  deliveryPending(thread: number, n: number, session: string): boolean {
+    return this.#one("SELECT 1 FROM deliveries WHERE thread = ? AND n = ? AND session = ? AND delivered_at IS NULL", thread, n, session) !== undefined;
+  }
+
+  /// Finishes this particular Router write, never a later write which has reused its expired key.
+  completeRouterWrite(id: string): boolean {
+    return this.#tx(() => {
+      const changed = this.#run("UPDATE comma_router_once SET pending = 0 WHERE id = ? AND pending = 1", id);
+      if (changed > 0) this.#run("DELETE FROM comma_router_once_targets WHERE id = ?", id);
+      return changed > 0 || this.#one("SELECT 1 FROM comma_router_once WHERE id = ? AND pending = 0", id) !== undefined;
+    }, true);
   }
 
   /// What the session has yet to read, as merged now, in the order it was handed over: its threads' messages, and the
@@ -1674,6 +2303,21 @@ export class Store {
     return out;
   }
 
+  /// The timestamps needed to tell an agent what arrived before its post, without reading messages or their edits.
+  pendingBefore(session: string, thread: number, n: number): string[] {
+    return this.#all(`SELECT m.ts FROM deliveries d INDEXED BY deliveries_pending
+      JOIN entries m ON m.thread = d.thread AND m.n = d.n AND m.kind = 'message'
+      JOIN threads t ON t.id = d.thread
+      JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = d.session
+      WHERE d.session = ? AND d.delivered_at IS NULL AND d.thread = ? AND d.n < ? ORDER BY d.rowid`, session, thread, n)
+      .map((r) => r.ts ?? "");
+  }
+
+  /// How many messages and letters pendingMessages would find, without reading their bodies.
+  pendingCount(session: string): number {
+    return this.#one(PENDING_COUNT, session).n;
+  }
+
   /// Whether `pendingMessages` would find anything, stopping at the first message or letter.
   hasPending(session: string): boolean {
     return this.#one(HAS_PENDING_MESSAGE, session) !== undefined || this.#one(HAS_PENDING_LETTER, session) !== undefined;
@@ -1686,11 +2330,12 @@ export class Store {
   }
 
   /// Marks messages read by the session.
-  markDelivered(session: string, messages: Handed[]): void {
-    this.#with((changes) => {
+  markDelivered(session: string, messages: Handed[]): number {
+    return this.#with((changes) => {
       const now = this.now();
+      let marked = 0;
       for (const { thread, n, apart } of messages) {
-        this.#run(`UPDATE ${apart ? "letter_deliveries" : "deliveries"} SET delivered_at = ? WHERE thread = ? AND n = ? AND session = ? AND delivered_at IS NULL`, now, thread, n, session);
+        marked += this.#run(`UPDATE ${apart ? "letter_deliveries" : "deliveries"} SET delivered_at = ? WHERE thread = ? AND n = ? AND session = ? AND delivered_at IS NULL`, now, thread, n, session);
       }
       if (messages.length > 0) {
         const pending = Number(this.#one(
@@ -1699,6 +2344,7 @@ export class Store {
         )?.n ?? 0);
         changes.push({ type: "session", key: session, pending });
       }
+      return marked;
     });
   }
 
@@ -1790,6 +2436,25 @@ export class Store {
     });
   }
 
+  /// A personal list mark: it does not affect the task, archive policy, or another viewer.
+  setChatHidden(viewer: string, thread: number, hidden: boolean): void {
+    this.#with((changes) => {
+      if (hidden) this.#run("INSERT OR IGNORE INTO hidden_chats (viewer, thread) VALUES (?, ?)", viewer, thread);
+      else this.#run("DELETE FROM hidden_chats WHERE viewer = ? AND thread = ?", viewer, thread);
+      changes.push({ type: "hidden", viewer, thread, hidden });
+    });
+  }
+
+  /// A separate personal notification mark; pending decisions stay visible in 待处理.
+  setChatMuted(viewer: string, thread: number, muted: boolean): void {
+    this.#with((changes) => {
+      const email = viewer.toLowerCase();
+      if (muted) this.#run("INSERT OR IGNORE INTO muted_chats (viewer, thread) VALUES (?, ?)", email, thread);
+      else this.#run("DELETE FROM muted_chats WHERE viewer = ? AND thread = ?", email, thread);
+      changes.push({ type: "muted", viewer, thread, muted });
+    });
+  }
+
   // ── pins ──
 
   /// The chats a viewer pinned (by their session's key), with when.
@@ -1802,55 +2467,11 @@ export class Store {
     return new Set(this.#all("SELECT DISTINCT session FROM pins").map((r) => r.session));
   }
 
-  /// The marks needed by one automatic archive pass. A large history is sought by viewer for each candidate; a small
-  /// table, many viewers, or many candidates is read once instead. Neither choice needs an index of its own.
+  /// The marks needed by one automatic archive pass. Until old marks are prepared, keep every candidate safely.
   archiveMarks(): { pinned: (session: string) => boolean; kept: (thread: number) => boolean } {
-    return {
-      pinned: this.#archiveMark("pins", "session", () => this.pinnedSessions()),
-      kept: this.#archiveMark("kept_chats", "thread", () => this.keptChats(null)),
-    };
-  }
-
-  #archiveMark<K extends string | number>(table: "pins" | "kept_chats", key: "session" | "thread", all: () => Set<K>): (key: K) => boolean {
-    let initialized = false;
-    let complete: Set<K> | null = null;
-    let viewers = "[]";
-    let viewerCount = 0;
-    let remaining = 0;
-    const answers = new Map<K, boolean>();
-    const collect = () => { complete = all(); };
-    return (value) => {
-      const answer = answers.get(value);
-      if (answer !== undefined) return answer;
-      if (!initialized) {
-        initialized = true;
-        // A rowid span bounds the number of rows, even if old rows were deleted or explicit rowids were used. Cap the
-        // budget in SQL so very large rowids never have to be represented as a JavaScript integer.
-        remaining = this.#one(`WITH bounds(span) AS (
-          SELECT (SELECT MAX(rowid) FROM ${table}) - (SELECT MIN(rowid) FROM ${table})
-        ) SELECT CASE WHEN COALESCE(span, 0) < 512 THEN 0
-          WHEN span >= 2097152 THEN 32768 ELSE CAST(span / 64 AS INTEGER) END AS budget FROM bounds`)!.budget;
-        if (remaining > 0) {
-          const rows = this.#all(`WITH RECURSIVE viewers(viewer, n) AS (
-            SELECT (SELECT viewer FROM ${table} ORDER BY viewer LIMIT 1), 1
-            UNION ALL SELECT (SELECT viewer FROM ${table} WHERE viewer > v.viewer ORDER BY viewer LIMIT 1), v.n + 1
-              FROM viewers v WHERE v.viewer IS NOT NULL AND v.n < ?1
-          ) SELECT viewer FROM viewers WHERE viewer IS NOT NULL`, remaining + 1);
-          viewerCount = rows.length;
-          if (viewerCount > remaining) remaining = 0;
-          else viewers = JSON.stringify(rows.map((row) => row.viewer));
-        }
-      }
-      if (complete === null && remaining < viewerCount) collect();
-      if (complete === null && remaining === 0) collect();
-      if (complete !== null) return complete.has(value);
-      const found = this.#one(
-        `SELECT 1 FROM ${table} WHERE viewer IN (SELECT value FROM json_each(?2)) AND ${key} = ?1 LIMIT 1`, value, viewers,
-      ) !== undefined;
-      remaining -= viewerCount;
-      answers.set(value, found);
-      return found;
-    };
+    if (!archiveMarksReady(this.db)) return { pinned: () => true, kept: () => true };
+    return { pinned: (key) => this.#one(ARCHIVE_PIN_EXISTS, key) !== undefined,
+      kept: (id) => this.#one(ARCHIVE_KEEP_EXISTS, id) !== undefined };
   }
 
   /// Pins a chat to the top of a viewer's list, or lets it go. Pinned again, it keeps when it was first pinned.
@@ -1872,6 +2493,29 @@ export class Store {
   /// A chat was relayed to a connect's channel or group now.
   noteRelayed(connect: string, channel: string): void {
     this.#run("INSERT INTO relayed_to (connect, channel, at) VALUES (?1, ?2, ?3) ON CONFLICT (connect, channel) DO UPDATE SET at = ?3", connect, channel, this.now());
+  }
+
+  /// The station a chat of a connect's thread runs on, when it is another of the workspace's (connects/remote.ts).
+  connectThreadStation(connect: string, channel: string, threadTs: string): string | null {
+    return (this.#one("SELECT station FROM connect_threads WHERE connect = ? AND channel = ? AND thread_ts = ?", connect, channel, threadTs)?.station as string | undefined) ?? null;
+  }
+
+  /// A chat of a connect's thread runs on `station` from now on.
+  setConnectThreadStation(connect: string, channel: string, threadTs: string, station: string): void {
+    this.#run("INSERT INTO connect_threads (connect, channel, thread_ts, station) VALUES (?1, ?2, ?3, ?4) ON CONFLICT (connect, channel, thread_ts) DO UPDATE SET station = ?4", connect, channel, threadTs, station);
+  }
+
+  /// A connect's threads whose chats run on other stations, as a move hands them on; and taken off this station.
+  connectThreads(connect: string): { channel: string; threadTs: string; station: string }[] {
+    return this.#all("SELECT channel, thread_ts, station FROM connect_threads WHERE connect = ?", connect).map((r) => ({ channel: r.channel as string, threadTs: r.thread_ts as string, station: r.station as string }));
+  }
+  dropConnectThreads(connect: string): void {
+    this.#run("DELETE FROM connect_threads WHERE connect = ?", connect);
+  }
+
+  /// The threads a connect's sessions here take part in, as a move of the connect hands them on (theirs run here still).
+  connectLocalThreads(connect: string): { channel: string; threadTs: string }[] {
+    return this.#all("SELECT DISTINCT t.channel, t.thread_ts FROM thread_sessions s JOIN threads t ON t.id = s.thread WHERE s.connect = ?", connect).map((r) => ({ channel: r.channel as string, threadTs: r.thread_ts as string }));
   }
 
   /// Chats kept instead of offered for archiving. Null selects every viewer, for automatic archiving.
@@ -1902,21 +2546,62 @@ export class Store {
   /// The thread's card still pending, if any: its latest post with a card (a newer one replaces an older one), as long
   /// as no person has written in the thread since. The post as merged, and its card.
   pendingCard(thread: number): [MessageRow, Json] | null {
-    // The latest of each kind (cards, and options from before cards), each read by its own index.
-    const latest = (column: string): Json | undefined =>
-      this.#one(`SELECT n, card, options FROM entries WHERE thread = ? AND kind = 'message' AND ${column} IS NOT NULL ORDER BY n DESC LIMIT 1`, thread);
-    const a = latest("card");
-    const b = latest("options");
-    const asked = a && b ? (a.n >= b.n ? a : b) : (a ?? b);
-    if (!asked) return null;
-    const n: number = asked.n;
+    const n = this.#pendingCardNumber(thread);
+    return n === undefined ? null : this.#cardPost(thread, n);
+  }
+
+  /// The same pending card's location and original card, for callers that do not need the merged message.
+  pendingCardHeader(thread: number): [{ n: number; ts: string }, Json] | null {
+    const n = this.#pendingCardNumber(thread);
+    if (n === undefined) return null;
+    const row = this.#one("SELECT ts, card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
+    const card = row ? cardOf(row.card, row.options) : undefined;
+    return card === undefined ? null : [{ n, ts: row!.ts ?? "" }, card];
+  }
+
+  /// A bounded header read, or undefined when an old thread needs its card-post index prepared first.
+  pendingCardHeaderIfReady(thread: number): [{ n: number; ts: string }, Json] | null | undefined {
+    this.db.exec("SAVEPOINT pending_card_header");
+    try {
+      if (!cardPostsReady(this.db, thread)) {
+        // These probes examine one index entry each. If an old index is absent, the builder uses primary-key pages.
+        const indexes = this.#one("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='index' AND name IN ('entries_cards','entries_options')")?.n;
+        if (indexes === 2 &&
+          !this.#one("SELECT 1 FROM entries INDEXED BY entries_cards WHERE thread = ? AND card IS NOT NULL LIMIT 1", thread) &&
+          !this.#one("SELECT 1 FROM entries INDEXED BY entries_options WHERE thread = ? AND options IS NOT NULL LIMIT 1", thread)) return null;
+        return undefined;
+      }
+      return this.pendingCardHeader(thread);
+    } finally { this.db.exec("RELEASE pending_card_header"); }
+  }
+
+  #pendingCardNumber(thread: number): number | undefined {
+    let n: number | undefined;
+    if (cardPostsReady(this.db, thread)) n = this.#one(CARD_POST_LATEST, thread)?.n;
+    else {
+      // Until an old thread is prepared, preserve its synchronous event-time answer using the original indexes.
+      const latest = (column: string): Json | undefined =>
+        this.#one(`SELECT n FROM entries WHERE thread = ? AND kind = 'message' AND ${column} IS NOT NULL ORDER BY n DESC LIMIT 1`, thread);
+      const a = latest("card"), b = latest("options");
+      n = a && b ? Math.max(a.n, b.n) : (a ?? b)?.n;
+    }
+    if (n === undefined) return undefined;
     const answered = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
     const closed = this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, n) !== undefined;
-    if (answered || closed) return null;
-    const card = cardOf(asked.card, asked.options);
-    if (card === undefined) return null;
-    const m = this.#one("SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
-    return m ? [toMessage(m), card] : null;
+    if (answered || closed) return undefined;
+    return n;
+  }
+
+  /// A prepared thread seeks the previous post directly. An old thread still being prepared uses the original query:
+  /// callers that tell a connect about this event must answer now, from the event's current state.
+  #previousCard(thread: number, n: number): number | null {
+    if (cardPostsReady(this.db, thread)) return this.#one(CARD_POST_BEFORE, thread, n).n;
+    return this.#one(CARD_BEFORE_LATEST_PERSON, thread, n).n;
+  }
+
+  #cardEndedAfter(thread: number, n: number): boolean {
+    const sql = cardPostsReady(this.db, thread) ? CLOSED_CARD_AFTER_POSTS : CLOSED_CARD_AFTER;
+    return this.#one(sql, thread, n)!.ended !== 0;
   }
 
   /// The card whose wait ended with this person's message. This follows the same entry-order rules as pendingCard and
@@ -1925,9 +2610,7 @@ export class Store {
   cardEndedByMessage(thread: number, n: number): [MessageRow, Json] | null {
     const person = this.#one("SELECT 1 FROM entries WHERE thread = ? AND n = ? AND kind = 'message' AND author_kind = 'person'", thread, n);
     if (!person) return null;
-    const cardN: number | null = this.#one(CARD_BEFORE, thread, n).n;
-    const optionsN: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
-    const asked = cardN === null ? optionsN : optionsN === null ? cardN : Math.max(cardN, optionsN);
+    const asked = this.#previousCard(thread, n);
     if (asked === null) return null;
     const earlier = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? AND n < ? LIMIT 1", thread, asked, n);
     const closed = this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked);
@@ -1943,9 +2626,7 @@ export class Store {
   cardReplacedBy(thread: number, n: number): [MessageRow, Json] | null {
     const carded = this.#one("SELECT 1 FROM entries WHERE thread = ? AND n = ? AND kind = 'message' AND (card IS NOT NULL OR options IS NOT NULL)", thread, n);
     if (!carded) return null;
-    const cardN: number | null = this.#one(CARD_BEFORE, thread, n).n;
-    const optionsN: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
-    const asked = cardN === null ? optionsN : optionsN === null ? cardN : Math.max(cardN, optionsN);
+    const asked = this.#previousCard(thread, n);
     if (asked === null) return null;
     const answered = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? AND n < ? LIMIT 1", thread, asked, n);
     const closed = this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked);
@@ -1958,7 +2639,7 @@ export class Store {
   /// agent withdrawing it, or a person's choice).
   closedCard(thread: number, n: number): [MessageRow, Json, string] | null {
     const by = this.#one("SELECT viewer FROM closed_cards WHERE thread = ? AND n = ?", thread, n);
-    if (by === undefined || this.#one(CLOSED_CARD_AFTER, thread, n)!.ended !== 0) return null;
+    if (by === undefined || this.#cardEndedAfter(thread, n)) return null;
     const found = this.#cardPost(thread, n);
     return found === null ? null : [...found, by.viewer as string];
   }
@@ -1977,7 +2658,7 @@ export class Store {
   askingMessage(thread: number, about: number | null, during: [number, number]): [MessageRow, MessageRow[]] | null {
     const n: number | null =
       about ??
-      this.#one("SELECT max(n) AS n FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'agent' AND at >= ? AND at <= ?", thread, during[0], during[1]).n;
+      this.#one(this.#legacyAgent ? LEGACY_ASKED_DURING : "SELECT max(n) AS n FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'agent' AND at >= ? AND at <= ?", thread, during[0], during[1]).n;
     if (n === null) return null;
     const answered = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? LIMIT 1", thread, n) !== undefined;
     // A post with a card is pendingCard's: one no longer pending was answered, closed or withdrawn.
@@ -1986,48 +2667,6 @@ export class Store {
     const messages = this.messagesBefore(thread, n + 1, 3);
     const m = messages.pop();
     return m && m.n === n && m.authorKind === "agent" ? [m, messages] : null;
-  }
-
-  /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card (the
-  /// thread's latest card then), or a choice that closed it (closed_cards, by a person: not its agent withdrawing it).
-  answersSince(since: number): CardAnswer[] {
-    const out: CardAnswer[] = [];
-    const said = this.#all("SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since);
-    const askedBefore = (thread: number, n: number): number | null => {
-      const card: number | null = this.#one(CARD_BEFORE, thread, n).n;
-      const options: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
-      // Option's max: None below any Some.
-      return card === null ? options : options === null ? card : Math.max(card, options);
-    };
-    const cardAt = (thread: number, n: number): [MessageRow, Json] | null => {
-      const row = this.#one("SELECT card, options FROM entries WHERE thread = ? AND n = ?", thread, n);
-      const card = row ? cardOf(row.card, row.options) : undefined;
-      if (card === undefined) return null;
-      const m = this.#one("SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
-      return m ? [toMessage(m), card] : null;
-    };
-    for (const { thread, n } of said) {
-      const asked = askedBefore(thread, n);
-      if (asked === null) continue;
-      // Only the first word after it answers it; one closed (by a choice or withdrawn) was answered then.
-      const earlier = this.#one("SELECT 1 FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' AND n > ? AND n < ? LIMIT 1", thread, asked, n) !== undefined;
-      const closed = this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, asked) !== undefined;
-      if (earlier || closed) continue;
-      const found = cardAt(thread, asked);
-      if (!found) continue;
-      const answer = this.#one("SELECT * FROM merged WHERE thread = ? AND n = ?", thread, n);
-      if (!answer) continue;
-      const a = toMessage(answer);
-      out.push({ question: found[0], card: found[1], by: a.author, at: a.createdAt, answer: a });
-    }
-    for (const { thread, n, viewer: by, at } of this.#all(CLOSED_SINCE, since)) {
-      const found = cardAt(thread, n);
-      if (!found) continue;
-      // Withdrawn by its own agent: no one answered it.
-      if (found[0].author === by) continue;
-      out.push({ question: found[0], card: found[1], by, at, answer: null });
-    }
-    return out;
   }
 
   /// The cards a viewer dismissed, as "thread:n" (read/store.ts's key for the Rust's (thread, n)).
@@ -2060,30 +2699,263 @@ export class Store {
   /// The author restates its card on the post at `ts` (an edit entry with the post's words and `card`): what became of
   /// it, said on the post itself (a vault request's outcome). Whether the post was found.
   restateCard(agent: string, thread: number, ts: string, card: (was: Json) => Json): boolean {
+    return this.#restateCard(agent, thread, ts, card)!;
+  }
+
+  /// Save the request, close its card when requested, and queue the outcome as one transaction. Announce the close
+  /// only after it commits; a missing card is checked again when the queued result is applied.
+  saveCardOutcome(item: Omit<CardOutcome, "id">, save: () => void): string {
+    // Store listeners cannot be deferred until an arbitrary caller's outer transaction commits.
+    if (this.db.isTransaction) throw new Error("card outcome save must run outside an existing transaction");
     return this.#with((changes) => {
-      const r = this.#one("SELECT card FROM entries WHERE thread = ? AND ts = ? AND kind = 'message' AND author_kind = 'agent' AND author = ? AND card IS NOT NULL", thread, ts, agent);
-      const message = r === undefined ? null : this.#messageAt(thread, ts);
-      if (r === undefined || message === null) return false;
-      // The latest restated card, else the post's.
-      const last = this.#one("SELECT card FROM entries WHERE thread = ? AND kind = 'edit' AND target = ? AND card IS NOT NULL ORDER BY n DESC LIMIT 1", thread, message.n);
-      this.#append(
-        {
-          agentIdentity: undefined, thread, n: 0, kind: "edit", target: message.n, ts: null,
-          authorKind: message.authorKind, author: message.author, text: message.text, attachments: message.attachments, quotes: message.quotes,
-          declared: null, client: null, profile: null, runtime: null, options: undefined, card: card(parsed(last?.card ?? r.card)), at: this.now(),
-        },
-        changes,
-      );
-      return true;
+      let closed: number | null = null;
+      // Take the writer before inspecting the queue: a different connection committing after a deferred read would
+      // otherwise leave this request unable to promote its snapshot to a write transaction.
+      const id = this.#tx(() => saveWithCardOutcome(this.db, item, () => {
+        save();
+        if (item.close) {
+          const row = this.#one("SELECT n FROM entries WHERE thread=? AND ts=? AND kind='message' AND author_kind='agent' AND author=? AND card IS NOT NULL", item.thread, item.ts, item.agent);
+          if (row !== undefined && this.#run("INSERT OR IGNORE INTO closed_cards(thread,n,viewer,at) VALUES(?,?,?,?)",
+            item.thread, row.n, item.agent, this.now()) > 0) closed = row.n;
+        }
+      }));
+      if (closed !== null) changes.push({ type: "thread", id: item.thread, entries: [], closed });
+      return id;
     });
   }
 
-  /// The login cards of a login (docs/remote-login.md: `{"type": "login", "login": <id>}`) still waiting: closed for
+  /// Apply the oldest queued outcome to its card, or discard it if its post is gone. False means another consumer
+  /// has already advanced that card; undefined means its old edits need a guarded paged read. The edit, any close and the
+  /// queue advance commit together.
+  restateQueuedCard(item: CardOutcome, prepared?: { scan: CardEditScan; card: string | null; edit?: string | null }): boolean | undefined {
+    if (prepared && (prepared.scan.thread !== item.thread || prepared.scan.ts !== item.ts || prepared.scan.agent !== item.agent))
+      throw new Error("card scan belongs to a different outcome");
+    try {
+      return this.#tryNow(() => this.#restateCard(item.agent, item.thread, item.ts,
+        (card) => ({ ...card, [item.field]: { ...card?.[item.field], outcome: item.outcome } }), item, prepared));
+    } finally {
+      if (prepared) try { this.endCardEditScan(prepared.scan); }
+      catch (error) { log.warn("store", "a card scan guard could not be released", { error: (error as Error).message }); }
+    }
+  }
+
+  /// Guard the target before a worker pages through its older card edits. A stale scan is rejected at write time.
+  beginCardEditScan(item: CardOutcome): CardEditScan | null {
+    return this.#tryNow(() => {
+      const first = this.#one("SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread=? AND ts=? AND kind='message' AND author_kind='agent' AND author=? AND card IS NOT NULL", item.thread, item.ts, item.agent);
+      if (first === undefined) return null;
+      const checked = ensureCardScanGuard(this.db), token = randomBytes(16).toString("hex"), target = first.n as string;
+      const registered = this.#tx(() => {
+        if (restateGuardSchema(this.db) !== checked) return false;
+        const hasTs = this.#one("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_ts'") === undefined ? 0 : 1;
+        this.#run(`UPDATE card_scan_meta SET schema_version=?,has_ts_index=? WHERE id=1
+          AND (schema_version<>? OR has_ts_index<>?)`, checked, hasTs, checked, hasTs);
+        this.#run(`INSERT INTO card_scan_guard(thread,target,token,dirty) VALUES(?,CAST(? AS INTEGER),?,0)
+          ON CONFLICT(thread,target) DO UPDATE SET token=excluded.token,dirty=0`, item.thread, target, token);
+        return true;
+      }, true);
+      if (!registered) return null;
+      let keep = false;
+      try {
+        this.db.exec("SAVEPOINT card_edit_scan");
+        try {
+          const schema = restateGuardSchema(this.db);
+          const row = this.#one("SELECT CAST(n AS TEXT) AS n FROM entries WHERE thread=? AND ts=? AND kind='message' AND author_kind='agent' AND author=? AND card IS NOT NULL", item.thread, item.ts, item.agent);
+          const guard = this.#one("SELECT token,dirty FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER)", item.thread, target);
+          if (schema !== checked || row === undefined || row.n !== target || guard?.token !== token || guard.dirty !== 0) return null;
+          keep = true;
+          return { thread: item.thread, ts: item.ts, agent: item.agent, target: row.n, token, schema };
+        } finally { this.db.exec("RELEASE card_edit_scan"); }
+      } finally {
+        if (!keep) this.#run("DELETE FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER) AND token=?", item.thread, target, token);
+      }
+    });
+  }
+
+  endCardEditScan(scan: CardEditScan): void {
+    this.#tryNow(() => this.#run("DELETE FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER) AND token=?", scan.thread, scan.target, scan.token));
+  }
+
+  #restateCard(agent: string, thread: number, ts: string, card: (was: Json) => Json, queued?: CardOutcome,
+    prepared?: { scan: CardEditScan; card: string | null; edit?: string | null }): boolean | undefined {
+    return this.#with((changes) => {
+      const postExists = () => this.#one("SELECT 1 FROM entries WHERE thread=? AND ts=? AND kind='message' AND author_kind='agent' AND author=? AND card IS NOT NULL", thread, ts, agent) !== undefined;
+      // A missing post is checked again under the write lock before its queued outcome can be discarded.
+      const discard = (): boolean | null => this.#tx(() => {
+        if (postExists()) return null;
+        return completeCardOutcome(this.db, queued!);
+      }, true);
+      // A missing or foreign post needs neither a guard nor edit-index preparation.
+      if (!postExists()) {
+        if (!queued) return false;
+        const result = discard();
+        if (result !== null) return result;
+      }
+      type Current = { message: MessageRow; card: Json; broken: boolean };
+      const read = (): Current | null | undefined => {
+        const r = this.#one("SELECT CAST(n AS TEXT) AS n,card FROM entries WHERE thread = ? AND ts = ? AND kind = 'message' AND author_kind = 'agent' AND author = ? AND card IS NOT NULL", thread, ts, agent);
+        if (r === undefined) return null;
+        if (prepared && prepared.scan.target !== r.n) return undefined;
+        const mode = legacyMergedEditMode(this.db);
+        if (queued) {
+          let message: MessageRow | null;
+          let last: string | null | undefined;
+          if (legacyMergedReadReady(this.db)) {
+            message = this.#messageAt(thread, ts);
+          } else {
+            const edit = prepared ? prepared.edit : boundedEditKey(this.db, thread, r.n);
+            if (edit === undefined) return undefined;
+            const row = this.#one(LAST_MESSAGE_WITH_EDIT, thread, r.n, edit);
+            message = row === undefined ? null : toMessage(row);
+            // If the latest target entry itself carries a card, it is also the latest eligible card edit. If there
+            // is no target entry, there can be no card edit either.
+            if (edit === null) last = null;
+            else {
+              const entry = this.#one("SELECT kind,card FROM entries WHERE thread=? AND n=CAST(? AS INTEGER)", thread, edit);
+              if (entry?.kind === "edit" && entry.card !== null) last = entry.card;
+            }
+          }
+          if (message === null) return null;
+          if (prepared) last = prepared.card;
+          else if (last === undefined) last = boundedCardEdit(this.db, thread, r.n, mode === "native");
+          if (last === undefined) return undefined;
+          return { message, card: parsed(last ?? r.card), broken: false };
+        }
+        const broken = mode === "repair";
+        const latest = broken ? this.#one("SELECT CAST(MAX(n) AS TEXT) AS n FROM entries WHERE thread=?1 AND target=CAST(?2 AS INTEGER)", thread, r.n)?.n ?? null : null;
+        const row = broken ? this.#one(LAST_MESSAGE_WITH_EDIT, thread, r.n, latest) : undefined;
+        const message = broken ? (row === undefined ? null : toMessage(row)) : this.#messageAt(thread, ts);
+        if (message === null) return null;
+        const last = mode === "legacy" || mode === "legacy-old-index"
+          ? this.#one(`SELECT x.card FROM entries x WHERE x.thread=?1 AND x.n=(${legacyEditLatest("?1","?2","x.kind='edit' AND x.card IS NOT NULL",mode === "legacy-old-index")})`, thread, r.n)
+          : this.#one("SELECT card FROM entries WHERE thread = ? AND kind = 'edit' AND target = ? AND card IS NOT NULL ORDER BY n DESC LIMIT 1", thread, r.n);
+        return { message, card: parsed(last?.card ?? r.card), broken };
+      };
+      const retry = Symbol("restate changed"), repair = Symbol("restate repair"), missing = Symbol("restate missing"), stale = Symbol("restate consumed"), pending = Symbol("restate pending");
+      const token = prepared?.scan.token ?? randomBytes(16).toString("hex");
+      let retries = 0, registered = prepared !== undefined;
+      try {
+        for (;;) {
+          const checkedSchema = prepared?.scan.schema ?? ensureRestateGuard(this.db);
+          if (!prepared) {
+            try {
+              this.#run(`INSERT INTO restate_guard(thread,token,dirty) VALUES(?,?,0)
+                ON CONFLICT(thread) DO UPDATE SET token=excluded.token,dirty=0`, thread, token);
+            } catch (error) {
+              if (restateGuardSchema(this.db) !== checkedSchema) { retries++; continue; }
+              throw error;
+            }
+            registered = true;
+          }
+          // A guard follows this thread while the message and card are read in one snapshot. The potentially long
+          // old lookup stays outside the write transaction; a write elsewhere does not invalidate it.
+          this.db.exec("SAVEPOINT restate_card_read");
+          let current: Current | null | undefined, schema: number;
+          try {
+            schema = restateGuardSchema(this.db);
+            const guard = prepared ? this.#one("SELECT token,dirty FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER)", thread, prepared.scan.target) : null;
+            current = prepared && (schema !== checkedSchema || guard?.token !== token || guard.dirty !== 0) ? undefined : read();
+          }
+          finally { this.db.exec("RELEASE restate_card_read"); }
+          if (current === undefined) return undefined;
+          if (current === null) {
+            if (!queued) return false;
+            const result = discard();
+            if (result !== null) return result;
+            continue;
+          }
+          if (schema !== checkedSchema) { retries++; continue; }
+          if (current.broken || widgetSourceBeforeAddNeedsRepair(this.db)) repairMergedEditLookup(this.db);
+          const entry: EntryRow = {
+            agentIdentity: undefined, thread, n: 0, kind: "edit", target: current.message.n, ts: null,
+            authorKind: current.message.authorKind, author: current.message.author, text: current.message.text,
+            attachments: current.message.attachments, quotes: current.message.quotes,
+            declared: null, client: null, profile: null, runtime: null, options: undefined, card: undefined, at: this.now(),
+          };
+          try {
+            let closed: number | null = null;
+            this.#append(entry, changes, () => {
+              if (restateGuardSchema(this.db) !== schema) throw retry;
+              if (legacyMergedNeedsRepair(this.db) || widgetSourceBeforeAddNeedsRepair(this.db)) throw repair;
+              const guard = prepared
+                ? this.#one("SELECT token,dirty FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER)", thread, prepared.scan.target)
+                : this.#one("SELECT token,dirty FROM restate_guard WHERE thread=?", thread);
+              if (guard?.token !== token || guard.dirty !== 0) {
+                if (prepared) throw retry;
+                // Retry outside the lock first; after repeated changes to this thread, reread under the lock so two
+                // writers or two restatements cannot keep one another waiting indefinitely.
+                if (retries < 1) throw retry;
+                current = read();
+                if (current === undefined) throw pending;
+                if (current === null) throw missing;
+                if (current.broken) throw repair;
+                entry.target = current.message.n;
+                entry.authorKind = current.message.authorKind;
+                entry.author = current.message.author;
+                entry.text = current.message.text;
+                entry.attachments = current.message.attachments;
+                entry.quotes = current.message.quotes;
+              }
+              if (prepared) this.#run("DELETE FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER) AND token=?", thread, prepared.scan.target, token);
+              else this.#run("DELETE FROM restate_guard WHERE thread=? AND token=?", thread, token);
+              if (queued) {
+                if (!completeCardOutcome(this.db, queued)) throw stale;
+                if (queued.close && this.#run("INSERT OR IGNORE INTO closed_cards (thread,n,viewer,at) VALUES (?,?,?,?)",
+                  thread, current!.message.n, agent, this.now()) > 0) closed = current!.message.n;
+              }
+              entry.card = card(current!.card);
+            }, queued !== undefined, () => {
+              if (closed !== null) changes.push({ type: "thread", id: thread, entries: [], closed });
+            });
+            registered = false;
+            return true;
+          } catch (error) {
+            if (error === pending) return undefined;
+            if (error === stale) return false;
+            if (error === missing) {
+              if (!queued) return false;
+              const result = discard();
+              if (result !== null) return result;
+              continue;
+            }
+            if (error === retry) { if (prepared) return undefined; retries++; continue; }
+            if (error === repair) { repairMergedEditLookup(this.db); if (prepared) return undefined; retries++; continue; }
+            throw error;
+          }
+        }
+      } finally {
+        if (registered) {
+          try {
+            if (prepared) this.#run("DELETE FROM card_scan_guard WHERE thread=? AND target=CAST(? AS INTEGER) AND token=?", thread, prepared.scan.target, token);
+            else this.#run("DELETE FROM restate_guard WHERE thread=? AND token=?", thread, token);
+          }
+          catch (error) { log.warn("store", "a card restatement guard could not be released", { error: (error as Error).message }); }
+        }
+      }
+    });
+  }
+
+  /// The login cards of a login (`{"type": "login", "login": <id>}`) still waiting: closed for
   /// everyone as the login ends, as their agent would withdraw them (nobody answered, nobody is woken: the station tells
   /// the agent itself). The sessions whose cards they were.
   closeLoginCards(login: string): string[] {
     return this.#with((changes) => {
-      const rows = this.#all(LOGIN_CARDS, `%"login":${JSON.stringify(login)}%`);
+      const pattern = `%"login":${JSON.stringify(login)}%`;
+      let rows: Json[];
+      if (!this.#legacyLoginCards) rows = this.#all(LOGIN_CARDS, pattern);
+      else {
+        const native = this.#one("SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_login_cards'") !== undefined;
+        const keyed = /^[0-9a-z]{1,40}$/i.test(login);
+        const read = (useNative: boolean) => keyed
+          ? this.#all(useNative ? LEGACY_LOGIN_CARDS_NATIVE : LEGACY_LOGIN_CARDS, login.toLowerCase(), pattern)
+          : this.#all(useNative ? LOGIN_CARDS : LEGACY_LOGIN_CARDS_FALLBACK, pattern);
+        try { rows = read(native); }
+        catch (error) {
+          // Another connection can remove the older index between the check and preparing the statement.
+          if (!native || !(error instanceof Error) || !error.message.includes("no such index: entries_login_cards")) throw error;
+          rows = read(false);
+        }
+      }
       for (const r of rows) {
         this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", r.thread, r.n, r.author, this.now());
         changes.push({ type: "thread", id: r.thread, entries: [], closed: r.n });
@@ -2092,14 +2964,17 @@ export class Store {
     });
   }
 
-  /// Close this exact pending card for everyone. This writes no message or delivery: the agent stays asleep. A stale
-  /// click cannot close a newer question or overwrite a newer turn's state. `lang` is lang.rs `spoken()`: the request's.
+  /// Close this exact pending card for everyone. This writes no message or delivery: the agent stays asleep, and is
+  /// told the choice with what it is next handed (card_choices). A stale
+  /// click cannot close a newer question or overwrite a newer turn's state. Its agent may still be in the turn that
+  /// asked (it goes on after posting, or a notice woke it): the card closes all the same, the choice is kept on that
+  /// turn as its need, and the turn ends final when it ends (endTurn). `lang` is lang.rs `spoken()`: the request's.
   closeCard(viewer: string, thread: number, n: number, option: string, lang: Lang = stationLang()): boolean {
     return this.#with((changes) => {
       // Told only when it got as far as closing it (one already closed says true and tells nothing, as the Rust).
       let closed: { agent: string; changed: boolean } | null = null;
       const done = this.#tx(() => {
-        const offered = this.#one("SELECT author, at, card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
+        const offered = this.#one("SELECT author, ts, at, card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
         if (offered === undefined) return false;
         const card = cardOf(offered.card, offered.options);
         if (card === undefined) return false;
@@ -2109,17 +2984,24 @@ export class Store {
         if (this.#one("SELECT 1 FROM closed_cards WHERE thread = ? AND n = ?", thread, n) !== undefined) return true;
         // The offered row exists and has a card. Only a later person, card or legacy options can end its wait;
         // reuse the same indexed checks as closedCard instead of walking the intervening ordinary messages.
-        if (this.#one(CLOSED_CARD_AFTER, thread, n)!.ended !== 0) return false;
-        // Do not race the agent still composing its question / recording its ending.
-        const composing = this.#one("SELECT ended_at IS NULL AS c FROM turns WHERE session_key = ? ORDER BY started_at DESC LIMIT 1", offered.author);
-        if (composing !== undefined && composing.c !== 0) return false;
+        if (this.#cardEndedAfter(thread, n)) return false;
         this.#run("INSERT INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, n, viewer, this.now());
+        // Its agent hears nothing now: it is told the choice with what it is next handed (untoldCardChoices).
+        this.#run("INSERT OR REPLACE INTO card_choices (thread, n, session, ts, viewer, option, at) VALUES (?, ?, ?, ?, ?, ?, ?)", thread, n, offered.author, offered.ts ?? null, viewer, option, this.now());
+        const chosen = tr(lang, "station.card.chosen", { option });
         const changed = this.#run(
           `UPDATE turns SET declared = 'final', need = ?5, wait_seconds = NULL
            WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1)
              AND declared IN ('block', 'need_help', 'need_human', 'need_decision') AND ended_at IS NOT NULL
              AND ((about_thread = ?2 AND about_n = ?3) OR (about_n IS NULL AND thread = ?2 AND started_at <= ?4))`,
-          offered.author, thread, n, offered.at, tr(lang, "station.card.chosen", { option }),
+          offered.author, thread, n, offered.at, chosen,
+        );
+        // Still in the turn that asked: the choice is its need once it ends (endTurn makes it final then).
+        this.#run(
+          `UPDATE turns SET need = ?4
+           WHERE id = (SELECT id FROM turns WHERE session_key = ?1 ORDER BY started_at DESC LIMIT 1)
+             AND ended_at IS NULL AND about_thread = ?2 AND about_n = ?3`,
+          offered.author, thread, n, chosen,
         );
         closed = { agent: offered.author, changed: changed > 0 };
         return true;
@@ -2131,6 +3013,36 @@ export class Store {
       }
       return done;
     });
+  }
+
+  /// What people chose on the session's cards with an option that closes them, which it has not been told: the oldest
+  /// first, at most `limit` (the rest with what it is handed after).
+  untoldCardChoices(session: string, limit = 20): CardChoice[] {
+    return this.#all("SELECT thread, n, ts, viewer, option, at FROM card_choices INDEXED BY card_choices_untold WHERE session = ? AND told_at IS NULL ORDER BY at LIMIT ?", session, limit)
+      .map((r) => this.#cardChoice(r));
+  }
+
+  /// The agent was told these choices.
+  markCardChoicesTold(session: string, told: readonly Pick<CardChoice, "thread" | "n">[]): void {
+    const now = this.now();
+    for (const { thread, n } of told) this.#run("UPDATE card_choices SET told_at = ? WHERE thread = ? AND n = ? AND session = ? AND told_at IS NULL", now, thread, n, session);
+  }
+
+  /// The choices that closed these posts' cards of a thread (chat_history), by post.
+  cardChoices(thread: number, ns: readonly number[]): Map<number, CardChoice> {
+    const out = new Map<number, CardChoice>();
+    for (const n of ns) {
+      const r = this.#one("SELECT thread, n, ts, viewer, option, at FROM card_choices WHERE thread = ? AND n = ?", thread, n);
+      if (r !== undefined) out.set(n, this.#cardChoice(r));
+    }
+    return out;
+  }
+
+  /// The post's words as first written: an edit of them is not looked for.
+  #cardChoice(r: Json): CardChoice {
+    const t = this.#one("SELECT channel, thread_ts FROM threads WHERE id = ?", r.thread);
+    const post = this.#one("SELECT text FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", r.thread, r.n);
+    return { thread: r.thread, n: r.n, ts: r.ts ?? null, where: t ? [t.channel, t.thread_ts] : null, question: post?.text ?? null, by: r.viewer, option: r.option, at: r.at };
   }
 
   // ── identities ──
@@ -2203,14 +3115,21 @@ export class Store {
 
   /// What a running turn says it ends in (`declared`, `waitSeconds` as `endTurn` takes them), on record as it is said: a
   /// station that dies before the turn ends (killed while handing over) leaves it for the next one to end the turn in.
-  declareTurn(id: string, declared: string, waitSeconds: number | null): void {
+  declareTurn(id: string, declared: string | null, waitSeconds: number | null): void {
     this.#run("UPDATE turns SET declared = ?, wait_seconds = ? WHERE id = ? AND ended_at IS NULL", declared, waitSeconds, id);
   }
 
-  /// Ends a turn; `waitSeconds` is how long a turn ending as waiting waits at most.
+  /// Ends a turn; `waitSeconds` is how long a turn ending as waiting waits at most. One that ends needing a person about
+  /// a card closed while it ran (closeCard) needs nothing more: it ends final.
   endTurn(id: string, outcome: string, detail: string | null, declared: string | null, waitSeconds: number | null): void {
     this.#with((changes) => {
       this.#run("UPDATE turns SET ended_at = ?, outcome = ?, detail = ?, declared = ?, wait_seconds = ? WHERE id = ?", this.now(), outcome, detail, declared, waitSeconds, id);
+      this.#run(
+        `UPDATE turns SET declared = 'final', wait_seconds = NULL
+         WHERE id = ? AND declared IN ('block', 'need_help', 'need_human', 'need_decision') AND about_n IS NOT NULL
+           AND EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = turns.about_thread AND c.n = turns.about_n)`,
+        id,
+      );
       const r = this.#one("SELECT session_key FROM turns WHERE id = ?", id);
       if (r !== undefined) changes.push({ type: "session", key: r.session_key });
     });
@@ -2285,6 +3204,11 @@ export class Store {
 
   listTurns(session: string): TurnRow[] {
     return this.#all("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at", session).map((r) => ({ id: r.id, summary: toTurnSummary(r) }));
+  }
+
+  /// The closest failed turn in a time window, without reading a session's older turns.
+  failedTurnsNear(session: string, from: number, to: number, at: number): TurnRow[] {
+    return this.#all(FAILED_TURN_NEAR, session, from, to, at).map((r) => ({ id: r.id, summary: toTurnSummary(r) }));
   }
 
   /// Latest turns for the named sessions: a missing session is omitted, even if an old turn remains for it.
@@ -2463,32 +3387,57 @@ export class Store {
     return (session === null ? this.#all("SELECT * FROM jobs ORDER BY started_at DESC") : this.#all(SESSION_JOBS, session)).map(toJob);
   }
 
-  /// The jobs running now, as listJobs gives them (by the index on their state: the queue reads them at each look, and
-  /// each second a command waits for the screen, jobs/jobs.ts `line`).
+  /// The jobs running now, as listJobs gives them, by the index on their state.
   jobsRunning(): JobRow[] {
     return this.#all(JOBS_RUNNING).map(toJob);
   }
 
+  /// The remote queue's running jobs, in the same order, without unrelated running jobs.
+  remoteQueueJobs(): Pick<JobRow, "id" | "sessionKey" | "startedAt" | "queued" | "screen" | "small">[] {
+    return this.#active(REMOTE_QUEUE_JOBS, REMOTE_QUEUE_BEFORE_UPGRADE).map((r) => ({
+      id: r.id, sessionKey: r.session_key, startedAt: r.started_at,
+      ...(r.queued === 1 ? { queued: true } : {}), ...(r.screen === 1 ? { screen: true } : {}),
+      ...(r.small === 1 ? { small: true } : {}),
+    }));
+  }
+
+  /// The running commands and watches that can keep the machine awake, without unrelated services on ports.
+  awakeJobs(): { sessionKey: string; startedAt: number }[] {
+    return this.#active(AWAKE_JOBS, AWAKE_JOBS_BEFORE_UPGRADE).map((r) => ({ sessionKey: r.session_key, startedAt: r.started_at }));
+  }
+
   /// Whether this session has at least `limit` jobs running. The lookup reads at most that many active jobs.
   runningJobsAtLeast(session: string, limit: number): boolean {
-    return limit <= 0 || this.#one(RUNNING_LIMIT, session, limit - 1) !== undefined;
+    return limit <= 0 || this.#active(RUNNING_LIMIT, RUNNING_LIMIT_BEFORE_UPGRADE, session, limit - 1).length !== 0;
+  }
+
+  /// Of these sessions, those with at least one running job. Once prepared, the lookup does not read their history.
+  runningJobSessions(sessions: string[]): Set<string> {
+    if (sessions.length === 0) return new Set();
+    return new Set(this.#active(RUNNING_JOB_SESSIONS, RUNNING_JOB_SESSIONS_BEFORE_UPGRADE, JSON.stringify(sessions)).map((r) => r.session as string));
   }
 
   /// Running jobs stopped with a wait, newest first; completed jobs and other sessions are not read.
   runningWaitJobIds(session: string): string[] {
-    return this.#all(RUNNING_WAIT_JOBS, session).map((r) => r.id);
+    return this.#active(RUNNING_WAIT_JOBS, RUNNING_WAIT_JOBS_BEFORE_UPGRADE, session).map((r) => r.id);
   }
 
   /// Its running jobs and services waiting to restart: what must stop when it is archived.
-  upJobIds(session: string): string[] {
-    return this.#all(UP_JOBS_OF_SESSION, session).map((r) => r.id);
+  upJobIds(session: string, old = false): string[] {
+    const sql = !old && sessionUpJobsReady(this.db, session) ? SESSION_UP_JOBS : UP_JOBS_OF_SESSION;
+    return this.#active(sql, UP_JOBS_BEFORE_UPGRADE, session).map((r) => r.id);
   }
 
-  /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and
-  /// the other jobs, for what other stations are told of this one's load (jobs/load.ts).
+  /// Null means this old session's jobs have not been prepared yet.
+  sessionHasUpJob(session: string): boolean | null {
+    return sessionUpJobsReady(this.db, session) ? this.#one(SESSION_UP_JOB, session) !== undefined : null;
+  }
+
+  /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts; not those still in the
+  /// queue), web services (a port) and the other jobs, for what other stations are told of this one's load (jobs/load.ts).
   runningJobs(): { remote: number; jobs: number; services: number } {
     const r = this.#one(
-      "SELECT COALESCE(SUM(substr(id, 1, 7) = 'remote_'), 0) AS remote, COALESCE(SUM(substr(id, 1, 7) <> 'remote_' AND port IS NOT NULL), 0) AS services, COUNT(*) AS n FROM jobs WHERE state = 'running'",
+      "SELECT COALESCE(SUM(substr(id, 1, 7) = 'remote_'), 0) AS remote, COALESCE(SUM(substr(id, 1, 7) <> 'remote_' AND port IS NOT NULL), 0) AS services, COUNT(*) AS n FROM jobs WHERE state = 'running' AND COALESCE(queued, 0) = 0",
     );
     const remote = Number(r?.remote ?? 0);
     const services = Number(r?.services ?? 0);
@@ -2540,6 +3489,12 @@ export class Store {
     return this.#all("SELECT * FROM processes").map((r) => ({ pgid: r.pgid, startedAt: r.started_at, runtime: r.runtime, label: r.label }));
   }
 
+  /// The process group with this id, if recorded by this or an earlier station.
+  processByGroup(pgid: number): ProcessRow | null {
+    const r = this.#one(PROCESS_BY_GROUP, pgid);
+    return r ? { pgid: r.pgid, startedAt: r.started_at, runtime: r.runtime, label: r.label } : null;
+  }
+
   // ── widget states ──
 
   /// Keeps what a widget in one of the session's messages holds (`state`, JSON) and what of it is for the agent
@@ -2560,19 +3515,26 @@ export class Store {
   /// The session's widget models it has not been told, with where each widget was posted (the latest of its threads'
   /// messages that carry the file).
   untoldWidgetModels(session: string): WidgetModel[] {
-    const untold = this.#all("SELECT path, model FROM widget_states WHERE session = ? AND model IS NOT NULL AND told_at IS NULL ORDER BY updated_at, rowid", session);
-    return untold.map(({ path, model }) => {
-      const found = this.#one(
-        `SELECT t.channel, t.thread_ts, json_extract(a.value, '$.name') AS name FROM merged m
-         JOIN threads t ON t.id = m.thread JOIN thread_sessions ts ON ts.thread = t.id AND ts.session = ?1, json_each(m.attachments) a
-         WHERE m.attachments IS NOT NULL AND json_extract(a.value, '$.path') = ?2 ORDER BY m.created_at DESC LIMIT 1`,
-        session, path,
-      );
-      const base: string = path.split(/[/\\]/).pop() ?? path;
-      if (found === undefined) return { path, name: base, thread: null, model };
-      const name = typeof found.name === "string" && found.name !== "" ? found.name : base;
-      return { path, name, thread: [found.channel, found.thread_ts], model };
-    });
+    // Membership, readiness and the selected messages must agree while another station writes.
+    this.db.exec("SAVEPOINT widget_source_read");
+    try {
+      const untold = this.#all("SELECT path, model FROM widget_states WHERE session = ? AND model IS NOT NULL AND told_at IS NULL ORDER BY updated_at, rowid", session);
+      if (untold.length === 0) return [];
+      checkWidgetSources(this.db);
+      const missing = this.#all(WIDGET_SOURCE_MISSING, session).map((row) => row.thread as number);
+      if (missing.length !== 0) throw new WidgetSourcesUnavailable(missing);
+      const unusual = this.#one(WIDGET_SOURCE_UNUSUAL, session) !== undefined;
+      return untold.map(({ path, model }) => {
+        const found = this.#one(
+          unusual ? WIDGET_SOURCE_ORIGINAL : WIDGET_SOURCE,
+          session, path,
+        );
+        const base: string = path.split(/[/\\]/).pop() ?? path;
+        if (found === undefined) return { path, name: base, thread: null, model };
+        const name = typeof found.name === "string" && found.name !== "" ? found.name : base;
+        return { path, name, thread: [found.channel, found.thread_ts], model };
+      });
+    } finally { this.db.exec("RELEASE widget_source_read"); }
   }
 
   /// The agent was told these (path, model): each is marked told unless its model changed since.
@@ -2704,7 +3666,7 @@ export class Store {
     const selves = [viewer];
     if (slack) selves.push(...this.slackIdentities(viewer));
     return this.#one(
-      `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message'
+      this.#legacySaid ? LEGACY_UNREAD : `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message'
        AND NOT (author_kind = 'person' AND author IN (SELECT value FROM json_each(?))) AND NOT ${LETTER_SQL}`,
       thread, read, JSON.stringify(selves),
     ).c;
@@ -2729,16 +3691,19 @@ export class Store {
   }
 
   /// Appends an entry as the thread's next.
-  #append(entry: EntryRow, changes: Changes): EntryRow {
+  #append(entry: EntryRow, changes: Changes, before?: () => void, tryWrite = before !== undefined, committed?: () => void, inserted?: (n: number) => void): EntryRow {
     if (entry.kind === "message" && entry.authorKind === "agent" && entry.agentIdentity === undefined) {
       const r = this.#one("SELECT s.model, s.effort, CASE WHEN r.session_key IS NULL THEN s.runtime ELSE COALESCE(r.runtime, s.original_runtime, s.runtime) END AS runtime FROM sessions s LEFT JOIN runtime_sessions r ON r.session_key = s.key AND r.id = s.runtime_session_id WHERE s.key = ?", entry.author);
       entry.agentIdentity = r ? { model: r.model, effort: r.effort, runtime: r.runtime } : undefined;
     }
     this.#tx(() => {
+      before?.();
       const n: number | null = this.#one("SELECT MAX(n) AS n FROM entries WHERE thread = ?", entry.thread).n;
       entry.n = (n ?? this.#lastKnown(entry.thread)) + 1;
       this.#insertEntry(entry);
-    });
+      inserted?.(entry.n);
+    }, tryWrite);
+    committed?.();
     // As a read of it gives it: what is told of it is made from this (api/events.ts), not read back.
     changes.push({ type: "thread", id: entry.thread, entries: [stored(entry)] });
     this.#bringBack(entry, changes);
@@ -2785,7 +3750,7 @@ export class Store {
   /// alone, and the sessions the station archived that hear it (every session of the thread) or said it. What was
   /// archived by hand stays archived: it takes no messages (manuallyArchived).
   #bringBack(entry: EntryRow, changes: Changes): void {
-    if (entry.kind !== "message" || entry.authorKind === "ember") return;
+    if (entry.kind !== "message" || entry.authorKind === STATION_AUTHOR) return;
     const thread = this.getThread(entry.thread);
     if (thread === null || this.manuallyArchived(thread.id)) return;
     const archived: string[] = this.#all(
@@ -2855,9 +3820,9 @@ export class Store {
   #insertEntry(e: EntryRow): void {
     const c = entryColumns(e);
     this.#run(
-      "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity, letter, change) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       c.thread, c.n, c.kind, c.target, c.ts, c.author_kind, c.author, c.text, c.attachments, c.quotes, c.declared, c.client, c.profile, c.runtime,
-      c.options, c.card, c.at, c.agent_identity, c.letter,
+      c.options, c.card, c.at, c.agent_identity, c.letter, c.change,
     );
   }
 }

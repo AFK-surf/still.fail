@@ -1,15 +1,13 @@
 // A thread's summary as its viewer has it (GET /threads/:id: how far it goes, its latest message, what the viewer has not
 // read, who wrote in it), brought on by what its station's stream says was said in it, here: the station tells what it
-// writes as it writes it, and leaves what a thread's summary makes of that to the device (docs/core-ts.md, sync).
+// writes as it writes it, and leaves what a thread's summary makes of that to the device (sync).
 // Made by the station, the summary was read again for every viewer after every message (a phone's few languages and
 // workspaces each), from the disk while its machine was short of memory: seconds for each on a station (2026-11-02).
 import { get, isObject } from "../util.ts";
+import { isOwnSurface } from "../titles.ts";
 
 type J = Record<string, any>;
 
-/// The surface of a station's own chats: those a viewer's own messages are known in by their email alone (a Slack or
-/// Feishu thread's are by the other selves the station knows of them).
-const OWN = "ember";
 
 const n = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -33,7 +31,7 @@ function messageOf(e: J): J {
 /// thread not of the station's own chats (whose people's other selves only the station knows), a person not known by
 /// their email (the station's own page's).
 export function threadAfter(held: unknown, entries: readonly unknown[], me: string): J | null {
-  if (!isObject(held) || get(held, "surface") !== OWN) return null;
+  if (!isObject(held) || !isOwnSurface(get(held, "surface"))) return null;
   const said = entries.filter(isObject) as J[];
   if (said.length === 0) return null;
   let last = n(get(held, "last"));

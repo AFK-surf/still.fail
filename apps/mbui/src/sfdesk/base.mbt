@@ -139,6 +139,7 @@ using @sfbase {
   long_jobs,
   long_jobs_lit,
   long_jobs_seen,
+  long_stop,
   held_order,
   chats_of,
   app,
@@ -264,20 +265,11 @@ using @sfbase {
 }
 
 ///|
-fn dmax(a : Double, b : Double) -> Double {
-  if a > b {
-    a
-  } else {
-    b
-  }
-}
-
-
-///|
 /// A sidebar's rows, the library's (src/sf side_rows.mbt).
 using @sf {
   nav_fade,
-  nav_ground,
+  nav_ground_by,
+  nav_ground_on,
   nav_row,
   nav_apart,
   nav_item,
@@ -297,13 +289,6 @@ using @sf {
 
 ///|
 using @sfpages {
-  login_steps,
-  pf_tag,
-  pf_tag_words,
-  profile_field,
-  quota_dials,
-  pf_card_foot,
-  pf_name_line,
   open_dialog,
   desk_dialogs,
   sec_section,
@@ -320,6 +305,7 @@ using @sfpages {
   body_size,
   chat_find_list,
   chat_key,
+  chat_list,
   composer_width,
   composer_side,
   context_tile_id,
@@ -348,4 +334,10 @@ using @sfpages {
   unpremultiplied,
   usage_tiles,
   video_least,
+}
+
+///|
+using @sf {
+  dmin,
+  dmax,
 }

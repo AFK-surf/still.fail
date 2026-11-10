@@ -1,19 +1,31 @@
-// Links to a station's screens and to its 共享调试 in an agent's words (ember apps/android chat/screens/ScreenLinks.kt,
-// AdbLinks.kt; docs/remote-screens.md, docs/adb-share.md), as the web draws them: one alone in a paragraph is its card
+// Links to a station's screens and to its 共享调试 in an agent's words (still.fail apps/android chat/screens/ScreenLinks.kt,
+// AdbLinks.kt), as the web draws them: one alone in a paragraph is its card
 // (@sf.markdown's `screens`), a bare one within a sentence reads as its title. What a card says is the core's (the
 // `screenCard` and `adbCard` topics). A screen its station previews is live in its card while the card is built (the
-// messages' list builds only the rows in view) and the app is shown: `screen.view` with `peek`, JPEG only, small, each
-// frame acknowledged peek_ms after the one before (the station sends the next once the last is acknowledged); stopped
-// (the call cancelled) as the card goes from view or the app behind. A card's tap opens its link, as a tap on the link
+// messages' list builds only the rows in view) and the app is shown: `screen.view` with `peek`, small, each frame
+// acknowledged peek_ms after the one before (the station sends the next once the last is acknowledged); stopped (the
+// call cancelled) as the card goes from view or the app behind. JPEG, and H.264 where the host decodes it: a source
+// that has JPEG sends it a preview, one with nothing else (an Android device) H.264, decoded by a Stream of the card's,
+// video_peeks_most of those at once. One refused (its station previews as many as it can) or ended asks again
+// peek_again_ms on while its card is on the screen. A card's tap opens its link, as a tap on the link
 // does (open_links.mbt open_link).
 
 ///|
-/// A preview's pace (ScreenLinks.kt PEEK_MS): a picture at most this often.
+/// A preview's pace: a picture at most this often.
 pub let peek_ms : Double = 500.0
 
 ///|
-/// The picture a preview asks for, in pixels at most (ScreenLinks.kt PEEK_SIZE): the card's width, twice over.
+/// The picture a preview asks for, in pixels at most: the card's width, twice over.
 pub let peek_size : Double = 640.0
+
+///|
+/// A preview refused or ended is asked for again after this, while its card shows.
+pub let peek_again_ms : Double = 5000.0
+
+///|
+/// The most previews the app decodes as a video at once (an Android device's): a phone has few hardware decoders.
+/// One more is let go, its mark shown, and asks again peek_again_ms on.
+pub let video_peeks_most : Int = 2
 
 ///|
 /// The shape of a browser's preview (16:10), and the default before another screen's size is known.
@@ -40,7 +52,7 @@ pub let monitor_mark : LinkMark = { name: "monitor" }
 pub let globe_mark : LinkMark = { name: "web" }
 
 
-// ── the cards' looks (ScreenLinks.kt ScreenLinkCard, AdbLinks.kt AdbLinkCard) ──
+// ── the cards' looks ──
 
 ///|
 /// A card: a row 236 wide, a capsule as a file's card (a row high, 52), on the chat's bubble ground: its mark, 24,
@@ -132,11 +144,11 @@ pub(all) struct ScreenCard {
 }
 
 ///|
-/// The card of the screen `href` names, once the core has said (ScreenLinks.kt screenCardOf).
+/// The card of the screen `href` names, once the core has said.
 pub fn screen_card_of(src : Source, to : @sf.LinkTo) -> ScreenCard? {
   guard to.card == "screen" else { return None }
   let (station, screen) = (to.station, to.screen)
-  let v = (src.topic)("screenCard", { "station": Json::string(station), "screen": Json::string(screen) }).value
+  let v = src.topic("screenCard", { "station": Json::string(station), "screen": Json::string(screen) }).get().value
   guard v is Some(Object(_)) else { return None }
   Some({
     kind: text(v, "kind"),
@@ -150,19 +162,19 @@ pub fn screen_card_of(src : Source, to : @sf.LinkTo) -> ScreenCard? {
 }
 
 ///|
-/// The card of the 共享调试 `href` names, once the core has said (AdbLinks.kt adbCardOf: the `adbCard` topic).
+/// The card of the 共享调试 `href` names, once the core has said.
 pub fn adb_card_of(src : Source, to : @sf.LinkTo) -> Json? {
   guard to.card == "adb" else { return None }
   let station = to.station
-  match (src.topic)("adbCard", { "station": Json::string(station) }).value {
+  match src.topic("adbCard", { "station": Json::string(station) }).get().value {
     Some(Object(_)) as v => v
     _ => None
   }
 }
 
 ///|
-/// The links to screens in an agent's words as a chat draws them (ScreenLinks.kt ScreenLinks): their cards, and a bare
-/// one's title (屏幕 until it is known); a station's 共享调试 as its own (AdbLinks.kt). `message` names the message
+/// The links to screens in an agent's words as a chat draws them: their cards, and a bare
+/// one's title (屏幕 until it is known); a station's 共享调试 as its own. `message` names the message
 /// (a screen's preview is its card's own).
 pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens {
   {
@@ -195,7 +207,7 @@ pub fn screen_links(c : @ui.Ctx, src : Source, message : String) -> @sf.Screens 
 pub fn service_card_of(src : Source, to : @sf.LinkTo) -> (String, String, Bool) {
   guard to.card == "service" else { return ("", "", false) }
   let (station, job) = (to.station, to.job)
-  let j = (src.topic)("job", { "station": Json::string(station), "id": Json::string(job) }).value
+  let j = src.topic("job", { "station": Json::string(station), "id": Json::string(job) }).get().value
   let name = match text(j, "name") {
     "" => @sf.t("android-chat.preview.service")
     n => n
@@ -225,9 +237,9 @@ pub fn service_card_of(src : Source, to : @sf.LinkTo) -> (String, String, Bool) 
 pub fn service_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.LinkTo, words : String?) -> Unit {
   let (name, line, down) = service_card_of(src, to)
   let open = c.id("service-link/" + href)
-  if c.clicked(open) {
+  c.on_press(open, fn() {
     open_link(href)
-  }
+  })
   let title = match words {
     Some(w) => w
     None => name
@@ -240,7 +252,7 @@ pub fn service_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.Link
 }
 
 ///|
-/// A bare link to a station's 共享调试: what it reads as within a sentence (AdbLinks.kt adbTitle).
+/// A bare link to a station's 共享调试: what it reads as within a sentence.
 pub fn adb_title(src : Source, to : @sf.LinkTo) -> String {
   match adb_card_of(src, to) {
     Some(_) as v => text(v, "title")
@@ -278,7 +290,7 @@ pub fn link_card_words(c : @ui.Ctx, title : String, line : String, gone : Bool, 
 }
 
 ///|
-/// A screen as a card (ScreenLinks.kt ScreenLinkCard): its kind's mark, its title (the link's own words, when it has
+/// A screen as a card: its kind's mark, its title (the link's own words, when it has
 /// them) over what its station says of it; one its station no longer has, its title quieter. Its size is kept while
 /// the core has not said, its lines empty. One its station previews (a tab of its browser) is the screen live across
 /// the card's top, the words under it. A tap opens it, as the link does. `key`: the card's own (its message's and its
@@ -286,9 +298,9 @@ pub fn link_card_words(c : @ui.Ctx, title : String, line : String, gone : Bool, 
 pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, to : @sf.LinkTo, words : String?) -> Unit {
   let card = screen_card_of(src, to)
   let open = c.id("screen-link/" + href)
-  if c.clicked(open) {
+  c.on_press(open, fn() {
     open_link(href)
-  }
+  })
   let gone = match card {
     Some(k) => k.gone
     None => false
@@ -325,7 +337,7 @@ pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, 
 }
 
 ///|
-/// A station's 共享调试 asked for (an agent's link to it alone in a paragraph: docs/adb-share.md), as a card that asks
+/// A station's 共享调试 asked for (an agent's link to it alone in a paragraph), as a card that asks
 /// (vault_ask.mbt's look: the question for its title, the line the answer turns on, a solid button and a text one):
 /// whether its agents may debug this device. Where the phone has all it takes (as its host says:
 /// @settings.adb_ready), 共享 lends it from here; where it lacks something first, what, and 查看步骤 opens the page that
@@ -363,12 +375,12 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.LinkTo, 
       if sharing {
         @sf.ask_words(c, @sf.t("android-misc.adb.ask.sharing", args=[("name", name)]), text(card, "line"))
         @sf.ask_buttons(c, fn() {
-          if @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Primary) {
+          @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Primary, on_press=fn() {
             open_adb(src, station)
-          }
-          if @sf.button(c, @sf.t("android-misc.adb.ask.stop"), key=key + "/stop", tone=Ghost, busy=acting.doing.contains(stopping)) {
+          }) |> ignore
+          @sf.button(c, @sf.t("android-misc.adb.ask.stop"), key=key + "/stop", tone=Ghost, busy=acting.doing.contains(stopping), on_press=fn() {
             act(src, @sf.t("android-misc.adb.stopWhat"), stopping, "adb.stop", Json::object({}))
-          }
+          }) |> ignore
         })
         return
       }
@@ -378,23 +390,23 @@ pub fn adb_link_card(c : @ui.Ctx, src : Source, href : String, to : @sf.LinkTo, 
         @settings.AdbLacks(step) => {
           @sf.ask_words(c, title, @sf.t("android-misc.adb.ask.first", args=[("step", step)]))
           @sf.ask_buttons(c, fn() {
-            if @sf.button(c, @sf.t("android-misc.adb.ask.how"), key=key + "/how", tone=Primary) {
+            @sf.button(c, @sf.t("android-misc.adb.ask.how"), key=key + "/how", tone=Primary, on_press=fn() {
               open_adb(src, station)
-            }
+            }) |> ignore
           })
         }
         @settings.AdbLends => {
           // lent to another station now: lending it here moves it
-          let now = (src.topic)("adbShare", {}).value
+          let now = src.topic("adbShare", {}).get().value
           let elsewhere = flag(now, "sharing") && text(now, "station") != station
           @sf.ask_words(c, title, @sf.t(if elsewhere { "android-misc.adb.elsewhere" } else { "android-misc.adb.hour" }))
           @sf.ask_buttons(c, fn() {
-            if @sf.button(c, @sf.t("android-misc.adb.ask.share"), key=key + "/share", tone=Primary, busy=@settings.adb_asking()) {
+            @sf.button(c, @sf.t("android-misc.adb.ask.share"), key=key + "/share", tone=Primary, busy=@settings.adb_asking(), on_press=fn() {
               @settings.adb_lend(station, name)
-            }
-            if @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Ghost) {
+            }) |> ignore
+            @sf.button(c, @sf.t("android-misc.adb.ask.more"), key=key + "/more", tone=Ghost, on_press=fn() {
               open_adb(src, station)
-            }
+            }) |> ignore
           })
         }
         // (not known yet what the phone has: the question alone, its answer as it comes)
@@ -432,7 +444,7 @@ pub(all) enum PeekRun {
 } derive(Eq)
 
 ///|
-/// A card's preview (ScreenLinks.kt Peek).
+/// A card's preview.
 pub(all) struct Peek {
   station : String
   screen : String
@@ -450,6 +462,14 @@ pub(all) struct Peek {
   pictures : Array[String]
   /// its card's target (0: none): where it shows, the card is on the screen (peeks_settle)
   mut target : Int
+  /// what its view's frames are (its config's `codec`): "jpeg" before one says otherwise
+  mut codec : String
+  /// its video's decoder (an H.264 preview), made as its config comes; each frame acknowledged as it is shown
+  mut stream : @ui.Stream?
+  /// it holds one of the app's video previews (video_peeks_most)
+  mut video : Bool
+  /// ended long enough: asked for again where its card shows (peeks_frame, peeks_settle)
+  mut again : Bool
 }
 
 ///|
@@ -465,12 +485,15 @@ pub let peeks_built : Map[String, Bool] = {}
 pub let peek_views : Ref[Int] = Ref(0)
 
 ///|
+/// The previews decoded as a video now (video_peeks_most at most).
+pub let video_peeks : Ref[Int] = Ref(0)
+
+///|
 pub fn peeks_reset() -> Unit {
   peeks.clear()
   peeks_built.clear()
-  peeks_node_held.clear()
-  peeks_told.set(0)
   peek_views.val = 0
+  video_peeks.val = 0
 }
 
 ///|
@@ -489,6 +512,10 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
         got: 0,
         pictures: [],
         target: 0,
+        codec: "jpeg",
+        stream: None,
+        video: false,
+        again: false,
       }
       peeks[key] = p
       p
@@ -497,7 +524,7 @@ pub fn peek_for(key : String, station : String, screen : String) -> Peek {
 }
 
 ///|
-/// The screen live in its card (ScreenLinks.kt Peek): only looking (not among those on it, its tab not brought
+/// The screen live in its card: only looking (not among those on it, its tab not brought
 /// forward), its mark until a picture comes (a tab behind another casts none). A browser's preview keeps its shape as
 /// its viewport adapts to a viewer; another screen's shape follows its picture, its listed size until one comes, within bounds. The newest picture
 /// decoded fills the preview, cropped from the top; a newer one is drawn over it once it is decoded.
@@ -526,6 +553,15 @@ pub fn screen_peek(
       None => ()
     }
   }
+  // (a video's picture, once one shows, over the pictures before it)
+  let video = match p.stream {
+    Some(st) if st.shown_any() => Some(st)
+    _ => None
+  }
+  match video.bind(fn(st) { st.size() }) {
+    Some((w, h)) if h > 0 => natural = w.to_double() / h.to_double()
+    _ => ()
+  }
   let listed = if card.width > 0.0 && card.height > 0.0 { card.width / card.height } else { 0.0 }
   // (a simulator's panel, and so its shape, may have changed since it was listed: as its picture has it)
   let own = if natural > 0.0 { natural } else { listed }
@@ -535,13 +571,18 @@ pub fn screen_peek(
     peek_ratio
   }
   c.box(style=peek_frame, aspect=ratio, fn() {
-    if shown < 0 {
+    if shown < 0 && video is None {
       link_mark(c, Some(if card.kind == "browser" { globe_mark } else { monitor_mark }), Muted)
     }
     let from = if shown < 0 { 0 } else { shown }
     for i in from..<p.pictures.length() {
       let k = p.pictures[i]
       c.layer(fn() { peek_picture(c, k) }) |> ignore
+    }
+    match video {
+      Some(st) =>
+        c.layer(fn() { c.stream(st, fit=FitCoverAt(0.0), layer=false) |> ignore }) |> ignore
+      None => ()
     }
   })
   |> ignore
@@ -554,10 +595,56 @@ pub fn peek_picture(c : @ui.Ctx, key : String) -> Unit {
 }
 
 ///|
-/// A frame of a preview as it comes: its picture (a JPEG) handed over under a key of its own, its `ts` to acknowledge.
-pub fn peek_took(p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit {
+/// A value of a preview as it comes. A config: what its frames are; H.264's (an Android device's) to the card's Stream,
+/// if the app decodes fewer than video_peeks_most videos now, else the preview let go (asked again later). A frame:
+/// a JPEG handed over under a key of its own, its `ts` to acknowledge peek_ms after the one before; an H.264 one to
+/// the Stream, acknowledged as soon as it is shown or let go (the station paces an Android preview itself).
+pub fn peek_took(src : Source, p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit {
   if p.view != view {
     return
+  }
+  match field(Some(value), "config") {
+    Some(Object(_) as cfg) => {
+      let codec = text(Some(cfg), "codec")
+      p.codec = codec
+      if codec == "h264" {
+        if !p.video {
+          if video_peeks.val >= video_peeks_most {
+            peek_end(src, p)
+            return
+          }
+          p.video = true
+          video_peeks.val += 1
+        }
+        let st = match p.stream {
+          Some(st) => st
+          None => {
+            let st = @ui.Stream::new(
+              // acknowledged as it is shown or let go, not at a later frame's build (nothing may build one: the
+              // station would wait on it); its pace is the station's own (an Android preview's 2 frames a second)
+              shown=fn(ts) {
+                if p.view == view {
+                  (src.call)("screen.ack", { "view": Json::string(view), "ts": Json::number(ts) }, fn(_) {  })
+                }
+              },
+              broken=fn() {
+                if p.view == view {
+                  (src.call)("screen.keyframe", { "view": Json::string(view) }, fn(_) {  })
+                }
+              },
+            )
+            p.stream = Some(st)
+            st
+          }
+        }
+        match bytes {
+          Some(b) => st.h264(b, number(Some(cfg), "width").to_int(), number(Some(cfg), "height").to_int())
+          None => ()
+        }
+      }
+      return
+    }
+    _ => ()
   }
   let f = field(Some(value), "frame")
   let ts = match field(f, "ts") {
@@ -569,13 +656,19 @@ pub fn peek_took(p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit 
       }
     _ => return
   }
+  if p.codec == "h264" {
+    match (p.stream, bytes, ts) {
+      (Some(st), Some(b), Number(n, ..)) if b.length() > 0 => st.frame(b, flag(f, "key"), n)
+      _ => p.waiting.push(ts)
+    }
+    return
+  }
   match bytes {
     Some(b) if b.length() > 0 => {
       let k = "mem:sf/peek/\{view}/\{p.got}"
       p.got += 1
       @ui.add_image(k, b)
       p.pictures.push(k)
-      peeks_told.set(@signals.untracked(fn() { peeks_told.get() }) + 1)
     }
     _ => ()
   }
@@ -583,7 +676,7 @@ pub fn peek_took(p : Peek, view : String, value : Json, bytes : Bytes?) -> Unit 
 }
 
 ///|
-/// The preview of `p` asked for (`screen.view` with `peek`: JPEG only, small).
+/// The preview of `p` asked for (`screen.view` with `peek`, small: JPEG, and H.264 where the host decodes it).
 pub fn peek_start(src : Source, p : Peek) -> Unit {
   peek_views.val += 1
   let view = "mbui-peek-\{peek_views.val}"
@@ -591,27 +684,57 @@ pub fn peek_start(src : Source, p : Peek) -> Unit {
   p.run = PeekOn
   p.call = 0
   p.acked = 0
+  p.again = false
+  p.codec = "jpeg"
   p.waiting.clear()
+  let codecs : Array[Json] = if @ui.h264_here() { ["jpeg", "h264"] } else { ["jpeg"] }
   let params : Map[String, Json] = {
     "station": Json::string(p.station),
     "screen": Json::string(p.screen),
     "view": Json::string(view),
-    "codecs": ["jpeg"],
+    "codecs": Json::array(codecs),
     "maxWidth": Json::number(peek_size),
     "maxHeight": Json::number(peek_size),
     "peek": true,
   }
-  let id = (src.stream)("screen.view", Json::object(params), None, fn(v, b) { peek_took(p, view, v, b) }, fn(_) {
-    // refused or ended (the station no longer previews it): what it shows stays
+  let id = (src.stream)("screen.view", Json::object(params), None, fn(v, b) { peek_took(src, p, view, v, b) }, fn(_) {
+    // refused or ended (the station previews as many as it can now, or no longer this one): what it shows stays
     if p.view == view {
-      p.run = PeekEnded
       p.call = 0
-      p.waiting.clear()
+      peek_end(src, p)
     }
   })
   if p.view == view && p.run == PeekOn {
     p.call = id
   }
+}
+
+///|
+/// Its video's decoder stopped and its place among the app's video previews given back (its last picture goes with it:
+/// a JPEG one, kept, shows until the next).
+fn peek_drop_video(p : Peek) -> Unit {
+  match p.stream {
+    Some(st) => st.close()
+    None => ()
+  }
+  p.stream = None
+  if p.video {
+    p.video = false
+    video_peeks.val = if video_peeks.val > 0 { video_peeks.val - 1 } else { 0 }
+  }
+}
+
+///|
+/// The preview of `p` ended (refused, ended by the station, or let go for want of a decoder): its call cancelled if it
+/// still runs; asked for again peek_again_ms on while its card shows (`view` kept, its wait's key).
+fn peek_end(src : Source, p : Peek) -> Unit {
+  if p.call != 0 {
+    (src.cancel)(p.call)
+  }
+  p.call = 0
+  p.run = PeekEnded
+  p.waiting.clear()
+  peek_drop_video(p)
 }
 
 ///|
@@ -623,7 +746,9 @@ pub fn peek_stop(src : Source, p : Peek) -> Unit {
   p.call = 0
   p.view = ""
   p.run = PeekOff
+  p.again = false
   p.waiting.clear()
+  peek_drop_video(p)
 }
 
 ///|
@@ -643,6 +768,10 @@ pub fn peeks_stop_all(src : Source) -> Unit {
 pub fn peeks_frame(c : @ui.Ctx, src : Source) -> Unit {
   peeks_built.clear()
   for key, p in peeks {
+    if p.run == PeekEnded &&
+      @kit.after(c, "peek-again/\{key}/\{p.view}", true, peek_again_ms, later=true) {
+      p.again = true
+    }
     if p.run != PeekOn {
       continue
     }
@@ -678,12 +807,18 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
   let shown = @ui.app_visible()
   let gone = []
   for key, p in peeks {
-    let held = peeks_built.contains(key) || peeks_node_held.contains(key)
+    let held = peeks_built.contains(key)
     let on = held && (p.target == 0 || c.rect_of(p.target) is Some(_))
     let want = shown && on
     match p.run {
       PeekOn => if !want { peek_stop(src, p) }
-      PeekEnded => if !want { p.run = PeekOff }
+      PeekEnded =>
+        if !want {
+          p.run = PeekOff
+          p.again = false
+        } else if p.again {
+          peek_start(src, p)
+        }
       PeekOff => if want { peek_start(src, p) }
     }
     let mut newest = -1
@@ -705,7 +840,6 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
       let rest = p.pictures[newest:].to_array()
       p.pictures.clear()
       p.pictures.append(rest)
-      peeks_told.set(@signals.untracked(fn() { peeks_told.get() }) + 1)
     }
   }
   for key in gone {

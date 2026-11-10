@@ -39,16 +39,13 @@ fn head_tester(s : HeadState, old : Bool, w? : Double = 390.0) -> @ui.Tester {
   @ui.set_view_app(fn(root) {
     if old {
       @ui.old(root, fn(c) {
-        let (closed, wide) = viewer_head(c, "h", s.name.get(), "", s.awake.get(), widest.val, 1.0, ink, fn() {
+        let wide = viewer_head(c, "h", s.name.get(), "", s.awake.get(), widest.val, 1.0, ink, fn() {
           for icon in s.tools.get() {
             viewer_tool(c, "h/" + icon, icon, head_label(icon), ink) |> ignore
           }
-        })
+        }, on_close=fn() { s.closed.val += 1 })
         if wide > widest.val {
           widest.val = wide
-        }
-        if closed {
-          s.closed.val += 1
         }
       }).over(Is(true))
       |> ignore

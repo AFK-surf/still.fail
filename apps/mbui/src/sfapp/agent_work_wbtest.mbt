@@ -12,8 +12,8 @@ test "an agent's card offers its jobs when a compact chat says it has them" {
     let base = fixture("chat-agent")
     let src : Source = {
       ..base,
-      topic: fn(name, params) {
-        let got = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let got = base.topic(name, params).get().snapshot()
         guard name == "chat" && got.value is Some(Object(chat)) else { return got }
         let out = chat.copy()
         out["agents"] = Json::array(items(got.value, "agents").map(fn(a) {
@@ -45,8 +45,8 @@ fn work_source(mode : String, on? : @signals.Signal[Bool] = @signals.signal(true
   let base = fixture(mode)
   {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       guard on.get() && name == "agentCard" && got.value is Some(Object(card)) else { got }
       let now = (base.now)()
       let task = fn(id : String, kind : String, words : String, kind_words : String, ago : Double) -> Json {
@@ -102,6 +102,8 @@ test "an agent's card over its name, as over its picture: its background work an
   assert_eq(line.length(), 1)
   let latest = word("改了 src/ui/list.mbt")
   assert_true(latest.length() == 1 && line[0].2 > latest[0].2, msg="\{(line, latest)}")
+  // the card's words start where the name does, its edge out to the side of them (its lines 14 in, after the dot)
+  assert_eq(latest[0].1, name.1 + 14.0)
   assert_eq(word("审阅 live.ts 的改动").length(), 0)
   assert_eq(word("截图").length(), 0)
   // as tall as one of its latest lines: it never wraps

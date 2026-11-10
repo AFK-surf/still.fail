@@ -7,9 +7,10 @@ import type { Lang } from "../ops/i18n.ts";
 import { ops } from "./ops.ts";
 import { openStore, usageGroupsBatched, UsageSummaryCache } from "./store.ts";
 import { HttpError, setSpoken } from "./views.ts";
+import { cardEditPage, cardMessagePage } from "../store/card-outbox.ts";
 
 export type Ask = { id: number; op: string; args: any; lang: Lang; names: [string, string][]; processes: [string, string][]; clientKeys: [string, string][] };
-export type Answer = { id: number; text?: string; status?: number; error?: string };
+export type Answer = { id: number; text?: string; status?: number; error?: string; prepareUpJobs?: string; prepareWorkspaceUpJobs?: boolean };
 /// Said once, as a reader is ready: how long it took from its first line (its code read in) to its store opened.
 export type Ready = { ready: { loadedMs: number; openedMs: number } };
 
@@ -43,6 +44,20 @@ parentPort!.on("message", async (ask: Ask) => {
     store.names = new Map(ask.names);
     store.processes = new Map(ask.processes);
     store.clientKeys = new Map(ask.clientKeys);
+    store.prepareUpJobs = null;
+    store.prepareWorkspaceUpJobs = false;
+    // Internal queue work is deliberately not in `ops`: the changed-list API must not expose an unscoped card read.
+    if (ask.op === "internalCardEditPage" || ask.op === "internalCardMessagePage") {
+      store.db.exec("BEGIN");
+      let page;
+      try {
+        const a = ask.args;
+        page = ask.op === "internalCardEditPage" ? cardEditPage(store.db, a.thread, a.target, a.before)
+          : cardMessagePage(store.db, a.thread, a.target, a.before);
+      } finally { store.db.exec("COMMIT"); }
+      parentPort!.postMessage({ id: ask.id, text: JSON.stringify(page) } satisfies Answer);
+      return;
+    }
     const op = ops[ask.op];
     if (!op) throw new HttpError(500, `no read ${ask.op}`);
     // One snapshot for the whole read: its statements see the same database, and what the first of them read in serves
@@ -54,9 +69,12 @@ parentPort!.on("message", async (ask: Ask) => {
       // Usage can span many minutes. Read its compact statistics in bounded steps on this same snapshot, resting
       // between them so the cold database does not displace other work's pages all at once.
       const a = ask.args;
-      const batched = ask.op === "usage"
-        ? await usageGroupsBatched(store, BigInt(a.from), BigInt(a.to), BigInt(a.tz), a.viewer ?? null, undefined, usageCache) : null;
+      const batched = ask.op === "usage" && a.detailsPreparing !== true
+        ? await usageGroupsBatched(store, BigInt(a.from), BigInt(a.to), BigInt(a.tz), a.viewer ?? null, undefined, usageCache,
+          a.summaryStrict === true ? a.summaryPrepared === true : undefined) : null;
       answer = { id: ask.id, text: JSON.stringify(op(store, { ...a, ...(batched === null ? {} : { batchedSummary: batched }) })) };
+      if (store.prepareUpJobs !== null) answer.prepareUpJobs = store.prepareUpJobs;
+      if (store.prepareWorkspaceUpJobs) answer.prepareWorkspaceUpJobs = true;
     } finally {
       store.db.exec("COMMIT");
     }

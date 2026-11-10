@@ -39,6 +39,7 @@ fn relay_mentions_tester(calls? : Array[Made] = []) -> @ui.Tester raise {
   let (x, y) = t.find("整理发布清单").unwrap()
   t.right_click(x, y)
   t.frame()
+  open_share(t)
   t.tap_text("接力到频道…")
   t.frame()
   t.frame()

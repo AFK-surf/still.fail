@@ -1,5 +1,5 @@
 // A web service an agent started (a dev server, a report it serves), or a visualization it posted, as one view on
-// every screen (ember web/src/Preview.tsx StationPreview, ServiceFrame, PreviewBar, Restart; PreviewStage.tsx,
+// every screen (still.fail web/src/Preview.tsx StationPreview, ServiceFrame, PreviewBar, Restart; PreviewStage.tsx,
 // ViewportSize.tsx, PreviewLoad.tsx; Android's Preview.kt the phone's): found by its job (the `job` topic), known by
 // its name, never its port; what serves its page and what it keeps is sfbase's (service_page.mbt, viz_file.mbt), its
 // marks service_marks.mbt. The frame puts it where it goes: the phone's stack a page of its own under a bar with its
@@ -28,7 +28,7 @@ pub fn service_note(c : @ui.Ctx, words : String) -> Unit {
 let note_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
 
 ///|
-/// The service's view in the box it is given (Preview.kt ServicePage, ServiceFrame): its bar, the stage. `file`: a
+/// The service's view in the box it is given (ServiceFrame): its bar, the stage. `file`: a
 /// visualization's page, served from here. `close`: what closes the panel it is alone in (on the tape, its bar the
 /// panel's: the × at its end, no row of the panel's own over it).
 pub fn service_view(
@@ -45,14 +45,14 @@ pub fn service_view(
   close? : (() -> Unit)? = None,
 ) -> Unit {
   svc_keep.val = fn(patch) { (src.call)("prefs.set", patch, fn(_) {  }) }
-  let p = service_page_for(station, job, prefs=(src.topic)("prefs", {}).value)
+  let p = service_page_for(station, job, prefs=src.topic("prefs", {}).get().value)
   p.port = port
   p.name = name
   p.session = session
   src_now.val = src.now
   let site = service_site(src, p, file, fn(url) {
     // a link elsewhere: one of still.fail's opened here as the core says, any other handed to the system
-    // (AppState.openLink), said when nothing took it (Preview.kt's leave)
+    // (AppState.openLink), said when nothing took it
     open_link_in(src, url, or_else=fn() {
       if !@ui.open_url(url) {
         toast_later(svc("android-chat.link.failed"))
@@ -172,8 +172,10 @@ fn bar_now(c : @ui.Ctx, p : ServicePage, site : @ui.NativeView, fixed : Bool) ->
   if !fixed {
     c.cursor(pill, IBeam)
   }
-  if !editing && !fixed && c.clicked(pill) {
-    c.focus_editor(field_key)
+  if !editing && !fixed {
+    c.on_press(pill, fn() {
+      c.focus_field(p.address)
+    })
   }
   { at, can_back, can_forward, field_key, editing, pill }
 }
@@ -238,9 +240,9 @@ fn service_page_bar(
     mark_key_of(c, p, site)
     // what left it, in its ⋯ at its end (there only while something did)
     c.box(more=true, fn() {
-      if @sf.bar_key(c, "service/more", "more", @sf.t("web-main.menu.more")) {
+      @sf.bar_key(c, "service/more", "more", @sf.t("web-main.menu.more"), on_press=fn() {
         @sf.menu(gone, from=Of(more))
-      }
+      })
     })
     |> ignore
     panel_close_key(c, close)
@@ -253,9 +255,9 @@ fn service_page_bar(
 fn panel_close_key(c : @ui.Ctx, close : (() -> Unit)?) -> Unit {
   match close {
     Some(f) =>
-      if @sf.bar_key(c, "service/panel-close", "close", @sf.t("web-pages.chat.closePanel")) {
+      @sf.bar_key(c, "service/panel-close", "close", @sf.t("web-pages.chat.closePanel"), on_press=fn() {
         f()
-      }
+      })
     None => ()
   }
 }
@@ -329,7 +331,7 @@ fn load_part(load : Json?) -> (Double, @ui.Color)? {
 /// The foot bar's ⋯: its size (its choices in the presenters' sheet), how far each of its resources came (a sheet).
 fn foot_more(c : @ui.Ctx, src : Source, p : ServicePage, station : String, port : Int, load : Json?) -> Unit {
   let more = c.id("service/more")
-  if @sf.bar_key(c, "service/more", "more", @sf.t("web-main.menu.more")) {
+  @sf.bar_key(c, "service/more", "more", @sf.t("web-main.menu.more"), on_press=fn() {
     let lines : Array[@sf.MenuItem?] = [
       Some(bar_line(size_said(p), "devices", disabled=false, on_press=fn() {
         service_sizes_panel(service_key(p.station, p.job), Of(more))
@@ -339,7 +341,7 @@ fn foot_more(c : @ui.Ctx, src : Source, p : ServicePage, station : String, port 
       lines.push(Some(bar_line(load_label(load), "", disabled=false, on_press=fn() { service_load_panel(src, station, port, Of(more)) })))
     }
     @sf.menu(lines, from=Of(more))
-  }
+  })
 }
 
 ///|
@@ -358,19 +360,19 @@ let foot_keys_in : Double = 8.0
 ///|
 /// Back and forward in the page's own history.
 fn back_forward(c : @ui.Ctx, site : @ui.NativeView, n : BarNow) -> Unit {
-  if @sf.bar_key(c, "service/go-back", "arrow-left", @sf.t("web-main.keymap.nav.back"), enabled=n.can_back) {
+  @sf.bar_key(c, "service/go-back", "arrow-left", @sf.t("web-main.keymap.nav.back"), enabled=n.can_back, on_press=fn() {
     site.go_back()
-  }
-  if @sf.bar_key(c, "service/go-forward", "arrow-right", @sf.t("web-main.keymap.nav.forward"), enabled=n.can_forward) {
+  })
+  @sf.bar_key(c, "service/go-forward", "arrow-right", @sf.t("web-main.keymap.nav.forward"), enabled=n.can_forward, on_press=fn() {
     site.go_forward()
-  }
+  })
 }
 
 ///|
 fn reload_key(c : @ui.Ctx, site : @ui.NativeView) -> Unit {
-  if @sf.bar_key(c, "service/reload", "refresh", @sf.t("web-main.preview.reload")) {
+  @sf.bar_key(c, "service/reload", "refresh", @sf.t("web-main.preview.reload"), on_press=fn() {
     site.reload()
-  }
+  })
 }
 
 ///|
@@ -379,20 +381,20 @@ fn load_of(src : Source, station : String, port : Int, fixed : Bool) -> Json? {
   if fixed {
     None
   } else {
-    (src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value
+    src.topic("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).get().value
   }
 }
 
 ///|
-/// How far the page's resources came (PreviewLoad.kt): a ring, red with one failed; pressed, each of them in a panel.
+/// How far the page's resources came: a ring, red with one failed; pressed, each of them in a panel.
 fn load_key(c : @ui.Ctx, src : Source, station : String, port : Int, load : Json?) -> Unit {
   let t = @sf.theme()
   let ring = c.id("service/load")
-  if c.clicked(ring) {
+  c.on_press(ring, fn() {
     service_load_panel(src, station, port, Of(ring))
-  }
+  })
   let color = if number(load, "failed") > 0.0 { t.p.red } else { t.p.muted }
-  // (PreviewLoad.kt: how far, in words, to a screen reader)
+  // (in words, to a screen reader)
   c.box(style=ring_box.then(@ui.style(w=Fixed(t.bars.key), h=Fixed(t.bars.key))), id=ring, label=load_label(load), fn() {
     @sf.progress_ring(c, 20.0, number(load, "percent") / 100.0, color) |> ignore
   })
@@ -470,13 +472,13 @@ fn size_said(p : ServicePage) -> String {
 fn size_key_of(c : @ui.Ctx, p : ServicePage) -> Unit {
   let t = @sf.theme()
   let sid = c.id("service/size")
-  if c.clicked(sid) {
+  c.on_press(sid, fn() {
     if p.moving {
       p.moving = false
     } else {
       service_sizes_panel(service_key(p.station, p.job), Of(sid))
     }
-  }
+  })
   let sb = c.box(style=if p.moving { size_key_moving } else if p.viewport is Some(_) { size_key_sized } else { size_key }, id=sid, fn() {
     @sf.icon(c, if p.moving { "move" } else { "devices" }, size=bar_icon_size, color=if p.moving { t.p.accent_text } else { t.p.text }) |> ignore
     // (its size in words, as its panel says it too: short of room they leave it, its icon staying)
@@ -496,13 +498,16 @@ fn size_key_of(c : @ui.Ctx, p : ServicePage) -> Unit {
 ///|
 /// Marking the page for the chat's agent (a page with no chat to put it in has none).
 fn mark_key_of(c : @ui.Ctx, p : ServicePage, site : @ui.NativeView) -> Unit {
-  if p.session != "" && page_mark_key(c, p.marks.marking) {
-    page_marks_toggle(p, site)
+  // (none yet in a frame of the browser's: marking is page.js's, which it does not run)
+  if p.session != "" && !site.framed() {
+    page_mark_key(c, p.marks.marking, on_press=fn() {
+      page_marks_toggle(p, site)
+    })
   }
 }
 
 ///|
-/// The size key (web ViewportSize.tsx trigger): 28 high, round, 6 in, as wide as high at least (its icon alone in its
+/// The size key: 28 high, round, 6 in, as wide as high at least (its icon alone in its
 /// middle, as the bar's other keys); sized, on the chip's ground with its size (12) 5 after the icon, 8 in; moving the
 /// page, on the accent's 14% in the accent's ink (as the mark key picking).
 // kept across runs: a value (no field of it changes)
@@ -561,18 +566,11 @@ fn dims(w : Int, h : Int?) -> String {
 }
 
 ///|
-/// A double tap on the ground (Preview.kt Stage): each tap shorter than this, moving less than `stage_tap_slop`, the
-/// second this soon after the first.
-let stage_tap_ms : Double = 300.0
-
-///|
-let stage_double_ms : Double = 350.0
-
-///|
+/// A double tap on the ground: the second of two taps (Ctx::on_double_press), the one let go moving less than this.
 let stage_tap_slop : Double = 12.0
 
 ///|
-/// The page's corners, as its screen's (Preview.kt cornerOf): a phone's round, a tablet's less, a desktop's all but
+/// The page's corners, as its screen's: a phone's round, a tablet's less, a desktop's all but
 /// square.
 fn corner_of(width : Int, scale : Double) -> Double {
   if width <= 600 {
@@ -644,11 +642,11 @@ fn service_stage(
             dmax(240.0, ((sh - 32.0) / fitted).floor())
           }
         }
-        p.view.boxed(sw, sh)
-        p.view.natural(w, h)
+        p.view.boxed(sw, sh, at=c.moment())
+        p.view.natural(w, h, at=c.moment())
         // (its scale as it shows, a glide's or a fling's way too: what its place says, Zoom::rect)
-        match p.view.rect() {
-          // (fitted: on whole points, as Preview.kt centres it)
+        match p.view.rect(c) {
+          // (fitted: on whole points)
           Some((x, y, rw, _)) if p.view.fitted => Some(({ x: x.round(), y: y.round(), scale: rw / w, w, h } : Placed))
           Some((x, y, rw, _)) => Some(({ x, y, scale: rw / w, w, h } : Placed))
           None => None
@@ -670,7 +668,7 @@ fn service_stage(
             tx=pl.x,
             ty=pl.y,
             radius=corner * pl.scale,
-            // (Preview.kt: the page's view at an elevation of 6)
+            // 
             shadow=@sf.bubble_raised.sigma,
             shadow_y=@sf.bubble_raised.dy,
             shadow_color=@sf.bubble_raised.color,
@@ -723,7 +721,7 @@ fn placed_origin(c : @ui.Ctx, stage : Int) -> (Double, Double)? {
 }
 
 ///|
-/// The stage's fingers on a sized page (Preview.kt Stage): the ground's (or, moving it, the page's) one finger moves
+/// The stage's fingers on a sized page: the ground's (or, moving it, the page's) one finger moves
 /// the page, two anywhere zoom and move it, a double tap on the ground fits it again. What the canvas is given of a
 /// finger on the page (two fingers; all, moving it) is its to handle, as the ground's is.
 fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : Double) -> Unit {
@@ -734,6 +732,19 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
       return
     }
   }
+  // a double tap on the ground fits it again
+  c.on_double_press(stage, fn() {
+    let dx = c.press_x - sx
+    let dy = c.press_y - sy
+    let on_page = dx >= pl.x && dx <= pl.x + pl.w * pl.scale && dy >= pl.y && dy <= pl.y + pl.h * pl.scale
+    let travelled = match p.hold {
+      Some(h) => h.travelled
+      None => 0.0
+    }
+    if !on_page && travelled < stage_tap_slop {
+      p.view.fit_now(at=c.moment())
+    }
+  })
   let (px, py, _) = c.pointer()
   if c.pressed(stage) {
     let at = match c.second_pointer() {
@@ -748,45 +759,24 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
         p.hold = Some({
           was: if at.length() == 1 { [(dx, dy)] } else { at },
           travelled: 0.0,
-          down_at: c.pointer_at(),
           on_page,
         })
         if at.length() == 1 && (at[0].0 != dx || at[0].1 != dy) {
-          stage_moved(p, at)
+          stage_moved(c, p, at)
         }
       }
-      Some(_) => stage_moved(p, at)
+      Some(_) => stage_moved(c, p, at)
     }
   } else {
-    // let go (down and up between two frames: a tap the frames never saw held, taken all the same)
-    let (on_page, travelled, down_at) = match p.hold {
-      Some(h) => (h.on_page, h.travelled, h.down_at)
-      None if c.clicked(stage) => {
-        let dx = c.press_x - sx
-        let dy = c.press_y - sy
-        (dx >= pl.x && dx <= pl.x + pl.w * pl.scale && dy >= pl.y && dy <= pl.y + pl.h * pl.scale, 0.0, c.press_at)
-      }
-      None => return
-    }
     p.hold = None
-    // a double tap on the ground fits it again
-    let now = c.pointer_at()
-    if !on_page && travelled < stage_tap_slop && now - down_at < stage_tap_ms {
-      if now - p.tapped_at < stage_double_ms {
-        p.view.fit_now()
-        p.tapped_at = -1.0e9
-      } else {
-        p.tapped_at = now
-      }
-    }
   }
 }
 
 ///|
 /// The fingers now at `at` (from the stage's top left): one moves the page as far as it went, two zoom it by how far
-/// apart they went about the point between them, moving it as that point did (Preview.kt pinch); a finger come or gone,
+/// apart they went about the point between them, moving it as that point did; a finger come or gone,
 /// from there on.
-fn stage_moved(p : ServicePage, at : Array[(Double, Double)]) -> Unit {
+fn stage_moved(c : @ui.Ctx, p : ServicePage, at : Array[(Double, Double)]) -> Unit {
   let h = match p.hold {
     Some(h) => h
     None => return
@@ -799,7 +789,7 @@ fn stage_moved(p : ServicePage, at : Array[(Double, Double)]) -> Unit {
     let (x0, y0) = h.was[0]
     let (x1, y1) = at[0]
     h.travelled = h.travelled + ((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)).sqrt()
-    p.view.pan(x1 - x0, y1 - y0)
+    p.view.pan(x1 - x0, y1 - y0, at=c.moment())
   } else {
     let mid = fn(ps : Array[(Double, Double)]) { ((ps[0].0 + ps[1].0) / 2.0, (ps[0].1 + ps[1].1) / 2.0) }
     let apart = fn(ps : Array[(Double, Double)]) {
@@ -809,7 +799,7 @@ fn stage_moved(p : ServicePage, at : Array[(Double, Double)]) -> Unit {
     }
     let (m0x, m0y) = mid(h.was)
     let (m1x, m1y) = mid(at)
-    p.view.transform(m0x, m0y, apart(at) / apart(h.was), m1x - m0x, m1y - m0y)
+    p.view.transform(m0x, m0y, apart(at) / apart(h.was), m1x - m0x, m1y - m0y, at=c.moment())
   }
   h.was = at
 }
@@ -870,7 +860,7 @@ fn preset_of(v : Viewport?) -> String? {
 }
 
 ///|
-/// All the sizes (ViewportSize.tsx's panel), the same on every screen: as big as the preview, the presets, 自定义; a
+/// All the sizes, the same on every screen: as big as the preview, the presets, 自定义; a
 /// page laid out at a size of its own moved by a finger in place of used (移动页面: what the toolbar under the page had)
 /// and fitted again once moved or zoomed. Its rows a row's room, its words the theme's (Rows, its ui and meta: a touch
 /// device's a finger's and a size up), a sheet on a phone and beside the size key with keyboard and mouse (the presenters').
@@ -886,19 +876,19 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
   c.box(style=sizes_room, fn() {
     let option = fn(k : String, checked : Bool, name : String, note : String, v : Viewport?) {
       let id = c.id("service/size/" + k)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         match p {
           Some(x) => {
             // a size chosen is fitted anew; the page no longer moved by a finger
             x.moving = false
-            x.view.fit_now()
+            x.view.fit_now(at=c.moment())
             x.viewport = v
             keep_size(key, v)
           }
           None => ()
         }
         close()
-      }
+      })
       c.box(style=size_option.then(@sf.panel_row_in()).then(@ui.style(min_h=Fixed(@sf.theme().items.least))), id~, fn() {
         c.box(style=@ui.style(w=Fixed(r.check), align=ACenter), fn() {
           if checked {
@@ -945,11 +935,12 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
                 close()
               }
             }
-            if !x.view.fitted &&
-              @sf.button(c, svc("android-chat.preview.fitView"), key="service/fit-view", w=Fill(1.0)) {
-              x.view.fit_now()
-              x.moving = false
-              close()
+            if !x.view.fitted {
+              @sf.button(c, svc("android-chat.preview.fitView"), key="service/fit-view", w=Fill(1.0), on_press=fn() {
+                x.view.fit_now(at=c.moment())
+                x.moving = false
+                close()
+              }) |> ignore
             }
           })
           |> ignore
@@ -993,11 +984,11 @@ let size_name_on : @ui.TextStyle = @ui.text_style(weight=Medium, wrap=false)
 let sizes_tools : @ui.Style = @ui.css("w=Full pt=S3 px=S2_5 gap=S2")
 
 ///|
-/// The turn key's icon (ViewportSize.tsx: 15).
+/// The turn key's icon.
 let custom_turn_icon : Double = 15.0
 
 ///|
-/// 自定义's row (ViewportSize.tsx CustomSize): 10 under the sizes, its name where the sizes' names are (past a column
+/// 自定义's row: 10 under the sizes, its name where the sizes' names are (past a column
 /// as wide as their check), its two fields the theme's rows' (Rows), 4 apart with × between them, the turn key 24
 /// round (faint when there is nothing to turn).
 // kept across runs: a value (no field of it changes)
@@ -1032,7 +1023,7 @@ let custom_turn : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justi
 let custom_turn_off : @ui.Style = custom_turn.then(@ui.css("opacity=O35"))
 
 ///|
-/// Any size, typed (Preview.kt CustomSize): the width, and the height (empty: as high as the preview leaves it), each
+/// Any size, typed: the width, and the height (empty: as high as the preview leaves it), each
 /// put once its field is let go of or done; turned by the button. 72 × 36 fields on the chip's ground.
 fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
   let t = @sf.theme()
@@ -1067,7 +1058,7 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
         }
         if !same {
           p.moving = false
-          p.view.fit_now()
+          p.view.fit_now(at=c.moment())
           p.viewport = Some(v)
           keep_size(key, Some(v))
         }
@@ -1123,21 +1114,23 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
       None => false
     }
     let turn = c.id("service/custom-turn")
-    if turnable && c.clicked(turn) {
-      match p.viewport {
-        Some({ width, height: Some(h) }) => {
-          let v : Viewport = { width: h, height: Some(width) }
-          p.view.fit_now()
-          p.viewport = Some(v)
-          keep_size(key, Some(v))
+    c.on_press(turn, fn() {
+      if turnable {
+        match p.viewport {
+          Some({ width, height: Some(h) }) => {
+            let v : Viewport = { width: h, height: Some(width) }
+            p.view.fit_now(at=c.moment())
+            p.viewport = Some(v)
+            keep_size(key, Some(v))
+          }
+          _ => ()
         }
-        _ => ()
       }
-    }
+    })
     let tb = c.box(style=if turnable { custom_turn } else { custom_turn_off }, id=if turnable { turn } else { 0 }, fn() {
       @sf.icon(c, "landscape", size=custom_turn_icon, color=t.p.text) |> ignore
     })
-    // (named, and said on hover: ViewportSize.tsx's Tip)
+    // (named)
     c.semantics(tb, Button, id=if turnable { turn } else { 0 }, label=@sf.t("web-main.viewport.turn"), disabled=!turnable)
     if turnable {
       @sf.tip(c, "service/custom-turn/tip", turn, @sf.t("web-main.viewport.turn"))
@@ -1147,11 +1140,11 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
 }
 
 ///|
-/// How the page's resources came, each of them (PreviewLoad.tsx's list): as tall as they are, scrolled past the web's
+/// How the page's resources came, each of them: as tall as they are, scrolled past the web's
 /// most (Preview.css.ts loadList: min(320px, 55vh)) on every screen.
 fn load_list(c : @ui.Ctx, src : Source, station : String, port : Int) -> Unit {
   let t = @sf.theme()
-  let v = (src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value
+  let v = src.topic("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).get().value
   let all = items(v, "resources")
   let row = fn(rr : Json?) {
     let failed = text(rr, "error") != "" || number(rr, "status") >= 400.0
@@ -1226,7 +1219,7 @@ fn load_label(v : Json?) -> String {
   }
 }
 
-// ── a visualization as a page of its own (Preview.kt PreviewFileScreen) ─
+// ── a visualization as a page of its own ─
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1248,17 +1241,17 @@ let file_name_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, col
 let service_restart_room : @ui.Style = @ui.css("w=Full h=Full pb=S5 align=ACenter justify=JEnd")
 
 ///|
-/// How far the page's resources came, each of them (PreviewLoad.tsx's list), beside the ring that opened it: a
+/// How far the page's resources came, each of them, beside the ring that opened it: a
 /// sheet with touch short of Large.
 fn service_load_panel(src : Source, station : String, port : Int, from : @sf.Anchor) -> Unit {
   let words = fn() {
-    load_label((src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value)
+    load_label(src.topic("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).get().value)
   }
   @sf.panel(words(), fn(c, _) { load_list(c, src, station, port) }, from~, live=fn() { (words(), "", "") })
 }
 
 ///|
-/// The page's sizes (ViewportSize.tsx's choices: 自适应, a phone's to a desktop's, 自定义 typed, turned), beside what
+/// The page's sizes (a phone's to a desktop's, 自定义 typed, turned), beside what
 /// opened them; one chosen, they go.
 pub fn service_sizes_panel(key : String, from : @sf.Anchor) -> Unit {
   @sf.panel(svc("android-chat.preview.size.title"), fn(c, close) { page_sizes(c, key, close) }, from~, focus=false)

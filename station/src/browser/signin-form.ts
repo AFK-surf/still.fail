@@ -1,4 +1,4 @@
-// A site's sign-in form in a chat's tab, filled by the station itself (docs/vault.md 登录态, "Signing in from a card"):
+// A site's sign-in form in a chat's tab, filled by the station itself ( 登录态, "Signing in from a card"):
 // what of a sign-in the page asks for now (an account, a password, a code), each field given what the person's app sent
 // as typing gives it (the field focused in a world of the page's own, its text put in as Chrome's input does: the
 // page's scripts hear it as keys typed), and the form sent as Enter sends it, else by its button. Only while the tab

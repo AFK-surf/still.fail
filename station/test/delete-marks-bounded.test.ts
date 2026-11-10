@@ -12,8 +12,8 @@ for (const { viewers, chats, negative } of [
     try {
       for (const key of ["a", "b"]) store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc",
         workspace: `/w/${key}`, token: key, createdAt: 1, lastActiveAt: 1 });
-      const own = store.openThread("ember", "EMBER", "own", null, null).id;
-      const shared = store.openThread("ember", "EMBER", "shared", null, null).id;
+      const own = store.openThread("ember", "CHAT", "own", null, null).id;
+      const shared = store.openThread("ember", "CHAT", "shared", null, null).id;
       store.joinThread(own, "a", "ember");
       store.joinThread(shared, "a", "ember");
       store.joinThread(shared, "b", "ember");
@@ -100,7 +100,7 @@ test("deleting a session removes every viewer's last mark, including an empty vi
   try {
     store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc",
       workspace: "/w/a", token: "a", createdAt: 1, lastActiveAt: 1 });
-    const thread = store.openThread("ember", "EMBER", "own", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "own", null, null).id;
     store.joinThread(thread, "a", "ember");
     const readers = ["", "A", "a", "é", "🚀", ...Array.from({ length: 260 }, (_, i) => `viewer-${i}`)];
     const putRead = db.prepare("INSERT INTO reads(viewer,thread,n,at) VALUES (?,?,1,1)");
@@ -125,8 +125,8 @@ test("deleting one chat keeps a second read from each of many viewers", () => {
   try {
     store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc",
       workspace: "/w/a", token: "a", createdAt: 1, lastActiveAt: 1 });
-    const own = store.openThread("ember", "EMBER", "own", null, null).id;
-    const other = store.openThread("ember", "EMBER", "other", null, null).id;
+    const own = store.openThread("ember", "CHAT", "own", null, null).id;
+    const other = store.openThread("ember", "CHAT", "other", null, null).id;
     store.joinThread(own, "a", "ember");
     const put = db.prepare("INSERT INTO reads(viewer,thread,n,at) VALUES (?,?,1,1)");
     db.exec("BEGIN");
@@ -147,7 +147,7 @@ test("a failed mark deletion rolls back the session and earlier mark removals", 
   try {
     store.insertSession({ key: "a", connect: "ember", runtime: "claude", profile: "cc",
       workspace: "/w/a", token: "a", createdAt: 1, lastActiveAt: 1 });
-    const thread = store.openThread("ember", "EMBER", "own", null, null).id;
+    const thread = store.openThread("ember", "CHAT", "own", null, null).id;
     store.joinThread(thread, "a", "ember");
     db.prepare("INSERT INTO reads(viewer,thread,n,at) VALUES ('person',?,1,1)").run(thread);
     db.prepare("INSERT INTO dismissed(viewer,thread,n,at) VALUES ('person',?,1,1)").run(thread);

@@ -22,7 +22,7 @@ test("without a token the installer only updates a station already in a workspac
 
 test("an update hands over to the new release only when the running station says it can and its service is unchanged", () => {
   const script = installScript("https://ember.test");
-  assert.match(script, /if \[ -n "\$pid" \] && \[ -z "\$migrate" \] && \[ -n "\$\(said handoff\)" \] && \[ -n "\$\(said renew\)" \] && same_service; then/);
+  assert.match(script, /if \[ -n "\$pid" \] && \[ -n "\$\(said handoff\)" \] && \[ -n "\$\(said renew\)" \] && same_service; then/);
   // The caller's PATH is not a change: an update from another shell (an agent's, the station's own) still hands over.
   assert.match(script, /without_path\(\) \{ sed -e 's#<key>PATH<\/key><string>\[\^<\]\*<\/string>##' -e '\/\^Environment=PATH=\/d'/);
   assert.match(script, /kill -USR2 "\$pid"/);
@@ -43,7 +43,7 @@ test("an update started inside the station restarts it in the background, and on
 test("the releases bucket serves the station's releases and the apps' builds, and nothing else", () => {
   assert.equal(releaseType("stillfail-station-linux-x64.tar.gz"), "application/gzip");
   // The last release from before the rename, for installers from before it.
-  assert.equal(releaseType("ember-station-linux-x64.tar.gz"), "application/gzip");
+  assert.equal(releaseType("ember-station-linux-x64.tar.gz"), null);
   assert.equal(releaseType("other-station-linux-x64.tar.gz"), null);
   // The Node a release runs on, kept apart from it once per version, with its checksum.
   assert.equal(releaseType("node/node-v24.21.0-linux-x64.tar.gz"), "application/gzip");
@@ -75,14 +75,8 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   assert.equal(releaseType("desktop/latest-mac.yml"), null);
   assert.equal(releaseType("desktop/ember-0.1.1092-arm64-mac.zip"), null);
   assert.equal(releaseType("desktop/other-mac.yml"), null);
-  // The modules' packages: each one's feeds and its archives, one for every machine or a platform's.
-  assert.equal(releaseType("modules/media/media.json"), "application/json");
-  assert.equal(releaseType("modules/media/media-beta.json"), "application/json");
-  assert.equal(releaseType("modules/media/media-0.1.3600.tar.gz"), "application/gzip");
-  assert.equal(releaseType("modules/media/media-0.1.3600-linux-x64.tar.gz"), "application/gzip");
-  for (const file of ["modules/media/books.json", "modules/media/books-0.1.3600.tar.gz", "modules/media/media-0.1.3600-other.tar.gz", "modules/media/media-1.tar.gz", "modules/my-mod/my-mod.json", "modules/media/x/media.json", "modules/media.json"]) {
-    assert.equal(releaseType(file), null, file);
-  }
+  // The modules' packages are gone (with the station's modules): nothing under modules/.
+  for (const file of ["modules/media/media.json", "modules/media/media-0.1.3600.tar.gz"]) assert.equal(releaseType(file), null, file);
   // The prebuilt native parts (scripts/native.ts prebuild), by part, target and key.
   assert.equal(releaseType("natives/shell-win32-x64-e873ee4f2e77b28f78c16a38.tar.gz"), "application/gzip");
   assert.equal(releaseType("natives/engine-win32-x64-95311552b24140105c1a54aa.tar.gz"), "application/gzip");
@@ -94,11 +88,13 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   for (const file of ["relay/iroh-relay-43a6892f-linux-x64", "relay/iroh-relay-43a6892ffe0689de0cf2545e3a8f3d567146b408-darwin-arm64", "relay/../station.json"]) {
     assert.equal(releaseType(file), null, file);
   }
+  assert.equal(releaseType("relay/dht-node-43a6892ffe0689de0cf2545e3a8f3d567146b408-linux-x64"), "application/octet-stream");
+  assert.equal(releaseType("relay/dht-node-43a6892f-linux-x64"), null);
   assert.equal(releaseType("android/latest.json"), "application/json");
   assert.equal(releaseType("station.json"), "application/json");
   assert.equal(releaseType("android/stillfail-1124.apk"), "application/vnd.android.package-archive");
   // Builds from before the rename keep being served: the latest.json of then names them.
-  assert.equal(releaseType("android/ember-890.apk"), "application/vnd.android.package-archive");
+  assert.equal(releaseType("android/ember-890.apk"), null);
   // monoid's apps, in its own bucket
   for (const name of ["android/monoid-beta-7300.apk", "android/monoid-7300.apk", "desktop/monoid-beta-0.1.7300-arm64-mac.zip", "desktop/monoid-0.1.7300-x64-win.exe", "desktop/monoid-beta-0.1.7300-x64-win.exe.sig"]) {
     assert.notEqual(releaseType(name), null, name);
@@ -148,7 +144,7 @@ esac
   const run = (args: string[] = [], env: Record<string, string> = {}, installer = installScript("https://app.still.fail")) => {
     const script = installer.replaceAll("/proc/sys/kernel/osrelease", osrelease);
     const done = spawnSync("sh", ["-c", script, "sh", ...args], {
-      // Only these: not the caller's (an agent's STILLFAIL_DATA or EMBER_DATA would aim it at the real station).
+      // Only these: not the caller's (an agent's STILLFAIL_DATA would aim it at the real station).
       env: { HOME: home, PATH: `${stub}:/usr/bin:/bin:/usr/sbin:/sbin`, ...env } as unknown as NodeJS.ProcessEnv,
       encoding: "utf8",
     });
@@ -195,48 +191,6 @@ test("in WSL the station runs without Windows' PATH, and Windows keeps WSL up fr
     assert.doesNotMatch(done.out.replaceAll(linux.root, ""), /WSL/);
   } finally {
     linux.done();
-  }
-});
-
-test("an install from before the rename is moved, not installed beside it", () => {
-  const m = machine();
-  try {
-    const old = join(m.home, ".ember");
-    mkdirSync(join(old, "mesh"), { recursive: true });
-    mkdirSync(join(old, "app", "bin"), { recursive: true });
-    writeFileSync(join(old, "mesh", "cloud.json"), '{"origin": "https://ember.3720.org"}');
-    writeFileSync(join(old, "ember.db"), "the store");
-    mkdirSync(join(m.home, "Library", "LaunchAgents"), { recursive: true });
-    writeFileSync(join(m.home, "Library", "LaunchAgents", "org.3720.ember.station.plist"), "<plist/>");
-    mkdirSync(join(m.home, ".local", "bin"), { recursive: true });
-    symlinkSync(join(old, "app", "bin", "ember"), join(m.home, ".local", "bin", "ember"));
-
-    // Run from an agent of the old station: its environment says the old place.
-    const first = m.run([], { EMBER_DATA: old });
-    assert.equal(first.status, 0, first.out);
-    const data = join(m.home, ".stillfail");
-    assert.ok(lstatSync(data).isDirectory());
-    assert.equal(readFileSync(join(data, "ember.db"), "utf8"), "the store");
-    assert.equal(readlinkSync(old), data, "a link left at the old place");
-    assert.equal(readFileSync(join(data, "app", "VERSION"), "utf8"), "new\n");
-    const agents = join(m.home, "Library", "LaunchAgents");
-    assert.ok(!existsSync(join(agents, "org.3720.ember.station.plist")), "the old service's definition removed");
-    const plist = readFileSync(join(agents, "fail.still.station.plist"), "utf8");
-    assert.match(plist, new RegExp(`<string>${data}/app/bin/stillfail</string><string>start</string>`));
-    assert.match(plist, new RegExp(`<key>STILLFAIL_DATA</key><string>${data}</string>`));
-    assert.match(first.said, /launchctl bootout gui\/\d+\/org\.3720\.ember\.station/);
-    assert.match(first.said, /launchctl bootstrap gui\/\d+ .*fail\.still\.station\.plist/);
-    assert.match(first.said, /curl .*\/releases\/stillfail-station-darwin-arm64\.tar\.gz/);
-    for (const name of ["stillfail", "ember"]) assert.equal(readlinkSync(join(m.home, ".local", "bin", name)), join(data, "app", "bin", "stillfail"));
-
-    // Again: nothing more moves.
-    const again = m.run();
-    assert.equal(again.status, 0, again.out);
-    assert.equal(readlinkSync(old), data);
-    assert.equal(readFileSync(join(data, "ember.db"), "utf8"), "the store");
-    assert.doesNotMatch(again.out, /搬/);
-  } finally {
-    m.done();
   }
 });
 

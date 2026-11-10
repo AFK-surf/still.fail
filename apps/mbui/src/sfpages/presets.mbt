@@ -1,4 +1,4 @@
-// Presets (docs/presets.md): what a chat starts knowing, chosen on the new chat's page beside where it runs and what it
+// Presets: what a chat starts knowing, chosen on the new chat's page beside where it runs and what it
 // runs on (the core's `newChat` view: the station's presets, the one picked and its name; `newChat.pick {preset}`). Its
 // control opens a menu of them (不用预设 and each preset, the one picked checked; 编辑 the one picked, 新预设). A preset is
 // made or changed in a short dialog, as a key's is: its name, its folders (each a row with its × to let go, 添加目录
@@ -33,30 +33,36 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
   if take_asked("preset-new-browse") {
     preset_dialog(src, w, address, "", items(v, "stations"), browsing=true)
   }
-  if (new_capsule(c, "new/preset", label, floating, fn() {
-      // (picked: its folders' marks, as they are shown where they are picked; none: a quiet mark of what it adds)
-      let marks = items(v, "presetMarks")
-      if name != "" && marks.length() > 0 {
-        c.box(style=preset_marks_row, fn() {
-          for m in marks {
-            repo_mark(c, text(Some(m), "name"), text(Some(m), "repo"), text(Some(m), "icon"), new_mark)
-          }
-        })
-        |> ignore
-      } else {
-        @sf.icon(c, "folder-plus", size=new_mark, color=t.p.muted) |> ignore
-      }
-      // (its words left out first, short of room: its mark says what it is, the station's name and the model's matter more)
-      c.box(style=new_station_name, drop=preset_drop_words, fn() {
-        c.text(label, style=if name == "" { preset_capsule_quiet } else { new_capsule_words }) |> ignore
+  let from = c.id("new/preset")
+  let open = fn() { preset_menu(src, w, address, v, picked, @sf.Of(from)) }
+  new_capsule(c, "new/preset", label, floating, fn() {
+    // (picked: its folders' marks, as they are shown where they are picked; none: a quiet mark of what it adds)
+    let marks = items(v, "presetMarks")
+    if name != "" && marks.length() > 0 {
+      c.box(style=preset_marks_row, fn() {
+        for m in marks {
+          repo_mark(c, text(Some(m), "name"), text(Some(m), "repo"), text(Some(m), "icon"), new_mark)
+        }
       })
       |> ignore
-      // (its chevron last, after the station's name: its mark alone, a round, on the narrowest)
-      c.box(drop=preset_drop_chevron, fn() { @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore }) |> ignore
-    }) &&
-    !going) ||
-    asked {
-    preset_menu(src, w, address, v, picked, @sf.Of(c.id("new/preset")))
+    } else {
+      @sf.icon(c, "folder-plus", size=new_mark, color=t.p.muted) |> ignore
+    }
+    // (its words left out first, short of room: its mark says what it is, the station's name and the model's matter more)
+    c.box(style=new_station_name, drop=preset_drop_words, fn() {
+      c.text(label, style=if name == "" { preset_capsule_quiet } else { new_capsule_words }) |> ignore
+    })
+    |> ignore
+    // (its chevron last, after the station's name: its mark alone, a round, on the narrowest)
+    c.box(drop=preset_drop_chevron, fn() { @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore }) |> ignore
+  }, on_press=fn() {
+    if !going {
+      open()
+    }
+  })
+  // (asked from elsewhere: opened as it is seen)
+  if asked {
+    open()
   }
 }
 
@@ -94,7 +100,7 @@ fn preset_menu(src : Source, w : Workspace, address : String, v : Json?, picked 
 ///|
 /// The station's presets and the folders it offers for one (the `presets` topic), read as they are shown.
 fn presets_of(src : Source, address : String) -> Json? {
-  (src.topic)("presets", { "station": Json::string(address) }).value
+  src.topic("presets", { "station": Json::string(address) }).get().value
 }
 
 ///|
@@ -209,20 +215,25 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
                   c.text(dir_note(one, false), style=preset_dir_note) |> ignore
                 })
                 |> ignore
-                if @sf.icon_button(c, "close", key=key("drop/" + at), size=preset_dir_x, label=@sf.t("web-main.preset.remove")) {
+                @sf.icon_button(c, "close", key=key("drop/" + at), size=preset_dir_x, label=@sf.t("web-main.preset.remove"), on_press=fn() {
                   e.dirs.retain(fn(x) { dir_key(Some(x)) != at })
-                }
+                }) |> ignore
               })
               |> ignore
             }
           }
-          if @sf.button(c, @sf.t("web-main.preset.add"), key=key("add"), tone=Ghost, icon="plus") || (e.adding && e.filled) {
+          let add = fn() {
             e.adding = false
             field_of(key("q")).set("")
             // (a step in, in the dialog: back from it to the fields)
             @sf.panel_go(@sf.t("web-main.preset.add"), fn(c, _) {
               preset_add_step(c, src, address, stations, offered_dirs(src, address, stations), e, key)
             })
+          }
+          @sf.button(c, @sf.t("web-main.preset.add"), key=key("add"), tone=Ghost, icon="plus", on_press=add) |> ignore
+          // (asked as the fields were filled in: added as it is seen)
+          if e.adding && e.filled {
+            add()
           }
         })
         |> ignore
@@ -235,7 +246,7 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
     },
     fn(c, shut) {
       if id != "" {
-        if @sf.button(c, @sf.t("common.delete"), key=key("delete"), tone=GhostDanger) {
+        @sf.button(c, @sf.t("common.delete"), key=key("delete"), tone=GhostDanger, on_press=fn() {
           confirm(
             @sf.t("web-main.preset.deleteTitle", args=[("name", name.text())]),
             @sf.t("web-main.preset.deleteBody"),
@@ -246,16 +257,16 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
               (src.call)("preset.delete", Json::object({ "station": Json::string(address), "id": Json::string(id) }), fn(_) {  })
             },
           )
-        }
+        }) |> ignore
       }
       c.spacer()
-      if @sf.button(c, @sf.t("common.cancel"), key=key("cancel"), tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key("cancel"), tone=Ghost, on_press=fn() {
         c.blur()
         shut()
-      }
+      }) |> ignore
       let ready = e.dirs.length() > 0 && name.text().trim(chars=" \n").to_owned() != ""
       let go = if id == "" { @sf.t("web-main.preset.create") } else { @sf.t("common.save") }
-      if @sf.button(c, go, key=key("save"), tone=Primary, busy=e.saving, disabled=!ready) {
+      @sf.button(c, go, key=key("save"), tone=Primary, busy=e.saving, disabled=!ready, on_press=fn() {
         e.saving = true
         e.error = ""
         c.blur()
@@ -296,7 +307,7 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
             Err(err) => e.error = text(Some(err), "message")
           }
         })
-      }
+      }) |> ignore
     },
   )
 }
@@ -336,10 +347,10 @@ fn preset_add_step(c : @ui.Ctx, src : Source, address : String, stations : Array
         |> ignore
       })
       c.semantics(b, Button, id~, label=name)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         e.dirs.push(o)
         @sf.panel_back() |> ignore
-      }
+      })
     }
     // (last, its folder where the others' marks stand)
     let id = c.id(key("browse"))
@@ -351,9 +362,14 @@ fn preset_add_step(c : @ui.Ctx, src : Source, address : String, stations : Array
       c.text(@sf.t("web-main.preset.browse"), style=preset_dir_name) |> ignore
     })
     c.semantics(b, Button, id~, label=@sf.t("web-main.preset.browse"))
-    if c.clicked(id) || e.browsing {
+    let go = fn() {
       e.browsing = false
       preset_browse(src, address, stations, e, key)
+    }
+    c.on_press(id, go)
+    // (asked from elsewhere: done as it is seen)
+    if e.browsing {
+      go()
     }
   })
   |> ignore
@@ -382,7 +398,7 @@ fn preset_browse(src : Source, address : String, stations : Array[Json], e : Pre
     foot=fn(c, _) {
       c.spacer()
       let here = (@sfbase.folder_browse_here.val)()
-      if @sf.button(c, @sf.t("web-main.preset.useFolder"), key=key("use"), tone=Primary, disabled=here == "") {
+      @sf.button(c, @sf.t("web-main.preset.useFolder"), key=key("use"), tone=Primary, disabled=here == "", on_press=fn() {
         let d = if e.browse_station == address {
           Json::object({ "path": Json::string(here) })
         } else {
@@ -402,7 +418,7 @@ fn preset_browse(src : Source, address : String, stations : Array[Json], e : Pre
           e.dirs.push(d)
         }
         @sf.panel_back(to=1) |> ignore
-      }
+      }) |> ignore
     },
     left=fn() { (@sfbase.folder_browse_close.val)() },
   )

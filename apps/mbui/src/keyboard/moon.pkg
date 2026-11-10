@@ -1,6 +1,0 @@
-import {
-  "moonbitlang/core/json",
-  "mbui/ui",
-  "stillfail/pinyin",
-  "stillfail/sf",
-}

@@ -1,4 +1,4 @@
-// The archive (settings/Archive.kt ArchiveScreen, the core's `archive` topic): chats archived by hand or by their
+// The archive (the core's `archive` topic): chats archived by hand or by their
 // station once they idled, of every station online in one list, newest first by the day they were archived. Each can
 // be opened to read (its composer restores it), put back in the list (`chat.archive` with archived false), and one
 // whose agents are done deleted for good (`session.delete`). Only those with the words looked for, and the newest so
@@ -47,13 +47,13 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     params["q"] = str(archive_state.q)
   }
   params["limit"] = Json::number(archive_state.limit.to_double())
-  let topic = (core.topic)("archive", params)
+  let topic = (core.topic)("archive", params).get()
   match topic.value {
     Some(_) => archive_state.last = topic.value
     None => ()
   }
   let view = archive_state.last
-  // under the app's top bar at the bar's top, from under it, scrolling under it (Archive.kt: contentPadding top)
+  // under the app's top bar at the bar's top, from under it, scrolling under it
   let top = top_room()
   let entries : Array[ArchiveEntry] = if top > 0.0 { [Room(top), Search] } else { [Search] }
   let days = items(view, "days")
@@ -199,7 +199,6 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
     None => failed_of(core, ["session.delete"], [("station", station), ("key", session)])
   }
   let id = c.id("archived/" + station + "/" + session)
-  let mut acted = false
   c.box(
     w=Fill(1.0),
     pl=20.0,
@@ -227,8 +226,7 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
               })
               |> ignore
             }
-            if round_action(c, "restore/" + session, "retry", label=fill("android-misc.archive.restoreNamed", [("title", title)])) {
-              acted = true
+            round_action(c, "restore/" + session, "retry", label=fill("android-misc.archive.restoreNamed", [("title", title)]), on_press=fn() {
               let p : Map[String, Json] = {
                 "station": str(station),
                 "session": str(session),
@@ -245,24 +243,25 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
                 Json::object(p),
                 done=tr("android-misc.archive.restored"),
               )
-            }
-            if flag(v, "deletable") && round_action(c, "delete/" + session, "trash", label=fill("android-misc.archive.deleteNamed", [("title", title)])) {
-              acted = true
-              confirm(
-                fill("android-misc.archive.deleteTitle", [("title", title)]),
-                tr("android-misc.archive.deleteText"),
-                tr("common.delete"),
-                danger=true,
-                fn() {
-                  act(
-                    core,
-                    tr("android-misc.archive.deleteWhat"),
-                    "session.delete",
-                    obj([("station", str(station)), ("key", str(session))]),
-                    done=tr("android-misc.archive.deleted"),
-                  )
-                },
-              )
+            })
+            if flag(v, "deletable") {
+              round_action(c, "delete/" + session, "trash", label=fill("android-misc.archive.deleteNamed", [("title", title)]), on_press=fn() {
+                confirm(
+                  fill("android-misc.archive.deleteTitle", [("title", title)]),
+                  tr("android-misc.archive.deleteText"),
+                  tr("common.delete"),
+                  danger=true,
+                  fn() {
+                    act(
+                      core,
+                      tr("android-misc.archive.deleteWhat"),
+                      "session.delete",
+                      obj([("station", str(station)), ("key", str(session))]),
+                      done=tr("android-misc.archive.deleted"),
+                    )
+                  },
+                )
+              })
             }
           })
           |> ignore
@@ -278,17 +277,16 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
     },
   )
   |> ignore
-  if hit(c, id) && !acted {
-    (core.open_chat)(station, session, title)
-  }
+  // (a press on one of its actions is that action's: Ctx::on_press, the innermost one pressed)
+  @sf.press_does(c, id, true, Some(fn() { (core.open_chat)(station, session, title) }))
 }
 
 ///|
 let round_action_side : Double = 34.0
 
 ///|
-/// A round action of a row (Archive.kt Action): its icon, 16 in a 34 circle. True on the frame after a tap.
-fn round_action(c : @ui.Ctx, key : String, icon : String, label? : String = "") -> Bool {
+/// A round action of a row: its icon, 16 in a 34 circle; `on_press`, what tapping it does, as it is let go.
+fn round_action(c : @ui.Ctx, key : String, icon : String, label? : String = "", on_press~ : () -> Unit) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   let b = c.box(
@@ -304,7 +302,7 @@ fn round_action(c : @ui.Ctx, key : String, icon : String, label? : String = "") 
       @motion.ripple(c, id, 17.0)
     },
   )
-  // what it says to a screen reader (Archive.kt Action: its contentDescription)
+  // what it says to a screen reader
   c.semantics(b, Button, id~, label~)
-  hit(c, id)
+  c.on_press(id, on_press)
 }

@@ -73,6 +73,24 @@ function setup() {
 const kinds = (n: Looked) => n.value(null).items.map((i: J) => i.kind);
 const agent: [string, string] = ["agent", "ds:C1:1.2"];
 
+test("a muted chat is silent until unmuted, without replaying old notifications", () => {
+  const { rows, notices } = setup();
+  const stations = ["ws/st"];
+  rows.set("ws/st", [{ ...row("run", 3, true, agent), muted: true }]);
+  notices.look(stations);
+  rows.set("ws/st", [{ ...row("block", 4, true, agent), muted: true }]);
+  notices.look(stations);
+  assert.deepEqual(kinds(notices), []);
+  rows.set("ws/st", [{ ...row("block", 4, true, agent), muted: false }]);
+  notices.look(stations);
+  assert.deepEqual(kinds(notices), []);
+  rows.set("ws/st", [{ ...row("run", 5, true, agent), muted: false }]);
+  notices.look(stations);
+  rows.set("ws/st", [{ ...row("block", 6, true, agent), muted: false }]);
+  notices.look(stations);
+  assert.deepEqual(kinds(notices), ["block"]);
+});
+
 test("a_reply_seen_while_running_is_noticed_once_when_the_turn_settles", () => {
   const { rows, notices } = setup();
   const stations = ["ws/st"];

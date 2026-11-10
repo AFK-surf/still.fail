@@ -1,14 +1,12 @@
 // The core in a browser's worker (web/src/core/worker.ts): the Host over the worker's own fetch, WebSocket, IndexedDB,
 // SQLite, crypto and clocks. The device's small values (logins, the device key, preferences) stay where the Rust core's
-// wasm host kept them — IndexedDB `stillfail-core`, its `values` by key (what `ember-core` had copied over on the first
-// open) — so a browser moving from the Rust core keeps its logins. Each signed-in account's database is SQLite's
+// wasm host kept them — IndexedDB `stillfail-core`, its `values` by key — so a browser moving from the Rust core keeps its logins. Each signed-in account's database is SQLite's
 // official WASM build on OPFS (its `opfs-sahpool` VFS: synchronous access handles, which only one worker holds at a
 // time — the tab whose worker holds them runs the core, worker.ts); what the former IndexedDB `records` kept is read
 // once into them (db/import.ts) and left there. Its iroh is client/iroh-wasm (relay only), loaded while the core
 // starts from its database.
 import { Effect, Queue, type Scope } from "effect";
 import { Core } from "../core.ts";
-import type { CoreModule } from "../module.ts";
 import { HostError } from "../error.ts";
 import type { BindOptions, Iroh } from "../iroh.ts";
 import { type BoundEndpoint, wrapIroh } from "../iroh-bindings.ts";
@@ -23,8 +21,6 @@ import { pictureRelay, relayedPicture } from "../picture-relay.ts";
 export { checkShared } from "../util.ts";
 
 const DATABASE = "stillfail-core";
-/// Its name before the rename: what a browser that ran the core then has, copied over on the first open.
-const FORMER_DATABASE = "ember-core";
 const VERSION = 2;
 const STORE = "values";
 const RECORDS = "records";
@@ -176,28 +172,10 @@ function openAt(name: string, version: number | undefined, rows: Rows, create: b
   });
 }
 
-/// What the database had under its name from before the rename, if this browser has it (left as it was).
-async function formerRows(): Promise<Rows> {
-  const db = await openAt(FORMER_DATABASE, undefined, [], false);
-  if (!db) return [];
-  const rows: Rows = [];
-  for (const store of [STORE, RECORDS]) {
-    if (!db.objectStoreNames.contains(store)) continue;
-    const os = db.transaction(store).objectStore(store);
-    const keys = await done(os.getAllKeys());
-    const values = await done(os.getAll());
-    rows.push([store, keys.map((k, i) => [k, values[i]] as [IDBValidKey, unknown])]);
-  }
-  db.close();
-  return rows;
-}
-
 async function openDatabase(): Promise<IDBDatabase> {
   if (typeof indexedDB === "undefined") throw HostError.said(t("core-misc.host.idb.missing"));
-  // The first open under the new name fills it with what the former one has (read first: the upgrade that makes the
-  // stores puts the rows in the same transaction, so no other tab sees it made and empty).
   let db = await openAt(DATABASE, VERSION, [], false);
-  if (!db) db = await openAt(DATABASE, VERSION, await formerRows(), true);
+  if (!db) db = await openAt(DATABASE, VERSION, [], true);
   if (!db) throw HostError.said(t("core-misc.host.idb.unopened"));
   // Another tab upgrading the schema later must not be blocked by us.
   const opened = db;
@@ -304,7 +282,7 @@ export class WebHost implements Host {
             socket.close();
           }),
       );
-      // `ping` every SOCKET_PING_MS while it is open (host.rs).
+      // `ping` every SOCKET_PING_MS while it is open.
       yield* Effect.forkScoped(
         Effect.forever(Effect.sleep(SOCKET_PING_MS).pipe(Effect.andThen(Effect.sync(() => socket.readyState === WebSocket.OPEN && socket.send(SOCKET_PING))))),
       );
@@ -453,13 +431,13 @@ export type WebCore = { connect(): number; disconnect(client: number): void; rec
 /// A core in this worker (as the Rust core's wasm `start` was): `emit(client, message)` gets what it says to each client;
 /// `testChannel` the page is the test channel's. A bug that ends a fiber ends it as a panic ended the Rust core's:
 /// `onFatal` is told, with the error itself (its stack is the only clue where), and the worker tells the pages and closes;
-/// a database found damaged on the way is marked first, to be made again by the core that follows (data.ts). `modules`:
-/// what the app adds to the core (module.ts); `onReport`: errors the core goes on after, for error tracking.
-export function startWeb(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string, error: unknown) => void, loadSqlite: () => Promise<WasmSqlite>, modules: readonly CoreModule[] = [], onReport?: (error: Error) => void): Promise<WebCore> {
+/// a database found damaged on the way is marked first, to be made again by the core that follows (data.ts).
+/// `onReport`: errors the core goes on after, for error tracking.
+export function startWeb(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string, error: unknown) => void, loadSqlite: () => Promise<WasmSqlite>, onReport?: (error: Error) => void): Promise<WebCore> {
   service.name = "stillfail-web";
   service.os = "browser";
   const host = new WebHost(emit, testChannel, loadSqlite, onReport);
-  return Core.create(host, { iroh: webIroh(loadIroh), modules }).then((core) => {
+  return Core.create(host, { iroh: webIroh(loadIroh) }).then((core) => {
     core.inner.runner.onDefect = (error) => void core.inner.data.damageKept().then(() => onFatal(t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }), error));
     core.keepTime();
     return {

@@ -1,4 +1,4 @@
-// A skill of a station's shared with the workspace's other stations (settings/memory.mbt; Memory.kt ShareRow): its row
+// A skill of a station's shared with the workspace's other stations (settings/memory.mbt): its row
 // switches it (`skill.share`), the memory read again after; the edits two stations made at once said under it.
 
 ///|

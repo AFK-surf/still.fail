@@ -1,4 +1,4 @@
-// An iPhone Duo folded through still.fail Helper's view as a person folds it (docs/remote-screens.md "Simulators"), on a real
+// An iPhone Duo folded through still.fail Helper's view as a person folds it, on a real
 // Mac with Xcode: a simulator of this test's own, no window of Device Hub's. Each pose's panel shows in the view's picture,
 // and its panels' corners are read from its type's masks. STILLFAIL_HELPER and STILLFAIL_HELPER_DIR: another helper; SIM_OUT:
 // where its pictures go. A side test.
@@ -156,6 +156,8 @@ test("an iPhone Duo's poses, its picture following", { skip: !hasSimctl && "no X
     const seen = (async () => {
       for (let f = await again.next(); f !== null; f = await again.next()) shapes.push(shape(f.data));
     })();
+    // (a first picture may be slow to come; then long enough to see any it goes through)
+    for (const asked = Date.now(); shapes.length === 0 && Date.now() - asked < 60_000;) await sleep(250);
     await sleep(6000);
     again.close();
     view = null;

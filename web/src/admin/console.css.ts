@@ -113,7 +113,7 @@ export const command = style({ display: "grid", gridTemplateColumns: "minmax(0, 
 export const fbNumber = style({ flex: "none", fontSize: vars.textMeta });
 export const fbTitle = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const fbBar = style({ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "14px" });
-export const fbBody = style({ padding: "10px 12px", borderRadius: vars.rOption, background: vars.canvas, cornerShape: vars.cornerShape });
+export const fbBody = style({ whiteSpace: "pre-wrap", overflowWrap: "anywhere", padding: "10px 12px", borderRadius: vars.rOption, background: vars.canvas, cornerShape: vars.cornerShape });
 export const fbContext = style({ gridTemplateColumns: "minmax(72px, max-content) minmax(0, 1fr)", fontSize: vars.textMeta });
 export const fbLogs = style({
   margin: "0", maxHeight: "360px", overflow: "auto", padding: "10px 12px", borderRadius: vars.rOption, background: vars.canvas,
@@ -175,6 +175,8 @@ globalStyle(`${relayNumbers} dd[data-tone=red]`, { color: vars.red });
 // A series' colour, by its place in the chart (the first blue, the second the accent), for its line, wash and key.
 export const seriesFirst = style({ vars: { "--series": vars.blue } });
 export const seriesSecond = style({ vars: { "--series": vars.accent } });
+/** The charts after the first, side by side where the card has the width (a lone one takes all of it). */
+export const relayCharts = style({ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "18px 32px", minWidth: "0" });
 export const loadChart = style({ margin: "0", display: "grid", gap: "8px", minWidth: "0" });
 export const loadHead = style({
   display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "4px 12px", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted,

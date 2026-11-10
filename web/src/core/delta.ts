@@ -1,4 +1,4 @@
-// A topic's deltas applied (docs/client-core.md): the pages' (client.ts) and the desktop app's main process's.
+// A topic's deltas applied: the pages' (client.ts) and the desktop app's main process's.
 
 import { type AnyOp, applyKeyed } from "../../../client/core-ts/src/collections.ts";
 

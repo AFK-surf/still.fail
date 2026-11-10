@@ -142,7 +142,7 @@ test "a picture goes to the preview, read by drive.read" {
   assert_eq(v.file.name, "首页截图.png")
   assert_true(v.drive is Some(_))
   assert_true(v.bytes.get() is Some(_))
-  // kept on the device as read from its start, as its folder lists it (DriveCache.kt; the core's drive-kept.ts)
+  // kept on the device as read from its start, as its folder lists it (the core's drive-kept.ts)
   let asked = fix_reads.filter(fn(p) { text(Some(p), "path").has_suffix("首页截图.png") })
   assert_true(asked.length() > 0)
   for p in asked {
@@ -170,8 +170,9 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
   assert_true(t.find("目录") is Some(_))
   t.tap_text("目录")
   sheet_rested(t, "dv-reader-sheet")
-  assert_true(t.find("第四章 回程") is Some(_))
-  t.tap_text("第四章 回程")
+  // The same title can already be in the text behind the contents sheet; tap the sheet on top.
+  guard t.find_last("第四章 回程") is Some((x, y)) else { fail("chapter not in contents") }
+  t.tap(x, y)
   // the panel sunk away, the jump made, where it is kept once it is still
   sheet_rested(t, "dv-reader-sheet")
   t.run_for(@sf.reader_still_ms)
@@ -185,8 +186,9 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
     // at the fourth chapter (a little before it shows too)
     Some(p) => {
       let ch4 = novel_text().find("第四章").unwrap().to_double()
-      assert_true(number(Some(p), "at") >= ch4 - 300.0)
-      assert_true(number(Some(p), "at") <= ch4 + 50.0)
+      let kept_at = number(Some(p), "at")
+      assert_true(kept_at >= ch4 - 300.0, msg="kept \{kept_at}, chapter \{ch4}")
+      assert_true(kept_at <= ch4 + 50.0, msg="kept \{kept_at}, chapter \{ch4}")
     }
     None => fail("no place kept: \{fix_places.keys().collect()}")
   }

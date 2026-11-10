@@ -25,26 +25,23 @@ pub(all) struct FocusAt {
 /// `keys` (focus_enter, focus_space: its on_press, as a press on it runs it). Not on, the focus on it let go of then;
 /// what it holds takes it or not by its own saying (what holds a node said to take no press, View::presses, keeps it
 /// from it). `tab`: whether Tab stops on it (false: it takes the focus as it is given it, a layer's own ground as it
-/// opens, Tab passing it by). `typing`: an editor whose existing focus a modal layer may leave in place for text
-/// input alone (View::leaves_typing); this does not give it the layer's keys or presses. Omitted, whether it is an
-/// editor stays as it was: changing an editor's enabled state does not change what takes its text.
-pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter | focus_space, tab? : Bool = true, typing? : Bool) -> View {
+/// opens, Tab passing it by).
+pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter | focus_space, tab? : Bool = true) -> View {
   // (whether it takes the focus is the logic's, as whether it takes presses is (View::presses): said at the moment it
   // changes, as the change saying it is committed, the focus on it let go of then; said anew, what was said before let
   // go of)
   guard self.live() is Some(n) else { return self }
-  let typing = typing.unwrap_or(n.focus_typing)
-  match n.props.get(Focusable) {
+  match n.props.get(Prop::Focusable.ord()) {
     Some(stop) => {
-      n.props.remove(Focusable)
+      n.props.remove(Prop::Focusable.ord())
       stop()
     }
     None => ()
   }
   // (its `tab` the last said of Tab's stop on it: View::tab_stop said before let go of)
-  match n.props.get(TabStop) {
+  match n.props.get(Prop::TabStop.ord()) {
     Some(stop) => {
-      n.props.remove(TabStop)
+      n.props.remove(Prop::TabStop.ord())
       stop()
     }
     None => ()
@@ -54,16 +51,16 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
   // what is read out of it told by the frame then owed, where it changed)
   let set = fn(on : Bool, tell : Bool) {
     guard self.live() is Some(n) else { return }
-    let was = (n.focusable, n.focus_keys, n.focus_tab, n.focus_typing)
+    let was = (n.focusable, n.focus_keys, n.focus_tab)
     n.focusable = on
-    n.focus_typing = typing
+    self.tree.said_marked(self.at, words=false, state=true)
     n.focus_keys = keys
     // (Tab's stop on it View::tab_stop's where that was said after this: not undone as whether it takes the focus
     // changes)
     if !n.tab_by_stop {
       n.focus_tab = tab
     }
-    if tell && was != (on, keys, tab, typing) {
+    if tell && was != (on, keys, tab) {
       self.tree.marked()
     }
     // (its own focus let go of, not what it holds: whether they take it is their own, View::presses what holds them
@@ -82,7 +79,7 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
           self.owning(fn() { set(v, first.val) })
           first.val = false
         })
-        n.props[Focusable] = stop
+        n.props[Prop::Focusable.ord()] = stop
       })
   }
   self
@@ -157,7 +154,7 @@ pub fn Tree::focus_order(self : Tree) -> Array[FocusAt] {
 pub fn Tree::focus_to(self : Tree, id : NodeId?, visible? : Bool = false) -> Bool {
   let ok = match id {
     Some(i) =>
-      self.can_focus(i) || (self.focused == Some(i) && self.typing_kept(i))
+      self.can_focus(i)
     None => true
   }
   if !ok {
@@ -242,6 +239,10 @@ fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
   let shown_was = self.focus_visible
   self.focused = id
   self.focus_visible = visible
+  // (a sequence of keys under way ends as the focus moves: keymap.mbt)
+  if was != id {
+    self.keys_end(FocusMoved)
+  }
   // (told as one change: what reads both never sees one half of it)
   @signals.start_batch()
   if was != id {
@@ -277,14 +278,6 @@ pub fn View::shows(self : View, f : (Double, Double) -> Double, across? : Bool =
 /// it): what a screen reader may give it.
 pub fn Tree::can_focus(self : Tree, id : NodeId) -> Bool {
   self.alive_id(id) && self.nodes[id.at].focusable && !self.pressless_at(id.at)
-}
-
-///|
-/// An editor's existing focus kept for text input under a layer that leaves typing. Its presses and keys still
-/// belong to the layer; leaving, disabling or releasing the editor drops that focus as usual.
-fn Tree::typing_kept(self : Tree, id : NodeId) -> Bool {
-  self.alive_id(id) && self.nodes[id.at].focusable && self.nodes[id.at].focus_typing &&
-    self.typing_left_under() && !self.pressless_own_at(id.at)
 }
 
 ///|
@@ -342,6 +335,26 @@ pub fn View::takes_input(self : View) -> Bool {
 /// Each node whose taking input is read told it as it is now (View::takes_input): as what decides it changes (a modal
 /// layer, a node leaving, said to take no press), once the change is committed whole. Those let go dropped.
 fn Tree::inputs_told(self : Tree) -> Unit {
+  // (where only what changed and what it holds may take input otherwise (Tree::modals_told's `within`): those alone)
+  if !self.inputs_whole {
+    let todo = self.inputs_in.copy()
+    self.inputs_in.clear()
+    // (no modal layer, the old frame's or the tree's: whether each takes input is what holds it says, worked out once
+    // for each change's node and carried down what it holds, not asked again of each all the way up)
+    let plain = self.modals.is_empty() && self.held_under_now() == -2
+    for at in todo {
+      guard at >= 0 && at < self.nodes.length() && self.nodes[at].live else { continue }
+      if plain {
+        let p = self.nodes[at].parent
+        self.inputs_down(at, p >= 0 && self.pressless_own_at(p))
+      } else {
+        self.inputs_each(at)
+      }
+    }
+    return
+  }
+  self.inputs_whole = false
+  self.inputs_in.clear()
   let live = self.inputs_at.filter(fn(at) { self.nodes[at].live && self.nodes[at].input_cell is Some(_) })
   self.inputs_at.clear()
   self.inputs_at.append(live)
@@ -350,6 +363,39 @@ fn Tree::inputs_told(self : Tree) -> Unit {
       Some(s) => s.set(!self.pressless_at(at))
       None => ()
     }
+  }
+}
+
+///|
+/// Node `at` and what it holds told whether each takes input (Tree::inputs_told), no modal layer said: none where what
+/// holds it takes no press (`above`: leaving, said to take none, left out, in its bones), else as it says itself.
+fn Tree::inputs_down(self : Tree, at : Int, above : Bool) -> Unit {
+  let n = self.nodes[at]
+  guard n.live else { return }
+  let off = above || n.left_at >= 0.0 || n.inert || n.out || n.bones != 0L
+  match n.input_cell {
+    Some(s) => s.set(!off)
+    None => ()
+  }
+  let kids = n.kids
+  for i in 0..<kids.length() {
+    self.inputs_down(kids[i], off)
+  }
+}
+
+///|
+/// Node `at` and what it holds told whether each takes input (Tree::inputs_told), each asked of all that holds it and
+/// of the modal layers.
+fn Tree::inputs_each(self : Tree, at : Int) -> Unit {
+  let n = self.nodes[at]
+  guard n.live else { return }
+  match n.input_cell {
+    Some(s) => s.set(!self.pressless_at(at))
+    None => ()
+  }
+  let kids = n.kids
+  for i in 0..<kids.length() {
+    self.inputs_each(kids[i])
   }
 }
 
@@ -480,9 +526,9 @@ fn Tree::layers_focus_told(self : Tree) -> Unit {
 /// whether that takes the focus changing leaves this alone).
 pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
-  match n.props.get(TabStop) {
+  match n.props.get(Prop::TabStop.ord()) {
     Some(stop) => {
-      n.props.remove(TabStop)
+      n.props.remove(Prop::TabStop.ord())
       stop()
     }
     None => ()
@@ -505,7 +551,7 @@ pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
           self.owning(fn() { set(v, first.val) })
           first.val = false
         })
-        n.props[TabStop] = stop
+        n.props[Prop::TabStop.ord()] = stop
       })
   }
   self

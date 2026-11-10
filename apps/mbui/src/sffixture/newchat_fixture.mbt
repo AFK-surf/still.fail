@@ -36,6 +36,8 @@ pub(all) struct NewFix {
   liked : Array[String]
   /// MBUI_FIXTURE=newchat-providers…: as crowded, with keys of many providers besides (fix_providers)
   mut providers : Bool
+  /// MBUI_FIXTURE=settings-connect-borrow: the model drafted another station's, borrowed first (the pick's `borrow`)
+  mut borrow : Bool
 }
 
 ///|
@@ -58,6 +60,7 @@ pub let new_fix : NewFix = {
   presets: [fix_preset_design(), fix_preset("p-tc", "web-app + backend", ["web-app", "backend"], "")],
   liked: [],
   providers: false,
+  borrow: false,
 }
 
 ///|
@@ -405,9 +408,10 @@ pub fn fix_pick() -> Json {
   }
   {
     "options": fix_pick_options(fix_shown_models()),
-    "near": Json::array(fix_near().map(Json::string(_))),
-    // (those starred, those used most left out)
-    "liked": Json::array(n.liked.filter(fn(m) { !fix_near().contains(m) }).map(Json::string(_))),
+    // (those used most, the starred left out)
+    "near": Json::array(fix_near().filter(fn(m) { !n.liked.contains(m) }).map(Json::string(_))),
+    // (every one starred, however often used)
+    "liked": Json::array(n.liked.map(Json::string(_))),
     // (the makers of its models, in their order, as the core says them)
     "makers": {
       let makers : Array[(String, String, Int)] = []
@@ -421,6 +425,18 @@ pub fn fix_pick() -> Json {
       Json::array(makers.map(fn(m) { { "id": Json::string(m.0), "title": Json::string(m.1), "count": Json::number(m.2.to_double()) } }))
     },
     "runtimeFixed": false,
+    // (the model drafted another station's: borrowed first, asked, from the panel's foot)
+    "borrow": if n.borrow {
+      {
+        "title": "借用 Maple 的 Fable 5.1？",
+        "lines": ["Fable 5.1 由 Maple 上的 Claude 订阅运行。", "借用后，这个连接的会话也用它的额度。"],
+        "action": "借用",
+        "allowed": true,
+        "note": "Fable 5.1 在 Maple 上，借用后这里也能用。",
+      }
+    } else {
+      Json::null()
+    },
     "value": picked(n.model, n.runtime, n.effort, ""),
     "valueOption": fix_model(n.model),
     "draft": picked(n.d_model, n.d_runtime, n.d_effort, n.d_profile),
@@ -589,14 +605,15 @@ fn fix_new_chat_of(f : Fixture) -> Json {
       "frequent": [],
     }
   }
-  // its station with no profile open here: what to add first (newchat-noprofile)
-  if f.mode == "newchat-noprofile" {
+  // Its station has no profile, or its only available profiles are disabled.
+  if f.mode == "newchat-noprofile" || f.mode == "newchat-disabled" {
     return {
       "kept": Json::string(n.station),
       "stations": [fix_station("st1"), fix_station("st2")],
       "any": true,
       "station": fix_station(n.station),
-      "blocked": "profile",
+      "blocked": Json::string(if f.mode == "newchat-disabled" { "disabled" } else { "profile" }),
+      "problem": Json::string(if f.mode == "newchat-disabled" { "Willow 的可用 Profile 均已停用，请在 Profile 页面重新启用。" } else { "" }),
       "model": Json::null(),
       "runtime": "",
       "effort": "",

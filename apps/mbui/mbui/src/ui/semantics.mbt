@@ -81,7 +81,7 @@ pub fn Ctx::semantics(
   if node < 0 || node >= self.count {
     return
   }
-  // (held by its node, docs/retained.md the way there's 1: the frame's `sems` are found from the nodes, sems_found)
+  // (held by its node the way there's 1: the frame's `sems` are found from the nodes, sems_found)
   self.nodes[node].sem = Some({
     node,
     id,
@@ -167,6 +167,18 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
   // an input, as a tap is: its frame and the one after, what reads what is asked built again (hand.mbt)
   hand_event()
   input_came()
+  // (Activate is a press let go on it: what was said a press on it does, done now, at the moment it is asked, as a
+  // tap's is: Ctx::on_press)
+  match action {
+    Activate => {
+      self.press_on_key(id)
+      made_pressed(id)
+    }
+    // (a step: as the key that steps it, Ctx::on_key)
+    Increment => made_stepped(id, true) |> ignore
+    Decrement => made_stepped(id, false) |> ignore
+    _ => ()
+  }
 }
 
 ///|

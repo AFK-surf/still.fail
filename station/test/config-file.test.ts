@@ -6,6 +6,33 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { ConfigFile } from "../src/ops/config.ts";
+import { setStationLang } from "../src/ops/i18n.ts";
+
+test("an unreadable initial config is reported without treating it as an empty config", () => {
+  setStationLang("en");
+  const dir = mkdtempSync(join(tmpdir(), "config-invalid-"));
+  const file = join(dir, "config.json");
+  const contents = "%TSD-Header-###%secret";
+  writeFileSync(file, contents);
+  assert.throws(() => new ConfigFile(dir), (error: Error) =>
+    error.message.includes(file) && /encrypt/i.test(error.message) && !error.message.includes("secret"));
+  assert.equal(readFileSync(file, "utf8"), contents);
+});
+
+test("an unreadable external edit keeps the last settings and cannot be overwritten", () => {
+  setStationLang("en");
+  const dir = mkdtempSync(join(tmpdir(), "config-invalid-edit-"));
+  const file = join(dir, "config.json");
+  writeFileSync(file, JSON.stringify({ language: "en", profiles: [] }));
+  const config = new ConfigFile(dir);
+  const contents = "%TSD-Header-###%ciphertext";
+  writeFileSync(file, contents);
+  assert.equal(config.raw().language, "en");
+  assert.throws(() => config.update((raw) => (raw.language = "zh")), /encrypt/i);
+  assert.equal(readFileSync(file, "utf8"), contents);
+  writeFileSync(file, JSON.stringify({ language: "zh" }));
+  assert.equal(config.raw().language, "zh");
+});
 
 test("an edit is checked, written privately and told; unknown fields are kept", () => {
   const dir = mkdtempSync(join(tmpdir(), "config-"));

@@ -1,4 +1,4 @@
-// What the core says of an allowance and of a machine, as fill chips (components.tsx QuotaChip, MeterChip): one part
+// What the core says of an allowance and of a machine, as fill chips (MeterChip): one part
 // each, for every page that shows one (a profile's row and page, a station's row and peek, a chat's agents, the model
 // control), drawn by fill_chip.
 
@@ -13,14 +13,18 @@ pub fn has_quota(q : Json?) -> Bool {
 }
 
 ///|
-/// An allowance's windows (components.tsx QuotaBars compact, QuotaChip each, ProfilesNav.tsx Windows): a chip per
+/// An allowance's windows (QuotaChip each): a chip per
 /// window, what is left in it, filled as far as that, its mark before it where `marked` (the web's default; a chat's
 /// agents only with more than one), or `worded`, its name and what is left in words, as a machine's chips say theirs
 /// (每周剩 78%, as 内存剩 12.3 G: a profile's row, where a touch has no tip to say what W is); `small`, a lower line;
 /// `gap` apart; nothing while the core cannot say (`state` not ok) or there is no window.
 /// Worded, the line said one way for all its chips, the longest that fits the room it is given whole (Ctx::box one_of): a
 /// phone's row has not the room for 5 小时剩 62%, 每周剩 95% and 每月剩 97%, so they say 5 小时 62%, 每周 95%…, then
-/// 5H 62%, W 95%…, never one chip a way of its own nor one cut short.
+/// 5H 62%, W 95%…, never one chip a way of its own nor one cut short. Where no line holds them (an account's windows
+/// and its models' own weeks, five: each was cut to …), the account's a line by their names and its models' own a line
+/// under it, each by its model, either going on in lines where it must (quota_chips_lines).
+/// `lines` (not worded): on a line of its own, as wide as what holds it (under a row's words: a station's account),
+/// where the line has not the room for its chips they go on so too, by their marks.
 /// Each says over it while it is pointed at what is left of it and when it fills again; `key` names them where the same
 /// allowance shows more than once in a place (a list's rows: each its profile's).
 pub fn quota_chips(
@@ -29,6 +33,7 @@ pub fn quota_chips(
   small? : Bool = false,
   marked? : Bool = true,
   worded? : Bool = false,
+  lines? : Bool = false,
   gap? : Double = 8.0,
   key? : String = "quota",
 ) -> Unit {
@@ -38,12 +43,23 @@ pub fn quota_chips(
     _ => []
   }
   if !worded {
-    c.box(style=quota_chips_row.then(@ui.style(gap=room(gap))), fn() {
-      for w in windows {
-        quota_chip(c, Some(w), small~, marked~, key~)
-      }
-    })
-    |> ignore
+    let row = fn() {
+      c.box(style=quota_chips_row.then(@ui.style(gap=room(gap))), fn() {
+        for w in windows {
+          quota_chip(c, Some(w), small~, marked~, key~)
+        }
+      })
+      |> ignore
+    }
+    if lines {
+      c.box(style=quota_chips_line, one_of=true, fn() {
+        row()
+        quota_chips_lines(c, windows, small, gap, key, 2)
+      })
+      |> ignore
+    } else {
+      row()
+    }
     return
   }
   // (its ways, each shorter than the one before, the first that fits the line's room shown: Ctx::box one_of)
@@ -66,23 +82,72 @@ pub fn quota_chips(
       })
       |> ignore
     }
+    quota_chips_lines(c, windows, small, gap, key, 1)
   })
   |> ignore
 }
 
 ///|
+/// An allowance's chips where no one line holds them (quota_chips' last way): the account's windows a line, each said
+/// `account`'s way (quota_worded's: 1 its name and what is left, 5 小时 62%; 2 by its mark, where the line before was),
+/// what its models have to themselves (`scope`) a line under it, each by its model (Fable 46%: a model's name says
+/// whose it is, where W says little without a tip); a line going on in lines where even it has not the room, every
+/// chip whole.
+fn quota_chips_lines(c : @ui.Ctx, windows : Array[Json], small : Bool, gap : Double, key : String, account : Int) -> Unit {
+  let own = fn(w : Json) { chip_str(Some(w), "scope") != "" }
+  c.box(style=quota_chips_parts, fn() {
+    for part in [(windows.filter(fn(w) { !own(w) }), account), (windows.filter(own), 2)] {
+      if part.0.length() > 0 {
+        c.box(style=quota_chips_part.then(@ui.style(gap=room(gap))), flow=true, line_gap=quota_chips_part_lines, fn() {
+          for w in part.0 {
+            let (mark, words) = quota_worded(Some(w), part.1)
+            fill_chip(
+              c,
+              chip_left(Some(w)),
+              chip_str(Some(w), "level"),
+              mark,
+              words,
+              small~,
+              key=key + "/" + chip_str(Some(w), "mark") + "/lines",
+              said=quota_said(Some(w)),
+            )
+          }
+        })
+        |> ignore
+      }
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The lines of an allowance no one line holds: as wide as what holds them, a line under another as far as the lines
+/// a line goes on in.
+// kept across runs: a value (no field of it changes)
+let quota_chips_parts : @ui.Style = @ui.css("w=Full gap=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let quota_chips_part : @ui.Style = @ui.css("row w=Full align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let quota_chips_part_lines : Double = 6.0
+
+///|
 /// A sidebar row's allowance starts with its text. If full chips need more room, they may extend under the mark. Where
 /// even those do not fit, each window's mark stands over its figure, keeping the figures together in one line. More
 /// windows form balanced rows, each still whole. Its nav_item gives it the whole row as `foot` and says
-/// foot_capsule=fill_chip_small_h so the capsules are at the same inset from the row's foot.
-pub fn nav_quota_chips(c : @ui.Ctx, q : Json?, key? : String = "quota") -> Unit {
+/// foot_capsule=fill_chip_small_h so the capsules are at the same inset from the row's foot. `at`: where its row's list
+/// stands (its words' room: band_pad_in).
+pub fn nav_quota_chips(c : @ui.Ctx, q : Json?, key? : String = "quota", at? : ListAt = Side) -> Unit {
   guard has_quota(q) else { return }
   let windows = match chip_field(q, "windows") {
     Some(Array(a)) => a
     _ => []
   }
-  let inset = capsule_in(row_corner, fill_chip_small_h)
-  let side = theme().chat_list.band_pad
+  let inset = @ui.capsule_in(row_corner, fill_chip_small_h)
+  let side = band_pad_in(at)
   // A capsule reaches the corner until it is past the outer corner's circle-equivalent radius.
   let clear = dmax(0.0, inset + fill_chip_small_h / 2.0 - side)
   // A line that starts with the words is in past the mark and the row's gap (item's S2).
@@ -198,7 +263,7 @@ fn quota_worded(w : Json?, form : Int) -> (String, String) {
 }
 
 ///|
-/// One window of an allowance (components.tsx QuotaChip), or the one an agent is short of: what is left in it, filled
+/// One window of an allowance, or the one an agent is short of: what is left in it, filled
 /// as far as that, its mark before it where `marked`; `compact` gives a small, unmarked figure less padding when the
 /// mark is above it; over it while pointed at, `said` (what is left and when it fills again: quota_said), the chip
 /// `key`'s.
@@ -226,7 +291,7 @@ pub fn quota_chip(
 }
 
 ///|
-/// What is left of an allowance's window, in words (components.tsx quotaLeft: with its name where it has one), and
+/// What is left of an allowance's window, in words, and
 /// when it fills again on a line of its own (QuotaBars' tip).
 pub fn quota_said(w : Json?) -> String {
   let said = quota_left(w)
@@ -249,19 +314,21 @@ fn quota_left(w : Json?) -> String {
 }
 
 ///|
-/// A machine's CPU, memory or disk (components.tsx MeterChip): its mark and what is left, filled as far as is used;
-/// `brief`, the figure alone with its unit's first letter, small (a station's row); `drop`, the turn it is left out of
-/// a line short of room in (Ctx::box's), `keep` never squeezed there.
+/// A machine's CPU, memory or disk: its mark and what is left, filled as far as is used;
+/// `brief`, the figure alone with its unit's first letter, small (a station's row); `figure`, the same words at the
+/// chip's own size (meter_line's shorter way); `drop`, the turn it is left out of a line short of room in (Ctx::box's),
+/// `keep` never squeezed there.
 pub fn meter_chip(
   c : @ui.Ctx,
   m : Json?,
   brief? : Bool = false,
+  figure? : Bool = false,
   drop? : Int = 0,
   keep? : Bool = false,
   key? : String = "meter",
 ) -> Unit {
   let unit = chip_str(m, "unit")
-  let words = if brief && chip_str(m, "big") != "" {
+  let words = if (brief || figure) && chip_str(m, "big") != "" {
     chip_str(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_string() })
   } else {
     chip_str(m, "remaining")
@@ -287,7 +354,7 @@ pub fn meter_chip(
 }
 
 ///|
-/// A machine's CPU, memory and disk (components.tsx MeterChips), each a meter_chip, in one line that never goes on to
+/// A machine's CPU, memory and disk, each a meter_chip, in one line that never goes on to
 /// another, so what holds it is as high however narrow (a station's row in a narrow sidebar). Where it is short of
 /// room, only what is still plenty is left out (level ok, grey: the last of them first); one running low (amber, red)
 /// always stays, being what the line is there to show (MeterChips `alerts`: those running low).
@@ -308,6 +375,28 @@ pub fn meter_chips(c : @ui.Ctx, meters : Array[Json], brief? : Bool = false, key
   })
   |> ignore
 }
+
+///|
+/// A machine's chips in a line as wide as what holds it (a station's card, its peek), 8 apart, each whole: in words
+/// where the line has the room for all of them (内存剩 9.2 G), else all by their figures (内存 9.2G), one way for all
+/// of them (Ctx::box one_of), never one cut short with an ellipsis.
+pub fn meter_line(c : @ui.Ctx, meters : Array[Json], key? : String = "meter") -> Unit {
+  c.box(style=quota_chips_line, one_of=true, fn() {
+    for figure in [false, true] {
+      c.box(style=meter_line_way, fn() {
+        for m in meters {
+          meter_chip(c, Some(m), figure~, key=key + (if figure { "/figure" } else { "" }))
+        }
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let meter_line_way : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

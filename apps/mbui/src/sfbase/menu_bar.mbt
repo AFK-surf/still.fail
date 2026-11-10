@@ -132,7 +132,7 @@ pub fn menu_bar_json(prefs : Json?, in_chat : Bool) -> String {
 /// Each frame: the menu bar given to the host once the frame is built, and again as what it shows changes (the
 /// language, the keys, a chat open or not).
 pub fn menu_bar(c : @ui.Ctx, src : Source) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   let in_chat = app.nav.top() is Chat(_)
   let keys = match field(prefs, "keys") {
     Some(k) => k.stringify()

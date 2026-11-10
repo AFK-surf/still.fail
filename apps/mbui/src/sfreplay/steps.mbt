@@ -1,4 +1,4 @@
-// A flow of e2e/flows seen again in a Tester, its steps written as a test's (e2e/README.md):
+// A flow of e2e/flows seen again in a Tester, its steps written as a test's (scripts/e2e-local.sh):
 // the app (source.mbt) over a run's conversation with its core (e2e/traces), every input given by the test. An input
 // draws only the frames it causes (Tester::draw); what the core said comes as the run had it, posted to mbui's queue
 // (Tester::post on "core") as a frame ends once what it came after has been asked again (Replay::deliver,
@@ -26,6 +26,9 @@ pub struct Flow {
   priv one_by_one : Ref[Bool]
   /// what moved as the last step that acts was taken (Tester::moving's lines): not what it began
   priv at_step : Array[String]
+  /// the words followed down the screen (Flow::follow; "": none), and where their middle was drawn each frame since
+  priv followed : Ref[String]
+  priv follow_ys : Array[(Double, Double)]
 }
 
 ///|
@@ -44,22 +47,29 @@ fn pace_of(seed : UInt) -> @core.Pace {
 }
 
 ///|
-/// The app over `trace` in a w × h window (a phone's by default; the wide flows' 1280 × 800), in the pass `seed`
-/// names (0: the strict one, as the run had it; else what is due at once in the order drawn from it, at that pass's
-/// pace: pace_of). `drop`: asks of the run's its timing made, by words in them
-/// (Replay::drop), each with what came for it. `platform`: the system it is on (Tester::new's), by default by its width:
-/// a phone's (Android) narrower than medium_from, else the Mac.
+/// The app over `trace`, drawn by what the run's host gave its frames (the trace's `{"settings":…}`: its window, its
+/// scale, the system it is and its settings, @ui.trace_settings), in the pass `seed` names (0: the strict one, as the
+/// run had it; else what is due at once in the order drawn from it, at that pass's pace: pace_of). `drop`: asks of the
+/// run's its timing made, by words in them (Replay::drop), each with what came for it. `w`, `h`, `platform`: what the
+/// test says its run was (the wide flows' 1280 × 800, the Mac's), held to the trace's: one that differs is refused, as
+/// is a trace that does not say.
 #callsite(autofill(loc))
 pub fn Flow::start(
   trace : String,
   seed? : UInt = 0,
   drop? : Array[String] = [],
-  w? : Double = 390.0,
-  h? : Double = 844.0,
+  w? : Double,
+  h? : Double,
   env? : Array[(String, String)] = [],
   platform? : Int,
   loc~ : SourceLoc,
 ) -> Flow {
+  // (the app of the run before let go first, while the core it talks to is that run's: what it says as it goes (a
+  // page's drafts dropped) is that run's, never heard by this one, whichever flow ran before it)
+  @ui.run_let_go()
+  // Legacy scopes outlive a frame's tree. Release the previous run's watches before its core is replaced, so their
+  // reset notifications cannot subscribe them into the next recording. Tester::new resets the rest of the app later.
+  @sfbase.reset()
   let r = @core.Replay::parse(trace)
   use_recorded_jobs(r)
   // (asks the run's timing made, with what came for them: each test says which and why)
@@ -76,13 +86,29 @@ pub fn Flow::start(
   // do not hang on the run's pace, and an older trace's asks have no wall clock to keep it by)
   r.pace(if seed == 0 && emit_path() != "" { @core.AtOnce } else { pace_of(seed) }, strict=seed == 0)
   r.attach()
-  // (on the screen it was made on: a phone's window's runs a phone's, Android's, pointed at by a finger; a wider one's
-  // the Mac's, by a mouse, and keyboard and mouse's window made narrow (`platform` 0); the live run recording it again on a Mac
-  // plays that system too)
-  let platform = match platform {
-    Some(p) => p
-    None => if w < @sf.medium_from { 2 } else { 0 }
+  // (on the screen it was made on, as its host gave it: a phone's window's runs a phone's, Android's, pointed at by a
+  // finger; a wider one's the Mac's, by a mouse, and keyboard and mouse's window made narrow (`platform` 0); the live
+  // run recording it again on a Mac plays that system too)
+  let (w_said, h_said, platform_said) = (w, h, platform)
+  let settings = match r.settings() {
+    Some(s) => s
+    None =>
+      abort(
+        "flow: this test's trace has no {\"settings\":…}, what its run's host gave its frames (mbui's @ui.trace_settings): record it again (scripts/rerecord.sh)",
+      )
   }
+  let (w, h, scale, platform, native, dark) = match @ui.settings_of(settings) {
+    Ok(s) => s
+    Err(why) => abort("flow: this test's trace: " + why + " (mbui's @ui.trace_settings): record it again (scripts/rerecord.sh)")
+  }
+  let said = fn(what : String, by_test : Double?, run : Double) {
+    if by_test is Some(v) && v != run {
+      abort("flow: the test says its run's \{what} was \{v}, its trace's was \{run}")
+    }
+  }
+  said("width", w_said, w)
+  said("height", h_said, h)
+  said("platform", platform_said.map(fn(p) { p.to_double() }), platform.to_double())
   emit_start(seed, w, h, if platform == 2 { env + [("MBUI_PLATFORM", "android")] } else { env })
   // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
   @ui.on_message("core", @core.receive)
@@ -96,9 +122,12 @@ pub fn Flow::start(
   // (and its host's answers as the run's gave them, where it kept them: a word's bounds as the system splits words)
   // (on the system the run was on, its core told so: above)
   let t = match r.text() {
-    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~, platform~, tree=@sfapp.app_tree(the_source), loc~)
-    None => @ui.Tester::new(app, w~, h~, env=r.env() + env, platform~, tree=@sfapp.app_tree(the_source), loc~)
+    Some(text) =>
+      @ui.Tester::new(app, w~, h~, scale~, dark~, native~, env=r.env() + env, text~, platform~, tree=@sfapp.app_tree(the_source), loc~)
+    None => @ui.Tester::new(app, w~, h~, scale~, dark~, native~, env=r.env() + env, platform~, tree=@sfapp.app_tree(the_source), loc~)
   }
+  // (and the rest of what its host gave its first frame: the system's settings, the minutes it was off UTC)
+  ignore(t.settings_said(settings.stringify()))
   // (which station this machine is, as the run's host said)
   if r.local_station() != "" {
     t.set_local_station(r.local_station())
@@ -110,7 +139,8 @@ pub fn Flow::start(
     None => ()
   }
   // what the run's host said of its views (a player's state, a video's frames) said to the Tester's in its place
-  r.host(fn(line) { ignore(t.view_said(line)) })
+  // (and what it gave its later frames, where that changed: its window, its settings)
+  r.host(fn(line) { if !t.settings_said(line) { ignore(t.view_said(line)) } })
   // the run's pace kept on the Tester's clock: when an ask is made again, when a message is given
   r.clock(fn() { t.time() })
   // the run's core answering as it did: what is due is posted as each frame ends, taken by the next (but while a
@@ -119,10 +149,18 @@ pub fn Flow::start(
   // (the last of the run's frames given to the Tester's display)
   let frames_to = Ref::new(-@double.infinity)
   let said : Array[String] = []
+  let followed = Ref::new("")
+  let follow_ys : Array[(Double, Double)] = []
   // (and when the next is due, a frame drawn then however the clock is run on: what came at a time came at it)
   // (what the run's host said comes before the frame it was said for: given as a frame ends, it is the next one's, by
   // that frame's time, as a host's events before a vsync are that frame's)
   t.between_frames(fn() {
+    if followed.val != "" {
+      match t.find(followed.val) {
+        Some((_, y)) => follow_ys.push((t.time(), y))
+        None => ()
+      }
+    }
     for m in t.moving() {
       if !said.contains(m) {
         said.push(m)
@@ -180,6 +218,8 @@ pub fn Flow::start(
     one_by_one,
     said,
     at_step: [],
+    followed,
+    follow_ys,
   }
   // each step the test says taken when the run took it, at this pace (at once: as soon as the test takes it), what
   // came after it in the run let come (Replay::step_taken)
@@ -398,6 +438,15 @@ pub fn Flow::field(self : Flow, words : String) -> Unit {
 }
 
 ///|
+/// A visible field holds words even when it has lost focus, as for a restored draft.
+pub fn Flow::field_visible(self : Flow, words : String) -> Unit {
+  emit("field " + words.replace_all(old="\n", new="\\n"))
+  if !self.t.all(@ui.Role::TextField).iter().any(fn(field) { field.value.contains(words) }) {
+    self.fail("no visible field holds \{words.escape()}")
+  }
+}
+
+///|
 /// The lowest `what` on screen (`top`: the highest) tapped, and what the core answers to it given.
 pub fn Flow::tap(self : Flow, what : String, top? : Bool = false) -> Unit {
   emit((if top { "tap1 " } else { "tap " }) + what)
@@ -564,7 +613,13 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
       self.t.run_for(frame_ms)
     }
     while self.t.rest_of("") > self.t.time() {
-      self.t.run_for(self.t.rest_of("") - self.t.time())
+      let before = self.t.time()
+      self.t.run_for(self.t.rest_of("") - before)
+      // run_for treats a rounding-sized difference as the same frame. If the motion's end is just beyond that
+      // frame, show the next one so the motion is actually sampled at rest instead of waiting forever.
+      if self.t.time() == before {
+        self.t.frame()
+      }
     }
     // (a toast's time too, before the frame owed: what is shown does not wait for it, but one left at the end goes at
     // its time, not as the end's last frame happens to fall)
@@ -783,6 +838,24 @@ pub fn Flow::resize(self : Flow, w : Double, h : Double) -> Unit {
 /// The wheel turned by `dy` over the window's middle (a flow's `wheel`).
 pub fn Flow::wheel(self : Flow, dy : Double) -> Unit {
   emit("wheel \{dy.to_int()}")
+  let (w, h) = self.t.size()
+  self.t.wheel(w / 2.0, h / 2.0, dy)
+  self.core()
+}
+
+///|
+/// Align content using a distance measured on the current frame. In another timing, that distance can change while
+/// the same scroll is needed; match the recorded wheel step in the same direction while applying the measured distance.
+pub fn Flow::wheel_aligned(self : Flow, dy : Double) -> Unit {
+  let actual = "wheel \{dy.to_int()}"
+  let step = if !self.strict {
+    match self.r.next_step() {
+      Some(recorded) if recorded.has_prefix("wheel ") && recorded != "wheel 0" &&
+        ((dy < 0.0 && recorded.has_prefix("wheel -")) || (dy > 0.0 && !recorded.has_prefix("wheel -"))) => recorded
+      _ => actual
+    }
+  } else { actual }
+  emit(step)
   let (w, h) = self.t.size()
   self.t.wheel(w / 2.0, h / 2.0, dy)
   self.core()
@@ -1031,4 +1104,36 @@ pub fn Flow::share_in(self : Flow, text : String, title? : String = "") -> Unit 
   self.t.share_in(text, title~)
   self.t.draw()
   self.core()
+}
+
+///|
+/// From here, where `what` (words on screen, as Tester::find finds them) is drawn down the screen each frame, till
+/// Flow::followed: what the reader sees of the list carrying it, whatever moved it.
+pub fn Flow::follow(self : Flow, what : String) -> Unit {
+  self.followed.val = what
+  self.follow_ys.clear()
+}
+
+///|
+/// How many times what was followed (Flow::follow) turned back since, more than `least` points each way: 0 where the
+/// screen took it one way only (2026-11-09 the user, of a card's option picked and the agent answering at once, the
+/// list up and then down: 「点一个决策后上下摇晃」). Following it stops.
+pub fn Flow::turns_followed(self : Flow, least? : Double = 1.0) -> Int {
+  self.followed.val = ""
+  let ys = self.follow_ys
+  let mut turns = 0
+  let mut way = 0.0
+  let mut from = if ys.length() > 0 { ys[0].1 } else { 0.0 }
+  for p in ys {
+    let d = p.1 - from
+    if d.abs() < least {
+      continue
+    }
+    if way != 0.0 && d * way < 0.0 {
+      turns += 1
+    }
+    way = d
+    from = p.1
+  }
+  turns
 }

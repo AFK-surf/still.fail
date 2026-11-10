@@ -177,7 +177,7 @@ async function notify(h: Harness, station: Station, notices: unknown[], sign: { 
   return h.fetch("/v1/stations/notify", { method: "POST", headers, body });
 }
 
-const notice = (to: string[], extra: Record<string, unknown> = {}) => ({ to, kind: "done", session: "ember:c-1/x y", thread: 7, title: "部署挂了", by: "Claude", text: "修好了", at: 1790000000000, ...extra });
+const notice = (to: string[], extra: Record<string, unknown> = {}) => ({ to, kind: "done", session: "chat:c-1/x y", thread: 7, title: "部署挂了", by: "Claude", text: "修好了", at: 1790000000000, ...extra });
 
 /** Push services as the tests see them: what each endpoint got; an endpoint listed in `gone` answers 410. */
 function pushServices() {
@@ -238,8 +238,8 @@ test("a browser registers, gets its notices encrypted and signed for, and unregi
     assert.equal(claims.sub, "mailto:ops@example.test");
     assert.deepEqual(JSON.parse(await decrypt(push.body, ua)), {
       type: "notice", kind: "done", title: "部署挂了", body: "Claude: 修好了",
-      tag: `${id}/${station.id}/ember:c-1/x y`, url: `/o/${id}/${station.id}/${encodeURIComponent("ember:c-1/x y")}`,
-      workspace: id, station: station.id, session: "ember:c-1/x y", at: "1790000000000",
+      tag: `${id}/${station.id}/chat:c-1/x y`, url: `/o/${id}/${station.id}/${encodeURIComponent("chat:c-1/x y")}`,
+      workspace: id, station: station.id, session: "chat:c-1/x y", at: "1790000000000",
     });
 
     // Registered again: still one registration, one push.
@@ -404,11 +404,11 @@ test("iOS devices get an APNs alert signed with the team's key, a chat's replaci
     assert.ok(await jwtVerify(toAlice.headers.authorization!.replace(/^bearer /, ""), publicKey), "signed with the key");
     assert.equal(toAlice.headers["apns-topic"], "fail.still.iphone");
     assert.equal(toAlice.headers["apns-push-type"], "alert");
-    const tag = `${id}/${station.id}/ember:c-1/x y`;
+    const tag = `${id}/${station.id}/chat:c-1/x y`;
     assert.match(toAlice.headers["apns-collapse-id"]!, /^[0-9a-f]{48}$/, "the chat's, within APNs' 64 bytes");
     const body = JSON.parse(new TextDecoder().decode(toAlice.body));
     assert.deepEqual(body.aps, { alert: { title: "部署挂了", body: "出错 · token runs out" }, sound: "default", "thread-id": tag });
-    assert.equal(body.url, `/o/${id}/${station.id}/${encodeURIComponent("ember:c-1/x y")}?message=12`, "what a tap opens");
+    assert.equal(body.url, `/o/${id}/${station.id}/${encodeURIComponent("chat:c-1/x y")}?message=12`, "what a tap opens");
     assert.equal(body.seq, "12");
 
     // The gone token is dropped; the same chat again has the same collapse id; the provider token is kept.
@@ -459,12 +459,12 @@ test("Android devices get a high-priority FCM data message; an unregistered toke
     assert.equal(sends.length, 2);
     const toAlice = sends.map((r) => ({ headers: r.headers, message: JSON.parse(new TextDecoder().decode(r.body)).message })).find((r) => r.message.token === "alice-token")!;
     assert.equal(toAlice.headers.authorization, "Bearer fcm-access");
-    const tag = `${id}/${station.id}/ember:c-1/x y`;
+    const tag = `${id}/${station.id}/chat:c-1/x y`;
     assert.deepEqual(toAlice.message.android, { priority: "HIGH" }, "no collapse key: the app replaces a chat's notification by its tag");
     assert.equal(toAlice.message.data.body, "出错 · token runs out");
     assert.equal(toAlice.message.data.tag, tag);
     assert.equal(toAlice.message.data.seq, "12", "the message it is about (none from an older station: above)");
-    assert.equal(toAlice.message.data.url, `/o/${id}/${station.id}/${encodeURIComponent("ember:c-1/x y")}?message=12`, "opened at that message");
+    assert.equal(toAlice.message.data.url, `/o/${id}/${station.id}/${encodeURIComponent("chat:c-1/x y")}?message=12`, "opened at that message");
     assert.ok(Object.values(toAlice.message.data).every((v) => typeof v === "string"), "every value a string");
 
     // The unregistered token is gone; the access token is kept.

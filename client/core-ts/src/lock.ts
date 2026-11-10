@@ -1,4 +1,4 @@
-// The workspace lock on this device (docs/workspace-lock.md): what the device signs and how it says which device it
+// The workspace lock on this device: what the device signs and how it says which device it
 // is. The stations decide (station/src/cloud/lock.ts); the cloud only keeps and carries the chain. The hashing is the
 // same forms as the stations' and the cloud's (lock-form.ts), tested on the same values (test/lock.test.ts).
 import { ed25519 } from "@noble/curves/ed25519.js";
@@ -14,7 +14,12 @@ export type Entry = { v: 1; ws: string; seq: number; prev: string | null; at: nu
 export type Head = { seq: number; hash: string; genesis: string };
 /// What a connection says of the device in its hello: its base key, and that key's signature for this endpoint;
 /// `entries`, what put it in the lock lately, for a station that has not heard of it yet (views/lock.ts `carried`).
-export type LockClaim = { device: string; proof: string; entries?: Entry[] };
+/// `person`: the chain of the person's own lock, where its member bound it in the workspace's (views/lock.ts
+/// `carriedPerson`).
+/// `kind`, `label`: what the device is, for the station to list it for a lock's owner (station/src/mesh/seen-devices.ts).
+export type LockClaim = { device: string; proof: string; kind?: string; label?: string; entries?: Entry[]; person?: Entry[] };
+/// How much of the locks a hello brings at most (a station reads its first line up to 16 KiB).
+export const CARRY_BYTES = 12 * 1024;
 
 /// JSON with object keys sorted, no space: what is hashed. Only integers, strings, booleans, null, arrays, objects.
 export function canonical(v: unknown): string {

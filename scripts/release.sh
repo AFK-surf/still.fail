@@ -11,9 +11,7 @@
 # `android` (the Android app: apps/mbui's in the Kotlin one's place, scripts/beta.sh build, MBUI_VARIANT=stable or
 # beta: its APK and latest.json, in android/). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
-# And `modules`: the packages of the modules stations install themselves (scripts/module-bundle.ts: each one's archive
-# in modules/<id>/, and its feed, modules/<id>/<id>.json or with --beta <id>-beta.json; any machine builds them).
-#   release.sh [--beta] [PLATFORM…]   (default: the station's four; desktop, android and modules only when named)
+#   release.sh [--beta] [PLATFORM…]   (default: the station's four; desktop and android only when named)
 #   release.sh promote [station]
 # --beta: to the test channel instead (cloud/src/install.ts): the station's tarballs in beta/ and station-beta.json; the
 # beta apps, apps of their own beside the released ones (fail.still.desktop.beta: apps/mbui's MBUI_VARIANT=beta, its
@@ -92,7 +90,7 @@ for platform in $platforms; do
     case "$(uname -s)" in MINGW* | MSYS*) continue ;; esac
     echo "the Windows app's release requires Windows (Git Bash, MSVC's environment: apps/mbui/scripts/win.sh)" >&2; exit 1
   fi
-  if [ "$platform" != android ] && [ "$platform" != modules ] && [ "$(uname -s)-$(uname -m)" != Darwin-arm64 ]; then
+  if [ "$platform" != android ] && [ "$(uname -s)-$(uname -m)" != Darwin-arm64 ]; then
     echo "$platform releases require a Mac with Apple silicon" >&2; exit 1
   fi
 done
@@ -221,11 +219,18 @@ for platform in $platforms; do
       # (monoid's: build.monoid.android, .beta, the same key)
       [ "$product" = stillfail ] || variant=$product${beta:+-beta}
       mbui_cache=${MBUI_CACHE:-$HOME/stillfail-ci/mbui-beta}
-      MBUI_CACHE=$mbui_cache bash "$root/apps/mbui/scripts/beta.sh" tools
-      node "$root/scripts/native.ts" fetch engine android-arm64 > /dev/null
-      node "$root/scripts/native.ts" fetch shell android-arm64 > /dev/null
-      MBUI_CACHE=$mbui_cache MBUI_TOOLS=$mbui_cache/tools MBUI_VARIANT=$variant RELEASE_DIR="$out/mbui" \
-        bash "$root/apps/mbui/scripts/beta.sh" build
+      # (one build in the cache at a time: still.fail's and monoid's Android apps are built on the same machine, often
+      # at once, and wrote each other's C over in its work/out (2026-11-04, "mbc: cannot write"); lockf's lock goes with
+      # the build that holds it, however it ends)
+      mkdir -p "$mbui_cache"
+      lockf -k "$mbui_cache/.build.lock" env MBUI_CACHE="$mbui_cache" MBUI_VARIANT="$variant" RELEASE_DIR="$out/mbui" \
+        root="$root" sh -c '
+          set -e
+          bash "$root/apps/mbui/scripts/beta.sh" tools
+          node "$root/scripts/native.ts" fetch engine android-arm64 > /dev/null
+          node "$root/scripts/native.ts" fetch shell android-arm64 > /dev/null
+          MBUI_TOOLS=$MBUI_CACHE/tools bash "$root/apps/mbui/scripts/beta.sh" build
+        '
       apk="$out/mbui/android/app-$variant.apk"
       # its signature verified before anything is uploaded: one that does not verify is not released (it was, printed
       # and passed over, until 2026-10-20)
@@ -243,34 +248,8 @@ for platform in $platforms; do
         "$build" "$build" "$name" "$(shasum -a 256 "$apk" | cut -d' ' -f1)" "$(wc -c < "$apk" | tr -d ' ')" > "$out/latest.json"
       put "$out/latest.json" "android/${beta:+beta/}latest.json" application/json
       ;;
-    modules)
-      # Each module's package (scripts/module-bundle.ts, docs/station-modules.md): its archive, named by its version, and
-      # its feed on this channel, signed as the station's is. The archive is the same bytes whenever its version is packed
-      # (the other channel's, a later commit's): one already out is checked to be these, never put over (it is kept for
-      # good where it is served: cloud/src/releases.ts). A module with native parts (the media service's ffmpeg) has an
-      # archive per platform, each carrying the parts the release native-artifacts has (the natives job published them).
-      ids=$(node "$root/scripts/module-bundle.ts" list)
-      for id in $ids; do
-        node "$root/scripts/module-bundle.ts" pack "$id" "$out/module" ${beta:+--beta} ${RELEASE_DIR:+--unsigned-ok} > "$out/module.names"
-        names=$(cat "$out/module.names")
-        feed=${names##* }
-        for archive in ${names% *}; do
-          if released "$archive"; then
-            { { [ -n "${RELEASE_DIR:-}" ] && [ -f "$RELEASE_DIR/$archive" ] && cp "$RELEASE_DIR/$archive" "$out/module.was"; } || curl -fsS -o "$out/module.was" "$releases/$archive"; } &&
-              cmp -s "$out/module.was" "$out/module/$archive" ||
-              { echo "$archive is out already, with other bytes than packed here: not put over (a change to how modules are packed, or to a native part they carry, is a new version)" >&2; exit 1; }
-            echo "$archive is out already, the same"
-          else
-            put "$out/module/$archive" "$archive" application/gzip
-          fi
-        done
-        put "$out/module/$feed" "$feed" application/json
-      done
-      ;;
     *)
       sh "$root/scripts/station-bundle.sh" "$out/$platform" "$platform"
-      # Under the new name only: the old name (ember-station-*.tar.gz) keeps the last release from before the rename,
-      # for the cloud's installer from before it, which would not know this layout (cloud/src/install.ts).
       # Packed and put beside the next platform's bundling (each ~20 s, one after another before 2026-10-04).
       # Windows' a zip (install.ps1 opens it with Expand-Archive), its Node nodejs.org's own zip (node-dist.sh).
       if [ "$platform" = win32-x64 ]; then
@@ -299,7 +278,7 @@ done
 for pid in ${putting:-}; do wait "$pid" || { echo "a station release was not put" >&2; exit 1; }; done
 # What stations read to say a newer release is out (station/src/updates/updates.ts), once its files are there: its
 # version, and the words naming each archive and its Node, signed with $RELEASE_SIGNING_KEY (scripts/release-sign.ts,
-# docs/release-signing.md). Not signing is an error but into RELEASE_DIR outside CI (a dev cloud's), where it warns.
+# scripts/release-sign.ts). Not signing is an error but into RELEASE_DIR outside CI (a dev cloud's), where it warns.
 if [ -n "${station:-}" ]; then
   node "$root/scripts/release-sign.ts" station "$out/station.json" --build "$build" --commit "$(git -C "$root" rev-parse HEAD)" \
     --node "$(cat "$root/.node-version")" ${RELEASE_DIR:+--unsigned-ok} $signing

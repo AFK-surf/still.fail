@@ -1,4 +1,4 @@
-// The vault on the station (docs/vault.md, src/vault/): its formats, on the values the core is tested on too
+// The vault on the station (src/vault/): its formats, on the values the core is tested on too
 // (fixtures/vault-vectors.json, made from fixed keys: `VAULT_VECTORS=write` makes it anew); who may write a vault or an
 // item, in which order; what a member sees and is told. Keys are fixed or made per run; nothing waits on time.
 import assert from "node:assert/strict";
@@ -15,9 +15,11 @@ import { PlainStore } from "../src/vault/plain.ts";
 import type { Request } from "../src/api/request.ts";
 import {
   type BoxCert, type Grant, type Item, type Sig, type Vault, TAG, boxPublic, decrypt, encryptWith, grantContext, itemContext, itemOk,
-  certOk, keyContext, newBoxPair, openSeal, recoveryPair, seal, sealWith, signedBytes, signedOk, signerOf, vaultOk,
+  certOk, itemSupersedes, keyContext, newBoxPair, openSeal, recoveryPair, seal, sealWith, signedBytes, signedOk, signerOf, vaultOk, vaultSupersedes,
 } from "../src/vault/crypto.ts";
 import { VaultStore } from "../src/vault/store.ts";
+// @ts-ignore: the MoonBit build's JS, untyped
+import * as rules from "../../rules/js/rules.js";
 
 const WS = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
 const VAULT = "v_01HZZZZZZZZZZZZZZZZZZZZZZZ";
@@ -199,6 +201,25 @@ test("a vault's keys go to box certificates of members' app devices in the lock,
   assert.equal(vaultOk(w.state, null, vaultOf(w, { certs: [good, boxOf(w.alice2)] })), null);
 });
 
+test("a certificate uses the same rules as the full lock, including removed devices and old keys", () => {
+  const w = lock();
+  const cert = boxOf(w.alice);
+  const original = w.state.devices.get(w.alice.base.hex)!;
+  const states = [
+    w.state,
+    { ...w.state, devices: new Map([...w.state.devices].filter(([id]) => id !== cert.device)) },
+    { ...w.state, members: new Map([...w.state.members].filter(([sub]) => sub !== "alice")) },
+    { ...w.state, devices: new Map([...w.state.devices].map(([id, d]) => [id, id === cert.device ? { ...d, own: false } : d] as const)) },
+    { ...w.state, devices: new Map([...w.state.devices].map(([id, d]) => [id, id === cert.device ? { ...original, sign_key: ed().id } : d] as const)) },
+  ];
+  const values: unknown[] = [cert, null, {}, { ...cert, device: 4 }, { ...cert, device: ed().hex }, { ...cert, ws: "other" },
+    { ...cert, box: "bad" }, { ...cert, box: newBoxPair().pub }, { ...cert, at: -1 }, { ...cert, sig: { ...cert.sig, sig: "00" } }];
+  const verify = { recordSigValid: (sig: Sig, tag: string, text: string) => signedOk({ ...JSON.parse(text), sig }, tag) };
+  for (const state of states) for (const value of values) for (const ever of [false, true]) {
+    assert.equal(certOk(state, value as BoxCert, ever), rules.cert_ok_js(state, value, ever, verify));
+  }
+});
+
 test("a device back in the lock under a new signing key keeps the key it was given: a vault's keys are checked against every signing key the lock has named for their device, the same on every station", () => {
   const w = lock();
   const [a1, a2] = [boxOf(w.alice), boxOf(w.alice2)];
@@ -232,6 +253,7 @@ test("a device back in the lock under a new signing key keeps the key it was giv
   // Published anew (PUT vault/boxes), a certificate is its device's current key's: the old one is not taken there.
   assert.match(certOk(state, a2)!, /its own device's key/);
   assert.equal(certOk(state, fresh), null);
+  assert.equal(certOk(state, a2, true), null, "a previously held certificate can use its historical signing key");
   // A device no longer in the lock at all: its key is no key (taking it out takes a new epoch).
   const gone = { ...state, devices: new Map([...state.devices].filter(([id]) => id !== w.alice2.base.hex)) };
   assert.match(vaultOk(gone, first, third)!, /not an app device in the lock/);
@@ -337,8 +359,15 @@ test("routes: a member sees the vaults they are in and their items, and is told 
   // Bob taken out (a new epoch): he is told it is gone, and sees it no more.
   const v1 = vaultOf(w, { seq: 1, epoch: 1 });
   assert.equal((await s.ask("PUT", "/vault/vaults", "alice", v1)).status, 200);
-  assert.deepEqual(s.told.slice(-2), [{ event: "vault", data: v1, to: ["alice"] }, { event: "vault-gone", data: { id: VAULT }, to: ["bob"] }]);
+  // (told with the version taking him out, signed by its owner: what his device checks it by)
+  assert.deepEqual(s.told.slice(-2), [{ event: "vault", data: v1, to: ["alice"] }, { event: "vault-gone", data: { id: VAULT, vault: v1 }, to: ["bob"] }]);
   assert.deepEqual((await s.ask("GET", "/vault/vaults", "bob")).body.vaults, []);
+  // A device of his away as it happened asks by the version it holds, naming him: given the latest. Carol, shown no
+  // version naming her, is given nothing; nor is bob for a version not its owner's.
+  const held0 = v0;
+  assert.deepEqual((await s.ask("POST", "/vault/vaults/latest", "bob", { held: [held0] })).body.vaults, [v1]);
+  assert.deepEqual((await s.ask("POST", "/vault/vaults/latest", "carol", { held: [held0] })).body.vaults, []);
+  assert.deepEqual((await s.ask("POST", "/vault/vaults/latest", "bob", { held: [{ ...held0, owner: "bob" }] })).body.vaults, []);
   assert.equal((await s.ask("GET", `/vault/items?vault=${VAULT}`, "bob")).status, 404);
 });
 
@@ -436,6 +465,54 @@ test("routes: a copy brought from another station is kept where later, the one h
   assert.deepEqual((await s.ask("GET", `/vault/items?vault=${VAULT}`, "bob")).body.items.map((i: Item) => i.version), [4]);
   // An item of a vault not held here: none to copy it into.
   assert.equal((await s.ask("PUT", "/vault/items?copy=1", "alice", itemOf({ by: w.alice, vault: `v_${ulid(3)}` }))).body.code, "vault_unknown");
+});
+
+test("routes: two versions of one seq written on two stations at once: each brought the other's, both keep the same one", async () => {
+  const w = lock();
+  const both = async (a: Vault, b: Vault) => {
+    const s1 = station(w), s2 = station(w);
+    const v0 = vaultOf(w, { members: [w.alice, w.bob] });
+    for (const s of [s1, s2]) assert.equal((await s.ask("PUT", "/vault/vaults", "alice", v0)).status, 200);
+    assert.equal((await s1.ask("PUT", "/vault/vaults", "alice", a)).status, 200);
+    assert.equal((await s2.ask("PUT", "/vault/vaults", "alice", b)).status, 200);
+    // (as the devices bring each station what it lacks)
+    await s1.ask("PUT", "/vault/vaults?copy=1", "alice", b);
+    await s2.ask("PUT", "/vault/vaults?copy=1", "alice", a);
+    const held = await Promise.all([s1, s2].map(async (s) => (await s.ask("GET", "/vault/vaults", "alice")).body.vaults[0] as Vault));
+    assert.deepEqual(held[0], held[1], "the same one on both");
+    return held[0]!;
+  };
+  // One takes bob out under a new key, the other adds carol under the old: the one under the new key, bob stays out.
+  const out = vaultOf(w, { seq: 1, epoch: 1 });
+  const added = vaultOf(w, { seq: 1, members: [w.alice, w.bob, w.carol] });
+  assert.deepEqual(await both(added, out), out);
+  assert.deepEqual(await both(out, added), out);
+  // Under one key: the same one, whichever station was given which.
+  const x = vaultOf(w, { seq: 1, members: [w.alice, w.bob] }), y = vaultOf(w, { seq: 1, members: [w.alice, w.bob, w.carol] });
+  const kept = await both(x, y);
+  assert.deepEqual(await both(y, x), kept);
+  assert.equal(vaultSupersedes(kept, kept === x ? y : x), true);
+  // Deleted on one: deleted on both.
+  const gone = vaultOf(w, { seq: 1, epoch: 1, deleted: true });
+  assert.equal((await both(gone, x)).deleted, true);
+  assert.equal((await both(x, gone)).deleted, true);
+});
+
+test("routes: two versions of one item written on two stations at once: both keep the same one", async () => {
+  const w = lock();
+  const s1 = station(w), s2 = station(w);
+  for (const s of [s1, s2]) {
+    assert.equal((await s.ask("PUT", "/vault/vaults", "alice", vaultOf(w, { members: [w.alice, w.bob] }))).status, 200);
+    assert.equal((await s.ask("PUT", "/vault/items", "alice", itemOf({ by: w.alice }))).status, 200);
+  }
+  const a = itemOf({ by: w.alice, version: 1 }), b = itemOf({ by: w.bob, version: 1 });
+  await s1.ask("PUT", "/vault/items", "alice", a);
+  await s2.ask("PUT", "/vault/items", "bob", b);
+  await s1.ask("PUT", "/vault/items?copy=1", "alice", b);
+  await s2.ask("PUT", "/vault/items?copy=1", "bob", a);
+  const held = await Promise.all([s1, s2].map(async (s) => (await s.ask("GET", `/vault/items?vault=${VAULT}`, "alice")).body.items[0] as Item));
+  assert.deepEqual(held[0], held[1]);
+  assert.deepEqual(held[0], itemSupersedes(a, b) ? a : b);
 });
 
 test("routes: box certificates, published by the lock's app devices, the latest of each", async () => {

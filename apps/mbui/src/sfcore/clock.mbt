@@ -23,7 +23,7 @@ fn own_core_clock() -> Unit {
 ///|
 fn take_core_clock(rt : @effect.Runtime) -> Unit {
   @core.own_clock({
-    now: @ui.now,
+    now: @hostapi.now,
     wait: fn(ms, later, then) {
       let f = rt.fork(
         async fn() {

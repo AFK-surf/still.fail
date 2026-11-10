@@ -4,7 +4,7 @@
 // up by a next driver (with a snapshot, and after a crash) with the turn's end told once and no live event twice.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import fs from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
@@ -13,11 +13,13 @@ import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src/agents/codex.ts";
-import { ackedOffset, runnerId } from "../src/agents/process.ts";
-import { allLeft, existingRunners } from "../src/agents/runner.ts";
+import { REPO_RULES_COMMAND } from "../src/agents/repo-rules.ts";
+import { ackedOffset, outFile, runnerId } from "../src/agents/process.ts";
+import { allLeft, existingRunners, type RunnerInfo } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
 import { transcriptPaths } from "../src/read/transcript.ts";
+import { tempDir } from "./temp-dir.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
 process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
@@ -25,7 +27,7 @@ process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
 process.env.OPENAI_API_KEY = "leaked";
 process.env.CODEX_HOME = "/nowhere";
 // Short: the runners' sockets live under it (104 bytes at most on macOS).
-const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "cx-") : "/tmp/cx-");
+const data = tempDir(process.platform === "win32" ? join(tmpdir(), "cx-") : "/tmp/cx-");
 const skills = join(data, "skills");
 mkdirSync(join(skills, "mine"), { recursive: true });
 writeFileSync(join(skills, "mine", "SKILL.md"), "");
@@ -84,6 +86,17 @@ const stdin = (dump: string) => readFileSync(`${dump}.stdin`, "utf8").trim().spl
 
 // Each test has its own driver, profile and runners: they run side by side.
 describe("the Codex driver", { concurrency: true }, () => {
+  test("the software page only updates the installation this profile actually runs", { skip: process.platform === "win32" }, async () => {
+    const p = profile();
+    const stationBin = join(data, `station-bin-${p.id}`), otherBin = join(data, `profile-bin-${p.id}`);
+    mkdirSync(stationBin);
+    mkdirSync(otherBin);
+    for (const bin of [stationBin, otherBin]) writeFileSync(join(bin, "codex"), "#!/bin/sh\necho codex-cli\n", { mode: 0o755 });
+    const d = driver({ env: { PATH: stationBin } });
+    assert.equal(await d.updateMatchesStation({ ...p, env: { PATH: stationBin } }), true);
+    assert.equal(await d.updateMatchesStation({ ...p, env: { PATH: otherBin } }), false);
+  });
+
   for (const resumed of [false, true]) test(`a ${resumed ? "resumed" : "new"} thread uses the transcript path Codex gave, before and after the file appears`, async () => {
     const d = driver();
     const p = profile();
@@ -156,6 +169,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(start.params.config["features.view_image"], false);
     assert.equal(start.params.config["features.goals"], false);
     assert.deepEqual(start.params.config.mcp_servers, {});
+    assert.equal(start.params.config.hooks, undefined, "no tools, no rules to tell");
     assert.ok(stdin(p.dump).some((m) => m.method === "mcpServerStatus/list"));
     assert.ok(!stdin(p.dump).some((m) => m.method === "config/read"), "MCP credentials are not read into the runner log");
     await session.dispose();
@@ -293,7 +307,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(started.env.OPENAI_API_KEY, undefined);
     assert.equal(started.env.SSL_CERT_FILE, bundle);
     assert.equal(started.env.OPENCODE_GO_KEY, "k2");
-    assert.equal(started.env.OPENCODE_SESSION, `ember-${p.id}`, "a codex route is its profile");
+    assert.equal(started.env.OPENCODE_SESSION, `stillfail-${p.id}`, "a codex route is its profile");
 
     const sent = stdin(p.dump);
     assert.deepEqual(sent[0], { id: 1, method: "initialize", params: { clientInfo: { name: "stillfail", version: "0" }, capabilities: { experimentalApi: true } } });
@@ -309,6 +323,12 @@ describe("the Codex driver", { concurrency: true }, () => {
         config: {
           "mcp_servers.stillfail.url": "http://127.0.0.1:4750/mcp",
           "mcp_servers.stillfail.http_headers": { Authorization: "Bearer tok" },
+          // A repository's rules told as its tools first touch it (test/repo-rules-hook.test.ts), trusted as given.
+          hooks: {
+            PostToolUse: [{ matcher: "*", hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+            PostCompact: [{ hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+          },
+          bypass_hook_trust: true,
           model_reasoning_effort: "high",
           "skills.config": [{ path: join(skills, "mine", "SKILL.md"), enabled: false }],
         },
@@ -525,18 +545,19 @@ describe("the Codex driver", { concurrency: true }, () => {
     // Updated: the files of the one running are gone (its version is not the one installed now).
     installed = "2.0.0";
     writeFileSync(`${p.dump}.version`, "2.0.0");
-    await d.runtimeChanged();
+    await d.runtimeChanged(false, true);
     assert.equal(starts(p.dump).length, 1, "a turn runs on it: it keeps serving");
+    const c = listen();
+    const three = await d.open(options(p), c.push);
+    assert.equal(starts(p.dump).length, 2, "new threads use the updated host while the old turn finishes");
+    await three.prompt("say:back");
+    await c.until(ended(1));
     await one.abort();
     await a.until(ended(1));
     // The turn over, it is replaced: its threads closed, to be opened again with their next turn.
     await a.until((e) => e.some((x) => x.type === "closed"));
     await b.until((e) => e.some((x) => x.type === "closed"));
-    const c = listen();
-    const three = await d.open(options(p), c.push);
     assert.equal(starts(p.dump).length, 2);
-    await three.prompt("say:back");
-    await c.until(ended(1));
   });
 
   test("a same-version replacement waits for its turn and starts a new app-server", async () => {
@@ -681,6 +702,240 @@ describe("the Codex driver", { concurrency: true }, () => {
     });
   }
 
+  // On ccvm (2026-11-04) a profile's app-server, shared by its chats, went 19 hours without a moment no turn ran on it:
+  // replaced only once idle, it never was, its output 4.9 GB.
+  for (const after of ["", "handed over", "a crash"] as const) {
+    test(`an app-server outgrown with a turn running all the while is replaced: new turns go to a new one, its own ends there${after ? `, ${after} meanwhile` : ""}`, async () => {
+      const d = driver();
+      const p = profile();
+      const a = listen();
+      const b = listen();
+      const long = await d.open(options(p), a.push);
+      const idle = await d.open(options(p), b.push);
+      const gate = gates(p.dump, `drain${after.length}`);
+      await long.prompt(`gate:6:3:drain${after.length}`);
+      await a.until((e) => deltas(e).length >= 3);
+      // Its output past the limit from now on (every app-server has written more than this by now).
+      (d as unknown as { options: CodexDriverOptions }).options.outputLimit = 1;
+      // Another's turn ends while that one runs: the app-server is replaced now, the one with no turn let go of.
+      await idle.prompt("say:x");
+      await b.until((e) => e.some((x) => x.type === "closed"));
+      const old = existingRunners(data).find((r) => r.id === runnerId("codex", p.id))!;
+      const c = listen();
+      const fresh = await d.open(options(p), c.push);
+      assert.equal(starts(p.dump).length, 2, "a new app-server for new turns");
+      const now = existingRunners(data).find((r) => r.id.startsWith(`${old.id}.`));
+      assert.ok(now, "under a runner of its own, the one being replaced keeping its");
+      let x = a;
+      let ending = long;
+      if (after !== "") {
+        const snapshots = after === "handed over" ? JSON.parse(JSON.stringify([long.snapshot(), fresh.snapshot()])) : [null, null];
+        d.detach();
+        await allLeft();
+        const next = driver({ outputLimit: 1 });
+        x = listen();
+        ending = await next.adopt(options(p, { resume: long.id() }), snapshots[0], x.push);
+        await next.adopt(options(p, { resume: fresh.id() }), snapshots[1], () => {});
+      }
+      await gate.open("a");
+      await eventually(gate.said);
+      await gate.open("b");
+      await x.until(ended(1));
+      assert.deepEqual(deltas([...a.events, ...(x === a ? [] : x.events)]), Array.from({ length: 6 }, (_, i) => `d${i} `), "its turn to the end, once, on the one being replaced");
+      assert.deepEqual(outcome(x.events), { kind: "completed" });
+      // Its last turn over: it is let go of, and ends with its runner (its output gone with it).
+      await x.until((e) => e.some((y) => y.type === "closed"));
+      await eventually(() => !existingRunners(data).some((r) => r.id === old.id));
+      assert.equal(starts(p.dump).length, 2, "none started for its turn");
+      void ending;
+      if (after === "") {
+        await fresh.prompt("say:y");
+        await c.until(ended(1));
+      }
+    });
+  }
+
+  for (const after of ["", "handed over", "a crash"] as const) {
+    test(`a thread let go of by an app-server being replaced takes its next turn on the new one, once that one let go of it${after ? `, ${after} meanwhile` : ""}`, async () => {
+      const d = driver();
+      const p = profile();
+      const a = listen();
+      const b = listen();
+      const long = await d.open(options(p), a.push);
+      const idle = await d.open(options(p), b.push);
+      const gate = gates(p.dump, `held${after.length}`);
+      const unsub = gates(p.dump, "unsub");
+      await long.prompt(`gate:6:3:held${after.length}`);
+      await a.until((e) => deltas(e).length >= 3);
+      (d as unknown as { options: CodexDriverOptions }).options.outputLimit = 1;
+      await idle.prompt("say:x");
+      await b.until((e) => e.some((x) => x.type === "closed"));
+      // Its unsubscribe held: a turn asked of it now is refused (as the session does, it is opened again)...
+      await assert.rejects(idle.prompt("say:again"), /closed|being replaced/);
+      let now = d;
+      let x = a;
+      if (after !== "") {
+        const snapshot = after === "handed over" ? JSON.parse(JSON.stringify(long.snapshot())) : null;
+        d.detach();
+        await allLeft();
+        now = driver();
+        x = listen();
+        await now.adopt(options(p, { resume: long.id() }), snapshot, x.push);
+      }
+      let opened = false;
+      const c = listen();
+      const reopening = now.open(options(p, { resume: idle.id() }), c.push).then((s) => ((opened = true), s));
+      // After a crash nothing says it was being replaced: taken up as the key's app-server, the thread resumes on it
+      // (the same process: nothing to let go of), and it is replaced at its next turn's end.
+      if (after !== "a crash") {
+        await sleep(300);
+        assert.equal(opened, false, "resumed elsewhere only once the one being replaced let go of it");
+      }
+      await unsub.open("a");
+      const again = await reopening;
+      await again.prompt("say:again");
+      await c.until(ended(1));
+      assert.deepEqual(outcome(c.events), { kind: "completed" });
+      if (after !== "a crash") assert.ok((again as unknown as { host: { proc: { info: { id: string } } } }).host.proc.info.id.includes("."), "on the new app-server");
+      // ...and the turn running all the while ends there, uninterrupted.
+      await gate.open("a");
+      await eventually(gate.said);
+      await gate.open("b");
+      await x.until(ended(1));
+      assert.deepEqual(outcome(x.events), { kind: "completed" });
+      assert.deepEqual(deltas([...a.events, ...(x === a ? [] : x.events)]), Array.from({ length: 6 }, (_, i) => `d${i} `));
+    });
+  }
+
+  test("handed over with no session on the app-server being replaced, its threads still being let go of: one is resumed elsewhere only once it is", async () => {
+    const d = driver();
+    const p = profile();
+    const a = listen();
+    const b = listen();
+    const long = await d.open(options(p), a.push);
+    const idle = await d.open(options(p), b.push);
+    const gate = gates(p.dump, "none");
+    const unsub = gates(p.dump, "unsub");
+    await long.prompt("gate:4:2:none");
+    await a.until((e) => deltas(e).length >= 2);
+    (d as unknown as { options: CodexDriverOptions }).options.outputLimit = 1;
+    await idle.prompt("say:x");
+    await b.until((e) => e.some((x) => x.type === "closed"));
+    const fresh = await d.open(options(p), () => {});
+    await gate.open("a");
+    await eventually(gate.said);
+    await gate.open("b");
+    await a.until((e) => e.some((x) => x.type === "closed"));
+    // Every session off it, its unsubscribes held: handed over, only the new one's session says where it runs.
+    const old = existingRunners(data).find((r) => r.id === runnerId("codex", p.id))!;
+    const snapshot = JSON.parse(JSON.stringify(fresh.snapshot()));
+    d.detach();
+    await allLeft();
+    // Its output not to be read again (held only: none of its turns runs on): it cannot be opened now, its runner
+    // writing on through the descriptor it holds.
+    const out = join(data, "run", "runners", `${old.id}.out`);
+    fs.chmodSync(out, 0);
+    const next = driver();
+    await next.adopt(options(p, { resume: fresh.id() }), snapshot, () => {});
+    let opened = false;
+    const c = listen();
+    const reopening = next.open(options(p, { resume: idle.id() }), c.push).then((s) => ((opened = true), s));
+    await sleep(300);
+    assert.equal(opened, false, "the one left being replaced found and asked first");
+    await unsub.open("a");
+    const again = await reopening;
+    fs.chmodSync(out, 0o600);
+    await again.prompt("say:again");
+    await c.until(ended(1));
+    assert.deepEqual(outcome(c.events), { kind: "completed" });
+  });
+
+  test("a thread the app-server being replaced will not let go of is not resumed elsewhere", async () => {
+    const d = driver();
+    const p = profile();
+    const a = listen();
+    const b = listen();
+    const long = await d.open(options(p), a.push);
+    const idle = await d.open(options(p), b.push);
+    const gate = gates(p.dump, "refuse");
+    await long.prompt("gate:4:2:refuse");
+    await a.until((e) => deltas(e).length >= 2);
+    writeFileSync(`${p.dump}.unsub.fail`, "");
+    (d as unknown as { options: CodexDriverOptions }).options.outputLimit = 1;
+    await idle.prompt("say:x");
+    await b.until((e) => e.some((x) => x.type === "closed"));
+    await assert.rejects(d.open(options(p, { resume: idle.id() }), () => {}), /did not let go of its thread/);
+    rmSync(`${p.dump}.unsub.fail`);
+    const c = listen();
+    const again = await d.open(options(p, { resume: idle.id() }), c.push);
+    await again.prompt("say:again");
+    await c.until(ended(1));
+    await gate.open("a");
+    await eventually(gate.said);
+    await gate.open("b");
+    await a.until(ended(1));
+  });
+
+  test("an app-server being replaced, slow to go once its last turn ends, is not taken up again by a host asked for meanwhile", async () => {
+    const d = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_TERM_MS: "1500" };
+    const a = listen();
+    const b = listen();
+    const long = await d.open(options(p), a.push);
+    const idle = await d.open(options(p), b.push);
+    const gate = gates(p.dump, "slow");
+    await long.prompt("gate:4:2:slow");
+    await a.until((e) => deltas(e).length >= 2);
+    (d as unknown as { options: CodexDriverOptions }).options.outputLimit = 1;
+    await idle.prompt("say:x");
+    await b.until((e) => e.some((x) => x.type === "closed"));
+    // Being replaced now; the new one within the limit (else it too is replaced, once idle).
+    (d as unknown as { options: CodexDriverOptions }).options.outputLimit = undefined;
+    const old = existingRunners(data).find((r) => r.id === runnerId("codex", p.id))!;
+    await gate.open("a");
+    await eventually(gate.said);
+    await gate.open("b");
+    await a.until(ended(1));
+    // Its last turn over, it is going (slowly): a session opened now goes to an app-server of its own.
+    const c = listen();
+    const fresh = await d.open(options(p), c.push);
+    assert.notEqual((fresh as unknown as { host: { proc: { info: RunnerInfo } } }).host.proc.info.runner, old.runner, "not the one going");
+    await fresh.prompt("say:y");
+    await c.until(ended(1));
+    assert.deepEqual(outcome(c.events), { kind: "completed" });
+    // (the new one may have its runner id now that the old one is gone: told apart by the runner's pid)
+    await eventually(() => !existingRunners(data).some((r) => r.runner === old.runner));
+    assert.ok(!c.events.some((e) => e.type === "closed"), "not killed under it");
+  });
+
+  test("a turn asked as an idle app-server is being replaced does not begin on it: opened again elsewhere", async () => {
+    const d = driver();
+    const p = profile();
+    p.env = { ...(p.env as Record<string, string>), FAKE_TERM_MS: "1500" };
+    const a = listen();
+    const b = listen();
+    const one = await d.open(options(p), a.push);
+    const two = await d.open(options(p), b.push);
+    const gate = gates(p.dump, "last");
+    await one.prompt("gate:2:1:last");
+    await a.until((e) => deltas(e).length >= 1);
+    // The other's turn asked, held where it looks at its thread's tools (its last await)...
+    const mcp = gates(p.dump, "mcp");
+    const asked = two.prompt("say:b").then(() => "began", (e: Error) => e.message);
+    await sleep(200);
+    // ...while the last turn ends, the app-server outgrown: idle, it is replaced (slow to go).
+    (d as unknown as { options: CodexDriverOptions }).options.outputLimit = 1;
+    await gate.open("a");
+    await eventually(gate.said);
+    await gate.open("b");
+    await a.until(ended(1));
+    await sleep(200);
+    await mcp.open("a");
+    assert.match(await asked, /being replaced|closed/, "refused, to be opened again on a new one");
+    assert.ok(!b.events.some((e) => e.type === "turnEnded"), "no turn begun there to be cut short");
+  });
+
   // On ccvm (2026-11-04) a station that crashed left two app-servers; the next read each one's output again from its
   // start (157 MB, the station's thread held 10 s; the other's was 4.9 GB), though only the turns running said anything
   // that still stood.
@@ -781,6 +1036,23 @@ describe("the Codex driver", { concurrency: true }, () => {
     await b.until(ended(1));
     assert.deepEqual(outcome(b.events), { kind: "completed" });
     assert.equal(starts(p.dump).length, 1, "the same app-server");
+  });
+
+  test("an app-server's output read again after a crash lets the main thread go and says it gets on with it", async () => {
+    const said: number[] = [];
+    let turns = 0;
+    const d = driver({ taking: () => { said.push(turns); setImmediate(() => turns++); } });
+    const p = profile();
+    const id = "codex-reread";
+    mkdirSync(dirname(outFile(data, id)), { recursive: true });
+    writeFileSync(outFile(data, id), '{"method":"item/started","params":{"threadId":"t"}}\n'.repeat(10_000));
+    try {
+      // No runner behind it: all the file is read, then taking it up goes no further, which is not this test's.
+      await (d as any).takeUp(p, { id, socket: join(data, "no-such.sock"), args: [] }).catch(() => {});
+    } finally {
+      await d.shutdown();
+    }
+    assert.deepEqual(said, [0, 1], "once per 4096 lines, the main thread let go after each");
   });
 
   test("shutdown ends the app-servers and their runners", async () => {

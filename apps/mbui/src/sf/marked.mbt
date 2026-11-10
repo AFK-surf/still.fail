@@ -1,9 +1,9 @@
-// What a search found, as its rows show it (the web's Marked.tsx and Switcher.tsx's ItemRow; the phone's Search.kt):
+// What a search found, as its rows show it:
 // the words found in a line marked (bold, a hand-drawn stroke under each), what is said of a row beside each other, and
 // what each kind found is drawn with. The phone's search and the desktop's ⌘K both draw with them.
 
 ///|
-/// A found line (Search.kt StrokedLine over `marked`): `text` on one line cut at its end, in `style`, the words found
+/// A found line: `text` on one line cut at its end, in `style`, the words found
 /// (`marks`) in `ink` and bold, a hand-drawn stroke in the accent under each, drawn in from the left one after another
 /// as the line comes (again when it changes).
 pub fn found_line(
@@ -32,9 +32,9 @@ pub fn found_line(
   let total = strokes_ms(marks.length())
   let drawn = @motion.anim(c, "search/drawn/" + key + "/" + text, 0.0, global=true)
   if drawn.target() == 0.0 && marks.length() > 0 {
-    drawn.animate(total, @motion.tween(total, ease=Linear))
+    drawn.animate(c, total, @motion.tween(total, ease=Linear))
   }
-  let at_ms = drawn.get()
+  let at_ms = drawn.get(c)
   let box = c.box(style=found_words_box, fn() {
     // under the words: each mark's stroke, from its first glyph's left to its last's right (2 past either), 3 under
     // the baseline
@@ -49,32 +49,33 @@ pub fn found_line(
           text.length()
         }
         let base = if lay.line_y.length() > 0 { lay.line_y[0] + lay.line_base[0] } else { 0.0 }
-        c.layer(fn() {
-          for i, m in marks {
-            let (from, to) = m
-            let to = if to < end { to } else { end }
-            if from >= to {
-              continue
-            }
-            let part = stroke_part(at_ms, i)
-            if part <= 0.0 {
-              continue
-            }
-            match lay.rects(from, to).get(0) {
-              Some((rx, _, rw, _)) => {
-                let left = rx - 2.0
-                let right = rx + rw + 2.0
-                let (cx, cy) = stroke_corner(line_stroke)
+        for i, m in marks {
+          let (from, to) = m
+          let to = if to < end { to } else { end }
+          if from >= to {
+            continue
+          }
+          let part = stroke_part(at_ms, i)
+          if part <= 0.0 {
+            continue
+          }
+          match lay.rects(from, to).get(0) {
+            Some((rx, _, rw, _)) => {
+              let left = rx - 2.0
+              let right = rx + rw + 2.0
+              let (cx, cy) = stroke_corner(line_stroke)
+              // Each mark is positioned from the line's origin, not below the previous mark.
+              c.layer(fn() {
                 c.box(tx=left - cx, ty=base + 3.0 - cy, fn() {
                   hand_stroke(c, line_stroke, right - left, part, t.p.accent) |> ignore
                 })
                 |> ignore
-              }
-              None => ()
+              })
+              |> ignore
             }
+            None => ()
           }
-        })
-        |> ignore
+        }
       }
       _ => ()
     }
@@ -95,7 +96,7 @@ pub fn join_meta(parts : Array[String]) -> String {
 }
 
 ///|
-/// What a kind is drawn with (web Switcher.tsx's KIND_ICON).
+/// What a kind is drawn with.
 pub fn kind_icon(kind : String) -> String {
   match kind {
     "file" => "file"

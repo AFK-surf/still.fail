@@ -34,7 +34,7 @@ test "46-chat-audio" {
     // Wait for the named row, rather than matching its first message while the title is still pending.
     f.see("=一段录音 104339")
     // (its chat to the top of the list as the recording comes, there where it goes: tapped once its room is open,
-    // where it shows, docs/list-motion.md)
+    // where it shows, mbui's view/list_motion.mbt)
     f.run_for(@ui.row_size_ms)
     f.tap("一段录音 104339")
     f.run_to(@ui.nav_rest())

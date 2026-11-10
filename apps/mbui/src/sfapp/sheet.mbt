@@ -1,4 +1,4 @@
-// The app's sheets (ember apps/android shared/ui/Sheet.kt SheetHost), one at a time: each the library's panel
+// The app's sheets, one at a time: each the library's panel
 // (@sf.panel, src/sf presenters.mbt), with a finger the phone's sheet, its share of the screen, a draggable one between
 // half (55%) and nearly all (94%); with a mouse beside what opened it. What it shows is its kind's (SheetKind), drawn
 // anew each frame by what the frame tells (sheet_contents).
@@ -10,7 +10,7 @@ priv enum SheetKind {
   /// what another app shares in, to a chat (the web's mobile/ShareIn.tsx; ShareIn.tsx's panel, 520 wide, with a wide
   /// window): as tall as what it holds
   ShareSheet
-  /// what an invitation's link leads to, before it is accepted (Workspaces.kt InviteLinkSheet): half the screen
+  /// what an invitation's link leads to, before it is accepted: half the screen
   InviteLink
 } derive(Eq)
 
@@ -90,21 +90,10 @@ fn sheet_contents(content : (SheetKind) -> Unit) -> Unit {
   sheet_drawer.val = content
 }
 
-// The grabber and a sheet's head (Sheet.kt SheetGrab, SheetHead) are decide.mbt's `sheet_grab`, `sheet_head`.
+// The grabber and a sheet's head (SheetHead) are decide.mbt's `sheet_grab`, `sheet_head`.
 
 ///|
-fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
-  if v < lo {
-    lo
-  } else if v > hi {
-    hi
-  } else {
-    v
-  }
-}
-
-///|
-/// What another app shares, its panel's width with a wide window (ShareIn.css.ts panel: 520).
+/// What another app shares, its panel's width with a wide window.
 let share_panel_w : Double = 520.0
 
 ///|

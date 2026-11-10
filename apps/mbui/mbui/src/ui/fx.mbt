@@ -26,9 +26,30 @@ fn fx_runtime(seed : Int?) -> @effect.Runtime {
     None => @effect.Runtime::new()
   }
   // a fiber woken between frames (a host's callback gave it its answer, a handler forked it): a frame soon
-  rt.on_wake(() => h_request_frame())
-  // a timer set between frames (a test's step, a host's callback): woken at its moment, as one set in a frame is
-  rt.on_timer(at => g().wake_at_time(at.to_double(), later=true))
+  rt.on_wake(() => if !offscreen_frame() { h_request_frame() })
+  // (between frames its clock the host's as it stands: what a callback come long after the last frame sets starts
+  // from its own moment; in a frame, the frame's time from its very start, before its fibers run up to it: what came
+  // from outside handed on as it begins, messages_arrive's and take_messages', an offscreen frame's view at its `t`)
+  rt.outside_clock(() => whole_ms(if frame_moment.val >= 0.0 { frame_moment.val } else { h_now() }).to_int64())
+  // (what a frame makes ready, its view's forks, its messages' handlers', is ready together, the seed choosing among
+  // them: no frame of the host's comes between them; a callback between frames is an event of its own)
+  rt.outside_event(() => if frame_moment.val >= 0.0 { frame_serial.val } else { -1 })
+  // a timer set between frames (a host's callback, a test's): a frame at its moment, the runtime brought there (it
+  // runs only as a frame is built: fx_frame_start)
+  // (one set as a frame is built is the frame's: fx_frame_end wakes for the next; one set as it begins, before it is
+  // said built whole or not, as a moment asked before: a frame of its paint or its looks alone wakes for it too)
+  rt.on_timer(at => if frame_moment.val < 0.0 {
+    g().wake_at_time(at.to_double(), later=true)
+    // (the host told, as a frame's end tells it: idle, it draws nothing till then otherwise. Between frames a host
+    // draws, for a wake `ms` after, the first frame whose time is at or after its clock now and `ms`, on the frames'
+    // clock (ios_app.m mb_host_wake_after, linux_app.c, the fake's): so `at` less the host's clock now, not less the
+    // runtime's, which is the last frame's time where that frame was drawn for a moment ahead of the host's clock;
+    // no floor of a ms, which would wake it a frame late for a moment less than a ms on: the hosts take any wait)
+    h_wake_after(dmax(at.to_double() - h_now(), 0.0))
+  } else if frame_running.val && !frame_built.val {
+    // (what came from outside handed on as the frame begins: a message one said, messages_arrive)
+    g().wake_at_time(at.to_double(), later=true)
+  })
   rt
 }
 

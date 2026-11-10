@@ -12,7 +12,7 @@ import { changedOf, digest } from "../src/read/digest.ts";
 const viewer = { sub: "u", email: "u@x", name: "", role: "owner", workspace: "w", device: "d" };
 const request = (path: string, headers: Record<string,string> = {}, method = "GET", body: unknown = {}): Request => ({ path, headers, method, query: [], body: Buffer.from(JSON.stringify(body)), viewer, lang: "en" });
 const modern = { "stillfail-runtimes": RUNTIME_KINDS.join(",") };
-const data = JSON.parse(readFileSync(new URL("../../web/src/demo/station.json", import.meta.url), "utf8")).overview;
+const data = JSON.parse(readFileSync(new URL("./fixtures/overview.json", import.meta.url), "utf8")).overview;
 function overview() {
   const value = structuredClone(data);
   value.profiles.push({ ...structuredClone(value.profiles[0]), id: "hermes", runtime: "hermes", runtimes: ["hermes"] });

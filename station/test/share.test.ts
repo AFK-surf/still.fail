@@ -1,4 +1,4 @@
-// Stations sharing profiles and skills (src/share/index.ts, docs/station-share.md): two stations, a cloud that only
+// Stations sharing profiles and skills (src/share/index.ts): two stations, a cloud that only
 // lists who hosts what (as cloud/src/directory.ts `stationShare` keeps it), and the station transport as a direct call.
 import assert from "node:assert/strict";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -56,7 +56,7 @@ class FakeCloud {
 
 type Station = { data: string; config: ConfigFile; sharing: Sharing; lent: string[] };
 
-function station(cloud: FakeCloud, id: string, others: () => Map<string, Station>, profiles: any[] = [], codexRenewRunning: (id: string) => Promise<boolean> = async () => false, extra: { profileChanged?: (id: string, reset: boolean) => Promise<void>; quotaReset?: (id: string) => Promise<void> } = {}): Station {
+function station(cloud: FakeCloud, id: string, others: () => Map<string, Station>, profiles: any[] = [], codexRenewRunning: (id: string) => Promise<boolean> = async () => false, extra: { profileChanged?: (id: string, reset: boolean) => Promise<void>; quotaReset?: (id: string) => Promise<void>; machineEmail?: (runtime: string) => string | null } = {}): Station {
   const data = mkdtempSync(join(tmpdir(), "share-"));
   writeFileSync(join(data, "config.json"), JSON.stringify({ profiles }));
   const config = new ConfigFile(data);
@@ -95,6 +95,32 @@ const settle = async (...stations: Station[]) => {
 const KEY = { id: "deepseek", name: "DeepSeek", access: { kind: "api-provider", provider: "deepseek", key: "sk-secret" }, home: "homes/deepseek", env: {} };
 const SUB = { id: "max", name: "Claude Max", runtime: "claude", access: { kind: "subscription" }, home: "homes/max", env: {} };
 
+test("a shared machine login carries its account to existing and returning borrowers", async () => {
+  const cloud = new FakeCloud();
+  const all = new Map<string, Station>();
+  let email: string | null = null;
+  const a = station(cloud, A, () => all, [{ ...SUB, id: "machine-claude", machine: true }], undefined, { machineEmail: (runtime) => runtime === "claude" ? email : null });
+  const b = station(cloud, B, () => all);
+  all.set(A, a).set(B, b);
+  await a.sharing.shareProfile("machine-claude", true, null);
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles[0].share.email, undefined);
+  email = "first@x.test";
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles[0].share.email, email, "a first reading updates an existing copy");
+  all.delete(B);
+  email = "second@x.test";
+  await settle(a);
+  all.set(B, b);
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles[0].share.email, email, "a borrower away at sign-in catches up");
+  email = null;
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles[0].share.email, undefined, "signing out removes the old identity");
+  await a.sharing.close();
+  await b.sharing.close();
+});
+
 test("a shared key profile is copied to the other station, key and all; stopping takes it away", async () => {
   const cloud = new FakeCloud();
   const all = new Map<string, Station>();
@@ -115,6 +141,13 @@ test("a shared key profile is copied to the other station, key and all; stopping
   a.config.update((raw) => (raw.profiles[0].access.key = "sk-new"));
   await settle(a, b);
   assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).access.key, "sk-new");
+  a.config.update((raw) => (raw.profiles[0].enabled = false));
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).enabled, false, "a disabled key stays disabled on its copy");
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).access.key, "sk-new", "the key is retained");
+  a.config.update((raw) => { delete raw.profiles[0].enabled; });
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).enabled, undefined, "enabling propagates too");
   // The host offline: the copy stays.
   all.delete(A);
   await settle(b);

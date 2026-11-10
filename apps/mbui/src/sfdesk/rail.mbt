@@ -1,4 +1,4 @@
-// The rail at the wide frame's left (ember web/src/Rail.tsx, Rail.css.ts), in one block with the sidebar (frame.mbt
+// The rail at the wide frame's left, in one block with the sidebar (frame.mbt
 // dock): its top row (in a window with its buttons in the app's top row, their row, dragging the window), the places
 // the person chose on this device as the core has them (prefs `railView`: which, their words and kinds, their order;
 // the rail only draws them), at its foot every workspace to switch to (each with what waits in it; a ＋ over them for
@@ -12,7 +12,7 @@
 /// the kinds the panel that adds them groups them by, the default, the rail of a workspace with none of its own (`all`)
 /// and each one's own (`by`).
 fn rail_view(src : Source) -> Json? {
-  field((src.topic)("prefs", {}).value, "railView")
+  field(src.topic("prefs", {}).get().value, "railView")
 }
 
 ///|
@@ -59,7 +59,7 @@ fn rail_label(src : Source, place : String) -> String {
 }
 
 ///|
-/// Whether the place has no sidebar: its page is the pane's whole (连接, 用量: Rail.tsx `own`).
+/// Whether the place has no sidebar: its page is the pane's whole (连接).
 pub fn place_bare(place : String) -> Bool {
   place == "connects" || place == "usage"
 }
@@ -103,12 +103,12 @@ fn rail_shown(src : Source, w : Workspace) -> Array[String] {
 }
 
 ///|
-/// Whether `place` is lit in the rail now (Rail.tsx `on`): the lit place's; a list's while its list is the one shown
+/// Whether `place` is lit in the rail now: the lit place's; a list's while its list is the one shown
 /// (我参与的, 监控中 by the filter when they are in the rail, else 对话; 已归档 while the archive is open: shownList).
 fn rail_lit(src : Source, w : Workspace, place : String) -> Bool {
   let lit = lit_place()
   match place {
-    "chats" | "mine" | "watching" | "archive" => {
+    "chats" | "mine" | "watching" | "hidden" | "archive" => {
       let list = list_place(list_mode(src, w))
       let shown_list = if rail_shown(src, w).contains(list) { list } else { "chats" }
       lit == "chats" && shown_list == place
@@ -134,15 +134,16 @@ pub fn side_place() -> String {
 }
 
 ///|
-/// Which of the lists is shown (the sidebar's mode, station.tsx useSidebarMode): 全部 0, 我参与的 1, 监控中 2 (the
+/// Which of the lists is shown (the sidebar's mode): 全部 0, 我参与的 1, 监控中 2 (the
 /// filter), 已归档 3.
 pub fn list_mode(src : Source, w : Workspace) -> Int {
   match side_place() {
-    "archive" => 3
+    "archive" => 4
     _ =>
       match filter_of(src, w.id) {
         "mine" => 1
         "watching" => 2
+        "hidden" => 3
         _ => 0
       }
   }
@@ -154,133 +155,10 @@ fn list_place(mode : Int) -> String {
   match mode {
     1 => "mine"
     2 => "watching"
-    3 => "archive"
+    3 => "hidden"
+    4 => "archive"
     _ => "chats"
   }
-}
-
-///|
-/// The rail: its top (in a window with its buttons in the app's top row, their row, dragging the window), the places,
-/// then the workspaces and settings at its foot. In the closed bar (`bar`) as narrow as it (42), its places 2 from its
-/// every edge (their grounds 6), no top row: the bar starts under it.
-fn rail(
-  c : @ui.Ctx,
-  src : Source,
-  w : Workspace,
-  all : Array[Workspace],
-  bar : Bool,
-  moving? : FoldLook? = None,
-) -> Unit {
-  let lit = lit_place()
-  let rail_id = c.id("rail")
-  match c.menu_asked(rail_id) {
-    Some((x, y)) if wide.rail_menu.get() is None => wide.rail_menu.set(Some(("", x, y)))
-    _ => ()
-  }
-  // (under the window's buttons where they are the system's, at its left: macOS's; where they are the app's, at its
-  // right, Windows', a rail's top row as a browser's: Rail.css.ts, the custom frame's only drags)
-  let inset = @ui.window_keys_left()
-  // Rail.css.ts rail, top: 56 wide, its places in its middle (9 from its edge; the sidebar reaches over its last 8, so
-  // the rail is as wide as the rest), 9 under the last; its top row (41 under the window's buttons, else 5) 6 over its
-  // first place; in the bar none, its first place 2 from the bar's top
-  // its grounds' corner, all one, linked to the corner they stand in: the closed bar's; the tape's sidebar panel's;
-  // open, the window's, its places where the bar's are (12 in: through the bar, the same corner), as round as the
-  // bar's would have them where the window has none to follow
-  let in_bar : @ui.CornerOf = Follow(@sf.closed_bar_of(rail_closed_ground_in), rail_closed_ground_in, @sf.small_corner)
-  rail_round.val = if bar {
-    @sf.rail_ground_radius(@sf.closed_bar_of(rail_closed_ground_in), rail_closed_ground_in)
-  } else if wide.tape {
-    @sf.rail_ground_radius(@sf.tape_side_corners()[3], @sf.rail_in_tape() + rail_ground_in)
-  } else {
-    @sf.rail_ground_radius(Window, rail_window_in() + rail_ground_in, alone=in_bar.radius(@ui.corner_roots()))
-  }
-  // (what it stands on: the marks hung on its grounds' corners on discs of it)
-  rail_under.val = dock_ground(bar)
-  let look = if bar {
-    rail_closed
-  } else if wide.tape {
-    rail_open_tape()
-  } else {
-    let inset = rail_window_in()
-    rail_open.then(@ui.style(w=Fixed(rail_box_w(false, None)), pl=@sf.room_of(inset), pb=@sf.room_of(inset)))
-  }
-  // (where the block's move has got: its width and padding, its top row's, between closed and open: pane_view.mbt)
-  let (look, top_h) = match moving {
-    Some(f) =>
-      (
-        look.then(@ui.style(w=Fixed(f.rail_w), pl=@sf.room_of(f.rail_pl), pt=@sf.room_of(f.rail_pt), pb=@sf.room_of(f.rail_pb))),
-        f.rail_top,
-      )
-    None => (look, rail_top_h(bar))
-  }
-  c.box(style=look, id=rail_id, fn() {
-    // its top row the window's title bar (the macOS app's buttons in it) across all of it, its padding too; not in the
-    // closed bar
-    if @ui.window_inset() && !bar {
-      // (the window's top row across it at least, where its first place is higher than that: Windows', a browser's;
-      // what is pressed there its places')
-      title_row(c, "rail/top", dmax(top_h, closed_bar_top))
-    }
-    // Keep the title-bar space and settings in place when the window is short. The places and workspaces each give
-    // way and scroll instead of pushing settings outside the window. Their marks may extend into the rail's margin.
-    if top_h > 0.0 {
-      let first_top = dmax(0.0, top_h - rail_gap)
-      // The column's gap after this box is part of top_h. When top_h is less than the gap, cancel the excess so the
-      // places keep following the move all the way to zero instead of jumping as the box disappears.
-      let over = dmin(0.0, top_h - rail_gap)
-      c.box(style=rail_top.then(@ui.style(h=Fixed(first_top), mb=@sf.room_of(over))), fn() {  }) |> ignore
-    }
-    let places = rail_items(src, w.id)
-    let shown = rail_shown(src, w)
-    c.capped("rail/places", c.height, shrinks=true, mx=-rail_ground_in, padx=rail_ground_in, fn() {
-      c.box(style=rail_places_col, fn() {
-        for place in shown {
-          rail_place(c, src, w, place, rail_lit(src, w, place), places)
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-    c.spacer()
-    // what comes and goes (transfers.mbt), over the workspaces
-    rail_transfers(c, src, w.id)
-    // the workspaces (sfpages' workspace.mbt), on the rail's squares and with its corner's marks
-    c.capped("rail/workspaces", c.height, shrinks=true, mx=-rail_ground_in, padx=rail_ground_in, fn() {
-      @sfpages.workspace_squares(c, src, w, all, {
-        square: fn(ground, body, id) { rail_square(c, ground, body, id~) },
-        corner: fn(tone) { rail_tone_mark(c, tone) },
-      })
-    })
-    |> ignore
-    // settings
-    let gear = c.id("rail/settings")
-    if c.clicked(gear) {
-      // lit (in the settings): back out of them, to the chat last open (Rail.tsx: the settings' NavLink, in them); their
-      // list folded for the page's room: shown over the page, or folded again (返回会话 at its top goes back)
-      if lit == "settings" && wide.crowded {
-        wide.peeking.set(!wide.peeking.get())
-      } else if lit == "settings" {
-        @sfbase.history_push()
-        while app.nav.depth() > 1 {
-          if !app.nav.pop() {
-            break
-          }
-        }
-        wide.landed.set("")
-      } else {
-        open_settings()
-        wide.peek_next.set(wide.crowded)
-      }
-    }
-    rail_ground(
-      c,
-      gear,
-      lit == "settings",
-      fn(color) { @sf.icon(c, "settings", size=rail_icon_size, color~) |> ignore },
-      label=@sf.t("web-pages.settings.title"),
-    )
-  })
-  |> ignore
 }
 
 ///|
@@ -289,37 +167,31 @@ fn rail(
 fn rail_top_h(bar : Bool) -> Double {
   if bar {
     0.0
+  } else if @ui.window_keys_left() && wide.tape {
+    // (its first place's middle on the line of the sidebar's first row beside it, under the window's buttons: worked
+    // out as that row's is, not read back from the frame's)
+    tape_brand_under_buttons() + band_new_top + band_row_h() / 2.0 - rail_item_side / 2.0
   } else if @ui.window_keys_left() {
     dmax(rail_top_inset + rail_gap, @ui.window_points_to_content(side_top_inset))
   } else if wide.tape {
     // (and its first place's middle on the line of the sidebar's first row beside it, 新建对话's: pengxiao, 2026-10-25)
     dmax(@sf.rail_in_tape(), tape_first_row_mid() - rail_item_side / 2.0)
   } else {
-    rail_top_web + rail_gap
+    rail_top_corner()
   }
+}
+
+///|
+/// The open rail's top row where nothing stands over its first place (no window buttons at its left, off the tape): as
+/// tall as its places are in from the window's side (rail_window_in), so its first place's ground stands as far under
+/// the window's top as it is in from its side, concentric with the window's corner (the user, 2026-11-09: 新建对话往上挪一点).
+fn rail_top_corner() -> Double {
+  rail_window_in()
 }
 
 ///|
 /// The closed bar's padding round its places (rail_closed's p=S0_5).
 let rail_closed_pad : Double = 2.0
-
-///|
-/// The rail open and in the closed bar (Rail.css.ts rail): its places 8 in and 8 under the last (@sf.rail_in: where they
-/// stand in the closed bar), 6 apart (open, as wide as the rail less the 8 the sidebar reaches over); as narrow as the
-/// bar, 2 from its every edge.
-// kept across runs: a value (no field of it changes)
-let rail_open : @ui.Style = @ui.style(
-  w=Fixed(rail_shown_w),
-  h=Full,
-  pl=@sf.rail_in,
-  pb=@sf.rail_in,
-  gap=S1_5,
-  align=AStart,
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let rail_closed : @ui.Style = @ui.style(w=Fixed(rail_closed_w), h=Full, p=S0_5, gap=S1_5, align=AStart)
 
 ///|
 /// How far in from the closed bar's edges its places' grounds stand: its 2 (rail_closed), a place's 38 less its 30.
@@ -328,13 +200,6 @@ let rail_closed_ground_in : Double = 2.0 + rail_ground_in
 ///|
 /// How far in from a place's edges its ground stands (its 38 less its 30).
 let rail_ground_in : Double = (rail_item_side - rail_sq_side) / 2.0
-
-///|
-/// The rail open in a panel of the tape (laid out Medium): its places in the panel's corners concentric with it
-/// (@sf.rail_in_tape, as round as the panel is this frame), what it shows beside the sidebar as much wider.
-fn rail_open_tape() -> @ui.Style {
-  rail_open.then(@ui.style(w=Fixed(rail_box_w(false, None)), pl=@sf.rail_in_tape_room(), pb=@sf.rail_in_tape_room()))
-}
 
 ///|
 /// How wide the rail is drawn in the block (its look's width, its padding in it), what the sidebar stands beside: where
@@ -389,10 +254,6 @@ let rail_shown_w : Double = 48.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_top : @ui.Style = @ui.css("w=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
 let rail_places_col : @ui.Style = @ui.css("gap=S1_5 align=AStart")
 
 ///|
@@ -400,49 +261,15 @@ let rail_places_col : @ui.Style = @ui.css("gap=S1_5 align=AStart")
 let lit_in_bar : Double = 0.12
 
 ///|
-/// The rail's places 6 apart; its top row 41 under the window's buttons, else 5.
+/// The rail's places 6 apart; its top row 41 under the window's buttons (else rail_top_corner).
 let rail_gap : Double = 6.0
 
 ///|
 let rail_top_inset : Double = 41.0
 
 ///|
-let rail_top_web : Double = 5.0
-
-///|
 /// A place's icon (20).
 let rail_icon_size : Double = 20.0
-
-///|
-/// A place's 38 to press, its ground (hovered, lit) 30 square under the icon (Rail.css.ts item).
-fn rail_ground(
-  c : @ui.Ctx,
-  id : Int,
-  on : Bool,
-  body : (Int64) -> Unit,
-  label? : String = "",
-  tipped? : Bool = true,
-) -> Unit {
-  let t = @sf.theme()
-  let hover = c.lit(id)
-  // its ground and its icon's colour moved over 140 ms (Rail.css.ts item: transition background, color)
-  let key = "rail/ground/" + id.to_string()
-  let ink = @kit.animate(c, key + "/ink", if on || hover { 1.0 } else { 0.0 }, transition=nav_fade)
-  let b = c.box(style=rail_item, id~, fn() {
-    // (lit in the closed bar, on its floating ground: the words' colour at 12%, as plain a step above it as the
-    // selected grey is above the sidebar; Rail.css.ts item, closed)
-    let lit = if wide.closed.get() { @sf.alpha(t.p.text, lit_in_bar) } else { t.p.selected }
-    rail_square(c, nav_ground(c, key, hover, on, lit~), fn() { body(@sf.mix(t.p.text, ink, t.p.muted)) })
-    |> ignore
-  })
-  // named for a screen reader (Rail.tsx's aria-label), and on hover beside it (its Tip, side right)
-  if label != "" {
-    c.semantics(b, Button, id~, label~)
-    if tipped {
-      @sf.tip(c, "rail/tip/" + id.to_string(), id, label, side=Right)
-    }
-  }
-}
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -452,67 +279,11 @@ let rail_item : @ui.Style = @ui.style(w=Fixed(rail_item_side), h=Fixed(rail_item
 let rail_item_side : Double = 38.0
 
 ///|
-/// A ground of the rail (Rail.css.ts item's ground, workspaceItem, workspaceAdd): 30 round, on `ground`; `id` to press
-/// it; its node.
-fn rail_square(c : @ui.Ctx, ground : Int64, body : () -> Unit, id? : Int) -> Int {
-  c.box(style=rail_sq.then(@ui.style(bg=Data(ground), radius=rail_round.val)), id?, body)
-}
-
-///|
 // kept across runs: a value (no field of it changes)
 let rail_sq : @ui.Style = @ui.style(w=Fixed(rail_sq_side), h=Fixed(rail_sq_side), align=ACenter, justify=JCenter)
 
 ///|
-/// Its grounds' corner this frame, all one (@sf.rail_ground_radius): concentric with the closed bar's corner (open or
-/// folded: its places stand where they do in the bar), or on the tape the sidebar's panel's. Said by the rail as it
-/// is built.
-// kept across runs: said by the rail each build
-let rail_round : Ref[@ui.Radius] = Ref(Full)
-
-///|
 let rail_sq_side : Double = 30.0
-
-///|
-/// What the rail stands on this frame (dock_ground: the sidebar's ground, or the closed bar's or the tape's panel's).
-/// Said by the rail as it is built.
-// kept across runs: said by the rail each build
-let rail_under : Ref[Int64] = Ref(0L)
-
-///|
-/// A mark hung on the top right corner of one of the rail's grounds (a place's, a workspace's square: drawn in it,
-/// after what is on it): on the corner, not in it (docs/ui-panels.md, the user, 2026-10-17: @sf.on_corner), its middle
-/// on the ground's curve where it turns 45° (its corner this frame: rail_round), on a disc of what the rail stands on
-/// 2 round it (rail_under), which the ground, lit, shows cut out of it. `shown` of the way in (a list's as the sidebar
-/// folds: Rail.css.ts listMark, from clear at 40%, moved with it).
-fn rail_hung(c : @ui.Ctx, mark : () -> Unit, shown? : Double = 1.0) -> Unit {
-  let reach = @sf.on_corner(c.theme().corner(rail_round.val), rail_hung_side, room=rail_sq_side / 2.0)
-  c.layer(fn() {
-    c.box(style=corner_end, fn() {
-      c.box(style=rail_hung_room, tx=reach, ty=-reach, fn() {
-        let i = c.box(style=rail_hung_ring.then(@ui.style(bg=Data(rail_under.val))), mark)
-        if shown < 1.0 {
-          c.look(i, @ui.look(alpha=shown, scale=fold_at(mark_folded_from, 1.0, shown)))
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// What waits in a list of chats or another workspace (Rail.css.ts listMark, mark), hung on its ground's corner
-/// (rail_hung): its rows' mark (ChatMark.css.ts chatMarkInline), or an invitation's dot.
-fn rail_tone_mark(c : @ui.Ctx, tone : String, shown? : Double = 1.0) -> Unit {
-  rail_hung(c, shown~, fn() {
-    if tone == "invite" {
-      @sfpages.invite_dot(c, "")
-    } else {
-      chat_mark(c, tone) |> ignore
-    }
-  })
-}
 
 ///|
 /// The room a mark hangs in, its middle the corner's: as large as the largest with its disc (a ring 10 across, 2 round
@@ -531,11 +302,6 @@ let rail_hung_room : @ui.Style = @ui.style(
 ///|
 // kept across runs: a value (no field of it changes)
 let rail_hung_ring : @ui.Style = @ui.css("p=S0_5 radius=Full")
-
-///|
-/// What stands at a square's top right (a layer's whole, its end).
-// kept across runs: a value (no field of it changes)
-let corner_end : @ui.Style = @ui.css("w=Full align=AEnd")
 
 ///|
 let mark_folded_from : Double = 0.4
@@ -564,130 +330,9 @@ pub fn closed_ground() -> Int64 {
 }
 
 ///|
-/// What waits on a place: a red dot 8 across hung on its ground's corner (Rail.css.ts count: rail_hung).
+/// What waits on a place: a red dot 8 across hung on its ground's corner.
 // kept across runs: a value (no field of it changes)
 let rail_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Danger")
-
-///|
-/// One place of the rail: its icon, what waits on it a dot at its corner; pressed, its page.
-fn rail_place(
-  c : @ui.Ctx,
-  src : Source,
-  w : Workspace,
-  place : String,
-  on : Bool,
-  places : Array[String],
-) -> Unit {
-  let t = @sf.theme()
-  let id = c.id("rail/" + place)
-  match c.menu_asked(id) {
-    Some((x, y)) => wide.rail_menu.set(Some((place, x, y)))
-    None => ()
-  }
-  // dragged up or down (past a few points) while the rail is changed or with ⌘ held as it was pressed: to another place
-  // in the rail, the others as they were until let go (where the pointer is read only by the place it drags)
-  let py = fn() { c.pointer().1 }
-  let dragged = match wide.rail_drag.get() {
-    Some((p, y0, _)) if p == place =>
-      if c.pressed(id) {
-        wide.rail_drag.set(Some((p, y0, py() - y0)))
-        true
-      } else {
-        // let go: its place by how far it went
-        let dy = py() - y0
-        let from = places.search_by(fn(x) { x == place }).unwrap_or(0)
-        let to = dmax(0.0, dmin((places.length() - 1).to_double(), from.to_double() + (dy / rail_pitch).round())).to_int()
-        wide.rail_drag.set(None)
-        if dy.abs() > rail_slop && to != from {
-          let next = places.filter(fn(x) { x != place })
-          next.insert(to, place)
-          // (the press let go took it: told once, whichever build took it)
-          c.tell("rail-keep", fn() { rail_keep(src, w.id, next) })
-        }
-        dy.abs() > rail_slop
-      }
-    // (only while the rail is changed, or pressed with ⌘ held: Rail.tsx drag)
-    None if c.pressed(id) && (wide.editing.get() || (c.press().mods & @ui.mod_cmd) != 0) => {
-      wide.rail_drag.set(Some((place, py(), 0.0)))
-      false
-    }
-    _ => false
-  }
-  let moved = match wide.rail_drag.get() {
-    Some((p, _, dy)) if p == place && dy.abs() > rail_slop => dy
-    _ => 0.0
-  }
-  ignore(dragged)
-  // pressed and let go: as it is let go, as things are then (while the rail is changed, a press of it is the change's;
-  // dragged past a few points from where it went down, to where it is let go, a drag's; lit or not as it is then)
-  c.on_press(id, fn() {
-    if wide.editing.get() {
-      return
-    }
-    match wide.rail_drag.get() {
-      Some((p, y0, _)) if p == place && (py() - y0).abs() > rail_slop => return
-      _ => ()
-    }
-    let on = rail_lit(src, w, place)
-    // the lit place pressed again (not 待处理, a panel): its sidebar folded or opened, not gone to; folded so with the
-    // pointer on the rail, it is shown a while (Rail.tsx's rail onClickCapture); on the tape, the page brought over
-    if on && place != "attention" && !place_bare(lit_place()) {
-      // (folded for the page's room: shown over it, or folded again)
-      if wide.crowded {
-        wide.peeking.set(!wide.peeking.get())
-      } else {
-        sidebar_toggle()
-        wide.peeking.set(side_folded())
-      }
-    } else {
-      rail_go(c, src, w, place)
-      // (pressed into a place whose sidebar is folded for the page's room: shown a while from the start, as the web's
-      // pressed into a folded one)
-      wide.peek_next.set(wide.crowded && !place_bare(place) && place != "attention")
-    }
-  })
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
-  let here = field(field(marks.value, "workspaces"), w.id)
-  let dot = match place {
-    "attention" => bell_lit(src, w)
-    _ => false
-  }
-  let label = match place {
-    "stations" => "Station：" + rail_stations_label(src, w.id)
-    _ => rail_label(src, place)
-  }
-  // what wants the person in a list, as its rows' marks: while the sidebar is folded (open, the rows show it;
-  // Rail.css.ts listMark)
-  let tone = match place {
-    "chats" => text(here, "tone")
-    "mine" => text(here, "mineTone")
-    "watching" => text(here, "watchingTone")
-    _ => ""
-  }
-  rail_edit_frame(c, src, w, place, moved, fn() {
-    rail_ground(c, id, on || (place == "attention" && wide.attention_open.get()), fn(color) {
-      if place == "stations" {
-        // the stations at a glance (Sidebar.tsx RailStations: StationGlyph, 20)
-        @sf.station_glyph(c, stations_at_glance(src, w.id).0, rail_icon_size, color, t.p.red) |> ignore
-      } else {
-        @sf.icon(c, rail_icon(place), size=rail_icon_size, color~) |> ignore
-      }
-      // hung on its ground's corner
-      if tone != "" && wide.mark > 0.0 {
-        rail_tone_mark(c, tone, shown=wide.mark)
-      }
-      if dot {
-        rail_hung(c, fn() { c.box(style=rail_dot, fn() {  }) |> ignore })
-      }
-    }, label~, tipped=!rail_carded(place))
-    // 对话's, 用量's: what the place is about at a glance, beside it as the pointer rests on it (in place of its tip: what
-    // it said is in the card; 用量's with the card to share of the agents' week)
-    if rail_carded(place) && !wide.editing.get() {
-      @sfpages.hover(c, "rail/card/" + place, id, side=Right, along=Start, fn() { @sfpages.rail_card(c, src, w, place) })
-      |> ignore
-    }
-  })
-}
 
 ///|
 /// Whether place `place` has a card as the pointer rests on it (the core's `railCard`: 对话, 用量; 2026-10-26 用户「stations
@@ -708,7 +353,7 @@ fn desk_home() -> Unit {
 }
 
 ///|
-/// A place gone to, from the rail or its menu (Rail.tsx `drawn`'s presses and `go`): 待处理 its panel; a list of chats
+/// A place gone to, from the rail or its menu: 待处理 its panel; a list of chats
 /// its list in the sidebar, the chat last open beside it; 已归档 the archive; the others their page.
 pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
   rail_go_told(src, w, place, fn(key, f) { c.tell(key, f) })
@@ -722,8 +367,8 @@ fn rail_go_told(src : Source, w : Workspace, place : String, tell : (String, () 
     "attention" => {
       attention_set(!wide.attention_open.get())
     }
-    "chats" | "mine" | "watching" => {
-      // its list in the sidebar (Rail.tsx toList): 对话 all of them, the others theirs
+    "chats" | "mine" | "watching" | "hidden" => {
+      // its list in the sidebar: 对话 all of them, the others theirs
       let f = if place == "chats" { "all" } else { place }
       if filter_of(src, w.id) != f {
         app.filters[w.id] = f
@@ -761,7 +406,7 @@ fn rail_keep(src : Source, ws : String, items : Array[String]) -> Unit {
 
 ///|
 /// The place in view that is left out of the rail, if one is: a list shown (我参与的, 监控中, the archive; the chats'
-/// when 对话 is out), the files, a place picked from the rail's menu (Rail.tsx inView, setExtra); "" none.
+/// when 对话 is out), the files, a place picked from the rail's menu (setExtra); "" none.
 fn rail_in_view(src : Source, w : Workspace) -> String {
   let lit = lit_place()
   let in_view = if lit == "chats" {
@@ -780,25 +425,36 @@ fn rail_in_view(src : Source, w : Workspace) -> String {
 
 ///|
 /// What opens from the rail, over the frame (drawn after it, with the app's: sfapp's wide_overlays): its menu and,
-/// while it is changed, what can be added beside it.
+/// while it is changed, what can be added beside it; the ＋'s menu and the list of what comes and goes.
 pub fn rail_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   rail_menu(c, src, w)
   rail_adder(c, src, w)
+  // (what opens from its foot's keys, nodes of the window's tree: beside where each was as it was pressed, else where it
+  // is now)
+  if !@sf.native_on() {
+    let at = match (workspace_add_from.val, rail_add.val) {
+      (Some(r), _) => r
+      (None, Some(v)) if v.alive() => v.placed_window_now()
+      _ => (0.0, 0.0, 0.0, 0.0)
+    }
+    @sfpages.workspace_menu(c, src, at)
+    rail_transfers_list(c, src, w)
+  }
 }
 
 ///|
 /// The rail's menu opened as a right click on `place` opens it (sffix's rail-menu).
 pub fn open_rail_menu(place : String) -> Unit {
-  wide.rail_menu.set(Some((place, 0.0, 0.0)))
+  wide.rail_menu.set(Some((place, rail_place_at(place))))
 }
 
 ///|
-/// The rail's menu (Rail.tsx's DropdownMenu, from a right click on it), beside the place right clicked (else its
+/// The rail's menu (from a right click on it), beside the place right clicked (else its
 /// first), 8 past it, clear of the window's buttons' row: the places not in it (pressed, their page; their ＋, shown on
 /// the row pointed at, puts one in it and the rail is changed from there), 从侧边条移除 the place right clicked,
 /// 自定义侧边条, 侧边条恢复默认 when it was changed.
 fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let (place, _, _) = match wide.rail_menu.get() {
+  let (place, from) = match wide.rail_menu.get() {
     Some(m) => m
     None => {
       @sf.dropdown(c, "rail-menu", false, 0, [], {}, @sf.menu_w) |> ignore
@@ -829,10 +485,9 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     entries.push(@kit.menu_item("reset", label=@sf.t("web-main.rail.reset")))
     icons["reset"] = "refresh"
   }
-  let by = c.rect_of(c.id("rail/" + (if place != "" { place } else { kept.get(0).unwrap_or("") })))
-  let (ax, ay, aw, ah) = by.unwrap_or((0.0, rail_menu_clear, rail_w - side_into_rail, 0.0))
-  // a place's ＋: put in, the rail changed from there (once the menu has gone)
-  let added : Ref[String] = Ref("")
+  // (beside the place it was asked on, where that was as it was asked: rail_node's)
+  let (ax, ay, aw, ah) = from.unwrap_or((0.0, rail_menu_clear, rail_w - side_into_rail, 0.0))
+  // a place's ＋: put in, the rail changed from there, the menu gone
   // (dismissed by the hand, Escape or a press outside it: closed at that moment)
   let menu : Ref[@kit.Menu?] = Ref(None)
   c.with_dismissed(fn(_) { wide.rail_menu.set(None) }, fn() {
@@ -851,24 +506,21 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         row_end=fn(c, s) {
           if s.entry.value.has_prefix("go:") {
             let i = s.entry.value.view(start_offset=3).to_string()
-            if rail_menu_add(c, i, rail_label(src, i), s.hot) {
-              added.val = i
+            rail_menu_add(c, i, rail_label(src, i), s.hot, on_press=fn() {
               let next = kept.copy()
               next.push(i)
               rail_keep(src, w.id, next)
               wide.editing.set(true)
-            }
+              wide.rail_menu.set(None)
+            })
           }
         },
       )
     )
   })
   let m = menu.val.unwrap()
-  if !m.open || added.val != "" {
+  if !m.open {
     wide.rail_menu.set(None)
-  }
-  if added.val != "" {
-    return
   }
   match m.chosen {
     Some("remove") => rail_keep(src, w.id, kept.filter(fn(i) { i != place }))
@@ -880,28 +532,25 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// A place's ＋ at the end of its row in the rail's menu (Rail.css.ts menuAdd): 24 round, shown on the row pointed at,
-/// in the pointer's ground pointed at itself; true on the frame after it was pressed.
-fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool) -> Bool {
+/// A place's ＋ at the end of its row in the rail's menu: 24 round, shown on the row pointed at,
+/// in the pointer's ground pointed at itself; `on_press`, what a press on it does.
+fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool, on_press~ : () -> Unit) -> Unit {
   let t = @sf.theme()
   let id = c.id("rail-menu/add/" + place)
+  c.on_press(id, on_press)
   let over = c.lit(id)
-  // in on its row pointed at (Rail.css.ts menuAdd: transition opacity 140 ms); always to a finger, which hovers over
+  // in on its row pointed at; always to a finger, which hovers over
   // nothing
-  let shown = @kit.animate(
-    c,
-    "rail-menu/add-shown/" + place,
-    if @sf.pointed_or_finger(c, hot || over) { 1.0 } else { 0.0 },
-    transition=nav_fade,
-  )
+  // (built while it is shown or fading, till its fade's declared end; faded as it is drawn)
+  let to = if @sf.pointed_or_finger(c, hot || over) { 1.0 } else { 0.0 }
+  let shown = @motion.told(c, "rail-menu/add-shown/" + place, to, spec=nav_fade)
   let b = c.box(style=if over { rail_menu_plus_on } else { rail_menu_plus }, id~, fn() {
-    if shown > 0.0 {
-      @sf.icon(c, "plus", size=rail_menu_plus_icon, color=@sf.alpha(if over { t.p.text } else { t.p.muted }, shown))
-      |> ignore
+    if to > 0.0 || !shown.over(c) {
+      let i = @sf.icon(c, "plus", size=rail_menu_plus_icon, color=if over { t.p.text } else { t.p.muted })
+      c.look_by(i, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, shown.get(c)))) })
     }
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.rail.add", args=[("name", label)]))
-  c.clicked(id)
 }
 
 ///|
@@ -917,7 +566,7 @@ let rail_menu_plus_on : @ui.Style = rail_menu_plus.then(@ui.css("bg=Hover"))
 let rail_menu_plus_icon : Double = 14.0
 
 ///|
-/// The rail's menu 8 past its place, and no higher than the window's buttons' row (Rail.tsx: collisionPadding top 52).
+/// The rail's menu 8 past its place, and no higher than the window's buttons' row.
 let rail_menu_off : Double = 8.0
 
 ///|
@@ -932,13 +581,14 @@ pub let rail_pitch : Double = 44.0
 let rail_slop : Double = 4.0
 
 ///|
-/// A place's icon in the rail (Rail.tsx RAIL_ICONS; the stations' is their glyph, rail_place).
+/// A place's icon in the rail (the stations' is their glyph, rail_place).
 fn rail_icon(place : String) -> String {
   match place {
     "attention" => "bell"
     "chats" => "chats"
     "mine" => "user"
     "watching" => "watch"
+    "hidden" => "eye-off"
     "archive" => "archive"
     "files" => "folder"
     "profiles" => "quota"
@@ -974,50 +624,12 @@ pub fn settings_beside(route : @settings.Route) -> Unit {
 }
 
 ///|
-/// A place of the rail as it is drawn, `moved` with its drag; while the rail is changed (自定义侧边条), outlined, its
-/// − at its top left corner (Rail.css.ts editing, remove).
-fn rail_edit_frame(c : @ui.Ctx, src : Source, w : Workspace, place : String, moved : Double, body : () -> Unit) -> Unit {
-  if !wide.editing.get() {
-    c.box(ty=moved, body) |> ignore
-    return
-  }
-  let t = @sf.theme()
-  let rm = c.id("rail/remove/" + place)
-  let items = rail_items(src, w.id)
-  if items.length() > 1 && c.clicked(rm) {
-    rail_keep(src, w.id, items.filter(fn(i) { i != place }))
-  }
-  c.box(ty=moved, fn() {
-    c.box(style=rail_editing, body) |> ignore
-    // its outline dashed, 1.5 wide, a pixel in from its edge (Rail.css.ts editing: outline-offset -1)
-    c.layer(fn() {
-      c.box(tx=rail_dash_at, ty=rail_dash_at, fn() {
-        @sf.dashed_frame(c, rail_dash_side, rail_dash_side, rail_dash_r, rail_dash_line, t.p.line_strong) |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-    c.layer(fn() {
-      c.box(style=rail_remove_at, tx=rail_remove_out, ty=rail_remove_out, fn() {
-        let b = c.box(style=rail_remove, id=rm, fn() {
-          @sf.icon(c, "minus", size=rail_remove_icon, color=t.p.sidebar) |> ignore
-        })
-        c.semantics(b, Button, id=rm, label=@sf.t("web-main.rail.remove", args=[("name", rail_label(src, place))]))
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// Beside the rail while it is changed (Rail.tsx's Popover): what can be added, by kind, each pressed into the rail;
+/// Beside the rail while it is changed: what can be added, by kind, each pressed into the rail;
 /// pressing anywhere but the rail (or Esc) ends the change.
 fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let kept = rail_items(src, w.id)
   // beside the rail (its 56: the sidebar reaches over its last 8), 8 past it, clear of the window's buttons' row
-  // (Rail.tsx: Popover.Anchor the rail, collisionPadding top 52)
+  // (collisionPadding top 52)
   // (ended as it is dismissed, at that moment: Esc, back, a press outside it and the rail, its anchor: one in the rail
   // dismisses nothing, its places moved and taken out there)
   c.with_dismissed(
@@ -1028,6 +640,8 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         "rail/adder",
         wide.editing.get(),
         c.id("rail"),
+        // (the rail a node of the window's tree: a press in it none outside, rail_node's)
+        anchor_node?=rail_col.val,
         side=Right,
         along=Start,
         offset=rail_adder_off,
@@ -1048,11 +662,11 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             none = false
             @sf.panel_group(c, label=k.0, fn() {
               for i in hidden {
-                if adder_row(c, i, rail_label(src, i)) {
+                adder_row(c, i, rail_label(src, i), on_press=fn() {
                   let next = kept.copy()
                   next.push(i)
                   rail_keep(src, w.id, next)
-                }
+                })
               }
             })
           }
@@ -1067,9 +681,9 @@ fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// A place that can be put in the rail, in the adder (parts.tsx PanelRow): its icon, its ＋ at its end.
-/// True on the frame after it was pressed.
-fn adder_row(c : @ui.Ctx, place : String, label : String) -> Bool {
+/// A place that can be put in the rail, in the adder (parts.tsx PanelRow): its icon, its ＋ at its end; `on_press`,
+/// what pressing it does, as it is let go.
+fn adder_row(c : @ui.Ctx, place : String, label : String, on_press~ : () -> Unit) -> Unit {
   @sf.menu_item(
     c,
     label,
@@ -1077,18 +691,19 @@ fn adder_row(c : @ui.Ctx, place : String, label : String) -> Bool {
     panel=true,
     icon=rail_icon(place),
     end="plus",
+    on_press~,
   )
 }
 
 ///|
-/// The adder's panel: 248 wide, 8 past the rail (Rail.css.ts adder).
+/// The adder's panel: 248 wide, 8 past the rail.
 let rail_adder_w : Double = 248.0
 
 ///|
 let rail_adder_off : Double = 8.0
 
 ///|
-/// The − 5 out past the place's top left corner, its icon 12 (Rail.css.ts remove).
+/// The − 5 out past the place's top left corner, its icon 12.
 let rail_remove_out : Double = -5.0
 
 ///|
@@ -1109,7 +724,7 @@ let rail_dash_r : Double = 11.75
 let rail_dash_at : Double = -0.5
 
 ///|
-/// A place while the rail is changed: outlined, its corner the editing frame's (Rail.css.ts editing: 12).
+/// A place while the rail is changed: outlined, its corner the editing frame's.
 // kept across runs: a value (no field of it changes)
 let rail_editing : @ui.Style = @ui.css("radius=Xl")
 
@@ -1118,25 +733,25 @@ let rail_editing : @ui.Style = @ui.css("radius=Xl")
 let rail_remove_at : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// The −: 18 round in the words' colour, the rail's ground round it (Rail.css.ts remove).
+/// The −: 18 round in the words' colour, the rail's ground round it.
 // kept across runs: a value (no field of it changes)
 let rail_remove : @ui.Style = @ui.css("w=S4_5 h=S4_5 align=ACenter justify=JCenter bg=Fg radius=Full")
 
 ///|
-/// The adder's head and its kinds 8 apart (Rail.css.ts adder: a grid, gap 8).
+/// The adder's head and its kinds 8 apart (gap 8).
 // kept across runs: a value (no field of it changes)
 let adder_body : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
-/// The rail in the closed bar (Rail.css.ts rail, closed): as narrow as the bar, its places 2 from its every edge.
+/// The rail in the closed bar (closed): as narrow as the bar, its places 2 from its every edge.
 pub let rail_closed_w : Double = 42.0
 
 ///|
 /// What the stations' place says on hover (RailStations): what is wrong with them, else what the core waits on, else
 /// how many and who works.
 pub fn rail_stations_label(src : Source, ws : String) -> String {
-  let chats = (src.topic)("chats", { "scope": Json::string(ws), "mine": Json::boolean(false) }).value
-  let status = (src.topic)("status", { "workspace": Json::string(ws) }).value
+  let chats = @sfbase.chats_topic(src, ws).value
+  let status = src.topic("status", { "workspace": Json::string(ws) }).get().value
   let trouble = text(field(chats, "trouble"), "text")
   let waiting = if text(status, "state") != "" { text(status, "text") } else { "" }
   let summary = text(field(chats, "glyph"), "summary")

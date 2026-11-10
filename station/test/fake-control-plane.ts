@@ -43,7 +43,7 @@ export class GrantKey {
   }
 }
 
-/// `joins`: a plane that keeps a station in several workspaces (docs/multi-workspace.md): it has the join route and says
+/// `joins`: a plane that keeps a station in several workspaces: it has the join route and says
 /// `workspaces` in its state frames; one from before has neither.
 export type FakeOptions = { provider: "stillfail" | "comma"; gateways?: string[]; joins?: boolean };
 
@@ -89,7 +89,6 @@ export class FakeControlPlane {
         return;
       }
       asked.verified.push(tag);
-      if (req.headers["x-ember-signature"] && checks(station, `ember-station-connect-v1:${this.origin}:${station}:${ts}`, String(req.headers["x-ember-signature"]))) asked.verified.push("ember");
       this.wss.handleUpgrade(req, socket, head, (ws) => {
         this.sockets.push(ws);
         ws.on("message", (data) => {
@@ -168,12 +167,8 @@ export class FakeControlPlane {
     const station = String(a.headers["x-stillfail-station"] ?? "");
     const ts = String(a.headers["x-stillfail-ts"] ?? "");
     const digest = sha256hex(a.body);
-    const tags = a.path.endsWith("/notify") ? [comma ? "comma-station-notify-v1" : "ember-station-notify-v1"] : ["stillfail-station-telemetry-v1"];
+    const tags = a.path.endsWith("/notify") ? [comma ? "comma-station-notify-v1" : "stillfail-station-notify-v1"] : ["stillfail-station-telemetry-v1"];
     for (const tag of tags) if (checks(station, `${tag}:${this.origin}:${station}:${ts}:${digest}`, String(a.headers["x-stillfail-signature"] ?? ""))) a.verified.push(tag);
-    if (a.headers["x-ember-signature"]) {
-      const emberTag = a.path.endsWith("/notify") ? "ember-station-notify-v1" : "ember-station-telemetry-v1";
-      if (checks(station, `${emberTag}:${this.origin}:${station}:${ts}:${digest}`, String(a.headers["x-ember-signature"]))) a.verified.push(`ember:${emberTag}`);
-    }
     return a.verified.length > 0 ? [200, {}] : [401, { error: "invalid_signature" }];
   }
 }

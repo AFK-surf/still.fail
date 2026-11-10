@@ -25,14 +25,16 @@
 //                               composer over a list's last row, a sheet); tap1 TEXT the highest
 //   tapxy X Y                   taps there (negative: from the right, the bottom)
 //   hold MS TEXT                pressed on TEXT for MS, then let go (a long press)
-//   type TEXT                   committed by the input method      mark TEXT    composed (not yet committed)
+//   type TEXT                   committed by the input method (the next step once they are in a field)
+//   mark TEXT                   composed (not yet committed)
 //   enter                       backspace                 back       the system's back
 //   paste TEXT                  TEXT on the clipboard, then the system's paste
 //   pasten N TEXT               TEXT repeated to N characters, pasted
 //   wheel DY [MODS]             the list under the middle of the window scrolled by DY (with MODS held: cmd, ctrl,
 //                               alt, shift joined by +; ⌘ and a wheel over a picture zoom it)
-//   wheelat DY TEXT             the list under the lowest TEXT scrolled by DY, a mouse wheel's notches (eased in)
-//   wheelxat DX TEXT            what scrolls sideways under the lowest TEXT scrolled by DX, a wheel's (a trackpad's)
+//   wheelat DY TEXT             the list under the lowest TEXT scrolled by DY at once, as a test's Flow::wheel_at
+//                               gives it (no notch eased in: what is pressed next finds it where it went)
+//   wheelxat DX TEXT            what scrolls sideways under the lowest TEXT scrolled by DX, the same
 //   move X Y                    the pointer moved there, no button down (negative: from the right, the bottom)
 //   hover TEXT                  the pointer moved onto the lowest TEXT, where the frame has it
 //   rightclick TEXT             a secondary click (a context menu's) on the lowest TEXT, where the frame has it
@@ -68,6 +70,10 @@
 //   exit                        ends the run: DRIVE PASS, exit 0
 //   ends                        the app ends by itself, its host quitting it (an update handed to its installer), within
 //                               the timeout; else the run fails. What follows it is never reached
+//   latency MODE TEXT           input to the screen measured by the host itself (macOS, Android), from the lowest TEXT
+//                               on screen (or @X,Y; none: the window's middle): its own events from then on (type,
+//                               scroll, drag; anim none), the process ending with what it measured (LATENCY …, said by
+//                               the host: still.fail's scripts/latency.sh); `ends` after it. For people, never a check
 //   linger MS                   the run passed (DRIVE PASS said now), the app left running MS more for what the last
 //                               step set off (a share sheet, a download): a check beside the run looks at it
 //   answered CALL               a call to the core named CALL (drive.read; or a subscription's topic key, its first
@@ -90,6 +96,8 @@
 //                               (a locked screen's window is covered): a run about the app put away (e2e/win's)
 //   shown                       the host's word that the app is shown again (after it was not: another app's page
 //                               over it gone) since the last step that acted, and a frame drawn after it
+//   typedone X                  the words the runner found doing X (`ok WORDS`: a code another device shows) typed, as
+//                               `type` types its own, once it has done X
 //   done X                      the run's runner (still.fail's run.sh: what `log do: X` asked of it) has done X: its
 //                               file X come in the directory the run names (MBUI_DONE_DIR, else $MBUI_SHOT_DIR/done),
 //                               the host told of it by its system (src/host/done_watch.h: macOS, Android, Windows);
@@ -159,6 +167,11 @@ priv struct Driver {
   dir : String
   // the app's events (Ctx::say) the run's `said` lines have taken: those before this one
   mut said_taken : Int
+  // words a `type` sent the way the system does (the input method's, @hostapi.drive), not yet in a field: the next
+  // step waits for them there ("" none). The host hands them on to the app later, as their own event; a tap taken
+  // before them moved the focus, and they went into the field it focused (2026-11-05, the vault's editor on Android:
+  // a host's words in the name's field)
+  mut typed : String
 }
 
 ///|
@@ -285,6 +298,7 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
     seen_frame: -1,
     dir,
     said_taken: 0,
+    typed: "",
   })
   let watched = if watching { " (the runner's directory \{done_dir} watched)" } else { "" }
   h_log("DRIVE start: \{steps.length()} lines" + watched)
@@ -298,11 +312,10 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
 }
 
 ///|
-/// What of the window's tree shows `what` (its words, `=WORDS` exactly, `icon:NAME` what it draws is called so:
-/// View::drawn_as; img:NAME its picture's source contains NAME; or is called `what`, its label whole: View::says),
-/// the middle of each where it takes input, in the
-/// window, as it is made, however faded this frame (made transparent, coming in), as on_screen_nodes finds an old
-/// view's laid out; not on its way out (View::leaving: drawn only, as an old layer leaving is, Ctx::overlay's inert);
+/// What of the window's tree shows `what` (its words, `=WORDS` exactly, `field:WORDS` a field by the words in it,
+/// `icon:NAME` what it draws is called so: View::drawn_as; or is called `what`, its label whole: View::says), the
+/// middle of each where it is drawn, in the window, as it is made, however faded this frame (made transparent, coming
+/// in), as on_screen_nodes finds an old view's laid out; not on its way out (View::leaving: drawn only, as an old layer leaving is, Ctx::overlay's inert);
 /// whether it takes a press or not, whatever lies over it (reachable says which of it a finger
 /// reaches). What is seen is the glyphs' to say (Tester::glyphs_seen), not this.
 fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId)] {
@@ -317,49 +330,32 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
     // (or by what it is called, its label whole, as an old view's box is: as Compose's test finds a node by its
     // contentDescription, on_screen_nodes)
     let label = tree.said_label(d.id)
-    let drawn_name = tree.drawn_name(d.id)
     // (its words as they are drawn: on one line where they do not wrap, as an old view's text is found: view_words_set)
     let words = view_words_found(d)
     let by_words = !what.has_prefix("icon:") && words != "" &&
       (if what.has_prefix("=") { words == what.unsafe_substring(start=1, end=what.length()) } else { words.contains(what) })
     let hit = if what.has_prefix("icon:") {
       tree.drawn_name(d.id).contains("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
-    } else if what.has_prefix("img:") {
-      d.image.map(fn(p) { p.0.contains(what.unsafe_substring(start=4, end=what.length())) }).unwrap_or(false)
     } else if what.has_prefix("switch:") {
       // a switch by what it turns (its label, whole), as on_screen_nodes finds an old view's: the switch alone
       let label = what.unsafe_substring(start=7, end=what.length())
       tree.said_of(d.id) is Some({ role: Switch, label: l, .. }) && l == label
+    } else if what.has_prefix("field:") && what.length() > 6 {
+      // a field by the words in it, not its placeholder, as on_screen_nodes finds an old view's
+      match tree_fields.get(d.id) {
+        Some(tf) => tf.st.shown().contains(what.unsafe_substring(start=6, end=what.length()))
+        None => false
+      }
     } else if what.has_prefix("=") && what.length() > 1 {
       let exact = what.unsafe_substring(start=1, end=what.length())
-      words == exact || (label != "" && label == exact) || (drawn_name != "" && drawn_name == exact)
+      words == exact || (label != "" && label == exact)
+    } else if what.contains(":") {
+      false
     } else {
-      (words != "" && words.contains(what)) || (label != "" && label == what) || (drawn_name != "" && drawn_name == what)
+      (words != "" && words.contains(what)) || (label != "" && label == what)
     }
-    let v = tree.view_of(d.id).unwrap()
-    let (left, top, width, height) = v.rect()
-    // A rich paragraph is found at the requested words, not at the paragraph's middle (which may be off screen
-    // on a long line). Its laid ranges are the same ones selection and links use, projected into its drawn box.
-    let (x, y) = if by_words && !what.has_prefix("=") {
-      match runs_words_now(v) {
-        Some(now) => {
-          let whole = (left + width / 2.0, top + height / 2.0)
-          match now.text.find(what) {
-            Some(k) => match now.pieces[0].layout.rects(k, k + what.length()).get(0) {
-              Some(r) => {
-                let laid = v.laid_size()
-                let scale = if laid.0 > 0.0 { width / laid.0 } else { 1.0 }
-                (left + (r.0 + r.2 / 2.0) * scale, top + (r.1 + r.3 / 2.0) * scale)
-              }
-              None => whole
-            }
-            None => whole
-          }
-        }
-        None => (left + width / 2.0, top + height / 2.0)
-      }
-    } else { (left + width / 2.0, top + height / 2.0) }
-    if hit && !tree.leaving(d.id) && width > 0.0 && height > 0.0 && x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {
+    let (x, y) = (d.x + d.w / 2.0, d.y + d.h / 2.0)
+    if hit && !tree.leaving(d.id) && d.w > 0.0 && d.h > 0.0 && x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {
       hits.push((x, y, d.id, by_words))
     }
   }
@@ -388,13 +384,6 @@ fn reachable(c : Ctx, what : String) -> Array[(Double, Double)] {
       for p in tree_on_screen(c, what) {
         match view_presses_at(p.0, p.1) {
           Some(id) if tree.holds(id, p.2) => at.push((p.0, p.1))
-          // A selectable paragraph need not take a press itself. Its still hold goes through an empty old
-          // frame (tree_finger_down), or nowhere, to the words. An old button or paragraph over it still owns it.
-          None if old_owns_nothing_at(p.0, p.1) &&
-            tree_sel_at(p.0, p.1, finger=true).map_or(false, fn(t) { t.node == Some(p.2) }) => match tree.target_at(p.0, p.1) {
-            Hosted(_) | Nothing => at.push((p.0, p.1))
-            _ => ()
-          }
           _ => ()
         }
       }
@@ -659,12 +648,9 @@ fn fields_hold(c : Ctx, words : String) -> Bool {
 }
 
 ///|
-/// The host's way of sending a step's input (@hostapi.drive); a test's fake host has none.
+/// The host's way of sending a step's input (@hostapi.drive).
 fn h_drive(kind : Int, text : String) -> Bool {
-  match fake.val {
-    Some(_) => false
-    None => @hostapi.drive(kind, text)
-  }
+  @hostapi.drive(kind, text)
 }
 
 ///|
@@ -676,10 +662,7 @@ fn drive_end(code : Int) -> Unit {
   if code == 0 && h_env("MBUI_DRIVE_KEEP_OPEN") == "1" {
     return
   }
-  match fake.val {
-    Some(f) => f.logs.push("EXIT \{code}")
-    None => @hostapi.exit(code)
-  }
+  @hostapi.exit(code)
 }
 
 ///|
@@ -731,6 +714,18 @@ fn number(s : String) -> Double {
     -v
   } else {
     v
+  }
+}
+
+///|
+/// The place a step says as `@X,Y` (none where it says no such place).
+fn point_said(what : String) -> Array[(Double, Double)] {
+  match what.find(",") {
+    Some(i) => {
+      let x = number(what.unsafe_substring(start=1, end=i))
+      [(x, number(what.unsafe_substring(start=i + 1, end=what.length())))]
+    }
+    None => []
   }
 }
 
@@ -886,6 +881,16 @@ fn drive_steps(c : Ctx) -> Unit {
       d.mark = runtime().outside_ended()
       d.shown_mark = d.shown
     }
+    if d.typed != "" {
+      if fields_hold(c, d.typed) {
+        d.typed = ""
+      } else if waited > d.timeout {
+        drive_fail(c, d, "the words typed (\"\{d.typed}\") never reached a field after \{d.timeout.to_int()} ms")
+        return
+      } else {
+        return
+      }
+    }
     match cmd {
       "" => next()
       _ if cmd.has_prefix("#") => next()
@@ -1028,7 +1033,7 @@ fn drive_steps(c : Ctx) -> Unit {
           return
         }
       }
-      "done" => {
+      "done" | "typedone" => {
         if !d.watching {
           drive_fail(
             c,
@@ -1041,7 +1046,24 @@ fn drive_steps(c : Ctx) -> Unit {
         match d.runner_done.get(arg) {
           Some(said) =>
             match said.trim(chars=" \n\r\t").to_string() {
-              "" | "ok" => {
+              "" | "ok" if cmd == "done" => {
+                h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
+                next()
+              }
+              // (what the runner found, typed: the code another device shows, as a person reads it off and types it)
+              words if cmd == "typedone" && words.has_prefix("ok ") => {
+                let typed = words.view(start_offset=3).to_string()
+                if h_drive(0, typed) {
+                  if c.editors.contains(c.focus) {
+                    d.typed = typed
+                  }
+                } else {
+                  on_text(0, typed, 0, 0)
+                }
+                acted()
+                return
+              }
+              why if cmd == "done" && why.has_prefix("ok ") => {
                 h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
                 next()
               }
@@ -1132,17 +1154,7 @@ fn drive_steps(c : Ctx) -> Unit {
         }
         let what = words[4:].to_owned().join(" ")
         // (`@X,Y`: there, words in a field being none of what is on screen to find)
-        let at = if what.has_prefix("@") {
-          match what.find(",") {
-            Some(i) => {
-              let x = number(what.unsafe_substring(start=1, end=i))
-              [(x, number(what.unsafe_substring(start=i + 1, end=what.length())))]
-            }
-            None => []
-          }
-        } else {
-          reachable(c, what)
-        }
+        let at = if what.has_prefix("@") { point_said(what) } else { reachable(c, what) }
         if at.length() == 0 {
           if waited > d.timeout {
             drive_fail(c, d, not_reachable(c, what, d.timeout))
@@ -1223,7 +1235,12 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "type" => {
-        if !h_drive(0, arg) {
+        if h_drive(0, arg) {
+          // (into a field: what a key catcher takes, a remote screen's, is in none)
+          if c.editors.contains(c.focus) {
+            d.typed = arg
+          }
+        } else {
           on_text(0, arg, 0, 0)
         }
         acted()
@@ -1357,8 +1374,38 @@ fn drive_steps(c : Ctx) -> Unit {
             on_pointer(0, x, y, 2)
             on_pointer(2, x, y, 2)
           }
-          "wheelxat" => on_wheel(x, y, dy, 0.0, 4)
-          _ => on_wheel(x, y, 0.0, dy, 4)
+          // (at once, as a test's replay gives the same step (src/sfreplay: Flow::wheel_at's t.wheel): a notch's ease
+          // under way when the next step presses would come out as far as the frames drawn meanwhile took it)
+          "wheelxat" => on_wheel(x, y, dy, 0.0, 0)
+          _ => on_wheel(x, y, 0.0, dy, 0)
+        }
+        acted()
+        return
+      }
+      "latency" => {
+        let (mode, what) = match arg.find(" ") {
+          Some(i) => (arg.unsafe_substring(start=0, end=i), arg.unsafe_substring(start=i + 1, end=arg.length()))
+          None => (arg, "")
+        }
+        // (where a wheel or a key goes: what is under the words, whatever lies over them)
+        let at = if what == "" {
+          [(c.width / 2.0, c.height / 2.0)]
+        } else if what.has_prefix("@") {
+          point_said(what)
+        } else {
+          on_screen(c, what)
+        }
+        if at.length() == 0 {
+          if waited > d.timeout {
+            drive_fail(c, d, not_reachable(c, what, d.timeout))
+          }
+          return
+        }
+        let (x, y) = lowest(at)
+        h_log("DRIVE latency \{mode} at \{x.to_int()},\{y.to_int()}")
+        if !h_drive(12, "\{mode} \{x} \{y}") {
+          drive_fail(c, d, "latency: this host measures no input latency, or not \{mode} (type, scroll, drag, anim)")
+          return
         }
         acted()
         return
@@ -1376,31 +1423,13 @@ fn drive_steps(c : Ctx) -> Unit {
             return
           }
         }
-      "system" => {
-        match fake.val {
-          Some(f) => fake_post(f, @hostapi.system_channel, arg, None)
-          None => {
-            drive_fail(c, d, "system: only a Tester's system says what a script tells it")
-            return
-          }
-        }
-        acted()
-        return
-      }
-      "viewsaid" => {
-        match fake.val {
-          Some(f) => {
-            // (what the host says of its native views comes from outside: frame_watch.mbt)
-            outside_counted()
-            if !fake_view_said(f, arg) {
-              drive_fail(c, d, "viewsaid: not a line of what a native view's host says: " + arg)
-              return
-            }
-          }
-          None => {
-            drive_fail(c, d, "viewsaid: only a Tester's host says what a script tells it of its views")
-            return
-          }
+      "system" | "viewsaid" | "ime" => {
+        // (what only some hosts take of a script: a Tester's says what its system, its native views' host and its
+        // keyboard do as it is told; a host that takes no such step says why)
+        let failed = @hostapi.script_step(cmd, arg)
+        if failed != "" {
+          drive_fail(c, d, failed)
+          return
         }
         acted()
         return
@@ -1421,20 +1450,6 @@ fn drive_steps(c : Ctx) -> Unit {
         acted()
         return
       }
-      "ime" => {
-        match fake.val {
-          Some(f) => {
-            f.dev.ime_inset = number(arg)
-            f.wants = true
-          }
-          None => {
-            drive_fail(c, d, "ime: only a Tester's keyboard moves as a script tells it")
-            return
-          }
-        }
-        acted()
-        return
-      }
       "resize" => {
         let wh = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
         if wh.length() < 2 {
@@ -1442,10 +1457,7 @@ fn drive_steps(c : Ctx) -> Unit {
           return
         }
         if !h_drive(8, "\{wh[0].to_int()}x\{wh[1].to_int()}") {
-          match fake.val {
-            Some(_) => tester_size.val = Some((wh[0], wh[1]))
-            None => h_log("DRIVE resize: the host cannot")
-          }
+          h_log("DRIVE resize: the host cannot")
         }
         acted()
         return
@@ -1475,24 +1487,10 @@ fn drive_steps(c : Ctx) -> Unit {
         next()
       }
       "picks" => {
-        match fake.val {
-          Some(f) => {
-            f.picks.clear()
-            for part in arg.split(" ") {
-              match part.rev_find(":") {
-                Some(i) => {
-                  let mut n = 0
-                  for ch in part[i + 1:] {
-                    n = n * 10 + (ch.to_int() - 48)
-                  }
-                  let bytes = Bytes::make(n, b'x')
-                  f.picks.push({ name: part[:i].to_string(), bytes, held: 0, size: n.to_double(), src: "" })
-                }
-                None => ()
-              }
-            }
-          }
-          None => h_log("DRIVE picks: no Tester here, the host's own pickers answer")
+        // (the pickers' answers a host says as it is told: a Tester's; else its own pickers answer)
+        let failed = @hostapi.script_step(cmd, arg)
+        if failed != "" {
+          h_log("DRIVE picks: " + failed)
         }
         next()
       }
@@ -1549,10 +1547,7 @@ fn drive_steps(c : Ctx) -> Unit {
       }
       "quit" => {
         driver.val = None
-        match fake.val {
-          Some(f) => f.logs.push("EXIT 0")
-          None => @hostapi.exit(0)
-        }
+        @hostapi.exit(0)
         return
       }
       _ => {

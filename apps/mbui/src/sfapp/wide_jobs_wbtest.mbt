@@ -1,4 +1,4 @@
-// The desktop's services and jobs left up long (sfdesk open_jobs.mbt, OpenJobs.tsx): in 待处理's panel (the sidebar
+// The desktop's services and jobs left up long (sfdesk open_jobs.mbt): in 待处理's panel (the sidebar
 // foot's count without the bell), each under its heading; a row leads to its chat.
 
 ///|

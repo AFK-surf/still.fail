@@ -1,4 +1,9 @@
 // Assemble mbui pictures and films on a frame-addressed timeline without opening a window or browser.
+//   media-compose.mjs still TIMELINE.json FRAME OUT.png | film TIMELINE.json OUT.mp4: a timeline is {width, height,
+//   fps, background, scenes: [{kind: film|picture, path, frames, start_frame}], overlays: [{path, at, until, x, y}],
+//   audio: [{path, at, gain}]}, frames at its fps, paths relative to it. Overlays are PNGs as they are (titles from
+//   @film.picture(transparent=true)); a film's own sound is not mixed. Needs node, ffmpeg and ffprobe; a failure leaves
+//   an existing result intact, and OUT.timeline.json records the inputs' hashes.
 import { createHash } from 'node:crypto';
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readSync, realpathSync,
   renameSync, rmSync, statSync, writeFileSync } from 'node:fs';

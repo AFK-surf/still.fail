@@ -1,4 +1,4 @@
-// A folder of a station's drive: one page on every screen (docs/architecture.md: the same on every screen, and what
+// A folder of a station's drive: one page on every screen (the same on every screen, and what
 // differs). What it is for: a person comes to find a file and open it (read, played, previewed, saved), and to put
 // files in and keep them in order (up, a new folder, a name changed, deleted, dragged into a folder, 收藏). So,
 // top to bottom: its bar (back where its frame has one, its name, what can be done to it), its way down from its root
@@ -27,14 +27,14 @@ pub fn folder_page(
     match bar {
       Some(n) =>
         // (what can be done to it at the bar's end, as far as half the bar less the title's half: the rest in its ⋯)
-        if narrow_bar(c, n, folder_name(f.st, f.at), fn() {
-            c.box(style=@ui.style(max_w=Fixed(actions_most)), fn() {
-              folder_actions(c, src, f, style=bar_actions_row())
-            })
-            |> ignore
-          }) {
+        narrow_bar(c, n, folder_name(f.st, f.at), fn() {
+          c.box(style=@ui.style(max_w=Fixed(actions_most)), fn() {
+            folder_actions(c, src, f, style=bar_actions_row())
+          })
+          |> ignore
+        }, on_press=fn() {
           (n.back)()
-        }
+        })
       None => ()
     }
     folder_view(c, src, f, head=fn(count) { folder_head(c, src, f, front_it, bar is None, count) }, foot=match bar {
@@ -46,7 +46,7 @@ pub fn folder_page(
 }
 
 ///|
-/// The folder's head (Drive.tsx FolderView's pageHead; the phone's Crumbs and mCount): its way (its station's button,
+/// The folder's head (the phone's Crumbs and mCount): its way (its station's button,
 /// then the way down from its root to it), its name where the frame's bar has not said it (`titled`: h1), what it holds
 /// in a line, or why it was not read again (its 重试). In as far as the rows' words are, wherever it is shown.
 fn folder_head(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit, titled : Bool, count : String?) -> Unit {
@@ -112,9 +112,9 @@ fn head_retry(c : @ui.Ctx, words : String, bad : Bool, retry : () -> Unit) -> Un
   c.box(style=head_problem, fn() {
     c.text(words, style=if bad { note.then(head_bad) } else { note.then(head_wraps) }) |> ignore
     let id = c.id("files/retry")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       retry()
-    }
+    })
     let b = c.box(style=head_link, id~, fn() { c.text(@sf.t("web-pages.drive.retry"), style=note.then(head_link_words)) |> ignore })
     c.semantics(b, Button, id~, label=@sf.t("web-pages.drive.retry"))
   })
@@ -238,9 +238,12 @@ pub fn roots_page(
     @sf.empty(c, fn() {
       c.text(words, style=roots_empty_words) |> ignore
       match pick {
-        Some(s) if @sf.button(c, @sf.t("web-pages.files.addFavorite"), key="files-roots/pick", tone=Primary) =>
-          add_favorite_folder(src, ws, [s], picked=fn(f) { go({ station: f.station, root: Some(f.root), path: f.path }) })
-        _ => ()
+        Some(s) =>
+          @sf.button(c, @sf.t("web-pages.files.addFavorite"), key="files-roots/pick", tone=Primary, on_press=fn() {
+            add_favorite_folder(src, ws, [s], picked=fn(f) { go({ station: f.station, root: Some(f.root), path: f.path }) })
+          })
+          |> ignore
+        None => ()
       }
     })
   }
@@ -297,11 +300,11 @@ fn root_row(c : @ui.Ctx, s : DvStation, r : DvRoot, go : (DriveAt) -> Unit) -> U
     Some((what, hint)) => what + " · " + hint
     None => ""
   }
-  if @sf.link_row(c, key, r.name, note=r.path, trouble~, lead=fn() {
-      @sf.icon(c, "folder", size=t.items.mark, color=t.p.muted) |> ignore
-    }) {
+  @sf.link_row(c, key, r.name, note=r.path, trouble~, lead=fn() {
+    @sf.icon(c, "folder", size=t.items.mark, color=t.p.muted) |> ignore
+  }, on_press=fn() {
     go({ station: s.station, root: Some(r.path), path: "" })
-  }
+  }) |> ignore
 }
 
 ///|

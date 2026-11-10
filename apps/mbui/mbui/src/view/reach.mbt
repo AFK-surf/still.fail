@@ -1,0 +1,214 @@
+// The room a press has round what is drawn smaller than it (still.fail's rules 1 and 2, the user, 2026-10-26: what
+// always shows is pressed in 44×44 at least): what a finger or the pointer at a point reaches from round it. One way
+// of working it out, here, under both views (ui imports this package): the window's tree's hit test
+// (Tree::target_at), the old view's (ui's press_reach) and the check of the room each has (ui's rooms.mbt) all ask it.
+
+///|
+/// The room a press has round what is drawn (x0, y0)–(x1, y1): each way it is drawn smaller than `least`, it grown to
+/// it round its middle (not drawn so, nor laid out); moved in where that passes an edge past which nothing is pressed
+/// (`edge`: the window, what cuts it) rather than cut short there; cut where it passes what holds it that takes presses
+/// (`cut`: a row's small button keeps to its row, the row's own room round it the row's). What the hit tests reach
+/// (press_reaches) and the room rules measure (ui's rooms.mbt), one.
+pub fn press_room(
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+  cut : (Double, Double, Double, Double),
+  edge : (Double, Double, Double, Double),
+  least : Double,
+) -> (Double, Double, Double, Double) {
+  let (ax0, ax1) = room_across(x0, x1, cut.0, cut.2, edge.0, edge.2, least)
+  let (ay0, ay1) = room_across(y0, y1, cut.1, cut.3, edge.1, edge.3, least)
+  (ax0, ay0, ax1, ay1)
+}
+
+///|
+/// One way of press_room: `lo`–`hi` grown to `least` round its middle where shorter, moved in from `elo`–`ehi`'s ends,
+/// cut to `clo`–`chi`.
+fn room_across(
+  lo : Double,
+  hi : Double,
+  clo : Double,
+  chi : Double,
+  elo : Double,
+  ehi : Double,
+  least : Double,
+) -> (Double, Double) {
+  let mut a = lo
+  let mut b = hi
+  if hi - lo < least {
+    let mid = (lo + hi) / 2.0
+    a = mid - least / 2.0
+    b = mid + least / 2.0
+    // (moved in from an edge it passes, not cut short at it)
+    if a < elo {
+      b = b + (elo - a)
+      a = elo
+    }
+    if b > ehi {
+      a = a - (b - ehi)
+      b = ehi
+    }
+  }
+  (dmax(a, dmax(clo, elo)), dmin(b, dmin(chi, ehi)))
+}
+
+///|
+/// Whether what is drawn (x0, y0)–(x1, y1) is reached from round it at all: drawn, and smaller than `least` some way
+/// (one as big each way is pressed where it is drawn).
+pub fn press_small(x0 : Double, y0 : Double, x1 : Double, y1 : Double, least : Double) -> Bool {
+  let (w, h) = (x1 - x0, y1 - y0)
+  w > 0.0 && h > 0.0 && (w < least || h < least)
+}
+
+///|
+/// How far a press at (x, y) is from what is drawn (x0, y0)–(x1, y1) (the square of it), where it reaches that from
+/// round it: drawn smaller than `least` (press_small), its room (press_room in `cut` and `edge`) holding (x, y); none
+/// where not. Of several a press reaches, the nearest is what it is on (where rooms meet, each has the part nearer it;
+/// as near, the one drawn first): the window's tree's (Tree::target_at) and the old view's (ui's press_reach) alike.
+pub fn press_reaches(
+  x0 : Double,
+  y0 : Double,
+  x1 : Double,
+  y1 : Double,
+  cut : (Double, Double, Double, Double),
+  edge : (Double, Double, Double, Double),
+  least : Double,
+  x : Double,
+  y : Double,
+) -> Double? {
+  guard press_small(x0, y0, x1, y1, least) else { return None }
+  let (rx0, ry0, rx1, ry1) = press_room(x0, y0, x1, y1, cut, edge, least)
+  if x < rx0 || x >= rx1 || y < ry0 || y >= ry1 {
+    return None
+  }
+  let dx = dmax(0.0, dmax(x0 - x, x - x1))
+  let dy = dmax(0.0, dmax(y0 - y, y - y1))
+  Some(dx * dx + dy * dy)
+}
+
+///|
+/// A target of the tree's drawn smaller than its room near a point, as a walk finding what takes a finger there passes
+/// it (Tree::near_said): where it is in the order drawn, which it is and how (Pressed or Dragged), its box in the window.
+priv struct Near {
+  order : Int
+  target : Target
+  box : (Double, Double, Double, Double)
+}
+
+///|
+/// How far across each way the room a press has is at least where what hosts the tree draws it, as it is asked (ui's
+/// room_least: by the native input; a finger's 44, a keyboard and mouse's 36); none said, none: each pressed only
+/// where it is drawn (a tree no host draws, its input not known).
+pub fn Tree::press_least(self : Tree, f : () -> Double) -> Unit {
+  self.press_least = f
+}
+
+///|
+/// The least room a press has as of now (Tree::press_least), nothing followed.
+fn Tree::least_now(self : Tree) -> Double {
+  @signals.untracked(self.press_least)
+}
+
+///|
+/// Node `n` (content `c`, drawn at (cx, cy), `s` as big) passed by a walk finding what takes a finger at (x, y), not
+/// there: kept in `out` (its place `order` in the walk) where it may be reached from round it, a press's room (`least`
+/// across) away at most. One that does something pressed or held as its own (View::on_press; View::on_drag, not one
+/// taking over holds), drawn smaller than its room, taking presses now; not one only pointed at (View::points), nor
+/// one pressed only where it is drawn: a column's edge, its pointer's shape a resize (the user, 2026-10-28: 左右各
+/// 6px, 同 web), one saying where it takes a finger (View::takes), one hosting an old view (whose own are its).
+/// Only arithmetic on what the walk gives it, but for one that near.
+fn Tree::near_said(
+  self : Tree,
+  n : Node,
+  c : Content,
+  cx : Double,
+  cy : Double,
+  s : Double,
+  x : Double,
+  y : Double,
+  least : Double,
+  order : Int,
+  out : Array[Near],
+) -> Unit {
+  let target = if n.on_drag is Some(_) && n.claims is None {
+    Dragged(c.id)
+  } else if n.on_press is Some(_) {
+    Pressed(c.id)
+  } else {
+    return
+  }
+  let (x0, y0, x1, y1) = (cx, cy, cx + c.w * s, cy + c.h * s)
+  if x < x0 - least || x >= x1 + least || y < y0 - least || y >= y1 + least || !press_small(x0, y0, x1, y1, least) {
+    return
+  }
+  if n.points || n.hosted || n.takes is Some(_) {
+    return
+  }
+  match n.cursor {
+    Some(ResizeX) | Some(ResizeY) => return
+    _ => ()
+  }
+  if self.pressless_at(c.id.at) {
+    return
+  }
+  self.work.near_kept = self.work.near_kept + 1
+  out.push({ order, target, box: (x0, y0, x1, y1) })
+}
+
+///|
+/// What a press at (x, y) is on, `top` found there (the topmost that takes it, at `top_order` in the walk, drawn as
+/// `top_box`; Nothing: none): `top`, or what of `near` (Tree::near_said) is drawn over it and within it whose room
+/// (press_reaches: cut to `top`, moved in from what bounds its input and the window) holds (x, y), the nearest of
+/// several (where rooms meet, each has the part nearer it): a row's small button from round it, not the row's
+/// neighbour's. By a finger and a pointer alike (the user, 2026-10-26: drawn small with a keyboard and mouse, a press's
+/// room is not), so what lights under the pointer is what a click there presses. On what a drag pans whole
+/// (View::on_drag's `whole`, the old view's `capture`: a picture) the press is its own, nothing over it reached; one
+/// hosting an old view, its own (the old view reaches what it draws itself).
+fn Tree::reached(
+  self : Tree,
+  top : Target,
+  top_order : Int,
+  top_box : (Double, Double, Double, Double),
+  near : Array[Near],
+  x : Double,
+  y : Double,
+  least : Double,
+) -> Target {
+  if near.is_empty() {
+    return top
+  }
+  let (ww, wh) = self.room.untracked()
+  let window = (0.0, 0.0, ww, wh)
+  let cut = match top {
+    Nothing => window
+    Hosted(_) => return top
+    Dragged(id) if self.nodes[id.at].drags_whole => return top
+    _ => top_box
+  }
+  let on = !(top is Nothing)
+  let mut best = top
+  let mut best_d = 1.0e18
+  for k in near {
+    let (x0, y0, x1, y1) = k.box
+    // (drawn over what the press is on, and within it)
+    if k.order <= top_order || (on && (x0 < cut.0 || y0 < cut.1 || x1 > cut.2 || y1 > cut.3)) {
+      continue
+    }
+    let id = match k.target {
+      Pressed(id) | Dragged(id) => id
+      _ => continue
+    }
+    let (bx0, by0, bx1, by1) = self.input_bounds(id)
+    let edge = (dmax(0.0, bx0), dmax(0.0, by0), dmin(ww, bx1), dmin(wh, by1))
+    match press_reaches(x0, y0, x1, y1, cut, edge, least, x, y) {
+      Some(d) if d < best_d => {
+        best_d = d
+        best = k.target
+      }
+      _ => ()
+    }
+  }
+  best
+}

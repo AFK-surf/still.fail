@@ -41,7 +41,6 @@ fn overlays(c : @ui.Ctx) -> Unit {
       _ => ()
     }
   }
-  let shown = 1.0
   section(c, "Dialog and alert dialog", fn() {
     c.box(dir=Row, gap=12.0, align=AStart, fn() {
       @kit.dialog_look(
@@ -104,7 +103,7 @@ fn overlays(c : @ui.Ctx) -> Unit {
     c.box(dir=Row, fn() {
       @kit.toast_look(
         c,
-        { toast: @kit.toast("g", "Sent", description="To the team, 2 minutes ago", action="Undo"), t: shown, dx: 0.0, hovered: false },
+        { toast: @kit.toast("g", "Sent", description="To the team, 2 minutes ago", action="Undo"), t: @kit.presence(c, "g-toast", true, initial=false).t, dx: 0.0, away: 0.0, hovered: false },
         fn() { @kit.toast_button(c, "g-undo", "Undo", "Undo", false) |> ignore },
         fn() { @kit.toast_button(c, "g-toast-close", "✕", "关闭", true) |> ignore },
       )

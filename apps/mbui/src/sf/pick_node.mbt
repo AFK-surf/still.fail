@@ -1,4 +1,4 @@
-// A long pick of the presenters' (pick_popover's long one: the web's chooser with its search) as nodes of the window's
+// A long pick of the presenters' (the web's chooser with its search) as nodes of the window's
 // tree: a modal layer over the window, nothing under it dimmed, its small panel beside what opened it (as menu_node's:
 // View::beside, grown out of that side as it comes, gone at once as it closes, as the old presenter lets it go), chooser
 // wide. Over its list its search, the library's line (input_node), the keyboard's as it opens; what is typed finds
@@ -129,7 +129,7 @@ pub fn pick_node(
         l.max_height(Is(Some(pick_list_most))).alpha(By(words_in)) |> ignore
         l.scrolls(list, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
           b.each(fn() { found().map(fn(x) { x.key }) }, fn(k) { k }, fn(cell, k) {
-            let k = @signals.untracked(fn() { k.get() })
+            let k = k.untracked()
             match choices.iter().find_first(fn(x) { x.key == k }) {
               Some(x) => {
                 // (the last found reaching into the panel's padding at its foot, as menu_item's at_foot)
@@ -159,6 +159,7 @@ pub fn pick_node(
 /// A choice of a long pick's (menu_item's look) in `b`: its mark or icon in a column before its words, its value after
 /// them, its note under them, in the accent where it is the one chosen; lit under the pointer or the keyboard's focus;
 /// pressed, `go`.
+#callsite(autofill(loc))
 fn pick_row_node(
   b : @view.View,
   x : Choice,
@@ -166,12 +167,13 @@ fn pick_row_node(
   go : () -> Unit,
   last : () -> Bool,
   reach : Double,
+  loc~ : SourceLoc,
 ) -> Unit {
   let t = theme()
   let panel = x.icon != "" || x.mark is Some(_)
   let gap = if panel { panel_row_gap } else { menu_row_gap }
   let said = [x.label, x.value, x.note].filter(fn(s) { s != "" })
-  b.box(fn(r) {
+  b.box(made_for=loc, fn(r) {
     r
     .row(Is(true))
     .lines_up(Is(Some(Middle)))

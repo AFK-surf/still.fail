@@ -1,6 +1,6 @@
 // A connection to Chrome's DevTools protocol (CDP) over its WebSocket: requests answered by id, events heard, sessions
 // of targets flattened onto it (`sessionId`). The station's browser holds one to watch the tabs, and each screen view
-// one of its own, so neither is in the way of the agents' own connections (docs/remote-screens.md).
+// one of its own, so neither is in the way of the agents' own connections.
 import WebSocket from "ws";
 import { wall } from "../ops/fibers.ts";
 

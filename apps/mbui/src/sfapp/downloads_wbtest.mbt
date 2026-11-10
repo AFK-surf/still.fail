@@ -12,18 +12,17 @@ fn downloads_src(
   list : Array[Json],
   calls : Array[(String, Json)],
   keeping? : Array[Json] = [],
-  revision? : @signals.Signal[Int] = @signals.signal(1),
   bytes? : Bytes = b"PK\x03\x04",
   part? : Int = 4 * 1024 * 1024,
 ) -> Source {
   let base = fixture(mode)
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "downloads" {
-        { value: Some({ "downloads": Json::array(list), "keeping": Json::array(keeping) }), error: None, version: revision.get() }
+        { value: Some({ "downloads": Json::array(list), "keeping": Json::array(keeping) }), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -75,8 +74,7 @@ test "downloads: a message's file and video offer 下载 by right click and long
       new_run()
       let calls : Array[(String, Json)] = []
       let list : Array[Json] = []
-      let revision = @signals.signal(1)
-      let src = downloads_src("chat-download", list, calls, revision~)
+      let src = downloads_src("chat-download", list, calls)
       let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=if platform == 0 { 1280.0 } else { 390.0 }, h=844.0, platform~)
       open_fixture_mode("chat-download")
       t.run_for(@ui.move_most_ms)
@@ -113,7 +111,6 @@ test "downloads: a message's file and video offer 下载 by right click and long
       assert_true(viewer.get() is None)
       if name == "发布包.zip" {
         list.push(listed(name, "going", 22020096.0, 52428800.0, "正在下载 42% · 50 MB"))
-        revision.set(revision.get() + 1)
         t.draw()
         assert_true(t.find("正在下载 42% · 50 MB") is Some(_))
         t.click(Button, label=tr("web-main.file.cancelDownload"))
@@ -121,7 +118,6 @@ test "downloads: a message's file and video offer 下载 by right click and long
         assert_eq(calls.filter(fn(m) { m.0 == "download.cancel" }).length(), 1)
       } else {
         list.push(listed(name, "going", 1048576.0, 5242880.0, "正在下载 20% · 5 MB"))
-        revision.set(revision.get() + 1)
         t.draw()
         t.run_for(@sf.dur_ms)
         assert_true(t.find("20%") is Some(_))
@@ -135,8 +131,7 @@ test "downloads: an image's menu downloads it and its picture shows the download
   new_run()
   let calls : Array[(String, Json)] = []
   let list : Array[Json] = []
-  let revision = @signals.signal(1)
-  let src = downloads_src("chat", list, calls, revision~)
+  let src = downloads_src("chat", list, calls)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=844.0, platform=0)
   nav_rested(t)
@@ -157,7 +152,6 @@ test "downloads: an image's menu downloads it and its picture shows the download
   assert_eq(text(Some(starts[0].1), "name"), "compare.png")
   assert_true(viewer.get() is None)
   list.push(listed("compare.png", "going", 25.0, 100.0, "正在下载 25% · 100 B"))
-  revision.set(revision.get() + 1)
   t.draw()
   t.run_for(@sfpages.coming_after_ms + @sfpages.coming_in_ms)
   assert_true(t.find("25%") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
@@ -169,8 +163,7 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
   let calls : Array[(String, Json)] = []
   let list : Array[Json] = []
   let keeping : Array[Json] = []
-  let revision = @signals.signal(1)
-  let src = downloads_src("chat-download", list, calls, keeping~, revision~)
+  let src = downloads_src("chat-download", list, calls, keeping~)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
   t.run_for(@ui.move_most_ms)
@@ -220,7 +213,6 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
     Json::object(o)
   }
   keeping.push(brought("going", "正在加载 20% · 5 MB", true))
-  revision.set(revision.get() + 1)
   t.draw()
   t.run_for(@sf.dur_ms)
   assert_true(t.find("20%") is Some(_))
@@ -240,7 +232,6 @@ test "downloads: a message's video right clicked, 加载: the core brings it bef
   // brought in the background (opened and let go): the same, one thing whichever way it began
   keeping.clear()
   keeping.push(brought("queued", "后台缓存排队中 · 20%", false))
-  revision.set(revision.get() + 1)
   t.draw()
   t.run_for(@sf.dur_ms)
   assert_true(t.find("20%") is Some(_))

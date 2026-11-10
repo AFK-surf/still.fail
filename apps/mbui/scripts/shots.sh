@@ -269,7 +269,7 @@ shoot() {
         names="$names web-$m"
       done ;;
     wide)
-      # the wide frame (src/sfapp/wide.mbt) at a desktop's size, light and dark: mac-wide-<mode>[-dark]
+      # the wide frame at a desktop's size, light and dark: mac-wide-<mode>[-dark]
       build_mac sffix
       rm -rf out/shot-wide; mkdir -p out/shot-wide
       names=

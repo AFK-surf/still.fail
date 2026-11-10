@@ -8,6 +8,7 @@ import {
   "stillfail/sfbase",
   "stillfail/sfkept",
   "mbui/ui",
+  "mbui/view",
   "mbui/kit",
   "mbui/motion",
   "moonbitlang/core/json",
@@ -15,6 +16,8 @@ import {
   "moonbitlang/core/env",
   "mbui/runfs",
 }
+
+import { "mbui/signals" } for "wbtest"
 
 options(
   targets: {

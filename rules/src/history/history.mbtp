@@ -108,3 +108,51 @@ predicate unexpired_complete(lasts : Bool, exp : Int64, now : Int64, result : Bo
 predicate unexpired_post(lasts : Bool, exp : Int64, now : Int64, result : Bool) {
   unexpired_sound(lasts, exp, now, result) && unexpired_complete(lasts, exp, now, result)
 }
+
+predicate by_seq(seq_a : Int64, seq_b : Int64) {
+  seq_a > seq_b
+}
+
+predicate by_deleting(seq_a : Int64, deleted_a : Bool, seq_b : Int64, deleted_b : Bool) {
+  seq_a == seq_b && deleted_a && !deleted_b
+}
+
+predicate same_deleting(deleted_a : Bool, deleted_b : Bool) {
+  deleted_a == deleted_b
+}
+
+predicate by_epoch(seq_a : Int64, deleted_a : Bool, epoch_a : Int64, seq_b : Int64, deleted_b : Bool, epoch_b : Int64) {
+  seq_a == seq_b && same_deleting(deleted_a, deleted_b) && epoch_a > epoch_b
+}
+
+predicate by_text(seq_a : Int64, deleted_a : Bool, epoch_a : Int64, seq_b : Int64, deleted_b : Bool, epoch_b : Int64, text : Int) {
+  seq_a == seq_b && same_deleting(deleted_a, deleted_b) && epoch_a == epoch_b && text > 0
+}
+
+predicate supersedes_rule(seq_a : Int64, deleted_a : Bool, epoch_a : Int64, seq_b : Int64, deleted_b : Bool, epoch_b : Int64, text : Int) {
+  by_seq(seq_a, seq_b) || by_deleting(seq_a, deleted_a, seq_b, deleted_b) || by_epoch(seq_a, deleted_a, epoch_a, seq_b, deleted_b, epoch_b) || by_text(seq_a, deleted_a, epoch_a, seq_b, deleted_b, epoch_b, text)
+}
+
+predicate supersedes_sound(seq_a : Int64, deleted_a : Bool, epoch_a : Int64, seq_b : Int64, deleted_b : Bool, epoch_b : Int64, text : Int, result : Bool) {
+  result → supersedes_rule(seq_a, deleted_a, epoch_a, seq_b, deleted_b, epoch_b, text)
+}
+
+predicate supersedes_complete(seq_a : Int64, deleted_a : Bool, epoch_a : Int64, seq_b : Int64, deleted_b : Bool, epoch_b : Int64, text : Int, result : Bool) {
+  supersedes_rule(seq_a, deleted_a, epoch_a, seq_b, deleted_b, epoch_b, text) → result
+}
+
+predicate supersedes_post(seq_a : Int64, deleted_a : Bool, epoch_a : Int64, seq_b : Int64, deleted_b : Bool, epoch_b : Int64, text : Int, result : Bool) {
+  supersedes_sound(seq_a, deleted_a, epoch_a, seq_b, deleted_b, epoch_b, text, result) && supersedes_complete(seq_a, deleted_a, epoch_a, seq_b, deleted_b, epoch_b, text, result)
+}
+
+predicate item_open_sound(was : Bool, result : Bool) {
+  result → !was
+}
+
+predicate item_open_complete(was : Bool, result : Bool) {
+  !was → result
+}
+
+predicate item_open_post(was : Bool, result : Bool) {
+  item_open_sound(was, result) && item_open_complete(was, result)
+}

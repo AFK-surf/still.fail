@@ -1,4 +1,4 @@
-// A list's rows' heights as they change (still.fail's docs/list-motion.md, 2026-10-30 the user: 「那些会变长或缩短的消息
+// A list's rows' heights as they change (2026-10-30 the user: 「那些会变长或缩短的消息
 // 列表内容的动效协同起来的效果，需要系统性设计一下」「为啥每个改动都要自己处理一遍」). The page gives its list its rows
 // each build, each by its key and its version (ListRows): from one build to the next the list itself works out what
 // came (a key new to it: its room opening from nothing), what went (a key gone: kept in the list as it last was while
@@ -53,6 +53,10 @@ priv struct RowSizing {
   /// from what it read, lays it out the same: from there each time)
   mut frame : Int
   mut was : (RowSize, Double, Double, Double, Double, Double, (Double, Double, Double, Double, Double)?)
+  /// the room over what it holds (its lead) as its cause came, and as the frame before this one laid it out: a lead
+  /// another as it changed goes there on the way with its height, what it holds not stepped in its row (row_lead_off)
+  mut lead : Double
+  mut seen_lead : Double
 }
 
 ///|
@@ -83,7 +87,7 @@ fn RowSizing::at(self : RowSizing, t : Double, to : Double, k : Double) -> (Doub
 }
 
 ///|
-/// How long a row's height takes to go to its new one: a near Move's (docs/motion.md Curves). Not yet as long as its
+/// How long a row's height takes to go to its new one: a near Move's (sf/motion.mbt Curves). Not yet as long as its
 /// way is far, as every other move is: a row's height is worked out by its key as the list is laid out (ListRows),
 /// its way's length to come with that.
 pub let row_size_ms : Double = 300.0
@@ -144,31 +148,15 @@ pub fn Ctx::held_look(self : Ctx, i : Int, p : Double, top? : Bool = false) -> L
 /// from it as it was as its cause came (from nothing, one coming; from the height it had, one changed), by less as the
 /// list's way goes, every row on it by the same share (RowSizing).
 fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Double, frame : Int) -> Double {
-  match self.causes {
+  let (c, key, cause) = match self.causes {
     Some(c) if k < c.keys.length() => {
-      self.sizes_end = c.end
-      c.height(self.sizes, self.shown_h, c.keys[k], natural, now, frame)
+      c.read()
+      match c.by.get(c.keys[k]) {
+        Some((cause, _)) => (c, c.keys[k], cause)
+        None => return natural
+      }
     }
-    _ => natural
-  }
-}
-
-///|
-/// The same height calculation for an old list and a list kept as nodes. Natural heights and the last heights
-/// shown are separate: measuring a new target must not lose where the row stood when its content changed.
-fn RowCauses::height(
-  c : RowCauses,
-  sizes : Map[String, RowSizing],
-  shown_h : Map[String, Double],
-  key : String,
-  natural : Double,
-  now : Double,
-  frame : Int,
-) -> Double {
-  c.read()
-  let cause = match c.by.get(key) {
-    Some((cause, _)) => cause
-    None => return natural
+    _ => return natural
   }
   let to = match cause {
     Goes(_) => 0.0
@@ -181,16 +169,26 @@ fn RowCauses::height(
     return to
   }
   // (its rows laid out on the way till its end, as it was declared: what is dropped of it a hair before is the list's)
-  let own = c.own.contains(key)
+  self.sizes_end = c.end
+  // (not of a row coming in: it goes from nothing to what it is laid out at, and what its content puts on at once
+  // on the way (a card's options come to their post a frame or two after it, there at once as they are) goes there
+  // with it, on from where it is, below; taken for its content's own going, the list put that whole room on in one
+  // frame and all over the row went up by it, rows_steady.mbt's rows_step_least)
+  let own = c.own.contains(key) && !(cause is Comes(_))
+  // (gone and back elsewhere: new where it is now, from nothing, not on from as tall as it had closed to)
+  if c.anew.contains(key) {
+    c.anew.remove(key)
+    self.sizes.remove(key)
+  }
   c.way_begun(frame)
-  let r = match sizes.get(key) {
+  let r = match self.sizes.get(key) {
     Some(r) => r
     None => {
       let from = match cause {
         Comes(_) => 0.0
         // (as tall as it was last laid out, by its key: what is had by its place in the list may be another row's as
-        // the rows given change)
-        _ => shown_h.get(key).unwrap_or(natural)
+        // the rows given change; a copy of a row gone and back elsewhere, as tall as that row stood)
+        _ => c.carried.get(key).unwrap_or(self.shown_h.get(key).unwrap_or(natural))
       }
       // (off as the way set out: laid out first a while on, it is where the way has it by then)
       let r = {
@@ -203,8 +201,10 @@ fn RowCauses::height(
         before: None,
         frame: -1,
         was: (cause, from - to, to, c.start, c.end, 0.0, None),
+        lead: self.shown_lead.get(key).unwrap_or(c.leads.get(key).unwrap_or(0.0)),
+        seen_lead: self.shown_lead.get(key).unwrap_or(c.leads.get(key).unwrap_or(0.0)),
       }
-      sizes[key] = r
+      self.sizes[key] = r
       c.way_off(key, from - to, 0.0)
       r
     }
@@ -221,6 +221,12 @@ fn RowCauses::height(
   } else {
     r.frame = frame
     r.was = (r.cause, r.a, r.to, r.start, r.end, r.k, r.before)
+    r.seen_lead = self.shown_lead.get(key).unwrap_or(r.seen_lead)
+  }
+  // (its content going on the way itself: where it goes is where it is laid out now, so that a cause after this one,
+  // its content no longer on the way, goes on from where it was laid out, not from where it was as it set out)
+  if own {
+    r.to = to
   }
   // (the way's speed as it set out, once every row on it has said what was off of it: the frame after)
   if r.start == c.start && r.end == c.end {
@@ -243,19 +249,34 @@ fn RowCauses::height(
     r.a = if x > 0.02 { (h - base(r)) / x } else { 0.0 }
   } else if r.cause != cause || r.start != c.start || r.end != c.end {
     let t = c.start
-    // (till then, on the way it was on; one whose own cause sets out then (timed on: words sent leaving the composer)
-    // as it is now, till then)
-    let held = cause.at() > now
-    let (h, v) = if held { (r.at(now, base(r), r.k).0, 0.0) } else { r.at(t, base(r), r.k) }
-    r.before = if t <= now {
+    // A future way replaces another future way, not the motion already under way. Keep that motion until the new
+    // start, including when the future way is retimed again or a closing row is due to return.
+    let before = if t <= now {
       None
-    } else if held {
+    } else if cause.at() > now && r.cause.at() == now &&
+      ((cause is Comes(_) && r.cause is Comes(_)) || (cause is Changed(_) && r.cause is Changed(_))) {
+      // The row's own start was just moved into the future, before that change set out.
+      let (h, _) = r.at(now, base(r), r.k)
       Some((h - base(r), base(r), @double.infinity, @double.infinity, 0.0))
+    } else if r.start > now {
+      match r.before {
+        Some(previous) => Some(previous)
+        None => Some((r.a, base(r), @double.infinity, @double.infinity, 0.0))
+      }
     } else {
       Some((r.a, base(r), r.start, r.end, r.k))
     }
+    let (h, v) = match before {
+      Some((a, bto, start, end, k)) => {
+        let (x, speed) = way_share(t, start, end, k)
+        (bto + a * x, a * speed)
+      }
+      None => r.at(t, base(r), r.k)
+    }
+    r.before = before
     r.a = h - to
     r.to = to
+    r.lead = r.seen_lead
     r.start = c.start
     r.end = c.end
     r.k = 0.0
@@ -275,10 +296,38 @@ fn RowCauses::height(
   let shown = r.at(t, base(r), r.k).0
   // (one coming or going where it is, how far open: what it holds is drawn by it as it is painted, ListRows::enter,
   // leave)
-  if !(cause is Changed(_)) && c.by_room.contains(key) {
+  // (not one laid out coming on this way already as what brought it had it, said to come by its room only since
+  // (words sent before the last, their flight over or let go as more were sent): it goes on as it went. Put in the
+  // middle of its room from then, what it holds stepped there in one frame, 14 points with a row 500 ms on its way)
+  if !(cause is Changed(_)) && c.by_room.contains(key) && !c.not_by_room.contains(key) {
     c.opened[key] = (shown, natural)
+  } else if cause is Comes(_) {
+    c.not_by_room.add(key)
   }
+  c.stood[key] = shown
   shown
+}
+
+///|
+/// How far down from where its row lays it what row `k` holds is placed at `now`, its lead (the room over it at its
+/// top, ListRows::enter) another as it changed: from where the lead put it then, going as far as its height has gone
+/// on the rows' way (the row's room between rows going there with it, not what it holds stepped in it); none once
+/// there, nor for a row coming or going, nor one whose lead is as it was.
+fn ListState::row_lead_off(self : ListState, k : Int, now : Double) -> Double {
+  let (c, key) = match self.causes {
+    Some(c) if k < c.keys.length() && c.end > now => (c, c.keys[k])
+    _ => return 0.0
+  }
+  match (c.by.get(key), self.sizes.get(key)) {
+    (Some((Changed(_), _)), Some(r)) => {
+      let lead = c.leads.get(key).unwrap_or(0.0)
+      if (r.lead - lead).abs() < 0.001 || now < r.start {
+        return if now < r.start { r.lead - lead } else { 0.0 }
+      }
+      (r.lead - lead) * way_share(now, r.start, r.end, r.k).0
+    }
+    _ => 0.0
+  }
 }
 
 ///|
@@ -359,8 +408,9 @@ fn Ctx::room_held_in(self : Ctx, r : Int) -> Array[Int] {
 }
 
 ///|
-/// Row `k` laid out `h` tall: so tall by its key, for a change of it from there (a list whose rows' heights move).
-fn ListState::row_shown(self : ListState, k : Int, h : Double) -> Unit {
+/// Row `k` laid out `h` tall, what it holds `lead_off` down from where its lead puts it (row_lead_off): so tall and its
+/// lead so, by its key, for a change of it from there (a list whose rows' heights move).
+fn ListState::row_shown(self : ListState, k : Int, h : Double, lead_off? : Double = 0.0) -> Unit {
   match self.causes {
     Some(c) if k < c.keys.length() => {
       // (only the rows given now kept: what went from the list long since forgotten)
@@ -368,6 +418,10 @@ fn ListState::row_shown(self : ListState, k : Int, h : Double) -> Unit {
         self.shown_h.clear()
       }
       self.shown_h[c.keys[k]] = h
+      if self.shown_lead.length() > 2 * c.keys.length() + 16 {
+        self.shown_lead.clear()
+      }
+      self.shown_lead[c.keys[k]] = c.leads.get(c.keys[k]).unwrap_or(0.0) + lead_off
     }
     _ => ()
   }
@@ -436,7 +490,17 @@ pub struct RowCauses {
   /// the rows that come and go where they are (ListRows::enter, leave), by their keys, and of those coming or going,
   /// how tall each is laid out now and how tall it is (by its layout, read as it is painted)
   priv by_room : Set[String]
+  /// the rows coming that were laid out on the way not so (brought some other way: words flying to their row): none
+  /// of them turns so on its way (ListState::row_sized)
+  priv not_by_room : Set[String]
   priv opened : Map[String, (Double, Double)]
+  /// how tall each row on the way was last laid out, by its key (ListState::row_sized)
+  priv stood : Map[String, Double]
+  /// a row gone that came back elsewhere while its room still closed (ListRows::rows): the copy of it left closing
+  /// where it stood, by its key, as tall as the row stood then (`stood`); and the row itself, new where it is now,
+  /// from nothing
+  priv carried : Map[String, Double]
+  priv anew : Set[String]
   /// of those, the room over what each holds, at its top (its gap to the row before: ListRows::enter's `lead`)
   priv leads : Map[String, Double]
   /// the frame its list was last laid out in (shown): one not shown the frame before is shown anew, as it is
@@ -540,7 +604,7 @@ pub struct ListRows[T] {
 
 ///|
 pub fn[T] ListRows::new() -> ListRows[T] {
-  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), opened: {}, leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
+  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), not_by_room: Set::new(), opened: {}, stood: {}, carried: {}, anew: Set::new(), leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
 }
 
 ///|
@@ -568,36 +632,32 @@ pub fn[T] ListRows::rows(
   let now = c.moment()
   // (its list not shown the frame before, its page come back to, its pane slid to: shown as it is, nothing coming)
   let watched = watched && self.causes.laid >= c.frame_number() - 1
-  let result = self.rows_at(now, keys, items, version, watched~, ms~, from~, comes~, moves~)
-  // (built again at its end: what goes out of the list then)
-  if !self.going.is_empty() && self.causes.end > now {
-    c.shows_until(self.causes.end - 0.001)
-  }
-  result
-}
-
-///|
-/// Changes of identity and content, independent of the host that schedules the end of their shared way.
-fn[T] ListRows::rows_at(
-  self : ListRows[T],
-  now : Double,
-  keys : Array[String],
-  items : Array[T],
-  version : (T) -> String,
-  watched~ : Bool,
-  ms~ : (String) -> Double?,
-  from~ : (String) -> Double?,
-  comes~ : (T) -> Bool,
-  moves~ : (T) -> Bool,
-) -> (Array[T], Array[String]) {
   // (the same arrays as last given: nothing of them changed, nothing to look over)
   let same = self.given &&
     physical_equal(keys, self.last_keys) &&
     physical_equal(items, self.last_items)
+  // A fresh set of items can still have the same keys in the same order. Their versions must be read, but no row
+  // can have moved or gone; finding the longest retained order again would do work proportional to the whole list.
+  let same_keys = if same {
+    true
+  } else if self.given && keys.length() == self.order.length() && keys.length() == self.was.length() {
+    // Compare against the recorded order, not the caller's last array: a caller may have changed that array in place
+    // while giving new items. Duplicate keys keep the ordinary path too.
+    let mut equal = true
+    for i, k in keys {
+      if k != self.order[i].0 {
+        equal = false
+        break
+      }
+    }
+    equal
+  } else {
+    false
+  }
   self.last_keys = keys
   self.last_items = items
   let here : Map[String, Bool] = {}
-  if !same {
+  if !same_keys {
     for k in keys {
       here[k] = true
     }
@@ -614,7 +674,11 @@ fn[T] ListRows::rows_at(
     self.causes.end = -1.0
     self.causes.own.clear()
     self.causes.by_room.clear()
+    self.causes.not_by_room.clear()
     self.causes.opened.clear()
+    self.causes.stood.clear()
+    self.causes.carried.clear()
+    self.causes.anew.clear()
     self.causes.leads.clear()
   }
   // (whether a row sets out now: the rows' way sets out again from here)
@@ -624,10 +688,13 @@ fn[T] ListRows::rows_at(
   } else if self.given && watched {
     for i, k in keys {
       let v = version(items[i])
+      // (gone, its room still closing, and given again: where it went by, before it is said to come)
+      let went_by = if self.going.contains(k) { self.causes.by.get(k) } else { None }
       match self.was.get(k) {
         None =>
           if comes(items[i]) {
             self.causes.by[k] = (Comes(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
+            self.causes.own.remove(k)
             began = true
           }
         // (changed as it comes: still coming, on to what it is now)
@@ -636,14 +703,40 @@ fn[T] ListRows::rows_at(
             Some((Comes(_), _)) => ()
             _ => {
               self.causes.by[k] = (Changed(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
+              // (its content going on the way itself for the cause before, not said for this one till it says so again:
+              // Ctx::row_way)
+              self.causes.own.remove(k)
               began = true
             }
           }
         _ => ()
       }
-      if self.going.contains(k) {
-        self.going.remove(k)
-        moved = true
+      match self.going.get(k) {
+        Some(g) => {
+          // back elsewhere than it stood (rows come since between: where a chat stands, gone as its agent set to
+          // work, back at the list's end as the turn was over a moment after): it leaves where it was, a copy of it
+          // as it was, and comes where it is from nothing, as a row gone ahead of others does (`moves`). Taken up
+          // where it is now as tall as it had closed to, that room went from over the rows between to under them in
+          // one frame, all of them a step up (rows_steady.mbt's rows_step_least). Back where it stood, it turns
+          // back from where it is
+          let copy = k + row_moved_mark
+          let stood_after = if i > 0 { keys[i - 1] } else { "" }
+          if g.after != stood_after && !self.going.contains(copy) && self.causes.by.get(k) is Some((Comes(_), _)) {
+            self.going[copy] = g
+            self.causes.by[copy] = match went_by {
+              Some((Goes(at), dur)) => (Goes(at), dur)
+              _ => (Goes(g.at), row_size_ms)
+            }
+            match self.causes.stood.get(k) {
+              Some(h) => self.causes.carried[copy] = h
+              None => ()
+            }
+            self.causes.anew.add(k)
+          }
+          self.going.remove(k)
+          moved = true
+        }
+        None => ()
       }
     }
     // the rows gone ahead of others (`moves`: a chat with news to its list's top): each leaves where it was, a copy of
@@ -651,8 +744,8 @@ fn[T] ListRows::rows_at(
     // 出来更合理」, not across the rows between, which it would cover)
     // Those that moved are the fewest whose order changed: all but the most rows kept in the order they had (one gone
     // down past others moved, not each it passed, which only kept their order among themselves)
-    let ahead : Set[String] = Set::new()
-    {
+    if !same_keys {
+      let ahead : Set[String] = Set::new()
       let before : Map[String, Int] = {}
       for j, r in self.order {
         before[r.0] = j
@@ -677,26 +770,26 @@ fn[T] ListRows::rows_at(
           began = true
         }
       }
-    }
-    let mut prev = ""
-    for r in self.order {
-      let (k, item) = r
-      if ahead.contains(k) {
-        let copy = k + row_moved_mark
-        let at = from(k).unwrap_or(now)
-        self.going[copy] = { item, at, after: prev }
-        self.causes.by[copy] = (Goes(at), ms(k).unwrap_or(row_size_ms))
-        prev = copy
-        continue
-      }
-      if !here.contains(k) && !self.going.contains(k) {
-        let at = from(k).unwrap_or(now)
-        self.going[k] = { item, at, after: prev }
-        self.causes.by[k] = (Goes(at), ms(k).unwrap_or(row_size_ms))
-        began = true
-      }
-      if here.contains(k) || self.going.contains(k) {
-        prev = k
+      let mut prev = ""
+      for r in self.order {
+        let (k, item) = r
+        if ahead.contains(k) {
+          let copy = k + row_moved_mark
+          let at = from(k).unwrap_or(now)
+          self.going[copy] = { item, at, after: prev }
+          self.causes.by[copy] = (Goes(at), ms(k).unwrap_or(row_size_ms))
+          prev = copy
+          continue
+        }
+        if !here.contains(k) && !self.going.contains(k) {
+          let at = from(k).unwrap_or(now)
+          self.going[k] = { item, at, after: prev }
+          self.causes.by[k] = (Goes(at), ms(k).unwrap_or(row_size_ms))
+          began = true
+        }
+        if here.contains(k) || self.going.contains(k) {
+          prev = k
+        }
       }
     }
   } else if !self.going.is_empty() || !self.causes.by.is_empty() {
@@ -740,10 +833,18 @@ fn[T] ListRows::rows_at(
     self.causes.start = -1.0
     self.causes.own.clear()
     self.causes.by_room.clear()
+    self.causes.not_by_room.clear()
     self.causes.opened.clear()
+    self.causes.stood.clear()
+    self.causes.carried.clear()
+    self.causes.anew.clear()
     self.causes.leads.clear()
   }
   self.causes.end = end
+  // (built again at its end: what goes out of the list then)
+  if !self.going.is_empty() && end > now {
+    c.shows_until(end - 0.001)
+  }
   if !same {
     self.was.clear()
     for i, k in keys {
@@ -763,18 +864,47 @@ fn[T] ListRows::rows_at(
   {
     let order = self.going.to_array()
     order.sort_by(fn(a, b) { a.1.at.compare(b.1.at) })
-    for g in order {
-      let (k, go) = g
-      let mut at = 0
-      if go.after != "" {
-        for i, kk in all_keys {
-          if kk == go.after {
-            at = i + 1
+    // (each once the row it came after is in, itself gone too maybe, as it went before this one: a row put before all
+    // where that was never found)
+    let mut pending = order
+    while !pending.is_empty() {
+      let later : Array[(String, GoingRow[T])] = []
+      for g in pending {
+        let (k, go) = g
+        let mut at = -1
+        if go.after == "" {
+          at = 0
+        } else {
+          for i, kk in all_keys {
+            if kk == go.after {
+              at = i + 1
+            }
           }
         }
+        if at < 0 {
+          later.push(g)
+          continue
+        }
+        // (after those gone before it that came after the same row: it stood after them, only not given with them as
+        // it went, they being gone already; else it is put over them, they and it each a step the other way at once)
+        while at < all_keys.length() &&
+              (match self.going.get(all_keys[at]) {
+                Some(o) => o.after == go.after && o.at <= go.at
+                None => false
+              }) {
+          at = at + 1
+        }
+        all_keys.insert(at, k)
+        all_items.insert(at, go.item)
       }
-      all_keys.insert(at, k)
-      all_items.insert(at, go.item)
+      if later.length() == pending.length() {
+        for g in later {
+          all_keys.insert(0, g.0)
+          all_items.insert(0, g.1.item)
+        }
+        break
+      }
+      pending = later
     }
   }
   self.causes.told(all_keys, moved)
@@ -961,10 +1091,11 @@ let rows_laid_by : Ref[(RowCauses, Int)?] = Ref(None)
 /// The way the rows of the list a row is built in go to their heights (its start, how long), while it is under way:
 /// what in the row changes its height itself as its version changes (a card's options closing as it is answered) goes
 /// on it, from its start and as long, so that it moves as one with the rows round it (None: built in no such list, or
-/// none on its way).
+/// none on its way, or its row not: what changes in a row whose version did not change is not the way's, which set out
+/// for others before it).
 pub fn Ctx::row_way(self : Ctx) -> (Double, Double)? {
   match rows_laid_by.val {
-    Some((c, k)) if c.end > self.clock && c.start >= 0.0 && k < c.keys.length() => {
+    Some((c, k)) if c.end > self.clock && c.start >= 0.0 && k < c.keys.length() && c.by.contains(c.keys[k]) => {
       // (what it does to its row's height its own from now: ListState::row_sized)
       c.own.add(c.keys[k])
       Some((c.start, c.end - c.start))

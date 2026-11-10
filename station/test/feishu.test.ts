@@ -1,17 +1,18 @@
-// The Feishu connect (docs/feishu.md): its frames, what its events say, its cards, its threads, its app registration,
+// The Feishu connect: its frames, what its events say, its cards, its threads, its app registration,
 // and its surface against Feishu's stand-in (test/feishu-fake.ts), through a hub with scripted runtimes.
 import assert from "node:assert/strict";
 import { gunzipSync } from "node:zlib";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { questionCard, textCards, took } from "../src/feishu/cards.ts";
+import { questionCard, textPosts, took } from "../src/feishu/cards.ts";
 import { CONTROL, DATA, Parts, decode, encode, header } from "../src/feishu/frame.ts";
 import { messageOf, resourceOf } from "../src/feishu/parse.ts";
 import { ADDONS, Registrations, encodeAddons } from "../src/feishu/register.ts";
+import { NameBook } from "../src/connects/names.ts";
 import { MEMBERS_MS } from "../src/connects/surface.ts";
 import { FeishuSurface } from "../src/feishu/surface.ts";
 import { FeishuThreads } from "../src/feishu/threads.ts";
@@ -61,10 +62,12 @@ test("messages: mentions as names and whether the bot was among them, rich text 
   assert.equal(messageOf(ev({ message_type: "sticker", content: "{}" }), "ou_bot")!.text, "[sticker]");
 });
 
-test("cards: long text in several; a question's buttons with the recommended one last and filled, a text card's field", () => {
-  const long = textCards(`${"字".repeat(5000)}\n\n${"字".repeat(5000)}`);
+test("cards: long text in several rich-text messages, mentions as md writes them; a question's buttons with the recommended one last and filled, a text card's field", () => {
+  const long = textPosts(`${"字".repeat(5000)}\n\n${"字".repeat(5000)}`);
   assert.equal(long.length, 2);
-  assert.equal(long[0].schema, "2.0");
+  assert.deepEqual(JSON.parse(textPosts("<at id=ou_ada></at> 好了\n\n| a |\n|---|\n| 1 |")[0]!), {
+    zh_cn: { content: [[{ tag: "md", text: '<at user_id="ou_ada"></at> 好了\n\n| a |\n|---|\n| 1 |' }]] },
+  });
   const q = questionCard("选一个", { type: "options", options: [{ label: "合并", recommended: true }, { label: "先不", detail: "留着分支" }] }, "om_t", "zh");
   const buttons = q.body.elements.filter((e: Json) => e.tag === "button");
   assert.deepEqual(buttons.map((b: Json) => [b.text.content, b.type, b.behaviors[0].value]), [
@@ -105,8 +108,11 @@ test("registration: the link carries what the app is to get; asked until its id 
     await t.adjust(5000);
     await settle();
     assert.equal(reg.get(r.id)!.state, "done");
-    assert.equal(reg.take(r.id, "b@x.test"), null, "only its maker's");
-    assert.deepEqual(reg.take(r.id, "a@x.test")!.app, { appId: "cli_new", appSecret: "sec", openId: "ou_me" });
+    assert.equal(await reg.complete(r.id, "b@x.test", "", async () => "wrong"), null, "only its maker's");
+    assert.equal(await reg.complete(r.id, "a@x.test", "", async (made) => {
+      assert.deepEqual(made.app, { appId: "cli_new", appSecret: "sec", openId: "ou_me" });
+      return "saved";
+    }), "saved");
     const again = await reg.begin("a@x.test", "feishu", null);
     answer = { error: "access_denied" };
     await t.adjust(5000);
@@ -119,15 +125,46 @@ test("registration: the link carries what the app is to get; asked until its id 
   }
 });
 
+test("registration: a temporary save failure is retried with the same app while the station stays up", async () => {
+  const t = testClock();
+  let attempts = 0;
+  const reg = new Registrations({ clock: t.clock, post: async (_domain, form) =>
+    form.action === "init" ? { supported_auth_methods: ["client_secret"] }
+      : form.action === "begin" ? { device_code: "dc", verification_uri_complete: "https://accounts.feishu.cn/x", interval: 5 }
+      : { client_id: "cli_new", client_secret: "sec" },
+  });
+  reg.start(async (r) => {
+    assert.equal(r.app?.appId, "cli_new");
+    if (++attempts === 1) throw new Error("temporary failure");
+    return "my-connect";
+  });
+  try {
+    const viewer = { sub: "s", email: "a@x.test", name: "A", role: "owner", workspace: "w", device: "d" };
+    const r = await reg.begin(viewer.email, "feishu", null, { viewer, lang: "zh", input: { bind: { runtime: "claude" } } }, viewer.workspace);
+    await t.adjust(5000);
+    await settle();
+    assert.equal(attempts, 1);
+    assert.equal(reg.get(r.id)?.app?.appSecret, "sec");
+    await t.adjust(5000);
+    await settle();
+    assert.equal(attempts, 2);
+    assert.deepEqual([reg.get(r.id)?.connectId, reg.get(r.id)?.app], ["my-connect", null]);
+  } finally {
+    await reg.close();
+    await t.close();
+  }
+});
+
 /// A surface on Feishu's stand-in, with its threads in a temporary directory.
-async function surfaceRig(o: { topics?: boolean; before?: (threads: FeishuThreads, fake: FakeFeishu) => void } = {}) {
+async function surfaceRig(o: { topics?: boolean; threadMode?: boolean; names?: boolean; before?: (threads: FeishuThreads, fake: FakeFeishu) => void } = {}) {
   const fake = await FakeFeishu.start();
   if (o.topics) fake.answer("GET /open-apis/im/v1/chats/oc_t", { code: 0, data: { name: "话题群", chat_mode: "group", group_message_type: "thread" } });
   const dir = mkdtempSync(join(tmpdir(), "fs-"));
   const t = testClock();
   const threads = new FeishuThreads(join(dir, "threads.json"));
   o.before?.(threads, fake);
-  const surface = new FeishuSurface({ connect: "fs", appId: "cli_test", appSecret: "s", domain: "feishu", threads, client: new FeishuClient("cli_test", "s", "feishu", fake.base), clock: t.clock });
+  const book = o.names ? new NameBook(join(dir, "names.json"), { clock: t.clock }) : null;
+  const surface = new FeishuSurface({ connect: "fs", appId: "cli_test", appSecret: "s", domain: "feishu", threads, threadMode: o.threadMode, book, client: new FeishuClient("cli_test", "s", "feishu", fake.base), clock: t.clock });
   const events: ChatEvent[] = [];
   await surface.start(async (e) => void events.push(e));
   await fake.until("connected", () => surface.socket().connected);
@@ -135,6 +172,7 @@ async function surfaceRig(o: { topics?: boolean; before?: (threads: FeishuThread
     fake, surface, events, threads, t,
     close: async () => {
       await surface.stop();
+      await book?.close();
       await fake.close();
       await t.close();
       rmSync(dir, { recursive: true, force: true });
@@ -211,7 +249,98 @@ test("surface: a topic group's topics are conversations of their own, answered i
     const reply = r.fake.calls("POST", "/open-apis/im/v1/messages/om_root/reply");
     assert.equal(reply.length, 1);
     assert.equal(reply[0]!.body.reply_in_thread, true);
-    assert.equal(JSON.parse(reply[0]!.body.content).body.elements[0].content, "答案");
+    assert.deepEqual([reply[0]!.body.msg_type, JSON.parse(reply[0]!.body.content).zh_cn.content[0][0].text], ["post", "答案"]);
+  } finally {
+    await r.close();
+  }
+});
+
+test("surface: thread mode: an @ begins a thread answered in it, a thread goes by its first message, and what calls nobody is no one's", async () => {
+  const r = await surfaceRig({ threadMode: true });
+  try {
+    r.fake.message({ id: "om_a", text: "看看", at: true });
+    r.fake.message({ id: "om_b", text: "闲聊" });
+    r.fake.message({ id: "om_c", text: "接着说", thread: "omt_1", root: "om_a" });
+    await r.fake.until("heard", () => r.events.length === 3);
+    assert.deepEqual(r.events.map((e) => (e.type === "message" ? e.message.threadTs : null)), ["om_a", "om_b", "om_a"]);
+    assert.equal(r.threads.current("fs", "oc_g"), null, "the group has no conversation of its own");
+    await r.surface.post({ channel: "oc_g", threadTs: "om_a" }, "答案", []);
+    const reply = r.fake.calls("POST", "/open-apis/im/v1/messages/om_a/reply");
+    assert.equal(reply.length, 1);
+    assert.equal(reply[0]!.body.reply_in_thread, true);
+    assert.equal(r.fake.calls("POST", "/open-apis/im/v1/messages").length, 0);
+    r.fake.message({ id: "om_d", text: "私聊", p2p: true });
+    await r.fake.until("direct", () => r.events.length === 4);
+    await r.surface.post({ channel: "oc_g", threadTs: "om_a" }, "仍在 thread", []);
+    assert.equal(r.fake.calls("POST", "/open-apis/im/v1/messages/om_a/reply").length, 2);
+    r.fake.answer("GET /open-apis/im/v1/messages/om_a", { code: 0, data: { items: [{ message_id: "om_a", thread_id: "omt_1" }] } });
+    r.fake.answer("GET /open-apis/im/v1/messages", { code: 0, data: { items: [], has_more: false } });
+    assert.deepEqual(await r.surface.history({ channel: "oc_g", threadTs: "om_a" }, "om_c", 10), []);
+    assert.equal(r.fake.calls("GET", "/open-apis/im/v1/messages").at(-1)!.query.container_id, "omt_1");
+  } finally {
+    await r.close();
+  }
+});
+
+test("surface: outside thread mode a group's thread is the group's conversation, answered in the group", async () => {
+  const r = await surfaceRig();
+  try {
+    r.fake.message({ id: "om_a", text: "看看", at: true });
+    r.fake.message({ id: "om_c", text: "接着说", thread: "omt_1", root: "om_a" });
+    await r.fake.until("heard", () => r.events.length === 2);
+    assert.deepEqual(r.events.map((e) => (e.type === "message" ? e.message.threadTs : null)), ["om_a", "om_a"]);
+    await r.surface.post({ channel: "oc_g", threadTs: "om_a" }, "答案", []);
+    assert.equal(r.fake.calls("POST", "/open-apis/im/v1/messages").length, 1);
+  } finally {
+    await r.close();
+  }
+});
+
+test("surface: a turn for a message that called nobody shows no card until the agent does something, and one that says nothing takes its card back", async () => {
+  const r = await surfaceRig();
+  try {
+    const cards = () => r.fake.calls("POST", "/open-apis/im/v1/messages").length;
+    const here = { channel: "oc_g", threadTs: "om_a" };
+    r.fake.message({ id: "om_a", text: "看看", at: true });
+    r.fake.message({ id: "om_b", text: "闲聊" });
+    await r.fake.until("heard", () => r.events.length === 2);
+    // Only thought and read the chat, said nothing: no card at all.
+    r.surface.working(here, "om_b", "正在思考…", null);
+    await settle();
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_b", "正在读取对话…", null);
+    await settle();
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_b", "", null);
+    await settle();
+    assert.equal(cards(), 0);
+    // It went to work, then said nothing: the card went up, and comes down.
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_b", "正在运行命令…", null);
+    await r.fake.until("card made", () => cards() === 1);
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_b", "", null);
+    await r.fake.until("recalled", () => r.fake.calls("DELETE", /^\/open-apis\/im\/v1\/messages\//).length === 1);
+    assert.equal(r.fake.calls("PUT", /^\/open-apis\/cardkit\/v1\/cards\//).length, 0);
+    // It said something: no card for thinking, and none left to change.
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_b", "正在思考…", null);
+    await settle();
+    await r.surface.post(here, "补一句", []);
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_b", "", null);
+    await settle();
+    assert.equal(r.fake.calls("DELETE", /^\/open-apis\/im\/v1\/messages\//).length, 1);
+    assert.equal(cards(), 2, "the card before, and what it said");
+    // Called by an @: the card at once; kept saying the turn is over when Feishu will not recall it.
+    await r.t.adjust(1000);
+    r.fake.answer("POST /open-apis/im/v1/messages", { code: 0, data: { message_id: "om_at" } });
+    r.surface.working(here, "om_a", "正在思考…", null);
+    await r.fake.until("card at once", () => cards() === 3);
+    r.fake.answer("DELETE /open-apis/im/v1/messages/om_at", { code: 230_000, msg: "too old" });
+    await r.t.adjust(1000);
+    r.surface.working(here, "om_a", "", null);
+    await r.fake.until("kept as done", () => r.fake.calls("PUT", /^\/open-apis\/cardkit\/v1\/cards\//).length === 1);
   } finally {
     await r.close();
   }
@@ -249,13 +378,14 @@ test("surface: relaying lists the groups the bot is in, topic group or not; begi
     assert.equal(r.threads.topicRoot("fs", "omt_9"), "om_r1");
     await r.surface.post({ channel: "oc_t", threadTs: "omt_9" }, "摘要", []);
     assert.equal(r.fake.calls("POST", "/open-apis/im/v1/messages/om_r1/reply").length, 1);
-    // Its first message changed in place, when what it says fits in one card.
-    r.fake.answer("PATCH /open-apis/im/v1/messages/om_r1", { code: 0, data: {} });
+    // Its first message changed in place, when what it says fits in one message.
+    r.fake.answer("PUT /open-apis/im/v1/messages/om_r1", { code: 0, data: {} });
     assert.equal(await r.surface.edit({ channel: "oc_t", threadTs: "omt_9" }, "om_r1", "接力到这里\n\n摘要"), true);
-    const patched = r.fake.calls("PATCH", "/open-apis/im/v1/messages/om_r1");
-    assert.equal(JSON.parse(patched[0]!.body.content).body.elements[0].content, "接力到这里\n\n摘要");
+    const put = r.fake.calls("PUT", "/open-apis/im/v1/messages/om_r1");
+    assert.equal(put[0]!.body.msg_type, "post");
+    assert.equal(JSON.parse(put[0]!.body.content).zh_cn.content[0][0].text, "接力到这里\n\n摘要");
     assert.equal(await r.surface.edit({ channel: "oc_t", threadTs: "omt_9" }, "om_r1", `${"甲".repeat(6000)}\n\n乙`), false);
-    assert.equal(r.fake.calls("PATCH", "/open-apis/im/v1/messages/om_r1").length, 1);
+    assert.equal(r.fake.calls("PUT", "/open-apis/im/v1/messages/om_r1").length, 1);
     // A topic Feishu did not name in its answer is read back from the message.
     r.fake.answer("GET /open-apis/im/v1/messages/om_r2", { code: 0, data: { items: [{ message_id: "om_r2", thread_id: "omt_10" }] } });
     assert.deepEqual((await r.surface.begin("oc_t", "再接力")).thread, { channel: "oc_t", threadTs: "omt_10" });
@@ -271,7 +401,7 @@ test("surface: relaying lists the groups the bot is in, topic group or not; begi
   }
 });
 
-test("surface: posts as cards in the chat, files after them; a question's button answers as the person and the card shows the answer", async () => {
+test("surface: posts as rich text in the chat, files after them; a question's button answers as the person and the card shows the answer", async () => {
   const r = await surfaceRig();
   const dir = mkdtempSync(join(tmpdir(), "fsf-"));
   try {
@@ -283,7 +413,7 @@ test("surface: posts as cards in the chat, files after them; a question's button
     ]);
     const sent = r.fake.calls("POST", "/open-apis/im/v1/messages");
     assert.deepEqual(sent.map((s) => [s.query.receive_id_type, s.body.receive_id, s.body.msg_type]), [
-      ["chat_id", "oc_g", "interactive"],
+      ["chat_id", "oc_g", "post"],
       ["chat_id", "oc_g", "image"],
       ["chat_id", "oc_g", "file"],
     ]);
@@ -330,6 +460,8 @@ test("surface: the status card follows the agent's steps at most once a second a
   const r = await surfaceRig();
   try {
     const here = { channel: "oc_g", threadTs: "om_a" };
+    r.fake.message({ id: "om_a", text: "看看", at: true });
+    await r.fake.until("heard", () => r.events.length === 1);
     r.surface.working(here, "om_a", "正在思考…", "https://still.test/o/w/s/k");
     await r.fake.until("card made", () => r.fake.calls("POST", "/open-apis/im/v1/messages").length === 1);
     assert.equal(JSON.parse(r.fake.calls("POST", "/open-apis/im/v1/messages")[0]!.body.content).type, "card");
@@ -339,6 +471,7 @@ test("surface: the status card follows the agent's steps at most once a second a
     await r.t.adjust(1000);
     await r.fake.until("changed", () => r.fake.calls("PUT", /^\/open-apis\/cardkit\/v1\/cards\//).length === 1);
     await r.t.adjust(64_000);
+    await r.surface.post(here, "好了", []);
     r.surface.working(here, "om_a", "", null);
     await r.fake.until("done", () => r.fake.calls("PUT", /^\/open-apis\/cardkit\/v1\/cards\//).length === 2);
     const puts = r.fake.calls("PUT", /^\/open-apis\/cardkit\/v1\/cards\//);
@@ -365,6 +498,7 @@ test("hub: a Feishu connect's chat is one session, its threads on the connect's 
     assert.ok(rig.store.getSession(key));
     const thread = rig.store.threadAt("feishu:fs", "oc_g", "om_a")!;
     assert.deepEqual(rig.said(thread.id).map((m) => m.text), ["@Bot 帮忙", "没 @ 也算"]);
+    rig.claude.last().reads();
     const answer = await rig.call(key, "chat_post", { to: "oc_g/om_a", text: "选哪个", card: { type: "options", options: [{ label: "A" }, { label: "B" }] }, kind: "need_human", need: "选 A 或 B" });
     assert.ok(answer.startsWith("Posted to oc_g/om_a"), answer);
     const card = r.fake.calls("POST", "/open-apis/im/v1/messages").map((c) => JSON.parse(c.body.content)).find((c) => JSON.stringify(c).includes("button"));
@@ -374,6 +508,18 @@ test("hub: a Feishu connect's chat is one session, its threads on the connect's 
     await r.close();
     await rig.close();
   }
+});
+
+test("thread mode: kept in a connect's Feishu part as asked, and only where each conversation has its own session", async () => {
+  const { feishuConnects } = await import("../src/feishu/index.ts");
+  const { feishuEntry } = await import("../src/api/routes/feishu.ts");
+  const had = { appId: "cli_1", appSecret: "s", domain: "feishu" };
+  const on = feishuEntry({ threads: true }, had)!;
+  assert.deepEqual(on, { ...had, threads: true });
+  assert.deepEqual(feishuEntry({ appId: "cli_1" }, on), on, "an edit that does not say keeps it");
+  assert.deepEqual(feishuEntry({ threads: false }, on), { ...had, threads: false });
+  const of = (mode: string, feishu: Json) => feishuConnects({ connects: [{ id: "f", kind: "feishu", mode, feishu }] })[0]!.threads;
+  assert.deepEqual([of("multi-session", on), of("single-session", on), of("multi-session", had)], [true, false, false]);
 });
 
 test("routes: a connect of an app given by its id and secret, or made by a scan; edits keep its app; its secret replaced once checked", async () => {
@@ -399,7 +545,8 @@ test("routes: a connect of an app given by its id and secret, or made by a scan;
   const store = Store.open(":memory:", null);
   const feishu = makeFeishu({ data, store, config, receive: async () => {}, bound: () => true });
   const viewer = { sub: "s", email: "owner@example.com", name: "Owner", role: "owner", workspace: "ws", device: "d" } as Json;
-  const table = feishuRoutes({ feishu, config, data, hub: () => undefined, overview: () => ({ connects: config.raw().connects }) });
+  let failOverview = false;
+  const table = feishuRoutes({ feishu, config, data, hub: () => undefined, overview: () => { if (failOverview) throw new Error("overview unavailable"); return { connects: config.raw().connects }; } });
   const ask = async (method: string, path: string, body?: unknown): Promise<[number, Json]> => {
     for (const route of table) {
       const found = route.method === method ? route.pattern.exec(path) : null;
@@ -431,11 +578,25 @@ test("routes: a connect of an app given by its id and secret, or made by a scan;
     const [begun, reg] = await ask("POST", "/feishu/registrations", { name: "Codex 机器人" });
     assert.equal(begun, 200);
     await fake.until("registered", () => feishu.registrations.get(reg.id)?.state === "done");
+    const [refused] = await ask("POST", "/feishu/connects", { feishu: { registration: reg.id }, bind: { runtime: "not-a-runtime" } });
+    assert.equal(refused, 400);
+    assert.equal(feishu.registrations.get(reg.id)?.state, "done", "a failed save keeps the app for another attempt");
     const [scanned, second] = await ask("POST", "/feishu/connects", { feishu: { registration: reg.id }, bind: { runtime: "claude" } });
     assert.equal(scanned, 200, JSON.stringify(second));
     assert.equal(second.id, "codex-2");
     assert.equal(config.raw().connects[1].feishu.appId, "cli_scan");
-    assert.equal(feishu.registrations.get(reg.id), undefined, "taken");
+    assert.equal(feishu.registrations.get(reg.id)?.connectId, second.id, "the saved result makes a repeated request idempotent");
+    const [again, repeated] = await ask("POST", "/feishu/connects", { feishu: { registration: reg.id }, bind: { runtime: "claude" } });
+    assert.deepEqual([again, repeated.id, config.raw().connects.length], [200, second.id, 2]);
+    const [, reg2] = await ask("POST", "/feishu/registrations");
+    await fake.until("registered again", () => feishu.registrations.get(reg2.id)?.state === "done");
+    failOverview = true;
+    const [answerLost] = await ask("POST", "/feishu/connects", { feishu: { registration: reg2.id }, bind: { runtime: "claude" } });
+    assert.equal(answerLost, 500, "the overview failed after the connection was written");
+    assert.equal(config.raw().connects.length, 3);
+    failOverview = false;
+    const [retry, afterLost] = await ask("POST", "/feishu/connects", { feishu: { registration: reg2.id }, bind: { runtime: "claude" } });
+    assert.deepEqual([retry, afterLost.id, config.raw().connects.length], [200, config.raw().connects[2].id, 3], "retry finds the committed connection");
   } finally {
     if (was === undefined) delete process.env.STILLFAIL_FEISHU_API;
     else process.env.STILLFAIL_FEISHU_API = was;
@@ -443,6 +604,109 @@ test("routes: a connect of an app given by its id and secret, or made by a scan;
     store.close();
     await fake.close();
     rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("scan: the station resumes a waiting scan and retries a failed save after restarts, without a client or another app", async () => {
+  const fake = await FakeFeishu.start();
+  let confirmed = false;
+  fake.answer("POST /oauth/v1/app/registration", (s: Json) =>
+    s.body.action === "init" ? { supported_auth_methods: ["client_secret"] }
+      : s.body.action === "begin" ? { device_code: "dc", verification_uri_complete: `${fake.base}/verify?code=1`, interval: 5, expires_in: 600 }
+      : confirmed ? { client_id: "cli_scan", client_secret: "scan-secret" } : { error: "authorization_pending" },
+  );
+  const was = process.env.STILLFAIL_FEISHU_API;
+  process.env.STILLFAIL_FEISHU_API = fake.base;
+  const data = mkdtempSync(join(tmpdir(), "fr-restart-"));
+  const t = testClock();
+  delete process.env.STILLFAIL_CONFIG;
+  writeFileSync(join(data, "config.json"), JSON.stringify({ connects: [] }));
+  const { ConfigFile } = await import("../src/ops/config.ts");
+  const { Store } = await import("../src/store/store.ts");
+  const { makeFeishu } = await import("../src/feishu/index.ts");
+  const { feishuRoutes } = await import("../src/api/routes/feishu.ts");
+  const config = new ConfigFile(data);
+  const store = Store.open(":memory:", null);
+  const viewer = { sub: "s", email: "owner@example.com", name: "Owner", role: "owner", workspace: "joined", device: "d" } as Json;
+  let failures = 0;
+  let failSave = true;
+  config.check = () => { if (failSave) { failures++; throw new Error("injected config write failure"); } };
+  let feishu = makeFeishu({ data, store, config, clock: t.clock, receive: async () => {}, bound: () => false });
+  const routes = () => feishuRoutes({ feishu, config, data, hub: () => undefined, overview: () => ({ connects: config.raw().connects }), place: () => ({ origin: "x", station: "st", workspace: "home" }) });
+  let table = routes();
+  const ask = async (method: string, path: string, body?: unknown): Promise<[number, Json]> => {
+    const route = table.find((route) => route.method === method && route.pattern.test(path))!;
+    const a = await route.handle({ method, path, query: [], headers: {}, body: Buffer.from(body === undefined ? "" : JSON.stringify(body)), viewer, lang: "zh" }, route.pattern.exec(path)!.slice(1));
+    return [a.status, JSON.parse(String(a.body))];
+  };
+  try {
+    const [status, reg] = await ask("POST", "/feishu/registrations", { bind: { runtime: "claude", model: "chosen-model" }, mode: "multi-session", requireMention: false, threads: true });
+    assert.equal(status, 200);
+    const journal = join(data, "feishu-registrations.json");
+    assert.equal(statSync(journal).mode & 0o777, 0o600);
+    await feishu.close();
+    confirmed = true;
+    feishu = makeFeishu({ data, store, config, clock: t.clock, receive: async () => {}, bound: () => false });
+    table = routes();
+    await t.adjust(5000);
+    await fake.until("save failed", () => failures > 0);
+    assert.equal(config.raw().connects.length, 0);
+    assert.equal(feishu.registrations.get(reg.id)?.app?.appSecret, "scan-secret", "the app survives a rejected config write");
+    assert.match(readFileSync(journal, "utf8"), /scan-secret/);
+    const polls = fake.calls("POST", "/oauth/v1/app/registration").filter((c) => c.body.action === "poll").length;
+    await feishu.close();
+    failSave = false;
+    feishu = makeFeishu({ data, store, config, clock: t.clock, receive: async () => {}, bound: () => false });
+    table = routes();
+    await fake.until("saved after restart", () => typeof feishu.registrations.get(reg.id)?.connectId === "string");
+    const kept = config.raw().connects;
+    assert.equal(kept.length, 1);
+    assert.deepEqual([kept[0].feishu.appId, kept[0].feishu.appSecret, kept[0].bind, kept[0].workspace, kept[0].requireMention, kept[0].feishu.threads], ["cli_scan", "scan-secret", { runtime: "claude", model: "chosen-model" }, "joined", false, true]);
+    assert.doesNotMatch(readFileSync(journal, "utf8"), /scan-secret|device_code|verify\?code/);
+    const [one, two] = await Promise.all([ask("POST", "/feishu/connects", { feishu: { registration: reg.id }, bind: { runtime: "claude" } }), ask("POST", "/feishu/connects", { feishu: { registration: reg.id }, bind: { runtime: "claude" } })]);
+    assert.deepEqual([one[0], two[0], one[1].id, two[1].id, config.raw().connects.length], [200, 200, kept[0].id, kept[0].id, 1]);
+    viewer.workspace = "other";
+    const [wrongWorkspace] = await ask("POST", "/feishu/connects", { feishu: { registration: reg.id }, bind: { runtime: "claude" } });
+    assert.equal(wrongWorkspace, 400, "a registration belongs to its creator and workspace");
+    viewer.workspace = "joined";
+    assert.equal(fake.calls("POST", "/oauth/v1/app/registration").filter((c) => c.body.action === "begin").length, 1);
+    assert.equal(fake.calls("POST", "/oauth/v1/app/registration").filter((c) => c.body.action === "poll").length, polls, "saving the app never starts another scan");
+  } finally {
+    if (was === undefined) delete process.env.STILLFAIL_FEISHU_API;
+    else process.env.STILLFAIL_FEISHU_API = was;
+    await feishu.close();
+    await t.close();
+    store.close();
+    await fake.close();
+    rmSync(data, { recursive: true, force: true });
+  }
+});
+
+test("surface: a person known without an email is asked for again after a day, one with an email never", async () => {
+  const r = await surfaceRig({ names: true });
+  try {
+    const known = () => r.surface.knownPerson("ou_bo");
+    const asked = () => r.fake.calls("GET", "/open-apis/contact/v3/users/ou_bo").length;
+    // Another person's answer: what the book would have asked about Bo by then has been asked.
+    const others = (id: string) => r.fake.until(id, () => r.surface.knownPerson(id) !== null);
+    let email = "";
+    r.fake.answer("GET /open-apis/contact/v3/users/ou_bo", () => ({ code: 0, data: { user: { name: "Bo", email } } }));
+    assert.equal(known(), null);
+    await r.fake.until("Bo learned", () => known() !== null);
+    assert.deepEqual(known(), { name: "Bo", email: "" });
+    await others("ou_a");
+    assert.equal(asked(), 1, "not again within the day");
+    email = "bo@example.test";
+    await r.t.adjust(24 * 60 * 60_000);
+    assert.deepEqual(known(), { name: "Bo", email: "" }, "what is known answers at once");
+    await r.fake.until("Bo's email", () => known()?.email === "bo@example.test");
+    assert.equal(asked(), 2);
+    await r.t.adjust(24 * 60 * 60_000);
+    known();
+    await others("ou_b");
+    assert.equal(asked(), 2, "an email found stays");
+  } finally {
+    await r.close();
   }
 });
 

@@ -35,7 +35,7 @@ fn tn_tester(
   markdown_read.val = Some(read)
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(ui_theme_now)
-    root.show(fn() { first.get() }, fn(a) { table_node(a, fn() { tn_text }) })
+    root.show(at_once=true, fn() { first.get() }, fn(a) { table_node(a, fn() { tn_text }) })
     root.box(fn(b) { table_node(b, fn() { tn_text }) }) |> ignore
     @ui.old(root, fn(c) { presented(c) }).over(Is(true)) |> @ui.old_takes_own |> ignore
     presented_nodes(root)
@@ -358,8 +358,8 @@ test "a table shown, its reading pushed out of the texts read lately by others: 
   })
   @ui.set_view_app(fn(root) {
     @ui.set_tree_theme(ui_theme_now)
-    root.show(fn() { first.get() }, fn(a) { table_node(a, fn() { tn_text }) })
-    root.show(fn() { second.get() }, fn(b) { table_node(b, fn() { tn_text }) })
+    root.show(at_once=true, fn() { first.get() }, fn(a) { table_node(a, fn() { tn_text }) })
+    root.show(at_once=true, fn() { second.get() }, fn(b) { table_node(b, fn() { tn_text }) })
     @ui.old(root, fn(c) { presented(c) }).over(Is(true)) |> @ui.old_takes_own |> ignore
     presented_nodes(root)
   })

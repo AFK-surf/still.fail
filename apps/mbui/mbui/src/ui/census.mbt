@@ -1,5 +1,5 @@
 // What values the last frame's nodes take, by kind (Tester::census): how many sizes of words, paddings, corners and
-// colours a screen uses, which an app keeps few (its styles' tokens: docs/style.md), the window's tree's nodes with the
+// colours a screen uses, which an app keeps few (its styles' tokens: mbui's ui/style.mbt), the window's tree's nodes with the
 // old frame's (Tree::styled). Read only.
 
 ///|
@@ -114,6 +114,10 @@ pub fn Tester::census(self : Tester) -> Census {
         }
         if (n.ground & 0xFFL) != 0L {
           color[census_hex(n.ground)] = true
+        }
+        // (the edge round it, as an old view's border is counted)
+        if (n.edge & 0xFFL) != 0L {
+          color[census_hex(n.edge)] = true
         }
       }
     None => ()

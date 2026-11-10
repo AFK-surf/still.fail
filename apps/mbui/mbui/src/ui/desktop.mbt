@@ -273,8 +273,6 @@ priv struct Picked {
   /// picked by a finger (finger_select.mbt): held on a word, its ends' handles, the system's text menu over it; the
   /// old view it was picked in (an old view's words: Node's `island`), the only one whose words it picks
   mut finger : Bool
-  /// the finger has slid after picking its word; layout moving under a still hold does not widen that word
-  mut slid : Bool
   mut island : @view.NodeId?
   /// the word a finger's hold picked (its start and its end), widened from by words while the finger slides on
   mut word : (SelSpot, SelSpot)?
@@ -295,7 +293,6 @@ let picked : Picked = {
   layer: OldLayer(0),
   made: 0,
   finger: false,
-  slid: false,
   island: None,
   word: None,
   handle: 0,
@@ -372,11 +369,6 @@ fn desk_build_start() -> Unit {
 /// As a frame ends (its targets in place): the shapes and drag areas it said are the ones in force, the pointer's
 /// target found again where it rests (what moved under it), its shape shown.
 fn Ctx::desk_frame_end(self : Ctx) -> Unit {
-  if self.pointer_pending {
-    self.pointer_pending = false
-    // The frame has read the event. A resting mouse follows the current target again from here.
-    view_point_seen.val = (-1, false, -1)
-  }
   desk.mouse_drags = match desk.next_mouse_drags.last() {
     Some(on) => on
     None => true
@@ -450,7 +442,8 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
 ///|
 /// A node's marks (Node's `marks`): it takes presses (Ctx::takes_presses, and what reads its click), a press on it drags
 /// the window (Ctx::window_drag), keeps what is picked (Ctx::keeps_selection), is what lies under it's when held
-/// (Ctx::holds_through), asks for a menu (Ctx::menu_asked); above them, the pointer's shape over it and one
+/// (Ctx::holds_through), asks for a menu (Ctx::menu_asked), or covers words picked with the pointer
+/// (Ctx::blocks_selection); above them, the pointer's shape over it and one
 /// (Ctx::cursor), 0 where none is said.
 let mark_takes : Int = 1
 
@@ -467,10 +460,13 @@ let mark_holds : Int = 8
 let mark_asks : Int = 16
 
 ///|
-let mark_cursor_at : Int = 5
+let mark_blocks_selection : Int = 32
 
 ///|
-/// What is said of the target `id` as it is built, marked on its node (docs/retained.md, the way there's 1: what a frame
+let mark_cursor_at : Int = 6
+
+///|
+/// What is said of the target `id` as it is built, marked on its node (the way there's 1: what a frame
 /// says is what its nodes hold, kept with them). Said of an id whose node is not made yet, it is marked on it as it is
 /// (Ctx::id_built). The shape said last is the one.
 fn Ctx::mark_id(self : Ctx, id : Int, m : Int, cursor? : Int = -1) -> Unit {
@@ -557,7 +553,7 @@ pub fn Ctx::cursor(self : Ctx, id : Int, cursor : Cursor) -> Unit {
 
 ///|
 /// `id` takes presses, said as it is built: the pointer's hand over it (Ctx::show_cursor). What reads its click
-/// (Ctx::clicked, a part's Response) says so by that; what takes its press without its click (a slider set where it
+/// (Ctx::on_press, a part's Response) says so by that; what takes its press without its click (a slider set where it
 /// is pressed, Ctx::pressed alone) says it here.
 pub fn Ctx::takes_presses(self : Ctx, id : Int) -> Unit {
   self.mark_id(id, mark_takes)
@@ -639,7 +635,7 @@ pub fn Ctx::mouse_drags_lists(self : Ctx, on : Bool) -> Unit {
 /// Whether key `code` came since the last frame with exactly `mods` held (with `in_field`, also one a focused field
 /// took: an Enter it sent, an arrow it moved by).
 pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Bool = false) -> Bool {
-  hand_events_read()
+  hand_keys_read()
   // (under an open menu or dialog, none: they are its)
   if !self.keys_here() {
     return false
@@ -657,7 +653,7 @@ pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Boo
 /// read) has none to look for when none came, as on every frame of a phone without a keyboard.
 pub fn Ctx::keys_came(self : Ctx) -> Bool {
   ignore(self)
-  hand_events_read()
+  hand_keys_read()
   !desk.keys.is_empty()
 }
 
@@ -665,7 +661,7 @@ pub fn Ctx::keys_came(self : Ctx) -> Bool {
 /// Key `code` with exactly `mods` held, if it came since the last frame and nothing took it yet: taken now (what reads
 /// keys after this does not see it). For a widget's own keys while it has the focus (a slider's arrows).
 pub fn Ctx::take_key(self : Ctx, code : Int, mods? : Int = 0) -> Bool {
-  hand_events_read()
+  hand_keys_read()
   if !self.keys_here() {
     return false
   }
@@ -691,7 +687,7 @@ pub fn Ctx::shortcut(self : Ctx, ch : Char, shift? : Bool = false) -> Bool {
 /// The keys since the last frame (code, modifiers, whether a field took it); none under an open menu or dialog (they
 /// are its).
 pub fn Ctx::keys(self : Ctx) -> Array[(Int, Int, Bool)] {
-  hand_events_read()
+  hand_keys_read()
   if !self.keys_here() {
     return []
   }
@@ -1188,7 +1184,7 @@ fn Ctx::select_after_layout(self : Ctx) -> Unit {
   // (read so: hand.mbt)
   hand.down.get() |> ignore
   // (the window's tree's: as each frame lays it out, view_frame)
-  if select_sliding() && self.down && !tree_picking() {
+  if picked.dragging && self.down && !tree_picking() {
     hand.pointer.get() |> ignore
     self.select_to(self.px, self.py)
   }
@@ -1218,7 +1214,7 @@ fn Ctx::select_edge(self : Ctx) -> Unit {
     return
   }
   let v = match self.bar_drawn(id) {
-    Some(b) if select_sliding() && self.down && !b.foot => {
+    Some(b) if picked.dragging && self.down && !b.foot => {
       let top = b.y0 + b.top_in
       let foot = b.y1 - b.foot_in
       if foot <= top {
@@ -1250,7 +1246,7 @@ fn select_edge_stop() -> Unit {
 /// The paragraph that can be picked under (x, y), the topmost, in the layer a press there goes to (Ctx::layer_at):
 /// none of the page's under a popover's panel or a dialog's ground.
 fn Ctx::sel_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
-  if x < 0.0 {
+  if x < 0.0 || self.selection_blocked(x, y) {
     return None
   }
   // (the window's tree's words picked, where they are said to be (words_picked): what is over them there is the tree's
@@ -1263,15 +1259,55 @@ fn Ctx::sel_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
     return None
   }
   let layer = self.layer_at(x, y)
+  // (what floats over what scrolls there, a page's bar, its buttons: its own words alone, never those scrolled under it)
+  let over = self.float_at(layer, x, y)
   let mut k = desk.sels.length() - 1
   while k >= 0 {
     let t = desk.sels[k]
-    if t.layer == OldLayer(layer) && x >= t.x0 && x < t.x1 && y >= t.y0 && y < t.y1 && old_owner_open(t.island) {
+    if t.layer == OldLayer(layer) &&
+      x >= t.x0 &&
+      x < t.x1 &&
+      y >= t.y0 &&
+      y < t.y1 &&
+      old_owner_open(t.island) &&
+      (over is None || over.map(fn(o) { has_prefix(t.at, o) }) == Some(true)) {
       return Some(t)
     }
     k = k - 1
   }
   None
+}
+
+///|
+/// Where in the page the topmost box floating over what scrolls (Ctx::floats_over) in layer `layer` holding (x, y)
+/// stands (Ctx::page_order), as last laid out; none there.
+fn Ctx::float_at(self : Ctx, layer : Int, x : Double, y : Double) -> Array[Int]? {
+  let mut k = self.floating.length() - 1
+  while k >= 0 {
+    let i = self.floating[k]
+    if i < self.count {
+      let n = self.nodes[i]
+      if x >= n.x && x < n.x + n.fw && y >= n.y && y < n.y + n.fh && self.layer_of(i) == layer {
+        return Some(self.page_order(i))
+      }
+    }
+    k = k - 1
+  }
+  None
+}
+
+///|
+/// Whether place `at` lies within place `p` (Ctx::page_order): `p`, or below it.
+fn has_prefix(at : Array[Int], p : Array[Int]) -> Bool {
+  if at.length() < p.length() {
+    return false
+  }
+  for i, v in p {
+    if at[i] != v {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -1337,6 +1373,35 @@ pub fn Ctx::selection_made(self : Ctx) -> Int {
 /// drawn.
 pub fn Ctx::keeps_selection(self : Ctx, id : Int) -> Unit {
   self.mark_id(id, mark_keeps)
+}
+
+///|
+/// A surface and what it holds cover words under them: a press on it lets go of a selection, but cannot begin one in
+/// words behind it. The surface's own fields keep their usual selection and scroll behavior.
+pub fn Ctx::blocks_selection(self : Ctx, id : Int) -> Unit {
+  self.mark_id(id, mark_blocks_selection)
+}
+
+///|
+/// Whether the target a press reaches, or one of its holders, covers words behind it.
+fn Ctx::selection_blocked(self : Ctx, x : Double, y : Double) -> Bool {
+  let top = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y, pressed=true)
+  let k = press_reach(self.hit_ids, self.hit_rects, self.hit_clips, top, x, y)
+  if k < 0 {
+    return false
+  }
+  if k < self.hit_marks.length() && (self.hit_marks[k] & mark_blocks_selection) != 0 {
+    return true
+  }
+  for j in 0..<k {
+    if j < self.hit_ends.length() &&
+      self.hit_ends[j] > k &&
+      j < self.hit_marks.length() &&
+      (self.hit_marks[j] & mark_blocks_selection) != 0 {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -1477,18 +1542,6 @@ fn Ctx::select_move(self : Ctx, x : Double, y : Double) -> Bool {
   if !picked.dragging {
     return false
   }
-  if x != self.last_x || y != self.last_y {
-    picked.slid = true
-  }
-  if select_sliding() {
-    self.select_to(x, y)
-  }
+  self.select_to(x, y)
   picked.spans.values().any(fn(s) { s.a < s.b })
-}
-
-///|
-/// A mouse's drag or a finger that moved from its picked word (or took a handle): follow the pointer as the page
-/// moves under it. A word picked by a still finger stays that word even when its paragraph moves.
-fn select_sliding() -> Bool {
-  picked.dragging && (!picked.finger || picked.slid || picked.handle != 0)
 }

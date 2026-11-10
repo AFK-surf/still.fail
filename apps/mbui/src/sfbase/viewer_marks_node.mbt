@@ -1,4 +1,4 @@
-// Marking's tools as nodes of the window's tree (ImageMarks.kt's MarksTools): the tools, the colour and
+// Marking's tools as nodes of the window's tree: the tools, the colour and
 // its palette, the picked one's removal, undo and redo, each done at the moment it is pressed (its press let go on
 // it), as the picture's own drawing is (Viewer::finger_on): the tool a stroke is drawn with the one taken up, whatever
 // frames came between. The note being written too (note_box_node): its pin and what it is, 删除 and 完成 nodes, done as
@@ -26,45 +26,61 @@ fn marks_foot_node(h : @view.View, foot : () -> Double) -> Unit {
   let tips = @sf.TipLayer::new(fn() { tips_at.val })
   h.box(fn(col) {
     col.over(Is(true)).padding(By(fn() { (0.0, 0.0, 0.0, foot()) })) |> ignore
-    // (the room over them the picture's: nothing of the foot's)
-    let room = col.box(fn(g) { g.grow(Is(1.0)) |> ignore })
-    col.reacts(
-      fn() {
-        marks_said()
-        match (col.laid_size_told(), room.laid_size_told()) {
-          (Some(all), Some(over)) if marking.note < 0 => Some(all.1 - over.1)
-          _ => None
-        }
-      },
-      fn(taken) {
-        if taken is Some(t) {
-          marks_foot_taken.set(t)
-        }
-      },
-    )
-    // (the notes' cards, while no note is written: note_cards_node)
-    col.show(
-      fn() {
-        marks_said()
-        marking.note < 0 && mark_notes().length() > 0
-      },
-      fn(r) { note_cards_node(r) },
-    )
-    // (the note being written, over the tools' room: note_box_node)
-    col.show(
-      fn() {
-        marks_said()
-        marks_note_shown() is Some(_)
-      },
-      fn(n) { note_box_node(n) },
-    )
-    col.show(
-      fn() {
-        marks_said()
-        marking.note < 0
-      },
-      fn(t) { marks_tools_node(t, tips) },
-    )
+    // (made by the room it is laid out in: how tall what is at its foot comes to there, told the picture as it is laid
+    // out, in that layout (Room::tall); nothing read back after it)
+    col
+    .by_room(fn(held, room) {
+      held.grow(Is(1.0)) |> ignore
+      // (the room over them the picture's: nothing of the foot's)
+      held.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+      let parts = held.box(fn(parts) {
+        // (the notes' cards, while no note is written: note_cards_node)
+        parts.show(
+          fn() {
+            marks_said()
+            marking.note < 0 && mark_notes().length() > 0
+          },
+          fn(r) { note_cards_node(r) },
+        )
+        // (the note being written, over the tools' room: note_box_node; the one in the other's place at once, its own
+        // coming in its own: NotePop)
+        parts.show(
+          at_once=true,
+          fn() {
+            marks_said()
+            marks_note_shown() is Some(_)
+          },
+          fn(n) { note_box_node(n) },
+        )
+        parts.show(
+          at_once=true,
+          fn() {
+            marks_said()
+            marking.note < 0
+          },
+          fn(t) { marks_tools_node(t, tips) },
+        )
+      })
+      // (what they take of the window's foot, the system's bar under them with it; kept as it was while a note is
+      // written in their place)
+      held.reacts(
+        fn() {
+          marks_said()
+          if marking.note < 0 {
+            Some(room.tall(parts) + foot())
+          } else {
+            None
+          }
+        },
+        fn(taken) {
+          if taken is Some(t) {
+            marks_foot_taken.set(t)
+          }
+        },
+      )
+    })
+    .grow(Is(1.0))
+    |> ignore
   })
   |> ignore
   tips_at.val = Some(h.box(fn(l) { l.over(Is(true)) |> ignore }))
@@ -153,7 +169,7 @@ fn marks_tools_node(col : @view.View, tips : @sf.TipLayer) -> Unit {
         ink,
         round,
         fn() {
-          marks_put_down(@ui.current())
+          marks_put_down()
           marking.note = -1
           marking.tool = tool
           if tool != Select {
@@ -299,8 +315,8 @@ fn marks_actions_node_of(row : @view.View, vw : Viewer, ink : () -> @sf.ViewerIn
     // (round as marking's own actions are, picture_key: not as the bar's tools at the window's corner)
     Is(picture_key),
     fn() { marks_leave() },
-    fn() { vw.finish_marks(@ui.current(), false) },
-    fn() { vw.finish_marks(@ui.current(), true) },
+    fn() { vw.finish_marks(false) },
+    fn() { vw.finish_marks(true) },
     tip=tips,
   )
   |> ignore
@@ -316,14 +332,14 @@ fn marks_note_shown() -> (Int, Int, String, Int64)? {
 }
 
 ///|
-/// The note being written in `w` (Notes.kt NoteBox, in the dark), 12 in at its sides and 8 over the
+/// The note being written in `w` (in the dark), 12 in at its sides and 8 over the
 /// navigation bar: a frosted card (26 round, its round buttons' room in from its sides and foot, 10 over, 6 between),
 /// its pin and what it is, muted; then 删除批注 (a bin, 36 round), the field (16 on 21, 添加批注（可选） till something
 /// is written, 8 lines at most: an old view's, the card as tall as it lays out), 完成 (a tick on the ink, 36 round), at
 /// their row's foot. Coming in from nothing and 97% of its size about its middle (note_pop_ms, ease out) as a note is
 /// asked for, from that moment, and again as another is. 删除 and 完成 done as their press is let go on them.
 fn note_box_node(w : @view.View) -> Unit {
-  let keys_in = @sf.capsule_in(note_box_corner, 36.0)
+  let keys_in = @ui.capsule_in(note_box_corner, 36.0)
   let pop = NotePop::new()
   w.padding(Is((12.0, 0.0, 12.0, 8.0))) |> ignore
   w.box(fn(b) {
@@ -391,7 +407,7 @@ fn note_box_node(w : @view.View) -> Unit {
         if id >= 0 {
           marking.note = -1
           marks_remove(id)
-          @ui.current().blur()
+          row.focus_let_go()
         }
       })
       // the field, a field of the tree's: as tall as it lays out (at least as a key is, its words in its middle)
@@ -425,7 +441,7 @@ fn note_box_node(w : @view.View) -> Unit {
       |> ignore
       // 完成
       note_key_node(row, "check", 18.0, note_ink, note_bg, pv("android-chat.annotate.done"), fn() {
-        marks_note_done(@ui.current())
+        marks_note_done()
       })
     })
     |> ignore
@@ -454,7 +470,7 @@ fn NotePop::again(self : NotePop, n : @view.View) -> Unit {
   (self.due)()
   self.way.put(0.0)
   self.way.go(1.0, @motion.tween(note_pop_ms, ease=Out), at=n.cause_at())
-  self.due = n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+  self.due = n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
 }
 
 ///|
@@ -529,7 +545,7 @@ fn note_pin_node(parent : @view.View, pin : () -> (Int, Int64)) -> Unit {
 }
 
 ///|
-/// The notes said so far in `r` (Notes.kt's tray), 10 over the tools: a card each across the foot (16 in
+/// The notes said so far in `r`, 10 over the tools: a card each across the foot (16 in
 /// at its sides, 8 between), in their numbers' order; where they do not all fit, the last leave the row first, a +N
 /// card at its end standing for them (a menu of them, in their order): nothing scrolled, nothing wrapped. Each card,
 /// pressed (its press let go on it), opens its note; +N's, its menu. Which are left out, how many +N says and what its
@@ -600,7 +616,7 @@ fn note_cards_node(r : @view.View) -> Unit {
             let (_, n, _, _) = note.get()
             "\{n}  " + note_said(mid)
           },
-          press=fn() { marks_open_note(@ui.current(), mid) },
+          press=fn() { marks_open_note(mid) },
         )
       },
     )
@@ -627,7 +643,7 @@ fn note_cards_node(r : @view.View) -> Unit {
         press=fn() {
           let (x, y, w, h) = more.rect()
           let items : Array[@sf.MenuItem?] = gone().map(fn(x) {
-            Some(@sf.menu_item_of("\{x.1}  " + note_said(x.0), fn() { marks_open_note(@ui.current(), x.0) }))
+            Some(@sf.menu_item_of("\{x.1}  " + note_said(x.0), fn() { marks_open_note(x.0) }))
           })
           @sf.menu(items, from=At(x, y, w, h), along=End)
         },
@@ -650,7 +666,7 @@ fn note_tray_card_node(
   label~ : () -> String,
   press~ : () -> Unit,
 ) -> Unit {
-  let pin_in = @sf.capsule_in(note_card_corner, note_pin)
+  let pin_in = @ui.capsule_in(note_card_corner, note_pin)
   card
   .width(Is(Some(w)))
   .padding(Is((pin_in, pin_in - (note_first_line - note_pin) / 2.0, note_card_end, note_card_foot)))
@@ -755,12 +771,12 @@ fn marks_pins_node(h : @view.View, vw : Viewer) -> Unit {
       .on_press(fn() {
         let id = @signals.untracked(fn() { pin.get().0 })
         if marking.note == id {
-          marks_put_down(@ui.current())
+          marks_put_down()
           marking.picked = -1
           marking.note = -1
           marks_changed()
         } else {
-          marks_open_note(@ui.current(), id)
+          marks_open_note(id)
         }
       })
       |> ignore
@@ -879,17 +895,15 @@ fn marks_shapes_node(h : @view.View, vw : Viewer) -> Unit {
   h.each(
     fn() {
       marks_said()
-      let n = match vw.zoom.rect() {
-        Some(r) => marks_lines(r, vw.zoom.nw).1.length()
-        None => 0
-      }
+      // (how many: the picked mark's, wherever the picture is, once its size is known)
+      let n = if vw.zoom.sized() { marks_lines((0.0, 0.0, vw.zoom.nw, 0.0), vw.zoom.nw).1.length() } else { 0 }
       Array::makei(n, fn(i) { i })
     },
     fn(i) { i },
     fn(d, i) {
       let at = fn() {
         let (_, handles) = laid(d)
-        match handles.get(@signals.untracked(fn() { i.get() })) {
+        match handles.get(i.untracked()) {
           Some((x, y)) => (x - 6.0, y - 6.0)
           None => (0.0, 0.0)
         }
@@ -909,7 +923,7 @@ fn marks_shapes_node(h : @view.View, vw : Viewer) -> Unit {
 
 
 ///|
-/// The words being written over viewer `vw`'s picture while it marks (marking.writing; ImageMarks.kt WritingField), in
+/// The words being written over viewer `vw`'s picture while it marks (marking.writing), in
 /// `h` (over the canvas, all of it): a field of the tree's where they begin on the picture as it is drawn while the zoom
 /// or the lift goes (marks_rect_on), as wide as six of their size at least 120, in their size on the picture and their
 /// colour, its placeholder that colour at 55%; given up (Enter), put down (marks_put_down).
@@ -962,7 +976,7 @@ fn marks_writing_node(h : @view.View, vw : Viewer) -> Unit {
         }
         (color, @sf.alpha(color, 0.55), color)
       },
-      submitted=fn(_) { marks_put_down(@ui.current()) },
+      submitted=fn(_) { marks_put_down() },
     )
     |> ignore
   })

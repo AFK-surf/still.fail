@@ -1,4 +1,4 @@
-// The desktop as a screen (docs/remote-screens.md) on a real Mac: still.fail Helper (native/helper, prebuilt by
+// The desktop as a screen on a real Mac: still.fail Helper (native/helper, prebuilt by
 // scripts/native.ts; STILLFAIL_HELPER another, a signed one), started as the station starts it, encoding H.264 on the
 // hardware encoder, its frames over a real iroh link on this machine to a
 // client that acknowledges them as it gets them, and decoded afterwards with ffmpeg (when the machine has it) into a
@@ -148,7 +148,7 @@ test("made-up 1080p pictures: encoded on the hardware, over iroh, decoded; a sti
       assert.ok(m.width > 0 && m.height > 0 && m.width <= 1920 && m.height <= 1080);
       if (mode === "still") {
         // Its first frame, then the same picture again as a key frame each time the rate has gone up (screens.ts
-        // #still, docs/remote-screens.md "Still"): at most one a STILL_MS, none smaller than the one before (encoded at
+        // #still): at most one a STILL_MS, none smaller than the one before (encoded at
         // a rate as high or higher: no blurrier; a made-up picture this plain is nearly as small at any rate, 21204,
         // 21204, 21255, 21256, 22769 bytes in run 40270232725), until it is at the source's own.
         assert.equal(m.keys, m.frames, `a still screen sends key frames only: ${m.sizes.join(", ")} bytes`);

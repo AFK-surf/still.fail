@@ -1,4 +1,4 @@
-// still.fail cloud's API (the Worker ember-cloud): accounts and sign-in, workspaces and their stations, the operator's
+// still.fail cloud's API (the Worker stillfail-cloud): accounts and sign-in, workspaces and their stations, the operator's
 // console API, and installing a station. It answers only the paths routed to it (wrangler.jsonc) on PUBLIC_ORIGIN's
 // and ADMIN_ORIGIN's hosts; the web apps are static Workers of their own on those hosts' Custom Domains (routes take
 // precedence over them), and the relay is a Worker of its own (relay-worker.ts), so deploying this one drops no relay
@@ -13,16 +13,23 @@ import { devicePage, googleStart, consumeLoginRate, signedInPage } from "./login
 import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
-import { adminApi, api, blockAccount, socketToken } from "./api";
+import { adminApi, api, blockAccount, feedbackList, liveOf, notBetaReply, onTestChannel } from "./api";
 import { noted, parseTraceparent, recordCall, relayToAxiom, takeNotes, unverifiedNotes } from "./tracing";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
 export { Directory } from "./directory";
 export { LoginAttempt, LoginLimiter } from "./login";
 export { RelayLoad } from "./relay-load";
+export { ServiceStatus } from "./status";
+export { Station } from "./station";
 import { sampleOwnRelay } from "./relay-load";
+import { checkServices } from "./status";
+import { checkModels } from "./models";
 import { PROBE_EVERY_MIN, probeRelays } from "./probes";
 import { relayUrls } from "./relays";
+
+/** The minute of each hour the models' catalog is made afresh (`scheduled`). */
+const MODELS_MINUTE = 7;
 
 // The admin's console has a host of its own, ADMIN_ORIGIN: its /v1/ calls come here too — the calls its client core
 // makes to sign in and stay signed in (the core talks to the page's origin), and the console's API; nothing else. A
@@ -36,17 +43,20 @@ const notFound = () => new Response("Not found", { status: 404 });
 // (app.youdid.wtf), with the API on its paths as on PUBLIC_ORIGIN, and the beta apps (fail.still.android.beta,
 // fail.still.desktop.beta), whose core says `x-stillfail-channel: beta` on every call. Signing in works for anyone
 // (on the test channel's host it starts on PUBLIC_ORIGIN, as from the console, and comes back to its /auth/callback);
-// any other call carrying an account's token answers 403 not_beta for an account not let in, which the page takes for
-// "go to the stable one" and an app for "this account cannot use the test build".
-const notBetaReply = (env: Env, request: Request) => reply({ error: "not_beta", message: tr(requestLang(request), "cloud.beta.notLetIn"), stable: env.PUBLIC_ORIGIN }, 403);
+// any other call carrying an account's token answers 403 not_beta for an account not let in (api.ts notBetaReply).
 
-/** Whether a call of the test channel comes from an account not let in: one with a valid token, not beta. */
+/**
+ * Whether a call of the test channel comes from an account not let in: one with a valid token, not beta, as its
+ * account's object says with whether the token's session is live (asked once: api.ts liveOf). A device's events socket
+ * is its account's object's to refuse (api.ts).
+ */
 async function notBeta(request: Request, env: Env): Promise<boolean> {
-  const token = bearerToken(request) ?? socketToken(request)?.token ?? null;
+  onTestChannel.add(request);
+  const token = bearerToken(request);
   const claims = token ? await verifyToken(env, token, "access") : null;
   // No token, or not a valid one: the call answers as it would anywhere (401 for an account's call).
-  if (!claims) return false;
-  return !(await env.DIRECTORY.getByName("primary").isBeta(claims.sub));
+  if (!claims || new URL(request.url).pathname === "/v1/events") return false;
+  return (await liveOf(request, env, claims)) === "not_beta";
 }
 
 /** The same request on PUBLIC_ORIGIN: where a browser's sign-in goes, so its cookie is on the host Google calls back. */
@@ -63,11 +73,22 @@ export default {
     if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
     return response;
   },
-  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts); every
-  // PROBE_EVERY_MIN, the relays probed from China's networks (probes.ts), where RELAY_PROBES says so.
+  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts; the
+  // operator's devices told they were sampled), then the services checked for still.fail/status (status.ts); every
+  // PROBE_EVERY_MIN, the relays probed from China's networks (probes.ts), where RELAY_PROBES says so; hourly, the
+  // models' catalog made afresh from models.dev, the stations told when it changed (models.ts).
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(sampleOwnRelay(env));
-    if (env.RELAY_PROBES === "globalping" && Math.floor(controller.scheduledTime / 60_000) % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
+    const minute = Math.floor(controller.scheduledTime / 60_000);
+    ctx.waitUntil(
+      sampleOwnRelay(env)
+        .catch(() => [])
+        .then(async (full) => {
+          await env.DIRECTORY.getByName("primary").tellAdmins({ type: "relays" }).catch(() => undefined);
+          await checkServices(env, full);
+        }),
+    );
+    if (minute % 60 === MODELS_MINUTE) ctx.waitUntil(checkModels(env).catch(() => undefined));
+    if (env.RELAY_PROBES === "globalping" && minute % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
   },
 } satisfies ExportedHandler<Env>;
 
@@ -206,6 +227,12 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return reply({ error: "invalid_request" }, 400);
     }
   }
+  // The console's bug reports for the team's feedback monitor: FEEDBACK_TOKEN reads them and nothing else.
+  if (path === "/v1/admin/feedback/list" && request.method === "POST") {
+    const supplied = bearerToken(request);
+    if (!env.FEEDBACK_TOKEN || env.FEEDBACK_TOKEN.length < 43 || !supplied || (await digest(supplied)) !== (await digest(env.FEEDBACK_TOKEN))) return denied();
+    return reply({ feedback: await feedbackList(env) });
+  }
   // The Android app opens an item's link (/o/…) itself: this says the domain is its (App Links).
   if (path === "/.well-known/assetlinks.json") {
     return new Response(JSON.stringify(assetLinks()), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" } });
@@ -222,11 +249,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
 }
 
 /**
- * Android App Links: the app, signed with this certificate, opens https://<its host>/o/… itself. Both the app from
- * before the rename (dev.ember.android) and the new one (fail.still.android), on every host: each says in its
- * manifest which hosts it opens. Another product's cloud its own apps' (monoid's: build.monoid.android and .beta).
+ * Android App Links: the app, signed with this certificate, opens https://<its host>/o/… itself, on every host: its
+ * manifest says which hosts it opens. Another product's cloud its own apps' (monoid's: build.monoid.android and .beta).
  */
-const assetLinks = () => (cloudProduct().id === "stillfail" ? ["fail.still.android", "dev.ember.android"] : [`${cloudProduct().reverse}.android`, `${cloudProduct().reverse}.android.beta`]).map((package_name) => ({
+const assetLinks = () => (cloudProduct().id === "stillfail" ? ["fail.still.android"] : [`${cloudProduct().reverse}.android`, `${cloudProduct().reverse}.android.beta`]).map((package_name) => ({
   relation: ["delegate_permission/common.handle_all_urls"],
   target: {
     namespace: "android_app",

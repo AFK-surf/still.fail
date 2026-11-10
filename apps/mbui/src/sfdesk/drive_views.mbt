@@ -1,4 +1,4 @@
-// The ways a folder of a station's drive is shown (ember web/src/pages/DriveViews.tsx: the files' page, a chat's 文件
+// The ways a folder of a station's drive is shown (still.fail web/src/pages/DriveViews.tsx: the files' page, a chat's 文件
 // tab), switched over its list and kept for each place on this device (prefs `driveViews`: `page`, `tab`): columns (a
 // column a folder, from where it is to the one open, as Finder's), a tree (folders opened in place, several
 // at once), or a list (one folder). Each row is the same (DriveRow, drive.mbt): chosen by a press, opened by a double
@@ -76,11 +76,12 @@ let rows_sample_props : RowProps = {
 let rows_sample_names : Array[(Bool, Int)] = [(true, 4), (true, 6), (false, 9), (false, 5), (false, 12), (false, 7), (false, 8), (false, 6)]
 
 ///|
-/// A row pressed: what it would carry (drag.mbt), as the web's draggedOf has it.
-fn drag_press(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Unit {
+/// Row `id` followed as it is pressed: what it would carry (drag.mbt), as the web's draggedOf has it; `tab`: a chat's
+/// 文件 tab's (let go off it, for the chat's composer); not while `live` is not.
+fn drag_press(c : @ui.Ctx, id : Int, src : Source, at : DriveAt, e : DvEntry, tab : Bool, live : Bool) -> Unit {
   let root = at.root.unwrap_or("")
   let path = dv_join(at.path, e.name)
-  fdrag_press(c, {
+  fdrag_source(c, id, {
     station: at.station,
     station_name: station_name(src, at.station),
     root,
@@ -89,26 +90,20 @@ fn drag_press(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Unit {
     name: e.name,
     size: e.size,
     dir: e.dir,
-  })
+  }, tab, live)
 }
 
 ///|
-/// A place a row or a column can be let go this frame (drag.mbt fdrag_target), as its folder is shown.
-fn drag_target(c : @ui.Ctx, id : Int, key : String, into : DriveAt, name : String, s : Shown, depth : Int) -> String? {
-  fdrag_target(c, id, key, Some(into), name, s.write, s.transfers, depth)
-}
-
-///|
-/// Whether the row `name` of the folder `at` is what is being dragged.
-fn drag_carried(at : DriveAt, name : String) -> Bool {
-  fdrag_carried(at.station, at.root.unwrap_or(""), dv_join(at.path, name))
+/// A place a row or a column can be let go (drag.mbt fdrag_target), as its folder is shown.
+fn drag_target(c : @ui.Ctx, src : Source, id : Int, key : String, into : DriveAt, name : String, s : Shown, depth : Int) -> String? {
+  fdrag_target(c, src, id, key, Some(into), name, s.write, s.transfers, depth)
 }
 
 ///|
 /// How `place` (page or tab) shows a folder, as last chosen there. The files page starts with the detailed list; a
 /// chat's narrower files tab starts with columns where they fit.
 pub fn drive_view(src : Source, place : String) -> String {
-  match text(field((src.topic)("prefs", {}).value, "driveViews"), place) {
+  match text(field(src.topic("prefs", {}).get().value, "driveViews"), place) {
     "columns" => "columns"
     "tree" => "tree"
     "list" => "list"
@@ -154,7 +149,13 @@ pub fn set_drive_view(src : Source, place : String, v : String) -> Unit {
 pub fn view_switch(c : @ui.Ctx, key : String, value : String, on_change : (String) -> Unit, ways? : Array[String] = views_all) -> Unit {
   let shown = view_icons.filter(fn(w) { ways.contains(w.0) })
   let at = shown.search_by(fn(w) { w.0 == value }).unwrap_or(0)
-  let k = @sf.segmented(
+  let pick = fn(k : Int) {
+    match shown.get(k) {
+      Some((v, _)) => on_change(v)
+      None => ()
+    }
+  }
+  @sf.segmented(
     c,
     key,
     shown.map(fn(w) { @sf.t("web-pages.drive.view." + w.0) }),
@@ -162,13 +163,12 @@ pub fn view_switch(c : @ui.Ctx, key : String, value : String, on_change : (Strin
     icons=shown.map(fn(w) { w.1 }),
     bar=true,
     said=@sf.t("web-pages.drive.view.label"),
+    on_pick=pick,
   )
-  // (the one shown chosen again is kept as chosen: shown where the room has not what was chosen before)
-  if k != at || c.clicked(@kit.part_id(c.id(key), at)) {
-    match shown.get(k) {
-      Some((v, _)) => on_change(v)
-      None => ()
-    }
+  |> ignore
+  // (the one shown where the room has not what was chosen before, chosen again: kept as chosen)
+  if !shown.iter().any(fn(w) { w.0 == value }) {
+    c.on_press(@kit.part_id(c.id(key), at), fn() { pick(at) })
   }
 }
 
@@ -199,7 +199,7 @@ pub fn drive_folder(src : Source, station : String, root : String, path : String
     "station": Json::string(station),
     "root": Json::string(root),
     "path": Json::string(path),
-  })
+  }).get().snapshot()
   (
     t.value,
     match t.error {
@@ -279,7 +279,7 @@ pub fn rows_view(
   let extra = if head is Some(_) { 1 } else { 0 }
   let empty_n = if lines.is_empty() && empty is Some(_) { 1 } else { 0 }
   // the list's rows by what each is (a file by its folder and name; its head, an empty folder's words and its foot
-  // too): one made, taken out or moved comes and goes where it is, as a chat's rows do (ListRows, docs/list-motion.md);
+  // too): one made, taken out or moved comes and goes where it is, as a chat's rows do (ListRows, mbui's view/list_motion.mbt);
   // a folder's rows all others now (another folder, its first read) as they are
   let lr = drive_rows_of(key)
   let all : Array[ListLine] = []
@@ -506,7 +506,7 @@ fn cols_reset() -> Unit {
 /// Every column's width: as kept on this device (prefs `driveViews.column`), or as just dragged until the kept one
 /// comes back.
 fn every_column(src : Source) -> Double {
-  let kept = text(field((src.topic)("prefs", {}).value, "driveViews"), "column")
+  let kept = text(field(src.topic("prefs", {}).get().value, "driveViews"), "column")
   match cols.every {
     Some((was, w)) if was == kept => return w
     Some(_) => cols.every = None
@@ -567,7 +567,7 @@ pub fn columns_view(
 }
 
 ///|
-/// Between two columns (Drive.css.ts columns' gap), where an edge is.
+/// Between two columns, where an edge is.
 pub let column_gap : Double = 6.0
 
 ///|
@@ -592,7 +592,7 @@ fn column(
   // (a ground round its rows: a press there chooses none)
   c.cursor(cid, Arrow)
   let lit = match (s.drop_on)(at) {
-    Some(into) => drag_target(c, cid, ckey, into, dv_name(dv_absolute(root, at.path)), s, 1)
+    Some(into) => drag_target(c, src, cid, ckey, into, dv_name(dv_absolute(root, at.path)), s, 1)
     None => None
   }
   let sized = column_box.then(@ui.style(w=Fixed(width)))
@@ -634,9 +634,11 @@ fn column(
       }
     }
     // a press in it where there is no row: nothing chosen
-    if c.clicked(cid) && !row_took(c) {
-      (s.clear)()
-    }
+    c.on_press(cid, fn() {
+      if !row_took(c) {
+        (s.clear)()
+      }
+    })
   })
   |> ignore
   if halves {
@@ -660,7 +662,13 @@ fn column_edge(c : @ui.Ctx, src : Source, s : Shown, path : String, column : Int
   let (px, py, _) = c.pointer()
   c.cursor(id, ResizeX)
   let every = (@ui.mods_held() & @ui.mod_alt) != 0
-  match @sf.handle_drag(c, id, width, min=column_least, max=column_most) {
+  let twice = fn() {
+    let need = names.fold(init=0.0, fn(m, n) { dmax(m, @ui.text_advance(n, size=@sf.theme().t.ui)) })
+    if need > 0.0 {
+      s.b.keep_width(c, src, path, clamp_column(need + column_row_room))
+    }
+  }
+  match @sf.handle_drag(c, id, width, min=column_least, max=column_most, twice~) {
     Dragging(w) => cols.drag = Some((s.b.key, if every { None } else { Some(path) }, w))
     Dropped(w) => {
       let was_every = match cols.drag {
@@ -678,13 +686,7 @@ fn column_edge(c : @ui.Ctx, src : Source, s : Shown, path : String, column : Int
         s.b.keep_width(c, src, path, w)
       }
     }
-    Twice => {
-      let need = names.fold(init=0.0, fn(m, n) { dmax(m, @ui.text_advance(n, size=@sf.theme().t.ui)) })
-      if need > 0.0 {
-        s.b.keep_width(c, src, path, clamp_column(need + column_row_room))
-      }
-    }
-    Untouched | Pressed => ()
+    Untouched | Pressed | Twice => ()
   }
   // in hand: this edge, or with ⌥ every one, while one is dragged
   let dragged = match cols.drag {
@@ -726,7 +728,6 @@ let tree_note_in : Double = 46.0
 ///|
 let tree_step : Double = 18.0
 
-
 ///|
 // kept across runs: a value (no field of it changes)
 let tree_note : @ui.Style = @ui.css("row w=Full pt=S2 pb=S2 pr=S2_5")
@@ -744,7 +745,7 @@ let tree_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 let tree_error : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, w=Full)
 
 ///|
-/// The columns side by side (Drive.css.ts columns), as tall as the list.
+/// The columns side by side, as tall as the list.
 // kept across runs: a value (no field of it changes)
 let columns_strip : @ui.Style = @ui.css("row w=Full h=Full")
 

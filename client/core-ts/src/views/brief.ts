@@ -124,7 +124,9 @@ export function usageNow(session: unknown, live: unknown): J {
   const status = shownStatus(session);
   const [first, then] = status === "running" || status === "queued" ? [told, said] : [said, told];
   const u = has(first) ? first : has(then) ? then : null;
-  const cap = get(session, "context");
+  // Over a most lowered meanwhile, until compacted: what it ran with till now is the window it filled.
+  const before = get(session, "contextBefore");
+  const cap = typeof before === "number" ? before : get(session, "context");
   if (u === null || typeof cap !== "number" || cap <= 0) return u;
   const window = get(u, "contextWindow");
   return typeof window === "number" && window > 0 && window <= cap ? u : { ...u, contextWindow: cap };
@@ -246,6 +248,11 @@ export function card(agent: J, live: J, stations?: ReadonlyMap<string, string>):
         : { percent: 0, text: used, level: "ok" } satisfies Meter;
       if (contextPercent === null) out.context.unknown = true;
     }
+  }
+  // Over a most lowered meanwhile: it comes down once this turn is over.
+  const lowered = get(get(agent, "session"), "context");
+  if (typeof get(get(agent, "session"), "contextBefore") === "number" && typeof lowered === "number") {
+    out.attention.push({ text: t("core-views.agent.contextCompacts", { window: format.compactNumber(lowered) }), level: "amber" });
   }
   // What is wrong, but a quota running out: its account's windows say that.
   for (const a of arr(get(agent, "attention"))) {

@@ -3,9 +3,9 @@ import { Miniflare, convertV4MiniflareOptions, Response as MFResponse, Log, LogL
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { ulid } from "ulid";
 import { digest, randomSecret, type Tokens } from "../src/auth.ts";
-import { shareFiles } from "../src/share.ts";
 import type { MailMessage } from "../src/mail.ts";
 import { createRequire } from "node:module";
+import { brotliCompressSync } from "node:zlib";
 
 // workerd keeps a WebSocket's TCP connection open some ten seconds after a close the Worker began (Cloudflare does
 // not), and the ws client miniflare hands sockets through says "close" only once it ends: a test waiting on a close
@@ -54,13 +54,15 @@ export async function harness(
     /** RELAY_URLS and RELAY_NAMES: relays beside it, and what they are called (the console's 中继 page). */
     relayUrls?: string;
     relayNames?: Record<string, string>;
+    /** STATUS_PAGES: the pages the cron checks for still.fail/status; answered by `push` (they are outside). */
+    statusPages?: Record<string, string>;
+    /** STATUS_REPO: whose issues labelled `incident` it shows; answered by `push`. */
+    statusRepo?: string;
     /** The console's admin (alice unless said otherwise). */
     adminEmail?: string;
     /** The console's host. */
     adminOrigin?: string;
     previewOrigin?: string;
-    /** The share host (src/share.ts): published chats. */
-    shareOrigin?: string;
     /** The test channel's host (BETA_ORIGIN): the web app and the API, for accounts let in. */
     betaOrigin?: string;
     /** The hosts' old names (before the rename to still.fail), bound to the same Workers: PUBLIC_ORIGIN_ALIASES and so on. */
@@ -93,7 +95,6 @@ export async function harness(
   const origin = options.origin ?? "https://relay.example";
   const adminOrigin = options.adminOrigin ?? "https://admin.relay.example";
   const previewOrigin = options.previewOrigin ?? "https://preview.relay.example";
-  const shareOrigin = options.shareOrigin ?? "https://share.relay.example";
   const betaOrigin = options.betaOrigin ?? "https://app.beta-domain.example";
   const oldOrigin = options.oldOrigin ?? "https://old.relay.example";
   const oldAdminOrigin = options.oldAdminOrigin ?? "https://admin.old.relay.example";
@@ -101,7 +102,8 @@ export async function harness(
   /** still.fail cloud's time, in seconds: what a station signs with, say. */
   const now = () => Math.floor((options.clock === "real" ? Date.now() : NOW_MS) / 1000);
   const signingKey = options.signingKey ?? randomSecret(),
-    adminToken = randomSecret();
+    adminToken = randomSecret(),
+    feedbackToken = randomSecret();
   const { publicKey, privateKey } = await generateKeyPair("RS256");
   const publicJwk = {
     ...(await exportJWK(publicKey)),
@@ -143,7 +145,7 @@ export async function harness(
         ...common,
         name: "static",
         script: await bundle("test/static-worker.ts"),
-        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin, BETA_ORIGIN: betaOrigin, SHARE_ORIGIN: shareOrigin },
+        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin, BETA_ORIGIN: betaOrigin },
         serviceBindings: { ASSETS: (options.assets ?? standInAssets) as any },
       }, {
         ...common,
@@ -168,6 +170,7 @@ export async function harness(
         GOOGLE_CLIENT_SECRET: randomSecret(),
         AUTH_SIGNING_KEY: signingKey,
         ADMIN_TOKEN: adminToken,
+        FEEDBACK_TOKEN: feedbackToken,
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
         ...(options.access ? { ACCESS_TEAM_DOMAIN: ACCESS_TEAM, ACCESS_AUD: "test-access-aud" } : {}),
         ...(options.upstream ? { RELEASES_UPSTREAM: "https://upstream.test/releases" } : {}),
@@ -175,6 +178,8 @@ export async function harness(
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
         ...(options.relayUrls ? { RELAY_URLS: options.relayUrls } : {}),
         ...(options.relayNames ? { RELAY_NAMES: options.relayNames } : {}),
+        ...(options.statusPages ? { STATUS_PAGES: options.statusPages } : {}),
+        ...(options.statusRepo ? { STATUS_REPO: options.statusRepo } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
         ...(options.apns ? { APNS_KEY: options.apns } : {}),
@@ -184,7 +189,7 @@ export async function harness(
       },
       r2Buckets: ["RELEASES"],
       durableObjects: {
-        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD"][i], { className, useSQLite: true }])),
+        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad", "ServiceStatus", "Station"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD", "SERVICE_STATUS", "STATIONS"][i], { className, useSQLite: true }])),
         RELAY: { className: "Relay", scriptName: "relay", useSQLite: true },
       },
       outboundService: async (request) => {
@@ -256,13 +261,44 @@ export async function harness(
   /** A request to the console's host. */
   const fetchAdmin = (path: string, init?: RequestInit) => mf.dispatchFetch(adminOrigin + path, init as any);
   const fetchPreview = (path: string, init?: RequestInit) => mf.dispatchFetch(previewOrigin + path, init as any);
-  const fetchShare = (path: string, init?: RequestInit) => mf.dispatchFetch(shareOrigin + path, init as any);
   /** A request to the test channel's host. */
   const fetchBeta = (path: string, init?: RequestInit) => mf.dispatchFetch(betaOrigin + path, init as any);
   /** A request to a host's old name (before the rename): "main", "admin" or "preview". */
   const fetchOld = (on: "main" | "admin" | "preview", path: string, init?: RequestInit) => mf.dispatchFetch({ main: oldOrigin, admin: oldAdminOrigin, preview: oldPreviewOrigin }[on] + path, init as any);
   /** A request straight to one of the Workers ("api", "relay", "static"), whatever the routes say. */
   const fetchWorker = async (name: string, url: string, init?: RequestInit) => ((await mf.getWorker(name)) as unknown as { fetch(url: string, init?: RequestInit): Promise<Response> }).fetch(url, init);
+  /** One of the API's Durable Objects, by its binding and name, with the test hooks test/worker.ts gives it. */
+  // deno-lint-ignore no-explicit-any
+  const object = async (binding: "DIRECTORY" | "ACCOUNTS" | "STATIONS", name: string): Promise<any> => {
+    const namespace: any = await mf.getDurableObjectNamespace(binding, "api");
+    return namespace.get(namespace.idFromName(name));
+  };
+  /**
+   * Once what still.fail cloud tells devices' and stations' objects after a change has got there (the Directory's
+   * deliveries go out as the change answers): the barrier a test waits at instead of waiting a while.
+   */
+  const settled = async () => (await object("DIRECTORY", "primary")).settled();
+  /**
+   * Once everything still.fail cloud sends on a socket for what was done or said before now has arrived: where a test
+   * reads a socket. The runtime answers "ping" itself, in the socket's order. By the first pong, what the socket said
+   * before has reached its object; `settled` then waits for that to be answered and for what the Directory tells; the
+   * second pong comes after everything those sent.
+   */
+  const heard = async (ws: { send(data: string): void; addEventListener(type: "message", on: (event: { data: unknown }) => void): void; removeEventListener(type: "message", on: (event: { data: unknown }) => void): void }) => {
+    const pong = () =>
+      new Promise<void>((resolve) => {
+        const on = (event: { data: unknown }) => {
+          if (event.data !== "pong") return;
+          ws.removeEventListener("message", on);
+          resolve();
+        };
+        ws.addEventListener("message", on);
+        ws.send("ping");
+      });
+    await pong();
+    await settled();
+    await pong();
+  };
   async function begin(sub = "google-test-user", invalid?: string, callback = "http://127.0.0.1:32145/oauth/callback") {
     const verifier = randomSecret(),
       state = randomSecret();
@@ -353,16 +389,19 @@ export async function harness(
     grantJwk,
     grantPublicJwk,
     adminToken,
+    feedbackToken,
     signingKey,
     codes,
     mails,
     fetch,
     fetchAdmin,
     fetchPreview,
-    fetchShare,
     fetchBeta,
     fetchOld,
     fetchWorker,
+    object,
+    settled,
+    heard,
     begin,
     complete,
     exchange,
@@ -371,12 +410,14 @@ export async function harness(
   };
 }
 
-/** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`, `/share/…`: see test/static-worker.ts). */
+/** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`: see test/static-worker.ts). */
 export const STAND_IN_FILES: Record<string, string> = {
   "/web/index.html": "<title>still.fail</title>",
   "/web/web.html": "<title>still.fail · web</title>",
   "/web/assets/app.js": "// the web app",
   "/web/sw.js": "// the notifications' worker",
+  "/web/mbui/app.js": "// the app, as mbui-web built it",
+  "/web/mbui/host.js": "// mbui's web host",
   "/admin/index.html": "<title>still.fail 管理后台</title>",
   "/admin/assets/console.js": "// the console",
   "/preview/_stillfail/frame.html": "<title>still.fail preview</title>",
@@ -384,13 +425,15 @@ export const STAND_IN_FILES: Record<string, string> = {
   "/preview/_ember/frame.html": "<title>still.fail preview (old path)</title>",
   "/preview/_ember/sw.js": "// the preview's service worker (old path)",
   "/preview/404.html": "这是 still.fail 的预览地址",
-  "/share/index.html": "<title>still.fail 分享</title>",
-  "/share/assets/share.js": "// the share page",
-  ...Object.fromEntries(Object.entries(shareFiles({ cloud: "https://relay.example", relays: ["https://relay.example", "https://39.105.157.122"] })).map(([path, text]) => [`/share/${path}`, text])),
 };
+
+/** The files the build brotlis beside them (apps/mbui/scripts/web-app.sh): app.js's, not host.js's (a build without one). */
+const STAND_IN_PACKED: Record<string, string> = { "/web/mbui/app.js.br": "/web/mbui/app.js" };
 
 function standInAssets(request: Request): Response {
   const path = new URL(request.url).pathname;
+  const packed = STAND_IN_PACKED[path];
+  if (packed) return new MFResponse(brotliCompressSync(STAND_IN_FILES[packed]!)) as unknown as Response;
   const body = STAND_IN_FILES[path];
   const headers = path.endsWith(".html") ? { "content-type": "text/html; charset=utf-8" } : {};
   return body === undefined ? new MFResponse("Not found", { status: 404 }) as unknown as Response : new MFResponse(body, { headers }) as unknown as Response;

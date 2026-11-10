@@ -1,4 +1,4 @@
-// One view of a station's screen (ember apps/android app/remote/ScreenSession.kt; docs/remote-screens.md, docs/client-core.md
+// One view of a station's screen (still.fail apps/android app/remote/ScreenSession.kt
 // `screen.view`): the core's call kept open while the viewer is in sight, its values taken apart (the state, a config,
 // frames with their bytes), frames handed to the decoder (@ui.Stream: H.264 or JPEG, drawn as the picture the viewer
 // shows), each acknowledged once shown (the stream says so) or dropped; input, 只看/控制 and key frames told back to
@@ -46,7 +46,7 @@ fn part_of(v : Json?) -> Part? {
 }
 
 ///|
-/// A copy made on the screen, for the device's clipboard (ScreenClips.kt Copied): its text, or its PNG.
+/// A copy made on the screen, for the device's clipboard: its text, or its PNG.
 priv enum Copied {
   CopiedText(String)
   CopiedPng(Bytes)
@@ -74,8 +74,9 @@ priv struct ScreenSess {
   /// the call answered: the view ended (the last state says why)
   finished : @signals.Signal[Bool]
   /// the frames' codec and size, from the latest config
-  mut audio_ready : Bool
-  mut audio_muted : Bool
+  /// the view's sound coming as this device plays it, and muted here (told as they change: 控制中心's row reads them)
+  audio_ready : @signals.Signal[Bool]
+  audio_muted : @signals.Signal[Bool]
   mut codec : String?
   mut size : (Int, Int)?
   /// something was shown since it opened: a frame kept on screen through a reconnect or an end
@@ -182,8 +183,8 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         pointer_layer: None,
         failure: @signals.signal(None),
         finished: @signals.signal(false),
-        audio_ready: false,
-        audio_muted: false,
+        audio_ready: @signals.signal(false, same=fn(a, b) { a == b }),
+        audio_muted: @signals.signal(false, same=fn(a, b) { a == b }),
         codec: None,
         size: None,
         shown_any: false,
@@ -338,7 +339,7 @@ fn ScreenSess::own_stream(self : ScreenSess) -> Unit {
 }
 
 ///|
-/// A call nobody waits for (`screen.ack`, `screen.input`: StillFailCore.kt tell): sent in order with the rest, its
+/// A call nobody waits for (`screen.ack`): sent in order with the rest, its
 /// answer (or error) let go.
 fn screen_tell(src : Source, name : String, params : Map[String, Json]) -> Unit {
   (src.call)(name, Json::object(params), fn(_) {  })
@@ -601,15 +602,13 @@ fn ScreenSess::cursor(self : ScreenSess) -> (Double, Double)? {
 }
 
 ///|
-/// The frame's size in pixels: the config's, else the picture's as the stream last showed it.
+/// The frame's size in pixels: the picture's as the stream last showed it, else (none yet) the config's.
 fn ScreenSess::frame_size(self : ScreenSess) -> (Int, Int)? {
-  match self.size {
-    Some(s) => Some(s)
-    None =>
-      match self.stream {
-        Some(st) => st.size()
-        None => None
-      }
+  // the picture's as it shows: a config says the next one's size before that is decoded (a device turned), the one showing
+  // squashed into it till then
+  match self.stream {
+    Some(st) if st.size() is Some(_) => st.size()
+    _ => self.size
   }
 }
 
@@ -628,7 +627,7 @@ fn ScreenSess::pad(self : ScreenSess, src : Source) -> Bool {
     Some(on) => on
     None if self.simulator() => false
     None if self.fit is Some(_) && text(self.state, "kind") == "browser" => false
-    None => text((src.topic)("prefs", {}).value, "screenTouch") != "direct"
+    None => text(src.topic("prefs", {}).get().value, "screenTouch") != "direct"
   }
 }
 
@@ -636,7 +635,7 @@ fn ScreenSess::pad(self : ScreenSess, src : Source) -> Bool {
 /// How large a picture this device asks for (prefs `screenQuality`, 控制中心's 画质): `smooth`, `hd`, `original`, or
 /// "" (自动: as large as the stage it is shown on, in device pixels: ScreenSess::bounds).
 fn screen_quality(src : Source) -> String {
-  match text((src.topic)("prefs", {}).value, "screenQuality") {
+  match text(src.topic("prefs", {}).get().value, "screenQuality") {
     "smooth" | "hd" | "original" as q => q
     _ => ""
   }
@@ -646,7 +645,7 @@ fn screen_quality(src : Source) -> String {
 /// The most frames a second this device asks for (prefs `screenFps`, 控制中心's 帧率): 120, 90, 60, 30 or 15, or 0 (自动:
 /// as many as the station and the link give).
 fn screen_fps(src : Source) -> Int {
-  let n = number((src.topic)("prefs", {}).value, "screenFps").to_int()
+  let n = number(src.topic("prefs", {}).get().value, "screenFps").to_int()
   if screen_fps_choices.contains(n) && n > 0 {
     n
   } else {
@@ -655,7 +654,7 @@ fn screen_fps(src : Source) -> Int {
 }
 
 ///|
-/// 帧率's choices, 自动 (0) first (web/src/screen/frames.ts FPS_CHOICES).
+/// 帧率's choices, 自动 (0) first.
 // kept across runs: a table, never written
 let screen_fps_choices : Array[Int] = [0, 120, 90, 60, 30, 15]
 
@@ -671,7 +670,7 @@ fn asks_into(params : Map[String, Json], quality : String, fps : Int) -> Unit {
 }
 
 ///|
-/// The bounds a 画质 asks for (web/src/screen/frames.ts QUALITY): `original` the largest a view may ask (the screen's own
+/// The bounds a 画质 asks for: `original` the largest a view may ask (the screen's own
 /// size); 自动 as large as the stage the picture is shown on, in this device's pixels (the user, 2026-10-29: a 4K
 /// window was sent 1920×1080 and its text blurred), screen_max_w × screen_max_h before it is laid out.
 fn ScreenSess::bounds(self : ScreenSess, quality : String) -> (Int, Int) {
@@ -765,7 +764,7 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     fn(value, bytes) { me.take(value, bytes) },
     fn(r) {
       me.call = 0
-      me.audio_ready = false
+      me.audio_ready.set(false)
       match me.stream { Some(st) => st.audio(Bytes::new(0)); None => () }
       match r {
         Ok(_) => me.finished.set(true)
@@ -801,7 +800,7 @@ fn ScreenSess::asked_again(self : ScreenSess, src : Source) -> Unit {
 ///|
 /// Stops viewing (the app went out of sight); the last frame stays, `open` goes on from it.
 fn ScreenSess::pause(self : ScreenSess, src : Source) -> Unit {
-  self.audio_ready = false
+  self.audio_ready.set(false)
   match self.stream { Some(st) => st.audio(Bytes::new(0)); None => () }
   if self.call != 0 {
     (src.cancel)(self.call)
@@ -973,7 +972,7 @@ pub fn screen_unread_calls() -> Array[String] {
 }
 
 ///|
-/// A value of the call: taken apart, the heavy parts handed on (ScreenSession.kt take). What screen_value_quiet says
+/// A value of the call: taken apart, the heavy parts handed on. What screen_value_quiet says
 /// changes nothing a frame reads is taken as it comes, before the frame is built: what a frame or a sound's packet sets
 /// here is read by no build.
 fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
@@ -982,21 +981,28 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
     Some(Object(_) as s) => {
       // the pointer alone moved, drawn on a picture's layer: the host told, nothing built (screen_value_quiet)
       let moved = self.pointer_layer is Some(_) && cursor_moved_only(self.state, s)
+      // made to only look from elsewhere: 只看 as if chosen, 控制 a tap away
+      if number(self.state, "watchOnly") != number(Some(s), "watchOnly") {
+        self.wants_control = Some(false)
+      }
       self.state = Some(s)
       self.heard = true
       if moved {
         self.pointer_moved()
       } else {
-        self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+        self.said.set(self.said.untracked() + 1)
       }
     }
     _ => ()
   }
   match o.get("audioConfig") {
-    Some(config) => self.audio_ready = text(Some(config), "codec") == "pcm_s16le" && number(Some(config), "sampleRate") == 48000.0 && number(Some(config), "channels") == 2.0
+    Some(config) =>
+      self.audio_ready.set(
+        text(Some(config), "codec") == "pcm_s16le" && number(Some(config), "sampleRate") == 48000.0 && number(Some(config), "channels") == 2.0,
+      )
     None => ()
   }
-  if o.contains("audio") && self.audio_ready && !self.audio_muted {
+  if o.contains("audio") && @signals.untracked(fn() { self.audio_ready.get() && !self.audio_muted.get() }) {
     match (self.stream, bytes) { (Some(st), Some(data)) => st.audio(data); _ => () }
   }
   // (the engine's own read of the view numbers what it says: those after it the host may take, ScreenSess::route)
@@ -1120,7 +1126,7 @@ fn ScreenSess::route(self : ScreenSess, after : Double) -> Unit {
     shown is Some(_) &&
     self.parts.last().map(fn(p) { p.1 }) == shown
   let to_whole = !self.parting && shown is None
-  let audio = self.audio_ready && !self.audio_muted
+  let audio = @signals.untracked(fn() { self.audio_ready.get() && !self.audio_muted.get() })
   match self.stream {
     Some(st) => st.route(self.call, after, video=to_whole, audio~)
     None => ()
@@ -1150,12 +1156,13 @@ fn ScreenSess::came(self : ScreenSess) -> (Int, Int) {
 }
 
 ///|
-/// The most a clipboard carries of a picture, each way (client/core-ts/src/screen-frames.ts; ScreenClips.kt).
+/// The most a clipboard carries of a picture, each way (client/core-ts/src/screen-frames.ts).
 let clip_png_max : Int = 8 * 1024 * 1024
 
 
 ///|
 fn ScreenSess::toggle_audio(self : ScreenSess) -> Unit {
-  self.audio_muted = !self.audio_muted
-  if self.audio_muted { match self.stream { Some(st) => st.audio(Bytes::new(0)); None => () } }
+  let muted = !self.audio_muted.untracked()
+  self.audio_muted.set(muted)
+  if muted { match self.stream { Some(st) => st.audio(Bytes::new(0)); None => () } }
 }

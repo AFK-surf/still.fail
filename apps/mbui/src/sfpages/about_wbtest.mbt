@@ -27,11 +27,11 @@ test "关于 names the build for its channel" {
     let t = setting_tester(About, 390.0, platform=2, over=fn(s) {
       {
         ..s,
-        topic: fn(name, params) {
+        topic_read: fn(name, params) {
           if name == "prefs" {
             { value: Some(Json::object({ "productName": Json::string(product) })), error: None, version: 1 }
           } else {
-            (s.topic)(name, params)
+            s.topic(name, params).get().snapshot()
           }
         },
       }
@@ -45,7 +45,7 @@ test "关于's 性能记录 where the device keeps one, at each width and with e
   for case in page_cases {
     let (w, platform) = case
     let at = "\{w} platform \{platform}"
-    // (a Tester's host keeps none, as Android's, a Mac's, Windows')
+    // (a Tester's host keeps none, as Android's, a Mac's)
     assert_true(setting_tester(About, w, platform~).find("性能记录") is None, msg=at)
     // (one kept, as iOS's)
     let t = setting_tester(About, w, platform~, host=fn(t) { t.set_perf(0) })
@@ -78,7 +78,8 @@ test "关于's version rows, at each width and with either hand: this build alon
     let at = "\{w} platform \{platform}"
     assert_true(t.query(Link, label="检查更新") is Some(_), msg=at)
     @sfbase.update.available.set(Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk", "size": 23515867 }))
-    t.draw()
+    // (its row makes its way in under 检查更新: looked at once there)
+    t.run_for(@ui.move_most_ms)
     // known, not handed to the host yet: offered, a row of its own under 检查更新 (still there); waiting for Wi‑Fi,
     // said with its size
     assert_true(t.query(Link, label="有新版本 0.1.1") is Some(_), msg=at)
@@ -127,7 +128,8 @@ test "关于's update row stays usable with the pointer over it as a download be
   @sfbase.update.available.set(Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk", "size": 23515867 }))
   t.draw()
   t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
-  t.draw()
+  // (its row made its way in: the pointer put over it where it rests)
+  t.run_for(@ui.move_most_ms)
   let (x, y, w, h) = t.query(Link, label="正在下载 0.1.1").unwrap().rect
   t.move(x + w / 2.0, y + h / 2.0)
   let now = t.time()
@@ -229,8 +231,8 @@ test "更新日志, at each width and with either hand: the build, a tab a part,
 fn changelog_one_tab(base : Source) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
-      let v = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let v = base.topic(name, params).get().snapshot()
       match v.value {
         Some(Object(o)) if name == "changelog" =>
           match o.get("tabs") {
@@ -296,6 +298,30 @@ test "关于's 性能记录 turned on stays on: its first line written (the 分�
     assert_true(t.get(Switch, label="性能记录").check is Some(On), msg=at)
     assert_eq(t.perf_said().0, [true], msg=at)
     assert_eq(@hostapi.perf_state(), 1, msg=at)
+  }
+}
+
+///|
+test "关于's 性能记录 where the host has no share sheet (Windows): the way to its folder always, the logs being there whether it is kept or not, its own note, no 分享记录 whatever it holds; pressed, the folder opened" {
+  for case in page_cases {
+    let (w, platform) = case
+    let at = "\{w} platform \{platform}"
+    let t = setting_tester(About, w, platform~, host=fn(t) {
+      t.set_perf(0)
+      t.set_perf_opens(true)
+    })
+    t.wheel(w / 2.0, 450.0, 5000.0)
+    t.run_for(@ui.move_most_ms)
+    t.draw()
+    assert_true(t.find("每 5 秒把 CPU、内存和帧数记在本机 Documents/perf（现有 0 B），不会上传。报错不论开没开都记在这个文件夹。") is Some(_), msg=at)
+    t.set_perf_size(666.0)
+    t.run_for(@ui.move_most_ms)
+    t.draw()
+    assert_true(t.find("分享记录") is None, msg=at)
+    assert_eq(t.perf_opened(), 0, msg=at)
+    t.click(Link, label="打开日志文件夹")
+    assert_eq(t.perf_opened(), 1, msg=at)
+    assert_eq(t.perf_said().0, [], msg=at)
   }
 }
 

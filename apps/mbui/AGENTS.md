@@ -2,18 +2,19 @@
 
 This is still.fail's app on every platform (README.md: which app is built), written in mbui, which is in this
 repository at `mbui/` (no pin: a change to mbui and to the app is one pull request). mbui's own `mbui/AGENTS.md`
-applies here as well. In short, and what is particular to this app:
+applies here as well; what follows is particular to this app.
 
 ## The terms (术语)
 
-Four things decide how the app looks and answers (docs/architecture.md, the terms):
+Four things decide how the app looks and answers:
 
 - **屏幕** (the screen): 小屏 / 中屏 / 大屏 (`@sf.layout`: `Small`, `Medium`, `Large`), plus the special screens (a fold
   half open, crease across: a chat laid out as 小屏's; a phone used upright only). How the panes are arranged, and
   sheets from the foot (小屏) or popovers beside what opened them (中屏, 大屏).
 - **原生操控** (the native input, `@sf.native_input()`): touch or keyboard and mouse, as the app was started, the same
-  the whole run. The size words, icons and rows are drawn at (never a press's room: 44×44 at least, overlapping
-  none), what shows only under a pointer and touch's way to the same, Enter, scroll bars, the search field or ⌘K.
+  the whole run. It decides the size words, icons and rows are drawn at (not the room a press gets, which is 44×44 at
+  least on every input, overlapping none), what shows only under a pointer and touch's way to the same, Enter, scroll
+  bars, the search field or ⌘K.
 - **当前操控** (the current input, `@ui.pointing()`): touch or keyboard and mouse at the moment; it may change. How a
   thing answers the hand alone, never what is shown, where or how big.
 - **页面宽窄** (a page's width, `@sf.look()`): 窄排法 / 宽排法, by the width of the box a page is drawn in.
@@ -25,34 +26,37 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - The released apps are this one: Android's since 2026-10-24, the Mac's and Windows' since 2026-10-26, each built in
   the place of the one before it. Nothing else of still.fail's apps is developed; the web runs this app too (2026-10-31: mbui's
   web host draws it on the web's own core, `web/mbui.html`, `scripts/web-app.sh`), so a page is made here once for
-  every screen; the React web app (`web/`) is read for why its pages are as they are, until it is gone.
+  every screen. The React web app's pages are gone (read for why a page is as it is: `git show 4577000fd7:web/src/…`);
+  what is left in `web/` is the web's host of this app and a few pages of its own (sign-in's way back, the share page,
+  the admin's console), in Preact.
 - What the app looks like and how it moves is what it does now; a change means to differ and says why. Nothing in this
   repository compares mbui with itself (#881 took that out); do not bring it back.
 - A change people can see (timing, rhythm, what is shown) says so in its PR with old and new side by side.
-- Comments here and in `mbui/` that name a `.kt` file, `apps/android/…` or `ember … apps/android` mean the Kotlin
+- Comments here and in `mbui/` that name a `.kt` file, `apps/android/…` or `still.fail … apps/android` mean the Kotlin
   Android app's (gone in #2547: `git show 5065f823b^:apps/android/…`); `apps/desktop/…` the Electron app's (gone in
-  #2182: `git show eba1e7f47^:apps/desktop/…`). They say where a way of doing a thing came from; where they name a
+  #2182: `git show eba1e7f47^:apps/desktop/…`); a `web/src/…` file that is not there any more, the React web app's
+  (`git show 4577000fd7:web/src/…`). They say where a way of doing a thing came from; where they name a
   format this app still reads (a sealed value's, a store's files, an updater's), the old file is its spec.
 
 ## The component library
 
-- The parts pages are made of are the library's, `src/sf` (docs/library.md): the counterpart of the web's `web/ui`,
+- The parts pages are made of are the library's, `src/sf` (sf/styles.mbt): the counterpart of the web's `web/ui`,
   one of its files for each of the web's. A part used by both the phone's pages and the desktop's lives there once and
   both use it; a page keeps no copy of its own. The library imports nothing of the app (detlint's `library-import`):
   what it needs of the app is given to it as the app starts.
 
 - A named style (a top-level `let`, and a `.then(…)` of one) whose properties are all tokens and numbers is written
   as its text, `@ui.css("w=Full px=S2 hovered{bg=Hover}")`; `@ui.style(…)` is for one that names a variable or is
-  worked out (`w=@sf.grow`, `Fixed(side_w)`), and inside functions (mbui/docs/style.md). Why (2026-10-24): moonc made
+  worked out (`w=@sf.grow`, `Fixed(side_w)`), and inside functions (mbui's ui/style.mbt). Why (2026-10-24): moonc made
   each `@ui.style(…)` constant ~5-10 KB of C in the program's start, ~1400 of them ~11.8 MB of one function compiled
   again on every build; as text each is a string read once at start-up. detlint's `style-text` forbids the other
   way and prints the text to write.
 
 ## One app: tiers, input, pages, shell
 
-- `docs/architecture.md` is how the app is built; read it before changing a page or the frame. In short:
+- How the app is built, in short:
   - It is one app on every device (the user, 2026-10-24); there is no phone app and desktop app.
-  - Six principles come first (the user, 2026-10-26; docs/architecture.md): every function as easy with either
+  - Six principles come first (the user, 2026-10-26): every function as easy with either
     input; what always shows is pressed in 44×44 at least, overlapping none; menus and picks from the foot on Small,
     beside what opened them on Medium and Large; the screen decides the arrangement, the input only how things
     answer and the size they are drawn at; the same content and actions on the three screens, each arranged as is
@@ -68,8 +72,8 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     app-level things, and the shared machinery. It imports the library and the settings' routes, nothing of the pages.
   - `src/sfdesk` holds the pages ported from the web, and the Medium and Large frame.
   - `src/sfapp` holds the phone's first pages and the Small frame. It takes `sfbase`'s names in by
-    `pub using` (`sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
-  - Both go into `sfpages` and `sfshell` as pages merge (`docs/architecture.md`, the way there).
+    `pub using` (`src/sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
+  - `src/sfpages` holds the pages already merged, one for every screen; `sfdesk` and `sfapp` import it.
 - **What doesn't change:**
   - Something both need moves down into `sfbase` or the library, once.
   - Logic is the core's, never a page's.
@@ -78,16 +82,36 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     tab)`: the shell's (sfbase's `Shell`) decides where it goes per layout. It never pushes onto `app.nav` itself.
   - Don't add a branch on the tier inside a page. A page that needs another arrangement asks its own
     width. Nor on the native input (`@sf.native_input()`): what differs by it is the theme's, the library
-    parts', the presenters' and the shell's (docs/architecture.md, the same on every screen and what differs); a page
+    parts', the presenters' and the shell's (the same on every screen and what differs); a page
     that needs it asks the library for a part. Nor on `@ui.pointing()`: the hand reaches a page only through the
     library's primitives (`c.lit`, `c.menu_asked`, tips).
   - A page is designed once from what it is for; the web's two are read for their reasons, not copied or picked
-    between. Merging two copies keeps neither and drops the other: the page is no worse on either
-    screen than its copy was there, shown before and after.
+    between. The merged page is no worse on either screen than its copy was there, shown before and after.
+  - A place of the bar never opens on its bones when the device holds what it shows (the user, 2026-11-10): the list
+    it opens on is one of sfbase's `lasting` (shown again at once) and of `place_reads` (asked ahead of it). A new
+    place, or another list a place opens on, goes in both; `src/sfapp/place_first_wbtest.mbt` holds every place.
+  - A step further in is the presenters', never a page's (弹层里往里走: the user, 2026-11-02, and 2026-11-10 「系统性
+    全修一下」 once the chat's own sheet and a menu's 分享… were found never to have had it). A page says `close()` and
+    opens the next, and keeps no step number and no 返回 button of its own; `src/sf/presenters.mbt` does the rest on
+    every screen: a panel that closes for another panel is a step further in from it (a back key before its title;
+    back, Escape and the system's back go back to the one before, a press outside, × or the sheet dragged down closes
+    all of it), a menu a menu's item opens is a level of the same sheet, and on 小屏 whatever a sheet closes for comes
+    in its place, one sheet all along and the scrim as it was, never one sheet sinking as the next rises
+    (presenters_wbtest's every pair of kinds holds it).
+
+## Made once, as nodes
+
+- The app is moving off the old immediate-mode view (`Ctx`, built again each frame) onto the window's tree, made once
+  (mbui's `mbui/src/view`; `mbui/AGENTS.md`, Two views). What is new or rewritten is nodes: a page is `@sf.page_node`, a
+  panel `@sf.panel_nodes` (drawn on 小屏 as a sheet from the foot), a long list `View::each` in what scrolls
+  (`View::scrolls_window`); the library's parts are its `*_node.mbt` ones. A press does its work in its handler (`on_press`, `on_pick`, `on_change`).
+- What is left of the old is counted by detlint and only falls: `old-island` (`@ui.old` hosting a Ctx in a node),
+  `old-list` (`Ctx::list`), `old-panel`, `click-read`, `key-read`, `build-motion`, `layout-read-back`, `ui-current`.
+  A change never adds one; one it touches it moves over. A node-made part is never wrapped back into a Ctx.
 
 ## Motion
 
-- `docs/motion.md` says what moves and how; read it before adding or changing a motion. In short (the user,
+- `src/sf/motion.mbt` says what moves and how; read it before adding or changing a motion. In short (the user,
   2026-10-25):
   - Every motion is one of nine kinds (in the hand, coming and going, moved or reshaped, flying, another page,
     scrolled to, a control answering, waiting, emphasis), each set off one way, with the kind's presets.
@@ -95,58 +119,84 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     differs from last frame's, and no measured size is a follow's target: what the window, the sidebar, a keyboard
     or the tier does to a thing is no motion of its own.
   - No time window is a cause, and no logic reads whether a motion runs.
+  - What comes or goes by its size keeps its whole scale, from where it starts, and is not seen at half its size or
+    less, so it does not jump (the user, 2026-10-31, again 2026-11-08): its opacity is `@sf.seen_at(scale)`.
 
 ## Running the app in development
 
 - `scripts/wasm-app.sh run` runs the Mac app built for Wasm in mbui's native shell (the user, 2026-11-03: no C of the
-  app compiled in development); `build` alone builds it (6 s after a change of the app; the shell is built again only
-  when the host's C, the core's parts or the declarations change). `e2e/run.sh mac` runs it too outside CI. The
+  app compiled in development); `build` alone builds it (the shell is built again only when the host's C, the core's
+  parts or the declarations change). `e2e/run.sh mac` runs it too outside CI. The
   native app (`scripts/mac.sh`) is CI's and the releases'.
 - The same on the other platforms, `PLATFORM=android|ios|windows scripts/wasm-app.sh run`: the shell an APK (installed
   only when it changed; the app compiled here for the device and put in its files), an iOS simulator's app (which reads
   the app where it lies on the Mac), a Windows program (Git Bash with MSVC). `e2e/run.sh android|ios` run it outside
   CI. `scripts/android.sh`, `ios.sh`, `win.sh` build the native apps, CI's and the releases'.
+- On a person's phone (lent to a chat by `phone_use`), a build of work in progress goes in as the dev build,
+  `fail.still.android.dev` (`scripts/android.sh`'s `VARIANT` left as it is), installed over the one there, whichever
+  chat put it: never a package of a chat's own, never in place of their stable or beta (the user, 2026-11-09). Its
+  test hooks (`env`, a drive script, a fixture) open with `adb shell setprop debug.mbui.hooks 1`.
 
 ## What is checked, and where
 
 - The app's screens are tested in the Tester: its draw list at the declared moment.
+- A screen changed is checked by `t.audit()` (every rule at once, each fault saying where what it names was made), not
+  by judging a picture; what people point at (their words on a screenshot) is found back to its line by
+  `t.sources_of(words)` or `t.sources_at(x, y)` on the same screen in the Tester (mbui's AGENTS.md: What is seen).
+- Every screen is swept at the default size of words (corners_wbtest.mbt) and, in a phone's window, at the system's
+  words set to 1.3 (`src/sfapp/words_large_wbtest.mbt`: what fits and words over words at rest; the user, 2026-11-10).
+  A new state a report shows gets a fixture mode in `corner_modes`, so both sweeps see it.
+- What the core sends for what the app subscribes to, in each flow's trace, keeps to its bar
+  (`src/sfreplay/topic_bytes.mbt`: KB of values sent whole, values sent whole again, messages for what was let go of;
+  each topic's largest value). A page subscribes to what it shows, no more (the user, 2026-11-10); a trace recorded
+  anew that is sent more fails, one sent less brings its bar down.
 - For development stills, prepare a `scripts/media-job.sh picture` job for each source state and reuse its Wasm
-  renderer across scenes; use a `film` job for video. The matching build, cache and scene records are in `docs/media.md`.
+  renderer across scenes; use a `film` job for video (`scripts/media-job.sh` says how).
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture
   with a kept one: that is slow, and what it waits for is never the app's own. A device runs only the host's
   contracts (`mbui-host-*`), the render contracts, and a few end-to-end smoke flows that wait for named events; their
   pictures are for people, not compared. detlint's `device-shot` counts each picture taken off a device: a new one
   fails.
+- How long input takes to show (`scripts/latency.sh`: a Mac's window, a phone) is measured for people on a real host,
+  never a check: its runs differ with the window server's state, so it says medians of several, two builds in turn.
 
 ## The host is asked through mbui/hostapi
 
-- App code asks its host through `@hostapi` (or `@ui`), never imports `mbui/host`: only a main (`src/stillfail`,
-  the demos) does, for the platform's host. A test's program links no host's code, so the native tests run on Linux
+- App code asks its host through `@hostapi` (or `@ui`), never imports mbui's host package (`mbui/src/host`): only a
+  main (`src/stillfail`, the demos) does, for the platform's host. A test's program links no host's code, so the native tests run on Linux
   (`TARGETS=native scripts/test.sh`, CI's check-mbui native). detlint's `host-import` holds it.
 
-## Time is declared, nothing is waited for, nothing is flaky
-
-> 一个测试里动画是多少帧，跑多久现实时间，对测试不会有任何影响。如果测试断言了动画第 3 秒应该是什么样，测试就能正确得到
-> 第三秒的视图，而前两秒到底是一秒一帧还是直接跳过，都不影响测试的正确性。
-
-> 不稳定测试是整个系统最严重的故障。我们的系统就不应该存在偶发失败。存在偶发失败说明整个系统就是烂的，而不是某个测试有问题。
+## Time is declared
 
 - What the app shows is tested in the Tester (`src/sfapp`, `src/sfreplay` replaying recorded core tapes): walk to it,
-  say the moment, assert. The frames between must not matter.
-- No flow, script or test waits for the app to settle or for a motion to end, under any name (`rest`, "until it
-  stops moving", "until it landed"), nor a fixed `wait`/`sleep`, a retry or a longer timeout. An end-to-end step
-  waits only for its own named event from outside the app (`answered`, `decoded`, `shown`, an outside wait done) or a
-  fact of state (a row by its id). `detlint.json` (run with `mbui/scripts/detlint`) counts what is
-  left and only lets it fall.
-- A check that fails and then passes on the same commit is not "偶发": something uncontrolled got in (real time, the
-  network, an emulator's or simulator's state, a host callback's order, another job's files). Do not rerun it green
-  and move on; find it and take it out of the run.
+  say the moment, assert, as mbui's rules say. `detlint.json` (run with `mbui/scripts/detlint`) counts the waits left
+  and only lets them fall.
+- What the host gives the app as it runs (its window and scale, the system and its settings, its time zone) is kept in
+  a recorded trace (`{"settings":…}`, mbui's `@ui.trace_settings`) and given back by its replay, never a default in its
+  place: a trace without it is refused (`Flow::start`). A recording is made in UTC (`e2e/run.sh`). Traces kept before
+  it say `"from":"replay"`, what their replays had always used (the coordinator of the migration, 2026-11-10).
+
+## Where the tests run (the user, 2026-11-08)
+
+- The whole suite (`scripts/test.sh`, `mbui/scripts/test.sh`) is the PR's CI's: native, side by side, five minutes.
+  On Studio or a laptop it is wasm-gc in a row, half an hour and more, with every other agent queued behind it, so
+  both scripts refuse outside CI. There run `check`, detlint and the test files the change touches
+  (`moon test --target wasm-gc --release src/sfapp/<file>_wbtest.mbt`), and a bench when it is a speed change.
+- A speed change is measured by `scripts/instrbench.sh`: what each frame runs, counted by kind of instruction, the same
+  every run (its `compare` sets two checkouts' runs side by side). It says numbers, each kind's and weighted, never a
+  verdict: what they say of the change is weighed and told as it is (the user, 2026-11-09). A device's or the native
+  build's time (`scripts/appbench.sh`) is what a frame takes there.
+- What the builds weigh (the web's `app.js` raw, gzip and brotli, the APK, the Mac app) and the memory the Mac and
+  Android apps take once idle are recorded, never a gate (the user, 2026-11-09): `.github/workflows/mbui-size.yml`
+  after each pipeline run on main that built them (`scripts/size.sh`, `scripts/idlemem.sh`), a line per commit on the
+  branch `mbui-size`. A change meant to make the app smaller or lighter says those numbers before and after.
+- A push starts CI. Push when the work is meant to merge (the change done, its files' tests and the bench passed),
+  not after each small change: Studio's runs take the worktree by `station_task`'s `dir`, no push needed.
+- A PR pushed has its CI watched by the stillfail-github-ci skill's `ci-wait.sh` run in the background, whose end
+  brings you back; meanwhile go on with the next step, not watching it yourself (the user, 2026-11-09). A failed check
+  is read from its log, fixed and pushed again; the work is done once all of it passed.
+- A brief that sends an agent to work here says the same; it never asks for a full run before the PR.
 
 ## Before a PR
 
-- Run what `check-mbui` runs, with its scripts: `scripts/check.sh` (native), `scripts/test.sh`,
-  `bash scripts/screens.sh test`.
 - Don't `moon fmt` here (it rewrites a hundred files nobody touched).
-- One PR per piece of work. Squash with `git reset --soft $(git merge-base HEAD origin/main)`, never onto
-  `origin/main`; check `git diff origin/main --stat` lists only your files.
-- Merge it yourself once every check has finished green (`gh pr checks <n> --watch`), not only the gate.

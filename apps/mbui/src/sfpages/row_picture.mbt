@@ -1,4 +1,4 @@
-// Who is in a chat, small at its row's second line's end (ember web/src/RowPicture.tsx RowAside, Face;
+// Who is in a chat, small at its row's second line's end (still.fail web/src/RowPicture.tsx RowAside, Face;
 // RowPicture.css.ts), as the chats' lists draw it with a finger and with a mouse alike: its agents' marks (a maker's
 // once) and its people's faces, those that lead first.
 
@@ -197,7 +197,7 @@ let face_ring_out : Double = 2.0
 let aside_most : Int = 3
 
 ///|
-/// What stands at a row's second line's end (RowPicture.css.ts aside): the agents and the people 6 apart, each 2 in.
+/// What stands at a row's second line's end: the agents and the people 6 apart, each 2 in.
 // kept across runs: a value (no field of it changes)
 let aside_row : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
@@ -206,7 +206,7 @@ let aside_row : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 let aside_agents : @ui.Style = @ui.css("row pl=S0_5 gap=S1 align=ACenter")
 
 ///|
-/// An agent's mark in a column 16 wide and high (RowPicture.css.ts asideAgent).
+/// An agent's mark in a column 16 wide and high.
 // kept across runs: a value (no field of it changes)
 let aside_agent : @ui.Style = @ui.css("w=S4 h=S4 align=ACenter justify=JCenter")
 
@@ -215,12 +215,12 @@ let aside_agent : @ui.Style = @ui.css("w=S4 h=S4 align=ACenter justify=JCenter")
 let aside_faces : @ui.Style = @ui.css("row pl=S0_5 align=ACenter")
 
 ///|
-/// How many more than are shown (RowPicture.css.ts asideMore): 12, muted.
+/// How many more than are shown: 12, muted.
 // kept across runs: a value (no field of it changes)
 let aside_more : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
-/// The pixel after who started it (RowPicture.css.ts: marginRight 1).
+/// The pixel after who started it.
 // kept across runs: a value (no field of it changes)
 let face_gap : @ui.Style = @ui.css("w=SPx h=S4")
 

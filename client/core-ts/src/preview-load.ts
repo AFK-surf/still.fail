@@ -1,6 +1,7 @@
-// Resource progress shared by every preview transport (preview_load.rs; the `previewLoad` topic). No response bodies
+// Resource progress shared by every preview transport (the `previewLoad` topic). No response bodies
 // are kept.
 import { topicKey, type Topic } from "./protocol.ts";
+import { Marks } from "./reactive.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -11,6 +12,8 @@ export type LoadKey = [Topic, number];
 export class Loads {
   #next = 0;
   readonly #pages = new Map<string, Page>();
+  /// What reads a page's progress (its topic) is made again as it changes.
+  readonly #seen = new Marks();
 
   start(station: string, port: number, method: string, path: string, headers: [string, string][], now: number): LoadKey {
     const topic: Topic = { topic: "previewLoad", station, port };
@@ -38,12 +41,14 @@ export class Loads {
       if (i >= 0) page.rows.splice(i, 1);
     }
     page.rows.push({ id, method, path, since: now, status: null, ended: null, error: null });
+    this.#seen.touch(key);
     return [topic, id];
   }
 
   head(key: LoadKey, status: number): void {
     const row = this.#pages.get(topicKey(key[0]))?.rows.find((r) => r.id === key[1]);
     if (row) row.status = status;
+    this.#seen.touch(topicKey(key[0]));
   }
 
   end(key: LoadKey, now: number, error: string | null): void {
@@ -55,9 +60,11 @@ export class Loads {
     row.error = error;
     page.finished++;
     if (error !== null || (typeof row.status === "number" && row.status >= 400)) page.failed++;
+    this.#seen.touch(topicKey(key[0]));
   }
 
   value(topic: Topic): J {
+    this.#seen.read(topicKey(topic));
     const page = this.#pages.get(topicKey(topic));
     if (!page) return { percent: 0, total: 0, finished: 0, failed: 0, resources: [] };
     return { percent: page.total === 0 ? 0 : Math.trunc((page.finished * 100) / page.total), total: page.total, finished: page.finished, failed: page.failed, resources: structuredClone(page.rows) };

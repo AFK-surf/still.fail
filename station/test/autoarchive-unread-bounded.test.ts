@@ -5,14 +5,15 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { autoArchive, startAutoArchiveTimer } from "../src/sessions/lifecycle.ts";
-import { saidScanStep, type SaidScan } from "../src/store/said-state.ts";
+import { installSaidState, SAID_LATEST, SAID_SCAN, saidScanStep, type SaidScan } from "../src/store/said-state.ts";
+import { installLegacySaid, legacySaidStep } from "../src/store/legacy-said-build.ts";
 import { Store } from "../src/store/store.ts";
 import { Rig } from "./hub-fakes.ts";
 
 const later = () => Date.now() + 3 * 86_400_000;
 
 function chat(r: Rig, name: string, who: "agent" | "person", firstOther = false) {
-  const thread = r.store.openThread("ember", "EMBER", name, null, "me").id;
+  const thread = r.store.openThread("ember", "CHAT", name, null, "me").id;
   const put = r.store.db.prepare("INSERT INTO entries (thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message',?,?,?,?)");
   r.store.db.exec("BEGIN");
   if (firstOther) put.run(thread, 1, "agent", "a", "first", 1);
@@ -30,7 +31,7 @@ function track(r: Rig) {
       if (property === "prepare") return (sql: string) => target.prepare(
         sql.includes("SELECT COUNT(*) AS c FROM entries")
           ? sql.replace("AND NOT (author_kind", "AND visit_archive_unread(n) IS NOT NULL AND NOT (author_kind")
-          : sql.includes("INDEXED BY entries_said") && sql.includes("ORDER BY n DESC")
+          : sql === SAID_LATEST || sql === SAID_SCAN
             ? sql.replace("ORDER BY n DESC", "AND visit_archive_unread(n) IS NOT NULL ORDER BY n DESC")
             : sql,
       );
@@ -64,6 +65,7 @@ test("auto-archive does not count a long run of unread messages", async () => {
     try {
       autoArchive(r.hub, later());
       assert.equal(r.store.getThread(thread)?.hiddenAt, null);
+      assert.ok(trace.visited() > 0, "the unread lookup was observed");
       assert.ok(trace.visited() <= 64, `the decision visited ${trace.visited()} messages`);
     } finally { trace.restore(); }
   } finally { await r.close(); }
@@ -78,6 +80,7 @@ test("auto-archive does not scan a long run of the starter's messages", async ()
     try {
       autoArchive(r.hub, later());
       assert.notEqual(r.store.getThread(thread)?.hiddenAt, null);
+      assert.ok(trace.visited() > 0, "the unread lookup was observed");
       assert.ok(trace.visited() <= 64, `the decision visited ${trace.visited()} messages`);
     } finally { trace.restore(); }
   } finally { await r.close(); }
@@ -86,7 +89,7 @@ test("auto-archive does not scan a long run of the starter's messages", async ()
 test("the archive check ignores letters and the starter's messages", async () => {
   const r = new Rig();
   try {
-    const thread = r.store.openThread("ember", "EMBER", "mixed", null, "me").id;
+    const thread = r.store.openThread("ember", "CHAT", "mixed", null, "me").id;
     const put = r.store.db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at,letter) VALUES (?,?,?,?,?,?,?,?)");
     put.run(thread, 1, "message", "person", "someone", "other", 1, null);
     put.run(thread, 2, "message", "person", "me", "mine", 2, null);
@@ -107,7 +110,7 @@ test("the archive's unread decision reads one snapshot while another station wri
   const store = Store.open(path);
   const other = new DatabaseSync(path);
   try {
-    const thread = store.openThread("ember", "EMBER", "chat", null, "me").id;
+    const thread = store.openThread("ember", "CHAT", "chat", null, "me").id;
     const put = "INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message',?,?,?,?)";
     store.db.prepare(put).run(thread, 1, "person", "me", "mine", 1);
     const read = store.readPosition.bind(store);
@@ -128,6 +131,157 @@ test("the archive's unread decision reads one snapshot while another station wri
   } finally { other.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
+for (const scenario of ["changed-away","ignored"] as const) test(`archive unread reads bounded ${scenario} legacy keys`, () => {
+  const counts: number[] = [];
+  for (const size of [80,800]) {
+    const dir = mkdtempSync(join(tmpdir(),"archive-unread-legacy-")), path = join(dir,"stillfail.db");
+    let store = Store.open(path);
+    const thread = store.openThread("ember","CHAT",`archive-${scenario}-${size}`,null,"me").id;
+    const put = store.db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,text,ts,at)
+      VALUES(?,?,'message','person','me','text',?,?)`);
+    put.run(thread,1,"occupied",1);
+    if (scenario === "changed-away") for (let n=2;n<=size+1;n++) put.run(thread,n,`t${n}`,n);
+    installLegacySaid(store.db);
+    store.db.exec("DROP INDEX entries_said");
+    installSaidState(store.db);
+    while (!legacySaidStep(store.db,64).ready) { /* prepare */ }
+    store.close();
+    store = Store.open(path);
+    const db = store.db;
+    try {
+      if (scenario === "changed-away") db.prepare("UPDATE entries SET letter='{}' WHERE thread=? AND n>1").run(thread);
+      else {
+        const ignored = db.prepare(`INSERT OR IGNORE INTO entries(thread,n,kind,author_kind,author,text,ts,at)
+          VALUES(?,?,'message','person','me','text','occupied',?)`);
+        for (let n=2;n<=size+1;n++) ignored.run(thread,n,n);
+      }
+      let visited = 0;
+      db.function("visit_archive_legacy", (n) => { visited++; return n; });
+      Object.defineProperty(store,"db",{ configurable:true,value:new Proxy(db,{ get(target,property) {
+        if (property === "prepare") return (sql: string) => target.prepare(sql.replaceAll(
+          "CROSS JOIN entries e ON e.thread=d.thread AND e.n=d.n",
+          "CROSS JOIN entries e ON e.thread=d.thread AND e.n=visit_archive_legacy(d.n)")
+          .replace("FROM entries e WHERE e.thread=?", "FROM entries e WHERE e.thread=? AND visit_archive_legacy(e.n)=e.n")
+          .replace("FROM entries WHERE thread=? ORDER BY n DESC LIMIT 65",
+            "FROM entries WHERE thread=? AND visit_archive_legacy(n)=n ORDER BY n DESC LIMIT 65")
+          .replace("FROM entries WHERE thread=?1 AND n<?2 ORDER BY n DESC LIMIT 65",
+            "FROM entries WHERE thread=?1 AND n<?2 AND visit_archive_legacy(n)=n ORDER BY n DESC LIMIT 65"));
+        const value = Reflect.get(target,property,target);
+        return typeof value === "function" ? value.bind(target) : value;
+      } }) });
+      let answer = store.unreadForArchive("me",thread);
+      assert.ok(visited > 0, "the unread lookup was observed");
+      counts.push(visited);
+      if (answer === null) {
+        let scan: SaidScan | null = null, done = false;
+        for (let i=0;i<100 && !done;i++) {
+          const step = saidScanStep(db,thread,scan);
+          assert.ok(step.visited <= 64);
+          scan = step.scan; done = step.done;
+        }
+        assert.ok(done,"the requested chat becomes readable");
+        answer = store.unreadForArchive("me",thread);
+      }
+      assert.equal(answer,false);
+    } finally {
+      Object.defineProperty(store,"db",{ configurable:true,value:db });
+      store.close(); rmSync(dir,{ recursive:true,force:true });
+    }
+  }
+  assert.ok(counts[1]! <= counts[0]!+4 && counts[1]! <= 70,
+    `archive unread candidates for 80 / 800 keys: ${counts.join(" / ")}`);
+});
+
+test("legacy archive unread keeps its snapshot while an old connection appends", () => {
+  const dir = mkdtempSync(join(tmpdir(),"archive-unread-legacy-snapshot-")), path = join(dir,"stillfail.db");
+  let store = Store.open(path);
+  const thread = store.openThread("ember","CHAT","archive-legacy-snapshot",null,"me").id;
+  store.db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,text,ts,at)
+    VALUES(? ,1,'message','person','me','mine','occupied',1)`).run(thread);
+  installLegacySaid(store.db);
+  store.db.exec("DROP INDEX entries_said");
+  installSaidState(store.db);
+  while (!legacySaidStep(store.db,64).ready) { /* prepare */ }
+  store.close();
+  store = Store.open(path);
+  const other = new DatabaseSync(path);
+  try {
+    const ignored = store.db.prepare(`INSERT OR IGNORE INTO entries(thread,n,kind,author_kind,author,text,ts,at)
+      VALUES(?,?,'message','person','me','mine','occupied',?)`);
+    for (let n=3;n<=75;n++) ignored.run(thread,n,n);
+    const read = store.readPosition.bind(store);
+    let wrote = false;
+    store.readPosition = (...args) => {
+      const position = read(...args);
+      if (!wrote) {
+        other.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,text,ts,at)
+          VALUES(?,2,'message','agent','worker','answer','new',2)`).run(thread);
+        wrote = true;
+      }
+      return position;
+    };
+    assert.equal(store.unreadForArchive("me",thread),false);
+    assert.equal(store.unreadForArchive("me",thread),true);
+    assert.equal(wrote,true);
+  } finally { other.close(); store.close(); rmSync(dir,{ recursive:true,force:true }); }
+});
+
+test("legacy archive waits for the older unread boundary when changed keys are pending", () => {
+  const dir = mkdtempSync(join(tmpdir(),"archive-unread-legacy-boundary-")), path = join(dir,"stillfail.db");
+  let store = Store.open(path);
+  const thread = store.openThread("ember","CHAT","archive-legacy-boundary",null,"me").id;
+  const put = store.db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,text,ts,at)
+    VALUES(?,?,'message',?,?,'text',?,?)`);
+  put.run(thread,1,"agent","worker","occupied",1);
+  for (let n=2;n<=150;n++) put.run(thread,n,"person","me",`t${n}`,n);
+  installLegacySaid(store.db);
+  store.db.exec("DROP INDEX entries_said");
+  installSaidState(store.db);
+  while (!legacySaidStep(store.db,64).ready) { /* prepare */ }
+  store.close();
+  store = Store.open(path);
+  try {
+    const ignored = store.db.prepare(`INSERT OR IGNORE INTO entries(thread,n,kind,author_kind,author,text,ts,at)
+      VALUES(?,?,'message','person','me','mine','occupied',?)`);
+    for (let n=200;n<300;n++) ignored.run(thread,n,n);
+    assert.equal(store.unreadForArchive("me",thread),null);
+    let scan: SaidScan | null = null, done = false;
+    for (let i=0;i<20 && !done;i++) {
+      const step = saidScanStep(store.db,thread,scan);
+      assert.ok(step.visited <= 64);
+      scan = step.scan; done = step.done;
+    }
+    assert.ok(done);
+    assert.equal(store.unreadForArchive("me",thread),true);
+    store.setRead("me",thread,1);
+    assert.equal(store.unreadForArchive("me",thread),false);
+  } finally { store.close(); rmSync(dir,{ recursive:true,force:true }); }
+});
+
+test("legacy archive can use a nearby unread boundary while changed keys are pending", () => {
+  const dir = mkdtempSync(join(tmpdir(),"archive-unread-legacy-near-")), path = join(dir,"stillfail.db");
+  let store = Store.open(path);
+  const thread = store.openThread("ember","CHAT","archive-legacy-near",null,"me").id;
+  const put = store.db.prepare(`INSERT INTO entries(thread,n,kind,author_kind,author,text,ts,at)
+    VALUES(?,?,'message',?,?,'text',?,?)`);
+  put.run(thread,1,"agent","worker","occupied",1);
+  for (let n=2;n<=150;n++) put.run(thread,n,n===140 ? "agent" : "person",n===140 ? "worker" : "me",`t${n}`,n);
+  installLegacySaid(store.db);
+  store.db.exec("DROP INDEX entries_said");
+  installSaidState(store.db);
+  while (!legacySaidStep(store.db,64).ready) { /* prepare */ }
+  store.close();
+  store = Store.open(path);
+  try {
+    const ignored = store.db.prepare(`INSERT OR IGNORE INTO entries(thread,n,kind,author_kind,author,text,ts,at)
+      VALUES(?,?,'message','person','me','mine','occupied',?)`);
+    for (let n=200;n<300;n++) ignored.run(thread,n,n);
+    assert.equal(store.unreadForArchive("me",thread),true);
+    store.setRead("me",thread,140);
+    assert.equal(store.unreadForArchive("me",thread),false);
+  } finally { store.close(); rmSync(dir,{ recursive:true,force:true }); }
+});
+
 test("an old unknown boundary is prepared before archiving", async () => {
   const r = new Rig();
   try {
@@ -139,7 +293,8 @@ test("an old unknown boundary is prepared before archiving", async () => {
       autoArchive(r.hub, later(), (id: number) => need.push(id));
       assert.equal(r.store.getThread(thread)?.hiddenAt, null, "unknown is not treated as read");
       assert.deepEqual(need, [thread]);
-      assert.ok(trace.visited() <= 65, `the foreground visited ${trace.visited()} messages`);
+      assert.ok(trace.visited() > 0, "the unread lookup was observed");
+      assert.ok(trace.visited() <= 65, `the unread decision visited ${trace.visited()} messages`);
     } finally { trace.restore(); }
     let scan: SaidScan | null = null;
     for (;;) {
@@ -166,7 +321,7 @@ test("the archive timer retries when the old boundary is ready", async () => {
     r.store.setRead("me", thread, 1);
     r.store.db.prepare("UPDATE threads SET created_at=0 WHERE id=?").run(thread);
     r.store.db.prepare("UPDATE thread_state SET said_other_known=0 WHERE thread=?").run(thread);
-    stop = startAutoArchiveTimer(r.hub, time, { prepareSaid: (ids) => { calls.push([...ids]); return ready.promise; } });
+    stop = startAutoArchiveTimer(r.hub, time, { prepareSaid: (ids) => { calls.push([...ids]); return ready.promise; }, prepareSessionBindings: async () => {}, prepareSessionUpJobs: async () => {} });
     time.fire(60_000);
     assert.equal(r.store.getThread(thread)?.hiddenAt, null);
     assert.deepEqual(calls, [[thread]]);
@@ -197,7 +352,7 @@ test("stopping the archive timer cancels its pending old-chat work", async () =>
     r.store.setRead("me", thread, 1);
     r.store.db.prepare("UPDATE threads SET created_at=0 WHERE id=?").run(thread);
     r.store.db.prepare("UPDATE thread_state SET said_other_known=0 WHERE thread=?").run(thread);
-    stop = startAutoArchiveTimer(r.hub, time, { prepareSaid: (_ids, s) => { signal = s; return ready.promise; } });
+    stop = startAutoArchiveTimer(r.hub, time, { prepareSaid: (_ids, s) => { signal = s; return ready.promise; }, prepareSessionBindings: async () => {}, prepareSessionUpJobs: async () => {} });
     time.fire(60_000);
     stop();
     assert.equal(signal?.aborted, true);

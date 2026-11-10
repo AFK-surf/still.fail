@@ -1,7 +1,7 @@
-// What a picture of a chat or a published snapshot hides (docs/public-share.md): words that look like secrets, each
+// What a picture of a chat hides: words that look like secrets, each
 // replaced by `[已隐藏]` (`[hidden]` in English) before anyone outside the workspace can read them. A net, not a
 // guarantee: the person sharing it sees the preview, with how many were hidden in each message, before it goes out.
-// The station hides a snapshot with it (station/src/publish/redact.ts), the core a picture (views/publish.ts).
+// The core hides a picture with it (views/publish.ts).
 
 /// Secrets by their shape: providers' keys and tokens, private keys, JWTs, credentials in URLs, `password=…` and the like.
 const SHAPES: (RegExp | [RegExp, (found: string) => boolean])[] = [

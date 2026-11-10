@@ -1,4 +1,4 @@
-// An image of a message held in the chat (its menu's 引用, sfpages menus.mbt; MessagePick.kt quoteFile): quoted into the draft,
+// An image of a message held in the chat (its menu's 引用, sfpages menus.mbt): quoted into the draft,
 // its file going again with the message; a quote's own file in its card, not among the files (Chat.kt QuoteCards,
 // besideQuotes; Composer.kt DraftExtras).
 
@@ -276,9 +276,9 @@ test "the pictures before and after a quote can be separate occurrences of the s
   let base = fixture("chat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name != "imageNear" {
-        return (base.topic)(name, params)
+        return base.topic(name, params).get().snapshot()
       }
       let at = text(Some(Json::object(params)), "at")
       let value : Json = match at {
@@ -560,9 +560,8 @@ test "the same picture quoted twice flies to each quote's own place" {
   let flight = send_flight.get().unwrap()
   let pictures = flight.files.filter(fn(f) { f.picture == Some("mem:fixture/twice.png") })
   assert_eq(pictures.length(), 2)
-  let landing = @sfpages.mine_landing(flight.key).unwrap()
-  let first = landing.files.get(pictures[0].key).unwrap().view.laid_window_now()
-  let second = landing.files.get(pictures[1].key).unwrap().view.laid_window_now()
+  let first = @motion.measured_rect(t.ctx(), @sfbase.flight_to_key(flight, pictures[0].key)).unwrap()
+  let second = @motion.measured_rect(t.ctx(), @sfbase.flight_to_key(flight, pictures[1].key)).unwrap()
   assert_true((first.1 - second.1).abs() > 0.5, msg="both pictures fly to the same place: \{first}, \{second}")
 }
 
@@ -661,7 +660,7 @@ test "an agent's image held: quoted, not a passage of its words picked; whose it
 
 ///|
 test "an image right clicked: its one menu, again on that menu still the one; in the preview over the chat, the picture's own, never the chat's 引用" {
-  // (macOS: a mouse; Large, menus beside what opened them, the chat its own column: docs/architecture.md, rule 3)
+  // (macOS: a mouse; Large, menus beside what opened them, the chat its own column, rule 3)
   let (t, x, y) = image_in_chat("compare.png", platform=0, w=1280.0)
   // (引用 a press reaches: a menu's, not what lies under what is over it)
   let quotes = fn() { t.reachable("引用").length() }

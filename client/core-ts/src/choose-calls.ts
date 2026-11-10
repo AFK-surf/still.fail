@@ -1,5 +1,5 @@
-// The choose calls (core/execute.rs `Call::Choose`) and the profiles checked once a run as their station's overview
-// comes in (choose.rs did it as a new chat's page was computed; here the sync does it, whatever is shown: rule 6).
+// The choose calls and the profiles checked once a run as their station's overview
+// comes in (here the sync does it, whatever is shown: rule 6).
 import { Effect } from "effect";
 import { Choose } from "./choose.ts";
 import type { Inner } from "./core.ts";
@@ -25,7 +25,7 @@ export function installChoose(inner: Inner): Choose {
     const station = topic.station as string;
     for (const p of arr(get(inner.data.get(topic), "profiles"))) {
       const id = typeof get(p, "id") === "string" ? p.id : "";
-      if (id === "" || (get(p, "check") !== undefined && p.check !== null)) continue;
+      if (id === "" || get(p, "enabled") === false || (get(p, "check") !== undefined && p.check !== null)) continue;
       const key = `${station}\u0001${id}`;
       if (checked.has(key)) continue;
       checked.add(key);

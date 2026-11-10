@@ -11,6 +11,7 @@
 #   scripts/win.sh core                    the core's bytecode (out/core/core.hbc)
 #   scripts/win.sh put                     the core's bytecode, the engine and the shell put beside the app
 #   scripts/win.sh collate                 the host's order of names (src/host/win_collate.h) checked
+#   scripts/win.sh engine-sync             synchronous host answers across the engine DLL checked
 #   scripts/win.sh sealed                  the desktop app's sealed values opened (src/host/win_electron_sealed.h) checked
 #   scripts/win.sh setup                   the installer (windows/setup.c) with the app built and put packed after it
 #   scripts/win.sh setup-bare              the installer's own program alone (out/setup-bare), which setup packs the app with
@@ -22,16 +23,16 @@
 # preview, an app beside still.fail's desktop app (fail.still.mbui, the test channel's, no links of that app's); stable and
 # beta still.fail's desktop app itself, to take its place (apps/desktop/package.json, build.sh): its id
 # (fail.still.desktop, .beta: its AppUserModelID, its pinned shortcuts'), its name (still.fail, youdid.wtf: its
-# userData, %APPDATA%\<name>, whose data, sign-in and sealed keys it takes: src/host/win_core.c), its links (stillfail
-# and ember, stillfail-beta), MBUI_OWN; the beta's core a beta's.
+# userData, %APPDATA%\<name>, whose data, sign-in and sealed keys it takes: src/host/win_core.c), its links (stillfail,
+# stillfail-beta), MBUI_OWN; the beta's core a beta's.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 # Every app build, including release variants, picks the same compiler before mbc looks up its objects.
 if [ "${1:-build}" = build ]; then . "$D/win-compiler.sh"; fi
 export APP=${APP:-stillfail}
 if [ "$APP" = stillfail ]; then
-  engine=$(cd "$EMBER" && node scripts/native.ts path engine win32-x64) || exit 1
-  shell=$(cd "$EMBER" && node scripts/native.ts path shell win32-x64) || exit 1
+  engine=$(cd "$SF_SRC" && node scripts/native.ts path engine win32-x64) || exit 1
+  shell=$(cd "$SF_SRC" && node scripts/native.ts path shell win32-x64) || exit 1
   # (the shell's import library too: the app asks the shell itself for a remote screen's frames, src/host/win_core.c)
   export LIB="$(cygpath -w "$engine");$(cygpath -w "$shell");$LIB"
   export CL="/I$(cygpath -w "$A/engine") /I$(cygpath -w "$MBUI_DIR/src/host") ${CL:-}"
@@ -44,7 +45,7 @@ MONOID_ENV='MBUI_OWN=1\nMBUI_UPDATE_FEED=win\nMBUI_CLOUD=https://app.monoid.buil
 variant() {
   case "${MBUI_VARIANT:-preview}" in
     preview) id=fail.still.mbui name="still.fail preview" exe=stillfail dir=stillfail-mbui schemes= extra='MBUI_BETA=1\nMBUI_UPDATE_FEED=win/mbui' ;;
-    stable) id=fail.still.desktop name=still.fail exe=still.fail dir=stillfail schemes=stillfail,ember extra='MBUI_OWN=1\nMBUI_UPDATE_FEED=win' ;;
+    stable) id=fail.still.desktop name=still.fail exe=still.fail dir=stillfail schemes=stillfail extra='MBUI_OWN=1\nMBUI_UPDATE_FEED=win' ;;
     beta) id=fail.still.desktop.beta name=youdid.wtf exe=youdid.wtf dir=stillfail-beta schemes=stillfail-beta extra='MBUI_OWN=1\nMBUI_BETA=1\nMBUI_UPDATE_FEED=win' ;;
     # monoid's: the same app on monoid's cloud, its station its own (~\.monoid, 「monoid station」: install-windows.ts)
     monoid) id=build.monoid.desktop name=monoid exe=monoid dir=monoid schemes=monoid extra="$MONOID_ENV" ;;
@@ -54,7 +55,7 @@ variant() {
 }
 # res: the app's resources (out/win-res/app.res), for mbui's win.sh to link into it (MBUI_WIN_RES)
 res() {
-  local n=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)}
+  local n=${MBUI_BUILD:-$(git -C "$SF_SRC" rev-list --count HEAD 2>/dev/null || echo 1)}
   local icon=$A/windows/AppIcon-$(sha256sum "$D/mac-icon.swift" | cut -c1-12).ico
   [ -f "$icon" ] || { echo "win.sh: no $icon (scripts/mac-icon.swift changed: swift scripts/mac-icon.swift --ico $icon, on a Mac)" >&2; return 1; }
   local id name exe dir schemes extra r=$A/out/win-res
@@ -96,10 +97,21 @@ END
 RC
   # (rc's options with -, not /: Git Bash hands /fo to Windows programs as a path)
   (cd "$r" && rc.exe -nologo -fo app.res app.rc) || return 1
-  # (named by what is in it: moon links the program again only for a link of other inputs, the link's flags among
-  # them, and so for resources that changed, another variant's or version's, as their name does; the same name, an
-  # app built before linked none of them and kept the resources it had)
-  local res=$r/app-$(sha256sum "$r/app.res" | cut -c1-16).res
+  # (one name whatever is in it, the app's link flags the same from one build to the next: named by its content, a
+  # version's every commit made the app package's moon.pkg another and moon built all of it again, moonc and its C split
+  # anew, ~45 s of a Windows preview with nothing of its MoonBit changed, 2026-11-05. moon links the program again only
+  # as an input it knows changes, which these resources are not: where they are not what the program was linked with
+  # (kept beside it), the program is taken away, and moon links it again alone; mbc's link goes by its inputs' content)
+  local res=$r/app.linked.res
+  . "$MBUI_DIR/scripts/env.sh"
+  # (a build before this one's: none, nothing linked yet)
+  if [ -f "$MBUI_DIR/out/win/app/moon.work" ]; then
+    local built=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build $APP native ${MODE:-release})
+    if ! cmp -s "$r/app.res" "$built/app.res"; then
+      rm -f "$built/stillfail.exe"
+      mkdir -p "$built" && cp "$r/app.res" "$built/app.res"
+    fi
+  fi
   cp "$r/app.res" "$res"
   export MBUI_WIN_RES=$res
   echo "win.sh: $name 0.1.$n ($id), its resources $(wc -c < "$res") bytes ($(basename "$res"))"
@@ -120,6 +132,15 @@ collate() {
   (cd "$A" && cl.exe -nologo -O2 -W3 -Isrc/host core/collate_test_win.c -Fe"$(cygpath -w "$out/collate_test_win.exe")" \
     -Fo"$(cygpath -w "$out/")" > "$out/build.log") || { cat "$out/build.log"; return 1; }
   "$out/collate_test_win.exe"
+}
+# The real engine DLL takes host answers through its C ABI (the host and the engine have separate CRTs).
+engine_sync() {
+  . "$MBUI_DIR/scripts/env.sh"
+  local built=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build $APP native ${MODE:-release}) out=$A/out/engine-sync
+  mkdir -p "$out/data"
+  (cd "$A" && cl.exe -nologo -O2 -W3 -Iengine -Isrc/host core/engine_sync_test_win.c \
+    -Fe"$(cygpath -w "$built/engine_sync_test.exe")" -Fo"$(cygpath -w "$out/")" > "$out/build.log") || { cat "$out/build.log"; return 1; }
+  "$built/engine_sync_test.exe" "$(cygpath -m "$out/data")"
 }
 # sealed: the desktop app's sealed values opened in its place (src/host/win_electron_sealed.h), checked by
 # core/sealed_test_win.c
@@ -146,14 +167,30 @@ setup_bare() {
   mv -f "$out/setup-bare.exe.tmp.exe" "$out/setup-bare.exe"
   echo "win.sh: setup.c compiled in $((SECONDS - t0)) s"
 }
+# Check the actual programs that will be installed, not just the compiler options: a prebuilt DLL can bring its own
+# runtime dependency. Windows 10 includes the UCRT, but not the Visual C++ redistributable.
+check_crt() {
+  local file deps bad=0
+  for file in "$@"; do
+    [ -f "$file" ] || { echo "win.sh: no $file to check" >&2; return 1; }
+    deps=$(dumpbin.exe -nologo -dependents "$(cygpath -w "$file")") || return 1
+    printf '%s\n%s\n' "Dependencies of $(basename "$file"):" "$deps"
+    if printf '%s\n' "$deps" | grep -Eiq '(^|[[:space:]])(MSVCP|VCRUNTIME)[0-9_]*\.dll([[:space:]]|$)'; then
+      echo "win.sh: $(basename "$file") needs the Visual C++ redistributable" >&2
+      bad=1
+    fi
+  done
+  return "$bad"
+}
 setup() {
-  local n=${MBUI_BUILD:-$(git -C "$EMBER" rev-list --count HEAD 2>/dev/null || echo 1)} id name exe dir schemes extra
+  local n=${MBUI_BUILD:-$(git -C "$SF_SRC" rev-list --count HEAD 2>/dev/null || echo 1)} id name exe dir schemes extra
   variant || return 1
   . "$MBUI_DIR/scripts/env.sh"
   local built=$MBUI_DIR/out/win/app/$(cd "$MBUI_DIR/out/win/app" && pkg_build $APP native ${MODE:-release}) out=${MBUI_SETUP_OUT:-$A/out/setup}
   [ -f "$built/stillfail.exe" ] || { echo "win.sh: no app built (win.sh build, put)" >&2; return 1; }
   rm -rf "$out" && mkdir -p "$out/files"
   setup_bare || return 1
+  check_crt "$A/out/setup-bare/setup-bare.exe" "$built/stillfail.exe" "$built/stillfail_engine.dll" "$built/stillfail_shell.dll" || return 1
   cp "$A/out/setup-bare/setup-bare.exe" "$out/setup-bare.exe"
   cp "$built/stillfail.exe" "$out/files/$exe.exe"
   cp "$built/stillfail_engine.dll" "$built/stillfail_shell.dll" "$built/core.hbc" "$out/files/"
@@ -167,6 +204,7 @@ case "${1:-build}" in
   core) core; exit $? ;;
   put) put core; exit $? ;;
   collate) collate; exit $? ;;
+  engine-sync) engine_sync; exit $? ;;
   sealed) sealed; exit $? ;;
   setup) setup; exit $? ;;
   setup-bare) setup_bare; exit $? ;;

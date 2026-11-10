@@ -1,4 +1,4 @@
-// GPOS's subtables (harfrust's ot/lookup/gpos.rs, ot/gpos/mod.rs): single and pair adjustment, cursive
+// GPOS's subtables (ot/gpos/mod.rs): single and pair adjustment, cursive
 // attachment, marks on bases, ligatures and marks, and propagating attachments into offsets at the end.
 
 ///|

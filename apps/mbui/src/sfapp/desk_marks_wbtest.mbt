@@ -7,7 +7,6 @@ test "desk: a page's marks waiting for the chat go into its composer's draft, ea
   let t = wide_tester(calls, mode="chat")
   t.frame()
   marked_into["ws1/st1:s-c1"] = [("首页-标注1-120000.png", b"\x89PNG", [("网页 首页 标注 1", "按钮「发送」", "颜色太浅")], "page")]
-  @sfbase.draft_given()
   t.frame()
   t.frame()
   assert_true(marked_into.get("ws1/st1:s-c1") is None, msg="taken once")

@@ -1,4 +1,4 @@
-// A folder of a station's drive on a wide screen (ember web/src/pages/Drive.tsx FolderView, DriveRow, NameField,
+// A folder of a station's drive on a wide screen (still.fail web/src/pages/Drive.tsx FolderView, DriveRow, NameField,
 // ListHead, UploadRow, Empty; Drive.css.ts): its entries in one of three ways (DriveViews: columns, a tree, a list),
 // each row chosen by a press, opened by a double click (a folder gone into, a text read, a video played, a picture or
 // code previewed, the rest downloaded), its name changed in place, its ⋯ (on hover) or a right click giving what can be
@@ -39,13 +39,14 @@ pub(all) struct FolderOf {
 }
 
 ///|
-/// The name being changed in place and whether its field had the focus (it is done once it leaves); the row whose menu
-/// is presented (its key, the presenter's serial: @sf.last_presented), marked while it is drawn.
+/// The name being changed in place and whether its field had the focus (it is done once it leaves); the row last
+/// pressed or asked for its menu (its id and its open's: row_took); the row whose menu is presented (its key, the
+/// presenter's serial: @sf.last_presented), marked while it is drawn.
 priv struct DriveHeld {
   naming : @signals.Signal[String]
   mut naming_had : Bool
   refreshing : @sf.LiveMap[String, Bool]
-  mut row_frame : Int
+  mut row_ids : (Int, Int)
   mut menu_row : String
   mut menu_serial : Int
   menu_items : Array[@sf.MenuItem?]
@@ -56,7 +57,7 @@ let held : DriveHeld = {
   naming: @signals.signal("", same=fn(a, b) { a == b }),
   naming_had: false,
   refreshing: @sf.LiveMap::new(),
-  row_frame: -1,
+  row_ids: (0, 0),
   menu_row: "",
   menu_serial: 0,
   menu_items: [],
@@ -67,7 +68,7 @@ fn drive_reset() -> Unit {
   held.naming.set("")
   held.naming_had = false
   held.refreshing.clear()
-  held.row_frame = -1
+  held.row_ids = (0, 0)
   held.menu_row = ""
   held.menu_serial = 0
 }
@@ -115,10 +116,12 @@ fn drive_row_menu_drawn(key : String) -> Bool {
 }
 
 ///|
-/// Whether a row took this frame's press or right click (what holds the rows leaves it to them: a click on a row is
-/// not one where there is no row).
+/// Whether a row took the press or right click the list sees now (what holds the rows leaves it to them: a click on a
+/// row is not one where there is no row): the row that took one last, asked whether it is its (as what stands beside
+/// it asks: nothing of it marked again).
 pub fn row_took(c : @ui.Ctx) -> Bool {
-  held.row_frame == c.frame_number()
+  let (id, did) = held.row_ids
+  id != 0 && (c.watch_press(id) || c.watch_press(did) || c.right_clicked(id) is Some(_) || c.held_long(id))
 }
 
 ///|
@@ -141,10 +144,17 @@ pub fn station_name(src : Source, station : String) -> String {
 ///|
 /// What a change set going said should it fail (useAct): 没能{what}：{error}; `done` once done, if said.
 pub fn act_done(c : @ui.Ctx, what : String, done? : String = "") -> (Result[Json, Json]) -> Unit {
+  ignore(c)
+  act_said(what, done~)
+}
+
+///|
+/// act_done's, for a handler of a node (no Ctx): 没能{what}：{error} in the toast should it fail; `done` once done.
+fn act_said(what : String, done? : String = "") -> (Result[Json, Json]) -> Unit {
   fn(r) {
     match r {
-      Ok(_) => if done != "" { say(c, done) }
-      Err(e) => say(c, @sf.t("web-main.act.failed", args=[("what", what), ("error", dv_error(e))]))
+      Ok(_) => if done != "" { toast_later(done) }
+      Err(e) => toast_later(@sf.t("web-main.act.failed", args=[("what", what), ("error", dv_error(e))]))
     }
   }
 }
@@ -341,7 +351,7 @@ fn ask_remove(c : @ui.Ctx, src : Source, asking : Array[(DriveAt, DvEntry)]) -> 
 fn entry_busy(src : Source, at : DriveAt, name : String) -> Bool {
   let root = at.root.unwrap_or("")
   let full = dv_join(at.path, name)
-  for d in items((src.topic)("doing", {}).value, "doing") {
+  for d in items(src.topic("doing", {}).get().value, "doing") {
     let call = text(Some(d), "call")
     let p = field(Some(d), "params")
     if text(Some(d), "stage") == "failed" || text(p, "station") != at.station || text(p, "root") != root {
@@ -365,6 +375,8 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
   let root = at.root.unwrap_or("")
   let st = f.st
   let write = f.rights.write
+  // Keep the entries' operation state while a newly opened folder is still loading.
+  src.topic("doing", {}).get() |> ignore
   let view = view_in(src, "page", list_room(src, f.room))
   let (value, error) = drive_folder(src, at.station, root, at.path)
   let entries = @sfbase.dv_entries(src, at.station, root, at.path).unwrap_or([])
@@ -424,12 +436,20 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
     if write && c.shortcut('n', shift=true) {
       b.new_folder(c, src, at.path)
     }
-    // (the keymap's files.preview: ⌘⇧P, as Finder's preview pane, or as changed)
-    if @settings.action_pressed(c, (src.topic)("prefs", {}).value, "files.preview") {
+    // (the keymap's files.preview: ⌘⇧P, as Finder's preview pane, or as changed; at its key's moment)
+    c.key_context("Files")
+    c.on_action("files.preview", fn() {
       set_preview_shown(src, "page", !previewing)
-    }
+      true
+    })
   }
-  let ups_here = ups.uploads.filter(fn(u) { u.station == at.station && u.root == root && u.dir == at.path })
+  // (one up stays till its folder's own row of it comes: the one row in the other's place, dv_up_done)
+  let ups_here = ups.uploads.filter(fn(u) {
+    u.station == at.station &&
+    u.root == root &&
+    u.dir == at.path &&
+    !(u.state.get() == "done" && entries.iter().any(fn(e) { e.name == u.name.get() }))
+  })
   let empty = fn() {
     folder_empty(c, if write { Some(fn() { dv_upload(c, at) }) } else { None })
   }
@@ -458,7 +478,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
     let lid = c.id("files/list/" + f.key)
     // (a ground round its rows: a press there chooses none)
     c.cursor(lid, Arrow)
-    let lit = drag_target(c, lid, "pane/" + f.key + "/" + at.station + "/" + root + "/" + at.path, at, name, shown, 0)
+    let lit = drag_target(c, src, lid, "pane/" + f.key + "/" + at.station + "/" + root + "/" + at.path, at, name, shown, 0)
     c.box(style=list_box, id=lid, fn() {
       if view == "columns" {
         // (columns stay while the folder opened is read: each column says its own reading or trouble)
@@ -524,10 +544,12 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
       }
       // a press where there is no row (a row's own is the row's): nothing chosen; a right click there, the folder's
       // menu
-      if !row_took(c) {
-        if c.clicked(lid) {
+      c.on_press(lid, fn() {
+        if !row_took(c) {
           b.clear(c, src)
         }
+      })
+      if !row_took(c) {
         match c.menu_asked(lid) {
           Some((x, y)) => @sf.menu(folder_menu(), from=@sf.at_point(x, y))
           None => ()
@@ -825,14 +847,11 @@ pub fn drive_row(
   let live = !busy && !row.renaming
   // (touch: no ⋯, a hold its menu, a folder's › saying a press goes in; a computer: its ⋯ under the pointer)
   let held_more = @sf.more_held()
-  if live {
-    if c.pressed(id) {
-      drag_press(c, src, at, e)
-    }
-  }
+  // pressed and moved: dragged (followed as the press goes: drag.mbt)
+  drag_press(c, id, src, at, e, s.b.owner == "tab", live)
   // a folder takes what is dropped on it
   let lit = match row.drop {
-    Some(into) => drag_target(c, id, "row/" + key, into, e.name, s, 2)
+    Some(into) => drag_target(c, src, id, "row/" + key, into, e.name, s, 2)
     None => None
   }
   // (a finger: its ⋯ always there, as nothing is hovered; a tap opens it, as a double click does with a mouse)
@@ -841,24 +860,32 @@ pub fn drive_row(
     let asked = c.menu_asked(id)
     match asked {
       Some((x, y)) => {
-        held.row_frame = c.frame_number()
+        held.row_ids = (id, did)
         (row.menu)()
         // (had by holding it, its menu says what it is of: a sheet over the row it was held on)
         drive_row_menu(key, (row.items)(), @sf.at_point(x, y), title=if held_more { e.name } else { "" })
       }
       None => ()
     }
-    if c.clicked(id) || c.clicked(did) {
-      held.row_frame = c.frame_number()
-    }
-    if asked is Some(_) {
-      ()
-    } else if depth is Some(_) && e.dir && c.clicked(did) {
-      on_toggle()
-    } else if c.double_clicked(id) || (finger && c.clicked(id)) {
+    // pressed, it is chosen (a finger's opens it); the second of two clicks opens it; its disclosure, in or out
+    c.on_press(id, fn() {
+      held.row_ids = (id, did)
+      if finger {
+        (row.open)()
+      } else {
+        (row.press)()
+      }
+    })
+    c.on_double_press(id, fn() {
+      held.row_ids = (id, did)
       (row.open)()
-    } else if c.clicked(id) {
-      (row.press)()
+    })
+    // (its disclosure takes a press only where it opens and closes: elsewhere the row's own)
+    if depth is Some(_) && e.dir {
+      c.on_press(did, fn() {
+        held.row_ids = (id, did)
+        on_toggle()
+      })
     }
   }
   let over = c.hovered(id)
@@ -988,17 +1015,18 @@ pub fn drive_row(
             // (there whether shown or not, clear while not: the hand changes no box)
             c.box(style=if shown { more_shown } else { more_clear }, fn() {
               // (round, in the middle of the row's capsule end, concentric with it)
-              if @sf.icon_button(
-                  c,
-                  "more",
-                  key=key + "/menu/more",
-                  size=if compact { more_compact } else { more_size },
-                  on=open,
-                  round=true,
-                  label=@sf.t("web-main.menu.more"),
-                ) {
-                drive_row_menu(key, (row.items)(), Of(more), along=End)
-              }
+              @sf.icon_button(
+                c,
+                "more",
+                key=key + "/menu/more",
+                size=if compact { more_compact } else { more_size },
+                on=open,
+                round=true,
+                label=@sf.t("web-main.menu.more"),
+                on_press=fn() {
+                  drive_row_menu(key, (row.items)(), Of(more), along=End)
+                },
+              ) |> ignore
             })
             |> ignore
           } else {
@@ -1045,24 +1073,29 @@ fn name_field(c : @ui.Ctx, key : String, b : Browse, e : DvEntry, row : RowProps
     if !r.focused && !held.naming_had {
       c.focus_editor(key)
     }
-    if c.key_pressed(@ui.key_escape, in_field=true) {
-      held.naming.set("")
-      (row.rename)(None)
-    } else {
-      match r.submitted {
-        Some(words) => {
-          held.naming.set("")
-          (row.rename)(Some(words))
-        }
-        None =>
-          if r.focused {
-            held.naming_had = true
-          } else if held.naming_had {
-            // left: kept
-            held.naming.set("")
-            (row.rename)(Some(r.text))
-          }
+    // (Escape gives up the new name, as it comes, before the field sees it: Ctx::on_key)
+    c.on_key(c.id(key), fn(code, mods) {
+      if code == @ui.key_escape && mods == 0 {
+        held.naming.set("")
+        (row.rename)(None)
+        true
+      } else {
+        false
       }
+    })
+    match r.submitted {
+      Some(words) => {
+        held.naming.set("")
+        (row.rename)(Some(words))
+      }
+      None =>
+        if r.focused {
+          held.naming_had = true
+        } else if held.naming_had {
+          // left: kept
+          held.naming.set("")
+          (row.rename)(Some(r.text))
+        }
     }
   })
   |> ignore
@@ -1076,9 +1109,9 @@ pub fn list_head(c : @ui.Ctx, a : Arrangement, on_sort : (String) -> Unit) -> Un
   let t = @sf.theme()
   let head = fn(by : String, words : String, style : @ui.Style) {
     let id = c.id("files/head/" + by)
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       on_sort(by)
-    }
+    })
     let on = a.by == by
     let b = c.box(style=style.then(@ui.style(min_h=Fixed(@ui.room_least()))), id~, fn() {
       c.text(words, style=if on || c.lit(id) { head_words_on } else { head_words }) |> ignore
@@ -1116,19 +1149,21 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
     dv_pump(src)
   }
   let keys = fn() {
-    if u.state.get() == "failed" && @sf.icon_button(c, "retry", key=k + "/retry", label=@sf.t("web-pages.drive.retry")) {
-      u.state.set("waiting")
-      u.error.set("")
-      u.sent.set(0)
-      dv_pump(src)
+    if u.state.get() == "failed" {
+      @sf.icon_button(c, "retry", key=k + "/retry", label=@sf.t("web-pages.drive.retry"), on_press=fn() {
+        u.state.set("waiting")
+        u.error.set("")
+        u.sent.set(0)
+        dv_pump(src)
+      }) |> ignore
     }
-    if @sf.icon_button(c, "close", key=k + "/cancel", label=@sf.t("common.cancel")) {
+    @sf.icon_button(c, "close", key=k + "/cancel", label=@sf.t("common.cancel"), on_press=fn() {
       ups.uploads.retain(fn(x) { x.serial != u.serial })
       if u.state.get() == "going" {
         ups.pumping.set(false)
         dv_pump(src)
       }
-    }
+    }) |> ignore
   }
   c.box(style=entry_room, fn() {
     c.box(style=entry_plain, fn() {
@@ -1176,12 +1211,12 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
                 c.box(style=upload_ask, fn() {
                   c.box(drop=upload_drop_note, fn() { c.text(@sf.t("web-pages.drive.taken"), style=items.meta) |> ignore })
                   |> ignore
-                  if @sf.button(c, @sf.t("web-pages.drive.replace"), key=k + "/replace", tone=Ghost) {
+                  @sf.button(c, @sf.t("web-pages.drive.replace"), key=k + "/replace", tone=Ghost, on_press=fn() {
                     replace()
-                  }
-                  if @sf.button(c, @sf.t("web-pages.drive.keepBoth"), key=k + "/both", tone=Ghost) {
+                  }) |> ignore
+                  @sf.button(c, @sf.t("web-pages.drive.keepBoth"), key=k + "/both", tone=Ghost, on_press=fn() {
                     dv_keep_both(src, u)
-                  }
+                  }) |> ignore
                 })
                 |> ignore
               "failed" =>
@@ -1222,9 +1257,9 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
 /// An answer to what is asked of a file going up, under its name: its words in the link's ink, 600.
 fn upload_answer(c : @ui.Ctx, key : String, words : String, act : () -> Unit) -> Unit {
   let id = c.id(key)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     act()
-  }
+  })
   let b = c.box(style=upload_answer_box, id~, fn() { c.text(words, style=@sf.theme().items.meta.then(upload_answer_words)) |> ignore })
   c.semantics(b, Button, id~, label=words)
 }
@@ -1297,7 +1332,7 @@ fn folder_empty(c : @ui.Ctx, upload : (() -> Unit)?) -> Unit {
   c.box(style=empty_box, fn() {
     @sf.icon(c, "folder", size=empty_icon, color=t.p.muted) |> ignore
     match upload {
-      Some(up) => if @sf.button(c, @sf.t("web-pages.drive.upload"), key="files/empty/upload", icon="upload") { up() }
+      Some(up) => @sf.button(c, @sf.t("web-pages.drive.upload"), key="files/empty/upload", icon="upload", on_press=up) |> ignore
       None => ()
     }
   })
@@ -1328,7 +1363,7 @@ fn drop_over(c : @ui.Ctx, lit : String, name : String) -> Unit {
 }
 
 ///|
-/// The preview's width beside the list (DrivePane.css.ts pane).
+/// The preview's width beside the list.
 pub let pane_w : Double = 300.0
 
 ///|

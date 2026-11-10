@@ -16,6 +16,16 @@ fn lists_tester(calls : Array[Made], w : Double, platform : Int, regular : Bool)
 }
 
 ///|
+/// The chat's menu up: its 分享… opened (复制会话链接, 接力到频道, 分享给其他 workspace, 分享图片, 在 Slack／飞书打开 in it),
+/// at rest.
+fn open_share(t : @ui.Tester) -> Unit {
+  t.tap_text("分享…")
+  t.frame()
+  let rest = @kit.sheet_rest("sf-present")
+  t.run_for(if rest > t.time() && rest < 1.0e12 { rest - t.time() } else { @ui.move_most_ms })
+}
+
+///|
 test "the chats' lists at each width and with either hand: its days and rows; a finger's 66 high, a mouse's 54, 2 apart but a finger's across a phone" {
   for case in one_page_cases {
     let (w, platform, regular, _) = case
@@ -51,14 +61,16 @@ test "a row's menu at each width and with either hand: held by a finger, right c
     t.frame()
     // not opened by the hold
     assert_false(app.nav.top() is Chat({ title: "夜里的构建又失败了", .. }), msg=at)
-    for item in ["重命名", "复制会话链接"] {
+    for item in ["重命名", "分享…"] {
       assert_true(t.find(item) is Some(_), msg="\{at}: \{item}")
     }
     assert_true(t.find("复制 session 文件路径") is None, msg=at)
     // 归档 with the chat's own state, not last (a sheet's last row is where a thumb going home lands)
     let (_, archive_y) = t.find("归档").unwrap()
-    let (_, link_y) = t.find("复制会话链接").unwrap()
-    assert_true(archive_y < link_y, msg="\{at}: 归档 at \{archive_y}, 复制会话链接 at \{link_y}")
+    let (_, share_y) = t.find("分享…").unwrap()
+    assert_true(archive_y < share_y, msg="\{at}: 归档 at \{archive_y}, 分享… at \{share_y}")
+    // (复制会话链接 in it, with the rest of what shares it)
+    open_share(t)
     t.tap_text("复制会话链接")
     assert_true(t.clipboard().has_prefix("[夜里的构建又失败了]("), msg=at)
   }
@@ -202,8 +214,8 @@ test "a row pinned, renamed or archived: no spinner while its station answers (t
       )
       let src : Source = {
         ..base,
-        topic: fn(name, params) {
-          let got = (base.topic)(name, params)
+        topic_read: fn(name, params) {
+          let got = base.topic(name, params).get().snapshot()
           if name == "doing" {
             { ..got, value: Some({ "doing": doing }) }
           } else {

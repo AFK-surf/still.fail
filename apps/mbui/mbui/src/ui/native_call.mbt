@@ -18,8 +18,6 @@
 pub struct NativeCall {
   name : String
   host : @hostapi.NativeCall?
-  /// a Tester's: its place among the fake host's calls; -1 a real host's
-  fake : Int
   /// a host without native calls: answered so at once
   none : Bool
   taken : Ref[Bool]
@@ -41,57 +39,22 @@ pub let native_unsupported : String = "unsupported"
 /// `name` asked of the host with `params`. Ask it from an event's handler (or Ctx::tell), not while a frame builds:
 /// a frame built again would ask it again.
 pub fn native_call(name : String, params : Json) -> NativeCall {
-  match fake.val {
-    Some(f) => {
-      let ask : FakeNative = { name, params, answer: None }
-      let at = answers_frames.val
-      let mut held = -1
-      for i, h in f.dev.native_held {
-        if h.0 == name {
-          held = i
-          break
-        }
-      }
-      if held >= 0 {
-        ask.answer = Some((f.dev.native_held.remove(held).1, at))
-      } else {
-        match f.dev.native_auto.get(name) {
-          Some(answer) => ask.answer = Some((answer(params), at))
-          None => ()
-        }
-      }
-      f.dev.natives.push(ask)
-      let c : NativeCall = {
-        name,
-        host: None,
-        fake: f.dev.natives.length() - 1,
-        none: false,
-        taken: Ref::new(false),
-      }
-      outside_start(outside_native, c.outside_id(), "the native call \{name} \{c.outside_id()}")
-      if ask.answer is Some(_) {
-        f.wants = true
-      }
+  match @hostapi.native_call(name, params.stringify()) {
+    Some(h) => {
+      let c : NativeCall = { name, host: Some(h), none: false, taken: Ref::new(false) }
+      outside_start(outside_native, h.id(), "the native call \{name} \{h.id()}")
       c
     }
-    None =>
-      match @hostapi.native_call(name, params.stringify()) {
-        Some(h) => {
-          let c : NativeCall = { name, host: Some(h), fake: -1, none: false, taken: Ref::new(false) }
-          outside_start(outside_native, h.id(), "the native call \{name} \{h.id()}")
-          c
-        }
-        None => { name, host: None, fake: -1, none: true, taken: Ref::new(false) }
-      }
+    None => { name, host: None, none: true, taken: Ref::new(false) }
   }
 }
 
 ///|
-/// Its id as the host's event names it (outside_native), a Tester's its call's place, from 1.
+/// Its id as the host's event names it (outside_native; a Tester's its call's place, from 1).
 fn NativeCall::outside_id(self : NativeCall) -> Int {
   match self.host {
     Some(h) => h.id()
-    None => self.fake + 1
+    None => 0
   }
 }
 
@@ -123,15 +86,7 @@ pub fn NativeCall::got(self : NativeCall) -> Result[Json, String]? {
         Some((false, why)) => Some(Err(why))
         None => None
       }
-    None =>
-      match fake.val {
-        Some(f) if self.fake >= 0 && self.fake < f.dev.natives.length() =>
-          match f.dev.natives[self.fake].answer {
-            Some((r, at)) if answers_frames.val > at => Some(r)
-            _ => None
-          }
-        _ => None
-      }
+    None => None
   }
   if got is Some(r) {
     self.taken.val = true
@@ -181,7 +136,7 @@ fn native_of_line(line : String) -> (String, Result[Json, String])? {
 fn fake_native_give(f : FakeHost, name : String, r : Result[Json, String]) -> Unit {
   for a in f.dev.natives {
     if a.name == name && a.answer is None {
-      a.answer = Some((r, answers_frames.val))
+      a.answer = Some((r, g().frame_no))
       f.wants = true
       return
     }
@@ -225,7 +180,7 @@ fn fake_native_answer(f : FakeHost, id : Int, r : Result[Json, String]) -> Unit 
   guard id >= 1 && id <= f.dev.natives.length() else { return }
   let a = f.dev.natives[id - 1]
   guard a.answer is None else { return }
-  a.answer = Some((r, answers_frames.val))
+  a.answer = Some((r, g().frame_no))
   f.wants = true
 }
 

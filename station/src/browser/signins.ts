@@ -1,4 +1,4 @@
-// Sign-ins in a chat's browser (docs/vault.md 登录态): a site's sign-in is its cookies (and its passkeys: passkeys.ts),
+// Sign-ins in a chat's browser ( 登录态): a site's sign-in is its cookies (and its passkeys: passkeys.ts),
 // kept in the vault as an item of kind browser and put into a chat's browser while a grant for it lasts. Here: which cookies are a site's, the cookies
 // of a browser as they are set again (DevTools' Storage.getCookies gives more than Storage.setCookies takes).
 import { type Passkey, passkeyOf } from "./passkeys.ts";
@@ -60,5 +60,6 @@ export function expired(cookies: CookieParam[]): CookieParam[] {
   return cookies.map((c) => ({ ...c, value: "", expires: 1 }));
 }
 
-/// A sign-in put into a chat's browser: the grant's request, its sites, until when (unix seconds).
-export type SignedIn = { request: string; sites: string[]; until: number };
+/// A sign-in put into a chat's browser: its request and workspace, sites, and end (unix seconds). Older kept contexts
+/// do not have the workspace.
+export type SignedIn = { request: string; workspace?: string; sites: string[]; until: number };

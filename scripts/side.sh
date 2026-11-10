@@ -8,7 +8,7 @@
 #   sh scripts/side.sh core-ts   one part's
 set -u
 cd "$(dirname "$0")/.."
-parts=${*:-core-ts station rust}
+parts=${*:-core-ts station rust locks}
 status=0
 for part in $parts; do
   echo "· side: $part"
@@ -22,6 +22,11 @@ for part in $parts; do
     # The native parts' tests of real processes' timing (#[ignore = "side: …"]): a handover with no gap on real ports,
     # restarts' backoff, a signal that leaves a grandchild be.
     rust) for crate in launcher runner; do (cd station/native/$crate && cargo test --locked -- --ignored) || status=1; done ;;
+    # The locks end to end (apps/mbui/e2e/locks.ts): alice's and bob's devices, each still.fail's core in Node,
+    # against a cloud, a relay and two stations of their own on this machine (scripts/e2e-local.sh locks-all), the
+    # station and the cloud frozen and started anew between; directories and ports of its own, beside the app's e2e.
+    locks) (cd apps/mbui && E2E_WORK=${RUNNER_TEMP:-/tmp}/side-locks E2E_STATION=/tmp/side-locks-$(id -u) E2E_PORT=28700 \
+      E2E_RELAY=28709 bash scripts/e2e-local.sh locks-all) || status=1 ;;
     *) echo "no side part $part"; status=1 ;;
   esac
 done

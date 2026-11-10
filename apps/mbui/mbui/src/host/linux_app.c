@@ -37,6 +37,7 @@ static int want_frame;
 static guint tick_id;
 static double wake_at = -1;  // mb_now_ms() of the earliest wake_after, or -1
 static double scale = 1;
+static int context_asked, context_new;  // the canvas's context asked anew, and made so (mb_host_drive 10, 11)
 static int fb_pw, fb_ph;          // the area's framebuffer in pixels, as GTK last sized it
 static double frame_w, frame_h;   // the last frame's size in points
 static int ime_active;
@@ -138,6 +139,9 @@ double mb_app_scale(void) { return scale; }
 
 void *mb_app_under(void) { return under; }
 
+// the app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): accessibles under the canvas
+#include "linux_a11y.h"
+
 // The canvas: a GtkGLArea that holds no press where a native view shows (linux_views.c): the view under it has it.
 // Drawn at the window's own scale, a fractional one too (GNOME's 125%, 150%, at which GTK draws the window:
 // gdk_surface_get_scale): GtkGLArea makes its picture at the whole scale above that (2 for 1.25), which GTK then
@@ -163,7 +167,8 @@ typedef struct {
 typedef struct {
   GtkGLAreaClass parent;
 } CanvasClass;
-G_DEFINE_TYPE(Canvas, canvas, GTK_TYPE_GL_AREA)
+G_DEFINE_TYPE_WITH_CODE(Canvas, canvas, GTK_TYPE_GL_AREA,
+                        G_IMPLEMENT_INTERFACE(GTK_TYPE_ACCESSIBLE, canvas_accessible_init))
 
 static gboolean on_render(GtkGLArea *a, GdkGLContext *c, gpointer data);
 static void canvas_resized(int pw, int ph);
@@ -354,6 +359,7 @@ static void on_realize(GtkWidget *w, gpointer data) {
     exit(1);
   }
   mb_render_setup();
+  if (context_asked) context_asked = 0, context_new = 1;
   schedule();
 }
 
@@ -936,15 +942,23 @@ int32_t mb_host_platform(void) { return 5; }
 
 void mb_host_request_frame(void) { schedule(); }
 
+// A frame for what moves on by the clock that needs fewer (@hostapi.frames_paced): not paced here, the next drawn.
+void mb_host_frames_paced(double hz) {
+  (void)hz;
+  mb_host_request_frame();
+}
+
 // (the loop waits no longer than it: run_loop)
 void mb_host_wake_after(double ms) {
   double t = mb_now_ms() + ms;
   if (wake_at < 0 || t < wake_at) wake_at = t;
 }
 
+#include "groups.h"
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   gl_current();  // (the frame may have opened a web view)
-  mb_render_present(buf, count, r, g, b);
+  mb_render_present(mb_groups_draw_out(buf, count), count, r, g, b);
 }
 
 void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moonbit_string_t text, int32_t a,
@@ -1123,9 +1137,6 @@ double mb_host_font_scale(void) {
 int32_t mb_host_native_pointing(void) { return 2; }
 // Whether a keyboard is at hand (@hostapi.keyboard): a computer's, always.
 int32_t mb_host_keyboard(void) { return 1; }
-// The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
-int32_t mb_host_a11y_on(void) { return 0; }
-void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }
 
 // Sharing (@hostapi.share, @hostapi.shared_in): no share sheet on Linux; nothing comes in.
 int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
@@ -1162,6 +1173,7 @@ int32_t mb_host_perf_state(void) { return -1; }
 void mb_host_set_perf(int32_t on) { (void)on; }
 void mb_host_perf_line(moonbit_string_t line) { (void)line; }
 moonbit_string_t mb_host_perf_where(void) { return moonbit_make_string_raw(0); }
+int32_t mb_host_perf_open(int32_t go) { (void)go; return 0; }
 double mb_host_perf_size(void) { return 0; }
 moonbit_bytes_t mb_host_perf_read(void) { return moonbit_make_bytes(0, 0); }
 
@@ -1171,11 +1183,36 @@ void mb_host_set_dark(int32_t dark) {
   if (s) g_object_set(s, "gtk-application-prefer-dark-theme", dark ? TRUE : FALSE, NULL);
 }
 
+// The canvas's GL context made anew (@hostapi.drive 10), as a context is lost: the canvas taken out of the window and
+// put back, between frames (not inside the render that asked), unrealized with its context and realized with a new
+// one (on_realize: mb_render_setup, what the old one held made again); `context_new` once it is (as GTK realizes it
+// again, which comes after it is put back: its next layout's)
+static gboolean context_again(gpointer data) {
+  (void)data;
+  GtkWidget *overlay = gtk_widget_get_parent(area);
+  g_object_ref(area);
+  gtk_overlay_remove_overlay(GTK_OVERLAY(overlay), area);
+  gtk_overlay_add_overlay(GTK_OVERLAY(overlay), area);
+  gtk_overlay_set_measure_overlay(GTK_OVERLAY(overlay), area, TRUE);
+  g_object_unref(area);
+  gtk_widget_grab_focus(area);
+  schedule();
+  return G_SOURCE_REMOVE;
+}
+
 // Scripted runs' input given to the host (src/ui/drive.mbt): the window's picture saved (4), a notification clicked
 // (6) or looked for (7) by its words (linux_life.h), the window resized to "<w>x<h>" points (8), the runner's directory
-// watched (9); the rest is sent to the app itself.
+// watched (9), the canvas's context made anew (10), and whether it has been since (11); the rest is sent to the app
+// itself.
 int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   if (kind == 9) return mb_done_watch(text);
+  if (kind == 10) {
+    context_new = 0;
+    context_asked = 1;
+    g_idle_add(context_again, NULL);
+    return 1;
+  }
+  if (kind == 11) return context_new;
   char *u = utf8(text);
   int done = 0;
   if (kind == 6 || kind == 7) {
@@ -1223,6 +1260,9 @@ void mb_host_set_full_screen(int32_t on) {
   if (on) gtk_window_fullscreen(GTK_WINDOW(win));
   else gtk_window_unfullscreen(GTK_WINDOW(win));
 }
+
+// The app's own top row draws Linux's buttons (window_keys_own): nothing of the system's to move.
+void mb_host_window_buttons_down(double by, double ms) { (void)by; (void)ms; }
 
 // How round the system draws the window's corners (@hostapi.window_corner): its content's are square under the title
 // bar.

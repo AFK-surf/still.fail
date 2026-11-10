@@ -14,9 +14,9 @@
 /// pointer found again; out of them again, it answers as before. Its colour alone changed, it is drawn again, no more.
 pub fn View::bones(self : View, color : Live[Int64]) -> View {
   guard self.live() is Some(n) else { return self }
-  match n.props.get(Bones) {
+  match n.props.get(Prop::Bones.ord()) {
     Some(stop) => {
-      n.props.remove(Bones)
+      n.props.remove(Prop::Bones.ord())
       stop()
     }
     None => ()
@@ -28,6 +28,12 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
     }
     let was = n.bones
     n.bones = k
+    if was == 0L {
+      self.tree.bones_set += 1
+    } else if k == 0L {
+      self.tree.bones_set -= 1
+    }
+    self.tree.said_marked(self.at, state=true, kids=true)
     self.tree.bones_marked_below(self.at)
     // (into them or out: what takes input in it is not there, or is again)
     if (was == 0L) != (k == 0L) {
@@ -37,7 +43,7 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
         self.tree.focus_lost_in(self.at)
         self.tree.back_lost_in(self.at)
       }
-      self.tree.modals_told()
+      self.tree.modals_told(within=self.at)
     }
   }
   match color {
@@ -45,7 +51,7 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Bones] = stop
+        n.props[Prop::Bones.ord()] = stop
       })
   }
   self
@@ -54,8 +60,9 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
 ///|
 /// In its bones, drawn as one piece: its own box in its own corners (with none, round at its ends: a control's),
 /// nothing in it drawn (a picture of someone with their initial on it, a chip, a button). Out of them, nothing.
-pub fn View::bone_whole(self : View, whole : Live[Bool]) -> View {
-  self.bind(BoneWhole, whole, Paint, fn(w) {
+#callsite(autofill(loc))
+pub fn View::bone_whole(self : View, whole : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, BoneWhole, whole, Paint, fn(w) {
     self.tree.nodes[self.at].bone_whole = w
     self.tree.bones_marked_below(self.at)
   })
@@ -72,6 +79,10 @@ pub fn View::in_bones(self : View) -> Bool {
 ///|
 /// What node `at` is drawn in as its bones: its own, else the nearest of what holds it's; 0 none.
 fn Tree::bones_of_at(self : Tree, at : Int) -> Int64 {
+  // (none in their bones: nothing walked up)
+  if self.bones_set == 0 {
+    return 0L
+  }
   let mut i = at
   while i >= 0 {
     let k = self.nodes[i].bones

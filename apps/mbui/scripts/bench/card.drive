@@ -1,5 +1,5 @@
 # 大屏, a mouse: the made-up chat's card answered: its options go, how it went comes in, the reply under it, all one
-# move (docs/list-motion.md).
+# move (mbui's view/list_motion.mbt).
 timeout 20000
 until =一起换
 wait 800

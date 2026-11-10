@@ -1,4 +1,4 @@
-// The station's logins to command-line tools (docs/remote-login.md) as a part of the station (parts.ts): each told on
+// The station's logins to command-line tools as a part of the station (parts.ts): each told on
 // the event streams as it changes, its screen followed by the pages; one an agent started tells that agent as it asks
 // something and as it ends, its cards closed. Its routes (machine-logins) and the agents' `login` tool. A login on
 // another station of the workspace (the tool's `station`) is that station's, asked over the station transport
@@ -14,7 +14,7 @@ import { Agents } from "../sessions/agents.ts";
 import { sender } from "../sessions/messages.ts";
 import { ControlPlane, Events, Parts, Paths, Peers, Readers, ScreenRegistry, Store } from "../services.ts";
 import { act, endedNotice, loginTools, promptNotice, type Where } from "./tool.ts";
-import { Logins, type Starter } from "./index.ts";
+import { Logins, slackPage, type Starter } from "./index.ts";
 import { LoginPages } from "./pages.ts";
 
 export const LoginsLive = Layer.effectDiscard(
@@ -94,11 +94,12 @@ export const LoginsLive = Layer.effectDiscard(
         }
       }),
     ];
-    // A Slack login card (a login whose page gives a code): shown only for such a login, its field handed to it.
+    // A Slack login card: shown only for a login waiting for a code from its page or entered on a device code's page,
+    // that page and the device code on it (its field handed to the login).
     hub.logins = {
-      pastes: (id) => {
+      page: (id) => {
         const login = logins.get(id);
-        return login?.paste === true && login.endedAt === undefined;
+        return login ? slackPage(login) : null;
       },
       answer: (id, code, by) => void logins.answer(id, code, by),
     };

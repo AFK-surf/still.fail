@@ -4,7 +4,7 @@
 // old frame's presented as each was presented; the rest the host's (presented) still. Closed (cancel, Escape, back), it
 // closes as the host's closes it (dismissed_now: what is over it too, what it holds let go of, once); said, it closes
 // and what it says goes on, at that moment. A confirm or a question going is presented till its way out is over
-// (tree_presented: the host lets it go then); a menu is let go of as it closes, as the host's menu_popover is. A menu's
+// (tree_presented: the host lets it go then); a menu is let go of as it closes, as the host's menus were. A menu's
 // items given anew where they are kept (presented_changed) are read again by its rows, keys and choices.
 
 ///|
@@ -13,18 +13,15 @@
 let tree_presented : Set[Int] = Set::new()
 
 ///|
-/// Whether a window's tree draws what it can of the presented (presented_nodes made, not let go).
-// kept across runs: said by presented_nodes as it is made and let go
-let presented_in_tree : Ref[Bool] = Ref(false)
-
-///|
-/// Whether `p` is the window's tree's to draw: a confirm, a question, a menu or a pick not on a sheet, where a tree
-/// draws them.
+/// Whether `p` is the window's tree's to draw (presented_nodes): a stage and a panel whose body is nodes (panel_nodes)
+/// on every screen, and a confirm, a question, a menu, a pick or a small panel not on a sheet. The rest (a sheet, a
+/// panel that goes in steps or as wide as what it holds) the host's (presented) still.
 fn tree_draws(p : Presented, sheet : Bool) -> Bool {
-  presented_in_tree.val &&
   (
     // (a stage on every screen the same, never a sheet: stage_node)
     (p.shows is Panel(x) && x.stage) ||
+    // (what it holds nodes: the tree's alone, the host's frame having none of it to draw)
+    (p.shows is Panel(x) && x.nodes is Some(_)) ||
     (
       !sheet &&
       (
@@ -62,17 +59,23 @@ fn panel_centred_of(x : PanelOf, from : Anchor) -> Bool {
 }
 
 ///|
-/// Whether a pick of `choices` is a menu of them (pick_popover's: short, or with no search), not a panel with a search.
+/// Whether a pick of `choices` is a menu of them (short, or with no search), not a panel with a search.
 fn pick_menu_of(choices : Array[Choice], search : Bool) -> Bool {
   choices.length() < pick_search_from || !search
 }
 
 ///|
 /// What of the presented the window's tree draws, in `root` (over all of it the root holds: each at its place in the
-/// window's stack of layers), made as one is presented and let go once it has gone.
-pub fn presented_nodes(root : @view.View) -> Unit {
-  presented_in_tree.val = true
-  root.owns(fn() { presented_in_tree.val = false }) |> ignore
+/// window's stack of layers), made as one is presented and let go once it has gone; and under them the reader's
+/// layout's panel while one is open (reader_layout_nodes).
+#callsite(autofill(loc))
+pub fn presented_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
+  // (the tips of what they hold: one layer of them for the window, over all of it, each presented one's lent it;
+  // made after them, its keys (Escape shutting a tip) asked before theirs)
+  let tips_at : Ref[@view.View?] = Ref(None)
+  let tips = TipLayer::new(fn() { tips_at.val })
+  // (the reader's layout's panel, laid over it: under what is presented, which stands in the window's stack of layers)
+  reader_layout_nodes(root)
   root.each(
     fn() {
       presented_said.get() |> ignore
@@ -81,11 +84,13 @@ pub fn presented_nodes(root : @view.View) -> Unit {
     },
     fn(serial) { serial },
     fn(row, item) {
-      let serial = @signals.untracked(fn() { item.get() })
+      let serial = item.untracked()
       guard presented_now.search_by(fn(q) { q.serial == serial }) is Some(i) else { return }
       let p = presented_now[i]
       // (the root's node it is in at its place in the window's stack of layers: its serial, as the host's presented are)
       row.over(Is(true)).stacked(Is(serial)) |> ignore
+      // (the tips of what its body and its foot are made of: the window's layer of them, panel_tips_lent)
+      row.lends(panel_tips_lent, tips) |> ignore
       let open = fn() {
         presented_said.get() |> ignore
         presented_open_of(serial)
@@ -108,6 +113,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
         // what it says goes on)
         field_let_go(p)
         p.ended = true
+        p.chosen = true
         close_from_serial(serial)
         f()
       }
@@ -149,7 +155,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
           )
         Menu(items, title, along) => {
           // (beside what opened it, where it was drawn as it opened; opened by the keyboard where that showed its focus:
-          // menu_popover's anchor_of and offset)
+          // menu_anchor_now)
           let (anchor, by_key, offset, keep_field) = @signals.untracked(fn() { menu_anchor_now(p.from) })
           // (what it holds as it is now, where it is kept: given anew there whole, then told, presented_changed; what
           // reads it, its rows, keys and choices, read it again then; what a choice does, as it is there then)
@@ -157,10 +163,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             row,
             open,
             anchor,
-            fn() {
-              presented_said.get() |> ignore
-              items
-            },
+            fn() { presented_items_of(serial, items) },
             title,
             along,
             offset,
@@ -172,6 +175,29 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             gone~,
           )
         }
+        // (what it holds nodes, on 小屏: a sheet from the window's foot, as the host's are there)
+        Panel(x) if x.nodes is Some(_) && @signals.untracked(fn() { layout(root.window().0) is Small }) =>
+          sheet_node(
+            row,
+            open,
+            x,
+            x.nodes.unwrap(),
+            fn() { done(fn() {  }) },
+            fn() { dismissed_now(serial) },
+            p.from,
+            shown~,
+            gone~,
+            covered_by=fn() { sheet_over(serial) },
+            in_place?=p.in_place,
+            // (a step further in from a panel: back from it back to that one)
+            step_back?=if p.under is Some(_) { Some(fn() { dismissed_now(serial, back=true) }) } else { None },
+            // (how tall it stands as it closes, for what comes in its place: close_from)
+            stands_by=fn(f) { p.stands_now = Some(f) },
+            taken=fn() {
+              presented_said.get() |> ignore
+              p.taken_by != 0
+            },
+          )
         Panel(x) if x.stage =>
           stage_node(
             row,
@@ -210,14 +236,14 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             x,
             fn() { done(fn() {  }) },
             fn() { dismissed_now(serial) },
-            Some(p),
+            p,
             shown~,
             gone~,
           )
         }
         Pick(title, choices, chosen, choose, along, search) if !pick_menu_of(choices, search) => {
           // (a panel with its search over its list: pick_node)
-          // (panel_offset off what opened it, a point too: @kit.popover's, as pick_popover's long one gives no other)
+          // (panel_offset off what opened it, a point too: @kit.popover's, as a long pick gives no other)
           let (anchor, _, _, _) = @signals.untracked(fn() { menu_anchor_now(p.from) })
           let offset = panel_offset
           pick_node(
@@ -237,7 +263,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
           )
         }
         Pick(title, choices, chosen, choose, along, _) => {
-          // (a menu of its choices, as pick_popover's short one: the one chosen checked where one is, else each its icon;
+          // (a menu of its choices, a short pick's: the one chosen checked where one is, else each its icon;
           // what each is under its words, its value at its row's end, its own mark after its check)
           let (anchor, by_key, offset, keep_field) = @signals.untracked(fn() { menu_anchor_now(p.from) })
           let one_chosen = choices.iter().any(fn(x) { x.key == chosen })
@@ -279,10 +305,11 @@ pub fn presented_nodes(root : @view.View) -> Unit {
       }
     },
   )
+  tips_at.val = Some(root.box(made_for=loc, fn(l) { l.over(Is(true)).over_all(Is(true)) |> ignore }))
 }
 
 ///|
-/// What a menu presented `from` goes beside, as menu_popover's anchor_of has it: what opened it where it is drawn
+/// What a menu presented `from` goes beside, as the host's menus had it: what opened it where it is drawn
 /// (@ui.old_anchor: the window's corner, nothing wide, where it never was, as kit's menu_anchor has it), a point,
 /// or the window's middle a third down; whether the keyboard opened it (what opened it shows the focus), how far off it
 /// it stands (at a point, none), and whether a finger opened it with a field focused (kit's dropdown_menu: the focus
@@ -299,6 +326,11 @@ fn menu_anchor_now(from : Anchor) -> ((@view.View) -> @view.View, Bool, Double, 
       let by_key = c.focus_shown(id)
       (fn(layer) { @ui.old_anchor(layer, id, (0.0, 0.0, 0.0, 0.0)) }, by_key, panel_offset, keep && !by_key)
     }
+    // (a node of the window's tree: beside it where it is drawn)
+    Node(v) => {
+      let by_key = v.focus_shown()
+      (fn(_) { v }, by_key, panel_offset, keep && !by_key)
+    }
     At(x, y, w, h) =>
       (
         fn(layer) { fixed_anchor(layer, (x, y, w, h)) },
@@ -308,4 +340,62 @@ fn menu_anchor_now(from : Anchor) -> ((@view.View) -> @view.View, Bool, Double, 
       )
     Unanchored => (fn(layer) { fixed_anchor(layer, middle) }, false, panel_offset, keep)
   }
+}
+
+///|
+/// A window's tree of `page` (an old view, the whole window) with what of the presented the tree draws over it
+/// (presented_nodes), in still.fail's theme: as the app's tree has them (sfapp's app_tree), for a page shown without
+/// the app's shell. The Tester's or a host's `tree`, its old frame `@ui.old_views_here`.
+pub fn presented_tree(page : (@ui.Ctx) -> Unit) -> (@view.View) -> Unit {
+  fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    @ui.old(root, page).grow(Is(1.0)) |> ignore
+    presented_nodes(root)
+  }
+}
+
+///|
+/// How far in from the column a panel's body is given node `v`'s words go (panel_words_in's, where the body is nodes:
+/// panel_nodes); none outside a panel.
+pub fn panel_words_in_node(v : @view.View) -> @ui.Style {
+  @ui.style(px=room(panel_words_at_node(v)))
+}
+
+///|
+/// The same, in points (panel_words_in_node's).
+pub fn panel_words_at_node(v : @view.View) -> Double {
+  match v.lent(panel_in_lent) {
+    Some(p) => p.words
+    None => 0.0
+  }
+}
+
+///|
+/// Node `v` of a panel's body clear of an untitled dialog's close button at its end (untitled_clear's, where the body is
+/// nodes); none elsewhere.
+pub fn untitled_clear_node(v : @view.View) -> @ui.Style {
+  @ui.style(pr=room(panel_clear_at_node(v)))
+}
+
+///|
+/// How far clear of an untitled dialog's close button node `v` of a panel's body is (untitled_clear_node's), in points.
+fn panel_clear_at_node(v : @view.View) -> Double {
+  match v.lent(panel_in_lent) {
+    Some(p) => p.clear
+    None => 0.0
+  }
+}
+
+///|
+/// Whether what a node is in is a sheet's foot whose buttons go across it, each its share (foot_fills, as nodes): lent by
+/// sheet_node to its foot's row; read by button_node and foot_spacer_node.
+// kept across runs: what each sheet lends its foot, let go with it
+let foot_fills_lent : @view.Lent[Bool] = @view.Lent::new()
+
+///|
+/// What stands between a foot's buttons at its start and those at its end (Ctx::spacer's, as a node) in `parent`: the
+/// room left between them; at a sheet's foot, a share of it as each button's (foot_fills: the old spacer's Fill there).
+#callsite(autofill(loc))
+pub fn foot_spacer_node(parent : @view.View, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(s) { s.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore }) |> ignore
 }

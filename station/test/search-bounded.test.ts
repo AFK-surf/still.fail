@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { Store, newMessage } from "../src/store/store.ts";
 import { openStore } from "../src/read/store.ts";
 import { type Asker, type Doc, pick, pickAsync } from "../src/search/match.ts";
-import { stationDocs } from "../src/search/sources.ts";
+import { SEARCH_NEXT_MESSAGES, stationDocs } from "../src/search/sources.ts";
 
 const asker: Asker = { workspace: "W2", home: false, scopes: ["write"] };
 
@@ -88,9 +88,11 @@ test("search reads messages in bounded batches and skips other workspaces before
     writer.insertMessage(newMessage(other, "1", "person", "a@x", "needle hidden"));
     for (let i = 0; i < 1_024; i++) writer.insertMessage(newMessage(own, String(i), "person", "a@x", `needle ${i}`));
     const read = openStore(data);
-    const plan = (read.db.prepare("EXPLAIN QUERY PLAN SELECT * FROM merged WHERE thread = ? AND n > ? AND n <= ? ORDER BY n LIMIT ?")
+    const plan = (read.db.prepare(`EXPLAIN QUERY PLAN ${SEARCH_NEXT_MESSAGES}`)
       .all(own, 512, 1_024, 256) as { detail: string }[]).map((r) => r.detail).join(" | ");
-    assert.match(plan, /SEARCH m USING INDEX \S+ \(thread=\? AND n>\? AND n<\?\)/, "later batches seek to their first message");
+    assert.match(plan, /SEARCH entries USING COVERING INDEX entries_said \(thread=\? AND n>\? AND n<\?\)/, "later batches seek ordinary messages");
+    assert.match(plan, /SEARCH entries USING INDEX entries_letters \(thread=\? AND n>\? AND n<\?\)/, "later batches seek legacy letters");
+    assert.match(plan, /SEARCH m USING INDEX \S+ \(thread=\? AND n=\?\)/, "only those messages are fetched");
     assert.doesNotMatch(plan, /USE TEMP B-TREE FOR ORDER BY/);
     const queries: { thread: unknown; rows: number }[] = [];
     const db = new Proxy(read.db, {

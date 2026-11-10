@@ -10,6 +10,15 @@
 // code, reason, failed}`. An older frame gets the answer whole, `{id, status, headers, body}`, and asks for no socket.
 
 import { PreviewCache } from "./previewCache.ts";
+
+/// A message of the preview's frame (cloud/src/preview.ts) or its marks (annotate/frame.ts): `stillfail-preview-<name>`,
+/// or `ember-preview-<name>` as the frames deployed before 2026-11-05 say it.
+export const fromPreview = (data: unknown, name: string): boolean => {
+  const type = (data as { type?: unknown } | null)?.type;
+  return type === `stillfail-preview-${name}` || type === `ember-preview-${name}`;
+};
+/// The type of a message to the preview's frame.
+export const toPreview = (name: string) => `stillfail-preview-${name}`;
 import { t } from "./i18n.ts";
 
 /// The core's call with bytes (CoreClient.callBytes): a request's body beside it, a response's beside its answer and

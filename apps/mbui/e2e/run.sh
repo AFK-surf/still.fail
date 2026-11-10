@@ -165,6 +165,20 @@ if [ $PLATFORM = android ]; then
     [ -n "${E2E_NOBUILD:-}${E2E_APK:-}" ] || APP=stillfail scripts/android.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
   fi
   scripts/android.sh emu >$OUT/emu.log 2>&1 || { tail $OUT/emu.log; exit 1; }
+  # (no screen lock left from a run before, whose flows set one: the app's files are reached by run-as, which a locked
+  # device's keeps from it)
+  # (booted with one, the device's own files stay locked until it is given: verified first, which unlocks them)
+  # (`locksettings verify` with no credential: verified where none is set)
+  unlocked() { $ADB shell locksettings verify 2>&1 | grep -qi "verified successfully"; }
+  if ! unlocked; then
+    $ADB shell locksettings verify --old ${E2E_PIN:-1234} >/dev/null 2>&1
+    $ADB shell locksettings clear --old ${E2E_PIN:-1234} >/dev/null 2>&1
+    unlocked || { echo "the emulator keeps a screen lock this run cannot clear (not ${E2E_PIN:-1234}): wipe it (scripts/android.sh)"; exit 1; }
+  fi
+  $ADB shell wm dismiss-keyguard >/dev/null 2>&1
+  # (no system dialog over the app for another app's "isn't responding": the launcher's or System UI's on a loaded
+  # machine, which took the run's taps and typing; the system's own setting for test harnesses)
+  $ADB shell settings put global hide_error_dialogs 1 >/dev/null 2>&1
   $ADB install -r ${E2E_APK:-android/app/build/outputs/apk/debug/app-debug.apk} >/dev/null || exit 1
   $ADB shell pm clear $E2E_PKG >/dev/null
   # (the program after the app's data is cleared: it lies in its files)
@@ -249,8 +263,9 @@ run_flow() {
   done
   if [ $PLATFORM = mac ]; then
     # (a phone's window unless the flow's #env says otherwise: the wide flows' MBUI_WIN=1280x800; no machine's own name,
-    # what the app tells the core the same wherever the trace is recorded: sfcore's apple_engine.m keeps one given)
-    on_screen env MBUI_WIN=390x844 MBUI_DEVICE_NAME= $extra MBUI_ISOLATED_STATION=1 MBUI_CLOUD=$MBUI_CLOUD MBUI_CORE_ACCOUNT_B64=$E2E_ACCOUNT_B64 MBUI_CORE_DATA=$CORE MBUI_KEYS_IN_FILES=1 \
+    # what the app tells the core the same wherever the trace is recorded: sfcore's apple_engine.m keeps one given; the
+    # time of day UTC's, wherever the machine is, as a replay's host has it: what its trace's settings say, `utc` 0)
+    on_screen env TZ=UTC MBUI_WIN=390x844 MBUI_DEVICE_NAME= $extra MBUI_ISOLATED_STATION=1 MBUI_CLOUD=$MBUI_CLOUD MBUI_CORE_ACCOUNT_B64=$E2E_ACCOUNT_B64 MBUI_CORE_DATA=$CORE MBUI_KEYS_IN_FILES=1 \
       MBUI_SHOT_DIR=$OUT/$name MBUI_DONE_DIR=$OUT/$name/done MBUI_DRIVE_B64=$(base64 < $script | tr -d '\n') \
       MBUI_PICK_FILES="$FILES/e2e-photo.jpg|$FILES/e2e-data.bin" MBUI_CALL_LOG=1 MBUI_MOTION_LOG=1 \
       MBUI_DOWNLOADS_DIR=$OUT/$name/downloads \
@@ -315,6 +330,9 @@ for f in $flows; do
     echo "FAIL $name (${FAILS#|})" | tee -a $TABLE
   fi
 done
+# (a screen lock a flow set, cleared while the device is unlocked still: booted with one, the next run's emulator would
+# keep the app's files locked until it was typed)
+[ $PLATFORM != android ] || $ADB shell locksettings clear --old ${E2E_PIN:-1234} >/dev/null 2>&1
 echo "$passed of $total flows passed ($PLATFORM)" | tee -a $TABLE
 # this run's drive folder goes with it (one per run would push the newest out of the drive's picker)
 rm -rf "${DRIVE:?}"

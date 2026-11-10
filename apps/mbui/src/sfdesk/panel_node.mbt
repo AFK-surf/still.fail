@@ -1,0 +1,252 @@
+// A chat's side panel (panel.mbt) as nodes of the window's tree, beside the chat's page in the pane off the tape (the
+// page made once: page_pane.mbt pane_made), the way there 4: its column as wide as the panel has slid in, a way set off
+// at the change that opens or closes it (side_slides) and read where it is drawn, as the block's fold is (pane_view's
+// fold_goes); over a page too narrow for both, over the page from its right edge, a shadow at its side; its edge the
+// tree's (@sf.edge_node). In it an agent's history in front: its top an old view as tall as it is (the bar, the head,
+// its details: history_top), its steps nodes (sfpages' history_steps_node); any other tab the panel's old view
+// (side_panel), the page's island. On the tape the panel is a panel of its own (tape_view's tape_side_node).
+
+///|
+/// Whether `front` (one the panel shows: side_shows) is one of the chat's agents' histories: what the panel's old view
+/// (side_panel) leaves to the tree.
+fn side_history_tab(front : String) -> Bool {
+  front != "" &&
+  !(front is ("jobs" | "files" | "letters" | "things")) &&
+  tab_service(front) is None &&
+  tab_file(front) is None &&
+  station_tab(front) is None
+}
+
+///|
+/// What chat `r`'s panel shows: its tabs as its view has them; its last closed, while it slides out, those it had.
+fn side_shown(src : Source, r : ChatRef) -> (Array[String], String) {
+  let (tabs, front) = side_now(src, r)
+  if tabs.length() > 0 {
+    (tabs, front)
+  } else {
+    side_leaving(chat_key(r)).unwrap_or(([], ""))
+  }
+}
+
+///|
+/// How wide chat `r`'s panel is as node `n` is drawn, at rest: over a page too narrow for both its least (side_over_w),
+/// else as side_width has it beside the page.
+fn side_whole(src : Source, n : @view.View) -> Double {
+  let pane = pane_w_at(src, n)
+  if pane < side_both_least {
+    dmin(side_over_w, pane)
+  } else {
+    side_width(pane)
+  }
+}
+
+///|
+/// Page `key`'s panel's column opened (`open`) or closed, as node `n` comes to have it so: from none to some tabs or back
+/// by a change asked here (side_changing's `asked`), slid in or out from where it is at that change's moment, as long as
+/// it is wide; else there at once (a page opened with its tabs as they were left). Slid out, what it showed let go of
+/// at its end.
+fn side_slides(n : @view.View, src : Source, key : String, open : Bool) -> Unit {
+  let way = match panel_own.goes.get(key) {
+    Some(w) => w
+    None => {
+      let w = @motion.Way::new(0.0)
+      panel_own.goes[key] = w
+      w
+    }
+  }
+  let target = if open { @signals.untracked(fn() { side_whole(src, n) }) } else { 0.0 }
+  let was = @signals.untracked(fn() { panel_own.was.get(key) })
+  match was {
+    Some(was) if was != open && panel_own.asked.untracked() == key => {
+      panel_own.asked.set("")
+      way.go(target, @motion.move(), at=n.cause_at())
+      if !open {
+        let ends = way.end()
+        n.at_moment(ends, fn() { if way.end() == ends { side_left(key) } }) |> ignore
+      }
+    }
+    _ => {
+      way.put(target)
+      if !open {
+        side_left(key)
+      }
+    }
+  }
+  if was != Some(open) {
+    panel_own.was[key] = open
+  }
+}
+
+///|
+/// How wide page `key`'s panel's column is as node `n` is drawn: where its way has it while it goes, else all of it
+/// open (`open`), none closed.
+fn side_col(src : Source, n : @view.View, key : String, open : Bool) -> Double {
+  match panel_own.goes.get(key) {
+    Some(way) => {
+      way.said()
+      if way.goes_at(n.logic_at()) {
+        let t = n.drawn_at()
+        if way.goes_at(t) {
+          return way.value_at(t)
+        }
+      }
+    }
+    None => ()
+  }
+  if open {
+    side_whole(src, n)
+  } else {
+    0.0
+  }
+}
+
+///|
+/// The side panel of the chat page `serial` of the stack (a chat's, or the new chat's once it becomes one) in node `v`,
+/// the row its page is in, after it, read by `src` (the page's, chat_page_made's: what it reads let go with the page): its column (side_col), moved aside with the page; in it, while it shows anything,
+/// the panel as wide as it is at rest (cut to the column while it slides beside the page) and its edge.
+fn side_panel_node(v : @view.View, src : Source, serial : Int, tips : @sf.TipLayer) -> Unit {
+  let chat = fn() {
+    match app.nav.page_of(serial) {
+      Some((Chat(r), _)) => Some(r)
+      _ => None
+    }
+  }
+  v.pick(fn() { chat().map(chat_key) }, fn(col, key) {
+    guard key is Some(key) && @signals.untracked(chat) is Some(r) else {
+      col.width(Is(Some(0.0))) |> ignore
+      return
+    }
+    let open = fn() { side_now(src, r).0.length() > 0 }
+    col.reacts(open, fn(open) { side_slides(col, src, key, open) })
+    let over = fn() { pane_w_at(src, col) < side_both_least }
+    let at = fn() { side_col(src, col, key, open()) }
+    col
+    .shrink(Is(0.0))
+    .width(By(fn() { Some(if over() { 0.0 } else { at() }) }))
+    .clips(By(fn() { !over() && at() < side_whole(src, col) }))
+    .offset(By(fn() { (pane_aside_at(src, col), 0.0) }))
+    |> ignore
+    col.show(fn() { side_shown(src, r).0.length() > 0 }, fn(p) {
+      p
+      .grow(Is(1.0))
+      .min_height(Is(Some(0.0)))
+      .width(By(fn() { Some(side_whole(src, p)) }))
+      .offset(By(fn() { (if over() { -at() } else { 0.0 }, 0.0) }))
+      .ground(By(fn() { @sf.theme().p.bg }))
+      .shadow(By(fn() {
+        if over() {
+          let (blur, fall) = @ui.Shadow::Xl.blur_y()
+          (blur, fall, @ui.tree_theme().shadow)
+        } else {
+          (0.0, 0.0, 0L)
+        }
+      }))
+      |> ignore
+      let island = fn(n : @view.View, build : (@ui.Ctx) -> Unit, natural : Bool) {
+        app.nav.page_island(n, serial, fn(c, _page) { build(c) }, key=tape_island_key, natural~)
+      }
+      p.pick(fn() { history_in_front(src, r) }, fn(q, agent) {
+        q.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+        if agent == "" {
+          // (every other tab: the panel's old view, all of it)
+          island(
+            q,
+            fn(c) {
+              match (@sfbase.workspace_in_view(src).0, view_of_chat(src, r).0) {
+                (Some(w), Some(view)) => {
+                  let (tabs, front) = side_shown(src, r)
+                  side_panel(c, src, w, r, view, tabs, front)
+                }
+                _ => ()
+              }
+            },
+            false,
+          )
+          .grow(Is(1.0))
+          .min_height(Is(Some(0.0)))
+          |> ignore
+        } else {
+          side_history_node(q, src, r, agent, tips, island)
+        }
+      })
+    })
+    // its edge, beside the page only
+    col.show(fn() { !over() && open() }, fn(e) { side_edge_node(e, src, r, tips) })
+  })
+}
+
+///|
+/// The agent whose history chat `r`'s panel has in front; "" another tab.
+fn history_in_front(src : Source, r : ChatRef) -> String {
+  let front = side_shown(src, r).1
+  if side_history_tab(front) {
+    front
+  } else {
+    ""
+  }
+}
+
+///|
+/// Agent `agent`'s history in chat `r`'s panel, in node `q` (as large as the panel): its top an old view as tall as it
+/// is (history_top, as `island` hosts one); its steps the rest, nodes
+/// (sfpages' history_steps_node).
+fn side_history_node(
+  q : @view.View,
+  src : Source,
+  r : ChatRef,
+  agent : String,
+  tips : @sf.TipLayer,
+  island : (@view.View, (@ui.Ctx) -> Unit, Bool) -> @view.View,
+) -> Unit {
+  island(
+    q,
+    fn(c) {
+      match view_of_chat(src, r).0 {
+        Some(view) => history_top(c, src, r, view, side_shown(src, r).0, agent)
+        None => ()
+      }
+    },
+    true,
+  )
+  .shrink(Is(1.0))
+  .min_height(Is(Some(0.0)))
+  |> ignore
+  q.box(fn(s) {
+    s.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+    @sfpages.history_steps_node(s, src, r.station, agent, tips)
+  })
+  |> ignore
+}
+
+///|
+/// Chat `r`'s panel's edge (ResizeHandle) in node `n`, over its column's left, half over the page: dragged, its width
+/// (kept while the app runs); pressed, the panel closed; pressed twice, its own width again.
+fn side_edge_node(n : @view.View, src : Source, r : ChatRef, tips : @sf.TipLayer) -> Unit {
+  let held = @signals.signal(false, same=fn(a, b) { a == b })
+  n.over(Is(true)).width(Is(Some(@sf.handle_w))).offset(Is((-@sf.handle_out, 0.0))) |> ignore
+  let e = @sf.edge_node(
+    n,
+    fn() { @sf.t("web-pages.chat.resizePanel") + " · " + @sf.t("web-pages.chat.closePanel") },
+    fn() { side_whole(src, n) },
+    fn() { panel_min },
+    fn() { panel_max },
+    Left,
+    fn(said, _) {
+      match said {
+        Dragging(x) | Dropped(x) => panel_own.width.set(Some(x))
+        Pressed => side_change(src, r, "clear", None)
+        Twice => panel_own.width.set(None)
+        Untouched => ()
+      }
+    },
+    fn(h) { held.set(h) },
+    tips~,
+    side=Left,
+  )
+  e.box(fn(g) {
+    g.over(Is(true)) |> ignore
+    @sf.edge_look_node(g, fn() { false }, fn() { e.pointed() || e.focus_shown() || held.get() }, fn() { held.get() })
+    |> ignore
+  })
+  |> ignore
+}

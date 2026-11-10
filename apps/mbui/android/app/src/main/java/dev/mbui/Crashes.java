@@ -35,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The app's crashes, to still.fail's PostHog project as {@code $exception} events, as still.fail's Android app sends
- * them (apps/android/app/src/main/kotlin/fail/still/android/Crashes.kt; docs/telemetry.md → 安卓). A crash in Java is
+ * them. A crash in Java is
  * written down as it happens (its exception, which the system does not keep); at the next start, once an account is
  * signed in (src/stillfail/reports.mbt), the system's record of how the app's processes ended (ApplicationExitInfo) is
  * read from where the last start left off, and each crash, native abort (Hermes, the core's JNI, the MoonBit app's C)
@@ -204,6 +204,31 @@ final class Crashes {
     /** The native heap past MemoryWatch's limit, with what was under way then (MemoryWatch.java). */
     static void memoryRunaway(Context context, String value, JSONObject facts) {
         handled(context, "MemoryRunaway", value, "memory_runaway", facts);
+    }
+
+    /** What the window thread found (mbui's src/ui/journal.mbt): a hang, or what the app did while shown, sent at once as
+     *  {@code name} with the JSON's fields as its properties (kinds of work and times only: no words, no messages), as
+     *  the account the last report went as, or android-anonymous before one. */
+    static void hang(Context context, String json, String name) {
+        if (!hasKey()) return;
+        String known = account(context);
+        String account = known != null ? known : "android-anonymous";
+        long at = System.currentTimeMillis();
+        new Thread(() -> {
+            try {
+                JSONObject p = new JSONObject(json);
+                JSONObject d = device();
+                for (Iterator<String> k = d.keys(); k.hasNext(); ) {
+                    String key = k.next();
+                    p.put(key, d.get(key));
+                }
+                List<JSONObject> batch = new ArrayList<>();
+                batch.add(new JSONObject().put("event", name).put("distinct_id", account)
+                        .put("uuid", UUID.randomUUID().toString()).put("timestamp", iso(at)).put("properties", p));
+                send(context, batch);
+            } catch (Exception ignored) {
+            }
+        }, "stillfail-hangs").start();
     }
 
     /** An error the app got past, sent at once as {@code type} with {@code value}, {@code reason} and {@code facts}. */

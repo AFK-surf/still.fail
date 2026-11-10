@@ -331,7 +331,7 @@ test "lines are drawn where they are said to be" {
 }
 
 ///|
-/// A screen in which only a spinner moves (docs/partial-redraw.md), at `phase` of its turn: in a window 240 by 200 at
+/// A screen in which only a spinner moves, at `phase` of its turn: in a window 240 by 200 at
 /// scale 2, under a bar of frosted glass whose capture reaches it, a box turned with it, a card with a
 /// shadow, shapes, and far from it a dot whose colour changes with it. Its two moments drawn one after the other, the second only where it differs, are the second
 /// drawn whole, to the byte (mbui-render MBUI_DL_FROM: scripts/render_offscreen.sh, render_check.sh).
@@ -411,4 +411,68 @@ test "a spinner's two moments' draw lists printed when asked (MBUI_DL_PRINT=part
     println(partial_shown(if which == "partial-a" { 0.1 } else { 0.35 }).drawlist())
     println("DLEND")
   }
+}
+
+///|
+/// What the renderers draw in strips (src/host/bands.h), in a window 240 by 300 at scale 3: a card's shadow under its
+/// ground, a ground in nine pieces (its middle flat), a ring that is only a border, a ground in a rounded clip (whole),
+/// and a sheet of frosted glass whose shadow is only outside it. Drawn in strips and drawn whole (mbui-render with
+/// MBUI_STRIPS=0), the same picture to the byte (scripts/render_offscreen.sh, render_check.sh, render_linux.sh,
+/// render_windows.sh).
+fn strips_shown() -> @ui.Tester {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), bg=0xF2F2F2FFL, pad=16.0, gap=16.0, align=AStart, fn() {
+        c.box(dir=Row, gap=16.0, fn() {
+          c.box(w=Px(96.0), h=Px(72.0), radius=16.0, bg=0xFFFFFFFFL, shadow=12.0, fn() { () }) |> ignore
+          c.box(w=Px(96.0), h=Px(72.0), radius=20.0, border=1.5, border_color=0x1559C4FFL, fn() { () }) |> ignore
+        })
+        |> ignore
+        c.box(w=Fill(1.0), h=Px(64.0), radius=12.0, bg=0x1559C4CCL, fn() { () }) |> ignore
+        c.box(w=Fill(1.0), h=Px(48.0), radius=18.0, clip=true, fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=0xFF3B30FFL, fn() { () }) |> ignore
+        })
+        |> ignore
+        c.layer(fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), pt=200.0, align=AStart, fn() {
+            c.box(
+              w=Fill(1.0),
+              h=Px(140.0),
+              radius=28.0,
+              shadow=19.2,
+              shadow_y=14.4,
+              shadow_color=0x00000044L,
+              glass=@ui.Glass::frosted(blur=12.0, tint=0xFFFFFF99L, solid=0xFFFFFFFFL),
+              fn() {  },
+            )
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=240.0,
+    h=300.0,
+    scale=3.0,
+  )
+  t.draw()
+  t
+}
+
+///|
+test "what the renderers draw in strips: its draw list printed when asked (MBUI_DL_PRINT=strips: scripts/render_dl.sh)" {
+  if node_env("MBUI_DL_PRINT") == "strips" {
+    println("DLBEGIN")
+    println(strips_shown().drawlist())
+    println("DLEND")
+  }
+}
+
+///|
+test "what the renderers draw in strips: a shadow under a ground, one only outside its glass, a ring, grounds" {
+  let t = strips_shown()
+  let shadows = t.drawn_shadows()
+  assert_eq(shadows.length(), 2)
 }

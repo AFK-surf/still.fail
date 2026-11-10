@@ -1,4 +1,4 @@
-// The frames of Feishu's long connection (docs/feishu.md): protobuf's `pbbp2.Frame`, as Feishu's SDKs encode it, by
+// The frames of Feishu's long connection: protobuf's `pbbp2.Frame`, as Feishu's SDKs encode it, by
 // hand (its five fields are all the station needs, and its SDK would bring a second HTTP stack and its own reconnects).
 //
 //   message Header { string key = 1; string value = 2; }

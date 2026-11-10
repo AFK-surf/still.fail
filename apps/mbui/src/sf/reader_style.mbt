@@ -1,4 +1,4 @@
-// How the reader lays text out (web/ui viewer/readerStyle.ts): the page keeps it (the host's reader_style and
+// How the reader lays text out: the page keeps it (the host's reader_style and
 // set_reader_style: the core's prefs, `prefs.reader`), and its bounds.
 
 ///|
@@ -28,7 +28,7 @@ pub(all) enum ReaderStyleChange {
 ///|
 /// The core's defaults (client/core-ts/src/prefs.ts readerOf).
 pub let reader_style_default : ReaderStyle = {
-  size: 18,
+  size: 16,
   line: 1.7,
   margin: 22,
   face: "sans",

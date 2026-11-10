@@ -244,6 +244,7 @@ fn state_json(s : @lock.LockState) -> Json {
     ("signed", Json::array(s.signed.keys().map(Json::string(_)).collect())),
     ("stations", pairs(s.stations.iter().map(fn(p) { (p.0, Json::object(Map([("key", Json::string(p.1.key)), ("name", Json::string(p.1.name))]))) }).collect())),
     ("gateways", Json::array(s.gateways.keys().map(Json::string(_)).collect())),
+    ("persons", pairs(s.persons.iter().map(fn(p) { (p.0, Json::string(p.1)) }).collect())),
     ("disabled", Json::boolean(s.disabled)),
   ]))
 }
@@ -369,6 +370,45 @@ pub fn fold_held_js(entries : JsValue, now : JsValue, crypto : JsCrypto) -> JsVa
   }
 }
 
+///|
+fn person_json(p : @lock.Person) -> Json {
+  let device = fn(d : @lock.PersonDevice) -> Json {
+    Json::object(Map([("key", Json::string(d.key)), ("id", Json::string(d.id)), ("label", Json::string(d.label))]))
+  }
+  Json::object(Map([
+    ("sub", Json::string(p.sub)),
+    ("genesis", Json::string(p.genesis)),
+    ("head", Json::string(p.head)),
+    ("seq", Json::number(p.seq)),
+    ("devices", Json::array(p.devices.values().map(device).collect())),
+  ]))
+}
+
+///|
+/// A person's own lock, its chain checked: `{sub, genesis, head, seq, devices}` or `{error}`.
+pub fn person_fold_js(entries : JsValue, sub : String, crypto : JsCrypto) -> JsValue {
+  let answer = try person_json(@lock.fold_person(entries_of(entries), sub, crypto)) catch {
+    @lock.Refused(why) | @lock.Refusal(why) => Json::object(Map([("error", Json::string(why))]))
+    @form.Invalid(why) => Json::object(Map([("error", Json::string(why))]))
+    e => Json::object(Map([("error", Json::string(e.to_string()))]))
+  }
+  to_js(answer)
+}
+
+///|
+/// Who a connection is by a person's own lock, `who` as `admit_one_js` has it: `{device, role, person}` or `{refusal}`.
+pub fn admit_person_js(s : @lock.LockState, who : JsValue, entries : JsValue, crypto : JsCrypto) -> JsValue {
+  let answer = try {
+    let (d, role, person) = @lock.admit_person(s, js_str(js_get(who, "sub")), js_str(js_get(who, "endpoint")), opt_str(js_get(who, "base")), opt_str(js_get(who, "proof")), entries_of(entries), crypto)
+    Json::object(Map([("device", Json::string(d.id)), ("role", Json::string(role)), ("person", person_json(person))]))
+  } catch {
+    @lock.Refusal(why) | @lock.Refused(why) => Json::object(Map([("refusal", Json::string(why))]))
+    @form.Invalid(why) => Json::object(Map([("refusal", Json::string(why))]))
+    e => Json::object(Map([("refusal", Json::string(e.to_string()))]))
+  }
+  to_js(answer)
+}
+
 // ── the vault's rules, as station/src/vault/crypto.ts calls them ──────────────────────────────────────────────────
 
 ///|
@@ -467,4 +507,35 @@ pub fn signer_of_js(lock : JsValue, key : String) -> JsValue {
     Some((sub, device)) => to_js(Json::object(Map([("sub", Json::string(sub)), ("device", Json::string(device))])))
     None => js_null()
   }
+}
+
+///|
+fn supersedes_of(a : JsValue, b : JsValue, number : String) -> Bool {
+  let (a, b) = try (json_of(a), json_of(b)) catch { _ => return false }
+  let n = fn(v : Json, k : String) -> Int64 {
+    match v {
+      Object(m) =>
+        match m.get(k) {
+          Some(Number(x, ..)) => x.to_int64()
+          _ => 0L
+        }
+      _ => 0L
+    }
+  }
+  let deleted = fn(v : Json) { v is Object(m) && m.get("deleted") is Some(True) }
+  let text = try @form.canonical(a).compare(@form.canonical(b)) catch { _ => return false }
+  @history.supersedes(n(a, number), deleted(a), n(a, "epoch"), n(b, number), deleted(b), n(b, "epoch"), text)
+}
+
+///|
+/// Whether vault version `a` is kept over `b`, by every station and device alike (rules/src/history `supersedes`):
+/// the later; of one seq, the one that deletes it, then the one under the later key, then the greater text.
+pub fn vault_supersedes_js(a : JsValue, b : JsValue) -> Bool {
+  supersedes_of(a, b, "seq")
+}
+
+///|
+/// Whether item version `a` is kept over `b`, as `vault_supersedes_js` has it of vaults (by `version`).
+pub fn item_supersedes_js(a : JsValue, b : JsValue) -> Bool {
+  supersedes_of(a, b, "version")
 }

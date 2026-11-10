@@ -1,4 +1,4 @@
-// A station's drive on the phone's stack (docs/drive.md): 文件 (the files' places, the wide frame's sidebar's list) and a
+// A station's drive on the phone's stack: 文件 (the files' places, the wide frame's sidebar's list) and a
 // page of a station's drive (the files' page, laid out by its width: @sfdesk files_start.mbt, drive_narrow.mbt), each in
 // the stack's frame; a folder gone into is a page pushed over it. ＋ adds a folder to the personal shortcuts.
 
@@ -15,18 +15,19 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
         Some(Home) => tr("android-misc.bar.place.chats")
         _ => tr("android-settings.title")
       }
-      if dv_nav_bar(c, back, tr("android-misc.bar.place.files"), fn() {
-          if lenders.length() > 0 &&
-            dv_nav_button(c, "files-lend", "plus", size=20.0, said=@sf.t("web-pages.files.addFavorite")) {
+      dv_nav_bar(c, back, tr("android-misc.bar.place.files"), fn() {
+        if lenders.length() > 0 {
+          dv_nav_button(c, "files-lend", "plus", size=20.0, said=@sf.t("web-pages.files.addFavorite"), on_press=fn() {
             @sfdesk.add_favorite_folder(src, w.id, lenders)
-          }
-        }) {
+          })
+        }
+      }, on_press=fn() {
         @sfbase.go_back() |> ignore
-      }
+      })
     }
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       // under the top bar (and the status bar); at the foot 30 over the navigation bar, and the bottom bar's room at a
-      // place's top (Files.kt foot)
+      // place's top
       let foot = nav_foot() + 30.0 + (if place && has_bar() { bar_room } else { 0.0 })
       @sfdesk.files_places(c, src, w.id, top=if place { status_top() + bar_h + 8.0 } else { 4.0 }, foot~, go=fn(at) {
         open_page(Drive(at))
@@ -49,13 +50,12 @@ pub fn files_can_lend(src : Source, w : Workspace) -> Bool {
 
 ///|
 /// ＋ of 文件 (the bottom bar's notch): Pin 文件夹, on the one station there is or one chosen first.
-pub fn files_lend(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  ignore(c)
+pub fn files_lend(src : Source, w : Workspace) -> Unit {
   @sfdesk.add_favorite_folder(src, w.id, @sfdesk.favorite_stations(src, w.id))
 }
 
 ///|
-/// 文件's top bar as a place's (PlacePage.kt TopGlassBar): its name, settings at the right edge.
+/// 文件's top bar as a place's: its name, settings at the right edge.
 fn files_top_bar(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
@@ -66,9 +66,9 @@ fn files_top_bar(c : @ui.Ctx) -> Unit {
       })
       |> ignore
       // settings at the right edge, as at Home's
-      if nav_button(c, "settings", 22.0, key="files-settings", said=tr("android-chat.home.settings")) {
+      nav_button(c, "settings", 22.0, key="files-settings", said=tr("android-chat.home.settings"), on_press=fn() {
         open_page(Settings)
-      }
+      })
     })
     |> ignore
   })

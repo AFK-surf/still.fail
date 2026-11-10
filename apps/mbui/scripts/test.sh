@@ -12,9 +12,19 @@
 # APP_EXE (with APP_INFO, its tests' list, __whitebox_test_info.json): sfapp's test program built elsewhere (check-mbui's
 # app-build job's), its runs asked of it directly (scripts/testexe; TESTEXE: that tool built elsewhere too, beside it),
 # nothing built here. APP_BUILD_OUT: sfapp's test program built only, it, its tests' list and the tool put in that
-# directory for them.
+# directory for them. REPLAY_EXE (with REPLAY_INFO, __blackbox_test_info.json) and REPLAY_BUILD_OUT: the same for the
+# flows' program (src/sfreplay/flows), check-mbui's replay-build job's, run at every frame rate (replay-fps); the
+# core's tests run where it is built (REPLAY_BUILD_OUT), after it is put there.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
+# (the whole suite is CI's, a PR's: on Studio or a laptop it is half an hour of wasm-gc in a row where CI's native runs
+# it in five minutes; outside CI run the test files a change touches, `moon test --target wasm-gc --release FILE`
+# (the user, 2026-11-08). MBUI_WHOLE_SUITE=1 only when a person asked for the whole of it here.)
+if [ -z "${GITHUB_ACTIONS:-}" ] && [ "${MBUI_WHOLE_SUITE:-}" != 1 ]; then
+  echo "test.sh: the whole suite runs in the PR's CI, not here. Run the test files your change touches:" >&2
+  echo "  moon test --target wasm-gc --release src/sfapp/<file>_wbtest.mbt" >&2
+  exit 2
+fi
 cd "$A"
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
 code=0
@@ -29,7 +39,7 @@ for t in $targets; do
   # MBC_LTO says (its link is 30-40 s a test; main's run has it on: mbui-check.yml).)
   mode="--target $t"
   # (mbui's scripts/env.sh native_tests: the C split by mbui's scripts/mbc, units kept by content in MBC_STORE)
-  if [ $t = native ] && [ -z "${APP_EXE:-}" ]; then native_tests "$A"; mode=$NATIVE; fi
+  if [ $t = native ] && [ -z "${APP_EXE:-}" ] && [ -z "${REPLAY_EXE:-}" ]; then native_tests "$A"; mode=$NATIVE; fi
   # (wasm-gc: --release, as native's; wasm-gc rather than classic Wasm, whose memory is freed by counting alone: what
   # holds itself is never freed, 3.7 MB a screen opened in a Tester, and the corner and contrast sweeps outgrew its
   # 4 GiB (2026-11-03))
@@ -44,12 +54,12 @@ for t in $targets; do
     # (the screens' tests in sfapp's own, screens_wbtest.mbt: a package of their own was a second program of the whole
     # app, compiled again on every change, 88 s of a branch's app part with sfapp's own 92, 2026-10-23)
     # (sfpages' own tests too: the pages moved there from sfapp brought theirs, run by nothing until 2026-10-25)
-    pkgs="-p stillfail/sf -p stillfail/sfbase -p stillfail/sfpages -p stillfail/sfdesk -p stillfail/sfapp -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player -p stillfail/pinyin -p stillfail/keyboard -p stillfail/sfgraphic"
+    pkgs="-p stillfail/sf -p stillfail/sfpages -p stillfail/sfapp -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player -p stillfail/sfgraphic"
     # (APP_GROUP=k/n: one runner's share of sfapp's runs, app_group_of below, each building sfapp's program alone;
     # APP_GROUP=pkgs: the small packages' run alone, on a runner of its own. Their five programs were built by the
     # first group beside sfapp's, each much of the app again: its build 168-209 s after a change where the others'
     # was 57-89, the first's job the check's longest, 2026-10-29, 40807235675)
-    if [ "${APP_GROUP:-}" = pkgs ]; then pkgs="-p stillfail/sf -p stillfail/sfbase -p stillfail/sfpages -p stillfail/sfdesk -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player -p stillfail/pinyin -p stillfail/keyboard -p stillfail/sfgraphic"
+    if [ "${APP_GROUP:-}" = pkgs ]; then pkgs="-p stillfail/sf -p stillfail/sfpages -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player -p stillfail/sfgraphic"
     elif [ -n "${APP_GROUP:-}" ]; then pkgs="-p stillfail/sfapp"; fi
     # (with ThinLTO, MBC_LTO=thin: only the program of the whole app. What ThinLTO's tests are for is the code that
     # ships, built as it ships, inlined across its units; all of it is in sfapp's test, run with the whole app's tests.
@@ -62,6 +72,8 @@ for t in $targets; do
     # (not sfreplay: no test of its own is left there, and its package was two empty programs of the whole app, 29 s
     # of the replay part's compile, 2026-10-24)
     pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay/flows"
+    # (on a program built elsewhere, REPLAY_EXE: the flows alone, the core's tests run where it was built)
+    [ -z "${REPLAY_EXE:-}" ] || pkgs="${pkgs/ -p stillfail\/core/}"
     fi
     # (a test under a directory of its own there is in no package this runs: a branch from before brought one back)
     for g in src/sfreplay/flows/*/; do
@@ -95,8 +107,14 @@ for t in $targets; do
   out=$(mktemp)
   # Built first on its own (TIMES=1, as CI's: each said with how long it took; its errors shown by the run), then run.
   s=$(date +%s)
-  [ -n "${APP_EXE:-}" ] || moon test $mode $pkgs --build-only > /dev/null 2>&1
-  [ -z "${TIMES:-}" ] || [ -n "${APP_EXE:-}" ] || echo "test.sh: built in $(( $(date +%s) - s )) s"
+  # (a build that fails fails the run: the programs a build before it left in _build are not run in their place)
+  if [ -z "${APP_EXE:-}" ] && [ -z "${REPLAY_EXE:-}" ] && ! moon test $mode $pkgs --build-only > "$out.build" 2>&1; then
+    grep -v "$F" "$out.build" | tail -40
+    rm -f "$out.build"
+    exit 1
+  fi
+  rm -f "$out.build"
+  [ -z "${TIMES:-}" ] || [ -n "${APP_EXE:-}${REPLAY_EXE:-}" ] || echo "test.sh: built in $(( $(date +%s) - s )) s"
   # (wasm-gc: the whole app's programs (sfapp's, the flows') run as a native one built elsewhere is (APP_EXE, exe_run),
   # their files side by side, each part a moonrun of the program (scripts/wasmtest.mjs): moon test runs a program's
   # tests one after another. UPDATE's are moon test's own, to write the snapshots)
@@ -121,6 +139,16 @@ for t in $targets; do
     echo "test.sh: sfapp's test program put in $APP_BUILD_OUT ($(du -h $b/sfapp.whitebox_test.exe | cut -f1))"
     exit 0
   fi
+  # (the flows' test program and its tests' list put where REPLAY_BUILD_OUT says, the same way)
+  if [ -n "${REPLAY_BUILD_OUT:-}" ]; then
+    b=_build/native/release/test/stillfail/sfreplay/flows
+    [ -f $b/flows.blackbox_test.exe ] || { moon test $mode $pkgs --build-only 2>&1 | grep -v "$F" | tail -40; exit 1; }
+    mkdir -p "$REPLAY_BUILD_OUT" && cp $b/flows.blackbox_test.exe $b/__blackbox_test_info.json "$REPLAY_BUILD_OUT/" &&
+      cp "$(bash "$D/testexe" path)" "$REPLAY_BUILD_OUT/testexe" || exit 1
+    echo "test.sh: the flows' test program put in $REPLAY_BUILD_OUT ($(du -h $b/flows.blackbox_test.exe | cut -f1))"
+    # (then the core's tests here, the flows' left to replay-fps's runs of it)
+    pkgs="${pkgs/ -p stillfail\/sfreplay\/flows/}"
+  fi
   s=$(date +%s)
   # Moon runs each test program serially; shard sfapp alongside the other packages.
   runs=("$pkgs")
@@ -128,10 +156,14 @@ for t in $targets; do
     files=(src/sfapp/*_wbtest.mbt)
     n=${SFAPP_SHARDS:-5}
     runs=("$(echo " $pkgs " | sed 's| -p stillfail/sfapp | |')")
-    # Run the screen sweeps beside page tests, so their durations do not add. Corners includes squeeze's screens;
+    # Run the screen sweeps beside page tests, so their durations do not add. Corners includes squeeze's screens (and,
+    # in its Chinese run, a press's room and the light theme's contrast: each screen opened once for all its rules);
     # the long-text, contrast, and kept-row sweeps have their own processes.
+    # (preview_tree's 121 tests in two: one process of it at 120 frames a second was 104-175 s, the longest of its
+    # part's job by 110 s and more, the job 156-263 s of its 5 minutes, main d2791a7a 42719997459,
+    # core/bound-devices-sign 42720203578, 2026-11-10)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
-      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4)
+      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4 src/sfapp/preview_tree_wbtest.mbt:2)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -150,9 +182,30 @@ for t in $targets; do
       # leaves behind that a later one trips on shows (shards, a process each, hide it))
       runs+=("${pages[*]}")
     elif [ -n "${APP_EXE:-}" ]; then
-      # (on a program built elsewhere: the pages in one run whose n programs each take the next file (exe_run's
-      # xargs -P), not dealt out beforehand: by name round four one took 75 s while another took 21, 2026-11-01)
-      runs+=("${pages[*]}")
+      # (on a program built elsewhere: the pages in runs whose programs each take the next file (exe_run's xargs -P),
+      # not dealt out beforehand to the programs: by name round four one took 75 s while another took 21, 2026-11-01)
+      # (dealt to the four runners by the cores each has free: all of them on the fourth, its job's tests were
+      # 218-276 s, cut at its 5 minutes, while the first ran two processes for 143 s, the second four for 150 (one
+      # long, three short), the third three for 90, 2026-11-05: of each fifteen, seven to the fourth with four
+      # programs, three to the first and four to the second with two each, one to the third with one) (the first's
+      # with four since: on a runner of its own, nothing beside them, two of its cores stood idle while preview_tree,
+      # taken late by name, ran 162 s of its 265 at 120 fps, mbui-motion-layer3 42659257481, 2026-11-10) (six to the
+      # fourth and four to the first since: at 60 a second the fourth's pages were 243 s, its job 254 of its 5 minutes,
+      # the first's job 59 s, core-unheld-messages 42723740236, main 2c1c63b8 42723386381, 2026-11-10)
+      if [ -n "${APP_GROUP:-}" ] && [ "${APP_GROUP#*/}" = 4 ]; then
+        g1=() g2=() g3=() g4=()
+        for i in "${!pages[@]}"; do
+          case $((i % 15)) in
+            0 | 2 | 4 | 6 | 8 | 10) g4+=("${pages[i]}") ;;
+            1 | 7 | 12 | 13) g1+=("${pages[i]}") ;;
+            3 | 9 | 11 | 14) g2+=("${pages[i]}") ;;
+            *) g3+=("${pages[i]}") ;;
+          esac
+        done
+        runs+=("@pages 1 $n ${g1[*]}" "@pages 2 2 ${g2[*]}" "@pages 3 1 ${g3[*]}" "@pages 4 $n ${g4[*]}")
+      else
+        runs+=("@pages 0 $n ${pages[*]}")
+      fi
       export APP_JOBS=$n
     else
       for ((k = 0; k < n; k++)); do
@@ -171,7 +224,7 @@ for t in $targets; do
     rest=()
     for r in "${runs[@]}"; do rest+=("$(echo " $r " | sed 's| -p stillfail/sfreplay/flows | |')"); done
     runs=("${rest[@]}")
-    fx=_build/native/release/test/stillfail/sfreplay/flows/flows.blackbox_test.exe
+    fx=${REPLAY_EXE:-_build/native/release/test/stillfail/sfreplay/flows/flows.blackbox_test.exe}
     [ $t = wasm-gc ] && fx=$(wasm_exe sfreplay/flows blackbox)
     if [ $t != js ] && [ -z "${UPDATE:-}" ] && [ -n "$fx" ] && [ -f "$fx" ]; then
       # (native: their files in one run of the program built above, whose n programs each take the next file
@@ -211,14 +264,19 @@ for t in $targets; do
     if [ "$n" != 4 ]; then echo 1; return; fi
     case "$1 $2 $3" in
       "-p "*) echo 1 ;;
-      "src/sfapp/corners_wbtest.mbt --index 0-"*) echo 1 ;;
-      "src/sfapp/corners_wbtest.mbt --index 2-"*) echo 1 ;;
+      # (corners' three runs on a runner of their own since, beside the four: its English run alone 240 s of the second's
+      # 252 on arch/next, its Chinese 200 of the first's, each push near its 5 minutes and some cut, ci-corners-once
+      # 42003619842, 2026-11-05: back among the four once a screen opens in one build, as on main)
+      "src/sfapp/corners_wbtest.mbt "*) echo corners ;;
       "src/sfapp/screens_wbtest.mbt  ") echo 2 ;;
-      "src/sfapp/corners_wbtest.mbt --index "*) echo 2 ;;
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt --index 8-"*) echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
+      # (preview_tree's two on the fourth, the one with the most programs: at 120 a second APP_PART gives each of its
+      # two halves one)
+      "src/sfapp/preview_tree_wbtest.mbt "*) echo 4 ;;
       "src/sfapp/contrast_wbtest.mbt  ") echo contrast ;;
+      "@pages "*) [ "$2" = 0 ] && echo 1 || echo "$2" ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
     esac
   }
@@ -226,14 +284,37 @@ for t in $targets; do
     mine=()
     for r in "${runs[@]}"; do
       [ -n "${r// /}" ] || continue
-      # (APP_GROUP=contrast: contrast's run alone, on a runner of its own, beside the four)
-      if [ "$APP_GROUP" = contrast ]; then [ "$(app_group_of 4 $r)" = contrast ] && mine+=("$r")
+      # (APP_GROUP=contrast, corners: that sweep's runs alone, on a runner of their own, beside the four)
+      if [ "$APP_GROUP" = contrast ] || [ "$APP_GROUP" = corners ]; then [ "$(app_group_of 4 $r)" = "$APP_GROUP" ] && mine+=("$r")
       else [ "$(app_group_of "${APP_GROUP#*/}" $r)" = "${APP_GROUP%/*}" ] && mine+=("$r"); fi
     done
     runs=("${mine[@]}")
+    # (APP_PART=k/m: the k-th of m shares of this group's pages' files, every m-th of them, and of its other runs: a
+    # group too long for one runner's five minutes at a rate's frames (mbui-check's at 120 a second) on m. Its other
+    # runs were all the first's: kept_rows' three runs and half the pages 228 s, the pages' 70 s of it beside them, the
+    # second's same number of pages alone 18 s, main c1c5a1b0, 42653215101, 2026-11-10)
+    if [ -n "${APP_PART:-}" ]; then
+      mine=() o=0
+      for r in "${runs[@]}"; do
+        if [ "${r%% *}" = @pages ]; then
+          read -r -a words <<< "$r"
+          kept=() i=0
+          for f in "${words[@]:3}"; do
+            [ $((i % ${APP_PART#*/})) = $((${APP_PART%/*} - 1)) ] && kept+=("$f")
+            i=$((i + 1))
+          done
+          [ ${#kept[@]} = 0 ] || mine+=("${words[0]} ${words[1]} ${words[2]} ${kept[*]}")
+        else
+          [ $((o % ${APP_PART#*/})) = $((${APP_PART%/*} - 1)) ] && mine+=("$r")
+          o=$((o + 1))
+        fi
+      done
+      runs=("${mine[@]}")
+    fi
   fi
   run_name() {
     [ "$1" = @flows ] && shift
+    [ "$1" = @pages ] && shift 3
     case " $* " in
       *" -p "*) echo "the packages$(echo " $* " | sed 's| -p stillfail/| |g')" ;;
       *" --index "*) echo "$(basename "$1") (tests $3)" ;;
@@ -267,9 +348,12 @@ for t in $targets; do
     # (each run's time with TIMES: the part's run is the longest of them, and which one it is is said)
     { if [ "${runs[i]%% *}" = @flows ]; then
         f=_build/$t/release/test/stillfail/sfreplay/flows
-        exe_run "$fx" $f/__blackbox_test_info.json ${REPLAY_SHARDS:-3} stillfail/sfreplay/flows \
+        exe_run "$fx" "${REPLAY_INFO:-$f/__blackbox_test_info.json}" ${REPLAY_SHARDS:-3} stillfail/sfreplay/flows \
           ${runs[i]#@flows } > "$out.$i" 2>&1
       # (the packages' run is moon test's even then: only sfapp's program is APP_EXE)
+      elif [ "${runs[i]%% *}" = @pages ]; then
+        set -- ${runs[i]}
+        exe_run "$APP_EXE" "$APP_INFO" $3 stillfail/sfapp "${@:4}" > "$out.$i" 2>&1
       elif [ -n "${APP_EXE:-}" ] && [[ " ${runs[i]} " != *" -p "* ]]; then
         exe_run "$APP_EXE" "$APP_INFO" ${APP_JOBS:-1} stillfail/sfapp ${runs[i]} > "$out.$i" 2>&1
       else moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1; fi; c=$?
@@ -279,7 +363,9 @@ for t in $targets; do
   done
   for p in "${pids[@]}"; do wait $p || code=1; done
   for i in "${!runs[@]}"; do [ -f "$out.$i" ] && cat "$out.$i"; rm -f "$out.$i"; done > "$out"
-  grep -v "$F" "$out" | grep -v '^Total tests' | tail -${LINES_OUT:-60}
+  # (how what moves goes, said where a run counts it (MBUI_TEST_MOTION=count): all of it kept, past LINES_OUT's tail)
+  [ -z "${MOTION_OUT:-}" ] || grep -a '^MOTION ' "$out" >> "$MOTION_OUT"
+  grep -v "$F" "$out" | grep -av '^MOTION ' | grep -v '^Total tests' | tail -${LINES_OUT:-60}
   grep '^Total tests' "$out"
   [ -z "${TIMES:-}" ] || cat "$out".time.* 2>/dev/null | sort -rn | sed 's/^/test.sh: a run of /'
   rm -f "$out".time.*

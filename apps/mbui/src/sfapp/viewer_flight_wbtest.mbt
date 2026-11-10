@@ -65,7 +65,7 @@ test "a film flying in: its capsule goes with the still as it leaves its thumbna
   // nearly in, its ground whole: the player's controls coming with it (their clock showing), not after it lands
   let nearly = v.fly.end() - @ui.move_most_ms / 8.0
   t.run_for(nearly - t.time())
-  assert_true(v.flies && v.flying() > @sfbase.bars_from)
+  assert_true(v.flies && v.flying(t.ctx()) > @sfbase.bars_from)
   assert_true(words_show(t, "0:00"))
   t.run_for(@ui.move_most_ms)
   assert_true(words_show(t, "0:00"))
@@ -91,4 +91,20 @@ test "a film closed back into its thumbnail: the player's bars go with it as it 
   assert_true(pv_leaving.get() is None)
   assert_false(words_show(t, "0:04"))
   assert_true(words_show(t, "1:13"))
+}
+
+///|
+test "a film not come yet, no still of it either, closed: it flies back from where it landed, not from a dot in the middle" {
+  let t = video_in_chat(still=false)
+  tap_video(t, "演示录屏.mp4")
+  // the player has read nothing of it yet: no size, no frame
+  t.set_player(1, natural=(0.0, 0.0), shown=false)
+  t.run_for(@ui.move_most_ms)
+  t.back()
+  t.draw()
+  let v = pv_leaving.get().unwrap()
+  assert_true(v.flies && v.fly_back)
+  // from the 16:9 box across the screen it landed as (its size as its message says it)
+  let (_, _, w, h) = v.fly_to.unwrap()
+  assert_true((w - 390.0).abs() < 1.0 && (h - 219.375).abs() < 1.0)
 }

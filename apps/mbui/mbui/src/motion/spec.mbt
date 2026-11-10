@@ -138,7 +138,7 @@ pub let sheet_spring : Spec = motion_spring(0.32, threshold=0.5)
 
 ///|
 /// What the hand holds or lifts (the one spring with a bounce: still.fail's
-/// docs/motion.md): a finger's ripple sinking (Android's), a switch's knob
+/// sf/motion.mbt): a finger's ripple sinking (Android's), a switch's knob
 /// held, a card lifted, the long-press menu's scale, the loupe following the
 /// finger (motionSpring(.25, bounce .35)).
 // kept across runs: a constant: its fields are not mut, nothing changes it
@@ -217,7 +217,7 @@ pub fn spring_at(
 
 ///|
 /// How long a spring takes, in whole ms, as Compose reckons it
-/// (SpringEstimation.kt): until it stays within `threshold` of its rest.
+/// : until it stays within `threshold` of its rest.
 /// Under-damped, by its envelope (c·e^(−ζωt) = threshold); critically and
 /// over-damped, until the motion itself last leaves the threshold.
 pub fn spring_duration(

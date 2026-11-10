@@ -28,7 +28,7 @@ fn activity_glyph_alphas(t : @ui.Tester, words : String) -> Array[Int64] {
 test "activity: the first words of a newly seen turn arrive a glyph at a time" {
   let t = linger_core()
   t.run_for(fix_deliver_ms)
-  let at = reading_of("ws1/st1\u{1}s-c1").rows.came("act:s-c1").unwrap_or(@double.infinity)
+  let at = turns_of("ws1/st1\u{1}s-c1").start_of("act:s-c1")
   assert_true(at >= 0.0 && at < @double.infinity, msg="\{at}")
   t.run_for(dmax(at - t.time(), 0.0) + @sfbase.glyph_line_in_ms / 2.0)
   let alphas = activity_glyph_alphas(t, tr("android-chat.chat.working"))

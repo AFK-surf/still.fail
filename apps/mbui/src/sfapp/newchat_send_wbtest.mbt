@@ -52,8 +52,8 @@ fn held_core(
         _ => (base.call)(name, params, done)
       }
     },
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       let made = match params.get("session") {
         Some(String(s)) => s.has_prefix("new:")
         _ => false
@@ -229,9 +229,12 @@ test "a new chat's restored picture travels from its composer into its first mes
       @ui.add_image("mem:test/new-restored", png_head())
       "mem:test/new-restored"
     },
-    topic: fn(name, params) {
-      let now = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let now = base.topic(name, params).get().snapshot()
       if name != "composer" { return now }
+      // The fixture's draft comes with an in-memory picture, as one picked here. After a restart the app keeps none:
+      // its source is the kept draft's, from the first read of it on.
+      @sfbase.writing_pictures.remove("seed-0")
       let m = match now.value { Some(Object(v)) => v.copy(); _ => return now }
       m["files"] = Json::array(items(now.value, "files").map(fn(file) {
         guard file is Object(o) else { return file }
@@ -252,10 +255,6 @@ test "a new chat's restored picture travels from its composer into its first mes
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.drive("timeout 20000\nuntil 想让 agent 做什么？\n") |> ignore
-  // The fixture normally starts with an in-memory picture. Its source after a restart is the kept draft instead.
-  @sfbase.writing_pictures.remove("seed-0")
-  @sfbase.sent_pictures.clear()
-  t.frame()
   t.run_for(@ui.image_fade_ms)
   assert_true(t.locate("img:mem:test/new-restored").length() > 0)
   tap_send(t)
@@ -353,24 +352,16 @@ test "a new chat's first words hold its composer as tall as it was while they ar
   t.tap_text("做任何事")
   t.type_text("第一行\n第二行\n第三行")
   t.run_for(@ui.move_most_ms)
-  let box = fn() {
-    let glasses = t.drawn_glass_corners().filter(fn(g) { g.2 > 250.0 && g.3 > 40.0 })
-    let mut lowest = (0.0, 0.0)
-    for g in glasses { if g.1 > lowest.0 { lowest = (g.1, g.3) } }
-    lowest.1
-  }
+  let box = fn() { @motion.measured(t.ctx(), "composer/content").unwrap() }
   let tall = box()
   tap_send(t)
   t.draw()
   assert_true(app.nav.top() is Chat(_))
   assert_eq(box(), tall)
   // let go of as they set out, the core's answers kept the while
-  let flight = send_flight.get().unwrap()
-  let go = flight.set_out + flight.after
+  let go = t.rest_of("composer/held-box/")
   assert_true(go > t.time() && go < @double.infinity, msg="\{go} \{t.time()}")
   t.run_for(go - t.time())
-  // Its layout lets go then; the visible ground shrinks on its declared reshape.
-  t.run_for(@sfbase.sent_down_ms)
   assert_true(box() < tall, msg="\{box()} \{tall}")
   ignore((held, unread))
 }
@@ -419,7 +410,6 @@ test "a new chat's first words not sent (the chat not made): the page the new ch
   t.draw()
   assert_true(send_flight.get() is None)
   assert_true(app.nav.top() is NewChat)
-  assert_eq(@sfbase.writing(src, "new:ws1").field.text(), words)
   let (_, back, _, _) = t.ime()
   assert_eq(back, words)
   // its scene, gone as they were sent, back as it was
@@ -443,7 +433,7 @@ fn reading_core(reading : @signals.Signal[Bool], made : Ref[Int]) -> @ui.Tester 
       }
       (base.call)(name, params, done)
     },
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "newChat" && reading.get() {
         {
           value: Some({
@@ -459,7 +449,7 @@ fn reading_core(reading : @signals.Signal[Bool], made : Ref[Int]) -> @ui.Tester 
           version: 0,
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }

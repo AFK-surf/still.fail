@@ -7,9 +7,11 @@
 import { consoleAdmin, isAdmin } from "./admin";
 import { bearerToken, clock, denied, limited, readJson, reply, verifyToken, type Claims } from "./auth";
 import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
-import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
+import type { Live } from "./account";
+import { EVENTS_PROTOCOLS, ROLES, sockets, type Role } from "./directory";
 import type { Env } from "./env";
-import type { FeedbackStatus } from "./types";
+import { requestLang, tr } from "./i18n.ts";
+import type { AdminFeedback, FeedbackStatus } from "./types";
 import { grantKeys, signCredential, validKeyHex, verifyAnySignature, verifyKeySignature } from "./grants";
 import { changelog, serveChangelog, serveFixed } from "./changelog";
 import { serveModels } from "./models";
@@ -17,6 +19,7 @@ import { receiveFeedback } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
 import { relays, relayUrls } from "./relays";
 import { receiveLoad, relaysLoad } from "./relay-load";
+import { receiveIncidents, receiveReleased, serveStatus } from "./status";
 import { receiveLogs, receiveTraces } from "./tracing";
 import { ICON_URL_CHARS, keptIcon, serveIcon } from "./icons";
 import { servePicture } from "./pictures";
@@ -60,15 +63,32 @@ async function directory<T>(run: () => Promise<T> | T): Promise<Response> {
   }
 }
 
+/** Requests of the test channel (index.ts): its account's object says whether it is let in, as it says its session is live. */
+export const onTestChannel = new WeakSet<Request>();
+/** What a request's account's object said of its token, asked once a request (index.ts asks first on the test channel). */
+const said = new WeakMap<Request, Promise<Live>>();
+export function liveOf(request: Request, env: Env, claims: Claims): Promise<Live> {
+  let live = said.get(request);
+  if (!live) said.set(request, (live = env.ACCOUNTS.getByName(claims.sub).live(claims, onTestChannel.has(request))));
+  return live;
+}
+
+/**
+ * The test channel is for the accounts the admin let in (Directory `beta`); any call carrying the token of an account
+ * not let in answers 403 not_beta, which the page takes for "go to the stable one" and an app for "this account cannot
+ * use the test build" (index.ts).
+ */
+export const notBetaReply = (env: Env, request: Request) => reply({ error: "not_beta", message: tr(requestLang(request), "cloud.beta.notLetIn"), stable: env.PUBLIC_ORIGIN }, 403);
+
 /**
  * The account a token signs in, or the answer to give: signed out (401), or over its requests a minute (429, tried
  * again later; it was answered as signed out before, and the apps said 登录已失效 to someone signed in).
  */
-async function account(token: string | null, env: Env): Promise<Claims | Response> {
+async function account(token: string | null, env: Env, request: Request): Promise<Claims | Response> {
   const claims = token ? await verifyToken(env, token, "access") : null;
   if (!claims) return denied();
-  const live = await env.ACCOUNTS.getByName(claims.sub).live(claims);
-  return live === true ? claims : live === "limited" ? limited() : denied();
+  const live = await liveOf(request, env, claims);
+  return live === true ? claims : live === "limited" ? limited() : live === "not_beta" ? notBetaReply(env, request) : denied();
 }
 
 const isUpgrade = (request: Request) => request.headers.get("upgrade")?.toLowerCase() === "websocket";
@@ -77,15 +97,14 @@ const isUpgrade = (request: Request) => request.headers.get("upgrade")?.toLowerC
  * The access token of an events socket, and the subprotocol the answer
  * selects. Browsers cannot set headers on a WebSocket, so it comes as a second
  * subprotocol, `stillfail-token.<token>`, next to `stillfail-events` (the one
- * the answer selects); clients from before the rename say `ember-token.` and
- * `ember-events`. A header, unlike a query string, stays out of URLs and so
+ * the answer selects). A header, unlike a query string, stays out of URLs and so
  * out of request logs.
  */
 export function socketToken(request: Request): { token: string; protocol: string } | null {
   const offered = (request.headers.get("sec-websocket-protocol") ?? "").split(",").map((p) => p.trim());
   const protocol = EVENTS_PROTOCOLS.find((p) => offered.includes(p));
   if (!protocol) return null;
-  const match = offered.map((p) => /^(?:stillfail|ember)-token\.([A-Za-z0-9._-]{1,4096})$/.exec(p)).find(Boolean);
+  const match = offered.map((p) => /^stillfail-token\.([A-Za-z0-9._-]{1,4096})$/.exec(p)).find(Boolean);
   return match?.[1] ? { token: match[1], protocol } : null;
 }
 
@@ -95,19 +114,20 @@ async function body(request: Request, maximum?: number): Promise<Record<string, 
   return readJson(request, maximum);
 }
 
-/** How large a change to a workspace or a station may be: it can carry a picture put up as its icon (icons.ts). */
+/** How large a change to a workspace or a station, or an account's own picture, may be: it can carry a picture put up
+ * (icons.ts). */
 const MARK_BODY = ICON_URL_CHARS + 8192;
 
 export async function api(request: Request, env: Env, url: URL): Promise<Response | null> {
   const path = url.pathname;
   const method = request.method;
-  if ((path === "/.well-known/stillfail-grant-keys" || path === "/.well-known/ember-grant-keys") && method === "GET") return reply(grantKeys(env), 200, { "cache-control": "public, max-age=300" });
+  if (path === "/.well-known/stillfail-grant-keys" && method === "GET") return reply(grantKeys(env), 200, { "cache-control": "public, max-age=300" });
 
   // ── the relays on machines of their own: their counters, a minute apart (relay-load.ts) ──
   if (path === "/v1/relays/load" && method === "POST") return receiveLoad(request, env);
 
   // ── stations, authenticated by their own key ────────────────────────────
-  // Enrolling moves the station to the token's workspace, out of any other; joining (docs/multi-workspace.md) adds that
+  // Enrolling moves the station to the token's workspace, out of any other; joining adds that
   // workspace to those it is in. The same body and proof (the token says where, the signature that the key is held);
   // a route of its own, so that a cloud from before it refuses rather than moves the station. Both answer with `home`.
   if ((path === "/v1/stations/enroll" || path === "/v1/stations/join") && method === "POST") {
@@ -129,8 +149,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // headers: x-stillfail-station (its key), x-stillfail-ts (unix seconds,
   // within 5 minutes), x-stillfail-signature over
   // "stillfail-station-connect-v1:<origin>:<station>:<ts>", and
-  // x-stillfail-version. (Stations from before the rename: x-ember-* and
-  // "ember-station-connect-v1:…"; the origin is any of the cloud's.)
+  // x-stillfail-version. (The origin is any of the cloud's.)
   if (path === "/v1/stations/connect" && method === "GET") {
     if (!isUpgrade(request)) return reply({ error: "websocket_required" }, 426);
     const station = header(request, "station");
@@ -141,14 +160,16 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     const headers = new Headers({ upgrade: "websocket", "x-stillfail-station": station });
     const version = header(request, "version");
     if (version) headers.set("x-stillfail-version", version.slice(0, 40));
-    return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/stations/connect", { headers }));
+    if (sockets.where(env) === "primary") return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/stations/connect", { headers }));
+    return env.STATIONS.getByName(station).fetch(new Request("https://station/connect", { headers }));
   }
 
   // Spans from a signed-in client, or from a station signing them with its key (tracing.ts).
+  // (their own budget by sender, tracing.ts: not the account's, which the account system's requests need)
   if (path === "/v1/telemetry/traces" && method === "POST") {
     const token = bearerToken(request);
-    const claims = token ? await account(token, env) : null;
-    if (claims instanceof Response) return claims;
+    const claims = token ? await verifyToken(env, token, "access") : null;
+    if (token && (!claims || !(await env.ACCOUNTS.getByName(claims.sub).signedIn(claims)))) return denied();
     return receiveTraces(request, env, claims?.sub ?? null);
   }
 
@@ -158,7 +179,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // A bug report about still.fail itself, from a station's agent (signed with its key) or a signed-in account (feedback.ts).
   if (path === "/v1/feedback" && method === "POST") {
     const token = bearerToken(request);
-    const claims = token ? await account(token, env) : null;
+    const claims = token ? await account(token, env, request) : null;
     if (claims instanceof Response) return claims;
     return receiveFeedback(request, env, claims?.sub ?? null);
   }
@@ -168,16 +189,18 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/changelog" && method === "GET") return serveChangelog(request, env);
   // What models can do and cost, for stations (models.ts): models.dev's, as still.fail reads it. No secret.
   if (path === "/v1/models" && method === "GET") return serveModels(request);
-  // still.fail's relays, for anyone: the page that shows a published chat (share.still.fail, src/share.ts) reaches the
-  // station through them, signed in to nothing (docs/public-share.md). From any page: what it says is no secret.
-  if (path === "/v1/relays" && method === "GET") return reply({ relay_urls: relayUrls(env) }, 200, { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" });
+  // What still.fail/status shows (status.ts).
+  if (path === "/v1/status" && method === "GET") return serveStatus(env);
+  if (path === "/v1/status/incidents" && method === "POST") return receiveIncidents(request, env);
+  // A release is out (status.ts): every device and station is told.
+  if (path === "/v1/releases/out" && method === "POST") return receiveReleased(request, env);
 
   // Notices of a station's chats, signed with its key like its spans, pushed to the people they are for (push.ts).
   if (path === "/v1/stations/notify" && method === "POST") return stationNotify(request, env);
   if (path === "/v1/push/key" && method === "GET") return pushKey(env);
   // This device's push subscription or token, registered with the signed-in account's session, or taken off it.
   if (path === "/v1/push" && (method === "POST" || method === "DELETE")) {
-    const claims = await account(bearerToken(request), env);
+    const claims = await account(bearerToken(request), env, request);
     if (claims instanceof Response) return claims;
     return registration(request, env, claims.sub, claims.sid);
   }
@@ -185,10 +208,18 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/events" && method === "GET") {
     if (!isUpgrade(request)) return reply({ error: "websocket_required" }, 426);
     const socket = socketToken(request);
-    const claims = await account(socket?.token ?? null, env);
-    if (claims instanceof Response) return claims;
-    if (!socket) return denied();
-    return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-stillfail-sub": claims.sub, "x-stillfail-protocol": socket.protocol } }));
+    if (sockets.where(env) === "primary") {
+      const claims = await account(socket?.token ?? null, env, request);
+      if (claims instanceof Response) return claims;
+      if (!socket) return denied();
+      return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-stillfail-sub": claims.sub, "x-stillfail-protocol": socket.protocol } }));
+    }
+    // On the account's object, which checks the session itself (and, on the test channel, that it is let in).
+    const claims = socket ? await verifyToken(env, socket.token, "access") : null;
+    if (!claims || !socket) return denied();
+    const headers = { upgrade: "websocket", "x-stillfail-sub": claims.sub, "x-stillfail-sid": claims.sid, "x-stillfail-protocol": socket.protocol, ...(onTestChannel.has(request) ? { "x-stillfail-channel": "beta" } : {}) };
+    const answer = await env.ACCOUNTS.getByName(claims.sub).fetch(new Request("https://account/events", { headers }));
+    return answer.status === 403 ? notBetaReply(env, request) : answer;
   }
 
   // ── the pictures put up as icons: to anyone with the address (icons.ts) ──
@@ -198,13 +229,13 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/pictures" && method === "GET") return servePicture(request);
 
   // ── accounts ────────────────────────────────────────────────────────────
-  const isAccountRoute = path === "/v1/me" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
+  const isAccountRoute = path === "/v1/me" || path === "/v1/me/personal-lock" || path === "/v1/me/picture" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
   if (!isAccountRoute) return null;
-  const claims = await account(bearerToken(request), env);
+  const claims = await account(bearerToken(request), env, request);
   if (claims instanceof Response) return claims;
   let input: Record<string, unknown>;
   try {
-    input = await body(request, method === "PATCH" && path.startsWith("/v1/workspaces/") ? MARK_BODY : undefined);
+    input = await body(request, (method === "PATCH" && path.startsWith("/v1/workspaces/")) || path === "/v1/me/picture" ? MARK_BODY : undefined);
   } catch {
     return reply({ error: "invalid_request" }, 400);
   }
@@ -215,6 +246,21 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
 
   if (path === "/v1/me" && method === "GET") {
     return directory(async () => ({ ...(await dir.me(sub)), invitations: await dir.invitationsFor(claims.email), ...relays(env, true) }));
+  }
+  // The person's own lock, which the cloud keeps and carries but does not decide (personal-lock.ts).
+  if (path === "/v1/me/personal-lock") {
+    const lock = env.ACCOUNTS.getByName(sub);
+    if (method === "GET") return reply({ entries: await lock.personalLock() });
+    if (method === "POST") {
+      const said = await lock.appendPersonalLock(sub, input.entries);
+      return "refused" in said ? reply({ error: said.refused }, STATUS[said.refused] ?? 409) : reply(said);
+    }
+  }
+  // The picture the account puts up for itself, sent as a data URL and kept in the bucket as icons are (icons.ts), or
+  // taken away (its sign-in's shown again).
+  if (path === "/v1/me/picture") {
+    if (method === "PUT") return directory(async () => dir.setOwnPicture(sub, typeof input.picture === "string" && input.picture.startsWith("data:") ? await keptIcon(env, input.picture) : input.picture));
+    if (method === "DELETE") return directory(() => dir.setOwnPicture(sub, null));
   }
   // Deleting the account: the Directory first (it may refuse: 409 sole_owner), then its sessions and all of it.
   if (path === "/v1/me" && method === "DELETE") {
@@ -272,7 +318,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // A mstill.fail's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).
   if (kind === "credential" && !target && method === "POST") {
     if (!validKeyHex(input.device)) return reply({ error: "invalid_device" }, 400);
-    // A newer client names its base key and proves the endpoint is its own (docs/workspace-lock.md): kept for the
+    // A newer client names its base key and proves the endpoint is its own: kept for the
     // owner to check when the lock is turned on. An older one names only the endpoint.
     const base = validKeyHex(input.base) && typeof input.proof === "string" && (await verifyKeySignature(input.base, input.proof, `stillfail-lock-endpoint/1\0${ws}\0${input.device}`)) ? input.base : undefined;
     if (input.base !== undefined && base === undefined) return reply({ error: "invalid_proof" }, 400);
@@ -315,9 +361,17 @@ export async function blockAccount(env: Env, sub: string, on: boolean): Promise<
   return answer;
 }
 
+/** The console's bug reports (feedback.ts), those the changelog fixes marked first (changelog.ts). */
+export async function feedbackList(env: Env): Promise<AdminFeedback[]> {
+  const dir = env.DIRECTORY.getByName("primary");
+  const entries = await changelog(env.RELEASES);
+  await dir.markFixed(entries.flatMap((e) => e.fixes.map((number) => ({ number, version: e.version, parts: e.parts }))));
+  return dir.adminFeedback();
+}
+
 export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
-  const claims = await account(bearerToken(request), env);
+  const claims = await account(bearerToken(request), env, request);
   if (claims instanceof Response || !(await consoleAdmin(request, env, claims.email))) return notFound();
   let input: Record<string, unknown>;
   try {
@@ -356,7 +410,7 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
     return blockAccount(env, block[1]!, input.on as boolean);
   }
   if (path === "/v1/admin/workspaces" && method === "GET") return directory(async () => ({ workspaces: await dir.adminWorkspaces() }));
-  // A workspace made for a company (docs/cloud.md「企业 workspace」): { name, owners: [email], members, stations }.
+  // A workspace made for a company (「企业 workspace」): { name, owners: [email], members, stations }.
   if (path === "/v1/admin/workspaces" && method === "POST") return directory(() => dir.adminCreateWorkspace(claims.sub, input));
   // Its limits: { members, stations }.
   const limits = /^\/v1\/admin\/workspaces\/([A-Za-z0-9_-]{1,64})\/limits$/.exec(path);
@@ -381,11 +435,7 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
   // Bug reports about still.fail (feedback.ts), and marking where each is: { status }.
   // Those the changelog fixes marked first (changelog.ts).
   if (path === "/v1/admin/feedback" && method === "GET") {
-    return directory(async () => {
-      const entries = await changelog(env.RELEASES);
-      await dir.markFixed(entries.flatMap((e) => e.fixes.map((number) => ({ number, version: e.version, parts: e.parts }))));
-      return { feedback: await dir.adminFeedback() };
-    });
+    return directory(async () => ({ feedback: await feedbackList(env) }));
   }
   const status = /^\/v1\/admin\/feedback\/([0-9A-Z]{26})\/status$/.exec(path);
   if (status && method === "POST") {

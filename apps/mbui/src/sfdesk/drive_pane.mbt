@@ -1,4 +1,4 @@
-// The preview beside a folder's list (⌘⇧P, as Finder's preview pane: ember web/src/pages/DrivePane.tsx, Drive.tsx
+// The preview beside a folder's list (⌘⇧P, as Finder's preview pane: still.fail web/src/pages/DrivePane.tsx, Drive.tsx
 // usePreviewShown): the file chosen shown there as it is chosen (a picture whole, the start of a text, Markdown
 // rendered, code as it is), with what it is, where (its station, its path) and its size and time; what plays (a video,
 // a song) or needs a page of its own (a PDF) says how to open it. Several chosen, or a folder, say so. The files' page
@@ -7,7 +7,7 @@
 ///|
 /// Whether the preview shows beside a folder's list (`place`: the files' page's, `page`, or a chat's 文件 tab's, `tab`).
 pub fn preview_shown(src : Source, place : String) -> Bool {
-  text(field((src.topic)("prefs", {}).value, "driveViews"), if place == "page" { "preview" } else { "tabPreview" }) ==
+  text(field(src.topic("prefs", {}).get().value, "driveViews"), if place == "page" { "preview" } else { "tabPreview" }) ==
   "shown"
 }
 
@@ -192,16 +192,17 @@ pub fn drive_pane(
           })
           |> ignore
           c.box(style=fpane_actions, fn() {
-            if @sf.button(c, @sf.t("web-pages.drive.open"), key="files/preview/open") {
+            @sf.button(c, @sf.t("web-pages.drive.open"), key="files/preview/open", on_press=fn() {
               on_open()
+            }) |> ignore
+            if !e.dir {
+              @sf.button(c, @sf.t("web-pages.drive.download"), key="files/preview/download", tone=Ghost, icon="download", on_press=fn() {
+                on_save()
+              }) |> ignore
             }
-            if !e.dir &&
-              @sf.button(c, @sf.t("web-pages.drive.download"), key="files/preview/download", tone=Ghost, icon="download") {
-              on_save()
-            }
-            if @sf.button(c, @sf.t("web-pages.drive.copyPath"), key="files/preview/copy", tone=Ghost, icon="copy") {
+            @sf.button(c, @sf.t("web-pages.drive.copyPath"), key="files/preview/copy", tone=Ghost, icon="copy", on_press=fn() {
               on_copy_path(abs)
-            }
+            }) |> ignore
           })
           |> ignore
         })
@@ -213,7 +214,7 @@ pub fn drive_pane(
 }
 
 ///|
-/// What the file is, shown as it can be here (DrivePane.tsx Body): its picture, its text's start, else its kind's mark
+/// What the file is, shown as it can be here: its picture, its text's start, else its kind's mark
 /// and how to open it (pressed, it opens).
 fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ : Double, fixed? : Bool = false) -> Unit {
   let t = @sf.theme()
@@ -274,9 +275,9 @@ fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ :
       }
     _ => {
       let id = c.id("files/preview/mark")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         open()
-      }
+      })
       let words = if e.kind == "video" || e.kind == "audio" {
         @sf.t("web-pages.files.previewPlay")
       } else if e.dir {
@@ -294,7 +295,7 @@ fn fpane_body(c : @ui.Ctx, e : DvEntry, way : String, open : () -> Unit, room~ :
 }
 
 ///|
-/// The pane (DrivePane.css.ts pane: 300 wide, 12 in, 12 between what it shows and what the file is), the room inside.
+/// The pane (12 in, 12 between what it shows and what the file is), the room inside.
 let fpane_w : Double = 300.0
 
 ///|

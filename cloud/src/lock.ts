@@ -1,4 +1,4 @@
-// The workspace lock as still.fail cloud keeps it (docs/workspace-lock.md): the cloud stores the chain and carries it,
+// The workspace lock as still.fail cloud keeps it: the cloud stores the chain and carries it,
 // to the stations (their presence sockets) and to members' devices. It keeps one chain, each entry following the last,
 // and only entries a station takes: checked by the stations' own rules (station/src/cloud/lock.ts `genesis`/`apply`),
 // as one it kept that they refuse leaves every entry after it refused too. The stations trust nothing the cloud says

@@ -85,7 +85,7 @@ const chatKeyOf = (hub: Hub, t: ThreadRow) => t.home ?? hub.store.threadSessions
 /// The chats session `key` is in, by the keys they are shared by.
 const chatsOf = (hub: Hub, key: string) => new Set([key, ...hub.store.sessionThreads(key).map((t) => chatKeyOf(hub, t.thread))]);
 
-/// Whether workspace `ws` may reach session `key`'s chat (docs/multi-workspace.md): one of that workspace's, or one
+/// Whether workspace `ws` may reach session `key`'s chat: one of that workspace's, or one
 /// another workspace of this station shares with it (to write in: shared to write), whose share goes on from now. `ws`
 /// null: any.
 export function reachable(hub: Hub, key: string, ws: string | null, write = false): boolean {
@@ -106,13 +106,13 @@ export function threadIn(hub: Hub, thread: ThreadRow, ws: string | null): boolea
   return keys.length === 0 ? hub.wsOf(null) === ws : keys.some((k) => hub.inWorkspace(k, ws));
 }
 
-/// The workspace whose chats and stations session `key` reaches (docs/multi-workspace.md): its chat's; null (any) on
+/// The workspace whose chats and stations session `key` reaches: its chat's; null (any) on
 /// a station in no workspace, where there is no telling.
 export function scopeOf(hub: Hub, key: string): string | null {
   return hub.workspaces().length === 0 ? null : hub.wsOf(key);
 }
 
-/// The station transport as session `key` asks it: in its chat's workspace (docs/multi-workspace.md), whose stations
+/// The station transport as session `key` asks it: in its chat's workspace, whose stations
 /// alone it reaches (and those sharing chats with that workspace); null while there is none.
 export function peersOf(hub: Hub, key: string): ((station: string, request: Json) => Promise<Json>) | null {
   const call = hub.peers();
@@ -274,7 +274,7 @@ export function named(hub: Hub, given: string, ws: string | null = null, write =
 
 /// The conversation a session is best read in: its own chat on the pages, else the one it last heard from.
 export function sessionThreadOf(hub: Hub, key: string): SessionThread {
-  const home = hub.store.sessionThreads(key).find((t) => t.thread.home === key);
+  const home = hub.store.sessionHomeThread(key);
   if (home) return home;
   const latest = hub.store.latestThread(key);
   if (!latest) throw new Error(`session ${key} has no conversation yet`);
@@ -283,16 +283,16 @@ export function sessionThreadOf(hub: Hub, key: string): SessionThread {
 
 /// chat_list: the station's conversations of session `key`'s workspace, the latest first, each with its agents
 /// (session keys).
-export async function chatList(hub: Hub, key: string, args: Args): Promise<string> {
+export async function chatList(hub: Hub, key: string, args: Args, signal?: AbortSignal): Promise<string> {
   const given = args.limit === undefined ? null : jsNumber(args.limit);
   const limit = given === null ? 20 : Number.isNaN(given) ? 0 : Math.trunc(Math.min(100, Math.max(1, given)));
   const query = (args.query === undefined ? "" : jsString(args.query)).trim().toLowerCase();
-  // Its workspace's only (docs/multi-workspace.md): a thread is its own session's, else its agents'.
+  // Its workspace's only: a thread is its own session's, else its agents'.
   const ws = scopeOf(hub, key);
   const home = hub.wsOf(null);
   // The reader counts and selects before returning the page. A search still checks each scoped chat's titles and words.
   const listed = query === ""
-    ? hub.recentChatList != null ? await hub.recentChatList(ws, home, limit)
+    ? hub.recentChatList != null ? await hub.recentChatList(ws, home, limit, signal)
       : hub.threadList == null ? hub.store.recentChatList(ws, home, limit) : null
     : hub.searchChatList != null ? await hub.searchChatList(ws, home, limit, query)
       : hub.threadList == null ? hub.store.searchChatList(ws, home, limit, query) : null;

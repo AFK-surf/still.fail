@@ -23,14 +23,16 @@ export type Profile = RuntimeProfile & {
   model?: string;
   /// A message that reaches a running Claude Code turn first moves what it waits on to the background (absent: on).
   backgroundOnMessage: boolean;
-  /// The joined workspaces kept from it (docs/multi-workspace.md): every workspace the station is in runs on it but these.
+  /// A stopped profile keeps its credentials and models but cannot be chosen for work.
+  enabled?: boolean;
+  /// The joined workspaces kept from it: every workspace the station is in runs on it but these.
   withheld?: string[];
 };
 
 export type ConnectMode = "multi-session" | "single-session";
 
-/// What a connect's bot is on: Slack, or Feishu (src/feishu; Lark too).
-export type ConnectKind = "slack" | "feishu";
+/// What a connect's bot is on: Slack, Feishu (src/feishu; Lark too), or Comma (src/comma: Comma's Tasks).
+export type ConnectKind = "slack" | "feishu" | "comma";
 
 export type Connect = {
   id: string;
@@ -41,8 +43,10 @@ export type Connect = {
   requireMention: boolean;
   slack: { botName?: string; [key: string]: unknown };
   bind: { runtime: Runtime; profile?: string; model?: string; effort?: string };
-  /// The workspace it was added in, whose chats its sessions are (docs/multi-workspace.md); absent: the home one.
+  /// The workspace it was added in, whose chats its sessions are; absent: the home one.
   workspace?: string;
+  /// One of another station whose chats run here (connects/remote.ts), not config.json's.
+  remote?: true;
 };
 
 /// decision.rs `DecisionRule`: the completion review after all_done, and the model it asks.
@@ -121,6 +125,7 @@ export function hubConfig(raw: any, dataDir: string, found: (id: string) => read
       named: models,
       model: nonEmpty(p.model),
       backgroundOnMessage: p.backgroundOnMessage !== false,
+      enabled: p.enabled !== false,
       ...(Array.isArray(p.withheld) ? { withheld: p.withheld.filter((w: unknown): w is string => typeof w === "string" && w !== "") } : {}),
     };
   });
@@ -129,7 +134,7 @@ export function hubConfig(raw: any, dataDir: string, found: (id: string) => read
     const bind = c.bind ?? {};
     return {
       id: c.id,
-      kind: c.kind === "feishu" ? "feishu" : "slack",
+      kind: c.kind === "feishu" || c.kind === "comma" ? c.kind : "slack",
       enabled: c.enabled !== false,
       mode,
       requireMention: mode === "multi-session" ? true : c.requireMention !== false,
@@ -170,7 +175,7 @@ export const runs = (profile: Profile, model: string): boolean => spelling(profi
 /// shapes model.rs `same`: two spellings are one model.
 export const sameModel = (a: string, b: string): boolean => a === b || modelKey(a) === modelKey(b);
 
-/// Whether sessions of workspace `ws` (null: the home one's) may run on a profile (docs/multi-workspace.md): those of
+/// Whether sessions of workspace `ws` (null: the home one's) may run on a profile: those of
 /// the home workspace (`home`; null outside any, when there is no telling) on every profile, those of a joined one on
 /// every profile not withheld from it. A copy of another station's profile (share/index.ts) only in the workspaces that
 /// station shares it in, as it says (`share.workspaces`): its account is for those workspaces' people alone.
@@ -184,7 +189,7 @@ export const allowedIn = (profile: Profile, ws: string | null, home: string | nu
 
 /// The profiles a connect's sessions can run on: every profile of its runtime allowed in its workspace.
 export const profilesFor = (config: HubConfig, connect: Connect, home: string | null = null): Profile[] =>
-  config.profiles.filter((p) => p.runtimes.includes(connect.bind.runtime) && allowedIn(p, connect.workspace ?? null, home));
+  config.profiles.filter((p) => p.enabled !== false && p.runtimes.includes(connect.bind.runtime) && allowedIn(p, connect.workspace ?? null, home));
 
 export const runtimeName = (r: Runtime) => r;
 export const runtimeNamed = (name: string): Runtime | null => runtimeKind(name) ?? null;

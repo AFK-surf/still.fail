@@ -27,6 +27,17 @@ fn Waiters::wake_all(self : Waiters) -> Unit {
 }
 
 ///|
+/// Wakes those that began waiting by the `last`th wait, in the order they did.
+fn Waiters::wake_until(self : Waiters, last : Int) -> Unit {
+  let ts : Array[(Int, Task)] = []
+  self.tasks.each((id, t) => if id <= last { ts.push((id, t)) })
+  for w in ts {
+    self.tasks.remove(w.0)
+    w.1.wake()
+  }
+}
+
+///|
 async fn Waiters::wait(self : Waiters) -> Unit noraise {
   let t = current_task()
   self.next += 1

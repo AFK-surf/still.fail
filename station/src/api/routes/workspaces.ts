@@ -1,4 +1,4 @@
-// The workspaces the station is in (docs/multi-workspace.md): GET lists them, to the owners and admins of any of them
+// The workspaces the station is in: GET lists them, to the owners and admins of any of them
 // all of them, to anyone else only their own; POST /workspaces/join `{token}` (one-time, from the workspace to join) has
 // it join one more, staying in those it is in: for the owners and admins of any of them. `lock`: that workspace's
 // lock's head as the asking device has it, which the station pins there (a locked station joins locked ones only).

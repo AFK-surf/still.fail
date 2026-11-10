@@ -4,7 +4,8 @@
 ///|
 /// A live node's values as set (Tree::styled): its words' size, line and the weight and ink of each of them (a piece's
 /// own where it is in pieces, View::words_runs; none where it says none); its padding (left, top, right, bottom) and the
-/// gap between what it holds, in points (none where it has none); its corner; its ground (0: none).
+/// gap between what it holds, in points (none where it has none); its corner; its ground (0: none); the colour of the
+/// edge drawn round it (0: none, nor where it is drawn none wide).
 pub(all) struct Styled {
   words : Bool
   size : Double
@@ -16,6 +17,7 @@ pub(all) struct Styled {
   spaces : Array[Double]
   radius : Double
   ground : Int64
+  edge : Int64
 } derive(Debug)
 
 ///|
@@ -76,6 +78,7 @@ pub fn Tree::styled(self : Tree) -> Array[Styled] {
       },
       radius: l.radius,
       ground: l.ground,
+      edge: if l.edge.0 > 0.0 { l.edge.1 } else { 0L },
     })
     for kid in n.kids {
       walk(kid)

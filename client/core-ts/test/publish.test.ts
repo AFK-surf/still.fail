@@ -1,12 +1,11 @@
-// A chat made public (views/publish.ts, docs/public-share.md): the links its "…" lists, put together from what its
-// station keeps (`published`); `chat.publishPreview` shaped for the panel, with the workspace's names; `chat.publish`
-// shown at once with its link; `chat.unpublish` gone from the list at once, back if its station says no.
+// A chat drawn as a picture (views/publish.ts): whether the viewer may, and `chat.publishPreview` shaped for the
+// panel, with the workspace's names.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";
 import type { HttpRequest } from "../src/host.ts";
 import { jsonResponse, type FakeHost } from "../src/testing.ts";
-import { linkOf, linkStation, previewShown, turnOf } from "../src/views/publish.ts";
+import { previewShown, turnOf } from "../src/views/publish.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
 import { base, started, stationReplies, status, threadView } from "./station-fixture.ts";
 
@@ -15,13 +14,6 @@ type J = any;
 
 const ORIGIN = "https://stillfail.test";
 const json = (b: Uint8Array | null | undefined) => (b && b.length > 0 ? JSON.parse(new TextDecoder().decode(b)) : null);
-
-/// A station's iroh key as its id has it (hex), and as a link has it (base64url).
-const HEX = Array.from({ length: 32 }, (_, i) => i.toString(16).padStart(2, "0")).join("");
-const B64 = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
-
-/// A snapshot as the station's thread view lists it.
-const published = (id: string, at: number, by: string, byName: string) => ({ id, key: `key-${id}`, title: "部署", at, by, byName, size: 10, upto: 3 });
 
 /// The viewer (a@x.com, as the fixture signs in) is `role` in `ws`, whose members are named.
 async function setUp(role = "member", thread: J = threadView(7, 3), answers: J = {}) {
@@ -55,14 +47,6 @@ function answerOf(host: FakeHost, values: Map<number, unknown>, id: number): J {
 function asked(host: FakeHost, prefix: string): { method: string; path: string; body: J }[] {
   return host.requests.filter((r) => r.url.startsWith(`${ORIGIN}/admin/api${prefix}`)).map((r) => ({ method: r.method, path: r.url.replace(`${ORIGIN}/admin/api`, ""), body: json(r.body) }));
 }
-
-test("a_link_is_the_share_origin_with_the_stations_key_in_base64url_and_the_snapshot_after_the_hash", () => {
-  assert.equal(linkStation(HEX), B64);
-  assert.equal(linkStation(HEX.toUpperCase()), B64);
-  assert.equal(linkStation("ff".repeat(32)), "_".repeat(42) + "8");
-  assert.equal(linkStation(B64), B64, "one in base64url already stays");
-  assert.equal(linkOf(HEX, "abcdefghijklmnop", "k".repeat(43)), `https://share.still.fail/#${B64}.abcdefghijklmnop.${"k".repeat(43)}`);
-});
 
 test("a_preview_says_how_many_things_each_message_had_hidden_and_has_its_attachments_as_the_chat_does", () => {
   const shown = previewShown({
@@ -114,42 +98,17 @@ test("an_agents_words_in_a_preview_are_read_as_markdown_with_the_files_they_plac
   assert.ok(shown.messages[1].md, "read as Markdown");
 });
 
-test("the_chats_links_are_listed_newest_first_and_each_is_revoked_by_its_publisher_or_a_manager", async () => {
-  const thread = { ...threadView(7, 3), published: [published("p1", 1_000, "b@x.com", "Bo"), published("p2", 2_000, "A@x.com", "安")] };
-  {
-    const { host, core } = await setUp("member", thread);
+test("a_chat_may_be_drawn_as_a_picture_by_any_but_a_read_only_member", async () => {
+  for (const [role, may] of [["member", true], ["viewer", false]] as const) {
+    const { host, core } = await setUp(role);
     const ui = core.connect();
     const values = new Map<number, unknown>();
     subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
     await host.settle();
     apply(host, values);
-    const p = v(values, 1).publish;
-    assert.equal(p.may, true);
-    assert.deepEqual(p.links.map((l: J) => [l.id, l.byName, l.mayRevoke, l.createdAt]), [["p2", "安", true, 2_000], ["p1", "Bo", false, 1_000]]);
-    // By its station's id (`st` here; a real one is its key in hex, as above).
-    assert.equal(p.links[0].link, "https://share.still.fail/#st.p2.key-p2");
-    assert.ok(p.links[0].time.createdAt.ago);
+    assert.deepEqual(v(values, 1).publish, { may });
     core.close();
   }
-  {
-    const { host, core } = await setUp("admin", thread);
-    const ui = core.connect();
-    const values = new Map<number, unknown>();
-    subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
-    await host.settle();
-    apply(host, values);
-    assert.deepEqual(v(values, 1).publish.links.map((l: J) => l.mayRevoke), [true, true]);
-    core.close();
-  }
-  // A read-only member publishes nothing; a station from before publishing lists none.
-  const { host, core } = await setUp("viewer");
-  const ui = core.connect();
-  const values = new Map<number, unknown>();
-  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
-  await host.settle();
-  apply(host, values);
-  assert.deepEqual(v(values, 1).publish, { may: false, links: [] });
-  core.close();
 });
 
 /// The viewer's chat 7 as its station gives its entries, held once its page has been open.
@@ -248,59 +207,5 @@ test("a_turns_preview_holds_its_messages_their_attachments_and_edits_alone", asy
   assert.deepEqual(answered.messages.map((m: J) => m.n), [2, 3, 4]);
   assert.deepEqual(answered.files.map((f: J) => f.k), ["f0"]);
   assert.equal(answered.hidden, 1);
-  core.close();
-});
-
-test("a_chat_published_shows_its_link_at_once_and_a_revoked_one_goes_at_once", async () => {
-  const thread = { ...threadView(7, 3), published: [published("p1", 1_000, "a@x.com", "安")] };
-  const { host, core } = await setUp("member", thread);
-  let refuse = false;
-  stationReplies(host, (req) => {
-    if (req.method === "POST" && req.url === `${ORIGIN}/admin/api/threads/7/publish`) return { published: published("p2", 2_000, "a@x.com", "安") };
-    if (req.method === "DELETE" && req.url.startsWith(`${ORIGIN}/admin/api/published/`)) return refuse ? status(500, { error: "坏了" }) : { ok: true };
-    return undefined;
-  });
-  const ui = core.connect();
-  const values = new Map<number, unknown>();
-  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
-  subscribe(core, ui, 2, { topic: "doing" });
-  await host.settle();
-  apply(host, values);
-
-  // Under way until the station has kept it; then its link, in the list at once (not read again).
-  const release = host.hold("/threads/7/publish");
-  call(core, ui, 3, "chat.publish", { station: "ws/st", thread: 7, upto: 3, files: ["f0", "f0"] });
-  await host.settle();
-  apply(host, values);
-  assert.deepEqual(v(values, 2).doing.map((d: J) => [d.call, d.params.station, d.params.thread, d.stage]), [["chat.publish", "ws/st", "7", "running"]]);
-  release();
-  await host.settle();
-  const answered = answerOf(host, values, 3);
-  assert.equal(answered.ok.link, "https://share.still.fail/#st.p2.key-p2");
-  assert.deepEqual(asked(host, "/threads/7/publish"), [{ method: "POST", path: "/threads/7/publish", body: { upto: 3, files: ["f0"], names: { "a@x.com": "安", "b@x.com": "Bo" } } }]);
-  assert.deepEqual(v(values, 1).publish.links.map((l: J) => l.id), ["p2", "p1"]);
-  assert.deepEqual(v(values, 2).doing, []);
-
-  // Revoked: gone at once, under way until its station answers.
-  const held = host.hold("/published/p1");
-  call(core, ui, 4, "chat.unpublish", { station: "ws/st", thread: 7, id: "p1" });
-  await host.settle();
-  apply(host, values);
-  assert.deepEqual(v(values, 1).publish.links.map((l: J) => l.id), ["p2"]);
-  assert.deepEqual(v(values, 2).doing.map((d: J) => [d.call, d.params.id, d.stage]), [["chat.unpublish", "p1", "running"]]);
-  held();
-  await host.settle();
-  assert.ok("ok" in answerOf(host, values, 4));
-  assert.deepEqual(asked(host, "/published"), [{ method: "DELETE", path: "/published/p1", body: null }]);
-  assert.deepEqual(v(values, 1).publish.links.map((l: J) => l.id), ["p2"]);
-
-  // One its station would not revoke comes back, and says why.
-  refuse = true;
-  call(core, ui, 5, "chat.unpublish", { station: "ws/st", thread: 7, id: "p2" });
-  await host.settle();
-  const failed = answerOf(host, values, 5);
-  assert.ok("error" in failed);
-  assert.deepEqual(v(values, 1).publish.links.map((l: J) => l.id), ["p2"]);
-  assert.deepEqual(v(values, 2).doing.map((d: J) => [d.call, d.stage]), [["chat.unpublish", "failed"]]);
   core.close();
 });

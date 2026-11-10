@@ -12,7 +12,7 @@ test "words sent while the agent works: nothing of the page over them on their w
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.run_for(phone_page_ms)
   t.tap_text("发消息")
   t.type_text("看一下列表")

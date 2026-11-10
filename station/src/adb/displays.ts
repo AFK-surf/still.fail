@@ -1,4 +1,4 @@
-// A screen of its own on the phone for each chat it is lent to (docs/adb-share.md "The chat's own screen", 2026-11-04,
+// A screen of its own on the phone for each chat it is lent to (2026-11-04,
 // user: 「会有一个虚拟屏跑 app 不影响我自己操作」): a virtual display, made and held by a run of scrcpy's server on the
 // phone (android.ts SERVER_FILE, `new_display`), in the grant's adb server. The agent starts its apps there
 // (`am start --display`), touches it (`input -d`) and takes its pictures (`screencap -d`, SurfaceFlinger's id of it),
@@ -152,8 +152,12 @@ export class PhoneDisplays {
       `scid=${scid}`, "log_level=info", "audio=false", "control=false", "tunnel_forward=true", "cleanup=false", "video_codec=h264",
       `max_size=${KEEP_SIDE}`, `max_fps=${KEEP_FPS}`, `video_bit_rate=${KEEP_RATE}`, "power_on=false",
       `new_display=${size.width}x${size.height}/${density}`,
-      // Its keyboard on it: Android 12 refuses this of a display that is not trusted, as every one of the shell's is there.
-      ...(sdk >= 33 ? ["display_ime_policy=local"] : []),
+      // No keyboard shown for it, on it or on the person's screen: the agent types by key events (`input text`), which need
+      // none. Its keyboard on it (`local`) took the phone's one keyboard over to it, and a field the person tapped on
+      // their own screen meanwhile drew it there, out of their sight, until a fold changed the screens (2026-11-05: the
+      // person's keyboard gone while a chat's display was up). Android 12 refuses a policy of a display that is not
+      // trusted, as every one of the shell's is there.
+      ...(sdk >= 33 ? ["display_ime_policy=hide"] : []),
     ];
     const child = spawnAdb(adb, [...server, "shell", `${DISPLAY_MARK} CLASSPATH=${jar} app_process / com.genymobile.scrcpy.Server ${SERVER_VERSION} ${args.join(" ")}`]);
     let said = "";

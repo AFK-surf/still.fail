@@ -1,6 +1,6 @@
-// An agent's context by hand, between turns (ember apps/android chat/screens/AgentSheet.kt ContextEntry, openContext):
+// An agent's context by hand, between turns (openContext):
 // its context's tile in the agent's card opens a sheet that compacts it (its chat is told when it is done) or clears it
-// (asked first in a sheet of its own, PageParts.kt confirm): its next message starts a new session.
+// (asked first in a sheet of its own): its next message starts a new session.
 
 ///|
 /// What is under way or failed of `call` on `key`'s session (the core's doing, as AppState.isDoing has it).
@@ -9,7 +9,7 @@ fn context_key(call : String, station : String, key : String) -> String {
 }
 
 ///|
-/// What can be done to its context from its tile (AgentSheet.kt ContextEntry): opens it; under way or failed, said
+/// What can be done to its context from its tile: opens it; under way or failed, said
 /// where the tile's › is; `compacts`: it can be compacted.
 priv struct ContextTile {
   open : () -> Unit
@@ -63,40 +63,41 @@ fn context_tile_name(c : @ui.Ctx, name : String, open : ContextTile?) -> Unit {
 }
 
 ///|
-/// What can be done to its context by hand (AgentSheet.kt openContext), the library's panel: compacted, or cleared
+/// What can be done to its context by hand, the library's panel: compacted, or cleared
 /// (asked first: @sf.confirm).
 fn open_context(src : Source, r : ChatRef, key : String) -> Unit {
   @sf.panel(tr("web-pages.chat.context"), from=Unanchored, fn(c, close) {
-    let s = field(agent_json((src.topic)("chat", chat_params(r)).value, key), "session")
-    if flag(s, "canCompact") &&
-      @sf.choice_row(c, "context/compact", false, tr("web-pages.chat.compact"), note=tr("web-mobile.agent.compactSub")) {
-      close()
-      let params : Json = { "station": Json::string(r.station), "key": Json::string(key) }
-      // told once the frame's builds are over, not while this one builds
-      c.tell("context/compact", fn() {
+    let s = field(agent_json(src.topic("chat", chat_params(r)).get().value, key), "session")
+    if flag(s, "canCompact") {
+      @sf.choice_row(c, "context/compact", false, tr("web-pages.chat.compact"), note=tr("web-mobile.agent.compactSub"), on_press=fn() {
+        close()
+        let params : Json = { "station": Json::string(r.station), "key": Json::string(key) }
         act(src, tr("web-pages.chat.compact"), context_key("session.compact", r.station, key), "session.compact", params, done=tr("web-mobile.agent.compacting"))
       })
+      |> ignore
     }
-    if flag(s, "canClear") &&
-      @sf.choice_row(c, "context/clear", false, tr("web-pages.chat.clear"), note=tr("web-mobile.agent.clearSub"), ink=@sf.theme().p.red) {
-      close()
-      // asked first (PageParts.kt confirm): the row shows it under way, a failure said by a toast
-      @sf.confirm(tr("web-pages.chat.clearConfirm"), tr("web-pages.chat.clearBody"), tr("web-pages.chat.clear"), danger=true, fn() {
-        @ui.haptic(Confirm)
-        act(
-          src,
-          tr("web-pages.chat.clear"),
-          context_key("session.clear", r.station, key),
-          "session.clear",
-          { "station": Json::string(r.station), "key": Json::string(key) },
-        )
+    if flag(s, "canClear") {
+      @sf.choice_row(c, "context/clear", false, tr("web-pages.chat.clear"), note=tr("web-mobile.agent.clearSub"), ink=@sf.theme().p.red, on_press=fn() {
+        close()
+        // asked first: the row shows it under way, a failure said by a toast
+        @sf.confirm(tr("web-pages.chat.clearConfirm"), tr("web-pages.chat.clearBody"), tr("web-pages.chat.clear"), danger=true, fn() {
+          @ui.haptic(Confirm)
+          act(
+            src,
+            tr("web-pages.chat.clear"),
+            context_key("session.clear", r.station, key),
+            "session.clear",
+            { "station": Json::string(r.station), "key": Json::string(key) },
+          )
+        })
       })
+      |> ignore
     }
   })
 }
 
 ///|
-/// A tile's name (AgentSheet.kt AgentTiles: 12/16, muted), and its name with its › side by side.
+/// A tile's name (muted), and its name with its › side by side.
 // kept across runs: a value (no field of it changes)
 let tile_name : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false)
 

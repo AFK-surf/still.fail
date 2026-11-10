@@ -1,4 +1,4 @@
-// `@stillfail/ui/<file>` (web/ui/package.json) to the package's source, for every build of the web (vite.*.config.ts):
+// `@stillfail/ui/<file>` (web/ui/package.json) to the package's source, for every build of the web:
 // the builds read it where it is (the root package.json links it into node_modules, for Node and the types).
 import { fileURLToPath } from "node:url";
 

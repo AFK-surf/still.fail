@@ -6,18 +6,12 @@
 /// Whether a press at (x, y) lands on a control: what its semantics say it is, named (a box pressed for itself alone,
 /// a page's, a list's, says no name; a panel's edge, dragged, is a Separator named).
 fn control_at(t : @ui.Tester, x : Double, y : Double) -> Bool {
-  let controls = t.semantics().filter(fn(s) {
+  t.semantics().iter().any(fn(s) {
+    let (sx, sy, sw, sh) = s.rect
     let control = s.role
       is (Button | Link | Tab | Switch | Checkbox | Radio | TextField | Combobox | MenuItem | Slider | Option | Separator)
-    !s.hidden && control && s.label != ""
+    !s.hidden && control && s.label != "" && x >= sx && x < sx + sw && y >= sy && y < sy + sh
   })
-  if controls.iter().any(fn(s) {
-    let (sx, sy, sw, sh) = s.rect
-    x >= sx && x < sx + sw && y >= sy && y < sy + sh
-  }) { return true }
-  // A small control's press room extends past its drawn semantics (the window keys' gaps among them).
-  // Ask the real press target there rather than treating every gap in the drawn boxes as window chrome.
-  t.press_target_at(x, y).map(fn(target) { controls.iter().any(fn(s) { s.id == target.id }) }).unwrap_or(false)
 }
 
 ///|
@@ -150,11 +144,11 @@ test "a window with its buttons in the app's top row: its top drags it before an
       let base = fixture("home")
       let src : Source = {
         ..base,
-        topic: fn(name, params) {
+        topic_read: fn(name, params) {
           if name == "accounts" {
             { value: None, error: None, version: 0 }
           } else {
-            (base.topic)(name, params)
+            base.topic(name, params).get().snapshot()
           }
         },
       }

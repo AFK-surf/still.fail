@@ -1,4 +1,4 @@
-// The keys still.fail's releases are signed with (docs/release-signing.md), raw Ed25519 public keys in base64: the
+// The keys still.fail's releases are signed with (scripts/release-sign.ts), raw Ed25519 public keys in base64: the
 // release key (CI's `production` environment, RELEASE_SIGNING_KEY) and a recovery key kept offline. Nothing but them
 // here: the station (signed.ts) and the apps' core (client/core-ts src/app-release.ts: the Windows app's own updates)
 // both read them, each with its own verifier.

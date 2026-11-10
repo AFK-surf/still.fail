@@ -1,4 +1,4 @@
-// Background jobs (the Rust station's jobs.rs): commands a session's agent starts that the station runs and keeps, apart from
+// Background jobs: commands a session's agent starts that the station runs and keeps, apart from
 // the agent's turns. Each runs in a process group of its own with its output in a log file; the agent hears when it
 // ends, and whatever the job says on the way (`stillfail-job notify …`). A job with a port is a web service: kept up
 // (started again when it ends, with a growing pause), and seen by the workspace's members through the station's
@@ -10,10 +10,9 @@
 // that writes no file (its shell killed) — Node has no exit event for a process that is not its child.
 import { randomBytes } from "node:crypto";
 import {
-  type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readlinkSync, renameSync, rmSync,
+  type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync,
   statSync, watch, writeFileSync,
 } from "node:fs";
-import { availableParallelism } from "node:os";
 import { join, sep } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { startEnv } from "../ops/agent-env.ts";
@@ -22,15 +21,13 @@ import { niced } from "../ops/nice.ts";
 import { startLasting } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
 import { inSandbox, keyPart, sandboxed, stopSandbox } from "../agents/sandbox.ts";
-import { linkSync } from "../ops/links.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
 import {
-  Busy, type BusyCause, type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, cpusFor,
-  overstaying, pick, place, served,
+  type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, overstaying, pick, place,
+  served,
 } from "./admit.ts";
-import type { Ticks } from "../read/host.ts";
 
 export { outputAt, tail };
 
@@ -71,7 +68,6 @@ const quoted = (word: string) => `'${word.replace(/'/g, `'\\''`)}'`;
 /// window does not come up under another task's work, then gives the screen back at once and runs the command,
 /// holding nothing however long it lasts. A job of a station from before it (no
 /// STILLFAIL_JOB_SCREEN) runs the command as it is; one whose station has not answered for a minute runs it, said.
-/// `ember-job`, its name before the rename, is a link to it; a job started then has only the EMBER_JOB_* variables.
 export const JOB_COMMAND = `#!/bin/sh
 # stillfail-job notify <words>: tells the agent that started this job (the words, or stdin's).
 # stillfail-job screen <command>...: runs the command with this machine's screen (windows, a simulator, screenshots),
@@ -79,8 +75,8 @@ export const JOB_COMMAND = `#!/bin/sh
 # minutes; a window kept up for a person is show's.
 # stillfail-job show <command>...: puts up a window for a person (a virtual machine, a simulator to look at) and leaves
 # it: waits for the screen to be free, then runs the command holding nothing.
-token=\${STILLFAIL_JOB_TOKEN:-\${EMBER_JOB_TOKEN:-}}
-notify=\${STILLFAIL_JOB_NOTIFY:-\${EMBER_JOB_NOTIFY:-}}
+token=\${STILLFAIL_JOB_TOKEN:-}
+notify=\${STILLFAIL_JOB_NOTIFY:-}
 case "$1" in
   notify)
     shift
@@ -136,7 +132,6 @@ case "$1" in
 esac
 `;
 export const JOB_COMMAND_NAME = "stillfail-job";
-const FORMER_JOB_COMMAND_NAME = "ember-job";
 
 /// Tells a session's agent something (the hub's notify).
 export type Notify = (session: string, text: string) => void;
@@ -144,13 +139,11 @@ export type Notify = (session: string, text: string) => void;
 /// service), when the station is in a workspace.
 export type Link = (session: string, job: string) => string | null;
 
-/// What the queue (jobs/admit.ts) measures of the machine: its CPUs, their ticks, what the system says of its memory,
-/// and how long its input has been idle (ms; none where it is not read: no person is seen at it).
-export type Machine = { cpus(): number; ticks(): Ticks | null; pressure(): Promise<Pressure | null>; inputIdle?(): Promise<number | null> };
+/// What the queue (jobs/admit.ts) measures of the machine: what the system says of its memory, and how long its input
+/// has been idle (ms; none where it is not read: no person is seen at it).
+export type Machine = { pressure(): Promise<Pressure | null>; inputIdle?(): Promise<number | null> };
 
 export const liveMachine: Machine = {
-  cpus: () => availableParallelism(),
-  ticks: () => platform.host.cpuTicks(),
   pressure: () => platform.memoryPressure(),
   inputIdle: () => platform.inputIdleMs(),
 };
@@ -289,13 +282,10 @@ export class Jobs {
   /// What waits for an exit file to appear, by job id; the watch on jobs/exit that tells them.
   private exitHeard = new Map<string, () => void>();
   private exitWatch: FSWatcher | null = null;
-  /// The queue (jobs/admit.ts): what it measures, the CPUs as it saw them, what the system last said of its memory, when
-  /// its last task started and when each session's did, and why the first waiting waits.
+  /// The queue (jobs/admit.ts): what it measures, what the system last said of its memory, when each session's task
+  /// last started, and why the first waiting waits.
   private machine: Machine;
-  private busy = new Busy();
   private pressure: Pressure | null = null;
-  private lastStart: number | null = null;
-  private lastStarted: string | null = null;
   private lastOf = new Map<string, number>();
   private why: Why | null = null;
   /// The queue looks at the machine (every LOOK_MS) while a task waits, on the jobs' clock.
@@ -327,19 +317,6 @@ export class Jobs {
       // The script is there for a POSIX shell; only another shell's way to it (no Git's sh on Windows) is missing.
       if (!existsSync(script)) throw error;
       log.warn("jobs", "no stillfail-job for cmd and PowerShell", { error: String(error) });
-    }
-    // The old name, for jobs and agents used to it: a link to the new one (in place of the script it was).
-    const former = join(dir, "bin", FORMER_JOB_COMMAND_NAME);
-    let linked: string | null = null;
-    try {
-      linked = readlinkSync(former);
-    } catch {}
-    if (linked !== JOB_COMMAND_NAME) {
-      const aside = join(dir, "bin", `.${FORMER_JOB_COMMAND_NAME}.${process.pid}`);
-      rmSync(aside, { force: true });
-      // Where links are refused, a copy will do: the script is written afresh at each start.
-      linkSync(JOB_COMMAND_NAME, aside, { copy: true });
-      renameSync(aside, former);
     }
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
@@ -472,8 +449,7 @@ export class Jobs {
   private line(): { waiting: Waiting[]; running: Started[] } {
     const waiting: Waiting[] = [];
     const running: Started[] = [];
-    for (const j of this.store.jobsRunning()) {
-      if (!queues(j)) continue;
+    for (const j of this.store.remoteQueueJobs()) {
       if (j.queued === true) waiting.push({ id: j.id, session: j.sessionKey, screen: j.screen === true, queuedAt: j.startedAt, ...(j.small ? { small: true } : {}) });
       else running.push({ id: j.id, screen: j.screen === true, ...(j.small ? { small: true } : {}) });
     }
@@ -484,33 +460,24 @@ export class Jobs {
   /// What the queue would start now, and why the first waiting waits else (kept for `queueOf`).
   private chosen(pressure: Pressure | null): ReturnType<typeof pick> {
     const { waiting, running } = this.line();
-    // (the last started, while it runs: how busy since it started; one that ended holds nothing back)
-    const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
-    const chosen = pick(waiting, running, { busy: this.busy.share(ramp), pressure, person: this.person }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
+    const chosen = pick(waiting, running, { pressure, person: this.person }, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
     this.why = chosen !== null && "wait" in chosen ? chosen.wait : null;
     return chosen;
   }
 
-  /// A task of the queue starts: noted as the last, and what it is told of the CPUs free.
+  /// A task of the queue starts: noted as its session's last. A small one is told to use one CPU; any other is told
+  /// nothing of the CPUs (jobs/admit.ts), however many run beside it.
   private admitted(job: JobRow): Record<string, string> {
-    const alone = this.line().running.length === 0;
-    const now = this.queueNow();
-    if (!job.small) {
-      this.lastStart = now;
-      this.lastStarted = job.id;
-    }
-    this.lastOf.set(job.sessionKey, now);
-    if (job.small) return { STILLFAIL_CPUS: "1", MAKEFLAGS: "-j1", CARGO_BUILD_JOBS: "1", CMAKE_BUILD_PARALLEL_LEVEL: "1" };
-    return cpusFor(startEnv(), this.machine.cpus(), this.busy.share(), alone);
+    this.lastOf.set(job.sessionKey, this.queueNow());
+    return job.small ? { STILLFAIL_CPUS: "1", MAKEFLAGS: "-j1", CARGO_BUILD_JOBS: "1", CMAKE_BUILD_PARALLEL_LEVEL: "1" } : {};
   }
 
-  /// While a task waits: every LOOK_MS the CPUs noted, the memory asked for, the next started if there is room.
+  /// While a task waits: every LOOK_MS the memory asked for, the next started if there is room.
   private watchQueue(): void {
     if (this.looking || this.closing) return;
     this.looking = true;
     const waiting = () => !this.closing && this.line().waiting.length > 0;
     const look = Effect.promise(async () => {
-      this.busy.note(this.queueNow(), this.machine.ticks());
       try {
         this.pressure = await this.machine.pressure();
       } catch {
@@ -520,8 +487,7 @@ export class Jobs {
       this.startNext();
     });
     void this.run(
-      Effect.sync(() => this.busy.note(this.queueNow(), this.machine.ticks())).pipe(
-        Effect.andThen(Effect.sleep(LOOK_MS)),
+      Effect.sleep(LOOK_MS).pipe(
         Effect.andThen(Effect.andThen(look, Effect.sync(waiting)).pipe(Effect.repeat({ schedule: Schedule.spaced(LOOK_MS), until: (more) => !more }))),
         Effect.ensuring(Effect.sync(() => {
           this.looking = false;
@@ -533,7 +499,13 @@ export class Jobs {
     ).catch(() => undefined);
   }
 
-  /// Starts what the queue picks now. A small task has its own slot and does not have to wait for a build's ramp.
+  /// What the station's memory watch (jobs/memory.ts) read of the memory on its own look: what the queue goes by as a
+  /// task asks to start, the queue looking at it itself only while one waits.
+  memorySeen(pressure: Pressure | null): void {
+    this.pressure = pressure;
+  }
+
+  /// Starts what the queue picks now. A small task has its own slot beside the rest.
   /// Then the screen given out to the commands that ask for it, if no task has it now.
   private startNext(): void {
     if (this.closing) return;
@@ -596,9 +568,10 @@ export class Jobs {
     if (this.line().waiting.length > 0) this.watchQueue();
   }
 
-  /// A waiting task's place in line (1: the next), what blocks it, and the queue's measurements; null for one not
-  /// waiting. If it could start but another is ahead, `why` is null. Waiting for the screen, who has it (screenHolder).
-  queueOf(id: string): { place: number; why: Why | null; cause?: BusyCause; holder?: string; decision: { cpuBusy: ReturnType<Busy["sample"]>; memoryPressure: Pressure | null } } | null {
+  /// A waiting task's place in line (1: the next), what blocks it, and what the queue measured (the memory's pressure);
+  /// null for one not waiting. If it could start but another is ahead, `why` is null. Waiting for the screen, who has
+  /// it (screenHolder).
+  queueOf(id: string): { place: number; why: Why | null; holder?: string; decision: { memoryPressure: Pressure | null } } | null {
     const job = this.store.getJob(id);
     if (!job || job.state !== "running" || job.queued !== true) return null;
     const { waiting, running } = this.line();
@@ -606,13 +579,10 @@ export class Jobs {
     if (task === undefined) return null;
     const p = place(waiting.filter((w) => !!w.small === !!task.small), id, (s) => this.lastOf.get(s) ?? null);
     if (p === null) return null;
-    const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
-    const cpuBusy = this.busy.sample(ramp);
-    const selected = pick([task], running, { busy: cpuBusy?.share ?? null, pressure: this.pressure, person: this.person }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
+    const selected = pick([task], running, { pressure: this.pressure, person: this.person }, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
     const why = selected !== null && "wait" in selected ? selected.wait : null;
-    const cause = selected !== null && "wait" in selected ? selected.cause : undefined;
     const holder = why === "screen" ? this.screenHolder(id) : null;
-    return { place: p, why, ...(cause !== undefined ? { cause } : {}), ...(holder !== null ? { holder } : {}), decision: { cpuBusy, memoryPressure: this.pressure } };
+    return { place: p, why, ...(holder !== null ? { holder } : {}), decision: { memoryPressure: this.pressure } };
   }
 
   /// Who has the screen, for one waiting for it (not `except`, a job of its own): the task's name, the chat it is
@@ -724,12 +694,9 @@ export class Jobs {
     rmSync(this.lostFile(job.id), { force: true });
     // With the variables the station's owners set for what it starts for its agents (ops/agent-env.ts).
     const env: NodeJS.ProcessEnv = { ...platform.prependPath(startEnv(), join(this.dir, "bin")), ...extra };
-    // Under both names: scripts written against the old ones go on working.
-    for (const prefix of ["STILLFAIL_", "EMBER_"]) {
-      env[`${prefix}JOB_ID`] = job.id;
-      env[`${prefix}JOB_TOKEN`] = job.token;
-      env[`${prefix}JOB_NOTIFY`] = this.notifyUrl;
-    }
+    env.STILLFAIL_JOB_ID = job.id;
+    env.STILLFAIL_JOB_TOKEN = job.token;
+    env.STILLFAIL_JOB_NOTIFY = this.notifyUrl;
     // Web services of the workspace's other stations, through the same door (mesh/peer-http.ts).
     if (this.notifyUrl !== "") env.STILLFAIL_PEER_HTTP = this.notifyUrl.replace(/\/jobs\/notify$/, "/peer");
     if (job.port !== null) env.PORT = String(job.port);
@@ -951,7 +918,8 @@ export class Jobs {
   /// The record of a job's group an earlier station started (not one this station follows).
   private leftBehind(pgid: number): ProcessRow | null {
     for (const r of this.running.values()) if (r.pgid === pgid) return null;
-    return this.store.listProcesses().find((p) => p.runtime === "job" && p.pgid === pgid) ?? null;
+    const entry = this.store.processByGroup(pgid);
+    return entry?.runtime === "job" ? entry : null;
   }
 
   /// Stops a job for someone on the pages: its agent is told who did (it did not ask for it), if it was at work within

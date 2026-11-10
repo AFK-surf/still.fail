@@ -751,8 +751,8 @@ fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
 
 ///|
 /// A paragraph of runs, wrapped as one text in `size` (the runs' sizes
-/// relative to it) with lines `line` high (0: the font's own). Links are
-/// drawn in `link_color` (unless a run has its own), with `pressed_bg`
+/// relative to it) with lines `line` high (0: the font's own). `line_em`, when given, sets the line as a multiple of
+/// the drawn size after system text scaling. Links are drawn in `link_color` (unless a run has its own), with `pressed_bg`
 /// behind them while held; tapped, `on_link` is told where they lead; held a long press's time, or right clicked,
 /// `on_link_hold` (with the piece of line under the finger or the pointer); `on_link_shown`, each link's way, its
 /// words and its id as the paragraph is built (what shows over it while it is pointed at: a card by that id,
@@ -778,6 +778,7 @@ pub fn Ctx::rich(
   weight? : Int,
   color? : Int64,
   line? : Double,
+  line_em? : Double,
   trim? : Bool = false,
   wrap? : Bool,
   w? : Size,
@@ -803,7 +804,11 @@ pub fn Ctx::rich(
   let size = self.sp(first(size, s_size).unwrap_or(15.0))
   let weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
   let color = first(color, opt_color(self.theme, st.color)).unwrap_or(0x1D1D1FFFL)
-  let line = first(line, s_line).map(fn(l) { self.sp(l) }).unwrap_or(self.theme.text_line * size)
+  // An em line follows the drawn size, including the system's non-linear text scaling.
+  let line = match line_em {
+    Some(em) => size * em
+    None => first(line, s_line).map(fn(l) { self.sp(l) }).unwrap_or(self.theme.text_line * size)
+  }
   let wrap = first(wrap, st.wrap).unwrap_or(true)
   let w = first(w, opt_size(st.w)).unwrap_or(Auto)
   let spacing = match (tracking, st.tracking) {
@@ -826,9 +831,11 @@ pub fn Ctx::rich(
   }
   let text = sb.to_string()
   let base = self.id(if key == "" { "\u{1}rich\u{1}" + text } else { key })
+  // a link pressed: told as it is let go (Ctx::on_press)
   for k, r in runs {
-    if link_starts(runs, k) && self.clicked(link_id(base, runs, k)) {
-      on_link(r.link)
+    if link_starts(runs, k) {
+      let link = r.link
+      self.on_press(link_id(base, runs, k), fn() { on_link(link) })
     }
   }
   // a link right clicked (a pointer's secondary button: a desktop's long press) told as held, at once; its menu the
@@ -918,7 +925,7 @@ pub fn Ctx::rich(
         0
       }
     ),
-    shaped_in: words_shaped_in.val,
+    shaped_in: words_shaped_in.get(),
   })
   // each link told with its words and its id, once the paragraph is there
   match on_link_shown {
@@ -942,7 +949,7 @@ pub fn Ctx::rich(
 ///|
 /// The paragraph laid out in `max_w`; as text_layout, one layout serves
 /// every width from its widest line up to the one it was laid out in. On one line (not wrapped) and laid out
-/// narrower than it is, cut with an ellipsis there, as Ctx::text's words are (style.md, Short of room); not cut, it
+/// narrower than it is, cut with an ellipsis there, as Ctx::text's words are (ui/squeeze.mbt); not cut, it
 /// serves every width it fits in.
 fn Node::rich_layout(self : Node, max_w : Double) -> RichLayout? {
   match self.rich {
@@ -1304,7 +1311,13 @@ fn Ctx::emit_rich_glyphs(
           let l = lay.line_of[c]
           let x = ox + lay.xs[c]
           let y = oy + lay.line_y[l] + lay.line_base[l] - d.baseline
-          if y > cy1 || y + d.height < cy0 { continue }
+          if y > cy1 || y + d.height < cy0 {
+            left_out()
+            continue
+          }
+          if rec_whole.val {
+            rec_line(self.ninst, y, d.height)
+          }
           let color = colors[lay.run_of[c]]
           for path in d.paths { self.emit_shape(x, y, path, true, 0.0, false, color, alpha) }
           for word in d.words {
@@ -1328,7 +1341,11 @@ fn Ctx::emit_rich_glyphs(
       _ => ()
     }
     if top > cy1 || top + lay.line_h[l] < cy0 {
+      left_out()
       continue
+    }
+    if rec_whole.val {
+      rec_line(self.ninst, top, lay.line_h[l])
     }
     // (made at the host's pixels a point; in a shot drawn at more, made that much larger and drawn that much smaller:
     // emit_text)
@@ -1336,16 +1353,24 @@ fn Ctx::emit_rich_glyphs(
       Some(big) if big[c] >= 0 => (big[c], zoom)
       _ => (key, 1.0)
     }
+    if rec_glyph_early(key, sc / zoom, ox + lay.xs[c], top, ox + lay.xs[c] + lay.adv[c], top + lay.line_h[l]) {
+      rec_skip(top, top + lay.line_h[l])
+      continue
+    }
     let g = glyph(key, sc / zoom)
     if g.gw <= 0.0 {
       continue
     }
     let gx = glyph_x(ox + lay.xs[c] + lay.pre[c] + g.ox / z, sc)
     let gy = glyph_row(top + lay.line_base[l], g.oy / z, sc)
+    match unplaced {
+      Some(u) => u.push((self.ninst, ox + lay.xs[c] + lay.pre[c] + g.ox / z, top + lay.line_base[l], g.oy / z))
+      None => ()
+    }
     let (gw, gh) = (g.gw / z, g.gh / z)
     // (the uniform scale is about its ink's middle; an extra horizontal scale is about its advance's middle, so a
     // glyph stays in its place while that place changes width)
-    let (lx, ly, gw, gh, ga) = match own {
+    let (gx, gy, gw, gh, ga) = match own {
       Some(gl) => {
         let ink_x = gx + gw * (1.0 - gl.scale) / 2.0
         let cell_x = ox + lay.xs[c] + lay.adv[c] / 2.0
@@ -1354,14 +1379,6 @@ fn Ctx::emit_rich_glyphs(
       }
       None => (gx, gy, gw, gh, alpha)
     }
-    // (where it is before it is set on the pixels, moved as its own look moves it: what places it again elsewhere (a
-    // node's words, view_blit) places it there)
-    match unplaced {
-      Some(u) =>
-        u.push((self.ninst, ox + lay.xs[c] + lay.pre[c] + g.ox / z + (lx - gx), top + lay.line_base[l], g.oy / z + (ly - gy)))
-      None => ()
-    }
-    let (gx, gy) = (lx, ly)
     glyph_pushing.val = true
     self.push_inst(
       gx,
@@ -1384,5 +1401,8 @@ fn Ctx::emit_rich_glyphs(
       let (x0, x1) = lay.span_x(c, c + 1)
       inst_cell(self.ninst - 1, gx, gw, ox + x0 + lay.pre[c], ox + x1)
     }
+  }
+  if rec_whole.val {
+    rec_line(self.ninst, 0.0, -1.0)
   }
 }

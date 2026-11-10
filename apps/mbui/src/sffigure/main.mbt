@@ -1,4 +1,4 @@
-// Render a named share graphic to a PNG through mbui's offscreen renderer. See docs/figures.md.
+// Render a named share graphic to a PNG through mbui's offscreen renderer. See scripts/figure.sh.
 
 ///|
 fn figure_valid(name : String, path : String) -> Bool {

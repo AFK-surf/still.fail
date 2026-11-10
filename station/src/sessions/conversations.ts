@@ -6,11 +6,14 @@ import { mkdirSync, rmSync } from "node:fs";
 import { copyFile, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { PlaceRefused } from "../ops/places.ts";
+import { wall } from "../ops/fibers.ts";
 import { formatHistory, parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
+import { LegacyEditsUnavailable, makeStore as makeReadStore, statePendingCard as readStatePendingCard, stateQuestion as readStateQuestion } from "../read/store.ts";
 import { iso } from "../read/transcript.ts";
+import { CARD_POSTS_PENDING } from "../store/card-post-index.ts";
 import { type Attachment, type MessageRow, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
-import type { DeclaredState } from "./actor.ts";
+import type { DeclaredState, SessionActor } from "./actor.ts";
 import {
   type Args,
   MAX_WAIT_SECONDS,
@@ -54,6 +57,149 @@ function checkQuestion(hub: Hub, key: string, m: MessageRow): void {
   const carded = entry && (entry.card != null || entry.options != null);
   if (carded ? hub.store.pendingCard(m.thread)?.[0].n !== m.n : hub.store.askingMessage(m.thread, m.n, [0, 0]) === null) {
     throw new Error("that question is no longer pending. Read what the person said; if a decision is still needed, ask again with a new card");
+  }
+}
+
+/// The message a state is about. A question must still be visible and actionable; other states only need its key.
+function messageForAbout(hub: Hub, key: string, thread: number, ts: string, question: boolean): [number, number, string] | null {
+  if (!question) {
+    const n = hub.store.messageNumberAt(thread, ts);
+    return n === null ? null : [thread, n, ts];
+  }
+  const message = hub.store.messageAt(thread, ts);
+  if (message === null) return null;
+  checkQuestion(hub, key, message);
+  return [message.thread, message.n, message.ts];
+}
+
+function questionResult(found: ReturnType<typeof readStateQuestion>): [number, number, string] | null {
+  if (found.kind === "missing") return null;
+  if (found.kind === "invalid") throw new Error("need_human about must point to your visible question, not a person's message or another agent's post");
+  if (found.kind === "answered") throw new Error("that question is no longer pending. Read what the person said; if a decision is still needed, ask again with a new card");
+  return found.about;
+}
+
+const needsQuestionPreparation = (error: unknown) => error instanceof LegacyEditsUnavailable ||
+  (error instanceof Error && error.message.startsWith(CARD_POSTS_PENDING));
+
+/// A reader's snapshot may have become stale before it answers. If so, confirm it with the bounded lookup in the
+/// current snapshot; when an old lookup is not prepared yet, let the reader prepare it and try again.
+async function stateRead<T>(hub: Hub, key: string, threadsOf: () => number[], read: (threads: number[]) => Promise<T>,
+  confirm: (threads: number[]) => T, canConfirm: () => boolean = () => true): Promise<T> {
+  const version = () => Number(hub.store.db.prepare("PRAGMA main.data_version").get()!.data_version);
+  for (;;) {
+    const before = version();
+    const threads = threadsOf();
+    const included = new Set(threads);
+    let changed = false;
+    const stop = hub.store.subscribe((change) => {
+      if ((change.type === "thread" || change.type === "threadRemoved") && included.has(change.id)) changed = true;
+      if (change.type === "sessionRemoved" && change.key === key) changed = true;
+    });
+    let found: T;
+    try { found = await read(threads); }
+    finally { stop(); }
+    const current = threadsOf();
+    const after = version();
+    if (changed || before !== after || current.length !== threads.length || current.some((id, i) => id !== threads[i])) {
+      if (!canConfirm()) continue;
+      try { found = confirm(current); }
+      catch (error) {
+        if (needsQuestionPreparation(error)) continue;
+        throw error;
+      }
+    }
+    return found;
+  }
+}
+
+class StateWriteBusy extends Error {}
+
+/// Recheck and write in one SQLite transaction. Do not wait for another connection's writer on the station thread.
+function stateWrite(hub: Hub, write: () => void): void {
+  const db = hub.store.db;
+  const timeout = Number(db.prepare("PRAGMA busy_timeout").get()!.timeout);
+  db.exec("PRAGMA busy_timeout=0");
+  let begun = false;
+  try {
+    try { db.exec("BEGIN IMMEDIATE"); begun = true; }
+    catch (error) {
+      const code = (error as { errcode?: number }).errcode;
+      if (code !== undefined && [5, 6].includes(code & 255)) throw new StateWriteBusy();
+      throw error;
+    }
+  } finally {
+    try { db.exec(`PRAGMA busy_timeout=${timeout}`); }
+    catch (error) { if (begun) { try { db.exec("ROLLBACK"); } catch {} } throw error; }
+  }
+  try { write(); db.exec("COMMIT"); }
+  catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+}
+
+/// An answer can arrive after the reader returns, while the actor waits its turn. Confirm it inside the same bounded
+/// transaction as the state write. An old lookup or a busy writer is waited for outside the actor's queue.
+async function recordQuestionForTurn(hub: Hub, key: string, actor: SessionActor, turn: string, kind: DeclaredState,
+  words: string | null, about: [number, number, string], watch: boolean, threadsOf: () => number[], ts: string,
+  missing: string): Promise<boolean> {
+  let delay = 10;
+  for (;;) {
+    try {
+      return await actor.stateForTurn(turn, kind, words, about, watch, (save) => stateWrite(hub, () => {
+        const current = questionResult(readStateQuestion(makeReadStore(hub.store.db, hub.config().dataDir), key, threadsOf(), ts));
+        if (current === null) throw new Error(missing);
+        save(current);
+      }));
+    } catch (error) {
+      if (error instanceof StateWriteBusy) {
+        await wall.sleep(delay);
+        delay = Math.min(delay * 2, 250);
+        continue;
+      }
+      if (needsQuestionPreparation(error)) { await questionForAbout(hub, key, threadsOf, ts); continue; }
+      throw error;
+    }
+  }
+}
+
+async function questionForAbout(hub: Hub, key: string, threadsOf: () => number[], ts: string): Promise<[number, number, string] | null> {
+  // An old native view can scan the chat after its index is removed. Do not use it on the station thread.
+  const bounded = () => hub.store.db.prepare(`SELECT 1 WHERE
+    EXISTS (SELECT 1 FROM sqlite_master WHERE type='index' AND name='entries_edits') OR
+    EXISTS (SELECT 1 FROM sqlite_master WHERE type='view' AND name='merged' AND instr(sql, 'legacy_edit_meta') > 0)`).get() !== undefined;
+  const found = await stateRead(hub, key, threadsOf, (threads) => hub.stateQuestion!(key, threads, ts),
+    (threads) => readStateQuestion(makeReadStore(hub.store.db, hub.config().dataDir), key, threads, ts), bounded);
+  return questionResult(found);
+}
+
+async function pendingForState(hub: Hub, key: string, threadsOf: () => number[]): Promise<[number, number, string] | null> {
+  return stateRead(hub, key, threadsOf, (threads) => hub.statePendingCard!(threads),
+    (threads) => readStatePendingCard(makeReadStore(hub.store.db, hub.config().dataDir), threads));
+}
+
+const NEED_VISIBLE_QUESTION = "need_human requires a visible question: post what you need with chat_post kind=need_human, or give about pointing to your question (a pending answer card is used by default). need alone is not a message to the person";
+
+/// As for a named question, the latest default card must be checked in the state-writing transaction.
+async function recordPendingForTurn(hub: Hub, key: string, actor: SessionActor, turn: string, kind: DeclaredState,
+  words: string | null, about: [number, number, string] | null, watch: boolean, threadsOf: () => number[],
+  requireQuestion: boolean): Promise<boolean> {
+  let delay = 10;
+  for (;;) {
+    if (hub.actors.get(key) !== actor) return false;
+    try {
+      return await actor.stateForTurn(turn, kind, words, about, watch, (save) => stateWrite(hub, () => {
+        const current = readStatePendingCard(makeReadStore(hub.store.db, hub.config().dataDir), threadsOf());
+        if (current === null && requireQuestion) throw new Error(NEED_VISIBLE_QUESTION);
+        save(current);
+      }));
+    } catch (error) {
+      if (error instanceof StateWriteBusy) {
+        await wall.sleep(delay);
+        delay = Math.min(delay * 2, 250);
+        continue;
+      }
+      if (needsQuestionPreparation(error)) { await pendingForState(hub, key, threadsOf); continue; }
+      throw error;
+    }
   }
 }
 
@@ -211,7 +357,7 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
 }
 
 /// chat_post: a message to one of the session's conversations, maybe with files and a card, maybe ending its turn.
-export async function chatPost(hub: Hub, key: string, args: Args): Promise<string> {
+export async function chatPost(hub: Hub, key: string, args: Args, held: Held = { id: null, args }): Promise<string> {
   const identity = actorOf(hub, key)?.messageIdentity() ?? undefined;
   const { store } = hub;
   if (args.withdraw !== undefined) {
@@ -251,29 +397,60 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
   const thread = target(hub, key, args.to);
   if (store.manuallyArchived(thread.thread.id)) throw new Error(`${threadAddress(thread.thread.channel, thread.thread.threadTs)} was archived by hand: it takes no messages until someone restores it`);
   const chat = hub.chat(thread.connect);
-  // A login card on a platform: a field for its page's code, so only for a login of this station that waits for one.
-  const loginHere = card?.type === "login" && chat.loginCards === true && card.station === undefined && hub.logins?.pastes(String(card.login)) === true;
+  // A login card on a platform: its page to open, with a field for the code that page gives or the device code to enter
+  // there; so only for a login of this station at such a step.
+  const page = card?.type === "login" && chat.loginCards === true && card.station === undefined ? (hub.logins?.page(String(card.login)) ?? null) : null;
+  const loginHere = page !== null;
+  // (the page goes only into what the platform shows, never into the card the chat keeps)
+  const shown = page !== null ? { ...card, page } : card;
   if (card !== null && thread.thread.surface !== STILLFAIL_SURFACE && !(chat.cards === true && (card.type === "options" || card.type === "text")) && !loginHere) {
     throw new Error(
       card.type === "login" && chat.loginCards === true
-        ? 'a login card is shown here only for a login of this station that waits for a code from its page (paste: true); otherwise post its link in the text and end with kind "need_human"'
+        ? 'a login card is shown here only for a login of this station that gives a device code, or waits for a code from its page (paste: true); otherwise post its link in the text and end with kind "need_human"'
         : chat.cards === true
-          ? 'a login card is shown only in still.fail chats (EMBER/…); here post its link in the text and end with kind "need_human"'
+          ? 'a login card is shown only in still.fail chats (CHAT/… or EMBER/…); here post its link in the text and end with kind "need_human"'
           : 'cards (options, a text field) are not shown here; write the choices or the question in the text and end with kind "need_human"',
     );
   }
   if (card !== null && text === "") throw new Error("text is required with a card: what it asks and the facts it turns on, so it can be answered from this message alone");
   let about: [number, number, string] | null = null;
   const ts = aboutTs(args);
+  const checkingQuestion = kind?.kind === "need_help" && ts !== null && hub.stateQuestion != null;
+  const checkingDefault = kind?.kind === "need_help" && ts === null && hub.statePendingCard != null;
+  const guarded = checkingQuestion || checkingDefault;
+  const questionActor = guarded ? actorOf(hub, key) : undefined;
+  const questionTurn = questionActor?.currentTurnId() ?? null;
+  const checkQuestionTurn = () => {
+    if (guarded && questionActor && questionTurn !== null &&
+      (hub.actors.get(key) !== questionActor || questionActor.currentTurnId() !== questionTurn))
+      throw new Error("the turn ended while checking its question; no message was posted");
+  };
+  let questionThreads: (() => number[]) | null = null;
   if (ts !== null) {
-    const m = store.messageAt(thread.thread.id, ts);
-    if (!m) throw new Error(`about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
-    if (kind?.kind === "need_help") {
-      checkQuestion(hub, key, m);
-      if (card !== null) throw new Error("a new card is this post's question: omit about so the wait points to it");
-    }
-    about = [m.thread, m.n, m.ts];
+    if (checkingQuestion) {
+      questionThreads = () => {
+        const current = target(hub, key, args.to);
+        if (current.thread.id !== thread.thread.id || current.connect !== thread.connect) throw new Error("the conversation changed while checking the question; try again");
+        if (store.manuallyArchived(current.thread.id)) throw new Error(`${threadAddress(current.thread.channel, current.thread.threadTs)} was archived by hand: it takes no messages until someone restores it`);
+        return [current.thread.id];
+      };
+      about = await questionForAbout(hub, key, questionThreads, ts);
+      checkQuestionTurn();
+    } else about = messageForAbout(hub, key, thread.thread.id, ts, kind?.kind === "need_help");
+    if (about === null) throw new Error(`about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
+    if (kind?.kind === "need_help" && card !== null) throw new Error("a new card is this post's question: omit about so the wait points to it");
   }
+  // Messages in this thread the agent has not read: the post may no longer fit them, so it is held back and they come
+  // to the agent first; it sends the post as written by its id, or writes another.
+  const unseen = unseenIn(hub, key, thread.thread.id, Number.MAX_SAFE_INTEGER);
+  if (unseen.length > 0) {
+    const id = held.id ?? hold(hub, key);
+    const { kind: _k, need: _n, done: _d, about: _a, ...post } = held.args;
+    hub.heldPosts.get(key)!.set(id, post);
+    const one = unseen.length === 1;
+    return `${NOT_POSTED} ${one ? "a message" : "messages"} you had not read came in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (ts ${unseen.join(", ")}), and ${one ? "it comes" : "they come"} to you next; no state was recorded. Held as ${id}. After reading ${one ? "it" : "them"}, if this post still stands as written, call chat_post with to, send="${id}" and the state the turn now ends with (kind, need, done, about), without writing it again; otherwise post what fits now.`;
+  }
+  if (held.id !== null) hub.heldPosts.get(key)?.delete(held.id);
   // Slack gets the files in the thread below the text. An app made before it could upload (no files:write) links to
   // them in still.fail instead.
   if (thread.thread.surface === STILLFAIL_SURFACE) {
@@ -288,16 +465,18 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     return link;
   };
   const files = await keep(paths.length === 0 ? [] : await attach(hub, key, paths), thumbsDir(hub.config().dataDir));
+  checkQuestionTurn();
   const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
   let posted: string;
   // A chat's first post where it was relayed goes into the station's first message there (relay.ts).
-  const opening = card === null && files.length === 0 ? await intoOpening(hub, key, chat, thread.thread, text) : null;
+  const opening = card === null && files.length === 0 ? await intoOpening(hub, key, chat, thread.thread, text, checkQuestionTurn) : null;
   let n: number;
   if (opening !== null) [posted, n] = opening;
   else {
+    checkQuestionTurn();
     if (slack) {
       try {
-        posted = await chat.post(here, text, files, card);
+        posted = await chat.post(here, text, files, shown);
         text = placeFigures(text, files);
       } catch (error) {
         if (!String((error as Error).message).includes("missing_scope")) throw error;
@@ -305,36 +484,109 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
         posted = await chat.post(here, sent, []);
         text = kept;
       }
-    } else posted = await chat.post(here, text, files, card);
+    } else posted = await chat.post(here, text, files, shown);
     [n] = store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: key, text, attachments: files, declared: kind ? declaredStr(kind) : null, card, agentIdentity: identity });
   }
   const offered = card !== null ? `${cardSaid(card)} Card message ts: ${posted}.` : "";
   hub.shared(thread.thread.id, n, key, text);
-  const actor = actorOf(hub, key);
-  await actor?.postedNow();
-  if (need !== null) await actor?.need(need);
+  const actor = guarded ? questionActor : actorOf(hub, key);
+  if (guarded) {
+    if (actor && questionTurn !== null && hub.actors.get(key) === actor) await actor.postedForTurn(questionTurn);
+  } else await actor?.postedNow();
+  if (!guarded && need !== null) await actor?.need(need);
+  let recorded = true;
+  let stateError: string | null = null;
   if (kind !== null) {
     // What the state is about: as said, else for need_help the card still pending in this chat (this post's, when it
     // carries one).
     if (about === null && kind.kind === "need_help") {
-      const pending = store.pendingCard(thread.thread.id);
-      if (pending) about = [pending[0].thread, pending[0].n, pending[0].ts];
+      if (hub.statePendingCard) {
+        try {
+          about = await pendingForState(hub, key, () => {
+            const current = store.sessionThreadById(key, thread.thread.id);
+            return current !== null && current.connect === thread.connect ? [thread.thread.id] : [];
+          });
+        } catch (error) { recorded = false; stateError = (error as Error).message; }
+      } else {
+        const pending = store.pendingCard(thread.thread.id);
+        if (pending) about = [pending[0].thread, pending[0].n, pending[0].ts];
+      }
     }
-    await actor?.about(about);
-    await actor?.declare(kind);
+    if (guarded) {
+      if (recorded && actor && questionTurn !== null) {
+        try {
+          if (checkingQuestion && ts !== null && questionThreads !== null && about !== null) {
+            recorded = hub.actors.get(key) === actor && await recordQuestionForTurn(hub, key, actor, questionTurn, kind,
+              need, about, false, questionThreads, ts, `about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
+          } else if (checkingDefault) {
+            const threadsOf = () => {
+              const current = store.sessionThreadById(key, thread.thread.id);
+              return current !== null && current.connect === thread.connect ? [thread.thread.id] : [];
+            };
+            recorded = await recordPendingForTurn(hub, key, actor, questionTurn, kind, need, about, false, threadsOf,
+              card !== null || about !== null);
+          }
+        } catch (error) { recorded = false; stateError = (error as Error).message; }
+      }
+    } else {
+      await actor?.about(about);
+      await actor?.declare(kind);
+    }
   }
   const titled = typeof args.title === "string" ? nameChat(hub, thread.thread, args.title) : "";
   const place = threadAddress(thread.thread.channel, thread.thread.threadTs) + (opening !== null ? ` (added to the station's first message there, ts ${posted})` : "");
   const crossed = unreadBefore(hub, key, thread.thread.id, n);
-  return kind !== null ? `Posted to ${place}, and recorded state ${saidAs(kind)}.${crossed}${titled}${offered}` : `Posted to ${place}.${crossed}${titled}${offered}`;
+  return kind !== null ? recorded
+    ? `Posted to ${place}, and recorded state ${saidAs(kind)}.${crossed}${titled}${offered}`
+    : stateError !== null ? `Posted to ${place}, but its state was not recorded: ${stateError}.${crossed}${titled}${offered}`
+      : `Posted to ${place}, but its turn ended before its state was recorded.${crossed}${titled}${offered}`
+    : `Posted to ${place}.${crossed}${titled}${offered}`;
+}
+
+/// How chat_post's answer begins when it held the post back.
+export const NOT_POSTED = "Not posted:";
+
+/// A post as the agent gave it (before its files are staged, which go once it returns) and, sent by send, its id.
+export type Held = { id: string | null; args: Args };
+
+/// chat_post's arguments with a held post sent by send (below) put back as it was written: its text, files, card and
+/// title; its state is what this call gives, as the messages read meanwhile may change how the turn ends.
+export function unheld(hub: Hub, key: string, args: Args): Held {
+  if (args.send === undefined) return { id: null, args };
+  if (Object.keys(args).some((k) => !SEND_KEYS.has(k))) throw new Error("send takes only to, send and the state (kind, need, done, about): the held post goes as it was written");
+  const id = jsString(args.send);
+  const held = hub.heldPosts.get(key)?.get(id);
+  if (held === undefined) throw new Error(`no held post ${id}: it was sent already, or the station restarted since; write the post again`);
+  if (args.to !== held.to) throw new Error(`held post ${id} goes to ${jsString(held.to)}`);
+  const { send: _, ...state } = args;
+  return { id, args: { ...held, ...state } };
+}
+
+/// What chat_post with send takes besides the held post.
+const SEND_KEYS = new Set(["to", "send", "kind", "need", "done", "about"]);
+/// Held posts kept per session: the oldest goes beyond it.
+const HELD_KEPT = 20;
+
+/// A new id for a post held back from session `key`.
+function hold(hub: Hub, key: string): string {
+  let held = hub.heldPosts.get(key);
+  if (held === undefined) hub.heldPosts.set(key, held = new Map());
+  while (held.size >= HELD_KEPT) held.delete(held.keys().next().value!);
+  return `held-${++hub.heldCount}`;
+}
+
+/// The ts of the messages in the thread before entry `n` that the session has not read: not yet given to it, or given to
+/// its running turn but not yet read by its model.
+function unseenIn(hub: Hub, key: string, thread: number, n: number): string[] {
+  const pending = hub.store.pendingBefore(key, thread, n);
+  const unread = (actorOf(hub, key)?.unreadIn(thread, n) ?? []).map((m) => m.message.ts);
+  return [...new Set([...pending, ...unread])];
 }
 
 /// Messages said in the thread before the agent's post (entry `n`) that it had not read when it wrote it, as the post's
 /// result says them: they come to it next, written without seeing the post. Empty when none.
 function unreadBefore(hub: Hub, key: string, thread: number, n: number): string {
-  const pending = hub.store.pendingMessages(key).filter((m) => m.message.apart !== true && m.message.thread === thread && m.message.n < n);
-  const unread = [...pending, ...(actorOf(hub, key)?.unreadIn(thread, n) ?? [])];
-  const ts = [...new Set(unread.map((m) => m.message.ts))];
+  const ts = unseenIn(hub, key, thread, n);
   if (ts.length === 0) return "";
   const one = ts.length === 1;
   return ` Before this post went up, ${one ? "a message" : "messages"} you had not read yet came in this thread (ts ${ts.join(", ")}): written without seeing your post, ${one ? "it comes" : "they come"} to you next.`;
@@ -343,21 +595,58 @@ function unreadBefore(hub: Hub, key: string, thread: number, n: number): string 
 /// The agent's first post in a conversation its chat was relayed to (hub.openings): added under the station's first
 /// message there, which is what people see without opening the thread. That message's ts and number, or null where it
 /// is posted as a reply: not the first post, not the relaying agent's, too long to go into one message, or not changed.
-async function intoOpening(hub: Hub, key: string, chat: ChatSurface, thread: ThreadRow, text: string): Promise<[string, number] | null> {
+async function intoOpening(hub: Hub, key: string, chat: ChatSurface, thread: ThreadRow, text: string, checkTurn: () => void): Promise<[string, number] | null> {
   const pending = hub.openings.get(thread.id);
   if (pending === undefined || pending.session !== key) return null;
-  hub.openings.delete(thread.id);
-  const opening = hub.store.messageAt(thread.id, pending.ts);
-  if (opening === null || chat.edit === undefined) return null;
-  const whole = `${opening.text}\n\n${text}`;
+  // A second post still becomes a reply, as it did while the first was editing the opening.
+  if (pending.claimed) { hub.openings.delete(thread.id); return null; }
+  pending.claimed = true;
+  let retry = false, edited = false;
   try {
-    if (!(await chat.edit({ channel: thread.channel, threadTs: thread.threadTs }, pending.ts, whole))) return null;
+    const edit = chat.edit?.bind(chat);
+    if (edit === undefined) return null;
+    const prepare = hub.prepareLegacyEdits;
+    let opening = prepare ? hub.store.messageAtIfReady(thread.id, pending.ts) : hub.store.messageAt(thread.id, pending.ts);
+    let waited = false;
+    while (opening === undefined) {
+      waited = true;
+      await prepare!(hub.stoppingSignal);
+      hub.stoppingSignal.throwIfAborted();
+      opening = hub.store.messageAtIfReady(thread.id, pending.ts);
+    }
+    if (waited) {
+      const current = hub.store.sessionThread(key, thread.channel, thread.threadTs);
+      if (!current || current.thread.id !== thread.id || hub.chat(current.connect) !== chat)
+        throw new Error("the conversation changed while preparing its first message; try again");
+      if (hub.store.manuallyArchived(thread.id)) throw new Error("the conversation was archived while preparing its first message; restore it first");
+    }
+    if (opening === null) return null;
+    const whole = `${opening.text}\n\n${text}`;
+    checkTurn();
+    try {
+      if (!(await edit({ channel: thread.channel, threadTs: thread.threadTs }, pending.ts, whole))) return null;
+    } catch (error) {
+      log.warn("hub", "a relayed chat's first post did not go into the station's first message", { thread: thread.id, error: (error as Error).message });
+      return null;
+    }
+    edited = true;
+    if (prepare === null) hub.store.editMessage(thread.surface, thread.channel, thread.threadTs, pending.ts, whole);
+    else {
+      // The platform edit has happened: finish recording it even if the caller goes away meanwhile.
+      while (hub.store.editMessageIfReady(thread.surface, thread.channel, thread.threadTs, pending.ts, whole) === undefined)
+        await prepare();
+    }
+    return [pending.ts, opening.n];
   } catch (error) {
-    log.warn("hub", "a relayed chat's first post did not go into the station's first message", { thread: thread.id, error: (error as Error).message });
-    return null;
+    if (edited) throw new Error(`The first message was updated on the platform, but could not be recorded here: ${(error as Error).message}`, { cause: error });
+    retry = true;
+    throw error;
+  } finally {
+    if (hub.openings.get(thread.id) === pending) {
+      if (retry) pending.claimed = false;
+      else hub.openings.delete(thread.id);
+    }
   }
-  hub.store.editMessage(thread.surface, thread.channel, thread.threadTs, pending.ts, whole);
-  return [pending.ts, opening.n];
 }
 
 /// What a state recorded with chat_state is about: the message `about` names (by its ts, in one of the session's
@@ -367,10 +656,8 @@ function stateAbout(hub: Hub, key: string, kind: DeclaredState, args: Args): [nu
   const ts = aboutTs(args);
   if (ts !== null) {
     for (const t of threads) {
-      const m = hub.store.messageAt(t.thread.id, ts);
-      if (!m) continue;
-      if (kind.kind === "need_help") checkQuestion(hub, key, m);
-      return [m.thread, m.n, m.ts];
+      const message = messageForAbout(hub, key, t.thread.id, ts, kind.kind === "need_help");
+      if (message !== null) return message;
     }
     throw new Error(`about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`);
   }
@@ -408,19 +695,41 @@ export async function chatState(hub: Hub, key: string, args: Args): Promise<stri
     kind = given[0];
     words = needArg(args, given[0], given[1]);
   }
-  const about = stateAbout(hub, key, kind, args);
+  const ts = aboutTs(args);
+  const checkingQuestion = kind.kind === "need_help" && ts !== null && hub.stateQuestion != null;
+  const checkingDefault = kind.kind === "need_help" && ts === null && hub.statePendingCard != null;
+  const questionActor = checkingQuestion || checkingDefault ? actorOf(hub, key) : undefined;
+  const questionTurn = questionActor?.currentTurnId() ?? null;
+  let about: [number, number, string] | null;
+  if (checkingQuestion) {
+    about = await questionForAbout(hub, key, () => hub.store.sessionThreads(key).map((t) => t.thread.id), ts);
+    if (about === null) throw new Error(`about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`);
+  } else if (checkingDefault) {
+    about = await pendingForState(hub, key, () => hub.store.sessionThreads(key).map((t) => t.thread.id));
+  } else about = stateAbout(hub, key, kind, args);
   if (kind.kind === "need_help" && about === null && args.kind !== "block") {
-    throw new Error(
-      "need_human requires a visible question: post what you need with chat_post kind=need_human, or give about pointing to your question (a pending answer card is used by default). need alone is not a message to the person",
-    );
+    throw new Error(NEED_VISIBLE_QUESTION);
   }
-  const actor = actorOf(hub, key);
-  if (words !== null) {
-    if (kind.kind === "waiting") await actor?.waitFor(words, watch);
-    else await actor?.need(words);
+  if (checkingQuestion) {
+    if (questionActor && questionTurn !== null &&
+      (hub.actors.get(key) !== questionActor || about === null || !await recordQuestionForTurn(hub, key, questionActor,
+        questionTurn, kind, words, about, watch, () => hub.store.sessionThreads(key).map((t) => t.thread.id), ts,
+        `about must be the ts of a message in one of your conversations (or leave it out), got ${ts}`)))
+      throw new Error("the turn ended while checking its question; its state was not recorded");
+  } else if (checkingDefault) {
+    if (questionActor && questionTurn !== null &&
+      !await recordPendingForTurn(hub, key, questionActor, questionTurn, kind, words, about, watch,
+        () => hub.store.sessionThreads(key).map((t) => t.thread.id), args.kind !== "block"))
+      throw new Error("the turn ended while checking its question; its state was not recorded");
+  } else {
+    const actor = actorOf(hub, key);
+    if (words !== null) {
+      if (kind.kind === "waiting") await actor?.waitFor(words, watch);
+      else await actor?.need(words);
+    }
+    await actor?.about(about);
+    await actor?.declare(kind);
   }
-  await actor?.about(about);
-  await actor?.declare(kind);
   if (kind.kind === "all_done") suggestArchive(hub, key);
   if (kind.kind !== "waiting") return `Recorded state ${saidAs(kind)}.`;
   return watch
@@ -452,13 +761,20 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
   const given = args.limit === undefined ? null : jsNumber(args.limit);
   const limit = given !== null && given !== 0 ? (Number.isNaN(given) ? 0 : Math.trunc(Math.min(200, Math.max(1, given)))) : 30;
   const before = typeof args.before === "string" && args.before !== "" ? args.before : null;
-  let from: number | null = null;
-  if (before !== null) {
-    const m = hub.store.messageAt(thread.id, before);
-    if (!m) throw new Error(`no message ${before} in ${named}`);
-    from = m.n;
+  let messages: MessageRow[] | null;
+  if (hub.historyMessages) {
+    messages = await hub.historyMessages(thread.id, before, limit);
+  } else {
+    // Hubs without readers (such as tests) keep the original store path.
+    let from: number | null = null;
+    if (before !== null) {
+      const m = hub.store.messageAt(thread.id, before);
+      if (!m) throw new Error(`no message ${before} in ${named}`);
+      from = m.n;
+    }
+    messages = hub.store.messagesBefore(thread.id, from, limit);
   }
-  const messages = hub.store.messagesBefore(thread.id, from, limit);
+  if (messages === null) throw new Error(`no message ${before} in ${named}`);
   if (messages.length === 0) return "No earlier messages.";
   seen?.push(...messages.flatMap((m) => m.attachments));
   const chat = hub.chatOf(connect);
@@ -468,12 +784,21 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
     const name = (await chat?.userName?.(m.author)) ?? null;
     if (name !== null) names.set(m.author, name);
   }
-  const pending = hub.store.pendingCard(thread.id)?.[0].n;
-  const cards = new Map<number, { card: Json; pending: boolean }>();
-  for (const e of hub.store.entriesBetween(thread.id, messages[0]!.n, messages.at(-1)!.n)) {
+  const cards = new Map<number, { card: Json; pending: boolean; chose?: { by: string; option: string } }>();
+  for (const e of hub.store.messagePageEntries(thread.id, messages.map((m) => m.n))) {
     if (e.kind !== "message") continue;
     const card = e.card ?? (e.options != null ? { type: "options", options: e.options } : null);
-    if (card !== null) cards.set(e.n, { card, pending: e.n === pending });
+    if (card !== null) cards.set(e.n, { card, pending: false });
+  }
+  if (cards.size > 0) {
+    const pending = hub.historyPendingCard ? await hub.historyPendingCard(thread.id) : hub.store.pendingCard(thread.id)?.[0].n;
+    const current = pending == null ? undefined : cards.get(pending);
+    if (current) current.pending = true;
+    // A choice that closed a card sent no message: said on the card, as nothing else in the thread says it.
+    for (const [n, c] of hub.store.cardChoices(thread.id, [...cards.keys()])) {
+      const name = (await chat?.userName?.(c.by)) ?? null;
+      cards.get(n)!.chose = { by: name !== null ? `${name} (${c.by})` : c.by, option: c.option };
+    }
   }
   return formatHistory(messages, thread.surface, threadAddress(thread.channel, thread.threadTs), key, names, cards);
 }

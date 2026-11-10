@@ -10,6 +10,8 @@ import * as format from "../format.ts";
 import { arr as arrU, get as getU } from "../util.ts";
 import { count, localDay, type Source } from "./usage.ts";
 import { USAGE_WEEKS } from "../station/usage-part.ts";
+import { isOwnSurface } from "../titles.ts";
+import * as brand from "../brand.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -20,9 +22,9 @@ const DAY_MS = 86_400_000;
 /// The year's weeks, each a column of its seven days, Sunday first (Codex's WEEK_COUNT, DAY_COUNT).
 export const WEEKS = USAGE_WEEKS;
 const WEEK_DAYS = 7;
-/// Where chats come from, by their surface's kind: still.fail's own, Slack, Feishu.
+/// Where chats come from, by their surface's kind: the station's own (by the product's name), Slack, Feishu.
 function placeName(place: string): string {
-  if (place === "ember") return "still.fail";
+  if (isOwnSurface(place)) return brand.name();
   if (place === "slack") return "Slack";
   if (place === "feishu") return t("core-views.usage.summary.feishu");
   return place;

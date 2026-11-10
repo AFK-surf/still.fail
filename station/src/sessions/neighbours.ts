@@ -1,5 +1,5 @@
-// What the hub needs of the parts beside it that are ported elsewhere (src/jobs/): background jobs (jobs.rs) and the
-// station transport to the workspace's other stations (remote.rs). Minimal: the hub and its tools call these, the
+// What the hub needs of the parts beside it that are ported elsewhere (src/jobs/): background jobs and the
+// station transport to the workspace's other stations. Minimal: the hub and its tools call these, the
 // composition root gives them; until it does, what needs one says it is not there.
 import type { JobRow } from "../store/store.ts";
 
@@ -16,7 +16,7 @@ export interface Jobs {
 
 /// remote.rs `Remote`, as far as the hub and its tools reach it.
 export interface Remote {
-  /// station_list / station_task / station_file for `session` (remote.rs `tool`): what the tool answers, as JSON.
+  /// station_list / station_task / station_file for `session`: what the tool answers, as JSON.
   tool(name: "station_list" | "station_task" | "station_file", session: string, args: Record<string, Json>): Promise<Json>;
   /// Calls another station of the workspace by its id (Remote::ask): how session_send reaches a session there. A
   /// station that refused it throws a `Refused`.
@@ -25,5 +25,5 @@ export interface Remote {
   closeSession(session: string): void;
 }
 
-/// An answer another station gave: it refused the request (remote.rs `Refused`). The transport's own.
+/// An answer another station gave: it refused the request. The transport's own.
 export { Refused } from "../jobs/remote.ts";

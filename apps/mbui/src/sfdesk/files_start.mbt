@@ -1,4 +1,4 @@
-// Where the files' place starts on the desktop (ember web/src/pages/Drive.tsx DriveHome, DrivePage, Roots, RootRow;
+// Where the files' place starts on the desktop (still.fail web/src/pages/Drive.tsx DriveHome, DrivePage, Roots, RootRow;
 // Drive.css.ts): 文件 in the rail opens the folder in front of the tabs as they were left (else the folder last open on
 // this page), else this machine's home, another station's home, an older configured root or a favorite; none, says so.
 // A station without a home offers its configured folders, or says why there is none.
@@ -49,8 +49,10 @@ fn files_home(c : @ui.Ctx, src : Source, w : Workspace, core : Core, room : Doub
           } else {
             @sf.empty(c, fn() {
               c.text(@sf.t("web-main.rail.filesNone"), style=fs_empty_words) |> ignore
-              if can.length() > 0 && @sf.button(c, @sf.t("web-pages.files.addFavorite"), key="files-home/pick", tone=Primary) {
-                add_favorite_folder(src, w.id, can, picked=fn(f) { files_go({ station: f.station, root: Some(f.root), path: f.path }) })
+              if can.length() > 0 {
+                @sf.button(c, @sf.t("web-pages.files.addFavorite"), key="files-home/pick", tone=Primary, on_press=fn() {
+                  add_favorite_folder(src, w.id, can, picked=fn(f) { files_go({ station: f.station, root: Some(f.root), path: f.path }) })
+                }) |> ignore
               }
             })
           }

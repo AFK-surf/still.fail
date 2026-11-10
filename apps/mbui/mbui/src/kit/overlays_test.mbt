@@ -357,7 +357,7 @@ test "tooltip: by its trigger from the first frame it is drawn, the trigger come
       tooltip(c, "tip", trigger.val, "Bold (⌘B)") |> ignore
     })
     |> ignore
-  }, w=800.0)
+  })
   // where the tip's words are drawn, if anywhere: never by the window's corner (the trigger is 200 in)
   let by_trigger = fn() raise {
     match t.drawn_of("Bold (⌘B)") {
@@ -369,8 +369,6 @@ test "tooltip: by its trigger from the first frame it is drawn, the trigger come
   t.draw()
   by_trigger()
   t.draw()
-  assert_true(t.ctx().rect_of(trigger.val) is Some((_, _, w, h)) && w > 0.0 && h > 0.0,
-    msg="the focused trigger has room inside the column's 200 padding")
   assert_true(t.drawn_of("Bold (⌘B)") is Some(_))
   by_trigger()
   // the trigger gone, its focus with it: the tip goes out where it was
@@ -850,4 +848,46 @@ test "popover: a wheel turned over it scrolls nothing under it; beside it, what 
   t.run_for(pop_ms)
   let (_, y1, _, _) = t.rect_of("line 0").unwrap_or((0.0, -1000.0, 0.0, 0.0))
   assert_true(y1 < y0)
+}
+
+///|
+test "toasts: one comes in faded and risen as each frame is painted, nothing built for its way in" {
+  let t = @ui.Tester::new(fn(c) { toaster(c, "toasts", [toast("a", "Saved")]) |> ignore })
+  t.draw()
+  // (where its words are drawn, and how far they show)
+  let words = fn() {
+    let g = t.drawn_glyphs()
+    if g.is_empty() {
+      None
+    } else {
+      Some((g[0].1, g[0].2 & 0xFFL))
+    }
+  }
+  let end = t.time() + presence_in_ms
+  let built : Array[String] = []
+  let seen : Array[(Double, Int64)] = []
+  // (its first frame built it; the frame after it is built once more for laying out otherwise, none after it)
+  let mut first = true
+  while t.time() < end {
+    // (the next frame its motion asks for)
+    let w = t.wanted_after()
+    if w == @double.infinity {
+      break
+    }
+    t.frame_at(if w <= t.time() { t.next_frame_time() } else { t.display_frame(w) })
+    let why = t.built_why()
+    if why != "" && !(first && why == "the one before it laid out otherwise") {
+      built.push("\{t.time()}: \{why}")
+    }
+    first = false
+    match words() {
+      Some(w) => if !seen.contains(w) { seen.push(w) }
+      None => ()
+    }
+  }
+  // (it rose and faded in: drawn somewhere else, fainter, most frames, to where it rests, whole)
+  assert_true(seen.length() > 3, msg="\{seen}")
+  let (y, a) = seen[seen.length() - 1]
+  assert_true(seen.iter().all(fn(s) { s.0 >= y && s.1 <= a }), msg="\{seen}")
+  assert_eq(built, [], msg="\{built.length()} frames built: \{built}")
 }

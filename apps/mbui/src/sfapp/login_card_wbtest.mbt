@@ -14,11 +14,11 @@ fn login_core(
   let base = fixture("chat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match name {
         "machineLogin" => { value: Some(login), error: None, version: 1 }
         "machineLogins" => { value: Some({ "canLogin": true, "canRelay": Json::boolean(relay) }), error: None, version: 1 }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -77,16 +77,48 @@ test "a login whose page gives a code to paste back: 打开登录页, then the c
   assert_true(t.find("在 github.com 登录，把页面给的码贴到下面") is Some(_))
   t.tap_text("打开登录页")
   assert_true(t.opened().contains("https://app.devin.ai/login"))
-  assert_true(done_at(t) is None, msg="完成 once a code is in")
+  assert_true(words_node(t, "完成") is None, msg="完成 once a code is in")
   t.tap_text("粘贴登录码")
   t.type_text("ABC-123")
   t.frame()
-  let (x, y) = done_at(t).unwrap()
+  let (x, y) = words_node(t, "完成").unwrap()
   t.tap(x, y)
   let sent = named(calls, "machineLogin.answer")
   assert_eq(sent.length(), 1)
   assert_eq(text(Some(sent[0].params), "text"), "ABC-123")
   assert_eq(text(Some(sent[0].params), "id"), "login-1")
+}
+
+///|
+test "a Claude login card asks before opening the authorization page" {
+  let calls : Array[Made] = []
+  let page = "https://claude.ai/oauth/authorize"
+  let t = with_logins(login_core(calls, login_of([
+    ("name", "claude"), ("step", "open"), ("paste", true), ("url", Json::string(page)),
+  ])))
+  t.tap_text("打开登录页")
+  sheet_rested(t, "sf-present")
+  assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+  assert_true(t.opened().is_empty())
+  t.tap_text("继续打开")
+  assert_eq(t.opened(), [page])
+}
+
+///|
+test "a login's page copied from the ⋯ beside its button, its address on the clipboard and said so" {
+  for login in [
+    login_of([("step", "open"), ("paste", true), ("url", "https://app.devin.ai/login")]),
+    login_of([("step", "open"), ("url", "https://app.devin.ai/login")]),
+    login_of([("step", "device"), ("code", "WXYZ-1234"), ("url", "https://github.com/login"), ("codeUrl", "https://app.devin.ai/login")]),
+  ] {
+    let calls : Array[Made] = []
+    let t = with_logins(login_core(calls, login))
+    t.click(Button, label="其他方式")
+    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.tap_text("复制链接")
+    assert_eq(t.clipboard(), "https://app.devin.ai/login")
+    assert_true(t.opened().is_empty(), msg="copied, nothing opened")
+  }
 }
 
 ///|
@@ -130,6 +162,24 @@ test "a login the station's own browser can do: seldom used, in the ⋯ by the s
     Screen(at) => assert_eq((at.station, at.screen, at.until_gone), ("ws1/st1", "browser:T1", true))
     _ => assert_true(false, msg="its tab's view opened")
   }
+}
+
+///|
+test "returning to an already open Claude login in the station's browser needs no confirmation" {
+  let calls : Array[Made] = []
+  let t = with_logins(login_core(
+    calls,
+    login_of([
+      ("name", "claude"), ("step", "loopback"), ("url", "https://claude.ai/oauth/authorize"),
+      ("browser", true), ("browserText", "回到 Willow 的浏览器"), ("screen", "browser:T1"),
+    ]),
+    answer=fn(name) { if name == "machineLogin.browser" { { "screen": "browser:T1" } } else { Json::object({}) } },
+    relay=false,
+  ))
+  t.tap_text("回到 Willow 的浏览器")
+  t.frame()
+  assert_eq(named(calls, "machineLogin.browser").length(), 1)
+  assert_false(@sf.presenting())
 }
 
 ///|
@@ -206,7 +256,7 @@ test "a login code sent (完成, or the keyboard's Done) lets go of the keyboard
     if by_enter {
       t.enter()
     } else {
-      let (x, y) = done_at(t).unwrap()
+      let (x, y) = words_node(t, "完成").unwrap()
       t.tap(x, y)
     }
     assert_eq(named(calls, "machineLogin.answer").length(), 1, msg="enter \{by_enter}")
@@ -277,10 +327,46 @@ test "a login card's field keeps in view as the keyboard comes up: under the bar
 }
 
 ///|
-/// Where the login card's 完成 is: at the end of its code's field, on its row (the keyboard's own 完成 is elsewhere).
-fn done_at(t : @ui.Tester) -> (Double, Double)? {
-  guard t.rect_of("粘贴登录码") is Some((_, fy, _, fh)) else { return None }
-  t.words().iter().find_first(fn(w) { w.0 == "完成" && w.2 + w.4 / 2.0 >= fy && w.2 + w.4 / 2.0 <= fy + fh }).map(fn(w) {
-    (w.1 + w.3 / 2.0, w.2 + w.4 / 2.0)
-  })
+test "a code-pasting login's card in its chat and on its station's page beside it at once: a field each, no fault" {
+  // The agent's post with the login's link, the link opening the station's page beside the chat (kept in its tabs):
+  // the one Field in both faulted, the chat 这部分显示出错了 each time it opened (2026-11-06).
+  new_run()
+  let base = fixture("chat")
+  let pasting = login_of([("step", "open"), ("paste", true), ("url", "https://claude.ai/oauth/authorize")])
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      match name {
+        "machineLogin" => { value: Some(pasting), error: None, version: 1 }
+        "machineLogins" =>
+          {
+            value: Some({ "canLogin": true, "canRelay": true, "supported": true, "loaded": true, "logins": [pasting] }),
+            error: None,
+            version: 1,
+          }
+        _ => base.topic(name, params).get().snapshot()
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  // (the station's page as a tab beside the chat: after its files, as the fixture's kept tabs go)
+  @sfbase.open_page(Drive({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
+  t.run_for(@ui.move_most_ms)
+  @settings.mark_login("ws1/st1", "login-1")
+  @sfbase.open_page(Setting(@settings.Route::Station("ws1/st1")))
+  t.run_for(@ui.move_most_ms)
+  assert_eq(side_now({ station: "ws1/st1", session: "s-c1", title: "", station_name: "" }).1, "station:[\"ws1/st1\"]")
+  assert_true(t.find("这部分显示出错了") is None)
+  let fields = t.locate("粘贴登录码")
+  assert_eq(fields.length(), 2, msg="\{fields}")
+  // what is typed in the one is its own: typed on the station's page
+  let (x, y) = fields.iter().find_first(fn(p) { p.0 > 800.0 }).unwrap()
+  t.tap(x, y)
+  t.type_text("ABC-123")
+  t.frame()
+  // (完成 shows once a code is in: on the station's page's card alone)
+  let done = t.locate("完成")
+  assert_true(done.length() == 1 && done[0].0 > 800.0, msg="\{done}")
 }

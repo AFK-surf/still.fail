@@ -96,11 +96,11 @@ pub fn open_cards_fixture(mode : String) -> Unit {
 pub fn open_fixture(mode : String) -> Unit {
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   match mode {
-    "history" | "history-reading" | "history-details" => {
+    "history" | "history-reading" | "history-failed" | "history-older" | "history-older-failed" | "history-details" => {
       app.nav.push(Chat(r))
       app.nav.push(History(r, "s-c1", None))
       if mode == "history-details" {
-        dui.history_tab = 1
+        history_tab.set(1)
       } else {
         @sfpages.history_open(["h2/group", "h2/group/1", "h4/group", "h4/group/0"])
       }
@@ -121,11 +121,11 @@ pub fn open_fixture(mode : String) -> Unit {
     "chat-model-accounts" => @sfpages.open_triple_accounts(r.station, "session:s-c1")
     // (what is typed is looked for as the bar is first drawn)
     "chat-find" => @sfpages.find_preset(side_key(r), "截图")
-    // the sheet that publishes the chat, what a snapshot would hold read (Publish.kt openPublish)
+    // the sheet that publishes the chat, what a snapshot would hold read
     "chat-publish" => {
       @sfpages.publish_set(r, 7.0, @sffixture.fix_preview())
     }
-    // its station's card, from the agent's (Stations.kt openStationPeek)
+    // its station's card, from the agent's
     "chat-peek" => @settings.open_station_peek(r.station, from=Unanchored)
     _ => ()
   }
@@ -146,7 +146,7 @@ fn open_decide_panels(mode : String, src : Source) -> Unit {
         src,
         "ws1",
         r,
-        @sfpages.chat_extra_items(src, r, (src.topic)("chat", chat_params(r)).value),
+        @sfpages.chat_extra_items(src, r, src.topic("chat", chat_params(r)).get().value),
         from=@sf.at_point(195.0, 800.0),
       )
     }
@@ -233,7 +233,8 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         r.contents_put = false
       }
       if mode == "reader-layout" {
-        r.panel = @sf.ReaderPanel::Layout
+        // (the layout's panel, nodes of the window's tree, told it is open)
+        @sf.reader_panel_set(r, @sf.ReaderPanel::Layout)
         r.contents_put = false
       }
     }
@@ -355,7 +356,7 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   if mode == "lock-security" || mode == "lock-upgrade" {
     open_setting(@settings.fixture_page("settings-security"))
   }
-  // ⌘/'s shortcuts at a glance (wide_keys.mbt keys_dialog)
+  // ⌘/'s shortcuts at a glance
   if mode == "keys-dialog" {
     @sfdesk.wide.keys_open.set(true)
   }
@@ -442,7 +443,7 @@ pub fn fixture_json(json : String) -> Source {
   let base = @sffixture.fixture("")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       let key : Map[String, Json] = { "topic": Json::string(name) }
       for k, v in params {
         key[k] = v
@@ -486,18 +487,13 @@ pub fn fixture_json(json : String) -> Source {
 }
 
 ///|
-/// The app as src/sffix starts it over a screen's JSON (MBUI_FIXTURE=json), for a Tester made next: the app as at the
-/// start (whatever ran before in the process reset), then the
-/// screen's source and its pages.
-pub fn fixture_json_app(json : String) -> Source {
-  reset()
-  fixture_json(json)
-}
-
-///|
 /// What a fixture mode opens over Home at the start (src/sffix): a new chat, with one of its sheets; the bar's panel;
 /// a place.
 pub fn open_mode(mode : String) -> Unit {
+  // (a connect's page whose model is drafted another station's: 借用 at its panel's foot)
+  if mode == "settings-connect-borrow" {
+    @sffixture.new_fix.borrow = true
+  }
   if mode.has_prefix("newchat") {
     app.nav.rise(NewChat)
     if mode.has_prefix("newchat-crowded") || mode.has_prefix("newchat-providers") || mode == "newchat-tall-model" {
@@ -520,6 +516,15 @@ pub fn open_mode(mode : String) -> Unit {
       @sffixture.new_fix.liked.push_iter(["claude-sonnet-5", "kimi-for-coding"].iter())
       @sffixture.new_fix.liked.push_iter(@sffixture.fix_providers[:8].iter().map(fn(p) { p.0 }))
     }
+    // (as many starred, the one picked the first of them: in a sheet risen from the foot the lowest, past what it
+    // shows at first)
+    if mode == "newchat-providers-model-far" {
+      let n = @sffixture.new_fix
+      n.liked.push_iter(["claude-sonnet-5", "kimi-for-coding"].iter())
+      n.liked.push_iter(@sffixture.fix_providers[:8].iter().map(fn(p) { p.0 }))
+      n.model = "claude-sonnet-5"
+      n.d_model = n.model
+    }
     match mode {
       "newchat-station" => @sfpages.new_chat_ask("station")
       "newchat-preset" => @sfpages.new_chat_ask("preset")
@@ -529,7 +534,7 @@ pub fn open_mode(mode : String) -> Unit {
       "newchat-preset-new-add" => @sfpages.new_chat_ask("preset-new-add")
       "newchat-preset-new-browse" => @sfpages.new_chat_ask("preset-new-browse")
       "newchat-preset-picked" => @sffixture.new_fix.preset = "p-sf"
-      "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" | "newchat-crowded-model-liked" | "newchat-providers-model" | "newchat-providers-model-liked" | "newchat-providers-model-many" =>
+      "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" | "newchat-crowded-model-liked" | "newchat-providers-model" | "newchat-providers-model-liked" | "newchat-providers-model-many" | "newchat-providers-model-far" =>
         @sfpages.new_chat_ask("model")
       _ => ()
     }
@@ -542,11 +547,11 @@ pub fn open_mode(mode : String) -> Unit {
     // Small its page
     app.nav.push(Archived)
   } else if mode.has_prefix("place-") {
-    // a place of the rail's in the wide frame (wide_places.mbt): place-stations, place-profiles, place-connects,
+    // a place of the rail's in the wide frame: place-stations, place-profiles, place-connects,
     // place-usage
     app.nav.replace(Place(mode.view(start_offset=6).to_string()))
   } else if mode.has_prefix("files-") {
-    // the files' page in the wide frame (wide_files.mbt) at Willow's 文档: files-columns (设计稿 open beside it, chosen),
+    // the files' page in the wide frame at Willow's 文档: files-columns (设计稿 open beside it, chosen),
     // files-tree (设计稿 opened in place), files-list, files-preview (发布清单.md previewed beside it), files-split (two
     // tabs, the one shown split)
     let docs : DriveAt = { station: "ws1/st1", root: Some(@sffixture.fix_docs), path: "" }
@@ -580,7 +585,7 @@ pub fn open_mode(mode : String) -> Unit {
         @sfdesk.nav_open("ws1/st1")
       }
       "files-list" => @sffixture.fix_browse_prefs_set({ "driveViews": { "page": "list" } }) |> ignore
-      // a copy asked about a name there (wide_files_drag.mbt): 说明.txt into 会议记录, which has one
+      // a copy asked about a name there: 说明.txt into 会议记录, which has one
       "files-clash" =>
         @sfdesk.drag_ask({
           into: { station: "ws1/st1", root: Some(@sffixture.fix_docs), path: "会议记录" },
@@ -608,7 +613,7 @@ pub fn open_mode(mode : String) -> Unit {
         })
         @sfdesk.transfers_open()
       }
-      // the preview beside the list (wide_files_pane.mbt), 发布清单.md chosen
+      // the preview beside the list, 发布清单.md chosen
       "files-preview" => {
         @sffixture.fix_browse_prefs_set({ "driveViews": { "preview": "shown" } }) |> ignore
         browse({ "act": "choose", "view": "columns", "folder": "", "name": "发布清单.md" })

@@ -23,6 +23,7 @@ import { chatMarks, chatRows, chats } from "../src/read/views.ts";
 import { marksOf, rowsMade } from "../../client/core-ts/src/station/rows-made.ts";
 import { isDeepStrictEqual } from "node:util";
 import { FakeDriver, settle } from "./hub-fakes.ts";
+import { referenceAnswersSince } from "./card-answer-reference.ts";
 import { UsageCounter, claudeProject } from "../src/usage/counter.ts";
 import { keepCounted } from "../src/usage/module.ts";
 
@@ -136,7 +137,7 @@ test("retrying a new chat after the station restarts returns the same chat", asy
   }
 });
 
-test("a chat's relaying through the routes (docs/relay.md): where to, read past the thread's other actions; to where, checked", async () => {
+test("a chat's relaying through the routes: where to, read past the thread's other actions; to where, checked", async () => {
   const r = rig();
   try {
     const [, made] = await r.ask("POST", "/sessions", { runtime: "claude" });
@@ -325,12 +326,143 @@ test("a pending card: an option chosen by an old client is refused; an answer qu
     r.store.insertMessage(newMessage(id, "1700000000.000200", "agent", made.key, "later"));
     const quote = [{ text: "deploy?", ts: "1700000000.000100" }];
     assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: quote }), [409, { error: en("station.admin.updateClientForOption") }]);
+    // The old-client check uses raw quotes, even those omitted from the message by quotesOf.
+    assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: quote[0]!.ts }] }), [409, { error: en("station.admin.updateClientForOption") }]);
+    const laterQuote = [...Array.from({ length: 20 }, () => ({ text: "other" })), ...quote];
+    assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: laterQuote }), [409, { error: en("station.admin.updateClientForOption") }]);
     const [status] = await r.ask("POST", `/threads/${id}/messages`, { text: "yes", quotes: quote });
     assert.equal(status, 200);
     assert.equal(r.store.readPosition("a@x", id), n, "read up to the card, not past it");
   } finally {
     await r.close();
   }
+});
+
+test("an old card without a timestamp still matches an empty raw quote timestamp", async () => {
+  const r = rig();
+  try {
+    const id = r.store.openThread("ember", "CHAT", "old-card-without-ts", null, null).id;
+    const [n] = r.store.insertMessage({ ...newMessage(id, "1.1", "agent", "worker", "choose"),
+      card: { type: "options", options: [{ label: "no", action: "close" }] } });
+    r.store.db.prepare("UPDATE entries SET ts=NULL WHERE thread=? AND n=?").run(id, n);
+    assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "" }] }),
+      [409, { error: en("station.admin.updateClientForOption") }]);
+  } finally { await r.close(); }
+});
+
+test("checking a quoted card for an old client does not merge its message", async () => {
+  const r = rig(), db = r.store.db;
+  try {
+    const id = r.store.openThread("ember", "CHAT", "quoted-card-identity", null, null).id;
+    db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','1.1','agent','worker','choose',?,1)")
+      .run(id, JSON.stringify({ type: "options", options: [{ label: "no", action: "close" }] }));
+    Object.defineProperty(r.store, "db", { configurable: true, value: new Proxy(db, { get(target, key) {
+      if (key === "prepare") return (sql: string) => {
+        if (/\bFROM\s+merged\b/i.test(sql)) throw new Error("quoted card lookup merged its message");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } }) });
+    try {
+      assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "1.1", text: "choose" }] }),
+        [409, { error: en("station.admin.updateClientForOption") }]);
+    } finally { Object.defineProperty(r.store, "db", { configurable: true, value: db }); }
+  } finally { await r.close(); }
+});
+
+test("a quoted old card is checked after its card-post index is prepared", async () => {
+  const r = rig(), db = r.store.db;
+  try {
+    const id = r.store.openThread("ember", "CHAT", "quoted-old-card", null, null).id;
+    db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','1.1','agent','worker','choose',?,1)")
+      .run(id, JSON.stringify({ type: "options", options: [{ label: "no", action: "close" }] }));
+    db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(id);
+    db.prepare("DELETE FROM card_posts WHERE thread=?").run(id);
+    (r.hub as any).prepareCardPosts = (threads: number[]) => r.readers.prepareCardPosts(threads);
+    Object.defineProperty(r.store, "db", { configurable: true, value: new Proxy(db, { get(target, key) {
+      if (key === "prepare") return (sql: string) => {
+        if (/SELECT n FROM entries WHERE thread = \? AND kind = 'message' AND (card|options) IS NOT NULL/i.test(sql))
+          throw new Error("the station scanned an unprepared card index");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } }) });
+    try {
+      assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "1.1", text: "choose" }] }),
+        [409, { error: en("station.admin.updateClientForOption") }]);
+    } finally { Object.defineProperty(r.store, "db", { configurable: true, value: db }); }
+  } finally { await r.close(); }
+});
+
+test("a quoted card answered during old index preparation no longer blocks the person's message", async () => {
+  const r = rig(), release = Promise.withResolvers<void>(), started = Promise.withResolvers<void>();
+  try {
+    const id = r.store.openThread("ember", "CHAT", "quoted-old-card-answered", null, null).id;
+    r.store.db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','1.1','agent','worker','choose',?,1)")
+      .run(id, JSON.stringify({ type: "options", options: [{ label: "no", action: "close" }] }));
+    r.store.db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(id);
+    r.store.db.prepare("DELETE FROM card_posts WHERE thread=?").run(id);
+    (r.hub as any).prepareCardPosts = async (threads: number[]) => {
+      started.resolve();
+      await release.promise;
+      await r.readers.prepareCardPosts(threads);
+    };
+    const send = r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "1.1", text: "choose" }] });
+    const waiting = await Promise.race([started.promise.then(() => true), send.then(() => false)]);
+    assert.equal(waiting, true, "the request waits for old card preparation");
+    r.store.db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES(?,2,'message','2.2','person','p','answer',2)").run(id);
+    release.resolve();
+    const [status] = await send;
+    assert.equal(status, 200);
+  } finally { release.resolve(); await r.close(); }
+});
+
+for (const index of ["entries_cards", "entries_options"]) {
+  test(`a quoted old card is prepared when ${index} was removed`, async () => {
+    const r = rig(), db = r.store.db;
+    try {
+      const id = r.store.openThread("ember", "CHAT", `quoted-card-${index}`, null, null).id;
+      db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,options,at) VALUES(?,1,'message','1.1','agent','worker','choose',?,1)")
+        .run(id, JSON.stringify([{ label: "no", action: "close" }]));
+      db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(id);
+      db.prepare("DELETE FROM card_posts WHERE thread=?").run(id);
+      db.exec(`DROP INDEX ${index}`);
+      (r.hub as any).prepareCardPosts = (threads: number[]) => r.readers.prepareCardPosts(threads);
+      assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "1.1", text: "choose" }] }),
+        [409, { error: en("station.admin.updateClientForOption") }]);
+    } finally { await r.close(); }
+  });
+}
+
+test("an old thread with no cards does not wait for card-post preparation", async () => {
+  const r = rig();
+  try {
+    const id = r.store.openThread("ember", "CHAT", "old-without-cards", null, null).id;
+    r.store.db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(id);
+    (r.hub as any).prepareCardPosts = async () => { throw new Error("unneeded card preparation"); };
+    const [status] = await r.ask("POST", `/threads/${id}/messages`, { text: "hello", quotes: [{ ts: "1.1", text: "earlier" }] });
+    assert.equal(status, 200);
+  } finally { await r.close(); }
+});
+
+test("a person can send without looking up a card when no quote names a message", async () => {
+  const r = rig();
+  try {
+    for (const [i, quotes] of [undefined, [], [{ text: "earlier" }], "not an array"].entries()) {
+      const id = r.store.openThread("ember", "CHAT", `without-card-quote-${i}`, null, null).id;
+      r.store.insertMessage({ ...newMessage(id, "1.1", "agent", "worker", "choose"), card: { type: "text" } });
+      const pending = r.store.pendingCardHeaderIfReady;
+      try {
+        r.store.pendingCardHeaderIfReady = () => { throw new Error("unneeded pending card lookup"); };
+        const [status, sent] = await r.ask("POST", `/threads/${id}/messages`, { text: "hello", quotes });
+        assert.equal(status, 200, JSON.stringify(sent));
+        assert.equal(r.store.messagesBefore(id, null, 1)[0]?.n, sent.n);
+      } finally { r.store.pendingCardHeaderIfReady = pending; }
+      assert.equal(r.store.pendingCard(id), null, "the person's message still ends the card's wait");
+    }
+  } finally { await r.close(); }
 });
 
 test("archiving a session and a chat, and deleting a session", async () => {
@@ -907,7 +1039,7 @@ test("the cards answered in some chats are those the whole station's say, read b
     r.store.insertMessage(card("c4", "Four?"));
     const store = openStore(r.data);
     const said = (a: any[]) => a.filter((x) => x.answer !== null && x.question.thread === id).map((x) => [x.question.text, x.answer.text]);
-    const whole = answersSince(store, 0);
+    const whole = referenceAnswersSince(r.store, 0);
     const scoped = answersSince(store, 0, [id]);
     assert.deepEqual(said(scoped), [["One?", "Yes"], ["Three?", "Three it is"]]);
     assert.deepEqual(said(scoped), said(whole));

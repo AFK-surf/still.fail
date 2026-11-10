@@ -4,7 +4,7 @@
 // each of one list found by their words, and 添加 through the presenters.
 
 ///|
-test "密钥, at each width and with either hand: the request's card, encrypted, the longest grant; its secrets a page under it, 添加 there asks what" {
+test "密钥, at each width and with either hand: the request's card, encrypted, the longest grant; its secrets a page under it" {
   for case in page_cases {
     let (w, platform) = case
     let t = setting_tester(Vault, w, platform~)
@@ -28,14 +28,23 @@ test "密钥, at each width and with either hand: the request's card, encrypted,
     assert_true(t.find("每次使用都要你批准一次") is Some(_), msg=at)
     @sf.close_presented()
     t.frame()
-    // 全部密钥 pressed: its page, its secrets and 添加
+    // 全部密钥 pressed: its page (made once as nodes, which this old view's Tester does not draw: what it holds, and 添加,
+    // its own test's)
     scrolled_to(t, w, "全部密钥")
     tap_words(t, "全部密钥")
     t.frame()
     t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() == Setting(VaultItems), msg=at)
-    scrolled_to(t, w, "部署机")
-    assert_true(t.find("部署机") is Some(_), msg=at)
+  }
+}
+
+///|
+test "全部密钥, at each width and with either hand: 添加 asks what; every secret a row of one list, its kind and what is worth knowing of it under its name; the profiles' accounts folded at its foot; found by any of their words" {
+  for case in page_cases {
+    let (w, platform) = case
+    let t = setting_tester(VaultItems, w, platform~)
+    let at = "\{w} platform \{platform}"
+    // 添加 at its head asks what (through the presenters)
     assert_false(@sf.presenting(), msg=at)
     let (x, y, bw, bh) = page_add(t).unwrap().rect
     t.tap(x + bw / 2.0, y + bh / 2.0)
@@ -43,15 +52,7 @@ test "密钥, at each width and with either hand: the request's card, encrypted,
     assert_true(@sf.presenting(), msg=at)
     @sf.close_presented()
     t.frame()
-  }
-}
-
-///|
-test "全部密钥, at each width and with either hand: every secret a row of one list, its kind and what is worth knowing of it under its name; the profiles' accounts folded at its foot; found by any of their words" {
-  for case in page_cases {
-    let (w, platform) = case
-    let t = setting_tester(VaultItems, w, platform~)
-    let at = "\{w} platform \{platform}"
+    t.run_for(@ui.move_most_ms)
     // (a secret: its kind, how an agent gets it, when and where it was last used)
     for words in ["GitHub token", "Token · 代理 · api.github.com · 昨天在「修 CI」用过", "SSH 密钥 · ssh-agent", "订阅和 API Key", "Claude 主账号、ChatGPT 团队、备用 key"] {
       assert_true(t.find(words) is Some(_), msg="\{at}: \{words}")

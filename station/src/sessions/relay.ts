@@ -1,4 +1,4 @@
-// A chat relayed to a channel (docs/relay.md): a person picks a Slack channel or a Feishu/Lark group one of the
+// A chat relayed to a channel: a person picks a Slack channel or a Feishu/Lark group one of the
 // station's connects' bots is in, and the chat's agent goes on there too. The station starts the conversation there
 // itself (who relayed it, from which chat, their note), or joins a Slack thread a person gave the link of, makes it one of the agent's conversations, says so in the chat
 // it came from, and tells the agent, who writes people there what they need to pick it up: its first post there is
@@ -11,6 +11,7 @@ import { threadAddress } from "../agents/instructions.ts";
 import type { ChatSurface, Member, Place, ThreadRef } from "./chat.ts";
 import type { Connect } from "./config.ts";
 import type { Hub } from "./hub.ts";
+import { STATION_AUTHOR } from "../store/rows.ts";
 
 /// A place a chat can be relayed to, with when one was last relayed there (absent if never).
 export type RelayPlace = Place & { used?: number };
@@ -132,7 +133,7 @@ async function targetOf(connects: ReturnType<typeof connectsFor>, target: RelayT
   return { c, existing, channel, place };
 }
 
-/// The people of the place a chat would be relayed to, to be mentioned in the note (docs/relay.md「附言里 @ 人」):
+/// The people of the place a chat would be relayed to, to be mentioned in the note (「附言里 @ 人」):
 /// none where the platform cannot say.
 export async function relayPeople(hub: Hub, thread: ThreadRow, target: RelayTarget): Promise<Member[]> {
   const { c, channel } = await targetOf(connectsFor(hub, agentOf(hub, thread)), target);
@@ -192,7 +193,7 @@ export async function relay(hub: Hub, thread: ThreadRow, relayer: Relayer, targe
   hub.store.noteRelayed(c.id, channel);
   hub.store.joinThread(there.id, session, c.id);
   // Kept as the station's words there; the agent hears of it in its notice below, not as a message.
-  hub.store.insertMessage({ thread: there.id, ts: begun.ts, authorKind: "ember", author: "ember", text: opening, attachments: [] });
+  hub.store.insertMessage({ thread: there.id, ts: begun.ts, authorKind: STATION_AUTHOR, author: STATION_AUTHOR, text: opening, attachments: [] });
   // The agent's first post there goes into it, so people see what it is about without opening the thread.
   const into = c.chat.edit !== undefined;
   if (into) hub.openings.set(there.id, { session, ts: begun.ts });
@@ -206,7 +207,7 @@ export async function relay(hub: Hub, thread: ThreadRow, relayer: Relayer, targe
     const text = `↗ ${tr(lang, "station.relay.relayed", { who: by, place: named })}`;
     try {
       const ts = await hub.chat(here.connect).post({ channel: thread.channel, threadTs: thread.threadTs }, text, []);
-      hub.store.insertMessage({ thread: thread.id, ts, authorKind: "ember", author: "ember", text, attachments: [] });
+      hub.store.insertMessage({ thread: thread.id, ts, authorKind: STATION_AUTHOR, author: STATION_AUTHOR, text, attachments: [] });
     } catch (error) {
       log.warn("hub", "a relay was not said in the chat it came from", { thread: thread.id, error: (error as Error).message });
     }

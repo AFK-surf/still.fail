@@ -182,25 +182,6 @@ using @sfbase {
 }
 
 ///|
-pub fn dmax(a : Double, b : Double) -> Double {
-  if a > b {
-    a
-  } else {
-    b
-  }
-}
-
-
-///|
-pub fn dmin(a : Double, b : Double) -> Double {
-  if a < b {
-    a
-  } else {
-    b
-  }
-}
-
-///|
 using @settings {
   binding_of,
   policy_forms,
@@ -214,6 +195,8 @@ using @settings {
   mode_name,
   profile_groups,
   recovery_words,
+  recovery_words_turned,
+  recovery_words_changed,
   vault_act,
   vault_ask,
   vault_hosts,
@@ -247,7 +230,6 @@ using @settings {
   build_version,
   error_text,
   has,
-  hit,
   is_doing,
   join,
   key_actions,
@@ -265,4 +247,11 @@ using @settings {
   type Core,
   type Asked,
   type Here,
+}
+
+///|
+using @sf {
+  dmin,
+  dmax,
+  dclamp,
 }

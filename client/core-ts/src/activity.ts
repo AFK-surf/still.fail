@@ -1,4 +1,4 @@
-// What an agent at work is doing, as a chat shows it (activity.rs): one line, the thing it does now. From a `live`
+// What an agent at work is doing, as a chat shows it: one line, the thing it does now. From a `live`
 // topic's value into `activity`: `{ now: { key, text } }`.
 import { t } from "./i18n.ts";
 import { closeCut as close } from "./tool-step.ts";

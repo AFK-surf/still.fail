@@ -1,4 +1,4 @@
-// The faces the app is set in, as this device chose them (docs/fonts.md; the Android app's ui/Fonts.kt rememberFonts
+// The faces the app is set in, as this device chose them (sf/faces.mbt; the Android app's ui/Fonts.kt rememberFonts
 // and FaceFiles): the prefs' `faces` say each place's (ui, text, code); one still.fail keeps is had from the core, which
 // keeps its files for this app (client/core-ts/src/font-files.ts: `fonts.file`, fetched first where it has none,
 // `fonts.fetch`), each unzipped here and checked by its hash (and given back unzipped: `fonts.keep`), and given to the
@@ -89,7 +89,7 @@ let local_face : String = "local:"
 /// The places' faces as the prefs say them, given to the host as each is here (call each frame, before the pages):
 /// with none chosen for the app's words, the desktop app's in the wide frame (`wide`).
 pub fn faces(src : Source, wide : Bool) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   guard prefs is Some(_) else { return }
   vector_cjk_had(src, prefs)
   let shown = field(prefs, "faces")

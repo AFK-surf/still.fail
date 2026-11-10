@@ -116,7 +116,7 @@ fn usage_chats_node(parent : @view.View, core : Core, v : () -> Json?) -> Unit {
             .ground(By(fn() { if b.pointed() { @ui.tree_theme().color(Hover) } else { 0L } }))
             .says(By(fn() { Some(@view.said(Button, label=words())) }))
             |> ignore
-            @sf.presses_node(b, fn() { usage_pick.all.set(!@signals.untracked(fn() { usage_pick.all.get() })) })
+            @sf.presses_node(b, fn() { usage_pick.all.set(!usage_pick.all.untracked()) })
             @sf.words_node(b, words, fn() { if @sf.lit_node(b) { ug_more_lit } else { ug_more_words } }) |> ignore
           })
           |> ignore
@@ -262,7 +262,7 @@ fn usage_prices_link_node(parent : @view.View, core : Core) -> Unit {
     .radius(By(fn() { @ui.tree_theme().corner(Inner) }))
     .says(By(fn() { Some(@view.said(Link, label=@sf.t("web-main.usage.costPrices"))) }))
     |> ignore
-    @sf.presses_node(b, fn() { (core.push)(UsagePrices(@signals.untracked(fn() { usage_pick.days.get() }))) })
+    @sf.presses_node(b, fn() { (core.push)(UsagePrices(usage_pick.days.untracked())) })
     @sf.words_node(b, fn() { @sf.t("web-main.usage.seePrices") }, fn() { if @sf.lit_node(b) { ug_prices_lit } else { ug_prices_words } })
     |> ignore
   })
@@ -400,7 +400,7 @@ fn usage_chart_node(parent : @view.View, v : () -> Json?, filtered : () -> Json?
   }
   let days : Map[String, @view.View] = Map([])
   let press = fn(key : String) {
-    let now = @signals.untracked(fn() { usage_pick.day.get() })
+    let now = usage_pick.day.untracked()
     usage_pick.day.set(if now == key { "" } else { key })
   }
   // the day nearest a finger's x, by where the days are laid out
@@ -654,14 +654,25 @@ fn usage_narrowed_node(parent : @view.View, v : () -> Json?, chart : () -> Json?
 /// or that none was spent (in its bones while it is still read, what failed said over it); how it is counted last; 16
 /// apart.
 fn usage_body_node(parent : @view.View, core : Core, v : () -> Json?, chart : () -> Json?, error : () -> Json?, page_w : () -> Double, tips? : @sf.TipLayer) -> Unit {
+  let details_pending = fn() { flag(v(), "detailsPreparing") || flag(chart(), "detailsPreparing") }
   parent.box(fn(b) {
     b.gap(Is(ug_body_gap)) |> ignore
     usage_summary_node(b, chart, page_w, tips?)
-    usage_overview_node(b, core, v, chart, tips?)
+    b.show(details_pending, fn(at) {
+      let sample = fn() { Some(usage_sample()) }
+      @sf.waiting_node(at, fn(s) {
+        s.box(fn(details) {
+          details.gap(Is(ug_body_gap)) |> ignore
+          usage_overview_node(details, core.quiet(), sample, sample)
+          usage_none_node(details)
+        }) |> ignore
+      }, note=fn() { { reading: true, text: @sf.t("common.reading"), failing: [] } })
+    })
+    b.show(fn() { !details_pending() }, fn(at) { usage_overview_node(at, core, v, chart, tips?) })
     b.show(fn() { v() is None && error() is Some(_) }, fn(p) {
       @sf.words_node(p, fn() { @sf.t("web-pages.settings.usage.failed", args=[("error", error_text(error().unwrap()))]) }, fn() { ug_failed }) |> ignore
     })
-    b.show(fn() { v() is Some(_) }, fn(q) {
+    b.show(fn() { v() is Some(_) && !details_pending() }, fn(q) {
     q.pick(fn() { flag(v(), "empty") }, fn(p, empty) {
       if empty {
         let wait = fn() { field(v(), "wait") }
@@ -957,10 +968,10 @@ pub fn usage_node(
     Some(w) => w
     None => fn() { v.window().0 }
   }
-  let read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get())) }
+  let read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get())).get() }
   let value = fn() { read().value }
   // Keep the chart's unfiltered view subscribed while the selected totals and chats are read.
-  let chart_read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get(), chart=true)) }
+  let chart_read = fn() { (core.topic)("usage", usage_args(here(), usage_pick.days.get(), chart=true)).get() }
   let chart = fn() { chart_read().value }
   // (at its title's line's end; where a frame's bar names it, in that bar, as tall as its days' choice stands there)
   let actions = fn(l : @view.View) {
@@ -1063,7 +1074,7 @@ pub fn usage_prices_node(
   said? : (@sf.PageSaid) -> Unit,
   width? : () -> Double,
 ) -> Unit {
-  let topic = fn() { (core.topic)("usage", { "scope": str(here().workspace), "days": Json::number(days.to_double()) }) }
+  let topic = fn() { (core.topic)("usage", { "scope": str(here().workspace), "days": Json::number(days.to_double()) }).get() }
   let tables = fn() { items(topic().value, "prices") }
   let wait = fn() { field(topic().value, "wait") }
   let blocks = fn() {

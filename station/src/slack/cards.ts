@@ -21,6 +21,10 @@ const FIELD = "sf_text";
 /// A login card's field and its button.
 const CODE = "sf_code";
 export const LOGIN = "sf_login";
+/// A login card's button that opens its page (a link: pressed, it hands Slack nothing to do).
+const OPEN = "sf_login_page";
+/// The longest address a button may open.
+const URL_CHARS = 3000;
 type Sent = { l?: string[] };
 
 const plain = (text: string): Json => ({ type: "plain_text", text, emoji: true });
@@ -64,11 +68,23 @@ export function questionBlocks(text: string, question: Json, lang: Lang): Json[]
   return blocks.filter((b) => b !== null);
 }
 
-/// A login card (a login whose page gives a code to enter, docs/remote-login.md): the agent's words (with the page's
-/// link), a field for the code, and a button that hands it to the login's command; the code is never said in the thread.
-export function loginBlocks(text: string, lang: Lang): Json[] {
+/// A login card: the agent's words (with the login's link), a button that opens its page, and a
+/// field for the code that page gives with a button that hands it to the login's command (the code is never said in the
+/// thread); or, for a device code, that code to enter on the page. Without the page (a channel shared with another
+/// organization, or one too long for a button): the words and the field, or the words alone for a device code; the
+/// page then opened from the login's link.
+export type LoginPage = { url: string; domain: string; code?: string; paste: boolean };
+export function loginBlocks(text: string, lang: Lang, page: LoginPage | null = null, shown = true): Json[] {
+  const open = page !== null && shown && page.url.length <= URL_CHARS ? page : null;
+  const button = open && { type: "actions", elements: [{ type: "button", action_id: OPEN, text: plain(tr(lang, "station.slack.loginOpen", { domain: open.domain })), url: open.url, ...(open.paste ? {} : { style: "primary" }) }] };
+  if (page !== null && !page.paste) {
+    if (open === null) return [markdownOf(text.trim() === "" ? [] : [text])].filter((b) => b !== null);
+    const code = { type: "section", text: { type: "mrkdwn", text: `${escape(tr(lang, "station.slack.loginDeviceCode"))}  \`${escape(page.code ?? "")}\`` } };
+    return [markdownOf(text.trim() === "" ? [] : [text]), code, button].filter((b) => b !== null);
+  }
   return [
     markdownOf(text.trim() === "" ? [] : [text]),
+    button,
     { type: "input", block_id: CODE, dispatch_action: false, label: plain(tr(lang, "station.slack.loginCode")), element: { type: "plain_text_input", action_id: CODE, placeholder: plain(tr(lang, "station.slack.loginCodeHint")) } },
     { type: "actions", elements: [{ type: "button", action_id: LOGIN, text: plain(tr(lang, "station.slack.loginSubmit")), style: "primary" }] },
   ].filter((b) => b !== null);
@@ -106,12 +122,14 @@ export function endedBlocks(text: string, words: string): Json[] {
 }
 
 /// Where a thread stands once its agent's turn ended (the line still.fail's chat shows at its end, and its row): done,
-/// or what it needs of a person; in small grey words under its last message (a context block), led as the app leads it.
-export type Stands = { kind: "done" | "need"; words: string | null };
+/// or what it needs of a person, or that the agent left it (chat_leave) until mentioned; in small grey words under its
+/// last message (a context block), led as the app leads it.
+export type Stands = { kind: "done" | "need" | "left"; words: string | null };
 export function standsBlock(stands: Stands, lang: Lang): Json {
   return { type: "context", elements: [{ type: "mrkdwn", text: escape(standsText(stands, lang)) }] };
 }
 export function standsText(stands: Stands, lang: Lang): string {
+  if (stands.kind === "left") return `🔕 ${tr(lang, "station.slack.standsLeft")}`;
   const words = stands.words?.trim() ?? "";
   const [mark, key, name] = stands.kind === "done" ? ["✓", "station.slack.standsDone", "done"] : ["🔔", "station.slack.standsNeed", "need"];
   return `${mark} ${words === "" ? tr(lang, `${key}Bare`) : tr(lang, key, { [name]: cut(words, STANDS_CHARS) })}`;

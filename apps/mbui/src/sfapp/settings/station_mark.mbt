@@ -1,4 +1,4 @@
-// A station's or a workspace's mark picked in a sheet (Settings.kt openMarkPick; the web's MarkPick.tsx): one of
+// A station's or a workspace's mark picked in a sheet: one of
 // still.fail's icons (in a colour, or the words') or an emoji (any, pasted or typed), a picture put up, or none; set at
 // once by `save`. What is sent is web/src/stationPick.ts's: a glyph keeps its emoji beside it for older clients, an
 // emoji or a picture takes the other away.
@@ -13,7 +13,7 @@ let station_emoji : Array[String] = [
 ]
 
 ///|
-/// The colours a glyph can be given, in the picker's order (Parts.kt MARK_COLORS).
+/// The colours a glyph can be given, in the picker's order.
 // kept across runs: a table of constants, never written
 let mark_colors : Array[String] = ["red", "orange", "amber", "green", "teal", "blue", "purple", "pink"]
 
@@ -142,7 +142,7 @@ fn picture_mark(bytes : Bytes) -> String? {
 }
 
 ///|
-/// A picture too large to put up as it is made small (Settings.kt stationPictureOf): its middle square at 96 px, read
+/// A picture too large to put up as it is made small: its middle square at 96 px, read
 /// at least 192 on its shorter side, as a JPEG (85) on white where it is clear (this app writes no WebP); None when
 /// even that is too large.
 fn picture_mark_small(w : Int, h : Int, px : FixedArray[Byte]) -> String? {
@@ -284,13 +284,13 @@ fn mark_pick_body(
         for col in [""] + mark_colors {
           let of = mark_color(col).unwrap_or(t.p.text)
           let id = c.id("mark-color/" + col)
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             mark_pick.color = col
             match glyph {
               Some((g, _)) => set(glyph_emoji(g), "glyph:" + g + (if col == "" { "" } else { ":" + col }))
               None => ()
             }
-          }
+          })
           let ring = c.box(style=mark_colour, border=if col == mark_pick.color { mark_ring } else { 0.0 }, border_color=of, id~, fn() {
             c.box(style=mark_colour_dot, bg=of, fn() {  }) |> ignore
           })
@@ -340,13 +340,13 @@ fn mark_pick_body(
             let key = offered[i]
             let on = (if emojis { bare_emoji(key) } else { key }) == kept
             let id = c.id("mark/" + key)
-            if c.clicked(id) {
+            c.on_press(id, fn() {
               if emojis {
                 pick(key, "")
               } else {
                 pick(glyph_emoji(key), "glyph:" + key + (if mark_pick.color == "" { "" } else { ":" + mark_pick.color }))
               }
-            }
+            })
             // (square: as tall as it is wide)
             let cell = c.box(style=if on { mark_cell_on } else { mark_cell }, aspect=1.0, id~, fn() {
               if emojis {
@@ -366,45 +366,45 @@ fn mark_pick_body(
     blocks.push(fn() {
       c.box(style=mark_foot, fn() {
         @sf.group(c, fn() {
-          if @sf.link_row(
-              c,
-              "mark-picture",
-              tr(if picture { "android-settings.station.imageAnother" } else { "android-settings.station.image" }),
-              chevron=false,
-              lead=fn() {
-                if picture {
-                  @sf.station_mark(c, "", icon, mark_row_mark, t.p.text)
-                } else {
-                  @sf.icon(c, "image-upload", size=mark_row_mark, color=t.p.text) |> ignore
-                }
-              },
-            ) {
-            // the picture the system's picker answers with put up as the mark
-            let asked = (core.pick_picture)(fn(bytes) {
-              mark_pick.asking = false
-              match bytes {
-                Some(b) =>
-                  match picture_mark(b) {
-                    Some(url) => pick("", url)
-                    None => {
-                      mark_pictures.val += 1
-                      mark_pick.reading = "mem:station-mark/\{mark_pictures.val}"
-                      @ui.add_image(mark_pick.reading, b)
-                    }
-                  }
-                None => ()
+          @sf.link_row(
+            c,
+            "mark-picture",
+            tr(if picture { "android-settings.station.imageAnother" } else { "android-settings.station.image" }),
+            chevron=false,
+            lead=fn() {
+              if picture {
+                @sf.station_mark(c, "", icon, mark_row_mark, t.p.text)
+              } else {
+                @sf.icon(c, "image-upload", size=mark_row_mark, color=t.p.text) |> ignore
               }
-            })
-            mark_pick.asking = asked
-            if !asked {
-              (core.say)(tr("android-settings.station.imageFailed"))
-            }
-          }
-          if @sf.has_station_mark(emoji, icon) &&
+            },
+            on_press=fn() {
+              // the picture the system's picker answers with put up as the mark
+              let asked = (core.pick_picture)(fn(bytes) {
+                mark_pick.asking = false
+                match bytes {
+                  Some(b) =>
+                    match picture_mark(b) {
+                      Some(url) => pick("", url)
+                      None => {
+                        mark_pictures.val += 1
+                        mark_pick.reading = "mem:station-mark/\{mark_pictures.val}"
+                        @ui.add_image(mark_pick.reading, b)
+                      }
+                    }
+                  None => ()
+                }
+              })
+              mark_pick.asking = asked
+              if !asked {
+                (core.say)(tr("android-settings.station.imageFailed"))
+              }
+            },
+          )
+          if @sf.has_station_mark(emoji, icon) {
             @sf.link_row(c, "mark-none", tr("android-settings.station.emojiClear"), chevron=false, lead=fn() {
               @sf.icon(c, "close", size=mark_row_mark, color=t.p.text) |> ignore
-            }) {
-            pick("", "")
+            }, on_press=fn() { pick("", "") })
           }
         })
       })

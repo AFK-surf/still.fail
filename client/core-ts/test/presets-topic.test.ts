@@ -1,4 +1,4 @@
-// A workspace's presets on a station (the `presets` topic, docs/presets.md): read as a page shows them and again once
+// A workspace's presets on a station (the `presets` topic): read as a page shows them and again once
 // one is made; the one picked for a new chat there is kept on this device and goes with the chat as it is made.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -49,7 +49,7 @@ test("presets_are_read_as_shown_again_once_one_is_made_and_the_one_picked_goes_w
     "GET /overview": { ...overview, profiles: [profile] },
     "GET /presets": { presets: [preset("app", "App")], candidates: [candidate] },
     "POST /presets": preset("lib", "Lib"),
-    "POST /sessions": { key: "ember:c-new", thread: { id: 9, threadTs: "9.0" } },
+    "POST /sessions": { key: "chat:c-new", thread: { id: 9, threadTs: "9.0" } },
   };
   const { host, core } = await started(said as never);
   const reads = () => host.requests.flatMap(readsOf).filter((u) => u.endsWith("/admin/api/presets")).length;

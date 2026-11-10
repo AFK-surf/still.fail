@@ -61,7 +61,7 @@ export abstract class ConnectedSurface implements Connection {
   /// People found by their email (userOf), by it.
   private byEmail = new Map<string, string>();
   /// Each thread an agent works for: its status line.
-  private lines = new Map<string, StatusLine>();
+  protected lines = new Map<string, StatusLine>();
   private readonly pingMs: number;
   private readonly staleMs: number;
   private readonly backoffMs: number;
@@ -217,7 +217,8 @@ export abstract class ConnectedSurface implements Connection {
 
   /// One socket: ends when it closes (or a hook ends it), and fails on its error, when it did not open within
   /// `staleMs`, or when it then said nothing (not even a pong) for `staleMs`; pinged every `pingMs` meanwhile.
-  protected socketTo(url: string, hooks: SocketHooks): Effect.Effect<void, Error> {
+  /// `headers`: what its handshake carries besides (Comma's bearer token).
+  protected socketTo(url: string, hooks: SocketHooks, headers?: Record<string, string>): Effect.Effect<void, Error> {
     const self = this;
     const kind = this.kind;
     const socket = Effect.gen(function* () {
@@ -228,7 +229,7 @@ export abstract class ConnectedSurface implements Connection {
       // The socket itself: ends when it closes, fails on its error. Interrupted (it went quiet, or the surface stops),
       // it is cut off.
       const open = Effect.callback<void, Error>((resume) => {
-        const socket = new WebSocket(url);
+        const socket = headers === undefined ? new WebSocket(url) : new WebSocket(url, { headers });
         ws = socket;
         let finished = false;
         const cut = () => {

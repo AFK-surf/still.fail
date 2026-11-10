@@ -1,5 +1,8 @@
 #!/bin/bash
 # Prepare a small, self-contained remote job. Source and build output stay here; only the scene and native-part client go.
+# The job: run it with `bash run.sh [OUT] [DRIVE] [PREPARE]` (the MBUI_* scene settings apply; MBUI_MEDIA_KIND=film for
+# a film), here or as station_task's `dir`, returning result.* and its scene record. It fetches the renderer by its
+# source key and never builds it: a new source state needs a new job, and a version not published fails.
 set -eu
 D="$(cd "$(dirname "$0")" && pwd)"
 repo=$(cd "$D/../../.." && pwd)
@@ -25,7 +28,7 @@ key=$(node "$repo/scripts/native.ts" key "$part" darwin-arm64)
 mkdir -p "$(dirname "$job")"
 mkdir "$job" || { echo "media-job: job directory already exists: $job" >&2; exit 2; }
 mkdir "$job/scripts"
-cp "$repo/scripts/native.ts" "$repo/scripts/ffmpeg.ts" "$job/scripts/"
+cp "$repo/scripts/native.ts" "$job/scripts/"
 printf '%s\n' "$key" > "$job/runtime.key"
 printf '%s\n' "$part" > "$job/runtime.part"
 if [ "$kind" = figure ]; then cp "$input" "$job/scene.json"; else cp "$input" "$job/action.drive"; fi

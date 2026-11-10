@@ -169,10 +169,10 @@ test "a modal layer traps Tab, takes the focus as it opens and gives it back as 
 
 ///|
 test "a modal layer stops the wheel over the page under it" {
-  let open = Ref(true)
+  let open = @signals.signal(true)
   let t = Tester::new(fn(c) {
     c.list("rows", 100, 40.0, fn(i) { c.text("row \{i}") |> ignore }) |> ignore
-    if open.val {
+    if open.get() {
       c.overlay("m", modal=true, fn() {
         c.box(tx=20.0, ty=20.0, w=Px(100.0), h=Px(100.0), bg=0xFFFFFFFFL, id=c.id("p"), fn() {  }) |> ignore
       })
@@ -181,7 +181,7 @@ test "a modal layer stops the wheel over the page under it" {
   })
   t.wheel(200.0, 400.0, 300.0)
   assert_eq(t.list_offset(), 0.0)
-  open.val = false
+  open.set(false)
   t.frame()
   t.wheel(200.0, 400.0, 300.0)
   assert_true(t.list_offset() > 0.0)
@@ -406,18 +406,18 @@ test "a toast over a dialog leaves it the keys: Escape dismisses the dialog, the
 
 ///|
 test "a field given the focus under a modal layer as it is built does not keep it; one in the layer does, and the one under once it is gone" {
-  let ask = Ref("")
-  let open = Ref(true)
+  let ask = @signals.signal("")
+  let open = @signals.signal(true)
   let t = Tester::new(fn(c) {
     // (as a chat's composer takes the cursor as its chat is first drawn)
     c.editor("under") |> ignore
-    if ask.val == "under" {
+    if ask.get() == "under" {
       c.focus_editor("under")
     }
-    if open.val {
+    if open.get() {
       c.overlay("over", modal=true, escape=false, outside=false, initial_focus=0, fn() {
         c.editor("in") |> ignore
-        if ask.val == "in" {
+        if ask.get() == "in" {
           c.focus_editor("in")
         }
       })
@@ -425,16 +425,16 @@ test "a field given the focus under a modal layer as it is built does not keep i
     }
   })
   t.draw()
-  ask.val = "under"
+  ask.set("under")
   t.frame()
   assert_false(t.ctx().field_focused())
-  ask.val = "in"
+  ask.set("in")
   t.frame()
   assert_true(t.ctx().editor_focused("in"))
-  ask.val = ""
-  open.val = false
+  ask.set("")
+  open.set(false)
   t.frame()
-  ask.val = "under"
+  ask.set("under")
   t.frame()
   assert_true(t.ctx().editor_focused("under"))
 }

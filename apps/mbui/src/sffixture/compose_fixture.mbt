@@ -132,9 +132,13 @@ pub fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Jso
     Some(Ok(Json::object({ "version": Json::number(w.version.to_double()) })))
   }
   match name {
+    // (its words typed: its draft's topic alone changed, told to what reads that topic, the rest of the made-up core
+    // as it was, as the core's own changes only the draft's: fixture_topic)
     "composer.text" => {
       w.text = text(p, "text")
-      changed()
+      w.version += 1
+      @settings.fixture_draft_changed()
+      Some(Ok(Json::object({ "version": Json::number(w.version.to_double()) })))
     }
     "composer.quote" => {
       let q = match field(p, "quote") {

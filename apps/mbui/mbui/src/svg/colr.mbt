@@ -1,4 +1,4 @@
-// usvg's COLR glyphs (text/colr.rs): a color glyph's paint written out as a small SVG document (paths of the
+// usvg's COLR glyphs: a color glyph's paint written out as a small SVG document (paths of the
 // glyphs it fills, gradients, clip paths of glyphs and clip boxes, blending groups) and read back as a tree.
 
 ///|

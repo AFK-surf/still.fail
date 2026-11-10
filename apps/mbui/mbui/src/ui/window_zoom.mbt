@@ -37,13 +37,11 @@ pub fn window_points_to_content(points : Double) -> Double {
 ///|
 /// Ask for the next frame at this zoom; the frame in progress and its input keep the scale they started at.
 pub fn set_window_zoom(zoom : Double) -> Unit {
-  if !window_zoom_supported() || zoom <= 0.0 || zoom == @signals.untracked(fn() { window_zoom_wanted.get() }) {
+  if !window_zoom_supported() || zoom <= 0.0 || zoom == window_zoom_wanted.untracked() {
     return
   }
   window_zoom_wanted.set(zoom)
-  if fake.val is None {
-    @hostapi.set_window_zoom(zoom)
-  }
+  @hostapi.set_window_zoom(zoom)
   // The scale is taken at the start of a frame, so a change made during it belongs to the next one.
   g().owe_next()
 }
@@ -54,6 +52,7 @@ fn window_zoom_reset() -> Unit {
   window_zoom_drawn.val = 1.0
   tree_window_zoom.set(1.0)
   window_key_handler.val = None
+  zoom_wheel_kept.val = false
 }
 
 ///|
@@ -68,4 +67,16 @@ fn host_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> 
   // A pinch is an amount of magnification, not a distance on the window.
   let delta = if (phase / 16 & wheel_mod_pinch) != 0 { 1.0 } else { z }
   on_wheel(x / z, y / z, dx / delta, dy / delta, phase)
+}
+
+///|
+// Whether the wheel being handed in zoomed something of the app's (keep_zoom_wheel), told the host as it is handled.
+let zoom_wheel_kept : Ref[Bool] = Ref(false)
+
+///|
+/// The wheel being handled zoomed something of the app's (a picture by a pinch or with ⌃ or ⌘ held): the host keeps it
+/// from what is under the window (a browser zooms its page by a wheel the app kept nothing of). A box that takes the
+/// pointer and zooms (capture's `zooms`) keeps one over it already.
+pub fn keep_zoom_wheel() -> Unit {
+  zoom_wheel_kept.val = true
 }

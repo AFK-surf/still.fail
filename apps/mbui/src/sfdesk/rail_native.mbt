@@ -40,7 +40,7 @@ fn native_workspace(c : @ui.Ctx, src : Source, w : Workspace, node : Int, id : I
     floating_installed.val = true
     @ui.on_after_layout(native_workspace_placed)
   }
-  let others = field((src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value, "others") is Some(String(_))
+  let others = field(src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value, "others") is Some(String(_))
   native_sidebar_items[id] = {
     id: "workspace-switch", title: w.name, icon: ws_badge(w),
     dot: others || @sfpages.invitations_waiting(src).length() > 0, prominent: true, menu: [],
@@ -121,17 +121,6 @@ let nav_page_of : Ref[Page?] = { val: None }
 /// over the system's own apps', the cards as far from the screen's foot as from its side (native_in), so their corners
 /// there are concentric with the screen's (the user, 2026-10-28: 跟手机的圆角对上).
 let cards_foot : Double = 0.0
-
-///|
-/// Whether the wide frame lays its cards across beside the column of the system's glass (sfapp's sides: their ground
-/// under the column).
-pub fn on_cards() -> Bool {
-  @sf.native_on() && wide.tape
-}
-
-// ---- what a page hands the system's bars: the one way a page has into them. Each answers whether it took it (the
-// page then draws nothing of its own for it) or not (no system's bars, every other device: the page draws its own, as
-// it did). A page asks nothing else of them.
 
 ///|
 /// One of the page's actions (`id`, its words and icon: an icon's name, or `raw`, an icon as the host's bars take it)
@@ -218,17 +207,19 @@ fn bar_chat(
   if !@sf.native_on() {
     return false
   }
-  if drawn_page.val is Some(p) && p != app.nav.top() {
-    return true
-  }
   bar_chat_of.val = Some((src, r))
-  // This is the chat's complete set, including absent optional actions. The previous view may have handed its
-  // actions itself while kept on screen, rather than through bar_chat_waiting; none of those may remain either.
-  nav_page.retain(fn(p) { !p.0.id.has_prefix("page/chat/") })
-  bar_chat_carried.clear()
-  bar_action("chat/more", @sf.t("common.more"), "more", more, rows?=if rows.iter().any(fn(i) { i is Some(_) }) { Some(rows) } else { None }) |> ignore
+  // (what was kept of the chat before it while it was read: its own in their place, none of the other's left)
+  if bar_chat_carried.length() > 0 {
+    nav_page.retain(fn(p) { !bar_chat_carried.contains(p.0.id) })
+    bar_chat_carried.clear()
+  }
+  // (the short column: its services and screens rows of the "…" (chat_page.mbt), their dot on it)
+  let dot = column_short.get() && (jobs is Some((_, true)) || screen is Some((_, true)))
+  bar_action("chat/more", @sf.t("common.more"), "more", more, rows?=if rows.iter().any(fn(i) { i is Some(_) }) { Some(rows) } else { None }, dot~) |> ignore
   bar_action("chat/info", @sf.t("web-pages.chat.info"), "info", info) |> ignore
   let (tabs, _) = side_now(src, r)
+  // (the panel's switch, whatever is in it: a screen alone there has a × of its own in its bar, as any panel has; the
+  // user, 2026-11-06: a × among the chat's actions here read as another thing's)
   let icon = if tabs.length() > 0 { "panel-close" } else { "panel-open" }
   let title = @sf.t(if tabs.length() > 0 { "web-pages.chat.closePanel" } else { "web-pages.chat.openPanel" })
   if agents.length() > 0 {
@@ -539,9 +530,9 @@ fn rail_native_marks(c : @ui.Ctx) -> Unit {
     return
   }
   c.layer(fn() {
-    // (at the bell where the system says it is; else where the column has it: moved there as an item is chosen,
-    // @sfbase.nav_tapped_said)
-    @sfbase.nav_tapped_said.get() |> ignore
+    // (at the bell where the system says it is; else where the column has it: moved there as the system says where
+    // an item was chosen, @sfbase.nav_tapped_place)
+    @sfbase.nav_tapped_place.get() |> ignore
     let (tx, ty, th) = native_mark_at(c)
     let id = c.id("rail/attention")
     native_mark.val = id
@@ -575,7 +566,6 @@ let native_mark_w : Double = 1.0
 /// How far over the window's foot 待处理's button ends (the host's column: 新建对话 under it, 12 apart, and the room the
 /// home indicator keeps).
 let native_bell_up : Double = 156.0
-
 
 ///|
 /// The column of the system's glass, the Duo's shape in mind (its right thumb at the inner screen's right edge, low): at
@@ -633,7 +623,7 @@ fn rail_nav(src : Source, w : Workspace, _all : Array[Workspace], card : Array[@
 /// The tab the place shown is in (rail_nav's `selected`).
 fn tab_of_place(lit : String) -> String {
   match lit {
-    "chats" | "mine" | "watching" | "archive" => "place/chats"
+    "chats" | "mine" | "watching" | "hidden" | "archive" => "place/chats"
     "files" => "place/files"
     "stations" => "place/stations"
     // (the settings, opened from the workspace's button: no tab of theirs)
@@ -675,10 +665,11 @@ fn native_frame(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]
 /// What was chosen in the system's bars since the last frame: a place gone to as the rail's pressed (rail_go), the
 /// settings opened, another workspace switched to.
 fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  // (read so: this island built again as one is chosen, @sfbase.nav_tapped_said)
-  @sfbase.nav_tapped_said.get() |> ignore
-  let taps = @sfbase.nav_tapped.copy()
-  @sfbase.nav_tapped.clear()
+  // (read so: this island built again as one is chosen; taken, none wait)
+  let taps = @sfbase.nav_tapped.get()
+  if !taps.is_empty() {
+    @sfbase.nav_tapped.set([])
+  }
   // (another page come to by what was chosen, mid-frame: the actions the one left handed in frames before not its; the
   // one come to hands its own as it is drawn after this: nav_frame)
   defer {
@@ -713,7 +704,7 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if id == "workspace-switch" {
       @sfpages.open_workspaces(src, Of(native_workspace_anchor.val), compact=true)
     } else if id == "sidebar/search" {
-      switcher_toggle(c)
+      switcher_toggle(fn() { c.blur() })
     } else if id.has_prefix("sidebar/filter/") {
       match id.substring(start=15) {
         "all" => rail_go(c, src, w, "chats")
@@ -851,6 +842,7 @@ fn rail_native_reset() -> Unit {
   for k in 0..<4 {
     @hostapi.nav_tapped_at[k] = 0.0
   }
+  @sfbase.nav_tapped_place.set((0.0, 0.0, 0.0, 0.0))
   tabs_kept.clear()
   nav_log_was.val = ""
   attention_size[0] = 0.0

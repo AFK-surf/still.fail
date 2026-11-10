@@ -1,4 +1,4 @@
-// 63-wide-switcher (e2e/traces/wide-switcher.trace: 1280 × 800): ⌘K (Switcher.tsx): the switcher over the frame; words
+// 63-wide-switcher (e2e/traces/wide-switcher.trace: 1280 × 800): ⌘K: the switcher over the frame; words
 // typed narrow it to the test chat, Enter opens it beside the list; Esc closes it when opened again, the keys nowhere;
 // Space, and words sent from the chat it opened.
 

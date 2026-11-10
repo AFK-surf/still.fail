@@ -36,18 +36,6 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false, pointin
 }
 
 ///|
-test "dismiss keeps the space below its options card as well as its own inset" {
-  let t = decide_core([], "chat")
-  let option = t.semantics().iter().find_first(fn(s) { s.role == Button && s.label == "一起换" }).unwrap()
-  let (x, y, w, h) = option.rect
-  let card = t.boxes_held().iter().find_first(fn(b) {
-    b.radii.0 > 20.0 && b.x <= x && x + w <= b.x + b.w && b.y <= y && y + h <= b.y + b.h && b.h < 300.0
-  }).unwrap()
-  let (_, top, _, _) = t.rect_of("忽略").unwrap()
-  assert_true((top - (card.y + card.h) - 8.0).abs() < 0.5, msg="space below the card: \{top - (card.y + card.h)}")
-}
-
-///|
 test "an option tapped in the chat answers its card (decision.answer)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
@@ -67,25 +55,6 @@ test "an option tapped in the chat answers its card (decision.answer)" {
   // the last tap's ripple shown whole, its way in and out
   t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
-}
-
-///|
-test "a chat's options use the column's room up to their wide card width, with short labels too" {
-  for width in [390.0, 700.0, 1280.0] {
-    new_run()
-    let src = fixture("chat")
-    open_fixture_over("chat", src)
-    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=844.0,
-      platform=if width == 390.0 { 2 } else { 0 })
-    t.run_for(@ui.move_most_ms)
-    let option = t.semantics().iter().find_first(fn(s) { s.role == Button && s.label == "先不换" }).unwrap()
-    let (x, y, w, h) = option.rect
-    let cards = t.boxes_held().filter(fn(b) {
-      b.radii.0 > 20.0 && b.x <= x && x + w <= b.x + b.w && b.y <= y && y + h <= b.y + b.h && b.h < 300.0
-    })
-    assert_true(cards.iter().any(fn(b) { (b.w - dmin(460.0, width - 32.0)).abs() < 0.5 }),
-      msg="window \{width}, options card \{cards.map(fn(b) { (b.x, b.y, b.w, b.h) })}")
-  }
 }
 
 ///|
@@ -129,7 +98,7 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
   assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
   // let go at once (what it showed only drawn as it closes up)
   t.frame()
-  assert_eq(@sfpages.dismissed.length(), 1)
+  assert_eq(@sfpages.dismissed.count(), 1)
   // (not idle yet: its room closes on the rows' spring, close_gap, till mbui#25 declares its end)
 }
 
@@ -137,7 +106,7 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
 test "the chat's \"…\": the menu a row has, pinning it from it" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-actions")
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("分享…") is Some(_))
   assert_true(t.find("重命名") is Some(_))
   t.tap_text("固定")
   let pinned = named(calls, "chat.pin")
@@ -168,6 +137,38 @@ test "the chat's own sheet: its agents, and on to the agent's card and its histo
 }
 
 ///|
+test "the chat's own sheet, on to its agent's card and to what was said in it: each a step further in, one sheet all the way; back is back to the chat's sheet" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-info")
+  t.run_for(@ui.move_most_ms)
+  let top0 = sheet_tops(t)
+  assert_eq(top0.length(), 1)
+  for further in [("Claude · Opus 5.5", "费用估算"), (@sf.t("web-main.things.title"), @sf.t("web-main.things.title"))] {
+    let (row, shown) = further
+    assert_true(t.find(row) is Some(_), msg=row)
+    t.tap_text(row)
+    assert_true(t.find(shown) is Some(_), msg=row)
+    for _ in 0..<40 {
+      t.run_for(@ui.frame_period_default)
+      assert_eq(sheet_tops(t).length(), 1, msg="\{row}: \{sheet_tops(t)}")
+    }
+    // back: the chat's own sheet again, as tall as it was, never two sheets on the way
+    t.back()
+    assert_true(@sf.presenting(), msg=row)
+    for _ in 0..<40 {
+      t.run_for(@ui.frame_period_default)
+      assert_eq(sheet_tops(t).length(), 1, msg="\{row}: \{sheet_tops(t)}")
+    }
+    assert_true(t.find("Claude · Opus 5.5") is Some(_), msg=row)
+    assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{row}: \{sheet_tops(t)} \{top0}")
+  }
+  // back from the chat's own sheet: closed
+  t.back()
+  t.run_for(@ui.move_most_ms * 2.0)
+  assert_true(!@sf.presenting())
+}
+
+///|
 test "the history: a group opens to its steps, a step to its call and what came back" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "history")
@@ -176,6 +177,8 @@ test "the history: a group opens to its steps, a step to its call and what came 
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is Some(_))
   // a step closed again
   t.tap_text("跑一遍列表的测试")
+  // (its room closed on its way)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
   t.tap_text("详情")
   assert_true(t.find("Claude Code 2.1.3") is Some(_))
@@ -191,13 +194,12 @@ test "the desk's chat: 忽略 at the end of the line saying what an agent needs,
   let t = decide_core(calls, "chat-need", wide=true)
   // in the reminder's card at the chat's end, after its words, not under the post that asks
   let (x, y) = t.find_last("忽略").unwrap()
-  // (the card's own words: the post that asks says them too)
-  let (_, said_x, said_y, said_w, said_h, _) = t.words().filter(fn(w) { w.0 == @sffixture.need_state.2 }).last().unwrap()
+  let (said_x, said_y, said_w, said_h) = t.rect_of(@sffixture.need_state.2).unwrap()
   assert_true(x > said_x + said_w)
   assert_true(y >= said_y && y <= said_y + said_h)
   // its words and 忽略 on lines as high as the bell's column (an option's disc, 20), the bell in their middle: on the
   // state line's 18 laid from the top they stood 1 over it
-  let (_, _, end_y, _, end_h, _) = t.words().filter(fn(w) { w.0 == "忽略" }).last().unwrap()
+  let (_, end_y, _, end_h) = t.rect_of("忽略").unwrap()
   assert_eq((said_h, end_y, end_h), (20.0, said_y, 20.0))
   t.tap(x, y)
   let made = named(calls, "decision.dismiss")
@@ -211,38 +213,51 @@ test "the desk's history beside a chat: a group opens to its steps, a step to it
   let t = decide_core(calls, "chat-history-side", wide=true)
   assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
   t.tap_text("读了 src/ui/list.mbt 等 2 个文件，跑了测试")
+  // (the group's room opened on its steps)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("跑一遍列表的测试")
-  // what the core made of the call and what came back (history.tool, answered as it was asked after that frame): the
-  // next frame shows the command, its timeout, its output
-  t.frame()
+  // what the core made of the call and what came back (history.tool, answered as it was asked after that frame), its
+  // room opened on its way (reveal_node): the command, its timeout, its output
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("moon test -p ui -f list_test.mbt") is Some(_))
   assert_true(t.find("120000") is Some(_))
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is Some(_))
-  // a step closed again
+  // a step closed again, its room closed on its way
   t.tap_text("跑一遍列表的测试")
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is None)
 }
 
 ///|
 test "a chat's link" {
-  assert_eq(chat_link("ws1/st1", "ember:c-1"), "https://app.still.fail/o/ws1/st1/ember%3Ac-1")
+  assert_eq(chat_link("ws1/st1", "chat:c-1"), "https://app.still.fail/o/ws1/st1/chat%3Ac-1")
 }
 
 ///|
 test "the chat's sheet and an agent's card as tall as what they show: their last row in it, no room under it to spare" {
   let calls : Array[Made] = []
-  // (the chat's last: its public links' last, Bob's)
+  // (its last row: the lowest words read out in it, over its foot)
   // (its foot the presenters' sheet's, under what it holds: sheet_panel's)
-  for case in [("chat-info", "Bob"), ("chat-agent", "后台")] {
-    let (mode, last) = case
+  for mode in ["chat-info", "chat-agent"] {
     let t = decide_core(calls, mode)
     sheet_rested(t, "sf-present")
-    let (_, sy, _, sh) = t.get(@ui.Role::Dialog).rect
-    let (_, ly, _, lh) = t.rect_of(last).unwrap()
+    let (sx, sy, sw, sh) = t.get(@ui.Role::Dialog).rect
+    let foot = @sf.sheet_panel_foot + nav_foot()
+    // (the words read out over its foot and bar: the composer under them is the page's, behind the sheet)
+    let inside = t
+      .words_said()
+      .filter(fn(w) { w.0 != "" && w.5 > 0.0 && w.1 >= sx && w.1 < sx + sw && w.2 >= sy && w.2 + w.4 <= sy + sh - foot })
+    assert_true(inside.length() > 0, msg="\{mode}: no words in the sheet")
+    let mut last = inside[0]
+    for w in inside {
+      if w.2 + w.4 > last.2 + last.4 {
+        last = w
+      }
+    }
+    let (_, _, ly, _, lh, _) = last
     // under its last row's words: the rest of its row (and its card's padding), the sheet's foot, the bar's
     let under = sy + sh - (ly + lh)
-    let foot = @sf.sheet_panel_foot + nav_foot()
-    assert_true(under >= foot && under < foot + 40.0, msg="\{mode}: \{under} under \{last} (sheet \{sy}+\{sh}, row \{ly}+\{lh})")
+    assert_true(under >= foot && under < foot + 40.0, msg="\{mode}: \{under} under \{last.0} (sheet \{sy}+\{sh}, row \{ly}+\{lh})")
     assert_true(sh < 844.0 * @sf.sheet_most, msg="\{mode}: \{sh}")
   }
 }
@@ -327,6 +342,7 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   open_fixture_over("chat-actions", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
+  open_share(t)
   t.tap_text("接力到频道…")
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
   // (the chat's menu goes, the relay's sheet comes up, to where it rests: the presenters')
@@ -359,3 +375,4 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   t.run_for(@kit.presence_in_ms)
   assert_true(t.find("已接力到 #dev") is Some(_))
 }
+

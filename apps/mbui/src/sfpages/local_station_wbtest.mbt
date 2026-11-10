@@ -11,16 +11,14 @@ let local_running : String =
 test "本机 Station, at each width and with either hand: as the system says it (a service running in a workspace), its facts in its card, stopped from its menu" {
   for case in page_cases {
     let (w, platform) = case
-    let t = setting_tester(LocalStation, w, platform~)
-    t.set_local_station(local_running)
-    t.draw()
+    let t = setting_tester(LocalStation, w, platform~, host=fn(h) { h.set_local_station(local_running) })
     let at = "\{w} platform \{platform}"
     for words in ["本机 Station", "Willow", "运行中", "单独安装（launchd）", "0.1.4600", "在 星火工作室", "~/.stillfail"] {
       assert_true(t.find(words) is Some(_), msg="\{at}: \{words}")
     }
     // (its facts going on in lines where the room ends: none cut, none past the card)
     assert_eq(t.squeeze_faults(), [], msg=at)
-    // stopped from its card's menu (LocalStation.tsx: its ⋯, the card's)
+    // stopped from its card's menu (the card's)
     t.click(Button, label="更多操作")
     t.frame()
     // (its menu in, a sheet's or a menu's)
@@ -40,12 +38,10 @@ test "本机 Station still.fail's desktop app ran (in a workspace, no service, s
     if platform != 0 {
       continue
     }
-    let t = setting_tester(LocalStation, w, platform~)
-    t.set_local_station(
+    let t = setting_tester(LocalStation, w, platform~, host=fn(h) { h.set_local_station(
       #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","name":"星火工作室","stationName":"MacBook","removed":false}}
       ,
-    )
-    t.draw()
+    ) })
     let at = "\{w}"
     assert_true(t.find("已停止") is Some(_), msg=at)
     // (nothing runs it: no app said to)
@@ -61,12 +57,10 @@ test "本机 Station still.fail's desktop app ran (in a workspace, no service, s
 
 ///|
 test "本机 Station with data in no workspace and no service: nothing to start it with" {
-  let t = setting_tester(LocalStation, 1280.0, platform=0)
-  t.set_local_station(
+  let t = setting_tester(LocalStation, 1280.0, platform=0, host=fn(h) { h.set_local_station(
     #|{"data":"~/.stillfail","runner":"none"}
     ,
-  )
-  t.draw()
+  ) })
   assert_true(t.find("已停止") is Some(_))
   assert_true(t.query(Button, label="启动") is None)
 }
@@ -75,12 +69,23 @@ test "本机 Station with data in no workspace and no service: nothing to start 
 test "本机 Station with none here: 添加这台 Mac where the app adds one, the note alone where it does not" {
   for case in page_cases {
     let (w, platform) = case
-    let t = setting_tester(LocalStation, w, platform~)
-    t.set_local_station("")
-    t.draw()
+    let t = setting_tester(LocalStation, w, platform~, host=fn(h) { h.set_local_station("") })
     let at = "\{w} platform \{platform}"
     assert_true(t.find("本机没有单独安装的 station") is Some(_), msg=at)
     // (a Mac's host adds one; a phone's has none to add)
     assert_eq(t.query(Button, label="添加这台 Mac") is Some(_), platform == 0, msg=at)
   }
+}
+
+///|
+test "本机 Station made once: what the host says asked again every few seconds from when it is made, not before" {
+  let t = setting_tester(LocalStation, 1280.0, platform=0, host=fn(h) { h.set_local_station("") })
+  assert_true(t.find("本机没有单独安装的 station") is Some(_))
+  // (the station here started on its own: said by the host, shown once the page asks it again, at that moment)
+  t.set_local_station(local_running)
+  t.draw()
+  assert_true(t.find("Willow") is None)
+  t.run_for(@settings.local_read_ms)
+  assert_true(t.find("Willow") is Some(_))
+  assert_true(t.find("运行中") is Some(_))
 }

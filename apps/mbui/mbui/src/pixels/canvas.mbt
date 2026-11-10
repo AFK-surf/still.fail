@@ -174,7 +174,7 @@ pub fn drawn_box(w : Int, h : Int, px : FixedArray[Byte]) -> (Int, Int, Int, Int
 }
 
 ///|
-/// The colour a picture sits on best (still.fail's Android app, SlackApp.kt edgeColour): the mean of its edge, made 32
+/// The colour a picture sits on best (still.fail's Android app): the mean of its edge, made 32
 /// by 32 first, as #RRGGBB.
 pub fn edge_colour(w : Int, h : Int, px : FixedArray[Byte]) -> String {
   let small = Canvas::new(32, 32)

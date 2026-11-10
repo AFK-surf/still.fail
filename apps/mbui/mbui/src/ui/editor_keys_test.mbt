@@ -257,3 +257,57 @@ test "the pointer past the end of a line that wraps into the next puts the caret
   assert_eq(x, x0 + 100.0)
   assert_eq(y, y0)
 }
+
+///|
+test "⌘Enter sends where Enter is a new line (command_sends), Ctrl+Enter elsewhere; Enter, ⇧Enter and the other a new line; a composition's Enter sends nothing" {
+  for one in [(0, @ui.mod_cmd, @ui.mod_ctrl), (3, @ui.mod_ctrl, @ui.mod_cmd)] {
+    let (platform, command, other) = one
+    let f = @ui.Field::new(text="")
+    let sent : Array[String] = []
+    let t = @ui.Tester::new(
+      fn(c) {
+        c.editor("e", field=f, font_size=10.0, enter_sends=false, command_sends=true, on_submit=fn(w) { sent.push(w) })
+        |> ignore
+      },
+      w=300.0,
+      h=200.0,
+      platform~,
+    )
+    t.draw()
+    t.tap(14.0, 14.0)
+    t.type_text("hi")
+    t.key(@ui.key_code_enter)
+    t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
+    t.key(@ui.key_code_enter, mods=other)
+    assert_eq(f.text(), "hi\n\n\n")
+    assert_eq(sent, [])
+    t.key(@ui.key_code_enter, mods=command)
+    assert_eq(sent, ["hi\n\n\n"])
+    // (an input method choosing: its Enter puts in what it chose)
+    t.compose("ni")
+    t.key(@ui.key_code_enter, mods=command)
+    assert_eq(sent, ["hi\n\n\n"])
+    assert_eq(f.text(), "hi\n\n\nni")
+  }
+}
+
+///|
+test "Enter sends by default, ⇧Enter a new line; a composition's Enter sends nothing" {
+  let f = @ui.Field::new(text="")
+  let sent : Array[String] = []
+  let t = @ui.Tester::new(
+    fn(c) { c.editor("e", field=f, font_size=10.0, enter_sends=true, on_submit=fn(w) { sent.push(w) }) |> ignore },
+    w=300.0,
+    h=200.0,
+  )
+  t.draw()
+  t.tap(14.0, 14.0)
+  t.type_text("hi")
+  t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
+  t.compose("ni")
+  t.key(@ui.key_code_enter)
+  assert_eq(sent, [])
+  assert_eq(f.text(), "hi\nni")
+  t.key(@ui.key_code_enter)
+  assert_eq(sent, ["hi\nni"])
+}

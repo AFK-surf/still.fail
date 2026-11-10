@@ -74,7 +74,10 @@ test("frequent_combos_keep_speed_separate_and_restore_it_including_defaults", ()
     assert.equal(combos.find((c) => c.fast === true).speedText, "Fast");
     assert.equal(combos.find((c) => c.fast === null).speedText, undefined);
   }
-  const other = { ...base, runtime: "claude" };
+  // Claude Code's speed is kept apart as Codex's is (an Anthropic key's Fast); one without Fast has none to keep.
+  const claude = { ...base, runtime: "claude" };
+  assert.equal(recordCombo(recordCombo([], { ...claude, fast: true }, 1), { ...claude, fast: false }, 2).length, 2);
+  const other = { ...base, runtime: "dsh" };
   assert.equal(recordCombo(recordCombo([], { ...other, fast: true }, 1), { ...other, fast: false }, 2).length, 1);
 });
 
@@ -84,7 +87,7 @@ test("speed_choices_preserve_false_and_follow_the_runtime", () => {
     const r = resolve(options, { runtime: "codex", model: "gpt-6-astra", fast });
     assert.equal(r.fast, fast);
   }
-  assert.equal(resolve(options, { runtime: "claude", fast: true }).fast, null);
+  assert.equal(resolve(options, { runtime: "claude", fast: true }).fast, true);
   assert.deepEqual([resolve(options, { runtime: "dsh", fast: true }).runtime, resolve(options, { runtime: "dsh", fast: true }).fast], ["dsh", null]);
 });
 
@@ -251,7 +254,7 @@ test("a_machines_session_is_a_line_its_home_as_tilde", () => {
   assert.equal(meta("/Users/bob/src/x", 3_000), "Claude Code · ~/src/x · 刚刚");
   assert.equal(meta("/home/bob", 12_000), "Claude Code · ~ · 12 秒前");
   assert.equal(meta("/srv/x", 4 * 60_000), "Claude Code · /srv/x · 4 分钟前");
-  assert.equal(meta("/Users/bob/x", 30 * 3_600_000), "Claude Code · ~/x · 昨天");
+  assert.equal(meta("/Users/bob/x", 30 * 3_600_000), "Claude Code · ~/x · 1 天前");
   assert.equal(meta("/Users/bob/x", 3 * 86_400_000), "Claude Code · ~/x · 3 天前");
 });
 

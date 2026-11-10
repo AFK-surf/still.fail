@@ -56,6 +56,13 @@ pub fn msg(
     "waiting": false,
     "time": ago(when, "10/19 0\{seq % 10}:12:0\{seq % 6}"),
   }
+  // a person's words in runs, as the core gives them (views.ts drawn: personWords)
+  if kind == "person" {
+    match @sf.kept_words(text) {
+      Some(w) => m["words"] = w
+      None => ()
+    }
+  }
   for k, v in more {
     m[k] = v
   }
@@ -446,6 +453,10 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
         let base = kept_chat("rich/\{f.older}/\{f.mode}/\{f.step}", fn() {
           let v = if f.mode == "chat-overload-before" || f.mode == "chat-overload-after" {
             with_overload_notice(rich_chat(f.older), f.mode == "chat-overload-after", f.step > 0)
+          } else if f.mode == "chat-model-limit-before" || f.mode == "chat-model-limit-after" {
+            with_model_limit(rich_chat(f.older), f.mode == "chat-model-limit-after")
+          } else if f.mode == "chat-run-change" {
+            with_run_change(rich_chat(f.older))
           } else if f.mode == "chat-md" {
             with_md_message(rich_chat(f.older))
           } else if f.mode == "chat-viz" {
@@ -482,6 +493,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_state(rich_chat(f.older), done_state)
           } else if f.mode == "chat-download" || f.mode == "chat-keeping" {
             with_download_message(rich_chat(f.older))
+          } else if f.mode == "chat-download-on" {
+            with_reply_after(with_download_message(rich_chat(f.older)))
           } else {
             rich_chat(f.older)
           }
@@ -715,6 +728,10 @@ pub(all) struct FixChat {
   /// the unread line as the core puts it (attend.ts): over the first of what was said before the chat was opened and
   /// came after (the app away meanwhile), by its seq; -1 none
   line : Ref[Int]
+  /// its agent's turns on what was sent: how many it has begun (its session's lastTurn's id says which), and the
+  /// message the last one over is about (its answer, by seq; -1 none), as a station tells them
+  mut turns : Int
+  mut about : Int
 }
 
 ///|
@@ -729,7 +746,7 @@ pub fn fix_chat(session : String) -> FixChat {
   match fix_chats.get(session) {
     Some(f) => f
     None => {
-      let f = { sent: [], outbox: [], working: -1.0, line: { val: -1 } }
+      let f = { sent: [], outbox: [], working: -1.0, line: { val: -1 }, turns: 0, about: -1 }
       fix_chats[session] = f
       f
     }
@@ -828,6 +845,30 @@ pub let fix_answer_ms : Double = 1400.0
 pub let fix_turn_end_ms : Double = 700.0
 
 ///|
+/// The pace the fixture's station keeps this run (fix_deliver_ms, fix_answer_ms, fix_turn_end_ms unless a test sets
+/// another): a sent message's delivery, its agent's answer after that, its turn's end after the answer (less than 0: that
+/// long before it, as a station may tell the turn over before the answer's message comes).
+pub let fix_pace : Ref[(Double, Double, Double)] = Ref((fix_deliver_ms, fix_answer_ms, fix_turn_end_ms))
+
+///|
+/// How long the fixture's station has a message sent before the chat's entries reach it (views/local.ts outboxSent:
+/// its outbox row `sent`, its time under it, till its message takes its place); less than 0, none (the message at once).
+// kept across runs: put back as a fixture is made (made.mbt)
+pub let fix_sent_for : Ref[Double] = Ref(-1.0)
+
+///|
+/// How long the fixture's core has words sent before its view has their row (the app's way to its core and back: a
+/// frame or two on a quiet device, many on a busy one); 0, the frame after.
+// kept across runs: put back as a fixture is made (made.mbt)
+pub let fix_core_for : Ref[Double] = Ref(0.0)
+
+///|
+/// The status its agent at work on what was sent has: "queued" as the station has its words and it has not taken them
+/// yet (or a summary read before it took them said so).
+// kept across runs: put back as a fixture is made (made.mbt)
+pub let fix_working_status : Ref[String] = Ref("running")
+
+///|
 pub fn fix_later(ms : Double, f : () -> Unit) -> Unit {
   match (fix_clock.val, fix_ctx.val) {
     (Some(clock), _) => fix_timers.push((clock() + ms, f))
@@ -836,6 +877,47 @@ pub fn fix_later(ms : Double, f : () -> Unit) -> Unit {
     (None, Some(_)) => @ui.runtime().after(ms.ceil().to_int(), fn() { fix_now(f) })
     (None, None) => fix_unsaid.push((ms, f))
   }
+}
+
+///|
+/// What was sent since (`sent`, the messages; `outbox`, those on their way) as the core says the viewer's own sent one
+/// after another, nothing between them (views.ts drawn): each but the last `followed` (its time under a later one),
+/// each but the first `joined` (close under the one before). One that did not go stands apart. And whether what is
+/// sent next would follow the last of them (the view's `joinsUntil`).
+fn fix_followed(sent : Array[Json], outbox : Array[Json]) -> (Array[Json], Array[Json], Bool) {
+  let all = sent + outbox
+  let mine = fn(i : Int) {
+    if i < sent.length() {
+      field(Some(all[i]), "mine") is Some(True)
+    } else {
+      text(Some(all[i]), "state") != "failed"
+    }
+  }
+  let said : Array[Json] = []
+  let going : Array[Json] = []
+  for i, x in all {
+    let followed = i + 1 < all.length() && mine(i) && mine(i + 1)
+    let joined = i > 0 && mine(i - 1) && mine(i)
+    let x = match x {
+      Object(m) if followed || joined => {
+        let m = m.copy()
+        if followed {
+          m["followed"] = Json::boolean(true)
+        }
+        if joined {
+          m["joined"] = Json::boolean(true)
+        }
+        Json::object(m)
+      }
+      _ => x
+    }
+    if i < sent.length() {
+      said.push(x)
+    } else {
+      going.push(x)
+    }
+  }
+  (said, going, all.length() > 0 && mine(all.length() - 1))
 }
 
 ///|
@@ -855,20 +937,43 @@ pub fn with_sent(base : Json, session : String) -> Json {
         Some(Array(a)) => a.copy()
         _ => []
       }
-      for x in fc.sent {
+      let (sent, outbox, joins) = fix_followed(fc.sent, fc.outbox)
+      for x in sent {
         all.push(x)
       }
       o["messages"] = Json::array(all)
-      o["outbox"] = Json::array(fc.outbox.copy())
-      if fc.working >= 0.0 {
+      o["outbox"] = Json::array(outbox)
+      if joins {
+        // (5 minutes from its time: the fixture's now, 0)
+        o["joinsUntil"] = Json::number(300000.0)
+      }
+      if fc.working >= 0.0 || fc.turns > 0 {
+        let thread = field(field(Some(base), "thread"), "id")
         o["agents"] = Json::array(
           items(Some(base), "agents").map(fn(a) {
             match a {
               Object(am) => {
                 let w = am.copy()
-                w["status"] = Json::string("running")
-                w["started"] = Json::boolean(true)
-                w["since"] = Json::number(fc.working)
+                if fc.working >= 0.0 {
+                  w["status"] = Json::string(fix_working_status.val)
+                  w["started"] = Json::boolean(true)
+                  w["since"] = Json::number(fc.working)
+                }
+                // (its session's last turn: the one at work on what was sent, or over, about its answer)
+                match am.get("session") {
+                  Some(Object(sm)) => {
+                    let sc = sm.copy()
+                    let turn : Map[String, Json] = { "id": Json::string("fix-turn-\{fc.turns}"), "kind": Json::string("message") }
+                    match (fc.about, thread) {
+                      (n, Some(t)) if n >= 0 && fc.working < 0.0 =>
+                        turn["about"] = Json::object({ "thread": t, "seq": Json::number(n.to_double()), "ts": Json::string("reply\{n - 100}") })
+                      _ => ()
+                    }
+                    sc["lastTurn"] = Json::object(turn)
+                    w["session"] = Json::object(sc)
+                  }
+                  _ => ()
+                }
                 Json::object(w)
               }
               _ => a
@@ -893,6 +998,11 @@ pub fn outgoing_json(id : String, params : Json, state : String, error : String)
     "quotes": Json::array(items(p, "quotes")),
     "createdAt": 0,
     "state": Json::string(state),
+  }
+  // its words in runs, as its message will draw them (views.ts drawn: personWords)
+  match @sf.kept_words(text(p, "text")) {
+    Some(w) => o["words"] = w
+    None => ()
   }
   if error != "" {
     o["error"] = Json::string(error)
@@ -937,6 +1047,25 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
     fc.outbox.push(outgoing_json(id, params, "failed", "Willow 没有回应（假数据：带「失败」的消息先发不出去）"))
     return
   }
+  // (taken by the station, the chat's entries yet to reach it: sent a while first, as the core says it)
+  if fix_sent_for.val >= 0.0 && text(Some(params), "state") != "sent" {
+    for i, o in fc.outbox {
+      if text(Some(o), "id") == id {
+        match outgoing_json(id, params, "sent", "") {
+          Object(m) => {
+            let m = m.copy()
+            m["seq"] = Json::number((100 + fix_serial.val + 1).to_double())
+            // (its time under it, as the core says an outgoing one's: Outgoing.time)
+            m["time"] = ago("刚刚", "10/19 09:12:00")
+            fc.outbox[i] = Json::object(m)
+          }
+          j => fc.outbox[i] = j
+        }
+      }
+    }
+    fix_later(fix_sent_for.val, fn() { fix_deliver(session, id) })
+    return
+  }
   fc.outbox.retain(fn(o) { text(Some(o), "id") != id })
   fix_serial.val += 1
   let seq = 100 + fix_serial.val
@@ -955,9 +1084,24 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
   // shows: out of the activity's avatar), and its turn ends a moment after that
   // (at work from its source's now: the fixture's is 0, fixture.mbt)
   fc.working = 0.0
-  fix_later(fix_answer_ms, fn() {
+  fc.turns += 1
+  fc.about = -1
+  let (_, answer_in, end_in) = fix_pace.val
+  // (its turn over: about its answer, said or still on its way (told before it, as a station may))
+  let over = fn(answer_seq : Int) {
+    let fc = fix_chat(session)
+    fc.working = -1.0
+    fc.about = answer_seq
+  }
+  if end_in < 0.0 {
+    fix_later(if answer_in + end_in < 0.0 { 0.0 } else { answer_in + end_in }, fn() { over(100 + fix_serial.val + 1) })
+  }
+  fix_later(answer_in, fn() {
     fix_serial.val += 1
-    fix_later(fix_turn_end_ms, fn() { fix_chat(session).working = -1.0 })
+    let answer_seq = 100 + fix_serial.val
+    if end_in >= 0.0 {
+      fix_later(end_in, fn() { over(answer_seq) })
+    }
     // (its first line, as a made-up agent would take it up)
     let lead = words.trim(chars=" \n\r\t").to_string()
     let first = match lead.find("\n") {
@@ -974,12 +1118,13 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
       }
       "收到：「" + cut + "」。我先看一下，有结果再告诉你。"
     }
-    fix_chat(session).sent.push(
-      msg(100 + fix_serial.val, "agent", by_agent("anthropic", "claude", session), said, "刚刚", {
-        "ts": Json::string("reply\{fix_serial.val}"),
-        "said": true,
-      }),
-    )
+    // (its turn ended by the answer, as an agent's post with its state: words with 「进度」 answered by one saying how
+    // far it got, its turn going on after it)
+    let reply : Map[String, Json] = { "ts": Json::string("reply\{fix_serial.val}"), "said": true }
+    if !words.contains("进度") {
+      reply["ending"] = Json::string("all_done")
+    }
+    fix_chat(session).sent.push(msg(100 + fix_serial.val, "agent", by_agent("anthropic", "claude", session), said, "刚刚", reply))
   })
 }
 
@@ -1008,13 +1153,20 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
     "chat.send" => {
       fix_serial.val += 1
       let id = "out\{fix_serial.val}"
-      fix_chat(session).outbox.push(outgoing_json(id, params, "sending", ""))
-      // (chat-ask-end's card answered by it at once, as the core says it: decisions.ts inMessages)
-      if f.mode == "chat-ask-end" && session == "s-c1" && !fix_decided.contains(62) {
-        fix_decided[62] = { "resolved": true, "answeredBy": "你", "text": "你 回复了" }
+      let taken = fn() {
+        fix_chat(session).outbox.push(outgoing_json(id, params, "sending", ""))
+        // (chat-ask-end's card answered by it at once, as the core says it: decisions.ts inMessages)
+        if f.mode == "chat-ask-end" && session == "s-c1" && !fix_decided.contains(62) {
+          fix_decided[62] = { "resolved": true, "answeredBy": "你", "text": "你 回复了" }
+        }
+        fix_later(fix_pace.val.0, fn() { fix_deliver(session, id) })
       }
-      f.changed()
-      fix_later(fix_deliver_ms, fn() { fix_deliver(session, id) })
+      if fix_core_for.val > 0.0 {
+        fix_later(fix_core_for.val, taken)
+      } else {
+        taken()
+        f.changed()
+      }
       Some(Ok(Json::object({})))
     }
     "chat.retry" => {
@@ -1033,7 +1185,7 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
       fc.outbox.retain(fn(o) { text(Some(o), "id") != id })
       fc.outbox.push(outgoing_json(id, was, "retried", ""))
       f.changed()
-      fix_later(fix_deliver_ms, fn() { fix_deliver(session, id) })
+      fix_later(fix_pace.val.0, fn() { fix_deliver(session, id) })
       Some(Ok(Json::object({})))
     }
     "chat.discard" => {
@@ -1306,7 +1458,7 @@ pub fn seeded_outbox(mode : String) -> Array[Json] {
 
 // ── the made-up chat's cards, answered here ─────────────────────────────
 //
-// The fixture takes a card's answer as the core does (Decisions.kt): answered at once (the option picked, 你 选择了
+// The fixture takes a card's answer as the core does: answered at once (the option picked, 你 选择了
 // 「…」 as how it went), let go at once (no longer asked). An option with 失败 in it fails. The modes chat-cards (the
 // card answered) and chat-answering (an option under way) open the first row's chat so (scripts/shots.sh cards);
 // chat-vault, with an agent asking to keep a password at its end, decided here as the core decides it; chat-vault-typed,
@@ -1317,12 +1469,12 @@ pub fn seeded_outbox(mode : String) -> Array[Json] {
 pub let fix_decided : Map[Int, Json] = {}
 
 ///|
-/// chat-locked: its agent's turn has ended (`fix.turn_over`, as a session's change brings it).
-pub let fix_turn_over : Ref[Bool] = Ref(false)
-
-///|
 /// The answers given here, by the card's seq: the viewer's message the core posts with each (said as the chat shows).
 pub let fix_replied : Map[Int, String] = {}
+
+///|
+/// The agent's answers to those answers, after them (fixture_card_call).
+pub let fix_card_replies : Array[Json] = []
 
 ///|
 /// How chat-vault's request to keep a password, at the chat's end, went once decided here ("": waiting).
@@ -1363,7 +1515,7 @@ pub let fix_phone : Ref[String] = Ref("")
 pub let fix_phone_link : Ref[String] = Ref("")
 
 ///|
-/// chat-phone's last post: an agent asking to debug the person's phone (docs/adb-share.md), its card as the core says
+/// chat-phone's last post: an agent asking to debug the person's phone, its card as the core says
 /// it, answered here; decided, how it went.
 pub fn phone_post() -> Json {
   let ask : Map[String, Json] = { "request": "p-1", "reason": "装上刚编好的测试包，看首屏在折叠屏展开时排得对不对" }
@@ -1383,7 +1535,7 @@ pub fn phone_post() -> Json {
 }
 
 ///|
-/// chat-signin's last post: an agent asking the person to sign in to github.com on the chat's tab (docs/vault.md 登录态),
+/// chat-signin's last post: an agent asking the person to sign in to github.com on the chat's tab ( 登录态),
 /// its card as the core says it; how it stands by the mode (chat-signin-code: a code asked; -person: a captcha, the
 /// person's; -done: signed in, its keeping waiting for this device; -kept: kept).
 pub fn signin_post(mode : String) -> Json {
@@ -1435,12 +1587,10 @@ pub fn ask_end_post() -> Json {
 pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
   let ask_end = f.mode == "chat-ask-end"
-  // (chat-locked: its card's first option closes it, and its agent is in a turn till fix_turn_over)
-  let locked = f.mode == "chat-locked"
   let vault = f.mode == "chat-vault" || f.mode == "chat-vault-typed" || f.mode == "chat-vault-file" || f.mode == "chat-vault-use" || f.mode == "chat-vault-timeout" || f.mode == "chat-vault-before"
   let linked = f.mode.has_prefix("chat-phone-linked-")
   let signin = f.mode.has_prefix("chat-signin")
-  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked
+  let phone = f.mode == "chat-phone" || f.mode == "chat-phone-outside" || f.mode == "chat-phone-granted" || f.mode == "chat-phone-lacks" || f.mode == "chat-phone-off" || linked
   // (chat-phone-granted: its request approved already; chat-phone-lacks: waiting, on a phone without Developer options;
   // chat-phone-linked-<link>[-desk]: approved, its station holding the phone as <link> says, on the phone or (-desk)
   // on a computer)
@@ -1457,7 +1607,7 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       None => rest
     }
   }
-  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone && !signin && !ask_end && !locked) {
+  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault && !phone && !signin && !ask_end) {
     return v
   }
   match v {
@@ -1481,25 +1631,8 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
             y["asked"] = Json::boolean(false)
             all[i] = Json::object(y)
           }
-          (None, Object(xm)) if locked && seq == 8 => {
-            let y = xm.copy()
-            y["card"] = {
-              "type": "options",
-              "assigneeText": "等 林 决定",
-              "options": [
-                { "label": "先不换", "detail": "这次只改列表，截图下次再说", "closes": true },
-                { "label": "一起换", "detail": "把首页和聊天页的截图都更新", "recommended": true },
-              ],
-            }
-            y["decision"] = { "resolved": false, "locked": Json::boolean(!fix_turn_over.val) }
-            all[i] = Json::object(y)
-          }
           _ => ()
         }
-      }
-      // (chat-locked: its card at the chat's end, as one asked in a turn going on is)
-      if locked {
-        all.retain(fn(x) { number(Some(x), "seq") <= 8.0 })
       }
       // what the chat's end says it needs, let go here: said let go at once, as the core says it (views.ts withLetGo)
       match o.get("stateAsk") {
@@ -1522,15 +1655,21 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
       if signin {
         all.push(signin_post(f.mode))
       }
-      // chat-ask-end's card, last
+      // chat-ask-end's card, last of what was there: what was sent since comes after it, as it was said after it (put
+      // at the end, words sent under it came to stand over it once the station had them, a whole row up in one frame)
       if ask_end {
-        all.push(ask_end_post())
+        let card = ask_end_post()
+        let at = all.search_by(fn(x) { number(Some(x), "seq") > number(Some(card), "seq") }).unwrap_or(all.length())
+        all.insert(at, card)
       }
       // each answer's message, after the rest
       for seq, label in fix_replied {
         all.push(
           msg(100 + seq, "person", by_person("林"), label, "刚刚", { "mine": true, "said": true, "createdAt": Json::number(1.0e9) }),
         )
+      }
+      for x in fix_card_replies {
+        all.push(x)
       }
       o["messages"] = Json::array(all)
       // what waits to be decided: the cards still not answered
@@ -1568,11 +1707,21 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
       }
       fix_decided[seq] = decided_json(label)
       fix_replied[seq] = label
-      f.changed()
-      Some(Ok(Json::object({})))
-    }
-    "fix.turn_over" => {
-      fix_turn_over.val = true
+      // its agent takes the answer up as it takes words sent (fix_deliver): at work at once, its answer a moment
+      // later out of its avatar, its turn over a moment after that
+      fix_chat("s-c1").working = 0.0
+      fix_later(fix_answer_ms, fn() {
+        fix_serial.val += 1
+        fix_later(fix_turn_end_ms, fn() { fix_chat("s-c1").working = -1.0 })
+        fix_card_replies.push(
+          msg(300 + fix_serial.val, "agent", by_agent("anthropic", "claude", "s-c1"), "好，按「" + label + "」来。", "刚刚", {
+            "ts": Json::string("card-reply\{fix_serial.val}"),
+            "said": true,
+            "ending": "all_done",
+            "createdAt": Json::number(1.0e9),
+          }),
+        )
+      })
       f.changed()
       Some(Ok(Json::object({})))
     }
@@ -1749,7 +1898,7 @@ pub let table_images_md : Json = [
 /// MBUI_FIXTURE=chat-viz's visualization: a fragment, as the viz skill has agents write them.
 pub let fixture_viz_html : String =
   #|<div class="viz-card" style="padding:16px"><b>本周发布</b><p>周一 2 个、周三 1 个、周五 3 个</p>
-  #|<button onclick="ember.setWidgetState({seen:true})">看过了</button></div>
+  #|<button onclick="openai.setWidgetState({seen:true})">看过了</button></div>
 
 ///|
 pub fn with_md_message(v : Json) -> Json {
@@ -1772,6 +1921,87 @@ pub fn with_message(v : Json, words : String) -> Json {
         }),
       )
       o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// A chat whose run was changed twice, as the core says the notices (run-change.ts): another model and effort, whose
+/// line has the room; another runtime and model, whose line has not on a phone, which says what it runs on now.
+fn with_run_change(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let notice = fn(words : String, short : String, was : String, now : String) -> Json {
+        { "failed": false, "words": Json::string(words), "short": Json::string(short), "lines": [Json::string(was), Json::string(now)] }
+      }
+      let was = "之前：Claude Code · Opus 5.5 · 高 · 自动 · lin@example.com"
+      let mid = "现在：Claude Code · Sonnet 5.5 · 中 · 自动 · lin@example.com"
+      let now = "现在：Codex · GPT-6 Astra · 高 · Fast · 自动 · lin@example.com"
+      let long = "Claude Code · Sonnet 5.5 · 中 · 标准 → Codex · GPT-6 Astra · 高 · Fast"
+      o["messages"] = [
+        msg(1, "person", by_person("林"), "换个模型试试", "刚刚", { "mine": true }),
+        msg(2, "ember", { "name": "still.fail" }, "已切换：Opus 5.5 · high → Sonnet 5.5 · medium", "刚刚", {
+          "notice": notice("Opus 5.5 · 高 → Sonnet 5.5 · 中", "换成 Sonnet 5.5 · 中", was, mid),
+        }),
+        msg(3, "ember", { "name": "still.fail" }, "已切换：" + long, "刚刚", {
+          "notice": notice(long, "换成 Codex · GPT-6 Astra · 高 · Fast", "之前：Claude Code · Sonnet 5.5 · 中 · 标准 · 自动 · lin@example.com", now),
+        }),
+      ]
+      o["asks"] = []
+      o["askClear"] = false
+      o["more"] = false
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// A model's own limit spent, as the station says it in the chat and the core in its agent's state, before #4365 (as
+/// though the account's quota were) and after (the model's, named).
+fn with_model_limit(v : Json, after : Bool) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let en = @sf.language() == "en"
+      let (words, state) = if after && en {
+        ("Fable's limit is spent, not your quota; resumes on refill", "Failed: Fable's limit spent")
+      } else if after {
+        ("Fable 自身限额已用完（非账号额度），恢复后自动继续", "出错：Fable 自身限额已用完")
+      } else if en {
+        ("Out of quota; continues when it refills", "Failed: Out of quota")
+      } else {
+        ("额度已用完，恢复后自动继续", "出错：额度已用完")
+      }
+      o["messages"] = [
+        msg(1, "person", by_person("林"), "请继续处理这个任务", "刚刚", { "mine": true }),
+        msg(2, "ember", { "name": "still.fail" }, "⚠️ " + words, "刚刚", {
+          "notice": { "failed": true, "words": Json::string(words) },
+        }),
+      ]
+      o["agents"] = Json::array(
+        items(Some(v), "agents").map(fn(a) {
+          match (a, field(Some(a), "session")) {
+            (Object(am), Some(Object(session))) => {
+              let w = am.copy()
+              let failed = session.copy()
+              failed["statusText"] = Json::string(state)
+              failed["tone"] = Json::string("red")
+              w["session"] = Json::object(failed)
+              w["status"] = Json::string("failed")
+              w["badge"] = Json::string("failed")
+              Json::object(w)
+            }
+            _ => a
+          }
+        }),
+      )
+      o["asks"] = []
+      o["askClear"] = false
+      o["more"] = false
       Json::object(o)
     }
     _ => v
@@ -1964,7 +2194,7 @@ pub fn fixture_peek(on_value : (Json, Bytes?) -> Unit) -> Int {
 }
 
 ///|
-/// The chat with its station's update said in its bar and opened (MBUI_FIXTURE=chat-update: station_update.mbt).
+/// The chat with its station's update said in its bar and opened.
 /// chat-cache-cold: its agent at rest, its prompt cache over, as the core says it (ChatView::cacheCold).
 pub fn with_cache_cold(v : Json) -> Json {
   match v {

@@ -1,5 +1,5 @@
 // What tells the page's parts that follow the appearance (theme.ts useDark) to read it again, on its own: the official
-// site sets the appearance itself and says so with it, without the app's prefs and core (site/ThemeSwitch.tsx), so
+// site sets the appearance itself and says so with it, without the app's prefs and core, so
 // that its own script stays small.
 export const APPEARANCE_EVENT = "stillfail-appearance";
 

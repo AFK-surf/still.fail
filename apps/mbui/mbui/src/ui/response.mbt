@@ -77,7 +77,7 @@ pub fn[T] Changed::changed(self : Changed[T]) -> Bool {
 ///|
 /// What happened to widget `id` since the last frame (see the file's head); it is registered as able to take the
 /// focus (unless not `focusable`, or `disabled`: nothing happens to it then but being pointed at), and as taking
-/// presses (as Ctx::clicked asked: the pointer's hand over it; not `disabled`). `keys`: those of
+/// presses (as Ctx::takes_presses says: the pointer's hand over it; not `disabled`). `keys`: those of
 /// Enter and Space that press it (press_enter, press_space); `focus_on_press`: a press gives it the focus (a slider's
 /// thumb), unless a finger uses it while a field has the focus; else only the keyboard does. `node`: its node (as
 /// Ctx::box returns it), for where the focus goes in order.

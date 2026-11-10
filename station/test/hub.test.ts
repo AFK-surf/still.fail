@@ -154,6 +154,50 @@ test("a message steered in as the turn ends is worked on in its thread, and the 
   await r.close();
 });
 
+test("a state said before the turn read a message no longer stands: the turn that leaves it unanswered is asked again", async () => {
+  const r = new Rig();
+  const first = message();
+  await r.accept(first);
+  await settle();
+  const key = sessionKey("cl", "C1", first.threadTs);
+  const session = r.claude.last();
+  // Given while it writes its answer to the first message: the post that ends the turn was written without seeing it.
+  await r.accept(reply(first, "9999.1", "你有哪些 chat"));
+  await settle();
+  assert.ok(session.steers[0]!.includes("你有哪些 chat"));
+  await r.call(key, "chat_post", { to: `C1/${first.threadTs}`, text: "第一个问题的回答", kind: "all_done", done: "回答了第一个问题" });
+  // The tool answered: its model is asked again, with the message; it answers in words nobody reads, and its turn ends.
+  session.events({ type: "live", event: { kind: "phase", phase: "requesting" } });
+  await settle();
+  session.says("我有这些 chat");
+  session.complete();
+  await settle();
+  assert.equal(session.prompts.length, 2, "asked where it stands, as any turn ending in no state");
+  assert.equal(r.store.listTurns(key).at(-1)?.summary.declared ?? null, null);
+  await r.close();
+});
+
+test("a state said after the turn read a message stands", async () => {
+  const r = new Rig();
+  const first = message();
+  await r.accept(first);
+  await settle();
+  const key = sessionKey("cl", "C1", first.threadTs);
+  const session = r.claude.last();
+  await r.accept(reply(first, "9999.1", "你有哪些 chat"));
+  await settle();
+  session.events({ type: "live", event: { kind: "phase", phase: "requesting" } });
+  await settle();
+  await r.call(key, "chat_post", { to: `C1/${first.threadTs}`, text: "两个都答了", kind: "all_done", done: "两个问题都答了" });
+  session.events({ type: "live", event: { kind: "phase", phase: "requesting" } });
+  await settle();
+  session.complete();
+  await settle();
+  assert.equal(session.prompts.length, 1, "nothing asked again");
+  assert.equal(r.store.listTurns(key).at(-1)?.summary.declared, "final");
+  await r.close();
+});
+
 test("a message during a running turn moves what it waits on to the background, unless its profile says not", async () => {
   const r = new Rig();
   const first = message();
@@ -401,8 +445,9 @@ test("a turn that fails after it said it would wait ends failed, not waiting: no
   await settle();
   const last = () => r.store.lastTurn(key)!;
   assert.deepEqual([last().outcome, last().declared, last().waitSeconds], ["failed", null, null], "shown failed, not waiting");
-  // What it means on the first line; what the runtime said under it, as it said it (opened, the notice shows it).
-  assert.equal(r.chat.lastText(), "⚠️ 模型服务出错，回复即可重试\n\n```\nAPI Error: Connection dropped (ECONNRESET)\n```");
+  // What it means on the first line, with the runtime's first words where the station has none of its own; all it
+  // said under it, as it said it (opened, the notice shows it).
+  assert.equal(r.chat.lastText(), "⚠️ 模型服务出错：API Error: Connection dropped (ECONNRESET)\n\n```\nAPI Error: Connection dropped (ECONNRESET)\n```");
   const thread = r.thread("C1", m.threadTs);
   const notice = r.store.entriesBefore(thread.id, null, 1).at(-1)!;
   assert.deepEqual(last().about, { thread: thread.id, seq: notice.n, ts: notice.ts }, "the failure points to its own notice");
@@ -723,6 +768,77 @@ test("a sign-in that failed has its account checked again first: one whose login
   await r.close();
 });
 
+test("an outdated Codex is updated before the failed conversation continues, only once", async () => {
+  const r = new Rig();
+  let finish!: () => void;
+  let calls = 0;
+  const updating = new Promise<void>((resolve) => { finish = resolve; });
+  Object.assign(r.hub.deps, { updateOldCodex: async () => { calls++; await updating; } });
+  const m = message();
+  await r.accept(m, "gpt");
+  await settle();
+  const first = r.codex.last();
+  const error = `{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'gpt-6-astra' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again."}}`;
+  first.end({ kind: "failed", reason: "model", message: error });
+  await settle();
+  assert.equal(calls, 1);
+  assert.equal(r.gptChat.lastText(), "Codex 版本过旧，正在更新，更新后将重试");
+  assert.equal(r.codex.count(), 1, "the conversation waits for the update");
+  await r.accept(reply(m, "9999.2", "also check the tests", { addressed: true }), "gpt");
+  await settle();
+  assert.equal(r.codex.count(), 1, "a message during the update waits for the new executable");
+  finish();
+  await settle();
+  const retry = r.codex.last();
+  assert.equal(r.codex.count(), 2);
+  assert.equal(retry.options.resume, first.sessionId);
+  assert.ok(retry.prompts[0]!.includes("Continue the unfinished work"));
+  assert.ok(retry.steers.some((text) => text.includes("also check the tests")), "the new message reaches the resumed turn");
+  retry.end({ kind: "failed", reason: "model", message: error });
+  await settle();
+  assert.equal(calls, 1, "a persistent version refusal must not loop");
+  assert.equal(r.codex.count(), 2);
+  await r.close();
+});
+
+test("an update failure explains the cause; unrelated model errors never install software", async () => {
+  const r = new Rig();
+  let calls = 0;
+  Object.assign(r.hub.deps, { updateOldCodex: async () => { calls++; throw new Error("npm: permission denied"); } });
+  const m = message();
+  await r.accept(m, "gpt");
+  await settle();
+  const error = "The 'gpt-6-astra' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.";
+  r.codex.last().end({ kind: "failed", reason: "model", message: error });
+  await settle();
+  assert.equal(calls, 1);
+  assert.equal(r.gptChat.lastText(), "⚠️ Codex 更新失败：npm: permission denied");
+  assert.equal(r.codex.count(), 1);
+  await r.accept(reply(m, "9999.2", "try another model", { addressed: true }), "gpt");
+  await settle();
+  r.codex.last().end({ kind: "failed", reason: "model", message: "model not supported" });
+  await settle();
+  assert.equal(calls, 1);
+  await r.close();
+});
+
+test("stopping while Codex updates prevents the failed conversation from restarting", async () => {
+  const r = new Rig();
+  let finish!: () => void;
+  const updating = new Promise<void>((resolve) => { finish = resolve; });
+  Object.assign(r.hub.deps, { updateOldCodex: async () => updating });
+  const m = message();
+  await r.accept(m, "gpt");
+  await settle();
+  r.codex.last().end({ kind: "failed", reason: "model", message: "The 'gpt-6-astra' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again." });
+  await settle();
+  await r.hub.stop(sessionKey("gpt", m.channel, m.threadTs));
+  finish();
+  await settle();
+  assert.equal(r.codex.count(), 1);
+  await r.close();
+});
+
 test("Codex authentication failure moves an automatic session and continues once", async () => {
   const r = new Rig();
   r.edit((raw) => {
@@ -882,7 +998,58 @@ test("messages that arrive while a turn cannot take them go in the next turn", a
   await r.close();
 });
 
-test("a message said before the agent's post, unread when it posted, is said to come before that post", async () => {
+test("a post over a message the agent has not read is held back, then sent as written by its id", async () => {
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const to = `C1/${m.threadTs}`;
+  const session = r.claude.last();
+  session.unsteerable = true;
+  await r.accept(reply(m, "9999.3", "wait, not that"));
+  await settle();
+  const said = () => r.said(r.thread("C1", m.threadTs).id).filter((x) => x.text === "Done.");
+  const held = await r.call(key, "chat_post", { to, text: "Done.", kind: "all_done", done: "构建修好了，CI 已通过" });
+  assert.match(held, /^Not posted: a message you had not read came in .*\(ts 9999\.3\).*Held as (held-\d+)/, held);
+  const id = held.match(/Held as (held-\d+)/)![1]!;
+  assert.equal(said().length, 0, "nothing went up");
+  assert.equal(r.store.listTurns(key).at(-1)?.summary.declared ?? null, null, "no state was recorded");
+  await assert.rejects(r.call(key, "chat_post", { to, send: id, text: "Other." }), /send takes only/);
+  session.complete();
+  await settle();
+  assert.ok(session.prompts[1]!.includes("wait, not that"), "the message comes in the next round");
+  const sent = await r.call(key, "chat_post", { to, send: id, kind: "all_done", done: "构建修好了，CI 已通过" });
+  assert.match(sent, /^Posted to .*recorded state all_done\./, sent);
+  assert.ok(!sent.includes("had not read"), sent);
+  assert.equal(said().length, 1, "posted once, as held");
+  await assert.rejects(r.call(key, "chat_post", { to, send: id }), /no held post/);
+  await r.close();
+});
+
+test("a held post's files and title go with it when it is sent", async () => {
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const to = `C1/${m.threadTs}`;
+  const file = join(r.dir, "report.txt");
+  writeFileSync(file, "all green");
+  await r.accept(reply(m, "9999.5", "and the logs"));
+  await settle();
+  const held = await r.call(key, "chat_post", { to, text: "Report attached.", files: [file], title: "构建报告" });
+  assert.ok(held.startsWith("Not posted"), held);
+  assert.deepEqual(r.chat.texts(), []);
+  r.claude.last().reads();
+  const sent = await r.call(key, "chat_post", { to, send: held.match(/Held as (held-\d+)/)![1]! });
+  assert.ok(sent.startsWith("Posted"), sent);
+  assert.deepEqual([r.chat.texts(), r.chat.files.at(-1)], [["Report attached."], ["report.txt"]]);
+  assert.equal(r.thread("C1", m.threadTs).autoTitle, "构建报告");
+  await r.close();
+});
+
+test("a message that comes while the post goes up is said to come before that post", async () => {
   const r = new Rig();
   const m = message();
   await r.accept(m);
@@ -890,10 +1057,9 @@ test("a message said before the agent's post, unread when it posted, is said to 
   const key = sessionKey("cl", "C1", m.threadTs);
   const session = r.claude.last();
   session.unsteerable = true;
-  await r.accept(reply(m, "9999.3", "wait, not that"));
-  await settle();
+  r.chat.whilePosting = () => r.accept(reply(m, "9999.3", "wait, not that"));
   const result = await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "Done." });
-  assert.ok(result.includes("you had not read yet came in this thread (ts 9999.3)"), result);
+  assert.ok(result.startsWith("Posted") && result.includes("you had not read yet came in this thread (ts 9999.3)"), result);
   const post = r.said(r.thread("C1", m.threadTs).id).find((x) => x.text === "Done.")!;
   session.complete();
   await settle();
@@ -901,21 +1067,26 @@ test("a message said before the agent's post, unread when it posted, is said to 
   await r.close();
 });
 
-test("a message steered into the turn is unread by the post its model was already writing, not by one after it asked again", async () => {
+test("a message steered into the turn holds the post its model was already writing, not one after it asked again", async () => {
   const r = new Rig();
   const m = message();
   await r.accept(m);
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
+  const to = `C1/${m.threadTs}`;
   const session = r.claude.last();
   await r.accept(reply(m, "9999.4", "also the docs"));
   await settle();
   assert.ok(session.steers[0]!.includes("also the docs"));
-  const result = await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "Fixed the build." });
-  assert.ok(result.includes("(ts 9999.4)"), result);
+  const result = await r.call(key, "chat_post", { to, text: "Fixed the build." });
+  assert.ok(result.startsWith("Not posted") && result.includes("(ts 9999.4)"), result);
+  const id = result.match(/Held as (held-\d+)/)![1]!;
   session.events({ type: "live", event: { kind: "phase", phase: "requesting" } });
-  const later = await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "Docs too." });
-  assert.ok(!later.includes("had not read"), later);
+  const sent = await r.call(key, "chat_post", { to, send: id });
+  assert.ok(sent.startsWith("Posted") && !sent.includes("had not read"), sent);
+  assert.equal(r.said(r.thread("C1", m.threadTs).id).filter((x) => x.text === "Fixed the build.").length, 1);
+  const later = await r.call(key, "chat_post", { to, text: "Docs too." });
+  assert.ok(later.startsWith("Posted") && !later.includes("had not read"), later);
   await r.close();
 });
 
@@ -974,6 +1145,7 @@ test("two connects in one thread keep separate sessions, share its messages and 
   await settle();
   assert.ok(r.claude.last().steers[0]!.includes("both of you"));
   assert.ok(r.codex.last().steers[0]!.includes("both of you"));
+  r.codex.last().reads();
   await r.call(sessionKey("gpt", "C1", root.threadTs), "chat_post", { to: `C1/${root.threadTs}`, text: "from gpt" });
   assert.deepEqual(r.gptChat.texts(), ["from gpt"]);
   assert.deepEqual(r.chat.texts(), []);
@@ -1180,6 +1352,46 @@ test("an agent that loses the station's tools is started again rather than nudge
   await r.accept(reply(m, "9999.9", "still there?"));
   await settle();
   assert.equal(r.claude.count(), 3);
+  await r.close();
+});
+
+test("a process ended while its turn waits on its background work: it goes on at once, told what stopped", async () => {
+  // 2026-11-05: the station updated while an agent waited on CI with a background command; its process lost the tools
+  // and was ended at the turn's end, the command with it, and nothing brought it back until its wait ran out.
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const first = r.claude.last();
+  const key = first.options.route;
+  first.tasks = [{ id: "b1", kind: "command", description: "watch CI" }];
+  await r.call(key, "chat_state", { kind: "waiting", seconds: 600, for: "CI" });
+  first.events({ type: "toolsLost", why: "ECONNRESET: The socket connection was closed unexpectedly" });
+  first.complete();
+  await settle();
+  assert.ok(first.disposed, "the process that lost them ends, with its background work");
+  const second = r.claude.last();
+  assert.notEqual(second, first, "not left until its wait is over");
+  assert.equal(second.options.resume, first.sessionId);
+  assert.ok(matches(second.prompts[0]!, ["background was stopped", "- background command b1 (watch CI)\n"]), second.prompts[0]);
+  await r.close();
+});
+
+test("a process that exits while its turn waits on its background work: it goes on at once, told what stopped", async () => {
+  const r = new Rig();
+  await r.accept(message());
+  await settle();
+  const first = r.claude.last();
+  first.tasks = [{ id: "b1", kind: "command", description: "watch CI" }];
+  await r.call(first.options.route, "chat_state", { kind: "waiting", seconds: 600, for: "CI" });
+  first.complete();
+  await settle();
+  assert.equal(r.claude.last(), first, "its process holds its background work while it waits");
+  first.events({ type: "closed", why: "claude exited (0)" });
+  await settle();
+  const second = r.claude.last();
+  assert.notEqual(second, first);
+  assert.ok(matches(second.prompts[0]!, ["background was stopped", "- background command b1 (watch CI)\n"]), second.prompts[0]);
   await r.close();
 });
 
@@ -1531,6 +1743,7 @@ test("a single-session connect gathers every thread into one session and replies
   await r.accept(reply(a, "9999.8", "and tests too"), "team");
   await settle();
   assert.ok(session.steers.at(-1)!.includes("and tests too"));
+  session.reads();
   await r.call(bound, "chat_post", { to: `C2/${b.threadTs}`, text: "B done" });
   assert.deepEqual(r.teamChat.posts, [[{ channel: "C2", threadTs: b.threadTs }, "B done"]]);
   await r.close();
@@ -1574,6 +1787,7 @@ test("a single-session connect can be pointed at a new or an existing session", 
       ["C1", "cl"],
     ],
   );
+  r.claude.last().reads();
   await r.call(clKey, "chat_post", { to: `C7/${t.threadTs}`, text: "to team thread" });
   await r.call(clKey, "chat_post", { to: `C1/${m.threadTs}`, text: "to cl thread" });
   assert.deepEqual(r.teamChat.texts(), ["to team thread"]);
@@ -1598,9 +1812,9 @@ test("a chat opened on the admin page reaches the session like Slack, and the ag
   sayIn(r.hub, thread.id, "local", "现在进展如何？");
   await settle();
   const prompt = r.claude.last().prompts.at(-1)!;
-  assert.ok(prompt.includes(`<message via="web" connect="ember" thread="EMBER/${thread.threadTs}" from="管理员 (local)"`), prompt);
+  assert.ok(prompt.includes(`<message via="web" connect="ember" thread="CHAT/${thread.threadTs}" from="管理员 (local)"`), prompt);
   assert.ok(prompt.includes("现在进展如何"));
-  const to = `EMBER/${thread.threadTs}`;
+  const to = `CHAT/${thread.threadTs}`;
   assert.equal(await r.call(key, "chat_post", { to, text: "快好了", kind: "all_done", done: "答了进展：快好了，没有别的要做" }), `Posted to ${to}, and recorded state all_done.`);
   assert.deepEqual(
     r.said(thread.id).map((x) => [x.authorKind, x.text]),
@@ -1774,7 +1988,7 @@ test("idle chats that are done are archived by the station; busy, blocked, unrea
   sayIn(r.hub, thread.id, "local", "hi");
   await settle();
   // The agent's answer is unread: the chat stays.
-  await r.call(web, "chat_post", { to: `EMBER/${thread.threadTs}`, text: "hello", kind: "final" });
+  await r.call(web, "chat_post", { to: `CHAT/${thread.threadTs}`, text: "hello", kind: "final" });
   r.claude.last().complete();
   await settle();
   await r.accept(say("<@UBOT> hi"), "team");
@@ -1914,6 +2128,34 @@ test("where only what the archive review recommended is archived on its own, an 
 });
 
 const withProfile = (id: string, name: string, models: string[]) => (raw: any) => raw.profiles.push({ ...raw.profiles[0], id, name, models });
+
+test("another runtime, model, effort or speed is said in the chat with how it ran and how it runs; another account alone is not", async () => {
+  const r = new Rig();
+  const m = say("<@UBOT> fix the build");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  r.claude.last().complete();
+  await settle();
+  r.edit(withProfile("cc2", "another", ["opus", "sonnet"]));
+  r.edit((raw) => raw.profiles.filter((p: any) => p.id === "cc").forEach((p: any) => (p.models = [...(p.models ?? []), "sonnet"])));
+  const thread = r.store.latestThread(key)!.thread.id;
+  const notices = () => r.store.entriesAfter(thread, 0).filter((e) => e.authorKind === "ember");
+  const before = r.session(key);
+  await configure(r.hub, key, { model: "sonnet", effort: "low" });
+  const [said] = notices();
+  // Its words what changed alone (Slack, an app from before); kept with how it ran and runs, the account named.
+  assert.equal(r.chat.lastText(), `已切换：Opus · ${before.effort} → Sonnet · low`);
+  assert.equal(said?.text, r.chat.lastText());
+  const run = { runtime: "claude", fast: before.fast, profile: "cc", account: said?.change?.was.account, pinned: false, context: null };
+  assert.equal(typeof said?.change?.was.account, "string");
+  assert.deepEqual(said?.change, { was: { ...run, model: "opus", effort: before.effort }, now: { ...run, model: "sonnet", effort: "low" } });
+  // Kept to another account: nothing said.
+  await configure(r.hub, key, { profile: "cc2" });
+  assert.equal(notices().length, 1);
+  await r.close();
+});
 
 test("a session changes profile, model and effort by hand, and is taken on by another profile when its own cannot run", async () => {
   const r = new Rig();
@@ -2211,6 +2453,38 @@ test("the station's variables for its agents changed: a process that could take 
   await r.close();
 });
 
+test("a runtime updated from the pages: its sessions' processes end now if idle, else before their next turn", async () => {
+  const r = new Rig();
+  const m = say("<@UBOT> fix the build");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const running = r.claude.last();
+  // Another runtime updated: nothing of Claude Code's ends.
+  r.hub.runtimeUpdated("codex");
+  // Updated while a turn runs: that turn goes on; its process ends before the next, which starts on the new one.
+  r.hub.runtimeUpdated("claude");
+  await settle();
+  assert.ok(!running.disposed && running.aborts === 0, "the running turn is not cut off");
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  running.complete();
+  await settle();
+  await r.accept({ ...say("<@UBOT> once more"), threadTs: m.threadTs });
+  await settle();
+  assert.ok(running.disposed, "its process ended before the next turn");
+  assert.deepEqual(running.retuned, [], "not retuned in place");
+  const next = r.claude.last();
+  assert.notEqual(next, running);
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  next.complete();
+  await settle();
+  // Idle: it ends at once.
+  r.hub.runtimeUpdated("claude");
+  await settle();
+  assert.ok(next.disposed);
+  await r.close();
+});
+
 test("a deleted profile's sessions go on on another, and stop when no other can run them", async () => {
   const r = new Rig();
   const m = say("<@UBOT> fix the build");
@@ -2245,6 +2519,28 @@ test("a deleted profile's sessions go on on another, and stop when no other can 
   assert.ok(moved.disposed, "not left running on the deleted profile");
   assert.equal(r.claude.last(), moved, "no process started without a profile");
   await r.close();
+});
+
+test("a disabled profile cannot run a new or pinned session, and its existing session moves", async () => {
+  const r = new Rig();
+  try {
+    const m = say("<@UBOT> work");
+    await r.accept(m);
+    await settle();
+    const key = sessionKey("cl", "C1", m.threadTs);
+    r.edit(withProfile("cc2", "another", ["opus"]));
+    r.hub.store.setSessionProfile(key, "cc", true);
+    r.edit((raw) => { raw.profiles.find((p: any) => p.id === "cc").enabled = false; });
+    await r.hub.profileGone("cc");
+    assert.deepEqual([r.session(key).profile, r.session(key).profilePinned], ["cc2", false]);
+    assert.ok(!r.hub.profilesIn(null).some((p) => p.id === "cc"));
+    assert.throws(() => r.hub.accounts.change(key, { profile: "cc" }), /停用/);
+    assert.throws(() => newSession(r.hub, { ...chat(), model: "opus", profile: "cc" }), /停用/);
+    const [next] = newSession(r.hub, { ...chat(), model: "opus" });
+    assert.equal(r.session(next).profile, "cc2");
+    r.edit((raw) => { delete raw.profiles.find((p: any) => p.id === "cc").enabled; });
+    assert.ok(r.hub.profilesIn(null).some((p) => p.id === "cc"), "enabled again without deleting its settings");
+  } finally { await r.close(); }
 });
 
 test("a connect or a new chat can keep its sessions to one profile; otherwise the pool picks", async () => {
@@ -2325,7 +2621,7 @@ test("in a chat on the station's page with several agents, what one posts reache
   r.claude.last().complete();
   r.codex.last().complete();
   await settle();
-  await r.call(one[0], "chat_post", { to: `EMBER/${one[1].threadTs}`, text: "我来写接口" });
+  await r.call(one[0], "chat_post", { to: `CHAT/${one[1].threadTs}`, text: "我来写接口" });
   await settle();
   const heard = r.codex.last().prompts.at(-1)!;
   assert.ok(matches(heard, ['from="Claude Code" bot ts="', '">\n我来写接口']), heard);
@@ -2393,6 +2689,65 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   await configure(r.hub, key, { profile: null });
   await settle();
   assert.equal(r.claude.count(), 3);
+  await r.close();
+});
+
+test("a model's own limit is said as the model's, not the account's: the quota left would make that look wrong", async () => {
+  // #4365: Fable 5.1 at its own weekly cap while the account had 5H 96% / W 29% left; "额度已用完" read as a mistake.
+  const r = new Rig();
+  const said = "You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage?from=cc_cli_limit_message, to continue.";
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const agent = r.claude.last();
+  agent.end({ kind: "failed", reason: classifyResult(said), message: said });
+  await settle();
+  assert.equal(r.chat.lastText(), `⚠️ Fable 自身限额已用完（非账号额度），恢复后自动继续\n\n\`\`\`\n${said}\n\`\`\``);
+  // Woken meanwhile, it runs into it again: said once, as an account's is.
+  r.hub.notify(r.claude.last().options.route, "a job ended");
+  await settle();
+  assert.equal(r.chat.texts().filter((t) => t.includes("限额已用完")).length, 1);
+  await r.close();
+});
+
+test("a model's own limit passes over that model alone on its account: its other models still run there", async () => {
+  // #4643: Fable at its own weekly cap left the whole account passed over for an hour, its quota showing room.
+  const r = new Rig();
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus", "sonnet"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "second" });
+  });
+  const said = "You've reached your Opus limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage?from=cc_cli_limit_message, to continue.";
+  const limited = { kind: "failed" as const, reason: classifyResult(said), message: said };
+  const claude = () => r.config.profiles.filter((p) => p.runtime === "claude");
+  await r.accept(message());
+  await settle();
+  const first = r.claude.last();
+  const key = first.options.route;
+  const on = r.session(key).profile;
+  // Left to the station, its chat goes on with the same model on another account, as when an account is spent.
+  first.end(limited);
+  await settle();
+  const second = r.claude.last();
+  assert.equal(r.claude.count(), 2);
+  assert.notEqual(second.options.profile.id, on);
+  assert.equal(r.session(key).model, "opus");
+  // The account left is not spent: its other models are picked there as before, only Opus is passed over.
+  assert.equal(r.hub.accounts.healthOf(on).spent, undefined);
+  assert.equal(r.hub.accounts.pick(claude(), "sonnet", true).id, on);
+  assert.equal(r.hub.accounts.pick(claude(), "opus", true).id, second.options.profile.id);
+  // Opus's limit on the second too: none left for Opus, so it says so and waits, as for an account.
+  second.end(limited);
+  await settle();
+  assert.equal(r.claude.count(), 2);
+  assert.equal(r.chat.lastText(), `⚠️ Opus 自身限额已用完（非账号额度），恢复后自动继续\n\n\`\`\`\n${said}\n\`\`\``);
+  // Changed to another model by hand: it goes on at once on the account it is on, whose allowance has room.
+  await configure(r.hub, key, { model: "sonnet" });
+  await settle();
+  const third = r.claude.last();
+  assert.equal(r.session(key).profile, second.options.profile.id);
+  assert.equal(third.options.profile.id, second.options.profile.id);
+  assert.ok(matches(third.prompts.at(-1)!, [GO_ON_AFTER_SPENT]), third.prompts.at(-1));
   await r.close();
 });
 
@@ -2917,7 +3272,7 @@ test("a session from before a change is told it once, and a new one never", asyn
   await r.close();
 });
 
-test("fast is per session, and null restores the subscription default", async () => {
+test("fast is per session, on Codex and Claude Code, and null restores the account's default", async () => {
   const r = new Rig();
   const [a] = newSession(r.hub, { ...chat("codex"), fast: true });
   const [b] = newSession(r.hub, chat("codex"));
@@ -2932,8 +3287,11 @@ test("fast is per session, and null restores the subscription default", async ()
   assert.equal(r.session(a).fast, false, "unrelated changes preserve an explicit standard speed");
   await configure(r.hub, a, { fast: null });
   assert.equal(r.session(a).fast, null);
-  const [claude] = newSession(r.hub, chat("claude"));
-  await assert.rejects(configure(r.hub, claude, { fast: true }));
+  // Claude Code takes it too (on an Anthropic key: its driver says fastMode as it starts).
+  const [claude] = newSession(r.hub, { ...chat("claude"), fast: true });
+  assert.equal(r.session(claude).fast, true);
+  await configure(r.hub, claude, { fast: false });
+  assert.equal(r.session(claude).fast, false);
   await r.close();
 });
 

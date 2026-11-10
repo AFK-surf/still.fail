@@ -8,18 +8,11 @@ fn init {
   @ui.rows_steady_known([
     // (Android's runs played again, src/sfapp/tape.mbt)
     ("src/sfapp/tape.mbt", 1),
-    ("src/sfreplay/flows/answer_option_test.mbt", 2),
-    ("src/sfreplay/flows/bar_archive_test.mbt", 2),
-    ("src/sfreplay/flows/card_motion_test.mbt", 1),
+    // (归档 pressed in the chat's bar: the list's foot stands taller at once as the composer goes, where the chat
+    // stands closing over the way, so what is over them goes up 42 in a frame and back, its page leaving for Home;
+    // rows_step_least's finding)
+    ("src/sfreplay/flows/bar_archive_test.mbt", 1),
     ("src/sfreplay/flows/drive_upload_test.mbt", 1),
-    ("src/sfreplay/flows/history_test.mbt", 1),
-    ("src/sfreplay/flows/offline_retry_test.mbt", 1),
-    ("src/sfreplay/flows/settings_add_station_test.mbt", 1),
-    ("src/sfreplay/flows/settings_connect_test.mbt", 1),
-    ("src/sfreplay/flows/settings_run_settings_test.mbt", 2),
-    ("src/sfreplay/flows/settings_station_mark_test.mbt", 1),
-    ("src/sfreplay/flows/settings_station_settings_test.mbt", 1),
     ("src/sfreplay/flows/share_test.mbt", 1),
-    ("src/sfreplay/flows/station_rename_test.mbt", 1),
   ])
 }

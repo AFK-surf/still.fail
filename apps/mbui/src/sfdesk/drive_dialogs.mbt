@@ -75,10 +75,10 @@ pub fn add_favorite_folder(src : Source, ws : String, stations : Array[DvStation
           c.box(style=roots_list.then(list), fn() {
             for s in stations {
               let id = c.id("drive/which/" + s.station)
-              if c.clicked(id) {
+              c.on_press(id, fn() {
                 close()
                 picker_open(src, ws, s.station, picked)
-              }
+              })
               let b = c.box(style=pick_row.then(row), id~, fn() {
                 @sf.station_icon(c, s.emoji, s.icon, pick_icon, t.p.muted)
                 c.text(s.name, style=pick_name) |> ignore
@@ -152,24 +152,25 @@ fn picker_open(src : Source, ws : String, station : String, picked : (Favorite) 
       let v = dialogs.value.get()
       let path = text(v, "path")
       let taken = v is Some(_) && favorite_has(favorites(src, ws), station, path, "")
-      if @sf.button(c, @sf.t("common.cancel"), key="drive/picker/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key="drive/picker/cancel", tone=Ghost, on_press=fn() {
         close()
         picker_close()
-      }
-      if @sf.button(
-          c,
-          @sf.t(if taken { "web-pages.files.alreadyFavorite" } else { "web-pages.files.pickFavorite" }),
-          key="drive/picker/pick",
-          tone=Primary,
-          disabled=v is None || taken || dialogs.denied.get(),
-        ) {
-        let name = dv_root_label([], path)
-        close()
-        picker_close()
-        let f : Favorite = { station, root: path, path: "", name }
-        favorite_add(src, ws, f)
-        picked(f)
-      }
+      }) |> ignore
+      @sf.button(
+        c,
+        @sf.t(if taken { "web-pages.files.alreadyFavorite" } else { "web-pages.files.pickFavorite" }),
+        key="drive/picker/pick",
+        tone=Primary,
+        disabled=v is None || taken || dialogs.denied.get(),
+        on_press=fn() {
+          let name = dv_root_label([], path)
+          close()
+          picker_close()
+          let f : Favorite = { station, root: path, path: "", name }
+          favorite_add(src, ws, f)
+          picked(f)
+        },
+      ) |> ignore
     },
     gone=picker_close,
   )
@@ -239,9 +240,9 @@ fn picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
   let wanted = dialogs.filter.text().trim(chars=" ").to_owned()
   let row = fn(name : String, p : String, unreadable : Bool, disk : Bool, here : Bool) {
     let id = c.id("drive/picker/row/" + p)
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       picker_go(c, src, station, Some(p))
-    }
+    })
     let b = c.box(style=if here { pick_row_here } else { pick_row }, id~, fn() {
       @sf.icon(c, if disk { "disk" } else { "folder" }, size=pick_icon, color=t.p.muted) |> ignore
       c.box(style=root_text, fn() {
@@ -270,9 +271,17 @@ fn picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
           Some(_) => path
           None => match way.last() { Some((_, p)) => p; None => "" }
         }
-        for p in places {
-          row(p.0, p.1, p.2, p.3, p.1 == here_at)
+        // (a machine's disks come last: a list, so that all of them are reached however many it has)
+        let h : @ui.Size = if narrow {
+          Px(dmin(places.length().to_double() * pick_row_h, picker_places_most))
+        } else {
+          Fill(1.0)
         }
+        c.list("drive/picker/places", places.length(), pick_row_h, h~, fn(i) {
+          let p = places[i]
+          row(p.0, p.1, p.2, p.3, p.1 == here_at)
+        })
+        |> ignore
       })
       |> ignore
     }
@@ -440,6 +449,10 @@ let picker_box_narrow : @ui.Style = @ui.css("w=Full h=S96 gap=S3")
 ///|
 // kept across runs: a value (no field of it changes)
 let picker_places_narrow : @ui.Style = @ui.css("w=Full gap=S0_5")
+
+///|
+/// Narrow: how high its places' list goes, the folders under it keeping the rest (4.5 rows: the half shows it goes on).
+let picker_places_most : Double = 180.0
 
 ///|
 /// Its places (180) beside its folders, 12 apart, as high as 420 at most.

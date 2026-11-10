@@ -20,9 +20,9 @@ pub fn page_bar(c : @ui.Ctx, body : () -> Unit, corners? : (Double, Double)? = N
         @ui.style(
           // (its corners as round as the tape's at least, as its line is: a square one along a hinge too)
           // (under the panel's edge: its line over it a point, as the frame draws its panes, page_apart)
-          pt=room_of(capsule_in(tape_corner, key) - pane_edge),
-          pl=room_of(capsule_in(dmax(left, tape_corner), key)),
-          pr=room_of(capsule_in(dmax(right, tape_corner), key)),
+          pt=room_of(@ui.capsule_in(tape_corner, key) - pane_edge),
+          pl=room_of(@ui.capsule_in(dmax(left, tape_corner), key)),
+          pr=room_of(@ui.capsule_in(dmax(right, tape_corner), key)),
         ),
       )
     }
@@ -36,9 +36,9 @@ pub fn page_bar(c : @ui.Ctx, body : () -> Unit, corners? : (Double, Double)? = N
 let page_bar_box : @ui.Style = @ui.css("row w=Full px=S2 py=S1_5 align=ACenter")
 
 ///|
-/// A key of the bar (PreviewBar's iconBtn, Preview.kt BarIcon): round, its icon in the ink, faint when it cannot be
-/// pressed, the hover grey under the hand; its name told a screen reader and shown on hover. Whether it was pressed.
-pub fn bar_key(c : @ui.Ctx, key : String, icon : String, label : String, enabled? : Bool = true) -> Bool {
+/// A key of the bar (PreviewBar's iconBtn): round, its icon in the ink, faint when it cannot be
+/// pressed, the hover grey under the hand; its name told a screen reader and shown on hover. `on_press` as it is pressed.
+pub fn bar_key(c : @ui.Ctx, key : String, icon : String, label : String, enabled? : Bool = true, on_press? : () -> Unit) -> Unit {
   let t = theme()
   let b = t.bars
   let id = c.id(key)
@@ -53,7 +53,10 @@ pub fn bar_key(c : @ui.Ctx, key : String, icon : String, label : String, enabled
   if enabled {
     tip(c, key + "/tip", id, label)
   }
-  enabled && c.clicked(id)
+  match on_press {
+    Some(f) if enabled => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|

@@ -69,9 +69,9 @@ test "panel centred a share of the window tall, 大屏 keyboard and mouse: a col
     let h = if kind.has_suffix("500") { 500.0 } else { 800.0 }
     let t = menu_tester(1280.0, h, 0)
     let foot = fn(c : @ui.Ctx, close : () -> Unit) {
-      if @sf.button(c, "好的", key="ok34", tone=Primary) {
+      @sf.button(c, "好的", key="ok34", tone=Primary, on_press=fn() {
         close()
-      }
+      }) |> ignore
     }
     let rows = @signals.signal(if kind.has_prefix("many") || kind.has_prefix("says") || kind.has_prefix("deep") { 60 } else { 3 })
     match kind {

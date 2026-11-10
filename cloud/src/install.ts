@@ -1,8 +1,8 @@
 // The still.fail station's installer, served at /install.sh: `curl -fsSL <origin>/install.sh | sh -s -- <token>` on the
 // machine that is to be a station. It gets the release for the machine (scripts/release.sh put it in the releases
-// bucket, served at /releases/<file>), puts it in ~/.stillfail/app (the data around it stays), links `stillfail` (and
-// `ember`, its name before the rename) into ~/.local/bin, joins the workspace the token is for (a station already in one
-// stays in it and joins this one beside it, `enroll --stay`: docs/multi-workspace.md), and runs the station as
+// bucket, served at /releases/<file>), puts it in ~/.stillfail/app (the data around it stays), links `stillfail` into
+// ~/.local/bin, joins the workspace the token is for (a station already in one
+// stays in it and joins this one beside it, `enroll --stay`), and runs the station as
 // a service of the user (launchd), started at login and again if it stops. Claude Code and Codex are the machine's own:
 // it says how to get them when they are missing.
 // On Linux the service is a systemd user service (lingering, so it runs with no one logged in); with no user systemd
@@ -16,10 +16,6 @@
 // update from another shell (an agent's, the station's own) would never hand over. Started from inside the station (an
 // agent's turn, a job), a restart goes on in the background, apart from the caller: the drain waits for the caller's
 // own turn to end, which does not end while it waits. A station already on this release is left as it is.
-// A station installed before the rename (docs/rename-still-fail.md: ~/.ember, the service org.3720.ember.station or
-// ember-station.service, `ember` in ~/.local/bin) is moved, not installed beside: its service is drained and stopped
-// (its definition differs, so it is never handed over), ~/.ember moved to ~/.stillfail with a link left at the old
-// place, the old service's definition removed and the new one started; `ember` is linked to the new command.
 
 import { tr, type Lang } from "./i18n.ts";
 import { PRODUCTS } from "../../client/i18n/brand.ts";
@@ -48,10 +44,9 @@ function productCases(): string {
 export const bundledInstallScript = (lang: Lang) => installScript("$STILLFAIL_ORIGIN", "stable", lang).replace('origin="$STILLFAIL_ORIGIN"', 'origin="${STILLFAIL_ORIGIN:?}"');
 
 /**
- * A release's file, as the bucket keeps it: stillfail-station-<platform>.tar.gz; ember-station-<platform>.tar.gz is the
- * last release from before the rename, which installers from before it still get. Windows' is a zip (install-windows.ts).
+ * A release's file, as the bucket keeps it: stillfail-station-<platform>.tar.gz. Windows' is a zip (install-windows.ts).
  */
-export const RELEASE_FILE = /^((stillfail|ember)-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|stillfail-station-win32-x64\.zip)$/;
+export const RELEASE_FILE = /^(stillfail-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|stillfail-station-win32-x64\.zip)$/;
 
 /** The test channel's release (scripts/release.sh --beta), until promoted to the stable name. */
 export const BETA_RELEASE_FILE = /^beta\/stillfail-station-((darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|win32-x64\.zip)$/;
@@ -64,12 +59,12 @@ export const NODE_FILE = /^node\/node-v[0-9]+\.[0-9]+\.[0-9]+-((darwin-arm64|lin
 
 /**
  * The apps' builds, as scripts/release.sh puts them beside the station's: what each app's updater reads for the
- * latest (the desktop app's electron-updater, the Android app's Updates.kt), and the files it names.
+ * latest (the desktop app's electron-updater), and the files it names.
  */
 const APP_FILES: [RegExp, string][] = [
   // The site's film (on it 2026-10-28 to 10-29; a page built then still asks for it), too large for the site's own files.
   [/^site\/film-[a-z]+-[0-9]+\.mp4$/, "video/mp4"],
-  // The station's latest release, for stations to say a newer one is out (the Rust station's updates.rs).
+  // The station's latest release, for stations to say a newer one is out.
   [/^station\.json$/, "application/json"],
   // The test channel's (scripts/release.sh --beta): the station's latest, and the beta apps' (fail.still.desktop.beta,
   // fail.still.android.beta, apps of their own beside the released ones): the desktop one's feed (electron-updater's
@@ -90,7 +85,7 @@ const APP_FILES: [RegExp, string][] = [
   [/^desktop\/stillfail\.yml$/, "text/yaml; charset=utf-8"],
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
-  // Its signature (scripts/release-sign.ts), which the app checks before installing it (docs/release-signing.md).
+  // Its signature (scripts/release-sign.ts), which the app checks before installing it (scripts/release-sign.ts).
   [/^desktop\/(stillfail|monoid)-(beta-)?[0-9.]+-x64-win\.exe\.sig$/, "application/json"],
   // It is mbui's (apps/mbui) in the Electron app's place (scripts/release.sh desktop-win): its own updater's feeds,
   // stable and beta (an AppRelease naming the installer above, its signed words in it), as the Mac's.
@@ -99,14 +94,9 @@ const APP_FILES: [RegExp, string][] = [
   // feed and the archives it names.
   [/^desktop\/web\/stillfail-beta-web\.json$/, "application/json"],
   [/^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$/, "application/gzip"],
-  // The packages of the modules stations install themselves (scripts/module-bundle.ts, docs/station-modules.md): each
-  // module's signed feeds, stable and beta, and the archives they name (one for every machine, or a platform's).
-  [/^modules\/([a-z][a-z0-9]{0,31})\/\1(-beta)?\.json$/, "application/json"],
-  [/^modules\/([a-z][a-z0-9]{0,31})\/\1-0\.1\.[0-9]+(-(darwin-arm64|linux-x64|linux-arm64|win32-x64))?\.tar\.gz$/, "application/gzip"],
   [/^android\/latest\.json$/, "application/json"],
-  // Builds from before the rename were android/ember-<n>.apk: the latest.json of then and the apps it updated name them.
   // monoid's (release.sh --product monoid), in its own bucket: monoid(-beta)-<n>.apk.
-  [/^android\/(stillfail|ember|stillfail-beta|monoid|monoid-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
+  [/^android\/(stillfail|stillfail-beta|monoid|monoid-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
   // still.fail mbui (apps/mbui: the Android app in mbui, fail.still.mbui, a test app of its own; apps/mbui/scripts/beta.sh):
   // its feed and the builds it names.
   [/^android\/mbui\/latest\.json$/, "application/json"],
@@ -123,7 +113,7 @@ const APP_FILES: [RegExp, string][] = [
   // each machine's builds a feed of their own (x64's linux/mbui, arm64's linux-arm64/mbui)
   [/^linux(-arm64)?\/mbui\/latest\.json$/, "application/json"],
   [/^linux\/stillfail-mbui-[0-9]+-(x64|arm64)-linux\.tar\.gz$/, "application/gzip"],
-  // The faces the apps offer beside the system's (scripts/fonts.py, docs/fonts.md): a page's stylesheet and its woff2
+  // The faces the apps offer beside the system's (scripts/fonts.py): a page's stylesheet and its woff2
   // slices, the Android app's gzipped files; each version in a folder of its own, never changed.
   [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/font\.css$/, "text/css; charset=utf-8"],
   [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/[a-z0-9-]+\.woff2$/, "font/woff2"],
@@ -133,6 +123,8 @@ const APP_FILES: [RegExp, string][] = [
   // The iroh-relay still.fail's relays on machines of their own (Beijing's, Hong Kong's) run, built from the iroh the
   // station pins (.github/workflows/relay.yml), named by that commit; cloud/relay-update.sh puts it on a relay.
   [/^relay\/iroh-relay-[0-9a-f]{40}-linux-x64$/, "application/octet-stream"],
+  // The DHT node beside it (same workflow), named by its source's tree; cloud/dht-node-update.sh puts it on a relay.
+  [/^relay\/dht-node-[0-9a-f]{40}-linux-x64$/, "application/octet-stream"],
   // The native parts prebuilt on a development machine (scripts/native.ts prebuild: the mbui app's Windows shell and
   // engine), each named by the hash of what it is made of, for CI and the builds to fetch (native.ts never builds them
   // there).
@@ -141,12 +133,12 @@ const APP_FILES: [RegExp, string][] = [
 
 /**
  * The files every cloud made of this code serves alike, its stations' and not its apps': the station's releases and
- * feeds, their Node, the modules, the faces, the prebuilt native parts and the relay. A cloud whose bucket holds its
+ * feeds, their Node, the faces, the prebuilt native parts and the relay. A cloud whose bucket holds its
  * own apps' builds alone (monoid's: RELEASES_UPSTREAM) reads these from still.fail's when it has none (releases.ts
  * upstreamRelease); never an app's feed or build, which would update its apps to another product's.
  */
 export function sharedRelease(file: string): boolean {
-  return RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file) || NODE_FILE.test(file) || /^station(-beta)?\.json$|^(modules|fonts|natives|relay)\//.test(file);
+  return RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file) || NODE_FILE.test(file) || /^station(-beta)?\.json$|^(fonts|natives|relay)\//.test(file);
 }
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
@@ -166,8 +158,7 @@ const script = (say: (key: string, args?: Record<string, string>) => string) => 
 #   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token> [<lock>]
 # <lock>: the workspace lock's hash the station pins (a locked workspace's command gives it).
 # STILLFAIL_CHANNEL=beta gets the test channel's release (stable: the usual one); this copy defaults to __CHANNEL__.
-# The token comes from 「添加 station」 in still.fail. Running it again updates it and keeps its data (~/.stillfail;
-# a station from before the rename has it in ~/.ember, which is moved there).
+# The token comes from 「添加 station」 in still.fail. Running it again updates it and keeps its data (~/.stillfail).
 set -eu
 origin="__ORIGIN__"
 token="\${1:-}"
@@ -178,22 +169,10 @@ product=stillfail reverse=fail.still
 case "$origin" in
 __PRODUCTS__
 esac
-# The data: $STILLFAIL_DATA, else $EMBER_DATA (a shell or service from before the rename), else ~/.stillfail. ~/.ember,
-# the default before the rename, is the default now too: it is moved to ~/.stillfail.
-old_data="$HOME/.ember"
-data="\${STILLFAIL_DATA:-\${EMBER_DATA:-$HOME/.$product}}"
-[ "$data" = "$old_data" ] && data="$HOME/.stillfail"
-# Moved from ~/.ember: only there (or ~/.stillfail an empty directory), not already moved (a link to ~/.stillfail).
-# Until then what runs now is found there.
-migrate=""
-if [ "$data" = "$HOME/.stillfail" ] && { [ -e "$old_data" ] || [ -L "$old_data" ]; } && [ "$(readlink "$old_data" 2>/dev/null)" != "$data" ]; then
-  if { [ ! -e "$data" ] && [ ! -L "$data" ]; } || { [ -d "$data" ] && [ ! -L "$data" ] && [ -z "$(ls -A "$data")" ]; }; then
-    migrate=yes
-  fi
-fi
+# The data: $STILLFAIL_DATA, else ~/.stillfail.
+data="\${STILLFAIL_DATA:-$HOME/.$product}"
 cur="$data"
-[ -n "$migrate" ] && cur="$old_data"
-# Where the update is, for the station to show on its pages (the Rust station's updates.rs): download, handoff, drain,
+# Where the update is, for the station to show on its pages: download, handoff, drain,
 # restart. Only for a station that is there to read it.
 step() { [ -d "$cur/run" ] && printf '%s\n' "$1" > "$cur/run/update.step" 2>/dev/null || true; }
 # A station already in a workspace is only updated: no token, and it stays the same station.
@@ -218,10 +197,6 @@ label="$reverse.station"
 plist="$HOME/Library/LaunchAgents/$label.plist"
 unit_dir="\${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 unit="$product-station.service"
-# The service as it was named before the rename: stopped and removed, the new one in its place (still.fail's alone).
-old_label="" old_unit=""
-if [ "$product" = stillfail ]; then old_label="org.3720.ember.station" old_unit="ember-station.service"; fi
-old_plist="$HOME/Library/LaunchAgents/$old_label.plist"
 # Whether this Linux has a systemd for the user to run services in (not a container's, not another init).
 user_systemd() { command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; }
 # WSL keeps a distribution up only while something of Windows' holds it (a terminal, a wsl.exe): with none, its
@@ -276,7 +251,7 @@ if [ -n "\${STILLFAIL_RELEASE_SHA256:-}" ] && [ -z "\${STILLFAIL_INSTALLER_HANDE
   trap - EXIT
   STILLFAIL_ARCHIVE="$keep/stillfail.tar.gz" STILLFAIL_INSTALLER_HANDED=1 exec sh "$keep/install.sh" "$@"
 fi
-# Which channel the release came from, for the station (the Rust station's updates.rs: where it goes back from the beta).
+# Which channel the release came from, for the station.
 printf '%s\n' "$channel" > "$tmp/stillfail/CHANNEL"
 
 # The Node it runs on (NODE_VERSION: its version) is not in the release: kept apart in node/v<version> beside the data, once per
@@ -393,7 +368,7 @@ if [ -z "$token" ] && [ -f "$station_json" ]; then
   pid=$(said pid)
   # Still that station (a pid is reused once its process is gone): signals go to nothing else.
   case "$(ps -p "\${pid:-0}" -o command= 2>/dev/null)" in
-    *stillfail-station*|*ember-station*) ;;
+    *stillfail-station*) ;;
     *) pid="" ;;
   esac
 fi
@@ -427,7 +402,7 @@ echo $$ > "$lock_dir/pid"
 trap 'rm -rf "$tmp" "$lock_dir"' EXIT
 
 # Already on this release, and running as its service would: nothing to do.
-if [ -n "$pid" ] && [ -z "$migrate" ] && [ -f "$app/VERSION" ] && cmp -s "$tmp/stillfail/VERSION" "$app/VERSION" && same_service; then
+if [ -n "$pid" ] && [ -f "$app/VERSION" ] && cmp -s "$tmp/stillfail/VERSION" "$app/VERSION" && same_service; then
   cp "$tmp/stillfail/CHANNEL" "$app/CHANNEL" 2>/dev/null || true
   echo "${say("cloud.install.upToDate", { version: '$(cut -c1-7 "$app/VERSION")' })}"
   exit 0
@@ -442,26 +417,11 @@ swap_app() {
   swapped=yes
 }
 
-# ~/.ember to ~/.stillfail, once the station from before the rename is stopped, with a link left at the old place (the
-# paths written down under it lead there still). Should the move fail, ~/.stillfail is made a link to ~/.ember instead.
-move_data() {
-  [ -n "$migrate" ] || return 0
-  if [ -d "$data" ] && [ ! -L "$data" ]; then rmdir "$data" 2>/dev/null || true; fi
-  if mv "$old_data" "$data" 2>/dev/null; then
-    ln -s "$data" "$old_data" || echo "${say("cloud.install.move.noLink", { data: "${data}", old: "${old_data}" })}" >&2
-    echo "${say("cloud.install.move.moved", { data: "${data}", old: "${old_data}" })}"
-  else
-    ln -s "$old_data" "$data"
-    echo "${say("cloud.install.move.linked", { data: "${data}", old: "${old_data}" })}" >&2
-  fi
-  migrate=""
-}
-
 # Handed over without stopping: the new release goes where the old one was, and the running station execs it. Only a
 # launcher that becomes the release's own as it hands over (\`renew\`, station/native/launcher/src/run.rs) is handed
 # over to: one from before would run on, never changed, until the machine's next start; it is restarted once instead.
 handed=""
-if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && [ -n "$(said renew)" ] && same_service; then
+if [ -n "$pid" ] && [ -n "$(said handoff)" ] && [ -n "$(said renew)" ] && same_service; then
   started=$(said startedAt)
   swap_app
   rm -f "$data/run/handoff-failed"
@@ -502,7 +462,7 @@ fi
 
 # Stopped and started again (when not handed over), and said how it went.
 restart_and_finish() {
-if [ -z "$handed" ] && [ -n "$pid" ] && [ -n "$(said drain)" ] && [ -z "\${STILLFAIL_NO_DRAIN:-\${EMBER_NO_DRAIN:-}}" ]; then
+if [ -z "$handed" ] && [ -n "$pid" ] && [ -n "$(said drain)" ] && [ -z "\${STILLFAIL_NO_DRAIN:-}" ]; then
   # Restarted: once no turn runs, so none is cut off (at most 10 minutes; it takes no new ones meanwhile).
   rm -f "$cur/run/drained"
   step drain
@@ -516,37 +476,24 @@ fi
 
 if [ -z "$handed" ]; then
 step restart
-# One running at a time: the old one stops before the new one takes its place (under either name).
+# One running at a time: the old one stops before the new one takes its place.
 if [ "$os" = Darwin ]; then
-  for l in "$label" \${old_label:+"$old_label"}; do
-    launchctl bootout "gui/$(id -u)/$l" 2>/dev/null || true
-    # bootout returns before the service is gone; bootstrapping it again before then fails.
-    for _ in 1 2 3 4 5 6 7 8 9 10; do launchctl print "gui/$(id -u)/$l" >/dev/null 2>&1 || break; sleep 1; done
-  done
-  [ -z "$old_label" ] || rm -f "$old_plist"
+  launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+  # bootout returns before the service is gone; bootstrapping it again before then fails.
+  for _ in 1 2 3 4 5 6 7 8 9 10; do launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1 || break; sleep 1; done
 else
   if user_systemd; then
     systemctl --user stop "$unit" 2>/dev/null || true
-    if [ -n "$old_unit" ] && [ -f "$unit_dir/$old_unit" ]; then
-      systemctl --user stop "$old_unit" 2>/dev/null || true
-      systemctl --user disable "$old_unit" >/dev/null 2>&1 || true
-      rm -f "$unit_dir/$old_unit"
-      systemctl --user daemon-reload 2>/dev/null || true
-    fi
   fi
-  for f in "$cur/stillfail.pid" "$cur/ember.pid"; do
-    [ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null || true
-    rm -f "$f"
-  done
+  if [ -f "$cur/stillfail.pid" ]; then kill "$(cat "$cur/stillfail.pid")" 2>/dev/null || true; fi
+  rm -f "$cur/stillfail.pid"
 fi
-move_data
 [ -n "$swapped" ] || swap_app
 rm -rf "$app.old"
 prune_node
 fi
 mkdir -p "$HOME/.local/bin"
 ln -sf "$app/bin/stillfail" "$HOME/.local/bin/$product"
-[ "$product" != stillfail ] || ln -sf "$app/bin/stillfail" "$HOME/.local/bin/ember"
 
 if [ -n "$token" ]; then
   echo "${say("cloud.install.join")}"

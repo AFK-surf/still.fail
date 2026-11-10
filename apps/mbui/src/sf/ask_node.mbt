@@ -1,4 +1,4 @@
-// A question (ask_centred's: the library's dialog with its line) as nodes of the window's tree: the presenters' dialog
+// A question (the library's dialog with its line) as nodes of the window's tree: the presenters' dialog
 // layer (dialog_layer_node: a press outside it closes it, as a dialog's does), its panel as dialog draws it (dialog_w wide
 // at most, the window less dialog_margin, no taller than it less dialog_room; 24 in, a line round it, dialog_r round,
 // the panel's ground and shadow; its title's row, then what it holds 18 under it, scrolling in itself where the panel
@@ -43,7 +43,7 @@ pub fn ask_node(
   }
   dialog_layer_node(parent, open, cancel, outside=true, shown~, gone~, dims~, covered~, fn(across, layer, look, veil) {
     let theme = fn() { @ui.tree_theme() }
-    // (its field: given the keyboard's focus as it opens, back to what had it as it goes, ask_centred's focus_once)
+    // (its field: given the keyboard's focus as it opens, back to what had it as it goes)
     let field : Ref[@view.View?] = Ref(None)
     across.box(fn(d) {
       d
@@ -93,8 +93,13 @@ pub fn ask_node(
         body.alpha(By(words_in)) |> ignore
         body.scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
         b.padding(Is((panel_words, @ui.Space::px(S4_5), panel_words, 0.0))).gap(Is(@ui.Space::px(S4))) |> ignore
-        // (its field the library's line, as wide as what it holds: Enter says it, at that key's moment)
-        field.val = Some(input_node(b, line, placeholder~, secret~, submitted=fn(_) { go() }))
+        // (its field the library's line, as wide as what it holds: Enter says it, at that key's moment; read out by the
+        // question's title where it shows no placeholder)
+        field.val = Some(
+          input_node(b, line, placeholder~, label=if placeholder == "" { title } else { "" }, secret~, submitted=fn(_) {
+            go()
+          }),
+        )
         if hint != "" {
           b.box(fn(t) {
             t.words(Is(hint), look=toast_words_look(Meta, L5, 400, true)).ink(By(fn() { theme().color(Muted) })) |> ignore
@@ -107,7 +112,7 @@ pub fn ask_node(
       |> ignore
       // (its foot: its buttons at its end, 8 apart, 24 over them; as far from its foot and sides as its corner has them)
       d.box(fn(f) {
-        let at = capsule_in(dialog_r, button_height())
+        let at = @ui.capsule_in(dialog_r, button_height())
         f.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2))).padding(Is((at, @ui.Space::px(S6), at, at))).alpha(By(words_in)) |> ignore
         f.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
         button_node(f, fn() { t("common.cancel") }, cancel, tone=Ghost) |> ignore

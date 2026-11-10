@@ -9,6 +9,8 @@ import {
 // Values
 pub fn arc(Double, Double, Double, from~ : Double, sweep~ : Double) -> Array[(Double, Double)]
 
+pub fn capsule_in(Double, Double, room? : Double) -> Double
+
 pub fn concentric(Double, Double) -> Double
 
 pub fn concentric_out(Double, Double) -> Double
@@ -20,10 +22,6 @@ pub fn dashed_outlines(Double, Double, Double, Double) -> Array[(Array[Double], 
 pub fn det_pow(Double, Double) -> Double
 
 pub fn line(Array[(Double, Double)], width~ : Double, color~ : Int64, upto? : Double) -> Line
-
-pub fn round_like(Double, room? : Double) -> Double
-
-pub fn round_like_out(Double, room? : Double) -> Double
 
 pub fn sd_box(Double, Double, Double, Double, Double) -> Double
 
@@ -46,34 +44,30 @@ pub fn vector_shapes(@pixels.Vector, Double, Double, tint? : Int64) -> Array[Sha
 // Errors
 
 // Types and methods
-#derive(Eq, Show, @debug.Debug)
 pub(all) struct CornerFit {
   least : Double
   most : Double
   near : Double
   far : Double
-}
+} derive(Eq, Show, @debug.Debug)
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) enum CornerOf {
   Window
   Own(Double)
   Follow(CornerOf, Double, Double)
-}
+} derive(Eq, Show, @debug.Debug)
 pub fn CornerOf::capsule_at(Self, Double, CornerRoots) -> Double?
 pub fn CornerOf::follows(Self, CornerRoots) -> Bool
 pub fn CornerOf::inset(Self, CornerRoots) -> Double?
 pub fn CornerOf::radius(Self, CornerRoots) -> Double
 pub fn CornerOf::source(Self, CornerRoots) -> Double?
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) struct CornerRoots {
   window : Double
   fit : CornerFit?
   zoom : Double
-}
+} derive(Eq, Show, @debug.Debug)
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) struct Glass {
   blur : Double
   tint : Int64
@@ -91,27 +85,25 @@ pub(all) struct Glass {
   adaptive : Bool
   shares_capture : Bool
   contained : Bool
-}
+} derive(Eq, Show, @debug.Debug)
 pub fn Glass::frosted(blur~ : Double, tint~ : Int64, solid~ : Int64, saturation? : Double, rim_edge? : Double, rim_lit? : Double, rim_back? : Double, shares_capture? : Bool, contained? : Bool) -> Self
 pub fn Glass::liquid(blur? : Double, tint? : Int64, solid? : Int64, saturation? : Double, rim? : Double, bezel? : Double, refraction? : Double, chroma? : Double, merge? : Double, adaptive? : Bool) -> Self
 pub fn Glass::sharing(Self) -> Self
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) struct Line {
   points : Array[(Double, Double)]
   width : Double
   color : Int64
   upto : Double
-}
+} derive(Eq, Show, @debug.Debug)
 
-#derive(Eq, Show, @debug.Debug)
 pub(all) struct Shape {
   outlines : Array[(Array[Double], Bool)]
   fill : Int64
   even_odd : Bool
   stroke : Int64
   width : Double
-}
+} derive(Eq, Show, @debug.Debug)
 
 // Type aliases
 

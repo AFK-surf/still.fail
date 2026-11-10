@@ -70,17 +70,17 @@ test("a_feishu_place_is_named_by_its_chat_and_opens_in_feishu_or_lark", () => {
 
 test("a_stillfail_place_is_its_title_or_the_agents_or_new_chat_never_its_first_message", () => {
   // Named as the station's titleOf names it: its first message, links and all, is never its name.
-  const first = "看 [一起排查 lab-node 图片加载](https://app.still.fail/w/01TEST/s/example/chats/ember%3Ac-abcd) 要排队";
+  const first = "看 [一起排查 lab-node 图片加载](https://app.still.fail/w/01TEST/s/example/chats/chat%3Ac-abcd) 要排队";
   const threads = [
-    { surface: "ember", channel: "EMBER", threadTs: "1700000001.618000", title: null, firstText: first, sessions: [{ session: "s1" }] },
-    { surface: "ember", channel: "EMBER", threadTs: "1700000002.000000", title: "排查 lab-node 图片加载", firstText: first, sessions: [] },
+    { surface: "ember", channel: "CHAT", threadTs: "1700000001.618000", title: null, firstText: first, sessions: [{ session: "s1" }] },
+    { surface: "ember", channel: "CHAT", threadTs: "1700000002.000000", title: "排查 lab-node 图片加载", firstText: first, sessions: [] },
     // the agent's (chat_post title), a person's being none
-    { surface: "ember", channel: "EMBER", threadTs: "1700000003.750000", title: null, autoTitle: "lab-node 发消息和图片卡顿", firstText: first, sessions: [] },
+    { surface: "ember", channel: "CHAT", threadTs: "1700000003.750000", title: null, autoTitle: "lab-node 发消息和图片卡顿", firstText: first, sessions: [] },
   ];
-  const untitled = format.place(threads, "EMBER/1700000001.618000", 480, new Map()) as J;
-  assert.deepEqual([untitled.name, untitled.surface, untitled.session], ["新对话", "ember", "s1"]);
-  assert.equal((format.place(threads, "EMBER/1700000002.000000", 480, new Map()) as J).name, "排查 lab-node 图片加载");
-  assert.equal((format.place(threads, "EMBER/1700000003.750000", 480, new Map()) as J).name, "lab-node 发消息和图片卡顿");
+  const untitled = format.place(threads, "CHAT/1700000001.618000", 480, new Map()) as J;
+  assert.deepEqual([untitled.name, untitled.surface, untitled.session], ["新对话", "chat", "s1"]);
+  assert.equal((format.place(threads, "CHAT/1700000002.000000", 480, new Map()) as J).name, "排查 lab-node 图片加载");
+  assert.equal((format.place(threads, "CHAT/1700000003.750000", 480, new Map()) as J).name, "lab-node 发消息和图片卡顿");
 });
 
 test("a_feishu_person_is_heard_as_a_slack_one_is", () => {
@@ -102,9 +102,9 @@ test("a_prompt_is_the_messages_it_carried_and_embers_words_around_them", () => {
 
 test("an_agents_letter_reads_as_markdown_a_persons_words_as_they_wrote_them", () => {
   // station instructions.ts: another agent's message is marked `bot`; a person's name may say "bot" and is not one.
-  const [said] = parsePrompt('<message via="web" thread="EMBER/1.0" from="Claude Code" bot ts="1.1">\n**根子**：`moves_in`\n</message>\n<message via="web" thread="EMBER/1.0" from="a bot fan (b@x)" ts="1.2">\n**hi**\n</message>');
+  const [said] = parsePrompt('<message via="web" thread="CHAT/1.0" from="Claude Code" bot ts="1.1">\n**根子**：`moves_in`\n</message>\n<message via="web" thread="CHAT/1.0" from="a bot fan (b@x)" ts="1.2">\n**hi**\n</message>');
   assert.deepEqual(said.map((m) => m.agent), [true, false]);
-  const h = presentHistory({ timeline: [{ kind: "user", text: '<message via="web" thread="EMBER/1.0" from="Claude Code" bot ts="1.1">\n**根子**：`moves_in`\n</message>\n<message via="web" thread="EMBER/1.0" from="Ada (ada@x)" ts="1.2">\n**hi**\n</message>' }], steps: [] }, cx([], [], []));
+  const h = presentHistory({ timeline: [{ kind: "user", text: '<message via="web" thread="CHAT/1.0" from="Claude Code" bot ts="1.1">\n**根子**：`moves_in`\n</message>\n<message via="web" thread="CHAT/1.0" from="Ada (ada@x)" ts="1.2">\n**hi**\n</message>' }], steps: [] }, cx([], [], []));
   const [letter, person] = h.items[0].body.content.messages;
   assert.deepEqual(letter.md, markdown("**根子**：`moves_in`"));
   assert.equal(person.md, undefined);
@@ -113,8 +113,8 @@ test("an_agents_letter_reads_as_markdown_a_persons_words_as_they_wrote_them", ()
 test("the_instructions_a_continued_session_is_given_carry_no_messages", () => {
   // station instructions.ts `continuedHere`, its instructions showing a message's shape, then the first message.
   const told = 'This session began in a terminal.\n\n<stillfail-instructions>\n- <message via="slack" connect="…" you="name (<@ID>)" thread="CHANNEL/THREAD_TS" from="…" ts="…">…</message> names the conversation.\n</stillfail-instructions>';
-  const [messages, note] = parsePrompt(`${told}\n\n<message via="ember" thread="EMBER/1.0" from="Ada (ada@x)" ts="2.0">\n具体什么问题\n</message>`);
-  assert.deepEqual(messages.map((m) => [m.thread, m.text]), [["EMBER/1.0", "具体什么问题"]]);
+  const [messages, note] = parsePrompt(`${told}\n\n<message via="ember" thread="CHAT/1.0" from="Ada (ada@x)" ts="2.0">\n具体什么问题\n</message>`);
+  assert.deepEqual(messages.map((m) => [m.thread, m.text]), [["CHAT/1.0", "具体什么问题"]]);
   assert.equal(note, told);
   assert.equal(readItem(0, { kind: "user", text: told, at: "2026-10-26T06:14:00Z" }), null);
 });
@@ -150,7 +150,6 @@ test("a_station_notice_is_a_jobs_words_or_an_event_in_a_line", () => {
   assert.deepEqual(messages.map((m: J) => [m.key, m.notice, m.from.name, m.text]), [
     ["9.1.0", "job", "ci-time-watch", said],
     ["9.1.1", "job", "web", "up"],
-    ["9.1.7", "stillfail", "still.fail", notices[7]],
   ]);
   assert.deepEqual(tasks.map((x: J) => [x.text, x.agent, x.failed, x.result]), [
     ["任务已退出（退出码 1）：shot", false, true, "boom"],
@@ -158,7 +157,31 @@ test("a_station_notice_is_a_jobs_words_or_an_event_in_a_line", () => {
     ["任务已被 Ada 停止：shot", false, false, null],
     ["任务无法重新启动：shot", false, true, "no such file"],
     ["对话需要你处理：Fix CI", true, false, "pick one"],
+    ["远程任务有新消息：t1 · teststat", false, false, null],
   ]);
+});
+
+test("a_remote_tasks_notice_is_its_end_in_a_line_or_what_it_said", () => {
+  const job = (state: string, exitCode: number | null) => ({ id: "remote_1", name: "lint", command: "npx oxlint", state, exitCode, log: "/x/log" });
+  const notices = [
+    `Remote task k1 on st1aaaaaaaa: ${JSON.stringify({ key: "k1", job: job("exited", 0), log: "ok\ndone\n", notices: [] })}`,
+    `Remote task k2 on st2bbbbbbbb: ${JSON.stringify({ key: "k2", job: job("exited", 2), log: "boom\n", notices: [] })}`,
+    `Remote task k3 on st1aaaaaaaa: ${JSON.stringify({ key: "k3", job: job("running", null), log: "", notices: [{ at: 2, text: "half way" }, { at: 1, text: "began" }] })}`,
+    `Remote task k4 on st1aaaaaaaa: ${JSON.stringify({ key: "k4", job: job("stopped", null), log: "", notices: [] })}`,
+    `Remote task k5 on st1aaaaaaaa: {"key":"k5","job":{"id":"remote_5","name":"long","command":"${"x".repeat(40)}\n… (900 more characters)`,
+    "Remote task k6 on st1aaaaaaaa: that station does not know it 10 minutes after its start was asked for, and is no longer followed. Ask with get, or prepare and start it again.",
+  ];
+  const text = notices.map((n, i) => `<message via="station" from="station" ts="9.${i}">\n${n}\n</message>`).join("\n");
+  const h = presentHistory({ loaded: true, timeline: [{ kind: "user", text }] }, { ...cx([], [], []), stations: new Map([["st1aaaaaaaa", "Host-1"]]) });
+  const { tasks, messages } = h.items[0].body.content;
+  assert.deepEqual(tasks.map((x: J) => [x.text, x.failed, x.result]), [
+    ["远程任务已退出（退出码 0）：lint · Host-1", false, "ok\ndone"],
+    ["远程任务已退出（退出码 2）：lint · st2bbbbb", true, "boom"],
+    ["远程任务已停止：lint · Host-1", false, null],
+    ["远程任务有新消息：long · Host-1", false, null],
+    ["远程任务没有启动，已不再跟进：k6 · Host-1", true, null],
+  ]);
+  assert.deepEqual(messages.map((m: J) => [m.notice, m.from.name, m.text]), [["job", "lint", "half way"]]);
 });
 
 test("a_task_notification_is_read_into_how_the_work_ended", () => {
@@ -360,12 +383,12 @@ test("a_post_read_from_the_transcript_stands_where_it_was_made", () => {
 test("each_prompt_that_woke_the_agent_begins_a_turn_saying_when_and_what_it_did", () => {
   const timeline = [
     { kind: "tool_call", tool: "Bash", text: '{"command":"ls"}', callId: "z" },
-    { kind: "user", text: '<message via="web" from="Ada (a@x.com)" ts="1.2" thread="EMBER/1.0">\nhi\n</message>', at: "2026-09-27T01:02:00.000Z" },
+    { kind: "user", text: '<message via="web" from="Ada (a@x.com)" ts="1.2" thread="CHAT/1.0">\nhi\n</message>', at: "2026-09-27T01:02:00.000Z" },
     { kind: "tool_call", tool: "Read", text: '{"file_path":"/a.ts"}', callId: "a" },
     { kind: "tool_result", callId: "a", ok: true, text: "x" },
     { kind: "user", text: "do this", subagent: true },
     { kind: "tool_call", tool: "Bash", text: '{"command":"ls"}', callId: "b", subagent: true },
-    { kind: "tool_call", tool: "mcp__stillfail__chat_post", text: '{"to":"EMBER/1.0","text":"done","kind":"all_done"}', callId: "p" },
+    { kind: "tool_call", tool: "mcp__stillfail__chat_post", text: '{"to":"CHAT/1.0","text":"done","kind":"all_done"}', callId: "p" },
     { kind: "user", text: "Your turn ended without a state.", at: "2026-09-28T03:00:00.000Z" },
     { kind: "tool_call", tool: "mcp__stillfail__chat_state", text: '{"kind":"waiting","seconds":60,"for":"CI"}', at: "2026-09-28T03:00:01.000Z" },
     { kind: "assistant", text: "waiting on CI" },

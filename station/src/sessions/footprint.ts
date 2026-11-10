@@ -1,4 +1,4 @@
-// Workspace file helpers for automatic cleanup of archived sessions (the Rust station's footprint.rs).
+// Workspace file helpers for automatic cleanup of archived sessions.
 import { execFile } from "node:child_process";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { lstat, readdir, realpath } from "node:fs/promises";
@@ -169,7 +169,7 @@ export async function measureRoom(dir: string): Promise<Room> {
   return { bytes, rebuild };
 }
 
-/// The size of a path, each file once (for the tests: footprint.rs `measure` without `found`).
+/// The size of a path, each file once.
 export const measured = (path: string, signal?: AbortSignal) => measure(path, new Seen(), null, signal);
 
 /// Count the whole path when it fits; once it exceeds `limit`, return a lower bound without traversing the rest.

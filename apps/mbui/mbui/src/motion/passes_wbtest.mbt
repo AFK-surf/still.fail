@@ -1,9 +1,10 @@
 ///|
 /// Rows keyed to move to their places (layout), a box above them in the first build of a frame only: what it read
 /// changed (Ctx::read_changed), the frame is built again without it (frame_body), so its rows are other nodes.
-fn rows_built_twice(extra : Ref[Bool]) -> @ui.Tester {
+fn rows_built_twice(extra : Ref[Bool], builds : Ref[Int]) -> @ui.Tester {
   @ui.Tester::new(
     fn(c) {
+      builds.val += 1
       c.column(fn() {
         // (the box above is what the rows move for, in the build it is in)
         let cause = if extra.val { "above" } else { "plain" }
@@ -28,16 +29,18 @@ fn rows_built_twice(extra : Ref[Bool]) -> @ui.Tester {
 ///|
 test "a frame built twice: its keyed nodes are the last build's, moved from where the last frame drew them" {
   let extra = Ref::new(false)
-  let t = rows_built_twice(extra)
+  // (how many times the view was built: the frame below built twice)
+  let builds = Ref::new(0)
+  let t = rows_built_twice(extra, builds)
   t.frame()
   let a = t.drawn_of("row a").unwrap()
   let b = t.drawn_of("row b").unwrap()
   let c = t.drawn_of("row c").unwrap()
-  let builds = t.ctx().build_number()
+  let built = builds.val
   // the next frame built twice: the first build with a box above the rows, the second (drawn) without
   extra.val = true
   t.frame()
-  assert_eq(t.ctx().build_number(), builds + 2)
+  assert_eq(builds.val, built + 2)
   // one set of entries, the last build's: one a row (asked before the rows are looked at, as a stale one would move one)
   let entries = mo.entries.length()
   for e in mo.entries {

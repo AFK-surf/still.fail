@@ -92,7 +92,7 @@ fn page_over(t : @ui.Tester, w : Double) -> Unit {
 }
 
 ///|
-/// Whether `a` is `b` as laid out (within a billionth: worked out through a capsule's place, smooth.mbt round_like).
+/// Whether `a` is `b` as laid out (within a billionth: worked out through a capsule's place, capsule_in).
 fn near_at(a : Double?, b : Double) -> Bool {
   match a {
     Some(x) => (x - b).abs() < 1.0e-9
@@ -116,8 +116,8 @@ fn covered(t : @ui.Tester, label : String) -> (Double, Double)? {
 
 ///|
 test "on the tape with the window's buttons in the app's top row (a Mac's) what shows at the window's left holds them, as much room past them as before them from the window's edge; the strip at the right as before" {
-  // (the host's buttons: 16 from the window's left, 54 across: mbui's mac_app.m)
-  let (buttons_in, buttons_w) = (16.0, 54.0)
+  // (the host's buttons: 16 from the window's left, 60 across on macOS 27: mbui's mac_app.m)
+  let (buttons_in, buttons_w) = (16.0, 60.0)
   for w in [600.0, 720.0, 839.0] {
     let at = "\{w}"
     let t = tape_chat(0, w, 840.0)
@@ -140,6 +140,60 @@ test "on the tape with the window's buttons in the app's top row (a Mac's) what 
     t.run_for(@ui.move_most_ms)
     assert_true(near_at(covered(t, "打开侧栏").map(fn(e) { e.0 }), w - @sfdesk.tape_shows), msg=at)
   }
+}
+
+///|
+test "on a Mac's tape the sidebar's first row stands under the window's buttons as far as they stand under its panel's top, the rail's first place beside it" {
+  let t = tape_chat(0, 720.0, 840.0)
+  t.set_window_inset(true)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  // (the buttons 14 high, centred on the top row's 44 and as much lower as the panel stands under the window's top;
+  // the panel's content under its 6 and its line)
+  let down = @sfdesk.closed_bar_in
+  let top = (44.0 - 14.0) / 2.0 + down
+  let bottom = top + 14.0
+  let content_top = down + 1.0
+  // the bell's icon (20) its top as far under the buttons as they stand under the panel's top: its middle there
+  let mid = bottom + (top - content_top) + 10.0
+  guard words_middle(t, "新建对话") is Some(y) else { fail("no 新建对话") }
+  // (its words' box a point over the row's middle)
+  assert_true((y - mid).abs() <= 1.0, msg="新建对话's middle \{y}, \{mid} wanted")
+  // the rail's first place (the bell) on that line, under the buttons
+  let first = t.all(Button).filter(fn(n) { !n.hidden && n.rect.0 < 40.0 && n.rect.1 > 0.0 }).iter().fold(
+    init=None,
+    fn(acc : @ui.SemNode?, n) {
+      match acc {
+        Some(a) if a.rect.1 <= n.rect.1 => acc
+        _ => Some(n)
+      }
+    },
+  )
+  guard first is Some(bell) else { fail("no rail place") }
+  let bell_mid = bell.rect.1 + bell.rect.3 / 2.0
+  assert_true((bell_mid - y).abs() < 1.0, msg="the bell's middle \{bell_mid}, the row's \{y}")
+  assert_true(bell.rect.1 >= bottom, msg="the bell \{bell.rect} under the buttons' \{bottom}")
+}
+
+///|
+test "on the tape the window's buttons stand as far lower as its panels stand under the window's top, back off it" {
+  let t = tape_chat(0, 720.0, 840.0)
+  t.set_window_inset(true)
+  t.run_for(@ui.move_most_ms)
+  // (the strip at the window's left its panel's top 6 under the window's: the buttons 16 under it, as 16 in from the
+  // window's side)
+  // (moved there as a Move that far: none seen as the window opens, the host's)
+  let moved = (@sfdesk.closed_bar_in, @ui.move_ms(@sfdesk.closed_bar_in))
+  assert_eq(t.window_buttons_down(), moved)
+  // off the tape (Large), centred on the top row's first 44 again, moved back
+  t.resize(1280.0, 840.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(!@sfdesk.wide.tape)
+  assert_eq(t.window_buttons_down(), (0.0, moved.1))
+  // and on it again
+  t.resize(720.0, 840.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.window_buttons_down(), moved)
 }
 
 ///|
@@ -414,7 +468,7 @@ fn drawn_from(t : @ui.Tester, left : Double) -> Array[String] {
 ///|
 test "on the tape the sidebar's list scrolled with a finger: the page beside drawn again as it was, none of it built" {
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   // (drawn as parts and rows are drawn when kept, built: what drawing them again is held to)
   t.draw()
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
@@ -451,7 +505,7 @@ fn tape_flung(keep : Bool) -> Array[String] {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
   t.run_for(@ui.move_most_ms)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(keep)
   t.drag(150.0, 760.0, 150.0, 260.0, steps=6)
   t.tap(690.0 - @sfdesk.tape_shows / 2.0, 400.0)
@@ -746,18 +800,13 @@ test "on the tape what shows of the page dragged a little and let go: the tape b
 ///|
 /// Where the composer's field is drawn from the left and the bottom of the panel it is in (as drawn: a panel's move
 /// and any of the field's own); None when it is drawn out of every panel.
-fn tape_composer_field(t : @ui.Tester) -> @ui.SemNode? {
-  t.semantics().iter().find_first(fn(s) { s.role == TextField && (s.label == "发消息" || s.label == "按空格输入") })
-}
-
-///|
 fn composer_in_panel(t : @ui.Tester) -> (Double, Double)? {
   let bs = t.boxes_held()
-  guard tape_composer_field(t) is Some(field) else { return None }
-  let (x, y, w, _) = field.rect
+  guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
+  let ed = bs[e]
   for b in bs {
-    if b.radius == @sf.tape_corner && b.x <= x && x + w <= b.x + b.w {
-      return Some((x - b.x, b.y + b.h - y))
+    if b.radius == @sf.tape_corner && b.x <= ed.x && ed.x + ed.w <= b.x + b.w {
+      return Some((ed.x - b.x, b.y + b.h - ed.y))
     }
   }
   None
@@ -791,11 +840,11 @@ test "on the tape the composer is drawn with its page as the page moves, never a
 /// it, the theme's): their corners.
 fn composer_corners(t : @ui.Tester) -> (Double, Double, Double)? {
   let bs = t.boxes_held()
-  guard tape_composer_field(t) is Some(field) else { return None }
-  let (x, y, w, h) = field.rect
+  guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
+  let ed = bs[e]
   let mut box : @ui.Laid? = None
   for b in bs {
-    if b.glass && b.x <= x && x + w <= b.x + b.w && b.y <= y && y + h <= b.y + b.h {
+    if b.glass && b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h {
       box = Some(b)
     }
   }
@@ -829,11 +878,11 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   // panel's corner less its half (the user, 2026-10-26: a finger's, 52 high, stood where keyboard and mouse's 48 would)
   guard composer_and_panel(t) is Some((b, p)) else { fail("no composer in a panel") }
   let at = (b.x - p.x, p.x + p.w - (b.x + b.w), p.y + p.h - (b.y + b.h), 0.0)
-  let concentric = @sf.capsule_in(panel, h)
+  let concentric = @ui.capsule_in(panel, h)
   assert_true(near4(at, (concentric, concentric, concentric, 0.0)), msg="the capsule from the panel's edges: \{at}")
   // (as high as its buttons 4 in its ends need, a finger's 44: 52; in the tape's 42, as a circle reads it
-  // (@ui.round_like), that stands concentric no nearer than the ranges let (4))
-  let r = @ui.round_like(panel)
+  // (the radius as given), that stands concentric no nearer than the ranges let (4))
+  let r = panel
   assert_true(h >= side + 2.0 * @sf.corner_fit.near - 1.0e-9, msg="\{h} for \{side}")
   assert_true(h <= 2.0 * (r - @sf.corner_fit.near) + 1.0e-9, msg="\{h} in \{r}")
   assert_eq(t.corner_faults(), [])
@@ -859,9 +908,9 @@ test "on the tape the page panel's corner is its own: the composer and its butto
 /// composer's box (the glass round the field): as laid out.
 fn composer_and_panel(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
   let bs = t.boxes_held()
-  guard tape_composer_field(t) is Some(field) else { return None }
-  let (x, y, w, h) = field.rect
-  let round = fn(b : @ui.Laid) { b.x <= x && x + w <= b.x + b.w && b.y <= y && y + h <= b.y + b.h }
+  guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
+  let ed = bs[e]
+  let round = fn(b : @ui.Laid) { b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h }
   let mut panel : @ui.Laid? = None
   let mut box : @ui.Laid? = None
   for b in bs {
@@ -889,12 +938,12 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   let edge = @ui.concentric(16.0, 6.0)
   assert_eq(@sf.tape_edge.radius(@ui.corner_roots()), edge)
   let pane = @sf.tape_corner
-  // the sidebar in use: its left corners at the window's, the page's right ones past its right edge as they will be
-  // there
+  // the sidebar in use: its left corners at the window's (its ground a node of the window's tree: dock_node), the
+  // page's right ones past its right edge as they will be there
   guard composer_and_panel(t) is Some((_, page)) else { fail("no composer in a panel") }
   assert_true(near4(page.radii, (pane, edge, edge, pane)), msg="the page's panel: \{page.radii}")
   assert_true(
-    t.boxes().iter().any(fn(b) { near4(b.radii, (edge, pane, pane, edge)) && b.x < 10.0 }),
+    t.boxes_held().iter().any(fn(b) { near4(b.radii, (edge, pane, pane, edge)) && b.x < 10.0 }),
     msg="no sidebar's panel with its left corners the window's",
   )
   assert_eq(t.corner_faults(), [])
@@ -962,15 +1011,13 @@ fn words_in_page(t : @ui.Tester, words : String) -> (Double, Double, Double)? {
 ///|
 /// The middle of the first words `words` drawn, across (their line's).
 fn words_middle(t : @ui.Tester, words : String) -> Double? {
-  // (the line as drawn, its top and its bottom: a node of the window's tree's words is held with no height, so its box
-  // would say only where it starts, words of two lines' heights told apart by that alone)
-  let mut first : (Double, Double)? = None
-  for r in t.text_runs() {
-    if r.text == words {
-      if first is None || r.top < first.unwrap().0 { first = Some((r.top, r.bottom)) }
+  for b in t.boxes() {
+    if (b.kind == "text" || b.kind == "rich") && b.text == words {
+      return Some(b.y + b.h / 2.0)
     }
   }
-  first.map(fn(r) { (r.0 + r.1) / 2.0 })
+  // (or a node of the window's tree's: the sidebar's band made once)
+  t.rect_of(words).map(fn(r) { r.1 + r.3 / 2.0 })
 }
 
 ///|
@@ -1044,7 +1091,7 @@ test "on the tape a finger's search at the lists' top: tucked under the band at 
 test "on the tape a passage held in the page beside the sidebar brings the page over, and its 引用 quotes it" {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   // (the page beside kept as it was drawn while nothing changes it, as on a device: held, built)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.draw()
@@ -1115,10 +1162,10 @@ test "on the tape the sidebar's rows stand in a side column's line, their words 
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   // the sidebar's panel 6 from the window's edge, its list from 8 into the rail, the rail as much wider as its places
   // stand further in than its 8 (concentric with the panel's corner): a row's ground as far in as 新建对话's (band_in),
-  // its words without a mark before them as far from it (band_pad)
+  // its words without a mark before them as far from it (band_pad_in: the tape's, as before #3806)
   let l = @sf.theme().chat_list
   let (x, _, _, _) = t.rect_of("Slack 里问的报销流程").unwrap()
-  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + (@sf.rail_in_tape() - 8.0) + l.band_in + l.band_pad)
+  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + (@sf.rail_in_tape() - 8.0) + l.band_in + @sf.band_pad_in(Tape))
   let p = tape_chat(2, 390.0, 844.0, width="compact", height="medium")
   p.run_for(@ui.move_most_ms)
   p.back()

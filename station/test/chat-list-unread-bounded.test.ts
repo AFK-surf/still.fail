@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { sessionOps } from "../src/read/ops-sessions.ts";
-import { publishDraft } from "../src/read/publish.ts";
 import { listThreads, makeStore } from "../src/read/store.ts";
 import { chatList } from "../src/sessions/others.ts";
 import type { Hub } from "../src/sessions/hub.ts";
@@ -11,7 +10,7 @@ function fixture() {
   const store = Store.open(":memory:");
   store.insertSession({ key: "agent", connect: "ember", runtime: "claude", profile: "cc",
     workspace: "/work", token: "token", createdAt: 1, lastActiveAt: 1 });
-  const thread = store.openThread("ember", "EMBER", "the-chat", "The chat", null).id;
+  const thread = store.openThread("ember", "CHAT", "the-chat", "The chat", null).id;
   store.joinThread(thread, "agent", "ember");
   const db = store.db;
   const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,?,'message','agent','agent','findable',?)");
@@ -44,18 +43,6 @@ test("the reader for chat_list does not count messages it will not show", () => 
     assert.equal(rows[0]?.thread.id, f.thread);
     assert.equal(rows[0]?.lastMessage?.text, "findable");
     assert.equal(f.visited(), 0, `chat_list visited ${f.visited()} unread messages`);
-  } finally { f.store.close(); }
-});
-
-test("a publish preview does not count unread messages it will not show", () => {
-  const f = fixture();
-  try {
-    const read = makeStore(f.instrumented, "/no-station-config");
-    const draft = publishDraft(read, { thread: f.thread, upto: 1, names: {}, viewer: "" }, "en");
-    assert.equal(draft.title, "The chat");
-    assert.equal(draft.entries.length, 1);
-    assert.equal(draft.entries[0]?.text, "findable");
-    assert.equal(f.visited(), 0, `the preview visited ${f.visited()} unread messages`);
   } finally { f.store.close(); }
 });
 

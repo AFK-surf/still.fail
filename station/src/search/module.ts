@@ -1,11 +1,11 @@
-// What a search finds on this station (docs/search.md) as a part of the station (parts.ts): its index of the station's
+// What a search finds on this station as a part of the station (parts.ts): its index of the station's
 // data and the machine's files as they are asked for, kept current while the station runs; GET /search and its
 // settings, the agents' `search` tool, and what other stations of the workspace ask of it (`search.query` on the bus).
 import { Effect, Layer } from "effect";
 import { routes } from "../api/routes/search.ts";
 import { rootsOf } from "../drive/drive.ts";
 import { Agents } from "../sessions/agents.ts";
-import { ControlPlane, Events, HelperFolders, Own, Parts, Paths, Peers, StationConfig, Store } from "../services.ts";
+import { ControlPlane, Events, HelperFolders, Own, Parts, Paths, Peers, Previous, StationConfig, Store } from "../services.ts";
 import { SKILL_READ, readSkill, skillForPeer } from "./skills.ts";
 import { SEARCH, searchForPeer, searchTools } from "./tool.ts";
 import { FileSearch } from "./files.ts";
@@ -18,6 +18,7 @@ export const SearchLive = Layer.effectDiscard(
     const own = yield* Own;
     const helperFiles = yield* HelperFolders;
     const store = yield* Store;
+    const previous = yield* Previous;
     const bus = yield* Peers;
     const events = yield* Events;
     const cloud = (yield* ControlPlane).state;
@@ -26,6 +27,7 @@ export const SearchLive = Layer.effectDiscard(
     // The machine's files too, never what is the station's own (ops/own.ts).
     const search = new Search({
       data,
+      backfill: { previousGone: previous.exited, priority: store.backfillPriority },
       files: new FileSearch({
         protect: () => own.paths(),
         roots: (ws) => rootsOf(config.raw(), ws),

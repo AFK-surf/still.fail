@@ -1,6 +1,6 @@
-// The chats' lists' sizes on the screen in force (docs/architecture.md: sizes, row heights and density are the
+// The chats' lists' sizes on the screen in force (sizes, row heights and density are the
 // theme's, by the native input): keyboard and mouse's the web's sidebar (Sidebar.css.ts navSession…, RowPicture.css.ts,
-// ChatMark.css.ts), touch's the phone's home (mobile/Home.css.ts mChatRow…, Home.kt). The rows, their second
+// ChatMark.css.ts), touch's the phone's home. The rows, their second
 // line, what stands at its end, the days' headings, the list's waiting and how its rows and panes move. One set of
 // pages draws them (sfpages' sidebar.mbt, chat_row.mbt, chat_mark.mbt, row_picture.mbt), taking them from here.
 
@@ -38,8 +38,6 @@ pub(all) struct ChatList {
   /// where a chat stands at the end of its messages (sfpages' chat_state): its icon's column, 10 wide (the row's
   /// leadSlot), as high as a line of the state's words, its icon in the middle (wrapping, the first line's)
   state_slot : @ui.Style
-  /// state_slot's height, for a node of the window's tree
-  state_slot_h : Double
   /// what stands at its end (row_picture): an agent's mark, a face across, a face's box and one after the first (3 of
   /// it over the one before), the pixel of ground round a face, who started it ringed
   agent_mark : Double
@@ -50,9 +48,8 @@ pub(all) struct ChatList {
   face_ring : @ui.Style
   /// the room over its first row and under its last, past what the frame gives (navScroll's padding; none on a touch
   /// device, across the whole screen its rows' grounds reaching its edges); under its last in a side column
-  /// (list_foot_in): navScroll's with keyboard and mouse, touch's a panel's corner (its rows 16
-  /// in from its sides, band_in, round by a row's 18, not a card's 26: its last row's ground clear of the arc of a
-  /// panel's foot corners, the corner rule)
+  /// (list_foot_in): a panel's corner with either input (its rows 8 or 16 in from its sides, band_in, round by a
+  /// row's 18, not a card's 26: its last row's ground clear of the arc of a panel's foot corners, the corner rule)
   top_in : Double
   foot_in : Double
   side_foot_in : Double
@@ -62,6 +59,11 @@ pub(all) struct ChatList {
   /// 12, 17, 38, 15)
   band_in : Double
   band_pad : Double
+  /// its words from its ground where the list stands on its own, not beside a page's whole: the tape's side column
+  /// and a phone's whole screen, its search fields (band_pad_in): with a finger 12, as before #3806 (5b8b71713d) made
+  /// it the ladder's inset, 8 (the user, 2026-11-09: 「把左边距恢复过来」, the 中屏's sidebar's words where they stood;
+  /// 「手机搜索也要改」); keyboard and mouse's its band_pad
+  own_band_pad : Double
   band_icon : Double
   band_h : Double
   band_words : @ui.TextStyle
@@ -84,7 +86,7 @@ pub(all) struct ChatList {
   waiting_rows : Int
   waiting_noted : Int
   /// whether the screen has keys to find and choose with: ⌘K, ↑ ↓ and Enter in what is found, the one chosen shown so (a
-  /// computer's); else the search is at the list's top, scrolled to (touch's: Home.kt top)
+  /// computer's); else the search is at the list's top, scrolled to
   keys : Bool
   /// what search finds, a line each (Found)
   found : Found
@@ -111,7 +113,7 @@ pub let mouse_chat_list : ChatList = {
     gap=S2,
     align=AStart,
   ),
-  // (SidebarList.css.ts item: 7 over and under, as a chat's row)
+  // (as a chat's row)
   item: @ui.style(row=true, w=Full, min_h=S8, py=row_in, gap=S2, align=AStart),
   text: @ui.css("w=Full gap=S0_5"),
   head: @ui.css("row w=Full h=S5 gap=S1_5 align=ACenter"),
@@ -125,13 +127,12 @@ pub let mouse_chat_list : ChatList = {
   more: @ui.css("w=Full pb=S0_5"),
   // (as far from the row's foot as from its end: its last face concentric with the row's foot corner when its ground
   // shows)
-  aside_end: capsule_in(row_corner, mouse_face_d),
+  aside_end: @ui.capsule_in(row_corner, mouse_face_d),
   state_quiet: @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false, w=Full),
   state_turn: @ui.text_style(size=Meta, color=Fg, leading=L5, wrap=false, w=Full),
   state_alert: @ui.text_style(size=Meta, color=Danger, leading=L5, wrap=false, w=Full),
   state_lead: @ui.text_style(weight=Semibold, w=Hug),
   state_slot: @ui.css("w=S2_5 h=S4_5 justify=JCenter"),
-  state_slot_h: 18.0,
   agent_mark: 12.0,
   face_d: mouse_face_d,
   face: @ui.css("w=S4 h=S4"),
@@ -140,9 +141,12 @@ pub let mouse_chat_list : ChatList = {
   face_ring: @ui.css("w=S5 h=S5 radius=Full border=B1 border_color=Fg"),
   top_in: 4.0,
   foot_in: 12.0,
-  side_foot_in: 12.0,
+  // (in a panel of its own, its foot corners the panel's 42 (0.1.7190's sidebar, #3975): its last row clear of their
+  // arc, as touch's)
+  side_foot_in: pane_corner,
   band_in: mouse_band_in,
   band_pad: mouse_band_pad,
+  own_band_pad: mouse_band_pad,
   band_icon: 16.0,
   band_h: 32.0,
   band_words: @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false, w=Full),
@@ -169,7 +173,7 @@ pub let mouse_chat_list : ChatList = {
 pub let touch_chat_list : ChatList = {
   row_h: touch_list_row_h,
   row: @ui.style(row=true, w=Full, h=Fixed(touch_list_row_h), gap=S1_5, align=ACenter),
-  // (SidebarList.css.ts phone: 10 over and under, its mark's column 8 from its words)
+  // (its mark's column 8 from its words)
   item: @ui.css("row w=Full py=S2_5 gap=S2 align=AStart"),
   text: @ui.css("w=Full justify=JCenter"),
   head: @ui.style(row=true, w=Full, h=Fixed(touch_title_h), gap=S2, align=ACenter),
@@ -180,14 +184,13 @@ pub let touch_chat_list : ChatList = {
   title_unread: @ui.text_style(size=Ui, weight=Semibold, color=Fg, leading=L7, wrap=false, w=Full),
   last: @ui.text_style(size=Meta, color=Muted, leading=L6, wrap=false, w=Full),
   more: full_width,
-  aside_end: capsule_in(row_corner, touch_face_d),
+  aside_end: @ui.capsule_in(row_corner, touch_face_d),
   state_quiet: @ui.text_style(size=Meta, color=Muted, leading=L6, wrap=false, w=Full),
   state_turn: @ui.text_style(size=Meta, color=Fg, leading=L6, wrap=false, w=Full),
   state_alert: @ui.text_style(size=Meta, color=Danger, leading=L6, wrap=false, w=Full),
-  // (bold, as the phone's: Home.kt StateLine)
+  // (bold)
   state_lead: @ui.text_style(weight=Bold, w=Hug),
   state_slot: @ui.css("w=S2_5 h=S5 justify=JCenter"),
-  state_slot_h: 20.0,
   agent_mark: 14.0,
   face_d: touch_face_d,
   face: @ui.css("w=S4_5 h=S4_5"),
@@ -199,6 +202,7 @@ pub let touch_chat_list : ChatList = {
   side_foot_in: pane_corner,
   band_in: touch_band_in,
   band_pad: touch_band_pad,
+  own_band_pad: 12.0,
   band_icon: 17.0,
   band_h: 38.0,
   band_words: @ui.text_style(size=Ui, color=Fg, wrap=false, w=Full),
@@ -233,12 +237,50 @@ let touch_band_in : Double = 16.0
 let touch_band_pad : Double = corner_inset
 
 ///|
-/// Where a list stands: in a side column beside a page (the wide frame's sidebar, on the tape or keyboard and mouse's) or a
-/// panel over it (⌘K's), or across the whole screen (a phone's home, its search). How far in its rows are and whether their grounds are rounded follow it,
+/// How far in from its ground the words of what stands over a list are, and a row's words in a side column, where the
+/// list stands (`at`): in a side column beside a page's whole the theme's band_pad; in the tape's side column and
+/// across the whole screen (a phone's search fields) its own_band_pad.
+pub fn band_pad_in(at : ListAt) -> Double {
+  let l = theme().chat_list
+  match at {
+    Side => l.band_pad
+    Tape | Whole => l.own_band_pad
+  }
+}
+
+///|
+/// A sidebar's other lists' row of one line and what stands while there is none (side_row, side_hint), their words as far
+/// in as where the list stands has them (band_pad_in).
+pub fn side_row_at(at : ListAt) -> @ui.Style {
+  theme().chat_list.side_row.then(@ui.style(px=room(band_pad_in(at))))
+}
+
+///|
+pub fn side_hint_at(at : ListAt) -> @ui.Style {
+  theme().chat_list.side_hint.then(@ui.style(px=room(band_pad_in(at))))
+}
+
+///|
+/// How far in a list's heading is from the line its rows stand on, in a side column (heading_in) or the tape's (as
+/// far further in as its rows' words are there: band_pad_in).
+pub fn heading_in_at(at : ListAt) -> Double {
+  let l = theme().chat_list
+  match at {
+    Tape => l.heading_in + l.own_band_pad - l.band_pad
+    Side | Whole => l.heading_in
+  }
+}
+
+///|
+/// Where a list stands: in a side column beside a page (the wide frame's sidebar, keyboard and mouse's or a finger's) or a
+/// panel over it (⌘K's), in the tape's side column, or across the whole screen (a phone's home, its search). How far in its rows are and whether their grounds are rounded follow it,
 /// not the native input (asked, 2026-10-25: touch's square rows, lit, in a tape's sidebar beside 新建对话's
 /// round ground).
 pub(all) enum ListAt {
   Side
+  /// the tape's side column (its sidebar's panel, laid out Medium: tape_view): a side column whose words stand as
+  /// before #3806 (band_pad_in)
+  Tape
   Whole
 } derive(Eq)
 
@@ -248,7 +290,7 @@ pub(all) enum ListAt {
 /// ground its whole width.
 pub fn list_line(at : ListAt) -> @ui.Style {
   match at {
-    Side => @ui.style(w=Full, px=room(list_line_in(at)))
+    Side | Tape => @ui.style(w=Full, px=room(list_line_in(at)))
     Whole => full_width
   }
 }
@@ -257,7 +299,7 @@ pub fn list_line(at : ListAt) -> @ui.Style {
 /// How far in from each side of its box a list's lines stand (list_line).
 pub fn list_line_in(at : ListAt) -> Double {
   match at {
-    Side => theme().chat_list.band_in
+    Side | Tape => theme().chat_list.band_in
     Whole => 0.0
   }
 }
@@ -269,7 +311,7 @@ pub fn list_line_in(at : ListAt) -> Double {
 pub fn list_foot_in(at : ListAt) -> Double {
   let l = theme().chat_list
   match at {
-    Side => l.side_foot_in
+    Side | Tape => l.side_foot_in
     Whole => l.foot_in
   }
 }
@@ -280,9 +322,8 @@ pub fn list_foot_in(at : ListAt) -> Double {
 /// placed there by itself: list_row `corner`), rounded as a sidebar's row; across the whole screen as the phone's
 /// (mChatRow: 22 at the left, 16 at the right), square.
 pub fn list_row_in(at : ListAt) -> @ui.Style {
-  let l = theme().chat_list
   match at {
-    Side => @ui.style(px=room(l.band_pad), radius=side_row_radius)
+    Side | Tape => @ui.style(px=room(band_pad_in(at)), radius=side_row_radius)
     Whole => whole_row_in
   }
 }
@@ -296,7 +337,7 @@ let whole_row_in : @ui.Style = @ui.style(pl=phone_row_in, pr=S4)
 /// row's ground's corners where its list stands (list_row_in): rounded in a side column, square across the whole screen.
 pub fn list_row_slot(at : ListAt) -> @ui.Style {
   match at {
-    Side => side_row_slot
+    Side | Tape => side_row_slot
     Whole => whole_row_slot
   }
 }
@@ -314,7 +355,7 @@ let whole_row_slot : @ui.Style = @ui.css("w=Full clip")
 /// screen the phone's section header's (20).
 pub fn list_heading_in(at : ListAt) -> @ui.Style {
   match at {
-    Side => @ui.style(px=room(theme().chat_list.heading_in))
+    Side | Tape => @ui.style(px=room(heading_in_at(at)))
     Whole => whole_heading_in
   }
 }
@@ -325,11 +366,11 @@ let whole_heading_in : @ui.Style = @ui.css("px=S5")
 
 ///|
 /// How far in a found line is and its corner, where its list stands: in a side column or a panel (⌘K's, the tape's
-/// sidebar's search) 12 in, rounded as a menu's row (Switcher.css.ts: 12 in); across the whole screen the phone's
+/// sidebar's search) 12 in, rounded as a menu's row; across the whole screen the phone's
 /// (mFound: 22 at the left, 16 at the right), square.
 pub fn found_row_in(at : ListAt) -> @ui.Style {
   match at {
-    Side => found_side_row
+    Side | Tape => found_side_row
     Whole => found_whole_row
   }
 }
@@ -347,7 +388,7 @@ let found_whole_row : @ui.Style = @ui.style(pl=found_start, pr=S4)
 /// lines' words, in a side column or a panel 12, across the whole screen the phone's 22.
 pub fn found_line_in(at : ListAt) -> @ui.Style {
   match at {
-    Side => found_side_in
+    Side | Tape => found_side_in
     Whole => found_whole_in
   }
 }
@@ -365,21 +406,17 @@ let found_whole_in : @ui.Style = @ui.style(px=found_start)
 /// screen the phone's section header's (20).
 pub fn found_head_in(at : ListAt) -> @ui.Style {
   match at {
-    Side => found_side_in
+    Side | Tape => found_side_in
     Whole => whole_heading_in
   }
 }
 
 ///|
-/// Touch's chat row's height and its title's line (mobile/Home.css.ts mChatRow, mChatLine1).
+/// Touch's chat row's height and its title's line (mChatLine1).
 pub let touch_list_row_h : Double = 66.0
 
 ///|
 let touch_title_h : Double = 22.0
-
-///|
-/// Touch's chat row's second line (meta: S5) and a face at its end.
-let touch_meta_h : Double = 20.0
 
 ///|
 let touch_face_d : Double = 18.0
@@ -389,22 +426,16 @@ let touch_face_d : Double = 18.0
 let mouse_face_d : Double = 16.0
 
 ///|
-let mouse_row_in : Double = 7.0
-
-///|
 /// Keyboard and mouse's chat row's title's line's height (head: S5).
 let mouse_head_h : Double = 20.0
-
-///|
-let mouse_meta_h : Double = 18.0
 
 ///|
 /// What search finds on this screen (sfpages' switcher.mbt: ⌘K's list, the phone's search page), one design: a line
 /// each, its mark (an icon, an agent's maker, a station's mark), its first line (what it is, or the words found in it)
 /// with who, where and when at its end, and where it is under it (its chat, its line with the words) where it says one;
 /// the kinds under their headings; 全部结果 and 查看更多 in the link's ink; quiet words, the stations still answering.
-/// Its sizes the screen's: keyboard and mouse's the web's ⌘K (Switcher.css.ts: rows 38, two lines 54, 13 and 12), a touch
-/// device's the phone's search (mobile/Home.css.ts mFound…: rows 50, two lines 66, 15 and 14).
+/// Its sizes the screen's: keyboard and mouse's the web's ⌘K (two lines 54, 13 and 12), a touch
+/// device's the phone's search (two lines 66, 15 and 14).
 pub(all) struct Found {
   /// a line's height as the list first takes it: one line, two, a heading, quiet words
   row_h : Double

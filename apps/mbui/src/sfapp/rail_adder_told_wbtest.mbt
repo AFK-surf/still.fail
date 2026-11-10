@@ -199,7 +199,7 @@ test "大屏: 文件 on the rail held with ⌘ and moved down past the slop, let
   let before = (app.nav.depth(), app.nav.top())
   t.hold_mods(@ui.mod_cmd)
   t.touch_at(0, x, y, t.time())
-  // (the drag begun as the frame after it is built: Rail.tsx drag, with ⌘ held as it was pressed)
+  // (with ⌘ held as it was pressed)
   t.frame()
   assert_true(@sfdesk.wide.rail_drag.get() is Some(_), msg="its drag begun")
   t.touch_at(1, x, y + 10.0, t.time())

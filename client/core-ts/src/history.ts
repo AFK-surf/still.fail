@@ -1,4 +1,4 @@
-// An agent's execution history as the clients show it (history.rs): what actually ran, put together here so every
+// An agent's execution history as the clients show it: what actually ran, put together here so every
 // client draws the same thing. Messages in and out, state marks and the agent's own words are boundaries; the tool
 // calls and thinking between two boundaries fold into one group, named by its latest call (shapes: HistoryView).
 import { args, doing, epochMs, importantCall, kindOf, type Known, tasksOf, told, toolName } from "./activity.ts";
@@ -8,6 +8,8 @@ import { t } from "./i18n.ts";
 import { lineOf, markdown, type MdStore } from "./markdown.ts";
 import * as present from "./present.ts";
 import { money } from "./views/usage.ts";
+import { isStationAuthor } from "./titles.ts";
+import { closeCut } from "./tool-step.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -32,6 +34,12 @@ export type Context = {
   /// Where the trees of its Markdown are kept on the device (markdown.ts); absent: read here only.
   md?: MdStore;
 };
+
+/// An entry in this device's words: a call's result that is in its script's output, which its station leaves the
+/// words of to the client (station/src/read/transcript.ts `inScript`).
+function worded(e: J): J {
+  return e?.inScript === true && e.text === "" ? { ...e, text: t("station.transcript.inScriptOutput") } : e;
+}
 
 function kindKey(kind: string): string {
   return ["read", "search", "edit", "command", "web", "agent", "thread"].includes(kind) ? kind : "other";
@@ -67,7 +75,7 @@ function fileOf(text: string): string | null {
   return null;
 }
 
-/// A message a prompt carried; `station`: a notice of the station's own (via="ember"), not a person's; `agent`: an
+/// A message a prompt carried; `station`: a notice of the station's own (via="station"; "ember" before), not a person's; `agent`: an
 /// agent's (marked `bot`: another session's letter, a bot in the thread), its words Markdown.
 export type Sourced = { user: string; name: string | null; ts: string; text: string; thread: string | null; slack: boolean; station: boolean; agent: boolean };
 
@@ -85,7 +93,9 @@ const CHAT_ENDS: Record<string, [string, boolean]> = {
   "was stopped by a person": ["stopped", false],
 };
 
-export function readNotice(text: string): Notice | null {
+export function readNotice(text: string, stations?: ReadonlyMap<string, string>): Notice | null {
+  const remote = /^Remote task (\S+) on (\S+): ([\s\S]*)$/.exec(text);
+  if (remote) return remoteNotice(remote[1], stations?.get(remote[2]) ?? remote[2].slice(0, 8), remote[3]);
   const chat = /^The chat you opened, "(.+?)"(?: \(\S+\))?, (ended its turn all_done|needs a person|stopped with an error|was stopped by a person)(?:: ([\s\S]*?))?(?:\. They are asked there; help if you can, or wait)?\. Read it with chat_read; write to its agent with session_send to its link\.$/.exec(text);
   if (chat) {
     const [how, failed] = CHAT_ENDS[chat[2]];
@@ -111,6 +121,39 @@ export function readNotice(text: string): Notice | null {
     return code !== null ? event(`exited${again}`, code !== 0, ended[3] ?? null, true, { code }) : event(`signaled${again}`, true, ended[3] ?? null, true);
   }
   return null;
+}
+
+/// What another station said of a task it runs for this session (remote.ts `settle`: its `task.get` answer as JSON, cut
+/// short when long, or why it is no longer followed): its end in a line with its last lines, or what it said.
+function remoteNotice(key: string, station: string, rest: string): Notice | null {
+  const what = t("core-logic.history.notice.remote");
+  const event = (k: string, failed: boolean, name: string, more: string | null = null, args: Record<string, string | number> = {}): Notice =>
+    ({ kind: "event", line: t(`core-logic.history.notice.${k}`, { what, name: `${name} · ${station}`, ...args }), failed, chat: false, more, output: more !== null });
+  if (!rest.startsWith("{")) return / is no longer followed\./.test(rest) ? event("lost", true, key) : null;
+  let got: J;
+  try {
+    got = JSON.parse(rest);
+  } catch {
+    const cut = CLIPPED.exec(rest);
+    if (!cut) return null;
+    try {
+      got = JSON.parse(closeCut(rest.slice(0, cut.index)));
+    } catch {
+      return null;
+    }
+  }
+  const job = got?.job;
+  const name = typeof job?.name === "string" && job.name !== "" ? job.name : key;
+  const log = typeof got?.log === "string" && got.log.trim() !== "" ? got.log.replace(/\n+$/, "") : null;
+  const state = typeof job?.state === "string" ? job.state : "";
+  if (state === "" || state === "running") {
+    // Its notices, newest first; cut short before its state, what it told is not known.
+    const said = Array.isArray(got?.notices) ? got.notices.find((n: J) => typeof n?.text === "string")?.text : undefined;
+    return said !== undefined ? { kind: "said", name, said } : event("remoteNews", false, name);
+  }
+  if (state === "stopped") return event("remoteStopped", false, name, log);
+  const code = typeof job.exitCode === "number" ? job.exitCode : null;
+  return code !== null ? event("exited", code !== 0, name, log, { code }) : event("signaled", true, name, log);
 }
 
 function attr(attrs: string, name: string): string | null {
@@ -196,9 +239,9 @@ export function parsePrompt(text: string): [Sourced[], string] {
       ts: attr(attrs, "ts") ?? "",
       text: b[0],
       thread: attr(attrs, "thread"),
-      // A person in a Feishu chat is told as one in Slack is (docs/feishu.md).
+      // A person in a Feishu chat is told as one in Slack is.
       slack: attr(attrs, "via") === "slack" || attr(attrs, "via") === "feishu",
-      station: ["ember", "stillfail"].includes(attr(attrs, "via") ?? ""),
+      station: isStationAuthor(attr(attrs, "via")),
       agent: bare(attrs, "bot"),
     });
     rest += text.slice(at, open);
@@ -291,7 +334,7 @@ type Item =
 type Row = { thought: number } | { step: number };
 
 export function presentHistory(live: J, cx: Context): J {
-  const timeline: J[] = Array.isArray(live?.timeline) ? live.timeline : [];
+  const timeline: J[] = (Array.isArray(live?.timeline) ? live.timeline : []).map(worded);
   const base = typeof live?.first === "number" ? live.first : 0;
   const s = (e: J, k: string): string => (typeof e?.[k] === "string" ? e[k] : "");
   const flag = (e: J, k: string): boolean => e?.[k] === true;
@@ -358,7 +401,7 @@ export function presentHistory(live: J, cx: Context): J {
         const [messages, said] = parsePrompt(s(timeline[item.i], "text"));
         const [tasks, note] = parseTasks(said);
         // The station's own notices: an event of a job's or of a chat it opened, in a line as background work's end is.
-        const notices = messages.map((m) => (m.station ? readNotice(m.text) : null));
+        const notices = messages.map((m) => (m.station ? readNotice(m.text, cx.stations) : null));
         const events = notices.flatMap((n) => (n?.kind === "event" ? [n] : []));
         v = {
           kind: "received",
@@ -517,15 +560,19 @@ export function presentHistory(live: J, cx: Context): J {
   const phase = pushedNow.phase;
   const { usage, usageLine } = usageOf(live?.usage);
   const loaded = flag(live, "loaded");
+  // Why its first read failed (it is read again), and how the page before stands: being read, or why it was not.
+  const failed = typeof live?.failed === "string" && live.failed !== "" ? live.failed : null;
+  const older = live?.older === "reading" || live?.older === "failed" ? live.older : null;
   let edge: string;
   let empty: boolean;
   if (!loaded && shown.length === 0) [edge, empty] = [t("core-logic.history.edge.loading"), true];
   else if (shown.length === 0 && liveSteps.length === 0 && phase === null && base === 0) {
     const why = flag(live, "offline") ? "core-logic.history.edge.offline" : cx.started ? "core-logic.history.edge.missing" : "core-logic.history.edge.not_started";
     [edge, empty] = [t(why), true];
-  } else if (base > 0) [edge, empty] = [t("core-logic.history.edge.earlier"), false];
+  } else if (base > 0 && older === "failed") [edge, empty] = [t("core-logic.history.edge.earlier_failed", { why: String(live.olderFailed ?? "") }), false];
+  else if (base > 0) [edge, empty] = [t("core-logic.history.edge.earlier"), false];
   else [edge, empty] = [t("core-logic.history.edge.start"), false];
-  return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0 };
+  return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0, ...(failed !== null && !loaded && shown.length === 0 ? { failed } : {}), ...(base > 0 && older !== null ? { older } : {}) };
 }
 
 /// What a session's calls used (views/brief.ts `usageNow`), as its history shows it: label and value rows, and in a

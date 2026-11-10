@@ -1,4 +1,4 @@
-// The corner rule (mbui's Tester::corner_faults; still.fail's docs/ui-panels.md「所有带圆角的东西」「圆角阶梯」: what
+// The corner rule (mbui's Tester::corner_faults; mbui's ui/corners.mbt: what
 // lies in a rounded container's corner as far from both its edges and concentric with it, the corners of both the
 // ladder's) on every screen sffix opens, in the narrowest window of each layout and a wide desktop's, in both of the
 // app's languages, over the Tester's own text (the faults a screen has its own, the same on every machine). Each keeps
@@ -47,16 +47,17 @@ let corner_modes : Array[String] = {
     "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
     "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
     "share-in-files", "share-in-stations", "lock-checking", "lock-code", "lock-failed", "lock-finding", "lock-nocode",
-    "lock-none", "lock-security", "lock-waiting", "lock-wrong", "screen-agent-driving",
+    "lock-none", "lock-security", "lock-upgrade", "lock-waiting", "lock-wrong", "screen-agent-driving",
     "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
     "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
     "screen-full-tools", "screen-gone", "screen-live", "screen-login-fill", "screen-login-pick", "screen-not-drivable", "screen-outdated", "screen-read-only",
     "screen-reconnecting", "screen-trackpad", "screen-trackpad-command", "settings-home", "settings-appearance",
     "settings-me", "settings-me-reading", "settings-workspace", "settings-security", "settings-vault",
     "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env", "settings-station-processes",
-    "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-station-network", "settings-stations-add",
+    "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-station-updated", "settings-station-network", "settings-stations-add",
     "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing", "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long",
-    "settings-profiles", "settings-profiles-monthly", "settings-profile", "settings-profile-quota",
+    "settings-profiles", "settings-profiles-monthly", "settings-profiles-fable", "settings-profiles-own3", "settings-profiles-week-fable",
+    "settings-profile", "settings-profile-fable", "settings-profile-own3", "settings-profile-week-fable", "settings-profile-quota",
     "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed",
     "settings-profile-blocked", "settings-profile-signin", "settings-profile-key", "settings-new-profile",
     "settings-connects", "settings-connect", "settings-connect-menu", "settings-connect-mode", "settings-connect-run",
@@ -78,9 +79,10 @@ let corner_modes : Array[String] = {
 }
 
 ///|
-/// `lang`'s screens in every window, each against its bars: the corners' and, the squeeze's ones, the squeeze's; or
-/// (`press_room`, Chinese) a press's room and the light theme's contrast instead. Apart, a sweep each: the two together were
-/// one test of 92 s alone on CI against English's 49, the longest of the app part's runs on four runners (2026-10-27).
+/// `lang`'s screens in every window, each against its bars: the corners' and, the squeeze's ones, the squeeze's; and
+/// (`press_room`, Chinese) a press's room and the light theme's contrast too, on the same screen opened once. (Apart, a
+/// sweep each, Chinese's screens were opened twice: of a sweep's 1939 screens, opening them was some seven tenths of
+/// its time, the checks the rest, none of them long (27 ms each at the median, 0.3 s the longest), 2026-11-05.)
 fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
   let wrong : Array[String] = []
   let gaps : Array[String] = []
@@ -104,7 +106,6 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
           Some(w) => wrong.push(w)
           None => ()
         }
-        continue
       }
       let faults = t.corner_faults()
       for f in t.gap_faults() {
@@ -147,10 +148,6 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
       Some(w) => wrong.push(w)
       None => ()
     }
-    if wrong.length() > 0 {
-      fail(wrong.join("\n"))
-    }
-    return
   }
   match gaps_wrong(lang, gaps) {
     Some(w) => wrong.push(w)
@@ -170,8 +167,8 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
 }
 
 ///|
-test "corners and squeeze: every screen in every window keeps the corner rule and fits, in Chinese" {
-  corners_check("zh")
+test "corners and squeeze, a press's room and the light theme's contrast: every screen in every window, in Chinese" {
+  corners_check("zh", press_room=true)
 }
 
 ///|
@@ -199,22 +196,22 @@ test "each player failure reason fits without adding a spacing or corner fault" 
     for lang in ["zh", "en"] {
       // The player's existing header has a known gap fault on a small screen. These are states of that same page,
       // so compare their actual faults with it rather than counting that same fault once per message.
-      let baseline = screen_in("player-failed", win, lang).gap_faults().map(gap_without_nodes)
+      // (and its corners with it: the player-failed screen's own, known to corners_everywhere_known, the rail's on the
+      // tape)
+      let failed = screen_in("player-failed", win, lang)
+      let baseline = failed.gap_faults().map(gap_without_nodes)
+      let corners = failed.corner_faults().map(gap_without_nodes)
+      let lit = failed.lit_all_faults().map(gap_without_nodes)
       for mode in ["player-damaged", "player-unplayable", "player-unsupported"] {
         let t = screen_in(mode, win, lang)
         let at = "\{win.0}-\{lang} \{mode}"
         assert_eq(t.gap_faults().map(gap_without_nodes), baseline, msg=at)
-        assert_true(t.corner_faults().is_empty(), msg=at)
-        assert_true(t.lit_all_faults().is_empty(), msg=at)
+        assert_eq(t.corner_faults().map(gap_without_nodes), corners, msg=at)
+        assert_eq(t.lit_all_faults().map(gap_without_nodes), lit, msg=at)
         if squeeze_windows.contains(win.0) {
           assert_true(t.squeeze_faults().is_empty(), msg=at)
         }
       }
     }
   }
-}
-
-///|
-test "a press's room and the light theme's contrast: every screen in every window, in Chinese" {
-  corners_check("zh", press_room=true)
 }

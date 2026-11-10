@@ -44,7 +44,6 @@ fn finger_reset() -> Unit {
 ///|
 /// What a finger picked let go: no word widened from, no handle held.
 fn finger_let_go() -> Unit {
-  picked.slid = false
   picked.word = None
   picked.handle = 0
   picked.grab_x = 0.0
@@ -63,6 +62,9 @@ fn finger_frame_end() -> Unit {
 /// layer a press there goes to, its old view open to presses (Ctx::sel_at's, whether lists are dragged by a mouse or
 /// not).
 fn Ctx::sel_finger_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
+  if self.selection_blocked(x, y) {
+    return None
+  }
   let layer = self.layer_at(x, y)
   let mut k = desk.sels.length() - 1
   while k >= 0 {
@@ -196,11 +198,6 @@ fn finger_menu() -> (Double, Double, Double, Double, Int)? {
   if !picked.finger || picked.dragging || selected_words() == "" {
     return None
   }
-  // (an app's own menu over what it picked in its rows: tree_menu_own)
-  match tree_picked() {
-    Some(t) if (tree_menu_own.val)(t.rows) => return None
-    _ => ()
-  }
   match g().selection_box() {
     Some((x, y, w, h)) => Some((x, y, w, h, @hostapi.text_menu_copy | @hostapi.text_menu_select_all))
     None => None
@@ -209,10 +206,8 @@ fn finger_menu() -> (Double, Double, Double, Double, Int)? {
 
 ///|
 /// All the words of the old view and layer a finger picked in, as laid out (those scrolled away kept as they were).
-fn Ctx::finger_select_all(self : Ctx, within? : (SelTarget) -> Bool = fn(_) { true }) -> Unit {
-  let laid = (self.sel_laid() + tree_sels()).filter(fn(t) {
-    t.layer == picked.layer && t.island == picked.island && within(t)
-  })
+fn Ctx::finger_select_all(self : Ctx) -> Unit {
+  let laid = (self.sel_laid() + tree_sels()).filter(fn(t) { t.layer == picked.layer && t.island == picked.island })
   if laid.is_empty() {
     return
   }
@@ -263,11 +258,6 @@ fn Ctx::paint_finger_ends(self : Ctx) -> Unit {
       }
     }
     guard on is Some(t) else { continue }
-    // (in what its words are picked on, whole: words_picked's)
-    let ink = match t.node {
-      Some(id) => picked_color_of(id) | 0xFFL
-      None => ink
-    }
     let rects = t.picked_rects()
     if rects.is_empty() {
       continue
@@ -280,11 +270,7 @@ fn Ctx::paint_finger_ends(self : Ctx) -> Unit {
     if top + h <= t.y0 || top >= t.y1 || x < t.x0 - 1.0 || x > t.x1 + 1.0 {
       continue
     }
-    let lined = match t.node {
-      Some(id) => picked_lined(id)
-      None => false
-    }
-    if h_feel() == 2 && !lined {
+    if h_feel() == 2 {
       let rr = handle_r
       if k == 0 {
         self.emit_rect(x - 2.0 * rr, top + h, 2.0 * rr, 2.0 * rr, rr, ink, 0.0, 0L, 1.0)
@@ -320,8 +306,7 @@ let finger_end_half : Double = 18.0
 /// Whether what is picked with the pointer was picked by a finger (held on its words), followed as that changes.
 pub fn Ctx::selection_by_finger(self : Ctx) -> Bool {
   ignore(self)
-  picked_said.get() |> ignore
-  picked.finger
+  picked_finger_said.get()
 }
 
 ///|

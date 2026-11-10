@@ -10,11 +10,13 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import * as read from "../src/read/store.ts";
+import { CARD_POSTS_PENDING, cardPostsStep } from "../src/store/card-post-index.ts";
 import { cardOf } from "../src/store/rows.ts";
 import { SCHEMA_VERSION } from "../src/store/schema.ts";
 import { usageCardOutcomesComplete } from "../src/store/usage-chat-stats.ts";
 import { readArchive } from "../src/store/archive.ts";
 import { MANUAL, Store, newMessage, turnSummaryJson } from "../src/store/store.ts";
+import { referenceAnswersSince } from "./card-answer-reference.ts";
 
 const live = process.env.STILLFAIL_COMPAT_DATA ?? join(homedir(), ".stillfail");
 const present = existsSync(join(live, "stillfail.db"));
@@ -80,13 +82,26 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
     // Reads: the same as read/store.ts over the same file.
     const r = read.makeStore(new DatabaseSync(path, { readOnly: true }), dir);
     try {
+      // A real reader retries after the requested old card posts are prepared on the writer connection.
+      const withCards = <T>(f: () => T): T => {
+        for (;;) {
+          try { return f(); } catch (error) {
+            if (!(error instanceof Error) || !error.message.startsWith(CARD_POSTS_PENDING)) throw error;
+            for (const thread of JSON.parse(error.message.slice(CARD_POSTS_PENDING.length)) as number[])
+              while (!cardPostsStep(store.db, thread).done) { /* bounded batches */ }
+          }
+        }
+      };
       const viewer: string = (store.db.prepare("SELECT viewer FROM reads GROUP BY viewer ORDER BY COUNT(*) DESC LIMIT 1").get() as any)?.viewer ?? "local";
       assert.deepEqual(store.listSessions().map(noToken), read.listSessions(r));
       assert.deepEqual(store.listThreads(viewer, null, null), read.listThreads(r, viewer, null, null));
       assert.deepEqual(store.participants(null), read.participants(r, null));
       assert.deepEqual(store.listBindings(), read.listBindings(r));
       assert.deepEqual(store.listJobs(null).map(noToken), read.listJobs(r, null));
-      assert.deepEqual(store.answersSince(0), read.answersSince(r, 0));
+      const threads = (store.db.prepare("SELECT thread AS id FROM entries UNION SELECT thread AS id FROM closed_cards").all() as { id: number }[]).map((t) => t.id);
+      const byQuestion = (a: read.CardAnswer, b: read.CardAnswer) =>
+        a.question.thread - b.question.thread || a.question.n - b.question.n;
+      assert.deepEqual(referenceAnswersSince(store, 0).sort(byQuestion), withCards(() => read.answersSince(r, 0, threads)).sort(byQuestion));
       const stats = store.sessionStats(null);
       for (const [key, s] of read.sessionStats(r, null)) {
         const mine = stats.get(key)!;
@@ -104,7 +119,7 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
         assert.deepEqual(store.entriesBefore(t.id, null, 50), read.entriesBefore(r, t.id, null, 50));
         assert.deepEqual(store.messagesBefore(t.id, null, 50), read.messagesBefore(r, t.id, null, 50));
         assert.deepEqual(store.lastMessage(t.id), read.lastMessage(r, t.id));
-        assert.deepEqual(store.pendingCard(t.id), read.pendingCard(r, t.id));
+        assert.deepEqual(store.pendingCard(t.id), withCards(() => read.pendingCard(r, t.id)));
       }
       // What lists say of each thread and session, kept (schema.ts LIST_STATE), as their messages say it.
       const rows = (sql: string) => store.db.prepare(sql).all().map((x) => JSON.stringify(x));

@@ -9,7 +9,7 @@ const viewer = { sub: "me", email: "me", name: "Me", role: "owner", workspace: "
 function fixture() {
   const store = Store.open(":memory:");
   store.insertSession({ key: "s", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w/s", token: "s", createdAt: 1, lastActiveAt: 1 });
-  const thread = store.openThread("ember", "EMBER", "chat", null, null).id;
+  const thread = store.openThread("ember", "CHAT", "chat", null, null).id;
   store.joinThread(thread, "s", "ember");
   const read = makeStore(store.db, "/no-station-config");
   return { store, thread, read };
@@ -90,6 +90,7 @@ test("the chat list is made once for everyone: a viewer's row is it with what is
     put.run(thread, 1, "person", "me", 1);
     put.run(thread, 2, "agent", "s", 2);
     store.setRead("me", thread, 2);
+    store.setChatHidden("me", thread, true);
     const other = { ...viewer, sub: "you", email: "you" };
     // One list, the same for both: named by the chat itself, nothing of either viewer in it.
     const shared = sharedChatRows(read, viewer, null, null);
@@ -100,5 +101,8 @@ test("the chat list is made once for everyone: a viewer's row is it with what is
     const yours = chats(read, other, false)[0]!;
     assert.deepEqual([mine.title, mine.unread, mine.mine], ["部署", false, true]);
     assert.deepEqual([yours.title, yours.unread, yours.mine], ["部署", true, false]);
+    assert.equal(mine.hidden, true);
+    assert.equal(yours.hidden, false);
+    assert.equal(store.getThread(thread)!.hiddenAt, null, "personal hiding does not archive the chat");
   } finally { store.close(); }
 });

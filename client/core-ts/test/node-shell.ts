@@ -141,7 +141,7 @@ export class NodeShell implements Native {
       case "tcp.end":
         (this.#handles.get(a.id).conn as TcpConnection).end();
         return done({});
-      // A login's loopback listener (in the app, Kotlin's Loopback.kt): its requests numbered as they come, each
+      // A login's loopback listener (in the app): its requests numbered as they come, each
       // answered by its number.
       case "listen.open": {
         const { value, scope } = await this.#scoped(h.listen(a.port, a.host));

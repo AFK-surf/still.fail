@@ -12,8 +12,8 @@ import { topicKey, type Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
-import { attention, choices, runnableOn } from "../src/views/models.ts";
-import { Views, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage } from "../src/views/views.ts";
+import { attention, choices, models, runnableOn } from "../src/views/models.ts";
+import { Views, answeredAt, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
 import { localDay } from "../src/views/usage.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
 import { markdown } from "../src/markdown.ts";
@@ -170,7 +170,7 @@ const overviewOf = (connects: J[], profiles: J[]): J => ({
 });
 const hostInfo = (hostname: string): J => ({
   hostname, os: "macOS 26", arch: "arm64", cpus: 8, cpuModel: "M4", load: 0.2, uptimeSec: 100,
-  memory: { totalBytes: 1024, usedBytes: 512, swapUsedBytes: null }, disk: { path: "/", totalBytes: 1024, freeBytes: 512 }, emberRssBytes: 10, checkedAt: 1,
+  memory: { totalBytes: 1024, usedBytes: 512, swapUsedBytes: null }, disk: { path: "/", totalBytes: 1024, freeBytes: 512 }, stationRssBytes: 10, checkedAt: 1,
 });
 
 for (const name of ["usage", "profiles"]) {
@@ -220,6 +220,9 @@ for (const name of ["usage", "profiles"]) {
   });
 }
 
+/// A list's rows as they are shown: each as its station's state makes it, said once for the station (`stations`).
+const shownRows = (v: J): J[] => v.days.flatMap((d: J) => d.items).map((i: J) => stationOn(i, v.stations.find((s: J) => s.station === i.station)));
+
 test("usage_keeps_its_spending_and_account_allowance_current", async () => {
   const t = setup();
   const u = ui();
@@ -242,6 +245,31 @@ test("usage_keeps_its_spending_and_account_allowance_current", async () => {
   t.set(link("ws/st"), { state: "offline" });
   await t.read(u, 1);
   assert.ok(u.value.notes.some((s: string) => s.includes("studio")));
+});
+
+test("usage keeps its available history visible while recent details are prepared", async () => {
+  const t = setup();
+  const u = ui();
+  const topic = { topic: "stationUsage", station: "ws/st" } as const;
+  t.set(workspace(), oneStation());
+  t.set(link("ws/st"), { state: "online" });
+  t.set(overview("ws/st"), overviewOf([], []));
+  t.set(topic, { rows: [], since: 0, reading: false, detailsPreparing: true,
+    history: { days: [], places: {}, archived: 0, remoteRuns: 0, cards: 0, picked: 0 } });
+  t.subscribe(1, { topic: "usage", scope: "ws", days: 7 });
+  t.views.start({ topic: "fleet", scope: "ws" });
+  await t.read(u, 1);
+  assert.ok(u.value.summary, "the already available history can be seen");
+  assert.equal(u.value.detailsPreparing, true, "the recent totals are not presented as zero");
+  assert.equal(u.value.wait.reading, true);
+  assert.equal(t.views.compute({ topic: "fleet", scope: "ws" }), undefined, "a shareable poster does not present missing usage as complete");
+
+  t.set(topic, { rows: [], since: 0, reading: false,
+    history: { days: [], places: {}, archived: 0, remoteRuns: 0, cards: 0, picked: 0 } });
+  await t.read(u, 1);
+  assert.notEqual(u.value.detailsPreparing, true);
+  assert.equal(u.value.wait.reading, false);
+  assert.ok(t.views.compute({ topic: "fleet", scope: "ws" }), "the poster is available once the recent details are ready");
 });
 
 test("profiles_keep_their_names_and_online_state_current", async () => {
@@ -359,6 +387,26 @@ test("a notice that a runtime is not installed is said under the viewer's messag
   // None of the viewer's waits (someone else's in Slack): it stays a notice; installed and nothing waits, it is gone.
   assert.deepEqual(blockedUnder([said({ seq: 1, waiting: true }), said({ seq: 2, system: true, install })]).map((m) => m.seq), [1, 2]);
   assert.deepEqual(blockedUnder([said({ seq: 1, mine: true }), said({ seq: 2, system: true, install: { ...install, state: "installed" } })]).map((m) => m.seq), [1]);
+});
+
+test("a notice that a chat's run changed says what changed, what it runs on now where that has not the room, and both runs whole opened", () => {
+  const run = { runtime: "claude", model: "claude-opus-5-5", effort: "high", fast: null, profile: "cc", account: "a@x.com", pinned: false, context: null };
+  const shown = (was: J, now: J) => shownMessage({ authorKind: "ember", author: "ember", text: "已切换：…", change: { was, now } }, [], null, [], [], [], undefined).notice;
+  // Another model and effort: those alone, before and after; the station's words given way to the viewer's.
+  let notice = shown(run, { ...run, model: "claude-sonnet-5-5", effort: "medium" });
+  assert.equal(notice.words, "Opus 5.5 · 高 → Sonnet 5.5 · 中");
+  assert.equal(notice.short, "换成 Sonnet 5.5 · 中");
+  assert.deepEqual(notice.lines, ["之前：Claude Code · Opus 5.5 · 高 · 自动 · a@x.com", "现在：Claude Code · Sonnet 5.5 · 中 · 自动 · a@x.com"]);
+  assert.equal(notice.failed, false);
+  // Another runtime: its speed said only where both have one; the account kept to and the most context said whole.
+  notice = shown(run, { ...run, runtime: "codex", model: "gpt-6", effort: "high", fast: true, profile: "cx", account: "b@x.com", pinned: true, context: 200000 });
+  assert.equal(notice.words, "Claude Code · Opus 5.5 → Codex · GPT-6");
+  assert.equal(notice.lines[1], "现在：Codex · GPT-6 · 高 · Fast · b@x.com · 上下文 200K");
+  // An effort or a speed alone is named.
+  assert.equal(shown(run, { ...run, effort: "low" }).words, "思考深度：高 → 低");
+  assert.equal(shown({ ...run, fast: false }, { ...run, fast: true }).short, "速度：Fast");
+  // Not a change (an old station's notice, a message of an agent): as it was.
+  assert.equal(shownMessage({ authorKind: "ember", author: "ember", text: "已压缩上下文" }, [], null, [], [], [], undefined).notice.short, undefined);
 });
 
 test("canonical_and_legacy_station_notices_have_the_same_presentation", () => {
@@ -491,6 +539,79 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   assert.deepEqual(m.workspaces.ws.items.map((i: J) => [i.kind, i.session, i.seq, i.stationName]), [["wait", "k1", 5, "studio"]]);
   assert.equal(m.workspaces.ws.items[0].text, "待处理 · k1 要合吗？", "its row's line");
   assert.equal(m.workspaces.ws.items[0].what, "k1 要合吗？", "the same without its lead");
+});
+
+test("a_comma_tasks_chat_is_marked_by_comma_as_a_slack_one_is_by_slack", async () => {
+  const t = setup();
+  const chats = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  await t.readAll([[chats, 1]]);
+  t.set({ topic: "workspaces" }, [{ workspaces: [{ id: "ws" }] }]);
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const now = t.host.nowMs();
+  const task = row("k1", now - 1000);
+  task.connect = "cm";
+  task.origin = { surface: "comma:cm", channel: "TASK", channelName: null, threadTs: "1.000001", teamName: null };
+  t.set(rows("ws/st"), [task, row("k2", now - 2000)]);
+  await t.readAll([[chats, 1]]);
+  const all = chats.value.days.flatMap((d: J) => d.items);
+  const of = (id: string) => all.find((r: J) => r.id === id);
+  assert.deepEqual([of("k1").originKind, of("k1").originText], ["comma", "Comma"]);
+  assert.deepEqual([of("k2").originKind, of("k2").originText], [undefined, undefined]);
+});
+
+test("a_hidden_chat_that_needs_the_viewer_remains_in_attention", async () => {
+  const t = setup();
+  const [list, marks] = [ui(), ui()];
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  t.subscribe(2, { topic: "workspaceMarks" });
+  t.set({ topic: "workspaces" }, [{ workspaces: [{ id: "ws" }] }]);
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const r = deciding("hidden", 7, 5, t.host.nowMs(), false);
+  r.hidden = true;
+  r.mine = true;
+  r.unread = true;
+  t.set(rows("ws/st"), [r]);
+  await t.readAll([[list, 1], [marks, 2]]);
+  assert.deepEqual(ids(list.value), []);
+  assert.deepEqual(marks.value.workspaces.ws.items.map((item: J) => [item.kind, item.session]), [["wait", "hidden"]]);
+});
+
+test("待处理_lists_the_unread_the_badge_counts_last_of_all_with_how_far_to_read_them", async () => {
+  const t = setup();
+  const marks = ui();
+  t.subscribe(1, { topic: "workspaceMarks" });
+  await t.readAll([[marks, 1]]);
+  t.set({ topic: "workspaces" }, [{ workspaces: [{ id: "ws" }] }]);
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const now = t.host.nowMs();
+  const unread = (id: string, at: number, authorKind: string) => {
+    const r = row(id, at);
+    r.mine = true;
+    r.unread = true;
+    r.thread = 20;
+    r.last = { seq: 30, authorKind };
+    return r;
+  };
+  const other = unread("other", now - 500, "person");
+  other.mine = false;
+  const waits = deciding("k1", 7, 5, now - 3000, false);
+  waits.unread = true;
+  t.set(rows("ws/st"), [unread("agent", now - 2000, "agent"), unread("person", now - 1000, "person"), other, waits]);
+  await t.readAll([[marks, 1]]);
+  const listed = () => marks.value.workspaces.ws.items.map((i: J) => [i.kind, i.session, i.seq]);
+  assert.deepEqual(listed(), [["wait", "k1", 5], ["done", "person", 30], ["done", "agent", 30]]);
+  assert.equal(marks.value.badge, listed().length, "every number on the badge can be found in it");
+  // a kind the badge does not count is not listed
+  t.set(prefs(), { badgeKinds: { on: true, wait: true, failed: true, done: false, message: true, services: true } });
+  await t.readAll([[marks, 1]]);
+  assert.deepEqual([listed(), marks.value.badge], [[["wait", "k1", 5], ["done", "person", 30]], 2]);
 });
 
 test("待处理_is_what_went_wrong_till_let_go_or_waits_not_looked_at_since_of_what_the_badge_counts", async () => {
@@ -646,6 +767,21 @@ test("what_is_worth_a_look_about_a_session_is_its_account_its_quota_running_out_
   ]);
 });
 
+test("a_models_own_window_is_said_of_that_model_alone", () => {
+  // Fable's week used up under an account whose own windows have room (#4365): the account's other models run on.
+  const fable = { label: "每周 · Fable", usedPercent: 100, resetsAt: 9000, scope: "Fable" };
+  const week = { label: "每周", usedPercent: 30, resetsAt: 9000 };
+  const ov = { profiles: [{ id: "a", name: "A", runtimes: ["claude"], model: "claude-opus-5-5", models: ["claude-fable-5-1", "claude-opus-5-5"], check: { state: "ok" }, quota: { state: "ok", windows: [week], scoped: [fable] } }] };
+  const on = (model: string | null) => runnableOn(ov, { runtime: "claude", profile: "a", model }, 0)[0];
+  assert.deepEqual([on("claude-fable-5-1").quota.windows, on("claude-fable-5-1").spent.until, on("claude-fable-5-1").quotaLine], [[week, fable], 9000, { text: "每周 · Fable剩余 0%", level: "red" }]);
+  assert.deepEqual([on("claude-opus-5-5").quota, on("claude-opus-5-5").spent, on("claude-opus-5-5").quotaLine], [{ state: "ok", windows: [week] }, null, { text: "每周 70%" }]);
+  assert.deepEqual(on(null).quota.windows, [week], "its account's own model, Opus");
+  const spent = Object.fromEntries(models(ov, 0).map((m: J) => [m.model, m.spent?.until ?? null]));
+  assert.deepEqual(spent, { "claude-fable-5-1": 9000, "claude-opus-5-5": null });
+  assert.deepEqual(attention(ov, { profile: "a", model: "claude-opus-5-5" }, 0), []);
+  assert.deepEqual(attention(ov, { profile: "a", model: "claude-fable-5-1" }, 0), [{ kind: "quota", text: "每周 · Fable剩余 0%", more: "即将刷新", quota: { left: 0, mark: "Fable", level: "red", until: 9000 } }]);
+});
+
 test("an_agent_can_be_moved_to_the_profiles_of_its_runtime", () => {
   const ov = {
     profiles: [
@@ -664,6 +800,32 @@ test("an_agent_can_be_moved_to_the_profiles_of_its_runtime", () => {
     },
   ]);
   assert.ok(choices(ov, s, 0).some((c: J) => c.model === "m" && c.accounts.codex.length === 2));
+});
+
+test("chats_asked_with_a_limit_have_their_first_rows_and_say_how_many_more", async () => {
+  // A list of 1400 chats went whole to the app as it opened, a screen of them shown (2026-11-08).
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws", limit: 2 });
+  t.set(workspace(), oneStation());
+  await t.read(u, 1);
+  const now = t.host.nowMs();
+  t.set(link("ws/st"), { state: "online" });
+  t.set(rows("ws/st"), [row("1", now - 1000), row("2", now - 2000), row("3", now - 3 * 86_400_000)]);
+  await t.read(u, 1);
+  assert.deepEqual(ids(u.value), ["1", "2"]);
+  assert.equal(u.value.more, 1);
+  // a new one on top: the last of the first two goes, one more past them
+  t.set(rows("ws/st"), [row("4", now), row("1", now - 1000), row("2", now - 2000), row("3", now - 3 * 86_400_000)]);
+  await t.read(u, 1);
+  assert.deepEqual(ids(u.value), ["4", "1"]);
+  assert.equal(u.value.more, 2);
+  // all of them in it: no `more`
+  const all = ui();
+  t.subscribe(2, { topic: "chats", scope: "ws", limit: 10 });
+  await t.read(all, 2);
+  assert.deepEqual(ids(all.value), ["4", "1", "2", "3"]);
+  assert.equal(all.value.more ?? null, null);
 });
 
 test("chats_puts_together_the_online_stations", async () => {
@@ -704,7 +866,9 @@ test("chats_puts_together_the_online_stations", async () => {
   let items = v.days[0].items;
   assert.deepEqual(ids(v), ["1", "1", "s1"]);
   assert.deepEqual([items[0].station, items[1].station, items[1].stationName], ["ws/a", "ws/b", "beta"]);
-  const shown = { ...structuredClone(slack), station: "ws/a", stationName: "alpha", state: null, agents: [{ key: "s1", runtime: "claude", model: "opus", process: "cold", pending: 0 }] };
+  // (what the list's rows say: no more of an agent than its mark shows, nor what no client reads of the chat)
+  const { lastActiveAt: _at, mine: _mine, ...listed } = structuredClone(slack);
+  const shown = { ...listed, station: "ws/a", stationName: "alpha", state: null, agents: [{ key: "s1", runtime: "claude" }] };
   assert.deepEqual(plain(items[2]), plain(shown));
   // A station given an emoji: its rows carry it (the rows made before are made again), and the stations list too.
   const withEmoji = stations(t.nowS());
@@ -728,10 +892,24 @@ test("chats_puts_together_the_online_stations", async () => {
   assert.equal(v.note.reading, false);
   assert.deepEqual(v.trouble, { text: "2 台 station 异常", state: "offline", retry: false });
   items = v.days[0].items;
-  assert.deepEqual([items[0].offline, items[1].offline], [undefined, "beta 离线"]);
+  // Said once, for the station: not on each of its rows.
+  assert.deepEqual([items[0].offline, items[1].offline], [undefined, undefined]);
+  assert.equal(v.stations[1].offline, "beta 离线");
+  assert.deepEqual(shownRows(v).map((i: J) => i.offline), [undefined, "beta 离线", undefined]);
   t.set(link("ws/b"), { state: "online" });
   await t.read(u, 1);
   assert.deepEqual(u.value.trouble, { text: "gamma 离线", state: "offline", retry: false, station: "ws/c" });
+  // A station's link coming and going changes its state in the list once, not each of its rows (1400 rows patched,
+  // 278 KB, for each change of one station, 2026-11-08).
+  t.set(link("ws/b"), { state: "reconnecting" });
+  await t.host.time.pass(100);
+  const said = t.host.takeEmitted().map(([, m]) => m as J).filter((m) => m.id === 1);
+  assert.equal(said.length, 1);
+  assert.ok(said[0].delta.every((op: J) => op.path[0] !== "days"), JSON.stringify(said[0].delta));
+  u.value = applyOps(u.value, said[0].delta);
+  assert.equal(u.value.stations[1].reconnecting, "正在重新连接 beta");
+  t.set(link("ws/b"), { state: "online" });
+  await t.read(u, 1);
   t.fail(rows("ws/a"), new CoreError("http_500", "坏了"));
   await t.read(u, 1);
   v = u.value;
@@ -744,7 +922,8 @@ test("chats_puts_together_the_online_stations", async () => {
   assert.deepEqual([v.stations[0].state, v.stations[0].message], ["connecting", "连接已断开"]);
   assert.equal(ids(v).length, 2);
   assert.deepEqual(v.trouble, { text: "2 台 station 异常", state: "offline", retry: false });
-  const reconnecting = (x: J) => x.days[0].items.map((i: J) => [i.station, i.reconnecting ?? null]);
+  const reconnecting = (x: J) => shownRows(x).map((i: J) => [i.station, i.reconnecting ?? null]);
+  assert.ok(v.days[0].items.every((i: J) => i.reconnecting === undefined));
   assert.ok(reconnecting(v).some(([s, r]: J) => s === "ws/a" && r === "正在重新连接 alpha"), JSON.stringify(v));
   assert.ok(reconnecting(v).every(([s, r]: J) => s === "ws/a" || r === null));
   t.set(link("ws/a"), { state: "error", message: "没有权限" });
@@ -934,7 +1113,46 @@ test("any_made_chat_is_swiped_away_regardless_of_its_state_its_station_there", a
   // Its station offline: nothing there to take it.
   t.set(link("ws/st"), { state: "offline" });
   await t.read(u, 1);
-  assert.equal(u.value.days.flatMap((d: J) => d.items).some((i: J) => i.swipeArchive === true), false);
+  assert.equal(shownRows(u.value).some((i: J) => i.swipeArchive === true), false);
+});
+
+test("a_chat_someone_else_started_asks_before_its_swipe_archives_it_for_the_whole_workspace", async () => {
+  const t = setup();
+  const now = t.host.nowMs();
+  const u = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  t.set(workspace(), oneStation());
+  t.set(link("ws/st"), { state: "online" });
+  await t.host.time.pass(100);
+  const other = { id: "ana@x.com", email: "ana@x.com", name: "Ana", via: "web" };
+  const mine = { id: "me@x.com", email: "me@x.com", name: "我", via: "web" };
+  const running = { ...row("running", now - 3), creator: other };
+  running.agents[0].process = "running";
+  const watching = { ...row("watching", now - 5), creator: other };
+  watching.agents[0].watch = { names: ["CI"], since: 1, at: 2 };
+  const mineRunning = { ...row("mine-running", now - 6), creator: mine };
+  mineRunning.agents[0].process = "running";
+  t.set(rows("ws/st"), [
+    { ...row("theirs", now), creator: other },
+    { ...row("theirs-hides", now - 1), creator: other, hidden: false },
+    { ...row("mine", now - 2), creator: mine },
+    running,
+    row("nobody", now - 4),
+    watching,
+    mineRunning,
+  ]);
+  await t.read(u, 1);
+  const asks = Object.fromEntries(u.value.days.flatMap((d: J) => d.items).filter((i: J) => i.swipeAsk !== undefined).map((i: J) => [i.id, i.swipeAsk]));
+  // Archived, a chat is off the lists of everyone in the workspace, not the viewer's alone: one someone else started is
+  // asked about first, the viewer's own way to take it off only their list said where it has one (its 隐藏).
+  assert.deepEqual(asks, {
+    theirs: "这是Ana发起的对话。归档后，workspace 里所有人的列表都不再显示它，agent 也不再接收新消息。",
+    "theirs-hides": "这是Ana发起的对话。归档后，workspace 里所有人的列表都不再显示它，agent 也不再接收新消息。只想从自己的列表移走，可以长按选「隐藏」。",
+    // (at work or keeping watch as well: both said, who it reaches first)
+    running: "这是Ana发起的对话。归档后，workspace 里所有人的列表都不再显示它，agent 也不再接收新消息。此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。",
+    watching: "这是Ana发起的对话。归档后，workspace 里所有人的列表都不再显示它，agent 也不再接收新消息。「CI」仍在监控。归档会停止监控。",
+    "mine-running": "此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。",
+  });
 });
 
 test("pinned_rows_go_above_the_days_the_latest_pinned_first", async () => {
@@ -1013,6 +1231,31 @@ test("mine_keeps_the_rows_the_station_says_are_the_viewers", async () => {
   assert.equal(mine.value.days[0].items[1].station, "ws/b");
 });
 
+test("a_hidden_chat_stays_out_of_normal_lists_but_is_findable_and_can_be_restored", async () => {
+  const t = setup();
+  const [all, hidden, found] = [ui(), ui(), ui()];
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  t.subscribe(2, { topic: "chats", scope: "ws", hidden: true });
+  t.subscribe(3, { topic: "chatSearch", scope: "ws", query: "标题" });
+  t.set(workspace(), oneStation());
+  const now = t.host.nowMs();
+  const hiddenRow = { ...row("7", now), hidden: true, mine: true };
+  t.set(rows("ws/st"), [hiddenRow, { ...row("8", now - 1), hidden: false }]);
+  await t.readAll([[all, 1], [hidden, 2], [found, 3]]);
+  assert.deepEqual(ids(all.value), ["8"]);
+  assert.deepEqual(ids(hidden.value), ["7"]);
+  assert.deepEqual(found.value.items.map((item: J) => [item.id, item.hidden]), [["7", true], ["8", false]]);
+  // A new message or completion changes the row, but does not restore it.
+  t.set(rows("ws/st"), [{ ...hiddenRow, unread: true, lastActiveAt: now + 1 }, { ...row("8", now - 1), hidden: false }]);
+  await t.readAll([[all, 1], [hidden, 2]]);
+  assert.deepEqual(ids(all.value), ["8"]);
+  assert.deepEqual(ids(hidden.value), ["7"]);
+  t.set(rows("ws/st"), [{ ...hiddenRow, hidden: false }, { ...row("8", now - 1), hidden: false }]);
+  await t.readAll([[all, 1], [hidden, 2]]);
+  assert.deepEqual(ids(all.value), ["7", "8"]);
+  assert.deepEqual(ids(hidden.value), []);
+});
+
 test("watching_keeps_the_rows_one_of_whose_agents_keeps_watch_marked_so", async () => {
   const t = setup();
   const [all, watching] = [ui(), ui()];
@@ -1089,7 +1332,7 @@ test("a_station_refusing_for_a_security_mode_says_why_in_place_of_offline", asyn
   const b = (list.value as J[]).find((s) => s.station === "ws/b");
   assert.deepEqual([b.online, b.summary, b.line, b.blocked], [false, "安全模式未放行", "安全模式未放行", why]);
   const v = chats.value;
-  assert.deepEqual(v.stations.find((s: J) => s.station === "ws/b"), { station: "ws/b", id: "b", name: "beta", state: "offline", message: why, cause: "lock", running: 0, doing: "安全模式未放行" });
+  assert.deepEqual(v.stations.find((s: J) => s.station === "ws/b"), { station: "ws/b", id: "b", name: "beta", state: "offline", message: why, cause: "lock", running: 0, doing: "安全模式未放行", offline: "安全模式未放行 beta" });
   assert.deepEqual(v.trouble, { text: "安全模式未放行 beta", state: "offline", retry: false, station: "ws/b" });
   // Down for another reason: as before, nothing of a security mode.
   t.set(link("ws/b"), { state: "offline", cause: "unreached" });
@@ -1097,6 +1340,29 @@ test("a_station_refusing_for_a_security_mode_says_why_in_place_of_offline", asyn
   const again = (list.value as J[]).find((s) => s.station === "ws/b");
   assert.deepEqual([again.summary, again.blocked], ["连不上", undefined]);
   assert.equal(chats.value.trouble.text, "无法连接 beta");
+});
+
+test("stations_asked_brief_say_what_names_each_and_how_it_is_reached_not_its_overview", async () => {
+  // A chat's bar asked the whole list for its station's name and mark: each station's overview came, and each of its
+  // changes (2026-11-08).
+  const t = setup();
+  const full = ui();
+  const brief = ui();
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  t.subscribe(2, { topic: "stations", scope: "ws", brief: true });
+  t.set(workspace(), stations(t.nowS()));
+  await t.readAll([[full, 1], [brief, 2]]);
+  t.set(link("ws/a"), { state: "online" });
+  t.set(overview("ws/a"), { ...overviewOf([], []), counts: { sessions: 3, running: 2, warm: 0 } });
+  await t.readAll([[full, 1], [brief, 2]]);
+  const a = (brief.value as J[]).find((s) => s.station === "ws/a");
+  assert.deepEqual(Object.keys(a).sort(), ["id", "name", "online", "reconnecting", "running", "station"]);
+  assert.deepEqual([a.name, a.online, a.running], ["alpha", true, 2]);
+  assert.ok((full.value as J[]).find((s) => s.station === "ws/a").overview !== undefined);
+  // what only the overview says changes: nothing goes to the brief
+  t.set(overview("ws/a"), { ...overviewOf([], []), counts: { sessions: 4, running: 2, warm: 1 } });
+  await t.host.time.pass(100);
+  assert.equal(t.host.takeEmitted().filter(([, m]) => (m as J).id === 2).length, 0);
 });
 
 test("a_stopped_view_lets_its_topics_go", async () => {
@@ -1610,20 +1876,10 @@ test("a_chats_decisions_show_their_options_and_where_they_stand", async () => {
   assert.deepEqual(m.map((x: J) => x.asked ?? false), [false, false, false, true]);
   // The last post, nothing after it: no room kept for the bell at the end.
   assert.equal(v.askClear, undefined);
-  // Its agent still in the turn that asked ("k" saying this as it goes on): an option that closes the card is refused
-  // by the station meanwhile, so the page says the card is locked; its turn over, it is answerable again.
-  const k = (endedAt: number | null) => ({ session: fullSession("k", { connect: "ember" }), turns: [{ ...turn("t1"), endedAt }], jobs: [], threads: [] });
-  t.set({ topic: "session", station: "ws/a", key: "k" }, k(null));
+  // Its agent still in the turn that asked ("k" saying this as it goes on): the card is answerable all the same.
+  t.set({ topic: "session", station: "ws/a", key: "k" }, { session: fullSession("k", { connect: "ember" }), turns: [{ ...turn("t1"), endedAt: null }], jobs: [], threads: [] });
   const busy = t.views.compute(chatTopic("ws/a", 7)) as J;
-  assert.deepEqual(busy.ok.messages[3].decision, { resolved: false, locked: true });
-  t.set({ topic: "session", station: "ws/a", key: "k" }, k(5));
-  const over = t.views.compute(chatTopic("ws/a", 7)) as J;
-  assert.deepEqual(over.ok.messages[3].decision, { resolved: false });
-  // Ended waiting on work it started: its turn is over, so a card it left is answerable (though it reads as running).
-  t.set({ topic: "session", station: "ws/a", key: "k" }, { ...k(5), session: fullSession("k", { connect: "ember", lastTurn: { ...turn("t1"), endedAt: 5, declared: "waiting" } }) });
-  const waiting = t.views.compute(chatTopic("ws/a", 7)) as J;
-  assert.deepEqual(waiting.ok.messages[3].decision, { resolved: false });
-  assert.equal((waiting.ok.agents[0] as J).status, "running");
+  assert.deepEqual(busy.ok.messages[3].decision, { resolved: false });
 });
 
 test("an_agents_need_without_a_card_is_let_go_where_the_chats_end_says_it", async () => {
@@ -1818,7 +2074,7 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   assert.equal(sent.length, 1);
   const delta = (sent[0][1] as J).delta;
   assert.ok(delta, JSON.stringify(sent[0]));
-  const appended: J[] = merge([entry(41, "新的")]);
+  const appended: J[] = merge([entry(41, "新的")]).map((m) => ({ ...m }));
   appended[0].mine = false;
   appended[0].system = false;
   appended[0].words = [{ text: "新的" }];
@@ -1841,7 +2097,13 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   await t.read(u, 1);
   agents = u.value.agents;
   assert.deepEqual(agents.map((a: J) => a.session.key), ["k", "n"]);
+  // Not in the threads read again: still the chat held (one made since the list was asked is not in it either); gone
+  // only as its station says.
   t.set(threads("ws/a"), [thread(3, ["k"], now)]);
+  await t.read(u, 1);
+  assert.equal(u.error?.status, undefined, "not said to be gone");
+  assert.deepEqual(u.value.agents.map((a: J) => a.session.key), ["k", "n"]);
+  t.fail(pageOf("ws/a", 7), new CoreError("http_404", "对话不存在", 404));
   await t.read(u, 1);
   assert.equal(u.error.status, 404);
 });
@@ -2003,6 +2265,11 @@ test("a_message_going_up_says_how_far_its_files_are_together", async () => {
   t.views.local.uploadChanged("u1", { sent: 300 });
   await t.read(u, 1);
   assert.deepEqual(shown(), ["正在上传 87%", 350 / 400]);
+  // Every byte gone, the station not yet saying it has them: waiting for it, not 100% (a picture's answer came 9 s
+  // after its bytes and it read as stuck, 2026-11-09).
+  t.views.local.uploadChanged("u2", { sent: 100 });
+  await t.read(u, 1);
+  assert.deepEqual(shown(), ["等待 station 确认收到", 1]);
   const copied = t.views.outboxAdd("ws/a", 7, { text: "再看", attachments: [], quotes: [], uploads: [
     { id: "u3", name: "a.png", size: 10, sent: 5 },
     { id: "u4", name: "b.zip", size: 10 },
@@ -2049,20 +2316,20 @@ test("a_chat_asked_for_here_shows_at_once_and_becomes_its_stations_under_the_sam
   assert.equal(local.pendingTry(key)?.[0], "ws/st");
   await both();
   assert.equal(screen.value.outbox[0].state, "sending");
-  const sends = local.pendingMade(key, "ember:c-1", 9);
+  const sends = local.pendingMade(key, "chat:c-1", 9);
   assert.deepEqual(sends.map(([id, m]) => [id, m.text]), [[first, "修一下登录\n细节…"]]);
   assert.equal(local.pendingThread("ws/st", key), 9);
   await both();
   v = screen.value;
-  assert.deepEqual([v.pending, v.key, v.outbox[0].id], [false, "ember:c-1", first]);
+  assert.deepEqual([v.pending, v.key, v.outbox[0].id], [false, "chat:c-1", first]);
   await both();
-  assert.equal(list.value.days[0].items[0].id, "ember:c-1");
-  t.set(threads("ws/st"), [thread(9, ["ember:c-1"], t.host.nowMs())]);
+  assert.equal(list.value.days[0].items[0].id, "chat:c-1");
+  t.set(threads("ws/st"), [thread(9, ["chat:c-1"], t.host.nowMs())]);
   t.set(pageOf("ws/st", 9), page(1, ["修一下登录\n细节…"], null));
   await both();
   v = screen.value;
-  assert.deepEqual([v.key, v.thread.id, v.messages.length], ["ember:c-1", 9, 1]);
-  const made = { ...row("ember:c-1", t.host.nowMs()), thread: 9, mine: true };
+  assert.deepEqual([v.key, v.thread.id, v.messages.length], ["chat:c-1", 9, 1]);
+  const made = { ...row("chat:c-1", t.host.nowMs()), thread: 9, mine: true };
   t.set(rows("ws/st"), [made]);
   await both();
   items = list.value.days[0].items;
@@ -2079,7 +2346,7 @@ test("the_stations_row_covers_a_chat_made_here_before_its_answer_comes", async (
   t.subscribe(2, { topic: "chats", scope: "ws", mine: true });
   t.set(workspace(), oneStation());
   await t.host.time.pass(100);
-  const old = { ...row("ember:c-0", t.host.nowMs() - 5000), mine: true, thread: 3 };
+  const old = { ...row("chat:c-0", t.host.nowMs() - 5000), mine: true, thread: 3 };
   t.set(rows("ws/st"), [old]);
   await t.read(list, 2);
   const key = local.pendingNew("ws/st", { runtime: "claude" });
@@ -2088,31 +2355,31 @@ test("the_stations_row_covers_a_chat_made_here_before_its_answer_comes", async (
   const idsOf = (): [string, string][] => list.value.days.flatMap((d: J) => d.items).map((i: J) => [i.id ?? "", i.title ?? ""]);
   await t.read(list, 2);
   assert.ok(idsOf().some(([i, ti]) => i === key && ti === "新对话"));
-  const theirs = { ...row("ember:c-2", t.host.nowMs()), mine: true, thread: 8, title: "新对话" };
+  const theirs = { ...row("chat:c-2", t.host.nowMs()), mine: true, thread: 8, title: "新对话" };
   t.set(rows("ws/st"), [old, theirs]);
   await t.read(list, 2);
   const cmp = (a: [string, string], b: [string, string]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
-  assert.deepEqual(idsOf().sort(cmp), [["ember:c-0", "ember:c-0 的标题"], ["ember:c-2", "新对话"], [key, "新对话"]].sort(cmp as never));
+  assert.deepEqual(idsOf().sort(cmp), [["chat:c-0", "chat:c-0 的标题"], ["chat:c-2", "新对话"], [key, "新对话"]].sort(cmp as never));
   assert.equal(local.pendingTry(key)?.[1].clientKey, key);
-  const made: J = { ...row("ember:c-1", t.host.nowMs()), mine: true, thread: 9, title: "新对话", clientKey: key };
+  const made: J = { ...row("chat:c-1", t.host.nowMs()), mine: true, thread: 9, title: "新对话", clientKey: key };
   t.set(rows("ws/st"), [old, theirs, made]);
   await t.read(list, 2);
-  const expected: [string, string][] = [["ember:c-0", "ember:c-0 的标题"], ["ember:c-1", "新对话"], ["ember:c-2", "新对话"]];
+  const expected: [string, string][] = [["chat:c-0", "chat:c-0 的标题"], ["chat:c-1", "新对话"], ["chat:c-2", "新对话"]];
   assert.deepEqual(idsOf().sort(cmp), expected);
-  local.pendingMade(key, "ember:c-1", 9);
+  local.pendingMade(key, "chat:c-1", 9);
   await t.read(list, 2);
   assert.deepEqual(idsOf().sort(cmp), expected);
   made.last = { seq: 1, text: "修一下登录", authorKind: "person", author: "Me@x.com", createdAt: Math.trunc(t.host.nowMs()) };
   made.title = "登录按钮";
   t.set(rows("ws/st"), [old, theirs, made]);
   await t.read(list, 2);
-  assert.ok(idsOf().some(([i, ti]) => i === "ember:c-1" && ti === "登录按钮"));
+  assert.ok(idsOf().some(([i, ti]) => i === "chat:c-1" && ti === "登录按钮"));
   // its station no longer says the key (it keeps it only a while): the row still does, its page open by it
   const later: J = { ...made, title: "登录按钮 2" };
   delete later.clientKey;
   t.set(rows("ws/st"), [old, theirs, later]);
   await t.read(list, 2);
-  const mine = list.value.days.flatMap((d: J) => d.items).find((i: J) => i.id === "ember:c-1");
+  const mine = list.value.days.flatMap((d: J) => d.items).find((i: J) => i.id === "chat:c-1");
   assert.deepEqual([mine?.title, mine?.clientKey], ["登录按钮 2", key]);
 });
 
@@ -2121,7 +2388,7 @@ test("a_chat_made_here_keeps_its_first_message_until_its_page_has_the_entry", as
   const local = t.views.local;
   const key = local.pendingNew("ws/st", { runtime: "claude" });
   const first = local.pendingQueue(key, { text: "修一下登录", attachments: [], quotes: [] })!;
-  local.pendingMade(key, "ember:c-1", 9);
+  local.pendingMade(key, "chat:c-1", 9);
   t.views.outboxSent("ws/st", 9, first, 1);
   const screen = ui();
   t.subscribe(1, agentPage("ws/st", key));
@@ -2130,7 +2397,7 @@ test("a_chat_made_here_keeps_its_first_message_until_its_page_has_the_entry", as
   await t.read(screen, 1);
   let v = screen.value;
   assert.deepEqual([v.messages.length, v.outbox[0].id], [0, first]);
-  t.set(threads("ws/st"), [thread(9, ["ember:c-1"], t.host.nowMs())]);
+  t.set(threads("ws/st"), [thread(9, ["chat:c-1"], t.host.nowMs())]);
   t.set(pageOf("ws/st", 9), page(1, ["修一下登录"], null));
   await t.read(screen, 1);
   v = screen.value;
@@ -2198,7 +2465,7 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
     [0, call("mcp__stillfail__chat_post", { to: "C0OPS/1727.0001", text: "*部署* 好了 <https://x.y|看这里>" }, "1970-01-01T00:00:02Z", "c1")],
     [1, { at: "1970-01-01T00:00:02Z", kind: "tool_result", text: "posted", ok: true, callId: "c1" }],
     // Its own chat's words are its messages already; what goes to a still.fail chat is not Slack's.
-    [2, call("mcp__stillfail__chat_post", { to: "EMBER/1.0", text: "这里" }, "1970-01-01T00:00:02.5Z", "c2")],
+    [2, call("mcp__stillfail__chat_post", { to: "CHAT/1.0", text: "这里" }, "1970-01-01T00:00:02.5Z", "c2")],
     [3, call("mcp__stillfail__slack_api", { method: "chat.postMessage", params: { channel: "C0DEV", text: "<@U9> 新话题" } }, "1970-01-01T00:00:04Z", "c3")],
     // What someone said in Slack, given to it.
     [4, { at: "1970-01-01T00:00:05Z", kind: "user", text: '<message via="slack" thread="C0OPS/1727.0001" from="Mia (U9)" ts="2.5">*收到*，<@U9> 看一下</message>' }],
@@ -2295,6 +2562,26 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_nothing_under
   assert.deepEqual(v.messages.map((m: J) => [m.archive, m.archiveCheck]), [[undefined, undefined], [undefined, undefined], [undefined, undefined]]);
 });
 
+test("a_done_chats_page_not_read_yet_says_where_it_stands_from_its_first_value_not_once_its_read_is_told", async () => {
+  // Opening a chat only raises what is brought first (the user, 2026-11-09): its page is what it will be once read, at
+  // once, not its end line and archive a moment after, as the read the opening told comes back.
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [entry(1, "看看"), { ...entry(2, "好了"), authorKind: "agent", author: "k", declared: "final", ending: "all_done" }], thread: null });
+  const unread = { ...row("k", now), thread: 7, unread: true };
+  unread.agents[0].lastTurn = { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: 1, endedAt: 1 };
+  t.set(rows("ws/a"), [unread]);
+  await t.read(u, 1);
+  const v = u.value;
+  assert.deepEqual([v.stateText, v.stateLead, v.archivable], ["已完成", "done", true]);
+  // (the list's row is as it was: not read, nothing said for it yet)
+  assert.equal(unread.unread, true);
+});
+
 test("a_chats_page_says_at_the_end_of_its_messages_what_its_agent_needs_as_its_row_does", async () => {
   const t = setup();
   const u = ui();
@@ -2309,6 +2596,49 @@ test("a_chats_page_says_at_the_end_of_its_messages_what_its_agent_needs_as_its_r
   await t.read(u, 1);
   const v = u.value;
   assert.deepEqual([v.stateText, v.stateLead, v.stateRest], ["需要你处理：Stripe 的测试 key", "need", "Stripe 的测试 key"]);
+});
+
+test("where_a_chat_stood_is_not_said_again_between_the_viewers_words_reaching_it_and_its_agent_taking_them", async () => {
+  // That its agent took them comes by another read (its session's, its row's) than the chat's page: between the two
+  // the line of the turn before came back, and went again as the agent set to work (the user, 2026-11-10:
+  // 「有个结束的提示，发消息后会出现，然后 agent 开始行动就消失」).
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  const done = { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: now - 60_000, endedAt: now - 50_000 };
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember", lastTurn: done })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  const before = [{ ...entry(1, "看看"), author: "Me@x.com", at: now - 70_000 }, { ...entry(2, "好了"), authorKind: "agent", author: "k", declared: "final", ending: "all_done", at: now - 50_000 }];
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: before, thread: null });
+  const rowOf = (lastTurn: J, patch: J = {}): J => {
+    const r = { ...row("k", now), thread: 7 };
+    r.agents = [{ ...r.agents[0], lastTurn, ...patch }];
+    return r;
+  };
+  t.set(rows("ws/a"), [rowOf(done)]);
+  await t.read(u, 1);
+  assert.equal(u.value.stateText, "已完成");
+  // On their way: the turn it tells of no longer stands.
+  t.views.outboxAdd("ws/a", 7, { text: "再改一下", attachments: [], quotes: [] });
+  await t.read(u, 1);
+  assert.deepEqual([u.value.outbox.length, u.value.stateText], [1, undefined]);
+  // In the chat, its agent's session and its row as they were: nor then.
+  const sent = { ...entry(3, "再改一下"), author: "Me@x.com", at: now };
+  t.set(pageOf("ws/a", 7), { first: 1, last: 3, entries: [...before, sent], thread: null });
+  await t.read(u, 1);
+  assert.deepEqual([u.value.outbox.length, u.value.messages.length, u.value.stateText], [0, 3, undefined]);
+  // Its agent at work on them: nothing to say; its turn over: where it stands now.
+  const working = { kind: "message", outcome: null, declared: null, startedAt: now + 1_000, endedAt: null };
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember", process: "running", lastTurn: working })]);
+  t.set(rows("ws/a"), [rowOf(working, { process: "running" })]);
+  await t.read(u, 1);
+  assert.equal(u.value.stateText, undefined);
+  const again = { ...done, need: "改好了", startedAt: now + 1_000, endedAt: now + 9_000 };
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember", lastTurn: again })]);
+  t.set(rows("ws/a"), [rowOf(again)]);
+  await t.read(u, 1);
+  assert.equal(u.value.stateText, "已完成：改好了");
 });
 
 test("a_slack_threads_page_says_at_the_end_of_its_messages_where_it_stands_as_its_agents_row_does", async () => {
@@ -2412,16 +2742,27 @@ test("the_viewers_messages_sent_one_after_another_go_close_together_their_time_u
   assert.deepEqual(v.messages.map((m: J) => m.followed ?? false), [true, true, false, false, false, true, false]);
   // Each close under the one before it that has its time under it.
   assert.deepEqual(v.messages.map((m: J) => m.joined ?? false), [false, true, true, false, false, false, true]);
+  // What they send now would follow the last, theirs, for 5 minutes from its time.
+  assert.equal(v.joinsUntil, at[6] + 5 * minute);
   // One on its way follows the last one too; failed, it does not.
   const id = t.views.outboxAdd("ws/a", 7, { text: "还有", attachments: [], quotes: [] });
   await t.read(u, 1);
   v = u.value;
   assert.deepEqual(v.messages.map((m: J) => m.followed ?? false), [true, true, false, false, false, true, true]);
   assert.deepEqual([v.outbox[0].joined, v.outbox[0].followed], [true, undefined]);
+  assert.equal(v.joinsUntil, v.outbox[0].createdAt + 5 * minute);
   t.views.local.outboxState("ws/a", 7, id, "无法连接 station");
   await t.read(u, 1);
   assert.deepEqual(u.value.messages.map((m: J) => m.followed ?? false), [true, true, false, false, false, true, false]);
   assert.equal(u.value.outbox[0].joined, undefined);
+  // (nor would the next follow one that did not go, or someone else's)
+  assert.equal(u.value.joinsUntil, undefined);
+  t.views.local.outboxRemove("ws/a", 7, id);
+  await t.read(u, 1);
+  assert.equal(u.value.joinsUntil, at[6] + 5 * minute);
+  t.set(pageOf("ws/a", 7), { first: 1, last: 8, entries: [said(1, at[0]), said(2, at[1]), said(3, at[2]), said(4, at[3]), said(5, at[4], "a@x.com"), said(6, at[5]), said(7, at[6]), said(8, at[6] + minute, "a@x.com")], thread: null });
+  await t.read(u, 1);
+  assert.equal(u.value.joinsUntil, undefined);
 });
 
 test("a_chats_page_is_told_which_files_its_agents_words_place_and_an_open_image_the_ones_beside_it", async () => {
@@ -2520,7 +2861,7 @@ test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () =>
   assert.deepEqual(v.elsewhere.map((s: J) => s.attachments ?? []), [[{ name: "shot.png", path: "/ws/k/uploads/shot.png", size: 13, owner: "k" }], [], [], []]);
 });
 
-// ── What is shared is never written on (docs/core-ts.md「谁能改什么」) ──
+// ── What is shared is never written on (「谁能改什么」) ──
 
 /// mulberry32: the same draws for the same seed.
 function draws(seed: number) {
@@ -2704,4 +3045,53 @@ test("still.fail's notice is shown as a line: a failure's mark taken off, no clo
   assert.deepEqual(noticeOf("⚠️ 账号认证失败：在 Profile 中重新登录\n\n```\n401 Missing API key\n```", true), { failed: true, words: "账号认证失败：在 Profile 中重新登录", linkAt: 7, detail: "401 Missing API key" });
   const m = shownMessage({ authorKind: "stillfail", author: "stillfail", text: "⚠️ 出错了。", seq: 3 }, [], {}, [], [], [], null);
   assert.deepEqual(m.notice, { failed: true, words: "出错了" });
+});
+
+test("a_slack_threads_row_has_its_link_there_as_its_page_does_for_its_menu", async () => {
+  const t = setup();
+  const chats = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  await t.read(chats, 1);
+  t.set({ topic: "workspaces" }, [{ workspaces: [{ id: "ws" }] }]);
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const slack = { ...row("k", t.host.nowMs()), connect: "c1", origin: { teamName: "AFK", channel: "C1", channelName: "ops", threadTs: "1.2" } };
+  t.set(rows("ws/st"), [row("7", t.host.nowMs()), slack]);
+  const connected = { state: "connected", workspace: { team: "AFK", teamId: "T1", url: "https://afk.slack.com/", botUserId: "U0BOT", botName: "bot" } };
+  t.set(overview("ws/st"), overviewOf([{ ...connect("c1", "Slack"), connection: { state: "disabled" } }], []));
+  await t.read(chats, 1);
+  const of = (id: string) => chats.value.days.flatMap((d: J) => d.items).find((r: J) => r.id === id);
+  assert.deepEqual([of("k").slackUrl, of("k").feishuUrl, of("7").slackUrl], [undefined, undefined, undefined], "not signed in: none");
+  t.set(overview("ws/st"), overviewOf([{ ...connect("c1", "Slack"), connection: connected }], []));
+  await t.read(chats, 1);
+  assert.deepEqual([of("k").slackUrl, of("k").slackApp, of("7").slackUrl], ["https://afk.slack.com/archives/C1/p12", "slack://channel?team=T1&id=C1&message=1.2", undefined]);
+});
+
+test("an_agent_whose_card_is_answered_from_here_is_at_work_from_the_answer_on_till_its_turn_after_it_begins", () => {
+  const agent = (status: string, startedAt: number | null) => ({
+    status,
+    session: { key: "s-1", lastTurn: startedAt === null ? null : { startedAt } },
+  });
+  const card = { seq: 5, ts: "t-5", by: { name: "Claude", agent: "s-1" }, card: { type: "options" }, createdAt: 100 };
+  const quotes = [{ author: "Claude", text: "换吗？", comment: "", role: "agent", ts: "t-5" }];
+  // on its way: at work at once
+  assert.equal(answeredAt([agent("final", 50)], [card], [{ id: "o-1", state: "sending", quotes }])[0].status, "queued");
+  // not sent: as it was
+  assert.equal(answeredAt([agent("final", 50)], [card], [{ id: "o-1", state: "failed", quotes }])[0].status, "final");
+  // here, its turn not begun since: still at work
+  const answer = { seq: 6, ts: "t-6", mine: true, quotes, createdAt: 200 };
+  assert.equal(answeredAt([agent("final", 50)], [card, answer], [])[0].status, "queued");
+  // its turn after it begun (and over): as the station says
+  assert.equal(answeredAt([agent("final", 250)], [card, answer], [])[0].status, "final");
+  // words sent under the card, the chat's last word: they answer it as a pick does
+  const said = { seq: 6, ts: "t-6", mine: true, quotes: [], createdAt: 200 };
+  assert.equal(answeredAt([agent("final", 50)], [card], [{ id: "o-1", state: "sending", quotes: [] }])[0].status, "queued");
+  assert.equal(answeredAt([agent("final", 50)], [card, said], [])[0].status, "queued");
+  // words under something said after it, quoting no card: as they are
+  const after = { seq: 6, ts: "t-6", by: { name: "Claude", agent: "s-1" }, createdAt: 150 };
+  const later = { seq: 7, ts: "t-7", mine: true, quotes: [], createdAt: 200 };
+  assert.equal(answeredAt([agent("final", 50)], [card, after, later], [])[0].status, "final");
+  // at work already: as it is
+  assert.equal(answeredAt([agent("running", 50)], [card], [{ id: "o-1", state: "sending", quotes }])[0].status, "running");
 });

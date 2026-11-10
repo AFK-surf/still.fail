@@ -1,4 +1,4 @@
-// Normalization as harfrust does it before GSUB (normalize.rs): decompose what the font has no glyph for, reorder
+// Normalization as harfrust does it before GSUB: decompose what the font has no glyph for, reorder
 // marks by combining class, then compose again where the font has the composed glyph. Each character's glyph is
 // kept in normalizer_glyph_index for mapping afterwards.
 

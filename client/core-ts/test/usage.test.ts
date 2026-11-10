@@ -11,16 +11,34 @@ holdLanguage();
 type J = any;
 
 const row = (day: string, person: string, thread: number, profile: string, model: string, calls: number, cost: number | null): J => ({
-  day, session: "ember:c-1", thread, person, profile, runtime: "claude", model, calls, input: 10 * calls, cacheRead: 90 * calls, cacheWrite: 0, output: calls, cost,
+  day, session: "chat:c-1", thread, person, profile, runtime: "claude", model, calls, input: 10 * calls, cacheRead: 90 * calls, cacheWrite: 0, output: calls, cost,
 });
 const station = (rows: J[]): J => ({
   since: 0, reading: false, rows,
-  threads: { "7": { title: "修登录", surface: "ember", home: "ember:c-1", archived: false }, "8": { title: "#ops", surface: "slack:T1", home: "ember:c-2", archived: true } },
+  threads: { "7": { title: "修登录", surface: "ember", home: "chat:c-1", archived: false }, "8": { title: "#ops", surface: "slack:T1", home: "chat:c-2", archived: true } },
   people: { "a@x": { id: "a@x", name: "a@x", email: "a@x", via: "cloud" }, "slack:ds:U1": { id: "slack:ds:U1", name: "阿一", email: "a@x", via: "slack" }, "b@x": { id: "b@x", name: "b@x", email: "b@x", via: "cloud" } },
   profiles: { cc: { name: "公司账号", runtime: "claude" } },
 });
 const NOW = 1_790_913_600_000;
 const ok = (v: J) => ({ ok: v });
+
+test("recent totals wait for every station even when one has already answered", () => {
+  const ready: Source = { address: "ws/a", name: "alpha", online: true,
+    value: ok(station([row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 1, 3)])) };
+  const pending: Source = { address: "ws/b", name: "beta", online: true,
+    value: ok({ ...station([]), detailsPreparing: true }) };
+  for (const sources of [[ready, pending], [pending, ready]]) {
+    const view = usageView(sources, 7, NOW, 480, {}, []);
+    assert.equal(view.detailsPreparing, true);
+    assert.equal(view.wait.reading, true);
+    assert.equal(view.empty, true, "incomplete totals cannot be shared as a whole");
+  }
+  const complete = usageView([ready, { ...pending, value: ok(station([])) }], 7, NOW, 480, {}, []);
+  assert.notEqual(complete.detailsPreparing, true);
+  assert.equal(complete.wait.reading, false);
+  assert.equal(complete.empty, false);
+  assert.equal(complete.tiles[0].value, "$3.00");
+});
 
 test("days_split_by_who_and_lists_ranked_by_cost", () => {
   assert.equal(localDay(NOW, 480), "2026-10-02");
@@ -50,7 +68,7 @@ test("days_split_by_who_and_lists_ranked_by_cost", () => {
   const chats = list(1);
   assert.deepEqual([chats[0].title, chats[0].chat], ["修登录", { station: "ws/st", thread: 7 }]);
   // each chat said with who it was for and its model, the most of each, then where it is
-  assert.deepEqual([chats[0].sub, chats[1].sub, chats[1].chat], ["阿一 · Opus 5.5", "阿一 · Opus 5.5 · Slack · 已归档", { station: "ws/st", session: "ember:c-2" }]);
+  assert.deepEqual([chats[0].sub, chats[1].sub, chats[1].chat], ["阿一 · Opus 5.5", "阿一 · Opus 5.5 · Slack · 已归档", { station: "ws/st", session: "chat:c-2" }]);
   // one person, one model: neither said of a chat, nor any list of one told apart
   const one = usageView([{ address: "ws/st", name: "studio", online: true, value: ok(station([row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 10, 3.0)])) }], 7, NOW, 480, { id: "a@x", email: "a@x" }, []);
   assert.deepEqual([one.lists[1].items[0].sub, one.lists.map((l: J) => l.parts.length)], [null, [0, 0, 0, 0]]);
