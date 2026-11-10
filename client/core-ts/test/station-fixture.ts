@@ -129,11 +129,11 @@ export function stationHost(answers: Answers) {
     return jsonResponse(404, { error: "no" });
   };
   // How its events stream answers: opens, fails (the station is not reached), hangs (a try that takes long), a status
-  // of its own, or the station's refusal of the link (a CoreError, as the mesh says it: a security mode's); `resumes`:
+  // of its own (a number, saying 没有权限; a `Status`, its body), or the station's refusal of the link (a CoreError, as the mesh says it: a security mode's); `resumes`:
   // one asked `since` an event says it was told first what came after it; `marks`: one not resumed is told where the
   // log is, an id alone (station/src/api/events.ts); `follows`: one asked `running=1` says it follows the sessions at work
-  // itself (FOLLOWS).
-  const gate: { stream: "open" | "fail" | "hang" | number | CoreError; resumes: boolean; marks: boolean; follows: boolean; shared: boolean } = { stream: "open", resumes: false, marks: false, follows: true, shared: false };
+  // itself (FOLLOWS); `build`: the build its stream's answer says (`stillfail-build`, oldest.ts), none unless given.
+  const gate: { stream: "open" | "fail" | "hang" | number | Status | CoreError; resumes: boolean; marks: boolean; follows: boolean; shared: boolean; build?: string } = { stream: "open", resumes: false, marks: false, follows: true, shared: false };
   let marked = 0;
   // What it tells as events besides its events stream (GET /resources asked as events), by path: those named here tell
   // what is offered on them (`tell`); one it has an answer for answers that whole, as a station from before does.
@@ -160,10 +160,12 @@ export function stationHost(answers: Answers) {
       if (gate.stream === "fail") return yield* Effect.fail(new HostError("connection refused"));
       if (gate.stream instanceof CoreError) return yield* Effect.fail(gate.stream);
       if (gate.stream === "hang") return yield* Effect.never;
-      if (typeof gate.stream === "number") {
-        const said = new TextEncoder().encode('{"error":"没有权限"}');
+      const build: [string, string][] = gate.build !== undefined ? [["stillfail-build", gate.build]] : [];
+      if (typeof gate.stream === "number" || gate.stream instanceof Status) {
+        const code = typeof gate.stream === "number" ? gate.stream : gate.stream.code;
+        const said = new TextEncoder().encode(typeof gate.stream === "number" ? '{"error":"没有权限"}' : JSON.stringify(gate.stream.body));
         let given = false;
-        return { status: gate.stream, headers: [], body: { take: Effect.sync(() => (given ? null : ((given = true), said))) } };
+        return { status: code, headers: build, body: { take: Effect.sync(() => (given ? null : ((given = true), said))) } };
       }
       const queue = yield* Queue.unbounded<Uint8Array | null>();
       const path = req.url.replace("https://stillfail.test/admin/api", "");
@@ -181,7 +183,7 @@ export function stationHost(answers: Answers) {
       const compress = asksCompressed(req) ? zstdBlocks() : null;
       const body: Pull<Uint8Array> = { take: Effect.map(Queue.take(queue), (c) => (c && compress ? compress(c) : c)) };
       const follows = gate.follows && path.includes("running=1");
-      const headers: [string, string][] = [...(resumed ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(follows ? [["stillfail-follows", "running"] as [string, string]] : []), ...(compress ? [["content-encoding", "zstd"] as [string, string]] : [])];
+      const headers: [string, string][] = [...build, ...(resumed ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(follows ? [["stillfail-follows", "running"] as [string, string]] : []), ...(compress ? [["content-encoding", "zstd"] as [string, string]] : [])];
       return { status: 200, headers, body };
     }),
   );

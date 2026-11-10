@@ -591,3 +591,55 @@ test("a_station_the_cloud_says_is_not_online_is_said_offline", async () => {
     s.core.close();
   }
 });
+
+type Troubled = { trouble: { text: string; state: string; retry: boolean; station?: string } | null; stations: { station: string; state: string; message: string | null }[] };
+const linkNow = (s: Awaited<ReturnType<typeof started>>) => s.core.inner.stations.link(ST)?.state as { state?: string; old?: string };
+
+test("a_station_that_finds_this_core_too_old_says_to_update_the_app_or_reload_the_page_until_it_answers", async () => {
+  // Every station answered a stable page 426 (station/src/mesh/serve.ts): its list said only that they were amiss
+  // (2026-11-10).
+  for (const app of [true, false]) {
+    const s = await started(undefined, 0, undefined, (st) => {
+      st.host.appKeys = app;
+      st.gate.stream = status(426, { error: "请更新 app", update: true });
+    });
+    try {
+      const values = new Map<number, unknown>();
+      subscribe(s.core, 1, 2, { topic: "chats", scope: "ws" });
+      await s.host.time.pass(1000, 250);
+      apply(s.host, values);
+      assert.deepEqual([linkNow(s).state, linkNow(s).old], ["error", "app"]);
+      const list = () => values.get(2) as Troubled;
+      assert.deepEqual(list().trouble, { text: t(app ? "core-views.station.appOld" : "core-views.station.pageOld"), state: "error", retry: false, station: ST });
+      // The station's own sentence is still its message.
+      assert.deepEqual(list().stations.map((x) => [x.station, x.state, x.message]), [[ST, "error", "请更新 app"]]);
+      // Answering again (the page reloaded is a core anew; here the station's floor lowered), tried as the UI comes
+      // back: nothing of it is left.
+      s.gate.stream = "open";
+      s.core.inner.wakes.wake(new Wake(s.host.nowMs(), 31_000, false, false));
+      await s.host.time.pass(1000, 250);
+      apply(s.host, values);
+      assert.deepEqual([linkNow(s).state, linkNow(s).old], ["online", undefined]);
+      assert.equal(list().trouble, null);
+    } finally {
+      s.core.close();
+    }
+  }
+});
+
+test("a_station_this_core_finds_too_old_is_said_by_name_to_need_an_update", async () => {
+  // Its answer's build under OLDEST_STATION (oldest.ts): 「无法连接 studio」 said nothing of what to do.
+  const s = await started(undefined, 0, undefined, (st) => {
+    st.gate.build = "0.1.5000";
+  });
+  try {
+    const values = new Map<number, unknown>();
+    subscribe(s.core, 1, 2, { topic: "chats", scope: "ws" });
+    await s.host.time.pass(1000, 250);
+    apply(s.host, values);
+    assert.deepEqual([linkNow(s).state, linkNow(s).old], ["error", "station"]);
+    assert.deepEqual((values.get(2) as Troubled).trouble, { text: t("core-views.station.incompatible_named", { name: "studio" }), state: "incompatible", retry: false, station: ST });
+  } finally {
+    s.core.close();
+  }
+});
