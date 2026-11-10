@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [6d985b7a7](https://github.com/AFK-surf/still.fail/commit/6d985b7a745263f260eb8c47a5e6cfc06dce56bb) mac: update in place where a translocated app was  | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 94.09 | 151.58 |
 | [351ef47b8](https://github.com/AFK-surf/still.fail/commit/351ef47b876954e1c506c5514ec2409c0b63720b) core: what each topic sends at a workspace's real  | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 94.09 | 185.99 |
 | [8b8145742](https://github.com/AFK-surf/still.fail/commit/8b8145742b38dd9215873c0705d546a6b3972890) mbui: words picked with the pointer never end on a | 1.78 | 2.37 | 9.84 | 28.49 | 34.6 | 25.45 | 46.86 | 93.96 | 171.75 |
 | [2e1be559b](https://github.com/AFK-surf/still.fail/commit/2e1be559b17ed69cd2e5801958eb528fc58a5698) mbui: a stop told at a moment after its frame's is | 1.78 | 2.37 | 9.84 | 28.49 | 34.6 | 25.45 | 46.86 | 93.95 | 156.36 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [28376c907](https://github.com/AFK-surf/still.fail/commit/28376c9071e24106660aea7233f0222d1f7340d2) cloud: the memberships test waits for its lock.get | 1.74 | 2.32 | 9.65 | 28.2 | 33.7 | 25.18 | 46.15 | 93.52 | 139.07 |
 | [a455a9c49](https://github.com/AFK-surf/still.fail/commit/a455a9c49d7c83da4700bff1436314eccb5e3745) cloud: signing in and a client's spans use up none | 1.74 | 2.32 | 9.65 | 28.2 | 33.68 | 25.18 | 46.13 | 93.55 | 168.29 |
 | [6f1305d96](https://github.com/AFK-surf/still.fail/commit/6f1305d9683c0b281d370ec470ba9b81cee6cf09) cloud: devices' and stations' sockets on their own | 1.74 | 2.32 | 9.65 | 28.2 | 33.68 | 25.18 | 46.13 | 93.28 | 144.49 |
-| [3aa5bc337](https://github.com/AFK-surf/still.fail/commit/3aa5bc33760adeb9a907f22174d9926f4d2c5e9a) app: every screen swept with the system's words at | 1.74 | 2.32 | 9.65 | 28.19 | 33.68 | 25.18 | 46.13 | 92.85 | 167.36 |
