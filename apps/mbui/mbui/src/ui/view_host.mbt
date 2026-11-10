@@ -397,6 +397,8 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   })
   // (a column's keys over an old view's list under the pointer: its, as ever, Ctx::list_key on on_key's way)
   t.on_old_scroll(fn() { old_list_under_pointer(g()) != 0 }, there=fn(id, x, y) { old_wheel_there(id, x, y) })
+  // (its work by part, for the hangs found in it: journal.mbt, @hostapi.work_part's clock and note)
+  t.timed_by(Some((fn() { @hostapi.work_began() }, fn(what, ms) { @hostapi.work_took(what, ms) })))
   view_app.val = Some(t)
   view_due.set(view_due.untracked() + 1)
   // (the tree in place of the one before, whole: whether the app takes back, as it has it, told the host now, as a change
