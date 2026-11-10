@@ -8,8 +8,8 @@
 
 ///|
 /// 安全 (SecuritySettings, SecurityScreen), made once in node `v` as wide as `width` gives it, in the frame it is given:
-/// the person's own lock first (an app's alone: a web page signs nothing), then the workspace's as the core's `lock`
-/// says it, each part of it a block of its own come and gone as that changes (read the first time: the page as it is
+/// the workspace's lock as the core's `lock` says it (the person's own lock is no row of its own: to people there is one
+/// safe mode, the user, 2026-11-10), each part of it a block of its own come and gone as that changes (read the first time: the page as it is
 /// while the lock is off, in its bones). `stint`: the page's time on top, what a station's picture is asked for on.
 pub fn security_node(
   v : @view.View,
@@ -33,7 +33,7 @@ pub fn security_node(
     width?,
     lead=fn() { @sf.t("web-pages.security.lead") },
     fn() {
-      let out = if @ui.platform() != 4 { ["personal"] } else { [] }
+      let out : Array[String] = []
       let l = lock()
       match l {
         None => out.push("waiting")
@@ -61,12 +61,6 @@ pub fn security_node(
     },
     fn(b, key) {
       match key {
-        "personal" =>
-          @sf.group_node(b, fn(g) {
-            @sf.link_row_node(g, fn() { @sf.t("android-misc.personal.heading") }, fn() { (core.push)(PersonalLock) }, note=fn() {
-              @sf.t("android-misc.personal.note")
-            })
-          })
         "waiting" =>
           // (read the first time: the page as it is while the lock is off, the commonest, in its bones)
           @sf.waiting_node(

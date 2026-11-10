@@ -7,7 +7,8 @@ let corners_known : Map[String, Int] = Map::new()
 
 ///|
 /// Every screen in every window (corners_wbtest.mbt), by window, language and screen: the bar it may only fall from. A
-/// screen not listed has none. Listed: the rail on the tape (corners_tape_rail).
+/// screen not listed has none. Listed: the rail on the tape (corners_tape_rail), and 安全's last card where its page
+/// ends 5 short of its panel.
 let corners_everywhere_known : Map[String, Int] = {
   let known = Map::new()
   for win in ["touch", "desk-win"] {
@@ -17,6 +18,13 @@ let corners_everywhere_known : Map[String, Int] = {
       }
     }
   }
+  // 安全 with safe mode on, in the tablet's window, in Chinese: the rail's one and two more, the foot corners of its
+  // last card (网页版's, 16 in from the panel's sides, 26 round). Without the row of a lock of one's own at its top
+  // (gone, 2026-11-10) the page is 5 short of its panel, so it does not scroll and its last card stands 21 over the
+  // panel's foot, where its end would stand 16 (page_foot). Where a page that does not fill its panel ends is its
+  // words' and the window's, no place it is stood at: the rule holds what does not scroll to the corner, and nothing
+  // here stands it elsewhere. Gone as the page's height is any other (English's has none).
+  known["touch-zh lock-security"] = 3
   known
 }
 

@@ -393,14 +393,22 @@ test "共享调试 of a station a grant lends the phone to: no switch that canno
 }
 
 ///|
-test "a device without the person's own lock is not let allow: its way to turn it on instead, on a phone and on a computer alike" {
+test "a request on a device its person's trusted devices have not approved: 批准这台设备 first, 查看步骤 opening 共享调试; with no lock of theirs yet, 允许 as anywhere" {
   for phone in [adb_phone_of(wireless=true), adb_phone_of(supported=false)] {
     let t = phone_chat("chat-phone-outside", phone)
+    assert_true(t.find("需要先批准这台设备") is Some(_))
     assert_eq(t.words().filter(fn(x) { x.0 == "允许" }).length(), 0)
-    assert_eq(t.words().filter(fn(x) { x.0 == "000000" }).length(), 0)
-    t.tap_text("开启个人锁")
+    t.tap_text("查看步骤")
     t.run_for(@ui.move_most_ms)
+    // (settings' 共享调试, that step alone)
+    assert_true(t.find("此设备尚未获批") is Some(_))
+    assert_true(t.find("发送批准请求") is Some(_))
     assert_true(t.find("默认最长授权") is None)
+    // no lock yet: the core says nothing first (allowing begins it), so the card is any ready device's
+    let t = phone_chat("chat-phone-none", phone)
+    assert_true(t.find("需要先") is None)
+    assert_eq(t.words().filter(fn(x) { x.0 == "允许" }).length(), 1)
+    assert_true(t.find("查看步骤") is None)
   }
 }
 
@@ -422,50 +430,95 @@ test "settings' 共享调试: a grant the phone does not lend keeps its title wh
 }
 
 ///|
-test "settings' 共享调试: off the person's own lock, the page is the lock's step alone" {
-  let t = settings_tester("adb:", shows="settings-adb-gate-none", platform=2)
-  assert_true(t.find("共享调试要先开启个人锁") is Some(_))
-  // nothing that does anything without it: the switch, the stations, how long grants last
-  assert_true(t.find("重启手机、更新 app 后也保持开启") is None)
-  assert_true(t.find("共享给的 station") is None)
-  assert_true(t.find("默认最长授权") is None)
+/// Settings' 共享调试 (`page`, a route's name) on a phone over the fixture's `mode`, each call it makes kept in order.
+fn adb_settings_calls(mode : String, page? : String = "adb:") -> (@ui.Tester, Array[(String, Json)]) {
+  new_run()
+  @settings.fixture_page(mode) |> ignore
+  let base = fixture("settings")
+  let calls : Array[(String, Json)] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push((name, params))
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_setting(page)
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  (t, calls)
 }
 
 ///|
-test "settings' 共享调试: 开启个人锁 there turns the lock on, and a device joining types the code in the page" {
-  for mode in ["settings-adb-gate-none", "settings-adb-gate-code"] {
-    new_run()
-    @settings.fixture_page(mode) |> ignore
-    let base = fixture("settings")
-    let calls : Array[(String, Json)] = []
-    let src : Source = {
-      ..base,
-      call: fn(name, params, done) {
-        calls.push((name, params))
-        (base.call)(name, params, done)
-      },
-    }
-    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
-    open_setting("adb:")
-    t.draw()
-    t.run_for(@ui.move_most_ms)
-    if mode == "settings-adb-gate-none" {
-      // the button, not the title over it that names it too
-      let button = t.words().filter(fn(w) { w.0 == "开启个人锁" })
-      assert_eq(button.length(), 1)
-      t.tap(button[0].1 + button[0].3 / 2.0, button[0].2 + button[0].4 / 2.0)
-      t.draw()
-      assert_true(calls.iter().any(fn(call) { call.0 == "adb.personalOpen" && call.1 == { "sub": "s" } }), msg="\{calls.map(fn(call) { call.0 })}")
-    } else {
-      assert_true(t.find("先把这台设备加入个人锁") is Some(_))
-      assert_true(t.find("14:05 前有效") is Some(_))
-      t.tap_text("MacBook Pro")
-      t.type_text("123456")
-      let typed = calls.filter(fn(call) { call.0 == "adb.personalCode" })
-      assert_eq(typed.length(), 1, msg="\{calls.map(fn(call) { call.0 })}")
-      assert_eq(typed[0].1, { "code": "123456" })
-    }
-  }
+test "settings' 共享调试 with no lock of the person's own yet: the page as it is, no step to turn anything on first" {
+  let t = settings_tester("adb:", shows="settings-adb-gate-none", platform=2)
+  assert_true(t.find("默认最长授权") is Some(_))
+  assert_true(t.find("重启手机、更新 app 后也保持开启") is Some(_))
+  // (the owner took 开启 away, 2026-11-10: nothing names a lock of one's own, nor asks to turn one on)
+  assert_eq(t.words().filter(fn(w) { w.0.contains("个人锁") || w.0 == "开启" }).length(), 0)
+  assert_true(t.find("此设备尚未获批") is None)
+  // nobody's devices listed: this device is on no lock
+  assert_true(t.find("能批准手机调试的设备") is None)
+}
+
+///|
+test "settings' 共享调试 on a device its person's trusted devices have not approved: that step alone, 发送批准请求 asking it" {
+  let (t, calls) = adb_settings_calls("settings-adb-lock-outside")
+  assert_true(t.find("此设备尚未获批") is Some(_))
+  assert_true(t.find("在你的受信任设备上批准这台设备后，它才能批准手机调试。") is Some(_))
+  // nothing that does anything before it: the switch, how long grants last
+  assert_true(t.find("重启手机、更新 app 后也保持开启") is None)
+  assert_true(t.find("默认最长授权") is None)
+  t.tap_text("发送批准请求")
+  t.draw()
+  let asked = calls.filter(fn(call) { call.0 == "adb.personalJoin" })
+  assert_eq(asked.length(), 1, msg="\{calls.map(fn(call) { call.0 })}")
+  assert_eq(asked[0].1, { "sub": "s" })
+}
+
+///|
+test "settings' 共享调试: a device being approved types the code its trusted device shows in the page" {
+  let (t, calls) = adb_settings_calls("settings-adb-gate-code")
+  assert_true(t.find("此设备尚未获批") is Some(_))
+  assert_true(t.find("14:05 前有效") is Some(_))
+  t.tap_text("MacBook Pro")
+  t.type_text("123456")
+  let typed = calls.filter(fn(call) { call.0 == "adb.personalCode" })
+  assert_eq(typed.length(), 1, msg="\{calls.map(fn(call) { call.0 })}")
+  assert_eq(typed[0].1, { "code": "123456" })
+}
+
+///|
+test "settings' 共享调试 on a device its person's trusted devices approved: the devices that approve phone debugging, another removed asked first, not this one" {
+  // (the link of the person's own lock's page of before opens it: existing links keep working)
+  let (t, calls) = adb_settings_calls("settings-adb-lock-member", page="personal-lock:")
+  assert_true(t.find("默认最长授权") is Some(_))
+  assert_true(t.find("能批准手机调试的设备") is Some(_))
+  let (_, mine_y) = t.find("OPPO PLP110").unwrap()
+  let (_, other_y) = t.find("MacBook Pro").unwrap()
+  assert_true(t.find("这台设备") is Some(_))
+  // 移除 by the other device alone
+  let removes = t.words().filter(fn(w) { w.0 == "移除" && w.5 > 0.5 })
+  assert_eq(removes.length(), 1, msg="\{removes}")
+  let row = removes[0]
+  let middle = row.2 + row.4 / 2.0
+  assert_true((middle - other_y).abs() < (middle - mine_y).abs(), msg="\{row} \{other_y} \{mine_y}")
+  t.tap(row.1 + row.3 / 2.0, middle)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  // asked first: nothing removed yet
+  assert_true(@sf.presenting())
+  assert_true(t.find("移除「MacBook Pro」？") is Some(_))
+  assert_true(t.find("该设备将不能再批准手机调试，也无法再访问开了安全模式的 workspace，重新批准后才能使用") is Some(_))
+  assert_eq(calls.filter(fn(call) { call.0 == "adb.personalRemove" }).length(), 0)
+  // the dialog's 移除, not the row's under it
+  let said = t.words().filter(fn(w) { w.0 == "移除" && w.5 > 0.5 && (w.1 != row.1 || w.2 != row.2) })
+  assert_eq(said.length(), 1, msg="\{said}")
+  t.tap(said[0].1 + said[0].3 / 2.0, said[0].2 + said[0].4 / 2.0)
+  t.run_for(@ui.move_most_ms)
+  let asked = calls.filter(fn(call) { call.0 == "adb.personalRemove" })
+  assert_eq(asked.length(), 1, msg="\{calls.map(fn(call) { call.0 })}")
+  assert_eq(asked[0].1, { "sub": "s", "key": "ed25519:bb" })
 }
 
 ///|

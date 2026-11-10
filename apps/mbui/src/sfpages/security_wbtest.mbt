@@ -74,6 +74,19 @@ test "安全, at each width and with either hand: its people, devices and statio
 }
 
 ///|
+test "安全, at each width and with either hand: no row of a lock of one's own, the workspace's safe mode alone" {
+  // (to people there is one safe mode, the user, 2026-11-10: its row was at the page's top, on every app but the web)
+  for case in page_cases {
+    let (w, platform) = case
+    let t = setting_tester(Security, w, platform~)
+    let at = "\{w} platform \{platform}"
+    assert_true(t.find("安全模式已开启") is Some(_), msg=at)
+    let named = t.words().filter(fn(x) { x.0.contains("个人锁") || x.0.contains("以你的名义批准") })
+    assert_eq(named.length(), 0, msg="\{at}: \{named}")
+  }
+}
+
+///|
 test "protecting a station keeps its button and label, with the spinner inside and no repeated press" {
   for (w, platform) in page_cases {
     let at = "\{w} platform \{platform}"

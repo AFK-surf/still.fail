@@ -1833,5 +1833,5 @@
   "web-pages.drive.viewAll": "View all files",
   "web-pages.drive.pinnedFolders": "Available folders",
   "web-pages.screen.none": "No screens yet",
-  "web-pages.security.pairPersonal": "It asks to join your personal lock"
+  "web-pages.security.pairPersonal": "Once approved, it can approve phone debugging"
 }

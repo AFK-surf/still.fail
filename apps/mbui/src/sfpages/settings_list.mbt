@@ -240,8 +240,10 @@ fn settings_parts_of(core : Core, here : @settings.Here, bars~ : Bool, kept~ : S
   if platform == 0 {
     device.push(settings_row(LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title")))
   }
-  // 共享调试, the phone's: its page says which chats it is lent to
-  if platform == 2 {
+  // 共享调试: on a phone its switch and which chats it is lent to; on every app, which chats were allowed, how long a
+  // grant lasts, and the devices that approve it (their own page under 安全 of before, gone: the user, 2026-11-10, to
+  // people there is one safe mode). Not the web's: a page signs nothing
+  if platform != 4 {
     device.push(settings_row(AdbShare(""), "adb", "phone", @sf.t("android-misc.adb.title")))
   }
   device.push(settings_row(KeptFiles, "files", "disk", @sf.t("android-settings.files.title"), value=kept))
@@ -273,7 +275,7 @@ fn settings_parts_of(core : Core, here : @settings.Here, bars~ : Bool, kept~ : S
 pub fn settings_row_of(r : @settings.Route) -> @settings.Route {
   match r {
     Fonts => Appearance
-    SecurityOpen | PersonalLock => Security
+    SecurityOpen => Security
     VaultItems | VaultItem(_, _) => Vault
     AdbShare("") => AdbShare("")
     Station(_) | AdbShare(_) => Stations
