@@ -269,6 +269,7 @@
   "core-misc.vault.unknownItem": "条目不存在",
   "core-misc.vault.scopeTooLong": "这个密钥不给这么长的授权",
   "core-misc.vault.untrusted": "此条目并非由库成员签名写入",
+  "core-misc.vault.waiting": "「{name}」有设备被移除，正在等它主人的设备在 station「{station}」上给它换钥匙，换好之前不能修改",
   "core-misc.vault.noRequest": "此申请已处理",
   "core-misc.vault.reason.open": "查看「{name}」",
   "core-misc.vault.reason.unlock": "解锁密钥库「{name}」",
