@@ -65,13 +65,13 @@ test("a_subscriptions_resets_are_offered_a_kind_each_with_what_one_gives_back", 
   };
   const shown = p.times(raw, c) as J;
   assert.deepEqual(shown.resets, [
-    { id: "session", kind: "session", left: 1, usable: false, title: "5 小时重置", text: "剩余 1 次 · 到达它能恢复的上限后才能用", refills: "立即恢复 5 小时额度" },
-    { id: "model", kind: "model", left: 1, usable: true, title: "Fable 重置", text: "剩余 1 次 · 3 天后到期", refills: "把本周 Fable 用掉的额度还回每周额度" },
+    { id: "session", kind: "session", left: 1, usable: false, title: "5 小时重置", leftText: "剩 1 次", text: "到达它能恢复的上限后才能用", refills: "立即恢复 5 小时额度" },
+    { id: "model", kind: "model", left: 1, usable: true, title: "Fable 重置", leftText: "剩 1 次", text: "3 天后到期", refills: "把本周 Fable 用掉的额度还回每周额度" },
   ]);
   assert.deepEqual((conform("Quota", shown) as J).ok.resets, shown.resets);
   // A station from before kinds, or one kind (a ChatGPT subscription's): all of them as one, no kind to ask for.
   const one = p.times({ state: "ok", windows: [], detail: null, checkedAt: now, resetCount: 2, resetExpiries: [now + day] }, c) as J;
-  assert.deepEqual(one.resets, [{ kind: "credit", left: 2, usable: true, title: "额度重置", text: "剩余 2 次 · 1 天后到期" }]);
+  assert.deepEqual(one.resets, [{ kind: "credit", left: 2, usable: true, title: "额度重置", leftText: "剩 2 次", text: "1 天后到期" }]);
   assert.deepEqual((p.times({ state: "ok", windows: [], detail: null, checkedAt: now, resetCount: 0 }, c) as J).resets, []);
 });
 

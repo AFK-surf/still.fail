@@ -974,7 +974,8 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
         g.show(fn() { credits() != "" }, fn(x) {
           @sf.link_row_node(x, fn() { @sf.t("android-settings.quota.credits") }, fn() {  }, value=credits, goes=false)
         })
-        // Each kind of reset it holds, a row each (what one gives back said beside it), resetting one of it asked first.
+        // Each kind of reset it holds, a row each: how many are left at its end, where they are seen at once (the user,
+        // 2026-11-10), what one gives back and till when under its name; the row pressed asks first, then uses one.
         g.each(fn() { items(quota(), "resets") }, fn(r) { text(Some(r), "kind") }, fn(x, rs) {
           let rv = fn() { Some(rs.get()) }
           let busy = fn() { is_doing(core, ["profile.resetQuota"], on) }
@@ -1006,13 +1007,8 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
                   },
                 )
               },
-              note=fn() {
-                match opt_text(rv(), "refills") {
-                  Some(refills) => refills + " · " + text(rv(), "text")
-                  None => text(rv(), "text")
-                }
-              },
-              value=fn() { @sf.t("web-pages.profiles.reset") },
+              note=fn() { reset_note(rv()) },
+              value=fn() { text(rv(), "leftText") },
               value_lit=lit,
               chevron=false,
               goes~,
@@ -1023,6 +1019,12 @@ fn profile_quota_node(b : @view.View, core : Core, address : String, id : String
       })
     },
   )
+}
+
+///|
+/// Under a kind of reset's name: what one gives back, and when they end or why none can be used now.
+fn reset_note(r : Json?) -> String {
+  [opt_text(r, "refills").unwrap_or(""), text(r, "text")].filter(fn(w) { w != "" }).join(" · ")
 }
 
 ///|

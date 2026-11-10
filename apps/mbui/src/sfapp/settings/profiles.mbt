@@ -448,16 +448,13 @@ fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arra
         let rv = Some(r)
         let left = count(rv, "left")
         let usable = left > 0 && flag(rv, "usable")
-        let words = match opt_text(rv, "refills") {
-          Some(refills) => refills + " · " + text(rv, "text")
-          None => text(rv, "text")
-        }
+        let words = [opt_text(rv, "refills").unwrap_or(""), text(rv, "text")].filter(fn(w) { w != "" }).join(" · ")
         list_row(
           c,
           fn() {
             row_lines(c, text(rv, "title"), words, wrap_sub=true, end=fn() {
               doing_mark(c, resetting, failed_of(core, ["profile.resetQuota"], on))
-              c.text(tr("android-settings.quota.reset"), style=if usable { @sf.value.then(@sf.link) } else { @sf.value })
+              c.text(text(rv, "leftText"), style=if usable { @sf.value.then(@sf.link) } else { @sf.value })
               |> ignore
             })
           },
@@ -469,7 +466,7 @@ fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arra
             }
             confirm(
               tr("android-settings.quota.resetTitle"),
-              fill("android-settings.quota.resetText", [("name", text(pv, "name")), ("text", text(rv, "title") + " · " + words)]),
+              fill("android-settings.quota.resetText", [("name", text(pv, "name")), ("text", [text(rv, "title"), text(rv, "leftText"), words].filter(fn(w) { w != "" }).join(" · "))]),
               tr("android-settings.quota.resetUse"),
               fn() { act(core, tr("android-settings.quota.resetWhat"), "profile.resetQuota", asked, done=tr("android-settings.quota.resetDone")) },
             )

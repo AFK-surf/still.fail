@@ -2286,7 +2286,6 @@ web-pages.profiles.recheck
 web-pages.profiles.recheckHint
 web-pages.profiles.refresh
 web-pages.profiles.replace
-web-pages.profiles.reset
 web-pages.profiles.resetAction
 web-pages.profiles.resetBody
 web-pages.profiles.resetConfirm

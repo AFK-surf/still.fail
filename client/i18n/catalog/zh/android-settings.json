@@ -344,7 +344,6 @@
   "android-settings.quota.checking": "正在查询",
   "android-settings.quota.credits": "积分余额",
   "android-settings.quota.none": "暂无额度信息",
-  "android-settings.quota.reset": "重置额度",
   "android-settings.quota.resetDone": "已重置额度",
   "android-settings.quota.resetText": "将使用「{name}」的 1 次额度重置，{text}",
   "android-settings.quota.resetTitle": "重置额度？",

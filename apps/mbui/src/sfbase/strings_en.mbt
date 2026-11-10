@@ -2331,7 +2331,6 @@ let en : Map[String, String] = {
   "web-pages.profiles.recheckHint": "Rechecked on save",
   "web-pages.profiles.refresh": "Refresh",
   "web-pages.profiles.replace": "Replace",
-  "web-pages.profiles.reset": "Reset quota",
   "web-pages.profiles.resetAction": "Use one reset",
   "web-pages.profiles.resetBody": "Uses 1 quota reset of “{name}”. {n} left",
   "web-pages.profiles.resetBody.one": "Uses 1 quota reset of “{name}”. 1 left",

@@ -72,8 +72,8 @@ function windows(list: Record<string, unknown>[], c: Clock): Record<string, unkn
   return out.sort((a, b) => (u64(a.order) ?? 1) - (u64(b.order) ?? 1));
 }
 
-/// So many resets left, and when they end.
-function resetsText(count: number, expiries: unknown, c: Clock): string {
+/// When so many resets end, in words (none known: nothing).
+function resetEnds(count: number, expiries: unknown, c: Clock): string[] {
   const expiry: string[] = [];
   if (count > 0 && Array.isArray(expiries)) {
     const ends = expiries.filter((at: unknown): at is number => typeof at === "number" && Number.isSafeInteger(at) && at > 0)
@@ -82,7 +82,12 @@ function resetsText(count: number, expiries: unknown, c: Clock): string {
     const future = ends.filter((at: number) => at > c.now).map((at: number) => format.preciseTimeUntil(at, c.now));
     if (future.length) expiry.push(t("core-views.present.resets_expire", { when: future.join(t("core-views.present.resets_separator")) }));
   }
-  return [t("core-views.present.resets_left", { n: count }), ...expiry].join(" · ");
+  return expiry;
+}
+
+/// So many resets left, and when they end.
+function resetsText(count: number, expiries: unknown, c: Clock): string {
+  return [t("core-views.present.resets_left", { n: count }), ...resetEnds(count, expiries, c)].join(" · ");
 }
 
 /// Each kind's name, and what one gives back (a provider's own reset, `credit`, says nothing of it).
@@ -94,7 +99,7 @@ const RESET_KINDS: Record<string, [string, string | null]> = {
   credit: ["core-views.present.reset.credit", null],
 };
 
-/// A kind of reset as it is offered: its name, what one gives back, how many are left and till when, and whether one
+/// A kind of reset as it is offered: its name, what one gives back, how many are left (`leftText`) and till when, and whether one
 /// can be used now (else only once at a limit it refills). `id`, what the station is asked for (none: any).
 function presentReset(r: Record<string, unknown>, c: Clock): Record<string, unknown> {
   const kind = Object.prototype.hasOwnProperty.call(RESET_KINDS, str(r.kind) ?? "") ? str(r.kind)! : "credit";
@@ -109,7 +114,9 @@ function presentReset(r: Record<string, unknown>, c: Clock): Record<string, unkn
     left,
     usable,
     title: t(name, { model }),
-    text: [resetsText(left, r.expiries, c), ...(usable ? [] : [t("core-views.present.reset.needsLimit")])].join(" · "),
+    // (how many on their own, where they are seen at once: the user, 2026-11-10)
+    leftText: t("core-views.present.reset.left", { n: left }),
+    text: [...resetEnds(left, r.expiries, c), ...(usable ? [] : [t("core-views.present.reset.needsLimit")])].join(" · "),
     ...(refills !== null ? { refills } : {}),
   };
 }
