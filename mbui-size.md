@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [1de5f9b47](https://github.com/AFK-surf/still.fail/commit/1de5f9b47794f98dd2b48fa2088b7d88c08eb692) Core: a session new to the device has its detail r | 1.76 | 2.35 | 9.77 | 28.38 | 34.21 | 25.34 | 46.54 | 93.37 | 138.22 |
 | [259b3e01f](https://github.com/AFK-surf/still.fail/commit/259b3e01f0bb530386174319d8213d3cf5275c20) core test: the pages before a history counted apar | 1.76 | 2.35 | 9.76 | 28.37 | 34.14 | 25.32 | 46.48 | 93.68 | 172.71 |
 | [cabc6d876](https://github.com/AFK-surf/still.fail/commit/cabc6d876242017694aa9b1130c9369a329c3574) station: a phone let go is disconnected after what | 1.76 | 2.35 | 9.76 | 28.37 | 34.14 | 25.32 | 46.48 | 93.9 | 175.67 |
 | [51d7c4e46](https://github.com/AFK-surf/still.fail/commit/51d7c4e469511a1ab1719decdac5f070a84c12c6) Core: the sidebar and the agents at work only as s | 1.76 | 2.35 | 9.75 | 28.35 | 34.11 | 25.32 | 46.46 | 93.11 | 153.59 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [b5da41117](https://github.com/AFK-surf/still.fail/commit/b5da41117f50a3dc5d05d673b532fbde6279b399) mbui: a picture made as nodes (take_picture), the  | 1.74 | 2.32 | 9.64 | 28.18 | 33.67 | 25.17 | 46.11 | 93.23 | 178.2 |
 | [7945c7051](https://github.com/AFK-surf/still.fail/commit/7945c70518842eaf9b8f3ab8e1c92081580b30d5) mbui: CI's 60 and 120 runs judge every file but th | 1.74 | 2.32 | 9.64 | 28.17 | 33.66 | 25.17 | 46.1 | 93.18 | 174.5 |
 | [40fcca753](https://github.com/AFK-surf/still.fail/commit/40fcca7536d67efc4c4d0f44d8f4874d0e64f83e) mbui: a word typed into a chat's composer builds i | 1.74 | 2.32 | 9.64 | 28.17 | 33.66 | 25.17 | 46.1 | 93.08 | 183.09 |
-| [a66778214](https://github.com/AFK-surf/still.fail/commit/a66778214fe7d25f16b6c7e2dfbe2163792c0394) mbui: a node says what of it moves (View::said_mov | 1.74 | 2.31 | 9.64 | 28.17 | 33.66 | 25.17 | 46.1 | 92.96 | 135.44 |
