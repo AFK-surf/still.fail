@@ -369,24 +369,24 @@ describe("remote", { concurrency: true }, () => {
     assert.ok(Date.now() - t0 >= 180, "refused only after the wait");
   });
 
-  test("transfer paths do not escape or follow links", () => {
+  test("transfer paths do not escape or follow links", async () => {
     const dir = tempdir();
     for (const path of ["", "/etc/passwd", "../secret", "a/../../secret", "./a", "."]) {
-      assert.throws(() => filePath(dir, path, true), Error, path);
+      await assert.rejects(filePath(dir, path, true), Error, path);
     }
     symlinkSync("/tmp", join(dir, "link"));
-    assert.throws(() => filePath(dir, "link/file", true));
-    assert.throws(() => filePath(join(dir, "link"), "file", true));
-    assert.ok(filePath(dir, "nested/file", true).startsWith(dir));
-    assert.equal(filePath(dir, "a/./b", false), join(dir, "a", "b"), "a . inside is no component, as Path::components has it");
+    await assert.rejects(filePath(dir, "link/file", true));
+    await assert.rejects(filePath(join(dir, "link"), "file", true));
+    assert.ok((await filePath(dir, "nested/file", true)).startsWith(dir));
+    assert.equal(await filePath(dir, "a/./b", false), join(dir, "a", "b"), "a . inside is no component, as Path::components has it");
   });
 
-  test("on Windows a backslash separates too, and a drive, a share or a stream is not relative", { skip: process.platform !== "win32" && "Windows only" }, () => {
+  test("on Windows a backslash separates too, and a drive, a share or a stream is not relative", { skip: process.platform !== "win32" && "Windows only" }, async () => {
     const dir = tempdir();
     for (const path of ["..\\outside.txt", "a\\..\\..\\secret", ".\\a", "C:\\Windows\\win.ini", "C:secret", "\\\\server\\share\\x", "\\x", "file:stream"]) {
-      assert.throws(() => filePath(dir, path, true), Error, path);
+      await assert.rejects(filePath(dir, path, true), Error, path);
     }
-    assert.equal(filePath(dir, "nested\\file", false), join(dir, "nested", "file"));
+    assert.equal(await filePath(dir, "nested\\file", false), join(dir, "nested", "file"));
   });
 
   // ── task_tests ──

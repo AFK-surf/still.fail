@@ -13,11 +13,9 @@
 // What is retried (a request that did not get through, a closed session's stations every 60 s) and the hourly sweep
 // are Effect schedules; nothing here polls local state.
 import { createHash, randomBytes } from "node:crypto";
-import {
-  appendFileSync, constants, existsSync, lstatSync, mkdirSync, readFileSync,
-  readdirSync, readlinkSync, renameSync, statSync,
-} from "node:fs";
-import { link, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { constants, createReadStream, lstatSync, mkdirSync, readFileSync, renameSync } from "node:fs";
+import { access, appendFile, link, lstat, mkdir, open, readFile, readdir, readlink, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createInterface } from "node:readline";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
 import { portableComponent, relativeParts } from "../ops/paths.ts";
@@ -288,17 +286,41 @@ export function updateJson(path: string, edit: (v: Json) => Json | null | undefi
   });
 }
 
-const isLink = (path: string): boolean => {
-  try {
-    return lstatSync(path).isSymbolicLink();
-  } catch {
-    return false;
-  }
-};
+const isLink = (path: string): Promise<boolean> => lstat(path).then((st) => st.isSymbolicLink(), () => false);
+
+/// Whether `path` is there, asked off the station's thread.
+const there = (path: string): Promise<boolean> => access(path).then(() => true, () => false);
 
 /// Relative paths only; transfers must not follow links planted by a task. Task commands themselves are trusted shell
-/// execution, so separate working directories are organizational isolation, not an OS security boundary.
-export function filePath(root: string, relative: string, create: boolean): string {
+/// execution, so separate working directories are organizational isolation, not an OS security boundary. Its links
+/// looked at off the station's thread.
+export async function filePath(root: string, relative: string, create: boolean): Promise<string> {
+  if ((await lstat(root)).isSymbolicLink()) throw new Error("transfer root is a symbolic link");
+  // Path::components: a leading / is the root (and on Windows a drive, a UNC share or a stream: relativeParts), a
+  // leading . is the current directory, a later . is no component.
+  const given = relativeParts(relative);
+  const parts: string[] = [];
+  let bad = given === null;
+  (given ?? []).forEach((part, i) => {
+    if (part === "") return;
+    if (part === ".") {
+      if (i === 0) bad = true;
+      return;
+    }
+    parts.push(part);
+  });
+  if (bad || parts.length === 0) throw new Error("file path must be relative, without . or ..");
+  let out = root;
+  for (const part of parts) {
+    out = join(out, part);
+    if (await isLink(out)) throw new Error("file path contains a symbolic link");
+  }
+  if (create) await mkdir(dirname(out), { recursive: true });
+  return out;
+}
+
+/// `filePath` on this thread, for a sync's application (dirsync.ts `apply`), which writes every file it sets so.
+export function filePathHere(root: string, relative: string, create: boolean): string {
   if (lstatSync(root).isSymbolicLink()) throw new Error("transfer root is a symbolic link");
   // Path::components: a leading / is the root (and on Windows a drive, a UNC share or a stream: relativeParts), a
   // leading . is the current directory, a later . is no component.
@@ -317,11 +339,19 @@ export function filePath(root: string, relative: string, create: boolean): strin
   let out = root;
   for (const part of parts) {
     out = join(out, part);
-    if (isLink(out)) throw new Error("file path contains a symbolic link");
+    if (isLinkHere(out)) throw new Error("file path contains a symbolic link");
   }
   if (create) mkdirSync(dirname(out), { recursive: true });
   return out;
 }
+
+const isLinkHere = (path: string): boolean => {
+  try {
+    return lstatSync(path).isSymbolicLink(); // sync: dirsync's apply (`filePathHere`), not moved in this change
+  } catch {
+    return false;
+  }
+};
 
 /// STANDARD base64 as the Rust decodes it: padded, nothing else in it.
 function fromBase64(data: string): Buffer {
@@ -396,7 +426,7 @@ export class Remote {
     this.removeMirror = options.removeMirror ?? ((path) => rm(path, { recursive: true, force: true }));
     this.removeTask = options.removeTask ?? ((path) => rm(path, { recursive: true, force: true }));
     this.root = join(options.data, "remote");
-    for (const name of ["incoming", "outgoing", "sessions", "used", "prepared"]) mkdirSync(join(this.root, name), { recursive: true });
+    for (const name of ["incoming", "outgoing", "sessions", "used", "prepared"]) mkdirSync(join(this.root, name), { recursive: true }); // sync: once, as it is made
     void readAllUsed(join(this.root, "used"));
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
@@ -467,7 +497,7 @@ export class Remote {
     for (const path of followed) {
       let entry: Json;
       try {
-        entry = readJson(path);
+        entry = await readJsonSoon(path);
       } catch {
         continue;
       }
@@ -608,12 +638,8 @@ export class Remote {
     await Effect.runPromise(Scope.close(this.scope, Exit.void));
   }
 
-  private list(dir: string): string[] {
-    try {
-      return readdirSync(dir);
-    } catch {
-      return [];
-    }
+  private list(dir: string): Promise<string[]> {
+    return readdir(dir).catch(() => [] as string[]);
   }
 
   private serially<T>(f: () => Promise<T>): Promise<T> {
@@ -670,7 +696,7 @@ export class Remote {
       if (typeof meta.mirror === "string") claimed.set(meta.mirror, text(field(meta, "spec"), "dir"));
     }
     const mirrors = join(this.room(workspace, peer, session), "mirrors");
-    for (const file of this.list(mirrors)) {
+    for (const file of await this.list(mirrors)) {
       const m = readManifest(join(mirrors, file));
       if (m !== null) claimed.set(m.name, m.dir);
     }
@@ -909,13 +935,13 @@ export class Remote {
       if (job?.state === "running" || (job && meta.safe === true && meta.collected !== true)) running.add(mirror);
       if (job?.endedAt) ended.set(mirror, Math.max(ended.get(mirror) ?? 0, job.endedAt));
     }
-    const mirrors = this.list(join(room, "mirrors")).filter((file) => file.endsWith(".json")).map((file) => file.slice(0, -".json".length));
-    const busy = new Set(mirrors.filter((name) => running.has(name) || this.syncing(join(room, "sync", name), now)));
+    const mirrors = (await this.list(join(room, "mirrors"))).filter((file) => file.endsWith(".json")).map((file) => file.slice(0, -".json".length));
+    const busy = new Set<string>();
+    for (const name of mirrors) if (running.has(name) || (await this.syncing(join(room, "sync", name), now))) busy.add(name);
     // Read and marked in the record's turn (after what was written of it before), never over a newer use.
     let used: Json = {};
-    await written(record);
     try {
-      used = readJson(record);
+      used = await readJsonSoon(record);
     } catch {}
     const marked = mirrors.filter((name) => asI64(field(used, name)) === null || busy.has(name));
     if (marked.length > 0) {
@@ -927,12 +953,10 @@ export class Remote {
 
   /// A sync to a mirror is under way: its directory there, it or what is in it touched within MIRROR_RECENT_MS (one
   /// given up on is not).
-  private syncing(dir: string, now: number): boolean {
+  private async syncing(dir: string, now: number): Promise<boolean> {
     let latest = 0;
-    for (const path of [dir, ...this.list(dir).map((name) => join(dir, name))]) {
-      try {
-        latest = Math.max(latest, statSync(path).mtimeMs);
-      } catch {}
+    for (const path of [dir, ...(await this.list(dir)).map((name) => join(dir, name))]) {
+      latest = Math.max(latest, await stat(path).then((st) => st.mtimeMs, () => 0));
     }
     return now - latest < MIRROR_RECENT_MS;
   }
@@ -1398,7 +1422,7 @@ export class Remote {
       if (session === "" || bytes(session) > 256) throw new Error("session is required");
       const room = this.room(workspace, peer, session);
       await written(join(room, "session.json"));
-      if (!existsSync(join(room, "session.json"))) return { present: false };
+      if (!(await there(join(room, "session.json")))) return { present: false };
       const path = join(room, "work");
       const cutoff = field(request, "limit") ?? DEFAULT_LIMIT;
       if (!Number.isSafeInteger(cutoff) || cutoff < 1) throw new Error("limit must be a positive whole number of bytes");
@@ -1409,9 +1433,11 @@ export class Remote {
       if (session === "" || bytes(session) > 256) throw new Error("session is required");
       const room = this.room(workspace, peer, session);
       await written(join(room, "session.json"));
-      const mirrors = existsSync(join(room, "session.json")) ? await this.mirrorsOf(workspace, peer, session, this.store.now()) : [];
+      const mirrors = (await there(join(room, "session.json"))) ? await this.mirrorsOf(workspace, peer, session, this.store.now()) : [];
       // Unlike the automatic sweep's age-based recovery, an explicit cleanup must not interrupt even a slow sync.
-      const inUse = (m: { name: string; busy: boolean }) => m.busy || existsSync(join(room, "sync", m.name));
+      const syncingNow = new Set<string>();
+      for (const m of mirrors) if (await there(join(room, "sync", m.name))) syncingNow.add(m.name);
+      const inUse = (m: { name: string; busy: boolean }) => m.busy || syncingNow.has(m.name);
       if (method === "task.mirrors") {
         return { mirrors: mirrors.map((m) => ({ name: m.name, path: join(room, "work", m.name), busy: inUse(m), lastUsed: m.used })) };
       }
@@ -1455,15 +1481,15 @@ export class Remote {
       const from = field(spec, "dir");
       if (from !== null && (typeof from !== "string" || from === "" || bytes(from) > 4096)) throw new Error("dir must be a path");
       let meta: Json;
-      if (existsSync(record)) {
-        meta = readJson(record);
+      if (await there(record)) {
+        meta = await readJsonSoon(record);
         if (!isDeepStrictEqual(field(meta, "spec"), spec)) {
           throw new Error("task key already used with different inputs; choose a new key for new work");
         }
       } else {
         meta = { spec, workspace, station: peer, session, key, layout: "session" };
         if (typeof from === "string") meta.mirror = await this.mirrorName(workspace, peer, session, from);
-        mkdirSync(dir, { recursive: true });
+        await mkdir(dir, { recursive: true });
         await writeJson(record, meta);
       }
       this.seen(workspace, peer, session);
@@ -1471,7 +1497,7 @@ export class Remote {
     }
     let meta: Json;
     try {
-      meta = readJson(record);
+      meta = await readJsonSoon(record);
     } catch {
       throw new Error("unknown task");
     }
@@ -1498,10 +1524,10 @@ export class Remote {
       if (collecting) throw new Error(`task ${text(collecting.meta, "key")} is still bringing back its results from ${mirror}; wait for its completion notice`);
     };
     /// The sync under way: its state, when `id` is its.
-    const ongoing = (): Json => {
+    const ongoing = async (): Promise<Json> => {
       let state: Json = null;
       try {
-        state = readJson(join(syncing, "state.json"));
+        state = await readJsonSoon(join(syncing, "state.json"));
       } catch {}
       if (state === null || text(state, "id") !== text(request, "id") || text(state, "key") !== key) throw new Error("this sync is over or another one began; start again");
       return state;
@@ -1518,7 +1544,7 @@ export class Remote {
           await refuseBusy();
         }
         if (mirror !== null) {
-          cwd = filePath(work, mirror, false);
+          cwd = await filePath(work, mirror, false);
           await this.usedMirror(workspace, peer, session, mirror);
         }
         const spec = field(meta, "spec");
@@ -1539,8 +1565,8 @@ export class Remote {
         if (job) return { key, started: true };
         await refuseBusy();
         await rm(syncing, { recursive: true, force: true });
-        mkdirSync(syncing, { recursive: true });
-        mkdirSync(join(room, "mirrors"), { recursive: true });
+        await mkdir(syncing, { recursive: true });
+        await mkdir(join(room, "mirrors"), { recursive: true });
         await this.usedMirror(workspace, peer, session, mirror!);
         const manifest = readManifest(manifestPath);
         const files = manifest === null ? {} : await actual(join(work, mirror!), manifest.files);
@@ -1562,49 +1588,51 @@ export class Remote {
         return { key, id, dir: mirror, version: manifest?.version ?? 0, safe: 1 };
       }
       case "sync.manifest": {
-        ongoing();
+        await ongoing();
         const after = asU64(field(request, "after")) ?? 0;
-        return page(listed(readJson(join(syncing, "actual.json"))), after);
+        return page(listed(await readJsonSoon(join(syncing, "actual.json"))), after);
       }
       case "sync.base": {
-        ongoing();
+        await ongoing();
         const after = asU64(field(request, "after")) ?? 0;
-        return page(listed(readJson(join(syncing, "base.json"))), after);
+        return page(listed(await readJsonSoon(join(syncing, "base.json"))), after);
       }
       case "sync.put": {
-        ongoing();
+        await ongoing();
         // The packed pieces after the request; from a station from before, base64 in it.
         const packed = bytesOf(request);
         return { pieces: await putBlobs(join(syncing, "blobs"), field(request, "blobs"), packed !== null ? await readBytes(packed, PACKED) : fromBase64(text(request, "data"))) };
       }
       case "sync.commit": {
-        const state = ongoing();
+        const state = await ongoing();
         const part = planPart(request);
-        appendFileSync(join(syncing, "plan.jsonl"), `${JSON.stringify(part)}\n`);
+        await appendFile(join(syncing, "plan.jsonl"), `${JSON.stringify(part)}\n`);
         if (field(request, "final") !== true) return { key, planned: true };
         await refuseBusy();
         const manifest = readManifest(manifestPath);
         const version = manifest?.version ?? 0;
         if (version !== field(state, "version")) throw new Error("the mirror changed while this sync went on; start again");
         const plan = { set: [] as [string, string, string][], remove: [] as string[] };
-        for (const line of readFileSync(join(syncing, "plan.jsonl"), "utf8").split("\n")) {
+        // Read a line at a time off the station's thread: a plan of a large directory is megabytes.
+        const lines = createInterface({ input: createReadStream(join(syncing, "plan.jsonl"), "utf8"), crlfDelay: Infinity });
+        for await (const line of lines) {
           if (line === "") continue;
           const p = JSON.parse(line);
           plan.set.push(...p.set);
           plan.remove.push(...p.remove);
         }
-        const base = readJson(join(syncing, "base.json"));
+        const base = await readJsonSoon(join(syncing, "base.json"));
         const root = join(work, mirror!);
         // Re-read at commit: a task's output may have changed while the source sent its files.
         const verify = new Set([...plan.set.map(([path]) => path), ...plan.remove]);
         const files = await actual(root, base, verify);
         const untracked: Record<string, [string, string, number, number, number, number?]> = {};
-        if (existsSync(root)) for (const [path] of plan.set) {
+        if (await there(root)) for (const [path] of plan.set) {
           if (base[path] !== undefined || files[path] !== undefined) continue;
           let abs: string;
-          try { abs = filePath(root, path, false); } catch { throw new Error(`sync conflict at ${path}: an existing remote path would be overwritten`); }
+          try { abs = await filePath(root, path, false); } catch { throw new Error(`sync conflict at ${path}: an existing remote path would be overwritten`); }
           try {
-            const st = lstatSync(abs);
+            const st = await lstat(abs);
             if (!st.isFile()) throw new Error(`sync conflict at ${path}: an existing remote path would be overwritten`);
             untracked[path] = ["", "", 0, 0, 0];
           } catch (error) {
@@ -1643,7 +1671,7 @@ export class Remote {
       case "sync.changes": {
         if (!job || job.state === "running") throw new Error("the task has not finished");
         const manifest = readManifest(manifestPath);
-        const base = filePath(work, mirror!, false);
+        const base = await filePath(work, mirror!, false);
         const now = manifest === null ? {} : await actual(base, manifest.files);
         const changes: Json[] = [];
         let more = false;
@@ -1655,7 +1683,7 @@ export class Remote {
             break;
           }
           const change: Json = { path, old: was[0], mode: was[1], hash: is?.[0] ?? null, newMode: is?.[1] ?? null };
-          if (is?.[1] === LINK) change.link = readlinkSync(join(base, ...path.split("/")));
+          if (is?.[1] === LINK) change.link = await readlink(join(base, ...path.split("/")));
           changes.push(change);
         }
         return { key, base: mirror, changes, more };
@@ -1670,21 +1698,21 @@ export class Remote {
         if (job?.state === "running") throw new Error("wait for the task to finish before downloading artifacts");
         const paths = field(request, "paths");
         if (!Array.isArray(paths) || paths.length > 100 || !paths.every((p) => typeof p === "string")) throw new Error("paths are required (at most 100)");
-        const cwd = mirror === null ? work : filePath(work, mirror, false);
+        const cwd = mirror === null ? work : await filePath(work, mirror, false);
         const files: [string, number | null][] = [];
-        const visit = (rel: string) => {
+        const visit = async (rel: string): Promise<void> => {
           if (files.length >= 1000) throw new Error("more than 1000 files to bring back");
           let st;
           try {
-            st = lstatSync(filePath(cwd, rel, false));
+            st = await lstat(await filePath(cwd, rel, false));
           } catch {
             files.push([rel, null]);
             return;
           }
           if (st.isFile()) files.push([rel, st.size]);
-          else if (st.isDirectory()) for (const name of readdirSync(join(cwd, ...rel.split("/"))).sort()) visit(`${rel.replace(/\/+$/, "")}/${name}`);
+          else if (st.isDirectory()) for (const name of (await readdir(join(cwd, ...rel.split("/")))).sort()) await visit(`${rel.replace(/\/+$/, "")}/${name}`);
         };
-        for (const p of paths) visit(p);
+        for (const p of paths) await visit(p);
         return { key, base: mirror ?? "", files };
       }
       case "task.get":
@@ -1707,7 +1735,7 @@ export class Remote {
           const size = asU64(field(request, "size"));
           if (size === null || size > MAX_FILE) throw new Error("file limit exceeded");
           const name = text(request, "path");
-          const path = filePath(work, name, true);
+          const path = await filePath(work, name, true);
           if (meta.uploads === null || typeof meta.uploads !== "object" || Array.isArray(meta.uploads)) meta.uploads = {};
           meta.uploads[name] = false;
           await writeJson(record, meta);
@@ -1729,7 +1757,7 @@ export class Remote {
         const data = fromBase64(text(request, "data"));
         if (data.length > CHUNK || offset + data.length > MAX_FILE) throw new Error("file limit exceeded");
         const name = text(request, "path");
-        const path = filePath(work, name, true);
+        const path = await filePath(work, name, true);
         if (meta.uploads === null || typeof meta.uploads !== "object" || Array.isArray(meta.uploads)) meta.uploads = {};
         meta.uploads[name] = false;
         await writeJson(record, meta);
@@ -1754,7 +1782,7 @@ export class Remote {
       }
       case "file.get": {
         if (job?.state === "running") throw new Error("wait for the task to finish before downloading artifacts");
-        const path = filePath(work, text(request, "path"), false);
+        const path = await filePath(work, text(request, "path"), false);
         const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
         try {
           const stat = await file.stat();
@@ -1825,7 +1853,7 @@ export class Remote {
   private async unfollowed(path: string): Promise<void> {
     let entry: Json;
     try {
-      entry = readJson(path);
+      entry = await readJsonSoon(path);
     } catch {
       return;
     }
@@ -2028,7 +2056,7 @@ export class Remote {
   /// A file of a task's station (`request`'s path) to `path` here, whole after one answer (a station from before answers
   /// a chunk, and is asked for each); its size. An existing file is replaced only when `replace`.
   private async download(ask: (request: Json) => Promise<Json>, request: Json, path: string, replace: boolean): Promise<number> {
-    if (!replace && existsSync(path)) throw new Error("local output already exists; choose another path");
+    if (!replace && (await there(path))) throw new Error("local output already exists; choose another path");
     const temp = withExtension(path, `${randomBytes(8).toString("hex")}.part`);
     // Written off the station's thread: each chunk, and the whole flushed to the disk (a task's files brought back held
     // it 3 s so on a machine short of memory, 2026-10-25).
@@ -2125,7 +2153,7 @@ export class Remote {
         if (!(error instanceof Refused && /unsupported peer method/.test(error.message))) throw error;
         files = back.map((p) => [p, 0]);
       }
-      mkdirSync(dest, { recursive: true });
+      await mkdir(dest, { recursive: true });
       const got: string[] = [];
       const missing: string[] = [];
       for (const [p, size] of files) {
@@ -2134,7 +2162,7 @@ export class Remote {
           continue;
         }
         try {
-          await this.download(ask, { path: prefix + p }, filePath(dest, p, true), true);
+          await this.download(ask, { path: prefix + p }, await filePath(dest, p, true), true);
           got.push(p);
         } catch (error) {
           if (error instanceof Unreached) throw error;
@@ -2326,9 +2354,9 @@ export class Remote {
         const path = this.outgoing(workspace, session, station, key);
         let refused = false;
         try {
-          refused = readJson(path).refused === true;
+          refused = (await readJsonSoon(path)).refused === true;
         } catch {}
-        if (!existsSync(path) || refused) {
+        if (!(await there(path)) || refused) {
           const more = local === null ? {} : { dir: local.dir ?? null, back: local.back ?? null, prefix: synced?.prefix ?? "" };
           await writeJson(path, { workspace, session, station, key, delivered: false, since: this.store.now(), ...more });
         }
@@ -2344,7 +2372,7 @@ export class Remote {
         // An uncertain start: asked about once its station would have started it (it says something before if it did).
         if (action === "start" && !(error instanceof Refused)) {
           const path = this.outgoing(workspace, session, station, key);
-          this.later(path, (asI64(field(readJson(path), "since")) ?? this.store.now()) + GIVE_UP_MS);
+          this.later(path, (asI64(field(await readJsonSoon(path).catch(() => null), "since")) ?? this.store.now()) + GIVE_UP_MS);
         }
         if (action === "start" && error instanceof Refused) {
           const path = this.outgoing(workspace, session, station, key);
@@ -2364,7 +2392,7 @@ export class Remote {
       relative = within;
     }
     const direction = text(args, "direction");
-    const path = filePath(root, relative, direction === "download");
+    const path = await filePath(root, relative, direction === "download");
     request.path = field(args, "path");
     if (direction === "upload") {
       const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
