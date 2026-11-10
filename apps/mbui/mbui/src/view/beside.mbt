@@ -320,8 +320,16 @@ fn Tree::window_place(self : Tree, at : Int) -> (Double, Double, Double)? {
 
 ///|
 /// It let go as `owner` is, wherever it is held (what is drawn elsewhere for another, a tip in a layer over all of the
-/// window for the control it tells of: its scope the other's, nothing of it left once that one goes). It.
+/// window for the control it tells of: its scope the other's, nothing of it left once that one goes); laid out nowhere
+/// (none of it drawn, pressed or read out) from the moment `owner` starts leaving (View::on_leaving), at once, back as
+/// that comes back (View::come_back). It.
 pub fn View::lives_with(self : View, owner : View) -> View {
+  let hidden = @signals.signal(false, same=fn(a, b) { a == b })
+  // (bound in its own scope, not in what is being made where it is said (its owner's, perhaps): at rest with that as
+  // that leaves, it would be told nothing)
+  self.owning(fn() { self.laid_nowhere(By(fn() { hidden.get() })) |> ignore })
+  owner.on_leaving(fn() { hidden.set(true) }) |> ignore
+  owner.on_back(fn() { hidden.set(false) }) |> ignore
   owner.owns(fn() {
     guard self.live() is Some(_) else { return }
     match self.parent() {

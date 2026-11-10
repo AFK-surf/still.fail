@@ -339,6 +339,11 @@ struct Node {
   drops : Map[Int, () -> Unit]
   /// the key the next of them is kept by
   mut drop_next : Int
+  /// what it said to do as it starts leaving (View::on_leaving) and as it comes back from leaving (View::on_back), and
+  /// whether its starting to leave has been told (Tree::tell_leaving: once, told anew once it has come back)
+  leavings : Array[() -> Unit]
+  backs : Array[() -> Unit]
+  mut leave_told : Bool
   /// its properties' bindings, by property (Prop::ord): what stops each
   props : Map[Int, () -> Unit]
   mut on_press : (() -> Unit)?
@@ -1421,6 +1426,7 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
       n.back_at = -1.0
       n.back_from = 0.0
       n.going = None
+      n.leave_told = false
       n.coming = false
       n.come_said = None
       n.come_off = fn() {  }
@@ -1452,6 +1458,9 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
         stop: None,
         drops: {},
         drop_next: 0,
+        leavings: [],
+        backs: [],
+        leave_told: false,
         props: {},
         on_press: None,
         on_double_press: None,
@@ -6096,6 +6105,68 @@ pub fn View::gesture(
 }
 
 ///|
+/// `f` done as it starts leaving: as the structure holding it, or what holds that, lets it go (closing its room on a
+/// Move, at once, another picked in its place), at that moment, before what it binds rests (View::rests); outside any
+/// tracking, so it may write state. Once; again only once it has come back (View::come_back) and starts leaving anew.
+/// What is to be done as it is let go is View::owns's. It.
+pub fn View::on_leaving(self : View, f : () -> Unit) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.leavings.push(f)
+  self
+}
+
+///|
+/// `f` done as it comes back from leaving (View::come_back), it or what holds it, after its starting to leave was told
+/// (View::on_leaving): at that moment, outside any tracking.
+fn View::on_back(self : View, f : () -> Unit) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.backs.push(f)
+  self
+}
+
+///|
+/// Node `at` and all it holds told they start leaving (View::on_leaving), each not told since it last came back.
+fn Tree::tell_leaving(self : Tree, at : Int) -> Unit {
+  guard at >= 0 && at < self.nodes.length() && self.nodes[at].live else { return }
+  let n = self.nodes[at]
+  if !n.leave_told {
+    n.leave_told = true
+    if n.leavings.length() > 0 {
+      let fs = n.leavings.copy()
+      @signals.untracked(fn() {
+        for f in fs {
+          f()
+        }
+      })
+    }
+  }
+  for k in n.kids.copy() {
+    self.tell_leaving(k)
+  }
+}
+
+///|
+/// Node `at` and all it holds told they are back from leaving (View::on_back), each told it started leaving.
+fn Tree::tell_back(self : Tree, at : Int) -> Unit {
+  guard at >= 0 && at < self.nodes.length() && self.nodes[at].live else { return }
+  let n = self.nodes[at]
+  if n.leave_told {
+    n.leave_told = false
+    if n.backs.length() > 0 {
+      let fs = n.backs.copy()
+      @signals.untracked(fn() {
+        for f in fs {
+          f()
+        }
+      })
+    }
+  }
+  for k in n.kids.copy() {
+    self.tell_back(k)
+  }
+}
+
+///|
 /// `f` run once as it is let go (what it holds that is no effect: a computed to dispose, a resource to close).
 pub fn View::owns(self : View, f : () -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
@@ -6179,6 +6250,9 @@ fn View::let_go(self : View) -> Unit {
   for f in drops {
     f()
   }
+  n.leavings.clear()
+  n.backs.clear()
+  n.leave_told = false
   n.on_press = None
   n.on_double_press = None
   n.on_step = None
@@ -6587,6 +6661,8 @@ pub fn[K : Eq] View::pick(
           Some((_, v)) => {
             // (one over what holds it, or along a row, took none of the column's room)
             let tall = if v.live() is Some(n) && slot.tree.in_column(v.at) { n.flex.height } else { 0.0 }
+            // (going in another's place: what it holds told it starts leaving, then let go)
+            slot.tree.tell_leaving(v.at)
             slot.drop(v)
             tall
           }
@@ -6899,6 +6975,8 @@ fn gone_at(n : Node, now : Double) -> Double {
 /// pressed; what reads how far it is gone told: View::going), let go as that ends (Tree::frame); let go at once where
 /// `ms` is 0. One coming back as it goes leaves from as far as it came back to.
 fn View::leave(self : View, v : View, ms : Double) -> Unit {
+  // (it and what it holds told it starts leaving, once: then let go at once, or leaving over `ms`)
+  self.tree.tell_leaving(v.at)
   if ms <= 0.0 {
     self.drop(v)
     return
@@ -6931,6 +7009,8 @@ fn View::come_back(self : View, v : View) -> Unit {
   n.back_from = gone_at(n, now)
   n.back_at = now
   n.left_at = -1.0
+  // (it and what it holds told it is back: told anew as it next starts leaving)
+  self.tree.tell_back(v.at)
   self.tree.said_marked(v.at, words=false, state=true)
   told_going(n)
   // (beside its anchor again, where that is now: View::beside)
@@ -7071,6 +7151,8 @@ fn View::comes(self : View, v : View, from : Double, to : Double) -> Bool {
 /// nothing of it was said to go over a time (`ms` 0: drawn as it was, nothing of it worked out again); else, or
 /// `at_once`, leaving over `ms`. Whether it is still there, leaving.
 fn View::goes(self : View, v : View, ms : Double, at_once : Bool, swaps? : Bool = false) -> Bool {
+  // (it and what it holds told it starts leaving before any of it is put to rest (View::rests, below))
+  self.tree.tell_leaving(v.at)
   if !at_once && v.live() is Some(n) {
     let tall = n.flex.height
     // (nothing tall: nothing to close)
@@ -7247,9 +7329,10 @@ fn Tree::holds_at(self : Tree, holder : Int, at : Int) -> Bool {
 }
 
 ///|
-/// Whether it is leaving, or what holds it is: no longer pressed. Followed: what reads it told as it or what holds it
-/// starts leaving and as it comes back (what View::going reads, and not the clock: a reaction on it runs then, not as
-/// the frames come).
+/// Whether it is leaving, or what holds it is: no longer pressed. Its value true from the moment that starts, wherever
+/// it is read (as it is drawn, in a handler). Followed by what reads it outside what is leaving (told as that starts
+/// leaving and as it comes back: what View::going reads, not the clock); what is leaving down a column on a Move is at
+/// rest (View::rests), what reads it there told nothing: what is to be done at that moment is View::on_leaving's.
 pub fn View::leaving(self : View) -> Bool {
   guard self.live() is Some(_) else { return true }
   let mut i = self.at
