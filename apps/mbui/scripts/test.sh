@@ -13,8 +13,8 @@
 # app-build job's), its runs asked of it directly (scripts/testexe; TESTEXE: that tool built elsewhere too, beside it),
 # nothing built here. APP_BUILD_OUT: sfapp's test program built only, it, its tests' list and the tool put in that
 # directory for them. REPLAY_EXE (with REPLAY_INFO, __blackbox_test_info.json) and REPLAY_BUILD_OUT: the same for the
-# flows' program (src/sfreplay/flows), check-mbui's replay-build job's, run at the other frame rates (replay-fps); the
-# core's tests are the default rate's run's alone.
+# flows' program (src/sfreplay/flows), check-mbui's replay-build job's, run at every frame rate (replay-fps); the
+# core's tests run where it is built (REPLAY_BUILD_OUT), after it is put there.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 # (the whole suite is CI's, a PR's: on Studio or a laptop it is half an hour of wasm-gc in a row where CI's native runs
@@ -72,7 +72,7 @@ for t in $targets; do
     # (not sfreplay: no test of its own is left there, and its package was two empty programs of the whole app, 29 s
     # of the replay part's compile, 2026-10-24)
     pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay/flows"
-    # (on a program built elsewhere, REPLAY_EXE: the flows alone, the core's tests the default rate's run's)
+    # (on a program built elsewhere, REPLAY_EXE: the flows alone, the core's tests run where it was built)
     [ -z "${REPLAY_EXE:-}" ] || pkgs="${pkgs/ -p stillfail\/core/}"
     fi
     # (a test under a directory of its own there is in no package this runs: a branch from before brought one back)
@@ -146,7 +146,8 @@ for t in $targets; do
     mkdir -p "$REPLAY_BUILD_OUT" && cp $b/flows.blackbox_test.exe $b/__blackbox_test_info.json "$REPLAY_BUILD_OUT/" &&
       cp "$(bash "$D/testexe" path)" "$REPLAY_BUILD_OUT/testexe" || exit 1
     echo "test.sh: the flows' test program put in $REPLAY_BUILD_OUT ($(du -h $b/flows.blackbox_test.exe | cut -f1))"
-    exit 0
+    # (then the core's tests here, the flows' left to replay-fps's runs of it)
+    pkgs="${pkgs/ -p stillfail\/sfreplay\/flows/}"
   fi
   s=$(date +%s)
   # Moon runs each test program serially; shard sfapp alongside the other packages.
