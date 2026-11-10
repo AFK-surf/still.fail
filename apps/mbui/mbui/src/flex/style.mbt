@@ -196,6 +196,15 @@ pub(all) struct Style {
   mut come_k : Double
   mut come_v : Double
   mut come_goal : Double
+  // Not CSS's: what an item's come way is to the box holding it (come_*), where that box takes no room holding nothing
+  // (`gone_empty`): whether this way is it going from holding nothing or to it (set out from none, going to none, or
+  // turned back on such a way), not one in another's place (a pick's, from as tall as that one was).
+  mut come_fill : Bool
+  // Not CSS's: holding nothing laid out (all it holds laid out nowhere, or none), it is laid out nowhere itself: no
+  // room, padding or gap in what holds it (an old view's box `gone_empty`, CSS's :empty { display: none }). Its padding
+  // top and foot as much as what it holds is there while what it holds comes from none or goes to none (come_fill: the
+  // most such a share of all it holds), the gap before it the same (come_k); across, all of it till it holds nothing.
+  mut gone_empty : Bool
   // Not CSS's: a column whose items are a page's list's rows set on a host's pixels (this many a point; 0: anywhere): each
   // as tall as whole pixels, rounded up, what is under it lower by as much, the column as much taller (an old view's
   // list's rows', ui's Ctx::row_slot).
@@ -289,6 +298,8 @@ pub fn Style::new() -> Style {
     come_k: 1.0,
     come_v: 0.0,
     come_goal: 0.0 / 0.0,
+    come_fill: false,
+    gone_empty: false,
     rows_grid: 0.0,
     ver: 0,
     basis_v: 0.0,
@@ -369,6 +380,8 @@ pub fn Style::reset(self : Style) -> Unit {
   self.stretch_past_max = false
   self.min_held = false
   self.wrap_least = false
+  self.gone_empty = false
+  self.come_fill = false
   self.ver = self.ver + 1
   self.basis_v = 0.0
   self.basis_k = LEN_AUTO
@@ -998,6 +1011,15 @@ pub fn Style::get_gap_col(self : Style) -> Dim {
 }
 
 ///|
+/// Whether it takes no room holding nothing (its `gone_empty`), its box (no least of its padding so) made again.
+pub fn Style::set_gone_empty(self : Style, on : Bool) -> Unit {
+  if self.gone_empty != on {
+    self.gone_empty = on
+    self.ver = self.ver + 1
+  }
+}
+
+///|
 pub fn Style::set_box_sizing(self : Style, b : BoxSizing) -> Unit {
   self.box_sizing = b
   self.ver = self.ver + 1
@@ -1088,6 +1110,11 @@ pub(all) struct Node {
   // was the one before, reused
   mut laid_gen : Int
   mut skip_gen : Int
+  // Whether any of its children may take no room holding nothing (Style's gone_empty): set as one is added so or said so,
+  // worked out again as its children are put again (none: what lays it out reads none of theirs for it, one test a
+  // container, however many it holds). Never false where one is; true where none is any more only lays it out the
+  // slower way (each child asked), the same layout.
+  mut holds_gone : Bool
 }
 
 ///|
@@ -1100,6 +1127,7 @@ pub fn Node::new() -> Node {
   {
     style: Style::new(),
     children: [],
+    holds_gone: false,
     measure: None,
     left: 0.0,
     top: 0.0,
@@ -1158,4 +1186,7 @@ pub fn computes() -> Int {
 ///|
 pub fn Node::add(self : Node, child : Node) -> Unit {
   self.children.push(child)
+  if child.style.gone_empty {
+    self.holds_gone = true
+  }
 }

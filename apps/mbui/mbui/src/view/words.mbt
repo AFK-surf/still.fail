@@ -567,6 +567,33 @@ pub fn View::aspect(self : View, wide_for_tall : Live[Double], loc~ : SourceLoc)
 }
 
 ///|
+/// Whether, holding nothing laid out (nothing in it, or all of it laid out nowhere: View::laid_nowhere, a show's or a
+/// pick's gone), it takes no room, as it changes: laid out nowhere itself, its padding, margins and the gap before it in
+/// what holds it none (an old view's box `gone_empty`, CSS's :empty { display: none }), what it holds left out as one
+/// laid out nowhere is. Down a column, while what it holds makes its way from nothing or closes it to nothing (View::comes:
+/// the first to come, the last to go; not one in another's place), its padding top and foot and the gap before it open
+/// or close with that way, as much of them as the most of what it holds is there: called back half way, they turn with
+/// it; what comes or goes at once, at once. Only down a column: along a row, or as a row itself, all of its room is
+/// there till the frame it holds nothing, and none of it from that frame on. Layout's.
+#callsite(autofill(loc))
+pub fn View::gone_empty(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, GoneEmpty, on, Layout, fn(on) {
+    self.tree.nodes[self.at].flex.style.set_gone_empty(on)
+    // (what lays it out told it holds such: the first not a slot holding it, its boxes', Tree::boxes_put)
+    if on {
+      let mut at = self.tree.nodes[self.at].parent
+      while at >= 0 && self.tree.nodes[at].slot && self.tree.nodes[at].parent >= 0 {
+        at = self.tree.nodes[at].parent
+      }
+      if at >= 0 {
+        self.tree.nodes[at].flex.holds_gone = true
+      }
+    }
+  })
+  self
+}
+
+///|
 /// Laid out nowhere while `on` says so, as it changes: no room of its own in what holds it, none of the gap that leaves
 /// between what it holds (a room shut: an old view's not built while it is), left out as one its row has not the room
 /// for is (View::drops, View::left_out): it and all it holds not drawn, pressed (by a finger, by its id, by a screen

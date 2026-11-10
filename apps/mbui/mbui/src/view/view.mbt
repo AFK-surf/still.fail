@@ -2789,6 +2789,7 @@ priv enum Prop {
   Bones
   BoneWhole
   Comes
+  GoneEmpty
 } derive(Eq, Show)
 
 ///|
@@ -2878,6 +2879,7 @@ fn Prop::ord(self : Prop) -> Int {
     Bones => 79
     BoneWhole => 80
     Comes => 81
+    GoneEmpty => 82
   }
 }
 
@@ -6449,6 +6451,7 @@ fn View::let_go(self : View) -> Unit {
   n.flex.measure = None
   n.flex.room = false
   n.flex.children.clear()
+  n.flex.holds_gone = false
   let parent = n.parent
   if parent >= 0 {
     self.tree.marked_up(parent, true, true, false, false, true)
@@ -6525,7 +6528,7 @@ fn View::box_appended(self : View, child : Int) -> Unit {
     at = parent
   }
   // (one due to be put again in order (Tree::holding_boxes) is put whole as that ends: what is pushed now is redone)
-  self.tree.nodes[at].flex.children.push(self.tree.nodes[child].flex)
+  self.tree.nodes[at].flex.add(self.tree.nodes[child].flex)
   // (what it holds changed, not what it asks of what holds it: where it lays out alone, laid out again from it, as
   // boxes_put does)
   self.tree.layout_marked_at(at, within=true)
@@ -6563,8 +6566,9 @@ fn Tree::boxes_put(self : Tree, at : Int) -> Unit {
     self.boxes(k, all)
   }
   n.flex.children.clear()
+  n.flex.holds_gone = false
   for b in all {
-    n.flex.children.push(b)
+    n.flex.add(b)
   }
   self.layout_marked_at(at, within=true)
   self.order_marked_in(at)
@@ -7196,6 +7200,9 @@ fn View::comes(self : View, v : View, from : Double, to : Double) -> Bool {
     (true, Some((tall, speed))) => (tall, speed)
     _ => (from, 0.0)
   }
+  // (from nothing or to nothing, or turned back on such a way: what a box taking no room holding nothing opens or
+  // closes its padding by (flex's come_fill, Style's gone_empty); not one in another's place, from as tall as that was)
+  st.come_fill = to <= 0.0 || from <= 0.0 || (n.coming && st.come_fill)
   st.come_from = from
   st.come_v = speed
   st.come_to = to
