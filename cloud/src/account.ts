@@ -64,13 +64,20 @@ export class Account extends DurableObject<Env> {
     const now = nowSeconds();
     return data && !data.blocked && data.sub === claims.sub ? data.sessions.find((s) => s.id === claims.sid && s.expires > now && s.idle > now) : undefined;
   }
-  private charge(): boolean {
+  /**
+   * One request more this minute, unless the minute's are used up. `quota-lock` is the minute of the locks kept here
+   * for the stations and devices from before (api.ts `LOCK_ROUTE`), apart from the account system's own: a device is
+   * sent what it signs there without waiting on it, as many as a person's devices sign, and that used up the minute
+   * their next change to a workspace (a member added) was refused in (the locks' end to end, 2026-11-10: 44 of an
+   * account's 123).
+   */
+  private charge(of: "quota" | "quota-lock" = "quota"): boolean {
     const minute = Math.floor(nowSeconds() / 60);
-    const old = this.ctx.storage.kv.get<{ minute: number; requests: number }>("quota");
+    const old = this.ctx.storage.kv.get<{ minute: number; requests: number }>(of);
     const quota = old?.minute === minute ? old : { minute, requests: 0 };
     if (quota.requests >= LIMITS.requestsPerMinute) return false;
     quota.requests++;
-    this.ctx.storage.kv.put("quota", quota);
+    this.ctx.storage.kv.put(of, quota);
     return true;
   }
 
@@ -288,12 +295,13 @@ export class Account extends DurableObject<Env> {
 
   /**
    * Whether an access token's session is still live (not logged out, blocked or expired); `limited` when it is, but
-   * over its requests a minute; on the test channel (`testChannel`), `not_beta` for an account not let in.
+   * over its requests a minute (`lock`: the locks' minute, `charge`); on the test channel (`testChannel`), `not_beta`
+   * for an account not let in.
    */
-  async live(claims: Claims, testChannel = false): Promise<Live> {
+  async live(claims: Claims, testChannel = false, lock = false): Promise<Live> {
     if (!this.session(this.data(), claims)) return false;
     if (testChannel && !(await this.beta(claims.sub))) return "not_beta";
-    return this.charge() ? true : "limited";
+    return this.charge(lock ? "quota-lock" : "quota") ? true : "limited";
   }
 
   /** Whether an access token's session is still live, not charged to the account's requests a minute: for what has
