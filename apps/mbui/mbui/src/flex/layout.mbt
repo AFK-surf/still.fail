@@ -2717,6 +2717,22 @@ fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> U
 }
 
 ///|
+/// Absolute node `c` laid out alone again, nothing above it, as the layout of all of it lays it out over the rest in
+/// `holder` (what holds it, positioned: its containing block, place_absolute's), in `holder`'s box as that was last
+/// laid out, by its style now (a width said of it since); what it holds over the rest after it, as there. Which compute
+/// it was (what it laid out is laid out at it or after).
+pub fn absolute_relaid(holder : Node, c : Node) -> Int {
+  generation.val = generation.val + 1
+  reusing.val = true
+  absolute_seen.val = false
+  place_absolute(holder, holder, c, 0.0, 0.0)
+  if !kept(c) && c.children.length() > 0 {
+    layout_static_absolute(c, c, 0.0, 0.0)
+  }
+  generation.val
+}
+
+///|
 fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) -> Unit {
   let cbb = box_of(cb.style, undef, undef)
   let pb = box_of(parent.style, undef, undef)

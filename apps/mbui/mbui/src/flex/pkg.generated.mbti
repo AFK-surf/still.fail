@@ -10,6 +10,8 @@ pub const LEN_PT : Int32 = 1
 
 pub const LEN_WITHIN : Int32 = 3
 
+pub fn absolute_relaid(Node, Node) -> Int32
+
 pub fn come_state(Style, Double) -> (Double, Double)?
 
 pub fn come_way(Double, Double, Double, Double, along? : ComeWith) -> (Double, Double)
