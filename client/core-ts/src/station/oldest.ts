@@ -12,6 +12,14 @@ export const BUILD_HEADER = "stillfail-build";
 /// The oldest station build talked to; 0: any.
 export const OLDEST_STATION = 0;
 
+/// A build under this is no release's count of commits, and is not held to the floor: a station run from the sources
+/// says `0.1.0` (station/src/ops/version.ts).
+export const COUNTED_FROM = 1000;
+
+/// What is asked of a station too old all the same: what its updates are and the asking for one (its overview, POST
+/// /updates…), so the person told to update it can.
+const ASKED_OF_ANY = /^\/(overview|updates)(\/|\?|$)/;
+
 let own = "";
 
 /// This core's build as its host says it (`0.1.<n>`), said with every request.
@@ -28,9 +36,10 @@ export function buildOf(said: string | undefined): number | null {
   return m ? Number(m[1]) : null;
 }
 
-/// The failure for an answer of a station older than OLDEST_STATION (`oldest`, a test's), null for one new enough.
-export function stationTooOld(headers: readonly [string, string][], oldest = OLDEST_STATION): CoreError | null {
-  if (oldest <= 0) return null;
+/// The failure for an answer to `path` (after /admin/api) of a station older than OLDEST_STATION (`oldest`, a test's),
+/// null for one new enough, or for what is asked of any (ASKED_OF_ANY).
+export function stationTooOld(headers: readonly [string, string][], path: string, oldest = OLDEST_STATION): CoreError | null {
+  if (oldest <= 0 || ASKED_OF_ANY.test(path)) return null;
   const build = buildOf(headers.find(([k]) => k.toLowerCase() === BUILD_HEADER)?.[1]);
-  return build !== null && build >= oldest ? null : new CoreError("station_too_old", t("station.core.stationTooOld"), 426);
+  return build !== null && (build < COUNTED_FROM || build >= oldest) ? null : new CoreError("station_too_old", t("station.core.stationTooOld"), 426);
 }
