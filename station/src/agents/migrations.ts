@@ -134,6 +134,7 @@ export const NOTES: [number, string][] = [
   [127, "A choice on a card's action=close option still sends no message and does not wake you, but you are now told it: a <card-choice> block before what you are next handed (a message, a notice), with when it was chosen (at, ago). It is an earlier, settled choice, not what the new messages are about; chat_history shows it on the card as well."],
   [128, "A station's queue no longer holds station_task tasks back for busy CPUs: a task waits only for memory pressure, the screen, or the small-task slot (queue.why memory, screen, person or small; no cause, and decision has only memoryPressure)."],
   [129, "A station_task started beside others is no longer given STILLFAIL_CPUS, MAKEFLAGS, CARGO_BUILD_JOBS or CMAKE_BUILD_PARALLEL_LEVEL by the station (the count came out as one on a busy machine): builds take the cores the system gives them. Only a small task is still told one CPU."],
+  [130, "station_list now also lists the workspace's stations safe mode does not protect (offline or too old when it was turned on), each with unprotected saying why it cannot be called from here; naming one in station_task, station_file or station_list is refused saying the same. It is not a bug: tell the person an owner or admin protects it in Settings → Security (设置 → 安全) with Protect (保护), updating it first if it is too old."],
 ];
 
 /// The last note that replaces every one before it (the instructions rewritten whole): a session behind it hears only
