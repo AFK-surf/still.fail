@@ -7,7 +7,7 @@ import { legacyMergedReadReady } from "../store/legacy-edits-build.ts";
 import { recentChatPage } from "./recent-chat.ts";
 import { workspaceSessionsToMeasure } from "../jobs/workspace-size.ts";
 import { policyChecksRead } from "./policy-checks.ts";
-import { recentConnectPeople } from "../store/store.ts";
+import { archiveLookOf, recentConnectPeople } from "../store/store.ts";
 import { session, sessionPlace, sessions, summary, thread, threads, timeline, transcriptFile, transcriptState, widgetState } from "./sessions.ts";
 
 /// `?turns=`: how many of a session's latest turns; none (or not a count): all of them, as a device from before reads.
@@ -18,6 +18,9 @@ export const sessionOps: Record<string, ReadOp> = {
   sessionsAtWork: (s, a) => workspaceSessionsToMeasure(s.db, a.processes),
   /// What a week's checks say of a workspace's chats, for its archive policy's view (api/overview.ts).
   policyChecks: (s, a) => policyChecksRead(s.db, a.since, a.viewer),
+  /// One look of the auto-archive (sessions/lifecycle.ts): every session shown and chat of its own, and what it needs
+  /// of those idle long enough. Read on the main thread at each look, it held it.
+  archiveLook: (s, a) => archiveLookOf(s.db, Number(a.now), Number(a.after), Number(a.slackAfter)),
   /// The people of a connect's recent threads, learned as it connects (connects/part.ts).
   recentConnectPeople: (s, a) => recentConnectPeople(s.db, a.connect, a.limit),
   /// Every thread as chat_list has it; it does not use a viewer's unread count (sessions/others.ts).

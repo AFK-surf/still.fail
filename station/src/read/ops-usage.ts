@@ -8,6 +8,7 @@ import { platform } from "../platform/index.ts";
 import { HttpError } from "./views.ts";
 import { resourceChats, usage } from "./usage.ts";
 import { usageCallsPage } from "./store.ts";
+import { usageTurns } from "../store/usage.ts";
 import { HOME, type Of, outflowChats, outflowMessages, outflowUsage } from "./outflow.ts";
 
 /// A whole number from the args (another station's may say anything), else 0.
@@ -19,6 +20,8 @@ const outflowOf = (ws: unknown): Of =>
 const SPAN_MAX_MS = 31 * 24 * 60 * 60_000;
 
 export const usageOps: Record<string, ReadOp> = {
+  /// The turns a part of a transcript's calls were made in, for the usage counter (usage/counter.ts).
+  usageTurns: (store, a) => usageTurns(store.db, String(a.session), Number(a.from), Number(a.until)),
   // `reading`: the counter's readingAll (absent: true).
   // `history`: the page's year by day as well (usage.ts usageHistory; `historyRange`, its days).
   usage: (store, a) => usage(store, a.lang, BigInt(a.from), BigInt(a.to), BigInt(a.tz), typeof a.reading === "boolean" ? a.reading : true, a.viewer ?? null, a.history === true,

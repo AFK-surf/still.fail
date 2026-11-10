@@ -80,6 +80,9 @@ import { completeCardOutcome, saveWithCardOutcome, type CardEditScan, type CardO
 import { type RecentChatList, recentChatIds, searchChats } from "./chat-list.ts";
 import { dueChatShareRows, lapsedChatShareWorkspaces, liveChatShareRows } from "./chat-share-index.ts";
 
+/// One transcript's part for `recordUsageAll`: as `recordUsage` takes it.
+export type UsageWrite = { path: string; file: usage.UsageFile; runtime: string; calls: [usage.UsageCall, usage.UsageFor][]; options?: usage.UsageWriteOptions };
+
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
 // (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
 export { JOBS_RUNNING, SESSION_JOBS };
@@ -178,6 +181,83 @@ export const WORK_OF_SESSION = `SELECT
   CASE WHEN EXISTS (SELECT 1 FROM deliveries d INDEXED BY deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL)
     THEN 1 ELSE EXISTS (SELECT 1 FROM letter_deliveries d INDEXED BY letter_deliveries_pending WHERE d.session = s.key AND d.delivered_at IS NULL) END AS pending,
   ${SESSION_TURN_COLUMNS} ${SESSION_TURN_JOIN}`;
+
+/// A session's undelivered messages and its last turn (WORK_OF_SESSION), as the auto-archive asks them.
+export type WorkOf = { pending: boolean; lastTurn: TurnSummary | null };
+export const workOfRow = (r: Json | undefined): WorkOf | undefined =>
+  r === undefined ? undefined : { pending: r.pending !== 0, lastTurn: r.started_at === null ? null : toTurnSummary(r) };
+
+/// What the auto-archive needs to know of a session idle long enough (sessions/lifecycle.ts), as a reader says it
+/// (read/ops-sessions.ts `archiveFacts`): bound to a connect, pinned, its chats and which of them are kept, its work and
+/// whether a job of its is up. Null where the index that says it is not built yet.
+export type ArchiveFacts = { bound: boolean | null; pinned: boolean | null; threads: SessionThread[]; kept: number[] | null; work: WorkOf | null; upJob: boolean | null };
+
+/// What one look of the auto-archive reads (sessions/lifecycle.ts), a reader's: the sessions shown that are idle long
+/// enough by their times, each with its `ArchiveFacts`; the chats of their own idle long enough and not kept; when the
+/// next one comes due. `after` and `slackAfter` as hub.config() says them (`autoArchiveMs`, `slackArchiveMs`).
+export type ArchiveLook = {
+  next: number | null;
+  sessions: { row: SessionRow; quiet: boolean; quietLong: boolean; facts: ArchiveFacts }[];
+  own: ThreadRow[];
+  /// Chats of their own whose last message is not known yet (archive-last.ts): to be prepared.
+  ownUnknown: number[];
+  marksReady: boolean;
+};
+
+export function archiveLookOf(db: DatabaseSync, now: number, after: number, slackAfter: number): ArchiveLook {
+  let next: number | null = null;
+  const idle = (at: (number | null | undefined)[], wait: number) => {
+    if (wait <= 0) return false;
+    const due = Math.max(0, ...at.filter((x): x is number => typeof x === "number")) + wait;
+    if (due > now && (next === null || due < next)) next = due;
+    return due <= now;
+  };
+  const marksReady = archiveMarksReady(db);
+  const idleSessions: { row: SessionRow; quiet: boolean; quietLong: boolean }[] = [];
+  for (const row of (db.prepare(LIVE_SESSIONS).all() as Json[]).map(toSession)) {
+    const quiet = idle([row.lastActiveAt, row.shownAt], after);
+    const quietLong = idle([row.lastActiveAt, row.shownAt], slackAfter);
+    if (quiet || quietLong) idleSessions.push({ row, quiet, quietLong });
+  }
+  const facts = archiveFactsOf(db, idleSessions.map((s) => s.row.key));
+  const keep = db.prepare(ARCHIVE_KEEP_EXISTS);
+  const own: ThreadRow[] = [];
+  const ownUnknown: number[] = [];
+  for (const t of (db.prepare("SELECT * FROM threads WHERE surface = ? AND home IS NULL AND hidden_at IS NULL").all(STILLFAIL_SURFACE) as Json[]).map(toThread)) {
+    if (marksReady && keep.get(t.id) !== undefined) continue;
+    const said = archiveLastRead(db, t.id);
+    if (!said.known) { ownUnknown.push(t.id); continue; }
+    if (idle([t.createdAt, said.at, t.shownAt], after)) own.push(t);
+  }
+  return { next, sessions: idleSessions.flatMap((s) => { const f = facts[s.row.key]; return f ? [{ ...s, facts: f }] : []; }), own, ownUnknown, marksReady };
+}
+
+/// `ArchiveFacts` of each of `keys` there is (null for one that is not), read on `db` in one snapshot.
+export function archiveFactsOf(db: DatabaseSync, keys: readonly string[]): Record<string, ArchiveFacts | null> {
+  const bindings = sessionBindingsReady(db);
+  const marks = archiveMarksReady(db);
+  const bound = db.prepare(SESSION_BINDINGS_EXISTS);
+  const pin = db.prepare(ARCHIVE_PIN_EXISTS);
+  const keep = db.prepare(ARCHIVE_KEEP_EXISTS);
+  const work = db.prepare(WORK_OF_SESSION);
+  const upJob = db.prepare(SESSION_UP_JOB);
+  const threads = db.prepare("SELECT t.*, ts.connect FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC");
+  const out: Record<string, ArchiveFacts | null> = {};
+  for (const key of keys) {
+    const of = workOfRow(work.get(key) as Json | undefined);
+    if (of === undefined) { out[key] = null; continue; }
+    const chats = (threads.all(key) as Json[]).map(toSessionThread);
+    out[key] = {
+      bound: bindings ? bound.get(key) !== undefined : null,
+      pinned: marks ? pin.get(key) !== undefined : null,
+      threads: chats,
+      kept: marks ? chats.filter((t) => keep.get(t.thread.id) !== undefined).map((t) => t.thread.id) : null,
+      work: of,
+      upJob: sessionUpJobsReady(db, key) ? upJob.get(key) !== undefined : null,
+    };
+  }
+  return out;
+}
 
 // `reads` is keyed by viewer, then chat. A small table is cheap to scan; a large one is sought once per viewer.
 // Its rowid range gives an upper bound on its size with two B-tree seeks, even after deletions or explicit rowids.
@@ -842,6 +922,38 @@ export class Store {
     return r ? toSession(r) : null;
   }
 
+  /// The sessions of `keys` that there are, read in one statement.
+  sessionsOf(keys: readonly string[]): SessionRow[] {
+    if (keys.length === 0) return [];
+    return this.#all("SELECT * FROM sessions WHERE key IN (SELECT value FROM json_each(?))", JSON.stringify(keys)).map(toSession);
+  }
+
+  /// A session's workspace (null: the home one's), undefined where there is no such session: asked for each change
+  /// told to each viewer (api/seen.ts), so kept in memory once read. It changes only as the session is made, moved with
+  /// its workspace (`setSessionsWs`) or deleted, each of which forgets it here; read inside a transaction, it is not
+  /// kept (the transaction may still be undone).
+  sessionWs(key: string): string | null | undefined {
+    if (this.#wsOf.has(key)) return this.#wsOf.get(key)!;
+    const r = this.#one("SELECT ws FROM sessions WHERE key = ?", key);
+    if (r === undefined) return undefined;
+    const ws = (r.ws as string | null) ?? null;
+    if (!this.db.isTransaction) this.#wsOf.set(key, ws);
+    return ws;
+  }
+  readonly #wsOf = new Map<string, string | null>();
+
+  /// The session a tool call's bearer token names (each MCP call asks): kept in memory once read, as a session's token
+  /// is given as it is made and never changed; forgotten as the session is deleted.
+  sessionKeyByToken(token: string): string | null {
+    const kept = this.#tokenKey.get(token);
+    if (kept !== undefined) return kept;
+    const r = this.#one("SELECT key FROM sessions WHERE token = ?", token);
+    if (r === undefined) return null;
+    if (!this.db.isTransaction) this.#tokenKey.set(token, r.key as string);
+    return r.key as string;
+  }
+  readonly #tokenKey = new Map<string, string>();
+
   sessionByToken(token: string): SessionRow | null {
     const r = this.#one("SELECT * FROM sessions WHERE token = ?", token);
     return r ? toSession(r) : null;
@@ -953,6 +1065,7 @@ export class Store {
       const keys = (from === null ? this.#all("SELECT key FROM sessions WHERE ws IS NULL") : this.#all("SELECT key FROM sessions WHERE ws = ?", from)).map((r) => r.key as string);
       if (from === null) this.#run("UPDATE sessions SET ws = ? WHERE ws IS NULL", to);
       else this.#run("UPDATE sessions SET ws = ? WHERE ws = ?", to, from);
+      this.#wsOf.clear();
       // The calls of the sessions gone before them were `from`'s as well: the whole workspace's go.
       moveUsageHistory(this.db, from ?? "", to ?? "");
       for (const key of keys) changes.push({ type: "session", key });
@@ -1257,8 +1370,8 @@ export class Store {
   }
 
   /// Each recorded transcript's runtime and profile, in conversation order.
-  runtimeSessionSources(key: string): { id: string; runtime: string; profile: string | null }[] {
-    const row = this.getSession(key);
+  runtimeSessionSources(key: string, known?: SessionRow): { id: string; runtime: string; profile: string | null }[] {
+    const row = known ?? this.getSession(key);
     if (!row) return [];
     const sources = this.#all(`SELECT r.id, COALESCE(r.runtime, s.original_runtime, s.runtime) AS runtime, r.profile
       FROM sessions s CROSS JOIN runtime_sessions r ON r.session_key = s.key WHERE s.key = ? ORDER BY r.at, r.rowid`, key)
@@ -1464,6 +1577,8 @@ export class Store {
         this.#run("DELETE FROM transcript_lengths WHERE session = ?", key);
         this.#run("DELETE FROM session_usage WHERE session = ?", key);
         this.#run("DELETE FROM sessions WHERE key = ?", key);
+        this.#wsOf.delete(key);
+        for (const [token, of] of this.#tokenKey) if (of === key) this.#tokenKey.delete(token);
         for (const thread of threads) {
           if (this.#one("SELECT 1 FROM thread_sessions WHERE thread = ? LIMIT 1", thread) !== undefined) {
             kept.push(thread);
@@ -3233,9 +3348,8 @@ export class Store {
   }
 
   /// A session's latest turn and whether anything is undelivered, including orphaned deliveries, without counting them.
-  workOf(key: string): { pending: boolean; lastTurn: TurnSummary | null } | undefined {
-    const r = this.#one(WORK_OF_SESSION, key);
-    return r === undefined ? undefined : { pending: r.pending !== 0, lastTurn: r.started_at === null ? null : toTurnSummary(r) };
+  workOf(key: string): WorkOf | undefined {
+    return workOfRow(this.#one(WORK_OF_SESSION, key));
   }
 
   /// For each of `keys` that is a session: its latest turn and undelivered messages as sessionStats says them (STATS_OF),
@@ -3590,8 +3704,17 @@ export class Store {
 
   /// Records a transcript's calls read up to `file.offset`, each with what it was for; a call recorded before keeps its
   /// row (its output grown, when the transcript wrote it again whole). How many were new.
+  /// In a transaction of its own, or in the one under way (`recordUsageAll`'s).
   recordUsage(path: string, file: usage.UsageFile, runtime: string, calls: [usage.UsageCall, usage.UsageFor][], options?: usage.UsageWriteOptions): number {
+    if (this.db.isTransaction) return usage.recordUsage(this.db, path, file, runtime, calls, options);
     return this.#tx(() => usage.recordUsage(this.db, path, file, runtime, calls, options));
+  }
+
+  /// `recordUsage` of each, in one transaction: what a read of the usage counter found in its transcripts, written at
+  /// once (the pages their derived tables share written once, not once a call). How many calls each recorded.
+  recordUsageAll(writes: readonly UsageWrite[]): number[] {
+    if (writes.length === 0) return [];
+    return this.#tx(() => writes.map((w) => this.recordUsage(w.path, w.file, w.runtime, w.calls, w.options)));
   }
 
   /// A session's last `limit` main-thread calls, oldest first: the context each sent, on what (store/usage.ts).
