@@ -13,7 +13,7 @@ import { devicePage, googleStart, consumeLoginRate, signedInPage } from "./login
 import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
-import { adminApi, api, blockAccount, feedbackList, liveOf, notBetaReply, onTestChannel } from "./api";
+import { adminApi, api, blockAccount, FEEDBACK_STATUS_PATH, feedbackList, liveOf, notBetaReply, onTestChannel, setFeedbackStatus } from "./api";
 import { noted, parseTraceparent, recordCall, relayToAxiom, takeNotes, unverifiedNotes } from "./tracing";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
@@ -91,6 +91,12 @@ export default {
     if (env.RELAY_PROBES === "globalping" && minute % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
   },
 } satisfies ExportedHandler<Env>;
+
+/** Whether the request carries FEEDBACK_TOKEN, the team's feedback monitor's (unset or short: nobody's). */
+async function feedbackMonitor(env: Env, request: Request): Promise<boolean> {
+  const supplied = bearerToken(request);
+  return !!env.FEEDBACK_TOKEN && env.FEEDBACK_TOKEN.length >= 43 && !!supplied && (await digest(supplied)) === (await digest(env.FEEDBACK_TOKEN));
+}
 
 async function handle(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -227,11 +233,21 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return reply({ error: "invalid_request" }, 400);
     }
   }
-  // The console's bug reports for the team's feedback monitor: FEEDBACK_TOKEN reads them and nothing else.
+  // The console's bug reports for the team's feedback monitor: FEEDBACK_TOKEN reads them and marks their status, and
+  // nothing else. A status marked with another token is the console's admin's, signed in (adminApi).
   if (path === "/v1/admin/feedback/list" && request.method === "POST") {
-    const supplied = bearerToken(request);
-    if (!env.FEEDBACK_TOKEN || env.FEEDBACK_TOKEN.length < 43 || !supplied || (await digest(supplied)) !== (await digest(env.FEEDBACK_TOKEN))) return denied();
+    if (!(await feedbackMonitor(env, request))) return denied();
     return reply({ feedback: await feedbackList(env) });
+  }
+  const feedbackStatus = FEEDBACK_STATUS_PATH.exec(path);
+  if (feedbackStatus && request.method === "POST" && (await feedbackMonitor(env, request))) {
+    let body: Record<string, unknown>;
+    try {
+      body = await readJson(request);
+    } catch {
+      return reply({ error: "invalid_request" }, 400);
+    }
+    return setFeedbackStatus(env, feedbackStatus[1]!, body.status);
   }
   // The Android app opens an item's link (/o/…) itself: this says the domain is its (App Links).
   if (path === "/.well-known/assetlinks.json") {
