@@ -27,7 +27,7 @@ import { isDeepStrictEqual } from "node:util";
 import { Clock, Duration, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
 import { wall } from "../ops/fibers.ts";
-import type { Cloud } from "../cloud/state.ts";
+import { type Cloud, UNPROTECTED } from "../cloud/state.ts";
 import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
 import { detailed, summary } from "./load.ts";
@@ -1183,11 +1183,13 @@ export class Remote {
   }
 
   /// station_list: the stations of `workspace`, each asked how busy it is at once (this one answers itself); one that
-  /// has not answered within LIST_WAIT_MS is listed as offline, one that refused says why.
+  /// has not answered within LIST_WAIT_MS is listed as offline, one that refused says why, one safe mode leaves out
+  /// (the roster's `unprotected`) after them, not asked, saying why it cannot be called.
   private async listStations(workspace: string): Promise<Json> {
-    const roster = await this.ask("", { method: "peers", workspace });
+    const { unprotected, ...roster } = (await this.ask("", { method: "peers", workspace })) ?? {};
     const own = this.ownId();
     const stations = Array.isArray(roster?.stations) ? roster.stations : [];
+    const left = (Array.isArray(unprotected) ? unprotected : []).map((entry: Json) => ({ ...entry, unprotected: UNPROTECTED }));
     const listed = await Promise.all(
       stations.map(async (entry: Json) => {
         const id = text(entry, "id");
@@ -1199,7 +1201,7 @@ export class Remote {
         return { ...entry, load: summary(field(got.ok, "load")) };
       }),
     );
-    return { ...roster, stations: listed };
+    return { ...roster, stations: [...listed, ...left] };
   }
 
   /// The id of the station an agent names: station_list shows each by its name and its id, and either is taken. A name
@@ -1210,7 +1212,8 @@ export class Remote {
     let stations: Json[] = [];
     try {
       const roster = await this.ask("", { method: "peers", workspace });
-      if (Array.isArray(roster?.stations)) stations = roster.stations;
+      // One safe mode leaves out too: named, it is refused saying why (peer.ts `member`).
+      stations = [roster?.stations, roster?.unprotected].flatMap((list) => (Array.isArray(list) ? list : []));
     } catch {
       return named;
     }

@@ -20,6 +20,10 @@ export type Revocation = { kind: string; id: string; at: number };
 export type Joined = { workspace: string; workspace_name: string; name: string; peers: any[]; revocations: Revocation[]; locked?: true };
 
 /// One of the workspaces the station is in, its home one (cloud.json's top level) or a joined one.
+/// Why a station `Cloud.unprotected` names cannot be called (its refusal, and its line in station_list): an agent took
+/// the plain "not another station" for a bug (FB-11). What is to be done, in the app's words for it.
+export const UNPROTECTED =
+  "that station is in this workspace but not protected by its safe mode (安全模式): it was offline or too old when safe mode was turned on. It is not a bug: stations safe mode protects run no remote tasks for an unprotected one, nor share with it, and it cannot be called from here. An owner or admin of the workspace protects it in the app's Settings → Security (设置 → 安全) with Protect (保护), updating it first if it is too old.";
 export type Membership = Joined & { home: boolean };
 
 export type CloudState = {
@@ -330,6 +334,17 @@ export class Cloud {
       peers: peers.filter((p) => s !== null && typeof p?.id === "string" && s.stations.has(p.id)),
       gateways: gateways === undefined ? undefined : gateways.filter((g) => s !== null && s.gateways.has(g)),
     };
+  }
+
+  /// The stations the control plane lists in `ws` (the home one when none is named) that the lock in force there leaves
+  /// out: not protected by safe mode (offline or too old when it was turned on), so the stations it protects neither
+  /// call them nor take their calls. Said to agents (`UNPROTECTED`) instead of letting them vanish. Empty without a
+  /// lock, with a broken one, and for the home one until the control plane's first roster of this run.
+  unprotected(ws?: string | null): any[] {
+    const s = this.locked(ws)?.state;
+    if (!s || !this.state) return [];
+    const listed = this.isHome(ws) ? (this.planePeers ?? []) : ((this.state.joined ?? []).find((j) => j.workspace === ws)?.peers ?? []);
+    return listed.filter((p) => typeof p?.id === "string" && p.id !== this.state!.station && !s.stations.has(p.id));
   }
 
   private refilter() {
