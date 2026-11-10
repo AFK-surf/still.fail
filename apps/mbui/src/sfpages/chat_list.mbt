@@ -49,16 +49,17 @@ pub fn chat_list(
   // words sent, each from the moment it came: composer's reshape), the room the list keeps under them with it as
   // drawn: that way the Foot row's change and the list's while it has not ended, as the list is told, so that what else
   // changes the rows' heights then (a row closing over it) goes with it, one way (list_size.mbt; rows_steady.mbt holds
-  // it); not a room the page gave otherwise (a new chat's, the least a phone's foot keeps)
+  // it); not a room the page gave otherwise (a new chat's, the least a phone's foot keeps); nor while words sent hold
+  // its room, which is theirs then, kept where it was till they let go of it and down on their flight's clock with
+  // their row from then (flight_lets_go, sfbase's shown_rows), its ground's ways then none of the list's
   let foot_way = if (room - composer_room(c, draft)).abs() < 0.01 {
-    @motion.reshape_way(c, "composer/box")
+    composer_way_for_list(c, draft)
   } else {
     None
   }
-  // (on that way at this moment, till its declared end; not while words sent hold its room, which is theirs then, as
-  // tall as it was till they let go of it and down on their flight's clock: composer_hold, sfbase's shown_rows)
+  // (on that way at this moment, till its declared end)
   let on_foot_way = match foot_way {
-    Some((at, ms)) => c.moment() < at + ms && !composer_held(c, draft)
+    Some((at, ms)) => c.moment() < at + ms
     None => false
   }
   let lf = list_frame(

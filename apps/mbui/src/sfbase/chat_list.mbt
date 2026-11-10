@@ -1668,7 +1668,7 @@ fn shown_rows(
   foot_way~ : (Double, Double)?,
 ) -> (Array[Entry], Array[String]) {
   // words sent let go of the composer as they leave it, a share of their way on (flight_placed): their row opens
-  // from then, the composer's room closes from then (composer_hold), as long, so that what is over them goes one way;
+  // from then, the composer's room closes from then (flight_lets_go), as long, so that what is over them goes one way;
   // their row opening from the moment they were sent, the room after, on a curve of its own, had it go up, then down
   // (set out this frame as their row is in the list, when not yet: flight_placed); what else changes the rows' heights
   // from now till then (a card they answer closing) sets out with them, one way
@@ -1676,12 +1676,17 @@ fn shown_rows(
   let mut told_foot = false
   let leaving = match flight {
     Some(f) if !f.carried => {
-      if f.placed && rd.sent_foot != "/" + f.key {
+      // (once their way is said, in the frame their row is placed: flight_timed)
+      if f.placed && f.timed && rd.sent_foot != "/" + f.key {
         rd.sent_foot = "/" + f.key
         told_foot = true
       }
-      let set_out = if f.placed { f.set_out } else { now }
-      Some((f.key, set_out + flight_settle * f.ms, (1.0 - flight_settle) * f.ms))
+      // (said in the one place the composer's coming down is: flight_lets_go; not placed yet, from now, as long as
+      // their usual way's share)
+      match flight_lets_go(f.chat) {
+        Some((at, ms)) => Some((f.key, at, ms))
+        None => Some((f.key, now + flight_settle * f.ms, (1.0 - flight_settle) * f.ms))
+      }
     }
     _ => None
   }

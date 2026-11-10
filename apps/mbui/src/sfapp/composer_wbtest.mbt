@@ -560,7 +560,7 @@ test "the app tells the core it is shown and in front, in which workspace, and w
 }
 
 ///|
-test "words sent as the composer grows a line hold its room where it is drawn, the list's foot not ahead of it" {
+test "words sent as the composer grows a line: it slows to rest from as fast as it went, over the list's foot by no more than was left, then down with it" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
   t.tap_text("发消息")
@@ -569,26 +569,45 @@ test "words sent as the composer grows a line hold its room where it is drawn, t
     let rows = t.rows()
     rows[rows.length() - 1].2
   }
-  let before = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  let room = fn() { @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") }
+  let before = room()
   let over = foot() - before
   for line in ["第二行", "第三行", "第四行"] {
     t.enter()
     t.type_text(line)
   }
-  // half way through its growing, sent: the composer held as tall as it shows, the rows over it where they were, with
-  // it, till the words let go of it
+  // half way through its growing, sent: the composer slows to rest from as fast as it went (@motion.stop_for); the
+  // list's room under the rows held as it was till the words let go of it, the composer over it by what was left to
+  // grow at most, and down with it from then. Meant, till the composer is a node (send_hold_wbtest's hold_cover)
   t.run_for(@ui.row_size_ms / 2.0)
-  let growing = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  let growing = room()
   assert_true(growing > before)
   assert_eq(foot(), growing + over)
+  let left = @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1", settled=true) - growing
   tap_send(t)
   assert_eq(named(calls, "chat.send").length(), 1)
-  // (a while on, the words still in it)
-  t.run_for(@ui.row_size_ms / 4.0)
-  assert_eq(foot(), @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") + over)
-  assert_eq(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), growing)
-  // (the words flown, the composer let go of)
-  t.run_for(@ui.move_most_ms)
+  let mut most = growing
+  let mut was = @double.infinity
+  let end = t.time() + @sfbase.flight_most_ms + @ui.move_most_ms
+  while t.time() < end {
+    let cover = room() + over - foot()
+    // (the composer's way and the list's two curves to the same end, half a point apart at most, send_hold_wbtest's
+    // hold_cover_slack)
+    assert_true(cover <= left + 0.5, msg="at \{t.time()}: covers \{cover} of \{left}")
+    match @sfbase.flight_lets_go("ws1/st1:s-c1") {
+      // (let go of: less at every frame on, the list's room and the composer down to the same)
+      Some((go, _)) if t.time() >= go => {
+        assert_true(cover <= was + 0.5, msg="at \{t.time()}: covers \{cover} after \{was}")
+        was = cover
+      }
+      _ => ()
+    }
+    most = if room() > most { room() } else { most }
+    t.frame()
+  }
+  assert_true(was <= 0.5, msg="still over it by \{was} once down")
+  // (carried on past where it was as it was sent, and down since)
+  assert_true(most > growing && room() < most, msg="\{growing} \{most} \{room()}")
   t.run_for(draft_keep_ms)
   t.assert_idle()
 }
@@ -817,7 +836,10 @@ test "lines typed while words sent let go of the composer: the list's foot goes 
   t.run_for(@ui.move_most_ms)
   let over = foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
   t.run_for(draft_keep_ms)
-  assert_eq(foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), over)
+  // (the list's way and the composer's ground's to the same end, a hair apart on their last frames: a hundredth of a
+  // point; the composer stopped where it was going as the words were sent, @motion.stop_for)
+  let now = foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
+  assert_true((now - over).abs() < 0.01, msg="\{now} after \{over}")
   t.assert_idle()
 }
 

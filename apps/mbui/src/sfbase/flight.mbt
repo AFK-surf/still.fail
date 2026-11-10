@@ -57,11 +57,26 @@ pub(all) struct SendFlight {
   field_y : Double
   field_w : Double
   field_h : Double
-  /// the composer's room when sent (held a quarter of the way: `hold`, the composer's own, told how long), and whether
-  /// it is the desktop's (the web's flight: desk)
+  /// the composer's room when sent, and whether it is the desktop's (the web's flight: desk)
   room : Double
-  mut hold : (@ui.Ctx, Double) -> Unit
   desk : Bool
+  /// what holds the composer they were sent from while they are in it, theirs (this send's, its chat's: another chat's
+  /// composer never reads it): what its shape was for as they were sent (`shaped`, the composer's: its words, quotes
+  /// and files) and how many lines they took in its field (`held_lines`), as the field had them; it stays as it is
+  /// laid out for them till they let go of it (flight_lets_go), whatever is in it meanwhile
+  shaped : String
+  held_lines : Int
+  /// how tall what was added to it (its quotes, its files) was laid out as they were sent, read in the frame they were
+  /// sent once it was laid out with them (the frame built again for it: flight_start), -1 till then; held so too
+  mut held_extras : Double
+  /// the moment they were sent, and whether what the composer was on its way to then has been told to stop there
+  /// (its growing a line: the words gone, it grows no further for them; sfpages composer's, @motion.stop_for)
+  sent_at : Double
+  mut stopped : Bool
+  /// how far the list's foot is drawn over where it comes to stand (the composer's room at rest, its target: what is
+  /// on its way to it, a line more just typed, not over), the composer's own: their row's place at rest is where this
+  /// frame lays it out less that (flight_timed)
+  mut foot_lift : (@ui.Ctx) -> Double
   /// the field's words as it laid them out (where each line starts, where each offset stood) and where the words sent
   /// start in them (what came before them trimmed off): what their pieces go from (flight_pieces); None, they go as
   /// one block
@@ -85,9 +100,9 @@ pub(all) struct SendFlight {
   /// from (their bubble's corner, or the first file's tile without words)
   carried : Bool
   from_top : Double
-  /// how long their way takes (flight_way_ms: as long as it is far, from where they were typed to where their row has
-  /// them), said as they set out and again once their row is laid out (`timed`); when they set out (the moment their
-  /// row was first in the list: flight_placed), after how long
+  /// how long their way takes (flight_way_ms: as long as it is far, from where they were typed to where their row
+  /// stands at rest), said once, as their row is first laid out (`timed`, in the frame it is placed: flight_placed);
+  /// when they set out (the moment their row was first in the list), after how long
   mut ms : Double
   mut timed : Bool
   /// where their words were laid out as they were timed (in the window: their row as it stood as they set out), what
@@ -243,7 +258,8 @@ pub fn flight_start(
   room : Double,
   files : Array[FlyingFile],
   field~ : @ui.Field,
-  hold~ : (@ui.Ctx, Double) -> Unit,
+  shaped~ : String,
+  foot_lift~ : (@ui.Ctx) -> Double,
   desk~ : Bool,
   marks? : Array[(Int, Int)] = [],
   runs? : Json? = None,
@@ -268,8 +284,13 @@ pub fn flight_start(
         field_w: w,
         field_h: h,
         room,
-        hold,
         desk,
+        shaped,
+        held_lines: field_lines_n(field),
+        held_extras: -1.0,
+        sent_at: c.moment(),
+        stopped: false,
+        foot_lift,
         lines,
         lead,
         marks,
@@ -287,12 +308,20 @@ pub fn flight_start(
         set_out: -1.0,
         after: 0.0,
       }))
-      hold(c, flight_wait_ms)
       // a turn among what changes the list's height, till they have landed: what comes after them waits for it, they
       // wait for nothing (list_turns.mbt)
       turns_of(turns).send(c, flight_wait_ms + flight_len(desk))
     }
     None => ()
+  }
+}
+
+///|
+/// How many lines the words in field `field` take in it, as it lays them out now (none: a line).
+pub fn field_lines_n(field : @ui.Field) -> Int {
+  match field.lines() {
+    Some(l) => if l.starts.length() > 0 { l.starts.length() } else { 1 }
+    None => 1
   }
 }
 
@@ -316,7 +345,7 @@ pub fn flight_carry_start(
   words : String,
   files : Array[FlyingFile],
   field~ : @ui.Field,
-  hold~ : (@ui.Ctx, Double) -> Unit,
+  shaped~ : String,
   desk~ : Bool,
   marks? : Array[(Int, Int)] = [],
   runs? : Json? = None,
@@ -345,8 +374,14 @@ pub fn flight_carry_start(
         field_w: w,
         field_h: h,
         room: 0.0,
-        hold,
         desk,
+        shaped,
+        held_lines: field_lines_n(field),
+        held_extras: -1.0,
+        sent_at: c.moment(),
+        stopped: false,
+        // (not timed: their way is the list's coming up, flight_carry_ms)
+        foot_lift: fn(_) { 0.0 },
         // (carried with the list as its chat comes up: as one block)
         lines: None,
         lead: 0,
@@ -365,7 +400,6 @@ pub fn flight_carry_start(
         after: 0.0,
         from_top,
       }))
-      hold(c, flight_wait_ms)
     }
     None => ()
   }
@@ -373,23 +407,21 @@ pub fn flight_carry_start(
 
 ///|
 /// The new chat's first words, carried from its draft `from`, go on to the chat it became: its draft `chat`, its list's
-/// turns `turns`, row `key` (in its list from now: sent_local), its composer held as the new chat's was (`hold`, the
-/// chat's own) till they set out. What is asked in its list after them waits for them.
+/// turns `turns`, row `key` (in its list from now: sent_local), its composer held as the new chat's was (theirs, read by
+/// the composer of the chat they are in: flight_held_lines) till they set out. What is asked in its list after them
+/// waits for them.
 pub fn flight_carry_into(
   c : @ui.Ctx,
   from : String,
   chat : String,
   turns : String,
   key : String,
-  hold~ : (@ui.Ctx, Double) -> Unit,
 ) -> Unit {
   match flight_of(from) {
     Some(f) if f.carried => {
       f.chat = chat
       f.turns = turns
       f.key = key
-      f.hold = hold
-      hold(c, flight_wait_ms)
       turns_of(turns).send(c, flight_wait_ms + flight_len(f.desk))
     }
     _ => ()
@@ -539,16 +571,6 @@ pub let flight_desk_ms : Double = 520.0
 /// (composer_hold): words sent's own, set with their flight's (sf/motion.mbt kind 4), not a Move's by its way.
 pub let sent_down_ms : Double = 300.0
 
-///|
-/// How long the composer of draft `draft` takes to come down as words sent let go of it: as long as what is left of
-/// their way as they leave it, their row opening on the list's way as long from then (shown_rows), so that the
-/// composer's ground, its room and the row go as one; sent_down_ms for a new chat's first words (their page's change).
-pub fn sent_down_of(draft : String) -> Double {
-  match flight_of(draft) {
-    Some(f) if f.placed && !f.carried => (1.0 - flight_settle) * f.ms
-    _ => sent_down_ms
-  }
-}
 
 ///|
 pub fn fly_share(desk : Bool) -> Double {
@@ -597,18 +619,17 @@ pub fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
     Some(f) => {
       let turns = turns_of(f.turns)
       flight_timed(c, f)
-      let waited = @kit.after(c, "flight/wait", !f.placed, flight_wait_ms)
-      // (landed: their way at the end it declared as it set out)
-      let landed = f.placed && f.way.over(c)
-      if (!f.placed && waited) || landed {
+      // (landed: their way at the end it declared as it set out; till their row is in the list they wait for it, no
+      // moment of theirs said: it is in it from the press, sent_local)
+      let landed = f.placed && f.timed && f.way.over(c)
+      if landed {
         send_flight.set(None)
         flight_shares_gone(f)
         // their turn over: where they were declared to land (or now, never having set out)
-        turns.over(c, Send, if landed { f.way.ends() } else { turns.moment(c) })
+        turns.over(c, Send, f.way.ends())
       }
     }
-    // (none: the wait starts again from nothing for the next words)
-    None => @kit.after(c, "flight/wait", false, flight_wait_ms) |> ignore
+    None => ()
   }
 }
 
@@ -622,8 +643,10 @@ pub fn flight_takes(chat : String, key : String) -> Bool {
 }
 
 ///|
-/// The row the words go to is in the list: they go from the next frame on, all of their way said now (and the
-/// composer let go a quarter of the way).
+/// The row the words go to is in the list: they set out at this moment. A new chat's go as their list comes up, all of
+/// their way said now; any other's is said in this frame too, once their row is laid out (flight_timed: the height of
+/// it read as it is built, the frame built again at this moment once it is laid out, before it is drawn, as any read
+/// of a height laid out in that frame is, mbui's motion measures_told_once), so no frame draws them on a way not theirs.
 pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
   if !f.placed {
     f.placed = true
@@ -633,14 +656,15 @@ pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
     f.set_out = c.moment()
     if f.carried {
       // a new chat's: once its choices have faded (web: 90 ms after what leaves has begun to); in the wide frame at
-      // once, the composer going to the chat's foot with them (Chat.tsx toMadeChat: no wait)
+      // once, the composer going to the chat's foot with them (Chat.tsx toMadeChat: no wait); the composer let go as
+      // they set out, their ground coming in round them from there (flight_lets_go)
       f.after = if f.desk { 0.0 } else { flight_carry_after_ms }
+      f.timed = true
       f.way.animate(c, 1.0, @motion.tween(f.ms, ease=Linear, delay=f.after))
-      // (the composer let go as they set out: their ground comes in round them from there)
-      (f.hold)(c, f.after)
     } else {
-      f.way.animate(c, 1.0, @motion.tween(f.ms, ease=Linear))
-      (f.hold)(c, flight_settle * f.ms)
+      // (how tall what they go to is, read as their row is built: none yet, the frame built again once this build has
+      // laid it out, their way said then, flight_timed)
+      ignore(@motion.measured(c, flight_target_key(f)))
     }
   }
 }
@@ -655,21 +679,36 @@ fn flight_going(c : @ui.Ctx, f : SendFlight) -> Bool {
 }
 
 ///|
-/// Once their row is laid out (from a moment after it was placed), their way timed as long as it is far: from where they
-/// were typed to where their row has them (their words' box, or the first file's place), the furthest of across and
-/// up. Told again from when they set out, its row's room and the composer's letting go with it.
-fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
-  // (a new chat's first words go with their page's change, the composer going to the chat's foot on their clock,
-  // told as the page changed: as long as any, flight_carry_ms)
-  if !flight_going(c, f) || f.timed || f.carried {
-    return
-  }
-  let to = if f.text != "" {
+/// Where words sent `f` go to in their row, what their way is timed by (flight_timed): their words' box, or the first
+/// file's place ("": nothing).
+fn flight_target_key(f : SendFlight) -> String {
+  if f.text != "" {
     flight_words_key(f)
   } else if f.files.length() > 0 {
     flight_to_key(f, f.files[0].key)
   } else {
     ""
+  }
+}
+
+///|
+/// Once their row is laid out (the frame it was placed in, built again: flight_placed), their way said, once: as long as
+/// it is far from where they were typed to where their row stands at rest (their words' box, or the first file's
+/// place), the furthest of across and up, from the moment they set out. Where it stands at rest: the list's foot where
+/// it comes to stand (the composer's room at its target, `foot_lift` under where it is drawn now), their row as far over
+/// it as this frame lays it out (a place in the list against its foot, whatever is on its way under it). Its row's room
+/// and the composer's letting go go by that (flight_lets_go, shown_rows).
+fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
+  // (a new chat's first words go with their page's change, the composer going to the chat's foot on their clock,
+  // told as the page changed: as long as any, flight_carry_ms)
+  if !f.placed || f.timed || f.carried {
+    return
+  }
+  let to = flight_target_key(f)
+  // (laid out yet in this frame: none the build that placed it, the frame built again once it is, its height read
+  // here; nothing to read, a flight of nothing, timed as it is)
+  if to != "" && @motion.measured(c, to) is None {
+    return
   }
   f.timed = true
   match @motion.measured_rect(c, to) {
@@ -677,18 +716,69 @@ fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
       if f.text != "" {
         f.to_y = Some(y)
       }
-      let ms = flight_way_ms(flies_desk(f), dmax((x - f.from_x).abs(), (y - f.from_y).abs()))
-      if ms != f.ms {
-        f.ms = ms
-        // (from the start of their way, as at the moment they set out: wherever the way said first has them by now)
-        f.way.snap(c, 0.0)
-        f.way.animate(c, 1.0, @motion.tween(ms, ease=Linear, delay=f.after), start_at=f.set_out)
-        if !f.carried {
-          (f.hold)(c, dmax(flight_settle * ms - (c.moment() - f.set_out), 0.0))
+      match c.list_info(flight_list_key(f)) {
+        // (read up the list so far that its end is not laid out, gliding to it as they go, list_to_end: where their row
+        // comes to stand is not known of its layout, as long as words sent take over their usual way)
+        Some(i) if !i.at_end && i.below >= 1.0e8 => ()
+        info => {
+          // (read up the list a little: at rest as far up as its end is under its view now)
+          let below = match info {
+            Some(i) if !i.at_end && i.below > 0.0 => i.below
+            _ => 0.0
+          }
+          let rest_y = y + (f.foot_lift)(c) - below
+          f.ms = flight_way_ms(flies_desk(f), dmax((x - f.from_x).abs(), (rest_y - f.from_y).abs()))
         }
       }
     }
+    // (nowhere laid out: as long as words sent take over their usual way)
     None => ()
+  }
+  f.way.animate(c, 1.0, @motion.tween(f.ms, ease=Linear, delay=f.after), start_at=f.set_out)
+}
+
+///|
+/// The list of the chat words sent `f` go into (sfpages chat_list's key: its station's and its session's).
+fn flight_list_key(f : SendFlight) -> String {
+  "chat/" + f.turns.replace(old="\u{1}", new="/")
+}
+
+///|
+/// When the composer of chat `chat` is let go by the words sent from it, and how long it then takes to come down (its
+/// room with it): a share of their way on, as long as what is left of it, so their row opening, the composer coming
+/// down and its room closing go as one (shown_rows, the composer's reshape); a new chat's as they set out, down in sent_down_ms. Said once,
+/// as their way is (flight_timed); None till then, the composer held as it is.
+pub fn flight_lets_go(chat : String) -> (Double, Double)? {
+  match flight_of(chat) {
+    Some(f) if f.placed && f.timed =>
+      if f.carried {
+        Some((f.set_out + f.after, sent_down_ms))
+      } else {
+        Some((f.set_out + flight_settle * f.ms, (1.0 - flight_settle) * f.ms))
+      }
+    _ => None
+  }
+}
+
+///|
+/// The lines the words sent from chat `chat` took in its composer's field, while they hold it (till they let go of
+/// it, flight_lets_go): 0 when nothing does.
+pub fn flight_held_lines(c : @ui.Ctx, chat : String) -> Int {
+  match (flight_of(chat), flight_lets_go(chat)) {
+    (Some(_), Some((at, _))) if c.moment() >= at => 0
+    (Some(f), _) => f.held_lines
+    _ => 0
+  }
+}
+
+///|
+/// What the composer of chat `chat` is shaped for while words sent from it hold it (as they were sent, SendFlight's
+/// `shaped`); None when nothing does.
+pub fn flight_held_shaped(c : @ui.Ctx, chat : String) -> String? {
+  if flight_held_lines(c, chat) > 0 {
+    flight_of(chat).map(fn(f) { f.shaped })
+  } else {
+    None
   }
 }
 
