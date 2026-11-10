@@ -582,7 +582,7 @@ export class Requests {
       const span = this.#core.tracer.span(`SOCKET ${route(full)}`, Kind.Client, ctx);
       span.set("url.path", route(full));
       span.set("stillfail.stream", true);
-      const head: RequestHead = { method: "GET", path: full, headers: [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()]] };
+      const head: RequestHead = { method: "GET", path: full, headers: [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()], [BUILD_HEADER, ownBuild() || "0.1.0"]] };
       const opening = this.wire.socket ? this.wire.socket(station, head) : Effect.fail(new CoreError("unsupported", t("station.core.previewNoSocket")));
       const opened = yield* Effect.result(
         Effect.raceFirst(
@@ -618,7 +618,7 @@ export class Requests {
       const span = this.#core.tracer.span(`SCREEN ${route(full)}`, Kind.Client, ctx);
       span.set("url.path", route(full));
       span.set("stillfail.stream", true);
-      const head: RequestHead = { method: "POST", path: full, headers: [["traceparent", span.context.traceparent()], [LANG_HEADER, current()]] };
+      const head: RequestHead = { method: "POST", path: full, headers: [["traceparent", span.context.traceparent()], [LANG_HEADER, current()], [BUILD_HEADER, ownBuild() || "0.1.0"]] };
       const opening = this.wire.screen ? this.wire.screen(station, head, ask) : Effect.fail(new CoreError("unsupported", t("core-misc.screen.noWire")));
       const opened = yield* Effect.result(
         Effect.raceFirst(
