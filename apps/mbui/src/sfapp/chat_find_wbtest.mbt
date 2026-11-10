@@ -878,3 +878,34 @@ test "对话目录: more found than it lists: the newest fifty, how many older n
   assert_true(t.find(@sf.t("web-main.outline.count", args=[("n", total.to_string())])) is Some(_))
   assert_eq(outline_faults(t), [])
 }
+
+///|
+test "对话目录: words found stand at the list's start, the first found whole and lit under its day; emptied, back at the reader's" {
+  let calls : Array[Made] = []
+  let t = outline_tester(calls, mode="chat-outline-long")
+  let (px, py, pw, ph) = outline_panel(t).unwrap()
+  let accent = outline_hex(@sf.theme().p.accent_text)
+  let reader = fn() {
+    outline_drawn(t, "glyphs").filter(fn(g) { g.4 == accent && g.0 >= px && g.1 >= py && g.1 < py + ph }).length()
+  }
+  assert_eq(reader(), 1)
+  t.type_text("的")
+  t.run_for(@sfpages.find_typing_ms)
+  t.run_for(@ui.move_most_ms)
+  // (the note over the rows, then the first day's heading, then the first found, lit, whole)
+  let glyphs = outline_drawn(t, "glyphs").filter(fn(g) { g.0 >= px && g.0 < px + pw && g.1 >= py && g.1 < py + ph })
+  let note = glyphs.iter().find_first(fn(g) { g.5.has_prefix("更早的") }).unwrap()
+  let hover = outline_hex(@sf.theme().p.hover)
+  let lit = outline_drawn(t, "rect").filter(fn(r) { r.4 == hover && r.0 >= px && r.0 + r.2 <= px + pw + 0.5 && r.2 > 200.0 })
+  assert_eq(lit.length(), 1, msg="\{lit}")
+  let heading = glyphs.filter(fn(g) { g.1 > note.1 + note.3 && g.1 < lit[0].1 })
+  assert_true(heading.length() >= 1, msg="no day over the first found: \{glyphs.map(fn(g) { (g.5, g.1) })}")
+  assert_true(lit[0].1 >= note.1 + note.3, msg="first found at \{lit[0]}, note \{(note.1, note.3)}")
+  let faces = outline_drawn(t, "glyphs").filter(fn(g) { g.0 >= px && g.1 >= lit[0].1 && g.1 + g.3 <= lit[0].1 + lit[0].3 + 0.5 && g.3 < 12.0 })
+  assert_true(faces.length() >= 1, msg="its face whole in it")
+  assert_eq(outline_faults(t), [])
+  // emptied: the outline again, the reader's row in view
+  t.backspace()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(reader(), 1)
+}

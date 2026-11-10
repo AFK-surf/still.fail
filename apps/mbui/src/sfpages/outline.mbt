@@ -354,8 +354,13 @@ fn outline_body(
         if bring || flag(Some(j), "whole") {
           at.bringing.set(false)
         }
-        // (the first found the one the keys are at)
+        // (the first found the one the keys are at, the list at its start with that row whole under what heads it: as
+        // each answer comes, by the list's own placing)
         at.lit.set(goes().get(0).unwrap_or(""))
+        match @signals.untracked(fn() { table.get().0.get(0) }) {
+          Some(k) => place.bring(k)
+          None => ()
+        }
       },
       bringing=fn() { at.bringing.set(true) },
       failed=fn() { at.bringing.set(false) },
