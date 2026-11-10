@@ -135,3 +135,35 @@ test "大屏: an untitled panel in the middle of the window whose body and foot 
   })
   assert_eq(body_and_foot(t, close=true), old)
 }
+
+///|
+/// A panel a share of the window caps (`tall`) holding a list of one row (a box 40 by 36 of body_ink), with a foot: the
+/// old frame's (its list said how tall it would be: panel_list), and the node one's as tall as what it holds up to that
+/// share (`hugs`: panel_list_node). Where its body's and its foot's boxes are drawn once it is in, each; closed by
+/// Escape and gone between them.
+fn hugging(t : @ui.Tester) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))] raise {
+  let at = fn() raise {
+    t.run_for(@ui.move_most_ms)
+    let boxes = (painted_at(t, body_ink), painted_at(t, foot_ink))
+    t.key(@ui.key_escape)
+    t.run_for(@ui.move_most_ms)
+    assert_false(@sf.presenter_visible(), msg="gone")
+    boxes
+  }
+  @sf.panel("列表", from=Unanchored, tall=0.78, foot=old_foot(), fn(c, close) {
+    @sf.panel_list(c, "hugging", 1, 40.0, fn(_) { old_body()(c, close) }) |> ignore
+  })
+  let old = at()
+  @sf.panel_nodes("列表", from=Unanchored, tall=0.78, hugs=true, foot=fn(v, _) { ink_node(v, 60.0, 36.0, foot_ink) }, fn(v, _) {
+    @sf.panel_list_node(v, fn() { [0] }, fn(b, _) { ink_node(b, 40.0, 36.0, body_ink) }, est=40.0) |> ignore
+  })
+  [old, at()]
+}
+
+///|
+test "a panel a share of the window caps whose body is nodes, as tall as what it holds (hugs): its list's row and its foot where the old frame's are, as a sheet and in the middle of the window" {
+  let sheet = hugging(menu_tester(390.0, 844.0, 2))
+  assert_eq(sheet[1], sheet[0])
+  let dialog = hugging(menu_tester(1280.0, 800.0, 0))
+  assert_eq(dialog[1], dialog[0])
+}

@@ -94,6 +94,7 @@ fn reader_layout_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
         layout_body(col, true, sheet_paper)
       },
       foot: None,
+      hugs: false,
     }),
   }
   let shut = fn() {

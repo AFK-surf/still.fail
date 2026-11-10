@@ -197,6 +197,8 @@ pub fn button_opens_node(@view.View, () -> String, (@view.View) -> Unit, tone? :
 
 pub fn button_start_reach() -> @ui.Style
 
+pub fn capped_node(@view.View, () -> Double, (@view.View) -> Unit) -> @view.View
+
 pub fn capsule_end_room(Double, Double) -> @ui.Space
 
 pub fn capsule_fit(Double, Double, Double) -> Double
@@ -1434,7 +1436,9 @@ pub let panel_in : @ui.Radius
 
 pub fn panel_list(@ui.Ctx, String, Int32, Double, (Int32) -> Unit, stick_end? : Bool, fills? : Bool) -> Int32
 
-pub fn panel_nodes(String, (@view.View, () -> Unit) -> Unit, from~ : Anchor, w? : Double, description? : String, foot? : (@view.View, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, focus? : Bool, ruled? : Bool, form? : Bool, grows? : Bool, side? : @view.Side, along? : @view.Along, offset? : Double) -> Unit
+pub fn[K : Hash + Eq] panel_list_node(@view.View, () -> Array[K], (@view.View, K) -> Unit, est~ : Double, fills? : Bool, most? : () -> Double) -> @view.View
+
+pub fn panel_nodes(String, (@view.View, () -> Unit) -> Unit, from~ : Anchor, w? : Double, description? : String, foot? : (@view.View, () -> Unit) -> Unit, wide? : Bool, live? : () -> (String, String, String), gone? : () -> Unit, tall? : Double, focus? : Bool, ruled? : Bool, form? : Bool, grows? : Bool, side? : @view.Side, along? : @view.Along, offset? : Double, hugs? : Bool) -> Unit
 
 pub fn panel_note(@ui.Ctx, String) -> Unit
 

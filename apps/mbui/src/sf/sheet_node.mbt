@@ -122,8 +122,10 @@ fn sheet_node(
         .margin(Is((0.0, 0.0, 0.0, -sheet_under)))
         .padding(Is((0.0, 0.0, 0.0, sheet_under)))
         .max_height(By(fn() {
-          // (one that grows: up to the window's top as a finger draws it past its most, giving way)
-          Some(layer.window().1 * (if x.grows { 1.0 } else { sheet_most }) + sheet_under)
+          // (one that grows: up to the window's top as a finger draws it past its most, giving way; one as tall as what
+          // it holds up to its share (`hugs`), no taller than that share)
+          let most = layer.window().1 * (if x.grows { 1.0 } else { sheet_most }) + sheet_under
+          Some(if capped && n.hugs { dmin(most, x.tall * layer.window().1 + sheet_under) } else { most })
         }))
         .height(By(fn() {
           match tall_held.get() {
@@ -131,7 +133,7 @@ fn sheet_node(
             None =>
               if sized.get() {
                 Some(tall.shown(sheet) + sheet_under)
-              } else if capped {
+              } else if capped && !n.hugs {
                 // (its share of the window, as the host's sheet is: present_sheet's)
                 Some(x.tall * layer.window().1 + sheet_under)
               } else {
