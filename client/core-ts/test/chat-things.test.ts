@@ -355,9 +355,9 @@ test("what_a_chats_outline_finds_is_listed_by_the_day_with_the_line_that_has_the
   core.close();
 });
 
-test("a_chats_outline_finds_lists_the_newest_hundred_and_says_how_many_more", async () => {
+test("a_chats_outline_finds_lists_the_newest_fifty_a_line_each_and_says_how_many_more", async () => {
   const n = 150;
-  const page = (from: number) => Array.from({ length: 50 }, (_, i) => said(from + i, { authorKind: i % 2 === 0 ? "person" : "agent", author: i % 2 === 0 ? "a@x.com" : "k1", text: `第 ${from + i} 条：部署`, at: AT + (from + i) * 3_600_000 }));
+  const page = (from: number) => Array.from({ length: 50 }, (_, i) => said(from + i, { authorKind: i % 2 === 0 ? "person" : "agent", author: i % 2 === 0 ? "a@x.com" : "k1", text: `第 ${from + i} 条：部署${"长".repeat(100)}\n下一行`, at: AT + (from + i) * 3_600_000 }));
   const { host, core } = await started({
     ...base(),
     "GET /threads": [threadView(7, n)],
@@ -369,10 +369,12 @@ test("a_chats_outline_finds_lists_the_newest_hundred_and_says_how_many_more", as
   call(core, ui, 1, "chat.outline.find", { station: S, thread: 7, query: "部署", bring: true });
   await host.time.pass(1000, 10);
   const found = (answers(host.takeEmitted(), 1) as J).ok;
-  assert.deepEqual([found.total, found.more, found.whole], [150, 50, true]);
+  assert.deepEqual([found.total, found.more, found.whole], [150, 100, true]);
   const rows = found.days.flatMap((d: J) => d.items);
   // The newest found, oldest first under their days.
-  assert.deepEqual(rows.map((r: J) => r.seq), Array.from({ length: 100 }, (_, i) => 51 + i));
+  assert.deepEqual(rows.map((r: J) => r.seq), Array.from({ length: 50 }, (_, i) => 101 + i));
+  // Each one line, cut as a row's words are: 64 columns (a Chinese character two), then `…`.
+  assert.equal(rows[0].snippet, `第 101 条：部署${"长".repeat(24)}…`);
   assert.ok(found.days.every((d: J, i: number) => i === 0 || d.day !== found.days[i - 1].day));
   core.close();
 });

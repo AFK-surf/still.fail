@@ -146,10 +146,12 @@ export function thingsHaving(things: readonly Thing[], words: readonly string[])
   });
 }
 
-/// How many messages a chat's outline gives at once, at most: the rows asked (`chat.outline.rows`), those found
-/// (`chat.outline.find`). A panel shows fewer; a hundred rows of long words stay under what a value may weigh (32 KB:
-/// test/topic-bytes.test.ts).
+/// How many rows a chat's outline gives at once, at most (`chat.outline.rows`): a panel shows fewer; a hundred of long
+/// words stay under what a value may weigh (32 KB: test/topic-bytes.test.ts).
 export const OUTLINE_ROWS = 100;
+/// How many of what looking in a chat's outline finds it lists, at most, the newest (`chat.outline.find`): a found row
+/// weighs more than a row (an agent's `by`, its flags), and fifty of the heaviest stay under 32 KB.
+export const OUTLINE_FOUND = 50;
 
 /// Items in the order given, by the day each was said (`day`: its heading, 今天, 昨天, 9月20日; "" where when is not
 /// known), a day's in that order: a day for each run of them said on it.

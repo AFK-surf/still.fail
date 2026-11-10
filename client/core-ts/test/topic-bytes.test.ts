@@ -26,7 +26,7 @@ import type { PersonalLock } from "../src/personal-lock.ts";
 import type { Rigs } from "../src/rigs.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { parseTopic, TOPICS, type Topic } from "../src/protocol.ts";
-import { OUTLINE_ROWS } from "../src/things.ts";
+import { OUTLINE_FOUND, OUTLINE_ROWS } from "../src/things.ts";
 import { CHAT, OUTLINED, OUTLINED_ENTRIES, UP, devicesSaid, fixture, hostReading, messageAdded, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, quotaChanged } from "./real-size.ts";
 import { hostOf, overview, setup } from "./views-rig.ts";
 
@@ -356,7 +356,8 @@ test("what each topic the app asks is sent as the workspace changes holds to its
 function outlineFinds(t: ReturnType<typeof setup>, queries: string[]): [string, J][] {
   return queries.map((q) => {
     const found = t.data.findInThread(OUTLINED.station, OUTLINED.thread, [q]).map((f) => ({ ...f, count: 1 }));
-    return [q, t.views.outlineFound(OUTLINED.station, OUTLINED.thread, { words: [q], found, held: OUTLINED_ENTRIES, of: OUTLINED_ENTRIES, whole: true })];
+    const span = t.data.logSpan("entry", OUTLINED.station, String(OUTLINED.thread))!;
+    return [q, t.views.outlineFound(OUTLINED.station, OUTLINED.thread, { words: [q], found, held: span.count, of: span.max, whole: true })];
   });
 }
 /// The words that are in most of the long chat's messages, its people's and its agent's.
@@ -382,28 +383,46 @@ test("the rows a chat's outline gives at once hold to the bar on a chat of real 
   }
 });
 
-test("what looking in a chat's outline finds lists a hundred at most, and says how many more", async () => {
+test("what looking in a chat's outline finds lists fifty at most, and says how many more", async () => {
   const { t } = await held();
   try {
-    const finds = outlineFinds(t, COMMON);
-    if (print) for (const [q, a] of finds) console.log(`chat.outline.find "${q}": ${a.total} found, ${a.total - a.more} listed, ${bytes(a)} B`);
-    for (const [q, a] of finds) {
-      assert.ok(a.total > OUTLINE_ROWS, q);
-      assert.equal(a.days.flatMap((d: J) => d.items).length, OUTLINE_ROWS, q);
-      assert.equal(a.more, a.total - OUTLINE_ROWS, q);
+    for (const [q, a] of outlineFinds(t, COMMON)) {
+      assert.ok(a.total > OUTLINE_FOUND, q);
+      assert.equal(a.days.flatMap((d: J) => d.items).length, OUTLINE_FOUND, q);
+      assert.equal(a.more, a.total - OUTLINE_FOUND, q);
     }
   } finally {
     t.store.runner.shutdown();
   }
 });
 
-// Not met (2026-11-10): with a snippet as it is (12 characters before the words and 120 after, views.ts SNIPPET_LEAD,
-// SNIPPET_MAX) a hundred found weigh 28-33 KB here, and a hundred long ones (an agent's `by`, a line of Chinese) some
-// 60 KB. Its bound is to be decided.
-test("what looking in a chat's outline finds holds to the bar on a chat of real size", { todo: "a snippet's bound to be decided: 120 characters after the words is over the bar" }, async () => {
+/// The heaviest a found row's `by` is: an agent's, its label, session, maker and runtime (views.ts shownMessage), its
+/// session's key at its longest kind (`chat:c-` and 32 hex digits).
+const LONG_KEY = "chat:c-c9091c93d6d6685b7330e4bd2d7eabbe";
+
+test("what looking in a chat's outline finds holds to the bar on a chat of real size, and at its heaviest", async () => {
   const { t } = await held();
   try {
-    for (const [q, a] of outlineFinds(t, COMMON)) assert.ok(bytes(a) <= BAR_KB * 1024, `"${q}": ${bytes(a)} B`);
+    const finds = outlineFinds(t, COMMON);
+    // The heaviest that can be: fifty found of an agent's, each a line of Chinese with the words far into it.
+    const heavy = 5000;
+    const agent = (t.data.thread(OUTLINED.station, OUTLINED.thread) as J).sessions.map((s: J) => s.session)[0];
+    t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), Array.from({ length: OUTLINE_FOUND + 10 }, (_, i): [number, J] => [heavy + i, {
+      thread: OUTLINED.thread, n: heavy + i, kind: "message", ts: `${OUTLINED.thread}.${heavy + i}`, authorKind: "agent", author: agent, authorName: null,
+      text: `${"迁移演练的完整记录导出新实例".repeat(2)}逻辑复制${"追平增量延迟稳定切换停写校验".repeat(10)}`, at: t.host.nowMs() + i,
+    }]));
+    const [[, worst]] = outlineFinds(t, ["逻辑复制"]);
+    const rows = worst.days.flatMap((d: J) => d.items);
+    // (its agent's session's key the longest a key is)
+    const longest = { ...worst, days: worst.days.map((d: J) => ({ ...d, items: d.items.map((r: J) => ({ ...r, author: LONG_KEY, by: { ...r.by, agent: LONG_KEY } })) })) };
+    if (print) {
+      for (const [q, a] of finds) console.log(`chat.outline.find "${q}": ${a.total} found, ${a.total - a.more} listed, ${bytes(a)} B`);
+      console.log(`chat.outline.find at its heaviest: ${rows.length} of an agent's, ${bytes(longest)} B (its by ${bytes(rows[0].by)} B, a snippet ${bytes(rows[0].snippet)} B: ${rows[0].snippet})`);
+    }
+    assert.equal(rows.length, OUTLINE_FOUND);
+    assert.ok(rows.every((r: J) => r.agent && r.by.maker !== undefined && r.snippet.endsWith("…")));
+    for (const [q, a] of finds) assert.ok(bytes(a) <= BAR_KB * 1024, `"${q}": ${bytes(a)} B`);
+    assert.ok(bytes(longest) <= BAR_KB * 1024, `${bytes(longest)} B`);
   } finally {
     t.store.runner.shutdown();
   }

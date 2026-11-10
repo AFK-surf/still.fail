@@ -36,7 +36,7 @@ import { archiveHintOf, badgeKindsOf, jobsSeenOf, type ArchiveHint } from "../pr
 import { markdown, type MdStore } from "../markdown.ts";
 import { heardFiles } from "../elsewhere.ts";
 import { isImage, near, placeFiles } from "../placed.ts";
-import { KINDS as THING_KINDS, OUTLINE_ROWS, inDays, isVideo, mediaDays, thingsHaving, thingsOf, wordsOf } from "../things.ts";
+import { KINDS as THING_KINDS, OUTLINE_FOUND, inDays, isVideo, mediaDays, thingsHaving, thingsOf, wordsOf } from "../things.ts";
 import { archive, archiveSearch } from "./archive.ts";
 import { Local, PENDING_PREFIX } from "./local.ts";
 import { askAnswers } from "./vault.ts";
@@ -651,9 +651,10 @@ function cutWords(words: string, max: number): string {
 }
 
 /// How much of a line of a message found goes before the words found in a chat's outline (`chat.outline.find`), at
-/// most, and how much after that.
+/// most; the whole of it is then cut as a row's words are (`OUTLINE_WORDS` columns, `…` where the line goes on): one
+/// line, as the app shows it.
+/// (`chat.find`'s own excerpt keeps refs.ts's lengths.)
 const SNIPPET_LEAD = 12;
-const SNIPPET_MAX = 120;
 
 /// The views a core shows, as an owner of their topics.
 export class Views implements Owner {
@@ -2834,8 +2835,8 @@ export class Views implements Owner {
 
   /// What a chat's outline lists for what was looked for (`chat.outline.find`): the messages `found` (station/topics.ts
   /// `found`), agents' too but not what two chats' agents wrote each other (not in the chat), the newest
-  /// `OUTLINE_ROWS` of them by the day, oldest first, each with who said it and the line of it that has the words;
-  /// `total` how many were found, `more` how many older ones are not listed.
+  /// `OUTLINE_FOUND` of them by the day, oldest first, each with who said it and the line of it that has the words, cut
+  /// to one line of the panel as a row's are; `total` how many were found, `more` how many older ones are not listed.
   outlineFound(station: string, id: number, f: { words: string[]; found: { seq: number }[]; held: number; of: number; whole: boolean }): J {
     const summary = this.#core.data.thread(station, id) as J;
     const agents = this.#agentsOf(station, summary);
@@ -2847,13 +2848,13 @@ export class Views implements Owner {
       const raw = messages.get(seq);
       return raw === undefined || isLetter(raw, keys) ? [] : [raw];
     });
-    const listed = all.slice(Math.max(0, all.length - OUTLINE_ROWS));
+    const listed = all.slice(Math.max(0, all.length - OUTLINE_FOUND));
     const rows = listed.map((raw) => {
       const m = shownMessage(raw, agents, viewer, slackUsers, members_, bots, get(summary, "creator"));
       const at = u64(m.createdAt);
       return {
         at, seq: m.seq, mine: m.mine === true, author: str(m.author) ?? "", by: m.by, agent: m.authorKind === "agent", system: m.system === true,
-        clock: at !== null ? format.clock(at, clock.offsetMin) : "", snippet: refs.excerpt(str(m.text) ?? "", f.words, SNIPPET_LEAD, SNIPPET_MAX).text,
+        clock: at !== null ? format.clock(at, clock.offsetMin) : "", snippet: cutWords(refs.excerpt(str(m.text) ?? "", f.words, SNIPPET_LEAD, OUTLINE_WORDS + 1).text, OUTLINE_WORDS),
       };
     });
     const days = inDays(rows, (r) => r.at, (ms) => format.dayLabel(ms, clock.now, clock.offsetMin)).map((d) => ({ day: d.day, items: d.items.map(({ at: _, ...row }) => row) }));
