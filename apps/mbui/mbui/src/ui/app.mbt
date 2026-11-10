@@ -933,6 +933,14 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
 
 ///|
 fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? : Int = -1) -> Unit {
+  // (where the pointer, a mouse's or a finger's, last was: where a column's keys go, as an old view's list's did by
+  // Ctx's px and py, @view's scroll_keys.mbt)
+  if kind >= 0 && kind <= 2 {
+    match view_app.val {
+      Some(t) => t.key_point_is(x, y)
+      None => ()
+    }
+  }
   // (what the event does to the fields' selections, the old view's and the tree's: told each field's as the event
   // is taken, EditorState::typed_told)
   pointed_edits(fn() { pointer_event_now(kind, x, y, button, mods, by~) })
@@ -2111,7 +2119,7 @@ fn key_in(code : Int, mods : Int) -> Unit {
       h_request_frame()
     }
     None => {
-      let target = hit_in(c.scroll_ids, c.scroll_rects, c.px, c.py)
+      let target = old_list_under_pointer(c)
       // a key the focused widget takes (focus.mbt) scrolls nothing under the pointer; nor one in an old view a modal
       // layer of the window's tree keeps from input (island_allows)
       if target != 0 &&
@@ -2119,6 +2127,10 @@ fn key_in(code : Int, mods : Int) -> Unit {
         !c.focus_takes(code) &&
         c.list_key(target, code) {
         h_request_frame()
+      } else if target == 0 && mods == 0 && !c.focus_takes(code) && view_scroll_key(c, code) {
+        // (none of the old frame's under it: a column of the window's tree's, where an old frame's layer had the keys
+        // first and took none of them (@view's scroll_keys.mbt))
+        h_frame_owed()
       }
     }
   }

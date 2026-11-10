@@ -395,6 +395,8 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
       h_frame_owed()
     }
   })
+  // (a column's keys over an old view's list under the pointer: its, as ever, Ctx::list_key on on_key's way)
+  t.on_old_scroll(fn() { old_list_under_pointer(g()) != 0 }, there=fn(id, x, y) { old_wheel_there(id, x, y) })
   view_app.val = Some(t)
   view_due.set(view_due.untracked() + 1)
   // (the tree in place of the one before, whole: whether the app takes back, as it has it, told the host now, as a change
@@ -5839,4 +5841,42 @@ fn view_offset_moved(col : @view.NodeId) -> Unit {
   if !frame_running.val || paint_phase.val != 0 {
     h_frame_owed()
   }
+}
+
+///|
+/// The old frame's list under the pointer (0: none), where the pointer is: the tree's as it was told it, where a tree
+/// takes the pointer's events (they reach the old frame's own only where none does), else the old frame's (Ctx::list_key's).
+fn old_list_under_pointer(c : Ctx) -> Int {
+  let (px, py) = match view_app.val {
+    Some(t) if t.pointer_said().0 >= 0.0 => t.pointer_said()
+    _ => (c.px, c.py)
+  }
+  hit_in(c.scroll_ids, c.scroll_rects, px, py)
+}
+
+///|
+/// A column's key (@view's scroll_keys.mbt: ↑ ↓ Home End Page Up Page Down) done by the window's tree's column under the
+/// pointer or with the focus in it, as its action asked at this moment, where the old frame's layers had the keys and
+/// took none of them; none under a modal one of theirs. True where one took it.
+fn view_scroll_key(c : Ctx, code : Int) -> Bool {
+  guard view_app.val is Some(tree) else { return false }
+  if c.last_layers.iter().any(fn(l) { l.modal && c.layer_takes(l) }) {
+    return false
+  }
+  let action = if code == key_page_down {
+    @view.scroll_page_down
+  } else if code == key_page_up {
+    @view.scroll_page_up
+  } else if code == key_down {
+    @view.scroll_line_down
+  } else if code == key_up {
+    @view.scroll_line_up
+  } else if code == key_home {
+    @view.scroll_top
+  } else if code == key_end {
+    @view.scroll_foot
+  } else {
+    return false
+  }
+  tree.ask_action(action, view_moment(), from=focus_node_of(c.focus))
 }

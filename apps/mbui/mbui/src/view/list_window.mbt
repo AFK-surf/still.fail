@@ -65,6 +65,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   make_reused? : (View, () -> K) -> Unit,
 ) -> View {
   guard self.live() is Some(_) else { return self }
+  // (what asks it to show a block or its foot: the page's, else its own, which End asks its foot of at once,
+  // scroll_keys.mbt)
+  let place = Some(place.unwrap_or(ListPlace::new()))
   // (its keys worked out once as what they read changes, not again as a block's height is told: what reads them, the
   // blocks' tops and the blocks made, reads these)
   let keyed = @signals.computed(fn(_) { keys() })
@@ -298,6 +301,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // (what is asked of it at a cause: done as the column is laid out again, or at once where it glides there)
   match place {
     Some(p) => {
+      s.to_foot = fn(_) {
+        p.to_end(glide=false)
+        true
+      }
       p.laid_again = laid_again
       p.glide = fn(ask) {
         let all = laid.untracked()

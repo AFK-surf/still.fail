@@ -96,6 +96,9 @@ pub struct Scroll {
   /// how far it was put in all for what came in or out over what shows, or was measured anew there
   /// (Scroll::grew_above): no move of the column's, what shows held where it was
   priv mut corrected : Double
+  /// its foot gone to at once at a moment (End: scroll_keys.mbt), where what fills it knows it better than how far it
+  /// was last laid out to go (a page's list: ListPlace::to_end); false where it does not
+  priv mut to_foot : (Double) -> Bool
 }
 
 ///|
@@ -138,6 +141,7 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     hand_v: 0.0,
     claimed: false,
     on_scrolled: fn(_) {  },
+    to_foot: fn(_) { false },
     serial: {
       scrolls_made.val += 1
       scrolls_made.val
@@ -731,6 +735,10 @@ pub fn View::scrolls(
     }
   }
   s.host = Some(self)
+  // (its keys, down a column: Home, End, the pages, the lines, as an old view's list's: scroll_keys.mbt)
+  if !s.across {
+    self.scroll_keys(s)
+  }
   // (found by what it holds: View::scroll_holding)
   self.tree.scrolls_at[self.at] = s
   let across = s.across
@@ -1017,6 +1025,7 @@ pub fn View::scrolls(
       _ => ()
     }
     s.on_scrolled = fn(_) {  }
+    s.to_foot = fn(_) { false }
     // (no glide of it told any more: Tree::on_glides)
     (self.tree.glides_gone)(s.serial)
   })
