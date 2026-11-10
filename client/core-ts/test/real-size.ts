@@ -672,6 +672,37 @@ export function fixture(now: number): [Topic, unknown][] {
   return out;
 }
 
+// ── devices ──
+
+/// What up station `st` says of the devices attached to it and the phones lent to it (its `GET /devices`, the `devices`
+/// event): three devices a member over the up stations, each as a station keeps it (`station/src/devices/registry.ts`
+/// Kept, with where), and some members' phones lent to every up station, each with a grant or two of a chat's (as
+/// `station/src/adb/module.ts` `shown` says them).
+export function devicesSaid(now: number, st: number): J {
+  const at = STATIONS[st]!;
+  const kinds = [
+    { kind: "adb", name: "Pixel 8 测试机", target: "192.168.1.%d:5555" },
+    { kind: "tcp", name: "打印服务器", target: "10.0.0.%d:9100" },
+    { kind: "serial", name: "ESP32 开发板", target: "/dev/tty.usbserial-14%d0", baud: 115200 },
+  ];
+  const devices = PEOPLE.flatMap((p, i) => kinds.map((k, j) => ({ p, i, j, k })))
+    .filter(({ i, j }) => (i * 3 + j) % UP_COUNT === st)
+    .map(({ p, i, j, k }) => ({
+      id: ((i * 3 + j) * 2654435761 >>> 0).toString(16).padStart(16, "0").slice(-16), name: `${k.name} ${i + 1}`, kind: k.kind,
+      target: k.target.replace("%d", String(20 + i * 3 + j)), ...(k.baud !== undefined ? { baud: k.baud } : {}),
+      ws: "ws", owner: p.sub, owner_email: p.email, owner_name: p.name, at: now - (i * 3 + j) * HOUR, station: at.id, stationName: at.name,
+    }));
+  const phones = PEOPLE.filter((_, i) => i % 3 === 0).map((p, i) => ({
+    id: `phone-${p.sub}`, name: `${p.name} 的 Pixel 8`, target: `R5CW${40000 + i}`,
+    ownerEmail: p.email, ownerName: p.name, online: i % 2 === 0, open: i === 0,
+    grants: Array.from({ length: 1 + (i % 2) }, (_, g) => ({
+      request: `req-${p.sub}-${g}`, session: keyOf(st, g + i), chat: `chat-${st}-${g + i}`, title: `修 ${p.name} 那台手机上的登录页`, by: p.email,
+      timeoutKind: g === 0 ? "idle" : "fixed", timeoutSeconds: 3600, exp: Math.trunc(now / 1000) + (g + 1) * 3600, until: Math.trunc(now / 1000) + 3600,
+    })),
+  }));
+  return { workspace: "ws", station: at.id, devices, phones };
+}
+
 // ── what changes ──
 
 /// The overview of station `st` (made at `base`, as `fixture` made it) with one profile's allowance read again at `at`

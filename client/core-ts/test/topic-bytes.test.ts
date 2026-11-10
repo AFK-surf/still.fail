@@ -17,12 +17,16 @@
 // heaviest fields (a list's items as `[]`), as the app's `@core.weights` says them, and the fixture's `stations` field
 // by field beside what the owner's phone was sent (`PHONE_STATIONS`).
 import assert from "node:assert/strict";
+import { Effect } from "effect";
 import { test } from "node:test";
 import { Changelog } from "../src/changelog.ts";
 import { Choose } from "../src/choose.ts";
+import { Devices } from "../src/devices.ts";
+import type { PersonalLock } from "../src/personal-lock.ts";
+import type { Rigs } from "../src/rigs.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { parseTopic, TOPICS, type Topic } from "../src/protocol.ts";
-import { CHAT, fixture, hostReading, messageAdded, quotaChanged } from "./real-size.ts";
+import { CHAT, UP, devicesSaid, fixture, hostReading, messageAdded, quotaChanged } from "./real-size.ts";
 import { hostOf, overview, setup } from "./views-rig.ts";
 
 holdLanguage();
@@ -68,6 +72,7 @@ const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
   "chatSearch": { topic: "chatSearch", scope: "ws", query: "迁移", station, limit: 8, elsewhere: true, exclude: key },
   "changelog": { topic: "changelog" },
   "changelog news": { topic: "changelog", news: true },
+  "devices": { topic: "devices", workspace: "ws" },
 };
 
 /// Those over `BAR_KB` now, by the name `ASKED` gives them: what each weighs, KB rounded up to a multiple of 8.
@@ -115,7 +120,6 @@ const NOT_MEASURED: Record<string, string> = {
   presets: PAGE, linkPreview: PAGE, filePeek: PAGE, messagePeek: PAGE, screenCard: PAGE, job: PAGE, shareIn: PAGE, chatFeedback: PAGE, imageNear: PAGE,
   live: LATER, jobLog: LATER, drive: LATER, driveBrowse: LATER, notices: LATER, lock: LATER, vaults: LATER, vaultItems: LATER, vaultUses: LATER,
   joinable: LATER, memberships: LATER, screens: LATER, workspaceWays: LATER, stationNet: LATER, chatLetters: LATER, chatThings: LATER,
-  devices: LATER,
 };
 
 // ── weighing ──
@@ -225,9 +229,23 @@ const topicOf = (name: string): Topic => {
 /// A rig with every view, a new chat's and a model's pickers, the changelog; the real-size workspace set in it, and
 /// every topic of `ASKED` subscribed as the app subscribes (keyed), its messages to each by id.
 async function held() {
+  // (the workspace's devices as core.ts makes them: what each up station says, the rigs' none here)
+  let devices: Devices | null = null;
   const t = setup({
     all: true,
-    owners: ({ host, store, data, views }) => [new Choose({ store, data, now: () => host.nowMs(), agent: (s, k) => views.agent(s, k) }), new Changelog(host, store, data)],
+    owners: ({ host, store, data, views }) => {
+      devices = new Devices({
+        host, store, rigs: () => ({ devices: () => [] }) as unknown as Rigs, personal: () => null as unknown as PersonalLock,
+        subOf: (ws) => (ws === "ws" ? "s1" : null), emailOf: (ws) => (ws === "ws" ? "me@x.com" : null),
+        view: (workspace) => data.shared({ topic: "workspace", workspace }), call: () => Effect.succeed(null),
+      });
+      const d = devices;
+      return [
+        new Choose({ store, data, now: () => host.nowMs(), agent: (s, k) => views.agent(s, k) }),
+        new Changelog(host, store, data),
+        { owns: (topic: Topic) => topic.topic === "devices", compute: (topic: Topic) => ({ ok: d.value(String(topic.workspace)) }) },
+      ];
+    },
   });
   const base = t.host.nowMs();
   const names = Object.keys(ASKED);
@@ -236,6 +254,7 @@ async function held() {
   // topic nothing watches is not kept: the core's station topics read what is watched).
   for (let round = 0; round < 2; round++) {
     for (const [topic, value] of fixture(base)) t.set(topic, value);
+    for (const [i, station] of UP.entries()) devices!.heard(station, "devices", devicesSaid(base, i));
     await t.host.time.pass(100);
   }
   // (what is made after the rest: Markdown read, a page's words)
