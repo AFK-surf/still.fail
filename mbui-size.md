@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [911cee5fc](https://github.com/AFK-surf/still.fail/commit/911cee5fc42925fde948f7ce69d9b5b7c8bd84b2) core: a device's signing key is said on its person | 1.76 | 2.35 | 9.78 | 28.38 | 34.21 | 25.35 | 46.56 | 93.19 | 138.22 |
 | [1de5f9b47](https://github.com/AFK-surf/still.fail/commit/1de5f9b47794f98dd2b48fa2088b7d88c08eb692) Core: a session new to the device has its detail r | 1.76 | 2.35 | 9.77 | 28.38 | 34.21 | 25.34 | 46.54 | 93.37 | 138.22 |
 | [259b3e01f](https://github.com/AFK-surf/still.fail/commit/259b3e01f0bb530386174319d8213d3cf5275c20) core test: the pages before a history counted apar | 1.76 | 2.35 | 9.76 | 28.37 | 34.14 | 25.32 | 46.48 | 93.68 | 172.71 |
 | [cabc6d876](https://github.com/AFK-surf/still.fail/commit/cabc6d876242017694aa9b1130c9369a329c3574) station: a phone let go is disconnected after what | 1.76 | 2.35 | 9.76 | 28.37 | 34.14 | 25.32 | 46.48 | 93.9 | 175.67 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f4f1041cf](https://github.com/AFK-surf/still.fail/commit/f4f1041cf8e2f9d4ca25acfaebb15be87e4c2ad2) mbui: Ctx::pager goes, with the Photos page nothin | 1.74 | 2.32 | 9.63 | 28.17 | 33.67 | 25.17 | 46.11 | 93 | 126.39 |
 | [b5da41117](https://github.com/AFK-surf/still.fail/commit/b5da41117f50a3dc5d05d673b532fbde6279b399) mbui: a picture made as nodes (take_picture), the  | 1.74 | 2.32 | 9.64 | 28.18 | 33.67 | 25.17 | 46.11 | 93.23 | 178.2 |
 | [7945c7051](https://github.com/AFK-surf/still.fail/commit/7945c70518842eaf9b8f3ab8e1c92081580b30d5) mbui: CI's 60 and 120 runs judge every file but th | 1.74 | 2.32 | 9.64 | 28.17 | 33.66 | 25.17 | 46.1 | 93.18 | 174.5 |
-| [40fcca753](https://github.com/AFK-surf/still.fail/commit/40fcca7536d67efc4c4d0f44d8f4874d0e64f83e) mbui: a word typed into a chat's composer builds i | 1.74 | 2.32 | 9.64 | 28.17 | 33.66 | 25.17 | 46.1 | 93.08 | 183.09 |
