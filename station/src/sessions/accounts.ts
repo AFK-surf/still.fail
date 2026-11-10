@@ -7,6 +7,7 @@ import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import { checkContext } from "./context-cap.ts";
 import type { Store } from "../store/store.ts";
+import type { SessionRow } from "../store/rows.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
 import { modelKey } from "../read/usage.ts";
 import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, reportedEfforts, serves, urgency, usable, windowsOf } from "./pool.ts";
@@ -39,6 +40,8 @@ export type AccountsDeps = {
   clock: Clock.Clock;
   /// Whether session `key` may run on a profile: one allowed in its workspace; absent: any.
   allows?(key: string, profile: Profile): boolean;
+  /// Session `key`, left to the station, was moved to another profile by it (`runOn`, `spend`): `was` how it ran before.
+  moved?(key: string, was: SessionRow): void;
 };
 
 export class Accounts {
@@ -170,8 +173,8 @@ export class Accounts {
   /// per use it leaves for one paid for already that can run it, and one whose short window is nearly full for one paid
   /// for alike that is not, when that loses little (pool.ts `cheapToLeave`): its context was just compacted, or is about
   /// to be, and not while its process has work going in the background (`holding`: commands and subagents, which end
-  /// with it).
-  runOn(key: string, holding = false): RunOn {
+  /// with it). A move is told (`moved`, said in its chat) unless `quiet`: a change by hand says its own.
+  runOn(key: string, holding = false, quiet = false): RunOn {
     const { store } = this.deps;
     const row = store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
@@ -204,6 +207,7 @@ export class Accounts {
     if (next.id !== row.profile) {
       store.setSessionProfile(key, next.id, false);
       log.info("hub", "session taken on by another profile", { session: key, from: row.profile, to: next.id });
+      if (!quiet) this.deps.moved?.(key, row);
     }
     return withSpelling(next);
   }
@@ -272,6 +276,7 @@ export class Accounts {
     const next = this.pick(candidates, row.model, false);
     store.setSessionProfile(key, next.id, false);
     log.info("hub", "allowance ran out; session taken on by another profile", { session: key, from: left, to: next.id });
+    this.deps.moved?.(key, row);
     return [name(left), next.name];
   }
 

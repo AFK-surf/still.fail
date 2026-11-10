@@ -762,6 +762,7 @@
   },
   "core-logic.transfer.otherWorkspace": "Files are copied between stations of one workspace",
   "core-logic.transfer.noGrant": "The station the files are on did not grant reading them",
+  "core-logic.notice.run.account": "Account: {change}",
   "core-logic.notice.run.context": "context {n}",
   "core-logic.notice.run.effort": "Effort: {change}",
   "core-logic.notice.run.now": "Now: {run}",

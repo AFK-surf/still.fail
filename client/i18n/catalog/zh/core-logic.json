@@ -621,6 +621,7 @@
   },
   "core-logic.transfer.otherWorkspace": "只能在同一个 workspace 的 station 之间复制",
   "core-logic.transfer.noGrant": "文件所在的 station 没有允许读取",
+  "core-logic.notice.run.account": "账号：{change}",
   "core-logic.notice.run.context": "上下文 {n}",
   "core-logic.notice.run.effort": "思考深度：{change}",
   "core-logic.notice.run.now": "现在：{run}",

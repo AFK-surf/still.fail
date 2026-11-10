@@ -34,6 +34,7 @@ import { tr, stationLang } from "../ops/i18n.ts";
 import { iso, sessionPlaces, transcriptSources } from "../read/transcript.ts";
 import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, commaSurface, slackSurface, type MessageRow, type ThreadRow, type ThreadSummary } from "../store/store.ts";
 import type { DeliveryCardState, PendingMessage } from "../store/rows.ts";
+import { runShown } from "./run-change.ts";
 import type { RecentChatList } from "../store/chat-list.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
@@ -265,6 +266,17 @@ export class Hub {
       running: (except) => [...this.actors.values()].filter((a) => a.key !== except && a.processState() !== "cold").flatMap((a) => this.store.getSession(a.key)?.profile ?? []),
       clock: this.clock,
       allows: (key, profile) => allowedIn(profile, this.wsOf(key), this.workspaces()[0] ?? null),
+      // Moved to another account by the station (its allowance ran out, its login is over, its profile deleted): said in
+      // its chat as a change by hand is (lifecycle.ts `configure`).
+      moved: (key, was) => {
+        const now = this.store.getSession(key);
+        if (!now) return;
+        const named = (id: string) => {
+          const name = this.accounts.profile(id)?.name;
+          return typeof name === "string" ? name : null;
+        };
+        void this.actor(now).runChanged({ was: runShown(was, named), now: runShown(now, named) }).catch(() => {});
+      },
     });
     this.live = new LiveHub(
       (key) => {
