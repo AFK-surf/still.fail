@@ -2597,6 +2597,11 @@ web-pages.stations.network.cubic
 web-pages.stations.network.bbr
 web-pages.stations.network.note
 web-pages.stations.network.what
+web-pages.stations.copies.section
+web-pages.stations.copies.restore
+web-pages.stations.copies.restoreTitle
+web-pages.stations.copies.restoreBody
+web-pages.stations.copies.restoreWhat
 web-pages.stations.network.saved
 web-pages.settings.stations.restart
 web-pages.settings.stations.restartWhat

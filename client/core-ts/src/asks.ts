@@ -56,15 +56,19 @@ export class Asks {
   readonly #changed: [string, string][] = [];
   readonly #taking = Semaphore.makeUnsafe(1);
 
-  constructor(host: Host, brings: Brings) {
+  /// The station a link names now (views.ts `stationNow`: one that took a lost one's place).
+  readonly #now: (address: string) => string;
+
+  constructor(host: Host, brings: Brings, now: (address: string) => string = (a) => a) {
     this.#host = host;
     this.#brings = brings;
+    this.#now = now;
   }
 
   run(ask: Ask, accounts: AccountSessions): Effect.Effect<unknown, CoreError> {
     switch (ask.kind) {
       case "linkParse":
-        return Effect.succeed(linkTarget(ask.url, this.#host.cloudOrigin()));
+        return Effect.succeed(linkNow(linkTarget(ask.url, this.#host.cloudOrigin()), this.#now));
       case "appUpdate":
         // (youdid.wtf's builds are its platform's beta feed; an app of its own on the test channel names its feed whole)
         return this.update(ask.platform, ask.version, ask.now, brand.testApp(), ask.keys);
@@ -384,6 +388,14 @@ function historyOf(query: string): { history?: string; entry?: number } {
 function messageOf(query: string): { message?: number } {
   const value = param(query, "message");
   return value !== null && /^[1-9]\d{0,14}$/.test(value) ? { message: Number(value) } : {};
+}
+
+/// A link's target with its station as it is now (a lost one's link opens the station that took its place).
+export function linkNow(target: J, now: (address: string) => string): J {
+  if (target === null || typeof target !== "object" || typeof target.workspace !== "string" || typeof target.station !== "string") return target;
+  const address = now(`${target.workspace}/${target.station}`);
+  const station = address.slice(address.lastIndexOf("/") + 1);
+  return station === target.station ? target : { ...target, station };
 }
 
 /// What one of still.fail's own links opens in the app; null for any other link. A chat's page or an item, with

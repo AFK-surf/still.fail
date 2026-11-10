@@ -230,6 +230,46 @@ test "a station's page in three parts: 概览 what runs on it, 设置 what it is
 }
 
 ///|
+test "a station's backups are one row of its 设置, 备份, nothing to press; a new station's backup to restore its one button" {
+  for (w, platform) in page_cases {
+    let at = "\{w} platform \{platform}"
+    let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-copies", h=2400.0)
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("备份") is Some(_), msg="its row: \{at}")
+    assert_true(t.find("已备份到 Cedar 和 Aspen · 2 分钟前") is Some(_), msg="where they are: \{at}")
+    assert_true(t.find("恢复到这台") is None, msg="nothing to press: \{at}")
+    // (after the station's own settings: its variables come before it)
+    let (_, vy) = t.find("Agent 环境变量").unwrap()
+    let (_, by) = t.find("已备份到 Cedar 和 Aspen · 2 分钟前").unwrap()
+    assert_true(vy < by, msg="after its settings: \{at}")
+    // a new station: the backup of a station no longer there in the row's place, 恢复到这台 its one button
+    let r = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-restore-offer", h=2400.0)
+    r.run_for(@ui.move_most_ms)
+    assert_true(r.find("Old Mac 的 128 个聊天") is Some(_), msg="what it would restore: \{at}")
+    assert_true(r.find("恢复到这台") is Some(_), msg="its button: \{at}")
+    // its button in the card's corner, the corner rule holding it there: concentric with the card's corner, as far in
+    // from its end as from its top and foot (the user, 2026-11-10: 「这按钮和卡片圆角也对不上」)
+    let pairs = r.corner_pairs().filter(fn(p) { p.contains("恢复到这台") })
+    assert_true(pairs.length() > 0, msg="the button counted in the card's corner: \{at}")
+    let faults = r.corner_faults().filter(fn(f) { f.contains("恢复到这台") })
+    assert_true(faults.length() == 0, msg="concentric with the card's corner: \{at} \{faults}")
+    // while it is restored, and once it is, the row says how it goes, nothing to press
+    let g = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-restore", h=2400.0)
+    g.run_for(@ui.move_most_ms)
+    assert_true(g.find("正在恢复：37 / 412 个文件") is Some(_), msg="how it goes: \{at}")
+    assert_true(g.find("恢复到这台") is None, msg="no button while it is restored: \{at}")
+    let d = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-restored", h=2400.0)
+    d.run_for(@ui.move_most_ms)
+    assert_true(d.find("已恢复 Old Mac 的 128 个聊天 · 2 分钟前") is Some(_), msg="what came of it: \{at}")
+    assert_true(d.find("恢复到这台") is None, msg="no button once it is restored: \{at}")
+    @settings.station_parts["ws1/st1"] = "overview"
+    r.draw()
+    assert_true(r.find("恢复到这台") is None, msg="not on the overview: \{at}")
+    assert_true(r.find("Old Mac 的 128 个聊天") is None, msg="not on the overview: \{at}")
+  }
+}
+
+///|
 test "an away station's 设置 shows none of what only it can change, a line saying so" {
   for (w, platform) in page_cases {
     let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-away", h=2400.0)

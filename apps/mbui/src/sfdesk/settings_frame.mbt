@@ -83,6 +83,11 @@ pub fn settings_fixture(src : Source, core : Core) -> Unit {
     "vault-add" => @sfpages.fx_vault_add_up.val = true
     "vault-editor" => @sfpages.vault_editor_dialog(core, "ws1", "v1", None, kind="token")
     "vault-recover" => @sfpages.vault_recover_dialog(core, "ws1")
+    "copies-confirm" =>
+      match items(@settings.fixture_copies(), "offers") {
+        [copy, ..] => @sfpages.copies_restore_confirm(core, "ws1/st1", Some(copy))
+        _ => ()
+      }
     _ => ()
   }
 }

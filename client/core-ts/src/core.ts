@@ -276,7 +276,7 @@ export class Core {
       inner.choose = installChoose(inner);
       installShareIn(inner);
       inner.forms = installForms(inner);
-      const asks = new Asks(inner.host, (from, to) => inner.changelog.brings(from, to));
+      const asks = new Asks(inner.host, (from, to) => inner.changelog.brings(from, to), (address) => inner.views?.stationNow(address) ?? address);
       asks.follow(inner.accounts);
       // A release may be out (still.fail cloud said one is, or its events socket opened again: what it said while closed
       // is not said again): the newest of each feed read again when next asked, and the app told (the `releases`

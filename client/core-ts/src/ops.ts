@@ -69,6 +69,7 @@ export const PARAMS: Record<string, string> = {
   "agentEnv.set": "env?:json text?:string",
   "search.setPersonal": "personal:boolean",
   "network.setCongestion": "congestion:string",
+  "copies.restore": "origin:string gen:string fromStation:string",
   "station.restart": "",
   "context.setAfresh": "afreshWhenCold?:boolean afreshAbove?:number",
   "diagnostics.setLogs": "logs:boolean",
@@ -329,6 +330,10 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("PUT", () => "/search/settings", p.pick(["personal"]), OVERVIEW);
     case "network.setCongestion":
       return op("PUT", () => "/network/settings", p.pick(["congestion"]), OVERVIEW);
+    // A lost station's chats restored into a new one (the overview's `copies.offers`), from a station that keeps them
+    // (its station's replica/copies.ts), by the workspace's owners and admins.
+    case "copies.restore":
+      return op("POST", () => "/copies/restore", { station: p.str("origin"), gen: p.str("gen"), from: { station: p.str("fromStation") } }, OVERVIEW);
     // The station started again by its launcher (its routes/network.ts), managers only.
     case "station.restart":
       return op("POST", () => "/station/restart", null, OVERVIEW);

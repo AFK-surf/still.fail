@@ -47,8 +47,11 @@ import type { Json } from "./store/store.ts";
 import { StationParts } from "./parts.ts";
 import { wall } from "./ops/fibers.ts";
 
+
 /// Where the station keeps its data, and the release it runs from.
-export class Paths extends Context.Service<Paths, { readonly data: string; readonly app: string }>()("stillfail/Paths") {}
+/// `beforeStore`: what is done before the store first opens (a lost station's chats taken back: replica/restore.ts,
+/// given by main.ts).
+export class Paths extends Context.Service<Paths, { readonly data: string; readonly app: string; readonly beforeStore?: () => Promise<void> }>()("stillfail/Paths") {}
 
 /// The control plane this station is enrolled in (cloud/plane.ts): cloud.json and its changes, the presence socket,
 /// notices, traces, releases and which credentials it takes. `layer` follows cloud.json's provider (still.fail cloud
@@ -142,7 +145,8 @@ export class Store extends Context.Service<Store, StationStore>()("stillfail/Sto
   static readonly layer = Layer.effect(
     Store,
     Effect.gen(function* () {
-      const { data } = yield* Paths;
+      const { data, beforeStore } = yield* Paths;
+      if (beforeStore !== undefined) yield* Effect.promise(beforeStore);
       return yield* Effect.acquireRelease(
         Effect.sync(() => {
           return StationStore.open(join(data, "stillfail.db"), join(data, "archive"));
