@@ -60,6 +60,7 @@ pub fn reset() -> Unit {
   news_reset()
   landing_reset()
   workspace_reset()
+  rigs_reset()
   outside_reset()
   new_chat_reset()
   changelog_reset()

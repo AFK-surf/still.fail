@@ -61,6 +61,9 @@ export function cardShown(card: J): J {
   // An agent's request for its person's phone: what it asks, and once decided, how.
   const phone = phoneAsk(get(card, "adb"));
   if (phone !== null) v.phoneAsk = phone;
+  // An agent's request for a rig of the workspace: which, why, for how long, and once its person decided, how.
+  const rig = rigAsk(get(card, "rig"));
+  if (rig !== null) v.rigAsk = rig;
   if (kind(card) === "options") v.options = optionsShown(get(card, "options"));
   else if (kind(card) === "text") {
     const p = trimmed(get(card, "placeholder"));
@@ -76,7 +79,7 @@ export function cardShown(card: J): J {
 }
 
 /// A card's fields that stand for an ask living beyond its post (inMessages: one card on screen for each).
-const LIVE_ASK_FIELDS = ["login", "station", "vault", "vaultAsk", "signinAsk", "phoneAsk"];
+const LIVE_ASK_FIELDS = ["login", "station", "vault", "vaultAsk", "signinAsk", "phoneAsk", "rigAsk"];
 
 /// Which ask living beyond its post a shown card is (cardShown's), or null: the same one twice is one ask.
 function liveAsk(s: J): string | null {
@@ -84,6 +87,7 @@ function liveAsk(s: J): string | null {
   if (s.vault !== undefined) return `vault ${s.vault}`;
   if (s.signinAsk !== undefined) return `signin ${s.signinAsk.id}`;
   if (s.phoneAsk !== undefined) return `phone ${s.phoneAsk.request}`;
+  if (s.rigAsk !== undefined) return `rig ${s.rigAsk.request}`;
   return null;
 }
 
@@ -152,6 +156,34 @@ function phoneAsk(v: J): J | null {
   for (const field of ["status", "scope", "why", "link", "lasts"]) {
     const said = trimmed(field === "lasts" ? get(v, field) : get(get(v, "outcome"), field));
     if (said !== null) out[field] = said;
+  }
+  return out;
+}
+
+/// A request for a rig as its card says it (station/src/rigs/requests.ts): what its person's device signs to grant it,
+/// and once decided how.
+function rigAsk(v: J): J | null {
+  const request = trimmed(get(v, "request"));
+  const rig = trimmed(get(v, "rig"));
+  if (request === null || rig === null) return null;
+  const text = (field: string) => str(get(v, field)) ?? "";
+  const seconds = (t: J) => (typeof get(t, "seconds") === "number" ? get(t, "seconds") : 0);
+  const out: J = {
+    request, rig, name: text("name"), owner: text("owner"), reason: text("reason"),
+    timeoutKind: str(get(get(v, "timeout"), "kind")) ?? "idle", timeoutSeconds: seconds(get(v, "timeout")),
+    session: text("session"), chat: text("chat"), title: text("title"), by: text("by"),
+  };
+  const outcome = get(v, "outcome");
+  for (const field of ["status", "why"]) {
+    const said = trimmed(get(outcome, field));
+    if (said !== null) out[field] = said;
+  }
+  if (typeof get(outcome, "delivered") === "boolean") out.delivered = get(outcome, "delivered");
+  if (typeof get(outcome, "until") === "number") out.until = get(outcome, "until");
+  const granted = get(outcome, "timeout");
+  if (str(get(granted, "kind")) !== null && out.status === "granted") {
+    out.grantedKind = str(get(granted, "kind"));
+    out.grantedSeconds = seconds(granted);
   }
   return out;
 }

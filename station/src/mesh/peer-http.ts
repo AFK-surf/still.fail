@@ -89,7 +89,8 @@ export function peerNamed(cloud: Cloud, given: string): { id: string; workspace:
   const all = cloud.memberships();
   const self = cloud.state?.station;
   const lower = given.toLowerCase();
-  const stations = all.flatMap((m) => m.peers.filter((p) => typeof p?.id === "string"));
+  // The workspace's rigs among them (a station that only runs tasks): a service a task started there is reached as one on a station is.
+  const stations = all.flatMap((m) => [...m.peers.filter((p) => typeof p?.id === "string"), ...cloud.rigs(m.workspace)]);
   let ids = [...new Set(stations.filter((p) => p.id === given).map((p) => p.id as string))];
   if (ids.length === 0) ids = [...new Set(stations.filter((p) => typeof p.name === "string" && p.name.toLowerCase() === lower).map((p) => p.id as string))];
   if (ids.length === 0 && (given === self || all.some((m) => m.name.toLowerCase() === lower))) ids = [self!];
@@ -100,7 +101,8 @@ export function peerNamed(cloud: Cloud, given: string): { id: string; workspace:
   }
   if (ids[0] === self) throw new HttpRefusal(400, `${given} is this station: reach its services at http://localhost:<port>/ directly`);
   try {
-    return { id: ids[0]!, workspace: member(cloud, ids[0]!, null) };
+    const rig = cloud.rigOf(ids[0]!);
+    return { id: ids[0]!, workspace: rig !== null ? rig.workspace : member(cloud, ids[0]!, null) };
   } catch (error) {
     throw new HttpRefusal(403, (error as Error).message);
   }
@@ -339,7 +341,9 @@ export class PeerHttp implements PeerRoute {
 /// What a station serving others' requests knows of this machine: how a forwarded connection reaches a port here
 /// (peer-forward.ts `reachLocal`; tests map ports), and which ports are this station's own forwards (refused: a forward
 /// reaching another would carry it on, around in a loop when two stations forward to each other).
-export type HereLocal = { reach?: (port: number) => Promise<Socket>; forwarded?: (port: number) => boolean };
+/// `allowed`: why a station of the workspace may not reach this machine's services now, or null (a rig: only a station
+/// with a chat its person granted, rig/grants.ts; a station refuses none of its workspace's).
+export type HereLocal = { reach?: (port: number) => Promise<Socket>; forwarded?: (port: number) => boolean; allowed?: (peer: string, workspace: string) => string | null };
 
 /// Another station's connection on this protocol: each stream a request to a web service on this machine, while that
 /// station is in a workspace with this one. Out of it, its connection ends; a roster not current ends nothing (losing
@@ -408,6 +412,8 @@ async function answer(cloud: Cloud, peer: string, stream: Stream, local: HereLoc
   } catch (error) {
     return refusal(stream, (error as Error).message);
   }
+  const barred = local.allowed?.(peer, typeof head.workspace === "string" ? head.workspace : "") ?? null;
+  if (barred !== null) return refuse(403, `that machine refused: ${barred}`);
   const port = head.port;
   if (!Number.isInteger(port) || port < 1 || port > 65535) return refuse(400, "port: 1 to 65535");
   // The station's own (its agents' door would carry the request on to a third).

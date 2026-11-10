@@ -8,7 +8,7 @@
 #   sh scripts/side.sh core-ts   one part's
 set -u
 cd "$(dirname "$0")/.."
-parts=${*:-core-ts station rust locks}
+parts=${*:-core-ts station rust locks rigs}
 status=0
 for part in $parts; do
   echo "· side: $part"
@@ -27,6 +27,10 @@ for part in $parts; do
     # station and the cloud frozen and started anew between; directories and ports of its own, beside the app's e2e.
     locks) (cd apps/mbui && E2E_WORK=${RUNNER_TEMP:-/tmp}/side-locks E2E_STATION=/tmp/side-locks-$(id -u) E2E_PORT=28700 \
       E2E_RELAY=28709 bash scripts/e2e-local.sh locks-all) || status=1 ;;
+    # A rig end to end (apps/mbui/e2e/rigs.ts): a machine enrolled as alice's rig beside the test station, asked for by
+    # a chat's agent, granted, used, taken back (scripts/e2e-local.sh rigs-all), on ports and directories of its own.
+    rigs) (cd apps/mbui && E2E_WORK=${RUNNER_TEMP:-/tmp}/side-rigs E2E_STATION=/tmp/side-rigs-$(id -u) E2E_PORT=28720 \
+      E2E_RELAY=28729 bash scripts/e2e-local.sh rigs-all) || status=1 ;;
     *) echo "no side part $part"; status=1 ;;
   esac
 done

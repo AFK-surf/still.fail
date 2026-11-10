@@ -11,7 +11,6 @@
 // over to the next process at a handover, `carried`), the plain library's written down without their value (`vault_grants`) and taken up again after a restart. A grant ends
 // with its chat: archived or deleted, its session's grants are dropped.
 import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync } from "node:fs";
 import { basename } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { devicesFor, memberWithEmail, membersWithEmail, type LockState } from "../cloud/lock.ts";
@@ -30,6 +29,7 @@ import { type BoxCert, type Deny, type Grant, type Item, type Kind, type Listing
 import { type Carried, type Held, Keeper, accountOf, hostAllowed, valueOf } from "./keeper.ts";
 import { FILE_MOST, KINDS, MODES, PLAIN, type PlainItem, type PlainStore, plainOk } from "./plain.ts";
 import { Proxy, placeholder } from "./proxy.ts";
+import { CAPTURE_MS, Incoming, RUN_MS, baseEnv } from "./incoming.ts";
 import { ACCOUNT_VAR, type Captured, type Ran, SECRET_VAR, capture, runWith } from "./run.ts";
 import type { VaultStore } from "./store.ts";
 import { UseIndex } from "./use-index.ts";
@@ -89,10 +89,6 @@ const SCOPE_WORDS: Record<Scope, { label: string; detail: string }> = {
 
 /// A request no one decided is let go after a day.
 const PENDING_SECS = 86400;
-/// A command run with a grant is stopped after this long, unless it asks for less (at most an hour).
-const RUN_MS = 10 * 60_000;
-/// A command printing a secret to keep is stopped after this long.
-const CAPTURE_MS = 2 * 60_000;
 
 /// The words on the card of a request to keep a secret.
 const SAVE_WORDS = {
@@ -255,7 +251,8 @@ export class Secrets {
   #reboxScheduled = false;
   /// Commands sent to other stations, by the id they say how they ended under (`vault.done`).
   readonly #away = new Map<string, Away>();
-  readonly #incoming = new Map<string, { peer: string; revoked: boolean }>();
+  /// The commands other stations send to run here (vault/incoming.ts).
+  readonly #runs: Incoming;
 
   constructor(d: SecretsDeps) {
     this.#d = d;
@@ -355,6 +352,7 @@ export class Secrets {
     });
     this.plain = d.plain;
     this.proxy = d.proxy ?? new Proxy(`${d.data}/vault`, d.now);
+    this.#runs = new Incoming({ proxy: this.proxy, now: d.now, ...(d.workOf ? { workOf: d.workOf } : {}), ...(d.ask ? { ask: d.ask } : {}) });
     this.#restore(ended);
     d.hub.store.subscribe((c) => {
       if ((c.type === "sessionRemoved" || c.type === "session") && ended(c.key)) {
@@ -2026,13 +2024,6 @@ export class Secrets {
     const r = (request ?? {}) as Record<string, unknown>;
     const method = typeof r.method === "string" ? r.method : "";
     const id = typeof r.id === "string" ? r.id : "";
-    if (method === "vault.capabilities") return { timeouts: true };
-    if (method === "vault.revoke") {
-      const incoming = this.#incoming.get(id);
-      if (!incoming || incoming.peer !== peer) throw new Error("no such command from that station");
-      incoming.revoked = true;
-      return { ok: true };
-    }
     if (method === "vault.used") {
       const away = this.#away.get(id);
       if (away === undefined || away.station !== peer || away.used === undefined) throw new Error("no such command sent to that station");
@@ -2045,58 +2036,8 @@ export class Secrets {
       away.done((r.result ?? null) as Json);
       return { ok: true };
     }
-    if (method !== "vault.run" && method !== "vault.capture") throw new Error(`unknown method ${method}`);
-    const session = typeof r.session === "string" ? r.session : "";
-    const command = typeof r.command === "string" ? r.command : "";
-    const under = typeof r.under === "string" ? r.under : "";
-    const timeoutMs = Number.isSafeInteger(r.timeoutMs) ? Math.min(Math.max(1, r.timeoutMs as number), 3600_000) : RUN_MS;
-    if (!/^x_[0-9A-Z]{26}$/.test(id) || session === "" || session.length > 256 || command.trim() === "") throw new Error("id, session and command are required");
-    if (under.startsWith("/") || under.split(/[\\/]/).includes("..")) throw new Error("under is a path inside the session's directory");
-    if (!this.#d.workOf || !this.#d.ask) throw new Error("this station runs no commands for others");
-    const ask = this.#d.ask;
-    const cwd = joinUnder(this.#d.workOf(ws, peer, session), under);
-    const tell = (result: Json) =>
-      ask(peer, { method: "vault.done", workspace: ws, id, result }).catch((e) => log.warn("vault", "a command's end not told to its station", { error: (e as Error).message }));
-    // The station does not update itself meanwhile: the proxy or ssh-agent the command uses is this process's.
-    const letGo = hold();
-    if (method === "vault.capture") {
-      void capture(command, cwd, baseEnv(), Math.min(timeoutMs, CAPTURE_MS))
-        .then((got) => tell(got as unknown as Json), (e) => tell({ code: null, signal: null, out: "", err: `could not run it: ${(e as Error).message}`, timedOut: false, tooLong: false }))
-        .finally(letGo);
-      return { started: true };
-    }
-    const mode = MODES.includes(r.mode as Mode) ? (r.mode as Mode) : null;
-    const secret = r.secret as { kind?: unknown; name?: unknown; fields?: unknown } | null;
-    const hosts = Array.isArray(r.hosts) ? r.hosts.filter((h): h is string => typeof h === "string") : [];
-    const env = typeof r.env === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(r.env) ? r.env : undefined;
-    const grant = typeof r.grant === "string" ? r.grant : "";
-    if (mode === null || grant === "" || secret === null || typeof secret !== "object" || typeof secret.fields !== "object" || secret.fields === null) {
-      letGo();
-      throw new Error("mode, grant and secret are required");
-    }
-    const fields = Object.fromEntries(Object.entries(secret.fields as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === "string"));
-    const held = { request: { id: grant }, grant: { mode, hosts }, secret: { kind: String(secret.kind ?? ""), name: String(secret.name ?? ""), fields }, uses: 0 } as unknown as Held;
-    if (valueOf(held.secret) === null) {
-      letGo();
-      throw new Error("the secret holds no value");
-    }
-    let used = false;
-    const incoming = { peer, revoked: false };
-    this.#incoming.set(id, incoming);
-    let expires = typeof r.expires === "number" && Number.isSafeInteger(r.expires) ? r.expires : Infinity;
-    let reports: Promise<void> = Promise.resolve();
-    const grantTimeout = r.grantTimeout as { kind?: unknown; seconds?: unknown } | undefined;
-    const idle = grantTimeout?.kind === "idle" && typeof grantTimeout.seconds === "number" && Number.isSafeInteger(grantTimeout.seconds) && grantTimeout.seconds > 0 && grantTimeout.seconds <= 30 * 86400 ? grantTimeout.seconds : 0;
-    void runWith(held, { command, cwd, timeoutMs, ...(env ? { env } : {}) }, this.proxy, baseEnv(), () => {
-      used = true;
-      reports = reports.then(async () => {
-        const answer = await ask(peer, { method: "vault.used", workspace: ws, id }) as { until?: unknown };
-        if (idle && typeof answer?.until === "number" && Number.isSafeInteger(answer.until)) expires = answer.until;
-      }).catch(() => {});
-    }, () => !incoming.revoked && expires > Math.floor(this.#d.now() / 1000))
-      .then((ran) => reports.then(() => tell({ ...ran, used } as unknown as Json)), (e) => tell({ code: null, signal: null, output: `could not run it: ${(e as Error).message}`, cut: false, timedOut: false }))
-      .finally(() => { this.#incoming.delete(id); letGo(); });
-    return { started: true };
+    // A command another station sends to run here: vault/incoming.ts (a rig runs those too, with no vault of its own).
+    return this.#runs.heard(peer, ws, request);
   }
 
   /// The grants a session holds that may still be used.
@@ -2111,16 +2052,6 @@ function accountSaid(held: Held): string {
   const account = accountOf(held.secret);
   return account === null ? "" : ` The login's account is ${JSON.stringify(account)}, in ${ACCOUNT_VAR} too.`;
 }
-
-function joinUnder(dir: string, under: string): string {
-  const at = under === "" ? dir : `${dir}/${under}`;
-  mkdirSync(at, { recursive: true });
-  return at;
-}
-
-/// The station's environment, without what would let a command act as the station or its agents' accounts.
-const baseEnv = (): Record<string, string> =>
-  Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && !/^(STILLFAIL_|ANTHROPIC_|CLAUDE_|OPENAI_|CODEX_)/.test(e[0])));
 
 function said(r: Ran): string {
   const end = r.timedOut ? "stopped: it ran too long" : r.code !== null ? `exit code ${r.code}` : `ended by ${r.signal}`;

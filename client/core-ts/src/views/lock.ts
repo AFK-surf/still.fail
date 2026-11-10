@@ -654,6 +654,23 @@ function onOwnLock(inner: Inner, ws: string, id: string): { sub: string; key: st
   return on === undefined ? null : { sub, key: on.key };
 }
 
+/// How this device signs for its person in workspace `ws` now, where that is in security mode (`locked`): with this
+/// app's lock key where it is one of their own devices that signs in the workspace's lock (`lock`), with a key on
+/// their own lock where they are bound to it there and this device is on it (`person`); null where it signs nothing
+/// there (a web page, a device not confirmed yet). What a rig's person signs to take it into the workspace (rigs.ts).
+export function signsAs(inner: Inner, ws: string): { locked: boolean; as: "lock" | "person" | null } {
+  const h = held(inner, ws);
+  const f = fold(h?.entries ?? []);
+  const locked = h?.head != null && !f.disabled;
+  if (!locked || !inner.host.appKeys) return { locked, as: null };
+  if (onBoundPerson(inner, ws)) return { locked, as: "person" };
+  const sub = inner.workspaces.owner(ws);
+  const base = bases.get(inner) ?? null;
+  const signer = signerOf(inner);
+  const mine = base === null ? undefined : f.devices.get(base);
+  return { locked, as: mine !== undefined && mine.sub === sub && signer !== null && mine.sign_key === signer && mine.own !== false ? "lock" : null };
+}
+
 /// Whether this app device's person bound a lock of their own in the workspace's, and this device is not on it.
 export function offOwnLock(inner: Inner, ws: string): boolean {
   const sub = inner.workspaces.owner(ws);

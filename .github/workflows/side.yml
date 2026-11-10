@@ -22,7 +22,7 @@ jobs:
       # Mac; beside those the mesh's measured too unevenly to move, or 109 ms for a line of nothing (side run 41798988101).
       max-parallel: 1
       matrix:
-        part: [core-ts, station, rust, locks]
+        part: [core-ts, station, rust, locks, rigs]
     runs-on: [self-hosted, macos-ci]
     timeout-minutes: 10
     steps:

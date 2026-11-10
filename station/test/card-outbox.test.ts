@@ -231,3 +231,31 @@ test("old message pages find an early target entry with a 64-bit cursor", () => 
     assert.deepEqual(page, { kind: "end" });
   } finally { db.close(); }
 });
+
+test("a queue made before a rig's card had an outcome takes one, the outcomes waiting in it kept", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    // The queue as it was made before (2026-11-10): three fields named in its CHECK.
+    db.exec(`CREATE TABLE card_outbox_meta(id INTEGER PRIMARY KEY CHECK(id=1),version INTEGER NOT NULL,next_id INTEGER NOT NULL) WITHOUT ROWID;
+      INSERT INTO card_outbox_meta VALUES(1,1,0);
+      CREATE TABLE card_outbox(thread INTEGER NOT NULL,ts TEXT NOT NULL,id INTEGER NOT NULL,
+        agent TEXT NOT NULL,field TEXT NOT NULL CHECK(field IN ('adb','signin','vault')),
+        close_card INTEGER NOT NULL CHECK(close_card IN (0,1)),outcome TEXT NOT NULL,
+        PRIMARY KEY(thread,ts,id)) WITHOUT ROWID;
+      CREATE TABLE card_outbox_head(id INTEGER PRIMARY KEY,thread INTEGER NOT NULL,ts TEXT NOT NULL);`);
+    const phone = { thread: 1, ts: "phone", agent: "a", field: "adb" as const, close: true, outcome: { status: "granted" } };
+    const rig = { thread: 2, ts: "rig", agent: "a", field: "rig" as const, close: true, outcome: { status: "granted", delivered: true } };
+    saveWithCardOutcome(db, phone, () => {});
+    assert.throws(() => transaction(db, () => enqueueCardOutcome(db, rig)), /CHECK constraint failed/);
+    let saved = 0;
+    saveWithCardOutcome(db, rig, () => void saved++);
+    assert.equal(saved, 1);
+    assert.deepEqual(cardOutcomeHeads(db, "0").map(({ id: _id, ...rest }) => rest), [phone, rig]);
+    assert.equal(hasCardOutbox(db), true);
+    // Made again once: the next finds it wide enough.
+    const made = db.prepare("SELECT sql FROM sqlite_master WHERE name='card_outbox'").get()?.sql;
+    saveWithCardOutcome(db, { ...rig, ts: "rig2" }, () => {});
+    assert.equal(db.prepare("SELECT sql FROM sqlite_master WHERE name='card_outbox'").get()?.sql, made);
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name='card_outbox_wider'").get()?.n, 0);
+  } finally { db.close(); }
+});

@@ -39,7 +39,7 @@ test("the installer a Windows release carries is the cloud's, its cloud the one 
 test("the station's logon task runs elevated only when -Admin is asked for, and keeps it over updates", () => {
   const script = windowsInstallScript("https://ember.test");
   // Opt-in: the -Admin switch, STILLFAIL_ADMIN, or a windows.json that kept admin.
-  assert.match(script, /param\(\[string\]\$Token = '', \[string\]\$Lock = '', \[switch\]\$Admin\)/);
+  assert.match(script, /param\(\[string\]\$Token = '', \[string\]\$Lock = '', \[string\]\$Rig = '', \[switch\]\$Admin\)/);
   assert.match(script, /\$adminRun = \$Admin -or \(\$apart\.admin -eq \$true\) -or \(\$env:STILLFAIL_ADMIN -eq '1'\)/);
   assert.match(script, /\$runLevel = if \(\$adminRun\) \{ 'Highest' \} else \{ 'Limited' \}/);
   // The one place the run level is set is the parameter, never a hard-coded Limited/Highest.

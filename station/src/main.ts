@@ -3,7 +3,7 @@
 // interrupting it: every part's scope closes, and with it what it opened. Commands as the Rust station takes them:
 //
 //   run --app DIR [--port N] [--data DIR] [--with-parent] [--launcher-fds a,b,c]
-//   enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join | --stay] [--data DIR]   status [--data DIR]   id [--data DIR]
+//   enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--rig HASH] [--join | --stay] [--data DIR]   status [--data DIR]   id [--data DIR]
 //   channel [stable|beta] [--app DIR] [--data DIR]   update [--beta|--stable] --app DIR [--data DIR]
 //   lock status|reset [--data DIR]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -12,7 +12,7 @@ import { type AddressInfo, setDefaultAutoSelectFamilyAttemptTimeout } from "node
 import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
-import { enroll, id, joinWorkspace, lockCommand, staysIn, status } from "./cli.ts";
+import { enroll, id, isRig, joinWorkspace, lockCommand, staysIn, status } from "./cli.ts";
 import { readState } from "./cloud/state.ts";
 import { loadKey } from "./cloud/key.ts";
 import { shortCode } from "./cloud/lock.ts";
@@ -57,6 +57,9 @@ import { longestWaits } from "./ops/waits.ts";
 import { takeQueries } from "./store/timed.ts";
 import { platform } from "./platform/index.ts";
 import { keepRunnerIn } from "./platform/processes.ts";
+import { becomeOther } from "./ops/restart.ts";
+import { RigLive, RigMeshLive, RigSide } from "./rig/main.ts";
+import { RigsLive } from "./rigs/module.ts";
 
 // What reads HOME (the machine's logins, its transcripts) finds the user's home there, where the machine names it
 // otherwise (Windows: USERPROFILE).
@@ -78,7 +81,7 @@ const args = process.argv.slice(2);
 const data = dataDir(args);
 const command = args.find((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && args[i - 1] !== "--with-parent"));
 /// Flags that take a value: what follows them is no command's argument.
-const VALUED = ["--data", "--provider", "--lock"];
+const VALUED = ["--data", "--provider", "--lock", "--rig"];
 /// How often the main thread's longest hold is looked at, and from how long a hold is said.
 const HELD_EVERY_MS = 10_000;
 const HELD_MS = 1_000;
@@ -90,7 +93,7 @@ try {
 } catch {}
 
 function usage(): never {
-  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join | --stay] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status|reset | heap");
+  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--rig HASH] [--join | --stay] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status|reset | heap");
   process.exit(2);
 }
 
@@ -139,6 +142,27 @@ const Loopback = (control: Control) =>
     }),
   );
 
+/// A station's process whose machine is a rig now (made one in the app: sessions/agents.ts; or enrolled as one from
+/// another process, `enroll --rig`) gives way to the rig's: its launcher asked to hand over, so its connections end
+/// as a restart's do (a station that asks it next reaches the new process, not one gone without a word); with no
+/// launcher, it ends for whoever started it to start it again.
+const BecameRig = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const cloud = (yield* ControlPlane).state;
+    const { data } = yield* Paths;
+    let asked = false;
+    yield* Effect.acquireRelease(
+      Effect.sync(() => cloud.listen((s) => {
+        if (s?.rig === undefined || !s.workspace || cloud.removed() || asked) return;
+        asked = true;
+        log.warn("station", "this machine is a rig now: the station's process gives way to the rig's");
+        becomeOther(data);
+      })),
+      (off) => Effect.sync(off),
+    );
+  }),
+);
+
 function run() {
   const app = flag(args, "--app");
   if (!app) usage();
@@ -170,9 +194,23 @@ function run() {
   // still.fail Helper, one for the screens and the drive, and one look at its grants.
   const base = Layer.mergeAll(Key.layer, ReadersAndStore, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(Previous.layer), Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
-  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, CheckpointsLive).pipe(
+  // A rig (a station that only runs tasks: cloud.json's `rig`, written by `enroll --rig`) is another program of the same release: of a station's
+  // parts only what another station asks of it (rig/main.ts). What a machine is, is read once, as it starts; enrolled
+  // as the other meanwhile, the process ends and the launcher starts it again as that.
+  const asRig = readState(data)?.rig !== undefined;
+  const rigStation = Layer.mergeAll(RigMeshLive, Loopback(control), AwakeLive, CheckpointsLive).pipe(
+    Layer.provideMerge(RigLive(control)),
+    Layer.provideMerge(RigSide.layer),
+    Layer.provideMerge(AdminHost.layer),
+    Layer.provideMerge(StationConfig.layer),
+    Layer.provideMerge(Peers.layer),
+    Layer.provideMerge(MeshSide.layer),
+    Layer.provideMerge(Parts.layer),
+    Layer.provideMerge(parts),
+  );
+  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, CheckpointsLive, BecameRig).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
-    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, LoginsLive, DriveTransfersLive, UsageLive, ElevationLive, ResourcesLive, SearchLive, SlackLive, FeishuLive, CommaLive, WorkspaceConnectsLive, ModelsLive)),
+    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, LoginsLive, DriveTransfersLive, UsageLive, ElevationLive, ResourcesLive, SearchLive, SlackLive, FeishuLive, CommaLive, WorkspaceConnectsLive, ModelsLive, RigsLive)),
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
     // The drive, the admin API's: the platform's, before the agents.
@@ -196,13 +234,13 @@ function run() {
   );
   // What the parts hold only in memory (the vault's grants), carried over to the next process at a handover.
   let carry = () => {};
-  const main = Effect.gen(function* () {
+  const running = Effect.gen(function* () {
     yield* SubscriptionRef.set(yield* Up, true);
     const stationParts = yield* Parts;
     control.carried((what) => stationParts.takeUp(what));
     carry = () => control.carry(stationParts.carried());
     control.ready(version());
-    log.info("station", "station up", { version: version(), data });
+    log.info("station", asRig ? "rig up" : "station up", { version: version(), data });
     // Where the memory goes, in MB: the main thread's (and resident), and each reader's heap. Every ten minutes, or
     // every ten seconds with STILLFAIL_MEMLOG (for measuring).
     const readers = yield* Readers;
@@ -253,7 +291,8 @@ function run() {
       );
     });
     return yield* Effect.never;
-  }).pipe(Effect.provide(station));
+  });
+  const main = asRig ? running.pipe(Effect.provide(rigStation)) : running.pipe(Effect.provide(station));
   const fiber = Effect.runFork(main);
 
   let stopping = false;
@@ -285,13 +324,16 @@ switch (command) {
     const [, origin, token] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
     const provider = (flag(args, "--provider") ?? "stillfail") as Provider;
     const lock = flag(args, "--lock");
-    if (!origin || !token || !PROVIDERS.includes(provider) || (lock !== undefined && !/^[0-9a-f]{64}$/.test(lock))) usage();
+    // A rig (a station that only runs tasks): its person's own lock's hash, which the command that adds it names.
+    const rig = flag(args, "--rig");
+    if (!origin || !token || !PROVIDERS.includes(provider) || (lock !== undefined && !/^[0-9a-f]{64}$/.test(lock)) || (rig !== undefined && !/^[0-9a-f]{64}$/.test(rig))) usage();
     // One more workspace, staying in those it is in: at the control plane it is enrolled with.
     // --stay (the installers'): joins when the station is in a workspace already, else enrolls; at the control plane it
     // is enrolled with whatever host the command names (the test channel's app.youdid.wtf is still.fail's API too), a
     // token that plane does not know refused there.
-    const stay = !args.includes("--join") && args.includes("--stay") && staysIn(data);
-    if (args.includes("--join") || stay) {
+    // (a rig is in one workspace: it enrolls, which refuses a machine that is a station now, and the other way round)
+    const stay = rig === undefined && !isRig(data) && !args.includes("--join") && args.includes("--stay") && staysIn(data);
+    if (rig === undefined && (args.includes("--join") || stay)) {
       const now = readState(data);
       if (!stay && now !== null && now.origin !== origin.replace(/\/+$/, "")) {
         console.error(`this station is enrolled at ${now.origin}; it joins workspaces there only`);
@@ -306,7 +348,7 @@ switch (command) {
       if (lock !== undefined) console.log(tr(stationLang(), "station.cli.lock.pending", { code: shortCode(loadKey(data).id) }));
       break;
     }
-    await enroll(data, origin.replace(/\/+$/, ""), token, provider, lock);
+    await enroll(data, origin.replace(/\/+$/, ""), token, provider, lock, rig);
     break;
   }
   // The workspace lock on this machine: what is pinned, or taking it away.

@@ -155,14 +155,17 @@ export function releaseType(file: string): string | null {
 // in ($names, $(commands)) given as arguments.
 const script = (say: (key: string, args?: Record<string, string>) => string) => `#!/bin/sh
 # Installs the still.fail station on this machine and joins it to a workspace in still.fail cloud:
-#   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token> [<lock>]
+#   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token> [<lock>] [rig:<person>]
 # <lock>: the workspace lock's hash the station pins (a locked workspace's command gives it).
+# rig:<person>: the machine joins as a rig (a station that only runs tasks), its person's own lock's hash pinned (a rig's command gives it).
 # STILLFAIL_CHANNEL=beta gets the test channel's release (stable: the usual one); this copy defaults to __CHANNEL__.
 # The token comes from 「添加 station」 in still.fail. Running it again updates it and keeps its data (~/.stillfail).
 set -eu
 origin="__ORIGIN__"
 token="\${1:-}"
 lock="\${2:-}"
+rig="\${3:-}"
+case "$lock" in rig:*) rig="$lock" lock="" ;; esac
 # The product its cloud is (client/i18n/brand.ts): another product's station has a data directory, a command and a
 # service of its own beside still.fail's on the same machine (monoid's: ~/.monoid, \`monoid\`, build.monoid.station).
 product=stillfail reverse=fail.still
@@ -497,7 +500,7 @@ ln -sf "$app/bin/stillfail" "$HOME/.local/bin/$product"
 
 if [ -n "$token" ]; then
   echo "${say("cloud.install.join")}"
-  "$app/bin/stillfail" station enroll "$origin" "$token" --stay \${lock:+--lock "$lock"}
+  "$app/bin/stillfail" station enroll "$origin" "$token" --stay \${lock:+--lock "$lock"} \${rig:+--rig "\${rig#rig:}"}
 fi
 
 if [ -n "$handed" ]; then

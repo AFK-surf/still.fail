@@ -1002,6 +1002,15 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
           _ => []
         },
       })
+    // the workspace's rigs (its stations that only run tasks) as a request's card for one goes by: on an app whose device is on its person's own
+    // lock (chat-rig-web: a web page; chat-rig-outside: a device its trusted devices have not approved yet)
+    "rigs" if f.mode.has_prefix("chat-rig") =>
+      Some({
+        "locked": false,
+        "app": f.mode != "chat-rig-web",
+        "personal": if f.mode == "chat-rig-outside" { "outside" } else { "member" },
+        "rigs": [],
+      })
     // what a web link in a message is, as the link's station says it (the core's `linkPreview`: peeks.mbt)
     "linkPreview" => Some(fixture_link_preview(text(Some(Json::object(params)), "url")))
     // what a file a message names is, as the station reads it under its agent's working directory (peeks.mbt)

@@ -308,6 +308,30 @@ fn station_menu_items(core : Core, here : Here, s : Json?) -> Array[@sf.MenuItem
       } else {
         None
       },
+      // made one that only runs tasks by its owner, who added it (`mine`: the core says; asked first, with how many
+      // chats it holds go out of sight): its own station asked, so only while it is up; one of another workspace's
+      // stays whole
+      if flag(s, "mine") && flag(s, "online") && !flag(s, "joined") {
+        Some(@sf.menu_item_of(@sf.t("web-pages.rigs.toTasks"), icon="boxes", fn() {
+          let chats = number(field(field(s, "overview"), "counts"), "sessions").to_int()
+          confirm(
+            @sf.t("web-pages.rigs.toTasksAsk", args=[("name", text(s, "name"))]),
+            if chats > 0 { @sf.t("web-pages.rigs.toTasksNote", args=[("n", chats.to_string())]) } else { @sf.t("web-pages.rigs.toTasksNoteNone") },
+            @sf.t("web-pages.rigs.toTasks"),
+            fn() {
+              @settings.act(
+                core,
+                @sf.t("web-pages.rigs.toTasks"),
+                "rig.setMode",
+                obj([("workspace", str(here.workspace)), ("station", str(text(s, "id"))), ("mode", str("tasks"))]),
+                done=@sf.t("web-pages.rigs.toTasksDone"),
+              )
+            },
+          )
+        }))
+      } else {
+        None
+      },
       Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.remove"), icon="trash", danger=true, remove)),
   ]
 }

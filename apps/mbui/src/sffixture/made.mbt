@@ -53,6 +53,8 @@ pub fn fixture_reset() -> Unit {
   fix_vault.val = ""
   fix_phone.val = ""
   fix_phone_link.val = ""
+  fix_rig.val = ""
+  fix_rig_asked.clear()
   fix_working_now.val = ("call:1", working_step)
   fix_working_important.val = false
   fix_working_status.val = "running"

@@ -79,6 +79,8 @@ priv struct SettingsFixture {
   mut willow_away : Bool
   // (settings-stations-incompatible: Willow up, saying what this core cannot read)
   mut willow_incompatible : Bool
+  // (settings-stations-tasks-theirs: Willow added by another member, its mode not the viewer's to change)
+  mut willow_theirs : Bool
   /// the subscriptions' allowances a month's window too, three in all (settings-profiles-monthly: OpenCode Go's)
   mut monthly : Bool
   /// the Claude subscription's allowance its models' own weeks too, under the account's: how many of Fable's, Opus's
@@ -144,6 +146,7 @@ let fx : SettingsFixture = {
   mba_online: false,
   willow_away: false,
   willow_incompatible: false,
+  willow_theirs: false,
   monthly: false,
   own: 0,
   no_hours: false,
@@ -218,6 +221,7 @@ let fx_station_updated : Ref[Bool] = Ref(false)
 /// The made-up settings as a run starts (reset): none changed, no sheet or scroll to put up.
 fn fixture_reset() -> Unit {
   fx.names.clear()
+  rigs_fixture_reset()
   fx_many_models.val = false
   fx_many_kept.val = false
   fx_station_many_profiles.val = false
@@ -261,6 +265,7 @@ fn fixture_reset() -> Unit {
   fx.mba_online = false
   fx.willow_away = false
   fx.willow_incompatible = false
+  fx.willow_theirs = false
   fx.monthly = false
   fx.own = 0
   fx.no_hours = false
@@ -451,6 +456,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-station-env" => station_parts["ws1/st1"] = "settings"
     // its 设置 while it is away: only what can be changed then
     "settings-stations-incompatible" => fx.willow_incompatible = true
+    "settings-stations-tasks-theirs" => fx.willow_theirs = true
     "settings-station-away" => {
       fx.willow_away = true
       station_parts["ws1/st1"] = "settings"
@@ -607,6 +613,9 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-motion" => "vault-items"
     "settings-local-fonts" => "fonts"
     "settings-security-join" | "settings-security-off" | "settings-security-protecting" => "security"
+    "settings-stations-tasks" | "settings-stations-tasks-outside" | "settings-stations-tasks-theirs" => "stations"
+    "settings-station-tasks" | "settings-station-tasks-locked" => "station:ws1/aa11"
+    "settings-station-tasks-other" => "station:ws1/bb22"
     "settings-notify-off" | "settings-lock-prompt" | "settings-lock-prompt-personal" | "settings-vault-prompt" => "home"
     // (the notifications' page; the system having refused them: its banner's way to allow them)
     "settings-notify" | "settings-notify-denied" => "notifications"
@@ -1218,6 +1227,8 @@ fn fx_station(address : String) -> Json {
       ("face", str("working")),
       ("line", str(if fx.willow_incompatible { "版本不兼容，需要更新" } else if fx.gpus { "AMD EPYC · 32 GB · Linux" } else { "Apple M1 Pro · 32 GB · macOS 26" })),
       ("online", Json::boolean(!fx.willow_away)),
+      // the viewer added it: its mode theirs to change (the core's `mine`)
+      ("mine", Json::boolean(!fx.willow_theirs)),
       ("profileGroups", Json::array(fx_station_profile_groups(profiles))),
       ("profileStates", fx_station_profile_states(profiles)),
       ("link", obj([("state", str(if fx.willow_away { "offline" } else { "online" }))])),
@@ -1964,11 +1975,14 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             fx_members(me),
           ),
           ("stations", [obj([("id", str("st1")), ("name", str("Willow"))]), obj([("id", str("st2")), ("name", str("Maple"))])]),
+          ("rigs", rigs_fixture_listed(mode)),
           ("invitations", [obj([("id", str("i1")), ("role", str("member")), ("email", str("qin@example.com")), ("time", obj([("expires_at", stamp_of("", until="6 天后"))]))])]),
           ("added", [obj([("email", str("he@example.com")), ("role", str("member"))])]),
           ("relays", []),
         ]),
       )
+    // the workspace's stations that only run tasks (rigs_fixture.mbt)
+    "rigs" if rigs_fixture_mode(mode) => Some(rigs_fixture_topic(mode))
     // every way its devices reach its stations (the core's views/ways.ts), the punched path turned off
     "workspaceWays" =>
       Some(
@@ -2640,6 +2654,10 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
 /// take.
 pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
+  match rigs_fixture_call(name, p) {
+    Some(r) => return Some(r)
+    None => ()
+  }
   match name {
     "workspace.renameStation" => {
       // a name, or (the mark picker's) a mark

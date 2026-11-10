@@ -137,6 +137,31 @@ pub(all) struct Card {
   phone : PhoneAsk?
   /// an agent's ask to sign in to a site (MessageCard.signinAsk), drawn in place of the post's words
   signin : SignInAsk?
+  /// an agent's request for a rig of the workspace (MessageCard.rigAsk), drawn in place of the post's words
+  rig : RigAsk?
+}
+
+///|
+/// An agent's request for a rig (a station that only runs tasks) as its card says it (RigAsk): its id, the rig and its name, the agent's
+/// reason and the time it asked for; the chat as the card named it (what the rig's person's device signs with the
+/// grant: `rig.decide`'s `ask`); once decided, how (`status`: granted, denied, ended; `why`; granted, whether the rig
+/// took it yet, `delivered`, and for how long it was signed).
+pub(all) struct RigAsk {
+  request : String
+  rig : String
+  name : String
+  reason : String
+  timeout_kind : String
+  timeout_seconds : Int
+  session : String
+  chat : String
+  title : String
+  by : String
+  status : String
+  why : String
+  delivered : Bool
+  granted_kind : String
+  granted_seconds : Int
 }
 
 ///|
@@ -477,6 +502,27 @@ pub fn message_of(m : Json) -> Message {
                 why: text(a, "why"),
                 link: text(a, "link"),
                 lasts: text(a, "lasts"),
+              })
+            _ => None
+          },
+          rig: match field(c, "rigAsk") {
+            Some(Object(_)) as a =>
+              Some({
+                request: text(a, "request"),
+                rig: text(a, "rig"),
+                name: text(a, "name"),
+                reason: text(a, "reason"),
+                timeout_kind: text(a, "timeoutKind"),
+                timeout_seconds: count(a, "timeoutSeconds"),
+                session: text(a, "session"),
+                chat: text(a, "chat"),
+                title: text(a, "title"),
+                by: text(a, "by"),
+                status: text(a, "status"),
+                why: text(a, "why"),
+                delivered: flag(a, "delivered"),
+                granted_kind: text(a, "grantedKind"),
+                granted_seconds: count(a, "grantedSeconds"),
               })
             _ => None
           },

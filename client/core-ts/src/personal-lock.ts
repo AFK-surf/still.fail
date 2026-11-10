@@ -13,6 +13,7 @@ import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import { type Entry, canonical, entryHash, signedBytes } from "./lock.ts";
+import { type Kind as RigKind, type Signed as RigSigned, signedBytes as rigBytes } from "./rig-form.ts";
 import type { Runner } from "./runtime.ts";
 import { fromUtf8, hex, parseJson, sha256, utf8 } from "./util.ts";
 import { ed25519Ok } from "./vault/verified.ts";
@@ -315,6 +316,21 @@ export class PersonalLock {
       const seed = standing === "none" ? yield* this.begin(sub, reason) : yield* this.#unseal(reason);
       const whole: GrantBody = { v: 1, sub, ...body };
       return { body: whole, sig: { key: this.#myKey!, sig: hex(ed25519.sign(grantBytes(whole), seed)) } };
+    });
+  }
+
+  /// What the person says of a rig of theirs, signed (rig-form.ts: a chat's grant, one taken back, its settings, the
+  /// rig taken into a workspace): refused on a device outside their lock, which a rig is added with (`root`), so there
+  /// is one. `station`: the station it goes through, read of alone.
+  signRig<B>(sub: string, kind: RigKind, body: B, reason: string, station?: string): Effect.Effect<RigSigned<B>, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      yield* Effect.result(this.refresh(sub, station));
+      const standing = this.standing(sub);
+      // (a rig pinned its person's lock as it was added: with none known here, this device is not on the one it pinned)
+      if (standing === "none" || standing === "outside") return yield* Effect.fail(new CoreError("personal_outside", t("core-misc.personal.outside")));
+      if (standing === "replaced") return yield* Effect.fail(new CoreError("personal_replaced", t("core-misc.personal.replaced")));
+      const seed = yield* this.#unseal(reason);
+      return { body, sig: { key: this.#myKey!, sig: hex(ed25519.sign(rigBytes(kind, body, sha256), seed)) } };
     });
   }
 

@@ -524,6 +524,8 @@ export type ViewsEnv = {
   emailOf: (workspace: string) => string | null;
   /// Whether that account is in the beta.
   betaOf: (workspace: string) => boolean;
+  /// That account's sub; none where not given.
+  subOf?: (workspace: string) => string | null;
   /// What still.fail calls the relay at a host.
   relayName: (host: string) => string | null;
   /// Every workspace the signed-in accounts are in (xshare.ts); none where not given.
@@ -574,6 +576,7 @@ export function envOf(core: Inner): ViewsEnv {
       const sub = owner(workspace);
       return sub !== null && get(get(core.data.record("me", sub), "user"), "beta") === true;
     },
+    subOf: owner,
     places: () => xshare.places(core),
     resume: (topic) => core.router.resume(topic),
     xshareAsked: (station, session) => xshare.asked(core, station, session),
@@ -1963,6 +1966,22 @@ export class Views implements Owner {
     }))) };
   }
 
+  /// Which of a workspace's stations the viewer may change the mode of, as the cloud has it (cloud/src/directory.ts
+  /// `setStationMode`; the user, 2026-11-10): those they added, and those no member of the workspace added (its adder
+  /// left, or the operator enrolled it) where they own the workspace.
+  #mayChangeMode(scope: string): (id: string) => boolean {
+    const ws = this.ok({ topic: "workspace", workspace: scope });
+    const sub = this.#core.subOf?.(scope) ?? null;
+    if (sub === null || !isObject(ws)) return () => false;
+    const owner = get(ws, "role") === "owner";
+    const members = new Set(arr(get(ws, "members")).map((m) => str(get(m, "sub"))));
+    const by = new Map(arr(get(ws, "stations")).map((s) => [str(get(s, "id")), str(get(s, "enrolled_by"))] as const));
+    return (id) => {
+      const adder = by.get(id) ?? null;
+      return adder === sub || (owner && (adder === null || !members.has(adder)));
+    };
+  }
+
   /// `view`: the topic asking, computed again when one of its stations has been silent long enough to say so.
   #stationsView(scope: string, view?: Topic): Value | undefined {
     const stations = this.#stationsOr(scope);
@@ -1970,6 +1989,7 @@ export class Views implements Owner {
     const c = this.#clock();
     let silentNext = Infinity;
     const byId = new Map(stations.map((s) => [String(s.id), s]));
+    const mine = this.#mayChangeMode(scope);
     const items = stations.map((s) => {
       const read = this.ok({ topic: "overview", station: s.address });
       const hostRaw = this.ok({ topic: "host", station: s.address });
@@ -2035,6 +2055,7 @@ export class Views implements Owner {
         way: way === undefined ? null : present.way(way, (h) => this.relayName(h)),
         betaOffered: betaOffered(overview, () => this.#betaOf(scope)),
         ...(s.joined ? { joined: true, home: this.#core.homeName?.(scope, s.id) ?? null } : {}),
+        mine: mine(s.id),
       };
     });
     this.#againIn(silentNext);

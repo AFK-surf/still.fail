@@ -29,7 +29,7 @@ const STATUS: Record<string, number> = {
   workspace_not_found: 404, member_not_found: 404, user_not_found: 404, station_not_found: 404, invitation_not_found: 404, enrollment_not_found: 404,
   forbidden: 403, invitation_for_other_email: 403,
   already_member: 409, invalid_name: 400, invalid_emoji: 400, invalid_icon: 400, invalid_role: 400, invalid_email: 400, invalid_relay: 400, invalid_relays: 400, invalid_way: 400, last_relay: 409,
-  last_owner: 409, sole_owner: 409, locked_workspace: 409, not_before_owner: 409,
+  last_owner: 409, sole_owner: 409, locked_workspace: 409, not_before_owner: 409, rig_enrollment: 409, station_enrollment: 409, station_in_others: 409, last_station: 409,
   too_many_workspaces: 429, too_many_invitations: 429, too_many_members: 429, too_many_stations: 429,
   invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
   invalid_note: 400, invalid_expiry: 400, invalid_limits: 400,
@@ -146,7 +146,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     return directory(async () => ({
       // `locks`: a station that pins a lock in each workspace it joins (one from before would take a locked one's
       // members on this cloud's word).
-      ...(await env.DIRECTORY.getByName("primary").enroll(input.token as string, input.station as string, version, path === "/v1/stations/join", input.locks === true)),
+      // `rig`: it enrolls as a rig, which a rig's token alone makes (directory.ts `enroll`).
+      ...(await env.DIRECTORY.getByName("primary").enroll(input.token as string, input.station as string, version, path === "/v1/stations/join", input.locks === true, input.rig === true)),
       station: input.station,
       ...relays(env),
       grant_keys: grantKeys(env),
@@ -322,6 +323,15 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
       return withCommands(env, made, (beta !== null && url.origin === beta) || header(request, "channel") === "beta");
     });
   }
+  // A rig's enrollment (a station that only runs tasks): the same commands, to which the app adds that it is one with its person's own lock
+  // to pin (`rig:<hash>`, `--rig <hash>`), as it adds a workspace lock's hash: the cloud never says whose lock that is.
+  if (kind === "rigs" && target === "enrollments" && !action && method === "POST") {
+    return directory(async () => {
+      const made = await dir.createRigEnrollment(sub, ws, text("name"));
+      const beta = betaOrigin(env);
+      return { ...withCommands(env, made, (beta !== null && url.origin === beta) || header(request, "channel") === "beta"), rig: true };
+    });
+  }
   // A mstill.fail's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).
   if (kind === "credential" && !target && method === "POST") {
     if (!validKeyHex(input.device)) return reply({ error: "invalid_device" }, 400);
@@ -350,6 +360,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   }
   if (kind === "devices" && !target && method === "GET") return directory(() => dir.devices(sub, ws));
   if (kind === "stations" && target && validKeyHex(target)) {
+    // (what it is, a whole station or one that only runs tasks: asked alone)
+    if (!action && method === "PATCH" && input.mode !== undefined) return directory(() => dir.setStationMode(sub, ws, target, input.mode));
     if (!action && method === "PATCH") return directory(async () => dir.updateStation(sub, ws, target, { name: input.name, emoji: input.emoji, icon: await icon() }));
     if (!action && method === "DELETE") return directory(() => dir.removeStation(sub, ws, target));
   }

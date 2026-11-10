@@ -41,8 +41,14 @@ pub fn station_node(
     None => @sf.TipLayer::new(fn() { Some(v) })
   }
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-  v.pick(fn() { (listed(), listed() == Some(true) && manager()) }, fn(p, k) {
+  // (one that only runs tasks is no station this device is linked to: its own page, station_rig.mbt)
+  let rig = fn() { @settings.rig_at(core, here(), address) }
+  v.pick(fn() { (if rig() is Some(_) { None } else { listed() }, listed() == Some(true) && manager(), rig() is Some(_)) }, fn(p, k) {
     p.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+    if k.2 {
+      rig_station_node(p, core, here, address, rig, on_back, frame, said, width, tips)
+      return
+    }
     match k.0 {
       Some(true) =>
         station_view_node(p, core, here, fn() { @settings.station_of(core, here(), address) }, k.1, None, on_back, frame, said, width, tips, stint)

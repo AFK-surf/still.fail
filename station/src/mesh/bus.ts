@@ -65,6 +65,8 @@ export class PeerBus {
   /// What answers the methods none names (the remote tasks).
   private rest: Inbox | null = null;
   private outsider: Inbox | null = null;
+  /// What every request passes before the part that answers it hears it (a rig's: rig/module.ts); it throws why not.
+  private guard: ((workspace: string, peer: string, request: Json) => void) | null = null;
   private readonly onAttach: (() => void)[] = [];
 
   /// `sleep`: how a request waits for the transport (the station's clock).
@@ -111,6 +113,11 @@ export class PeerBus {
     this.outsider = inbox;
   }
 
+  /// What every request of the workspace's stations passes first (one at most): it throws a Refused why not.
+  guarded(guard: (workspace: string, peer: string, request: Json) => void): void {
+    this.guard = guard;
+  }
+
   /// Whether stations of other workspaces are heard at all.
   hearsOutside(): boolean {
     return this.outsider !== null;
@@ -122,6 +129,11 @@ export class PeerBus {
     const dot = method.indexOf(".");
     const inbox = this.handlers.get(method) ?? (dot > 0 ? this.handlers.get(method.slice(0, dot + 1)) : undefined) ?? this.rest;
     if (!inbox) return Promise.reject(new Error("station is starting"));
+    try {
+      this.guard?.(workspace, peer, request);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     return inbox(peer, request, workspace);
   }
 

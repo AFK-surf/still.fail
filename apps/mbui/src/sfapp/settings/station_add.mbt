@@ -2,13 +2,17 @@
 // Stations.tsx): a new machine named, the one command that installs still.fail there and joins it (`workspace.enroll`)
 // copied, and the wait for it to join; or, for whoever manages another workspace too, a station of that one added
 // here as it is (`station.join`). The workspace's owners and admins add stations: Station's ＋, or its first one in
-// the page itself while it has none.
+// the page itself while it has none. What the new machine will be is chosen as it is named (2026-11-10): a whole
+// station, or one that only runs tasks (a rig: `rig.add`, its command naming its person's own lock), which any member
+// adds, as theirs.
 
 ///|
 /// What the adding has come to: the sheet's (and the first station's, in its page) as they go on.
 priv struct Adding {
   /// a station of another workspace (the choice's second side)
   existing : @signals.Signal[Bool]
+  /// one that only runs tasks (the mode's second side; a member's only one)
+  tasks : @signals.Signal[Bool]
   /// the command made: (install, command)
   made : @signals.Signal[(String, String)?]
   /// why the command could not be made, or a station not joined
@@ -28,6 +32,7 @@ priv struct Adding {
 ///|
 let adding : Adding = {
   existing: @signals.signal(false, same=fn(a, b) { a == b }),
+  tasks: @signals.signal(false, same=fn(a, b) { a == b }),
   made: @signals.signal(None),
   error: @signals.signal("", same=fn(a, b) { a == b }),
   known: @signals.signal([]),
@@ -39,8 +44,9 @@ let adding : Adding = {
 
 ///|
 /// As before anything was asked.
-fn adding_reset(known : Array[String], existing : Bool) -> Unit {
+fn adding_reset(known : Array[String], existing : Bool, tasks? : Bool = false) -> Unit {
   adding.existing.set(existing)
+  adding.tasks.set(tasks)
   adding.made.set(None)
   adding.error.set("")
   adding.known.set(known)
@@ -68,6 +74,8 @@ pub fn place_action(core : Core, here : Here, place : String) -> ((@sf.Beside) -
     "stations" =>
       match station_ids(core, here) {
         Some(ids) if manager_of(core, here) == Some(true) => Some(fn(from) { open_add_station(core, here, ids, from=from.anchor()) })
+        // (a member adds one that only runs tasks, theirs: no whole station, none of another workspace's)
+        Some(ids) if text(workspace_view(core, here).value, "role") == "member" => Some(fn(from) { open_add_station(core, here, ids, tasks=true, from=from.anchor()) })
         _ => None
       }
     // a profile is added on a station online (the only one, without asking)
@@ -98,13 +106,16 @@ fn open_add_station(
   here : Here,
   known : Array[String],
   existing? : Bool = false,
+  tasks? : Bool = false,
   from? : @sf.Anchor = Unanchored,
 ) -> Unit {
-  adding_reset(known, existing)
+  // (those that only run tasks are known too: one of them there already has not just joined)
+  adding_reset([..known, ..rigs_listed(core, here).map(fn(r) { text(Some(r), "id") })], existing, tasks~)
+  let manager = manager_of(core, here) == Some(true)
   @sf.panel(tr("android-settings.station.add"), from~, tall=0.72, form=true, fn(c, close) {
     let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).get().value
     let rows = joinable_rows(joinable)
-    let offered = flag(joinable, "offered") && rows.length() > 0
+    let offered = manager && flag(joinable, "offered") && rows.length() > 0
     // the choice stays at the top; only what is under it scrolls
     if offered && adding.made.get() is None {
       c.box(style=@sf.panel_words_in(), w=Fill(1.0), pb=10.0, fn() {
@@ -118,13 +129,24 @@ fn open_add_station(
       })
       |> ignore
     }
+    // what the new machine will be, its managers' to choose (a member's is one that only runs tasks)
+    if manager && adding.made.get() is None && !(offered && adding.existing.get()) {
+      c.box(style=@sf.panel_words_in().then(add_mode_room), fn() {
+        let i = @sf.segmented(c, "add-mode", [tr("web-pages.rigs.add.kind.full"), tr("web-pages.rigs.add.kind.tasks")], if adding.tasks.get() { 1 } else { 0 })
+        if (i == 1) != adding.tasks.get() {
+          adding.error.set("")
+        }
+        adding.tasks.set(i == 1)
+      })
+      |> ignore
+    }
     if offered && adding.existing.get() && adding.made.get() is None {
       join_existing(c, core, here, rows, flag(joinable, "loading"))
     } else {
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
         let blocks : Array[() -> Unit] = []
         // this machine, where it has none: added here, no command to run (before a command is made)
-        if adding.made.get() is None && local_station_addable() {
+        if adding.made.get() is None && !adding.tasks.get() && local_station_addable() {
           blocks.push(fn() {
             c.box(style=@sf.panel_words_in().then(here_room), fn() { add_this_machine(c, core, fn() { close() }) })
             |> ignore
@@ -134,7 +156,7 @@ fn open_add_station(
           fn() {
             c.box(style=@sf.panel_words_in(), w=Fill(1.0), pb=10.0, fn() {
               c.text(
-                fill("android-settings.station.addNote", [("app", "still.fail")]),
+                if adding.tasks.get() { tr("web-pages.rigs.add.lead") } else { fill("android-settings.station.addNote", [("app", "still.fail")]) },
                 size=@sf.theme().t.meta,
                 color=@sf.theme().p.muted,
                 w=Fill(1.0),
@@ -159,13 +181,18 @@ fn open_add_station(
     // its buttons at the panel's foot (the presenter's: as far from its foot as its corner says), the step's
     let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).get().value
     let rows = joinable_rows(joinable)
-    if flag(joinable, "offered") && rows.length() > 0 && adding.existing.get() && adding.made.get() is None {
+    if manager && flag(joinable, "offered") && rows.length() > 0 && adding.existing.get() && adding.made.get() is None {
       join_buttons(c, core, here, rows)
     } else {
       add_station_buttons(c, core, here, cancel=true, fn() { close() })
     }
   })
 }
+
+///|
+/// The mode's choice over the steps: across the panel's words, the steps 10 under it (as the kind's choice is).
+// kept across runs: a value (no field of it changes)
+let add_mode_room : @ui.Style = @ui.css("w=Full pb=S2_5")
 
 ///|
 /// The joinable stations to show (the core's `joinable`, with those joined from here kept where they were).
@@ -387,6 +414,8 @@ fn station_name_key() -> String {
 /// The station joined since 添加 station opened (one not among those there when it opened), once its command is made.
 fn station_joined(core : Core, here : Here) -> Json? {
   match adding.made.get() {
+    // (one that only runs tasks joins the workspace's rigs, not its stations)
+    Some(_) if adding.tasks.get() => rigs_listed(core, here).iter().find_first(fn(r) { !adding.known.get().contains(text(Some(r), "id")) })
     Some(_) =>
       match stations_of(core, here).value {
         Some(Array(a)) => a.iter().find_first(fn(s) { !adding.known.get().contains(text(Some(s), "id")) })
@@ -403,7 +432,8 @@ fn station_joined(core : Core, here : Here) -> Json? {
 fn add_station_buttons(c : @ui.Ctx, core : Core, here : Here, done : () -> Unit, cancel? : Bool = false) -> Unit {
   match (adding.made.get(), station_joined(core, here)) {
     (None, _) => {
-      let busy = is_doing(core, ["workspace.enroll"], [("account", here.sub), ("workspace", here.workspace)])
+      let tasks = adding.tasks.get()
+      let busy = if tasks { is_doing(core, ["rig.add"], [("workspace", here.workspace)]) } else { is_doing(core, ["workspace.enroll"], [("account", here.sub), ("workspace", here.workspace)]) }
       let name = field_of(station_name_key()).text().trim(chars=" \t\n").to_owned()
       if cancel {
         @sf.button(c, tr("common.cancel"), key="add-cancel", on_press=fn() {
@@ -415,8 +445,8 @@ fn add_station_buttons(c : @ui.Ctx, core : Core, here : Here, done : () -> Unit,
         c.blur()
         adding.error.set("")
         (core.call)(
-          "workspace.enroll",
-          obj([("workspace", str(here.workspace)), ("name", str(name)), ("account", str(here.sub))]),
+          if tasks { "rig.add" } else { "workspace.enroll" },
+          if tasks { obj([("workspace", str(here.workspace)), ("name", str(name))]) } else { obj([("workspace", str(here.workspace)), ("name", str(name)), ("account", str(here.sub))]) },
           fn(r) {
             match r {
               Ok(v) => adding.made.set(Some((text(Some(v), "install"), text(Some(v), "command"))))

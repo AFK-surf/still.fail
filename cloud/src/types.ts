@@ -17,13 +17,15 @@ export interface WayView { id: string; kind: "relay" | "lan" | "tailnet" | "dire
  * first (its home, whose owners and admins manage the machine); absent where this is its home.
  */
 export interface StationView { id: string; name: string; emoji: string | null; icon?: string | null; enrolled_at: number; enrolled_by: string; last_seen: number | null; version: string | null; joined?: true }
+/** A rig (a station that only runs tasks): a machine that only runs what the workspace's stations send it, its person's (`owner`, who added it). */
+export interface RigView { id: string; name: string; enrolled_at: number; owner: string; owner_email: string; owner_name: string; last_seen: number | null; version: string | null }
 export interface MemberView extends UserView { role: Role; added_at: number }
 export interface InvitationView { id: string; role: Role; email: string | null; created_by: string; expires_at: number }
 /** An invitation waiting for the signed-in account's email. */
 export interface PendingInvitation { id: string; workspace: string; name: string; role: Role; inviter: string; expires_at: number }
 /** An email added to a workspace whose account has not signed in yet: a member from its first sign-in on. */
 export interface AddedView { email: string; role: Role; added_by: string; added_at: number }
-export interface WorkspaceView { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; ways_off?: string[]; /** Every way, on or off (setWay). */ ways?: WayView[]; lock?: LockHead | null; /** In security mode now: a lock not turned off. */ locked?: true; lock_requests?: number }
+export interface WorkspaceView { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; /** Absent with none (and from a cloud before them). */ rigs?: RigView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; ways_off?: string[]; /** Every way, on or off (setWay). */ ways?: WayView[]; lock?: LockHead | null; /** In security mode now: a lock not turned off. */ locked?: true; lock_requests?: number }
 
 /** How far the workspace's lock goes as the cloud keeps it: null, none. */
 export interface LockHead { seq: number; hash: string; genesis: string }
