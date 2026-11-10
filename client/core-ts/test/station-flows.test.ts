@@ -3805,7 +3805,10 @@ test("the_page_before_a_history_is_read_on_till_an_item_begins_in_what_came", as
   assert.equal(await run(core.inner.stationTopics.historyOlder(ST, "k1")), true);
   await read();
   assert.equal(liveOf(core).first, 100);
-  assert.equal(host.requests.filter((r) => r.url.includes("/sessions/k1/timeline?before=")).length, 2);
+  // (the two pages before what it showed, each once; the history's latest page, read as it was opened, counts not:
+  // every station follows the sessions at work since #5191, and one that does is read as its history opens)
+  const asked = (before: number) => host.requests.filter((r) => r.url.includes(`/sessions/k1/timeline?before=${before}&`)).length;
+  assert.deepEqual([asked(500), asked(300)], [1, 1]);
   core.close();
 });
 
