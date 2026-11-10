@@ -3231,9 +3231,10 @@ test("a_history_step_in_brief_is_read_whole_as_it_is_opened_and_shown_so", async
   core.receive(1, { kind: "subscribe", id: 1, subscribe: { topic: "history", station: ST, key: "k1" } });
   await read();
   await read();
-  // In brief, as the station pushes it: the call by what says what it does, the result without what it gave.
+  // In brief, as the station pushes it: the call by what says what it does, the result without what it gave. (After
+  // the agent's words: a page's first calls with none before them go on a group begun on the page before, and wait for it.)
   const call = { at: "2026-10-08T00:00:00Z", kind: "tool_call", text: JSON.stringify({ command: "pnpm test", description: "Run the tests" }), tool: "Bash", callId: "c" };
-  s.push("live", { key: "k1", type: "timeline", start: 7, entries: [{ ...call, brief: true }, { at: "2026-10-08T00:00:03Z", kind: "tool_result", text: "", ok: true, callId: "c", brief: true }], usage: {} });
+  s.push("live", { key: "k1", type: "timeline", start: 6, entries: [{ kind: "assistant", text: "on it" }, { ...call, brief: true }, { at: "2026-10-08T00:00:03Z", kind: "tool_result", text: "", ok: true, callId: "c", brief: true }], usage: {} });
   await read();
   const step = () => {
     const group = (v(values, 1) as J).items.find((i: J) => i.body.kind === "group").body.content;
@@ -3927,6 +3928,29 @@ test("a_history_whose_first_read_fails_says_why_and_is_read_again_while_its_stre
   await read();
   assert.deepEqual([liveOf(core).loaded, liveOf(core).failed, liveOf(core).timeline], [true, undefined, ["a", "b"]]);
   assert.equal(streamPaths(host).length, streams, "read again on its own, not by the stream opening again");
+  core.close();
+});
+
+test("the_page_before_a_history_is_read_on_till_an_item_begins_in_what_came", async () => {
+  // Calls of one group from entry 150 to 699, the agent's words at 149: the page before the latest (300 to 499) is all
+  // within the group and shows nothing more, so the one before it (100 to 299) is read in the same asking.
+  const entry = (n: number) => (n === 149 ? { kind: "assistant", text: "so" } : { kind: "tool_call", tool: "Bash", text: '{"command":"ls"}', callId: `c${n}` });
+  const items = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => entry(from + i));
+  const answers: J = base();
+  const s = await ui(answers);
+  const { host, core, read } = s;
+  core.receive(1, { kind: "subscribe", id: 1, subscribe: liveK });
+  await read();
+  await read();
+  s.push("live", { key: "k1", type: "timeline", start: 500, entries: items(500, 699), usage: {} });
+  await read();
+  assert.equal(liveOf(core).first, 500);
+  answers["GET /sessions/k1/timeline?before=500&limit=200&brief=1"] = { start: 300, entries: items(300, 499) };
+  answers["GET /sessions/k1/timeline?before=300&limit=200&brief=1"] = { start: 100, entries: items(100, 299) };
+  assert.equal(await run(core.inner.stationTopics.historyOlder(ST, "k1")), true);
+  await read();
+  assert.equal(liveOf(core).first, 100);
+  assert.equal(host.requests.filter((r) => r.url.includes("/sessions/k1/timeline?before=")).length, 2);
   core.close();
 });
 
