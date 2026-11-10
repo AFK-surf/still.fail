@@ -100,6 +100,13 @@ export type DownCause = "network" | "station" | "unreached" | "lock" | "updating
 /// `stationLimit`), past which it counts the update failed.
 export const UPDATE_DOWN_MS = 20 * 60_000;
 
+/// Which side is too old for the other, as a station's link in `error` says once its stream's open was answered 426:
+/// `station`, this core finds it older than OLDEST_STATION (oldest.ts `station_too_old`); `app`, the station finds this
+/// core older than its OLDEST_CORE (station/src/api/oldest.ts: update the app, or reload the page). Every station
+/// answered a stable page so on 2026-11-10 and its list said only 「4 台 station 异常」: nothing said why, or what to do.
+/// Absent otherwise.
+export type TooOld = "station" | "app";
+
 /// Whether a station's refusal is for a security mode (DownCause `lock`).
 export const lockRefusal = (e: { code: string }) => e.code === "lock_unconfirmed" || e.code === "lock_station";
 
@@ -583,11 +590,12 @@ export class Links {
               span.end();
               misses++;
               // It answered, but no: it is there. Not reached at all: coming back, or down. Refused for a security mode:
-              // down for this device, and why (DownCause `lock`).
+              // down for this device, and why (DownCause `lock`). Answered 426: which side is too old (TooOld).
               const lock = lockRefusal(error);
               const state = lock ? "offline" : error.status !== undefined ? "error" : reached && misses < MISSES ? "reconnecting" : "offline";
+              const old: TooOld | null = state === "error" && error.status === 426 ? (error.code === "station_too_old" ? "station" : "app") : null;
               record(core.host, "link miss", () => `${stationTag(address)} misses=${misses}/${LONG_MISSES} cloud=${core.status.cloudDown() ? "down" : "up"} -> ${state}: ${said(error.message)}`);
-              self.setLink(address, state === "offline" ? { state, message: error.message, cause: lock ? "lock" : self.#cause(address) } : { state, message: error.message });
+              self.setLink(address, state === "offline" ? { state, message: error.message, cause: lock ? "lock" : self.#cause(address) } : { state, message: error.message, ...(old !== null ? { old } : {}) });
               return { failed: `open failed: ${error.message}` } as const;
             }
             const body = opened.success.body;

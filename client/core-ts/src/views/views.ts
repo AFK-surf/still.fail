@@ -106,7 +106,8 @@ function linkValue(v: Value | undefined): J {
   if ("err" in v) return { state: "error", message: v.err.message };
   const cause = get(v.ok, "cause");
   const catching = get(v.ok, "catching");
-  return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "hostUnreadable") === true ? { hostUnreadable: true } : {}), ...(get(v.ok, "retrying") === true ? { retrying: true } : {}), ...(typeof cause === "string" ? { cause } : {}), ...(typeof catching === "number" ? { catching } : {}) };
+  const old = get(v.ok, "old");
+  return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "hostUnreadable") === true ? { hostUnreadable: true } : {}), ...(get(v.ok, "retrying") === true ? { retrying: true } : {}), ...(typeof cause === "string" ? { cause } : {}), ...(typeof catching === "number" ? { catching } : {}), ...(old === "station" || old === "app" ? { old } : {}) };
 }
 
 const stationOnline = (v: Value | undefined): boolean => !down(linkValue(v));
@@ -1494,7 +1495,11 @@ export class Views implements Owner {
     const menu = { role: str(get(workspace, "role")), places: (this.#core.places?.() ?? []).map((p) => [p.id, p.role] as const) };
     const hint = archiveHintOf(this.ok({ topic: "prefs" }) ?? null);
     const states: J[] = [];
-    const troubles: [string, string, boolean, string][] = [];
+    // Each station in trouble: its state, its line, the words said once when every one says the same (the device's
+    // network; this app or page too old for them), and its address.
+    const troubles: [string, string, string | null, string][] = [];
+    // The stations find this core too old (link.ts TooOld `app`): a web page is reloaded, an app updated.
+    const appOld = this.#core.host.appKeys === true ? t("core-views.station.appOld") : t("core-views.station.pageOld");
     const rows: J[] = [];
     // The rows each station's records made last time (`keptBetween`), and which of them changed since.
     const listKey = `${scope}\u0001${mine}\u0001${watching}\u0001${visibility}`;
@@ -1609,10 +1614,15 @@ export class Views implements Owner {
           else behind += catching;
         }
       }
-      if (state === "offline") troubles.push(["offline", downWords(this.link(s.address), s.name), get(this.link(s.address), "cause") === "network", s.address]);
-      else if (state === "error") troubles.push(["error", t("core-views.station.unreachable", { name: s.name }), false, s.address]);
-      else if (state === "connecting" && read && "ok" in read) troubles.push(["reconnecting", t("core-views.station.reconnecting", { name: s.name }), false, s.address]);
-      else if (state === "online" && get(this.link(s.address), "hostUnreadable") === true) troubles.push(["incompatible", t("core-views.station.incompatible_named", { name: s.name }), false, s.address]);
+      if (state === "offline") troubles.push(["offline", downWords(this.link(s.address), s.name), get(this.link(s.address), "cause") === "network" ? t("core-views.station.network") : null, s.address]);
+      else if (state === "error") {
+        // Answered that one side is too old (link.ts TooOld): what to update, not 无法连接.
+        const old = get(this.link(s.address), "old");
+        if (old === "app") troubles.push(["error", appOld, appOld, s.address]);
+        else if (old === "station") troubles.push(["incompatible", t("core-views.station.incompatible_named", { name: s.name }), null, s.address]);
+        else troubles.push(["error", t("core-views.station.unreachable", { name: s.name }), null, s.address]);
+      } else if (state === "connecting" && read && "ok" in read) troubles.push(["reconnecting", t("core-views.station.reconnecting", { name: s.name }), null, s.address]);
+      else if (state === "online" && get(this.link(s.address), "hostUnreadable") === true) troubles.push(["incompatible", t("core-views.station.incompatible_named", { name: s.name }), null, s.address]);
       const cause = state === "offline" ? get(this.link(s.address), "cause") : undefined;
       // Refused for a security mode: why.
       if (cause === "lock") message = get(this.link(s.address), "message") ?? null;
@@ -1624,9 +1634,11 @@ export class Views implements Owner {
     if (troubles.length === 1) trouble = { text: troubles[0][1], state: troubles[0][0], retry: false, station: troubles[0][3] };
     else if (troubles.length > 1) {
       const worst = ["error", "offline", "reconnecting", "incompatible"].find((w) => troubles.some(([s]) => s === w)) ?? "offline";
-      // Every one down as the device's network is: that, once, and not as so many stations amiss.
-      const network = troubles.every(([, , n]) => n === true);
-      trouble = { text: network ? t("core-views.station.network") : t("core-views.station.troubles", { n: troubles.length }), state: worst, retry: false };
+      // Every one down as the device's network is, or finding this app too old: that, once, and not as so many stations
+      // amiss.
+      const once = troubles[0][2];
+      const same = once !== null && troubles.every(([, , w]) => w === once);
+      trouble = { text: same ? once : t("core-views.station.troubles", { n: troubles.length }), state: worst, retry: false };
     }
     const glyph = looks.glyph(states, days);
     const note = looks.listNote(states, days, loading, unread);

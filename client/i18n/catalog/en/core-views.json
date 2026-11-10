@@ -446,6 +446,8 @@
     "one": "1 station with issues",
     "other": "{n} stations with issues"
   },
+  "core-views.station.appOld": "This app is too old for your stations: update the app",
+  "core-views.station.pageOld": "This page is too old for your stations: reload it",
   "core-views.station.unreachable": "Can't reach {name}",
   "core-views.station.unreachable_short": "Can't reach",
   "core-views.station.lock": "Security mode is blocking {name}",
