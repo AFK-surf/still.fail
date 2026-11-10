@@ -57,14 +57,13 @@ jobs:
         # four branches pushed at once waited up to 4 minutes for runners, 2026-10-31, as asked)
         include:
           - { part: app, group: pkgs, store: app-pkgs }
-          - { part: replay, group: "", store: replay }
           # (and again with frames drawn on run_for's way while the app asks for them, at 120 a second, at 60, and at
           # 24 then 7, a runner each (MBUI_TEST_FPS, mbui's scripts/fps_check.sh): the same results, what a test asserts
           # at a moment what is so at it however many frames came before)
           - { part: app, group: pkgs, store: app-pkgs, fps: "120" }
           - { part: app, group: pkgs, store: app-pkgs, fps: "60" }
           - { part: app, group: pkgs, store: app-pkgs, fps: "24 7" }
-          # (the flows at the other rates: replay-fps below, on the program replay-build makes once)
+          # (the flows at every rate, the default's too: replay-fps below, on the program replay-build makes once)
     env:
       PART: ${{ matrix.part }}
       GROUP: ${{ matrix.group }}
@@ -81,8 +80,8 @@ jobs:
         # (arch/next's commit, on main's ref: workflow_run, above)
         with: { ref: "${{ github.event.workflow_run.head_sha || github.sha }}" }
       - name: The core takes input and due timers in order
-        # (once a push, on the replay runner at the default rate: a frame rate is nothing to it)
-        if: env.PART == 'replay' && env.FPS == '' && env.GROUP != 'build'
+        # (once a push, on replay-build's runner: a frame rate is nothing to it)
+        if: env.PART == 'replay'
         run: |
           clang++ -std=c++20 -O2 apps/mbui/engine/tests/ready_queue.cpp -o "$RUNNER_TEMP/core-ready-queue-test"
           "$RUNNER_TEMP/core-ready-queue-test"
@@ -181,9 +180,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "mbui-replay-test-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/replay-test", retention-days: 1, compression-level: 1 }
       - name: The mbui app's check (detlint, then native type-checked)
-        # (on the default rate's replay runner alone: the same check on each rate's was 17-21 s of each of their 200-300
-        # in the same push, 2026-11-09)
-        if: env.PART == 'replay' && env.FPS == '' && env.GROUP != 'build'
+        # (on replay-build's runner alone: the same check on each rate's was 17-21 s of each of their 200-300 in the
+        # same push, 2026-11-09)
+        if: env.PART == 'replay'
         # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23. On the replay
         # part's runner: the app part was 184-187 s with it, the replay part 77-100 s, 2026-10-24)
         run: moon version && bash apps/mbui/scripts/check.sh
@@ -265,7 +264,9 @@ jobs:
   # The flows' test program built once for their runs at the other rates (scripts/test.sh REPLAY_BUILD_OUT): each
   # rate's runner built the same program again, 104-177 s apiece of their 200-300, replay at 60 fps 300 s of its five
   # minutes on main 097da882 (42644588583), 2026-11-10; sfapp's is built once the same way (app-build, as asked
-  # 2026-10-31). The default rate's replay runner builds its own beside it, with the core's tests and the check.
+  # 2026-10-31). The default rate's runs on it too, and the core's tests and the check run here after the build: the
+  # default rate's runner built the same program beside it, 158 s of its 294 after four commits' changes to mbui (main
+  # 2dbd62da, 42734298401, 2026-11-10), every unit a change made compiled twice.
   replay-build:
     name: native (replay build)
     runs-on: ubuntu-24.04
@@ -278,17 +279,17 @@ jobs:
       OWN: ${{ github.event_name == 'workflow_run' && 'a-' || github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
     steps: *native-steps
 
-  # The flows seen again at 120, 60, 24 and 7 frames a second (MBUI_TEST_FPS), each on the program replay-build made
-  # (REPLAY_EXE: nothing built here, no MoonBit, no units: a checkout, the program, the runs)
+  # The flows seen again at the default rate and at 120, 60, 24 and 7 frames a second (MBUI_TEST_FPS), each on the
+  # program replay-build made (REPLAY_EXE: nothing built here, no MoonBit, no units: a checkout, the program, the runs)
   replay-fps:
-    name: native (replay at ${{ matrix.fps }} fps)
+    name: native (replay${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }})
     needs: replay-build
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
-        fps: ["120", "60", "24", "7"]
+        fps: ["", "120", "60", "24", "7"]
     env:
       MBUI_TEST_FPS: ${{ matrix.fps }}
       FPS: ${{ matrix.fps }}
@@ -299,7 +300,7 @@ jobs:
         with: { ref: "${{ github.event.workflow_run.head_sha || github.sha }}" }
       - uses: actions/download-artifact@v4
         with: { name: "mbui-replay-test-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/replay-test" }
-      - name: The flows seen again (native, at ${{ matrix.fps }} fps, on replay-build's program)
+      - name: The flows seen again (native${{ matrix.fps && format(', at {0} fps', matrix.fps) || '' }}, on replay-build's program)
         run: |
           set -o pipefail
           chmod +x "$RUNNER_TEMP/replay-test/flows.blackbox_test.exe" "$RUNNER_TEMP/replay-test/testexe"
@@ -321,7 +322,7 @@ jobs:
         if: failure()
         run: |
           failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-test.log" | sed 's/^\[stillfail[^]]*\] test //; s/ failed.*//' | sort -u)
-          echo "::error title=check-mbui (replay at ${{ matrix.fps }} fps) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
+          echo "::error title=check-mbui (replay${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
 
   # sfapp's tests, the app part's groups (scripts/test.sh app_group_of), each run on the program app-build made
   # (APP_EXE: nothing built here, no MoonBit, no units: a checkout, the program, the runs)
