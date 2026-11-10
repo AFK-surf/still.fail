@@ -65,13 +65,12 @@ test("events_keep_the_records_current", async () => {
   apply(host, values);
   push("session", { ...session("k1", 1), title: "改了" });
   push("thread", { id: 7, entries: [entry(4, "new")] });
-  push("chat", { id: "8", thread: 8, title: "新的", agents: [], lastActiveAt: 2 });
   await host.time.pass(600);
   apply(host, values);
   assert.equal(v(values, 1)[0].title, "改了");
   assert.deepEqual(v(values, 2).entries.map((e: { n: number }) => e.n), [1, 2, 3, 4]);
   assert.equal(v(values, 2).caught, 3, "said as it came: it comes in with a motion");
-  assert.deepEqual(v(values, 3).map((r: { id: string }) => r.id), ["7", "8"]);
+  assert.deepEqual(v(values, 3).map((r: { id: string }) => r.id), ["7"]);
   // Its summary made from what was said (station/thread-after.ts), not read.
   assert.equal(gets(host, "/admin/api/threads/7"), 0);
   assert.equal((core.inner.data.of("ws/st")!.thread("ws/st", 7) as { last: number }).last, 4);

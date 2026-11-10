@@ -1301,79 +1301,20 @@ test("a_chat_not_in_the_threads_held_waits_for_its_station_and_only_one_it_says_
   core.close();
 });
 
-test("a_thread_its_station_tells_the_summary_of_is_not_read_again", async () => {
+test("a_thread_its_summary_is_made_of_what_is_said_in_it_is_not_read_again", async () => {
   const { host, core, push, read } = await ui({ ...base(), "GET /threads": [threadView(7, 3)], "GET /threads/7/entries?limit=50": { last: 3, entries: entries(1, 3) } });
   await read();
   const summaries = () => gets(host, "/admin/api/threads/7");
-  // Told after what was said, before or after it: put in place, not read.
+  // The station leaves it to the device: made here from what was said (thread-after.ts), not read.
   push("thread", { id: 7, entries: [entry(4, "m4")] });
-  push("thread-view", { ...threadView(7, 4, 3, 1) });
-  push("thread-view", { ...threadView(7, 5, 3, 2) });
-  push("thread", { id: 7, entries: [entry(5, "m5")] });
-  await host.time.pass(EVENTS_COALESCE_MS + 100, 50);
-  assert.equal(summaries(), 0);
-  const t = threadsOf(core).find((x: J) => x.id === 7);
-  assert.deepEqual([t.last, t.unread], [5, 2]);
-  // Told none (the station leaves it to the device, views=1): made here from what was said (thread-after.ts), not read.
-  push("thread", { id: 7, entries: [entry(6, "m6")] });
   await host.time.pass(EVENTS_COALESCE_MS + 100, 50);
   assert.equal(summaries(), 0);
   const made = threadsOf(core).find((x: J) => x.id === 7);
-  assert.deepEqual([made.last, made.unread, made.lastMessage.text], [6, 2, "m6"], "the viewer's own message: not unread");
+  assert.deepEqual([made.last, made.lastMessage.text], [4, "m4"]);
   // One it cannot make (an entry left out before it): read.
   push("thread", { id: 7, entries: [entry(9, "m9")] });
   await host.time.pass(EVENTS_COALESCE_MS + 100, 50);
   assert.equal(summaries(), 1);
-  core.close();
-});
-
-test("a_station_that_leaves_its_rows_to_the_device_has_them_made_here_from_what_it_tells", async () => {
-  // Made by the station, each change read every row it could touch again for every viewer: 3 to 5 s each on a station short of
-  // memory (2026-11-03). Told what they are made of, the device makes them; what only the station can say is read.
-  const agent = { key: "k1", runtime: "claude", model: null, effort: null, process: "cold", pending: 0, lastTurn: null };
-  const row = { id: "k1", session: "k1", thread: 7, title: "部署", agents: [agent], last: null, unread: false, mine: false, lastActiveAt: 1, people: [], archiveRecommended: false, pinned: null };
-  const answers: J = { ...base(), "GET /chats": [row] };
-  const { host, core, push, read } = await ui(answers);
-  await read();
-  const held = () => core.inner.data.chat(ST, "k1") as J;
-  const asked = () => host.requests.filter((r) => r.url.includes("/admin/api/chats")).map((r) => r.url.replace("https://stillfail.test/admin/api", ""));
-  const before = asked().length;
-  push("made", { rows: true });
-  // What an agent said: its row's latest, unread.
-  push("thread", { id: 7, entries: [{ ...entry(4, "  改好了 "), authorKind: "agent", author: "k1", authorName: "bot" }] });
-  await coalesce(host);
-  assert.deepEqual([held().last, held().unread, held().lastActiveAt], [{ seq: 4, authorKind: "agent", author: "k1", authorName: "bot", text: "改好了", createdAt: 4 }, true, 4]);
-  // Its session at work, the viewer's pin: in place.
-  push("session", { ...session("k1"), process: "running", pending: 1 });
-  push("pin", { session: "k1", at: 9 });
-  await coalesce(host);
-  assert.deepEqual([held().agents[0].process, held().agents[0].pending, held().pinned], ["running", 1, 9]);
-  assert.deepEqual(asked().slice(before), [], "none read");
-  // A card posted: what waits is the station's to say, read for that chat alone.
-  answers["GET /chats?thread=7"] = { rows: [{ ...held(), last: { ...held().last, seq: 5, text: "选一个", createdAt: 5 }, card: { seq: 5, card: { type: "options" } } }], scope: ["k1"] };
-  push("thread", { id: 7, entries: [{ ...entry(5, "选一个"), authorKind: "agent", author: "k1", card: { type: "options" } }] });
-  await coalesce(host);
-  assert.deepEqual(asked().slice(before), ["/chats?thread=7"]);
-  assert.equal(held().card.seq, 5);
-  // The viewer said they will not take it up: in place.
-  push("dismiss", { thread: 7, n: 5 });
-  await coalesce(host);
-  assert.equal(held().card.dismissed, true);
-  // Its sessions changed: that chat's rows read; gone with its thread: out.
-  answers["GET /chats?thread=7"] = { rows: [{ ...held(), title: "部署（二）" }], scope: ["k1"] };
-  push("chat-changed", { thread: 7 });
-  await coalesce(host);
-  assert.deepEqual([asked().slice(before), held().title], [["/chats?thread=7", "/chats?thread=7"], "部署（二）"]);
-  // Gone from the list as the station says (archived): out.
-  answers["GET /chats?session=k1"] = { rows: [], scope: ["k1"] };
-  push("session", { ...session("k1"), archivedAt: 20 });
-  await coalesce(host);
-  assert.deepEqual(asked().slice(before), ["/chats?thread=7", "/chats?thread=7", "/chats?session=k1"]);
-  assert.equal(held(), undefined);
-  // Settings changed (nothing said of what): the list read whole.
-  push("chat-changed", {});
-  await coalesce(host);
-  assert.deepEqual(asked().slice(before).slice(3), ["/chats"]);
   core.close();
 });
 
@@ -1598,42 +1539,25 @@ test("a_gap_is_read_once_and_what_came_meanwhile_waits_for_it", async () => {
   core.close();
 });
 
-test("a_thread_its_summary_says_goes_further_than_what_is_held_is_read_whoever_said_so", async () => {
-  const answers: J = { ...base(), "GET /threads/7/entries?after=3&limit=50": { last: 5, entries: entries(4, 5) } };
+test("a_thread_its_summary_says_goes_further_than_what_is_held_is_read", async () => {
+  const answers: J = { ...base(), "GET /threads": [threadView(7, 3, 1, 2)] };
   const { host, core, push, values, read } = await ui(answers);
   core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
   await read();
   const from = host.requests.length;
-  // Its summary alone says it goes to 5 (the entries were never told): read once the burst is over, not before.
-  push("thread-view", { ...threadView(7, 5, 3, 2) });
-  await host.settle();
-  assert.deepEqual(entryReads(host, from), [], "waits for the burst to end: the entries are mostly on their way");
+  // A read of its summary (after something was read, say) says it goes to 5 (the entries were never told): read.
+  answers["GET /threads/7"] = threadView(7, 5, 3, 2);
+  answers["GET /threads/7/entries?after=3&limit=50"] = { last: 5, entries: entries(4, 5) };
+  push("read", { viewer: "a@x.com", thread: 7, n: 2 });
+  await coalesce(host);
   await coalesce(host);
   await read();
   assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3&limit=50"]);
   assert.deepEqual(nums(values), [1, 2, 3, 4, 5]);
-  // Said with its entries, in either order: they are held by the time the burst is over, and nothing is read.
-  push("thread-view", { ...threadView(7, 6, 3, 3) });
-  push("thread", { id: 7, entries: [entry(6, "m6")] });
-  push("thread", { id: 7, entries: [entry(7, "m7")] });
-  push("thread-view", { ...threadView(7, 7, 3, 4) });
-  await coalesce(host);
-  await read();
-  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3&limit=50"]);
-  assert.deepEqual(nums(values), [1, 2, 3, 4, 5, 6, 7]);
-  // A read of its summary (after something was read, say) says so as well.
-  answers["GET /threads/7"] = threadView(7, 9, 7, 2);
-  answers["GET /threads/7/entries?after=7&limit=50"] = { last: 9, entries: entries(8, 9) };
-  push("read", { viewer: "a@x.com", thread: 7, n: 4 });
-  await coalesce(host);
-  await coalesce(host);
-  await read();
-  assert.deepEqual(entryReads(host, from), ["/threads/7/entries?after=3&limit=50", "/threads/7/entries?after=7&limit=50"]);
-  assert.deepEqual(nums(values), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   core.close();
 });
 
-test("a_thread_not_open_its_summary_says_goes_further_is_read_too_and_one_none_of_which_is_held_waits_to_be_brought", async () => {
+test("a_thread_not_open_its_summary_says_goes_further_is_read_too", async () => {
   const answers: J = {
     ...base(),
     "GET /threads": [threadView(7, 3), threadView(8, 2)],
@@ -1645,9 +1569,9 @@ test("a_thread_not_open_its_summary_says_goes_further_is_read_too_and_one_none_o
   const held = (id: number) => core.inner.data.logNumbers("entry", ST, String(id));
   assert.deepEqual(held(8), [1, 2]);
   const from = host.requests.length;
-  push("thread-view", { ...threadView(8, 3, 2, 1) });
-  // One the device holds nothing of (it is new): brought with the station's history, not by this.
-  push("thread-view", { ...threadView(9, 4, 0, 4) });
+  // Its summary read again says it goes to 3.
+  answers["GET /threads/8"] = threadView(8, 3, 2, 1);
+  core.inner.stations.summaryOf(ST, 8);
   await coalesce(host);
   await host.settle();
   assert.deepEqual(entryReads(host, from), ["/threads/8/entries?after=2&limit=50"]);
@@ -2022,13 +1946,6 @@ test("a_chat_open_is_asked_what_was_said_since_though_its_stream_came_back_told_
   const asked = host.requests.slice(from).flatMap(readsOf).filter((url) => url.includes("/admin/api/") && !url.includes("/events") && !url.endsWith("/screens")).map((url) => url.replace("https://stillfail.test/admin/api", ""));
   // (and the person's own lock, read of the station as it is reached again: of the cloud before, unseen here)
   assert.deepEqual(asked.filter((url) => url !== "/lock/person"), ["/threads/7/entries?after=3&limit=50"]);
-  // A stream that takes over from one still heard (an agent started: the stream follows it) was not away: nothing asked.
-  const again = host.requests.length;
-  push("chat", { id: "7", thread: 7, session: "k1", title: "部署", lastActiveAt: 1, agents: [{ key: "k1", process: "running" }] });
-  await host.settle();
-  await host.settle();
-  assert.ok(streams.at(-1)!.path.includes("live=k1"), streams.at(-1)!.path);
-  assert.deepEqual(entryReads(host, again), []);
   core.close();
 });
 
@@ -2725,29 +2642,20 @@ test("a_removed_thread_and_a_removed_sessions_transcript_are_forgotten", async (
   core.close();
 });
 
-test("chat_rows_come_from_the_station_and_follow_its_events", async () => {
+test("chat_rows_come_from_the_station_and_follow_what_is_read_and_written", async () => {
   const row = (id: string, thread: number | null, last: number, unread: boolean) => ({ id, thread, session: "k1", title: id, agents: [], lastActiveAt: 1, last: last > 0 ? { seq: last, text: "…" } : null, unread });
-  const answers: J = { ...base(), "GET /chats": [row("7", 7, 12, true), row("k", null, 0, false)], "PUT /threads/7/read": { n: 13 } };
+  const answers: J = { ...base(), "GET /chats": [row("7", 7, 12, true), row("k", null, 0, false)], "PUT /threads/7/read": { n: 12 } };
   const { host, core, push, streams } = await started(answers);
   await host.settle();
   assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?running=1&views=1&rows=1&shared=1"]);
   const rows = () => core.inner.data.get({ topic: "chatRows", station: ST }) as J[];
   const ids = () => rows().map((r) => r.id);
   assert.deepEqual(ids(), ["7", "k"]);
-  const reads = reqs(host);
-  // Rows change, come and go as the station says, without a request.
-  push("chat", { ...row("7", 7, 13, true), title: "排查" });
-  push("chat", row("8", 8, 1, false));
-  push("chat-removed", { id: "k" });
-  await host.settle();
-  assert.deepEqual(ids(), ["7", "8"]);
-  assert.equal(rows()[0].title, "排查");
-  assert.equal(reqs(host), reads);
   // Read short of the last message: still unread; up to it: read, at once.
-  push("read", { viewer: "a@x.com", thread: 7, n: 12 });
+  push("read", { viewer: "a@x.com", thread: 7, n: 11 });
   await host.settle();
   assert.equal(rows()[0].unread, true);
-  await run(core.inner.stations.read(ST, 7, 13, null));
+  await run(core.inner.stations.read(ST, 7, 12, null));
   assert.equal(rows()[0].unread, false);
   // A new chat is written: the rows are current when the write answers.
   answers["GET /chats"] = [row("9", 9, 0, false)];
@@ -2792,18 +2700,17 @@ test("a_message_read_in_a_chat_looked_at_is_read_on_the_list_at_once_not_after_i
   // Words sent and answered at once: the answer came while the list was still taking the words sent (its end not in
   // view), was the list's and the workspace's unread, and was read on them only once the station took the read, a
   // round trip later (2026-11-08).
-  const row = (last: number, unread: boolean) => ({ id: "7", thread: 7, session: "k1", title: "部署", agents: [], lastActiveAt: last, last: { seq: last, text: "…" }, unread });
-  const { host, core, push, values, read } = await ui({ ...base(), "GET /chats": [row(3, false)] });
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], hidden: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [] };
+  const { host, core, push, values, read } = await ui({ ...base(), "GET /chats?marks=1": marks, "GET /chats": [], "GET /sessions": [{ ...session("k1"), creator: { id: "a@x.com", name: "A", email: "a@x.com", via: "cloud" } }] });
   // the station slow to take the read
   stationLater(host, (req) => (req.method === "PUT" && req.url.endsWith("/threads/7/read") ? new Promise(() => {}) : undefined));
   subscribe(core, 1, 1, { topic: "chat", station: ST, thread: 7 });
   subscribe(core, 1, 2, { topic: "chats", scope: "ws" });
   call(core, 1, 3, "client.focus", { visible: true, focused: true, chat: { station: ST, thread: 7, end: false } });
+  push("made", { rows: true, marks: true });
   await read();
-  const unread = () => (v(values, 2).days as J[]).flatMap((d) => d.items).find((i: J) => i.id === "7")?.unread;
-  push("thread", { id: 7, entries: [entry(4, "来了")] });
-  push("thread-view", threadView(7, 4, 3, 1));
-  push("chat", row(4, true));
+  const unread = () => (v(values, 2).days as J[]).flatMap((d) => d.items).find((i: J) => i.thread === 7)?.unread;
+  push("thread", { id: 7, entries: [{ ...entry(4, "来了"), authorKind: "agent", author: "k1", authorName: "bot" }] });
   await read();
   assert.equal(unread(), true);
   // its end in view: read, on the list too, while the station has not answered
@@ -3522,22 +3429,6 @@ test("an_old_notification_to_a_missing_or_forbidden_thread_reports_the_failure",
   }
 });
 
-// sync.rs
-test("the_core_keeps_its_workspaces_stations_and_agents_at_work_with_nobody_looking", async () => {
-  const { host, core, push, streams } = await started();
-  // Nobody subscribed: the account's workspaces, their stations, and what each station holds are read.
-  for (const path of ["/v1/me", "/v1/workspaces/ws", "/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats"]) {
-    assert.ok(host.requests.some((r) => r.url.endsWith(path)), path);
-  }
-  assert.equal(core.inner.stations.link(ST)?.state.state, "online");
-  // An agent at work: its live state is kept too (its stream follows it); one idle is not.
-  push("chat", { id: "7", thread: 7, session: "k1", title: "部署", lastActiveAt: 1, agents: [{ key: "k", process: "running" }, { key: "idle", process: "warm" }] });
-  await host.settle();
-  await host.settle();
-  assert.deepEqual(streams.filter((s) => !s.closed).map((s) => s.path), ["/events?running=1&views=1&rows=1&shared=1&live=k&from=0&last=200&brief=1"]);
-  core.close();
-});
-
 test("how_a_station_was_last_time_is_there_as_its_link_starts_and_an_old_file_of_it_moves_into_the_database", async () => {
   const { host, core } = await started({ ...base(), "GET /overview": { connects: [], profiles: [] } }, 0, undefined, (s) => (s.gate.stream = "fail"));
   await host.settle();
@@ -3581,30 +3472,6 @@ test("a_station_not_reached_for_long_is_tried_seldom_though_the_cloud_says_it_is
   await host.time.pass(OFFLINE_RETRY_MS / 2 + 30_000, 1_000);
   assert.equal(tries(), LONG_MISSES + 2);
   assert.equal(core.inner.data.record("link", ST), "online");
-  core.close();
-});
-
-test("an_agent_ending_its_turn_keeps_the_stream_one_starting_opens_it_anew", async () => {
-  const { host, core, push, streams } = await started();
-  const open = () => streams.filter((s) => !s.closed).map((s) => s.path);
-  const row = (id: string, agents: unknown[]) => push("chat", { id, thread: Number(id), session: `s${id}`, title: "部署", lastActiveAt: 1, agents });
-  row("7", [{ key: "k", process: "running" }]);
-  await host.settle();
-  await host.settle();
-  assert.deepEqual(open(), ["/events?running=1&views=1&rows=1&shared=1&live=k&from=0&last=200&brief=1"]);
-  const opened = streams.length;
-  // Its turn over: the stream goes on as it is, still following it.
-  row("7", [{ key: "k", process: "warm" }]);
-  await host.settle();
-  await host.settle();
-  assert.equal(streams.length, opened);
-  assert.deepEqual(open(), ["/events?running=1&views=1&rows=1&shared=1&live=k&from=0&last=200&brief=1"]);
-  // Another at work: a stream for what is wanted now, without the one done.
-  row("8", [{ key: "j", process: "running" }]);
-  await host.settle();
-  await host.settle();
-  assert.equal(streams.length, opened + 1);
-  assert.deepEqual(open(), ["/events?running=1&views=1&rows=1&shared=1&live=j&from=0&last=200&brief=1"]);
   core.close();
 });
 

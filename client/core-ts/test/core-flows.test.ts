@@ -1710,7 +1710,6 @@ test("letters_kept_in_their_own_log_are_no_entries_of_the_chat_and_its_letters_p
   assert.deepEqual(page(), [["备份", [["in", "旧的一封"], ["out", "脚本放好了吗"], ["in", "放好了"]]]]);
   // One told as it is kept: on the page, nothing of it in the chat.
   s.push("letters", { id: 7, letters: [going(3, 45, "谢谢")] });
-  s.push("thread-view", { ...threadView(7, 3), letters: 4, lettersLast: 3 });
   await host.settle();
   apply(host, values);
   assert.deepEqual(page(), [["备份", [["in", "旧的一封"], ["out", "脚本放好了吗"], ["in", "放好了"], ["out", "谢谢"]]]]);
@@ -1943,9 +1942,13 @@ test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_a
   const atRest = session("chat:c-1");
   const working = { ...atRest, process: "running", running: true, turns: 1, lastTurn: { id: "t1", kind: "input", startedAt: 5, endedAt: null } };
   const row = (id: string, session: string, thread: number, agents: J[]) => ({ id, session, thread, title: "新对话", agents, last: null, unread: false, mine: true, lastActiveAt: thread, connect: null, origin: null });
-  const answers: J = { ...base(), "GET /chats": [row("7", "k1", 7, [])] };
+  const marks = { card: {}, need: {}, answered: {}, suggested: [], verdicts: {}, reviews: false, kept: [], hidden: [], pins: {}, openers: {}, opened: {}, shares: {}, clientKeys: {}, teams: {}, selves: [] };
+  const answers: J = { ...base(), "GET /chats": [row("7", "k1", 7, [])], "GET /chats?marks=1": marks };
   const s = await started(answers);
   const { host, core } = s;
+  // A station that keeps the marks: the sidebar made here of the summaries held.
+  s.push("made", { rows: true, marks: true });
+  await host.settle();
   // The station as it is at each moment: what a read is answered with is what it had as it was asked.
   const now = (agent: J) => {
     answers["GET /sessions"] = [session("k1"), agent];
@@ -1973,7 +1976,6 @@ test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_a
   // Its agent begins: the station tells it, and has it so from now.
   now(working);
   s.push("session", working);
-  s.push("chat", row("9", "chat:c-1", 9, [working]));
   await host.settle();
   subscribe(core, ui, 4, { topic: "chat", station: "ws/st", thread: 9 });
   await host.settle();
@@ -1981,7 +1983,7 @@ test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_a
   for (const r of release) r();
   await host.settle();
   apply(host, values);
-  const item = v(values, 1).days.flatMap((d: J) => d.items).find((i: J) => i.id === "9");
+  const item = v(values, 1).days.flatMap((d: J) => d.items).find((i: J) => i.thread === 9);
   assert.deepEqual([v(values, 4).agents[0].status, item?.state], ["running", "run"]);
   core.close();
 });

@@ -11,7 +11,8 @@ test("with no floor every station is talked to; with one, a station older than i
   assert.equal(stationTooOld([["stillfail-build", "0.99.6999"]], "/sessions", 7000)?.code, "station_too_old");
   const old = stationTooOld([["stillfail-build", "0.1.6999"]], "/events?running=1", 7000);
   assert.deepEqual([old?.code, old?.status], ["station_too_old", 426]);
-  assert.equal(stationTooOld([["content-type", "application/json"]], "/sessions", 7000)?.code, "station_too_old");
+  assert.equal(stationTooOld([["stillfail-idempotent", "1"]], "/sessions", 7000)?.code, "station_too_old", "a station from before it said its build");
+  assert.equal(stationTooOld([["content-type", "application/json"]], "/sessions", 7000), null, "no station's");
 });
 
 test("a station too old is still asked what its updates are and for one, so it can be updated from here", () => {
