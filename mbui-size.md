@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [cabc6d876](https://github.com/AFK-surf/still.fail/commit/cabc6d876242017694aa9b1130c9369a329c3574) station: a phone let go is disconnected after what | 1.76 | 2.35 | 9.76 | 28.37 | 34.14 | 25.32 | 46.48 | 93.9 | 175.67 |
 | [51d7c4e46](https://github.com/AFK-surf/still.fail/commit/51d7c4e469511a1ab1719decdac5f070a84c12c6) Core: the sidebar and the agents at work only as s | 1.76 | 2.35 | 9.75 | 28.35 | 34.11 | 25.32 | 46.46 | 93.11 | 153.59 |
 | [7c7349a14](https://github.com/AFK-surf/still.fail/commit/7c7349a14847966e17ed93c02629279494a30def) station: a stopped preparation of the Linux screen | 1.76 | 2.34 | 9.73 | 28.33 | 34.05 | 25.29 | 46.41 | 93.72 | 179.58 |
 | [a657d7e50](https://github.com/AFK-surf/still.fail/commit/a657d7e50e1875f5ed9046a59f9a06bdb1b2e292) cloud: the feedback monitor's token marks a report | 1.75 | 2.33 | 9.7 | 28.26 | 33.94 | 25.23 | 46.33 | 93.28 | 184.86 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [40fcca753](https://github.com/AFK-surf/still.fail/commit/40fcca7536d67efc4c4d0f44d8f4874d0e64f83e) mbui: a word typed into a chat's composer builds i | 1.74 | 2.32 | 9.64 | 28.17 | 33.66 | 25.17 | 46.1 | 93.08 | 183.09 |
 | [a66778214](https://github.com/AFK-surf/still.fail/commit/a66778214fe7d25f16b6c7e2dfbe2163792c0394) mbui: a node says what of it moves (View::said_mov | 1.74 | 2.31 | 9.64 | 28.17 | 33.66 | 25.17 | 46.1 | 92.96 | 135.44 |
 | [9c17d8cb7](https://github.com/AFK-surf/still.fail/commit/9c17d8cb78abdf4d656cc465346c3cc9773dd2c7) mbui: a zoom is read by the old view's Ctx and tol | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.17 | 46.1 | 93.23 | 148.8 |
-| [181c034b0](https://github.com/AFK-surf/still.fail/commit/181c034b00968d3d452dea3090801c75f0825841) mbui: Anim and Way read the old view's Ctx they ar | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.17 | 46.1 | 93.36 | 140.6 |
