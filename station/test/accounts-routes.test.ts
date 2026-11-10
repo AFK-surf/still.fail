@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { Accounts, type AccountsDeps } from "../src/accounts/index.ts";
 import { checkConfig } from "../src/accounts/check.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
@@ -30,7 +31,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; codex?: AccountsDeps["codex"]; hub?: AccountsDeps["hub"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; review?: AccountsDeps["reviewUndecided"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; readQuota?: AccountsDeps["quota"]; resetQuota?: AccountsDeps["resetQuota"]; codex?: AccountsDeps["codex"]; hub?: AccountsDeps["hub"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; review?: AccountsDeps["reviewUndecided"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"]; claudeVersion?: string; ownReset?: boolean } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -67,7 +68,8 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
             return { state: "ok", windows: [{ label: "5 小时", usedPercent: 12, resetsAt: null }], detail: null, checkedAt: Date.now() };
           }
         : null),
-    resetQuota: o.resetQuota ?? null,
+    // (ownReset: the station's own way of resetting, a Claude subscription's here)
+    ...(o.ownReset ? {} : { resetQuota: o.resetQuota ?? null }),
     codex: o.codex,
     hub: o.hub,
     reviewUndecided: o.review,
@@ -77,6 +79,7 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
     workspaces: () => o.workspaces ?? [],
     shared: o.shared,
     urls: o.urls,
+    ...(o.claudeVersion !== undefined ? { claudeVersion: () => o.claudeVersion! } : {}),
   });
   accounts.start();
   const table = routes({
@@ -906,6 +909,60 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal(await redeem("nope", "x"), 404);
     assert.ok(quota.n >= 4);
     await t.close();
+  });
+
+  test("a Claude subscription's limit reset is used as the installed Claude Code uses it, and wakes its account", async () => {
+    const woke: string[] = [];
+    let grantLeft = 1;
+    const p = await provider((asked) => {
+      if (asked.url.startsWith("/api/oauth/usage")) {
+        return { status: 200, body: {
+          seven_day: { utilization: 100, resets_at: null },
+          juniper_tide: { eligible: false, ineligible_reason: "not_at_wall", arm: null, available: false },
+          cedar_ember: { eligible: true, grants: [{ id: "launch-fable", resets_total: 1, resets_left: grantLeft, ends_at: "2027-03-09T07:59:00+00:00", paused: false, usable_now: true }], next_grant_id: grantLeft > 0 ? "launch-fable" : null },
+        } };
+      }
+      if (asked.url === "/api/oauth/profile") return { status: 200, body: { organization: { uuid: "0f0e-org" } } };
+      if (asked.url === "/api/organizations/0f0e-org/reset_rate_limits") {
+        const result = grantLeft > 0 ? "reset" : "already_used";
+        grantLeft = 0;
+        return { status: 200, body: { result, resets_left: 0 } };
+      }
+      return { status: 404, body: {} };
+    });
+    const t = await rig({
+      urls: { ...URLS, anthropic: p.base },
+      claudeVersion: "2.1.321",
+      ownReset: true,
+      hub: { accounts: { setHealth: () => {}, healthOf: () => ({}) }, allowanceReset: async (id) => { woke.push(id); } },
+      readQuota: async () => ({ state: "ok", windows: [{ label: "每周", usedPercent: grantLeft > 0 ? 100 : 3, resetsAt: null }], detail: null, checkedAt: 0 }),
+    });
+    await t.call("PUT", "/profiles/cc", { access: { kind: "subscription" } });
+    mkdirSync(join(t.data, "homes/cc"), { recursive: true });
+    writeFileSync(join(t.data, "homes/cc/.credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "claude-token", refreshToken: "r", expiresAt: Date.now() + 86_400_000 } }));
+    const redeem = (key: string) => t.call("POST", "/profiles/cc/reset-quota", undefined, owner, { "Idempotency-Key": key });
+    assert.deepEqual(await redeem("first"), [200, { outcome: "reset" }]);
+    const claim = p.asked.find((a) => a.method === "POST")!;
+    assert.deepEqual(claim.body, { program: "cedar_ember", grant_id: "launch-fable", request_id: createHash("sha256").update("first").digest("hex") });
+    assert.equal(claim.headers.authorization, "Bearer claude-token");
+    assert.equal(claim.headers["user-agent"], "claude-cli/2.1.321 (external, cli)");
+    assert.deepEqual(woke, ["cc"]);
+    // None left now: said so, nothing claimed.
+    const claims = p.asked.filter((a) => a.method === "POST").length;
+    assert.equal((await redeem("second"))[0], 409);
+    assert.equal(p.asked.filter((a) => a.method === "POST").length, claims);
+    await t.close();
+    await p.close();
+  });
+
+  test("without an installed Claude Code a Claude subscription's reset is not asked", async () => {
+    const p = await provider(() => ({ status: 500, body: {} }));
+    const t = await rig({ urls: { ...URLS, anthropic: p.base }, ownReset: true, readQuota: async () => ({ state: "ok", windows: [], detail: null, checkedAt: 0 }) });
+    await t.call("PUT", "/profiles/cc", { access: { kind: "subscription" } });
+    assert.equal((await t.call("POST", "/profiles/cc/reset-quota", undefined, owner, { "Idempotency-Key": "k" }))[0], 503);
+    assert.equal(p.asked.length, 0);
+    await t.close();
+    await p.close();
   });
 
   test("a successful reset wakes its account and informs its share; an old redemption with no allowance does neither", async () => {

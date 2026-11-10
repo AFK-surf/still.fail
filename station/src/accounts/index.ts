@@ -54,6 +54,7 @@ import { uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { accessKinds, checkProfile, devinAccountFile, devinNotedIn, grokAuthFile, grokEmailIn, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
 import { checkQuota, codexUsage, lentCodexUsage, machineUsage } from "./quota.ts";
+import { claudeResetWith } from "./claude-reset.ts";
 import { Refused as Refusal } from "../api/request.ts";
 
 export { checkConfig } from "./check.ts";
@@ -118,6 +119,8 @@ export type AccountsDeps = {
   following?: () => boolean;
   /// The station's environment (where the machine's logins are, and the CLIs found); process.env by default.
   env?: Env;
+  /// The installed Claude Code's version (updates.ts), which a Claude subscription's limit resets are asked as.
+  claudeVersion?: () => string | null;
   loginCommands?: LoginCommands;
   urls?: Urls;
   /// Tests: how a profile is checked, its allowance read (null: nobody can ask), its reset asked, its decisions found.
@@ -140,6 +143,8 @@ export type AccountsDeps = {
     view(profile: Json): Json | null;
     lendCodex?(profile: Profile, rejected: boolean): Promise<number>;
     quotaReset?(profile: Profile, key: string): Promise<void>;
+    /// A borrowed Claude subscription's token, lent by its host (to use one of its resets with).
+    lendClaude?(profile: Profile, rejected?: string): Promise<MachineToken>;
     loginUpdated?(): void;
     /// Whether the station the profile is another's of did not answer lately.
     hostName?(profile: Json): string | null;
@@ -258,12 +263,13 @@ export class Accounts {
         ? deps.quota
         : (profile) => {
             const codex = deps.codex?.();
-            return checkQuota(profile, this.env, codex ? (p) => codex.rateLimits(p) : undefined, this.urls);
+            return checkQuota(profile, this.env, codex ? (p) => codex.rateLimits(p) : undefined, this.urls, stationLang(), deps.claudeVersion?.() ?? null);
           };
     this.resetFn =
       deps.resetQuota !== undefined
         ? deps.resetQuota
         : (profile, key) => {
+            if (profile.runtime === "claude") return this.claudeReset(profile, key);
             const codex = deps.codex?.();
             if (!codex) throw new Refusal(503, tr(stationLang(), "station.quota.resetUnsupported"));
             return codex.resetQuota(profile, key);
@@ -412,6 +418,25 @@ export class Accounts {
     const home = String(profile.home ?? "");
     const [token, expiresAt] = await claudeOAuthToken(this.env, joinPath(this.deps.data, home), rejected ?? null, this.urls.claudeToken, stationLang(), HANDED_MARGIN_MS);
     return { token, expiresAt };
+  }
+
+  /// One of a Claude subscription's limit resets used (claude-reset.ts), with its token (a borrowed one's lent by its
+  /// host), renewed and asked again once when the provider says it is not good.
+  private async claudeReset(profile: Profile, key: string): Promise<Json> {
+    const version = this.deps.claudeVersion?.() ?? null;
+    if (version === null) throw new Refusal(503, tr(stationLang(), "station.quota.resetUnsupported"));
+    const token = (rejected?: string) => {
+      if (!borrowed(profile)) return this.claudeToken(profile, rejected);
+      if (!this.deps.shared?.lendClaude) throw new Refusal(503, tr(stationLang(), "station.quota.resetUnsupported"));
+      return this.deps.shared.lendClaude(profile, rejected);
+    };
+    const first = await token();
+    const result = await claudeResetWith(this.urls.anthropic, first.token, version, key);
+    if (result?.unauthorized !== true) return result;
+    const renewed = await token(first.token);
+    const again = await claudeResetWith(this.urls.anthropic, renewed.token, version, key);
+    if (again?.unauthorized === true) throw new Refusal(502, tr(stationLang(), "station.quota.signInExpired"));
+    return again;
   }
 
   /// Refused for a copy of another station's profile: it is changed there.
@@ -1282,12 +1307,13 @@ export class Accounts {
     this.refreshQuotas(false);
   }
 
-  /// POST /profiles/:id/reset-quota: an OpenAI subscription's rate-limit reset redeemed, under the request's key.
+  /// POST /profiles/:id/reset-quota: a subscription's rate-limit reset redeemed (OpenAI's, Claude's), under the request's
+  /// key.
   async resetQuota(id: string, key: string, lang: Lang = stationLang()): Promise<Json> {
     const t = (k: string) => tr(lang, k);
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, t("station.profile.notFound"));
-    if (profile.runtime !== "codex" || accessKind(profile) !== "subscription") throw new Refusal(400, t("station.quota.resetOpenAiOnly"));
+    if ((profile.runtime !== "codex" && profile.runtime !== "claude") || accessKind(profile) !== "subscription") throw new Refusal(400, t("station.quota.resetSubscriptionOnly"));
     if (!this.resetFn) throw new Refusal(503, t("station.quota.resetUnsupported"));
     const result = await this.resetFn(profile, key);
     const quota = await this.readQuota(id, true).catch((error) => {
@@ -1307,6 +1333,7 @@ export class Accounts {
     }
     if (outcome === "nothingToReset") throw new Refusal(409, t("station.quota.nothingToReset"));
     if (outcome === "noCredit") throw new Refusal(409, t("station.quota.noCredit"));
+    if (outcome === "unavailable") throw new Refusal(409, t("station.quota.resetUnavailable"));
     throw new Refusal(502, t("station.quota.resetUnconfirmed"));
   }
 

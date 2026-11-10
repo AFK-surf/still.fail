@@ -528,7 +528,8 @@ export const AgentsLive = (control: Control) =>
       const accounts: Accounts = makeAccounts({
         data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, agy: () => agy, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
         workspaces: () => hub.workspaces(),
-        shared: { status: (p) => sharing!.status(p), lendCodex: (p, rejected) => sharing!.lendCodex(p, rejected), quotaReset: (p, key) => sharing!.quotaReset(p.id, key), loginUpdated: () => { void sharing?.reconcile(); }, view: (p) => sharing?.profileView(p) ?? null, hostName },
+        claudeVersion: () => updates.get().find((v) => v.id === "claude")?.version ?? null,
+        shared: { status: (p) => sharing!.status(p), lendCodex: (p, rejected) => sharing!.lendCodex(p, rejected), lendClaude: (p, rejected) => sharing!.lendClaude(p, rejected), quotaReset: (p, key) => sharing!.quotaReset(p.id, key), loginUpdated: () => { void sharing?.reconcile(); }, view: (p) => sharing?.profileView(p) ?? null, hostName },
       });
       found = accounts.found;
       accounts.start();
