@@ -465,6 +465,8 @@ pub fn dialog_corner_foot(Double) -> @ui.Style
 
 pub fn dialog_foot_rows(@ui.Ctx, @ui.Style, () -> Unit) -> Unit
 
+pub fn dialog_foot_rows_node(@view.View, @ui.Style, (@view.View) -> Unit) -> Unit
+
 pub let dialog_margin : Double
 
 pub let dialog_r : Double
@@ -1173,6 +1175,8 @@ pub fn meter_chip(@ui.Ctx, @json.Json?, brief? : Bool, figure? : Bool, drop? : I
 pub fn meter_chips(@ui.Ctx, Array[@json.Json], brief? : Bool, key? : String) -> Unit
 
 pub fn meter_line(@ui.Ctx, Array[@json.Json], key? : String) -> Unit
+
+pub fn meter_line_node(@view.View, () -> Array[@json.Json], in_row? : Bool) -> Unit
 
 pub fn mix(Int64, Double, Int64) -> Int64
 

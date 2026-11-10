@@ -250,7 +250,7 @@ pub fn opt_text(@json.Json?, String) -> String?
 
 pub fn page(@ui.Ctx, Core, Here, Route, root? : Bool, top? : Double) -> Unit
 
-pub fn panels_frame(Core) -> Unit
+pub fn panels_frame(Core, String) -> Unit
 
 pub fn pending_login(Core, String, String) -> @json.Json?
 

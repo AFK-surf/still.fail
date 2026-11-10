@@ -172,13 +172,25 @@ test "a chat with no agent yet, tapped by a finger on a desktop: its station's c
 }
 
 ///|
+/// Where the card's row `words` is (in the card: on its rows' line, as 机器详情 is, whatever else under it says them).
+fn peek_row(t : @ui.Tester, words : String) -> (Double, Double) {
+  let (dx, _) = t.find("机器详情").unwrap()
+  match t.locate(words).iter().find_first(fn(p) { (p.0 - dx).abs() < 1.0 }) {
+    Some(p) => p
+    None => abort("no \{words} on the card's rows' line: \{t.locate(words)}")
+  }
+}
+
+///|
 test "station menus keep a wide chat open and route files and details into its tabs" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-station-tag", wide=true)
   let before = app.nav.top()
   @settings.open_station_peek("ws1/st1", from=Unanchored)
   t.run_for(@kit.presence_in_ms)
-  t.tap_text("文件")
+  // (the card's 文件, not the files' place in the sidebar under it)
+  let (fx, fy) = peek_row(t, "文件")
+  t.tap(fx, fy)
   t.run_for(@kit.presence_in_ms)
   assert_true(t.find("可访问的文件夹") is None)
   t.tap_text("查看所有文件")
@@ -386,4 +398,183 @@ test "a login screen opened beside a chat closes its tab when the login browser 
   assert_true(app.nav.top() is Chat(_))
   assert_true(!side_now(r).0.contains("screen:[\"ws1/st1\",\"desktop\"]"))
   assert_true(!t.awake())
+}
+
+///|
+test "a wide chat's station card, its 文件 open beside it, 机器详情 pressed: the card and its menu go, the menu's words not jumping on their way out" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-station-tag", wide=true)
+  @settings.open_station_peek("ws1/st1", from=Unanchored)
+  t.run_for(@ui.move_most_ms)
+  let (fx, fy) = peek_row(t, "文件")
+  t.tap(fx, fy)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("查看所有文件") is Some(_), msg="its menu open")
+  // (judged frame by frame on the way: the old one's words stepped 469 down on the frame of the press)
+  let (dx, dy) = peek_row(t, "机器详情")
+  t.tap(dx, dy)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("查看所有文件") is None && t.find("机器详情") is None, msg="the card and its menu gone")
+  assert_eq(text(Some(named(calls, "chat.tabs.open")[0].params), "tab"), "station:[\"ws1/st1\"]")
+}
+
+///|
+/// The fixture's chat as `platform` plays it on a phone's window (`wide`: a 1280 by 800 one), Willow's card opened over
+/// it (`beside`: beside a point of its bar, else by nothing), at the frame it opened in or (`rest`) a Move after.
+fn peek_open(platform : Int, wide : Bool, beside : Bool, rest : Bool) -> @ui.Tester {
+  new_run()
+  let src = fixture("chat")
+  decide_src.val = Some(src)
+  open_fixture_over("chat", src)
+  let t = if wide {
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform~)
+  } else {
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
+  }
+  t.run_for(@ui.move_most_ms)
+  @settings.open_station_peek("ws1/st1", from=if beside { At(500.0, 30.0, 80.0, 24.0) } else { Unanchored })
+  t.frame()
+  if rest {
+    t.run_for(@ui.move_most_ms)
+  }
+  t
+}
+
+///|
+test "the station card on each screen: what it says, its machine, its network, then its rows, one under another, the rows' words on its words' line; with keyboard and mouse Escape closes it" {
+  // (touch on a phone's window, a sheet; keyboard and mouse there, a sheet too; a wide window, a dialog in its middle,
+  // and beside a point of the chat's bar)
+  for screen in [(2, false, false), (0, false, false), (0, true, false), (0, true, true)] {
+    let about = "platform \{screen.0}, wide \{screen.1}, beside \{screen.2}"
+    let t = peek_open(screen.0, screen.1, screen.2, true)
+    let (_, said_y) = t.find("Apple M1 Pro · 2 个 agent 在工作").unwrap()
+    // (its chips in words where the line has the room, else by their figures: either)
+    let (_, meter_y) = (t.locate("空闲 72%") + t.locate("72%")).fold(init=(0.0, 0.0), fn(a, p) { if p.1 > a.1 { p } else { a } })
+    let (_, net_y) = t.locate("直连").fold(init=(0.0, 0.0), fn(a, p) { if p.1 > a.1 { p } else { a } })
+    let (dx, dy) = t.find("机器详情").unwrap()
+    let (sx, sy) = peek_row(t, "屏幕")
+    let (fx, fy) = peek_row(t, "文件")
+    assert_true(said_y < meter_y && meter_y < net_y && net_y < sy && sy < fy && fy < dy, msg="\{about}: \{said_y} \{meter_y} \{net_y} \{sy} \{fy} \{dy}")
+    assert_true((sx - dx).abs() < 1.0 && (fx - dx).abs() < 1.0, msg="\{about}: its rows \{sx} \{fx} \{dx}")
+    if screen.0 == 0 {
+      t.key(@ui.key_escape)
+      t.run_for(@ui.move_most_ms)
+      assert_true(t.find("机器详情") is None, msg="\{about}: Escape")
+    }
+  }
+}
+
+
+///|
+/// The fixture's chat with its station's card put up as it opens, before its first frame is built (chat-peek, as
+/// fixture_open puts it up), on a phone: the Tester, and what of the card's title is drawn on every frame from the first
+/// (each frame's, put in `titles`: its words where they are seen at all, its name or its id).
+fn peek_first_tester(titles : Array[Array[String]]) -> @ui.Tester {
+  let src : Ref[Source?] = Ref(None)
+  let made = fn() {
+    match src.val {
+      Some(s) => s
+      None => {
+        let s = fixture_app("chat-peek")
+        src.val = Some(s)
+        s
+      }
+    }
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, made()) }, tree=fn(root) { app_tree(made())(root) }, w=390.0, h=844.0, platform=2, env=[
+    ("MBUI_LOCALE", "zh"),
+  ])
+  t.each_frame(
+    Some(fn() { titles.push(t.words().filter(fn(w) { w.5 > 0.0 && (w.0 == "st1" || w.0 == "Willow") }).map(fn(w) { w.0 })) }),
+  )
+  t
+}
+
+///|
+test "a station's card put up before the first frame is built: titled its name from its first frame to the end of its way in, never its id; what it says there" {
+  let titles : Array[Array[String]] = []
+  let t = peek_first_tester(titles)
+  t.frame()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(titles[0], ["Willow"], msg="its name on its first frame")
+  assert_true(titles.iter().all(fn(ws) { !ws.contains("st1") }), msg="its id never drawn: \{titles}")
+  assert_true(t.find("机器详情") is Some(_) && t.find("直连") is Some(_), msg="what it says")
+}
+
+///|
+/// A window's tree of what is presented alone (no frame of the app round it, so nothing says
+/// the settings' core but `here`: the old frame's build says it while `here` says so, as signed_in_over does), on a
+/// phone: the Tester and the fixture's chat's source.
+fn peek_core_later_tester(here : @signals.Signal[Bool]) -> (@ui.Tester, Source) {
+  let src = fixture_app("chat")
+  let t = @ui.Tester::new(
+    fn(_c) {
+      if here.get() {
+        match workspace_in_view(src).0 {
+          Some(w) => @settings.panels_frame(settings_core(src, w), w.id)
+          None => ()
+        }
+      }
+    },
+    tree=fn(root) {
+      @sf.set_words(fill)
+      @sf.presented_nodes(root)
+    },
+    w=390.0,
+    h=844.0,
+    platform=2,
+    env=[("MBUI_LOCALE", "zh")],
+  )
+  (t, src)
+}
+
+///|
+test "a station's card put up while the settings' core is not said yet: nothing of it but its panel, never its id; the core said, its name and what it says come in then; another workspace's said, its name and what it says as that one's" {
+  let here = @signals.signal(false, same=fn(a, b) { a == b })
+  let (t, src) = peek_core_later_tester(here)
+  t.frame()
+  @settings.open_station_peek("ws1/st1", from=Unanchored)
+  t.run_for(@ui.move_most_ms)
+  assert_true(@sf.presenting(), msg="the card is up")
+  assert_true(t.find("st1") is None && t.find("Willow") is None && t.find("机器详情") is None, msg="nothing of it yet")
+  here.set(true)
+  t.frame()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("st1") is None, msg="never its id")
+  assert_true(t.find("Willow") is Some(_), msg="its name, as the core is said")
+  assert_true(t.find("机器详情") is Some(_) && t.find("直连") is Some(_), msg="what it says, as the core is said")
+  // (another workspace's core said while it is up: one whose stations name it otherwise and say otherwise of it)
+  let w = workspace_in_view(src).0.unwrap()
+  let core = settings_core(src, w)
+  let other : @settings.Core = {
+    ..core,
+    topic: fn(name, params) {
+      if name == "stations" {
+        @signals.computed(fn(_) {
+          {
+            value: Some(
+              Json::array([
+                Json::object({
+                  "station": Json::string("ws1/st1"),
+                  "name": Json::string("Birch"),
+                  "summary": Json::string("另一处说的它"),
+                  "online": Json::boolean(false),
+                }),
+              ]),
+            ),
+            error: None,
+            version: 1,
+          }
+        })
+      } else {
+        (core.topic)(name, params)
+      }
+    },
+  }
+  @settings.panels_frame(other, "ws-other")
+  here.set(false)
+  t.frame()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("Birch") is Some(_) && t.find("Willow") is None, msg="its name as the other's stations say it")
+  assert_true(t.find("另一处说的它") is Some(_) && t.find("直连") is None, msg="what it says, as the other's stations say it")
 }
