@@ -1619,6 +1619,7 @@ export const SHAPES: Record<string, Shape> = {
     ["daysLeft", opt("u32")],
     ["waiting", "bool", { doc: "Not in the lock: it waits to be approved face to face (`lock.pair`)." }],
     ["unsigned", opt("bool"), { doc: "In the lock, an app, but not signing with this device's key (let in before it kept one, or its key since\nlost): it may be made one that signs (a trusted device), approved as a new one is (`lock.pair`)." }],
+    ["ownLock", opt("bool"), { doc: "Its person bound a lock of their own here that this app is not on: the stations let it in on that lock\nalone, so it waits however the workspace's names it, and `lock.pair` asks to join that one (`pair` its try)." }],
     ["pair", opt("LockPair"), { doc: "Its try to be approved face to face (or made one that signs), once it began (`lock.pair`)." }],
   ], { doc: "This device in the workspace's lock." }),
   LockView: struct([
