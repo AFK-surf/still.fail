@@ -1,5 +1,6 @@
-// A chat's outline (对话目录): what people said in it (the core's `chatOutline`: theirs and the viewer's, not agents'),
-// oldest first under its days, each its first line and its time, a face before those of someone other than the viewer
+// A chat's outline (对话目录): what people said in it (the core's `chatOutline`, an index: each day's messages' seqs,
+// theirs and the viewer's, not agents'; each row's words and who asked for by their seqs, `chat.outline.rows`, fifty at
+// a time as rows of them show, bones till they come), oldest first under its days, each its first line and its time, a face before those of someone other than the viewer
 // in a chat of more than one person; the one the reader is at (outline_current) in the accent. Pressed, the outline
 // closes and the chat's list goes to that message, which flashes (@sfbase.go_to). A field over it looks in all of the
 // chat (`chat.outline.find`, asked as the chat's find asks `chat.find`: ask_bringing), its rows then what has the words
@@ -59,16 +60,24 @@ pub fn outline_params(r : ChatRef, thread : Double) -> Map[String, Json] {
 }
 
 ///|
-/// The messages people said in an outline (`value`, the core's `chatOutline`), oldest first.
+/// The messages people said in an outline (`value`, the core's `chatOutline`: its days' seqs), oldest first.
 fn outline_seqs(value : Json?) -> Array[Double] {
   let out : Array[Double] = []
   for d in items(value, "days") {
-    for it in items(Some(d), "items") {
-      out.push(number(Some(it), "seq"))
+    for q in items(Some(d), "seqs") {
+      match q {
+        Number(seq, ..) => out.push(seq)
+        _ => ()
+      }
     }
   }
   out
 }
+
+///|
+/// How many rows of the outline are asked for at once (`chat.outline.rows`, a hundred at most): the index's seqs
+/// [chunk·n, chunk·n + n) a chunk.
+let outline_chunk : Int = 50
 
 ///|
 /// The message of `said` (people's, oldest first) the reader is at: at the chat's end, the last; else the last at or
@@ -124,14 +133,16 @@ fn said_in_view(v : ChatView) -> Array[Double] {
 /// What a row of the outline's list is: a day's heading, a message said, one found.
 priv enum OutlineRow {
   RowDay(String)
-  RowSaid(OutlineItem)
+  RowSaid(Double)
   RowFound(OutlineItem)
 }
 
 ///|
 /// An outline open: its field, what is looked for (its words as last asked, "" nothing: the outline itself), what the
 /// core found for them, whether it reads the rest of the chat for them, how many were asked (an answer to one asked
-/// before let be), the row the keys are at (its key, "" none), the message the reader is at as it opened.
+/// before let be), the row the keys are at (its key, "" none), the message the reader is at as it opened; the rows'
+/// words and who the core gave (`chat.outline.rows`), by seq; the chunks asked for whose answer has not come, and the
+/// seqs asked for the core left out (not on the device: not asked again while it is open).
 priv struct OutlineAt {
   field : @ui.Field
   query : @signals.Signal[String]
@@ -140,6 +151,9 @@ priv struct OutlineAt {
   mut asked : Int
   lit : @signals.Signal[String]
   current : Double
+  held : @signals.Signal[Map[Double, OutlineItem]]
+  asking : Map[Int, Bool]
+  absent : Map[Double, Bool]
 }
 
 ///|
@@ -169,6 +183,9 @@ pub fn open_outline(
     asked: 0,
     lit: @signals.signal("", same=fn(a, b) { a == b }),
     current,
+    held: @signals.signal({}),
+    asking: {},
+    absent: {},
   }
   // (words in its field as it opens, looked for at once: a screen's fixture)
   at.field.set(typed)
@@ -210,9 +227,7 @@ fn outline_body(
   let searching = fn() { at.query.get() != "" }
   // (in a chat of more than one person: a face before the rows of those other than the viewer, a face's room before
   // the viewer's)
-  let others = fn() {
-    items(value(), "days").iter().any(fn(d) { items(Some(d), "items").iter().any(fn(i) { !flag(Some(i), "mine") }) })
-  }
+  let others = fn() { flag(value(), "others") }
   // its rows by their keys, as the core has them now
   let table : @signals.Computed[(Array[String], Map[String, OutlineRow])] = @signals.computed(fn(_) {
     let keys : Array[String] = []
@@ -226,33 +241,89 @@ fn outline_body(
     }
     let found = searching()
     let shown = if found { at.found.get() } else { value() }
-    let whole = match shown {
-      Some(_) => flag(shown, "whole")
-      None => !found
-    }
-    for di, d in items(shown, "days") {
+    for d in items(shown, "days") {
+      // (a day by its key, not its heading nor where it is: 今天 is 昨天 tomorrow)
       let day = text(Some(d), "day")
       if day != "" {
-        put("day/\{di}/" + day, RowDay(day))
+        put("day/" + text(Some(d), "date"), RowDay(day))
       }
-      for it in items(Some(d), "items") {
-        let item = outline_item(it, found)
-        let s = item.seq.to_int().to_string()
-        put(if found { "found/" + s } else { "said/" + s }, if found { RowFound(item) } else { RowSaid(item) })
+      if found {
+        for it in items(Some(d), "items") {
+          let item = outline_item(it, true)
+          put("found/" + item.seq.to_int().to_string(), RowFound(item))
+        }
+      } else {
+        for q in items(Some(d), "seqs") {
+          match q {
+            Number(seq, ..) => put("said/" + seq.to_int().to_string(), RowSaid(seq))
+            _ => ()
+          }
+        }
       }
     }
     (keys, rows)
   })
-  // (the rows the keys go along: those of messages, in order)
-  let goes = fn() { table.get().0.filter(fn(k) { k.has_prefix("said/") || k.has_prefix("found/") }) }
+  // (the rows the keys go along: those of messages whose words have come, in order)
+  let goes = fn() {
+    let held = at.held.get()
+    let (keys, rows) = table.get()
+    keys.filter(fn(k) {
+      match rows.get(k) {
+        Some(RowFound(_)) => true
+        Some(RowSaid(seq)) => held.contains(seq)
+        _ => false
+      }
+    })
+  }
   let place : @view.ListPlace[String] = @view.ListPlace::new()
-  let go = fn(item : OutlineItem) {
+  // the rows' words and who asked for a chunk at a time (outline_chunk of the index's seqs, by where they stand in it):
+  // the chunk `i`'s, unless asked for and not answered yet, or all of it held (or left out by the core) already
+  let ask_chunk = fn(i : Int) {
+    let seqs = outline_seqs(@signals.untracked(value))
+    let from = i * outline_chunk
+    guard from < seqs.length() && !at.asking.contains(i) && !src.read_only else { return }
+    let to = if from + outline_chunk < seqs.length() { from + outline_chunk } else { seqs.length() }
+    let chunk = seqs[from:to].to_array()
+    let held = at.held.untracked()
+    guard chunk.iter().any(fn(q) { !held.contains(q) && !at.absent.contains(q) }) else { return }
+    at.asking[i] = true
+    let asked = params.copy()
+    asked["seqs"] = Json::array(chunk.map(fn(q) { Json::number(q) }))
+    (src.call)("chat.outline.rows", Json::object(asked), fn(res) {
+      at.asking.remove(i) |> ignore
+      match res {
+        Ok(j) => {
+          let now = at.held.untracked().copy()
+          for row in items(Some(j), "rows") {
+            let item = outline_item(row, false)
+            now[item.seq] = item
+          }
+          for q in chunk {
+            if !now.contains(q) {
+              at.absent[q] = true
+            }
+          }
+          at.held.set(now)
+        }
+        // (its station away: asked again as a row of it is next made)
+        Err(_) => ()
+      }
+    })
+  }
+  // (the chunk a message of the index is in)
+  let chunk_of = fn(seq : Double) {
+    match outline_seqs(@signals.untracked(value)).search(seq) {
+      Some(i) => i / outline_chunk
+      None => -1
+    }
+  }
+  let go = fn(seq : Double) {
     let words = match at.found.get() {
       Some(f) if searching() => found_words(f)
       _ => []
     }
     close()
-    @sfbase.go_to(r, item.seq)
+    @sfbase.go_to(r, seq)
     // (one found: the words marked in it, as a search's are, nothing flashing)
     if words.length() > 0 {
       @sfbase.go_to_words[r.station + "\u{1}" + r.session] = words
@@ -260,7 +331,8 @@ fn outline_body(
   }
   let go_key = fn(k : String) {
     match @signals.untracked(fn() { table.get().1.get(k) }) {
-      Some(RowSaid(item)) | Some(RowFound(item)) => go(item)
+      Some(RowSaid(seq)) if at.held.untracked().contains(seq) => go(seq)
+      Some(RowFound(item)) => go(item.seq)
       _ => ()
     }
   }
@@ -369,8 +441,20 @@ fn outline_body(
     }
   }
   v.show(bringing, fn(n) { @sf.panel_note_node(n, fn() { @sf.t("web-main.outline.bringing") }) })
-  // its rows, the reader's in the middle as it opens; what its field holds as it opens looked for at once
+  // (more found than are listed, the newest of them: how many older are not, over the rows)
+  let more = fn() {
+    match at.found.get() {
+      Some(f) if searching() => number(Some(f), "more").to_int()
+      _ => 0
+    }
+  }
+  v.show(fn() { more() > 0 }, fn(n) {
+    @sf.panel_note_node(n, fn() { @sf.t("web-main.outline.more", args=[("n", more().to_string())]) })
+  })
+  // its rows, the reader's in the middle as it opens, the chunk it is in asked for then; what its field holds as it
+  // opens looked for at once
   at.lit.set(current_key(at))
+  v.at_moment(v.cause_at(), fn() { ask_chunk(chunk_of(at.current)) }) |> ignore
   let first = @signals.untracked(fn() { at.field.text() }).trim(chars=" ").to_string()
   if first != "" {
     ask(first)
@@ -381,21 +465,46 @@ fn outline_body(
     fn(row, k) {
       match @signals.untracked(fn() { table.get().1.get(k) }) {
         Some(RowDay(day)) => @sf.panel_heading_node(row, fn() { day })
-        Some(RowSaid(item)) =>
-          @sf.panel_said_row_node(
-            row,
-            fn() { [@ui.span(item.words)] },
-            fn() { go(item) },
-            fn() { item.words + " " + item.clock },
-            lead?=if @signals.untracked(others) {
-              Some(fn(col : @view.View, size : Double) { if !item.mine { outline_face(col, src, item, size, stint) } })
+        Some(RowSaid(seq)) => {
+          let lead = fn(face : (@view.View, Double) -> Unit) -> ((@view.View, Double) -> Unit)? {
+            if @signals.untracked(others) {
+              Some(face)
             } else {
               None
-            },
-            end=fn() { item.clock },
-            chosen=fn() { item.seq == at.current },
-            lit=fn() { at.lit.get() == k },
-          )
+            }
+          }
+          // (its words as the core gave them; till then the bones of such a row, as tall, taking no press, its chunk
+          // asked for as it is made, at that moment, not as it is built)
+          row.pick(fn() { at.held.get().contains(seq) }, fn(b, filled) {
+            match @signals.untracked(fn() { at.held.get().get(seq) }) {
+              Some(item) if filled =>
+                @sf.panel_said_row_node(
+                  b,
+                  fn() { [@ui.span(item.words)] },
+                  fn() { go(item.seq) },
+                  fn() { item.words + " " + item.clock },
+                  lead?=lead(fn(col, size) { if !item.mine { outline_face(col, src, item, size, stint) } }),
+                  end=fn() { item.clock },
+                  chosen=fn() { item.seq == at.current },
+                  lit=fn() { at.lit.get() == k },
+                )
+              _ => {
+                @sf.waiting_node(b, fn(s) {
+                  let words = @sf.sample_words(outline_sample_words)
+                  @sf.panel_said_row_node(
+                    s,
+                    fn() { [@ui.span(words)] },
+                    fn() {  },
+                    fn() { words },
+                    lead?=lead(fn(_, _) {  }),
+                    end=fn() { outline_sample_clock },
+                  )
+                })
+                b.at_moment(b.cause_at(), fn() { ask_chunk(chunk_of(seq)) }) |> ignore
+              }
+            }
+          })
+        }
         Some(RowFound(item)) => {
           let words = fn() {
             match at.found.get() {
@@ -407,7 +516,7 @@ fn outline_body(
           @sf.panel_said_row_node(
             row,
             fn() { @sf.found_weight([@ui.span(item.words)], words()) },
-            fn() { go(item) },
+            fn() { go(item.seq) },
             fn() { who + " " + item.words },
             who=(fn() { who }, fn(f, size) { outline_face(f, src, item, size, stint) }),
             lit=fn() { at.lit.get() == k },
@@ -489,6 +598,13 @@ fn outline_face(col : @view.View, src : Source, item : OutlineItem, size : Doubl
 /// How tall a row of the outline is taken to be till it is laid out, and how far under the list's top one the keys come
 /// to is kept (a row's room over it, so what is over it shows).
 let outline_row_est : Double = 40.0
+
+///|
+/// What a row not yet given its words shows in its bones: so many made-up words, and a time of day.
+let outline_sample_words : Int = 14
+
+///|
+let outline_sample_clock : String = "09:00"
 
 ///|
 let outline_keep : Double = outline_row_est
@@ -672,7 +788,7 @@ fn outline_rail(
   top : Double,
   room : Double,
 ) -> Bool {
-  let days = items(value, "days").map(fn(d) { items(Some(d), "items").length() })
+  let days = items(value, "days").map(fn(d) { items(Some(d), "seqs").length() })
   let said = outline_seqs(value)
   guard said.length() >= rail_least else { return false }
   let current = outline_current(said, top_seq, at_end)

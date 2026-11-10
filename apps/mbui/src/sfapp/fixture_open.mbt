@@ -123,10 +123,12 @@ pub fn open_fixture(mode : String) -> Unit {
     "chat-find" => @sfpages.find_preset(side_key(r), "截图")
     // the long chat of two people (outline_fixture.mbt), the list away from its end, at a message of 昨天's; its
     // outline opened from what shows (its rail on a wide page, else its round button), words typed in it
-    "chat-outline-away" | "chat-outline" | "chat-outline-find" | "chat-outline-bringing" => {
-      @sfbase.kept_places[side_key(r)] = { top: @sffixture.outline_away_seq, offset: 0.0, bottom: -1.0 }
+    // (chat-outline-long: one of 240 said by people, its list holding the last forty, its outline open)
+    "chat-outline-away" | "chat-outline" | "chat-outline-find" | "chat-outline-bringing" | "chat-outline-long" => {
+      let top = if mode == "chat-outline-long" { @sffixture.outline_long_away_seq } else { @sffixture.outline_away_seq }
+      @sfbase.kept_places[side_key(r)] = { top, offset: 0.0, bottom: -1.0 }
       match mode {
-        "chat-outline" | "chat-outline-bringing" => @sfpages.outline_preset(side_key(r), "")
+        "chat-outline" | "chat-outline-bringing" | "chat-outline-long" => @sfpages.outline_preset(side_key(r), "")
         "chat-outline-find" => @sfpages.outline_preset(side_key(r), "签名")
         _ => ()
       }

@@ -497,7 +497,9 @@ pub fn outgoing_json(String, Json, String, String) -> Json
 
 pub let outline_away_seq : Double
 
-pub fn outline_chat() -> @json.Json
+pub fn outline_chat(String) -> @json.Json
+
+pub let outline_long_away_seq : Double
 
 pub fn outline_mode(String) -> Bool
 

@@ -129,10 +129,12 @@ fn outline_tester(
   w? : Double = 1280.0,
   h? : Double = 800.0,
   platform? : Int = 0,
-  outline? : Json? = None,
+  outline? : @signals.Signal[Json?] = @signals.signal(None),
   newer? : Bool = false,
   top? : Double = -1.0,
   asks? : Bool = true,
+  held? : OutlineHeld = { on: false, answers: [] },
+  heard? : Array[(String, Json)] = [],
 ) -> @ui.Tester {
   new_run()
   let base = fixture(mode)
@@ -141,10 +143,23 @@ fn outline_tester(
     asks_outline: fn() { asks },
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
-      (base.call)(name, params, done)
+      // (`held`: the outline's rows answered only as the test lets them go)
+      // (`heard`: what the core answered, each by its call's name)
+      let done = fn(res : Result[Json, Json]) {
+        match res {
+          Ok(j) => heard.push((name, j))
+          Err(_) => ()
+        }
+        done(res)
+      }
+      if held.on && name == "chat.outline.rows" {
+        held.answers.push(fn() { (base.call)(name, params, done) })
+      } else {
+        (base.call)(name, params, done)
+      }
     },
     topic_read: fn(name, params) {
-      match (name, outline) {
+      match (name, outline.get()) {
         ("chatOutline", Some(o)) => { value: Some(o), error: None, version: 1 }
         // (`newer`: the chat's window short of its end, as the core says it of an older page)
         ("chat", _) if newer =>
@@ -169,6 +184,31 @@ fn outline_tester(
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   t
+}
+
+///|
+/// The outline's rows' answers held back while `on` (what was asked, to answer as the test says: outline_let_go).
+priv struct OutlineHeld {
+  mut on : Bool
+  answers : Array[() -> Unit]
+}
+
+///|
+/// The rows' answers held so far given.
+fn outline_let_go(held : OutlineHeld) -> Unit {
+  let now = held.answers.copy()
+  held.answers.clear()
+  for f in now {
+    f()
+  }
+}
+
+///|
+/// The seqs each `chat.outline.rows` asked for.
+fn outline_rows_asked(calls : Array[Made]) -> Array[Array[Double]] {
+  named(calls, "chat.outline.rows").map(fn(m) {
+    items(Some(m.params), "seqs").map(fn(q) { q.as_number().unwrap_or(-1.0) })
+  })
 }
 
 ///|
@@ -228,16 +268,14 @@ test "对话目录: a wide page's rail at the list's right, 44 wide, clear of th
   assert_eq(outline_faults(t), [])
   // two said: no rail
   let few : Json = {
-    "days": [{ "day": "今天", "items": [
-      { "seq": 2, "mine": true, "author": "lin@example.com", "by": { "name": "林" }, "words": "一", "clock": "09:00" },
-      { "seq": 4, "mine": false, "author": "ana@example.com", "by": { "name": "Ana" }, "words": "二", "clock": "09:10" },
-    ] }],
+    "days": [{ "date": "2026-11-10", "day": "今天", "seqs": [2, 4] }],
     "count": 2,
+    "others": true,
     "held": 2,
     "of": 2,
     "whole": true,
   }
-  let t = outline_tester(calls, outline=Some(few))
+  let t = outline_tester(calls, outline=@signals.signal(Some(few)))
   assert_eq(outline_buttons(t), [])
   // a phone's window: the round button over the way to the newest, 32 round, no rail
   let t = outline_tester(calls, w=390.0, h=844.0, platform=2)
@@ -500,17 +538,14 @@ test "对话目录: the rail's ticks, one for each said, the reader's (the 16th:
   assert_true(short.iter().all(fn(k) { k.1 == short[0].1 }) && short[0].1 != long[0].1.1, msg="\{ticks}")
   // three said: the rail as tall as a press at least, its ticks in its middle
   let three : Json = {
-    "days": [{ "day": "今天", "items": [
-      { "seq": 2, "mine": true, "author": "lin@example.com", "by": { "name": "林" }, "words": "一", "clock": "09:00" },
-      { "seq": 4, "mine": false, "author": "ana@example.com", "by": { "name": "Ana" }, "words": "二", "clock": "09:10" },
-      { "seq": 6, "mine": true, "author": "lin@example.com", "by": { "name": "林" }, "words": "三", "clock": "09:20" },
-    ] }],
+    "days": [{ "date": "2026-11-10", "day": "今天", "seqs": [2, 4, 6] }],
     "count": 3,
+    "others": true,
     "held": 3,
     "of": 3,
     "whole": true,
   }
-  let t = outline_tester(calls, outline=Some(three))
+  let t = outline_tester(calls, outline=@signals.signal(Some(three)))
   let rails = outline_buttons(t)
   assert_eq(rails.length(), 1)
   let (_, ry, rw, rh) = rails[0]
@@ -688,5 +723,153 @@ test "对话目录: in the sheet its day headings on the title's line, the rows'
   let (gx, _, gw, _, _, _) = grounds[0]
   assert_eq(gx, @sf.panel_card_in)
   assert_eq(gx + gw, 390.0 - @sf.panel_card_in)
+  assert_eq(outline_faults(t), [])
+}
+
+///|
+test "对话目录: the rail and the steps from the outline's index alone: no row asked for while only the rail shows" {
+  let calls : Array[Made] = []
+  let t = outline_tester(calls)
+  assert_eq(outline_buttons(t).length(), 1)
+  t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(outline_reading().flash, "ts20")
+  assert_eq(named(calls, "chat.outline.rows").length(), 0)
+}
+
+///|
+test "对话目录: opened, its rows filled from the chunk the reader's is in, asked once, the reader's row in view, no bones at rest" {
+  let calls : Array[Made] = []
+  let t = outline_tester(calls)
+  t.click(Button, label="对话目录")
+  t.run_for(@ui.move_most_ms)
+  let asked = outline_rows_asked(calls)
+  assert_eq(asked.length(), 1, msg="\{asked}")
+  // (the long chat's 31 said, one chunk: all of them, the reader's among them, by its station and thread)
+  assert_eq(asked[0].length(), 31)
+  assert_true(asked[0].contains(22.0))
+  let rows = named(calls, "chat.outline.rows")
+  assert_eq(text(Some(rows[0].params), "station"), "ws1/st1")
+  assert_eq(number(Some(rows[0].params), "thread"), 7.0)
+  assert_eq(t.bones_drawn(), 0)
+  let (px, py, pw, ph) = outline_panel(t).unwrap()
+  let reader = outline_drawn(t, "glyphs").filter(fn(g) {
+    g.5 == "截图初稿我看了，iPad 那几张字还是小，第三张的状态栏也没隐藏，我标出来发你" && g.0 >= px && g.0 < px + pw && g.1 >= py && g.1 < py + ph
+  })
+  assert_eq(reader.length(), 1, msg="\{reader}")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named(calls, "chat.outline.rows").length(), 1)
+}
+
+///|
+test "对话目录: a long outline (240 said) asks only the chunk shown; scrolled to its start, that chunk once, bones till it comes, the rows as tall after" {
+  let calls : Array[Made] = []
+  let held : OutlineHeld = { on: false, answers: [] }
+  let t = outline_tester(calls, mode="chat-outline-long", held~)
+  let asked = outline_rows_asked(calls)
+  // (the reader's, 283, among the last of the 240 said: the fifth chunk, its 200th to 239th)
+  assert_eq(asked.length(), 1, msg="\{asked}")
+  assert_eq(asked[0].length(), 40)
+  assert_true(asked[0].contains(@sffixture.outline_long_away_seq))
+  assert_eq(t.bones_drawn(), 0)
+  // to its start at once, the answer held
+  held.on = true
+  let (px, py, pw, ph) = outline_panel(t).unwrap()
+  t.wheel(px + pw / 2.0, py + ph / 2.0, -100000.0)
+  t.run_for(@ui.move_most_ms)
+  let asked = outline_rows_asked(calls)
+  assert_eq(asked.length(), 2, msg="\{asked.map(fn(a) { a.get(0) })}")
+  assert_eq(asked[1].length(), 50)
+  assert_eq(asked[1][0], 1.0)
+  assert_true(t.bones_drawn() > 0)
+  let heading = fn(day : String) {
+    outline_drawn(t, "glyphs").iter().find_first(fn(g) { g.5 == day }).map(fn(g) { g.1 }).unwrap_or(-1.0)
+  }
+  let first = heading("10月30日")
+  assert_true(first > 0.0, msg="\{first}")
+  // (where each row stands and how tall it is, in the panel: the bones' boxes and the rows' alike)
+  let boxes = fn() {
+    t.drawn_rects().filter(fn(r) { r.0 >= px && r.0 + r.2 <= px + pw + 0.5 && r.1 >= py + 60.0 && r.1 + r.3 <= py + ph && r.3 >= 30.0 && r.3 <= 60.0 }).map(fn(r) { (r.1, r.3) })
+  }
+  let rows_at = fn() { t.semantics().filter(fn(s) { s.role == Button && s.rect.0 >= px && s.rect.1 > py + 60.0 && s.rect.1 < py + ph }).map(fn(s) { (s.rect.1, s.rect.3) }) }
+  let before = rows_at()
+  let bones_before = boxes()
+  t.run_for(@ui.move_most_ms)
+  // (asked once while it is asked)
+  assert_eq(outline_rows_asked(calls).length(), 2)
+  held.on = false
+  outline_let_go(held)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.bones_drawn(), 0)
+  assert_eq(heading("10月30日"), first)
+  let after = rows_at()
+  assert_true(after.length() >= 8, msg="\{after}")
+  assert_eq(before, after, msg="bones \{bones_before} rows \{after}")
+  assert_eq(outline_rows_asked(calls).length(), 2)
+  assert_eq(outline_faults(t), [])
+}
+
+///|
+test "对话目录: a person's message said while it is open adds its row, asking only its chunk" {
+  let calls : Array[Made] = []
+  // (the long chat's index without its last said, 林's 今天 14:40, seq 40; then with it)
+  let full = ((fixture("chat-outline").topic_read)("chatOutline", {
+    "station": Json::string("ws1/st1"),
+    "thread": Json::number(7.0),
+  })).value.unwrap()
+  let short = match full {
+    Object(m) => {
+      let o = m.copy()
+      let days = items(Some(full), "days")
+      let last = days[days.length() - 1]
+      let seqs = items(Some(last), "seqs")
+      let cut : Json = {
+        "date": field(Some(last), "date").unwrap(),
+        "day": field(Some(last), "day").unwrap(),
+        "seqs": Json::array(seqs[:seqs.length() - 1].to_array()),
+      }
+      o["days"] = Json::array(days[:days.length() - 1].to_array() + [cut])
+      Json::object(o)
+    }
+    _ => full
+  }
+  let live = @signals.signal(Some(short))
+  let t = outline_tester(calls, outline=live)
+  t.click(Button, label="对话目录")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(outline_rows_asked(calls).length(), 1)
+  let row = "还有深色模式也看一下，启动画面那张图在深色模式下边缘有一圈白，挺显眼的"
+  let shows = fn() { outline_drawn(t, "glyphs").filter(fn(g) { g.5 == row }).length() }
+  assert_eq(shows(), 0)
+  live.set(Some(full))
+  t.run_for(@ui.move_most_ms)
+  // (its row made as it shows, at the outline's end: its chunk asked again for it, the one thing of it not held)
+  let (px, py, pw, ph) = outline_panel(t).unwrap()
+  t.wheel(px + pw / 2.0, py + ph / 2.0, 100000.0)
+  t.run_for(@ui.move_most_ms)
+  let asked = outline_rows_asked(calls)
+  assert_eq(asked.length(), 2, msg="\{asked}")
+  assert_true(asked[1].contains(40.0))
+  assert_eq(shows(), 1)
+}
+
+///|
+test "对话目录: more found than it lists: the newest hundred, how many older not listed said over the rows" {
+  let calls : Array[Made] = []
+  let heard : Array[(String, Json)] = []
+  let t = outline_tester(calls, mode="chat-outline-long", heard~)
+  t.type_text("的")
+  t.run_for(@sfpages.find_typing_ms)
+  t.run_for(@ui.move_most_ms)
+  let found = named(calls, "chat.outline.find")
+  assert_true(found.length() >= 1)
+  let (total, more) = match heard.iter().filter(fn(h) { h.0 == "chat.outline.find" }).last() {
+    Some((_, j)) => (number(Some(j), "total").to_int(), number(Some(j), "more").to_int())
+    None => (0, 0)
+  }
+  assert_true(more > 0 && total == more + 100, msg="\{(total, more)}")
+  let note = @sf.t("web-main.outline.more", args=[("n", more.to_string())])
+  assert_true(t.find(note) is Some(_), msg="\{note} \{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find(@sf.t("web-main.outline.count", args=[("n", total.to_string())])) is Some(_))
   assert_eq(outline_faults(t), [])
 }
