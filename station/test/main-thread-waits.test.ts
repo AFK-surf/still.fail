@@ -331,9 +331,14 @@ test("a task on this station for another's chat: prepared and its files listed o
 test("an archived session's directory and transcripts are asked of as it opens, off the main thread", async () => {
   const r = new Rig();
   r.hub.live.locateAsync = async () => ({ runtime: "claude", paths: [join(r.dir, "nowhere.jsonl")], current: true });
+  // The session at work is followed as it starts (live.ts `running`), off the main thread: its transcript's first length
+  // is written once its reader says it, whenever that is (on CI's Linux, inside what is counted below). Counted after it.
+  const note = r.hub.live.lengths!;
+  const followed = new Promise<void>((noted) => (r.hub.live.lengths = (key, n) => (note(key, n), noted())));
   try {
     const m = message();
     await r.accept(m);
+    await followed;
     await settle();
     const key = sessionKey("cl", "C1", m.threadTs);
     const cold = new ColdRooms(() => r.hub);
