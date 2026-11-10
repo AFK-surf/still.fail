@@ -17,7 +17,6 @@ export type Effect =
   | { kind: "thread"; archived: boolean }
   | { kind: "connect"; id: string | null }
   | { kind: "overview" }
-  | { kind: "footprint" }
   | { kind: "slack" }
   | { kind: "job" }
   /// The agents' memory (the `memory` topic): read again.
@@ -181,10 +180,6 @@ export const PARAMS: Record<string, string> = {
   "signin.deny": "id:string",
   "memory.get": "",
   "process.end": "pid:number session:string",
-  "footprint.scan": "",
-  "footprint.rebuild": "keys?:strings",
-  "footprint.delete": "keys?:strings",
-  "footprint.evict": "keys?:strings",
   "software.update": "id?:string repair?:boolean",
   "software.updateAll": "",
   "software.check": "",
@@ -296,7 +291,6 @@ class P {
 const NONE: Effect = { kind: "none" };
 const OVERVIEW: Effect = { kind: "overview" };
 const SLACK: Effect = { kind: "slack" };
-const FOOTPRINT: Effect = { kind: "footprint" };
 /// The folders `paths` (under `root`) are in.
 const drive = (root: string, paths: string[]): Effect => ({ kind: "drive", root, paths: paths.map(folderOf) });
 
@@ -659,14 +653,6 @@ function stationOp(name: string, params: unknown): Request | null {
     // A chat's process ended from its station's 进程 (resources/watch.ts `end`): the page reads it again in a moment.
     case "process.end":
       return op("POST", () => `/resources/processes/${p.u64("pid")}/end`, p.pick(["session"]), NONE);
-    case "footprint.scan":
-      return op("POST", () => "/footprint/scan", null, FOOTPRINT);
-    case "footprint.rebuild":
-      return op("POST", () => "/footprint/rebuild", p.pick(["keys"]), FOOTPRINT);
-    case "footprint.delete":
-      return op("POST", () => "/footprint/delete", p.pick(["keys"]), FOOTPRINT);
-    case "footprint.evict":
-      return op("POST", () => "/footprint/evict", p.pick(["keys"]), FOOTPRINT);
     case "software.update":
       return op("POST", () => "/updates", p.pick(["id", "repair"]), OVERVIEW);
     case "software.updateAll":

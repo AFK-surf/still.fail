@@ -1622,10 +1622,6 @@ fn station_device_node(b : @view.View, s : () -> Json?) -> Unit {
         if known {
           let rows = fn() {
             let out : Array[(String, String)] = items(host(), "details").map(fn(d) { (text(Some(d), "label"), text(Some(d), "value")) })
-            let footprint = text(field(field(s(), "overview"), "footprint"), "text")
-            if footprint != "" {
-              out.push((@sf.t("web-pages.stations.page.footprint"), footprint))
-            }
             out
           }
           @sf.block_node(p, fn(k) { host_details_node(k, rows) })

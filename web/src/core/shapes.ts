@@ -1109,15 +1109,6 @@ export interface SoftwareVersion {
 	failedText?: string;
 }
 
-/** How much of the disk a station takes, for the row that opens its footprint page. */
-export interface FootprintBrief {
-	/** None before its first measure. */
-	bytes?: number;
-	scanning?: boolean;
-	/** What the core says of it: 12.3 GB, 正在统计…. */
-	text?: string;
-}
-
 /** Whether a folder of the drive can be browsed now. */
 export type DriveRootState = "ok" | "missing" | "not_a_directory" | "unreadable";
 
@@ -1285,8 +1276,6 @@ export interface Overview {
 	updates?: SoftwareVersion[];
 	/** Its agents' processes, in a line. */
 	processesText: string;
-	/** How much of the disk it takes (none from a station older than the footprint page, which then is not offered). */
-	footprint?: FootprintBrief;
 	/**
 	 * The variables everything it starts for its agents runs with, by name, a secret's value
 	 * masked (none from a station older than them, which then does not offer them).

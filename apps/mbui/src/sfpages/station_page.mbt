@@ -1400,11 +1400,7 @@ fn station_machine(c : @ui.Ctx, core : Core, s : Json?, manager : Bool) -> Array
         match host {
           Some(_) => {
             let details = items(host, "details")
-            let footprint = text(field(o, "footprint"), "text")
             let rows : Array[(String, String)] = details.map(fn(d) { (text(Some(d), "label"), text(Some(d), "value")) })
-            if footprint != "" {
-              rows.push((@sf.t("web-pages.stations.page.footprint"), footprint))
-            }
             @sf.block(c, fn() { host_details(c, rows) })
           }
           None =>
