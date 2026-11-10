@@ -105,20 +105,23 @@ try {
   const keyedFor = async (d: Device, ms = 90_000) => {
     await d.until({ topic: "vaults", workspace }, (v) => (v?.vaults ?? []).find((x: J) => x.id === vault && x.keyed), ms);
   };
-  // (once it has heard it is out of the workspace's lock: what it held before, it held)
+  // (once it has heard it is out of the workspace's lock: what it held before, it held. Not by `signs` alone: a device
+  // that hears it is off its person's own lock shows as not signing at once, while the entry taking it out of the
+  // workspace's lock, which the vault goes by, comes a moment after)
   const refusedVault = async (d: Device) => {
-    const l = await d.lock(workspace, (l) => !l.signs, 60_000);
+    const l = await d.lock(workspace, (l) => !l.signs && !lockDevices(l).some((x) => x.mine && x.signs), 60_000);
     log(`  ${d.name}'s lock view: me=${JSON.stringify(l.me)}`);
     await d.call("vault.lock", { workspace });
     const o = await d.call("vault.open", { workspace, item }).then((o) => o, (e) => e);
     if (!(o instanceof Error)) throw new Error(`still opened: ${JSON.stringify(o)?.slice(0, 200)}`);
     log(`  ${d.name}'s vault.open: ${o.message.slice(0, 200)}`);
   };
-  /// A's vault as it stands after a device went: shown again (keyed anew) and opened, how long it took.
-  const aStill = async (what: string) => {
+  /// A's vault as it stands after a device went: keyed anew for the `left` devices that hold its key now (shown all
+  /// along, the one that went still among those holding its key until then) and opened, how long it took.
+  const aStill = async (what: string, left: number) => {
     const t1 = Date.now();
-    const v = await a.until({ topic: "vaults", workspace }, (v) => (v?.vaults ?? []).find((x: J) => x.id === vault && x.keyed), 60_000);
-    log(`  ${what}: A's vault back after ${Date.now() - t1} ms (${v.devices} devices hold its key)`);
+    const v = await a.until({ topic: "vaults", workspace }, (v) => (v?.vaults ?? []).find((x: J) => x.id === vault && x.keyed && x.devices === left), 60_000);
+    log(`  ${what}: A's vault keyed anew after ${Date.now() - t1} ms (${v.devices} devices hold its key)`);
     await a.stationState(workspace, (s) => s.state === "online");
     await opens(a);
   };
@@ -183,7 +186,7 @@ try {
   });
   await check("the station refuses C", async () => log(`  C sees: ${short(await c.stationState(workspace, (s) => s.state !== "online", 90_000))}`));
   await check("C can no longer open the item", () => refusedVault(c));
-  await check("A's vault keyed anew without C (its key in hand: nobody asked)", () => aStill("C taken out"));
+  await check("A's vault keyed anew without C (its key in hand: nobody asked)", () => aStill("C taken out", 1));
 
   // ── B joins the own lock face to face, is put in the workspace's lock and given the vault ──
   await b.signIn();
@@ -210,7 +213,7 @@ try {
     log(`  B sees: ${short(await b.stationState(workspace, (s) => s.state !== "online", 90_000))}`);
     await refusedVault(b);
   });
-  await check("A's vault keyed anew without B (its key read with the box key)", () => aStill("B taken off"));
+  await check("A's vault keyed anew without B (its key read with the box key)", () => aStill("B taken off", 1));
 
   // ── B back again: a new key given it ──
   await must("B joins alice's own lock again", async () => {
@@ -279,7 +282,7 @@ try {
     await a.lock(workspace, (l) => !lockDevices(l).some((x) => x.id === dBase), 120_000);
     log(`  D sees: ${short(await d.stationState(workspace, (s) => s.state !== "online", 120_000))}`);
     await refusedVault(d);
-    await aStill("D taken off with the station away");
+    await aStill("D taken off with the station away", 2);
     await keyedFor(b);
     await opens(b);
   });
@@ -299,7 +302,7 @@ try {
     await refusedVault(b);
   });
   await check("A, the last on the own lock, still let in and opens the item", async () => {
-    await aStill("B taken off while closed");
+    await aStill("B taken off while closed", 1);
   });
 
   // ── round 4: the first device taken off by another; the last one left cannot go ──
@@ -472,6 +475,7 @@ try {
   });
   stationDo("freeze");
   let gKey = "";
+  let gBase = "";
   await g.signIn().catch((x) => log(`  G signs in: ${x}`));
   await check("with the first station frozen, G, not on the lock yet, refused by the second", async () => {
     log(`  G sees the second: ${short(await stationIn(g, secondId, (s) => s.state !== "online" && s.state !== "connecting", 120_000))}`);
@@ -490,6 +494,7 @@ try {
     await stationIn(g, secondId, (s) => s.state === "online", 90_000);
     log(`  G let in after ${Date.now() - t1} ms`);
     await g.lock(workspace, (l) => l.signs && l.me?.confirmed, 90_000);
+    gBase = await baseOf(g);
     const t2 = Date.now();
     await g.call("vault.setup", { workspace });
     log(`  G set up in ${Date.now() - t2} ms`);
@@ -504,6 +509,8 @@ try {
     await opens(g);
   });
   stationDo("freeze");
+  // (how many devices hold the vault's key with G among them: one less once it is keyed anew)
+  const heldBy = (await b.until({ topic: "vaults", workspace }, (v) => (v?.vaults ?? []).find((x: J) => x.id === vault && x.keyed), 60_000)).devices as number;
   await must("with the first station frozen, B takes G off alice's own lock", async () => {
     await b.call("adb.personalRemove", { sub, key: gKey });
     await b.personal((p) => p.devices.length === 2, 60_000);
@@ -513,13 +520,42 @@ try {
     log(`  G sees the second: ${short(await stationIn(g, secondId, (s) => s.state !== "online" && s.state !== "connecting", 120_000))}`);
     await refusedVault(g);
   });
+  // (a vault is written on the first, by id, of the stations that hold it (views/vault.ts `holds`): the first station,
+  // frozen, or the second. On the frozen one it waits to be keyed anew: the devices left read it meanwhile and change
+  // nothing in it, told the station it waits for (the owner's decision, 2026-11-10, views/vault.ts `waitingAs`). On the
+  // second it is keyed anew at once, and written as ever. Which it is differs by the run, the stations' ids made anew.)
+  await check("with the first station frozen, B and A installed anew still open the item; a new item refused while the vault waits for that station, taken where it lives on the second", async () => {
+    for (const x of [b, e]) await x.lock(workspace, (l) => !lockDevices(l).some((d) => d.id === gBase), 90_000);
+    const host = (await b.until({ topic: "vaults", workspace }, (v) => (v?.vaults ?? []).find((x: J) => x.id === vault), 60_000)).station as string;
+    const waits = host === station.split("/")[1];
+    log(`  the vault lives on the ${waits ? "first station, frozen: it waits to be keyed anew" : "second station: keyed anew at once"}`);
+    for (const x of [b, e]) {
+      // (on the second station: once keyed anew, G's key gone from it; written meanwhile it is refused as waiting too,
+      // for the moment that takes)
+      if (!waits) await x.until({ topic: "vaults", workspace }, (v) => (v?.vaults ?? []).find((y: J) => y.id === vault && y.keyed && y.devices < heldBy), 60_000);
+      await opens(x);
+    }
+    const put = await within(b.call("vault.putItem", {
+      workspace, vault,
+      plain: { kind: "token", name: "e2e-waiting", fields: { value: "w" }, domains: [], notes: "" },
+      listing: { name: "e2e-waiting", kind: "token", modes: ["proxy"], hosts: ["api.example.test"] },
+    }).then((o: J) => o, (x: Error) => x), 60_000);
+    if (put === undefined) throw new Error("B's vault.putItem not answered in 60 s");
+    if (!waits) {
+      if (put instanceof Error) throw new Error(`B's vault.putItem on the second station: ${put.message.slice(0, 300)}`);
+      return;
+    }
+    if (!(put instanceof Error)) throw new Error("B's vault.putItem taken while the vault waits to be keyed anew");
+    log(`  B's vault.putItem: ${put.message.slice(0, 300)}`);
+    if (!/vault_waiting/.test(put.message)) throw new Error(`not refused as waiting: ${put.message.slice(0, 300)}`);
+  });
   stationDo("thaw");
   await check("the first station back hears G was taken off: it refuses G; B and A installed anew open the item", async () => {
     await atLength(first, n + 2, 90_000);
     await g.restart();
     log(`  G sees the first: ${short(await stationIn(g, station.split("/")[1], (s) => s.state !== "online" && s.state !== "connecting", 120_000))}`);
-    // (the vault keyed anew first: with G's key still in it, it is no vault to anyone, and its owner's device writes the
-    // new keys on the first station, which was frozen as G was taken off: opened before that, the item is not there)
+    // (the vault keyed anew first: its owner's device writes the new keys on the first station, which was frozen as G
+    // was taken off; meanwhile it was read as it stood, and changed by no one)
     for (const x of [b, e]) {
       await x.stationState(workspace, (s) => s.state === "online", 90_000);
       await keyedFor(x);
