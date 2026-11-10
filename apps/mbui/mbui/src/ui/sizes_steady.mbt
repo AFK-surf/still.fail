@@ -8,8 +8,9 @@
 // hidden, not made another size), words by their place only (how tall they are is how many lines they take); by who it is
 // in the frame (its ident, a tree node's id) and what it is (its kind, its ground): one made in another's place is
 // another. Only while some of it shows. Not across a gap of more than a few frames,
-// the window made another size (or words by the system's setting), a frame with the pointer down (what the hand moves goes as it goes), nor while it does
-// not show. Held on every frame a Tester draws, as rows_steady.mbt's rule; its known faults a file at a time
+// the window made another size (or words by the system's setting), a frame with the pointer down, whoever holds the
+// press (the old frame's, Ctx::down, or a node of the window's tree, view_holds: what the hand moves goes as it goes),
+// nor while it does not show. Held on every frame a Tester draws, as rows_steady.mbt's rule; its known faults a file at a time
 // (`sizes_steady_known`), each bar only falling.
 
 ///|
@@ -337,7 +338,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           }
         }
         let gap = seen.length() > 0 && now - seen[seen.length() - 1].1 > 2.5 * period
-        if gap || resized || !shows || self.down {
+        if gap || resized || !shows || self.down || view_holds() {
           seen.clear()
           continue
         }
