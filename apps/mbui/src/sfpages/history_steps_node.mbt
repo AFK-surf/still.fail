@@ -685,8 +685,7 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
         })
         let shown = fn() {
           way.said()
-          let now = room.logic_at()
-          way.value_at(if way.goes_at(now) { room.drawn_at() } else { @double.infinity })
+          way.value_at(room.drawn_while(fn(t) { way.goes_at(t) }))
         }
         // (cut from the first: measured whole however short it is cut, View::holds_whole; said once what it measures
         // is made)

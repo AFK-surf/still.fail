@@ -235,8 +235,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     .ground(By(fn() {
       vw.fly.said()
       vw.fade.said()
-      let now = g.logic_at()
-      let t = if vw.fly.goes_at(now) || vw.fade.goes_at(now) { g.drawn_at() } else { @double.infinity }
+      let t = g.drawn_while(fn(at) { vw.fly.goes_at(at) || vw.fade.goes_at(at) })
       // (a film's or a song's under its player's fade too, as the old frame's preview layer laid its ground in the box
       // it faded: its fade twice where it does not fly)
       let under = if vw.played() { vw.fade.value_at(t) } else { 1.0 }
@@ -276,8 +275,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       .over(Is(true))
       .alpha(By(fn() {
         vw.fade.said()
-        let now = canvas.logic_at()
-        vw.fade.value_at(if vw.fade.goes_at(now) { canvas.drawn_at() } else { @double.infinity })
+        vw.fade.value_at(canvas.drawn_while(fn(at) { vw.fade.goes_at(at) }))
       }))
       // (closed: what is on it the viewer's going alone, a finger on it called off then)
       .presses(By(fn() {
@@ -1103,8 +1101,7 @@ fn Viewer::shown_on(self : Viewer, node : @view.View) -> Double {
   let vw = self
   vw.fly.said()
   vw.fade.said()
-  let now = node.logic_at()
-  let t = if vw.fly.goes_at(now) || vw.fade.goes_at(now) { node.drawn_at() } else { @double.infinity }
+  let t = node.drawn_while(fn(at) { vw.fly.goes_at(at) || vw.fade.goes_at(at) })
   if vw.flies {
     vw.flight_share_at(t)
   } else {
@@ -1534,8 +1531,7 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
     .alpha(By(fn() {
       vw.fly.said()
       vw.fade.said()
-      let now = s.logic_at()
-      vw.words_share(vw.in_at(if vw.fly.goes_at(now) || vw.fade.goes_at(now) { s.drawn_at() } else { @double.infinity }))
+      vw.words_share(vw.in_at(s.drawn_while(fn(at) { vw.fly.goes_at(at) || vw.fade.goes_at(at) })))
     }))
     // (going, the page's: a press there its own, nothing of it here taking it)
     .presses(By(fn() {
@@ -1609,12 +1605,7 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
 fn film_at(vw : Viewer, node : @view.View) -> Double {
   vw.fly.said()
   vw.fade.said()
-  let now = node.logic_at()
-  if vw.fly.goes_at(now) || vw.fade.goes_at(now) {
-    node.drawn_at()
-  } else {
-    @double.infinity
-  }
+  node.drawn_while(fn(at) { vw.fly.goes_at(at) || vw.fade.goes_at(at) })
 }
 
 ///|

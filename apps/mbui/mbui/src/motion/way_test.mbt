@@ -157,11 +157,7 @@ test "a way read by a binding of the window's tree at the moment its frame is dr
         .height(Is(Some(10.0)))
         .ground(Is(0x3366CCFFL))
         .alpha(
-          By(fn() {
-            w.said()
-            let now = v.logic_at()
-            w.value_at(if w.goes_at(now) { v.drawn_at() } else { @double.infinity })
-          }),
+          By(fn() { w.shown_on(v) }),
         )
         |> ignore
       })

@@ -154,17 +154,12 @@ fn NodeWay::go_from(self : NodeWay, n : @view.View, from : Double, to : Double, 
 fn NodeWay::goes(self : NodeWay, n : @view.View) -> Bool {
   self.way.said()
   self.ended.get() |> ignore
-  self.way.goes_at(n.logic_at())
+  n.goes_now(fn(at) { self.way.goes_at(at) })
 }
 
 ///|
 /// Where it is as `n` is drawn: at the moment it is drawn at while it goes, where it went once it is there.
 fn NodeWay::shown(self : NodeWay, n : @view.View) -> Double {
-  self.way.said()
   self.ended.get() |> ignore
-  if self.way.goes_at(n.logic_at()) {
-    self.way.value_at(n.drawn_at())
-  } else {
-    self.way.target()
-  }
+  self.way.shown_on(n)
 }

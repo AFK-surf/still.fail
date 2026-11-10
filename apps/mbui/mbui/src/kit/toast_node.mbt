@@ -413,11 +413,6 @@ fn ToastWay::go(self : ToastWay, n : @view.View, to : Double, spec : @motion.Spe
 
 ///|
 fn ToastWay::shown(self : ToastWay, n : @view.View) -> Double {
-  self.way.said()
   self.ended.get() |> ignore
-  if self.way.goes_at(n.logic_at()) {
-    self.way.value_at(n.drawn_at())
-  } else {
-    self.way.target()
-  }
+  self.way.shown_on(n)
 }

@@ -167,8 +167,7 @@ fn version_rows_node(g : @view.View, core : Core) -> Unit {
     })
     let share = fn() {
       open.said()
-      let now = r.logic_at()
-      open.value_at(if open.goes_at(now) { r.drawn_at() } else { @double.infinity })
+      open.value_at(r.drawn_while(fn(t) { open.goes_at(t) }))
     }
     @sf.link_row_node(
       r,

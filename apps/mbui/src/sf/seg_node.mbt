@@ -173,8 +173,7 @@ pub fn seg_node(
           strip.box(fn(th) {
             let x = fn() {
               way.said()
-              let now = th.logic_at()
-              way.value_at(if way.goes_at(now) { th.drawn_at() } else { @double.infinity })
+              way.value_at(th.drawn_while(fn(t) { way.goes_at(t) }))
             }
             th
             .over(Is(true))

@@ -76,7 +76,7 @@ fn Tree::through_found(self : Tree, id : NodeId, x : Double, y : Double, t : Dou
 /// What a finger at (x, y) finds under node `id` (as Tree::target_at finds, of what is drawn before it and neither it
 /// nor held by it), and what of what a node hosts is there (Tree::hosts_at).
 fn Tree::target_under(self : Tree, id : NodeId, x : Double, y : Double) -> (Target, Int?) {
-  let at = self.logic_at()
+  let at = self.logic_said()
   let found : Array[Target] = []
   let past = Ref(false)
   self.each_drawn_scaled(fn(c, cx, cy, _, s) {
@@ -118,7 +118,7 @@ fn Tree::through_takes(self : Tree, th : Through, x : Double, y : Double) -> Boo
     return false
   }
   let n = self.nodes[u.at]
-  let at = self.logic_at()
+  let at = self.logic_said()
   guard @signals.untracked(fn() { self.takes_here(n, x - d.x, y - d.y, d.w, d.h, at) }) else { return false }
   match th.under {
     Dragged(_) => n.on_drag is Some(_) && n.drag_said == th.said
@@ -146,7 +146,7 @@ fn Tree::hand_through(self : Tree, id : NodeId, x : Double, y : Double, moved? :
   }
   // (the cover's hold ended first, as any is called off: Off, what it held let go of; committed whole before the rest)
   self.hold_lost_in(id.at)
-  let now = self.logic_at()
+  let now = self.logic_said()
   match why {
     // (held: at its moment, on the timeline)
     Held => self.handle(0).at_moment(now, fn() { self.hand_on(th, why, x, y, now) }) |> ignore

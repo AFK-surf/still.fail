@@ -425,11 +425,7 @@ fn fold_put(to : FoldLook, at : Double) -> Unit {
 fn fold_drawn_at(n : @view.View) -> Double {
   fold_goes.said.get() |> ignore
   fold_goes.way.said()
-  if fold_goes.way.goes_at(n.logic_at()) {
-    n.drawn_at()
-  } else {
-    @double.infinity
-  }
+  n.drawn_while(fn(t) { fold_goes.way.goes_at(t) })
 }
 
 ///|

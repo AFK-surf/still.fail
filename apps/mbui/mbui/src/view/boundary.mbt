@@ -68,7 +68,7 @@ pub fn View::faults_to(self : View, shown : (String) -> Unit) -> View {
   n.fault_to = Some(fn(said) {
     if !told.val {
       told.val = true
-      self.at_moment(self.tree.logic_at(), fn() { shown(said) }) |> ignore
+      self.at_moment(self.tree.logic_said(), fn() { shown(said) }) |> ignore
     }
   })
   self

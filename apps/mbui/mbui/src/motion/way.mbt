@@ -159,3 +159,16 @@ pub fn Way::get(self : Way, c : @ui.Ctx) -> Double {
   c.shows_motion(self.mover, self.goes_at(t))
   self.value_at(t)
 }
+
+///|
+/// Where it is as node `n` draws it: at the moment `n` is drawn at while it goes (that clock followed), where it went
+/// once it is there (View::drawn_while: the clock followed no more). What a binding reads a way by.
+pub fn Way::shown_on(self : Way, n : @view.View) -> Double {
+  self.said()
+  let t = n.drawn_while(fn(at) { self.goes_at(at) })
+  if t == @double.infinity {
+    self.target()
+  } else {
+    self.value_at(t)
+  }
+}

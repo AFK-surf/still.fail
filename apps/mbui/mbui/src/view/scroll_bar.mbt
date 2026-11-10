@@ -124,7 +124,7 @@ fn BarState::rested_at(self : BarState, b : ScrollBar, v : View) -> Unit {
   (self.rest_off)()
   self.rest_off = fn() {  }
   @signals.untracked(fn() {
-    let now = v.logic_at()
+    let now = v.tree.logic_said()
     let come_end = self.in_at.get() + b.fade_ms
     let hide = self.hides_at(b)
     let go_end = hide + b.fade_ms
@@ -216,15 +216,16 @@ fn View::scroll_bar(
     }
     // (coming in or going: by the time as it is drawn; out or gone: as it stands, no time read)
     match bar.phase.get() {
-      1 | 3 => bar.shown(b, self.drawn_at())
+      1 | 3 => bar.shown(b, self.tree.drawn_said())
       // (out: as it stands, unless what is drawn is drawn past where it starts to go, the logic not come to it yet:
       // from there by the time as drawn)
       2 => {
         let hide = bar.hides_at(b)
         if hide < 1.0e299 && self.drawn_past(hide) {
-          bar.shown(b, self.drawn_at())
+          bar.shown(b, self.tree.drawn_said())
         } else {
-          bar.shown(b, @signals.untracked(fn() { self.logic_at() }))
+          // (out all of it till it starts to go: as at its coming in's end, the time not read)
+          bar.shown(b, bar.in_at.untracked() + b.fade_ms)
         }
       }
       _ => 0.0
@@ -236,7 +237,7 @@ fn View::scroll_bar(
     over.over(Is(true)).drawn_clear_of(self) |> ignore
     // (the pointer along its right brings it out: the innermost column at the pointer's, View::bar_near)
     over.reacts(fn() { (b.drawn)() && self.bar_near(if has_bar() { b.near } else { 0.0 }, across~) }, fn(on) {
-      let t = self.logic_at()
+      let t = self.tree.logic_said()
       // (come out first, then along it: as ui's bar_near does, its coming in from how far it showed then)
       if on {
         bar.woke(b, self, t)
