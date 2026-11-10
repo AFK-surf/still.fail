@@ -90,9 +90,13 @@ win_res() {
 WV2_VERSION=1.0.4258.31
 WV2=out/webview2/$WV2_VERSION
 webview2_sdk() {
-  [ -f $WV2/build/native/include/WebView2.h ] && return
+  if [ -f $WV2/build/native/include/WebView2.h ]; then
+    echo "win.sh: WebView2 SDK $WV2_VERSION kept"
+    return
+  fi
   mkdir -p out/webview2
-  curl -sSfL --retry 3 -o $WV2.nupkg "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$WV2_VERSION"
+  echo "win.sh: downloading WebView2 SDK $WV2_VERSION"
+  curl -sSfL --connect-timeout 10 --max-time 30 --retry 3 --retry-max-time 90 -o $WV2.nupkg "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$WV2_VERSION"
   PY=$(command -v python || command -v python3)
   "$PY" -m zipfile -e "$WV2.nupkg" $WV2
   rm -f $WV2.nupkg
@@ -107,6 +111,7 @@ case "${1:-build}" in
   build)
     webview2_sdk
     export LIB="$(cygpath -w "$PWD/$WV2/build/native/x64");$LIB"
+    echo "win.sh: staging $PKG"
     sync
     # moon's build, with the C that moonc generates split and compiled by cl in parallel, moonbit_init at /O1
     # (scripts/mbc: a cl.exe first on PATH, every other command passed to the real one; MBC_SPLIT=0 compiles it
@@ -124,6 +129,7 @@ case "${1:-build}" in
     # (its warnings a line each, not rendered: moon renders them, ~600-1100 with their sources, after the last task,
     # 5-10 s of the runner's one core with nothing else of the build left, as moon's --trace shows, still.fail's CI,
     # 2026-10-24)
+    echo "win.sh: building $PKG"
     (cd $B && export PATH="$SHIM:$PATH" MBC_LOG="$LOG" MBC_VERBOSE=1 && time moon build --no-render --target native $FLAG src/$PKG) || code=$?
     cat out/mbc.log 2>/dev/null || echo "win.sh: moon ran no command through scripts/mbc (out/mbc/win)"
     [ $code = 0 ] || exit $code
