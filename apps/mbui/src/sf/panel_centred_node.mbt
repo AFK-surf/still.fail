@@ -374,6 +374,9 @@ fn panel_centred_node(
                     style_node(col, fn() {
                       (if footed { dialog_body } else { dialog_body_end }).then(@ui.style(px=room(words_in))).then(body_top())
                     })
+                    // (holding nothing laid out, none of its room: its title and what it says straight over its foot,
+                    // as the old body's box gone_empty)
+                    col.gone_empty(Is(true)) |> ignore
                     // (on its words' line already: none further in; its rows out across the room the dialog leaves them,
                     // as far as an old body's (rows_out's); clear of its close button while untitled)
                     panel_in_lend(col, Wide, 0.0, sides=dialog_pad + words_in, rows_out=panel_words - panel_card_in, centred=true, clear=@signals.untracked(fn() {
