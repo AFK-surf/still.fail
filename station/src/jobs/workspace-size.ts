@@ -8,6 +8,7 @@ import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { measuredUpTo } from "../sessions/footprint.ts";
+import type { DatabaseSync } from "node:sqlite";
 import type { Store } from "../store/store.ts";
 
 export const GIB = 1024 ** 3;
@@ -24,15 +25,32 @@ export function workspaceWorking(store: Pick<Store, "getSession" | "runningJobsA
     || store.runningJobsAtLeast(key, 1) || store.lastTurn(key)?.declared === "waiting");
 }
 
-/// The live sessions whose workspaces should be measured this round.
-export function workspaceSessionsToMeasure(store: Pick<Store, "liveSessions" | "runningJobSessions" | "waitingOf">,
-  processState: (key: string) => string): ReturnType<Store["liveSessions"]> {
-  const live = store.liveSessions();
-  const idle = live.filter((s) => s.archivedAt === null && !s.running && processState(s.key) !== "running");
-  const jobsRunning = store.runningJobSessions(idle.map((s) => s.key));
-  const waiting = store.waitingOf(idle.filter((s) => !jobsRunning.has(s.key)).map((s) => s.key));
-  return live.filter((s) => s.archivedAt === null && (s.running || processState(s.key) === "running"
-    || jobsRunning.has(s.key) || waiting.has(s.key)));
+/// The most of the sessions shown (the latest active first) a round looks at: what auto-archiving keeps shown, with room.
+export const MEASURED_MOST = 1000;
+const atWork = (jobs: string) => `SELECT s.key, s.workspace FROM (SELECT rowid AS rid, key, workspace, running, last_active_at
+  FROM sessions INDEXED BY sessions_live WHERE archived_at IS NULL ORDER BY last_active_at DESC, rowid DESC LIMIT ?2) s
+  WHERE s.running = 1 OR s.key IN (SELECT value FROM json_each(?1)) OR ${jobs}
+    OR (SELECT declared FROM turns INDEXED BY turns_by_session WHERE session_key = s.key ORDER BY started_at DESC, rowid DESC LIMIT 1) = 'waiting'
+  ORDER BY s.last_active_at DESC, s.rid DESC`;
+/// The sessions shown that are at work (a turn running, its process running, a job of its running, or waiting on what
+/// it started), each by its own index entries: a reader's (read/ops-sessions.ts), off the main thread, where it read
+/// every session shown and each one's latest turn, held up to 18 s on a station short of memory (2026-11-06).
+export const SESSIONS_AT_WORK = atWork(`EXISTS (SELECT 1 FROM active_watch_jobs INDEXED BY active_watch_jobs_session WHERE session = s.key)
+    OR EXISTS (SELECT 1 FROM active_other_jobs WHERE session = s.key)`);
+/// The same on a store whose running jobs' lookup is still being prepared (store/active-jobs-upgrade.ts).
+export const SESSIONS_AT_WORK_BEFORE_UPGRADE = atWork("EXISTS (SELECT 1 FROM jobs INDEXED BY jobs_by_session WHERE session_key = s.key AND state = 'running')");
+
+/// The sessions whose workspaces are measured this round: those at work (SESSIONS_AT_WORK); `processes`, those whose
+/// process runs now.
+export function workspaceSessionsToMeasure(db: DatabaseSync, processes: readonly string[], most = MEASURED_MOST): { key: string; workspace: string }[] {
+  const args = [JSON.stringify(processes), most];
+  let rows: unknown[];
+  try { rows = db.prepare(SESSIONS_AT_WORK).all(...args); }
+  catch (error) {
+    if (!/no such table: active_(watch|other)_jobs/.test(error instanceof Error ? error.message : "")) throw error;
+    rows = db.prepare(SESSIONS_AT_WORK_BEFORE_UPGRADE).all(...args);
+  }
+  return rows.map((r) => ({ key: (r as { key: string }).key, workspace: (r as { workspace: string }).workspace }));
 }
 
 export type WorkspaceSize = { bytes: number; complete: boolean };

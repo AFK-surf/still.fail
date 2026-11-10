@@ -33,8 +33,9 @@ import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { iso, sessionPlaces, transcriptSources } from "../read/transcript.ts";
 import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, commaSurface, slackSurface, type MessageRow, type ThreadRow, type ThreadSummary } from "../store/store.ts";
-import type { DeliveryCardState, PendingMessage } from "../store/rows.ts";
+import type { DeliveryCardState, InWorkspace, PendingMessage } from "../store/rows.ts";
 import { runShown } from "./run-change.ts";
+import type { PolicyChecks } from "./archive-policy.ts";
 import type { RecentChatList } from "../store/chat-list.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
@@ -170,6 +171,9 @@ export class Hub {
   /// A thread's latest `limit` messages, oldest first, read by the readers (agents.ts sets it): the archive review's
   /// (review.ts), up to 400 of them through the merged view, 3 seconds held on a station. Unset (tests): the store.
   latestMessages: ((thread: number, limit: number) => Promise<MessageRow[]>) | null = null;
+  /// What a week's checks say of a workspace's chats, counted by the readers (null: on the main thread, as the store is
+  /// still preparing their lookups); none (tests): counted here.
+  policyChecks: ((since: number, viewer: InWorkspace) => Promise<PolicyChecks | null>) | null = null;
   /// Check whether a chat's opener wrote among its latest messages without reading their edits.
   openedChatSaid: ((thread: number, author: string, agentOnly: boolean) => Promise<boolean>) | null = null;
   /// Read a chat_history page and its optional before-message boundary off the station thread.
@@ -297,6 +301,8 @@ export class Hub {
     // part keeps: usage/module.ts), gathered (`noteLength`).
     this.live.lengths = (key, n) => this.noteLength(key, n);
     this.unlistenRunning = this.store.subscribe((change) => {
+      // Its summary is told now: with its transcript's length as read.
+      if (change.type === "session" && this.lengths.has(change.key)) this.writeLengths([change.key]);
       if (change.type === "session") this.live.running(change.key, this.store.getSession(change.key)?.running === true);
       else if (change.type === "sessionRemoved") this.live.running(change.key, false);
     });
@@ -1146,24 +1152,33 @@ export class Hub {
   /// Transcripts' lengths not written yet, and whether their write is due (`noteLength`).
   private lengths = new Map<string, number>();
   private lengthsDue = false;
+  /// The sessions whose length was written in this process.
+  private lengthWritten = new Set<string>();
 
   /// A transcript's length, written with the others' that come within LENGTHS_GATHER_MS: one statement of its own at each
   /// read was one at every step of every agent at work, on the main thread. Only a session's summary reads it (its
-  /// entries told as they come say more): one read meanwhile says the length before. Written as the hub stops (a
-  /// handover, a shutdown); one lost in a crash is read again, as the next station follows its transcript from the
-  /// start (live.ts `begin`).
+  /// entries told as they come say more): its first in this process is written at once, the rest before its summary is
+  /// next told (a change of the session), else within LENGTHS_GATHER_MS; one read between says the length before.
+  /// Written as the hub stops (a handover, a shutdown); one lost in a crash is read again, as the next station follows
+  /// its transcript from the start (live.ts `begin`).
   private noteLength(key: string, n: number) {
     this.lengths.set(key, n);
+    if (!this.lengthWritten.has(key)) {
+      this.lengthWritten.add(key);
+      this.writeLengths([key]);
+      return;
+    }
     if (this.lengthsDue) return;
     this.lengthsDue = true;
     this.fork(Effect.sleep(LENGTHS_GATHER_MS).pipe(Effect.andThen(Effect.sync(() => this.writeLengths()))));
   }
 
-  private writeLengths() {
-    this.lengthsDue = false;
-    if (this.lengths.size === 0) return;
-    const lengths = this.lengths;
-    this.lengths = new Map();
+  private writeLengths(only?: string[]) {
+    if (only === undefined) this.lengthsDue = false;
+    const lengths = only === undefined ? this.lengths : new Map(only.flatMap((key) => this.lengths.has(key) ? [[key, this.lengths.get(key)!] as const] : []));
+    if (only === undefined) this.lengths = new Map();
+    else for (const key of only) this.lengths.delete(key);
+    if (lengths.size === 0) return;
     try {
       this.store.setTranscriptLengths(lengths);
     } catch (error) {

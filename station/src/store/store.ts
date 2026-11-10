@@ -120,6 +120,22 @@ export const SESSION_HOME_THREAD = `SELECT t.*, ts.connect FROM threads t INDEXE
   ORDER BY ts.joined_at DESC, ts.rowid DESC LIMIT 1`;
 // Ordering still considers every thread, but it reads only its latest message's time; people and full summaries are
 // needed only after the limit. Applying the connect filter outside the limit preserves the prior cross-connect order.
+/// The people of a connect's recent threads (`RECENT_CONNECT_THREADS`) as its platform names them: a reader's
+/// (connects/part.ts asks it as a connect connects), as it goes through the station's threads by when they were said.
+export function recentConnectPeople(db: DatabaseSync, connect: string, limit: number): { thread: number; people: string[] }[] {
+  const prefix = `slack:${connect}:`;
+  return (db.prepare(RECENT_CONNECT_THREADS).all(limit, connect) as Json[]).map((r) => ({ thread: r.id, people: threadPeople(db, r.id, r.surface)
+    .flatMap((person) => person.startsWith(prefix) ? [person.slice(prefix.length)] : []) }));
+}
+
+/// Who spoke in a thread, as its people are named (`slack:<connect>:<user>` on a platform's).
+function threadPeople(db: DatabaseSync, thread: number, surface: string): string[] {
+  const connect = (db.prepare("SELECT MIN(connect) AS c FROM thread_sessions WHERE thread = ?").get(thread) as Json).c as string | null;
+  const authors = (db.prepare("SELECT author FROM thread_people WHERE thread = ? ORDER BY first_n").all(thread) as Json[]).map((r) => r.author as string);
+  if (surface === STILLFAIL_SURFACE) return authors;
+  return connect === null ? [] : authors.map((a) => `slack:${connect}:${a}`);
+}
+
 export const RECENT_CONNECT_THREADS = `WITH recent AS MATERIALIZED (
   SELECT t.id, t.surface, t.created_at, COALESCE(e.at, 0) AS said_at
   FROM threads t LEFT JOIN thread_state s ON s.thread = t.id
@@ -237,7 +253,7 @@ export const DELETE_PINS_OF_SESSION = PIN_MARKS.indexed;
 export { CARD_BEFORE, OPTIONS_BEFORE };
 export const LATEST_DECISIONS =
   "SELECT id, session, created_at, result FROM decision_checks WHERE id IN (SELECT MAX(id) FROM decision_checks WHERE created_at >= ? GROUP BY +session) ORDER BY created_at, id";
-const LATEST_DECISIONS_SCOPED_FALLBACK = `WITH latest AS MATERIALIZED (
+export const LATEST_DECISIONS_SCOPED_FALLBACK = `WITH latest AS MATERIALIZED (
   SELECT MAX(id) AS id, session FROM decision_checks WHERE created_at >= ?1 GROUP BY +session
 )
 SELECT d.id, d.session, d.created_at, d.result FROM latest l
@@ -1726,10 +1742,7 @@ export class Store {
   /// People of a connect's threads among the station's latest `limit`: what a connecting platform learns. Order and
   /// limit all threads first, as listThreads does; only then look up people for the threads of this connect.
   recentConnectPeople(connect: string, limit: number): { thread: number; people: string[] }[] {
-    const rows = this.#all(RECENT_CONNECT_THREADS, limit, connect);
-    const prefix = `slack:${connect}:`;
-    return rows.map((r) => ({ thread: r.id, people: this.#threadPeople(r.id, r.surface)
-      .flatMap((person) => person.startsWith(prefix) ? [person.slice(prefix.length)] : []) }));
+    return recentConnectPeople(this.db, connect, limit);
   }
 
   /// The unfiltered chat_list, with full details only for the selected chats.
@@ -3181,16 +3194,6 @@ export class Store {
   /// The session's latest turn.
   /// Of some sessions, those whose latest turn said it waits (`declared` 'waiting'), in one statement: looking each up
   /// separately blocks the station's thread while workspaces in use are read.
-  waitingOf(sessions: string[]): Set<string> {
-    if (sessions.length === 0) return new Set();
-    return new Set(
-      this.#all(
-        "SELECT j.value AS k FROM json_each(?) j WHERE (SELECT declared FROM turns WHERE session_key = j.value ORDER BY started_at DESC, rowid DESC LIMIT 1) = 'waiting'",
-        JSON.stringify(sessions),
-      ).map((r) => r.k as string),
-    );
-  }
-
   lastTurn(session: string): TurnSummary | null {
     const r = this.#one("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at DESC, rowid DESC LIMIT 1", session);
     return r ? toTurnSummary(r) : null;

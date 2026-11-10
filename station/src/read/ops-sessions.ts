@@ -5,12 +5,21 @@ import { chatHistoryMessages, deliveryCardState, firstText, getSession, getThrea
 import { searchChats } from "../store/chat-list.ts";
 import { legacyMergedReadReady } from "../store/legacy-edits-build.ts";
 import { recentChatPage } from "./recent-chat.ts";
+import { workspaceSessionsToMeasure } from "../jobs/workspace-size.ts";
+import { policyChecksRead } from "./policy-checks.ts";
+import { recentConnectPeople } from "../store/store.ts";
 import { session, sessionPlace, sessions, summary, thread, threads, timeline, transcriptFile, transcriptState, widgetState } from "./sessions.ts";
 
 /// `?turns=`: how many of a session's latest turns; none (or not a count): all of them, as a device from before reads.
 const latest = (v: unknown): number | null => (typeof v === "string" && /^\d{1,6}$/.test(v) ? Number(v) : null);
 
 export const sessionOps: Record<string, ReadOp> = {
+  /// The sessions whose workspaces the station measures this round (jobs/workspace-size.ts).
+  sessionsAtWork: (s, a) => workspaceSessionsToMeasure(s.db, a.processes),
+  /// What a week's checks say of a workspace's chats, for its archive policy's view (api/overview.ts).
+  policyChecks: (s, a) => policyChecksRead(s.db, a.since, a.viewer),
+  /// The people of a connect's recent threads, learned as it connects (connects/part.ts).
+  recentConnectPeople: (s, a) => recentConnectPeople(s.db, a.connect, a.limit),
   /// Every thread as chat_list has it; it does not use a viewer's unread count (sessions/others.ts).
   threadList: (s) => listThreads(s, "", null, null, "none"),
   /// The first page of chat_list and its count, read together in the reader's snapshot.
