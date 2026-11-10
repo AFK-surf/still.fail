@@ -37,6 +37,12 @@ fn panel_in_lend(
 }
 
 ///|
+/// Where the tips of what a panel's body and foot are made of are shown (panel_icon_button_node's): the window's layer
+/// of them over all of it, lent by presented_nodes to each of what it presents, read as what the panel holds is made.
+// kept across runs: what each presented one is lent, let go with it
+let panel_tips_lent : @view.Lent[TipLayer] = @view.Lent::new()
+
+///|
 /// Which of what a dialog in the middle of the window holds takes the keyboard's focus as the dialog opens, where what
 /// it holds says one (panel_opens_on_node): lent by panel_centred_node to its dialog, read as all it holds is made.
 // kept across runs: what each dialog lends, let go with it

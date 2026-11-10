@@ -144,10 +144,17 @@ pub fn station_name(src : Source, station : String) -> String {
 ///|
 /// What a change set going said should it fail (useAct): 没能{what}：{error}; `done` once done, if said.
 pub fn act_done(c : @ui.Ctx, what : String, done? : String = "") -> (Result[Json, Json]) -> Unit {
+  ignore(c)
+  act_said(what, done~)
+}
+
+///|
+/// act_done's, for a handler of a node (no Ctx): 没能{what}：{error} in the toast should it fail; `done` once done.
+fn act_said(what : String, done? : String = "") -> (Result[Json, Json]) -> Unit {
   fn(r) {
     match r {
-      Ok(_) => if done != "" { say(c, done) }
-      Err(e) => say(c, @sf.t("web-main.act.failed", args=[("what", what), ("error", dv_error(e))]))
+      Ok(_) => if done != "" { toast_later(done) }
+      Err(e) => toast_later(@sf.t("web-main.act.failed", args=[("what", what), ("error", dv_error(e))]))
     }
   }
 }
