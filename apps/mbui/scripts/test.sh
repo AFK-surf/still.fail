@@ -162,8 +162,12 @@ for t in $targets; do
     # (preview_tree's 121 tests in two: one process of it at 120 frames a second was 104-175 s, the longest of its
     # part's job by 110 s and more, the job 156-263 s of its 5 minutes, main d2791a7a 42719997459,
     # core/bound-devices-sign 42720203578, 2026-11-10)
+    # (FILE:@N, in two at its test N: preview_tree's halves by count were 140-242 s and 72-88 s of app 4/4 at 120 fps,
+    # its part 1/2 260 s of its 5 minutes, main c96bf86e 42774790006, 2026-11-10: its test 54, the long name's bar at
+    # each platform, size of words, width and state, 48 viewers opened, is a fifth of the file's time alone (13 s of 62
+    # in Wasm on Studio, the others 1 s each). Cut before it, the two are 28 s and 34 s; a test added before it moves N)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
-      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4 src/sfapp/preview_tree_wbtest.mbt:2
+      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4 src/sfapp/preview_tree_wbtest.mbt:@54
       src/sfapp/words_large_wbtest.mbt:2)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
@@ -172,7 +176,8 @@ for t in $targets; do
       [ -f "$f" ] || continue
       # (in k runs of its tests by their index: moon test FILE --index FROM-TO, the tests in the file's order)
       m=$(grep -c '^test "' "$f")
-      if [ "$k" -le 1 ] || [ "$m" -le 1 ]; then runs+=("$f"); continue; fi
+      if [ "${k#@}" != "$k" ] && [ "${k#@}" -lt "$m" ]; then runs+=("$f --index 0-${k#@}" "$f --index ${k#@}-$m"); continue; fi
+      if [ "${k#@}" != "$k" ] || [ "$k" -le 1 ] || [ "$m" -le 1 ]; then runs+=("$f"); continue; fi
       for ((j = 0; j < k; j++)); do
         a=$((j * m / k)) b=$(((j + 1) * m / k))
         [ $b -gt $a ] && runs+=("$f --index $a-$b")
