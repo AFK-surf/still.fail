@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [20cbc21c6](https://github.com/AFK-surf/still.fail/commit/20cbc21c6531a870fea37d5b2fe8e461e1c7254a) mbui: a node that says it takes no press is no pre | 1.79 | 2.38 | 9.94 | 28.58 | 34.9 | 25.52 | 47.07 | 94 | 162.36 |
 | [68685cd2a](https://github.com/AFK-surf/still.fail/commit/68685cd2a13c0ba43977f36cc23380a9bea31bf8) core, app: a list a place opens on, asked again, i | 1.79 | 2.38 | 9.93 | 28.56 | 34.79 | 25.5 | 46.96 | 93.9 | 147.14 |
 | [e6400c684](https://github.com/AFK-surf/still.fail/commit/e6400c684933bf0db7e641ff35c05904458fbb58) app: the update dialog (检查更新) as nodes (#5306) | 1.78 | 2.38 | 9.93 | 28.56 | 34.78 | 25.5 | 46.96 | 94.14 | 180.44 |
 | [da1d0b203](https://github.com/AFK-surf/still.fail/commit/da1d0b2036a3012eca5ef47277f8adbf06526026) sf: a panel's body of nodes holding nothing takes  | 1.78 | 2.38 | 9.93 | 28.56 | 34.77 | 25.49 | 46.94 | 93.9 | 177.94 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [28b5d3654](https://github.com/AFK-surf/still.fail/commit/28b5d3654b4f043a1bd96331fc27ee0f0b6a9b42) app: 重试 where the station files picker could not r | 1.76 | 2.35 | 9.78 | 28.38 | 34.21 | 25.34 | 46.56 | 93.68 | 138.22 |
 | [911cee5fc](https://github.com/AFK-surf/still.fail/commit/911cee5fc42925fde948f7ce69d9b5b7c8bd84b2) core: a device's signing key is said on its person | 1.76 | 2.35 | 9.78 | 28.38 | 34.21 | 25.35 | 46.56 | 93.19 | 138.22 |
 | [1de5f9b47](https://github.com/AFK-surf/still.fail/commit/1de5f9b47794f98dd2b48fa2088b7d88c08eb692) Core: a session new to the device has its detail r | 1.76 | 2.35 | 9.77 | 28.38 | 34.21 | 25.34 | 46.54 | 93.37 | 138.22 |
-| [259b3e01f](https://github.com/AFK-surf/still.fail/commit/259b3e01f0bb530386174319d8213d3cf5275c20) core test: the pages before a history counted apar | 1.76 | 2.35 | 9.76 | 28.37 | 34.14 | 25.32 | 46.48 | 93.68 | 172.71 |
