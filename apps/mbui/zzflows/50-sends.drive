@@ -1,0 +1,30 @@
+# probe: several messages sent one after another, the keyboard up, the screen recorded
+timeout 240000
+tap 端到端测试
+until =willow
+until 发消息
+tap 发消息
+type 第一条看看 {T} post:收到一 {T}
+tap icon:arrow-up
+untiln 2 收到一 {T}
+wait 1500
+type 第二条消息稍微长一点看看这一行会不会折到第二行去然后再看动效 {T} slow:30 post:收到二 {T}
+tap icon:arrow-up
+untiln 2 收到二 {T}
+wait 1500
+type 三 {T} post:收到三 {T}
+tap icon:arrow-up
+untiln 2 收到三 {T}
+wait 1500
+type 第四条 {T} slow:40 post:收到四 {T}
+tap icon:arrow-up
+untiln 2 收到四 {T}
+wait 1500
+type 第五条 {T} post:收到五 {T}
+tap icon:arrow-up
+wait 300
+type 第六条紧跟着发 {T} post:收到六 {T}
+tap icon:arrow-up
+untiln 2 收到六 {T}
+wait 2000
+shot 1-end
