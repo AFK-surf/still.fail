@@ -1416,6 +1416,8 @@ impl @hostapi.Host for FakeHost with present(self, _, _, _, _, _) {
   c.flat_from(0)
   self.instances = c.ninst
   host_presented_now(c.inst, c.ninst)
+  // (what of it was drawn not as laid out, as it is presented: held at the frame's end, tester_placed.mbt)
+  placed_at_present()
 }
 
 ///|

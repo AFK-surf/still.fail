@@ -99,6 +99,7 @@ fn reset_globals() -> Unit {
   notices_reset()
   hand_reset()
   corners_hold.val = true
+  placed_presented.val = None
   text_runs.on = false
   inst_owners.on = false
   inst_owners.track = false
