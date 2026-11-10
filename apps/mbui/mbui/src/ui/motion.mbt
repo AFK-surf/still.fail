@@ -103,6 +103,22 @@ pub let move_least_ms : Double = @flex.move_least_ms
 pub let move_most_ms : Double = @flex.move_most_ms
 
 ///|
+/// How far (points) what goes `v` points a ms is carried as it is told to stop: as far as a Move from that speed
+/// slows to rest on its own way (move_path from `v` with nothing left of it then: ω·d + v = 0, as long as move_ms has a
+/// way that far), never past it and back.
+pub fn move_stop_points(v : Double) -> Double {
+  let speed = v.abs()
+  if speed <= 0.0 {
+    return 0.0
+  }
+  let mut d = speed * 200.0
+  for _ in 0..<8 {
+    d = speed * move_ms(d) / move_k
+  }
+  d
+}
+
+///|
 /// Where a Move is `t` ms into its `dur`: `d` off its end as it set out, going `v` (per ms, of the same units) then
 /// (what it was told to go on from: a move under way, the hand's speed as it let go). A critically damped spring's way
 /// (ω = move_k / dur), its rest at `dur` made exact by taking off what it would still have left there in the measure

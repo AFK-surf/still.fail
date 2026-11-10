@@ -1588,3 +1588,114 @@ test "a measured node in what slides by the clock: read where it is drawn as eac
 ///|
 /// How long the slide above takes.
 let slide_ms : Double = 300.0
+
+///|
+/// A box 100 wide, 20 high a line, reshaped for its lines on a Move of `turn_ms`; told (`stop`, at that moment) to stop
+/// what moves for its cause where it goes (stop_for).
+fn lined_box(lines : Ref[Int], stop : Ref[Double]) -> @ui.Tester {
+  @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      let b = c.box(w=Px(100.0), h=Px(20.0 * lines.val.to_double()), bg=0xFF0000FFL, fn() {  })
+      let by = "\{lines.val} lines"
+      @motion.reshape(c, b, "box", by~, spec=@motion.tween(turn_ms, ease=Move))
+      if stop.val >= 0.0 {
+        @motion.stop_for(c, by, stop.val)
+        stop.val = -1.0
+      }
+    })
+    |> ignore
+  })
+}
+
+///|
+let turn_ms : Double = 300.0
+
+///|
+/// How soon after it is turned back a box is looked at to see its speed as it turned (a ms: well inside any frame).
+let turn_look_ms : Double = 1.0
+
+///|
+/// A frame's length at 60 a second, as a display draws them.
+let turn_frame_ms : Double = 1000.0 / 60.0
+
+///|
+test "a box growing turned back on its way: on from its speed a little past where it was, then back to its shape; never stopped dead as it turned" {
+  let lines = Ref::new(1)
+  let t = lined_box(lines, Ref::new(-1.0))
+  let h = fn() { drawn_box(t, 0xFF0000FFL).3 }
+  lines.val = 3
+  t.frame()
+  t.run_for(turn_ms / 3.0)
+  let a = h()
+  t.run_for(turn_frame_ms)
+  let b = h()
+  assert_true(b > a, msg="growing: \{a} then \{b}")
+  // turned back: one line again; its speed the same either side of that moment (turn_look_ms on), not turned at
+  // once nor from rest
+  lines.val = 1
+  t.frame()
+  let turned = h()
+  t.run_for(turn_look_ms)
+  let on = h()
+  let speed = (b - a) / turn_frame_ms
+  assert_true(on - turned > 0.4 * speed, msg="on up from its speed (\{speed} a ms) as it turned: \{turned} then \{on}")
+  t.run_for(turn_frame_ms - turn_look_ms)
+  let d = h()
+  // then down to its one line, the one turn only
+  let mut prev = d
+  let mut down = false
+  let rest = @motion.layout_rest("box")
+  while t.time() + turn_frame_ms < rest {
+    t.run_for(turn_frame_ms)
+    let x = h()
+    if x < prev {
+      down = true
+    } else {
+      assert_true(!down || x == prev, msg="back up at \{t.time()} after it came down: \{prev} then \{x}")
+    }
+    prev = x
+  }
+  t.run_for(rest - t.time())
+  assert_true(down)
+  assert_eq(h(), 20.0)
+  t.assert_idle()
+}
+
+///|
+/// Where the box growing from one line to three, told to stop at `ms` into it (`late`: told a frame after that
+/// moment, of it), comes to rest; and where it was a frame after that moment, and at it.
+fn stopped_box(ms : Double, late : Bool) -> (Double, Double, Double) {
+  let lines = Ref::new(1)
+  let stop = Ref::new(-1.0)
+  let t = lined_box(lines, stop)
+  let h = fn() { drawn_box(t, 0xFF0000FFL).3 }
+  lines.val = 3
+  t.frame()
+  t.run_for(ms)
+  let at = t.time()
+  let there = h()
+  if late {
+    t.run_for(turn_frame_ms)
+    stop.val = at
+    t.frame()
+  } else {
+    stop.val = at
+    t.frame()
+    t.run_for(turn_frame_ms)
+  }
+  let after = h()
+  t.run_for(@ui.move_most_ms)
+  t.assert_idle()
+  (there, after, h())
+}
+
+///|
+test "a box growing told to stop for its cause: on from its speed, slowing to rest short of its new shape; where it rests the moment's, not the frames'" {
+  let (there, after, rest) = stopped_box(turn_ms / 4.0, false)
+  assert_true(after > there, msg="on from its speed, not stopped dead: \{there} then \{after}")
+  assert_true(rest > after && rest < 60.0, msg="slowing to rest short of its 60: \{after} then \{rest}")
+  let (there_late, after_late, rest_late) = stopped_box(turn_ms / 4.0, true)
+  assert_eq(there_late, there)
+  assert_true((after_late - after).abs() < 0.001, msg="a frame after the moment, told of it then: \{after_late} / \{after}")
+  assert_true((rest_late - rest).abs() < 0.001, msg="at rest, told of it a frame late: \{rest_late} / \{rest}")
+}

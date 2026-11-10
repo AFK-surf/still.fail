@@ -347,6 +347,56 @@ pub fn Anim::animate(
 }
 
 ///|
+/// Where it is and how fast it goes (per second) at moment `at` on the way it was told, as that way has it (not where a
+/// frame drew it): its start if `at` is before it.
+fn Anim::state_at(self : Anim, at : Double) -> (Double, Double) {
+  if !self.running || self.start < 0.0 {
+    return (self.value, 0.0)
+  }
+  let ms = at - self.start
+  if ms <= 0.0 {
+    return (self.from, self.v0)
+  }
+  if ms >= self.dur {
+    return (self.end, 0.0)
+  }
+  match (self.gen, self.spec) {
+    (Some(g), Motion(tr)) => {
+      let t = ms - tr.delay
+      if t < 0.0 {
+        (self.from, self.v0)
+      } else {
+        (g.next(t).value, g.velocity(t, initial=self.v0))
+      }
+    }
+    _ => self.spec.value_at(ms, self.dur, self.from, self.target, self.v0)
+  }
+}
+
+///|
+/// Told at moment `at` (now, or a moment before it in this frame) to stop where it goes, one of it `points` points: on
+/// from where its way had it then and as fast, slowing to rest on a Move's way as far as that speed carries it
+/// (@ui.move_stop_points), never past its end nor back: its speed the same either side of `at`, no stop dead, wherever
+/// the frames fall. At rest, or past its end by then, it stays.
+#callsite(autofill(loc))
+pub fn Anim::stop_at(self : Anim, c : @ui.Ctx, at : Double, points~ : Double, loc~ : SourceLoc) -> Unit {
+  self.step(c)
+  if !self.running || points <= 0.0 {
+    return
+  }
+  let (x, v) = self.state_at(at)
+  let ahead = @ui.move_stop_points(v * points / 1000.0) / points
+  let to = if v >= 0.0 {
+    dmin(x + ahead, dmax(self.target, x))
+  } else {
+    dmax(x - ahead, dmin(self.target, x))
+  }
+  self.value = x
+  self.velocity = v
+  self.animate(c, to, Moved(points, -1.0, 0.0), velocity=v, start_at=at, loc~)
+}
+
+///|
 /// Off to `target`, unless it goes there already or is there (animate*AsState): told again
 /// mid-way it goes on from where it is, as fast as it goes.
 #callsite(autofill(loc))

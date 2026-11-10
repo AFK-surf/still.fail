@@ -879,21 +879,20 @@ fn new_send(
   // its words, its quotes and its files from where they were typed, their cards and their tiles, into their row in
   // the chat's list, in it from now (sent_local), the list coming up with them, the composer held as tall as it is
   // till they set out
-  let box = @motion.measured(c, "composer/content").unwrap_or(0.0)
   @sfbase.flight_carry_start(
     c,
     d.key,
     words,
     flying_quotes(c, src, d, station) + flying_files(c, src, d),
     field=d.field,
-    hold=fn(c, ms) { composer_hold(c, d.key, 0.0, box, ms) },
+    shaped=composer_shapes_sent(c, src, d, station),
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
     desk=!frame.in_place,
     marks~,
     runs~,
   )
   let row = sent_local(c, rk, None, words, up, going~, quotes~, runs~, now=(src.now)())
-  @sfbase.flight_carry_into(c, d.key, draft, rk, row, hold=fn(c, ms) { composer_hold(c, draft, 0.0, box, ms) })
+  @sfbase.flight_carry_into(c, d.key, draft, rk, row)
   let sig = @sfbase.picked_sig(v)
   fresh.starting.set(true)
   fresh.sending.set(true)
