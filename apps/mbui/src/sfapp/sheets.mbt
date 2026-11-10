@@ -617,7 +617,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let s = field(a, "session")
   let status = text(a, "status")
-  let entry = context_entry(c, src, r, key, s)
+  let entry = context_entry(c, src, r, key, s, close)
   c.box(w=Fill(1.0), fn() {
     // (its head: the panel's title row in the middle of the window (agent_title_row), else its own here, clear of an
     // untitled dialog's close button over its end)
