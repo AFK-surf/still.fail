@@ -13,6 +13,8 @@ fn init {
     ("src/sfapp/emit_kept_wbtest.mbt", 2),
     // (send_steady_wbtest's, on its first send)
     ("src/sfapp/linger_wbtest.mbt", 1),
+    // (send_steady_wbtest's, its words sent flying)
+    ("src/sfapp/motion_wbtest.mbt", 1),
     ("src/sfapp/quote_image_wbtest.mbt", 5),
     // (sent with a quote: the agent's row over it opens 82→91 and closes to 87 as the sent one comes; the quote over
     // its first line closes 40→18 and opens to 20)
