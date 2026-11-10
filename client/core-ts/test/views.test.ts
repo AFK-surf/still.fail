@@ -1669,7 +1669,8 @@ test("connects_lists_every_online_stations_connects", async () => {
   t.subscribe(1, { topic: "connects", scope: "ws" });
   t.set(workspace(), stations(t.nowS()));
   await t.read(u, 1);
-  const each = (st: string) => [link(st), overview(st), sessions(st), threads(st)];
+  // (a row is made of its station's overview alone: not of its sessions or chats)
+  const each = (st: string) => [link(st), overview(st)];
   sameTopics(t.started(), [workspace(), ...each("ws/a"), ...each("ws/b"), ...each("ws/c")]);
   t.set(link("ws/c"), { state: "offline" });
   const me = { id: "Me@x.com", email: "Me@x.com" };
@@ -1681,21 +1682,80 @@ test("connects_lists_every_online_stations_connects", async () => {
   await t.read(u, 1);
   const v: J = u.value;
   assert.deepEqual(v.items.map((i: J) => [i.station, i.connect.id]), [["ws/a", "c1"], ["ws/a", "c2"]]);
-  assert.deepEqual([v.wait.reading, v.items[0].running, v.items[0].sessions.length], [false, 0, 0]);
+  // what its row shows, and nothing of its page (its sessions, those it could deliver into, the ways it could change)
+  assert.deepEqual(Object.keys(v.items[0]).sort(), ["connect", "station", "stationName"]);
   assert.deepEqual([v.wait.reading, v.wait.failing.map((f: J) => [f.station, f.message])], [false, [["ws/b", "连不上"]]]);
   assert.equal(v.items[0].connect.createdBy.shown.display, "你");
   assert.equal(v.items[0].connect.statusText, "未连接 Slack");
-  // where it is reached and how it runs, in words; the ways it could be switched to, each with what that does
   assert.deepEqual([v.items[0].connect.placeText, v.items[0].connect.modeLabel], ["Slack", "每个 thread 一个会话"]);
-  assert.deepEqual(v.items[0].changes.map((c: J) => [c.mode, c.requireMention, c.changed, c.effects.length]), [
-    ["multi-session", true, false, 0],
-    ["single-session", true, true, 2],
-    ["single-session", false, true, 3],
-  ]);
   const mine = ui();
   t.subscribe(2, { topic: "connects", scope: "ws", mine: true });
   await t.read(mine, 2);
   assert.deepEqual(mine.value.items.map((i: J) => i.connect.id), ["c1"]);
+});
+
+test("a_connects_list_is_sent_nothing_as_its_sessions_or_its_stations_quota_change", async () => {
+  // Its rows are made of each station's connects alone: a session's turn, a new one or an allowance read again made
+  // every list of them anew, and each connect's every session went out with it (1.5 MB at a workspace's real size).
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, { topic: "connects", scope: "ws" });
+  t.set(workspace(), oneStation());
+  t.set(link("ws/st"), { state: "online" });
+  const over = overviewOf([connect("c1", "one")], [profile("p1")]);
+  t.set(overview("ws/st"), over);
+  t.store.watch(sessions("ws/st"), () => {});
+  t.set(sessions("ws/st"), [fullSession("k1")]);
+  await t.read(u, 1);
+  assert.deepEqual(u.value.items.map((i: J) => i.connect.id), ["c1"]);
+  const [computed, messages] = [t.router.computed, u.messages];
+  t.set(sessions("ws/st"), [fullSession("k1", { turns: 3, lastActiveAt: 9 }), fullSession("k2")]);
+  t.set(overview("ws/st"), { ...over, profiles: [profile("p1", { quota: { state: "ok", detail: null, checkedAt: 2, windows: [] } })], counts: { sessions: 2, running: 1, warm: 0 } });
+  await t.read(u, 1);
+  assert.equal(t.router.computed, computed, "the list is not made again");
+  assert.equal(u.messages, messages);
+  t.set(overview("ws/st"), { ...over, connects: [{ ...connect("c1", "one"), name: "uno" }] });
+  await t.read(u, 1);
+  assert.deepEqual(u.value.items.map((i: J) => i.connect.name), ["uno"]);
+});
+
+test("a_connects_page_is_that_connect_and_its_choice_of_a_session_the_sessions_of_its_runtime", async () => {
+  const t = setup();
+  const [page, choice, none, offline] = [ui(), ui(), ui(), ui()];
+  t.subscribe(1, { topic: "connect", scope: "ws", station: "ws/a", id: "c1" });
+  t.subscribe(2, { topic: "connectCandidates", scope: "ws", station: "ws/a", id: "c1" });
+  t.subscribe(3, { topic: "connect", scope: "ws", station: "ws/a", id: "c9" });
+  t.subscribe(4, { topic: "connect", scope: "ws", station: "ws/c", id: "c1" });
+  t.set(workspace(), stations(t.nowS()));
+  await t.readAll([[page, 1], [choice, 2], [none, 3], [offline, 4]]);
+  // (its own station's alone)
+  sameTopics(t.started(), [workspace(), link("ws/a"), link("ws/b"), link("ws/c"), overview("ws/a"), sessions("ws/a"), threads("ws/a"), overview("ws/c"), sessions("ws/c"), threads("ws/c")]);
+  // not read yet: none
+  assert.deepEqual([page.value, choice.value, none.value], [undefined, undefined, undefined]);
+  t.set(link("ws/c"), { state: "offline" });
+  const c1 = { ...connect("c1", "one"), mode: "single-session", session: "k2" };
+  const c2 = connect("c2", "two");
+  t.set(overview("ws/a"), { ...overviewOf([c1, c2], []), connectRuntimeChange: true });
+  t.set(sessions("ws/a"), [
+    fullSession("k1", { lastActiveAt: 5, turns: 2, firstText: "第一个" }),
+    fullSession("k2", { connect: "c2", scope: "all", lastActiveAt: 9, title: "合并的", boundTo: ["c1", "c2"], process: "running" }),
+    fullSession("k3", { runtime: "codex", lastActiveAt: 7 }),
+  ]);
+  t.set(threads("ws/a"), [thread(4, ["k1"], t.host.nowMs())]);
+  await t.readAll([[page, 1], [choice, 2], [none, 3], [offline, 4]]);
+  const v: J = page.value;
+  assert.deepEqual([v.station, v.stationName, v.connect.id, v.runtimeChanges, v.running], ["ws/a", "alpha", "c1", true, 1]);
+  assert.equal("candidates" in v, false);
+  assert.deepEqual(v.sessions.map((s: J) => [s.key, s.chat ?? null]), [["k3", null], ["k1", 4]]);
+  assert.deepEqual([v.bound.key, v.bound.titleText], ["k2", "合并的"]);
+  assert.deepEqual(v.changes.map((c: J) => c.mode), ["multi-session", "single-session", "single-session"]);
+  // its runtime's, the latest first, each in words, the one it delivers into said so; nothing more of each
+  const said = choice.value.candidates;
+  assert.deepEqual(said.map((c: J) => [c.key, c.titleText, c.current]), [["k2", "合并的", true], ["k1", "第一个", false]]);
+  assert.deepEqual(Object.keys(said[0]).sort(), ["current", "description", "key", "titleText"]);
+  assert.ok(said[0].description.startsWith("单会话 · two · 0 轮 · "), said[0].description);
+  assert.ok(said[0].description.endsWith(" · 也被 two 使用"), said[0].description);
+  assert.deepEqual([none.value, offline.value], [null, null]);
 });
 
 test("times_in_words_go_out_fresh_each_minute", async () => {
@@ -3103,6 +3163,8 @@ test("what_the_core_keeps_and_shares_is_never_written_on_whatever_a_chat_holds",
       { topic: "chats", scope: "ws" },
       { topic: "stations", scope: "ws" },
       { topic: "connects", scope: "ws" },
+      { topic: "connect", scope: "ws", station: "ws/st", id: "c1" },
+      { topic: "connectCandidates", scope: "ws", station: "ws/st", id: "c1" },
       overview("ws/st"),
       sessions("ws/st"),
       hostOf("ws/st"),

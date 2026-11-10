@@ -88,3 +88,50 @@ test "a run from before the stations' rows: the app's rows, a station and a part
   @core.Replay::detach()
   @core.client.reset()
 }
+
+///|
+test "a run from before the connects' rows: one connect and its choice's sessions read out of its connects whole, made once, held with them" {
+  @core.client.reset()
+  let src = source()
+  let r = @core.Replay::parse(
+    #|{"out":{"id":5,"subscribe":{"topic":"connects","scope":"w","mine":false},"keyed":true}}
+    #|{"in":{"id":5,"value":{"me":{},"items":[{"station":"w/a","stationName":"A","connect":{"id":"c1","name":"One"},"sessions":[{"key":"s1"}],"running":1,"candidates":[{"key":"s1","titleText":"T","description":"D","current":true,"statusText":"x"}]}],"wait":{"reading":false,"failing":[]},"slackApps":[],"noProfile":false}}}
+  )
+  r.keep_stations()
+  r.attach()
+  let all_p : Map[String, Json] = { "scope": "w", "mine": false }
+  let one_p : Map[String, Json] = { "scope": "w", "station": "w/a", "id": "c1" }
+  // (nothing yet: no value, none made)
+  assert_true((src.topic_read)("connect", one_p).value is None)
+  (src.topic_read)("connectCandidates", one_p) |> ignore
+  (src.topic_read)("connects", all_p) |> ignore
+  assert_eq(r.deliver(), 1)
+  let one = (src.topic_read)("connect", one_p)
+  assert_eq(
+    one.value.unwrap().stringify(),
+    "{\"station\":\"w/a\",\"stationName\":\"A\",\"connect\":{\"id\":\"c1\",\"name\":\"One\"},\"sessions\":[{\"key\":\"s1\"}],\"running\":1}",
+  )
+  assert_eq(
+    (src.topic_read)("connectCandidates", one_p).value.unwrap().stringify(),
+    "{\"candidates\":[{\"key\":\"s1\",\"titleText\":\"T\",\"description\":\"D\",\"current\":true}]}",
+  )
+  // (the list's rows: the run's items as they are, each a row and more)
+  assert_eq(@settings.items((src.topic_read)("connects", all_p).value, "items").length(), 1)
+  assert_eq((src.topic_read)("connect", { "scope": "w", "station": "w/a", "id": "c9" }).value, Some(Json::null()))
+  // read again while nothing changed: the same value, the same version
+  let again = (src.topic_read)("connect", one_p)
+  assert_true(physical_equal(again.value.unwrap(), one.value.unwrap()))
+  assert_eq(again.version, one.version)
+  // one followed `connects` for all of them, the list's own too, let go of once the last leaves
+  (src.leave)("connect", one_p, @sfbase.TopicLeave::Legacy)
+  (src.leave)("connect", { "scope": "w", "station": "w/a", "id": "c9" }, @sfbase.TopicLeave::Legacy)
+  (src.leave)("connectCandidates", one_p, @sfbase.TopicLeave::Legacy)
+  assert_true(@core.client.peek_topic("connects", params=all_p) is Some(_))
+  (src.leave)("connects", all_p, @sfbase.TopicLeave::Legacy)
+  assert_true(@core.client.peek_topic("connects", params=all_p) is None)
+  assert_eq(r.left(), 0)
+  assert_eq(r.unmade(), [])
+  assert_false(r.diverged().iter().any(fn(m) { m.contains("connect") }))
+  @core.Replay::detach()
+  @core.client.reset()
+}

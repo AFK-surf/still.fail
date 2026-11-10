@@ -101,7 +101,11 @@ export const TOPICS: Record<string, Spec> = {
   station: { scope: S, station: S },
   stationPart: { scope: S, station: S, part: S },
   profiles: { scope: S },
+  // A list's connects, each its row (ConnectRow); one connect's page asks that connect (ConnectView), and a
+  // single-session one's page what its choice of a session lists, `connectCandidates`, while it can open that choice.
   connects: { scope: S, mine: ["bool", "def"] },
+  connect: { scope: S, station: S, id: S },
+  connectCandidates: { scope: S, station: S, id: S },
   chat: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], compact: ["bool", "skipFalse"] },
   history: { station: S, key: S },
   agentCard: { station: S, key: S },
@@ -228,7 +232,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
 }
 
 const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "linkPreview", "filePeek", "messagePeek"]);
-const VIEWS = new Set(["chats", "stations", "station", "stationPart", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEWS = new Set(["chats", "stations", "station", "stationPart", "profiles", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.
 export function topicStation(topic: Topic): string | null {

@@ -672,6 +672,44 @@ fn station_part_in(core : Core, scope : String, address : String, part : String)
 }
 
 ///|
+/// Connect `id` of station `address` whole, as its own page shows it (`connect`: its connect, its latest sessions, the
+/// one it delivers into, how many of them run, the ways it could change): no value while its station's overview is not
+/// read, null where the station is not up or has no such connect. Asked one way wherever one connect is shown, of the
+/// workspace the address is of (`here`'s for one without it); a list of connects reads their rows (`connects`), never
+/// one whole (the user, 2026-11-10).
+pub fn connect_read(core : Core, here : Here, address : String, id : String) -> Read {
+  (core.topic)("connect", { "scope": str(station_scope(here, address)), "station": str(address), "id": str(id) }).get()
+}
+
+///|
+/// Connect `id` of station `address` whole (connect_read), None while not known or where there is none.
+pub fn connect_of(core : Core, here : Here, address : String, id : String) -> Json? {
+  match connect_read(core, here, address, id).value {
+    Some(Object(_)) as c => c
+    _ => None
+  }
+}
+
+///|
+/// The sessions connect `id` of station `address` could deliver into (`connectCandidates`: each its key, title,
+/// description and whether it is the one now, the latest first), for its choice of one alone: None while not answered
+/// or where there is no such connect. Held ahead by a single-session connect's page while its 更换 row shows
+/// (connect_candidates_asked), so the choice opens on them whole.
+pub fn connect_candidates(core : Core, here : Here, address : String, id : String) -> Array[Json]? {
+  match (core.topic)("connectCandidates", connect_candidates_asked(here, address, id)).get().value {
+    Some(Object(_)) as v => Some(items(v, "candidates"))
+    _ => None
+  }
+}
+
+///|
+/// What `connectCandidates` is asked with for connect `id` of station `address` (connect_candidates'), for what holds it
+/// ahead of the choice that reads it.
+pub fn connect_candidates_asked(here : Here, address : String, id : String) -> Map[String, Json] {
+  { "scope": str(station_scope(here, address)), "station": str(address), "id": str(id) }
+}
+
+///|
 /// The workspace a station is asked of: its address's, `here`'s for one without it.
 fn station_scope(here : Here, address : String) -> String {
   if address.contains("/") {

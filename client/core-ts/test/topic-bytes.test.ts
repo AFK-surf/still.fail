@@ -55,6 +55,10 @@ const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
   "chats mine": { topic: "chats", scope: "ws", mine: true, limit: 50 },
   "profiles": { topic: "profiles", scope: "ws" },
   "connects": { topic: "connects", scope: "ws", mine: false },
+  "connects mine": { topic: "connects", scope: "ws", mine: true },
+  // (a connect of the chat's station with sessions, of its runtime many: its page, and its choice of a session's list)
+  "connect": { topic: "connect", scope: "ws", station, id: "c-slack-1" },
+  "connectCandidates": { topic: "connectCandidates", scope: "ws", station, id: "c-slack-1" },
   "newChat": { topic: "newChat", scope: "ws" },
   "pick": { topic: "pick", station, of: "new" },
   "settings": { topic: "settings", scope: "ws" },
@@ -83,7 +87,6 @@ const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
 
 /// Those over `BAR_KB` now, by the name `ASKED` gives them: what each weighs, KB rounded up to a multiple of 8.
 const OVER: Record<string, number> = {
-  "connects": 1560,
   "chat": 344,
   "chat compact": 328,
   "profiles": 160,

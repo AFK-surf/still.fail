@@ -1355,13 +1355,13 @@ test("a connect can switch runtime through its model control when its station su
   const { host, core } = await choosing(false, false, null, true);
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "connect:c1" });
-  subscribe(core, ui, 2, { topic: "connects", scope: "ws" });
+  subscribe(core, ui, 2, { topic: "connect", scope: "ws", station: "ws/st", id: "c1" });
   await host.settle();
   const values = new Map();
   apply(host, values);
   assert.equal(v(values, 1).runtimeFixed, false);
   assert.ok(v(values, 1).options.some((o: J) => o.model === "gpt-6-astra"), "the other runtime's models are offered");
-  assert.equal(v(values, 2).items[0].runtimeChanges, true);
+  assert.equal(v(values, 2).runtimeChanges, true);
   await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "connect:c1", model: "gpt-6-astra", runtime: "codex" });
   await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "connect:c1" });
   const put = host.requests.filter((r) => r.method === "PUT" && r.url.endsWith("/admin/api/connects/c1")).map((r) => JSON.parse(new TextDecoder().decode(r.body!)));

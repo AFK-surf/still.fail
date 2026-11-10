@@ -135,52 +135,103 @@ fn stations_params(params : Map[String, Json]) -> Map[String, Json] {
 }
 
 ///|
-/// Who holds a scope's stations without a graph (a read outside one: the client's `manual` hold, @core's Sub), by the
-/// app's topic (its wire key): let go of once the last of them leaves, as several of the app's topics are read out of
-/// one followed `stations` (a graph's readers are counted by the client itself, by its signal's watchers).
-// kept across runs: emptied as a Tester begins (on_reset)
-let stations_holders : Map[String, Map[String, Bool]] = {}
+/// Whether this Tester's run asked one connect by the connects whole (its trace's head without MBUI_CONNECT_ROWS): the
+/// page of one and its choice of a session read it out of `connects {scope, mine:false}`, whose items had all of it,
+/// as the run's app did at the same moments; here they are read out of that (connects_made), as the core makes them.
+/// Its rows are the run's items as they are (each whole: what a list reads of a row is there).
+fn connects_whole() -> Bool {
+  !@sfcore.trace_switch("MBUI_CONNECT_ROWS")
+}
 
 ///|
-/// A scope's stations followed for the app's topic `name` with `params` (a hold of it counted, stations_holders).
-fn follow_stations(name : String, params : Map[String, Json]) -> @core.Sub {
-  let p = stations_params(params)
+/// The app's topics read out of a scope's connects whole in such a run: one connect, its choice's sessions.
+fn of_connects(name : String) -> Bool {
+  name == "connect" || name == "connectCandidates"
+}
+
+///|
+/// The connects followed for those (of_connects) and what the app asks the same of itself: `connects {scope,
+/// mine:false}`.
+fn connects_params(params : Map[String, Json]) -> Map[String, Json] {
+  match params.get("scope") {
+    Some(s) => { "scope": s, "mine": Json::boolean(false) }
+    None => { "mine": Json::boolean(false) }
+  }
+}
+
+///|
+/// Whether the app's topic `name` with `params` is itself the connects one is read out of (connects_params): held with
+/// them, so that letting one go does not let go of what the others read.
+fn is_all_connects(name : String, params : Map[String, Json]) -> Bool {
+  name == "connects" && !(params.get("mine") is Some(True))
+}
+
+///|
+/// Who holds a topic the app's topics are read out of (a scope's stations, its connects) without a graph (a read
+/// outside one: the client's `manual` hold, @core's Sub), by that topic's wire key, then the app's topic's: let go of
+/// once the last of them leaves, as several of the app's topics are read out of one followed (a graph's readers are
+/// counted by the client itself, by its signal's watchers).
+// kept across runs: emptied as a Tester begins (on_reset)
+let holders : Map[String, Map[String, Bool]] = {}
+
+///|
+/// Topic `whole` with `whole_params` followed for the app's topic `name` with `params` (a hold of it counted, holders).
+fn follow_whole(whole : String, whole_params : Map[String, Json], name : String, params : Map[String, Json]) -> @core.Sub {
   if @signals.active_sub() is None {
-    let scope = @sfbase.wire_topic_key("stations", p)
-    let held = match stations_holders.get(scope) {
+    let of = @sfbase.wire_topic_key(whole, whole_params)
+    let held = match holders.get(of) {
       Some(h) => h
       None => {
         let h : Map[String, Bool] = {}
-        stations_holders[scope] = h
+        holders[of] = h
         h
       }
     }
     held[@sfbase.wire_topic_key(name, params)] = true
   }
-  @core.follow_topic("stations", params=p)
+  @core.follow_topic(whole, params=whole_params)
+}
+
+///|
+/// The app's topic `name` with `params`, held outside a graph, left: topic `whole` with `whole_params` left once none
+/// holds it so.
+fn leave_whole(whole : String, whole_params : Map[String, Json], name : String, params : Map[String, Json]) -> Unit {
+  let of = @sfbase.wire_topic_key(whole, whole_params)
+  match holders.get(of) {
+    Some(held) => {
+      held.remove(@sfbase.wire_topic_key(name, params))
+      if held.is_empty() {
+        holders.remove(of)
+        @core.leave_topic(whole, params=whole_params)
+      }
+    }
+    None => @core.leave_topic(whole, params=whole_params)
+  }
+}
+
+///|
+/// A scope's stations followed for the app's topic `name` with `params` (follow_whole).
+fn follow_stations(name : String, params : Map[String, Json]) -> @core.Sub {
+  follow_whole("stations", stations_params(params), name, params)
 }
 
 ///|
 /// The app's topic `name` with `params`, held outside a graph, left: its scope's stations left once none holds them so.
 fn leave_stations(name : String, params : Map[String, Json]) -> Unit {
-  let p = stations_params(params)
-  let scope = @sfbase.wire_topic_key("stations", p)
-  match stations_holders.get(scope) {
-    Some(held) => {
-      held.remove(@sfbase.wire_topic_key(name, params))
-      if held.is_empty() {
-        stations_holders.remove(scope)
-        @core.leave_topic("stations", params=p)
-      }
-    }
-    None => @core.leave_topic("stations", params=p)
-  }
+  leave_whole("stations", stations_params(params), name, params)
 }
 
 ///|
-/// A value read out of the stations (stations_made): what it was made of (the stations, the run's own topic), and it.
+/// A scope's connects whole followed for the app's topic `name` with `params` (follow_whole).
+fn follow_connects(name : String, params : Map[String, Json]) -> @core.Sub {
+  follow_whole("connects", connects_params(params), name, params)
+}
+
+///|
+/// A value read out of another (made_once): what it was made of (the stations, the connects; the run's own topic),
+/// and it.
 priv struct Made {
-  stations : Json?
+  of : Json?
   own : Json?
   topic : @sfapp.Topic
 }
@@ -206,49 +257,29 @@ fn same_json(a : Json?, b : Json?) -> Bool {
 }
 
 ///|
-/// The app's topic `name` with `params` as the core makes it of the scope's stations whole (`stations`, in such a run)
-/// and, for with_stations, of the run's own value (`own`): the settings' fixture_stations.mbt, as the made-up cores do.
-fn stations_made(name : String, params : Map[String, Json], stations : @core.Sub, own : @core.Sub?) -> @sfapp.Topic {
+/// The app's topic `name` with `params` made by `make` of topic `of`'s value and, where it has one, of the run's own
+/// value of it (`own`): once for each value of theirs (made), its error the run's own's, else `of`'s.
+fn made_once(
+  name : String,
+  params : Map[String, Json],
+  of : @core.Sub,
+  own : @core.Sub?,
+  make : (Json?, Json?) -> Json?,
+) -> @sfapp.Topic {
   let key = @sfbase.wire_topic_key(name, params)
   let own_value = match own {
     Some(s) => s.value
     None => None
   }
-  match made.get(key) {
-    Some(m) if same_json(m.stations, stations.value) && same_json(m.own, own_value) => {
-      let error = match own {
-        Some(s) => s.error
-        None => stations.error
-      }
-      return { ..m.topic, error }
-    }
-    _ => ()
-  }
-  let p = Some(Json::object(params))
-  let value = match name {
-    "stations" =>
-      match stations.value {
-        Some(Array(a)) => Some(Json::array(a.map(@settings.station_row)))
-        v => v
-      }
-    "station" => @settings.station_said(stations.value, @settings.text(p, "station"), "")
-    "stationPart" => @settings.station_said(stations.value, @settings.text(p, "station"), @settings.text(p, "part"))
-    "connects" =>
-      match own_value {
-        Some(Object(o)) if !o.contains("slackApps") => @settings.connects_of_stations(own_value, stations.value)
-        v => v
-      }
-    "profiles" =>
-      match own_value {
-        Some(Object(o)) if !o.contains("machineLogins") => @settings.profiles_of_stations(own_value, stations.value)
-        v => v
-      }
-    _ => None
-  }
   let error = match own {
     Some(s) => s.error
-    None => stations.error
+    None => of.error
   }
+  match made.get(key) {
+    Some(m) if same_json(m.of, of.value) && same_json(m.own, own_value) => return { ..m.topic, error }
+    _ => ()
+  }
+  let value = make(of.value, own_value)
   let version = if value is None {
     0
   } else {
@@ -256,14 +287,53 @@ fn stations_made(name : String, params : Map[String, Json], stations : @core.Sub
     made_count.val
   }
   let topic : @sfapp.Topic = { value, error, version }
-  made[key] = { stations: stations.value, own: own_value, topic }
+  made[key] = { of: of.value, own: own_value, topic }
   topic
+}
+
+///|
+/// The app's topic `name` with `params` as the core makes it of the scope's stations whole (`stations`, in such a run)
+/// and, for with_stations, of the run's own value (`own`): the settings' fixture_stations.mbt, as the made-up cores do.
+fn stations_made(name : String, params : Map[String, Json], stations : @core.Sub, own : @core.Sub?) -> @sfapp.Topic {
+  let p = Some(Json::object(params))
+  made_once(name, params, stations, own, fn(all, own_value) {
+    match name {
+      "stations" =>
+        match all {
+          Some(Array(a)) => Some(Json::array(a.map(@settings.station_row)))
+          v => v
+        }
+      "station" => @settings.station_said(all, @settings.text(p, "station"), "")
+      "stationPart" => @settings.station_said(all, @settings.text(p, "station"), @settings.text(p, "part"))
+      "connects" =>
+        match own_value {
+          Some(Object(o)) if !o.contains("slackApps") => @settings.connects_of_stations(own_value, all)
+          v => v
+        }
+      "profiles" =>
+        match own_value {
+          Some(Object(o)) if !o.contains("machineLogins") => @settings.profiles_of_stations(own_value, all)
+          v => v
+        }
+      _ => None
+    }
+  })
+}
+
+///|
+/// The app's topic `name` (of_connects) with `params` as the core makes it of the scope's connects whole (`connects`,
+/// in such a run): the settings' fixture_connects.mbt, as the made-up cores do.
+fn connects_made(name : String, params : Map[String, Json], connects : @core.Sub) -> @sfapp.Topic {
+  let p = Some(Json::object(params))
+  made_once(name, params, connects, None, fn(all, _) {
+    @settings.connect_said(all, @settings.text(p, "station"), @settings.text(p, "id"), name == "connectCandidates")
+  })
 }
 
 ///|
 fn init {
   @ui.on_reset(fn() {
-    stations_holders.clear()
+    holders.clear()
     made.clear()
   })
 }
@@ -276,7 +346,14 @@ pub fn source() -> @sfapp.Source {
       if stations_whole() && of_stations(name) {
         return stations_made(name, params, follow_stations(name, params), None)
       }
-      let s = @core.follow_topic(name, params=replay_topic_params(name, params))
+      if connects_whole() && of_connects(name) {
+        return connects_made(name, params, follow_connects(name, params))
+      }
+      let s = if connects_whole() && is_all_connects(name, params) {
+        follow_connects(name, params)
+      } else {
+        @core.follow_topic(name, params=replay_topic_params(name, params))
+      }
       if stations_whole() && with_stations(name) {
         return stations_made(name, params, follow_stations(name, params), Some(s))
       }
@@ -290,6 +367,8 @@ pub fn source() -> @sfapp.Source {
     waits: fn(name, params) {
       if stations_whole() && of_stations(name) {
         follow_stations(name, params).waiting
+      } else if connects_whole() && of_connects(name) {
+        follow_connects(name, params).waiting
       } else {
         @core.follow_topic(name, params=replay_topic_params(name, params)).waiting
       }
@@ -297,6 +376,8 @@ pub fn source() -> @sfapp.Source {
     generation: fn(name, params) {
       if stations_whole() && of_stations(name) {
         @core.client.topic_generation("stations", params=stations_params(params))
+      } else if connects_whole() && of_connects(name) {
+        @core.client.topic_generation("connects", params=connects_params(params))
       } else {
         @core.client.topic_generation(name, params=replay_topic_params(name, params))
       }
@@ -398,6 +479,11 @@ pub fn source() -> @sfapp.Source {
           return
         }
       }
+      // (one connect, or the connects it is read out of: left once none of them holds those)
+      if connects_whole() && (of_connects(name) || is_all_connects(name, params)) {
+        leave_whole("connects", connects_params(params), name, params)
+        return
+      }
       @core.leave_topic(name, params=replay_topic_params(name, params)) },
     release: fn(name, params) {
       // (a graph's readers of the scope's stations counted by the client: it lets them go once none watches them)
@@ -407,11 +493,17 @@ pub fn source() -> @sfapp.Source {
           return
         }
       }
+      if connects_whole() && of_connects(name) {
+        @core.release_topic("connects", params=connects_params(params))
+        return
+      }
       @core.release_topic(name, params=replay_topic_params(name, params))
     },
     refresh: fn(name, params) {
       if stations_whole() && of_stations(name) {
         @core.refresh_topic("stations", params=stations_params(params))
+      } else if connects_whole() && of_connects(name) {
+        @core.refresh_topic("connects", params=connects_params(params))
       } else {
         @core.refresh_topic(name, params=replay_topic_params(name, params))
       }
