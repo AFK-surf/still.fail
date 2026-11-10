@@ -66,8 +66,8 @@ fn panel_centred_node(
     }
     // (which of what it holds takes the focus as it opens, where what it holds says one: panel_opens_on_node)
     let opens_on : Ref[@view.View?] = Ref(None)
-    // (and the field it opens to be typed in, before that: panel_opens_in_node)
-    let field : Ref[@view.View?] = Ref(None)
+    // (and the field it opens to be typed in, before that: panel_opens_in_node, panel_search_at_hand_node)
+    let field : Ref[PanelField?] = Ref(None)
     across.box(fn(d) {
       d.lends(panel_opens_lent, opens_on) |> ignore
       d.lends(panel_field_lent, field) |> ignore
@@ -501,9 +501,9 @@ fn panel_centred_node(
     // (the focus on its own ground as it opens, the first of what it holds that takes it once that is built
     // (first_stop; not one in steps, whose steps keep it on its ground as they come), as kit's dialog's: back to what
     // had it as it goes; on the field it opens to be typed in, or the one of what it holds that said so, where one did:
-    // panel_opens_in_node, panel_opens_on_node)
+    // panel_opens_in_node, panel_search_at_hand_node, panel_opens_on_node)
     match (field.val, opens_on.val) {
-      (Some(f), _) => f
+      (Some(f), _) => f.field
       (None, Some(first)) => first
       (None, None) => layer
     }

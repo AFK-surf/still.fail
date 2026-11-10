@@ -200,3 +200,29 @@ test "a panel whose body says its field is typed in as it opens: that field has 
     assert_eq(t.focus_said(), was, msg="\{at}: given back")
   }
 }
+
+///|
+test "a panel whose body says its search is at hand: that search has the keys as it opens beside what opened it and in the window's middle, given back as it goes; on a sheet (by touch or with keyboard and mouse) not, no input method up" {
+  for way in field_panel_ways {
+    @sf.presenters_reset()
+    let (at, w, h, platform, from) = way
+    let t = menu_tester(w, h, platform)
+    let was = t.focus_said()
+    let query = @ui.Field::new()
+    @sf.panel_nodes("面板", from~, fn(v, _) {
+      v.box(fn(b) { @sf.panel_search_at_hand_node(@sf.input_node(b, query, placeholder="搜索")) }) |> ignore
+    })
+    t.run_for(@ui.move_most_ms)
+    assert_true(@sf.presenter_visible(), msg="\{at}: up")
+    if w < 600.0 {
+      assert_false(t.focus_said().has_prefix("TextField \"搜索\""), msg="\{at}: \{t.focus_said()}")
+      assert_false(t.ime().0, msg="\{at}: the input method")
+    } else {
+      assert_true(t.focus_said().has_prefix("TextField \"搜索\""), msg="\{at}: \{t.focus_said()}")
+    }
+    t.key(@ui.key_escape)
+    t.run_for(@ui.move_most_ms)
+    assert_false(@sf.presenter_visible(), msg="\{at}: gone")
+    assert_eq(t.focus_said(), was, msg="\{at}: given back")
+  }
+}
