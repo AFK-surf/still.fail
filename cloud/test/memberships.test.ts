@@ -58,8 +58,14 @@ async function connect(h: Harness, station: Station) {
   const ws = response.webSocket!;
   const frames: any[] = [];
   let pong: (() => void) | null = null;
+  let wanted: { type: string; resolve: () => void } | null = null;
   const closed = new Promise<number>((resolve) => ws.addEventListener("close", (event) => resolve(event.code), { once: true }));
-  ws.addEventListener("message", (event) => (event.data === "pong" ? pong?.() : frames.push(JSON.parse(event.data as string))));
+  ws.addEventListener("message", (event) => {
+    if (event.data === "pong") return pong?.();
+    const frame = JSON.parse(event.data as string);
+    frames.push(frame);
+    if (wanted !== null && frame.type === wanted.type) wanted.resolve();
+  });
   ws.accept();
   /** Everything it was told since the last time (once what was told its object got there, a pong comes after everything sent before it). */
   const told = async () => {
@@ -70,10 +76,18 @@ async function connect(h: Harness, station: Station) {
     });
     return frames.splice(0);
   };
+  /** Everything it was told since the last time, once an answer of `type` came: what a station says is answered by the
+   * Directory through the station's object, and the runtime's pong to a ping sent after it can come first (main
+   * 6f1305d9, 42723697969, 2026-11-10). */
+  const answered = async (type: string) => {
+    if (!frames.some((f) => f.type === type)) await new Promise<void>((resolve) => (wanted = { type, resolve }));
+    wanted = null;
+    return frames.splice(0);
+  };
   /** The last state it was told since the last time. */
   const state = async () => (await told()).filter((f) => f.type === "state").at(-1);
   const revokes = async () => (await told()).filter((f) => f.type === "revoke").map((f) => [f.workspace, f.kind, f.id]);
-  return { ws, closed, told, state, revokes };
+  return { ws, closed, told, answered, state, revokes };
 }
 
 const directory = async (h: Harness) => {
@@ -269,12 +283,12 @@ test("a station whose home is locked joins locked workspaces only; each one's lo
     assert.equal(state.lock.seq, 0);
     assert.deepEqual(state.workspaces.map((w: { workspace: string; lock: { seq: number } | null }) => [w.workspace, w.lock?.seq]), [[a, 0]]);
     sq.ws.send(JSON.stringify({ type: "lock.get", after: -1, workspace: a }));
-    const got = (await sq.told()).filter((f) => f.type === "lock");
+    const got = (await sq.answered("lock")).filter((f) => f.type === "lock");
     assert.deepEqual(got.map((f) => [f.workspace, f.entries.map((e: LockEntry) => e.ws)]), [[a, [a]]]);
     // A workspace it is not in is no lock of its to ask; none named, its home's.
     sq.ws.send(JSON.stringify({ type: "lock.get", after: -1, workspace: c }));
     sq.ws.send(JSON.stringify({ type: "lock.get", after: -1 }));
-    const home = (await sq.told()).filter((f) => f.type === "lock");
+    const home = (await sq.answered("lock")).filter((f) => f.type === "lock");
     assert.deepEqual(home.map((f) => [f.workspace, f.entries.map((e: LockEntry) => e.ws)]), [[undefined, [b]]]);
     // Its home locked since, p joins no unlocked workspace either.
     assert.deepEqual(Object.values(await enroll(h, p, await token(alice, c, "p"), true, { locks: true })), [409, { error: "locked_workspace" }]);
