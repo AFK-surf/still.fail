@@ -237,7 +237,11 @@ fn hand_on(channel : String, json : String, bytes : Bytes?) -> Unit {
   match message_handlers.get(channel) {
     Some(f) => {
       messages_handed.val += 1
+      // (each message one change: what its handler writes (a value, a call's answer and what that does) told once all
+      // of it is written, never what reads it run between two of its writes)
+      @signals.start_batch()
       f(json, bytes)
+      @signals.end_batch()
     }
     None => h_log("MSG on \{channel}: no handler for it (@ui.on_message): left")
   }

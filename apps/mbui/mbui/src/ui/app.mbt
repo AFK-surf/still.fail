@@ -526,11 +526,18 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
   let told = c.told.copy()
   c.told.clear()
   if tell {
+    // (each one change, as a press's handler is: what it writes told once all of it is written, never what reads it
+    // run between two of its writes and seeing half of it; an after_build's (a host's notice tapped, opening its page)
+    // as a tell's)
     for f in tells {
+      @signals.start_batch()
       f()
+      @signals.end_batch()
     }
     for t in told {
+      @signals.start_batch()
       (t.1)()
+      @signals.end_batch()
     }
     // (what is told may answer at once (a cache, a test's core): what the answer changes is shown by the frame after,
     // owed now, at this moment, not by whatever frame comes next)
