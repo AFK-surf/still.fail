@@ -404,7 +404,9 @@ peer_wait() {
 }
 
 # the security mode as the test station keeps it (its lock.json, read by the station's own rules): LOCK on|off,
-# DEVICE <id> <person> <kind> own=<own> a line each, STATIONS n
+# DEVICE <id> <person> <kind> own=<own> a line each, STATIONS n, PERSONS n; SAID and the devices whose latest `device`
+# entry says the key they are or would be on their person's own lock with (`person_key`, which the fold drops: read of
+# the entries themselves), the first 12 hex digits of each
 lock_state() {
   local f=$(find $STATION/data -name lock.json 2>/dev/null | head -1)
   [ -n "$f" ] || { echo "LOCK off"; return; }
@@ -417,6 +419,9 @@ console.log(s.disabled ? 'LOCK off' : 'LOCK on ' + s.seq);
 for (const [id, d] of s.devices) console.log('DEVICE ' + id.slice(0, 12) + ' ' + d.sub + ' ' + d.kind + ' own=' + d.own + ' ' + (d.label ?? ''));
 console.log('STATIONS ' + s.stations.size);
 console.log('PERSONS ' + s.persons.size);
+const said = new Map();
+for (const e of (j.entries ?? j)) if (e?.kind === 'device' && typeof e.body?.id === 'string') said.set(e.body.id, typeof e.body.person_key === 'string');
+console.log(['SAID', ...[...said].filter(([, k]) => k).map(([id]) => id.slice(0, 12))].join(' '));
 " "$f")
 }
 

@@ -64,7 +64,7 @@ import { Adb } from "./adb.ts";
 import { Rigs } from "./rigs.ts";
 import { Signer } from "./lock.ts";
 import { PersonalLock } from "./personal-lock.ts";
-import { answersOf, bindPerson, enrolled, keepToPerson, lockSeen, personalStations, refusedAgain, signerOf, signsAs, tellStations, tookOrRefused } from "./views/lock.ts";
+import { answersOf, bindPerson, enrolled, keepToPerson, lockSeen, ownLockEnv, ownLockFor, personalStations, refusedAgain, signerOf, signsAs, tellStations, tookOrRefused } from "./views/lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -303,6 +303,7 @@ export class Core {
           device: () => Effect.map(inner.mesh(), (m) => m.deviceId()),
           label: () => prefs.deviceName(inner.data) ?? "",
           signKey: () => signerOf(inner),
+          ...ownLockEnv(inner),
           changed: () => {
             inner.adb.touched();
             inner.rigs?.touched();
@@ -310,6 +311,7 @@ export class Core {
               lockSeen(inner).touch(`lock ${ws}`);
               inner.runner.fork(bindPerson(inner, ws));
               inner.runner.fork(keepToPerson(inner, ws));
+              inner.runner.fork(ownLockFor(inner, ws));
               refusedAgain(inner, ws);
             }
           },

@@ -1,10 +1,13 @@
 // A device of the end-to-end runs that need no app (e2e/locks.ts, e2e/rigs.ts): still.fail's TS core in Node in a
 // process of its own (client/core-ts hosts/node.ts, on the station's mesh addon: one core a process, as its calls'
 // handlers are the module's), signed in with the dev cloud's mock account and keeping its keys in a file (a sealer
-// that asks no one), as a person uses the app. This file run as `device NAME` is that process; imported, it gives the
-// run its devices and its checks (PASS or FAIL each, counted). E2E_SF_SRC, E2E_ORIGIN, E2E_PEER_DATA as peer.ts.
+// that asks no one, though it notes each time it would have asked: `Device.asked`), as a person uses the app; or, as
+// a device from before the update to a lock of one's own for everyone, with no sealer at all (`{ sealed: false }`:
+// the core then keeps its signing key in a plain file and makes no key of a person's lock). This file run as
+// `device NAME` is that process; imported, it gives the run its devices and its checks (PASS or FAIL each, counted).
+// E2E_SF_SRC, E2E_ORIGIN, E2E_PEER_DATA as peer.ts.
 import { type ChildProcess, execFileSync, fork } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -39,7 +42,11 @@ export function whenChanged<T>(dirs: string[], ok: () => T | undefined | null | 
   });
 }
 
-// A device: this file run as `device NAME`, its core's messages passed to and from the parent as they are.
+/// Where a device notes each time its sealer was asked with the person present (`Device.asked`), in its data.
+const askedFile = (data: string) => join(data, "asked.log");
+
+// A device: this file run as `device NAME again|new sealed|plain`, its core's messages passed to and from the parent
+// as they are.
 if (process.argv[2] === "device") {
   const { start } = await import(pathToFileURL(join(src, "client/core-ts/src/hosts/node.ts")).href);
   const data = join(dir, process.argv[3]);
@@ -50,13 +57,21 @@ if (process.argv[2] === "device") {
   const sealedAt = join(data, "sealed.json");
   const kept = new Map<string, Uint8Array>(existsSync(sealedAt) ? Object.entries(JSON.parse(readFileSync(sealedAt, "utf8")) as Record<string, string>).map(([k, v]) => [k, Buffer.from(v, "hex")]) : []);
   const save = () => writeFileSync(sealedAt, JSON.stringify(Object.fromEntries([...kept].map(([k, v]) => [k, Buffer.from(v).toString("hex")]))));
+  // Each time the person would have been asked (a value sealed for their presence read, or they asked to say yes),
+  // a line, written as it happens: it outlives the process, as the driver reads it after a restart.
+  const noteAsked = (what: string) => appendFileSync(askedFile(data), `${what}\n`);
   const sealer = {
-    get: async (key: string) => kept.get(key) ?? null,
-    set: async (key: string, value: Uint8Array) => void (kept.set(key, value), save()),
+    get: async (key: string, user: boolean, _reason: string) => {
+      if (user) noteAsked(`get ${key}`);
+      return kept.get(key) ?? null;
+    },
+    set: async (key: string, value: Uint8Array, _user: boolean) => void (kept.set(key, value), save()),
     delete: async (key: string) => void (kept.delete(key), save()),
-    ask: async () => {},
+    ask: async (_reason: string) => noteAsked("ask"),
   };
-  const core = start(join(data, "core"), origin, (_c: number, json: string) => process.send!(json), undefined, { sealer });
+  // (`plain`: a device from before, whose host seals nothing: hosts/node.ts gives it no `secure*`)
+  const options = process.argv[5] === "plain" ? {} : { sealer };
+  const core = start(join(data, "core"), origin, (_c: number, json: string) => process.send!(json), undefined, options);
   const client = core.connect();
   process.on("message", (m: J) => {
     if (m === "close") void within(core.close(), 4000).then(() => process.exit(0));
@@ -96,23 +111,34 @@ export class Device {
   /// Whose device: the dev cloud's mock account (alice, or bob) and, once signed in, its subject.
   user: string;
   sub = "";
-  constructor(name: string, user = "alice") {
+  /// Whether its host seals what it keeps (an app of today); false: an app from before, with no sealer.
+  sealed: boolean;
+  constructor(name: string, user = "alice", opts: { sealed?: boolean } = {}) {
     this.name = name;
     this.user = user;
+    this.sealed = opts.sealed ?? true;
     this.child = this.#fork(false);
   }
   #fork(again: boolean): ChildProcess {
-    const child = fork(fileURLToPath(import.meta.url), ["device", this.name, ...(again ? ["again"] : [])], { stdio: ["ignore", "inherit", "inherit", "ipc"] });
+    const child = fork(fileURLToPath(import.meta.url), ["device", this.name, again ? "again" : "new", this.sealed ? "sealed" : "plain"], { stdio: ["ignore", "inherit", "inherit", "ipc"] });
     child.on("message", (json: J) => this.#got(JSON.parse(json)));
     return child;
   }
-  /// The app quit and started again: the same data, a core anew (what it was subscribed to forgotten).
-  async restart(): Promise<void> {
+  /// The app quit and started again: the same data, a core anew (what it was subscribed to forgotten). `sealed: true`
+  /// on a device from before: the app updated, its host sealing now; left out, as it was.
+  async restart(opts: { sealed?: boolean } = {}): Promise<void> {
     await this.close();
     this.pending.clear();
     this.topics.clear();
+    if (opts.sealed !== undefined) this.sealed = opts.sealed;
     this.child = this.#fork(true);
     await this.call("client.device", { client: "still.fail e2e", app: "desktop", model: this.name });
+  }
+  /// How many times its sealer was asked with the person present since the device was new: a value sealed for their
+  /// presence read (`get` with `user`), or the person asked to say yes (`ask`). None while it had no sealer.
+  asked(): number {
+    const at = askedFile(join(dir, this.name));
+    return existsSync(at) ? readFileSync(at, "utf8").split("\n").filter((l) => l !== "").length : 0;
   }
   #send(m: J) {
     // (a device closed while a wait on it was still counting, one of two a step raced: nothing is there to be told
