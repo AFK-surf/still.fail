@@ -455,6 +455,30 @@ pub let started_by : Array[String] = [
 ]
 
 ///|
+/// What the released app always does that a replay's app does only where its trace's head says its run's app did: a
+/// way of asking the core that a change brought in after traces were recorded, which those traces' replays could not
+/// keep to (their asks are held to what the run asked). A recording's app says each of these is on (src/stillfail's
+/// CORETRACE env); a replay reads one by `trace_switch`, never by its own name, so none goes uncounted. How many traces
+/// still replay without each is held to its bar and only falls (src/sfreplay/flows/trace_switches_test.mbt): a replay
+/// without one tests what no device does any more, its subscriptions' bytes (topic_bytes) included.
+pub let trace_switches : Array[String] = [
+  // (#5142: a place of the bar keeps its lists and they are asked ahead)
+  "MBUI_PLACES_AHEAD",
+]
+
+///|
+/// Whether the run a replay plays had `name` on (its trace's head, as its Tester was started with it): `name` one of
+/// `trace_switches`.
+pub fn trace_switch(name : String) -> Bool {
+  if !trace_switches.contains(name) {
+    abort(
+      "trace_switch: \{name} is not one of sfcore's trace_switches: say it there, and its bar in src/sfreplay/flows/trace_switches_test.mbt",
+    )
+  }
+  @ui.env(name) == "1"
+}
+
+///|
 /// An environment variable (a Tester's, as its test gives it, the host's else), or the same name with `_B64` given as
 /// base64 ("" when neither is set): @hostapi.env_text, through @ui.env.
 pub fn env_text(name : String) -> String {
