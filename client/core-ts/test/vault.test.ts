@@ -1398,6 +1398,9 @@ test("a device taken out while the vault's station takes no write: the devices l
   assert.deepEqual([r.st.vaults.get(id)!.epoch, r.st.vaults.get(team)!.seq], [0, 0]);
   // Both read meanwhile: the owner's own and s2's, of which this person is a member.
   assert.deepEqual(listed(), [id, team].sort(), "listed still");
+  // Each row says it waits, and on which station.
+  const waits = (v: string) => vaults().vaults.find((row: any) => row.id === v)?.waits;
+  assert.deepEqual([waits(id), waits(team)], ["studio", "studio"]);
   assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
   assert.equal((await r.ask("vault.open", { item: teamItem.id })).plain.fields.value, "dep_1");
   const shown = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: team });
@@ -1426,6 +1429,8 @@ test("a device taken out while the vault's station takes no write: the devices l
   assert.deepEqual([v.epoch, v.keys.map((k) => k.cert.device)], [1, ["ab".repeat(32)]]);
   assert.equal(r.st.items.get(put.id)!.epoch, 1);
   assert.ok(listed().includes(id));
+  assert.ok(!("waits" in vaults().vaults.find((row: any) => row.id === id)), "keyed anew, it waits no more");
+  assert.equal(waits(team), "studio", "s2's waits on");
   assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
   const added = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "new", fields: { value: "n" } } });
   assert.equal(r.st.items.get(added.id)!.epoch, 1);

@@ -284,11 +284,16 @@ function readAs(inner: Inner, ws: string, lock: Checked, v: Vault, self: { devic
   return waitingAs(inner, ws, lock, v);
 }
 
-/// Why a change to vault `v`, waiting to be keyed anew, is refused: the station it waits for, the one it lives on.
-function waitingError(inner: Inner, ws: string, v: Vault): CoreError {
+/// The name of the station vault `v` waits on to be keyed anew (`waitingAs`), the one it lives on: its id's first
+/// characters where the workspace names none.
+function waitsOn(inner: Inner, ws: string, v: Vault): string {
   const at = held(inner, ws).at[v.id] ?? "";
-  const station = str(stationsOf(inner, ws).find((s) => s.id === at)?.name) || at.slice(0, 8);
-  return new CoreError("vault_waiting", t("core-misc.vault.waiting", { name: v.name, station }));
+  return str(stationsOf(inner, ws).find((s) => s.id === at)?.name) || at.slice(0, 8);
+}
+
+/// Why a change to vault `v`, waiting to be keyed anew, is refused: the station it waits for (`waitsOn`).
+function waitingError(inner: Inner, ws: string, v: Vault): CoreError {
+  return new CoreError("vault_waiting", t("core-misc.vault.waiting", { name: v.name, station: waitsOn(inner, ws, v) }));
 }
 
 /// Which of what a station says the rules take (a vault's version, an item's, a box certificate): what one says is
@@ -961,6 +966,8 @@ export function vaultsView(inner: Inner, ws: string): J {
         keyed: self !== null && mine !== undefined && keyed.get(self.device) === mine.box,
         missing: vouched.filter((c) => v.members.includes(c.sub) && keyed.get(c.device) !== c.box).length,
         recoverable: v.recovery !== undefined, lasts: v.lasts ?? "chat",
+        // (said only while it waits to be keyed anew: a row that does not wait is as it was)
+        ...(waitingAs(inner, ws, lock, v) !== null ? { waits: waitsOn(inner, ws, v) } : {}),
       };
     });
   // (a secret to keep is told only to whom it is for: it may be meant for no vault yet)

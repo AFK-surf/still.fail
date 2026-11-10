@@ -46,6 +46,9 @@ priv struct SettingsFixture {
   mut vault_off : Bool
   /// secrets of lin's still in plain text from before security mode (settings-vault-plain), until encrypted
   mut plain_left : Int
+  /// lin's own vault waiting to be keyed anew on Willow, a device holding its key taken out of the lock
+  /// (settings-vault-waits): its row's `waits`
+  mut vault_waits : Bool
   /// the skills shared (true) or no longer (false) since the run started (`skill.share`), by name
   skills_shared : Map[String, Bool]
   /// the quota's resets used on ChatGPT 团队 (`profile.resetQuota`)
@@ -138,6 +141,7 @@ let fx : SettingsFixture = {
   trouble: "",
   vault_off: false,
   plain_left: 0,
+  vault_waits: false,
   skills_shared: {},
   resets_used: 0,
   reset_expiry: false,
@@ -190,6 +194,32 @@ fn fx_kept_file(key : String, name : String, size : Double, bytes : Double, open
     None => ()
   }
   Some(Json::object(o))
+}
+
+///|
+/// lin's own vault, 林的库 on Willow, as the core's `vaults` lists it: waiting to be keyed anew there (`waits`) in
+/// settings-vault-waits only, as the core says it only while it does.
+fn fx_vault_row() -> Json {
+  let row : Array[(String, Json)] = [
+    ("id", str("v1")),
+    ("name", str("林的库")),
+    ("owner", str("u1")),
+    ("ownerName", str("林")),
+    ("mine", Json::boolean(true)),
+    ("members", []),
+    ("station", str("st1")),
+    ("stationName", str("Willow")),
+    ("items", Json::number(3.0)),
+    ("devices", Json::number(2.0)),
+    ("open", Json::boolean(false)),
+    ("keyed", Json::boolean(true)),
+    ("missing", Json::number(0.0)),
+    ("recoverable", Json::boolean(true)),
+  ]
+  if fx.vault_waits {
+    row.push(("waits", str("Willow")))
+  }
+  obj(row)
 }
 
 ///|
@@ -268,6 +298,7 @@ fn fixture_reset() -> Unit {
   fx.trouble = ""
   fx.vault_off = false
   fx.plain_left = 0
+  fx.vault_waits = false
   fx.pairing = false
   fx.pairing_personal = false
   fx.pairing_more = false
@@ -549,6 +580,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-connect-mode" => fixture_open.desk = "connect-mode"
     "settings-vault-off" => fx.vault_off = true
     "settings-vault-plain" => fx.plain_left = 2
+    "settings-vault-waits" => fx.vault_waits = true
     "settings-lock-prompt" => fx.pairing = true
     // (one asking into the person's own lock: no workspace named)
     "settings-lock-prompt-personal" => {
@@ -611,7 +643,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-connect-run" | "settings-connect-switch" | "settings-slack-app" => "connect:ws1/st1#k1"
     "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" | "settings-new-connect-app" =>
       "connects"
-    "settings-vault-off" | "settings-vault-words" | "settings-vault-recover" | "settings-vault-plain" => "vault"
+    "settings-vault-off" | "settings-vault-words" | "settings-vault-recover" | "settings-vault-plain" | "settings-vault-waits" =>
+      "vault"
     "settings-vault-items" | "settings-vault-add" | "settings-vault-editor" => "vault-items"
     "settings-vault-item" => "vault-item:v1#it1"
     "settings-decisions" => "decisions-settings"
@@ -2563,24 +2596,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("plainLeft", Json::number(fx.plain_left.to_double())),
           (
             "vaults",
-            [
-              obj([
-                ("id", str("v1")),
-                ("name", str("林的库")),
-                ("owner", str("u1")),
-                ("ownerName", str("林")),
-                ("mine", Json::boolean(true)),
-                ("members", []),
-                ("station", str("st1")),
-                ("stationName", str("Willow")),
-                ("items", Json::number(3.0)),
-                ("devices", Json::number(2.0)),
-                ("open", Json::boolean(false)),
-                ("keyed", Json::boolean(true)),
-                ("missing", Json::number(0.0)),
-                ("recoverable", Json::boolean(true)),
-              ]),
-            ],
+            [fx_vault_row()],
           ),
           (
             "requests",

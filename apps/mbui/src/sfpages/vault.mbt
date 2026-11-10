@@ -4,9 +4,10 @@
 // device signing, this device set up, the recovery words written down): a card alone on either, with the way on. Set
 // up, 密钥 is what waits on the viewer and how the library stands, not what it keeps (「密钥管理不需要入口做这么浅，因为
 // 平时不会手动操作，顶多就是类似 1p，进去看一眼复制一下」): the requests waiting on the viewer first (each one's card, as
-// in its chat); a row to 全部密钥; how its secrets are kept, a row each on one list card, each what it is with how it
-// stands under it (encrypted or not, and unlocked here a while; those still in plain text from before; the longest an
-// approval lasts, picked through the presenters; the devices holding its key); deleting the vault in red at its foot,
+// in its chat); a vault waiting to be keyed anew, a card under its name (vault_waits); a row to 全部密钥; how its
+// secrets are kept, a row each on one list card, each what it is with how it stands under it (encrypted or not, and
+// unlocked here a while; those still in plain text from before; the longest an approval lasts, picked through the
+// presenters; the devices holding its key); deleting the vault in red at its foot,
 // asked first; the stations that refused it. 全部密钥 is what it keeps, a section a kind (the profiles' accounts as the
 // profiles list them, then each vault's secrets), each a row to its page, and 添加 at its head. Made of the library's
 // page parts (@sf.section, group, link_row, page_card), laid out by the page's width. Adding, a
@@ -205,6 +206,12 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
   for row in vaults {
     if !plain && !flag(Some(row), "keyed") {
       out.push(fn() { vault_no_key(c, core, ws, Some(row)) })
+    }
+  }
+  // one waiting to be keyed anew: on which station, and that it is read meanwhile, not changed
+  for row in vaults {
+    if text(Some(row), "waits") != "" {
+      out.push(fn() { vault_waits(c, Some(row)) })
     }
   }
   // what it keeps (the profiles' accounts, the vaults' secrets), a page of its own
@@ -466,6 +473,22 @@ fn vault_no_key(c : @ui.Ctx, core : Core, ws : String, rv : Json?) -> Unit {
         }
       })
     })
+  })
+}
+
+///|
+/// A vault waiting to be keyed anew (its row's `waits`: a device or member holding its key taken out of the lock),
+/// under its name: on which station its owner's device gives it new keys, and that until then it is read and used, not
+/// changed. Nothing to press: the owner's device does it by itself, and a change meanwhile says why it is refused.
+fn vault_waits(c : @ui.Ctx, rv : Json?) -> Unit {
+  let station = text(rv, "waits")
+  let note = if flag(rv, "mine") {
+    @sf.t("web-pages.vault.waits.mine", args=[("station", station)])
+  } else {
+    @sf.t("web-pages.vault.waits.theirs", args=[("owner", text(rv, "ownerName")), ("station", station)])
+  }
+  @sf.section(c, text(rv, "name"), fn() {
+    @sf.page_card(c, fn() { @sf.card_lines(c, @sf.t("web-pages.vault.waits.title"), note~) })
   })
 }
 
