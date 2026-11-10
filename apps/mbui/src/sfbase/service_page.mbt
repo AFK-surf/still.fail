@@ -38,7 +38,8 @@ pub(all) struct ServicePage {
   mut port : Int
   /// the service's cookies, by name (kept here: sent along with each request)
   cookies : Map[String, String]
-  mut viewport : Viewport?
+  /// what it is laid out at (none: as the room is), a signal: what is made once (its sizes' panel) follows it
+  viewport : @signals.Signal[Viewport?]
   mut restarting : Bool
   /// requests under way: the core's call for each
   calls : @sf.LiveMap[Int, Int]
@@ -54,15 +55,15 @@ pub(all) struct ServicePage {
   /// Preview.kt StageState), moved by a finger on it (the toolbar's 移动), where it was drawn last, the stage's fingers,
   /// when the ground was last tapped
   view : @kit.Zoom
-  mut moving : Bool
+  /// moved by a finger on its canvas in place of used, a signal as `viewport` is
+  moving : @signals.Signal[Bool]
   mut placed : Placed?
   mut hold : StageHold?
   /// its name and its chat's agent (marks go into that chat's draft: none, nothing to mark for), its marks
   mut name : String
   mut session : String
   marks : PageMarks
-  /// a size being typed (the sizes sheet's 自定义): put once its field is let go of; its two fields' words
-  mut custom_typing : Bool
+  /// the two fields' words of a size being typed (the sizes' 自定义)
   custom_w : @ui.Field
   custom_h : @ui.Field
 }
@@ -137,14 +138,17 @@ pub fn service_page_for(station : String, job : String, prefs? : Json? = None) -
         site: None,
         port: 0,
         cookies: {},
-        viewport: match svc_viewports.get(key) {
-          Some(v) => v
-          None =>
-            match field(field(prefs, "previewSizes"), key) {
-              Some(String(s)) => size_of_kept(s)
-              _ => None
-            }
-        },
+        viewport: @signals.signal(
+          match svc_viewports.get(key) {
+            Some(v) => v
+            None =>
+              match field(field(prefs, "previewSizes"), key) {
+                Some(String(s)) => size_of_kept(s)
+                _ => None
+              }
+          },
+          same=fn(a, b) { a == b },
+        ),
         restarting: false,
         calls: @sf.LiveMap::from({}),
         asked: 0,
@@ -153,13 +157,12 @@ pub fn service_page_for(station : String, job : String, prefs? : Json? = None) -
         address: @ui.Field::new(),
         link: page_link_new(),
         view: stage_zoom(),
-        moving: false,
+        moving: @signals.signal(false, same=fn(a, b) { a == b }),
         placed: None,
         hold: None,
         name: "",
         session: "",
         marks: page_marks_new(),
-        custom_typing: false,
         custom_w: @ui.Field::new(),
         custom_h: @ui.Field::new(),
       }
