@@ -288,5 +288,8 @@ fn files_bindings() -> Array[@view.Binding] {
     b(@ui.key_of_char('['), mod_key() | shift, "files.tab_back", files),
     b(@ui.key_of_char('d'), @ui.mod_cmd | @ui.mod_alt, "files.split", files),
     b(@ui.key_of_char('g'), @ui.mod_cmd | shift, "files.go_to", files),
+    // (↓ ↑ in 前往文件夹, with the cursor in its field: what is chosen under it, sfdesk's files_go.mbt)
+    b(@ui.key_code_down, 0, "files.go_to.down", In("GoTo")),
+    b(@ui.key_code_up, 0, "files.go_to.up", In("GoTo")),
   ]
 }
