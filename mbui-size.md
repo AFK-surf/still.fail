@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [85413543f](https://github.com/AFK-surf/still.fail/commit/85413543f0d721c9ed49e826b71181ec7f058599) mbui: a wheel and a press 7 ms after it scroll as  | 1.75 | 2.33 | 9.68 | 28.25 | 33.88 | 25.23 | 46.28 | 93.67 | 176.03 |
 | [62fe6d55e](https://github.com/AFK-surf/still.fail/commit/62fe6d55efbe05394fc23efa89c2efd7312953f1) app: what scrolls in itself in a panel of nodes, a | 1.75 | 2.33 | 9.68 | 28.24 | 33.86 | 25.22 | 46.26 | 93.54 | 140.62 |
 | [2dbd62daf](https://github.com/AFK-surf/still.fail/commit/2dbd62daffd926cff7d1fcad747b8323a37aaf97) core: to people there is one safe mode: approving  | 1.75 | 2.33 | 9.67 | 28.23 | 33.83 | 25.21 | 46.25 | 93.32 | 173.06 |
 | [9dfe391d0](https://github.com/AFK-surf/still.fail/commit/9dfe391d0ef9370b9e5d14815b83dba9b1c156d5) station, core, app: a model's own week under a Cla | 1.74 | 2.33 | 9.67 | 28.23 | 33.81 | 25.21 | 46.23 | 93.26 | 180.32 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [c1c5a1b0f](https://github.com/AFK-surf/still.fail/commit/c1c5a1b0f0bd25823209dab601ffdf216353c636) mbui: 60/120 帧下逐帧判平滑度（MBUI_TEST_MOTION），先在 CI 计数 ( | 1.73 | 2.31 | 9.61 | 28.13 | 33.49 | 25.12 | 45.93 | 93.55 | 147.47 |
 | [9da9d3e4a](https://github.com/AFK-surf/still.fail/commit/9da9d3e4a64943cb9c3c0bec47a2bb86426207d1) mbui: where the old views are placed worked out ag | 1.73 | 2.31 | 9.61 | 28.13 | 33.49 | 25.12 | 45.93 | 93.28 | 181.3 |
 | [16974fbc6](https://github.com/AFK-surf/still.fail/commit/16974fbc68586fa0c47785d89e80a6679c01ec4c) mbui: the player's keys are the keymap's actions,  | 1.73 | 2.31 | 9.61 | 28.13 | 33.48 | 25.12 | 45.93 | 93.55 | 146.41 |
-| [874d0a6bb](https://github.com/AFK-surf/still.fail/commit/874d0a6bb8782c31c66812cb403c1e8d6079765a) mbui: a code field as nodes; the narrow frame's lo | 1.73 | 2.31 | 9.61 | 28.13 | 33.48 | 25.12 | 45.93 | 93.36 | 140.08 |
