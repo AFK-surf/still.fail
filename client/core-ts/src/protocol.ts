@@ -85,7 +85,7 @@ export const TOPICS: Record<string, Spec> = {
   adminOverview: { account: S },
   adminRelays: { account: S, range: ["string", "skip"] },
   chats: { scope: S, mine: ["bool", "def"], watching: ["bool", "skipFalse"], hidden: ["bool", "skipFalse"], limit: ["u32", "skip"] },
-  stations: { scope: S, drive: ["bool", "skipFalse"], here: ["string", "skip"], brief: ["bool", "skipFalse"] },
+  stations: { scope: S, drive: ["bool", "skipFalse"], here: ["string", "skip"], brief: ["bool", "skipFalse"], lean: ["bool", "skipFalse"] },
   profiles: { scope: S },
   connects: { scope: S, mine: ["bool", "def"] },
   chat: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], compact: ["bool", "skipFalse"] },

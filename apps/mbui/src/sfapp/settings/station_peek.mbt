@@ -217,7 +217,7 @@ fn peek_station(core : Core, address : String) -> Json? {
     Some(i) => address.view(end_offset=i).to_owned()
     None => address
   }
-  match (core.topic)("stations", { "scope": str(ws) }).get().value {
+  match (core.topic)("stations", { "scope": str(ws), "lean": Json::boolean(true) }).get().value {
     Some(Array(a)) =>
       for x in a {
         if text(Some(x), "station") == address {

@@ -401,8 +401,15 @@ pub fn workspace_view(core : Core, here : Here) -> Read {
 }
 
 ///|
-/// The workspace's stations (`stations`: StationView).
+/// The workspace's stations (`stations`: StationView), asked `lean`: without the models each can run, which only a
+/// model's choice reads (stations_with_models).
 pub fn stations_of(core : Core, here : Here) -> Read {
+  (core.topic)("stations", { "scope": str(here.workspace), "lean": Json::boolean(true) }).get()
+}
+
+///|
+/// The workspace's stations with the models each can run (StationView `models`), for what picks one.
+pub fn stations_with_models(core : Core, here : Here) -> Read {
   (core.topic)("stations", { "scope": str(here.workspace) }).get()
 }
 

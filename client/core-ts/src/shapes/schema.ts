@@ -3743,7 +3743,7 @@ export const SHAPES: Record<string, Shape> = {
     ["version", opt("String")],
     ["link", "Link"],
     ["runtimes", vec("RuntimeModels")],
-    ["models", vec("ModelOption")],
+    ["models", vec("ModelOption"), { doc: "None when asked `lean` (the lists: only a model's choice reads them)." }],
     ["overview", opt("Overview")],
     ["profileGroups", vec("StationProfileGroup"), { default: true, doc: "Its profiles by account kind, those needing a look first." }],
     ["profileStates", map("ProfileState"), { default: true, doc: "Each of its profile rows' state, keyed by profile id, using the profiles list's rule." }],
