@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [a7b60f6b2](https://github.com/AFK-surf/still.fail/commit/a7b60f6b22673771b8f1cfe19bfd7e5b67dcb910) mbui: a stack's pages put in place, or gone back t | 1.76 | 2.35 | 9.79 | 28.4 | 34.29 | 25.38 | 46.63 | 94.03 | 162.11 |
 | [154f6d152](https://github.com/AFK-surf/still.fail/commit/154f6d152de376a69b8f0c80c94d649724516667) station: the main thread waits on no disk, process | 1.76 | 2.35 | 9.79 | 28.38 | 34.26 | 25.36 | 46.61 | 93.57 | 125.36 |
 | [d2247c1b5](https://github.com/AFK-surf/still.fail/commit/d2247c1b58fac7c5cd9117925a7a1d8f4462362f) feedback: the still.fail team replies on a bug rep | 1.76 | 2.35 | 9.78 | 28.38 | 34.26 | 25.35 | 46.59 | 93.7 | 173.58 |
 | [87bc79faf](https://github.com/AFK-surf/still.fail/commit/87bc79faf1131dbca3843f025a7644b17f1c090c) mbui: the Wasm film's host answers the core's call | 1.76 | 2.35 | 9.78 | 28.38 | 34.21 | 25.34 | 46.58 | 93.54 | 138.22 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [2a31b314f](https://github.com/AFK-surf/still.fail/commit/2a31b314fb3486b36e023a5d682710dcbc9ed548) mbui: hang reports keep the heaviest past the cap, | 1.74 | 2.32 | 9.63 | 28.17 | 33.62 | 25.15 | 46.08 | 92.77 | 131.2 |
 | [d23367cfa](https://github.com/AFK-surf/still.fail/commit/d23367cfae07dd21c5805c27728d02873132630f) core: the account's list changed reads /v1/me and  | 1.74 | 2.32 | 9.63 | 28.16 | 33.61 | 25.15 | 46.08 | 93.05 | 179.11 |
 | [ca2d39363](https://github.com/AFK-surf/still.fail/commit/ca2d39363c12612addb0481ba8b0b9c8a49edde5) core: a vault's version told before the lock that  | 1.74 | 2.32 | 9.63 | 28.16 | 33.61 | 25.15 | 46.06 | 93.05 | 179.11 |
-| [18b961167](https://github.com/AFK-surf/still.fail/commit/18b9611671c1e66191592f06ba0aa57168989345) app: a software's update said under its version, n | 1.74 | 2.32 | 9.63 | 28.16 | 33.61 | 25.15 | 46.06 | 93.13 | 173.67 |
