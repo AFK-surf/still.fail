@@ -65,3 +65,58 @@ test "a page let go of by a finger: as a page popped, never one deep at rest wit
   t.run_for(move_most_ms)
   assert_eq(seen[before - 1:].to_array(), [(2, false, 0), (1, true, 2), (1, true, 0)])
 }
+
+///|
+/// A stack of letters and what a reaction reading it saw: its depth, the page on top, whether its root shows, how it
+/// moves, each told where it differs from the one before.
+fn top_seen() -> (Tester, Nav[String], Array[(Int, String, Bool, Int)]) {
+  let (t, nav, _) = stacked()
+  let seen : Array[(Int, String, Bool, Int)] = []
+  let owner = @signals.set_owner(None)
+  @signals.effect(fn() {
+    let now = (nav.depth(), nav.top(), nav.root_shows(), nav.mode)
+    if seen.last() != Some(now) {
+      seen.push(now)
+    }
+  })
+  |> ignore
+  @signals.set_owner(owner) |> ignore
+  (t, nav, seen)
+}
+
+///|
+test "a page put in place of one still coming in: seen coming in, then the new one on top at rest; never the one coming in stopped where it was" {
+  let (t, nav, seen) = top_seen()
+  nav.push("b")
+  t.draw()
+  nav.replace("c")
+  t.draw()
+  t.run_for(move_most_ms)
+  assert_eq(seen, [(1, "a", true, 0), (2, "b", true, 1), (2, "c", false, 0)])
+}
+
+///|
+test "the pages over the first put in place while one still comes in: as a page put in place, never the one coming in stopped where it was" {
+  let (t, nav, seen) = top_seen()
+  nav.push("b")
+  t.draw()
+  nav.replace_above(1, ["c"])
+  t.draw()
+  t.run_for(move_most_ms)
+  assert_eq(seen, [(1, "a", true, 0), (2, "b", true, 1), (2, "c", false, 0)])
+}
+
+///|
+test "back to the root while a page still comes in: seen coming in, then going back over the root; never three deep at rest" {
+  let (t, nav, seen) = top_seen()
+  nav.push("b")
+  t.draw()
+  t.run_for(move_most_ms)
+  nav.push("c")
+  t.draw()
+  let before = seen.length()
+  assert_true(nav.pop_to(1))
+  t.draw()
+  t.run_for(move_most_ms)
+  assert_eq(seen[before - 1:].to_array(), [(3, "c", false, 1), (1, "a", true, 2), (1, "a", true, 0)])
+}

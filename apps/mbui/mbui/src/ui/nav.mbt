@@ -584,8 +584,9 @@ pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
 }
 
 ///|
-/// What one cause does to the stack (a push, a rise, a pop, a page let go), told as one: what reads it (`said`,
-/// `shown`) sees it whole, never half done (its pages pushed, its slide not yet set out: none beside its top, at rest).
+/// What one cause does to the stack (a push, a rise, a pop, back to a depth, a page let go, one or more put in place),
+/// told as one: what reads it (`said`, `shown`) sees it whole, never half done (its pages pushed, its slide not yet set
+/// out: none beside its top, at rest; or a slide under way ended, the pages that replace it not yet there).
 fn[T] told_once(f : () -> T) -> T {
   @signals.start_batch()
   let r = f()
@@ -716,6 +717,11 @@ fn[P] Nav::pop_now(self : Nav[P]) -> Bool {
 /// Back to the page `depth` deep (1 the root): the top slides away over it, those between taken off as they are, never
 /// shown again (forgotten, `on_leave` told, as the top's slide begins); false when the stack is no deeper than that.
 pub fn[P] Nav::pop_to(self : Nav[P], depth : Int) -> Bool {
+  told_once(fn() { self.pop_to_now(depth) })
+}
+
+///|
+fn[P] Nav::pop_to_now(self : Nav[P], depth : Int) -> Bool {
   if depth < 1 || self.pages.length() <= depth {
     return false
   }
@@ -731,6 +737,11 @@ pub fn[P] Nav::pop_to(self : Nav[P], depth : Int) -> Bool {
 ///|
 /// The top page replaced by `page`, in place (nothing slides).
 pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
+  told_once(fn() { self.replace_now(page) })
+}
+
+///|
+fn[P] Nav::replace_now(self : Nav[P], page : P) -> Unit {
   self.settle()
   // (told once, as the new one is on top: never with no page)
   let was = self.pages.pop()
@@ -755,6 +766,11 @@ pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
 /// list's row choosing the page beside it in place of whatever was open over the list). Never with no page: `pages`
 /// empty, `keep` 1 at least.
 pub fn[P] Nav::replace_above(self : Nav[P], keep : Int, pages : Array[P]) -> Unit {
+  told_once(fn() { self.replace_above_now(keep, pages) })
+}
+
+///|
+fn[P] Nav::replace_above_now(self : Nav[P], keep : Int, pages : Array[P]) -> Unit {
   let keep = if keep < 0 { 0 } else { keep }
   if pages.is_empty() && (keep == 0 || self.pages.length() <= keep) {
     return
