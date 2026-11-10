@@ -84,8 +84,9 @@ jobs:
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: macos-ci's cache is shared by its runners and the checks beside this job wait
-  # for a build under way rather than doing it again). main publishes them, and keeps the newest 20 of each; a branch
-  # publishes nothing, and passes what it built to its other jobs as a run artifact. Seconds when none changed.
+  # for a build under way rather than doing it again). main publishes them, and keeps the newest 20 of each (as every
+  # publisher does: native.ts prune); a branch publishes nothing, and passes what it built to its other jobs as a run
+  # artifact. Seconds when none changed.
   natives:
     needs: plan
     if: needs.plan.outputs.natives == 'needed'
@@ -109,7 +110,6 @@ jobs:
         run: |
           if [ "$GITHUB_REF" = refs/heads/main ]; then
             node scripts/native.ts ensure --publish
-            node scripts/native.ts prune 20
           else
             # What a branch's checks and builds use (BRANCH_NATIVES).
             node scripts/native.ts ensure --outbox "$RUNNER_TEMP/natives" $BRANCH_NATIVES
