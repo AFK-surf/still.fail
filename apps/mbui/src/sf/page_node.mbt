@@ -1066,6 +1066,7 @@ let status_dot_side : Double = 7.0
 /// knob slides to its side (switch_ms, eased out) and its track's colour with it, from where it is at that moment;
 /// held by a finger, the knob a lens growing as a lift does. In the room a finger's press takes round it, up and down.
 /// `small`: 26 by 16 (switch_size's). While `disabled()`, at half (@kit.switch's look's), taking no press nor the focus.
+/// What the keys' focus and a screen reader find is one node, its room: a switch by its name, on or off.
 #callsite(autofill(loc))
 pub fn switch_node(
   parent : @view.View,
@@ -1099,11 +1100,15 @@ pub fn switch_node(
         }
         turn(to)
       }
-      room.presses(By(fn() { !disabled() })).focusable(By(fn() { !disabled() })).on_press(press) |> ignore
-      v
-      .alpha(By(fn() { if disabled() { switch_disabled_alpha } else { 1.0 } }))
+      // (what takes the focus and the press is what says it is a switch, its name and whether it is on: one thing to a
+      // screen reader and to the keys, its room; the ring the keys' focus shows drawn round its track, below)
+      room
+      .presses(By(fn() { !disabled() }))
+      .focusable(By(fn() { !disabled() }))
+      .on_press(press)
       .says(By(fn() { Some(@view.said(Switch, label=label(), check=if on() { On } else { Off })) }))
       |> ignore
+      v.alpha(By(fn() { if disabled() { switch_disabled_alpha } else { 1.0 } })) |> ignore
       let on_it = fn(d : @view.Drag) { room.finger_target(d.wx, d.wy) }
       room.gesture(
         @ui.touch_slop(),
