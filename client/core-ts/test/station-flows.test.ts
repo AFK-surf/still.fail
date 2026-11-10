@@ -1657,13 +1657,15 @@ test("session_events_update_in_place", async () => {
     "GET /sessions/c": { session: summary("c", 0), threads: [], turns: [] },
   });
   await host.settle();
-  // The same turns: the summary changes in place. (A session new to the device has its detail brought in, rule 6.)
+  const detailOfA = gets(host, "/admin/api/sessions/a?turns=0&jobs=now");
+  // The same turns: the summary changes in place, its detail not read. (A session new to the device has its detail
+  // brought in, rule 6.)
   const renamed = { ...summary("a", 1), title: "新名字", lastTurn: turn };
   push("session", renamed);
   push("session", summary("c", 0));
   await host.settle();
-  assert.ok(gets(host, "/admin/api/sessions/c?turns=0&jobs=now") >= 1, "brought in");
-  const detailOfA = gets(host, "/admin/api/sessions/a?turns=0&jobs=now");
+  assert.equal(gets(host, "/admin/api/sessions/c?turns=0&jobs=now"), 1, "brought in, once");
+  assert.equal(gets(host, "/admin/api/sessions/a?turns=0&jobs=now"), detailOfA);
   const list = () => core.inner.data.get({ topic: "sessions", station: ST }) as J[];
   assert.deepEqual(list().map((s) => s.key), ["c", "a", "b"]);
   assert.equal(list()[1].title, "新名字");

@@ -1543,11 +1543,11 @@ export class StationsSync {
 
   /// What a stream told of what reads bring too (RETOLD) into what is held: as it is told, and again on top of what a
   /// read asked before it brought (`#retell`).
-  #held(address: string, name: string, data: unknown): void {
+  #held(address: string, name: string, data: unknown, details = true): void {
     const core = this.#core;
     switch (name) {
       case "session":
-        return this.#onSession(address, data);
+        return this.#onSession(address, data, details);
       case "session-pending": {
         // Its messages taken (how many it has yet to take): in its summary at once, its summary told after.
         const key = str(get(data, "key"));
@@ -1725,20 +1725,23 @@ export class StationsSync {
   }
 
   /// What `address`'s stream told since `read` was asked, on top of what it brought (retold.ts).
-  #retell(address: string, read: number, shared = false): void {
+  /// `details`: whether a summary told again may ask its session's detail read again. Not after a read of the marks,
+  /// which brings no detail: the summary asked its detail as it was first told (a session new to the device was read
+  /// twice so, the second while the first was on its way).
+  #retell(address: string, read: number, shared = false, details = true): void {
     // Only a shared-list read replaces sharedRows. Replaying its events after an unrelated, slower read could put an
     // older row back over a newer shared-list answer.
-    for (const { name, data } of this.#retold.since(read, address)) if (SHARED_RETOLD.has(name) === shared) this.#held(address, name, data);
+    for (const { name, data } of this.#retold.since(read, address)) if (SHARED_RETOLD.has(name) === shared) this.#held(address, name, data, details);
   }
 
   /// A session's summary changed: in place among the listed (and in its detail); its detail is read again when its
   /// turns changed.
-  #onSession(address: string, summary: unknown): void {
+  #onSession(address: string, summary: unknown, details = true): void {
     const key = str(get(summary, "key"));
     if (!key) return;
     const before = this.#core.data.of(address)?.summary(address, key);
     this.#rowsAfterSession(address, key, before, summary);
-    if (this.#core.data.putSummary(address, summary)) this.#enqueue(address, `session/${key}`, Priority.shown, this.#session(address, key));
+    if (this.#core.data.putSummary(address, summary) && details) this.#enqueue(address, `session/${key}`, Priority.shown, this.#session(address, key));
     // How far its transcript goes: what the device lacks of it after what it holds is read (channels.ts `settle`).
     const length = u64(get(summary, "transcriptLength"));
     if (length !== null && length > 0) this.channels.goesTo(transcriptOf(address, key), length - 1);
@@ -1804,7 +1807,7 @@ export class StationsSync {
       if (marks === null) return yield* Effect.fail(new CoreError("bad_response", t("station.core.invalidReply")));
       link.marks = marks;
       this.#made(address);
-      this.#retell(address, asked);
+      this.#retell(address, asked, false, false);
     }));
   }
 
@@ -1830,7 +1833,7 @@ export class StationsSync {
       if (read === null || !link.marks) return;
       link.marks = whole ? read : marksWith(link.marks, read, scope);
       this.#made(address);
-      this.#retell(address, asked);
+      this.#retell(address, asked, false, false);
     })));
   }
 
