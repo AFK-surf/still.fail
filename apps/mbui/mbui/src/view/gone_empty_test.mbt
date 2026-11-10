@@ -348,3 +348,107 @@ test "gone_empty along a row: none of its room, padding or gap in the frame it h
   assert_eq(ge_x(t, "乙"), 86.0)
   assert_false(t.clock_read())
 }
+
+///|
+/// As ge_tree, what the box holds a pick: 里 (40 tall) where `on` says so, else a case that makes nothing.
+fn ge_pick_tree(on : @signals.Signal[Bool], at_once? : Bool = false) -> @view.Tree {
+  @view.Tree::new(fn(root) {
+    root.gap(Is(10.0)) |> ignore
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("上")) |> ignore }) |> ignore
+    root.box(fn(b) {
+      b.gone_empty(Is(true)).padding(Is((0.0, 18.0, 0.0, 24.0))).margin(Is((0.0, 4.0, 0.0, 0.0))) |> ignore
+      b.pick(at_once~, fn() { on.get() }, fn(v, k) {
+        if k {
+          v.height(Is(Some(40.0))).words(Is("里")) |> ignore
+        }
+      })
+    })
+    |> ignore
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("下")) |> ignore }) |> ignore
+  })
+}
+
+///|
+test "gone_empty holding a pick of a case that makes nothing: none of its room; the other case, all of it" {
+  let on = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = ge_pick_tree(on, at_once=true)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(ge_y(t, "下"), 30.0)
+  t.event(100.0, fn() { on.set(true) })
+  t.at(100.0)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(ge_y(t, "里"), 52.0)
+  assert_eq(ge_y(t, "下"), 126.0)
+  t.event(200.0, fn() { on.set(false) })
+  t.at(200.0)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(ge_y(t, "下"), 30.0)
+}
+
+///|
+test "gone_empty, a pick changed to a case that makes nothing: its padding, margin and gap close with the one before's way, then none" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let t = ge_pick_tree(on)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(ge_y(t, "下"), 126.0)
+  t.event(100.0, fn() { on.set(false) })
+  let ys = ge_frames(t, 100.0, 900.0)
+  assert_eq(ys[0], 126.0)
+  assert_eq(ys[ys.length() - 1], 30.0)
+  for i in 1..<ys.length() {
+    assert_true(ys[i] <= ys[i - 1], msg="closes only: \{ys}")
+  }
+  let most = ge_most_step(ys)
+  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{ys}")
+  assert_eq(ge_y(t, "里"), -1.0)
+  assert_false(t.clock_read())
+}
+
+///|
+test "gone_empty, a pick changed from a case that makes nothing: its padding, margin and gap open with the new one's way" {
+  let on = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = ge_pick_tree(on)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(ge_y(t, "下"), 30.0)
+  t.event(100.0, fn() { on.set(true) })
+  let ys = ge_frames(t, 100.0, 900.0)
+  assert_eq(ys[0], 30.0)
+  assert_eq(ys[ys.length() - 1], 126.0)
+  for i in 1..<ys.length() {
+    assert_true(ys[i] >= ys[i - 1], msg="opens only: \{ys}")
+  }
+  let most = ge_most_step(ys)
+  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{ys}")
+  assert_false(t.clock_read())
+}
+
+///|
+test "gone_empty, a pick changed to nothing and back half way: its padding turns with the way, no step" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let t = ge_pick_tree(on)
+  t.frame(390.0, 844.0) |> ignore
+  t.event(100.0, fn() { on.set(false) })
+  let going = ge_frames(t, 100.0, 160.0)
+  t.event(160.0, fn() { on.set(true) })
+  let ys = going + ge_frames(t, 160.0, 900.0)
+  assert_eq(ys[ys.length() - 1], 126.0)
+  let most = ge_most_step(ys)
+  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{ys}")
+}
+
+///|
+test "gone_empty holding a box the app says that holds nothing: that is something, all of its room there" {
+  let t = @view.Tree::new(fn(root) {
+    root.gap(Is(10.0)) |> ignore
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("上")) |> ignore }) |> ignore
+    root.box(fn(b) {
+      b.gone_empty(Is(true)).padding(Is((0.0, 18.0, 0.0, 24.0))) |> ignore
+      b.box(fn(_) {  }) |> ignore
+    })
+    |> ignore
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("下")) |> ignore }) |> ignore
+  })
+  t.frame(390.0, 844.0) |> ignore
+  // (20 + 10 + 18 + 0 + 24 + 10)
+  assert_eq(ge_y(t, "下"), 82.0)
+}

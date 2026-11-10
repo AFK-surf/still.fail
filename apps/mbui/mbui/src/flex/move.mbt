@@ -255,7 +255,15 @@ fn come_height(s : Style, natural : Double) -> Double {
   }
   let (tall, _) = come_way(s.come_from, s.come_v, goal, t)
   let tall = fmax(tall, 0.0)
-  s.come_k = if natural > 0.0 { fmax(fmin(tall / natural, 1.0), 0.0) } else { s.come_to }
+  // (holding nothing it is laid out by, closing to nothing from as tall as one before it was (a pick's case that made
+  // nothing): its share of that)
+  s.come_k = if natural > 0.0 {
+    fmax(fmin(tall / natural, 1.0), 0.0)
+  } else if s.come_to <= 0.0 && s.come_from > 0.0 {
+    fmax(fmin(tall / s.come_from, 1.0), 0.0)
+  } else {
+    s.come_to
+  }
   tall
 }
 
