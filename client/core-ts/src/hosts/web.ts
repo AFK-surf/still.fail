@@ -14,6 +14,7 @@ import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest,
 import { t } from "../i18n.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
+import { setOwnBuild } from "../station/oldest.ts";
 import { collate } from "./collate.ts";
 import { pictureRelay, relayedPicture } from "../picture-relay.ts";
 
@@ -432,10 +433,15 @@ export type WebCore = { connect(): number; disconnect(client: number): void; rec
 /// `testChannel` the page is the test channel's. A bug that ends a fiber ends it as a panic ended the Rust core's:
 /// `onFatal` is told, with the error itself (its stack is the only clue where), and the worker tells the pages and closes;
 /// a database found damaged on the way is marked first, to be made again by the core that follows (data.ts).
-/// `onReport`: errors the core goes on after, for error tracking.
-export function startWeb(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string, error: unknown) => void, loadSqlite: () => Promise<WasmSqlite>, onReport?: (error: Error) => void): Promise<WebCore> {
+/// `onReport`: errors the core goes on after, for error tracking. `build`: the web's own build (`0.1.<n>`, its
+/// `__BUILD__`), said to the stations with every request from the first (station/oldest.ts): the app tells the core
+/// what its device is on every platform but the browser (apps/mbui/src/sfcore/signin.mbt `tell_device`), so a web
+/// page's core said no build at all, and a station could not tell it from a core from before builds were said (the
+/// stable web refused by every station that held those to its floor, 2026-11-10, #5281).
+export function startWeb(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string, error: unknown) => void, loadSqlite: () => Promise<WasmSqlite>, onReport?: (error: Error) => void, build = ""): Promise<WebCore> {
   service.name = "stillfail-web";
   service.os = "browser";
+  if (build !== "") setOwnBuild(build);
   const host = new WebHost(emit, testChannel, loadSqlite, onReport);
   return Core.create(host, { iroh: webIroh(loadIroh) }).then((core) => {
     core.inner.runner.onDefect = (error) => void core.inner.data.damageKept().then(() => onFatal(t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }), error));
