@@ -947,6 +947,9 @@ pub struct Tree {
   mut measured_gen : Int
   /// the first compute laid out to be read since things were last placed (-1: none): what a later layout places by too
   mut walk_from : Int
+  /// Whether a layout of all of it is under way as of the logic's moment (Tree::measured_now): what is made in it and
+  /// reads how big it is laid out reads that layout as it stands, none begun inside it
+  mut measuring : Bool
   /// what lays out alone (View::lays_out_alone) with something under it to be laid out again, nothing above it: laid
   /// out from it as the rest is (Tree::alone_laid_out)
   alone_due : Array[Int]
@@ -1194,6 +1197,7 @@ pub fn Tree::new(
     settle_at: 0.0,
     measured_gen: -1,
     walk_from: -1,
+    measuring: false,
     alone_due: [],
     alone_laid: [],
     alone_asks: {},
@@ -4113,6 +4117,17 @@ pub fn View::placed_window_now(self : View) -> (Double, Double, Double, Double) 
 }
 
 ///|
+/// Node `id` as it was last placed against how it is laid out now, for a Tester's check that what a frame draws was
+/// placed by the layout it draws by (tester_placed.mbt): whether it was placed at all, how big it was placed, how big it
+/// is laid out. None: no such node.
+pub fn Tree::placed_against_laid(self : Tree, id : NodeId) -> (Bool, Double, Double, Double, Double)? {
+  guard id.at >= 0 && id.at < self.nodes.length() else { return None }
+  let n = self.nodes[id.at]
+  guard n.live && n.gen == id.gen else { return None }
+  Some((n.placed, n.lw, n.lh, n.flex.width, n.flex.height))
+}
+
+///|
 /// Whether it was ever placed: where it stood before a change told now (placed_window_now) is somewhere, not nowhere
 /// (none of what is made for that change, or since the last was placed).
 pub fn View::was_placed(self : View) -> Bool {
@@ -4126,7 +4141,10 @@ pub fn View::was_placed(self : View) -> Bool {
 /// by what goes from where they stood to there for its cause (View::laid_window_now), the same for all that read it in
 /// that change.
 fn Tree::measured_now(self : Tree) -> Unit {
-  if self.last_w <= 0.0 {
+  // (asked as that layout is under way, by what a room's fill makes in it reading how tall it is laid out as it is made
+  // (reveal_node): that layout as it stands, none begun inside it, which would place what it lays out from its own
+  // generation and leave what the one under way laid out unplaced)
+  if self.last_w <= 0.0 || self.measuring {
     return
   }
   // (asked in a change holding its boxes: those put first)
@@ -4155,10 +4173,13 @@ fn Tree::measured_now(self : Tree) -> Unit {
       self.alone_laid_out()
       self.work.computes = self.work.computes + 1
       let g = @flex.computes() + 1
+      self.measuring = true
       @flex.compute(self.nodes[0].flex, width=self.last_w, height=self.last_h, round=false, reuse=true)
+      self.measuring = false
       self.measured_gen = g
-      // (placed by once things are placed, whatever is laid out again before that)
-      if self.walk_from < 0 {
+      // (placed by once things are placed, whatever is laid out again before that: from the first of what was laid out
+      // and not placed yet)
+      if self.walk_from < 0 || g < self.walk_from {
         self.walk_from = g
       }
     }
