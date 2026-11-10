@@ -35,7 +35,7 @@ fn chart_fmt(n : Double, digits : Int) -> String {
     return n.to_string()
   }
   let neg = n < 0.0
-  let scale = @math.pow(10.0, digits.to_double())
+  let scale = @dmath.pow(10.0, digits.to_double())
   let r = (n.abs() * scale).round() / scale
   let whole = r.floor()
   let frac = r - whole
@@ -85,7 +85,7 @@ fn chart_ticks(lo0 : Double, hi0 : Double) -> Array[Double] {
   let lo = lo0
   let hi = if hi0 == lo0 { lo0 + 1.0 } else { hi0 }
   let raw = (hi - lo) / 4.0
-  let mag = @math.pow(10.0, (@math.log10(raw)).floor())
+  let mag = @dmath.pow(10.0, (@dmath.log10(raw)).floor())
   let mut step = raw
   for m in [1.0, 2.0, 2.5, 5.0, 10.0] {
     if m * mag >= raw {
@@ -108,25 +108,24 @@ fn chart_ticks(lo0 : Double, hi0 : Double) -> Array[Double] {
 }
 
 ///|
-let chart_tones : Map[String, String] = {
-  "green": "--green",
-  "ok": "--green",
-  "yellow": "--yellow",
-  "amber": "--yellow",
-  "warn": "--yellow",
-  "red": "--red",
-  "error": "--red",
-  "blue": "--blue",
-  "info": "--blue",
-  "purple": "--purple",
-  "orange": "--orange",
-  "ink": "--foreground",
-  "muted": "--muted-foreground",
+/// A tone's token (components.js TONE_INK).
+fn chart_tone(tone : String) -> String? {
+  match tone {
+    "green" | "ok" => Some("--green")
+    "yellow" | "amber" | "warn" => Some("--yellow")
+    "red" | "error" => Some("--red")
+    "blue" | "info" => Some("--blue")
+    "purple" => Some("--purple")
+    "orange" => Some("--orange")
+    "ink" => Some("--foreground")
+    "muted" => Some("--muted-foreground")
+    _ => None
+  }
 }
 
 ///|
 fn chart_ink(tone : String, i : Int) -> String {
-  match chart_tones.get(tone) {
+  match chart_tone(tone) {
     Some(v) => "var(" + v + ")"
     None => "var(--viz-series-" + (i % 6 + 1).to_string() + ")"
   }
@@ -468,7 +467,7 @@ fn chart_donut(e : @html.Elem, d : Json?, unit : String, pie : Bool) -> String {
     colors.push(color)
     let end = a + span
     let big = if span > pi { 1 } else { 0 }
-    let p = fn(rad : Double, ang : Double) { n2(c + rad * @math.cos(ang)) + "," + n2(c + rad * @math.sin(ang)) }
+    let p = fn(rad : Double, ang : Double) { n2(c + rad * @dmath.cos(ang)) + "," + n2(c + rad * @dmath.sin(ang)) }
     let gap = if items.length() > 1 { 0.012 } else { 0.0 }
     let path = if span >= pi * 2.0 - 1.0e-6 {
       "M\{n2(c - big_r)},\{n2(c)}a\{n2(big_r)},\{n2(big_r)} 0 1,0 \{n2(big_r * 2.0)},0a\{n2(big_r)},\{n2(big_r)} 0 1,0 \{n2(-big_r * 2.0)},0" +

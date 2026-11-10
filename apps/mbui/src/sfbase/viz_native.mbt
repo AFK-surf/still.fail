@@ -6,6 +6,7 @@
 
 ///|
 /// HTML's own sheet and still.fail's visualization stylesheet, read once.
+// kept across runs: read from constants, the same in every run
 let viz_native_sheet : Ref[@html.Sheet?] = Ref(None)
 
 ///|
@@ -22,6 +23,7 @@ fn viz_native_defaults() -> @html.Sheet {
 
 ///|
 /// still.fail's icons by name (viz_icons: what a figure's data-icon marks name), read once.
+// kept across runs: read from a constant, the same in every run
 let viz_icon_paths : Ref[Map[String, String]?] = Ref(None)
 
 ///|
