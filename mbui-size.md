@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [da1d0b203](https://github.com/AFK-surf/still.fail/commit/da1d0b2036a3012eca5ef47277f8adbf06526026) sf: a panel's body of nodes holding nothing takes  | 1.78 | 2.38 | 9.93 | 28.56 | 34.77 | 25.49 | 46.94 | 93.9 | 177.94 |
 | [da0d3f539](https://github.com/AFK-surf/still.fail/commit/da0d3f539c30bde5c7c79b246d6c353f27f0bfc7) app: how far a service page's resources came in a  | 1.78 | 2.38 | 9.93 | 28.55 | 34.77 | 25.49 | 46.94 | 94.27 | 161.73 |
 | [95aaca627](https://github.com/AFK-surf/still.fail/commit/95aaca627e60fcfd4220f740b5d8b53aca9c3686) mbui: what goes beside another may be as wide as i | 1.78 | 2.38 | 9.92 | 28.55 | 34.75 | 25.49 | 46.93 | 93.95 | 151.88 |
 | [fea8ca3d4](https://github.com/AFK-surf/still.fail/commit/fea8ca3d40f12d5161a5870b9cab507f1889a5e8) Fix pasted screenshots exceeding 8 MiB (#5299) | 1.78 | 2.38 | 9.92 | 28.55 | 34.74 | 25.49 | 46.93 | 94.01 | 129.35 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [259b3e01f](https://github.com/AFK-surf/still.fail/commit/259b3e01f0bb530386174319d8213d3cf5275c20) core test: the pages before a history counted apar | 1.76 | 2.35 | 9.76 | 28.37 | 34.14 | 25.32 | 46.48 | 93.68 | 172.71 |
 | [cabc6d876](https://github.com/AFK-surf/still.fail/commit/cabc6d876242017694aa9b1130c9369a329c3574) station: a phone let go is disconnected after what | 1.76 | 2.35 | 9.76 | 28.37 | 34.14 | 25.32 | 46.48 | 93.9 | 175.67 |
 | [51d7c4e46](https://github.com/AFK-surf/still.fail/commit/51d7c4e469511a1ab1719decdac5f070a84c12c6) Core: the sidebar and the agents at work only as s | 1.76 | 2.35 | 9.75 | 28.35 | 34.11 | 25.32 | 46.46 | 93.11 | 153.59 |
-| [7c7349a14](https://github.com/AFK-surf/still.fail/commit/7c7349a14847966e17ed93c02629279494a30def) station: a stopped preparation of the Linux screen | 1.76 | 2.34 | 9.73 | 28.33 | 34.05 | 25.29 | 46.41 | 93.72 | 179.58 |
