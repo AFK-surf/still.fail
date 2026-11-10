@@ -90,6 +90,31 @@ test "a node of the window's tree that clips, with an edge, cuts what it holds a
 }
 
 ///|
+test "a round node that clips, in one that clips to the same edge worked out another way, keeps its corners there" {
+  // (the outside's far edge 10.1 + 60.3, the inside's 10.1 + 0.3 + 60: the same place, a float's last bit apart, as a
+  // picture's flight has its cut and its box some frames)
+  assert_true(10.1 + 60.3 != 10.1 + 0.3 + 60.0)
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(cut) {
+      cut.offset(Is((10.1, 20.0))).width(Is(Some(60.3))).height(Is(Some(40.0))).clips(Is(true)) |> ignore
+      cut.box(fn(n) {
+        n.offset(Is((0.3, 0.0))).width(Is(Some(60.0))).height(Is(Some(40.0))).radius(Is(8.0)).clips(Is(true)) |> ignore
+        n.box(fn(k) { k.width(Is(Some(60.0))).height(Is(Some(40.0))).ground(Is(0x2233AAFFL)) |> ignore }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let c = g()
+  let k = (0).until(c.ninst).iter().find_first(fn(k) { c.inst[k * inst_size + 5] == 0.0 && c.inst[k * inst_size + 9] == 51.0 / 255.0 })
+  guard k is Some(k) else { fail("what the node holds not drawn") }
+  let at = k * inst_size
+  assert_eq([c.inst[at + 24], c.inst[at + 25], c.inst[at + 26], c.inst[at + 27]], [8.0, 8.0, 8.0, 8.0])
+}
+
+///|
 test "a box holding nothing draws its border with its ground, once" {
   let t = Tester::new(
     fn(c) {

@@ -181,6 +181,13 @@ fn clip_corner_r(k : Int, corner : Int, x : Double, y : Double) -> (Double, Doub
 }
 
 ///|
+/// Whether a clip's edge at `a` is the one at `b` (within a millionth, what the same place worked out two ways may
+/// differ by).
+fn clip_edge_is(a : Double, b : Double) -> Bool {
+  (a - b).abs() < 1.0e-6
+}
+
+///|
 /// Whether (`x`, `y`) is the clip `k`'s corner `corner` (clip_corner_r's).
 fn clip_corner_is(k : Int, corner : Int, x : Double, y : Double) -> Bool {
   let s = clip_stack
@@ -588,10 +595,12 @@ fn push_box_clip(
   let r1 = box_corner_r(r1, room)
   let r2 = box_corner_r(r2, room)
   let r3 = box_corner_r(r3, room)
-  let own0 = r0 > 0.0 && x0 == x && y0 == y
-  let own1 = r1 > 0.0 && x1 == x + w && y0 == y
-  let own2 = r2 > 0.0 && x1 == x + w && y1 == y + h
-  let own3 = r3 > 0.0 && x0 == x && y1 == y + h
+  // (a corner its own where the clip it is in leaves it there: within a millionth, as clip_corner_is, since an edge of
+  // both worked out two ways differs by that, and the corner was square for that frame)
+  let own0 = r0 > 0.0 && clip_edge_is(x0, x) && clip_edge_is(y0, y)
+  let own1 = r1 > 0.0 && clip_edge_is(x1, x + w) && clip_edge_is(y0, y)
+  let own2 = r2 > 0.0 && clip_edge_is(x1, x + w) && clip_edge_is(y1, y + h)
+  let own3 = r3 > 0.0 && clip_edge_is(x0, x) && clip_edge_is(y1, y + h)
   let p0 = clip_corner_radius(k, 0, x0, y0)
   let p1 = clip_corner_radius(k, 1, x1, y0)
   let p2 = clip_corner_radius(k, 2, x1, y1)
