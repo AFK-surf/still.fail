@@ -8,7 +8,9 @@
 // (the same topic and params asked again, or a whole value in place of a delta), and how many came for what was let
 // go of; and each topic to the most KB one whole value of it came to in any trace. A trace's data is the e2e run's
 // (a few chats, one station: a value is far smaller than on a phone in use), so the KB say what grows with what is
-// asked, not what a phone is sent; how often a value comes again whole does not depend on the data.
+// asked, not what a phone is sent; how often a value comes again whole does not depend on the data. A replay asks what
+// its run's app did: where the released app has a way of asking its run did not (sfcore's trace_switches), the trace
+// says what an older app was sent, until it is recorded again (flows/trace_switches_test.mbt counts how many).
 
 ///|
 /// What one trace says came for the app's subscriptions (tape_topics).

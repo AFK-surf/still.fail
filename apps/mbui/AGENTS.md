@@ -150,6 +150,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   (`src/sfreplay/topic_bytes.mbt`: KB of values sent whole, values sent whole again, messages for what was let go of;
   each topic's largest value). A page subscribes to what it shows, no more (the user, 2026-11-10); a trace recorded
   anew that is sent more fails, one sent less brings its bar down.
+- A replay asks the core what its run's app asked, so a way of asking brought in after a trace was recorded is
+  switched by the trace's head (`@sfcore.trace_switch`, one of `trace_switches`; a recording says all of them on), and
+  how many traces still replay without each only falls (`src/sfreplay/flows/trace_switches_test.mbt`; the user,
+  2026-11-10): such a trace's replay and its bytes are of an app no device runs.
 - For development stills, prepare a `scripts/media-job.sh picture` job for each source state and reuse its Wasm
   renderer across scenes; use a `film` job for video (`scripts/media-job.sh` says how).
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture
