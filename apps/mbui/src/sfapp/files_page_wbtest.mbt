@@ -409,6 +409,33 @@ test "the files' keys: ⌘⇧G (the keymap's) opens 前往文件夹; in its fiel
   assert_true(t.find("前往文件夹…") is None)
 }
 
+///|
+/// The carets drawn in the last frame: rects of the accent's colour, a caret's width.
+fn go_carets(t : @ui.Tester) -> Int {
+  let accent = @sf.theme().p.accent
+  let part = fn(shift : Int) { ((accent >> shift) & 0xFFL).to_double() / 255.0 }
+  t
+  .drawn_instances()
+  .filter(fn(a) { a[5] == 0.0 && a[2] > 0.0 && a[2] <= 4.0 && a[3] > 3.0 * a[2] && a[8] == part(24) && a[9] == part(16) && a[10] == part(8) })
+  .length()
+}
+
+///|
+test "前往文件夹 opened by ⌘⇧G: its field's caret shows as it lands and through the first blink from the moment it opened" {
+  let t = files_page_tester(1280.0, 800.0, 0)
+  // (opened a moment off the caret's beat from the app's start: a blink from then is not one from that start)
+  t.run_for(@ui.caret_blink_ms / 3.0)
+  let at = t.time()
+  t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key)
+  let to = fn(d : Double) { t.run_for(at + d - t.time()) }
+  to(@ui.move_most_ms)
+  assert_eq(go_carets(t), 1, msg="landed")
+  to(@ui.caret_blink_ms - 1.0)
+  assert_eq(go_carets(t), 1, msg="a hair before a blink from when it opened")
+  to(@ui.caret_blink_ms + 1.0)
+  assert_eq(go_carets(t), 0, msg="a hair after it")
+}
+
 // 前往文件夹 (sfdesk's files_go.mbt go_to) on each screen it opens on: a dialog in the middle of the window, with
 // keyboard and mouse on a wide one (⌘⇧G), with touch on a wide one and on a Medium one (its folder's ⋯: go_to_open);
 // its rows pressed and pointed at, Escape and a press outside it, where its parts stand.

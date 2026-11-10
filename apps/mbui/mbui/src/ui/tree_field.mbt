@@ -326,6 +326,17 @@ fn tree_field_focus(id : @view.NodeId) -> Unit {
 }
 
 ///|
+/// The focus come to what `c` says has it (Ctx::focus_moved, whoever moved it: the app's Field::focus, a layer opening
+/// with it, Tab, a press, a screen reader): where that is a field of the window's tree, its caret blinking from the
+/// moment of what moved it (the event's, as a press puts the caret: place_caret; in a frame, the frame's), shown at
+/// once as an old view's field's is, built as it is first shown (Ctx::editor's blink_again, which a field of the tree's
+/// never reads).
+fn tree_field_focus_came(c : Ctx) -> Unit {
+  guard tree_said_ids.get(c.focus) is Some(id) && tree_fields.get(id) is Some(tf) else { return }
+  tf.st.blink0 = if c.in_frame() { c.clock } else { view_moment() }
+}
+
+///|
 /// Field node `id` let go: its editor nobody's in the window.
 fn tree_field_gone(id : @view.NodeId) -> Unit {
   match tree_fields.get(id) {
