@@ -27,6 +27,10 @@ let sheet_drag_h : Double = 64.0
 /// of its way and dimmed, as the host's sheet does: present_sheet's recede). `in_place`: presented in the place of a
 /// sheet that stood so tall, gone at that moment (what was chosen in that one opened this): there at once that tall, its
 /// scrim whole as that one's was, on a Move to its own height from there, not from below (@kit.sheet's `in_place`).
+/// `step_back`: a step further in from a panel (the presenters' `under`): what its back key before its title, the system's
+/// back and Escape do in `cancel`'s place. `stands_by`: given what says how tall it stands over the window's foot (where
+/// it was last placed), asked as it closes: where what comes in its place starts. `taken`: whether, closed, another
+/// sheet is presented in its place: it is drawn no more then, that one there, its scrim that one's.
 fn sheet_node(
   parent : @view.View,
   open : () -> Bool,
@@ -39,6 +43,9 @@ fn sheet_node(
   gone? : () -> Unit = fn() {  },
   covered_by? : () -> Double? = fn() { None },
   in_place? : Double,
+  step_back? : () -> Unit,
+  stands_by? : (() -> Double) -> Unit = fn(_) {  },
+  taken? : () -> Bool = fn() { false },
 ) -> Unit {
   parent.show(
     open,
@@ -66,6 +73,8 @@ fn sheet_node(
       let sized = @signals.signal(false)
       let tall = EdgeWay::new(0.0)
       let tall_held : @signals.Signal[Double?] = @signals.signal(None)
+      // (closed with another in its place: drawn no more)
+      let vanished = fn() { layer.leaving() && taken() }
       layer.reacts(fn() { layer.leaving() }, fn(going) {
         if going {
           dim.go(layer, 0.0, @kit.sheet_scrim_ms, ease=Out)
@@ -100,13 +109,20 @@ fn sheet_node(
       // (a share of the window tall (`tall`, not a form): that tall, what it holds filling the room left it and laid out
       // in it, scrolling as it does itself, as the host's sheet has a capped panel's (sheet_capped_room))
       let capped = x.tall > 0.0 && !x.form
+      // (back: a step further in from a panel, back to that one; else as it is cancelled)
+      let go_back = fn() {
+        match step_back {
+          Some(f) => f()
+          None => cancel()
+        }
+      }
       layer
       .over(Is(true))
       // (modal while open: closing, what is under it its own again as it begins to go)
       .modal(By(live))
       .hides(By(fn() { layer.leaving() }))
       .held_back_goes_on()
-      .ground(By(fn() { @ui.alpha(sheet_scrim, dim.shown(layer)) }))
+      .ground(By(fn() { @ui.alpha(sheet_scrim, if vanished() { 0.0 } else { dim.shown(layer) }) }))
       // (a press on what is above it its own, nothing under it pressed: closing it as it goes down)
       .presses(Is(true))
       .on_drag(fn(d) {
@@ -116,7 +132,7 @@ fn sheet_node(
       })
       .on_key(fn(k) {
         if k.code == @ui.key_escape && @signals.untracked(live) {
-          cancel()
+          go_back()
           true
         } else {
           false
@@ -124,13 +140,15 @@ fn sheet_node(
       })
       .takes_back(fn() {
         if @signals.untracked(live) {
-          cancel()
+          go_back()
         }
       })
       |> ignore
       // (the room over it: what a press closes it on)
       layer.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
       layer.box(fn(sheet) {
+        // (how tall it stands, asked as it closes: where it was last placed)
+        stands_by(fn() { dmax(0.0, layer.window().1 - sheet.placed_window_now().1) })
         sheet
         // (its foot past the window's by its corner, as the host's: its round corners only at its top)
         .margin(Is((0.0, 0.0, 0.0, -under)))
@@ -156,7 +174,12 @@ fn sheet_node(
           }
         }))
         .radius(Is(pane_corner))
+        // (another in its place: none of it drawn from then, where it is, till its layer is let go)
+        .alpha(By(fn() { if vanished() { 0.0 } else { 1.0 } }))
         .glass(By(fn() {
+          if vanished() {
+            return None
+          }
           let t = theme()
           Some({ ..glass_sheet(), solid: over(over(t.p.bg, alpha(0x000000FFL, 0.28 * dim.shown(layer))), alpha(t.p.card, 0.8)) })
         }))
@@ -278,7 +301,22 @@ fn sheet_node(
           style_node(r, fn() { sheet_title_row })
           words_node(r, fn() { now().0 }, fn() { sheet_title_words }) |> ignore
         }
-        if x.heads_itself {
+        // (a step further in from a panel: its back key before its title, as a step's head has it (step_head), the row
+        // no taller for it)
+        let step_row = fn(r : @view.View) {
+          style_node(r, fn() { sheet_title_row.then(step_head_gap) })
+          r.box(fn(k) {
+            style_node(k, fn() {
+              in_line(step_back_side - @ui.tree_theme().text_size(Title).1).then(@ui.style(ml=room(-step_back_in)))
+            })
+            icon_button_node(k, "chevron-left", fn() { t("common.back") }, go_back, size=step_back_side) |> ignore
+          })
+          |> ignore
+          words_node(r, fn() { now().0 }, fn() { sheet_title_words }) |> ignore
+        }
+        if step_back is Some(_) && !x.heads_itself {
+          sheet.box(step_row) |> ignore
+        } else if x.heads_itself {
           ()
         } else if x.live is Some(_) {
           sheet.show(fn() { now().0 != "" }, title_row)

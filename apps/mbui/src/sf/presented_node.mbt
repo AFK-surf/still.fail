@@ -113,6 +113,7 @@ pub fn presented_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
         // what it says goes on)
         field_let_go(p)
         p.ended = true
+        p.chosen = true
         close_from_serial(serial)
         f()
       }
@@ -188,6 +189,14 @@ pub fn presented_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
             gone~,
             covered_by=fn() { sheet_over(serial) },
             in_place?=p.in_place,
+            // (a step further in from a panel: back from it back to that one)
+            step_back?=if p.under is Some(_) { Some(fn() { dismissed_now(serial, back=true) }) } else { None },
+            // (how tall it stands as it closes, for what comes in its place: close_from)
+            stands_by=fn(f) { p.stands_now = Some(f) },
+            taken=fn() {
+              presented_said.get() |> ignore
+              p.taken_by != 0
+            },
           )
         Panel(x) if x.stage =>
           stage_node(

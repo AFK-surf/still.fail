@@ -90,6 +90,14 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   - A place of the bar never opens on its bones when the device holds what it shows (the user, 2026-11-10): the list
     it opens on is one of sfbase's `lasting` (shown again at once) and of `place_reads` (asked ahead of it). A new
     place, or another list a place opens on, goes in both; `src/sfapp/place_first_wbtest.mbt` holds every place.
+  - A step further in is the presenters', never a page's (弹层里往里走: the user, 2026-11-02, and 2026-11-10 「系统性
+    全修一下」 once the chat's own sheet and a menu's 分享… were found never to have had it). A page says `close()` and
+    opens the next, and keeps no step number and no 返回 button of its own; `src/sf/presenters.mbt` does the rest on
+    every screen: a panel that closes for another panel is a step further in from it (a back key before its title;
+    back, Escape and the system's back go back to the one before, a press outside, × or the sheet dragged down closes
+    all of it), a menu a menu's item opens is a level of the same sheet, and on 小屏 whatever a sheet closes for comes
+    in its place, one sheet all along and the scrim as it was, never one sheet sinking as the next rises
+    (presenters_wbtest's every pair of kinds holds it).
 
 ## Made once, as nodes
 
@@ -113,9 +121,6 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   - No time window is a cause, and no logic reads whether a motion runs.
   - What comes or goes by its size keeps its whole scale, from where it starts, and is not seen at half its size or
     less, so it does not jump (the user, 2026-10-31, again 2026-11-08): its opacity is `@sf.seen_at(scale)`.
-  - On 小屏 a sheet opened by what was chosen in a sheet comes in that one's place: one sheet all along, from as tall
-    as that one stood to its own height, the scrim as it was; a menu a menu's item opens is a level of the same sheet,
-    back taking it off. Never one sheet sinking as the next rises (the user, 2026-11-09; `src/sf/presenters.mbt`).
 
 ## Running the app in development
 

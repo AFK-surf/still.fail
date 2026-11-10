@@ -689,11 +689,7 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
     }
     let busy = is_doing(core, ["machineSessions.continue"], [("station", station), ("id", text(sv, "id"))])
     c.box(style=@sf.panel_words_in(), dir=Row, w=Fill(1.0), pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-      @sf.button(c, tr("common.back"), key="machine-back", on_press=fn() {
-        // (the list in its place)
-        close()
-        open_machine_sessions(core, station, name)
-      })
+      // (back to the list its head's back key: a step further in from it, the presenters')
       @sf.button(c, tr(if has(sv, "session") { "android-chat.new.machine.open" } else { "android-chat.new.machine.continue" }), key="machine-go", tone=Primary, busy=busy, on_press=fn() {
         error.set("")
         (core.call)("machineSessions.continue", obj([("station", str(station)), ("runtime", str(text(sv, "runtime"))), ("id", str(text(sv, "id")))]), fn(r) {

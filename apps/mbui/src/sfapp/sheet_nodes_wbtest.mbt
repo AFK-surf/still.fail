@@ -294,6 +294,18 @@ test "小屏: a sheet whose body is nodes opened by what a sheet's button does a
       last = tops[0]
     }
     assert_true(if up { last < top0[0] - 100.0 } else { last > top0[0] + 100.0 }, msg="\{case}: \{last} \{top0}")
+    // (a step further in from the first: back is back to that one, in its place, from as tall as this stood, one
+    // sheet and one scrim all the way; back again closes it)
+    t.back()
+    assert_true(t.find("看更多") is Some(_), msg="\{case}")
+    assert_eq(sheet_tops(t).length(), 1, msg="\{case}: back \{sheet_tops(t)}")
+    assert_true((sheet_tops(t)[0] - last).abs() < 0.5, msg="\{case}: back \{sheet_tops(t)} from \{last}")
+    for _ in 0..<40 {
+      t.run_for(@ui.frame_period_default)
+      assert_eq(sheet_tops(t).length(), 1, msg="\{case}: back \{sheet_tops(t)}")
+      assert_eq(scrim_drawn(t).length(), 1, msg="\{case}: back")
+    }
+    assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{case}: \{sheet_tops(t)} \{top0}")
     t.back()
     t.run_for(sheet_way_ms(t))
     assert_false(@sf.presenter_visible(), msg="\{case}")

@@ -26,7 +26,8 @@ fn panel_centred_node(
   covered? : () -> Bool = fn() { false },
 ) -> Unit {
   // (one that goes in steps: Escape and back a step back first, its steps' own)
-  let within = fn() { steps_escape(keyed) }
+  // (a step further in from a panel: back to that one)
+  let within = fn() { steps_escape(keyed) || back_under(keyed) }
   dialog_layer_node(parent, open, cancel, outside=true, first_stop=keyed.steps is None, shown~, gone~, dims~, covered~, within~, fn(across, layer, look, veil) {
     let theme = fn() { @ui.tree_theme() }
     // (one that goes in steps: each its own head and foot, sliding in whole; the dialog untitled round them)
@@ -167,9 +168,22 @@ fn panel_centred_node(
             part.box(fn(line) {
               style_node(line, fn() { dialog_head.then(@ui.style(pl=room(words_in))) })
               line.laid_nowhere(By(untitled)) |> ignore
+              // (a step further in from a panel: its back key before its title, back to that one)
+              let stepped = keyed.under is Some(_)
+              if stepped {
+                line.box(fn(k) {
+                  style_node(k, fn() { dialog_back_at }, in_row=true)
+                  icon_button_node(k, "chevron-left", fn() { t("common.back") }, fn() { back_under(keyed) |> ignore }, size=step_back_side)
+                  |> ignore
+                })
+                |> ignore
+              }
               line.box(fn(l) {
                 style_node(l, fn() { dialog_title_line }, in_row=true)
                 l.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+                if stepped {
+                  l.grow(Is(1.0)) |> ignore
+                }
                 words_node(l, fn() { now().0 }, fn() { if now().1 != "" { dialog_title_one } else { dialog_title } })
                 |> ignore
                 words_node(l, fn() { now().1 }, fn() { dialog_step }) |> ignore
@@ -197,6 +211,16 @@ fn panel_centred_node(
               let words_at = @ui.style(pl=room(words_in_now.val))
               if !untitled() {
                 c.box(style=dialog_head.then(words_at), fn() {
+                  // (a step further in from a panel: its back key before its title, back to that one)
+                  let stepped = keyed.under is Some(_)
+                  if stepped {
+                    c.box(style=dialog_back_at, fn() {
+                      icon_button(c, "chevron-left", key=key + "/back", size=step_back_side, round=true, label=t("common.back"), on_press=fn() {
+                        back_under(keyed) |> ignore
+                      }) |> ignore
+                    })
+                    |> ignore
+                  }
                   // (a step's count beside the title: dialog's)
                   if step != "" {
                     c.box(style=dialog_title_line, fn() {
@@ -210,7 +234,12 @@ fn panel_centred_node(
                       // corner over its end: title_row)
                       Some(f) =>
                         c.box(style=title_row_room.then(@ui.style(pr=room(dialog_close_clear()))), fn() { f(c) }) |> ignore
-                      None => c.text(title, style=dialog_title) |> ignore
+                      None =>
+                        if stepped {
+                          c.box(style=sheet_row_words_at, fn() { c.text(title, style=dialog_title) |> ignore }) |> ignore
+                        } else {
+                          c.text(title, style=dialog_title) |> ignore
+                        }
                     }
                   }
                   if x.title_row is None {

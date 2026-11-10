@@ -79,16 +79,19 @@ fn panel_node(
           cancel()
         }
       })
+      // (Escape and back, a step further in from a panel: back to that one, back_under; else it closes)
       .on_key(fn(k) {
         if k.code == @ui.key_escape && @signals.untracked(live) {
-          cancel()
+          if !back_under(keyed) {
+            cancel()
+          }
           true
         } else {
           false
         }
       })
       .takes_back(fn() {
-        if @signals.untracked(live) {
+        if @signals.untracked(live) && !back_under(keyed) {
           cancel()
         }
       })

@@ -828,6 +828,228 @@ test "what a sheet's item opens with a finger at Small: a sheet in its place, fr
 }
 
 ///|
+/// A panel, 信息 (opened by 打开, by nothing), whose 看详情 closes it and opens another, 详情: each `gone` said as it is
+/// let go of unsaid.
+fn panel_with_more(said : Array[String]) -> (Anchor) -> Unit {
+  fn(_) {
+    panel(
+      "信息",
+      fn(c, close) {
+        c.text("信息内容") |> ignore
+        c.text("信息的第二行") |> ignore
+        c.text("信息的第三行") |> ignore
+        button(c, "看详情", key="more", on_press=fn() {
+          close()
+          panel("详情", fn(c, _) { c.text("详情内容") |> ignore }, from=Unanchored, gone=fn() { said.push("detail gone") })
+        })
+      },
+      from=Unanchored,
+      gone=fn() { said.push("info gone") },
+    )
+  }
+}
+
+///|
+test "a panel a panel's button opens as it closes, with a finger at Small: a step further in, in its place; back is back to the first, a press outside closes all" {
+  let said : Array[String] = []
+  let t = presenting_tester(phone, panel_with_more(said))
+  open_it(t)
+  let (top0, _) = one_sheet(t)
+  let dim = scrim_alpha(t, phone)
+  assert_true(dim > 0L)
+  t.tap_text("看详情")
+  // (the frame it was pressed in: the next where the first stood, the window as dim)
+  assert_eq(presented_how, [AsSheet])
+  assert_true((one_sheet(t).0 - top0).abs() < 0.5, msg="\{one_sheet(t)} \{top0}")
+  assert_eq(scrim_alpha(t, phone), dim)
+  assert_true(t.find("详情内容") is Some(_) && t.find("信息内容") is None)
+  for _ in 0..<way_frames {
+    t.run_for(@ui.frame_period_default)
+    one_sheet(t) |> ignore
+    assert_eq(scrim_alpha(t, phone), dim)
+  }
+  let (top1, _) = one_sheet(t)
+  assert_true(top1 > top0 + 10.0, msg="\{top1} \{top0}")
+  assert_eq(said, [])
+  // back: the first again where this one stood, on to as tall as it was; this one let go of, the first not
+  t.back()
+  assert_true(presenting())
+  assert_true(t.find("信息内容") is Some(_) && t.find("详情内容") is None)
+  assert_true((one_sheet(t).0 - top1).abs() < 0.5, msg="\{one_sheet(t)} \{top1}")
+  assert_eq(scrim_alpha(t, phone), dim)
+  for _ in 0..<way_frames {
+    t.run_for(@ui.frame_period_default)
+    one_sheet(t) |> ignore
+    assert_eq(scrim_alpha(t, phone), dim)
+  }
+  assert_true((one_sheet(t).0 - top0).abs() < 0.5, msg="\{one_sheet(t)} \{top0}")
+  assert_eq(said, ["detail gone"])
+  // in again and back again, then back from the first: closed
+  t.tap_text("看详情")
+  t.run_for(@ui.move_most_ms)
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("信息内容") is Some(_))
+  t.back()
+  assert_true(!presenting())
+  t.run_for(@ui.move_most_ms)
+  assert_eq(said, ["detail gone", "detail gone", "info gone"])
+  // a press outside the step further in: all of it closed
+  open_it(t)
+  t.tap_text("看详情")
+  t.run_for(@ui.move_most_ms)
+  t.tap(phone.1 / 2.0, 40.0)
+  assert_true(!presenting())
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("信息内容") is None && t.find("详情内容") is None)
+}
+
+///|
+test "a panel a panel's button opens as it closes, with a mouse at Large: a step further in, a dialog with a back key; its back key and Escape are back to the first, a press outside closes all" {
+  let said : Array[String] = []
+  let t = presenting_tester(desk, panel_with_more(said))
+  open_it(t)
+  t.tap_text("看详情")
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.find("详情内容") is Some(_) && t.find("信息内容") is None)
+  // its back key, before its title: back to the first
+  t.click(Button, label="common.back")
+  t.run_for(@kit.presence_in_ms)
+  assert_true(presenting())
+  assert_true(t.find("信息内容") is Some(_) && t.find("详情内容") is None)
+  assert_eq(said, ["detail gone"])
+  // (the first has none: nothing before it)
+  assert_true(t.query(Button, label="common.back") is None)
+  // Escape: back to the first, then closed
+  t.tap_text("看详情")
+  t.run_for(@kit.presence_in_ms)
+  assert_true(t.key_named("esc"))
+  t.run_for(@kit.presence_in_ms)
+  assert_true(presenting() && t.find("信息内容") is Some(_))
+  assert_true(t.key_named("esc"))
+  assert_true(!presenting())
+  assert_eq(said, ["detail gone", "detail gone", "info gone"])
+  // a press outside the step further in: all of it closed
+  open_it(t)
+  t.tap_text("看详情")
+  t.run_for(@kit.presence_in_ms)
+  t.tap(8.0, 8.0)
+  assert_true(!presenting())
+}
+
+///|
+/// Each kind of presenter, presented by what `from` opened: what in it is called `word` (a menu's item, a pick's
+/// choice, a confirm's and a question's action, a button in a panel of an old body, of nodes, of nodes a share of the
+/// window tall) closes it and does `then`.
+fn kinds_of(from : Anchor, word : String, then : () -> Unit) -> Array[(String, () -> Unit)] {
+  let beside = beside_of(from)
+  [
+    ("a menu", fn() { menu([Some(menu_item_of("别的", fn() {  })), Some(menu_item_of(word, then))], from=beside) }),
+    ("a pick", fn() { pick("选一个", [choice("a", "别的"), choice("b", word)], "a", fn(_) { then() }, from=beside) }),
+    ("a confirm", fn() { confirm("确定吗？", "这里说明它做什么。", word, then, from~) }),
+    ("a question", fn() { ask("写一句", word, fn(_) { then() }, empty=true, from~) }),
+    (
+      "a panel",
+      fn() {
+        panel(
+          "面板",
+          fn(c, close) {
+            c.text("面板里的内容") |> ignore
+            button(c, word, key="then", on_press=fn() {
+              close()
+              then()
+            })
+          },
+          from=Unanchored,
+        )
+      },
+    ),
+    (
+      "a panel of nodes",
+      fn() {
+        panel_nodes(
+          "节点面板",
+          fn(v, close) {
+            button_node(v, fn() { word }, fn() {
+              close()
+              then()
+            })
+            |> ignore
+          },
+          from=Unanchored,
+        )
+      },
+    ),
+    (
+      "a tall panel of nodes",
+      fn() {
+        panel_nodes(
+          "高的节点面板",
+          fn(v, close) {
+            button_node(v, fn() { word }, fn() {
+              close()
+              then()
+            })
+            |> ignore
+          },
+          from=Unanchored,
+          tall=0.6,
+        )
+      },
+    ),
+  ]
+}
+
+///|
+test "with a finger at Small, whatever kind of sheet closes for whatever kind: that one in its place where the first stood, one sheet and the scrim as it was on every frame" {
+  let kinds = kinds_of(At(0.0, 0.0, 0.0, 0.0), "", fn() {  }).length()
+  for i in 0..<kinds {
+    for j in 0..<kinds {
+      let named : Ref[String] = Ref("")
+      let t = presenting_tester(phone, fn(from) {
+        let nexts = kinds_of(from, "完成", fn() {  })
+        let firsts = kinds_of(from, "下一步", nexts[j].1)
+        named.val = "\{firsts[i].0}, then \{nexts[j].0}"
+        (firsts[i].1)()
+      })
+      t.tap_text("打开")
+      t.run_for(@ui.move_most_ms + @kit.sheet_scrim_ms)
+      let at = named.val
+      let first = t.drawn_glass().filter(fn(g) { g.3 > 100.0 })
+      assert_eq(first.length(), 1, msg="\{at}: the first: \{first}")
+      let top0 = first[0].1
+      let dim = scrim_alpha(t, phone)
+      assert_true(dim > 0L, msg=at)
+      // (a question's action said once its line has words)
+      if at.has_prefix("a question") {
+        t.type_text("一句")
+      }
+      t.tap_text("下一步")
+      // (the frame it was chosen in, and every frame of its way: one sheet, the window as dim; in that frame where the
+      // first stood)
+      for k in 0..<way_frames {
+        let sheets = t.drawn_glass().filter(fn(g) { g.3 > 100.0 })
+        assert_eq(sheets.length(), 1, msg="\{at}, frame \{k}: \{sheets}")
+        assert_eq(scrim_alpha(t, phone), dim, msg="\{at}, frame \{k}")
+        if k == 0 {
+          assert_true((sheets[0].1 - top0).abs() < 0.5, msg="\{at}: \{sheets[0].1} where the first stood \{top0}")
+        }
+        t.run_for(@ui.frame_period_default)
+      }
+      assert_true(t.find("完成") is Some(_), msg=at)
+      // closed, however many steps back that is
+      for _ in 0..<3 {
+        if presenting() {
+          t.back()
+          t.run_for(@ui.move_most_ms + @kit.sheet_scrim_ms)
+        }
+      }
+      assert_true(!presenting(), msg=at)
+    }
+  }
+}
+
+///|
 test "one over another with a mouse at Large: a confirm over a dialog dims no darker" {
   let t = panel_with_confirm(desk, by_nothing=true)
   open_it(t)
