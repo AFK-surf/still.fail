@@ -469,6 +469,8 @@ pub let dialog_r : Double
 
 pub fn dialog_rows(Double) -> (@ui.Style, @ui.Style)
 
+pub fn dialog_rows_node(@view.View, Double) -> (@ui.Style, @ui.Style)
+
 pub let dialog_shadow : Double
 
 pub let dialog_shadow_y : Double

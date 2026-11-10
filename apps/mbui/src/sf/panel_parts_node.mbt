@@ -7,13 +7,15 @@
 ///|
 /// Where a panel's body made of nodes is laid out, lent by its presenter to the column it makes it in: how far in from
 /// that column its words go (words_in_now's), how far its rows reach out across the room the panel leaves (rows_out's),
-/// whether it is a small panel beside what opened it (in_small_panel's) and how far clear of an untitled dialog's close
-/// button at its end its words keep (untitled_clear's); with its look (look_lent: a sheet's narrow, a small panel's and
+/// whether it is a small panel beside what opened it (in_small_panel's), whether it is a dialog in the middle of the
+/// window (in_dialog's) and how far clear of an untitled dialog's close button at its end its words keep
+/// (untitled_clear's); with its look (look_lent: a sheet's narrow, a small panel's and
 /// a dialog's wide), so what the body makes reads them however late it is made.
 priv struct PanelIn {
   words : Double
   rows_out : Double
   small : Bool
+  centred : Bool
   clear : Double
 }
 
@@ -23,17 +25,19 @@ let panel_in_lent : @view.Lent[PanelIn] = @view.Lent::new()
 
 ///|
 /// The column `col` a panel's body is made in by its presenter, laid out `look`, its words `words` in, its rows out
-/// `rows_out`, in a small panel where `small`, `clear` clear of an untitled dialog's close button.
+/// `rows_out`, in a small panel where `small`, in a dialog in the middle of the window where `centred`, `clear` clear of
+/// an untitled dialog's close button.
 fn panel_in_lend(
   col : @view.View,
   look : Look,
   words : Double,
   rows_out? : Double = 0.0,
   small? : Bool = false,
+  centred? : Bool = false,
   clear? : Double = 0.0,
 ) -> Unit {
   look_lent(col, look)
-  col.lends(panel_in_lent, { words, rows_out, small, clear }) |> ignore
+  col.lends(panel_in_lent, { words, rows_out, small, centred, clear }) |> ignore
 }
 
 ///|
@@ -63,7 +67,7 @@ pub fn panel_opens_on_node(v : @view.View) -> Unit {
 ///|
 /// Where node `v` of a panel's body is laid out (none outside a panel).
 fn panel_in_of(v : @view.View) -> PanelIn {
-  v.lent(panel_in_lent).unwrap_or({ words: 0.0, rows_out: 0.0, small: false, clear: 0.0 })
+  v.lent(panel_in_lent).unwrap_or({ words: 0.0, rows_out: 0.0, small: false, centred: false, clear: 0.0 })
 }
 
 ///|

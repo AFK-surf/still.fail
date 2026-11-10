@@ -66,35 +66,58 @@ pub fn add_favorite_folder(src : Source, ws : String, stations : Array[DvStation
     [s] => picker_open(src, ws, s.station, picked)
     [] => ()
     _ =>
-      @sf.panel(
+      @sf.panel_nodes(
         @sf.t("web-pages.files.addFavorite"),
-        fn(c, close) {
-          let t = @sf.theme()
-          // (in a dialog, round rows out to its corners, the last concentric with them: @sf.dialog_rows)
-          let (list, row) = @sf.dialog_rows(pick_row_h)
-          c.box(style=roots_list.then(list), fn() {
-            for s in stations {
-              let id = c.id("drive/which/" + s.station)
-              c.on_press(id, fn() {
-                close()
-                picker_open(src, ws, s.station, picked)
-              })
-              let b = c.box(style=pick_row.then(row), id~, fn() {
-                @sf.station_icon(c, s.emoji, s.icon, pick_icon, t.p.muted)
-                c.text(s.name, style=pick_name) |> ignore
-                if !s.online {
-                  c.text(@sf.t("web-pages.stations.offline"), style=pick_meta) |> ignore
-                }
-              })
-              c.semantics(b, Button, id~, label=s.name)
-            }
-          })
-          |> ignore
-        },
+        fn(v, close) { which_station(v, src, ws, stations, picked, close) },
         from=Unanchored,
         description=@sf.t("web-pages.files.whichFavoriteStation"),
       )
   }
+}
+
+///|
+/// Which of `stations` the folder is to be chosen on, in node `v` (the panel's body's): a row each, its mark (a server's
+/// where it has none), its name, 离线 after it while it is; pressed, the panel closed and the picker opened on it. The
+/// stations are those it was opened with (a panel asked again is another).
+fn which_station(
+  v : @view.View,
+  src : Source,
+  ws : String,
+  stations : Array[DvStation],
+  picked : (Favorite) -> Unit,
+  close : () -> Unit,
+) -> Unit {
+  // (in a dialog, round rows out to its corners, the last concentric with them: @sf.dialog_rows_node)
+  let (list, row) = @sf.dialog_rows_node(v, pick_row_h)
+  v.box(fn(l) {
+    @sf.style_node(l, fn() { roots_list.then(list) })
+    for s in stations {
+      l.box(fn(r) {
+        @sf.style_node(r, fn() { pick_row.then(row) })
+        // (the list's ground under the hand: pick_row's hovered)
+        r
+        .ground(By(fn() { if @sf.lit_node(r) { @sf.theme().p.hover } else { 0L } }))
+        .says(Is(Some(@view.said(Button, label=s.name))))
+        |> ignore
+        @sf.presses_node(r, fn() {
+          close()
+          picker_open(src, ws, s.station, picked)
+        })
+        if @sf.has_station_mark(s.emoji, s.icon) {
+          // (a panel's pictures asked for on no page's time on top)
+          @sf.station_mark_node(r, fn() { s.emoji }, fn() { s.icon }, pick_icon, fn() { @sf.theme().p.muted }, fn() { 0 })
+        } else {
+          @sf.icon_node(r, "server", pick_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+        }
+        @sf.words_node(r, fn() { s.name }, fn() { pick_name }) |> ignore
+        if !s.online {
+          @sf.words_node(r, fn() { @sf.t("web-pages.stations.offline") }, fn() { pick_meta }) |> ignore
+        }
+      })
+      |> ignore
+    }
+  })
+  |> ignore
 }
 
 ///|

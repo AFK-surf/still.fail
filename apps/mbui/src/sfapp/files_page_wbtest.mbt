@@ -590,3 +590,116 @@ test "前往文件夹: keys pressed one after another, nothing waited for betwee
   }
   assert_true(t.find("前往文件夹…") is None)
 }
+
+///|
+/// 文件 at its start over the fixture, as `platform` plays it on a phone's window (`wide`: one 1200 by 800), 添加到收藏
+/// asked with the stations that lend their folders: which of them first, at the frame it opened in, or (`rest`) a Move
+/// after (`calls`: what is asked of the core).
+fn which_station(calls : Array[Made], platform : Int, wide : Bool, rest : Bool) -> @ui.Tester {
+  new_run()
+  let base = fixture("home")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
+  if wide {
+    t.resize(1200.0, 800.0)
+  }
+  app.nav.replace(Files)
+  t.run_for(@ui.move_most_ms)
+  @sfdesk.add_favorite_folder(src, "ws1", @sfdesk.favorite_stations(src, "ws1"))
+  t.frame()
+  if rest {
+    t.run_for(@ui.move_most_ms)
+  }
+  t
+}
+
+///|
+test "添加到收藏 with more than one station: a row each, its name and 离线 after one that is; pressed, the picker on it" {
+  // (touch on a small window, a sheet; keyboard and mouse there, a sheet too; a wide window, a dialog in its middle)
+  for screen in [(2, false), (0, false), (0, true)] {
+    let about = "platform \{screen.0}, wide \{screen.1}"
+    let calls : Array[Made] = []
+    let t = which_station(calls, screen.0, screen.1, true)
+    assert_true(t.find("添加到收藏") is Some(_), msg=about)
+    assert_true(t.find("选择一台 station，然后选择要收藏的文件夹") is Some(_), msg=about)
+    // (each a button by its name, under what it says (the page's own under the panel); nothing asked of the station
+    // yet)
+    let (_, lead_y) = t.find("选择一台 station，然后选择要收藏的文件夹").unwrap()
+    let row = fn(name : String) { t.all(Button, label=name).filter(fn(b) { b.rect.1 > lead_y }) }
+    assert_eq(row("Willow").length(), 1, msg=about)
+    assert_eq(row("Maple").length(), 1, msg=about)
+    assert_eq(named(calls, "drive.folders").length(), 0, msg=about)
+    let (x, y, w, h) = row("Willow")[0].rect
+    t.tap(x + w / 2.0, y + h / 2.0)
+    t.frame()
+    let asked = named(calls, "drive.folders")
+    assert_eq(asked.length(), 1, msg=about)
+    assert_eq(text(Some(asked[0].params), "station"), "ws1/st1", msg=about)
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("选择一台 station，然后选择要收藏的文件夹") is None, msg=about)
+  }
+}
+
+///|
+test "添加到收藏's stations with keyboard and mouse: Escape closes it, on a wide window a press outside it too; nothing asked" {
+  for wide in [false, true] {
+    let calls : Array[Made] = []
+    let t = which_station(calls, 0, wide, true)
+    t.key(@ui.key_escape)
+    t.draw()
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("选择一台 station，然后选择要收藏的文件夹") is None, msg="wide \{wide}")
+    assert_true(!@sf.presenting(), msg="wide \{wide}")
+    assert_eq(named(calls, "drive.folders").length(), 0)
+  }
+  let calls : Array[Made] = []
+  let t = which_station(calls, 0, true, true)
+  t.tap(20.0, 780.0)
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("选择一台 station，然后选择要收藏的文件夹") is None)
+  assert_eq(named(calls, "drive.folders").length(), 0)
+}
+
+///|
+/// Where the words `words` are drawn first under `below` (the panel's, not what the page under it says of the same):
+/// their left, top, width and height.
+fn which_word(t : @ui.Tester, words : String, below? : Double = 0.0) -> (Double, Double, Double, Double) {
+  let mut at : (Double, Double, Double, Double)? = None
+  for w in t.words() {
+    if w.0 == words && w.2 >= below && (at is None || w.2 < at.unwrap().1) {
+      at = Some((w.1, w.2, w.3, w.4))
+    }
+  }
+  guard at is Some(r) else { abort("\{words} is not drawn under \{below}") }
+  r
+}
+
+///|
+test "添加到收藏's stations: under what it says, one under another, 离线 on its station's line after its name; in a dialog their grounds out past its words" {
+  for screen in [(2, false), (0, false), (0, true)] {
+    let about = "platform \{screen.0}, wide \{screen.1}"
+    let t = which_station([], screen.0, screen.1, true)
+    let mid = fn(r : (Double, Double, Double, Double)) { r.1 + r.3 / 2.0 }
+    let lead = which_word(t, "选择一台 station，然后选择要收藏的文件夹")
+    let under = lead.1 + lead.3
+    let (willow, maple, off) = (which_word(t, "Willow", below=under), which_word(t, "Maple", below=under), which_word(t, "离线", below=under))
+    assert_true(lead.1 + lead.3 <= willow.1 && willow.1 + willow.3 <= maple.1, msg="\{about}: \{lead}, \{willow}, \{maple}")
+    // (their names on one line down, in from the lead by their marks)
+    assert_true((willow.0 - maple.0).abs() < 0.5 && willow.0 > lead.0, msg="\{about}: \{willow}, \{maple}")
+    assert_true(off.0 > maple.0 + maple.2 && (mid(off) - mid(maple)).abs() < 2.0, msg="\{about}: \{maple}, \{off}")
+    // (each row as wide as the panel's words at least: in a dialog out past them at its sides)
+    let row = t.all(Button, label="Maple").filter(fn(b) { b.rect.1 >= under })[0].rect
+    if screen.1 {
+      assert_true(row.0 < lead.0 && row.0 + row.2 > lead.0 + lead.2, msg="\{about}: \{row}, the lead \{lead}")
+    } else {
+      assert_true(row.0 <= lead.0 + 0.5 && row.0 + row.2 >= lead.0 + lead.2 - 0.5, msg="\{about}: \{row}, the lead \{lead}")
+    }
+  }
+}
