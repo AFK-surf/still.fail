@@ -2034,6 +2034,8 @@ pub fn sides_clear(Double) -> @ui.Style
 
 pub let sign_in_title_size : @ui.TextSize
 
+pub fn sized_words_node(@view.View, () -> String, () -> Double, () -> Int64, wrap? : Bool, cut? : Bool) -> @view.View
+
 pub fn slack_mark(@ui.Ctx, Double) -> Int32
 
 pub let sleep_ms : Double
