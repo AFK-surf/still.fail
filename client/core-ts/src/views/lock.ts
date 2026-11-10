@@ -1239,12 +1239,31 @@ export function personalStations(inner: Inner): NonNullable<PersonalEnv["station
     if (heard === undefined) m.set(sub, (heard = new Set()));
     return heard;
   };
+  const answered = (sub: string): boolean => {
+    const heard = answeredOf.get(inner)?.get(sub);
+    if (heard === undefined || heard.size === 0) return false;
+    const at = now(inner);
+    for (const [ws, owner] of inner.workspaces.owned()) {
+      if (owner !== sub) continue;
+      for (const s of arr(get(view(inner, ws), "stations"))) {
+        if (typeof s?.id === "string" && typeof s.last_seen === "number" && at - s.last_seen <= SEEN_SECS && !heard.has(s.id)) return false;
+      }
+    }
+    return true;
+  };
   return {
     read: (sub, only) => {
       const asked = personStations(inner, sub).filter((at) => only === undefined || at.toString() === only);
       const heard = heardOf(sub);
       const ask = (at: StationAddr) => {
-        const noted = Effect.sync(() => void heard.add(at.station));
+        const noted = Effect.sync(() => {
+          if (heard.has(at.station)) return;
+          const before = answered(sub);
+          heard.add(at.station);
+          // The last of them to answer (a machine that was asleep, reached again): the one to begin their lock, held
+          // back for it alone, is asked again now. Nothing else would ask it until a lock of theirs next moved.
+          if (!before && answered(sub)) inner.runner.fork(ownLockFor(inner, at.workspace));
+        });
         return Effect.tapError(Effect.tap(inner.stations.requests.call(at, "GET", "/lock/person", null, { quiet: true }), () => noted), (e) => (e.code === "lock_unconfirmed" ? noted : Effect.void));
       };
       return Effect.map(answersOf(inner, asked.map(ask), () => OTHERS_MS, asked.map(String)), (answers) => {
@@ -1258,18 +1277,7 @@ export function personalStations(inner: Inner): NonNullable<PersonalEnv["station
         return told === undefined ? kept : [...kept, ...told];
       });
     },
-    answered: (sub) => {
-      const heard = answeredOf.get(inner)?.get(sub);
-      if (heard === undefined || heard.size === 0) return false;
-      const at = now(inner);
-      for (const [ws, owner] of inner.workspaces.owned()) {
-        if (owner !== sub) continue;
-        for (const s of arr(get(view(inner, ws), "stations"))) {
-          if (typeof s?.id === "string" && typeof s.last_seen === "number" && at - s.last_seen <= SEEN_SECS && !heard.has(s.id)) return false;
-        }
-      }
-      return true;
-    },
+    answered,
     bring: (sub, chain) => {
       const asked = personStations(inner, sub);
       return Effect.flatMap(

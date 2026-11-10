@@ -43,11 +43,13 @@ function station(first: Entry) {
   return { chain, came, say, head, answer };
 }
 
-async function setUp(silent = false) {
+/// `silent`: the workspace has the silent station too. `seen`: the control plane saw it lately (a station of the
+/// person's that their lock waits for, views/lock.ts `personalStations` `answered`). `keyMade`: as below.
+async function setUp(silent = false, { seen = false, keyMade = true } = {}) {
   const g = grant();
   let me: Signer | null = null;
   const named = silent ? [{ key: A, name: "a" }, { key: S, name: "s" }] : [{ key: A, name: "a" }];
-  const r = await rig((signer) => ((me = signer), { ws: genesis("ws", signer, true, named, g.keys, ME, []) }), undefined, silent ? [A, S] : A);
+  const r = await rig((signer) => ((me = signer), { ws: genesis("ws", signer, true, named, g.keys, ME, []) }), undefined, silent ? [A, S] : A, seen ? [S] : []);
   const inner = r.core.inner;
   const st = station(r.cloud.chains.get("ws")![0]!);
   // What the cloud is asked of the lock, and whether it answers.
@@ -59,10 +61,12 @@ async function setUp(silent = false) {
   });
   // The silent one, until it wakes (answering as the other does; asked the while it slept, it never answers).
   const asleep = { now: true, asked: 0 };
+  // What A alone was asked (the silent one, awake, answers as the same station and is noted in `st.say.asked` too).
+  const atA: string[] = [];
   const original = inner.stations.requests.call.bind(inner.stations.requests);
   inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
     const [ws, id] = addr.toString().split("/");
-    if (ws === "ws" && id === A && path.startsWith("/lock")) return st.answer(method, path, body);
+    if (ws === "ws" && id === A && path.startsWith("/lock")) return (atA.push(`${method} ${path}`), st.answer(method, path, body));
     if (ws === "ws" && id === S) return (asleep.asked++, asleep.now ? Effect.never : st.answer(method, path, body));
     return (original as (...a: unknown[]) => unknown)(addr, method, path, body, ...rest);
   }) as typeof inner.stations.requests.call;
@@ -77,9 +81,11 @@ async function setUp(silent = false) {
     return out as X;
   };
   // (its key of its person's lock made before: alone in the workspace's lock and its station answering, this device
-  // would begin its person's lock by itself and bind it, views/lock.ts `ownLockFor`: entries these tests do not count)
-  await run(inner.adb.personal().makeKey());
-  return { r, inner, st, cloud, run, asleep, signer: () => me! };
+  // would begin its person's lock by itself and bind it, views/lock.ts `ownLockFor`: entries these tests do not count.
+  // `keyMade: false` for the test of that beginning: a key made before is one it could begin with only by asking, so
+  // it would never begin quietly, personal-lock.ts `mayBeginQuietly`)
+  if (keyMade) await run(inner.adb.personal().makeKey());
+  return { r, inner, st, atA, cloud, run, asleep, signer: () => me! };
 }
 
 test("the lock is read of its stations, the devices that came with it; the cloud is not asked", async () => {
@@ -185,4 +191,31 @@ test("a station gone silent is not waited on: the locks are read of the one that
   const t5 = r.host.nowMs();
   await run(read(inner, "ws"));
   assert.ok(r.host.nowMs() - t5 >= OTHERS_MS, `waited for again: ${r.host.nowMs() - t5} ms`);
+});
+
+test("the one to begin its person's lock, held back for a station asleep, begins it once that one answers", async () => {
+  const { inner, atA, run, r, asleep } = await setUp(true, { seen: true, keyMade: false });
+  const personal = inner.adb.personal();
+  const asked = r.host.secureAsked.length;
+  // (both workspaces' locks read, as ownLockFor waits for: the other one is read of the cloud, with no stations)
+  await run(read(inner, "w2"));
+  await run(read(inner, "ws"));
+  // Alone in the workspace's lock and signing there, this device is the one to begin; the silent station, seen lately,
+  // has not answered a read of the person's lock, so it begins nothing. (Its read of A asked, and its wait for the
+  // silent one over, so that nothing is still to come of it.)
+  for (let i = 0; i < 500 && !atA.includes("GET /lock/person"); i++) await r.host.time.pass(10);
+  assert.ok(atA.includes("GET /lock/person"), "the person's lock read of A");
+  await r.host.time.pass(2 * OTHERS_MS + 200);
+  assert.equal(personal.standing("s1"), "none");
+  assert.ok(!atA.includes("POST /lock/person"), atA.join());
+  // Awake again, reached, and its person's lock read of it alone (as the core reads it of a station reached): the last
+  // of their stations answered, and the one held back for it begins now, nothing else moving.
+  asleep.now = false;
+  await run(personal.refresh("s1", `ws/${S}`));
+  for (let i = 0; i < 1000 && personal.standing("s1") !== "member"; i++) await r.host.time.pass(10);
+  assert.equal(personal.standing("s1"), "member");
+  assert.equal(personal.entries("s1")[0]?.kind, "genesis");
+  assert.ok(atA.includes("POST /lock/person"), atA.join());
+  // Begun quietly: its key made then, its seed in hand, the person not asked.
+  assert.equal(r.host.secureAsked.length, asked, JSON.stringify(r.host.secureAsked));
 });
