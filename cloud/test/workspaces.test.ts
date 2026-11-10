@@ -66,15 +66,14 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
     const connect = async () => h.fetch("/v1/stations/connect", {
       headers: { upgrade: "websocket", "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-connect-v1:${h.origin}:${station.id}:${ts}`) },
     });
-    // A station's socket and what it was told; a ping's pong comes after everything sent before it.
+    // A station's socket and what it was told (h.heard: all of it has arrived).
     const listen = (socket: NonNullable<Awaited<ReturnType<typeof h.fetch>>["webSocket"]>) => {
       const frames: any[] = [];
-      let pong = () => {};
-      socket.addEventListener("message", (event) => (event.data === "pong" ? pong() : frames.push(JSON.parse(event.data as string))));
+      socket.addEventListener("message", (event) => void (event.data === "pong" || frames.push(JSON.parse(event.data as string))));
       socket.accept();
       const told = async () => {
-        await h.settled();
-        return new Promise<any[]>((resolve) => { pong = () => resolve(frames); socket.send("ping"); });
+        await h.heard(socket);
+        return frames;
       };
       return told;
     };
