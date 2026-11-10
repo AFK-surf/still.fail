@@ -280,3 +280,36 @@ fn dial_node(
   |> ignore
   d.show(fn() { detail().unwrap_or("") != "" }, fn(s) { words_node(s, fn() { detail().unwrap_or("") }, fn() { dl_detail }) |> ignore })
 }
+
+///|
+/// A machine's CPU, memory and disk (meter_line's, as nodes) in `parent`, as `meters` says them now: each a chip, what
+/// is left in it, filled as far as is used, its mark before it; 8 apart in a line; what it is (its name, how much of
+/// how much, a note) over it while it is pointed at, in `tips`.
+#callsite(autofill(loc))
+pub fn meter_chips_node(parent : @view.View, meters : () -> Array[Json], tips? : TipLayer, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(r) {
+    style_node(r, fn() { meter_line_way }, in_row=true)
+    r.shrink(Is(0.0)) |> ignore
+    r.each(fn() { Array::makei(meters().length(), fn(i) { i }) }, fn(i) { i }, fn(c, i) {
+      let k = i.untracked()
+      let m = fn() { meters().get(k) }
+      fill_chip_node(
+        c,
+        fn() { 100 - chip_left(m()) },
+        fn() { chip_str(m(), "level") },
+        fn() { chip_str(m(), "short") },
+        fn() { chip_str(m(), "remaining") },
+        said=fn() {
+          let note = chip_str(m(), "note")
+          match chip_str(m(), "label") {
+            "" => ""
+            label => label + " " + chip_str(m(), "value") + (if note != "" { " · " + note } else { "" })
+          }
+        },
+        tips?,
+      )
+      |> ignore
+    })
+  })
+  |> ignore
+}

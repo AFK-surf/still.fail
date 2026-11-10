@@ -333,7 +333,7 @@ fn steps_flip(v : @view.View, key : String) -> Unit {
 /// A clock running in `v` from `since` (the core's time: `src.now`), read again each whole second from then as it is
 /// shown, no longer than `till` (ms after it, none: on), the test's idle not waiting on it (Ctx::every's): what reads
 /// the time of it reads what this returns.
-fn steps_seconds(v : @view.View, src : Source, since : Double, till? : Double) -> () -> Int {
+pub fn steps_seconds(v : @view.View, src : Source, since : Double, till? : Double) -> () -> Int {
   let tick : @signals.Signal[Int] = @signals.signal(0)
   fn plan() -> Unit {
     let gone = (src.now)() - since
@@ -354,7 +354,7 @@ fn steps_seconds(v : @view.View, src : Source, since : Double, till? : Double) -
 
 ///|
 /// The history's rows to come while it is read the first time in `v`, as its list draws them.
-fn steps_sample_node(v : @view.View, station : String, key : String, tips : @sf.TipLayer) -> Unit {
+pub fn steps_sample_node(v : @view.View, station : String, key : String, tips : @sf.TipLayer) -> Unit {
   let lines = [("group", 16), ("text", 24), ("group", 12), ("group", 20), ("text", 9), ("group", 18)]
   for i, line in lines {
     let (kind, n) = line
@@ -2142,3 +2142,42 @@ let steps_usage_line : @sfbase.Kept[String] = @sfbase.Kept::new()
 ///|
 // kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
 let steps_usage : @sfbase.Kept[Json?] = @sfbase.Kept::new()
+
+///|
+/// What needs seeing to in an agent's history now (HistorySummary), as `a` (the chat's agent) says it, in `parent`'s
+/// row: a quota running out (its chip, what it says and more over it while it is pointed at, in `tips`), the disk
+/// filling up (in `amber`), an account that cannot run (in `red`).
+pub fn history_attention_node(
+  parent : @view.View,
+  a : () -> Json?,
+  tips : @sf.TipLayer,
+  amber : @ui.TextStyle,
+  red : @ui.TextStyle,
+) -> Unit {
+  let notes = fn() { items(a(), "attention") }
+  parent.each(fn() { Array::makei(notes().length(), fn(i) { i }) }, fn(i) { i }, fn(c, i) {
+    let k = i.untracked()
+    let n = fn() { notes().get(k) }
+    let q = fn() { field(n(), "quota") }
+    c.pick(fn() { q() is Some(Object(_)) }, fn(x, quota) {
+      if quota {
+        @sf.fill_chip_node(
+          x,
+          fn() { number(q(), "left").to_int() },
+          fn() { text(q(), "level") },
+          fn() { text(q(), "mark") },
+          fn() { number(q(), "left").to_int().to_string() + "%" },
+          small=true,
+          said=fn() {
+            let more = text(n(), "more")
+            text(n(), "text") + (if more != "" { "\n" + more } else { "" })
+          },
+          tips~,
+        )
+        |> ignore
+      } else {
+        @sf.words_node(x, fn() { text(n(), "text") }, fn() { if text(n(), "kind") == "disk" { amber } else { red } }) |> ignore
+      }
+    })
+  })
+}

@@ -364,7 +364,7 @@ pub fn model_triple(
 /// ring in place of its chevron while what was picked is on its way; on its hover's ground while the hand is on it and
 /// while its panel is open. Pressed, its panel opens beside it (open_triple_panel); borrowing a model from there is
 /// asked in the presenters' confirm. `saved`: as model_triple's. Nothing while the pick is not read.
-fn model_triple_node(parent : @view.View, src : Source, station : String, of : String, saved? : String = "") -> Unit {
+pub fn model_triple_node(parent : @view.View, src : Source, station : String, of : String, saved? : String = "") -> Unit {
   let me = station + "\u{1}" + of
   let dkey = "pick.save/" + station + "/" + of
   let v = fn() { src.topic("pick", pick_params(station, of)).get().value }

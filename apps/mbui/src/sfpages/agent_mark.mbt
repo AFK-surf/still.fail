@@ -112,3 +112,17 @@ let agent_badge_red : @ui.Style = @ui.style(w=Full, h=Full, radius=Full, bg=@sf.
 ///|
 // kept across runs: a value (no field of it changes)
 let agent_badge_blue : @ui.Style = @ui.style(w=Full, h=Full, radius=Full, bg=@sf.mark_blue)
+
+///|
+/// `maker`'s mark (of `runtime`) on its tile `side` across, as agent_mark has it with no badge, as a node in `parent`:
+/// as the two say now.
+pub fn agent_mark_node(parent : @view.View, maker : () -> String, runtime : () -> String, side : Double) -> Unit {
+  parent.box(fn(t) {
+    @sf.style_node(t, fn() { agent_tile.then(@ui.style(w=Fixed(side), h=Fixed(side), radius=@sf.agent_mark_corner(side))) }, in_row=true)
+    t.shrink(Is(0.0)) |> ignore
+    t.pick(fn() { (maker(), runtime()) }, fn(m, k) {
+      @sf.maker_mark_node(m, k.0, k.1, (side * agent_logo_of).round()) |> ignore
+    })
+  })
+  |> ignore
+}

@@ -378,7 +378,7 @@ fn form_rows_node(
 /// Where what someone set going shows how it is (doing_mark's) as nodes: a spinner while it is under way, a small red
 /// mark while it failed a moment ago, why said under the pointer (in `tips`, where given). `size`: its spinner's and its mark's
 /// (doing_mark's: 12 beside a row's words, inline; 14 otherwise).
-fn doing_mark_node(
+pub fn doing_mark_node(
   v : @view.View,
   running : () -> Bool,
   failed : () -> String?,

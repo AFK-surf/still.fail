@@ -51,8 +51,8 @@
 /// 归档建议 made once (2026-11-03): 4 fewer, 309. The chats' lists made once (2026-11-03): one fewer, 308. Back on 0.1.7190's chat page (#3975): 306. The reader's
 /// layout as nodes of the window's tree (reader-layout): 4 fewer, 302. 连接 and a connect's page made once (2026-11-09):
 /// 5 fewer, 297. An agent's request for a rig a screen of its own (chat-rig, 2026-11-10), what every chat has: its last
-/// message's time, in the four windows it shows in, 4 more, 301; such a station's page, made once, none.)
-let rooms_known : Map[String, Int] = { "room": 301, "apart": 0, "hover": 0 }
+/// message's time, in the four windows it shows in, 4 more, 301; such a station's page, made once, none. An agent's history's head and details made once as nodes, 291.)
+let rooms_known : Map[String, Int] = { "room": 291, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.
