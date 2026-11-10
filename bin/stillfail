@@ -47,7 +47,7 @@ case "${1:-} ${2:-}" in
     while IFS='=' read -r key value; do
       case $key in
         script) script=$value ;;
-        STILLFAIL_ORIGIN|STILLFAIL_CHANNEL|STILLFAIL_RELEASE_SHA256|STILLFAIL_NODE_SHA256|STILLFAIL_INSTALL_LANG) export "$key=$value" ;;
+        STILLFAIL_ORIGIN|STILLFAIL_CHANNEL|STILLFAIL_RELEASE_SHA256|STILLFAIL_NODE_SHA256|STILLFAIL_INSTALL_LANG|STILLFAIL_ARCHIVE) export "$key=$value" ;;
       esac
     done <<PLAN
 $plan

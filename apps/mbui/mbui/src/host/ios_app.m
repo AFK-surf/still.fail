@@ -2509,8 +2509,9 @@ void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   if (json) mb_post("system", (const char *)json.bytes, json.length, NULL, 0);
 }
 
-void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now) {
-  (void)url; (void)sha256; (void)size; (void)name; (void)now;
+void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now,
+                          moonbit_string_t delta) {
+  (void)url; (void)sha256; (void)size; (void)name; (void)now; (void)delta;
 }
 void mb_host_update_apply(moonbit_string_t said) { (void)said; }
 moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0); }

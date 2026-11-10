@@ -8,12 +8,19 @@
 // this one quits. How it goes the app reads (`update_state`: the phase, how far, what went wrong), told each time it
 // changes (MB_OUTSIDE_UPDATE, id 1: 0 while the host works at it, -1 failed). Only a program with a version of its own
 // (its resources' FILEVERSION 0.1.<n>: an app's, still.fail's scripts/win.sh) updates; a bare one (0) never asks.
-// Included by win_app.c after win_life.h (its app_id).
+// Where the core says a delta from this build (update_fetch's `delta`), that is tried first: downloaded as the installer
+// would be (`<name>.delta`), applied to the installed folder's files (update_delta.h) into the release's raw installer
+// (`<name less .exe>.raw.exe`: the same program, what it carries stored, not LZMS's), checked against the size and
+// SHA-256 the signed words say for it, and run in the installer's place. Anything wrong with it is said on the log and
+// the installer downloaded whole as ever. The made installer, kept until another build is asked for, is taken again by
+// a later start; the delta goes once it is applied.
+// Included by win_app.c after win_life.h (its app_id, and mini_json.h's jparse).
 #include <stdarg.h>
 #include <shlobj.h>
 #include <knownfolders.h>
 #include <winhttp.h>
 #include <bcrypt.h>
+#include "update_delta.h"
 
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "bcrypt.lib")
@@ -101,6 +108,7 @@ typedef struct {
   char sha256[65];
   ULONGLONG size;
   WCHAR dir[MAX_PATH];
+  char *delta;  // the JSON the core gave for a delta, "" none
 } update_job;
 
 // the file's SHA-256 as hex, "" where it cannot be read
@@ -129,17 +137,18 @@ static ULONGLONG file_size(const WCHAR *path) {
   return GetFileAttributesExW(path, GetFileExInfoStandard, &fa) ? ((ULONGLONG)fa.nFileSizeHigh << 32 | fa.nFileSizeLow) : 0;
 }
 
-// the files in `dir` other than `name` and its part taken away
-static void update_leave_only(const WCHAR *dir, const WCHAR *name) {
-  WCHAR pattern[MAX_PATH * 2], part[MAX_PATH], path[MAX_PATH * 2];
+// the files in `dir` other than those named (a NULL-ended list) taken away
+static void update_leave_only(const WCHAR *dir, const WCHAR *const *keep) {
+  WCHAR pattern[MAX_PATH * 2], path[MAX_PATH * 2];
   _snwprintf(pattern, MAX_PATH * 2, L"%ls\\*", dir);
-  _snwprintf(part, MAX_PATH, L"%ls.part", name);
   WIN32_FIND_DATAW f;
   HANDLE h = FindFirstFileW(pattern, &f);
   if (h == INVALID_HANDLE_VALUE) return;
   do {
+    int kept = 0;
     if (f.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-    if (!_wcsicmp(f.cFileName, name) || !_wcsicmp(f.cFileName, part)) continue;
+    for (const WCHAR *const *k = keep; *k && !kept; k++) kept = !_wcsicmp(f.cFileName, *k);
+    if (kept) continue;
     _snwprintf(path, MAX_PATH * 2, L"%ls\\%ls", dir, f.cFileName);
     DeleteFileW(path);
   } while (FindNextFileW(h, &f));
@@ -148,7 +157,7 @@ static void update_leave_only(const WCHAR *dir, const WCHAR *name) {
 
 // One try: the rest of the file (from what `part` holds) appended to it. 1 whole, 0 to try again (a cut connection,
 // the server's trouble), -1 given up (why in `why`).
-static int update_try(update_job *j, const WCHAR *part, WCHAR *why) {
+static int update_try(const WCHAR *url, ULONGLONG size, const WCHAR *part, WCHAR *why) {
   URL_COMPONENTS u;
   memset(&u, 0, sizeof u);
   u.dwStructSize = sizeof u;
@@ -157,13 +166,13 @@ static int update_try(update_job *j, const WCHAR *part, WCHAR *why) {
   u.dwHostNameLength = 256;
   u.lpszUrlPath = path;
   u.dwUrlPathLength = 2048;
-  if (!WinHttpCrackUrl(j->url, 0, 0, &u)) {
+  if (!WinHttpCrackUrl(url, 0, 0, &u)) {
     lstrcpynW(why, L"not a URL", 300);
     return -1;
   }
   ULONGLONG have = file_size(part);
-  if (have > j->size) DeleteFileW(part), have = 0;
-  if (have == j->size) return 1;
+  if (have > size) DeleteFileW(part), have = 0;
+  if (have == size) return 1;
   HINTERNET s = WinHttpOpen(L"still.fail", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
   HINTERNET c = s ? WinHttpConnect(s, host, u.nPort, 0) : NULL;
   HINTERNET r = c ? WinHttpOpenRequest(c, L"GET", path, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
@@ -188,11 +197,11 @@ static int update_try(update_job *j, const WCHAR *part, WCHAR *why) {
           DWORD put = 0;
           if (!WriteFile(f, buf, n, &put, NULL) || put != n) break;
           have += n;
-          int percent = j->size ? (int)(have * 100 / j->size) : -1;
+          int percent = size ? (int)(have * 100 / size) : -1;
           if (percent != last) update_say("downloading", percent, NULL), last = percent;
         }
         CloseHandle(f);
-        result = have == j->size ? 1 : 0;
+        result = have == size ? 1 : 0;
       }
     } else if (status >= 400 && status < 500 && status != 408 && status != 429) {
       _snwprintf(why, 300, L"HTTP %lu", status);
@@ -205,27 +214,20 @@ static int update_try(update_job *j, const WCHAR *part, WCHAR *why) {
   return result;
 }
 
-static DWORD WINAPI update_thread(void *arg) {
-  update_job *j = (update_job *)arg;
-  WCHAR part[MAX_PATH * 2], file[MAX_PATH * 2], why[300] = L"";
-  SHCreateDirectoryExW(NULL, j->dir, NULL);
-  _snwprintf(file, MAX_PATH * 2, L"%ls\\%ls", j->dir, j->name);
+// `file` downloaded (its bytes so far in `<file>.part`; the file there already taken where its SHA-256 is the one asked
+// for) and checked against `sha256`: 1, or 0 and why not.
+static int update_get(const WCHAR *url, ULONGLONG size, const char *sha256, const WCHAR *file, WCHAR *why) {
+  WCHAR part[MAX_PATH * 2];
   _snwprintf(part, MAX_PATH * 2, L"%ls.part", file);
-  update_log(L"%ls: %llu bytes to %ls", j->url, j->size, file);
-  // what an earlier update left (another build's installer, its part) gone; this one's, downloaded before, taken
-  update_leave_only(j->dir, j->name);
   char sum[65];
   file_sha256(file, sum);
-  int got = 0;
-  if (sum[0] && !_stricmp(sum, j->sha256)) {
-    MoveFileExW(file, part, MOVEFILE_REPLACE_EXISTING);
-    got = 1;
-  }
+  if (sum[0] && !_stricmp(sum, sha256)) return 1;
   // how far from the first: what an earlier try kept (0 none), not "not known" till the first bytes come
-  if (!got && j->size) update_say("downloading", (int)(file_size(part) * 100 / j->size), NULL);
+  if (size) update_say("downloading", (int)(file_size(part) * 100 / size), NULL);
+  int got = 0;
   for (int failures = 0; got == 0;) {
     ULONGLONG before = file_size(part);
-    got = update_try(j, part, why);
+    got = update_try(url, size, part, why);
     if (got != 0) break;
     if (file_size(part) > before) failures = 0;
     if (++failures >= 5) break;
@@ -236,19 +238,187 @@ static DWORD WINAPI update_thread(void *arg) {
   }
   if (got == 1) {
     file_sha256(part, sum);
-    if (_stricmp(sum, j->sha256) != 0) {
+    if (_stricmp(sum, sha256) != 0) {
       DeleteFileW(part);
       lstrcpynW(why, L"not the signed one (SHA-256)", 300);
       got = -1;
+    } else if (!MoveFileExW(part, file, MOVEFILE_REPLACE_EXISTING)) {
+      _snwprintf(why, 300, L"not kept (%lu)", GetLastError());
+      got = -1;
     }
   }
-  if (got != 1) {
-    if (!why[0]) lstrcpynW(why, L"not downloaded", 300);
+  if (got != 1 && !why[0]) lstrcpynW(why, L"not downloaded", 300);
+  return got == 1;
+}
+
+// One of the installed folder's files for the delta (update_delta.h's ud_read_fn; `root` the folder, wide): its bytes
+// (malloc's), or NULL.
+static unsigned char *update_old_file(void *root, const char *rel, size_t *size) {
+  WCHAR wrel[MAX_PATH], path[MAX_PATH * 2];
+  int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, rel, -1, wrel, MAX_PATH);
+  if (n <= 0) return NULL;
+  for (WCHAR *c = wrel; *c; c++)
+    if (*c == L'/') *c = L'\\';
+  _snwprintf(path, MAX_PATH * 2, L"%ls\\%ls", (const WCHAR *)root, wrel);
+  path[MAX_PATH * 2 - 1] = 0;
+  // (the program running among them: read beside its loader, whatever else holds it)
+  HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING,
+                         FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+  if (f == INVALID_HANDLE_VALUE) return NULL;
+  LARGE_INTEGER total;
+  unsigned char *b = NULL;
+  size_t have = 0;
+  if (GetFileSizeEx(f, &total) && total.QuadPart >= 0 && (ULONGLONG)total.QuadPart < ((ULONGLONG)1 << 40))
+    b = (unsigned char *)malloc(total.QuadPart ? (size_t)total.QuadPart : 1);
+  while (b && have < (size_t)total.QuadPart) {
+    DWORD k = 0, ask = (DWORD)((size_t)total.QuadPart - have > (1u << 30) ? (1u << 30) : (size_t)total.QuadPart - have);
+    if (!ReadFile(f, b + have, ask, &k, NULL) || k == 0) break;
+    have += k;
+  }
+  CloseHandle(f);
+  if (b && have != (size_t)total.QuadPart) {
+    free(b);
+    return NULL;
+  }
+  if (b) *size = have;
+  return b;
+}
+
+static int update_made_bytes(void *out, const unsigned char *b, size_t n) {
+  while (n > 0) {
+    DWORD k = 0, ask = (DWORD)(n > (1u << 30) ? (1u << 30) : n);
+    if (!WriteFile((HANDLE)out, b, ask, &k, NULL) || k == 0) return 0;
+    b += k, n -= k;
+  }
+  return 1;
+}
+
+// The release's raw installer made from the delta the core says (`json`: url, sha256, size, makes_sha256, makes_size)
+// and the installed folder, in the updates' folder beside what the installer's download keeps, into `made`: 1, or 0
+// and why not (0 and no why: the installer is here already, the delta not wanted).
+static int update_by_delta(update_job *j, WCHAR *made, WCHAR *why) {
+  const char *p = j->delta;
+  jv d;
+  int ok = 0;
+  if (!jparse(&p, &d, 0) || d.kind != 'o') {
+    jv_free(&d);
+    lstrcpynW(why, L"not a delta this host takes (JSON)", 300);
+    return 0;
+  }
+  const char *url8 = jtext(&d, "url"), *sha256 = jtext(&d, "sha256"), *makes = jtext(&d, "makes_sha256");
+  double size = jnum(&d, "size", 0), made_size = jnum(&d, "makes_size", 0);
+  WCHAR url[2048], delta[MAX_PATH], delta_part[MAX_PATH], raw[MAX_PATH], part[MAX_PATH], file[MAX_PATH * 2];
+  WCHAR dfile[MAX_PATH * 2], mpart[MAX_PATH * 2], root[MAX_PATH * 2];
+  if (!MultiByteToWideChar(CP_UTF8, 0, url8, -1, url, 2048) || !url[0] || strlen(sha256) != 64 || strlen(makes) != 64 ||
+      size <= 0 || made_size <= 0) {
+    lstrcpynW(why, L"not a delta this host takes", 300);
+    jv_free(&d);
+    return 0;
+  }
+  // names: <name>.delta, and the installer it makes <name less .exe>.raw.exe (it is run: an .exe)
+  size_t nn = wcslen(j->name);
+  int exe = nn > 4 && !_wcsicmp(j->name + nn - 4, L".exe");
+  _snwprintf(delta, MAX_PATH, L"%ls.delta", j->name);
+  _snwprintf(delta_part, MAX_PATH, L"%ls.delta.part", j->name);
+  _snwprintf(raw, MAX_PATH, L"%.*ls.raw.exe", (int)(exe ? nn - 4 : nn), j->name);
+  _snwprintf(part, MAX_PATH, L"%ls.part", j->name);
+  delta[MAX_PATH - 1] = delta_part[MAX_PATH - 1] = raw[MAX_PATH - 1] = part[MAX_PATH - 1] = 0;
+  const WCHAR *keep[] = {j->name, part, delta, delta_part, raw, NULL};
+  update_leave_only(j->dir, keep);
+  _snwprintf(file, MAX_PATH * 2, L"%ls\\%ls", j->dir, j->name);
+  _snwprintf(made, MAX_PATH * 2, L"%ls\\%ls", j->dir, raw);
+  _snwprintf(dfile, MAX_PATH * 2, L"%ls\\%ls", j->dir, delta);
+  _snwprintf(mpart, MAX_PATH * 2, L"%ls.part", made);
+  if (GetFileAttributesW(file) != INVALID_FILE_ATTRIBUTES) {
+    jv_free(&d);
+    return 0;
+  }
+  char sum[65];
+  file_sha256(made, sum);
+  if (sum[0] && !_stricmp(sum, makes)) {
+    update_log(L"%ls made before, sha256 %hs as the signed words say", raw, makes);
+    jv_free(&d);
+    return 1;
+  }
+  DeleteFileW(made);
+  if (!update_get(url, (ULONGLONG)size, sha256, dfile, why)) {
+    WCHAR w[300];
+    lstrcpynW(w, why, 300);
+    _snwprintf(why, 300, L"not downloaded (%ls)", w);
+    why[299] = 0;
+    _snwprintf(mpart, MAX_PATH * 2, L"%ls.part", dfile);
+    DeleteFileW(mpart);
+    jv_free(&d);
+    return 0;
+  }
+  // the old files: the folder this program runs from
+  GetModuleFileNameW(NULL, root, MAX_PATH * 2);
+  if (wcsrchr(root, L'\\')) *wcsrchr(root, L'\\') = 0;
+  const char *e = NULL;
+  size_t dn = 0;
+  unsigned char *bytes = NULL;
+  {
+    HANDLE f = CreateFileW(dfile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+    LARGE_INTEGER n;
+    if (f != INVALID_HANDLE_VALUE && GetFileSizeEx(f, &n) && n.QuadPart > 0 && n.QuadPart < (1 << 30) &&
+        (bytes = (unsigned char *)malloc((size_t)n.QuadPart)) != NULL) {
+      DWORD k = 0;
+      if (ReadFile(f, bytes, (DWORD)n.QuadPart, &k, NULL) && k == (DWORD)n.QuadPart) dn = k;
+      else free(bytes), bytes = NULL;
+    }
+    if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
+  }
+  HANDLE out = bytes ? CreateFileW(mpart, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL) : INVALID_HANDLE_VALUE;
+  if (!bytes) e = "not read";
+  else if (out == INVALID_HANDLE_VALUE) e = "can't write the made installer";
+  else e = ud_apply(bytes, dn, update_old_file, root, update_made_bytes, out, (uint64_t)made_size);
+  if (out != INVALID_HANDLE_VALUE) CloseHandle(out);
+  free(bytes);
+  DeleteFileW(dfile);
+  if (!e) {
+    file_sha256(mpart, sum);
+    if (file_size(mpart) != (ULONGLONG)made_size) e = "the made installer is not the size the signed words say";
+    else if (_stricmp(sum, makes) != 0) e = "the made installer is not the signed one (SHA-256)";
+    else if (!MoveFileExW(mpart, made, MOVEFILE_REPLACE_EXISTING)) e = "the made installer not kept";
+  }
+  if (e) {
+    DeleteFileW(mpart);
+    _snwprintf(why, 300, L"%hs", e);
+    why[299] = 0;
+  } else {
+    update_log(L"%ls made from a delta of %.0f bytes, sha256 %hs as the signed words say", raw, size, sum);
+    ok = 1;
+  }
+  jv_free(&d);
+  return ok;
+}
+
+static DWORD WINAPI update_thread(void *arg) {
+  update_job *j = (update_job *)arg;
+  WCHAR part[MAX_PATH], file[MAX_PATH * 2], why[300] = L"";
+  SHCreateDirectoryExW(NULL, j->dir, NULL);
+  _snwprintf(file, MAX_PATH * 2, L"%ls\\%ls", j->dir, j->name);
+  _snwprintf(part, MAX_PATH, L"%ls.part", j->name);
+  update_log(L"%ls: %llu bytes to %ls", j->url, j->size, file);
+  int got = 0;
+  // the delta first, where there is one: on any trouble, said and left for the installer downloaded whole
+  if (j->delta && j->delta[0]) {
+    got = update_by_delta(j, file, why);
+    if (!got && why[0]) update_log(L"delta not used: %ls", why);
+    why[0] = 0;
+    if (!got) _snwprintf(file, MAX_PATH * 2, L"%ls\\%ls", j->dir, j->name);
+  }
+  if (!got) {
+    // what an earlier update left (another build's installer, its part, a delta's) gone; this one's, downloaded
+    // before, taken
+    const WCHAR *keep[] = {j->name, part, NULL};
+    update_leave_only(j->dir, keep);
+    got = update_get(j->url, j->size, j->sha256, file, why);
+  }
+  if (!got) {
     update_log(L"failed: %ls", why);
     update_say("failed", -1, why);
   } else {
-    DeleteFileW(file);
-    MoveFileW(part, file);
     AcquireSRWLockExclusive(&update_lock);
     lstrcpynW(update_ready, file, MAX_PATH * 2);
     lstrcpynW(update_ready_dir, j->dir, MAX_PATH);
@@ -260,6 +430,7 @@ static DWORD WINAPI update_thread(void *arg) {
   }
   free(j->url);
   free(j->name);
+  free(j->delta);
   free(j);
   return 0;
 }
@@ -285,7 +456,8 @@ static void update_at_quit(void) {
   }
 }
 
-void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now) {
+void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now,
+                          moonbit_string_t delta) {
   (void)now;  // (no network here is told apart as costing more)
   if (mb_host_app_version() <= 0 || InterlockedCompareExchange(&update_working, 1, 0) != 0) return;
   update_job *j = (update_job *)calloc(1, sizeof *j);
@@ -324,6 +496,14 @@ void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double 
   ReleaseSRWLockExclusive(&update_lock);
   for (int i = 0; i < 64; i++) j->sha256[i] = (char)sha256[i];
   j->size = (ULONGLONG)size;
+  // the delta's JSON as UTF-8 ("" none)
+  int dn = Moonbit_array_length(delta);
+  int du = dn ? WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)delta, dn, NULL, 0, NULL, NULL) : 0;
+  j->delta = (char *)malloc((size_t)du + 1);
+  if (j->delta) {
+    if (du) WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)delta, dn, j->delta, du, NULL, NULL);
+    j->delta[du] = 0;
+  }
   PWSTR local = NULL;
   if (SUCCEEDED(SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, NULL, &local))) {
     _snwprintf(j->dir, MAX_PATH, L"%ls\\%ls\\updates", local, app_id());

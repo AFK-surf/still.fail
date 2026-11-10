@@ -13,9 +13,15 @@
 // is put in place as it goes (update_at_quit), not opened again. How it goes the app reads
 // (`update_state`: the phase, how far, what went wrong, the build), told each time it changes (MB_OUTSIDE_UPDATE, id 1:
 // 0 while the host works at it, 1 once it is ready, -1 failed). Included by linux_app.c after linux_life.h (app_id, quit).
+// Where the core says a delta from this build (update_fetch's `delta`), that is tried first: downloaded as the archive
+// would be (`<name>.delta`), applied to the installed folder's files (update_delta.h) into the release's tar as it was
+// before it was gzipped (`<name>.raw`; tar reads either), checked against the size and SHA-256 the feed says for it, and
+// ready in the archive's place. Anything wrong with it is said on the update's log and the archive downloaded whole as
+// ever. The made tar, kept until it is in place or another build is asked for, is taken again by a later start.
 #include <glib/gstdio.h>
 #include <libsoup/soup.h>
 #include <sys/utsname.h>
+#include "update_delta.h"
 
 static char *own_exe;  // the program's path as it started (the one opened again: its installer puts the new one there)
 static const char *update_phase = "idle";  // idle | downloading | retrying | ready | installing | failed
@@ -184,22 +190,39 @@ static gint64 file_size(const char *path) {
   return g_stat(path, &st) == 0 ? (gint64)st.st_size : 0;
 }
 
+// What is in `dir` taken away but the files named (a NULL-ended list), and `dir` made where it is not.
+static void update_leave_only(const char *dir, const char *const *keep) {
+  g_mkdir_with_parents(dir, 0700);
+  GDir *d = g_dir_open(dir, 0, NULL);
+  for (const char *f; d && (f = g_dir_read_name(d));) {
+    int kept = 0;
+    for (const char *const *k = keep; *k && !kept; k++) kept = !strcmp(f, *k);
+    if (kept) continue;
+    char *p = g_build_filename(dir, f, NULL);
+    char *argv[] = {"rm", "-rf", p, NULL};
+    g_spawn_sync(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL, NULL, NULL);
+    g_free(p);
+  }
+  if (d) g_dir_close(d);
+}
+
+static char *update_get(const char *dir, const char *url, const char *sha256, gint64 size, const char *name, char **why);
+
 // The release downloaded whole into `dir` (what is there from before kept only if it is the part of this one), checked
 // against its SHA-256: its path, or NULL and why not.
 static char *update_download(const char *dir, const char *url, const char *sha256, gint64 size, const char *name,
                              char **why) {
-  g_mkdir_with_parents(dir, 0700);
+  char *part = g_strconcat(name, ".part", NULL);
+  const char *keep[] = {name, part, NULL};
+  update_leave_only(dir, keep);
+  g_free(part);
+  return update_get(dir, url, sha256, size, name, why);
+}
+
+// `name` downloaded into `dir` (its bytes so far in `<name>.part`; the file there already taken where its SHA-256 is
+// the one asked for), checked against its SHA-256: its path, or NULL and why not.
+static char *update_get(const char *dir, const char *url, const char *sha256, gint64 size, const char *name, char **why) {
   char *tgz = g_build_filename(dir, name, NULL), *part = g_strconcat(tgz, ".part", NULL);
-  GDir *d = g_dir_open(dir, 0, NULL);
-  for (const char *f; d && (f = g_dir_read_name(d));) {
-    char *p = g_build_filename(dir, f, NULL);
-    if (strcmp(p, tgz) && strcmp(p, part)) {
-      char *argv[] = {"rm", "-rf", p, NULL};
-      g_spawn_sync(NULL, argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL, NULL, NULL);
-    }
-    g_free(p);
-  }
-  if (d) g_dir_close(d);
   if (g_file_test(tgz, G_FILE_TEST_EXISTS)) {
     char *got = update_sha256(tgz);
     int same = !g_ascii_strcasecmp(got, sha256);
@@ -245,6 +268,103 @@ fail:
   return NULL;
 }
 
+// One of the installed folder's files for the delta (update_delta.h's ud_read_fn): its bytes (malloc's), or NULL.
+static unsigned char *update_old_file(void *root, const char *rel, size_t *size) {
+  char *path = g_build_filename((const char *)root, rel, NULL);
+  FILE *f = fopen(path, "rb");
+  g_free(path);
+  if (!f) return NULL;
+  unsigned char *b = NULL;
+  off_t n = fseeko(f, 0, SEEK_END) == 0 ? ftello(f) : -1;
+  if (n >= 0 && fseeko(f, 0, SEEK_SET) == 0 && (b = malloc(n ? (size_t)n : 1)) && fread(b, 1, (size_t)n, f) != (size_t)n) {
+    free(b);
+    b = NULL;
+  }
+  fclose(f);
+  if (b) *size = (size_t)n;
+  return b;
+}
+
+static int update_made_bytes(void *out, const unsigned char *b, size_t n) { return fwrite(b, 1, n, (FILE *)out) == n; }
+
+// The release's raw tar made from the delta the core says (`json`: url, sha256, size, makes_sha256, makes_size) and the
+// installed folder, in `dir` beside what update_download keeps: its path, or NULL and why not (NULL and no why: the
+// archive is here already, the delta not wanted).
+static char *update_by_delta(const char *dir, const char *json, const char *name, char **why) {
+  const char *p = json;
+  jv d;
+  char *out = NULL;
+  if (!jparse(&p, &d, 0) || d.kind != 'o') {
+    jv_free(&d);
+    *why = g_strdup("not a delta this host takes (JSON)");
+    return NULL;
+  }
+  const char *url = jtext(&d, "url"), *sha256 = jtext(&d, "sha256"), *makes = jtext(&d, "makes_sha256");
+  gint64 size = (gint64)jnum(&d, "size", 0), made_size = (gint64)jnum(&d, "makes_size", 0);
+  char *delta = g_strconcat(name, ".delta", NULL), *delta_part = g_strconcat(name, ".delta.part", NULL);
+  char *made = g_strconcat(name, ".raw", NULL), *part = g_strconcat(name, ".part", NULL);
+  char *tgz = g_build_filename(dir, name, NULL), *path = g_build_filename(dir, made, NULL), *got = NULL;
+  char *made_part = g_strconcat(path, ".part", NULL), *root = g_path_get_dirname(own_exe);
+  const char *keep[] = {name, part, delta, delta_part, made, NULL};
+  if (!*url || strlen(sha256) != 64 || strlen(makes) != 64 || size <= 0 || made_size <= 0) {
+    *why = g_strdup("not a delta this host takes");
+    goto end;
+  }
+  update_leave_only(dir, keep);
+  if (g_file_test(tgz, G_FILE_TEST_EXISTS)) goto end;
+  if (g_file_test(path, G_FILE_TEST_EXISTS)) {
+    char *sum = update_sha256(path);
+    int same = !g_ascii_strcasecmp(sum, makes);
+    g_free(sum);
+    if (same) {
+      char *said = g_strdup_printf("%s made before, sha256 %s as the feed says", made, makes);
+      update_log(said);
+      g_free(said);
+      out = g_strdup(path);
+      goto end;
+    }
+    g_unlink(path);
+  }
+  got = update_get(dir, url, sha256, size, delta, why);
+  if (!got) {
+    char *dp = g_build_filename(dir, delta_part, NULL), *w = *why;
+    g_unlink(dp);
+    g_free(dp);
+    *why = g_strdup_printf("not downloaded (%s)", w ? w : "failed");
+    g_free(w);
+    goto end;
+  }
+  gchar *bytes = NULL;
+  gsize n = 0;
+  const char *e = NULL;
+  FILE *f = NULL;
+  if (!g_file_get_contents(got, &bytes, &n, NULL)) e = "not read";
+  else if (!(f = fopen(made_part, "wb"))) e = "can't write the made tar";
+  else e = ud_apply((const unsigned char *)bytes, n, update_old_file, root, update_made_bytes, f, (uint64_t)made_size);
+  if (f && fclose(f) != 0 && !e) e = "the made package could not be written";
+  g_free(bytes);
+  g_unlink(got);
+  char *sum = e ? NULL : update_sha256(made_part);
+  if (!e && file_size(made_part) != made_size) e = "the made tar is not the size the feed says";
+  else if (!e && g_ascii_strcasecmp(sum, makes) != 0) e = "the made tar is not the one the feed says (SHA-256)";
+  if (!e && g_rename(made_part, path) != 0) e = "the made tar not kept";
+  if (e) {
+    g_unlink(made_part);
+    *why = g_strdup(e);
+  } else {
+    char *said = g_strdup_printf("%s made from a delta of %" G_GINT64_FORMAT " bytes, sha256 %s as the feed says", made, size, sum);
+    update_log(said);
+    g_free(said);
+    out = g_strdup(path);
+  }
+  g_free(sum);
+end:
+  jv_free(&d);
+  g_free(delta), g_free(delta_part), g_free(made), g_free(part), g_free(tgz), g_free(path), g_free(got);
+  g_free(made_part), g_free(root);
+  return out;
+}
+
 // this machine's architecture as a release names it
 static const char *own_arch(void) {
   struct utsname u;
@@ -262,14 +382,16 @@ static int update_for_here(const char *name) {
   return here;
 }
 
-// The archive unpacked beside it, checked to be this app's newer build, and its installer run: NULL, or why not.
+// The archive (gzipped as released, or the tar a delta made) unpacked beside it, checked to be this app's newer build,
+// and its installer run: NULL, or why not.
 static char *update_put(const char *tgz) {
   char *why = NULL;
   char *dir = g_path_get_dirname(tgz), *stage = g_build_filename(dir, "stage", NULL);
   char *exe = g_path_get_basename(own_exe), *folder = NULL, *program = NULL, *installer = NULL, *version = NULL;
   int status = -1;
   char *rm[] = {"rm", "-rf", stage, NULL}, *mk[] = {"mkdir", "-p", stage, NULL};
-  char *untar[] = {"tar", "-xzf", (char *)tgz, "-C", stage, NULL};
+  // (-xf: GNU tar and bsdtar both find a gzipped archive gzipped as they read it)
+  char *untar[] = {"tar", "-xf", (char *)tgz, "-C", stage, NULL};
   g_spawn_sync(NULL, rm, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL, NULL, NULL);
   g_spawn_sync(NULL, mk, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL, NULL, NULL);
   if (!g_spawn_sync(NULL, untar, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL, &status, NULL) ||
@@ -312,7 +434,7 @@ end:
 }
 
 typedef struct {
-  char *url, *sha256, *name;
+  char *url, *sha256, *name, *delta;  // delta: the JSON the core gave, "" none
   gint64 size;
 } update_ask;
 
@@ -356,8 +478,21 @@ static gpointer update_work(gpointer data) {
   update_ask *a = data;
   char *dir = update_dir("updates"), *why = NULL, *tgz = NULL;
   // (another machine's not downloaded at all)
-  if (!update_for_here(a->name)) why = g_strdup_printf("another machine's (%s)", a->name);
-  else tgz = update_download(dir, a->url, a->sha256, a->size, a->name, &why);
+  if (!update_for_here(a->name)) {
+    why = g_strdup_printf("another machine's (%s)", a->name);
+  } else {
+    // the delta first, where there is one: on any trouble, said and left for the archive downloaded whole
+    if (*a->delta) {
+      tgz = update_by_delta(dir, a->delta, a->name, &why);
+      if (why) {
+        char *said = g_strdup_printf("delta not used: %s", why);
+        update_log(said);
+        g_free(said);
+        g_clear_pointer(&why, g_free);
+      }
+    }
+    if (!tgz) tgz = update_download(dir, a->url, a->sha256, a->size, a->name, &why);
+  }
   if (why) {
     char *said = g_strdup_printf("failed: %s", why);
     update_log(said);
@@ -372,20 +507,22 @@ static gpointer update_work(gpointer data) {
     update_say("ready", -1, NULL);
   }
   g_free(why), g_free(dir);
-  g_free(a->url), g_free(a->sha256), g_free(a->name), g_free(a);
+  g_free(a->url), g_free(a->sha256), g_free(a->name), g_free(a->delta), g_free(a);
   return NULL;
 }
 
-void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now) {
+void mb_host_update_fetch(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name, int32_t now,
+                          moonbit_string_t delta) {
   (void)now;  // (no network here is told apart as costing more)
   if (update_working || mb_host_app_version() <= 0) return;
   update_ask *a = g_new0(update_ask, 1);
   char *n = utf8(name);
   a->url = utf8(url), a->sha256 = utf8(sha256), a->name = g_path_get_basename(n), a->size = (gint64)size;
+  a->delta = utf8(delta);
   g_free(n);
   // (ready already, or being put in place)
   if (update_file && !strcmp(update_file, a->name) && (!strcmp(update_phase, "ready") || !strcmp(update_phase, "installing"))) {
-    g_free(a->url), g_free(a->sha256), g_free(a->name), g_free(a);
+    g_free(a->url), g_free(a->sha256), g_free(a->name), g_free(a->delta), g_free(a);
     return;
   }
   g_free(update_file);

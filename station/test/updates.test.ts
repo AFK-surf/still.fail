@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ConfigFile } from "../src/ops/config.ts";
+import { tr } from "../src/ops/i18n.ts";
 import { hearLines, type Line } from "../src/ops/log.ts";
 import { type Env, type Found, howToInstall, howToUpdate, findCommand, ownNode, pinNpmVersion, run, runLines, Unable, kindCommand, kindPackage } from "../src/updates/runtimes.ts";
 import { hold } from "../src/updates/holds.ts";
@@ -22,7 +23,7 @@ import {
 } from "../src/updates/versions.ts";
 import { setChannelIn } from "../src/updates/channel.ts";
 import { exe, launcher, script as stand_in } from "./accounts-fakes.ts";
-import { OTHER, SHA_A, SHA_B, feedOf, trusted } from "./release-fakes.ts";
+import { OTHER, SHA_A, SHA_B, feedOf, nextRelease, programBytes, trusted, withDeltas } from "./release-fakes.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
 delete process.env.STILLFAIL_CONFIG;
@@ -78,8 +79,9 @@ async function serve(routes: (path: string, search: string) => Said | Promise<Sa
 /// given), and the installer the station's release carries (the last of what this gives), playing the real one's part
 /// on a temporary data directory: says its steps and what it was told, puts the new BUILD in the release, ends 0. Its
 /// download goes on until `finish` is called (asking the cloud for /download, which answers then); unless `held`, it
-/// goes on at once.
-async function cloudWithRelease(latest: string, build: string, held = false, feed?: object): Promise<[string, Server, string[], () => void, string]> {
+/// goes on at once. Handed an archive (STILLFAIL_ARCHIVE, a delta's), it keeps a copy in <data>/handed and takes it as
+/// the real one does (its directory removed). `files`: more the cloud serves under /releases/.
+async function cloudWithRelease(latest: string, build: string, held = false, feed?: object, files: Record<string, () => Said | Promise<Said>> = {}): Promise<[string, Server, string[], () => void, string]> {
   const asked: string[] = [];
   let finish = () => {};
   const finished = held ? new Promise<void>((r) => (finish = r)) : Promise.resolve();
@@ -92,12 +94,19 @@ echo "### 50.0%"
 printf '%s %s\\n' "$STILLFAIL_CHANNEL" "$STILLFAIL_DATA" > "$STILLFAIL_DATA/installer-saw"
 printf '%s %s %s %s\\n' "$STILLFAIL_ORIGIN" "$STILLFAIL_RELEASE_SHA256" "$STILLFAIL_NODE_SHA256" "$STILLFAIL_INSTALL_LANG" >> "$STILLFAIL_DATA/installer-saw"
 echo ran >> "$STILLFAIL_DATA/installer-ran"
+if [ -n "\${STILLFAIL_ARCHIVE:-}" ]; then
+  case "$STILLFAIL_ARCHIVE" in */stillfail-handed.*/stillfail.tar.gz) ;; *) echo "not where the installer takes one: $STILLFAIL_ARCHIVE" >&2; exit 1 ;; esac
+  cp "$STILLFAIL_ARCHIVE" "$STILLFAIL_DATA/handed"
+  rm -rf "$(dirname "$STILLFAIL_ARCHIVE")"
+fi
 curl -fsS "${origin}/download" > /dev/null
 printf 'handoff\\n' > "$run/update.step"
 printf '${build}\\n' > "$STILLFAIL_DATA/app/BUILD"
 `;
   const [base, server] = await serve(async (path, search) => {
     asked.push(path + search);
+    const file = path.startsWith("/releases/") ? files[path.slice("/releases/".length)] : undefined;
+    if (file) return file();
     if (path === "/releases/station.json") return { body: JSON.stringify(feed ?? feedOf(Number(latest.split(".").at(-1)))) };
     if (path === "/download") return finished.then(() => ({ type: "text/plain", body: "" }));
     return null;
@@ -1013,5 +1022,134 @@ INSTALLER
   test("a command's failure shown as its last lines, without a terminal's escapes and a progress bar's returns", () => {
     const said = "\u001b[0;32m✓\u001b[0m Installed devin\n##   44.4%\r####   95.5%\r#####  100.0%\n\u001b[1A\u001b[2KError: Login canceled\n\u001b[?2004l";
     assert.equal(tail(said, "en"), "✓ Installed devin\n#####  100.0%\nError: Login canceled");
+  });
+});
+
+// One at a time (the tests above run side by side): each points TMPDIR at a directory of its own, and hears the log.
+describe("the station's update by a delta", { skip: WINDOWS && "install.sh is macOS's and Linux's" }, () => {
+  const shInstaller = {};
+  /// A station installed from release 1300 (its files as its archive had them: BUILD, station/main.js, the installer;
+  /// then what the installer put beside them, CHANNEL and the link to its Node), the next release 1310 and the delta
+  /// between them; the cloud serves the feed `feed` makes of them, and the delta at /releases/station/next.delta
+  /// (`body`: what it answers instead). Temporary files in a temporary directory of the test's own (TMPDIR).
+  async function deltaCase(t: { after: (f: () => unknown) => void; signal: AbortSignal }, feed: (r: ReturnType<typeof nextRelease>) => object, body?: (r: ReturnType<typeof nextRelease>) => Said | Promise<Said>) {
+    const dir = temp();
+    const tmp = join(dir, "tmp");
+    mkdirSync(tmp);
+    const before = process.env.TMPDIR;
+    process.env.TMPDIR = tmp;
+    t.after(() => (before === undefined ? delete process.env.TMPDIR : (process.env.TMPDIR = before)));
+    const data = join(dir, "data");
+    let release: ReturnType<typeof nextRelease> | null = null;
+    const [origin, server, asked, , installer] = await cloudWithRelease("0.1.1310", "1310", false, undefined, {
+      "station.json": () => ({ body: JSON.stringify(feed(release!)) }),
+      "station/next.delta": () => (body ? body(release!) : { type: "application/octet-stream", body: release!.delta }),
+    });
+    t.after(() => server.close());
+    const updates = installed(data, "1300", null, { origin: () => origin, env: { PATH: "/usr/bin:/bin" } }, installer);
+    t.after(() => updates.close());
+    mkdirSync(join(data, "app", "station"));
+    writeFileSync(join(data, "app", "station", "main.js"), programBytes(200_000));
+    release = nextRelease(join(dir, "release"), join(data, "app"));
+    writeFileSync(join(data, "app", "CHANNEL"), "stable\n");
+    symlinkSync(join(dir, "node"), join(data, "app", "node"));
+    const lines: Line[] = [];
+    hearLines((l) => void (l.at === "updates" && lines.push(l)));
+    t.after(() => hearLines(null));
+    const run = async () => {
+      await updates.check();
+      await updates.update("station", "zh");
+      await until("ended", () => station(updates).state !== "updating", t.signal);
+      const [saw] = readFileSync(join(data, "installer-saw"), "utf8").trim().split("\n").slice(1);
+      return { told: saw!.split(" ")[1], handed: existsSync(join(data, "handed")) ? readFileSync(join(data, "handed")) : null };
+    };
+    return { data, tmp, origin, asked, updates, lines, release: release!, run };
+  }
+
+  test("with a delta from the build it runs, the station makes the release's raw archive and hands it to the installer", shInstaller, async (t) => {
+    const c = await deltaCase(t, (r) => withDeltas(feedOf(1310, r.build), [r.entry(1290, "station/other.delta"), r.entry(1300)]));
+    const { told, handed } = await c.run();
+    assert.equal(station(c.updates).done, "已更新到 0.1.1310，agent 未中断");
+    // What it made is the tar inside the release's .tar.gz, byte for byte, and the installer checks it by its hash.
+    assert.ok(handed !== null && handed.equals(c.release.raw), "the raw archive handed");
+    assert.equal(told, c.release.build.rawSha256);
+    assert.ok(c.asked.includes("/releases/station/next.delta"), c.asked.join());
+    assert.ok(!c.asked.includes("/releases/station/other.delta"), "only the delta from its own build");
+    assert.ok(c.lines.some((l) => l.message === "the release made from a delta"), c.lines.map((l) => l.message).join());
+    // Nothing left of it but what the installer took.
+    assert.deepEqual(readdirSync(c.tmp), []);
+  });
+
+  test("while it takes the delta, the update is answered as started and shows the download", shInstaller, async (t) => {
+    let send = () => {};
+    const sent = new Promise<void>((r) => (send = r));
+    const c = await deltaCase(t, (r) => withDeltas(feedOf(1310, r.build), [r.entry(1300)]), async (r) => {
+      await sent;
+      return { type: "application/octet-stream", body: r.delta };
+    });
+    await c.updates.check();
+    await c.updates.update("station", "zh");
+    await until("asked for the delta", () => c.asked.includes("/releases/station/next.delta"), t.signal);
+    const line = station(c.updates);
+    assert.equal(line.state, "updating");
+    assert.equal(line.percent, 0);
+    assert.equal(line.progress, tr("zh", "station.updates.downloadingStation"), "the installer's download step, as the pages say it");
+    assert.ok(!existsSync(join(c.data, "installer-ran")), "the installer waits for it");
+    await assert.rejects(c.updates.update("station", "zh"), (e: Error) => e.message === "Station 正在更新");
+    send();
+    await until("ended", () => station(c.updates).state === "idle", t.signal);
+    assert.ok(readFileSync(join(c.data, "handed")).equals(c.release.raw));
+  });
+
+  test("a delta that cannot be used is a line in the log, and the installer downloads the release as without one", shInstaller, async (t) => {
+    const cases: [string, (r: ReturnType<typeof nextRelease>) => object, ((r: ReturnType<typeof nextRelease>) => Said)?, ((data: string) => void)?][] = [
+      // Its bytes broken after it was made, the feed saying their hash: it does not apply.
+      ["a corrupt delta", (r) => {
+        const bad = Buffer.from(r.delta);
+        bad[bad.length - 20] = bad[bad.length - 20]! ^ 0xff;
+        return withDeltas(feedOf(1310, r.build), [r.entry(1300, "station/next.delta", bad)]);
+      }, (r) => {
+        const bad = Buffer.from(r.delta);
+        bad[bad.length - 20] = bad[bad.length - 20]! ^ 0xff;
+        return { type: "application/octet-stream", body: bad };
+      }],
+      ["a delta whose hash is not the feed's", (r) => withDeltas(feedOf(1310, r.build), [{ ...r.entry(1300), sha256: SHA_A }])],
+      ["a delta of another size than the feed says", (r) => withDeltas(feedOf(1310, r.build), [{ ...r.entry(1300), size: r.delta.length - 1 }])],
+      ["a delta not found", (r) => withDeltas(feedOf(1310, r.build), [r.entry(1300, "station/gone.delta")])],
+      // The release installed is not the one the delta is from (a file changed since).
+      ["an installed release that differs", (r) => withDeltas(feedOf(1310, r.build), [r.entry(1300)]), undefined,
+        (data) => writeFileSync(join(data, "app", "station", "main.js"), programBytes(200_000, 2))],
+    ];
+    for (const [name, feed, body, change] of cases) {
+      await t.test(name, async (t) => {
+        const c = await deltaCase(t, feed, body);
+        change?.(c.data);
+        const { told, handed } = await c.run();
+        assert.equal(station(c.updates).done, "已更新到 0.1.1310，agent 未中断", name);
+        assert.equal(handed, null, "nothing handed");
+        assert.equal(told, c.release.build.sha256, "the whole archive's hash");
+        const warned = c.lines.find((l) => l.message === "the delta not used: the installer downloads the whole release");
+        assert.ok(warned && typeof warned.fields?.why === "string", c.lines.map((l) => l.message).join());
+        assert.deepEqual(readdirSync(c.tmp), [], "nothing left of it");
+      });
+    }
+  });
+
+  test("a delta is not tried for another build, nor for a release whose signed words say no raw archive", shInstaller, async (t) => {
+    for (const [name, feed] of [
+      ["from another build", (r: ReturnType<typeof nextRelease>) => withDeltas(feedOf(1310, r.build), [r.entry(1299)])],
+      ["no raw archive signed", (r: ReturnType<typeof nextRelease>) => withDeltas(feedOf(1310, { sha256: r.build.sha256, size: r.build.size }), [r.entry(1300)])],
+      ["not well formed", (r: ReturnType<typeof nextRelease>) => withDeltas(feedOf(1310, r.build), [{ ...r.entry(1300), file: "../station.json" }])],
+      ["no smaller than the archive", (r: ReturnType<typeof nextRelease>) => withDeltas(feedOf(1310, r.build), [{ ...r.entry(1300), size: r.build.size }])],
+    ] as const) {
+      await t.test(name, async (t) => {
+        const c = await deltaCase(t, feed);
+        const { told, handed } = await c.run();
+        assert.equal(handed, null);
+        assert.equal(told, c.release.build.sha256);
+        assert.ok(!c.asked.some((a) => a.endsWith(".delta")), c.asked.join());
+        assert.ok(!c.lines.some((l) => l.message.startsWith("the delta not used")), "nothing to say: none was tried");
+      });
+    }
   });
 });

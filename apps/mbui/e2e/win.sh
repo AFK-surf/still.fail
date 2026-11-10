@@ -276,19 +276,31 @@ check "put away, a notice shown (by the system: $(grep -c '^NOTICE shown by the 
 # (win/mbui/latest.json, scripts/win-feeds.sh); the app, given that key (STILLFAIL_RELEASE_KEYS, as a station and the
 # desktop app take one), finds it, and 关于's 更新到 pressed, downloads it, checks it and runs it as the desktop app's
 # updater ran its installer, quitting; the installer puts it in %LOCALAPPDATA%\Programs and opens it. That one ended,
-# then taken away by its uninstaller.
+# then taken away by its uninstaller. The feed lists a delta from this build (scripts/delta.ts: the files beside the app
+# to the installer's raw form, `--raw`: the same program with its files stored), the raw installer's sha256 and size in
+# the signed words (release-sign.ts --raw) and the feed (`raw`): the app makes the raw installer from the delta and its
+# own files, checks it against the signed words and runs it in place of the one downloaded whole (win_update.h).
 NEXT=$(( $(git -C "$SF" rev-list --count HEAD) + 1 ))
 UPD=$WORK/update
 UP_NAME=stillfail-mbui-$NEXT-x64-win.exe
 PROGRAMS=$(cygpath -u "$LOCALAPPDATA")/Programs/stillfail-mbui
 rm -rf "$UPD" && mkdir -p "$UPD"
+# (the delta: from the build running, its files beside it, as the installed folder's are in a person's; the raw
+# installer it makes, named as the app names it, <name less .exe>.raw.exe)
+FROM=$((NEXT - 1))
+UP_RAW=${UP_NAME%.exe}.raw.exe
+UP_DELTA=$UP_NAME.from-$FROM.delta
 up_key=
 if (cd "$ROOT" && MBUI_BUILD=$NEXT MBUI_SETUP_OUT="$UPD/setup" MBUI_SETUP_NAME=$UP_NAME bash scripts/win.sh setup) > "$OUT/update-seed.log" 2>&1 &&
+  MSYS_NO_PATHCONV=1 "$UPD/setup/$UP_NAME" --raw "$(w "$UPD/$UP_RAW")" >> "$OUT/update-seed.log" 2>&1 &&
+  mkdir -p "$UPD/old" && for f in stillfail.exe stillfail_engine.dll stillfail_shell.dll core.hbc; do cp "$(dirname "$EXE")/$f" "$UPD/old/"; done &&
+  mkdir -p "$SF/dist/releases/win/mbui" && cp "$UPD/setup/$UP_NAME" "$SF/dist/releases/win/" &&
+  (cd "$SF" && node scripts/delta.ts make --old "$(w "$UPD/old")" --new "$(w "$UPD/$UP_RAW")" --out "$(w "$SF/dist/releases/win/$UP_DELTA")") >> "$OUT/update-seed.log" 2>&1 &&
   up_key=$(cd "$SF" && node scripts/release-sign.ts keygen "$(w "$UPD/key.pem")" | cut -d' ' -f1) &&
   (cd "$SF" && env -u CI RELEASE_SIGNING_KEY="$(cat "$UPD/key.pem")" \
-    node scripts/release-sign.ts file "$(w "$UPD/setup/$UP_NAME")" --kind stillfail-desktop-win --build $NEXT) >> "$OUT/update-seed.log" 2>&1 &&
-  mkdir -p "$SF/dist/releases/win/mbui" && cp "$UPD/setup/$UP_NAME" "$SF/dist/releases/win/" &&
-  sh "$SF/scripts/win-feeds.sh" "$UPD/setup/$UP_NAME" "win/$UP_NAME" $NEXT "$UPD/setup/$UP_NAME.sig" "$SF/dist/releases/win/mbui/latest.json"; then
+    node scripts/release-sign.ts file "$(w "$UPD/setup/$UP_NAME")" --kind stillfail-desktop-win --build $NEXT --raw "$(w "$UPD/$UP_RAW")") >> "$OUT/update-seed.log" 2>&1 &&
+  sh "$SF/scripts/win-feeds.sh" "$UPD/setup/$UP_NAME" "win/$UP_NAME" $NEXT "$UPD/setup/$UP_NAME.sig" "$SF/dist/releases/win/mbui/latest.json" &&
+  node "$D/feed-delta.mjs" "$(w "$SF/dist/releases/win/mbui/latest.json")" "$(w "$UPD/$UP_RAW")" $FROM "win/$UP_DELTA" "$(w "$SF/dist/releases/win/$UP_DELTA")" >> "$OUT/update-seed.log" 2>&1; then
   # (the installer's log, in the temporary folder it is given: %TEMP%\stillfail-mbui-setup.log)
   setup_log=$(cygpath -u "$(powershell.exe -NoProfile -Command '[IO.Path]::GetTempPath()' | tr -d '\r')")stillfail-mbui-setup.log
   rm -f "$setup_log"
@@ -304,8 +316,10 @@ else
 fi
 check "the next build offered (found by the core's app.update, signed by the key the app was given)" \
   '[ -n "$up_key" ] && grep -q "update: 0.1.$NEXT ($NEXT) is newer than this build" "$OUT/update.log"'
-check "its installer downloaded from the cloud, checked and run as the desktop app's updater ran its own, the app quitting" \
-  'grep -q "update: .*/releases/win/$UP_NAME: $(wc -c < "$UPD/setup/$UP_NAME" 2>/dev/null) bytes to " "$OUT/update.log" && grep -q "update: .*$UP_NAME run: this one quits" "$OUT/update.log"'
+check "its installer made from the feed's delta and the app's own files, checked against the signed words' raw installer, and run as the desktop app's updater ran its own, the app quitting" \
+  'grep -q "update: .*/releases/win/$UP_NAME: $(wc -c < "$UPD/setup/$UP_NAME" 2>/dev/null) bytes to " "$OUT/update.log" &&
+   grep -q "update: $UP_RAW made from a delta of $(wc -c < "$SF/dist/releases/win/$UP_DELTA" 2>/dev/null) bytes, sha256 $(sha256sum "$UPD/$UP_RAW" 2>/dev/null | cut -d" " -f1) as the signed words say" "$OUT/update.log" &&
+   ! grep -q "update: delta not used" "$OUT/update.log" && grep -q "update: .*$UP_RAW run: this one quits" "$OUT/update.log"'
 up_entry() { reg.exe query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\fail.still.mbui" //v "$1" 2>/dev/null | tr -d '\r' | sed -n "s/^ *$1 *REG_[A-Z_]* *//p"; }
 check "put in %LOCALAPPDATA%\\Programs (its uninstall entry 0.1.$NEXT) and opened from there (${opened:-none})" \
   '[ -f "$PROGRAMS/stillfail.exe" ] && [ "$(up_entry DisplayVersion)" = "0.1.$NEXT" ] && grep -q "stillfail.exe opened" "$OUT/update-setup.log" && case "$opened" in *Programs\\stillfail-mbui\\stillfail.exe*) true ;; *) false ;; esac'

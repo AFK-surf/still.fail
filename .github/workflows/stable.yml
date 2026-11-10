@@ -153,10 +153,14 @@ jobs:
           . "$RUNNER_TEMP/win-compiler.sh"
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release.sh desktop-win
-      - name: Put its files, then its feeds
+      # its files (named by its version: nothing points at them yet) put here; its feeds by desktop-win-feeds, after the
+      # deltas to it, which are not this job's to make (it takes most of its 5 minutes already)
+      - name: Put its files
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: sh scripts/release-put.sh "$RUNNER_TEMP/release"
+        run: sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@v4
+        with: { name: "release-desktop-win-stable", path: "${{ runner.temp }}/release", retention-days: 1 }
       # monoid's (build.monoid.desktop): the same program, linked again with its own resources (its id, name and
       # environment: apps/mbui/scripts/win.sh), nothing compiled again; put by monoid-desktop-win.
       - name: Pack and sign monoid's stable Windows app from the same build
@@ -170,6 +174,27 @@ jobs:
       - uses: actions/upload-artifact@v4
         continue-on-error: true
         with: { name: "monoid-desktop-win-stable", path: "${{ runner.temp }}/monoid", if-no-files-found: error, retention-days: 1 }
+
+  # The stable Windows app's feeds (desktop-win put its files), after the deltas to it from the stable builds before
+  # (scripts/release-deltas.ts, which fetches the installer's raw form back: a few minutes of a Linux runner's, never a
+  # reason to hold the release back).
+  desktop-win-feeds:
+    needs: [plan, desktop-win]
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - uses: actions/download-artifact@v4
+        with: { name: "release-desktop-win-stable", path: "${{ runner.temp }}/release" }
+      - name: Its deltas, then its feeds
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/release-deltas.ts "$RUNNER_TEMP/release" --deadline 200
+          sh scripts/release-put.sh "$RUNNER_TEMP/release"
 
   # monoid's stable apps (apps/mbui's monoid variants on monoid's cloud: build.monoid.android, build.monoid.desktop), of
   # the same reviewed release as still.fail's, made from theirs (nothing compiled again) and put in monoid's bucket in the
@@ -185,11 +210,12 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with: { name: "monoid-android-stable", path: "${{ runner.temp }}/monoid" }
-      - name: Put it in monoid's bucket (its files, then its feed)
+      - name: Put it in monoid's bucket (its files and deltas, then its feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/release-deltas.ts "$RUNNER_TEMP/monoid" --releases https://app.monoid.build/releases --deadline 150
           sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
   # monoid's Mac app: still.fail's stable one (as the desktop job put it) renamed, not built again: the same program,
@@ -230,11 +256,12 @@ jobs:
       - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v4
         with: { name: "monoid-desktop-win-stable", path: "${{ runner.temp }}/monoid" }
-      - name: Put it in monoid's bucket (its files, then its feed)
+      - name: Put it in monoid's bucket (its files and deltas, then its feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.MONOID_CLOUDFLARE_API_TOKEN }}
         run: |
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/release-deltas.ts "$RUNNER_TEMP/monoid" --releases https://app.monoid.build/releases --deadline 150
           sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
   # The app's page for a web built here (plan's web=build: a release branch's commit, never on beta, or a main commit
@@ -345,7 +372,7 @@ jobs:
         run: sh .github/deploy.sh site
 
   done:
-    needs: [plan, android, desktop, desktop-win, web, station, site]
+    needs: [plan, android, desktop, desktop-win, desktop-win-feeds, web, station, site]
     runs-on: [self-hosted, macos-ci]
     timeout-minutes: 5
     permissions:

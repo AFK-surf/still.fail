@@ -43,6 +43,12 @@ import java.security.MessageDigest;
  * build goes in; found missing while away, the app is told (phase allow) and the build waits. How it goes the app
  * reads (`state`, on the GL thread: the phase, how far, what went wrong, the build), told each time it changes
  * (`changed`). What it asked for and the build ready are kept in the app's files: a job of a later run takes them up.
+ *
+ * Where the core names a delta from this build (`delta`, scripts/delta.ts's format), it is tried first, on the same
+ * worker and network rule: downloaded the same resumable way (`<name>.delta.part`, how far against its own size),
+ * checked, made into the package against the installed APK (Delta.apply) and checked against the package's own sha256;
+ * then on as if the package had been downloaded. Anything wrong with it is logged and the whole package downloaded as
+ * before: the person never sees a delta fail. It is kept with what was asked for, so a later run takes the same way.
  */
 final class Updates {
     /** idle | waiting (for a network that is not metered) | downloading | retrying | ready | allow | installing | failed */
@@ -158,11 +164,15 @@ final class Updates {
         d.delete();
     }
 
-    /** What was asked for last: url, sha256, size, name; null none (or the build it names put in place since). */
+    /**
+     * What was asked for last: url, sha256, size, name, delta ("" none: as an earlier build, which kept four lines,
+     * left it); null none (or the build it names put in place since).
+     */
     private static String[] asked(Context c) {
         try {
-            String[] a = new String(Files.readAllBytes(new File(dir(c), "asked").toPath()), StandardCharsets.UTF_8).split("\n");
-            return a.length == 4 ? a : null;
+            String[] a = new String(Files.readAllBytes(new File(dir(c), "asked").toPath()), StandardCharsets.UTF_8).split("\n", -1);
+            if (a.length == 4) return new String[]{a[0], a[1], a[2], a[3], ""};
+            return a.length == 5 ? a : null;
         } catch (IOException e) {
             return null;
         }
@@ -177,16 +187,18 @@ final class Updates {
      * The build at `url` made ready (@hostapi.update_fetch): downloaded now where the network is not metered or the
      * person asked (`now`), else once one that is not comes (a job). One ready, or coming, of that name: nothing more.
      */
-    static synchronized void fetch(String url, String sha256, double size, String name, boolean now) {
+    static synchronized void fetch(String url, String sha256, double size, String name, boolean now, String delta) {
         Context c = app();
         if (c == null) return;
         restore(c);
         name = new File(name).getName();
         if (worker != null && worker.isAlive()) return;
         if (name.equals(file) && (phase.equals("ready") || phase.equals("allow") || phase.equals("installing"))) return;
+        // (JSON on a line of its own: the core's has no line breaks, and one that had would only be a delta not used)
+        String d = delta == null ? "" : delta.replace('\n', ' ');
         try {
             Files.write(new File(dir(c), "asked").toPath(),
-                    (url + "\n" + sha256 + "\n" + (long) size + "\n" + name).getBytes(StandardCharsets.UTF_8));
+                    (url + "\n" + sha256 + "\n" + (long) size + "\n" + name + "\n" + d).getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             Host.log("update: what is asked for not kept: " + e);
         }
@@ -202,20 +214,22 @@ final class Updates {
             changed(1);
             return;
         }
-        start(c, url, sha256, (long) size, name);
+        start(c, url, sha256, (long) size, name, d);
     }
 
     /** The download on a thread of its own: ready, then put in place once the app is out of sight a while. */
-    private static void start(Context c, String url, String sha256, long size, String name) {
+    private static void start(Context c, String url, String sha256, long size, String name, String delta) {
         phase = "downloading";
-        // how far from the first: what an earlier try kept (0 none), not "not known" till the first bytes come
-        long have = new File(dir(c), name + ".part").length();
-        percent = size > 0 ? (int) (Math.min(have, size) * 100 / size) : -1;
+        // how far from the first: what an earlier try kept (0 none), not "not known" till the first bytes come (the
+        // delta's, against its size, where there is one)
+        long deltaSize = deltaSize(delta);
+        long have = new File(dir(c), name + (deltaSize > 0 ? ".delta.part" : ".part")).length(), of = deltaSize > 0 ? deltaSize : size;
+        percent = of > 0 ? (int) (Math.min(have, of) * 100 / of) : -1;
         changed(0);
         worker = new Thread(() -> {
             String result = "ready", why = "";
             try {
-                download(c, url, sha256, size, name);
+                download(c, url, sha256, size, name, delta);
                 Host.log("update: " + name + " ready");
             } catch (Exception e) {
                 result = "failed";
@@ -242,7 +256,7 @@ final class Updates {
             restore(c);
             String[] a = asked(c);
             if (a == null || !phase.equals("waiting") || (worker != null && worker.isAlive())) return;
-            start(c, a[0], a[1], Long.parseLong(a[2]), a[3]);
+            start(c, a[0], a[1], Long.parseLong(a[2]), a[3], a[4]);
             w = worker;
         }
         w.join();
@@ -401,18 +415,96 @@ final class Updates {
         }
     }
 
-    /** The build downloaded whole into `dir` and checked against its sha256. */
-    static File download(Context c, String url, String sha256, long size, String name) throws IOException, InterruptedException {
+    /** The build downloaded whole into `dir` (made from the delta where one is given and works) and checked against its sha256. */
+    static File download(Context c, String url, String sha256, long size, String name, String delta) throws IOException, InterruptedException {
         File dir = dir(c);
         File apk = new File(dir, name);
         File part = new File(dir, name + ".part");
+        File deltaPart = new File(dir, name + ".delta.part");
         File[] old = dir.listFiles();
-        // (another build's, whole or in part, let go; what is asked for kept)
-        if (old != null) for (File f : old) if (!f.equals(part) && !f.equals(apk) && !f.getName().equals("asked")) f.delete();
+        // (another build's, whole or in part, let go; what is asked for kept, and this one's delta coming)
+        if (old != null) for (File f : old) if (!f.equals(part) && !f.equals(apk) && !f.equals(deltaPart) && !f.getName().equals("asked")) f.delete();
         if (apk.exists()) {
-            if (sha256(apk).equalsIgnoreCase(sha256)) return apk;
+            if (sha256(apk).equalsIgnoreCase(sha256)) {
+                deltaPart.delete();
+                return apk;
+            }
             apk.delete();
         }
+        if (delta != null && !delta.isEmpty()) {
+            try {
+                return fromDelta(c, url, sha256, size, name, delta);
+            } catch (InterruptedException e) {
+                throw e;
+            } catch (Exception e) {
+                Host.log("update: the delta for " + name + " not used, the whole package instead: "
+                        + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+                deltaPart.delete();
+                new File(dir, name + ".made").delete();
+                phase = "downloading";
+                percent = size > 0 ? (int) (Math.min(part.length(), size) * 100 / size) : -1;
+                changed(0);
+            }
+        }
+        whole(url, part, size);
+        String got = sha256(part);
+        if (!got.equalsIgnoreCase(sha256)) {
+            part.delete();
+            throw new IOException("incomplete");
+        }
+        if (!part.renameTo(apk)) throw new IOException("incomplete");
+        Host.log("update: " + name + " downloaded (" + apk.length() + " bytes), sha256 " + got + " as the feed says");
+        return apk;
+    }
+
+    /** The delta's size from its JSON; 0 none (or not readable: the whole package's way). */
+    private static long deltaSize(String delta) {
+        if (delta == null || delta.isEmpty()) return 0;
+        try {
+            return new org.json.JSONObject(delta).optLong("size", 0);
+        } catch (org.json.JSONException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * The build made from the delta (`delta`: {url, sha256, size, makes_sha256, makes_size}) against the installed APK:
+     * downloaded into `<name>.delta.part`, checked, applied into `<name>.made`, that checked against the package's
+     * sha256 and put in its place. Throws for anything wrong; the caller lets it go and downloads the package.
+     */
+    private static File fromDelta(Context c, String url, String sha256, long size, String name, String delta) throws Exception {
+        org.json.JSONObject d = new org.json.JSONObject(delta);
+        // (on Android the package the delta makes is the APK itself: the feed must say the same of both)
+        if (!d.optString("makes_sha256").equalsIgnoreCase(sha256) || (size > 0 && d.optLong("makes_size", -1) != size)) {
+            throw new IOException("it makes another package than the one asked for");
+        }
+        long dsize = d.getLong("size");
+        String dsha = d.getString("sha256");
+        if (dsize <= 0 || dsha.isEmpty()) throw new IOException("its size or sha256 is missing");
+        // (where the feed names it beside the package, relative to it)
+        String durl = new URL(new URL(url), d.getString("url")).toString();
+        File dir = dir(c);
+        File part = new File(dir, name + ".delta.part");
+        File made = new File(dir, name + ".made");
+        File apk = new File(dir, name);
+        whole(durl, part, dsize);
+        if (part.length() != dsize || !sha256(part).equalsIgnoreCase(dsha)) {
+            part.delete();
+            throw new IOException("the delta downloaded is not the one the feed says");
+        }
+        long t0 = System.currentTimeMillis();
+        Delta.apply(new File(c.getApplicationInfo().sourceDir), part, made, dir);
+        String got = sha256(made);
+        if (!got.equalsIgnoreCase(sha256)) throw new IOException("the package it made is not the feed's (sha256 " + got + ")");
+        if (!made.renameTo(apk)) throw new IOException("the package it made could not be kept");
+        part.delete();
+        Host.log("update: " + name + " made from a delta of " + dsize + " bytes (in " + (System.currentTimeMillis() - t0)
+                + " ms), sha256 " + got + " as the feed says");
+        return apk;
+    }
+
+    /** `url` downloaded into `part` till it is `size` bytes (or whole, size unknown), picking up where it was left. */
+    private static void whole(String url, File part, long size) throws IOException, InterruptedException {
         if (size > 0 && part.length() > size) part.delete();
         int failures = 0;
         while (size <= 0 || part.length() < size) {
@@ -429,14 +521,6 @@ final class Updates {
                 changed(0);
             }
         }
-        String got = sha256(part);
-        if (!got.equalsIgnoreCase(sha256)) {
-            part.delete();
-            throw new IOException("incomplete");
-        }
-        if (!part.renameTo(apk)) throw new IOException("incomplete");
-        Host.log("update: " + name + " downloaded (" + apk.length() + " bytes), sha256 " + got + " as the feed says");
-        return apk;
     }
 
     /** One try: appends to `part` from where it ends. Whether the file is whole. */

@@ -42,9 +42,9 @@ impl @hostapi.Host for FakeHost with exit(self, code) {
 }
 
 ///|
-/// An update asked for: kept as asked (Tester::update_asked).
-impl @hostapi.Host for FakeHost with update_fetch(_, _, _, _, name, now) {
-  update_asked.push("fetch \{name} \{now}")
+/// An update asked for: kept as asked (Tester::update_asked), with the delta it was given where there was one.
+impl @hostapi.Host for FakeHost with update_fetch(_, _, _, _, name, now, delta) {
+  update_asked.push(if delta == "" { "fetch \{name} \{now}" } else { "fetch \{name} \{now} delta \{delta}" })
 }
 
 ///|
