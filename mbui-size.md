@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [5e6176182](https://github.com/AFK-surf/still.fail/commit/5e61761821eb6bb4a614aea56d73683aa4ef5e98) mbui: window tree words may be cut by their own sa | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 93.8 | 187.35 |
 | [c96bf86e3](https://github.com/AFK-surf/still.fail/commit/c96bf86e3fbeaa57e946050230a3f3475ddabe3a) mbui: a show's node called back as it closes goes  | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 94.26 | 152.04 |
 | [0c0ba9fb9](https://github.com/AFK-surf/still.fail/commit/0c0ba9fb9c1a585b4974a5e5438213727376188d) core: the device that began a person's lock says i | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 93.65 | 173.63 |
 | [5d8ebf2e2](https://github.com/AFK-surf/still.fail/commit/5d8ebf2e2ca7c99a6d20c6ea990e6350f0d57b29) core test: the devices topic placed among those no | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 93.95 | 171.54 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [9dfe391d0](https://github.com/AFK-surf/still.fail/commit/9dfe391d0ef9370b9e5d14815b83dba9b1c156d5) station, core, app: a model's own week under a Cla | 1.74 | 2.33 | 9.67 | 28.23 | 33.81 | 25.21 | 46.23 | 93.26 | 180.32 |
 | [5d36a3d7a](https://github.com/AFK-surf/still.fail/commit/5d36a3d7a8ae8ab74ae6fa48c091fc8b9dee731c) core: a device off the lock of their own its perso | 1.74 | 2.32 | 9.66 | 28.21 | 33.73 | 25.19 | 46.16 | 93.98 | 131.71 |
 | [e364d101c](https://github.com/AFK-surf/still.fail/commit/e364d101cac653bec49d48a8f705d42504d4d21c) app, core: the chats' list asks the changelog for  | 1.74 | 2.32 | 9.66 | 28.21 | 33.72 | 25.19 | 46.16 | 93.41 | 168.39 |
-| [e553b0a6e](https://github.com/AFK-surf/still.fail/commit/e553b0a6e7638c7b0db377f0a9bbe623948c9e53) mbui: a node drawn smaller than a press's room is  | 1.74 | 2.32 | 9.66 | 28.21 | 33.72 | 25.19 | 46.16 | 92.6 | 133.06 |
