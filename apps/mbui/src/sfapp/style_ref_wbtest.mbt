@@ -147,19 +147,21 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
       out.write_string("me-reading" + dark + " " + name + " " + fnv(reading) + "\n")
     }
   }
+  // (the wide ones, 2026-11-10: 共享调试 a row of the settings' sidebar on a computer too, 关于 under the window's
+  // foot for it; the narrow ones, a phone's, had the row)
   inspect(out.to_string(), content=(
     #|settings narrow 77022:ba68b727
     #|station narrow 95281:75936fb1
     #|me-reading narrow 23860:9496c484
-    #|settings wide 172993:24ac3018
-    #|station wide 240131:fb326c7c
-    #|me-reading wide 167639:a390393c
+    #|settings wide 169493:3c3cce58
+    #|station wide 236631:ff65d6db
+    #|me-reading wide 164139:26e7b1d0
     #|settings-dark narrow 77290:42efbe58
     #|station-dark narrow 95149:7bceef30
     #|me-reading-dark narrow 23998:61f49844
-    #|settings-dark wide 172913:55a02a3d
-    #|station-dark wide 239797:5a9c18f0
-    #|me-reading-dark wide 167635:20849138
+    #|settings-dark wide 169413:e977ddb1
+    #|station-dark wide 236297:8fcec277
+    #|me-reading-dark wide 164135:bcf613c0
     #|
 
 
