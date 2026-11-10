@@ -156,6 +156,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - What the app shows is tested in the Tester (`src/sfapp`, `src/sfreplay` replaying recorded core tapes): walk to it,
   say the moment, assert, as mbui's rules say. `detlint.json` (run with `mbui/scripts/detlint`) counts the waits left
   and only lets them fall.
+- What the host gives the app as it runs (its window and scale, the system and its settings, its time zone) is kept in
+  a recorded trace (`{"settings":…}`, mbui's `@ui.trace_settings`) and given back by its replay, never a default in its
+  place: a trace without it is refused (`Flow::start`). A recording is made in UTC (`e2e/run.sh`). Traces kept before
+  it say `"from":"replay"`, what their replays had always used (the coordinator of the migration, 2026-11-10).
 
 ## Where the tests run (the user, 2026-11-08)
 

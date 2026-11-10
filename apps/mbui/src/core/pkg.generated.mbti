@@ -172,6 +172,7 @@ pub fn Replay::pace(Self, Pace, strict? : Bool) -> Unit
 pub fn Replay::parse(String) -> Self
 pub fn Replay::sent_bytes(Self, String, String, String) -> Bytes?
 pub fn Replay::sent_bytes_from(Self, String, String, String) -> Bytes?
+pub fn Replay::settings(Self) -> @json.Json?
 pub fn Replay::shuffle(Self, UInt32) -> Unit
 pub fn Replay::skip(Self, String) -> Unit
 pub fn Replay::skip_where(Self, (String, @json.Json) -> Bool) -> Unit

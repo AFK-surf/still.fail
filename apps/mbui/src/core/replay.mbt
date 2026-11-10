@@ -78,6 +78,10 @@ pub struct Replay {
   priv run_text : Array[String]
   /// this machine's station as the run's host said it (its trace's `{"host":{"localStation":…}}`: src/stillfail's CORETRACE host)
   priv run_local : String
+  /// what the run's host gave its frames as the run began (its trace's first `{"settings":…}`: mbui's
+  /// @ui.trace_settings, src/stillfail's CORETRACE settings); those after it are given again as the host's lines are
+  /// (Replay::host), at their place
+  priv run_settings : Json?
   /// where what the run's host said of its views goes (Replay::host)
   priv mut host_said : ((String) -> Unit)?
 }
@@ -122,6 +126,7 @@ pub fn Replay::parse(log : String) -> Replay {
   let run_env : Array[(String, String)] = []
   let run_text : Array[String] = []
   let run_local : Ref[String] = Ref("")
+  let run_settings : Ref[Json?] = Ref(None)
   for v in log.split("\n") {
     let line = v.to_owned()
     let start = match line.find("CORETRACE ") {
@@ -169,6 +174,8 @@ pub fn Replay::parse(log : String) -> Replay {
             Some(Object(_) as v) => run_local.val = v.stringify()
             _ => ()
           }
+        } else if m.get("settings") is Some(Object(_)) && run_settings.val is None {
+          run_settings.val = Some(j)
         } else if m.get("textrec") is Some(rec) {
           run_text.push(rec.stringify())
         } else if m.contains("view") ||
@@ -177,6 +184,7 @@ pub fn Replay::parse(log : String) -> Replay {
           m.contains("site") ||
           m.contains("sitebody") ||
           m.contains("sitestate") ||
+          m.contains("settings") ||
           m.contains("read") {
           let (wall, has_wall) = match m.get("w") {
             Some(Number(d, ..)) => (d, true)
@@ -266,6 +274,7 @@ pub fn Replay::parse(log : String) -> Replay {
     run_env,
     run_text,
     run_local: run_local.val,
+    run_settings: run_settings.val,
   }
   r.advance()
   r
@@ -1384,6 +1393,13 @@ pub fn Replay::first_happened(self : Replay) -> (Double, Double)? {
 /// What the run's app was started with, as its trace keeps it (`{"env":…}`): for a replay's to be started the same.
 pub fn Replay::env(self : Replay) -> Array[(String, String)] {
   self.run_env
+}
+
+///|
+/// What the run's host gave its frames as it began (`{"settings":{…}}`: mbui's @ui.trace_settings), for a replay's
+/// Tester to be made by it; None where its trace does not say (Flow::start refuses it).
+pub fn Replay::settings(self : Replay) -> Json? {
+  self.run_settings
 }
 
 ///|

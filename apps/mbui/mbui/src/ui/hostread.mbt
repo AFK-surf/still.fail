@@ -307,6 +307,13 @@ pub fn Tester::set_font_scale(self : Tester, scale : Double) -> Unit {
 }
 
 ///|
+/// How far its local time is ahead of UTC, in minutes, from the next frame on (a run's, as its trace says it).
+pub fn Tester::set_utc_offset(self : Tester, minutes : Int) -> Unit {
+  self.fake.utc_offset = minutes
+  self.fake.wants = true
+}
+
+///|
 /// How much lower than centred on the app's top row's first 44 the app last moved the window's buttons, and over how
 /// many ms (@hostapi.window_buttons_down).
 pub fn Tester::window_buttons_down(self : Tester) -> (Double, Double) {
