@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [e553b0a6e](https://github.com/AFK-surf/still.fail/commit/e553b0a6e7638c7b0db377f0a9bbe623948c9e53) mbui: a node drawn smaller than a press's room is  | 1.74 | 2.32 | 9.66 | 28.21 | 33.72 | 25.19 | 46.16 | 92.6 | 133.06 |
 | [28376c907](https://github.com/AFK-surf/still.fail/commit/28376c9071e24106660aea7233f0222d1f7340d2) cloud: the memberships test waits for its lock.get | 1.74 | 2.32 | 9.65 | 28.2 | 33.7 | 25.18 | 46.15 | 93.52 | 139.07 |
 | [a455a9c49](https://github.com/AFK-surf/still.fail/commit/a455a9c49d7c83da4700bff1436314eccb5e3745) cloud: signing in and a client's spans use up none | 1.74 | 2.32 | 9.65 | 28.2 | 33.68 | 25.18 | 46.13 | 93.55 | 168.29 |
 | [6f1305d96](https://github.com/AFK-surf/still.fail/commit/6f1305d9683c0b281d370ec470ba9b81cee6cf09) cloud: devices' and stations' sockets on their own | 1.74 | 2.32 | 9.65 | 28.2 | 33.68 | 25.18 | 46.13 | 93.28 | 144.49 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [097da8829](https://github.com/AFK-surf/still.fail/commit/097da88292160fb6ac0810b7bcda8ee79b0bb4be) mbui: a page's list made by an anchor, what shows  | 1.73 | 2.31 | 9.6 | 28.11 | 33.44 | 25.1 | 45.88 | 93 | 129.95 |
 | [f1d7ef363](https://github.com/AFK-surf/still.fail/commit/f1d7ef363367cb368666c8b785e2e123f8b1a7b0) mbui: two presses in a row are the window's tree's | 1.73 | 2.3 | 9.58 | 28.1 | 33.42 | 25.1 | 45.86 | 93.32 | 171.76 |
 | [0490574ec](https://github.com/AFK-surf/still.fail/commit/0490574ece26e7de539d2ea290ab95aa6ccb042c) app: what is worked out of a topic kept by the sou | 1.73 | 2.3 | 9.58 | 28.09 | 33.42 | 25.1 | 45.86 | 92.78 | 139.51 |
-| [048c87d3f](https://github.com/AFK-surf/still.fail/commit/048c87d3f25c4fcfe3db3c3b78e335b2b19dd61a) A station gone silent is not waited for again unti | 1.73 | 2.3 | 9.58 | 28.09 | 33.39 | 25.09 | 45.86 | 93.73 | 179.8 |
