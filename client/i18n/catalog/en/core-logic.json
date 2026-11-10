@@ -520,6 +520,7 @@
   "core-logic.looks.offline.station": "“{name}” is offline. Showing previously loaded content; messages you send are delivered when it is back.",
   "core-logic.looks.offline.network": "No network connection. Showing previously loaded content; messages you send go to “{name}” once connected.",
   "core-logic.looks.offline.unreached": "Can't reach “{name}” right now. Showing previously loaded content; messages you send are delivered once it is reached.",
+  "core-logic.looks.offline.fill.dialing": "Reaching your other devices…",
   "core-logic.looks.offline.fill.asking": "Catching up from {device}…",
   "core-logic.looks.offline.fill.from": "Caught up some content from {device}; it may not be the latest.",
   "core-logic.looks.offline.fill.upTo": "Caught up to {time} from {device}; it may not be the latest.",

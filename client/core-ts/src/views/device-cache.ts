@@ -1,19 +1,13 @@
-// A station down: what the person's other devices hold of it, read from them, face to face (iroh, CACHE_ALPN), with no
-// cloud between them and nothing kept beyond what a device keeps anyway. Each device holds what it read of every station
-// (docs/core-db.md); this is how one that was away, its station gone meanwhile, gets the chats and messages it missed.
+// A station down: the chats and messages the person's other devices hold of it, read from them face to face (iroh,
+// CACHE_ALPN), nothing kept beyond what a device keeps anyway, nothing through the cloud. Only in a workspace with a lock:
+// its chain, not the cloud, says which devices are whose (`allowed`: who is answered, and why each condition).
 //
-// Only in a workspace with a lock (docs/workspace-lock.md), whose chain says which devices are whose, with no word of the
-// cloud's. A device asked answers only: a device the lock names, live, as the same person's as this device's account in
-// that workspace; with a member credential of that workspace for that very endpoint; whose login session still stands
-// (the credential's `sid` among the account's sessions, as still.fail cloud told them last). Otherwise it says nothing.
-//
-// Read only, and what comes is the same rows as the station's: entries are numbered and never change, so the station
-// coming back only goes on from them; its lists read then replace what a device said. Chats and messages alone: an agent's
-// transcript and files stay on the station.
+// Read only; what comes is the station's own rows, and entries never change, so the station back goes on from them and
+// its lists then replace what a device said. An agent's transcript and files stay on the station.
 //
 // The wire, a line of JSON each way at a time on one stream: `hello {ws, credential}` → `ok` | `no`; `list {station}` →
-// `{rows, threads}`; `entries {station, thread, after, limit}` → `{entries, last}`.
-import { Effect } from "effect";
+// `{rows, threads}`; `entries {station, thread, after, limit}` → `{entries, last}`, the next `limit` held above `after`.
+import { Deferred, Effect, Semaphore } from "effect";
 import type { Inner } from "../core.ts";
 import { hooks } from "../core/execute.ts";
 import { CoreError } from "../error.ts";
@@ -46,13 +40,17 @@ export const FILL_OPENED_AGAIN_MS = 30_000;
 /// What came of asking, kept with what came (`deviceFill`, by the station's address) until the station is back: `filled`,
 /// from which device and as far as when; `none`, those reached have nothing newer; `unreached`, none was reached.
 export type FillStatus = { state: "filled"; from: string; upTo: number | null } | { state: "none" } | { state: "unreached" };
-/// The device being asked now, by station: not kept.
-const asking = new WeakMap<Data, Map<string, string>>();
+/// Those being asked now, by station: the device being read from, or null while none has answered yet (once one has,
+/// what came is said meanwhile). Not kept.
+const asking = new WeakMap<Data, Map<string, string | null>>();
 
 /// What the line over a chat's composer adds while its station is down.
 export function fillNote(data: Data, station: string, now: number, offsetMin: number): string | null {
-  const device = asking.get(data)?.get(station);
-  if (device !== undefined) return t("core-logic.looks.offline.fill.asking", { device });
+  const being = asking.get(data);
+  if (being?.has(station)) {
+    const device = being.get(station);
+    return device == null ? t("core-logic.looks.offline.fill.dialing") : t("core-logic.looks.offline.fill.asking", { device });
+  }
   const status = data.record("deviceFill", station) as FillStatus | undefined;
   switch (status?.state) {
     case "filled":
@@ -105,8 +103,13 @@ export function serveCache(inner: Inner, peer: string, d: Duplex): Effect.Effect
         const after = u64(get(asked, "after"));
         if (thread === null || after === null) return yield* d.send({ t: "no" });
         const limit = Math.min(u64(get(asked, "limit")) ?? PAGE, PAGE);
-        const found = inner.data.logRange("entry", station, String(thread), after + 1, after + limit);
-        yield* d.send({ entries: [...found.keys()].sort((a, b) => a - b).map((n) => found.get(n)), last: inner.data.threadLast(station, thread) });
+        // The next `limit` it holds above `after`, whatever their numbers: a hole in what it holds ends no page.
+        const held = inner.data.logNumbers("entry", station, String(thread));
+        let i = 0;
+        while (i < held.length && held[i]! <= after) i++;
+        const next = held.slice(i, i + limit);
+        const found = next.length === 0 ? new Map<number, unknown>() : inner.data.logRange("entry", station, String(thread), next[0]!, next[next.length - 1]!);
+        yield* d.send({ entries: next.flatMap((n) => (found.has(n) ? [found.get(n)] : [])), last: inner.data.threadLast(station, thread) });
       } else return yield* d.send({ t: "no" });
     }
   });
@@ -133,11 +136,15 @@ export function served(inner: Inner, connection: IrohConnection): void {
 
 // ── the device that asks ──
 
-/// Whether a station is taken for down here: its link found it so, or still.fail cloud says it is not online.
+/// Whether a station is taken for down here: its link found it so, or still.fail cloud says it is not online and this
+/// device's link is not up (one up, as on the station's LAN while its internet is gone, is believed over the cloud).
 function isDown(inner: Inner, ws: string, station: string): boolean {
+  const link = inner.stations.link(station)?.state;
+  if (down(link)) return true;
+  if (get(link, "state") === "online") return false;
   const id = station.slice(ws.length + 1);
   const listed = arr(get(inner.data.shared({ topic: "workspace", workspace: ws }), "stations")).find((s) => get(s, "id") === id);
-  return get(listed, "online") === false || down(inner.stations.link(station)?.state);
+  return get(listed, "online") === false;
 }
 
 /// What a device holds of a station, brought here over `d` (hello answered), all of it: page after page until it has no
@@ -199,12 +206,13 @@ export function fillOver(inner: Inner, station: string, d: Duplex, going: () => 
   });
 }
 
-/// A station's other holders asked, one after another, each for all it has: each may have more than the last. What came
-/// of it kept, a later try that found nothing newer leaving what an earlier one brought said.
+/// A station's other holders dialled together, each given FILL_DIAL_MS to say it answers; those that do read from one at a
+/// time (`fillOver` compares with what is held), in the order they answered, each for all it has: each may have more
+/// than the last. What came of it kept, a later try that found nothing newer leaving what an earlier one brought said.
 function fill(inner: Inner, ws: string, sub: string, station: string): Effect.Effect<void, CoreError> {
   return Effect.gen(function* () {
     const h = held(inner, ws);
-    if (!h?.head) return;
+    if (!h?.head || !isDown(inner, ws, station)) return;
     const now = Math.floor(inner.host.nowMs() / 1000);
     const mesh = yield* inner.mesh();
     const me = mesh.deviceId();
@@ -216,43 +224,81 @@ function fill(inner: Inner, ws: string, sub: string, station: string): Effect.Ef
     const told = () => inner.store.invalidateAll((topic) => topic.topic === "chat" && topic.station === station);
     let shown = asking.get(inner.data);
     if (!shown) asking.set(inner.data, (shown = new Map()));
+    const turn = Semaphore.makeUnsafe(1);
     let answered = false;
     let from: string | null = null;
     let upTo: number | null = null;
-    yield* Effect.ensuring(
-      Effect.gen(function* () {
-        for (const other of others) {
-          if (!isDown(inner, ws, station)) return;
-          shown.set(station, nameOf(other));
-          told();
-          yield* Effect.ignore(
+    // One device: reached and its `ok` heard within FILL_DIAL_MS, then read from in its turn. Its connection closed
+    // however it ends, one the host hands over after this has ended included.
+    const one = (other: { id: string; label?: unknown }) =>
+      Effect.suspend(() => {
+        let ended = false;
+        let connection: IrohConnection | null = null;
+        const close = () => {
+          ended = true;
+          connection?.close(0, "done");
+          connection = null;
+        };
+        const reach = Effect.gen(function* () {
+          const dialled = Deferred.makeUnsafe<IrohConnection, CoreError>();
+          inner.runner.fork(
             Effect.gen(function* () {
-              const reached = yield* Effect.timeout(
-                Effect.gen(function* () {
-                  const connection = yield* Effect.mapError(mesh.endpoint().connect({ id: other.id, relays }, CACHE_ALPN, []), (e) => CoreError.plainly("device cache", e));
-                  const stream = yield* Effect.mapError(connection.openBi(), (e) => CoreError.plainly("device cache", e));
-                  const d = streamDuplex(stream, () => connection.close(0, "done"));
-                  yield* d.send({ t: "hello", ws, credential });
-                  return { d, ok: get(yield* d.next(), "t") === "ok" };
-                }),
-                FILL_DIAL_MS,
-              );
-              if (!reached.ok) return reached.d.close();
-              answered = true;
-              const came = yield* Effect.ensuring(fillOver(inner, station, reached.d, () => isDown(inner, ws, station)), Effect.sync(() => reached.d.close()));
-              if (came.brought) {
-                from = nameOf(other);
-                if (came.upTo !== null && (upTo === null || came.upTo > upTo)) upTo = came.upTo;
+              const r = yield* Effect.result(mesh.endpoint().connect({ id: other.id, relays }, CACHE_ALPN, []));
+              if (r._tag === "Success") {
+                if (ended) return r.success.close(0, "done");
+                connection = r.success;
               }
+              Deferred.doneUnsafe(dialled, r._tag === "Success" ? Effect.succeed(r.success) : Effect.fail(CoreError.plainly("device cache", r.failure)));
             }),
           );
-        }
-      }),
+          const c = yield* Deferred.await(dialled);
+          const stream = yield* Effect.mapError(c.openBi(), (e) => CoreError.plainly("device cache", e));
+          const d = streamDuplex(stream, close);
+          yield* d.send({ t: "hello", ws, credential });
+          return get(yield* d.next(), "t") === "ok" ? d : null;
+        });
+        return Effect.ensuring(
+          Effect.gen(function* () {
+            const d = yield* Effect.timeout(reach, FILL_DIAL_MS);
+            if (d === null) return;
+            answered = true;
+            yield* turn.withPermits(1)(
+              Effect.gen(function* () {
+                if (!isDown(inner, ws, station)) return;
+                shown.set(station, nameOf(other));
+                told();
+                const came = yield* Effect.ensuring(
+                  fillOver(inner, station, d, () => isDown(inner, ws, station)),
+                  Effect.sync(() => {
+                    shown.delete(station);
+                    told();
+                  }),
+                );
+                if (came.brought) {
+                  from = nameOf(other);
+                  if (came.upTo !== null && (upTo === null || came.upTo > upTo)) upTo = came.upTo;
+                  // Said at once, not once those not reached yet are given up on.
+                  keep();
+                  told();
+                }
+              }),
+            );
+          }),
+          Effect.sync(close),
+        );
+      });
+    const keep = () => {
+      const was = inner.data.record("deviceFill", station) as FillStatus | undefined;
+      if (from !== null) inner.data.put("deviceFill", station, { state: "filled", from, upTo: upTo ?? (was?.state === "filled" ? was.upTo : null) } satisfies FillStatus);
+      else if (was?.state !== "filled" && isDown(inner, ws, station)) inner.data.put("deviceFill", station, { state: answered ? "none" : "unreached" } satisfies FillStatus);
+    };
+    shown.set(station, null);
+    told();
+    yield* Effect.ensuring(
+      Effect.forEach(others, (other) => Effect.ignore(one(other)), { concurrency: "unbounded", discard: true }),
       Effect.sync(() => {
         shown.delete(station);
-        const was = inner.data.record("deviceFill", station) as FillStatus | undefined;
-        if (from !== null) inner.data.put("deviceFill", station, { state: "filled", from, upTo: upTo ?? (was?.state === "filled" ? was.upTo : null) } satisfies FillStatus);
-        else if (was?.state !== "filled" && isDown(inner, ws, station)) inner.data.put("deviceFill", station, { state: answered ? "none" : "unreached" } satisfies FillStatus);
+        keep();
         told();
       }),
     );
