@@ -164,7 +164,7 @@ for t in $targets; do
     # core/bound-devices-sign 42720203578, 2026-11-10)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4 src/sfapp/preview_tree_wbtest.mbt:2
-      src/sfapp/words_large_wbtest.mbt:1)
+      src/sfapp/words_large_wbtest.mbt:2)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -280,7 +280,9 @@ for t in $targets; do
       # at every rate: dealt with the pages by name it was the fourth's at 60 a second, one of its last files to start,
       # 51-59 s of its 214-262, 2026-11-10. At 24 and at 7 on the fourth, which has a runner for each: the second runs
       # both in turn, 138 s and 117 s of pages beside its four sweeps, 267 s of its 5 minutes, main 62fed392 42751653901)
-      "src/sfapp/words_large_wbtest.mbt  ") case "${MBUI_TEST_FPS:-}" in 24 | 7) echo 4 ;; *) echo 2 ;; esac ;;
+      # (its two, the app's two languages, a run each: in one at 120 a second it was 173 s of the second's part 2/2, 257 s
+      # of its 5 minutes on main caa9c272, 42759467421, 2026-11-10; at 120 APP_PART gives each part one)
+      "src/sfapp/words_large_wbtest.mbt "*) case "${MBUI_TEST_FPS:-}" in 24 | 7) echo 4 ;; *) echo 2 ;; esac ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt --index 8-"*) echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
       # (preview_tree's two on the fourth, the one with the most programs: at 120 a second APP_PART gives each of its
