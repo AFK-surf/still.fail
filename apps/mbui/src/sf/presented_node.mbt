@@ -204,6 +204,8 @@ pub fn presented_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
               presented_said.get() |> ignore
               p.taken_by != 0
             },
+            // (dimming what is under it only where no sheet under it does, the host's sheets among them: scrim_owner)
+            dims=fn() { scrim_owner(true) == serial },
           )
         Panel(x) if x.stage =>
           stage_node(
