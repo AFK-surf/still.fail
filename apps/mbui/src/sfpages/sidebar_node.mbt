@@ -267,6 +267,8 @@ fn chats_pane_node(
   v.scrolls_window(
     scroll,
     keys,
+    // (its rows' coming and going its own: a row closes where it was as it goes, ListMotion's)
+    own_ways=true,
     est=@signals.untracked(fn() { @sf.theme().chat_list.row_h }),
     bar=@ui.tree_scroll_bar(),
     bar_clear=fn() { ((frame.top)(), (frame.foot)()) },

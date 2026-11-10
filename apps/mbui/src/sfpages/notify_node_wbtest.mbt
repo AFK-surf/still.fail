@@ -229,7 +229,8 @@ test "通知 made once, its settings read the first time: their cards in their b
     assert_true(t.find(@sf.t("web-pages.notifications.ways.title")) is None, msg=at)
     assert_true(t.find(@sf.t("web-pages.notifications.kinds.wait")) is None, msg=at)
     notify.set(kept.val)
-    t.draw()
+    // (its cards in their bones' place on their ways: looked at once they have made them)
+    t.run_for(@ui.move_most_ms)
     assert_true(t.find(@sf.t("web-pages.notifications.ways.title")) is Some(_), msg=at)
     assert_true(t.find(@sf.t("web-pages.notifications.kinds.wait")) is Some(_), msg=at)
   }

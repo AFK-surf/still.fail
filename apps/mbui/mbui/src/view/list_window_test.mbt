@@ -18,6 +18,7 @@ fn window_case(
   place? : @view.ListPlace[Int],
   near_foot? : (Double, () -> Bool, () -> Unit),
   tucks? : Int,
+  own_ways? : Bool = false,
 ) -> WindowCase {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal(Array::makei(10, fn(i) { i }), same=fn(a, b) { a == b })
@@ -37,7 +38,7 @@ fn window_case(
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
-      o.scrolls_window(scroll, fn() { keys.get() }, est=80.0, holds~, follows~, place?, near_foot?, fn(b, k) {
+      o.scrolls_window(scroll, fn() { keys.get() }, est=80.0, holds~, follows~, place?, near_foot?, own_ways~, fn(b, k) {
         made.push(k)
         if tucks == Some(k) {
           scroll.tucks(b, fn() { 0.0 })
@@ -143,7 +144,8 @@ test "scrolls_window: a block come under a head that does not hold what shows: w
   let more = [0, 100]
   more.append(Array::makei(9, fn(i) { i + 1 }))
   k.keys.set(more)
-  k.tree.frame(390.0, 844.0) |> ignore
+  // (once it has made its way in: View::scrolls_window's ways)
+  k.settled()
   let (_, y1_now, _, _) = k.live[1].rect()
   // (block 100 laid out 40 over block 1: the column moved down by as much, the head gone up out of sight with it)
   assert_eq((k.scroll.at(k.tree), k.shown(), y1_now), (40.0, [1, 2, 100], y1))
@@ -171,7 +173,7 @@ test "scrolls_window: following its foot, scrolled up to its top, blocks come ov
   let more = [-5, -4, -3, -2, -1]
   more.append(Array::makei(10, fn(i) { i }))
   k.keys.set(more)
-  k.tree.frame(390.0, 844.0) |> ignore
+  k.settled()
   let (_, y0_now, _, _) = k.live[0].rect()
   assert_eq((k.scroll.at(k.tree), k.shown(), y0_now), (400.0, [0, 1, 2], y0))
 }
@@ -233,7 +235,7 @@ test "scrolls_window near_foot: a page more come in as it is asked (a source tha
 test "Scroll::tucks: put as the block is first laid out so its foot is at the top, its foot keeping the room to go there with fewer than it is tall" {
   let c = window_case(tucks=1)
   c.keys.set([0, 1])
-  c.tree.frame(390.0, 844.0) |> ignore
+  c.settled()
   // (two of 40 in 100: the second's foot 80 down, room kept under them to go there)
   assert_eq(c.scroll.at(c.tree), 80.0)
   assert_eq(c.scroll.most(), 80.0)
@@ -342,16 +344,230 @@ test "ListPlace::follow_from: its foot followed no further than the block's top;
   })
   tree.frame(390.0, 844.0) |> ignore
   place.follow_from(Some(10))
-  // (two come at its end: its foot at 380, 10's top at 400 under it: followed)
+  // (two come at its end: its foot at 380, 10's top at 400 under it: followed, once they have made their way in)
   keys.set(Array::makei(12, fn(i) { i }))
-  tree.frame(390.0, 844.0) |> ignore
+  settle_tree(tree)
   let followed = scroll.at(tree) == scroll.most()
   // (five more: its foot at 580, past 10's top; held with 10 at the top of what shows)
   keys.set(Array::makei(17, fn(i) { i }))
-  tree.frame(390.0, 844.0) |> ignore
+  settle_tree(tree)
   let (_, y10, _, _) = live[10].rect()
   let held = scroll.at(tree)
   keys.set(Array::makei(18, fn(i) { i }))
-  tree.frame(390.0, 844.0) |> ignore
+  settle_tree(tree)
   assert_eq((followed, y10, held, scroll.at(tree)), (true, 0.0, 400.0, 400.0))
 }
+
+///|
+/// A frame drawn at `ms`, its logic come to then.
+fn WindowCase::frame_at(self : WindowCase, ms : Double) -> Unit {
+  self.tree.at(ms)
+  self.tree.frame(390.0, 844.0, now=ms) |> ignore
+}
+
+///|
+/// Its keys set to `ks` at `ms`, a change of its data (a cause at its moment).
+fn WindowCase::keys_at(self : WindowCase, ms : Double, ks : Array[Int]) -> Unit {
+  self.tree.event(ms, fn() { self.keys.set(ks) })
+}
+
+///|
+/// Where block `k` is drawn down the column now and how tall: none where it is not made.
+fn WindowCase::at_y(self : WindowCase, k : Int) -> (Double, Double)? {
+  self.live.get(k).map(fn(v) {
+    let (_, y, _, h) = v.rect()
+    (y, h)
+  })
+}
+
+///|
+test "scrolls_window: a block its data takes out where it shows closes its way, those under it going up with it, and is let go once shut" {
+  let k = window_case()
+  let t0 = 1000.0
+  k.frame_at(t0)
+  let y2 = k.at_y(2).unwrap().0
+  k.keys_at(t0 + 10.0, [0, 2, 3, 4, 5, 6, 7, 8, 9])
+  // (half way: block 1 still drawn, between none and all of its 40; block 2 on its way up from 80 to 40, never past)
+  let mut last = y2
+  let mut t = t0 + 10.0
+  while t < t0 + 10.0 + @flex.move_ms(40.0) {
+    t = t + 1000.0 / 60.0
+    k.frame_at(t)
+    let now = k.at_y(2).unwrap().0
+    assert_true(now <= last + 0.001 && now >= 40.0 - 0.001, msg="at \{t}: block 2 at \{now}, \{last} before")
+    last = now
+  }
+  k.frame_at(t + 20.0)
+  assert_eq((k.at_y(1), k.at_y(2).unwrap().0), (None, 40.0))
+  assert_true(k.tree.wake_waited() is None, msg="nothing more to draw for it")
+}
+
+///|
+test "scrolls_window: a block its data brings in where it shows makes its way in from nothing, those under it going down with it" {
+  let k = window_case()
+  let t0 = 1000.0
+  k.frame_at(t0)
+  k.keys_at(t0 + 10.0, [0, 20, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+  k.frame_at(t0 + 10.0 + 1000.0 / 60.0)
+  let first = k.at_y(1).unwrap().0
+  let mut last = first
+  let mut t = t0 + 10.0 + 1000.0 / 60.0
+  while t < t0 + 10.0 + @flex.move_ms(40.0) + 20.0 {
+    t = t + 1000.0 / 60.0
+    k.frame_at(t)
+    let y = k.at_y(1).unwrap().0
+    assert_true(y >= last - 0.001 && y <= 80.0 + 0.001, msg="at \{t}: block 1 at \{y}, \{last} before")
+    last = y
+  }
+  // (block 1 from 40 on its way down to 80: not there at once)
+  assert_true(first < 80.0 - 0.5, msg="block 1 at \{first} as it set out")
+  assert_eq(k.at_y(1).unwrap().0, 80.0)
+}
+
+///|
+test "scrolls_window: a block its data brings in or takes out over what shows, out of what is made: counted at once, what shows not moved, nothing to draw for it" {
+  let k = window_case()
+  k.tree.wheel_at(150.0, 50.0, 0.0, 100.0, 0, 10.0) |> ignore
+  let t0 = 1000.0
+  k.frame_at(t0)
+  let y2 = k.at_y(2).unwrap().0
+  // (block 0, out of sight over what shows, taken out; another brought in there)
+  k.keys_at(t0 + 10.0, [30, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+  k.frame_at(t0 + 10.0 + 1000.0 / 60.0)
+  assert_eq((k.shown(), k.at_y(2).unwrap().0), ([2, 3, 4], y2))
+  assert_true(k.tree.wake_waited() is None, msg="nothing to draw for what is out of sight")
+}
+
+///|
+test "scrolls_window: a block its data brings in or takes out under what is made: counted at once, nothing to draw for it" {
+  let k = window_case()
+  let t0 = 1000.0
+  k.frame_at(t0)
+  let y1 = k.at_y(1).unwrap().0
+  k.keys_at(t0 + 10.0, [0, 1, 2, 3, 4, 5, 6, 40, 7, 8])
+  k.frame_at(t0 + 10.0 + 1000.0 / 60.0)
+  assert_eq((k.shown(), k.at_y(1).unwrap().0), ([0, 1, 2], y1))
+  assert_true(k.tree.wake_waited() is None, msg="nothing to draw for what is out of sight")
+}
+
+///|
+test "scrolls_window: following its foot, a block its data brings in at its end makes its way in and what is over it goes up for it, the column at its foot all the way" {
+  let k = window_case(follows=fn() { true })
+  let t0 = 1000.0
+  k.frame_at(t0)
+  let mut last = k.at_y(9).unwrap().0
+  k.keys_at(t0 + 10.0, Array::makei(11, fn(i) { i }))
+  let mut t = t0 + 10.0
+  while t < t0 + 10.0 + @flex.move_ms(40.0) + 20.0 {
+    t = t + 1000.0 / 60.0
+    k.frame_at(t)
+    let y9 = k.at_y(9).unwrap().0
+    assert_true(y9 <= last + 0.001, msg="at \{t}: block 9 at \{y9}, \{last} before")
+    assert_true((k.scroll.at(k.tree) - k.scroll.most()).abs() < 0.001, msg="at \{t}: at its foot")
+    last = y9
+  }
+  assert_eq(k.at_y(10).unwrap().1, 40.0)
+}
+
+///|
+test "scrolls_window: its blocks' coming and going its own (own_ways): taken out at once" {
+  let k = window_case(own_ways=true)
+  let t0 = 1000.0
+  k.frame_at(t0)
+  k.keys_at(t0 + 10.0, [0, 2, 3, 4, 5, 6, 7, 8, 9])
+  k.frame_at(t0 + 10.0 + 1000.0 / 60.0)
+  assert_eq((k.at_y(1), k.at_y(2).unwrap().0), (None, 40.0))
+}
+
+///|
+/// Frames drawn well after now, what makes its way there by then: its last frames as they rest.
+fn settle_tree(tree : @view.Tree) -> Unit {
+  let t = tree.drawn_at() + 1000.0
+  tree.at(t)
+  tree.frame(390.0, 844.0, now=t) |> ignore
+  tree.at(t + 1000.0 / 60.0)
+  tree.frame(390.0, 844.0, now=t + 1000.0 / 60.0) |> ignore
+}
+
+///|
+fn WindowCase::settled(self : WindowCase) -> Unit {
+  settle_tree(self.tree)
+}
+
+///|
+/// Whether the blocks `ks` made now are drawn in that order down the column (those not made left out).
+fn WindowCase::in_order(self : WindowCase, ks : Array[Int]) -> Bool {
+  let ys = ks.filter_map(fn(k) { self.at_y(k).map(fn(p) { p.0 }) })
+  let mut ok = true
+  for i in 1..<ys.length() {
+    if ys[i] < ys[i - 1] - 0.001 {
+      ok = false
+    }
+  }
+  ok
+}
+
+///|
+/// Frames from `from` to the end of a way as long as a 40-tall block's and a little more, `check` held at each.
+fn WindowCase::frames_to(self : WindowCase, from : Double, check : (Double) -> Unit raise) -> Double raise {
+  let mut t = from
+  while t < from + @flex.move_ms(40.0) + 40.0 {
+    t = t + 1000.0 / 60.0
+    self.frame_at(t)
+    check(t)
+  }
+  t
+}
+
+///|
+test "scrolls_window: a block its data takes out as another comes in over it closes its way where it was, under what was over it" {
+  let k = window_case()
+  let t0 = 1000.0
+  k.frame_at(t0)
+  k.keys_at(t0 + 10.0, [30, 0, 2, 3, 4, 5, 6, 7, 8, 9])
+  k.frames_to(t0 + 10.0, fn(t) raise { assert_true(k.in_order([30, 0, 1, 2]), msg="at \{t}") }) |> ignore
+  assert_eq(k.at_y(1), None)
+}
+
+///|
+test "scrolls_window: a block closing its way as another comes in over it stays where it was among them" {
+  let k = window_case()
+  let t0 = 1000.0
+  k.frame_at(t0)
+  k.keys_at(t0 + 10.0, [0, 2, 3, 4, 5, 6, 7, 8, 9])
+  let mid = t0 + 10.0 + @flex.move_ms(40.0) / 2.0
+  k.frame_at(mid)
+  k.keys_at(mid + 1.0, [31, 0, 2, 3, 4, 5, 6, 7, 8, 9])
+  k.frames_to(mid + 1.0, fn(t) raise { assert_true(k.in_order([31, 0, 1, 2]), msg="at \{t}") }) |> ignore
+  assert_eq(k.at_y(1), None)
+}
+
+///|
+test "scrolls_window: two blocks side by side taken out close their ways in their order" {
+  let k = window_case()
+  let t0 = 1000.0
+  k.frame_at(t0)
+  k.keys_at(t0 + 10.0, [0, 3, 4, 5, 6, 7, 8, 9])
+  k.frames_to(t0 + 10.0, fn(t) raise { assert_true(k.in_order([0, 1, 2, 3]), msg="at \{t}") }) |> ignore
+  assert_eq((k.at_y(1), k.at_y(2)), (None, None))
+}
+
+///|
+test "scrolls_window: a block closing its way brought back makes its way in again from as far as it had got, where it was" {
+  let k = window_case()
+  let t0 = 1000.0
+  k.frame_at(t0)
+  let all = Array::makei(10, fn(i) { i })
+  k.keys_at(t0 + 10.0, [0, 2, 3, 4, 5, 6, 7, 8, 9])
+  let mid = t0 + 10.0 + @flex.move_ms(40.0) / 2.0
+  k.frame_at(mid)
+  let y2_mid = k.at_y(2).unwrap().0
+  k.keys_at(mid + 1.0, all)
+  k.frame_at(mid + 1.0 + 1000.0 / 60.0)
+  // (from where it had got: block 2 not back at 80 at once, nor further up than it was)
+  let y2_back = k.at_y(2).unwrap().0
+  assert_true(y2_back >= y2_mid - 0.001 && y2_back < 80.0 - 0.5, msg="\{y2_back} from \{y2_mid}")
+  k.frames_to(mid + 1.0, fn(t) raise { assert_true(k.in_order([0, 1, 2]), msg="at \{t}") }) |> ignore
+  assert_eq((k.at_y(1).unwrap().0, k.at_y(2).unwrap().0), (40.0, 80.0))
+}
+

@@ -31,8 +31,10 @@ yet and you can add one, add it.
   it (`View::comes`, flex's `come_*`): the framework's, not each page's (the user, 2026-11-09: 方案 A). A show in its
   opposite's place, or a pick, is one in the other's place, its way from as tall as that one was. Say `at_once=true`
   only where one is in another's place the column does not see (an old view's drawn there, one sidebar for another);
-  `leave` keeps a structure's coming and going its own; a page's list's blocks come and go at once as it scrolls,
-  what a block holds makes its way as anywhere; what holds a scroller (a page, a pane) comes and goes at once.
+  `leave` keeps a structure's coming and going its own; a page's list's blocks its data brings or takes where it
+  shows make their way in or close it (View::scrolls_window; `own_ways` a list's own), those its scrolling or another
+  window size brings or takes, or out of what is made, at once; what a block holds makes its way as anywhere; what
+  holds a scroller (a page, a pane) comes and goes at once.
 - State that what is made reads is a signal: a mutable value read by a binding that is not one is never seen to
   change (detlint `built-by-hand`).
 - Layout goes one way (the user, 2026-11-05): what is laid out is never told back as a change to make things by. What
