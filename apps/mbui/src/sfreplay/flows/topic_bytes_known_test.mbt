@@ -40,7 +40,7 @@ fn init {
     ("lock-wait", 16, 0, 0),
     ("mark-read", 57, 3, 0),
     ("markdown", 55, 4, 0),
-    ("new-chat", 43, 5, 2),
+    ("new-chat", 43, 4, 2),
     ("notice-cancel", 45, 1, 0),
     ("notice-failed", 49, 2, 0),
     ("notice-looking", 47, 1, 0),

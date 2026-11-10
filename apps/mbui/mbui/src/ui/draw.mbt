@@ -1741,6 +1741,15 @@ pub fn Ctx::in_frame(self : Ctx) -> Bool {
 }
 
 ///|
+/// Whether the frame is being painted now (frame_paint): its nodes those of the layout it is painted from, each where
+/// it is drawn (what the clock moves placed where it is now, Ctx::moved_place), as what is worked out as it is painted
+/// (Ctx::look_by, Ctx::glyphs_by) reads them.
+pub fn Ctx::painting(self : Ctx) -> Bool {
+  ignore(self)
+  paint_phase.val == 1
+}
+
+///|
 /// Where node `i` is laid out (x, y, w, h).
 pub fn Ctx::node_rect(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
   let n = self.nodes[i]

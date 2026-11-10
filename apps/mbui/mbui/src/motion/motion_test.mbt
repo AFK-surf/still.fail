@@ -1537,3 +1537,54 @@ test "an Anim is over at the end it declared as it was told, whoever asks and ho
   assert_true(a.over(t2.ctx()))
   ignore(t)
 }
+
+///|
+/// Words in a box sliding across by the clock (Ctx::moved_by, a page going), each glyph drawn by a look worked out from
+/// where it is in its measured words (measured_rect, as a message's glyphs come out: emit's): the frames of the slide
+/// painted alone, nothing built nor laid out, each drawn as building it whole draws it (the Tester's own check, as in
+/// every test), the measured words' place where they are drawn. Found in a replay (new_chat_test: a glyph drawn 0.03
+/// off as the page it was in slid away).
+test "a measured node in what slides by the clock: read where it is drawn as each frame is painted alone" {
+  let go = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let slide = @motion.anim(c, "slide", 0.0)
+      if go.val {
+        go.val = false
+        slide.animate(c, 1.0, @motion.tween(slide_ms, ease=Out))
+      }
+      let page = c.box(w=Px(300.0), h=Px(100.0), fn() {
+        let words = c.text("a line of words")
+        @motion.measure(c, words, "slid-words")
+        c.glyphs_by(words, fn(at) {
+          let dy = match @motion.measured_rect(c, "slid-words") {
+            Some((x, _, _, _)) => (at.x - x) * 0.013
+            None => 0.0
+          }
+          { alpha: 1.0, dx: 0.0, dy, scale: 1.0, sx: 1.0 }
+        })
+      })
+      c.moved_by(page, fn(w, _) { (slide.get(c) * w * 0.731, 0.0) })
+    },
+    w=400.0,
+    h=200.0,
+  )
+  t.draw()
+  t.frame()
+  go.val = true
+  t.draw()
+  // (the slide's frames as a display draws them, each painted alone: what is checked against building it whole)
+  let ends = t.time() + slide_ms
+  let mut alone = 0
+  while t.time() < ends {
+    t.frame()
+    if t.built_why() == "" && t.painted_why() != "" {
+      alone = alone + 1
+    }
+  }
+  assert_true(alone > 3, msg="painted alone: \{alone}")
+}
+
+///|
+/// How long the slide above takes.
+let slide_ms : Double = 300.0
