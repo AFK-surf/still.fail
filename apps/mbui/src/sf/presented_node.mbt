@@ -68,7 +68,12 @@ fn pick_menu_of(choices : Array[Choice], search : Bool) -> Bool {
 /// What of the presented the window's tree draws, in `root` (over all of it the root holds: each at its place in the
 /// window's stack of layers), made as one is presented and let go once it has gone; and under them the reader's
 /// layout's panel while one is open (reader_layout_nodes).
-pub fn presented_nodes(root : @view.View) -> Unit {
+#callsite(autofill(loc))
+pub fn presented_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
+  // (the tips of what they hold: one layer of them for the window, over all of it, each presented one's lent it;
+  // made after them, its keys (Escape shutting a tip) asked before theirs)
+  let tips_at : Ref[@view.View?] = Ref(None)
+  let tips = TipLayer::new(fn() { tips_at.val })
   // (the reader's layout's panel, laid over it: under what is presented, which stands in the window's stack of layers)
   reader_layout_nodes(root)
   root.each(
@@ -84,6 +89,8 @@ pub fn presented_nodes(root : @view.View) -> Unit {
       let p = presented_now[i]
       // (the root's node it is in at its place in the window's stack of layers: its serial, as the host's presented are)
       row.over(Is(true)).stacked(Is(serial)) |> ignore
+      // (the tips of what its body and its foot are made of: the window's layer of them, panel_tips_lent)
+      row.lends(panel_tips_lent, tips) |> ignore
       let open = fn() {
         presented_said.get() |> ignore
         presented_open_of(serial)
@@ -288,6 +295,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
       }
     },
   )
+  tips_at.val = Some(root.box(made_for=loc, fn(l) { l.over(Is(true)).over_all(Is(true)) |> ignore }))
 }
 
 ///|
