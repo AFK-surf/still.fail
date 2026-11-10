@@ -584,8 +584,23 @@ pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
 }
 
 ///|
+/// What one cause does to the stack (a push, a rise, a pop, a page let go), told as one: what reads it (`said`,
+/// `shown`) sees it whole, never half done (its pages pushed, its slide not yet set out: none beside its top, at rest).
+fn[T] told_once(f : () -> T) -> T {
+  @signals.start_batch()
+  let r = f()
+  @signals.end_batch()
+  r
+}
+
+///|
 /// Pushes `page`, over the one on top (Nav::push_over) or not: what it is known as it sets out (Nav::go).
 fn[P] Nav::pushes(self : Nav[P], page : P, over : Bool) -> Unit {
+  told_once(fn() { self.pushes_now(page, over) })
+}
+
+///|
+fn[P] Nav::pushes_now(self : Nav[P], page : P, over : Bool) -> Unit {
   self.settle()
   self.pages.push(nav_page(page, Some(self.top())))
   self.pages[self.pages.length() - 1].over = over
@@ -622,6 +637,11 @@ pub fn[P] Nav::top_over(self : Nav[P]) -> Bool {
 /// Pushes `page` rising from the bottom over the one on top, which stays where it is (App.kt: a new chat, 380 ms on
 /// (.2, .8, .2, 1)); back, it sinks down the same way (swiped back, it goes down with the finger).
 pub fn[P] Nav::rise(self : Nav[P], page : P) -> Unit {
+  told_once(fn() { self.rise_now(page) })
+}
+
+///|
+fn[P] Nav::rise_now(self : Nav[P], page : P) -> Unit {
   self.settle()
   let e = nav_page(page, Some(self.top()))
   e.rise = true
@@ -652,6 +672,11 @@ pub fn[P] Nav::risen(self : Nav[P]) -> Bool {
 ///|
 /// Back a page: the top slides away; false when there is none under it.
 pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
+  told_once(fn() { self.pop_now() })
+}
+
+///|
+fn[P] Nav::pop_now(self : Nav[P]) -> Bool {
   if self.pages.length() < 2 {
     return false
   }
@@ -859,6 +884,11 @@ let back_far : Double = 120.0
 ///|
 /// Gone back from where a finger left the page: on from there, as fast as it let it go (`v`, its widths per ms).
 fn[P] Nav::let_go(self : Nav[P], v : Double) -> Unit {
+  told_once(fn() { self.let_go_now(v) })
+}
+
+///|
+fn[P] Nav::let_go_now(self : Nav[P], v : Double) -> Unit {
   self.leaving = self.pages.pop()
   self.topped()
   self.told()

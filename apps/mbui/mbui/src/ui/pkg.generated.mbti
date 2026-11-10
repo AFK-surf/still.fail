@@ -1985,6 +1985,7 @@ pub fn[P] Nav::replace_above(Self[P], Int32, Array[P]) -> Unit
 pub fn[P] Nav::rest(Self[P]) -> Double
 pub fn[P] Nav::rise(Self[P], P) -> Unit
 pub fn[P] Nav::risen(Self[P]) -> Bool
+pub fn[P] Nav::root_shows(Self[P]) -> Bool
 pub fn[P] Nav::shows(Self[P], Int32) -> Bool
 pub fn[P] Nav::shows_when(Self[P], () -> Bool, Double) -> Unit
 pub fn[P] Nav::top(Self[P]) -> P

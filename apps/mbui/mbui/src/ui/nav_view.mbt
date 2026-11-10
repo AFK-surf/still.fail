@@ -76,6 +76,17 @@ pub fn[P] Nav::shows(self : Nav[P], serial : Int) -> Bool {
 }
 
 ///|
+/// Whether the stack's root page shows: the top, or the one beside it as one moves over it or off it (read: told as it
+/// changes, at its slide's end on the tree's timeline).
+pub fn[P] Nav::root_shows(self : Nav[P]) -> Bool {
+  self.said.get() |> ignore
+  self.shown.get() |> ignore
+  let root = self.pages[0].serial
+  let (top, beside) = self.top_beside()
+  top.serial == root || (beside is Some(b) && b.serial == root)
+}
+
+///|
 /// Whether page `serial` takes presses: not as it goes back off the stack, nor under a page coming in over it (read:
 /// told as that changes).
 fn[P] Nav::takes(self : Nav[P], serial : Int) -> Bool {
