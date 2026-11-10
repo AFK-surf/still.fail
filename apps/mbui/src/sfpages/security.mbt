@@ -254,7 +254,7 @@ fn pair_node(parent : @view.View, core : Core, ws : () -> String, lock : () -> J
           },
         )
       },
-      fn() { sec_state },
+      fn() { sec_state_lines },
     )
     |> ignore
     let look = @sf.look_node(k)
@@ -1027,6 +1027,12 @@ let sec_lead : @ui.Style = @sf.desk_card.then(@ui.css("mb=S7"))
 /// The state (state: the body's 14 in 500; its meta the ui's 13 muted).
 // kept across runs: a value (no field of it changes)
 let sec_state : @ui.TextStyle = @ui.text_style(size=Body, leading=L7, weight=Medium, color=Fg, wrap=false)
+
+///|
+/// The state said alone on its line, the card's first (pair_node's: waiting to be approved, to be made trusted): on
+/// as many lines as it takes where the card has not the room, never cut (a phone's words set larger, in English).
+// kept across runs: a value (no field of it changes)
+let sec_state_lines : @ui.TextStyle = sec_state.then(@sf.in_lines)
 
 ///|
 // kept across runs: a value (no field of it changes)
