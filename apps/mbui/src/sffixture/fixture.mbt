@@ -1255,7 +1255,17 @@ pub fn round_trip_again(base : Source, ms : Double, heard? : (String) -> Unit = 
   // (what is answered for each subscription the client holds, by its id: called to stop)
   let live : Map[Int, () -> Unit] = {}
   let wire_key = fn(name : String, wire : Map[String, Json]) { @sfbase.wire_topic_key(name, wire) }
+  // (whether this one is the core still: one another took the core's place from (a test after, a kept conversation)
+  // says nothing more, all it answers stopped)
+  let mine = Ref(0)
   let give = fn(m : Json) {
+    if mine.val == 0 || @core.served() != mine.val {
+      for _, stop in live {
+        stop()
+      }
+      live.clear()
+      return
+    }
     let text = m.stringify()
     heard("in " + text)
     @core.receive(text, None)
@@ -1323,18 +1333,14 @@ pub fn round_trip_again(base : Source, ms : Double, heard? : (String) -> Unit = 
       _ => ()
     }
   }
-  // (the client's core is this one from the first read on: made so again where something else took the core since,
-  // a Tester begun anew)
-  let mine = Ref(0)
+  // (the client's core this one from the first read on, once: given up for good once another takes the core's place
+  // (a Tester begun anew, a kept conversation), never taken back)
   let serving = fn() {
-    if @core.served() != mine.val || mine.val == 0 {
-      for _, stop in live {
-        stop()
-      }
-      live.clear()
+    if mine.val == 0 {
       mine.val = @core.serve(send)
     }
   }
+
   let wire = fn(name : String, params : Map[String, Json]) { @sfbase.core_topic_params(name, params) }
   {
     ..base,

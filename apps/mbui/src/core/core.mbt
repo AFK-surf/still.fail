@@ -70,7 +70,8 @@ pub fn serve(send : (String) -> Unit) -> Int {
 }
 
 ///|
-/// The number of the made-up core serving now (serve), 0 where the engine (or a kept conversation) is the core.
+/// The number of the made-up core serving now (serve), 0 where the engine (or a kept conversation, Replay::attach) is
+/// the core: one serving no more says nothing to the client.
 pub fn served() -> Int {
   serving.val
 }

@@ -355,6 +355,8 @@ pub fn Replay::client(self : Replay) -> Client {
 ///|
 /// The app's core (`client`, `wall_ms`) is this conversation from now on, until `detach`: its client started anew.
 pub fn Replay::attach(self : Replay) -> Unit {
+  // (the core's place this conversation's from now: a made-up core that had it no longer, core.mbt's serve)
+  serving.val = 0
   // A reader still following a subscription can ask for it again during reset: its ask belongs to this replay.
   transport.val = fn(s, _) { self.out(s) }
   wall_override.val = Some(fn() { self.wall })
@@ -374,6 +376,7 @@ pub fn Replay::attach(self : Replay) -> Unit {
 ///|
 /// The app's core is the engine again.
 pub fn Replay::detach() -> Unit {
+  serving.val = 0
   transport.val = engine_send
   wall_override.val = None
   receive_hook.val = None

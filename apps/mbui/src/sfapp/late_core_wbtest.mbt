@@ -75,3 +75,32 @@ test "two readers of a topic over the late core: subscribed once; the first let 
     ),
   )
 }
+
+///|
+test "a late core done with, a kept conversation taking the core after it as the next Tester begins: the conversation is told what the client sends, and the late core says nothing more to the client" {
+  new_run()
+  let heard : Array[String] = []
+  let src = round_trip_again(fixture("home"), place_core_soon_ms, heard=fn(h) { heard.push(h) })
+  let t = @ui.Tester::new(fn(_c) {  }, w=390.0, h=844.0)
+  @sffixture.fix_ctx.val = Some(t.ctx())
+  t.draw()
+  let owner = @signals.set_owner(None)
+  let stop = @signals.effect(fn() { src.topic("prefs", {}).get() |> ignore })
+  @signals.set_owner(owner) |> ignore
+  t.run_for(place_core_soon_ms * 2.0)
+  let heard_then = heard.length()
+  // (a kept conversation the core, then a Tester begun: as a replay's test begins after this one)
+  let replay = @core.Replay::parse("")
+  replay.attach()
+  let t2 = @ui.Tester::new(fn(_c) {  }, w=390.0, h=844.0)
+  t2.draw()
+  // (what the client sends now goes to the conversation: an ask the run never made, where the two went apart)
+  @core.subscribe("workspaces") |> ignore
+  let told = replay.diverged().iter().any(fn(d) { d.contains("workspaces") })
+  // (the late core's value changed now: nothing of it to the client)
+  @settings.fixture_changed()
+  t2.run_for(place_core_soon_ms * 2.0)
+  stop()
+  @core.Replay::detach()
+  assert_eq((told, heard.length() - heard_then), (true, 0))
+}
