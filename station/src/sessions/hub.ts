@@ -655,9 +655,15 @@ export class Hub {
     const surface = this.surface(connectId);
     const single = connect.mode === "single-session";
     const bound = single ? this.store.binding(connect.id) : null;
-    const key = bound ?? (single ? newSingleSessionKey(connect.id) : sessionKey(connect.id, message.channel, message.threadTs));
     const existing = this.store.threadAt(surface, message.channel, message.threadTs);
     const members = existing ? this.store.threadSessions(existing.id) : [];
+    // A thread this connect's bot already takes part in (a chat relayed there) is its session's: the bot mentioned
+    // there goes to the one still following it, never to a second agent of the same bot (relay.ts refuses the other
+    // way round), and one that left stays out while another follows.
+    const own = single ? null : sessionKey(connect.id, message.channel, message.threadTs);
+    const sameBot = single ? [] : members.filter((m) => m.connect === connect.id);
+    const taken = sameBot.find((m) => m.leftAt === null) ?? sameBot.find((m) => m.session === own) ?? sameBot[0];
+    const key = bound ?? taken?.session ?? own ?? newSingleSessionKey(connect.id);
     const exists = this.store.getSession(key) !== null;
     // Left (chat_leave): it hears the thread again only once someone mentions it.
     const left = members.some((m) => m.session === key && m.leftAt !== null);
