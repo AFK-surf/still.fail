@@ -1420,6 +1420,8 @@ pub fn panel_button(@ui.Ctx, String, String, tone? : PanelTone, disabled? : Bool
 
 pub fn panel_button_node(@view.View, () -> String, () -> Unit, tone? : PanelTone) -> @view.View
 
+pub fn panel_card_last_node(@view.View) -> @ui.Style
+
 pub fn panel_card_out_node(@view.View) -> @ui.Style
 
 pub fn panel_column(@ui.Ctx, String, Double, @ui.Style, () -> Unit) -> Unit
