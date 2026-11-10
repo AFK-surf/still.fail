@@ -49,6 +49,42 @@ let receive_hook : Ref[(() -> Unit)?] = { val: None }
 let wall_override : Ref[(() -> Double)?] = { val: None }
 
 ///|
+/// How many made-up cores have taken the engine's place (serve), the one serving now's number; 0: the engine's.
+let served_count : Ref[Int] = Ref(0)
+
+///|
+let serving : Ref[Int] = Ref(0)
+
+///|
+/// A made-up core in the engine's place (a test's: sffixture's round_trip_again), as a kept conversation takes it
+/// (Replay::attach): what the app's client sends goes to `send`, the client started anew; what it answers it gives
+/// `receive` as the engine's messages come. Its number, to tell whether it still serves (served). Till serve_end.
+pub fn serve(send : (String) -> Unit) -> Int {
+  served_count.val += 1
+  serving.val = served_count.val
+  transport.val = fn(s, _) { send(s) }
+  wall_override.val = None
+  receive_hook.val = None
+  client.reset()
+  serving.val
+}
+
+///|
+/// The number of the made-up core serving now (serve), 0 where the engine (or a kept conversation) is the core.
+pub fn served() -> Int {
+  serving.val
+}
+
+///|
+/// The engine is the core again, a made-up one done with (serve).
+pub fn serve_end() -> Unit {
+  if serving.val != 0 {
+    serving.val = 0
+    transport.val = engine_send
+  }
+}
+
+///|
 /// The app's client of its core.
 pub let client : Client = Client::new(
   fn(s) {
