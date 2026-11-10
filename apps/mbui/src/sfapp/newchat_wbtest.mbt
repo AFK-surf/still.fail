@@ -194,20 +194,20 @@ test "the bar: hidden under a page pushed, back as it comes back" {
 test "the workspaces' sheet: drawn up to 94%, dragged down past 30% it closes" {
   let t = tester("home")
   t.tap_text("星火工作室")
-  sheet_rested(t, "sf-present")
+  presented_rested(t)
   assert_true((t.get(@ui.Role::Dialog).rect.3 - 844.0 * 0.7).abs() < 1.0)
   let (x, y) = t.find("切换 workspace").unwrap()
   t.drag(x, y, x, y - 200.0)
-  sheet_rested(t, "sf-present")
+  presented_rested(t)
   assert_true((t.get(@ui.Role::Dialog).rect.3 - 844.0 * 0.94).abs() < 1.0)
   // a tap on the grabber: half
   let (x, y) = t.find("切换 workspace").unwrap()
   t.tap(x, y - 30.0)
-  sheet_rested(t, "sf-present")
+  presented_rested(t)
   assert_true((t.get(@ui.Role::Dialog).rect.3 - 844.0 * 0.55).abs() < 1.0)
   let (x, y) = t.find("切换 workspace").unwrap()
   t.drag(x, y, x, y + 300.0)
-  sheet_rested(t, "sf-present")
+  presented_rested(t)
   assert_true(t.find("切换 workspace") is None)
   assert_true(!sheet_open())
 }
@@ -219,10 +219,21 @@ test "a sheet takes the drags on it: the list under it does not scroll" {
   let row = fn() { t.locate("=把旧的截图都换成新的").map(fn(p) { p.1 }) }
   let before = row()
   t.tap_text("星火工作室")
-  sheet_rested(t, "sf-present")
+  presented_rested(t)
   t.drag(195.0, 700.0, 195.0, 400.0)
   assert_eq(row(), before)
   assert_true(@sf.presenting())
+}
+
+///|
+/// Frames on to where what the presenters hold up as a sheet said it is at rest, whichever kind it is drawn as
+/// (@sf.presented_rest: its motions' ends, from their causes' moments and lengths).
+fn presented_rested(t : @ui.Tester) -> Unit {
+  t.draw()
+  let e = @sf.presented_rest()
+  if e > t.time() && e < 1.0e300 {
+    t.run_for(e - t.time())
+  }
 }
 
 ///|

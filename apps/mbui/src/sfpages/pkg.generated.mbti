@@ -359,6 +359,8 @@ pub fn new_connect_dialog(@sfbase.Source, @settings.Core, @settings.Here, String
 
 pub fn new_profile_node(@view.View, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer) -> Unit
 
+pub fn new_workspace_put(@sfbase.Source, name~ : String, code~ : String, error_code~ : String) -> Unit
+
 pub fn news_of(@sfbase.Source) -> @json.Json?
 
 pub fn news_params() -> Map[String, @json.Json]

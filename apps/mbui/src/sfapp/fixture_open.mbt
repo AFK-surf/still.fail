@@ -386,7 +386,8 @@ pub fn open_fixture_over(mode : String, src : Source) -> Unit {
 /// What the mode opens over the app once its source is made (what is put up reading through it), as open_fixture_mode
 /// opens its pages: ＋'s Station 文件 (chat-station-files); a station's file's card pressed, its panel (chat-station-sheet);
 /// the files' favorite picker with no one station in view, which station first (files-add-folder: its rows' grounds under the
-/// pointer, the last in the dialog's foot corners); the card to share of the agents at work (share-card).
+/// pointer, the last in the dialog's foot corners); the card to share of the agents at work (share-card); a new
+/// workspace, empty and with an invite code found wrong (new-workspace, new-workspace-code).
 pub fn open_fixture_src(mode : String, src : Source) -> Unit {
   // slice 8's panels over the chat (decide_fixture.mbt)
   open_decide_panels(mode, src)
@@ -406,6 +407,14 @@ pub fn open_fixture_src(mode : String, src : Source) -> Unit {
   }
   if mode == "chat-station-sheet" {
     @sfpages.ref_panel_put(src, "ws1/st1:s-c1", "ws1/st1", "ref-发布清单.md", "发布清单.md")
+  }
+  // a new workspace over Home: nothing typed yet; and named, an invite code typed that still.fail cloud found wrong
+  // (what is wrong with it under its field)
+  if mode == "new-workspace" {
+    @sfpages.new_workspace_put(src, name="", code="", error_code="")
+  }
+  if mode == "new-workspace-code" {
+    @sfpages.new_workspace_put(src, name="产品团队", code="ABCD-1234-EFGH", error_code="invite_code_invalid")
   }
 }
 

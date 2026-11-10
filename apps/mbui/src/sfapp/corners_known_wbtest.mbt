@@ -34,10 +34,11 @@ let corners_everywhere_known : Map[String, Int] = {
 /// left, as the rail's places stand, and 27 under its top, that place's middle on the line of the sidebar's first row
 /// beside it, 新建对话's (pengxiao, 2026-10-25). The tablet is kept so for now (the user, 2026-11-09, moving the Mac window's up into its
 /// corner alone). On main the rail was an old view's island, measured against the island's own square box, so the rule
-/// never saw it; as nodes of the window's tree it is measured against the panel.
+/// never saw it; as nodes of the window's tree it is measured against the panel. A panel over Home (home-sheet, switcher,
+/// new-workspace and new-workspace-code, …) has it too: the rail behind it, not the panel.
 let corners_tape_rail : Array[String] = [
-  "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "rail-menu", "place", "switcher",
-  "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
+  "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "new-workspace", "new-workspace-code", "rail-menu",
+  "place", "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
   "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose",
   "chat-download", "chat-failed", "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine",
   "chat-history-side", "chat-info", "chat-job", "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters",
