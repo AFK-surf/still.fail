@@ -31,8 +31,10 @@ async function listen(h: Harness, token: string) {
   ws.addEventListener("message", (event) => (event.data === "pong" ? pong?.() : got.push(JSON.parse(event.data as string))));
   return {
     ws,
-    // A pong comes after everything sent before it, so this sees every event of the call before.
+    // Once what the call before told the account's object has got there (h.settled), a pong comes after everything
+    // sent before it, so this sees every event of that call.
     async take(): Promise<string[]> {
+      await h.settled();
       await new Promise<void>((resolve) => {
         pong = resolve;
         ws.send("ping");
@@ -44,10 +46,9 @@ async function listen(h: Harness, token: string) {
 
 type Listener = Awaited<ReturnType<typeof listen>>;
 
-/** The Directory object (test/worker.ts): its presence sweep, and when a station's socket closing has been handled. */
-async function directory(h: Harness): Promise<{ sweepAt(ms: number): Promise<boolean>; left(station: string): Promise<void> }> {
-  const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
-  return directories.get(directories.idFromName("primary"));
+/** A station's object (test/worker.ts): its presence sweep, and when its socket closing has been handled. */
+async function stationObject(h: Harness, station: string): Promise<{ sweepAt(ms: number): Promise<boolean>; left(): Promise<void> }> {
+  return h.object("STATIONS", station);
 }
 
 /** Each listener got exactly these events (in any order); the rest got none. */
@@ -70,7 +71,10 @@ async function connectStation(h: Harness, station: Awaited<ReturnType<typeof key
   let pong: (() => void) | null = null;
   ws.addEventListener("message", (event) => (event.data === "pong" ? pong?.() : frames.push(JSON.parse(event.data as string))));
   ws.accept();
-  const ping = () => new Promise<void>((resolve) => { pong = resolve; ws.send("ping"); });
+  const ping = async () => {
+    await h.settled();
+    await new Promise<void>((resolve) => { pong = resolve; ws.send("ping"); });
+  };
   return { status: 101, ws, frames, closed, ping };
 }
 
@@ -211,7 +215,7 @@ test("every change reaches exactly the accounts it affects", async () => {
     assert.deepEqual([seen.icon, seen.emoji], [null, null]);
 
     first.ws!.close(1000);
-    await (await directory(h)).left(station.id);
+    await (await stationObject(h, station.id)).left();
     await expect(on, {}, "nor does leaving");
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.equal(seen.last_seen, h.now(), "last here at");
@@ -267,8 +271,8 @@ test("a reconnect replaces the old station socket; a silent one is dropped", asy
     const first = await connectStation(h, station);
     const second = await connectStation(h, station);
     assert.equal(await first.closed, 4000);
-    const objects = await directory(h);
-    await objects.left(station.id);
+    const objects = await stationObject(h, station.id);
+    await objects.left();
     assert.deepEqual(await events.take(), [], "a station's socket tells no one");
 
     // The runtime answers a ping itself and notes when, on the machine's clock (as the sockets' times are): after

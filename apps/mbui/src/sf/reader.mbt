@@ -349,13 +349,12 @@ fn reader_keep(r : Reading, book : Book, force : Bool) -> Unit {
 }
 
 ///|
-/// How far through the whole: the block and how far down it.
+/// How far through the whole text the current place is.
 pub fn reader_fraction(r : Reading, book : Book) -> Double {
-  let n = book.chunks.length()
-  if n == 0 {
+  if book.length <= 0 {
     return 0.0
   }
-  dmin(1.0, dmax(0.0, (r.chunk.to_double() + r.within) / n.to_double()))
+  dmin(1.0, dmax(0.0, book.offset_of(r.chunk, r.within).to_double() / book.length.to_double()))
 }
 
 ///|
@@ -511,7 +510,7 @@ pub fn reader_column(
       if i == 0 {
         c.box(style=@ui.style(h=Fixed(top)), fn() {  }) |> ignore
       } else if i <= n {
-        reader_chunk(c, r, book, i - 1, style, p, size, line, left, right, mark, mark_now, headings)
+        reader_chunk(c, r, book, i - 1, style, p, size, left, right, mark, mark_now, headings)
       } else if i == n + 1 && cut_row == 1 {
         // a text cut at reader_most says so under it
         c.box(style=reader_cut_row, fn() {
@@ -588,7 +587,6 @@ fn reader_chunk(
   style : ReaderStyle,
   p : ReaderPaper,
   size : Double,
-  line : Double,
   left : Double,
   right : Double,
   mark : Int64,
@@ -610,7 +608,7 @@ fn reader_chunk(
   // (the margins either side of the words: room of their own, the words between)
   c.box(style=reader_chunk_row, id~, fn() {
     c.box(style=@ui.style(w=Fixed(left)), fn() {  }) |> ignore
-    c.box(style=desk_grow, fn() { reader_words(c, r, book, k, style, p, size, line, mark, mark_now, headings, mine, now) })
+    c.box(style=desk_grow, fn() { reader_words(c, r, book, k, style, p, size, mark, mark_now, headings, mine, now) })
     |> ignore
     c.box(style=@ui.style(w=Fixed(right)), fn() {  }) |> ignore
   })
@@ -627,7 +625,6 @@ fn reader_words(
   style : ReaderStyle,
   p : ReaderPaper,
   size : Double,
-  line : Double,
   mark : Int64,
   mark_now : Int64,
   headings : Bool,
@@ -665,7 +662,7 @@ fn reader_words(
     }
     let runs = if serif { runs.map(fn(x) { { ..x, serif: true } }) } else { runs }
     // (the reader's own size and lines, as its layout picks them)
-    c.rich(runs, key="chunk/\{k}/\{mine.length()}/\{r.hit}", size~, color=p.ink, line~, w=reader_words_w) |> ignore
+    c.rich(runs, key="chunk/\{k}/\{mine.length()}/\{r.hit}", size~, color=p.ink, line_em=style.line, w=reader_words_w) |> ignore
   }
 }
 
@@ -1558,9 +1555,9 @@ fn narrow_track(c : @ui.Ctx, r : Reading, book : Book, p : ReaderPaper, live : B
   slider(c, key, shown, 0.0, 1.0, ink=p.ink, accent=p.accent, ground=p.raised, on_change=fn(v) { if live { r.draft = v } }, on_let_go=fn(to) {
     let held = r.draft >= 0.0
     r.draft = -1.0
-    if live || held {
-      let last = book.chunks.length() - 1
-      reader_jump(r, (to * (if last < 0 { 0 } else { last }).to_double()).round().to_int(), 0)
+    if (live || held) && book.length > 0 && book.chunks.length() > 0 {
+      let (chunk, offset) = book.at((to * book.length.to_double()).round().to_int())
+      reader_jump(r, chunk, offset)
     }
   })
   |> ignore

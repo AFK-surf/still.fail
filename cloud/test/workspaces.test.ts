@@ -72,7 +72,10 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
       let pong = () => {};
       socket.addEventListener("message", (event) => (event.data === "pong" ? pong() : frames.push(JSON.parse(event.data as string))));
       socket.accept();
-      const told = () => new Promise<any[]>((resolve) => { pong = () => resolve(frames); socket.send("ping"); });
+      const told = async () => {
+        await h.settled();
+        return new Promise<any[]>((resolve) => { pong = () => resolve(frames); socket.send("ping"); });
+      };
       return told;
     };
     const presence = await connect();
@@ -192,6 +195,22 @@ test("an account over its requests a minute is told to wait (429), not that it i
     for (let i = 0; i < 130 && last.status === 200; i++) last = await alice("GET", "/v1/me");
     assert.equal(last.status, 429);
     assert.deepEqual(await last.json(), { error: "rate_limited" });
+  } finally {
+    await h.close();
+  }
+});
+
+test("an account over its requests a minute still signs in a new device: its other devices' asking keeps no one out", async () => {
+  // (the locks' end to end, 2026-11-10: a person's devices reading their workspaces again as they changed used up the
+  // minute, and the next device's sign-in was refused, 429)
+  const h = await harness();
+  try {
+    const alice = h.as(await h.login("alice"));
+    let last = await alice("GET", "/v1/me");
+    for (let i = 0; i < 130 && last.status === 200; i++) last = await alice("GET", "/v1/me");
+    assert.equal(last.status, 429);
+    const another = await h.login("alice");
+    assert.ok(another.access_token);
   } finally {
     await h.close();
   }

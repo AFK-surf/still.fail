@@ -57,3 +57,7 @@
 - `pnpm exec tsgo --noEmit` types; one test file is `node ../scripts/native.ts run mesh runner archive-rs reader --
   node --import ./test/setup-env.mjs --test test/<file>.test.ts` (`pnpm test` is every file). Agents in tests are
   fakes on the test's clock; real processes, signals and sockets are the side run's (`side/`).
+- CI runs `test/` on Linux, in slices (`scripts/check.sh`, station-tests): a test passes there as on a Mac, or
+  skips itself saying what it lacks. A test with the vault on a database in a file gives it through
+  `test/vault-no-reader.ts`, unless the use index's reader is what it tests: the reader is a process of its own, and
+  writes when it will.

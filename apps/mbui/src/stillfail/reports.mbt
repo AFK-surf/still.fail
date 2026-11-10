@@ -64,6 +64,15 @@ fn reports_start() -> Unit {
       let json = match s.json() {
         Object(m) => {
           m["hangs_unsent"] = Json::number(unsent.to_double())
+          // (what the core said meanwhile to ids nothing held, let be unread, by what the ids were: how many, their
+          // length; none: not said)
+          let unheld : Map[String, Json] = {}
+          for u in @core.unheld_said() {
+            unheld[u.0] = Json::array([Json::number(u.1.to_double()), Json::number(u.2.to_double())])
+          }
+          if !unheld.is_empty() {
+            m["unheld"] = Json::object(unheld)
+          }
           Json::object(m)
         }
         j => j

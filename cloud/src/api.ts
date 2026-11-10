@@ -7,8 +7,10 @@
 import { consoleAdmin, isAdmin } from "./admin";
 import { bearerToken, clock, denied, limited, readJson, reply, verifyToken, type Claims } from "./auth";
 import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
-import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
+import type { Live } from "./account";
+import { EVENTS_PROTOCOLS, ROLES, sockets, type Role } from "./directory";
 import type { Env } from "./env";
+import { requestLang, tr } from "./i18n.ts";
 import type { AdminFeedback, FeedbackStatus } from "./types";
 import { grantKeys, signCredential, validKeyHex, verifyAnySignature, verifyKeySignature } from "./grants";
 import { changelog, serveChangelog, serveFixed } from "./changelog";
@@ -61,15 +63,32 @@ async function directory<T>(run: () => Promise<T> | T): Promise<Response> {
   }
 }
 
+/** Requests of the test channel (index.ts): its account's object says whether it is let in, as it says its session is live. */
+export const onTestChannel = new WeakSet<Request>();
+/** What a request's account's object said of its token, asked once a request (index.ts asks first on the test channel). */
+const said = new WeakMap<Request, Promise<Live>>();
+export function liveOf(request: Request, env: Env, claims: Claims): Promise<Live> {
+  let live = said.get(request);
+  if (!live) said.set(request, (live = env.ACCOUNTS.getByName(claims.sub).live(claims, onTestChannel.has(request))));
+  return live;
+}
+
+/**
+ * The test channel is for the accounts the admin let in (Directory `beta`); any call carrying the token of an account
+ * not let in answers 403 not_beta, which the page takes for "go to the stable one" and an app for "this account cannot
+ * use the test build" (index.ts).
+ */
+export const notBetaReply = (env: Env, request: Request) => reply({ error: "not_beta", message: tr(requestLang(request), "cloud.beta.notLetIn"), stable: env.PUBLIC_ORIGIN }, 403);
+
 /**
  * The account a token signs in, or the answer to give: signed out (401), or over its requests a minute (429, tried
  * again later; it was answered as signed out before, and the apps said 登录已失效 to someone signed in).
  */
-async function account(token: string | null, env: Env): Promise<Claims | Response> {
+async function account(token: string | null, env: Env, request: Request): Promise<Claims | Response> {
   const claims = token ? await verifyToken(env, token, "access") : null;
   if (!claims) return denied();
-  const live = await env.ACCOUNTS.getByName(claims.sub).live(claims);
-  return live === true ? claims : live === "limited" ? limited() : denied();
+  const live = await liveOf(request, env, claims);
+  return live === true ? claims : live === "limited" ? limited() : live === "not_beta" ? notBetaReply(env, request) : denied();
 }
 
 const isUpgrade = (request: Request) => request.headers.get("upgrade")?.toLowerCase() === "websocket";
@@ -141,14 +160,16 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     const headers = new Headers({ upgrade: "websocket", "x-stillfail-station": station });
     const version = header(request, "version");
     if (version) headers.set("x-stillfail-version", version.slice(0, 40));
-    return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/stations/connect", { headers }));
+    if (sockets.where(env) === "primary") return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/stations/connect", { headers }));
+    return env.STATIONS.getByName(station).fetch(new Request("https://station/connect", { headers }));
   }
 
   // Spans from a signed-in client, or from a station signing them with its key (tracing.ts).
+  // (their own budget by sender, tracing.ts: not the account's, which the account system's requests need)
   if (path === "/v1/telemetry/traces" && method === "POST") {
     const token = bearerToken(request);
-    const claims = token ? await account(token, env) : null;
-    if (claims instanceof Response) return claims;
+    const claims = token ? await verifyToken(env, token, "access") : null;
+    if (token && (!claims || !(await env.ACCOUNTS.getByName(claims.sub).signedIn(claims)))) return denied();
     return receiveTraces(request, env, claims?.sub ?? null);
   }
 
@@ -158,7 +179,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // A bug report about still.fail itself, from a station's agent (signed with its key) or a signed-in account (feedback.ts).
   if (path === "/v1/feedback" && method === "POST") {
     const token = bearerToken(request);
-    const claims = token ? await account(token, env) : null;
+    const claims = token ? await account(token, env, request) : null;
     if (claims instanceof Response) return claims;
     return receiveFeedback(request, env, claims?.sub ?? null);
   }
@@ -179,7 +200,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/push/key" && method === "GET") return pushKey(env);
   // This device's push subscription or token, registered with the signed-in account's session, or taken off it.
   if (path === "/v1/push" && (method === "POST" || method === "DELETE")) {
-    const claims = await account(bearerToken(request), env);
+    const claims = await account(bearerToken(request), env, request);
     if (claims instanceof Response) return claims;
     return registration(request, env, claims.sub, claims.sid);
   }
@@ -187,10 +208,18 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/events" && method === "GET") {
     if (!isUpgrade(request)) return reply({ error: "websocket_required" }, 426);
     const socket = socketToken(request);
-    const claims = await account(socket?.token ?? null, env);
-    if (claims instanceof Response) return claims;
-    if (!socket) return denied();
-    return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-stillfail-sub": claims.sub, "x-stillfail-protocol": socket.protocol } }));
+    if (sockets.where(env) === "primary") {
+      const claims = await account(socket?.token ?? null, env, request);
+      if (claims instanceof Response) return claims;
+      if (!socket) return denied();
+      return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-stillfail-sub": claims.sub, "x-stillfail-protocol": socket.protocol } }));
+    }
+    // On the account's object, which checks the session itself (and, on the test channel, that it is let in).
+    const claims = socket ? await verifyToken(env, socket.token, "access") : null;
+    if (!claims || !socket) return denied();
+    const headers = { upgrade: "websocket", "x-stillfail-sub": claims.sub, "x-stillfail-sid": claims.sid, "x-stillfail-protocol": socket.protocol, ...(onTestChannel.has(request) ? { "x-stillfail-channel": "beta" } : {}) };
+    const answer = await env.ACCOUNTS.getByName(claims.sub).fetch(new Request("https://account/events", { headers }));
+    return answer.status === 403 ? notBetaReply(env, request) : answer;
   }
 
   // ── the pictures put up as icons: to anyone with the address (icons.ts) ──
@@ -202,7 +231,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // ── accounts ────────────────────────────────────────────────────────────
   const isAccountRoute = path === "/v1/me" || path === "/v1/me/personal-lock" || path === "/v1/me/picture" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
   if (!isAccountRoute) return null;
-  const claims = await account(bearerToken(request), env);
+  const claims = await account(bearerToken(request), env, request);
   if (claims instanceof Response) return claims;
   let input: Record<string, unknown>;
   try {
@@ -342,7 +371,7 @@ export async function feedbackList(env: Env): Promise<AdminFeedback[]> {
 
 export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
-  const claims = await account(bearerToken(request), env);
+  const claims = await account(bearerToken(request), env, request);
   if (claims instanceof Response || !(await consoleAdmin(request, env, claims.email))) return notFound();
   let input: Record<string, unknown>;
   try {

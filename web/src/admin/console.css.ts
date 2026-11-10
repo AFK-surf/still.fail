@@ -175,6 +175,8 @@ globalStyle(`${relayNumbers} dd[data-tone=red]`, { color: vars.red });
 // A series' colour, by its place in the chart (the first blue, the second the accent), for its line, wash and key.
 export const seriesFirst = style({ vars: { "--series": vars.blue } });
 export const seriesSecond = style({ vars: { "--series": vars.accent } });
+/** The charts after the first, side by side where the card has the width (a lone one takes all of it). */
+export const relayCharts = style({ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "18px 32px", minWidth: "0" });
 export const loadChart = style({ margin: "0", display: "grid", gap: "8px", minWidth: "0" });
 export const loadHead = style({
   display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "4px 12px", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted,

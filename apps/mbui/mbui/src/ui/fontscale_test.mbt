@@ -45,3 +45,16 @@ test "words follow the system's size of words from the next frame, said with the
   t.frame()
   assert_true(near(t.rect_of("Sized words").unwrap().3, 20.0))
 }
+
+///|
+test "a line in ems follows the drawn size for plain and rich words" {
+  let t = @ui.Tester::new(fn(c) {
+    c.text("Plain words", size=20.0, line_em=1.7) |> ignore
+    c.rich([@ui.plain("Rich words")], size=20.0, line_em=1.7) |> ignore
+  })
+  t.set_font_scale(1.5)
+  t.draw()
+  let height = @ui.sp_at(1.5, 20.0) * 1.7
+  assert_true(near(t.rect_of("Plain words").unwrap().3, height))
+  assert_true(near(t.rect_of("Rich words").unwrap().3, height))
+}

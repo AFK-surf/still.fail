@@ -787,6 +787,10 @@ try {
     x.until({ topic: "workspaces" }, (v) => (v ?? []).every((a: J) => !(a.workspaces ?? []).some((w: J) => w.id === workspace)) ? "the workspace gone from its list" : undefined, ms),
     x.stationState(workspace, (s) => s.state !== "online" && s.state !== "connecting", ms).then(short),
   ]).catch((x: AggregateError) => Promise.reject(x.errors[0]));
+  await check("bob out of the workspace's lock too, his devices with him: the cloud alone does not keep him out", async () => {
+    let said = "";
+    await whenChanged([stationData], () => !/^DEVICE \S+ bob /m.test((said = stationSays("lock-state"))), 60_000, () => `the station's lock: ${said.trim().split("\n").filter((l) => l.startsWith("DEVICE")).join("; ")}`);
+  });
   await check("bob's devices H and I out once he is: the workspace gone, its station refusing them", async () => {
     for (const x of [h, i]) {
       const t1 = Date.now();

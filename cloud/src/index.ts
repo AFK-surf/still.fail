@@ -13,7 +13,7 @@ import { devicePage, googleStart, consumeLoginRate, signedInPage } from "./login
 import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
-import { adminApi, api, blockAccount, feedbackList, socketToken } from "./api";
+import { adminApi, api, blockAccount, feedbackList, liveOf, notBetaReply, onTestChannel } from "./api";
 import { noted, parseTraceparent, recordCall, relayToAxiom, takeNotes, unverifiedNotes } from "./tracing";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
@@ -21,6 +21,7 @@ export { Directory } from "./directory";
 export { LoginAttempt, LoginLimiter } from "./login";
 export { RelayLoad } from "./relay-load";
 export { ServiceStatus } from "./status";
+export { Station } from "./station";
 import { sampleOwnRelay } from "./relay-load";
 import { checkServices } from "./status";
 import { checkModels } from "./models";
@@ -42,17 +43,20 @@ const notFound = () => new Response("Not found", { status: 404 });
 // (app.youdid.wtf), with the API on its paths as on PUBLIC_ORIGIN, and the beta apps (fail.still.android.beta,
 // fail.still.desktop.beta), whose core says `x-stillfail-channel: beta` on every call. Signing in works for anyone
 // (on the test channel's host it starts on PUBLIC_ORIGIN, as from the console, and comes back to its /auth/callback);
-// any other call carrying an account's token answers 403 not_beta for an account not let in, which the page takes for
-// "go to the stable one" and an app for "this account cannot use the test build".
-const notBetaReply = (env: Env, request: Request) => reply({ error: "not_beta", message: tr(requestLang(request), "cloud.beta.notLetIn"), stable: env.PUBLIC_ORIGIN }, 403);
+// any other call carrying an account's token answers 403 not_beta for an account not let in (api.ts notBetaReply).
 
-/** Whether a call of the test channel comes from an account not let in: one with a valid token, not beta. */
+/**
+ * Whether a call of the test channel comes from an account not let in: one with a valid token, not beta, as its
+ * account's object says with whether the token's session is live (asked once: api.ts liveOf). A device's events socket
+ * is its account's object's to refuse (api.ts).
+ */
 async function notBeta(request: Request, env: Env): Promise<boolean> {
-  const token = bearerToken(request) ?? socketToken(request)?.token ?? null;
+  onTestChannel.add(request);
+  const token = bearerToken(request);
   const claims = token ? await verifyToken(env, token, "access") : null;
   // No token, or not a valid one: the call answers as it would anywhere (401 for an account's call).
-  if (!claims) return false;
-  return !(await env.DIRECTORY.getByName("primary").isBeta(claims.sub));
+  if (!claims || new URL(request.url).pathname === "/v1/events") return false;
+  return (await liveOf(request, env, claims)) === "not_beta";
 }
 
 /** The same request on PUBLIC_ORIGIN: where a browser's sign-in goes, so its cookie is on the host Google calls back. */

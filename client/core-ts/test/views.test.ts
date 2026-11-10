@@ -2583,6 +2583,49 @@ test("a_chats_page_says_at_the_end_of_its_messages_what_its_agent_needs_as_its_r
   assert.deepEqual([v.stateText, v.stateLead, v.stateRest], ["需要你处理：Stripe 的测试 key", "need", "Stripe 的测试 key"]);
 });
 
+test("where_a_chat_stood_is_not_said_again_between_the_viewers_words_reaching_it_and_its_agent_taking_them", async () => {
+  // That its agent took them comes by another read (its session's, its row's) than the chat's page: between the two
+  // the line of the turn before came back, and went again as the agent set to work (the user, 2026-11-10:
+  // 「有个结束的提示，发消息后会出现，然后 agent 开始行动就消失」).
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  const done = { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: now - 60_000, endedAt: now - 50_000 };
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember", lastTurn: done })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  const before = [{ ...entry(1, "看看"), author: "Me@x.com", at: now - 70_000 }, { ...entry(2, "好了"), authorKind: "agent", author: "k", declared: "final", ending: "all_done", at: now - 50_000 }];
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: before, thread: null });
+  const rowOf = (lastTurn: J, patch: J = {}): J => {
+    const r = { ...row("k", now), thread: 7 };
+    r.agents = [{ ...r.agents[0], lastTurn, ...patch }];
+    return r;
+  };
+  t.set(rows("ws/a"), [rowOf(done)]);
+  await t.read(u, 1);
+  assert.equal(u.value.stateText, "已完成");
+  // On their way: the turn it tells of no longer stands.
+  t.views.outboxAdd("ws/a", 7, { text: "再改一下", attachments: [], quotes: [] });
+  await t.read(u, 1);
+  assert.deepEqual([u.value.outbox.length, u.value.stateText], [1, undefined]);
+  // In the chat, its agent's session and its row as they were: nor then.
+  const sent = { ...entry(3, "再改一下"), author: "Me@x.com", at: now };
+  t.set(pageOf("ws/a", 7), { first: 1, last: 3, entries: [...before, sent], thread: null });
+  await t.read(u, 1);
+  assert.deepEqual([u.value.outbox.length, u.value.messages.length, u.value.stateText], [0, 3, undefined]);
+  // Its agent at work on them: nothing to say; its turn over: where it stands now.
+  const working = { kind: "message", outcome: null, declared: null, startedAt: now + 1_000, endedAt: null };
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember", process: "running", lastTurn: working })]);
+  t.set(rows("ws/a"), [rowOf(working, { process: "running" })]);
+  await t.read(u, 1);
+  assert.equal(u.value.stateText, undefined);
+  const again = { ...done, need: "改好了", startedAt: now + 1_000, endedAt: now + 9_000 };
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember", lastTurn: again })]);
+  t.set(rows("ws/a"), [rowOf(again)]);
+  await t.read(u, 1);
+  assert.equal(u.value.stateText, "已完成：改好了");
+});
+
 test("a_slack_threads_page_says_at_the_end_of_its_messages_where_it_stands_as_its_agents_row_does", async () => {
   // Its agent has no chat here: the list has it by its session alone (its row's thread null), the page by its thread.
   const t = setup();

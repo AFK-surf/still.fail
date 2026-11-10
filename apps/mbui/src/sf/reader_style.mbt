@@ -28,7 +28,7 @@ pub(all) enum ReaderStyleChange {
 ///|
 /// The core's defaults (client/core-ts/src/prefs.ts readerOf).
 pub let reader_style_default : ReaderStyle = {
-  size: 18,
+  size: 16,
   line: 1.7,
   margin: 22,
   face: "sans",
