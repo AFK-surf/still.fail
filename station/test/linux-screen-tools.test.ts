@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { closeSync, constants, openSync } from "node:fs";
+import { mkdir, mkdtemp, open, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -107,6 +108,37 @@ test("concurrent requests share a preparation and a stopped station cancels it",
   assert.equal(a, b);
   tools.close();
   await assert.rejects(a);
+  assert.equal(tools.prepared(r.env), null);
+  assert.deepEqual(await readdir(join(r.data, "screen-tools")), []);
+});
+
+test("a preparation stopped ends what its command started, before its stage is removed", { skip: process.platform !== "linux" && process.platform !== "darwin", timeout: 60_000 }, async (t) => {
+  // (CI, 2026-11-10: apt-get ended alone left the process it had started copying a package into the stage as the stage
+  // was removed, and the stage stayed.) This apt-get starts a process that waits to be told to go on, on a FIFO the test
+  // holds the writing end of: written to once the preparation has failed, it has no reader left.
+  const r = await rig();
+  const go = join(r.dir, "go");
+  assert.equal(spawnSync("mkfifo", [go]).status, 0);
+  let told: Awaited<ReturnType<typeof open>> | undefined;
+  t.after(async () => {
+    // (a writer's opening that no reader ever met is met here, so that it ends with the test)
+    closeSync(openSync(go, constants.O_RDONLY | constants.O_NONBLOCK));
+    await told?.close();
+    await r.cleanup();
+  });
+  await writeFile(join(r.dir, "bin", "apt-get"), `#!/bin/sh
+for arg in "$@"; do case "$arg" in Dir::Cache::archives=*) archives="\${arg#*=}";; esac; done
+( read line < "$APT_TEST_GO"; /bin/cp "$APT_TEST_FIXTURES/ffmpeg.deb" "$archives/" ) &
+wait
+`, { mode: 0o755 });
+  r.env.APT_TEST_GO = go;
+  const tools = new LinuxScreenTools(r.data);
+  const preparing = tools.prepare(r.env);
+  // Opened once the command's own process has opened it to read: it is running, and waits.
+  told = await open(go, "w");
+  tools.close();
+  await assert.rejects(preparing);
+  await assert.rejects(told.write("go\n"), { code: "EPIPE" }, "a process of the command still read what it waited for");
   assert.equal(tools.prepared(r.env), null);
   assert.deepEqual(await readdir(join(r.data, "screen-tools")), []);
 });
