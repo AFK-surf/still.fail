@@ -270,6 +270,11 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"), trailing?=update_trailing(c, src), band=update_band(), at=side_at())
     side_scroll(c, "profiles-nav/" + w.id, fn() {
       let mut group = ""
+      // (the room the widest allowance's chips need: one way for every row, nav_quota_chips)
+      let mut chips = 0.0
+      for e in list {
+        chips = dmax(chips, @sf.nav_quota_line(c, field(field(Some(e), "profile"), "quota")))
+      }
       for i, e in list {
         let e = Some(e)
         // (another row under it: the next of its group)
@@ -340,7 +345,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             },
             more~,
             foot?=if windows {
-              Some(fn() { @sf.nav_quota_chips(c, quota, key="profiles/" + text(e, "key"), at=side_at()) })
+              Some(fn() { @sf.nav_quota_chips(c, quota, key="profiles/" + text(e, "key"), at=side_at(), widest=chips) })
             } else {
               None
             },

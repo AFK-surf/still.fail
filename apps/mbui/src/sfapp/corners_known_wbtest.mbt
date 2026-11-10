@@ -69,7 +69,7 @@ let corners_tape_rail : Array[String] = [
   "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing",
   "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long",
   "settings-profiles", "settings-profiles-monthly", "settings-profiles-fable", "settings-profiles-own3",
-  "settings-profiles-week-fable", "settings-profile", "settings-profile-fable", "settings-profile-own3",
+  "settings-profiles-week-fable", "settings-profiles-several", "settings-profile", "settings-profile-fable", "settings-profile-own3",
   "settings-profile-week-fable", "settings-profile-quota", "settings-profile-quota-kinds",
   "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed",
   "settings-profile-quota-failed", "settings-profile-blocked", "settings-profile-signin", "settings-profile-key",

@@ -166,3 +166,196 @@ test "a profile's offline state and its three allowance windows each have room t
     assert_eq(t.squeeze_faults(), [])
   }
 }
+
+///|
+/// The Profile sidebar of settings-profiles-several (five Claude accounts, the report's figures), on 大屏; `row`'s
+/// figures all `left` where given (another account's spent so far, the rest as they were).
+fn several_tester(platform : Int, digits : Double, row? : String = "", left? : Int = 0) -> @ui.Tester {
+  new_run()
+  @settings.fixture_page("settings-profiles-several") |> ignore
+  let base = fixture("settings")
+  // (one field of an object made anew by `f`)
+  let put = fn(v : Json, name : String, f : (Json) -> Json) {
+    match v {
+      Object(m) => {
+        let m = m.copy()
+        m[name] = f(m.get(name).unwrap_or(Json::null()))
+        Json::object(m)
+      }
+      _ => v
+    }
+  }
+  let figures = fn(w : Json) {
+    let w = put(w, "left", fn(_) { Json::number(left.to_double()) })
+    put(w, "usedPercent", fn(_) { Json::number((100 - left).to_double()) })
+  }
+  let respent = fn(v : Json) {
+    put(v, "items", fn(items) {
+      guard items is Array(a) else { return items }
+      Json::array(
+        a.map(fn(e) {
+          guard e is Object(m) && m.get("key") == Some(Json::string(row)) else { return e }
+          put(e, "profile", fn(p) {
+            put(p, "quota", fn(q) {
+              put(q, "windows", fn(ws) {
+                guard ws is Array(ws) else { return Json::null() }
+                Json::array(ws.map(figures))
+              })
+            })
+          })
+        }),
+      )
+    })
+  }
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      let read = base.topic(name, params).get().snapshot()
+      if name == "profiles" && row != "" {
+        { ..read, value: read.value.map(respent) }
+      } else {
+        read
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform~)
+  t.tabular_wider(digits)
+  app.nav.replace(Place("profiles"))
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+/// Each row with an allowance in the sidebar of several_tester, from the top: where its first capsule starts (its box,
+/// none where it has none) and how tall it is; the words of every chip drawn in those rows; where the titles start; where
+/// each row's line under its title starts; the widest room between two capsules side by side in each row.
+fn several_rows(t : @ui.Tester) -> (Array[Double?], Array[Double], Array[String], Double, Array[Double], Array[Double]) raise {
+  let titles = [
+    "claude1@example.com", "claude2@example.com", "claude3@example.com", "claude4@example.com", "claude5@example.com",
+    "ChatGPT 团队", "备用 key",
+  ]
+  let runs = t.text_runs()
+  // (the sidebar's: the title furthest left, a page beside it may say it again; whole, or cut to … where narrow)
+  // (the last, 备用 key, only where the row above it ends: under the window's foot where the rows above are tall)
+  let title_runs = titles.mapi(fn(i, title) {
+    let found = runs.filter(fn(r) {
+      r.text == title ||
+      (r.text.has_suffix("…") && r.text.length() > 4 && title.has_prefix(r.text.substring(end=r.text.length() - 1)))
+    })
+    if found.length() == 0 && i == titles.length() - 1 {
+      return None
+    }
+    guard found.length() > 0 else { abort("no \{title} in \{runs.map(fn(r) { r.text })}") }
+    Some(found.fold(init=found[0], fn(a, r) { if r.x0 < a.x0 { r } else { a } }))
+  })
+  let tops = title_runs.map(fn(r) {
+    match r {
+      Some(r) => r.top
+      None => t.h
+    }
+  })
+  let first_title = title_runs[0].unwrap()
+  let right = first_title.x0 + @sfdesk.wide.side_w.get() - 30.0
+  let boxes = t.boxes()
+  let starts : Array[Double?] = []
+  let heights : Array[Double] = []
+  let words : Array[String] = []
+  let lines_x : Array[Double] = []
+  let gaps : Array[Double] = []
+  for k in 0..<(titles.length() - 1) {
+    let (top, next) = (tops[k], tops[k + 1])
+    heights.push(next - top)
+    let in_row = runs.filter(fn(r) { r.top > top && r.top < next && r.x1 < right })
+    // (the chips' words: under its line of facts, which may end in … as it will, and not the next group's heading)
+    let facts = in_row.fold(init=next, fn(a, r) { if r.top < a { r.top } else { a } })
+    lines_x.push(in_row.filter(fn(r) { r.top == facts }).fold(init=@double.infinity, fn(a, r) { if r.x0 < a { r.x0 } else { a } }))
+    for r in in_row {
+      if r.top > facts && !["ChatGPT 订阅", "API key"].contains(r.text) {
+        words.push(r.text)
+      }
+    }
+    let mut first : Double? = None
+    let capsules : Array[(Double, Double, Double)] = []
+    for r in in_row.filter(fn(r) { r.text.has_suffix("%") }) {
+      // (its capsule: the narrowest round box of a chip's height round it, not its fill's square parts)
+      let middle = (r.top + r.bottom) / 2.0
+      let around = boxes.filter(fn(b) {
+        (b.h - @sf.fill_chip_small_h).abs() < 0.01 &&
+        b.radius > 0.0 &&
+        b.x <= r.x0 &&
+        b.x + b.w >= r.x1 &&
+        b.y <= middle &&
+        b.y + b.h >= middle
+      })
+      guard around.length() > 0 else { fail("\{titles[k]}: \{r.text} in no capsule") }
+      let capsule = around.fold(init=around[0], fn(a, b) { if b.w < a.w { b } else { a } })
+      let x = capsule.x
+      capsules.push((capsule.y, capsule.x, capsule.x + capsule.w))
+      first = Some(match first {
+        Some(f) => if x < f { x } else { f }
+        None => x
+      })
+    }
+    starts.push(first)
+    // (the widest room between two capsules side by side in a line of the row)
+    capsules.sort_by(fn(a, b) { if a.0 != b.0 { a.0.compare(b.0) } else { a.1.compare(b.1) } })
+    let mut widest = 0.0
+    for i in 1..<capsules.length() {
+      if capsules[i].0 == capsules[i - 1].0 {
+        widest = dmax(widest, capsules[i].1 - capsules[i - 1].2)
+      }
+    }
+    gaps.push(widest)
+  }
+  (starts, heights, words, first_title.x0, lines_x, gaps)
+}
+
+///|
+test "a list of five accounts' allowances: every row's chips start where its mark does, at each sidebar width, whatever is spent" {
+  for case in [(0, 0.0), (2, 0.3)] {
+    let (platform, digits) = case
+    let t = several_tester(platform, digits)
+    let own = @sfdesk.wide.side_w.get()
+    // (what a person can drag it to, side_min to side_max)
+    let widths = [own, (own + @sfdesk.side_min) / 2.0, @sfdesk.side_min, own + 60.0, @sfdesk.side_max]
+    let seen : Array[(Array[Double?], Array[Double])] = []
+    for side in widths {
+      @sfdesk.wide.side_w.set(side)
+      t.draw()
+      let (starts, heights, words, text_x, lines_x, gaps) = several_rows(t)
+      let at = "\{platform} \{digits} \{side}"
+      // (a) the five Claude accounts' and ChatGPT's: one start, the mark's
+      let shown = starts.filter_map(fn(s) { s })
+      assert_eq(shown.length(), 6, msg="\{at}: \{starts}")
+      assert_true(shown.iter().all(fn(s) { (s - shown[0]).abs() < 0.01 }), msg="\{at}: first capsules start at \{starts}")
+      // (the mark's left edge: the text is the mark and the row's gap, S2, in from it)
+      let mark_x = text_x - @sf.nav_mark_side - @ui.Space::S2.px()
+      assert_true((shown[0] - mark_x).abs() < 0.01, msg="\{at}: first capsules start at \{starts}, the mark at \{mark_x}")
+      // (one way for a list's rows: claude1 and claude2 have three windows, claude3 and claude4 two, each pair as tall)
+      assert_true(heights[0] == heights[1] && heights[2] == heights[3], msg="\{at}: rows \{heights}")
+      // (each way of a row's chips from the start, never spread to the row's ends: no more room between two side by
+      // side than a mark wider than its chip leaves)
+      assert_true(gaps.iter().all(fn(g) { g < 16.0 }), msg="\{at}: room between capsules \{gaps}")
+      // (and each row's line under its title, its facts: from the mark's edge too)
+      assert_true(lines_x.iter().all(fn(x) { (x - mark_x).abs() < 0.01 }), msg="\{at}: lines under the titles start at \{lines_x}, the mark at \{mark_x}")
+      // (b) every chip whole
+      assert_true(words.iter().all(fn(w) { !w.has_suffix("…") }), msg="\{at}: \{words}")
+      assert_eq(t.squeeze_faults(), [], msg=at)
+      seen.push((starts, heights))
+    }
+    // (c) an account's figures all spent or all left: every row still starts where it did, at each width, and the
+    // list's rows still take one way (each pair of as many windows as tall)
+    for change in [(0, "ws1/st1/cc", 100), (0, "ws1/st1/cc", 0), (2, "ws1/st1/claude-3", 100), (4, "ws1/st1/claude-5", 0)] {
+      let (_, row, left) = change
+      let t = several_tester(platform, digits, row~, left~)
+      for i, side in widths {
+        @sfdesk.wide.side_w.set(side)
+        t.draw()
+        let (starts, heights, _, _, _, _) = several_rows(t)
+        let at = "\{platform} \{digits} \{side}: \{row} all \{left}"
+        assert_eq(starts, seen[i].0, msg=at)
+        assert_true(heights[0] == heights[1] && heights[2] == heights[3], msg="\{at}: rows \{heights}")
+      }
+    }
+  }
+}

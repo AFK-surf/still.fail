@@ -639,6 +639,8 @@ pub fn fill_chip_node(@view.View, () -> Int32, () -> String, () -> String, () ->
 
 pub let fill_chip_small_h : Double
 
+pub fn fill_chip_wide(@ui.Ctx, String, String, small? : Bool, compact? : Bool) -> Double
+
 pub fn find_passage(String, String) -> (Int32, Int32)?
 
 pub fn find_words(String, Array[String]) -> Array[(Int32, Int32)]
@@ -1262,7 +1264,9 @@ pub fn nav_meta() -> @ui.TextStyle
 
 pub fn nav_new() -> @ui.Style
 
-pub fn nav_quota_chips(@ui.Ctx, @json.Json?, key? : String, at? : ListAt) -> Unit
+pub fn nav_quota_chips(@ui.Ctx, @json.Json?, key? : String, at? : ListAt, widest? : Double) -> Unit
+
+pub fn nav_quota_line(@ui.Ctx, @json.Json?) -> Double
 
 pub fn nav_row(@ui.Ctx, String, Bool, () -> Unit, align? : @ui.Align, more? : Bool) -> Bool
 
