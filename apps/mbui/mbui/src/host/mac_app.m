@@ -3034,11 +3034,33 @@ static BOOL update_signed_as_this(NSURL *app, NSString **why) {
   return st == errSecSuccess;
 }
 
+// Where this app lives: its bundle, or where it was opened from when macOS runs it translocated (an app opened, with the
+// quarantine on it, from where Finder did not move it, e.g. Downloads, is run from a read-only copy under
+// /private/var/folders/.../AppTranslocation/, beside which nothing can be written). The update goes in place there; the
+// app it puts there carries no quarantine, so it is opened from where it is from then on. (Security's calls found as
+// they are first needed, as below.)
+static NSURL *update_home(void) {
+  static Boolean (*is_translocated)(CFURLRef, bool *, CFErrorRef *);
+  static CFURLRef (*original_of)(CFURLRef, CFErrorRef *);
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    void *sec = dlopen("/System/Library/Frameworks/Security.framework/Security", RTLD_LAZY);
+    if (!sec) return;
+    is_translocated = dlsym(sec, "SecTranslocateIsTranslocatedURL");
+    original_of = dlsym(sec, "SecTranslocateCreateOriginalPathForURL");
+  });
+  NSURL *here = NSBundle.mainBundle.bundleURL;
+  bool moved = false;
+  if (!is_translocated || !original_of || !is_translocated((__bridge CFURLRef)here, &moved, NULL) || !moved) return here;
+  CFURLRef from = original_of((__bridge CFURLRef)here, NULL);
+  return from ? (NSURL *)CFBridgingRelease(from) : here;
+}
+
 // The zip unzipped beside this app (a folder the system gives for replacing it, on its volume) and its app checked:
 // the app, or nil and why not.
 static NSURL *update_stage(NSString *zip, NSString **why) {
   NSFileManager *fm = NSFileManager.defaultManager;
-  NSURL *here = NSBundle.mainBundle.bundleURL;
+  NSURL *here = update_home();
   NSError *e = nil;
   NSURL *stage = [fm URLForDirectory:NSItemReplacementDirectory inDomain:NSUserDomainMask appropriateForURL:here
                               create:YES error:&e];
@@ -3076,7 +3098,7 @@ static void update_at_quit(void) {
   update_staged = nil;
   NSFileManager *fm = NSFileManager.defaultManager;
   NSError *e = nil;
-  if ([fm replaceItemAtURL:NSBundle.mainBundle.bundleURL withItemAtURL:app backupItemName:nil options:0
+  if ([fm replaceItemAtURL:update_home() withItemAtURL:app backupItemName:nil options:0
           resultingItemURL:NULL error:&e])
     update_log(@"in place as this one quits");
   else
@@ -3150,7 +3172,7 @@ void mb_host_update_apply(moonbit_string_t said) {
   mb_host_outside(MB_OUTSIDE_UPDATE, 1, 0);
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
     NSFileManager *fm = NSFileManager.defaultManager;
-    NSURL *here = NSBundle.mainBundle.bundleURL;
+    NSURL *here = update_home();
     NSError *e = nil;
     NSString *why = nil;
     if (![fm replaceItemAtURL:here withItemAtURL:app backupItemName:nil options:0 resultingItemURL:NULL error:&e])
@@ -3178,7 +3200,7 @@ void mb_host_update_apply(moonbit_string_t said) {
         [NSString stringWithFormat:@"while /bin/kill -0 %d 2>/dev/null; do /bin/sleep 0.2; done; "
                                    @"/usr/bin/open \"$0\" && echo \"$(/bin/date) opened $0\" >> \"$1\"",
                                    getpid()],
-        NSBundle.mainBundle.bundlePath, update_log_path()
+        here.path, update_log_path()
       ];
       [again launch];
       [NSApp terminate:nil];
