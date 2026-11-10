@@ -47,18 +47,19 @@ fn pace_of(seed : UInt) -> @core.Pace {
 }
 
 ///|
-/// The app over `trace` in a w × h window (a phone's by default; the wide flows' 1280 × 800), in the pass `seed`
-/// names (0: the strict one, as the run had it; else what is due at once in the order drawn from it, at that pass's
-/// pace: pace_of). `drop`: asks of the run's its timing made, by words in them
-/// (Replay::drop), each with what came for it. `platform`: the system it is on (Tester::new's), by default by its width:
-/// a phone's (Android) narrower than medium_from, else the Mac.
+/// The app over `trace`, drawn by what the run's host gave its frames (the trace's `{"settings":…}`: its window, its
+/// scale, the system it is and its settings, @ui.trace_settings), in the pass `seed` names (0: the strict one, as the
+/// run had it; else what is due at once in the order drawn from it, at that pass's pace: pace_of). `drop`: asks of the
+/// run's its timing made, by words in them (Replay::drop), each with what came for it. `w`, `h`, `platform`: what the
+/// test says its run was (the wide flows' 1280 × 800, the Mac's), held to the trace's: one that differs is refused, as
+/// is a trace that does not say.
 #callsite(autofill(loc))
 pub fn Flow::start(
   trace : String,
   seed? : UInt = 0,
   drop? : Array[String] = [],
-  w? : Double = 390.0,
-  h? : Double = 844.0,
+  w? : Double,
+  h? : Double,
   env? : Array[(String, String)] = [],
   platform? : Int,
   loc~ : SourceLoc,
@@ -85,13 +86,29 @@ pub fn Flow::start(
   // do not hang on the run's pace, and an older trace's asks have no wall clock to keep it by)
   r.pace(if seed == 0 && emit_path() != "" { @core.AtOnce } else { pace_of(seed) }, strict=seed == 0)
   r.attach()
-  // (on the screen it was made on: a phone's window's runs a phone's, Android's, pointed at by a finger; a wider one's
-  // the Mac's, by a mouse, and keyboard and mouse's window made narrow (`platform` 0); the live run recording it again on a Mac
-  // plays that system too)
-  let platform = match platform {
-    Some(p) => p
-    None => if w < @sf.medium_from { 2 } else { 0 }
+  // (on the screen it was made on, as its host gave it: a phone's window's runs a phone's, Android's, pointed at by a
+  // finger; a wider one's the Mac's, by a mouse, and keyboard and mouse's window made narrow (`platform` 0); the live
+  // run recording it again on a Mac plays that system too)
+  let (w_said, h_said, platform_said) = (w, h, platform)
+  let settings = match r.settings() {
+    Some(s) => s
+    None =>
+      abort(
+        "flow: this test's trace has no {\"settings\":…}, what its run's host gave its frames (mbui's @ui.trace_settings): record it again (scripts/rerecord.sh)",
+      )
   }
+  let (w, h, scale, platform, native, dark) = match @ui.settings_of(settings) {
+    Ok(s) => s
+    Err(why) => abort("flow: this test's trace: " + why + " (mbui's @ui.trace_settings): record it again (scripts/rerecord.sh)")
+  }
+  let said = fn(what : String, by_test : Double?, run : Double) {
+    if by_test is Some(v) && v != run {
+      abort("flow: the test says its run's \{what} was \{v}, its trace's was \{run}")
+    }
+  }
+  said("width", w_said, w)
+  said("height", h_said, h)
+  said("platform", platform_said.map(fn(p) { p.to_double() }), platform.to_double())
   emit_start(seed, w, h, if platform == 2 { env + [("MBUI_PLATFORM", "android")] } else { env })
   // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
   @ui.on_message("core", @core.receive)
@@ -105,9 +122,12 @@ pub fn Flow::start(
   // (and its host's answers as the run's gave them, where it kept them: a word's bounds as the system splits words)
   // (on the system the run was on, its core told so: above)
   let t = match r.text() {
-    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~, platform~, tree=@sfapp.app_tree(the_source), loc~)
-    None => @ui.Tester::new(app, w~, h~, env=r.env() + env, platform~, tree=@sfapp.app_tree(the_source), loc~)
+    Some(text) =>
+      @ui.Tester::new(app, w~, h~, scale~, dark~, native~, env=r.env() + env, text~, platform~, tree=@sfapp.app_tree(the_source), loc~)
+    None => @ui.Tester::new(app, w~, h~, scale~, dark~, native~, env=r.env() + env, platform~, tree=@sfapp.app_tree(the_source), loc~)
   }
+  // (and the rest of what its host gave its first frame: the system's settings, the minutes it was off UTC)
+  ignore(t.settings_said(settings.stringify()))
   // (which station this machine is, as the run's host said)
   if r.local_station() != "" {
     t.set_local_station(r.local_station())
@@ -119,7 +139,8 @@ pub fn Flow::start(
     None => ()
   }
   // what the run's host said of its views (a player's state, a video's frames) said to the Tester's in its place
-  r.host(fn(line) { ignore(t.view_said(line)) })
+  // (and what it gave its later frames, where that changed: its window, its settings)
+  r.host(fn(line) { if !t.settings_said(line) { ignore(t.view_said(line)) } })
   // the run's pace kept on the Tester's clock: when an ask is made again, when a message is given
   r.clock(fn() { t.time() })
   // the run's core answering as it did: what is due is posted as each frame ends, taken by the next (but while a

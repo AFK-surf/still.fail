@@ -411,6 +411,10 @@ fn main {
     @hostapi.log("CORETRACE " + ({ "host": { "localStation": local } } : Json).stringify())
     // and what the host said of its views (a video's frames' times, a frame grabbed), at the core's clock, beside it
     @ui.trace_views(fn(m) { @core.trace_note(m) })
+    // and what it gives the frames (the window's size and scale, the system and its settings), first as the first
+    // frame begins and again where it changes: a replay's Tester is made by it, never by defaults (src/sfreplay:
+    // Flow::start)
+    @ui.trace_settings(fn(m) { @core.trace_note(m) })
     // and each line of a scripted run's script as it began (`{"step":…}`), and a line that acts again as its input
     // went to the host (`"acted":true`), at the same clock: when the run took each step and when it acted, for a replay
     // to take it when the run did (src/core/replay.mbt: Replay::step_at)

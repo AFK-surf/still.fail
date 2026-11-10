@@ -156,6 +156,8 @@ struct FakeHost {
   window_corners : FixedArray[Double]?
   /// the system's size of words (font_scale: 1 as it is)
   mut font_scale : Double
+  /// how far its local time is ahead of UTC, in minutes (utc_offset_min; Tester::set_utc_offset: 0 as it is)
+  mut utc_offset : Int
   /// whether the system lays out the app's tabs itself (an iPhone Duo's: Tester::set_nav_able), and the bars the app
   /// handed it last (@hostapi.nav_bar's JSON; "" none yet)
   mut nav_able : Bool
@@ -404,6 +406,13 @@ fn h_clock_at_wall(ms : Double) -> Double {
 /// How far local time is ahead of UTC at `at_ms`, in minutes.
 fn h_utc_offset_min(at_ms : Double) -> Int {
   @hostapi.utc_offset_min(at_ms)
+}
+
+///|
+/// How far the local time is ahead of UTC now, in minutes: what a core trace keeps of the host (envrec.mbt's
+/// settings_at_frame), the time of day read here where the host provides it.
+fn h_utc_offset_now() -> Int {
+  h_utc_offset_min(h_wall_ms())
 }
 
 ///|

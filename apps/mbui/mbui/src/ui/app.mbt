@@ -117,6 +117,8 @@ fn frame_afters_run() -> Unit {
 
 ///|
 fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
+  // (what the host gives the frame, as it gives it: kept on a core trace as it changes, envrec.mbt)
+  settings_at_frame(w, h, scale)
   let z = window_zoom_wanted.get()
   if z != window_zoom_drawn.val {
     let ratio = window_zoom_drawn.val / z

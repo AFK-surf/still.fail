@@ -531,6 +531,8 @@ pub fn set_pointing(Pointing?) -> Unit
 
 pub fn set_tree_theme(() -> Theme) -> Unit
 
+pub fn settings_of(Json) -> Result[(Double, Double, Double, Int32, Pointing, Bool), String]
+
 pub fn set_vector_pictures((Bytes, Int32) -> (Int32, Int32, FixedArray[Byte])?) -> Unit
 
 pub fn set_view_app((@view.View) -> Unit, around? : (Ctx) -> Unit) -> Unit
@@ -627,6 +629,8 @@ pub fn text_patch(size? : TextSize, weight? : Weight, color? : Color, w? : Len, 
 pub fn text_style(size? : TextSize, weight? : Weight, color? : Color, w? : Len, center? : Bool, wrap? : Bool, tracking? : Tracking, max_lines? : Int32, leading? : Leading, tabular? : Bool, balance? : Bool, narrow? : TextPatch, dark? : TextPatch) -> TextStyle
 
 pub fn touch_slop() -> Double
+
+pub fn trace_settings((Map[String, Json]) -> Unit) -> Unit
 
 pub fn trace_steps((String, StepMoment) -> Unit) -> Unit
 
@@ -2735,11 +2739,13 @@ pub fn Tester::set_stream_feeds(Self, Bool) -> Unit
 pub fn Tester::set_stream_layers(Self, Bool) -> Unit
 pub fn Tester::set_stream_layers_srgb(Self, Bool) -> Unit
 pub fn Tester::set_unreadable_font(Self, String) -> Unit
+pub fn Tester::set_utc_offset(Self, Int32) -> Unit
 pub fn Tester::set_wall(Self, Double) -> Unit
 pub fn Tester::set_window_inset(Self, Bool) -> Unit
 pub fn Tester::set_window_opens(Self, Bool) -> Unit
 pub fn Tester::set_window_snap(Self, Int32) -> Unit
 pub fn Tester::set_window_zoomed(Self, Bool) -> Unit
+pub fn Tester::settings_said(Self, String) -> Bool
 pub fn Tester::shape_boxes(Self) -> Array[(String, Double, Double, Double, Double)]
 pub fn Tester::shape_cover(Self, Double, Double) -> Double
 pub fn Tester::share_in(Self, String, title? : String, files? : Array[(String, Bytes)]) -> Unit

@@ -1273,6 +1273,12 @@ impl @hostapi.Host for FakeHost with font_scale(self) {
 }
 
 ///|
+/// How far its local time is ahead of UTC (Tester::set_utc_offset), whatever the moment.
+impl @hostapi.Host for FakeHost with utc_offset_min(self, _) {
+  self.utc_offset
+}
+
+///|
 /// What the person points with as it starts (Tester::new's `pointing`): 1 a finger, 0 a mouse; each event's word
 /// after (@ui.pointing).
 impl @hostapi.Host for FakeHost with pointing(self) {

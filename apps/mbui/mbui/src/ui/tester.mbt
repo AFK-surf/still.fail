@@ -400,6 +400,7 @@ pub fn Tester::new(
     window_corner,
     window_corners,
     font_scale: 1.0,
+    utc_offset: 0,
     nav_able,
     nav_said: "",
     a11y: false,
