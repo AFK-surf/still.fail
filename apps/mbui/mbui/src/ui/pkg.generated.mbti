@@ -599,6 +599,8 @@ pub fn style(row? : Bool, w? : Len, h? : Len, min_w? : Len, max_w? : Len, min_h?
 
 pub fn style_cut(TextStyle) -> Bool
 
+pub fn style_fills(TextStyle) -> Bool
+
 pub fn style_ink(TextStyle) -> Int64
 
 pub fn style_words(TextStyle) -> @view.WordsLook
