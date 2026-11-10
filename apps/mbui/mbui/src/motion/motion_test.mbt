@@ -1722,3 +1722,62 @@ test "a box growing told to stop at a moment after its frame's: stopped as at th
   let rest = h()
   assert_true(rest >= after && rest < 60.0, msg="slowing to rest short of its 60: \{after} then \{rest}")
 }
+
+///|
+/// The box growing from one line to three (said `turn_lead_ms` before 0) and turned back to one at `turn_back_at`
+/// (Spec::value_at's Moved, set off again from its speed): its height at each of `turn_seen_at` after the turn, its
+/// frames each `step` on (0: none between what is said and looked at) and `between` frames drawn between the two
+/// events, evenly.
+fn turned_heights(step : Double, between : Int) -> Array[Double] {
+  let lines = Ref::new(1)
+  let t = lined_box(lines, Ref::new(-1.0))
+  let h = fn() { drawn_box(t, 0xFF0000FFL).3 }
+  let t0 = t.time() + turn_lead_ms
+  // (frames each `step` on up to `at`, the last landed on it)
+  let walk = fn(at : Double) {
+    if step > 0.0 {
+      while t.time() + step < at {
+        t.frame(ms=step)
+      }
+    }
+    if at > t.time() {
+      t.frame(ms=at - t.time())
+    }
+  }
+  lines.val = 3
+  t.frame(ms=turn_lead_ms)
+  for i in 0..<between {
+    walk(t0 + turn_back_at * (i + 1).to_double() / (between + 1).to_double())
+  }
+  walk(t0 + turn_back_at - turn_lead_ms)
+  lines.val = 1
+  t.frame(ms=turn_lead_ms)
+  turn_seen_at.map(fn(at) {
+    walk(t0 + turn_back_at + at)
+    h()
+  })
+}
+
+///|
+/// How long before an event's moment the frame before the one that sees it is drawn (ms).
+let turn_lead_ms : Double = 4.0
+
+///|
+/// When (ms after it grows) the growing box is turned back: on its way, as fast as it goes.
+let turn_back_at : Double = 100.0
+
+///|
+/// When (ms after it is turned back) the turned box is looked at: as it turns, slowing, on its way back, at rest.
+let turn_seen_at : Array[Double] = [1.0, 10.0, 33.0, 80.0, 150.0, 260.0, 400.0, 1000.0]
+
+///|
+test "a box growing turned back (a Move set off again from its speed): the same at every moment, at any rate, a frame between its two events or none" {
+  let none = turned_heights(0.0, 0)
+  // (turned back on its way: up a little from its speed, then down to its one line)
+  assert_true(none[0] > 20.0 && none[none.length() - 1] == 20.0, msg="\{none}")
+  for rate in [60.0, 120.0, 24.0, 7.0] {
+    assert_eq(turned_heights(1000.0 / rate, 0), none, msg="at \{rate} a second")
+  }
+  assert_eq(turned_heights(0.0, 1), none, msg="a frame between its two events")
+  assert_eq(turned_heights(0.0, 3), none, msg="three frames between its two events")
+}

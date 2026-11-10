@@ -435,7 +435,7 @@ pub fn sheet_look(c : @ui.Ctx, s : SheetState, body : () -> Unit) -> Unit {
 /// go back never goes on down past `line` before it turns (the coordinator of the migration, 2026-11-10). Its node
 /// sheet's (sf's sheet_node) the same.
 pub fn sheet_drag_closes(down : Double, speed : Double, line : Double) -> Bool {
-  @ui.lands_past(down, speed, line) || speed >= @ui.flung_away
+  @ui.lands_past(down, speed, line) || @ui.flung_away_at(speed)
 }
 
 ///|
@@ -447,7 +447,7 @@ pub fn sheet_drag_closes(down : Double, speed : Double, line : Double) -> Bool {
 /// sheet's (sf's sheet_node) the same.
 pub fn sheet_goes_to(shares : Array[Double], at : Double, speed : Double, total : Double, close_below : Double) -> Double? {
   let f = at / total
-  if speed >= @ui.flung_away {
+  if @ui.flung_away_at(speed) {
     // (the highest under it)
     let mut below : Double? = None
     for s in shares {
@@ -456,7 +456,7 @@ pub fn sheet_goes_to(shares : Array[Double], at : Double, speed : Double, total 
       }
     }
     below
-  } else if speed <= -@ui.flung_away {
+  } else if @ui.flung_away_at(-speed) {
     // (the lowest over it; over the highest, the highest)
     let mut above : Double? = None
     let mut most = shares[0]

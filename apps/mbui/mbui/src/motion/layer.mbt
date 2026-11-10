@@ -2183,12 +2183,17 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           }
           // (set off again while it went: a Move on from that speed (move_path), past its new shape a little where it
           // went toward it fast and back, not from rest on its curve, stopped dead (the user, 2026-11-09: 「冲过一点再弹回」))
-          // (turned back too: on from its speed the other way, slowing on its Move's way past where it was a little, then
-          // back to its new shape, not from rest, stopped dead as it turned (sizes_steady); the coordinator of the
-          // migration, 2026-11-10: a composer growing a line let go of by words sent from it before it has grown)
+          // (turned back too: on from its speed the other way, slowing to rest as far as it carries, then to its new
+          // shape, its speed the same either side of the turn and turning over frames: flex's come_way, the one way a
+          // motion changed goes on from its speed, a show's node's called back as much (the coordinator of the
+          // migration, 2026-11-10: one way, not one here and another there))
           let spec = if sets_out_from_rest(spec) && v.abs() > reshape_moving {
             let way = ground_way(r, laid)
-            move(points=way, over=carried_way(-way, v * way, 0.0, 0.0))
+            if v > 0.0 {
+              move(points=way, over=carried_way(-way, v * way, 0.0, 0.0))
+            } else {
+              move(points=way)
+            }
           } else {
             spec
           }

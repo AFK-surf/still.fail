@@ -100,6 +100,24 @@ fn moved_ms(per : Double, over : Double, from : Double, to : Double) -> Double {
 }
 
 ///|
+/// A Move told how far its way is as another's (`over`, Spec::over: those of one cause as long as the furthest of
+/// them): its Move to where it goes along that length (flex's ComeWith); none, as long as how far it goes itself.
+fn moved_along(per : Double, over : Double, from : Double, to : Double) -> @flex.ComeWith? {
+  if over >= 0.0 {
+    Some({ start: 0.0, ends: moved_ms(per, over, from, to) })
+  } else {
+    None
+  }
+}
+
+///|
+/// How long a Move from `from` to `to` set out at `v` (per second) runs: flex's come_way_ms, in points.
+fn moved_way_ms(per : Double, over : Double, from : Double, to : Double, v : Double) -> Double {
+  let p = if per > 0.0 { per } else { 1.0 }
+  @flex.come_way_ms(from * p, v / 1000.0 * p, to * p, along?=moved_along(per, over, from, to))
+}
+
+///|
 /// Motion.kt motionSpring: a spring by its visual duration (seconds) and
 /// bounce, as Motion (the web's motion library) makes it: stiffness
 /// (2π / 1.2·duration)², damping ratio clamp(1 − bounce, .05, 1).
@@ -281,7 +299,7 @@ pub fn Spec::duration(self : Spec, from : Double, to : Double, v : Double) -> Do
     Spring(ratio, k, thr, delay) =>
       delay + spring_duration(ratio, k, from - to, v, thr)
     Tween(ms, _, delay) => delay + ms
-    Moved(per, over, delay) => if from == to && v == 0.0 { delay } else { delay + moved_ms(per, over, from, to) }
+    Moved(per, over, delay) => if from == to && v == 0.0 { delay } else { delay + moved_way_ms(per, over, from, to, v) }
     Snap(delay) => delay
     Motion(tr) => tr.delay + generator_duration(tr.generator(from, to, v))
   }
@@ -340,9 +358,10 @@ pub fn Spec::value_at(
       if t < delay {
         return (from, v)
       }
-      // (its speed per second, the way's per ms)
-      let (x, xv) = @ui.move_path(from - to, v / 1000.0, t - delay, moved_ms(per, over, from, to))
-      (to + x, xv * 1000.0)
+      // (in points, the way's speed per ms: flex's come_way, the one way a motion changed goes on from its speed)
+      let p = if per > 0.0 { per } else { 1.0 }
+      let (x, xv) = @flex.come_way(from * p, v / 1000.0 * p, to * p, t - delay, along?=moved_along(per, over, from, to))
+      (x / p, xv * 1000.0 / p)
     }
     Snap(_) => (from, v)
     Motion(_) => (from, v)

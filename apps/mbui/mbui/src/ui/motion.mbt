@@ -146,6 +146,13 @@ pub fn lands_past(at : Double, v : Double, line : Double) -> Bool {
 pub let flung_away : Double = 0.5
 
 ///|
+/// Whether a finger putting a thing away let go of it going `v` (points a ms, its way away) flicked it: faster than
+/// flung_away (a toast's as it was). The one test for the gestures of the one kind, a sheet's and a toast's.
+pub fn flung_away_at(v : Double) -> Bool {
+  v > flung_away
+}
+
+///|
 /// Where a Move is `t` ms into its `dur`: `d` off its end as it set out, going `v` (per ms, of the same units) then
 /// (what it was told to go on from: a move under way, the hand's speed as it let go). A critically damped spring's way
 /// (ω = move_k / dur), its rest at `dur` made exact by taking off what it would still have left there in the measure
