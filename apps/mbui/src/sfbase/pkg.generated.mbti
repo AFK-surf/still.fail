@@ -591,6 +591,8 @@ pub fn flight_ground(Double, Bool) -> Double
 
 pub fn flight_ground_of(@ui.Ctx, SendFlight) -> Double
 
+pub fn flight_grounded(@ui.Ctx, SendFlight) -> Bool
+
 pub fn flight_hint_away(@ui.Ctx, String) -> Bool
 
 pub fn flight_landing(@ui.Ctx, SendFlight, Int32, String, share? : (Double, Double), top_crop? : Bool, paint? : ((Double, Double, @ui.Fit, Double) -> Unit)?) -> Unit

@@ -1,0 +1,14 @@
+# 小屏, a finger: words sent in a chat whose agent's turn is over, flying from the composer into their bubble; the
+# station has them, its agent sets to work and answers (chat_fixture.mbt's pace). What each frame of the flight costs,
+# and of what follows it till the answer is in.
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 看一下列表的高度
+wait 700
+log measure
+tap icon:arrow-up
+wait 5500
+exit

@@ -138,6 +138,9 @@ priv struct KeptClock {
 priv struct KeptDue {
   at : Double
   mut later : Bool
+  /// whether a frame is asked of the host for it (false: read in the first frame drawn at or past it for anything
+  /// else, Ctx::shows_from)
+  mut asks : Bool
   come : @signals.Signal[Bool]
 }
 
@@ -156,7 +159,7 @@ fn part_live() -> Unit {
 ///|
 /// What is built now changes at `t` (`later`: what is shown does not wait for it): built again in the first frame at
 /// or past it, kept or not; one past already, the next frame's.
-fn part_wake(now : Double, t : Double, later : Bool) -> Unit {
+fn part_wake(now : Double, t : Double, later : Bool, asks? : Bool = true) -> Unit {
   if !part_building() || t == @double.infinity {
     return
   }
@@ -172,11 +175,12 @@ fn part_wake(now : Double, t : Double, later : Bool) -> Unit {
   let d = if i < dues.length() && dues[i].at == t {
     dues[i]
   } else {
-    let d = { at: t, later: true, come: @signals.signal(false) }
+    let d = { at: t, later: true, asks: false, come: @signals.signal(false) }
     dues.insert(i, d)
     d
   }
   d.later = d.later && later
+  d.asks = d.asks || asks
   d.come.get() |> ignore
 }
 
@@ -223,6 +227,17 @@ pub fn Ctx::shows_until(self : Ctx, t : Double) -> Unit {
 }
 
 ///|
+/// What is being built changes at `t` (the frames' clock) while something else it shows is drawn each frame meanwhile
+/// (a share of a way reached while that way is drawn going): built again in the first frame drawn at or past it, a
+/// part's or a row's kept as it was drawn or not, with no frame of its own asked for it (Ctx::shows_until asks one at
+/// `t`, a frame drawn between those the display draws, where what moved since the last is seen from where that one
+/// drew it). Only what a frame drawn for something else will show: what nothing else draws a frame for till then is
+/// Ctx::shows_until's.
+pub fn Ctx::shows_from(self : Ctx, t : Double) -> Unit {
+  part_wake(self.clock, t, true, asks=false)
+}
+
+///|
 /// A frame begins (frame_drawn, before what it does again is decided): what read the frame told it changed, and what
 /// read a moment come.
 fn clock_frame_start(t : Double) -> Unit {
@@ -258,7 +273,7 @@ fn clock_frame_end(c : Ctx) -> Unit {
 /// (a frame drawn from the last build's tree too: frame_watch.mbt).
 fn dues_wake(c : Ctx) -> Unit {
   for d in kept_clock.dues {
-    if d.at > c.clock {
+    if d.at > c.clock && d.asks {
       if c.wake_at < 0.0 || d.at < c.wake_at {
         c.wake_at = d.at
       }

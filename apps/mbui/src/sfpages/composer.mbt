@@ -963,17 +963,23 @@ fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) 
   // (whatever this build saw: submit asks whether it is ready as it is pressed)
   c.on_press(id, fn() { submit() })
   @sf.tip(c, "composer/send", id, @sf.t("web-main.composer.send"))
-  let able = @sf.ease_to(c, "composer/send/able", ready)
-  let lit = @sf.ease_to(c, "composer/send/lit", hot)
-  let on = @sf.mix(@sf.mix(p.text, send_hot, p.canvas), lit, p.text)
-  let ground = @sf.mix(on, able, @sf.over(p.raised, @sf.alpha(p.text, send_off)))
-  let b = c.box(style=@sf.round_face().then(@ui.style(bg=Data(ground))), id~, fn() {
+  // (told as it is built, eased as it is painted: what builds the composer is not built again each frame they go, as
+  // its words are sent)
+  let able = @motion.told(c, "composer/send/able", if ready { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+  let lit = @motion.told(c, "composer/send/lit", if hot { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+  let ground_at = fn(able : Double, lit : Double) {
+    let on = @sf.mix(@sf.mix(p.text, send_hot, p.canvas), lit, p.text)
+    @sf.mix(on, able, @sf.over(p.raised, @sf.alpha(p.text, send_off)))
+  }
+  let b = c.box(style=@sf.round_face().then(@ui.style(bg=Data(ground_at(able.target(), lit.target())))), id~, fn() {
     if starting {
       @sf.spinner(c, size=@sf.theme().round.glyph) |> ignore
     } else {
-      @sf.icon(c, "arrow-up", size=@sf.theme().round.glyph, color=@sf.mix(p.canvas, able, p.raised)) |> ignore
+      let arrow = @sf.icon(c, "arrow-up", size=@sf.theme().round.glyph, color=@sf.mix(p.canvas, able.target(), p.raised))
+      c.ink_by(arrow, fn() { @sf.mix(p.canvas, able.get(c), p.raised) })
     }
   })
+  c.bg_by(b, fn() { ground_at(able.get(c), lit.get(c)) })
   c.semantics(b, Button, id~, label=@sf.t("web-main.composer.send"), disabled=!ready)
   b
 }
@@ -2184,7 +2190,16 @@ fn composer_was(c : @ui.Ctx) -> String {
 /// of it till it is down, its declared end), its ground going down with its room.
 fn composer_let_go(c : @ui.Ctx, draft : String) -> Bool {
   match @sfbase.flight_lets_go(draft) {
-    Some((at, ms)) => c.moment() >= at && c.moment() < at + ms
+    Some((at, ms)) => {
+      // (built again as it is let go and as it is down, in the first frames drawn at or past those moments: their way is
+      // drawn each frame meanwhile)
+      if c.moment() < at {
+        c.shows_from(at)
+      } else if c.moment() < at + ms {
+        c.shows_from(at + ms)
+      }
+      c.moment() >= at && c.moment() < at + ms
+    }
     None => false
   }
 }
@@ -2238,6 +2253,11 @@ fn composer_held(c : @ui.Ctx, draft : String) -> Bool {
     (Some(f), _) if f.carried => false
     (Some(_), Some((at, ms))) => {
       composing.held_till = (draft, at + ms)
+      // (built again as it is down, in the first frame drawn at or past that moment: their way is drawn each frame
+      // meanwhile)
+      if c.moment() < at + ms {
+        c.shows_from(at + ms)
+      }
       c.moment() < at + ms
     }
     (Some(_), None) => {

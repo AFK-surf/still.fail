@@ -1380,6 +1380,7 @@ pub fn Ctx::shot(Self, String, Double, () -> Unit) -> Unit
 pub fn Ctx::show(Self, Int32) -> Unit
 pub fn Ctx::shown_across(Self, Int32, but? : String) -> (Double, Double)?
 pub fn Ctx::shows_cut(Self, Int32) -> Bool
+pub fn Ctx::shows_from(Self, Double) -> Unit
 pub fn Ctx::shows_motion(Self, Mover, Bool) -> Unit
 pub fn Ctx::shows_until(Self, Double) -> Unit
 pub fn Ctx::sideways(Self, String, w? : Size, pad? : Double, padx? : Double, pady? : Double, across? : Bool, to_end? : String, fill? : Bool, show? : Int32, bar_in? : Double, () -> Unit) -> Int32

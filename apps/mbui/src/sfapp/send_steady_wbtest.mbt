@@ -373,3 +373,72 @@ test "words sent before the words sent before them are out of the field: never d
   }
   assert_eq(bad.length(), 0)
 }
+
+///|
+test "words sent under a waiting card, the core yet to have them: the chat's rows given its list the same each frame" {
+  // (2026-11-10: said answered from the frame they are sent (sent_here_view), the view and its entries were made anew
+  // each time they were read: other rows to the list every frame of the words' flight, all of them built again, as
+  // long as the core took to have them, many frames on a phone)
+  new_run()
+  fix_core_for.val = 400.0
+  // (the made-up chat's card waits, 等 林 决定, its agent's posts after it: what is sent answers it)
+  let src = fixture("chat")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.type_text("看一下列表")
+  let (_, core, _) = view_of_chat(src, r)
+  tap_send(t)
+  t.frame()
+  let (was_view, was, _) = view_of_chat(src, r)
+  // (answered from here, the core yet to say so: not the entries the core gave, which are as they were)
+  assert_true(!physical_equal(core, was), msg="said answered from here")
+  // (the frames of a tenth of a second on, the core still without them: fix_core_for)
+  let till = t.time() + 100.0
+  while t.time() < till {
+    t.frame()
+    let (now_view, now, _) = view_of_chat(src, r)
+    assert_true(physical_equal(was_view.unwrap(), now_view.unwrap()), msg="the same view")
+    assert_true(physical_equal(was, now), msg="the same entries")
+  }
+}
+
+///|
+test "words sent: the chat's rows they fly past are kept, not built again each frame of their flight" {
+  // (2026-11-10: where they are on their way was read as their row was built (flight_p, the send button's ease_to),
+  // every row of the chat's list built again each frame of the flight, 14-17M instructions a frame on a phone, the
+  // instrbench's `send`; read where it is laid out or painted, their own row alone is. Tester::built_why names neither:
+  // the list's own clock read as it is laid out is the frame's first cause either way. Judged on frame()'s, the
+  // display's own: the default run's alone, @ui.test_at_a_rate)
+  if @ui.test_at_a_rate() {
+    return
+  }
+  new_run()
+  let src = fixture("chat-done-live")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.type_text("看一下列表的高度")
+  t.run_for(@ui.move_most_ms)
+  tap_send(t)
+  ignore(t.rows_built())
+  // (each frame on their way: how many of the list's rows it built, not kept)
+  let built : Array[Int] = []
+  let end_at = t.time() + @sfbase.flight_most_ms
+  while t.time() < end_at {
+    t.frame()
+    let rows = t.rows_built().filter(fn(r) { r.1 >= 0 }).length()
+    match send_flight.get() {
+      Some(f) if f.placed => built.push(rows)
+      _ => ()
+    }
+  }
+  assert_true(built.length() >= 20, msg="frames of their flight: \{built.length()}")
+  // (their own row, where its pieces are drawn, and no other; all of them again only in the frames a share of their
+  // way is reached: their row opening, the composer let go and down, shows_from)
+  let own = built.filter(fn(n) { n <= 1 }).length()
+  assert_true(own * 4 >= built.length() * 3, msg="rows built each frame of their flight: \{built}")
+}

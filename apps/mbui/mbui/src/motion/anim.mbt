@@ -374,6 +374,35 @@ fn Anim::state_at(self : Anim, at : Double) -> (Double, Double) {
 }
 
 ///|
+/// Where a frame drawn at moment `at` (now or later) has it on the way it was told, as Anim::get would then (to its end
+/// once its time has gone, as its time goes, whole ms), read by nothing: what is built from when it gets somewhere (a
+/// share of its way) asks when that is of it once, and is built again then (Ctx::shows_from), not each frame it goes.
+pub fn Anim::value_at(self : Anim, at : Double) -> Double {
+  if !self.running || self.start < 0.0 {
+    return self.value
+  }
+  let ms = at - self.start
+  match (self.gen, self.spec) {
+    (Some(g), Motion(tr)) => {
+      let t = @ui.whole_ms(ms) - tr.delay
+      if @ui.whole_ms(ms) >= self.dur || (t >= 0.0 && g.next(t).done) {
+        self.end
+      } else if t < 0.0 {
+        self.from
+      } else {
+        g.next(t).value
+      }
+    }
+    _ =>
+      if @ui.whole_ms(ms) >= self.dur {
+        self.end
+      } else {
+        self.spec.value_at(ms, self.dur, self.from, self.target, self.v0).0
+      }
+  }
+}
+
+///|
 /// Told at moment `at` (now, or a moment before it in this frame) to stop where it goes, one of it `points` points: on
 /// from where its way had it then and as fast, slowing to rest on a Move's way as far as that speed carries it
 /// (@ui.move_stop_points), never past its end nor back: its speed the same either side of `at`, no stop dead, wherever
