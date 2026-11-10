@@ -743,6 +743,22 @@ export interface QuotaCredits {
 	balance?: string;
 }
 
+/** A kind of reset of a subscription's limits, as offered. */
+export interface QuotaReset {
+	/** What `profile.resetQuota` is asked for as `reset`; none: any of the account's. */
+	id?: string;
+	/** session | weekly | full | model (what one model used of the week) | credit (a provider's own, saying nothing more) */
+	kind: string;
+	left: number;
+	/** One can be used now; else only once at a limit it refills. */
+	usable: boolean;
+	title: string;
+	/** How many are left, when they end, and why none can be used now. */
+	text: string;
+	/** What one gives back, in words. */
+	refills?: string;
+}
+
 /** How full something is. */
 export type Level = "ok" | "amber" | "red";
 
@@ -771,6 +787,8 @@ export interface Quota {
 	resetExpiries?: number[];
 	creditsText?: string;
 	resetText?: string;
+	/** Each kind of reset it holds, as offered (all of them together, as one, where the provider has one kind or its station tells no kinds); present with `resetCount`. */
+	resets?: QuotaReset[];
 	/** ok | unsupported | unavailable | blocked (the provider refuses the account) */
 	state: string;
 	windows: QuotaWindow[];

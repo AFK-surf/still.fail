@@ -940,8 +940,11 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.call("PUT", "/profiles/cc", { access: { kind: "subscription" } });
     mkdirSync(join(t.data, "homes/cc"), { recursive: true });
     writeFileSync(join(t.data, "homes/cc/.credentials.json"), JSON.stringify({ claudeAiOauth: { accessToken: "claude-token", refreshToken: "r", expiresAt: Date.now() + 86_400_000 } }));
-    const redeem = (key: string) => t.call("POST", "/profiles/cc/reset-quota", undefined, owner, { "Idempotency-Key": key });
-    assert.deepEqual(await redeem("first"), [200, { outcome: "reset" }]);
+    const redeem = (key: string, reset?: string) => t.call("POST", "/profiles/cc/reset-quota", reset !== undefined ? { reset } : undefined, owner, { "Idempotency-Key": key });
+    // A kind it holds none of: nothing claimed.
+    assert.equal((await redeem("weekly", "weekly"))[0], 409);
+    assert.equal(p.asked.filter((a) => a.method === "POST").length, 0);
+    assert.deepEqual(await redeem("first", "full"), [200, { outcome: "reset" }]);
     const claim = p.asked.find((a) => a.method === "POST")!;
     assert.deepEqual(claim.body, { program: "cedar_ember", grant_id: "launch-fable", request_id: createHash("sha256").update("first").digest("hex") });
     assert.equal(claim.headers.authorization, "Bearer claude-token");

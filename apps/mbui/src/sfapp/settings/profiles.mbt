@@ -442,37 +442,40 @@ fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arra
           |> ignore
         None => ()
       }
-      if has(q, "resetCount") {
-        // a reset used, asked first (the subscription's own: so many left, `resetText` what it does)
-        let resetting = is_doing(core, ["profile.resetQuota"], on)
-        let left = count(q, "resetCount")
+      // each kind of reset it holds, a row each, one used asked first (so many left, what one gives back)
+      let resetting = is_doing(core, ["profile.resetQuota"], on)
+      for r in items(q, "resets") {
+        let rv = Some(r)
+        let left = count(rv, "left")
+        let usable = left > 0 && flag(rv, "usable")
+        let words = match opt_text(rv, "refills") {
+          Some(refills) => refills + " · " + text(rv, "text")
+          None => text(rv, "text")
+        }
         list_row(
           c,
           fn() {
-            row_lines(c, tr("android-settings.quota.resets"), text(q, "resetText"), wrap_sub=true, end=fn() {
+            row_lines(c, text(rv, "title"), words, wrap_sub=true, end=fn() {
               doing_mark(c, resetting, failed_of(core, ["profile.resetQuota"], on))
-              c.text(tr("android-settings.quota.reset"), style=if left > 0 { @sf.value.then(@sf.link) } else { @sf.value })
+              c.text(tr("android-settings.quota.reset"), style=if usable { @sf.value.then(@sf.link) } else { @sf.value })
               |> ignore
             })
           },
-          key=if left <= 0 || resetting { "" } else { "quota-reset" },
+          key=if !usable || resetting { "" } else { "quota-reset/" + text(rv, "kind") },
           on_press=fn() {
+            let asked = match opt_text(rv, "id") {
+              Some(kind) => obj([("station", str(station)), ("id", str(id)), ("reset", str(kind))])
+              None => obj([("station", str(station)), ("id", str(id))])
+            }
             confirm(
               tr("android-settings.quota.resetTitle"),
-              fill("android-settings.quota.resetText", [("name", text(pv, "name")), ("text", text(q, "resetText"))]),
+              fill("android-settings.quota.resetText", [("name", text(pv, "name")), ("text", text(rv, "title") + " · " + words)]),
               tr("android-settings.quota.resetUse"),
-              fn() {
-                act(
-                  core,
-                  tr("android-settings.quota.resetWhat"),
-                  "profile.resetQuota",
-                  obj([("station", str(station)), ("id", str(id))]),
-                  done=tr("android-settings.quota.resetDone"),
-                )
-              },
+              fn() { act(core, tr("android-settings.quota.resetWhat"), "profile.resetQuota", asked, done=tr("android-settings.quota.resetDone")) },
             )
           },
         )
+        |> ignore
       }
     })
   })

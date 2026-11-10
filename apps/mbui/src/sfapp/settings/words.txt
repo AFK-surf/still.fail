@@ -609,7 +609,6 @@ android-settings.quota.resetText
 android-settings.quota.resetTitle
 android-settings.quota.resetUse
 android-settings.quota.resetWhat
-android-settings.quota.resets
 android-settings.quota.title
 android-settings.quota.unavailable
 android-settings.quota.updated

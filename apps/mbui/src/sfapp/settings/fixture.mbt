@@ -52,6 +52,11 @@ priv struct SettingsFixture {
   mut resets_used : Int
   /// Two reset credits with distinct expiry times (settings-profile-quota-expiry).
   mut reset_expiry : Bool
+  /// Claude 主账号's resets of two kinds: a 5-hour one usable only at a limit, a Fable one usable now, used by
+  /// `profile.resetQuota` with its kind (settings-profile-quota-kinds).
+  mut reset_kinds : Bool
+  /// the Fable reset used (`profile.resetQuota` with `reset: model`)
+  mut fable_used : Bool
   /// the models named by hand on ChatGPT 团队 (`profile.addModel`)
   models_added : Array[String]
   /// Whether the example API key is enabled.
@@ -133,6 +138,8 @@ let fx : SettingsFixture = {
   skills_shared: {},
   resets_used: 0,
   reset_expiry: false,
+  reset_kinds: false,
+  fable_used: false,
   models_added: [],
   key_enabled: true,
   pairing: false,
@@ -233,6 +240,8 @@ fn fixture_reset() -> Unit {
   fx.kept_cleared.clear()
   fx.resets_used = 0
   fx.reset_expiry = false
+  fx.reset_kinds = false
+  fx.fable_used = false
   fx.models_added.clear()
   fx.key_enabled = true
   fx.version = 0
@@ -525,6 +534,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-quota-failed" => fx.trouble = "quota"
     "settings-profile-quota-login" => fx.trouble = "quota-login"
     "settings-profile-quota-expiry" => fx.reset_expiry = true
+    "settings-profile-quota-kinds" => fx.reset_kinds = true
     "settings-profile-blocked" => fx.trouble = "blocked"
     "settings-profile-signin" => fx.trouble = "login"
     // a connect's page; its way of making sessions asked (src/sfpages connect.mbt's dialog)
@@ -627,6 +637,7 @@ pub fn fixture_page(mode : String) -> String {
       "profile:ws1/st1#cc"
     "settings-profile-key" => "profile:ws1/st1#k2"
     "settings-profile-quota" | "settings-profile-quota-login" | "settings-profile-quota-expiry" => "profile:ws1/st1#cx"
+    "settings-profile-quota-kinds" => "profile:ws1/st1#cc"
     "settings-me-reading" => "me"
     "settings-usage-details-pending" => "usage"
     "settings-profiles-pick" | "settings-profiles-monthly" | "settings-profiles-fable" | "settings-profiles-own3" | "settings-profiles-week-fable" => "profiles"
@@ -727,6 +738,7 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
           }),
         ).collect()),
       ),
+      ..(if id == "cc" { fx_cc_resets() } else { [] }),
       ("checkedAt", Json::number(0.0)),
       ("time", obj([("checkedAt", stamp_of("3 分钟前"))])),
     ]),
@@ -981,6 +993,49 @@ fn fx_cc_with(more : Array[(String, Json)]) -> Array[(String, Json)] {
 }
 
 ///|
+/// ChatGPT 团队's resets left, in the core's words.
+fn fx_cx_reset_text(left : Int) -> String {
+  if fx.reset_expiry {
+    if left == 2 { "剩余 2 次 · 6 小时 35 分钟后、3 天 19 小时后到期" } else if left == 1 { "剩余 1 次 · 3 天 19 小时后到期" } else { "剩余 0 次" }
+  } else {
+    "还可重置 \{left} 次"
+  }
+}
+
+///|
+/// Claude 主账号's resets of two kinds, as the core offers them (settings-profile-quota-kinds).
+fn fx_cc_resets() -> Array[(String, Json)] {
+  if !fx.reset_kinds {
+    return []
+  }
+  let kinds = [
+    obj([
+      ("id", str("session")),
+      ("kind", str("session")),
+      ("left", Json::number(1.0)),
+      ("usable", Json::boolean(false)),
+      ("title", str("5 小时重置")),
+      ("text", str("剩余 1 次 · 到达它能恢复的上限后才能用")),
+      ("refills", str("立即恢复 5 小时额度")),
+    ]),
+  ]
+  if !fx.fable_used {
+    kinds.push(
+      obj([
+        ("id", str("model")),
+        ("kind", str("model")),
+        ("left", Json::number(1.0)),
+        ("usable", Json::boolean(true)),
+        ("title", str("Fable 重置")),
+        ("text", str("剩余 1 次 · 118 天后到期")),
+        ("refills", str("把本周 Fable 用掉的额度还回每周额度")),
+      ]),
+    )
+  }
+  [("resetCount", Json::number(kinds.length().to_double())), ("resets", Json::array(kinds))]
+}
+
+///|
 /// ChatGPT 团队's own: more models than its page shows at first (one named by hand once added, which can be taken off
 /// again), a reset of its quota left.
 fn fx_cx_more() -> Array[(String, Json)] {
@@ -1014,9 +1069,13 @@ fn fx_cx_more() -> Array[(String, Json)] {
           ],
         ),
         ("resetCount", Json::number(left.to_double())),
-        ("resetText", str(if fx.reset_expiry {
-          if left == 2 { "剩余 2 次 · 6 小时 35 分钟后、3 天 19 小时后到期" } else if left == 1 { "剩余 1 次 · 3 天 19 小时后到期" } else { "剩余 0 次" }
-        } else { "还可重置 \{left} 次" })),
+        ("resetText", str(fx_cx_reset_text(left))),
+        // (one kind, which says nothing of what it gives back: as the core offers it, with no kind to ask for)
+        ("resets", if left > 0 {
+          [obj([("kind", str("credit")), ("left", Json::number(left.to_double())), ("usable", Json::boolean(true)), ("title", str("额度重置")), ("text", str(fx_cx_reset_text(left)))])]
+        } else {
+          []
+        }),
         ("checkedAt", Json::number(0.0)),
         ("time", obj([("checkedAt", stamp_of("3 分钟前"))])),
       ]),
@@ -2831,6 +2890,11 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     // the subscription's sign-in begun: as settings-profile-login has it, waiting on the code
     "profile.login" => {
       fx.login = "needs_code"
+      fx_changed()
+      Some(Ok(obj([])))
+    }
+    "profile.resetQuota" if text(p, "reset") == "model" => {
+      fx.fable_used = true
       fx_changed()
       Some(Ok(obj([])))
     }

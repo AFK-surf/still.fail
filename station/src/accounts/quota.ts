@@ -22,7 +22,7 @@ import { RenewRefused } from "./console.ts";
 import { type ProfileQuota, type QuotaWindow, URLS, type Urls } from "./profiles.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 import { codexQuotaFailure } from "../../../client/core-ts/src/codex-quota.ts";
-import { claudeHeaders, claudeResets, USAGE_PATH } from "./claude-reset.ts";
+import { claudeHeaders, claudeResets, type QuotaReset, USAGE_PATH } from "./claude-reset.ts";
 
 type Json = any;
 
@@ -157,12 +157,17 @@ async function claudeUsageResponse(base: string, token: string, lang: Lang, vers
   const scoped = claudeScoped(body?.limits).filter((s) => !windows.some((w) => w.label === s.label));
   if (scoped.length > 0) q.scoped = scoped;
   if (typeof body?.extra_usage?.is_enabled === "boolean") q.extraUsage = body.extra_usage.is_enabled;
-  const resets = version !== null ? claudeResets(body) : null;
-  if (resets !== null) {
-    q.resetCount = resets.count;
-    if (resets.expiries.length > 0) q.resetExpiries = resets.expiries;
-  }
+  const resets = version !== null ? claudeResets(body, scoped.length === 1 ? (scoped[0]!.scope ?? null) : null) : [];
+  if (resets.length > 0) withResets(q, resets);
   return [q, false];
+}
+
+/// The resets of each kind, and their count and expiries all together as a core from before kinds reads them.
+function withResets(q: ProfileQuota, resets: QuotaReset[]) {
+  q.resets = resets;
+  q.resetCount = resets.reduce((n, r) => n + r.left, 0);
+  const expiries = resets.flatMap((r) => r.expiries ?? []).sort((a, b) => a - b);
+  if (expiries.length > 0) q.resetExpiries = expiries;
 }
 
 /// The weeks one model has to itself under the account's (Fable's, 2026-11): the entries of `limits` scoped to a

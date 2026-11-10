@@ -350,7 +350,6 @@
   "android-settings.quota.resetTitle": "重置额度？",
   "android-settings.quota.resetUse": "使用一次重置",
   "android-settings.quota.resetWhat": "重置额度",
-  "android-settings.quota.resets": "额度重置",
   "android-settings.quota.title": "额度",
   "android-settings.quota.unavailable": "无法获取额度",
   "android-settings.quota.updated": "已更新额度",

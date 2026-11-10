@@ -126,7 +126,7 @@ export type AccountsDeps = {
   /// Tests: how a profile is checked, its allowance read (null: nobody can ask), its reset asked, its decisions found.
   check?: (request: CheckRequest, lang: Lang) => Promise<ProfileCheck>;
   quota?: ((profile: Profile) => Promise<ProfileQuota>) | null;
-  resetQuota?: ((profile: Profile, key: string) => Promise<Json>) | null;
+  resetQuota?: ((profile: Profile, key: string, kind: string | null) => Promise<Json>) | null;
   discover?: (profile: Profile, check: ProfileCheck) => Promise<Capability>;
   /// The machine's logins (null: none to read); read in `env` with their allowances by default.
   machine?: MachineLogins | null;
@@ -237,7 +237,7 @@ export class Accounts {
   private readonly urls: Urls;
   private readonly checkFn: (request: CheckRequest, lang: Lang) => Promise<ProfileCheck>;
   private readonly quotaFn: ((profile: Profile) => Promise<ProfileQuota>) | null;
-  private readonly resetFn: ((profile: Profile, key: string) => Promise<Json>) | null;
+  private readonly resetFn: ((profile: Profile, key: string, kind: string | null) => Promise<Json>) | null;
   private readonly discoverFn: (profile: Profile, check: ProfileCheck) => Promise<Capability>;
 
   private deps: AccountsDeps;
@@ -268,8 +268,8 @@ export class Accounts {
     this.resetFn =
       deps.resetQuota !== undefined
         ? deps.resetQuota
-        : (profile, key) => {
-            if (profile.runtime === "claude") return this.claudeReset(profile, key);
+        : (profile, key, kind) => {
+            if (profile.runtime === "claude") return this.claudeReset(profile, key, kind);
             const codex = deps.codex?.();
             if (!codex) throw new Refusal(503, tr(stationLang(), "station.quota.resetUnsupported"));
             return codex.resetQuota(profile, key);
@@ -422,7 +422,7 @@ export class Accounts {
 
   /// One of a Claude subscription's limit resets used (claude-reset.ts), with its token (a borrowed one's lent by its
   /// host), renewed and asked again once when the provider says it is not good.
-  private async claudeReset(profile: Profile, key: string): Promise<Json> {
+  private async claudeReset(profile: Profile, key: string, kind: string | null): Promise<Json> {
     const version = this.deps.claudeVersion?.() ?? null;
     if (version === null) throw new Refusal(503, tr(stationLang(), "station.quota.resetUnsupported"));
     const token = (rejected?: string) => {
@@ -431,10 +431,10 @@ export class Accounts {
       return this.deps.shared.lendClaude(profile, rejected);
     };
     const first = await token();
-    const result = await claudeResetWith(this.urls.anthropic, first.token, version, key);
+    const result = await claudeResetWith(this.urls.anthropic, first.token, version, key, kind);
     if (result?.unauthorized !== true) return result;
     const renewed = await token(first.token);
-    const again = await claudeResetWith(this.urls.anthropic, renewed.token, version, key);
+    const again = await claudeResetWith(this.urls.anthropic, renewed.token, version, key, kind);
     if (again?.unauthorized === true) throw new Refusal(502, tr(stationLang(), "station.quota.signInExpired"));
     return again;
   }
@@ -1308,14 +1308,14 @@ export class Accounts {
   }
 
   /// POST /profiles/:id/reset-quota: a subscription's rate-limit reset redeemed (OpenAI's, Claude's), under the request's
-  /// key.
-  async resetQuota(id: string, key: string, lang: Lang = stationLang()): Promise<Json> {
+  /// key; `kind`, of the allowance's `resets` (none: any, as a core from before kinds asks).
+  async resetQuota(id: string, key: string, lang: Lang = stationLang(), kind: string | null = null): Promise<Json> {
     const t = (k: string) => tr(lang, k);
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, t("station.profile.notFound"));
     if ((profile.runtime !== "codex" && profile.runtime !== "claude") || accessKind(profile) !== "subscription") throw new Refusal(400, t("station.quota.resetSubscriptionOnly"));
     if (!this.resetFn) throw new Refusal(503, t("station.quota.resetUnsupported"));
-    const result = await this.resetFn(profile, key);
+    const result = await this.resetFn(profile, key, kind);
     const quota = await this.readQuota(id, true).catch((error) => {
       log.warn("accounts", "could not read the allowance after a reset", { profile: id, error: (error as Error).message });
       return null;
