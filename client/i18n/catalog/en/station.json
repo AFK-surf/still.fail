@@ -584,6 +584,7 @@
   "station.context.empty": "No context yet",
   "station.context.cannotCompact": "{name} can't compact its context",
   "station.notice.compacted": "Context compacted",
+  "station.notice.runAccountChanged": "Switched account: {was} → {now}",
   "station.notice.runChanged": "Switched: {was} → {now}",
   "station.notice.runDefaultModel": "default model",
   "station.notice.runDefaultEffort": "default effort",

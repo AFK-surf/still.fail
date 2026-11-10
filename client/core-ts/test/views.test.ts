@@ -405,6 +405,11 @@ test("a notice that a chat's run changed says what changed, what it runs on now 
   // An effort or a speed alone is named.
   assert.equal(shown(run, { ...run, effort: "low" }).words, "思考深度：高 → 低");
   assert.equal(shown({ ...run, fast: false }, { ...run, fast: true }).short, "速度：Fast");
+  // Another account alone (the station moved it, an allowance run out) is named; with another runtime it is the rest's.
+  notice = shown(run, { ...run, profile: "cc2", account: "b@x.com" });
+  assert.equal(notice.words, "账号：a@x.com → b@x.com");
+  assert.equal(notice.short, "账号：b@x.com");
+  assert.equal(notice.lines[1], "现在：Claude Code · Opus 5.5 · 高 · 自动 · b@x.com");
   // Not a change (an old station's notice, a message of an agent): as it was.
   assert.equal(shownMessage({ authorKind: "ember", author: "ember", text: "已压缩上下文" }, [], null, [], [], [], undefined).notice.short, undefined);
 });

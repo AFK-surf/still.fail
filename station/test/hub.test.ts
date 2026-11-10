@@ -2664,7 +2664,13 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   assert.notEqual(second.options.profile.id, on);
   assert.equal(r.session(key).profile, second.options.profile.id);
   assert.ok(!r.session(key).profilePinned);
-  assert.ok(r.chat.texts().every((t) => !t.includes("额度")), "it just goes on, saying nothing");
+  assert.ok(r.chat.texts().every((t) => !t.includes("额度")), "it just goes on, saying no more than that it moved");
+  // Said in its chat as a change of model is, the account alone (the user, 2026-11-10).
+  const name = (id: string) => r.config.profiles.find((p: any) => p.id === id)!.name;
+  assert.equal(r.chat.texts().filter((t) => t.startsWith("已切换账号：")).length, 1);
+  assert.ok(r.chat.texts().includes(`已切换账号：${name(on)} → ${name(second.options.profile.id)}`), r.chat.texts().join("\n"));
+  const moved = r.store.entriesAfter(r.store.latestThread(key)!.thread.id, 0).find((e) => e.change !== undefined);
+  assert.deepEqual([moved?.change?.was.profile, moved?.change?.now.profile, moved?.change?.now.pinned], [on, second.options.profile.id, false]);
   // In a new runtime session of its own (sessions/afresh.ts).
   assert.equal(second.options.resume, undefined);
   assert.equal(second.prompts.length, 1);
@@ -2960,7 +2966,7 @@ test("a model at capacity is no account's limit: said once, tried again after lo
   await time.adjust(60_000);
   await settle();
   assert.equal(agent.prompts.length, 3);
-  assert.equal(said().length, 1);
+  assert.equal(said().length, 1, r.chat.texts().join("\n---\n"));
   // Stopped while it waits to try again: it tries no more, and its jobs go on.
   r.store.insertJob({ ...watchJob(key), id: "build", token: "tbuild", port: null, watch: false });
   agent.end(full);
@@ -3043,7 +3049,8 @@ test("taken up by the next station, a process runs on the account it was started
   assert.equal(busyNext.options.profile.id, "cc2");
   assert.equal(r.session(busyKey).profile, "cc2");
   assert.ok(matches(busyNext.prompts[0]!, [GO_ON_AFTER_SPENT]), busyNext.prompts[0]);
-  assert.ok(r.chat.texts().every((t) => !t.includes("额度")), "it just goes on, saying nothing");
+  assert.ok(r.chat.texts().every((t) => !t.includes("额度")), "it just goes on, saying no more than that it moved");
+  assert.ok(r.chat.texts().some((t) => t.startsWith("已切换账号：") && t.endsWith(" → second")), r.chat.texts().join("\n"));
   // The idle one, given a message, leaves its process on the full account first.
   await hub.accept("cl", reply(idle, "9999.5", "<@UBOT> one more", { addressed: true }));
   await settle();

@@ -578,6 +578,7 @@
   "station.context.empty": "暂无上下文",
   "station.context.cannotCompact": "{name} 不支持压缩上下文",
   "station.notice.compacted": "已压缩上下文",
+  "station.notice.runAccountChanged": "已切换账号：{was} → {now}",
   "station.notice.runChanged": "已切换：{was} → {now}",
   "station.notice.runDefaultModel": "默认模型",
   "station.notice.runDefaultEffort": "默认深度",

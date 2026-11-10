@@ -243,7 +243,7 @@ export async function configure(hub: Hub, key: string, change: SessionChange, la
       hub.store.setSessionContextBefore(key, over ? (row.contextBefore ?? row.context ?? 0) : null);
     }
     if (repick) hub.accounts.repick(key);
-    else if (profile === null) hub.accounts.runOn(key);
+    else if (profile === null) hub.accounts.runOn(key, false, true);
   }
   // Another most context is what its process starts with (Claude Code's settings, a Codex thread's config): only a new
   // one takes it.
