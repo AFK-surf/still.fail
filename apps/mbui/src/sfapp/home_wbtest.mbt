@@ -445,6 +445,8 @@ test "a row held long, its 分享…: the next level in the menu's sheet, one sh
   assert_true(row_lifted(t, ry))
   let top0 = sheet_tops(t)
   assert_eq(top0.length(), 1)
+  // (every rule the screen is held to, as the menu has it: its next level adds no fault)
+  let held = t.audit()
   t.tap_text("分享…")
   for _ in 0..<40 {
     t.run_for(@ui.frame_period_default)
@@ -453,6 +455,8 @@ test "a row held long, its 分享…: the next level in the menu's sheet, one sh
   }
   assert_true(t.find("复制会话链接") is Some(_) && t.find("重命名") is None)
   assert_true(sheet_tops(t)[0] > top0[0] + 20.0, msg="\{sheet_tops(t)} \{top0}")
+  let added = t.audit().filter(fn(f) { !held.contains(f) })
+  assert_eq(added, [])
   t.back()
   for _ in 0..<40 {
     t.run_for(@ui.frame_period_default)
