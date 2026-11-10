@@ -273,8 +273,9 @@ for t in $targets; do
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
       # (words_large's sweep, every screen at the system's larger words, on the second, whose jobs had the most room
       # at every rate: dealt with the pages by name it was the fourth's at 60 a second, one of its last files to start,
-      # 51-59 s of its 214-262, 2026-11-10)
-      "src/sfapp/words_large_wbtest.mbt  ") echo 2 ;;
+      # 51-59 s of its 214-262, 2026-11-10. At 24 and at 7 on the fourth, which has a runner for each: the second runs
+      # both in turn, 138 s and 117 s of pages beside its four sweeps, 267 s of its 5 minutes, main 62fed392 42751653901)
+      "src/sfapp/words_large_wbtest.mbt  ") case "${MBUI_TEST_FPS:-}" in 24 | 7) echo 4 ;; *) echo 2 ;; esac ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt --index 8-"*) echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
       # (preview_tree's two on the fourth, the one with the most programs: at 120 a second APP_PART gives each of its
