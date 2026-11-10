@@ -9647,9 +9647,21 @@ pub fn Tree::drawn(self : Tree) -> Array[Drawn] {
 }
 
 ///|
+/// Whether node `at` is a press target as Tree::drawn_held and the rest say it: it has a press (View::on_press) and is
+/// not `inert`. `inert` is written by what it says itself (View::presses(false)), cleared as a node is made again, and
+/// set on the old copy a shared element leaves where it flies (Tree::paired: that copy drawn fading out on the flight's
+/// way, taking nothing). Not what holds it, nor whether it is leaving, in its bones or under a modal layer: what reads
+/// this runs on every frame of a running app too (ui's Ctx::corners_after_layout: a row pressed whole is the corner
+/// container of an old view's box said `Inner` in it), so it is one field read, and a row that starts to leave stays
+/// that box's container all the way out, its corner not worked out against another halfway.
+fn Tree::presses_said(self : Tree, at : Int) -> Bool {
+  self.nodes[at].on_press is Some(_) && !self.nodes[at].inert
+}
+
+///|
 /// The scene unfolded as Tree::drawn has it, its corners as big as it is drawn too, each with what holds it as drawn (its index in the same array, -1: none
-/// drawn round it) and whether it takes a press (View::on_press): for a check of where things stand in what holds them
-/// (ui's corner rule).
+/// drawn round it) and whether it is a press target (Tree::presses_said: not one that says it takes none): for a check of
+/// where things stand in what holds them (ui's corner rule).
 pub fn Tree::drawn_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
   let out : Array[(Drawn, Int, Bool)] = []
   // (each in the order's place, where it is in what is drawn: -1 where it draws nothing)
@@ -9666,7 +9678,7 @@ pub fn Tree::drawn_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
       radius: c.radius * s,
       corners: c.corners.map(fn(k) { (k.0 * s, k.1 * s, k.2 * s, k.3 * s) }),
     }
-    out.push((d, if h >= 0 { at_out[h] } else { -1 }, self.nodes[c.id.at].on_press is Some(_)))
+    out.push((d, if h >= 0 { at_out[h] } else { -1 }, self.presses_said(c.id.at)))
     false
   })
   out
@@ -9686,7 +9698,7 @@ pub fn Tree::laid_held(self : Tree) -> Array[(Drawn, Int, Bool)] {
     }
     at_out[i] = out.length()
     let (lx, ly) = self.laid_origin(c.id).unwrap_or((x, y))
-    out.push((unfolded(c, lx, ly, a, 1.0), if h >= 0 { at_out[h] } else { -1 }, self.nodes[c.id.at].on_press is Some(_)))
+    out.push((unfolded(c, lx, ly, a, 1.0), if h >= 0 { at_out[h] } else { -1 }, self.presses_said(c.id.at)))
     false
   })
   out
@@ -9735,7 +9747,7 @@ pub fn Tree::laid_held_toward(self : Tree, wanted : (Content) -> Bool) -> Array[
       h = self.order_holder[h]
     }
     at_out[i] = out.length()
-    out.push((unfolded(c, lx, ly, a, 1.0), if h >= 0 { at_out[h] } else { -1 }, self.nodes[c.id.at].on_press is Some(_)))
+    out.push((unfolded(c, lx, ly, a, 1.0), if h >= 0 { at_out[h] } else { -1 }, self.presses_said(c.id.at)))
     false
   })
   out
