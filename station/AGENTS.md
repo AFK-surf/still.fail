@@ -18,7 +18,8 @@
   microseconds took seconds on a station short of memory. No new synchronous call of node:fs, child_process or zlib
   there (fs/promises, execFile): `scripts/check.sh` refuses one a change adds unless its line says why with `sync:`
   (read before the station serves; one step that must not be split), outside a worker's file, the readers' (`src/read/`
-  but for what the main thread runs of it) and `src/cli.ts`. Those from before this rule stand until they are moved; the
+  but for what the main thread runs of it), `src/cli.ts`, and the update's own process (`src/updates/command.ts` and
+  the delta applier it runs, `src/updates/delta.ts`). Those from before this rule stand until they are moved; the
   line that says the main thread was held (`src/main.ts`) names, by caller, those that still take time.
   `test/main-thread-waits.test.ts` counts what a day's scenarios make it wait on; a change may lower the counts, never
   raise them.
