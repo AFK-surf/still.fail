@@ -47,7 +47,7 @@ async function counted(work: () => Promise<unknown>): Promise<Counted> {
 const STATEMENTS = {
   transcriptGrowing: 0,
   lengthsWritten: 4,
-  turn: 97,
+  turn: 98,
   toolCall: 4,
   usageRecord: 6,
   remoteToolCall: 1,
