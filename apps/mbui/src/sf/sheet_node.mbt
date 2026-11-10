@@ -30,7 +30,9 @@ let sheet_drag_h : Double = 64.0
 /// `step_back`: a step further in from a panel (the presenters' `under`): what its back key before its title, the system's
 /// back and Escape do in `cancel`'s place. `stands_by`: given what says how tall it stands over the window's foot (where
 /// it was last placed), asked as it closes: where what comes in its place starts. `taken`: whether, closed, another
-/// sheet is presented in its place: it is drawn no more then, that one there, its scrim that one's.
+/// sheet is presented in its place: it is drawn no more then, that one there, its scrim that one's. `dims`: whether its
+/// scrim dims what is under it, as it is now (presenters' scrim_owner: one scrim however many sheets are over one
+/// another, whichever draws each).
 fn sheet_node(
   parent : @view.View,
   open : () -> Bool,
@@ -46,6 +48,7 @@ fn sheet_node(
   step_back? : () -> Unit,
   stands_by? : (() -> Double) -> Unit = fn(_) {  },
   taken? : () -> Bool = fn() { false },
+  dims? : () -> Bool = fn() { true },
 ) -> Unit {
   parent.show(
     open,
@@ -122,7 +125,7 @@ fn sheet_node(
       .modal(By(live))
       .hides(By(fn() { layer.leaving() }))
       .held_back_goes_on()
-      .ground(By(fn() { @ui.alpha(sheet_scrim, if vanished() { 0.0 } else { dim.shown(layer) }) }))
+      .ground(By(fn() { @ui.alpha(sheet_scrim, if vanished() || !dims() { 0.0 } else { dim.shown(layer) }) }))
       // (a press on what is above it its own, nothing under it pressed: closing it as it goes down)
       .presses(Is(true))
       .on_drag(fn(d) {
