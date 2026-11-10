@@ -228,7 +228,8 @@ test("a trusted device opened after the new device asked shows its code: dialled
   const p = await w.pair();
   assert.equal(p.state, "code");
   assert.deepEqual(p.approvers.map((a: { id: string; showing: boolean }) => [a.id, a.showing]), [[PHONE_APP, true], [LAPTOP_APP, false]]);
-  assert.match(p.approvers[0].nameText, /Pixel 8/);
+  // Each a row of its page's list: a phone or a computer, and which machine.
+  assert.deepEqual(p.approvers.map((a: { kind: string; nameText: string }) => [a.kind, a.nameText]), [["phone", "Pixel 8"], ["computer", "MacBook"]]);
   assert.equal((w.hellos[0] as { t: string }).t, "hello");
   // The phone kept, not dialled again; the laptop still is, a code shown elsewhere or not, PAIR_DIAL_TRIES times in all.
   await w.host.time.pass(10 * PAIR_REDIAL_MS);

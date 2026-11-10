@@ -1667,8 +1667,8 @@ export const SHAPES: Record<string, Shape> = {
   LockApprover: struct([
     ["id", "String", { doc: "Its key (its iroh id)." }],
     ["showing", "bool", { doc: "It shows a code for this device now (to type here)." }],
-    ["nameText", "String", { said: true, doc: "Its machine and its app in a line, as people know it (LockDevice `fullText`)." }],
-    ["usedText", opt("String"), { doc: "When it was last used, in words (LockDevice `usedText`)." }],
+    ["kind", "String", { doc: "What it is, for its mark: `phone`, `computer`." }],
+    ["nameText", "String", { said: true, doc: "Which machine it is, as people know it (LockDevice `nameText`)." }],
     ["lastSeen", opt("i64"), { client: opt("I54"), doc: "When it last asked the cloud for a credential (s)." }],
   ], { doc: "A trusted device that may approve this one, which this one dials while it waits: those showing a code\nfirst, then the most lately used." }),
   LockPair: struct([

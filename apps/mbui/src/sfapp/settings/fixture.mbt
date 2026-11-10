@@ -2863,6 +2863,26 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
 }
 
 ///|
+/// The trusted devices a waiting device dials (the lock's `me.pair.approvers`): a phone and a laptop, the phone
+/// showing the code where `code`.
+fn waiting_approvers(code : Bool) -> Json {
+  [
+    obj([
+      ("id", str("d-phone")),
+      ("showing", Json::boolean(code)),
+      ("kind", str("phone")),
+      ("nameText", str("Pixel 9")),
+    ]),
+    obj([
+      ("id", str("d-laptop")),
+      ("showing", Json::boolean(false)),
+      ("kind", str("computer")),
+      ("nameText", str("林的 MacBook Pro")),
+    ]),
+  ]
+}
+
+///|
 /// The lock as a device not confirmed in it has it (MBUI_FIXTURE=lock-waiting, lock-finding, lock-code, lock-wrong,
 /// lock-wrong-gone, lock-checking, lock-none, lock-failed, lock-nocode, lock-security, each also -dark: its waiting page
 /// asking, finding, the code being typed, typed wrong (or the device showing it gone), being checked, no device found,
@@ -2872,14 +2892,15 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
 fn waiting_lock(mode : String) -> Json {
   let mode = if mode.has_suffix("-dark") { mode.unsafe_substring(start=0, end=mode.length() - 5) } else { mode }
   let pair = match mode {
-    "lock-finding" => obj([("state", str("finding"))])
+    // (the devices it dials, the core's rows; one showing the code, once it does)
+    "lock-finding" => obj([("state", str("finding")), ("approvers", waiting_approvers(false))])
     "lock-code" | "lock-upgrade" =>
-      obj([("state", str("code")), ("left", Json::number(3.0)), ("untilText", str("14:05 前有效"))])
+      obj([("state", str("code")), ("left", Json::number(3.0)), ("untilText", str("14:05 前有效")), ("approvers", waiting_approvers(true))])
     "lock-wrong" => obj([("state", str("wrong")), ("left", Json::number(2.0)), ("untilText", str("14:05 前有效"))])
     "lock-wrong-gone" =>
       obj([("state", str("wrong")), ("left", Json::number(2.0)), ("error", str("安全码不对，或显示它的设备已断开，还可以试 2 次")), ("untilText", str("14:05 前有效"))])
     "lock-checking" => obj([("state", str("checking")), ("left", Json::number(3.0))])
-    "lock-none" => obj([("state", str("none"))])
+    "lock-none" => obj([("state", str("none")), ("approvers", waiting_approvers(false))])
     "lock-failed" => obj([("state", str("failed")), ("error", str("配对超时"))])
     "lock-elsewhere" =>
       obj([("state", str("failed")), ("devices", Json::number(0.0)), ("error", str("此设备已在「日常」获批，在这里还需要此 workspace 的管理员或你在这里的受信任设备批准"))])

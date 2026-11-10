@@ -1098,15 +1098,23 @@ export function lockView(inner: Inner, ws: string): J {
   const unsigned = locked && mine !== undefined && mine.kind === "app" && inner.host.appKeys === true && signers.has(inner) && !signs;
   if (unsigned && typeof mine.sign_key === "string") recover(inner, mine.sign_key);
   const pair = locked && (mine === undefined || unsigned) ? pairs.mine(inner, own && sub !== null ? personOf(sub) : ws) : null;
-  // The devices its try dials here, as people know them (which machine and app, when last used), the most lately used
+  // The devices its try dials here, as people know them (which machine, a phone or a computer), the most lately used
   // first, those showing a code before them: the person opens still.fail on one of those (2026-11-05: "到底是哪个设备会
-  // 弹出来呀？", a web page of theirs, or an app not approved, shows nothing).
+  // 弹出来呀？", a web page of theirs, or an app not approved, shows nothing). Each a row of the page's list, its name
+  // alone (the user, #4213: joined into a sentence, a narrow page broke a name in two; with its app and when it was
+  // used under each, 字还是很多).
   if (pair !== null && Array.isArray(pair.approvers)) {
     pair.approvers = pair.approvers
       .map((a: J) => {
         const d = f.devices.get(a.id);
         const v = d === undefined ? null : device(d);
-        return { id: a.id, showing: a.showing === true, nameText: v?.fullText ?? t("web-pages.security.appDevice"), usedText: v?.usedText ?? null, lastSeen: v?.lastSeen ?? null };
+        const { group } = prefs.deviceParts(v?.label ?? "");
+        return {
+          id: a.id, showing: a.showing === true,
+          kind: group !== null && /^(android|ios) /.test(group) ? "phone" : "computer",
+          nameText: v?.nameText ?? t("web-pages.security.appDevice"),
+          lastSeen: v?.lastSeen ?? null,
+        };
       })
       .sort((a: J, b: J) => Number(b.showing) - Number(a.showing) || (b.lastSeen ?? -1) - (a.lastSeen ?? -1));
   }

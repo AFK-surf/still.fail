@@ -47,7 +47,7 @@ let corners_tape_rail : Array[String] = [
   "reader-layout", "reader-md", "newchat", "newchat-files", "newchat-lend", "share-card", "share-card-dark",
   "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
   "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized",
-  "service-stopped", "share-in", "share-in-files", "share-in-stations", "lock-security", "screen-agent-driving",
+  "service-stopped", "share-in", "share-in-files", "share-in-stations", "lock-security", "lock-upgrade", "screen-agent-driving",
   "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
   "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
   "screen-full-tools", "screen-gone", "screen-live", "screen-login-fill", "screen-login-pick",
