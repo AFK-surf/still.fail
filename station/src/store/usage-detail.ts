@@ -1,6 +1,6 @@
 // Detailed usage distributions. The finest buckets preserve the exact time of a call while combining calls with the
 // same dimensions; coarser buckets let a read cover a long interval without visiting each finer bucket.
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, StatementSync } from "node:sqlite";
 import type { InWorkspace } from "./rows.ts";
 import { retiredUsage } from "./usage-retire.ts";
 import { compactCoverageSince, hasCompactUsage } from "./usage-compact.ts";
@@ -297,8 +297,18 @@ export function installIncrementalUsageTotals(db: DatabaseSync): void {
 
 /// A session total is complete if the total existed before the upgrade, or the new source saw no earlier calls of it.
 export function usageTotalsComplete(db: DatabaseSync, session: string): boolean {
-  if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals_incremental'").get()) return true;
-  return (db.prepare("SELECT done FROM usage_totals_source_sessions WHERE session = ?").get(session) as { done: number } | undefined)?.done === 1;
+  if (!totalsStatement(db, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals_incremental'").get()) return true;
+  return (totalsStatement(db, "SELECT done FROM usage_totals_source_sessions WHERE session = ?").get(session) as { done: number } | undefined)?.done === 1;
+}
+
+/// usageTotalsComplete's statements, each prepared once a connection (it is asked at every usage record and summary).
+const totalsStatements = new WeakMap<DatabaseSync, Map<string, StatementSync>>();
+function totalsStatement(db: DatabaseSync, sql: string): StatementSync {
+  let kept = totalsStatements.get(db);
+  if (kept === undefined) totalsStatements.set(db, (kept = new Map()));
+  let statement = kept.get(sql);
+  if (statement === undefined) kept.set(sql, (statement = db.prepare(sql)));
+  return statement;
 }
 
 type State = { after_at: number | null; after_rowid: number | null; end_at: number | null; end_rowid: number | null; done: number };

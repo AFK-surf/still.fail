@@ -411,7 +411,7 @@ async function profileToken(o: CheckOptions, urls: Urls, lang: Lang): Promise<st
     return (await claudeOAuthToken(o.env, o.home, null, urls.claudeToken, lang))[0];
   } catch (e) {
     if (e instanceof RenewRefused) throw e;
-    return tokenOf(o.home);
+    return await tokenOf(o.home);
   }
 }
 

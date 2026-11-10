@@ -1898,7 +1898,7 @@ test("deleting a session ends its process and removes its workspace, the threads
 test("archiving hands an idle session to cold storage, never on a timer for what was archived before", async () => {
   const packed: string[] = [];
   const restored: string[] = [];
-  const r = new Rig({ cold: { isCold: () => false, restore: (key) => void restored.push(key), pack: (key) => void packed.push(key) } });
+  const r = new Rig({ cold: { isCold: async () => false, restore: (key) => void restored.push(key), pack: (key) => void packed.push(key) } });
   const m = message();
   await r.accept(m);
   await settle();
@@ -3091,7 +3091,7 @@ test("changing runtime lets the running turn finish and the next reads back the 
   assert.equal(next.options.resume, undefined);
   assert.ok(matches(next.prompts[0]!, ["This is a new conversation", `session_history with chat ${key}`, "continue"]));
   assert.equal(r.store.runtimeSessionSources(key)[0]!.runtime, "claude");
-  assert.ok(r.hub.live.before(key, 100, 100)![1].some((e) => e.text === "earlier work"));
+  assert.ok((await r.hub.live.before(key, 100, 100))![1].some((e) => e.text === "earlier work"));
   const codexPath = join(r.config.profiles[1]!.home, "sessions", "2026", "11", "03", `rollout-${next.id()}.jsonl`);
   mkdirSync(dirname(codexPath), { recursive: true });
   writeFileSync(codexPath, JSON.stringify({ type: "response_item", timestamp: "2026-10-24T00:00:00Z", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "continued work" }] } }) + "\n");
@@ -3134,7 +3134,7 @@ test("on another account a conversation goes on in a new runtime session, its hi
   assert.equal(r.store.ranOn(key, second.id()), second.options.profile.id);
   // Its history goes on from the first's.
   transcript(second.id(), "second", 1_000);
-  assert.deepEqual(r.hub.live.before(key, 100, 100)![1].filter((e) => e.kind === "user").map((e) => e.text), ["first", "second"]);
+  assert.deepEqual((await r.hub.live.before(key, 100, 100))![1].filter((e) => e.kind === "user").map((e) => e.text), ["first", "second"]);
   // Its process gone, on the same account: taken up as before.
   await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
   second.complete();
@@ -3259,11 +3259,12 @@ test("a session from before a change is told it once, and a new one never", asyn
   assert.ok(!r.claude.last().prompts[0]!.includes("still.fail changed how you work"), "a new session has today's instructions");
   await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
   r.claude.last().complete();
-  await settle();
+  await r.quiet();
   // As a session from before the notes: told them with its next turn, once.
   r.store.setToldNotes(key, 0);
   await r.accept(reply(m, "9999.1", "还有一件"));
-  await settle();
+  // Today's instructions are written down off the main thread before the turn is given them.
+  await r.quiet();
   const prompts = r.claude.last().prompts;
   assert.ok(prompts.at(-1)!.startsWith("[still.fail changed how you work"), prompts.at(-1));
   const full = join(r.session(key).workspace, ".stillfail-instructions.md");
@@ -3272,9 +3273,9 @@ test("a session from before a change is told it once, and a new one never", asyn
   assert.equal(r.store.toldNotes(key), latest());
   await r.call(key, "chat_state", { kind: "all_done", done: "答完了它问的事" });
   r.claude.last().complete();
-  await settle();
+  await r.quiet();
   await r.accept(reply(m, "9999.2", "再一件"));
-  await settle();
+  await r.quiet();
   assert.ok(!r.claude.last().prompts.at(-1)!.includes("still.fail changed how you work"));
   await r.close();
 });

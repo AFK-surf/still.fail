@@ -4,7 +4,7 @@ import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_pro
 import { chmodSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { release, type as osType, userInfo } from "node:os";
 import { basename, delimiter, join } from "node:path";
-import { copyFile, readdir } from "node:fs/promises";
+import { copyFile, readFile, readdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
@@ -44,11 +44,12 @@ function clean(path: string): string {
   return `/${out.join("/")}`;
 }
 
-/// When `pid` started (ms): from its elapsed time as ps says it ([[dd-]hh:]mm:ss).
-function startTimeOf(pid: number): number | null {
+/// When `pid` started (ms): from its elapsed time as ps says it ([[dd-]hh:]mm:ss). Not waited on: under memory pressure
+/// a process takes seconds to start, and every device and agent waited on each one the main thread started.
+async function startTimeOf(pid: number): Promise<number | null> {
   let text: string;
   try {
-    text = execFileSync("ps", ["-o", "etime=", "-p", String(pid)], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    text = (await run("ps", ["-o", "etime=", "-p", String(pid)], { encoding: "utf8" })).stdout.trim();
   } catch {
     return null;
   }
@@ -71,6 +72,40 @@ function startTimeOf(pid: number): number | null {
   return wall.now() - (seconds + days * 86_400) * 1000;
 }
 
+/// macOS's memory (host.memory) from what sysctl and vm_stat said; `swap` asked only when the rest is known.
+function macMemoryOf(totalText: string | null, vm: string | null, swap: () => string | null): ReturnType<Host["memory"]> {
+  const total = parseU64(totalText ?? "") ?? 0;
+  if (vm !== null) {
+    const after = vm.split("page size of ")[1];
+    const page = after !== undefined ? parseU64(firstWord(after)) : null;
+    const anonymous = fieldOrNull(vm, "Anonymous pages");
+    const purgeable = fieldOrNull(vm, "Pages purgeable");
+    const wired = fieldOrNull(vm, "Pages wired down");
+    const compressed = fieldOrNull(vm, "Pages occupied by compressor");
+    if (total > 0 && page !== null && page > 0 && anonymous !== null && purgeable !== null && wired !== null && compressed !== null) {
+      const used = Math.max(anonymous - purgeable + wired + compressed, 0) * page;
+      const usedText = swap()?.split("used = ")[1]?.split("M")[0];
+      const swapMb = usedText === undefined ? null : parseF64(usedText);
+      return { totalBytes: total, usedBytes: Math.min(used, total), swapUsedBytes: swapMb === null ? null : Math.round(swapMb * 1024 * 1024) };
+    }
+  }
+  return { totalBytes: total, usedBytes: 0, swapUsedBytes: null, known: false };
+}
+
+/// host.memory on macOS, its commands not waited on (the main thread's: memoryPressure). The swap is not asked: the
+/// pressure reads only the memory used.
+async function macMemory(): Promise<ReturnType<Host["memory"]>> {
+  const said = async (command: string, args: string[]) => {
+    try {
+      return trim((await run(command, args, { encoding: "utf8", timeout: 3000 })).stdout);
+    } catch {
+      return null;
+    }
+  };
+  const [total, vm] = await Promise.all([said("sysctl", ["-n", "hw.memsize"]), said("vm_stat", [])]);
+  return macMemoryOf(total, vm, () => null);
+}
+
 const host: Host = {
   /// On macOS the CPUs' user, system, idle and nice time (os.cpus, from the same counters as Mach's
   /// HOST_CPU_LOAD_INFO, in ms rather than ticks: the share is the same); elsewhere /proc/stat.
@@ -84,26 +119,7 @@ const host: Host = {
   },
   /// On macOS as Activity Monitor counts it (app, wired and compressed pages, not reclaimable cache).
   memory() {
-    if (MACOS) {
-      const total = parseU64(output("sysctl", ["-n", "hw.memsize"]) ?? "") ?? 0;
-      const vm = output("vm_stat", []);
-      if (vm !== null) {
-        const after = vm.split("page size of ")[1];
-        const page = after !== undefined ? parseU64(firstWord(after)) : null;
-        const anonymous = fieldOrNull(vm, "Anonymous pages");
-        const purgeable = fieldOrNull(vm, "Pages purgeable");
-        const wired = fieldOrNull(vm, "Pages wired down");
-        const compressed = fieldOrNull(vm, "Pages occupied by compressor");
-        if (total > 0 && page !== null && page > 0 && anonymous !== null && purgeable !== null && wired !== null && compressed !== null) {
-          const used = Math.max(anonymous - purgeable + wired + compressed, 0) * page;
-          const swapText = output("sysctl", ["-n", "vm.swapusage"]);
-          const usedText = swapText?.split("used = ")[1]?.split("M")[0];
-          const swapMb = usedText === undefined ? null : parseF64(usedText);
-          return { totalBytes: total, usedBytes: Math.min(used, total), swapUsedBytes: swapMb === null ? null : Math.round(swapMb * 1024 * 1024) };
-        }
-      }
-      return { totalBytes: total, usedBytes: 0, swapUsedBytes: null, known: false };
-    }
+    if (MACOS) return macMemoryOf(output("sysctl", ["-n", "hw.memsize"]), output("vm_stat", []), () => output("sysctl", ["-n", "vm.swapusage"]));
     let info = "";
     try {
       info = readFileSync("/proc/meminfo", "utf8");
@@ -461,9 +477,9 @@ export const unix: Platform = {
 
   host,
 
-  isLauncher(pid) {
+  async isLauncher(pid) {
     try {
-      const command = execFileSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+      const command = (await run("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" })).stdout;
       return command.includes("stillfail-station");
     } catch {
       return false;
@@ -570,10 +586,12 @@ export const unix: Platform = {
       if (MACOS) {
         const level = (await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"])).stdout;
         if (trim(level) !== "2") return pressureOfLevel(level);
-        const mem = host.memory();
+        // Read without waiting: this is asked every few seconds exactly while the memory is short, when a process
+        // started takes longest (host.memory's three, each waited on, held the main thread).
+        const mem = await macMemory();
         return mem.known === false ? pressureOfLevel(level) : pressureOfLevel(level, mem.totalBytes - mem.usedBytes, mem.totalBytes);
       }
-      const info = readFileSync("/proc/meminfo", "utf8");
+      const info = await readFile("/proc/meminfo", "utf8");
       return pressureOfAvailable(fieldOrNull(info, "MemAvailable"), fieldOrNull(info, "MemTotal"));
     } catch {
       return null;

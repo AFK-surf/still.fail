@@ -391,10 +391,10 @@ export class ClaudeDriver extends OwnProcessDriver<ClaudeSession> {
   }
 
   /// What the station before had handled (stdout up to where it acknowledged) says where the turn stands.
-  protected crashed(options: OpenOptions, lines: Iterable<string>, info: RunnerInfo, events: Events) {
+  protected async crashed(options: OpenOptions, lines: AsyncIterable<string>, info: RunnerInfo, events: Events) {
     const turn: Turn = { busy: false, aborting: false, authFailure: null, closed: false };
     const live = new LiveFromClaude();
-    for (const line of lines) {
+    for await (const line of lines) {
       const frame = parseLine("claude", line);
       if (frame === undefined) continue;
       live.feed(frame);

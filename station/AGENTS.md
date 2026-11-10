@@ -14,6 +14,14 @@
 - `src/main.ts` is the composition root: every part is a Layer made there and given what it needs
   (`src/services.ts`); nothing registers itself, there is no global state. Async work is Effect 4: fibers in their
   part's scope, `Schedule` for backoff, streams for what is pushed. Pure computation stays plain functions.
+- The main thread waits on nothing: every device's request and every agent's tool call waits behind it, and a call of
+  microseconds took seconds on a station short of memory. No new synchronous call of node:fs, child_process or zlib
+  there (fs/promises, execFile): `scripts/check.sh` refuses one a change adds unless its line says why with `sync:`
+  (read before the station serves; one step that must not be split), outside a worker's file, the readers' (`src/read/`
+  but for what the main thread runs of it) and `src/cli.ts`. Those from before this rule stand until they are moved; the
+  line that says the main thread was held (`src/main.ts`) names, by caller, those that still take time.
+  `test/main-thread-waits.test.ts` counts what a day's scenarios make it wait on; a change may lower the counts, never
+  raise them.
 - Time is the Clock's (a `TestClock` in tests): `Date.now`, `new Date()`, `setTimeout`, `setInterval` only in
   `src/ops/fibers.ts` (`wall`, for what is shared with other programs: mtimes, expiries, deadlines to processes).
   `scripts/check.sh` refuses them elsewhere.

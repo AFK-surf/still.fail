@@ -6,7 +6,8 @@
 // - per-session settings (the MCP endpoint and token) travel in the thread/start|resume `config`, not the process
 //   environment;
 // - threads need sandbox "danger-full-access" with approvalPolicy "never", or MCP tool calls are refused.
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { open } from "node:fs/promises";
 import { join } from "node:path";
 import { agentEnv } from "../ops/agent-env.ts";
 import { log } from "../ops/log.ts";
@@ -172,25 +173,29 @@ export function userAgentVersion(userAgent: unknown): string | null {
   return versionIn(userAgent.split(/\s/)[0]?.split("/")[1] ?? "");
 }
 
-/// The version an app-server a runner keeps runs: its answer to `initialize`, the first line it wrote.
-function versionInOutput(file: string): string | null {
-  let fd: number;
+/// The version an app-server a runner keeps runs: its answer to `initialize`, the first line it wrote. Read off the
+/// station's thread; the host says none until it is.
+async function versionInOutput(file: string): Promise<string | null> {
+  let fd;
   try {
-    fd = openSync(file, "r");
+    fd = await open(file, "r");
   } catch {
     return null;
   }
   try {
     const buf = Buffer.alloc(4096);
-    const n = readSync(fd, buf, 0, buf.length, 0);
+    const { bytesRead: n } = await fd.read(buf, 0, buf.length, 0);
     const first = buf.subarray(0, n).toString("utf8").split("\n")[0] ?? "";
     return userAgentVersion(JSON.parse(first)?.result?.userAgent);
   } catch {
     return null;
   } finally {
-    closeSync(fd);
+    await fd.close().catch(() => undefined);
   }
 }
+
+/// `host`'s version as its output says it, once read (`versionInOutput`).
+const readVersion = (host: Host, file: string) => void versionInOutput(file).then((version) => { if (host.version === null) host.version = version; });
 
 /// How often what `codex` on the PATH is now is read again, while app-servers are looked at.
 const INSTALLED_MS = 60_000;
@@ -775,14 +780,14 @@ export class CodexDriver implements AgentDriver {
   /// ccvm one was 5 GB (2026-11-04).
   private holdLeft(profile: Profile, info: RunnerInfo, key: string): Host {
     const host = Host.adopt(profile.id, info, JSON.stringify(info.args) === JSON.stringify(hostArgs(profile)) ? hostSignature(profile) : "unknown", wall.now(), true, undefined, key);
-    host.version = versionInOutput(outFile(this.data, info.id));
+    readVersion(host, outFile(this.data, info.id));
     return host;
   }
 
   /// The runner id a new app-server of a key starts under: its own, unless one being replaced still has it.
-  private runnerFor(key: string): string {
+  private async runnerFor(key: string): Promise<string> {
     const base = runnerId("codex", key);
-    return findRunner(this.data, base) ? `${base}.${wall.now().toString(36)}` : base;
+    return (await findRunner(this.data, base)) ? `${base}.${wall.now().toString(36)}` : base;
   }
 
   /// Ends an app-server of one session's whose last thread was let go.
@@ -832,7 +837,7 @@ export class CodexDriver implements AgentDriver {
         // One an earlier station left running (its threads may be taken up yet) is taken up rather than replaced.
         const taken = await this.takeUpLeft(profile, key);
         const left = taken !== null;
-        const host = taken ?? (await Host.start(profile, key, this.command, this.data, this.env, this.caBundle, this.options.lent, key === profile.id ? profile.home : cwd, this.runnerFor(key)));
+        const host = taken ?? (await Host.start(profile, key, this.command, this.data, this.env, this.caBundle, this.options.lent, key === profile.id ? profile.home : cwd, await this.runnerFor(key)));
         // Taken up on a borrowed login: when that one runs out, as its auth.json says.
         if (left && this.options.lent?.borrowed(profile)) host.lentUntil = lentExpiry(profile.home);
         this.hosts.set(key, host);
@@ -855,7 +860,7 @@ export class CodexDriver implements AgentDriver {
     const recovered = new Map<string, Recovered>();
     const began = new Map<string, number>();
     let read = 0;
-    for (const { text: line, at: lineAt } of linesWithin(out, keep ?? 0, at)) {
+    for await (const { text: line, at: lineAt } of linesWithin(out, keep ?? 0, at)) {
       if (++read % TAKE_UP_LINES === 0) {
         this.options.taking?.();
         await new Promise((resolve) => setImmediate(resolve));
@@ -886,7 +891,7 @@ export class CodexDriver implements AgentDriver {
     const same = JSON.stringify(info.args) === JSON.stringify(hostArgs(profile));
     // Ids above any the previous station can have sent.
     const host = Host.adopt(profile.id, info, same ? hostSignature(profile) : "unknown", wall.now(), true, recovered, key);
-    host.version = versionInOutput(out);
+    readVersion(host, out);
     for (const [thread, r] of recovered) {
       if (!r.busy) continue;
       host.turns.add(thread);
@@ -1039,10 +1044,10 @@ export class CodexDriver implements AgentDriver {
       if (handed?.host.draining) {
         const already = [...this.draining].find((h) => h.proc.info.id === handed.host.runner);
         if (already) return already;
-        const info = findRunner(this.data, handed.host.runner);
+        const info = await findRunner(this.data, handed.host.runner);
         if (!info) throw new Error(`codex app-server ${key} was not taken up: no runner keeps it`);
         const host = Host.adopt(profileId, info, handed.host.signature, handed.host.nextId, handed.host.ready, undefined, key, handed.host.keep ?? 0);
-        host.version = versionInOutput(outFile(this.data, info.id));
+        readVersion(host, outFile(this.data, info.id));
         this.keepDraining(host);
         return host;
       }
@@ -1055,13 +1060,13 @@ export class CodexDriver implements AgentDriver {
       if (current) await current.proc.released();
       let host: Host | null;
       if (handed) {
-        const info = findRunner(this.data, handed.host.runner);
+        const info = await findRunner(this.data, handed.host.runner);
         if (!info) throw new Error(`codex app-server ${key} was not taken up: no runner keeps it`);
         host = Host.adopt(profileId, info, handed.host.signature, handed.host.nextId, handed.host.ready, undefined, key, handed.host.keep ?? 0);
         this.sweepLeft(options.profile, key);
         if (handed.host.loginStale) host.loginStale = true;
         if (handed.host.runtimeStale) host.runtimeStale = true;
-        host.version = versionInOutput(outFile(this.data, info.id));
+        readVersion(host, outFile(this.data, info.id));
       } else host = await this.takeUpLeft(options.profile, key);
       if (!host) throw new Error(`codex app-server ${key} was not taken up: no runner keeps it`);
       this.hosts.set(key, host);

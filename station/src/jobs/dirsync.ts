@@ -27,7 +27,7 @@ import { promisify } from "node:util";
 import { zstdCompress, zstdDecompress } from "node:zlib";
 import { NoBytes, withBytes } from "../mesh/bus.ts";
 import { oneBytes } from "../mesh/files.ts";
-import { filePath } from "./remote.ts";
+import { filePathHere } from "./remote.ts";
 
 type Json = any;
 
@@ -553,7 +553,7 @@ export function apply(
   files: Record<string, Entry>,
   plan: { set: [string, string, string][]; remove: string[] },
 ): { written: number; removed: number } {
-  const mirror = filePath(work, name, true);
+  const mirror = filePathHere(work, name, true);
   mkdirSync(mirror, { recursive: true });
   mkdirSync(scratch, { recursive: true });
   const byHash = new Map<string, string>();
@@ -594,7 +594,7 @@ export function apply(
     if (!(path in files)) continue;
     let abs: string;
     try {
-      abs = filePath(mirror, path, false);
+      abs = filePathHere(mirror, path, false);
     } catch {
       delete files[path];
       continue;
@@ -611,7 +611,7 @@ export function apply(
   for (const r of ready) {
     let abs: string;
     try {
-      abs = filePath(mirror, r.path, true);
+      abs = filePathHere(mirror, r.path, true);
     } catch (error) {
       throw new Error(`cannot write ${r.path} on the target: ${(error as Error).message}`);
     }

@@ -19,7 +19,7 @@ import { AgyDriver } from "../agents/agy.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
-import { WorkspaceWatch, workspaceSessionsToMeasure, workspaceWorking, type WorkspaceReading } from "../jobs/workspace-size.ts";
+import { WorkspaceWatch, workspaceWorking, type WorkspaceReading } from "../jobs/workspace-size.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import { DISK_EVERY_MS, DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
@@ -328,7 +328,8 @@ export const AgentsLive = (control: Control) =>
         working,
         notify: (session, text) => hub.notify(session, text),
         readings: async () => {
-          const workingSessions = workspaceSessionsToMeasure(store, (session) => hub.processState(session));
+          const processes = [...hub.processes()].flatMap(([key, state]) => state === "running" ? [key] : []);
+          const workingSessions: { key: string; workspace: string }[] = JSON.parse(await readers.read("sessionsAtWork", { processes }, "zh"));
           return (await Promise.all(workingSessions.map(async (s) => {
             const found: WorkspaceReading[] = [];
             if (roomOf(data, s.workspace) !== null) {
@@ -576,6 +577,7 @@ export const AgentsLive = (control: Control) =>
       hub.recentChatList = async (ws, home, limit, signal) => JSON.parse(await readers.read("recentChatList", { ws, home, limit }, "zh", { signal }));
       hub.searchChatList = async (ws, home, limit, query) => JSON.parse(await readers.read("searchChatList", { ws, home, limit, query }, "zh"));
       hub.latestMessages = async (thread, limit) => JSON.parse(await readers.read("latestMessages", { thread, limit }, "zh"));
+      hub.policyChecks = async (since, viewer) => JSON.parse(await readers.read("policyChecks", { since, viewer: { workspace: viewer.workspace, home: viewer.home } }, "zh"));
       hub.openedChatSaid = async (thread, author, agentOnly) => JSON.parse(await readers.read("openedChatSaid", { thread, author, agentOnly }, "zh"));
       hub.historyMessages = async (thread, before, limit) => JSON.parse(await readers.read("chatHistoryMessages", { thread, before, limit }, "zh"));
       hub.historyPendingCard = async (thread) => JSON.parse(await readers.read("historyPendingCard", { thread }, "zh"));
@@ -709,7 +711,7 @@ export const AgentsLive = (control: Control) =>
           log.info("station", "in a workspace: connects, turns and jobs go on");
           for (const a of along) await a.joined?.();
           hub.recover();
-          jobs.relaunch();
+          await jobs.relaunch();
           hub.release("unbound");
         } else {
           const why = cloud.removed() ? "the station was removed from its workspace" : "the station is in no workspace";
@@ -788,7 +790,7 @@ export const AgentsLive = (control: Control) =>
         if (inWorkspace) {
           for (const a of along) await a.taken?.();
           hub.recover();
-          jobs.relaunch();
+          await jobs.relaunch();
         } else if (cloud.removed()) {
           // Removed, and the station stopped before it stopped its jobs (or crashed): what still runs is ended now.
           await jobs.stopAll("the station was removed from its workspace");

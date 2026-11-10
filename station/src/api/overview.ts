@@ -17,7 +17,7 @@ import type { Updates } from "../updates/updates.ts";
 import { type RootView, rootView, rootsOf } from "../drive/drive.ts";
 import { sees } from "../store/rows.ts";
 import { titleOf } from "../read/views.ts";
-import { policyView } from "../sessions/archive-policy.ts";
+import { type PolicyChecks, policySince, policyView } from "../sessions/archive-policy.ts";
 import { agentEnvView } from "./routes/agent-env.ts";
 import { networkView } from "../mesh/settings.ts";
 import { contextView } from "./routes/context.ts";
@@ -239,8 +239,11 @@ async function decisionsView(d: OverviewDeps, viewer: Viewer): Promise<unknown> 
   const was = kept.get(whose);
   if (was !== undefined && was.stamp === stamp && now - was.at < DECISIONS_KEPT_MS) return structuredClone(was.view);
   const notReady = Symbol("decision sessions not ready");
+  // The policy's checks counted by a reader, before the view is made (none: counted as it is made).
+  const manages = viewer.role === "owner" || viewer.role === "admin";
+  const checks = manages && d.hub.policyChecks != null ? await d.hub.policyChecks(policySince(now), viewer) : null;
   const make = (name: (session: string) => string, visible?: Map<string, boolean>) => {
-    try { return madeDecisionsView(d, viewer, name, visible); }
+    try { return madeDecisionsView(d, viewer, name, visible, checks ?? undefined); }
     catch (error) { if (error instanceof DecisionSessionsUnavailable) return notReady; throw error; }
   };
   let view: unknown;
@@ -314,7 +317,7 @@ const DECISIONS_KEPT_MS = 60_000;
 const decisionsKept = new WeakMap<object, Map<string, { at: number; stamp: string; view: unknown }>>();
 
 function madeDecisionsView(d: OverviewDeps, viewer: Viewer, name: (session: string) => string,
-  visible = new Map<string, boolean>()): unknown {
+  visible = new Map<string, boolean>(), checks?: PolicyChecks): unknown {
   const mine = (session: unknown) => {
     if (typeof session !== "string") return false;
     let isMine = visible.get(session);
@@ -330,7 +333,7 @@ function madeDecisionsView(d: OverviewDeps, viewer: Viewer, name: (session: stri
   const view = d.accounts!.automaticDecisionsView(viewer, { includePolicy: false, visible: mine, title });
   const manages = viewer.role === "owner" || viewer.role === "admin";
   if (manages) {
-    view.policy = policyView(d.store, viewer.home === false ? viewer.workspace : null, mine, title, viewer);
+    view.policy = policyView(d.store, viewer.home === false ? viewer.workspace : null, mine, title, viewer, checks);
     view.canEditPolicy = manages;
   }
   return view;

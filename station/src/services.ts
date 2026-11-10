@@ -282,7 +282,12 @@ export class StationConfig extends Context.Service<StationConfig, ConfigFile>()(
   static readonly layer = Layer.effect(
     StationConfig,
     Effect.gen(function* () {
-      return new ConfigFile((yield* Paths).data);
+      const { data } = yield* Paths;
+      return yield* Effect.acquireRelease(Effect.sync(() => {
+        const config = new ConfigFile(data);
+        config.watch();
+        return config;
+      }), (config) => Effect.sync(() => config.unwatch()));
     }),
   );
 }

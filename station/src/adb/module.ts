@@ -51,12 +51,11 @@ export const AdbLive = Layer.effectDiscard(
         return key === null ? null : { workspace: store.getSession(key)?.workspace ?? null };
       },
       table: () => platform.processTable(false),
-      runners: (id) => {
+      runners: async (id) => {
         const key = sessionOf(id);
-        return key === null ? [] : RUNTIME_KINDS.flatMap((kind) => {
-          const r = runnerOf(data, runnerId(kind, key));
-          return r === undefined ? [] : [r.runner, r.pid];
-        });
+        if (key === null) return [];
+        const found = await Promise.all(RUNTIME_KINDS.map((kind) => runnerOf(data, runnerId(kind, key))));
+        return found.flatMap((r) => (r === undefined ? [] : [r.runner, r.pid]));
       },
       jobs: () => watchedJobs(store, hub.processJobLookup()).map((j) => ({ pgid: j.pgid, mine: (id: string) => j.session === sessionOf(id) })),
       cwds: (pids) => platform.cwds(pids),

@@ -4,8 +4,9 @@
 // a profile's models) is the accounts module's; its result reaches here as the profile's check (`decision`).
 import type { Clock } from "effect";
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { type FSWatcher, watch } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { accessKind, apiSource, profileEnv, profileVia } from "../agents/profiles.ts";
 import { endpoints, find } from "../agents/providers.ts";
 import { liveClock, wall, within } from "../ops/fibers.ts";
@@ -219,24 +220,64 @@ function codexConfig(text: string): { provider?: string; providers: Record<strin
   return out;
 }
 
-/// A profile's files `connection` reads, each as read in the last READ_FOR_MS (null: not there): it is asked again for
-/// every profile as the profiles are shown and checked; repeated synchronous reads hold the station's thread. A change
-/// is seen once that interval has passed.
-const READ_FOR_MS = 10_000;
-const lately = new Map<string, { at: number; text: string | null }>();
-function readLately(path: string): string | null {
-  const now = wall.now();
-  const kept = lately.get(path);
-  if (kept !== undefined && now - kept.at < READ_FOR_MS) return kept.text;
-  let text: string | null;
+/// A profile's files `connection` reads (its Codex config and login), kept as last read and read again, off the
+/// station's thread, as the system says one changed (a watch of its directory). Asked for every profile as the profiles
+/// are shown and checked: read on the thread at each ask, they held it a second at a time (2026-11-03). One not read
+/// yet is read now and said as not there meanwhile; a check reads them first (`profileFilesRead`).
+const files = new Map<string, { text: string | null; known: boolean; reading: Promise<void> | null }>();
+const watched = new Map<string, FSWatcher>();
+const WATCHED_FILES = ["config.toml", "auth.json"];
+
+function readAgain(path: string): Promise<void> {
+  let file = files.get(path);
+  if (file === undefined) files.set(path, (file = { text: null, known: false, reading: null }));
+  const now = file;
+  const read = async () => {
+    try {
+      now.text = await readFile(path, "utf8");
+    } catch {
+      now.text = null;
+    }
+    now.known = true;
+  };
+  const reading = (now.reading ?? Promise.resolve()).then(read, read);
+  now.reading = reading;
+  void reading.then(() => { if (now.reading === reading) now.reading = null; });
+  return reading;
+}
+
+function watchHome(dir: string) {
+  if (watched.has(dir)) return;
   try {
-    text = readFileSync(path, "utf8");
-  } catch {
-    text = null;
-  }
-  lately.set(path, { at: now, text });
-  if (lately.size > 256) lately.delete(lately.keys().next().value!);
-  return text;
+    const watcher = watch(dir, { persistent: false }, (_, name) => {
+      for (const file of WATCHED_FILES) if (name === null || name === file) void readAgain(join(dir, file));
+    });
+    watcher.on("error", () => {
+      watcher.close();
+      watched.delete(dir);
+      for (const file of WATCHED_FILES) files.delete(join(dir, file));
+    });
+    watched.set(dir, watcher);
+  } catch {}
+}
+
+function readLately(path: string): string | null {
+  const file = files.get(path);
+  if (file?.known) return file.text;
+  watchHome(dirname(path));
+  if (file?.reading == null) void readAgain(path);
+  return null;
+}
+
+/// A profile's files `connection` reads, read now (off the thread) and watched from then on.
+export async function profileFilesRead(profile: Profile): Promise<void> {
+  if (!profile.runtimes.includes("codex")) return;
+  watchHome(profile.home);
+  await Promise.all(WATCHED_FILES.map((file) => {
+    const path = join(profile.home, file);
+    const known = files.get(path);
+    return known?.known ? known.reading ?? Promise.resolve() : readAgain(path);
+  }));
 }
 
 function connection(profile: Profile): Connection | undefined {
@@ -335,6 +376,7 @@ export const byDecisionPriority = (a: string, b: string) => decisionPriority(a) 
 /// Probes which of a profile's models answer a decision with real probabilities (synthetic evidence only; no
 /// conversation, tools or agent). `check` is the profile's check: its listed models are the first candidates.
 export async function discover(profile: Profile, check: { state: string; models?: string[] | null }, clock: Clock.Clock = liveClock): Promise<Capability> {
+  await profileFilesRead(profile);
   const capability: Capability = { state: "unsupported", detail: "当前登录未提供决策概率接口", reason: "no_probabilities", model: null, provider: null, models: [], fingerprint: fingerprint(profile) };
   if (check.state === "login" || check.state === "failed") return { ...capability, state: "unavailable", detail: "账号恢复后自动检查决策能力", reason: "signed_out" };
   const c = connection(profile);

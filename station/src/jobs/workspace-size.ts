@@ -1,13 +1,14 @@
 // A working chat's workspace on each station has a soft size limit. Measurements are shared and queued so many active
 // chats do not walk the disk at once; links are not followed and hard links count once (sessions/footprint.ts).
-import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
+import { PrivateFile } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { measuredUpTo } from "../sessions/footprint.ts";
+import type { DatabaseSync } from "node:sqlite";
 import type { Store } from "../store/store.ts";
 
 export const GIB = 1024 ** 3;
@@ -24,15 +25,32 @@ export function workspaceWorking(store: Pick<Store, "getSession" | "runningJobsA
     || store.runningJobsAtLeast(key, 1) || store.lastTurn(key)?.declared === "waiting");
 }
 
-/// The live sessions whose workspaces should be measured this round.
-export function workspaceSessionsToMeasure(store: Pick<Store, "liveSessions" | "runningJobSessions" | "waitingOf">,
-  processState: (key: string) => string): ReturnType<Store["liveSessions"]> {
-  const live = store.liveSessions();
-  const idle = live.filter((s) => s.archivedAt === null && !s.running && processState(s.key) !== "running");
-  const jobsRunning = store.runningJobSessions(idle.map((s) => s.key));
-  const waiting = store.waitingOf(idle.filter((s) => !jobsRunning.has(s.key)).map((s) => s.key));
-  return live.filter((s) => s.archivedAt === null && (s.running || processState(s.key) === "running"
-    || jobsRunning.has(s.key) || waiting.has(s.key)));
+/// The most of the sessions shown (the latest active first) a round looks at: what auto-archiving keeps shown, with room.
+export const MEASURED_MOST = 1000;
+const atWork = (jobs: string) => `SELECT s.key, s.workspace FROM (SELECT rowid AS rid, key, workspace, running, last_active_at
+  FROM sessions INDEXED BY sessions_live WHERE archived_at IS NULL ORDER BY last_active_at DESC, rowid DESC LIMIT ?2) s
+  WHERE s.running = 1 OR s.key IN (SELECT value FROM json_each(?1)) OR ${jobs}
+    OR (SELECT declared FROM turns INDEXED BY turns_by_session WHERE session_key = s.key ORDER BY started_at DESC, rowid DESC LIMIT 1) = 'waiting'
+  ORDER BY s.last_active_at DESC, s.rid DESC`;
+/// The sessions shown that are at work (a turn running, its process running, a job of its running, or waiting on what
+/// it started), each by its own index entries: a reader's (read/ops-sessions.ts), off the main thread, where it read
+/// every session shown and each one's latest turn, held up to 18 s on a station short of memory (2026-11-06).
+export const SESSIONS_AT_WORK = atWork(`EXISTS (SELECT 1 FROM active_watch_jobs INDEXED BY active_watch_jobs_session WHERE session = s.key)
+    OR EXISTS (SELECT 1 FROM active_other_jobs WHERE session = s.key)`);
+/// The same on a store whose running jobs' lookup is still being prepared (store/active-jobs-upgrade.ts).
+export const SESSIONS_AT_WORK_BEFORE_UPGRADE = atWork("EXISTS (SELECT 1 FROM jobs INDEXED BY jobs_by_session WHERE session_key = s.key AND state = 'running')");
+
+/// The sessions whose workspaces are measured this round: those at work (SESSIONS_AT_WORK); `processes`, those whose
+/// process runs now.
+export function workspaceSessionsToMeasure(db: DatabaseSync, processes: readonly string[], most = MEASURED_MOST): { key: string; workspace: string }[] {
+  const args = [JSON.stringify(processes), most];
+  let rows: unknown[];
+  try { rows = db.prepare(SESSIONS_AT_WORK).all(...args); }
+  catch (error) {
+    if (!/no such table: active_(watch|other)_jobs/.test(error instanceof Error ? error.message : "")) throw error;
+    rows = db.prepare(SESSIONS_AT_WORK_BEFORE_UPGRADE).all(...args);
+  }
+  return rows.map((r) => ({ key: (r as { key: string }).key, workspace: (r as { workspace: string }).workspace }));
 }
 
 export type WorkspaceSize = { bytes: number; complete: boolean };
@@ -117,33 +135,39 @@ export class WorkspaceWatch {
   readonly #fibers: Fibers;
   readonly #directory: string;
   readonly #limits = new Map<string, Limits>();
+  readonly #files = new Map<string, PrivateFile>();
+  readonly #ready: Promise<void>;
 
   constructor(options: WorkspaceWatchOptions) {
     this.#o = options;
     this.#fibers = new Fibers("workspace-size", options.clock);
     this.#directory = join(options.data, "workspace-limits");
-    mkdirSync(this.#directory, { recursive: true });
+    this.#ready = this.#readAll();
+  }
+
+  /// Once every chat's limit is read (off the station's thread, as it starts): what is said of one before is the default.
+  ready(): Promise<void> {
+    return this.#ready;
   }
 
   start(): void {
-    void this.#readAll();
     const tick = async () => {
       try { await this.look(); } finally { this.#fibers.after(CHECK_MS, tick); }
     };
     this.#fibers.after(60_000, tick);
   }
 
-  close(): Promise<void> { return this.#fibers.close(); }
+  async close(): Promise<void> {
+    await this.#fibers.close();
+    await Promise.all([...this.#files.values()].map((file) => file.written()));
+  }
 
   /// An archived chat can be restored with its limit; a deleted chat has no settings left behind.
   forget(session: string): void {
     this.#limits.delete(session);
     this.#read.delete(this.#file(session).slice(this.#directory.length + 1));
-    try {
-      rmSync(this.#file(session), { force: true });
-    } catch (error) {
-      log.warn("workspace-size", "deleted chat's limit not removed", { session, error: (error as Error).message });
-    }
+    void rm(this.#file(session), { force: true }).catch((error) =>
+      log.warn("workspace-size", "deleted chat's limit not removed", { session, error: (error as Error).message }));
   }
 
   #file(session: string): string {
@@ -155,6 +179,7 @@ export class WorkspaceWatch {
   readonly #read = new Map<string, string | null>();
 
   async #readAll(): Promise<void> {
+    await mkdir(this.#directory, { recursive: true }).catch(() => undefined);
     for (const name of await readdir(this.#directory).catch(() => [] as string[])) {
       if (!name.endsWith(".json") || this.#read.has(name)) continue;
       this.#read.set(name, await readFile(join(this.#directory, name), "utf8").catch(() => null));
@@ -170,7 +195,9 @@ export class WorkspaceWatch {
       const name = file.slice(this.#directory.length + 1);
       const text = this.#read.get(name);
       this.#read.delete(name);
-      const parsed: unknown = JSON.parse(text ?? readFileSync(file, "utf8"));
+      // None read: none written (they are all read as it starts).
+      if (text === undefined || text === null) throw new Error("none");
+      const parsed: unknown = JSON.parse(text);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         for (const [station, value] of Object.entries(parsed)) {
           if (!value || typeof value !== "object") continue;
@@ -184,33 +211,31 @@ export class WorkspaceWatch {
     return all;
   }
 
-  #save(session: string): void {
+  /// Written whole, off the station's thread, the latest only (ops/files.ts PrivateFile).
+  #save(session: string): Promise<void> {
     const file = this.#file(session);
-    const temp = `${file}.${randomBytes(8).toString("hex")}.tmp`;
-    try {
-      writeFileSync(temp, JSON.stringify(this.#of(session)), { mode: 0o600 });
-      renameSync(temp, file);
-    } catch (error) {
-      try { rmSync(temp, { force: true }); } catch {}
-      throw error;
-    }
+    let kept = this.#files.get(file);
+    if (kept === undefined) this.#files.set(file, (kept = new PrivateFile(file)));
+    return kept.write(JSON.stringify(this.#of(session)));
   }
 
   limit(session: string, station: string): number {
     return this.#of(session)[station || "local"]?.bytes ?? DEFAULT_LIMIT;
   }
 
-  setLimit(session: string, station: string, gib: number): number {
+  async setLimit(session: string, station: string, gib: number): Promise<number> {
     if (!Number.isSafeInteger(gib) || gib < 1 || gib > Math.floor(Number.MAX_SAFE_INTEGER / GIB)) {
       throw new Error("limit_gib must be a positive whole number of GiB");
     }
+    await this.#ready;
     const bytes = gib * GIB;
     this.#of(session)[station || "local"] = { bytes, over: false, told: null };
-    this.#save(session);
+    await this.#save(session);
     return bytes;
   }
 
   async look(): Promise<void> {
+    await this.#ready;
     const readings = await this.#o.readings();
     for (const reading of readings) {
       try {
@@ -230,7 +255,7 @@ export class WorkspaceWatch {
     if (reading.bytes <= previous.bytes) {
       if (previous.over && reading.complete) {
         all[key] = { ...previous, over: false, told: null };
-        this.#save(reading.session);
+        await this.#save(reading.session);
       }
       return;
     }
@@ -246,6 +271,6 @@ export class WorkspaceWatch {
     // An agent may have raised the limit while the notice was being delivered; keep its newer choice.
     if (all[key] !== existing) return;
     all[key] = { ...previous, over: true, told: now };
-    this.#save(reading.session);
+    await this.#save(reading.session);
   }
 }

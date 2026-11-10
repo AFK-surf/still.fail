@@ -341,6 +341,19 @@ if part ts; then
       | grep -v 'timer:' > "$tmp/timers" || true
     step "no polling between still.fail's parts (in what this adds)" sh -c "! grep . '$tmp/timers'"
   fi
+  # The station's main thread waits on nothing (station/AGENTS.md): what a change adds there calls no synchronous file
+  # call, process or compression of node's (fs, child_process, zlib) unless its line says why with "sync:". What runs on
+  # no other thread may: a worker's own file (`*worker.ts`), the readers' (src/read/, but for what of it the main thread
+  # runs: the pool, the builders and their requests, and the transcripts it follows), the command line (src/cli.ts).
+  if touches '^station/src/'; then
+    {
+      added 'station/src/*.ts' ':(exclude,glob)station/src/**/*worker.ts' ':(exclude)station/src/read' ':(exclude)station/src/cli.ts'
+      added 'station/src/read/pool.ts' 'station/src/read/mb-reader.ts' 'station/src/read/tail.ts' 'station/src/read/transcript.ts' \
+        'station/src/read/packed.ts' 'station/src/read/plan.ts' 'station/src/read/*-builder.ts' 'station/src/read/*-requests.ts' ':(exclude,glob)station/src/**/*worker.ts'
+    } | grep -nE '\b(access|appendFile|chmod|chown|close|copyFile|cp|exists|fchmod|fchown|fdatasync|fstat|fsync|ftruncate|futimes|lchown|link|lstat|lutimes|mkdir|mkdtemp|open|opendir|read|readdir|readFile|readlink|readv|realpath|rename|rm|rmdir|stat|statfs|symlink|truncate|unlink|utimes|write|writeFile|writev|exec|execFile|spawn|gzip|gunzip|deflate|deflateRaw|inflate|inflateRaw|unzip|brotliCompress|brotliDecompress|zstdCompress|zstdDecompress)Sync(\.native)?\(' \
+      | grep -v 'sync:' > "$tmp/syncs" || true
+    step "the station's main thread waits on nothing (in what this adds)" sh -c "! grep . '$tmp/syncs'"
+  fi
   # No way into a station from outside (AGENTS.md): every socket a station listens on is this machine's own, and says
   # so on its line (127.0.0.1; the fd the launcher holds, a Unix socket's path); the mesh's endpoint is bound by
   # mesh/native.ts. No tunnel in the station or the cloud. (A `.listen(` given a function is an event's, not a socket's.)
