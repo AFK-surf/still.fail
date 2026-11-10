@@ -49,9 +49,9 @@ fn come_back_close_ms() -> Double {
 }
 
 ///|
-/// 甲 let go of, called back `after` later (on a frame); from then, a frame each 60th of a second till it is back: where
-/// 下 was at each, first where it stood, and the index of the frame it was called back in.
-fn come_back_walk(centred : Bool, after : Double) -> (Array[Double], Int) {
+/// 甲 let go of, called back `after` later (on a frame); from then, a frame each `ms` (a 60th of a second) till it is
+/// back: where 下 was at each, first where it stood, and the index of the frame it was called back in.
+fn come_back_walk(centred : Bool, after : Double, ms? : Double = come_back_frame_ms) -> (Array[Double], Int) {
   let here = @signals.signal(true, same=fn(a, b) { a == b })
   let t = come_back_tester(here, centred)
   // (as a test walks to it: a run first, the frames' clock where that leaves it)
@@ -61,8 +61,8 @@ fn come_back_walk(centred : Bool, after : Double) -> (Array[Double], Int) {
   t.frame()
   ys.push(come_back_y(t))
   let back = t.time() + after
-  while t.time() + come_back_frame_ms <= back {
-    t.run_for(come_back_frame_ms)
+  while t.time() + ms <= back {
+    t.run_for(ms)
     ys.push(come_back_y(t))
   }
   let turn = ys.length() - 1
@@ -71,7 +71,7 @@ fn come_back_walk(centred : Bool, after : Double) -> (Array[Double], Int) {
   ys.push(come_back_y(t))
   let end = t.time() + @ui.move_most_ms
   while t.time() < end {
-    t.run_for(come_back_frame_ms)
+    t.run_for(ms)
     ys.push(come_back_y(t))
   }
   t.assert_idle()
@@ -156,5 +156,66 @@ test "a show's node called back: where its way has it at each moment the same ho
     let walked = come_back_at(after, moments, true)
     let jumped = come_back_at(after, moments, false)
     assert_eq(walked, jumped, msg="called back \{after} on")
+  }
+}
+
+///|
+/// Seen hanging at its turn (the coordinator of the migration, 2026-11-10: 「松手，滑一下，愣住，再弹回去」): of `ys`, a
+/// thing's place on frames `ms` apart from the one it set off again on, the longest run of frames each going less than
+/// half a point a 60th of a second (ms): from the first till the frame it went fastest on after it turned; none where it
+/// never turned.
+fn hung_at_turn(ys : Array[Double], ms : Double) -> Double {
+  let steps = Array::makei(ys.length() - 1, fn(i) { ys[i + 1] - ys[i] })
+  let first = steps.search_by(fn(d) { d != 0.0 })
+  guard first is Some(f) else { return 0.0 }
+  let set_out = steps[f]
+  let turned = steps.search_by(fn(d) { d * set_out < 0.0 })
+  guard turned is Some(ti) else { return 0.0 }
+  let mut fastest = ti
+  for i in ti..<steps.length() {
+    if steps[i].abs() > steps[fastest].abs() {
+      fastest = i
+    }
+  }
+  let still = turn_still_speed * ms
+  let mut run = 0
+  let mut most = 0
+  for i in 0..=fastest {
+    run = if steps[i].abs() < still { run + 1 } else { 0 }
+    most = if run > most { run } else { most }
+  }
+  most.to_double() * ms
+}
+
+///|
+/// Under half a point a 60th of a second (points a ms): a frame seen still.
+let turn_still_speed : Double = 0.5 / come_back_frame_ms
+
+///|
+/// Two 60ths of a second (ms): frames still that long, together, are seen hanging.
+let turn_hung_ms : Double = 2.0 * come_back_frame_ms
+
+///|
+/// How fast (points a ms) a thing set off again has to go for its turn to be judged: one slower than that is all but
+/// still as it sets off.
+let turn_judged_from : Double = 0.05
+
+///|
+/// Hanging at its turn as `ys` (on frames `ms` apart) has it, called `what`: none, frames still as long as turn_hung_ms.
+fn assert_not_hung(ys : Array[Double], ms : Double, what : String) -> Unit raise {
+  let hung = hung_at_turn(ys, ms)
+  assert_true(hung + 0.01 < turn_hung_ms, msg="\{what}: still \{hung} ms at its turn: \{ys}")
+}
+
+///|
+test "a show's node called back as it closes its room: never hanging near still at its turn, at 60 and 120 a second" {
+  for ms in [1000.0 / 60.0, 1000.0 / 120.0] {
+    for after in [100.0, 150.0, 200.0, 220.0, 240.0] {
+      let (ys, turn) = come_back_walk(false, after, ms~)
+      let v = (ys[turn] - ys[turn - 1]) / ms
+      if v.abs() > turn_judged_from {
+        assert_not_hung(ys[turn:].to_array(), ms, "called back \{after} ms on, frames \{ms} ms apart")
+      }
+    }
   }
 }
