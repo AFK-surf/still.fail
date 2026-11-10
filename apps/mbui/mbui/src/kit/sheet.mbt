@@ -303,7 +303,7 @@ pub fn sheet(
           c.presses_to(top_id)
         }
         c.layer(fn() { c.drag_area(top_id, axis=Vertical, w=Fill(1.0), h=Px(drag_h), fn() {  }) |> ignore }) |> ignore
-        c.box(w=Fill(1.0), h=Px(own), fn() { body() }) |> ignore
+        c.box(style=@ui.style(w=Full, h=Fixed(own)), fn() { body() }) |> ignore
       })
     })
     c.semantics(i, Dialog, label~, modal=true)
