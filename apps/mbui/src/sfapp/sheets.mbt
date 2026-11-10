@@ -647,7 +647,7 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
       None => []
     }
     // All visible rows share a column wide enough for their labels in this language and at this text size.
-    let labels = [tr("android-chat.agent.account"), tr("android-chat.agent.history")]
+    let labels = [tr("android-chat.agent.account"), tr("android-chat.agent.history"), tr("android-chat.new.model")]
     if station is Some(_) { labels.push(tr("android-chat.agent.station")) }
     if screens.length() > 0 { labels.push(tr("android-chat.agent.screen")) }
     if entry is Some(_) && !(field(card, "context") is Some(Object(_))) { labels.push(tr("android-chat.agent.context")) }
@@ -701,12 +701,29 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
       } else {
         fill("android-chat.agent.account.auto", [("name", name)])
       }
-      // The same model picker as the chat's history and a new chat: every way to the run offers the same choices.
+      // What it runs on under its own name, the model and how hard it thinks said (2026-11-10: the only way to its
+      // picker was the row named 账号, and how hard it thinks was said nowhere short of the picker). The same model
+      // picker as the chat's history and a new chat: every way to the run offers the same choices.
+      let model = match text(s, "modelName") {
+        "" => text(s, "model")
+        n => n
+      }
+      if model != "" {
+        let runs = match text(s, "effort") {
+          "" => model
+          e => model + " · " + @sfpages.effort_text(e)
+        }
+        agent_row(c, "agent/model", tr("android-chat.new.model"), runs, label_w, fn() {  }, on_press=fn() {
+          close()
+          @sfpages.open_triple_panel(src, r.station, "session:" + key, Unanchored, saved=@sf.t("web-pages.chat.pickSaved"))
+        })
+      }
+      // (who runs it: the picker with its accounts open over it)
       agent_row(c, "agent/account", tr("android-chat.agent.account"), value, label_w, fn() {  }, under=fn() {
         allowance_line(c, field(account, "quota"))
       }, on_press=fn() {
         close()
-        @sfpages.open_triple_panel(src, r.station, "session:" + key, Unanchored, saved=@sf.t("web-pages.chat.pickSaved"))
+        @sfpages.open_triple_panel(src, r.station, "session:" + key, Unanchored, saved=@sf.t("web-pages.chat.pickSaved"), accounts=true)
       })
       agent_row(
         c,

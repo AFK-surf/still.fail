@@ -29,6 +29,8 @@ const TABLE = "choice";
 /// How many of the models used most a model control's panel keeps nearest what opened it.
 const NEAR = 4;
 const FIELDS = ["runtime", "model", "effort", "profile", "fast", "context"];
+/// How a model runs, apart from who runs it: what is set by hand in a control's panel (`Choose`'s `#hand`).
+const HOW = ["runtime", "effort", "fast", "context"];
 
 /// The most context picked (views/models.ts `contextSteps`), as a client says it: tokens, as a number or its digits;
 /// anything else (null, "") the model's whole window.
@@ -164,6 +166,14 @@ export class Choose implements Owner {
   readonly #chosen = new Marks();
   readonly #drafts = new Map<string, Record<string, J>>();
   readonly #adding = new Map<string, J>();
+  /// What was set by hand in a control's panel since it opened (a `pick.save` of how it runs with no model: how hard
+  /// it thinks, its runtime, how fast, how much context), by its topic's key: what a model never run here would run
+  /// with picked in that panel next (`#pick`'s `usual`). One that has run here is picked as it last ran whatever was
+  /// set since: a model used most is the model with how it runs (the user, 2026-11-10: 「常用模型按理说是包括思考深度
+  /// 的，这样随便切会让常用模型的配置失效」, of every model picked taking what was set by hand).
+  readonly #hand = new Map<string, Record<string, J>>();
+  /// What `#hand` held before the last save asked of the station, put back if that fails (`unsaved`).
+  readonly #handWas = new Map<string, Record<string, J> | null>();
   /// The key each scope's next new chat is to be made under (`next`), until one is made under it.
   readonly #next = new Map<string, string>();
 
@@ -177,6 +187,8 @@ export class Choose implements Owner {
 
   stop(topic: Topic): void {
     this.#drafts.delete(topicKey(topic));
+    this.#hand.delete(topicKey(topic));
+    this.#handWas.delete(topicKey(topic));
   }
 
   compute(topic: Topic): Value | undefined {
@@ -693,9 +705,29 @@ export class Choose implements Owner {
       const found = optionOf(options, text(get(h, "model")));
       if (found !== undefined) uses.set(found.model, (uses.get(found.model) ?? 0) + (typeof h.count === "number" ? h.count : 1));
     }
+    const hand = this.#hand.get(topicKey(topic));
+    // What a model never run here takes of what was set by hand in the panel: a runtime among those it runs on, how
+    // hard it thinks among that runtime's levels, how fast and how much context where that runtime has them; none,
+    // nothing of it.
+    const byHand = (opt: J): J => {
+      if (hand === undefined) return undefined;
+      const rts = arr(opt.runtimes);
+      const rt = !fixed && rts.some((r) => r === hand.runtime) ? hand.runtime : null;
+      const at = fixed ? value.runtime : (rt ?? rts[0]);
+      const has = (field: string) => (typeof at === "string" ? arr(get(get(opt, field), at)) : []);
+      const e = text(hand.effort);
+      const c = contextOf(hand.context);
+      const took = {
+        runtime: rt,
+        effort: e !== null && has("efforts").some((x) => x === e) ? e : null,
+        fast: typeof hand.fast === "boolean" && fastRuntime(at) ? hand.fast : null,
+        context: c !== null && (o.kind === "new" || o.kind === "session") && has("contexts").some((n) => n === c) ? c : null,
+      };
+      return took.runtime === null && took.effort === null && took.fast === null && took.context === null ? undefined : took;
+    };
     const annotated = options.map((opt: J) => {
       const id = typeof opt.model === "string" ? opt.model : "";
-      const ran = id === m ? { runtime: on ?? null, effort, fast, context } : this.#usual(scope, id, history);
+      const ran = id === m ? { runtime: on ?? null, effort, fast, context } : (this.#usual(scope, id, history) ?? byHand(opt));
       const r = ran === undefined ? null : resolve(options, { model: id, runtime: fixed ? value.runtime : ran.runtime, effort: ran.effort, fast: ran.fast, context: ran.context });
       const parts: string[] = [];
       if (r !== null) {
@@ -816,7 +848,11 @@ export class Choose implements Owner {
     const o = of(oName);
     const key = topicKey({ topic: "pick", station, of: oName });
     if (get(params, "clear") === true && o.kind === "connectNew") this.#adding.delete(`${station}\u0001${o.form}`);
-    if (get(params, "open") === true || get(params, "clear") === true) this.#drafts.delete(key);
+    if (get(params, "open") === true || get(params, "clear") === true) {
+      this.#drafts.delete(key);
+      this.#hand.delete(key);
+      this.#handWas.delete(key);
+    }
     const fields = FIELDS.filter((f) => get(params, f) !== undefined);
     if (fields.length > 0) {
       const draft = this.#drafts.get(key) ?? {};
@@ -855,6 +891,17 @@ export class Choose implements Owner {
     const next = v.next;
     // Not run here till its account is borrowed (`pick.borrow`).
     if (v.borrow !== null && v.borrow !== undefined) throw CoreError.invalid(t("core-logic.choose.borrow.first"));
+    // How it runs set with no model: set by hand in the panel, kept for the model picked in it next (`#hand`); set
+    // to what it already was, still set.
+    const set = get(params, "model") === undefined ? HOW.filter((f) => get(params, f) !== undefined) : [];
+    if (set.length > 0) {
+      const key = topicKey(topic);
+      const was = this.#hand.get(key);
+      this.#handWas.set(key, was ?? null);
+      this.#hand.set(key, { ...was, ...Object.fromEntries(set.map((f) => [f, params[f]])) });
+    } else {
+      this.#handWas.delete(topicKey(topic));
+    }
     if (v.changed !== true || v.option === null) {
       this.#drafts.delete(topicKey(topic));
       this.#env.store.invalidate(topic);
@@ -900,7 +947,15 @@ export class Choose implements Owner {
 
   /// A pick asked of the station that failed: the panel back to what it runs on.
   unsaved(station: string, oName: string): void {
-    this.#drafts.delete(topicKey({ topic: "pick", station, of: oName }));
+    const key = topicKey({ topic: "pick", station, of: oName });
+    this.#drafts.delete(key);
+    // (what was set by hand as it was before what failed)
+    const was = this.#handWas.get(key);
+    if (was !== undefined) {
+      if (was === null) this.#hand.delete(key);
+      else this.#hand.set(key, was);
+      this.#handWas.delete(key);
+    }
     this.#changed();
   }
 

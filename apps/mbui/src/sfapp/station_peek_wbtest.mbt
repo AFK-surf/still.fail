@@ -103,10 +103,11 @@ test "a station's card while it is offline: says so, no figures; its page still 
 }
 
 ///|
-test "an agent's account opens its model picker, where the context limit can be changed" {
+test "an agent's model opens its model picker, where the context limit can be changed" {
+  // (under its own name since 2026-11-10; its account opens who runs it: agent_card_model_wbtest.mbt)
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-agent")
-  t.tap_text("账号")
+  t.tap_text("模型")
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("完整 · 1M") is Some(_), msg="the model picker offers the current context limit")
   t.tap_text("完整 · 1M")

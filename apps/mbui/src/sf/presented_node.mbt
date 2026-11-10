@@ -36,10 +36,12 @@ fn tree_draws(p : Presented, sheet : Bool) -> Bool {
 ///|
 /// Whether panel `x` presented `from` is a small panel beside what opened it the window's tree draws (panel_node): not
 /// a stage, a form or one opened by nothing (a dialog in the middle of the window), nor (yet) one as wide as what it
-/// holds and a share of the window tall, or one that goes in steps (`steps`). One whose title is as it is now (`live`)
-/// heads itself with that title as it is (panel_node).
+/// holds and a share of the window tall. One whose title is as it is now (`live`) heads itself with that title as it
+/// is (panel_node). One that goes in steps (`steps`) is the tree's too, its first step: its steps are its sheet's (the
+/// model's panel: all of its models a step in on 小屏, columns side by side beside what opened it), and a step told
+/// (panel_go) beside what opened it is not drawn yet.
 fn panel_popover_of(x : PanelOf, from : Anchor) -> Bool {
-  !x.stage && !x.form && from != Unanchored && !(x.fits && x.tall > 0.0) && !x.steps
+  !x.stage && !x.form && from != Unanchored && !(x.fits && x.tall > 0.0)
 }
 
 ///|
