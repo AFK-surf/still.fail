@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [6fe59f6a9](https://github.com/AFK-surf/still.fail/commit/6fe59f6a9297bc81d55d767780f43bc8b3fd4139) fix: forward Windows shortcuts from the remote scr | 1.78 | 2.38 | 9.91 | 28.53 | 34.71 | 25.48 | 46.89 | 93.96 | 158.29 |
 | [b2fe04982](https://github.com/AFK-surf/still.fail/commit/b2fe04982d5071a1b4cc93e25598eeb1fbc0c9b5) core: a vault's items left under an earlier key ar | 1.78 | 2.38 | 9.91 | 28.53 | 34.71 | 25.48 | 46.89 | 94.11 | 178.87 |
 | [994ca523b](https://github.com/AFK-surf/still.fail/commit/994ca523b8e2f79bb1f198d7167eaec088a2102a) mbui: what reads the time as a node's property is  | 1.78 | 2.38 | 9.91 | 28.52 | 34.71 | 25.47 | 46.89 | 94.03 | 162.93 |
 | [081eff020](https://github.com/AFK-surf/still.fail/commit/081eff020f54f2731df7566cf9e8323ad4bb05c6) core, app: a list's stations are rows; one station | 1.78 | 2.37 | 9.9 | 28.52 | 34.69 | 25.45 | 46.78 | 93.9 | 181.79 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [1c6ee92f5](https://github.com/AFK-surf/still.fail/commit/1c6ee92f50f3cb2fd8c149612b9dd13db7cf3923) app, core: to people there is one safe mode: no 个人 | 1.75 | 2.33 | 9.69 | 28.27 | 33.92 | 25.24 | 46.31 | 93.54 | 156.12 |
 | [5944ba7e0](https://github.com/AFK-surf/still.fail/commit/5944ba7e017b4c6e51ccaa31050d65689562e6cb) ci: the flows' default-rate run on replay-build's  | 1.75 | 2.33 | 9.7 | 28.27 | 33.93 | 25.24 | 46.33 | 93.72 | 166.21 |
 | [ee40c4a4f](https://github.com/AFK-surf/still.fail/commit/ee40c4a4f96499aa12879f6fe6c574e50d75ac3c) mbui: a measured node read as a frame is painted i | 1.75 | 2.33 | 9.69 | 28.26 | 33.9 | 25.24 | 46.3 | 93.5 | 150.25 |
-| [85413543f](https://github.com/AFK-surf/still.fail/commit/85413543f0d721c9ed49e826b71181ec7f058599) mbui: a wheel and a press 7 ms after it scroll as  | 1.75 | 2.33 | 9.68 | 28.25 | 33.88 | 25.23 | 46.28 | 93.67 | 176.03 |
