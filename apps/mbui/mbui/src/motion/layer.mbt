@@ -786,6 +786,28 @@ fn rec_unread(k : Int) -> Unit {
 }
 
 ///|
+/// The shape of what is reshaped for cause `by` (reshape's `by`: its ground's way) told at moment `at` to stop where it
+/// goes (Anim::stop_at): on from where it was then and as fast, slowing to rest, left there, short of where it is laid
+/// out, till its next cause (the coordinator of the migration, 2026-11-10: a composer growing a line as words sent from
+/// it hold it: the words gone, it grows no further for them). Only its shape: where it and its parts are placed goes on
+/// to where they are laid out, which no next cause would set going again (a box sent from as it opened, its place
+/// halfway there for good). One rule with a way set off again the other way (layout_entry): a motion changed carries
+/// its speed.
+pub fn stop_for(c : @ui.Ctx, by : String, at : Double) -> Unit {
+  if by == "" {
+    return
+  }
+  mo.recs.each(fn(_, r) {
+    if r.alive && r.by == by {
+      let way = ground_way(r, (r.x, r.y, r.w, r.h))
+      if way > 0.0 {
+        r.gp.stop_at(c, at, points=way)
+      }
+    }
+  })
+}
+
+///|
 /// How far over its laid out top the ground of the shape keyed `key` (reshape) is drawn now, on its way from the shape
 /// it had (less than 0 while it is drawn lower: growing up to it): what stands on it moves with it so, in the same
 /// frame. 0 at rest, and while it goes from where it was with what it holds (`carry`: to another place, not another
@@ -2168,9 +2190,10 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           }
           // (set off again while it went: a Move on from that speed (move_path), past its new shape a little where it
           // went toward it fast and back, not from rest on its curve, stopped dead (the user, 2026-11-09: 「冲过一点再弹回」))
-          // (only toward its new shape: turned back, from rest, as its parts are)
-          let v = if v > 0.0 { v } else { 0.0 }
-          let spec = if sets_out_from_rest(spec) && v > reshape_moving {
+          // (turned back too: on from its speed the other way, slowing on its Move's way past where it was a little, then
+          // back to its new shape, not from rest, stopped dead as it turned (sizes_steady); the coordinator of the
+          // migration, 2026-11-10: a composer growing a line let go of by words sent from it before it has grown)
+          let spec = if sets_out_from_rest(spec) && v.abs() > reshape_moving {
             let way = ground_way(r, laid)
             move(points=way, over=carried_way(-way, v * way, 0.0, 0.0))
           } else {

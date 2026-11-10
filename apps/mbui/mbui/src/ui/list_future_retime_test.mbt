@@ -103,3 +103,34 @@ test "an arriving row whose own start is moved to the future does not open early
   t.run_for(@ui.row_size_ms * 2.0)
   assert_eq(t.row(1).unwrap().3, 50.0, msg="the row opens once its start is due")
 }
+
+///|
+test "an arriving row told to come sooner than it was before it set out opens from then, not from the moment said first" {
+  let entries = [[0]]
+  let start = [-1.0]
+  let rows : @ui.ListRows[Int] = @ui.ListRows::new()
+  let t = @ui.Tester::new(fn(c) {
+    let now = entries[0]
+    let (items, _) = rows.rows(
+      c, now.map(fn(i) { "r\{i}" }), now, fn(_) { "" },
+      from=fn(k) { if k == "r1" && start[0] >= 0.0 { Some(start[0]) } else { None } },
+    )
+    c.list("list", items.length(), 50.0, fn(_) {
+      c.box(h=Px(50.0), fn() { c.text("Row") |> ignore }) |> ignore
+    }, stick_end=true, sized=rows.sized()) |> ignore
+  }, w=300.0, h=400.0)
+  // said to come a row's way from now
+  start[0] = t.time() + @ui.row_size_ms
+  entries[0] = [0, 1]
+  t.draw()
+  t.run_for(@ui.row_size_ms / 4.0)
+  assert_eq(t.row(1).unwrap().3, 0.0, msg="not due yet")
+  // told now that it comes now (its cause timed once it knows its way)
+  start[0] = t.time()
+  t.draw()
+  t.run_for(@ui.row_size_ms / 4.0)
+  let opening = t.row(1).unwrap().3
+  assert_true(opening > 0.0 && opening < 50.0, msg="opening from when it was told it comes: \{opening}")
+  t.run_for(@ui.row_size_ms * 2.0)
+  assert_eq(t.row(1).unwrap().3, 50.0)
+}

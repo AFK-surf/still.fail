@@ -818,6 +818,14 @@ pub fn[T] ListRows::rows(
       self.causes.start = r.1.at()
     }
   }
+  // (told sooner than said, the way not set out yet: from the latest of its causes now, as it would have been said so,
+  // not from the moment said first: words sent timed once their row is laid out, their row's coming earlier than the
+  // usual way's share had it)
+  if !retimed.is_empty() && self.causes.start > now {
+    let mut start = now
+    self.causes.by.each(fn(_, cm) { start = dmax(start, cm.0.at()) })
+    self.causes.start = start
+  }
   self.given = true
   // the rows' way: from the last cause's moment to the latest end any was given
   if began {
