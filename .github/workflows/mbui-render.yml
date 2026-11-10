@@ -61,6 +61,7 @@ jobs:
         run: scripts/render_offscreen.sh
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: render
           path: apps/mbui/mbui/out/render/

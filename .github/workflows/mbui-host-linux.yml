@@ -137,6 +137,7 @@ jobs:
           grep -q 'STREAM start h264' out/host/stream-h264.log && grep -q 'STREAM done' out/host/stream-h264.log
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
         with:
           name: host-linux
           path: apps/mbui/mbui/out/host/
