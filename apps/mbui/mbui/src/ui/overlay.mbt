@@ -397,11 +397,14 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
     Some((x, y)) => {
       // (what took the press as it went down: the window's tree's, none of the old frame's)
       let target = if self.press_down_tree { 0 } else { hit_in(self.hit_ids, self.hit_rects, x, y) }
+      // (taken by what of the tree is over a layer in the window's stack of layers, or by its modal layer over it: the
+      // layer never saw it, as one under a layer of its own does not; one over that, as ever, a press outside it)
+      let under = if self.press_down_tree { self.press_tree_stack } else { -3 }
       let mut k = self.last_layers.length() - 1
       while k >= 0 {
         let l = self.last_layers[k]
         k = k - 1
-        if !self.layer_takes(l) {
+        if !self.layer_takes(l) || self.layer_stack(l) < under {
           continue
         }
         if self.in_layer(l, x, y) {
@@ -1149,8 +1152,10 @@ fn Ctx::back_layer_spent(self : Ctx) -> Unit {
 fn Ctx::layer_escape(self : Ctx, keys : Array[(Int, Int, Bool)]) -> Int {
   let open = self.last_layers.filter(fn(l) { self.layer_takes(l) }).rev()
   let keys_layer = self.keys_layer()
+  // (one under a modal layer of the window's tree takes no key, an Escape the tree left as none: Tree::modal_stack)
+  let modal = @signals.untracked(fn() { tree_modal_stack() })
   for l in open {
-    if l.escape {
+    if l.escape && self.layer_stack(l) >= modal {
       let mut took = false
       for k in 0..<keys.length() {
         let (code, mods, taken) = keys[k]

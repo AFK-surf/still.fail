@@ -1087,6 +1087,7 @@ pub struct Ctx {
   layer_return : Map[Int32, Int32]
   mut press_down : (Double, Double)?
   mut press_down_tree : Bool
+  mut press_tree_stack : Int32
   mut inst : FixedArray[Double]
   mut ninst : Int32
   segs : Array[Double]
