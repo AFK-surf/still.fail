@@ -55,8 +55,9 @@ fn sheet_node(
     fn(layer) {
       shown()
       layer.owns(gone) |> ignore
-      // (the field it opens to be typed in, where what it holds says one: panel_opens_in_node)
-      let field : Ref[@view.View?] = Ref(None)
+      // (the field it opens to be typed in, where what it holds says one: panel_opens_in_node; a search at hand,
+      // panel_search_at_hand_node's, not on a sheet)
+      let field : Ref[PanelField?] = Ref(None)
       layer.lends(panel_field_lent, field) |> ignore
       // (how far its scrim is in; how far below its place it is, in its own heights; how far a finger has its top down)
       // (in another's place: its scrim whole from the first, where that one stood, not below)
@@ -289,12 +290,12 @@ fn sheet_node(
                     let (lo, hi) = (sheet_grows_to[0], sheet_grows_to[1])
                     tall.go_by(sheet, if at > (lo + hi) / 2.0 * total { lo * total } else { hi * total }, @motion.move())
                   }
-                } else if at / total < sheet_close_below {
+                } else if @kit.sheet_goes_to(sheet_grows_to, at, speed, total, sheet_close_below) is None {
                   // (sinking away from where it is, as fast as it was going down)
                   let_go_speed.val = Some(dmax(0.0, speed))
                   cancel()
                 } else {
-                  let f = sheet_nearest(sheet_grows_to, at / total)
+                  let f = @kit.sheet_goes_to(sheet_grows_to, at, speed, total, sheet_close_below).unwrap_or(sheet_grows_to[0])
                   // (its height, up: its speed the other way, a second's)
                   tall.go_by(sheet, f * total, @motion.move(), velocity=-speed * 1000.0)
                 }
@@ -310,7 +311,7 @@ fn sheet_node(
               Up | Off => {
                 held.set(None)
                 back.put(down)
-                if d.kind == Up && down > sheet_drag_close {
+                if d.kind == Up && @kit.sheet_drag_closes(down, speed, sheet_drag_close) {
                   // (closed from where it is: it sinks away from there, as fast as it was going down)
                   let_go_speed.val = Some(dmax(0.0, speed))
                   cancel()
@@ -412,6 +413,9 @@ fn sheet_node(
               }
               s.box(fn(col) {
                 style_node(col, fn() { room })
+                // (holding nothing laid out, none of its room: its title and what it says straight over its foot, as the
+                // old sheet's body's box gone_empty)
+                col.gone_empty(Is(true)) |> ignore
                 // (laid out as the host's sheet lays out a panel's body, sheet_step's: narrow; its words what a sheet's rows
                 // leave of its words' in one a press opened, its rows out to its words' in one opened by nothing)
                 let pressed = from != Unanchored
@@ -457,11 +461,11 @@ fn sheet_node(
         |> ignore
       })
       |> ignore
-      // (the keys on the field it opens to be typed in, where it says one, given back as it goes; else the focus left
-      // where it is: Enter its foot's action)
+      // (the keys on the field it opens to be typed in, where it says one, given back as it goes; else, a search at
+      // hand or none, the focus left where it is: Enter its foot's action)
       match field.val {
-        Some(f) => layer.focus_opens(f) |> ignore
-        None => layer.focus_returns() |> ignore
+        Some(f) if f.sheet => layer.focus_opens(f.field) |> ignore
+        _ => layer.focus_returns() |> ignore
       }
     },
     // (its scrim's fade; and its sinking away, which holds it: View::moved_by)
@@ -507,12 +511,6 @@ fn sheet_stretched_slope(h : Double, top : Double, room : Double) -> Double {
 ///|
 /// How much a sheet drawn past its top gives way (@kit.sheet's: UIScrollView's rubber band's constant).
 let sheet_give : Double = 0.55
-
-///|
-/// Which of `shares` `f` is nearest (@kit.sheet's).
-fn sheet_nearest(shares : Array[Double], f : Double) -> Double {
-  shares.fold(init=shares[0], fn(best, s) { if (s - f).abs() < (best - f).abs() { s } else { best } })
-}
 
 ///|
 /// How far a sheet is below its place, in its own heights (1: out of the window, 0: risen), as it rises and sinks: each

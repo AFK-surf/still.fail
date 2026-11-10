@@ -14,8 +14,12 @@ export type ClientMessage =
   | { kind: "call"; id: RequestId; call: string; params: unknown; bytes?: Uint8Array }
   /// `from`: another of its subscriptions to the same topic with other params (a list's first rows, more of them asked
   /// now), still held: this one's first value goes as a keyed delta to what that one has (store.ts `#firstFrom`).
-  | { kind: "subscribe"; id: RequestId; subscribe: Topic; keyed?: boolean; from?: RequestId }
-  | { kind: "unsubscribe"; id: RequestId; unsubscribe: boolean }
+  /// `have`: the version (digest.ts `version`) of the value it holds of this topic, kept from an unsubscribe's `v`:
+  /// where the topic's value is that one still, its first message is `{id, same: true}`, not the value again.
+  | { kind: "subscribe"; id: RequestId; subscribe: Topic; keyed?: boolean; from?: RequestId; have?: string }
+  /// `keep`: the client keeps what it holds of the topic, to ask with it again (`have`): answered `{id, v}`, the last
+  /// message for this id, what it holds by then being the value `v` is the version of.
+  | { kind: "unsubscribe"; id: RequestId; unsubscribe: boolean; keep?: boolean }
   | { kind: "cancel"; id: RequestId; cancel: boolean };
 
 /// core → UI, as it goes on the wire. An answer's `bytes` go as a value's do (a file read: its JSON says what it is).
@@ -30,7 +34,12 @@ export type CoreMessage =
   | { id: RequestId; delta: AnyOp[]; from: RequestId }
   /// A topic with no value yet whose value waits on a station (or the cloud), not on the core reading what the device
   /// holds (store.ts `waits`): what shows it can show what is to come now, not what it holds a moment later.
-  | { id: RequestId; waiting: true };
+  | { id: RequestId; waiting: true }
+  /// A subscription asked with `have`: the topic's value is the one it holds; nothing of it is sent.
+  | { id: RequestId; same: true }
+  /// An unsubscribe with `keep` answered, its id's last message: the version of the value the client holds of it now
+  /// (null: it had none).
+  | { id: RequestId; v: string | null };
 
 /// A call's answer with bytes beside its JSON (a file read), as a handler gives it: `{id, ok: value, bytes}`.
 export class Beside {
@@ -246,14 +255,16 @@ export function parseClientMessage(raw: unknown, bytes?: Uint8Array): ClientMess
     const topic = parseTopic(raw.subscribe);
     // `keyed`: the UI applies keyed ops (collections.ts); the Rust core ignores it.
     if (topic) {
-      if (raw.keyed !== true) return { kind: "subscribe", id, subscribe: topic };
+      const have = typeof raw.have === "string" ? { have: raw.have } : {};
+      if (raw.keyed !== true) return { kind: "subscribe", id, subscribe: topic, ...have };
       const from = raw.from;
       return typeof from === "number" && Number.isInteger(from) && from >= 0 && from !== id
-        ? { kind: "subscribe", id, subscribe: topic, keyed: true, from }
-        : { kind: "subscribe", id, subscribe: topic, keyed: true };
+        ? { kind: "subscribe", id, subscribe: topic, keyed: true, from, ...have }
+        : { kind: "subscribe", id, subscribe: topic, keyed: true, ...have };
     }
   }
-  if (typeof raw.unsubscribe === "boolean") return { kind: "unsubscribe", id, unsubscribe: raw.unsubscribe };
+  if (typeof raw.unsubscribe === "boolean")
+    return raw.keep === true ? { kind: "unsubscribe", id, unsubscribe: raw.unsubscribe, keep: true } : { kind: "unsubscribe", id, unsubscribe: raw.unsubscribe };
   if (typeof raw.cancel === "boolean") return { kind: "cancel", id, cancel: raw.cancel };
   return bad;
 }

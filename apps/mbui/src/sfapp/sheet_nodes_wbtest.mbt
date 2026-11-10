@@ -311,3 +311,34 @@ test "小屏: a sheet whose body is nodes opened by what a sheet's button does a
     assert_false(@sf.presenter_visible(), msg="\{case}")
   }
 }
+
+///|
+/// A sheet whose body is nodes (`nodes`) or an old one, at rest; its top drawn `down` down in `steps` moves (a frame's
+/// apart: as fast as that makes it) and let go: whether it is open once it has had its way.
+fn sheet_let_go_open(nodes : Bool, down : Double, steps : Int) -> Bool raise {
+  let t = phone_tester()
+  if nodes {
+    @sf.panel_nodes("面板", from=Unanchored, foot=fn(v, _) { ink_node(v, 60.0, 36.0, foot_ink) }, fn(v, _) {
+      ink_node(v, 40.0, 36.0, body_ink)
+    })
+  } else {
+    @sf.panel("面板", from=Unanchored, foot=old_foot(), old_body())
+  }
+  t.run_for(sheet_way_ms(t))
+  let (_, y, _, _) = t.query(Dialog).unwrap().rect
+  t.drag(195.0, y + 10.0, 195.0, y + 10.0 + down, steps~)
+  t.run_for(sheet_way_ms(t))
+  @sf.presenting()
+}
+
+///|
+test "小屏: a sheet let go short of its line: closed flicked down, back let go slowly; past its line closed; the same for one whose body is nodes" {
+  for nodes in [false, true] {
+    // (40 down a frame apart in 2 moves: 1.2 points a ms, a flick; in 8, 0.3: slowly, landing short of 80)
+    assert_false(sheet_let_go_open(nodes, 40.0, 2), msg="flicked 40 down (nodes \{nodes}): closed")
+    assert_true(sheet_let_go_open(nodes, 40.0, 8), msg="let go slowly 40 down (nodes \{nodes}): back, open")
+    // (either side of its line, slowly: 70 and 100 down in 30 moves, 0.14 and 0.2 points a ms)
+    assert_true(sheet_let_go_open(nodes, 70.0, 30), msg="let go slowly 70 down (nodes \{nodes}): back, open")
+    assert_false(sheet_let_go_open(nodes, 100.0, 30), msg="let go slowly 100 down (nodes \{nodes}): closed")
+  }
+}

@@ -122,7 +122,7 @@ static void clip_picture_done(GObject *src, GAsyncResult *res, gpointer data) {
     GBytes *png = t ? gdk_texture_save_to_png_bytes(t) : NULL;
     if (!png) {
       r->picture = CLIP_UNREADABLE;
-    } else if (g_bytes_get_size(png) > 8u * 1024 * 1024) {
+    } else if (g_bytes_get_size(png) > (1u << 30)) {
       r->picture = CLIP_TOO_LARGE;
       g_bytes_unref(png);
     } else {

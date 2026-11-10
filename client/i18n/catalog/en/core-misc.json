@@ -269,6 +269,7 @@
   "core-misc.vault.unknownItem": "No such item",
   "core-misc.vault.scopeTooLong": "This secret is not granted for that long",
   "core-misc.vault.untrusted": "This item is not signed by a member of its vault",
+  "core-misc.vault.waiting": "“{name}” had a device taken out and is waiting for its owner's device to give it new keys on the station “{station}”; it can't be changed until then",
   "core-misc.vault.noRequest": "That request is not waiting any more",
   "core-misc.vault.reason.open": "Open “{name}”",
   "core-misc.vault.reason.unlock": "Unlock the vault “{name}”",

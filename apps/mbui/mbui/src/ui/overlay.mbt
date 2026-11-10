@@ -667,14 +667,13 @@ fn Ctx::layers_focus(self : Ctx) -> Unit {
     if was {
       continue
     }
-    // (its own ground in place of what outside it has the focus: nothing has it, or what is in it has it already, it
-    // stays)
-    if l.initial == layer_ground &&
-      (
-        self.focus == 0 ||
+    // (its own ground in place of what outside it has the focus: Ctx::focus_taken_under, the one rule)
+    if l.initial == layer_ground {
+      self.focus_taken_under(
+        l.id,
         self.focus == l.id ||
-        self.focusables.iter().any(fn(f) { f.id == self.focus && self.layer_built_in(f.layer, l.id) })
-      ) {
+        self.focusables.iter().any(fn(f) { f.id == self.focus && self.layer_built_in(f.layer, l.id) }),
+      )
       self.layers_opened.push(l.id)
       continue
     }
@@ -1241,4 +1240,19 @@ fn Ctx::on_anchor(self : Ctx, anchor : Int, target : Int, x : Double, y : Double
   let held : Array[Int] = []
   self.holders(self.hit_of(target, x, y), held)
   held.contains(anchor)
+}
+
+///|
+/// A modal layer opened over the keyboard's focus takes it (the one rule, the old frame's layers' and the window's
+/// tree's alike, whichever is over which): what outside it has the focus gives it to the layer's own `ground` (0: none),
+/// so what is typed goes into nothing under it, its keys are the topmost layer's and a field's input method is put away;
+/// as the layer goes, the focus goes back to what had it (Ctx::layers_focus's, view_layers_focus's), what was written
+/// still there. Where nothing has it, or what is in it (`inside`) has it, it stays. A layer that is not modal, or one
+/// that leaves what is typed to the field under it (View::leaves_typing, an old overlay opened with initial focus 0: a
+/// menu a finger opened beside it), is not asked.
+fn Ctx::focus_taken_under(self : Ctx, ground : Int, inside : Bool) -> Unit {
+  if self.focus == 0 || inside || self.focus == ground {
+    return
+  }
+  self.focus_moved(ground)
 }

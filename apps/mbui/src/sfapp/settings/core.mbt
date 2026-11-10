@@ -568,11 +568,6 @@ pub fn reset() -> Unit {
   adding.order.clear()
   adding.picked.set("")
   adding.serial.set(0)
-  mark_pick.emojis = false
-  mark_pick.color = ""
-  mark_pick.serial = 0
-  mark_pick.asking = false
-  mark_pick.reading = ""
   mark_pictures.val = 0
   env_form.val = 0
   versions_state.updating.clear()

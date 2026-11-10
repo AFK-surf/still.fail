@@ -562,8 +562,9 @@ fn screen_pasted(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   match kind {
     "image" =>
       match got.picture {
-        Png(png) => c.tell("screen-paste/" + s.view, fn() { s.paste_png(s.src, png, done) })
-        TooLarge => {
+        Png(png) if png.length() <= clip_png_max =>
+          c.tell("screen-paste/" + s.view, fn() { s.paste_png(s.src, png, done) })
+        Png(_) | TooLarge => {
           s.pasting = false
           say(c, @sf.t("android-misc.screen.imageTooLarge"))
         }

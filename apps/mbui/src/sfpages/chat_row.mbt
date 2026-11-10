@@ -1088,10 +1088,11 @@ let fling_from_share : Double = 0.5
 
 ///|
 /// Whether a row `w` wide let go `at` across (to the left: negative), its finger going `vx` (points per ms), is
-/// archived: past the line, or flung left from past `fling_from_share` of the way to it.
+/// archived: landing past the line on from that speed (@ui.lands_past), or flung left from past `fling_from_share` of
+/// the way to it.
 fn swipe_archives(at : Double, w : Double, vx : Double) -> Bool {
   let line = w * archive_at_share
-  at < -line || (vx < -fling_speed && at < -line * fling_from_share)
+  @ui.lands_past(at, vx, -line) || (vx < -fling_speed && at < -line * fling_from_share)
 }
 
 ///|

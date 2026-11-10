@@ -1855,3 +1855,54 @@ test "a chat after closing the switcher reads station changes made in the gap" {
   assert_true(t.shown_of("Pine") is Some(_), msg="the chat follows later station updates")
   @ui.run_let_go()
 }
+
+///|
+test "a place's list let go of and asked again: kept as the core last said it, nothing made of it again when it is the same" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  client.keep(@sfbase.lasting_kept)
+  let src = signal_client_source(client)
+  let params : Map[String, Json] = { "scope": "ws1" }
+  let made = Ref(0)
+  let follow = fn(seen : Array[Json?]) {
+    let live = src.topic("stations", params)
+    // (what a page works out of the list: done again only for another value, not for the same one said again)
+    let value = @signals.computed(fn(_) { live.get().value }, same=fn(a, b) { physical_equal(a, b) })
+    let stop = @signals.effect(fn() {
+      made.val += 1
+      seen.push(value.get())
+    })
+    fn() {
+      stop()
+      value.dispose()
+      live.dispose()
+    }
+  }
+  let first : Array[Json?] = []
+  let stop = follow(first)
+  client.receive_json({ "id": 1, "value": [{ "id": "a", "t": "A" }] })
+  let held = first[first.length() - 1]
+  stop()
+  assert_true(sent[1].contains("\"keep\":true"), msg=sent[1])
+  client.receive_json({ "id": 1, "v": "k:1" })
+  // Asked again with its version: shown at once as it was, then the core's `same`, and nothing made again of it.
+  let second : Array[Json?] = []
+  let made_before = made.val
+  let stop = follow(second)
+  assert_true(sent[2].contains("\"have\":\"k:1\""), msg=sent[2])
+  assert_true(second.length() == 1 && physical_equal(second[0], held), msg="shown at once as it was")
+  client.receive_json({ "id": 2, "same": true })
+  assert_eq(made.val, made_before + 1, msg="the same value said again makes nothing again")
+  // Let go of while a change was on its way to it: that change is in what is kept, and shown once asked again.
+  stop()
+  assert_true(sent[3].contains("\"keep\":true"), msg=sent[3])
+  client.receive_json({ "id": 2, "delta": [{ "path": [], "key": ["id"], "patch": "a", "ops": [{ "path": ["t"], "set": "A2" }] }] })
+  client.receive_json({ "id": 2, "v": "k:2" })
+  let third : Array[Json?] = []
+  let stop = follow(third)
+  assert_true(sent[4].contains("\"have\":\"k:2\""), msg=sent[4])
+  client.receive_json({ "id": 3, "same": true })
+  assert_eq(third[third.length() - 1].unwrap().stringify(), "[{\"id\":\"a\",\"t\":\"A2\"}]")
+  stop()
+}

@@ -224,20 +224,24 @@ pub fn sheet(
         // up is more, per second
         let v = -d.vy * 1000.0
         if !draggable {
-          if target - at > 80.0 {
+          if sheet_drag_closes(target - at, d.vy, 80.0) {
             dragged = Some(DraggedClosed)
             now = false
           } else {
             dragged = Some(DraggedBack)
             s.h.go_at(c, target, v~)
           }
-        } else if at / total < close_below {
-          dragged = Some(DraggedClosed)
-          now = false
         } else {
-          let f = nearest(detents, at / total)
-          dragged = Some(DraggedTo(f))
-          s.h.go_at(c, f * total, v~)
+          match sheet_goes_to(detents, at, d.vy, total, close_below) {
+            None => {
+              dragged = Some(DraggedClosed)
+              now = false
+            }
+            Some(f) => {
+              dragged = Some(DraggedTo(f))
+              s.h.go_at(c, f * total, v~)
+            }
+          }
         }
       }
       // a tap on the grabber (its top 30): to the other end
@@ -393,7 +397,7 @@ pub fn sheet_rest(key : String) -> Double {
 
 ///|
 /// Of `shares`, the one nearest `f`.
-fn nearest(shares : Array[Double], f : Double) -> Double {
+fn nearest_share(shares : Array[Double], f : Double) -> Double {
   let mut best = shares[0]
   for x in shares {
     if (x - f).abs() < (best - f).abs() {
@@ -423,4 +427,52 @@ pub fn sheet_look(c : @ui.Ctx, s : SheetState, body : () -> Unit) -> Unit {
     body()
   })
   |> ignore
+}
+
+///|
+/// Whether a sheet without detents let go `down` below its place, going `speed` down (points a ms), closes: landing past
+/// `line` on from that speed (@ui.lands_past), or flicked down (@ui.flung_away) however short; else back. So one let
+/// go back never goes on down past `line` before it turns (the coordinator of the migration, 2026-11-10). Its node
+/// sheet's (sf's sheet_node) the same.
+pub fn sheet_drag_closes(down : Double, speed : Double, line : Double) -> Bool {
+  @ui.lands_past(down, speed, line) || speed >= @ui.flung_away
+}
+
+///|
+/// Where a sheet with detents (`shares` of the window, `total` tall) let go `at` tall, going `speed` down (points a ms),
+/// settles (none: it closes): flicked (@ui.flung_away) a detent on the way it was flicked from where it was let go,
+/// down from its lowest closed, up from its highest its highest; else the detent nearest where it lands on from that
+/// speed (@ui.lands_at), closed landing under `close_below` of the window. So one let go short of closing goes on
+/// down no further than it was from closing before it turns (the coordinator of the migration, 2026-11-10). Its node
+/// sheet's (sf's sheet_node) the same.
+pub fn sheet_goes_to(shares : Array[Double], at : Double, speed : Double, total : Double, close_below : Double) -> Double? {
+  let f = at / total
+  if speed >= @ui.flung_away {
+    // (the highest under it)
+    let mut below : Double? = None
+    for s in shares {
+      if s < f && (match below { Some(b) => s > b; None => true }) {
+        below = Some(s)
+      }
+    }
+    below
+  } else if speed <= -@ui.flung_away {
+    // (the lowest over it; over the highest, the highest)
+    let mut above : Double? = None
+    let mut most = shares[0]
+    for s in shares {
+      most = if s > most { s } else { most }
+      if s > f && (match above { Some(b) => s < b; None => true }) {
+        above = Some(s)
+      }
+    }
+    Some(above.unwrap_or(most))
+  } else {
+    let lands = @ui.lands_at(at, -speed) / total
+    if lands < close_below {
+      None
+    } else {
+      Some(nearest_share(shares, lands))
+    }
+  }
 }

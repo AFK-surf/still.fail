@@ -527,9 +527,9 @@ export class Core {
     const inner = this.inner;
     switch (message.kind) {
       case "subscribe":
-        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true, message.from);
+        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true, message.from, message.have);
       case "unsubscribe":
-        return inner.store.unsubscribe(client, message.id);
+        return inner.store.unsubscribe(client, message.id, message.keep === true);
       case "cancel": {
         const key = `${client}/${message.id}`;
         const fiber = inner.calls.get(key);

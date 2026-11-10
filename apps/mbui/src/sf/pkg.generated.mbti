@@ -669,6 +669,8 @@ pub fn foot_fit(Double, Double, Double, least? : Double) -> Double
 
 pub fn foot_pad(Double) -> @ui.Style
 
+pub fn foot_place_node(@view.View, () -> Bool, (@view.View) -> Unit) -> Unit
+
 pub fn foot_reach(Double, start? : Double, words_first? : Bool) -> @ui.Style
 
 pub fn foot_spacer_node(@view.View) -> Unit
@@ -1420,6 +1422,8 @@ pub fn panel_button(@ui.Ctx, String, String, tone? : PanelTone, disabled? : Bool
 
 pub fn panel_button_node(@view.View, () -> String, () -> Unit, tone? : PanelTone) -> @view.View
 
+pub fn panel_card_last_node(@view.View) -> @ui.Style
+
 pub fn panel_card_out_node(@view.View) -> @ui.Style
 
 pub fn panel_column(@ui.Ctx, String, Double, @ui.Style, () -> Unit) -> Unit
@@ -1487,6 +1491,8 @@ pub fn panel_row_opens_node(@view.View, () -> String, (Anchor) -> Unit, icon? : 
 pub fn panel_rule_over() -> Double
 
 pub fn panel_said_row_node(@view.View, () -> Array[@text.Run], () -> Unit, () -> String, lead? : (@view.View, Double) -> Unit, end? : () -> String, who? : (() -> String, (@view.View, Double) -> Unit), chosen? : () -> Bool, lit? : () -> Bool, made? : (@view.View) -> Unit) -> Unit
+
+pub fn panel_search_at_hand_node(@view.View) -> Unit
 
 pub fn panel_switch_noted_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit, note? : () -> String, disabled? : () -> Bool) -> Unit
 
@@ -2035,6 +2041,8 @@ pub let side_tab_side : Double
 pub fn sides_clear(Double) -> @ui.Style
 
 pub let sign_in_title_size : @ui.TextSize
+
+pub fn sized_words_node(@view.View, () -> String, () -> Double, () -> Int64, wrap? : Bool, cut? : Bool) -> @view.View
 
 pub fn slack_mark(@ui.Ctx, Double) -> Int32
 

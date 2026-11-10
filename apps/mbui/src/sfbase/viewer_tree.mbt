@@ -973,10 +973,8 @@ fn Viewer::image_let_go(
     let width = z.bw + slide_gap
     let base = if v.strip_down > width / 2.0 { -1 } else if v.strip_down < -width / 2.0 { 1 } else { 0 }
     let dx = s - v.strip_down
-    let far = dx.abs() > dmin(80.0, z.bw / 5.0)
     let from_edge = !zoomed || (if dx > 0.0 { v.at_left } else { v.at_right })
-    let flung = from_edge && vx.abs() > 0.3 && (vx > 0.0) == (dx > 0.0) && dx.abs() > 10.0
-    let step = if dx != 0.0 && (far || flung) { if dx > 0.0 { -1 } else { 1 } } else { 0 }
+    let step = strip_step(dx, vx, z.bw, from_edge)
     let to = base + step
     if to < 0 {
       v.go(c, src, -1, vx * 1000.0)
@@ -2146,4 +2144,23 @@ pub fn viewer_flight_slot(slot : @view.View, src : Source, serial : Int, stage :
       image_flight(f, src, vw, stage, fn(t) { vw.lifted_at(t) < 1.0 })
     }
   })
+}
+
+///|
+/// Which way a picture's strip drawn `dx` across (a picture `bw` wide), let go going `vx` (points a ms), steps: on to the
+/// one beside it (-1 the one before, 1 the one after) landing far enough on from that speed (@ui.lands_past) or flung
+/// that way from its edge, else none (back).
+fn strip_step(dx : Double, vx : Double, bw : Double, from_edge : Bool) -> Int {
+  let far_at = dmin(80.0, bw / 5.0)
+  let far = @ui.lands_past(dx, vx, if dx > 0.0 { far_at } else { -far_at })
+  let flung = from_edge && vx.abs() > 0.3 && (vx > 0.0) == (dx > 0.0) && dx.abs() > 10.0
+  if dx != 0.0 && (far || flung) {
+    if dx > 0.0 {
+      -1
+    } else {
+      1
+    }
+  } else {
+    0
+  }
 }

@@ -235,6 +235,14 @@ fn read_topic_state(src : Source, name : String, params : Map[String, Json]) -> 
 let lasting : Array[String] = ["workspace", "stations", "stationNet", "profiles", "connects", "vaults", "usage", "archive"]
 
 ///|
+/// Whether topic `name` asked with `params` (its JSON as the core is asked it, its name in it too) is one of the
+/// lists the places open on (`lasting`), whose value the core's client keeps as it is let go of, to ask it again with
+/// its version (@core.Client::keep: the core answers `same` where it has not changed).
+pub fn lasting_kept(name : String, params : Json) -> Bool {
+  lasting.contains(name) && !(params is Object(p) && p.contains("q"))
+}
+
+///|
 /// What a source last said of a lasting topic. `version` is below every core's (those count up from 0), another for
 /// each value kept: what is worked out of a topic by its version never takes this for the answer that follows it.
 priv struct LastSaid {

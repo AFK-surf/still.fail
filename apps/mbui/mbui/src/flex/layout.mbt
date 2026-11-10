@@ -173,6 +173,12 @@ fn box_of(
   // a box is never smaller than its padding and border
   min_w = if known(min_w) { fmax(min_w, pbw) } else { pbw }
   min_h = if known(min_h) { fmax(min_h, pbh) } else { pbh }
+  // (one taking no room holding nothing: its padding top and foot as much as what it holds is there (layout_flex), so
+  // none of them its least, only its border's and what its style says; Style's gone_empty)
+  if s.gone_empty {
+    min_h = fmax(resolve_of(s.min_height_k, s.min_height_v, cb_h) + adj_h, bor_t + bor_b)
+    min_h = if known(min_h) { min_h } else { bor_t + bor_b }
+  }
   let mar_l = edge_of(s.margin_left_k, s.margin_left_v, cb_w)
   let mar_t = edge_of(s.margin_top_k, s.margin_top_v, cb_w)
   let mar_r = edge_of(s.margin_right_k, s.margin_right_v, cb_w)
@@ -721,6 +727,8 @@ fn size_uncached(
       return w
     }
   } else if !known(s.come_now) {
+    // (one taking no room holding nothing (Style's gone_empty) as much as what it holds is there: its layout says so
+    // again below, layout_flex)
     s.come_k = 1.0
   }
   let b = box_for(node, cb_w, cb_h)
@@ -1098,6 +1106,8 @@ fn layout_flex(
   let row = is_row(s.direction)
   let pbw = b.pbw()
   let pbh = b.pbh()
+  // (whether any it holds may take no room holding nothing: none, none of theirs read for it)
+  let gone_kids = node.holds_gone
   // the content box, when known
   let inner_w = if known(w0) { fmax(w0 - pbw, 0.0) } else { undef }
   let inner_h = if known(h0) { fmax(h0 - pbh, 0.0) } else { undef }
@@ -1211,6 +1221,9 @@ fn layout_flex(
     known(h0) &&
     h0 == pre.unsafe_get(2)
   let mut fh = 0.0
+  // (holding nothing but what comes from none or goes to none: as much less of its padding top and foot as that is not
+  // there, Style's gone_empty)
+  let mut gone_cut = 0.0
   let fw = if fast {
     for j, c in flow {
       let cs = c.style
@@ -1425,7 +1438,19 @@ fn layout_flex(
       }
       let pb_main = if row { cb.pbw() } else { cb.pbh() }
       f.unsafe_set(i + PB_MAIN, pb_main)
-      basis = fmax(basis, pb_main)
+      // (a box that takes no room holding nothing, what it holds coming from none or going to none: as much of its
+      // padding as that is there, measured so above (Style's gone_empty), none of it its least)
+      if gone_kids && !row && cs.gone_empty && !known(cs.come_now) && cs.come_k < 1.0 {
+        f.unsafe_set(i + MIN_MAIN, undef)
+        f.unsafe_set(i + PB_MAIN, 0.0)
+        // (its margins top and foot as much as that too)
+        let k = cs.come_k
+        f.unsafe_set(i + MARGIN_MAIN, margin_main * k)
+        f.unsafe_set(i + MAR_MAIN_START, cb.mar_t * k)
+        f.unsafe_set(i + MAR_MAIN_END, cb.mar_b * k)
+      } else {
+        basis = fmax(basis, pb_main)
+      }
       // (coming or going down a column, as tall as its way has got of what it comes to, however tall it is said to be,
       // its least too: Style's come_*; as what it holds comes to, worked out so as it was sized above)
       if !row && known(cs.come_now) {
@@ -1814,6 +1839,17 @@ fn layout_flex(
     }
     let fw = if row { main_size + pbw } else { cross_size + pbw }
     fh = if row { cross_size + pbh } else { main_size + pbh }
+    if s.gone_empty && !row {
+      gone_cut = 1.0 - gone_there(flow, pool)
+      if gone_cut > 0.0 {
+        // (given its height by what holds it, measured so: that, less than its padding as it may be)
+        fh = if known(h0) { h0 } else { fmax(fh - gone_cut * (b.pad_t + b.pad_b), 0.0) }
+      }
+      // (the gap before it in what holds it: as much as it is there)
+      if !known(s.come_now) {
+        s.come_k = 1.0 - gone_cut
+      }
+    }
     if !perform &&
       row &&
       s.wrap == NoWrap &&
@@ -1861,6 +1897,7 @@ fn layout_flex(
     let flags = pool.flags
     let ox = b.bor_l + b.pad_l
     let oy = b.bor_t + b.pad_t
+    let oy = if gone_cut > 0.0 { oy - b.pad_t * gone_cut } else { oy }
     for k in 0..<count {
       let i = k * ITEM
       let n = flow.unsafe_get(at.unsafe_get(k))
@@ -1925,6 +1962,15 @@ fn layout_flex(
         zero(c)
       } else if c.line < 0 && c.style.position == Absolute {
         c.line = 0
+      }
+    }
+    // (one taking no room holding nothing, so too: Style's gone_empty; none such, none of them read for it)
+    if gone_kids {
+      for c in node.children {
+        if c.style.display == Flex && c.style.gone_empty && holds_none(c) {
+          left_out(c)
+          zero(c)
+        }
       }
     }
     // what its row left out, nowhere (its line said so), the rest on theirs
@@ -2279,6 +2325,10 @@ fn fit_line(
 ///|
 /// Children taking part in layout: display: contents lifts its children up.
 fn flow_children(node : Node) -> Array[Node] {
+  // (one in it taking no room holding nothing: Style's gone_empty, Node's holds_gone; none such, none of theirs read)
+  if node.holds_gone {
+    return flow_children_gone(node)
+  }
   let mut plain = true
   for c in node.children {
     if c.style.display != Flex {
@@ -2303,6 +2353,84 @@ fn flow_children(node : Node) -> Array[Node] {
     }
   }
   out
+}
+
+///|
+/// flow_children of a node some of whose children may take no room holding nothing (Style's gone_empty): those that do
+/// left out as well.
+fn flow_children_gone(node : Node) -> Array[Node] {
+  let out = []
+  for c in node.children {
+    match c.style.display {
+      DisplayNone => ()
+      Flex if c.style.gone_empty && holds_none(c) => ()
+      Contents => {
+        zero(c)
+        for g in flow_children(c) {
+          out.push(g)
+        }
+      }
+      Flex => out.push(c)
+    }
+  }
+  out
+}
+
+///|
+/// How much of what a box that takes no room holding nothing (Style's gone_empty) holds is there, its items `flow` as
+/// `pool` has them laid out: the most of any (1 where one is not on a way from none or to none, come_fill; a box such
+/// as this in it as much as it is, its come_k); none, none.
+fn gone_there(flow : Array[Node], pool : Pool) -> Double {
+  let mut most = 0.0
+  for k in 0..<pool.count {
+    let c = flow.unsafe_get(pool.at.unsafe_get(k))
+    // (a structure's box that made nothing: not there, Style's structural)
+    if nothing_made(c) {
+      continue
+    }
+    let cs = c.style
+    let here = if (cs.come_fill && known(cs.come_now)) || cs.gone_empty { cs.come_k } else { 1.0 }
+    if here >= 1.0 {
+      return 1.0
+    }
+    most = fmax(most, here)
+  }
+  if pool.count == 0 { 1.0 } else { most }
+}
+
+///|
+/// Whether node `n` is laid out nowhere: so said (DisplayNone), or holding nothing laid out where it takes no room so
+/// (Style's gone_empty; `gone`: what holds it holds such, Node's holds_gone).
+fn laid_none(n : Node, gone : Bool) -> Bool {
+  n.style.display == DisplayNone || (gone && n.style.gone_empty && holds_none(n))
+}
+
+///|
+/// Whether all node `n` holds is laid out nowhere (laid_none), or it holds nothing.
+fn holds_none(n : Node) -> Bool {
+  for c in n.children {
+    if !laid_none(c, n.holds_gone) && !nothing_made(c) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Whether node `n` is a structure's box that made nothing (Style's structural): holding no box but such as this or
+/// those laid out nowhere so said, and on no way (one closing or opening is there as much as its way has it, gone_there).
+/// To a box that takes no room holding nothing (Style's gone_empty) it is not there.
+fn nothing_made(n : Node) -> Bool {
+  let s = n.style
+  if !s.structural || s.come_now == s.come_now {
+    return false
+  }
+  for c in n.children {
+    if c.style.display != DisplayNone && !nothing_made(c) {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -2583,9 +2711,10 @@ fn last_resort(pool : Pool, a : Int, b : Int, space : Double) -> Unit {
 /// position in its parent when it has no insets. (ox, oy): the parent's
 /// border box in cb's.
 fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> Unit {
+  let gone = node.holds_gone
   for c in node.children {
     let cs = c.style
-    if cs.display == DisplayNone {
+    if cs.display == DisplayNone || (gone && cs.gone_empty && holds_none(c)) {
       continue
     }
     if cs.display == Contents {
@@ -2607,6 +2736,22 @@ fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> U
       layout_static_absolute(c, c, 0.0, 0.0)
     }
   }
+}
+
+///|
+/// Absolute node `c` laid out alone again, nothing above it, as the layout of all of it lays it out over the rest in
+/// `holder` (what holds it, positioned: its containing block, place_absolute's), in `holder`'s box as that was last
+/// laid out, by its style now (a width said of it since); what it holds over the rest after it, as there. Which compute
+/// it was (what it laid out is laid out at it or after).
+pub fn absolute_relaid(holder : Node, c : Node) -> Int {
+  generation.val = generation.val + 1
+  reusing.val = true
+  absolute_seen.val = false
+  place_absolute(holder, holder, c, 0.0, 0.0)
+  if !kept(c) && c.children.length() > 0 {
+    layout_static_absolute(c, c, 0.0, 0.0)
+  }
+  generation.val
 }
 
 ///|
@@ -2737,7 +2882,7 @@ fn node_baseline(n : Node) -> Double {
     if c.line > 0 {
       break
     }
-    if c.style.position == Absolute || c.style.display == DisplayNone {
+    if c.style.position == Absolute || c.style.display == DisplayNone || (n.holds_gone && c.style.gone_empty && holds_none(c)) {
       continue
     }
     let al = item_align(n.style, c.style)

@@ -659,3 +659,74 @@ test "what the core says to an id nothing holds is taken as it comes, and as a f
   @core.receive("{\"id\":424242,\"delta\":[never read", None)
   assert_eq(@core.unheld_said(), [("?", 2, 64)])
 }
+
+///|
+test "a kept topic is let go of keeping its value till the core says its version, and asked again with it" {
+  let (c, sent) = recorder()
+  c.keep(fn(name, _) { name == "stations" })
+  let s = c.subscribe("stations", params={ "scope": "ws" })
+  c.receive("{\"id\":1,\"value\":[{\"id\":\"a\",\"t\":\"A\"}]}") |> ignore
+  c.unsubscribe(s)
+  assert_eq(sent[1].stringify(), ({ "id": 1, "unsubscribe": true, "keep": true } : Json).stringify())
+  // What the core sent before it was told: applied still to what is kept, not let be as for what nothing holds.
+  let changed = "{\"id\":1,\"delta\":[{\"path\":[],\"key\":[\"id\"],\"patch\":\"a\",\"ops\":[{\"path\":[\"t\"],\"set\":\"A2\"}]}]}"
+  assert_false(c.unheld(changed))
+  c.receive(changed) |> ignore
+  // Asked again before the core's answer: no version to say yet, asked as ever.
+  let early = c.subscribe("stations", params={ "scope": "other" })
+  assert_eq(early.id, 2)
+  c.receive("{\"id\":1,\"v\":\"k:1\"}") |> ignore
+  // After it, nothing more is the id's.
+  assert_true(c.unheld("{\"id\":1,\"value\":[]}"))
+  let again = c.subscribe("stations", params={ "scope": "ws" })
+  assert_eq(
+    sent[3].stringify(),
+    ({ "id": 3, "subscribe": { "topic": "stations", "scope": "ws" }, "keyed": true, "have": "k:1" } : Json).stringify(),
+  )
+  assert_true(again.value is None)
+  let v0 = c.version
+  c.receive("{\"id\":3,\"same\":true}") |> ignore
+  // the value kept, with what changed of it before the answer
+  assert_eq(again.value.unwrap().stringify(), "[{\"id\":\"a\",\"t\":\"A2\"}]")
+  assert_eq(again.version, 1)
+  assert_eq(c.version, v0 + 1)
+  // Let go of and asked again once more, the core saying it changed meanwhile: its value whole, as ever.
+  c.unsubscribe(again)
+  c.receive("{\"id\":3,\"v\":\"k:2\"}") |> ignore
+  let third = c.subscribe("stations", params={ "scope": "ws" })
+  assert_eq(sent[sent.length() - 1].stringify(), ({ "id": 4, "subscribe": { "topic": "stations", "scope": "ws" }, "keyed": true, "have": "k:2" } : Json).stringify())
+  c.receive("{\"id\":4,\"value\":[]}") |> ignore
+  assert_eq(third.value.unwrap().stringify(), "[]")
+  // Its version said once: let go of without its value kept answered (none), and asked anew without it.
+  c.unsubscribe(third)
+  c.receive("{\"id\":4,\"v\":null}") |> ignore
+  let fourth = c.subscribe("stations", params={ "scope": "ws" })
+  assert_eq(sent[sent.length() - 1].stringify(), ({ "id": 5, "subscribe": { "topic": "stations", "scope": "ws" }, "keyed": true } : Json).stringify())
+  assert_true(fourth.value is None)
+}
+
+///|
+test "a topic not kept, or one with no value, is let go of as ever" {
+  let (c, sent) = recorder()
+  c.keep(fn(name, _) { name == "stations" })
+  let other = c.subscribe("accounts")
+  c.receive("{\"id\":1,\"value\":[]}") |> ignore
+  c.unsubscribe(other)
+  assert_eq(sent[1].stringify(), ({ "id": 1, "unsubscribe": true } : Json).stringify())
+  let unanswered = c.subscribe("stations", params={ "scope": "ws" })
+  c.unsubscribe(unanswered)
+  assert_eq(sent[3].stringify(), ({ "id": 2, "unsubscribe": true } : Json).stringify())
+}
+
+///|
+test "a kept value is forgotten by reset" {
+  let (c, sent) = recorder()
+  c.keep(fn(name, _) { name == "stations" })
+  let s = c.subscribe("stations", params={ "scope": "ws" })
+  c.receive("{\"id\":1,\"value\":[1]}") |> ignore
+  c.unsubscribe(s)
+  c.receive("{\"id\":1,\"v\":\"k:1\"}") |> ignore
+  c.reset()
+  c.subscribe("stations", params={ "scope": "ws" }) |> ignore
+  assert_eq(sent[sent.length() - 1].stringify(), ({ "id": 1, "subscribe": { "topic": "stations", "scope": "ws" }, "keyed": true } : Json).stringify())
+}

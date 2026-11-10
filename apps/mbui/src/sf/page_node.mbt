@@ -638,10 +638,23 @@ fn on_card_node(v : @view.View) -> Bool {
 ///|
 /// Rows together on a list card (group's), `rows` made in it: narrow, ListCard (10 under it, its rows `list_pad` in, its
 /// corner the list card's; lent to them that they are on it: on_card_node); wide, wide_group_node's (a list card, or a
-/// `card` of words).
+/// `card` of words). In a panel's body, not a small panel's beside what opened it, a card of the panel's whatever its
+/// look, as the old one's there (group's in_panel way): on the panel's cards' ground (panel_card_group: the ink at 5%,
+/// a card's corner), its rows the ladder's inset in (panel_card_rows), `panel_card_in` from the panel's sides
+/// (panel_card_out_node), its rows told they are on it (narrow, a card's: on_card_node; wide, a list's: part_of's
+/// `list`), as the old one's in_card and in_list.
 #callsite(autofill(loc))
 pub fn group_node(parent : @view.View, rows : (@view.View) -> Unit, card? : Bool = false, loc~ : SourceLoc) -> Unit {
   let at = part_of(parent)
+  if parent.lent(panel_in_lent) is Some(p) && !p.small {
+    parent.box(made_for=loc, fn(k) {
+      style_node(k, fn() { panel_card_group.then(panel_card_rows).then(panel_card_out_node(k)) })
+      k.lends(on_card_lent, true).lends(part_at, { ..at, list: at.look is Wide }) |> ignore
+      rows(k)
+    })
+    |> ignore
+    return
+  }
   if at.look is Wide {
     wide_group_node(parent, at, rows, card)
     return

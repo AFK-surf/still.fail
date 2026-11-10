@@ -424,12 +424,12 @@ fn outline_body(
         @sf.words_node(e, fn() { outline_count(at, searching()) }, fn() { outline_count_words }) |> ignore
       },
     )
-    // (the keys as it opens from ⌘G and the rail, however it is shown, the input method up; from the round button only
-    // where the panel takes the focus, beside it: not on a sheet, where the rows are what is read)
+    // (the keys as it opens from ⌘G and the rail, however it is shown, the input method up; from the round button a
+    // search at hand: the keys where the panel is beside it, not on a sheet, where the rows are what is read)
     if keyed {
       @sf.panel_opens_in_node(f)
     } else {
-      @sf.panel_opens_on_node(f)
+      @sf.panel_search_at_hand_node(f)
     }
   })
   |> ignore

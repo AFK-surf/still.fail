@@ -84,7 +84,8 @@ static DWORD drag_time;
 static POINT drag_at;
 // a message posted from outside (mb_post_wake), a stream shown by its layer that said something (mb_app_streamed:
 // wParam its id), each told the app between frames, which asks for a frame only where something is left for one
-enum { WM_MB_DRAG = WM_APP + 6, WM_MB_POSTED = WM_APP + 7, WM_MB_STREAMED = WM_APP + 8, WM_MB_CALL = WM_APP + 9 };  // (win_life.h has 1 to 5, win.h 4)
+enum { WM_MB_DRAG = WM_APP + 6, WM_MB_POSTED = WM_APP + 7, WM_MB_STREAMED = WM_APP + 8, WM_MB_CALL = WM_APP + 9,
+       WM_MB_CAUGHT_KEY = WM_APP + 10 };  // (win_life.h has 1 to 5, win.h 4)
 static int frames_drawn;
 static int sizing;  // inside the modal move/size loop, where our loop does not run
 
@@ -305,12 +306,6 @@ static void paste(void) {
 }
 
 // ---- keys ----
-
-static int mods_now(void) {
-  return (GetKeyState(VK_SHIFT) < 0 ? 1 : 0) | (GetKeyState(VK_CONTROL) < 0 ? 2 : 0) |
-         (GetKeyState(VK_MENU) < 0 ? 4 : 0) |
-         ((GetKeyState(VK_LWIN) < 0 || GetKeyState(VK_RWIN) < 0) ? 8 : 0);
-}
 
 // files from outside: the system's dialog, let go on the window
 #include "win_files.h"
@@ -739,6 +734,9 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_MOUSEWHEEL: wheel(wp, lp, 0); return 0;
     case WM_MOUSEHWHEEL: wheel(wp, lp, 1); return 0;
     case WM_KEYDOWN: key_down(wp); return 0;
+    case WM_MB_CAUGHT_KEY:
+      if (catch_canvas()) mb_cb.key((int32_t)wp, (int32_t)lp);
+      return 0;
     case WM_SYSKEYDOWN:
       // Alt with a key: a key catcher's shortcut (win_device.h)
       if (key_catching && ime_active && catch_vk(wp)) return 0;
@@ -755,12 +753,13 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       return TRUE;
     case WM_CHAR: char_in((WCHAR)wp); return 0;
     case WM_SETFOCUS:
+      catch_keys_focus(1);
       if (ime_active) {
         CreateCaret(h, NULL, 1, (int)lround(caret[3] * scale));
         ime_place();
       }
       return 0;
-    case WM_KILLFOCUS: DestroyCaret(); return 0;
+    case WM_KILLFOCUS: catch_keys_focus(0); DestroyCaret(); return 0;
     case WM_IME_SETCONTEXT:
       // we draw the composition ourselves; the system draws the candidates
       lp &= ~(LPARAM)ISC_SHOWUICOMPOSITIONWINDOW;

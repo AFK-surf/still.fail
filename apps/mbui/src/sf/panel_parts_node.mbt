@@ -83,20 +83,18 @@ fn panel_row_at(at : PanelIn, own? : Double = @double.infinity, card? : Bool = f
 }
 
 ///|
-/// Which of what a dialog in the middle of the window, or a panel beside what opened it, holds takes the keyboard's
-/// focus as it opens, where what it holds says one (panel_opens_on_node): lent by panel_centred_node to its dialog and
-/// by panel_node to its panel, read as all it holds is made. A field it opens to be typed in is panel_field_lent's, on
-/// every way a panel is shown.
+/// Which of what a dialog in the middle of the window holds takes the keyboard's focus as the dialog opens, where what
+/// it holds says one (panel_opens_on_node): lent by panel_centred_node to its dialog, read as all it holds is made. A
+/// field it opens to be typed in is panel_field_lent's, on every way a panel is shown.
 // kept across runs: what each dialog lends, let go with it
 let panel_opens_lent : @view.Lent[Ref[@view.View?]] = @view.Lent::new()
 
 ///|
 /// `v`, a part of what a panel's body or foot is made of, takes the keyboard's focus as its panel opens in the middle
-/// of the window or beside what opened it, in place of the first of what it holds that takes it (or of what holds it):
-/// what Enter does there at once (a question's yes), a search's field typed into at once. Said as the panel's body or
-/// foot is made. Nothing where the panel gives the focus to none of what it holds (a sheet: a phone's keyboard is not
-/// raised over what it shows, and Enter is the foot's action; one opened not to take it, `focus`). A field to be typed
-/// in as it opens however it is shown, a sheet too, is panel_opens_in_node's.
+/// of the window, in place of the first of what it holds that takes it: what Enter does there at once (a question's
+/// yes). Said as the panel's body or foot is made. Nothing where the panel gives the focus to none of what it holds (a
+/// sheet, a panel beside what opened it): there Enter is the foot's action. A field to be typed in as it opens is
+/// panel_opens_in_node's.
 pub fn panel_opens_on_node(v : @view.View) -> Unit {
   match v.lent(panel_opens_lent) {
     Some(r) => r.val = Some(v)
@@ -105,20 +103,54 @@ pub fn panel_opens_on_node(v : @view.View) -> Unit {
 }
 
 ///|
-/// Which field of what a panel holds has the keys as the panel opens, however it is presented (panel_opens_in_node):
+/// Which field of what a panel holds has the keys as the panel opens (panel_opens_in_node, panel_search_at_hand_node):
 /// lent by each of the panel's ways (panel_centred_node, sheet_node, panel_node) to what it holds, read as all it holds
 /// is made.
 // kept across runs: what each panel lends, let go with it
-let panel_field_lent : @view.Lent[Ref[@view.View?]] = @view.Lent::new()
+let panel_field_lent : @view.Lent[Ref[PanelField?]] = @view.Lent::new()
+
+///|
+/// The field a panel opens on: the field, and whether a sheet gives it the keys too (`sheet`: panel_opens_in_node's;
+/// not panel_search_at_hand_node's).
+priv struct PanelField {
+  field : @view.View
+  sheet : Bool
+}
 
 ///|
 /// `field`, a field of what a panel's body is made of, has the keyboard's focus as its panel opens, however the
 /// presenters show it (in the window's middle, a sheet from its foot, beside what opened it), the input method up for it
 /// with a finger: given it by the panel's layer as it opens (View::focus_opens), as anything a layer opens on is, given
-/// back as it goes. Said once as the panel's body is made; a page never says how its panel is shown.
+/// back as it goes. Said once as the panel's body is made; a page never says how its panel is shown. For a field the
+/// panel is for, to be typed in before anything else; a search over what the panel lists is
+/// panel_search_at_hand_node's.
+///
+/// | caller | its field | shown |
+/// |---|---|---|
+/// | sfdesk files_go.mbt, 前往文件夹 | the path | a dialog in the middle (中屏, 大屏) |
+/// | sfpages workspace.mbt, 新建 workspace | its name | a sheet on 小屏, a dialog in the middle |
 pub fn panel_opens_in_node(field : @view.View) -> Unit {
   match field.lent(panel_field_lent) {
-    Some(r) => r.val = Some(field)
+    Some(r) => r.val = Some({ field, sheet: true })
+    None => ()
+  }
+}
+
+///|
+/// `field`, a search over what a panel's body lists, has the keyboard's focus as its panel opens where the presenters
+/// show it in the window's middle or beside what opened it (typed into at once there), as panel_opens_in_node's has
+/// (View::focus_opens, given back as it goes); not on a sheet from its foot, where what it lists is looked at first
+/// and an input method raised would cover it: there the focus is left where it is, the field taken when it is pressed.
+/// The old frame's presenters' `field` (panel's `field`: given it where it is not a sheet). Said once as the panel's
+/// body is made; a page never says how its panel is shown.
+///
+/// | caller | its field | shown |
+/// |---|---|---|
+/// | sfpages outline.mbt, 对话目录 from its round button | what it finds | a sheet on 小屏, beside the button |
+/// | (the old frame's panels that say `field`, as they move over) | | |
+pub fn panel_search_at_hand_node(field : @view.View) -> Unit {
+  match field.lent(panel_field_lent) {
+    Some(r) => r.val = Some({ field, sheet: false })
     None => ()
   }
 }

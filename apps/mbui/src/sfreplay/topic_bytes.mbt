@@ -11,6 +11,10 @@
 // asked, not what a phone is sent; how often a value comes again whole does not depend on the data. A replay asks what
 // its run's app did: where the released app has a way of asking its run did not (sfcore's trace_switches), the trace
 // says what an older app was sent, until it is recorded again (flows/trace_switches_test.mbt counts how many).
+// A subscription let go of keeping its value (`keep`: @core.Client::keep) is held till the core's answer, `{id, v}`,
+// its last message: what came for it before that is applied to what is kept, so it is not for what was let go of,
+// nor is that answer (the coordinator of the migration, 2026-11-10). A `same` (asked with `have`, its value unchanged)
+// is no value sent: nothing counted.
 
 ///|
 /// What one trace says came for the app's subscriptions (tape_topics).
@@ -37,6 +41,8 @@ pub fn tape_topics(trace : String) -> TapeTopics {
   // (a subscription by its id in the run: its topic, and its topic with its params, what one asked again shares)
   let subs : Map[Int, (String, String)] = {}
   let gone : Map[Int, Bool] = {}
+  // (let go of keeping its value, till the core's `{id, v}`)
+  let keeping : Map[Int, Bool] = {}
   let wholes : Map[String, Int] = {}
   let topics : Map[String, Int] = {}
   let mut whole = 0
@@ -63,8 +69,14 @@ pub fn tape_topics(trace : String) -> TapeTopics {
             }
             subs[id.to_int()] = (topic, Json::object(s).stringify())
             gone.remove(id.to_int())
+            keeping.remove(id.to_int())
           }
-          (Some(Number(id, ..)), _, Some(True)) => gone[id.to_int()] = true
+          (Some(Number(id, ..)), _, Some(True)) =>
+            if o.get("keep") is Some(True) {
+              keeping[id.to_int()] = true
+            } else {
+              gone[id.to_int()] = true
+            }
           _ => ()
         }
       (_, Some(Object(i))) => {
@@ -72,6 +84,11 @@ pub fn tape_topics(trace : String) -> TapeTopics {
         guard subs.get(id.to_int()) is Some((topic, key)) else { continue }
         if gone.contains(id.to_int()) {
           unheld += 1
+          continue
+        }
+        if keeping.contains(id.to_int()) && i.contains("v") {
+          keeping.remove(id.to_int())
+          gone[id.to_int()] = true
           continue
         }
         if i.contains("value") {
