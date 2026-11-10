@@ -509,6 +509,7 @@ pub fn Tester::new(
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)
   sizes_steady_begin(loc.to_string(), words_over_held)
+  gaps_steady_begin(loc.to_string(), words_over_held)
   seen_whole.val = ""
   said_log.on = false
   frame_said.val = None
@@ -920,6 +921,7 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
     self.hold_words_over()
     self.hold_rows_steady()
     self.hold_sizes_steady()
+    self.hold_gaps_steady()
   } else if !words_over.held && !self.on_way && self.period <= frame_period_default + 1.0e-9 {
     // (where a test does not hold the rule but reads which frames show words over words: kept on a run at a rate's
     // frames as on the default's, but for those on run_for's way)
