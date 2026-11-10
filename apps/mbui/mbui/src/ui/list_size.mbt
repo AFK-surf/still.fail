@@ -170,7 +170,11 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
   }
   // (its rows laid out on the way till its end, as it was declared: what is dropped of it a hair before is the list's)
   self.sizes_end = c.end
-  let own = c.own.contains(key)
+  // (not of a row coming in: it goes from nothing to what it is laid out at, and what its content puts on at once
+  // on the way (a card's options come to their post a frame or two after it, there at once as they are) goes there
+  // with it, on from where it is, below; taken for its content's own going, the list put that whole room on in one
+  // frame and all over the row went up by it, rows_steady.mbt's rows_step_least)
+  let own = c.own.contains(key) && !(cause is Comes(_))
   c.way_begun(frame)
   let r = match self.sizes.get(key) {
     Some(r) => r

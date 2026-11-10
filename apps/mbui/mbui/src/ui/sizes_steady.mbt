@@ -207,8 +207,9 @@ fn sizes_steady_fault(
       return (Some("went \{v1} a frame between \{v0} and \{v2} at \{at} seen=\{all}"), turned)
     }
   }
-  // (only its turning back: what rows_steady_fault says of a speed is the list's way's, where it set out)
-  rows_steady_fault(seen, period, set_out=seen[0].1 + 0.5 * period, turned~)
+  // (only its turning back: what rows_steady_fault says of a speed is the list's way's, where it set out, and of a
+  // step under a way's setting out a list's row's)
+  rows_steady_fault(seen, period, set_out=seen[0].1 + 0.5 * period, turned~, faint=true)
 }
 
 ///|

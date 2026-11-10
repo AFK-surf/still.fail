@@ -6,7 +6,9 @@
 // a height taken from another row), and shows as a jolt. Held on every frame a Tester draws, as words over words
 // are (words_over.mbt): what a test walks through is checked, not only what a test of motion looks at. Nor does a row
 // come to rest one way and go back the other soon after with nothing done by the hand between (rows_return_ms): up as
-// one thing came, down a moment later as another left, which reads as the list shaking however smooth each way is.
+// one thing came, down a moment later as another left, which reads as the list shaking however smooth each way is. Nor
+// does a row go a whole step in the frame its list's way sets out again, many times as far as in the frames round it
+// (rows_step_least): the way setting out lets a speed taken up by, not a height put on at once under it.
 //
 // Measured on the rows' places in their list as laid out (from the list's top: the list carried by its page moves
 // none of them), by their keys where the list is given them (ListRows) and else by their index; not while the list
@@ -21,6 +23,17 @@
 /// A frame's speed (points a frame) this far from the mean of the frames' round it, and by more than half the faster of
 /// theirs, is a jolt: a step, a stop on the way, a start at full speed (a smooth way starts from rest and slows to it).
 let rows_speed_least : Double = 3.0
+
+///|
+/// Where the list's way set out between the frames (the rows taking up its speed from where they were, no jolt of
+/// itself), a frame this far (points, a 60 a second frame's) and this many times as far as both of the frames round it
+/// is a step all the same: a row's height put on at once under the way's setting out (2026-11-10 the user: 「还是有很多
+/// 问题导致它乱跳」; a card come to a post still coming in put all over it up by the card's whole room in one frame, and
+/// the way set out again in that frame let it by).
+let rows_step_least : Double = 12.0
+
+///|
+let rows_step_times : Double = 4.0
 
 ///|
 /// How long after a list is first shown its rows may still come to stand at their own heights (guessed till laid out).
@@ -178,6 +191,17 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
         seen.clear()
         rows_steady.went.remove(key)
       }
+      // (coming or going where it is, less than half open: what it holds is not seen yet, or no more (row_gone_at),
+      // and where its room stands as the rows round it take their places is no step of anything seen; nor one with no
+      // room at all)
+      let faint = n.fh < 1.0 || (match st.causes {
+        Some(c) if n.item >= 0 && n.item < keys.length() =>
+          match c.opened.get(keys[n.item]) {
+            Some((shown, natural)) => shown < row_gone_at * natural
+            None => false
+          }
+        _ => false
+      })
       // (moved one way, come to rest, then back the other way soon after: rows_return_ms)
       let returned = if free && shows && seen.length() > 0 {
         // (a row of it gone on the list's way, none come: what was at its end left with nothing in its place)
@@ -209,7 +233,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
           None => -1.0
         }
         let turned = rows_steady.turned.get(key).unwrap_or(-1.0e9)
-        let (fault, turn) = rows_steady_fault(seen, period, set_out~, turned~)
+        let (fault, turn) = rows_steady_fault(seen, period, set_out~, turned~, faint~)
         if turn != turned {
           rows_steady.turned[key] = turn
         }
@@ -321,12 +345,15 @@ fn rows_steady_return(
 /// frames `period` apart; its list's way set out last at `set_out`, the row last turned back at `turned`): the frame
 /// before the last going at a speed off the frames round it (not where the way set out between them: the rows go on
 /// from where they were, as fast as the way has them), or a move one way then back within rows_back_frames a second time
-/// within rows_turn_ms of the turn before. And when it turned back now (`turned` as it was where it did not).
+/// within rows_turn_ms of the turn before. And when it turned back now (`turned` as it was where it did not). Where the
+/// way did set out between them, a frame many times as far as both of those round it is a step all the same
+/// (rows_step_least, rows_step_times), unless `faint`: a row not half open, what it holds not seen.
 fn rows_steady_fault(
   seen : Array[(Double, Double, Double)],
   period : Double,
   set_out~ : Double,
   turned~ : Double,
+  faint? : Bool = false,
 ) -> (String?, Double) {
   let n = seen.length()
   let speed = fn(a : Int) {
@@ -335,14 +362,21 @@ fn rows_steady_fault(
     (y1 - y0) / (t1 - t0)
   }
   // its speed off the way the frames round it go: a step (a spike), a stop on its way (a dip), a start at full speed
-  if n >= 4 && seen[0].1 < seen[1].1 && seen[1].1 < seen[2].1 && seen[2].1 < seen[3].1 &&
-    !(set_out > seen[0].1 && set_out <= seen[3].1) {
+  if n >= 4 && seen[0].1 < seen[1].1 && seen[1].1 < seen[2].1 && seen[2].1 < seen[3].1 {
     let v0 = speed(0) * period
     let v1 = speed(1) * period
     let v2 = speed(2) * period
-    let off = (v1 - (v0 + v2) / 2.0).abs()
-    if off > rows_speed_least && off > 0.5 * dmax(v0.abs(), v2.abs()) {
-      return (Some("went \{v1} a frame between \{v0} and \{v2} at \{seen[2].1}"), turned)
+    if !(set_out > seen[0].1 && set_out <= seen[3].1) {
+      let off = (v1 - (v0 + v2) / 2.0).abs()
+      if off > rows_speed_least && off > 0.5 * dmax(v0.abs(), v2.abs()) {
+        return (Some("went \{v1} a frame between \{v0} and \{v2} at \{seen[2].1}"), turned)
+      }
+    } else if !faint && v1.abs() > rows_step_least * period / frame_period_default &&
+      v1.abs() > rows_step_times * dmax(v0.abs(), v2.abs()) {
+      // (the way set out between them: the rows go on from where they were at the speed it has them, which may be
+      // another than before; a frame many times as far as both of those round it is no speed taken up, but a step the
+      // way's setting out hid)
+      return (Some("went \{v1} in one frame as its list's way set out, between \{v0} and \{v2} at \{seen[2].1}"), turned)
     }
   }
   // one way, then back: once is the way's turning to where it now ends; again soon after, a jolt

@@ -723,6 +723,8 @@ common.telemetry.title
 common.uploadConfirming
 common.uploading
 core-logic.accounts.login.failed
+core-logic.decisions.replied
+core-logic.decisions.you
 desktop.contextMenu.copy
 desktop.contextMenu.copyImage
 desktop.contextMenu.copyLink

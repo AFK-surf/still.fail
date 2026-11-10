@@ -10,6 +10,10 @@ fn init {
     ("src/sfreplay/flows/archive_restore_test.mbt", 2),
     ("src/sfreplay/flows/card_motion_test.mbt", 2),
     ("src/sfreplay/flows/chinese_enter_test.mbt", 1),
+    // (words sent flying to their row as a card comes under it at once, the test's agent's: where they are drawn in
+    // their row goes a few points back and forth as the row goes up under them on the list's way, one way on the
+    // screen; their row stepped up in one frame before, the card's room put on at once: under_post.mbt)
+    ("src/sfreplay/flows/close_option_test.mbt", 2),
     ("src/sfreplay/flows/drive_delete_test.mbt", 1),
     ("src/sfreplay/flows/drive_lend_test.mbt", 1),
     ("src/sfreplay/flows/drive_play_test.mbt", 3),
