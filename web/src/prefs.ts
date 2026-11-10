@@ -23,7 +23,7 @@ type PrefsPatch = { [K in keyof Omit<Prefs, "device">]?: NonNullable<Prefs[K]> e
 const DEFAULTS: Prefs = {
   onlyMine: false, onlyWatching: false, listFilter: {}, appearance: "system", rowPicture: "auto", absoluteTime: false, keys: {}, lastChat: {}, openChat: {}, chatTabs: {}, dropFiles: {}, driveViews: {}, filesTabs: {}, driveFavorites: {}, driveFavoritesHidden: {}, resume: {}, stationUpdatesDismissed: {}, rails: {}, barsBy: {}, fonts: {}, previewSizes: {}, sidebars: {}, trouble: {}, jobsSeen: {}, failsGone: {},
   // As the core fills it in (prefs.ts readerOf), before it has answered.
-  reader: { size: 18, line: 1.7, margin: 22, face: "sans", indent: true, paper: "follow" },
+  reader: { size: 16, line: 1.7, margin: 22, face: "sans", indent: true, paper: "follow" },
   // As the core fills it in (prefs.ts barsOf).
   bars: { sets: [["chats", "files", "profiles", "stations"], ["usage", "connects", "archive"]], current: 0 },
   device: { app: "", phone: false, handoff: false },
