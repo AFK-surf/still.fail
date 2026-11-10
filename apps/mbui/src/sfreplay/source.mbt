@@ -214,6 +214,8 @@ pub fn source() -> @sfapp.Source {
     release: fn(name, params) { @core.release_topic(name, params=replay_topic_params(name, params)) },
     refresh: fn(name, params) { @core.refresh_topic(name, params=replay_topic_params(name, params)) },
     read_only: false,
+    // (a run's core is asked what the run asked: as its app did, which says so in its trace's head since it does)
+    reads_ahead: fn() { @ui.env("MBUI_PLACES_AHEAD") == "1" },
   }
 }
 

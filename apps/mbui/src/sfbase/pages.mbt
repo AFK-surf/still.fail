@@ -696,6 +696,8 @@ pub fn reset() -> Unit {
   page_way_said("", 0.0, ends=0.0)
   // where it has been (app_history.mbt)
   history_reset()
+  last_reset()
+  ahead_reset()
   app.picked.set("")
   @ui.set_motion_chosen(None)
   @ui.set_haptics(true)

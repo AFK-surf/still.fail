@@ -1217,6 +1217,42 @@ pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
 }
 
 ///|
+/// `base` answering as round_trip does, and as a core does a topic let go of: asked again, its first value `ms` late
+/// again (round_trip's comes at once from then on, as if nothing were ever let go).
+pub fn round_trip_again(base : Source, ms : Double) -> Source {
+  let asked : Map[String, (Int, Bool)] = {}
+  let count = Ref(0)
+  let key = fn(name : String, params : Map[String, Json]) { name + Json::object(params).stringify() }
+  {
+    ..base,
+    topic_read: fn(name, params) {
+      @settings.fixture_followed()
+      let t = base.topic(name, params).get().snapshot()
+      let k = key(name, params)
+      match asked.get(k) {
+        Some((_, true)) => t
+        Some(_) => { value: None, error: None, version: -1 }
+        None => {
+          count.val += 1
+          let n = count.val
+          asked[k] = (n, false)
+          fix_later(ms, fn() { if asked.get(k) is Some((m, _)) && m == n { asked[k] = (n, true) } })
+          { value: None, error: None, version: -1 }
+        }
+      }
+    },
+    release: fn(name, params) { asked.remove(key(name, params)) },
+    leave: fn(name, params, reason) {
+      if reason is @sfbase.TopicLeave::Owned(stop) {
+        stop()
+        return
+      }
+      asked.remove(key(name, params))
+    },
+  }
+}
+
+///|
 /// `base` with the topics named in `held` never come (src/sffilm's MBUI_HOLD): what shows while they are read the
 /// first time, filmed.
 pub fn held_topics(base : Source, held : Array[String]) -> Source {
@@ -1733,6 +1769,8 @@ pub fn fixture(mode : String) -> Source {
     release: fn(_, _) {  },
     refresh: fn(_, _) {  },
     read_only: false,
+    // (a made-up core's lists are set up as each test's page asks for them: asked ahead where a test says so)
+    reads_ahead: fn() { false },
   }
 }
 

@@ -2496,6 +2496,7 @@ pub fn Tester::bench_whole(Self, Bool) -> Unit
 pub fn Tester::beside_faults(Self) -> Array[String]
 pub fn Tester::between_frames(Self, () -> Unit, due? : () -> Double) -> Unit
 pub fn Tester::bold_wider(Self, Double) -> Unit
+pub fn Tester::bones_drawn(Self) -> Int32
 pub fn Tester::boxes(Self) -> Array[Laid]
 pub fn Tester::boxes_held(Self) -> Array[Laid]
 pub fn Tester::built_why(Self) -> String

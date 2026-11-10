@@ -262,6 +262,10 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
   first_waiting.val = !first_page_shown(c, src, w)
   first_hide(first_waiting.val)
+  // what the places of the bar in view open on, asked ahead of them once the first page has shown (sfbase's bars.mbt)
+  if !first_waiting.val {
+    @sfbase.places_ahead(src, w.id)
+  }
 }
 
 ///|

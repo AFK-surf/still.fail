@@ -509,6 +509,8 @@ pub fn rich_chat(Int32) -> Json
 
 pub fn round_trip(@sfbase.Source, Double) -> @sfbase.Source
 
+pub fn round_trip_again(@sfbase.Source, Double) -> @sfbase.Source
+
 pub fn round_trip_by(@sfbase.Source, () -> Double) -> @sfbase.Source
 
 pub fn row(String, String, String, String, Map[String, Json]) -> Json

@@ -87,6 +87,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     library's primitives (`c.lit`, `c.menu_asked`, tips).
   - A page is designed once from what it is for; the web's two are read for their reasons, not copied or picked
     between. The merged page is no worse on either screen than its copy was there, shown before and after.
+  - A place of the bar never opens on its bones when the device holds what it shows (the user, 2026-11-10): the list
+    it opens on is one of sfbase's `lasting` (shown again at once) and of `place_reads` (asked ahead of it). A new
+    place, or another list a place opens on, goes in both; `src/sfapp/place_first_wbtest.mbt` holds every place.
 
 ## Made once, as nodes
 
