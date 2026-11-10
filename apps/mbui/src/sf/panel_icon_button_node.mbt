@@ -23,9 +23,6 @@ pub fn panel_icon_button_node(
     presses_node(v, press)
     v.says(By(fn() { Some(@view.said(Button, label=label())) })) |> ignore
     icon_node(v, icon, panel_icon_size, By(fn() { if hot() { theme().p.text } else { theme().p.muted } })) |> ignore
-    match v.lent(panel_tips_lent) {
-      Some(tips) => tip_node(tips, v, label) |> ignore
-      None => ()
-    }
+    panel_tip_node(v, label)
   })
 }
