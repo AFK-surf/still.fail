@@ -50,6 +50,7 @@
 | 回放 `offline_retry` | 60 | `rows not steady`：row `top` went -6.661377287408474 a frame between -2.5274687069706037 and -4.6578095707352825 at 2250；seen 456.65、454.12、447.46（2216.67、2233.33、2250） | 待定（看着是「起因的时刻」或「掉头」） |
 | 回放 `offline_retry` | 120 | `rows not steady`：row `o:local:1` went 59.877135951566174 one way, stood 33.33333333333303 ms, came back 3.4296286847662714 at 3216.6666666666665 | 待定 |
 | 回放 `chinese_enter` | 120 | `sizes_steady`：发消息 的输入框 at 2227.73 | 待定 |
+| `src/sfapp/flight_under_bar_wbtest.mbt`（两条都红；新旧对话栏相同，不是 #5647 带来的。迁移协调 2026-11-12 报） | 60、120（24 和 7 不红） | `rows_steady`：测试准备阶段（`image_in_chat` / `film_in_chat` 往上滚去找图）1466.67 ms，对话列表的一行一帧走了 351.7：`row …/m:ts12 (list chat/ws1/st1/s-c1) went 351.70000648498376 a frame between 0 and 0 … causes[]`；`quote_image_wbtest` 建的那个 Tester 里同一刻另一行走了 787.6 | 节点列表要给明确答案：要么是测试把列表一下滚到位、本来就不算运动（那该让测试说明它是「摆过去」），要么是旧列表在那种滚法下真跳 |
 
 早先（main `1609696a9c`）同样方式量到、这次没有重跑的：`activity_wbtest:152`@60（stop dead）、`emit_wbtest:59`@60（一行一帧 −246）、回放 `new_chat`@60（间距 37.9 → 43.6 → 40.7）、回放 `send_card_paced`@120（foot went 6.9, stood 33 ms, back 4.6）、`cards_wbtest`@60（row `m:ts6` went 29.486785119823537 one way, stood 1366 ms, came back 4.967318880290122 at 3116）。
 
