@@ -306,7 +306,7 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -410,7 +410,7 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       if name == "prefs.set" {
         match field(Some(params), "trouble") {
           Some(Object(t)) => {
@@ -1073,7 +1073,7 @@ test "wide: Station's page picked in one workspace: in another, that one's first
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }

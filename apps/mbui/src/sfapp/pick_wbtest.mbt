@@ -93,7 +93,7 @@ test "a message that did not go: a finger can select and copy its words" {
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -154,7 +154,7 @@ test "a message picked on its way and then delivered keeps its selection and quo
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -324,3 +324,7 @@ test "its words no longer laid out: what was picked goes in that very frame, not
   assert_eq(pk.ts, "")
   t.assert_idle()
 }
+
+///|
+/// How long a finger is held still for a long press (ViewConfiguration's long press timeout, as Compose has it).
+let long_press_ms : Double = @ui.long_press_ms

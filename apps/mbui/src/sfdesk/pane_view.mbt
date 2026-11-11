@@ -137,7 +137,6 @@ priv struct FoldIs {
 priv struct PaneRoom {
   gated : Bool
   bare : Bool
-  own : Bool
   crowded : Bool
   on_fold : Double?
   bar : Bool
@@ -164,7 +163,6 @@ fn pane_room(src : Source, w : Workspace, ww : Double) -> PaneRoom {
   {
     gated,
     bare,
-    own,
     crowded,
     on_fold,
     bar,
@@ -265,7 +263,7 @@ fn fold_look_of(r : PaneRoom, shift : Double) -> FoldLook {
 fn fold_look_tape(s : Double, col : Double, top : Double, foot : Double, x? : Double = 0.0) -> FoldLook {
   {
     ..fold_look_of(
-      { gated: false, bare: false, own: true, crowded: false, on_fold: None, bar: false, peek: false, s, top, foot },
+      { gated: false, bare: false, crowded: false, on_fold: None, bar: false, peek: false, s, top, foot },
       0.0,
     ),
     x,

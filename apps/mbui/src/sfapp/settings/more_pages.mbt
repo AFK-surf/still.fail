@@ -519,11 +519,6 @@ let kept_part_size : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=
 let kept_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full")
 
 ///|
-/// A row's words beside what is at its end (a switch, a ✕), as wide as it leaves them.
-// kept across runs: a value (no field of it changes)
-let fill_words : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
 /// The size chosen at its row's end, as a size row's.
 // kept across runs: a value (no field of it changes)
 let fill_size_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)

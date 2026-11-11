@@ -38,7 +38,7 @@ priv struct RsShown {
   by : String
   open : Array[String]
   opened : Bool
-} derive(Eq)
+}
 
 ///|
 // kept across runs: said as a station's 进程 is chosen in; station_page_reset empties it
@@ -303,7 +303,7 @@ priv struct RsLayout {
   widths : Array[Double]
   stacked : Bool
   share : Bool
-} derive(Eq)
+}
 
 ///|
 /// The layout of table `id` (as wide as it is laid out: read back) for `rows` (each row's use, and whether its sorted

@@ -2300,7 +2300,7 @@ pub fn Viewer::shown_picture(self : Viewer, c : @ui.Ctx, src : Source, r : (Doub
 /// to the picture's place, what the stage shows of it where it is zoomed past it, and none); `picture`, the picture in
 /// it (from where it lies in the box, covering it or fitted inside it, to its place), at its own proportions all the
 /// way.
-struct FlightBox {
+priv struct FlightBox {
   cut : (Double, Double, Double, Double)
   box : (Double, Double, Double, Double)
   corners : (Double, Double, Double, Double)
@@ -2670,7 +2670,7 @@ pub fn Viewer::wheel(self : Viewer, c : @ui.Ctx, stage : Int, z : @kit.Zoom) -> 
 /// by what a frame last copied): a desktop's pans (⇧ sideways), with ⌃ or ⌘ held (or a trackpad's pinch) zooms round
 /// the pointer; a phone's zooms.
 pub fn Viewer::wheeled(
-  self : Viewer,
+  _self : Viewer,
   z : @kit.Zoom,
   px : Double,
   py : Double,

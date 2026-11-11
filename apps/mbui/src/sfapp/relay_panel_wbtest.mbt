@@ -87,7 +87,7 @@ fn relay_src(
     call: fn(name, params, done) {
       match name {
         "chat.relayPlaces" => {
-          calls.push({ name, params, bytes: None, done, heard: None })
+          calls.push({ name, params, bytes: None, done })
           match places {
             Some(Ok(v)) => done(Ok(v))
             Some(Err(e)) => done(Err(e))
@@ -95,11 +95,11 @@ fn relay_src(
           }
         }
         "chat.relayView" => {
-          calls.push({ name, params, bytes: None, done, heard: None })
+          calls.push({ name, params, bytes: None, done })
           done(Ok(relay_made_view(params)))
         }
         "chat.relay" => {
-          calls.push({ name, params, bytes: None, done, heard: None })
+          calls.push({ name, params, bytes: None, done })
           if !hold {
             done(Ok({ "place": "#dev" }))
           }

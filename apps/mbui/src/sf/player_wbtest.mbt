@@ -316,10 +316,6 @@ test "a desktop's: the bar says the film's size, length and rate as its message 
 }
 
 ///|
-/// How long a single tap waits to be a double one (@kit.Media's double_tap_ms).
-let double_tap_wait : Double = 300.0
-
-///|
 test "a desktop's on a narrow page with a finger: short of room for its keys a finger apart, 保存此帧 leaves them for their ⋯" {
   let t = player_tester(false, "E1.mp4", ["E1.mp4", "E2.mp4", "E1.srt"], [], [], window=(600.0, 900.0, 2), subtitled=true)
   t.draw()

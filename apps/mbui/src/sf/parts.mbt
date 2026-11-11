@@ -1824,7 +1824,6 @@ let switch_reach : @ui.Style = @ui.css("justify=JCenter")
 /// A switch drawn in a row that takes the tap itself (the row turns it): its look alone, its thumb sliding as a
 /// switch's does (`@kit.switch_knob` by `key`), held as the row is `pressed`.
 pub fn switch_look(c : @ui.Ctx, key : String, on : Bool, small? : Bool = false, pressed? : Bool = false) -> Unit {
-  let (w, h) = switch_size(small)
   switch_look_for(small)(c, {
     on,
     t: @kit.switch_knob(c, key, on),
@@ -1852,7 +1851,6 @@ fn wide_switch_row(
   lead? : (@ui.Ctx) -> Unit,
   on_change? : (Bool) -> Unit,
 ) -> Bool {
-  let id = c.id(key + "/words")
   let mut now = on
   // (the switch alone answers, not its words: 2026-10-27 用户「只有开关响应」)
   control_row(c, title, fn() { now = switch(c, key, on, label=title, disabled~, busy~, on_change?) }, note~, title_style~, note_style~, lead?)
@@ -4700,7 +4698,7 @@ fn sync_turning(k : Double) -> Double {
 ///|
 /// The mark brought to rest once all is here: from `from`, going `speed` (per ms), to `to` in `ms`, as a cubic going on
 /// from that speed and slowing to none there.
-struct SyncRest {
+priv struct SyncRest {
   ms : Double
   from : Double
   speed : Double

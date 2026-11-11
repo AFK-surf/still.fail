@@ -8,8 +8,6 @@ priv struct Made {
   params : Json
   bytes : Bytes?
   done : (Result[Json, Json]) -> Unit
-  /// a streamed call's: what it hears before its answer (a part going up: how much of it has gone)
-  heard : ((Json, Bytes?) -> Unit)?
 }
 
 ///|
@@ -32,7 +30,7 @@ fn fake_core(
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "draft.get" => done(Ok(kept))
         // the core's name for the draft (DraftView.id): another once it is put back empty
@@ -58,17 +56,17 @@ fn fake_core(
       }
     },
     call_bytes: fn(name, params, bytes, done) {
-      calls.push({ name, params, bytes: Some(bytes), done, heard: None })
+      calls.push({ name, params, bytes: Some(bytes), done })
       (base.call_bytes)(name, params, bytes, done)
     },
     stream: fn(name, params, bytes, on_value, done) {
       if name != "station.upload.part" {
         return (base.stream)(name, params, bytes, on_value, done)
       }
-      calls.push({ name, params, bytes, done, heard: Some(on_value) })
+      calls.push({ name, params, bytes, done })
       0
     },
-    // the draft's files in the core's composer, as the test moves them on (`ups`: going_up, upped)
+    // the draft's files in the core's composer, as the test moves them on (`ups`)
     // (what the test makes over the made-up core's: what `over` reads of the test's own is a signal it sets, so what
     // reads the topic follows it as it follows the core's)
     topic_read: fn(name, params) {
@@ -97,36 +95,6 @@ fn handed(m : Made) -> Json? {
   match field(Some(m.params), "files") {
     Some(Array([one, ..])) => Some(one)
     _ => None
-  }
-}
-
-///|
-/// The core says the file `m` handed over has `sent` bytes up.
-fn going_up(ups : Map[String, Json], m : Made, sent : Int) -> Unit {
-  let f = handed(m)
-  ups[text(f, "id")] = {
-    "id": Json::string(text(f, "id")),
-    "name": Json::string(text(f, "name")),
-    "size": Json::number(number(f, "size")),
-    "sent": Json::number(sent.to_double()),
-  }
-}
-
-///|
-/// The core says the file `m` handed over is up, at the station's `path` (its uploads' by default).
-fn upped(ups : Map[String, Json], m : Made, path? : String = "") -> Unit {
-  let f = handed(m)
-  let name = text(f, "name")
-  ups[text(f, "id")] = {
-    "id": Json::string(text(f, "id")),
-    "name": Json::string(name),
-    "size": Json::number(number(f, "size")),
-    "sent": Json::number(number(f, "size")),
-    "done": {
-      "name": Json::string(name),
-      "path": Json::string(if path == "" { "uploads/u/" + name } else { path }),
-      "size": Json::number(number(f, "size")),
-    },
   }
 }
 
@@ -533,7 +501,6 @@ test "image sizes from their bytes" {
   let gif = Bytes::from_array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 3, 0, 2, 0, 0, 0].map(fn(i) { i.to_byte() }))
   assert_eq(@pixels.image_size(gif), Some((3, 2)))
   assert_eq(@pixels.image_size(b"plain words"), None)
-  assert_eq(uuid("0123456789abcdef0123456789abcdef"), "01234567-89ab-cdef-0123-456789abcdef")
 }
 
 ///|

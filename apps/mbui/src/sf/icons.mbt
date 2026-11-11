@@ -12,7 +12,7 @@ let shapes_made : Map[String, Array[@ui.Shape]] = {}
 
 ///|
 /// An icon or a picture as drawn: its shapes and the name its node says.
-struct DrawnShapes {
+priv struct DrawnShapes {
   shapes : Array[@ui.Shape]
   name : String
 }

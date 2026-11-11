@@ -99,7 +99,7 @@ test "添加这台 Mac refused by the cloud: said why, nothing installed" {
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       if name == "workspace.enroll" {
         done(Err({ "code": "forbidden", "message": "只有 owner 和 admin 可以添加 station" }))
       } else {

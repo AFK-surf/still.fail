@@ -169,7 +169,7 @@ pub fn service_marked(p : ServicePage, said : Json) -> Unit {
 
 ///|
 /// A new page: the marks of the one before are gone, picking goes on (loaded).
-pub fn page_marks_new_page(p : ServicePage, site : @ui.NativeView) -> Unit {
+pub fn page_marks_new_page(p : ServicePage, _site : @ui.NativeView) -> Unit {
   let m = p.marks
   m.marks.clear()
   m.at.clear()
@@ -181,7 +181,7 @@ pub fn page_marks_new_page(p : ServicePage, site : @ui.NativeView) -> Unit {
 
 ///|
 /// Marking stopped: its marks gone.
-pub fn page_marks_leave(p : ServicePage, site : @ui.NativeView) -> Unit {
+pub fn page_marks_leave(p : ServicePage, _site : @ui.NativeView) -> Unit {
   let m = p.marks
   m.marks.clear()
   m.at.clear()
@@ -193,14 +193,14 @@ pub fn page_marks_leave(p : ServicePage, site : @ui.NativeView) -> Unit {
 
 ///|
 /// The bar's edit key turned (Preview.kt BarIcon(Icons.Edit)): picking on or off.
-pub fn page_marks_toggle(p : ServicePage, site : @ui.NativeView) -> Unit {
+pub fn page_marks_toggle(p : ServicePage, _site : @ui.NativeView) -> Unit {
   p.marks.marking = !p.marks.marking
   page_say(p, "window.__stillfailMarks&&__stillfailMarks.on(\{p.marks.marking})")
 }
 
 ///|
 /// One mark gone (its note's remove key).
-pub fn page_marks_remove(p : ServicePage, site : @ui.NativeView, n : Int) -> Unit {
+pub fn page_marks_remove(p : ServicePage, _site : @ui.NativeView, n : Int) -> Unit {
   let m = p.marks
   match m.marks.search_by(fn(x) { x.n == n }) {
     Some(i) => m.marks.remove(i) |> ignore
@@ -227,7 +227,7 @@ pub fn shot_ask(k : Int, t : String, expr : String, drawn? : Bool = false) -> St
 
 ///|
 /// The marks put into the chat's draft: begun here, each step as the page answers.
-pub fn page_marks_put(p : ServicePage, site : @ui.NativeView, src : Source) -> Unit {
+pub fn page_marks_put(p : ServicePage, _site : @ui.NativeView, _src : Source) -> Unit {
   let m = p.marks
   if m.marks.length() == 0 || m.shot is Some(_) {
     return

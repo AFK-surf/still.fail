@@ -71,7 +71,7 @@ test "a go-to in the chat keeps where the reader was: ↓ back there, ↓ again 
     let src : Source = {
       ..base,
       call: fn(name, params, done) {
-        calls.push({ name, params, bytes: None, done, heard: None })
+        calls.push({ name, params, bytes: None, done })
         (base.call)(name, params, done)
       },
     }
@@ -433,7 +433,7 @@ test "words sent going up into the list tell the core where it is as the message
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -783,3 +783,7 @@ test "a chat's run changed: what changed on a line, else what it runs on now; pr
   assert_true(t.find("现在：Claude Code · Sonnet 5.5 · 中 · 自动 · lin@example.com") is Some(_))
   assert_true(t.find("Opus 5.5 · 高 → Sonnet 5.5 · 中") is None)
 }
+
+///|
+/// How long the bell rises over the way to the end as that comes, and goes back down.
+let ask_lift_ms : Double = 200.0

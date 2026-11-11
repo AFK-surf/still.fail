@@ -465,15 +465,13 @@ fn players_reset() -> Unit {
 
 ///|
 /// Where it is among its frames: the file's own (when each starts, read by the host), else a 60th of a second each;
-/// how many, which one shows (the last to start by now), when that one starts, its rate (0: not known), whether they
-/// were read (or there are none to read).
+/// how many, which one shows (the last to start by now), when that one starts, its rate (0: not known).
 priv struct Frames {
   starts : Array[Double]?
   count : Int
   at : Int
   now : Double
   fps : Double
-  read : Bool
   dur : Double
 }
 
@@ -496,11 +494,11 @@ fn frames_of(p : @kit.Media, s : @kit.MediaStatus, pos : Double) -> Frames {
       let k = list.length()
       let span = list[k - 1] - list[0]
       let at = frame_at(list, pos)
-      { starts, count: k, at, now: list[at], fps: if span > 0.0 { (k - 1).to_double() * 1000.0 / span } else { 0.0 }, read, dur }
+      { starts, count: k, at, now: list[at], fps: if span > 0.0 { (k - 1).to_double() * 1000.0 / span } else { 0.0 }, dur }
     }
     None => {
       let count = if dur > 0.0 && read { (dur / step).round().to_int() } else { 0 }
-      { starts, count, at: if dur > 0.0 { ((pos + player_frame_slack) / step).floor().to_int() } else { 0 }, now: pos, fps: 0.0, read, dur }
+      { starts, count, at: if dur > 0.0 { ((pos + player_frame_slack) / step).floor().to_int() } else { 0 }, now: pos, fps: 0.0, dur }
     }
   }
 }
@@ -2542,13 +2540,6 @@ let desk_play_cover : @ui.Style = @ui.css("w=Full h=Full px=S8 gap=S4 align=ACen
 ///|
 // kept across runs: a value (no field of it changes)
 let desk_cover_name : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, center=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let desk_play_middle : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
-
-// kept across runs: a value (no field of it changes)
-let desk_play_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true)
 
 ///|
 /// A cue over a desktop's controls: as far off the foot as they reach (player_room), and 16 more (with keyboard and

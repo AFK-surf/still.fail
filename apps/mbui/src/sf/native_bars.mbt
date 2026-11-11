@@ -212,7 +212,7 @@ pub let native_over : NativeOver = { up: false, title: "", acts: [], active: [],
 /// One of what has said it is up over the whole window (native_over_up): what it said, kept as it said it while it is
 /// alive, by what said it (`owner`) and how high over the rest it is (`over`: the viewer over the pages it is opened
 /// from).
-struct NativeClaim {
+priv struct NativeClaim {
   over : Int
   /// when it was said, in the order of all said (native_said_n): of two as high, the one said last handed
   said : Int

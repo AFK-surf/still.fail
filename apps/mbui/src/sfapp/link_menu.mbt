@@ -6,10 +6,8 @@
 
 ///|
 /// The menu that is open: its items (its words and its icon), what a tap on one does, where it is put (x, the top and
-/// bottom of what it is under), the link it is for when it is a link's; the press it opened on (Ctx::press frame), so the
-/// same press picks no words.
+/// bottom of what it is under); the press it opened on (Ctx::press frame), so the same press picks no words.
 priv struct LinkMenu {
-  mut href : String
   mut items : Array[(String, String)]
   mut pick : (@ui.Ctx, Int) -> Unit
   mut x : Double
@@ -21,7 +19,6 @@ priv struct LinkMenu {
 
 ///|
 let link_menu : LinkMenu = {
-  href: "",
   items: [],
   pick: fn(_, _) {  },
   x: 0.0,
@@ -34,7 +31,6 @@ let link_menu : LinkMenu = {
 ///|
 /// The link's menu, open it or copy it, centred on `x` under (or over) the line from `top` to `bottom`.
 fn link_menu_at(href : String, x : Double, top : Double, bottom : Double) -> Unit {
-  link_menu.href = href
   menu_under([(tr("common.link.open"), "external"), (tr("common.link.copy"), "copy")], x, top, bottom, fn(c, i) {
     if i == 0 {
       // as a tap on it: a chat's link opens it here, any other in the browser

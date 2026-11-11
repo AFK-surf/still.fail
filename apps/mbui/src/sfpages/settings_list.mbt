@@ -365,10 +365,6 @@ let settings_search_grow : @ui.Style = @ui.style(w=@sf.grow)
 let settings_search_page : @ui.Style = @ui.css("w=Full pb=S3 clip=true")
 
 ///|
-/// The room under the search field on a page (settings_search_page's S3).
-let settings_search_foot : Double = 12.0
-
-///|
 /// The same search control (settings_search's) as nodes, over the settings' list made once: its round ground as tall as
 /// the theme's band, the search mark, the field, and while it holds words the clear key at its end, inside the ground,
 /// as round as it; 12 under it. Its field an editor of its own (a Field is one editor's: the list made once while

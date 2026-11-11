@@ -72,7 +72,7 @@ pub fn files_station(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  core : Core,
+  _core : Core,
   at : DriveAt,
   room : Double,
   narrow? : NarrowOf = narrow_bare(),
@@ -93,7 +93,7 @@ pub fn files_station(
   }
   let look = look_of(c)
   // (the page's arrangement said once, here, for what draws it: wide, the tabs' sides; narrow, its own frame)
-  @sf.with_look(look, fn() { files_station_in(c, src, w, core, at, room, narrow, go, st, root, look, known, error, stations) })
+  @sf.with_look(look, fn() { files_station_in(c, src, w, at, room, narrow, go, st, root, look, known, error, stations) })
 }
 
 ///|
@@ -102,7 +102,6 @@ fn files_station_in(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  core : Core,
   at : DriveAt,
   room : Double,
   narrow : NarrowOf,

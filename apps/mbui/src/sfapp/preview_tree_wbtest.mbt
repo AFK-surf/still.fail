@@ -3852,13 +3852,6 @@ fn opening(finish? : Bool = true) -> @ui.Tester raise {
 }
 
 ///|
-/// The pictures drawn now at least half as wide as viewer `v`'s where it lies.
-fn big_pictures(t : @ui.Tester, v : Viewer) -> Int {
-  let (_, _, w, _) = v.zoom.rect(t.ctx()).unwrap()
-  drawn_pictures(t).filter(fn(d) { d.2 >= w / 2.0 }).length()
-}
-
-///|
 /// The window's tree's node drawing viewer `v`'s picture as it flies (its whole picture or what stands in for it), where
 /// it is drawn: none, else one.
 fn flight_nodes(v : Viewer, src : Source) -> Array[(Double, Double, Double, Double)] {

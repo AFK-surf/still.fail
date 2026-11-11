@@ -16,16 +16,6 @@ fn joined_mark(s : Json?) -> String {
 }
 
 ///|
-/// A station's mark where it has one (StationMark): its glyph, picture or emoji.
-fn station_mark(c : @ui.Ctx, s : Json?, size : Double, tint : Int64) -> Unit {
-  let emoji = text(s, "emoji")
-  let icon = text(s, "icon")
-  if @sf.has_station_mark(emoji, icon) {
-    @sf.station_mark(c, emoji, icon, size, tint)
-  }
-}
-
-///|
 /// The workspace's stations (StationsScreen), pushed from settings: their cards, each opening its page.
 fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let topic = stations_of(core, here)

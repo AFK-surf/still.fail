@@ -247,7 +247,7 @@ test "adding a favorite on a narrow screen chooses a station and folder without 
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -628,7 +628,7 @@ fn which_station(calls : Array[Made], platform : Int, wide : Bool, rest : Bool) 
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }

@@ -9,7 +9,7 @@ fn waiting_chat(calls : Array[Made], wait? : Json? = None, two? : Bool = false) 
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       done(Ok(Json::object({})))
     },
     topic_read: fn(name, params) {

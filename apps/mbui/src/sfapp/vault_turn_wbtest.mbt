@@ -110,7 +110,7 @@ fn vault_chat_src(vc : VaultChat, calls : Array[String]) -> Source {
         _ => base.topic(name, params).get().snapshot()
       }
     },
-    call: fn(name, params, done) {
+    call: fn(name, _, done) {
       calls.push(name)
       if name == "vault.deny" {
         vc.status = "denied"

@@ -25,7 +25,7 @@ fn screen_links_core(
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
     stream: fn(_name, params, _bytes, on_value, _done) {

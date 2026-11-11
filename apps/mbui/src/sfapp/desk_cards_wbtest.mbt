@@ -16,7 +16,7 @@ fn desk_login(calls : Array[Made], login : Json) -> @ui.Tester {
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       done(Ok(Json::object({ "url": Json::string("https://github.com/login/oauth") })))
     },
   }

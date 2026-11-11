@@ -9,7 +9,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -126,7 +126,7 @@ test "wide: a message right clicked offers 多选, which opens the chat's pictur
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -186,7 +186,7 @@ test "wide: the message header's ⋯ offers the same message actions as a right 
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }

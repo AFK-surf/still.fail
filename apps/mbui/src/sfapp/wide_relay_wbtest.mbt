@@ -26,7 +26,7 @@ test "wide: 接力到频道… from a row's menu: the dialog lists the bot's pla
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -82,7 +82,7 @@ test "wide: an @ typed in the relay's note offers the people there in a popover 
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "chat.relayPeople" => done(Ok({ "people": people }))
         // (whom it finds, the core's: relay-pick.ts mentionView, tested there)

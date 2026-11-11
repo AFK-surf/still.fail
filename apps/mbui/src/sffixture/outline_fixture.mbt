@@ -106,10 +106,7 @@ pub let outline_away_seq : Double = 22.0
 pub let outline_long_away_seq : Double = 283.0
 
 ///|
-/// How many messages the longer chat has, and how many of its last its list holds.
-let outline_long_n : Int = 300
-
-///|
+/// How many of the longer chat's last messages its list holds.
 let outline_long_held : Int = 40
 
 ///|

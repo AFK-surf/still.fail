@@ -276,7 +276,7 @@ priv enum How {
   AsSheet
   AsPopover
   AsDialog
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What is presented, the lowest first; how many were opened (each one's keys its own).

@@ -9,7 +9,7 @@ test "wide: 分享给其他 workspace from the chat's info: a dialog lists the w
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }

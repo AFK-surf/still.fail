@@ -54,7 +54,7 @@ priv struct RelayShown {
   read : Int
   error : String
   connected : Bool
-} derive(Eq)
+}
 
 ///|
 /// What the picker shows now, read in node `v` (its body's or its foot's): as it was while it goes (relayed, what it

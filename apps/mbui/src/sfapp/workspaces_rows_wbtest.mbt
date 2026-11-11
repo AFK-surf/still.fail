@@ -69,7 +69,7 @@ fn ws_told(
     },
     call: fn(name, params, done) {
       match name {
-        "invitation.accept" | "invitation.decline" => calls.push({ name, params, bytes: None, done, heard: None })
+        "invitation.accept" | "invitation.decline" => calls.push({ name, params, bytes: None, done })
         _ => (base.call)(name, params, done)
       }
     },

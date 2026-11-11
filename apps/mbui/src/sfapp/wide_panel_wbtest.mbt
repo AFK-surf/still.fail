@@ -127,7 +127,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -185,7 +185,7 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -356,4 +356,22 @@ test "wide: a chat of a Slack thread alone has its \"…\" too: where it is, its
   t.run_for(@ui.move_most_ms)
   open_share(t)
   assert_true(t.find("在 Slack 中打开") is Some(_))
+}
+
+///|
+/// Chat `r`'s tabs as its view has them now.
+fn side_now(r : ChatRef) -> (Array[String], String) {
+  match link_src.val {
+    Some(src) => @sfdesk.side_now(src, r)
+    None => ([], "")
+  }
+}
+
+///|
+/// Chat `r`'s tabs changed by the core, the panel told first whether any will be open (sfdesk's side_change).
+fn side_change(r : ChatRef, action : String, tab : String?) -> Unit {
+  match link_src.val {
+    Some(src) => @sfdesk.side_change(src, r, action, tab)
+    None => ()
+  }
 }

@@ -93,9 +93,6 @@ pub fn chat_list(
   let let_go = @sfbase.sent_let_go(rd, flight)
   let foot_room = composer_foot_room(c, draft, room, let_go~)
   let side = row_side(lay_w)
-  // the sides are only the page's margin either way: wide, the pictures out in it stand by their heads' line, not by
-  // the words under it, so a table scrolls out over it to the pane's edges as it does narrow
-  let gutter = side
   // the room over row `i`: none at the list's ends, a little over a message joined to the one before, else the gap
   let top_at = fn(i : Int) -> Double {
     let e = list[i]

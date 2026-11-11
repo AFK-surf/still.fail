@@ -1672,7 +1672,7 @@ pub fn Flow::message_taken(self : Flow, which : (Json) -> Bool) -> Double {
 
 
 ///|
-fn Flow::frame_taking(self : Flow, given : Double?) -> Double {
+fn Flow::frame_taking(_self : Flow, given : Double?) -> Double {
   // (Replay::deliver's taken_at: the display's frame that took it)
   given.unwrap_or(-1.0)
 }
@@ -1680,12 +1680,10 @@ fn Flow::frame_taking(self : Flow, given : Double?) -> Double {
 ///|
 /// The clock stepped a frame at a time, what is due given as it comes, until something said to move holds `name`
 /// (Tester::moving, Tester::rest_of): when it is at rest. The test fails if nothing more may come first and none does.
-#callsite(autofill(loc))
-pub fn Flow::until_moving(self : Flow, name : String, loc~ : SourceLoc) -> Double {
+pub fn Flow::until_moving(self : Flow, name : String) -> Double {
   if pace_split.val != "" {
     return self.t.time()
   }
-  let site = loc.to_string()
   // (one the last step that acts began: one of its name moving as it was taken, its coming in not over at a tap, is not
   // it)
   let told = fn() { self.t.moving().iter().any(fn(l) { l.contains(name) && !self.at_step.contains(l) }) }

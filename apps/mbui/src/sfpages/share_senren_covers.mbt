@@ -10,7 +10,7 @@
 /// picture's top fades into); where the cover lines start (`lines_top`); her words' keys under shareSenren.: her name
 /// and title's (`who`), her line's and her issue's (`own`), and the cover lines between the feature and the live one
 /// (what each is, what it says).
-struct SrCover {
+priv struct SrCover {
   look : String
   art : String
   ink : Int64
@@ -609,7 +609,7 @@ let gh_code_words : @ui.TextStyle = @ui.text_style(size=Xs3, tracking=Widest, co
 /// (`side`: from the map's left, or from its right where `right`, so longer words grow away from the edge); where its
 /// dashed leader ends (`ex`, `ey`: a little inside the card, which covers the rest, as the mockup's ends on its edge);
 /// its symbol (map_icon_shapes' parts); its name's key and its lines' keys under shareSenren.
-struct MapPlace {
+priv struct MapPlace {
   x : Double
   y : Double
   right : Bool

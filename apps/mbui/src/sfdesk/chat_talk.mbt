@@ -52,7 +52,7 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
   }
   // over it, what is picked in the messages; a row let go over the pane, into the draft
   if view is Some(_) {
-    chat_layers(c, src, r, draft, pane, room)
+    chat_layers(c, src, r, draft, room)
   }
   chat_drop(c, src, r.station, draft, pane)
   // words dragged in from another app and let go anywhere on the pane but a field (a field takes them where they

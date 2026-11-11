@@ -1293,7 +1293,7 @@ test "on the tape a settings page a fixture opens as the app begins (a scripted 
 
 ///|
 test "on the tape the gear's settings: their list in use, its first row's page showing beside it" {
-  let t = tape_settings(600.0, fn() { open_page(Settings) })
+  let _ = tape_settings(600.0, fn() { open_page(Settings) })
   assert_true(@sfdesk.wide.tape.get())
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
 }

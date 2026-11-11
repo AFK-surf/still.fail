@@ -436,7 +436,6 @@ fn attention_item(
     go()
   })
   let hover = c.lit(id) || c.lit(drop)
-  let alert = kind == "alert"
   let b = c.box(style=if hover { att_item_on } else { att_item }, id~, fn() {
     // (its kind in words: role="img")
     let (ground, said) : (@ui.Color, String) = match kind {

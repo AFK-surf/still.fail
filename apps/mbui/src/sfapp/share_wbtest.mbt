@@ -43,37 +43,6 @@ test "a chat tapped: what is shared goes to its composer and the chat opens; 新
 }
 
 ///|
-test "a shared link in a draft: a card with its site, sent as words after what is written" {
-  let d : Draft = {
-    key: "ws1/st1:s-c4",
-    text: @signals.signal(""),
-    put_text: @signals.signal(None),
-    field: @ui.Field::new(),
-    quotes: @sf.LiveArray::from([]),
-    comments: @sf.LiveMap::from({}),
-    files: @sf.LiveArray::from([]),
-    error: @signals.signal(None),
-    loaded: @signals.signal(true),
-    kept: @signals.signal(""),
-    changed_at: 0.0,
-    warm_n: 1,
-    focus: 0,
-    id: "",
-    sig: None,
-  }
-  fill_draft(d, {
-    "text": "帮我下这个",
-    "quotes": [],
-    "files": [],
-    "links": [{ "url": "https://www.youtube.com/watch?v=x", "title": "列表滑动", "site": "youtube.com" }],
-  })
-  assert_eq(d.files.length(), 1)
-  assert_eq(up_files(d).length(), 0)
-  assert_eq(with_link_words("帮我下这个", d), "帮我下这个\n列表滑动\nhttps://www.youtube.com/watch?v=x")
-  assert_true(draft_view(d).get("links") is Some(_))
-}
-
-///|
 test "over another app (ShareActivity): only the sheet; a chat tapped opens the app at it, over Home" {
   let t = share_tester("share-in")
   t.post(@hostapi.system_channel, "{\"over\":true}")

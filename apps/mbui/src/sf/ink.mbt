@@ -28,7 +28,7 @@ priv enum Scope {
   Added
   Removed
   Hunk
-} derive(Eq)
+}
 
 ///|
 /// vitesse-light's colour (its tokenColors), each made to read on a code block's ground (4.5:1, WCAG's AA: its hue

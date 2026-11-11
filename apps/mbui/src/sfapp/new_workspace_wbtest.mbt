@@ -132,12 +132,6 @@ test "a new workspace from each tier's way in, on either screen: Home's name lai
 /// core's `workspace.create` kept in `calls` unanswered (the rest the fixture's); 新建 workspace opened over it by
 /// nothing, at the frame it opened in.
 ///|
-/// Whether `words` are said whole somewhere (not as part of other words: Tester::find's).
-fn words_said(t : @ui.Tester, words : String) -> Bool {
-  t.words().iter().any(fn(w) { w.0 == words && w.5 > 0.0 })
-}
-
-///|
 /// Whether the field with the keys holds `words` (what its host was told it holds).
 fn name_typed(t : @ui.Tester, words : String) -> Bool {
   let (active, now, _, _) = t.ime()
@@ -180,7 +174,7 @@ fn new_ws_over(calls : Array[Made], platform~ : Int, wide~ : Bool, mode? : Strin
     ..base,
     call: fn(name, params, done) {
       if name == "workspace.create" {
-        calls.push({ name, params, bytes: None, done, heard: None })
+        calls.push({ name, params, bytes: None, done })
       } else {
         (base.call)(name, params, done)
       }

@@ -17,7 +17,7 @@ fn wide_tester(
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }
@@ -1952,7 +1952,7 @@ test "wide: 字体's faces a row each under the places' choice, the chosen one c
   let src2 : Source = {
     ..src,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (src.call)(name, params, done)
     },
   }

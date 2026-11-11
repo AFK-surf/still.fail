@@ -232,10 +232,9 @@ fn rail_gear() -> Unit {
 }
 
 ///|
-/// What a key of the rail gives what it draws on its ground: its node, its ground (its 30 square), and its icon's ink
-/// now (the words' colour eased in over 140 ms as it is lit or pointed at).
+/// What a key of the rail gives what it draws on its ground: its ground (its 30 square), and its icon's ink now (the
+/// words' colour eased in over 140 ms as it is lit or pointed at).
 priv struct RailKey {
-  item : @view.View
   sq : @view.View
   ink : () -> Int64
 }
@@ -297,7 +296,6 @@ fn rail_key_node(
       }))
       |> ignore
       body({
-        item,
         sq,
         ink: fn() {
           let t = @sf.theme()

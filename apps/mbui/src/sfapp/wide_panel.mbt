@@ -6,22 +6,3 @@
 fn side_key(r : ChatRef) -> String {
   @sfpages.chat_key(r)
 }
-
-///|
-/// Chat `r`'s tabs as its view has them now.
-fn side_now(r : ChatRef) -> (Array[String], String) {
-  match link_src.val {
-    Some(src) => @sfdesk.side_now(src, r)
-    None => ([], "")
-  }
-}
-
-///|
-/// Chat `r`'s tabs changed by the core, the panel told first whether any will be open (sfdesk's side_change).
-fn side_change(r : ChatRef, action : String, tab : String?) -> Unit {
-  match link_src.val {
-    Some(src) => @sfdesk.side_change(src, r, action, tab)
-    None => ()
-  }
-}
-

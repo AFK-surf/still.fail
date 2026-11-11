@@ -254,7 +254,7 @@ test "station tabs show their page beside the chat, preserve folders and release
     },
     cancel: fn(id) { cancelled.push(id); (base.cancel)(id) },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       (base.call)(name, params, done)
     },
   }

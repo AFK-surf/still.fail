@@ -813,7 +813,7 @@ fn Viewer::finger_on(self : Viewer, canvas : @view.View, src : Source, d : @view
         v.held = false
         return
       }
-      v.image_let_go(c, canvas, src, d, pinched, has_before, has_after)
+      v.image_let_go(c, canvas, src, d, pinched)
     }
   }
 }
@@ -959,8 +959,6 @@ fn Viewer::image_let_go(
   src : Source,
   d : @view.Drag,
   pinched : Bool,
-  has_before : Bool,
-  has_after : Bool,
 ) -> Unit {
   let v = self
   let z = v.zoom

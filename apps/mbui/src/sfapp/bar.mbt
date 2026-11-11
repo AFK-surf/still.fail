@@ -229,11 +229,6 @@ fn spr(start : Double, tension : Double, friction : Double, what : String, rest?
 }
 
 ///|
-fn Spr::moving(self : Spr) -> Bool {
-  self.v != 0.0 || self.x != self.to
-}
-
-///|
 /// Where it is at `now`, read (once a frame, or at a moment ahead of the logic's): its way kept whole, a ride past its
 /// end too (at rest where it rode to), so that what is told it at an earlier moment after goes on from where it was
 /// then.
@@ -549,9 +544,8 @@ fn Spr::ride_on(
 ///|
 /// One number gliding to where it is sent over a time on a curve, its way said once as it sets out (where
 /// from, how fast, where to, by what, when): where it is at a moment a function of that moment alone (`value` and
-/// `target` as of the moment last sampled, BarModel::sample). `key`: what it is in the motion log.
+/// `target` as of the moment last sampled, BarModel::sample).
 priv struct Glide {
-  key : String
   mut value : Double
   mut target : Double
   mut from : Double
@@ -563,8 +557,8 @@ priv struct Glide {
 }
 
 ///|
-fn glide(key : String, start : Double) -> Glide {
-  { key, value: start, target: start, from: start, v0: 0.0, spec: @motion.Snap(0.0), start: 0.0, dur: 0.0 }
+fn glide(start : Double) -> Glide {
+  { value: start, target: start, from: start, v0: 0.0, spec: @motion.Snap(0.0), start: 0.0, dur: 0.0 }
 }
 
 ///|
@@ -729,7 +723,6 @@ priv struct BarModel {
   mut open : Bool
   mut y0 : Double
   mut o0 : Double
-  mut was_down : Bool
   /// first drawn: everything where it goes at once
   mut placed : Bool
   mut width : Double
@@ -770,9 +763,9 @@ let bar : BarModel = {
   k: spr(1.0, 300.0, 30.0, "bar/k"),
   held: spr(0.0, 420.0, 16.0, "bar/held"),
   up: spr(0.0, ball_down, raise_damping, "bar/up"),
-  vis: glide("vis", 0.0),
-  ball_alpha: glide("ball-alpha", 1.0),
-  ball_scale: glide("ball-scale", 1.0),
+  vis: glide(0.0),
+  ball_alpha: glide(1.0),
+  ball_scale: glide(1.0),
   tints: {},
   ball_x: spr(0.0, 300.0, ball_damping(300.0), "bar/ball-x", rest=ball_rest_within),
   ball_y: spr(0.0, ball_down, ball_damping(ball_down), "bar/ball-y", rest=ball_rest_within),
@@ -785,7 +778,6 @@ let bar : BarModel = {
   open: false,
   y0: 0.0,
   o0: 0.0,
-  was_down: false,
   placed: false,
   width: 0.0,
   swap: None,
@@ -793,7 +785,7 @@ let bar : BarModel = {
   felt: "",
   icon_was: "",
   told: None,
-  icon_swap: glide("icon-swap", 1.0),
+  icon_swap: glide(1.0),
 }
 
 ///|
@@ -824,7 +816,6 @@ fn bar_reset() -> Unit {
   bar.y0 = 0.0
   bar.o0 = 0.0
   bar.placed = false
-  bar.was_down = false
   bar.width = 0.0
   bar.swap = None
   bar.waits = false
@@ -1514,7 +1505,7 @@ fn bar_tell(told : BarTold, at : Double) -> Unit {
       let on = if lit { 1.0 } else { 0.0 }
       match m.tints.get(id) {
         Some(g) => if landing && i == told.cur { g.snap(on) } else { g.go(on, tint_ms, Out, at~) }
-        None => m.tints[id] = glide("tint/" + id, on)
+        None => m.tints[id] = glide(on)
       }
     }
   }
@@ -1730,8 +1721,6 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   let lit = if t.dark { 0xFFFFFFFFL } else { 0x111827FFL }
   // the panel's frame in the window: 22 over the navigation bar (Bar.kt: padding(bottom = 22.dp + navBottom))
   let foot = 22.0 + nav_foot()
-  let fx = 22.0
-  let fy = c.height - foot - panel
   // the panel open: a press anywhere else closes it (and does nothing else: the window's tree's, bar_glass_node); back
   // closes it too (back still said by the old views as they are built, at the moment it is taken)
   if shown && m.mode.get() {
@@ -2578,7 +2567,6 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 /// A place's top bar at the stack's root: the place's name, the page's actions
 /// (`@sf.named_actions`), settings at the right edge; frosted over what runs under it, no line under it.
 fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
-  let t = @sf.theme()
   let actions = @sf.named_actions.val
   @sf.named_actions.val = None
   let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {

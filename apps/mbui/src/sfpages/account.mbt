@@ -9,7 +9,6 @@
 ///|
 /// 账号 (AccountSettings, MeScreen).
 pub fn me_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
-  let look = look_of(c)
   let name = if here.person != "" { here.person } else { here.email }
   let how = if here.sub.has_prefix("em-") || here.sub.has_prefix("pw-") {
     @sf.t("web-pages.settings.account.email")

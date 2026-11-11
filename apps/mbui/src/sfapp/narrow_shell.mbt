@@ -215,8 +215,8 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page, barre
   // (the page is its island, kept as its nodes by what it reads and its key (narrow_page_key): no part of its own)
   let built = fn() {
     let whole = c.box(style=page_whole, fn() {
-      let (now, all, _, invited) = workspace_in_view(src)
-      page_view(c, src, now.unwrap_or(w), all, invited, page, barred~)
+      let (now, _, _, _) = workspace_in_view(src)
+      page_view(c, src, now.unwrap_or(w), page, barred~)
     })
     @motion.scope(c, whole, bottom=true)
   }

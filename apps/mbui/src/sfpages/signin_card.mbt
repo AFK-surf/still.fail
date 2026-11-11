@@ -500,7 +500,7 @@ fn signin_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, as
         close=@motion.Snap(0.0),
         fn() {
           signin_outcome(c, ask, here.inline, history=Some(("signin/" + key, fn(id) {
-            card_history(c, "signin/" + key, id, fn(p) {
+            card_history(c, id, fn(p) {
               @sf.ask_words(p, @sf.t("android-misc.signin.title", args=[("site", ask.site)]), ask.reason)
             })
           })))

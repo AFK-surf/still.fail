@@ -12,7 +12,7 @@ fn relay_mentions_tester(calls? : Array[Made] = [], held? : Array[() -> Unit]) -
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "chat.relayPeople" => done(Ok({ "people": people }))
         // (whom it finds, as the core finds them: relay_mentions_kept)

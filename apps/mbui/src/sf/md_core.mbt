@@ -15,7 +15,6 @@ priv enum MdInline {
   /// its address, its words, and what it is to as the core says (refLinks.ts linkTo: the tree's `to`)
   Link(String, Array[MdInline], LinkTo)
   Image(String, String)
-  SoftBreak
   HardBreak
 }
 ///|
@@ -46,7 +45,7 @@ fn md_plain(xs : Array[MdInline]) -> String {
     match x {
       Text(s) | Code(s) | FileRef(s, _, _, _) | Formula(s, _) | Image(_, s) => out.write_string(s)
       Emph(c) | Strong(c) | Strike(c) | Link(_, c, _) => out.write_string(md_plain(c))
-      SoftBreak | HardBreak => out.write_string(" ")
+      HardBreak => out.write_string(" ")
     }
   }
   out.to_string()

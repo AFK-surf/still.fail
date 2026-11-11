@@ -88,7 +88,6 @@ fn coming_words(n : Int, percent : Int) -> String {
 /// rail's key: beside the rail, `rail_menu_off` out, its foot level with the key's, as the workspaces' menu under it is;
 /// under it, it lay over the rail, the mark of the workspace in view showing at its edge).
 fn transfers_list(
-  c : @ui.Ctx,
   src : Source,
   ws : String,
   from : @sf.Anchor,
@@ -125,7 +124,7 @@ fn transfers_list(
 /// Their list from the rail's key of them (rail_transfers_node), drawn over the frame (rail_overlays): beside the key
 /// where it was as the list was opened from it (else where it is now), its foot level with the key's, as the
 /// workspaces' menu under it is.
-fn rail_transfers_list(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+fn rail_transfers_list(src : Source, w : Workspace) -> Unit {
   let all = coming(src, w.id)
   let from : @sf.Anchor = match (transfers_from.val, rail_transfers_key.val) {
     (Some((x, y, aw, ah)), _) => At(x, y, aw, ah)
@@ -135,7 +134,7 @@ fn rail_transfers_list(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
     _ => Unanchored
   }
-  transfers_list(c, src, w.id, from, fn(at) { open_page(Drive(at)) }, all.none(), side=Right, along=End)
+  transfers_list(src, w.id, from, fn(at) { open_page(Drive(at)) }, all.none(), side=Right, along=End)
 }
 
 ///|
@@ -148,7 +147,7 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
   let id = c.id("home/transfers")
   let go = fn(at : DriveAt) { open_page(Drive(at)) }
   if all.none() {
-    transfers_list(c, src, ws, Of(id), go, true)
+    transfers_list(src, ws, Of(id), go, true)
     return
   }
   let (n, percent, failed) = all.going()
@@ -157,7 +156,7 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
   @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, failed~, on_press=fn() {
     ftransfers.open.set(!ftransfers.open.get())
   })
-  transfers_list(c, src, ws, Of(id), go, false)
+  transfers_list(src, ws, Of(id), go, false)
 }
 
 ///|

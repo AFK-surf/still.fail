@@ -39,8 +39,6 @@ priv struct TriplePanel {
   mut kind : String
   mut all : Bool
   mut pick : Json?
-  /// whether its body was drawn last as a sheet's (its foot then leaves the runtime to the body: triple_foot)
-  mut sheet : Bool
   /// the level the model picked was last brought into view in (its first, all of them, a kind's; none yet), for each
   /// of a sheet's steps ("" its first, and all of one beside what opened it): once as each is come to, not each frame,
   /// so what the person scrolled stays where they left it
@@ -168,7 +166,7 @@ pub fn open_triple_panel(
   if accounts {
     triple.accounts_asked = true
   }
-  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: triple_no_kind, all: false, pick: page, sheet: false, shown: {}, asks, effort_stops: {}, first: None, combos_first: None }
+  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: triple_no_kind, all: false, pick: page, shown: {}, asks, effort_stops: {}, first: None, combos_first: None }
   pick_draft(src, station, of, { "open": Json::boolean(true) })
   // (as wide as its models and how hard it thinks beside them; wider where they are many, their makers a column
   // before them)
@@ -209,8 +207,8 @@ pub fn open_triple_panel(
 }
 
 ///|
-/// The control of the pick `of` on `station` (ModelTriple): its line, and its panel under it while open (above it with
-/// `up`). `page`: the control as a page has it with itself (a new chat's: its `pick`), not read on its own; `small`: in
+/// The control of the pick `of` on `station` (ModelTriple): its line, and its panel under it while open (above it
+/// where the presenters flip it up). `page`: the control as a page has it with itself (a new chat's: its `pick`), not read on its own; `small`: in
 /// a composer's row (its words 12). `saved`: what is said once a model picked
 /// (onConfirm's toast: a chat's, from its next turn; a connect's, its model bound; nothing where nothing runs on it yet,
 /// a new chat's or a new connect's). `floating`: over a page rather than in a row (a new chat's over its
@@ -220,7 +218,6 @@ pub fn model_triple(
   src : Source,
   station : String,
   of : String,
-  up? : Bool = false,
   page? : Json? = None,
   small? : Bool = false,
   floating? : Bool = false,
@@ -567,7 +564,6 @@ fn triple_body(
   // first, "all" all of them by their makers, "kind:" and a maker's id its models); beside what opened it all in the
   // one panel, the makers and a maker's models side by side)
   let sheet = !@sf.in_small_panel()
-  contents.sheet = sheet
   // (typed in its first step, where its search is)
   let words = if sheet && at != "" { "" } else { contents.query.trim(chars=" ").to_string().to_lower() }
   // (the search, where the panel's head has none: a sheet's, its head its own)

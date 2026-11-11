@@ -32,7 +32,6 @@ using @sfbase {
   search_view,
   type ChatItem,
   type ChatsView,
-  type ListNote,
   type Attachment,
   type Card,
   type ChatRef,

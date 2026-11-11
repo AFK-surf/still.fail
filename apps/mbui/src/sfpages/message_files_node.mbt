@@ -6,7 +6,7 @@
 ///|
 /// Where a message's file is shown, as it is now: its chat's station and session, and its view (whose session keeps a
 /// file the core names none for: its first agent's).
-struct MessageFilesAt {
+priv struct MessageFilesAt {
   station : () -> String
   session : () -> String
   view : () -> ChatView

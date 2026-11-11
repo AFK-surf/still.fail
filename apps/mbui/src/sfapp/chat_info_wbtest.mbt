@@ -10,7 +10,7 @@ fn bar_chat(calls : Array[Made], mode? : String = "chat", over? : (String, Topic
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       done(Ok(Json::object({})))
     },
     topic_read: fn(name, params) { over(name, base.topic(name, params).get().snapshot()) },

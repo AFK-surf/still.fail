@@ -32,7 +32,7 @@ fn publish_core(
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done, heard: None })
+      calls.push({ name, params, bytes: None, done })
       match name {
         "chat.publishPreview" => done(Ok(preview()))
         _ => done(Ok(Json::object({})))
