@@ -38,7 +38,8 @@
 #   scripts/e2e-local.sh android-unlock PIN   the system's prompt for the screen lock answered with PIN, once its field is up
 #   scripts/e2e-local.sh intruder-refused CMD…  e2e/peer.ts as a device the cloud signed in as alice and the lock never
 #                                   took in, asked CMD: INTRUDER REFUSED once the station refused it
-#   scripts/e2e-local.sh lock-state the security mode as the test station keeps it: LOCK, DEVICE lines, STATIONS, PERSONS, PERSON lines
+#   scripts/e2e-local.sh lock-state [NAME]   the security mode as the test station keeps it (NAME: the station beside it
+#                                   of that name, second-station's): LOCK, DEVICE lines, STATIONS, PERSONS, PERSON lines
 #   scripts/e2e-local.sh sql SQL    the test station's database, read only
 #   scripts/e2e-local.sh android-ime off|on   the emulator's own keyboard off (the run composes) or back
 #   scripts/e2e-local.sh android-installer    until the system's installer is the emulator's top activity, then back
@@ -57,8 +58,10 @@
 #   scripts/e2e-local.sh android-gallery FILE…  files put in the emulator's gallery, the app let read it
 #   scripts/e2e-local.sh release-seed     a newer build of the app (the APK built again as build 2) and a delta to it
 #                                   from the installed one in the local cloud's releases
-#   scripts/e2e-local.sh second-station FILE [third]   a second station enrolled with the command the app made (its log,
-#                                   FILE); `third`: another beside it
+#   scripts/e2e-local.sh second-station FILE [third|fourth] [bare]   a second station enrolled with the command the app
+#                                   made (its log, FILE); `third`, `fourth`: another beside it; `bare`: with its token
+#                                   alone, the lock's hash dropped (as the app's 添加这台 Mac enrolled one before #5545:
+#                                   in the workspace, not in its lock)
 #   scripts/e2e-local.sh second-down [third]   that station stopped, its directory gone
 #   scripts/e2e-local.sh second-stop [third]   that station stopped, its directory kept (its machine switched off)
 #   scripts/e2e-local.sh second-again [third]  that station started again on its directory, nothing enrolled
@@ -323,11 +326,11 @@ stop() {
 down() {
   # (the station's directory another run's: only what this run started, by its own pids)
   if held_by_other; then
-    stop second; stop third; stop rig; stop station; stop cloud; stop relay
+    stop second; stop third; stop fourth; stop rig; stop station; stop cloud; stop relay
     say "down ($STATION left to the run of $(readlink "$HELD"))"
     return 0
   fi
-  for n in second third rig; do second_down $n >/dev/null 2>&1 || true; done
+  for n in second third fourth rig; do second_down $n >/dev/null 2>&1 || true; done
   stop station
   # whatever of the test station is left (its node, runner): only processes on its own data directory
   pkill -f "$STATION/data" 2>/dev/null || true
@@ -393,7 +396,7 @@ kept() {
   rm -rf $KEPT && mkdir -p $KEPT || return 0
   keep $RUN/cloud.log cloud.log
   keep $RUN/relay.log relay.log
-  for n in station second third rig; do
+  for n in station second third fourth rig; do
     if [ $n = station ]; then d=$STATION; f=enroll; else d=$(more_dir $n); f=$n-enroll; fi
     keep $RUN/$n.log $n/launcher.log
     keep $RUN/$f.log $n/enroll.log
@@ -443,13 +446,16 @@ peer_wait() {
   cat $RUN/peer-bg.out; grep -q "^PEER EXIT 0" $RUN/peer-bg.out
 }
 
-# the security mode as the test station keeps it (its lock.json, read by the station's own rules): LOCK on|off,
+# the security mode as the test station keeps it (its lock.json, read by the station's own rules; NAME: that of the
+# station beside it so named, as second-station names them): LOCK on|off,
 # DEVICE <id> <person> <kind> own=<own> exp=<seconds, or -> a line each, STATIONS n, PERSONS n, PERSON <person> <the
 # lock of their own bound> a line each; SAID and the devices whose latest `device` entry says the key they are or would
 # be on their person's own lock with (`person_key`, which the fold drops: read of the entries themselves), the first 12
 # hex digits of each
 lock_state() {
-  local f=$(find $STATION/data -name lock.json 2>/dev/null | head -1)
+  local at=$STATION
+  [ -z "${1:-}" ] || at=$(more_dir $1)
+  local f=$(find $at/data -name lock.json 2>/dev/null | head -1)
   [ -n "$f" ] || { echo "LOCK off"; return; }
   (cd $E/station && node --input-type=module -e "
 import { readFileSync } from 'node:fs';
@@ -667,16 +673,19 @@ release_seed() {
 
 # a second station (flow 80, adding one): enrolled with the token of the command the app made (the last
 # `ANSWER workspace.enroll` in the flow's log, FILE), its own data and HOME beside the first's ($STATION-b), started;
-# `second-down` stops it and takes its directory away
+# `second-down` stops it and takes its directory away. `bare` (after its name): the lock's hash the command names is
+# not given it, as the app's installer enrolled a station before #5545 (e2e/locks.ts round 17: in a locked workspace,
+# not in its lock)
 second_station() {
   local cmd=$(grep 'ANSWER workspace.enroll ok' "${1:?the log of the flow}" | tail -1 | sed 's/.*"command":"\([^"]*\)".*/\1/')
   # (a locked workspace's: the lock's hash after --lock, which it pins)
   local lock=$(echo "$cmd" | sed -n 's/.*--lock \([0-9a-f]*\).*/\1/p')
+  [ "${3:-}" != bare ] || lock=
   # (a rig's, e2e/rigs.ts: its person's own lock's hash after --rig; enrolled so, it starts as a rig)
   local rig=$(echo "$cmd" | sed -n 's/.*--rig \([0-9a-f]*\).*/\1/p')
   local token=$(echo "$cmd" | sed 's/ --lock [0-9a-f]*//; s/ --rig [0-9a-f]*//' | awk '{print $NF}')
   [ -n "$token" ] || die "no command made in $1"
-  # (`third`: another beside it, of the same kind: its files under that name, its directory $STATION-third)
+  # (`third`, `fourth`: another beside it, of the same kind: its files under that name, its directory $STATION-<name>)
   local n=${2:-second}
   local B=$(more_dir $n)
   second_down $n >/dev/null 2>&1
@@ -833,7 +842,7 @@ case "${1:-all}" in
   peer-wait) peer_wait ;;
   intruder-refused) shift; intruder_refused "$@" ;;
   android-unlock) android_unlock "$2" ;;
-  lock-state) lock_state ;;
+  lock-state) shift; lock_state "$@" ;;
   android-pin) shift; android_pin "$@" ;;
   android-tap) shift; "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb" -s emulator-${EMU_PORT:-5586} shell input tap "$@" ;;
   sql) shift; sql "$@" ;;
