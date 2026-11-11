@@ -157,14 +157,18 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   `client/core-ts/test/topic-bytes.test.ts`. Stations so: a list reads their rows (`@settings.stations_of`, sfbase's
   `station_rows`, one ask everywhere), a station's own page that station (`@settings.station_of`), a page showing one
   part of every station each row's own part (`@settings.station_part`); a list never takes a station whole, and a
-  field a row lacks is the core's to add, not the list's to ask whole.
+  field a row lacks is the core's to add, not the list's to ask whole. Connects the same: a list their rows
+  (`connects`), a connect's page that connect (`@settings.connect_of`), and a single-session connect's page, while its
+  更换 row shows, what its choice of a session lists (`connectCandidates`), so that choice opens whole; nothing else
+  asks it.
 - A replay asks the core what its run's app asked, so a way of asking brought in after a trace was recorded is
   switched by the trace's head (`@sfcore.trace_switch`, one of `trace_switches`; a recording says all of them on), and
   how many traces still replay without each only falls (`src/sfreplay/flows/trace_switches_test.mbt`; the user,
   2026-11-10): such a trace's replay and its bytes are of an app no device runs. Where the old way is gone from the app,
   the switch is the replay's alone, which gives the new asks out of what the trace has: without `MBUI_STATION_ROWS` the
   run's `stations` are kept by the replay (`@core.Replay::keep_stations`) and the rows, a station and its parts read
-  out of them (`src/sfreplay/source.mbt`).
+  out of them; without `MBUI_CONNECT_ROWS` one connect and its choice's sessions are read out of the run's `connects
+  {scope, mine:false}` (`src/sfreplay/source.mbt`).
 - For development stills, prepare a `scripts/media-job.sh picture` job for each source state and reuse its Wasm
   renderer across scenes; use a `film` job for video (`scripts/media-job.sh` says how).
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture

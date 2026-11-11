@@ -888,7 +888,14 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
       let p = Some(Json::object(params))
       @settings.station_said(wholes(), text(p, "station"), text(p, "part"))
     }
-    "connects" => @settings.connects_of_stations(value, wholes())
+    // (the connects a row each, `connect` one whole and `connectCandidates` its choice's, of the connects whole the
+    // made-up cores describe: the settings' fixture_connects.mbt)
+    "connects" => @settings.connects_rows(@settings.connects_of_stations(value, wholes()))
+    "connect" | "connectCandidates" => {
+      let p = Some(Json::object(params))
+      let all = fixture_topic_inner(f, "connects", { "scope": Json::string(text(p, "scope")), "mine": Json::boolean(false) })
+      @settings.connect_said(all, text(p, "station"), text(p, "id"), name == "connectCandidates")
+    }
     "profiles" => @settings.profiles_of_stations(value, wholes())
     // (where a new chat runs, a row each, as the stations' list has them)
     "newChat" =>
@@ -1413,7 +1420,7 @@ fn init {
 /// `base` with the topics named in `held` never come (src/sffilm's MBUI_HOLD): what shows while they are read the
 /// first time, filmed.
 pub fn held_topics(base : Source, held : Array[String]) -> Source {
-  let held = of_stations(held)
+  let held = of_wholes(held)
   {
     ..base,
     topic_read: fn(name, params) {
@@ -1430,7 +1437,7 @@ pub fn held_topics(base : Source, held : Array[String]) -> Source {
 /// `base` with the topics named in `failed` failing to be read, the core saying why as `why` (src/sffilm's MBUI_FAILED):
 /// what shows when reading them fails, filmed.
 pub fn failed_topics(base : Source, failed : Array[String], why : String) -> Source {
-  let failed = of_stations(failed)
+  let failed = of_wholes(failed)
   {
     ..base,
     topic_read: fn(name, params) {
@@ -1444,17 +1451,19 @@ pub fn failed_topics(base : Source, failed : Array[String], why : String) -> Sou
 }
 
 ///|
-/// Topics named, with a station's page and its parts where the stations are among them: "the stations not read" is
-/// each of their topics not read.
-fn of_stations(names : Array[String]) -> Array[String] {
+/// Topics named, with a station's page and its parts where the stations are among them, one connect's and its choice's
+/// where the connects are: "the stations not read" is each of their topics not read.
+fn of_wholes(names : Array[String]) -> Array[String] {
+  let out = names.copy()
   if names.contains("stations") {
-    let out = names.copy()
     out.push("station")
     out.push("stationPart")
-    out
-  } else {
-    names
   }
+  if names.contains("connects") {
+    out.push("connect")
+    out.push("connectCandidates")
+  }
+  out
 }
 
 ///|

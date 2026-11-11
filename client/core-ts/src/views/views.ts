@@ -75,7 +75,7 @@ export const HEAD = 80;
 /// (`stationsWhole` is the core's own: a scope's stations, each its page with the models it can run, as `stations` was
 /// before its items were rows. choose.ts reads it for a model's choice and its borrowing; no UI asks it, and protocol.ts
 /// does not offer it.)
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "station", "stationPart", "stationsWhole", "profiles", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them.
@@ -475,15 +475,12 @@ function isMine(me: J, creator: J): boolean {
   return mine !== null && email(creator) === mine;
 }
 
-/// A connect's sessions as its page shows them.
-function connectSessions(connect: J, connects: J[], sessions: J[], threads: J[], clock: present.Clock): J {
+/// A connect's sessions as its page shows them (ConnectView): its latest dozen, the one it delivers into, how many of
+/// its run, the ways it could change.
+function connectSessions(connect: J, sessions: J[], threads: J[]): J {
   const id = str(get(connect, "id")) ?? "";
   const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
   const at = (v: J) => (typeof get(v, "lastActiveAt") === "number" ? v.lastActiveAt : 0);
-  const nameOf = (c: string) => {
-    const n = strOf(connects.find((x) => strOf(x, "id") === c), "name");
-    return n !== "" ? n : c;
-  };
   const shown = (s: J) => {
     const c = present.session(s);
     const key = strOf(c, "key");
@@ -491,16 +488,31 @@ function connectSessions(connect: J, connects: J[], sessions: J[], threads: J[],
     c.chat = thread !== undefined ? (get(thread, "id") ?? null) : null;
     return c;
   };
-  const byRecent = [...sessions].sort((a, b) => at(b) - at(a));
   const boundTo = (s: J) => arr(get(s, "boundTo")).some((c) => c === id);
-  const own = byRecent.filter((s) => strOf(s, "connect") === id).slice(0, 12).map(shown);
+  const own = sessions.filter((s) => strOf(s, "connect") === id).sort((a, b) => at(b) - at(a)).slice(0, 12).map(shown);
   const running = sessions.filter((s) => (strOf(s, "connect") === id || boundTo(s)) && strOf(s, "process") === "running").length;
   const current = str(get(connect, "session"));
+  const bound = sessions.find((s) => current !== null && strOf(s, "key") === current);
+  return { sessions: own, bound: bound !== undefined ? shown(bound) : null, running, changes: present.modeChanges(connect, running) };
+}
+
+/// The sessions a connect could deliver into instead (ConnectCandidates): its station's of its runtime, the latest
+/// first, each its title, how it was made and by which connect, its turns, when it was last active and the other
+/// connects it delivers for; and whether it is the one now.
+function connectCandidates(connect: J, connects: J[], sessions: J[], clock: present.Clock): J[] {
+  const id = str(get(connect, "id")) ?? "";
+  const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
+  const at = (v: J) => (typeof get(v, "lastActiveAt") === "number" ? v.lastActiveAt : 0);
+  const nameOf = (c: string) => {
+    const n = strOf(connects.find((x) => strOf(x, "id") === c), "name");
+    return n !== "" ? n : c;
+  };
+  const current = str(get(connect, "session"));
   const runtime = str(get(get(connect, "bind"), "runtime")) ?? "";
-  const candidates = byRecent
+  return sessions
     .filter((s) => strOf(s, "runtime") === runtime)
+    .sort((a, b) => at(b) - at(a))
     .map((s) => {
-      const c = shown(s);
       const others = arr(get(s, "boundTo"))
         .filter((x): x is string => typeof x === "string" && x !== id)
         .map(nameOf);
@@ -511,13 +523,19 @@ function connectSessions(connect: J, connects: J[], sessions: J[], threads: J[],
         format.relativeTime(at(s), clock.now, clock.offsetMin),
       ].join(" · ");
       if (others.length > 0) description += ` · ${t("core-views.connect.also_used", { names: others.join(t("core-views.list_separator")) })}`;
-      c.description = description;
-      c.current = strOf(s, "key") === current;
-      return c;
+      return { key: strOf(s, "key"), titleText: str(get(present.session(s), "titleText")) ?? "", description, current: strOf(s, "key") === current };
     });
-  const bound = sessions.find((s) => current !== null && strOf(s, "key") === current);
-  return { sessions: own, bound: bound !== undefined ? shown(bound) : null, candidates, running, changes: present.modeChanges(connect, running) };
 }
+
+/// What the connects' list reads of a station's overview (`undefined`: not read): its connects, the Slack apps not
+/// taken yet, whether it has a profile (`profiled`, none known while it cannot be read), why it could not be read
+/// (`err`). Its rows are made again only as these change, not with each quota or decision of its overview.
+const connectsPartOf = (v: Value | undefined): J => {
+  if (v === undefined) return undefined;
+  if ("err" in v) return { err: v.err.message };
+  const o = v.ok as J;
+  return { connects: arr(get(o, "connects")), slackApps: arr(get(o, "slackApps")), profiled: !isObject(o) || arr(get(o, "profiles")).length > 0 };
+};
 
 /// What the views are put together with: the core's store and data, and what the accounts say of a workspace.
 export type ViewsEnv = {
@@ -943,7 +961,16 @@ export class Views implements Owner {
         break;
       case "connects":
         scope = view.scope as string;
-        perStation = (s) => [{ topic: "overview", station: s }, { topic: "sessions", station: s }, { topic: "threads", station: s }];
+        // (each row made of its station's overview alone: a session's turn, or a new one, is nothing of a list's)
+        perStation = (s) => [{ topic: "overview", station: s }];
+        break;
+      case "connect":
+        scope = view.scope as string;
+        perStation = (s) => (s === view.station ? [{ topic: "overview", station: s }, { topic: "sessions", station: s }, { topic: "threads", station: s }] : []);
+        break;
+      case "connectCandidates":
+        scope = view.scope as string;
+        perStation = (s) => (s === view.station ? [{ topic: "overview", station: s }, { topic: "sessions", station: s }] : []);
         break;
       case "chatJobs":
         return [{ topic: "chat", station, thread: view.thread ?? null, session: view.session ?? null, ...(view.compact === true ? { compact: true } : {}) }];
@@ -1351,6 +1378,10 @@ export class Views implements Owner {
       }
       case "connects":
         return this.#connects(view.scope as string, view.mine === true);
+      case "connect":
+        return this.#connectOf(view.scope as string, view.station as string, view.id as string, "page");
+      case "connectCandidates":
+        return this.#connectOf(view.scope as string, view.station as string, view.id as string, "candidates");
       case "chat": {
         const station = view.station as string;
         // (its agents' Markdown read once on the device: kept by the chat it is read for)
@@ -2242,6 +2273,9 @@ export class Views implements Owner {
     return kept;
   }
 
+  /// A scope's connects as a list shows them (ConnectRow), every station's up, all or the viewer's (`mine`): made of
+  /// each station's connects alone (connectsPartOf), so a session's turn, a new one or its overview's quota sends a list
+  /// nothing. One's page is `connect` (#connectOf).
   #connects(scope: string, mine: boolean): Value | undefined {
     const stations = this.#stationsOr(scope);
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
@@ -2250,39 +2284,62 @@ export class Views implements Owner {
     const items: J[] = [];
     const waiting: string[] = [];
     const failing: { station: string; name: string; message: string }[] = [];
-    for (const s of stations.filter((s) => s.online)) {
-      const v = this.value({ topic: "overview", station: s.address });
-      if (v === undefined) {
-        waiting.push(s.name);
-        continue;
-      }
-      if ("err" in v) {
-        failing.push({ station: s.address, name: s.name, message: v.err.message });
-        continue;
-      }
-      const sessions = arr(this.ok({ topic: "sessions", station: s.address }));
-      const threads = arr(this.ok({ topic: "threads", station: s.address }));
-      const connects = arr(get(v.ok, "connects"));
-      for (const connect of connects) {
-        const id = get(get(connect, "createdBy"), "id");
-        const creator = id !== undefined ? { id, email: id } : null;
-        if (mine && !isMine(me, creator)) continue;
-        const shown = present.connect(connect);
-        if (shown.createdBy !== undefined) shown.createdBy = present.person(shown.createdBy, me, members_);
-        items.push({ station: s.address, stationName: s.name, connect: shown, runtimeChanges: get(v.ok, "connectRuntimeChange") === true, ...connectSessions(connect, connects, sessions, threads, this.#clock()) });
-      }
-    }
     // The Slack apps the viewer made that no connect has taken yet (a station's overview has those alone: one a connect
     // takes is let go of there), each on its station; and whether the first step is a profile: a connect runs a
     // profile's model, and no station has one (each read). Whatever `mine` is.
     const slackApps: J[] = [];
     let noProfile = stations.length > 0;
     for (const s of stations) {
-      const overview = this.ok({ topic: "overview", station: s.address });
-      for (const app of arr(get(overview, "slackApps"))) slackApps.push({ station: s.address, stationName: s.name, app });
-      if (!isObject(overview) || arr(get(overview, "profiles")).length > 0) noProfile = false;
+      const part = this.#core.store.select({ topic: "overview", station: s.address }, connectsPartOf);
+      if (part === undefined || "err" in part || part.profiled) noProfile = false;
+      if (part !== undefined && !("err" in part)) for (const app of part.slackApps) slackApps.push({ station: s.address, stationName: s.name, app });
+      if (!s.online) continue;
+      if (part === undefined) {
+        waiting.push(s.name);
+        continue;
+      }
+      if ("err" in part) {
+        failing.push({ station: s.address, name: s.name, message: part.err });
+        continue;
+      }
+      for (const connect of part.connects as J[]) {
+        const shown = this.#connectShown(connect, me, members_, mine);
+        if (shown !== null) items.push({ station: s.address, stationName: s.name, connect: shown });
+      }
     }
     return { ok: { me, items, wait: looks.waitNote(waiting, failing, items.length === 0), slackApps, noProfile } };
+  }
+
+  /// Connect `connect` as it is shown (Connect): its owner said as the viewer `me` knows them among the workspace's
+  /// `members`; null where only the viewer's are asked (`mine`) and it is another's.
+  #connectShown(connect: J, me: J, members: J[], mine: boolean): J {
+    const id = get(get(connect, "createdBy"), "id");
+    const creator = id !== undefined ? { id, email: id } : null;
+    if (mine && !isMine(me, creator)) return null;
+    const shown = present.connect(connect);
+    if (shown.createdBy !== undefined) shown.createdBy = present.person(shown.createdBy, me, members);
+    return shown;
+  }
+
+  /// One connect of a scope's station, by its id: its page (`page`, ConnectView) or the sessions its choice of one lists
+  /// (`candidates`, ConnectCandidates). None while its station's overview is not read, why where it could not be; null
+  /// where the scope has no such station up, or it no such connect.
+  #connectOf(scope: string, station: string, id: string, kind: "page" | "candidates"): Value | undefined {
+    const stations = this.#stationsOr(scope);
+    if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+    const s = stations.find((x) => x.address === station);
+    if (s === undefined || !s.online) return { ok: null };
+    const v = this.value({ topic: "overview", station });
+    if (v === undefined || "err" in v) return v;
+    const connects = arr(get(v.ok, "connects"));
+    const connect = connects.find((c) => str(get(c, "id")) === id);
+    if (connect === undefined) return { ok: null };
+    const sessions = arr(this.ok({ topic: "sessions", station }));
+    if (kind === "candidates") return { ok: { candidates: connectCandidates(connect, connects, sessions, this.#clock()) } };
+    const me = this.me(scope);
+    const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
+    const threads = arr(this.ok({ topic: "threads", station }));
+    return { ok: { station, stationName: s.name, connect: this.#connectShown(connect, me, members_, false), runtimeChanges: get(v.ok, "connectRuntimeChange") === true, ...connectSessions(connect, sessions, threads) } };
   }
 
   // ── a chat ──

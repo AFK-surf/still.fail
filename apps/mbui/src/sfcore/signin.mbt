@@ -479,6 +479,12 @@ pub let trace_switches : Array[String] = [
   "MBUI_HAVE_SAME",
   // (对话目录: an open chat's page on a page wide enough for its rail, and its outline's panel, ask for its outline)
   "MBUI_OUTLINE",
+  // (the connects a row each, `connect` one whole, `connectCandidates` what its choice of a session lists, asked by a
+  // single-session connect's page while its 更换 row shows: what the app asks since a list stopped taking each connect with every session it could deliver
+  // into. Like MBUI_STATION_ROWS the app does not branch on it, its old way (one connect read out of `connects`' whole
+  // items) gone from it, so only the replay reads it: a trace without it has the app's `connect` and
+  // `connectCandidates` read out of its run's `connects {scope, mine:false}` (src/sfreplay/source.mbt))
+  "MBUI_CONNECT_ROWS",
 ]
 
 ///|

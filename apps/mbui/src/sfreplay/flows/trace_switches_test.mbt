@@ -16,6 +16,10 @@
 // replay reads it: a trace without it has its run's `stations` kept by the replay (@core.Replay::keep_stations) and the
 // app's new asks read out of them (sfreplay's source.mbt), so its replay is of today's app, its asks of the stations
 // aside; its bytes (topic_bytes) are still the old app's.
+//
+// MBUI_CONNECT_ROWS (the connects a row each, `connect`, `connectCandidates`), in all 81 as it came, as
+// MBUI_STATION_ROWS: only the replay reads it, which reads the app's `connect` and `connectCandidates` out of the run's
+// `connects {scope, mine:false}` (sfreplay's source.mbt).
 
 ///|
 /// Each switch: how many traces may replay without it.
@@ -31,6 +35,7 @@ let switches_known : Map[String, Int] = {
   "MBUI_STATION_ROWS": 81,
   "MBUI_HAVE_SAME": 81,
   "MBUI_OUTLINE": 81,
+  "MBUI_CONNECT_ROWS": 81,
 }
 
 ///|
