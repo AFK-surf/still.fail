@@ -1899,6 +1899,8 @@ pub let viz_max_state : Int32
 
 pub fn viz_mermaid_block(@ui.Ctx, Source, String, String, String, Int64) -> Unit
 
+pub fn viz_mermaid_node(@view.View, Source, String, () -> String, () -> Int64, @sf.TipLayer) -> Unit
+
 pub let viz_mermaid_box : @ui.Style
 
 pub fn viz_open_full(String, String, String, String, String, linked? : Bool) -> Unit
