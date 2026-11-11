@@ -31,8 +31,8 @@ message as something changes at most 4 KB. A list's item carries what its row sh
 thing's own topic; a field one page needs is not added to a list every page holds; a new topic is placed in the test's
 tables. A page's topic carries what the page draws; what shows only after a press is asked at the press, answered at
 once from the device's data, and what it opens appears whole once that is there (the user, 2026-11-11): a chat list's
-row and its menu (`chatRow`), a new chat's model control closed and its panel (`pick`). Its `OVER` tables only fall. A topic the app lets go of keeping its value (`keep`) and asks again (`have`) is
-sent `same`, or what changed from what it kept (store.ts `#first`), held to the change's bar too (`OVER_AGAIN`).
+row and its menu (`chatRow`), a new chat's model control closed and its panel (`pick`). The test's `OVER` tables only
+fall. A topic the app lets go of keeping its value (`keep`) and asks again (`have`) is sent `same`, or what changed from what it kept (store.ts `#first`), held to the change's bar too (`OVER_AGAIN`).
 Every way of asking has a change measured, a cause of `test/real-size-asked.ts` `CAUSES` that changes what it shows as
 the sync is told it, or is in the test's `STILL` with why its value does not change while shown, and `STILL` only
 falls; what each cause sends is written for the app's sweep as the ops a device applies (`test/real-size-app.test.ts`,

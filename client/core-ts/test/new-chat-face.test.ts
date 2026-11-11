@@ -64,9 +64,9 @@ test("a_new_chats_page_asked_anew_makes_the_models_of_the_station_it_starts_on_a
   // (the real path: a station up it starts on, its control drawn)
   assert.equal(page.station.station, CHAT.station);
   assert.equal(typeof page.pick.valueOption.name, "string");
-  // Each time, its station's models as its page serves them and as its control runs on them (choose.ts `#onStation`):
-  // two lists of one station's (main: every station's up besides, `stationsWhole`'s, and every option annotated).
-  assert.equal(made.models, 2 * makes, "one station's models");
+  // Each time, its station's models once (every profile enabled there serves the workspace: what its page serves and
+  // its control runs on are one list; main: every station's up besides, `stationsWhole`'s, and every option annotated).
+  assert.equal(made.models, makes, "one station's models");
   assert.equal(made.annotated, 0, "no option annotated");
   assert.ok(!t.store.liveTopics().some((topic) => topic.topic === "stationsWhole" || topic.topic === "pick"), "no station whole, no panel");
 });
@@ -81,7 +81,7 @@ test("another_stations_overview_changing_makes_the_new_chats_page_of_its_one_sta
   t.set({ topic: "overview", station: other }, { ...ov, profiles: ov.profiles.map((p: J) => ({ ...p, quota: { ...p.quota, readAt: (p.quota?.readAt ?? 0) + 1 } })) });
   await t.host.time.pass(100);
   const made = workSince(from);
-  assert.equal(made.models, 2, "its one station's models");
+  assert.equal(made.models, 1, "its one station's models");
   assert.equal(made.annotated, 0, "no option annotated");
 });
 
@@ -100,4 +100,39 @@ test("a_new_chats_control_says_of_what_it_runs_on_what_its_panel_says", async ()
   assert.equal(face.fastText, pick.fastText);
   assert.deepEqual(face.account, pick.account);
   assert.ok(pick.options.length > 20, "the panel's models");
+});
+
+/// A new chat on station `ws/st` of a workspace whose only station it is (`joined` or its own), of `profiles`: its
+/// page's value and what its making listed, over a store and records stood in for.
+function pageOf(profiles: J[], joined = false): { page: J; pick: J; made: ReturnType<typeof workSince> } {
+  const overview = { sharing: true, profiles };
+  const row = { station: "ws/st", id: "st", name: "Willow", online: true, ...(joined ? { joined: true, home: "Home" } : {}), overview: { counts: { running: 0 } } };
+  const value = (t: J): unknown => (t.topic === "overview" ? overview : t.topic === "station" ? { ...row, overview } : t.topic === "stations" ? [row] : t.topic === "stationsWhole" ? [{ ...row, overview }] : undefined);
+  const store: J = { get: value, value: (t: J) => (value(t) === undefined ? undefined : { ok: value(t) }), watch: () => ({ drop() {} }), invalidate() {} };
+  const data: J = { record: () => undefined, put() {}, shared: () => undefined, mes: () => [] };
+  const choose = new Choose({ store, data, now: () => 0, agent: () => null });
+  const from = { ...work };
+  const page = (choose.compute({ topic: "newChat", scope: "ws" }) as J).ok;
+  const made = workSince(from);
+  return { page, pick: (choose.compute({ topic: "pick", station: "ws/st", of: "new" }) as J).ok, made };
+}
+
+const runs = (id: string, ms: string[], more: J = {}): J => ({ id, name: `${id}@x.com`, runtime: "claude", runtimes: ["claude"], access: { kind: "subscription" }, models: ms, ...more });
+
+test("a_new_chats_page_lists_its_stations_models_once_where_every_profile_enabled_there_serves_its_workspace_and_twice_where_one_does_not", () => {
+  // Every profile enabled there serving it (one disabled, which neither lists): one list, the page's and the control's.
+  const all = pageOf([runs("a", ["claude-opus-5-5"]), runs("b", ["claude-sonnet-5"], { serves: true }), runs("c", ["claude-fable-1"], { enabled: false })]);
+  assert.equal(all.made.models, 1);
+  assert.deepEqual(all.page.pick.value, all.pick.value);
+  // One enabled there that does not serve this workspace (`serves` false): the page's models leave it out, the
+  // control's do not (`pick` of `new`, as it always made them), each made apart, the face as its panel's.
+  const not = pageOf([runs("a", ["claude-sonnet-5"]), runs("b", ["claude-opus-5-5"], { serves: false })]);
+  assert.equal(not.made.models, 2);
+  assert.deepEqual(not.page.model.model, "claude-sonnet-5", "the page: what serves it");
+  assert.deepEqual(not.page.pick.value, not.pick.value, "the control: as its panel");
+  assert.ok(not.pick.options.some((o: J) => o.model === "claude-opus-5-5"), "the control's: the one not serving it too");
+  // A station this workspace joined, of before `serves`: its profiles whose `workspaces` do not name it serve it not.
+  const joined = pageOf([runs("a", ["claude-sonnet-5"], { workspaces: ["ws"] }), runs("b", ["claude-opus-5-5"], { workspaces: ["home"] })], true);
+  assert.equal(joined.made.models, 2);
+  assert.deepEqual(joined.page.pick.value, joined.pick.value);
 });

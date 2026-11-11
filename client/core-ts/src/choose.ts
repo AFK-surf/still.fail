@@ -331,7 +331,9 @@ export class Choose implements Owner {
     // workspace (not every station's, by the minute).
     const page: J = this.#env.store.get({ topic: "station", scope, station: addr });
     const overview = isObject(get(page, "overview")) ? page.overview : null;
-    const options = overview !== null ? models(servingIn(this.#env.store.get({ topic: "overview", station: addr }), scope, station.joined === true), this.#env.now()) : [];
+    const raw: J = this.#env.store.get({ topic: "overview", station: addr });
+    const served = servingIn(raw, scope, station.joined === true);
+    const options = overview !== null ? models(served, this.#env.now()) : [];
     const r = resolve(options, this.#choice(scope, id));
     view.frequent = frequentCombos(arr(this.#record(`ws:${scope}:frequent`)), options, r);
     // A station this workspace joined runs its chats on the profiles open to it: with some, but
@@ -372,7 +374,12 @@ export class Choose implements Owner {
     view.accounts = r.accounts;
     // Its model control as the page draws it closed (none while its profiles are read: the page shows it in its
     // bones); its panel is the `pick` topic, asked as it opens.
-    view.pick = overview !== null ? this.#face(addr) : null;
+    // Its control runs on the station's models of every profile it has enabled (`#onStation`, as `pick` of `new` has
+    // always made them), the page on those serving this workspace (`servingIn`): the same list, made once, unless a
+    // profile enabled there does not serve it (its `serves` false; or, on a station from before `serves`, one this
+    // workspace joined whose profile's `workspaces` do not name it); then the control's are made apart, as before.
+    const servesAll = arr(get(served, "profiles")).length === arr(get(raw, "profiles")).filter((p) => get(p, "enabled") !== false).length;
+    view.pick = overview !== null ? this.#face(addr, servesAll ? options : models(raw, this.#env.now())) : null;
     // The workspace's presets, every station's up now (each as it was read last), to pick from where the page's
     // control opens (its menu: each by its name and station's); the one picked whichever station it is of. Held with
     // the page, which has each station's read as it shows: the menu finds them read, never waits on a station.
@@ -393,29 +400,25 @@ export class Choose implements Owner {
     return [options, resolve(options, this.#choice(ofAddress(addr), stationId(addr)))];
   }
 
-  /// A new chat's model control as its page draws it closed (NewChatPick), on `station`: what it runs on now and how
+  /// A new chat's model control as its page draws it closed (NewChatPick), on `station` of `options` (its models as
+  /// `#onStation` makes them: of every profile enabled there): what it runs on now and how
   /// (the model's name, maker and runtimes; whether it says how hard it thinks, Fast; the account kept to), worked out
   /// of that station alone, as `#pick` works out the same of it (`#now`'s, `named`, `runsFast`). Its panel is the `pick`
   /// topic, asked as it opens: every option annotated, the workspace's other stations' models after them, made for
   /// the panel, never for the page. None while the station's overview is not read (`pick`'s none).
-  #face(station: string): J {
-    const [, r] = this.#onStation(station);
+  #face(station: string, options: J[]): J {
     const overview = this.#env.store.get({ topic: "overview", station });
     if (overview === undefined) return null;
+    const r = resolve(options, this.#choice(ofAddress(station), stationId(station)));
     const value = picked(r);
     return { value, valueOption: r.entry, efforts: r.efforts, account: named(value, r.entry, null, true).account, fastText: runsFast(overview, value, null) ? "Fast" : null };
   }
 
   /// Whether another station of `scope` up now would lend station `here` a model (views/models.ts `lends`): a yes or no
-  /// read of the overviews of the scope's other stations up, its own, as they are kept, none of their models made.
+  /// of the scope's stations' rows and the overviews of those up, as they are kept, none of their models made.
   #lends(scope: string, here: string): boolean {
     const v = this.#env.store.value({ topic: "stations", scope });
-    const all = v !== undefined && "ok" in v ? arr(v.ok) : [];
-    const self = all.find((s) => s.station === here);
-    if (self === undefined || self.joined === true) return false;
-    // (a station whose overview is not read, or cannot be here, lends nothing: its row says none)
-    const others = all.filter((s) => s.station !== here && s.online === true && s.joined !== true && isObject(s.overview));
-    return lends(this.#env.store.get({ topic: "overview", station: here }), others.map((s) => this.#env.store.get({ topic: "overview", station: s.station })));
+    return lends(v !== undefined && "ok" in v ? v.ok : [], here, (station) => this.#env.store.get({ topic: "overview", station }));
   }
 
   /// The presets of the scope's stations `online` (their addresses' `presets` topics), as each station said them last,

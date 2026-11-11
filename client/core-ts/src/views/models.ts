@@ -7,7 +7,7 @@ import * as jobs from "../jobs.ts";
 import * as present from "../present.ts";
 import * as model from "../shapes/model.ts";
 import * as reasoning from "../shapes/reasoning.ts";
-import { arr as arrU, equal, get as getU } from "../util.ts";
+import { arr as arrU, equal, get as getU, isObject } from "../util.ts";
 import { work } from "../work.ts";
 import { profileServes } from "./profile-scope.ts";
 
@@ -473,12 +473,22 @@ const lent = (p: J, ownHere: Set<string>): boolean => {
   return get(share, "role") !== "user" && !(typeof get(share, "id") === "string" && ownHere.has(share.id));
 };
 
-/// Whether `borrowable` would offer a station whose overview is `here` any model at all, of any runtime, as a yes or
-/// no: some of `others` (the overviews of the workspace's other stations up now, its own, not joined) shares, and has a
-/// profile it would lend that runs one. Each walked as it is; none of their models made.
-export function lends(here: J, others: J[]): boolean {
-  const ownHere = copiesHere(here);
-  return others.some((o) => get(o, "sharing") === true && profilesOf(o).some((p) => lent(p, ownHere) && arr(get(p, "models")).some((m) => typeof m === "string")));
+/// Whether `borrowable` would offer station `here` any model at all, of any runtime (`borrowable(…, here, [], null,
+/// …).length > 0`), as a yes or no: `stations` as a list has them (StationRow: up or not, joined or not, their overview
+/// as a row has it, none where it is not read or cannot be here), each one's whole overview read of `overviewOf`; some
+/// other station up, of this workspace, shares and has a profile it would lend that runs one, `here` being one of this
+/// workspace's own. Each walked as it is; none of their models made, no station read whole (new-chat-lends.test.ts
+/// holds the two the same).
+export function lends(stations: J, here: string, overviewOf: (station: string) => J): boolean {
+  const all = arr(stations).filter((s) => typeof get(s, "station") === "string" && typeof get(s, "id") === "string");
+  const self = all.find((s) => s.station === here);
+  if (self === undefined || get(self, "joined") === true) return false;
+  const ownHere = copiesHere(overviewOf(here));
+  return all.some((s) => {
+    if (s.station === here || get(s, "online") !== true || get(s, "joined") === true || !isObject(get(s, "overview"))) return false;
+    const o = overviewOf(s.station);
+    return get(o, "sharing") === true && profilesOf(o).some((p) => lent(p, ownHere) && arr(get(p, "models")).some((m) => typeof m === "string"));
+  });
 }
 
 const isShared = (share: J) => typeof get(share, "id") === "string" && get(share, "role") === "host";
