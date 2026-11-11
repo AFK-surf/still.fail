@@ -37,7 +37,7 @@ test "window zoom: the chat remains usable at both limits" {
     assert_eq(@ui.window_zoom(), zoom, msg="the shortcut stops at \{zoom}")
     assert_eq(named(calls, "prefs.set").length(), saved, msg="the limit does not save again")
     // At a narrow layout the chat peeks beside the list until it is brought over.
-    if @sfdesk.wide.tape && @sfdesk.wide.tape_at.get() != @sfdesk.TapePane::Page {
+    if @sfdesk.wide.tape.get() && @sfdesk.wide.tape_at.get() != @sfdesk.TapePane::Page {
       let (w, h) = t.ctx().window_size()
       t.tap(w - 20.0, h / 2.0)
       t.run_for(@ui.move_most_ms)
@@ -218,7 +218,7 @@ test "window zoom: the panel at the window edge keeps following its corner when 
   for _ in 0..<2 {
     t.run_for(@ui.move_most_ms)
     let zoom = @ui.window_zoom()
-    assert_true(@sfdesk.wide.tape, msg="\{zoom}: expected the panel layout")
+    assert_true(@sfdesk.wide.tape.get(), msg="\{zoom}: expected the panel layout")
     guard composer_and_panel(t) is Some((_, page)) else { fail("\{zoom}: no chat panel") }
     // (concentric with the window's where that is as round on the screen as the ranges let, 6 (at 1.75: 5.5); a
     // window too square for it (at 2: 4, as Windows 11's 8 is) stands alone, the tape's)

@@ -87,7 +87,7 @@ pub(all) struct Wide {
   /// show; which of its panels is in use (kept while the frame is off the tape: a place with no sidebar, another
   /// layout; the sidebar at first); one asked over where no frame was being built (back); the chat shown last frame and
   /// the one whose side panel was open then (its panel opening brings it over)
-  mut tape : Bool
+  tape : @signals.Signal[Bool]
   tape_at : @signals.Signal[TapePane]
   tape_ask : @signals.Signal[TapePane?]
   tape_chat : @signals.Signal[String]
@@ -148,7 +148,7 @@ pub let wide : Wide = {
   attention_open: @signals.signal(false, same=fn(a, b) { a == b }),
   jobs_open: @signals.signal(false, same=fn(a, b) { a == b }),
   keys_open: @signals.signal(false, same=fn(a, b) { a == b }),
-  tape: false,
+  tape: @signals.signal(false, same=fn(a, b) { a == b }),
   tape_at: @signals.signal(Side, same=fn(a, b) { a == b }),
   tape_ask: @signals.signal(None, same=fn(a, b) { a == b }),
   tape_chat: @signals.signal("", same=fn(a, b) { a == b }),
@@ -220,7 +220,7 @@ fn wide_reset() -> Unit {
   wide.attention_open.set(false)
   wide.jobs_open.set(false)
   wide.keys_open.set(false)
-  wide.tape = false
+  wide.tape.set(false)
   wide.tape_at.set(Side)
   wide.tape_ask.set(None)
   wide.tape_chat.set("")
@@ -280,7 +280,7 @@ pub fn shown_in_page(p : Page) -> Bool {
 /// sidebar is never put away but by a press on the page beside it or what is chosen to be shown in the page
 /// (show_page; asked, 2026-10-24: it went away unasked).
 pub fn sidebar_toggle() -> Unit {
-  if !wide.tape {
+  if !wide.tape.get() {
     wide.folded.set(!wide.folded.get())
   }
 }
@@ -320,7 +320,7 @@ pub let page_beside_least : Double = 360.0
 /// the tape (laid out Medium: the sidebar always whole there, the page beside it brought over instead); or kept so for
 /// the page's room (page_beside_least).
 pub fn side_folded() -> Bool {
-  (wide.folded.get() && !wide.tape) || wide.crowded
+  (wide.folded.get() && !wide.tape.get()) || wide.crowded
 }
 
 ///|
@@ -426,7 +426,7 @@ fn dock_side_at(
     box: (inside + rail, top + f.mt, f.side_w, dock_h),
     block: (inside, top + f.mt, dock_w, dock_h),
     // (on the tape, open, a panel of its own: the ground it floats on; else where the move has its ground)
-    ground: if wide.tape && !bar { dock_ground(bar) } else { f.ground },
+    ground: if wide.tape.get() && !bar { dock_ground(bar) } else { f.ground },
     shadow: (f.blur, f.fall, @sf.alpha(@sf.theme().p.shadow, f.shade)),
     held_w: f.side_w,
     links,
@@ -600,7 +600,7 @@ fn side_list_at(at : SideAt) -> @sf.ListAt {
 /// Where the sidebar's lists stand as the frame draws its old views now: in the tape's side column while the frame is
 /// the tape (wide.tape: laid out Medium, with a sidebar to show), else in a side column beside the page.
 fn side_at() -> @sf.ListAt {
-  if wide.tape {
+  if wide.tape.get() {
     Tape
   } else {
     Side
@@ -612,7 +612,7 @@ fn side_at() -> @sf.ListAt {
 /// from the page) a panel's corners, the tape's sidebar's; on its way between, as round as its move has it; the closed
 /// bar its own; each in the window's the window's less its 6 from it where it follows it.
 fn dock_radius(bar : Bool, moving : Bool, f : FoldLook) -> @ui.Radius? {
-  if wide.tape && !bar {
+  if wide.tape.get() && !bar {
     Some(@sf.corners_radius(tape_pane_corners(Side, false)))
   } else if moving && @sf.native_card_corner() <= 0.0 {
     Some(@sf.radius_between(f.corner))
@@ -628,7 +628,7 @@ fn dock_radius(bar : Bool, moving : Bool, f : FoldLook) -> @ui.Radius? {
 /// ground it floats on (apart_ground), as the lists' bands on it are: one ground under all of it, whatever the theme's
 /// surface is on this system. The rail's marks are on discs of it (rail_hung).
 fn dock_ground(bar : Bool) -> Int64 {
-  if bar || wide.tape {
+  if bar || wide.tape.get() {
     apart_ground()
   } else {
     @sf.theme().p.sidebar
@@ -650,13 +650,13 @@ fn side_brand_h(bar : Bool, top : Double) -> Double {
   if bar {
     0.0
   // (followed: as the window's buttons come into the app's top row or leave it, what reads it told)
-  } else if @ui.window_keys_left_now() && wide.tape {
+  } else if @ui.window_keys_left_now() && wide.tape.get() {
     tape_brand_under_buttons()
   } else if @ui.window_keys_left_now() {
     dmax(side_top_inset, @ui.window_points_to_content_now(side_top_inset))
   } else if side_full_height(bar) {
     side_top_web + top
-  } else if wide.tape {
+  } else if wide.tape.get() {
     side_top_web
   } else {
     // (beside the rail's first place, in the window's corner: its row as far over that place's 38 as ever, the bell and
@@ -680,7 +680,7 @@ let side_over_rail : Double = 3.0
 /// there is never empty (land: popped, a new chat would come again), so nothing to go back to.
 pub fn wide_back(src : Source) -> (() -> Unit)? {
   let over_all = app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_))
-  if wide.tape && !over_all {
+  if wide.tape.get() && !over_all {
     match tape_back_to() {
       Some(p) => Some(fn() { wide.tape_ask.set(Some(p)) })
       None =>
@@ -859,7 +859,7 @@ fn tape_pull_clamp(at : (Double, Double, Double), p : TapePane, drag : Double) -
 /// taken off, as a phone's are: the page's stack, Ctx::nav_flat's; what is over the whole window put away, the
 /// sidebar's own: wide_back).
 fn tape_back_to() -> TapePane? {
-  if !wide.tape || app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_)) {
+  if !wide.tape.get() || app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_)) {
     return None
   }
   match wide.tape_at.get() {
@@ -885,7 +885,7 @@ fn page_back_pops() -> Bool {
 /// it opens from there, as a phone's page does, pushed over it, Nav::push_over, back coming to it again) rather than in
 /// its place (the sidebar in use, choosing what the page shows; laid out Large, the web's pane).
 pub fn page_goes_on() -> Bool {
-  wide.tape && wide.tape_at.get() != Side
+  wide.tape.get() && wide.tape_at.get() != Side
 }
 
 ///|
@@ -981,7 +981,7 @@ let frame_gate : @ui.Style = @ui.css("bg=Bg")
 /// aside taken back): where the block's move has got to (side_moves' page-bar), so a bar built of them moves with the
 /// page it is on, its words not jumping ahead of it.
 pub fn page_bar_room() -> (Double, Double, Double, Double) {
-  (wide.bar_pl, if wide.tape { @sf.tape_bar_end(bar_in) } else { @sf.window_end_in(bar_in) }, wide.bar_ml, wide.bar_mr)
+  (wide.bar_pl, if wide.tape.get() { @sf.tape_bar_end(bar_in) } else { @sf.window_end_in(bar_in) }, wide.bar_ml, wide.bar_mr)
 }
 
 ///|

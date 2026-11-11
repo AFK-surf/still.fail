@@ -48,7 +48,7 @@ let lists_room : @signals.Signal[(Double, Double, Double, Bool, Double)] = @sign
 ///|
 /// The lists' room told as the frame has just worked it out (lists_room).
 fn list_room_told() -> Unit {
-  lists_room.set((wide.brand_h, wide.list_top, wide.list_band, wide.tape, wide.band))
+  lists_room.set((wide.brand_h, wide.list_top, wide.list_band, wide.tape.get(), wide.band))
 }
 
 ///|

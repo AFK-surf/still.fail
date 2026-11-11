@@ -76,7 +76,7 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
     foot: fn() { 0.0 },
     // (on the tape the block's, a step darker behind the panel in use: tape_side_at)
     ground: fn() {
-      if wide.tape {
+      if wide.tape.get() {
         at().ground
       } else if side_folded() {
         apart_ground()

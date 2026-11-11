@@ -35,7 +35,7 @@ test "back on the tape, a computer's and a tablet's: from the chat in use the si
     let (platform, w, h, width, height) = case
     let at = "platform \{platform} \{w}"
     let t = tape_chat(platform, w, h, width~, height~)
-    assert_true(@sfdesk.wide.tape, msg=at)
+    assert_true(@sfdesk.wide.tape.get(), msg=at)
     page_over(t, w)
     assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page, msg=at)
     t.back()

@@ -50,7 +50,11 @@ yet and you can add one, add it.
   long as its speed takes to be told to stop by its speed alone (`come_turn_w`), no speed a threshold (the coordinator
   of the migration, 2026-11-11).
 - State that what is made reads is a signal: a mutable value read by a binding that is not one is never seen to
-  change (detlint `built-by-hand`).
+  change. No check finds such a read: detlint's `built-by-hand` only refuses the two ways of covering one by hand
+  (`Ctx::forget_parts`, `built_from_changed`). What shows one is the Tester keeping rows and parts as a device does
+  (`Tester::frame`; a pass that kept rows compared with one built whole, `src/ui/tester_rows.mbt`): a test that changes
+  the value and looks sees what a device would, the old (sfdesk's `wide.tape`, a plain field read by the rail's
+  corners till 2026-11-11).
 - Layout goes one way (the user, 2026-11-05): what is laid out is never told back as a change to make things by. What
   is made by the width a node is given, or by how tall something in it comes to, is made in `View::by_room`
   (`src/view/room.mbt`) as that layout comes to it; what it would change outside its room is a fault. Nothing outside

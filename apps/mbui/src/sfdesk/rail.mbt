@@ -167,13 +167,13 @@ fn list_place(mode : Int) -> String {
 fn rail_top_h(bar : Bool) -> Double {
   if bar {
     0.0
-  } else if @ui.window_keys_left() && wide.tape {
+  } else if @ui.window_keys_left() && wide.tape.get() {
     // (its first place's middle on the line of the sidebar's first row beside it, under the window's buttons: worked
     // out as that row's is, not read back from the frame's)
     tape_brand_under_buttons() + band_new_top + band_row_h() / 2.0 - rail_item_side / 2.0
   } else if @ui.window_keys_left() {
     dmax(rail_top_inset + rail_gap, @ui.window_points_to_content(side_top_inset))
-  } else if wide.tape {
+  } else if wide.tape.get() {
     // (and its first place's middle on the line of the sidebar's first row beside it, 新建对话's: pengxiao, 2026-10-25)
     dmax(@sf.rail_in_tape(), tape_first_row_mid() - rail_item_side / 2.0)
   } else {
@@ -211,7 +211,7 @@ fn rail_box_w(bar : Bool, moving : FoldLook?) -> Double {
     None =>
       if bar {
         rail_closed_w
-      } else if wide.tape {
+      } else if wide.tape.get() {
         rail_shown_w + rail_tape_more()
       } else {
         rail_shown_w + rail_window_in() - rail_in_px
@@ -311,7 +311,7 @@ let mark_folded_from : Double = 0.4
 /// the tape, a panel beside the page's as it is, the page's ground, which a phone's lists and pages share (the user,
 /// 2026-10-25: the medium screen's grounds the phone's, no other colours).
 pub fn apart_ground() -> Int64 {
-  if wide.tape {
+  if wide.tape.get() {
     @sf.theme().p.bg
   } else {
     closed_ground()

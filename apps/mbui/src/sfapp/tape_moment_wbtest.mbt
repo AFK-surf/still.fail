@@ -228,10 +228,10 @@ test "on the tape the window made 大屏 and 中屏 again: off the tape, then th
   t.resize(1280.0, 840.0)
   t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.tape_seen() is None)
-  assert_false(@sfdesk.wide.tape)
+  assert_false(@sfdesk.wide.tape.get())
   t.resize(720.0, 840.0)
   t.run_for(@ui.move_most_ms)
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
   assert_eq(tape_now(), was)
 }
@@ -273,7 +273,7 @@ test "中屏: a screen reader's press of a panel's cover brings it over at that 
 /// Whether the page's panel draws the chat titled `title` (in its bar: where the tape has the page then, past the
 /// sidebar's column; the sidebar's rows say the titles too).
 fn page_draws(t : @ui.Tester, title : String) -> Bool {
-  let col = if @sfdesk.wide.tape {
+  let col = if @sfdesk.wide.tape.get() {
     @sfdesk.tape_col_now(t.time())
   } else {
     // (off the tape, Large: past the block's column)
