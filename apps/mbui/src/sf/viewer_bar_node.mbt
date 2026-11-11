@@ -10,7 +10,7 @@
 /// over a 20 blur, saturated, 45 high under the room's top (`top`: a tablet's status bar, its ground on under it); the
 /// way back first (`back`'s words after the chevron, `went` as it is pressed), clear of the window's buttons where they
 /// are the system's at its left; `name` and `meta` under it in the middle, as wide as they are (the window's `width`
-/// less 320 at most), where the file is (`title`, none: "") its tip while the pointer is over them; what `tools` makes in
+/// less viewer_bar_sides at most), where the file is (`title`, none: "") its tip while the pointer is over them; what `tools` makes in
 /// the row at its end (the corner each is round at given: the window's followed at its corner, a bar's buttons'), the
 /// last as far in from the window's side as a page's bar's last. There while `hidden` holds not (gone up its height and
 /// faded over 240 ms, eased out, from where it is at the moment it is told, and back so; at once with motion
@@ -90,7 +90,7 @@ pub fn viewer_bar_node(
         let middle = row.box(fn(m) {
           m
           .lines_up(Is(Some(Middle)))
-          .max_width(By(fn() { Some(dmax(viewer_none, width() - viewer_bar_sides)) }))
+          .max_width(By(fn() { Some(dmax(viewer_none, width() - viewer_bar_sides())) }))
           .shrink(Is(1.0))
           .min_width(Is(Some(0.0)))
           |> ignore

@@ -1219,7 +1219,7 @@ test "viewer on the tree, a phone's screen: a picture as it comes, its floating 
   assert_true(!v.coming(), msg="whole")
   assert_eq(t.all(ProgressBar).length(), 0, msg="its card gone")
   assert_true(t.find("正在读取") is None)
-  for l in [@sf.t("web-main.annotate.image"), @sf.t("common.copy"), @sf.t("web-main.preview.download"), close] {
+  for l in [@sf.t("web-main.annotate.image"), @sf.t("common.copy"), @sf.t("android-misc.drive.share"), @sf.t("web-main.preview.download"), close] {
     assert_eq(t.all(Button, label=l).length(), 1, msg="\{l}: \{t.all(Button, label=l).length()}")
   }
   assert_true(!@ui.view_tree().unwrap().cycle_read(), msg="no wait drawn by the clock once whole")
@@ -1260,12 +1260,13 @@ test "viewer on the tree, a phone's screen: a picture coming, its card shown: at
 }
 
 ///|
-test "viewer on the tree, a phone's screen: its floating bar its nodes, one of each tool (标注, 复制, 下载, ×), none of the old bar's; copied, a check for copied_ms from the press, frames drawn only as the app asks the host for them; × closes it" {
+test "viewer on the tree, a phone's screen: its floating bar its nodes, one of each tool (标注, 复制, 分享, 下载, ×), none of the old bar's; copied, a check for copied_ms from the press, frames drawn only as the app asks the host for them; × closes it" {
   let t = preview_tester("image", platform=1)
   let told = @sf.words_told_count()
   let labels = [
     @sf.t("web-main.annotate.image"),
     @sf.t("common.copy"),
+    @sf.t("android-misc.drive.share"),
     @sf.t("web-main.preview.download"),
     @sf.t("web-main.preview.closeKey"),
   ]
@@ -1565,7 +1566,7 @@ test "viewer on the tree, a fold half open wider than a phone: its floating bar 
   t.draw()
   t.run_for(@kit.progress_known_ms)
   assert_true(!v.coming(), msg="whole")
-  for l in [@sf.t("web-main.annotate.image"), @sf.t("common.copy"), @sf.t("web-main.preview.download"), @sf.t("web-main.preview.closeKey")] {
+  for l in [@sf.t("web-main.annotate.image"), @sf.t("common.copy"), @sf.t("android-misc.drive.share"), @sf.t("web-main.preview.download"), @sf.t("web-main.preview.closeKey")] {
     assert_eq(t.all(Button, label=l).length(), 1, msg="\{l}: one, the node's: \{t.all(Button, label=l).length()}")
   }
   for l in zoom {
@@ -2007,8 +2008,8 @@ test "viewer on the tree, an Android tablet 840 wide, a picture whose name is fa
       middle = dmax(middle, d.w)
     }
   }
-  // (the middle no wider than the bar lets it be: the window's width less 320)
-  let middle = dmin(middle, 840.0 - 320.0)
+  // (the middle no wider than the bar lets it be: the window's width less its sides, a phone's one tool more)
+  let middle = dmin(middle, 840.0 - @sf.viewer_bar_sides())
   let end_in = @sf.window_end_in(@sf.viewer_bar_in)
   let half = (840.0 - @sf.viewer_bar_in - end_in - 2.0 * 16.0 - middle) / 2.0
   let tools = last.0 + last.2 - first.0
@@ -3049,10 +3050,11 @@ test "viewer on the tree, a phone, marking: its floating bar wider as what marki
 ///|
 test "viewer on the tree, a phone: its floating bar's tools and × as far apart as keys are (keys_apart), each from the one before it" {
   let t = preview_tester("image", w=390.0, platform=2)
-  // (its tools and × by what they say: 标注图片, 复制, 下载, 关闭)
+  // (its tools and × by what they say: 标注图片, 复制, 分享, 下载, 关闭)
   let keys = [
     @sf.t("web-main.annotate.image"),
     @sf.t("common.copy"),
+    @sf.t("android-misc.drive.share"),
     @sf.t("web-main.preview.download"),
     @sf.t("web-main.preview.closeKey"),
   ].map(fn(label) { t.get(Button, label~).rect })

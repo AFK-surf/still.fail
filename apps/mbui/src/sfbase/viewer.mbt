@@ -177,6 +177,8 @@ pub(all) struct Viewer {
   /// a file told of (not shown): asked for (to save)
   mut asked : Bool
   mut save_after : Bool
+  /// …or to be handed to another app (分享: Viewer::ask_share), as its whole comes
+  mut share_after : Bool
   /// a chat's file asked to be downloaded by the core (downloads.mbt), said to it in the next frame (the old bars');
   /// told as it is asked (`asked_told`: the window's tree's viewer says it to the core then, and saves what was asked
   /// for to be saved as its whole comes, each once)
@@ -905,6 +907,7 @@ pub fn new_viewer(
     error: @signals.signal(None),
     asked: false,
     save_after: false,
+    share_after: false,
     download_asked: false,
     install_after: false,
     awake: true,
@@ -2081,6 +2084,39 @@ pub fn Viewer::ask_save(self : Viewer, c : @ui.Ctx) -> Unit {
 }
 
 ///|
+/// Whether a file a preview shows is offered to other apps from it (分享): on a phone (iOS, Android), where the
+/// system's share sheet is how a picture or a file goes on to another app (WeChat, Files); beside download, which
+/// keeps it on the phone. Asked for 2026-11-11 (「建议图片和文件支持ios分享功能」, then Android's too).
+pub fn shares_out() -> Bool {
+  @sf.picture_to_album()
+}
+
+///|
+/// 分享: the file handed to the system's share sheet (@ui.share) once it is here, read whole first where it was only
+/// told of (as Viewer::ask_install's, then handed on as it comes: share_after); 本机没有可打开此文件的应用 when
+/// nothing takes it.
+pub fn Viewer::ask_share(self : Viewer) -> Unit {
+  match self.bytes.untracked() {
+    Some(b) => if !@ui.share("", self.file.name, self.mime, b) { toast_later(@sf.t("android-misc.drive.noApp")) }
+    None => {
+      self.error.set(None)
+      self.asked = true
+      self.share_after = true
+      self.asked_told.set(self.asked_told.untracked() + 1)
+    }
+  }
+}
+
+///|
+/// What was asked to be shared before it was here, handed on as its whole comes, once (Viewer::ask_share).
+pub fn Viewer::share_came(self : Viewer) -> Unit {
+  if self.share_after && self.bytes.untracked() is Some(_) {
+    self.share_after = false
+    self.ask_share()
+  }
+}
+
+///|
 /// 下载 pressed on a node of the window's tree (a tab's tools beside a chat: viewer_tab.mbt), outside any build: as
 /// Viewer::ask_save, what is here handed to the host at once (keep_now).
 pub fn Viewer::save_now(self : Viewer) -> Unit {
@@ -2295,7 +2331,11 @@ fn Viewer::picture_menu_at(self : Viewer, c : @ui.Ctx, x : Double, y : Double, b
       self.copied += 1
     }
   }
-  @sf.menu([Some(@sf.menu_item_of(label, out, icon=glyph))], from=@sf.at_point(x, y))
+  let items = [Some(@sf.menu_item_of(label, out, icon=glyph))]
+  if shares_out() {
+    items.push(Some(@sf.menu_item_of(@sf.t("android-misc.drive.share"), fn() { self.ask_share() }, icon="share")))
+  }
+  @sf.menu(items, from=@sf.at_point(x, y))
 }
 
 ///|
