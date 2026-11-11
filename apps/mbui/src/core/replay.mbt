@@ -1533,8 +1533,9 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       return
     }
     self.diverge(text)
-    // (a call the run did not make is answered all the same by a live backend: a scripted run waits for it too)
-    if kind == "call" {
+    // (a call the run did not make is answered all the same by a live backend: a scripted run waits for it too, unless
+    // nobody reads its answer, awaited by nothing there)
+    if kind == "call" && !(id_of(m) is Some(now) && client.call_unread(now)) {
       self.asked.push(name_of(m))
     }
     return
@@ -1567,7 +1568,9 @@ fn Replay::out(self : Replay, text : String) -> Unit {
         if kind == "subscribe" && twin_topic(name_of(m)) {
           self.twins[then] = true
         }
-        if kind == "call" && self.answers(then) {
+        // (one whose answer nobody reads awaited by nothing in a scripted run: no `answered` line for it, emit.mbt;
+        // since #5425, client.device and the start's notify.permission)
+        if kind == "call" && self.answers(then) && !client.call_unread(now) {
           self.asked.push(name_of(m))
         }
       }
