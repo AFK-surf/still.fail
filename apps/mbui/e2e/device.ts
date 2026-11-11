@@ -282,11 +282,18 @@ export class Device {
     }, 120_000);
     return { workspace, station };
   }
-  /// How the station stands for this device (the chats topic's station row): its state and why.
-  stationState(workspace: string, ok: (s: J) => boolean, ms = 60_000): Promise<J> {
-    return this.until({ topic: "chats", scope: workspace, mine: false, limit: 5 }, (v) => {
-      const s = (v?.stations ?? [])[0];
-      return s && ok(s) ? s : undefined;
+  /// How a station stands for this device (the first of the workspace's, or the one of `id`): its link's state and
+  /// message as its page has them (the `station` topic's `link`), and `cause` lock while it is down for a security
+  /// mode (its `blocked`). The chats topic's station rows said these till #5382 left them what the list's rows read.
+  async stationState(workspace: string, ok: (s: J) => boolean, ms = 60_000, id?: string): Promise<J> {
+    const station = await this.until({ topic: "stations", scope: workspace }, (v) => {
+      const s = (v ?? []).find((s: J) => id === undefined || s.id === id);
+      return s ? (s.station as string) : undefined;
+    }, ms);
+    return this.until({ topic: "station", scope: workspace, station }, (v) => {
+      if (!v?.link) return undefined;
+      const s: J = { station, state: v.link.state, message: v.link.message, ...(v.blocked ? { cause: "lock", blocked: v.blocked } : {}) };
+      return ok(s) ? s : undefined;
     }, ms);
   }
   personal(ok: (p: J) => boolean, ms = 60_000): Promise<J> {

@@ -445,11 +445,7 @@ try {
 
   // ── round 7: a second station in the lock. The stations keep each other level in alice's own lock (person-sync.ts):
   // with the first one frozen, G joins through the second; the first, back, hears it of the second ──
-  const stationIn = (x: Device, id: string, ok: (s: J) => boolean, ms = 60_000) =>
-    x.until({ topic: "chats", scope: workspace, mine: false, limit: 5 }, (v) => {
-      const s = (v?.stations ?? []).find((s: J) => JSON.stringify(s).includes(id));
-      return s && ok(s) ? s : undefined;
-    }, ms);
+  const stationIn = (x: Device, id: string, ok: (s: J) => boolean, ms = 60_000) => x.stationState(workspace, ok, ms, id);
   const chainsAt = (data: string): number => {
     try {
       const kept = JSON.parse(readFileSync(`${data}/mesh/person-chains.json`, "utf8"));
