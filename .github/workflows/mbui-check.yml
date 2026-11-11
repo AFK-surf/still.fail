@@ -112,6 +112,14 @@ jobs:
           restore-keys: mbui-moon-build-${{ env.PART }}-
       # (each file an mtime of its content: moon builds again only what changed since that build, not all of it after
       # the checkout's new mtimes: the replay's 170 tasks over main's last build, 0b0e29e8, 41381222307, 2026-11-02)
+      # EXPERIMENT (to be taken out): what main's moon cache holds as restored
+      - run: |
+          cd apps/mbui/_build
+          echo "restored: $(du -sh --exclude=mbc-store . | cut -f1)"
+          find . -path ./native/release/mbc-store -prune -o -type f -printf '%s %h\n' | awk '{ s[$2] += $1 } END { for (d in s) printf "%d %s\n", s[d], d }' | sort -rn | head -12 | awk '{ printf "  %5.0f MB %s\n", $1 / 1e6, $2 }'
+          find . -path ./native/release/mbc-store -prune -o -type f -printf '%s %f\n' | sed -E 's/ [^ ]*\.([^. ]+)$/ \1/' | awk '{ s[$2] += $1; n[$2]++ } END { for (k in s) printf "%d %s %d\n", s[k], k, n[k] }' | sort -rn | head -10 | awk '{ printf "  %5.0f MB in %d .%s\n", $1 / 1e6, $3, $2 }'
+          tar -cf - --exclude=./native/release/mbc-store . | zstd -T0 --long=30 -q | wc -c | awk '{ printf "zstd --long=30: %.0f MB\n", $1 / 1e6 }'
+          find . -path '*.mbc*' -prune -print | head -5
       - run: bash apps/mbui/scripts/moon-mtimes.sh
       # The units main's newest run kept, and on a branch its own last run's beside them (a store by content: the two
       # together, nothing of one replaces the other's). A branch's own alone, after it took main's newer commits in
