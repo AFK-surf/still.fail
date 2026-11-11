@@ -161,7 +161,7 @@ test "all: the first failure fails it, others that failed too are told to on_def
     ])
   })
   rt.advance(fail_at)
-  assert_eq(outcome(f), "failed: first")
+  assert_eq(outcome_said(f, fn(xs) { "[" + xs.map(fn(x) { x.to_string() }).join(", ") + "]" }), "failed: first")
   // the root scope tells the failed fiber's error too
   assert_true(told.contains("second"))
   assert_idle(rt)

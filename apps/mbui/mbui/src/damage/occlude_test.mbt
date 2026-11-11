@@ -27,16 +27,31 @@ fn sheet_over_rows() -> FixedArray[Double] {
 test "what an opaque sheet covers wholly is left out, what its round corners might show kept" {
   let d = @damage.Damage::new()
   // (the rows from 140 on under it; the ground under it only in part, the row at 40 above it)
-  inspect(
+  debug_inspect(
     kept(d, sheet_over_rows()),
-    content="[(0, 0, 400, 300, 0), (0, 40, 400, 50, 0), (16, 60, 100, 10, 1), (0, 100, 400, 200, 0)]",
+    content=(
+      #|[
+      #|  (0, 0, 400, 300, 0),
+      #|  (0, 40, 400, 50, 0),
+      #|  (16, 60, 100, 10, 1),
+      #|  (0, 100, 400, 200, 0),
+      #|]
+    ),
   )
   // (a row reaching under the band its top corners curve in, kept)
   let a = sheet_over_rows()
   a[3 * 60 + 1] = 120.0
-  inspect(
+  debug_inspect(
     kept(d, a),
-    content="[(0, 0, 400, 300, 0), (0, 40, 400, 50, 0), (16, 60, 100, 10, 1), (0, 120, 400, 50, 0), (0, 100, 400, 200, 0)]",
+    content=(
+      #|[
+      #|  (0, 0, 400, 300, 0),
+      #|  (0, 40, 400, 50, 0),
+      #|  (16, 60, 100, 10, 1),
+      #|  (0, 120, 400, 50, 0),
+      #|  (0, 100, 400, 200, 0),
+      #|]
+    ),
   )
 }
 

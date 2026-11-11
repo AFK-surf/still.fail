@@ -70,8 +70,8 @@ test "SimFiles: reads and writes take time on the clock; a full disk fails write
   ignore(
     rt.fork(async fn() {
       (files.write)("a.txt", b"hi")
-      out.push("read \{(files.read)("a.txt").map(b => b.length())} at \{@effect.now()}")
-      out.push("missing \{(files.read)("b.txt")}")
+      out.push("read \{(files.read)("a.txt").map(b => b.length()).map_or("None", fn(n) { "Some(\{n})" })} at \{@effect.now()}")
+      out.push("missing \{(files.read)("b.txt").map_or("None", fn(b) { "Some(\{b})" })}")
       sim.fail_writes(true)
       (files.write)("c.txt", b"x") catch {
         e => out.push(describe(e))
