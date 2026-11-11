@@ -784,6 +784,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   picture_at.clear()
   c.layers.clear()
   c.focusables.clear()
+  islands_built.clear()
   c.sem_hide = 0
   c.layer_cur = 0
   c.group_cur = 0

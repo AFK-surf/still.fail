@@ -40,6 +40,8 @@ pub(all) struct ComposerSpec {
 priv struct Composing {
   mut picking : (String, @ui.Pick)?
   let_go : @signals.Signal[Bool]
+  /// the moment the box it stayed after the cursor left was last let go of (let_go's end): a change of its own then
+  mut let_go_at : Double
   warmed : Map[String, Int]
   /// words typed into its field since it was last built (told the core as they were typed: composer_text's
   /// `on_change`), for its build to warm the agent's runtime
@@ -47,6 +49,10 @@ priv struct Composing {
   comments : Map[String, @ui.Field]
   mut roomy : Bool?
   mut draft : String
+  /// each draft's page's time on top (Ctx::page_stint) as it was last switched to it there: switched to it again in
+  /// the same stint (two chats' composers built at once, the one under sliding away as another's comes over it), it
+  /// does not take the cursor again; only the page come on top does
+  took : Map[String, Int]
   /// the moment it was last switched to another chat and the one it was for till then (the switch as it was first built:
   /// each build and frame made at that moment starts from that one, frame_body may build it twice)
   mut draft_was : (Double, String)
@@ -122,11 +128,13 @@ pub fn composer_take_focus() -> Unit {
 let composing : Composing = {
   picking: None,
   let_go: @signals.signal(false, same=fn(a, b) { a == b }),
+  let_go_at: @double.neg_infinity,
   warmed: {},
   typed: false,
   comments: {},
   roomy: None,
   draft: "",
+  took: {},
   roomy_before: None,
   draft_before: "",
   draft_was: (-1.0, ""),
@@ -163,6 +171,7 @@ fn composing_reset() -> Unit {
   composer_set_off.val = ("", 0.0)
   composing.picking = None
   composing.let_go.set(false)
+  composing.let_go_at = @double.neg_infinity
   composing.warmed.clear()
   composing.typed = false
   composing.comments.clear()
@@ -170,6 +179,7 @@ fn composing_reset() -> Unit {
   composing.pictures.clear()
   composing.roomy = None
   composing.draft = ""
+  composing.took.clear()
   composing.roomy_before = None
   composing.toolbar = None
   composing.toolbar_before = None
@@ -251,9 +261,14 @@ pub fn composer(
   composing.same_draft = whose == composing.draft_before
   if whose != composing.draft {
     composing.draft = whose
+    // (once a time its page is on top: built again in the stint it was switched to in, as another chat's is built
+    // beside it, it is the page under that one, not one come to; outside a stack, each switch)
+    let stint = c.page_stint()
+    let come = stint == 0 || composing.took.get(whose) != Some(stint)
+    composing.took[whose] = stint
     // (where the keyboard is at hand, typed into at once; not raising the screen's keyboard over the chat; not taken from
     // a field written in, but asked under a modal layer over it all the same: kept for that layer to give back)
-    if !@sf.soft_keyboard() && !c.field_focused_here() {
+    if come && !@sf.soft_keyboard() && !c.field_focused_here() {
       c.focus_field(w.field)
       composing.taking.set(true)
       // (this frame's alone: what reads it built again the frame after, as it has the cursor)
@@ -283,6 +298,13 @@ pub fn composer(
   }
   let lost_long = @kit.after(c, "composer/let-go", !focused && !choosing_cache, let_go_ms)
   let held = composing.let_go.get() && !focused && !lost_long
+  // (the box it stayed a moment after the cursor left, let go of now: a change of its own, at this moment, whatever
+  // words sent from it are doing meanwhile)
+  if lost_long && composing.let_go.get() {
+    composing.let_go_at = c.moment()
+  }
+  // (as each build at this moment has it: frame_body may build it twice)
+  let let_go_now = lost_long && composing.let_go_at == c.moment()
   if lost_long {
     composing.let_go.set(false)
   }
@@ -360,9 +382,12 @@ pub fn composer(
   // (gone to its chat's foot as a new chat's first words set out from it: on their way and as long, one motion with
   // them, not a page's quick start that leaves them behind and goes far in its first frame)
   let opening = composer_opening(c, "\{spec.roomy}|\{multiline}")
+  // (words sent letting go of it shape it on their clock only for what they change: the cursor's box let go of
+  // meanwhile (let_go_now) is a change of its own, from now, not one as far on as the time since they let go)
+  let sent_lets_go = composer_let_go(c, spec.draft) && !let_go_now
   let shape = if moved && flight_carried(spec.draft) {
     @motion.tween(flight_desk_ms, ease=Flight)
-  } else if composer_let_go(c, spec.draft) {
+  } else if sent_lets_go {
     // (let go by words sent from it: down on their flight's clock, with its room, flight_lets_go)
     // (said where their row's opening is: flight_lets_go)
     // det-ok(motion-length): words sent's own, set with their flight (sf/motion.mbt kind 4)
@@ -512,7 +537,7 @@ pub fn composer(
     spec=shape,
     carry=moved,
     foot=!spec.roomy && @sf.native_side(),
-    at?=if composer_let_go(c, spec.draft) { Some(composer_released_at(spec.draft)) } else { None },
+    at?=if sent_lets_go { Some(composer_released_at(spec.draft)) } else { None },
   )
   composing.shaped = Some((holds, shape))
   // (its ＋ and send drawn whole on their way, its field going up past them as it opens: composer_hint_wbtest, the user

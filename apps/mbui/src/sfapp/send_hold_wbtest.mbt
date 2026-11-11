@@ -470,3 +470,91 @@ test "sent, then the chat left at once and come back to later: no words flying l
   assert_true(flight_of(hold_draft) is None)
   assert_true(t.rest_of("a chat's list turns") <= t.time(), msg="\{t.rest_of("a chat's list turns")} at \{t.time()}")
 }
+
+///|
+/// Words sent, the cursor taken from the field at once (as the chat is left, or anything else takes it): the box it
+/// stays a moment after closes to its capsule from that moment on its own clock, not as far on as the time since the
+/// words let go of it (sizes_steady judging each frame drawn).
+test "sent, then the cursor let go of: the composer closes from the moment it is let go of, not at once" {
+  if @ui.test_at_a_rate() {
+    return
+  }
+  let t = hold_chat()
+  t.type_text("\n离开前发出的话")
+  tap_send(t)
+  t.ctx().blur()
+  let at = t.time()
+  for i in 0..<40 {
+    t.frame_at(at + i.to_double() * 1000.0 / 60.0)
+  }
+}
+
+///|
+/// How far the composer's ground is drawn over where it is laid out (its box closing to its capsule), at each of `at`'s
+/// moments after `from`.
+fn hold_over_at(t : @ui.Tester, from : Double, at : Array[Double]) -> Array[Double] {
+  at.map(fn(d) {
+    t.run_for(from + d - t.time())
+    @motion.reshaped_over(t.ctx(), "composer/box")
+  })
+}
+
+///|
+/// The moments after the box is let go of (let_go_ms after the cursor left) the closing is looked at, the first a frame
+/// on.
+let hold_over_moments : Array[Double] = [17.0, 60.0, 120.0, 180.0, 240.0, 299.0, 400.0]
+
+///|
+/// Words sent, the cursor taken at once: from where the box is let go of, its closing goes all the way down on its own
+/// clock, each moment lower than the one before, at every rate the same (a step down at its start would be its
+/// clock taken for the words' that let go of it before).
+test "sent, then the cursor let go of: the box closes from the moment it is let go of, all the way, lower each moment" {
+  let t = hold_chat()
+  t.type_text("\n离开前发出的话")
+  tap_send(t)
+  t.ctx().blur()
+  let over = hold_over_at(t, t.time() + @sfpages.let_go_ms, hold_over_moments)
+  assert_true(over[0] > 30.0, msg="as far on as it is a frame after it is let go of: \{over}")
+  for i in 1..<over.length() {
+    assert_true(over[i] <= over[i - 1], msg="\{over}")
+  }
+  assert_eq(over[over.length() - 1], 0.0, msg="\{over}")
+}
+
+///|
+/// The box let go of at the very moment words sent from it let go of it: the closing is the box's own, on its own clock
+/// from then (as the box let go of with no words on their way closes), not the words' (decided: the cursor's leaving is
+/// the cause that changes its shape then).
+test "the box let go of at the moment words sent let go of it: closed on its own clock" {
+  // (the words' let-go after the press, measured: a run of its own)
+  let t = hold_chat()
+  t.type_text("\n离开前发出的话")
+  let sent_at = t.time()
+  tap_send(t)
+  guard @sfbase.flight_lets_go(hold_draft) is Some((go, _)) else { fail("no words on their way") }
+  let after_send = go - sent_at
+  // (the same once more: the cursor taken let_go_ms before the moment they will let go of it)
+  let t = hold_chat()
+  t.type_text("\n离开前发出的话")
+  let blur_at = t.time()
+  t.ctx().blur()
+  t.run_for(@sfpages.let_go_ms - after_send)
+  tap_send(t)
+  guard @sfbase.flight_lets_go(hold_draft) is Some((go, _)) else { fail("no words on their way") }
+  assert_eq(go, blur_at + @sfpages.let_go_ms, msg="not at the same moment: sent \{t.time()}")
+  let both = hold_over_at(t, go, hold_over_moments)
+  // (the box alone, nothing in it, no words on their way: its own clock)
+  new_run()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.run_for(@ui.move_most_ms)
+  t.ctx().blur()
+  let alone = hold_over_at(t, t.time() + @sfpages.let_go_ms, hold_over_moments)
+  // (the same curve: each moment as far down its way, whatever height it closes from)
+  let way = fn(o : Array[Double]) { o.map(fn(v) { v / o[0] }) }
+  let (a, b) = (way(both), way(alone))
+  assert_true(a.iter().zip(b.iter()).all(fn(p) { (p.0 - p.1).abs() < 1.0e-9 }), msg="both \{both}, alone \{alone}")
+}

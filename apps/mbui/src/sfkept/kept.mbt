@@ -492,6 +492,7 @@ let kept_answers : String =
   #|["words","{\"call\":\"ref.at\",\"text\":\"改好\",\"caret\":2}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"断网时发出的消息 082947 post:重试后收到 082947\",\"caret\":33}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"断网时发出的消息 082947\",\"caret\":15}",{"at":null}]
+  #|["words","{\"call\":\"ref.at\",\"text\":\"新\",\"caret\":1}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"新对话来自 mbui 084656 post:新对话里的回答 084656\",\"caret\":37}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"权限\",\"caret\":2}",{"at":null}]
   #|["words","{\"call\":\"ref.at\",\"text\":\"构建\",\"caret\":2}",{"at":null}]

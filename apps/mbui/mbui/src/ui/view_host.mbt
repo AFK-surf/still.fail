@@ -3109,6 +3109,7 @@ pub fn old(
     let held_build = fn(c : Ctx) {
       let was = island_building.val
       island_building.val = Some(id)
+      islands_built.push(id)
       // (what it says of the keyboard said anew as it is built: Ctx::on_action)
       match view_app.val {
         Some(t) => t.keys_said(id, anew=true)
