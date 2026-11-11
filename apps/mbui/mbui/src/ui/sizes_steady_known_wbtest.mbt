@@ -5,9 +5,6 @@
 ///|
 fn init {
   sizes_steady_known([
-    ("src/ui/island_moved_wbtest.mbt", 1),
-    ("src/ui/layout_wbtest.mbt", 30),
-    ("src/ui/list_scroll_same_wbtest.mbt", 9),
-    ("src/ui/view_ride_wbtest.mbt", 4),
+    ("src/ui/layout_wbtest.mbt", 29),
   ])
 }
