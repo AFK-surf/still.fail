@@ -26,6 +26,8 @@ pub(all) struct LaidFacts {
   /// its width said in points (View::width), or as a share of what holds it (View::width_share)
   width_points : Bool
   width_share : Bool
+  /// its height said in points (View::height): as high as that whatever it holds (a least, View::min_height, is not)
+  height_points : Bool
   /// how much it grows into the room along a row and gives way where that is short (as laid out now: View::grow,
   /// View::shrink, or what it is makes it, Tree::give_way_applied)
   grow : Double
@@ -85,6 +87,7 @@ pub fn Tree::laid_facts(self : Tree, id : NodeId) -> LaidFacts? {
     margin: (st.margin_left_value(), st.margin_top_value(), st.margin_right_value(), st.margin_bottom_value()),
     width_points: st.width_kind() == @flex.LEN_PT,
     width_share: st.width_kind() == @flex.LEN_PCT,
+    height_points: st.height_kind() == @flex.LEN_PT,
     grow: st.grow,
     shrink: st.shrink,
     keeps: st.min_held,

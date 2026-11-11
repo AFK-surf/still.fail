@@ -151,6 +151,11 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - Every screen is swept at the default size of words (corners_wbtest.mbt) and, in a phone's window, at the system's
   words set to 1.3 (`src/sfapp/words_large_wbtest.mbt`: what fits and words over words at rest; the user, 2026-11-10).
   A new state a report shows gets a fixture mode in `corner_modes`, so both sweeps see it.
+- Both sweeps hold each screen as well to the words a box with its height said does not hold (mbui's
+  `Tester::fixed_outgrown`, in `t.audit()` too): a box holding words grows with them (a least, or its height worked out
+  of their line at the system's size of words, as `list_looks_at` does); each screen's bar is in
+  `corners_outgrown_known` and `words_large_outgrown_known`, and only falls (the coordinator of the migration,
+  2026-11-11).
 - What the core sends for what the app subscribes to, in each flow's trace, keeps to its bar
   (`src/sfreplay/topic_bytes.mbt`: KB of values sent whole, values sent whole again, messages for what was let go of;
   each topic's largest value). A page subscribes to what it shows, no more (the user, 2026-11-10); a trace recorded
