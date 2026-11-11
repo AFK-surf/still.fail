@@ -261,9 +261,16 @@ export class FakeDriver implements AgentDriver {
   detach() {}
 }
 
-/// Lets queued actor tasks and what they started run.
+/// Lets queued actor tasks and what they started run: `rounds` turns of the loop with no file request out. The station
+/// reads off its main thread (a turn's end waits for its transcript's last lines, sessions/live.ts `turnEnded`), and how
+/// many turns the disk takes to answer is the machine's: counted alone, a test went on before the turn was over where
+/// the disk was slow (hub.test.ts, a session continued from the machine's, on a CI runner, 2026-11-11). A request out
+/// is waited for, however long, and the turns counted again after it.
 export async function settle(rounds = 100) {
-  for (let i = 0; i < rounds; i++) await new Promise((r) => setImmediate(r));
+  for (let quiet = 0; quiet < rounds; ) {
+    await new Promise((r) => setImmediate(r));
+    quiet = process.getActiveResourcesInfo().some((r) => r === "FSReqPromise" || r === "FSReqCallback") ? 0 : quiet + 1;
+  }
 }
 
 export const message = (over: Partial<InboundMessage> = {}): InboundMessage => {

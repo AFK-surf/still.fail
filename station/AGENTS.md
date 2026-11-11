@@ -116,3 +116,6 @@
   skips itself saying what it lacks. A test with the vault on a database in a file gives it through
   `test/vault-no-reader.ts`, unless the use index's reader is what it tests: the reader is a process of its own, and
   writes when it will.
+- A test waits for what the station set going with `settle()` (`test/hub-fakes.ts`): turns of the loop with no file
+  request out, since the station reads off its main thread and how many turns the disk takes is the machine's. A count
+  of turns of a test's own before it looks is that race again.
