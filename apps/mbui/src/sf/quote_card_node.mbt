@@ -57,7 +57,7 @@ pub fn quote_card_node(
             mark_words_node(mark, pin, fn() { quote_pin_words }) |> ignore
           })
           |> ignore
-          words_node(p, fn() { words().split("\n").next().map(fn(s) { s.to_string() }).unwrap_or("") }, fn() {
+          words_node(p, fn() { words().split("\n").next().map(fn(s) { s.to_owned() }).unwrap_or("") }, fn() {
             quote_text
           })
           |> ignore

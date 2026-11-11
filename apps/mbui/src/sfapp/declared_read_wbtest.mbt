@@ -10,12 +10,12 @@
 /// What the client sent the made-up core, `heard` (round_trip_again's), read for a topic let go of and asked again:
 /// each such, by its topic.
 fn asked_again(heard : Array[String]) -> Array[String] {
-  let by_id : Map[Int, String] = {}
-  let left : Map[String, Bool] = {}
+  let by_id : Map[Int, String] = Map([])
+  let left : Map[String, Bool] = Map([])
   let again : Array[String] = []
   for h in heard {
     guard h.has_prefix("out ") else { continue }
-    let j = @json.parse(h.view(start_offset=4).to_string()) catch { _ => continue }
+    let j = @json.parse(h.view(start_offset=4).to_owned()) catch { _ => continue }
     guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { continue }
     let id = n.to_int()
     match (m.get("subscribe"), m.get("unsubscribe")) {

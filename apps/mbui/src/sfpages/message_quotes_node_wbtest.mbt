@@ -189,7 +189,7 @@ fn qt_seen(
       Some(w) => (w.1 + 4.0, w.2 + w.4 / 2.0)
       None => @halt.saying("\{s.name}: its quote's words not drawn")
     }
-    t.move(x, y)
+    t.move_to(x, y)
     t.run_for(@sf.tip_delay_ms - @ui.move_most_ms)
     looks.push(cmp_drawn(t))
     t.run_for(@ui.move_most_ms)
@@ -223,7 +223,7 @@ fn qt_unknown(faults : Array[String]) -> Array[String] {
 fn qt_unbreathed(l : Array[String]) -> Array[String] {
   let out = l.map(fn(x) {
     if x.has_prefix("image ") {
-      let parts : Array[String] = x.split(",").map(fn(p) { p.to_string() }).collect()
+      let parts : Array[String] = x.split(",").map(fn(p) { p.to_owned() }).collect()
       parts.pop() |> ignore
       parts.join(",")
     } else {
@@ -366,7 +366,7 @@ test "what was sent from here quoting, as nodes, is drawn as outbox_row draws it
       None => dec_src(@signals.signal((None : Json?)), [])
     }
   }
-  let lines = fn(s : String) { s.split("\n").map(fn(l) { l.to_string() }).collect() }
+  let lines = fn(s : String) { s.split("\n").map(fn(l) { l.to_owned() }).collect() }
   let differ = []
   for c in cases {
     for w in [760.0, 390.0] {
