@@ -1115,6 +1115,9 @@ pub struct Tree {
   /// boxes changed is only marked (Node's boxes_due, in boxes_held_at), its boxes put again once as the change ends
   mut boxes_held : Int
   boxes_held_at : Array[Int]
+  /// boxes put in or taken out one at a time in the change being made (Tree::box_put_in, box_taken_out): past a few,
+  /// its holders put again whole as it ends instead, as many made at once are
+  mut boxes_one_by_one : Int
   /// told as there is first something for a frame to do: what hosts it asks for a frame
   mut on_due : () -> Unit
   /// told as a node's pointer's shape is said anew (View::cursor): what hosts it shows the pointer's shape again, no frame
@@ -1396,6 +1399,7 @@ pub fn Tree::new(
     held_walked: 0,
     boxes_held: 0,
     boxes_held_at: [],
+    boxes_one_by_one: 0,
     timed: None,
     structuring: 0,
     measured_ms: 0.0,
@@ -7241,6 +7245,7 @@ fn View::box_appended(self : View, child : Int) -> Unit {
   // (telling the host of a new box of the root's can make another of the root's at once, before this one is put)
   if self.at == 0 {
     self.boxes_again()
+    self.tree.modals_told(within=child)
     return
   }
   let mut at = self.at
@@ -7248,7 +7253,12 @@ fn View::box_appended(self : View, child : Int) -> Unit {
     let parent = self.tree.nodes[at].parent
     let siblings = self.tree.nodes[parent].kids
     if parent == 0 || siblings.length() == 0 || siblings[siblings.length() - 1] != at {
-      self.boxes_again()
+      // (its box put in where it goes among its holder's, not all of them put again: Tree::box_put_in)
+      if !self.tree.box_put_in(child) {
+        self.boxes_again()
+      }
+      // (whether it takes input told it alone: the others' is what holds each and the modal layers, none of them changed)
+      self.tree.modals_told(within=child)
       return
     }
     at = parent
@@ -7298,8 +7308,11 @@ fn Tree::boxes_put(self : Tree, at : Int) -> Unit {
   }
   self.layout_marked_at(at, within=true)
   self.order_marked_in(at)
-  // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held)
-  self.modals_told(within=at)
+  // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held. Whether each it
+  // holds takes input is what holds it and the modal layers say (Tree::pressless_at), none of which a child come, gone
+  // or moved among the others changes: one come is told by what made it (View::box_appended, take_in), one leaving by
+  // View::leave, one let go needs none; not all it holds told again)
+  self.modals_marked()
 }
 
 ///|
@@ -7311,6 +7324,7 @@ fn Tree::holding_boxes(self : Tree, change : () -> Unit) -> Unit {
   change()
   self.boxes_held = self.boxes_held - 1
   if self.boxes_held == 0 {
+    self.boxes_one_by_one = 0
     self.boxes_flushed()
   }
 }
@@ -7333,11 +7347,139 @@ fn Tree::boxes_flushed(self : Tree) -> Unit {
 }
 
 ///|
+/// The last box node `at` lays out among its holder's (its own; a slot's, the last of what it holds that lays one
+/// out): none where it lays out none (an empty slot).
+fn Tree::last_box(self : Tree, at : Int) -> @flex.Node? {
+  let n = self.nodes[at]
+  if !n.slot {
+    return Some(n.flex)
+  }
+  let mut i = n.kids.length() - 1
+  while i >= 0 {
+    match self.last_box(n.kids[i]) {
+      Some(b) => return Some(b)
+      None => ()
+    }
+    i = i - 1
+  }
+  None
+}
+
+///|
+/// The box laid out just before node `at`'s among the boxes of the node that lays it out (the first not a slot holding
+/// it): the last box of what comes before it in its slots, as far up as that holder; none where it is the first.
+fn Tree::box_before(self : Tree, at : Int) -> @flex.Node? {
+  let mut c = at
+  while true {
+    let p = self.nodes[c].parent
+    guard p >= 0 else { return None }
+    let kids = self.nodes[p].kids
+    let mut j = match kids.search(c) {
+      Some(i) => i - 1
+      None => return None
+    }
+    while j >= 0 {
+      match self.last_box(kids[j]) {
+        Some(b) => return Some(b)
+        None => ()
+      }
+      j = j - 1
+    }
+    if !self.nodes[p].slot {
+      return None
+    }
+    c = p
+  }
+  None
+}
+
+///|
+/// The node that lays out node `at`'s box: the first not a slot holding it; none where none does.
+fn Tree::box_holder(self : Tree, at : Int) -> Int {
+  let mut h = self.nodes[at].parent
+  while h >= 0 && self.nodes[h].slot {
+    h = self.nodes[h].parent
+  }
+  h
+}
+
+///|
+/// Whether one more box may be put in or taken out by itself in the change being made: any outside a change that
+/// makes many (Tree::holding_boxes); in one, a few, then all of its holders put again whole once as it ends.
+fn Tree::box_one_more(self : Tree) -> Bool {
+  if self.boxes_held == 0 {
+    return true
+  }
+  if self.boxes_one_by_one >= boxes_one_by_one_most {
+    return false
+  }
+  self.boxes_one_by_one = self.boxes_one_by_one + 1
+  true
+}
+
+///|
+/// Node `at`'s box (it no slot, just held) put in among its holder's where it goes, not all of them put again; its
+/// holder marked to be laid out, the order to be made again there. Whether it was: not where its holder is due to be
+/// put again whole anyway, nor where the box before it is not among its holder's (all put again then).
+fn Tree::box_put_in(self : Tree, at : Int) -> Bool {
+  let n = self.nodes[at]
+  guard !n.slot && n.parent >= 0 else { return false }
+  let h = self.box_holder(at)
+  guard h > 0 && !self.nodes[h].boxes_due else { return false }
+  let children = self.nodes[h].flex.children
+  let pos = match self.box_before(at) {
+    None => 0
+    Some(b) =>
+      match children.search_by(fn(c) { physical_equal(c, b) }) {
+        Some(i) => i + 1
+        None => return false
+      }
+  }
+  guard self.box_one_more() else { return false }
+  children.insert(pos, n.flex)
+  if n.flex.style.gone_empty {
+    self.nodes[h].flex.holds_gone = true
+  }
+  self.layout_marked_at(h, within=true)
+  self.order_marked_in(h)
+  true
+}
+
+///|
+/// Box `b` (of a node no slot that its holder `h` laid out) taken out of `h`'s, not all of them put again; `h` marked to
+/// be laid out, the order to be made again there. Whether it was: not where `h` is due to be put again whole anyway or
+/// does not hold it.
+fn Tree::box_taken_out(self : Tree, h : Int, b : @flex.Node) -> Bool {
+  guard h > 0 && h < self.nodes.length() && self.nodes[h].live && !self.nodes[h].boxes_due else { return false }
+  let children = self.nodes[h].flex.children
+  let i = match children.search_by(fn(c) { physical_equal(c, b) }) {
+    Some(i) => i
+    None => return false
+  }
+  guard self.box_one_more() else { return false }
+  children.remove(i) |> ignore
+  self.layout_marked_at(h, within=true)
+  self.order_marked_in(h)
+  self.modals_marked()
+  true
+}
+
+///|
+/// How many boxes a change that makes many (Tree::holding_boxes) puts in or takes out one at a time before its holders
+/// are put again whole as it ends instead (each one a search of what its holder lays out).
+let boxes_one_by_one_most : Int = 8
+
+///|
 /// Node `v` let go and taken out of what it holds.
 fn View::drop(self : View, v : View) -> Unit {
   // (one of an id in it, in a change: kept till the change is committed whole, flying from there or let go of then)
   if self.tree.departs(self, v) {
     return
+  }
+  // (its box, as it laid one out: taken out of its holder's by itself below, not all of them put again)
+  let own = match v.live() {
+    Some(m) if !m.slot => Some(m.flex)
+    _ => None
   }
   v.let_go()
   guard self.live() is Some(n) else { return }
@@ -7345,7 +7487,11 @@ fn View::drop(self : View, v : View) -> Unit {
     Some(i) => n.kids.remove(i) |> ignore
     None => ()
   }
-  self.boxes_again()
+  let h = if n.slot { self.tree.box_holder(self.at) } else { self.at }
+  match own {
+    Some(b) if self.tree.box_taken_out(h, b) => ()
+    _ => self.boxes_again()
+  }
 }
 
 ///|
@@ -7618,6 +7764,8 @@ fn[T : Eq, K : Hash + Eq] each_change(
   slot.tree.work.structure = slot.tree.work.structure + 1
   let seen : Map[K, Bool] = Map([])
   let order : Array[Int] = []
+  // (the rows made by this change, each its own box put in where it goes: each_place)
+  let made_now : Array[Int] = []
   @signals.start_batch()
   for it in all {
     let k = key(it)
@@ -7650,6 +7798,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
               slot.comes(v, 0.0, 1.0) |> ignore
             }
             rows[k] = (v, item)
+            made_now.push(v.at)
             order.push(v.at)
           }
         }
@@ -7673,13 +7822,15 @@ fn[T : Eq, K : Hash + Eq] each_change(
   for k in ended {
     gone_rows.remove(k)
   }
-  each_place(slot, sn, order)
+  each_place(slot, sn, order, made=made_now)
 }
 
 ///|
 /// What View::each and View::each_of do last as their rows change: the rows in `order` (their nodes), what is leaving
-/// kept where it was, after what was before it; the slot's nodes put in that order where it differs.
-fn each_place(slot : View, sn : Node, order : Array[Int]) -> Unit {
+/// kept where it was, after what was before it; the slot's nodes put in that order where it differs. Where only rows
+/// made by this change (`made`) are out of their place, the others in theirs, each made one's box is taken out and put
+/// in again where it goes (Tree::box_taken_out, box_put_in), not all of the holder's put again.
+fn each_place(slot : View, sn : Node, order : Array[Int], made? : Array[Int] = []) -> Unit {
   // (what is leaving kept where it was, after what was before it)
   let tree = slot.tree
   for j, at in sn.kids {
@@ -7695,12 +7846,24 @@ fn each_place(slot : View, sn : Node, order : Array[Int]) -> Unit {
   let kids = sn.kids
   let moved = order.length() != kids.length() || order.mapi(fn(i, v) { kids[i] != v }).contains(true)
   if moved {
+    // (the others keep their order among themselves: only the made ones come where they go)
+    let fresh = fn(v : Int) { made.contains(v) }
+    let few = made.length() > 0 &&
+      kids.filter(fn(v) { !fresh(v) }) == order.filter(fn(v) { !fresh(v) })
     kids.clear()
     tree.marked_up(slot.at, true, true, false, false, true)
     for v in order {
       kids.push(v)
     }
-    slot.boxes_again()
+    let h = tree.box_holder(made.get(0).unwrap_or(slot.at))
+    let one_by_one = few &&
+      made.iter().all(fn(v) {
+        let m = tree.nodes[v]
+        !m.slot && tree.box_taken_out(h, m.flex) && tree.box_put_in(v)
+      })
+    if !one_by_one {
+      slot.boxes_again()
+    }
   }
 }
 

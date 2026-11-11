@@ -98,10 +98,10 @@ let change_settle_ms : Double = 100.0
 /// What one child put in (`in`) and taken out (`out`) of a column of 17 and of 170 works out again, as main had it:
 /// each may only fall. What grows with the column's children here grows with them for each change of any column.
 let column_change_known : Map[(Int, String), ChangeCount] = Map::from_array([
-  ((17, "in"), { inputs: 21, order: 19, boxes: 19, made: 1, copied: 54, handed: 252 }),
-  ((17, "out"), { inputs: 19, order: 18, boxes: 18, made: 0, copied: 51, handed: 225 }),
-  ((170, "in"), { inputs: 174, order: 172, boxes: 172, made: 1, copied: 513, handed: 2757 }),
-  ((170, "out"), { inputs: 172, order: 171, boxes: 171, made: 0, copied: 510, handed: 2730 }),
+  ((17, "in"), { inputs: 1, order: 19, boxes: 0, made: 1, copied: 54, handed: 252 }),
+  ((17, "out"), { inputs: 0, order: 18, boxes: 0, made: 0, copied: 51, handed: 225 }),
+  ((170, "in"), { inputs: 1, order: 172, boxes: 0, made: 1, copied: 513, handed: 2757 }),
+  ((170, "out"), { inputs: 0, order: 171, boxes: 0, made: 0, copied: 510, handed: 2730 }),
 ])
 
 ///|
