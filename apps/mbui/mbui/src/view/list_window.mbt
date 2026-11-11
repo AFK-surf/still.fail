@@ -118,6 +118,20 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // (the keys they were worked out for, where each is among them, and its height and whether it was laid out: made
   // again as the keys change, else only those whose height changed since)
   let laid_keys : Ref[Array[K]] = Ref([])
+  // (each key's number, given as it is first asked (words picked in its row: View::row_place), kept while the list
+  // lives: what its row is known by, whichever node it is made in (Tree's rows_named); a key come back the same row)
+  let row_numbers : Map[K, Int] = Map([])
+  let row_numbered = Ref(0)
+  let number_of = fn(k : K) {
+    match row_numbers.get(k) {
+      Some(n) => n
+      None => {
+        row_numbered.val = row_numbered.val + 1
+        row_numbers[k] = row_numbered.val
+        row_numbered.val
+      }
+    }
+  }
   let laid_at : Map[K, Int] = Map([])
   let laid_h : Array[(Double, Bool)] = []
   let height_of = fn(k : K) {
@@ -378,6 +392,22 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     v.owns(fn() { showing.remove(@signals.untracked(key)) }) |> ignore
     // (measured as it is laid out, in that layout: the column's fill, below)
     blocks.push((v, key))
+    // (known by its key as the row it is made for, read as its key is: taken for another key, that one's row from then;
+    // where a word in it is placed, View::row_place stops at it)
+    self.tree.nodes[v.at].each_row = true
+    let named = (
+      self.id(),
+      fn() { number_of(key()) },
+      fn() { laid_at.get(@signals.untracked(key)).unwrap_or(-1) },
+    )
+    self.tree.rows_named[v.at] = named
+    let v_at = v.at
+    v.owns(fn() {
+      if self.tree.rows_named.get(v_at) is Some(r) && physical_equal(r.2, named.2) {
+        self.tree.rows_named.remove(v_at)
+      }
+    })
+    |> ignore
     made(v)
   }
   // (how tall what it holds comes to: its blocks as they are counted, on its host's pixels, and its foot's room)
@@ -922,6 +952,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       .lays_out_alone()
       |> ignore
       let slot_at = slot.at
+      // (its key's row: where a word in it is placed, View::row_place stops at it)
+      self.tree.nodes[slot_at].each_row = true
+      let named = (self.id(), fn() { number_of(k) }, fn() { laid_at.get(k).unwrap_or(-1) })
+      self.tree.rows_named[slot_at] = named
+      slot.owns(fn() {
+        if self.tree.rows_named.get(slot_at) is Some(r) && physical_equal(r.2, named.2) {
+          self.tree.rows_named.remove(slot_at)
+        }
+      })
+      |> ignore
       self.tree.alone_asks[slot_at] = fn() {
         // (the block that shows its key)
         guard showing.contains(k) else { return false }
