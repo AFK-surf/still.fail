@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [af3361193](https://github.com/AFK-surf/still.fail/commit/af33611938021707c27c6c0d74a4cd5cf453bb31) app tests: late_core's switch tests begin their ru | 1.82 | 2.43 | 10.16 | 28.9 | 35.85 | 25.73 | 47.72 | 94.42 | 167.88 |
 | [cfc0e8fde](https://github.com/AFK-surf/still.fail/commit/cfc0e8fde50ebe7082861a75ebd79d2b6f72caf9) ci: the mbui app's tests at the rates once before  | 1.82 | 2.43 | 10.16 | 28.9 | 35.85 | 25.73 | 47.72 | 94.42 | 177.1 |
 | [0573e4a0b](https://github.com/AFK-surf/still.fail/commit/0573e4a0ba3e51418ca3e4db159bda349d595b39) core test: what each topic sends is the same put o | 1.82 | 2.43 | 10.16 | 28.89 | 35.84 | 25.73 | 47.7 | 94.37 | 173.43 |
 | [e537bd092](https://github.com/AFK-surf/still.fail/commit/e537bd092bceaada08e4c74b23680cee7fae4906) app: a workspace switch keeps the screen as it was | 1.82 | 2.43 | 10.16 | 28.89 | 35.84 | 25.73 | 47.7 | 94.36 | 182.55 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [d61f237d6](https://github.com/AFK-surf/still.fail/commit/d61f237d694dc35aa680d4f3d804819771b81d48) sf: a style on a node draws its border, as its edg | 1.81 | 2.42 | 10.07 | 28.81 | 35.55 | 25.65 | 47.47 | 94.42 | 134.74 |
 | [b805f72e7](https://github.com/AFK-surf/still.fail/commit/b805f72e7df416d481c5dbf7ea41265d4bc0247e) sf: a sheet's foot of nodes keeps its buttons whol | 1.81 | 2.42 | 10.07 | 28.81 | 35.55 | 25.65 | 47.47 | 94.93 | 183.54 |
 | [2cdb3ab04](https://github.com/AFK-surf/still.fail/commit/2cdb3ab040f068fcd7ab15c9d14316ca9db55030) app: a history's model and its station, and an act | 1.81 | 2.42 | 10.07 | 28.81 | 35.55 | 25.65 | 47.47 | 94.5 | 186.35 |
-| [224daa17e](https://github.com/AFK-surf/still.fail/commit/224daa17e9b815b8d33dd3aa1784663e287bc704) core, app: a model control and a new chat send wha | 1.81 | 2.42 | 10.07 | 28.81 | 35.54 | 25.65 | 47.47 | 94.6 | 130.15 |
