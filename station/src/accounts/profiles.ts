@@ -74,6 +74,10 @@ export type ProfileQuota = {
   checkedAt: number;
   /// Asked with a login that turned out to be over: its profile's check is updated. Not kept in the allowance.
   signedOut?: boolean;
+  /// Asked and not answered: the provider was not reached, gave no answer in time, or was itself in trouble (429, a
+  /// 5xx). It says nothing of the allowance, so the one read before stands a while (Accounts.askQuota). Not kept in
+  /// the allowance.
+  unanswered?: boolean;
 };
 
 /// Where the providers are: the real ones unless a test says otherwise.

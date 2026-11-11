@@ -64,6 +64,9 @@ type Json = any;
 
 /// How often allowances are asked again while someone follows.
 const QUOTA_EVERY_MS = 5 * 60_000;
+/// How long an allowance read stands while its provider gives no answer (six rounds): past it the failure is said, so
+/// a station long off the network says that, not an allowance of hours ago (the user, 2026-11-11).
+const QUOTA_STANDS_MS = 30 * 60_000;
 /// A Claude token handed to a process (or lent to another station) that cannot renew it is renewed first when it would
 /// last less than this, so it is not swapped soon after.
 const HANDED_MARGIN_MS = 3600_000;
@@ -212,6 +215,9 @@ export class Accounts {
   private checks = new Map<string, ProfileCheck>();
   private quotas = new Map<string, ProfileQuota>();
   private quotaBusy = new Map<string, Promise<void>>();
+  /// The profiles whose allowance was last asked without an answer while the one read before stood: what was said of
+  /// it (told to a person who asks it again: askedQuota) and when (it is not asked again before the next round).
+  private quotaUnanswered = new Map<string, { detail: string; at: number }>();
   /// A host on an older version may know the reset count but not the cards' expiries. Try the borrowed login at most
   /// once a round for the same count, including when the provider cannot supply all of the details.
   private resetDetailsAsked = new Map<string, { at: number; count: number }>();
@@ -401,8 +407,7 @@ export class Accounts {
   /// How a profile is doing, told to a station borrowing it: its allowance asked again first when older than a round
   /// (the rounds run only while someone follows this station, and the borrower is not someone).
   async lentHealth(id: string): Promise<ProfileHealth> {
-    const q = this.quotas.get(id);
-    if (q === undefined || this.background.now() - q.checkedAt >= QUOTA_EVERY_MS) await this.refreshQuota(id).catch(() => null);
+    if (!this.quotas.has(id) || this.background.now() - this.quotaAskedAt(id) >= QUOTA_EVERY_MS) await this.refreshQuota(id).catch(() => null);
     return this.health(id);
   }
 
@@ -1158,13 +1163,31 @@ export class Accounts {
     return this.readQuota(id, false);
   }
 
+  /// When a profile's allowance was last asked, answered or not (what stands through a question unanswered keeps the
+  /// time it was read: askQuota).
+  private quotaAskedAt(id: string): number {
+    return Math.max(this.quotas.get(id)?.checkedAt ?? 0, this.quotaUnanswered.get(id)?.at ?? 0);
+  }
+
+  /// The same asked by a person (the route's), who is told what came of it: the question on its way waited for, and
+  /// one that got no answer refused saying so, the allowance read before left standing.
+  async askedQuota(id: string): Promise<ProfileQuota | null> {
+    const busy = this.quotaBusy.get(id);
+    if (busy) await busy;
+    else await this.readQuota(id, false);
+    const unanswered = this.quotaUnanswered.get(id);
+    if (unanswered !== undefined) throw new Refusal(502, unanswered.detail);
+    return this.quotas.get(id) ?? null;
+  }
+
   private readQuota(id: string, afterReset: boolean): Promise<ProfileQuota | null> {
     const busy = this.quotaBusy.get(id);
     if (busy && !afterReset) return Promise.resolve(this.quotas.get(id) ?? null);
     // A read after a reset waits for any older one, so an in-flight snapshot from before cannot win.
     const read = (async () => {
       if (busy) await busy;
-      return this.askQuota(id);
+      // (asked because it changed, a reset used or signed in anew: what was read before is not what stands)
+      return this.askQuota(id, !afterReset);
     })();
     const done: Promise<void> = read.then(
       () => {},
@@ -1177,10 +1200,14 @@ export class Accounts {
     return read;
   }
 
-  private async askQuota(id: string): Promise<ProfileQuota | null> {
+  /// `stands`: whether the allowance read before stands where this question gets no answer.
+  private async askQuota(id: string, stands: boolean): Promise<ProfileQuota | null> {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
-    if (profile.enabled === false) return this.quotas.get(id) ?? null;
+    if (profile.enabled === false) {
+      this.quotaUnanswered.delete(id);
+      return this.quotas.get(id) ?? null;
+    }
     const generation = this.loginGeneration.get(id) ?? 0;
     // Another station's subscription: a Codex one's is read with the login its host lent while that is good; otherwise
     // (none lent yet, run out, refused) it comes with its host's check.
@@ -1222,8 +1249,18 @@ export class Accounts {
       return this.quotas.get(id) ?? null;
     }
     if (!this.quotaFn) return this.quotas.get(id) ?? null;
-    const { signedOut, ...asked } = await this.quotaFn(profile);
+    const { signedOut, unanswered, ...asked } = await this.quotaFn(profile);
     if ((this.loginGeneration.get(id) ?? 0) !== generation) return this.quotas.get(id) ?? null;
+    // No answer (the provider not reached, or in trouble itself) says nothing of the allowance: the one read before
+    // stands, with when it was read, till an answer comes or it is too old to show. One such miss took every Claude
+    // account's allowance and resets off their pages for a round (2026-11-11). Asked again each round as ever: what
+    // stands keeps its `checkedAt`.
+    const before = this.quotas.get(id);
+    if (stands && unanswered === true && before?.state === "ok" && this.background.now() - before.checkedAt < QUOTA_STANDS_MS) {
+      this.quotaUnanswered.set(id, { detail: asked.detail ?? "", at: this.background.now() });
+      return before;
+    }
+    this.quotaUnanswered.delete(id);
     let current = asked;
     let refused = signedOut === true;
     if (profile.runtime === "codex" && accessKind(profile) === "subscription" && refused) {
@@ -1255,8 +1292,7 @@ export class Accounts {
     const now = this.background.now();
     for (const p of this.profiles()) {
       if (p.enabled === false) continue;
-      const q = this.quotas.get(p.id);
-      const fresh = q !== undefined && now - q.checkedAt < QUOTA_EVERY_MS - 1000;
+      const fresh = this.quotas.has(p.id) && now - this.quotaAskedAt(p.id) < QUOTA_EVERY_MS - 1000;
       if (fresh && !all) {
         this.refreshMissingBorrowedResetDetails(p);
         continue;

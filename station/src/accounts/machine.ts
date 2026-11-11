@@ -92,7 +92,11 @@ export class MachineLogins {
       for (const l of logins.filter((l) => l.loggedIn && l.usable)) {
         try {
           const q = (await this.usage(l.runtime, this.env)) ?? null;
-          l.quota = q !== null && typeof q === "object" ? { ...q, checkedAt: this.clock.currentTimeMillisUnsafe() } : q;
+          if (q !== null && typeof q === "object") {
+            // (what a question's answer says of the asking, not of the allowance: not kept in it)
+            const { signedOut: _, unanswered: __, ...asked } = q;
+            l.quota = { ...asked, checkedAt: this.clock.currentTimeMillisUnsafe() };
+          } else l.quota = q;
         } catch {
           l.quota = null;
         }

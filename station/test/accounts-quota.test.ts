@@ -103,10 +103,15 @@ describe("allowances and renewing", { concurrency: true }, () => {
     assert.equal((await ask(revoked, "en")).detail, "ChatGPT sign-in is no longer valid. Sign in again.");
     const network = await ask("failed to fetch codex rate limits: error sending request: connection refused");
     assert.deepEqual([network.state, network.signedOut, network.detail], ["unavailable", undefined, "无法连接服务商，请检查此 station 的网络或代理"]);
+    // Not reached, or the provider in trouble itself: no answer about the allowance (the one read before stands a
+    // while: Accounts). What it says of the account is an answer.
+    assert.deepEqual([q.unanswered, network.unanswered], [undefined, true]);
     const busy = await ask("failed to fetch codex rate limits: GET /usage failed: 503 Service Unavailable; body=private");
     assert.deepEqual([busy.state, busy.signedOut, busy.detail], ["unavailable", undefined, "ChatGPT 暂时无法提供额度信息（HTTP 503）"]);
+    assert.equal(busy.unanswered, true);
     const blocked = await ask("failed to fetch codex rate limits: GET /usage failed: 403 Forbidden; account has been suspended");
     assert.deepEqual([blocked.state, blocked.detail], ["blocked", "ChatGPT 账号已被停用"]);
+    assert.equal(blocked.unanswered, undefined);
     const other = await ask("internal error: private diagnostics 401");
     assert.deepEqual([other.state, other.signedOut, other.detail], ["unavailable", undefined, "暂时无法查询 ChatGPT 额度，请稍后重试"]);
   });
@@ -119,6 +124,17 @@ describe("allowances and renewing", { concurrency: true }, () => {
     await p.close();
     const quota = await machineUsage("codex", { CODEX_HOME: dir }, { ...URLS, chatgpt: p.base }, "zh");
     assert.deepEqual([quota!.state, quota!.detail], ["unavailable", "无法连接服务商，请检查此 station 的网络或代理"]);
+    assert.equal(quota!.unanswered, true);
+  });
+
+  test("a provider in trouble itself gives no answer about the allowance; what it says of the account is one", async () => {
+    const said: Record<number, boolean | undefined> = {};
+    for (const status of [500, 503, 429, 401, 403, 404]) {
+      const p = await provider(() => ({ status, body: {} }));
+      said[status] = (await claudeUsage(p.base, "t", "zh")).unanswered;
+      await p.close();
+    }
+    assert.deepEqual(said, { 500: true, 503: true, 429: true, 401: undefined, 403: undefined, 404: undefined });
   });
 
   test("codex credits and resets are independent of windows and preserve unknowns", () => {
