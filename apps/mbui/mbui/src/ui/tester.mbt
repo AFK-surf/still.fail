@@ -387,6 +387,10 @@ pub fn Tester::new(
     image_ids: 0,
     decode_after: {},
     decode_due: {},
+    image_bytes: {},
+    image_bytes_now: 0,
+    image_bytes_most: 0,
+    made_at: loc.to_string(),
     bold: 0.0,
     ui_face: 0.0,
     generation: 0,
@@ -2460,6 +2464,13 @@ pub fn Tester::image_src(self : Tester, id : Int) -> String {
 /// The images loaded so far: source and the size asked for.
 pub fn Tester::image_loads(self : Tester) -> Array[(String, Int)] {
   self.fake.image_loads
+}
+
+///|
+/// The most bytes handed over for decodes (image_load_bytes) the host held at once in this run: what a host keeps of
+/// them till they are let go of (image_free), as a phone's Java side kept a GIF's every frame's (#5301).
+pub fn Tester::host_image_bytes_most(self : Tester) -> Int {
+  self.fake.image_bytes_most
 }
 
 ///|
