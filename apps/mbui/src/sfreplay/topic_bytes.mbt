@@ -14,7 +14,8 @@
 // A subscription let go of keeping its value (`keep`: @core.Client::keep) is held till the core's answer, `{id, v}`,
 // its last message: what came for it before that is applied to what is kept, so it is not for what was let go of,
 // nor is that answer (the coordinator of the migration, 2026-11-10). A `same` (asked with `have`, its value unchanged)
-// is no value sent: nothing counted.
+// is no value sent: nothing counted. Nor is what changed from the value kept (`{id, delta, kept}`, asked with `have`,
+// its value changed): a message of its size as any delta, not a value whole, nor one sent again.
 
 ///|
 /// What one trace says came for the app's subscriptions (tape_topics).

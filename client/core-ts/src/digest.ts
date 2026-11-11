@@ -16,8 +16,9 @@ export function digest(v: unknown): string {
 }
 
 /// The version of a topic's value as it went to a subscriber (store.ts: a subscription's `have`, an unsubscribe's
-/// `v`): its canonical JSON's length and its hash, `<length>:<hash>` in base 36. Made of the value alone, so the core
-/// keeps nothing for a topic no one subscribes to, and a version a client kept is asked about the same way later. The
+/// `v`): its canonical JSON's length and its hash, `<length>:<hash>` in base 36. Made of the value alone, so a topic
+/// evicted and made again still answers `same` to a version a client kept, and nothing of it is kept to answer that
+/// (what the store remembers for a client, `#kept`, is only to send what changed where it is not the same). The
 /// length beside the hash makes two values taken for one (cyrb53 is 53 bits, not a cryptographic hash) the less likely
 /// still; were the way it is made ever changed, a version kept from before would match nothing, and the value would
 /// only go whole again.

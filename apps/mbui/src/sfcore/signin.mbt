@@ -485,6 +485,9 @@ pub let trace_switches : Array[String] = [
   // items) gone from it, so only the replay reads it: a trace without it has the app's `connect` and
   // `connectCandidates` read out of its run's `connects {scope, mine:false}` (src/sfreplay/source.mbt))
   "MBUI_CONNECT_ROWS",
+  // (a chat, however it is asked, kept as it is let go of as the lists are, the last few of them, and asked again with
+  // its version: the core answering `same`, or what changed from it (`{id, delta, kept}`); sfbase's `topic_kept`)
+  "MBUI_KEEP_CHAT",
 ]
 
 ///|

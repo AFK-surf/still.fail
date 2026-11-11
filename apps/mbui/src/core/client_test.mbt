@@ -663,7 +663,7 @@ test "what the core says to an id nothing holds is taken as it comes, and as a f
 ///|
 test "a kept topic is let go of keeping its value till the core says its version, and asked again with it" {
   let (c, sent) = recorder()
-  c.keep(fn(name, _) { name == "stations" })
+  c.keep(fn(name, _) { if name == "stations" { 64 } else { 0 } })
   let s = c.subscribe("stations", params={ "scope": "ws" })
   c.receive("{\"id\":1,\"value\":[{\"id\":\"a\",\"t\":\"A\"}]}") |> ignore
   c.unsubscribe(s)
@@ -708,7 +708,7 @@ test "a kept topic is let go of keeping its value till the core says its version
 ///|
 test "a topic not kept, or one with no value, is let go of as ever" {
   let (c, sent) = recorder()
-  c.keep(fn(name, _) { name == "stations" })
+  c.keep(fn(name, _) { if name == "stations" { 64 } else { 0 } })
   let other = c.subscribe("accounts")
   c.receive("{\"id\":1,\"value\":[]}") |> ignore
   c.unsubscribe(other)
@@ -721,7 +721,7 @@ test "a topic not kept, or one with no value, is let go of as ever" {
 ///|
 test "a kept value is forgotten by reset" {
   let (c, sent) = recorder()
-  c.keep(fn(name, _) { name == "stations" })
+  c.keep(fn(name, _) { if name == "stations" { 64 } else { 0 } })
   let s = c.subscribe("stations", params={ "scope": "ws" })
   c.receive("{\"id\":1,\"value\":[1]}") |> ignore
   c.unsubscribe(s)
@@ -729,4 +729,72 @@ test "a kept value is forgotten by reset" {
   c.reset()
   c.subscribe("stations", params={ "scope": "ws" }) |> ignore
   assert_eq(sent[sent.length() - 1].stringify(), ({ "id": 1, "subscribe": { "topic": "stations", "scope": "ws" }, "keyed": true } : Json).stringify())
+}
+
+///|
+test "a kept topic asked again is given what changed from what it kept: applied, the same value as whole" {
+  let (c, sent) = recorder()
+  c.keep(fn(name, _) { if name == "stations" { 64 } else { 0 } })
+  let s = c.subscribe("stations", params={ "scope": "ws" })
+  c.receive("{\"id\":1,\"value\":[{\"id\":\"a\",\"t\":\"A\"},{\"id\":\"b\",\"t\":\"B\"}]}") |> ignore
+  c.unsubscribe(s)
+  c.receive("{\"id\":1,\"v\":\"k:1\"}") |> ignore
+  let again = c.subscribe("stations", params={ "scope": "ws" })
+  assert_eq(sent[sent.length() - 1].stringify(), ({ "id": 2, "subscribe": { "topic": "stations", "scope": "ws" }, "keyed": true, "have": "k:1" } : Json).stringify())
+  // (nothing of it shown before the core's answer)
+  assert_true(again.value is None)
+  let v0 = c.version
+  c.receive(
+    "{\"id\":2,\"kept\":true,\"delta\":[{\"path\":[],\"key\":[\"id\"],\"patch\":\"a\",\"ops\":[{\"path\":[\"t\"],\"set\":\"A2\"}]},{\"path\":[],\"key\":[\"id\"],\"put\":{\"id\":\"c\",\"t\":\"C\"},\"before\":null}]}",
+  )
+  |> ignore
+  assert_eq(again.version, 1)
+  assert_eq(c.version, v0 + 1)
+  // The same as the value whole would have been
+  let whole = c.subscribe("stations", params={ "scope": "other" })
+  c.receive("{\"id\":3,\"value\":[{\"id\":\"a\",\"t\":\"A2\"},{\"id\":\"b\",\"t\":\"B\"},{\"id\":\"c\",\"t\":\"C\"}]}") |> ignore
+  assert_eq(again.value.unwrap().stringify(), whole.value.unwrap().stringify())
+  // Taken out as it came: let go of without keeping and asked again, no version said.
+  c.keep(fn(_, _) { 0 })
+  c.unsubscribe(again)
+  c.subscribe("stations", params={ "scope": "ws" }) |> ignore
+  assert_eq(sent[sent.length() - 1].stringify(), ({ "id": 4, "subscribe": { "topic": "stations", "scope": "ws" }, "keyed": true } : Json).stringify())
+}
+
+///|
+test "a topic's name keeps as many values as said, the oldest forgotten; one forgotten before its answer is asked whole" {
+  let (c, sent) = recorder()
+  c.keep(fn(name, _) { if name == "chat" { 4 } else if name == "stations" { 64 } else { 0 } })
+  let list = c.subscribe("stations", params={ "scope": "ws" })
+  c.receive("{\"id\":1,\"value\":[]}") |> ignore
+  c.unsubscribe(list)
+  c.receive("{\"id\":1,\"v\":\"l:1\"}") |> ignore
+  // Five chats opened and let go of: the four last kept, and the list beside them.
+  for i in 0..<5 {
+    let s = c.subscribe("chat", params={ "station": "ws/a", "session": "s\{i}" })
+    c.receive("{\"id\":\{s.id},\"value\":{\"title\":\"\{i}\"}}") |> ignore
+    c.unsubscribe(s)
+    c.receive("{\"id\":\{s.id},\"v\":\"c:\{i}\"}") |> ignore
+  }
+  let had = fn() { sent[sent.length() - 1].stringify().contains("\"have\"") }
+  let first = c.subscribe("chat", params={ "station": "ws/a", "session": "s0" })
+  assert_false(had(), msg="the oldest chat forgotten")
+  let second = c.subscribe("chat", params={ "station": "ws/a", "session": "s1" })
+  assert_true(had())
+  c.subscribe("stations", params={ "scope": "ws" }) |> ignore
+  assert_true(had(), msg="the list not counted with the chats")
+  // Asked with its version, its kept value forgotten before the answer (four more chats let go of meanwhile): what
+  // changed from it cannot be applied, so it is asked again, whole.
+  for i in 5..<9 {
+    let s = c.subscribe("chat", params={ "station": "ws/a", "session": "s\{i}" })
+    c.receive("{\"id\":\{s.id},\"value\":{\"title\":\"\{i}\"}}") |> ignore
+    c.unsubscribe(s)
+    c.receive("{\"id\":\{s.id},\"v\":\"c:\{i}\"}") |> ignore
+  }
+  c.receive("{\"id\":\{second.id},\"kept\":true,\"delta\":[{\"path\":[\"title\"],\"set\":\"1b\"}]}") |> ignore
+  assert_true(second.value is None)
+  assert_eq(sent[sent.length() - 1].stringify(), ({ "id": second.id, "subscribe": { "topic": "chat", "station": "ws/a", "session": "s1" }, "keyed": true } : Json).stringify())
+  c.receive("{\"id\":\{second.id},\"value\":{\"title\":\"1b\"}}") |> ignore
+  assert_eq(second.value.unwrap().stringify(), "{\"title\":\"1b\"}")
+  assert_true(first.value is None)
 }

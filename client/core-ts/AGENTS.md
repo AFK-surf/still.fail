@@ -29,7 +29,8 @@ each time it came. So what a topic sends is bounded (the user, 2026-11-10): `tes
 way the app asks each topic on a workspace of real size (`test/real-size.ts`), a value sent whole at most 32 KB, a
 message as something changes at most 4 KB. A list's item carries what its row shows; a page of one thing asks that
 thing's own topic; a field one page needs is not added to a list every page holds; a new topic is placed in the test's
-tables. Its `OVER` tables only fall.
+tables. Its `OVER` tables only fall. A topic the app lets go of keeping its value (`keep`) and asks again (`have`) is
+sent `same`, or what changed from what it kept (store.ts `#first`), held to the change's bar too (`OVER_AGAIN`).
 
 ## What is shared is never written
 

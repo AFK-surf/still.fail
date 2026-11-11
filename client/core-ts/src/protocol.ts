@@ -15,10 +15,13 @@ export type ClientMessage =
   /// `from`: another of its subscriptions to the same topic with other params (a list's first rows, more of them asked
   /// now), still held: this one's first value goes as a keyed delta to what that one has (store.ts `#firstFrom`).
   /// `have`: the version (digest.ts `version`) of the value it holds of this topic, kept from an unsubscribe's `v`:
-  /// where the topic's value is that one still, its first message is `{id, same: true}`, not the value again.
+  /// where the topic's value is that one still, its first message is `{id, same: true}`, not the value again; else,
+  /// where the core remembers that value for this client, `{id, delta, kept: true}`, what changed from it (store.ts
+  /// `#first`); else the value whole.
   | { kind: "subscribe"; id: RequestId; subscribe: Topic; keyed?: boolean; from?: RequestId; have?: string }
   /// `keep`: the client keeps what it holds of the topic, to ask with it again (`have`): answered `{id, v}`, the last
-  /// message for this id, what it holds by then being the value `v` is the version of.
+  /// message for this id, what it holds by then being the value `v` is the version of. The core remembers that value
+  /// for the client a while (store.ts `#kept`).
   | { kind: "unsubscribe"; id: RequestId; unsubscribe: boolean; keep?: boolean }
   | { kind: "cancel"; id: RequestId; cancel: boolean };
 
@@ -37,6 +40,9 @@ export type CoreMessage =
   | { id: RequestId; waiting: true }
   /// A subscription asked with `have`: the topic's value is the one it holds; nothing of it is sent.
   | { id: RequestId; same: true }
+  /// A subscription asked with `have`, its first message: what changed from the value of that version, which the client
+  /// kept as it let go of the topic, to the topic's value now (keyed ops to a keyed subscriber, as `delta`).
+  | { id: RequestId; delta: AnyOp[]; kept: true }
   /// An unsubscribe with `keep` answered, its id's last message: the version of the value the client holds of it now
   /// (null: it had none).
   | { id: RequestId; v: string | null };

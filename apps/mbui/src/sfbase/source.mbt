@@ -235,12 +235,27 @@ fn read_topic_state(src : Source, name : String, params : Map[String, Json]) -> 
 let lasting : Array[String] = ["workspace", "stations", "stationNet", "profiles", "connects", "vaults", "usage", "archive"]
 
 ///|
-/// Whether topic `name` asked with `params` (its JSON as the core is asked it, its name in it too) is one of the
-/// lists the places open on (`lasting`), whose value the core's client keeps as it is let go of, to ask it again with
-/// its version (@core.Client::keep: the core answers `same` where it has not changed).
-pub fn lasting_kept(name : String, params : Json) -> Bool {
-  lasting.contains(name) && !(params is Object(p) && p.contains("q"))
+/// How many values of topic `name` asked with `params` (its JSON as the core is asked it, its name in it too) the
+/// core's client keeps as they are let go of, to ask them again with their version (@core.Client::keep: the core
+/// answers `same` where one has not changed, what changed from it where it has); 0, none. The lists the places open
+/// on (`lasting`, as many as last_said keeps), and a chat however it is asked (its session, a thread, `compact`):
+/// `chats_kept` of those, a decoded chat being the largest tree the app holds. Unlike the lists (last_said), a chat's
+/// value kept is never shown before the core's answer: a chat's page and a row's read ahead have it only as that comes.
+pub fn topic_kept(name : String, params : Json) -> Int {
+  if name == "chat" {
+    chats_kept
+  } else if lasting.contains(name) && !(params is Object(p) && p.contains("q")) {
+    last_most
+  } else {
+    0
+  }
 }
+
+///|
+/// How many chats' values are kept at a time (topic_kept), the oldest forgotten: a chat opened again, or read ahead
+/// again from its row, among the last few is answered with what changed in it, not the whole of it (a phone's ~180 KB,
+/// 17-21 ms to decode).
+let chats_kept : Int = 4
 
 ///|
 /// What a source last said of a lasting topic. `version` is below every core's (those count up from 0), another for

@@ -28,6 +28,7 @@ import { holdLanguage } from "../src/i18n.ts";
 import { parseTopic, TOPICS, type Topic } from "../src/protocol.ts";
 import { OUTLINE_FOUND, OUTLINE_ROWS } from "../src/things.ts";
 import { CHAT, OUTLINED, OUTLINED_ENTRIES, UP, devicesSaid, fixture, hostReading, messageAdded, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, quotaChanged } from "./real-size.ts";
+import { applyKeyed } from "../src/collections.ts";
 import { hostOf, overview, setup } from "./views-rig.ts";
 
 holdLanguage();
@@ -430,6 +431,106 @@ test("what looking in a chat's outline finds holds to the bar on a chat of real 
     t.store.runner.shutdown();
   }
 });
+
+// ── asked again ──
+//
+// A topic the app keeps as it lets go of it (`keep`), asked again with the version it kept (`have`), is sent `same`
+// where it has not changed, else what changed from what it kept (store.ts `#first`), else its value whole. Measured
+// for every way the app asks such a topic: let go of, each cause above happening while it is, asked again; its first
+// message at most `DELTA_BAR_KB`, those over in `OVER_AGAIN` (by `<name>/<cause>`, as `OVER_DELTA`), which only falls.
+
+/// The topics the app keeps as it lets go of them (apps/mbui/src/sfbase/source.mbt `topic_kept`: the lists the places
+/// open on, `lasting`, and `chat`).
+const KEPT = new Set(["workspace", "stations", "stationNet", "profiles", "connects", "vaults", "usage", "archive", "chat"]);
+
+/// Those whose first message asked again after a cause is over `DELTA_BAR_KB`, by `<name>/<cause>`: KB as in `OVER`.
+const OVER_AGAIN: Record<string, number> = {
+  "chat/quota": 8,
+  "chat compact/quota": 8,
+};
+
+/// What `m`, a first message, is: `same`, `kept` (what changed from what was kept), `value` (whole), else `?`.
+const said = (m: J): string => ("same" in m ? "same" : "kept" in m ? "kept" : "value" in m ? "value" : "?");
+
+test("what a topic the app keeps is sent as it is asked again after something changed holds to its bar", async () => {
+  const { t, base } = await held();
+  try {
+    const names = Object.keys(ASKED).filter((name) => KEPT.has(ASKED[name]!.topic));
+    const st = 0;
+    const causes: [string, () => void, number][] = [
+      ["host", () => t.set(hostOf(station), hostReading(t.host.nowMs(), st, 0.83)), 1000],
+      ["quota", () => t.set(overview(station), quotaChanged(base, t.host.nowMs(), st)), 1000],
+      ["message", () => {
+        for (const [topic, value] of messageAdded(base, t.host.nowMs())) t.set(topic, value);
+      }, 1000],
+      ["minute", () => {}, 60_000],
+    ];
+    /// The first message to `id` once `f` was done.
+    const firstTo = async (id: number, f: () => void): Promise<J> => {
+      t.host.takeEmitted();
+      f();
+      await t.host.time.pass(100);
+      return t.host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === id && !("waiting" in m));
+    };
+    let id = 10_000;
+    const measured = new Map<string, number>();
+    const rows: { name: string; whole: number; now: number; how: string }[] = [];
+    const faults: string[] = [];
+    for (const [cause, f, ms] of causes) {
+      // Each subscribed as the app asks it, and let go of keeping what it was sent.
+      const kept = new Map<string, { value: unknown; v: string }>();
+      for (const name of names) {
+        const at = ++id;
+        const m = await firstTo(at, () => t.store.subscribe(1, at, topicOf(name), true));
+        const v = await firstTo(at, () => t.store.unsubscribe(1, at, true));
+        if (m === undefined || !("value" in m) || typeof v?.v !== "string") faults.push(`${name}/${cause}: nothing kept (${JSON.stringify(m)?.slice(0, 80)}, ${JSON.stringify(v)})`);
+        else kept.set(name, { value: m.value, v: v.v });
+      }
+      t.host.takeEmitted();
+      f();
+      await t.host.time.pass(ms, 100);
+      // Asked again with it; and as one that kept nothing, whole, to weigh it against.
+      for (const [name, { value, v }] of kept) {
+        const again = ++id;
+        const fresh = ++id;
+        const m = await firstTo(again, () => t.store.subscribe(1, again, topicOf(name), true, undefined, v));
+        const w = await firstTo(fresh, () => t.store.subscribe(1, fresh, topicOf(name), true));
+        t.store.unsubscribe(1, again);
+        t.store.unsubscribe(1, fresh);
+        const at = `${name}/${cause}`;
+        if (m === undefined || w === undefined || !("value" in w)) {
+          faults.push(`${at}: ${JSON.stringify(m)?.slice(0, 80)}, ${JSON.stringify(w)?.slice(0, 80)}`);
+          continue;
+        }
+        // (what it holds then is what it would be sent whole)
+        const holds = "same" in m ? value : "kept" in m ? applyKeyed(value, m.delta) : m.value;
+        if (JSON.stringify(canonical(holds)) !== JSON.stringify(canonical(w.value))) faults.push(`${at}: asked again (${said(m)}), it holds another value than the one whole`);
+        measured.set(at, bytes(m));
+        rows.push({ name: at, whole: bytes(w), now: bytes(m), how: said(m) });
+      }
+    }
+    faults.push(...judge(measured, DELTA_BAR_KB, OVER_AGAIN, "OVER_AGAIN"));
+    if (print || faults.length > 0) {
+      const lines = [`What a topic kept is sent asked again, its first message (bar ${DELTA_BAR_KB} KB), beside its value whole:`];
+      for (const r of rows) {
+        const over = r.now > DELTA_BAR_KB * 1024;
+        lines.push(`  ${over ? "!" : " "} ${r.name.padEnd(28)} ${r.how.padEnd(6)} ${String(r.now).padStart(9)} B ${kb(r.now).toFixed(1).padStart(7)} KB   whole ${String(r.whole).padStart(9)} B ${kb(r.whole).toFixed(1).padStart(7)} KB`);
+      }
+      console.log(lines.join("\n"));
+    }
+    assert.deepEqual(faults, []);
+  } finally {
+    t.store.runner.shutdown();
+  }
+});
+
+/// `v` with every object's keys in order: two values alike whatever order their keys were made in.
+function canonical(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonical);
+  if (v === null || typeof v !== "object") return v;
+  const o = v as Record<string, unknown>;
+  return Object.fromEntries(Object.keys(o).sort().filter((k) => o[k] !== undefined).map((k) => [k, canonical(o[k])]));
+}
 
 test("every topic of the core is measured or says why not", () => {
   const asked = new Set(Object.values(ASKED).map((a) => a.topic));

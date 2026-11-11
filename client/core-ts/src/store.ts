@@ -6,7 +6,9 @@
 // they changed; a topic's first value goes out on the next turn instead. A subscriber's first message is the whole
 // value, the next ones only what changed (delta.ts), and an unchanged value sends nothing; one subscribed `from` another
 // of its subscriptions to the same topic (a list's first rows, more of them asked now) gets its first value as what
-// changed from that one's, not the whole of it again (#firstFrom). Code inside the core can
+// changed from that one's, not the whole of it again (#firstFrom); one asked again by a client that kept what it was
+// sent as it let go of the topic (`have`) gets `same` where it is that still, else what changed from that (#first).
+// Code inside the core can
 // `watch` a topic; a derived topic is `invalidate`d and computed by its source when its emission goes out. While no page
 // is in view (`inView`), what changed is kept from the subscribers and goes out as one difference per topic once one is.
 import { Effect } from "effect";
@@ -29,6 +31,11 @@ import { version } from "./digest.ts";
 
 export const COALESCE_MS = 50;
 export const EVICT_AFTER_MS = 60_000;
+/// How many values let go of keeping them (`keep`) are remembered for a client (#kept), the least recently let go of
+/// forgotten first: the app keeps the lists its places open on, a workspace's eight or so, and its last 4 chats
+/// (apps/mbui/src/sfbase/source.mbt `topic_kept`). One it keeps past these, asked again, is still answered `same`
+/// where it has not changed (a version needs nothing remembered), and whole where it has.
+export const KEPT_PER_CLIENT = 24;
 /// The topics a page opens with, each first subscriber's wait for its first value a trace of its own (`<topic>.open`,
 ///): how long a chat took to show, and how much of that the core spent making it.
 const OPENED = new Set(["chat"]);
@@ -133,8 +140,17 @@ export class Store {
   readonly #subscriptions = new Map<string, Topic>();
   /// A keyed subscriber's `from` (`client/id` to the id of the client's other subscription), till its first value goes.
   readonly #from = new Map<string, RequestId>();
-  /// A subscriber's `have` (`client/id` to the version of what it holds), till its first value goes (#same).
+  /// A subscriber's `have` (`client/id` to the version of what it holds), till its first value goes (#first).
   readonly #have = new Map<string, string>();
+  /// What each client holds of the topics it let go of keeping them (`keep`), by topic key: the value it was last sent,
+  /// whose version its `{id, v}` said, and that version; at most KEPT_PER_CLIENT, the least recently let go of first.
+  /// A subscription asked again with that version gets what changed from it (#first), not the value whole. It is
+  /// cheap: the value is the object that went out (shared, read-only: never a copy, never changed), the one the topic's
+  /// entry holds as `sent` while it lives, so it costs memory only once the topic is evicted or has moved on; and a
+  /// version is made only as a client lets go of a topic it keeps. One is forgotten as a subscription of that client to
+  /// that topic gets its first message (whatever it is: the client takes what it kept out with it too), and all of a
+  /// client's as it goes (dropClient).
+  readonly #kept = new Map<ClientId, Map<string, { ok: unknown; v: string }>>();
   #source: Source | null = null;
   #idleCount = 0;
   #watchCount = 0;
@@ -228,7 +244,7 @@ export class Store {
       this.#firstPending.set(key, entry);
       this.#wakePending(true);
     }
-    if (cached !== undefined) this.host.emit(client, this.#same(client, id, cached) ?? this.#firstFrom(client, id, topic, cached) ?? to(whole(cached), id));
+    if (cached !== undefined) this.host.emit(client, this.#first(client, id, topic, keyed, cached) ?? to(whole(cached), id));
     else {
       if (entry.waiting === true) this.host.emit(client, { id, waiting: true });
       if (entry.opening === undefined && this.#tracer !== null && OPENED.has(topic.topic)) {
@@ -313,7 +329,8 @@ export class Store {
   }
 
   /// `keep`: the client keeps what it holds of the topic (protocol.ts): answered `{id, v}`, the version of that, the
-  /// last message for `id`: what went to it before (a difference already on its way) it has applied by then.
+  /// last message for `id`: what went to it before (a difference already on its way) it has applied by then. That value
+  /// is remembered for the client (#kept), to send what changed from it as it asks again.
   unsubscribe(client: ClientId, id: RequestId, keep = false): void {
     const at = `${client}/${id}`;
     const topic = this.#subscriptions.get(at);
@@ -328,7 +345,9 @@ export class Store {
     if (keep) {
       // (what went to it last: the value it holds, every message to it going out in order; none, where none went)
       const had = entry?.subscribers.some(([c, i]) => c === client && i === id) ? entry.sent : undefined;
-      this.host.emit(client, { id, v: had !== undefined && "ok" in had ? version(had.ok) : null });
+      const v = had !== undefined && "ok" in had ? version(had.ok) : null;
+      if (had !== undefined && "ok" in had && v !== null) this.#keep(client, topicKey(topic), had.ok, v);
+      this.host.emit(client, { id, v });
     }
     if (!entry) return;
     entry.subscribers = entry.subscribers.filter(([c, i]) => !(c === client && i === id));
@@ -379,10 +398,26 @@ export class Store {
     this.runner.fork(laterSleep(EVICT_AFTER_MS).pipe(Effect.andThen(Effect.sync(() => this.#evict(topic, idle)))));
   }
 
-  /// A UI went away: drops all its subscriptions.
+  /// A UI went away: drops all its subscriptions, and what it kept of those it let go of.
   dropClient(client: ClientId): void {
     const ids = [...this.#subscriptions.keys()].filter((k) => k.startsWith(`${client}/`)).map((k) => Number(k.slice(k.indexOf("/") + 1)));
     for (const id of ids) this.unsubscribe(client, id);
+    this.#kept.delete(client);
+  }
+
+  /// Client `client` let go of topic `key` keeping `ok`, of version `v`: remembered for it (#kept), the least recently
+  /// let go of forgotten past KEPT_PER_CLIENT.
+  #keep(client: ClientId, key: string, ok: unknown, v: string): void {
+    let kept = this.#kept.get(client);
+    if (kept === undefined) this.#kept.set(client, (kept = new Map()));
+    kept.delete(key);
+    kept.set(key, { ok, v });
+    if (kept.size > KEPT_PER_CLIENT) kept.delete(kept.keys().next().value!);
+  }
+
+  /// How many values are remembered for `client` (#kept), for tests.
+  keptOf(client: ClientId): number {
+    return this.#kept.get(client)?.size ?? 0;
   }
 
   /// Stores a topic's new value (or its error) and schedules sending it. A topic that is not live is ignored.
@@ -740,21 +775,47 @@ export class Store {
     for (const w of changed) w();
     for (const [client, id, keyed] of subscribers) {
       const o = keyed ? keyedOut : out;
-      // (its first value: what changed from its `from`'s, where it has one)
-      const first = sent === undefined ? (this.#same(client, id, value) ?? (keyed ? this.#firstFrom(client, id, topic, value) : null)) : null;
+      // (its first value: `same`, or what changed from what the client holds, where it says so)
+      const first = sent === undefined ? this.#first(client, id, topic, keyed, value) : null;
       if (first) this.host.emit(client, first);
       else if (o) this.host.emit(client, to(o, id));
     }
   }
 
-  /// The first value `value` going to subscriber `id` of `client`, asked with `have`: `{id, same: true}` where `value`
-  /// is the one of that version (it holds it already), else none (it goes as it would). Its `have` forgotten either way.
-  #same(client: ClientId, id: RequestId, value: Value): CoreMessage | null {
+  /// The first message of subscriber `id` of `client` (`keyed`: it takes keyed ops) to topic `topic`, whose value going
+  /// out is `value`, where it need not be the value whole; none where it goes whole. In this order:
+  /// - `{id, same: true}` where it was asked with `have` and `value` is the one of that version: nothing of it sent;
+  /// - its `from`'s (#firstFrom): what changed from another of its subscriptions held now (a list's first rows, more
+  ///   of them asked), which differs from it by the rows asked and what changed this moment; what was kept is as old as
+  ///   the while the topic was let go of, all that changed meanwhile in what changed from it: the lighter as a rule;
+  /// - `{id, delta, kept: true}` where it was asked with `have` and that is the version of what the client was
+  ///   remembered to keep of this topic (#kept): what changed from that, as a held subscriber's change goes (keyed ops
+  ///   for a keyed one of a topic with keyed lists, plain else), unless it weighs more than the value (`heavier`,
+  ///   `largerThan`, as #flush decides).
+  /// An error, nothing remembered, another version: none. Its `from` and `have` are forgotten either way, and what was
+  /// remembered of the topic for the client: its first message gone, the client keeps none of it after.
+  #first(client: ClientId, id: RequestId, topic: Topic, keyed: boolean, value: Value): CoreMessage | null {
     const at = `${client}/${id}`;
     const have = this.#have.get(at);
-    if (have === undefined) return null;
     this.#have.delete(at);
-    return "ok" in value && version(value.ok) === have ? { id, same: true } : null;
+    const kept = this.#kept.get(client);
+    const had = kept?.get(topicKey(topic));
+    if (had !== undefined) kept!.delete(topicKey(topic));
+    if (have !== undefined && "ok" in value && version(value.ok) === have) {
+      this.#from.delete(at);
+      return { id, same: true };
+    }
+    const from = keyed ? this.#firstFrom(client, id, topic, value) : null;
+    this.#from.delete(at);
+    if (from !== null) return from;
+    if (have === undefined || had === undefined || had.v !== have || !("ok" in value)) return null;
+    const spec = keyed ? specOf(topic) : null;
+    if (spec) {
+      const ops = diffKeyed(had.ok, value.ok, spec);
+      return heavier(ops, value.ok) ? null : { id, delta: ops, kept: true };
+    }
+    const ops = diff(had.ok, value.ok);
+    return largerThan(ops, value.ok) ? null : { id, delta: ops, kept: true };
   }
 
   /// The first value `value` of topic `topic` going to subscriber `id` of `client` as what changed from what its
