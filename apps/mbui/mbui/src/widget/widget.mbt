@@ -19,31 +19,59 @@ pub(all) struct Hooks {
   /// an element of the app's own vocabulary as the HTML it stands for at the widget's width (a chart), read in its place
   expand : (@html.Elem, Double) -> String?
   on_link : (String) -> Unit
+  /// what its scripts are given of the app
+  bridge : Bridge
+  /// told why it cannot be drawn here (a script that failed, or needs what is not here): what draws it with a browser
+  /// takes over
+  failed : (String) -> Unit
 }
 
 ///|
 /// The widget `html` (as it changes) drawn in `parent`, as wide as it is given, as tall as it comes to.
 #callsite(autofill(loc))
 pub fn widget_node(parent : @view.View, html : () -> String, hooks : Hooks, loc~ : SourceLoc) -> @view.View {
-  // what using it changed of its elements' attributes (a tab chosen, a box ticked), by their place: kept while it is
-  // shown, its HTML the same
-  let changed : Map[Int, Array[(String, String?)]] = {}
+  // its live document: the fragment read once (each element its number), changed in place as it is used (a tab chosen,
+  // a box ticked, what its scripts do), made again as its HTML changes; the realm its scripts run in, if it has any
+  let live : Ref[(String, Array[@html.Node], Doc?)] = Ref(("", [], None))
   let version = @signals.signal(0)
   parent.by_room(loc~, fn(held, room) {
     // what it is made of: made again whole as any of it changes (a width to the point)
     let key = fn() -> (String, Int, Bool, Double, Array[(String, String)], Int) {
       (html(), room.width().round().to_int(), (hooks.dark)(), (hooks.size)(), (hooks.tokens)(), version.get())
     }
-    let shown = Ref("")
     held.pick(key, fn(p, k) {
       let (h, w, dark, size, tokens, _) = k
-      if shown.val != h {
-        changed.clear()
-        shown.val = h
+      if live.val.0 != h {
+        let nodes = @html.parse(h)
+        assign_uids(nodes)
+        let doc = if has_script(nodes) || has_handlers(nodes) {
+          let d = Doc::new(nodes, hooks.bridge)
+          d.run_scripts()
+          match d.failed {
+            Some(why) => (hooks.failed)(why)
+            None => ()
+          }
+          Some(d)
+        } else {
+          None
+        }
+        live.val = (h, nodes, doc)
+      }
+      let (_, nodes, doc) = live.val
+      match doc {
+        Some(d) => {
+          d.sized(w.to_double())
+          d.touched = false
+        }
+        None => ()
       }
       let env : @html.Env = { width: w.to_double(), dark, reduced_motion: false, root_size: size, tokens }
-      let styled = @html.style_widget(h, hooks.defaults, env, fn(_, _) { false }, expand=fn(e) { (hooks.expand)(e, w.to_double()) }, changed~)
-      let b : Builder = { styled, hooks, env, changed, version }
+      let styled = @html.style_nodes(nodes, hooks.defaults, env, fn(_, _) { false }, expand=fn(e) { (hooks.expand)(e, w.to_double()) })
+      match doc {
+        Some(d) => d.styled = Some(styled)
+        None => ()
+      }
+      let b : Builder = { styled, hooks, env, version, doc }
       let root = p.box(fn(col) {
         col.css_laid(Is({ ..@view.CssLaid::block(), padding: lens(styled.root.padding) })) |> ignore
         // (its root's ground is what it is drawn on: none of its own, as a widget on a bubble)
@@ -60,8 +88,8 @@ priv struct Builder {
   styled : @html.Styled
   hooks : Hooks
   env : @html.Env
-  changed : Map[Int, Array[(String, String?)]]
   version : @signals.Signal[Int]
+  doc : Doc?
 }
 
 // ── lengths and looks ────────────────────────────────────────────────
@@ -364,6 +392,29 @@ fn words_look(st : @html.Style) -> @view.WordsLook {
 fn Builder::line(self : Builder, p : @view.View, b : @html.Box, pieces : Array[@html.Inline]) -> Unit {
   let st = b.style
   let atoms = pieces.iter().any(fn(x) { x is Atom(_) })
+  // words that do not wrap (pre, nowrap) set on one line each: a break starts the next
+  if !atoms && !words_look(st).wrap && pieces.iter().any(fn(x) { x is Break }) {
+    p.box(fn(col) {
+      col.css_laid(Is(@view.CssLaid::block())) |> ignore
+      let run = []
+      for x in pieces {
+        if x is Break {
+          if run.is_empty() {
+            run.push(@html.Inline::Words(" ", st, "", -1))
+          }
+          self.words(col, st, run.copy())
+          run.clear()
+        } else {
+          run.push(x)
+        }
+      }
+      if !run.is_empty() {
+        self.words(col, st, run)
+      }
+    })
+    |> ignore
+    return
+  }
   if !atoms {
     self.words(p, st, pieces)
     return
@@ -934,12 +985,34 @@ fn Builder::control(self : Builder, v : @view.View, b : @html.Box, what : String
   }
   let line = @html.faded(st.color, 0.35)
   let l = laid(st, Row)
+  let given = fn(len : @html.Len) {
+    match len {
+      Of(p, 0.0) if p > 0.0 => Some(p)
+      _ => None
+    }
+  }
+  // a checkbox wider than it is tall (`.form-switch`'s), or said a switch: a track with a knob
+  let switch = what == "checkbox" &&
+    (el.bind(fn(e) { e.attr("role") }) == Some("switch") ||
+    el.map(fn(e) { e.has("switch") }).unwrap_or(false) ||
+    (match (given(st.width), given(st.height)) {
+      (Some(w), Some(h)) => w > h
+      _ => false
+    }))
+  if switch {
+    let tall = given(st.height).unwrap_or(16.0)
+    let wide = given(st.width).filter(fn(w) { w > tall }).unwrap_or(tall * 1.75)
+    let knob = tall - 4.0
+    v.css_laid(Is({ ..l, width: Pt(wide), height: Pt(tall), shrink: 0.0, align_items: Center, justify: if checked { FlexEnd } else { FlexStart }, padding: (Pt(2.0), Pt(2.0), Pt(2.0), Pt(2.0)) }))
+    .radius(Is(tall / 2.0))
+    .ground(Is(if checked { accent } else { @html.faded(st.color, 0.2) }))
+    |> ignore
+    v.box(fn(k) { k.css_laid(Is({ ..@view.CssLaid::block(), width: Pt(knob), height: Pt(knob), shrink: 0.0 })).radius(Is(knob / 2.0)).ground(Is(0xFFFFFFFFL)) |> ignore }) |> ignore
+    return
+  }
   match what {
     "checkbox" | "radio" => {
-      let side = match st.width {
-        Of(p, 0.0) if p > 0.0 => p
-        _ => 16.0
-      }
+      let side = given(st.width).unwrap_or(16.0)
       v.css_laid(Is({ ..l, width: Pt(side), height: Pt(side), shrink: 0.0, justify: Center, align_items: Center }))
       .radius(Is(if what == "radio" { side / 2.0 } else { 4.0 }))
       |> ignore
@@ -1034,20 +1107,16 @@ fn Builder::control(self : Builder, v : @view.View, b : @html.Box, what : String
 // ── what it does as it is used ───────────────────────────────────────
 
 ///|
-/// Element `i`'s attribute `name` set (None: taken away) as using the widget changed it.
+/// Element `i`'s attribute `name` set (None: taken away) as using the widget changed it: its live document's (what is
+/// styled shares its attributes).
 fn Builder::set_attr(self : Builder, i : Int, name : String, value : String?) -> Unit {
-  let list = match self.changed.get(i) {
-    Some(l) => l
-    None => {
-      let l = []
-      self.changed[i] = l
-      l
-    }
-  }
-  match list.search_by(fn(c) { c.0 == name }) {
-    Some(k) => list[k] = (name, value)
-    None => list.push((name, value))
-  }
+  set_attr(self.elem(i), name, value)
+}
+
+///|
+/// What changed drawn: the widget made again from its document.
+fn Builder::changed(self : Builder) -> Unit {
+  self.version.set(self.version.get() + 1)
 }
 
 ///|
@@ -1096,6 +1165,29 @@ fn Builder::behave(self : Builder, v : @view.View, b : @html.Box) -> Unit {
   guard b.el >= 0 else { return }
   let i = b.el
   let e = self.elem(i)
+  // what its script listens on for a press (a button, a link, what says it is one, an element listened on itself)
+  match self.doc {
+    Some(d) if d.listens(e, "click") && clickable(e, d) => {
+      let label = e.attr("aria-label").unwrap_or(e.text().trim().to_string())
+      v.says(Is(Some(@view.said(if e.tag == "a" { Link } else { Button }, label~)))) |> ignore
+      v.on_press(fn() {
+        d.pressing = true
+        let target = match d.els.get(uid_of(e)) {
+          Some(x) => x
+          None => e
+        }
+        d.dispatch("click", Some(target)) |> ignore
+        d.pressing = false
+        if d.touched {
+          d.touched = false
+          self.changed()
+        }
+      })
+      |> ignore
+      return
+    }
+    _ => ()
+  }
   let disabled = e.has("disabled") || e.attr("aria-disabled") == Some("true")
   if e.attr("role") == Some("tab") && !disabled {
     match self.up(i, fn(x) { x.attr("role") == Some("tablist") }) {
@@ -1118,7 +1210,7 @@ fn Builder::behave(self : Builder, v : @view.View, b : @html.Box) -> Unit {
               }
             }
           }
-          self.version.set(self.version.get() + 1)
+          self.changed()
         })
         |> ignore
       }
@@ -1133,7 +1225,7 @@ fn Builder::behave(self : Builder, v : @view.View, b : @html.Box) -> Unit {
         v.says(Is(Some(@view.said(Button, label=e.text().trim().to_string(), expanded=open)))) |> ignore
         v.on_press(fn() {
           self.set_attr(d, "open", if open { None } else { Some("") })
-          self.version.set(self.version.get() + 1)
+          self.changed()
         })
         |> ignore
       }
@@ -1184,7 +1276,24 @@ fn Builder::tick(self : Builder, i : Int) -> Unit {
   } else {
     self.set_attr(i, "checked", if e.has("checked") { None } else { Some("") })
   }
-  self.version.set(self.version.get() + 1)
+  // a script told: its input and change
+  match self.doc {
+    Some(d) => {
+      d.dispatch("input", Some(e)) |> ignore
+      d.dispatch("change", Some(e)) |> ignore
+      d.touched = false
+    }
+    None => ()
+  }
+  self.changed()
+  // a script told: its input and change
+  match self.doc {
+    Some(d) => {
+      d.dispatch("input", Some(e)) |> ignore
+      d.dispatch("change", Some(e)) |> ignore
+    }
+    None => ()
+  }
 }
 
 ///|
@@ -1202,4 +1311,24 @@ fn Builder::behave_control(self : Builder, v : @view.View, b : @html.Box, what :
   let label = e.attr("aria-label").unwrap_or(e.attr("name").unwrap_or(what))
   v.says(Is(Some(@view.said(if what == "radio" { Radio } else { Checkbox }, label~, check=if checked { On } else { Off })))) |> ignore
   v.on_press(fn() { self.tick(i) }) |> ignore
+}
+
+///|
+/// Whether a press on `e` is one a script hears: what is pressed in a page (a button, a link, a control, what says it is
+/// a button or a tab, what has a listener of its own).
+fn clickable(e : @html.Elem, d : Doc) -> Bool {
+  if ["button", "a", "summary", "label", "select", "option"].contains(e.tag) {
+    return true
+  }
+  match e.attr("role") {
+    Some("button") | Some("tab") | Some("link") | Some("checkbox") | Some("switch") | Some("option") | Some("menuitem") => return true
+    _ => ()
+  }
+  if e.has("onclick") || e.has("data-action") || e.has("tabindex") {
+    return true
+  }
+  match d.listeners.get(uid_of(e)) {
+    Some(ls) => ls.iter().any(fn(l) { l.0 == "click" })
+    None => false
+  }
 }

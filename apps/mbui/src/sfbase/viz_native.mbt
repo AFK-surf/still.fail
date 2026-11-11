@@ -45,12 +45,17 @@ fn viz_icon_path(name : String) -> String? {
 
 ///|
 /// The visualization `html` (as it changes) drawn by the app in `parent`, as wide as it is given; `on_link` where a
-/// link in it leads.
+/// link in it leads; its script given what its widget kept (`state`, JSON), keeping a new one (`keep`), words to put in
+/// the composer (`follow_up`); `failed` told why it cannot be drawn here (the page draws it then).
 #callsite(autofill(loc))
 pub fn viz_native_node(
   parent : @view.View,
   html : () -> String,
   on_link? : (String) -> Unit = fn(_) {  },
+  state? : () -> String? = fn() { None },
+  keep? : (String) -> Unit = fn(_) {  },
+  follow_up? : (String) -> Unit = fn(_) {  },
+  failed? : (String) -> Unit = fn(_) {  },
   loc~ : SourceLoc,
 ) -> @view.View {
   @widget.widget_node(
@@ -64,6 +69,8 @@ pub fn viz_native_node(
       element: viz_native_element,
       expand: viz_chart_html,
       on_link,
+      bridge: { state, keep, follow_up },
+      failed,
     },
     loc~,
   )

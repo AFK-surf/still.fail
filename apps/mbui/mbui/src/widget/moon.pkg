@@ -1,5 +1,6 @@
 import {
   "mbui/html",
+  "mbui/js",
   "mbui/view",
   "mbui/ui",
   "mbui/flex",

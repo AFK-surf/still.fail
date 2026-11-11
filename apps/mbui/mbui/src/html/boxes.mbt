@@ -53,6 +53,8 @@ pub(all) struct Styled {
   styles : Array[Cascaded]
   boxes : Array[Box]
   root : Style
+  /// the root's custom properties (the theme's tokens and :root's)
+  root_vars : Map[String, String]
 }
 
 ///|
@@ -71,7 +73,19 @@ pub fn style_widget(
   expand? : (Elem) -> String? = fn(_) { None },
   changed? : Map[Int, Array[(String, String?)]] = {},
 ) -> Styled {
-  let nodes = changed_nodes(expand_nodes(parse(html), expand), changed)
+  style_nodes(changed_nodes(parse(html), changed), defaults, env, state, expand~)
+}
+
+///|
+/// A widget's nodes (its live document's: what is styled shares its elements' attributes) styled as style_widget says.
+pub fn style_nodes(
+  doc : Array[Node],
+  defaults : Sheet,
+  env : Env,
+  state : (Int, State) -> Bool,
+  expand? : (Elem) -> String? = fn(_) { None },
+) -> Styled {
+  let nodes = expand_nodes(doc, expand)
   let tree = Tree::new(nodes)
   // its own sheets, in the order they are in
   let css = StringBuilder()
@@ -96,7 +110,7 @@ pub fn style_widget(
   }
   let b : Builder = { tree, styles, sheets, env, state, root }
   let boxes = b.flow_of(nodes, -1, root.style)
-  { tree, styles, boxes, root: root.style }
+  { tree, styles, boxes, root: root.style, root_vars: root.vars }
 }
 
 ///|
@@ -252,8 +266,16 @@ priv enum Part {
 }
 
 ///|
-/// The parts of `nodes` (children of element `parent`, -1 the fragment), styled under `pst`.
-fn Builder::parts_of(self : Builder, nodes : Array[Node], parent : Int, pst : Style, out : Array[Part]) -> Unit {
+/// The parts of `nodes` (children of element `parent`, -1 the fragment), styled under `pst`; `items`: they are a flex or
+/// grid container's, each element a box of its own (blockified, as CSS says), so its width and the like hold.
+fn Builder::parts_of(
+  self : Builder,
+  nodes : Array[Node],
+  parent : Int,
+  pst : Style,
+  out : Array[Part],
+  items? : Bool = false,
+) -> Unit {
   for n in nodes {
     match n {
       Text(t) => out.push(InlinePart(Words(t, pst, "", parent)))
@@ -267,7 +289,7 @@ fn Builder::parts_of(self : Builder, nodes : Array[Node], parent : Int, pst : St
           continue
         }
         if st.display == "contents" {
-          self.parts_of(e.kids, i, st, out)
+          self.parts_of(e.kids, i, st, out, items~)
           continue
         }
         if e.tag == "br" {
@@ -291,6 +313,8 @@ fn Builder::parts_of(self : Builder, nodes : Array[Node], parent : Int, pst : St
         let pressed_whole = e.tag == "label" && self.holds_input(i)
         if block {
           out.push(BlockPart(self.element_box(e, i, st)))
+        } else if items && !pressed_whole && !is_atomic(st.display) {
+          out.push(BlockPart(self.element_box(e, i, { ..st, display: "block" })))
         } else if pressed_whole && !is_atomic(st.display) {
           out.push(InlinePart(Atom(self.element_box(e, i, { ..st, display: "inline-flex", align_items: "center" }))))
         } else if is_atomic(st.display) {
@@ -553,7 +577,7 @@ fn Builder::flow_of(self : Builder, nodes : Array[Node], parent : Int, pst : Sty
 fn Builder::items_of(self : Builder, nodes : Array[Node], parent : Int, pst : Style) -> Array[Box] {
   let parts = []
   self.pseudo(parent, "before", pst, parts)
-  self.parts_of(nodes, parent, pst, parts)
+  self.parts_of(nodes, parent, pst, parts, items=true)
   self.pseudo(parent, "after", pst, parts)
   let out = []
   let line = []
@@ -687,8 +711,18 @@ fn line_box(pieces : Array[Inline], pst : Style) -> Box? {
           }
           b.to_string()
         }
-        if text != "" {
-          out.push(Words(transform(text, st.text_transform), st, link, el))
+        // a newline kept (pre, pre-wrap, pre-line) ends the line there
+        let parts = text.split("\n").map(fn(x) { x.to_string() }).collect()
+        for i, part in parts {
+          if i > 0 {
+            if ws != "pre" && ws != "pre-wrap" && ws != "break-spaces" {
+              trim_end(out)
+            }
+            out.push(Break)
+          }
+          if part != "" {
+            out.push(Words(transform(part, st.text_transform), st, link, el))
+          }
         }
       }
       Atom(_) => {
@@ -883,9 +917,9 @@ fn Builder::svg_write(self : Builder, e : Elem, i : Int, b : StringBuilder, root
 // ── what is drawn natively ───────────────────────────────────────────
 
 ///|
-/// Why `html` is not drawn by the app itself (None: it is): what it would need a browser for. Its script (none but
-/// data: application/json) and its outside resources (a stylesheet linked, a script's source, an image or a font from
-/// the network) and the elements a browser draws by itself (frames, canvas, media).
+/// Why `html` is not drawn by the app itself (None: it is): what it would need a browser for. Its outside resources (a
+/// stylesheet linked, a script's source, an image or a font from the network) and the elements a browser draws by
+/// itself (frames, canvas, media). Its own scripts run here; one that fails is said as it runs (widget's failed).
 pub fn needs_browser(html : String) -> String? {
   let nodes = parse(html)
   let mut why : String? = None
@@ -897,12 +931,8 @@ pub fn needs_browser(html : String) -> String? {
       Text(_) => ()
       Elem(e) => {
         match e.tag {
-          "script" => {
-            let ty = to_lower(e.attr("type").unwrap_or(""))
-            if ty != "application/json" && ty != "application/ld+json" {
-              why = Some("script")
-            }
-          }
+          // a script's own is run here (mbui/js); one from the network is not
+          "script" => if e.has("src") { why = Some("a script from the network") }
           "link" => if to_lower(e.attr("rel").unwrap_or("")).contains("stylesheet") { why = Some("stylesheet") }
           "iframe" | "frame" | "canvas" | "video" | "audio" | "object" | "embed" | "form" | "dialog" | "math" =>
             why = Some(e.tag)
@@ -917,11 +947,6 @@ pub fn needs_browser(html : String) -> String? {
               why = Some("style resources")
             }
           _ => ()
-        }
-        for a in e.attrs {
-          if a.0.has_prefix("on") {
-            why = Some("script")
-          }
         }
         for k in e.kids {
           go(k)

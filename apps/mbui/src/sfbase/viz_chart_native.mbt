@@ -305,7 +305,7 @@ fn chart_xy(e : @html.Elem, d : Json?, unit : String, width : Double, ty : Strin
   let ys = chart_ticks(lo, hi)
   let y0 = ys[0]
   let y1 = ys[ys.length() - 1]
-  let label_w = ys.fold(init=0, fn(m, v) { let l = (chart_short(v) + unit).length(); if l > m { l } else { m } }).to_double() * 6.5 + 8.0
+  let label_w = ys.fold(init=0.0, fn(m, v) { let l = chart_label_w(chart_short(v) + unit); if l > m { l } else { m } }) + 12.0
   let left = label_w
   let right = 4.0
   let top = 8.0
@@ -534,7 +534,7 @@ fn chart_scatter(e : @html.Elem, d : Json?, unit : String, width : Double) -> St
   let xs = chart_ticks(min(px), max(px))
   let ys = chart_ticks(if min(py) < 0.0 { min(py) } else { 0.0 }, max(py))
   let xunit = chart_esc(e.attr("x-unit").unwrap_or(""))
-  let left = ys.fold(init=0, fn(m, v) { let l = (chart_short(v) + unit).length(); if l > m { l } else { m } }).to_double() * 6.5 + 8.0
+  let left = ys.fold(init=0.0, fn(m, v) { let l = chart_label_w(chart_short(v) + unit); if l > m { l } else { m } }) + 12.0
   let right = 8.0
   let top = 8.0
   let bottom = 22.0
@@ -560,4 +560,22 @@ fn chart_scatter(e : @html.Elem, d : Json?, unit : String, width : Double) -> St
   }
   b.write_string("</svg>")
   b.to_string() + chart_legend(series.map(fn(sr) { (sr.0, sr.2) }), true)
+}
+
+///|
+/// How wide an axis label is at least, in points at 11-point words: a digit's width, wider for letters and a CJK
+/// character's whole em (taken generously: a label cut off at the plot's left is worse than a little more room).
+fn chart_label_w(t : String) -> Double {
+  let mut w = 0.0
+  for c in t {
+    let k = c.to_int()
+    w += if k >= 0x2E80 {
+      11.0
+    } else if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '%' {
+      if c == 'm' || c == 'w' || c == 'M' || c == 'W' || c == '%' { 9.5 } else { 7.0 }
+    } else {
+      6.8
+    }
+  }
+  w
 }

@@ -701,3 +701,51 @@ pub fn decode_refs(s : String) -> String {
   }
   b.to_string()
 }
+
+///|
+fn escape_text(s : String) -> String {
+  s.replace_all(old="&", new="&amp;").replace_all(old="<", new="&lt;").replace_all(old=">", new="&gt;")
+}
+
+///|
+/// `nodes` written back as HTML (innerHTML's), attributes for which `skip` holds left out.
+pub fn serialize(nodes : Array[Node], skip? : (String) -> Bool = fn(_) { false }) -> String {
+  let b = StringBuilder()
+  fn go(n : Node, raw : Bool) {
+    match n {
+      Text(t) => b.write_string(if raw { t } else { escape_text(t) })
+      Elem(e) => {
+        b.write_char('<')
+        b.write_string(e.tag)
+        for a in e.attrs {
+          if skip(a.0) {
+            continue
+          }
+          b.write_char(' ')
+          b.write_string(a.0)
+          if a.1 != "" {
+            b.write_string("=\"")
+            b.write_string(a.1.replace_all(old="&", new="&amp;").replace_all(old="\"", new="&quot;"))
+            b.write_char('"')
+          }
+        }
+        b.write_char('>')
+        if !e.svg && void_tags.contains(e.tag) {
+          return
+        }
+        let r = !e.svg && raw_tags.contains(e.tag)
+        for k in e.kids {
+          go(k, r)
+        }
+        b.write_string("</")
+        b.write_string(e.tag)
+        b.write_char('>')
+      }
+    }
+  }
+
+  for n in nodes {
+    go(n, false)
+  }
+  b.to_string()
+}
