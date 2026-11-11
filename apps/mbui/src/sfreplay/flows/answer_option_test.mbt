@@ -31,7 +31,7 @@ test "22-answer-option" {
     if closing > f.t.time() {
       f.run_to(closing)
     }
-    f.check(@sfapp.under_rest() < 0.0, "something under the post moves: \{@sfapp.under_rest()}")
+    f.check(@sfapp.under_rest() <= f.t.time(), "something under the post moves: \{@sfapp.under_rest()}")
     f.end()
   })
 }

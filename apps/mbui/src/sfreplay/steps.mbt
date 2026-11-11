@@ -765,14 +765,15 @@ fn waiting_step(line : String) -> Bool {
 ///|
 /// On the frames' clock to the end of what moves named `name` (Tester::rest_of: a line of Tester::moving that says it),
 /// as run_to. At the run's pace it may be over already, the run's own waiting having taken the clock past it: when a
-/// motion so named was said since the last step that acted and is at rest now, that is where the test would have run it to. One
-/// not said since, or the at-once pass: no motion.
+/// motion so named was said since the last step that acted and is at rest now, that is where the test would have run it to;
+/// one over before that step, its end as it said it (Tester::rest_of). One never said: no motion.
 pub fn Flow::run_to_rest(self : Flow, name : String) -> Unit {
   let end = self.t.rest_of(name)
-  if end < 0.0 && self.rest_passed(name) {
+  if end <= self.t.time() && self.rest_passed(name) {
     self.core()
     return
   }
+  // (one so named over before the last step that acted: its end as it said it (Tester::rest_of), run_to there)
   self.run_to(end)
 }
 
@@ -780,7 +781,7 @@ pub fn Flow::run_to_rest(self : Flow, name : String) -> Unit {
 /// Whether what moves named `name` was said since the last step that acted and is at rest now (Flow::run_to_rest):
 /// a motion said and over, not one never said.
 pub fn Flow::rest_passed(self : Flow, name : String) -> Bool {
-  self.t.rest_of(name) < 0.0 && self.said.iter().any(fn(m) { m.contains(name) })
+  self.t.rest_of(name) <= self.t.time() && self.said.iter().any(fn(m) { m.contains(name) })
 }
 
 ///|

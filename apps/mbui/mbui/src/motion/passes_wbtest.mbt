@@ -52,9 +52,10 @@ test "a frame built twice: its keyed nodes are the last build's, moved from wher
   assert_eq(t.drawn_of("row c"), Some(c))
   t.frame()
   assert_eq(t.drawn_of("row c"), Some(c))
-  assert_eq(layout_rest("row/a"), -1.0)
-  assert_eq(layout_rest("row/b"), -1.0)
-  assert_eq(layout_rest("row/c"), -1.0)
+  // (none moving: where one moved before, its end, over)
+  assert_true(layout_rest("row/a") <= t.time())
+  assert_true(layout_rest("row/b") <= t.time())
+  assert_true(layout_rest("row/c") <= t.time())
   assert_eq(entries, 3)
   t.assert_idle()
 }

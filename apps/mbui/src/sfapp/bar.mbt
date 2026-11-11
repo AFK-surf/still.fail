@@ -897,10 +897,11 @@ pub fn bar_rest() -> Double {
 
 ///|
 /// When the bar chosen in the panel has landed (the frames' clock, ms): the end of the panel's own spring as it closes
-/// under it; -1 when none is landing. Until then a finger does not take the panel (a bar landing lands untouched): what
-/// a test runs to before it draws the panel up again.
+/// under it, the last one chosen's once it has (its end as it was given, whichever frames were drawn on its way); -1
+/// when none was ever chosen. Until then a finger does not take the panel (a bar landing lands untouched): what a test
+/// runs to before it draws the panel up again.
 pub fn bar_landed() -> Double {
-  match bar.swap_at(bar_clock.now) {
+  match bar.swap {
     Some(s) => s.ends
     None => -1.0
   }

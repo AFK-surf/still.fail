@@ -336,7 +336,7 @@ test "a push is over at the end it declares, to the bit: the page under it no lo
   t.frame_at(@ui.first_frame_ms * 27.0)
   t.tap_text("open 1")
   t.run_for(nav.rest() - t.time())
-  assert_true(t.rest_of("a stack's slide") < 0.0)
+  assert_true(t.rest_of("a stack's slide") <= t.time())
   assert_true(t.find("title 0") is None)
   t.assert_idle()
 }
@@ -350,7 +350,7 @@ test "a push whose end is a hair past one of the display's frames is run to its 
   t.advance(at - t.time())
   t.tap_text("open 1")
   t.run_for(nav.rest() - t.time())
-  assert_true(t.rest_of("a stack's slide") < 0.0)
+  assert_true(t.rest_of("a stack's slide") <= t.time())
   assert_true(t.find("title 0") is None)
   t.assert_idle()
 }
@@ -793,3 +793,23 @@ test "nav_flat, its owner keeping a stay: one on top again since (come back to: 
 ///|
 /// A display's frame period at 7 frames a second (ms): frames far apart, one well past a slide's end.
 let seven_a_second : Double = 1000.0 / 7.0
+
+///|
+/// rest_of once what it names is over: when it came to rest, as it said it (the Tester's own record, tester_time.mbt),
+/// whatever frames were drawn on its way; -1 for what was never said to move, and none of a Tester before.
+test "rest_of: a slide over is answered at its end, not -1; a Tester made after it knows none" {
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  t.draw()
+  assert_eq(t.rest_of("a stack's slide"), -1.0)
+  t.tap_text("open 1")
+  let end = t.rest_of("a stack's slide")
+  assert_true(end > t.time() && end < @double.infinity, msg="\{end} at \{t.time()}")
+  t.run_for(end - t.time() + @ui.move_most_ms)
+  assert_eq(t.moving(), [])
+  assert_eq(t.rest_of("a stack's slide"), end)
+  assert_eq(t.rest_of("nothing of that name"), -1.0)
+  let again = @ui.Tester::new(nav_view(@ui.Nav::new(0)))
+  again.draw()
+  assert_eq(again.rest_of("a stack's slide"), -1.0)
+}

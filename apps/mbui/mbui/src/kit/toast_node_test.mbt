@@ -219,8 +219,9 @@ test "a toast going out at a moment between whole ms: its way out going on till 
   run_to_time(t, rest - 0.5)
   let between = (@ui.view_tree().unwrap().clock_read(), t.query(Status, label="一") is Some(_))
   run_to_time(t, rest)
-  let after = (t.query(Status, label="一") is None, @kit.toast_rest("toast"), t.next_wake())
-  assert_eq((early, rest == rest.floor(), between, after), (true, false, (true, true), (true, -1.0, None)), msg="\{rest} \{t.time()}")
+  // (let go: its rest the moment it came to rest, as it said it, not -1)
+  let after = (t.query(Status, label="一") is None, @kit.toast_rest("toast") == rest, t.next_wake())
+  assert_eq((early, rest == rest.floor(), between, after), (true, false, (true, true), (true, true, None)), msg="\{rest} \{t.time()}")
 }
 
 ///|
@@ -235,8 +236,16 @@ test "a toast coming in, what holds the toaster let go: none of it left, read ou
   k.holder.set(false)
   t.frame()
   assert_eq(
-    (coming, t.query(Status, label="一") is None, t.rest_of("presence/toast"), t.next_wake(), t.at_rest(), @kit.toast_rest("toast")),
-    ((true, true), true, -1.0, None, true, -1.0),
+    // (none of it moving: what it said cut short by its letting go, at rest by now)
+    (
+      coming,
+      t.query(Status, label="一") is None,
+      t.rest_of("presence/toast") <= t.time(),
+      t.next_wake(),
+      t.at_rest(),
+      @kit.toast_rest("toast") <= t.time(),
+    ),
+    ((true, true), true, true, None, true, true),
     msg="\{t.moving()} \{t.rest_why()}",
   )
 }
@@ -261,9 +270,10 @@ test "the last toast going out, given again by its id with another action: the s
   let acted = k.acted.copy()
   k.toasts.set([])
   t.frame()
-  run_to_time(t, @kit.toast_rest("toast"))
+  let gone = @kit.toast_rest("toast")
+  run_to_time(t, gone)
   assert_eq(
     (first is Some(_), back == first, button, acted, t.query(Status, label="一") is None, @kit.toast_rest("toast"), t.next_wake()),
-    (true, true, (true, true), ["a"], true, -1.0, None),
+    (true, true, (true, true), ["a"], true, gone, None),
   )
 }

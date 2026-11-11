@@ -169,7 +169,9 @@ test "the settings' list made once: flung by a finger, it glides on as a list's 
   let end = @ui.rest_of("a list's")
   assert_true(end > t.time(), msg="at rest at \{end}, now \{t.time()}; 外观 at \{before} before, \{at()} after")
   t.run_for(end - t.time())
-  assert_eq(@ui.rest_of("a list's"), -1.0)
+  // (at rest: when it came to rest, as it last said it (its glide's end worked out again on the way), not -1)
+  let rested = @ui.rest_of("a list's")
+  assert_true(rested > 0.0 && rested <= t.time(), msg="at rest at \{rested}, now \{t.time()}")
 }
 
 ///|
@@ -192,7 +194,7 @@ test "the settings' list dragged on past its end by a finger, counted taller bel
   if end > t.time() {
     t.run_for(end - t.time())
   }
-  assert_eq(@ui.rest_of("a list's"), -1.0)
+  assert_true(@ui.rest_of("a list's") <= t.time())
   let rests = at()
   assert_true(before.length() == 1 && held.length() == 1 && rests.length() == 1, msg="\{before} \{held} \{rests}")
   assert_true(held[0] < before[0], msg="not moved by the finger: \{before} \{held}")

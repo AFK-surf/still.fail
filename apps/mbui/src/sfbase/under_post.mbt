@@ -40,11 +40,11 @@ let under_ways : Map[String, (Double, Double)] = {}
 
 ///|
 /// When what comes and goes under the posts (options, how a card went, 忽略, the archive buttons) is at rest, their
-/// rooms opening or closing on their springs and tweens (the frames' clock; -1: none moves; +inf: told to go, not
-/// started yet): a test runs to it.
+/// rooms opening or closing on their springs and tweens (the frames' clock; once at rest, the end each was given,
+/// Anim::ended_at; -1: none has moved; +inf: told to go, not started yet): a test runs to it.
 pub fn under_rest() -> Double {
   let mut end = -1.0
-  under_ends.each(fn(_, a) { if a.ends_at() > end { end = a.ends_at() } })
+  under_ends.each(fn(_, a) { if a.ended_at() > end { end = a.ended_at() } })
   end
 }
 

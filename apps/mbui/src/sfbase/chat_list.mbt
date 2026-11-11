@@ -1810,11 +1810,12 @@ pub let flash_held_ms : Double = 900.0
 pub let flash_ms : Double = 1700.0
 
 ///|
-/// When the flash of the messages gone to (in every chat read) is over (the frames' clock; -1: none flashes): a test
+/// When the flash of the messages gone to (in every chat read) is over (the frames' clock; once over, the end it was
+/// given, Anim::ended_at; -1: none has flashed): a test
 /// runs to it after opening a chat at a message (a notification tapped, a decision's post).
 pub fn flash_rest() -> Double {
   let mut end = -1.0
-  readings.each(fn(_, rd) { if rd.flash_lit.ends_at() > end { end = rd.flash_lit.ends_at() } })
+  readings.each(fn(_, rd) { if rd.flash_lit.ended_at() > end { end = rd.flash_lit.ended_at() } })
   end
 }
 

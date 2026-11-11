@@ -542,6 +542,7 @@ pub fn Tester::new(
     None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
   }
   let between = test_frames_between()
+  tester_rested.clear()
   let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(loc.to_string()), host_frames: false, each: None, before }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
@@ -936,6 +937,9 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
     None => ()
   }
   self.fake_pages_run()
+  // (what was said to move since the frame before, between frames (an input's handler): seen before this frame lets
+  // go of what is over by its moment, tester_time.mbt)
+  tester_rests_seen()
   on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })
   // (a bench's measured frame ends here: what follows is the Tester's own checks of it, which a device runs not)
   bench_frame_ends()
@@ -966,6 +970,8 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   // what the outside the test stands for has said meanwhile, posted for the next frame (messages.mbt)
   frame_ended_outside()
+  // (what is said to move, its end as it says it, kept by the Tester for rest_of once it is over: tester_time.mbt)
+  tester_rests_seen()
   // (as its host got it, where a test records it: tester_host.mbt)
   host_frame_drawn(at)
 }

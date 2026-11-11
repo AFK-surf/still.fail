@@ -26,7 +26,8 @@ test "a quote's card pressed: the list goes to the message it quotes, and only t
   let (_, qx, qy, qw, qh, _) = quote[0]
   t.tap(qx + qw / 2.0, qy + qh / 2.0)
   // (the middle of its hold, from when it began)
-  let held = flash_rest() - flash_ms + (flash_in_ms + flash_held_ms) / 2.0
+  let flashed = flash_rest()
+  let held = flashed - flash_ms + (flash_in_ms + flash_held_ms) / 2.0
   if held > t.time() {
     t.run_for(held - t.time())
   }
@@ -61,4 +62,6 @@ test "a quote's card pressed: the list goes to the message it quotes, and only t
   t.run_for(flash_ms)
   t.draw()
   assert_eq(grounds_in(t, p.accent).length(), 0)
+  // (over: what a test runs to is still its end as it was told)
+  assert_eq(flash_rest(), flashed)
 }

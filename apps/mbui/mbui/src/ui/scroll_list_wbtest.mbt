@@ -98,7 +98,7 @@ test "a page's list let go of as what it was pulled past its top goes back: noth
     t.draw()
     assert_eq(s.glides_till(), None)
     assert_eq(s.past(tree), 0.0)
-    assert_eq(rest_of("a list's fling, the tree's"), -1.0)
+    assert_true(rest_of("a list's fling, the tree's") <= t.time())
   }
 }
 

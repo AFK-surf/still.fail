@@ -780,7 +780,8 @@ test "toasts: one gone (its time out) is drawn going away until its rest (toast_
   assert_true(rest > t.time() && rest < @double.infinity)
   t.run_for(rest - t.time())
   assert_eq(t.all(@ui.Role::Status).length(), 0)
-  assert_eq(toast_rest("toasts"), -1.0)
+  // (gone: when it came to rest, as it said it)
+  assert_eq(toast_rest("toasts"), rest)
   t.assert_idle()
 }
 
