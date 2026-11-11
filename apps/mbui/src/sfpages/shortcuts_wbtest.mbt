@@ -12,10 +12,7 @@ test "快捷键, at each width and with either hand: each group's actions and th
     assert_true(t.find("点击快捷键，再按下新的组合") is Some(_), msg=at)
     // none changed: nothing to put back
     assert_true(t.find("全部恢复默认") is None && t.find("恢复默认") is None, msg=at)
-    // (真问题，待修, the squeeze holding the window tree's nodes, 2026-11-11: at 390 on a phone an action's keys
-    // 「Ctrl++ / Ctrl+= / Ctrl+S…」 on their button, 362 wide, cut off 16 by the card: made at sf/keys_node.mbt:117, asked
-    // for at keys_node.mbt:84. Its bar, to come down as it is mended.)
-    assert_eq(t.squeeze_faults().length(), if at == "390 platform 2" { 1 } else { 0 }, msg="\{at}: \{t.squeeze_faults()}")
+    assert_eq(t.squeeze_faults(), [], msg=at)
   }
 }
 
@@ -114,9 +111,64 @@ test "快捷键, at each width and with either hand: how a message is sent, Ente
     t.draw()
     assert_eq(field(Some(sets[1]), "sendKey"), Some(Json::null()), msg=at)
     assert_true(t.find(lines) is Some(_), msg=at)
-    // (真问题，待修, the squeeze holding the window tree's nodes, 2026-11-11: at 390 on a phone an action's keys
-    // 「Ctrl++ / Ctrl+= / Ctrl+S…」 on their button, 362 wide, cut off 16 by the card: made at sf/keys_node.mbt:117, asked
-    // for at keys_node.mbt:84. Its bar, to come down as it is mended.)
-    assert_eq(t.squeeze_faults().length(), if at == "390 platform 2" { 1 } else { 0 }, msg="\{at}: \{t.squeeze_faults()}")
+    assert_eq(t.squeeze_faults(), [], msg=at)
+  }
+}
+
+///|
+test "快捷键, at each width and with either hand: every action's name drawn, wider than nothing; its keys beside it while its line has the room for both, else on a line of their own under it at its end" {
+  for case in page_cases {
+    let (w, platform) = case
+    let at = "\{w} platform \{platform}"
+    let t = setting_tester(Shortcuts, w, platform~, h=2400.0)
+    let word = fn(f : (String) -> Bool) {
+      match t.words().search_by(fn(x) { f(x.0) }) {
+        Some(i) => t.words()[i]
+        None => ("", 0.0, 0.0, 0.0, 0.0, 0.0)
+      }
+    }
+    // (every action the page lists, by its name where the names are, as 新建对话's: drawn, wider than nothing, on one
+    // line as that is)
+    let new = word(fn(s) { s == @sf.t("web-main.keymap.chat.new") })
+    let named = fn(name : String) {
+      match t.words().search_by(fn(x) { x.0 == name && (x.1 - new.1).abs() < 0.5 }) {
+        Some(i) => t.words()[i]
+        None => ("", 0.0, 0.0, 0.0, 0.0, 0.0)
+      }
+    }
+    for a in @sffixture.fx_key_actions {
+      // (not one the page lists: none of its own to show, or only worth a key: keymap.ts UNLISTED)
+      if a.4 == "no" || @sffixture.fx_key_unlisted.contains(a.0) {
+        continue
+      }
+      let name = @sf.t("web-main.keymap.\{a.0}")
+      let n = named(name)
+      assert_true(n.0 == name && n.3 > 0.0 && n.4 == new.4, msg="\{at}: \{name} at \{n}, 新建对话 at \{new}")
+    }
+    // 放大界面's keys, the longest (the only ones with an =): beside it where the line has the room for both, the
+    // middle of its line; else under it, at the line's end as 新建对话's are
+    let n = named(@sf.t("web-main.keymap.zoom.in"))
+    let keys = word(fn(s) { s.contains("=") })
+    assert_true(keys.3 > 0.0, msg="\{at}: \{t.words()}")
+    let mid = fn(x : (String, Double, Double, Double, Double, Double)) { x.2 + x.4 / 2.0 }
+    let button = fn(x : (String, Double, Double, Double, Double, Double)) {
+      match t.drawn_rects().search_by(fn(r) { r.0 <= x.1 && x.1 + x.3 <= r.0 + r.2 && r.1 <= x.2 && x.2 + x.4 <= r.1 + r.3 && r.3 < 40.0 }) {
+        Some(i) => t.drawn_rects()[i]
+        None => (0.0, 0.0, 0.0, 0.0, 0L)
+      }
+    }
+    let new_keys = word(fn(s) { s.has_suffix("N") && s != n.0 })
+    let (b, nb) = (button(keys), button(new_keys))
+    assert_true(b.2 > 0.0 && nb.2 > 0.0, msg="\{at}: its keys' button \{b}, 新建对话's \{nb}")
+    if w >= 720.0 {
+      assert_true((mid(keys) - mid(n)).abs() < 0.5 && keys.1 > n.1 + n.3, msg="\{at}: its name at \{n}, its keys at \{keys}")
+    } else {
+      if platform == 2 {
+        assert_true(keys.2 >= n.2 + n.4, msg="\{at}: its name at \{n}, its keys at \{keys}")
+      }
+      if keys.2 >= n.2 + n.4 {
+        assert_true((b.0 + b.2 - (nb.0 + nb.2)).abs() < 0.5, msg="\{at}: its keys' button \{b}, 新建对话's \{nb}")
+      }
+    }
   }
 }

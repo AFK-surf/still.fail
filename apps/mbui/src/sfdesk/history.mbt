@@ -218,26 +218,30 @@ fn wh_details_node(
         })
       },
       fn(w) {
-        @sf.words_node(w, fn() {
-          match look() {
-            Some(st) if st.name != "" => st.name
-            _ =>
-              match text(host(), "hostname") {
-                "" => @sf.t("web-pages.chat.thisMachine")
-                h => h
-              }
-          }
-        }, fn() { wh_name })
-        .shrink(Is(0.0))
-        |> ignore
-        @sf.words_node(w, fn() {
-          match text(host(), "identity") {
-            "" => ""
-            i => " · " + i
-          }
-        }, fn() { wh_words })
+        @sf.name_line_node(
+          w,
+          fn() {
+            match look() {
+              Some(st) if st.name != "" => st.name
+              _ =>
+                match text(host(), "hostname") {
+                  "" => @sf.t("web-pages.chat.thisMachine")
+                  h => h
+                }
+            }
+          },
+          fn() { wh_name },
+          fn() {
+            match text(host(), "identity") {
+              "" => ""
+              i => " · " + i
+            }
+          },
+          fn() { wh_words },
+        )
+        .grow(Is(1.0))
         .shrink(Is(1.0))
-        .min_width(Is(Some(0.0)))
+        .basis(Is(Some(0.0)))
         |> ignore
       },
       fn(e) {
@@ -506,7 +510,7 @@ let wh_dot : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// The station's name: whole on its one line, what its machine is after it cut short first (itself only where it is
-/// longer than the line, as a last resort).
+/// longer than the line leaves beside the least of that, as a last resort: @sf.name_line_node).
 // kept across runs: a value (no field of it changes)
 let wh_name : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 

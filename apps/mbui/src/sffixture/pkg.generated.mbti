@@ -449,6 +449,8 @@ pub let fx_key_actions : Array[(String, String, Array[String], Array[String], St
 
 pub fn fx_key_label(String, Bool) -> String
 
+pub let fx_key_unlisted : Array[String]
+
 pub fn fx_keys_of(Map[String, Array[String]], (String, String, Array[String], Array[String], String)) -> Array[String]
 
 pub let going_up_picture : Json

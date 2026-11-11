@@ -37,7 +37,7 @@ pub let fx_key_actions : Array[(String, String, Array[String], Array[String], St
 /// The actions not in the list of shortcuts, only worth a key (keymap.ts UNLISTED): of those listed here, the steps
 /// between what people said in a chat.
 // kept across runs: a table, never written
-let fx_key_unlisted : Array[String] = ["chat.said.prev", "chat.said.next"]
+pub let fx_key_unlisted : Array[String] = ["chat.said.prev", "chat.said.next"]
 
 ///|
 /// A binding as a key cap shows it (keymap.ts label): ⌘⇧H on a Mac, Ctrl+Shift+H elsewhere.
