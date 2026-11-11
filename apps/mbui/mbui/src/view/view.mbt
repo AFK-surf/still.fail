@@ -7251,8 +7251,10 @@ fn View::come_back(self : View, v : View) -> Unit {
 /// (Style's come_*, flex's move.mbt): laid out so as the clock goes, cut at its edges, what is under it in its column
 /// moved by as much and the gap before it opening with it, in the same layout (the user, 2026-11-09: what comes or goes
 /// makes its way in or closes it, the framework's, not each page's). Only where it is laid out in its turn down a
-/// column, the tree has been drawn, motion is not reduced, nothing of it is shared by an id and nothing of it scrolls
-/// (a page's, a pane's): elsewhere nothing, and false. `stays`: closing to nothing, it stays there once its way
+/// column, the tree has been drawn, motion is not reduced and nothing of it is shared by an id: elsewhere nothing, and
+/// false. What scrolls in it makes its way as anything does, what it holds laid out once at the size it comes to (flex's
+/// come_*: its room, how far it can go and the blocks a list makes in it as at rest all the way); a page or a pane,
+/// grown to what the column leaves it, is not laid out in its turn (Tree::in_column), and comes at once. `stays`: closing to nothing, it stays there once its way
 /// ends (a pick's case that made nothing), at rest. `fill`: on from the way of one before it in its place that was from
 /// nothing or to it (Style's come_fill).
 fn View::comes(
@@ -7270,8 +7272,7 @@ fn View::comes(
     tree.last_w >= 0.0 &&
     !@signals.untracked(tree.motion_reduced) &&
     tree.in_column(v.at) &&
-    !tree.holds_shared(v.at) &&
-    !tree.holds_scroll(v.at) else {
+    !tree.holds_shared(v.at) else {
     return false
   }
   let st = n.flex.style
@@ -7376,6 +7377,9 @@ fn come_done(tree : Tree, v : View, m : Node) -> Unit {
   m.coming = false
   m.come_off = fn() {  }
   st.come_now = 0.0 / 0.0
+  // (all of what it comes to, the gap before it whole: as its column lays it out from here, whether it is measured
+  // again or laid out as it said it is)
+  st.come_k = 1.0
   m.look.clips = m.clips_said
   m.come_said = None
   match m.props.get(Comes.ord()) {
@@ -7443,14 +7447,6 @@ fn View::goes(self : View, v : View, ms : Double, at_once : Bool, swaps? : Bool 
   }
   self.leave(v, ms)
   ms > 0.0
-}
-
-///|
-/// Whether node `at` or what it holds scrolls what it holds (View::scrolls): a page's or a pane's, one in another's
-/// place, not a piece of one making its way.
-fn Tree::holds_scroll(self : Tree, at : Int) -> Bool {
-  let n = self.nodes[at]
-  n.scroll_held >= 0 || n.kids.iter().any(fn(k) { self.holds_scroll(k) })
 }
 
 ///|
