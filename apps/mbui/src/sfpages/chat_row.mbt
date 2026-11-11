@@ -1296,19 +1296,23 @@ pub fn open_chat_menu(
     Some(items) => @sf.menu(items, from~, along~)
     None => {
       // (its chat's whole row not answered yet, asked as its page opened: opened whole the moment it is; owned by
-      // nothing, as what waits is no part of what reads now)
+      // nothing, as what waits is no part of what reads now, neither the owner set nor what is reading as it is made:
+      // the system's bars' … (sfdesk rail_native.mbt) is chosen as a frame is read, and an effect made there is that
+      // frame's watch's, let go by the next frame before the row is answered: @signals.effect_in_watch)
       let done = Ref(false)
       let owner = @signals.set_owner(None)
-      let stop = @signals.effect(fn() {
-        if !done.val && chat_menu_whole(src, r, extra, share_from=fn() { from }) is Some(_) {
-          done.val = true
-          @signals.untracked(fn() {
-            match chat_menu_whole(src, r, extra, share_from=fn() { from }) {
-              Some(items) => @sf.menu(items, from~, along~)
-              None => ()
-            }
-          })
-        }
+      let stop = @signals.untracked(fn() {
+        @signals.effect(fn() {
+          if !done.val && chat_menu_whole(src, r, extra, share_from=fn() { from }) is Some(_) {
+            done.val = true
+            @signals.untracked(fn() {
+              match chat_menu_whole(src, r, extra, share_from=fn() { from }) {
+                Some(items) => @sf.menu(items, from~, along~)
+                None => ()
+              }
+            })
+          }
+        })
       })
       @signals.set_owner(owner) |> ignore
       if done.val {
