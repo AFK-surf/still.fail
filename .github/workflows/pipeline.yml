@@ -1070,9 +1070,11 @@ jobs:
           sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
   # The deltas of each release (scripts/release-deltas.ts: from the builds before, at https://app.still.fail/releases),
-  # a job a part, beside the checks: one part's, 3 bases, takes up to ~2 minutes of a runner's 4 cores (the station's 4
-  # archives ×3, ~100 s; Android's 3 with the Java applier's check, ~100 s), all four parts in put's job were ~5 minutes
-  # more. Each takes its part's release as put will (its hand, its artifact; the station's archives taken back from
+  # a job a part, beside the checks: 10 bases a feed (the owner, 2026-11-11; the station's 4 archives ×10), four makers
+  # at once on a runner's 4 cores, inside --deadline 200. A pair was ~40 s of a core for an app's package (Android's
+  # with the Java applier's check) and ~25 s for a station's archive at 3 bases; the station's is under half that since
+  # its files found whole are not sorted (scripts/delta.ts). All four parts in put's job were ~5 minutes more at 3
+  # bases. Each takes its part's release as put will (its hand, its artifact; the station's archives taken back from
   # staged/), puts the deltas (and the station's archives under their own names: nothing points at them until put
   # writes the feed) and hands put the amended feeds (deltas-<part>-<sha>). Never a reason to hold a release back:
   # put goes on without what this did not make.

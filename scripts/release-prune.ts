@@ -1,23 +1,26 @@
 // The releases bucket keeps, of the desktop, Android and Linux apps, the installer each feed names and any newer (a
-// release whose files are put but whose feed is not yet, scripts/release-put.sh), and the newest 5 installers (zip,
-// exe, apk, tar.gz) beside it: what the deltas of the releases after them are made from (scripts/release-deltas.ts, 3
-// builds back), the betas' as the stable apps'; of the betas also 30 .blockmap/.sig. Older installers are deleted, and
-// older beta blockmaps; a stable release's blockmaps all stay (a few hundred KB each). A desktop app updates from the
-// version it runs by fetching that version's blockmap (when it has not kept it) and the new file's changed blocks: no
-// old installer is needed, so a beta up to 30 releases behind still updates by difference. A Windows installer's raw
-// form (.raw.zst) stays as long as its installer. A delta (….from-<n>.delta) stays while its feed offers it (and when
-// it is newer than what the feed names: being put); the station's archives kept under their own names
-// (station/archive/<channel>/…) while their channel's feed names them, as its build or a base of its deltas (or are
-// newer than it), and its deltas while it offers them. The web archives the beta Electron app took without a new app
-// (made until 2026-10-26, when that app was moved to mbui's): the one its feed names, any newer, and the newest 5. What
-// a station's job staged (staged/<when>-<commit>/: scripts/release-put.sh --stage) and no put took back and deleted:
-// after two days. An Android release's native symbols (symbols/android/…: scripts/release.sh, read by
-// scripts/crash-symbols.ts) once older than 30 days by the time the bucket says it was put (its listing's
-// last_modified; the owner, 2026-11-11): one whose time cannot be read stays. The stations' own names, Node and the
-// feeds are never touched.
+// release whose files are put but whose feed is not yet, scripts/release-put.sh), and the installers (zip, exe, apk,
+// tar.gz) its deltas are from: what the next release's deltas are made from (scripts/release-deltas.ts, up to 10 builds
+// back, the betas' as the stable apps'; the owner, 2026-11-11). Not the newest N: Android's APK is put for every main
+// commit before its feed, so installers that never were a feed would take the places. Of the betas also 30
+// .blockmap/.sig. Other older installers are deleted, and older beta blockmaps; a stable release's blockmaps all stay
+// (a few hundred KB each). A desktop app updates from the version it runs by fetching that version's blockmap (when it
+// has not kept it) and the new file's changed blocks: no old installer is needed, so a beta up to 30 releases behind
+// still updates by difference. A Windows installer's raw form (.raw.zst) stays as long as its installer. A delta
+// (….from-<n>.delta) stays while its feed offers it (and when it is newer than what the feed names: being put); the
+// station's archives kept under their own names (station/archive/<channel>/…) while their channel's feed names them,
+// as its build or a base of its deltas (or are newer than it), and its deltas while it offers them. The web archives
+// the beta Electron app took without a new app (made until 2026-10-26, when that app was moved to mbui's): the one its
+// feed names, any newer, and the newest 5. What a station's job staged (staged/<when>-<commit>/: scripts/release-put.sh
+// --stage) and no put took back and deleted: after two days. An Android release's native symbols (symbols/android/…:
+// scripts/release.sh, read by scripts/crash-symbols.ts) once older than 30 days by the time the bucket says it was put
+// (its listing's last_modified; the owner, 2026-11-11): one whose time cannot be read stays. The stations' own names,
+// Node and the feeds are never touched.
 // CI runs it after `put` (.github/workflows/pipeline.yml).
 //   node scripts/release-prune.ts [--dry-run]
 // Needs CLOUDFLARE_API_TOKEN (and CLOUDFLARE_ACCOUNT_ID, else the token's first account).
+
+import { baseFile } from "./release-deltas.ts";
 
 const BUCKET = "stillfail-releases";
 export const FEEDS = [
@@ -29,9 +32,7 @@ export const FEEDS = [
 /** An installer: its name before and after the version, and the version; then what goes with it (.blockmap, .sig, its
  * raw form, a delta to it) when it is one. */
 const INSTALLER = /^((?:desktop|android|mac|win|linux)\/stillfail-(?:beta-|mbui-)?)(\d+(?:\.\d+\.\d+)?)(-[\w-]+\.(?:zip|exe|tar\.gz)|\.apk)(\.blockmap|\.sig|\.raw\.zst|\.from-\d+\.delta)?$/;
-/** How many of an app's newest installers stay (the one its feed names among them: the bases of the next deltas), and
- * of a beta's blockmaps. */
-const INSTALLERS = 5;
+/** How many of a beta's newest blockmaps and .sigs stay. */
 const BETA_BLOCKMAPS = 30;
 /** The beta Electron app's web app: its feed, its archives, and how many of the newest stay. */
 const WEB_FEED = "desktop/web/stillfail-beta-web.json";
@@ -58,16 +59,13 @@ const installer = (key: string) => {
   return m ? { group: m[1]! + m[3]!, version: m[2]!, beta: m[1]!.endsWith("beta-") || m[1]!.endsWith("mbui-"), extra: m[4] ?? "" } : null;
 };
 
-/**
- * Which of the bucket's `keys` go: `feeds` the feeds' text by name (a feed not there: absent), `webNamed` the build the
- * web archives' feed names, `now` seconds since 1970, `putAt` when each key was put by the bucket's word (seconds since
- * 1970; a key without one: not known).
- */
-export function doomedOf(keys: string[], feeds: Record<string, string>, webNamed: number | null, now: number, putAt: ReadonlyMap<string, number> = new Map()): string[] {
-  // The version each app's feed names, by group (the desktop's feeds name the file without its directory), and every
-  // delta a feed offers.
+
+/** Of the apps' feeds: the version each names, by group (the desktop's feeds name the file without its directory),
+ * every delta one offers, and the versions of the installers its deltas are from, by group. */
+const appFeeds = (feeds: Record<string, string>) => {
   const current = new Map<string, string>();
   const offered = new Set<string>();
+  const bases = new Map<string, Set<string>>();
   for (const feed of FEEDS) {
     const text = feeds[feed];
     if (text === undefined || feed.startsWith("station")) continue;
@@ -77,7 +75,35 @@ export function doomedOf(keys: string[], feeds: Record<string, string>, webNamed
       if (named) current.set(named.group, named.version);
     }
     for (const m of text.matchAll(/[\w.\/-]+\.delta/g)) offered.add(m[0]);
+    if (!feed.endsWith(".json")) continue;
+    let f: any;
+    try { f = JSON.parse(text); } catch { continue; }
+    if (!Number.isSafeInteger(f?.versionCode) || typeof f.file !== "string" || !Array.isArray(f.deltas)) continue;
+    for (const d of f.deltas) {
+      const base = Number.isSafeInteger(d?.from) ? installer(baseFile(f.file, f.versionCode, d.from)) : null;
+      if (base) bases.set(base.group, (bases.get(base.group) ?? new Set()).add(base.version));
+    }
   }
+  return { current, offered, bases };
+};
+
+/** The installers of `keys` newer than the version their feed names (a release being put, or never to be a feed). */
+export function aheadOf(keys: string[], feeds: Record<string, string>): string[] {
+  const { current } = appFeeds(feeds);
+  return keys.filter((key) => {
+    const file = installer(key);
+    const named = file?.extra === "" && current.get(file.group);
+    return !!named && older(named, file!.version);
+  });
+}
+
+/**
+ * Which of the bucket's `keys` go: `feeds` the feeds' text by name (a feed not there: absent), `webNamed` the build the
+ * web archives' feed names, `now` seconds since 1970, `putAt` when each key was put by the bucket's word (seconds since
+ * 1970; a key without one: not known).
+ */
+export function doomedOf(keys: string[], feeds: Record<string, string>, webNamed: number | null, now: number, putAt: ReadonlyMap<string, number> = new Map()): string[] {
+  const { current, offered, bases } = appFeeds(feeds);
   // The station's feeds: by channel, the build each names, the archives (by sha256) it names as its own or as a base
   // of its deltas, and its deltas.
   const station = new Map<string, { build: number; named: Set<string>; deltas: Set<string> }>();
@@ -96,12 +122,12 @@ export function doomedOf(keys: string[], feeds: Record<string, string>, webNamed
     }
   }
 
-  // The versions of each kind of installer and of a beta's blockmaps and .sigs, newest first.
-  const kind = (file: { group: string; extra: string }) => file.group + (file.extra === ".blockmap" || file.extra === ".sig" ? file.extra : "");
+  // The versions of each installer's blockmaps and of its .sigs, newest first.
+  const kind = (file: { group: string; extra: string }) => file.group + file.extra;
   const versions = new Map<string, string[]>();
   for (const key of keys) {
     const file = installer(key);
-    if (file && (file.extra === "" || file.extra === ".blockmap" || file.extra === ".sig")) versions.set(kind(file), [...(versions.get(kind(file)) ?? []), file.version]);
+    if (file && (file.extra === ".blockmap" || file.extra === ".sig")) versions.set(kind(file), [...(versions.get(kind(file)) ?? []), file.version]);
   }
   for (const list of versions.values()) list.sort((a, b) => (older(a, b) ? 1 : older(b, a) ? -1 : 0));
   const webBuilds = keys.map((key) => Number(key.match(WEB_ARCHIVE)?.[1])).filter((n) => Number.isSafeInteger(n)).sort((a, b) => b - a);
@@ -132,9 +158,8 @@ export function doomedOf(keys: string[], feeds: Record<string, string>, webNamed
       if (!file.beta) return false;
       return versions.get(kind(file))!.indexOf(file.version) >= BETA_BLOCKMAPS;
     }
-    // (an installer, and its raw form with it)
-    const rank = versions.get(file.group)?.indexOf(file.version) ?? -1;
-    return rank < 0 || rank >= INSTALLERS;
+    // (an installer, and its raw form with it: a base of its feed's deltas stays)
+    return !bases.get(file.group)?.has(file.version);
   });
 }
 
@@ -189,11 +214,11 @@ if (import.meta.main) {
   const webNamed = webFeed.ok ? Number((await webFeed.json()).build) : null;
 
   const doomed = doomedOf(keys, feeds, webNamed, Date.now() / 1000, putAt);
+  // (said each, so that what goes can be read from CI's log)
+  for (const key of aheadOf(keys, feeds)) console.log(`above its feed: ${key}`);
   console.log(`${keys.length} files, ${doomed.length} old installers, deltas, blockmaps, archives, staged files and symbols to delete`);
-  if (dryRun) {
-    for (const key of doomed) console.log(`  ${key}`);
-    process.exit(0);
-  }
+  for (const key of doomed) console.log(`  ${key}`);
+  if (dryRun) process.exit(0);
   let failed = 0;
   for (let i = 0; i < doomed.length; i += 8) {
     await Promise.all(doomed.slice(i, i + 8).map(async (key) => {

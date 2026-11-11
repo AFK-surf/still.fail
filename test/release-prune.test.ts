@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { doomedOf } from "../scripts/release-prune.ts";
+import { baseFile } from "../scripts/release-deltas.ts";
+import { aheadOf, doomedOf } from "../scripts/release-prune.ts";
 
 // What scripts/release-prune.ts deletes of the releases bucket, as a decision on its keys and feeds: the bases of the
-// next deltas stay (the newest installers, the Windows installers' raw forms with them, the station's archives its
+// next deltas stay (the installers the feeds' deltas are from, the Windows installers' raw forms with them, the station's archives its
 // feeds name), a delta while its feed offers it, and whatever is newer than its feed (a release being put).
 const NOW = 1_800_000_000;
 const sha = (c: string) => c.repeat(64);
@@ -11,7 +12,7 @@ const station = (build: number, archives: Record<string, string>, deltas: Record
   version: `0.1.${build}`, build, release: Buffer.from(JSON.stringify({ build, builds: Object.fromEntries(Object.entries(archives).map(([p, s]) => [p, { sha256: s }])) })).toString("base64"), deltas,
 });
 
-test("installers: the newest five stay, stable's as beta's; a raw form with its installer; a delta while offered", () => {
+test("installers: the feed's, any newer, and its deltas' bases, stable's as beta's; a raw form with its installer; a delta while offered", () => {
   const mac = (n: number) => `desktop/stillfail-0.1.${n}-arm64-mac.zip`;
   const win = (n: number) => `desktop/stillfail-beta-0.1.${n}-x64-win.exe`;
   const keys = [
@@ -30,25 +31,63 @@ test("installers: the newest five stay, stable's as beta's; a raw form with its 
     "linux/mbui/latest.json": JSON.stringify({ versionCode: 6, file: "linux/stillfail-mbui-6-x64-linux.tar.gz", deltas: [{ from: 5, file: "linux/stillfail-mbui-6-x64-linux.tar.gz.from-5.delta" }] }),
   };
   const doomed = new Set(doomedOf(keys, feeds, null, NOW));
-  // stable: the newest five (8 being put, 7 named, 6..4 the bases) stay, 3..1 go; their blockmaps all stay
-  for (const n of [8, 7, 6, 5, 4]) assert.ok(!doomed.has(mac(n)), mac(n));
-  for (const n of [3, 2, 1]) assert.ok(doomed.has(mac(n)), mac(n));
+  // stable: 8 being put, 7 named, 6 its base stay, 5..1 go; their blockmaps all stay
+  for (const n of [8, 7, 6]) assert.ok(!doomed.has(mac(n)), mac(n));
+  for (const n of [5, 4, 3, 2, 1]) assert.ok(doomed.has(mac(n)), mac(n));
   for (const n of [1, 2, 7]) assert.ok(!doomed.has(`${mac(n)}.blockmap`));
   // deltas: the offered one stays, one to 7 not offered goes, one to 6 (older than the feed) goes; 8's (being put) stays
   assert.ok(!doomed.has(`${mac(7)}.from-6.delta`));
   assert.ok(doomed.has(`${mac(7)}.from-5.delta`));
   assert.ok(doomed.has(`${mac(6)}.from-5.delta`));
   assert.ok(!doomed.has(`${mac(8)}.from-7.delta`) && !doomed.has(mac(8)));
-  // a beta's installers: 9..5 stay with their raw forms, 4 and 3 go with theirs; .sig as blockmaps (30)
-  for (const n of [9, 8, 7, 6, 5]) assert.ok(!doomed.has(win(n)) && !doomed.has(`${win(n)}.raw.zst`), win(n));
-  for (const n of [4, 3]) assert.ok(doomed.has(win(n)) && doomed.has(`${win(n)}.raw.zst`), win(n));
+  // a beta's installers: 9 and its base 8 stay with their raw forms, 7..3 go with theirs; .sig as blockmaps (30)
+  for (const n of [9, 8]) assert.ok(!doomed.has(win(n)) && !doomed.has(`${win(n)}.raw.zst`), win(n));
+  for (const n of [7, 6, 5, 4, 3]) assert.ok(doomed.has(win(n)) && doomed.has(`${win(n)}.raw.zst`), win(n));
   assert.ok(!doomed.has(`${win(3)}.sig`));
   assert.ok(!doomed.has(`${win(9)}.from-8.delta`));
   // Linux's as the others', each machine's by itself (arm64's has no feed here: nothing of it goes)
-  assert.ok(doomed.has("linux/stillfail-mbui-1-x64-linux.tar.gz"));
-  assert.ok(!doomed.has("linux/stillfail-mbui-2-x64-linux.tar.gz"));
+  for (const n of [1, 2, 3, 4]) assert.ok(doomed.has(`linux/stillfail-mbui-${n}-x64-linux.tar.gz`), String(n));
+  assert.ok(!doomed.has("linux/stillfail-mbui-5-x64-linux.tar.gz"));
   assert.ok(!doomed.has("linux/stillfail-mbui-6-x64-linux.tar.gz.from-5.delta"));
   assert.ok(!doomed.has("linux/stillfail-mbui-6-arm64-linux.tar.gz"));
+});
+
+test("Android beta as seen on production: the feed's base stays, APKs of runs that never were a feed go", () => {
+  const apk = (n: number) => `android/stillfail-beta-${n}.apk`;
+  const keys = [8358, 8360, 8365, 8367, 8370, 8372, 8375, 99999].map(apk);
+  const feeds = { "android/beta/latest.json": JSON.stringify({ versionCode: 8367, file: apk(8367), deltas: [{ from: 8360, file: `${apk(8367)}.from-8360.delta` }] }) };
+  // (8365: put by a run later cancelled; 8370.. 99999: newer than the feed, put before theirs or never to be one)
+  assert.deepEqual(doomedOf(keys, feeds, null, NOW), [apk(8358), apk(8365)]);
+  assert.deepEqual(aheadOf(keys, feeds), [8370, 8372, 8375, 99999].map(apk));
+});
+
+test("ten bases all stay, an eleventh older installer goes; a feed without deltas keeps none older", () => {
+  const apk = (n: number) => `android/stillfail-beta-${n}.apk`;
+  const keys = Array.from({ length: 12 }, (_, i) => apk(100 + i));
+  const from = Array.from({ length: 10 }, (_, i) => 110 - i);
+  const feeds = { "android/beta/latest.json": JSON.stringify({ versionCode: 111, file: apk(111), deltas: from.map((n) => ({ from: n, file: `${apk(111)}.from-${n}.delta` })) }) };
+  assert.deepEqual(doomedOf(keys, feeds, null, NOW), [apk(100)]);
+  const none = { "android/beta/latest.json": JSON.stringify({ versionCode: 111, file: apk(111) }) };
+  assert.deepEqual(doomedOf(keys, none, null, NOW), keys.slice(0, 11));
+  // (a feed not read as JSON: no bases either)
+  assert.deepEqual(doomedOf(keys, { "android/beta/latest.json": `{"versionCode": 111, "file": "${apk(111)}", ` }, null, NOW), keys.slice(0, 11));
+});
+
+test("desktop: the base's build is swapped inside 0.1.N; the yml feed naming the same zip changes nothing", () => {
+  const zip = (n: number) => `desktop/stillfail-beta-0.1.${n}-arm64-mac.zip`;
+  assert.equal(baseFile(zip(9), 9, 8), zip(8));
+  const keys = [6, 7, 8, 9].map(zip);
+  const json = { "mac/beta/latest.json": JSON.stringify({ versionCode: 9, file: zip(9), deltas: [{ from: 8, file: `${zip(9)}.from-8.delta` }, { from: 7, file: `${zip(9)}.from-7.delta` }] }) };
+  assert.deepEqual(doomedOf(keys, json, null, NOW), [zip(6)]);
+  const yml = { ...json, "desktop/stillfail-beta-mac.yml": `version: 0.1.9\nfiles:\n  - url: stillfail-beta-0.1.9-arm64-mac.zip\npath: stillfail-beta-0.1.9-arm64-mac.zip\n` };
+  assert.deepEqual(doomedOf(keys, yml, null, NOW), [zip(6)]);
+});
+
+test("Windows: a base's exe and its raw form stay together, a non-base's go together", () => {
+  const exe = (n: number) => `win/stillfail-mbui-${n}-x64-win.exe`;
+  const keys = [3, 4, 5].flatMap((n) => [exe(n), `${exe(n)}.raw.zst`]);
+  const feeds = { "win/mbui/latest.json": JSON.stringify({ versionCode: 5, file: exe(5), deltas: [{ from: 4, file: `${exe(5)}.from-4.delta` }] }) };
+  assert.deepEqual(doomedOf(keys, feeds, null, NOW), [exe(3), `${exe(3)}.raw.zst`]);
 });
 
 test("the station's own archives: while their channel's feed names them, as its build or a base, or are newer", () => {
@@ -96,6 +135,6 @@ test("an Android release's symbols: older than 30 days by when the bucket says t
   const old = new Map(keys.map((k) => [k, NOW - 365 * day]));
   const others = (d: string[]) => d.filter((k) => !k.startsWith("symbols/"));
   assert.deepEqual(others(doomedOf(keys, feeds, null, NOW, old)), others(doomedOf(keys, feeds, null, NOW)));
-  assert.deepEqual(others([...doomed]), [apk(1), apk(2)]);
+  assert.deepEqual(others([...doomed]), [1, 2, 3, 4, 5, 6].map(apk));
   assert.deepEqual(doomedOf(keys, feeds, null, NOW).filter((k) => k.startsWith("symbols/")), [], "none goes without times");
 });
