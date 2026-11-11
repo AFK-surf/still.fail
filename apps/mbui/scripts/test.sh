@@ -498,6 +498,10 @@ for t in $targets; do
   # 42956992852, 2026-11-11)
   awk '/^\[[^]]*\] test .* failed/ { on = 1; print; next } on && /^  / { print; next } { on = 0 }' "$out" |
     sed '1s/^/test.sh: what failed, whole:\n/'
+  # (and what testexe said of each run's files, its slowest and each one's seconds, which scripts/page-seconds.sh reads
+  # back: behind the tail's last lines they were in no log, app 1/4 at 120 fps's pages 259-265 s of a run dealt as 139
+  # with nothing to say which file grew, 42977201225 42980774839, 2026-11-11)
+  grep -a '^testexe: ' "$out"
   grep '^Total tests' "$out"
   [ -z "${TIMES:-}" ] || cat "$out".time.* 2>/dev/null | sort -rn | sed 's/^/test.sh: a run of /'
   rm -f "$out".time.*
