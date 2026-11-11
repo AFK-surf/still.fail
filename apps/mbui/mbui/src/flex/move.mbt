@@ -367,6 +367,7 @@ pub fn come_way_by(
   }
   // (turned back: slowing at one rate to rest, then its way back from there set out still and gaining as it slowed)
   let tr = come_turned(v, plan - from, along)
+  println("MOTION turn one: v=\{v} far=\{plan - from} from=\{from}")
   if t <= tr.t1 {
     let g = if v > 0.0 { -tr.a } else { tr.a }
     return (from + v * t + g * t * t / 2.0, v + g * t)
@@ -425,6 +426,9 @@ pub fn come_group_set(g : ComeGroup) -> Unit {
   // its own speed is of the group's, then its way back from there; what each then goes worked out again from how far
   // that carries it, the same number of times)
   let speed = -v
+  if v < 0.0 {
+    println("MOTION turn group: v=\{v} n=\{g.members.length()}")
+  }
   let w = if v < 0.0 { come_turn_w(v) } else { 0.0 }
   let a_stop = if v < 0.0 { speed * speed / (2.0 * move_stop_points(v)) } else { 0.0 }
   let mut s = 0.0
