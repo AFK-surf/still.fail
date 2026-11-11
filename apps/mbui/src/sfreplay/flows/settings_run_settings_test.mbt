@@ -10,7 +10,7 @@ test "89-run-settings" {
     f.see("=willow")
     f.tap("icon:info")
     // the chat's own sheet (decide.mbt's)
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest())
     // the agent's part of the same sheet
     // (its first row's: under it, the pull requests' and the public links' have one too)
     f.tap("icon:chevron-right", top=true)
@@ -20,7 +20,7 @@ test "89-run-settings" {
     f.tap("=详情")
     // How it runs: the shared model picker rises from the foot.
     f.tap("icon:chevron-down")
-    f.run_to(@kit.sheet_rest("sf-present"))
+    f.run_to(@sf.presented_rest())
     // 思考深度: its stops in the sheet itself (@sf.stops), a level a tap; the third of its five (低 to 最高) is 高, the
     // middle of its track. No model is picked yet, so the core keeps none of it (`saved: false`) and the track goes
     // back to none: that it was asked is held at the flow's end, as every ask of the run's is.

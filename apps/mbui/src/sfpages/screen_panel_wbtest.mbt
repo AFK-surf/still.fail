@@ -13,7 +13,7 @@ fn open_center(r : ScreenRig) -> Unit {
 ///|
 /// The presenters' sheet, where one is moving (a phone's 控制中心 opened or closed), at its rest.
 fn to_sheet_rest(t : @ui.Tester) -> Unit {
-  let rest = @kit.sheet_rest("sf-present")
+  let rest = @sf.presented_rest()
   if rest > t.time() && rest < @double.infinity {
     t.run_for(rest - t.time())
   }

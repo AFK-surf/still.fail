@@ -100,7 +100,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     back, Escape and the system's back go back to the one before, a press outside, × or the sheet dragged down closes
     all of it), a menu a menu's item opens is a level of the same sheet, and on 小屏 whatever a sheet closes for comes
     in its place, one sheet all along and the scrim as it was, never one sheet sinking as the next rises
-    (presenters_wbtest's every pair of kinds holds it).
+    (presenters_wbtest's every pair of kinds holds it). On 小屏 a panel's step further in is a page of the same sheet
+    of the window's tree (`sheet_node`, every panel there but a stage or one with steps of its own): it slides in as
+    the one before slides off, and that one is kept as it was left for back.
 
 ## Made once, as nodes
 

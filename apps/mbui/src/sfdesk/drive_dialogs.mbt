@@ -175,10 +175,8 @@ fn picker_open(src : Source, ws : String, station : String, picked : (Favorite) 
       let v = dialogs.value.get()
       let path = text(v, "path")
       let taken = v is Some(_) && favorite_has(favorites(src, ws), station, path, "")
-      @sf.button(c, @sf.t("common.cancel"), key="drive/picker/cancel", tone=Ghost, on_press=fn() {
-        close()
-        picker_close()
-      }) |> ignore
+      // (what it shows kept as it was while it sinks away: let go of once it has gone, `gone`)
+      @sf.button(c, @sf.t("common.cancel"), key="drive/picker/cancel", tone=Ghost, on_press=fn() { close() }) |> ignore
       @sf.button(
         c,
         @sf.t(if taken { "web-pages.files.alreadyFavorite" } else { "web-pages.files.pickFavorite" }),
@@ -188,7 +186,6 @@ fn picker_open(src : Source, ws : String, station : String, picked : (Favorite) 
         on_press=fn() {
           let name = dv_root_label([], path)
           close()
-          picker_close()
           let f : Favorite = { station, root: path, path: "", name }
           favorite_add(src, ws, f)
           picked(f)

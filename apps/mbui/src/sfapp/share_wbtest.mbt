@@ -30,6 +30,10 @@ test "a chat tapped: what is shared goes to its composer and the chat opens; 新
     Chat(r) => assert_eq(r.session, "s-c4")
     _ => fail("not the chat")
   }
+  // (what the sheet shows kept as it was while it sinks away, let go of once it has gone)
+  assert_true(share_in.shared.get() is Some(_))
+  sheet_rested(t, "sf-present")
+  t.frame()
   assert_true(share_in.shared.get() is None)
   let n = share_tester("share-in-stations")
   // (the station chosen on the new chat's page, as any new chat's: not listed here)

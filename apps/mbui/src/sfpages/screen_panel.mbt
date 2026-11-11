@@ -202,6 +202,9 @@ fn net_panel(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let net = screen_net(s)
   let rtt = field(net, "rtt")
   let level = text(rtt, "level")
+  // (its figures counted each second as the view's seconds seen are (screen_count): read again with them, where it is
+  // an old view in a node of the window's tree, built again only as what it read changes)
+  u.seen.get() |> ignore
   let st = s.state
   let latency = field(st, "latency")
   let video = field(st, "video")

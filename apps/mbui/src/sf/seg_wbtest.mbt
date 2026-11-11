@@ -119,7 +119,7 @@ test "a filling Seg whose options do not fit side by side even at the system's o
   assert_eq(presented_how, [AsSheet])
   t.tap_text("Station")
   assert_true(!presenting())
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(presented_rest() - t.time())
   assert_eq(chosen.val, 3)
   assert_true(t.query(@ui.Role::Button, label="Station") is Some(_))
   // (given the room: its options side by side, the one picked chosen)
@@ -258,7 +258,7 @@ test "option_widths: alike, none narrower than its words and sides; then their s
 fn open_choice(t : @ui.Tester, words : String) -> Unit raise {
   t.click(@ui.Role::Button, label=words)
   if presented_how == [AsSheet] {
-    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.run_for(presented_rest() - t.time())
   } else {
     t.run_for(@kit.presence_in_ms)
   }

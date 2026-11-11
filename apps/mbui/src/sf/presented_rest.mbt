@@ -14,13 +14,26 @@ let presented_sheet_rests : Map[Int, () -> Double] = {}
 let presented_sheet_next : Ref[Int] = Ref(0)
 
 ///|
+/// When the motions of the tree's sheets already let go said they end, the latest: what presented_rest answers for one
+/// that has gone, as the old frame's sheet's rest still says its end once it is still.
+// kept across runs: presenters_reset puts it back
+let presented_sheet_ended : Ref[Double] = Ref(-1.0)
+
+///|
 /// Layer `layer` (a sheet of the tree's the presenters hold up) says when its motions end with `rest`, till it is let
 /// go.
 fn presented_sheet_rest(layer : @view.View, rest : () -> Double) -> Unit {
   presented_sheet_next.val += 1
   let k = presented_sheet_next.val
   presented_sheet_rests[k] = rest
-  layer.owns(fn() { presented_sheet_rests.remove(k) }) |> ignore
+  layer.owns(fn() {
+    let r = rest()
+    if r > presented_sheet_ended.val {
+      presented_sheet_ended.val = r
+    }
+    presented_sheet_rests.remove(k)
+  })
+  |> ignore
 }
 
 ///|
@@ -30,6 +43,9 @@ fn presented_sheet_rest(layer : @view.View, rest : () -> Double) -> Unit {
 pub fn presented_rest() -> Double {
   // (the old frame's: the presenters' own key, present_sheet's)
   let mut end = @kit.sheet_rest("sf-present")
+  if presented_sheet_ended.val > end {
+    end = presented_sheet_ended.val
+  }
   for _, rest in presented_sheet_rests {
     let r = rest()
     if r > end {

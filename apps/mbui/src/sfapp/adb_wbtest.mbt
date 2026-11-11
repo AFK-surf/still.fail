@@ -508,7 +508,7 @@ test "settings' 共享调试 on a device its person's trusted devices approved: 
   let middle = row.2 + row.4 / 2.0
   assert_true((middle - other_y).abs() < (middle - mine_y).abs(), msg="\{row} \{other_y} \{mine_y}")
   t.tap(row.1 + row.3 / 2.0, middle)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   // asked first: nothing removed yet
   assert_true(@sf.presenting())
   assert_true(t.find("移除「MacBook Pro」？") is Some(_))

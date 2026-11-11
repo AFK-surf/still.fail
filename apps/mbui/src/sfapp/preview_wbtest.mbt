@@ -114,7 +114,7 @@ test "the picture held by a finger, Small or Medium: its one menu, 保存到相�
     t.run_for(@ui.long_press_ms + 20.0)
     t.release(w / 2.0, 422.0)
     t.draw()
-    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.run_for(@sf.presented_rest() - t.time())
     // (its sheet measures what it holds as it first comes, the frame built again then: that build sees no hold)
     assert_eq(@sf.last_presented() - before, 1, msg="\{w} wide")
     assert_true(t.reachable("保存到相册").length() > 0, msg="\{w} wide")

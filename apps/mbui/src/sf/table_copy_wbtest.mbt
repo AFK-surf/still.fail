@@ -42,14 +42,14 @@ test "a table's copy key hangs past its right edge, in line with its head; its m
   assert_true(kx >= lx + lw + table_key_gap && kx + kw <= 390.0 - 16.0, msg="\{(kx, kw, lx, lw)}")
   assert_true((ky + kh / 2.0 - (hy + hh / 2.0)).abs() <= 1.0, msg="\{(ky, kh, hy, hh)}")
   t.click(Button, label="web-main.prose.copyTable")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(presented_rest() - t.time())
   t.tap_text("web-main.prose.copyCsv")
   assert_eq(t.clipboard(), "模型,输入,输出,缓存读\nOpus 5.5,$5,$25,$0.5\nSonnet 5,$3,$15,$0.3")
   t.frame()
   // a check a moment
   let _ = table_key_of(t, copied=true)
   t.click(Button, label="common.copied")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(presented_rest() - t.time())
   t.tap_text("web-main.prose.copyMarkdown")
   assert_eq(t.clipboard(), copy_table)
 }

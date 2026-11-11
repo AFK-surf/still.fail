@@ -114,7 +114,7 @@ test "a login's page copied from the ⋯ beside its button, its address on the c
     let calls : Array[Made] = []
     let t = with_logins(login_core(calls, login))
     t.click(Button, label="其他方式")
-    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.run_for(@sf.presented_rest() - t.time())
     t.tap_text("复制链接")
     assert_eq(t.clipboard(), "https://app.devin.ai/login")
     assert_true(t.opened().is_empty(), msg="copied, nothing opened")
@@ -152,9 +152,9 @@ test "a login the station's own browser can do: seldom used, in the ⋯ by the s
   assert_true(t.find("在 Willow 的浏览器中打开") is None, msg="not a button of its own")
   t.click(Button, label="其他方式")
   assert_true(@sf.presenting())
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t.tap_text("在 Willow 的浏览器中打开")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   let asked = named(calls, "machineLogin.browser")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "id"), "login-1")
@@ -218,7 +218,7 @@ test "this device's port taken just now: the station's browser is the step, this
   assert_true(t.find("本机 8085 端口被占用") is Some(_))
   assert_true(t.find("在 Willow 的浏览器中打开") is Some(_))
   t.click(Button, label="其他方式")
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   assert_true(t.find("在浏览器里登录") is Some(_))
 }
 

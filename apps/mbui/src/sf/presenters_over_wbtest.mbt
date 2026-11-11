@@ -62,7 +62,7 @@ fn one_over_another(
 ///|
 /// The moment what was presented or let go last has come in or gone: a sheet's rest, then the longest move.
 fn come_to_rest(t : @ui.Tester) -> Unit {
-  let rest = @kit.sheet_rest("sf-present") - t.time()
+  let rest = presented_rest() - t.time()
   if rest > 0.0 {
     t.run_for(rest)
   }

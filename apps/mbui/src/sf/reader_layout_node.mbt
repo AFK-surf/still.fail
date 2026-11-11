@@ -84,7 +84,13 @@ fn reader_layout_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
   }
   root.box(made_for=loc, fn(layer) {
     layer.over(Is(true)).stacked(Is(0)) |> ignore
-    sheet_node(layer, fn() { open() && small() }, x, x.nodes.unwrap(), shut, shut, Unanchored)
+    sheet_node(
+      layer,
+      "sf-reader-layout",
+      fn() { open() && small() },
+      fn() { [{ n: 0, x, nodes: x.nodes, close: shut, from: Unanchored, lists: -1 }] },
+      shut,
+    )
   })
   |> ignore
 }

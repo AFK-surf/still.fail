@@ -42,7 +42,7 @@ test "a way short of room: the first and the last whole, those between leaving f
   assert_eq(t.squeeze_faults(), [])
   // the …: those that left, in their order; one picked, gone to
   t.tap_text(@sf.way_more)
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   let left = [1, 2, 3, 4].filter(fn(i) { !shown[i] })
   let ys = left.map(fn(i) { t.find_last(steps[i]).unwrap().1 })
   for k in 1..<ys.length() {

@@ -94,7 +94,7 @@ fn publish_shown(preview? : () -> Json = fix_preview, finish? : Bool = true) -> 
   let t = publish_core([], preview~, finish~, menu=true)
   open_publish_page()
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -111,7 +111,7 @@ test "分享图片's page dismissed by back: closed as back is taken; the frame 
   // (opened again as it was)
   open_publish_page()
   t.frame()
-  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@sf.presented_rest() - t.time())
   seen.push(@sfpages.publish_open())
   t.run_for(@ui.move_most_ms)
   seen.push(@sfpages.publish_open())

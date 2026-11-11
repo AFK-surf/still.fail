@@ -90,7 +90,7 @@ test "downloads: a message's file and video offer 下载 by right click and long
         t.press_at(x, y)
         t.run_for(@ui.long_press_ms)
         t.release(x, y)
-        t.run_for(@kit.sheet_rest("sf-present") - t.time())
+        t.run_for(@sf.presented_rest() - t.time())
       }
       t.draw()
       let role : @ui.Role = if platform == 0 { MenuItem } else { Button }

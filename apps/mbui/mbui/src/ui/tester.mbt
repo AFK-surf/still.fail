@@ -2014,6 +2014,31 @@ pub fn Tester::drawn_glass(self : Tester) -> Array[(Double, Double, Double, Doub
 }
 
 ///|
+/// The same glass as far as it is drawn: its rect cut to its clip (a box over it that cuts it off, a sheet's foot),
+/// (x, y, w, h); none where nothing of it is left.
+pub fn Tester::drawn_glass_cut(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    let kind = c.inst[b + 5].to_int()
+    if kind == 5 || kind == 6 {
+      let (x, y, w, h) = (c.inst[b], c.inst[b + 1], c.inst[b + 2], c.inst[b + 3])
+      let (cx0, cy0, cx1, cy1) = (c.inst[b + 16], c.inst[b + 17], c.inst[b + 18], c.inst[b + 19])
+      let x0 = if cx1 > cx0 { dmax(x, cx0) } else { x }
+      let y0 = if cy1 > cy0 { dmax(y, cy0) } else { y }
+      let x1 = if cx1 > cx0 { dmin(x + w, cx1) } else { x + w }
+      let y1 = if cy1 > cy0 { dmin(y + h, cy1) } else { y + h }
+      if x1 > x0 && y1 > y0 {
+        out.push((x0, y0, x1 - x0, y1 - y0))
+      }
+    }
+  }
+  out
+}
+
+///|
 /// The same glass with its corner, the roundest of its four: (x, y, w, h, corner).
 pub fn Tester::drawn_glass_corners(self : Tester) -> Array[(Double, Double, Double, Double, Double)] {
   ignore(self)

@@ -245,6 +245,20 @@ priv struct Presented {
   /// more; back from this one (its back key, the system's back, Escape) puts that one back in its place (back_under),
   /// a press outside or the sheet dragged down closes all of it
   mut under : Presented?
+  /// a panel of nodes on a sheet: the panels of nodes a step further in from it that it closed for, each a page of the
+  /// same sheet (panel_page: sheet_node's pages, each kept as it was left, sliding in over the one before); back takes
+  /// the last off (panel_pop), a press outside or the sheet dragged down closes all of it
+  more : @signals.Signal[Array[PanelPage]]
+}
+
+///|
+/// A page of a sheet past its first (Presented's `more`): its number in it, its panel, what opened it, what is let go
+/// of as it is left unsaid (gone back from, or the sheet closed with nothing chosen).
+priv struct PanelPage {
+  n : Int
+  x : PanelOf
+  from : Anchor
+  gone : () -> Unit
 }
 
 ///|
@@ -346,6 +360,7 @@ pub fn presenters_reset() -> Unit {
   presented_now.clear()
   took_place.clear()
   tree_presented.clear()
+  tree_as_sheet.clear()
   presented_drawn_said.set([])
   presented_items_said.clear()
   presented_told()
@@ -355,6 +370,7 @@ pub fn presenters_reset() -> Unit {
   presented_how.clear()
   presented_sheet_rests.clear()
   presented_sheet_next.val = 0
+  presented_sheet_ended.val = -1.0
 }
 
 ///|
@@ -365,6 +381,21 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
   match (chosen_in, shows) {
     (Some(old), Menu(items, title, _)) if old.chosen && old.shows is Menu(_, _, _) => {
       menu_level(old, title, items, gone)
+      return
+    }
+    _ => ()
+  }
+  // (a panel by what a panel on a sheet of the window's tree held, which closed for it: a page of that sheet)
+  match (chosen_in, shows) {
+    (Some(old), Panel(x)) if old.chosen &&
+      old.steps is None &&
+      old.stands_now is Some(_) &&
+      // (that sheet drawn still: not one the window's tree let go of as the window came to another screen)
+      tree_presented.contains(old.serial) &&
+      tree_as_sheet.get(old.serial).unwrap_or(false) &&
+      sheet_panel_of(x) &&
+      old.shows is Panel(_) => {
+      panel_page(old, x, from, gone)
       return
     }
     _ => ()
@@ -434,6 +465,7 @@ fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit
     levels: None,
     chosen: false,
     under,
+    more: @signals.signal([]),
   })
   @signals.start_batch()
   presented_told()
@@ -692,10 +724,11 @@ pub fn panel_back(to? : Int) -> Bool {
         Some(d) => nav.pop_to(d)
         None => nav.pop()
       }
-    // (a panel a step further in from another, which closed for it: back to that one)
+    // (a page of a sheet past its first: taken off; a panel a step further in from another, which closed for it: back
+    // to that one)
     _ =>
-      match presented_now.iter().filter(fn(q) { q.open && q.under is Some(_) }).last() {
-        Some(p) => back_under(p)
+      match presented_now.iter().filter(fn(q) { q.open && (q.more.untracked().length() > 0 || q.under is Some(_)) }).last() {
+        Some(p) => panel_pop(p) || back_under(p)
         None => false
       }
   }
@@ -1385,19 +1418,65 @@ fn close_from(i : Int) -> Unit {
 /// then; its view draws it going from the next frame on.
 fn dismissed_now(serial : Int, back? : Bool = false) -> Unit {
   match presented_now.search_by(fn(q) { q.serial == serial }) {
-    // (a step further in from a panel, gone back from: that one back in its place)
-    Some(i) if back && presented_now[i].open && back_under(presented_now[i]) => ()
+    // (a step further in, gone back from: a page of its sheet taken off; a panel's from another's, that one back)
+    Some(i) if back && presented_now[i].open && (panel_pop(presented_now[i]) || back_under(presented_now[i])) => ()
     Some(i) if presented_now[i].open => {
       // (it and what is over it, each closed unsaid let go of once, from the top)
       let closing = presented_now[i:].to_array().filter(fn(q) { q.open && !q.ended }).rev()
       close_from(i)
       for q in closing {
         q.ended = true
-        (q.gone)()
+        gone_all(q)
       }
     }
     _ => ()
   }
+}
+
+///|
+/// Panel `x` (opened by `from`, `gone` as panel_nodes') presented by what a page of sheet `p` held, which closed the
+/// sheet for it: a page of `p`, a step further in. `p`, closed as its page said so, is open again.
+fn panel_page(p : Presented, x : PanelOf, from : Anchor, gone : () -> Unit) -> Unit {
+  p.open = true
+  p.closed_now = false
+  p.ended = false
+  p.chosen = false
+  p.steps_made += 1
+  // (how tall it stands now, for the page put on to set out from: sheet_node's `stood`, as panel_pop has it)
+  match p.stands_now {
+    Some(f) => p.stands = f()
+    None => ()
+  }
+  @signals.start_batch()
+  p.more.set([..p.more.untracked(), { n: p.steps_made, x, from, gone }])
+  presented_told()
+  @signals.end_batch()
+}
+
+///|
+/// The last page of sheet `p` taken off, back to the one before, where it is past its first: what it held let go of.
+/// Whether one was.
+fn panel_pop(p : Presented) -> Bool {
+  let more = p.more.untracked()
+  guard p.open && more.length() > 0 else { return false }
+  let last = more[more.length() - 1]
+  // (how tall it stands now, for the page before to set out from: sheet_node's `stood`)
+  match p.stands_now {
+    Some(f) => p.stands = f()
+    None => ()
+  }
+  p.more.set(more[:more.length() - 1].to_array())
+  (last.gone)()
+  true
+}
+
+///|
+/// What `p` holds let go of as it closes unsaid: its pages', the last first, then its own.
+fn gone_all(p : Presented) -> Unit {
+  for pg in p.more.untracked().rev() {
+    (pg.gone)()
+  }
+  (p.gone)()
 }
 
 ///|
@@ -1413,12 +1492,17 @@ fn back_under(p : Presented) -> Bool {
   close_from(i)
   for q in closing {
     q.ended = true
-    (q.gone)()
+    gone_all(q)
   }
   let before = presented_count.val
   present(u.shows, u.from, gone=u.gone)
   match presented_now.last() {
-    Some(q) if presented_count.val > before => q.under = u.under
+    Some(q) if presented_count.val > before => {
+      q.under = u.under
+      // (the pages it had past its first, with it)
+      q.steps_made = u.steps_made
+      q.more.set(u.more.untracked())
+    }
     _ => ()
   }
   @signals.end_batch()
@@ -1610,7 +1694,7 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
     // closed unsaid: what it holds let go of, once
     if !p.open && !p.ended {
       p.ended = true
-      c.tell("sf-present/gone/\{p.serial}", p.gone)
+      c.tell("sf-present/gone/\{p.serial}", fn() { gone_all(p) })
     }
     if was && open {
       presented_how.push(how_of(p.shows, p.from, sheet))

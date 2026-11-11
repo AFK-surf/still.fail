@@ -7,7 +7,9 @@
 fn painted_at(t : @ui.Tester, color : Int64) -> (Double, Double, Double, Double) raise {
   let found = t.drawn_rects().filter(fn(r) { r.4 >> 8 == color >> 8 })
   assert_eq(found.length(), 1, msg="one box of \{color}")
-  (found[0].0, found[0].1, found[0].2, found[0].3)
+  // (to a thousandth of a point: what one layout sums another way, never seen)
+  let near = fn(v : Double) { (v * 1000.0).round() / 1000.0 }
+  (near(found[0].0), near(found[0].1), near(found[0].2), near(found[0].3))
 }
 
 ///|

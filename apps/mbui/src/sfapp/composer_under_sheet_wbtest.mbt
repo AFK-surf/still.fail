@@ -25,7 +25,7 @@ test "小屏: a chat's message field focused, a panel of nodes over it: none of 
     assert_eq(t.focused().map(fn(s) { s.label }), Some("发消息"), msg~)
     open_things(src, chat_a, 0.0)
     t.frame()
-    t.run_for(@kit.sheet_rest("sf-present") - t.time())
+    t.run_for(@sf.presented_rest() - t.time())
     t.run_for(@ui.move_most_ms)
     assert_true(t.find(tr("web-main.things.title")) is Some(_), msg="\{msg}: open")
     assert_false(t.focused().map(fn(s) { s.label }) == Some("发消息"), msg="\{msg}: the focus under it")
