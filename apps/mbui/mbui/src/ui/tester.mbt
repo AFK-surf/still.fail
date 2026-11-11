@@ -108,6 +108,7 @@ fn reset_globals() -> Unit {
   corners_known_now.val = []
   presses_hold.val = true
   placed_presented.val = None
+  kept_presented.val = None
   text_runs.on = false
   inst_owners.on = false
   inst_owners.track = false
@@ -1135,13 +1136,46 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
     @halt.saying("a list's block's key mark (key_taking, key_taken) left set after a frame at \{at}")
   }
   // (what the window's tree keeps held to what working it out whole gives, where the frame changed it: the drawing
-  // order, the boxes each node lays out, whether each takes input; view's kept_checks.mbt)
+  // order and the boxes each node lays out as the frame was presented, kept_at_present; whether each takes input as
+  // the frame's own work is done, here, what the next input meets: the old frame's modal layer is told the tree as its
+  // frame closes, view_frame_end, after it was presented. Not where a bench measures its frames, as kept_at_present)
+  match kept_presented.val {
+    Some(why) => {
+      kept_presented.val = None
+      @halt.saying("after the frame at \{at}, as it was presented: \{why}")
+    }
+    None => ()
+  }
   match view_app.val {
-    Some(tree) =>
-      match tree.kept_said() {
+    Some(tree) if !bench_measuring.val =>
+      match tree.kept_inputs_said() {
         Some(why) => @halt.saying("after the frame at \{at}: \{why}")
         None => ()
       }
+    _ => ()
+  }
+}
+
+///|
+/// What the window's tree keeps that working it out whole does not give, as the frame being drawn was presented
+/// (kept_at_present), for the Tester's frame end to stop on: None where nothing differed.
+let kept_presented : Ref[String?] = Ref(None)
+
+///|
+/// The frame presented now (FakeHost::present): what the window's tree draws by, as it keeps it, held to what working it
+/// out whole gives (the drawing order and each node's boxes: view's kept_checks.mbt, Tree::kept_drawn_said), as the
+/// frame stood the moment it was presented, as tester_placed.mbt holds its rule. What
+/// comes after that in the same frame (a scripted run's step, drive_frame: a finger's move scrolling a list, a row put
+/// in) is put in order for the frame after it, which lays it out: looked at as the frame ends, every frame of a drag
+/// ended with the next one's change already committed, the order due, and two in a row stopped the run as never held
+/// (#5620's bench, its list scenes: still.fail's instrbench, paged, list30, list1500). Not where a bench measures its
+/// frames (Tester::bench past its `log measure`): as the bench's other checks of a frame, no work of the app's.
+fn kept_at_present() -> Unit {
+  if bench_measuring.val || kept_presented.val is Some(_) {
+    return
+  }
+  match view_app.val {
+    Some(tree) => kept_presented.val = tree.kept_drawn_said()
     None => ()
   }
 }

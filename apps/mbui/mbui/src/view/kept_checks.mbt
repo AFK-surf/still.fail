@@ -1,9 +1,12 @@
-// What the tree keeps rather than works out whole each time, held to what working it out whole gives, after each frame
-// a Tester draws (ui's tester.mbt): the drawing order (made again from what holds a change, Tree::order_again), the
-// boxes each node lays out (put in one at a time where it can, View::box_appended; else all again, Tree::boxes_put),
-// and whether each node that asks takes input (told from what changed, Tree::inputs_told). Each is looked at only after
-// a frame that changed it, by the tree's own counts of its work since the last look; what the look itself walks is
-// counted nowhere. A difference stops the run, saying where.
+// What the tree keeps rather than works out whole each time, held to what working it out whole gives after each frame a
+// Tester draws (ui's tester.mbt), each at the moment it is for: the drawing order (made again from what holds a change,
+// Tree::order_again) and the boxes each node lays out (put in one at a time where it can, View::box_appended; else all
+// again, Tree::boxes_put), what was drawn, as the frame is presented (kept_at_present: what a scripted step after it
+// changes is the next frame's to lay out); whether each node that asks takes input (told from what changed,
+// Tree::inputs_told), what the next input meets, as the frame's own work is done (the old frame's modal layer told the
+// tree as its frame closes, after it was presented). Each is looked at only after a frame that changed it, by the
+// tree's own counts of its work since the last look; what the look itself walks is counted nowhere. A difference stops
+// the run, saying where.
 //
 // Every way a node comes to be held, and what tells the drawing order of it (Tree::made marks nothing of the order: what
 // holds it does, as below). A new way to hold a node says it here and tells the order; the check finds a miss only on a
@@ -33,8 +36,20 @@
 
 ///|
 /// The first difference between what the tree keeps and what working it out whole gives, where any part kept changed
-/// since this was last asked: none where all is the same.
+/// since this was last asked: none where all is the same. Both looks at once (Tree::kept_drawn_said, then
+/// Tree::kept_inputs_said), for a test asking at one moment.
 pub fn Tree::kept_said(self : Tree) -> String? {
+  match self.kept_drawn_said() {
+    Some(said) => Some(said)
+    None => self.kept_inputs_said()
+  }
+}
+
+///|
+/// What is drawn, as kept against what working it out whole gives: the drawing order and each node's boxes. Asked as a
+/// frame is presented (ui's tester.mbt, kept_at_present): what that frame drew by. Still due as two frames in a row are
+/// presented is a fault of its own.
+pub fn Tree::kept_drawn_said(self : Tree) -> String? {
   let w = self.work
   let (orders, structure, inputs, order_structure, inputs_structure) = self.kept_seen
   // (what the looks below walk, counted as they walk it: put back after, as it was)
@@ -51,21 +66,11 @@ pub fn Tree::kept_said(self : Tree) -> String? {
   if said is None && w.structure != structure && boxes_settled {
     said = self.boxes_kept_said()
   }
-  // (not while what takes input is still to be told: what its rows left out, once all of a layout is done
-  // (Tree::outs_told), or the modal layers at a change's end)
-  let inputs_settled = !self.inputs_whole && self.inputs_in.is_empty() && !self.outs_changed && !self.modals_due
-  if said is None && (w.inputs_walked != inputs || w.structure != inputs_structure) && inputs_settled {
-    said = self.inputs_kept_said()
-  }
-  // (still due as a frame ends, and again as the next one ends: never looked at, which is a fault of its own)
-  if order_settled && inputs_settled {
-    self.kept_waits = 0
-  } else {
-    self.kept_waits = self.kept_waits + 1
-  }
+  // (still due as a frame is presented, and again as the next one is: never looked at, which is a fault of its own)
+  self.kept_waits = if order_settled { 0 } else { self.kept_waits + 1 }
   if said is None && self.kept_waits > 1 {
     said = Some(
-      "still due after two frames, so never held to what is worked out whole: the drawing order \{!order_settled}, what takes input \{!inputs_settled} (all of it \{self.inputs_whole}, some \{self.inputs_in.length()}, rows left out \{self.outs_changed}, the modal layers \{self.modals_due})",
+      "the drawing order still due as two frames in a row were presented, so never held to what is worked out whole",
     )
   }
   w.boxes_walked = walked.0
@@ -74,8 +79,42 @@ pub fn Tree::kept_said(self : Tree) -> String? {
   self.kept_seen = (
     if order_settled { w.orders } else { orders },
     if boxes_settled { w.structure } else { structure },
-    if inputs_settled { w.inputs_walked } else { inputs },
+    inputs,
     if order_settled { w.structure } else { order_structure },
+    inputs_structure,
+  )
+  said
+}
+
+///|
+/// Whether each node that asks takes input, as told against what working it out whole gives. Asked as a frame's own
+/// work is done (ui's tester.mbt, at the Tester's frame end): what the next input meets, the old frame's modal layer
+/// told the tree as its frame closes (ui's view_frame_end, Tree::hold_under), after the frame was presented. Still due
+/// as two frames in a row end so is a fault of its own.
+pub fn Tree::kept_inputs_said(self : Tree) -> String? {
+  let w = self.work
+  let (orders, structure, inputs, order_structure, inputs_structure) = self.kept_seen
+  let walked = (w.boxes_walked, w.order_copied)
+  let mut said : String? = None
+  // (not while what takes input is still to be told: what its rows left out, once all of a layout is done
+  // (Tree::outs_told), or the modal layers at a change's end)
+  let inputs_settled = !self.inputs_whole && self.inputs_in.is_empty() && !self.outs_changed && !self.modals_due
+  if (w.inputs_walked != inputs || w.structure != inputs_structure) && inputs_settled {
+    said = self.inputs_kept_said()
+  }
+  self.kept_inputs_waits = if inputs_settled { 0 } else { self.kept_inputs_waits + 1 }
+  if said is None && self.kept_inputs_waits > 1 {
+    said = Some(
+      "what takes input still due as two frames in a row ended, so never held to what is worked out whole (all of it \{self.inputs_whole}, some \{self.inputs_in.length()}, rows left out \{self.outs_changed}, the modal layers \{self.modals_due})",
+    )
+  }
+  w.boxes_walked = walked.0
+  w.order_copied = walked.1
+  self.kept_seen = (
+    orders,
+    structure,
+    if inputs_settled { w.inputs_walked } else { inputs },
+    order_structure,
     if inputs_settled { w.structure } else { inputs_structure },
   )
   said

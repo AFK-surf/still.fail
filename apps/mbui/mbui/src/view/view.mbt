@@ -765,9 +765,10 @@ pub struct Tree {
   order_in : Array[Int]
   /// what the checks of what is kept against what is worked out whole (kept_checks.mbt) last saw of the work: the
   /// order made again, the structure changed (as the boxes', the order's and the inputs' looks each last saw it), what
-  /// takes input told; and how many looks in a row found the order or what takes input still due
+  /// takes input told; and how many looks in a row found the order still due, and what takes input
   mut kept_seen : (Int, Int, Int, Int, Int)
   mut kept_waits : Int
+  mut kept_inputs_waits : Int
   /// nodes made since the order was last worked out to be put in it by their own runs (Tree::order_put_in), each with
   /// what lays it out; and those let go to be taken out of it so, each with its making and what held it
   /// (Tree::order_taken_out): the rest of the order as it was, where nothing else changed in it (Tree::order_spliced)
@@ -1257,6 +1258,7 @@ pub fn Tree::new(
     order_in: [],
     kept_seen: (0, 0, 0, 0, 0),
     kept_waits: 0,
+    kept_inputs_waits: 0,
     order_ins: [],
     order_outs: [],
     letting: [],
