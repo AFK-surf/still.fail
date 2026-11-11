@@ -333,7 +333,8 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   t.held_under_by(fn() { g().old_modal_stack() })
   // (a press held on an old view a modal layer now keeps from input: called off then)
   t.on_modals(view_modals_told)
-  // (a hold going through to an old view: what of it takes a press there, who it is; handed so, its from then)
+  // (what of an old view takes a press there, who it is: a hold going through to it handed so, its from then; where
+  // none, what of the tree is drawn small over it reached from round it, Tree::reached)
   t.hosts_at(fn(island, x, y) { old_taker_at(t, island, x, y) })
   // (where a node said it yields to the list's thumb of an old view under it: that view's there, yield_thumbs)
   t.on_target(fn(picked, found, x, y) { view_retarget(t, picked, found, x, y) })
@@ -4083,7 +4084,8 @@ fn old_press_owner(c : Ctx, x : Double, y : Double, chosen : @view.NodeId) -> @v
 ///|
 /// What of the old view in node `island` takes a press at (x, y), placed where the tree has it now: who it is (a hit
 /// target's id; words picked from there, their paragraph's), as old_press_owner finds it, only where it is that old
-/// view's (Tree::hosts_at: what a hold going through is handed, the one found as the finger went down alone).
+/// view's (Tree::hosts_at: what a hold going through is handed, the one found as the finger went down alone; where
+/// none, a key of the tree's drawn small over it is reached from round it, as a press and the pointer find it).
 fn old_taker_at(tree : @view.Tree, island : @view.NodeId, x : Double, y : Double) -> Int? {
   let c = g()
   old_hits_place(c, Some(tree))

@@ -45,7 +45,8 @@ pub fn Tree::on_through(self : Tree, f : (Target, Double, Double, Double, Handed
 ///|
 /// What hosts the tree asks of what a node hosts: what takes a press at (x, y) in the window there (`f` given the node
 /// hosting it: who it is, as its host knows it; None: nothing), as the finger goes down and as a hold is handed to it
-/// (View::gesture's `through`: only to the one found as it went down). Not said: nothing.
+/// (View::gesture's `through`: only to the one found as it went down), and as a press or the pointer on it is found
+/// (where it has nothing, what is drawn over it is reached from round it: Tree::reached). Not said: nothing.
 pub fn Tree::hosts_at(self : Tree, f : (NodeId, Double, Double) -> Int?) -> Unit {
   self.hosts_at = f
 }
