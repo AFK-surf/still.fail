@@ -811,10 +811,12 @@ export interface ProfileTrouble {
 	label: string;
 }
 
-/** Who made a model, for its mark; absent when the marks do not know it (the runtime's stands in). */
+/**
+ * Who made a model, for its mark; absent when the marks do not know it (the runtime's stands in). Its name in words
+ * (Anthropic) is the core's own: no page says it, and a control's panel names its makers by `ModelMaker`.
+ */
 export interface Maker {
 	id: string;
-	name: string;
 }
 
 /** Models of one series (Opus), newest first. */

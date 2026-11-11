@@ -101,8 +101,6 @@ const OVER: Record<string, number> = {
   "usage": 144,
   "chats": 88,
   "chats mine": 88,
-  "newChat": 80,
-  "pick": 64,
   "station": 56,
   "history": 56,
   "chat": 48,
@@ -110,10 +108,7 @@ const OVER: Record<string, number> = {
 };
 
 /// Those over `DELTA_BAR_KB` as something changes, by `<name>/<cause>`: the heaviest message, KB as in `OVER`.
-const OVER_DELTA: Record<string, number> = {
-  "newChat/quota": 8,
-  "pick/quota": 8,
-};
+const OVER_DELTA: Record<string, number> = {};
 
 /// The topics measured nowhere here, and why. (Not `stationsWhole`, the stations each with its page and its models:
 /// the core's own, which no UI can ask, so it is no topic of `TOPICS`; views/views.ts.)
