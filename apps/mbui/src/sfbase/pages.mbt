@@ -754,6 +754,29 @@ pub fn open_page(p : Page) -> Unit {
 }
 
 ///|
+/// What page `p` reads of the core as it is first built, each asked of `ask`, in the order its build asks them: a
+/// chat its view, its draft, its workspace's stations (the names it shows its agents by) and its jobs' summary. A
+/// page not said here asks as its build runs. Only what it reads on every screen, at once: what its build reads
+/// later or on one screen alone is its build's (sfapp's declared_read_wbtest holds each said here read at rest, and
+/// the frame that builds it asking nothing more).
+///
+/// A bridge while pages are built by the old view, as opens_ahead_node's is (apps/mbui/AGENTS.md): only for a page the
+/// old view builds whose first screen reads the core (the chat's, so far; another added only with the coordinator of
+/// the migration, 2026-11-12), not a table every page is put in. A page made as nodes says what it reads where it is
+/// made, and goes from here then.
+pub fn page_opens(p : Page, ask : (String, Map[String, Json]) -> Unit) -> Unit {
+  match p {
+    Chat(r) => {
+      ask("chat", chat_params(r))
+      ask("composer", { "key": Json::string(r.station + ":" + r.session) })
+      ask("stations", stations_asked(workspace_of(r.station)))
+      ask("chatJobs", chat_jobs_summary_params(r))
+    }
+    _ => ()
+  }
+}
+
+///|
 /// Page `p` opened from the page in view (a chat's link in a message): over it, back coming to it again, where the
 /// layout has it (Shell's `open_over`).
 pub fn open_page_over(p : Page) -> Unit {

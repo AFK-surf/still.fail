@@ -104,9 +104,11 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     `opens_ahead_node`, `declare_topic`): asked of the core then, not as the frame that builds the panes runs, and taken
     over by the reader that comes to read it, the same subscription all along; what no reader took is let go of as
     another workspace comes in view. So a shell's function says only what its first screen reads, all of it read once
-    it is at rest (`src/sfapp/declared_read_wbtest.mbt`). A bridge while pages are built by the old view: a page made
-    as nodes says what it reads where it is made, and writes nothing here (the coordinator of the migration,
-    2026-11-12).
+    it is at rest (`src/sfapp/declared_read_wbtest.mbt`). So is what a page reads as it is first built, declared as it
+    comes on top (sfbase's `page_opens`, by `page_opens_node`; a chat's so far, another only with the coordinator of
+    the migration), let go of where no reader took it as another comes on top. A bridge while pages are built by the
+    old view: a page made as nodes says what it reads where it is made, and writes nothing here (the coordinator of
+    the migration, 2026-11-12).
   - A press that waits for the core before it opens something (a menu, a panel, a question) goes through sfbase's
     `press_wait` (`src/sfbase/press_wait.mbt`), never a wait of its own: it waits only while what it was pressed in
     stays as it was (the page, the workspace, nothing else put up) and lets go of what it asked when it stops

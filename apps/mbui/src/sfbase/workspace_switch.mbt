@@ -283,10 +283,39 @@ pub fn opens_ahead_node(
         return
       }
       declared_let_go()
+      page_declared_let_go()
       opens_declared.val = now
       guard now is Some(ws) else { return }
       guard @signals.untracked(opens) is Some((_, panes)) else { return }
       panes(src, ws, fn(name, params) { declare_topic(src, name, params) }) |> ignore
+    },
+  )
+}
+
+///|
+/// What the page on top reads as it is first built (page_opens), declared in node `v` at the moment it comes on top,
+/// however it came (a row pressed, a notification or a link opened, back to it, a pane landing on it), between frames,
+/// not as the frame that builds it runs; what the page on top before declared and no reader took let go of then.
+pub fn page_opens_node(v : @view.View, src : Source) -> Unit {
+  v.reacts(
+    fn() {
+      match workspace_in_view(src).0 {
+        Some(_) => Some(app.nav.top())
+        None => None
+      }
+    },
+    fn(top) {
+      page_declared_let_go()
+      guard top is Some(p) else { return }
+      // (once the change that put it on top is told whole: asked in the reaction itself, a topic's first read can set
+      // what `read` follows while it runs, and the node's watch of the top then went on with none of it, never told the
+      // page went: its declared never let go, sfapp's core_signal_wbtest and page_scope_*_wbtest; one no longer on top
+      // by then declares nothing)
+      @signals.after_flush(fn() {
+        if @signals.untracked(fn() { app.nav.top() }) == p {
+          page_opens(p, fn(name, params) { declare_page_topic(src, name, params) })
+        }
+      })
     },
   )
 }

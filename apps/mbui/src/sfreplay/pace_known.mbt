@@ -21,15 +21,12 @@ let pace_splits_known : Map[String, Array[Int]] = {
   // subscriptions at 1159 here, 1033-1050 in the strict pass; the tap at 1150))
   "agent-reply": [7],
   "answer-option": [7],
-  "bar-going-down": [7, 120],
+  "bar-going-down": [7],
   "card-motion": [7],
   "close-option": [7],
   "delete-failed": [7],
   "draft": [7],
-  // glass at 120 (#5519): the chat page's reads go out between frames at 1165.3 ms, as a message of the core is
-  // taken as it comes and what read it is made again, chatJobs first; the strict pass sends them as its frame at
-  // 1150 is built, stations, picture, then chatJobs; gone with what a page reads said as it is made
-  "glass": [7, 120],
+  "glass": [7],
   "history": [7],
   "markdown": [7],
   "offline-retry": [7],
@@ -65,7 +62,7 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "station-rename": [7],
   "settings-decisions": [7],
   // 4: - | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
-  "bar-archive": [7, 120],
+  "bar-archive": [7],
   "notice-looking": [7],
   // wide-answer-reply at 120 (#5519): the new chat page sends its composer, machineSessions.list and status's
   // release in the frame at 1050 ms, notify.permission (sent once notify's values are in, which came after that
@@ -95,8 +92,6 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "drive-download-many": [7, 120],
   // 1: - | strict call lock.pair {"workspace":…}
   "lock-wait": [7],
-  // 1: sub {"scope":…,"topic":"stations"} | strict sub {"key":…,"topic":"composer"}
-  "mark-read": [7, 120],
   // 1: sub {"scope":…,"topic":"stations"} | strict sub {"scope":…,"topic":"newChat"}
   "new-chat": [7],
   // 1: sub {"topic":"chat","compact":true,"session":…,"station":…} | strict call notify.permission
@@ -106,10 +101,7 @@ let pace_splits_known : Map[String, Array[Int]] = {
   // 1: - | strict sub {"topic":"stationNet","station":…}
   "settings-add-station": [7],
   // 1: unsub {"topic":"doing"} | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
-  // settings-run-settings at 120 (#5519): the chat page's chatJobs and picture go out between frames at 1147.3
-  // ms, as a message of the core is taken as it comes, chatJobs first; the strict pass sends them as its frame at
-  // 1133.3 is built, picture first; gone with what a page reads said as it is made
-  "settings-run-settings": [7, 120],
+  "settings-run-settings": [7],
   // 1: call picture {"url":…} | strict unsub {"topic":"driveTransfers","workspace":…}
   "sheets-sinking": [7],
   // 1: - | strict call composer.starting {"key":…,"starting":true}
