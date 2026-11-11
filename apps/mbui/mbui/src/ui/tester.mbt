@@ -893,6 +893,11 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
       self.finish(p.0, p.1)
     }
   }
+  // what was posted since the frame before, told as a device's host tells it, between frames, before this one begins
+  // (messages.mbt: messages_between takes what changes only signals now, what is left this frame's)
+  if fake_posted.length() > 0 {
+    on_outside(outside_posted, 0, 0)
+  }
   self.fake.wants = false
   // a scripted run's `resize`
   match tester_size.val {

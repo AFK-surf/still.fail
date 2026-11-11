@@ -31,6 +31,8 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/linkcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/noticecheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/updatecheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/postcheck.mbt"
+      - "apps/mbui/mbui/src/ui/messages.mbt"
       - "apps/mbui/mbui/src/host/gles_render.h"
       - "apps/mbui/mbui/src/host/corner_sl.h"
       - "apps/mbui/mbui/src/host/done_watch.h"
@@ -109,6 +111,9 @@ jobs:
       - name: "The PDFs' contract: a PDF's two pages read and drawn, the second turned as its /Rotate says"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux pdf
+      - name: "What is posted's contract: a message posted from outside the frames told between frames, not taken as one begins"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux posted
       - name: "The pictures' contract over a new context: a picture told ready again and drawn again there"
         if: success() || failure()
         run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux images

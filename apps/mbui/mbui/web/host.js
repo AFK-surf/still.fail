@@ -222,15 +222,20 @@
   };
 
   // ---- messages from outside the frames (src/ui/messages.mbt; mbui's mb_post on the native hosts) ----
-  // H.post(channel, json, bytes?): kept for the next frame, which takes all that came and hands them on in their
-  // order; the first since a frame took the last asks for that frame, the rest wait for it.
+  // H.post(channel, json, bytes?): kept, the app told from the event loop, between frames (outside(OUTSIDE_POSTED):
+  // ui's messages_between, as the Mac's host tells it), which takes all that came in their order, what changes only
+  // signals then, and asks for a frame only where something is left for one. Never taken as a frame begins: there the
+  // frame has read what it does again before what came is taken, and a change only the window's tree reads went
+  // unseen till something else built the frame whole (2026-11-11).
   const posted = [];
   let postTaken = [], postCur = null;
   H.post = (channel, json, bytes) => {
     if (!channel) return;
     const first = posted.length === 0;
     posted.push([String(channel), String(json), bytes ? new Uint8Array(bytes) : new Uint8Array(0)]);
-    if (first) H.requestFrame();
+    if (!first) return;
+    if (outside) queueMicrotask(() => outside(OUTSIDE_POSTED, 0, 0));
+    else H.requestFrame();
   };
   H.postTake = () => {
     postTaken = postTaken.concat(posted.splice(0));
@@ -252,7 +257,7 @@
   // moment (shot_at) keeps its clock still while any is.
   // its kinds, named as src/ui/hostcall.mbt's outside_* (this host has no picker, gallery, marks or update; a frame
   // grab asked of a video fails at once, told so)
-  const OUTSIDE_IMAGE = 1, OUTSIDE_VIEW = 2, OUTSIDE_GRAB = 6, OUTSIDE_CLIP = 9, OUTSIDE_STOOD = 13;
+  const OUTSIDE_IMAGE = 1, OUTSIDE_VIEW = 2, OUTSIDE_GRAB = 6, OUTSIDE_CLIP = 9, OUTSIDE_POSTED = 11, OUTSIDE_STOOD = 13;
   let outside = null, awaiting = 0, why = '';
   const told = new Set();
   H.setOutside = (f) => { outside = f; return true; };
