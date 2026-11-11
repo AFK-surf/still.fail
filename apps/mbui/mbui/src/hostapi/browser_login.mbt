@@ -22,6 +22,18 @@
 pub let polled : Ref[() -> Unit] = Ref(fn() {  })
 
 ///|
+/// Who waits on the host's word that what it does for the app of `kind` (as set_outside numbers them) for `id` is done
+/// (`take(kind, id, f)`: `f` takes the host's answer into what reads it as that word comes, and says whether it was
+/// there to take), and who lets such a wait go (`let_go(kind, id)`): ui's outside_takes and outside_let_go, set as it
+/// starts. Without ui, `f` is tried at once and nothing else is.
+// kept across runs: set once by ui as it starts
+pub let outside_waits : Ref[(Int, Int, () -> Bool) -> Unit] = Ref(fn(_, _, f) { f() |> ignore })
+
+///|
+// kept across runs: set once by ui as it starts
+pub let outside_lets_go : Ref[(Int, Int) -> Unit] = Ref(fn(_, _) {  })
+
+///|
 /// A sign-in under way in the browser.
 pub struct BrowserLogin {
   priv id : Int

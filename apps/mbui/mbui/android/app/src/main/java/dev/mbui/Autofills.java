@@ -118,7 +118,7 @@ final class Autofills {
         f.setDimens(r.left, r.top, 0, 0, r.width(), r.height());
     }
 
-    /** What the service filled (MBView.autofill): kept until taken, a frame asked for. */
+    /** What the service filled (MBView.autofill): kept until taken, the app told now (OUTSIDE_AUTOFILL, between frames). */
     static void filled(SparseArray<AutofillValue> values) {
         String h = host;
         if (h == null) return;
@@ -126,7 +126,7 @@ final class Autofills {
         Host.log("autofill: the service filled " + values.size() + " fields for " + h);
         if (user.isEmpty() && pass.isEmpty()) return;
         picked = h + "\u001f" + user + "\u001f" + pass + "\u001f";
-        Host.requestFrame();
+        Native.tell(Native.OUTSIDE_AUTOFILL, 1, 1);
         // the session ended now: the form holds nothing the service would offer to save
         AutofillManager m = manager(Host.view);
         if (m != null) m.cancel();

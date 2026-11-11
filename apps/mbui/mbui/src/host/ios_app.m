@@ -1883,7 +1883,12 @@ static void tell_state(void) {
     say([NSString stringWithFormat:@"ios: %s", front ? "active" : shown ? "inactive" : "in the background"]);
   }
   if (!state_cb) return;
-  state_cb((shown ? 1 : 0) | (front ? 2 : 0));
+  // (told only as it changes: the same said again tells the app nothing, and draws nothing)
+  static int told_app = -1;
+  int s = (shown ? 1 : 0) | (front ? 2 : 0);
+  if (s == told_app) return;
+  told_app = s;
+  state_cb(s);
   [the_view requestFrame];
 }
 // Off the screen (in the background) and back: how long it was away said to the app (the system's `shown`, as

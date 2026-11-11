@@ -76,6 +76,9 @@ jobs:
               - "src/host/host_native.mbt"
               - "src/kitdemo/main.mbt"
               - "src/host/moon.pkg"
+              - "src/hostapi/passwords.mbt"
+              - "src/ui/hostcall.mbt"
+              - "src/kitdemo/gallery/opcheck.mbt"
             marks:
               - "src/host/apple_views.m"
               - "src/host/apple.h"
@@ -117,6 +120,9 @@ jobs:
       - name: "The pages' contract: a page says to the app, runs its scripts, keeps cookies, takes an event stream as it is sent"
         if: (success() || failure()) && steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh mac site
+      - name: "The password manager's contract: a run of op ended, and none to run, each told between frames and read"
+        if: (success() || failure()) && steps.f.outputs.host != 'false'
+        run: scripts/host_contract.sh mac op
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
         if: (success() || failure()) && steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh mac runner

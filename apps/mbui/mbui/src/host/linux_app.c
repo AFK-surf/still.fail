@@ -682,7 +682,12 @@ static void app_state(void) {
   if (!state_cb || !win) return;
   int shown = gtk_widget_get_mapped(win);
   int front = shown && gtk_window_is_active(GTK_WINDOW(win));
-  state_cb((shown ? 1 : 0) | (front ? 2 : 0));
+  // (told only as it changes: the same said again tells the app nothing, and draws nothing)
+  static int told = -1;
+  int s = (shown ? 1 : 0) | (front ? 2 : 0);
+  if (s == told) return;
+  told = s;
+  state_cb(s);
   schedule();
 }
 

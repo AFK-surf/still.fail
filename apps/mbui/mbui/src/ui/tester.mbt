@@ -163,6 +163,7 @@ fn reset_globals() -> Unit {
   update_asked.clear()
   answers_waiting.clear()
   outside_takers.clear()
+  @hostapi.autofill_forget()
   views_told.clear()
   code_fields.clear()
   code_clears.clear()

@@ -44,6 +44,14 @@ static NSString *op_path(void) {
 
 int32_t mb_host_passwords_able(void) { return 1; }
 
+/// Run `id` ended (or never started): the app told on the main thread, between frames (MB_OUTSIDE_OP), which takes what
+/// it said into what reads it (hostapi/passwords.mbt), never left for a frame to look for.
+static void op_told(int id) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    mb_host_outside(MB_OUTSIDE_OP, id, 1);
+  });
+}
+
 int32_t mb_host_passwords_run(moonbit_string_t args) {
   // One argument after another, each ended by a unit separator (U+001F).
   NSMutableArray<NSString *> *argv = [[mb_ns_from_string(args) componentsSeparatedByString:@"\x1f"] mutableCopy];
@@ -60,7 +68,7 @@ int32_t mb_host_passwords_run(moonbit_string_t args) {
     @synchronized(runs) {
       run[@"done"] = @{@"code" : @(-1), @"out" : @"", @"err" : @"op not found"};
     }
-    mb_host_request_frame();
+    op_told(id);
     return id;
   }
   NSTask *t = [NSTask new];
@@ -101,14 +109,14 @@ int32_t mb_host_passwords_run(moonbit_string_t args) {
       run[@"done"] = @{@"code" : @(task.terminationStatus), @"out" : o, @"err" : e};
       [run removeObjectForKey:@"task"];
     }
-    mb_host_request_frame();
+    op_told(id);
   };
   NSError *why = nil;
   if (![t launchAndReturnError:&why]) {
     @synchronized(runs) {
       run[@"done"] = @{@"code" : @(-1), @"out" : @"", @"err" : why.localizedDescription ?: @"op did not start"};
     }
-    mb_host_request_frame();
+    op_told(id);
     return id;
   }
   @synchronized(runs) {
