@@ -701,6 +701,13 @@ fn Flow::until_at(self : Flow, site : String, so : () -> Bool) -> Unit {
   let run_at = step_moment.val
   step_moment.val = None
   let mut late = false
+  // (the strict pass: what comes meanwhile told at its own moment between the host's frames, all that came by then at
+  // once, as a device's host tells it (Tester::come_to), not a message a frame: one at a time, each with a frame of its
+  // own, put a frame's wait on every message after the first that came together, and the screen it waits for later by
+  // as many frames)
+  if keeping.val == 1 {
+    self.one_by_one.val = false
+  }
   while !so() {
     // (bounded on the run's clock: what it waits for never coming, said, not run on)
     if self.t.time() - began > until_most_ms {
@@ -713,6 +720,12 @@ fn Flow::until_at(self : Flow, site : String, so : () -> Bool) -> Unit {
     }
     if self.t.time() >= by - 1.0e-6 {
       late = true
+    }
+    if keeping.val == 1 {
+      let now = self.t.time()
+      let due = self.r.next_due().unwrap_or(@double.infinity)
+      self.t.come_to(if due > now && due < now + frame_ms { due } else { now + frame_ms })
+      continue
     }
     let n = self.r.deliver(at_most=1, now=self.t.time(), host_by=self.t.taken_at(), taken_at=self.t.taken_at(), to=fn(json, bytes) { self.t.post("core", json, bytes?) })
     if n > 0 || self.t.posted() > 0 {
@@ -752,6 +765,16 @@ fn Flow::until_at(self : Flow, site : String, so : () -> Bool) -> Unit {
 /// The clock on to `at` (a pace pass's wait, Flow::until), what comes meanwhile given a message at a time with its
 /// frame, as the strict pass's wait gave it.
 fn Flow::wait_to(self : Flow, at : Double) -> Unit {
+  // (a pass of the run's pace: as the strict pass's wait, what comes told at its own moment, Tester::come_to)
+  if keeping.val >= 1 {
+    while self.t.time() < at - 1.0e-9 {
+      let now = self.t.time()
+      let due = self.r.next_due().unwrap_or(@double.infinity)
+      let next = if due > now && due < now + frame_ms { due } else { now + frame_ms }
+      self.t.come_to(if next < at { next } else { at })
+    }
+    return
+  }
   self.one_by_one.val = true
   while self.t.time() < at - 1.0e-9 {
     let n = self.r.deliver(at_most=1, now=self.t.time(), host_by=self.t.taken_at(), taken_at=self.t.taken_at(), to=fn(json, bytes) { self.t.post("core", json, bytes?) })
