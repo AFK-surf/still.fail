@@ -297,8 +297,12 @@ for t in $targets; do
           # (dealt so, the first's 271 s, the fourth's 251, the second's 240 and the third's 121 at 60, main 4d4bc73a
           # 43070391697: the third's pages on one program beside kept_rows' five runs took little. Its pages on two
           # now, and the first's other runs between the two measures)
-          60) specs="4,4,520,1 4,4,20,1 2,4,560,1 4,4,0,1" ;;
-          120) specs="4,4,160,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
+          # (its pages on two the third's at 60 were 259-266 s, kept_rows' runs slowed beside them: main 436755fc
+          # 43074044573, f06a53f3 43076123102; on one 121-199. Reckoned at 800 of its cores, fewer pages)
+          60) specs="4,4,520,1 4,4,20,1 2,4,800,1 4,4,0,1" ;;
+          # (the first's packages' programs at 120 275 s beside its pages' 263, the job 295 s of its 5 minutes, main
+          # 436755fc 43074044573, 2026-11-11: reckoned 160 s of its cores, they take some 500 now)
+          120) specs="4,4,500,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
           24 | 7) specs="4,4,90,2 4,4,14,2 1,4,840,2 4,4,120,1" ;;
           *) specs="4,4,80,1 2,4,160,1 1,4,240,1 4,4,0,1" ;;
         esac
