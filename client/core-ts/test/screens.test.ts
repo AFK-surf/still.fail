@@ -4,7 +4,7 @@
 // SIM_SEED=<seed> runs it again); nothing waits for real time.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Effect, Queue } from "effect";
+import { Deferred, Effect, Queue } from "effect";
 import { linkTarget } from "../src/asks.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { CoreError } from "../src/error.ts";
@@ -176,10 +176,18 @@ function screenWire(seed: number) {
   // `tap`: the host reads the picture and sound itself (IrohStream.tap, Apple's shell), the core only the rest
   const opts: { answer: (v: Viewing) => number | [number, string]; tap?: boolean } = { answer: () => 200 };
   const draw = random(seed);
+  // The way to the station as the mesh has it: `replace` puts another in its place (mesh.ts `#switch`).
+  let way = Deferred.makeUnsafe<void>();
+  const replace = () => {
+    const was = way;
+    way = Deferred.makeUnsafe<void>();
+    Deferred.doneUnsafe(was, Effect.void);
+  };
   const make = (host: FakeHost): StationWire => {
     const plain = new HostWire(host);
     return {
       request: (s, head, body) => plain.request(s, head, body),
+      replaced: () => Deferred.await(way),
       screen: (_station, head, ask) =>
         Effect.gen(function* () {
           const queue = yield* Queue.unbounded<Uint8Array | null>();
@@ -217,7 +225,7 @@ function screenWire(seed: number) {
         }),
     };
   };
-  return { views, opts, make };
+  return { views, opts, make, replace };
 }
 
 const SCREENS = { screens: [{ id: "desktop", kind: "desktop", title: "studio 的桌面", width: 3024, height: 1964, viewers: [] }, { id: "browser:T1", kind: "browser", title: "登录 - GitHub", width: 1280, height: 800, viewers: ["Bob"] }] };
@@ -587,6 +595,31 @@ each("a_view_brings_its_frames_with_their_bytes_and_takes_acks_key_frames_and_in
   core.receive(ui, { kind: "cancel", id: 1, cancel: true });
   await host.settle();
   assert.equal(v!.closed, true);
+  core.close();
+});
+
+/// 2026-11-11: a station killed and started again on another port left the view's stream open and silent; the mesh puts
+/// a new link in the old one's place once its ping goes unanswered (mesh.ts `#suspect`), and the view opens again on it
+/// at once, the old stream kept until the new one is open, not left to wait out the old link's close.
+each("a_view_opens_again_on_the_way_put_in_place_of_its_own", async (seed) => {
+  const { host, core, ui, views, replace } = await viewing(seed);
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", maxWidth: 1280, maxHeight: 720, codecs: ["h264"] });
+  await host.settle();
+  views[0]!.send(join([configFrame({ codec: "h264", width: 1280, height: 720, description: base64(bytesOf(38, seed)) }), videoFrame(true, 1_000, bytesOf(900, seed))]));
+  await host.settle();
+  replace();
+  await host.settle();
+  assert.equal(views.length, 2, "opened again at once, no wait");
+  assert.equal(views[1]!.alongside, 1, "the next opened before the one before it closed");
+  assert.equal(views[0]!.closed, true);
+  views[1]!.send(join([configFrame({ codec: "h264", width: 1280, height: 720, description: base64(bytesOf(38, seed)) }), videoFrame(true, 2_000, bytesOf(900, seed + 1))]));
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(log.filter((m) => m.id === 1 && m.value?.frame).map((m) => m.value.frame.ts), [1_000, 2_000]);
+  assert.equal(states(log, 1).some((st: J) => st.phase === "reconnecting"), false, "never shown reconnecting");
+  core.receive(ui, { kind: "cancel", id: 1, cancel: true });
+  await host.settle();
   core.close();
 });
 
