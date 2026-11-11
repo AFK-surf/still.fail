@@ -31,7 +31,10 @@ pub fn fill_chip_node(
     }
   }
   let chip = parent.box(made_for=loc, fn(b) {
-    style_node(b, fn() { if small { chip_box_small } else { chip_box } })
+    // (as high as its words' line at the system's size of words where that is higher than the chip: at 1.3 a small
+    // chip's 16 held words of 20, over the line above and below it, a station's row in 选择运行的 station, main
+    // df98aad1 42956992852, 2026-11-11)
+    style_node(b, fn() { chip_box_at(b.words_scale(), small) })
     b.bone_whole(Is(true)).shrink(Is(if squeezes { 1.0 } else { 0.0 })) |> ignore
     if squeezes {
       b.min_width(Is(Some(0.0))) |> ignore
@@ -322,4 +325,19 @@ pub fn meter_chips_node(parent : @view.View, meters : () -> Array[Json], tips? :
     })
   })
   |> ignore
+}
+
+///|
+/// A fill chip's box (chip_box's, chip_box_small's) at the system's size of words `scale`: as high as chip_text's line
+/// drawn at that size where that is higher than the chip (list_looks_at's way for a row's lines).
+fn chip_box_at(scale : Double, small : Bool) -> @ui.Style {
+  let box = if small { chip_box_small } else { chip_box }
+  let h = if small { fill_chip_small_h } else { fill_chip_h }
+  let look = @ui.style_words(chip_text)
+  let line = if look.line < 0.0 { -look.line * @ui.sp_at(scale, look.size) } else { @ui.sp_at(scale, look.line) }
+  if line > h {
+    box.then(@ui.style(h=Fixed(line)))
+  } else {
+    box
+  }
 }
