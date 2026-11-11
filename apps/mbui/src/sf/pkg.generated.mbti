@@ -1632,6 +1632,8 @@ pub fn pill_node(@view.View, () -> String, tone? : PillTone, icon? : String) -> 
 
 pub let pin_raised : Raised
 
+pub fn place_node(@view.View, () -> String, () -> String, (Bool) -> @ui.Style, @ui.TextStyle, press? : (() -> Unit)?, on? : () -> Bool, mark? : Double) -> @view.View
+
 pub fn play_mark(@ui.Ctx, Double, @ui.Color) -> Int32
 
 pub fn player(@ui.Ctx, String, ViewerFile, Array[ViewerEntry], back_label~ : String, on_back~ : () -> Unit, on_go~ : (String) -> Unit) -> Unit

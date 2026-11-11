@@ -18,7 +18,7 @@ import {
 }
 
 // Values
-pub let absolute_times : @ref.Ref[Bool]
+pub let absolute_times : @signals.Signal[Bool]
 
 pub fn act(@sfbase.Source, String, String, String, @json.Json, done? : String, done_action? : String, done_run? : () -> Unit, at_once? : Bool, ok? : (@json.Json) -> Unit, failed? : () -> Unit) -> Unit
 

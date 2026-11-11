@@ -84,3 +84,27 @@ test "the thread named after 发送到 pressed opens it where it has its link; w
   t.draw()
   assert_true(t.opened().is_empty(), msg="\{t.opened()}")
 }
+
+///|
+test "its time pressed says when it was, and pressed again how long ago" {
+  let said = match elsewhere_said() {
+    Object(m) => {
+      let o = m.copy()
+      o["time"] = @sffixture.ago("3 分钟前", "2026-11-11 21:04")
+      Json::object(o)
+    }
+    j => j
+  }
+  let t = elsewhere_chat(said)
+  t.run_for(@ui.move_most_ms)
+  guard t.find("3 分钟前") is Some((x, y)) else { fail("no time: \{t.words().map(fn(w) { w.0 })}") }
+  assert_true(t.find("2026-11-11 21:04") is None, msg="\{x}")
+  t.tap_text("3 分钟前")
+  t.run_for(@ui.move_most_ms)
+  guard t.find("2026-11-11 21:04") is Some((_, ay)) else { fail("not when: \{t.words().map(fn(w) { w.0 })}") }
+  assert_true((ay - y).abs() < 4.0, msg="\{(y, ay)}")
+  t.tap_text("2026-11-11 21:04")
+  t.run_for(@ui.move_most_ms)
+  guard t.find("3 分钟前") is Some((_, by)) else { fail("not how long ago: \{t.words().map(fn(w) { w.0 })}") }
+  assert_true((by - y).abs() < 4.0, msg="\{(y, by)}")
+}
