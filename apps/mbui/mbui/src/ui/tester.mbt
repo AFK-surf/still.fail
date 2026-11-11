@@ -3477,24 +3477,3 @@ pub fn Tester::bones_drawn(self : Tester) -> Int {
   }
   n
 }
-
-///|
-/// The text `Show` wrote for an option of a plain value (`Some(v)`, `None`), for what a test compares as it was written
-/// before the `Show` of a composed value went (a value shown for debugging is `Repr`). `list_text` the same of an array
-/// (`[a, b]`), `rect_text` of four numbers (`(x, y, w, h)`).
-pub fn[T : Show] some_text(o : T?) -> String {
-  match o {
-    Some(v) => "Some(\{v})"
-    None => "None"
-  }
-}
-
-///|
-pub fn[T : Show] list_text(xs : Array[T]) -> String {
-  "[" + xs.map(fn(x) { x.to_string() }).join(", ") + "]"
-}
-
-///|
-pub fn rect_text(r : (Double, Double, Double, Double)) -> String {
-  "(\{r.0}, \{r.1}, \{r.2}, \{r.3})"
-}
