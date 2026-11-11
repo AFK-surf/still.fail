@@ -209,6 +209,7 @@ pub fn Flow::start(
     keeping.val = 0
   }
   pace_failed.val = false
+  @sfkept.asks_kept.val = !pace_pass.val
   t.looks_said_only(pace_pass.val)
   // (what it says from here, MOTION lines too, the pace pass's till its PACE-END)
   if pace_pass.val {
@@ -982,6 +983,7 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
   emit_answered(self.r.take_asked())
   emit_end()
   step_hook.val = None
+  @sfkept.asks_kept.val = true
   if why.length() > 0 {
     self.fail(why.join("; "))
   }
