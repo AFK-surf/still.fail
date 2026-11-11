@@ -143,6 +143,8 @@ type Part = {
   serving: Set<string>;
   /// The base key of this device (the mesh's), once known.
   base: string | null;
+  /// The read of every station of the workspace while none is held (readLockOf), while it runs: one at a time.
+  reading: Deferred.Deferred<{ got: boolean; refused: boolean }, CoreError> | null;
 };
 
 /// What the signing key of this device is, as loaded (undefined: not loaded yet), per core.
@@ -256,7 +258,7 @@ export function fold(entries: Entry[]): Folded {
 }
 
 const part = (inner: Inner, ws: string): Part =>
-  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null }));
+  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null, reading: null }));
 
 /// This device's base key known: kept for every workspace.
 const knowBase = (inner: Inner, ws: string, base: string) => {
@@ -458,7 +460,41 @@ function lockStations(inner: Inner, ws: string): string[] {
 /// The lock read of `stations` (each one's GET /lock, and the devices that came to it): held when one of them answered,
 /// as the longest chain that goes on from the one held (one that keeps another lock or none says so, and is not taken);
 /// false when none did (nothing held then; `said.refused`: one refused this device for the lock).
+/// None held (or the one held turned off): every station of the workspace is read, whichever was to be (one told, one
+/// whose link opened), since which lock to take is chosen among all their answers (readLockOnce); one read alone would
+/// have its lock taken, whatever the others keep. One such read at a time: another asked meanwhile (each link opening
+/// again at once, after the network came back) waits for its answer and asks nothing itself.
 function readLockOf(inner: Inner, ws: string, stations: string[], said?: { refused: boolean }): Effect.Effect<boolean, CoreError> {
+  return Effect.suspend(() => {
+    const was = held(inner, ws);
+    if (was?.head && !fold(was.entries).disabled) return readLockOnce(inner, ws, stations, said);
+    const p = part(inner, ws);
+    const tell = (r: { got: boolean; refused: boolean }) => {
+      if (r.refused && said) said.refused = true;
+      return r.got;
+    };
+    if (p.reading !== null) return Effect.map(Deferred.await(p.reading), tell);
+    const flight = Deferred.makeUnsafe<{ got: boolean; refused: boolean }, CoreError>();
+    p.reading = flight;
+    const all = lockStations(inner, ws);
+    const mine = { refused: false };
+    // A fiber of the core's, not of whoever asked first: that one going away (its link closed again as it read) does
+    // not end the read for the others waiting on it, who would be left with none held and nothing to read it again.
+    inner.runner.fork(
+      readLockOnce(inner, ws, all.every((id) => stations.includes(id)) ? stations : all, mine).pipe(
+        Effect.map((got) => ({ got, refused: mine.refused })),
+        Effect.onExit((exit) => Effect.sync(() => {
+          if (p.reading === flight) p.reading = null;
+          Deferred.doneUnsafe(flight, exit);
+        })),
+        Effect.exit,
+      ),
+    );
+    return Effect.map(Deferred.await(flight), tell);
+  });
+}
+
+function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { refused: boolean }): Effect.Effect<boolean, CoreError> {
   return Effect.gen(function* () {
     const sub = inner.workspaces.owner(ws);
     if (sub === null || stations.length === 0) return false;
@@ -500,12 +536,42 @@ function readLockOf(inner: Inner, ws: string, stations: string[], said?: { refus
     // lock); none longer, what is held stays.
     let head = was?.head ?? null;
     let entries = was?.entries ?? [];
-    for (const a of served) {
-      if (a.head === null || a.entries === null || a.entries.length !== a.head.seq + 1) continue;
-      if (head !== null && !off && (a.head.genesis !== head.genesis || a.head.seq <= head.seq || entryHash(a.entries[head.seq]!) !== head.hash)) continue;
-      if (head !== null && off && a.head.genesis === head.genesis) continue;
-      head = a.head;
-      entries = a.entries;
+    if (!off) {
+      for (const a of served) {
+        if (a.head === null || a.entries === null || a.entries.length !== a.head.seq + 1) continue;
+        if (a.head.genesis !== head!.genesis || a.head.seq <= head!.seq || entryHash(a.entries[head!.seq]!) !== head!.hash) continue;
+        head = a.head;
+        entries = a.entries;
+      }
+    } else {
+      // None held (or the one held turned off, whose own chain is not taken again): which lock of those the stations
+      // keep. The workspace's view names the one its stations keep (the cloud is sent every entry), and is preferred:
+      // where a station keeps that lock, the others' locks are not considered, and of its chains, those holding the
+      // entry the view names come first, so that of two that went their own way after some entry the one the view is
+      // on is taken. Only a preference, never a refusal: where no station keeps the lock it names (or it names none),
+      // what they keep is taken still, so the cloud's word cannot keep a device from the lock honest stations keep (the
+      // root AGENTS.md, The cloud is the account system). Nor does it give the cloud more than it had: the order of the
+      // stations in its view was what chose before (the first lock, then any other replacing it).
+      const says = readHead(get(view(inner, ws), "lock"));
+      const whole = served.flatMap((a) =>
+        a.head !== null && a.entries !== null && a.entries.length === a.head.seq + 1 && !(was?.head && a.head.genesis === was.head.genesis) ? [{ head: a.head, entries: a.entries }] : [],
+      );
+      const ofSays = says?.genesis ? whole.filter((a) => a.head.genesis === says.genesis) : [];
+      const considered = ofSays.length > 0 ? ofSays : whole;
+      const onSays = (a: { head: Head; entries: Entry[] }) => !!says?.genesis && a.head.genesis === says.genesis && a.head.seq >= says.seq && entryHash(a.entries[says.seq]!) === says.hash;
+      // (where they keep locks of several genesis and the view names none of them, nothing tells them apart: the first
+      // in the stations' order is taken)
+      const ordered = [...considered.filter(onSays), ...considered.filter((a) => !onSays(a))];
+      if (ordered.length > 0) {
+        head = ordered[0]!.head;
+        entries = ordered[0]!.entries;
+        // Then the longest that goes on from it: of one lock, one station behind another is not what is taken.
+        for (const a of ordered) {
+          if (a.head.genesis !== head.genesis || a.head.seq <= head.seq || entryHash(a.entries[head.seq]!) !== head.hash) continue;
+          head = a.head;
+          entries = a.entries;
+        }
+      }
     }
     // None keeps a lock: none, where none was held, or where every station the held one names says so. A station the
     // held lock does not name (added to the workspace and not protected yet: it goes by the cloud's word, lets the
@@ -516,9 +582,11 @@ function readLockOf(inner: Inner, ws: string, stations: string[], said?: { refus
     if (served.every((a) => a.head === null) && (was?.head == null || (named.length > 0 && named.every((id) => none.has(id))))) {
       head = null;
       entries = [];
-    } else if (named.some((id) => none.has(id)) && named.some((id) => !stations.includes(id))) {
+    } else if (!off && named.some((id) => none.has(id)) && named.some((id) => !stations.includes(id))) {
       // One the held lock names keeps none, and not all it names were asked (it told so, or its link opened): they
       // are, now. Each of them reset on its own machine tells it alone, and no such read by itself is the lock's end.
+      // (Only of a lock held and on: one turned off was read of every station already, readLockOf, and would wait on
+      // itself.)
       return yield* readLockOf(inner, ws, lockStations(inner, ws), said);
     }
     // The devices that came, as those read say: with what was held where not every station of the lock answered this
