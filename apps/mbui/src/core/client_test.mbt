@@ -386,7 +386,8 @@ test "what is asked of the core is awaited until answered or first read" {
     fn(t) { waits.remove(t) },
   )
   let s = c.subscribe("overview", params={ "station": Json::string("st1") })
-  let id = c.call("chat.send", params=Json::object({}))
+  let answers : Array[Result[Json, Json]] = []
+  let id = c.call("chat.send", params=Json::object({}), on_done=fn(r) { answers.push(r) })
   assert_eq(waits.length(), 2)
   // the subscription's first value: no longer awaited
   assert_true(c.receive("{\"id\":\{s.id},\"value\":{\"a\":1}}"))
