@@ -162,7 +162,7 @@ pub fn Flow::take(self : Flow, bytes : Bytes) -> Unit {
   self.tail = parts.pop().unwrap_or("")
   let from = self.lines.length()
   for line in parts {
-    self.lines.push(if line.has_suffix("\r") { line.view(end_offset=line.length() - 1).to_owned() } else { line })
+    self.lines.push(if line.has_suffix("\r") { line.exact_view(end=line.length() - 1).to_owned() } else { line })
   }
   if self.whole() && self.tail != "" {
     self.lines.push(self.tail)

@@ -35,6 +35,7 @@ priv struct WordsOver {
 /// Words over words found on a frame drawn (any frame where the rule is not held: Tester::words_over_frames): the
 /// moment it was drawn at, the words under and over, where they meet (the middle of where both are seen in the
 /// window), whether the words over are a layer leaving.
+#derive(Eq, Debug)
 pub(all) struct WordsOverAt {
   at : Double
   under : String
@@ -42,7 +43,7 @@ pub(all) struct WordsOverAt {
   x : Double
   y : Double
   leaving : Bool
-} derive(Eq, Show)
+}
 
 ///|
 // kept across runs: begun anew by each Tester (words_over_begin)

@@ -7,21 +7,23 @@
 ///|
 /// How a folder's entries are shown (Arrangement): ordered by `by` (name, time, size or kind), the other way (`down`),
 /// hidden ones too.
+#derive(Eq)
 pub(all) struct Arrangement {
   by : String
   down : Bool
   hidden : Bool
-} derive(Eq)
+}
 
 ///|
 /// What is chosen (Chosen): names in one folder (its path under the root), the one ⇧ goes from and the one the keys move
 /// from.
+#derive(Eq)
 pub(all) struct Chosen {
   folder : String
   names : Array[String]
   anchor : String?
   lead : String?
-} derive(Eq)
+}
 
 ///|
 /// Nothing chosen.

@@ -61,7 +61,7 @@ test "sent while it grows by a line: what holds the composer is said once, as th
         assert_true(flight_of(hold_draft).map(fn(f) { f.timed }).unwrap_or(true), msg="placed, not timed")
         said = Some(now)
       }
-      None => assert_true(now.0 == @double.infinity || now.0 < 0.0, msg="said before their row: \{now}")
+      None => assert_true(now.0 == @double.infinity || now.0 < 0.0, msg="said before their row: \{Repr(now)}")
       // (and never again: not when their row is laid out, not as it lets go)
       Some(was) if t.time() < was.1 => assert_eq(now, was)
       Some(_) => ()
@@ -461,7 +461,7 @@ test "sent, then the chat left at once and come back to later: no words flying l
   t.run_for(@ui.nav_rest() - t.time() + @sfbase.flight_most_ms + @ui.move_most_ms)
   t.tap_text("整理发布清单")
   // (the first frame back: nothing flies, the composer as it rests, their row there)
-  assert_true(t.find(words) is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find(words) is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   assert_eq(flight_of(hold_draft).map(fn(f) { f.way.over(t.ctx()) }).unwrap_or(true), true)
   let (_, down) = hold_said(t)
   assert_true(down <= t.time() || down == @double.infinity, msg="held till \{down} at \{t.time()}")
@@ -514,11 +514,11 @@ test "sent, then the cursor let go of: the box closes from the moment it is let 
   tap_send(t)
   t.ctx().blur()
   let over = hold_over_at(t, t.time() + @sfpages.let_go_ms, hold_over_moments)
-  assert_true(over[0] > 30.0, msg="as far on as it is a frame after it is let go of: \{over}")
+  assert_true(over[0] > 30.0, msg="as far on as it is a frame after it is let go of: \{Repr(over)}")
   for i in 1..<over.length() {
-    assert_true(over[i] <= over[i - 1], msg="\{over}")
+    assert_true(over[i] <= over[i - 1], msg="\{Repr(over)}")
   }
-  assert_eq(over[over.length() - 1], 0.0, msg="\{over}")
+  assert_eq(over[over.length() - 1], 0.0, msg="\{Repr(over)}")
 }
 
 ///|
@@ -556,5 +556,5 @@ test "the box let go of at the moment words sent let go of it: closed on its own
   // (the same curve: each moment as far down its way, whatever height it closes from)
   let way = fn(o : Array[Double]) { o.map(fn(v) { v / o[0] }) }
   let (a, b) = (way(both), way(alone))
-  assert_true(a.iter().zip(b.iter()).all(fn(p) { (p.0 - p.1).abs() < 1.0e-9 }), msg="both \{both}, alone \{alone}")
+  assert_true(a.iter().zip(b.iter()).all(fn(p) { (p.0 - p.1).abs() < 1.0e-9 }), msg="both \{Repr(both)}, alone \{Repr(alone)}")
 }

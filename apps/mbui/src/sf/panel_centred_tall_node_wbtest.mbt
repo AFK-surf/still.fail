@@ -61,7 +61,7 @@ fn tall_dialog_stood(h : Double, old : Bool) -> Array[String] {
     let dialog = t.all(Dialog, label="很长的单子").map(fn(s) { rect(s.rect) })
     let done = t.all(Button, label="完成").map(fn(s) { rect(s.rect) })
     let first = t.words().filter(fn(w) { w.0 == "第 0 行" }).map(fn(w) { "\{k(w.1)},\{k(w.2)} a\{k(w.5)}" })
-    stood.push("\{when}: dialog \{dialog} 完成 \{done} first row \{first}")
+    stood.push("\{when}: dialog \{@ui.list_text(dialog)} 完成 \{@ui.list_text(done)} first row \{@ui.list_text(first)}")
   }
   t.tap_text("打开")
   let from = t.time()
@@ -87,7 +87,7 @@ test "a dialog in the middle of the window a share of it tall, holding nodes: as
     // the other dialogs of nodes have it, not compared)
     let place = fn(s : String) {
       match s.find(" first row ") {
-        Some(i) => s.view(end_offset=i).to_owned()
+        Some(i) => s.exact_view(end=i).to_owned()
         None => s
       }
     }

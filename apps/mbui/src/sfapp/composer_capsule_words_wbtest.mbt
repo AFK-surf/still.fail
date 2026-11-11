@@ -18,13 +18,13 @@ test "a chat 700 wide on a Mac, its composer let go of (its capsule), the system
   t.draw()
   t.run_for(@sfpages.let_go_ms + @ui.move_most_ms + @sf.hint_back_ms)
   let field = fn() { t.semantics().filter(fn(s) { s.role == @ui.Role::TextField }).map(fn(s) { (s.label, s.rect) }) }
-  assert_true(t.ctx().focused_id() == 0 && t.find("按空格输入") is Some(_), msg="its capsule, let go of: \{field()}")
+  assert_true(t.ctx().focused_id() == 0 && t.find("按空格输入") is Some(_), msg="its capsule, let go of: \{Repr(field())}")
   // (the system's words larger, much larger (its line then taller than the round buttons), as they were: the corner
   // rule held on each, its capsule still)
   for scale in [1.3, 2.0, 1.0] {
     t.set_font_scale(scale)
     t.draw()
     t.run_for(@ui.move_most_ms)
-    assert_true(t.find("按空格输入") is Some(_), msg="words \{scale}: its capsule still: \{field()}")
+    assert_true(t.find("按空格输入") is Some(_), msg="words \{scale}: its capsule still: \{Repr(field())}")
   }
 }

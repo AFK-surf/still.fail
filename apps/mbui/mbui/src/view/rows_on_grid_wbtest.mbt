@@ -70,8 +70,8 @@ test "a page's list on 2.75 and 3.5 pixels a point, its gap, margins and padding
         }
       }
     }
-    assert_eq(off, [], msg="on \{g} pixels a point, rows' top and height in pixels: \{off}")
-    assert_eq(rooms.length(), 1, msg="on \{g} pixels a point, the room between rows in pixels: \{rooms}")
+    assert_eq(off, [], msg="on \{g} pixels a point, rows' top and height in pixels: \{Repr(off)}")
+    assert_eq(rooms.length(), 1, msg="on \{g} pixels a point, the room between rows in pixels: \{Repr(rooms)}")
   }
 }
 
@@ -156,9 +156,9 @@ test "a windowed list on 2.75 and 3.5 pixels a point, at the same place come to 
         rows.map(fn(r) { (r.0, r.1.reinterpret_as_int64(), r.2.reinterpret_as_int64(), r.3) })
       }
       assert_true(down.length() > 0, msg="nothing in sight at \{at}")
-      assert_eq(bits(up), bits(down), msg="on \{g} at \{at}: from its foot \{up}, from its top \{down}")
-      assert_eq(bits(asked), bits(down), msg="on \{g} at \{at}: asked \{asked}, from its top \{down}")
-      assert_eq(down.filter(fn(r) { !r.3 }), [], msg="on \{g} at \{at}: rows not on whole pixels: \{down.map(fn(r) { (r.0, r.1 * g, r.2 * g) })}")
+      assert_eq(bits(up), bits(down), msg="on \{g} at \{at}: from its foot \{Repr(up)}, from its top \{Repr(down)}")
+      assert_eq(bits(asked), bits(down), msg="on \{g} at \{at}: asked \{Repr(asked)}, from its top \{Repr(down)}")
+      assert_eq(down.filter(fn(r) { !r.3 }), [], msg="on \{g} at \{at}: rows not on whole pixels: \{Repr(down.map(fn(r) { (r.0, r.1 * g, r.2 * g) }))}")
     }
   }
 }

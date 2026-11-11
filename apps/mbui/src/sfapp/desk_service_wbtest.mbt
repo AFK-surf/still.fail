@@ -96,7 +96,7 @@ test "desk: a service up pressed in 任务 beside the chat opens its own tab in 
   t.frame()
   let (tabs, front) = side_now(r)
   assert_eq(front, "service:j-web")
-  assert_true(tabs.contains("jobs") && tabs.contains("service:j-web"), msg="\{tabs}")
+  assert_true(tabs.contains("jobs") && tabs.contains("service:j-web"), msg="\{Repr(tabs)}")
 }
 
 ///|
@@ -150,7 +150,7 @@ fn desk_corners(t : @ui.Tester, at : String) -> Unit raise {
     faults.length() == 1 &&
     faults[0].has_prefix("a box in 「移动页面 开着时手指拖动的是画布，不点网页」 (at ") &&
     faults[0].has_suffix(" (corner 24): 16 and 15 from its edges"),
-    msg="\{at}: \{faults}",
+    msg="\{at}: \{Repr(faults)}",
   )
 }
 

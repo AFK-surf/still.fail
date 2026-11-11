@@ -18,7 +18,7 @@ test "words sent after a card's answer stay under it: from the press to rest no 
   t.tap_text("把首页和聊天页的截图都更新")
   t.run_for(@sffixture.fix_answer_ms + @sffixture.fix_turn_end_ms + @ui.move_most_ms)
   let answer = "好，按「一起换」来。"
-  guard t.find(answer) is Some(_) else { @halt.saying("no answer to the card: \{t.words().map(fn(w) { w.0 })}") }
+  guard t.find(answer) is Some(_) else { @halt.saying("no answer to the card: \{Repr(t.words().map(fn(w) { w.0 }))}") }
   t.tap_text("发消息")
   // (words the core's answers are kept for, src/sfkept)
   t.type_text("看一下列表")

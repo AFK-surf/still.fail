@@ -91,7 +91,7 @@ test "a wide picture fills its taller chat preview without stretching, its middl
     (i[2] - 360.0).abs() < 0.5 && (i[3] - 160.0).abs() < 0.5 &&
     (i[4] - 0.275).abs() < 0.001 && (i[5] - 0.0).abs() < 0.001 &&
     (i[6] - 0.45).abs() < 0.001 && (i[7] - 1.0).abs() < 0.001
-  }), msg="\{images}")
+  }), msg="\{Repr(images)}")
   assert_false(thumb_of(t.ctx(), "ws1/st1/s-c1/uploads/fx/wide.png").unwrap().top_crop)
 }
 
@@ -124,7 +124,7 @@ test "a tall picture fills its wider chat preview without stretching" {
     (i[2] - 160.0).abs() < 0.5 && (i[3] - 300.0).abs() < 0.5 &&
     (i[4] - 0.0).abs() < 0.001 && (i[5] - 0.0).abs() < 0.001 &&
     (i[6] - 1.0).abs() < 0.001 && (i[7] - 0.375).abs() < 0.001
-  }), msg="\{images}")
+  }), msg="\{Repr(images)}")
   let thumb = thumb_of(t.ctx(), "ws1/st1/s-c1/uploads/fx/tall.png").unwrap()
   assert_true(thumb.top_crop)
   t.tap(80.0, 150.0)
@@ -166,8 +166,8 @@ test "a letterboxed strip waiting to load: what it waits on is its share of its 
   t.draw()
   let ground = t.drawn_rects().filter(fn(r) { (r.2 - 200.0).abs() < 0.5 })
   // its own proportions (200 : 4), 200 × 4 in the middle of its 200 × 16
-  assert_true(ground.iter().any(fn(r) { (r.3 - 4.0).abs() < 0.5 }), msg="\{ground}")
-  assert_false(ground.iter().any(fn(r) { (r.3 - 16.0).abs() < 0.5 }), msg="\{ground}")
+  assert_true(ground.iter().any(fn(r) { (r.3 - 4.0).abs() < 0.5 }), msg="\{Repr(ground)}")
+  assert_false(ground.iter().any(fn(r) { (r.3 - 16.0).abs() < 0.5 }), msg="\{Repr(ground)}")
 }
 
 ///|
@@ -233,7 +233,7 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
   // flown all the way (the phone's: over its first part, then settling)
   t.run_for(@sfbase.flight_ms_of(f) * @sfbase.fly_share(false))
   let drawn = t.drawn_images()
-  assert_true(drawn.iter().any(fn(i) { (i[2] - 360.0).abs() < 0.5 && (i[3] - 7.2).abs() < 0.5 }), msg="\{drawn}")
+  assert_true(drawn.iter().any(fn(i) { (i[2] - 360.0).abs() < 0.5 && (i[3] - 7.2).abs() < 0.5 }), msg="\{Repr(drawn)}")
   // no ground under it: the message shows the picture on none
   let neutral = @sf.theme().p.neutral_bg
   assert_false(t.drawn_rects().iter().any(fn(r) { r.4 == neutral }))
@@ -298,12 +298,12 @@ test "a tall sent picture moves its crop to the top as it lands" {
   t.draw()
   t.draw()
   t.run_for(@sfbase.flight_ms_of(f) * @sfbase.fly_share(false) * 0.5)
-  assert_true(t.drawn_images().iter().any(fn(i) { i[5] > 0.0 }), msg="\{t.drawn_images()}")
+  assert_true(t.drawn_images().iter().any(fn(i) { i[5] > 0.0 }), msg="\{Repr(t.drawn_images())}")
   t.run_for(@sfbase.flight_ms_of(f) * @sfbase.fly_share(false) * 0.5)
   assert_true(t.drawn_images().iter().any(fn(i) {
     (i[2] - 160.0).abs() < 0.5 && (i[3] - 300.0).abs() < 0.5 &&
     i[5].abs() < 0.001 && (i[7] - 0.375).abs() < 0.001
-  }), msg="\{t.drawn_images()}")
+  }), msg="\{Repr(t.drawn_images())}")
   send_flight.set(None)
 }
 
@@ -391,6 +391,6 @@ test "an image sent while it goes up flies on to its place once it is up: its me
   // still the picture flying to its place, never drawn back where its tile was
   assert_eq(faced.val, 0)
   let drawn = t.drawn_images()
-  assert_true(drawn.iter().any(fn(i) { i[2] > 56.0 && i[2] < 240.0 }), msg="\{drawn}")
+  assert_true(drawn.iter().any(fn(i) { i[2] > 56.0 && i[2] < 240.0 }), msg="\{Repr(drawn)}")
   send_flight.set(None)
 }

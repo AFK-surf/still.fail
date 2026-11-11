@@ -36,7 +36,7 @@ fn viz_chat() -> (@ui.Tester, (Double, Double)?, (Double, Double)?) {
 fn both_seen(picture : (Double, Double)?, full : (Double, Double)?) -> ((Double, Double), (Double, Double)) raise {
   match (picture, full) {
     (Some(p), Some(f)) => (p, f)
-    _ => fail("not both on the screen: the picture \{picture}, the visualization's 全屏 \{full}")
+    _ => fail("not both on the screen: the picture \{Repr(picture)}, the visualization's 全屏 \{Repr(full)}")
   }
 }
 

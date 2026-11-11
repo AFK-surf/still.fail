@@ -8,6 +8,7 @@
 ///|
 /// Spacing, Tailwind's scale (v3.4: a step 4 px; v4's quarter steps where still.fail's Android app says them: S1_25 5,
 /// S4_5 18): padding, gaps, a size. `Exact(v)` a value off the scale, said in an app's token file only (detlint's `style-literal` counts it anywhere else, `style-exact` everywhere).
+#derive(Eq, Debug)
 pub(all) enum Space {
   S0
   SPx
@@ -47,7 +48,7 @@ pub(all) enum Space {
   S80
   S96
   Exact(Double)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// The spacing scale: every named step, in order (what each comes to: Space::px). What measures spacing against the
@@ -160,6 +161,7 @@ pub fn Space::margin_px(self : Space) -> Double {
 /// not a bound), a spacing token, or `Fixed(v)` (a value worked out as the view builds: a list's width; in a token
 /// file, a value off the scale); as a least across (`min_w`), `Within(v)`: `v` where the parent has the room, all of it
 /// where it has less (CSS's `min(100%, 320px)`).
+#derive(Eq, Debug)
 pub(all) enum Len {
   Hug
   /// as wide as what it holds, cut short where its row has less (words on one line in an ellipsis)
@@ -207,7 +209,58 @@ pub(all) enum Len {
   S72
   S80
   S96
-} derive(Eq, Show, Debug)
+}
+
+///|
+/// As a fault of style_node's says a length (sf's style_wrong): what `derive(Show)` wrote, a number as its text.
+pub impl Show for Len with output(self, logger) {
+  match self {
+    Hug => logger.write_string("Hug")
+    Cut => logger.write_string("Cut")
+    Full => logger.write_string("Full")
+    Grow(v) => logger.write_string("Grow(\{v})")
+    Fixed(v) => logger.write_string("Fixed(\{v})")
+    Pct(v) => logger.write_string("Pct(\{v})")
+    Within(v) => logger.write_string("Within(\{v})")
+    S0 => logger.write_string("S0")
+    SPx => logger.write_string("SPx")
+    S0_5 => logger.write_string("S0_5")
+    S1 => logger.write_string("S1")
+    S1_25 => logger.write_string("S1_25")
+    S1_5 => logger.write_string("S1_5")
+    S2 => logger.write_string("S2")
+    S2_5 => logger.write_string("S2_5")
+    S3 => logger.write_string("S3")
+    S3_5 => logger.write_string("S3_5")
+    S4 => logger.write_string("S4")
+    S4_5 => logger.write_string("S4_5")
+    S5 => logger.write_string("S5")
+    S6 => logger.write_string("S6")
+    S7 => logger.write_string("S7")
+    S8 => logger.write_string("S8")
+    S9 => logger.write_string("S9")
+    S10 => logger.write_string("S10")
+    S11 => logger.write_string("S11")
+    S12 => logger.write_string("S12")
+    S14 => logger.write_string("S14")
+    S16 => logger.write_string("S16")
+    S20 => logger.write_string("S20")
+    S24 => logger.write_string("S24")
+    S28 => logger.write_string("S28")
+    S32 => logger.write_string("S32")
+    S36 => logger.write_string("S36")
+    S40 => logger.write_string("S40")
+    S44 => logger.write_string("S44")
+    S48 => logger.write_string("S48")
+    S52 => logger.write_string("S52")
+    S56 => logger.write_string("S56")
+    S60 => logger.write_string("S60")
+    S64 => logger.write_string("S64")
+    S72 => logger.write_string("S72")
+    S80 => logger.write_string("S80")
+    S96 => logger.write_string("S96")
+  }
+}
 
 ///|
 /// The spacing token a length names, if it names one.
@@ -301,6 +354,7 @@ fn Len::bound(self : Len, none_is : Double) -> Double {
 /// where it lies in a rounded container's corner and `r` where it lies in none (the web's innerOr: a capsule standing
 /// alone that, in a panel's corner, follows the panel's, which so is the panel's own to choose); `Around` the other way
 /// round, the container's own corner from what lies in it.
+#derive(Eq, Debug)
 pub(all) enum Radius {
   Sharp
   Sm
@@ -326,12 +380,13 @@ pub(all) enum Radius {
   Linked(CornerOf)
   /// the same each its own (top left, then round it)
   LinkedEach(CornerOf, CornerOf, CornerOf, CornerOf)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A size of words with its line's height: by what the words are (`Caption` … `Display`: the theme's roles, as a
 /// design system's type tokens say them, each its own size on each screen), the theme's scale (Tailwind's names, and
 /// Xs2, Xs3 under Xs, as Xl2, Xl3 over Xl; Xl5 … Xl7 past them, a picture's one number), or `Exact(size, line)`.
+#derive(Eq, Debug)
 pub(all) enum TextSize {
   /// the smallest words: a time, a count on a badge, a small status
   Caption
@@ -361,11 +416,12 @@ pub(all) enum TextSize {
   Xl6
   Xl7
   Exact(Double, Double)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A line's height said apart from the words' size (which has one of its own, TextSize): the theme's scale
 /// (Tailwind's leading-3 … leading-10 by default: 12, 16 … 40; L4_75, 19), `Font` the font's own, or `Exact(px)`.
+#derive(Eq, Debug)
 pub(all) enum Leading {
   Font
   L3
@@ -378,11 +434,12 @@ pub(all) enum Leading {
   L9
   L10
   Exact(Double)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Letter spacing (Tailwind's tracking, in ems of the words' size), or `Exact(px)` in pixels: added to each
 /// cluster's advance, half before it and half after (Android's letterSpacing).
+#derive(Eq, Debug)
 pub(all) enum Tracking {
   Tighter
   Tight
@@ -391,7 +448,7 @@ pub(all) enum Tracking {
   Wider
   Widest
   Exact(Double)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// The spacing in pixels, for words of `size`.
@@ -409,12 +466,13 @@ pub fn Tracking::px(self : Tracking, size : Double) -> Double {
 
 ///|
 /// How heavy words are.
+#derive(Eq, Debug)
 pub(all) enum Weight {
   Normal
   Medium
   Semibold
   Bold
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub fn Weight::value(self : Weight) -> Int {
@@ -428,6 +486,7 @@ pub fn Weight::value(self : Weight) -> Int {
 
 ///|
 /// How much of a colour shows, Tailwind's scale (`O35` is 0.35), or `Exact(a)`.
+#derive(Eq, Debug)
 pub(all) enum Opacity {
   O0
   O5
@@ -451,7 +510,7 @@ pub(all) enum Opacity {
   O95
   O100
   Exact(Double)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub fn Opacity::value(self : Opacity) -> Double {
@@ -489,6 +548,7 @@ pub fn Opacity::value(self : Opacity) -> Double {
 ///|
 /// A colour by its role in the theme (Theme's fields), one of them at an opacity (`A(Fg, O5)`), one laid over another
 /// (`Over(Card, A(Fg, O5))`), none (`Clear`), or `Exact(rrggbbaa)`.
+#derive(Eq, Debug)
 pub(all) enum Color {
   Clear
   Bg
@@ -555,11 +615,12 @@ pub(all) enum Color {
   /// a colour that comes with what is shown, not the design's (an avatar's own ground, a colour a person typed): from
   /// data, never a number written in a view (one there is a style-literal)
   Data(Int64)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// An edge's width (Tailwind's border widths, and a hairline: B0_5; B1_5 a ring a little firmer than a line, as a dot
 /// looked at is drawn round).
+#derive(Eq, Debug)
 pub(all) enum Stroke {
   B0
   B0_5
@@ -568,7 +629,7 @@ pub(all) enum Stroke {
   B2
   B4
   B8
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// How wide a border of this stroke is, in points (an old view's box's, and the library's style_node's for an edge).
@@ -586,6 +647,7 @@ pub fn Stroke::px(self : Stroke) -> Double {
 
 ///|
 /// A shadow (Tailwind's, its first layer: mbui draws one), in the theme's shadow colour.
+#derive(Eq, Debug)
 pub(all) enum Shadow {
   NoShadow
   Sm
@@ -595,7 +657,7 @@ pub(all) enum Shadow {
   Xl
   /// a shadow said whole: its sigma, how far down, its colour (an app's own, worked out once where it says why)
   Cast(Double, Double, Int64)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A shadow's blur (its sigma, as CALayer's shadowRadius) and how far down it falls.

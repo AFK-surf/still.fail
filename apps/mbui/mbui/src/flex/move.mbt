@@ -292,10 +292,11 @@ fn come_toward(from : Double, v : Double, goal : Double) -> Bool {
 /// and ended with their flight; an answer's room with the avatar's spit): it sets out with it and is there as it ends,
 /// on a Move all the same. Not a length of its own to be said instead of how far it goes (move_ms): there is none to
 /// give, only another way to go with (the coordinator of the migration, 2026-11-10).
+#derive(Eq, Debug)
 pub(all) struct ComeWith {
   start : Double
   ends : Double
-} derive(Eq, Show)
+}
 
 ///|
 /// How long its Move to `goal` takes, `far` points away, going along `along` from `t0` ms after the way set out (at

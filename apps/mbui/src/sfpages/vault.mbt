@@ -726,7 +726,7 @@ fn vault_first_node(
     "not-signer" => vault_gate_node(b, core, "web-pages.vault.notSigner", "web-pages.vault.notSignerWhy")
     "off" => vault_off_node(b, core, ws)
     k if k.has_prefix("named/") => {
-      let id = k.view(start_offset=6).to_owned()
+      let id = k.exact_view(start=6).to_owned()
       vault_named_node(b, core, ws, fn() { items(view().value, "vaults").iter().find_first(fn(r) { text(Some(r), "id") == id }) })
     }
     _ => return false
@@ -867,10 +867,11 @@ fn vault_reset() -> Unit {
 
 ///|
 /// A row of 全部密钥: a vault's secret ("it/<vault>/<item>"), or those of a vault it does not name ("hidden/<vault>").
+#derive(Eq)
 priv enum VaultRow {
   Secret(Json, Json, Bool, Bool)
   Hidden(Json, String, String, Bool)
-} derive(Eq)
+}
 
 ///|
 /// 全部密钥 (LibraryItems), as a password manager's list (the user, 2026-10-26: a section a kind of one row each was

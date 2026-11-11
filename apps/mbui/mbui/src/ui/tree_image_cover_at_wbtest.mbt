@@ -73,11 +73,11 @@ test "a node's picture told another side to cover it from, or none: the frame af
   }
   // (60 by 40 of a picture 300 by 3000: as wide as it, about 1/15 of its height shown, as decoded)
   let top = part()
-  assert_true(top.0 == 0.0 && top.1 > 0.0 && top.1 < 0.1, msg="from its top: \{top}")
+  assert_true(top.0 == 0.0 && top.1 > 0.0 && top.1 < 0.1, msg="from its top: \{Repr(top)}")
   at.set(Some(1.0))
   t.frame()
   // (as much of it, from its foot)
-  assert_true((part().1 - top.1).abs() < 1.0e-9 && (part().0 + part().1 - 1.0).abs() < 1.0e-9, msg="from its foot: \{part()}")
+  assert_true((part().1 - top.1).abs() < 1.0e-9 && (part().0 + part().1 - 1.0).abs() < 1.0e-9, msg="from its foot: \{Repr(part())}")
   // (none said: filling it, all of it shown)
   at.set(None)
   t.frame()

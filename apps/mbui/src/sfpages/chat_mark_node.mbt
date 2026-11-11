@@ -97,7 +97,7 @@ pub fn state_line_node(
         p.box(fn(r) {
           @sf.style_node(r, fn() { state_row })
           @sf.words_node(r, lead_text, fn() { words().then(@sf.theme().chat_list.state_lead) }) |> ignore
-          @sf.words_node(r, fn() { text().view(start_offset=lead_text().length()).to_owned() }, fn() {
+          @sf.words_node(r, fn() { text().clamped_view(start=lead_text().length()).to_owned() }, fn() {
             words().then(state_rest_cut)
           })
           |> ignore

@@ -6,6 +6,7 @@
 
 ///|
 /// A line of words drawn (Tester::text_runs), in points.
+#derive(Debug, Eq)
 pub(all) struct TextRun {
   text : String
   x0 : Double
@@ -13,7 +14,7 @@ pub(all) struct TextRun {
   base : Double
   top : Double
   bottom : Double
-} derive(Show, Eq)
+}
 
 ///|
 priv struct TextRuns {

@@ -170,7 +170,7 @@ test "offers: Tab takes the one chosen, the focus staying; closed, Tab moves the
   x.t.run_for(@kit.pop_out_ms)
   x.t.key(@ui.key_tab)
   assert_eq(x.taken, [1])
-  assert_true(x.t.focused().map(fn(s) { s.label }) == Some("下面"), msg="\{x.t.focused().map(fn(s) { s.label })}")
+  assert_true(x.t.focused().map(fn(s) { s.label }) == Some("下面"), msg="\{Repr(x.t.focused().map(fn(s) { s.label }))}")
 }
 
 ///|
@@ -230,7 +230,7 @@ test "offers: many, past its most: ↑ from the first to the last, round, brings
   x.t.run_for(@ui.move_most_ms)
   assert_eq(x.current.get(), 19)
   let (_, ry, _, rh) = x.t.get(Button, label="第19").rect
-  assert_true(ry >= dy && ry + rh <= dy + dh + 0.5, msg="\{(ry, rh, dy, dh)}")
+  assert_true(ry >= dy && ry + rh <= dy + dh + 0.5, msg="\{Repr((ry, rh, dy, dh))}")
 }
 
 ///|
@@ -268,7 +268,7 @@ test "offers: a mouse's pointer over its ground (its head's words, its padding) 
   }
   let points = [(dx + 3.0, dy + dh / 2.0), (dx + dw / 2.0, dy + 3.0), (dx + dw / 2.0, dy + dh - 3.0), (dx + dw - 3.0, dy + dh / 2.0)]
   let grounds = points.map(fn(p) { shape_on(p.0, p.1) })
-  assert_eq(grounds, points.map(fn(_) { Arrow }), msg="its ground at \{points}, it \{(dx, dy, dw, dh)}")
+  assert_eq(grounds, points.map(fn(_) { Arrow }), msg="its ground at \{Repr(points)}, it \{Repr((dx, dy, dw, dh))}")
   let (rx, ry, rw, rh) = x.t.get(Button, label="乙", selected=false).rect
   assert_eq(shape_on(rx + rw / 2.0, ry + rh / 2.0), Hand, msg="a row")
 }

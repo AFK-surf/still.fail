@@ -38,7 +38,7 @@ fn quote_dragged_over() -> (String, String) {
   let at = fn(s : String) {
     match tr.words().iter().find_first(fn(w) { w.0 == s }) {
       Some(w) => w
-      None => @halt.saying("\{s} not drawn: \{tr.words()}")
+      None => @halt.saying("\{s} not drawn: \{Repr(tr.words())}")
     }
   }
   let first = at("正文在前")

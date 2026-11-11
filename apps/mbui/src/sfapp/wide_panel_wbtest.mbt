@@ -108,14 +108,14 @@ test "wide: a quota running out beside an agent's history's control is whole how
   t.run_for(@ui.move_most_ms)
   let figure = fn() { t.words().filter(fn(w) { w.0 == "23%" && w.5 > 0.5 }) }
   let wide = figure()
-  assert_true(wide.length() == 1, msg="\{wide}")
+  assert_true(wide.length() == 1, msg="\{Repr(wide)}")
   let whole = wide[0].3
   // the panel from as narrow as it is beside the chat (360) to wider: its figure as wide as it is everywhere
   for w = 1100.0; w <= 1600.0; w = w + 20.0 {
     t.resize(w, 800.0)
     t.frame()
     let now = figure()
-    assert_true(now.length() == 1 && now[0].3 >= whole - 0.5, msg="\{w}: \{now} (whole: \{whole})")
+    assert_true(now.length() == 1 && now[0].3 >= whole - 0.5, msg="\{w}: \{Repr(now)} (whole: \{whole})")
   }
 }
 

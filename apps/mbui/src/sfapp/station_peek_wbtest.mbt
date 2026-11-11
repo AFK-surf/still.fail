@@ -116,7 +116,7 @@ test "an agent's model opens its model picker, where the context limit can be ch
   // 「高 · 300K」, and is no step)
   let roles : Array[@ui.Role] = [MenuItemRadio, MenuItem, Radio, Option, Button]
   let role = roles.iter().find_first(fn(r) { t.query(r, label="300K") is Some(_) })
-  guard role is Some(role) else { fail("no step 300K: \{t.all(Button).map(fn(s) { s.label })}") }
+  guard role is Some(role) else { fail("no step 300K: \{Repr(t.all(Button).map(fn(s) { s.label }))}") }
   t.click(role, label="300K")
   let saved = named(calls, "pick.save")
   assert_eq(saved.length(), 1)
@@ -150,14 +150,14 @@ test "a chat with no agent yet, on a desktop: its station's card under its tag i
   // the tag: its name in the chat's bar (where it is: its middle)
   let before = t.locate("Willow")
   let tag = before.filter(fn(p) { p.1 < 40.0 })
-  assert_true(tag.length() > 0, msg="the station's tag in the bar: \{before}")
+  assert_true(tag.length() > 0, msg="the station's tag in the bar: \{Repr(before)}")
   let (x, y) = tag[0]
   t.move_to(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // the card's name (the name there now that was not before): beside the tag (under it), not in the window's middle
   let card = t.locate("Willow").filter(fn(p) { !before.contains(p) })
   assert_true(card.length() > 0, msg="its card")
-  assert_true(card.iter().all(fn(p) { p.1 > y && p.1 < 200.0 && (p.0 - x).abs() < 240.0 }), msg="under the tag: \{card}")
+  assert_true(card.iter().all(fn(p) { p.1 > y && p.1 < 200.0 && (p.0 - x).abs() < 240.0 }), msg="under the tag: \{Repr(card)}")
   assert_true(t.find("机器详情") is Some(_), msg="its way on")
   // gone once the pointer has left it
   t.move_to(900.0, 400.0)
@@ -182,7 +182,7 @@ fn peek_row(t : @ui.Tester, words : String) -> (Double, Double) {
   let (dx, _) = t.find("机器详情").unwrap()
   match t.locate(words).iter().find_first(fn(p) { (p.0 - dx).abs() < 1.0 }) {
     Some(p) => p
-    None => @halt.saying("no \{words} on the card's rows' line: \{t.locate(words)}")
+    None => @halt.saying("no \{words} on the card's rows' line: \{Repr(t.locate(words))}")
   }
 }
 
@@ -503,7 +503,7 @@ test "a station's card put up before the first frame is built: titled its name f
   t.frame()
   t.run_for(@ui.move_most_ms)
   assert_eq(titles[0], ["Willow"], msg="its name on its first frame")
-  assert_true(titles.iter().all(fn(ws) { !ws.contains("st1") }), msg="its id never drawn: \{titles}")
+  assert_true(titles.iter().all(fn(ws) { !ws.contains("st1") }), msg="its id never drawn: \{Repr(titles)}")
   assert_true(t.find("机器详情") is Some(_) && t.find("直连") is Some(_), msg="what it says")
 }
 

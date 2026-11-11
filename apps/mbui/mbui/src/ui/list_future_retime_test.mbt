@@ -52,9 +52,9 @@ fn closing_before_future_change(change : Int) -> (Double, Double, Double, Double
 test "a closing row keeps closing while a future arrival's duration changes" {
   let steady = closing_before_future_change(0)
   let retimed = closing_before_future_change(1)
-  assert_true(steady.0 > steady.1 && steady.1 > 0.0, msg="the old row closes: \{steady}")
+  assert_true(steady.0 > steady.1 && steady.1 > 0.0, msg="the old row closes: \{Repr(steady)}")
   assert_true((steady.0 - retimed.0).abs() < 0.001 && (steady.1 - retimed.1).abs() < 0.001,
-    msg="a future arrival cannot change the closing row yet: \{steady} / \{retimed}")
+    msg="a future arrival cannot change the closing row yet: \{Repr(steady)} / \{Repr(retimed)}")
   assert_eq(retimed.2, 0.0, msg="the arrival has not started")
   assert_eq(retimed.4, 50.0, msg="the arrival opens once it is due")
 }
@@ -64,7 +64,7 @@ test "a closing row keeps closing until it is due to return" {
   let steady = closing_before_future_change(0)
   let returning = closing_before_future_change(2)
   assert_true((steady.0 - returning.0).abs() < 0.001 && (steady.1 - returning.1).abs() < 0.001,
-    msg="a future return cannot stop the closing row yet: \{steady} / \{returning}")
+    msg="a future return cannot stop the closing row yet: \{Repr(steady)} / \{Repr(returning)}")
   assert_eq(returning.3, 50.0, msg="the returning row opens once it is due")
   assert_eq(returning.4, 50.0, msg="the arrival opens once it is due")
 }
@@ -74,7 +74,7 @@ test "a closing row keeps closing when a future arrival is moved later" {
   let steady = closing_before_future_change(0)
   let later = closing_before_future_change(3)
   assert_true((steady.0 - later.0).abs() < 0.001 && (steady.1 - later.1).abs() < 0.001,
-    msg="a later arrival cannot change the closing row yet: \{steady} / \{later}")
+    msg="a later arrival cannot change the closing row yet: \{Repr(steady)} / \{Repr(later)}")
   assert_eq(later.2, 0.0, msg="the arrival has not started")
   assert_eq(later.4, 50.0, msg="the later arrival opens once it is due")
 }

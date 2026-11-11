@@ -558,7 +558,7 @@ test "a column's bar: none where it is first put; scrolled, it comes in (the tim
   assert_eq(
     (first, coming.map(fn(c) { c.4 }), out, going.map(fn(c) { c.4 }), gone, (coming_clock, out_clock, going_clock)),
     (None, Some(0.5), Some((295.0, y, 3.0, long, 1.0)), Some(0.5), (None, false), (true, false, true)),
-    msg="\{coming} \{out} \{going}",
+    msg="\{Repr(coming)} \{Repr(out)} \{Repr(going)}",
   )
 }
 
@@ -706,7 +706,7 @@ test "a column's bar out, its logic short of where it starts to go, a frame draw
   assert_eq(
     (at_900, at_950.map(fn(a) { (a - 0.8).abs() < 1.0e-9 }), tree.logic_at() < 910.0),
     (Some(1.0), Some(true), true),
-    msg="\{at_950}",
+    msg="\{Repr(at_950)}",
   )
 }
 
@@ -839,7 +839,7 @@ test "drawn past a moment: watched with the moment drawn, both told as one; the 
   assert_eq(
     (torn, seen.iter().any(fn(e) { e == (150.0, true, false) }), seen.last()),
     (false, true, Some((250.0, true, true))),
-    msg="\{seen}",
+    msg="\{Repr(seen)}",
   )
 }
 
@@ -858,7 +858,7 @@ test "drawn past a moment: the moment waited for said anew, the one before passe
   let after_old = seen.length() - n
   tree.at(350.0)
   tree.frame(390.0, 844.0, now=85.0) |> ignore
-  assert_eq((after_old, seen.length() - n, seen.last().map(fn(e) { (e.1, e.2) })), (0, 1, Some((true, false))), msg="\{seen}")
+  assert_eq((after_old, seen.length() - n, seen.last().map(fn(e) { (e.1, e.2) })), (0, 1, Some((true, false))), msg="\{Repr(seen)}")
 }
 
 ///|

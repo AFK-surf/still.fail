@@ -40,23 +40,25 @@ pub(all) enum TopicLeave {
 
 ///|
 /// How a source read is owned. A lease may explicitly move to another view after it is created.
+#derive(Eq)
 pub(all) enum TopicReadMode {
   Raw
   Graph
   Lease
-} derive(Eq)
+}
 
 ///|
 /// Where signing in to still.fail stands, as the sign-in page says it: nothing under way; its page being opened; out in
 /// the browser, the app waiting for it to come back; what it brought back being checked; or failed, why in the person's
 /// words ("" when there are none).
+#derive(Eq, Debug)
 pub(all) enum SignInStep {
   Idle
   Opening
   InBrowser
   Verifying
   Failed(String)
-} derive(Eq, Show)
+}
 
 ///|
 /// The step a sign-in's state says (sfcore's SignIn: `failed` "" when it did not fail, "!" when it did with no words).

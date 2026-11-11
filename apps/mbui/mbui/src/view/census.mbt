@@ -7,6 +7,7 @@
 /// (View::words_scale's); its padding (left, top, right, bottom) and the
 /// gap between what it holds, in points (none where it has none); its corner; its ground (0: none); the colour of the
 /// edge drawn round it (0: none, nor where it is drawn none wide).
+#derive(Debug)
 pub(all) struct Styled {
   words : Bool
   size : Double
@@ -20,7 +21,7 @@ pub(all) struct Styled {
   radius : Double
   ground : Int64
   edge : Int64
-} derive(Debug)
+}
 
 ///|
 /// The live nodes the root holds, each one's values as set (Styled), what holds each before it.

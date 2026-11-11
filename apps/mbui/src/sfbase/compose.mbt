@@ -935,20 +935,20 @@ pub fn finder_dragged(src : Source, paths : Array[@ui.DroppedPath]) -> Array[Dra
     station_name
   } else {
     match station.rev_find("/") {
-      Some(i) => station.view(start_offset=i + 1).to_owned()
+      Some(i) => station.exact_view(start=i + 1).to_owned()
       None => station
     }
   }
   paths.map(fn(p) {
     let abs = if p.path.length() > 1 && p.path.has_suffix("/") {
-      p.path.view(end_offset=p.path.length() - 1).to_owned()
+      p.path.exact_view(end=p.path.length() - 1).to_owned()
     } else {
       p.path
     }
     // (its folder the root it is asked from: the station's own reach any folder of it, drive.ts `anywhere`)
     let (root, name) = match abs.rev_find("/") {
-      Some(0) => ("/", abs.view(start_offset=1).to_owned())
-      Some(i) => (abs.view(end_offset=i).to_owned(), abs.view(start_offset=i + 1).to_owned())
+      Some(0) => ("/", abs.exact_view(start=1).to_owned())
+      Some(i) => (abs.exact_view(end=i).to_owned(), abs.exact_view(start=i + 1).to_owned())
       None => ("", abs)
     }
     { station, station_name, root, path: name, abs, name, size: p.size, dir: p.dir }

@@ -100,13 +100,13 @@ test "sideways: what it holds fades out towards an edge it goes on past, each pi
   }
   assert_true(fades().length() > 0, msg="no glyphs")
   // at its start: towards its end only
-  assert_true(fades().iter().all(fn(f) { f.0 <= 0.0 && f.1 > 0.0 }), msg="at its start: \{fades()[:3]}")
+  assert_true(fades().iter().all(fn(f) { f.0 <= 0.0 && f.1 > 0.0 }), msg="at its start: \{Repr(fades()[:3])}")
   t.drag(250.0, y + 5.0, 50.0, y + 5.0)
   t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
   assert_true(at.val > 0.0, msg="not scrolled")
   // scrolled on: towards its start, and towards its end while it goes on past it (600 wide in 300)
   let more = at.val < 300.0 - 0.5
-  assert_true(fades().iter().all(fn(f) { f.0 > 0.0 && (f.1 > 0.0) == more }), msg="scrolled to \{at.val}: \{fades()[:3]}")
+  assert_true(fades().iter().all(fn(f) { f.0 > 0.0 && (f.1 > 0.0) == more }), msg="scrolled to \{at.val}: \{Repr(fades()[:3])}")
 }
 
 ///|

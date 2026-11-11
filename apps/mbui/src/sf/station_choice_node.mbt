@@ -5,12 +5,13 @@
 
 ///|
 /// A station to choose (station_choice_node): its address, its name, its mark (its emoji, its icon: station_mark_node's).
+#derive(Eq)
 pub(all) struct StationChoice {
   station : String
   name : String
   emoji : String
   icon : String
-} derive(Eq)
+}
 
 ///|
 /// The station `chosen()` of `stations()` in `parent`: its mark (a server's where it has none) and its name, 13 and

@@ -136,7 +136,7 @@ pub fn viz_said(f : VizFrame, hears : VizHears, words : String) -> Unit {
         Some(String(p)) => {
           let words = p.trim().to_owned()
           if words != "" {
-            let cut = if words.length() > 4000 { words.view(end_offset=4000).to_owned() } else { words }
+            let cut = if words.length() > 4000 { words.clamped_view(end=4000).to_owned() } else { words }
             let took = match hears.follow_up {
               Some(f) => f(cut)
               None => false

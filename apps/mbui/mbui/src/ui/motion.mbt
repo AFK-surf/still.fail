@@ -59,6 +59,7 @@ fn bezier_at(x1 : Double, y1 : Double, x2 : Double, y2 : Double, t : Double) -> 
 /// What a timed motion's curve says it is (sf/motion.mbt, Curves): one curve for each, so what moves the
 /// same way moves alike everywhere. No other: what is sprung is @motion's (its springs: rows making way, a sheet, a
 /// thing let go with the hand's speed, a thing lifted).
+#derive(Eq, Debug)
 pub(all) enum Ease {
   /// A thing seen where it was and where it goes, going there: a page pushed or risen, the tape, the sidebar, a side
   /// panel, the composer's shape, a picture flown open, the search rising. A critically damped spring's way from rest
@@ -78,7 +79,7 @@ pub(all) enum Ease {
   Linear
   /// (.6, 0, .2, 1): words sent on their way to their row (sfbase's flight.mbt)
   Flight
-} derive(Eq, Show)
+}
 
 ///|
 /// Move's spring: ω·T where it rests, and how far it has got there (said once under what lays things out: flex's

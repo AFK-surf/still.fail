@@ -40,6 +40,7 @@ let a11y_sep : String = "\u{1F}"
 
 ///|
 /// A node as the host is told it (see above): where it is from where what holds it is.
+#derive(Eq, Debug)
 struct A11yNode {
   id : Int
   role : String
@@ -55,7 +56,7 @@ struct A11yNode {
   actions : String
   widget : Int
   kids : Array[Int]
-} derive(Eq, Show)
+}
 
 ///|
 /// What a host keeps of what it was told (each node by its number, what holds each, which has the focus), as an update
@@ -1027,7 +1028,7 @@ fn Tester::hold_named(self : Tester, tree : Array[SemNode]) -> Unit {
     return
   }
   let said = "what can be done is named (mbui's src/ui/a11y.mbt, sem_unnamed), on a frame drawn at \{self.fake.time}:\n" +
-    bad.map(fn(s) { "  \{s.describe()} at \{s.rect}, actions \{s.actions}" }).join("\n")
+    bad.map(fn(s) { "  \{s.describe()} at \{Repr(s.rect)}, actions \{Repr(s.actions)}" }).join("\n")
   @halt.saying(said)
 }
 

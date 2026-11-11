@@ -18,15 +18,15 @@ pub fn chat_link(station : String, session : String) -> String {
     Some(at) if at > 0 && at < station.length() - 1 && session != "" => {
       let cloud = cloud_origin()
       let base = if cloud.has_suffix("/") {
-        cloud.view(end_offset=cloud.length() - 1).to_owned()
+        cloud.exact_view(end=cloud.length() - 1).to_owned()
       } else {
         cloud
       }
       base +
       "/o/" +
-      station.view(end_offset=at).to_owned() +
+      station.exact_view(end=at).to_owned() +
       "/" +
-      station.view(start_offset=at + 1).to_owned() +
+      station.exact_view(start=at + 1).to_owned() +
       "/" +
       @codec.encode_uri_component(session)
     }

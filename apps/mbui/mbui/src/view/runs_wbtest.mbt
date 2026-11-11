@@ -24,7 +24,7 @@ test "words in pieces: drawn with their pieces, read as their words one after an
   assert_eq(d.words, "ab cd")
   assert_eq(d.runs, [words_run("ab "), words_run("cd", weight=600, ink=7L)])
   assert_eq(d.w, 35.0, msg="measured as its words")
-  assert_true(measured.contains(2), msg="by what measures pieces: \{measured}")
+  assert_true(measured.contains(2), msg="by what measures pieces: \{Repr(measured)}")
   pieces.set([words_run("abc", weight=700)])
   t.frame(390.0, 844.0) |> ignore
   let d = t.drawn_of(id.val.unwrap()).unwrap()

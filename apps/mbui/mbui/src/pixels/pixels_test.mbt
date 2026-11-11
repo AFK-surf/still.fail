@@ -125,7 +125,7 @@ test "a ThumbHash drawn back as the reference does, and its proportions" {
     mid.push(rgba[(w * 16 + 11) * 4 + i].to_int())
   }
   inspect(
-    "\{w}x\{h} \{first} \{mid}",
+    "\{w}x\{h} [\{first.map(fn(x) { x.to_string() }).join(", ")}] [\{mid.map(fn(x) { x.to_string() }).join(", ")}]",
     content="23x32 [64, 77, 113, 255, 66, 79, 114, 255] [140, 109, 88, 255]",
   )
   // thumbHashToApproximateAspectRatio: 5 / 7

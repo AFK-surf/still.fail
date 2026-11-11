@@ -76,7 +76,7 @@ test "a node's edge round what it holds, reaching its edges: its ground inside t
     |> ignore
   })
   let old = rects_sized(40.0, 24.0)
-  assert_eq(old.length(), 3, msg="the old box: its ground, what it holds, its border \{old}")
+  assert_eq(old.length(), 3, msg="the old box: its ground, what it holds, its border \{Repr(old)}")
   let t = Tester::new(fn(_c) {  })
   set_view_app(fn(root) {
     root.box(fn(n) {
@@ -187,7 +187,7 @@ test "a node's edge round what it holds, what holds it fading towards its edges:
   let ring = inst_where(red_edged)
   // (the fade's own numbers: what fades it, its band from the top and the foot, as inst_fade wrote them)
   let fades_of = fn(k : Int) { Array::makei(8, fn(j) { c.inst[k * inst_size + 52 + j] }) }
-  assert_true(fill >= 0 && ring > fill && fades_of(fill) == fades_of(ring) && fades_of(fill).iter().any(fn(v) { v != 0.0 }), msg="\{fill} \{ring} \{if fill >= 0 { fades_of(fill) } else { [] }} \{if ring >= 0 { fades_of(ring) } else { [] }}")
+  assert_true(fill >= 0 && ring > fill && fades_of(fill) == fades_of(ring) && fades_of(fill).iter().any(fn(v) { v != 0.0 }), msg="\{fill} \{ring} \{Repr(if fill >= 0 { fades_of(fill) } else { [] })} \{Repr(if ring >= 0 { fades_of(ring) } else { [] })}")
 }
 
 ///|

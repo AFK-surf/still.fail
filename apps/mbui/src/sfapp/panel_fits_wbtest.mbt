@@ -6,7 +6,7 @@
 fn fits_said(t : @ui.Tester, words : String) -> String {
   let r = fn(role : @ui.Role, label : String) { t.query(role, label~).map(fn(s) { tenth4(s.rect) }) }
   let w = fn(s : String) { t.words().filter(fn(x) { x.0 == s }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) }) }
-  "dialog \{r(Dialog, "面板")} title \{w("面板")} words \{w(words)} button \{r(Button, "好的")} end \{r(Button, "尾")}"
+  "dialog \{@ui.some_text(r(Dialog, "面板").map(@ui.rect_text))} title \{@ui.list_text(w("面板").map(@ui.rect_text))} words \{@ui.list_text(w(words).map(@ui.rect_text))} button \{@ui.some_text(r(Button, "好的").map(@ui.rect_text))} end \{@ui.some_text(r(Button, "尾").map(@ui.rect_text))}"
 }
 
 ///|
@@ -50,10 +50,10 @@ test "panel fits, 大屏 keyboard and mouse: as wide as its words as they change
   t.run_for(@ui.move_most_ms)
   let d = t.get(Dialog, label="面板").rect
   let row0 = fn() { t.words().filter(fn(x) { x.0 == "第0行" }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) }) }
-  let before = "column: dialog \{tenth4(d)} row0 \{row0()} held \{held.last()}"
+  let before = "column: dialog \{@ui.rect_text(tenth4(d))} row0 \{@ui.list_text(row0().map(@ui.rect_text))} held \{@ui.some_text(held.last())}"
   t.wheel(d.0 + d.2 / 2.0, d.1 + 120.0, 120.0)
   t.run_for(@ui.move_most_ms)
-  out.push("\{before} | wheel: \{row0()}")
+  out.push("\{before} | wheel: \{@ui.list_text(row0().map(@ui.rect_text))}")
   drawn.push(tree_said(Dialog, "面板") is Some(_))
   // (as main has it, a4c845604)
   assert_eq(out, fits_main)
@@ -67,18 +67,18 @@ test "panel fits, the model's (model_pop): where it is, its models and how hard 
   for mode in ["newchat-model", "newchat-tall-model", "newchat-crowded-model"] {
     let t = model_pop(mode)
     let r = fn(role : @ui.Role, label : String) { t.query(role, label~).map(fn(s) { tenth4(s.rect) }) }
-    out.push("\{mode}: dialog \{t.query(Dialog).map(fn(s) { tenth4(s.rect) })} opus \{r(Button, "Opus 5.5")} high \{r(Radio, "高")}")
+    out.push("\{mode}: dialog \{@ui.some_text(t.query(Dialog).map(fn(s) { tenth4(s.rect) }).map(@ui.rect_text))} opus \{@ui.some_text(r(Button, "Opus 5.5").map(@ui.rect_text))} high \{@ui.some_text(r(Radio, "高").map(@ui.rect_text))}")
     // (the row it runs on, the configuration picked exactly, wholly in view as it opens: Opus above it a model scrolled
     // past, not the one picked)
     let runs_on = if mode == "newchat-model" { "Opus 5.5 · 高" } else { "DeepSeek V4.1 Flash · DSH · 高" }
     let on = t.get(Button, label=runs_on)
-    assert_true(wholly_in_view(t, on.rect), msg="\{mode}: \{runs_on} at \{on.rect} out of view")
+    assert_true(wholly_in_view(t, on.rect), msg="\{mode}: \{runs_on} at \{Repr(on.rect)} out of view")
     drawn.push(tree_said(Dialog, t.query(Dialog).map(fn(s) { s.label }).unwrap_or("")) is Some(_))
     if mode == "newchat-crowded-model" {
       for label in ["低", "最高"] {
         t.click(Radio, label~)
         t.run_for(squeeze_opening)
-        out.push("\{mode} \{label}: dialog \{t.query(Dialog).map(fn(s) { tenth4(s.rect) })} high \{r(Radio, "高")}")
+        out.push("\{mode} \{label}: dialog \{@ui.some_text(t.query(Dialog).map(fn(s) { tenth4(s.rect) }).map(@ui.rect_text))} high \{@ui.some_text(r(Radio, "高").map(@ui.rect_text))}")
       }
     }
   }

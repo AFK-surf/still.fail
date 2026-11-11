@@ -119,10 +119,10 @@ test "window tree: the old view in its island: laid out and cut there, the bar d
   let bar = drawn_index(w.t, (0.0, 0.0, 390.0, 40.0, island_blue))
   let old = drawn_index(w.t, (30.0, 60.0, 200.0, 300.0, island_green))
   let badge = drawn_index(w.t, (40.0, 140.0, 60.0, 30.0, island_red))
-  assert_true(bar >= 0 && old >= 0 && badge >= 0, msg="\{w.t.drawn_rects()}")
-  assert_true(bar < old && old < badge, msg="\{(bar, old, badge)}")
+  assert_true(bar >= 0 && old >= 0 && badge >= 0, msg="\{Repr(w.t.drawn_rects())}")
+  assert_true(bar < old && old < badge, msg="\{Repr((bar, old, badge))}")
   let (x, y, _, _) = w.t.rect_of("old").unwrap()
-  assert_true(x >= 30.0 && y >= 60.0 && x < 230.0 && y < 360.0, msg="\{(x, y)}")
+  assert_true(x >= 30.0 && y >= 60.0 && x < 230.0 && y < 360.0, msg="\{Repr((x, y))}")
 }
 
 ///|
@@ -198,7 +198,7 @@ test "window tree: the badge moved: drawn where it went, nothing of it made agai
   assert_eq(tree.work().instances - work.instances, 0)
   assert_eq(tree.work().composed - work.composed, 1)
   assert_eq(view_painted().made - painted.made, 0)
-  assert_true(drawn_index(w.t, (100.0, 140.0, 60.0, 30.0, island_red)) >= 0, msg="\{w.t.drawn_rects()}")
+  assert_true(drawn_index(w.t, (100.0, 140.0, 60.0, 30.0, island_red)) >= 0, msg="\{Repr(w.t.drawn_rects())}")
   // (pressed where it went)
   tree_tap(w.t, 110.0, 150.0)
   assert_eq(w.badge_taps.val, 1)
@@ -225,10 +225,10 @@ test "window tree: a part leaving goes on as the host draws it, from when it was
   t.run_for(part_leave_ms / 2.0)
   // (half gone: drawn half as opaque)
   let half = t.drawn_rects().filter(fn(r) { r.4 >> 8 == island_red >> 8 })
-  assert_true(half.length() == 1 && (half[0].4 & 0xFFL) >= 126L && (half[0].4 & 0xFFL) <= 129L, msg="\{half}")
+  assert_true(half.length() == 1 && (half[0].4 & 0xFFL) >= 126L && (half[0].4 & 0xFFL) <= 129L, msg="\{Repr(half)}")
   assert_false(t.at_rest())
   t.run_for(part_leave_ms / 2.0 + part_leave_ms / 6.0)
-  assert_false(t.drawn_rects().iter().any(fn(r) { r.4 >> 8 == island_red >> 8 }), msg="\{t.drawn_rects()}")
+  assert_false(t.drawn_rects().iter().any(fn(r) { r.4 >> 8 == island_red >> 8 }), msg="\{Repr(t.drawn_rects())}")
   assert_true(t.at_rest(), msg=t.rest_why())
   assert_eq(view_blocks.length(), base - 1)
 }

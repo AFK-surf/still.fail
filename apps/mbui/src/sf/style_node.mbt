@@ -29,6 +29,7 @@ pub fn style_node(v : @view.View, look : () -> @ui.Style, in_row? : Bool = false
 ///|
 /// What a style says of a node (style_node), worked out: each property as it is set, and which of them it sets
 /// (`says`, as it said them as the node was made).
+#derive(Eq)
 priv struct StyleSet {
   says : StyleSays
   row : Bool
@@ -51,10 +52,11 @@ priv struct StyleSet {
   edge_w : Double
   edge_c : Int64
   clip : Bool
-} derive(Eq)
+}
 
 ///|
 /// Which properties a style sets (StyleSet's `says`).
+#derive(Eq)
 priv struct StyleSays {
   w : Bool
   h : Bool
@@ -69,7 +71,7 @@ priv struct StyleSays {
   ground : Bool
   edge : Bool
   clip : Bool
-} derive(Eq)
+}
 
 ///|
 /// What `self` says and what `more` says (the same `self` where `more` says nothing it does not: made anew only as a

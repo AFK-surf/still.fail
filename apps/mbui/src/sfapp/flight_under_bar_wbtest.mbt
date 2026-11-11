@@ -131,7 +131,7 @@ test "a picture under a chat's bar: the bar over it every frame till it is out f
   for screen in [(0, 1280.0), (2, 390.0)] {
     for top in [10.0, -100.0] {
       let faults = picture_under_bar_faults(top, screen.0, screen.1)
-      assert_true(faults.is_empty(), msg="\{screen.1} wide, its top at \{top}: \{faults}")
+      assert_true(faults.is_empty(), msg="\{screen.1} wide, its top at \{top}: \{Repr(faults)}")
     }
   }
 }
@@ -141,7 +141,7 @@ test "a film under a chat's bar: the bar over it every frame till it is out from
   for screen in [(0, 1280.0), (2, 390.0)] {
     for top in [10.0, -100.0] {
       let faults = picture_under_bar_faults(top, screen.0, screen.1, film=true)
-      assert_true(faults.is_empty(), msg="\{screen.1} wide, its top at \{top}: \{faults}")
+      assert_true(faults.is_empty(), msg="\{screen.1} wide, its top at \{top}: \{Repr(faults)}")
     }
   }
 }

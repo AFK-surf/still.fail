@@ -77,8 +77,8 @@ test "window zoom: an embedded page is placed and rendered at the same size as i
     }, w=400.0, h=300.0)
     set_window_zoom(zoom)
     t.frame()
-    assert_true(t.views().contains(place), msg="position at zoom \{zoom}: \{t.views()}")
-    assert_true(t.views().contains(scale), msg="page scale at zoom \{zoom}: \{t.views()}")
+    assert_true(t.views().contains(place), msg="position at zoom \{zoom}: \{Repr(t.views())}")
+    assert_true(t.views().contains(scale), msg="page scale at zoom \{zoom}: \{Repr(t.views())}")
     page.val.unwrap().close()
   }
 }

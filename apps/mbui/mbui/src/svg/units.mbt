@@ -288,7 +288,7 @@ fn is_condition_passed(doc : SDoc, node : Int, opt : Options) -> Bool {
         }
         match lang.find("-") {
           Some(idx) => {
-            let prefix = lang.view(end_offset=idx).to_owned()
+            let prefix = lang.exact_view(end=idx).to_owned()
             if opt.languages.contains(prefix) {
               return true
             }

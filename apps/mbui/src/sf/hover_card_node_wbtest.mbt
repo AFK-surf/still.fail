@@ -233,7 +233,7 @@ test "a card opens as the mouse's pointer has rested on its trigger hover_card_o
   let r = h.trigger("甲")
   match h.card("甲") {
     Some(c) => {
-      assert_eq((c.0, c.1, c.2), (r.0, r.1 + r.3 + hover_card_offset, hover_card_px), msg="where: \{c}, its trigger \{r}")
+      assert_eq((c.0, c.1, c.2), (r.0, r.1 + r.3 + hover_card_offset, hover_card_px), msg="where: \{Repr(c)}, its trigger \{Repr(r)}")
     }
     None => fail("open, none drawn")
   }
@@ -262,7 +262,7 @@ test "a card stays open as the pointer goes from its trigger onto it, across the
   h.t.run_for(hover_short_ms + hover_settled_ms)
   assert_false(h.open("甲"), msg="at its time: closed")
   assert_eq(h.card("甲"), None, msg="gone")
-  assert_eq(h.turns.length(), 2, msg="\{h.turns}")
+  assert_eq(h.turns.length(), 2, msg="\{Repr(h.turns)}")
   assert_eq(h.turns[1], ("甲", false, left + hover_card_close_ms), msg="closed at the leave's end")
   assert_eq(h.t.audit(), [])
 }
@@ -278,7 +278,7 @@ test "the pointer going from one trigger to the next: the first's card closes ho
   h.t.run_for(hover_card_open_ms + hover_settled_ms)
   assert_false(h.open("甲"), msg="甲 closed")
   assert_true(h.open("乙"), msg="乙 open")
-  assert_eq(h.turns.length(), 3, msg="\{h.turns}")
+  assert_eq(h.turns.length(), 3, msg="\{Repr(h.turns)}")
   assert_eq(h.turns[1], ("甲", false, moved + hover_card_close_ms), msg="甲 closed at its leave's end")
   assert_eq(h.turns[2], ("乙", true, moved + hover_card_open_ms), msg="乙 opened at its rest's end")
   assert_eq(h.t.audit(), [])
@@ -330,7 +330,7 @@ test "a finger, resting on nothing, opens a card by holding its trigger long_pre
   h.t.touch(2, hover_away.0, hover_away.1)
   h.t.run_for(hover_settled_ms)
   assert_false(h.open("甲"), msg="a press elsewhere: closed")
-  assert_eq(h.turns, [("甲", true, down + @ui.long_press_ms), ("甲", false, off)], msg="\{h.turns}")
+  assert_eq(h.turns, [("甲", true, down + @ui.long_press_ms), ("甲", false, off)], msg="\{Repr(h.turns)}")
   assert_eq(h.t.audit(), [])
 }
 
@@ -352,7 +352,7 @@ test "a card closes at once at a press outside it and its trigger, and at Escape
     }
     h.t.run_for(hover_settled_ms)
     assert_false(h.open("甲"), msg="\{case}: closed")
-    assert_eq(h.turns[1], ("甲", false, at), msg="\{case}: at once: \{h.turns}")
+    assert_eq(h.turns[1], ("甲", false, at), msg="\{case}: at once: \{Repr(h.turns)}")
     if case == "escape" {
       h.t.run_for(hover_card_open_ms + hover_settled_ms)
       assert_false(h.open("甲"), msg="escape: resting on still: not again")
@@ -380,7 +380,7 @@ test "a card closes at once as its trigger takes input no more (its holder said 
     let at = h.t.time()
     h.t.run_for(hover_settled_ms)
     assert_false(h.open("甲"), msg="\{case}: closed")
-    assert_eq(h.turns[1], ("甲", false, at), msg="\{case}: at once: \{h.turns}")
+    assert_eq(h.turns[1], ("甲", false, at), msg="\{case}: at once: \{Repr(h.turns)}")
     // (waiting: never)
     cover(false)
     h.move_to(hover_away)
@@ -390,7 +390,7 @@ test "a card closes at once as its trigger takes input no more (its holder said 
     cover(true)
     h.t.run_for(hover_card_open_ms + hover_settled_ms)
     assert_false(h.open("甲"), msg="\{case}: while it waited: never")
-    assert_eq(h.turns.length(), 2, msg="\{case}: \{h.turns}")
+    assert_eq(h.turns.length(), 2, msg="\{case}: \{Repr(h.turns)}")
     cover(false)
     assert_eq(h.t.audit(), [], msg=case)
   }
@@ -424,7 +424,7 @@ test "a card kept open by the app (held) stays as the pointer leaves both, as a 
   let let_go = h.t.time()
   h.t.run_for(hover_card_close_ms + hover_settled_ms)
   assert_false(h.open("甲"), msg="let go: closed")
-  assert_eq(h.turns.length(), 2, msg="\{h.turns}")
+  assert_eq(h.turns.length(), 2, msg="\{Repr(h.turns)}")
   assert_eq(h.turns[1], ("甲", false, let_go + hover_card_close_ms), msg="its close's time after it was let go")
   assert_eq(h.t.audit(), [])
 }
@@ -447,11 +447,11 @@ test "the focus taken into a card by Tab: Escape closes it at once, the focus ba
     if case == "escape" {
       h.t.key(@ui.key_escape)
       h.t.run_for(hover_settled_ms)
-      assert_eq(h.turns[1], ("甲", false, at), msg="escape: at once: \{h.turns}")
+      assert_eq(h.turns[1], ("甲", false, at), msg="escape: at once: \{Repr(h.turns)}")
     } else {
       h.move_to(hover_away)
       h.t.run_for(hover_card_close_ms + hover_settled_ms)
-      assert_eq(h.turns[1], ("甲", false, at + hover_card_close_ms), msg="leave: its close's time after: \{h.turns}")
+      assert_eq(h.turns[1], ("甲", false, at + hover_card_close_ms), msg="leave: its close's time after: \{Repr(h.turns)}")
     }
     assert_false(h.open("甲"), msg="\{case}: closed")
     assert_eq(h.focus(), "甲", msg="\{case}: the focus back on its trigger")
@@ -495,7 +495,7 @@ test "a finger's long press opens the card of a trigger that is pressed for noth
   h.t.touch(2, hover_away.0, hover_away.1)
   h.t.run_for(hover_settled_ms)
   assert_false(h.open("丙"), msg="a press elsewhere: closed")
-  assert_eq(h.turns, [("丙", true, down + @ui.long_press_ms), ("丙", false, off)], msg="\{h.turns}")
+  assert_eq(h.turns, [("丙", true, down + @ui.long_press_ms), ("丙", false, off)], msg="\{Repr(h.turns)}")
   assert_eq(h.t.audit(), [], msg="at rest")
 }
 
@@ -517,7 +517,7 @@ test "a trigger pressed for nothing (a name in a bar): a tap or a click on it is
     if platform == 0 {
       h.t.run_for(hover_card_open_ms + hover_settled_ms)
       assert_true(h.open("丙"), msg="rested: open")
-      assert_eq(h.turns, [("丙", true, up + hover_card_open_ms)], msg="\{h.turns}")
+      assert_eq(h.turns, [("丙", true, up + hover_card_open_ms)], msg="\{Repr(h.turns)}")
     }
     assert_eq(h.t.audit(), [], msg="\{platform}")
   }
@@ -529,10 +529,10 @@ test "a trigger pressed for nothing still takes a finger's long press, so it is 
     let h = hover_rig(platform~, cramped=true)
     let faults = h.t.audit()
     let least = if platform == 0 { "36" } else { "44" }
-    assert_eq(faults.length(), 1, msg="\{platform}: \{faults}")
+    assert_eq(faults.length(), 1, msg="\{platform}: \{Repr(faults)}")
     assert_true(
       faults[0].has_prefix("room: ") && faults[0].contains("60×20") && faults[0].contains("has 60×32 to be pressed in, under \{least}"),
-      msg="\{platform}: \{faults}",
+      msg="\{platform}: \{Repr(faults)}",
     )
   }
 }
@@ -555,7 +555,7 @@ test "a trigger only a finger's tap is said for (a station's name in a bar that 
   let at = h.t.time()
   h.t.run_for(hover_card_open_ms + hover_settled_ms)
   assert_true(h.open("丁"), msg="a mouse resting on it: its card")
-  assert_eq(h.turns.filter(fn(tn) { tn.0 == "丁" && tn.1 }).last(), Some(("丁", true, at + hover_card_open_ms)), msg="\{h.turns}")
+  assert_eq(h.turns.filter(fn(tn) { tn.0 == "丁" && tn.1 }).last(), Some(("丁", true, at + hover_card_open_ms)), msg="\{Repr(h.turns)}")
   // (what holds it under a modal layer: taking no input, closed at once)
   modal.set(true)
   h.t.run_for(hover_settled_ms)
@@ -596,7 +596,7 @@ test "a card said along_offset stands that much further along its trigger's side
     assert_true(h.open("甲"), msg="\{off}: open")
     let r = h.trigger("甲")
     match h.card_along("甲") {
-      Some(c) => assert_eq((c.0, c.1), (r.0 + off, r.1 + r.3 + hover_card_offset), msg="\{off}: \{c}, its trigger \{r}")
+      Some(c) => assert_eq((c.0, c.1), (r.0 + off, r.1 + r.3 + hover_card_offset), msg="\{off}: \{Repr(c)}, its trigger \{Repr(r)}")
       None => fail("\{off}: open, none drawn")
     }
     assert_eq(h.t.audit(), [], msg="\{off}")
@@ -611,7 +611,7 @@ test "a card said a piece of its trigger stands beside that piece (a link in its
   assert_true(h.open("乙"), msg="open")
   let r = h.trigger("乙")
   match h.card_along("乙") {
-    Some(c) => assert_eq((c.0, c.1), (r.0 + 30.0 - 5.0, r.1 + 4.0 + 12.0 + hover_card_offset), msg="\{c}, its trigger \{r}")
+    Some(c) => assert_eq((c.0, c.1), (r.0 + 30.0 - 5.0, r.1 + 4.0 + 12.0 + hover_card_offset), msg="\{Repr(c)}, its trigger \{Repr(r)}")
     None => fail("open, none drawn")
   }
   // (its hand says the card while it is made: what is opened from what it holds stands beside it)

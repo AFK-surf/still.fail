@@ -14,7 +14,7 @@ fn ahead_phone(ms : Double, said : Array[String]) -> @ui.Tester {
   let names : Map[Int, String] = Map([])
   let heard = fn(h : String) {
     guard h.has_prefix("out ") else { return }
-    let j = @json.parse(h.view(start_offset=4).to_owned()) catch { _ => return }
+    let j = @json.parse(h.exact_view(start=4).to_owned()) catch { _ => return }
     guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { return }
     match (m.get("subscribe"), m.get("unsubscribe")) {
       (Some(Object(sub)), _) =>
@@ -202,6 +202,6 @@ test "the other bar brought into view once: its places' own subscribed, what onl
   t.draw()
   t.run_for(place_core_soon_ms * 4.0)
   let now = ahead_said(said[before:].to_owned())
-  assert_false(now.contains("unsub stations") || now.contains("sub stations"), msg="\{now}")
+  assert_false(now.contains("unsub stations") || now.contains("sub stations"), msg="\{Repr(now)}")
   assert_eq(now, ["sub connects {\"mine\":false}", "sub vaults", "unsub workspace", "unsub profiles"])
 }

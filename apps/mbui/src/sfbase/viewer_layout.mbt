@@ -26,7 +26,7 @@ pub fn viewer_folder_label(src : Source, station : String, root : String, folder
     return dv_name(folder)
   }
   let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
+    Some(i) => station.exact_view(end=i).to_owned()
     None => station
   }
   let roots = match dv_stations(src, ws).0 {

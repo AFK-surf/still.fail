@@ -76,7 +76,7 @@ test "wide: a web service's panel sliding in beside a chat, its tabs coming late
   assert_eq(side_now(r), (["service:j-web"], "service:j-web"))
   // (its column narrow at rest beside the panel: the way it took crossed chat_narrow_w)
   let widths = t.list_row_boxes().map(fn(rows) { rows.map(fn(b) { b.2 }) }).filter(fn(ws) { ws.length() > 3 })
-  assert_true(widths.length() > 0 && widths[0][0] <= @sfpages.chat_narrow_w, msg="\{widths}")
+  assert_true(widths.length() > 0 && widths[0][0] <= @sfpages.chat_narrow_w, msg="\{Repr(widths)}")
   // and out again, the tabs closed coming late as well
   // (closed by its ×: the hand's)
   t.by_hand(fn() { side_change(r, "close", Some("service:j-web")) })
@@ -139,7 +139,7 @@ fn rows_held(t : @ui.Tester, most : Double) -> (() -> (Array[(Double, Double)], 
           let b = now[now.length() - k]
           let d = (b.1 - a.1).abs()
           if d > most && failed.val == "" {
-            failed.val = "at \{t.time()}: the row \{k} from the end went \{d} at once (\{a} to \{b})"
+            failed.val = "at \{t.time()}: the row \{k} from the end went \{d} at once (\{Repr(a)} to \{Repr(b)})"
           }
         }
         crossed.push((pane(before[0]), pane(now[0])))
@@ -184,9 +184,9 @@ test "wide: a web service's panel sliding in beside a chat and out, no file in i
   t.run_as_host(@ui.move_most_ms)
   let (crossed, went) = stop()
   assert_eq(went, "")
-  assert_true(went_across(crossed, across) && went_across(crossed, @sfpages.chat_narrow_w), msg="\{crossed}")
+  assert_true(went_across(crossed, across) && went_across(crossed, @sfpages.chat_narrow_w), msg="\{Repr(crossed)}")
   let widths = t.list_row_boxes().map(fn(rows) { rows.map(fn(b) { b.2 }) }).filter(fn(ws) { ws.length() > 3 })
-  assert_true(widths.length() > 0 && widths[0][0] <= @sfpages.chat_narrow_w, msg="\{widths}")
+  assert_true(widths.length() > 0 && widths[0][0] <= @sfpages.chat_narrow_w, msg="\{Repr(widths)}")
   // and out again, the tabs closed coming late as well
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let stop = rows_held(t, 7.5)
@@ -197,7 +197,7 @@ test "wide: a web service's panel sliding in beside a chat and out, no file in i
   t.run_as_host(@ui.move_most_ms)
   let (crossed, went) = stop()
   assert_eq(went, "")
-  assert_true(went_across(crossed, across) && went_across(crossed, @sfpages.chat_narrow_w), msg="\{crossed}")
+  assert_true(went_across(crossed, across) && went_across(crossed, @sfpages.chat_narrow_w), msg="\{Repr(crossed)}")
   @ui.run_let_go()
 }
 
@@ -236,7 +236,7 @@ fn panel_way_seen(every : Double) -> Array[String] raise {
       let w = (rows[0].2 * 10.0).round() / 10.0
       let x = (rows[0].0 * 10.0).round() / 10.0
       let foot = (rows[rows.length() - 1].3 * 10.0).round() / 10.0
-      seen.push("\{phase} +\{k.to_double() * way_look_ms}: list \{x}+\{w} rows \{tops} foot \{foot} field \{composer_field_y(t)}")
+      seen.push("\{phase} +\{k.to_double() * way_look_ms}: list \{x}+\{w} rows \{@ui.list_text(tops)} foot \{foot} field \{composer_field_y(t)}")
     }
   }
   let with_tabs = chat_value.copy()

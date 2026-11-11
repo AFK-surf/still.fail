@@ -28,7 +28,7 @@ test "a row's note coming in and going over the red line of what is wrong: never
     for m in note_way_moments {
       t.run_for(asked + m - t.time())
       let over = t.words_over_now()
-      assert_true(over.is_empty(), msg="\{if said != "" { "coming in" } else { "going" }} at \{m}: \{over}")
+      assert_true(over.is_empty(), msg="\{if said != "" { "coming in" } else { "going" }} at \{m}: \{Repr(over)}")
     }
   }
 }

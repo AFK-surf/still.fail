@@ -192,14 +192,14 @@ pub fn viz_css_color(c : Int64) -> String {
 ///|
 /// Whether an HTML file is a fragment (as the viz skill has agents write them), to be drawn in the stylesheet.
 pub fn viz_is_fragment(html : String) -> Bool {
-  let head = if html.length() > 2048 { html.view(end_offset=2048).to_owned() } else { html }
+  let head = if html.length() > 2048 { html.clamped_view(end=2048).to_owned() } else { html }
   let lower = head.to_lower()
   if lower.contains("<!doctype") {
     return false
   }
   // <html followed by a space or >
   let mut at = 0
-  while lower.view(start_offset=at).find("<html") is Some(i) {
+  while lower.exact_view(start=at).find("<html") is Some(i) {
     let k = at + i + 5
     if k < lower.length() {
       let ch = lower.get_char(k).unwrap_or(' ')
@@ -267,11 +267,11 @@ pub fn viz_document(
 pub fn viz_tag_end(html : String, tag : String) -> Int {
   let lower = html.to_lower()
   let mut at = 0
-  while lower.view(start_offset=at).find(tag) is Some(i) {
+  while lower.exact_view(start=at).find(tag) is Some(i) {
     let k = at + i + tag.length()
     let next = lower.get_char(k).unwrap_or('x')
     if next == '>' || next == ' ' || next == '\n' || next == '\t' || next == '\r' {
-      match lower.view(start_offset=k).find(">") {
+      match lower.exact_view(start=k).find(">") {
         Some(j) => return k + j + 1
         None => return -1
       }
@@ -302,7 +302,7 @@ pub fn viz_page_document(html : String) -> String {
     n => n
   }
   if at >= 0 {
-    html.view(end_offset=at).to_owned() + head + html.view(start_offset=at).to_owned()
+    html.clamped_view(end=at).to_owned() + head + html.clamped_view(start=at).to_owned()
   } else {
     head + html
   }
@@ -320,7 +320,7 @@ pub fn viz_served(html : String, state : Json?, dark : Bool, ground : Int64, scr
     n => n
   }
   if at >= 0 {
-    doc.view(end_offset=at).to_owned() + tag + doc.view(start_offset=at).to_owned()
+    doc.clamped_view(end=at).to_owned() + tag + doc.clamped_view(start=at).to_owned()
   } else {
     tag + doc
   }
@@ -453,7 +453,7 @@ pub fn viz_keep(src : Source, station : String, key : String, path : String, sta
 /// A path's last part (its file's name).
 pub fn viz_base_name(path : String) -> String {
   match path.rev_find("/") {
-    Some(i) => path.view(start_offset=i + 1).to_owned()
+    Some(i) => path.exact_view(start=i + 1).to_owned()
     None => path
   }
 }
@@ -463,11 +463,11 @@ pub fn viz_base_name(path : String) -> String {
 /// extension, reloaded with what it kept since), and nothing else there is.
 pub fn file_serve(f : FilePage, req : @ui.SiteRequest, reply : @ui.SiteReply) -> Unit {
   let bare = match req.path.find("?") {
-    Some(i) => req.path.view(end_offset=i).to_owned()
+    Some(i) => req.path.exact_view(end=i).to_owned()
     None => req.path
   }
   let last = match bare.rev_find("/") {
-    Some(i) => bare.view(start_offset=i + 1).to_owned()
+    Some(i) => bare.exact_view(start=i + 1).to_owned()
     None => bare
   }
   let served = req.verb == "GET" && !last.contains(".")

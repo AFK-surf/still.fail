@@ -95,7 +95,7 @@ fn text_check(name : String) -> (Int, Int, Int) {
   for v in run.split("\n") {
     let line = v.to_owned()
     guard line.find("TEXTREC ") is Some(i) else { continue }
-    let j = @json.parse(line.view(start_offset=i + 8).to_owned()) catch {
+    let j = @json.parse(line.exact_view(start=i + 8).to_owned()) catch {
       _ => {
         skipped += 1
         continue
@@ -153,7 +153,7 @@ fn zero_width_check() -> Int {
     }
     let mut last = -1
     for i, c in cs {
-      let ch = text.view(start_offset=c.0, end_offset=c.0 + c.1)
+      let ch = text.exact_view(start=c.0, end=c.0 + c.1)
       if ch.iter().all(zw) {
         if c.2 != 0.0 {
           said.push("a zero width character at \{c.0} goes \{c.2}")

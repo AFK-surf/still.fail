@@ -65,13 +65,13 @@ test "a mouse's pointer over a panel's ground is the arrow, over what in it is p
       [(x + 3.0, y + h / 2.0), (x + w / 2.0, y + 3.0), (x + w / 2.0, y + h - 3.0), (x + w - 3.0, y + h / 2.0)]
     }
     let grounds = points.map(fn(p) { shape_at(t, p.0, p.1) })
-    assert_eq(grounds, points.map(fn(_) { Arrow }), msg="\{name}: its ground at \{points}: \{grounds}, it \{panel.rect}")
+    assert_eq(grounds, points.map(fn(_) { Arrow }), msg="\{name}: its ground at \{Repr(points)}: \{Repr(grounds)}, it \{Repr(panel.rect)}")
     let key = match t.semantics().filter(fn(s) { s.label == label && !s.hidden }) {
       [s, ..] => s.rect
       [] => fail("\{name}: no \{label}")
     }
     let over = shape_at(t, key.0 + key.2 / 2.0, key.1 + key.3 / 2.0)
-    assert_eq(over, Hand, msg="\{name}: \{label} at \{key}: \{over}")
+    assert_eq(over, Hand, msg="\{name}: \{label} at \{Repr(key)}: \{over}")
     // (a centred one's close button drawn over the top of what it holds by a point (`apart`): so on main before this,
     // none of its own; told, left to its own change. Every other fault none)
     let faults = t
@@ -79,6 +79,6 @@ test "a mouse's pointer over a panel's ground is the arrow, over what in it is p
       .filter(fn(f) {
         !(name == "panel_centred_node" && f.has_prefix("apart: ") && f.contains("icon_button_node.mbt") && f.contains("drawn over each other by 58×1"))
       })
-    assert_eq(faults, [], msg="\{name}: \{faults}")
+    assert_eq(faults, [], msg="\{name}: \{Repr(faults)}")
   }
 }

@@ -34,7 +34,7 @@ fn zf_pic(t : @ui.Tester) -> ZfPic? {
 ///|
 /// No fault found, or the test fails saying them and `what` it was.
 fn zf_none(faults : Array[String], what : String) -> Unit raise {
-  assert_true(faults.is_empty(), msg="\{what}: \{faults}")
+  assert_true(faults.is_empty(), msg="\{what}: \{Repr(faults)}")
 }
 
 ///|
@@ -102,7 +102,7 @@ fn zf_corner_faults(
     }
     let (tl, tr, br, bl) = p.corners
     if tl < corners.0 * 0.2 || tr < corners.1 * 0.2 || br < corners.2 * 0.2 || bl < corners.3 * 0.2 {
-      faults.push("\{share}: corners \{p.corners} of the thumbnail's \{corners}")
+      faults.push("\{share}: corners \{Repr(p.corners)} of the thumbnail's \{Repr(corners)}")
     }
     if tl > corners.0 + 0.01 || tl <= was {
       faults.push("\{share}: its corner \{tl} after \{was}, the thumbnail's \{corners.0}")
@@ -110,7 +110,7 @@ fn zf_corner_faults(
     was = tl
     let (l, top, r, b) = p.clip
     if l < -0.01 || top < -0.01 || r > window.0 + 0.01 || b > window.1 + 0.01 {
-      faults.push("\{share}: cut to \{p.clip}, past the window")
+      faults.push("\{share}: cut to \{Repr(p.clip)}, past the window")
     }
   }
   faults
@@ -121,7 +121,7 @@ test "zoomed past the window and closed, a picture and a film fly back with roun
   for film in [false, true] {
     // 小屏, a finger: pinched 3 times as big
     let (t, v, corners) = zf_opened(film, 2, 390.0)
-    assert_true(corners.0 > 4.0, msg="the thumbnail's corners \{corners}")
+    assert_true(corners.0 > 4.0, msg="the thumbnail's corners \{Repr(corners)}")
     zf_pinch(t, 240.0, 420.0)
     t.run_for(@ui.move_most_ms)
     let start = zf_closed(t, film, false)
@@ -143,7 +143,7 @@ fn zf_film_back_ms(from : Double) -> Double raise {
   zf_pinch(t, from, 330.0)
   t.run_for(@ui.move_most_ms)
   let (x, y, w, h) = @sf.player_picture_at(v.media.unwrap().key()).unwrap()
-  assert_true(x <= 0.0 && y <= 0.0 && x + w >= 390.0 && y + h >= 844.0, msg="over the whole window: \{(x, y, w, h)}")
+  assert_true(x <= 0.0 && y <= 0.0 && x + w >= 390.0 && y + h >= 844.0, msg="over the whole window: \{Repr((x, y, w, h))}")
   let start = zf_closed(t, true, false)
   v.fly.end() - start
 }
@@ -171,7 +171,7 @@ fn zf_stop_faults(t : @ui.Tester, v : @sfbase.Viewer, wide : Bool) -> Array[Stri
   for share in [0.25, 0.5, 0.75] {
     t.frame_at(start + (end - start) * share)
     if v.zoom.rect_at(t.time()).unwrap() != stopped {
-      faults.push("\{share}: its zoom went on, \{v.zoom.rect_at(t.time())} from \{stopped}")
+      faults.push("\{share}: its zoom went on, \{Repr(v.zoom.rect_at(t.time()))} from \{Repr(stopped)}")
     }
     match zf_pic(t) {
       Some(p) => {
@@ -227,7 +227,7 @@ test "a film pinched smaller than fitted and let go: back to fitted, as an image
   t.draw()
   t.touch(5, 240.0, 422.0)
   t.draw()
-  assert_true(@sf.player_picture_at(key).unwrap().2 < fit.2 * 0.75, msg="\{@sf.player_picture_at(key)} \{fit}")
+  assert_true(@sf.player_picture_at(key).unwrap().2 < fit.2 * 0.75, msg="\{Repr(@sf.player_picture_at(key))} \{Repr(fit)}")
   t.touch(6, 240.0, 422.0)
   t.draw()
   t.touch(2, 150.0, 422.0)
@@ -236,7 +236,7 @@ test "a film pinched smaller than fitted and let go: back to fitted, as an image
   let now = @sf.player_picture_at(key).unwrap()
   assert_true(
     (now.0 - fit.0).abs() < 0.01 && (now.1 - fit.1).abs() < 0.01 && (now.2 - fit.2).abs() < 0.01 && (now.3 - fit.3).abs() < 0.01,
-    msg="\{now} \{fit}",
+    msg="\{Repr(now)} \{Repr(fit)}",
   )
 }
 
@@ -256,11 +256,11 @@ test "a film zoomed, flung and closed: its flight back sets out where its player
     t.draw()
   }
   let last = @sf.player_picture_at(key).unwrap()
-  assert_true(last.0 > let_go.0 + 8.0, msg="flung on: \{let_go} \{last}")
+  assert_true(last.0 > let_go.0 + 8.0, msg="flung on: \{Repr(let_go)} \{Repr(last)}")
   film_frame_answered(t)
   assert_true(v.flies && !v.leaving_grab)
   let p = zf_pic(t).unwrap()
-  assert_true((p.whole.0 - last.0).abs() < 0.5 && (p.whole.2 - last.2).abs() < 0.5, msg="\{p.whole} \{last}")
+  assert_true((p.whole.0 - last.0).abs() < 0.5 && (p.whole.2 - last.2).abs() < 0.5, msg="\{Repr(p.whole)} \{Repr(last)}")
 }
 
 ///|
@@ -284,12 +284,12 @@ test "a film opened again and closed while it still flies in: back from where th
   assert_true(!v.leaving_grab, msg="no frame waited for")
   assert_eq(t.holes(), [])
   let after = zf_pic(t).unwrap()
-  assert_true(after.at.2 <= before.at.2 + 0.5, msg="\{before.at} \{after.at}")
+  assert_true(after.at.2 <= before.at.2 + 0.5, msg="\{Repr(before.at)} \{Repr(after.at)}")
   t.advance(@ui.frame_period_default)
   t.draw()
   assert_eq(t.holes(), [])
   let next = zf_pic(t).unwrap()
-  assert_true(next.at.2 < after.at.2, msg="\{after.at} \{next.at}")
+  assert_true(next.at.2 < after.at.2, msg="\{Repr(after.at)} \{Repr(next.at)}")
 }
 
 ///|
@@ -304,7 +304,7 @@ fn zf_uneven_frames(t : @ui.Tester, end : Double) -> Array[String] {
       Some(p) => {
         let (tl, tr, br, bl) = p.corners
         if (tl - tr).abs() > 0.01 || (tl - br).abs() > 0.01 || (tl - bl).abs() > 0.01 {
-          faults.push("\{end - t.time()} before its end: \{p.corners}")
+          faults.push("\{end - t.time()} before its end: \{Repr(p.corners)}")
         }
       }
       None => ()

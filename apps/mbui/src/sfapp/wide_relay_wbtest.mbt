@@ -15,7 +15,7 @@ fn relay_via_at_right(t : @ui.Tester) -> Unit raise {
   // (in line as laid out, whole points alike; not assert_eq: on its way in, each end drawn is its own place and width
   // each times the panel's scale, Tree::projected's, and two such sums may part in their last bit)
   let ends = (end_x + end_w, change.0 + change.2)
-  assert_true((ends.0 - ends.1).abs() < 0.01, msg="\{ends}")
+  assert_true((ends.0 - ends.1).abs() < 0.01, msg="\{Repr(ends)}")
 }
 
 ///|
@@ -89,7 +89,7 @@ test "wide: an @ typed in the relay's note offers the people there in a popover 
         "chat.relayMentions" => {
           let note = text(Some(params), "note")
           let (at, rows) : (Int, Array[Json]) = if note.has_suffix("@p") {
-            let before = note.view(end_offset=note.length() - 2).to_owned()
+            let before = note.exact_view(end=note.length() - 2).to_owned()
             (note.length() - 2, [
               { "id": "U1", "name": "pengxiao", "aka": "Peng Xiao", "note": before + "@pengxiao " },
               { "id": "U2", "name": "peter", "note": before + "@peter " },

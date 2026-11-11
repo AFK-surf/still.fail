@@ -172,7 +172,7 @@ test "on a Mac's tape the sidebar's first row stands under the window's buttons 
   guard first is Some(bell) else { fail("no rail place") }
   let bell_mid = bell.rect.1 + bell.rect.3 / 2.0
   assert_true((bell_mid - y).abs() < 1.0, msg="the bell's middle \{bell_mid}, the row's \{y}")
-  assert_true(bell.rect.1 >= bottom, msg="the bell \{bell.rect} under the buttons' \{bottom}")
+  assert_true(bell.rect.1 >= bottom, msg="the bell \{Repr(bell.rect)} under the buttons' \{bottom}")
 }
 
 ///|
@@ -448,7 +448,7 @@ fn drawn_from(t : @ui.Tester, left : Double) -> Array[String] {
       // (its first number: where it is across, in 1/64 px)
       let mut x = 0
       let mut sign = 1
-      for ch in line.view(start_offset=5) {
+      for ch in line.exact_view(start=5) {
         if ch == '-' {
           sign = -1
         } else if ch >= '0' && ch <= '9' {
@@ -879,7 +879,7 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   guard composer_and_panel(t) is Some((b, p)) else { fail("no composer in a panel") }
   let at = (b.x - p.x, p.x + p.w - (b.x + b.w), p.y + p.h - (b.y + b.h), 0.0)
   let concentric = @ui.capsule_in(panel, h)
-  assert_true(near4(at, (concentric, concentric, concentric, 0.0)), msg="the capsule from the panel's edges: \{at}")
+  assert_true(near4(at, (concentric, concentric, concentric, 0.0)), msg="the capsule from the panel's edges: \{Repr(at)}")
   // (as high as its buttons 4 in its ends need, a finger's 44: 52; in the tape's 42, as a circle reads it
   // (the radius as given), that stands concentric no nearer than the ranges let (4))
   let r = panel
@@ -896,7 +896,7 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   let d = @sf.foot_fit(panel, panel, panel - @sf.card_corner, least=@sf.holds_least(side))
   guard composer_and_panel(t) is Some((b, p)) else { fail("no composer in a panel") }
   let at = (b.x - p.x, p.x + p.w - (b.x + b.w), p.y + p.h - (b.y + b.h), 0.0)
-  assert_true(near4(at, (d, d, d, 0.0)), msg="the box from the panel's edges: \{at}")
+  assert_true(near4(at, (d, d, d, 0.0)), msg="the box from the panel's edges: \{Repr(at)}")
   assert_true((k - @ui.concentric(panel, d)).abs() < 0.01, msg="the box's corner: \{k}")
   assert_true(k <= @sf.card_corner + 0.01, msg="the box's corner: \{k}")
   assert_eq(s, side / 2.0)
@@ -941,7 +941,7 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   // the sidebar in use: its left corners at the window's (its ground a node of the window's tree: dock_node), the
   // page's right ones past its right edge as they will be there
   guard composer_and_panel(t) is Some((_, page)) else { fail("no composer in a panel") }
-  assert_true(near4(page.radii, (pane, edge, edge, pane)), msg="the page's panel: \{page.radii}")
+  assert_true(near4(page.radii, (pane, edge, edge, pane)), msg="the page's panel: \{Repr(page.radii)}")
   assert_true(
     t.boxes_held().iter().any(fn(b) { near4(b.radii, (edge, pane, pane, edge)) && b.x < 10.0 }),
     msg="no sidebar's panel with its left corners the window's",
@@ -957,9 +957,9 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   let d = @sf.foot_fit(pane, edge, pane - @sf.card_corner, least=@sf.holds_least(32.0))
   assert_true((d - @sf.panel_card_in).abs() < 0.01, msg="the box's place: \{d}")
   let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
-  assert_true(near4((at.0, at.1, at.2, 0.0), (d, d, d, 0.0)), msg="the box from the panel's edges: \{at}")
+  assert_true(near4((at.0, at.1, at.2, 0.0), (d, d, d, 0.0)), msg="the box from the panel's edges: \{Repr(at)}")
   let round = @ui.concentric(pane, d)
-  assert_true(near4(k.radii, (round, round, round, round)), msg="the box's corners: \{k.radii}")
+  assert_true(near4(k.radii, (round, round, round, round)), msg="the box's corners: \{Repr(k.radii)}")
   assert_eq(t.corner_faults(), [])
   // let go of: a capsule, its left end concentric with the panel's 28 (4 in), its right in the window's 11.2, too
   // square for it, as far in as the left; the box's place to the capsule's in the one change of shape
@@ -970,7 +970,7 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   // (concentric with the panel's corner where the ranges let it stand that far in, else as far in as the box was)
   let six = @sf.capsule_fit(pane, k.h, d)
   let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
-  assert_true(near4((at.0, at.1, at.2, 0.0), (six, six, six, 0.0)), msg="the capsule from the panel's edges: \{at}")
+  assert_true(near4((at.0, at.1, at.2, 0.0), (six, six, six, 0.0)), msg="the capsule from the panel's edges: \{Repr(at)}")
   assert_eq(t.corner_faults(), [])
 }
 
@@ -1125,7 +1125,7 @@ test "on the tape the panels behind the one in use stand on a ground a step dark
     // the sidebar in use: the page behind (what shows of it at the right), on the darker ground, its words drawn as
     // before
     let (mx, my, _, _) = t.rect_of("做完了：列表、跳到最新的按钮").unwrap()
-    assert_true(grounds_at(t, mx + 4.0, my).contains(behind), msg="dark \{dark}: the page's grounds \{grounds_at(t, mx + 4.0, my)}")
+    assert_true(grounds_at(t, mx + 4.0, my).contains(behind), msg="dark \{dark}: the page's grounds \{Repr(grounds_at(t, mx + 4.0, my))}")
     let (rx, ry) = t.find("首页的列表改成按天分组").unwrap()
     assert_false(grounds_at(t, rx, ry).contains(behind), msg="dark \{dark}: the sidebar's grounds")
     // the page brought over: the sidebar behind now (what shows of it at the left), the page on its own ground
@@ -1281,14 +1281,14 @@ test "on the tape a settings page opened at one of its own (⌘K's, the bell's �
   assert_true(@sfdesk.wide.tape.get())
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   page_over(t, 600.0)
-  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of(local_none)}")
+  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of(local_none))}")
 }
 
 ///|
 test "on the tape a settings page a fixture opens as the app begins (a scripted run's, a picture's) is the one in use, as a row of their list opens it: whole in the window" {
   let t = tape_settings(600.0, fn() { open_fixture_mode("settings-local-station") }, first=true)
   assert_true(@sfdesk.wide.tape.get())
-  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of(local_none)}")
+  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of(local_none))}")
 }
 
 ///|
@@ -1311,16 +1311,16 @@ test "on the tape a settings page chosen in their list shows beside it, pressed 
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   page_over(t, 600.0)
-  assert_true(settings_page_whole(t, "全局记忆 · 项目记忆", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("全局记忆 · 项目记忆")}")
+  assert_true(settings_page_whole(t, "全局记忆 · 项目记忆", 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of("全局记忆 · 项目记忆"))}")
   // a level further in from the page in use: a station's memory, then one of its pages
   t.tap_text("Willow")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(settings_page_whole(t, "发布流程", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("发布流程")}")
+  assert_true(settings_page_whole(t, "发布流程", 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of("发布流程"))}")
   t.tap_text("发布流程")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(settings_page_whole(t, "checklist", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("checklist")}")
+  assert_true(settings_page_whole(t, "checklist", 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of("checklist"))}")
 }
 
 ///|

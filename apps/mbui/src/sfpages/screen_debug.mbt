@@ -482,12 +482,13 @@ fn device_combos(s : ScreenSess, cased : DeviceCase?) -> Array[Combo] {
 
 ///|
 /// One line of the log as `screen.logs` says it: when (its time of day), how serious, which app, what.
+#derive(Eq)
 priv struct DebugLine {
   at : String
   level : String
   app : String
   words : String
-} derive(Eq)
+}
 
 ///|
 /// What debugs an app holds, the pane beside the device's and the 日志 panel's alike: what the panel's nodes read of it

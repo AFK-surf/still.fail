@@ -22,6 +22,7 @@
 /// (no workspace yet, every account answered: entry_tree.mbt); the splash's nodes while the workspaces are read or fail
 /// to be (app.mbt's reading_tree); a window of its own, its page in the tree's frame (app.mbt's lone_tree); or nothing
 /// while the window's width is not known yet (the tree made before its first frame).
+#derive(Eq)
 priv enum ShellIs {
   Stacked
   Taped
@@ -30,7 +31,7 @@ priv enum ShellIs {
   Reading
   Lone
   Unsized
-} derive(Eq)
+}
 
 ///|
 /// Which shell the signed-in app is in for a window `width` wide (app_tree).

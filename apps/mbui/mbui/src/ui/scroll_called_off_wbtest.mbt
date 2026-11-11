@@ -8,13 +8,14 @@
 /// What one way came to: whether the list was held pulled past its top as it was called off or let go, and let go
 /// as that was told (before any frame); where what it pulled is and whether it moves at `at` + `then`; the end said
 /// for its way back; and where it is, whether it moves, at that end.
+#derive(Eq, Debug)
 struct OffWay {
   pulled : Bool
   let_go : Bool
   then : (Double, Bool)
   rest : Double
   at_rest : (Double, Bool)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A finger down on the list at (200, 300) and 10 moves down to 400, then held still: pulled 100 past its top.
@@ -103,7 +104,7 @@ fn assert_off(now : OffWay, late : OffWay) -> Unit raise {
   assert_eq(late, now)
   assert_true(
     now.pulled && now.let_go && now.then.0 > 0.0 && now.then.1 && now.at_rest == (0.0, false),
-    msg="\{now}",
+    msg="\{Repr(now)}",
   )
 }
 

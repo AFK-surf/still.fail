@@ -32,7 +32,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
   assert_true(picture_mine_at_end(t), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("已允许使用 Axiom 查询 token") is Some(_))
   // each message's box to tick in a column of its own before them (and before their pictures out in the margin)
-  assert_true(ticks_before_words(t, @sf.message_avatar_reach), msg=t.all(Checkbox, label="放进图片").map(fn(n) { n.rect }).to_string())
+  assert_true(ticks_before_words(t, @sf.message_avatar_reach), msg=Repr(t.all(Checkbox, label="放进图片").map(fn(n) { n.rect })).to_string())
   t.click(Button, label="复制图片")
   t.frame()
   assert_eq(t.shots().length(), 1)
@@ -41,7 +41,7 @@ test "wide: 分享图片 from the chat's info: the picture as it would be over t
     Some(png) =>
       match png_size(png) {
         Some((pw, ph)) => {
-          assert_true(pw == 1520 && ph > 600, msg="\{(pw, ph)}")
+          assert_true(pw == 1520 && ph > 600, msg="\{Repr((pw, ph))}")
           assert_eq(t.clipboard_label(), "still.fail")
         }
         None => fail("not a PNG")
@@ -70,7 +70,7 @@ test "wide: a vault request's outcome line has its dot in the middle of its word
   // (the words as the theme sets a meta line: the dot by that line's middle, not by a line of a height of its own; the
   // chat's own line under the picture's too)
   let lines = t.text_runs().filter(fn(r) { r.text.contains("本对话内") })
-  assert_true(lines.length() > 0 && lines.all(fn(r) { r.text == "已允许使用 Axiom 查询 token · 本对话内" }), msg="\{lines}")
+  assert_true(lines.length() > 0 && lines.all(fn(r) { r.text == "已允许使用 Axiom 查询 token · 本对话内" }), msg="\{Repr(lines)}")
   for r in lines {
     let mid = (r.top + r.bottom) / 2.0
     let dots = t.boxes().filter(fn(b) { b.w == 6.0 && b.h == 6.0 && b.x < r.x0 && b.y >= r.top - 6.0 && b.y <= r.bottom })

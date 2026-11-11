@@ -59,7 +59,7 @@ fn independent_wide_pop_case(pop : Bool, intermediate : Bool, legacy : Bool, cov
   client.receive_json({ "id": Json::number(prefs_sub.id.to_double()), "value": Json::object(prefs_value) })
   t.frame()
   guard client.peek_topic("chat", params=@sfbase.core_topic_params("chat", params)) is Some(chat_sub) else {
-    fail("chat subscription missing after opening: \{sent}")
+    fail("chat subscription missing after opening: \{Repr(sent)}")
   }
   if old_reader is Some(old) {
     assert_true(physical_equal(old, chat_sub), msg="the page shares the legacy reader's original subscription")

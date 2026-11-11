@@ -84,7 +84,7 @@ test "code's colours read by a node: plain till the core says them, then that no
   t.draw()
   assert_eq(made, [before[0] + 1, before[1]], msg="that node alone, once")
   let said = ink_runs(inkn_a, inkn_said, theme().dark).map(fn(r) { r.color })
-  assert_true(said.length() > 1 && said.iter().all(fn(c) { c != 0L }), msg="\{said}")
+  assert_true(said.length() > 1 && said.iter().all(fn(c) { c != 0L }), msg="\{Repr(said)}")
   assert_eq(inkn_colours(inkn_a), said)
   assert_eq(inkn_colours(inkn_b), [0L])
   // (asked no more: it is here)

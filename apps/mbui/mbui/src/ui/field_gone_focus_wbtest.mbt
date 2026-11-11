@@ -52,7 +52,7 @@ test "a field with the focus no longer shown: the focus not left in it, nothing 
     for tree in [true, false] {
       let (ime, words) = field_gone(tree, platform)
       let msg = "tree \{tree}, platform \{platform}"
-      assert_false(ime.0, msg="\{msg}: the input method up for what does not show: \{ime}")
+      assert_false(ime.0, msg="\{msg}: the input method up for what does not show: \{Repr(ime)}")
       assert_eq(words, "a", msg="\{msg}: typed into what does not show: \{words}")
     }
   }

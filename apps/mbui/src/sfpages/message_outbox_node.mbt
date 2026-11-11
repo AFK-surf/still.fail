@@ -9,12 +9,13 @@
 ///|
 /// What is under what was sent from here (outbox_row's order): what did not go, nothing (followed), its time (the
 /// station has it), 正在发送.
+#derive(Eq)
 priv enum OutboxUnder {
   OutUnsent
   OutNothing
   OutTime
   OutSending
-} derive(Eq)
+}
 
 ///|
 /// What is under `o` now.

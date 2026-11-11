@@ -50,13 +50,13 @@ fn whole_from(frames : Array[(Double, Array[String])], words : Array[String], la
   guard shown.length() > 0 else { fail("\{at}: never shown") }
   for f in frames {
     if f.0 < late - 1.0 && f.1.length() > 0 {
-      fail("\{at}: \{f.1} at \{f.0} ms, before its whole row was answered (\{late} ms)")
+      fail("\{at}: \{Repr(f.1)} at \{f.0} ms, before its whole row was answered (\{late} ms)")
     }
   }
   let first = shown[0].0
   for f in frames {
     if f.0 >= first && f.1.length() != words.length() {
-      fail("\{at}: at \{f.0} ms only \{f.1} of \{words}")
+      fail("\{at}: at \{f.0} ms only \{Repr(f.1)} of \{Repr(words)}")
     }
   }
   if first > due + 4.0 * @ui.frame_period_default {

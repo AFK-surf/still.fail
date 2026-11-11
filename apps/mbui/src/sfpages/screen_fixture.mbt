@@ -63,7 +63,7 @@ pub fn open_screen_fixture(mode : String) -> Unit {
     return
   }
   let m = if mode.has_suffix("-dark") {
-    mode.view(end_offset=mode.length() - 5).to_owned()
+    mode.exact_view(end=mode.length() - 5).to_owned()
   } else {
     mode
   }

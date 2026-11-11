@@ -42,17 +42,17 @@ test "a page's list flung into its end: what it shows at each moment the same at
     let (a, ad, ar) = met_at(platform, 1000.0 / 60.0)
     // (it met its end and showed past it)
     if !a.iter().any(fn(f) { f.2.abs() > 0.01 }) || a.last().unwrap().1 != 40.0 * 50.0 - 844.0 {
-      differ.push("\{platform}: not past its end: \{a}")
+      differ.push("\{platform}: not past its end: \{Repr(a)}")
     }
     for period in [1000.0 / 120.0, 0.0] {
       let (b, bd, br) = met_at(platform, period)
       if ar != br {
-        differ.push("\{platform} at \{period}: at rest at \{br}, at 60 Hz \{ar}")
+        differ.push("\{platform} at \{period}: at rest at \{Repr(br)}, at 60 Hz \{Repr(ar)}")
       }
       for k in 0..<a.length() {
         // (the same moment, however its time was summed: to a millionth of a ms; what shows then to a millionth)
         if (a[k].0 - b[k].0).abs() > 1.0e-6 || (a[k].1 - b[k].1).abs() > 1.0e-6 || (a[k].2 - b[k].2).abs() > 1.0e-6 {
-          differ.push("\{platform} at \{period}: \{b[k]}, at 60 Hz \{a[k]}")
+          differ.push("\{platform} at \{period}: \{Repr(b[k])}, at 60 Hz \{Repr(a[k])}")
           break
         }
         let alike = ad[k].length() == bd[k].length() &&
@@ -61,7 +61,7 @@ test "a page's list flung into its end: what it shows at each moment the same at
             (0).until(ad[k][i].length()).iter().all(fn(j) { (ad[k][i][j] - bd[k][i][j]).abs() <= 1.0e-6 })
           })
         if !alike {
-          differ.push("\{platform} at \{period}: drawn at \{a[k].0} \{bd[k][:imin(3, bd[k].length())]}, at 60 Hz \{ad[k][:imin(3, ad[k].length())]}")
+          differ.push("\{platform} at \{period}: drawn at \{a[k].0} \{Repr(bd[k][:imin(3, bd[k].length())])}, at 60 Hz \{Repr(ad[k][:imin(3, ad[k].length())])}")
           break
         }
       }
@@ -195,7 +195,7 @@ test "a page's list grown above what is in sight as it moves by itself: what is 
         (0).until(was.length()).iter().all(fn(i) {
           (0).until(was[i].length()).iter().all(fn(j) { (was[i][j] - now[i][j]).abs() <= 1.0e-6 })
         })
-      assert_true(alike, msg="\{platform} \{name}: drawn \{was[:imin(2, was.length())]}, grown \{now[:imin(2, now.length())]}")
+      assert_true(alike, msg="\{platform} \{name}: drawn \{Repr(was[:imin(2, was.length())])}, grown \{Repr(now[:imin(2, now.length())])}")
       assert_true((y - (x + grown_by)).abs() < 1.0e-6, msg="\{platform} \{name}: at \{y}, was \{x}")
       assert_eq(rest_now, rest, msg="\{platform} \{name}")
       assert_true((end - (end_alone + grown_by)).abs() < 1.0e-6, msg="\{platform} \{name}: at rest at \{end}, not grown \{end_alone}")
@@ -303,11 +303,11 @@ test "a page's list flung down toward its foot, what it holds grown on its way: 
     for platform in [0, 1, 2] {
       let (after, end, most) = grown_down(platform, grown.0, grown.1)
       match after.iter().find_first(fn(f) { f.1 != 0.0 && (f.0 - f.2).abs() > 1.0e-6 }) {
-        Some(f) => fail("\{platform} \{grown}: past its end \{f.1} at \{f.0} of \{f.2}")
+        Some(f) => fail("\{platform} \{Repr(grown)}: past its end \{f.1} at \{f.0} of \{f.2}")
         None => ()
       }
-      assert_true((end - most).abs() < 1.0e-6, msg="\{platform} \{grown}: at rest at \{end} of \{most}")
-      assert_true(platform == 0 || after.iter().any(fn(f) { f.1 != 0.0 }), msg="\{platform} \{grown}: never past its foot")
+      assert_true((end - most).abs() < 1.0e-6, msg="\{platform} \{Repr(grown)}: at rest at \{end} of \{most}")
+      assert_true(platform == 0 || after.iter().any(fn(f) { f.1 != 0.0 }), msg="\{platform} \{Repr(grown)}: never past its foot")
     }
   }
 }
@@ -450,7 +450,7 @@ test "a page's list flung down, what is under it measured shorter as it is let g
     below.set(shrunk_from - (s.most() - at))
     t.draw()
     let rest = s.glides_till()
-    assert_true(rest is Some(r) && r > t.time(), msg="\{platform}: at rest at \{rest}, now \{t.time()}")
+    assert_true(rest is Some(r) && r > t.time(), msg="\{platform}: at rest at \{Repr(rest)}, now \{t.time()}")
     let mut past = false
     let end = t.time() + grown_rest_ms
     while t.time() < end {
@@ -523,16 +523,16 @@ test "a page's list's wheel notch: when it is at rest said from what it was as i
   for notches in [1, 2] {
     let (rest, at_end, after, then) = notch_rests(notches, 0.0)
     assert_true(rest is Some(_), msg="\{notches}: not moving by itself")
-    assert_true(after.iter().all(fn(x) { x == at_end }), msg="\{notches}: at rest at \{at_end}, after \{after}")
+    assert_true(after.iter().all(fn(x) { x == at_end }), msg="\{notches}: at rest at \{at_end}, after \{Repr(after)}")
     assert_eq(then, None)
     ones.push(rest)
     for period in [1000.0 / 60.0, 1000.0 / 120.0, 1000.0 / 24.0, 1000.0 / 7.0] {
       let got = notch_rests(notches, period)
-      assert_eq(got, (rest, at_end, after, then), msg="\{notches} at \{period}: \{got}, in one jump \{(rest, at_end, after, then)}")
+      assert_eq(got, (rest, at_end, after, then), msg="\{notches} at \{period}: \{Repr(got)}, in one jump \{Repr((rest, at_end, after, then))}")
     }
   }
   // (turned again, said again: at rest later than the one alone)
-  assert_true(ones[1].unwrap() > ones[0].unwrap(), msg="\{ones}")
+  assert_true(ones[1].unwrap() > ones[0].unwrap(), msg="\{Repr(ones)}")
 }
 
 ///|

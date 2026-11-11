@@ -80,7 +80,7 @@ test "what reads where a zoom shows is told as that changes, by any way it chang
   assert_true(near_rect(shown.get(), 50.0, 50.0, 100.0, 100.0))
   // (the stage larger, the picture's middle where it was, then kept centred: nothing to bring in sight)
   z.resize_keeping(300.0, 300.0, Some((0.5, 0.5)), 0.0, when=now())
-  assert_true(near_rect(z.rect(cur()), 100.0, 100.0, 100.0, 100.0), msg="\{z.rect(cur())}")
+  assert_true(near_rect(z.rect(cur()), 100.0, 100.0, 100.0, 100.0), msg="\{Repr(z.rect(cur()))}")
   assert_eq(shown.get(), z.rect(cur()))
 }
 
@@ -106,7 +106,7 @@ test "what reads where a zoom shows is not told where nothing it shows changed, 
   b.transform(200.0, 200.0, 1.5, 0.0, 0.0, at=now())
   shown.get() |> ignore
   assert_eq(reads.val, first)
-  assert_true(b.rect(cur()) != b_was, msg="\{b.rect(cur())}")
+  assert_true(b.rect(cur()) != b_was, msg="\{Repr(b.rect(cur()))}")
   // (a small one kept centred in its stage, pushed against its edges, pinched by nothing: as it was, told nothing)
   let c = @kit.Zoom::new()
   c.natural(100.0, 100.0, at=now())
@@ -157,7 +157,7 @@ test "a glide cut short at a moment goes on from where it was then, a frame samp
   assert_eq(glide_cut(false, tapped), glide_cut(true, tapped))
   // (cut short midway: neither where it set out nor where it went)
   let mid = glide_cut(false, fn(_z) {  }).unwrap()
-  assert_true(mid.2 > 100.0 && mid.2 < 300.0, msg="\{mid}")
+  assert_true(mid.2 > 100.0 && mid.2 < 300.0, msg="\{Repr(mid)}")
 }
 
 ///|
@@ -208,7 +208,7 @@ test "a pan told at a moment between frames starts from where the glide has it t
   let ten = pan_after_frame(10.0)
   assert_eq(pan_after_frame(15.0), ten)
   // (by then it had left where it set out)
-  assert_true(ten.unwrap().2 > 100.0, msg="\{ten}")
+  assert_true(ten.unwrap().2 > 100.0, msg="\{Repr(ten)}")
 }
 
 ///|
@@ -288,7 +288,7 @@ test "a glide the window's tree tells at a moment sets out from that moment, the
   let one = glide_told_by_tree([])
   assert_eq(one, each)
   // (on its way by then, from 1050)
-  assert_true(one.unwrap().2 > 100.0, msg="\{one}")
+  assert_true(one.unwrap().2 > 100.0, msg="\{Repr(one)}")
 }
 
 ///|

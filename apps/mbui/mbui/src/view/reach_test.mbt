@@ -60,10 +60,10 @@ test "reach: a button smaller than its room is pressed from round it each way, i
   let id = b.val.unwrap().id()
   assert_eq(b.val.unwrap().rect(), (100.0, 100.0, 36.0, 36.0))
   for p in [(118.0, 97.0), (118.0, 139.0), (97.0, 118.0), (139.0, 118.0), (97.0, 97.0), (139.5, 139.5)] {
-    assert_eq(t.target_at(p.0, p.1), Pressed(id), msg="\{p}")
+    assert_eq(t.target_at(p.0, p.1), Pressed(id), msg="\{Repr(p)}")
   }
   for p in [(118.0, 95.0), (118.0, 140.5), (95.0, 118.0), (141.0, 118.0)] {
-    assert_eq(t.target_at(p.0, p.1), Pressed(sheet), msg="\{p}")
+    assert_eq(t.target_at(p.0, p.1), Pressed(sheet), msg="\{Repr(p)}")
   }
   // a press there presses it
   assert_true(t.press(118.0, 97.0))
@@ -242,8 +242,8 @@ test "reach: a press let go in its room is on what it went down on; the pointer 
   // the pointer there: it pointed at, as a press there finds
   for p in [(118.0, 97.0), (139.0, 118.0), (97.0, 139.0)] {
     t.point_at(p.0, p.1)
-    assert_eq(t.pointed_now(), Some(id), msg="\{p}")
-    assert_eq(t.pointed_of(t.target_at(p.0, p.1)), Some(id), msg="\{p}")
+    assert_eq(t.pointed_now(), Some(id), msg="\{Repr(p)}")
+    assert_eq(t.pointed_of(t.target_at(p.0, p.1)), Some(id), msg="\{Repr(p)}")
   }
   t.point_at(118.0, 94.0)
   assert_eq(t.pointed_now(), Some(sheet))

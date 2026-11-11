@@ -131,7 +131,7 @@ fn screen_played(mode : String, opening : Double) -> @ui.Tester raise {
   for v in text.split("\n") {
     if v.has_prefix("VIEWSAID ") {
       if framed {
-        ignore(t.view_said(v.view(start_offset=9).to_owned()))
+        ignore(t.view_said(v.exact_view(start=9).to_owned()))
       }
       continue
     }

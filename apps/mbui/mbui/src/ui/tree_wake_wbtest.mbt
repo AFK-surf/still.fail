@@ -29,7 +29,7 @@ test "a node leaving: its leaving's end waited for (next_wake), not idle before 
     None => ()
   }
   let left = view_tree().unwrap().drawn().length()
-  assert_eq((ahead, idle, shown - left, t.next_wake().map(fn(w) { w.0 })), (true, false, 1, None), msg="\{waited} \{from}")
+  assert_eq((ahead, idle, shown - left, t.next_wake().map(fn(w) { w.0 })), (true, false, 1, None), msg="\{Repr(waited)} \{from}")
 }
 
 ///|
@@ -56,7 +56,7 @@ test "steps for a stretch: waited for to their last, not idle before it; run on 
     Some(at) => t.run_for(at - t.time())
     None => ()
   }
-  assert_eq((waited is Some(_), before, done, t.next_wake()), (true, (true, true), [0, 1, 2, 3, 4], None), msg="\{waited} \{done} \{t.next_wake()} \{t.time()} \{g().rest_why()}")
+  assert_eq((waited is Some(_), before, done, t.next_wake()), (true, (true, true), [0, 1, 2, 3, 4], None), msg="\{Repr(waited)} \{Repr(done)} \{Repr(t.next_wake())} \{t.time()} \{g().rest_why()}")
 }
 
 ///|

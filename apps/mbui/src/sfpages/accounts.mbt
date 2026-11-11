@@ -1306,7 +1306,7 @@ fn profile_share_node(
     let all = stations()
     match all.search_by(fn(x) { text(Some(x), "id") == sid }) {
       Some(i) => text(Some(all[i]), "name")
-      None => sid.view(end_offset=@cmp.minimum(8, sid.length())).to_owned()
+      None => sid.clamped_view(end=@cmp.minimum(8, sid.length())).to_owned()
     }
   }
   let subscription = fn() { text(field(p(), "access"), "kind") == "subscription" }

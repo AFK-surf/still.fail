@@ -95,6 +95,7 @@ test "words laid out only as they are held, under a cover holding through: held 
 /// (handed_lost's): nothing; the press called off instead of let go; or, let go, before a frame: the words not shown in
 /// the frame it comes to (shown in the one after), a modal layer over them, their old view taking no presses, the
 /// window's tree made anew, a press on a button of the tree's (as it goes down now, or `same`: said to go down at the moment the first did).
+#derive(Debug)
 enum After {
   Nothing
   Off
@@ -103,7 +104,7 @@ enum After {
   Inert
   Anew
   Button(same~ : Bool)
-} derive(Show)
+}
 
 ///|
 /// Words laid out only as they are held under a cover holding through (picked_through's), a button of the tree's below
@@ -188,7 +189,7 @@ fn handed_lost(after : After) -> Bool {
 ///|
 test "a hold handed through and not taken yet: called off, or let go and, before a frame, what it was held on not shown in the frame it came to, a modal layer over it, its old view taking no presses, the tree made anew, another press down (on a button of the tree's; at the same moment as it): picks nothing later" {
   let picked = [Off, Hidden, Modal, Inert, Anew, Button(same=false), Button(same=true)].filter(handed_lost).map(fn(a) {
-    "\{a}"
+    "\{Repr(a)}"
   })
   assert_eq(picked, [])
   // (none of them: picked, as picked_through has it)
@@ -273,8 +274,8 @@ fn picked_under(swiped : Bool, frames : Bool) -> ((Int, Int, Bool), Int, Array[S
 test "words under a cover a finger drags only once held, the finger moved past the slop at once and let go: nothing picked, nothing felt; under one holding through, held past a long press: the word picked once (a hold handed through felt by none, as ever); frames or none" {
   for frames in [true, false] {
     let (picked, took, said, felt) = picked_under(true, frames)
-    assert_eq((picked.2, took, said, felt), (false, 0, ["cover press", "cover drag Off"], []), msg="swiped, frames \{frames}: \{picked}")
+    assert_eq((picked.2, took, said, felt), (false, 0, ["cover press", "cover drag Off"], []), msg="swiped, frames \{frames}: \{Repr(picked)}")
     let held = picked_under(false, frames)
-    assert_eq(held, ((0, 5, true), 1, ["cover press", "cover drag Off"], []), msg="held, frames \{frames}: \{held}")
+    assert_eq(held, ((0, 5, true), 1, ["cover press", "cover drag Off"], []), msg="held, frames \{frames}: \{Repr(held)}")
   }
 }

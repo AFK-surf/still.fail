@@ -215,7 +215,7 @@ fn changelog_real_walk() -> RealSeen {
   let look = fn(stage : String) {
     let seam = seams()
     if seam.length() > 0 && !faults.iter().any(fn(f) { f.has_prefix("seam") }) {
-      faults.push("seams between a card's pieces at \{stage}: \{seam}")
+      faults.push("seams between a card's pieces at \{stage}: \{Repr(seam)}")
     }
     let kept = t.tree_frames()
     t.tree_frames_from_now()
@@ -327,7 +327,7 @@ fn changelog_real_walk() -> RealSeen {
 /// counted, least and most.
 fn real_said(seen : RealSeen) -> String {
   let stages = ["open", "down", "up", "tab", "tab back"]
-  let lines = ["whole once made \{seen.real_h}; asked: \{seen.asks}", "the whole down, by pages asked: \{seen.wholes}"]
+  let lines = ["whole once made \{seen.real_h}; asked: \{Repr(seen.asks)}", "the whole down, by pages asked: \{Repr(seen.wholes)}"]
   for s in stages {
     let fs = seen.frames.filter(fn(f) { f.0 == s })
     let most = fn(get : ((String, @ui.TreeFrame, Int, Double)) -> Double) {
@@ -346,7 +346,7 @@ test "更新日志 of the beta's size, opened 窄排法, scrolled to its end, ba
   let seen = changelog_real_walk()
   println(real_said(seen))
   // (its pages asked as it came near their last: a page, then more, each tab's own)
-  assert_true(seen.asks.contains("{\"limit\":30}") && seen.asks.contains("{\"limit\":60}"), msg="\{seen.asks}")
-  assert_true(seen.asks.iter().any(fn(a) { a.contains("station") }), msg="\{seen.asks}")
+  assert_true(seen.asks.contains("{\"limit\":30}") && seen.asks.contains("{\"limit\":60}"), msg="\{Repr(seen.asks)}")
+  assert_true(seen.asks.iter().any(fn(a) { a.contains("station") }), msg="\{Repr(seen.asks)}")
   assert_eq(seen.faults, [])
 }

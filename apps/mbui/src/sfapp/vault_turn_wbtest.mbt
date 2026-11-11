@@ -211,7 +211,7 @@ test "the disclosure mark is centred on the result's first line" {
     let mark = t.shape_boxes().iter().find_first(fn(s) {
       s.0.has_prefix("sf/icon/chevron-right/12") && s.1 >= x && s.1 <= x + w + 20.0 && (s.2 - y).abs() < 20.0
     }).unwrap()
-    assert_true((mark.2 + mark.4 / 2.0 - y - h / 2.0).abs() < 0.5, msg="the mark and the words share the first line's centre: \{mark}, \{(x, y, w, h)}")
+    assert_true((mark.2 + mark.4 / 2.0 - y - h / 2.0).abs() < 0.5, msg="the mark and the words share the first line's centre: \{Repr(mark)}, \{Repr((x, y, w, h))}")
   }
 }
 

@@ -6,6 +6,7 @@
 /// What an edge's run comes to (edge_seen): whether the edge is held as the finger goes down; held once the tree is
 /// brought to the hold's end; the sidebar's width after each move; held after the release; the pane in use as the press
 /// on the page is let go (no frame after it), and once the tape's move had its while.
+#derive(Eq, Debug)
 priv struct EdgeSeen {
   down : Bool
   held : Bool
@@ -13,7 +14,7 @@ priv struct EdgeSeen {
   after : Bool
   pressed : @sfdesk.TapePane
   rest : @sfdesk.TapePane
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// 中屏 on the tape (a finger's, 720 wide), the sidebar in use: a finger down on the sidebar's edge at `t0`, held
@@ -86,8 +87,8 @@ test "中屏: the sidebar's edge on the tape held, dragged and let go by a finge
     rest: @sfdesk.TapePane::Page,
   }
   let none = edge_seen(false)
-  assert_eq(stepped, want, msg="frames all along: \{stepped}; no frame: \{none}")
-  assert_eq(none, want, msg="no frame: \{none}")
+  assert_eq(stepped, want, msg="frames all along: \{Repr(stepped)}; no frame: \{Repr(none)}")
+  assert_eq(none, want, msg="no frame: \{Repr(none)}")
 }
 
 ///|
@@ -124,8 +125,8 @@ test "中屏: what shows of the page where the sidebar's edge reaches over it pr
   let want = (@sfdesk.TapePane::Page, @sfdesk.TapePane::Page)
   let stepped = edge_page_pressed(true)
   let none = edge_page_pressed(false)
-  assert_eq(stepped, want, msg="frames before: \{stepped}; none: \{none}")
-  assert_eq(none, want, msg="none: \{none}")
+  assert_eq(stepped, want, msg="frames before: \{Repr(stepped)}; none: \{Repr(none)}")
+  assert_eq(none, want, msg="none: \{Repr(none)}")
 }
 
 ///|
@@ -296,7 +297,7 @@ test "中屏: the sidebar's edge by a mouse: hidden at rest; pointed at, its bar
   t.run_for(edge_look_ms)
   assert_true(@sfdesk.wide.edge_held.get(), msg="pressed: in hand")
   guard edge_bar_drawn(t) is Some((x2, h2, held_ink)) else { fail("in hand: not shown") }
-  assert_true((x2, h2) == (x1, s12) && held_ink != on_ink, msg="in hand: \{(x2, h2, held_ink)}, on it \{(x1, on_ink)}")
+  assert_true((x2, h2) == (x1, s12) && held_ink != on_ink, msg="in hand: \{Repr((x2, h2, held_ink))}, on it \{Repr((x1, on_ink))}")
   assert_eq((said_at(t, "调整侧边栏宽度").unwrap(), covered(t, "收起侧边栏").unwrap()), (room, page), msg="in hand: where it was")
   // (dragged 20 wider: the width, the page beside it and the edge 20 on, its bar with it)
   t.move_to(ex + 20.0, ey)

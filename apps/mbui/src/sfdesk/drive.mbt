@@ -128,7 +128,7 @@ pub fn row_took(c : @ui.Ctx) -> Bool {
 /// A station's name, as the workspace's stations list has it (its address while not known).
 pub fn station_name(src : Source, station : String) -> String {
   let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
+    Some(i) => station.exact_view(end=i).to_owned()
     None => station
   }
   match dv_stations(src, ws).0 {

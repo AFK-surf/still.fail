@@ -6,11 +6,12 @@
 ///|
 /// How a chart stands as the core has said (mermaid_charts, as mermaid_made says it changed): made (its SVG, its
 /// picture, its width and height), refused, or coming (asked, or not yet).
+#derive(Eq)
 priv enum MermaidNow {
   NowComing
   NowMade(Bytes, String, Double, Double)
   NowRefused
-} derive(Eq)
+}
 
 ///|
 /// A ```mermaid block (viz_mermaid_block's) in `v`, its code as `code` says it as it changes: its chart, drawn as a
@@ -111,7 +112,7 @@ fn mermaid_ways_node(
 fn mermaid_full(station : String, svg : Bytes, w : Double, h : Double) -> Unit {
   let a : Attachment = {
     name: "Mermaid.svg",
-    path: "draft:mermaid/" + @zip.sha256(svg).view(end_offset=16).to_owned(),
+    path: "draft:mermaid/" + @zip.sha256(svg).exact_view(end=16).to_owned(),
     size: svg.length().to_double(),
     width: w,
     height: h,

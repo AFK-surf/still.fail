@@ -56,7 +56,7 @@ fn gives_said(t : Tester, ids : Map[String, @view.View], rows : Int) -> String {
   }
   t.wheel(200.0, 60.0, -(30.0 * rows.to_double() + 600.0))
   t.run_for(move_most_ms)
-  "h \{h} foot \{foot} last \{last} whole \{whole}"
+  "h \{h} foot \{some_text(foot)} last \{some_text(last)} whole \{whole}"
 }
 
 ///|

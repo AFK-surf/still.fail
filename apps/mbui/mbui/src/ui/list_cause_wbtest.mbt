@@ -177,7 +177,7 @@ test "a list opened at its foot: each block made once, none let go" {
   let twice = c.made.iter().filter(fn(e) { e.1 != 1 }).collect()
   assert_eq(twice, [])
   assert_eq(c.gone.length(), 0)
-  assert_true(c.drawn().contains(29) && !c.drawn().contains(0), msg="\{c.drawn()}")
+  assert_true(c.drawn().contains(29) && !c.drawn().contains(0), msg="\{Repr(c.drawn())}")
 }
 
 ///|
@@ -201,7 +201,7 @@ test "at its top, a key in the middle of what shows gone: that block alone let g
   assert_eq(gone.get(3), Some(1))
   assert_eq(cause_let_go(before, c.drawn(), gone), [])
   // (the one come into sight at its foot, made: its drawing alone)
-  assert_eq(painted, made.length(), msg="contents' drawings made again: \{painted}, blocks made \{made}")
+  assert_eq(painted, made.length(), msg="contents' drawings made again: \{painted}, blocks made \{Repr(made)}")
 }
 
 ///|
@@ -211,9 +211,9 @@ test "scrolled up off its foot, a key appended out of sight: nothing made, none 
   c.t.run_for(move_most_ms)
   let before = c.drawn()
   let (made, gone, painted) = c.change([Array::makei(31, fn(i) { i })])
-  assert_eq(made.length(), 0, msg="\{made}")
+  assert_eq(made.length(), 0, msg="\{Repr(made)}")
   // (one made past the list's edge, out of sight, may be let go as the list is laid out again: none in sight)
-  assert_eq(gone.to_array().filter(fn(e) { before.contains(e.0) }), [], msg="\{gone}, drawn \{before}")
+  assert_eq(gone.to_array().filter(fn(e) { before.contains(e.0) }), [], msg="\{Repr(gone)}, drawn \{Repr(before)}")
   assert_eq(painted, 0, msg="contents' drawings made again: \{painted}")
   assert_eq(c.drawn(), before)
 }

@@ -76,7 +76,7 @@ pub let asks_kept : Ref[Bool] = Ref(true)
 /// An answer not kept: said on the output for scripts/kept, an error for the asker.
 fn not_kept(ask : Map[String, Json]) -> Result[(Json, Bytes?), Json]? {
   println((if asks_kept.val { "kept-answers-ask " } else { "PACE-UNKEPT " }) + Json::object(ask).stringify())
-  Some(Err({ "code": "not_kept", "message": "the core's answer to \{ask.get("call").unwrap()} is not kept: apps/mbui/scripts/kept" }))
+  Some(Err({ "code": "not_kept", "message": "the core's answer to \{match ask.get("call").unwrap() { String(s) => "String(\{s})"; call => Repr(call).to_string() }} is not kept: apps/mbui/scripts/kept" }))
 }
 
 ///|
@@ -253,7 +253,7 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
                 Some(Object(s)) if s.get(query) is Some(at) => Some(Ok(({ "at": at }, None)))
                 _ => {
                   let (markdown, text) = match key.split("\u{1}").next() {
-                    Some(m) => (m == "md", key.view(start_offset=m.length() + 1).to_owned())
+                    Some(m) => (m == "md", key.exact_view(start=m.length() + 1).to_owned())
                     None => (false, key)
                   }
                   not_kept({
@@ -288,7 +288,7 @@ fn book_text(key : String) -> String {
     Some(Object(entry)) if entry.get("text") is Some(String(t)) => t
     _ =>
       match key.split("\u{1}").next() {
-        Some(m) => key.view(start_offset=m.length() + 1).to_owned()
+        Some(m) => key.exact_view(start=m.length() + 1).to_owned()
         None => key
       }
   }

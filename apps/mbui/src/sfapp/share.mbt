@@ -624,7 +624,7 @@ fn shared_head(c : @ui.Ctx, source : String, head : String?, look : ShareLook) -
   // (the title said once: what follows it in the words shared under it, a phone's app having put it first)
   let source = match head {
     Some(h) if source.trim().has_prefix(h) && source.trim().length() > h.length() =>
-      source.trim().view(start_offset=h.length()).to_owned().trim().to_owned()
+      source.trim().exact_view(start=h.length()).to_owned().trim().to_owned()
     _ => source
   }
   c.box(

@@ -92,7 +92,7 @@ pub fn station_peek_part(c : @ui.Ctx, address : String) -> Unit {
             // (none of its own: its name's first letter)
             let name = peek_name(core, address)
             if name.length() > 0 {
-              c.text(name.view(end_offset=1).to_owned(), style=peek_part_name) |> ignore
+              c.text(name.clamped_view(end=1).to_owned(), style=peek_part_name) |> ignore
             }
           }
         })
@@ -438,7 +438,7 @@ fn station_peek_node(v : @view.View, core : Core, address : String, close : () -
 /// The workspace of station `address` (`ws/station`).
 fn peek_scope(address : String) -> String {
   match address.find("/") {
-    Some(i) => address.view(end_offset=i).to_owned()
+    Some(i) => address.exact_view(end=i).to_owned()
     None => address
   }
 }

@@ -14,7 +14,7 @@ test "a post that asks with no card or options has 忽略 alone under it; presse
   let (_, ly) = t.find(last).unwrap()
   // (its 忽略: the one under it, not the options card's further up)
   let under = t.words().filter(fn(w) { w.0 == "忽略" && w.2 > ly && w.5 > 0.0 })
-  assert_eq(under.length(), 1, msg="\{t.words().map(fn(w) { (w.0, w.2) })}")
+  assert_eq(under.length(), 1, msg="\{Repr(t.words().map(fn(w) { (w.0, w.2) }))}")
   let (_, x, y, w, h, _) = under[0]
   t.tap(x + w / 2.0, y + h / 2.0)
   t.draw()
@@ -63,7 +63,7 @@ test "a login card says whom it waits on over it while it is asked" {
     }
   })
   t.run_for(@ui.move_most_ms)
-  guard t.find("等 林 登录") is Some((_, ay)) else { fail("\{t.words().map(fn(w) { w.0 })}") }
+  guard t.find("等 林 登录") is Some((_, ay)) else { fail("\{Repr(t.words().map(fn(w) { w.0 }))}") }
   let (_, cy) = t.find("在 Willow 上登录 gh").unwrap()
   assert_true(ay < cy, msg="\{ay} \{cy}")
 }

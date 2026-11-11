@@ -201,7 +201,7 @@ test "touch wide: an agent's history as the agent writes builds no old view's ro
   assert_true(t.find(more[more.length() - 1]) is Some(_))
   for k in 0..<more.length() {
     let built = built_at[k + 1] - built_at[k]
-    assert_true(built == 0, msg="\{more[k]}: \{built} built (\{whys})")
+    assert_true(built == 0, msg="\{more[k]}: \{built} built (\{Repr(whys)})")
   }
 }
 
@@ -284,7 +284,7 @@ test "the desk's history beside a chat: a wheel up 60 at a time over turns whose
       seen = seen + 1
       match now.get(k) {
         Some(y2) if (y2 - y - 60.0).abs() <= 1.5 => ()
-        other => moved.push("turn \{i}, group \{k}: \{y} to \{other}")
+        other => moved.push("turn \{i}, group \{k}: \{y} to \{Repr(other)}")
       }
     }
   }

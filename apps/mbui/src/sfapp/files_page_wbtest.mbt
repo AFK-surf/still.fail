@@ -85,7 +85,7 @@ test "a list's sort controls have room to press with either native input" {
     t.run_for(@ui.move_most_ms)
     assert_true(t.find("名称") is Some(_), msg="the list's headings")
     let faults = t.room_faults().filter(fn(f) { f.contains("「名称」") || f.contains("「大小」") || f.contains("「修改时间」") })
-    assert_eq(faults, [], msg="\{platform}: \{faults}")
+    assert_eq(faults, [], msg="\{platform}: \{Repr(faults)}")
   }
 }
 
@@ -361,7 +361,7 @@ test "a phone's folder: a name changed in place, its row kept in view over the s
   match t.focused() {
     Some(n) => {
       let (_, fy, _, fh) = n.rect
-      assert_true(fy >= 0.0 && fy + fh <= 844.0 - keyboard_h, msg="\{n.rect}")
+      assert_true(fy >= 0.0 && fy + fh <= 844.0 - keyboard_h, msg="\{Repr(n.rect)}")
       assert_true(n.value.has_prefix("首页截图"), msg=n.value)
     }
     None => fail("no field has the focus")
@@ -476,11 +476,11 @@ fn go_chosen(t : @ui.Tester) -> String {
 ///|
 test "前往文件夹 on each screen: a dialog in the middle, its field focused; a station's name typed offers it, Tab its folders" {
   for sc in go_screens() {
-    let about = "\{sc}"
+    let about = "\{Repr(sc)}"
     let t = go_up(sc.0, sc.1, sc.2)
     let (x, y, w, _) = t.rect_of("前往文件夹…").unwrap()
     let (dx, _, dw, _) = t.get(@ui.Role::Dialog).rect
-    assert_true((dx + dw / 2.0 - sc.1 / 2.0).abs() < 1.0 && x >= dx && x + w <= dx + dw && y > 0.0, msg="\{about}: its title \{(x, y, w)}")
+    assert_true((dx + dw / 2.0 - sc.1 / 2.0).abs() < 1.0 && x >= dx && x + w <= dx + dw && y > 0.0, msg="\{about}: its title \{Repr((x, y, w))}")
     assert_true(t.focused() is Some(n) && n.role is TextField, msg="\{about}: the field focused")
     assert_true(t.find("↑↓ 选择 · Tab 补全 · ⏎ 前往") is Some(_), msg=about)
     t.type_text("wil")
@@ -498,7 +498,7 @@ test "前往文件夹 on each screen: a dialog in the middle, its field focused;
 ///|
 test "前往文件夹 on each screen: a folder's row pressed goes there, the dialog gone" {
   for sc in go_screens() {
-    let about = "\{sc}"
+    let about = "\{Repr(sc)}"
     let t = go_up(sc.0, sc.1, sc.2)
     t.type_text("willow:~/")
     t.run_for(@ui.move_most_ms)
@@ -571,7 +571,7 @@ fn go_word(t : @ui.Tester, words : String) -> (Double, Double, Double, Double) {
 ///|
 test "前往文件夹 on each screen: its note, its field, its rows a row apart, Tab at the chosen one's end, its keys under them" {
   for sc in go_screens() {
-    let about = "\{sc}"
+    let about = "\{Repr(sc)}"
     let t = go_up(sc.0, sc.1, sc.2)
     t.type_text("willow:~/")
     t.run_for(@ui.move_most_ms)
@@ -584,15 +584,15 @@ test "前往文件夹 on each screen: its note, its field, its rows a row apart,
     let keys = go_word(t, "↑↓ 选择 · Tab 补全 · ⏎ 前往")
     let mid = fn(r : (Double, Double, Double, Double)) { r.1 + r.3 / 2.0 }
     // top to bottom: the note, the field, the rows, the keys
-    assert_true(note.1 + note.3 <= field.1, msg="\{about}: \{note}, \{field}")
-    assert_true(field.1 + field.3 <= first.1, msg="\{about}: \{field}, \{first}")
-    assert_true(third.1 + third.3 <= keys.1, msg="\{about}: \{third}, \{keys}")
+    assert_true(note.1 + note.3 <= field.1, msg="\{about}: \{Repr(note)}, \{Repr(field)}")
+    assert_true(field.1 + field.3 <= first.1, msg="\{about}: \{Repr(field)}, \{Repr(first)}")
+    assert_true(third.1 + third.3 <= keys.1, msg="\{about}: \{Repr(third)}, \{Repr(keys)}")
     // the rows' words lined up, as far apart each from the next
     assert_true((first.0 - second.0).abs() < 1.0 && (second.0 - third.0).abs() < 1.0, msg=about)
     assert_true(((second.1 - first.1) - (third.1 - second.1)).abs() < 1.0, msg=about)
     // Tab on the chosen one's line, after its words; the keys where the note starts
-    assert_true((mid(tab) - mid(first)).abs() < 1.0 && tab.0 > first.0 + first.2, msg="\{about}: \{tab}, \{first}")
-    assert_true((keys.0 - note.0).abs() < 1.0, msg="\{about}: \{keys}, \{note}")
+    assert_true((mid(tab) - mid(first)).abs() < 1.0 && tab.0 > first.0 + first.2, msg="\{about}: \{Repr(tab)}, \{Repr(first)}")
+    assert_true((keys.0 - note.0).abs() < 1.0, msg="\{about}: \{Repr(keys)}, \{Repr(note)}")
   }
 }
 
@@ -717,16 +717,16 @@ test "添加到收藏's stations: under what it says, one under another, 离线 
     let lead = which_word(t, "选择一台 station，然后选择要收藏的文件夹")
     let under = lead.1 + lead.3
     let (willow, maple, off) = (which_word(t, "Willow", below=under), which_word(t, "Maple", below=under), which_word(t, "离线", below=under))
-    assert_true(lead.1 + lead.3 <= willow.1 && willow.1 + willow.3 <= maple.1, msg="\{about}: \{lead}, \{willow}, \{maple}")
+    assert_true(lead.1 + lead.3 <= willow.1 && willow.1 + willow.3 <= maple.1, msg="\{about}: \{Repr(lead)}, \{Repr(willow)}, \{Repr(maple)}")
     // (their names on one line down, in from the lead by their marks)
-    assert_true((willow.0 - maple.0).abs() < 0.5 && willow.0 > lead.0, msg="\{about}: \{willow}, \{maple}")
-    assert_true(off.0 > maple.0 + maple.2 && (mid(off) - mid(maple)).abs() < 2.0, msg="\{about}: \{maple}, \{off}")
+    assert_true((willow.0 - maple.0).abs() < 0.5 && willow.0 > lead.0, msg="\{about}: \{Repr(willow)}, \{Repr(maple)}")
+    assert_true(off.0 > maple.0 + maple.2 && (mid(off) - mid(maple)).abs() < 2.0, msg="\{about}: \{Repr(maple)}, \{Repr(off)}")
     // (each row as wide as the panel's words at least: in a dialog out past them at its sides)
     let row = t.all(Button, label="Maple").filter(fn(b) { b.rect.1 >= under })[0].rect
     if screen.1 {
-      assert_true(row.0 < lead.0 && row.0 + row.2 > lead.0 + lead.2, msg="\{about}: \{row}, the lead \{lead}")
+      assert_true(row.0 < lead.0 && row.0 + row.2 > lead.0 + lead.2, msg="\{about}: \{Repr(row)}, the lead \{Repr(lead)}")
     } else {
-      assert_true(row.0 <= lead.0 + 0.5 && row.0 + row.2 >= lead.0 + lead.2 - 0.5, msg="\{about}: \{row}, the lead \{lead}")
+      assert_true(row.0 <= lead.0 + 0.5 && row.0 + row.2 >= lead.0 + lead.2 - 0.5, msg="\{about}: \{Repr(row)}, the lead \{Repr(lead)}")
     }
   }
 }

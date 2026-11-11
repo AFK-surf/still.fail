@@ -444,7 +444,7 @@ test "window tree: a message the frame takes makes a node over an old view talle
   // (that frame: the old view built for its room under the taller node, its words drawn there)
   let words_y = t.words().filter(fn(w) { w.0 == "page" }).map(fn(w) { w.2 })
   assert_eq(rooms.last(), Some((390.0, 744.0)))
-  assert_true(words_y.length() == 1 && words_y[0] >= 100.0, msg="\{words_y}")
+  assert_true(words_y.length() == 1 && words_y[0] >= 100.0, msg="\{Repr(words_y)}")
   // (and pressed there)
   tree_tap(t, 50.0, 120.0)
   assert_eq(taps.val, 1)

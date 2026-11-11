@@ -59,7 +59,7 @@ fn md_words(j : Json, text : String) -> String? {
   match j {
     String(s) => Some(s)
     Array([Number(a,..),Number(b,..)]) if a >= 0.0 && b >= a && b <= text.length().to_double() =>
-      Some(text.view(start_offset=a.to_int(), end_offset=b.to_int()).to_owned())
+      Some(text.clamped_view(start=a.to_int(), end=b.to_int()).to_owned())
     _ => None
   }
 }
@@ -196,6 +196,7 @@ pub fn md_node_depth(node : Json) -> Int? {
 /// `screen`, `job`); a pull request's or an issue's (`peek`: "pull", "issue": its card over it that one's, bars while it
 /// is read). `bare`: its words are its address (a Markdown link's: it may read as what it names). Nothing here reads a
 /// link's address for it.
+#derive(Eq)
 pub(all) struct LinkTo {
   chat : Bool
   card : String
@@ -204,7 +205,7 @@ pub(all) struct LinkTo {
   job : String
   peek : String
   bare : Bool
-} derive(Eq)
+}
 
 ///|
 /// A link to none of those: a web page's, a file's.

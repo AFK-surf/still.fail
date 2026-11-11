@@ -27,7 +27,7 @@ test "sheet: a field under it keeps neither the focus, what is typed nor its inp
     open.val = true
     to_rest(t, "s")
     assert_eq(t.focused().map(fn(s) { s.label }), None, msg=at)
-    assert_false(t.ime().0, msg="\{at}: no field while it is up: \{t.ime()}")
+    assert_false(t.ime().0, msg="\{at}: no field while it is up: \{Repr(t.ime())}")
     assert_false(t.get(@ui.Role::TextField, label="Sheet field").focused, msg=at)
     t.type_text("a")
     t.draw()
@@ -37,7 +37,7 @@ test "sheet: a field under it keeps neither the focus, what is typed nor its inp
     assert_false(open.val, msg=at)
     to_rest(t, "s")
     assert_eq(t.focused().map(fn(s) { s.label }), Some("Page field"), msg=at)
-    assert_true(t.ime().0, msg="\{at}: given back: \{t.ime()}")
+    assert_true(t.ime().0, msg="\{at}: given back: \{Repr(t.ime())}")
     t.type_text("b")
     t.draw()
     assert_eq((page.text(), inner.text()), ("b", ""), msg=at)

@@ -112,7 +112,7 @@ test "corners of the window's tree: a node's ground shown only while pointed at,
   assert_eq(
     (wants(rest, follow), wants(lit, follow), tree.pointed, tree.pressing, wants(after, follow)),
     (true, true, None, None, true),
-    msg="\{rest}\n\{lit}",
+    msg="\{Repr(rest)}\n\{Repr(lit)}",
   )
 }
 
@@ -446,7 +446,7 @@ test "corners of the window's tree: an old view's box said concentric (radius=In
   let halved = own.0.map(fn(r) { (r.0 / 2.0, r.1 / 2.0, r.2 / 2.0, r.3 / 2.0) })
   // (as an old view's own: not all alike)
   let unlike = own.0.length() == 1 && own.0[0].0 != own.0[0].1
-  assert_eq((unlike, hosted, half), (true, own, (halved, [])), msg="\{own}")
+  assert_eq((unlike, hosted, half), (true, own, (halved, [])), msg="\{Repr(own)}")
 }
 
 ///|
@@ -647,12 +647,12 @@ fn scrolled_faults(view : (Ctx) -> Unit) -> (Int, Int, Int) {
 test "corners: cards in a list in a panel, scrolled to its top, its middle and its end: near a corner only at its ends, concentric there (16 in a 42, 26); 12 in with a 24 said at its ends; 40 in, none; in the middle, none" {
   assert_eq(scrolled_faults(scrolled_cards(16.0, 26.0, 16.0)), (0, 0, 0))
   let (top, middle, end) = scrolled_faults(scrolled_cards(12.0, 24.0, 12.0))
-  assert_true(top > 0 && end > 0, msg="\{(top, middle, end)}")
+  assert_true(top > 0 && end > 0, msg="\{Repr((top, middle, end))}")
   assert_eq(middle, 0)
   assert_eq(scrolled_faults(scrolled_cards(40.0, 24.0, 16.0)), (0, 0, 0))
   // (as far in from its sides as a 26 follows a 42 from, but 10 from its top and foot: said at its ends)
   let (top, middle, end) = scrolled_faults(scrolled_cards(16.0, 26.0, 10.0))
-  assert_true(top > 0 && end > 0, msg="\{(top, middle, end)}")
+  assert_true(top > 0 && end > 0, msg="\{Repr((top, middle, end))}")
   assert_eq(middle, 0)
   // (corners unlike: its foot's right one 10, too square for a card 16 in to follow: that corner alone, the others
   // judged each by their own)
@@ -689,7 +689,7 @@ test "corners of the window's tree: a round key 12 in a node's 20, 6 and 10 in, 
   assert_eq(
     (off, taking.length() > 0, off_again, taking_again.length() > 0),
     ([], true, [], true),
-    msg="\{off} | \{taking} | \{off_again} | \{taking_again}",
+    msg="\{Repr(off)} | \{Repr(taking)} | \{Repr(off_again)} | \{Repr(taking_again)}",
   )
 }
 
@@ -725,7 +725,7 @@ test "the corner rule, a box said concentric whose foot is at the card's corner'
   // (a hundredth inside: near it, its edges at 6 and 19.99, said)
   let inside = inner_foot_faults(94.01)
   assert_eq((at_radius, a_hair_in), ([], []))
-  assert_true(inside.length() == 1, msg="\{inside}")
+  assert_true(inside.length() == 1, msg="\{Repr(inside)}")
 }
 
 ///|

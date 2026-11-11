@@ -33,13 +33,13 @@ test "the keyboard's trackpad: the caret it draws goes as far as the finger, bet
   let field = Field::new()
   field.set("hello brave world\nnext one")
   let t = float_tester(field)
-  guard carets_drawn() is [c0] else { fail("one caret: \{carets_drawn()}") }
+  guard carets_drawn() is [c0] else { fail("one caret: \{Repr(carets_drawn())}") }
   float_at(text_float_begin, 100.0, 300.0)
   t.draw()
   // a little more than a letter and a half on: the one it draws that far exactly, a little bigger, see-through
   float_at(text_float_move, 113.25, 300.0)
   t.draw()
-  guard carets_drawn() is [f] else { fail("only the trackpad's, near the caret: \{carets_drawn()}") }
+  guard carets_drawn() is [f] else { fail("only the trackpad's, near the caret: \{Repr(carets_drawn())}") }
   assert_eq(f[0] + f[2] / 2.0, c0[0] + c0[2] / 2.0 + 13.25)
   assert_eq(f[2], c0[2] + float_caret_grow_w)
   assert_eq(f[3], c0[3] + float_caret_grow_h)
@@ -103,13 +103,13 @@ test "the keyboard's trackpad let go: the caret it drew slides to where the care
   // the caret stays where it went
   assert_eq(field.selection(), sel)
   t.run_for(float_caret_back_ms / 2.0)
-  guard carets_drawn() is [mid] else { fail("one caret sliding: \{carets_drawn()}") }
+  guard carets_drawn() is [mid] else { fail("one caret sliding: \{Repr(carets_drawn())}") }
   assert_true(mid[0] != at[0])
   assert_true(mid[11] > at[11] && mid[11] < 1.0)
   t.run_for(float_caret_back_ms)
   let st = g().editors.get(g().focus).unwrap()
   assert_true(st.floating is None)
-  guard carets_drawn() is [c] else { fail("the caret: \{carets_drawn()}") }
+  guard carets_drawn() is [c] else { fail("the caret: \{Repr(carets_drawn())}") }
   assert_eq(c[2], caret_w)
   assert_eq(c[11], 1.0)
   // landed where the field's caret was drawn grey as it was let go
@@ -157,7 +157,7 @@ test "the keyboard's trackpad let go: its caret's way back the same at each mome
     let (mid, end, drawn) = slid_back(step)
     // (the same two moments looked at, exactly)
     assert_eq((drawn[drawn.length() - 1], drawn.filter(fn(a) { a == jump.2[0] }).length()), (jump.2[1], 1))
-    assert_eq((mid, end), (jump.0, jump.1), msg="frames at \{drawn}")
+    assert_eq((mid, end), (jump.0, jump.1), msg="frames at \{Repr(drawn)}")
   }
   // (on its way half way back, then the caret at rest)
   assert_true(jump.0[0] != jump.1[0])
@@ -188,13 +188,13 @@ test "the keyboard's trackpad let go: each frame of its caret's way back asked f
   let landed = frames.filter(fn(f) { f.at > landing + 1000.0 / 60.0 && f.at < landing + caret_blink_ms })
   let blinked = frames.filter(fn(f) { f.at >= landing + caret_blink_ms })
   assert_true(on_way.length() > 2, msg="\{on_way.length()} frames on its way")
-  assert_true(on_way.all(fn(f) { f.asked && f.changed }), msg="\{on_way}")
+  assert_true(on_way.all(fn(f) { f.asked && f.changed }), msg="\{Repr(on_way)}")
   // (none but the frame the tap's blink asked for before the trackpad took the caret: a wake once asked kept till its
   // frame, as the fake host keeps it and macOS's and iOS's do, mac_app.m and ios_app.m wake_for; nothing in it changed)
   let tap_wake = frames.filter(fn(f) { f.at >= tapped + caret_blink_ms })[0].at
-  assert_true(landed.length() > 2, msg="\{landed}")
+  assert_true(landed.length() > 2, msg="\{Repr(landed)}")
   assert_eq(landed.filter(fn(f) { f.asked || f.changed }).map(fn(f) { (f.at, f.asked, f.changed) }), [(tap_wake, true, false)], msg="tapped at \{tapped}, let go at \{went}")
   // (its first blink's frame, the last, asked for, and no caret drawn in it)
-  assert_true(blinked.length() == 1 && blinked[0].asked, msg="landed at \{landing}: \{blinked}")
+  assert_true(blinked.length() == 1 && blinked[0].asked, msg="landed at \{landing}: \{Repr(blinked)}")
   assert_eq(carets_drawn(), [], msg="at \{t.time()}")
 }

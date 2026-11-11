@@ -303,7 +303,7 @@ test "a requested frame of a scripted scene is the same picture that its film wr
     let t = @ui.Tester::new(film_frame_view(Ref(0)))
     t.set_frame_period(1000.0 / 120.0)
     let (reached, logs) = t.film_frame(script, k)
-    assert_true(reached, msg="frame \{k}: \{logs}")
+    assert_true(reached, msg="frame \{k}: \{Repr(logs)}")
     assert_eq(t.frame_hash(), pictures[k], msg="frame \{k}")
   }
   let t = @ui.Tester::new(film_frame_view(Ref(0)))

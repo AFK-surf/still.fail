@@ -246,7 +246,7 @@ test "a toast coming in, what holds the toaster let go: none of it left, read ou
       @kit.toast_rest("toast") <= t.time(),
     ),
     ((true, true), true, true, None, true, true),
-    msg="\{t.moving()} \{t.rest_why()}",
+    msg="\{Repr(t.moving())} \{t.rest_why()}",
   )
 }
 

@@ -27,16 +27,31 @@ fn sheet_over_rows() -> FixedArray[Double] {
 test "what an opaque sheet covers wholly is left out, what its round corners might show kept" {
   let d = @damage.Damage::new()
   // (the rows from 140 on under it; the ground under it only in part, the row at 40 above it)
-  inspect(
+  debug_inspect(
     kept(d, sheet_over_rows()),
-    content="[(0, 0, 400, 300, 0), (0, 40, 400, 50, 0), (16, 60, 100, 10, 1), (0, 100, 400, 200, 0)]",
+    content=(
+      #|[
+      #|  (0, 0, 400, 300, 0),
+      #|  (0, 40, 400, 50, 0),
+      #|  (16, 60, 100, 10, 1),
+      #|  (0, 100, 400, 200, 0),
+      #|]
+    ),
   )
   // (a row reaching under the band its top corners curve in, kept)
   let a = sheet_over_rows()
   a[3 * 60 + 1] = 120.0
-  inspect(
+  debug_inspect(
     kept(d, a),
-    content="[(0, 0, 400, 300, 0), (0, 40, 400, 50, 0), (16, 60, 100, 10, 1), (0, 120, 400, 50, 0), (0, 100, 400, 200, 0)]",
+    content=(
+      #|[
+      #|  (0, 0, 400, 300, 0),
+      #|  (0, 40, 400, 50, 0),
+      #|  (16, 60, 100, 10, 1),
+      #|  (0, 120, 400, 50, 0),
+      #|  (0, 100, 400, 200, 0),
+      #|]
+    ),
   )
 }
 
@@ -207,7 +222,7 @@ test "a frame that moves only its headers is left out of as all of it asked agai
     groups(fresh)
     let (s0, n0) = fresh.occlude(a, 7, 400.0, 300.0)
     let moved = d.occlude_moved(a, 7, 400.0, 300.0, [1, 5]).map(fn(o) { shown(o.0, o.1) })
-    assert_eq(moved, Some(shown(s0, n0)), msg="\{p}")
+    assert_eq(moved, Some(shown(s0, n0)), msg="\{Repr(p)}")
   }
   // (a group set again: asked whole)
   groups(d)

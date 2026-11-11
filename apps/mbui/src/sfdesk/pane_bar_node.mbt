@@ -8,12 +8,13 @@
 ///|
 /// What a page's bar on the tape shows (pane_page's: @sf.PageBar's, its title the one the bar shows), compared by
 /// what it shows: back's words (none: no back), the title, what the page is of, what it is for.
+#derive(Eq)
 priv struct PaneBarSaid {
   back : String?
   title : String
   small : String
   about : String
-} derive(Eq)
+}
 
 ///|
 /// The bar in `parent`, as `said` says it as it changes (none: nothing in it), back done by `back` as it is pressed; the

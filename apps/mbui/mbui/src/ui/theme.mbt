@@ -735,10 +735,22 @@ pub fn Ctx::with_theme(self : Ctx, t : Theme, body : () -> Unit) -> Unit {
 
 ///|
 /// Which way words and rows run (Radix's DirectionProvider, CSS's `dir`).
+#derive(Eq, Debug)
 pub(all) enum Direction {
   Ltr
   Rtl
-} derive(Eq, Show, Debug)
+}
+
+///|
+/// By its name, as the gallery writes it: what `derive(Show)` wrote.
+pub impl Show for Direction with output(self, logger) {
+  logger.write_string(
+    match self {
+      Ltr => "Ltr"
+      Rtl => "Rtl"
+    },
+  )
+}
 
 ///|
 /// The direction in force where the view is building.

@@ -167,7 +167,7 @@ test "list: laid from its end and short of its view, no frame the wheel scrolls 
     t.frame()
   }
   t.each_frame(None)
-  assert_true(firsts.length() > 0 && firsts.iter().all(fn(y) { y == 250.0 }), msg="\{firsts}")
+  assert_true(firsts.length() > 0 && firsts.iter().all(fn(y) { y == 250.0 }), msg="\{Repr(firsts)}")
 }
 
 ///|
@@ -502,7 +502,7 @@ test "list: a finger's list scrolled draws no scroll bar, and is at rest once it
   t.move_to(100.0, 100.0)
   t.wheel(100.0, 100.0, 300.0)
   t.run_for(@ui.scrollbar_fade_ms)
-  assert_true(t.drawn_rects().iter().all(fn(r) { r.2 != 3.0 }), msg="\{t.drawn_rects()}")
+  assert_true(t.drawn_rects().iter().all(fn(r) { r.2 != 3.0 }), msg="\{Repr(t.drawn_rects())}")
   let rest = t.ctx().list_rest("list")
   if rest > t.time() {
     t.run_for(rest - t.time())

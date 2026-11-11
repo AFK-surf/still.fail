@@ -83,10 +83,11 @@ fn Paint::content_units(self : Paint) -> Units {
 }
 
 ///|
+#derive(Eq)
 priv enum ContextElement {
   UseNode
   PathNode
-} derive(Eq)
+}
 
 ///|
 priv struct Fill {
@@ -150,10 +151,11 @@ priv struct Mask {
 }
 
 ///|
+#derive(Eq)
 priv enum PaintOrder {
   FillAndStroke
   StrokeAndFill
-} derive(Eq)
+}
 
 ///|
 priv struct SPath {

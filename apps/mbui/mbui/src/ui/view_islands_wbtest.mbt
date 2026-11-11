@@ -73,10 +73,10 @@ test "window tree: two old views side by side: each in its own room and place, c
   let w = islands()
   assert_eq(rects_of(w.t, islands_green), [(0.0, 0.0, 195.0, 844.0, 255L)])
   let red = rects_of(w.t, islands_red)
-  assert_true(red.length() == 1 && red[0].0 == 195.0 && red[0].4 >= 126L && red[0].4 <= 129L, msg="\{red}")
+  assert_true(red.length() == 1 && red[0].0 == 195.0 && red[0].4 >= 126L && red[0].4 <= 129L, msg="\{Repr(red)}")
   // (wider than its room, cut to it)
   let clip = w.t.drawn_instances().filter(fn(i) { i[5] == 0.0 && i[0] == 195.0 && i[2] == 400.0 })
-  assert_true(clip.length() == 1 && clip[0][18] <= 390.0, msg="\{clip.map(fn(i) { (i[16], i[17], i[18], i[19]) })}")
+  assert_true(clip.length() == 1 && clip[0][18] <= 390.0, msg="\{Repr(clip.map(fn(i) { (i[16], i[17], i[18], i[19]) }))}")
 }
 
 ///|
@@ -199,10 +199,10 @@ fn islands_read_late(where_read : String, in_row? : Bool = false) -> Unit raise 
   tree_tap(t, 300.0, 400.0)
   t.each_frame(None)
   let taken = frames.filter(fn(f) { f.0 == 1 })
-  assert_true(taken.length() > 0, msg="\{where_read}, in a row \{in_row}: the press not taken: \{frames}")
-  assert_eq(taken[0].1, [islands_red], msg="\{where_read}, in a row \{in_row}: the frame the press was taken in: \{frames}")
-  assert_eq(taken[0].2, 0, msg="\{where_read}, in a row \{in_row}: the one between, built again in the frame the press was taken in: \{frames}")
-  assert_eq(taps.val, 1, msg="\{where_read}, in a row \{in_row}: the press taken once: \{frames}")
+  assert_true(taken.length() > 0, msg="\{where_read}, in a row \{in_row}: the press not taken: \{Repr(frames)}")
+  assert_eq(taken[0].1, [islands_red], msg="\{where_read}, in a row \{in_row}: the frame the press was taken in: \{Repr(frames)}")
+  assert_eq(taken[0].2, 0, msg="\{where_read}, in a row \{in_row}: the one between, built again in the frame the press was taken in: \{Repr(frames)}")
+  assert_eq(taps.val, 1, msg="\{where_read}, in a row \{in_row}: the press taken once: \{Repr(frames)}")
 }
 
 ///|
@@ -219,7 +219,7 @@ test "window tree: one old view let go: what it read no longer followed, the oth
   assert_eq(w.builds_a.val, built)
   assert_eq(rects_of(w.t, islands_green), [])
   let red = rects_of(w.t, islands_red)
-  assert_true(red.length() == 1 && red[0].0 == 0.0, msg="\{red}")
+  assert_true(red.length() == 1 && red[0].0 == 0.0, msg="\{Repr(red)}")
   assert_true(w.b.watched())
 }
 

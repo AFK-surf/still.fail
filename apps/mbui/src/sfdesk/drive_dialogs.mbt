@@ -261,12 +261,13 @@ fn picker_body(v : @view.View, src : Source, p : @sfbase.FolderPick) -> Unit {
 ///|
 /// What the picker shows under its filter: the folder read, one it cannot read (or failed to), nothing there (or
 /// nothing found), or its rows.
+#derive(Eq)
 priv enum PickerShows {
   PickerReading
   PickerShut
   PickerNone
   PickerListed
-} derive(Eq)
+}
 
 ///|
 fn picker_shows() -> PickerShows {
@@ -331,9 +332,9 @@ fn picker_rows() -> Array[String] {
 fn picker_entry_of(key : String) -> PickerEntry? {
   let v = dialogs.value.get()
   let (list, path) = if key.has_prefix("d\n") {
-    (picker_entries(v, "places"), key.view(start_offset=2).to_owned())
+    (picker_entries(v, "places"), key.exact_view(start=2).to_owned())
   } else {
-    (picker_entries(v, "entries"), key.view(start_offset=2).to_owned())
+    (picker_entries(v, "entries"), key.exact_view(start=2).to_owned())
   }
   list.iter().find_first(fn(e) { e.path == path })
 }
@@ -561,7 +562,7 @@ fn way_of(here : Json) -> Array[(String, String)] {
   let under = home != "" && (path == home_path || path.has_prefix(home + "/"))
   let way : Array[(String, String)] = [if under { (@sf.t("web-pages.drive.home"), home_path) } else { ("/", "/") }]
   let mut at = if under { home } else { "" }
-  let rest = if under { path.view(start_offset=home.length()).to_owned() } else { path }
+  let rest = if under { path.exact_view(start=home.length()).to_owned() } else { path }
   for part in rest.split("/") {
     if part != "" {
       at = at + "/" + part.to_owned()

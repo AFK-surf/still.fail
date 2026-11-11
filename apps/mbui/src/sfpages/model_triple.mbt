@@ -95,7 +95,7 @@ pub fn effort_text(effort : String) -> String {
   } else if effort == "" {
     effort
   } else {
-    effort.view(end_offset=1).to_upper().to_owned() + effort.view(start_offset=1).to_owned()
+    effort.clamped_view(end=1).to_upper().to_owned() + effort.clamped_view(start=1).to_owned()
   }
 }
 
@@ -626,7 +626,7 @@ fn triple_body(
   let kind_asked = if !sheet {
     contents.kind
   } else if at.has_prefix("kind:") {
-    at.view(start_offset=5).to_owned()
+    at.exact_view(start=5).to_owned()
   } else {
     triple_no_kind
   }

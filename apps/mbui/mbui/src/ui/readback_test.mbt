@@ -40,7 +40,7 @@ test "a row's height read as the view builds is this frame's, in the frame it ch
     fn(c) {
       let h = c.list_row_height("rows", 0)
       c.column(fn() {
-        c.text("row 0: \{h}", wrap=false) |> ignore
+        c.text("row 0: \{@ui.some_text(h)}", wrap=false) |> ignore
         c.list("rows", 3, 40.0, fn(i) {
           c.box(w=Fill(1.0), h=Px(if i == 0 { tall.val } else { 40.0 }), fn() {  }) |> ignore
         })
@@ -107,7 +107,7 @@ test "a list in a scope of its own is read back by the id it has there" {
         ignore(c.list_place("rows"))
         let h = c.list_row_height("rows", 0)
         c.column(fn() {
-          c.text("row 0: \{h}", wrap=false) |> ignore
+          c.text("row 0: \{@ui.some_text(h)}", wrap=false) |> ignore
           c.list("rows", 3, 40.0, fn(i) {
             c.box(w=Fill(1.0), h=Px(if i == 0 { tall.val } else { 40.0 }), fn() {  }) |> ignore
           })

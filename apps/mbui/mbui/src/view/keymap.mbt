@@ -13,21 +13,23 @@
 
 ///|
 /// A key as a binding says it: its code and exactly the modifiers held (ui's key codes and mods).
+#derive(Eq, Debug)
 pub(all) struct Stroke {
   code : Int
   mods : Int
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Where a binding works, of the contexts said by the chain a node is in (View::key_context) and the facts of the key
 /// itself (Tree::stroke's: the focus in a field, `Field`): GPUI's context predicate, without `>`.
+#derive(Eq, Debug)
 pub(all) enum KeyWhen {
   Always
   In(String)
   Not(KeyWhen)
   All(Array[KeyWhen])
   Any(Array[KeyWhen])
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Whether it holds where `has` says which contexts are.
@@ -156,19 +158,21 @@ fn WhenParse::any(self : WhenParse) -> KeyWhen? {
 
 ///|
 /// Keys (one after another where more than one) that do `action` where `when` holds.
+#derive(Eq, Debug)
 pub(all) struct Binding {
   keys : Array[Stroke]
   action : String
   when : KeyWhen
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A tree's keys: its bindings, a later one before an earlier (what a person changed put after what the app has), and
 /// how long a sequence under way waits for its next key before it ends (None: till a cause ends it).
+#derive(Eq, Debug)
 pub(all) struct Keymap {
   bindings : Array[Binding]
   pending_ms : Double?
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub fn Keymap::new(bindings : Array[Binding], pending_ms? : Double? = None) -> Keymap {
@@ -178,6 +182,7 @@ pub fn Keymap::new(bindings : Array[Binding], pending_ms? : Double? = None) -> K
 ///|
 /// Why the last sequence of keys under way ended (Tree::keys_ended): none yet; its action done; a key that goes on with
 /// none of it; Escape; the focus moved; the keymap changed; its time out (Keymap's `pending_ms`).
+#derive(Eq, Debug)
 pub(all) enum KeysEnd {
   NotYet
   Done(String)
@@ -186,23 +191,25 @@ pub(all) enum KeysEnd {
   FocusMoved
   KeymapChanged
   TimedOut
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// How an action came: by its keys, or asked by name (a menu's item, a command's list: Tree::ask_action).
+#derive(Eq, Debug)
 pub(all) enum ActionBy {
   Keys
   Asked
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// An action as a node is told it (View::on_action): which, at what moment, the keys it came by (none asked by name).
+#derive(Eq, Debug)
 pub(all) struct ActionAt {
   action : String
   at : Double
   keys : Array[Stroke]
   by : ActionBy
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What a node says of the keyboard's actions: its contexts, and what it does for an action (whether it can now, and

@@ -25,7 +25,7 @@ pub fn file_tile(c : @ui.Ctx, name : String, dir? : Bool = false, progress? : Do
   }
   let dot = name.rev_find(".")
   let ext = match dot {
-    Some(i) if i > 0 && name.length() - i <= tile_ext_most => name.view(start_offset=i + 1).to_owned().to_upper()
+    Some(i) if i > 0 && name.length() - i <= tile_ext_most => name.exact_view(start=i + 1).to_owned().to_upper()
     _ => ""
   }
   let shapes = match progress {
@@ -200,7 +200,7 @@ let tile_ext_failed : @ui.TextStyle = tile_ext.then(@ui.text_style(color=Danger)
 pub fn file_name(c : @ui.Ctx, name : String) -> Unit {
   let (stem, ext) = match name.rev_find(".") {
     Some(i) if i > 0 && name.length() - i <= name_ext_most =>
-      (name.view(end_offset=i).to_owned(), name.view(start_offset=i).to_owned())
+      (name.exact_view(end=i).to_owned(), name.exact_view(start=i).to_owned())
     _ => (name, "")
   }
   c.box(style=name_row, fn() {
@@ -214,12 +214,26 @@ pub fn file_name(c : @ui.Ctx, name : String) -> Unit {
 
 ///|
 /// What of a file's card a press was on: its ✕, its ↻ or its ✎, or (one that opens) the card itself.
+#derive(Eq, Debug)
 pub(all) enum FileCardPress {
   Remove
   Retry
   Restore
   Open
-} derive(Eq, Show, Debug)
+}
+
+///|
+/// By its name, as tests write what a file card's press asked: what `derive(Show)` wrote.
+pub impl Show for FileCardPress with output(self, logger) {
+  logger.write_string(
+    match self {
+      Remove => "Remove"
+      Retry => "Retry"
+      Restore => "Restore"
+      Open => "Open"
+    },
+  )
+}
 
 ///|
 /// A file as a card (FileCard): its sheet, its name over its size (or how far it has gone up,

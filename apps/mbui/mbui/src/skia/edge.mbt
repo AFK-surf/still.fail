@@ -108,11 +108,12 @@ fn fdot16_fast_div(a : Int, b : Int) -> Int {
 let max_coeff_shift : Int = 6
 
 ///|
+#derive(Eq)
 priv enum EdgeKind {
   ELine
   EQuad
   ECubic
-} derive(Eq)
+}
 
 ///|
 /// An edge: its line now (x, dx, first and last y, winding; prev and next in the active list, -1 for none), and for

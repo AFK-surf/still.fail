@@ -7,11 +7,12 @@
 ///|
 /// What a file's card shows (file_card's): its bones while it is read (and the picture it names comes); why not, read
 /// and refused; the file as the core read it.
+#derive(Eq)
 priv enum FileShows {
   Bones
   Refused
   Shown
-} derive(Eq)
+}
 
 ///|
 /// What a file's card holds (file_card's) in `parent`: the file `path` (at `line`) that session `session` of station
@@ -310,7 +311,7 @@ fn file_entries_node(parent : @view.View, entries : () -> Array[Json]) -> Unit {
             b,
             fn() {
               let n = name(k.get())
-              [@ui.span(if dir() { n.view(end_offset=n.length() - 1).to_owned() } else { n }, mono=true)]
+              [@ui.span(if dir() { n.exact_view(end=n.length() - 1).to_owned() } else { n }, mono=true)]
             },
             peek_file_code,
           )

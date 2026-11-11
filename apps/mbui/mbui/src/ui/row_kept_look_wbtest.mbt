@@ -88,10 +88,10 @@ test "a row coming or going where it is, kept as its nodes on its way as nodes b
     // (the same, the bar as it is then all the while)
     let (still, _, still_row) = kept_row_drawn(goes, after, after, change_ms, at_ms)
     // (kept as its nodes, the row: what is asked of it; grown or shrunk then, about the middle of what it holds)
-    assert_true(kept > 0, msg="\{cs}: no row kept as the bar changed")
-    assert_true(still_row[2] < 40.0 && still_row[2] > 0.0, msg="\{cs}: row 4 drawn \{still_row}, not on its way")
+    assert_true(kept > 0, msg="\{Repr(cs)}: no row kept as the bar changed")
+    assert_true(still_row[2] < 40.0 && still_row[2] > 0.0, msg="\{Repr(cs)}: row 4 drawn \{Repr(still_row)}, not on its way")
     if row != still_row || drawn != still {
-      parted.push("\{cs}: row 4 drawn at \{row}, where nothing before it changed \{still_row}")
+      parted.push("\{Repr(cs)}: row 4 drawn at \{Repr(row)}, where nothing before it changed \{Repr(still_row)}")
     }
   }
   assert_eq(parted, [], msg=parted.join("\n"))

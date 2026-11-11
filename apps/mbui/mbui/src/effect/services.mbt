@@ -6,17 +6,19 @@
 
 ///|
 /// Something outside failed (a file, a host call).
+#derive(Debug)
 pub suberror IoError {
   IoError(String)
-} derive(Show)
+}
 
 ///|
 /// A message between two endpoints.
+#derive(Debug, Eq)
 pub(all) struct Packet {
   from : String
   to : String
   body : String
-} derive(Show, Eq)
+}
 
 ///|
 /// An endpoint of the network, as the core sees it. Real (a host's sockets,

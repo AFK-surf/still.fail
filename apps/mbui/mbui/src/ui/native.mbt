@@ -97,12 +97,13 @@ pub struct NativeView {
 /// canvas given it from where it went down (a pinch's first finger then where it is now). A mouse's wheel goes the
 /// same way: `VerticalOut` and `Through` give the canvas the wheel's upright scroll; `PinchOut` keeps a trackpad's
 /// pinch from the page (the canvas takes none of its own on the Mac yet).
+#derive(Eq, Debug)
 pub(all) enum Touch {
   All
   Through
   PinchOut
   VerticalOut
-} derive(Eq, Show)
+}
 
 ///|
 fn touch_name(t : Touch) -> String {

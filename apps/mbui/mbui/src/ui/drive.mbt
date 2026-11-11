@@ -212,12 +212,13 @@ fn drive_init() -> Unit {
 
 ///|
 /// The moments of a script's line a run's tracer is told of (@ui.trace_steps).
+#derive(Eq, Debug)
 pub(all) enum StepMoment {
   /// the line begun, before anything of it is done (a tap still waiting for its words to be on screen)
   Began
   /// its input handed to the app as the host sends it (the press, the words typed, the key): the frame it goes in
   Acted
-} derive(Eq, Show)
+}
 
 ///|
 /// Who is told each line of a script as it begins and as it acts (@ui.trace_steps): a run's record of it.
@@ -1193,7 +1194,7 @@ fn drive_steps(c : Ctx) -> Unit {
               }
               // (what the runner found, typed: the code another device shows, as a person reads it off and types it)
               words if cmd == "typedone" && words.has_prefix("ok ") => {
-                let typed = words.view(start_offset=3).to_owned()
+                let typed = words.exact_view(start=3).to_owned()
                 if h_drive(0, typed) {
                   if c.editors.contains(c.focus) {
                     d.typed = typed
@@ -1450,7 +1451,7 @@ fn drive_steps(c : Ctx) -> Unit {
       "wheel" => {
         // (DY, then what is held with it: cmd, ctrl, alt, shift joined by +, as a key's are said)
         let (dy, held) = match arg.find(" ") {
-          Some(i) => (arg.view(end_offset=i).to_owned(), arg.view(start_offset=i + 1).to_owned())
+          Some(i) => (arg.exact_view(end=i).to_owned(), arg.exact_view(start=i + 1).to_owned())
           None => (arg, "")
         }
         let mut mods = 0

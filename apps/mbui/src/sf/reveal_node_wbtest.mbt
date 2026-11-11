@@ -81,7 +81,7 @@ test "a room on two lines said as a node, opened and closed: drawn as an old vie
   assert_eq(
     (new == old, old.1.0.length() > 0, old.0.0.length(), old.2.0.length()),
     (true, true, 0, 0),
-    msg="old \{old.1.0[:2]}\nnode \{new.1.0[:2]}",
+    msg="old \{Repr(old.1.0[:2])}\nnode \{Repr(new.1.0[:2])}",
   )
 }
 
@@ -165,7 +165,7 @@ test "a room as a node opened the first time, each moment looked at in a run of 
   assert_eq(
     (stepped == jumped, stepped.map(fn(s) { (s.0 * 1000.0).round() }) == want.map(fn(w) { (w * 1000.0).round() }), natural > 30.0),
     (true, true, true),
-    msg="\{stepped} \{jumped} want \{want}",
+    msg="\{Repr(stepped)} \{Repr(jumped)} want \{Repr(want)}",
   )
 }
 
@@ -226,7 +226,7 @@ test "a room as a node grown about the middle of what it draws: a button at its 
   let button = held.kids()[1]
   let (x, _, w, _) = button.rect()
   // (what is drawn: the button alone, 60 wide at the left; grown about its middle, 30 in)
-  assert_eq(((x + w / 2.0) * 1000.0).round(), 30000.0, msg="\{button.rect()}")
+  assert_eq(((x + w / 2.0) * 1000.0).round(), 30000.0, msg="\{Repr(button.rect())}")
 }
 
 ///|
@@ -308,6 +308,6 @@ test "a room on two lines said as a node, opened and closed a second time (the o
   assert_eq(
     alike,
     Array::make(old.length(), true),
-    msg="old \{old.map(fn(o) { (o.0[:1], o.1[:1]) })}\nnode \{new.map(fn(o) { (o.0[:1], o.1[:1]) })}",
+    msg="old \{Repr(old.map(fn(o) { (o.0[:1], o.1[:1]) }))}\nnode \{Repr(new.map(fn(o) { (o.0[:1], o.1[:1]) }))}",
   )
 }

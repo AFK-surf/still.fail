@@ -86,11 +86,12 @@ let workspaces_tall : Double = 0.7
 ///|
 /// What the list holds, top to bottom: the one in use (its label, its card, the invitations under it), the others'
 /// label, the others by their ids.
+#derive(Eq, Hash)
 priv enum WsBlock {
   InUse
   OthersLabel
   Other(String)
-} derive(Eq, Hash)
+}
 
 ///|
 /// The list in node `v` (the panel's body's): the one in use (checked) on a card, the invitations waiting, the others
@@ -815,7 +816,7 @@ pub fn workspace_menu(c : @ui.Ctx, src : Source, at : (Double, Double, Double, D
     Some("account") => (src.sign_in)()
     Some(v) if v.has_prefix("join:") || v.has_prefix("ignore:") => {
       let join = v.has_prefix("join:")
-      let id = v.view(start_offset=if join { 5 } else { 7 }).to_owned()
+      let id = v.exact_view(start=if join { 5 } else { 7 }).to_owned()
       for p in pending {
         if text(Some(p.1), "id") == id {
           answer_invitation(src, p.0, id, join, text(Some(p.1), "name"), fn() {  })

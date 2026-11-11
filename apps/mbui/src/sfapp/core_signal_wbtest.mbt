@@ -842,8 +842,8 @@ fn wide_chat_subscription_case(intermediate : Bool, leave_pending : Bool) -> Uni
   let opened_at = t.time()
   open_chat_beside(chat)
   t.frame()
-  guard client.peek_topic("chat", params=core_params) is Some(sub) else { fail("opening did not subscribe to the chat: \{sent}") }
-  assert_eq(sent.length(), 1, msg="the waiting pane keeps its first chat subscription: \{sent}")
+  guard client.peek_topic("chat", params=core_params) is Some(sub) else { fail("opening did not subscribe to the chat: \{Repr(sent)}") }
+  assert_eq(sent.length(), 1, msg="the waiting pane keeps its first chat subscription: \{Repr(sent)}")
   let opened = try Some(@json.parse(sent[0])) catch { _ => None }
   assert_eq(@sfbase.text(@sfbase.field(opened, "subscribe"), "topic"), "chat")
   assert_eq(@sfbase.number(opened, "id"), sub.id.to_double())
@@ -859,15 +859,15 @@ fn wide_chat_subscription_case(intermediate : Bool, leave_pending : Bool) -> Uni
     t.frame_at(opened_at + 116.0)
     t.frame_at(opened_at + 132.0)
     assert_true(client.peek_topic("chat", params=core_params) is None, msg="leaving while waiting releases the chat")
-    assert_eq(sent.length(), 2, msg="leaving while waiting sends one unsubscribe: \{sent}")
+    assert_eq(sent.length(), 2, msg="leaving while waiting sends one unsubscribe: \{Repr(sent)}")
     let left = try Some(@json.parse(sent[1])) catch { _ => None }
     assert_true(@sfbase.flag(left, "unsubscribe"))
     assert_eq(@sfbase.number(left, "id"), sub.id.to_double())
     open_chat_beside(chat)
     t.frame_at(opened_at + 148.0)
-    guard client.peek_topic("chat", params=core_params) is Some(reopened) else { fail("reopening did not subscribe: \{sent}") }
+    guard client.peek_topic("chat", params=core_params) is Some(reopened) else { fail("reopening did not subscribe: \{Repr(sent)}") }
     assert_true(reopened.id != sub.id, msg="the reopened chat has a new subscription")
-    assert_eq(sent.length(), 3, msg="reopening subscribes once: \{sent}")
+    assert_eq(sent.length(), 3, msg="reopening subscribes once: \{Repr(sent)}")
     let reopened_message = try Some(@json.parse(sent[2])) catch { _ => None }
     assert_eq(@sfbase.text(@sfbase.field(reopened_message, "subscribe"), "topic"), "chat")
     assert_eq(@sfbase.number(reopened_message, "id"), reopened.id.to_double())
@@ -898,7 +898,7 @@ fn wide_chat_subscription_case(intermediate : Bool, leave_pending : Bool) -> Uni
   t.frame()
   assert_true(client.peek_topic("chat", params=core_params) is None, msg="the chat is released when the pane leaves")
   let n = if leave_pending { 4 } else { 2 }
-  assert_eq(sent.length(), n, msg="the chat is unsubscribed once after leaving: \{sent}")
+  assert_eq(sent.length(), n, msg="the chat is unsubscribed once after leaving: \{Repr(sent)}")
   let last = try Some(@json.parse(sent[n - 1])) catch { _ => None }
   assert_true(@sfbase.flag(last, "unsubscribe"))
   assert_eq(@sfbase.number(last, "id"), answered.id.to_double())
@@ -1701,7 +1701,7 @@ fn chat_signal_page_case(pop : Bool, intermediate : Bool) -> Unit raise {
   client.receive_json({ "id": Json::number(prefs_sub.id.to_double()), "value": Json::object(prefs_value) })
   t.frame()
   guard client.peek_topic("chat", params=@sfbase.core_topic_params("chat", params)) is Some(chat_sub) else {
-    fail("chat subscription missing after opening: \{sent}")
+    fail("chat subscription missing after opening: \{Repr(sent)}")
   }
   let chat_value = match (base.topic_read)("chat", params).value {
     Some(Object(m)) => m.copy()
@@ -1720,11 +1720,11 @@ fn chat_signal_page_case(pop : Bool, intermediate : Bool) -> Unit raise {
   let refs = @sfbase.writings.get(draft_key(chat)).map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 1)
   assert_eq(@sfbase.text(@sfbase.field(refs.get(0), "ref"), "mode"), "file")
-  assert_eq(sent.length(), before_events, msg="the file-drop frames kept the page subscription; sent=\{sent}")
+  assert_eq(sent.length(), before_events, msg="the file-drop frames kept the page subscription; sent=\{Repr(sent)}")
   let link = @sfbase.link_target({ "opens": "item", "workspace": "ws1", "station": "st1", "session": "child-session", "service": "j-web" })
   assert_true(@sfbase.open_target(src, link, false, None))
   assert_true(app.nav.top() == Service("ws1/st1", "j-web"), msg="an agent's link stays over its chat")
-  assert_eq(sent.length(), before_events, msg="event reads share the topics from the page; before=\{before_events}, sent=\{sent}")
+  assert_eq(sent.length(), before_events, msg="event reads share the topics from the page; before=\{before_events}, sent=\{Repr(sent)}")
   assert_true(app.nav.pages().iter().any(fn(p) { p is Chat(_) }))
   if pop {
     let start = t.time()
@@ -1825,8 +1825,8 @@ fn drive_place_row_case(intermediate : Bool) -> Unit raise {
   open_drive_fixture("drive")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.frame()
-  guard client.peek_topic("drivePlace", params~) is Some(first) else { fail("the row did not subscribe: \{sent}") }
-  assert_eq(sent.length(), 1, msg="the row subscribes once: \{sent}")
+  guard client.peek_topic("drivePlace", params~) is Some(first) else { fail("the row did not subscribe: \{Repr(sent)}") }
+  assert_eq(sent.length(), 1, msg="the row subscribes once: \{Repr(sent)}")
   let first_ask = try Some(@json.parse(sent[0])) catch { _ => None }
   assert_eq(@sfbase.text(@sfbase.field(first_ask, "subscribe"), "topic"), "drivePlace")
   assert_eq(@sfbase.number(first_ask, "id"), first.id.to_double())
@@ -1841,8 +1841,8 @@ fn drive_place_row_case(intermediate : Bool) -> Unit raise {
   assert_true(physical_equal(first, client.peek_topic("drivePlace", params~).unwrap()), msg="the departing row still has its place")
   t.frame_at(opened_at + @ui.move_ms(390.0))
   t.frame()
-  assert_true(client.peek_topic("drivePlace", params~) is None, msg="the covered list releases its reading place: \{sent}")
-  assert_eq(sent.length(), 2, msg="the covered list unsubscribes once: \{sent}")
+  assert_true(client.peek_topic("drivePlace", params~) is None, msg="the covered list releases its reading place: \{Repr(sent)}")
+  assert_eq(sent.length(), 2, msg="the covered list unsubscribes once: \{Repr(sent)}")
   let left = try Some(@json.parse(sent[1])) catch { _ => None }
   assert_true(@sfbase.flag(left, "unsubscribe"))
   assert_eq(@sfbase.number(left, "id"), first.id.to_double())
@@ -1851,9 +1851,9 @@ fn drive_place_row_case(intermediate : Bool) -> Unit raise {
   if intermediate { t.frame_at(returned_at + 50.0) }
   t.frame_at(returned_at + @ui.move_ms(390.0))
   t.frame()
-  guard client.peek_topic("drivePlace", params~) is Some(current) else { fail("returning did not read the place: \{sent}") }
-  assert_true(current.id != first.id, msg="the returned row has a new subscription: \{sent}")
-  assert_eq(sent.length(), 3, msg="the returned row subscribes once: \{sent}")
+  guard client.peek_topic("drivePlace", params~) is Some(current) else { fail("returning did not read the place: \{Repr(sent)}") }
+  assert_true(current.id != first.id, msg="the returned row has a new subscription: \{Repr(sent)}")
+  assert_eq(sent.length(), 3, msg="the returned row subscribes once: \{Repr(sent)}")
   let again = try Some(@json.parse(sent[2])) catch { _ => None }
   assert_eq(@sfbase.text(@sfbase.field(again, "subscribe"), "topic"), "drivePlace")
   assert_eq(@sfbase.number(again, "id"), current.id.to_double())
@@ -1867,7 +1867,7 @@ fn drive_place_row_case(intermediate : Bool) -> Unit raise {
   assert_true(t.words().iter().any(fn(word) { word.0.contains("80%") && word.5 > 0.0 }), msg="the updated reading place is transparent")
   @ui.run_let_go()
   assert_true(client.peek_topic("drivePlace", params~) is None, msg="ending the run releases the place")
-  assert_eq(sent.length(), 4, msg="ending the run unsubscribes once: \{sent}")
+  assert_eq(sent.length(), 4, msg="ending the run unsubscribes once: \{Repr(sent)}")
   let last = try Some(@json.parse(sent[3])) catch { _ => None }
   assert_true(@sfbase.flag(last, "unsubscribe"))
   assert_eq(@sfbase.number(last, "id"), current.id.to_double())
@@ -1907,18 +1907,18 @@ test "a chat after closing the switcher reads station changes made in the gap" {
   t.frame()
   t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
   t.frame()
-  guard client.peek_topic("stations", params~) is Some(first) else { fail("the switcher did not read stations: \{sent}") }
+  guard client.peek_topic("stations", params~) is Some(first) else { fail("the switcher did not read stations: \{Repr(sent)}") }
   client.receive_json({ "id": Json::number(first.id.to_double()), "value": [{ "station": "ws1/st1", "name": "Cedar" }] })
   t.frame()
   t.key(@ui.key_escape)
   // The switcher closes immediately; inspect its first frame after Escape.
   t.frame()
-  assert_true(client.peek_topic("stations", params~) is None, msg="the switcher's reader was not released before the chat's reader: \{sent}")
+  assert_true(client.peek_topic("stations", params~) is None, msg="the switcher's reader was not released before the chat's reader: \{Repr(sent)}")
   // The server changes after unsubscribe. A late message from the old wire id must not become the new value.
   client.receive_json({ "id": Json::number(first.id.to_double()), "value": [{ "station": "ws1/st1", "name": "Outdated" }] })
   open_chat_beside({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.frame()
-  guard client.peek_topic("stations", params~) is Some(second) else { fail("the chat did not read stations: \{sent}") }
+  guard client.peek_topic("stations", params~) is Some(second) else { fail("the chat did not read stations: \{Repr(sent)}") }
   assert_true(second.id != first.id, msg="the new reader must have its own wire id")
   assert_true(second.value is None, msg="the old value must not be reused before the current answer")
   assert_true(t.shown_of("Outdated") is None, msg="a late answer to the old subscription is not shown")

@@ -94,7 +94,7 @@ test "picked anew down a column, a list that holds its blocks only while they sh
   // (made as it set out, none made again or more on its way: as many as its size at rest shows)
   assert_eq(made, first)
   let at_rest = made.length()
-  assert_true(at_rest > 0 && at_rest <= 6, msg="made: \{made}")
+  assert_true(at_rest > 0 && at_rest <= 6, msg="made: \{Repr(made)}")
 }
 
 ///|

@@ -126,13 +126,13 @@ test "a link in runs one after another (a reference's @ and its title) is one li
     w=300.0,
     h=300.0,
   )
-  assert_true(told.length() >= 1 && told.iter().all(fn(l) { l == ("x://c", "@Title") }), msg="\{told}")
+  assert_true(told.length() >= 1 && told.iter().all(fn(l) { l == ("x://c", "@Title") }), msg="\{Repr(told)}")
   // where it is: round both, from its @ (what hangs by it lines up there)
   t.frame()
   let (ax, _, _, _) = t.run_rects("@")[0]
   let (x, y, w, h) = t.run_rects("Title")[0]
   guard rect.val is Some((rx, _, rw, _)) else { fail("no rect") }
-  assert_true((rx - ax).abs() < 0.5 && (rx + rw - (x + w)).abs() < 0.5, msg="\{rect.val} @ at \{ax}, title to \{x + w}")
+  assert_true((rx - ax).abs() < 0.5 && (rx + rw - (x + w)).abs() < 0.5, msg="\{Repr(rect.val)} @ at \{ax}, title to \{x + w}")
   t.press_at(x + w / 2.0, y + h / 2.0)
   // its @ on the same ground as its title
   assert_eq(t.drawn_rects().filter(fn(r) { r.4 == 0x11223344L }).length(), 2)

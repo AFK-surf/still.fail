@@ -211,12 +211,13 @@ fn tape_room_now() -> TapeRoom {
 ///|
 /// Where what the tape moves goes, as the state is now (`r`, the one in use): how far the tape is moved (no finger's
 /// pull), how wide the page's panel is, where the sidebar's column ends, how far behind each panel is.
+#derive(Eq)
 priv struct TapeTo {
   x : Double
   page : Double
   col : Double
   behind : FixedArray[Double]
-} derive(Eq)
+}
 
 ///|
 fn tape_to_of(r : TapeRoom) -> TapeTo {

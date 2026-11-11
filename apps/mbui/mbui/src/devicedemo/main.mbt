@@ -54,7 +54,7 @@ fn main {
       let keys = k.keys
       c.tell("caught", fn() {
         for key in keys {
-          say("CAUGHT \{key}")
+          say("CAUGHT \{Repr(key)}")
           match key {
             Text(s) =>
               for ch in s {

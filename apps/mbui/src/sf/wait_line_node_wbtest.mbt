@@ -21,7 +21,7 @@ test "a wait as nodes, its moment come: its words where wait_line's are, as wide
   for fs in [1.0, 2.0] {
     let node = wait_words_at(false, fs)
     let line = wait_words_at(true, fs)
-    assert_true(node.length() == 1, msg="the node's words, at \{fs}: \{node}")
-    assert_eq(node, line, msg="at \{fs}: the node's \{node}, wait_line's \{line}")
+    assert_true(node.length() == 1, msg="the node's words, at \{fs}: \{Repr(node)}")
+    assert_eq(node, line, msg="at \{fs}: the node's \{Repr(node)}, wait_line's \{Repr(line)}")
   }
 }

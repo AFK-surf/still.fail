@@ -7,11 +7,12 @@
 
 ///|
 /// How a page's list moves where the tree is drawn (Tree::lists_feel): as the desktop's, iOS's or Android's.
+#derive(Eq)
 pub(all) enum ListFeel {
   Desktop
   Ios
   Android
-} derive(Eq)
+}
 
 ///|
 /// How far a finger moves on a page's list before it drags it (the window's points): Android's touch slop, 8 dp; 6

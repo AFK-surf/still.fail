@@ -55,7 +55,7 @@ pub fn tape_topics(trace : String) -> TapeTopics {
       Some(i) => i + 10
       None => if line.has_prefix("{") { 0 } else { continue }
     }
-    let text = line.view(start_offset=start).to_owned()
+    let text = line.exact_view(start=start).to_owned()
     let j = @json.parse(text) catch {
       _ => continue
     }

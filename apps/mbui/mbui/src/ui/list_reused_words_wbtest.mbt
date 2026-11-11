@@ -13,7 +13,7 @@ fn reused_words_drawn(t : Tester) -> Array[Int] {
   rows.sort_by(fn(a, b) { a.0.compare(b.0) })
   rows.map(fn(r) {
     let mut n = 0
-    for c in r.1.view(start_offset=4) {
+    for c in r.1.exact_view(start=4) {
       n = n * 10 + (c.to_int() - '0'.to_int())
     }
     n
@@ -64,6 +64,6 @@ test "a page's list's blocks taken for other keys as a frame lays it out draw th
       reused_words_in_order(after, 17),
     ),
     (true, true, true),
-    msg="first \{first}, by the wheel's frame \{by_the_wheel}, after \{after}",
+    msg="first \{Repr(first)}, by the wheel's frame \{Repr(by_the_wheel)}, after \{Repr(after)}",
   )
 }

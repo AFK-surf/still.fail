@@ -28,10 +28,11 @@ struct Through {
 /// Why a finger held on a cover is handed on (Tree::on_through): held still long (View::gesture's `through`: a hold
 /// already, what lies under it's), or moved past the slop before the hold a node drags only once held (`held_first`:
 /// a finger come down at (x0, y0), moved to where it is: no hold of anything's).
+#derive(Eq, Debug)
 pub(all) enum Handed {
   Held
   Moved(Double, Double)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What hosts the tree tells of a hold it hands on (View::gesture's `through`): `f` given what it went to (what a node

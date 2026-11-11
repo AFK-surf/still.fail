@@ -31,11 +31,12 @@ pub fn takes_drops() -> Bool {
 ///|
 /// A file or folder let go on the window from outside, where its host says where it is (the Finder's): its path,
 /// whether it is a folder, how many bytes it has (a folder: 0).
+#derive(Eq, Debug)
 pub(all) struct DroppedPath {
   path : String
   dir : Bool
   size : Double
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Files from outside let go where they are said by their paths (DroppedPath), the frame they came in: what holds where

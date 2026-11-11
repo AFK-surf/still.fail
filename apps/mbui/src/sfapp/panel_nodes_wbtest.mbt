@@ -49,11 +49,11 @@ fn body_and_foot(
 ) -> ((Double, Double, Double, Double), (Double, Double, Double, Double), Array[String], String) raise {
   t.run_for(@ui.move_most_ms)
   // (in any order: what of it is nodes listed before or after the old frame's as the tree draws it)
-  let words = t.words().map(fn(w) { "\{w.0} \{tenth4((w.1, w.2, w.3, w.4))}" })
+  let words = t.words().map(fn(w) { "\{w.0} \{@ui.rect_text(tenth4((w.1, w.2, w.3, w.4)))}" })
   words.sort()
   // (its close button where it has one: asked of what is read out only where asked, `close`)
   let close = if close { t.query(Button, label=@sf.t("common.close")).map(fn(b) { tenth4(b.rect) }) } else { None }
-  let at = (painted_at(t, body_ink), painted_at(t, foot_ink), words, "\{close}")
+  let at = (painted_at(t, body_ink), painted_at(t, foot_ink), words, "\{@ui.some_text(close.map(@ui.rect_text))}")
   t.key(@ui.key_escape)
   t.run_for(@kit.pop_out_ms)
   assert_false(@sf.presenter_visible(), msg="gone")

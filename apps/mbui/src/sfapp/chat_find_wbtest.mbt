@@ -61,7 +61,7 @@ test "⌘F: what is found counted as the core says where the reader is (n/total)
   t.run_for(@sfpages.find_typing_ms)
   t.run_for(@ui.move_most_ms)
   let counted = fn() { t.words().filter(fn(w) { w.5 > 0.0 && w.0.contains("/") && w.0.length() <= 5 }).map(fn(w) { w.0 }) }
-  assert_true(counted().length() == 1, msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(counted().length() == 1, msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   let was = counted()[0]
   let goes = named(calls, "chat.find.go").length()
   t.key(@ui.key_code_enter)
@@ -69,7 +69,7 @@ test "⌘F: what is found counted as the core says where the reader is (n/total)
   let moved = named(calls, "chat.find.go")
   assert_eq(moved.length(), goes + 1)
   assert_eq(number(Some(moved[moved.length() - 1].params), "by"), 1.0)
-  assert_true(counted()[0] != was, msg="\{was} \{counted()}")
+  assert_true(counted()[0] != was, msg="\{was} \{Repr(counted())}")
   t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
   t.run_for(@ui.move_most_ms)
   let moved = named(calls, "chat.find.go")
@@ -84,7 +84,7 @@ test "⌘F: words no message has say 无结果, and its ways up and down are not
   find_typed(t, "没有这个词")
   t.run_for(@sfpages.find_typing_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("无结果") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("无结果") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   let goes = named(calls, "chat.find.go").length()
   t.click(Button, label="下一个")
   t.draw()
@@ -108,7 +108,7 @@ test "⌘F: a message found out of the chat's window has the window moved about 
     t.run_for(@ui.move_most_ms)
   }
   let around = named(calls, "chat.around")
-  assert_eq(around.length(), 1, msg="\{calls.map(fn(m) { m.name })}")
+  assert_eq(around.length(), 1, msg="\{Repr(calls.map(fn(m) { m.name }))}")
   assert_eq(number(Some(around[0].params), "seq"), -98.0)
   assert_eq(number(Some(around[0].params), "thread"), 7.0)
   assert_eq(named(calls, "chat.older").length(), 0)
@@ -260,10 +260,10 @@ test "对话目录: a wide page's rail at the list's right, 44 wide, clear of th
   let calls : Array[Made] = []
   let t = outline_tester(calls)
   let rail = outline_buttons(t)
-  assert_eq(rail.length(), 1, msg="\{rail}")
+  assert_eq(rail.length(), 1, msg="\{Repr(rail)}")
   let (x, _, w, _) = rail[0]
-  assert_true(w >= 44.0, msg="\{rail}")
-  assert_true(x + w <= 1280.0 - @ui.scroll_bar_room + 0.5 && x + w >= 1280.0 - 20.0, msg="\{rail}")
+  assert_true(w >= 44.0, msg="\{Repr(rail)}")
+  assert_true(x + w <= 1280.0 - @ui.scroll_bar_room + 0.5 && x + w >= 1280.0 - 20.0, msg="\{Repr(rail)}")
   // (the outline subscribed while it shows; nothing asked of the core by it)
   assert_eq(named(calls, "chat.bring").length(), 0)
   assert_eq(outline_faults(t), [])
@@ -281,14 +281,14 @@ test "对话目录: a wide page's rail at the list's right, 44 wide, clear of th
   // a phone's window: the round button over the way to the newest, 32 round, no rail
   let t = outline_tester(calls, w=390.0, h=844.0, platform=2)
   let floats = outline_buttons(t)
-  assert_eq(floats.length(), 1, msg="\{floats}")
+  assert_eq(floats.length(), 1, msg="\{Repr(floats)}")
   let jump = t.semantics().iter().find_first(fn(s) { s.role == Button && s.label == "跳到最新" }).map(fn(s) { s.rect })
   match jump {
     Some((jx, jy, jw, _)) => {
       let (fx, fy, fw, fh) = floats[0]
       // (directly over it, as wide, the same column)
       assert_eq(fx + fw, jx + jw)
-      assert_true(fy + fh < jy, msg="\{floats[0]} \{jump}")
+      assert_true(fy + fh < jy, msg="\{Repr(floats[0])} \{Repr(jump)}")
       assert_eq(fw, jw)
     }
     None => fail("no way to the newest")
@@ -308,7 +308,7 @@ test "对话目录: pressed, the rail's outline beside it at its left, its days 
   t.run_for(@ui.move_most_ms)
   let panel = outline_panel(t).unwrap()
   let (px, _, pw, _) = panel
-  assert_true(px + pw <= rx, msg="\{panel} rail at \{rx}")
+  assert_true(px + pw <= rx, msg="\{Repr(panel)} rail at \{rx}")
   // its days as the core heads them, its rows' first lines and times; the reader's (Ana's 09:40 昨天) among them
   assert_true(t.find("昨天") is Some(_))
   assert_true(t.find_last("截图初稿我看了，iPad 那几张字还是小，第三张的状态栏也没隐藏，我标出来发你") is Some(_))
@@ -366,14 +366,14 @@ test "对话目录: words typed find in all of the chat (chat.outline.find, 120 
   assert_eq(text(Some(asked[0].params), "query"), "签名")
   assert_eq(number(Some(asked[0].params), "thread"), 7.0)
   // (who said each and when, over the line with the words; agents' too)
-  assert_true(t.find("Claude · 09:05") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
-  assert_true(t.find("8 条") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("Claude · 09:05") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
+  assert_true(t.find("8 条") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   assert_eq(outline_faults(t), [])
   // none found: said so at the field's end
   t.type_text("没有这个词")
   t.run_for(@sfpages.find_typing_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("没有找到") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("没有找到") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   // a found row gone to: the words marked in its message (as a search's), nothing flashing
   for _ in "没有这个词" {
     t.backspace()
@@ -392,7 +392,7 @@ test "对话目录: words typed find in all of the chat (chat.outline.find, 120 
 test "对话目录: while not all of the chat is on the device, 正在读取其余消息 over its rows" {
   let calls : Array[Made] = []
   let t = outline_tester(calls, mode="chat-outline-bringing")
-  assert_true(t.find("正在读取其余消息") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("正在读取其余消息") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   assert_eq(outline_faults(t), [])
 }
 
@@ -437,13 +437,13 @@ test "对话目录: the pointer moved onto a row takes the keys there, one groun
     t.drawn_rects().filter(fn(r) { r.4 == hover && r.0 >= px && r.0 + r.2 <= px + pw + 0.5 && r.1 >= py && r.1 + r.3 <= py + ph + 0.5 })
   }
   let at_first = grounds()
-  assert_eq(at_first.length(), 1, msg="\{at_first}")
+  assert_eq(at_first.length(), 1, msg="\{Repr(at_first)}")
   // (onto the row under the reader's: 林's 10:35, seq 23)
   let (gx, gy, gw, gh, _) = at_first[0]
   t.move_to(gx + gw / 2.0, gy + gh * 1.5)
   t.run_for(@ui.move_most_ms)
   let after = grounds()
-  assert_eq(after.length(), 1, msg="\{after}")
+  assert_eq(after.length(), 1, msg="\{Repr(after)}")
   assert_eq(after[0].1, gy + gh)
   t.key(@ui.key_code_enter)
   t.run_for(@ui.move_most_ms)
@@ -479,7 +479,7 @@ test "对话目录: a go-to in the chat far from its end keeps where the reader 
   t.key(@ui.key_code_up, mods=@ui.mod_alt | @ui.mod_shift_key)
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(back(), msg="\{t.semantics().filter(fn(s) { s.role == Button }).map(fn(s) { s.label })}")
+  assert_true(back(), msg="\{Repr(t.semantics().filter(fn(s) { s.role == Button }).map(fn(s) { s.label }))}")
   assert_eq(outline_reading().flash, "ts20")
   // ↓: back at 22, its top as it was, nothing flashing anew
   let n = outline_reading().flash_n
@@ -508,7 +508,7 @@ fn outline_drawn(t : @ui.Tester, kind : String) -> Array[(Double, Double, Double
       }
     }
     let words = match l.find("\"") {
-      Some(i) => l.view(start_offset=i + 1).to_owned().trim_end(chars="\"").to_owned()
+      Some(i) => l.exact_view(start=i + 1).to_owned().trim_end(chars="\"").to_owned()
       None => ""
     }
     Some((n(p[1]), n(p[2]), n(p[3]), n(p[4]), p[5], words))
@@ -546,16 +546,16 @@ test "对话目录: the rail's ticks, one for each said, the reader's (the 16th:
   let rail = outline_buttons(t)[0]
   let ticks = outline_ticks(t, rail)
   // (31 said by people in the long chat, all of them in half the list's height)
-  assert_eq(ticks.length(), 31, msg="\{ticks}")
+  assert_eq(ticks.length(), 31, msg="\{Repr(ticks)}")
   let p = @sf.theme().p
   let long = ticks.mapi(fn(i, k) { (i, k) }).filter(fn(k) { k.1.1 == outline_hex(p.text) })
-  assert_eq(long.map(fn(k) { k.0 }), [15], msg="\{ticks}")
+  assert_eq(long.map(fn(k) { k.0 }), [15], msg="\{Repr(ticks)}")
   assert_eq(long[0].1.0, 16.0)
   // (the rest one colour, quieter than the ink, each as long as its turn: shorter than the reader's, 4 for one message,
   // longer as more answered it: 林's first (Claude answering, then Ana) longer than Ana's next (林 straight after))
   let short = ticks.filter(fn(k) { k.1 != long[0].1.1 })
-  assert_true(short.iter().all(fn(k) { k.1 == short[0].1 && k.0 >= 4.0 && k.0 <= 12.0 }), msg="\{ticks}")
-  assert_true(ticks[0].0 > ticks[1].0 && ticks[1].0 == 4.0, msg="\{ticks}")
+  assert_true(short.iter().all(fn(k) { k.1 == short[0].1 && k.0 >= 4.0 && k.0 <= 12.0 }), msg="\{Repr(ticks)}")
+  assert_true(ticks[0].0 > ticks[1].0 && ticks[1].0 == 4.0, msg="\{Repr(ticks)}")
   // three said: the rail as tall as a press at least, its ticks in its middle
   let three : Json = {
     "days": [{ "date": "2026-11-10", "day": "今天", "seqs": [2, 4, 6] }],
@@ -569,14 +569,14 @@ test "对话目录: the rail's ticks, one for each said, the reader's (the 16th:
   let rails = outline_buttons(t)
   assert_eq(rails.length(), 1)
   let (_, ry, rw, rh) = rails[0]
-  assert_true(rw >= 44.0 && rh >= 44.0, msg="\{rails}")
+  assert_true(rw >= 44.0 && rh >= 44.0, msg="\{Repr(rails)}")
   let drawn = outline_ticks(t, rails[0])
   assert_eq(drawn.length(), 3)
   let ys = outline_drawn(t, "rect").filter(fn(r) { r.3 <= 2.5 && r.0 >= rails[0].0 && r.0 <= rails[0].0 + rw })
   let top = ys.fold(init=1.0e9, fn(a, r) { if r.1 < a { r.1 } else { a } })
   let foot = ys.fold(init=-1.0e9, fn(a, r) { if r.1 + r.3 > a { r.1 + r.3 } else { a } })
   // (as far over them as under them)
-  assert_true((top - ry - (ry + rh - foot)).abs() < 1.0, msg="\{top} \{foot} in \{rails[0]}")
+  assert_true((top - ry - (ry + rh - foot)).abs() < 1.0, msg="\{top} \{foot} in \{Repr(rails[0])}")
   assert_eq(outline_faults(t), [])
 }
 
@@ -627,7 +627,7 @@ test "对话目录: the rail over the list takes no wheel nor press beside its o
   let w = outline_rail_from(900, 1280)
   let t = outline_tester(calls, w=w.to_double())
   let (rx, ry, rw, rh) = outline_buttons(t)[0]
-  assert_true(rx + rw <= w.to_double() - @ui.scroll_bar_room + 0.5, msg="\{w}: \{(rx, rw)}")
+  assert_true(rx + rw <= w.to_double() - @ui.scroll_bar_room + 0.5, msg="\{w}: \{Repr((rx, rw))}")
   let words = t.text_runs().filter(fn(r) { r.x0 > w.to_double() / 2.0 && r.top < ry + rh && r.bottom > ry - 200.0 })
   let right = words.fold(init=0.0, fn(a, r) { if r.x1 > a && r.x0 < rx { r.x1 } else { a } })
   // (1206 as this was written: the press at 1155..1199, the rows' words ending at 1131, 24 clear; 7 to the window's
@@ -641,15 +641,15 @@ test "对话目录: on a page too narrow for the rail (a 1200 wide window) the r
   let calls : Array[Made] = []
   let t = outline_tester(calls, w=1200.0, h=800.0)
   let floats = outline_buttons(t)
-  assert_eq(floats.length(), 1, msg="\{floats}")
+  assert_eq(floats.length(), 1, msg="\{Repr(floats)}")
   let (fx, fy, _, fh) = floats[0]
-  assert_true(fh < 40.0, msg="\{floats}")
+  assert_true(fh < 40.0, msg="\{Repr(floats)}")
   t.click(Button, label="对话目录")
   t.run_for(@ui.move_most_ms)
   let (px, py, pw, ph) = outline_panel(t).unwrap()
   // (at its left, their feet together)
-  assert_true(pw < 600.0 && px + pw <= fx + 0.5, msg="panel \{(px, pw)} float at \{fx}")
-  assert_true((py + ph - (fy + fh)).abs() < 12.0, msg="panel \{(py, ph)} float \{(fy, fh)}")
+  assert_true(pw < 600.0 && px + pw <= fx + 0.5, msg="panel \{Repr((px, pw))} float at \{fx}")
+  assert_true((py + ph - (fy + fh)).abs() < 12.0, msg="panel \{Repr((py, ph))} float \{Repr((fy, fh))}")
   assert_eq(outline_faults(t), [])
 }
 
@@ -670,7 +670,7 @@ test "对话目录: the reader's row in the accent's ink, it alone; each row's w
   let drawn = outline_drawn(t, "glyphs").filter(fn(g) {
     g.5.contains("截图初稿我看了") && g.0 >= px && g.0 < px + pw && g.1 >= py && g.1 < py + ph
   })
-  assert_eq(drawn.length(), 1, msg="\{drawn}")
+  assert_eq(drawn.length(), 1, msg="\{Repr(drawn)}")
 }
 
 ///|
@@ -728,14 +728,14 @@ test "对话目录: in the sheet its day headings on the title's line, the rows'
   // the face's column)
   let hover = outline_hex(@sf.theme().p.hover)
   let grounds = outline_drawn(t, "rect").filter(fn(r) { r.4 == hover && r.2 > 200.0 })
-  assert_eq(grounds.length(), 1, msg="\{grounds}")
+  assert_eq(grounds.length(), 1, msg="\{Repr(grounds)}")
   let (gx, _, gw, _, _, _) = grounds[0]
   assert_eq(gx, @sf.panel_card_in)
   assert_eq(gx + gw, 390.0 - @sf.panel_card_in)
   // (round as a pick's rows are, row_corner, not a card's corner that made a capsule of it)
   let r = @sf.row_corner.to_int()
   let lines = t.frame_export().filter(fn(l) { l.has_prefix("rect ") && l.contains(" " + hover + " ") })
-  assert_true(lines.iter().any(fn(l) { l.contains(" r=\{r},\{r},\{r},\{r}") }), msg="\{lines}")
+  assert_true(lines.iter().any(fn(l) { l.contains(" r=\{r},\{r},\{r},\{r}") }), msg="\{Repr(lines)}")
   assert_eq(outline_faults(t), [])
 }
 
@@ -745,9 +745,9 @@ test "对话目录: in the sheet to a finger no row has a ground at rest, the re
   let t = outline_tester(calls, mode="chat-outline", w=390.0, h=844.0, platform=2)
   let hover = outline_hex(@sf.theme().p.hover)
   let grounds = outline_drawn(t, "rect").filter(fn(r) { r.4 == hover && r.2 > 200.0 })
-  assert_eq(grounds.length(), 0, msg="\{grounds}")
+  assert_eq(grounds.length(), 0, msg="\{Repr(grounds)}")
   let accent = outline_hex(@sf.theme().p.accent_text)
-  assert_true(outline_drawn(t, "glyphs").iter().any(fn(g) { g.4 == accent }), msg="\{outline_drawn(t, "glyphs")}")
+  assert_true(outline_drawn(t, "glyphs").iter().any(fn(g) { g.4 == accent }), msg="\{Repr(outline_drawn(t, "glyphs"))}")
   assert_eq(outline_faults(t), [])
 }
 
@@ -769,7 +769,7 @@ test "对话目录: opened, its rows filled from the chunk the reader's is in, a
   t.click(Button, label="对话目录")
   t.run_for(@ui.move_most_ms)
   let asked = outline_rows_asked(calls)
-  assert_eq(asked.length(), 1, msg="\{asked}")
+  assert_eq(asked.length(), 1, msg="\{Repr(asked)}")
   // (the long chat's 31 said, one chunk: all of them, the reader's among them, by its station and thread)
   assert_eq(asked[0].length(), 31)
   assert_true(asked[0].contains(22.0))
@@ -781,7 +781,7 @@ test "对话目录: opened, its rows filled from the chunk the reader's is in, a
   let reader = outline_drawn(t, "glyphs").filter(fn(g) {
     g.5 == "截图初稿我看了，iPad 那几张字还是小，第三张的状态栏也没隐藏，我…" && g.0 >= px && g.0 < px + pw && g.1 >= py && g.1 < py + ph
   })
-  assert_eq(reader.length(), 1, msg="\{reader}")
+  assert_eq(reader.length(), 1, msg="\{Repr(reader)}")
   t.run_for(@ui.move_most_ms)
   assert_eq(named(calls, "chat.outline.rows").length(), 1)
 }
@@ -793,7 +793,7 @@ test "对话目录: a long outline (240 said) asks only the chunk shown; scrolle
   let t = outline_tester(calls, mode="chat-outline-long", held~)
   let asked = outline_rows_asked(calls)
   // (the reader's, 283, among the last of the 240 said: the fifth chunk, its 200th to 239th)
-  assert_eq(asked.length(), 1, msg="\{asked}")
+  assert_eq(asked.length(), 1, msg="\{Repr(asked)}")
   assert_eq(asked[0].length(), 40)
   assert_true(asked[0].contains(@sffixture.outline_long_away_seq))
   assert_eq(t.bones_drawn(), 0)
@@ -803,7 +803,7 @@ test "对话目录: a long outline (240 said) asks only the chunk shown; scrolle
   t.wheel(px + pw / 2.0, py + ph / 2.0, -100000.0)
   t.run_for(@ui.move_most_ms)
   let asked = outline_rows_asked(calls)
-  assert_eq(asked.length(), 2, msg="\{asked.map(fn(a) { a.get(0) })}")
+  assert_eq(asked.length(), 2, msg="\{Repr(asked.map(fn(a) { a.get(0) }))}")
   assert_eq(asked[1].length(), 50)
   assert_eq(asked[1][0], 1.0)
   assert_true(t.bones_drawn() > 0)
@@ -828,8 +828,8 @@ test "对话目录: a long outline (240 said) asks only the chunk shown; scrolle
   assert_eq(t.bones_drawn(), 0)
   assert_eq(heading("10月30日"), first)
   let after = rows_at()
-  assert_true(after.length() >= 8, msg="\{after}")
-  assert_eq(before, after, msg="bones \{bones_before} rows \{after}")
+  assert_true(after.length() >= 8, msg="\{Repr(after)}")
+  assert_eq(before, after, msg="bones \{Repr(bones_before)} rows \{Repr(after)}")
   assert_eq(outline_rows_asked(calls).length(), 2)
   assert_eq(outline_faults(t), [])
 }
@@ -867,7 +867,7 @@ test "对话目录: a person's message said while it is open adds its row, askin
   // (its words in the panel, as the core cuts a row's: they begin as it does)
   let shows = fn() {
     let (px, _, _, _) = outline_panel(t).unwrap()
-    outline_drawn(t, "glyphs").filter(fn(g) { g.0 >= px && g.5.has_prefix(row.view(end_offset=20).to_owned()) }).length()
+    outline_drawn(t, "glyphs").filter(fn(g) { g.0 >= px && g.5.has_prefix(row.exact_view(end=20).to_owned()) }).length()
   }
   assert_eq(shows(), 0)
   live.set(Some(full))
@@ -877,7 +877,7 @@ test "对话目录: a person's message said while it is open adds its row, askin
   t.wheel(px + pw / 2.0, py + ph / 2.0, 100000.0)
   t.run_for(@ui.move_most_ms)
   let asked = outline_rows_asked(calls)
-  assert_eq(asked.length(), 2, msg="\{asked}")
+  assert_eq(asked.length(), 2, msg="\{Repr(asked)}")
   assert_true(asked[1].contains(40.0))
   assert_eq(shows(), 1)
 }
@@ -896,9 +896,9 @@ test "对话目录: more found than it lists: the newest fifty, how many older n
     Some((_, j)) => (number(Some(j), "total").to_int(), number(Some(j), "more").to_int())
     None => (0, 0)
   }
-  assert_true(more > 0 && total == more + 50, msg="\{(total, more)}")
+  assert_true(more > 0 && total == more + 50, msg="\{Repr((total, more))}")
   let note = @sf.t("web-main.outline.more", args=[("n", more.to_string())])
-  assert_true(t.find(note) is Some(_), msg="\{note} \{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find(note) is Some(_), msg="\{note} \{Repr(t.words().map(fn(w) { w.0 }))}")
   assert_true(t.find(@sf.t("web-main.outline.count", args=[("n", total.to_string())])) is Some(_))
   assert_eq(outline_faults(t), [])
 }
@@ -921,10 +921,10 @@ test "对话目录: words found stand at the list's start, the first found whole
   let note = glyphs.iter().find_first(fn(g) { g.5.has_prefix("更早的") }).unwrap()
   let hover = outline_hex(@sf.theme().p.hover)
   let lit = outline_drawn(t, "rect").filter(fn(r) { r.4 == hover && r.0 >= px && r.0 + r.2 <= px + pw + 0.5 && r.2 > 200.0 })
-  assert_eq(lit.length(), 1, msg="\{lit}")
+  assert_eq(lit.length(), 1, msg="\{Repr(lit)}")
   let heading = glyphs.filter(fn(g) { g.1 > note.1 + note.3 && g.1 < lit[0].1 })
-  assert_true(heading.length() >= 1, msg="no day over the first found: \{glyphs.map(fn(g) { (g.5, g.1) })}")
-  assert_true(lit[0].1 >= note.1 + note.3, msg="first found at \{lit[0]}, note \{(note.1, note.3)}")
+  assert_true(heading.length() >= 1, msg="no day over the first found: \{Repr(glyphs.map(fn(g) { (g.5, g.1) }))}")
+  assert_true(lit[0].1 >= note.1 + note.3, msg="first found at \{Repr(lit[0])}, note \{Repr((note.1, note.3))}")
   let faces = outline_drawn(t, "glyphs").filter(fn(g) { g.0 >= px && g.1 >= lit[0].1 && g.1 + g.3 <= lit[0].1 + lit[0].3 + 0.5 && g.3 < 12.0 })
   assert_true(faces.length() >= 1, msg="its face whole in it")
   assert_eq(outline_faults(t), [])
@@ -972,7 +972,7 @@ test "对话目录: a go-to to a message of an older page, read first: the longe
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   // (the page before asked for (chat.older, or round it: chat.around), then gone to: flashing, the panel closed)
-  assert_true(named(calls, "chat.older").length() + named(calls, "chat.around").length() >= 1, msg="\{calls.map(fn(m) { m.name })}")
+  assert_true(named(calls, "chat.older").length() + named(calls, "chat.around").length() >= 1, msg="\{Repr(calls.map(fn(m) { m.name }))}")
   assert_true(outline_panel(t) is None)
   assert_eq(outline_reading().flash, "ts1")
 }
@@ -1025,7 +1025,7 @@ test "对话目录: the longer chat's rail a steady map, its ticks where they we
   t.run_for(@ui.move_most_ms)
   let p = outline_tick_places(t)
   assert_eq(ys(p), ys(first))
-  let went = (try Some(@json.parse(outline_reading().flash.view(start_offset=2).to_owned())) catch { _ => None })
+  let went = (try Some(@json.parse(outline_reading().flash.exact_view(start=2).to_owned())) catch { _ => None })
     .bind(fn(j) { (if j is Number(n, ..) { Some(n) } else { None }) })
     .unwrap_or(-1.0)
   assert_eq(long(p), [outline_long_tick(m, went)])
@@ -1091,14 +1091,14 @@ test "对话目录: a tick of the rail pointed at says its message's first line 
   t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
   assert_eq(outline_rows_asked(calls).length(), asked + 1)
   let tip = t.semantics().filter(fn(s) { s.role == Tooltip }).map(fn(s) { s.label })
-  assert_eq(tip.length(), 1, msg="\{tip}")
-  assert_true(tip[0].has_prefix("早，今天想把发布清单") && tip[0].has_suffix("09:12"), msg="\{tip}")
+  assert_eq(tip.length(), 1, msg="\{Repr(tip)}")
+  assert_true(tip[0].has_prefix("早，今天想把发布清单") && tip[0].has_suffix("09:12"), msg="\{Repr(tip)}")
   // (the next: Ana's 09:40, its words held already, nothing asked)
   t.move_to(rx + rw / 2.0, ticks[1].1 + 1.0)
   t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
   assert_eq(outline_rows_asked(calls).length(), asked + 1)
   let tip = t.semantics().filter(fn(s) { s.role == Tooltip }).map(fn(s) { s.label })
-  assert_true(tip.length() == 1 && tip[0].has_prefix("签名证书下周三过期") && tip[0].has_suffix("09:40"), msg="\{tip}")
+  assert_true(tip.length() == 1 && tip[0].has_prefix("签名证书下周三过期") && tip[0].has_suffix("09:40"), msg="\{Repr(tip)}")
   // (pressed there, the outline as from the rail)
   t.click(Button, label="对话目录")
   t.run_for(@ui.move_most_ms)
@@ -1153,5 +1153,5 @@ test "a phone's chat: each key of its bar, over the messages scrolled under the 
   u.release(x, y)
   u.run_for(@sfbase.pick_bar_in_ms)
   let p = @sfbase.picked.get()
-  assert_true(p.ts != "" && p.b > p.a, msg="held long on \{past.text} at (\{x}, \{y}): \{p}")
+  assert_true(p.ts != "" && p.b > p.a, msg="held long on \{past.text} at (\{x}, \{y}): \{Repr(p)}")
 }

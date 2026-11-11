@@ -81,7 +81,7 @@ fn ch_button(t : @ui.Tester, words : String) -> @ui.SemNode? {
 fn ch_at(t : @ui.Tester, words : Array[String]) -> Array[String] {
   words.map(fn(s) {
     match t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }).last() {
-      Some(w) => "\{s} \{tenth4((w.1, w.2, w.3, w.4))}"
+      Some(w) => "\{s} \{@ui.rect_text(tenth4((w.1, w.2, w.3, w.4)))}"
       None => "\{s} -"
     }
   })
@@ -93,7 +93,7 @@ fn ch_drawn_in(t : @ui.Tester, r : (Double, Double, Double, Double)) -> Array[St
   t
   .drawn_rects()
   .filter(fn(d) { d.0 >= r.0 - 0.5 && d.1 >= r.1 - 0.5 && d.0 + d.2 <= r.0 + r.2 + 0.5 && d.1 + d.3 <= r.1 + r.3 + 0.5 })
-  .map(fn(d) { "\{tenth4((d.0, d.1, d.2, d.3))} \{d.4}" })
+  .map(fn(d) { "\{@ui.rect_text(tenth4((d.0, d.1, d.2, d.3)))} \{d.4}" })
 }
 
 ///|
@@ -110,32 +110,32 @@ fn ch_hand(old : Bool, platform : Int, wide : Bool) -> Array[String] {
   let t = ch_panel(old, chosen, platform~, wide~)
   let out : Array[String] = []
   guard ch_button(t, "小时") is Some(b) else {
-    out.push("rest: no 小时 \{ch_at(t, ["小时", "单位"])}")
+    out.push("rest: no 小时 \{@ui.list_text(ch_at(t, ["小时", "单位"]))}")
     return out
   }
   let r = b.rect
-  out.push("rest: \{tenth4(r)} expanded \{b.expanded} \{ch_at(t, ["小时", "说明文字", "末尾文字"])}")
-  out.push("rest drawn: \{ch_drawn_in(t, r)}")
+  out.push("rest: \{@ui.rect_text(tenth4(r))} expanded \{@ui.some_text(b.expanded)} \{@ui.list_text(ch_at(t, ["小时", "说明文字", "末尾文字"]))}")
+  out.push("rest drawn: \{@ui.list_text(ch_drawn_in(t, r))}")
   let (x, y) = (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
   if platform == 0 {
     t.move_to(x, y)
     t.run_for(@ui.move_most_ms)
-    out.push("pointed drawn: \{ch_drawn_in(t, r)}")
+    out.push("pointed drawn: \{@ui.list_text(ch_drawn_in(t, r))}")
   }
   t.tap(x, y)
   t.run_for(@ui.move_most_ms)
-  out.push("open: expanded \{ch_button(t, "小时").map(fn(s) { s.expanded })} \{ch_at(t, ["小时", "分钟"])}")
-  out.push("open drawn: \{ch_drawn_in(t, r)}")
+  out.push("open: expanded \{@ui.some_text(ch_button(t, "小时").map(fn(s) { @ui.some_text(s.expanded) }))} \{@ui.list_text(ch_at(t, ["小时", "分钟"]))}")
+  out.push("open drawn: \{@ui.list_text(ch_drawn_in(t, r))}")
   // (its menu as a screen reader reads it: a choice each, the one chosen checked)
   let items = t.semantics().filter(fn(n) { (n.role == @ui.Role::MenuItemRadio || n.role == @ui.Role::MenuItem) && !n.hidden })
-  out.push("menu: \{items.map(fn(n) { (n.role, n.label, n.check) })}")
+  out.push("menu: \{@ui.list_text(items.map(fn(n) { "(\{n.role}, \{n.label}, \{@ui.some_text(n.check)})" }))}")
   guard ch_seen(t, "分钟") is Some((mx, my)) else {
     out.push("open: no 分钟")
     return out
   }
   t.tap(mx, my)
   t.run_for(@ui.move_most_ms)
-  out.push("chosen: \{chosen} \{ch_at(t, ["小时", "分钟", "单位"])}")
+  out.push("chosen: \{@ui.list_text(chosen)} \{@ui.list_text(ch_at(t, ["小时", "分钟", "单位"]))}")
   // (opened again, Escape: its menu alone)
   guard ch_button(t, "分钟") is Some(b2) else {
     out.push("chosen: no 分钟 to press")
@@ -143,22 +143,22 @@ fn ch_hand(old : Bool, platform : Int, wide : Bool) -> Array[String] {
   }
   t.tap(b2.rect.0 + b2.rect.2 / 2.0, b2.rect.1 + b2.rect.3 / 2.0)
   t.run_for(@ui.move_most_ms)
-  out.push("again: \{ch_at(t, ["小时", "分钟"])}")
+  out.push("again: \{@ui.list_text(ch_at(t, ["小时", "分钟"]))}")
   t.key(@ui.key_escape)
   t.run_for(@ui.move_most_ms)
-  out.push("escape: \{ch_at(t, ["小时", "分钟", "单位"])}")
-  out.push("escape focus: \{t.focused().map(fn(s) { s.label })}")
+  out.push("escape: \{@ui.list_text(ch_at(t, ["小时", "分钟", "单位"]))}")
+  out.push("escape focus: \{@ui.some_text(t.focused().map(fn(s) { s.label }))}")
   // (a press outside it, on the panel's title: its menu alone)
   t.tap(b2.rect.0 + b2.rect.2 / 2.0, b2.rect.1 + b2.rect.3 / 2.0)
   t.run_for(@ui.move_most_ms)
   let (wx, wy) = ch_seen(t, "单位").unwrap_or((0.0, 0.0))
   t.tap(wx, wy)
   t.run_for(@ui.move_most_ms)
-  out.push("outside: \{ch_at(t, ["小时", "分钟", "单位"])} chosen \{chosen}")
+  out.push("outside: \{@ui.list_text(ch_at(t, ["小时", "分钟", "单位"]))} chosen \{@ui.list_text(chosen)}")
   // (pressed 3 over its top, within the room a press is given round it)
   t.tap(x, r.1 - 3.0)
   t.run_for(@ui.move_most_ms)
-  out.push("over its edge: \{ch_at(t, ["小时", "分钟"])}")
+  out.push("over its edge: \{@ui.list_text(ch_at(t, ["小时", "分钟"]))}")
   out
 }
 
@@ -175,24 +175,24 @@ fn ch_keys(old : Bool, wide : Bool) -> Array[String] {
     t.run_for(@ui.move_most_ms)
     n += 1
   }
-  out.push("tab: \{n} \{t.focused().map(fn(s) { s.label })}")
+  out.push("tab: \{n} \{@ui.some_text(t.focused().map(fn(s) { s.label }))}")
   guard ch_button(t, "小时") is Some(b) else { return out }
   if t.focused() is Some(s) && s.label == "小时" {
-    out.push("focused drawn: \{ch_drawn_in(t, b.rect)}")
+    out.push("focused drawn: \{@ui.list_text(ch_drawn_in(t, b.rect))}")
     t.enter()
     t.run_for(@ui.move_most_ms)
-    out.push("enter: \{ch_at(t, ["分钟"])} focus \{t.focused().map(fn(s) { s.label })}")
+    out.push("enter: \{@ui.list_text(ch_at(t, ["分钟"]))} focus \{@ui.some_text(t.focused().map(fn(s) { s.label }))}")
     t.key(@ui.key_escape)
     t.run_for(@ui.move_most_ms)
-    out.push("escape: \{ch_at(t, ["分钟", "单位"])} focus \{t.focused().map(fn(s) { s.label })}")
+    out.push("escape: \{@ui.list_text(ch_at(t, ["分钟", "单位"]))} focus \{@ui.some_text(t.focused().map(fn(s) { s.label }))}")
     t.key(@ui.key_code_down)
     t.run_for(@ui.move_most_ms)
-    out.push("down: \{ch_at(t, ["分钟"])} focus \{t.focused().map(fn(s) { s.label })}")
+    out.push("down: \{@ui.list_text(ch_at(t, ["分钟"]))} focus \{@ui.some_text(t.focused().map(fn(s) { s.label }))}")
     t.key(@ui.key_code_down)
     t.run_for(@ui.move_most_ms)
     t.enter()
     t.run_for(@ui.move_most_ms)
-    out.push("chosen by keys: \{chosen} \{ch_at(t, ["小时", "分钟", "单位"])} focus \{t.focused().map(fn(s) { s.label })}")
+    out.push("chosen by keys: \{@ui.list_text(chosen)} \{@ui.list_text(ch_at(t, ["小时", "分钟", "单位"]))} focus \{@ui.some_text(t.focused().map(fn(s) { s.label }))}")
   }
   out
 }
@@ -206,9 +206,9 @@ test "a chooser, old and as nodes, on the three screens: where it stands, what i
     let made = ch_hand(false, platform, wide)
     let same = fn(l : Array[String]) { l.filter(fn(x) { !x.has_prefix("escape focus:") }) }
     assert_eq(same(made), same(old), msg=at)
-    assert_true(made.length() > 8, msg="\{at}: \{made}")
+    assert_true(made.length() > 8, msg="\{at}: \{Repr(made)}")
     // (its menu closed by Escape, the focus back on it, on a sheet too: the old one's left it nowhere there)
-    assert_true(made.contains("escape focus: Some(分钟)"), msg="\{at}: \{made}")
+    assert_true(made.contains("escape focus: Some(分钟)"), msg="\{at}: \{Repr(made)}")
   }
 }
 
@@ -221,6 +221,6 @@ test "a chooser, old and as nodes, with keyboard and mouse: Tab to it, Enter ope
     // of nodes gives it none: that is the dialog's, not the chooser's, so how it came to the focus is not compared there)
     let same = fn(l : Array[String]) { l.filter(fn(x) { !wide || !(x.has_prefix("tab:") || x.has_prefix("focused drawn:")) }) }
     assert_eq(same(made), same(old), msg="wide \{wide}")
-    assert_true(made.length() == 6 && made[0].has_suffix("Some(小时)"), msg="wide \{wide}: \{made}")
+    assert_true(made.length() == 6 && made[0].has_suffix("Some(小时)"), msg="wide \{wide}: \{Repr(made)}")
   }
 }

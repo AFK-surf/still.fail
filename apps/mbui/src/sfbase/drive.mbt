@@ -5,6 +5,7 @@
 
 ///|
 /// A file of a drive handed to the viewer that previews it (open_file): where it is and what it is.
+#derive(Eq)
 pub(all) struct DriveFile {
   station : String
   root : String
@@ -17,7 +18,7 @@ pub(all) struct DriveFile {
   kind : String
   /// its media type, by its name
   mime : String
-} derive(Eq)
+}
 
 ///|
 /// An entry of a folder (DriveEntry).
@@ -204,7 +205,7 @@ pub fn dv_join(dir : String, name : String) -> String {
 ///|
 pub fn dv_parent(path : String) -> String {
   match path.rev_find("/") {
-    Some(i) => path.view(end_offset=i).to_owned()
+    Some(i) => path.exact_view(end=i).to_owned()
     None => ""
   }
 }
@@ -213,7 +214,7 @@ pub fn dv_parent(path : String) -> String {
 /// Whether an absolute path names a Windows drive or UNC share. A backslash in a Unix name is not a separator.
 pub fn dv_windows_path(path : String) -> Bool {
   path.has_prefix("\\\\") ||
-  (path.find(":") is Some(1) && (path.view(start_offset=2).has_prefix("\\") || path.view(start_offset=2).has_prefix("/")))
+  (path.find(":") is Some(1) && (path.exact_view(start=2).has_prefix("\\") || path.exact_view(start=2).has_prefix("/")))
 }
 
 ///|
@@ -226,7 +227,7 @@ pub fn dv_name(path : String) -> String {
     _ => None
   }
   match last {
-    Some(i) => path.view(start_offset=i + 1).to_owned()
+    Some(i) => path.exact_view(start=i + 1).to_owned()
     None => path
   }
 }

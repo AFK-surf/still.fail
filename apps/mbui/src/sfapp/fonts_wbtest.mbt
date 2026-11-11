@@ -215,7 +215,7 @@ test "pointing at an interface or text face tries it on the whole message, keepi
     let mine_after = preview_width(t, "登录页在 Safari 上点了没反应")
     let name_after = preview_width(t, "Claude")
     let row_after = t.find("思源宋体")
-    assert_true(text_after > text_before, msg="place=\{place} row_before=\{(x, y)} row_after=\{row_after} text=\{text_before},\{text_after} mine=\{mine_before},\{mine_after} name=\{name_before},\{name_after}")
+    assert_true(text_after > text_before, msg="place=\{place} row_before=\{Repr((x, y))} row_after=\{Repr(row_after)} text=\{text_before},\{text_after} mine=\{mine_before},\{mine_after} name=\{name_before},\{name_after}")
     assert_eq(preview_width(t, "preventDefault"), inline_before)
     t.move_to(x, 4.0)
     t.draw()

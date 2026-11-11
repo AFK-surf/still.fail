@@ -105,8 +105,8 @@ test "chat find colours in every match, still, and strokes only the current occu
     let coloured = fn(rect : (Double, Double, Double, Double)) {
       markers().iter().any(fn(m) { (m.0 - rect.0).abs() < 4.0 && (m.2 - rect.2 - 4.0).abs() < 3.0 && m.1 > rect.1 && m.1 < rect.1 + rect.3 })
     }
-    assert_eq(markers().length(), 3, msg="\{markers()}")
-    assert_true(rects.iter().all(coloured), msg="\{markers()} \{rects}")
+    assert_eq(markers().length(), 3, msg="\{Repr(markers())}")
+    assert_true(rects.iter().all(coloured), msg="\{Repr(markers())} \{Repr(rects)}")
     let strokes_under = fn(rect : (Double, Double, Double, Double)) {
       t.drawn_lines().iter().any(fn(l) { l.5 == theme.p.accent && l.0 >= rect.0 - 3.0 && l.0 <= rect.0 + rect.2 + 3.0 && l.1 >= rect.1 && l.1 <= rect.1 + rect.3 + 8.0 })
     }
@@ -125,7 +125,7 @@ test "chat find colours in every match, still, and strokes only the current occu
     assert_true(stroke_top < 1.0e9, msg="the current match has its stroke")
     // (its bands are whole pixels, a pixel of room round its edges: the scribble itself ends marker_below under the
     // baseline, short of the stroke's highest, 0.75)
-    assert_true(m.1 + m.3 <= stroke_top + 1.0, msg="the colouring in reaches over the stroke: \{m} \{stroke_top}")
+    assert_true(m.1 + m.3 <= stroke_top + 1.0, msg="the colouring in reaches over the stroke: \{Repr(m)} \{stroke_top}")
     current.set(2)
     t.frame()
     assert_true(!strokes_under(rects[0]) && strokes_under(rects[2]), msg="the stroke moved to the third match in the next paragraph")
@@ -178,7 +178,7 @@ test "a highlighter scribbled up and down: within its box, the strokes close eno
     // up and down, left to right, each stroke within a tip's width of the one before
     for k in 1..<xs.length() {
       assert_true((ys[k] - ys[k - 1]).abs() > h / 2.0, msg="stroke \{k} goes up or down")
-      assert_true(xs[k] >= xs[k - 1] - 0.001 && xs[k] - xs[k - 1] <= pen, msg="stroke \{k} \{xs}")
+      assert_true(xs[k] >= xs[k - 1] - 0.001 && xs[k] - xs[k - 1] <= pen, msg="stroke \{k} \{Repr(xs)}")
     }
     assert_true(xs[xs.length() - 1] > w - pen, msg="it reaches the band's end")
   }

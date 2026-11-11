@@ -3,6 +3,7 @@
 // and write of JSON, so that a file they rewrite is the same where nothing changed.
 
 ///|
+#derive(Eq)
 pub(all) enum Value {
   Null
   Bool(Bool)
@@ -10,7 +11,7 @@ pub(all) enum Value {
   Str(String)
   Arr(Array[Value])
   Obj(Array[(String, Value)])
-} derive(Eq)
+}
 
 ///|
 pub suberror JsonError {

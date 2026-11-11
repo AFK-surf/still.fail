@@ -30,7 +30,7 @@ fn drop_chat(calls : Array[Made]) -> @ui.Tester {
 test "a 文件 tab's row carried over the chat: 松开以添加到消息 over it; let go there, it goes into the draft by its path (composer.add)" {
   let calls : Array[Made] = []
   let t = drop_chat(calls)
-  guard t.find("首页截图.png") is Some((x, y)) else { fail("no tab row: \{t.words().map(fn(w) { w.0 })}") }
+  guard t.find("首页截图.png") is Some((x, y)) else { fail("no tab row: \{Repr(t.words().map(fn(w) { w.0 }))}") }
   assert_true(t.find("松开以添加到消息") is None)
   // (carried to the chat's messages, left of the panel)
   t.hold_drag(x, y, 300.0, 400.0)
@@ -39,7 +39,7 @@ test "a 文件 tab's row carried over the chat: 松开以添加到消息 over it
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("松开以添加到消息") is None)
   let added = named(calls, "composer.add")
-  assert_eq(added.length(), 1, msg="\{calls.map(fn(m) { m.name })}")
+  assert_eq(added.length(), 1, msg="\{Repr(calls.map(fn(m) { m.name }))}")
   let one = handed(added[0]).unwrap()
   assert_eq(text(Some(one), "name"), "首页截图.png")
   assert_eq(text(field(Some(one), "ref"), "mode"), "path")
@@ -69,7 +69,7 @@ test "a file from this machine's file manager dropped on the chat goes into its 
   t.frame()
   t.frame()
   let files = @sfbase.writings.get("ws1/st1:s-c1").map(fn(d) { d.files.get() }).unwrap_or([])
-  assert_eq(files.length(), 1, msg="\{calls.map(fn(m) { m.name })}")
+  assert_eq(files.length(), 1, msg="\{Repr(calls.map(fn(m) { m.name }))}")
   let one = files[0]
   assert_eq(text(Some(one), "name"), "报告.pdf")
   assert_eq(text(field(Some(one), "ref"), "mode"), "path")

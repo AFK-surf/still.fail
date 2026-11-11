@@ -9,6 +9,7 @@
 /// agent's reason, the time it asked for, what it said of the chat (`rig.decide`'s `ask`), whether it is the viewer's
 /// to answer (`mine`), whose it is (`who`), one of its devices alone (`device`: its name, "" the rig itself), and how
 /// it went once decided (`ended`: granted, its words).
+#derive(Eq)
 pub(all) struct RigCard {
   request : String
   name : String
@@ -19,7 +20,7 @@ pub(all) struct RigCard {
   who : String?
   device : String
   ended : (Bool, String)?
-} derive(Eq)
+}
 
 ///|
 /// The card of request `card` (as it says it now) in `v` (rig_card's, as nodes): its words, and its answer where it is
@@ -68,7 +69,7 @@ pub fn rig_card_node(
 /// there in 允许's place), else None.
 fn rig_lacks(core : Core, station : String) -> (String, Bool)? {
   let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
+    Some(i) => station.exact_view(end=i).to_owned()
     None => ""
   }
   let rigs = (core.topic)("rigs", { "workspace": str(ws) }).get().value

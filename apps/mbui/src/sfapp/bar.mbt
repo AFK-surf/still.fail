@@ -1272,7 +1272,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   // is laid out by besides what it reads: the window, the navigation bar's room, the ground, the place shown and
   // whether it shows
   let t = @sf.theme()
-  let key = "\{c.width} \{c.height} \{nav_foot()} \{t.p.bg} \{t.dark} \{ws.id} \{active} \{shown}"
+  let key = "\{c.width} \{c.height} \{nav_foot()} \{t.p.bg} \{t.dark} \{ws.id} \{@ui.some_text(active)} \{shown}"
   c.kept_as_nodes(
     c.id("bar/kept"),
     key,
@@ -1359,6 +1359,7 @@ let bar_told_now : @signals.Signal[BarTold?] = @signals.signal(None, same=fn(a, 
 /// What the bar is told by the app's state and the window: whether it shows, the notch's action ("" none: closed), the
 /// place shown, the bars (`cur` the one shown, the others the panel's rows), how wide it is laid out (0: not known
 /// yet). Compared whole: told the same again, nothing new.
+#derive(Eq)
 priv struct BarTold {
   shown : Bool
   action : String
@@ -1366,7 +1367,7 @@ priv struct BarTold {
   sets : Array[Array[String]]
   cur : Int
   width : Double
-} derive(Eq)
+}
 
 ///|
 /// What the bar is told in workspace `ws` with `active` the place on top, `shown` whether it shows (narrow_shell's

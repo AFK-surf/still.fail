@@ -2,6 +2,7 @@
 // which is also what React Native and the UI framework use.
 
 ///|
+#derive(Eq)
 pub(all) enum Dim {
   Auto
   Pt(Double)
@@ -9,25 +10,28 @@ pub(all) enum Dim {
   /// points, or all of the reference length where that is less (CSS's `min(100%, 320px)`); the points where the
   /// reference is not known
   Within(Double)
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum FlexDirection {
   Column
   Row
   ColumnReverse
   RowReverse
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum FlexWrap {
   NoWrap
   Wrap
   WrapReverse
-} derive(Eq)
+}
 
 ///|
 /// Used for align-items, align-self, align-content and justify-content.
+#derive(Eq)
 pub(all) enum Align {
   Auto
   FlexStart
@@ -38,41 +42,46 @@ pub(all) enum Align {
   SpaceBetween
   SpaceAround
   SpaceEvenly
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum PositionType {
   Relative
   Absolute
   Static
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum Display {
   Flex
   DisplayNone
   Contents
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum BoxSizing {
   BorderBox
   ContentBox
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum Overflow {
   Visible
   Hidden
   Scroll
-} derive(Eq)
+}
 
 ///|
+#derive(Eq)
 pub(all) enum MeasureMode {
   Undefined
   Exactly
   AtMost
-} derive(Eq)
+}
 
 ///|
 /// A length's kind in a Style (its `<name>_k`; the number is its `<name>_v`): as a Dim says, kept as two numbers in the

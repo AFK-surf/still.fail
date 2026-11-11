@@ -89,7 +89,7 @@ test "over all else, the old frame's modal layer open: drawn over it, pressed wh
   t.tap(40.0, 20.0)
   let pressed = (top.val, old.val)
   t.tap(200.0, 150.0)
-  assert_eq((over, pressed, (top.val, old.val)), (true, (1, 0), (1, 1)), msg="\{rects}")
+  assert_eq((over, pressed, (top.val, old.val)), (true, (1, 0), (1, 1)), msg="\{Repr(rects)}")
 }
 
 ///|
@@ -154,7 +154,7 @@ test "over all else, a node of the root's made after it, later: under it, drawn 
   assert_eq(
     (last.map(fn(r) { r.4 }) == own, lates, top.val, late.val, under.val),
     (true, 2, 1, 0, 0),
-    msg="\{rects}",
+    msg="\{Repr(rects)}",
   )
 }
 

@@ -27,7 +27,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
           here.station
         } else {
           match here.station.find("/") {
-            Some(i) => here.station.view(end_offset=i).to_owned() + "/" + card.station
+            Some(i) => here.station.exact_view(end=i).to_owned() + "/" + card.station
             None => card.station
           }
         }

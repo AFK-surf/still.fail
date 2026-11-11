@@ -267,7 +267,7 @@ test "the whole window with the window's buttons in the app's top row (a Mac's):
     Some((x, _)) => assert_true(x > 16.0 + 54.0, msg="\{x}")
     None => fail("no way back")
   }
-  assert_true(name[0].1 > 16.0 + 54.0, msg="\{name[0]}")
+  assert_true(name[0].1 > 16.0 + 54.0, msg="\{Repr(name[0])}")
   t.tap_text(tr("common.back"))
   t.frame()
   t.frame()

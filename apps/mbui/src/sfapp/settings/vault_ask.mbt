@@ -145,6 +145,7 @@ fn typed_field(request : String, part : String) -> @ui.Field {
 
 ///|
 /// How a request is answered here, what its card's foot is.
+#derive(Eq, Debug)
 pub(all) enum Answer {
   /// 允许 / 存入 and 拒绝 / 不存: a use given for as long as `lasts` at the longest (unused for a secret to keep)
   Approve(String)
@@ -159,7 +160,7 @@ pub(all) enum Answer {
   Decided
   /// another's to answer: whose (the card's 由…决定)
   Theirs(String)
-} derive(Eq, Show)
+}
 
 ///|
 /// How a request is answered here as its card says it (`answer`, `lasts`: its `vaultAsk`'s), the core having answered

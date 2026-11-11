@@ -283,13 +283,14 @@ pub fn heading_in_at(at : ListAt) -> Double {
 /// panel over it (⌘K's), in the tape's side column, or across the whole screen (a phone's home, its search). How far in its rows are and whether their grounds are rounded follow it,
 /// not the native input (asked, 2026-10-25: touch's square rows, lit, in a tape's sidebar beside 新建对话's
 /// round ground).
+#derive(Eq)
 pub(all) enum ListAt {
   Side
   /// the tape's side column (its sidebar's panel, laid out Medium: tape_view): a side column whose words stand as
   /// before #3806 (band_pad_in)
   Tape
   Whole
-} derive(Eq)
+}
 
 ///|
 /// Where a list's lines stand (Sidebar.css.ts navScroll): in a side column as far in from its sides as what stands

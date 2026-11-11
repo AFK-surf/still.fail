@@ -137,7 +137,7 @@ test "分享图片: the page shows the picture as it would be, 取消, 复制 an
   // kept in the photo album, at the usual chat column's width and the screen's scale, said once it is
   assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [("still.fail.png", "Photos")])
   match png_size(t.kept()[0].2) {
-    Some((pw, ph)) => assert_true(pw == 1520 && ph > 600, msg="\{(pw, ph)}")
+    Some((pw, ph)) => assert_true(pw == 1520 && ph > 600, msg="\{Repr((pw, ph))}")
     None => fail("not a PNG")
   }
   assert_true(t.find("已保存到相册") is Some(_))
@@ -146,8 +146,8 @@ test "分享图片: the page shows the picture as it would be, 取消, 复制 an
   let cancel = t.query(Button, label="取消").unwrap().rect
   let copy = t.query(Button, label="复制").unwrap().rect
   let save = t.query(Button, label="保存到相册").unwrap().rect
-  assert_true(cancel.0 < copy.0 && copy.0 < save.0 && cancel.1 == copy.1 && copy.1 == save.1, msg="\{(cancel, copy, save)}")
-  assert_true(copy.2 < save.2, msg="\{(cancel, copy, save)}")
+  assert_true(cancel.0 < copy.0 && copy.0 < save.0 && cancel.1 == copy.1 && copy.1 == save.1, msg="\{Repr((cancel, copy, save))}")
+  assert_true(copy.2 < save.2, msg="\{Repr((cancel, copy, save))}")
   assert_true(t.find("保存到…") is None, msg=t.words().map(fn(w) { w.0 }).join("|"))
   t.click(Button, label="复制")
   t.frame()
@@ -179,7 +179,7 @@ test "分享图片 on an iPhone Duo: the system's tabs put away, its way back an
     let said = t.nav_said()
     for id in ["\"bare\":true", "lead/over/close", "over/copy", "复制图片", "over/act", "保存到相册"] {
       if !said.contains(id) {
-        fail("\{size}: the bars handed hold no \{id}: \{said}")
+        fail("\{Repr(size)}: the bars handed hold no \{id}: \{said}")
       }
     }
     // (its title upright, in the bar across the top; on its side none, the system floating it over the page's top)
@@ -194,7 +194,7 @@ test "分享图片 on an iPhone Duo: the system's tabs put away, its way back an
     for s in t.semantics() {
       let (x, _, sw, _) = s.rect
       if !s.hidden && s.label != "收起侧边栏" && s.role == @ui.Role::Button && s.label != "" && sw > 0.0 && x + sw > w - side + 0.5 {
-        fail("\{size}: \{s.label} under the system's column: \{s.rect}")
+        fail("\{Repr(size)}: \{s.label} under the system's column: \{Repr(s.rect)}")
       }
     }
     // 保存到相册 chosen there: the picture kept in the photo album
@@ -204,7 +204,7 @@ test "分享图片 on an iPhone Duo: the system's tabs put away, its way back an
     // 复制图片 chosen there: the picture on the clipboard, nothing more in the album, 已复制 there a moment
     t.post(@hostapi.system_channel, "{\"nav\":\"over/copy\"}")
     t.run_for(@ui.move_most_ms / 4.0)
-    assert_true(t.clipboard_png() is Some(_), msg="\{size}: nothing copied")
+    assert_true(t.clipboard_png() is Some(_), msg="\{Repr(size)}: nothing copied")
     assert_eq(t.kept_ways().length(), 1)
     assert_true(t.nav_said().contains("已复制"), msg=t.nav_said())
     // closed there: gone as a dialog goes, the tabs back
@@ -227,7 +227,7 @@ test "分享图片: a message unticked fades on the page and is not in the pictu
   assert_eq(ticks.length(), 4)
   assert_true(ticks.iter().all(fn(n) { n.check == Some(On) }))
   // in a column of their own before the words (the phone's picture: the pictures inline, at the words' start)
-  assert_true(ticks_before_words(t, 0.0), msg=ticks.map(fn(n) { n.rect }).to_string())
+  assert_true(ticks_before_words(t, 0.0), msg=Repr(ticks.map(fn(n) { n.rect })).to_string())
   // its attachments not ticked: each has the composer's ✕ on its corner, which takes it out; then a ＋ puts it back
   assert_eq(t.all(Checkbox).length(), 4)
   let outs = t.all(Button, label="移出图片")
@@ -268,14 +268,14 @@ test "多选: the chat's picture opened from a message has that message alone ti
   assert_true(@sfpages.publish_message_left_out(4.0) && @sfpages.publish_message_left_out(6.0))
   assert_true(!@sfpages.publish_message_left_out(9.0))
   match t.rect_of("截图、日志和构建缓存都附上了") {
-    Some((_, y, _, h)) => assert_true(y > 0.0 && y + h < 520.0, msg="\{(y, h)}")
+    Some((_, y, _, h)) => assert_true(y > 0.0 && y + h < 520.0, msg="\{Repr((y, h))}")
     None => fail("Ana's message not drawn")
   }
   // another ticked (the one over it, scrolled back to): both in the picture, the rest not
   t.wheel(195.0, 260.0, -150.0)
   t.run_for(@ui.move_most_ms)
   let (x, y, w, h) = t.all(Checkbox, label="放进图片")[2].rect
-  assert_true(y > 0.0 && y + h < 520.0, msg="\{(y, h)}")
+  assert_true(y > 0.0 && y + h < 520.0, msg="\{Repr((y, h))}")
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(!@sfpages.publish_message_left_out(7.0) && @sfpages.publish_message_left_out(6.0))
   t.click(Button, label="保存到相册")
@@ -432,7 +432,7 @@ test "分享图片: a page of HTML its words place is drawn live on the page and
   t.each_frame(None)
   // The picture is wider than this screen, but its captured page keeps its original size and is not cropped.
   guard drawn.val is Some((iw, ih)) else { fail("no captured page in the picture") }
-  assert_true((iw - bw).abs() <= 2.0 && (ih - bh).abs() <= 2.0, msg="the captured page changed size: \{(iw, ih)} vs \{(bw, bh)}")
+  assert_true((iw - bw).abs() <= 2.0 && (ih - bh).abs() <= 2.0, msg="the captured page changed size: \{Repr((iw, ih))} vs \{Repr((bw, bh))}")
   assert_eq(t.shots().length(), 1)
   // its card not in it: its grab where it was
   assert_true(!t.shots()[0].join("|").contains(".html"), msg=t.shots()[0].join("|"))

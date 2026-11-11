@@ -52,7 +52,7 @@ test "stopped dead: slowing at one rate to rest, wherever its rest falls among t
         let t = (k.to_double() + phase) * period
         samples.push((1000.0 + t, 1000.0 + t, at(t)))
         let (said, _) = sizes_steady_fault(samples, period, turned=-1.0)
-        assert_true(!(said is Some(s) && s.contains("stopped dead")), msg="\{rate} \{phase} at \{k}: \{said}")
+        assert_true(!(said is Some(s) && s.contains("stopped dead")), msg="\{rate} \{phase} at \{k}: \{Repr(said)}")
         k = k + 1
       }
     }

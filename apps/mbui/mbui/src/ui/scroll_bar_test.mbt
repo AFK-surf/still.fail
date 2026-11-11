@@ -43,7 +43,7 @@ test "scroll bar: a list scrolled shows a thumb 3 wide, 2 in from its right, in 
   // come in over its fade
   t.run_for(@ui.scrollbar_fade_ms)
   let shown = thumbs(t)
-  assert_eq(shown.length(), 1, msg="\{shown}")
+  assert_eq(shown.length(), 1, msg="\{Repr(shown)}")
   let (x, y, w, h, colour) = shown[0]
   assert_eq(x, 300.0 - 2.0 - 3.0)
   assert_eq(w, 3.0)
@@ -59,7 +59,7 @@ test "scroll bar: a list scrolled shows a thumb 3 wide, 2 in from its right, in 
   assert_eq(thumbs(t).length(), 1)
   t.run_for(@ui.scrollbar_fade_ms / 2.0)
   let fading = thumbs(t)
-  assert_true(fading.length() == 1 && (fading[0].4 & 0xFFL) < (colour & 0xFFL), msg="\{fading}")
+  assert_true(fading.length() == 1 && (fading[0].4 & 0xFFL) < (colour & 0xFFL), msg="\{Repr(fading)}")
   t.run_for(@ui.scrollbar_fade_ms / 2.0)
   assert_eq(thumbs(t).length(), 0)
   t.assert_idle()
@@ -181,15 +181,15 @@ test "scroll bar: a box kept to a height has one along its right, a box scrolled
   let tall = thumbs(t)
   assert_eq(tall.length(), 1)
   assert_eq(tall[0].0, 300.0 - 2.0 - 3.0)
-  assert_true(tall[0].1 > 2.0 && tall[0].1 + tall[0].3 <= 200.0 - 2.0, msg="\{tall}")
+  assert_true(tall[0].1 > 2.0 && tall[0].1 + tall[0].3 <= 200.0 - 2.0, msg="\{Repr(tall)}")
   t.move_to(100.0, 250.0)
   t.wheel_with(100.0, 250.0, 100.0, 0.0, 0)
   t.run_for(@ui.scrollbar_fade_ms)
   let wide = thumbs(t).filter(fn(r) { r.3 == 3.0 })
-  assert_eq(wide.length(), 1, msg="\{thumbs(t)}")
+  assert_eq(wide.length(), 1, msg="\{Repr(thumbs(t))}")
   // (under what it holds (200 to 300), not over it: the box keeps its foot clear for it)
   assert_eq(wide[0].1, 300.0 + 2.0)
-  assert_true(wide[0].0 > 2.0, msg="\{wide}")
+  assert_true(wide[0].0 > 2.0, msg="\{Repr(wide)}")
 }
 
 ///|
@@ -210,14 +210,14 @@ test "scroll bar: a box scrolled sideways out past the view it is for has its ba
   t.wheel_with(150.0, 50.0, 100.0, 0.0, 0)
   t.run_for(@ui.scrollbar_fade_ms)
   let at_start = thumbs(t)
-  assert_eq(at_start.length(), 1, msg="\{at_start}")
-  assert_true(at_start[0].0 >= 40.0 + 2.0, msg="\{at_start}")
+  assert_eq(at_start.length(), 1, msg="\{Repr(at_start)}")
+  assert_true(at_start[0].0 >= 40.0 + 2.0, msg="\{Repr(at_start)}")
   // (scrolled to its end: at the view's end, not the screen's)
   t.wheel_with(150.0, 50.0, 2000.0, 0.0, 0)
   t.run_for(@ui.scrollbar_fade_ms)
   let at_end = thumbs(t)
-  assert_eq(at_end.length(), 1, msg="\{at_end}")
-  assert_true((at_end[0].0 + at_end[0].2 - (300.0 - 40.0 - 2.0)).abs() < 0.01, msg="\{at_end}")
+  assert_eq(at_end.length(), 1, msg="\{Repr(at_end)}")
+  assert_true((at_end[0].0 + at_end[0].2 - (300.0 - 40.0 - 2.0)).abs() < 0.01, msg="\{Repr(at_end)}")
 }
 
 ///|
@@ -281,8 +281,8 @@ test "scroll bar: a field of more lines than it shows scrolls by the wheel, its 
   assert_eq(f.selection(), (twelve_lines().length(), twelve_lines().length()))
   t.run_for(@ui.scrollbar_fade_ms)
   let shown = thumbs(t)
-  assert_eq(shown.length(), 1, msg="\{shown}")
-  assert_true(shown[0].0 == 300.0 - 2.0 - 3.0 && shown[0].1 + shown[0].3 <= 60.0, msg="\{shown}")
+  assert_eq(shown.length(), 1, msg="\{Repr(shown)}")
+  assert_true(shown[0].0 == 300.0 - 2.0 - 3.0 && shown[0].1 + shown[0].3 <= 60.0, msg="\{Repr(shown)}")
   // past its top the wheel goes no further
   t.wheel(100.0, 30.0, -500.0)
   assert_eq(field_scrolled(f), 0.0)
@@ -317,7 +317,7 @@ fn inset_field_thumbs(r : Double) -> Array[(Double, Double, Double, Double, Int6
 ///|
 test "scroll bar: a field inset in a box cut round, its corners clear of the field's: its thumb where it is in a box cut square" {
   let square = inset_field_thumbs(0.0)
-  assert_eq(square.length(), 1, msg="its thumb out: \{square}")
+  assert_eq(square.length(), 1, msg="its thumb out: \{Repr(square)}")
   assert_eq(inset_field_thumbs(30.0), square, msg="cut round: the same thumb")
 }
 

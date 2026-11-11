@@ -42,5 +42,5 @@ test "a list held at its end: a row coming before the row kept at its end holds 
   // caught up on, at the end: put there at once
   ids.set(Array::makei(19, fn(i) { i }) + [50, 100, 60])
   t.draw()
-  assert_true(put_at_now() > held, msg="\{(held, put_at_now())}")
+  assert_true(put_at_now() > held, msg="\{Repr((held, put_at_now()))}")
 }

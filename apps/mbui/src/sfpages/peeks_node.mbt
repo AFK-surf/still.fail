@@ -297,11 +297,12 @@ fn peek_layer(v : @view.View) -> @view.View {
 ///|
 /// What a link's card shows (link_card's): a pull request's card or an issue's; the bones of one (a pull request's
 /// where `true`) while it is read and the core says it is one; else a page's tile.
+#derive(Eq)
 priv enum PeekShows {
   Change(Bool)
   Sample(Bool)
   Page
-} derive(Eq)
+}
 
 ///|
 /// The card (link_card's) in `parent`, of what `read` reads (`href`, `words`, `peek` as web_peek_node's) of station
@@ -553,12 +554,13 @@ fn change_card_node(
 /// A fact a pull request's or an issue's card shows (change_card's): who opened it (their login, their picture's key),
 /// a pull request's size (added, taken out), a fact in a pill, how its checks stand (as a state: failed, pending,
 /// passed; in words).
+#derive(Eq, Hash)
 priv enum PeekFact {
   Person(String, String)
   Size(Int, Int)
   Chip(String)
   Checks(String, String)
-} derive(Eq, Hash)
+}
 
 ///|
 /// What facts `v` has (change_card's, in its order): who opened it; a pull request's (`pr`) size where it says one,

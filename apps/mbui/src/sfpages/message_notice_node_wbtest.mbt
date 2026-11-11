@@ -524,7 +524,7 @@ test "取消 makes its way along the row as a retry begins and as it ends: the p
   let coming = t.rect_of(words).unwrap().0
   t.run_for(@ui.move_most_ms)
   let beside = t.rect_of(words).unwrap().0
-  assert_true(beside < coming && coming < alone, msg="the pill on its way aside: \{(alone, coming, beside)}")
+  assert_true(beside < coming && coming < alone, msg="the pill on its way aside: \{Repr((alone, coming, beside))}")
   let (px, _, pw, _) = t.rect_of(words).unwrap()
   assert_true(t.rect_of("取消").unwrap().0 > px + pw, msg="取消 after the pill")
   // (the retry over: 取消 goes along the row, the pill back to the middle as it does)
@@ -532,7 +532,7 @@ test "取消 makes its way along the row as a retry begins and as it ends: the p
   t.frame()
   t.frame()
   let going = t.rect_of(words).unwrap().0
-  assert_true(beside < going && going < alone, msg="the pill on its way back: \{(beside, going, alone)}")
+  assert_true(beside < going && going < alone, msg="the pill on its way back: \{Repr((beside, going, alone))}")
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("取消") is None, msg="gone once its way is over")
   assert_true((t.rect_of(words).unwrap().0 - alone).abs() < 0.01, msg="the pill centred again")

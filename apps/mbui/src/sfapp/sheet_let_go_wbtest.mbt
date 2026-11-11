@@ -56,7 +56,7 @@ test "a sheet of the tree's let go drawn up short of 94% of the window: on up at
   assert_true((held + 11.0).abs() < 0.5, msg="the finger's last move: \{held}")
   assert_true(after / held >= 0.6 && after / held <= 1.5, msg="the frame after it was let go: \{after} (the finger's \{held})")
   t.run_for(sheet_way_ms(t))
-  assert_true((let_go_dialog(t).3 - 844.0 * 0.94).abs() < 1.0, msg="\{let_go_dialog(t)}")
+  assert_true((let_go_dialog(t).3 - 844.0 * 0.94).abs() < 1.0, msg="\{Repr(let_go_dialog(t))}")
 }
 
 ///|
@@ -76,7 +76,7 @@ test "a sheet of the tree's said to a screen reader as a dialog as tall as it is
   t.run_for(sheet_way_ms(t))
   let (x, y, w, h) = let_go_dialog(t)
   assert_eq((x, w), (0.0, 390.0))
-  assert_true((h - 844.0 * things_share).abs() < 0.5 && (y + h - 844.0).abs() < 0.5, msg="\{(x, y, w, h)}")
+  assert_true((h - 844.0 * things_share).abs() < 0.5 && (y + h - 844.0).abs() < 0.5, msg="\{Repr((x, y, w, h))}")
 }
 
 ///|

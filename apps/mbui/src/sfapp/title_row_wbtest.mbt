@@ -199,7 +199,7 @@ test "a window of its own, a station's screen live alone in it (the window's tre
   let read = fn() { t.semantics().filter(fn(s) { !s.hidden && s.label != "" }) }
   let center = read().iter().find_first(fn(s) { s.label == @sf.t("web-pages.screen.panel") && s.role is Button })
   // (the window of its own it is, its screen live (控制中心 there), none of the app's)
-  assert_eq((shell.val == Lone, center is Some(_), t.find("新建对话") is None), (true, true, true), msg="\{read().map(fn(s) { s.label })}")
+  assert_eq((shell.val == Lone, center is Some(_), t.find("新建对话") is None), (true, true, true), msg="\{Repr(read().map(fn(s) { s.label }))}")
   row_drags(t, "a window of its own", 0.0)
   let inputs = fn() { calls.filter(fn(c) { c.name == "screen.input" }).length() }
   let sent_since = fn(n : Int) { calls.filter(fn(c) { c.name == "screen.input" })[n:].to_owned().map(fn(c) { c.params.stringify() }) }
@@ -294,6 +294,6 @@ test "a window of its own, a station's screen live alone in it (the window's tre
   assert_eq(
     saw,
     (true, 1, true, true, true, true, true, [], false, true, true, 0, true, 1),
-    msg="saw \{saw}; blank at \{(px, py)}; panel \{panel.map(fn(s) { s.rect })}; task's keys \{task_keys}",
+    msg="saw \{Repr(saw)}; blank at \{Repr((px, py))}; panel \{Repr(panel.map(fn(s) { s.rect }))}; task's keys \{Repr(task_keys)}",
   )
 }

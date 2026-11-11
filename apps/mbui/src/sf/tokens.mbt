@@ -1150,6 +1150,7 @@ pub fn native_input() -> @ui.Pointing {
 ///|
 /// How the app's panes are laid out, by the screen alone: how much room its window has and what kind of screen it is.
 /// Never by what it is pointed with (@ui.pointing): each is pointed at with a mouse or a finger alike.
+#derive(Eq, Debug)
 pub(all) enum Layout {
   /// one page at a time, the whole window (a phone held upright, a narrow window)
   Small
@@ -1158,7 +1159,7 @@ pub(all) enum Layout {
   Medium
   /// the panes side by side, all of them shown: the rail and the sidebar, the page, the page's side panel
   Large
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// The layout of a window `width` wide, in points, on every screen alike (medium_from, large_from): neither which way up

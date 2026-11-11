@@ -299,7 +299,7 @@ test "a node's picture judged ready for a room bigger than it is drawn (View::im
   let t = judged_for(room, 1.0)
   let want = dmin(300.0 * g().scale, 4096.0)
   let asked = asked_pic(t)
-  assert_true(asked.length() > 0 && asked.iter().all(fn(px) { px.to_double() >= want }), msg="asked for the room: \{asked}, \{want}")
+  assert_true(asked.length() > 0 && asked.iter().all(fn(px) { px.to_double() >= want }), msg="asked for the room: \{Repr(asked)}, \{want}")
   let drawn = fn() {
     t.drawn_instances().filter(fn(i) { i[5] == 4.0 && i[2] == 60.0 && i[3] == 40.0 }).map(fn(i) { t.image_src(i[20].to_int()) })
   }
@@ -317,7 +317,7 @@ test "a node's picture judged ready for a room bigger than it is drawn (View::im
   room.set((900.0, 600.0))
   t.draw()
   let again = asked_pic(t)
-  assert_true(again.length() > before && again[again.length() - 1].to_double() >= dmin(900.0 * g().scale, 4096.0), msg="asked for again, bigger: \{again}")
+  assert_true(again.length() > before && again[again.length() - 1].to_double() >= dmin(900.0 * g().scale, 4096.0), msg="asked for again, bigger: \{Repr(again)}")
 }
 
 ///|
@@ -326,7 +326,7 @@ test "a node's picture judged ready for a bigger room, nothing of it seen yet: i
   let t = judged_for(room, 0.0)
   let want = dmin(300.0 * g().scale, 4096.0)
   let asked = asked_pic(t)
-  assert_true(asked.length() > 0 && asked.iter().all(fn(px) { px.to_double() >= want }), msg="asked for the room unseen: \{asked}, \{want}")
+  assert_true(asked.length() > 0 && asked.iter().all(fn(px) { px.to_double() >= want }), msg="asked for the room unseen: \{Repr(asked)}, \{want}")
   assert_eq(pictures_sized(60.0, 40.0).length(), 0, msg="none drawn unseen")
 }
 
@@ -336,7 +336,7 @@ test "a node's picture judged ready for a room bigger than the most it is asked 
     let room = @signals.signal((5000.0, 3000.0), same=fn(a, b) { a == b })
     let t = judged_for(room, alpha)
     let asked = asked_pic(t)
-    assert_true(asked.length() > 0 && asked.iter().all(fn(px) { px == 4096 }), msg="\{alpha}: asked at the most: \{asked}")
+    assert_true(asked.length() > 0 && asked.iter().all(fn(px) { px == 4096 }), msg="\{alpha}: asked at the most: \{Repr(asked)}")
   }
 }
 
@@ -395,11 +395,11 @@ test "a node's corners each (View::corners): its ground drawn with them, what it
   assert_eq(cornered(1.0, None), ((10.0, 20.0, 30.0, 0.0), (10.0, 20.0, 30.0, 0.0)), msg="as said")
   // (drawn half as big: its ground's corners its own, drawn so by what holds it; its cut's on the window, half)
   let (ground, cut) = cornered(0.5, None)
-  assert_eq(cut, (5.0, 10.0, 15.0, 0.0), msg="what holds it half as big: \{ground} \{cut}")
+  assert_eq(cut, (5.0, 10.0, 15.0, 0.0), msg="what holds it half as big: \{Repr(ground)} \{Repr(cut)}")
   // (cut by what holds it at x 120, inside its right side: its right corners not its own there, its left as they are)
   let (_, cut) = cornered(1.0, Some(120.0))
-  assert_eq((cut.0, cut.3), (10.0, 0.0), msg="its left corners its own: \{cut}")
-  assert_eq((cut.1, cut.2), (0.0, 0.0), msg="its right ones where what holds it cuts, square: \{cut}")
+  assert_eq((cut.0, cut.3), (10.0, 0.0), msg="its left corners its own: \{Repr(cut)}")
+  assert_eq((cut.1, cut.2), (0.0, 0.0), msg="its right ones where what holds it cuts, square: \{Repr(cut)}")
 }
 
 ///|

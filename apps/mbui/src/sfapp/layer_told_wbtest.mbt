@@ -170,7 +170,7 @@ fn publish_busy() -> @ui.Tester raise {
   t.frame()
   assert_true(
     t.ctx().taking_shot(publish_shot_key) && t.shots().length() == 0,
-    msg="being taken: \{t.ctx().taking_shot(publish_shot_key)}, shots \{t.shots().length()}, pending \{t.pending()}",
+    msg="being taken: \{t.ctx().taking_shot(publish_shot_key)}, shots \{t.shots().length()}, pending \{Repr(t.pending())}",
   )
   t
 }

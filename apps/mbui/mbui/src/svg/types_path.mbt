@@ -16,13 +16,14 @@ priv enum PSeg {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum SimpleSeg {
   SMoveTo(Double, Double)
   SLineTo(Double, Double)
   SCurveTo(Double, Double, Double, Double, Double, Double)
   SQuadTo(Double, Double, Double, Double)
   SClose
-} derive(Eq, Show, Debug)
+}
 
 ///|
 fn is_cmd(c : Int) -> Bool {

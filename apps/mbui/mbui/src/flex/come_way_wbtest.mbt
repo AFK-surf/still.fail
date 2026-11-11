@@ -17,11 +17,11 @@ test "come_way set out toward where it goes: on from its speed all the way there
   let walk = come_way_walk(100.0, 1.5, 300.0)
   assert_eq(walk[0], (100.0, 1.5))
   for i in 1..<(walk.length() - 1) {
-    assert_true(walk[i].0 >= walk[i - 1].0, msg="back at \{i}: \{walk[i - 1]} \{walk[i]}")
+    assert_true(walk[i].0 >= walk[i - 1].0, msg="back at \{i}: \{Repr(walk[i - 1])} \{Repr(walk[i])}")
   }
   // (no stall: fast till it is near, the speed at half way still a good share of what it set out at)
   let half = walk.search_by(fn(p) { p.0 >= 200.0 }).unwrap()
-  assert_true(walk[half].1 > 0.3, msg="\{walk[half]}")
+  assert_true(walk[half].1 > 0.3, msg="\{Repr(walk[half])}")
   assert_eq(walk[walk.length() - 1].0, 300.0)
 }
 
@@ -166,14 +166,14 @@ test "come_way turned back: slowing at one rate and its way back meet with its p
     let at = fn(t : Double) { come_way(from, v, goal, t) }
     let (xa, va) = at(tr.t1 - h)
     let (xb, vb) = at(tr.t1 + h)
-    assert_true((xa - xb).abs() < 0.01 && (va - vb).abs() <= 2.5 * h * tr.a + 1.0e-9, msg="\{c}: \{xa} \{xb}, \{va} \{vb}")
+    assert_true((xa - xb).abs() < 0.01 && (va - vb).abs() <= 2.5 * h * tr.a + 1.0e-9, msg="\{Repr(c)}: \{xa} \{xb}, \{va} \{vb}")
     // (its gain each side: as it slowed, -a; as it sets back out, within what is taken off to rest at its end)
     let before = (at(tr.t1 - h).1 - at(tr.t1 - 2.0 * h).1) / h
     let after = (at(tr.t1 + 2.0 * h).1 - at(tr.t1 + h).1) / h
-    assert_true((before - after).abs() <= 0.02 * tr.a + 1.0e-6, msg="\{c}: gain \{before} then \{after}, a \{tr.a}")
+    assert_true((before - after).abs() <= 0.02 * tr.a + 1.0e-6, msg="\{Repr(c)}: gain \{before} then \{after}, a \{tr.a}")
     let mut t = 0.0
     while t <= come_way_ms(from, v, goal) {
-      assert_true(at(t).0 >= goal - 1.0e-9, msg="\{c} past \{goal} at \{t}: \{at(t).0}")
+      assert_true(at(t).0 >= goal - 1.0e-9, msg="\{Repr(c)} past \{goal} at \{t}: \{at(t).0}")
       t = t + 1.0
     }
     assert_eq(at(come_way_ms(from, v, goal)).0, goal)
@@ -219,7 +219,7 @@ test "come_way turned back: its gain goes on wherever it changes fastest as it s
     let after = (x(b + 3.0 * h) - 2.0 * x(b + 2.0 * h) + x(b + h)) / (h * h)
     assert_true(
       (before - after).abs() <= 0.02 * fmax(before.abs(), after.abs()) + 1.0e-6,
-      msg="\{c}: at \{a} ms, gain \{before} then \{after}",
+      msg="\{Repr(c)}: at \{a} ms, gain \{before} then \{after}",
     )
   }
 }

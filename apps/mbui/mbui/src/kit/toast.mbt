@@ -7,12 +7,13 @@
 ///|
 /// A toast: its id (the view's, unique among those showing), its title, its description ("" none), its action's
 /// words ("" none).
+#derive(Eq, Debug)
 pub(all) struct Toast {
   id : String
   title : String
   description : String
   action : String
-} derive(Eq, Show)
+}
 
 ///|
 /// A toast of `title` (its id `id`).

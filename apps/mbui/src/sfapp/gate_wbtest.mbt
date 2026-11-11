@@ -250,7 +250,7 @@ test "signed out, its words told as the app's tree is made: its button's words i
   let (on_way, going) = gate_words_at("重新打开登录页")
   t.run_for(@ui.move_most_ms)
   let (there, still_going) = gate_words_at("重新打开登录页")
-  assert_eq((first, going, on_way != there, still_going), ((195.0, false), true, true, false), msg="\{first} \{on_way} \{there}")
+  assert_eq((first, going, on_way != there, still_going), ((195.0, false), true, true, false), msg="\{Repr(first)} \{on_way} \{there}")
 }
 
 ///|

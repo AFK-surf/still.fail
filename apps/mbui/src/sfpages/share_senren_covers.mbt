@@ -218,7 +218,7 @@ fn gh_args(fleet : Json?) -> Array[(String, String)] {
   let month = match sr_days(fleet) {
     [.., last] =>
       match last.0.find("/") {
-        Some(i) => last.0.view(end_offset=i).to_owned()
+        Some(i) => last.0.exact_view(end=i).to_owned()
         None => ""
       }
     _ => ""
@@ -250,13 +250,13 @@ fn gh_said(
     match rest.find("{") {
       None => break
       Some(i) => {
-        let after = rest.view(start_offset=i + 1).to_owned()
+        let after = rest.exact_view(start=i + 1).to_owned()
         match after.find("}") {
           None => break
           Some(j) => {
-            let name = after.view(end_offset=j).to_owned()
+            let name = after.exact_view(end=j).to_owned()
             if i > 0 {
-              runs.push(@ui.span(rest.view(end_offset=i).to_owned(), scale~))
+              runs.push(@ui.span(rest.exact_view(end=i).to_owned(), scale~))
             }
             let value = sr_arg(args, name)
             if gh_plain.contains(name) {
@@ -264,7 +264,7 @@ fn gh_said(
             } else {
               runs.push(@ui.span(value, color=hi, weight=700, scale=hi_scale))
             }
-            rest = after.view(start_offset=j + 1).to_owned()
+            rest = after.exact_view(start=j + 1).to_owned()
           }
         }
       }

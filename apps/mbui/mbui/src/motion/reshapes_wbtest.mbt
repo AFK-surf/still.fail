@@ -263,7 +263,7 @@ fn goes_alike(
   assert_eq(
     (same, seen_alike(old_over, new_over)),
     (Array::make(old.length(), true), true),
-    msg="old \{old}\nnode \{new}\nover \{old_over} \{new_over}",
+    msg="old \{Repr(old)}\nnode \{Repr(new)}\nover \{Repr(old_over)} \{Repr(new_over)}",
   )
 }
 
@@ -329,6 +329,6 @@ test "a composer opening: nothing built or laid out again while it goes, the clo
       tree.clock_read(),
     ),
     (false, 0, 0, 0, 0, true, false),
-    msg="\{drawn_on}",
+    msg="\{Repr(drawn_on)}",
   )
 }

@@ -318,7 +318,7 @@ fn tell_permission(src : Source, notify : Json?) -> Unit {
 /// notifications: 共享调试's, AdbShare.java) that settings page over Home.
 fn open_notice(src : Source, opens : String) -> Unit {
   if opens.has_prefix("settings:") {
-    let name = opens.view(start_offset=9).to_owned()
+    let name = opens.exact_view(start=9).to_owned()
     @hostapi.log("notice tapped settings:\{name}")
     match @settings.route_of(name) {
       Some(route) if app.nav.top() != Setting(route) => {
@@ -334,7 +334,7 @@ fn open_notice(src : Source, opens : String) -> Unit {
     return
   }
   let (url, seq) = match opens.find("\n") {
-    Some(i) => (opens.view(end_offset=i).to_owned(), opens.view(start_offset=i + 1).to_owned())
+    Some(i) => (opens.exact_view(end=i).to_owned(), opens.exact_view(start=i + 1).to_owned())
     None => (opens, "")
   }
   let at = match seq_of(seq) {
@@ -366,7 +366,7 @@ pub fn seq_of(s : String) -> Double {
 ///|
 pub fn trim_slash(o : String) -> String {
   if o.has_suffix("/") {
-    o.view(end_offset=o.length() - 1).to_owned()
+    o.exact_view(end=o.length() - 1).to_owned()
   } else {
     o
   }

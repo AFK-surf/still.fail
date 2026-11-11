@@ -92,9 +92,9 @@ test "a row coming called back as another comes at once: what is under them one 
   for swap in [1, 11] {
     let (ys, rest) = cg_rows(swap, ["头", "回复"])
     let (turns, _) = cg_turns(ys)
-    assert_eq(turns, 0, msg="swap at \{swap}: \{ys}")
+    assert_eq(turns, 0, msg="swap at \{swap}: \{Repr(ys)}")
     assert_eq(ys[ys.length() - 1], 91.1)
-    assert_eq(rest["处理中"], rest["回复"], msg="\{rest}")
+    assert_eq(rest["处理中"], rest["回复"], msg="\{Repr(rest)}")
   }
 }
 
@@ -104,9 +104,9 @@ test "a row coming called back as another comes, the whole turned back: it slows
   for swap in [3, 10] {
     let (ys, rest) = cg_rows(swap, ["头", "另"])
     let (turns, _) = cg_turns(ys)
-    assert_true(turns <= 1, msg="swap at \{swap}: \{ys}")
+    assert_true(turns <= 1, msg="swap at \{swap}: \{Repr(ys)}")
     assert_eq(ys[ys.length() - 1], 50.0)
-    assert_eq(rest["处理中"], rest["另"], msg="\{rest}")
+    assert_eq(rest["处理中"], rest["另"], msg="\{Repr(rest)}")
   }
 }
 
@@ -149,7 +149,7 @@ test "a show closing and another opening down a column at once with one between,
       i = i + 1
     }
     let (turns, _) = cg_turns(ys)
-    assert_eq(turns, 0, msg="\{between}: \{ys}")
+    assert_eq(turns, 0, msg="\{between}: \{Repr(ys)}")
     assert_eq(ys[ys.length() - 1], between + 60.0)
   }
 }
@@ -276,7 +276,7 @@ test "one that went in a group, then set off alone: its way bit for bit as one t
     let (a, c) = again
     let grouped = cg_two(true, false, [(100.0, Some(false), Some(true)), (90.0 * s, a, c)], 90.0 * s, 140.0 * s)
     let alone = cg_two(true, false, [(100.0, Some(false), None), (40.0 * s, None, Some(true)), (90.0 * s, a, c)], 90.0 * s, 140.0 * s)
-    assert_eq(grouped, alone, msg="\{again}")
+    assert_eq(grouped, alone, msg="\{Repr(again)}")
   }
 }
 
@@ -288,7 +288,7 @@ test "both of a group set off again together once at rest: bit for bit as the sa
   assert_eq(again, fresh)
   let ys = again.map(fn(r) { r.2 })
   let (turns, _) = cg_turns(ys)
-  assert_eq(turns, 0, msg="\{ys}")
+  assert_eq(turns, 0, msg="\{Repr(ys)}")
 }
 
 ///|
@@ -299,10 +299,10 @@ test "one of a group turned back on its way, the other on its way: a group of th
   let a = run(1000.0 / 60.0)
   let b = run(1000.0 / 120.0)
   for i in 0..<a.length() {
-    assert_eq(a[i], b[i * 2], msg="at \{i}: \{a[i]} \{b[i * 2]}")
+    assert_eq(a[i], b[i * 2], msg="at \{i}: \{Repr(a[i])} \{Repr(b[i * 2])}")
   }
   let (turns, _) = cg_turns(a.map(fn(r) { r.2 }))
-  assert_true(turns <= 1, msg="\{a}")
+  assert_true(turns <= 1, msg="\{Repr(a)}")
   assert_eq(a[a.length() - 1], (40.0, 60.0, 120.0))
 }
 

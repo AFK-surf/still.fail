@@ -49,7 +49,7 @@ fn hint_watch(t : @ui.Tester, hint : String, ms : Double) -> Array[(Double, Doub
 fn assert_hint_still(seen : Array[(Double, Double)], at : (Double, Double)) -> Unit raise {
   assert_true(seen.length() > 0, msg="the hint never came back")
   for s in seen {
-    assert_true((s.0 - at.0).abs() < 0.5 && (s.1 - at.1).abs() < 0.5, msg="the hint at \{s}, not \{at}: \{seen}")
+    assert_true((s.0 - at.0).abs() < 0.5 && (s.1 - at.1).abs() < 0.5, msg="the hint at \{Repr(s)}, not \{Repr(at)}: \{Repr(seen)}")
   }
 }
 

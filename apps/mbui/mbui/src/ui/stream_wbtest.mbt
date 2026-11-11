@@ -101,20 +101,20 @@ test "a stream shown by its system video layer: its hole painted, a frame of its
   s.h264(wb_avcc, 640, 360)
   t.draw()
   // its layer a native view of kind 4, the stream's
-  assert_true(t.fake.views.iter().any(fn(l) { l == "open 1 4 1" }), msg="\{t.fake.views}")
+  assert_true(t.fake.views.iter().any(fn(l) { l == "open 1 4 1" }), msg="\{Repr(t.fake.views)}")
   // the first frame: built, the view placed where the picture is
   s.frame(b"\x00\x00\x00\x01\x65", true, 1.0)
   t.stream_shows(s.id(), 1.0, 640, 360)
   t.draw()
   assert_eq(acks, [1.0])
-  assert_true(t.fake.views.iter().any(fn(l) { l.has_prefix("place 1 0 0 320 180") && !l.contains("hidden") }), msg="\{t.fake.views}")
+  assert_true(t.fake.views.iter().any(fn(l) { l.has_prefix("place 1 0 0 320 180") && !l.contains("hidden") }), msg="\{Repr(t.fake.views)}")
   // the next, of its size: taken as it comes, shown and said shown, nothing built for it
   s.frame(b"\x00\x00\x00\x01\x41", false, 2.0)
   t.stream_shows(s.id(), 2.0, 640, 360)
   t.frame_at(t.fake.time + said_frame_ms)
   assert_eq(acks, [1.0, 2.0])
   assert_eq(t.built_why(), "")
-  assert_true(t.stream_fed(s.id()).contains("show ts=2"), msg="\{t.stream_fed(s.id())}")
+  assert_true(t.stream_fed(s.id()).contains("show ts=2"), msg="\{Repr(t.stream_fed(s.id()))}")
   // between frames, as a host whose streams show themselves tells it (outside_streamed): taken then, no frame drawn
   s.frame(b"\x00\x00\x00\x01\x41", false, 2.2)
   t.stream_shows(s.id(), 2.2, 640, 360)
@@ -141,7 +141,7 @@ test "a stream shown by its system video layer: its hole painted, a frame of its
   // drawn by the app (faded, under the dark): its view hidden, its frames taken as the frame is built
   layer.val = false
   t.draw()
-  assert_true(t.fake.views.last().unwrap().contains("hidden"), msg="\{t.fake.views}")
+  assert_true(t.fake.views.last().unwrap().contains("hidden"), msg="\{Repr(t.fake.views)}")
   s.frame(b"\x00\x00\x00\x01\x41", false, 4.0)
   t.stream_shows(s.id(), 4.0, 640, 360)
   t.draw()
@@ -149,7 +149,7 @@ test "a stream shown by its system video layer: its hole painted, a frame of its
   assert_true(t.at_rest(), msg=t.rest_why())
   s.close()
   t.draw()
-  assert_true(t.fake.views.last().unwrap() == "close 1", msg="\{t.fake.views}")
+  assert_true(t.fake.views.last().unwrap() == "close 1", msg="\{Repr(t.fake.views)}")
 }
 
 ///|
@@ -174,8 +174,8 @@ test "on a host whose decoder is driven from here, a stream on its system video 
   s.frame(b"\x00\x00\x00\x01\x65", true, 1.0)
   // the frame handed to the host as it is, no decoder's command of the feed's
   let has = fn(id : Int, what : String) { t.stream_fed(id).iter().any(fn(l) { l.contains(what) }) }
-  assert_true(has(s.id(), "frame key=true ts=1"), msg="\{t.stream_fed(s.id())}")
-  assert_false(has(s.id(), "do "), msg="\{t.stream_fed(s.id())}")
+  assert_true(has(s.id(), "frame key=true ts=1"), msg="\{Repr(t.stream_fed(s.id()))}")
+  assert_false(has(s.id(), "do "), msg="\{Repr(t.stream_fed(s.id()))}")
   t.stream_shows(s.id(), 1.0, 640, 360)
   t.draw()
   assert_eq(acks, [1.0])
@@ -185,11 +185,11 @@ test "on a host whose decoder is driven from here, a stream on its system video 
   t.frame_at(t.fake.time + said_frame_ms)
   assert_eq(acks, [1.0, 2.0])
   assert_eq(t.built_why(), "")
-  assert_false(has(s.id(), "do "), msg="\{t.stream_fed(s.id())}")
+  assert_false(has(s.id(), "do "), msg="\{Repr(t.stream_fed(s.id()))}")
   // one drawn by the app on the same host (no layer asked): its feed, as before
   let plain = Stream::new(shown=fn(_) {  }, broken=fn() {  })
   plain.h264(wb_avcc, 640, 360)
-  assert_true(has(plain.id(), "do "), msg="\{t.stream_fed(plain.id())}")
+  assert_true(has(plain.id(), "do "), msg="\{Repr(t.stream_fed(plain.id()))}")
   plain.close()
   s.close()
 }

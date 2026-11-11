@@ -78,7 +78,7 @@ pub fn fix_entry(name : String, dir : Bool, size : Int, time : String) -> Json {
 /// A made-up file's extension, lower case (what its kind is made up from).
 pub fn fix_ext(name : String) -> String {
   match name.rev_find(".") {
-    Some(i) if i > 0 => name.view(start_offset=i + 1).to_owned().to_lower()
+    Some(i) if i > 0 => name.exact_view(start=i + 1).to_owned().to_lower()
     _ => ""
   }
 }

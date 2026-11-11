@@ -85,7 +85,7 @@ fn input_taped(kind : String, t : Double, args : Array[Double], text? : String) 
 /// One INPUT line handed on again (Tester::replay_frames), the fake host's clock at its time while it is.
 fn replay_input(f : FakeHost, line : String) -> Unit {
   guard line.find("INPUT ") is Some(i) else { return }
-  let j = @json.parse(line.view(start_offset=i + 6).to_owned()) catch { _ => return }
+  let j = @json.parse(line.exact_view(start=i + 6).to_owned()) catch { _ => return }
   guard j is Object(m) else { return }
   let a : Array[Double] = match m.get("a") {
     Some(Array(xs)) =>

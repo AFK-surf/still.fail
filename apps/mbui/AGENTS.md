@@ -271,9 +271,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - Off for good: 33, a line past 65535 columns (the fonts' bytes and kept data are written on one line on purpose);
   79, said at every `derive` of a public type and stopped only by an `extend` declaration for each trait of each type
   (~600 lines of boilerplate); and 29, an unused package, since an import kept for its effect (every main's of
-  mbui's host, `mbui/src/host`) or for one target's files cannot be told from an unused one in a `moon.pkg`. The rest
-  of the off list is what is not mended yet: it only shrinks, each kind going to an error in the change that mends the
-  last of it.
+  mbui's host, `mbui/src/host`) or for one target's files cannot be told from an unused one in a `moon.pkg`.
+- A value shown for a person who debugs is `Repr(x)` or `#derive(Debug)`; `Show` is for words meant to be read as they
+  are written, by hand. A text that is itself a value (a key, a line a script or a test reads) and held an option, an
+  array or a rectangle is written by ui's `some_text`, `list_text`, `rect_text` (`mbui/src/ui/shown_text.mbt`).
 - What is kept unused for a reason says so where it is declared: `#warnings("-unused_value")` (a function, a derive),
   `-unused_field`, `-unused_constructor` or `-struct_never_constructed` on that declaration alone, the reason on the
   line above (its tests alone use it; not used by the app yet; a state matched only by `_`). On a struct it hushes every

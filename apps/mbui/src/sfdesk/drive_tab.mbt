@@ -277,13 +277,13 @@ fn ftab_places(c : @ui.Ctx, src : Source, ws : String, stations : Array[DvStatio
 ///|
 /// The way to `abs`: from the home (主目录) when it is under it, else from the top of the disk.
 fn ftab_trail(abs : String, home : String) -> Array[(String, String)] {
-  let trim = fn(p : String) { if p.length() > 1 && p.has_suffix("/") { p.view(end_offset=p.length() - 1).to_owned() } else { p } }
+  let trim = fn(p : String) { if p.length() > 1 && p.has_suffix("/") { p.exact_view(end=p.length() - 1).to_owned() } else { p } }
   let at = trim(abs)
   let h = trim(home)
   let out : Array[(String, String)] = []
   let rest = if h != "" && (at == h || at.has_prefix(h + "/")) {
     out.push((@sf.t("web-pages.drive.home"), h))
-    at.view(start_offset=h.length()).to_owned()
+    at.exact_view(start=h.length()).to_owned()
   } else {
     out.push(("/", "/"))
     at
@@ -332,7 +332,7 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
     if abs == root {
       ftab_go(at.station, root, "")
     } else if abs.has_prefix(prefix) {
-      ftab_go(at.station, root, abs.view(start_offset=prefix.length()).to_owned())
+      ftab_go(at.station, root, abs.exact_view(start=prefix.length()).to_owned())
     } else {
       ftab_go(at.station, abs, "")
     }

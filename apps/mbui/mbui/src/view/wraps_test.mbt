@@ -94,11 +94,11 @@ test "wraps: words that fit beside each other stay on one line, the first growin
     })
   }
   let wide = at()
-  assert_true(wide[1].1 == 0.0 && wide[1].0 > wide[0].0, msg="one line: \{wide}")
-  assert_true(wide[0].2 + 12.0 + wide[1].2 == 300.0, msg="the first grown to the line's room: \{wide}")
+  assert_true(wide[1].1 == 0.0 && wide[1].0 > wide[0].0, msg="one line: \{Repr(wide)}")
+  assert_true(wide[0].2 + 12.0 + wide[1].2 == 300.0, msg="the first grown to the line's room: \{Repr(wide)}")
   width.set(wide[1].2 + 20.0)
   let narrow = at()
-  assert_true(narrow[1].1 > 0.0 && narrow[1].0 == 0.0, msg="the second under the first: \{narrow}")
+  assert_true(narrow[1].1 > 0.0 && narrow[1].0 == 0.0, msg="the second under the first: \{Repr(narrow)}")
 }
 
 ///|
@@ -147,5 +147,5 @@ test "wraps: words exactly as wide as the line beside each other stay on it, wha
   grows.set(1.0)
   width.set(first_w + 12.0 + free[1].2)
   let exact = at()
-  assert_true(exact[1].1 == exact[0].1, msg="one line at \{first_w} + 12 + \{free[1].2}: \{exact} (free \{free})")
+  assert_true(exact[1].1 == exact[0].1, msg="one line at \{first_w} + 12 + \{free[1].2}: \{Repr(exact)} (free \{Repr(free)})")
 }

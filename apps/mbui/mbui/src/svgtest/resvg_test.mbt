@@ -95,7 +95,7 @@ test "resvg suite" {
     total += 1
     let svg = @utf8.decode(@skiatest.read_file(dir + name + ".svg")) catch { _ => "" }
     let opt = { ..@svg.Options::default(), fonts, read_file: fn(f) {
-        let b = @skiatest.read_file(dir + name.rev_find("/").map(fn(i) { name.view(end_offset=i + 1).to_owned() }).unwrap_or("") + f)
+        let b = @skiatest.read_file(dir + name.rev_find("/").map(fn(i) { name.exact_view(end=i + 1).to_owned() }).unwrap_or("") + f)
         if b.length() > 0 { Some(b) } else { None }
       } }
     let expected = @skiatest.decode_png(@skiatest.read_file(dir + name + ".png"))

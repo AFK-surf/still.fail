@@ -15,7 +15,7 @@ fn asked_again(heard : Array[String]) -> Array[String] {
   let again : Array[String] = []
   for h in heard {
     guard h.has_prefix("out ") else { continue }
-    let j = @json.parse(h.view(start_offset=4).to_owned()) catch { _ => continue }
+    let j = @json.parse(h.exact_view(start=4).to_owned()) catch { _ => continue }
     guard j is Object(m) && m.get("id") is Some(Number(n, ..)) else { continue }
     let id = n.to_int()
     match (m.get("subscribe"), m.get("unsubscribe")) {

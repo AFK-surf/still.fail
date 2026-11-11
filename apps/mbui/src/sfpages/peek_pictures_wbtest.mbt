@@ -93,7 +93,7 @@ fn peek_pictures_whole(seen : Array[((Double, Double, Double, Double)?, Array[(D
       return "frame \{i} of those shown: \{f.1.length()} images, not \{images}"
     }
     if f.0 != Some(last) || f.1 != last_images {
-      return "frame \{i} of those shown: at \{f.0}, images \{f.1}; at rest at \{last}, \{last_images}"
+      return "frame \{i} of those shown: at \{Repr(f.0)}, images \{Repr(f.1)}; at rest at \{Repr(last)}, \{Repr(last_images)}"
     }
   }
   ""

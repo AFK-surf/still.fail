@@ -88,7 +88,7 @@ fn staged_file_name(key : String) -> String {
   let path = key.replace_all(old="\\", new="/")
   match path.rev_find("/") {
     Some(i) => {
-      let parent = path.view(end_offset=i).to_owned()
+      let parent = path.exact_view(end=i).to_owned()
       if @sfbase.base_name(parent) == "uploads" { @sfbase.base_name(path) } else { "" }
     }
     None => ""
@@ -218,7 +218,7 @@ fn owner_of(here : MessageHere, a : Attachment) -> String {
 /// The last part of a path: the name the station keeps a file by (storedName).
 fn stored_name(path : String) -> String {
   match path.rev_find("/") {
-    Some(i) => path.view(start_offset=i + 1).to_owned()
+    Some(i) => path.exact_view(start=i + 1).to_owned()
     None => path
   }
 }
@@ -731,7 +731,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     letterbox~,
     list=list_of(here),
     over=fn(alpha) { over(alpha * marks) },
-    said="\{marks} \{coming} \{a.duration} \{corner}",
+    said="\{marks} \{@ui.some_text(coming)} \{a.duration} \{corner}",
   )
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
   // held by a finger for its menu: lifted over the menu's scrim (@sf.lift_over)

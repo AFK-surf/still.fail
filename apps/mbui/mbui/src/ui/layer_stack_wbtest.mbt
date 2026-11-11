@@ -372,7 +372,7 @@ test "an old 丙 at 3, a menu at no place built after it, an old view's own back
     each.push(k.closed.copy())
   }
   t.draw()
-  assert_eq((menu_stack.val, kept, each), (-1, true, [["丙的菜单"], ["丙的菜单", "丙"], ["丙的菜单", "丙", "乙页"]]), msg="\{why} \{builds.val - built} \{nodes_run.evented}")
+  assert_eq((menu_stack.val, kept, each), (-1, true, [["丙的菜单"], ["丙的菜单", "丙"], ["丙的菜单", "丙", "乙页"]]), msg="\{Repr(why)} \{builds.val - built} \{nodes_run.evented}")
 }
 
 ///|

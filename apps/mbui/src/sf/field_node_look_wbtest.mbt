@@ -5,11 +5,12 @@
 
 ///|
 /// Which line to type in: one line, one a small panel's (`small`), lines (textarea).
+#derive(Debug)
 priv enum FieldKind {
   OneLine
   SmallLine
   ManyLines
-} derive(Show)
+}
 
 ///|
 /// A line to type in of `kind` in a column 300 wide at the window's top left, started as `platform`, words `scale` as
@@ -105,7 +106,7 @@ test "input_node and textarea_node drawn as input and textarea, each instance: a
         let old = field_look_states(false, kind, platform, scale)
         let made = field_look_states(true, kind, platform, scale)
         for i, s in old {
-          seg_same(made[i].1, s.1, "\{kind} platform \{platform} scale \{scale} \{s.0}")
+          seg_same(made[i].1, s.1, "\{Repr(kind)} platform \{platform} scale \{scale} \{s.0}")
         }
       }
     }
@@ -126,7 +127,7 @@ test "input_node, keyboard and mouse: the pointer on its padding (in its frame, 
     t.run_for(@ui.move_most_ms)
     lit.push((padding, t.cursor()))
   }
-  assert_eq(lit[1], lit[0], msg="old \{lit[0]}, made \{lit[1]}")
+  assert_eq(lit[1], lit[0], msg="old \{Repr(lit[0])}, made \{Repr(lit[1])}")
 }
 
 ///|

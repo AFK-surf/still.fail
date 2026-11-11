@@ -26,8 +26,8 @@ fn glyph_look_of(at : GlyphAt) -> GlyphLook {
 /// or View::words, View::glyphs_by). What is read at once (the Tester's reads are the last made's): what each glyph was
 /// told (its number, line, middle along it and its line's box), and each glyph drawn, to a hundredth.
 fn glyphs_told_drawn(node : Bool, runs : Bool, words : String, cut : Int, w : Double) -> (Array[String], Array[String]) {
-  let first = words.view(end_offset=cut).to_owned()
-  let second = words.view(start_offset=cut).to_owned()
+  let first = words.exact_view(end=cut).to_owned()
+  let second = words.exact_view(start=cut).to_owned()
   let told : Array[String] = []
   let r2 = fn(x : Double) { (x * 100.0).round() / 100.0 }
   // (what each glyph is told, kept as it is asked: the frame's last asking of each number the one kept)
@@ -94,12 +94,12 @@ test "a node's glyphs by a look of their own: each told its number, its line and
       let (old_told, old_drawn) = glyphs_told_drawn(false, runs, "ab cd efg hij", 6, w)
       let (made_told, made_drawn) = glyphs_told_drawn(true, runs, "ab cd efg hij", 6, w)
       assert_eq(made_told, old_told, msg="\{at}: told")
-      assert_eq(made_drawn, old_drawn, msg="\{at}: drawn: only made \{made_drawn.filter(fn(x) { !old_drawn.contains(x) })} | only old \{old_drawn.filter(fn(x) { !made_drawn.contains(x) })}")
+      assert_eq(made_drawn, old_drawn, msg="\{at}: drawn: only made \{Repr(made_drawn.filter(fn(x) { !old_drawn.contains(x) }))} | only old \{Repr(old_drawn.filter(fn(x) { !made_drawn.contains(x) }))}")
       // (all its glyphs told and drawn: ab cd efg hij, 10)
-      assert_eq(made_told.length(), 10, msg="\{at}: \{made_told}")
+      assert_eq(made_told.length(), 10, msg="\{at}: \{Repr(made_told)}")
       // (narrow: on two lines, the middle along each from its own start: the second line's first glyph as the first's)
       if w < 100.0 {
-        assert_true(made_told[0].has_prefix("0: line 0, cx 3.75,") && made_told[4].has_prefix("4: line 1, cx 3.75,"), msg="\{at}: \{made_told}")
+        assert_true(made_told[0].has_prefix("0: line 0, cx 3.75,") && made_told[4].has_prefix("4: line 1, cx 3.75,"), msg="\{at}: \{Repr(made_told)}")
       }
     }
   }
@@ -145,7 +145,7 @@ test "the cells a line of words is cut into (glyph_cells): each glyph's middle w
       let told = node_glyph_middles(words, mono, scale)
       let cells = glyph_cells(words, { ..@view.words_plain, wrap: false }, scale, mono~).map(fn(c) { c.0 })
       assert_eq(cells, told, msg="\{words} at \{scale}")
-      assert_true(cells.length() > 0 && cells.iter().all(fn(x) { x > 0.0 }), msg="\{cells}")
+      assert_true(cells.length() > 0 && cells.iter().all(fn(x) { x > 0.0 }), msg="\{Repr(cells)}")
     }
   }
 }

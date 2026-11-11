@@ -62,7 +62,7 @@ test "touch wide, a tall window: a link held (its menu up), then a picture in th
   }
   let (px, py) = match t.locate("img:compare.png") {
     [p, ..] => p
-    [] => fail("the picture not on the screen with the link: \{link}")
+    [] => fail("the picture not on the screen with the link: \{Repr(link)}")
   }
   let page = (app.nav.top(), app.nav.depth())
   // (nothing over it: the picture opens, back closes it)

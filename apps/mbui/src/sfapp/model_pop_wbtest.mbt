@@ -16,8 +16,8 @@ test "wide, short names: the model's panel as wide as what it holds, not as wide
   let (px, _, pw, _) = t.get(@ui.Role::Dialog).rect
   let effort = t.get(Radio, label="高").rect
   // (what it holds narrow, its foot the widest of it: far narrower than the most it may be)
-  assert_true(pw < 2.0 * @sfpages.triple_models_least, msg="\{t.get(@ui.Role::Dialog).rect}")
-  assert_true(effort.0 + effort.2 <= px + pw - @sf.panel_pad, msg="\{t.get(@ui.Role::Dialog).rect} \{effort}")
+  assert_true(pw < 2.0 * @sfpages.triple_models_least, msg="\{Repr(t.get(@ui.Role::Dialog).rect)}")
+  assert_true(effort.0 + effort.2 <= px + pw - @sf.panel_pad, msg="\{Repr(t.get(@ui.Role::Dialog).rect)} \{Repr(effort)}")
   let model = t.get(Button, label="Opus 5.5").rect
   assert_true(model.0 + model.2 <= px + pw)
 }
@@ -120,7 +120,7 @@ test "a new chat's model panel opens where it stays: what the page has shown unt
     rects.iter().all(fn(r) {
       (r.0 - fx).abs() < 1.0 && (r.1 + r.3 - (fy + fh)).abs() < 1.0 && (r.2 / r.3 - fw / fh).abs() < 0.02 * fw / fh
     }),
-    msg="\{rects}",
+    msg="\{Repr(rects)}",
   )
 }
 
@@ -178,12 +178,12 @@ test "wide, crowded, the panel gone up from its control: the configuration used 
   t.run_for(@ui.move_most_ms)
   let first = t.get(Button, label="GPT-6 Astra · 中").rect
   let foot = t.get(Button, label="DeepSeek Harness").rect
-  assert_true(wholly_in_view(t, first), msg="\{first}")
-  assert_true(first.1 + first.3 <= foot.1, msg="\{first} over the foot's \{foot}")
+  assert_true(wholly_in_view(t, first), msg="\{Repr(first)}")
+  assert_true(first.1 + first.3 <= foot.1, msg="\{Repr(first)} over the foot's \{Repr(foot)}")
   t.click(Button, label="GPT-6 Astra · 中")
   t.run_for(@kit.presence_in_ms)
   let saves = calls.filter(fn(c) { c.0 == "pick.save" })
-  assert_eq(saves.length(), 1, msg="\{saves}")
+  assert_eq(saves.length(), 1, msg="\{Repr(saves)}")
   let p = Some(saves[0].1)
   assert_eq((text(p, "model"), text(p, "runtime"), text(p, "effort")), ("gpt-6-astra", "codex", "medium"))
   assert_eq((field(p, "fast"), field(p, "context")), (Some(Json::null()), Some(Json::null())))
@@ -216,15 +216,15 @@ test "wide, few models: the configurations used most under 常用搭配, one mod
   assert_true(t.query(Button, label="全部模型") is None)
   for c in combos {
     // under their name, nearest what opened the panel (its foot: it opens up from the composer); no star
-    assert_true(c.1.1 > head.1, msg="\{c} under 常用搭配 at \{head}")
+    assert_true(c.1.1 > head.1, msg="\{Repr(c)} under 常用搭配 at \{Repr(head)}")
     assert_true(!starred_beside(t, c.1), msg="\{c.0} has a star")
   }
   // (the most used nearest what opened it)
-  assert_true(combos[0].1.1 > combos[1].1.1 && combos[1].1.1 > combos[2].1.1, msg="\{combos}")
+  assert_true(combos[0].1.1 > combos[1].1.1 && combos[1].1.1 > combos[2].1.1, msg="\{Repr(combos)}")
   for m in models {
-    assert_true(m.1.1 < head.1, msg="\{m} over 常用搭配 at \{head}")
+    assert_true(m.1.1 < head.1, msg="\{Repr(m)} over 常用搭配 at \{Repr(head)}")
     assert_true(starred_beside(t, m.1), msg="\{m.0} has no star")
-    assert_true(effort.0 >= m.1.0 + m.1.2, msg="\{m} \{effort}")
+    assert_true(effort.0 >= m.1.0 + m.1.2, msg="\{Repr(m)} \{Repr(effort)}")
   }
   // the starred one both among the starred and under 常用搭配, its star lit
   assert_true(t.query(Button, label="喜欢 Sonnet 5") is Some(_))
@@ -239,7 +239,7 @@ test "wide, few models: the configurations used most under 常用搭配, one mod
   t.run_for(@kit.presence_in_ms)
   assert_true(t.query(@ui.Role::Dialog) is None, msg="its panel closed")
   let saves = calls.filter(fn(c) { c.0 == "pick.save" })
-  assert_eq(saves.length(), 1, msg="\{saves}")
+  assert_eq(saves.length(), 1, msg="\{Repr(saves)}")
   let p = Some(saves[0].1)
   assert_eq((text(p, "model"), text(p, "runtime"), text(p, "effort")), ("claude-opus-5-5", "claude", "high"))
   assert_eq(field(p, "fast"), Some(Json::null()))
@@ -261,7 +261,7 @@ test "wide, few models: each configuration used most has what takes it out where
     assert_true(!starred_beside(t, rects[i]), msg="\{l} has a star")
     assert_true(
       forget.1 >= rects[i].1 - 1.0 && forget.1 + forget.3 <= rects[i].1 + rects[i].3 + 1.0 && forget.0 >= rects[i].0 + rects[i].2,
-      msg="\{l}: \{forget} beside \{rects[i]}",
+      msg="\{l}: \{Repr(forget)} beside \{Repr(rects[i])}",
     )
   }
   assert_eq(t.audit().filter(fn(f) { !held.contains(f) }), [])
@@ -269,7 +269,7 @@ test "wide, few models: each configuration used most has what takes it out where
   t.click(Button, label="从常用搭配移除 GPT-6 · 中")
   t.run_for(@ui.move_most_ms)
   let forgets = calls.filter(fn(c) { c.0 == "pick.forget" })
-  assert_eq(forgets.length(), 1, msg="\{forgets}")
+  assert_eq(forgets.length(), 1, msg="\{Repr(forgets)}")
   let p = Some(forgets[0].1)
   assert_eq((text(p, "model"), text(p, "runtime"), text(p, "effort")), ("gpt-6", "codex", "medium"))
   assert_eq((field(p, "fast"), field(p, "context")), (Some(Json::null()), Some(Json::null())))
@@ -316,7 +316,7 @@ test "wide, few models: the configuration it runs on pressed sends nothing; anot
   t.click(Button, label="Opus 5.5 · 高")
   t.run_for(@kit.presence_in_ms)
   assert_true(t.query(@ui.Role::Dialog) is None, msg="its panel closed")
-  assert_eq(calls.filter(fn(c) { c.0 == "pick.save" }).length(), 0, msg="\{calls}")
+  assert_eq(calls.filter(fn(c) { c.0 == "pick.save" }).length(), 0, msg="\{Repr(calls)}")
   let t = model_pop_calls("newchat-model", calls)
   t.click(Button, label="GPT-6 · 中")
   t.run_for(@kit.presence_in_ms)
@@ -378,16 +378,16 @@ test "wide, many models and Codex's efforts and speeds: the models, how hard it 
   // 放在整个面板的右边」「模型跟思考深度的并排的」)
   let levels = ["最低", "低", "中", "高", "很高", "最高", "Ultra"].map(fn(l) raise { t.get(Radio, label=l).rect })
   for i, r in levels {
-    assert_true(r.0 == levels[0].0 && r.0 >= all.0 + all.2, msg="\{levels}, beside \{all}")
-    assert_true(i == 0 || r.1 > levels[i - 1].1, msg="\{levels}")
-    assert_true(r.0 + r.2 <= px + pw && r.1 + r.3 <= py + ph, msg="\{r} past the panel")
+    assert_true(r.0 == levels[0].0 && r.0 >= all.0 + all.2, msg="\{Repr(levels)}, beside \{Repr(all)}")
+    assert_true(i == 0 || r.1 > levels[i - 1].1, msg="\{Repr(levels)}")
+    assert_true(r.0 + r.2 <= px + pw && r.1 + r.3 <= py + ph, msg="\{Repr(r)} past the panel")
   }
   // the runtime and how fast at the foot, by who runs it, how fast saying how fast it runs (its account's standard: no
   // 跟随订阅), pressed the two ways in a pick (「速度放在面板下面，跟账号差不多的位置」「运行时不应该放那个位置吧」)
   let runtime = t.get(Button, label="DeepSeek Harness").rect
   let speed = t.get(Button, label="标准").rect
-  assert_true(runtime.1 == speed.1, msg="\{runtime} \{speed}")
-  assert_true(speed.1 >= levels[levels.length() - 1].1 + levels[levels.length() - 1].3, msg="\{speed}")
+  assert_true(runtime.1 == speed.1, msg="\{Repr(runtime)} \{Repr(speed)}")
+  assert_true(speed.1 >= levels[levels.length() - 1].1 + levels[levels.length() - 1].3, msg="\{Repr(speed)}")
   assert_true(t.words().iter().all(fn(w) { w.0 != "跟随订阅" }), msg="跟随订阅 said")
   t.click(Button, label="标准")
   t.run_for(squeeze_opening)
@@ -403,7 +403,7 @@ test "wide: how hard it thinks picked in the panel is made what it runs on at on
     t.run_for(squeeze_opening)
     assert_eq(new_fix.effort, effort)
     let now = t.get(@ui.Role::Dialog).rect
-    assert_true(now.0 == opened.0 && now.2 == opened.2, msg="\{label} picked: \{now}, opened \{opened}")
+    assert_true(now.0 == opened.0 && now.2 == opened.2, msg="\{label} picked: \{Repr(now)}, opened \{Repr(opened)}")
   }
 }
 
@@ -414,7 +414,7 @@ test "wide: how much context at the foot after who runs it, as how fast is; its 
   let high = t.get(Radio, label="高").rect
   // (at the foot, with who runs it: 2026-11-03 用户「直接放最下面跟速度一样吧」)
   let context = t.get(Button, label="完整 · 1M").rect
-  assert_true(context.1 > high.1 + high.3 && context.1 + context.3 <= py + ph && context.0 + context.2 <= px + pw, msg="\{context}, the panel \{(px, py, pw, ph)}")
+  assert_true(context.1 > high.1 + high.3 && context.1 + context.3 <= py + ph && context.0 + context.2 <= px + pw, msg="\{Repr(context)}, the panel \{Repr((px, py, pw, ph))}")
   assert_true(t.words().iter().any(fn(w) { w.0 == "上下文" }), msg="no name before it")
   t.click(Button, label="完整 · 1M")
   t.run_for(@ui.move_most_ms)

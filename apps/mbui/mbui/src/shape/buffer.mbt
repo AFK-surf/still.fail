@@ -249,12 +249,26 @@ fn GlyphInfo::unhide(self : GlyphInfo) -> Unit {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Direction {
   LeftToRight
   RightToLeft
   TopToBottom
   BottomToTop
-} derive(Eq, Show, Debug)
+}
+
+///|
+/// By its name, as a shaping plan's key says it (ShapeFont::plan): what `derive(Show)` wrote.
+pub impl Show for Direction with output(self, logger) {
+  logger.write_string(
+    match self {
+      LeftToRight => "LeftToRight"
+      RightToLeft => "RightToLeft"
+      TopToBottom => "TopToBottom"
+      BottomToTop => "BottomToTop"
+    },
+  )
+}
 
 ///|
 fn Direction::is_horizontal(self : Direction) -> Bool {

@@ -15,7 +15,7 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   assert_true(t.find("整理发布清单") is Some(_))
   // (what the bar shows: its words seen, not those its row left out for the title and its agent, as a phone's is)
   let bar = fn(t : @ui.Tester) { t.words().filter(fn(w) { w.2 < 100.0 && w.5 > 0.0 }).map(fn(w) { w.0 }) }
-  assert_true(!bar(t).contains("你") && !bar(t).contains("林"), msg="its people left out for its title: \{bar(t)}")
+  assert_true(!bar(t).contains("你") && !bar(t).contains("林"), msg="its people left out for its title: \{Repr(bar(t))}")
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
   let (_, field_y) = t.find("发消息").unwrap()
@@ -30,8 +30,8 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   t.assert_idle()
   // its people in the bar where it has the room, lettered as it calls them: the viewer 「你」, not their name
   let wide = chat_tester("chat", w=480.0)
-  assert_true(bar(wide).contains("你"), msg="its people with the room: \{bar(wide)}")
-  assert_true(!bar(wide).contains("林"), msg="lettered as it calls them: \{bar(wide)}")
+  assert_true(bar(wide).contains("你"), msg="its people with the room: \{Repr(bar(wide))}")
+  assert_true(!bar(wide).contains("林"), msg="lettered as it calls them: \{Repr(bar(wide))}")
 }
 
 ///|
@@ -454,7 +454,7 @@ test "words sent going up into the list tell the core where it is as the message
   let told = named(calls, "chat.place").map(fn(m) { field(Some(m.params), "seq") })
   assert_true(told.length() > 0)
   for i in 1..<told.length() {
-    assert_true(told[i] != told[i - 1], msg="told again with the same message at the top: \{told}")
+    assert_true(told[i] != told[i - 1], msg="told again with the same message at the top: \{Repr(told)}")
   }
   fix_clock.val = None
 }
@@ -668,7 +668,7 @@ test "a table on a wide list, slid sideways: out over the margin, not cut at the
   t.run_for(long_press_ms)
   t.release(x - 20.0, y)
   let (shown, _, _, _) = t.shown_of(cell).unwrap()
-  assert_true(shown < column, msg="\{(shown, column)}")
+  assert_true(shown < column, msg="\{Repr((shown, column))}")
 }
 
 ///|

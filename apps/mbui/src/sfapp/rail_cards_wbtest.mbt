@@ -89,7 +89,7 @@ test "wide: a mouse's pointer over a rail card's ground is the arrow, over 分�
   let left = x + w + 6.0
   let points = [(left + 3.0, y + 20.0), (left + 160.0, y + 3.0), (left + 317.0, y + 20.0)]
   let grounds = points.map(fn(p) { shape_on(p.0, p.1) })
-  assert_eq(grounds, [Arrow, Arrow, Arrow], msg="its ground at \{points}")
+  assert_eq(grounds, [Arrow, Arrow, Arrow], msg="its ground at \{Repr(points)}")
   let (sx, sy, sw, sh) = t.get(Button, label="分享卡片").rect
   assert_eq(shape_on(sx + sw / 2.0, sy + sh / 2.0), Hand, msg="分享卡片")
 }

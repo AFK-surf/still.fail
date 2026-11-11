@@ -79,12 +79,12 @@ test "a node's words in pieces in a page whose words are picked: dragged over wi
     let t = tree_picked_tester(true)
     let next = dragged_at(t, x0, 51.0, x1, 51.0, t.time(), true)
     t.frame_at(next)
-    assert_eq(t.ctx().selected_text(), old_said, msg="\{case}")
-    assert_true(old_said != "", msg="the old one picked: \{case}")
+    assert_eq(t.ctx().selected_text(), old_said, msg="\{Repr(case)}")
+    assert_true(old_said != "", msg="the old one picked: \{Repr(case)}")
     // (drawn picked where the old one is, as big)
     let old_drawn = old_drawn_now
-    assert_true(old_drawn.length() > 0, msg="the old one drawn picked: \{case}")
-    assert_eq(picked_drawn(t), old_drawn, msg="drawn picked: \{case}")
+    assert_true(old_drawn.length() > 0, msg="the old one drawn picked: \{Repr(case)}")
+    assert_eq(picked_drawn(t), old_drawn, msg="drawn picked: \{Repr(case)}")
     // (pressed under them, where no words are: let go)
     let next = dragged_at(t, 350.0, 250.0, 350.0, 250.0, next + double_click_ms, true)
     t.frame_at(next)
@@ -100,7 +100,7 @@ test "a node's words in pieces picked by none where nothing says its words are, 
     let t = tree_picked_tester(picks, platform~)
     let next = dragged_at(t, 1.0, 51.0, 300.0, 51.0, t.time(), true)
     t.frame_at(next)
-    assert_eq(t.ctx().selected_text(), "", msg="\{case}")
+    assert_eq(t.ctx().selected_text(), "", msg="\{Repr(case)}")
   }
 }
 
@@ -109,10 +109,10 @@ test "a node's words in pieces with its line in its middle: dragged from its fir
   let t = tree_picked_tester(true, centered=true)
   let glyphs = t.drawn_instances().filter(fn(a) { a[5] == 1.0 }).map(fn(a) { (a[0], a[1], a[2], a[3]) })
   glyphs.sort_by(fn(a, b) { a.0.compare(b.0) })
-  assert_true(glyphs[0].0 > 20.0, msg="in its middle: \{glyphs[0]}")
+  assert_true(glyphs[0].0 > 20.0, msg="in its middle: \{Repr(glyphs[0])}")
   // (where its words are said to be (Tester::run_rects) where they are drawn: in its middle too)
   let rs = t.run_rects("hello")
-  assert_true(rs.length() == 1 && (rs[0].0 - glyphs[0].0).abs() < 2.0, msg="run_rects: \{rs} \{glyphs[0]}")
+  assert_true(rs.length() == 1 && (rs[0].0 - glyphs[0].0).abs() < 2.0, msg="run_rects: \{Repr(rs)} \{Repr(glyphs[0])}")
   // (its last move, the fifth of six (dragged_at: the sixth lets go where it is), where the fifth glyph begins)
   let (x0, to) = (glyphs[0].0 + 0.5, glyphs[4].0 + 0.5)
   let next = dragged_at(t, x0, 51.0, x0 + (to - x0) * 6.0 / 5.0, 51.0, t.time(), true)
@@ -120,7 +120,7 @@ test "a node's words in pieces with its line in its middle: dragged from its fir
   let drawn = picked_drawn(t)
   assert_eq(t.ctx().selected_text(), "hell")
   assert_eq(drawn.length(), 1)
-  assert_true((drawn[0].0 - glyphs[0].0).abs() < 2.0, msg="from its first glyph: \{drawn} \{glyphs[0]}")
+  assert_true((drawn[0].0 - glyphs[0].0).abs() < 2.0, msg="from its first glyph: \{Repr(drawn)} \{Repr(glyphs[0])}")
 }
 
 ///|
@@ -160,7 +160,7 @@ test "words picked in a page's list scrolled away and back (the nodes that show 
   let said = t.ctx().selected_text()
   assert_true(said.contains("第 0 段") && said.contains("第 1 段 hello"), msg="\{said}")
   let drawn = picked_drawn(t)
-  assert_true(drawn.length() >= 2, msg="drawn picked: \{drawn}")
+  assert_true(drawn.length() >= 2, msg="drawn picked: \{Repr(drawn)}")
   // (frames with something else moving: nothing found again)
   let found = tree_sels_made.val
   for k in 0..<5 {
@@ -246,7 +246,7 @@ test "words picked held past a page's list's foot, the list shorter under a poin
   let state = match tree_edge.val {
     Some(e) =>
       match e.scroll.bind(fn(s) { s.shown_by() }) {
-        Some(v) => "shown by a node, nowhere \{v.shown_nowhere()}, rect \{v.rect()}, speed \{e.speed}"
+        Some(v) => "shown by a node, nowhere \{v.shown_nowhere()}, rect \{Repr(v.rect())}, speed \{e.speed}"
         None => "shown by none"
       }
     None => "none"

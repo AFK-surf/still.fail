@@ -80,7 +80,7 @@ test "the pages of the stack come in the same way the first time and again" {
     tree.event(start, fn() { @sfbase.stack_open(page) })
     t.frame_at(start + @ui.move_most_ms / 4.0)
     let first = first_open_islands()
-    assert_true(first.iter().any(fn(p) { p.0.abs() > 1.0 || p.1.abs() > 1.0 }), msg="\{mode}: no page moving: \{first}")
+    assert_true(first.iter().any(fn(p) { p.0.abs() > 1.0 || p.1.abs() > 1.0 }), msg="\{mode}: no page moving: \{Repr(first)}")
     t.run_for(@ui.move_most_ms)
     tree.event(t.time(), fn() { app.nav.pop() |> ignore })
     t.run_for(@ui.move_most_ms)
@@ -117,7 +117,7 @@ test "stations: the first list after a wait or an empty list appears in place" {
     ready.set(true)
     t.frame()
     let first = (t.drawn_of("Willow").unwrap(), t.drawn_of("Maple").unwrap())
-    assert_true(first.1.1 > first.0.1, msg="the stations overlap when their first list comes: \{first}")
+    assert_true(first.1.1 > first.0.1, msg="the stations overlap when their first list comes: \{Repr(first)}")
     t.run_for(@ui.row_size_ms)
     assert_eq((t.drawn_of("Willow").unwrap(), t.drawn_of("Maple").unwrap()), first)
   }
@@ -225,7 +225,7 @@ test "a place made once made anew while it comes in goes on coming in from where
   let kept = usage_coming_in(false)
   let rebuilt = usage_coming_in(true)
   assert_eq(rebuilt, kept)
-  assert_true(kept[0].1 < kept[1].1 && kept[1].1 < 1.0, msg="\{kept}")
+  assert_true(kept[0].1 < kept[1].1 && kept[1].1 < 1.0, msg="\{Repr(kept)}")
 }
 
 ///|
@@ -245,7 +245,7 @@ test "a place made once, its place tapped again on the bar (no switch), then mad
   t.resize(390.0, 844.0)
   t.frame()
   let name = t.words().filter(fn(w) { w.0 == place_label("usage") })
-  assert_true(name.length() == 1 && name[0].1 == 16.0 && name[0].5 == 1.0, msg="\{name}")
+  assert_true(name.length() == 1 && name[0].1 == 16.0 && name[0].5 == 1.0, msg="\{Repr(name)}")
 }
 
 // A place of the bar shows what the device holds the frame it is switched to, never its bones first: the first time

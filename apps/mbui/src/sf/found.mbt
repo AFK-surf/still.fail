@@ -17,7 +17,7 @@ pub fn find_words(text : String, words : Array[String]) -> Array[(Int, Int)] {
     }
     let mut at = 0
     while at + w.length() <= lower.length() {
-      match lower.view(start_offset=at).find(w) {
+      match lower.exact_view(start=at).find(w) {
         Some(k) => {
           out.push((at + k, at + k + w.length()))
           at = at + k + w.length()
@@ -126,7 +126,7 @@ pub fn found_weight(runs : Array[@ui.Run], words : Array[String]) -> Array[@ui.R
         continue
       }
       let inside = ranges.iter().any(fn(m) { m.0 <= off + a && off + b <= m.1 })
-      let piece = r.text.view(start_offset=a, end_offset=b).to_owned()
+      let piece = r.text.exact_view(start=a, end=b).to_owned()
       out.push({ ..r, text: piece, weight: if inside && r.weight < 600 { 600 } else { r.weight } })
     }
     off = off + n

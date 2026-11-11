@@ -20,7 +20,7 @@ test "a chat scroll within its visible messages keeps their layout and reports t
   let next_row = t.row(visible.0).unwrap()
   let next_place = reading.top_off
   let perf = t.frame_perf()
-  let detail = "visible \{visible} -> \{next_visible}, row \{row} -> \{next_row}, reported \{place} -> \{next_place}, perf \{perf}, build \{t.built_why()}, paint \{t.painted_why()}"
+  let detail = "visible \{Repr(visible)} -> \{Repr(next_visible)}, row \{Repr(row)} -> \{Repr(next_row)}, reported \{place} -> \{next_place}, perf \{Repr(perf)}, build \{t.built_why()}, paint \{t.painted_why()}"
   assert_eq(next_visible, visible, msg="the measured scroll must keep the same visible rows: \{detail}")
   assert_true(next_row.1 < row.1, msg="the visible message must move: \{detail}")
   assert_true(next_place < place, msg="the chat must report its new reading place: \{detail}")
@@ -44,7 +44,7 @@ fn chat_scrolled_reference(keep : Bool) -> (Double, Double, String) raise {
   t.frame_at(at + 16.0)
   let after = t.run_rects(title)[0]
   assert_eq(t.visible(), visible, msg="the short scroll must keep the same chat rows")
-  assert_true(after.1 < before.1, msg="the reference must move with its message: \{before} -> \{after}")
+  assert_true(after.1 < before.1, msg="the reference must move with its message: \{Repr(before)} -> \{Repr(after)}")
   t.tap_run(title)
   let opened = match app.nav.top() {
     Chat(r) => r.session
@@ -58,7 +58,7 @@ fn chat_scrolled_reference(keep : Bool) -> (Double, Double, String) raise {
 test "a scrolled chat reference opens the same chat with or without kept rows" {
   let ordinary = chat_scrolled_reference(false)
   let kept = chat_scrolled_reference(true)
-  println("CHAT_SCROLL_REFERENCE ordinary=\{ordinary} retained=\{kept}")
+  println("CHAT_SCROLL_REFERENCE ordinary=\{Repr(ordinary)} retained=\{Repr(kept)}")
   assert_eq(ordinary.2, "s-c2", msg="the reference must open its chat after the scroll")
   assert_eq(kept, ordinary, msg="retained rows must move and respond as the ordinary path")
 }

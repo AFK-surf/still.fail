@@ -189,7 +189,7 @@ test "the page before that could not be read says why in its place, not asked fo
   }
   assert_eq(asked, [171])
   let words = @sf.t("web-main.chat.olderFailed", args=[("why", "连不上")])
-  assert_true(t.find(words) is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find(words) is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   // the core's wait over: asked again, there at the top
   failed.set(false)
   t.run_for(@ui.move_most_ms)

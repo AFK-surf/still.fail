@@ -55,10 +55,11 @@ pub fn set_platform(p : Int?) -> Unit {
 
 ///|
 /// What the person points with: a finger on the screen, or a mouse or a trackpad moving a pointer over it.
+#derive(Eq, Debug)
 pub(all) enum Pointing {
   Finger
   Mouse
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What the person points with here (a Tester's: its `pointing`, by default its `platform`'s): a finger on a phone's or a tablet's system (iOS,

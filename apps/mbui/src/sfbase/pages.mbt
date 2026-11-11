@@ -4,6 +4,7 @@
 
 ///|
 /// A page of the stack.
+#derive(Eq)
 pub(all) enum Page {
   Home
   /// a chat (chat.mbt)
@@ -37,7 +38,7 @@ pub(all) enum Page {
   Setting(@settings.Route)
   /// a station's screen, seen and driven (screen_view.mbt), over the app as Android's ScreenActivity is
   Screen(ScreenAt)
-} derive(Eq)
+}
 
 ///|
 /// Keep a chat's own reader while its navigation entry remains on the stack, including while another page covers it.
@@ -463,12 +464,13 @@ pub using @sf {
 /// one (the link's own, or the row's it was opened from; "" none). `until_gone`: opened for a while only (a login's
 /// page in the station's browser, its tab closed as the login ends): the page goes back by itself once the screen is
 /// gone.
+#derive(Eq)
 pub(all) struct ScreenAt {
   station : String
   screen : String
   title : String
   until_gone : Bool
-} derive(Eq)
+}
 
 ///|
 /// What page `p` is, by its kind alone: a name out of a fixed set written here, never a chat's, station's, session's,
@@ -564,13 +566,14 @@ fn setting_kind(r : @settings.Route) -> String {
 /// What the app shows as a whole (sfapp's shown_now says which): before it can show a workspace (the splash, the
 /// accounts or workspaces still read or failing), the way in signed out, the landing with no workspace, a share sheet
 /// over another app, or a page (the stack's top, the page the pane lands on on 中屏 and 大屏; a window of its own's).
+#derive(Eq)
 pub(all) enum Shown {
   Starting
   SignIn
   Landing
   Share
   Shows(Page)
-} derive(Eq)
+}
 
 ///|
 /// What the app shows by its kind alone (page_kind's for a page): what it tells the window thread's journal as that
@@ -764,20 +767,22 @@ pub fn open_page_over(p : Page) -> Unit {
 ///|
 /// A chat the page is of: its station, the session it is opened by (a row's `session`), its title and its station's
 /// name as the row said them (the page shows the view's own once it is read).
+#derive(Eq)
 pub(all) struct ChatRef {
   station : String
   session : String
   title : String
   station_name : String
-} derive(Eq)
+}
 
 ///|
 /// Where a page of a drive is: a station, one of its roots (None: the drive itself, its roots), a path under it.
+#derive(Eq)
 pub(all) struct DriveAt {
   station : String
   root : String?
   path : String
-} derive(Eq)
+}
 
 ///|
 /// As at the start: Home alone on the stack, nothing chosen here yet, nothing said, no page left (the app's reset; a

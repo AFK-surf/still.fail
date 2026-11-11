@@ -32,7 +32,7 @@ fn connect_asked(said : Array[String], page : String) -> @ui.Tester {
   new_run()
   let heard = fn(h : String) {
     guard h.has_prefix("out ") else { return }
-    let j = @json.parse(h.view(start_offset=4).to_owned()) catch { _ => return }
+    let j = @json.parse(h.exact_view(start=4).to_owned()) catch { _ => return }
     guard j is Object(m) && m.get("subscribe") is Some(Object(sub)) && sub.get("topic") is Some(String(topic)) else {
       return
     }
@@ -52,7 +52,7 @@ fn connect_asked(said : Array[String], page : String) -> @ui.Tester {
 test "连接 open: the connects' rows subscribed, no connect whole, nor what a connect's choice of a session lists" {
   let said : Array[String] = []
   let t = connect_asked(said, "connects")
-  assert_true(asked_of(said, "connects").contains("connects {\"scope\":\"ws1\",\"mine\":false}"), msg="\{said}")
+  assert_true(asked_of(said, "connects").contains("connects {\"scope\":\"ws1\",\"mine\":false}"), msg="\{Repr(said)}")
   assert_eq(asked_of(said, "connect"), [])
   assert_eq(asked_of(said, "connectCandidates"), [])
   assert_true(t.find("星火助手") is Some(_), msg="its rows show")
@@ -63,17 +63,17 @@ test "a single-session connect's page open: that connect and what its choice of 
   let said : Array[String] = []
   let t = connect_asked(said, "connect:ws1/st1#k2")
   let asked = asked_of(said, "connect")
-  assert_eq(asked.length(), 1, msg="\{said}")
+  assert_eq(asked.length(), 1, msg="\{Repr(said)}")
   assert_true(asked[0].contains("\"station\":\"ws1/st1\"") && asked[0].contains("\"id\":\"k2\""), msg=asked[0])
   let chose = asked_of(said, "connectCandidates")
-  assert_eq(chose.length(), 1, msg="\{said}")
+  assert_eq(chose.length(), 1, msg="\{Repr(said)}")
   assert_true(chose[0].contains("\"station\":\"ws1/st1\"") && chose[0].contains("\"id\":\"k2\""), msg=chose[0])
   assert_true(t.find("值班机器人") is Some(_), msg="its page shows it")
   // (the choice opens on what its page asked: nothing more asked, the session it could go into listed)
   t.tap_text("更换")
   t.run_for(@ui.move_most_ms)
   t.run_for(place_core_soon_ms * 4.0)
-  assert_eq(asked_of(said, "connectCandidates").length(), 1, msg="\{said}")
+  assert_eq(asked_of(said, "connectCandidates").length(), 1, msg="\{Repr(said)}")
   assert_true(t.find("单会话 · 值班机器人 · 3 轮 · 昨天") is Some(_), msg="the session it could go into listed")
   assert_eq(asked_of(said, "connect").length(), 1, msg="the page's own ask not made again")
 }
@@ -83,7 +83,7 @@ test "a multi-session connect's page open: that connect alone, nothing of a choi
   let said : Array[String] = []
   let t = connect_asked(said, "connect:ws1/st1#k1")
   let asked = asked_of(said, "connect")
-  assert_eq(asked.length(), 1, msg="\{said}")
+  assert_eq(asked.length(), 1, msg="\{Repr(said)}")
   assert_true(asked[0].contains("\"station\":\"ws1/st1\"") && asked[0].contains("\"id\":\"k1\""), msg=asked[0])
   assert_eq(asked_of(said, "connectCandidates"), [])
   assert_true(t.find("Slack 里问的报销流程") is Some(_), msg="its page shows its sessions")

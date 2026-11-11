@@ -71,7 +71,7 @@ test "a table dragged across on 小屏: it moves under the finger and back" {
   t.release(40.0, y)
   t.run_for(kept_rows_step_ms)
   let (x1, _) = t.drawn_of(cell).unwrap()
-  assert_true(x1 < x0, msg="\{(x0, x1)}")
+  assert_true(x1 < x0, msg="\{Repr((x0, x1))}")
   t.press_at(40.0, y)
   for step in 1..=8 {
     t.move_to(40.0 + step.to_double() * 40.0, y)

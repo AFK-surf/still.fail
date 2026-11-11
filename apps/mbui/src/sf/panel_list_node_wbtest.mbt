@@ -130,7 +130,7 @@ fn lists_words_of(t : @ui.Tester, side : String) -> Map[String, (Double, Double,
   for w in t.words() {
     // (a row's words where they meet its room: those past it cut away, whether made or not)
     if w.0.has_prefix(side + " ") && (w.0 == side + " end" || (w.2 + w.4 > 0.0 && w.2 < lists_room)) {
-      out[w.0.view(start_offset=side.length() + 1).to_owned()] = (w.1 - dx, w.2, w.5)
+      out[w.0.exact_view(start=side.length() + 1).to_owned()] = (w.1 - dx, w.2, w.5)
     }
   }
   out
@@ -151,7 +151,7 @@ fn lists_same_words(t : @ui.Tester, at : String) -> Unit raise {
     let n = new.get(k).unwrap()
     assert_true(
       (n.0 - o.0).abs() < 0.01 && (n.1 - o.1).abs() < 0.01 && (n.2 - o.2).abs() < 0.01,
-      msg="\{at}: row \{k} old \{o} new \{n}",
+      msg="\{at}: row \{k} old \{Repr(o)} new \{Repr(n)}",
     )
   }
 }
@@ -191,12 +191,12 @@ fn lists_alphas(t : @ui.Tester, side : String) -> Array[Int] {
 /// moment, said).
 fn lists_same_rects(t : @ui.Tester, at : String) -> Unit raise {
   let (rn, ro) = (lists_rects_of(t, "new"), lists_rects_of(t, "old"))
-  assert_eq(rn, ro, msg="\{at}: drawn new \{rn} old \{ro}")
+  assert_eq(rn, ro, msg="\{at}: drawn new \{Repr(rn)} old \{Repr(ro)}")
   let (an, ao) = (lists_alphas(t, "new"), lists_alphas(t, "old"))
   for i, a in an {
     // (the tree's bar (@ui.tree_scroll_bar) fading after the wheel is one in 255 more or less opaque than the old view's
     // at some moments, its fade worked out its own way: within that)
-    assert_true((a - ao[i]).abs() <= 1, msg="\{at}: alphas new \{an} old \{ao}")
+    assert_true((a - ao[i]).abs() <= 1, msg="\{at}: alphas new \{Repr(an)} old \{Repr(ao)}")
   }
 }
 
@@ -277,12 +277,12 @@ test "panel_list_node: dragged and let go with a finger, where its rows are at e
     keys_old.sort()
     let keys_new = n.keys().collect()
     keys_new.sort()
-    assert_eq(keys_new, keys_old, msg="moment \{i}: rows drawn new \{keys_new} old \{keys_old}")
+    assert_eq(keys_new, keys_old, msg="moment \{i}: rows drawn new \{Repr(keys_new)} old \{Repr(keys_old)}")
     for k, ov in o {
       let nv = n.get(k).unwrap()
       // (the node's scroll put on the window's pixels as it is flung (half a point at 2), the old one's anywhere between
       // them: within one)
-      assert_true((nv.1 - ov.1).abs() <= 0.5 && (nv.2 - ov.2).abs() < 0.01, msg="moment \{i}: row \{k} old \{ov} new \{nv}")
+      assert_true((nv.1 - ov.1).abs() <= 0.5 && (nv.2 - ov.2).abs() < 0.01, msg="moment \{i}: row \{k} old \{Repr(ov)} new \{Repr(nv)}")
     }
   }
   let meeting = lists_meeting(60, lists_scrolled(t, 60, first_y), lists_room)
@@ -295,7 +295,7 @@ test "capped_node: as tall as what it holds under its most, its words under it w
   t.run_for(@ui.move_most_ms)
   lists_same_words(t, "short")
   let end = lists_words_of(t, "new").get("end").unwrap()
-  assert_true(end.1 >= lists_row_top(3) - 0.01 && end.1 < lists_room, msg="its words under it: \{end}")
+  assert_true(end.1 >= lists_row_top(3) - 0.01 && end.1 < lists_room, msg="its words under it: \{Repr(end)}")
 }
 
 ///|
@@ -306,7 +306,7 @@ test "capped_node: past its most, kept to it, scrolled by the wheel as the old o
     lists_same_words(t, "at rest, platform \{platform}")
     lists_same_rects(t, "capped at rest, platform \{platform}")
     let end = lists_words_of(t, "new").get("end").unwrap()
-    assert_true((end.1 - lists_room).abs() < 0.01, msg="its words under its most: \{end}")
+    assert_true((end.1 - lists_room).abs() < 0.01, msg="its words under its most: \{Repr(end)}")
   }
   let (t, _, _) = lists_tester(20, capped=true)
   t.run_for(@ui.move_most_ms)

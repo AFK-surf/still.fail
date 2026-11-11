@@ -252,7 +252,7 @@ pub fn Pages::text_of(self : Pages, i : Int) -> String {
             if sb.to_string().length() > 0 {
               sb.write_char('\n')
             }
-            sb.write_string(s.view(start_offset=a, end_offset=b).to_owned())
+            sb.write_string(s.exact_view(start=a, end=b).to_owned())
           }
           _ => ()
         }

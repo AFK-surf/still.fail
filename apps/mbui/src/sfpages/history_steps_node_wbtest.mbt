@@ -90,7 +90,7 @@ fn steps_code_lines(t : @ui.Tester, code : String) -> Array[String] {
   .filter(fn(l) { l != "" })
   .map(fn(l) {
     let rects = t.run_rects(l.to_owned()).map(fn(r) { "\{(r.0 * 100.0).round() / 100.0},\{(r.1 * 100.0).round() / 100.0} \{(r.2 * 100.0).round() / 100.0}x\{(r.3 * 100.0).round() / 100.0}" })
-    "\{l}: \{rects}"
+    "\{l}: \{@ui.list_text(rects)}"
   })
 }
 
@@ -106,9 +106,9 @@ test "a call's code of two lines in the history: on two lines, each where an old
   let made_box = made_t.rect_of("moon check")
   // (each line on a line of its own, the second under the first)
   let ys = fn(t : @ui.Tester) { ["moon test", "moon check"].map(fn(l) { t.run_rects(l).map(fn(r) { r.1 }) }) }
-  assert_eq(made, old, msg="each line where an old view's code block draws it:\nmade \{made}\nold  \{old}")
-  assert_eq(made_box, old_box, msg="its words as wide and as tall as an old view's: made \{made_box}, old \{old_box}")
+  assert_eq(made, old, msg="each line where an old view's code block draws it:\nmade \{Repr(made)}\nold  \{Repr(old)}")
+  assert_eq(made_box, old_box, msg="its words as wide and as tall as an old view's: made \{Repr(made_box)}, old \{Repr(old_box)}")
   let lines = ys(made_t)
-  assert_true(lines[0].length() == 1 && lines[1].length() == 1 && lines[1][0] > lines[0][0], msg="\{lines}")
+  assert_true(lines[0].length() == 1 && lines[1].length() == 1 && lines[1][0] > lines[0][0], msg="\{Repr(lines)}")
   steps_reset()
 }

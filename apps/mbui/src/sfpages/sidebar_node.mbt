@@ -246,7 +246,7 @@ fn chats_pane_node(
   // another, View::scrolls_window's reused): as its chat is now, the last it was where it is gone from the list)
   let row_line = fn(line : @view.View, key : () -> String) {
     motion.line_node(line, key)
-    let name = fn() { key().view(start_offset=2).to_owned() }
+    let name = fn() { key().exact_view(start=2).to_owned() }
     guard @signals.untracked(fn() { item_of(name()) }) is Some(first) else { return }
     // (looked up once as its key or the days change, not by each of what of the row reads it: the last it was where it
     // is gone)
@@ -309,7 +309,7 @@ fn chats_pane_node(
         "wait" => list_waiting_node(line, src, read, frame.at, tips, stint)
         "empty" => list_empty_node(line, read, filter, frame.at)
         _ if k.has_prefix("part/") => {
-          let part = k.view(start_offset=5).to_owned()
+          let part = k.exact_view(start=5).to_owned()
           let (view, _) = @signals.untracked(read)
           let parts = (frame.before)(filter, view) + (frame.after)(filter, view)
           match parts.iter().find_first(fn(p) { p.key == part }) {
@@ -319,7 +319,7 @@ fn chats_pane_node(
         }
         _ if k.has_prefix("h/") => {
           motion.line_node(line, fn() { k })
-          @sf.list_heading_node(line, fn() { k.view(start_offset=2).to_owned().replace_all(old=moved_mark, new="") }, frame.at)
+          @sf.list_heading_node(line, fn() { k.exact_view(start=2).to_owned().replace_all(old=moved_mark, new="") }, frame.at)
         }
         _ => {
           // (a row gone, or the copy of one gone ahead of others where it was: as it was, drawn only)
@@ -365,7 +365,7 @@ fn chats_pane_node(
         @sf.style_node(line, fn() { @sf.list_line(frame.at) })
         if @signals.untracked(key).has_prefix("h/") {
           motion.line_node(line, key)
-          @sf.list_heading_node(line, fn() { key().view(start_offset=2).to_owned() }, frame.at)
+          @sf.list_heading_node(line, fn() { key().exact_view(start=2).to_owned() }, frame.at)
         } else {
           row_line(line, key)
         }
@@ -629,13 +629,13 @@ fn RowsMotion::said(
     for k in was {
       if ahead.contains(k) {
         let copy = k + moved_mark
-        self.going[copy] = (self.last_items.get(k.view(start_offset=2).to_owned()), prev)
+        self.going[copy] = (self.last_items.get(k.exact_view(start=2).to_owned()), prev)
         self.moving[copy] = (false, now)
         prev = copy
         continue
       }
       if !here.contains(k) && !self.going.contains(k) {
-        let name = k.view(start_offset=2).to_owned()
+        let name = k.exact_view(start=2).to_owned()
         self.going[k] = (if k.has_prefix("r/") { self.last_items.get(name) } else { None }, prev)
         self.moving[k] = (false, now)
       }

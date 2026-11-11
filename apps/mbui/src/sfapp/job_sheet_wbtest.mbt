@@ -129,17 +129,17 @@ test "小屏: a job's output as nodes follows its end as the old one's did (Ctx:
   @sffixture.fix_now(fn() { @sffixture.fix_job_more.val += job_lines_come })
   t.run_for(@ui.move_most_ms)
   let newest = "deploy check \{job_lines_come}"
-  assert_eq(job_lines_drawn(t).last(), Some(newest), msg="followed to its newest: \{job_lines_drawn(t)}")
+  assert_eq(job_lines_drawn(t).last(), Some(newest), msg="followed to its newest: \{Repr(job_lines_drawn(t))}")
   // (its box as the old one's, however many lines it holds: never pushed past the sheet)
   let ground = @sf.alpha(@sf.theme().p.text, job_output_ink)
-  assert_true(job_rects_of(t, ground).contains(job_output_box_was), msg="its output's ground: \{job_rects_of(t, ground)}")
+  assert_true(job_rects_of(t, ground).contains(job_output_box_was), msg="its output's ground: \{Repr(job_rects_of(t, ground))}")
   assert_false(job_lines_drawn(t).contains("✓ build (1m 12s)"), msg="its first gone up")
   // (scrolled back off its end: more come, left where it was)
   let (x, y, w, h) = job_output_box_was
   t.wheel(x + w / 2.0, y + h / 2.0, job_wheel_back)
   t.run_for(@ui.move_most_ms)
   let seen = job_lines_drawn(t)
-  assert_false(seen.contains(newest), msg="scrolled off its end: \{seen}")
+  assert_false(seen.contains(newest), msg="scrolled off its end: \{Repr(seen)}")
   @sffixture.fix_now(fn() { @sffixture.fix_job_more.val += job_lines_more })
   t.run_for(@ui.move_most_ms)
   assert_eq(job_lines_drawn(t), seen, msg="left where it was")
@@ -149,7 +149,7 @@ test "小屏: a job's output as nodes follows its end as the old one's did (Ctx:
   @sffixture.fix_now(fn() { @sffixture.fix_job_more.val += job_lines_more })
   t.run_for(@ui.move_most_ms)
   let last = "deploy check \{job_lines_come + job_lines_more * 2}"
-  assert_eq(job_lines_drawn(t).last(), Some(last), msg="followed again: \{job_lines_drawn(t)}")
+  assert_eq(job_lines_drawn(t).last(), Some(last), msg="followed again: \{Repr(job_lines_drawn(t))}")
 }
 
 ///|
@@ -274,11 +274,11 @@ test "小屏: a job's output of 300 coloured lines: in the frame a line comes, w
   assert_eq(job_long_end(t), (true, job_long_words(next.val - 1)), msg="at its 300, followed to the line come")
   let two = job_frame_after(t, fn() { more(2) })
   assert_eq(job_long_end(t), (true, job_long_words(next.val - 1)), msg="two come, followed to the last")
-  println("a line more: \{one}; at its 300: \{capped}; two at once: \{two}")
+  println("a line more: \{Repr(one)}; at its 300: \{Repr(capped)}; two at once: \{Repr(two)}")
   // One line came, one row made, its words alone measured; as many again for each line more come at once, whatever
   // rows show.
-  assert_true(one.made > 0, msg="the line come made: \{one}")
-  assert_eq(one.measured, 1, msg="the line come's words alone measured: \{one}")
-  assert_eq((capped.made, capped.measured), (one.made, one.measured), msg="at its 300 as under them: \{capped} \{one}")
-  assert_eq((two.made, two.measured), (2 * one.made, 2 * one.measured), msg="two come: twice one's: \{two} \{one}")
+  assert_true(one.made > 0, msg="the line come made: \{Repr(one)}")
+  assert_eq(one.measured, 1, msg="the line come's words alone measured: \{Repr(one)}")
+  assert_eq((capped.made, capped.measured), (one.made, one.measured), msg="at its 300 as under them: \{Repr(capped)} \{Repr(one)}")
+  assert_eq((two.made, two.measured), (2 * one.made, 2 * one.measured), msg="two come: twice one's: \{Repr(two)} \{Repr(one)}")
 }

@@ -45,10 +45,10 @@ fn next(d : @damage.Damage, a : FixedArray[Double]) -> Array[(Double, Double, Do
 test "the first frame whole, the same again none" {
   let a = frame([(10.0, 10.0, 20.0, 20.0, 0)])
   let d = @damage.Damage::new()
-  inspect(next(d, a), content="[(0, 0, -1, -1)]")
-  inspect(next(d, a), content="[]")
+  debug_inspect(next(d, a), content="[(0, 0, -1, -1)]")
+  debug_inspect(next(d, a), content="[]")
   d.forget()
-  inspect(next(d, a), content="[(0, 0, -1, -1)]")
+  debug_inspect(next(d, a), content="[(0, 0, -1, -1)]")
 }
 
 ///|
@@ -57,7 +57,7 @@ test "an instance that changed: where it is, its edge's reach round it" {
   let d = seen(a)
   let b = copy(a)
   b[60 + 8] = 0.5
-  inspect(next(d, b), content="[(98, 48, 24, 14)]")
+  debug_inspect(next(d, b), content="[(98, 48, 24, 14)]")
 }
 
 ///|
@@ -66,17 +66,17 @@ test "moved: where it was and where it is" {
   let d = seen(a)
   let b = copy(a)
   b[60] = 130.0
-  inspect(next(d, b), content="[(98, 48, 54, 14)]")
+  debug_inspect(next(d, b), content="[(98, 48, 54, 14)]")
 }
 
 ///|
 test "another window, scale or ground: whole" {
   let a = frame([(10.0, 10.0, 20.0, 20.0, 0)])
   let d = seen(a)
-  inspect(d.next(a, 1, 401.0, 300.0, 2.0, 1.0, 1.0, 1.0), content="[(0, 0, -1, -1)]")
-  inspect(d.next(a, 1, 401.0, 300.0, 3.0, 1.0, 1.0, 1.0), content="[(0, 0, -1, -1)]")
-  inspect(d.next(a, 1, 401.0, 300.0, 3.0, 0.0, 1.0, 1.0), content="[(0, 0, -1, -1)]")
-  inspect(d.next(a, 1, 401.0, 300.0, 3.0, 0.0, 1.0, 1.0), content="[]")
+  debug_inspect(d.next(a, 1, 401.0, 300.0, 2.0, 1.0, 1.0, 1.0), content="[(0, 0, -1, -1)]")
+  debug_inspect(d.next(a, 1, 401.0, 300.0, 3.0, 1.0, 1.0, 1.0), content="[(0, 0, -1, -1)]")
+  debug_inspect(d.next(a, 1, 401.0, 300.0, 3.0, 0.0, 1.0, 1.0), content="[(0, 0, -1, -1)]")
+  debug_inspect(d.next(a, 1, 401.0, 300.0, 3.0, 0.0, 1.0, 1.0), content="[]")
 }
 
 ///|
@@ -90,11 +90,11 @@ test "another number of instances: the same from the start and the end kept, wha
     (52.0, 10.0, 2.0, 16.0, 0),
     (60.0, 10.0, 40.0, 16.0, 1),
   ])
-  inspect(next(d, b), content="[(50, 8, 6, 20)]")
-  inspect(next(d, a), content="[(50, 8, 6, 20)]")
+  debug_inspect(next(d, b), content="[(50, 8, 6, 20)]")
+  debug_inspect(next(d, a), content="[(50, 8, 6, 20)]")
   // a word longer at the end
   let c = frame([(0.0, 0.0, 400.0, 300.0, 0), (10.0, 10.0, 40.0, 16.0, 1), (60.0, 10.0, 40.0, 16.0, 1), (100.0, 10.0, 8.0, 16.0, 1)])
-  inspect(next(d, c), content="[(98, 8, 12, 20)]")
+  debug_inspect(next(d, c), content="[(98, 8, 12, 20)]")
 }
 
 ///|
@@ -103,7 +103,7 @@ test "more than half the window: whole" {
   let d = seen(a)
   let b = copy(a)
   b[8] = 0.0
-  inspect(next(d, b), content="[(0, 0, -1, -1)]")
+  debug_inspect(next(d, b), content="[(0, 0, -1, -1)]")
 }
 
 ///|
@@ -116,12 +116,12 @@ test "in its clip, and in the window" {
   let d = seen(a)
   let b = copy(a)
   b[8] = 0.0
-  inspect(next(d, b), content="[(118, 58, 24, 14)]")
+  debug_inspect(next(d, b), content="[(118, 58, 24, 14)]")
   let c = frame([(-10.0, -10.0, 20.0, 20.0, 0)])
   let d = seen(c)
   let e = copy(c)
   e[8] = 0.0
-  inspect(next(d, e), content="[(0, 0, 12, 12)]")
+  debug_inspect(next(d, e), content="[(0, 0, 12, 12)]")
 }
 
 ///|
@@ -138,14 +138,23 @@ test "turned: the circle about its point, its clip turned with it not cut by" {
   let b = copy(a)
   b[32] = 0.6
   // (half its diagonal grown by the edge's reach: 12 √2)
-  inspect(next(d, b), content="[(93.02943725152286, 93.02943725152286, 33.94112549695427, 33.94112549695427)]")
+  debug_inspect(next(d, b), content=(
+    #|[
+    #|  (
+    #|    93.02943725152286,
+    #|    93.02943725152286,
+    #|    33.94112549695427,
+    #|    33.94112549695427,
+    #|  ),
+    #|]
+  ))
   // its clip where it is drawn (35): cut by it
   let c = copy(a)
   c[35] = 1.0
   let d = seen(c)
   let e = copy(c)
   e[32] = 0.6
-  inspect(next(d, e), content="[(103, 103, 14, 14)]")
+  debug_inspect(next(d, e), content="[(103, 103, 14, 14)]")
 }
 
 ///|
@@ -156,7 +165,7 @@ test "a shadow: its blur's reach" {
   let b = copy(a)
   b[8] = 0.0
   // (3 sigma, 2 more, the edge's 2)
-  inspect(next(d, b), content="[(84, 84, 52, 52)]")
+  debug_inspect(next(d, b), content="[(84, 84, 52, 52)]")
 }
 
 ///|
@@ -169,11 +178,11 @@ test "a band whose pieces changed, the band the same" {
   // a piece of the first piece instance: no band of it drawn
   let b = copy(a)
   b[60 + 0] = 0.25
-  inspect(next(d, b), content="[]")
+  debug_inspect(next(d, b), content="[]")
   // the band's
   let c = copy(b)
   c[120 + 8] = 0.25
-  inspect(next(d, c), content="[(48, 48, 34, 12)]")
+  debug_inspect(next(d, c), content="[(48, 48, 34, 12)]")
 }
 
 ///|
@@ -181,12 +190,12 @@ test "a stream's picture: drawn again each frame" {
   let a = frame([(10.0, 10.0, 20.0, 20.0, 4)])
   a[20] = @damage.stream_tex_base + 3.0
   let d = seen(a)
-  inspect(next(d, a), content="[(8, 8, 24, 24)]")
+  debug_inspect(next(d, a), content="[(8, 8, 24, 24)]")
   // a native view's hole: as its numbers say
   let b = copy(a)
   b[20] = @damage.view_tex_base + 3.0
   let d = seen(b)
-  inspect(next(d, b), content="[]")
+  debug_inspect(next(d, b), content="[]")
 }
 
 ///|
@@ -199,7 +208,7 @@ test "glass: the part reaching what its capture copies takes all of that in" {
   let b = copy(a)
   b[60] = 190.0
   // (the glass's rect, 3 sigma, 2, and the edge's 2 round it: 84 … 196, 4 … 56; the dot's 188 … 206)
-  inspect(next(d, b), content="[(84, 4, 122, 52)]")
+  debug_inspect(next(d, b), content="[(84, 4, 122, 52)]")
   // far from it: only the dot
   let c = frame([(0.0, 0.0, 400.0, 300.0, 0), (300.0, 200.0, 4.0, 4.0, 0), (100.0, 20.0, 80.0, 20.0, 5)])
   c[120 + 7] = 4.0
@@ -207,7 +216,7 @@ test "glass: the part reaching what its capture copies takes all of that in" {
   let d = seen(c)
   let e = copy(c)
   e[60 + 8] = 0.0
-  inspect(next(d, e), content="[(298, 198, 8, 8)]")
+  debug_inspect(next(d, e), content="[(298, 198, 8, 8)]")
 }
 
 ///|
@@ -227,7 +236,7 @@ test "parts far apart: each its own, up to four; near: one" {
     b[k * 60 + 8] = 0.0
   }
   // (the dot at 20 near the one at 10: one part; five left, the pair whose rect grows least merged)
-  inspect(
+  debug_inspect(
     next(d, b),
     content="[(8, 8, 18, 198), (298, 8, 8, 8), (298, 198, 8, 8), (198, 98, 8, 8)]",
   )
@@ -246,7 +255,7 @@ test "another number of instances, two changes far apart: each its own, what is 
   more.push((300.0, 280.0, 2.0, 12.0, 0))
   let b = frame(more)
   b[60 + 8] = 0.0
-  inspect(next(d, b), content="[(8, 8, 8, 8), (298, 278, 6, 16)]")
+  debug_inspect(next(d, b), content="[(8, 8, 8, 8), (298, 278, 6, 16)]")
 }
 
 ///|
@@ -266,7 +275,7 @@ test "a list scrolled, a row more: each row where it was and where it is, one pa
     }
   }
   let d = seen(frame(rows))
-  inspect(next(d, frame(moved)), content="[(18, 25, 104, 212)]")
+  debug_inspect(next(d, frame(moved)), content="[(18, 25, 104, 212)]")
 }
 
 ///|
@@ -294,11 +303,11 @@ test "a header compared as itself, its room passed over; moved, where its group 
   let next_h = fn(a : FixedArray[Double]) {
     d.next(a, a.length() / 60, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true)
   }
-  inspect(next_h(headed(7, 2, 0.0, 3.0)), content="[(0, 0, -1, -1)]")
+  debug_inspect(next_h(headed(7, 2, 0.0, 3.0)), content="[(0, 0, -1, -1)]")
   // (the same header, whatever its room holds: nothing)
-  inspect(next_h(headed(7, 2, 0.0, 5.0)), content="[]")
+  debug_inspect(next_h(headed(7, 2, 0.0, 5.0)), content="[]")
   // (moved 40 down: the group's reach where it was and where it is)
-  inspect(next_h(headed(7, 2, 40.0, 5.0)), content="[(98, 48, 24, 74)]")
+  debug_inspect(next_h(headed(7, 2, 40.0, 5.0)), content="[(98, 48, 24, 74)]")
 }
 
 ///|
@@ -319,7 +328,7 @@ test "a group holding a header of another reaches as far as that one does, moved
   // (its header standing for the three it draws out to)
   ignore(next_h(headed(8, 3, 0.0, 3.0)))
   // (moved 40 down: from its own instance's top to group 7's foot where it stands in it, where it was and is)
-  inspect(next_h(headed(8, 3, 40.0, 3.0)), content="[(8, 8, 114, 214)]")
+  debug_inspect(next_h(headed(8, 3, 40.0, 3.0)), content="[(8, 8, 114, 214)]")
 }
 
 ///|
@@ -392,12 +401,12 @@ test "known drawn anew: a part from the start, past half the window whole with n
   let a = frame([(10.0, 10.0, 20.0, 20.0, 0), (300.0, 200.0, 20.0, 20.0, 0)])
   let d = seen(a)
   let b = copy(a)
-  inspect(d.next(b, 2, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, known=[(0.0, 0.0, 100.0, 50.0)]), content="[(0, 0, 100, 50)]")
+  debug_inspect(d.next(b, 2, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, known=[(0.0, 0.0, 100.0, 50.0)]), content="[(0, 0, 100, 50)]")
   // (the known part and what changed besides, each its own)
   b[60 + 8] = 0.5
-  inspect(
+  debug_inspect(
     d.next(b, 2, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, known=[(0.0, 0.0, 100.0, 50.0)]),
     content="[(0, 0, 100, 50), (298, 198, 24, 24)]",
   )
-  inspect(d.next(copy(b), 2, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, known=[(0.0, 0.0, 400.0, 200.0)]), content="[(0, 0, -1, -1)]")
+  debug_inspect(d.next(copy(b), 2, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, known=[(0.0, 0.0, 400.0, 200.0)]), content="[(0, 0, -1, -1)]")
 }

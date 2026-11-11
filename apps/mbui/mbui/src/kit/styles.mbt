@@ -4,12 +4,13 @@
 // not here. A variant is a parameter (its default the usual one), a pair of them that looks otherwise a `match`.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum CardTone {
   /// on the page, a ground of its own
   Plain
   /// lifted over the page, with a shadow
   Lifted
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A card: a block of its own on the page, rounded, padded so that what lies in its corners is concentric with it
@@ -29,10 +30,11 @@ pub fn list_card() -> @ui.Style {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Density {
   Comfy
   Compact
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A row of a list: what it shows in a line, a tint while pointed at and held, chosen in its colour; its corner
@@ -57,12 +59,13 @@ pub fn list_row(density? : Density = Comfy) -> @ui.Style {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Indent {
   /// in line with the page's words
   Page
   /// in line with the words in a card's rows
   Inset
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What heads a section of a page (its words: section_title).
@@ -79,11 +82,12 @@ pub fn section_header(indent? : Indent = Page) -> @ui.Style {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum ButtonSize {
   Sm
   Md
   Lg
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A button (button.mbt's Variant its tone): a pill of its size, its ground by its tone, tinted pointed at and held, faded when disabled; its words
@@ -158,10 +162,11 @@ pub fn button_text(size? : ButtonSize = Md, tone? : Variant = Solid) -> @ui.Text
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum FieldSize {
   Sm
   Md
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A field's frame: an edge in the theme's border, its colour pointed at and focused.
@@ -187,12 +192,13 @@ pub fn field(size? : FieldSize = Md) -> @ui.Style {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum BadgeTone {
   Neutral
   Accent
   Positive
   Danger
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A badge: a small pill (its words badge_text).
@@ -244,11 +250,12 @@ pub fn panel() -> @ui.Style {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum RowTone {
   Normal
   /// what failed, what cannot be undone
   Bad
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A row's title.

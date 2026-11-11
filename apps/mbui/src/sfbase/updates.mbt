@@ -57,11 +57,12 @@ pub(all) struct UpdateSource {
 ///|
 /// What the last check asked now answered, where it found no newer build: nothing yet (or a newer one), none newer, or
 /// why it could not ask.
+#derive(Eq, Debug)
 pub(all) enum UpdateSaid {
   Unsaid
   NoneNewer
   CouldNot(String)
-} derive(Eq, Debug)
+}
 
 ///|
 /// How an update stands: the newer build found, the person's check under way, what the last check asked now
@@ -270,7 +271,7 @@ pub fn update_auto_on() -> Unit {
 fn update_file_name(v : Json) -> String {
   let file = text(Some(v), "file")
   match file.rev_find("/") {
-    Some(i) => file.view(start_offset=i + 1).to_owned()
+    Some(i) => file.exact_view(start=i + 1).to_owned()
     None => file
   }
 }
@@ -430,7 +431,7 @@ pub fn update_error(e : String) -> String {
   match e {
     "incomplete" => @sf.t("android-misc.updates.incomplete")
     e if e.has_prefix("status ") =>
-      @sf.t("android-misc.updates.httpStatus", args=[("status", e.view(start_offset=7).to_owned())])
+      @sf.t("android-misc.updates.httpStatus", args=[("status", e.exact_view(start=7).to_owned())])
     e => e
   }
 }
@@ -439,13 +440,14 @@ pub fn update_error(e : String) -> String {
 /// How the update goes as the host tells it (@ui.update_state's JSON): its phase (idle, waiting, downloading,
 /// retrying, ready, allow, installing, failed), how far (-1 not known), what went wrong, the build it is about (its
 /// file's name), and whether one ready is put in place by itself while the app is out of sight.
+#derive(Eq)
 priv struct UpdateHow {
   phase : String
   percent : Int
   error : String
   file : String
   away : Bool
-} derive(Eq)
+}
 
 ///|
 /// How the update goes, worked out of the host's word as that changes (a computed of @ui.update_state, a signal the
@@ -692,11 +694,12 @@ let update_news_most : Int = 5
 ///|
 /// What the dialog holds, as it shows it: asking still.fail cloud, nothing more to say (none newer, or why it could not
 /// ask: its title and the line under it say it), or a newer build (update_dialog_body).
+#derive(Eq)
 priv enum UpdateHolds {
   Asking
   Said
   Newer
-} derive(Eq)
+}
 
 ///|
 fn update_holds() -> UpdateHolds {

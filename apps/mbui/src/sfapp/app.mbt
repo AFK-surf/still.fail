@@ -430,6 +430,7 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
 
 ///|
 /// What the app shows under all of it (view_in).
+#derive(Eq)
 priv enum AppIs {
   /// the core failed
   Failed
@@ -438,7 +439,7 @@ priv enum AppIs {
   SignedIn
   /// the accounts not read yet, or failing to be
   Starting
-} derive(Eq)
+}
 
 ///|
 /// Whether the stack of pages laid out Small (narrow_shell.mbt) is in a finger's hand now: its lists dragged and words

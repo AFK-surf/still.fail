@@ -38,7 +38,7 @@ test "panel a form, 大屏 keyboard and mouse and a tablet by touch: at a point,
     }
     t.run_for(@ui.move_most_ms)
     let r = fn(role : @ui.Role, label : String) { t.query(role, label~).map(fn(s) { tenth4(s.rect) }) }
-    let open = "dialog \{r(Dialog, "面板")} field \{r(TextField, "填一下")} ok \{r(Button, "好的")} focus \{panel_focus_said(t)}"
+    let open = "dialog \{@ui.some_text(r(Dialog, "面板").map(@ui.rect_text))} field \{@ui.some_text(r(TextField, "填一下").map(@ui.rect_text))} ok \{@ui.some_text(r(Button, "好的").map(@ui.rect_text))} focus \{panel_focus_said(t)}"
     drawn.push(tree_said(Dialog, "面板") is Some(_))
     t.type_text("甲")
     t.run_for(@ui.move_most_ms)
@@ -47,10 +47,10 @@ test "panel a form, 大屏 keyboard and mouse and a tablet by touch: at a point,
     let grown = if kind == "grown" {
       lines.set(8)
       t.run_for(@ui.move_most_ms)
-      let more = "more: dialog \{r(Dialog, "面板")} ok \{r(Button, "好的")}"
+      let more = "more: dialog \{@ui.some_text(r(Dialog, "面板").map(@ui.rect_text))} ok \{@ui.some_text(r(Button, "好的").map(@ui.rect_text))}"
       lines.set(2)
       t.run_for(@ui.move_most_ms)
-      " | \{more} less: dialog \{r(Dialog, "面板")} ok \{r(Button, "好的")}"
+      " | \{more} less: dialog \{@ui.some_text(r(Dialog, "面板").map(@ui.rect_text))} ok \{@ui.some_text(r(Button, "好的").map(@ui.rect_text))}"
     } else {
       ""
     }
@@ -85,7 +85,7 @@ test "panel a form, 大屏 keyboard and mouse and a tablet by touch: at a point,
             }
             None => ()
           }
-          " | far: ok \{ok} last \{last} seen \{seen} | ok pressed: said \{said} presenting \{@sf.presenting()} focus \{panel_focus_said(t)}"
+          " | far: ok \{@ui.some_text(ok.map(@ui.rect_text))} last \{@ui.list_text(last.map(@ui.rect_text))} seen \{@ui.list_text(seen)} | ok pressed: said \{@ui.list_text(said)} presenting \{@sf.presenting()} focus \{panel_focus_said(t)}"
         }
         None => " | far: none"
       }
@@ -129,7 +129,7 @@ test "panel a form at a point, its field given the focus and holding it, 大屏 
     }
     let at_close = panel_focus_said(t)
     t.run_for(@ui.move_most_ms)
-    out.push("\{how}: open {\{open}} closed {\{at_close}} after {\{panel_focus_said(t)}} said \{said} presenting \{@sf.presenting()}")
+    out.push("\{how}: open {\{open}} closed {\{at_close}} after {\{panel_focus_said(t)}} said \{@ui.list_text(said)} presenting \{@sf.presenting()}")
   }
   // (as main has it: its close button and its own let its field go, the focus nowhere after; Escape and a press
   // outside give it back first, to what had it as it opened)
@@ -171,7 +171,7 @@ test "panel a form at a point, its field holding the focus, its own button closi
   t.run_for(@ui.move_most_ms)
   // (as main has it: the other form's field the focus's from the frame the first closes in, typed into; the first's
   // field none of it)
-  assert_eq([open, at_close, after, "填 \{pf.text()} 另 \{other.text()} said \{said}"], [
+  assert_eq([open, at_close, after, "填 \{pf.text()} 另 \{other.text()} said \{@ui.list_text(said)}"], [
     "focused Some(TextField 填一下) ime (true, , 0, 0)",
     "focused Some(TextField 另一框) ime (true, , 0, 0)",
     "focused Some(TextField 另一框) ime (true, , 0, 0)",

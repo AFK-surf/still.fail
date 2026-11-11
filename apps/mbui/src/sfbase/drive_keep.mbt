@@ -87,7 +87,7 @@ pub fn keeps_frame(c : @ui.Ctx) -> Unit {
 pub fn keep_way_of(name : String) -> @hostapi.KeepWay {
   let lower = @sf.lower(name)
   let ext = match lower.rev_find(".") {
-    Some(i) if i > 0 => lower.view(start_offset=i + 1).to_owned()
+    Some(i) if i > 0 => lower.exact_view(start=i + 1).to_owned()
     _ => ""
   }
   let album = [

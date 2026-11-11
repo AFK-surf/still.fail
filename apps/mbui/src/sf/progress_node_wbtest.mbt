@@ -57,7 +57,7 @@ fn progress_said(t : @ui.Tester, value : String, range : (Double, Double, Double
   let bars = t.all(ProgressBar)
   assert_eq(bars.length(), 2, msg="both bars read out")
   for b in bars {
-    assert_eq((b.value, b.range), (value, range), msg="read out: \{b.value} \{b.range}")
+    assert_eq((b.value, b.range), (value, range), msg="read out: \{b.value} \{Repr(b.range)}")
   }
   let told = t.ctx().a11y_lines().split("\n").filter(fn(l) { l.contains("ProgressBar") }).to_array()
   assert_eq(told.length(), 2, msg="both told the host")
@@ -87,7 +87,7 @@ test "a progress bar as nodes drawn and read out as the old view's is (its range
   let t = progress_pair(part)
   let same = fn(what : String) raise {
     let (old, new) = progress_drawn(t)
-    assert_true(old.length() >= 2, msg="\{what}: the old one drawn: \{old}")
+    assert_true(old.length() >= 2, msg="\{what}: the old one drawn: \{Repr(old)}")
     assert_eq(new, old, msg=what)
   }
   same("at a quarter")
@@ -137,7 +137,7 @@ test "a progress bar as nodes, motion reduced, drawn as the old view's is: a par
   @ui.set_motion_chosen(None)
   for s in seen {
     let (what, (old, new), ticking) = s
-    assert_true(old.length() >= 2, msg="\{what}: the old one drawn: \{old}")
+    assert_true(old.length() >= 2, msg="\{what}: the old one drawn: \{Repr(old)}")
     assert_eq(new, old, msg="\{what}: in the first frame, as the old one")
     assert_true(!ticking, msg="\{what}: nothing read of the clock after")
   }

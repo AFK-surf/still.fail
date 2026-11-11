@@ -530,11 +530,12 @@ let seg_least : Double = @ui.Space::px(S1)
 /// or not side by side at all, the chosen one alone and the others offered in a pick (choice_pick).
 // Eq, Show and Debug for its tests
 #warnings("-unused_value")
+#derive(Eq, Debug)
 priv enum Fit {
   Whole
   Smaller(Double)
   Menu
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// How wide each of a choice's options is in `room` (all of it, the gaps between them aside), their words `words`

@@ -3,8 +3,8 @@
 fn local_ask_of(act : String) -> (String, Json?) {
   match act.find(" ") {
     Some(i) => {
-      let j = @json.parse(act.view(start_offset=i + 1).to_owned()) catch { _ => Json::null() }
-      (act.view(end_offset=i).to_owned(), Some(j))
+      let j = @json.parse(act.exact_view(start=i + 1).to_owned()) catch { _ => Json::null() }
+      (act.exact_view(end=i).to_owned(), Some(j))
     }
     None => (act, None)
   }

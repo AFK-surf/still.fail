@@ -11,13 +11,14 @@
 
 ///|
 /// The tools.
+#derive(Eq)
 pub(all) enum MarkTool {
   Select
   Rect
   Arrow
   Pen
   Words
-} derive(Eq)
+}
 
 ///|
 /// still.fail's accent, what is drawn by default; the colours to draw in, each with the halo that edges its words.
@@ -111,10 +112,11 @@ pub fn Mark::scaled(self : Mark, ax : Double, ay : Double, sx : Double, sy : Dou
 ///|
 /// A handle of the picked mark: a corner of its box (`Corner(1, 1)` its foot right; the
 /// corner across stays), or an end of an arrow (0 its tail, 1 its point).
+#derive(Eq)
 pub(all) enum MarkHandle {
   Corner(Int, Int)
   End(Int)
-} derive(Eq)
+}
 
 ///|
 /// The picked mark's handles and where each is drawn, in the image's pixels at `k` stage points to one: an arrow's on

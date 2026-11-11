@@ -116,7 +116,7 @@ test "breathing as a node as the old view's breathe: the same opacity at each mo
     seen.push(new)
   }
   // (it breathes: not as opaque at every moment)
-  assert_true(seen.iter().any(fn(a) { a != seen[0] }), msg="\{seen}")
+  assert_true(seen.iter().any(fn(a) { a != seen[0] }), msg="\{Repr(seen)}")
 }
 
 ///|

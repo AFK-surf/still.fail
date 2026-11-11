@@ -15,7 +15,7 @@ pub fn found_marks(text : String, word : String) -> Json {
   let out : Array[Json] = []
   let mut at = 0
   while at + word.length() <= text.length() {
-    if text.view(start_offset=at, end_offset=at + word.length()).to_owned() == word {
+    if text.clamped_view(start=at, end=at + word.length()).to_owned() == word {
       out.push(found_mark(at, at + word.length()))
       at = at + word.length()
     } else {

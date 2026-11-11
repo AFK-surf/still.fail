@@ -767,11 +767,12 @@ fn Tester::motion_period(self : Tester) -> Double {
 /// frame on run_for's way too, a fault failing its test; or that, each fault said and none failing.
 // Judge is made by tester_fps.mbt, a file of every target but wasm
 #warnings("-unused_constructor")
+#derive(Eq)
 pub enum MotionJudged {
   Results
   Judge
   Count
-} derive(Eq)
+}
 
 ///|
 /// The files whose Testers a run that counts motion only counts (test_motion_judged), not judges.
@@ -975,7 +976,7 @@ pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
 /// The waits asked without their own `since` that count from no cause, from the frame's moment as it began, or from
 /// the latest of several (Ctx::held, wait_look): said as MOTION lines, each a place to give its `since` or to make a node.
 fn wait_looked(kind : String, loc : SourceLoc, causes : Array[(Double, String)]) -> Unit {
-  println("MOTION \{kind} \{sizes_steady.file}: \{loc} \{causes}")
+  println("MOTION \{kind} \{sizes_steady.file}: \{loc} [\{causes.map(fn(c) { "(\{c.0}, \{c.1})" }).join(", ")}]")
 }
 
 ///|
@@ -3346,7 +3347,7 @@ fn Tester::hold_corners(self : Tester) -> Unit {
   if faults.is_empty() {
     return
   }
-  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{c.corner_ladder}; the rule: mbui's src/ui/corners.mbt):\n" +
+  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{Repr(c.corner_ladder)}; the rule: mbui's src/ui/corners.mbt):\n" +
     faults.join("\n")
   @halt.saying(said)
 }

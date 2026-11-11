@@ -50,13 +50,13 @@ fn switch_said(node : Bool, platform : Int, disabled : Bool) -> Array[String] {
   let out = []
   let switches = t.semantics().filter(fn(n) { n.role == Switch && !n.hidden })
   for n in switches {
-    out.push("switch \{n.label} \{n.check} disabled \{n.disabled} \{n.rect.2}x\{n.rect.3}")
+    out.push("switch \{n.label} \{@ui.some_text(n.check)} disabled \{n.disabled} \{n.rect.2}x\{n.rect.3}")
   }
   guard switches.length() == 1 else { return out }
   let (sx, sy, sw, sh) = switches[0].rect
   t.key(@ui.key_tab)
   t.frame()
-  out.push("tab: " + t.focused().map(fn(n) { "\{n.role} \{n.label} \{n.check} at \{n.rect.0 - sx},\{n.rect.1 - sy}" }).unwrap_or("none"))
+  out.push("tab: " + t.focused().map(fn(n) { "\{n.role} \{n.label} \{@ui.some_text(n.check)} at \{n.rect.0 - sx},\{n.rect.1 - sy}" }).unwrap_or("none"))
   for b in t.boxes_held() {
     if b.border_w > 0.0 {
       out.push("ring at \{b.x - sx},\{b.y - sy} \{b.w}x\{b.h} round \{b.radius} line \{b.border_w}")
@@ -79,9 +79,9 @@ test "a switch's row as nodes, with keyboard and mouse and with a finger: Tab to
   for platform in [0, 2] {
     let made = switch_said(true, platform, false)
     let old = switch_said(false, platform, false)
-    assert_eq(made, old, msg="platform \{platform}: as nodes \{made}, as the old view's \{old}")
-    assert_true(made.contains("tab: Switch 性能记录 Some(Off) at 0,0"), msg="platform \{platform}: \{made}")
-    assert_true(made.contains("space: on true") && made.contains("enter: on false"), msg="platform \{platform}: \{made}")
+    assert_eq(made, old, msg="platform \{platform}: as nodes \{Repr(made)}, as the old view's \{Repr(old)}")
+    assert_true(made.contains("tab: Switch 性能记录 Some(Off) at 0,0"), msg="platform \{platform}: \{Repr(made)}")
+    assert_true(made.contains("space: on true") && made.contains("enter: on false"), msg="platform \{platform}: \{Repr(made)}")
   }
 }
 
@@ -90,7 +90,7 @@ test "a switch's row as nodes taking no press: read out disabled, Tab passing it
   for platform in [0, 2] {
     let made = switch_said(true, platform, true)
     let old = switch_said(false, platform, true)
-    assert_eq(made, old, msg="platform \{platform}: as nodes \{made}, as the old view's \{old}")
-    assert_true(made.contains("tab: none") && made.contains("space: on false"), msg="platform \{platform}: \{made}")
+    assert_eq(made, old, msg="platform \{platform}: as nodes \{Repr(made)}, as the old view's \{Repr(old)}")
+    assert_true(made.contains("tab: none") && made.contains("space: on false"), msg="platform \{platform}: \{Repr(made)}")
   }
 }

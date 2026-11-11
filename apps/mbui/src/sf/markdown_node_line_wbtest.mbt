@@ -62,13 +62,13 @@ test "Markdown as nodes on one line: its first block's words alone, cut with an 
     let made_t = ml_tester(true, w)
     let made = mn_words(made_t)
     let made_drawn = mn_instances(made_t)
-    assert_true(old.iter().all(fn(x) { !x.has_prefix("第二段") }), msg="\{w}: \{old}")
-    assert_eq(made, old, msg="\{w}:\nmade \{made}\nold  \{old}")
+    assert_true(old.iter().all(fn(x) { !x.has_prefix("第二段") }), msg="\{w}: \{Repr(old)}")
+    assert_eq(made, old, msg="\{w}:\nmade \{Repr(made)}\nold  \{Repr(old)}")
     let only_made = made_drawn.filter(fn(x) { !old_drawn.contains(x) })
     let only_old = old_drawn.filter(fn(x) { !made_drawn.contains(x) })
     assert_true(
       made_drawn == old_drawn,
-      msg="\{w}: \{made_drawn.length()} drawn, \{old_drawn.length()} old;\nonly made \{only_made.iter().take(8).collect()}\nonly old  \{only_old.iter().take(8).collect()}",
+      msg="\{w}: \{made_drawn.length()} drawn, \{old_drawn.length()} old;\nonly made \{Repr(only_made.iter().take(8).collect())}\nonly old  \{Repr(only_old.iter().take(8).collect())}",
     )
     let faults = made_t.audit()
     assert_true(faults.is_empty(), msg="\{w}: " + faults.join(" | "))
@@ -110,7 +110,7 @@ test "Markdown as nodes: each paragraph's links told as they are, its words' nod
   )
   @signals.end_batch()
   t.draw()
-  assert_true(told.contains(("https://example.com/new", "新的")), msg="\{told}")
+  assert_true(told.contains(("https://example.com/new", "新的")), msg="\{Repr(told)}")
 }
 
 ///|
@@ -176,12 +176,12 @@ test "Markdown as nodes, its tables shown whole: one too wide for the column mad
     let made_t = ml_fit_tester(true, w)
     let made = mn_words(made_t)
     let made_drawn = mn_instances(made_t)
-    assert_eq(made, old, msg="\{w}:\nmade \{made}\nold  \{old}")
+    assert_eq(made, old, msg="\{w}:\nmade \{Repr(made)}\nold  \{Repr(old)}")
     let only_made = made_drawn.filter(fn(x) { !old_drawn.contains(x) })
     let only_old = old_drawn.filter(fn(x) { !made_drawn.contains(x) })
     assert_true(
       made_drawn == old_drawn,
-      msg="\{w}: \{made_drawn.length()} drawn, \{old_drawn.length()} old;\nonly made \{only_made.iter().take(8).collect()}\nonly old  \{only_old.iter().take(8).collect()}",
+      msg="\{w}: \{made_drawn.length()} drawn, \{old_drawn.length()} old;\nonly made \{Repr(only_made.iter().take(8).collect())}\nonly old  \{Repr(only_old.iter().take(8).collect())}",
     )
   }
 }
@@ -197,7 +197,7 @@ test "Markdown as nodes, its tables shown whole: the window narrowed past where 
     let turned_words = mn_words(t)
     let made = ml_fit_tester(true, to_w)
     made.run_for(@ui.move_most_ms)
-    assert_eq(turned_words, mn_words(made), msg="\{turn}")
-    assert_true(turned == mn_instances(made), msg="\{turn}: drawn otherwise in the frame it turned in")
+    assert_eq(turned_words, mn_words(made), msg="\{Repr(turn)}")
+    assert_true(turned == mn_instances(made), msg="\{Repr(turn)}: drawn otherwise in the frame it turned in")
   }
 }

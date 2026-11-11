@@ -392,9 +392,9 @@ fn Flow::settle_start(self : Flow) -> Unit {
 fn notice_permission_of(trace : String) -> String? {
   let key = "\"call\":\"notify.permission\",\"params\":{\"state\":\""
   guard trace.find(key) is Some(i) else { return None }
-  let rest = trace.view(start_offset=i + key.length())
+  let rest = trace.exact_view(start=i + key.length())
   guard rest.find("\"") is Some(j) else { return None }
-  Some(rest.view(end_offset=j).to_owned())
+  Some(rest.exact_view(end=j).to_owned())
 }
 
 ///|
@@ -603,7 +603,7 @@ fn Flow::until_at(self : Flow, site : String, so : () -> Bool) -> Unit {
   if keeping.val == 2 {
     match self.kept(site) {
       Some(Waited(at)) => self.wait_to(at)
-      Some(k) => self.fail("the strict pass kept \{k} here, not a wait")
+      Some(k) => self.fail("the strict pass kept \{Repr(k)} here, not a wait")
       None => ()
     }
     return
@@ -974,7 +974,7 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
     // (what never stops asking: said, not hidden behind the idle check)
     if rounds > end_rounds {
       self.fail(
-        "the end still not quiet after \{end_rounds} rounds: \{self.r.left()} messages in left, the next due at \{self.r.next_due()}, \{self.t.posted()} posted, moving: \{self.t.moving().join("; ")}",
+        "the end still not quiet after \{end_rounds} rounds: \{self.r.left()} messages in left, the next due at \{Repr(self.r.next_due())}, \{self.t.posted()} posted, moving: \{self.t.moving().join("; ")}",
       )
       break
     }
@@ -1118,7 +1118,7 @@ pub fn orders(flow : (UInt) -> String raise) -> Unit raise {
   for seed in seeds {
     let again = flow(seed)
     if again != first {
-      let s = "flow: in the pass \{seed} (\{pace_of(seed)}) the screen ends otherwise (\{again}, not \{first})"
+      let s = "flow: in the pass \{seed} (\{Repr(pace_of(seed))}) the screen ends otherwise (\{again}, not \{first})"
       @halt.saying(s)
     }
   }
@@ -1143,13 +1143,13 @@ pub fn orders(flow : (UInt) -> String raise) -> Unit raise {
   let healed = known.filter(fn(r) { !split_at.contains(r) })
   if unknown.length() > 0 {
     fail(
-      "flow \{pass_trace.val}: its pace pass splits from the strict pass at \{unknown} a second, not known (pace_known.mbt): " +
+      "flow \{pass_trace.val}: its pace pass splits from the strict pass at \{Repr(unknown)} a second, not known (pace_known.mbt): " +
       said.join(" || "),
     )
   }
   if healed.length() > 0 {
     fail(
-      "flow \{pass_trace.val}: its pace pass at \{healed} a second no longer splits: take it out of pace_splits_known (pace_known.mbt)",
+      "flow \{pass_trace.val}: its pace pass at \{Repr(healed)} a second no longer splits: take it out of pace_splits_known (pace_known.mbt)",
     )
   }
 }
@@ -1184,7 +1184,7 @@ fn Flow::run_to_at(self : Flow, site : String, end : Double) -> Unit {
   if keeping.val == 2 {
     match self.kept(site) {
       Some(Waited(at)) => self.wait_to(at)
-      Some(k) => self.fail("the strict pass kept \{k} here, not where it ran to")
+      Some(k) => self.fail("the strict pass kept \{Repr(k)} here, not where it ran to")
       None => ()
     }
     self.core()
@@ -1270,12 +1270,13 @@ pub fn Flow::open_page(self : Flow, page : @sfapp.Page, loc~ : SourceLoc) -> Uni
 ///|
 /// The lowest `what` (`top`: the highest) on screen, or the test fails.
 /// An input as the strict pass worked it out of the screen (Flow::start): a pace pass's own, the same.
+#derive(Debug)
 priv enum Kept {
   Point(Double, Double)
   NoPoint
   Waited(Double)
   Amount(Double)
-} derive(Show)
+}
 
 ///|
 /// What the strict pass worked its inputs out to, by the test's line that asked (a step there skipped or taken more
@@ -1346,7 +1347,7 @@ fn Flow::kept_point(self : Flow, site : String, find : () -> (Double, Double)?) 
         Some(Point(x, y)) => Some((x, y))
         Some(NoPoint) => None
         Some(k) => {
-          self.fail("the strict pass kept \{k} here, not where an input went")
+          self.fail("the strict pass kept \{Repr(k)} here, not where an input went")
           find()
         }
         None => find()
@@ -1383,7 +1384,7 @@ pub fn Flow::measured(self : Flow, x : Double, loc~ : SourceLoc) -> Double {
       match self.kept(site) {
         Some(Amount(d)) => d
         Some(k) => {
-          self.fail("the strict pass kept \{k} here, not what it measured")
+          self.fail("the strict pass kept \{Repr(k)} here, not what it measured")
           x
         }
         None => x
@@ -1494,7 +1495,7 @@ pub fn Flow::wheel_aligned(self : Flow, dy : Double, loc~ : SourceLoc) -> Unit {
       match self.kept(site) {
         Some(Amount(d)) => d
         Some(k) => {
-          self.fail("the strict pass kept \{k} here, not how far it wheeled")
+          self.fail("the strict pass kept \{Repr(k)} here, not how far it wheeled")
           dy
         }
         None => dy

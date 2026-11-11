@@ -238,8 +238,8 @@ test "the frame's targets found before the tree is drawn are found once: an old 
   t.frame_at(t.time() + frame_period_default)
   let c = g()
   let once = fn(ids : Array[Int]) { Set::from_array(ids).length() == ids.length() }
-  assert_true(once(c.hit_ids), msg="targets \{c.hit_ids}")
-  assert_true(once(c.scroll_ids), msg="what scrolls \{c.scroll_ids}")
+  assert_true(once(c.hit_ids), msg="targets \{Repr(c.hit_ids)}")
+  assert_true(once(c.scroll_ids), msg="what scrolls \{Repr(c.scroll_ids)}")
   assert_true(c.hit_ids.length() > 0 && c.scroll_ids.length() > 0)
 }
 
@@ -303,7 +303,7 @@ test "an old view's list drawn moved by a look of its own, in the window's tree:
   let c = g()
   let id = c.nodes[list.val].id
   let at = c.scroll_ids.search(id)
-  assert_true(at is Some(_) && c.scroll_ids.filter(fn(s) { s == id }).length() == 1, msg="\{c.scroll_ids}")
+  assert_true(at is Some(_) && c.scroll_ids.filter(fn(s) { s == id }).length() == 1, msg="\{Repr(c.scroll_ids)}")
   let k = at.unwrap() * 4
   assert_eq((c.scroll_rects[k], c.scroll_rects[k + 1]), (c.nodes[list.val].x, c.nodes[list.val].y))
   let before = t.list_offset()

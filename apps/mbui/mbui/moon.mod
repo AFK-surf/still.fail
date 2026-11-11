@@ -7,4 +7,4 @@ source = "src"
 preferred_target = "native"
 
 // The app's line, the same (apps/mbui/AGENTS.md, Warnings).
-warnings = "@a-33-79-29-20-27"
+warnings = "@a-33-79-29"

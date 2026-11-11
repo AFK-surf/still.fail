@@ -431,7 +431,7 @@ fn mark_grid_node(
           }
           let emojis = k.has_prefix("e/")
           let mut row = 0
-          for ch in k.view(start_offset=k.rev_find("/").unwrap_or(0) + 1) {
+          for ch in k.exact_view(start=k.rev_find("/").unwrap_or(0) + 1) {
             row = row * 10 + (ch.to_int() - '0'.to_int())
           }
           let all = @signals.untracked(fn() { offered.get() })

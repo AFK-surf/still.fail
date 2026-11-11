@@ -5,12 +5,13 @@
 
 ///|
 /// What the window's tree did in one frame a Tester drew (Tester::tree_frames).
+#derive(Eq, Debug)
 pub(all) struct TreeFrame {
   made : Int
   let_go : Int
   laid : Int
   measured : Int
-} derive(Eq, Show)
+}
 
 ///|
 // kept across runs: written by each frame a Tester draws while a test asked for them, put back as a Tester is made

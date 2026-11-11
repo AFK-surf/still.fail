@@ -15,7 +15,7 @@ pub fn ease_to(c : @ui.Ctx, key : String, on : Bool) -> Double {
 fn draw_icon(c : @ui.Ctx, name : String, size : Double, color : Int64, by_ink? : Bool = false) -> Unit {
   // (a runtime's mark by its runtime, `runtime:<runtime>`: its maker's, as maker_mark draws it)
   if name.has_prefix("runtime:") {
-    maker_mark(c, "", name.view(start_offset=8).to_owned(), size) |> ignore
+    maker_mark(c, "", name.exact_view(start=8).to_owned(), size) |> ignore
   } else {
     icon(c, name, size~, color~, by_ink~) |> ignore
   }
@@ -25,6 +25,7 @@ fn draw_icon(c : @ui.Ctx, name : String, size : Double, color : Int64, by_ink? :
 /// What a button is (controls.css.ts): `Plain` lined, on the canvas;
 /// `Primary` the one thing to do, solid; `Ghost` words alone, a ground
 /// under the pointer or while busy; `Danger` lined, its words red; `DangerSolid` solid red.
+#derive(Eq)
 pub(all) enum Tone {
   Plain
   Primary
@@ -33,7 +34,7 @@ pub(all) enum Tone {
   DangerSolid
   /// a ghost's in the red (controls.css.ts btnGhost with btnDanger: 删除 beside a dialog's other buttons)
   GhostDanger
-} derive(Eq)
+}
 
 ///|
 /// A button (Button): a 36 pill on the wide screen, the phone's 38 one on a
@@ -2078,6 +2079,7 @@ let section_actions : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 /// A pill's tone (parts.tsx Tone): its ground and its words' ink.
+#derive(Eq)
 pub(all) enum PillTone {
   Neutral
   Green
@@ -2085,7 +2087,7 @@ pub(all) enum PillTone {
   Amber
   Red
   Accented
-} derive(Eq)
+}
 
 ///|
 /// A pill (parts.tsx Pill, parts.css.ts pill): words 12, 500, on one line, 22 high, 9 in, round; on the quiet grey in
@@ -3368,12 +3370,13 @@ pub fn panel_foot(c : @ui.Ctx, body : () -> Unit) -> Unit {
 ///|
 /// How a small panel's button stands (PanelButton's tone): its words alone, the accent's ink (the one thing to do),
 /// muted (a lesser one), or the accent's pale ground always (one that must be seen).
+#derive(Eq)
 pub(all) enum PanelTone {
   Plainly
   Accent
   Quiet
   Filled
-} derive(Eq)
+}
 
 ///|
 /// Words to press in a small panel (PanelButton): a small pill, 24 high, 10 in, its words 12 and 500; a ground only
@@ -3667,6 +3670,7 @@ let chooser_words_lit : @ui.TextStyle = chooser_words.then(@ui.text_style(color=
 
 ///|
 /// What a column's edge was done with this frame.
+#derive(Eq, Debug)
 pub(all) enum Resized {
   /// nothing
   Untouched
@@ -3678,7 +3682,19 @@ pub(all) enum Resized {
   Pressed
   /// the second of two clicks (the first was `Pressed`): its own width again, or as wide as what it holds needs
   Twice
-} derive(Eq, Show, Debug)
+}
+
+///|
+/// As what an edge's handle was done with is written (tests compare it): what `derive(Show)` wrote, a number as its text.
+pub impl Show for Resized with output(self, logger) {
+  match self {
+    Untouched => logger.write_string("Untouched")
+    Dragging(v) => logger.write_string("Dragging(\{v})")
+    Dropped(v) => logger.write_string("Dropped(\{v})")
+    Pressed => logger.write_string("Pressed")
+    Twice => logger.write_string("Twice")
+  }
+}
 
 ///|
 /// An edge in hand: where the press went down, its column's width then; which end of what it is dragged between it was

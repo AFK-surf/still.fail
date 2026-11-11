@@ -86,7 +86,7 @@ fn landing_faces(t : @ui.Tester) -> (Double, Double) raise {
   let rk = "ws1/st1\u{1}s-c1"
   let em = emits_of(rk)
   guard em.current is Some(turn) && turn.pose == Spit else {
-    fail("not landing: \{em.current.map(fn(c) { c.pose })}")
+    fail("not landing: \{Repr(em.current.map(fn(c) { c.pose }))}")
   }
   // (its line gone as the answer left it: where it was last drawn)
   let face = match @motion.measured_rect(t.ctx(), "emit-avatar/" + rk + "/" + turn.agent) {
@@ -128,8 +128,8 @@ test "the flying avatar goes where its answer comes in: where it was aimed on it
       _ => ()
     }
   }
-  guard (aimed, landed) is (Some(a), Some(l)) else { fail("aimed \{aimed}, landed \{landed}") }
-  assert_true((a.0 - l.0).abs() < 0.5 && (a.1 - l.1).abs() < 0.5, msg="aimed at \{a}, landed at \{l}")
+  guard (aimed, landed) is (Some(a), Some(l)) else { fail("aimed \{Repr(aimed)}, landed \{Repr(landed)}") }
+  assert_true((a.0 - l.0).abs() < 0.5 && (a.1 - l.1).abs() < 0.5, msg="aimed at \{Repr(a)}, landed at \{Repr(l)}")
   emit_restore()
 }
 
@@ -159,7 +159,7 @@ test "read up a little, the answer coming in under what is read comes where it i
   let answer = fn() { t.words().filter(fn(w) { w.0.has_prefix("收到") }) }
   // (in view, as it sets out: nothing of it shown yet)
   guard answer() is [w, ..] else { fail("no answer in view") }
-  assert_true(w.5 < 1.0, msg="\{w}")
+  assert_true(w.5 < 1.0, msg="\{Repr(w)}")
   // in at last where the list has it: over nothing else (its words over no other's)
   t.run_for(emit_all_ms())
   guard answer() is [w, ..] else { fail("no answer in view") }
@@ -167,7 +167,7 @@ test "read up a little, the answer coming in under what is read comes where it i
   for o in t.words() {
     if o.0 != w.0 && o.5 > 0.0 {
       let apart = o.2 + o.4 <= w.2 + 0.5 || w.2 + w.4 <= o.2 + 0.5 || o.1 + o.3 <= w.1 + 0.5 || w.1 + w.3 <= o.1 + 0.5
-      assert_true(apart, msg="\{w} over \{o}")
+      assert_true(apart, msg="\{Repr(w)} over \{Repr(o)}")
     }
   }
   emit_restore()

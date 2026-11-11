@@ -147,10 +147,11 @@ test "pressed: its callback writes the state outside any tracking, what reads it
 }
 
 ///|
+#derive(Eq)
 priv struct Item {
   key : String
   words : String
-} derive(Eq)
+}
 
 ///|
 /// A list of rows by key, each row's making counted, each row's words by its item.
@@ -318,7 +319,7 @@ test "changed a little at a time, it draws what the same state made fresh draws"
     made_fresh.frame(w, 844.0) |> ignore
     let fresh = made_fresh.drawn()
     made_fresh.dispose()
-    assert_eq(shown(kept), shown(fresh), msg="step \{step} w=\{w}\nkept  \{shown(kept)}\nfresh \{shown(fresh)}")
+    assert_eq(shown(kept), shown(fresh), msg="step \{step} w=\{w}\nkept  \{Repr(shown(kept))}\nfresh \{Repr(shown(fresh))}")
   }
 }
 
@@ -802,7 +803,7 @@ test "leaving starts at its cause's moment: its first frame at 8.3, 16.7 or 200,
   assert_eq(at_moment(1000.0 / 60.0), jump)
   assert_eq(at_moment(1000.0 / 120.0), jump)
   // (250 of its 300 gone)
-  assert_true(jump.iter().any(fn(s) { s.has_suffix(" " + (1.0 - 250.0 / 300.0).to_string()) }), msg="\{jump}")
+  assert_true(jump.iter().any(fn(s) { s.has_suffix(" " + (1.0 - 250.0 / 300.0).to_string()) }), msg="\{Repr(jump)}")
 }
 
 ///|

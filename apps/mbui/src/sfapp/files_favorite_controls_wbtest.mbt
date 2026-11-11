@@ -27,7 +27,7 @@ test "a pointer reveals removal without moving the following row" {
   let (_, after) = t.find("备份盘").unwrap()
   assert_true((after - before).abs() < 0.5, msg="the next row stays in place")
   let faults = t.room_faults().filter(fn(f) { f.contains("从个人收藏移除") })
-  assert_true(faults.is_empty(), msg="\{faults}")
+  assert_true(faults.is_empty(), msg="\{Repr(faults)}")
   t.click(Button, label="从个人收藏移除「文档」")
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("备份盘") is Some(_))

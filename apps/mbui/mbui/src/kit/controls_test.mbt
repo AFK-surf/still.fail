@@ -395,13 +395,13 @@ test "progress: told a value anew, laid out there at once (its value said at onc
     for f in fill_drawn(t) {
       assert_eq(f.1, [1.5, 1.5, 1.5, 1.5], msg="its ends round at \{f.0} wide")
       if widths.length() > 0 {
-        assert_true(f.0 >= widths[widths.length() - 1], msg="\{widths} \{f.0}")
+        assert_true(f.0 >= widths[widths.length() - 1], msg="\{Repr(widths)} \{f.0}")
       }
       widths.push(f.0)
     }
   }
-  assert_true(widths.filter(fn(w) { w > 100.0 && w < 200.0 }).length() > 3, msg="\{widths}")
-  assert_eq(built, [], msg="built for the clock: \{built}")
+  assert_true(widths.filter(fn(w) { w > 100.0 && w < 200.0 }).length() > 3, msg="\{Repr(widths)}")
+  assert_eq(built, [], msg="built for the clock: \{Repr(built)}")
   t.assert_idle()
 }
 
@@ -670,9 +670,9 @@ test "switch: its knob slides and its track's colour goes with it as each frame 
     }
   }
   // (it slides, from the off side to the on side, its track's colour with it)
-  assert_true(places.length() > 3, msg="\{places}")
+  assert_true(places.length() > 3, msg="\{Repr(places)}")
   assert_eq(knob_x(), [x0[0] + 36.0 - 2.0 * 2.0 - 18.0])
-  assert_true(grounds.length() > 3, msg="\{grounds}")
-  assert_eq(built, [], msg="\{built.length()} frames built: \{built}")
+  assert_true(grounds.length() > 3, msg="\{Repr(grounds)}")
+  assert_eq(built, [], msg="\{built.length()} frames built: \{Repr(built)}")
   t.assert_idle()
 }

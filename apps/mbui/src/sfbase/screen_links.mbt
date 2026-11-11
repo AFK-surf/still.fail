@@ -213,7 +213,7 @@ pub fn service_card_of(src : Source, to : @sf.LinkTo) -> (String, String, Bool) 
   }
   guard j is Some(Object(_)) else { return (name, "", false) }
   let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
+    Some(i) => station.exact_view(end=i).to_owned()
     None => station
   }
   let at = match dv_stations(src, ws).0 {
@@ -340,11 +340,12 @@ pub fn screen_link_card(c : @ui.Ctx, src : Source, key : String, href : String, 
 ///|
 /// How a card's preview stands: not asked for, coming (its call), or ended by the station (refused, or the screen no
 /// longer previewed: its picture, or its mark, stays until the card goes from view).
+#derive(Eq)
 pub(all) enum PeekRun {
   PeekOff
   PeekOn
   PeekEnded
-} derive(Eq)
+}
 
 ///|
 /// A card's preview.

@@ -6,6 +6,7 @@
 ///|
 /// One path of a picture: its data (`d`, svg_path's), its fill and stroke (0xRRGGBBAA, 0: none), the stroke's width,
 /// the fill's rule, and where its groups put it (scaled by `sx`, `sy`, then moved by `tx`, `ty`).
+#derive(Eq, Debug)
 pub(all) struct VectorPath {
   d : String
   fill : Int64
@@ -16,15 +17,16 @@ pub(all) struct VectorPath {
   sy : Double
   tx : Double
   ty : Double
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A picture: its viewport (`w` × `h`) and its paths, drawn in order.
+#derive(Eq, Debug)
 pub(all) struct Vector {
   w : Double
   h : Double
   layers : Array[VectorPath]
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// The outlines of `l` in the viewport's units times `k`, cut for drawing at `scale` pixels a unit of that.

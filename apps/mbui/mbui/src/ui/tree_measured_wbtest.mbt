@@ -94,7 +94,7 @@ test "a node as tall as the field in the old view it hosts: what the input metho
   on_text(1, long, long.length(), 0)
   t.draw()
   let (h, uy, rh) = measured_now(t, holder, under)
-  assert_true(h > 21.0 && uy == h && rh == h, msg="composed: taller, the first frame: \{(h, uy, rh)}")
+  assert_true(h > 21.0 && uy == h && rh == h, msg="composed: taller, the first frame: \{Repr((h, uy, rh))}")
   assert_eq(field.text(), "", msg="composed: its words still those given")
   on_text(1, "", 0, 0)
   t.draw()
@@ -113,7 +113,7 @@ test "a node as tall as the field in the old view it hosts, words on a line at i
   assert_eq(measured_now(t, holder, under), (21.0, 21.0, 21.0), msg="300 wide: a line")
   t.resize(120.0, 400.0)
   let (h, uy, rh) = measured_now(t, holder, under)
-  assert_true(h > 21.0 && uy == h && rh == h, msg="120 wide: more lines, the first frame: \{(h, uy, rh)}")
+  assert_true(h > 21.0 && uy == h && rh == h, msg="120 wide: more lines, the first frame: \{Repr((h, uy, rh))}")
   t.resize(300.0, 400.0)
   assert_eq(measured_now(t, holder, under), (21.0, 21.0, 21.0), msg="300 again: a line, the first frame")
 }
@@ -125,7 +125,7 @@ test "a node as tall as the field in the old view it hosts: the system's words m
   t.set_font_scale(1.5)
   t.draw()
   let (h, uy, rh) = measured_now(t, holder, under)
-  assert_true(h > 21.0 && uy == h && rh == h, msg="bigger words: taller, the first frame: \{(h, uy, rh)}")
+  assert_true(h > 21.0 && uy == h && rh == h, msg="bigger words: taller, the first frame: \{Repr((h, uy, rh))}")
 }
 
 ///|
@@ -229,13 +229,13 @@ test "a node as tall as a plain field with no line said in the old view it hosts
   assert_eq((tree_theme().text_line, line()), (1.5, 24.0), msg="its tree's theme and its editor's line")
   let (_, _, _, h) = measured_at(holder)
   let (_, _, _, rh) = t.get(TextField).rect
-  assert_eq(h, rh, msg="as tall as its editor: \{(h, rh)}")
+  assert_eq(h, rh, msg="as tall as its editor: \{Repr((h, rh))}")
   text_line.set(2.0)
   t.draw()
   assert_eq((tree_theme().text_line, line()), (2.0, 32.0), msg="2: its tree's theme and its editor's line")
   let (_, _, _, h2) = measured_at(holder)
   let (_, _, _, rh2) = t.get(TextField).rect
-  assert_true(h2 > h && h2 == rh2, msg="the theme's line longer: taller, as its editor: \{(h, h2, rh2)}")
+  assert_true(h2 > h && h2 == rh2, msg="the theme's line longer: taller, as its editor: \{Repr((h, h2, rh2))}")
 }
 
 ///|

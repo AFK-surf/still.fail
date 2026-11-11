@@ -284,7 +284,7 @@ test "a match low in a long message is brought into view" {
   let line = t.text_runs().iter().find_first(fn(r) { r.text.contains("有问题随时说") })
   match line {
     Some(r) => {
-      assert_true(r.top > 200.0 && r.bottom < 650.0, msg="the match was not brought near the middle: \{r}")
+      assert_true(r.top > 200.0 && r.bottom < 650.0, msg="the match was not brought near the middle: \{Repr(r)}")
       assert_true(search_stroke_under(t, "有问题随时说", @sf.theme().p.accent, @sf.message_stroke.width))
     }
     None => fail("the match low in the message is not visible")

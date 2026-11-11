@@ -719,7 +719,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       },
       code=fn(lang, code) {
         let first = match lang.find(" ") {
-          Some(i) => lang.view(end_offset=i).to_owned()
+          Some(i) => lang.exact_view(end=i).to_owned()
           None => lang
         }
         if first.to_lower() == "mermaid" && code.trim() != "" {
@@ -800,8 +800,8 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
             let p = @sf.theme().p
             c.rich(
               [
-                @ui.span(said.view(end_offset=m.notice_link).to_owned()),
-                @ui.span(said.view(start_offset=m.notice_link).to_owned(), underline=true, link="profile"),
+                @ui.span(said.clamped_view(end=m.notice_link).to_owned()),
+                @ui.span(said.clamped_view(start=m.notice_link).to_owned(), underline=true, link="profile"),
               ],
               key="notice-profile/" + m.ts,
               style=(if open { notice_words_open } else { notice_words }).then(@ui.text_style(color=ink)),

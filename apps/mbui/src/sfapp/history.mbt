@@ -388,7 +388,7 @@ let details_group : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=
 /// A station's name, from the stations the app knows (its address's workspace's), else as the chat's row said it.
 fn station_name_of(src : Source, r : ChatRef) -> String {
   let scope = match r.station.find("/") {
-    Some(i) => r.station.view(end_offset=i).to_owned()
+    Some(i) => r.station.exact_view(end=i).to_owned()
     None => r.station
   }
   match station_marks(src, scope).iter().find_first(fn(

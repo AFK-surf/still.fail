@@ -39,7 +39,7 @@ test "flat stack on the tree: a page put in place shows at once, alone; one push
   t.run_for(move_ms(390.0) / 2.0)
   let half = flat_drawn(t)
   assert_eq(half.map(fn(d) { d.0 }), ["b", "c"])
-  assert_true(half[1].1 > 0.0 && half[1].1 < 390.0, msg="\{half}")
+  assert_true(half[1].1 > 0.0 && half[1].1 < 390.0, msg="\{Repr(half)}")
   t.run_for(move_ms(390.0))
   assert_eq(flat_drawn(t).map(fn(d) { d.0 }), ["c"])
   // (back: off it, sliding, to the page in place; no further)

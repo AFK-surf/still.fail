@@ -6,12 +6,13 @@
 
 ///|
 /// What a form field takes: words, an email, a password (dots), a number.
+#derive(Eq, Debug)
 pub(all) enum FieldKind {
   Words
   Email
   Secret
   Number
-} derive(Eq, Show)
+}
 
 ///|
 /// A form's field: its name (its value's key), its label, what it takes, whether it is needed, its placeholder, and
@@ -81,7 +82,7 @@ pub fn field_error(f : FormField, text : String, words? : FormWords = form_words
     Email => {
       let at = s.find("@")
       let ok = match at {
-        Some(i) => i > 0 && s.view(start_offset=i + 1).contains(".") && !s.contains(" ")
+        Some(i) => i > 0 && s.exact_view(start=i + 1).contains(".") && !s.contains(" ")
         None => false
       }
       if !ok {

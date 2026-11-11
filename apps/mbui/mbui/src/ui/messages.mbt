@@ -274,7 +274,7 @@ fn is_message_line(line : String) -> Bool {
 /// One MSG line posted again (Tester::replay_frames): the frame the tape has after it takes it, as the run's did.
 fn replay_message(f : FakeHost, line : String) -> Unit {
   guard line.find("MSG {") is Some(i) else { return }
-  let j = @json.parse(line.view(start_offset=i + 4).to_owned()) catch { _ => return }
+  let j = @json.parse(line.exact_view(start=i + 4).to_owned()) catch { _ => return }
   guard j is Object(m) else { return }
   guard (m.get("c"), m.get("j")) is (Some(String(channel)), Some(String(json))) else { return }
   let bytes = match m.get("b") {

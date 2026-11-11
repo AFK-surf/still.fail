@@ -277,32 +277,32 @@ fn load_sub_svg(data : Bytes, opt : Options) -> ImageData? {
 /// bytes (the data_url crate's process + decode_to_vec); None where it is not one.
 fn parse_data_url(href : String) -> (String, Bytes)? {
   let s = href.trim(chars=" \t\n\r\u{0C}").to_owned()
-  if s.length() < 5 || s.view(end_offset=5).to_owned().to_lower() != "data:" {
+  if s.length() < 5 || s.clamped_view(end=5).to_owned().to_lower() != "data:" {
     return None
   }
-  let rest = s.view(start_offset=5).to_owned()
+  let rest = s.exact_view(start=5).to_owned()
   let comma = match rest.find(",") {
     Some(c) => c
     None => return None
   }
-  let meta = rest.view(end_offset=comma).to_owned()
-  let body = rest.view(start_offset=comma + 1).to_owned()
+  let meta = rest.exact_view(end=comma).to_owned()
+  let body = rest.exact_view(start=comma + 1).to_owned()
   let mut meta_t = meta.trim(chars=" \t\n\r").to_owned()
   let mut base64 = false
   let lower = meta_t.to_lower()
   match lower.rev_find(";") {
     Some(i) => {
-      let tail = lower.view(start_offset=i + 1).to_owned().trim(chars=" ").to_owned()
+      let tail = lower.exact_view(start=i + 1).to_owned().trim(chars=" ").to_owned()
       if tail == "base64" {
         base64 = true
-        meta_t = meta_t.view(end_offset=i).to_owned()
+        meta_t = meta_t.clamped_view(end=i).to_owned()
       }
     }
     None => ()
   }
   let mime = {
     let essence = match meta_t.find(";") {
-      Some(i) => meta_t.view(end_offset=i).to_owned()
+      Some(i) => meta_t.exact_view(end=i).to_owned()
       None => meta_t
     }
     let essence = essence.trim(chars=" \t\n\r").to_owned().to_lower()

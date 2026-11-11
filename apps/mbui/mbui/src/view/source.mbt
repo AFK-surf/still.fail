@@ -57,12 +57,13 @@ pub fn View::made_for(self : View, loc : SourceLoc) -> View {
 /// One node on the way from what is drawn out to the root: who it is, where it was made, where the part it is the
 /// outside of was asked for ("" where it is no part's), and where each of its properties was last said, by name, in
 /// the order the properties are listed. Places as source_place says them.
+#derive(Eq, Debug)
 pub(all) struct SourceStep {
   id : NodeId
   made : String
   made_for : String
   said : Array[(String, String)]
-} derive(Eq, Debug)
+}
 
 ///|
 /// Where node `id` was made, and what holds it out to the root, innermost first; none where it is let go or the tree

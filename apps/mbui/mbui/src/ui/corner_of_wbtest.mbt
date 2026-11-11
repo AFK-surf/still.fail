@@ -79,7 +79,7 @@ test "corners linked: the window square, each stands alone, worked out again; a 
   // (the panel's 34 less 6 in: 29.2, past the ground's half, so drawn as a circle)
   assert_eq(b.radius, concentric(34.0, 6.0))
   assert_eq(b.corner(), 15.0)
-  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("whose drawn shape is not concentric") }), msg="\{t.corner_faults()}")
+  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("whose drawn shape is not concentric") }), msg="\{Repr(t.corner_faults())}")
 }
 
 ///|
@@ -87,7 +87,7 @@ test "corners linked: one standing elsewhere than its link says is said" {
   let t = Tester::new(linked_panel(8.0), w=400.0, h=200.0, window_corner=22.0, corners_held=false)
   t.draw()
   let faults = t.corner_faults()
-  assert_true(faults.iter().any(fn(f) { f.contains("linked to follow") }), msg="\{faults}")
+  assert_true(faults.iter().any(fn(f) { f.contains("linked to follow") }), msg="\{Repr(faults)}")
 }
 
 ///|
@@ -190,9 +190,9 @@ test "a node of the window's tree linked at each corner (tree_corners_linked): i
     fit.set(f)
     seen.push((corners(), worked()))
   }
-  assert_eq(seen[0], ([worked_at(None, links)], worked_at(None, links)), msg="none: \{seen[0]}")
+  assert_eq(seen[0], ([worked_at(None, links)], worked_at(None, links)), msg="none: \{Repr(seen[0])}")
   assert_eq(seen[1].0, [seen[1].1], msg="told: as the tree's linked corners, at once")
-  assert_true(seen[1].0 != seen[0].0, msg="the theme's ranges changing its corners: \{seen}")
+  assert_true(seen[1].0 != seen[0].0, msg="the theme's ranges changing its corners: \{Repr(seen)}")
   assert_eq(seen[2], seen[0], msg="none again: as before, at once")
   // (the corner rule takes the tree's node as linked, from the same corners)
   t.draw()

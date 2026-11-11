@@ -82,13 +82,14 @@ fn relay_shown(v : @view.View) -> () -> RelayShown {
 ///|
 /// What stands in the list's place while nothing is picked: the thread of a link typed, its places being read, not
 /// read, none connected, or the places offered.
+#derive(Eq)
 priv enum RelayList {
   Thread
   Reading
   Failed
   NoConnects
   Places
-} derive(Eq)
+}
 
 ///|
 /// The panel's body in node `v`, made once as it opens: one of two, as a place is picked or not. Picking: the bots to
@@ -481,8 +482,8 @@ fn relay_note(parent : @view.View, src : Source) -> Unit {
       },
       fn(x) {
         let (at, t, k) = x
-        let before = if at >= 0 && at < t.length() { t.view(end_offset=at + 1).to_owned() } else { "" }
-        let after = if k >= 0 && k <= t.length() { t.view(start_offset=k).to_owned() } else { "" }
+        let before = if at >= 0 && at < t.length() { t.clamped_view(end=at + 1).to_owned() } else { "" }
+        let after = if k >= 0 && k <= t.length() { t.clamped_view(start=k).to_owned() } else { "" }
         then.val = (at, before, after)
       },
     )
@@ -516,7 +517,7 @@ fn relay_note(parent : @view.View, src : Source) -> Unit {
         let caret = relaying.note.selection().1
         let name = text(Some(p), "name")
         relaying.note.set(
-          now.view(end_offset=at).to_owned() + "@" + name + " " + now.view(start_offset=caret).to_owned(),
+          now.clamped_view(end=at).to_owned() + "@" + name + " " + now.clamped_view(start=caret).to_owned(),
           caret=at + name.length() + 2,
         )
         relaying.mention_closed.set(at)

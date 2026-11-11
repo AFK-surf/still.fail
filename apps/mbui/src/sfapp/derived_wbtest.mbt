@@ -480,7 +480,7 @@ test "a chat's page with nothing changed goes over none of its rows again; a mes
   t.frame()
   assert_false(physical_equal(rd.motion_keys, after_ask))
   t.run_for(@sf.enter_ms)
-  assert_true(rd.motion_keys.iter().any(fn(k) { k.has_suffix("m:t31") }), msg=rd.motion_keys.to_string())
+  assert_true(rd.motion_keys.iter().any(fn(k) { k.has_suffix("m:t31") }), msg=Repr(rd.motion_keys).to_string())
 }
 
 ///|

@@ -27,12 +27,13 @@ let mod_shift : Int = 8
 /// A rect on the stage: left, top, width, height (px).
 // Eq and Debug for its tests
 #warnings("-unused_value")
+#derive(Eq, Debug)
 priv struct SRect {
   x : Double
   y : Double
   w : Double
   h : Double
-} derive(Eq, Debug)
+}
 
 ///|
 // kept across runs: a value (no field of it changes)

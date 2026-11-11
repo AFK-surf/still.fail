@@ -148,7 +148,7 @@ pub fn state_line(
         // (the theme's lists' lead word: bold with touch, as the phone's Home.kt StateLine; 600 with keyboard and mouse,
         // ChatMark.css.ts)
         c.text(lead_text, style=words.then(look.state_lead)) |> ignore
-        c.text(text.view(start_offset=lead_text.length()).to_owned(), style=words.then(state_rest_cut)) |> ignore
+        c.text(text.exact_view(start=lead_text.length()).to_owned(), style=words.then(state_rest_cut)) |> ignore
       })
       |> ignore
     _ => c.text(text, style=words) |> ignore

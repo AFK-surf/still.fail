@@ -55,7 +55,7 @@ pub fn decode_text(b : Bytes, truncated? : Bool = false) -> (String, String) {
       let mut text = s
       if truncated {
         while text.has_suffix("\u{FFFD}") {
-          text = text.view(end_offset=text.length() - 1).to_owned()
+          text = text.exact_view(end=text.length() - 1).to_owned()
         }
       }
       (text, "GB18030")

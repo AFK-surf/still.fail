@@ -44,7 +44,7 @@ test "74-markdown" {
     f.drag("placeRows", -220.0, 0.0, steps=30)
     // the code scrolled sideways under the finger (its words gone left, or out of its box), not the list
     let after = f.t.locate("placeRows")
-    f.check(after.length() == 0 || after[0].0 < x0, "the code not scrolled sideways: \{after}")
+    f.check(after.length() == 0 || after[0].0 < x0, "the code not scrolled sideways: \{Repr(after)}")
     // the touch on the list lets go of the field: the composer closes to its one row, the field lower in it, a line as
     // tall as before; the list keeps the room of an opened composer (composer_room_for), so its words stay where they
     // were: the page does not jump

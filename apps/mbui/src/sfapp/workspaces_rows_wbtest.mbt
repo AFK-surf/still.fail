@@ -116,7 +116,7 @@ fn ws_at(t : @ui.Tester, words : String, at : String) -> (Double, Double) raise 
     Some(p) => p
     None => {
       let said = match ws_panel(t) {
-        Some(p) => "panel at \{p.rect}: " + t.words().map(fn(w) { "\{w.0}@\{w.1},\{w.2} a\{w.5}" }).join("|")
+        Some(p) => "panel at \{Repr(p.rect)}: " + t.words().map(fn(w) { "\{w.0}@\{w.1},\{w.2} a\{w.5}" }).join("|")
         None => "no panel"
       }
       fail("\{at}: no \{words} in the panel; \{said}")
@@ -308,7 +308,7 @@ test "the workspaces on each screen: 当前使用 over the card of the one in us
       ws_in_panel(t, w).map(fn(p) { p.1 }).unwrap_or(-1.0)
     })
     for i in 1..<ys.length() {
-      assert_true(ys[i - 1] >= 0.0 && ys[i - 1] < ys[i], msg="\{at}: \{ys}")
+      assert_true(ys[i - 1] >= 0.0 && ys[i - 1] < ys[i], msg="\{at}: \{Repr(ys)}")
     }
     // the invitation's buttons beside its words, 加入 before 忽略
     let (jx, jy) = ws_in_panel(t, "加入").unwrap()

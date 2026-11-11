@@ -44,12 +44,12 @@ test "the focus moved by the keys among what a box kept to a height holds is bro
   }
   assert_eq(t.focused().unwrap().label, "item 7")
   let (top, foot) = shown_in_capped(t, "menu", "item 7")
-  assert_true(top >= 0.0 && foot <= 100.0, msg="\{(top, foot)}")
+  assert_true(top >= 0.0 && foot <= 100.0, msg="\{Repr((top, foot))}")
   assert_eq(foot, 100.0)
   // to the last and back to the first
   t.press("End")
   let (top, foot) = shown_in_capped(t, "menu", "item 19")
-  assert_true(top >= 0.0 && foot <= 100.0, msg="\{(top, foot)}")
+  assert_true(top >= 0.0 && foot <= 100.0, msg="\{Repr((top, foot))}")
   t.press("Home")
   let (top, _) = shown_in_capped(t, "menu", "item 0")
   assert_eq(top, 0.0)
@@ -95,7 +95,7 @@ test "an option chosen by the keys while the focus stays in a field is brought i
     t.press("Down")
   }
   let (top, foot) = shown_in_capped(t, "options", "option 12")
-  assert_eq(foot, 100.0, msg="\{(top, foot)}")
+  assert_eq(foot, 100.0, msg="\{Repr((top, foot))}")
   // up within what shows: still; up past its top: it stands at the top
   for _ in 0..<4 {
     t.press("Up")

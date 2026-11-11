@@ -267,7 +267,7 @@ test "a page's list on the window's tree moves as an old view's list, frame by f
         differ.push("\{platform} \{name}: the old view's list shows nothing past its end")
       }
       match k {
-        Some(k) => differ.push("\{platform} \{name}: at \{k} old \{was[k]} tree \{now[k]}; last old \{was.last()} tree \{now.last()}")
+        Some(k) => differ.push("\{platform} \{name}: at \{k} old \{Repr(was[k])} tree \{Repr(now[k])}; last old \{Repr(was.last())} tree \{Repr(now.last())}")
         None => if was.length() != now.length() { differ.push("\{platform} \{name}: \{was.length()} frames, \{now.length()}") }
       }
       // (its rows as drawn, the first frame they differ at)
@@ -292,7 +292,7 @@ test "a page's list on the window's tree moves as an old view's list, frame by f
       if r is Some(r) {
         let (a, b) = (was_rows[r], now_rows[r])
         differ.push(
-          "\{platform} \{name}: drawn at \{r} (\{was[r].0}): old \{a.length()}, tree \{b.length()}; the old's not in the tree's \{lost(a, b)}, the tree's not in the old's \{lost(b, a)}",
+          "\{platform} \{name}: drawn at \{r} (\{was[r].0}): old \{a.length()}, tree \{b.length()}; the old's not in the tree's \{Repr(lost(a, b))}, the tree's not in the old's \{Repr(lost(b, a))}",
         )
       }
     }

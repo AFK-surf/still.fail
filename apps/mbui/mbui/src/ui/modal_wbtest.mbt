@@ -957,7 +957,7 @@ test "a swipe back from the left edge of a page under a modal layer: none while 
   at(t, t0 + 48.0, 1, 300.0)
   at(t, t0 + 64.0, 2, 300.0)
   t.frame_at(t0 + 64.0 + move_most_ms)
-  assert_true(begun > 0 && told[0] == 0, msg="\{told}")
+  assert_true(begun > 0 && told[0] == 0, msg="\{Repr(told)}")
   assert_eq(told[begun:].to_owned(), [3])
   assert_eq(nav.depth(), 2)
 }
@@ -1036,7 +1036,7 @@ test "the caret's handle of a field of a page under an empty page in a modal lay
   let t1 = t0 + 7.0 * input_step_ms + double_click_ms
   drag(t1)
   t.frame_at(t1 + 7.0 * input_step_ms)
-  assert_true(field.selection().0 > before.0, msg="\{field.selection()} handle \{st.handle_on} focus \{g().focus_allowed()}")
+  assert_true(field.selection().0 > before.0, msg="\{Repr(field.selection())} handle \{st.handle_on} focus \{g().focus_allowed()}")
 }
 
 ///|
@@ -1099,7 +1099,7 @@ test "the system's back held by what took it as it began: what takes back changi
   for frame_between in [true, false] {
     let msg = "a frame between: \{frame_between}"
     let switched = back_switched(false, frame_between)
-    assert_eq(switched, (["A 0", "A 1", "A 1", "A 4"], [true, true, true, true]), msg="\{msg}: \{switched}")
+    assert_eq(switched, (["A 0", "A 1", "A 1", "A 4"], [true, true, true, true]), msg="\{msg}: \{Repr(switched)}")
     assert_eq(back_switched(true, frame_between).0, ["A 0", "A 1", "A 3"], msg~)
   }
 }
@@ -1264,7 +1264,7 @@ test "the system's back of an old view going on as the window's tree is made ane
     t.frame_at(t0 + 60.0)
     back(80.0, 1, 200.0, 0.6)
     back(96.0, 2, 0.0, 1.0)
-    assert_eq(told.length(), 3, msg="\{how}: \{told}")
+    assert_eq(told.length(), 3, msg="\{how}: \{Repr(told)}")
     // a back of its own after: the one there now
     back(120.0, 0, 0.0, 0.0)
     back(136.0, 2, 0.0, 1.0)

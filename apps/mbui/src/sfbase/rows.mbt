@@ -298,7 +298,7 @@ pub fn open_listed(view : ChatsView) -> Unit {
       // #n: the n-th row (from 1)
       let nth = if words.has_prefix("#") {
         let mut k = 0
-        for ch in words.view(start_offset=1) {
+        for ch in words.exact_view(start=1) {
           let d = ch.to_int() - 48
           if d >= 0 && d <= 9 {
             k = k * 10 + d

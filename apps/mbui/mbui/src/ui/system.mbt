@@ -9,12 +9,13 @@
 
 ///|
 /// How far the system bars reach in over the view from each edge, in points.
+#derive(Eq, Debug)
 pub(all) struct SystemBars {
   top : Double
   bottom : Double
   left : Double
   right : Double
-} derive(Eq, Show)
+}
 
 ///|
 /// The bars as the host last said them (none: all 0), a signal: what is laid out by them (the window's tree's sides)
@@ -61,10 +62,11 @@ pub fn system_nav_action() -> (Double, Double, Double, Double)? {
 
 ///|
 /// How much room the window has, as the system classes it (@hostapi.system_channel `size_class`).
+#derive(Eq, Debug)
 pub(all) struct SystemSizeClass {
   width : @hostapi.SizeClass
   height : @hostapi.SizeClass
-} derive(Eq, Show)
+}
 
 ///|
 /// The size classes as the host last said them (none yet: None). Put back by each Tester (messages_reset).
@@ -79,11 +81,12 @@ pub fn system_size_class() -> SystemSizeClass? {
 
 ///|
 /// The device's hinge and where its fold divides the view (@hostapi.system_channel `fold`).
+#derive(Eq, Debug)
 pub(all) struct SystemFold {
   hinge : @hostapi.Hinge
   /// where the fold divides the view now (x, y, w, h in the view's points), the margins the system keeps round it in
   divisions : Array[(Double, Double, Double, Double)]
-} derive(Eq, Show)
+}
 
 ///|
 /// The hinge as the host last said it (none yet: no hinge). Put back by each Tester (messages_reset).

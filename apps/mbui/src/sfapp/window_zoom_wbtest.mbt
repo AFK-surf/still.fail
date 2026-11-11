@@ -44,7 +44,7 @@ test "window zoom: the chat remains usable at both limits" {
       assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
     }
     let faults = t.corner_faults()
-    assert_true(faults.is_empty(), msg="zoom \{zoom}: \{faults}")
+    assert_true(faults.is_empty(), msg="zoom \{zoom}: \{Repr(faults)}")
     guard t.boxes().iter().find_first(fn(b) { b.kind == "editor" }) is Some(editor) else { fail("no chat editor at zoom \{zoom}") }
     let (w, h) = t.ctx().window_size()
     let (x, y) = (editor.x + editor.w / 2.0, editor.y + editor.h / 2.0)
@@ -226,7 +226,7 @@ test "window zoom: the panel at the window edge keeps following its corner when 
     let edge = if (follows * zoom * 1.0e6).round() / 1.0e6 >= @sf.corner_fit.least - 0.5 { follows } else { @sf.tape_corner }
     assert_true(
       (page.radii.1 - edge).abs() < 0.01 && (page.radii.2 - edge).abs() < 0.01,
-      msg="\{zoom}: the panel's right corners \{page.radii} should follow the window at \{edge}",
+      msg="\{zoom}: the panel's right corners \{Repr(page.radii)} should follow the window at \{edge}",
     )
     t.key(@ui.key_of_char('='), mods=@ui.mod_cmd)
   }
@@ -301,11 +301,11 @@ test "window zoom: a short rail keeps settings visible and scrolls its places" {
   assert_true((@ui.window_zoom() - 1.75).abs() < 0.001)
   let gear = t.query(Button, label=@sf.t("web-pages.settings.title")).unwrap().rect
   let (_, height) = t.ctx().window_size()
-  assert_true(gear.1 >= 0.0 && gear.1 + gear.3 <= height, msg="settings is outside the window: \{gear}")
+  assert_true(gear.1 >= 0.0 && gear.1 + gear.3 <= height, msg="settings is outside the window: \{Repr(gear)}")
   let before = t.query(Button, label="文件").unwrap().rect
   t.wheel(before.0 + before.2 / 2.0, before.1 + before.3 / 2.0, 300.0)
   t.frame_at(t.time() + @ui.move_most_ms)
   let after = t.query(Button, label="文件").unwrap().rect
-  assert_true(after.1 < before.1, msg="places did not scroll: \{before} → \{after}")
+  assert_true(after.1 < before.1, msg="places did not scroll: \{Repr(before)} → \{Repr(after)}")
   assert_eq(t.query(Button, label=@sf.t("web-pages.settings.title")).unwrap().rect, gear)
 }

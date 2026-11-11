@@ -178,7 +178,7 @@ test "the seeded random draws the same on every backend" {
   let a = Array::makei(5, _ => r.below(1000))
   let r2 = @effect.Rng::new(42)
   assert_eq(Array::makei(5, _ => r2.below(1000)), a)
-  inspect(a, content=(
+  debug_inspect(a, content=(
     #|[791, 314, 751, 389, 144]
   ))
   for _ in 0..<1000 {

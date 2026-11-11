@@ -61,7 +61,7 @@ test "presented_rest: a step further in whose page grows, asked before a frame d
   t.run_for(end - t.time())
   let (top, h) = one_sheet(t)
   t.run_for(@ui.move_most_ms)
-  assert_eq(one_sheet(t), (top, h), msg="at rest by \{end}: \{(top, h)}, then \{one_sheet(t)}")
+  assert_eq(one_sheet(t), (top, h), msg="at rest by \{end}: \{Repr((top, h))}, then \{Repr(one_sheet(t))}")
 }
 
 ///|

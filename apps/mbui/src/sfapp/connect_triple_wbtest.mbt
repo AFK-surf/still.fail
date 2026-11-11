@@ -23,10 +23,10 @@ test "a connect's model control says its model, effort and who runs it in one ro
     })
     let middle = fn(r : (Double, Double, Double, Double)) { r.1 + r.3 / 2.0 }
     for i in 1..<at.length() {
-      assert_true((middle(at[i]) - middle(at[0])).abs() < 1.0, msg="\{win.0}: not one row: \{found}")
-      assert_true(at[i].0 >= at[i - 1].0 + at[i - 1].2, msg="\{win.0}: out of order: \{found}")
+      assert_true((middle(at[i]) - middle(at[0])).abs() < 1.0, msg="\{win.0}: not one row: \{Repr(found)}")
+      assert_true(at[i].0 >= at[i - 1].0 + at[i - 1].2, msg="\{win.0}: out of order: \{Repr(found)}")
     }
-    assert_true(at.iter().all(fn(r) { r.0 >= 0.0 && r.0 + r.2 <= win.1 }), msg="\{win.0}: past the window: \{found}")
+    assert_true(at.iter().all(fn(r) { r.0 >= 0.0 && r.0 + r.2 <= win.1 }), msg="\{win.0}: past the window: \{Repr(found)}")
   }
 }
 

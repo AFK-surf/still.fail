@@ -9,6 +9,7 @@
 /// (ui's Ctx::show_cursor, Tree::cursor_of): a field the I-beam, what takes presses the hand, words picked with the
 /// pointer the I-beam; what is none of those as it is (an edge, what a press on goes to a field, a remote screen's
 /// pointer) is said so (ui's Ctx::cursor, View::cursor).
+#derive(Eq, Debug)
 pub(all) enum Cursor {
   Arrow
   Hand
@@ -19,7 +20,25 @@ pub(all) enum Cursor {
   Grabbing
   Crosshair
   NotAllowed
-} derive(Eq, Show, Debug)
+}
+
+///|
+/// By its name, as a Tester's export writes the pointer's shape: what `derive(Show)` wrote.
+pub impl Show for Cursor with output(self, logger) {
+  logger.write_string(
+    match self {
+      Arrow => "Arrow"
+      Hand => "Hand"
+      IBeam => "IBeam"
+      ResizeX => "ResizeX"
+      ResizeY => "ResizeY"
+      Grab => "Grab"
+      Grabbing => "Grabbing"
+      Crosshair => "Crosshair"
+      NotAllowed => "NotAllowed"
+    },
+  )
+}
 
 ///|
 /// The number a host is told it by (@hostapi.set_cursor).

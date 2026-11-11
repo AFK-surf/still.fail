@@ -107,8 +107,8 @@ test "a long status stays a one-line pill" {
   )
   t.draw()
   let lines = t.lines_of(words)
-  assert_eq(lines.length(), 1, msg="\{lines}")
-  assert_true(lines[0].has_suffix("…"), msg="\{lines}")
+  assert_eq(lines.length(), 1, msg="\{Repr(lines)}")
+  assert_true(lines[0].has_suffix("…"), msg="\{Repr(lines)}")
 }
 
 ///|
@@ -372,7 +372,7 @@ test "a list's row in a side column: what stands at its first line's end in one 
   }
   let end = at(0xFF0000FFL)
   let corner = at(0x00FF00FFL)
-  assert_true(end > 0.0 && corner > 0.0, msg="\{t.drawn_rects()}")
+  assert_true(end > 0.0 && corner > 0.0, msg="\{Repr(t.drawn_rects())}")
   assert_true((end - corner).abs() < 0.5, msg="the first line's end at \{end}, the corner's at \{corner}")
 }
 
@@ -421,7 +421,7 @@ test "a list's row as a node in a side column: what stands at its first line's e
       }
       let end = at(0xFF0000FFL)
       let corner = at(0x00FF00FFL)
-      assert_true(end > 0.0 && corner > 0.0, msg="\{t.drawn_rects()}")
+      assert_true(end > 0.0 && corner > 0.0, msg="\{Repr(t.drawn_rects())}")
       assert_true((end - corner).abs() < 0.5, msg="platform \{platform}, last \{last}: the first line's end at \{end}, the corner's at \{corner}")
     }
   }
@@ -469,7 +469,7 @@ test "a list's row as a node: its lines as high as their words' lines at the sys
           |> ignore
         })
         t.run_for(@ui.move_most_ms)
-        assert_eq(t.squeeze_faults(), [], msg="\{at}: \{t.squeeze_faults()}")
+        assert_eq(t.squeeze_faults(), [], msg="\{at}: \{Repr(t.squeeze_faults())}")
         let word = fn(s : String) {
           match t.words().search_by(fn(w) { w.0 == s }) {
             Some(i) => t.words()[i]
@@ -478,9 +478,9 @@ test "a list's row as a node: its lines as high as their words' lines at the sys
         }
         let title = word("整理发布清单")
         let under = word("正在核对第三项")
-        assert_true(title.4 > 0.0 && under.4 > 0.0, msg="\{at}: \{t.words()}")
+        assert_true(title.4 > 0.0 && under.4 > 0.0, msg="\{at}: \{Repr(t.words())}")
         // (the line under it starts no higher than where its title's line ends)
-        assert_true(under.2 >= title.2 + title.4 - 0.5, msg="\{at}: its title at \{title}, the line under it at \{under}")
+        assert_true(under.2 >= title.2 + title.4 - 0.5, msg="\{at}: its title at \{Repr(title)}, the line under it at \{Repr(under)}")
         guard t.drawn_rects().search_by(fn(r) { r.4 == 0x00FF00FFL }) is Some(g) else { fail("\{at}: no row") }
         let ground = t.drawn_rects()[g]
         rows["\{platform} \{high} \{scale}"] = ground.3
@@ -495,7 +495,7 @@ test "a list's row as a node: its lines as high as their words' lines at the sys
           let mark = t.drawn_rects()[i]
           assert_true(
             (mark.1 + mark.3 / 2.0 - (title.2 + title.4 / 2.0)).abs() < 0.5,
-            msg="\{at}: its mark at \{mark}, its title at \{title}",
+            msg="\{at}: its mark at \{Repr(mark)}, its title at \{Repr(title)}",
           )
         }
       }
@@ -536,7 +536,7 @@ test "a chat's rows as nodes: as high as each other whatever their second lines 
     })
     let heights = fn(at : String) -> (Double, Double) raise {
       t.run_for(@ui.move_most_ms)
-      assert_eq(t.squeeze_faults(), [], msg="\{at}: \{t.squeeze_faults()}")
+      assert_eq(t.squeeze_faults(), [], msg="\{at}: \{Repr(t.squeeze_faults())}")
       let high = fn(color : Int64) -> Double raise {
         match t.drawn_rects().search_by(fn(r) { r.4 == color }) {
           Some(i) => t.drawn_rects()[i].3

@@ -120,7 +120,7 @@ fn font_and_text(sk : String) -> ((Double, Int, Int), String)? {
     }
   }
   let skip = parts[0].length() + parts[1].length() + parts[2].length() + 3
-  Some(((n(parts[0]), n(parts[1]).to_int(), n(parts[2]).to_int()), sk.view(start_offset=skip).to_owned()))
+  Some(((n(parts[0]), n(parts[1]).to_int(), n(parts[2]).to_int()), sk.exact_view(start=skip).to_owned()))
 }
 
 ///|

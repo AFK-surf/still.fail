@@ -23,6 +23,7 @@
 /// How something comes or goes (Compose's EnterTransition / ExitTransition): at its far end its opacity is `fade`, its
 /// scale `scale` (about `ox`, `oy`), it is `dx`, `dy` off its place; the opacity goes by `fade_spec`, the rest by
 /// `spec`.
+#derive(Eq)
 pub(all) struct Trans {
   fade : Double
   scale : Double
@@ -36,7 +37,7 @@ pub(all) struct Trans {
   /// come in over it, they going before it as it goes (Look's `words`), so that never are its words and what it is put
   /// over both seen in one place (sf/motion.mbt rule 4)
   ground_first : Bool
-} derive(Show, Eq)
+}
 
 ///|
 /// A transition: fadeIn/Out to `fade`, scaleIn/Out to `scale`, slideIn/Out by `dx`, `dy`; all by `spec` unless the

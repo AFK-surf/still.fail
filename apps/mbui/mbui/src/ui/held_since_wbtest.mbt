@@ -84,8 +84,8 @@ test "two changes told one watch before a build, the second turning the wait on:
     (at_60 - (held_since_wait_ms - held_since_gap_ms)).abs() < 1.0e-6,
     msg="at 60 a second: held \{at_60} after B",
   )
-  assert_true(said_60.contains("held_causes"), msg="at 60 a second: \{said_60}")
+  assert_true(said_60.contains("held_causes"), msg="at 60 a second: \{Repr(said_60)}")
   // (a frame between them at 120: B told alone, from B)
   assert_true((at_120 - held_since_wait_ms).abs() < 1.0e-6, msg="at 120 a second: held \{at_120} after B")
-  assert_true(!said_120.contains("held_causes"), msg="at 120 a second: \{said_120}")
+  assert_true(!said_120.contains("held_causes"), msg="at 120 a second: \{Repr(said_120)}")
 }

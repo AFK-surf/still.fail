@@ -8,6 +8,7 @@
 ///|
 /// What the glyph draws (the core's `glyph` of the chats' list): stations online, those not (`connecting` of them on
 /// their way), failing, working; asleep while the core reaches nothing at all.
+#derive(Eq)
 pub(all) struct GlyphCounts {
   online : Int
   dim : Int
@@ -15,7 +16,7 @@ pub(all) struct GlyphCounts {
   working : Int
   asleep : Bool
   connecting : Int
-} derive(Eq)
+}
 
 // All in the web's 24-unit box.
 

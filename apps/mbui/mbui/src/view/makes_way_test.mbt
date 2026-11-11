@@ -262,7 +262,7 @@ test "words wrapping in a padded column shown, let go of and shown again, no fra
   let none = turned_padded([100.0, 130.0, 160.0], false)
   let one = turned_padded([100.0, 130.0, 160.0], true)
   assert_eq(none, one)
-  assert_true(none[none.length() - 1] > 40.0, msg="shown again, wrapped: \{none}")
+  assert_true(none[none.length() - 1] > 40.0, msg="shown again, wrapped: \{Repr(none)}")
 }
 
 ///|

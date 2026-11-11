@@ -2,11 +2,12 @@
 // the screen picture is composed beneath the hardware and is never stretched.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Device {
   IPhone11Pro
   IPadPro11
   MacBookPro16
-} derive(Eq, Debug)
+}
 
 ///|
 /// A device's artwork size and the screen rectangle within it, in the artwork's original units.

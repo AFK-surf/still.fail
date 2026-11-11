@@ -22,13 +22,13 @@ test "Home: a chat with news goes to the top: it closes where it was and opens t
   let ci = t.words().filter(fn(w) { w.0 == "盯着 CI，绿了告诉我" })
   assert_eq(ci.length(), 2)
   for w in ci {
-    assert_true(w.5 < 1.0, msg="\{w}")
+    assert_true(w.5 < 1.0, msg="\{Repr(w)}")
   }
   // its room open, the copy where it was gone
   t.run_for(@ui.row_size_ms)
   let ci = t.words().filter(fn(w) { w.0 == "盯着 CI，绿了告诉我" })
   assert_eq(ci.length(), 1)
-  assert_true((ci[0].2 - y_top).abs() < 0.5, msg="\{ci[0]} \{y_top}")
+  assert_true((ci[0].2 - y_top).abs() < 0.5, msg="\{Repr(ci[0])} \{y_top}")
   let (_, f2) = t.drawn_of("整理发布清单").unwrap()
   assert_true((f2 - y_top - 66.0).abs() < 0.5)
   fix_clock.val = None
@@ -142,7 +142,7 @@ test "Home: a row swiped off is archived once it has gone, and leaves no copy of
   t.frame()
   assert_true(t.locate("=把旧的截图都换成新的").is_empty())
   // gone with no copy fading where it was; the rows under it close over the room
-  assert_true(t.moving().iter().all(fn(m) { !m.contains("c8 leaving") }), msg="\{t.moving()}")
+  assert_true(t.moving().iter().all(fn(m) { !m.contains("c8 leaving") }), msg="\{Repr(t.moving())}")
 }
 
 ///|
@@ -211,7 +211,7 @@ test "words sent: the composer stays as it was while they are in it, and comes d
   // was, its ＋ and send where they were), the list's room under its last row as it was
   assert_true(flight_of("ws1/st1:s-c1") is Some(f) && f.placed)
   assert_eq(box(), tall)
-  assert_true(!reshaping(), msg="\{t.moving()}")
+  assert_true(!reshaping(), msg="\{Repr(t.moving())}")
   assert_eq(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), room)
   // let go of once the words are on their way: it comes down from as tall as it was, its field with it
   let (go, down) = @sfbase.flight_lets_go("ws1/st1:s-c1").unwrap()
@@ -222,7 +222,7 @@ test "words sent: the composer stays as it was while they are in it, and comes d
     msg="the words not yet on their way",
   )
   assert_true(box() < tall, msg="\{box()} \{tall}")
-  assert_true(reshaping(), msg="\{t.moving()}")
+  assert_true(reshaping(), msg="\{Repr(t.moving())}")
   // and its room under the list down with it, on the same curve
   t.run_for(go + down - t.time())
   assert_true(@sfpages.composer_room(t.ctx(), "ws1/st1:s-c1") < room)
@@ -256,7 +256,7 @@ test "words sent set out from where they were typed and land where their message
     let (fx, fy) = typed.place(f.lead + p.a)
     assert_true(
       copies.iter().any(fn(w) { (w.1 + p.at.0 - fx).abs() < 0.5 && (w.2 + p.at.1 - fy).abs() < 0.5 }),
-      msg="\{p.a}: \{fx},\{fy} \{copies}",
+      msg="\{p.a}: \{fx},\{fy} \{Repr(copies)}",
     )
   }
   // landed: the message's own words where it has them, nothing else of them drawn
@@ -264,7 +264,7 @@ test "words sent set out from where they were typed and land where their message
   t.frame()
   assert_true(flight_of("ws1/st1:s-c1") is None)
   let drawn = t.words().filter(fn(w) { w.0 == words && w.5 > 0.01 })
-  assert_eq(drawn.length(), 1, msg="\{drawn}")
+  assert_eq(drawn.length(), 1, msg="\{Repr(drawn)}")
   fix_clock.val = None
 }
 

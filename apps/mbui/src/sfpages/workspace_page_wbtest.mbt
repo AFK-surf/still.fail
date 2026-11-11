@@ -400,8 +400,8 @@ test "where the two panels' words stand on every screen: each under the one befo
       "移出 workspace",
     ].map(fn(w) { ws_word(t, w) })
     for k in 1..<order.length() {
-      assert_true(order[k].1 >= order[k - 1].1 + order[k - 1].3 - 0.5, msg="\{at}: \{order[k - 1]} over \{order[k]}")
-      assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{order[0]} beside \{order[k]}")
+      assert_true(order[k].1 >= order[k - 1].1 + order[k - 1].3 - 0.5, msg="\{at}: \{Repr(order[k - 1])} over \{Repr(order[k])}")
+      assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{Repr(order[0])} beside \{Repr(order[k])}")
     }
     @sf.presenters_reset()
     // the ways': the groups' labels and the ways' titles on one line, down in the core's order
@@ -412,15 +412,15 @@ test "where the two panels' words stand on every screen: each under the one befo
       ws_word(t, w)
     })
     for k in 1..<order.length() {
-      assert_true(order[k].1 >= order[k - 1].1 + order[k - 1].3 - 0.5, msg="\{at}: \{order[k - 1]} over \{order[k]}")
-      assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{order[0]} beside \{order[k]}")
+      assert_true(order[k].1 >= order[k - 1].1 + order[k - 1].3 - 0.5, msg="\{at}: \{Repr(order[k - 1])} over \{Repr(order[k])}")
+      assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{Repr(order[0])} beside \{Repr(order[k])}")
     }
     // (局域网's switch after its title, across the middle of its title and its note)
     let (title, note) = (ws_word(t, "局域网"), ws_word(t, "在同一局域网时直连"))
     let (sx, sy, _, sh) = t.get(Switch, label="局域网").rect
     let mid = sy + sh / 2.0
-    assert_true(sx >= title.0 + title.2, msg="\{at}: switch at \{sx}, \{title}")
-    assert_true(mid > title.1 && mid < note.1 + note.3, msg="\{at}: switch's middle \{mid}, \{title}, \{note}")
+    assert_true(sx >= title.0 + title.2, msg="\{at}: switch at \{sx}, \{Repr(title)}")
+    assert_true(mid > title.1 && mid < note.1 + note.3, msg="\{at}: switch's middle \{mid}, \{Repr(title)}, \{Repr(note)}")
     @sf.presenters_reset()
     assert_eq(calls.length(), 0, msg=at)
   }

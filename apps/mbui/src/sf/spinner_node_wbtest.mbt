@@ -72,7 +72,7 @@ test "the spinner as a node drawn as the old view's spinner is, at its first fra
       @ui.view_painted().made - made,
     ),
     (true, true, true, true, true, true, 0),
-    msg="old \{about(old1)[:1]}, node \{about(new1)[:1]}",
+    msg="old \{Repr(about(old1)[:1])}, node \{Repr(about(new1)[:1])}",
   )
 }
 
@@ -127,7 +127,7 @@ test "a page whose spinners turn: each frame of their turning is painted alone o
     frames += 1
     let perf = t.frame_perf()
     if t.built_why() != "" || !(perf.looks || perf.painted) {
-      built.push("\{t.time()}: \{t.built_why()} \{perf}")
+      built.push("\{t.time()}: \{t.built_why()} \{Repr(perf)}")
     }
   }
   let (old1, new1) = spinner_drawn(t)
@@ -135,7 +135,7 @@ test "a page whose spinners turn: each frame of their turning is painted alone o
   assert_eq(
     (frames >= 55, old1 != old0, new1 != new0),
     (true, true, true),
-    msg="\{frames} frames; old \{old0.length()} \{old0[:1]} -> \{old1[:1]}; node \{new0.length()} \{new0[:1]} -> \{new1[:1]}; \{t.time()}; built \{built[:2]}",
+    msg="\{frames} frames; old \{old0.length()} \{Repr(old0[:1])} -> \{Repr(old1[:1])}; node \{new0.length()} \{Repr(new0[:1])} -> \{Repr(new1[:1])}; \{t.time()}; built \{Repr(built[:2])}",
   )
   assert_eq(built, [], msg="\{built.length()} of \{frames} frames built")
 }

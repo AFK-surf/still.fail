@@ -234,7 +234,7 @@ fn init {
 pub fn app_link(url : String) -> String {
   for scheme in ["stillfail://", "stillfail-beta://"] {
     if url.has_prefix(scheme) {
-      return "\{cloud_origin()}/\{url.view(start_offset=scheme.length())}"
+      return "\{cloud_origin()}/\{url.exact_view(start=scheme.length())}"
     }
   }
   url

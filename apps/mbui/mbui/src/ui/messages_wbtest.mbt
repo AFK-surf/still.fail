@@ -251,6 +251,6 @@ test "a message that changes only a signal, taken as it comes: what read it buil
   assert_eq(handed, ["other"])
   // the frame that took the first: the one row that read it built, the others kept; the second's, every row built
   let (kept, built) = ends[posted[0]]
-  assert_true(built == 1 && kept > 10, msg="\{ends[posted[0]]}")
-  assert_true(ends[posted[1]].1 >= 20, msg="\{ends[posted[1]]}")
+  assert_true(built == 1 && kept > 10, msg="\{Repr(ends[posted[0]])}")
+  assert_true(ends[posted[1]].1 >= 20, msg="\{Repr(ends[posted[1]])}")
 }

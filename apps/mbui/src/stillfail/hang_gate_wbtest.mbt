@@ -39,7 +39,7 @@ test "past each ten minutes' first twenty, the heaviest twenty held, stalls firs
   // (the late frames kept are the longest: 45 to 59 ms)
   let late = held.filter(fn(h) { h.trigger is LateFrame }).map(fn(h) { h.stall_ms })
   assert_eq(late.length(), 15)
-  assert_true(late.iter().all(fn(ms) { ms >= 45.0 }), msg=late.to_string())
+  assert_true(late.iter().all(fn(ms) { ms >= 45.0 }), msg=Repr(late).to_string())
   assert_eq(unsent, 25)
   assert_eq(g.flush(), ([], 0))
 }

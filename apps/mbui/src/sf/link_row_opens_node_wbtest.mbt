@@ -64,7 +64,7 @@ test "a row that opens a panel from itself (link_row_opens_node): pressed by the
     let r = rows[0].rect
     t.tap(r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
     t.run_for(@ui.move_most_ms)
-    assert_eq(opened.val, 1, msg="\{at}: opened \{opened.val} times, row at \{r}")
+    assert_eq(opened.val, 1, msg="\{at}: opened \{opened.val} times, row at \{Repr(r)}")
     assert_true(presenter_visible(), msg="\{at}: open")
     match t.find("面板里的字") {
       // (beside the row on a wide window: under it)

@@ -4,13 +4,14 @@
 ///|
 /// A notification the app had shown: its channel, its tag (shown again by it: the same one, replaced), its title and
 /// words, what it opens when tapped.
+#derive(Eq, Debug)
 pub(all) struct Notice {
   channel : String
   tag : String
   title : String
   body : String
   opens : String
-} derive(Eq, Debug)
+}
 
 ///|
 /// Shows a notification (@hostapi.notice_show): one of the same tag is replaced.

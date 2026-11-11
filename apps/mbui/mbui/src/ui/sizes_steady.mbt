@@ -237,7 +237,7 @@ fn sizes_steady_fault(
       let before = if d0 < d1 { d0 } else { d1 }
       if before <= 0.0 || d2 > stop_jerk * before {
         return (
-          Some("stopped dead from \{v1} a frame (\{v0} before; slowing \{before} then \{d2}) at \{seen[3].1} seen=\{all}"),
+          Some("stopped dead from \{v1} a frame (\{v0} before; slowing \{before} then \{d2}) at \{seen[3].1} seen=[\{all.map(fn(s) { "(\{s.0}, \{s.1}, \{s.2})" }).join(", ")}]"),
           turned,
         )
       }
@@ -246,7 +246,7 @@ fn sizes_steady_fault(
     let resting = v0.abs() < least && v1.abs() < least
     if !sets_out && !resting && (v1 - v0) * (v1 - v2) > 0.0 && (v1 - v0).abs() > least && (v1 - v2).abs() > least &&
       off > 0.5 * dmax(v0.abs(), v2.abs()) {
-      return (Some("went \{v1} a frame between \{v0} and \{v2} at \{at} seen=\{all}"), turned)
+      return (Some("went \{v1} a frame between \{v0} and \{v2} at \{at} seen=[\{all.map(fn(s) { "(\{s.0}, \{s.1}, \{s.2})" }).join(", ")}]"), turned)
     }
   }
   // (only its turning back: what rows_steady_fault says of a speed is the list's way's, where it set out, and of a

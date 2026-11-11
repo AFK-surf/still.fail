@@ -250,14 +250,14 @@ fn update_key_marks(busy : Bool) -> (@ui.Tester, Array[String]) {
 ///|
 test "the update key, a build here already waiting on its press: the update's mark (an arrow up in a ring), not download's" {
   let (_, marks) = update_key_marks(false)
-  assert_true(marks.iter().any(fn(m) { m.contains("icon/update") }), msg="\{marks}")
-  assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{marks}")
+  assert_true(marks.iter().any(fn(m) { m.contains("icon/update") }), msg="\{Repr(marks)}")
+  assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{Repr(marks)}")
 }
 
 ///|
 test "the update key while the build goes in: its arrow going up as a station's does (no download's mark), no words, no press" {
   let (t, marks) = update_key_marks(true)
-  assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{marks}")
+  assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{Repr(marks)}")
   assert_true(t.find("重启更新") is None)
   assert_true(t.query(Button, label="重启更新").unwrap().disabled, msg="takes no press while it goes in")
 }

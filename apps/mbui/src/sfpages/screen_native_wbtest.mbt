@@ -93,7 +93,7 @@ test "a late system column refits the whole picture and its control panel opens 
   @hostapi.nav_tapped_at[3] = 48.0
   // (each of the page's actions handed to the system once, however often what says them was built)
   let ids = @sf.native_over.acts.map(fn(a) { a.0 })
-  assert_eq(ids.length(), Set::from_array(ids).length(), msg="\{ids}")
+  assert_eq(ids.length(), Set::from_array(ids).length(), msg="\{Repr(ids)}")
   for a in @sf.native_over.acts.copy() {
     if a.0 == "over/screen-center" { (a.3)() }
   }

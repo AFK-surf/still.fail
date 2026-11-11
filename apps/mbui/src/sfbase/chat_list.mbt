@@ -791,7 +791,7 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
     // every chat kept whose data the page read: its activities whose turn is over let go, its page shown or not
     // (not one a message of it drawn elsewhere keeps: its topic never asked for)
     let (station, session) = match rk.find("\u{1}") {
-      Some(i) => (rk.view(end_offset=i).to_owned(), rk.view(start_offset=i + 1).to_owned())
+      Some(i) => (rk.exact_view(end=i).to_owned(), rk.exact_view(start=i + 1).to_owned())
       None => continue
     }
     let r : ChatRef = { station, session, title: "", station_name: "" }
@@ -1190,6 +1190,7 @@ pub fn floor_of(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) -
 /// before asked for) or its end (the page after), at its end, away from it (the way to the newest), and whether the
 /// asks waiting are all in view (the bell over the way to the end, jump_to_ask). A scroll changing none of that builds
 /// nothing again.
+#derive(Eq)
 pub(all) struct ListMade {
   laid : Bool
   near_top : Bool
@@ -1197,7 +1198,7 @@ pub(all) struct ListMade {
   at_end : Bool
   away : Bool
   asks_seen : Bool
-} derive(Eq)
+}
 
 ///|
 pub fn list_made(info : @ui.ListInfo?, n : Int, ask_rows : Array[Int]) -> ListMade {
@@ -2443,7 +2444,7 @@ fn shown_sign(e : Entry) -> String {
   match e {
     Said(m) => {
       let d = match m.decision {
-        Some(d) => "\{d.resolved}\{d.dismissed}\{d.chosen}"
+        Some(d) => "\{d.resolved}\{d.dismissed}\{@ui.some_text(d.chosen)}"
         None => ""
       }
       "m\{m.text.length()}|\{m.attachments.length()}|\{m.quotes.length()}|\{m.time is Some(_)}|\{m.waiting}|\{m.joined}|\{m.followed}|\{d}|\{m.notice_failed}|\{m.notice_words.length()}|\{m.notice_retry_session}|\{m.notice_detail.length()}"

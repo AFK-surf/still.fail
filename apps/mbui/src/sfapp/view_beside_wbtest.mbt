@@ -521,13 +521,13 @@ test "大屏: a film pressed with ⌘ held opens in a tab beside the chat, its p
   assert_eq(view_tabs(t).length(), 1)
   assert_eq(t.all(Tab, label=beside_film, selected=true).length(), 1, msg="its tab, in front")
   let id = tab_player_view(t, beside_film)
-  assert_true(told_playing(t, id), msg="played at once: \{t.views()}")
+  assert_true(told_playing(t, id), msg="played at once: \{Repr(t.views())}")
   // its picture in the stage under the tab's tools, its controls there (a phone's: the stage 373 wide)
   let (left, top, wide, tall) = t.get(Toolbar, label=beside_film).rect
   let holes = holes_beside(t, left)
-  assert_eq(holes.length(), 1, msg="its picture beside: \{t.holes()}")
+  assert_eq(holes.length(), 1, msg="its picture beside: \{Repr(t.holes())}")
   let (hx, hy, hw, _) = holes[0]
-  assert_true(hx >= left - 0.5 && hx + hw <= left + wide + 0.5 && hy >= top + tall - 0.5, msg="in the stage: \{holes[0]}")
+  assert_true(hx >= left - 0.5 && hx + hw <= left + wide + 0.5 && hy >= top + tall - 0.5, msg="in the stage: \{Repr(holes[0])}")
   assert_eq(t.all(Button, label=@sf.t("android-chat.video.play")).length(), 1, msg="its play key")
   // closed, and opened again by its menu
   t.click(Button, label=@sf.t("web-pages.chat.close", args=[("name", beside_film)]))
@@ -547,12 +547,12 @@ test "大屏: a film pressed with ⌘ held opens in a tab beside the chat, its p
 test "大屏: a chat opened with a film's tab kept shows its player in the tab's stage, not playing, none of the whole window's keys" {
   let t = beside_tester(mode="chat-view-side-video")
   let id = tab_player_view(t, beside_film)
-  assert_true(!ever_played(t, id), msg="never played: \{t.views()}")
+  assert_true(!ever_played(t, id), msg="never played: \{Repr(t.views())}")
   let (left, top, wide, tall) = t.get(Toolbar, label=beside_film).rect
   let holes = holes_beside(t, left)
-  assert_eq(holes.length(), 1, msg="its picture: \{t.holes()}")
+  assert_eq(holes.length(), 1, msg="its picture: \{Repr(t.holes())}")
   let (hx, hy, hw, _) = holes[0]
-  assert_true(hx >= left - 0.5 && hx + hw <= left + wide + 0.5 && hy >= top + tall - 0.5, msg="in the stage: \{holes[0]}")
+  assert_true(hx >= left - 0.5 && hx + hw <= left + wide + 0.5 && hy >= top + tall - 0.5, msg="in the stage: \{Repr(holes[0])}")
   assert_eq(t.all(Button, label=@sf.t("android-chat.video.play")).length(), 1, msg="its play key")
   // (paused: a frame back and on in the place of 15 s back and on)
   assert_eq(t.all(Button, label=@sf.t("android-chat.video.prev")).length(), 1, msg="a frame back")
@@ -637,7 +637,7 @@ test "大屏: a film's tab's 全屏 opens the whole window from where the tab's 
   let wid = m.native().unwrap().id()
   assert_true(wid != id, msg="a player of its own")
   assert_eq(m.key(), "preview-media", msg="the whole window's key")
-  assert_true(t.views().contains("control \{wid} 3 4000"), msg="from the tab's place: \{t.views()}")
+  assert_true(t.views().contains("control \{wid} 3 4000"), msg="from the tab's place: \{Repr(t.views())}")
   assert_true(told_playing(t, wid))
   assert_eq(view_tabs(t).length(), 1, msg="the tab stays")
   // closed: the tab's still paused, its player as it was
@@ -682,7 +682,7 @@ test "大屏: the whole window's 移到侧边 with no tab of the film before: th
   assert_eq(view_tabs(t).length(), 1)
   let id = tab_player_view(t, beside_film)
   assert_true(id != wid)
-  assert_true(t.views().contains("control \{id} 3 5000"), msg="from where it was: \{t.views()}")
+  assert_true(t.views().contains("control \{id} 3 5000"), msg="from where it was: \{Repr(t.views())}")
   assert_true(told_playing(t, id))
 }
 
@@ -719,7 +719,7 @@ test "大屏: a film's tab closed lets go of its player: its view closed, nothin
   assert_true(!@sfbase.tab_viewer_held(beside_chat, tab), msg="its viewer let go")
   assert_true(t.views().contains("close \{id}"), msg="its view closed")
   t.draw()
-  assert_eq(t.holes().length(), 0, msg="nothing of it drawn: \{t.holes()}")
+  assert_eq(t.holes().length(), 0, msg="nothing of it drawn: \{Repr(t.holes())}")
 }
 
 ///|
@@ -729,7 +729,7 @@ test "大屏: a song kept beside shows its cover and its controls in the tab, no
   assert_true(!ever_played(t, id))
   let (left, top, _, tall) = t.get(Toolbar, label=beside_song).rect
   let cover = t.locate(beside_song).filter(fn(p) { p.0 >= left && p.1 > top + tall })
-  assert_eq(cover.length(), 1, msg="its name under its cover in the stage: \{t.locate(beside_song)}")
+  assert_eq(cover.length(), 1, msg="its name under its cover in the stage: \{Repr(t.locate(beside_song))}")
   assert_eq(t.all(Button, label=@sf.t("android-chat.video.play")).length(), 1, msg="its play key")
   assert_true(t.find("0:31") is Some(_), msg="where it stands")
   // (no picture: nothing to turn sideways, no frame to step)
@@ -775,7 +775,7 @@ test "中屏 and 大屏: a film's and a song's player in a tab keeps the corner 
 fn film_hole(t : @ui.Tester, name : String) -> (Double, Double, Double, Double) raise {
   let holes = holes_beside(t, tab_left(t, name))
   if holes.length() != 1 {
-    fail("one picture beside: \{t.holes()}")
+    fail("one picture beside: \{Repr(t.holes())}")
   }
   holes[0]
 }

@@ -84,7 +84,7 @@ fn tape_topic_key(name : String, params : Map[String, Json]) -> Json {
     match (k, v) {
       ("session", String(s)) if s.has_prefix("thread:") => {
         let mut n = 0.0
-        for ch in s.view(start_offset=7) {
+        for ch in s.exact_view(start=7) {
           n = n * 10.0 + (ch.to_int() - 48).to_double()
         }
         key["thread"] = Json::number(n)
@@ -257,7 +257,7 @@ pub fn tape_differences(json : String, base~ : Source, trace? : Array[String] = 
     for want in trace {
       let a = words.filter(fn(w) { w.text == want }).map(fn(w) { "\{w.x.round()},\{w.y.round()}" })
       let h = here.filter(fn(h) { h.0 == want }).map(fn(h) { "\{h.1.round()},\{h.2.round()} a\{(h.5 * 100.0).round() / 100.0}" })
-      out.push("TRACE \{ft} \{want}: android \{a} here \{h}")
+      out.push("TRACE \{ft} \{want}: android \{@ui.list_text(a)} here \{@ui.list_text(h)}")
     }
     for w in words {
       // (a time counted on the wall clock, which Android's test does not stop: 8s there is 1s here)

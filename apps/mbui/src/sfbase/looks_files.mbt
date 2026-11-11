@@ -6,11 +6,12 @@
 
 ///|
 /// How a file of the looks stands: on its way, here (its size), or not had (why, in the core's words).
+#derive(Eq)
 pub(all) enum LooksFile {
   LooksComing
   LooksHere(Int)
   LooksFailed(String)
-} derive(Eq)
+}
 
 ///|
 /// The looks' files asked for this run, by name (`<drawing>/<name>`).
@@ -70,11 +71,12 @@ pub fn looks_files_again(src : Source, files : Array[String]) -> Unit {
 ///|
 /// How `files` (asked with looks_file) stand together: all here (Ready), one failed (Failed: the first one's why), else
 /// on their way, how far (the share of their bytes here: None while one's size is not known yet).
+#derive(Eq)
 pub(all) enum LooksStand {
   LooksReady
   LooksGoing(Double?)
   LooksNotHad(String)
-} derive(Eq)
+}
 
 ///|
 pub fn looks_stand(src : Source, files : Array[String]) -> LooksStand {

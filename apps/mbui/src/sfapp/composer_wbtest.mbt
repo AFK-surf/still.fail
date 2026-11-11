@@ -322,7 +322,7 @@ test "a video waiting is told apart from a picture waiting by its play mark" {
     top = if m.1 < top { m.1 } else { top }
     foot = if m.1 + m.3 > foot { m.1 + m.3 } else { foot }
   }
-  assert_true(((top + foot) / 2.0 - (tiles[1][1] + 28.0)).abs() < 3.0, msg="\{marks} \{tiles[1]}")
+  assert_true(((top + foot) / 2.0 - (tiles[1][1] + 28.0)).abs() < 3.0, msg="\{Repr(marks)} \{Repr(tiles[1])}")
   assert_eq(t.squeeze_faults(), [])
 }
 

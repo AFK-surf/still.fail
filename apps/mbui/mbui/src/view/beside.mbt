@@ -5,21 +5,23 @@
 
 ///|
 /// Which side of its anchor a layer's content goes.
+#derive(Eq, Debug)
 pub(all) enum Side {
   Top
   Right
   Bottom
   Left
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Where along the side it lines up with the anchor: their starts (the left, right to left the right), their middles,
 /// their ends. (Where what a node holds lies along its own way, spread between its ends too, is Lies: words.mbt.)
+#derive(Eq, Debug)
 pub(all) enum Along {
   Start
   Middle
   End
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Where content `w` by `h` goes by an anchor (x, y, w, h, in a window `vw` by `vh`), Radix's Popper: on `side`,
@@ -113,6 +115,7 @@ pub fn place_beside(
 /// What a node goes beside (View::beside): its anchor, on which side of it, lined up how, how far off, kept how far
 /// inside the window; `at_pointer`: beside the point of it the pointer is at while the pointer is on it, not all of it;
 /// `along_offset`: moved that much further along its side, in its own points.
+#derive(Eq, Debug)
 pub(all) struct Beside {
   anchor : NodeId
   side : Side
@@ -122,15 +125,16 @@ pub(all) struct Beside {
   at_pointer : Bool
   width : BesideWidth
   along_offset : Double
-} derive(Eq, Debug)
+}
 
 ///|
 /// How wide what goes beside another is (View::beside's `width`): as wide as what it holds says (`Own`), or as wide as
 /// its anchor is laid out (`Anchor`: Radix's trigger width, a list a field offers as wide as the field).
+#derive(Eq, Debug)
 pub(all) enum BesideWidth {
   Own
   Anchor
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Placed beside node `anchor` (place_beside: on `side`, `offset` away, lined up `along` it, kept `padding` inside the
@@ -444,11 +448,12 @@ pub fn View::lives_with(self : View, owner : View) -> View {
 /// it and what it holds draw, as they are laid out (the boxes of those with a ground, words, shapes, lines, a picture or
 /// an old view of their own): what is grown and shrunk where it is, not about a page's width (a room opening on a line
 /// to one side: reveal's, an old view's Ctx::held_look).
+#derive(Eq, Debug)
 pub(all) enum Pivot {
   At(Double, Double)
   FromBeside
   Drawn
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Where node `self` is drawn bigger or smaller about, in points where it is its own, laid out `w` by `h`.

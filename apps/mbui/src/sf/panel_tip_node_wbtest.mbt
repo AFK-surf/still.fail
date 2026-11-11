@@ -37,8 +37,8 @@ test "a key of a panel's own shows its name by it as the pointer rests on it, ov
   assert_eq(tips().length(), 1, msg="shown")
   // (by it: under it, across its middle)
   let tip = tips()[0].rect
-  assert_true(tip.1 >= k.rect.1 + k.rect.3, msg="under the key: \{tip}, the key \{k.rect}")
-  assert_true((tip.0 + tip.2 / 2.0 - (k.rect.0 + k.rect.2 / 2.0)).abs() < 1.0, msg="across its middle: \{tip}, the key \{k.rect}")
+  assert_true(tip.1 >= k.rect.1 + k.rect.3, msg="under the key: \{Repr(tip)}, the key \{Repr(k.rect)}")
+  assert_true((tip.0 + tip.2 / 2.0 - (k.rect.0 + k.rect.2 / 2.0)).abs() < 1.0, msg="across its middle: \{Repr(tip)}, the key \{Repr(k.rect)}")
   t.key(@ui.key_escape)
   t.draw()
   t.run_for(@ui.move_most_ms)

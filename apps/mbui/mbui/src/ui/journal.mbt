@@ -17,6 +17,7 @@
 
 ///|
 /// One piece of the window's thread's work.
+#derive(Eq, Debug)
 pub(all) enum Done {
   /// an event from outside handled (view_event_said's `what`): its kind alone
   Event(String)
@@ -28,12 +29,13 @@ pub(all) enum Done {
   FrameEnd
   /// pieces each shorter than `journal_floor_ms`, folded: how many, their work summed (ms)
   Small(Int, Double)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A frame's work up to presenting it, by part (ms on the work clock): the window's tree brought, the messages from
 /// outside handed on, its builds, its layout, its paint; the nodes built and instances drawn; what it was drawn for
 /// (built, painted or looks, and the code that asked: journal_places), said only of a frame at least the budget long.
+#derive(Eq, Debug)
 pub(all) struct FrameDone {
   tree : Double
   messages : Double
@@ -49,11 +51,12 @@ pub(all) struct FrameDone {
   laid : Int
   measured : Int
   why : String
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// A piece of work and when it began and ended (ms on the work clock); of folded pieces, the first one's beginning and
 /// the last one's end.
+#derive(Eq, Debug)
 pub(all) struct Worked {
   what : Done
   start : Double
@@ -61,7 +64,7 @@ pub(all) struct Worked {
   /// what it went on, by part (@hostapi.work_part: where it was made, ms summed), the longest first, each 1 ms in all at
   /// least, at most `journal_notes_kept`
   notes : Array[(String, Double)]
-} derive(Eq, Show, Debug)
+}
 
 ///|
 pub fn Worked::ms(self : Worked) -> Double {
@@ -73,6 +76,7 @@ pub fn Worked::ms(self : Worked) -> Double {
 
 ///|
 /// What closed an interval.
+#derive(Eq, Debug)
 pub(all) enum Seal {
   /// a frame presented
   Presented
@@ -80,17 +84,19 @@ pub(all) enum Seal {
   Idle
   /// the app no longer shown (on_app_state): no frame comes until it is again
   Hidden
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What the journal keeps, oldest first (journal).
+#derive(Eq, Debug)
 pub(all) enum Entry {
   Work(Worked)
   Boundary(Seal, Double)
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Which rule found a hang.
+#derive(Eq, Debug)
 pub(all) enum HangTrigger {
   /// one piece of work at least `hang_stall_ms` long
   Stall
@@ -98,7 +104,7 @@ pub(all) enum HangTrigger {
   LateFrame
   /// an interval closed with no frame, one piece of it at least the budget long
   Blocking
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// An interval with a hang in it: the rule, what closed it, whether no frame had been presented before it (the app
@@ -107,6 +113,7 @@ pub(all) enum HangTrigger {
 /// beginning overwritten before it closed: no budget is judged then), what made it a hang, the longest first, at most
 /// `hang_contributors_kept`, and how many more there were; what the app said it showed as the interval was sealed
 /// (journal_shows: "" none said yet).
+#derive(Eq, Debug)
 pub(all) struct Hang {
   trigger : HangTrigger
   page : String
@@ -122,7 +129,7 @@ pub(all) struct Hang {
   lost : Int
   contributors : Array[Worked]
   elided : Int
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// What the app did while it was shown, said as it is hidden (hang_summary_told): from its first work after it was
@@ -134,6 +141,7 @@ pub(all) struct Hang {
 /// lost the beginning of are in none. `by_page`: of the frames presented, stalls, late frames and blocking, those
 /// counted while each name the app said it showed was (journal_shows; "" before it said one), in the order the names
 /// were said: they add up to the four counts above.
+#derive(Eq, Debug)
 pub(all) struct HangSummary {
   shown_ms : Double
   work_ms : Double
@@ -146,7 +154,7 @@ pub(all) struct HangSummary {
   moved : Array[Int]
   moved_laid : Array[Int]
   by_page : Array[(String, Int, Int, Int, Int)]
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// The bounds (ms) of the bands a presented frame is counted in by what it waited on (HangSummary): 120, 90 and 60

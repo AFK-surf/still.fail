@@ -96,8 +96,8 @@ test "lifted with its menu up from the foot: drawn over the scrim, and up clear 
   menu([Some(menu_item_of("一项", fn() {  }))], from=Node(square.val.unwrap()))
   t.run_for(@ui.move_most_ms)
   let (up, at) = lift_square(t).unwrap()
-  assert_true((up.2 - lift_test_side * lift_test_scale).abs() < 0.001, msg="\{up}")
-  assert_true(up.1 + up.3 < laid.1 + laid.3, msg="up clear of the sheet: \{up} from \{laid}")
+  assert_true((up.2 - lift_test_side * lift_test_scale).abs() < 0.001, msg="\{Repr(up)}")
+  assert_true(up.1 + up.3 < laid.1 + laid.3, msg="up clear of the sheet: \{Repr(up)} from \{Repr(laid)}")
   // (drawn after the scrim: a rect over the whole window drawn before it)
   let mut scrim : Int? = None
   for i, r in t.drawn_rects() {
@@ -105,7 +105,7 @@ test "lifted with its menu up from the foot: drawn over the scrim, and up clear 
       scrim = Some(i)
     }
   }
-  assert_true(scrim is Some(s) && s < at, msg="scrim \{scrim}, square \{at}")
+  assert_true(scrim is Some(s) && s < at, msg="scrim \{Repr(scrim)}, square \{at}")
   close_presented_of(last_presented())
   t.run_for(@ui.move_most_ms)
   assert_eq(lift_square(t).unwrap().0, laid)

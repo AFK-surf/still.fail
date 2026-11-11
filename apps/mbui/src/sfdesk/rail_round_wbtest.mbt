@@ -28,7 +28,7 @@ test "a rail ground made off the tape is as round as one made on it once the fra
   t.draw()
   let on = fresh.val.unwrap().corners_said()
   // (the two differ, or this holds nothing)
-  assert_true(on != off, msg="off the tape \{off}, on it \{on}")
+  assert_true(on != off, msg="off the tape \{Repr(off)}, on it \{Repr(on)}")
   assert_eq(kept.val.unwrap().corners_said(), on)
   wide.tape.set(false)
 }

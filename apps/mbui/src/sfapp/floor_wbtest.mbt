@@ -45,7 +45,7 @@ test "an agent's line gone from the chat's end: what is over it makes way, nothi
   }
   // (each frame a step of the spring's, none the line's whole room at once)
   for i in 1..<ys.length() {
-    assert_true((ys[i] - ys[i - 1]).abs() < 20.0, msg="\{ys}")
+    assert_true((ys[i] - ys[i - 1]).abs() < 20.0, msg="\{Repr(ys)}")
   }
   assert_eq(floor_now(), 0.0)
   assert_true(t.at_end())

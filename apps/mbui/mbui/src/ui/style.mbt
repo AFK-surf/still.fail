@@ -6,6 +6,7 @@
 ///|
 /// What a box looks like, every property optional (None: not said here). Padding from the finer to the coarser: `pl`
 /// `pr` `pt` `pb` over `px` `py` over `p`; the margins (`m`…) the same.
+#derive(Eq)
 pub(all) struct Patch {
   row : Bool?
   w : Len?
@@ -40,12 +41,13 @@ pub(all) struct Patch {
   shadow : Shadow?
   clip : Bool?
   opacity : Opacity?
-} derive(Eq)
+}
 
 ///|
 /// A box's style: what it looks like, and what it looks like instead in a state (each a Patch over it). The states
 /// are laid on in one order, the later winning: narrow, dark, selected, hovered, focused, pressed, disabled; the
 /// ground of `hovered` and `pressed` laid over the ground under it (Style::resolve).
+#derive(Eq)
 pub(all) struct Style {
   base : Patch
   narrow : Patch?
@@ -55,7 +57,7 @@ pub(all) struct Style {
   focused : Patch?
   pressed : Patch?
   disabled : Patch?
-} derive(Eq)
+}
 
 ///|
 /// A box's look, every property a token (style_tokens.mbt); a state's block in place of none.

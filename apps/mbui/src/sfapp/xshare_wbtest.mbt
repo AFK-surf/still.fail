@@ -96,7 +96,7 @@ test "分享给其他 workspace on a phone: its rows a finger's, 完成 across t
   let (x, y, w, h) = t.rect_of("完成").unwrap()
   let (cx, cy) = (x + w / 2.0, y + h / 2.0)
   let grounds = t.drawn_rects().filter(fn(r) { r.0 <= cx && cx <= r.0 + r.2 && r.1 <= cy && cy <= r.1 + r.3 && r.3 < 60.0 })
-  assert_true(grounds.iter().any(fn(r) { r.2 >= 390.0 - 2.0 * 24.0 }), msg="完成 not across the sheet: \{grounds}")
+  assert_true(grounds.iter().any(fn(r) { r.2 >= 390.0 - 2.0 * 24.0 }), msg="完成 not across the sheet: \{Repr(grounds)}")
 }
 
 ///|
@@ -355,32 +355,32 @@ test "分享给其他 workspace: each workspace a row, its box, its mark and its
     let lead = xshare_word(t, "所选 workspace 中的 agent 可读取此对话；连续 6 小时未使用即失效，需重新分享")
     let (daily, open) = (xshare_word(t, "日常"), xshare_word(t, "开源"))
     // the workspaces under what it says, one under the other, their names on one line down the panel
-    assert_true(daily.1 > lead.1 + lead.3 && open.1 >= daily.1 + daily.3, msg="\{about}: \{lead}, \{daily}, \{open}")
-    assert_true((daily.0 - open.0).abs() < 0.5, msg="\{about}: \{daily}, \{open}")
+    assert_true(daily.1 > lead.1 + lead.3 && open.1 >= daily.1 + daily.3, msg="\{about}: \{Repr(lead)}, \{Repr(daily)}, \{Repr(open)}")
+    assert_true((daily.0 - open.0).abs() < 0.5, msg="\{about}: \{Repr(daily)}, \{Repr(open)}")
     for named_by in [("日常", "日"), ("开源", "开")] {
       let (name, first) = named_by
       let words = xshare_word(t, name)
       let box = t.get(Checkbox, label=name).rect
       // its letter (the mark of a workspace with none) on its name's line, before it, its box before that
       let letter = t.words().iter().find_first(fn(w) { w.0 == first && (w.2 + w.4 / 2.0 - mid(words)).abs() < 1.5 })
-      assert_true(letter is Some(l) && l.1 + l.3 <= words.0 && box.0 + box.2 <= l.1, msg="\{about}: \{name} \{words}, its letter \{letter}, its box \{box}")
-      assert_true((mid(box) - mid(words)).abs() < 1.0, msg="\{about}: \{name} \{words}, its box \{box}")
+      assert_true(letter is Some(l) && l.1 + l.3 <= words.0 && box.0 + box.2 <= l.1, msg="\{about}: \{name} \{Repr(words)}, its letter \{Repr(letter)}, its box \{Repr(box)}")
+      assert_true((mid(box) - mid(words)).abs() < 1.0, msg="\{about}: \{name} \{Repr(words)}, its box \{Repr(box)}")
       // (its box by the panel's words' line: its row out by a row's room, 12, its box in by its corner)
-      assert_true((box.0 - lead.0).abs() < 12.0, msg="\{about}: \{name}'s box \{box}, the lead \{lead}")
+      assert_true((box.0 - lead.0).abs() < 12.0, msg="\{about}: \{name}'s box \{Repr(box)}, the lead \{Repr(lead)}")
     }
     // 可发送消息 and its note under the workspaces, on the panel's words' line; the switch at its end
     let (write, note) = (xshare_word(t, "可发送消息"), xshare_word(t, "关闭时仅可查看"))
-    assert_true(write.1 > open.1 + open.3 && note.1 >= write.1 + write.3, msg="\{about}: \{open}, \{write}, \{note}")
-    assert_true((write.0 - lead.0).abs() < 0.5 && (note.0 - lead.0).abs() < 0.5, msg="\{about}: \{write}, \{note}, \{lead}")
+    assert_true(write.1 > open.1 + open.3 && note.1 >= write.1 + write.3, msg="\{about}: \{Repr(open)}, \{Repr(write)}, \{Repr(note)}")
+    assert_true((write.0 - lead.0).abs() < 0.5 && (note.0 - lead.0).abs() < 0.5, msg="\{about}: \{Repr(write)}, \{Repr(note)}, \{Repr(lead)}")
     let switch = t.get(Switch, label="可发送消息").rect
-    assert_true(switch.0 > write.0 + write.2 && switch.0 + switch.2 <= lead.0 + lead.2 + 0.5, msg="\{about}: \{switch}, \{write}, \{lead}")
+    assert_true(switch.0 > write.0 + write.2 && switch.0 + switch.2 <= lead.0 + lead.2 + 0.5, msg="\{about}: \{Repr(switch)}, \{Repr(write)}, \{Repr(lead)}")
     // 完成 last: across a sheet's middle; at a dialog's end
     let done = xshare_word(t, "完成")
-    assert_true(done.1 > note.1 + note.3, msg="\{about}: \{done}, \{note}")
+    assert_true(done.1 > note.1 + note.3, msg="\{about}: \{Repr(done)}, \{Repr(note)}")
     if screen.1 {
-      assert_true(done.0 + done.2 > lead.0 + lead.2 - 40.0, msg="\{about}: \{done}, \{lead}")
+      assert_true(done.0 + done.2 > lead.0 + lead.2 - 40.0, msg="\{about}: \{Repr(done)}, \{Repr(lead)}")
     } else {
-      assert_true((done.0 + done.2 / 2.0 - (lead.0 + lead.2 / 2.0)).abs() < 1.0, msg="\{about}: \{done}, \{lead}")
+      assert_true((done.0 + done.2 / 2.0 - (lead.0 + lead.2 / 2.0)).abs() < 1.0, msg="\{about}: \{Repr(done)}, \{Repr(lead)}")
     }
   }
 }

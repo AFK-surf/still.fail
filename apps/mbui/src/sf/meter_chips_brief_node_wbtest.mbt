@@ -97,7 +97,7 @@ test "meter_chips_brief_node drawn as meter_chips brief, each instance, in a lin
       counts.push(made.length())
     }
     // (narrower, fewer drawn: what it is for is measured)
-    assert_true(counts[0] > counts[1], msg="platform \{platform}: \{counts}")
+    assert_true(counts[0] > counts[1], msg="platform \{platform}: \{Repr(counts)}")
   }
 }
 
@@ -121,7 +121,7 @@ test "meter_chips_brief_node in a line short even of the low ones: those it has 
     // (内存 and 磁盘, the two running low, 4 apart: just the room for both at their narrowest)
     let both = least[1] + @ui.Space::S1.px() + least[2]
     for w in [both, 110.0, 70.0] {
-      let at = "platform \{platform} \{w} wide (least \{least})"
+      let at = "platform \{platform} \{w} wide (least \{Repr(least)})"
       let t = mb_tester(true, w, platform)
       // (each chip's ground and fill: a rect as high as a small chip on the line's top; a chip, the widest at its start)
       let chips : Map[Int, (Double, Double)] = Map([])
@@ -144,18 +144,18 @@ test "meter_chips_brief_node in a line short even of the low ones: those it has 
       } else {
         0
       }
-      assert_eq(spans.length(), shown, msg="\{at}: \{spans}")
+      assert_eq(spans.length(), shown, msg="\{at}: \{Repr(spans)}")
       let glyphs = t.drawn_instances().filter(fn(a) { a[5] == 1.0 })
       for i, c in spans {
-        assert_true(c.0 >= -0.01 && c.0 + c.1 <= w + 0.01, msg="\{at}: \{c} out of the line")
+        assert_true(c.0 >= -0.01 && c.0 + c.1 <= w + 0.01, msg="\{at}: \{Repr(c)} out of the line")
         if i > 0 {
-          assert_true(c.0 >= spans[i - 1].0 + spans[i - 1].1 - 0.01, msg="\{at}: \{spans} over each other")
+          assert_true(c.0 >= spans[i - 1].0 + spans[i - 1].1 - 0.01, msg="\{at}: \{Repr(spans)} over each other")
         }
         // (its mark's two characters and two of its figure's at least, an ellipsis or not)
         let drawn = glyphs.filter(fn(a) { a[0] + a[2] / 2.0 >= c.0 && a[0] + a[2] / 2.0 <= c.0 + c.1 }).length()
-        assert_true(drawn >= 4, msg="\{at}: \{c} draws \{drawn} characters")
+        assert_true(drawn >= 4, msg="\{at}: \{Repr(c)} draws \{drawn} characters")
       }
-      assert_eq(t.squeeze_faults(), [], msg="\{at}: \{t.squeeze_faults()}")
+      assert_eq(t.squeeze_faults(), [], msg="\{at}: \{Repr(t.squeeze_faults())}")
     }
   }
 }

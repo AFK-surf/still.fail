@@ -61,11 +61,12 @@ fn parse_paint(text : String) -> SPaint? {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum PaintOrderKind {
   OFill
   OStroke
   OMarkers
-} derive(Eq, Show, Debug)
+}
 
 ///|
 fn default_paint_order() -> Array[PaintOrderKind] {
@@ -115,13 +116,14 @@ fn parse_paint_order(text : String) -> Array[PaintOrderKind] {
 }
 
 ///|
+#derive(Eq)
 priv enum DirPos {
   DTop
   DCenter
   DBottom
   DRight
   DLeft
-} derive(Eq)
+}
 
 ///|
 fn Stream::parse_directional_position(self : Stream) -> DirPos? {

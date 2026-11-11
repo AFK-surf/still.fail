@@ -261,11 +261,12 @@ priv struct ViewBlock {
 /// What drawing the tree did, counted from its making: nodes' instances made (paint generation), nodes' instances
 /// copied into a frame (the scene gone through), instances put into frames so (what the frame holds of the tree, not
 /// what is uploaded: the host is handed each frame whole, its renderers upload all of it).
+#derive(Eq, Debug)
 pub(all) struct ViewPaintWork {
   mut made : Int
   mut copied : Int
   mut handed : Int
-} derive(Eq, Debug)
+}
 
 ///|
 // kept across runs: put back as a run begins (view_forget)

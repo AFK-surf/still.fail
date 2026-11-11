@@ -3,6 +3,7 @@
 // dropped least recently used first once they take more than the budget.
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum Fit {
   /// fills the box, cropping what sticks out
   FitCover
@@ -12,7 +13,7 @@ pub(all) enum Fit {
   FitContain
   /// stretched to the box
   FitFill
-} derive(Eq)
+}
 
 ///|
 priv struct ImageEntry {
@@ -786,11 +787,12 @@ priv struct ImageSaid {
 ///|
 /// How the decode of a picture to one size (bucket) stands: coming (or not yet started), done, or failed (it, or one
 /// at least as large: pixels_for's). Told as the host's word on one of its decodes comes (image_done).
+#derive(Eq)
 priv enum DecodeState {
   DecodeComing
   DecodeDone
   DecodeFailed
-} derive(Eq)
+}
 
 ///|
 // kept across runs: what is said of the pictures kept, gone with them (image_forget, Tester's reset)

@@ -56,8 +56,8 @@ test "a timer set between frames (a host's callback, a test's): the host woken f
   let at = t.display_frame(due)
   let asked = frames.filter(fn(f) { f.1 })
   let changed = frames.filter(fn(f) { f.2 })
-  assert_eq(asked.map(fn(f) { f.0 }), [at], msg="due at \{due}: \{frames}")
-  assert_eq(changed.map(fn(f) { f.0 }), [at], msg="due at \{due}: \{frames}")
+  assert_eq(asked.map(fn(f) { f.0 }), [at], msg="due at \{due}: \{Repr(frames)}")
+  assert_eq(changed.map(fn(f) { f.0 }), [at], msg="due at \{due}: \{Repr(frames)}")
   assert_true(t.find("after") is Some(_))
   assert_eq(t.find("before"), None)
 }
@@ -72,8 +72,8 @@ test "a timer set between frames before one set already: the host woken for the 
   @ui.runtime().after(30, fn() { said.set("earlier") })
   let frames = host_frames_for(t, between_timer_ms)
   let (early, late) = (t.display_frame(now + 30.0), t.display_frame(now + 80.0))
-  assert_eq(frames.filter(fn(f) { f.1 }).map(fn(f) { f.0 }), [early, late], msg="\{frames}")
-  assert_eq(frames.filter(fn(f) { f.2 }).map(fn(f) { f.0 }), [early, late], msg="\{frames}")
+  assert_eq(frames.filter(fn(f) { f.1 }).map(fn(f) { f.0 }), [early, late], msg="\{Repr(frames)}")
+  assert_eq(frames.filter(fn(f) { f.2 }).map(fn(f) { f.0 }), [early, late], msg="\{Repr(frames)}")
   assert_true(t.find("later") is Some(_))
 }
 

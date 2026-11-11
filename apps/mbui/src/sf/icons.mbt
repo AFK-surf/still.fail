@@ -299,7 +299,7 @@ let video_capsule_words : @ui.TextStyle = @ui.text_style(size=Caption, color=whi
 /// leadSlot's copies, each showing one part of the icon).
 pub fn icon_parts(c : @ui.Ctx, name : String, parts : Array[Int], size? : Double = 16.0, color? : Int64) -> Int {
   let color = color.unwrap_or(theme().p.text)
-  let key = "icon/\{name}/\{parts}/\{size}/\{color}"
+  let key = "icon/\{name}/\{@ui.list_text(parts)}/\{size}/\{color}"
   let shapes = match shapes_made.get(key) {
     Some(s) => s
     None => {

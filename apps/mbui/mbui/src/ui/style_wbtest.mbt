@@ -916,7 +916,7 @@ test "corners: a box in a corner too square for the corner it has keeps it, alon
     t.draw()
     let c = g()
     let b = c.nodes[c.count - 1]
-    assert_true(b.radii is None && b.radius == 26.0, msg="\{drawn4(b)}")
+    assert_true(b.radii is None && b.radius == 26.0, msg="\{Repr(drawn4(b))}")
     assert_eq(t.corner_faults(), [])
   }
 }

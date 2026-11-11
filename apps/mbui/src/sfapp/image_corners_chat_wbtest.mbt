@@ -113,7 +113,7 @@ fn chat_corners(w : Double, h : Double, scale : Double) -> Int raise {
                 bad = bad + 1
                 if bad < 30 {
                   println(
-                    "CORNER \{w}x\{h} \{at} ms: kind \{a[5]} rect (\{a[0]}, \{a[1]}, \{a[2]}, \{a[3]}) r \{a[4]} covers (\{px}, \{py}) past the frame (\{x0}, \{y0}, \{x1}, \{y1}): clip \{a[16:20]} \{a[24:28]}, outer \{a[40:44]} \{a[44:48]}",
+                    "CORNER \{w}x\{h} \{at} ms: kind \{a[5]} rect (\{a[0]}, \{a[1]}, \{a[2]}, \{a[3]}) r \{a[4]} covers (\{px}, \{py}) past the frame (\{x0}, \{y0}, \{x1}, \{y1}): clip \{Repr(a[16:20])} \{Repr(a[24:28])}, outer \{Repr(a[40:44])} \{Repr(a[44:48])}",
                   )
                 }
                 break

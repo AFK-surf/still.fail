@@ -76,7 +76,7 @@ fn shows(t : @ui.Tester, words : String) -> Bool {
 ///|
 /// The words drawn now, seen.
 fn runs(t : @ui.Tester) -> String {
-  "\{t.text_runs().map(fn(r) { r.text })} \{t.words().filter(fn(w) { w.5 > 0.5 }).map(fn(w) { w.0 })}"
+  "\{Repr(t.text_runs().map(fn(r) { r.text }))} \{Repr(t.words().filter(fn(w) { w.5 > 0.5 }).map(fn(w) { w.0 }))}"
 }
 
 ///|
@@ -170,7 +170,7 @@ test "switching the browsing station starts at its home and saves the chosen fol
   t.click(MenuItemRadio, label="Maple")
   t.run_for(@ui.move_most_ms)
   let asks = named(calls, "drive.folders")
-  assert_eq(asks.length(), 3, msg="\{asks.map(fn(m) { m.params.stringify() })}")
+  assert_eq(asks.length(), 3, msg="\{Repr(asks.map(fn(m) { m.params.stringify() }))}")
   assert_eq(text(Some(asks[2].params), "station"), "ws1/st2")
   assert_eq(text(Some(asks[2].params), "path"), "")
   press(t, "项目")

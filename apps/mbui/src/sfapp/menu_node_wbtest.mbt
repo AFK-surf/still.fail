@@ -89,7 +89,7 @@ test "大屏, keyboard and mouse, a short window: a menu taller than it: its pan
     Some((_, y, _, h)) => y >= py - 0.5 && y + h <= py + ph + 0.5
     None => false
   }
-  assert_eq((within, seen), (true, true), msg="panel \{(px, py, pw, ph)} last \{last}")
+  assert_eq((within, seen), (true, true), msg="panel \{Repr((px, py, pw, ph))} last \{Repr(last)}")
 }
 
 ///|
@@ -123,7 +123,7 @@ test "大屏, keyboard and mouse, a short window: a menu taller than it, the poi
   t.key(@ui.key_code_enter)
   t.key(@ui.key_code_enter)
   t.run_for(@ui.move_most_ms)
-  assert_eq((focused, seen, chosen), (Some("第29项"), true, [29]), msg="panel \{py} \{ph} last \{last}")
+  assert_eq((focused, seen, chosen), (Some("第29项"), true, [29]), msg="panel \{py} \{ph} last \{Repr(last)}")
 }
 
 ///|
@@ -214,7 +214,7 @@ test "大屏, keyboard and mouse, a short window: a menu taller than it, the poi
   assert_eq(
     (after_end, under != Some("第29项") && under is Some(_), moved == under, chosen),
     (Some("第29项"), true, true, [want]),
-    msg="under \{under} moved \{moved}",
+    msg="under \{Repr(under)} moved \{Repr(moved)}",
   )
 }
 
@@ -357,7 +357,7 @@ fn menu_of_three(chosen : Array[Int]) -> @ui.Tester {
 /// What has the focus (a menu by its role alone), whether a menu is open, and what was chosen.
 fn menu_keys_said(t : @ui.Tester, chosen : Array[Int]) -> String {
   let f = t.focused().map(fn(s) { if s.role is Menu { "Menu" } else { "\{s.role} \{s.label}" } }).unwrap_or("none")
-  "\{f} open=\{@sf.presenting()} chosen=\{chosen}"
+  "\{f} open=\{@sf.presenting()} chosen=\{@ui.list_text(chosen)}"
 }
 
 ///|

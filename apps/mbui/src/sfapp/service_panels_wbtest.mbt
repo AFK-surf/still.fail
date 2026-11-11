@@ -98,7 +98,7 @@ fn svc_at(t : @ui.Tester, words : String, at : String) -> (Double, Double, Doubl
     Some(w) => (w.1, w.2, w.3, w.4)
     None =>
       fail(
-        "\{at}: no \{words} in the panel at \{p.rect}: " +
+        "\{at}: no \{words} in the panel at \{Repr(p.rect)}: " +
         t.words().map(fn(w) { "\{w.0}@\{w.1},\{w.2} a\{w.5}" }).join("|"),
       )
   }
@@ -163,7 +163,7 @@ fn svc_corners(t : @ui.Tester, at : String, wide~ : Bool) -> Unit raise {
     faults[0].contains(" 36×22, node ") &&
     faults[0].contains(") (corner 11) in the bottom right of 「页面尺寸 ") &&
     faults[0].has_suffix(" (corner 24): 16 and 15 from its edges")
-  assert_true(known, msg="\{at}: \{faults}")
+  assert_true(known, msg="\{at}: \{Repr(faults)}")
   // (made by the switch the panel's row of 移动页面 is made of)
   let s = t.get(Switch, label="移动页面").rect
   let made = t.sources_at(s.0 + s.2 / 2.0, s.1 + s.3 / 2.0)
@@ -329,7 +329,7 @@ test "the sizes on every screen: 自适应 and the presets in rows, each read ou
       assert_true(row.rect.1 > y, msg="\{at}: \{r.0} under the one before")
       y = row.rect.1
       // (a press's room: a row's least, 44 with a finger, 36 with a mouse)
-      assert_true(row.rect.3 >= (if platform == 2 { 44.0 } else { 36.0 }) - 0.5, msg="\{at}: \{r.0} \{row.rect}")
+      assert_true(row.rect.3 >= (if platform == 2 { 44.0 } else { 36.0 }) - 0.5, msg="\{at}: \{r.0} \{Repr(row.rect)}")
       let name = svc_at(t, r.0, at)
       let note = svc_at(t, r.1, at)
       // (its name past its check's column, all in one line; its size at its end)

@@ -7,13 +7,14 @@
 let ns_xml : String = "http://www.w3.org/XML/1998/namespace"
 
 ///|
+#derive(Eq)
 priv enum XKind {
   XRoot
   XElement
   XText
   XComment
   XPI
-} derive(Eq)
+}
 
 ///|
 priv struct XAttr {
@@ -173,7 +174,7 @@ fn XParser::name(self : XParser) -> String {
   while !self.at_end() && is_name_char(self.cur()) {
     self.pos += 1
   }
-  self.s.view(start_offset=start, end_offset=self.pos).to_owned()
+  self.s.exact_view(start=start, end=self.pos).to_owned()
 }
 
 ///|
@@ -181,7 +182,7 @@ fn XParser::until(self : XParser, t : String) -> String? {
   let start = self.pos
   while !self.at_end() {
     if self.starts(t) {
-      let r = self.s.view(start_offset=start, end_offset=self.pos).to_owned()
+      let r = self.s.exact_view(start=start, end=self.pos).to_owned()
       self.pos += t.length()
       return Some(r)
     }
@@ -351,12 +352,12 @@ fn XParser::element(self : XParser) -> Unit {
     if self.at_end() {
       return self.fail()
     }
-    let value = self.normalize_attribute(self.s.view(start_offset=start, end_offset=self.pos).to_owned())
+    let value = self.normalize_attribute(self.s.exact_view(start=start, end=self.pos).to_owned())
     self.pos += 1
     if an == "xmlns" {
       scope.push(("", value))
     } else if an.has_prefix("xmlns:") {
-      scope.push((an.view(start_offset=6).to_owned(), value))
+      scope.push((an.exact_view(start=6).to_owned(), value))
     } else {
       raw.push((an, value))
     }
@@ -424,7 +425,7 @@ fn XParser::element(self : XParser) -> Unit {
 ///|
 fn split_qname(q : String) -> (String, String) {
   match q.find(":") {
-    Some(i) => (q.view(end_offset=i).to_owned(), q.view(start_offset=i + 1).to_owned())
+    Some(i) => (q.exact_view(end=i).to_owned(), q.exact_view(start=i + 1).to_owned())
     None => ("", q)
   }
 }
@@ -461,7 +462,7 @@ fn XParser::reference(self : XParser) -> XRef? {
       }
       self.pos += 1
     }
-    let digits = self.s.view(start_offset=start, end_offset=self.pos).to_owned()
+    let digits = self.s.exact_view(start=start, end=self.pos).to_owned()
     if digits == "" || self.cur() != ';'.to_int() {
       return None
     }
@@ -551,7 +552,7 @@ fn XParser::text(self : XParser) -> Unit {
       while !self.at_end() && self.cur() != '<'.to_int() && self.cur() != '&'.to_int() {
         self.pos += 1
       }
-      buf.write_string(self.s.view(start_offset=start, end_offset=self.pos).to_owned())
+      buf.write_string(self.s.exact_view(start=start, end=self.pos).to_owned())
     }
   }
   flush()
@@ -665,7 +666,7 @@ fn XParser::internal_subset(self : XParser) -> Unit {
         while !self.at_end() && self.cur() != q {
           self.pos += 1
         }
-        let value = self.s.view(start_offset=start, end_offset=self.pos).to_owned()
+        let value = self.s.exact_view(start=start, end=self.pos).to_owned()
         self.pos += 1
         if !parameter && !self.entities.contains(name) {
           self.entities[name] = value

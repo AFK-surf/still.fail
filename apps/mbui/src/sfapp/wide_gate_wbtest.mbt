@@ -155,7 +155,7 @@ test "wide: while the device waits in the lock its page in the pages' place, the
   t.tap(fx, fy)
   t.frame()
   assert_eq(focus_said(t), "none")
-  assert_eq(calls.length(), made, msg="\{calls[made:]}")
+  assert_eq(calls.length(), made, msg="\{Repr(calls[made:])}")
   // (what is typed meanwhile goes into nothing of the chat's)
   t.type_text("zq")
   t.frame()
@@ -270,7 +270,7 @@ test "Duo: 发送批准请求 pressed on the waiting page is taken, the system's
   t.release(x, y)
   t.run_for(@ui.move_most_ms)
   assert_true(handed())
-  assert_true(calls.contains("lock.pair"), msg="\{calls}")
+  assert_true(calls.contains("lock.pair"), msg="\{Repr(calls)}")
 }
 
 ///|
@@ -343,5 +343,5 @@ test "wide: while the device looks for its trusted devices, 没收到？重新�
   assert_true(t.find("正在联系你的受信任设备") is Some(_))
   t.tap_text("没收到？重新申请")
   t.frame()
-  assert_true(calls.contains("lock.pair"), msg="\{calls}")
+  assert_true(calls.contains("lock.pair"), msg="\{Repr(calls)}")
 }

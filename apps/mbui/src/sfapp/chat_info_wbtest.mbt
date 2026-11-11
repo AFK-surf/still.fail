@@ -40,14 +40,14 @@ fn renaming(title : String, stage? : String = "sent", error? : String = "") -> (
 test "大屏: a chat being renamed has its new title in its bar at once, a turning mark beside it saying 正在重命名" {
   let calls : Array[Made] = []
   let t = bar_chat(calls, over=renaming("发布清单 v2"))
-  assert_true(t.find("发布清单 v2") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("发布清单 v2") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   // (the bar's title: its old one only where the list's row still says it, not in the bar)
   let bar_words = t.words().filter(fn(w) { w.2 < 60.0 && w.1 > 300.0 }).map(fn(w) { w.0 })
-  assert_true(!bar_words.contains("整理发布清单"), msg="\{bar_words}")
+  assert_true(!bar_words.contains("整理发布清单"), msg="\{Repr(bar_words)}")
   let (x, y, w, h) = t.rect_of("发布清单 v2").unwrap()
   t.move_to(x + w + 12.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms * 3.0)
-  assert_true(t.find("正在重命名") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("正在重命名") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
 }
 
 ///|
@@ -56,11 +56,11 @@ test "大屏: a rename that failed leaves the chat's own title in its bar, a mar
   let t = bar_chat(calls, over=renaming("发布清单 v2", stage="failed", error="无法重命名：Willow 不在线"))
   assert_true(t.find("发布清单 v2") is None)
   let bar = t.words().filter(fn(w) { w.2 < 60.0 && w.1 > 300.0 && w.0 == "整理发布清单" })
-  assert_true(bar.length() == 1, msg="\{t.words().map(fn(w) { (w.0, w.1, w.2) })}")
+  assert_true(bar.length() == 1, msg="\{Repr(t.words().map(fn(w) { (w.0, w.1, w.2) }))}")
   let (_, x, y, w, h, _) = bar[0]
   t.move_to(x + w + 12.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms * 3.0)
-  assert_true(t.find("无法重命名：Willow 不在线") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("无法重命名：Willow 不在线") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
 }
 
 ///|
@@ -69,7 +69,7 @@ test "大屏: the chat's info lists its first three pull requests, each pressed 
   let t = bar_chat(calls)
   t.click(Button, label="对话信息")
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("列表里的图片按需解码") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("列表里的图片按需解码") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   assert_true(t.find("#131") is Some(_))
   // (the fourth only among all of them)
   assert_true(t.find("去掉旧的分页加载") is None)
@@ -107,7 +107,7 @@ test "大屏: a service chosen in the chat's services' popover opens 任务 besi
   let calls : Array[Made] = []
   let t = bar_chat(calls, mode="chat-jobs-pop")
   // (the job the fixture opened: its last notice in place)
-  assert_true(t.find("第 3 步通过：单元测试全部通过") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("第 3 步通过：单元测试全部通过") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   t.tap_text("盯 CI")
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("第 3 步通过：单元测试全部通过") is None)
@@ -115,7 +115,7 @@ test "大屏: a service chosen in the chat's services' popover opens 任务 besi
   t.tap_text("web")
   t.draw()
   let opened = named(calls, "chat.tabs.open")
-  assert_true(opened.iter().any(fn(m) { text(Some(m.params), "tab") == "jobs" }), msg="\{calls.map(fn(m) { m.name })}")
+  assert_true(opened.iter().any(fn(m) { text(Some(m.params), "tab") == "jobs" }), msg="\{Repr(calls.map(fn(m) { m.name }))}")
 }
 
 ///|
@@ -131,8 +131,8 @@ test "大屏: the chat's bar shows five of its people at most, +n for the rest; 
     o["people"] = Json::array(people)
     { ..tp, value: Some(Json::object(o)) }
   })
-  assert_true(t.find("+2") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("+2") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   t.click(Button, label="对话信息")
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("7 人") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("7 人") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
 }

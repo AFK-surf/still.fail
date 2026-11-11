@@ -64,7 +64,7 @@ fn invitation_token(words : String) -> String? {
     return None
   }
   let hash = match t.find("/invite#") {
-    Some(i) => t.view(start_offset=i + 8).to_owned()
+    Some(i) => t.exact_view(start=i + 8).to_owned()
     None => ""
   }
   let token = if hash != "" {

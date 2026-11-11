@@ -41,7 +41,7 @@ fn links_tester(
 ///|
 test "a node's link broken across lines: each piece tapped tells where it leads; the line past its words, and words that lead nowhere, nothing" {
   let (t, taps, _, pieces) = links_tester()
-  assert_true(pieces.length() >= 2, msg="across lines: \{pieces}")
+  assert_true(pieces.length() >= 2, msg="across lines: \{Repr(pieces)}")
   for p in pieces {
     t.tap((p.0 + p.2) / 2.0, (p.1 + p.3) / 2.0)
   }
@@ -83,11 +83,11 @@ test "a node's link pressed: its pressed ground under each of its pieces alone, 
   let p = pieces[0]
   t.press_at((p.0 + p.2) / 2.0, (p.1 + p.3) / 2.0)
   let grounds = pressed_ground()
-  assert_eq(grounds.length(), pieces.length(), msg="\{grounds} for \{pieces}")
+  assert_eq(grounds.length(), pieces.length(), msg="\{Repr(grounds)} for \{Repr(pieces)}")
   for g in grounds {
     assert_true(
       pieces.iter().any(fn(q) { g.0 >= q.0 - 2.5 && g.0 + g.2 <= q.2 + 2.5 && g.1 >= q.1 - 0.5 && g.1 + g.3 <= q.3 + 0.5 }),
-      msg="under a piece of it: \{g} in \{pieces}",
+      msg="under a piece of it: \{Repr(g)} in \{Repr(pieces)}",
     )
   }
   t.release((p.0 + p.2) / 2.0, (p.1 + p.3) / 2.0)
@@ -174,7 +174,7 @@ test "a node's link in a box drawn half as big and moved: a glyph of it tapped w
   assert_true(glyphs.length() > 4, msg="its glyphs drawn: \{glyphs.length()}")
   let first = glyphs[0]
   let last = glyphs[glyphs.length() - 1]
-  assert_true(last.1 > first.1, msg="across lines: \{first} \{last}")
+  assert_true(last.1 > first.1, msg="across lines: \{Repr(first)} \{Repr(last)}")
   for g in [first, last] {
     m.t.tap(g.0 + g.2 / 2.0, g.1 + g.3 / 2.0)
   }
@@ -185,7 +185,7 @@ test "a node's link in a box drawn half as big and moved: a glyph of it tapped w
   m.t.release(x, y)
   assert_eq(m.holds.length(), 1)
   let (_, (rx, ry, rw, rh)) = m.holds[0]
-  assert_true(x >= rx && x < rx + rw && y >= ry && y < ry + rh, msg="the piece held, in the window: \{m.holds[0]} round \{(x, y)}")
+  assert_true(x >= rx && x < rx + rw && y >= ry && y < ry + rh, msg="the piece held, in the window: \{Repr(m.holds[0])} round \{Repr((x, y))}")
   // (its words' height as drawn, half its line's)
   assert_true(rh <= 11.5, msg="as big as drawn: \{rh}")
 }

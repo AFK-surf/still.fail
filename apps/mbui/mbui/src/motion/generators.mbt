@@ -8,10 +8,11 @@
 
 ///|
 /// A generator's value at a time, and whether it is done (Motion's AnimationState).
+#derive(Eq, Debug)
 pub(all) struct GenState {
   done : Bool
   value : Double
-} derive(Eq, Show, Debug)
+}
 
 ///|
 /// Values over time (Motion's KeyframeGenerator): `next(t)` its state at `t` ms from its start, `velocity(t)` (per

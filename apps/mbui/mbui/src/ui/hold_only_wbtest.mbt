@@ -164,7 +164,7 @@ test "a mark drawn smaller than a press's room that answers only a hold: held pa
     t.run_for(long_press_ms)
     t.touch(2, p.0, p.1)
     t.draw()
-    assert_eq((held.val - was.0, pressed.val - was.1), (1, 0), msg="held at \{p}: \{(held.val - was.0, pressed.val - was.1)}, the mark \{tree.drawn_of(mark).map(fn(d) { (d.x, d.y, d.w, d.h) })}")
+    assert_eq((held.val - was.0, pressed.val - was.1), (1, 0), msg="held at \{Repr(p)}: \{Repr((held.val - was.0, pressed.val - was.1))}, the mark \{Repr(tree.drawn_of(mark).map(fn(d) { (d.x, d.y, d.w, d.h) }))}")
   }
   // (tapped in its room: a tap is no hold, the row's)
   t.touch(0, 115.0, 64.0)

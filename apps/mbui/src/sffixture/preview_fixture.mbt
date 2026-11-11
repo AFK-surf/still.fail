@@ -356,7 +356,7 @@ fn fixture_pdf_made() -> Bytes {
   sb.write_string("xref\n0 \{objs.length() + 1}\n0000000000 65535 f \n")
   for o in offsets {
     let d = "\{o}"
-    sb.write_string("0000000000".view(end_offset=10 - d.length()).to_owned() + d + " 00000 n \n")
+    sb.write_string("0000000000".exact_view(end=10 - d.length()).to_owned() + d + " 00000 n \n")
   }
   sb.write_string("trailer\n<< /Size \{objs.length() + 1} /Root 1 0 R >>\nstartxref\n\{at}\n%%EOF\n")
   @utf8.encode(sb.to_string())

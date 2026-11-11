@@ -64,7 +64,7 @@ test "a turn in a turn: one turn, where the two put it" {
   }
   for p in [(20.0, 20.0), (40.0, 20.0), (20.0, 30.0), (40.0, 30.0)] {
     let want = turn(o, 70.0, 20.0, turn(i, 20.0, 20.0, p))
-    assert_true(near(drawn_at(k, p.0, p.1), want), msg="\{p}: \{drawn_at(k, p.0, p.1)} for \{want}")
+    assert_true(near(drawn_at(k, p.0, p.1), want), msg="\{Repr(p)}: \{Repr(drawn_at(k, p.0, p.1))} for \{Repr(want)}")
   }
 }
 
@@ -80,7 +80,7 @@ test "turned back as far: not turned, moved" {
   // the inner turn takes (20, 20) nowhere, the outer one about (70, 20) does
   let (c, s) = (@dmath.cos(0.3), @dmath.sin(0.3))
   let want = (70.0 + c * -50.0, 20.0 + s * -50.0)
-  assert_true(near((k[0], k[1]), want), msg="\{(k[0], k[1])} for \{want}")
+  assert_true(near((k[0], k[1]), want), msg="\{Repr((k[0], k[1]))} for \{Repr(want)}")
   // what cuts it from outside (the window) where it was
   for j in 16..<20 {
     assert_eq(k[j], k0[j])

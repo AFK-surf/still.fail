@@ -53,7 +53,7 @@ test "a video taken down fast (its finger's events 20 ms apart) and let go past 
     t.touch(if i == 0 { 0 } else if i == ys.length() - 1 { 2 } else { 1 }, 195.0, ys[i])
     t.frame_at(t0 + ms + frame_after_ms)
   }
-  assert_true(viewer.get() is None && pv_leaving.get() is Some(_), msg="viewer \{viewer.get().map(fn(v) { v.closing })}")
+  assert_true(viewer.get() is None && pv_leaving.get() is Some(_), msg="viewer \{Repr(viewer.get().map(fn(v) { v.closing }))}")
 }
 
 ///|
@@ -79,5 +79,5 @@ test "the app's video (its window's tree, the old views in it) taken down fast: 
       assert_true(down > y + 60.0, msg="\{down} from \{y}")
     }
   }
-  assert_true(viewer.get() is None && pv_leaving.get() is Some(_), msg="viewer \{viewer.get().map(fn(v) { v.closing })}")
+  assert_true(viewer.get() is None && pv_leaving.get() is Some(_), msg="viewer \{Repr(viewer.get().map(fn(v) { v.closing }))}")
 }

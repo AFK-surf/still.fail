@@ -86,7 +86,7 @@ test "a message's picture: its box its data's while it is asked, all of it breat
   let t = media_tester(images, asks)
   assert_eq(asks.length(), 1)
   // (its box as its data says it, the neutral ground in it, breathing)
-  assert_true(t.drawn_rects().iter().any(fn(r) { r.2 == media_test_w && r.3 == media_test_h }), msg="\{t.drawn_rects()}")
+  assert_true(t.drawn_rects().iter().any(fn(r) { r.2 == media_test_w && r.3 == media_test_h }), msg="\{Repr(t.drawn_rects())}")
   assert_eq(media_drawn_w(t), 0.0)
   assert_true(media_clock_read(), msg="breathing")
   // (here: brushed in from that moment, over reveal_ms)

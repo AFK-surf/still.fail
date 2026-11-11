@@ -56,7 +56,7 @@ fn floating_rail_stays_between(seen : Array[Array[(Double, Double)]]) -> Unit ra
       assert_true(
         p.0 >= dmin(a.0, b.0) - 0.75 && p.0 <= dmax(a.0, b.0) + 0.75 &&
         p.1 >= dmin(a.1, b.1) - 0.75 && p.1 <= dmax(a.1, b.1) + 0.75,
-        msg="icon \{i}, frame \{frame}: \{p}, endpoints \{a} and \{b}",
+        msg="icon \{i}, frame \{frame}: \{Repr(p)}, endpoints \{Repr(a)} and \{Repr(b)}",
       )
     }
   }
