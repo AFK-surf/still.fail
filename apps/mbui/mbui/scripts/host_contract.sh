@@ -831,15 +831,19 @@ INSTALL
     env MBUI_BENCH=-1 MBUI_WIN=480x320 MBUI_A11YCHECK=1 ./out/win/mod/_build/native/release/build/kitdemo/kitdemo.exe > "$A/run.log" 2>&1 &
     pid=$(cat /proc/$!/winpid)
     client=0
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w test/host/a11ycheck.ps1)" -AppId "$pid" > "$A/client.log" 2>&1 || client=1
+    # the client's own deadline is 40 s; this one is for a UI Automation call that never returns (once 2.5 minutes,
+    # #5629's run 43093853929, cancelled by the job's limit with its log lost): the client stopped, its steps said
+    # so far tell where, and the app ended so that the wait for it ends
+    timeout 60 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w test/host/a11ycheck.ps1)" -AppId "$pid" > "$A/client.log" 2>&1 || client=$?
+    [ $client = 0 ] || { echo "a11y contract (windows): the client ended $client (124: stopped at 60 s)"; taskkill //F //PID "$pid" > /dev/null 2>&1; }
     wait
-    tr -d '\r' < "$A/client.log" | grep -a "A11YCHECK"
-    grep -a "A11YCHECK" "$A/run.log"
+    tr -d '\r' < "$A/client.log" | grep -a "A11YCHECK" || true
+    grep -a "A11YCHECK" "$A/run.log" || true
     [ $client = 0 ] && grep -aq "A11YCHECK button ControlType.Button" "$A/client.log" &&
       grep -aq "A11YCHECK check ControlType.CheckBox Off" "$A/client.log" &&
       grep -aq "A11YCHECK field ControlType.Edit read-only False" "$A/client.log" &&
       grep -aq "A11YCHECK activated written by a reader" "$A/run.log" ||
-      { echo "a11y contract (windows): not read out and pressed as told"; tail -20 "$A/client.log"; exit 1; }
+      { echo "a11y contract (windows): not read out and pressed as told"; tail -20 "$A/client.log"; tail -20 "$A/run.log"; exit 1; }
     echo "a11y contract (windows): a field, a button and a checkbox read out by UI Automation, words written in the field and the button pressed through it" ;;
   secret)
     [ "$H" = windows ] || { echo "secret contract: Windows' (Android's marks it in Host.java; the others put words)"; exit 1; }
