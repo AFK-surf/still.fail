@@ -805,6 +805,15 @@ pub fn holds_least(Double) -> Double
 
 pub let home_workspace_title_look : @view.WordsLook
 
+pub let hover_card_close_ms : Double
+
+#callsite(autofill(loc))
+pub fn hover_card_node(TipLayer, @view.View, (@view.View) -> Unit, tile? : Bool, padded? : Bool, side? : @view.Side, along? : @view.Along, held? : () -> Bool, press? : () -> Unit, tapped? : () -> Unit, loc~ : SourceLoc) -> HoverHand
+
+pub let hover_card_open_ms : Double
+
+pub let hover_card_out_ms : Double
+
 pub let hover_card_w : @ui.Len
 
 pub let hover_tile_least : @ui.Len
@@ -2838,6 +2847,12 @@ pub(all) struct Grounds {
   card2 : Int64
   chip : Int64
   faint : Int64
+}
+
+pub struct HoverHand {
+  hold : () -> Unit
+  close : () -> Unit
+  open : () -> Bool
 }
 
 pub(all) struct Items {
