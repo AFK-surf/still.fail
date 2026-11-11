@@ -161,6 +161,11 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   `View::box(words_as_said=true)`, whose words and all made in it are at 1); each screen's bar is in
   `corners_outgrown_known` and `words_large_outgrown_known`, and only falls (the coordinator of the migration,
   2026-11-11).
+- Every screen is opened as well on a workspace of real size (`src/sfapp/real_size_wbtest.mbt`; the user, 2026-11-11):
+  what the core sends each topic there, written into `src/sfrealsize` by the core's own rig
+  (`client/core-ts/test/real-size-app.test.ts`, never by hand), and the most one frame of its opening makes, lays out
+  and measures is held to its bar in `real_size_known_wbtest.mbt`, which only falls. A topic's value changed in the
+  core writes those files again in the same change.
 - What the core sends for what the app subscribes to, in each flow's trace, keeps to its bar
   (`src/sfreplay/topic_bytes.mbt`: KB of values sent whole, values sent whole again, messages for what was let go of;
   each topic's largest value). A page subscribes to what it shows, no more (the user, 2026-11-10); a trace recorded
