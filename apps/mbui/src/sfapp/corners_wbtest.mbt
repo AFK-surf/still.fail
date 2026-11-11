@@ -145,6 +145,11 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
       if squeeze is Some(w) {
         wrong.push(w)
       }
+      // (words a box with its height said does not hold, mbui's Tester::fixed_outgrown, against its bar)
+      match outgrown_wrong(at, t.fixed_outgrown(), corners_outgrown_known, "corners_known_wbtest.mbt") {
+        Some(w) => wrong.push(w)
+        None => ()
+      }
     }
   }
   if press_room {
@@ -218,4 +223,26 @@ test "each player failure reason fits without adding a spacing or corner fault" 
       }
     }
   }
+}
+
+///|
+/// What is wrong of `faults`, the words a box with its height said does not hold on screen `at` (mbui's
+/// Tester::fixed_outgrown), against its bar in `known` (kept in `file`): none where they are as many as it says; else
+/// how many, the bar, and each.
+fn outgrown_wrong(at : String, faults : Array[String], known : Map[String, Int], file : String) -> String? {
+  let bar = known.get(at).unwrap_or(0)
+  if faults.length() == bar {
+    return None
+  }
+  Some(
+    "\{at}: \{faults.length()} words a box with its height said does not hold, \{bar} known (" +
+    (if faults.length() < bar {
+      "fewer: its bar comes down in \{file}"
+    } else {
+      "more than its bar: the box grown by its words (a least, min_h, or its height worked out of their line at " +
+      "the system's size of words)"
+    }) +
+    ")\n  " +
+    faults.join("\n  "),
+  )
 }

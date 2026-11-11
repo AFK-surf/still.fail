@@ -366,6 +366,7 @@ fn[T] Ctx::with_tree_nodes(
   tree_field_boxes.clear()
   tree_scaled_at.clear()
   tree_draws_at.clear()
+  tree_fixed_h_at.clear()
   tree_moved_at.clear()
   tree_scroller_at.clear()
   tree_nodes_from.val = -1
