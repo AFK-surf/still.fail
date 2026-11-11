@@ -51,8 +51,8 @@ pub fn options_card_node(
       }))
       |> ignore
       card.each(fn() { options().mapi(fn(i, o) { (i, o) }) }, fn(p) { p.0 }, fn(r, item) {
-        let i = item.untracked().0
-        option_row_node(loc~, r, i, fn() { item.get().1 }, enabled, busy, chosen, free, history, on_pick)
+        // (its place and what it says read through its item, never kept: View::each's rows are their keys' readings)
+        option_row_node(loc~, r, fn() { item.get().0 }, fn() { item.get().1 }, enabled, busy, chosen, free, history, on_pick)
       })
     })
     |> ignore
@@ -60,14 +60,14 @@ pub fn options_card_node(
 }
 
 ///|
-/// Option `i` of options_card_node's (`o` as it is said) in `r`: a row pressed while `free` (its ground under a mouse,
+/// Option `i` of options_card_node's (`i` its place and `o` what it says, as they are) in `r`: a row pressed while `free` (its ground under a mouse,
 /// its ripple), its number's disc (the accent where recommended; a check over the number once it is `chosen`, the
 /// disc going to the accent with it), its label and detail; turning at its end while it is `busy`; half there once
 /// none may be pressed but it; read-only with its check after it in a history.
 #callsite(autofill(loc))
 fn option_row_node(
   r : @view.View,
-  i : Int,
+  i : () -> Int,
   o : () -> (String, String, Bool),
   enabled : () -> Bool,
   busy : () -> Int?,
@@ -96,14 +96,14 @@ fn option_row_node(
     row.radius(Is(option_row_corner)).ground(By(fn() { if hot() { theme().p.hover } else { 0L } })) |> ignore
     // (the one picked, answered: a check in its disc where its number was, on the accent; the rest half there, the
     // one being sent turning at its end: each over dur_ms from the moment it changed, as a control answers)
-    let picked_here = fn() { !history && chosen() == Some(i) }
-    let there_of = fn() { if history || enabled() || chosen() == Some(i) { 1.0 } else { 0.5 } }
+    let picked_here = fn() { !history && chosen() == Some(i()) }
+    let there_of = fn() { if history || enabled() || chosen() == Some(i()) { 1.0 } else { 0.5 } }
     let there = EdgeWay::new(@signals.untracked(there_of))
     let ticked = EdgeWay::new(if @signals.untracked(picked_here) { 1.0 } else { 0.0 })
-    let turning = EdgeWay::new(if @signals.untracked(fn() { busy() == Some(i) }) { 1.0 } else { 0.0 })
+    let turning = EdgeWay::new(if @signals.untracked(fn() { busy() == Some(i()) }) { 1.0 } else { 0.0 })
     row.reacts(there_of, fn(to) { there.go(row, to, dur_ms) })
     row.reacts(picked_here, fn(on) { ticked.go(row, if on { 1.0 } else { 0.0 }, dur_ms) })
-    row.reacts(fn() { busy() == Some(i) }, fn(on) { turning.go(row, if on { 1.0 } else { 0.0 }, dur_ms) })
+    row.reacts(fn() { busy() == Some(i()) }, fn(on) { turning.go(row, if on { 1.0 } else { 0.0 }, dur_ms) })
     row.alpha(By(fn() { there.shown(row) })) |> ignore
     // its number's disc
     row.box(fn(disc) {
@@ -123,17 +123,23 @@ fn option_row_node(
       }))
       |> ignore
       let color = fn() { if o().2 { 0xFFFFFFFFL } else { theme().p.muted } }
-      let number = if i < 6 {
-        icon_node(disc, "option-\{i + 1}", option_type().disc, By(color))
-      } else {
-        disc.box(fn(n) {
-          n
-          .words(Is("\{i + 1}"))
-          .words_look(By(fn() { { ..@view.words_plain, size: theme().t.caption, weight: 600, wrap: false } }))
-          .ink(By(color))
-          |> ignore
+      // (its number: an icon's for the first six, its words after)
+      let number = disc.box(fn(n) {
+        n.pick(fn() { i() < 6 }, fn(k, drawn) {
+          if drawn {
+            icon_node(k, "option-1", option_type().disc, By(color), name_now=fn() { "option-\{i() + 1}" }) |> ignore
+          } else {
+            k.box(fn(w) {
+              w
+              .words(By(fn() { "\{i() + 1}" }))
+              .words_look(By(fn() { { ..@view.words_plain, size: theme().t.caption, weight: 600, wrap: false } }))
+              .ink(By(color))
+              |> ignore
+            })
+            |> ignore
+          }
         })
-      }
+      })
       number.alpha(By(fn() { 1.0 - ticked.shown(disc) })) |> ignore
       // (the check over the number while it is picked, and as it fades out after)
       disc.show(fn() { picked_here() || ticked.shown(disc) > 0.0 }, fn(mark) {
@@ -176,7 +182,7 @@ fn option_row_node(
     |> ignore
     // (turning over the row's end, in what it leaves at the end of the words: never narrowing them; and as it fades
     // out after)
-    row.show(fn() { busy() == Some(i) || turning.shown(row) > 0.0 }, fn(s) {
+    row.show(fn() { busy() == Some(i()) || turning.shown(row) > 0.0 }, fn(s) {
       // (over the row, taking none of its room nor a gap of it)
       s.over(Is(true)) |> ignore
       style_node(s, fn() { @ui.style(w=Full, align=AEnd, pt=room(option_type().pad_in), pr=room(option_row_end)) })
@@ -189,7 +195,7 @@ fn option_row_node(
     })
     // (read-only: the one chosen checked after its words)
     if history {
-      row.show(fn() { chosen() == Some(i) }, fn(c) {
+      row.show(fn() { chosen() == Some(i()) }, fn(c) {
         style_node(c, fn() { @ui.style(h=Fixed(option_type().label_line), justify=JCenter) })
         icon_node(c, "check", 14.0, By(fn() { theme().p.accent })) |> ignore
       })
@@ -204,11 +210,11 @@ fn option_row_node(
         .says(By(fn() { Some(@view.said(Button, label=o().0)) }))
         .on_press(fn() {
           if @signals.untracked(free) {
-            f(i)
+            f(i())
           }
         })
         |> ignore
-        let rippled = press_look(row, Is(option_row_corner), fn() { false }, ink=alpha(theme().p.text, 0.1))
+        let rippled = press_look(row, Is(option_row_corner), fn() { false }, ink=fn() { alpha(theme().p.text, 0.1) })
         let on_it = fn(d : @view.Drag) { row.finger_target(d.wx, d.wy) }
         row.gesture(
           @ui.touch_slop(),
@@ -216,12 +222,12 @@ fn option_row_node(
           tap=fn(d) {
             (rippled.tapped)(d)
             if on_it(d) && @signals.untracked(free) {
-              f(i)
+              f(i())
             }
           },
           drag=fn(d) {
             if d.kind == Up && @ui.pointing() is Mouse && on_it(d) && @signals.untracked(free) {
-              f(i)
+              f(i())
             }
           },
         )
