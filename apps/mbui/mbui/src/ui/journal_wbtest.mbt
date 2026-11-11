@@ -186,6 +186,56 @@ test "the app hidden closes its interval, and what it did while shown is said" {
 }
 
 ///|
+test "every frame presented is counted by what it waited on, a finger's moves and a layout before it told apart" {
+  let (_, clock) = journal_start()
+  defer set_work_clock(None)
+  let said : Array[HangSummary] = []
+  hang_summary_told(Some(fn(s) { said.push(s) }))
+  // (the bands written out are the bounds')
+  for i in 0..<frame_band_ms.length() {
+    assert_eq((frame_band(frame_band_ms[i] - 0.5), frame_band(frame_band_ms[i])), (i, i + 1))
+  }
+  assert_eq(journal_bands.length(), 4 * (frame_band_ms.length() + 1))
+  let frame = fn(start : Double, ms : Double, laid : Bool) {
+    journal_laid.val = laid
+    journal_work(Frame({ tree: 0.0, messages: 0.0, build: ms, layout: 0.0, paint: 0.0, nodes: 1, insts: 1, made: 0, let_go: 0, laid: 0, measured: 0, why: "" }), start, start + ms)
+    journal_seal(Presented, start + ms)
+    journal_dirty_at.val = -1.0
+  }
+  // nothing moved, nothing laid out: 3 ms; 9 ms (over 120 a second's budget and no hang); 30 ms (a hang as well)
+  frame(1000.0, 3.0, false)
+  frame(1100.0, 9.0, false)
+  frame(1200.0, 30.0, false)
+  assert_eq(hangs().length(), 1)
+  // a finger's move of 5 ms that asks for a frame of 6 ms laying out: 11 ms waited, under a hang's 24
+  clock.val = 1300.0
+  view_event_said(fn() {  }, fn() {
+    clock.val += 5.0
+    h_request_frame()
+  }, what="touch-move")
+  frame(1305.0, 6.0, true)
+  // (the frame after it had no move of its own)
+  frame(1400.0, 2.0, true)
+  assert_eq(hangs().length(), 1)
+  clock.val = 2000.0
+  view_event_said(fn() {  }, fn() { journal_hidden.val = true }, what="app-state")
+  assert_eq(said.length(), 1)
+  assert_eq(said[0].still, [1, 0, 1, 0, 0, 1])
+  assert_eq(said[0].still_laid, [1, 0, 0, 0, 0, 0])
+  assert_eq(said[0].moved, [0, 0, 0, 0, 0, 0])
+  assert_eq(said[0].moved_laid, [0, 0, 1, 0, 0, 0])
+  let j = said[0].json().stringify()
+  assert_true(j.contains("\"frames_by_ms\":{") && j.contains("\"bounds\":[4,8,12,16,24]"), msg=j)
+  assert_true(j.contains("\"still\":[1,0,1,0,0,1]") && j.contains("\"moved_laid\":[0,0,1,0,0,0]"), msg=j)
+  // (counted from none again once said)
+  frame(2100.0, 3.0, false)
+  clock.val = 3000.0
+  view_event_said(fn() {  }, fn() { journal_hidden.val = true }, what="app-state")
+  assert_eq(said[1].still, [1, 0, 0, 0, 0, 0])
+  assert_eq(said[1].moved_laid, [0, 0, 0, 0, 0, 0])
+}
+
+///|
 test "of a frame's why, the code it names alone: no key of what is shown" {
   assert_eq(
     journal_places("the clock read at @mbui/src/sf:motion.mbt:12:3-12:20 (row:chat-01HX, told at page.mbt:40)"),
