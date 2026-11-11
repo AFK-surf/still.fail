@@ -392,6 +392,12 @@ fn an_ack_on_a_connection_replaced_moves_nothing() {
     // Another station attaches; the one before, not knowing, acknowledges the rest afterwards.
     let mut new = runner.connect();
     new.send(json!({"op": "attach"}));
+    // It is sent what the one before had not acknowledged, "two\n" from 4, by the thread that pushes, in its own time:
+    // read before the runner is asked whether it has handled the attach. Not read, it came after the refusal and
+    // was left there, or before it on a busy Mac, and `handled` took it for the refusal (42942838163).
+    let (mut again_at, mut again) = ([4, 0], [vec![], vec![]]);
+    new.read_until(&mut again_at, &mut again, 0, 4);
+    assert_eq!(again[0], b"two\n");
     new.handled();
     // (its connection may be closed by now: what it sends is lost, or read and refused)
     let _ = old.writer.write_all(format!("{}\n", json!({"op": "ack", "out": 8, "err": 0, "keep": 4})).as_bytes());
