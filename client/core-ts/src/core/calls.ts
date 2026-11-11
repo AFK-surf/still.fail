@@ -173,6 +173,8 @@ export type Call =
   | { kind: "lockPrompt"; name: string; params: Record<string, unknown> }
   /// The vault (views/vault.ts): `vault.<name>` on a workspace, with what it takes.
   | { kind: "vault"; name: string; workspace: string; params: Record<string, unknown> }
+  /// A workspace's ways changed from the app (views/ways-stations.ts): on its stations, else on still.fail cloud.
+  | { kind: "ways"; name: "setRelays" | "setWay"; workspace: string; params: Record<string, unknown> }
   | { kind: "driveTransfer"; action: "start" | "cancel" | "retry"; params: Record<string, unknown> }
   /// A station's files as they are browsed (views/browse.ts): `drive.browse` and the rest of drive-browse.ts's CALLS,
   /// with what each takes.
@@ -288,6 +290,8 @@ export function counts(call: Call, name: string): boolean {
       return false;
     case "vault":
       return call.name !== "state" && call.name !== "lock" && call.name !== "open";
+    case "ways":
+      return true;
     default:
       return false;
   }
@@ -382,6 +386,10 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
     return { kind: "download", action: name.slice(9) as "start" | "retry" | "take" | "read" | "done" | "cancel", params: isObject(params) ? (params as Record<string, unknown>) : {} };
   }
   if (name === "fill.want" || name === "fill.stop" || name === "fill.stopAll") return { kind: "fill", action: name === "fill.want" ? "want" : name === "fill.stop" ? "stop" : "stopAll", params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  if (name === "workspace.setRelays" || name === "workspace.setWay") {
+    const p = read(params, [["workspace", S, "req"]]);
+    return { kind: "ways", name: name === "workspace.setRelays" ? "setRelays" : "setWay", workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  }
   if (name.startsWith("vault.") && VAULT_CALLS.includes(name.slice(6))) {
     const p = read(params, [["workspace", S, "req"]]);
     return { kind: "vault", name: name.slice(6), workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };

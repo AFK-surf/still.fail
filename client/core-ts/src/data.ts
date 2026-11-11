@@ -963,6 +963,8 @@ export class Data {
     if (table === "feedback") return [this.#ofWorkspace(key) ?? null, [key, "feedback"]];
     // A workspace's lock as the cloud keeps it (views/lock.ts): in the workspace's, by its id.
     if (table === "lock") return [this.#ofWorkspace(key) ?? null, [key, "lock"]];
+    // A workspace's ways as its stations keep them (views/ways-stations.ts): in the workspace's, by its id.
+    if (table === "ways") return [this.#ofWorkspace(key) ?? null, [key, "ways"]];
     // A workspace's vaults as its stations hold them (views/vault.ts): the vaults, box certificates and requests by the
     // workspace's id; each vault's items by `<workspace>/<vault>`.
     if (table === "vault") return [this.#ofWorkspace(key) ?? null, [key, "vault"]];

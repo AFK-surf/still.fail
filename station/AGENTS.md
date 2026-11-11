@@ -68,6 +68,15 @@
 - An agent's own answer is never forwarded: it posts with `chat_post` and ends each turn with a state (`all_done`,
   `need_human`, `waiting`); a turn ended without one is asked again.
 
+## How a workspace's devices reach its stations (its ways)
+
+- A workspace's own relays and the ways its devices do not take are its stations' (`src/mesh/ways.ts`; the root
+  AGENTS.md, The cloud is the account system): one record a workspace, the newest kept, brought level between its
+  stations, read by devices (`GET /ways`) and told changed (`ways`). An agent adds a relay with the `relays` tool and
+  nobody approves it (the user, 2026-11-11: 「要手动加太不 ai native 了」): a relay carries only end-to-end encrypted
+  packets and one that is slow is not taken, so an approval would guard nothing; the tool adds one only once this
+  station reached it as a relay, and who added it is kept and shown.
+
 ## A station's mode: whole, or only tasks (a rig)
 
 - A station is whole, or it only runs tasks (只执行任务; `rig` in the code: `src/rig/`; the user, 2026-11-04 and

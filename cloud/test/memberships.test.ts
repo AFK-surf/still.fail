@@ -142,7 +142,7 @@ test("a station joins a second workspace: named there; its home's at the top of 
     const both = await sx.state();
     assert.deepEqual([both.workspace, both.workspace_name, both.name, both.lock], [home, "Home", "willow", null], "the home's at the top, as before");
     assert.deepEqual(both.peers.map((p: any) => p.id), [x.id, y.id]);
-    assert.deepEqual(both.workspaces, [{ workspace: lab, workspace_name: "Lab", name: "lab box", peers: [{ id: x.id, name: "lab box", version: "0.5.0" }], revocations: [], lock: null }]);
+    assert.deepEqual(both.workspaces, [{ workspace: lab, workspace_name: "Lab", name: "lab box", peers: [{ id: x.id, name: "lab box", version: "0.5.0" }], revocations: [], lock: null, ways: { relays: ["https://relay-b.example", "https://relay-a.example"], off: [] } }]);
     assert.deepEqual(both.relay_urls, [h.origin, "https://relay-a.example", "https://relay-b.example"], "every workspace's relays, each once");
     assert.equal((await sy.state())?.workspaces.length ?? 0, 0, "the home's other station hears nothing of the lab");
 

@@ -2094,15 +2094,18 @@ export class Directory extends DurableObject<Env> {
 
   /** A station's state frame (#sendState); null for one in no workspace. */
   #frame(station: string): string | null {
-    const found = this.#rows(`SELECT m.workspace, w.name AS workspace_name, m.name, w.relays, m.rig, m.enrolled_by FROM station_members m JOIN workspaces w ON w.id = m.workspace
+    const found = this.#rows(`SELECT m.workspace, w.name AS workspace_name, m.name, w.relays, w.ways_off, m.rig, m.enrolled_by FROM station_members m JOIN workspaces w ON w.id = m.workspace
       WHERE m.station = ? ORDER BY m.enrolled_at, m.rowid`, station);
     if (!found.length) return null;
     const since = nowSeconds() - REVOCATION_DAYS * 86400;
     // The rigs apart from the stations (`rigs`): a station from before them reads no such field and so takes no rig
     // for a station (which it would let ask anything of it). A rig is told the stations (they alone ask of it), not
     // the other rigs, and whose it is (`rig`).
-    const [home, ...joined] = found.map(({ relays: _, rig, enrolled_by, ...row }) => ({
+    // (`ways`: the workspace's own relays and the ways it turned off, as kept here before its stations kept them: what a
+    // station takes as its first of them, station/src/mesh/ways.ts)
+    const [home, ...joined] = found.map(({ relays, ways_off, rig, enrolled_by, ...row }) => ({
       ...(row as { workspace: string; workspace_name: string; name: string }),
+      ways: { relays: parseRelays(relays), off: parseRelays(ways_off) },
       peers: this.#rows("SELECT m.station AS id, m.name, s.version FROM station_members m LEFT JOIN stations s ON s.id = m.station WHERE m.workspace = ? AND m.rig IS NULL ORDER BY m.enrolled_at, m.rowid", row.workspace),
       ...(rig === 1 ? { rig: { owner: enrolled_by as string } } : this.#rigsTold(row.workspace as string)),
       revocations: this.#rows("SELECT kind, id, at FROM revocations WHERE workspace = ? AND at >= ?", row.workspace, since),

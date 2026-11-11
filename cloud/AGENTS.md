@@ -3,9 +3,11 @@
 - It keeps only what is about people: accounts and sign-in, workspaces, members and roles, invitations, the list of a
   workspace's stations, each whole or one that only runs tasks (a rig, listed with the member whose it is; who may
   use it is that member's signature, checked by the machine, never the cloud's to say; listing it as the other kind
-  changes nothing on the machine by itself, `station/AGENTS.md`), members' credentials and their revocation, the
-  relays. A station's chats, sessions, runtime accounts and usage are the station's; the cloud never holds them nor passes a request on to a station
-  (the root AGENTS.md, No way into a station from outside).
+  changes nothing on the machine by itself, `station/AGENTS.md`), members' credentials and their revocation,
+  still.fail's relays. A workspace's own relays and the ways it turned off are its stations'
+  (`station/src/mesh/ways.ts`): what is kept of them here is for the stations and devices from before, and told to
+  stations once as their first. A station's chats, sessions, runtime accounts and usage are the station's; the cloud
+  never holds them nor passes a request on to a station (the root AGENTS.md, No way into a station from outside).
 - Workers, each deployed on its own (`deploy.py` lists them, `wrangler*.jsonc` route them): the API
   (`src/index.ts`), the relay (`src/relay-worker.ts`: deploying it drops every relay connection, so it is deployed
   only when it changed), the static web, admin, preview, status and site. Their names, Durable Objects, bucket and
