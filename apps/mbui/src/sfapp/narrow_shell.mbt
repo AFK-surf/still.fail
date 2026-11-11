@@ -258,7 +258,8 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // the number on the app's icon (app_frame.mbt)
   badge_frame(c, src, w)
   // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
-  if !link_later.is_empty() {
+  // (whether one waits read as a signal: this part, kept as its nodes, built again as one is given)
+  if links_wait() {
     c.tell("links-given", fn() { links_given(src) })
   }
   // a newer build of the app asked for once (updates.mbt)

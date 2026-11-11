@@ -65,7 +65,8 @@ test "a link held still: its menu (打开链接, 复制链接: the presenters' s
 
 ///|
 /// The fixture's app in `mode`, its calls kept and answered (`link.parse` as the core would, `invitation.*` as
-/// `invitation` says), `history` its history view when given.
+/// `invitation` says), `history` its history view when given; `as_host`: built as a host builds it, what a pass kept
+/// drawn as kept (Tester::check_looks(false)).
 fn links_core(
   calls : Array[Made],
   mode : String,
@@ -75,6 +76,7 @@ fn links_core(
   w? : Double = 390.0,
   h? : Double = 844.0,
   platform? : Int = 2,
+  as_host? : Bool = false,
 ) -> @ui.Tester {
   new_run()
   let base = fixture(mode)
@@ -101,6 +103,9 @@ fn links_core(
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
+  if as_host {
+    t.check_looks(false)
+  }
   t.run_for(@ui.move_most_ms)
   t
 }

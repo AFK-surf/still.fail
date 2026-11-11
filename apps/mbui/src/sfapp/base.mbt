@@ -581,7 +581,7 @@ pub using @sfbase {
   menu_bar,
   menu_bar_json,
   link_src,
-  link_later,
+  links_wait,
   link_target,
   links_frame,
   links_given,
