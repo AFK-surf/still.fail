@@ -214,6 +214,7 @@ pub fn Tester::check_looks(self : Tester, on : Bool) -> Unit {
 /// Why the last frame was built whole ("" where it was of its looks alone): it left more to come of its own, what it
 /// read changed (the clock, where it read it so), a moment it waits for came.
 pub fn Tester::built_why(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   built_why.val
 }
@@ -223,6 +224,7 @@ pub fn Tester::built_why(self : Tester) -> String {
 /// alone): what its paint read changed (the clock, where it read it so), a moment its paint waits for came, the paint
 /// before it drew otherwise.
 pub fn Tester::painted_why(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   painted_why.val
 }
@@ -313,6 +315,7 @@ fn looks_looked(
 /// How many frames were drawn of their looks alone so far (frame_watch.mbt: nothing built, laid out or painted, a list
 /// moved by its header), each drawn whole after it as well and compared where the looks are checked.
 pub fn Tester::looks_alone(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   looks_frames.val
 }

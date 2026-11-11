@@ -112,6 +112,7 @@ fn keep_rich_runs(lay : RichLayout, ox : Double, oy : Double, cy0 : Double, cy1 
 /// The lines of words the last frame drew, in drawing order (in points): each line's words, where its first letter
 /// starts and its last ends, its baseline and its line's top and bottom.
 pub fn Tester::text_runs(self : Tester) -> Array[TextRun] {
+  self.reads_own()
   ignore(self)
   text_runs.runs.copy()
 }

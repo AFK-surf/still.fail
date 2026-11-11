@@ -613,6 +613,7 @@ pub fn Tester::failed_images(self : Tester) -> Array[Int] {
 /// Failed decodes needed to draw the last painted frame, by the host's image id. A failure kept in the cache for a
 /// picture no longer in the frame is not one of these. `image_src` gives the source of each id.
 pub fn Tester::failed_images_drawn(self : Tester) -> Array[Int] {
+  self.reads_own()
   ignore(self)
   frame_failed_images.copy()
 }
@@ -654,6 +655,7 @@ pub fn Tester::finished_order(self : Tester) -> Array[(Int, Int)] {
 ///|
 /// What the app awaits from the host, as effect.mb's outside says it (what it is), oldest first.
 pub fn Tester::awaited(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   runtime().awaited().map(a => a.0)
 }
@@ -1141,6 +1143,7 @@ pub fn Tester::backspace(self : Tester) -> Unit {
 /// The centre of the first text node (or editor placeholder) containing `s`. Here and in what else finds words, none
 /// of a page's bones: no words are drawn there (bones.mbt).
 pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
+  self.reads_own()
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
@@ -1169,6 +1172,7 @@ pub fn Tester::find(self : Tester, s : String) -> (Double, Double)? {
 /// they are painted (Ctx::paint: a node, then its children; what flies over everything after all the rest), not the
 /// order they were made: a list's rows are made as it is laid out, after what was built over it.
 pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
+  self.reads_own()
   ignore(self)
   let c = g()
   let found : Ref[(Double, Double)?] = Ref::new(None)
@@ -1356,6 +1360,7 @@ pub fn Tester::site_says(self : Tester, event : String) -> Unit {
 ///|
 /// The holes (kind 9: where a native view shows) in the last frame, as (x, y, w, h).
 pub fn Tester::holes(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let out = []
   for i in 0..<g().ninst {
@@ -1370,6 +1375,7 @@ pub fn Tester::holes(self : Tester) -> Array[(Double, Double, Double, Double)] {
 ///|
 /// The holes' corners in the last frame (kind 9, in the order of holes): 0 square, else their radius.
 pub fn Tester::hole_radii(self : Tester) -> Array[Double] {
+  self.reads_own()
   ignore(self)
   let out = []
   for i in 0..<g().ninst {
@@ -1384,6 +1390,7 @@ pub fn Tester::hole_radii(self : Tester) -> Array[Double] {
 ///|
 /// The same, each corner its own (top left, then round it: an instance's 36-39).
 pub fn Tester::hole_corners(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let out = []
   for i in 0..<g().ninst {
@@ -1400,6 +1407,7 @@ pub fn Tester::hole_corners(self : Tester) -> Array[(Double, Double, Double, Dou
 /// @hostapi.view_tex_base) and the part of its content there (u0, v0, du, dv: shares of the content's rect), as a host
 /// that draws the view's picture draws it.
 pub fn Tester::hole_parts(self : Tester) -> Array[(Int, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let out = []
   for i in 0..<g().ninst {
@@ -1493,6 +1501,7 @@ fn dump_node(sb : StringBuilder, i : Int, depth : Int) -> Unit {
 /// The images the old views built in the last frame (Ctx::image), each its source and its size as laid out, drawn or
 /// not (none decoded yet, faded out): what an old view asked to be shown.
 pub fn Tester::image_nodes(self : Tester) -> Array[(String, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -1510,6 +1519,7 @@ pub fn Tester::image_nodes(self : Tester) -> Array[(String, Double, Double)] {
 /// text node's words, where its top left is drawn (moved by its own look and its ancestors': Ctx::drawn_at), its size
 /// as laid out, and how opaque it is drawn (its and its ancestors' opacities and looks' alphas, multiplied).
 pub fn Tester::words(self : Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
+  self.reads_own()
   self.words_marked().map(fn(w) { w.0 })
 }
 
@@ -1574,12 +1584,14 @@ fn Tester::words_marked(self : Tester) -> Array[((String, Double, Double, Double
 /// The words Tester::words has of the app's own nodes, but those made where nothing is read out (Ctx::hidden_from_semantics:
 /// a picture drawn small to stand for itself, say), as a person reading the screen out would have them.
 pub fn Tester::words_said(self : Tester) -> Array[(String, Double, Double, Double, Double, Double)] {
+  self.reads_own()
   self.words_marked().filter(fn(w) { !w.1 }).map(fn(w) { w.0 })
 }
 
 ///|
 /// The rectangle of the first node whose text contains `s` (x, y, w, h).
 pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Double)? {
+  self.reads_own()
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
@@ -1604,6 +1616,7 @@ pub fn Tester::rect_of(self : Tester, s : String) -> (Double, Double, Double, Do
 ///|
 /// Visible list rows: (item, y, height), top to bottom.
 pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
+  self.reads_own()
   let c = g()
   let out = []
   for i in 0..<c.count {
@@ -1622,6 +1635,7 @@ pub fn Tester::rows(self : Tester) -> Array[(Int, Double, Double)] {
 ///|
 /// Each list's visible rows' boxes (x, y, width, height), top to bottom, list by list as they were built.
 pub fn Tester::list_row_boxes(self : Tester) -> Array[Array[(Double, Double, Double, Double)]] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -1643,6 +1657,7 @@ pub fn Tester::list_row_boxes(self : Tester) -> Array[Array[(Double, Double, Dou
 ///|
 /// The lines of the first text node whose text contains `s`, as laid out (an old view's, else a node's of the window's tree).
 pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
+  self.reads_own()
   let c = g()
   for i in 0..<c.count {
     let n = c.nodes[i]
@@ -1738,6 +1753,7 @@ fn Tester::list_state(self : Tester) -> ListState {
 /// The context the view is built in (between frames: for what a view would
 /// call on it while building, as Ctx::list_moved).
 pub fn Tester::ctx(self : Tester) -> Ctx {
+  self.reads_own()
   ignore(self)
   g()
 }
@@ -1772,6 +1788,7 @@ pub fn Tester::at_end(self : Tester) -> Bool {
 ///|
 /// Where row `item` of the list is (x, y, w, h), if built.
 pub fn Tester::row(self : Tester, item : Int) -> (Double, Double, Double, Double)? {
+  self.reads_own()
   ignore(self)
   let c = g()
   for i in 0..<c.count {
@@ -2069,6 +2086,7 @@ pub fn Tester::set_reduce_transparency(self : Tester, on : Bool) -> Unit {
 /// The glass drawn in the last frame: (x, y, w, h, kind (5 frosted, 6
 /// liquid), the capture it shares (1, 2, …)).
 pub fn Tester::drawn_glass(self : Tester) -> Array[(Double, Double, Double, Double, Int, Int)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2095,6 +2113,7 @@ pub fn Tester::drawn_glass(self : Tester) -> Array[(Double, Double, Double, Doub
 /// The same glass as far as it is drawn: its rect cut to its clip (a box over it that cuts it off, a sheet's foot),
 /// (x, y, w, h); none where nothing of it is left.
 pub fn Tester::drawn_glass_cut(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2119,6 +2138,7 @@ pub fn Tester::drawn_glass_cut(self : Tester) -> Array[(Double, Double, Double, 
 ///|
 /// The same glass with its corner, the roundest of its four: (x, y, w, h, corner).
 pub fn Tester::drawn_glass_corners(self : Tester) -> Array[(Double, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2136,6 +2156,7 @@ pub fn Tester::drawn_glass_corners(self : Tester) -> Array[(Double, Double, Doub
 /// Whether each glass of the last frame (drawn_glass's order) frosts only what is under its own box (Glass's
 /// `contained`: its blur said below 0).
 pub fn Tester::drawn_glass_contained(self : Tester) -> Array[Bool] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2153,6 +2174,7 @@ pub fn Tester::drawn_glass_contained(self : Tester) -> Array[Bool] {
 /// The notches cut into the last frame's rectangles and frosted glass (Ctx::box `notch_r`): (kind (0 a rectangle, 5
 /// glass), its top, its circle's middle below the top, its radius, its fillets').
 pub fn Tester::drawn_notches(self : Tester) -> Array[(Int, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2169,6 +2191,7 @@ pub fn Tester::drawn_notches(self : Tester) -> Array[(Int, Double, Double, Doubl
 ///|
 /// How many glyphs of the last frame are inked by the glass under them.
 pub fn Tester::adaptive_glyphs(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   let c = g()
   let mut n = 0
@@ -2184,6 +2207,7 @@ pub fn Tester::adaptive_glyphs(self : Tester) -> Int {
 /// The plain rectangles drawn in the last frame, as (x, y, w, h, colour
 /// RRGGBBAA with its opacity applied).
 pub fn Tester::drawn_rects(self : Tester) -> Array[(Double, Double, Double, Double, Int64)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2206,6 +2230,7 @@ pub fn Tester::drawn_rects(self : Tester) -> Array[(Double, Double, Double, Doub
 pub fn Tester::drawn_rect_corners(
   self : Tester,
 ) -> Array[(Double, Double, Double, Double, Int64, (Double, Double, Double, Double))] {
+  self.reads_own()
   let rs = self.drawn_rects()
   let out = []
   let c = g()
@@ -2226,6 +2251,7 @@ pub fn Tester::drawn_rect_corners(
 /// RRGGBBAA with its opacity applied). One of no opacity left (under half a step of 255) draws nothing and is none: a
 /// shadow's last frame as what casts it goes, the frame its card was gone in.
 pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Double, Double, Double, Int64)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2248,6 +2274,7 @@ pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Do
 ///|
 /// The glyphs drawn in the last frame: (x, y, colour).
 pub fn Tester::drawn_glyphs(self : Tester) -> Array[(Double, Double, Int64)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2269,6 +2296,7 @@ pub fn Tester::drawn_glyphs(self : Tester) -> Array[(Double, Double, Int64)] {
 /// What shows of each glyph drawn in the last frame (seen at all: not wholly cut by its clip): its picture's box (x0,
 /// y0, x1, y1) cut by its clip.
 pub fn Tester::glyphs_shown(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let a = c.inst
@@ -2292,6 +2320,7 @@ pub fn Tester::glyphs_shown(self : Tester) -> Array[(Double, Double, Double, Dou
 /// Each glyph drawn in the last frame (seen at all) as it is drawn: its picture's box and the clip it is cut by (x0, y0,
 /// x1, y1 each), for what asks where words show within what cuts them (a column that scrolls).
 pub fn Tester::glyph_clips(self : Tester) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let a = c.inst
@@ -2309,6 +2338,7 @@ pub fn Tester::glyph_clips(self : Tester) -> Array[((Double, Double, Double, Dou
 /// What of each glyph drawn in the last frame is seen (glyphs_shown's), but for those whose middle something drawn
 /// after them hides (a fill nearly whole, a picture, glass: words_over_hides): what a person can read.
 pub fn Tester::glyphs_seen(self : Tester) -> Array[(Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let a = c.inst
@@ -2343,6 +2373,7 @@ pub fn Tester::glyphs_seen(self : Tester) -> Array[(Double, Double, Double, Doub
 /// The rich paragraph whose text contains `s`, as laid out, and where it
 /// is (its content's top left).
 pub fn Tester::rich_of(self : Tester, s : String) -> (RichLayout, Double, Double)? {
+  self.reads_own()
   ignore(self)
   let c = g()
   for i in 0..<c.count {
@@ -2460,6 +2491,7 @@ pub fn Tester::images_kept(self : Tester) -> Int {
 /// Every instance drawn in the last frame in the order drawn, each its numbers whole (scene.mbt's layout: its rect 0-3,
 /// its kind 5, its clip 16-19 and 24-31, its outer 40-51…): what is cut where, read as the renderers read it.
 pub fn Tester::drawn_instances(self : Tester) -> Array[Array[Double]] {
+  self.reads_own()
   ignore(self)
   let c = g()
   Array::makei(c.ninst, fn(k) { Array::makei(inst_size, fn(j) { c.inst[k * inst_size + j] }) })
@@ -2469,6 +2501,7 @@ pub fn Tester::drawn_instances(self : Tester) -> Array[Array[Double]] {
 /// Every instance drawn in the last frame in the order drawn (later over earlier): its kind (0 a rect, 4 an image…),
 /// x, y, w, h and opacity.
 pub fn Tester::drawn_order(self : Tester) -> Array[(Int, Double, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2483,6 +2516,7 @@ pub fn Tester::drawn_order(self : Tester) -> Array[(Int, Double, Double, Double,
 /// Every instance drawn in the last frame in the order drawn, with what cuts it: its kind, x, y, w, h, and the rect it
 /// is cut to (x0, y0, x1, y1: scene.mbt 16-19); what of it lies outside that is not seen.
 pub fn Tester::drawn_cut(self : Tester) -> Array[(Int, Double, Double, Double, Double, (Double, Double, Double, Double))] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2499,6 +2533,7 @@ pub fn Tester::drawn_cut(self : Tester) -> Array[(Int, Double, Double, Double, D
 /// rect's top and height, then from its top where it is 0 and how far below that it is whole, from its foot where it is
 /// 0 and how far above that it is whole (a soft of 0: none that way).
 pub fn Tester::drawn_fades(self : Tester) -> Array[(Int, Double, Double, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2515,6 +2550,7 @@ pub fn Tester::drawn_fades(self : Tester) -> Array[(Int, Double, Double, Double,
 /// kind, its rect's top and height, then from its left how far it is whole past where it is 0, and from its right (0:
 /// none that way), with where each is 0.
 pub fn Tester::drawn_fades_across(self : Tester) -> Array[(Int, Double, Double, Double, Double, Double, Double)] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2530,6 +2566,7 @@ pub fn Tester::drawn_fades_across(self : Tester) -> Array[(Int, Double, Double, 
 /// The image instances drawn in the last frame: (x, y, w, h, u0, v0, du,
 /// dv, opacity).
 pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2558,6 +2595,7 @@ pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {
 pub fn Tester::drawn_image_clips(
   self : Tester,
 ) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -2628,6 +2666,7 @@ pub fn Tester::face_wider(self : Tester, face : Int, em : Double) -> Unit {
 /// Where the first text node containing `s` is drawn (its top left), moved as it and what holds it move
 /// (draw.mbt).
 pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
+  self.reads_own()
   ignore(self)
   let c = g()
   for i in 0..<c.count {
@@ -2654,6 +2693,7 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
 /// holding it that clips, where that box is drawn (a clip moves with its own look and its holders', not with what it
 /// holds); nothing shows when w or h is 0.
 pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, Double)? {
+  self.reads_own()
   ignore(self)
   let c = g()
   for i in 0..<c.count {
@@ -2718,6 +2758,7 @@ pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, D
 /// goes: (0.9, 0.9, 1.0)); words, as they are drawn, by their looks' `words` too (a panel's words after its ground).
 /// None when there is no such node.
 pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)? {
+  self.reads_own()
   let c = g()
   let found = self.node_named(what)
   guard found >= 0 else { return None }
@@ -2746,6 +2787,7 @@ pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)
 /// How far the node `what` (as look_of finds it) was turned in the last frame, in radians clockwise: its own look's
 /// and all its ancestors' together. None when there is no such node.
 pub fn Tester::turn_of(self : Tester, what : String) -> Double? {
+  self.reads_own()
   let c = g()
   let found = self.node_named(what)
   guard found >= 0 else { return None }
@@ -2948,6 +2990,7 @@ pub fn Tester::set_window_snap(self : Tester, state : Int) -> Unit {
 /// what the old frame put over all of it at its root first; then the tree's, an old view's where the tree hosts one
 /// there, or where nothing of the tree's is and the one old view is the whole window, taking input.
 pub fn Tester::drags_window_at(self : Tester, x : Double, y : Double) -> Bool {
+  self.reads_own()
   let c = self.ctx()
   let old = fn() { desk_drags(hit_in(c.hit_ids, c.hit_rects, x, y)) }
   match view_tree() {
@@ -2978,6 +3021,7 @@ pub fn Tester::tab(self : Tester, back? : Bool = false) -> Unit {
 /// The semantics tree as it is read now (Ctx::semantics_tree): the old views' as the last frame built them, the window's
 /// tree's nodes as they say they are now.
 pub fn Tester::semantics(self : Tester) -> Array[SemNode] {
+  self.reads_own()
   let tree = g().semantics_tree()
   self.hold_named(tree)
   tree
@@ -2986,6 +3030,7 @@ pub fn Tester::semantics(self : Tester) -> Array[SemNode] {
 ///|
 /// The semantics tree as text, hidden nodes left out (Ctx::semantics_dump).
 pub fn Tester::semantics_dump(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   g().semantics_dump()
 }
@@ -3102,6 +3147,7 @@ pub fn Tester::all(
   disabled? : Bool,
   within? : SemNode,
 ) -> Array[SemNode] {
+  self.reads_own()
   self.found({ role, label, has, checked, selected, expanded, disabled, within })
 }
 
@@ -3119,6 +3165,7 @@ pub fn Tester::get(
   disabled? : Bool,
   within? : SemNode,
 ) -> SemNode raise {
+  self.reads_own()
   let f : Find = { role, label, has, checked, selected, expanded, disabled, within }
   let found = self.found(f)
   if found.length() == 1 {
@@ -3143,6 +3190,7 @@ pub fn Tester::query(
   disabled? : Bool,
   within? : SemNode,
 ) -> SemNode? {
+  self.reads_own()
   let found = self.found({ role, label, has, checked, selected, expanded, disabled, within })
   if found.is_empty() {
     None
@@ -3201,6 +3249,7 @@ pub fn Tester::act_on(self : Tester, s : SemNode, action : Action) -> Unit raise
 ///|
 /// The node that has the keyboard's focus, if it says something.
 pub fn Tester::focused(self : Tester) -> SemNode? {
+  self.reads_own()
   for s in self.semantics() {
     if s.focused {
       return Some(s)
@@ -3251,6 +3300,7 @@ fn Ctx::held_corner_faults(self : Ctx) -> Array[String] {
 /// shows at its end, for the rules held at rest (a card last in a panel ending in its foot corners: corner_faults).
 /// How many it scrolled.
 pub fn Tester::scroll_all_to_end(self : Tester) -> Int {
+  self.reads_own()
   let c = g()
   let at : Array[(Double, Double)] = c.with_tree_nodes(fn() {
     let out = []
@@ -3274,6 +3324,7 @@ pub fn Tester::scroll_all_to_end(self : Tester) -> Int {
 /// How many things are drawn in their bones now (Ctx::bones, View::bones): what a page shows of what it still waits
 /// for. None: nothing on screen waits.
 pub fn Tester::bones_drawn(self : Tester) -> Int {
+  self.reads_own()
   let _ = self
   let c = g()
   let mut n = 0

@@ -36,6 +36,7 @@ pub fn room_least() -> Double {
 /// Where the last frame breaks the rules of a press's room (see the file's head): one line for each fault, `room:` or
 /// `apart:` first.
 pub fn Tester::room_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   // (what the old views hold where it is drawn, as big: Ctx::with_old_drawn)
   let c = g()
@@ -46,6 +47,7 @@ pub fn Tester::room_faults(self : Tester) -> Array[String] {
 /// Where what is shown only under the hand (a frame built with all of it shown, Ctx::lit_all) takes presses no touch
 /// way reaches as easily (see the file's head): one `hover:` line each; the frames after it as before.
 pub fn Tester::hover_only_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   let c = g()
   let rest : Set[Int] = Set::new()
   for i in c.press_targets() {
@@ -243,6 +245,7 @@ fn rooms_parted(
 /// the node by the words drawn in it and where it was made (tester_sources.mbt). Apart from Tester::room_faults, whose
 /// counts the app's tests keep to their bars.
 pub fn Tester::tree_room_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   guard view_tree() is Some(tree) else { return [] }
   let targets = tree.press_boxes()

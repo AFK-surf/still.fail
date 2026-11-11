@@ -20,6 +20,7 @@ let fixed_outgrown_slack : Double = 0.5
 /// Each of the frame's words a box with its height said does not hold (the file's head): the words and the box with
 /// where each was made, how high the words are as drawn and by how much they reach out of it.
 pub fn Tester::fixed_outgrown(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   g().fixed_outgrown()
 }

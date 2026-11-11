@@ -181,6 +181,7 @@ fn corner_gaps(a : Node, b : Node, k : Int) -> (Double, Double) {
 /// Where the last frame breaks the corner rule (see the file's head): one line for each grounded node in a rounded
 /// container's corner that is not as far from both edges, or not concentric (within half a pixel).
 pub fn Tester::corner_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   let c = g()
   c.with_tree_nodes(fn() { c.corner_faults() })
@@ -191,6 +192,7 @@ pub fn Tester::corner_faults(self : Tester) -> Array[String] {
 /// row's at once; the window's tree's nodes each told it is pointed at and pressed, Tree::lit_all) breaks the corner
 /// rule; the frames after it as before, the tree's hand as it is.
 pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   let c = g()
   c.lit_all = true
   match view_app.val {
@@ -434,6 +436,7 @@ let tree_laid_spare : Array[Node] = []
 /// came to have them: said each (`Corners`), linked each (`LinkedEach`), or worked out once laid out (`Inner`,
 /// `InnerOr`, one in a container's corner).
 pub fn Tester::mixed_corners(self : Tester, lit? : Bool = false) -> Array[String] {
+  self.reads_own()
   let c = g()
   if lit {
     c.lit_all = true

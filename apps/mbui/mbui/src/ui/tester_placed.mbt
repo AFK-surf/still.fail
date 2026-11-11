@@ -13,6 +13,7 @@
 /// What of the frame just drawn was drawn not as it is laid out: each node, where it was made, as it was placed and as
 /// it is laid out.
 pub fn Tester::placed_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   placed_faults_now()
 }

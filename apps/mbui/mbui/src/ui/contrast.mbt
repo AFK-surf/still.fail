@@ -917,6 +917,7 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
 /// Where the screen as it is now draws something too faint to be seen on what it lies on (see the file's head): a
 /// frame drawn, each fault once. `marks`: the least for what has nothing in it (contrast_mark_least).
 pub fn Tester::contrast_faults(self : Tester, marks? : Double = contrast_mark_least) -> Array[String] {
+  self.reads_own()
   let c = g()
   inst_owners.on = true
   inst_owners_clear()

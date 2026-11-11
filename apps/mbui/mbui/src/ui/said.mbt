@@ -280,6 +280,7 @@ fn Ctx::said_logged(self : Ctx) -> Unit {
 /// in 64ths of a point, ids numbered as first said in the frame: what a part or a row drawn again must say as its build
 /// does. Shown from the frame after the first that asks.
 pub fn Tester::said(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   said_log.on = true
   frame_said.val = Some(fn(c, at) { if at == 0 { c.said_built_logged() } else { c.said_logged() } })

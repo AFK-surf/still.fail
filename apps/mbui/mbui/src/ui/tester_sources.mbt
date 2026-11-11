@@ -8,6 +8,7 @@
 /// What is drawn topmost at (x, y) in the window and what holds it out to the root (Tree::topmost_at,
 /// Tree::sources_of), as sources_said says them; or why nothing is said.
 pub fn Tester::sources_at(self : Tester, x : Double, y : Double) -> String {
+  self.reads_own()
   ignore(self)
   guard view_tree() is Some(tree) else { return "no window's tree" }
   guard tree.topmost_at(x, y) is Some(id) else { return "nothing is drawn at \{x},\{y}" }
@@ -17,6 +18,7 @@ pub fn Tester::sources_at(self : Tester, x : Double, y : Double) -> String {
 ///|
 /// The same for the words `s` where they are drawn last (over the others: Tester::find_last's), the node drawing them.
 pub fn Tester::sources_of(self : Tester, s : String) -> String {
+  self.reads_own()
   ignore(self)
   guard view_tree() is Some(tree) else { return "no window's tree" }
   let mut found : @view.NodeId? = None

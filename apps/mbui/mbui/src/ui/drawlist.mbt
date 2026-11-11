@@ -36,6 +36,7 @@
 ///|
 /// What the last frame drew, as a draw list (the file's head); `bytes`: with the pictures handed over as bytes in it.
 pub fn Tester::drawlist(self : Tester, bytes? : Bool = false) -> String {
+  self.reads_own()
   ignore(self)
   drawlist_of(g(), bytes~)
 }
@@ -44,6 +45,7 @@ pub fn Tester::drawlist(self : Tester, bytes? : Bool = false) -> String {
 /// The images the last frame drew that the app handed over as bytes (Ctx::image_bytes, add_image), in the list's
 /// order: their sources and bytes, for a renderer beside the draw list (its `.img<N>` files).
 pub fn Tester::drawlist_images(self : Tester) -> Array[(Int, String, Bytes)] {
+  self.reads_own()
   ignore(self)
   let out : Array[(Int, String, Bytes)] = []
   for k, e in drawn_images(g()) {
@@ -201,6 +203,7 @@ fn drawlist_lacks() -> String? {
 /// What Tester::drawlist would stop on, said (drawlist_lacks: the host's kept text lacking what was drawn); None where
 /// it would not.
 pub fn Tester::drawlist_said(self : Tester) -> String? {
+  self.reads_own()
   ignore(self)
   drawlist_lacks()
 }

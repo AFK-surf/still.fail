@@ -290,6 +290,7 @@ pub fn update_apply(said : String) -> Unit {
 /// What the app asked of the host's updates under a Tester ("fetch <name> <now>", with " delta <json>" where it gave
 /// one; "apply"), in order.
 pub fn Tester::update_asked(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   update_asked.copy()
 }

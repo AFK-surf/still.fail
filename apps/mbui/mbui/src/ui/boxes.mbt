@@ -71,6 +71,7 @@ fn laid_kind(n : Node) -> String {
 ///|
 /// The last frame's nodes, in the order they were built (a parent before what it holds).
 pub fn Tester::boxes(self : Tester) -> Array[Laid] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -155,5 +156,6 @@ pub fn Tester::boxes(self : Tester) -> Array[Laid] {
 /// by the tree's node it is drawn in, as the corner rule takes them (Ctx::with_tree_nodes): a panel the tree draws
 /// round what an old view in it draws.
 pub fn Tester::boxes_held(self : Tester) -> Array[Laid] {
+  self.reads_own()
   g().with_tree_nodes(fn() { self.boxes() })
 }

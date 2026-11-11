@@ -89,6 +89,7 @@ pub fn Tester::film_frame(self : Tester, script : String, frame : Int, max? : In
 /// `inst_size` numbers each: the Tester's own, read, not changed), how many, and what is under them (red, green,
 /// blue, 0-1).
 pub fn Tester::presented(self : Tester) -> (FixedArray[Double], Int, (Double, Double, Double)) {
+  self.reads_own()
   ignore(self)
   let c = g()
   (c.inst, c.ninst, c.clear)
