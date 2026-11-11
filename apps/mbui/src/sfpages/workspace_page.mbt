@@ -699,9 +699,19 @@ fn ws_ways_panel(core : Core, here : Here, from : @sf.Anchor) -> Unit {
     })
     // its own: removed, added (one not wanted is taken away, not turned off)
     v.show(fn() { manager() || relays().length() > 0 }, fn(l) { ws_way_label_node(l, fn() { @sf.t("android-settings.ways.own") }) })
+    // (who added each, as its stations keep it: an agent's chat, a person)
+    let added_by = fn(url : String) {
+      match ways().filter(fn(w) { id(w) == url }).get(0) {
+        Some(w) => {
+          let by = text(Some(w), "by")
+          if by == "" { "" } else { @sf.t("android-settings.relays.by", args=[("by", by)]) }
+        }
+        None => ""
+      }
+    }
     v.each(relays, fn(url) { url }, fn(row, url) {
       row.box(fn(b) {
-        ws_way_row_node(b, fn() { host(url.get()) }, fn() { "" }, fn(e) {
+        ws_way_row_node(b, fn() { host(url.get()) }, fn() { added_by(url.get()) }, fn(e) {
           e.show(manager, fn(k) {
             @sf.button_node(
               k,

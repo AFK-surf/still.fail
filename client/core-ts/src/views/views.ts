@@ -49,6 +49,7 @@ import { resourcesView } from "./resources.ts";
 import { stationProfileSummary, workspaceProfiles } from "./profiles.ts";
 import { settingsView } from "./settings.ts";
 import { waysView, type WaysView } from "./ways.ts";
+import { keptWays } from "./ways-stations.ts";
 import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, quotaFor, runnableOn, runtimes, servingIn } from "./models.ts";
 import * as brief from "./brief.ts";
@@ -643,7 +644,8 @@ export function envOf(core: Inner): ViewsEnv {
         const relays = arr(get(me, "relay_urls")).filter((u): u is string => typeof u === "string");
         if (relays.length === 0) continue;
         const names = get(me, "relay_names");
-        return waysView(relays, isObject(names) ? names : {}, core.cloudSync.workspaceRelays(workspace), core.cloudSync.workspaceOff(workspace));
+        const by = Object.fromEntries((keptWays(core, workspace)?.relays ?? []).flatMap((r) => (r.by ? [[r.url, r.by]] : [])));
+        return waysView(relays, isObject(names) ? names : {}, core.cloudSync.workspaceRelays(workspace), core.cloudSync.workspaceOff(workspace), by);
       }
       return undefined;
     },

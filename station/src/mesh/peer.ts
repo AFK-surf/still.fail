@@ -12,6 +12,7 @@ import { type Cloud, UNPROTECTED } from "../cloud/state.ts";
 import { BYTES, CHECK_BYTES, type Bytes, NoBytes, type PeerBus, type PeerCall, Refused, bytesOf } from "./bus.ts";
 import type { Addr, Connection, Endpoint, Stream } from "./native.ts";
 import { answerLock } from "./lock-sync.ts";
+import { answerWays, waysOf } from "./ways.ts";
 import { Reader } from "./serve.ts";
 
 export const PEER_ALPN = Buffer.from("stillfail/station/1");
@@ -372,7 +373,10 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
       } else if (there || (ours && !remote.hearsOutside?.())) {
         member(cloud, peer, envelope.workspace);
         const method = envelope.request?.method;
-        result = typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request, envelope.workspace) : await remote.handle(envelope.workspace, peer, envelope.request ?? null);
+        result = typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request, envelope.workspace)
+          // The workspace's ways (mesh/ways.ts), kept level between its stations.
+          : typeof method === "string" && method.startsWith("ways.") ? answerWays(waysOf(cloud), envelope.request, envelope.workspace ?? cloud.home() ?? "")
+          : await remote.handle(envelope.workspace, peer, envelope.request ?? null);
       } else {
         if (cloud.membership(envelope.workspace) === null) throw new Error("station is outside this workspace");
         result = await remote.handleOutside(peer, envelope.request ?? null, envelope.workspace);

@@ -46,3 +46,9 @@ test("a workspace's ways come from /v1/me: still.fail's relays named, its own, t
   assert.equal(view.off, 2);
   assert.equal(view.offLabel, "已关闭 2 项");
 });
+
+test("a relay of the workspace's own says who added it, as its stations keep it", async () => {
+  const { waysView } = await import("../src/views/ways.ts");
+  const view = waysView(["https://cf.test"], {}, ["https://own.test", "https://pvg.test:8445"], [], { "https://pvg.test:8445/": "上海中继" });
+  assert.deepEqual(view.ways.filter((w) => w.own).map((w) => [w.id, w.by ?? null]), [["https://own.test", null], ["https://pvg.test:8445", "上海中继"]]);
+});

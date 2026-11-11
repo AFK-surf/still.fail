@@ -49,6 +49,8 @@ import { nameOf, peerNamed } from "../mesh/peer-http.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
 import { workspaceSizeTools } from "../tools/workspace-size.ts";
+import { relayTools } from "../tools/relays.ts";
+import { waysOf } from "../mesh/ways.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { ChatShares } from "../xshare/index.ts";
@@ -496,6 +498,18 @@ export const AgentsLive = (control: Control) =>
         }),
         ...computerTools(computer),
         ...forwardTools(forwards),
+        // The relays of the chat's workspace of its own (mesh/ways.ts), added by the agents themselves.
+        ...relayTools({
+          ways: () => (plane.state.state === null ? null : waysOf(plane.state)),
+          workspaceOf: (session) => store.sessionWs(session) ?? plane.state.home(),
+          by: (session) => {
+            try {
+              return sender(hub, session)[0];
+            } catch {
+              return session;
+            }
+          },
+        }),
       ];
       // The station's and the runtimes' versions, read at start, the station's again as the cloud says a release is out
       // and the runtimes' (other registries') every few hours; updated from the pages, or by itself while nothing runs

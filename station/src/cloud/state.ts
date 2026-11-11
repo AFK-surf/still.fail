@@ -17,7 +17,12 @@ export type Revocation = { kind: string; id: string; at: number };
 /// stations there and what that workspace takes back.
 /// `locked`: that workspace is in security mode, as the control plane says (its lock is pinned here before any of its
 /// members is taken).
-export type Joined = { workspace: string; workspace_name: string; name: string; peers: any[]; revocations: Revocation[]; locked?: true; rigs?: Rig[] };
+export type Joined = { workspace: string; workspace_name: string; name: string; peers: any[]; revocations: Revocation[]; locked?: true; rigs?: Rig[]; ways?: WaysSaid };
+
+/// A workspace's own relays and the ways its members' devices do not take to its stations (`lan`, `tailnet`, `direct`,
+/// a relay's URL), as still.fail cloud kept them before the stations did: what a station takes as its first of them
+/// where it holds none yet (mesh/ways.ts). Absent from planes of before, and from Comma's.
+export type WaysSaid = { relays: string[]; off: string[] };
 
 /// A rig of a workspace (a station that only runs tasks): a machine that only runs what the workspace's stations send it, its person's
 /// (`owner`, who added it), as the control plane names it. In security mode that is not taken on the plane's word:
@@ -61,6 +66,8 @@ export type CloudState = {
   joined?: Joined[];
   /// The home workspace's rigs, as the control plane said last; absent from planes of before them.
   rigs?: Rig[];
+  /// The home workspace's own relays and ways turned off, as the control plane kept them (WaysSaid).
+  ways?: WaysSaid;
   /// This machine is a rig, not a whole station: a station that only runs tasks (set by `enroll --rig`, or by
   /// `rig_due` below; never by the control plane's word alone).
   rig?: RigSelf;
@@ -151,6 +158,9 @@ export function readState(data: string): CloudState | null {
   if (raw.joined !== undefined) state.joined = joinedOf(raw.joined);
   if (raw.provider !== undefined) state.provider = providerOf(raw.provider);
   if (raw.rigs !== undefined) state.rigs = rigsOf(raw.rigs);
+  const ways = waysSaidOf(raw.ways);
+  if (ways !== null) state.ways = ways;
+  else delete state.ways;
   const rig = rigSelfOf(raw.rig);
   if (rig !== null) state.rig = rig;
   else delete state.rig;
@@ -195,6 +205,7 @@ export function writeState(data: string, s: CloudState) {
   if (s.removed_code !== undefined) out.removed_code = s.removed_code;
   if (s.joined !== undefined && s.joined.length > 0) out.joined = s.joined;
   if (s.rigs !== undefined && s.rigs.length > 0) out.rigs = s.rigs;
+  if (s.ways !== undefined) out.ways = s.ways;
   if (s.rig !== undefined) out.rig = s.rig;
   if (s.rig_pending !== undefined) out.rig_pending = s.rig_pending;
   if (s.rig_due === true) out.rig_due = true;
@@ -215,9 +226,17 @@ export function joinedOf(raw: unknown): Joined[] {
           revocations: Array.isArray(j.revocations) ? j.revocations.filter(isRevocation) : [],
           ...(j.locked === true ? { locked: true as const } : {}),
           ...(Array.isArray(j.rigs) && j.rigs.length > 0 ? { rigs: rigsOf(j.rigs) } : {}),
+          ...(waysSaidOf(j.ways) !== null ? { ways: waysSaidOf(j.ways)! } : {}),
         }]
       : [],
   );
+}
+
+/// The ways a file or a `state` frame says (WaysSaid); null when it says none.
+export function waysSaidOf(raw: any): WaysSaid | null {
+  if (raw === null || typeof raw !== "object" || !Array.isArray(raw.relays)) return null;
+  const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  return { relays: strings(raw.relays), off: strings(raw.off) };
 }
 
 export const isRevocation = (r: any): r is Revocation => typeof r?.kind === "string" && typeof r?.id === "string" && Number.isInteger(r?.at) && r.at >= 0;
@@ -604,6 +623,14 @@ export class Cloud {
     if (workspace === s.workspace) return this.homeMembership(s);
     const joined = (s.joined ?? []).find((j) => j.workspace === workspace);
     return joined === undefined ? null : this.joinedMembership(joined, s.workspace);
+  }
+
+  /// A workspace's own relays and ways turned off as the control plane kept them (WaysSaid): null when it said none.
+  waysSaid(workspace: string): WaysSaid | null {
+    const s = this.state;
+    if (s === null) return null;
+    if (workspace === s.workspace) return s.ways ?? null;
+    return (s.joined ?? []).find((j) => j.workspace === workspace)?.ways ?? null;
   }
 
   /// still.fail's relays, ours first, as `relays()` in the Rust station: `relay_urls`, else `relay_url`; what is no URL

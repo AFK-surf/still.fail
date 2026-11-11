@@ -16,6 +16,7 @@ import { type Admitted, readOnly, revoked, verifyMemberOf } from "./credential.t
 import { PersonChains } from "./person-chains.ts";
 import { SeenDevices } from "./seen-devices.ts";
 import { checkChain } from "./person-sync.ts";
+import { WaysRefusal, setRelays, setWay, waysOf as workspaceWaysOf } from "./ways.ts";
 import { join } from "node:path";
 import { meshDir } from "../cloud/state.ts";
 import { type Entry, LockRefusal, admit, admitPerson, asEntry, endpointProof, fold, lowerRole, personFold } from "../cloud/lock.ts";
@@ -262,6 +263,32 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
     return [200, { taken, head: lockHead(cloud, ws) }];
   } catch (e) {
     return [409, { error: (e as Error).message, head: lockHead(cloud, ws) }];
+  }
+}
+
+/// GET /ways: the asker's workspace's own relays and the ways turned off, as this station goes by them (`at` 0: as
+/// still.fail cloud kept them, none changed here yet). POST /ways: `{relays}` the whole list of its own relays, or
+/// `{way, on}` one way turned on or off; any member but a read-only one (mesh/ways.ts: nobody approves a relay).
+export function waysRoute(cloud: Cloud, method: string, body: Buffer, viewer: Admitted["viewer"]): [number, unknown] {
+  const ways = workspaceWaysOf(cloud);
+  const ws = viewer.workspace || cloud.home() || "";
+  if (method === "GET") return [200, ways.view(ws)];
+  if (method !== "POST") return [405, { error: "GET or POST" }];
+  if (readOnly(viewer)) return [403, { error: "read-only members cannot change this workspace's ways" }];
+  let said: any;
+  try {
+    said = JSON.parse(body.toString("utf8") || "{}");
+  } catch {
+    return [400, { error: "invalid JSON" }];
+  }
+  try {
+    const by = viewer.name || viewer.email || null;
+    if (Array.isArray(said?.relays)) return [200, setRelays(ways, ws, said.relays, by)];
+    if (typeof said?.way === "string" && typeof said?.on === "boolean") return [200, setWay(ways, ws, said.way, said.on)];
+    return [400, { error: "relays: a list of URLs, or way and on" }];
+  } catch (e) {
+    if (e instanceof WaysRefusal) return [e.message.startsWith("the last relay") ? 409 : 400, { error: e.message }];
+    throw e;
   }
 }
 
@@ -647,6 +674,11 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   // The workspace lock (cloud/lock.ts): the station's, here where the device that brings it is known.
   if ((at < 0 ? rest : rest.slice(0, at)) === "/lock") {
     const [status, said] = lockRoute(m.cloud, method, at < 0 ? [] : queryPairs(rest.slice(at + 1)), body, viewer);
+    return answer(status, said);
+  }
+  // The workspace's ways (mesh/ways.ts): read by its members' devices, changed from the app's 连接方式.
+  if ((at < 0 ? rest : rest.slice(0, at)) === "/ways") {
+    const [status, said] = waysRoute(m.cloud, method, body, viewer);
     return answer(status, said);
   }
   const lockPart = /^\/lock\/(person|devices)$/.exec(at < 0 ? rest : rest.slice(0, at));

@@ -1213,4 +1213,7 @@ pub let said_paths : Map[String, Array[String]] = {
     "workspaces.*.items.*.text",
     "workspaces.*.items.*.what",
   ],
+  "workspaceWays": [
+    "ways.*.by",
+  ],
 }

@@ -609,6 +609,7 @@ let zh : Map[String, String] = {
   "android-settings.relays.add": "添加中继",
   "android-settings.relays.addAction": "添加",
   "android-settings.relays.added": "已添加中继",
+  "android-settings.relays.by": "{by} 添加",
   "android-settings.relays.hint": "iroh-relay 的 https 地址。网页版要求使用公开签发的证书（如 Let's Encrypt），不支持自签证书。",
   "android-settings.relays.lead": "除 {app} 的中继外，station 和成员设备也会通过这些中继连接，并自动选择最快的。",
   "android-settings.relays.removeWhat": "移除中继",

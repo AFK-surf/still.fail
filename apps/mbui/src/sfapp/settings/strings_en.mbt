@@ -625,6 +625,7 @@ let en : Map[String, String] = {
   "android-settings.relays.add": "Add a relay",
   "android-settings.relays.addAction": "Add",
   "android-settings.relays.added": "Relay added",
+  "android-settings.relays.by": "Added by {by}",
   "android-settings.relays.hint": "An iroh-relay https address. The web app requires a publicly issued certificate (such as Let's Encrypt); self-signed certificates aren't supported.",
   "android-settings.relays.lead": "Besides {app}'s relays, stations and members' devices also connect through these, automatically using the fastest.",
   "android-settings.relays.removeWhat": "remove the relay",

@@ -10,7 +10,7 @@ import WebSocket from "ws";
 import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
 import { version } from "../ops/version.ts";
-import { type Cloud as CloudState, MODE_PENDING_S, isRevocation, joinedOf, joinedPendingPath, pendingLockPath, rigGrantsPath, rigsOf } from "./state.ts";
+import { type Cloud as CloudState, MODE_PENDING_S, isRevocation, joinedOf, joinedPendingPath, pendingLockPath, rigGrantsPath, rigsOf, waysSaidOf } from "./state.ts";
 import { type Entry, asEntry, entryHash, fold } from "./lock.ts";
 import type { StationKey } from "./key.ts";
 import type { CloudSaid } from "./plane.ts";
@@ -285,6 +285,10 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
         if (typeof body[k] === "string") st[k] = body[k];
       }
       if (Array.isArray(body.relay_urls)) st.relay_urls = body.relay_urls.filter((u: unknown) => typeof u === "string");
+      // The home workspace's own relays and ways turned off as the plane kept them: what mesh/ways.ts takes first.
+      const ways = waysSaidOf(body.ways);
+      if (ways !== null) st.ways = ways;
+      else delete st.ways;
       // Kept as said; once locked, credentials are checked with the lock's keys instead (cloud/state.ts `grantKeys`).
       if (body.grant_keys && typeof body.grant_keys === "object" && !Array.isArray(body.grant_keys)) st.grant_keys = body.grant_keys;
       if (Array.isArray(body.revocations) && body.revocations.every(isRevocation)) st.revocations = body.revocations;
