@@ -51,6 +51,14 @@ pub fn Tester::set_rows_on_pixels(self : Tester, on : Bool) -> Unit {
 }
 
 ///|
+/// The host keeping groups of instances as every platform's host does, from the next frame on, or keeping none (as the
+/// web's host: what a list draws drawn out flat in each frame).
+pub fn Tester::set_groups(self : Tester, on : Bool) -> Unit {
+  self.fake.groups = on
+  groups_host.val = -1
+}
+
+///|
 /// A frame begins: what is kept of another run forgotten. (A fiber's step is no event from outside: what it changes
 /// it says by the signals it sets, and only what reads them is built again.)
 fn parts_frame_start(c : Ctx) -> Unit {

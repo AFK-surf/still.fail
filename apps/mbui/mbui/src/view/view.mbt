@@ -4349,7 +4349,7 @@ pub fn rows_slot_on(h : Double, g : Double) -> Double {
 
 ///|
 /// Node `at` a page's list's rows' holder (Tree::set_rows_grid), its rows laid out on the grid there is; those let go
-/// since no more counted.
+/// since no more counted. Made in a row of another such list, a fault (rows_list_nested_said).
 fn Tree::rows_list(self : Tree, at : Int) -> Unit {
   let keep = self.rows_lists.filter(fn(i) { i != at && self.nodes[i].live && self.nodes[i].list_rows })
   self.rows_lists.clear()
@@ -4358,6 +4358,41 @@ fn Tree::rows_list(self : Tree, at : Int) -> Unit {
   self.nodes[at].list_rows = true
   self.nodes[at].flex.style.rows_grid = self.rows_grid
   self.layout_marked_at(at)
+  match self.rows_list_nested_said(at) {
+    Some(said) => self.fault({ at, gen: self.nodes[at].gen }, said)
+    None => ()
+  }
+}
+
+///|
+/// Where node `at`, a page's list's rows' holder, is made in a row of another's, what is wrong said: which two lists
+/// and the row, each where it was made (Tree::source_of). The walk puts a list's rows on its host's grid by the holder it
+/// last came to (Tree::each_drawn_in_order's `rows_at`), so the outer's rows after the inner would be drawn where their
+/// sums put them, not on the grid's own numbers; asked once, as the inner is made, never as a frame is drawn.
+fn Tree::rows_list_nested_said(self : Tree, at : Int) -> String? {
+  let mut row = at
+  let mut p = self.nodes[at].parent
+  while p >= 0 {
+    if self.nodes[p].list_rows {
+      let place = fn(i : Int) {
+        let (made, part) = self.source_of({ at: i, gen: self.nodes[i].gen })
+        if part == "" || part == made {
+          made
+        } else {
+          "\{made} (in a part asked for at \{part})"
+        }
+      }
+      let list_of = fn(i : Int) { if self.nodes[i].parent >= 0 { self.nodes[i].parent } else { i } }
+      return Some(
+        "a page's list made in a row of another page's list (View::scrolls_window in a row of one): the outer's rows after it would not be put on its host's grid; the inner made at \{place(list_of(at))}, in the row made at \{place(row)}, of the list made at \{place(list_of(p))}",
+      )
+    }
+    if !self.nodes[p].slot {
+      row = p
+    }
+    p = self.nodes[p].parent
+  }
+  None
 }
 
 ///|
@@ -4394,6 +4429,17 @@ fn Tree::rows_laid_y(self : Tree, at : Int) -> Double {
     i = m.parent
   }
   y
+}
+
+///|
+/// Where a page's list's row is drawn down the window, `y` as it was summed there, on its host's grid of `g` pixels a
+/// point (Tree::set_rows_grid): the grid's own number for the pixel it is on. Its top is on one wherever it is scrolled
+/// (Tree::rows_placed), but come to as a sum of where the list is, how far it is scrolled and where the row is laid
+/// out in it, numbers each path to a state (scrolled there, asked there, made there) comes to otherwise, so its last
+/// bits went by the path; put on the grid's own number after the last of the sum, the same however it came there
+/// (list_three_paths_test).
+pub fn row_on_grid(y : Double, g : Double) -> Double {
+  (y * g).round() / g
 }
 
 ///|
@@ -9887,6 +9933,14 @@ fn Tree::each_drawn_in_order(
     }
   }
   let g = self.pixel_grid
+  // (a page's list's rows on its host's grid (Tree::set_rows_grid): the place in the order of the holder of the rows
+  // last come to (-1: none), what holds each of them there (a slot is in no order: its holder holds what it holds).
+  // Found where what a column scrolls by its offset alone is, as every such holder is (View::scrolls), not looked for
+  // at each node. A list's rows after a list of rows in one of them would not be put on the grid (what the walk would
+  // ask at every node to know it is out of the inner again): such a list is a fault as it is made,
+  // Tree::rows_list_nested_said.)
+  let rg = self.rows_grid
+  let mut rows_at = -1
   let mut i = 0
   while i < len {
     // (the tree let go of from inside `f`: nothing more of it walked, as it went before)
@@ -9928,16 +9982,20 @@ fn Tree::each_drawn_in_order(
     let mut ly = n.ly
     // (as far as a column scrolls it now (Node's scroll_off), but where `offsets` says it is not: what it holds drawn
     // as it is placed in it, it drawn off as a whole by what hosts it, a page's list's header)
-    if n.scroll_off is Some(_) &&
-      (match (offsets, n.content) {
-        (Some(o), Some(c)) => o(c)
-        _ => true
-      }) {
-      let (sx, sy) = self.scroll_off_now(n)
-      x = x + sx
-      y = y + sy
-      lx = lx + sx
-      ly = ly + sy
+    if n.scroll_off is Some(_) {
+      if n.list_rows && rg > 0.0 {
+        rows_at = i
+      }
+      if (match (offsets, n.content) {
+          (Some(o), Some(c)) => o(c)
+          _ => true
+        }) {
+        let (sx, sy) = self.scroll_off_now(n)
+        x = x + sx
+        y = y + sy
+        lx = lx + sx
+        ly = ly + sy
+      }
     }
     if h >= 0 {
       let bs = ws.unsafe_get(h)
@@ -9947,6 +10005,12 @@ fn Tree::each_drawn_in_order(
       s = bs * s
       lx = ux.unsafe_get(h) + lx
       ly = uy.unsafe_get(h) + ly
+      // (a page's list's row on its host's pixels, drawn as big as it is laid out: its top the grid's own number for
+      // where it is, however it was summed there: row_on_grid)
+      if h == rows_at && s == 1.0 {
+        y = row_on_grid(y, rg)
+        ly = row_on_grid(ly, rg)
+      }
     }
     // (on a flight's way: where the flight has it in the window, nothing that holds it counted, shared.mbt)
     match n.lift {
@@ -10001,6 +10065,7 @@ pub fn Tree::drawn_one(
     j = self.order_holder[j]
   }
   let g = self.pixel_grid
+  let mut rows_kids = false
   let mut x = 0.0
   let mut y = 0.0
   let mut a = 1.0
@@ -10039,7 +10104,14 @@ pub fn Tree::drawn_one(
       ns = s * ns
       lx = ux + lx
       ly = uy + ly
+      if rows_kids && ns == 1.0 {
+        ny = row_on_grid(ny, self.rows_grid)
+        ly = row_on_grid(ly, self.rows_grid)
+      }
     }
+    // (what it holds a page's list's rows on the grid, as the walk finds them (a slot is in no order: what it holds is
+    // its holder's))
+    rows_kids = n.list_rows && self.rows_grid > 0.0
     x = nx
     y = ny
     a = na

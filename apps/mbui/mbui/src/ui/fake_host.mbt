@@ -2275,9 +2275,10 @@ impl @hostapi.Host for FakeHost with script_step(self, step, arg) {
 }
 
 ///|
-/// It keeps groups of instances, as every platform's host does: drawn out as it is handed them (present).
-impl @hostapi.Host for FakeHost with groups_here(_) {
-  true
+/// It keeps groups of instances, as every platform's host does: drawn out as it is handed them (present); none where
+/// the test says so (Tester::set_groups), as the web's host.
+impl @hostapi.Host for FakeHost with groups_here(self) {
+  self.groups
 }
 
 ///|
