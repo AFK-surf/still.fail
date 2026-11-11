@@ -12,8 +12,8 @@ test "history reminder keeps its label on one line beside a long note and opens 
       let (w, platform) = case
       steps_reset()
       @sf.set_words(@sfbase.fill)
-      @sf.set_language(Some(lang))
       let src = @sffixture.fixture("history")
+      // (the language as the device says it: what a test sets before its Tester is put back as the Tester starts)
       let t = @ui.Tester::new(
         fn(c) {
           @sf.begin(c) |> ignore
@@ -27,6 +27,7 @@ test "history reminder keeps its label on one line beside a long note and opens 
         w~,
         h=240.0,
         platform~,
+        env=[("MBUI_LOCALE", lang)],
       )
       t.draw()
       // (its words read once its run has begun)
@@ -48,5 +49,4 @@ test "history reminder keeps its label on one line beside a long note and opens 
     }
   }
   steps_reset()
-  @sf.set_language(None)
 }
