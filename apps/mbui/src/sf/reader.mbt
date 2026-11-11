@@ -214,7 +214,7 @@ pub fn reader_let_go(key : String) -> Unit {
   match readings.get(key) {
     Some(r) => {
       match r.book.get() {
-        Some(book) => reader_keep(r, book, true)
+        Some(book) => reader_keep(r, book)
         None => ()
       }
       // (its layout's panel let go with it)
@@ -372,10 +372,10 @@ pub fn reader_open_at(c : @ui.Ctx, r : Reading, book : Book) -> Bool {
 
 ///|
 /// Where it was left, kept with its file (the offset of the text, of its length): as the reader holds still, and as it
-/// is left (`force`).
-fn reader_keep(r : Reading, book : Book, force : Bool) -> Unit {
+/// is left; told only where it is not where it was last kept (left where it last held still, nothing is told again).
+fn reader_keep(r : Reading, book : Book) -> Unit {
   let off = book.offset_of(r.chunk, r.within)
-  if !force && off == r.kept {
+  if off == r.kept {
     return
   }
   r.kept = off
@@ -481,7 +481,7 @@ pub fn reader_column(
   // (each move a wait of its own; nothing shown waits for it)
   if @kit.after(c, "reader-keep/" + r.key + "/\{r.moves}", r.moves > r.kept_moves, reader_still_ms, later=true) {
     // (once the frame's builds are over, where the last put it)
-    c.after_build("reader-keep", fn() { reader_keep(r, book, false) })
+    c.after_build("reader-keep", fn() { reader_keep(r, book) })
   }
   // a jump (r.jump: to block k, `off` into it, `lead` a little below the top), held until it is there: each build
   // scrolls to where it is by what is laid out now (the block's row at the top; once its height is laid out, the
