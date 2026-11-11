@@ -394,9 +394,7 @@ fn init {
         let on_field = !paths.is_empty() && c.editors.contains(hit_in(c.hit_ids, c.hit_rects, x, y))
         match (if on_field { None } else { files_take_at(x, y) }) {
           Some(take) => {
-            let p : Pick = { hosts: [@hostapi.dropped_pick(id)], got: [None] }
-            p.wait("files dropped")
-            take(p)
+            take(Pick::waits([@hostapi.dropped_pick(id)], "files dropped"))
           }
           // (taken by none as files: left to what takes them by their paths, else let go now)
           None =>

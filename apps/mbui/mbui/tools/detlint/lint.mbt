@@ -309,7 +309,8 @@ fn lint_mbt(
   }
   // an empty `on_done` (or `done` of a source's call: `(src.call)(name, params, fn(_) {  })`) outside the tests: to the
   // core it is a reader, its answer awaited and the frame after it built whole for nothing; a call nobody reads the
-  // answer of gives none (@core.call) or the app's answer_unread (still.fail's sfbase/source.mbt)
+  // answer of gives none (@core.call) or the app's answer_unread (still.fail's sfbase/source.mbt); so a native call's
+  // empty `on_got` (@ui.native_call: none given, nobody reads its answer)
   for k, tk in toks {
     if tk.text == "fn" &&
       k + 5 < toks.length() &&
@@ -321,7 +322,7 @@ fn lint_mbt(
       k > 1 &&
       !f.in_test(k) &&
       (
-        (toks[k - 1].text == "=" && toks[k - 2].text == "on_done") ||
+        (toks[k - 1].text == "=" && (toks[k - 2].text == "on_done" || toks[k - 2].text == "on_got")) ||
         (toks[k - 1].text == "," &&
         k + 6 < toks.length() &&
         toks[k + 6].text == ")" &&

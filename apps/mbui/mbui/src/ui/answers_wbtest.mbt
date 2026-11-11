@@ -107,12 +107,48 @@ test "an update downloading is waited on while the host says it works at it, eac
 }
 
 ///|
-test "an answer told (a pick's) asks for a frame" {
+test "a pick's answer someone reads (an old view's build): told at the moment its event comes, a frame asked, read in that frame" {
+  let ask : Ref[Pick?] = Ref(None)
+  let seen : Array[Int] = []
+  let t = Tester::new(fn(c) {
+    match ask.val {
+      Some(p) =>
+        match p.files() {
+          Some(fs) => {
+            seen.push(fs.length())
+            c.text("picked \{fs.length()}", wrap=false) |> ignore
+          }
+          None => c.text("picking", wrap=false) |> ignore
+        }
+      None => c.text("nothing", wrap=false) |> ignore
+    }
+  })
+  t.picks([("a.txt", b"hi"), ("b.txt", b"yo")])
+  t.draw()
+  ask.val = pick(Files)
+  // (its answer not there till its event: the fake's pickers answer by the frame otherwise)
+  t.fake.pick_asks[0] = { kind: Files, frame: 2147483647, taken: false }
+  t.draw()
+  assert_true(t.find("picking") is Some(_))
+  assert_false(t.fake.wants || g().wants_frame)
+  // the system answers: its event, between frames
+  t.fake.pick_asks[0] = { kind: Files, frame: -1, taken: false }
+  on_outside(outside_pick, 1, 1)
+  // told: the build that read it is to be built again, a frame asked for it
+  assert_true(t.fake.wants)
+  assert_eq(seen, [])
+  t.draw()
+  assert_eq(seen, [2])
+  assert_true(t.find("picked 2") is Some(_))
+  t.assert_idle()
+}
+
+///|
+test "a pick's answer nobody reads asks for no frame: taken, nothing built again for it" {
   let t = Tester::new(fn(c) { c.text("x", wrap=false) |> ignore })
   t.draw()
   t.assert_idle()
   on_outside(outside_pick, 9, 1)
-  assert_true(t.fake.wants || g().wants_frame)
-  t.draw()
+  assert_false(t.fake.wants || g().wants_frame)
   t.assert_idle()
 }

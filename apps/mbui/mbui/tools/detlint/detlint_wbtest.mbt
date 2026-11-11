@@ -2414,11 +2414,11 @@ test "empty-on-done" {
     [
       (
         "src/app/view.mbt",
-        "fn v(src : Source) -> Unit {\n  @core.call(\"client.focus\", on_done=fn(_) {  })\n  (src.call)(\"prefs.set\", p, fn(_) {  })\n  (core.call_bytes)(\"fonts.keep\", p, b, fn(_) {  })\n}\n",
+        "fn v(src : Source) -> Unit {\n  @core.call(\"client.focus\", on_done=fn(_) {  })\n  (src.call)(\"prefs.set\", p, fn(_) {  })\n  (core.call_bytes)(\"fonts.keep\", p, b, fn(_) {  })\n  @ui.native_call(\"adb.open\", p, on_got=fn(_) {  })\n}\n",
       ),
     ],
     "empty-on-done",
-    3,
+    4,
   )
   |> ignore
   found(

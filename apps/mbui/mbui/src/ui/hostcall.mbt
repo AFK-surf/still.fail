@@ -866,8 +866,9 @@ fn h_wheel_kept(kept : Bool) -> Unit {
 // the host tells (a pick, the gallery read, marks drawn, a frame grabbed, an update's word) asks for a frame: what it
 // brings is read as the next frame builds, not looked for frame after frame. Where a ticket of these ends: on a host,
 // at its event (or as the app takes the answer, if it read it first); under a Tester, whose fake host tells no event,
-// as the app takes the answer (Pick::files, MarkedImage::made, NativeView::grabbed): both are when the host's work for
-// it is over.
+// as the app takes the answer (MarkedImage::made, NativeView::grabbed): both are when the host's work for it is over.
+// A pick's and a native call's answers are taken as their event comes (outside_take: Pick::take, NativeCall::take),
+// into a signal what waits on them reads; a host answering them by the frame, as each frame begins.
 
 ///|
 /// An image or a PDF's page decoded (its image's id).
@@ -1032,8 +1033,67 @@ fn answers_by_the_frame() -> Unit {
     kinds[(k >> 32).to_int()] = true
   }
   for kind, _ in kinds {
-    if kind < answers_told.length() && kind != outside_update && @hostapi.answers_by_frame(kind) {
+    if kind < answers_told.length() &&
+      kind != outside_update &&
+      kind != outside_pick &&
+      kind != outside_native &&
+      @hostapi.answers_by_frame(kind) {
       answer_told(kind)
+    }
+  }
+}
+
+///|
+/// Who takes the host's answer of a kind that is taken as it comes (outside_pick, outside_native), by its key
+/// (outside_key): told by the host's event, it takes the answer from the host into what reads it, and says whether it
+/// was there to take.
+// kept across runs: emptied by each Tester (reset_globals)
+let outside_takers : Map[Int64, () -> Bool] = Map::new()
+
+///|
+/// `take` takes the host's answer of `kind` for `id` as its event comes (outside_take); now, where the event came
+/// before it was asked to (a host's that answered at once).
+fn outside_takes(kind : Int, id : Int, take : () -> Bool) -> Unit {
+  let k = outside_key(kind, id)
+  if answers_waiting.contains(k) {
+    answers_waiting.remove(k)
+    if take() {
+      return
+    }
+  }
+  outside_takers[k] = take
+}
+
+///|
+/// The host's event: its answer of `kind` for `id` came, taken now by who waits on it (outside_takes), into what reads
+/// it; kept till one does where none does yet.
+fn outside_take(kind : Int, id : Int) -> Unit {
+  let k = outside_key(kind, id)
+  match outside_takers.get(k) {
+    Some(take) => if take() { outside_takers.remove(k) }
+    None => answers_waiting[k] = true
+  }
+}
+
+///|
+/// A frame begins: the answers of a kind taken as it comes that a host answering it by the frame
+/// (@hostapi.answers_by_frame: a Tester's, what it answers by itself) or telling no events has by now, taken as its
+/// event would have them. Nothing reads them for it: what reads one is told as it is taken, and only then.
+fn takers_by_the_frame() -> Unit {
+  if outside_takers.is_empty() {
+    return
+  }
+  let ks = []
+  for k, _ in outside_takers {
+    ks.push(k)
+  }
+  for k in ks {
+    let kind = (k >> 32).to_int()
+    if @hostapi.answers_by_frame(kind) || !outside_told.val {
+      match outside_takers.get(k) {
+        Some(take) => if take() { outside_takers.remove(k) }
+        None => ()
+      }
     }
   }
 }
@@ -1069,6 +1129,12 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
   // where something read it)
   if kind == outside_perf {
     perf_told()
+    return
+  }
+  // (what was picked, a native call's answer: taken now into what reads it, Pick::files and NativeCall::got, each a
+  // signal; nothing else of the frame built again for it, no frame asked but where something reads it)
+  if kind == outside_pick || kind == outside_native {
+    outside_take(kind, id)
     return
   }
   // (a ready view's player asking more of the app: nothing waited on ends, nothing built again for it)
@@ -1118,12 +1184,7 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
   }
   // an answer brought (what was picked, read, drawn, grabbed: told, followed by what waits on it; a view the host is
   // done opening): read as the next frame builds
-  let answer = kind == outside_pick ||
-    kind == outside_gallery ||
-    kind == outside_marks ||
-    kind == outside_grab ||
-    kind == outside_clip ||
-    kind == outside_native
+  let answer = kind == outside_gallery || kind == outside_marks || kind == outside_grab || kind == outside_clip
   if answer {
     answers_waiting[outside_key(kind, id)] = true
     answer_told(kind)

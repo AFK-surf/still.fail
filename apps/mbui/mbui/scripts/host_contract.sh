@@ -35,6 +35,8 @@
 #        (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt)
 #   scripts/host_contract.sh linux posted       what the host posts from outside the frames told between frames, not
 #        taken as a frame begins (kitdemo's MBUI_POSTCHECK, src/kitdemo/gallery/postcheck.mbt)
+#   scripts/host_contract.sh linux picked       what the system's picker gave told between frames, not taken as a frame
+#        begins (kitdemo's MBUI_PICKCHECK with MBUI_PICK_FILES, src/kitdemo/gallery/pickcheck.mbt)
 #   scripts/host_contract.sh linux notices      (a session bus) a notification the app shows kept, and clicked by the
 #        run's script (MBUI_DRIVE `notice`, as the desktop's click): what it opens given to the app (kitdemo's
 #        MBUI_NOTICECHECK, src/kitdemo/gallery/noticecheck.mbt)
@@ -899,6 +901,20 @@ INSTALL
       echo "posted contract (linux): what was posted not told between frames"; tail -20 $O/posted.log; exit 1
     fi
     echo "posted contract (linux): told between frames" ;;
+  picked)
+    # (Linux) what the system's picker gave (MBUI_PICK_FILES: a file of the run's, no dialog) told between frames, not
+    # taken as a frame begins (kitdemo's MBUI_PICKCHECK, src/kitdemo/gallery/pickcheck.mbt): the app ends 0 only where
+    # what reads it was told between frames.
+    [ "$H" = linux ] || { echo "picked contract: Linux only"; exit 1; }
+    mkdir -p "$O"
+    printf 'picked\n' > "$O/picked.txt"
+    r=0
+    run "MBUI_PICKCHECK=1 MBUI_PICK_FILES=$PWD/$O/picked.txt" $O/picked.log || r=$?
+    grep -a "PICKCHECK" $O/picked.log || true
+    if [ $r != 0 ] || ! grep -aq "PICKCHECK taken between frames: 1 files" $O/picked.log; then
+      echo "picked contract (linux): what was picked not told between frames"; tail -20 $O/picked.log; exit 1
+    fi
+    echo "picked contract (linux): told between frames" ;;
   notices)
     # (Linux) the app as its desktop entry runs it (MBUI_APP_ID: its notifications the desktop's, linux_life.h), a
     # notification shown, then clicked by the run's script as the desktop's click would be: the app says what it opened
@@ -987,5 +1003,5 @@ INSTALL
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge, secret, a11y, fontscale; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge, secret, a11y, fontscale, posted, picked; ios: free, done)" >&2; exit 1 ;;
 esac

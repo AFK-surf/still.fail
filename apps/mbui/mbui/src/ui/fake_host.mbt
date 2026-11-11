@@ -95,10 +95,11 @@ impl @hostapi.Host for FakeHost with pk_start(self, kind) {
 }
 
 ///|
-/// How ask `id` goes: 0 asking (until the frame after it was asked), 1 answered, -1 let go of or none.
+/// How ask `id` goes: 0 asking (until the frame after it was asked: as that frame begins, before it is counted, its
+/// answer taken then, hostcall.mbt's takers_by_the_frame), 1 answered, -1 let go of or none.
 impl @hostapi.Host for FakeHost with pk_state(self, id) {
   match self.pick_asks.get(id - 1) {
-    Some(a) if !a.taken => if g().frame_no <= a.frame { 0 } else { 1 }
+    Some(a) if !a.taken => if g().frame_no < a.frame { 0 } else { 1 }
     _ => -1
   }
 }
@@ -2109,11 +2110,12 @@ impl @hostapi.Host for FakeHost with ncall_call(self, name, params) {
 }
 
 ///|
-/// Call `id`'s answer, from the frame after it was given.
+/// Call `id`'s answer, from the frame after it was given (as that frame begins, before it is counted: its answer taken
+/// then, hostcall.mbt's takers_by_the_frame).
 fn FakeHost::native_given(self : FakeHost, id : Int) -> Result[Json, String]? {
   guard self.dev.natives.get(id - 1) is Some(a) else { return None }
   match a.answer {
-    Some((r, at)) if g().frame_no > at => Some(r)
+    Some((r, at)) if g().frame_no >= at => Some(r)
     _ => None
   }
 }

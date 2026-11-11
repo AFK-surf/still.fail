@@ -968,6 +968,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   messages_arrive()
   // (a Tester's fake host's answers come by the frame, told as it begins: what waits on them reads them)
   answers_by_the_frame()
+  // (and what is taken as it comes, a pick's, a native call's: taken now into what reads it)
+  takers_by_the_frame()
   // (what the host says of the streams and the native views, read of it each frame: what changed come from outside)
   streams_arrive()
   views_arrive()

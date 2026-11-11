@@ -186,7 +186,9 @@ yet and you can add one, add it.
   frames (`tester_host_wbtest`'s "told at its moment"; the coordinator of the migration, 2026-11-11: a replay had every
   message wait for a frame a device's would not, and counted that against the app). What each host's
   check holds: the Tester's every replay; Linux's `host_contract.sh linux posted` (told between frames); the web's
-  `test/web/posted.test.mjs` (told between frames, and before an input that came after it). What the window's tree
+  `test/web/posted.test.mjs` (told between frames, and before an input that came after it). So is what the system's
+  picker gave (`MB_OUTSIDE_PICK`, taken then into what reads it: hostcall.mbt's `outside_take`; Windows' and Linux's
+  told it as a frame began till 2026-11-11): Linux's `host_contract.sh linux picked`. What the window's tree
   was told in a frame is drawn by that frame whenever in it it was told (ui's `view_owes`: its changes waiting count,
   not only whether it is due).
 - What runs in the app never asks whether a Tester runs it: no `fake.val`, no switch only a Tester sets. What differs

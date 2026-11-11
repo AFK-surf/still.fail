@@ -8,8 +8,10 @@
 /// together: pick_photos) one for each, answered as one once all of them are, in their order.
 pub struct Pick {
   priv hosts : Array[@hostapi.Pick]
-  /// what each of `hosts` answered (taken from the host as it does)
+  /// what each of `hosts` answered (taken from the host as its event says it did: Pick::take)
   priv got : Array[Array[@hostapi.Picked]?]
+  /// all of it, once all of `hosts` answered: what reads it is told then (Pick::files)
+  priv said : @signals.Signal[Array[@hostapi.Picked]?]
 }
 
 ///|
@@ -17,22 +19,21 @@ pub struct Pick {
 /// None when this host cannot.
 pub fn pick(kind : @hostapi.PickKind, hold? : Bool = false) -> Pick? {
   match @hostapi.pick(kind, hold~) {
-    Some(h) => {
-      let p : Pick = { hosts: [h], got: [None] }
-      p.wait("a pick")
-      Some(p)
-    }
+    Some(h) => Some(Pick::waits([h], "a pick"))
     None => None
   }
 }
 
 ///|
-/// Waited on until the system answers and the answer is taken (hostcall.mbt's outside): each ask of the host's by its
-/// id as the host's event names it (outside_pick).
-fn Pick::wait(self : Pick, what : String) -> Unit {
-  for h in self.hosts {
+/// An ask of `hosts`, waited on until the system answers each (hostcall.mbt's outside, by its id as the host's event
+/// names it: outside_pick), each taken as its event comes (outside_takes).
+fn Pick::waits(hosts : Array[@hostapi.Pick], what : String) -> Pick {
+  let p : Pick = { hosts, got: hosts.map(fn(_) { None }), said: @signals.signal(None) }
+  for i, h in hosts {
     outside_start(outside_pick, h.id(), what + " \{h.id()}")
+    outside_takes(outside_pick, h.id(), fn() { p.take(i) })
   }
+  p
 }
 
 ///|
@@ -49,39 +50,35 @@ pub fn pick_photos(srcs : Array[String]) -> Pick? {
   if hosts.is_empty() {
     None
   } else {
-    let p : Pick = { hosts, got: hosts.map(fn(_) { None }) }
-    p.wait("a gallery photo read")
-    Some(p)
+    Some(Pick::waits(hosts, "a gallery photo read"))
   }
 }
 
 ///|
-/// What was picked, once the system has answered (empty: called off); None while it asks. Taken once.
-pub fn Pick::files(self : Pick) -> Array[@hostapi.Picked]? {
-  for i, h in self.hosts {
-    if self.got[i] is None && answer_here(outside_pick, h.id()) {
-      match h.files() {
-        Some(files) => {
-          self.got[i] = Some(files)
-          answer_taken(outside_pick, h.id())
-          outside_end(outside_pick, h.id())
-        }
-        None => ()
-      }
-    }
-  }
+/// The host's answer for `hosts[i]` taken, as its event says it came (or, a host answering by the frame, as a frame
+/// begins): what it gave kept, the ask's wait over; all of them answered, what was picked said (Pick::files). Whether
+/// it was there to take.
+fn Pick::take(self : Pick, i : Int) -> Bool {
+  let h = self.hosts[i]
+  guard self.got[i] is None && h.files() is Some(files) else { return false }
+  self.got[i] = Some(files)
+  outside_end(outside_pick, h.id(), wake=false)
   let out = []
   for got in self.got {
     match got {
       Some(files) => out.push_iter(files.iter())
-      None => return None
+      None => return true
     }
   }
-  // (taken: asked again, nothing)
-  for i in 0..<self.got.length() {
-    self.got[i] = Some([])
-  }
-  Some(out)
+  self.said.set(Some(out))
+  true
+}
+
+///|
+/// What was picked, once the system has answered (empty: called off); None while it asks. A signal's read: what reads
+/// it (a binding, a `reacts`, an old view's build) is told as the answer comes, and reads the same however often.
+pub fn Pick::files(self : Pick) -> Array[@hostapi.Picked]? {
+  self.said.get()
 }
 
 ///|
