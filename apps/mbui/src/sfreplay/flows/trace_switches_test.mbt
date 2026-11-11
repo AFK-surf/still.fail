@@ -31,6 +31,9 @@
 /// ask for its outline) off in all 81 as it came.
 /// MBUI_KEEP_CHAT (2026-11-11: a chat kept as it is let go of, the last few, asked again with its version) off in all
 /// 81 as it came: none had been recorded with MBUI_HAVE_SAME on either.
+/// MBUI_CHAT_ROW (2026-11-11: a row of the chats' lists what it draws, what a press, a hold, a swipe or a pointer reads
+/// of it its chat's whole row, `chatRow`) off in all 81 as it came: as MBUI_CONNECT_ROWS, only the replay reads it,
+/// which reads the app's `chatRow` out of the run's chats' list, whose rows were whole.
 let switches_known : Map[String, Int] = {
   "MBUI_PLACES_BAR": 79,
   "MBUI_DEVICES": 80,
@@ -39,6 +42,7 @@ let switches_known : Map[String, Int] = {
   "MBUI_OUTLINE": 80,
   "MBUI_CONNECT_ROWS": 80,
   "MBUI_KEEP_CHAT": 80,
+  "MBUI_CHAT_ROW": 81,
 }
 
 ///|

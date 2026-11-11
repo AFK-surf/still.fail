@@ -144,6 +144,49 @@ fn connects_whole() -> Bool {
 }
 
 ///|
+/// Whether this Tester's run read a chat's whole row off the chats' list (its trace's head without MBUI_CHAT_ROW): its
+/// list's rows were whole then, so the app's `chatRow {station, session}` is that chat's row of the run's `chats` list
+/// of its workspace (all of its chats, as the app asks it now: @sfbase.chats_asked), null where it has none such
+/// (chat_row_made). That list is the app's own ask, followed as it is, never left for it.
+fn chat_rows_listed() -> Bool {
+  !@sfcore.trace_switch("MBUI_CHAT_ROW")
+}
+
+///|
+/// The run's chats' list a chat's whole row is read out of in such a run.
+fn chat_row_list(params : Map[String, Json]) -> Map[String, Json] {
+  @sfbase.chats_asked(@settings.workspace_of(@settings.text(Some(Json::object(params)), "station")), "all")
+}
+
+///|
+/// Chat `session` (its session, or its id) of station `station` in a `chats` value: its row there.
+fn row_in_list(chats : Json?, station : String, session : String) -> Json? {
+  for d in @settings.items(chats, "days") {
+    for i in @settings.items(Some(d), "items") {
+      let r = Some(i)
+      if @settings.text(r, "station") == station && (@settings.text(r, "session") == session || @settings.text(r, "id") == session) {
+        return Some(i)
+      }
+    }
+  }
+  None
+}
+
+///|
+/// The app's `chatRow` with `params` read out of the run's chats' list (chat_rows_listed).
+fn chat_row_made(params : Map[String, Json]) -> @sfapp.Topic {
+  let p = Some(Json::object(params))
+  let station = @settings.text(p, "station")
+  let session = @settings.text(p, "session")
+  made_once("chatRow", params, @core.follow_topic("chats", params=chat_row_list(params)), None, fn(list, _) {
+    match list {
+      Some(_) => Some(row_in_list(list, station, session).unwrap_or(Json::null()))
+      None => None
+    }
+  })
+}
+
+///|
 /// The app's topics read out of a scope's connects whole in such a run: one connect, its choice's sessions.
 fn of_connects(name : String) -> Bool {
   name == "connect" || name == "connectCandidates"
@@ -343,6 +386,9 @@ fn init {
 pub fn source() -> @sfapp.Source {
   {
     topic_read: fn(name, params) {
+      if chat_rows_listed() && name == "chatRow" {
+        return chat_row_made(params)
+      }
       if stations_whole() && of_stations(name) {
         return stations_made(name, params, follow_stations(name, params), None)
       }
@@ -365,7 +411,9 @@ pub fn source() -> @sfapp.Source {
     topic_alive: fn() { true },
     topic_lease_own: None,
     waits: fn(name, params) {
-      if stations_whole() && of_stations(name) {
+      if chat_rows_listed() && name == "chatRow" {
+        @core.follow_topic("chats", params=chat_row_list(params)).waiting
+      } else if stations_whole() && of_stations(name) {
         follow_stations(name, params).waiting
       } else if connects_whole() && of_connects(name) {
         follow_connects(name, params).waiting
@@ -374,7 +422,9 @@ pub fn source() -> @sfapp.Source {
       }
     },
     generation: fn(name, params) {
-      if stations_whole() && of_stations(name) {
+      if chat_rows_listed() && name == "chatRow" {
+        @core.client.topic_generation("chats", params=chat_row_list(params))
+      } else if stations_whole() && of_stations(name) {
         @core.client.topic_generation("stations", params=stations_params(params))
       } else if connects_whole() && of_connects(name) {
         @core.client.topic_generation("connects", params=connects_params(params))
@@ -482,6 +532,10 @@ pub fn source() -> @sfapp.Source {
     now: fn() { @ui.wall_ms() },
     leave: fn(name, params, __reason) {
       if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      // (read out of the app's own list: nothing of the run's to leave)
+      if chat_rows_listed() && name == "chatRow" {
+        return
+      }
       if stations_whole() && (of_stations(name) || with_stations(name)) {
         leave_stations(name, params)
         if of_stations(name) {
@@ -495,6 +549,9 @@ pub fn source() -> @sfapp.Source {
       }
       @core.leave_topic(name, params=replay_topic_params(name, params)) },
     release: fn(name, params) {
+      if chat_rows_listed() && name == "chatRow" {
+        return
+      }
       // (a graph's readers of the scope's stations counted by the client: it lets them go once none watches them)
       if stations_whole() && (of_stations(name) || with_stations(name)) {
         @core.release_topic("stations", params=stations_params(params))
@@ -509,7 +566,9 @@ pub fn source() -> @sfapp.Source {
       @core.release_topic(name, params=replay_topic_params(name, params))
     },
     refresh: fn(name, params) {
-      if stations_whole() && of_stations(name) {
+      if chat_rows_listed() && name == "chatRow" {
+        @core.refresh_topic("chats", params=chat_row_list(params))
+      } else if stations_whole() && of_stations(name) {
         @core.refresh_topic("stations", params=stations_params(params))
       } else if connects_whole() && of_connects(name) {
         @core.refresh_topic("connects", params=connects_params(params))

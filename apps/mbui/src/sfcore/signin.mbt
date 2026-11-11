@@ -488,6 +488,12 @@ pub let trace_switches : Array[String] = [
   // (a chat, however it is asked, kept as it is let go of as the lists are, the last few of them, and asked again with
   // its version: the core answering `same`, or what changed from it (`{id, delta, kept}`); sfbase's `topic_kept`)
   "MBUI_KEEP_CHAT",
+  // (a row of the chats' lists is what it draws, the core's ListedChat: what only a press, a hold, a swipe or a pointer
+  // reads of it (its menu's, its swipe's question, its time in words) is its chat's whole row, `chatRow`, asked as that
+  // begins; the chat's page's "…" asks its own. Like MBUI_CONNECT_ROWS the app does not branch on it, its old way (those
+  // read off the list's rows) gone from it, so only the replay reads it: a trace without it has the app's `chatRow`
+  // read out of its run's `chats` list, whose rows were whole (src/sfreplay/source.mbt))
+  "MBUI_CHAT_ROW",
 ]
 
 ///|
