@@ -42,7 +42,11 @@ yet and you can add one, add it.
   down one column at one moment, with what is still on its way there then, goes one way (flex's `ComeGroup`), each its
   share, setting out and coming to rest together; turned away from where it goes as a whole, all of it slows as one
   first; one alone goes its own way. Never each its own beside the others (the coordinator of the migration,
-  2026-11-11, by the user's 2026-10-30, 2026-11-03 and 2026-11-09).
+  2026-11-11, by the user's 2026-10-30, 2026-11-03 and 2026-11-09). A way turned back (one alone, or all of a group)
+  slows at one rate to rest and from there sets back out still and gaining as it slowed, its place, speed and gain going
+  on where the two meet (flex's `come_turned`, `come_back_path`); how long it slows goes from a Move's from rest's to as
+  long as its speed takes to be told to stop by its speed alone (`come_turn_w`), no speed a threshold (the coordinator
+  of the migration, 2026-11-11).
 - State that what is made reads is a signal: a mutable value read by a binding that is not one is never seen to
   change (detlint `built-by-hand`).
 - Layout goes one way (the user, 2026-11-05): what is laid out is never told back as a change to make things by. What

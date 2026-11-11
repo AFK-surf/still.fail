@@ -6,7 +6,7 @@ test "a sheet's way from rest worked out as before and by its top: the same curv
     for up in [true, false] {
       let r = SheetRise::new()
       r.risen = !up
-      r.way = Some({ at: 0.0, up, u0: if up { 0.0 } else { d }, v0: 0.0, plan: d })
+      r.way = Some({ at: 0.0, up, u0: if up { 0.0 } else { d }, v0: 0.0, plan: d, kept: @ui.come_kept() })
       let mut t = -10.0
       while t <= @ui.move_most_ms + 20.0 {
         let before = sheet_below_as_before(up, d, t)

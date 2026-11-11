@@ -1158,6 +1158,8 @@ priv struct SheetWay {
   u0 : Double
   v0 : Double
   plan : Double
+  /// what its way keeps of its turn, worked out once (come_way_by's)
+  kept : @ui.ComeKept
 }
 
 ///|
@@ -1174,10 +1176,10 @@ fn SheetRise::top_at(self : SheetRise, h : Double, hv : Double, t : Double) -> (
     Some(w) => {
       let goal = if w.up { h } else { 0.0 }
       let plan = if w.plan.is_nan() { h } else { w.plan }
-      let (u, uv) = @ui.come_way_by(w.u0, w.v0, goal, if w.up { plan } else { 0.0 }, t - w.at)
+      let (u, uv) = @ui.come_way_by(w.u0, w.v0, goal, if w.up { plan } else { 0.0 }, t - w.at, kept=w.kept)
       // (rising: its end as tall as it comes to, as much of how fast that goes as its way has got there)
       if w.up && hv != 0.0 {
-        let (u1, _) = @ui.come_way_by(w.u0, w.v0, goal + 1.0, plan, t - w.at)
+        let (u1, _) = @ui.come_way_by(w.u0, w.v0, goal + 1.0, plan, t - w.at, kept=w.kept)
         (u, uv + (u1 - u) * hv)
       } else {
         (u, uv)
@@ -1217,7 +1219,7 @@ fn SheetRise::go(
     // (`late`: what it holds laid out only once it is drawn (an old body), so not as tall as it comes to yet: rising
     // from rest at its foot, as long as how tall it is as each frame lays it out, as before; NaN)
     let plan = if late && up && u - off.0 == 0.0 && v0 == 0.0 { @double.not_a_number } else { h }
-    self.way = Some({ at, up, u0: u - off.0, v0, plan })
+    self.way = Some({ at, up, u0: u - off.0, v0, plan, kept: @ui.come_kept() })
     self.said.set(self.said.untracked() + 1)
   }
   match sheet.val {
@@ -1276,7 +1278,7 @@ fn SheetRise::ends(self : SheetRise, h? : Double = 0.0) -> Double {
     Some(w) => {
       // (one as long as how tall it is: `h` tall)
       let plan = if w.plan.is_nan() { dmax(h, 0.0) } else { w.plan }
-      w.at + @ui.come_way_ms(w.u0, w.v0, if w.up { plan } else { 0.0 })
+      w.at + @ui.come_way_ms(w.u0, w.v0, if w.up { plan } else { 0.0 }, kept=w.kept)
     }
   }
 }
