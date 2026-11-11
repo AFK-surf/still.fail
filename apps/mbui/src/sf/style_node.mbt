@@ -6,8 +6,8 @@
 /// column, its size (`in_row`: what holds it lays what it holds in a row, so `w=Full` takes what is left along it, else
 /// across it; `h=Full` the other way; `w=Cut` cut short where it has not the room), its least and most, its padding and
 /// margin, the room between what it holds and how that lines up across it and lies along it (spread between its ends
-/// too), its corner, its ground and whether it cuts what it holds. What no node is laid out by is a fault (style_of). What it
-/// has never said is left as the node has it; what it said once and says no more is put back to none (no ground, a
+/// too), its corner, its ground, its border (an edge round its ground) and whether it cuts what it holds. What no node
+/// is laid out by is a fault (style_of). What it has never said is left as the node has it; what it said once and says no more is put back to none (no ground, a
 /// corner of 0, ...).
 #callsite(autofill(loc))
 pub fn style_node(v : @view.View, look : () -> @ui.Style, in_row? : Bool = false, loc~ : SourceLoc) -> Unit {
@@ -47,6 +47,8 @@ priv struct StyleSet {
   margin : (Double, Double, Double, Double)
   corner : Double
   ground : Int64
+  edge_w : Double
+  edge_c : Int64
   clip : Bool
 } derive(Eq)
 
@@ -63,6 +65,7 @@ priv struct StyleSays {
   margin : Bool
   corner : Bool
   ground : Bool
+  edge : Bool
   clip : Bool
 } derive(Eq)
 
@@ -81,6 +84,7 @@ fn StyleSays::joined(self : StyleSays, more : StyleSays) -> StyleSays {
     margin: self.margin || more.margin,
     corner: self.corner || more.corner,
     ground: self.ground || more.ground,
+    edge: self.edge || more.edge,
     clip: self.clip || more.clip,
   }
   if all == self {
@@ -120,6 +124,7 @@ fn style_of(q : @ui.Patch, in_row : Bool, loc : SourceLoc) -> StyleSet {
       q.mb is Some(_),
       corner: q.radius is Some(_),
       ground: q.bg is Some(_),
+      edge: q.border is Some(_) || q.border_color is Some(_),
       clip: q.clip is Some(_),
     },
     row: q.row.unwrap_or(false),
@@ -164,9 +169,20 @@ fn style_of(q : @ui.Patch, in_row : Bool, loc : SourceLoc) -> StyleSet {
       Some(c) => @ui.tree_theme().color(c)
       None => 0L
     },
+    // (an old view's border: drawn round its ground, inside it, in no colour where it says none)
+    edge_w: match q.border {
+      Some(b) => b.px()
+      None => 0.0
+    },
+    edge_c: match q.border_color {
+      Some(Data(k)) => k
+      Some(c) => @ui.tree_theme().color(c)
+      None => 0L
+    },
     clip: q.clip.unwrap_or(false),
   }
 }
+
 
 ///|
 /// Size `l` (its `w` or `h`, `name`) in points: none where it says none of its own (none said, as what it holds, grown
@@ -272,6 +288,9 @@ fn style_set(v : @view.View, was : StyleSet?, s : StyleSet, loc : SourceLoc) -> 
   }
   if style_first(new, before.ground, now.ground) || (before.ground && w.ground != s.ground) {
     v.ground(loc~, Is(s.ground)) |> ignore
+  }
+  if style_first(new, before.edge, now.edge) || (before.edge && (w.edge_w != s.edge_w || w.edge_c != s.edge_c)) {
+    v.edge(loc~, Is((s.edge_w, s.edge_c))) |> ignore
   }
   if style_first(new, before.clip, now.clip) || (before.clip && w.clip != s.clip) {
     v.clips(loc~, Is(s.clip)) |> ignore
