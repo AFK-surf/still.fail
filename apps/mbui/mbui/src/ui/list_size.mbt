@@ -1020,11 +1020,14 @@ pub fn[T] ListRows::leave(
       c.nodes[i].room_held = true
       c.draw_only(i)
       let causes = self.causes
+      // (its node where it is as it is painted: its row kept as its nodes is put back where its list lays it then)
+      let row = c.node_held(i)
       c.look_by(i, fn() {
         causes.read()
         // (as it was laid out last on the list's way; none once that is over, laid out again or not)
-        match (causes.by.get(key), causes.opened.get(key)) {
-          (Some((Goes(_), _)), Some((shown, h))) if c.moment() < causes.end - 0.001 => c.row_look(i, shown, h)
+        match (causes.by.get(key), causes.opened.get(key), row.at()) {
+          (Some((Goes(_), _)), Some((shown, h)), Some(i)) if c.moment() < causes.end - 0.001 =>
+            c.row_look(i, shown, h)
           _ => still_look
         }
       })
@@ -1056,13 +1059,15 @@ pub fn[T] ListRows::enter(
     return
   }
   let causes = self.causes
+  // (its node where it is as it is painted: its row kept as its nodes is put back where its list lays it then)
+  let row = c.node_held(i)
   c.look_by(i, fn() {
     causes.read()
     // (one going drawn as it goes, not as it came: ListRows::leave)
     // (as it was laid out last on the list's way; none once that is over, laid out again or not)
-    match (causes.by.get(key), causes.opened.get(key)) {
-      (Some((Goes(_), _)), _) => still_look
-      (_, Some((shown, h))) if c.moment() < causes.end - 0.001 => c.row_look(i, shown, h)
+    match (causes.by.get(key), causes.opened.get(key), row.at()) {
+      (Some((Goes(_), _)), _, _) => still_look
+      (_, Some((shown, h)), Some(i)) if c.moment() < causes.end - 0.001 => c.row_look(i, shown, h)
       _ => still_look
     }
   })
