@@ -43,13 +43,24 @@ function station(first: Entry) {
   return { chain, came, say, head, answer };
 }
 
+/// A station keeping no lock, as station/src/mesh/serve.ts answers then: one of the workspace's that its lock does not
+/// name (added and not protected yet: it goes by the cloud's word and lets the members in), or one reset.
+function unprotected(method: string, path: string): Effect.Effect<unknown, CoreError> {
+  if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after="))) return Effect.succeed({ head: null, entries: [], takes: ["person"], serves: ["person", "devices", "told"] });
+  if (method === "GET" && path === "/lock/devices") return Effect.succeed({ devices: [] });
+  if (method === "GET" && path === "/lock/person") return Effect.succeed({ chains: [] });
+  return Effect.fail(new CoreError("http_404", "no route", 404));
+}
+
 /// `silent`: the workspace has the silent station too. `seen`: the control plane saw it lately (a station of the
-/// person's that their lock waits for, views/lock.ts `personalStations` `answered`). `keyMade`: as below.
-async function setUp(silent = false, { seen = false, keyMade = true } = {}) {
+/// person's that their lock waits for, views/lock.ts `personalStations` `answered`). `keyMade`: as below. `unnamed`:
+/// the workspace has S too, awake, which its lock does not name and which keeps none (`unprotected`; what S was asked
+/// is in `atS`). `reset`: A, or S where the lock names it, reset on its own machine since: it keeps no lock.
+async function setUp(silent = false, { seen = false, keyMade = true, unnamed = false } = {}) {
   const g = grant();
   let me: Signer | null = null;
   const named = silent ? [{ key: A, name: "a" }, { key: S, name: "s" }] : [{ key: A, name: "a" }];
-  const r = await rig((signer) => ((me = signer), { ws: genesis("ws", signer, true, named, g.keys, ME, []) }), undefined, silent ? [A, S] : A, seen ? [S] : []);
+  const r = await rig((signer) => ((me = signer), { ws: genesis("ws", signer, true, named, g.keys, ME, []) }), undefined, silent || unnamed ? [A, S] : A, seen ? [S] : []);
   const inner = r.core.inner;
   const st = station(r.cloud.chains.get("ws")![0]!);
   // What the cloud is asked of the lock, and whether it answers.
@@ -63,11 +74,14 @@ async function setUp(silent = false, { seen = false, keyMade = true } = {}) {
   const asleep = { now: true, asked: 0 };
   // What A alone was asked (the silent one, awake, answers as the same station and is noted in `st.say.asked` too).
   const atA: string[] = [];
+  const atS: string[] = [];
+  const reset = { A: false, S: false };
   const original = inner.stations.requests.call.bind(inner.stations.requests);
   inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
     const [ws, id] = addr.toString().split("/");
-    if (ws === "ws" && id === A && path.startsWith("/lock")) return (atA.push(`${method} ${path}`), st.answer(method, path, body));
-    if (ws === "ws" && id === S) return (asleep.asked++, asleep.now ? Effect.never : st.answer(method, path, body));
+    if (ws === "ws" && id === A && path.startsWith("/lock")) return (atA.push(`${method} ${path}`), reset.A ? unprotected(method, path) : st.answer(method, path, body));
+    if (ws === "ws" && id === S && unnamed) return (atS.push(`${method} ${path}`), unprotected(method, path));
+    if (ws === "ws" && id === S) return (asleep.asked++, asleep.now ? Effect.never : reset.S ? unprotected(method, path) : st.answer(method, path, body));
     return (original as (...a: unknown[]) => unknown)(addr, method, path, body, ...rest);
   }) as typeof inner.stations.requests.call;
   const run = async <X>(e: Effect.Effect<X, any>) => {
@@ -85,7 +99,7 @@ async function setUp(silent = false, { seen = false, keyMade = true } = {}) {
   // `keyMade: false` for the test of that beginning: a key made before is one it could begin with only by asking, so
   // it would never begin quietly, personal-lock.ts `mayBeginQuietly`)
   if (keyMade) await run(inner.adb.personal().makeKey());
-  return { r, inner, st, atA, cloud, run, asleep, signer: () => me! };
+  return { r, inner, st, atA, atS, reset, cloud, run, asleep, signer: () => me! };
 }
 
 test("the lock is read of its stations, the devices that came with it; the cloud is not asked", async () => {
@@ -127,6 +141,97 @@ test("a station that tells its lock moved is read again", async () => {
   inner.stations.onEvent(`ws/${A}`, "lock", JSON.stringify({ workspace: "ws", head: st.head() }));
   for (let i = 0; i < 50 && held(inner, "ws")?.head?.seq !== 1; i++) await r.host.time.pass(10);
   assert.equal(held(inner, "ws")?.head?.seq, 1);
+});
+
+test("a station the lock does not name, keeping none, read alone does not make this device forget the lock", async () => {
+  // #5540: S, in the workspace and not protected yet, answers that it keeps no lock. Read alone (it told `lock`, its
+  // link opened again), its answer was every answer of the read, and the device let go of the lock A still keeps.
+  const { inner, st, run, signer, r, atS } = await setUp(false, { unnamed: true });
+  st.chain.push(signer().sign(next("ws", st.head(), 1001, "member", { sub: "s3", email: "c@x.com", role: "member" })));
+  await run(read(inner, "ws"));
+  await r.host.time.pass(100);
+  const h = held(inner, "ws")!;
+  assert.equal(h.head?.seq, 1);
+  // (S was asked too, and its answer, with A's beside it, left the lock as A keeps it)
+  assert.ok(atS.some((a) => a.startsWith("GET /lock?")), atS.join());
+  // S tells its lock moved: it alone is read.
+  atS.length = 0;
+  inner.stations.onEvent(`ws/${S}`, "lock", JSON.stringify({ workspace: "ws", head: null }));
+  for (let i = 0; i < 50 && !atS.includes("GET /lock/devices"); i++) await r.host.time.pass(10);
+  assert.ok(atS.includes("GET /lock/devices"), atS.join());
+  await r.host.time.pass(100);
+  assert.equal(held(inner, "ws")?.head?.hash, h.head!.hash);
+  assert.deepEqual(held(inner, "ws")?.entries, h.entries);
+  // S's link opens again (resumed): each part read again after an absence reads it alone, as station/sync.ts does.
+  atS.length = 0;
+  await run(Effect.all(inner.stations.also.filter((p) => p.resume).map((p) => Effect.ignore(p.read(`ws/${S}`))), { discard: true }));
+  assert.ok(atS.some((a) => a.startsWith("GET /lock?")), atS.join());
+  await r.host.time.pass(100);
+  assert.equal(held(inner, "ws")?.head?.hash, h.head!.hash);
+  assert.deepEqual(held(inner, "ws")?.entries, h.entries);
+});
+
+test("every station the lock names keeping none, this device lets the lock go", async () => {
+  const { inner, run, r, reset } = await setUp(false, { unnamed: true });
+  await run(read(inner, "ws"));
+  assert.notEqual(held(inner, "ws")?.head, null);
+  // A, the one station the lock names, reset on its own machine, tells it: read alone, its word is the lock's end.
+  reset.A = true;
+  inner.stations.onEvent(`ws/${A}`, "lock", JSON.stringify({ workspace: "ws", head: null }));
+  for (let i = 0; i < 50 && held(inner, "ws")?.head != null; i++) await r.host.time.pass(10);
+  assert.equal(held(inner, "ws")?.head, null);
+  assert.deepEqual(held(inner, "ws")?.entries, []);
+});
+
+test("one of the lock's two stations keeping none is not the lock's end: the other is asked, and it is once both keep none", async () => {
+  const { inner, run, r, reset, asleep } = await setUp(true);
+  // (S awake, and answered once: a station that did not answer the read before is not waited for in the next)
+  asleep.now = false;
+  await run(read(inner, "ws"));
+  await r.host.time.pass(100);
+  await run(read(inner, "ws"));
+  await r.host.time.pass(100);
+  const h = held(inner, "ws")!;
+  assert.notEqual(h.head, null);
+  // A reset on its own machine tells it. Read alone it keeps none, and it is one the lock names: S, the other, is
+  // asked too, and keeps the lock.
+  reset.A = true;
+  let asked = asleep.asked;
+  inner.stations.onEvent(`ws/${A}`, "lock", JSON.stringify({ workspace: "ws", head: null }));
+  for (let i = 0; i < 50 && asleep.asked === asked; i++) await r.host.time.pass(10);
+  assert.ok(asleep.asked > asked, "S was asked as A said it keeps none");
+  await r.host.time.pass(100);
+  assert.equal(held(inner, "ws")?.head?.hash, h.head!.hash);
+  assert.deepEqual(held(inner, "ws")?.entries, h.entries);
+  // S reset too, telling it alone: A is asked with it, and with both keeping none the lock is let go.
+  reset.S = true;
+  inner.stations.onEvent(`ws/${S}`, "lock", JSON.stringify({ workspace: "ws", head: null }));
+  for (let i = 0; i < 50 && held(inner, "ws")?.head != null; i++) await r.host.time.pass(10);
+  assert.equal(held(inner, "ws")?.head, null);
+  assert.deepEqual(held(inner, "ws")?.entries, []);
+});
+
+test("a device holding no lock where the cloud's view says there is one reads it of a station as its link opens again", async () => {
+  // #5540's devices, as they are once updated: the lock let go for an unnamed station's answer, the cloud's view of it
+  // unchanged since, so nothing else reads it again.
+  const { inner, st, run, r, atA } = await setUp(false, { unnamed: true });
+  await run(read(inner, "ws"));
+  await r.host.time.pass(100);
+  const h = held(inner, "ws")!;
+  assert.notEqual(h.head, null);
+  inner.data.put("lock", "ws", { head: null, entries: [] });
+  assert.equal(held(inner, "ws")?.head, null);
+  // S's link opens again: it keeps none, and none is held still.
+  await run(Effect.all(inner.stations.also.filter((p) => p.resume).map((p) => Effect.ignore(p.read(`ws/${S}`))), { discard: true }));
+  await r.host.time.pass(100);
+  assert.equal(held(inner, "ws")?.head, null);
+  // A's does: the lock it keeps is held again.
+  atA.length = 0;
+  await run(Effect.all(inner.stations.also.filter((p) => p.resume).map((p) => Effect.ignore(p.read(`ws/${A}`))), { discard: true }));
+  assert.ok(atA.some((a) => a.startsWith("GET /lock")), atA.join());
+  await r.host.time.pass(100);
+  assert.equal(held(inner, "ws")?.head?.hash, st.head().hash);
+  assert.deepEqual(held(inner, "ws")?.entries, h.entries);
 });
 
 test("a station refusing this device tells its lock's last entries: one taken out hears so, with no cloud", async () => {
