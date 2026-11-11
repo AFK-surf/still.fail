@@ -12,7 +12,11 @@
 // that way till it is measured: a block made and still in sight is never let go for one come in over it (worked out
 // from the top down by where the blocks were counted, one never measured come in at the top was all that showed till it
 // was measured, every block under it let go and made again, the anchor with them: what was read jumped as far as the
-// block was taller than counted, and a list opened at its foot made and let go its blocks several times over).
+// block was taller than counted, and a list opened at its foot made and let go its blocks several times over), nor for
+// one come at its foot: what showed as the column began to be laid out stays made while what shows is measured, and
+// what shows no more is let go once, as the last of that measuring finds what shows (a key appended at its foot, never
+// measured, was all that showed for a pass: every block in sight let go and made again, its words drawn anew, for one
+// row come).
 
 ///|
 /// A block of a list's column as its tops are worked out (View::scrolls_window's `laid`): its key, its top in the
@@ -426,6 +430,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // (told only to those that come or go, each found among the others by looking: what shows is a screen of them, and
   // those that stay were told as they came, or made so: `shown`'s cell made by `shown_now`)
   let show_only = fn(now : Array[K]) {
+    guard now != shown_now else { return }
     for k in shown_now {
       if !now.contains(k) && shown.get(k) is Some(c) {
         c.set(false)
@@ -725,11 +730,17 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let mut vh = 0.0
     let mut again = true
     let measured : Map[K, Bool] = Map([])
+    // (what showed as this layout began, kept made while it still measures: a pass that finds what shows otherwise for
+    // one never measured (the appended one at its foot, as tall as `est` till it is measured, all that shows by itself)
+    // lets none of it go, to make it again a pass later; what shows no more let go once, after the last pass)
+    let showed = shown_now.copy()
+    let mut found : Array[K] = []
     while again {
       again = false
       let all = laid.untracked()
       vh = shows().unwrap_or(0.0)
       if all.length() == 0 {
+        found = []
         show_only([])
         top = 0.0
         break
@@ -768,7 +779,19 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         first_past(all, top).min(all.length() - 1)
       }
       let now = window(all, top, vh, si, si, !foot && !centring)
-      show_only(now)
+      found = now
+      // (most often what showed is what shows: nothing to add, nothing told)
+      if now == showed {
+        show_only(now)
+      } else {
+        let kept = now.copy()
+        for k in showed {
+          if laid_at.contains(k) && !kept.contains(k) {
+            kept.push(k)
+          }
+        }
+        show_only(kept)
+      }
       self.tree.room_bindings_run()
       // (each that shows measured, once in this fill, its height counted where it came out otherwise)
       for b in blocks.filter(fn(b) { b.0.alive() }) {
@@ -791,6 +814,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         self.tree.room_bindings_run()
       }
     }
+    // (what the last pass found, alone: what showed before and shows no more let go now, in this layout)
+    show_only(found)
     let live = blocks.filter(fn(b) { b.0.alive() })
     blocks.clear()
     blocks.append(live)
