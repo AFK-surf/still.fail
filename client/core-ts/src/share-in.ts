@@ -166,7 +166,8 @@ export class ShareIn implements Owner {
     const k = keptRow(all, kept(this.#inner, scope, site));
     const found = query.trim() === "" ? all : open(arr(refs.search({ days: [{ items: all }] }, query, null, null, undefined).items));
     const rest = found.filter((r) => r !== k);
-    view.items = (k !== undefined && found.includes(k) ? [k, ...rest] : rest).slice(0, LISTED);
+    // (each whole, as the list's rows were before they were what a row draws: views.ts wholeFor)
+    view.items = (k !== undefined && found.includes(k) ? [k, ...rest] : rest).slice(0, LISTED).map((r) => this.#inner.views?.wholeFor(r) ?? r);
     if (k !== undefined) view.kept = { station: k.station, id: k.id, text: site !== null ? t("core-logic.shareIn.kept", { site }) : t("core-logic.shareIn.kept_text") };
     if (stations.length === 0 && all.length === 0) view.note = t("core-logic.shareIn.none");
     return { ok: view };

@@ -264,7 +264,7 @@ export function times(value: unknown, c: Clock): unknown {
 /// What `times` puts in a value, for the test that holds it to how it was written before (present.test.ts).
 export const timesParts = { windows, resetsText, presentReset };
 
-const NO_TICK = new Set(["live", "thread", "letters", "history", "host", "net", "way", "stationNet", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "slackTokens", "joinable", "memberships", "screenCard"]);
+const NO_TICK = new Set(["chats", "live", "thread", "letters", "history", "host", "net", "way", "stationNet", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "slackTokens", "joinable", "memberships", "screenCard"]);
 
 /// Whether a topic shows times in words, sent again each minute while shown.
 export function ticks(topic: Topic): boolean {
@@ -359,6 +359,12 @@ export function waiting(s: J): J {
 }
 
 /// A chat's watch, when one of its agents keeps watch.
+/// Whether one of a row's agents keeps watch (rowWatch not null), its words not made: what the list of those watching
+/// asks of a row it does not make whole.
+export function watches(agents: J[]): boolean {
+  return agents.some((a) => arr(get(get(a, "watch"), "names"))?.some((n) => typeof n === "string") === true);
+}
+
 export function rowWatch(agents: J[]): J {
   const names: string[] = [];
   for (const a of agents) {
@@ -632,6 +638,27 @@ export function person(p: J, me: J, members: J[]): J {
   // A Slack person's own picture, as their Slack shows it; else their workspace account's.
   const picture = strOf("picture") ?? (str(get(member, "picture")) || null);
   return { ...p, shown: { name, display: mine ? t("core-views.present.you") : name, picture, mine } };
+}
+
+/// The workspace's members a row's people and its last line name (rowPeople, lastBy read their names and pictures): what
+/// of the members a row is made of, the rest of them nothing of its.
+export function rowMembers(row: J, members: J[]): J[] {
+  const out: J[] = [];
+  const add = (key: string | undefined) => {
+    const m = key === undefined || key === "" ? undefined : memberOf(members, key);
+    if (m !== undefined && !out.includes(m)) out.push(m);
+  };
+  // (as person() keys them: the email, else the id)
+  const keyOf = (p: J) => {
+    const email = str(get(p, "email"));
+    return email !== undefined && email !== "" ? email : str(get(p, "id"));
+  };
+  if (isObject(get(row, "creator"))) add(keyOf(row.creator));
+  for (const p of arr(get(row, "people")) ?? []) add(keyOf(p));
+  const last = get(row, "last");
+  const kind = str(get(last, "authorKind")) ?? "person";
+  if (isObject(last) && kind !== "agent" && !isStationAuthor(kind)) add(str(last.author));
+  return out;
 }
 
 /// A row's people as the clients show them.

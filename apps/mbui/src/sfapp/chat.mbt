@@ -297,6 +297,8 @@ fn bar_frame(
 /// Frosted glass over the messages, no line under it (the frost alone sets it off).
 fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let t = @sf.theme()
+  // (its "…" is its chat's whole row's: held while its page is open, asked as it opens, @sfpages.chat_menu_of)
+  @sfbase.chat_whole_held(src, r) |> ignore
   let stations = station_marks(src, w.id)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let jobs = src.topic("chatJobs", chat_jobs_summary_params(r)).get().snapshot()

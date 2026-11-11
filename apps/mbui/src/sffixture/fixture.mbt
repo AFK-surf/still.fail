@@ -694,6 +694,78 @@ fn first_rows(days : Array[Json], limit : Int) -> (Array[Json], Int) {
 }
 
 ///|
+/// One made-up chat's whole row (`chatRow {station, session}`): its row as the made-up lists make it, all of it (those
+/// lists send it cut: listed_chats); null where none lists it.
+fn fixture_chat_row(f : Fixture, params : Map[String, Json]) -> Json? {
+  let p = Some(Json::object(params))
+  let station = text(p, "station")
+  let session = text(p, "session")
+  let scope = @settings.workspace_of(station)
+  for hidden in [false, true] {
+    let asked : Map[String, Json] = { "scope": Json::string(scope), "mine": Json::boolean(false) }
+    if hidden {
+      asked["hidden"] = Json::boolean(true)
+    }
+    match whole_row_in(fixture_chats(f, asked), station, session) {
+      Some(row) => return Some(row)
+      None => ()
+    }
+  }
+  Some(Json::null())
+}
+
+///|
+/// The row of chat `session` (its session, or its id) of station `station` in a made-up `chats` value, as it is made
+/// (whole: each made-up row has what the core's whole row has).
+pub fn whole_row_in(chats : Json?, station : String, session : String) -> Json? {
+  for d in items(chats, "days") {
+    for i in items(Some(d), "items") {
+      let r = Some(i)
+      if text(r, "station") == station && (text(r, "session") == session || text(r, "id") == session) {
+        return Some(i)
+      }
+    }
+  }
+  None
+}
+
+///|
+/// What a whole row says that the `chats` list's rows are made without (client/core-ts views.ts WHOLE_ONLY, and what
+/// the list's shape, ListedChat, has not: its time in words, its kept and muted, whom it is shared with): read of the
+/// chat's whole row (`chatRow`) as a press, a hold, a swipe or a pointer begins.
+let whole_only : Array[String] = [
+  "time", "swipeAsk", "watch", "decision", "xshare", "mayShare", "mayPublish", "slackUrl", "slackApp", "feishuUrl", "kept",
+  "muted",
+]
+
+///|
+/// A made-up `chats` value as the core sends it: each row cut to what the list's rows carry (ListedChat).
+pub fn listed_chats(v : Json) -> Json {
+  guard v is Object(o) && o.get("days") is Some(Array(days)) else { return v }
+  let out = o.copy()
+  out["days"] = Json::array(
+    days.map(fn(d) {
+      guard d is Object(day) && day.get("items") is Some(Array(rows)) else { return d }
+      let cut = day.copy()
+      cut["items"] = Json::array(rows.map(listed_row))
+      Json::object(cut)
+    }),
+  )
+  Json::object(out)
+}
+
+///|
+/// A made-up chat's row cut to what a row of the `chats` list carries.
+pub fn listed_row(row : Json) -> Json {
+  guard row is Object(o) && whole_only.iter().any(fn(k) { o.contains(k) }) else { return row }
+  let out = o.copy()
+  for k in whole_only {
+    out.remove(k)
+  }
+  Json::object(out)
+}
+
+///|
 pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
   let scope = match params.get("scope") {
     Some(String(s)) => s
@@ -1207,9 +1279,11 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     "shareIn" => fixture_share_topic(params)
     "imageNear" => fixture_image_near(params)
     // (待处理 open, Maple offline: decide_fixture.mbt)
-    "chats" if f.mode == "home-attention" => fixture_chats(f, params).map(fn(v) { fix_with_trouble(v, params) })
-    "chats" if f.mode == "home-syncing" => fixture_chats(f, params).map(fix_with_syncing)
-    "chats" => fixture_chats(f, params)
+    "chats" if f.mode == "home-attention" => fixture_chats(f, params).map(fn(v) { listed_chats(fix_with_trouble(v, params)) })
+    "chats" if f.mode == "home-syncing" => fixture_chats(f, params).map(fn(v) { listed_chats(fix_with_syncing(v)) })
+    "chats" => fixture_chats(f, params).map(listed_chats)
+    // (one chat's whole row, of the same made-up chats: what the list's rows are cut from)
+    "chatRow" => fixture_chat_row(f, params)
     "fleet" => Some(fixture_fleet(f))
     "railCard" => fixture_rail_card(params)
     "search" => fixture_search(f, params)

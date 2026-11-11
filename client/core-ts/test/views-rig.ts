@@ -15,7 +15,7 @@ import { Views, chatDerive, type ViewsEnv } from "../src/views/views.ts";
 type J = any;
 
 /// The views this rig routes to `Views` unless asked for every one of theirs (`all`); the rest it only notes as started.
-const VIEWS = new Set(["chats", "chatSearch", "stations", "stationNet", "connects", "connect", "connectCandidates", "chat", "history", "archive", "workspaceMarks", "chatJobs", "imageNear", "longJobs", "usage", "profiles"]);
+const VIEWS = new Set(["chats", "chatRow", "chatSearch", "stations", "stationNet", "connects", "connect", "connectCandidates", "chat", "history", "archive", "workspaceMarks", "chatJobs", "imageNear", "longJobs", "usage", "profiles"]);
 
 export class Router implements Source {
   views!: Views;

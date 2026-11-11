@@ -468,6 +468,10 @@ pub let kept_chats : Map[String, Json]
 
 pub fn last(String) -> Json
 
+pub fn listed_chats(Json) -> Json
+
+pub fn listed_row(Json) -> Json
+
 pub fn login_chat(String, String, Int32, station? : String, name? : String) -> Json
 
 pub fn login_job(Json, String, String, String, Int32?, Int32) -> Json
@@ -573,6 +577,8 @@ pub fn vault_post(Bool, file? : Bool, use_secret? : Bool, timed? : Bool) -> Json
 pub let viz_answer : String
 
 pub fn webdemo_days() -> Array[Json]
+
+pub fn whole_row_in(Json?, String, String) -> Json?
 
 pub fn with_cache_cold(Json) -> Json
 

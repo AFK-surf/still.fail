@@ -100,6 +100,10 @@ export const TOPICS: Record<string, Spec> = {
   adminOverview: { account: S },
   adminRelays: { account: S, range: ["string", "skip"] },
   chats: { scope: S, mine: ["bool", "def"], watching: ["bool", "skipFalse"], hidden: ["bool", "skipFalse"], limit: ["u32", "skip"] },
+  // One chat's row whole (ChatItem), as the list made it before its rows were what they draw (ListedChat): what a row
+  // offers only as it is pressed, held, swiped or pointed at (its menu, its swipe's question, its time), asked as that
+  // begins and held while it is open (apps/mbui sfbase rows.mbt `whole_row`). Null where the station lists no such chat.
+  chatRow: { station: S, session: S },
   // A list's stations, each its row (StationRow); one station's page asks that station (StationView), one part of its
   // overview `stationPart` (`part`: one of STATION_PARTS). (`stationsWhole`, the rows with the pages and the models
   // each can run, is the core's own: views/views.ts; no UI asks it.)
@@ -239,7 +243,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
 }
 
 const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "linkPreview", "filePeek", "messagePeek"]);
-const VIEWS = new Set(["chats", "stations", "station", "stationPart", "profiles", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
+const VIEWS = new Set(["chats", "chatRow", "stations", "station", "stationPart", "profiles", "connects", "connect", "connectCandidates", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "chatThings", "chatOutline", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.
 export function topicStation(topic: Topic): string | null {

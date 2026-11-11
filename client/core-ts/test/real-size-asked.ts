@@ -55,6 +55,8 @@ export const ASKED: Record<string, Record<string, unknown> & { topic: string }> 
   "stationPart updates": { topic: "stationPart", scope: "ws", station, part: "updates" },
   "chats": { topic: "chats", scope: "ws", mine: false, limit: 50 },
   "chats mine": { topic: "chats", scope: "ws", mine: true, limit: 50 },
+  // (a row pressed, held, swiped or pointed at: its chat's whole row, sfbase/rows.mbt whole_row; the chat's, its page's menu)
+  "chatRow": { topic: "chatRow", station, session: key },
   "profiles": { topic: "profiles", scope: "ws" },
   "connects": { topic: "connects", scope: "ws", mine: false },
   "connects mine": { topic: "connects", scope: "ws", mine: true },

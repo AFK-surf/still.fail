@@ -15,6 +15,13 @@ pub fn chats_of(src : Source, scope : String, filter : String) -> (ChatsView?, S
 }
 
 ///|
+/// List `filter` of workspace `scope` as it is asked of the core now (chats_params): what a replay of a run from before
+/// the list's rows were what they draw reads a chat's whole row out of (sfreplay's source.mbt).
+pub fn chats_asked(scope : String, filter : String) -> Map[String, Json] {
+  chats_params(scope, filter)
+}
+
+///|
 /// How many of a list's rows are asked of the core at first (`limit`), and how many more each time it is scrolled near
 /// the last of them: the core sends the first ones and how many more it has, not the whole of a list of 1400.
 pub let chats_page : Int = 50

@@ -66,6 +66,8 @@ pub fn ask_clears(ChatView) -> Bool
 
 pub fn ask_rows_of(ChatView, Array[Entry]) -> Array[Int32]
 
+pub fn ask_whole(Source, ChatItem) -> TopicLease?
+
 pub fn asks_in_view(Array[Int32], @ui.ListInfo?) -> Bool
 
 pub fn at_end_asked() -> Bool
@@ -174,9 +176,13 @@ pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : 
 
 pub fn chat_view_made(@json.Json) -> ChatView
 
+pub fn chat_whole_held(Source, ChatRef) -> TopicState
+
 pub fn chats_all_opens(Source, String, (String, Map[String, @json.Json]) -> TopicState) -> Bool
 
 pub fn chats_ask_more(Source, String, String, Int) -> Unit
+
+pub fn chats_asked(String, String) -> Map[String, @json.Json]
 
 pub fn chats_limit(String, String) -> Int
 
@@ -1920,6 +1926,16 @@ pub let viz_wait_under : @ui.Style
 pub let viz_way : @ui.Style
 
 pub let viz_ways : @ui.Style
+
+pub fn whole_already(Source, ChatItem) -> Bool
+
+pub fn whole_answered(Source, ChatItem) -> Bool
+
+pub fn whole_of_state(ChatItem, TopicState) -> ChatItem?
+
+pub fn whole_params(String, String) -> Map[String, @json.Json]
+
+pub fn whole_row(Source, ChatItem) -> ChatItem?
 
 pub fn window_front(Page) -> Bool
 
@@ -3747,6 +3763,13 @@ pub(all) struct VizLoad {
   failed : @signals.Signal[Bool]
   mut asked : Bool
 }
+
+pub struct WholeAsk {
+  // private fields
+}
+pub fn WholeAsk::ask(Self, Source, ChatItem) -> Unit
+pub fn WholeAsk::let_go(Self) -> Unit
+pub fn WholeAsk::new() -> Self
 
 pub(all) struct Workspace {
   id : String

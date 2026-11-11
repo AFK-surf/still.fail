@@ -808,10 +808,18 @@ fn chat_named(src : Source, here : String, href : String) -> Named {
 /// A reference to a chat (`href`) in a chat of station `here`: its card over it while the pointer rests on it, read as
 /// the pointer comes onto it and let go of once it has gone (peek_read); `linked`, the chat as its message says it.
 fn chat_peek(c : @ui.Ctx, src : Source, here : String, href : String, id : Int, linked : LinkedChat?) -> Unit {
-  if c.hovered(id) {
-    ignore(chat_named(src, here, href))
-  }
   let scope = "chat-peek/" + id.to_string()
+  if c.hovered(id) {
+    // (and its chat's whole row, for when it was last active: asked as the pointer comes onto it, as the card opens)
+    match chat_named(src, here, href) {
+      Chat(station, key, _, _) =>
+        match peek_listed(src, here, station, key) {
+          Some(i) if !@sfbase.whole_already(src, i) => @sfbase.hold(src, scope, "chatRow", @sfbase.whole_params(i.station, i.session)) |> ignore
+          _ => ()
+        }
+      _ => ()
+    }
+  }
   let drawn = Ref(false)
   hover(c, scope, id, fn() {
     drawn.val = true
@@ -862,20 +870,22 @@ fn chat_card(c : @ui.Ctx, src : Source, scope : String, here : String, href : St
       return
     }
   }
-  guard @sfbase.chats_of(src, @sfbase.workspace_of(here), "all").0 is Some(view) else {
+  guard @sfbase.chats_of(src, @sfbase.workspace_of(here), "all").0 is Some(_) else {
     chat_card_sample(c)
     return
   }
-  let mut found : ChatItem? = None
-  for d in view.days {
-    for i in d.items {
-      if found is None && i.station == station && (i.id == key || i.session == key) {
-        found = Some(i)
-      }
-    }
-  }
-  guard found is Some(item) else {
+  guard peek_listed(src, here, station, key) is Some(listed) else {
     c.text(@sf.t("web-main.chatRef.previewGone"), style=peek_note) |> ignore
+    return
+  }
+  // (when it was last active is its whole row's, asked as the pointer came onto the link: chat_peek)
+  let whole = if @sfbase.whole_already(src, listed) {
+    Some(listed)
+  } else {
+    @sfbase.whole_of_state(listed, @sfbase.hold(src, scope, "chatRow", @sfbase.whole_params(listed.station, listed.session)).get())
+  }
+  guard whole is Some(item) else {
+    chat_card_sample(c)
     return
   }
   let message = match (seq, item.thread) {
@@ -883,6 +893,21 @@ fn chat_card(c : @ui.Ctx, src : Source, scope : String, here : String, href : St
     _ => None
   }
   chat_card_of(c, item, item.station != here, history, message~)
+}
+
+///|
+/// The list's row of the chat `key` (its id, or its session) of station `station`, in the list of the workspace of
+/// station `here`: None while the list is read, or where it lists none such.
+fn peek_listed(src : Source, here : String, station : String, key : String) -> ChatItem? {
+  guard @sfbase.chats_of(src, @sfbase.workspace_of(here), "all").0 is Some(view) else { return None }
+  for d in view.days {
+    for i in d.items {
+      if i.station == station && (i.id == key || i.session == key) {
+        return Some(i)
+      }
+    }
+  }
+  None
 }
 
 ///|

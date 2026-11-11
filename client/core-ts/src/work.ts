@@ -35,6 +35,12 @@ export const work = {
   /// Rows a chat list made of its records (views.ts #chatRow): those something shows, each once while its record is as
   /// it was.
   rows: 0,
+  /// What a chat's row offers only as it is pressed, held, swiped or pointed at, made of its record (views.ts #chatRow
+  /// whole, #rowMenu): its menu's (who may share it, publish it, its links in Slack and Feishu), its swipe's question, its
+  /// watch's words. A list's rows make none: a chat's whole row (`chatRow`) does, made for one chat at a time.
+  rowMenus: 0,
+  swipeAsks: 0,
+  watches: 0,
   /// Stations' whole overviews read from the database and parsed (db/account.ts `stationDoc`), not taken as kept.
   overviewsRead: 0,
   /// Stations' whole overviews decorated and shaped (views.ts #stationShownOf), not taken as made for their record.

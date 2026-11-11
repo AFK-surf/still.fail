@@ -180,6 +180,9 @@ fn bar_middle_node(row : @view.View, src : Source, r : ChatRef, view : () -> Cha
 /// jobs while it has any (a dot when one died lately or a service is started again), what it is and "…".
 fn bar_end_node(e : @view.View, src : Source, r : ChatRef, view : () -> ChatView?) -> Unit {
   e.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+  // (its "…" is its chat's whole row's: held while its page is open (let go of as it is left, chat_left), asked as it
+  // opens: @sfpages.chat_menu_of)
+  @signals.untracked(fn() { @sfbase.chat_whole_held(src, r) }) |> ignore
   let archivable = fn() {
     match view() {
       Some(v) => v.archivable && !v.archived
