@@ -814,7 +814,7 @@ fn chat_peek(c : @ui.Ctx, src : Source, here : String, href : String, id : Int, 
     match chat_named(src, here, href) {
       Chat(station, key, _, _) =>
         match peek_listed(src, here, station, key) {
-          Some(i) if !src.read_only => @sfbase.hold(src, scope, "chatRow", @sfbase.whole_params(i.station, i.session)) |> ignore
+          Some(i) if !@sfbase.whole_already(src, i) => @sfbase.hold(src, scope, "chatRow", @sfbase.whole_params(i.station, i.session)) |> ignore
           _ => ()
         }
       _ => ()
@@ -879,7 +879,11 @@ fn chat_card(c : @ui.Ctx, src : Source, scope : String, here : String, href : St
     return
   }
   // (when it was last active is its whole row's, asked as the pointer came onto the link: chat_peek)
-  let whole = @sfbase.whole_of_state(listed, @sfbase.hold(src, scope, "chatRow", @sfbase.whole_params(listed.station, listed.session)).get())
+  let whole = if @sfbase.whole_already(src, listed) {
+    Some(listed)
+  } else {
+    @sfbase.whole_of_state(listed, @sfbase.hold(src, scope, "chatRow", @sfbase.whole_params(listed.station, listed.session)).get())
+  }
   guard whole is Some(item) else {
     chat_card_sample(c)
     return

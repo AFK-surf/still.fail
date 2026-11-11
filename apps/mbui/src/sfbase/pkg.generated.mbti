@@ -1923,6 +1923,8 @@ pub let viz_way : @ui.Style
 
 pub let viz_ways : @ui.Style
 
+pub fn whole_already(Source, ChatItem) -> Bool
+
 pub fn whole_answered(Source, ChatItem) -> Bool
 
 pub fn whole_of_state(ChatItem, TopicState) -> ChatItem?

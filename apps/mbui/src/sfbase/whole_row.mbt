@@ -35,9 +35,23 @@ pub fn whole_of_state(item : ChatItem, s : TopicState) -> ChatItem? {
 }
 
 ///|
+/// Whether `item` says what its whole row would itself, so nothing waits for `chatRow`: decided by what the app can know
+/// of it. A row of the core's `chats` list (ListedChat) never says its time in words, and every ChatItem the core sends
+/// whole does (`time`: a search's, the `@` menu's, share-in's), as a made-up sample does: one saying its time (`ago`)
+/// is whole already, its menu's fields and its swipe's question with it. And a source that asks nothing (read only: a
+/// sample's, drawn in bones or for a part's own test) has no whole row to wait for: what its item says is all there is.
+/// Only a list's lean row over a source that asks waits for its chat's whole row.
+pub fn whole_already(src : Source, item : ChatItem) -> Bool {
+  src.read_only || item.ago != ""
+}
+
+///|
 /// The whole row of list row `item` as the core says it now, read where it is read (a binding: held while it reads it):
-/// None while not answered.
+/// None while not answered; `item` itself where it is whole already (whole_already).
 pub fn whole_row(src : Source, item : ChatItem) -> ChatItem? {
+  if whole_already(src, item) {
+    return Some(item)
+  }
   whole_of_state(item, src.topic("chatRow", whole_params(item.station, item.session)).get())
 }
 
@@ -49,9 +63,9 @@ pub fn whole_answered(src : Source, item : ChatItem) -> Bool {
 
 ///|
 /// The whole row of list row `item` asked of the core ahead of what reads it (a gesture beginning), held by what it
-/// gives till that lets it go (TopicLease::cancel); None where `src` asks nothing (a sample's, read only).
+/// gives till that lets it go (TopicLease::cancel); None where nothing need be asked (whole_already).
 pub fn ask_whole(src : Source, item : ChatItem) -> TopicLease? {
-  if src.read_only || item.pending || item.session == "" {
+  if whole_already(src, item) || item.pending || item.session == "" {
     return None
   }
   Some(src.lease_topic("chatRow", whole_params(item.station, item.session)))

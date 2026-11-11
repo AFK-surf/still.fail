@@ -165,9 +165,11 @@ pub fn chat_row(
   // its chat's whole row (what its menu, its swipe's question, its time read: the list's row is made without them),
   // held while the hand is on it (pointed at, down on it, its menu open), let go of after; what reads it waits for it
   let whole_scope = "row-whole/" + key
-  let wants_whole = !src.read_only && !item.pending &&
+  let wants_whole = !@sfbase.whole_already(src, item) && !item.pending &&
     (down || parts.iter().any(fn(p) { c.hovered(p) }) || c.hovered(archive) || row_menu_open(item) || c.held_down(c.id("swipe/" + key)))
-  let whole : ChatItem? = if wants_whole {
+  let whole : ChatItem? = if @sfbase.whole_already(src, item) {
+    Some(item)
+  } else if wants_whole {
     @sfbase.whole_of_state(item, @sfbase.hold(src, whole_scope, "chatRow", @sfbase.whole_params(item.station, item.session)).get())
   } else {
     @sfbase.let_go(src, whole_scope)
