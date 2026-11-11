@@ -20,7 +20,7 @@ import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import * as jobs from "../jobs.ts";
 import * as looks from "../looks.ts";
-import { conformTy } from "../conform.ts";
+import { conformTy, shapeKey } from "../conform.ts";
 import { LISTED_CHAT } from "../shapes/schema.ts";
 import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
@@ -90,7 +90,7 @@ export const chatDerive: Derive = {
 };
 
 /// A station's overview and host reading as its row and its page show them (Views `#stationShownOf`).
-type StationShown = { full: Derived<J>; profile: Derived<J>; host: Derived<J>; row: Derived<J>; hostRow: Derived<J>; unreadable: Derived<boolean>; offered: Derived<J[]> };
+type StationShown = { full: Derived<J>; profile: Derived<J>; host: Derived<J>; row: Derived<J>; hostRow: Derived<J>; unreadable: Derived<boolean>; offered: Derived<J[]>; judge: (o: J) => boolean };
 
 /// A station of a scope, as the workspace lists it.
 /// `joined`: the station's home is another workspace, this one it joined.
@@ -336,13 +336,21 @@ function firstRows(chats: J, window: number): J {
 /// The chats' rail card reads the list as it is: it counts by each row's `state` alone.
 const wholeRows = (chats: J): J => firstRows(chats, Infinity);
 
-/// What a station's row reads of its overview (OverviewRow), picked from what it says (`undefined`: not read): its
-/// row is made again only as these change, not with each of its profiles' quota or its decisions.
-const overviewRowOf = (v: Value | undefined): J => {
-  if (v === undefined || !("ok" in v) || !isObject(v.ok)) return undefined;
-  const o = v.ok as J;
-  return { viewer: o.viewer, counts: o.counts, ...(o.disk != null ? { disk: o.disk } : {}), ...(o.drive != null ? { drive: o.drive } : {}) };
-};
+/// What a station's row reads of its overview (OverviewRow), of what the database keeps of it beside it
+/// (`station_part.row`: db/schema.ts overviewRowOf, those four as the overview has them): its row is made again only as
+/// these change, not with each of its profiles' quota or its decisions.
+const rowOf = (o: J): J => ({ viewer: o.viewer, counts: o.counts, ...(o.disk != null ? { disk: o.disk } : {}), ...(o.drive != null ? { drive: o.drive } : {}) });
+
+/// How an overview's verdict is judged (`unreadable`: decorated, then put through `Overview`): another number whenever
+/// what decorating one makes could fit otherwise with the shapes as they are (present.ts decorate).
+const FIT_READING = 1;
+/// The id of what judges whether this core can read a station's overview, its verdicts kept by it (db/schema.ts
+/// `station_fit`): the reading's and the `Overview` shape's as declared, with every shape it reaches (conform.ts
+/// shapeKey). Made once, as it is first needed (0.6 ms in Node for its 17.7 KB). Not the app's build: the core does not
+/// know it until the device tells it, a development build keeps one through many changes, and a new build that changed
+/// no shape keeps its verdicts.
+let overviewFit: string | null = null;
+export const OVERVIEW_FIT = (): string => (overviewFit ??= `${FIT_READING}.${shapeKey("Overview")}`);
 
 /// Whether a station's versions offer the 测试版 switch.
 export function betaOffered(overview: J, accountInBeta: () => boolean): boolean {
@@ -847,6 +855,10 @@ export class Views implements Owner {
     this.#moments = new Moments(() => core.host.nowMs(), core.runner);
     this.local = new Local(core.data, () => core.host.nowMs());
     this.local.load();
+    // Whether this core can read an overview, judged as it is written (#stationShownOf `judge`) and kept beside it:
+    // `stations` reads the verdict, not the overview.
+    // (its shapes' id made as it is first read, not at the start)
+    core.data.judgeOverviews({ get shapes() { return OVERVIEW_FIT(); }, judge: (station, o) => this.#stationShownOf(station).judge(o) });
   }
 
   owns(topic: Topic): boolean {
@@ -2632,10 +2644,11 @@ export class Views implements Owner {
         const h = this.ok({ topic: "host", station });
         return h === undefined ? null : asShaped("Host", present.host(h));
       }),
-      // What its row shows of them: its overview's parts (undefined: not read), its machine's line and meters.
+      // What its row shows of them: its overview's parts (undefined: not read), its machine's line and meters. Read of
+      // what the database keeps beside the overview (data.ts overviewRow), never the overview.
       row: computed(() => {
-        const o = this.#core.store.select(overview, overviewRowOf);
-        return o === undefined ? undefined : asShaped("OverviewRow", o);
+        const o = this.#core.data.overviewRow(station);
+        return isObject(o) ? asShaped("OverviewRow", rowOf(o)) : undefined;
       }),
       hostRow: computed(() => {
         const h = kept!.host.get();
@@ -2643,17 +2656,19 @@ export class Views implements Owner {
       }),
       // Its overview is read and this core cannot read it (its page says so): a boolean, so that what reads it is made
       // again only as that changes (reactive.ts: a computed whose value is the same tells its readers nothing), not
-      // with each quota or decision of a station it can read.
+      // with each quota or decision of a station it can read. As kept beside the overview, judged as it was written
+      // (data.ts overviewFit): its overview neither read nor decorated. Where none is kept for this core's shapes (a
+      // database from before, an overview another core wrote, shapes changed by an update, one shown with what is
+      // being done to it here), judged as it is read, and kept.
       unreadable: computed(() => {
+        const verdict = this.#core.data.overviewFit(station);
+        if (verdict === undefined) return false;
+        if (verdict !== null) return !verdict;
         const o = this.ok(overview);
         if (o === undefined) return false;
         if (!isObject(o)) return kept!.full.get() === null;
-        let fits = readable.get(o);
-        if (fits === undefined) {
-          const c = untracked(() => this.#clock());
-          fits = present.made(shown, o, c, () => decorate(o, c)).value !== null;
-          readable.set(o, fits);
-        }
+        const fits = kept!.judge(o);
+        untracked(() => this.#core.data.keepOverviewFit(station, fits));
         return !fits;
       }),
       // Its machine's own logins offered for a profile, as its page has them (the same list while they are equal: the
@@ -2665,6 +2680,17 @@ export class Views implements Owner {
           return equal(last, next) ? last : (last = next);
         });
       })(),
+      // Whether this core can read an overview of it (an object), as its page would show it: decorated (kept for its
+      // record, which `full` and `profile` take as made) and put through its shape.
+      judge: (o) => {
+        let fits = readable.get(o);
+        if (fits === undefined) {
+          const c = untracked(() => this.#clock());
+          fits = present.made(shown, o, c, () => decorate(o, c)).value !== null;
+          readable.set(o, fits);
+        }
+        return fits;
+      },
     };
     this.#stationShown.set(station, kept);
     return kept;

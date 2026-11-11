@@ -11,14 +11,14 @@ import { merge } from "../src/entries.ts";
 import { topicKey, type Topic } from "../src/protocol.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
 import { attention, choices, models, runnableOn } from "../src/views/models.ts";
-import { answeredAt, betaOffered, blockedUnder, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
+import { OVERVIEW_FIT, answeredAt, betaOffered, blockedUnder, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
 import { localDay } from "../src/views/usage.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
 import { markdown } from "../src/markdown.ts";
 import { work, workSince } from "../src/work.ts";
 import { hostOf, link, overview, prefs, rows, sessions, setup, sorted, threads, ui, workspace, type Ui } from "./views-rig.ts";
 import { dbName } from "../src/data.ts";
-import { VERSION } from "../src/db/schema.ts";
+import { VERSION, overviewPartOf } from "../src/db/schema.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -1647,6 +1647,159 @@ test("a_stations_overview_is_decorated_once_for_its_record_by_the_list_and_the_p
   await t.read(again, 3);
   assert.equal(workSince(before).overviews, 0, "asked again, no overview changed: none");
   assert.deepEqual(again.value, list.value);
+});
+
+/// An overview this core cannot read (a station newer than the app: a field of another type than it knows).
+const newerOverview = (): J => ({ ...busyOverview(20, false), processes: "a station newer than the app" });
+
+/// The stations' rows asked of a core started anew on the database `first` left (its host's), its stations up again
+/// (their links and hosts are not kept), and what that took.
+async function stationsAnew(first: ReturnType<typeof setup>) {
+  const before = { ...work };
+  const t = setup({ all: true, host: first.host });
+  const list = ui();
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  for (const id of ["a", "b", "c"]) t.set(link(`ws/${id}`), { state: "online" });
+  await t.host.time.pass(100);
+  for (const id of ["a", "b", "c"]) t.set(hostOf(`ws/${id}`), hostInfo(id));
+  await t.read(list, 1);
+  return { t, list, made: workSince(before) };
+}
+
+/// Each station's verdict kept beside its overview (`station_fit`): its shapes' id and whether it could be read.
+const verdicts = (t: ReturnType<typeof setup>): string[] =>
+  t.host.sqls.get(dbName("s1"))!.all("SELECT address, shapes, readable FROM station_fit ORDER BY address, shapes").map((r: J) => `${r[0]} ${r[1] === OVERVIEW_FIT() ? "this" : r[1]} ${r[2]}`);
+
+/// A list's rows but how each is reached (a rig's links as it set them).
+const rowsOf = (list: Ui): J[] => (list.value as J[]).map(({ reconnecting: _r, ...row }) => row);
+
+/// The stations' rows as a core first asks them, with station c's overview one it cannot read.
+async function stationsFirst() {
+  const t = setup({ all: true });
+  const list = ui();
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  await allUp(t);
+  t.set(overview("ws/c"), newerOverview());
+  await t.read(list, 1);
+  return { t, list };
+}
+
+test("a_core_started_anew_lists_its_stations_reading_and_decorating_no_overview", async () => {
+  // The list decorated each station's whole overview for whether this core could read it, and read and parsed each for
+  // the four parts its row shows: 10.6 ms and 3.2 ms of its 14.9 ms in Hermes (5 stations of 25-27 KB), on each start.
+  // Both are kept beside the overview as it is written (its part, its verdict): read of the database, not the overview.
+  const first = await stationsFirst();
+  assert.deepEqual(verdicts(first.t), ["ws/a this 1", "ws/b this 1", "ws/c this 0"], "judged as each was written");
+  const again = await stationsAnew(first.t);
+  assert.equal(again.made.overviews, 0, "no overview decorated");
+  assert.equal(again.made.overviewsRead, 0, "no overview read");
+  assert.deepEqual(rowsOf(again.list), rowsOf(first.list));
+  const c = (again.list.value as J[]).find((s) => s.station === "ws/c");
+  assert.deepEqual([c.summary, c.problems.map((x: J) => x.key), c.overview], [words("core-views.station.incompatible_short"), ["incompatible"], undefined]);
+  assert.deepEqual(Object.keys((again.list.value as J[]).find((s) => s.station === "ws/a").overview).sort(), ["counts", "disk", "drive", "viewer"]);
+});
+
+test("an_overview_written_without_a_verdict_is_judged_as_it_is_first_read_and_the_verdict_kept", async () => {
+  const first = await stationsFirst();
+  const sql = first.t.host.sqls.get(dbName("s1"))!;
+  // An older core writes station a's overview as it always did (one this core cannot read) and b's (one it can): no
+  // verdict on either; their parts kept all the same.
+  const write = (station: string, o: J) => sql.run("INSERT INTO station (address, kind, json, confirmed) VALUES (?, 'overview', ?, 2) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", [station, JSON.stringify(o)]);
+  write("ws/a", newerOverview());
+  write("ws/b", busyOverview(20, false, 4));
+  assert.deepEqual(verdicts(first.t), ["ws/c this 0"]);
+  const again = await stationsAnew(first.t);
+  // Judged as now, each once.
+  assert.equal(again.made.overviews, 2);
+  const row = (s: string) => (again.list.value as J[]).find((x) => x.station === s);
+  assert.deepEqual(row("ws/a").problems.map((x: J) => x.key), ["incompatible"]);
+  assert.equal(row("ws/a").overview, undefined);
+  assert.equal(row("ws/b").overview.counts.running, 4, "its row as written, of its part");
+  await again.t.host.time.pass(100);
+  assert.deepEqual(verdicts(again.t), ["ws/a this 0", "ws/b this 1", "ws/c this 0"], "kept");
+  // and not judged again
+  const third = await stationsAnew(again.t);
+  assert.deepEqual([third.made.overviews, third.made.overviewsRead], [0, 0]);
+  assert.deepEqual(third.list.value, again.list.value);
+});
+
+test("a_verdict_kept_under_other_shapes_is_not_this_cores", async () => {
+  const first = await stationsFirst();
+  const sql = first.t.host.sqls.get(dbName("s1"))!;
+  // Another core's verdicts (an app put back to an older one, its shapes otherwise): c readable to it, a not.
+  sql.run("INSERT INTO station_fit (address, shapes, readable) VALUES ('ws/a', 'other', 0), ('ws/c', 'other', 1)");
+  sql.run("DELETE FROM station_fit WHERE shapes <> 'other'");
+  const again = await stationsAnew(first.t);
+  assert.equal(again.made.overviews, 3, "each judged as now");
+  assert.deepEqual(rowsOf(again.list), rowsOf(first.list));
+  await again.t.host.time.pass(100);
+  assert.deepEqual(verdicts(again.t), ["ws/a this 1", "ws/a other 0", "ws/b this 1", "ws/c this 0", "ws/c other 1"]);
+});
+
+test("a_database_from_before_the_rows_part_and_verdicts_is_brought_to_them_and_lists_the_same_stations", async () => {
+  const first = await stationsFirst();
+  const sql = first.t.host.sqls.get(dbName("s1"))!;
+  // As a core before them left it: no verdicts, the parts of the chat list alone (no row's column), kept by its triggers.
+  const before = overviewPartOf;
+  sql.exec(`
+    DROP TRIGGER station_fit_put; DROP TRIGGER station_fit_set; DROP TRIGGER station_fit_drop; DROP TABLE station_fit;
+    DROP TRIGGER station_part_put; DROP TRIGGER station_part_set; DROP TRIGGER station_part_drop; DROP TABLE station_part;
+    CREATE TABLE station_part (address TEXT PRIMARY KEY, part TEXT NOT NULL);
+    CREATE TRIGGER IF NOT EXISTS station_part_put AFTER INSERT ON station WHEN new.kind = 'overview'
+    BEGIN
+      DELETE FROM station_part WHERE address = new.address;
+      INSERT INTO station_part (address, part) SELECT new.address, ${before("new.json")} WHERE json_valid(new.json);
+    END;
+    CREATE TRIGGER IF NOT EXISTS station_part_set AFTER UPDATE OF json ON station WHEN new.kind = 'overview' AND old.json IS NOT new.json
+    BEGIN
+      DELETE FROM station_part WHERE address = new.address;
+      INSERT INTO station_part (address, part) SELECT new.address, ${before("new.json")} WHERE json_valid(new.json);
+    END;
+    CREATE TRIGGER IF NOT EXISTS station_part_drop AFTER DELETE ON station WHEN old.kind = 'overview'
+    BEGIN
+      DELETE FROM station_part WHERE address = old.address;
+    END;
+    INSERT INTO station_part (address, part) SELECT st.address, ${before("st.json")} FROM station AS st WHERE st.kind = 'overview';
+  `);
+  const parts = () => sql.all("SELECT address, json_type(row) FROM station_part ORDER BY address").map((r: J) => `${r[0]} ${r[1]}`);
+  const partsBefore = sql.all("SELECT address, part FROM station_part ORDER BY address");
+  const again = await stationsAnew(first.t);
+  // Brought to them as it opened, at its version (a core before them still writes it): the triggers made again, every
+  // part with them, by SQLite.
+  assert.equal(sql.all("PRAGMA user_version")[0][0], VERSION);
+  assert.deepEqual(parts(), ["ws/a object", "ws/b object", "ws/c object"]);
+  // (what the chat list reads, and an older core reads, as it was)
+  assert.deepEqual(sql.all("SELECT address, part FROM station_part ORDER BY address"), partsBefore);
+  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("(address, part, row)"));
+  assert.equal(again.made.overviewsRead, 3, "read only to be judged");
+  assert.deepEqual(rowsOf(again.list), rowsOf(first.list));
+  await again.t.host.time.pass(100);
+  assert.deepEqual(verdicts(again.t), ["ws/a this 1", "ws/b this 1", "ws/c this 0"]);
+  // A core before them writing an overview: its part made with the row all the same (the triggers are this core's).
+  sql.run("UPDATE station SET json = ? WHERE address = 'ws/b' AND kind = 'overview'", [JSON.stringify(busyOverview(20, false, 6))]);
+  assert.equal(sql.all("SELECT row -> '$.counts.running' FROM station_part WHERE address = 'ws/b'")[0][0], "6");
+});
+
+test("a_verdict_goes_as_its_overview_changes_or_goes_whoever_writes_it", async () => {
+  const { t } = await stationsFirst();
+  const sql = t.host.sqls.get(dbName("s1"))!;
+  const json = (s: string) => String(sql.all("SELECT json FROM station WHERE address = ? AND kind = 'overview'", [s])[0][0]);
+  // Written again the same: kept.
+  sql.run("UPDATE station SET json = ?, confirmed = 3 WHERE address = 'ws/a' AND kind = 'overview'", [json("ws/a")]);
+  assert.deepEqual(verdicts(t), ["ws/a this 1", "ws/b this 1", "ws/c this 0"]);
+  // Changed: gone.
+  sql.run("UPDATE station SET json = ? WHERE address = 'ws/a' AND kind = 'overview'", [JSON.stringify(busyOverview(30, false))]);
+  assert.deepEqual(verdicts(t), ["ws/b this 1", "ws/c this 0"]);
+  // Put anew (as an older core's upsert or a replace): gone.
+  sql.run("INSERT OR REPLACE INTO station (address, kind, json, confirmed) VALUES ('ws/b', 'overview', ?, 1)", [json("ws/b")]);
+  assert.deepEqual(verdicts(t), ["ws/c this 0"]);
+  // Its overview gone: gone.
+  sql.run("DELETE FROM station WHERE address = 'ws/c' AND kind = 'overview'");
+  assert.deepEqual(verdicts(t), []);
+  // Written by this core: judged as it is written.
+  t.set(overview("ws/a"), newerOverview());
+  await t.host.time.pass(100);
+  assert.deepEqual(verdicts(t), ["ws/a this 0"]);
 });
 
 test("a_stations_words_about_time_follow_the_minute_watched_or_asked_anew", async () => {
