@@ -13,6 +13,8 @@ export const work = {
   weighed: 0,
   /// Items of keyed lists made as they go out (output.ts), not taken as they went out last.
   shaped: 0,
+  /// Values made whole as they go out (output.ts `shape`), not taken as they went out last (`kept`).
+  shapes: 0,
   /// Rows of a log (a thread's entries) read from the database rather than taken as parsed (db/account.ts).
   logRows: 0,
   /// Numbers of a log's items read from the database (which it holds, to find what to read).
@@ -22,6 +24,16 @@ export const work = {
   /// Records a chat list made into rows, and rows it put into its days (views.ts #chats): those that changed, where
   /// the list is made from the last one.
   listed: 0,
+  /// Rows a workspace's mark made what they say of themselves of (views/marks.ts `rowMade`): those that changed, the
+  /// rest kept with the row.
+  marked: 0,
+  /// Workspaces' marks made (views/marks.ts `workspaceMark`): each made again only as what it is made of changed.
+  workspaceMarks: 0,
+  /// Rows a chat list made of its records (views.ts #chatRow): those something shows, each once while its record is as
+  /// it was.
+  rows: 0,
+  /// Stations' whole overviews decorated and shaped (views.ts #stationShownOf), not taken as made for their record.
+  overviews: 0,
 };
 
 export type Work = typeof work;

@@ -101,7 +101,8 @@ type Entry = {
   job?: () => void;
   /// The value last sent to the subscribers; the next emission is the difference to it.
   sent?: Value;
-  /// Its value changed without a subscriber; it needs output when a page next asks for it.
+  /// What would go out of it changed without a subscriber (#sentHolds no longer): it needs output when a page next asks
+  /// for it, not `sent`.
   outputDirty?: boolean;
   /// Its value changed while no page was in view: what changed goes out once one is (`inView`).
   unseen?: boolean;
@@ -718,8 +719,11 @@ export class Store {
     now.waiting = false;
     if (now.subscribers.length === 0) {
       // Internal readers use the value above, not its client representation. Keep the last output for a reopening
-      // page, and make the new one only when there is a subscriber to receive it.
-      now.outputDirty = true;
+      // page, and make the new one only when there is a subscriber to receive it. Out of date only where it is: a
+      // value made again the same (a pref written at every switch of workspace, read whole by several views) left the
+      // chat list it went into sent whole again as its page came back (69 KB, parsed on the app's frame thread), and
+      // `profiles` shaped again (5 ms in Hermes, 2026-11-11). What is held is read from Data, not here: out of date.
+      if (isHeld || !this.#sentHolds(now)) now.outputDirty = true;
       for (const w of changed) w();
       return;
     }
@@ -780,6 +784,22 @@ export class Store {
       if (first) this.host.emit(client, first);
       else if (o) this.host.emit(client, to(o, id));
     }
+  }
+
+  /// Whether what went out of the topic last (`sent`) is what would go out of it now: an error that went out as it is,
+  /// or what its output made of the very value it holds, said in the same words, nothing that making read changed
+  /// since (output.ts `kept`). What makes it otherwise while nobody subscribes: a value made again that differs, or
+  /// one `set` or `update`d (a new object, equal or not); a change kept from the subscribers while no page was in view
+  /// (`unseen`, not shaped); what went out told out of date (#again: the clock moved on past its words, an item's
+  /// computed); the language, the product's name, the minute where it says times in words; the last shaping failed.
+  #sentHolds(entry: Entry): boolean {
+    const { sent, value, output } = entry;
+    if (sent === undefined || value === undefined) return false;
+    if ("err" in value) return sent === value;
+    if (!("ok" in sent) || output === undefined) return false;
+    const at = this.host.nowMs();
+    const kept = output.kept(entry.topic, value.ok, { now: at, offsetMin: this.host.utcOffsetMin(at) }, this.#shaped);
+    return kept !== null && kept.ok === sent.ok;
   }
 
   /// The first message of subscriber `id` of `client` (`keyed`: it takes keyed ops) to topic `topic`, whose value going

@@ -2,7 +2,7 @@
 // value through its shape (client/core-ts/src/shapes/schema.ts) as it goes out.
 import { conform, type Ty } from "./conform.ts";
 import * as format from "./format.ts";
-import { t } from "./i18n.ts";
+import { current as language, t } from "./i18n.ts";
 import { authorNameOf } from "./entries.ts";
 import { STATION_PARTS, type Topic } from "./protocol.ts";
 import * as brand from "./brand.ts";
@@ -18,6 +18,7 @@ import * as providers from "./shapes/providers.ts";
 import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
 import { SHAPES, TOPIC_SHAPES } from "./shapes/schema.ts";
 import * as clock from "./clock.ts";
+import { untracked } from "./reactive.ts";
 import { GROUPS as PROFILE_GROUPS, group as profileGroup, groupTitle as profileGroupTitle } from "./views/profiles.ts";
 import { codexQuotaFailure } from "./codex-quota.ts";
 import { isStationAuthor } from "./titles.ts";
@@ -38,10 +39,73 @@ export function clockAt(c: Clock): void {
 
 const DAY_MS = 86_400_000;
 
+// The grains of the clock a making read, recorded as it reads them (`grainsOf`), so that what takes a value kept from
+// it reads them too (`taken`).
+const MINUTE = 1;
+const DAY = 2;
+let grains = 0;
+
+function byMinute(): void {
+  grains |= MINUTE;
+  clock.minute.get();
+}
+
+function byDay(): void {
+  grains |= DAY;
+  clock.day.get();
+}
+
+/// What `fn` gives, and the grains of the clock it read (`MINUTE`, `DAY`); what it read counts for a making around it too.
+export function grainsOf<T>(fn: () => T): { value: T; grains: number } {
+  const outer = grains;
+  grains = 0;
+  try {
+    const value = fn();
+    return { value, grains };
+  } finally {
+    grains |= outer;
+  }
+}
+
+/// A value made for a clock and kept with what it was made of (`made`): the minute, offset, language and product name
+/// its words hold for (`at`), and the grains of the clock its making read.
+export type Made<T> = { value: T; at: string; grains: number };
+
+/// What kept words hold for: the minute of the clock they were made for (the clock they were made with, not the
+/// `clock.minute` signal, which moves only as a value is put together or a ticking topic is shown, so lags now by a
+/// second at each minute and by hours while nothing is), its offset, and what they are said in.
+function holdsFor(c: Clock): string {
+  return `${Math.floor(c.now / 60_000)}/${c.offsetMin}/${language()}/${brand.name()}`;
+}
+
+/// What `make` makes of `of` for clock `c`, kept in `kept`: the one kept while it was made in the same minute (a value
+/// made again in that minute could differ only by what a decorator says of `c.now` within it, which a computed kept
+/// through the minute says as stale), else made again, untracked; reads nothing reactive. A station's whole overview
+/// decorated took 2.6 ms in Hermes, made again by every computed that read it, and again as one let go was read anew
+/// though its record had not changed (views.ts #stationShownOf). `taken` is what a computed takes of it.
+export function made<K extends object, T>(kept: WeakMap<K, Made<T>>, of: K, c: Clock, make: () => T): Made<T> {
+  const at = holdsFor(c);
+  const was = kept.get(of);
+  if (was !== undefined && was.at === at) return was;
+  const m = untracked(() => grainsOf(make));
+  const next = { value: m.value, at, grains: m.grains };
+  kept.set(of, next);
+  return next;
+}
+
+/// A kept value as the computed taking it has it: reading the grains of the clock its making read, so that it is made
+/// again as its words change, as though it had made the value itself.
+export function taken<T>(m: Made<T>): T {
+  if (m.grains & MINUTE) byMinute();
+  if (m.grains & DAY) byDay();
+  return m.value;
+}
+
 /// A moment in words (Stamp).
 export function stamp(ms: number, c: Clock): Record<string, unknown> {
   // (a day or more past, its words are its day's: 昨天 18:12, 11月3日 18:12; nearer, or to come, the minute's)
-  (c.now - ms >= DAY_MS ? clock.day : clock.minute).get();
+  if (c.now - ms >= DAY_MS) byDay();
+  else byMinute();
   return {
     past: ms <= c.now,
     at: ms,
@@ -52,8 +116,8 @@ export function stamp(ms: number, c: Clock): Record<string, unknown> {
 }
 
 /// Times kept in seconds (still.fail cloud's) and in milliseconds (the station's).
-const SECONDS = ["created_at", "expires_at", "used_at", "revoked_at", "last_seen", "lastSeen"];
-const MILLIS = ["createdAt", "lastActiveAt", "lastUsedAt", "checkedAt", "resetsAt"];
+const SECONDS = new Set(["created_at", "expires_at", "used_at", "revoked_at", "last_seen", "lastSeen"]);
+const MILLIS = new Set(["createdAt", "lastActiveAt", "lastUsedAt", "checkedAt", "resetsAt"]);
 
 /// What a window with `used` percent of it used has left, and how full it is.
 export function leftLevel(used: number): [number, string] {
@@ -61,7 +125,7 @@ export function leftLevel(used: number): [number, string] {
 }
 
 function windows(list: Record<string, unknown>[], c: Clock): Record<string, unknown>[] {
-  clock.minute.get();
+  byMinute();
   const out = list.map((w) => {
     const label = str(w.label) ?? "";
     const used = typeof w.usedPercent === "number" ? w.usedPercent : 0;
@@ -130,6 +194,9 @@ function presentReset(r: Record<string, unknown>, c: Clock): Record<string, unkn
 
 /// Every time in a value, in words beside it: an object with some gets `time: { <field>: stamp }`; a quota's windows
 /// are put as they are drawn. A new value where anything is put; a part with nothing put is the part as it was.
+/// An object is copied only as something is first put in it, its keys looked up in sets: walking a station's 150 KB
+/// overview took 1.5 ms in Hermes copying every object and looking each key up in two arrays, where most of its parts
+/// have nothing put.
 export function times(value: unknown, c: Clock): unknown {
   if (value !== null && typeof value === "object" && shaped.has(value)) return value;
   if (Array.isArray(value)) {
@@ -141,37 +208,29 @@ export function times(value: unknown, c: Clock): unknown {
     return out ?? value;
   }
   if (!isObject(value)) return value;
-  const map: Record<string, unknown> = { ...(value as Record<string, unknown>) };
-  let changed = false;
-  const stamps: Record<string, unknown> = {};
-  let any = false;
-  for (const key of Object.keys(map)) {
-    const v = map[key];
+  const from = value as Record<string, unknown>;
+  // (what is read is the copy once there is one: a part already put, `scoped` taken into the windows)
+  let map: Record<string, unknown> | null = null;
+  let stamps: Record<string, unknown> | null = null;
+  for (const key of Object.keys(from)) {
+    const v = (map ?? from)[key];
     if (typeof v === "number" && v > 0) {
-      if (SECONDS.includes(key)) {
-        stamps[key] = stamp(v * 1000, c);
-        any = true;
-      } else if (MILLIS.includes(key)) {
-        stamps[key] = stamp(v, c);
-        any = true;
-      }
-    } else if (key === "windows" && Array.isArray(v) && [v, map.scoped].some((l) => Array.isArray(l) && l.some((w) => get(w, "usedPercent") !== undefined))) {
+      if (SECONDS.has(key)) (stamps ??= {})[key] = stamp(v * 1000, c);
+      else if (MILLIS.has(key)) (stamps ??= {})[key] = stamp(v, c);
+    } else if (key === "windows" && Array.isArray(v) && [v, (map ?? from).scoped].some((l) => Array.isArray(l) && l.some((w) => get(w, "usedPercent") !== undefined))) {
       // What its models have to themselves (`scoped`: Fable's week) drawn after the account's own. Where one model
       // is asked about (a chat's agent, an account to run a model on), views/models.ts quotaFor has left only its.
+      map ??= { ...from };
       map[key] = windows([...v, ...(Array.isArray(map.scoped) ? map.scoped : [])] as Record<string, unknown>[], c);
       delete map.scoped;
-      changed = true;
-    } else if (key !== "time" && !(key === "scoped" && Array.isArray(map.windows))) {
+    } else if (key !== "time" && !(key === "scoped" && Array.isArray((map ?? from).windows))) {
       const shown = times(v, c);
-      if (shown !== v) {
-        map[key] = shown;
-        changed = true;
-      }
+      if (shown !== v) (map ??= { ...from })[key] = shown;
     }
   }
-  if ("windows" in map && "state" in map) {
-    clock.minute.get();
-    const credits = map.credits;
+  if ("windows" in from && "state" in from) {
+    byMinute();
+    const credits = (map ?? from).credits;
     if (isObject(credits)) {
       const text =
         credits.unlimited === true
@@ -181,26 +240,28 @@ export function times(value: unknown, c: Clock): unknown {
             : credits.hasCredits === false
               ? t("core-views.present.credits.none")
               : t("core-views.present.credits.unknown");
-      map.creditsText = text;
-      changed = true;
+      (map ??= { ...from }).creditsText = text;
     }
-    const count = u64(map.resetCount);
+    const count = u64((map ?? from).resetCount);
     if (count !== undefined) {
+      map ??= { ...from };
       map.resetText = resetsText(count, map.resetExpiries, c);
       // Each kind of reset it holds, as it is offered: a station from before kinds, or a provider with one kind (a
       // ChatGPT subscription's), all of them as one with no kind to ask for.
       const kinds = Array.isArray(map.resets) ? map.resets.filter(isObject) : count > 0 ? [{ kind: "credit", left: count, expiries: map.resetExpiries, usable: true }] : [];
       map.resets = kinds.map((r) => presentReset(r, c));
-      changed = true;
     }
   }
-  if (any) {
+  if (stamps !== null) {
+    map ??= { ...from };
     // (beside the times a value already says in words: a pull request's `updatedAt`, from its card)
     map.time = isObject(map.time) ? { ...map.time, ...stamps } : stamps;
-    changed = true;
   }
-  return changed ? map : value;
+  return map ?? value;
 }
+
+/// What `times` puts in a value, for the test that holds it to how it was written before (present.test.ts).
+export const timesParts = { windows, resetsText, presentReset };
 
 const NO_TICK = new Set(["live", "thread", "letters", "history", "host", "net", "way", "stationNet", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "slackTokens", "joinable", "memberships", "screenCard"]);
 

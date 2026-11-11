@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { markdown } from "../src/markdown.ts";
 import { Output } from "../src/output.ts";
+import * as present from "../src/present.ts";
+import { work } from "../src/work.ts";
 
 test("output_an_agents_markdown_goes_out_as_the_tree_kept_for_its_words_not_copied_again", () => {
   // A chat's page of agents' replies is mostly their trees: copied, put through the shape and cloned to keep for the
@@ -60,4 +62,59 @@ test("a_new_minute_makes_again_only_the_items_whose_times_it_may_say_otherwise",
   assert.notEqual(items({ now: midnight + 1000, offsetMin: 480 })[0], first[0]);
   // another time zone: every time says it otherwise
   assert.notEqual(items({ now: midnight + 61_000, offsetMin: 0 })[0], items({ now: midnight + 62_000, offsetMin: 480 })[0]);
+});
+
+test("a_value_given_again_as_the_same_object_goes_out_as_it_went_until_what_it_read_moves_on", () => {
+  // `profiles`, no keyed items, was copied, decorated and shaped whole each time it went out, the same value too: 5 ms
+  // in Hermes each time (2026-11-11).
+  const now = Date.UTC(2026, 10, 11, 4, 30, 10);
+  const topic = { topic: "linkPreview", station: "w/s", url: "https://x" };
+  const raw = Object.freeze({ kind: "github_pull_request", title: "PR", updatedAt: now - 2 * 60_000 });
+  const out = new Output();
+  const shape = (v: unknown, c: { now: number; offsetMin: number }) => out.shape(topic, v, c, true) as { ok: { time: { updatedAt: { ago: string } } } };
+  const from = work.shapes;
+  const first = shape(raw, { now, offsetMin: 480 });
+  assert.equal(work.shapes - from, 1);
+  const again = shape(raw, { now: now + 20_000, offsetMin: 480 });
+  assert.equal(again, first, "the same value, in the same minute: what went out");
+  assert.equal(again.ok, first.ok);
+  assert.equal(work.shapes - from, 1, "nothing made again");
+  // a minute on: its words move on (the clock's signal it read), made again
+  const later = shape(raw, { now: now + 60_000, offsetMin: 480 });
+  assert.equal(work.shapes - from, 2);
+  assert.notEqual(later.ok, first.ok);
+  assert.notEqual(later.ok.time.updatedAt.ago, first.ok.time.updatedAt.ago);
+  assert.equal(shape(raw, { now: now + 70_000, offsetMin: 480 }), later);
+  // another object, equal to it: made again
+  const other = shape({ ...raw }, { now: now + 70_000, offsetMin: 480 });
+  assert.equal(work.shapes - from, 3);
+  assert.notEqual(other, later);
+  assert.deepEqual(other.ok, later.ok);
+  // given without its shape: made again
+  out.shape(topic, { ...raw }, { now: now + 70_000, offsetMin: 480 }, false);
+  assert.equal(work.shapes - from, 4);
+  // let go of: made again
+  const kept = { ...raw };
+  out.shape(topic, kept, { now: now + 70_000, offsetMin: 480 }, true);
+  out.stop();
+  out.shape(topic, kept, { now: now + 70_000, offsetMin: 480 }, true);
+  assert.equal(work.shapes - from, 6);
+});
+
+test("a_value_given_again_is_made_again_as_a_signal_its_making_read_moves_on_whatever_the_minute", () => {
+  // (what its watch fired for: here the clock's minute moved on by another's clockAt, as the store's minute does)
+  const now = Date.UTC(2026, 10, 11, 4, 30, 10);
+  const topic = { topic: "filePeek", station: "w/s", path: "/a" };
+  const raw = Object.freeze({ name: "a", mtime: now - 2 * 60_000 });
+  let agains = 0;
+  const out = new Output(() => agains++);
+  const c = { now, offsetMin: 480 };
+  const first = out.shape(topic, raw, c, false);
+  present.clockAt({ now: now + 60_000, offsetMin: 480 });
+  assert.equal(agains, 1, "told it is out of date");
+  const from = work.shapes;
+  // (given the old clock again: the minute is the same as it was made in, but what it read moved on)
+  const again = out.shape(topic, raw, c, false);
+  assert.equal(work.shapes - from, 1);
+  assert.notEqual(again, first);
 });

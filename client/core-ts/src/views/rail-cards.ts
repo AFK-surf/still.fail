@@ -5,7 +5,6 @@
 // wants a look coloured), lines of what it is made of (the models that spent most), the last 7 days as bars where it
 // has them, and 分享卡片 where there is something to share.
 import { t } from "../i18n.ts";
-import * as present from "../present.ts";
 import { arr as arrU, get as getU } from "../util.ts";
 import { localDay } from "./usage.ts";
 
@@ -33,7 +32,8 @@ const stat = (value: string | number, label: string, tone: Tone | null = null, g
 /// clock `offset` minutes east of UTC; `now`). Each figure opens the chats it counts (2026-11-10 用户「这里面不能点击跳转，光告诉我有几个
 /// 没用啊」): the first three 待处理, which lists them, those archived the archive.
 export function chatsCard(rows: J[], mark: J, archived: number[], now: number, offset: number): J {
-  const running = rows.filter((r) => present.rowState(arr(get(r, "agents"))) === "run").length;
+  // (a row's `state` as its list says it, views.ts #chats: said by a row not made yet too, so the card makes none)
+  const running = rows.filter((r) => get(r, "state") === "run").length;
   const wait = num(get(mark, "wait"));
   const alert = num(get(mark, "alert"));
   const today = localDay(now, offset);

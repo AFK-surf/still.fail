@@ -11,6 +11,7 @@ import { Runner } from "../src/runtime.ts";
 import { COALESCE_MS, EVICT_AFTER_MS, KEPT_PER_CLIENT, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { version } from "../src/digest.ts";
+import { work } from "../src/work.ts";
 import { topicDebug } from "../src/protocol.ts";
 
 holdLanguage();
@@ -1047,4 +1048,154 @@ test("new_pages_and_background_updates_both_get_a_turn", async () => {
   store.invalidate(background);
   await pass(COALESCE_MS * 4);
   assert.deepEqual(order, ["first", "page1", "background", "page2", "page3"]);
+});
+
+/// A page made from a dependency, kept live by a watch as a view would: what its source made of it, as many times.
+function madeFrom(t: ReturnType<typeof setup>, make: (dependency: Record<string, unknown>) => unknown) {
+  const { store } = t;
+  const dependency: Topic = { topic: "dependency" };
+  const page: Topic = { topic: "page" };
+  const made = { n: 0 };
+  store.setSource({
+    start(topic) {
+      if (topic.topic === "page") store.invalidate(page);
+    },
+    stop() {},
+    compute(topic) {
+      if (topic.topic !== "page") return undefined;
+      made.n++;
+      const d = store.get(dependency) as Record<string, unknown> | undefined;
+      return d === undefined ? undefined : { ok: make(d) };
+    },
+  });
+  store.watch(dependency, () => {});
+  return { dependency, page, made };
+}
+
+/// What `messages` make of a value, in order.
+function shownOf(messages: [number, unknown][]): unknown {
+  let shown: unknown;
+  for (const [, message] of messages) {
+    const m = message as { value?: unknown; delta?: Op[] };
+    if ("value" in m) shown = m.value;
+    else if (m.delta) shown = applyOps(shown, m.delta);
+  }
+  return shown;
+}
+
+test("a_page_let_go_of_whose_value_is_made_again_the_same_is_answered_at_once_with_what_went_out", async () => {
+  // A pref written at every switch of workspace, read whole by several views, made their topics again the same while
+  // their pages were away: each came back sent whole and shaped again (a chat list's 69 KB, 2026-11-11).
+  const t = setup();
+  const { host, store, pass } = t;
+  const { dependency, page, made } = madeFrom(t, (d) => ({ title: d.title }));
+  store.set(dependency, { ok: { title: "A", seen: 1 } });
+  store.subscribe(1, 1, page);
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [[1, value(1, { title: "A" })]]);
+  store.unsubscribe(1, 1, true);
+  const [[, { v }]] = host.takeEmitted() as [number, { v: string }][];
+
+  store.set(dependency, { ok: { title: "A", seen: 2 } });
+  const before = made.n;
+  await pass(COALESCE_MS * 2);
+  assert.equal(made.n, before + 1, "made again while let go of");
+  const shapes = work.shapes;
+  store.subscribe(1, 2, page);
+  assert.deepEqual(host.takeEmitted(), [[1, value(2, { title: "A" })]], "at once: what went out");
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [], "and nothing after");
+  assert.equal(made.n, before + 1, "not made again for it");
+  assert.equal(work.shapes, shapes, "nor shaped again");
+
+  // One that says it holds that version: `same`, at once.
+  store.unsubscribe(1, 2);
+  store.set(dependency, { ok: { title: "A", seen: 3 } });
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 3, page, false, undefined, v);
+  assert.deepEqual(host.takeEmitted(), [[1, { id: 3, same: true }]]);
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), []);
+  assert.equal(work.shapes, shapes);
+});
+
+test("a_page_let_go_of_whose_value_is_made_again_otherwise_is_sent_its_new_value_whole", async () => {
+  const t = setup();
+  const { host, store, pass } = t;
+  const { dependency, page } = madeFrom(t, (d) => ({ title: d.title }));
+  store.set(dependency, { ok: { title: "A" } });
+  store.subscribe(1, 1, page);
+  await pass(COALESCE_MS * 2);
+  host.takeEmitted();
+  store.unsubscribe(1, 1);
+  store.set(dependency, { ok: { title: "B" } });
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 2, page);
+  assert.deepEqual(host.takeEmitted(), [], "not what went out before");
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [[1, value(2, { title: "B" })]], "the new value, whole");
+});
+
+test("a_page_let_go_of_whose_value_is_set_is_sent_its_new_value_whole", async () => {
+  const { host, store, pass } = setup();
+  const page: Topic = { topic: "page" };
+  store.watch(page, () => {});
+  store.subscribe(1, 1, page);
+  store.set(page, { ok: { n: 1 } });
+  await pass(COALESCE_MS * 2);
+  host.takeEmitted();
+  store.unsubscribe(1, 1);
+  store.set(page, { ok: { n: 2 } });
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 2, page);
+  assert.deepEqual(host.takeEmitted(), []);
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [[1, value(2, { n: 2 })]]);
+  // an error set: that, whole
+  store.unsubscribe(1, 2);
+  store.set(page, { err: new CoreError("offline", "连不上") });
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 3, page);
+  assert.deepEqual(host.takeEmitted(), []);
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [[1, { id: 3, error: { code: "offline", message: "连不上" } }]]);
+});
+
+test("a_page_let_go_of_whose_words_about_time_moved_on_is_sent_them_fresh", async () => {
+  type Said = { time: { lastActiveAt: { ago: string } } };
+  const ago = (messages: [number, unknown][]) => (shownOf(messages) as Said).time.lastActiveAt.ago;
+  const t = setup();
+  const { host, store, pass } = t;
+  const at = host.nowMs() - 2 * 60_000;
+  const { dependency, page } = madeFrom(t, (d) => ({ title: d.title, lastActiveAt: at }));
+  store.watch(page, () => {});
+  store.set(dependency, { ok: { title: "A", seen: 1 } });
+  store.subscribe(1, 1, page);
+  await pass(COALESCE_MS * 2);
+  const first = ago(host.takeEmitted());
+  store.unsubscribe(1, 1);
+
+  // Told out of date as the minute's clock moves on (another page shows times in words meanwhile).
+  const other: Topic = { topic: "other" };
+  store.subscribe(2, 1, other);
+  store.set(other, { ok: { n: 1 } });
+  store.setClock();
+  await pass(61_000 + COALESCE_MS * 2);
+  host.takeEmitted();
+  store.subscribe(1, 2, page);
+  assert.deepEqual(host.takeEmitted(), [], "not the words that went out");
+  await pass(COALESCE_MS * 2);
+  const second = ago(host.takeEmitted());
+  assert.notEqual(second, first);
+
+  // And with no clock moved on: made again the same in another minute than its words were said in.
+  store.unsubscribe(1, 2);
+  store.unsubscribe(2, 1);
+  await pass(61_000);
+  store.set(dependency, { ok: { title: "A", seen: 2 } });
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 3, page);
+  assert.deepEqual(host.takeEmitted(), []);
+  await pass(COALESCE_MS * 2);
+  assert.notEqual(ago(host.takeEmitted()), second);
 });

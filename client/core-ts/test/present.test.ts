@@ -5,6 +5,11 @@ import { conform } from "../src/conform.ts";
 import { holdLanguage, setCurrent } from "../src/i18n.ts";
 import * as p from "../src/present.ts";
 import { packetsSince } from "../src/station/topics.ts";
+import * as clock from "../src/clock.ts";
+import * as format from "../src/format.ts";
+import { t } from "../src/i18n.ts";
+import { deepFreeze, get, isObject, shaped, u64 } from "../src/util.ts";
+import { fixture, more, profilesOf, records, STATIONS } from "./real-size.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -861,4 +866,146 @@ test("a_slack_apps_permissions_are_said_in_sections_those_only_admins_allow_mark
   assert.deepEqual([base.id, base.fixed, base.admin], ["base", true, null]);
   const connect = sections[1].groups.find((g: J) => g.id === "connect");
   assert.equal(connect.tip, `${connect.description} ${connect.admin}`);
+});
+
+// ── times, held to how it was written before it copied only what it changed ──
+
+/// `times` as it was (before an object was copied only as something was first put in it), word for word.
+function timesBefore(value: unknown, c: p.Clock): unknown {
+  const SECONDS = ["created_at", "expires_at", "used_at", "revoked_at", "last_seen", "lastSeen"];
+  const MILLIS = ["createdAt", "lastActiveAt", "lastUsedAt", "checkedAt", "resetsAt"];
+  const { windows, resetsText, presentReset } = p.timesParts;
+  const stamp = p.stamp;
+  const times = timesBefore;
+  if (value !== null && typeof value === "object" && shaped.has(value)) return value;
+  if (Array.isArray(value)) {
+    let out: unknown[] | null = null;
+    for (let i = 0; i < value.length; i++) {
+      const v = times(value[i], c);
+      if (v !== value[i]) (out ??= [...value])[i] = v;
+    }
+    return out ?? value;
+  }
+  if (!isObject(value)) return value;
+  const map: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+  let changed = false;
+  const stamps: Record<string, unknown> = {};
+  let any = false;
+  for (const key of Object.keys(map)) {
+    const v = map[key];
+    if (typeof v === "number" && v > 0) {
+      if (SECONDS.includes(key)) {
+        stamps[key] = stamp(v * 1000, c);
+        any = true;
+      } else if (MILLIS.includes(key)) {
+        stamps[key] = stamp(v, c);
+        any = true;
+      }
+    } else if (key === "windows" && Array.isArray(v) && [v, map.scoped].some((l) => Array.isArray(l) && l.some((w) => get(w, "usedPercent") !== undefined))) {
+      map[key] = windows([...v, ...(Array.isArray(map.scoped) ? map.scoped : [])] as Record<string, unknown>[], c);
+      delete map.scoped;
+      changed = true;
+    } else if (key !== "time" && !(key === "scoped" && Array.isArray(map.windows))) {
+      const shown = times(v, c);
+      if (shown !== v) {
+        map[key] = shown;
+        changed = true;
+      }
+    }
+  }
+  if ("windows" in map && "state" in map) {
+    clock.minute.get();
+    const credits = map.credits;
+    if (isObject(credits)) {
+      const text =
+        credits.unlimited === true
+          ? t("core-views.present.credits.unlimited")
+          : typeof credits.balance === "string"
+            ? t("core-views.present.credits.balance", { balance: format.decimal(credits.balance) })
+            : credits.hasCredits === false
+              ? t("core-views.present.credits.none")
+              : t("core-views.present.credits.unknown");
+      map.creditsText = text;
+      changed = true;
+    }
+    const count = u64(map.resetCount);
+    if (count !== undefined) {
+      map.resetText = resetsText(count, map.resetExpiries, c);
+      const kinds = Array.isArray(map.resets) ? map.resets.filter(isObject) : count > 0 ? [{ kind: "credit", left: count, expiries: map.resetExpiries, usable: true }] : [];
+      map.resets = kinds.map((r) => presentReset(r, c));
+      changed = true;
+    }
+  }
+  if (any) {
+    map.time = isObject(map.time) ? { ...map.time, ...stamps } : stamps;
+    changed = true;
+  }
+  return changed ? map : value;
+}
+
+/// Holds `times` to `timesBefore` on `value` and on every part of it: equal, its keys in the same order, and the part
+/// itself wherever the one before gave the part itself. How many parts were compared.
+function sameTimes(value: unknown, c: p.Clock, where: string): number {
+  deepFreeze(value);
+  let n = 0;
+  const walk = (v: unknown, path: string): void => {
+    if (v === null || typeof v !== "object") return;
+    const [now, before] = [p.times(v, c), timesBefore(v, c)];
+    assert.deepEqual(now, before, path);
+    assert.equal(JSON.stringify(now), JSON.stringify(before), `${path}: its keys in the same order`);
+    if (before === v) assert.equal(now, v, `${path}: the part itself`);
+    else assert.notEqual(now, v, `${path}: a new part`);
+    n++;
+    for (const k of Object.keys(v)) walk((v as Record<string, unknown>)[k], `${path}.${k}`);
+  };
+  walk(value, where);
+  return n;
+}
+
+test("times copies only what it puts and gives what it gave: every part of a workspace of real size", () => {
+  const now = 1_900_000_000_000;
+  for (const offsetMin of [0, 480]) {
+    const c = { now, offsetMin };
+    let parts = 0;
+    let changed = 0;
+    for (const [topic, value] of [...fixture(now), ...more(now)]) {
+      parts += sameTimes(value, c, JSON.stringify(topic));
+      if (timesBefore(value, c) !== value) changed++;
+    }
+    for (const [kind, id, value] of records(now)) parts += sameTimes(value, c, `${kind} ${id}`);
+    for (let st = 0; st < STATIONS.length; st++) parts += sameTimes(profilesOf(now, st), c, `profiles ${st}`);
+    // (the fixture holds times in words to put, and the parts walked are its whole)
+    assert.ok(changed > 10 && parts > 10_000, `${changed} values put, ${parts} parts`);
+  }
+});
+
+test("times copies only what it puts and gives what it gave: arrays, quotas' windows and resets, times already said", () => {
+  const now = 1_900_000_000_000;
+  const c = { now, offsetMin: 480 };
+  const window = (label: string, usedPercent?: number) => ({ label, ...(usedPercent === undefined ? {} : { usedPercent }), resetsAt: now + 3_600_000 });
+  const cases: [string, unknown][] = [
+    ["an array with one element changed", [{ a: 1 }, { created_at: 1_800_000_000 }, "x", [1, 2], { b: { c: [3] } }]],
+    ["nothing to put", { a: { b: { c: 1 } }, d: [{ e: 2 }], createdAt: 0, lastSeen: -1, used_at: "soon" }],
+    ["nested parts unchanged beside one put", { a: { b: { c: 1 } }, d: [{ e: 2 }], lastSeen: 1_800_000_000, f: { g: { checkedAt: now - 5000 } } }],
+    ["a time already in words", { updatedAt: now - 3_600_000, time: { updatedAt: { ago: "1 小时前" } }, createdAt: now - 5000, lastActiveAt: now - 90_000_000 }],
+    ["a time key holding no number", { time: { created_at: 5 }, checkedAt: "now", resetsAt: null }],
+    ["windows with scoped", { state: "ok", windows: [window("5h", 10)], scoped: [window("Fable 每周", 50)], checkedAt: now - 60_000, detail: null }],
+    ["scoped before windows", { scoped: [window("Fable 每周", 50)], state: "ok", windows: [window("5h", 10), window("每周", 95)] }],
+    ["only scoped used", { state: "ok", windows: [window("5h")], scoped: [window("Fable 每周", 80)] }],
+    ["no window used", { state: "ok", windows: [window("5h")], scoped: [{ x: { created_at: 1_800_000_000 } }] }],
+    ["scoped with no windows list", { state: "ok", windows: null, scoped: [{ created_at: 1_800_000_000 }] }],
+    ["windows as a field of no quota", { windows: [window("5h", 10)], scoped: "none" }],
+    ["credits and resets", { state: "ok", windows: [], credits: { balance: "12.5", checkedAt: now - 1000 }, resetCount: 2, resetExpiries: [now + 86_400_000, now - 1] }],
+    ["credits of each kind", [{ state: "ok", windows: [], credits: { unlimited: true } }, { state: "ok", windows: [], credits: { hasCredits: false } }, { state: "ok", windows: [], credits: {} }, { state: "ok", windows: [], credits: "x" }]],
+    ["resets by kind", { state: "ok", windows: [window("每周", 100)], resetCount: 2, resetExpiries: [now + 1e9], resets: [{ id: "weekly", kind: "weekly", left: 1, usable: true, expiries: [now + 1e9] }, "x", { kind: "model", model: "Fable", left: 1, usable: false }] }],
+    ["no resets left", { state: "ok", windows: [], resetCount: 0 }],
+    ["a quota inside a profile", { id: "p", quota: { state: "ok", windows: [window("5h", 75)], scoped: [], checkedAt: now - 120_000, resetCount: 1 }, usedBy: [{ created_at: 1_800_000_000, name: "x" }] }],
+  ];
+  for (const [name, value] of cases) sameTimes(value, c, name);
+  // A part already shaped is the part itself.
+  const done = { createdAt: now - 1000 };
+  shaped.add(done);
+  assert.equal(p.times(done, c), done);
+  const around = { a: done };
+  assert.equal(p.times(around, c), around);
 });
