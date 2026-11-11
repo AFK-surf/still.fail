@@ -5381,9 +5381,10 @@ pub fn View::on_menu(self : View, f : (Menu) -> Unit) -> View {
 }
 
 ///|
-/// The pointer's secondary button pressed at (x, y) in the window at `at`: where the topmost node drawn there that takes
-/// a press asks for a menu (View::on_menu), its menu asked for, as one event of that moment; true then. None asks where
-/// the topmost is one that does not (or hosts the old view, or nothing is there).
+/// The pointer's secondary button pressed at (x, y) in the window at `at`: the menu of the topmost node drawn there that
+/// takes a press, where it asks for one (View::on_menu), else of the first that holds it and does, out from it (a row's,
+/// pressed on its name or a button in it), as one event of that moment; true then. None asks where none out to one
+/// hosting the old view (its own), the edge of a modal layer or the root does, or nothing is there.
 pub fn Tree::menu_at(self : Tree, x : Double, y : Double, at : Double) -> Bool {
   self.asked_at(x, y, at, fn(n) { n.on_menu is Some(_) }, fn(n, lx, ly, t) {
     match n.on_menu {
@@ -5637,10 +5638,11 @@ fn Tree::topmost_from(self : Tree, at : Int, has : (Node) -> Bool, out : Array[I
 }
 
 ///|
-/// What the pointer does at (x, y) at `at` (a secondary press, a wheel), asked of the topmost node drawn there that takes
-/// a press: where it is one that `takes` it, `then` with it, where in it and when, as one event of that moment (the
-/// moment of the event it is in, the tree brought there first where it is in none; where things are as of then, as a
-/// drag's: Tree::drag_at); true then.
+/// What the pointer does at (x, y) at `at` (a secondary press), asked of the topmost node drawn there that takes a press,
+/// or where that one does not `take` it, of the first that holds it and does, out from it (a button in a row that has a
+/// menu: the row's), never past one hosting the old view (its own) nor out of a modal layer: `then` with it, where in it
+/// and when, as one event of that moment (the moment of the event it is in, the tree brought there first where it is in
+/// none; where things are as of then, as a drag's: Tree::drag_at); true then.
 fn Tree::asked_at(
   self : Tree,
   x : Double,
@@ -5667,16 +5669,24 @@ fn Tree::asked_at(
         }
       }
     })
-    match found.val {
-      Some(id) => {
-        let n = self.nodes[id.at]
-        if takes(n) {
-          asked.val = true
-          let (nx, ny, ns) = self.placed(id.at)
-          then(n, (x - nx) / ns, (y - ny) / ns, t)
-        }
+    // (the topmost there, else the first that holds it and takes it, out from it: never past one hosting the old view
+    // (the old view's own) nor out of a modal layer (what is under it takes none))
+    let mut i = match found.val {
+      Some(id) => id.at
+      None => -1
+    }
+    while i >= 0 {
+      let n = self.nodes[i]
+      if takes(n) && !self.pressless_at(i) {
+        asked.val = true
+        let (nx, ny, ns) = self.placed(i)
+        then(n, (x - nx) / ns, (y - ny) / ns, t)
+        break
       }
-      None => ()
+      if n.hosted || n.modal {
+        break
+      }
+      i = n.parent
     }
   })
   asked.val
