@@ -169,6 +169,72 @@ export function ensureSaid(sql: Sql): void {
   dropSaidIndex(sql);
 }
 
+/// What the chat list reads of a station's overview, the JSON `j` (views.ts #chats), as SQL: who the viewer is in Slack
+/// (`slackUsers`, its strings), each connect's id, kind, connection state and Slack workspace and Feishu domain (a row's
+/// signature, its menu's links there; one not an object as it is), and how many agents its station runs (`running`, its
+/// state's line and the glyph's count). A field not there is null. Made by SQLite itself, so that the triggers below
+/// keep it whoever writes the overview; `ORDER BY` keeps each list in its order; json() takes a subquery's answer as
+/// JSON again (a scalar subquery loses that it is, and would be put in as a string). `j` is qualified by its table:
+/// json_each has a hidden column `json` of its own.
+export const overviewPartOf = (j: string) => `json_object(
+  'running', ${j} -> '$.counts.running',
+  'slackUsers', CASE WHEN json_type(${j}, '$.slackUsers') = 'array'
+    THEN json((SELECT json_group_array(u.value ORDER BY u.key) FROM json_each(${j}, '$.slackUsers') AS u WHERE u.type = 'text'))
+    ELSE json_array() END,
+  'connects', CASE WHEN json_type(${j}, '$.connects') = 'array'
+    THEN json((SELECT json_group_array(CASE c.type WHEN 'object' THEN json_object(
+        'id', c.value -> '$.id',
+        'kind', c.value -> '$.kind',
+        'connection', CASE json_type(c.value, '$.connection') WHEN 'object'
+          THEN json_object('state', c.value -> '$.connection.state', 'workspace', c.value -> '$.connection.workspace')
+          ELSE c.value -> '$.connection' END,
+        'feishu', CASE json_type(c.value, '$.feishu') WHEN 'object'
+          THEN json_object('domain', c.value -> '$.feishu.domain')
+          ELSE c.value -> '$.feishu' END)
+      ELSE ${j} -> c.fullkey END ORDER BY c.key) FROM json_each(${j}, '$.connects') AS c))
+    ELSE json_array() END)`;
+
+/// Each station's overview's part the chat list reads (overviewPartOf), beside it in a table of its own: the list reads
+/// a few hundred bytes, not an overview of some 150 KB (nor walks its pages to a column after it). Kept by triggers on
+/// `station`, as `said` is, so a core that knows nothing of it (a web page still open from before, an app put back to
+/// an older one) keeps it too: nothing it holds is older than its overview. Made where missing at every open, as
+/// `said`; overviews from before it get theirs at once, SQLite reading them itself (no overview crosses to the core).
+export function ensureOverviewParts(sql: Sql): void {
+  sql.exec("BEGIN IMMEDIATE");
+  try {
+    sql.exec(`
+      CREATE TABLE IF NOT EXISTS station_part (address TEXT PRIMARY KEY, part TEXT NOT NULL);
+      CREATE TRIGGER IF NOT EXISTS station_part_put AFTER INSERT ON station WHEN new.kind = 'overview'
+      BEGIN
+        DELETE FROM station_part WHERE address = new.address;
+        INSERT INTO station_part (address, part) SELECT new.address, ${overviewPartOf("new.json")} WHERE json_valid(new.json);
+      END;
+      CREATE TRIGGER IF NOT EXISTS station_part_set AFTER UPDATE OF json ON station WHEN new.kind = 'overview' AND old.json IS NOT new.json
+      BEGIN
+        DELETE FROM station_part WHERE address = new.address;
+        INSERT INTO station_part (address, part) SELECT new.address, ${overviewPartOf("new.json")} WHERE json_valid(new.json);
+      END;
+      CREATE TRIGGER IF NOT EXISTS station_part_drop AFTER DELETE ON station WHEN old.kind = 'overview'
+      BEGIN
+        DELETE FROM station_part WHERE address = old.address;
+      END;
+    `);
+    // (asked first by the rows' keys alone: an overview is read only where its part is missing)
+    const missing = sql.all("SELECT s.address FROM station s WHERE s.kind = 'overview' AND NOT EXISTS (SELECT 1 FROM station_part p WHERE p.address = s.address)");
+    for (const [address] of missing) {
+      sql.run(`INSERT INTO station_part (address, part) SELECT st.address, ${overviewPartOf("st.json")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [address]);
+    }
+    sql.exec("COMMIT");
+  } catch (e) {
+    try {
+      sql.exec("ROLLBACK");
+    } catch {
+      // Rolled back already.
+    }
+    throw e;
+  }
+}
+
 /// A thread's letters (what its agents and other chats' wrote each other), item by item: their own log beside its
 /// entries (the station's GET /threads/:id/letters, numbered from 1 in it). Made where missing at every open, as `said`.
 export function ensureLetters(sql: Sql): void {

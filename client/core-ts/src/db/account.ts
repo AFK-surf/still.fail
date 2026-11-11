@@ -20,7 +20,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, versionOf } from "./schema.ts";
+import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, overviewPartOf, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 import { timed } from "../spent.ts";
 import { OWN_SURFACES } from "../titles.ts";
@@ -304,6 +304,8 @@ export class AccountDb {
   readonly found: number;
   /// Whether what was said can be found (`said` is there; it could not be made without room).
   readonly #said: boolean = false;
+  /// Whether each overview's part the chat list reads is kept (`station_part`; it could not be made without room).
+  #parts = false;
   /// The logs let go for room (`log_use`), by K(kind, station, id).
   readonly #evicted = new Set<string>();
   readonly #runner: Runner;
@@ -358,6 +360,12 @@ export class AccountDb {
         // No room to make it: messages are not found by their words this time.
       }
       try {
+        ensureOverviewParts(sql);
+        this.#parts = true;
+      } catch {
+        // No room to make it: each part is read of its overview, by SQLite, this time.
+      }
+      try {
         if (ensureSlackSaid(sql)) this.#fillSlackSaid();
       } catch {
         // No room to make it: what agents said in Slack is not shown in their chats this time.
@@ -381,6 +389,7 @@ export class AccountDb {
     } else if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'said'").length > 0) {
       this.#said = true;
     }
+    if (this.readOnly) this.#parts = this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'station_part'").length > 0;
     this.#bursts = Effect.runSync(Queue.unbounded<void>());
     // The one write fiber: a burst is committed once what started it has run.
     this.#writer = runner.fork(Effect.forever(Effect.andThen(Queue.take(this.#bursts), Effect.andThen(Effect.yieldNow, Effect.sync(() => this.#commit())))));
@@ -612,15 +621,56 @@ export class AccountDb {
 
   /// A station's overview or usage.
   stationDoc(station: string, kind: string): J {
-    return this.#doc(K("st", station, kind), "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind]);
+    const key = K("st", station, kind);
+    const read = kind === "overview" && !this.#cache.has(key);
+    const v = this.#doc(key, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind]);
+    if (read && v !== undefined) work.overviewsRead++;
+    return v;
   }
 
   putStationDoc(station: string, kind: string, value: J, confirmed: number | null, topic: Topic | null): void {
-    this.#putDoc(K("st", station, kind), value, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind], "INSERT INTO station (address, kind, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [station, kind, json, confirmed], topic);
+    const put = () => this.#putDoc(K("st", station, kind), value, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind], "INSERT INTO station (address, kind, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [station, kind, json, confirmed], topic);
+    if (kind === "overview") this.#partWritten(station, put);
+    else put();
   }
 
   dropStationDoc(station: string, kind: string, topic: Topic | null): void {
-    this.#dropDoc(K("st", station, kind), "DELETE FROM station WHERE address = ? AND kind = ?", [station, kind], topic);
+    const drop = () => this.#dropDoc(K("st", station, kind), "DELETE FROM station WHERE address = ? AND kind = ?", [station, kind], topic);
+    if (kind === "overview") this.#partWritten(station, drop);
+    else drop();
+  }
+
+  /// What the chat list reads of a station's overview (schema.ts overviewPartOf), undefined while none is held: kept
+  /// beside it (`station_part`, by triggers), not the overview, which is not read.
+  overviewPart(station: string): J {
+    const key = K("part", station);
+    if (this.#cache.has(key)) return this.#cache.get(key) ?? undefined;
+    const text = this.#partText(station);
+    const part = text === undefined ? undefined : frozen(JSON.parse(text));
+    this.#cache.set(key, part ?? null);
+    return part;
+  }
+
+  /// An overview's part as the database holds it; where it could not keep them (no room, a database a newer core
+  /// wrote), made of the overview by SQLite as it is read.
+  #partText(station: string): string | undefined {
+    const r = this.#parts
+      ? this.sql.all("SELECT part FROM station_part WHERE address = ?", [station])[0]
+      : this.sql.all(`SELECT ${overviewPartOf("st.json")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [station])[0];
+    return typeof r?.[0] === "string" ? r[0] : undefined;
+  }
+
+  /// The overview written or dropped by `write`, its part with it (the triggers): said (`$overview-part`) only where the
+  /// part is not what it was.
+  #partWritten(station: string, write: () => void): void {
+    this.#write(() => {
+      const before = this.#partText(station);
+      write();
+      const after = this.#partText(station);
+      if (after === before) return;
+      this.#cache.set(K("part", station), after === undefined ? null : frozen(JSON.parse(after)));
+      this.#tell({ topic: "$overview-part", station });
+    });
   }
 
   /// At most `most` of a station's documents whose kind starts with `prefix`, the latest confirmed: the others go.

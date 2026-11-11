@@ -17,6 +17,8 @@ import { installView, profile as presentProfile } from "../src/present.ts";
 import { markdown } from "../src/markdown.ts";
 import { work, workSince } from "../src/work.ts";
 import { hostOf, link, overview, prefs, rows, sessions, setup, sorted, threads, ui, workspace, type Ui } from "./views-rig.ts";
+import { dbName } from "../src/data.ts";
+import { VERSION } from "../src/db/schema.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -3540,6 +3542,127 @@ test("a_slack_threads_row_has_its_link_there_as_its_page_does_for_its_menu", asy
   t.set(overview("ws/st"), overviewOf([{ ...connect("c1", "Slack"), connection: connected }], []));
   await t.read(chats, 1);
   assert.deepEqual([of("k").slackUrl, of("k").slackApp, of("7").slackUrl], ["https://afk.slack.com/archives/C1/p12", "slack://channel?team=T1&id=C1&message=1.2", undefined]);
+});
+
+/// Three stations' chats, each with a Slack thread's row and a Feishu chat's, and overviews of some size: Slack users,
+/// a connect signed in to Slack and one to Feishu, agents running, profiles with their allowances.
+const STATIONS = ["a", "b", "c"];
+const slackSignedIn = (state = "connected"): J => ({ state, workspace: { team: "AFK", teamId: "T1", url: "https://afk.slack.com/", botUserId: "U0BOT", botName: "bot" } });
+function busyStation(i: number, patch: J = {}): J {
+  const quota = { state: "ok", windows: [{ label: "5h", usedPercent: 10 + i, resetsAt: 9e12 }], checkedAt: 1 };
+  return {
+    ...overviewOf(
+      [{ ...connect("c1", "Slack"), connection: slackSignedIn() }, { ...connect("c2", "飞书"), kind: "feishu", feishu: { domain: "lark" }, connection: { state: "connected" } }],
+      Array.from({ length: 20 }, (_, p) => profile(`p${p}`, { quota, models: ["opus", "sonnet"], env: [{ name: "X", value: "y".repeat(200) }] })),
+    ),
+    slackUsers: ["U1", "U2"],
+    counts: { sessions: 9, running: i + 1, warm: 0 },
+    ...patch,
+  };
+}
+function busyRows(st: string, now: number): J[] {
+  return [
+    { ...row(`${st}-slack`, now - 1000), connect: "c1", origin: { teamName: "AFK", channel: "C1", channelName: "ops", threadTs: "1.2" } },
+    { ...row(`${st}-feishu`, now - 2000), connect: "c2", origin: { surface: "feishu:c2", channel: "oc_1", channelName: "群" } },
+    ...Array.from({ length: 5 }, (_, i) => row(`${st}${i}`, now - 3000 - i)),
+  ];
+}
+/// A rig with the stations' records written, their chat list asked for.
+async function busyList(options: { host?: J } = {}, write = true) {
+  const t = setup(options);
+  const now = t.host.nowMs();
+  if (write) t.set(workspace(), { id: "ws", stations: STATIONS.map((id) => ({ id, name: id, last_seen: null, version: null })) });
+  for (const [i, st] of STATIONS.entries()) {
+    t.set(link(`ws/${st}`), { state: "online" });
+    if (write) {
+      t.set(overview(`ws/${st}`), busyStation(i));
+      t.set(rows(`ws/${st}`), busyRows(st, now));
+    }
+  }
+  // (written as the list is read: its time passes)
+  const u = ui();
+  t.subscribe(1, { topic: "chats", scope: "ws" });
+  await t.read(u, 1);
+  return { t, u };
+}
+
+test("a_chat_list_reads_what_it_shows_of_each_stations_overview_not_the_whole_of_it", async () => {
+  // The list read every station's whole overview, the largest record there is, for its Slack users and its connects:
+  // 3.25 ms of its 21.8 ms in Hermes, five stations of 150 KB each read and parsed on a workspace's first open in a run.
+  const first = await busyList();
+  const items = first.u.value.days.flatMap((d: J) => d.items);
+  const of = (id: string) => items.find((r: J) => r.id === id);
+  assert.deepEqual([of("a-slack").slackUrl, of("a-feishu").feishuUrl === undefined, first.u.value.glyph.running], ["https://afk.slack.com/archives/C1/p12", false, 6]);
+  // A core started anew on that database: nothing read yet.
+  const before = { ...work };
+  const again = await busyList({ host: first.t.host }, false);
+  assert.equal(workSince(before).overviewsRead, 0, "no station's whole overview read");
+  assert.deepEqual(again.u.value, first.u.value);
+});
+
+test("a_chat_list_is_made_again_only_as_what_it_reads_of_an_overview_changes", async () => {
+  const { t, u } = await busyList();
+  const listed = () => u.value.days.flatMap((d: J) => d.items);
+  const was = u.value;
+  // Its allowances, its profiles, its jobs: nothing the list reads.
+  let before = { ...work };
+  let computed = t.router.computed;
+  t.set(overview("ws/a"), busyStation(0, { profiles: [profile("p0", { quota: { state: "ok", windows: [], checkedAt: 2 } })], processes: [{ pid: 1 }], disk: { free: 1 } }));
+  await t.read(u, 1);
+  assert.equal(t.router.computed, computed, "the list not made again");
+  assert.equal(workSince(before).listed, 0);
+  assert.equal(u.value, was);
+  // Who the viewer is in Slack: its station's rows made again.
+  before = { ...work };
+  computed = t.router.computed;
+  t.set(overview("ws/a"), busyStation(0, { slackUsers: ["U1"] }));
+  await t.read(u, 1);
+  assert.equal(t.router.computed, computed + 1);
+  assert.ok(workSince(before).listed > 0, "its rows made again");
+  // A connect's state: its rows' links there go.
+  before = { ...work };
+  t.set(overview("ws/a"), busyStation(0, { slackUsers: ["U1"], connects: [{ ...connect("c1", "Slack"), connection: slackSignedIn("disabled") }] }));
+  await t.read(u, 1);
+  assert.ok(workSince(before).listed > 0);
+  assert.equal(listed().find((r: J) => r.id === "a-slack").slackUrl, undefined);
+  // How many agents it runs: the glyph's count.
+  t.set(overview("ws/a"), busyStation(5, { slackUsers: ["U1"], connects: [{ ...connect("c1", "Slack"), connection: slackSignedIn("disabled") }] }));
+  await t.read(u, 1);
+  assert.equal(u.value.glyph.running, 11);
+});
+
+test("a_database_without_the_overviews_parts_opens_at_its_version_and_gives_the_same_chat_list", async () => {
+  const first = await busyList();
+  // As a core before them left the database: no parts, no triggers keeping them.
+  const sql = first.t.host.sqls.get(dbName("s1"))!;
+  sql.exec("DROP TRIGGER IF EXISTS station_part_put; DROP TRIGGER IF EXISTS station_part_set; DROP TRIGGER IF EXISTS station_part_drop; DROP TABLE IF EXISTS station_part;");
+  const before = { ...work };
+  const again = await busyList({ host: first.t.host }, false);
+  // The parts are made as the database opens, no version raised: a core before them still writes it (schema.ts).
+  assert.equal(sql.all("PRAGMA user_version")[0][0], 1);
+  assert.equal(VERSION, 1);
+  assert.deepEqual(again.u.value, first.u.value);
+  assert.equal(workSince(before).overviewsRead, 0, "the parts made of the overviews by SQLite: none read by the core");
+});
+
+test("an_overview_written_by_a_core_that_knows_nothing_of_its_part_is_what_the_chat_list_shows", async () => {
+  const first = await busyList();
+  const sql = first.t.host.sqls.get(dbName("s1"))!;
+  // An older core (a web page still open from before) writes station a's overview as it always did: its connect signed
+  // out of Slack, other Slack users, more agents at work.
+  const changed = busyStation(0, { slackUsers: ["U9"], counts: { sessions: 9, running: 7, warm: 0 }, connects: [{ ...connect("c1", "Slack"), connection: slackSignedIn("disabled") }] });
+  sql.run("INSERT INTO station (address, kind, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", ["ws/a", "overview", JSON.stringify(changed), 2]);
+  const again = await busyList({ host: first.t.host }, false);
+  const item = (id: string) => again.u.value.days.flatMap((d: J) => d.items).find((r: J) => r.id === id);
+  assert.equal(item("a-slack").slackUrl, undefined, "its connect's state as written");
+  assert.equal(item("b-slack").slackUrl, "https://afk.slack.com/archives/C1/p12");
+  assert.equal(again.u.value.glyph.running, 7 + 2 + 3);
+  // and as the core that knows of it writes it again: the same
+  const fresh = await busyList();
+  fresh.t.set(overview("ws/a"), changed);
+  await fresh.t.read(fresh.u, 1);
+  assert.deepEqual(again.u.value.days, fresh.u.value.days);
+  assert.deepEqual(again.u.value.glyph, fresh.u.value.glyph);
 });
 
 test("an_agent_whose_card_is_answered_from_here_is_at_work_from_the_answer_on_till_its_turn_after_it_begins", () => {

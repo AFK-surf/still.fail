@@ -69,10 +69,12 @@ export type RigOptions = {
   all?: boolean;
   owners?: (parts: { host: FakeHost; store: Store; data: Data; views: Views }) => Owner[];
   env?: (parts: { host: FakeHost; store: Store; data: Data; runner: Runner }) => Partial<ViewsEnv>;
+  /// The host whose databases it opens: another rig's, to read what that one wrote as a core started anew does.
+  host?: FakeHost;
 };
 
 export function setup(options: RigOptions = {}) {
-  const host = new FakeHost();
+  const host = options.host ?? new FakeHost();
   const runner = new Runner(host.time.clock);
   const store = new Store(host, runner);
   store.setShaped();
