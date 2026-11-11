@@ -13,6 +13,8 @@ export const work = {
   weighed: 0,
   /// Items of keyed lists made as they go out (output.ts), not taken as they went out last.
   shaped: 0,
+  /// Values made whole as they go out (output.ts `shape`), not taken as they went out last (`kept`).
+  shapes: 0,
   /// Rows of a log (a thread's entries) read from the database rather than taken as parsed (db/account.ts).
   logRows: 0,
   /// Numbers of a log's items read from the database (which it holds, to find what to read).
