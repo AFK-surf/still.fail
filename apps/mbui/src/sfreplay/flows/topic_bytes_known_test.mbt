@@ -32,7 +32,7 @@ fn init {
     ("drive-read", 55, 5, 0),
     ("drive-rename", 42, 1, 0),
     ("drive-sheet-closing", 41, 0, 0),
-    ("drive-upload", 42, 2, 0),
+    ("drive-upload", 24, 2, 0),
     ("drive-zip", 42, 0, 0),
     ("glass", 29, 11, 0),
     ("history", 45, 4, 0),

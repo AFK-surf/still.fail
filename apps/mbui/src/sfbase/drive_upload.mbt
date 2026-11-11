@@ -127,7 +127,7 @@ pub fn dv_pump(src : Source) -> Unit {
       ups.pumping.set(true)
       u.state.set("going")
       u.sent.set(0)
-      u.id = upload_id("drive\u{1}\{u.root}\u{1}\{u.dir}\u{1}" + file_seed(u.station, u.name.get(), u.bytes), u.serial)
+      u.id = dv_upload_id(u)
       dv_up_part(src, u, 0, dv_part_first)
     }
     None => ()
@@ -221,6 +221,16 @@ pub fn dv_up_part(src : Source, u : DvUpload, have : Int, planned : Int) -> Unit
       }
     }
   })
+}
+
+///|
+/// A file going up into a drive's id (upload_id): the station, where in the drive it goes (the folder under its root,
+/// its name), its size and bytes' hash, its place among the uploads. Not the root: that is a path on the station's
+/// machine (a home folder's, a temporary one's), and a recording says it as `/test-station` (tools/trace), so a replay
+/// of the run would make another id. The station keeps a part beside where the file goes (the folder, by the id:
+/// station/src/drive/drive.ts `upload`), so two roots' files of the same name and bytes never meet there.
+pub fn dv_upload_id(u : DvUpload) -> String {
+  upload_id("drive\u{1}\{u.dir}\u{1}" + file_seed(u.station, u.name.get(), u.bytes), u.serial)
 }
 
 ///|
