@@ -257,3 +257,19 @@ test "offers: the one chosen on the hover's ground, and only it, as ↓ and ↑ 
   x.t.run_for(@ui.move_most_ms)
   assert_eq((offers_lit(x, "甲"), offers_lit(x, "乙"), offers_lit(x, "丙")), (false, false, true))
 }
+
+///|
+test "offers: a mouse's pointer over its ground (its head's words, its padding) is the arrow, over a row the hand (ground_node)" {
+  let x = offers_tester()
+  let (dx, dy, dw, dh) = x.t.get(Dialog, label="可以选的").rect
+  let shape_on = fn(px : Double, py : Double) {
+    x.t.move(px, py)
+    x.t.run_for(@ui.move_most_ms)
+    x.t.cursor()
+  }
+  let points = [(dx + 3.0, dy + dh / 2.0), (dx + dw / 2.0, dy + 3.0), (dx + dw / 2.0, dy + dh - 3.0), (dx + dw - 3.0, dy + dh / 2.0)]
+  let grounds = points.map(fn(p) { shape_on(p.0, p.1) })
+  assert_eq(grounds, points.map(fn(_) { Arrow }), msg="its ground at \{points}, it \{(dx, dy, dw, dh)}")
+  let (rx, ry, rw, rh) = x.t.get(Button, label="乙", selected=false).rect
+  assert_eq(shape_on(rx + rw / 2.0, ry + rh / 2.0), Hand, msg="a row")
+}

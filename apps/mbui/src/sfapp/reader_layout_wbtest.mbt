@@ -378,3 +378,23 @@ test "wide: layout changes show while the core is still keeping them" {
   assert_true(t.find("150%") is Some(_))
   assert_eq(pending.length(), 3)
 }
+
+///|
+test "wide: the mouse's pointer over the layout's ground (its title, a heading's words) is the arrow, over its controls the hand (@sf.ground_node)" {
+  let t = layout_wide()
+  let words = layout_words(t, fn(x, y) { x >= 955.0 && y >= 40.0 })
+  let shape_on = fn(x : Double, y : Double) {
+    t.move(x, y)
+    t.run_for(@ui.move_most_ms)
+    t.cursor()
+  }
+  let grounds = ["排版", "背景"].map(fn(s) {
+    match words.filter(fn(w) { w.0 == s }) {
+      [(_, x, y, w, h), ..] => (s, shape_on(x + w / 2.0, y + h / 2.0))
+      [] => (s, NotAllowed)
+    }
+  })
+  assert_eq(grounds, [("排版", Arrow), ("背景", Arrow)], msg="\{words}")
+  let (kx, ky) = layout_middle(t, Button, "增大字号")
+  assert_eq(shape_on(kx, ky), Hand)
+}

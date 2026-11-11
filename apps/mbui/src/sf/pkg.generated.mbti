@@ -731,6 +731,8 @@ pub fn glyph_color(String, Bool) -> Int64?
 
 pub fn gradient(@ui.Ctx, Double, Double, Double, Int64, Int64, radius? : Double) -> Unit
 
+pub fn ground_node(@view.View) -> @view.View
+
 pub fn group(@ui.Ctx, () -> Unit, card? : Bool) -> Unit
 
 pub let group_corner : Double

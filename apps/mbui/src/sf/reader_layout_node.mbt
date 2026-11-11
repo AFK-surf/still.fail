@@ -111,7 +111,7 @@ pub fn reader_layout_docked(parent : @view.View, close : () -> Unit, fits? : Boo
         p.shrink(Is(1.0)).min_width(Is(Some(0.0))).clips(Is(true)) |> ignore
       }
       // (a press on it its own: not the text's under it)
-      p.presses(Is(true)).on_press(fn() {  }) |> ignore
+      ground_node(p) |> ignore
       p.box(fn(head) {
         style_node(head, fn() { desk_panel_head })
         words_node(head, fn() { t("web-pages.drive.reader.layout") }, fn() {

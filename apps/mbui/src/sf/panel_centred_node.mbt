@@ -105,14 +105,13 @@ fn panel_centred_node(
       .alpha(By(fn() { look().alpha }))
       .scale(By(fn() { look().sx }))
       .offset(By(fn() { (look().dx, look().dy) }))
-      // (a press on it its own: not outside it)
-      .presses(Is(true))
-      .on_press(fn() {  })
       // (one that goes in steps read out by its own title still: what its steps say is theirs)
       .says(By(fn() {
         let (title, _, description) = if steps is Some(_) { (x.title, "", x.description) } else { now() }
         Some(@view.said(Dialog, label=title, description~))
       }))
+      // (a press on it its own: not outside it)
+      |> ground_node
       |> ignore
       // (where what it holds starts: under an untitled one's close button; right under a title row of its own, which
       // keeps what space it wants under it, as what it holds kept it when it drew that row itself; a title's gap else)

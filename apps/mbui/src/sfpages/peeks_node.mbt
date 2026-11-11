@@ -191,10 +191,10 @@ fn peek_holder(
     .alpha(By(fn() { look().alpha }))
     .scale(By(fn() { look().sx }), about=FromBeside)
     .says(Is(Some(@view.said(Group))))
-    // (a press on it its own, not the row's under it nor one elsewhere; going, nothing of it read out)
-    .presses(Is(true))
-    .on_press(fn() {  })
+    // (going, nothing of it read out)
     .hides(By(fn() { card.leaving() }))
+    // (a press on it its own, not the row's under it nor one elsewhere)
+    |> @sf.ground_node
     |> ignore
     card.reacts(fn() { card.pointed_in() }, fn(on) { on_card.set(on) })
     card.owns(fn() {

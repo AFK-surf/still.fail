@@ -139,8 +139,7 @@ fn panel_node(
         .scale(By(fn() { look().sx }), about=FromBeside)
         .says(Is(Some(@view.said(Dialog, label=x.title))))
         // (a press on it its own: not outside it)
-        .presses(Is(true))
-        .on_press(fn() {  })
+        |> ground_node
         |> ignore
         // (the side of what opened it it went on, as the tree placed it (@ui.old_went: flipped there for want of room,
         // its old views built again as it goes to the other): what its parts keep nearest what opened it is by that side
