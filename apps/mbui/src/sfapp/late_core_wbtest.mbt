@@ -117,9 +117,8 @@ let switch_screens : Array[(String, Double, Double, Int)] = [
 ///|
 /// The made-up core answering each topic as late as `late` says by its name, through the app's own client, what the
 /// places open on asked ahead (reads_ahead), with a third workspace (ws3, 第三个) where `three`: what the client sent and
-/// was told put in `heard`. A run begun for it.
+/// was told put in `heard`. Made in a run begun for it (switch_on).
 fn switch_core(late : (String) -> Double, heard : Array[String], three? : Bool = false) -> Source {
-  new_run()
   let base = fixture("home")
   let base = if three {
     {
@@ -156,8 +155,24 @@ fn switch_screen(src : Source, w : Double, h : Double, platform : Int, most : Do
 /// A phone over the made-up core answering `ms` late, at rest on Home of ws1 (星火工作室), what the places open on asked
 /// ahead (reads_ahead): what the client sent and was told put in `heard`.
 fn switch_phone(ms : Double, heard : Array[String]) -> (@ui.Tester, Source) {
-  let src = switch_core(fn(_) { ms }, heard)
-  (switch_screen(src, 390.0, 844.0, 2, ms), src)
+  switch_on(fn(_) { ms }, heard, 390.0, 844.0, 2, ms)
+}
+
+///|
+/// A run begun, the made-up core answering as late as `late` says (switch_core) and the app over it at rest in a
+/// window `w` by `h` on `platform` (switch_screen): the run's own Tester, and its source.
+fn switch_on(
+  late : (String) -> Double,
+  heard : Array[String],
+  w : Double,
+  h : Double,
+  platform : Int,
+  most : Double,
+  three? : Bool = false,
+) -> (@ui.Tester, Source) {
+  new_run()
+  let src = switch_core(late, heard, three~)
+  (switch_screen(src, w, h, platform, most), src)
 }
 
 ///|
@@ -313,8 +328,7 @@ test "a workspace switched over a core answering each of its topics tens of ms l
   for s in switch_screens {
     let (name, w, h, platform) = s
     let wide = name != "小屏"
-    let src = switch_core(switch_late, [])
-    let t = switch_screen(src, w, h, platform, 70.0)
+    let (t, src) = switch_on(switch_late, [], w, h, platform, 70.0)
     let start = t.time()
     @ui.view_tree().unwrap().event(start, fn() { @sfpages.switch_workspace(src, "ws2") })
     let frames = switch_frames(t, src, start, @sfbase.switch_wait_ms + @ui.move_most_ms * 2.0)
@@ -349,8 +363,7 @@ test "a workspace switched over a core that answers none of it within switch_wai
   let faults : Array[String] = []
   for s in switch_screens {
     let (name, w, h, platform) = s
-    let src = switch_core(fn(_) { 600.0 }, [])
-    let t = switch_screen(src, w, h, platform, 600.0)
+    let (t, src) = switch_on(fn(_) { 600.0 }, [], w, h, platform, 600.0)
     let start = t.time()
     @ui.view_tree().unwrap().event(start, fn() { @sfpages.switch_workspace(src, "ws2") })
     let frames = switch_frames(t, src, start, @sfbase.switch_wait_ms + @ui.move_most_ms)
@@ -402,8 +415,7 @@ test "a second workspace asked while a switch waits takes its place, the first n
   for s in switch_screens {
     let (name, w, h, platform) = s
     let heard : Array[String] = []
-    let src = switch_core(fn(_) { 150.0 }, heard, three=true)
-    let t = switch_screen(src, w, h, platform, 150.0)
+    let (t, src) = switch_on(fn(_) { 150.0 }, heard, w, h, platform, 150.0, three=true)
     let tree = @ui.view_tree().unwrap()
     let start = t.time()
     tree.event(start, fn() { @sfpages.switch_workspace(src, "ws2") })
@@ -431,8 +443,7 @@ test "the workspace in view asked while a switch waits calls it off: on 小屏, 
   for s in switch_screens {
     let (name, w, h, platform) = s
     let heard : Array[String] = []
-    let src = switch_core(fn(_) { 150.0 }, heard)
-    let t = switch_screen(src, w, h, platform, 150.0)
+    let (t, src) = switch_on(fn(_) { 150.0 }, heard, w, h, platform, 150.0)
     let tree = @ui.view_tree().unwrap()
     let start = t.time()
     tree.event(start, fn() { @sfpages.switch_workspace(src, "ws2") })
