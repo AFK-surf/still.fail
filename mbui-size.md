@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [e537bd092](https://github.com/AFK-surf/still.fail/commit/e537bd092bceaada08e4c74b23680cee7fae4906) app: a workspace switch keeps the screen as it was | 1.82 | 2.43 | 10.16 | 28.89 | 35.84 | 25.73 | 47.7 | 94.36 | 182.55 |
 | [e6defc3ae](https://github.com/AFK-surf/still.fail/commit/e6defc3aec4ae431c7aff33554623b114031c5ca) chat: a notice gone to lights its own pill, not a  | 1.82 | 2.43 | 10.13 | 28.87 | 35.77 | 25.71 | 47.65 | 94.09 | 159.19 |
 | [a16ed7802](https://github.com/AFK-surf/still.fail/commit/a16ed780226e292b3a0f79f10ffcd877d1dc3daf) mbui: what a test runs to once a motion is over is | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.41 | 133.17 |
 | [c41e22428](https://github.com/AFK-surf/still.fail/commit/c41e224283adc5681cff8fdbe4b9df1790f50070) sfpages: a chat row's ground put at once when anot | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.21 | 173.03 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [224daa17e](https://github.com/AFK-surf/still.fail/commit/224daa17e9b815b8d33dd3aa1784663e287bc704) core, app: a model control and a new chat send wha | 1.81 | 2.42 | 10.07 | 28.81 | 35.54 | 25.65 | 47.47 | 94.6 | 130.15 |
 | [1c21e3620](https://github.com/AFK-surf/still.fail/commit/1c21e36201ae7b64bd2ebbeb5874b65924398483) mbui: what comes and goes down a column at one mom | 1.81 | 2.42 | 10.07 | 28.81 | 35.54 | 25.65 | 47.47 | 94.32 | 139.21 |
 | [d4072dad1](https://github.com/AFK-surf/still.fail/commit/d4072dad1eac9fe7c85ac4e74733728623bd8554) sf: a style on a node lies between its ends where  | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 94.41 | 184.61 |
-| [4c8329652](https://github.com/AFK-surf/still.fail/commit/4c8329652908f02745d2faaad2b0a9377d6130d2) app: 分享给其他 workspace copies the chat's link as 完成  | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 94.47 | 148.37 |
