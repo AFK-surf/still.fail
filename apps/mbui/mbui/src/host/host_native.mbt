@@ -146,7 +146,6 @@ extern "C" fn ffi_set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Int = "mb
 
 ///|
 #borrow(what)
-#borrow(what)
 extern "C" fn ffi_frame_awaiting(awaiting : Int, what : String) -> Unit = "mb_host_frame_awaiting"
 
 ///|

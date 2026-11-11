@@ -152,14 +152,14 @@ pub fn film(
   let passed = drive_passed(logs)
   let drawn_ok = run.failure is None && passed
   // (the last frame as drawn, before the film is closed: what was drawn last is still the renderer's)
-  let shot = last == "" || drawn_ok && drawn.val > 0 && snapshot(last)
+  let shot = last == "" || (drawn_ok && drawn.val > 0 && snapshot(last))
   let closed = close(put.val)
   // (what the app put on the clipboard as a picture last, as the host drew it: a shot's, Ctx::take_shot)
-  let copy = copied == "" || drawn_ok && closed &&
+  let copy = copied == "" || (drawn_ok && closed &&
     (match t.clipboard_png() {
       Some(png) => write_text(copied, @codec.base64(png))
       None => false
-    })
+    }))
   let text = logs
     .filter(fn(l) { l.has_prefix("TEXTREC ") })
     .map(fn(l) { l.unsafe_substring(start=8, end=l.length()) })

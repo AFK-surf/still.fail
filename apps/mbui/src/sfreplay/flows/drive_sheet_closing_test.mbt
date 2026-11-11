@@ -5,7 +5,7 @@
 
 ///|
 test "52-drive-sheet-closing" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-sheet-closing"), seed~)
     // 文件 over Home from the start, as the run's MBUI_OPEN_PAGE=files had it
     f.open_page(@sfapp.Page::Files)

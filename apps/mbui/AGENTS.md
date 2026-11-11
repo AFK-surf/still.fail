@@ -255,6 +255,22 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   is read from its log, fixed and pushed again; the work is done once all of it passed.
 - A brief that sends an agent to work here says the same; it never asks for a full run before the PR.
 
+## Warnings
+
+- A compiler warning is an error or off, never left a warning (the user, 2026-11-11): `warnings` in `moon.mod` and
+  `mbui/moon.mod`, the same line. Why: moon keeps no diagnostics, so a package that printed a warning is type-checked
+  again on every `moon check` (8 s with nothing changed; 0.1 s when none is printed), and the tree's ~5800 were read by
+  nobody.
+- Off for good: 33, a line past 65535 columns (the fonts' bytes and kept data are written on one line on purpose), and
+  79, said at every `derive` of a public type and stopped only by an `extend` declaration for each trait of each type
+  (~600 lines of boilerplate). The rest of the off list is what is not mended yet: it only shrinks, each kind going to
+  an error in the change that mends the last of it.
+- The modules with a `moon.mod` of their own (`mbui/tools`, `tools`, `mbui/bench/signals`) carry the same kind of line.
+- CI's MoonBit is the latest release, taken each hour (`.github/workflows/mbui-moonbit.yml`), so a release that
+  deprecates something, or warns of something new, fails every pull request with no commit of ours, till its places are
+  mended: taken as it is (the user, 2026-11-12: 继续跟最新), whoever meets it first mends it. Check with the MoonBit CI
+  has (its jobs say `moon version --all`): an older one says less.
+
 ## Before a PR
 
 - Don't `moon fmt` here (it rewrites a hundred files nobody touched).

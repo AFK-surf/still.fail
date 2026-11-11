@@ -393,7 +393,7 @@ test "a fiber forked long after the last frame: ready at once, run by run_ready"
   let rt = runtime()
   let ran = Ref(0)
   t.fake.wants = false
-  rt.fork(async fn() { ran.val += 1 }) |> ignore
+  rt.fork(fn() { ran.val += 1 }) |> ignore
   assert_true(!rt.idle())
   assert_true(rt.wants_frame())
   assert_true(t.fake.wants)
@@ -409,7 +409,7 @@ test "a scope closed long after the last frame: its fiber cut, its finalizer run
   let rt = runtime()
   let said : Array[String] = []
   let scope = rt.root().child()
-  scope.add_finalizer(async fn() { said.push("finalized") })
+  scope.add_finalizer(fn() { said.push("finalized") })
   scope.fork(async fn() {
     @effect.sleep(timers_fired_ms.to_int() * 10)
     said.push("slept")
@@ -432,7 +432,7 @@ test "a fiber forked between frames, an offscreen frame drawn earlier than its m
   t.advance(idle_ms)
   let since = whole_ms(t.time())
   let ran : Array[Double] = []
-  runtime().fork(async fn() { ran.push(@effect.now().to_double()) }) |> ignore
+  runtime().fork(fn() { ran.push(@effect.now().to_double()) }) |> ignore
   assert_true(t.fake.wants, msg="the host not asked for a frame as it was forked")
   t.fake.wants = false
   frame_offscreen(still_view, 100.0, 100.0, 1.0, at) |> ignore
@@ -470,7 +470,7 @@ test "a fiber forked and a timer due at the same moment: the first set first, wh
       }
       let said : Array[(String, Double)] = []
       let fork = fn() {
-        runtime().fork(async fn() { said.push(("fiber", @effect.now().to_double())) }) |> ignore
+        runtime().fork(fn() { said.push(("fiber", @effect.now().to_double())) }) |> ignore
       }
       let timer = fn() { runtime().after(0, fn() { said.push(("timer", runtime().now().to_double())) }) }
       if fork_first {
@@ -516,7 +516,7 @@ test "a task run at its moment, one made ready at a later moment waiting: that o
   // (run to its sleep, at the last frame's time)
   ignore(runtime().run_ready())
   t.advance(idle_ms)
-  runtime().fork(async fn() {  }) |> ignore
+  runtime().fork(fn() {  }) |> ignore
   frame_offscreen(still_view, 100.0, 100.0, 1.0, at) |> ignore
   assert_eq(seen, [(false, true, 1)])
   assert_eq(runtime().holding().1, 1)
@@ -535,7 +535,7 @@ test "an offscreen frame's view forking a fiber: the host asked for nothing" {
   let view = fn(c : Ctx) {
     if !forked.val {
       forked.val = true
-      c.fork(async fn() { ran.val += 1 }) |> ignore
+      c.fork(fn() { ran.val += 1 }) |> ignore
     }
     still_view(c)
   }
@@ -560,7 +560,7 @@ test "a timer's callback running what is ready, a task made ready after it at th
     said.push("timer")
     ignore(runtime().run_ready())
   })
-  runtime().fork(async fn() { said.push("fiber") }) |> ignore
+  runtime().fork(fn() { said.push("fiber") }) |> ignore
   t.frame()
   assert_eq(said, ["timer", "fiber"])
   assert_true(runtime().idle())
@@ -580,11 +580,11 @@ test "fibers forked between frames at one moment, a seed: in their order; their 
     t.advance(idle_ms)
     let ran : Array[String] = []
     for i in 0..<forked_n {
-      runtime().fork(async fn() {
+      runtime().fork(fn() {
         ran.push("fiber \{i}")
         if i == 0 {
           for j in 0..<forked_n {
-            runtime().fork(async fn() { ran.push("child \{j}") }) |> ignore
+            runtime().fork(fn() { ran.push("child \{j}") }) |> ignore
           }
         }
       })

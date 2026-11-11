@@ -2866,7 +2866,7 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
           obj([
             (
               "chats",
-              Json::array([
+              Json::array(([
                 // a PDF opened, 5 minutes ago; a video, 12 of its 48 MB come
                 obj([
                   ("station", str("ws1/st1")),
@@ -2887,7 +2887,7 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
                 obj([("station", str("ws1/st1")), ("thread", Json::number(4.0)), ("title", str("给设置页加一个深色模式开关")), ("sessions", ["s-c4"]), ("bytes", Json::number(860000.0))]),
                 obj([("station", str("ws1/st2")), ("thread", Json::number(3.0)), ("title", str("夜里的构建又失败了")), ("sessions", ["s-c3"]), ("bytes", Json::number(41000.0))]),
                 ] +
-                fx_kept_many()
+                fx_kept_many())
                 |> fx_kept_most_first,
               ),
             ),

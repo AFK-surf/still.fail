@@ -4,7 +4,7 @@
 
 ///|
 test "64-wide-new-chat" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("wide-new-chat"), seed~, w=1280.0, h=800.0)
     f.see("新建对话")
     f.key("cmd+n")

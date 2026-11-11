@@ -27,7 +27,7 @@ fn let_go_dialog(t : @ui.Tester) -> (Double, Double, Double, Double) {
 /// moves, let go: how far its title (where it is drawn, closing or not) went at the finger's last move and over the
 /// frame after it was let go (at a rate of frames, the finger's again: what walks its own frames returns at once
 /// there), and the Tester.
-fn sheet_let_go(dy : Double) -> (@ui.Tester, Double, Double) raise {
+fn sheet_let_go(dy : Double) -> (@ui.Tester, Double, Double) {
   let (t, src, r) = things_chat()
   open_things(src, r, 7.0)
   t.run_for(sheet_way_ms(t))
@@ -82,7 +82,7 @@ test "a sheet of the tree's said to a screen reader as a dialog as tall as it is
 ///|
 /// The chat's things opened and at rest (675.2 tall), its top drawn `dy` down in `steps` moves a frame apart and let
 /// go: whether it is open once it has had its way, and how tall it is then.
-fn things_let_go(dy : Double, steps : Int) -> (Bool, Double) raise {
+fn things_let_go(dy : Double, steps : Int) -> (Bool, Double) {
   let (t, src, r) = things_chat()
   open_things(src, r, 7.0)
   t.run_for(sheet_way_ms(t))
@@ -112,7 +112,7 @@ test "a sheet of the tree's that grows let go above 30% of the window: closed fl
 /// A sheet held at its top, drawn `dy` down in `steps` moves (a frame apart: as fast as that), let go short of where it
 /// would close or go to its next height; from the finger's last move, a frame each `ms` till it is back where it stood:
 /// where its top was at each (the chat's things, as tall as it can grow, or a panel of nodes).
-fn let_go_back(grows : Bool, dy : Double, steps : Int, ms : Double) -> Array[Double] raise {
+fn let_go_back(grows : Bool, dy : Double, steps : Int, ms : Double) -> Array[Double] {
   let t = if grows {
     let (t, src, r) = things_chat()
     open_things(src, r, 7.0)

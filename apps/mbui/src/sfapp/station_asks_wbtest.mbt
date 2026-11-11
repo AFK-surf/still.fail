@@ -79,7 +79,7 @@ fn three_stations(base : Source) -> Source {
 ///|
 /// A phone signed in over the three stations' core answering `ms` late, at rest on Home: every subscription the client
 /// sent said in `said` as `<topic> <params>`, its params whole.
-fn asked_phone(said : Array[String]) -> @ui.Tester raise {
+fn asked_phone(said : Array[String]) -> @ui.Tester {
   new_run()
   let heard = fn(h : String) {
     guard h.has_prefix("out ") else { return }

@@ -2656,7 +2656,7 @@ fn probe_message(channel : String, json : String, bytes : Bytes?) -> Unit {
 fn[N : Compare + Show] probe_top(m : Map[String, (Int, N)], n : Int, unit : String, sep? : String = " ") -> String {
   let all = m.to_array()
   all.sort_by(fn(a, b) {
-    let c = b.1.1.compare(a.1.1)
+    let c = Compare::compare(b.1.1, a.1.1)
     if c != 0 { c } else { b.1.0.compare(a.1.0) }
   })
   let out = StringBuilder::new()

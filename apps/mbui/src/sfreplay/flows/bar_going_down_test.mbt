@@ -3,7 +3,7 @@
 
 ///|
 test "54-bar-going-down" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("bar-going-down"), seed~)
     f.see("端到端测试")
     f.tap("端到端测试")

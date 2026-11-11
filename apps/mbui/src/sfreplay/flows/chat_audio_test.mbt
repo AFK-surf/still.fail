@@ -26,7 +26,7 @@ fn opened_view(f : @sfreplay.Flow) -> Int {
 
 ///|
 test "46-chat-audio" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("chat-audio"), seed~)
     f.see("端到端测试")
     // (alice's other device sends the song: a live run's step beside the app)

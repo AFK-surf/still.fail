@@ -3,7 +3,7 @@
 
 ///|
 test "36-archive-restore" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("archive-restore"), seed~)
     f.see("端到端测试")
     // (a live run's step beside the app, the trace has what came of it)

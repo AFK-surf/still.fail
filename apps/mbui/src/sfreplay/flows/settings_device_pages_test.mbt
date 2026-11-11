@@ -3,7 +3,7 @@
 
 ///|
 test "87-device-pages" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("settings-device-pages"), seed~)
     f.tap("icon:settings")
     f.run_to(@ui.nav_rest())

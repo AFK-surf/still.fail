@@ -1679,7 +1679,7 @@ pub fn page_card_node(
     |> ignore
   }
   let at = part_of(parent)
-  if layered || at.look is Wide && at.section {
+  if layered || (at.look is Wide && at.section) {
     card(parent)
   } else {
     // (narrow, 10 under it; wide, alone on the page, a section's 28 (wide_alone's))

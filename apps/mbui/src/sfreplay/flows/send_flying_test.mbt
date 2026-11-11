@@ -3,7 +3,7 @@
 
 ///|
 test "39-send-flying" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("send-flying"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)

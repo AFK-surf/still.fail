@@ -8,7 +8,7 @@
 
 ///|
 test "48-share" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("share"), seed~)
     f.share_in("https://www.youtube.com/watch?v=e2e105609", title="列表视频105609")
     // the sheet of chats raised

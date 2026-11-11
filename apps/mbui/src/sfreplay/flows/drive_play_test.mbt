@@ -44,7 +44,7 @@ fn player_told(f : @sfreplay.Flow) -> Unit {
 
 ///|
 test "45-drive-play" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-play"), seed~)
     // (put in the lent folder before the app starts: a live run's step, the trace has what came of it)
     f.before("drive-media 105609")

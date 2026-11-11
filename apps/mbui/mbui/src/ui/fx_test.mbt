@@ -160,7 +160,7 @@ test "a lifetime ends the first frame its key is not built: its fibers interrupt
   let t = @ui.Tester::new(fn(c) {
     if shown.val {
       c.effect("panel", async fn(s) {
-        s.add_finalizer(async fn() { log.push("finalizer at \{@effect.now()}") })
+        s.add_finalizer(fn() { log.push("finalizer at \{@effect.now()}") })
         defer log.push("fiber ended at \{@effect.now()}")
         log.push("started at \{@effect.now()}")
         @effect.never()

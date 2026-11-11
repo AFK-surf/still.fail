@@ -5,7 +5,7 @@
 
 ///|
 test "19-drive-rename" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-rename"), seed~)
     // (the photo 18's upload left, put there before the app starts: the run apart from 18's)
     f.before("drive-photo 082940")

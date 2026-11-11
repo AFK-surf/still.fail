@@ -22,7 +22,7 @@ fn send_at_pace(
   sent? : Double = -1.0,
   core? : Double = 0.0,
   after? : Double = -1.0,
-) -> SentMoves raise {
+) -> SentMoves {
   new_run()
   fix_pace.val = (deliver, answer, end)
   fix_sent_for.val = sent
@@ -138,14 +138,7 @@ test "words sent at any pace of the station: the list goes up only, never down a
     for answer in [0.0, 100.0, 400.0, 1400.0] {
       for end in [-300.0, -100.0, 0.0, 100.0, 300.0, 900.0] {
         let at = "deliver \{deliver} answer \{answer} end \{end}"
-        let s = send_at_pace(deliver, answer, end) catch {
-          e => {
-            let said = e.to_string()
-            let cut = if said.length() > 900 { said.view(end_offset=900).to_string() } else { said }
-            bad.push(at + ": " + cut.replace_all(old="\n", new=" "))
-            continue
-          }
-        }
+        let s = send_at_pace(deliver, answer, end)
         if s.turns > 0 || s.down >= 1.0 {
           bad.push(at + ": \{s.turns} turns, down \{s.down} (\{s.worst})")
         }
@@ -171,14 +164,7 @@ test "words sent, the station slow to take them or the chat to reach them: the l
     for sent in [-1.0, 0.0, 100.0, 600.0, 1200.0] {
       for answer in [0.0, 1400.0] {
         let at = "deliver \{deliver} sent \{sent} answer \{answer}"
-        let s = send_at_pace(deliver, answer, fix_turn_end_ms, sent~) catch {
-          e => {
-            let said = e.to_string()
-            let cut = if said.length() > 900 { said.view(end_offset=900).to_string() } else { said }
-            bad.push(at + ": " + cut.replace_all(old="\n", new=" "))
-            continue
-          }
-        }
+        let s = send_at_pace(deliver, answer, fix_turn_end_ms, sent~)
         if s.turns > 0 || s.down >= 1.0 {
           bad.push(at + ": \{s.turns} turns, down \{s.down} (\{s.worst})")
         }
@@ -211,14 +197,7 @@ test "words sent soon after words sent, the core's row of them late or not: the 
           continue
         }
         let at = "after \{after} deliver \{deliver} core \{core}"
-        let s = send_at_pace(deliver, 30000.0, fix_turn_end_ms, core~, after~) catch {
-          e => {
-            let said = e.to_string()
-            let cut = if said.length() > 900 { said.view(end_offset=900).to_string() } else { said }
-            bad.push(at + ": " + cut.replace_all(old="\n", new=" "))
-            continue
-          }
-        }
+        let s = send_at_pace(deliver, 30000.0, fix_turn_end_ms, core~, after~)
         if s.turns > 0 || s.down >= 1.0 {
           bad.push(at + ": \{s.turns} turns, down \{s.down} (\{s.worst})")
         }
@@ -242,14 +221,7 @@ test "words sent, the core's row of them late: the list goes up only, never down
     for deliver in [0.0, 300.0, 700.0] {
       for answer in [0.0, 400.0, 1400.0] {
         let at = "core \{core} deliver \{deliver} answer \{answer}"
-        let s = send_at_pace(deliver, answer, fix_turn_end_ms, core~) catch {
-          e => {
-            let said = e.to_string()
-            let cut = if said.length() > 900 { said.view(end_offset=900).to_string() } else { said }
-            bad.push(at + ": " + cut.replace_all(old="\n", new=" "))
-            continue
-          }
-        }
+        let s = send_at_pace(deliver, answer, fix_turn_end_ms, core~)
         if s.turns > 0 || s.down >= 1.0 {
           bad.push(at + ": \{s.turns} turns, down \{s.down} (\{s.worst})")
         }

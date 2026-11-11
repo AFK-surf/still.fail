@@ -4,12 +4,12 @@
 
 ///|
 test "84-connect" {
-  @sfreplay.orders(flow_84_connect)
+  @sfreplay.orders(fn(seed) { flow_84_connect(seed) })
 }
 
 ///|
 /// The flow of 84-connect in the pass `seed` (@sfreplay.orders): its end's screen.
-fn flow_84_connect(seed : UInt) -> String raise {
+fn flow_84_connect(seed : UInt) -> String {
   let f = @sfreplay.Flow::start(@sfreplay.trace("settings-connect"), seed~)
   // (the connect made on the test station before the app starts: e2e/peer.ts connect-put)
   f.before("peer connect-put e2e-080726")

@@ -183,7 +183,7 @@ let job_long_most : Int = 300
 /// A job's sheet on 小屏 (chat-job's 盯 CI) whose output is `log` as the core client holds it (`lines` of 300 asked:
 /// what the station says, the client's keyed ops applied, the lines they do not touch the same JSON), the rest the
 /// fixture's; its 输出 pressed, at its end.
-fn job_long_sheet(log : @signals.Signal[Json]) -> @ui.Tester raise {
+fn job_long_sheet(log : @signals.Signal[Json]) -> @ui.Tester {
   new_run()
   let base = @sffixture.fixture("chat-job")
   // (its version: one more each time it is another value)

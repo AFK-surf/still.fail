@@ -111,7 +111,7 @@ test "小屏: a sheet whose body is nodes: drawn by the window's tree, read out 
 
 ///|
 /// Where the top of the sheet up is (its Dialog's), the window's.
-fn sheet_top_y(t : @ui.Tester) -> Double raise {
+fn sheet_top_y(t : @ui.Tester) -> Double {
   t.query(Dialog).unwrap().rect.1
 }
 
@@ -168,10 +168,10 @@ let sheet_look_step_ms : Double = @ui.move_least_ms / 4.0
 ///|
 /// Where a sheet's body is drawn as it rises from opening, sheet_look_step_ms apart till it is up, then as it sinks
 /// away once closed by Escape, on the device's pixels.
-fn rise_trace(t : @ui.Tester) -> Array[Double] raise {
+fn rise_trace(t : @ui.Tester) -> Array[Double] {
   let seen = []
   let steps = (sheet_way_ms(t) / sheet_look_step_ms).ceil().to_int()
-  let look = fn() raise {
+  let look = fn() {
     let y = t.drawn_rects().filter(fn(r) { r.4 >> 8 == body_ink >> 8 }).map(fn(r) { r.1 })
     // (what is under the window's foot is not seen: an old view's is not drawn there at all)
     seen.push(if y.is_empty() || y[0] >= 844.0 { -1.0 } else { (y[0] * 2.0).round() / 2.0 })
@@ -317,7 +317,7 @@ test "小屏: a sheet whose body is nodes opened by what a sheet's button does a
 ///|
 /// A sheet whose body is nodes (`nodes`) or an old one, at rest; its top drawn `down` down in `steps` moves (a frame's
 /// apart: as fast as that makes it) and let go: whether it is open once it has had its way.
-fn sheet_let_go_open(nodes : Bool, down : Double, steps : Int) -> Bool raise {
+fn sheet_let_go_open(nodes : Bool, down : Double, steps : Int) -> Bool {
   let t = phone_tester()
   if nodes {
     @sf.panel_nodes("面板", from=Unanchored, foot=fn(v, _) { ink_node(v, 60.0, 36.0, foot_ink) }, fn(v, _) {

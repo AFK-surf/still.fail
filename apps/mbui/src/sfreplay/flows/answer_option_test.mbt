@@ -5,7 +5,7 @@
 
 ///|
 test "22-answer-option" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("answer-option"), seed~)
     f.tap("端到端测试")
     // the chat pushed over Home: in place once its push is over

@@ -519,7 +519,7 @@ fn long_profile(s : Source) -> Source {
           // (in place of the fixture's own accounts)
           let lists = match o.get("lists") { Some(Array(a)) => a.filter(fn(l) {
                 match l {
-                  Object(m) => !(m.get("key") is Some(String("profiles", ..)))
+                  Object(m) => !(m.get("key") is Some(String("profiles")))
                   _ => true
                 }
               }); _ => [] }

@@ -254,7 +254,7 @@ fn card_rig_both(
   scale? : Double = 1.0,
   over? : String = "",
   press? : String = "",
-) -> (String, String, @ui.Tester) raise {
+) -> (String, String, @ui.Tester) {
   let at = "rig \{c.0} \{w} \{scale} \{over} \{press}"
   let old = card_old(w, card_src(c.1, doing=c.3), c.2, at, fn(x, here) { card_old_rig(x, here, c.2) })
   old.set_font_scale(scale)

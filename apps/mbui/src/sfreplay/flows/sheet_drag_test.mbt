@@ -5,7 +5,7 @@
 
 ///|
 test "32-sheet-drag" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("sheet-drag"), seed~)
     f.see("端到端测试")
     f.tap("=Dev")

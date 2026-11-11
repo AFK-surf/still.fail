@@ -3,7 +3,7 @@
 
 ///|
 test "81-station-mark" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("settings-station-mark"), seed~)
     f.tap("icon:settings")
     f.run_to(@ui.nav_rest())

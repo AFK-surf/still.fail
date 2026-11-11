@@ -153,7 +153,7 @@ test "a node's picture drawn smaller, by itself or by what holds it: where it is
 /// A node 60 by 40 at (100, 100) drawing a line down its left (from (0, 0) to (10, 40)) and the picture "pic", turned
 /// about the middle of what it draws: where it turns about, its picture not decoded yet (the line alone drawn), and once
 /// it is (the line and the picture).
-fn turned_about() -> ((Double, Double), (Double, Double)) raise {
+fn turned_about() -> ((Double, Double), (Double, Double)) {
   let t = Tester::new(fn(_c) {  }, images=[("pic", 600, 400)], finish=false)
   set_view_app(fn(root) {
     root.box(fn(n) {
@@ -379,10 +379,10 @@ fn cornered(holder : Double, cut_w : Double?) -> ((Double, Double, Double, Doubl
     let b = k * inst_size
     if c.inst[b + 5] == 0.0 {
       let color = ((c.inst[b + 8] * 255.0).round().to_int64() << 24) | ((c.inst[b + 9] * 255.0).round().to_int64() << 16)
-      if color == (0x33L << 24 | 0x66L << 16) {
+      if color == ((0x33L << 24) | (0x66L << 16)) {
         ground = (c.inst[b + 36], c.inst[b + 37], c.inst[b + 38], c.inst[b + 39])
       }
-      if color == (0xCCL << 24 | 0x33L << 16) {
+      if color == ((0xCCL << 24) | (0x33L << 16)) {
         cut = (c.inst[b + 24], c.inst[b + 25], c.inst[b + 26], c.inst[b + 27])
       }
     }

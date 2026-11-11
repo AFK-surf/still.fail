@@ -5,7 +5,7 @@
 
 ///|
 test "83-profile" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("settings-profile"), seed~)
     f.tap("icon:settings")
     f.run_to(@ui.nav_rest())

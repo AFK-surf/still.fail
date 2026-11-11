@@ -5,7 +5,7 @@
 
 ///|
 test "50-bar-glass" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("bar-glass"), seed~)
     f.see("端到端测试")
     f.tap("icon:folder")

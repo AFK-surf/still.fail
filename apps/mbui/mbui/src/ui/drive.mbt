@@ -566,7 +566,7 @@ fn on_screen_nodes(
       None =>
         // a box by what it is called (its label, whole), as Compose's test finds a node by its contentDescription
         (n.kind == kind_box && n.label != "" && field is None && n.label == exact.unwrap_or(what)) ||
-        (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
+        ((n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
         (match field {
           // a field by the words in it (`field:WORDS`), not its placeholder
           Some(w) => n.kind == kind_editor && field_words_of(c, n).contains(w)
@@ -575,7 +575,7 @@ fn on_screen_nodes(
               Some(e) => n.text == e
               None => n.text.contains(what)
             }
-        })
+        }))
     }
     // (not what a page's bones are made of: not there yet, bones.mbt)
     if hit && n.bones == 0L && n.fw > 0.0 && n.fh > 0.0 && !c.in_draw_only(i) {
