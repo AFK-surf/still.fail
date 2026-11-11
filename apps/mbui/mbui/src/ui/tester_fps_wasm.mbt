@@ -11,3 +11,9 @@ fn test_frames_between() -> Double {
 fn test_motion_judged(_loc : String) -> MotionJudged {
   Results
 }
+
+///|
+/// (looked at, as the default: test_corners_looked, tester_fps.mbt; a bench says not, Tester::corners_look)
+fn test_corners_looked() -> Bool {
+  true
+}

@@ -71,6 +71,8 @@ pub fn bench(
   )
   // (a frame of the looks alone drawn once, as a host draws it: a test's draws it whole too, frame_watch.mbt)
   t.check_looks(false)
+  // (nor its corners worked out anew beside what is kept, compared: tester_corners.mbt)
+  t.corners_look(false)
   // (MBUI_BENCH_WHOLE=1: every frame measured built whole, keeping nothing: what building a frame anew costs)
   t.bench_whole(arg("MBUI_BENCH_WHOLE") == "1")
   let buf = Ref::new(FixedArray::make(0, 0.0))

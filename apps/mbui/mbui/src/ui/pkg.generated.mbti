@@ -2534,6 +2534,7 @@ pub fn Tester::compose(Self, String) -> Unit
 pub fn Tester::contrast_faults(Self, marks? : Double) -> Array[String]
 pub fn Tester::corner_faults(Self) -> Array[String]
 pub fn Tester::corner_pairs(Self) -> Array[String]
+pub fn Tester::corners_look(Self, Bool) -> Unit
 pub fn Tester::ctx(Self) -> Ctx
 pub fn Tester::cursor(Self) -> @view.Cursor
 pub fn Tester::cycles(Self) -> Array[String]

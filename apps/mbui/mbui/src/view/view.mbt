@@ -1030,6 +1030,14 @@ pub struct Tree {
   priv mut pairs_asked : Bool
   priv flights : Array[Flying]
   priv mut lifting : Bool
+  /// how many times its nodes' flex places were worked out (a layout of all of it, one laid out to be read, one laid
+  /// out alone, one beside another): what Tree::laid_origin sums changes only with one of them
+  priv mut laids : Int
+  /// what Tree::laid_held_hosted last worked out, and what it was worked out of (draws_rev, places_rev, how long the
+  /// order was, laids); and how many times it walked the tree to work it out (Tree::held_walked)
+  priv mut held_kept : Array[(Drawn, Int, Bool)]
+  priv mut held_kept_for : (Int, Int, Int, Int)
+  priv mut held_walked : Int
 }
 
 ///|
@@ -1253,6 +1261,10 @@ pub fn Tree::new(
     pairs_asked: false,
     flights: [],
     lifting: false,
+    laids: 0,
+    held_kept: [],
+    held_kept_for: (-1, -1, -1, -1),
+    held_walked: 0,
     boxes_held: 0,
     boxes_held_at: [],
     timed: None,
@@ -2248,6 +2260,7 @@ fn Tree::layout_marked_at(self : Tree, at : Int, within? : Bool = false) -> Unit
 /// whichever of the two lays it out. Which compute it was, for Tree::walk to place by.
 fn Tree::laid_over_alone(self : Tree, at : Int, holder : Int) -> Int {
   self.work.computes = self.work.computes + 1
+  self.laids = self.laids + 1
   @flex.absolute_relaid(self.nodes[holder].flex, self.nodes[at].flex)
 }
 
@@ -2264,6 +2277,7 @@ fn Tree::alone_laid_out(self : Tree) -> Unit {
     let n = self.nodes[at]
     if n.live && n.flex.dirty && n.flex.laid_given() {
       self.work.computes = self.work.computes + 1
+      self.laids = self.laids + 1
       @flex.relayout(n.flex)
       self.alone_laid.push((at, @flex.computes()))
       // (what it holds came out another size than it is counted: what holds it laid out again, from the nearest that
@@ -4409,6 +4423,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
       self.work.computes = self.work.computes + 1
       let g = @flex.computes() + 1
       self.measuring = true
+      self.laids = self.laids + 1
       @flex.compute(self.nodes[0].flex, width=self.last_w, height=self.last_h, round=false, reuse=true)
       self.measuring = false
       self.measured_gen = g
@@ -8596,6 +8611,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
       self.alone_laid_out()
       self.work.computes = self.work.computes + 1
       let g = @flex.computes() + 1
+      self.laids = self.laids + 1
       @flex.compute(self.nodes[0].flex, width=w, height=h, round=false, reuse=true)
       if self.walk_from >= 0 && self.walk_from < g {
         self.walk_from
@@ -9972,9 +9988,10 @@ pub fn Tree::drawn(self : Tree) -> Array[Drawn] {
 /// not `inert`. `inert` is written by what it says itself (View::presses(false)), cleared as a node is made again, and
 /// set on the old copy a shared element leaves where it flies (Tree::paired: that copy drawn fading out on the flight's
 /// way, taking nothing). Not what holds it, nor whether it is leaving, in its bones or under a modal layer: what reads
-/// this runs on every frame of a running app too (ui's Ctx::corners_after_layout: a row pressed whole is the corner
-/// container of an old view's box said `Inner` in it), so it is one field read, and a row that starts to leave stays
-/// that box's container all the way out, its corner not worked out against another halfway.
+/// this runs in a running app too (ui's Ctx::corners_after_layout, by Tree::laid_held_hosted: as it walks the tree, and
+/// of each it kept on every frame an old view builds, no count of changes raised by it: a row pressed whole is the
+/// corner container of an old view's box said `Inner` in it), so it is one field read, and a row that starts to leave
+/// stays that box's container all the way out, its corner not worked out against another halfway.
 fn Tree::presses_said(self : Tree, at : Int) -> Bool {
   self.nodes[at].on_press is Some(_) && !self.nodes[at].inert
 }
@@ -10072,6 +10089,54 @@ pub fn Tree::laid_held_toward(self : Tree, wanted : (Content) -> Bool) -> Array[
     false
   })
   out
+}
+
+///|
+/// What Tree::laid_held_toward gives of the nodes an old view is hosted in (Content's `hosted`), kept and given again,
+/// the same array, while nothing it is worked out of changed: the order and each node's content (`draws_rev`: the order
+/// made again, a node made, made again or let go), where each is placed, as opaque and whether left out (`places_rev`),
+/// its flex place (`laids`: what Tree::laid_origin sums changes only as one is worked out, placed or not yet), the
+/// order's length; never while the order is due to be made again (what holds a node changed before that) or anything
+/// flies (the walk then takes what flies where its flight has it now); and each kept one's taking a press as it is said
+/// now (Tree::presses_said, which no count says: one field read each, walked afresh where one differs). Nothing else
+/// of it is worked out by the clock: a scroller's offset is not taken (each is where it is laid out, Tree::laid_origin),
+/// and how opaque one is on a way is what Tree::place last placed it as, each frame of the way a place counted (ui's
+/// corners read it: one as good as unseen is no container). It is the
+/// tree's own: whoever reads it reads it only, never writing it nor anything in it. For ui's Ctx::corners_after_layout,
+/// on every frame an old view builds.
+pub fn Tree::laid_held_hosted(self : Tree) -> Array[(Drawn, Int, Bool)] {
+  let key = (self.draws_rev, self.places_rev, self.order.length(), self.laids)
+  if key == self.held_kept_for && !self.order_due && self.flights.is_empty() {
+    let kept = self.held_kept
+    let mut same = true
+    for k in 0..<kept.length() {
+      let (d, _, presses) = kept[k]
+      if presses != self.presses_said(d.id.at) {
+        same = false
+        break
+      }
+    }
+    if same {
+      return kept
+    }
+  }
+  self.held_walked = self.held_walked + 1
+  let held = self.laid_held_toward(fn(c) { c.hosted })
+  // (kept only where it can be said again: none while the order is due, or while anything flies)
+  if !self.order_due && self.flights.is_empty() {
+    self.held_kept = held
+    self.held_kept_for = key
+  } else {
+    self.held_kept = []
+    self.held_kept_for = (-1, -1, -1, -1)
+  }
+  held
+}
+
+///|
+/// How many times Tree::laid_held_hosted walked the tree, not giving again what it kept: for a test of when it does.
+pub fn Tree::held_walked(self : Tree) -> Int {
+  self.held_walked
 }
 
 ///|

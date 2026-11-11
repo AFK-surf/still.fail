@@ -689,6 +689,74 @@ fn Node::reset_rest(self : Node) -> Unit {
 }
 
 ///|
+/// Every field as Node::new has it, its flex node aside (its own, never laid out where this is asked: corners.mbt
+/// tree_laid_spare): the three parts a node reused is reset in, and what those leave to Ctx::alloc_part, to node_known
+/// or to the layout; its lines and shapes none, as reset_rest has them (empty, shared). A node of the window's tree's
+/// put among the frame's again (Ctx::with_tree_nodes), as a new one. A field added to Node::new is added here too.
+fn Node::reset_new(self : Node) -> Unit {
+  self.reset_rest()
+  self.reset_look()
+  self.reset_words()
+  self.kind = 0
+  self.parent = -1
+  self.corners_worked = false
+  self.ident = 0
+  self.keyless = false
+  self.seed = 0
+  self.slot = -1
+  self.kids = 0
+  self.made_pass = -1
+  self.notch_y = 0.0
+  self.notch_f = 0.0
+  self.least = 0.0
+  self.fit_least = 0.0
+  self.soft_least = 0.0
+  self.x = 0.0
+  self.y = 0.0
+  self.fw = 0.0
+  self.fh = 0.0
+  self.tl = None
+  self.full = None
+  self.full_max = 0.0
+  self.full_cut = false
+  self.said_of = ""
+  self.said_hash = no_words_said
+  self.shape_bands = None
+  self.rcut = None
+  self.rl = None
+  self.rl_max = 0.0
+  self.rl_for = None
+  self.rl_whole = 0.0 / 0.0
+  self.lk_kind = -1
+  self.lk_text = ""
+  self.lk_shorter = no_words
+  self.lk_size = 0.0
+  self.lk_weight = 0
+  self.lk_line = 0.0
+  self.lk_trim = false
+  self.lk_wrap = false
+  self.lk_spacing = 0.0
+  self.lk_tabular = false
+  self.lk_balance = false
+  self.lk_max_lines = 0
+  self.lk_shaped = -1
+  self.lk_rich = None
+  self.lk_iw = -1.0
+  self.lk_ih = -1.0
+  self.lk_scale = -1.0
+  self.lk_whole = false
+  self.lk_up = 0
+  self.otx = 0.0
+  self.oty = 0.0
+  self.same = false
+}
+
+///|
+/// The stable_hash of no words (Node::new's `said_hash`), worked out once.
+// kept across runs: a table, never written
+let no_words_said : Int64 = stable_hash("")
+
+///|
 /// Its words' stable_hash (tree_sig): kept with the words it was worked out of, worked out again only where they are
 /// other words (the same string, as a row built again from the same data has it, not read again).
 fn Node::text_said(self : Node) -> Int64 {

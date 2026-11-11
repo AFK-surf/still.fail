@@ -60,6 +60,7 @@ pub fn View::grows_now(self : View) -> (Double, Double) {
         j = tree.nodes[j].parent
       }
     }
+    tree.laids = tree.laids + 1
     @flex.compute(tree.nodes[0].flex, width=tree.last_w, height=tree.last_h, round=false, reuse=true)
     n.flex.height
   }
