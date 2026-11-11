@@ -259,14 +259,19 @@ pub fn workspace_switch_node(
 /// first screen reads), declared at the moment it is known to be the one in view, in the app's node `v` that outlives
 /// the splash and every shell: each topic asked of the core then (declare_topic), not as the frame that builds the
 /// panes runs, and taken over by the reader that comes to read it as it reads, the same subscription never let go of
-/// between. Only what is asked as it is known: what an answer leads to (the chat a pane lands on, once the marks say
-/// it) is asked by its reader as before, as nothing here may read what it declared (it would be its reader, holding it
-/// past its own). What no reader took is let go of as another workspace comes in view, or none. A bridge till the old view is gone: a page made as nodes says what it reads where
+/// between. What an answer leads to (the page a pane lands on, once the marks say which) is declared at the moment that
+/// answer comes, between frames, while the app's first page waits (`first_waits`: another workspace switched to later
+/// declares what it knows as it comes in view, as before): what the function says is read here as held till all of it
+/// is answered or the first page is shown (its reader that long, as the first page's wait is: what it read of its own
+/// taken by the pages' readers by then), added to and never taken back, and not again once all of it was answered (the chat opened last changing later is no first screen;
+/// the coordinator of the migration, 2026-11-12). What no reader took is let go of as another workspace comes in view,
+/// or none. A bridge till the old view is gone: a page made as nodes says what it reads where
 /// it is made.
 pub fn opens_ahead_node(
   v : @view.View,
   src : Source,
   opens : () -> (String, (Source, String, (String, Map[String, Json]) -> TopicState) -> Bool)?,
+  first_waits~ : () -> Bool,
 ) -> Unit {
   // (the first screen of the shell its window's width picks as the workspace comes in view, none before the window has
   // a width; another shell come of the window's width alone declares nothing: the workspace is in view already, what
@@ -285,12 +290,83 @@ pub fn opens_ahead_node(
       declared_let_go()
       page_declared_let_go()
       opens_declared.val = now
+      opens_declared_said.set(None)
       guard now is Some(ws) else { return }
       guard @signals.untracked(opens) is Some((_, panes)) else { return }
       panes(src, ws, fn(name, params) { declare_topic(src, name, params) }) |> ignore
+      opens_declared_said.set(now)
+      opens_declared_round.set(opens_declared_round.untracked() + 1)
+    },
+  )
+  // (what the function comes to say as what it read is answered: declared at that moment; read as held till all of it
+  // is, then no more)
+  v.reacts(
+    fn() {
+      opens_declared_round.get() |> ignore
+      guard opens_declared_said.get() is Some(ws) else { return None }
+      if opens_all_answered.val == Some(ws) || !first_waits() {
+        return None
+      }
+      guard @signals.untracked(opens) is Some((_, panes)) else { return None }
+      let held = read_held_found(src)
+      let more : Array[(String, Map[String, Json])] = []
+      opens_more.val = more
+      let all = panes(src, ws, fn(name, params) {
+        match held(name, params) {
+          Some(st) => st
+          None => {
+            more.push((name, params.copy()))
+            { value: None, error: None, version: -1, waiting: false }
+          }
+        }
+      })
+      Some((ws, all, more.map(fn(m) { m.0 + " " + Json::object(m.1).stringify() })))
+    },
+    fn(said) {
+      guard said is Some((ws, all, _)) else { return }
+      let more = opens_more.val
+      if more.length() > 0 {
+        for m in more {
+          declare_topic(src, m.0, m.1) |> ignore
+        }
+        // (read again, what it declared now followed with the rest)
+        opens_declared_round.set(opens_declared_round.untracked() + 1)
+      } else if all {
+        opens_all_answered.val = Some(ws)
+        opens_declared_round.set(opens_declared_round.untracked() + 1)
+      }
     },
   )
 }
+
+///|
+/// The workspace whose first screen opens_ahead_node has declared, told once it has (None: none yet, or let go):
+/// what reads what that screen opens on as held reads it once this is its workspace, all of it followed then
+/// (sfapp's first_page_node).
+pub fn opens_declared_now() -> String? {
+  // (each time more of it is declared, told again: opens_ahead_node's second reaction)
+  opens_declared_round.get() |> ignore
+  opens_declared_said.get()
+}
+
+///|
+/// How many times opens_ahead_node has declared (the first screen, and what an answer led it to): told each time.
+// kept across runs: a count, read for its changes alone
+let opens_declared_round : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// What opens_ahead_node's second reaction found the function saying that is not declared yet, as it last read it.
+// kept across runs: put back as a run begins (switch_reset)
+let opens_more : Ref[Array[(String, Map[String, Json])]] = Ref([])
+
+///|
+/// The workspace all of whose first screen opens_ahead_node found answered: what it declared read there no more.
+// kept across runs: put back as a run begins (switch_reset)
+let opens_all_answered : Ref[String?] = Ref(None)
+
+///|
+// kept across runs: put back as a run begins (switch_reset)
+let opens_declared_said : @signals.Signal[String?] = @signals.signal(None, same=fn(a, b) { a == b })
 
 ///|
 /// What the page on top reads as it is first built (page_opens), declared in node `v` at the moment it comes on top,
@@ -351,5 +427,8 @@ fn switch_reset() -> Unit {
   switch_handing.val = []
   switch_hand_at.set(-1.0)
   opens_declared.val = None
+  opens_declared_said.set(None)
+  opens_all_answered.val = None
+  opens_more.val = []
   declared_reset()
 }

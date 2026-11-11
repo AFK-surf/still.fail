@@ -53,9 +53,8 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "paste-short": [7],
   "pin": [7],
   "station-files": [7],
-  // 6: sub {"query":…,"scope":…,"topic":"search"} | strict call cache.usage {}
+  // 5: sub {"query":…,"scope":…,"topic":"search"} | strict call cache.usage {}
   "settings-profile": [7],
-  "settings-sheet-sinking": [7],
   "settings-station-mark": [7],
   "settings-station-settings": [7],
   "settings-workspace-people": [7],
@@ -102,10 +101,8 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "settings-add-station": [7],
   // 1: unsub {"topic":"doing"} | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
   "settings-run-settings": [7],
-  // 1: call picture {"url":…} | strict unsub {"topic":"driveTransfers","workspace":…}
-  "sheets-sinking": [7],
   // 1: - | strict call composer.starting {"key":…,"starting":true}
-  "wide-new-chat": [7, 120],
+  "wide-new-chat": [7],
   // 1: - | strict call session.warm {"key":…,"station":…}
   "wide-newline": [7],
   // 1: unsub {"topic":"doing"} | strict sub {"scope":…,"topic":"newChat"}
@@ -147,6 +144,16 @@ let strict_diverged_known : Map[String, Array[(Double, String)]] = {
     (22116.666666666668, "{\"id\":13,\"unsubscribe\":true}"),
     (22116.666666666668, "{\"id\":14,\"unsubscribe\":true}"),
     (22133.333333333336, "{\"id\":24,\"subscribe\":{\"topic\":\"doing\"},\"keyed\":true}"),
+  ],
+  // wide-newline (the first page's status let go of at its moment: opens_ahead_node declares the page the wide
+  // frame's pane lands on at the moment the marks that say which are answered, a new chat here): the run's chat is
+  // pressed within the frame after, before the pane lands, so what was declared for the new chat no reader takes and
+  // it is let go of at once. The run's app landed the pane in a frame and asked nothing for it before the press. Gone
+  // as the trace is recorded again (the coordinator of the migration, 2026-11-12: not before, a take now carries much
+  // else of main's since and is a frame late on its first step, the display's frames not the run's)
+  "wide-newline": [
+    (1100.0, "{\"id\":19,\"subscribe\":{\"topic\":\"newChat\",\"scope\":\"01M6WAM7VZHF0BF7YTBFKJC8BS\"},\"keyed\":true}"),
+    (1101.26513671875, "{\"id\":19,\"unsubscribe\":true}"),
   ],
 }
 

@@ -461,6 +461,12 @@ pub fn read_held(src : Source) -> (String, Map[String, Json]) -> TopicState {
 }
 
 ///|
+/// What `src` holds of a topic followed now, as read_held reads it; None where nothing follows it.
+pub fn read_held_found(src : Source) -> (String, Map[String, Json]) -> TopicState? {
+  fn(name, params) { existing_followed_topic(src, name, params).map(fn(h) { h.get() }) }
+}
+
+///|
 fn existing_followed_topic(src : Source, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState]? {
   let key = name + "\u{1}" + Json::object(params).stringify()
   followed_topics.val.search_by(fn(t) { physical_equal(t.source, src) && t.key == key && !t.independent }).map(fn(i) { followed_topics.val[i].holder })
