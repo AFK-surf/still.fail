@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [ba12c35d5](https://github.com/AFK-surf/still.fail/commit/ba12c35d5138e2c8e1a7e59e3554393eea76dc63) app: the vault's 授权时限 (how long a use is allowed)  | 1.8 | 2.41 | 10.05 | 28.78 | 35.45 | 25.64 | 47.39 | 94.11 | 176.07 |
 | [98c5ec5f9](https://github.com/AFK-surf/still.fail/commit/98c5ec5f9efef64c598a516c15da26c63e38b775) sf: a line to type in on a card's ground, a field' | 1.8 | 2.41 | 10.04 | 28.71 | 35.27 | 25.64 | 47.37 | 94.24 | 154.28 |
 | [16fd90f9b](https://github.com/AFK-surf/still.fail/commit/16fd90f9b603ce46d07513061b35601404337a12) mbui: what holds a scroller makes its way as anyth | 1.8 | 2.41 | 10.04 | 28.71 | 35.26 | 25.63 | 47.37 | 93.96 | 184.49 |
 | [a3f8baeb2](https://github.com/AFK-surf/still.fail/commit/a3f8baeb2bb12dba6062d6f7e208e577cfa8af4c) app: 对话's card on the rail, each figure opens the  | 1.8 | 2.41 | 10.04 | 28.71 | 35.26 | 25.63 | 47.37 | 94.14 | 187.39 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [8b8145742](https://github.com/AFK-surf/still.fail/commit/8b8145742b38dd9215873c0705d546a6b3972890) mbui: words picked with the pointer never end on a | 1.78 | 2.37 | 9.84 | 28.49 | 34.6 | 25.45 | 46.86 | 93.96 | 171.75 |
 | [2e1be559b](https://github.com/AFK-surf/still.fail/commit/2e1be559b17ed69cd2e5801958eb528fc58a5698) mbui: a stop told at a moment after its frame's is | 1.78 | 2.37 | 9.84 | 28.49 | 34.6 | 25.45 | 46.86 | 93.95 | 156.36 |
 | [e59dd4763](https://github.com/AFK-surf/still.fail/commit/e59dd4763d3287a63f65e07176d8853a701ff968) app: a station's card from a chat's agent as nodes | 1.77 | 2.36 | 9.82 | 28.46 | 34.51 | 25.42 | 46.79 | 93.93 | 173.66 |
-| [04cca9525](https://github.com/AFK-surf/still.fail/commit/04cca9525df9de721c3ebe1ddcd337d01bdb0bef) history: its head and details made once as nodes,  | 1.77 | 2.36 | 9.81 | 28.42 | 34.43 | 25.4 | 46.74 | 93.9 | 174.65 |
