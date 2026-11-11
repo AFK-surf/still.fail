@@ -126,6 +126,7 @@ type_of() {
     *.zip) echo application/zip ;;
     *.apk) echo application/vnd.android.package-archive ;;
     *.zst) echo application/zstd ;;
+    *.xz) echo application/x-xz ;;
     *) echo application/octet-stream ;;
   esac
 }
@@ -212,6 +213,13 @@ for dir in "$@"; do
     pids=""
     for name in $names; do
       [ "$(pass_of "$name")" = "$pass" ] || continue
+      # (an Android release's symbols, scripts/release.sh's: never a reason to fail or hold back the put, a warning;
+      # taken out all the same, so no later put tries them again)
+      case $name in symbols/*)
+        { put "$name" "$dir/$name" "$(type_of "$name")" || echo "release-put.sh: warning: $name not put (the release goes on without it)" >&2
+          if [ -n "$taken" ]; then rm -f "$dir/$name"; fi; } &
+        pids="$pids $!"; continue ;;
+      esac
       { put "$name" "$dir/$name" "$(type_of "$name")" && clean_cache_copy "$name" "$dir/$name" && if [ -n "$taken" ]; then rm "$dir/$name"; fi; } &
       pids="$pids $!"
     done

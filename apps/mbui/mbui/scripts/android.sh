@@ -16,7 +16,8 @@
 #     link flags), APP_KIND (what the app packs: a change builds Gradle's outputs anew), and the functions app_libs
 #     (alongside the compile: .so files into $jni, before the link), app_assets (alongside: into $apk/assets, before
 #     Gradle) and app_cmd (commands of its own)
-# VARIANT=release builds the project's release build type (default debug).
+# VARIANT=release builds the project's release build type (default debug). MBUI_SYMBOLS=<file>: libmbui.so's function
+# symbols written there (below, after the link).
 # MBUI_WASM_THUNKS=<thunks.c> builds an app's Wasm shell instead (still.fail's scripts/wasm-app.sh: no C of the app's,
 # its program a .wasm of its own): the host, the hook's C, src/host/wasm_shell.c, those thunks, MBUI_WASM_STUBS and
 # wasmtime; its APK packed again only when what it is made of changed. `put FILE NAME` puts a file in the app's files.
@@ -191,6 +192,22 @@ case "${1:-build}" in
     "$D/mbc" link --out=$SO --dep=$jni -- $CC -shared -o $SO $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) \
       $APP_LINK -lGLESv3 -llog -lz -lm -Wl,--no-undefined
     T4=$(now)
+    # MBUI_SYMBOLS=<file>: the library's function symbols written there, `<address> <name>` a line, xz'd (still.fail's
+    # release keeps them to name the frames of its crash reports: its scripts/crash-symbols.ts). Read from the library
+    # as linked, before the APK's packing strips it (scripts/apk), its addresses the same; written whether or not the
+    # link above was skipped. Never the build's failure: a warning, and none.
+    if [ -n "${MBUI_SYMBOLS:-}" ]; then
+      rm -f "$MBUI_SYMBOLS"
+      if mkdir -p "$(dirname "$MBUI_SYMBOLS")" && "$TC/llvm-nm" -n --defined-only $SO > $OUT/symbols.nm \
+        && awk '$2 ~ /^[tTwW]$/ { print $1, $3 }' $OUT/symbols.nm | xz -6 > "$MBUI_SYMBOLS.part" \
+        && [ -s "$MBUI_SYMBOLS.part" ] && mv "$MBUI_SYMBOLS.part" "$MBUI_SYMBOLS"; then
+        echo "android.sh: symbols $(size "$MBUI_SYMBOLS") bytes ($(awk '$2 ~ /^[tTwW]$/' $OUT/symbols.nm | wc -l | tr -d ' ') functions) in $(secs $T4 $(now)) s: $MBUI_SYMBOLS"
+      else
+        rm -f "$MBUI_SYMBOLS.part"
+        echo "android.sh: warning: no symbols written to $MBUI_SYMBOLS" >&2
+      fi
+      rm -f $OUT/symbols.nm
+    fi
     echo "libmbui.so $(size $SO) bytes in $(secs $T0 $T4) s"
     if [ -n "$HBC" ]; then wait $HBC || { cat $OUT/app-assets.log; exit 1; }; cat $OUT/app-assets.log; fi
     if [ -n "$DEX" ]; then wait $DEX || { cat $OUT/apk-dex.log; exit 1; }; cat $OUT/apk-dex.log; fi

@@ -11,7 +11,10 @@
 // newer than it), and its deltas while it offers them. The web archives the beta Electron app took without a new app
 // (made until 2026-10-26, when that app was moved to mbui's): the one its feed names, any newer, and the newest 5. What
 // a station's job staged (staged/<when>-<commit>/: scripts/release-put.sh --stage) and no put took back and deleted:
-// after two days. The stations' own names, Node and the feeds are never touched.
+// after two days. An Android release's native symbols (symbols/android/…: scripts/release.sh, read by
+// scripts/crash-symbols.ts) once older than 30 days by the time the bucket says it was put (its listing's
+// last_modified; the owner, 2026-11-11): one whose time cannot be read stays. The stations' own names, Node and the
+// feeds are never touched.
 // CI runs it after `put` (.github/workflows/pipeline.yml).
 //   node scripts/release-prune.ts [--dry-run]
 // Needs CLOUDFLARE_API_TOKEN (and CLOUDFLARE_ACCOUNT_ID, else the token's first account).
@@ -37,6 +40,9 @@ const WEB_ARCHIVES = 5;
 /** What a station's job staged, by when (seconds since 1970), and how long it may stay there. */
 const STAGED = /^staged\/(\d+)-/;
 const STAGED_SECONDS = 2 * 24 * 3600;
+/** An Android release's symbols, and how long they stay after they were put. */
+const SYMBOLS = /^symbols\//;
+const SYMBOLS_SECONDS = 30 * 24 * 3600;
 /** The station's archives under their own names, and their deltas (scripts/release-deltas.ts). */
 const STATION_ARCHIVE = /^station\/archive\/(stable|beta)\/(\d+)-([0-9a-f]{64})-([a-z0-9-]+?)(\.tar\.gz|\.zip|\.from-\d+-[0-9a-f]{16}\.delta)$/;
 
@@ -54,9 +60,10 @@ const installer = (key: string) => {
 
 /**
  * Which of the bucket's `keys` go: `feeds` the feeds' text by name (a feed not there: absent), `webNamed` the build the
- * web archives' feed names, `now` seconds since 1970.
+ * web archives' feed names, `now` seconds since 1970, `putAt` when each key was put by the bucket's word (seconds since
+ * 1970; a key without one: not known).
  */
-export function doomedOf(keys: string[], feeds: Record<string, string>, webNamed: number | null, now: number): string[] {
+export function doomedOf(keys: string[], feeds: Record<string, string>, webNamed: number | null, now: number, putAt: ReadonlyMap<string, number> = new Map()): string[] {
   // The version each app's feed names, by group (the desktop's feeds name the file without its directory), and every
   // delta a feed offers.
   const current = new Map<string, string>();
@@ -102,6 +109,10 @@ export function doomedOf(keys: string[], feeds: Record<string, string>, webNamed
   return keys.filter((key) => {
     const staged = Number(key.match(STAGED)?.[1]);
     if (Number.isSafeInteger(staged)) return staged < now - STAGED_SECONDS;
+    if (SYMBOLS.test(key)) {
+      const put = putAt.get(key);
+      return put !== undefined && Number.isFinite(put) && put < now - SYMBOLS_SECONDS;
+    }
     const web = Number(key.match(WEB_ARCHIVE)?.[1]);
     if (Number.isSafeInteger(web)) return webNamed !== null && web < webNamed && webBuilds.indexOf(web) >= WEB_ARCHIVES;
     const archive = key.match(STATION_ARCHIVE);
@@ -150,10 +161,17 @@ if (import.meta.main) {
   const account = process.env.CLOUDFLARE_ACCOUNT_ID || (await json("/accounts")).result[0].id;
   const objects = `/accounts/${account}/r2/buckets/${BUCKET}/objects`;
 
+  // (each object's last_modified, an ISO 8601 time, when it was written: Cloudflare's R2 List Objects; one not read as a
+  // time is left out of putAt, and what goes by it stays)
   const keys: string[] = [];
+  const putAt = new Map<string, number>();
   for (let cursor = ""; ;) {
     const page = await json(`${objects}?per_page=1000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
-    keys.push(...page.result.map((o: { key: string }) => o.key));
+    for (const o of page.result as { key: string; last_modified?: unknown }[]) {
+      keys.push(o.key);
+      const put = typeof o.last_modified === "string" ? Date.parse(o.last_modified) / 1000 : NaN;
+      if (Number.isFinite(put)) putAt.set(o.key, put);
+    }
     cursor = page.result_info?.cursor ?? "";
     if (!page.result_info?.is_truncated || !cursor) break;
   }
@@ -170,8 +188,8 @@ if (import.meta.main) {
   if (!webFeed.ok && webFeed.status !== 404) throw new Error(`${WEB_FEED}: ${webFeed.status}`);
   const webNamed = webFeed.ok ? Number((await webFeed.json()).build) : null;
 
-  const doomed = doomedOf(keys, feeds, webNamed, Date.now() / 1000);
-  console.log(`${keys.length} files, ${doomed.length} old installers, deltas, blockmaps, archives and staged files to delete`);
+  const doomed = doomedOf(keys, feeds, webNamed, Date.now() / 1000, putAt);
+  console.log(`${keys.length} files, ${doomed.length} old installers, deltas, blockmaps, archives, staged files and symbols to delete`);
   if (dryRun) {
     for (const key of doomed) console.log(`  ${key}`);
     process.exit(0);

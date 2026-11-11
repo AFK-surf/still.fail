@@ -8,7 +8,8 @@
 #                                        Android app's own): versionCode the build (git rev-list --count HEAD), signed
 #                                        with ANDROID_DEBUG_KEYSTORE_B64 (every still.fail Android release's key;
 #                                        POSTHOG_JSON: the key its crash reports go with), into $RELEASE_DIR as
-#                                        android/app-<variant>.apk
+#                                        android/app-<variant>.apk; stable's and beta's with their libmbui.so's
+#                                        function symbols beside it, android/app-<variant>.syms.xz
 #   apps/mbui/scripts/beta.sh mac        the macOS app (scripts/mac-app.sh, MBUI_VARIANT stable or beta: still.fail's
 #                                        Mac app itself, in the Electron app's place), signed with still.fail's identity
 #                                        (.github/mac_signing.py), zipped, into $RELEASE_DIR as mac/app-<variant>.zip
@@ -214,9 +215,13 @@ build() {
     (umask 077 && printf '%s' "$POSTHOG_JSON" > "$posthog/posthog.json")
     export STILLFAIL_POSTHOG="$posthog/posthog.json"
   fi
+  # still.fail's own app's libmbui.so function symbols beside its APK, android/app-<variant>.syms.xz (mbui's
+  # scripts/android.sh MBUI_SYMBOLS: none when they could not be made), for scripts/release.sh to keep (monoid's: none)
+  local syms=
+  case $variant in stable|beta) syms=$RELEASE_DIR/android/app-$variant.syms.xz ;; esac
   local r=0
   env APP=stillfail VARIANT=$variant HBC_CACHE="${HBC_CACHE:-$C/hbc}" SF_SRC="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
-    bash "$WORK/scripts/android.sh" build 2>&1 | tee "$C/build.log" || r=$?
+    MBUI_SYMBOLS="$syms" bash "$WORK/scripts/android.sh" build 2>&1 | tee "$C/build.log" || r=$?
   [ -z "${ANDROID_DEBUG_KEYSTORE_B64:-}" ] || rm -rf "$ANDROID_USER_HOME"
   [ -z "$posthog" ] || rm -rf "$posthog"
   [ $r = 0 ] || exit $r

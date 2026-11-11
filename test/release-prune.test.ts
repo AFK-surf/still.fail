@@ -79,3 +79,23 @@ test("staged files after two days; the web archives as before", () => {
   const doomed = doomedOf(keys, {}, 8, NOW);
   assert.deepEqual(doomed, [`staged/${NOW - 3 * 86400}-abc/x.tar.gz`, "desktop/web/stillfail-beta-web-0.1.3.tar.gz", "desktop/web/stillfail-beta-web-0.1.2.tar.gz", "desktop/web/stillfail-beta-web-0.1.1.tar.gz"].sort((x, y) => keys.indexOf(x) - keys.indexOf(y)));
 });
+
+test("an Android release's symbols: older than 30 days by when the bucket says they were put go, nothing else by it", () => {
+  const sym = (n: number) => `symbols/android/stillfail-beta-${n}.syms.xz`;
+  const apk = (n: number) => `android/stillfail-beta-${n}.apk`;
+  const keys = [sym(1), sym(2), sym(3), sym(4), ...[1, 2, 3, 4, 5, 6, 7].map(apk), `staged/${NOW - 3600}-abc/x.tar.gz`, "stillfail-station-linux-x64.tar.gz"];
+  const feeds = { "android/beta/latest.json": JSON.stringify({ versionCode: 7, file: apk(7) }) };
+  const day = 86400;
+  // (sym(4): no time read of it)
+  const putAt = new Map([[sym(1), NOW - 31 * day], [sym(2), NOW - 29 * day], [sym(3), NaN]]);
+  const doomed = new Set(doomedOf(keys, feeds, null, NOW, putAt));
+  assert.ok(doomed.has(sym(1)), "older than 30 days");
+  assert.ok(!doomed.has(sym(2)), "younger");
+  assert.ok(!doomed.has(sym(3)) && !doomed.has(sym(4)), "no time");
+  // every other key's fate as without the times, however old they say it is
+  const old = new Map(keys.map((k) => [k, NOW - 365 * day]));
+  const others = (d: string[]) => d.filter((k) => !k.startsWith("symbols/"));
+  assert.deepEqual(others(doomedOf(keys, feeds, null, NOW, old)), others(doomedOf(keys, feeds, null, NOW)));
+  assert.deepEqual(others([...doomed]), [apk(1), apk(2)]);
+  assert.deepEqual(doomedOf(keys, feeds, null, NOW).filter((k) => k.startsWith("symbols/")), [], "none goes without times");
+});

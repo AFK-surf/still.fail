@@ -111,3 +111,68 @@ fi
   assert.equal(existsSync(join(bucket, staged.replaceAll("/", "_"))), false, "the staged copy deleted");
   assert.equal(existsSync(marker), false);
 });
+
+// An Android release's symbols (scripts/release.sh: symbols/android/…) are put by --files as its APK is, as x-xz; one
+// that cannot be put is a warning, taken out all the same (not handed on to a put that would try it again), and the
+// release goes on; the APK's failure is still the put's.
+test("--files puts an Android release's symbols; their failure alone never fails it", (t) => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const tmp = mkdtempSync(join(tmpdir(), "release-symbols-test-"));
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const bin = join(tmp, "bin"), bucket = join(tmp, "bucket");
+  mkdirSync(bin);
+  mkdirSync(bucket);
+  // (a key starting with $FAKE_FAIL is refused; each put's content type beside it, as <object>.type)
+  writeFileSync(join(bin, "curl"), `#!/bin/sh
+out= upload= method=GET url= type=
+while [ "$#" -gt 0 ]; do
+  case "$1" in -o) shift; out=$1 ;; -T) shift; upload=$1 ;; -X) shift; method=$1 ;; -H) shift; case "$1" in Content-Type:*) type=\${1#Content-Type: } ;; esac ;; https://*) url=$1 ;; esac
+  shift
+done
+key=\${url#*/objects/}
+object="$FAKE_BUCKET/$(printf %s "$key" | tr / _)"
+if [ -n "$upload" ]; then case "$key" in "$FAKE_FAIL"*) [ -n "$FAKE_FAIL" ] && exit 22 ;; esac; cp "$upload" "$object"; printf %s "$type" > "$object.type"
+elif [ "$method" = DELETE ]; then rm "$object"
+elif [ -n "$out" ]; then [ -f "$object" ] || exit 22; cp "$object" "$out"
+fi
+`);
+  writeFileSync(join(bin, "pnpm"), "#!/bin/sh\nexit 1\n");
+  writeFileSync(join(bin, "sleep"), "#!/bin/sh\nexit 0\n");
+  for (const name of ["curl", "pnpm", "sleep"]) chmodSync(join(bin, name), 0o755);
+  const run = (fail: string, ...args: string[]) => spawnSync("sh", [join(root, "scripts/release-put.sh"), ...args], {
+    cwd: root, encoding: "utf8",
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, CLOUDFLARE_API_TOKEN: "fake", CLOUDFLARE_ACCOUNT_ID: "fake",
+      STILLFAIL_DIRECT_DNS: "", FAKE_BUCKET: bucket, FAKE_FAIL: fail },
+  });
+  const made = (name: string) => {
+    const dir = join(tmp, name);
+    mkdirSync(join(dir, "android/beta"), { recursive: true });
+    mkdirSync(join(dir, "symbols/android"), { recursive: true });
+    writeFileSync(join(dir, "android/stillfail-beta-8300.apk"), "apk");
+    writeFileSync(join(dir, "android/beta/latest.json"), "{}");
+    writeFileSync(join(dir, "symbols/android/stillfail-beta-8300.syms.xz"), "syms");
+    return dir;
+  };
+
+  let dir = made("put");
+  let result = run("", "--files", dir);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(join(bucket, "symbols_android_stillfail-beta-8300.syms.xz"), "utf8"), "syms");
+  assert.equal(readFileSync(join(bucket, "symbols_android_stillfail-beta-8300.syms.xz.type"), "utf8"), "application/x-xz");
+  assert.equal(existsSync(join(dir, "symbols/android/stillfail-beta-8300.syms.xz")), false, "taken out once put");
+  assert.ok(existsSync(join(dir, "android/beta/latest.json")), "the feed left for the put after");
+  rmSync(bucket, { recursive: true });
+  mkdirSync(bucket);
+
+  dir = made("refused");
+  result = run("symbols/", "--files", dir);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /warning: symbols\/android\/stillfail-beta-8300\.syms\.xz not put/);
+  assert.equal(readFileSync(join(bucket, "android_stillfail-beta-8300.apk"), "utf8"), "apk");
+  assert.equal(existsSync(join(bucket, "symbols_android_stillfail-beta-8300.syms.xz")), false);
+  assert.equal(existsSync(join(dir, "symbols/android/stillfail-beta-8300.syms.xz")), false, "not handed on");
+
+  dir = made("apk-refused");
+  result = run("android/stillfail-beta", "--files", dir);
+  assert.notEqual(result.status, 0, "the APK's failure is the put's");
+});
