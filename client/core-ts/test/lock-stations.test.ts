@@ -143,6 +143,33 @@ test("a station that tells its lock moved is read again", async () => {
   assert.equal(held(inner, "ws")?.head?.seq, 1);
 });
 
+test("a read that lands late does not take back what the lock came to hold meanwhile", async () => {
+  // S on a slow line, asked alone as its link opened: each answer comes 3 s after it was asked, what S kept then.
+  // Meanwhile A tells an entry more and is read. S's answer, behind by now, was held as read: the entry gone from this
+  // device again, until the lock next moved.
+  const { inner, st, run, signer, r, asleep } = await setUp(true);
+  await run(read(inner, "ws"));
+  assert.equal(held(inner, "ws")?.head?.seq, 0);
+  asleep.now = false;
+  const call = inner.stations.requests.call;
+  inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
+    const said = (call as (...a: unknown[]) => Effect.Effect<unknown, CoreError>)(addr, method, path, body, ...rest);
+    return addr.toString() === `ws/${S}` && path.startsWith("/lock") ? Effect.andThen(Effect.sleep(3_000), said) : said;
+  }) as typeof inner.stations.requests.call;
+  const opened = (id: string) => Effect.all(inner.stations.also.filter((p) => p.resume).map((p) => Effect.ignore(p.read(`ws/${id}`))), { discard: true });
+  let landed = false;
+  inner.runner.fork(Effect.andThen(opened(S), Effect.sync(() => { landed = true; })));
+  await r.host.time.pass(100);
+  st.chain.push(signer().sign(next("ws", st.head(), 1001, "member", { sub: "s3", email: "c@x.com", role: "member" })));
+  await run(opened(A));
+  assert.equal(held(inner, "ws")?.head?.seq, 1);
+  assert.equal(landed, false, "S's read still on its way");
+  for (let i = 0; i < 200 && !landed; i++) await r.host.time.pass(100);
+  assert.ok(landed, "S's read landed");
+  assert.equal(held(inner, "ws")?.head?.seq, 1, "what S kept as it was asked is behind what is held, and does not replace it");
+  assert.ok(fold(held(inner, "ws")!.entries).members.has("s3"));
+});
+
 test("a station the lock does not name, keeping none, read alone does not make this device forget the lock", async () => {
   // #5540: S, in the workspace and not protected yet, answers that it keeps no lock. Read alone (it told `lock`, its
   // link opened again), its answer was every answer of the read, and the device let go of the lock A still keeps.
