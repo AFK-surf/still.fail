@@ -1,0 +1,54 @@
+# The merge queue's run (main's protection: a pull request merges through it, `gh pr merge` putting it there): what a
+# branch's pushes leave out, the mbui app's tests at 120, 60, 24 and 7 frames a second (mbui-check.yml with rates:
+# only), on what would merge, when it changes what they test (scripts/plan.sh's mbui). Its gate is the check the queue
+# waits for, as pipeline.yml's is a push's (the user, 2026-11-11: 帧率只在合并前跑: the rates on every push were four
+# fifths of a push's runner time, and pushes waited minutes for GitHub's runners).
+name: merge-queue
+on:
+  merge_group:
+concurrency:
+  group: merge-queue-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  plan:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      mbui: ${{ steps.plan.outputs.mbui }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0, filter: "blob:none" }
+      - id: plan
+        env:
+          BASE: ${{ github.event.merge_group.base_sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE" "$GITHUB_SHA")
+          printf '%s\n' "$changed" | range="$BASE..$GITHUB_SHA" bash scripts/plan.sh > "$RUNNER_TEMP/plan"
+          grep '^mbui=' "$RUNNER_TEMP/plan" >> "$GITHUB_OUTPUT"
+          echo "range $BASE..$GITHUB_SHA ($(printf '%s\n' "$changed" | grep -c .) files): $(grep '^mbui=' "$RUNNER_TEMP/plan")"
+
+  rates:
+    needs: plan
+    if: ${{ !cancelled() && needs.plan.outputs.mbui == 'true' }}
+    uses: ./.github/workflows/mbui-check.yml
+    with: { rates: only }
+
+  # The check main's protection requires, here for the queue: a job skipped as passing, one failed or cancelled failing it
+  gate:
+    needs: [plan, rates]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if echo "$RESULTS" | jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' >/dev/null; then
+            echo "::error::the rates failed or were cancelled: this merge leaves the queue"
+            exit 1
+          fi
