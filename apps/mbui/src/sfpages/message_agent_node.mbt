@@ -4,13 +4,13 @@
 // paths name its agent's chips, the files it places drawn where it places them, a link to a station's screens its card
 // and a bare one its title: screen_links_node; each link's card while a mouse rests on it: message_link_card), its other
 // files under them, what it asks under it (message_decision_node).
+// What it quotes ahead of its words (message_quotes_node), each quote's own file in its card and not under its words.
 // Each read through what it is given, as that changes.
 // Not here yet, each where it comes in:
 // - a Mermaid chart: as its code till then; `code` takes viz_mermaid_node once it is in main (#5525).
 // - a card in its words' place (vault, phone, signin, rig): nothing drawn for it yet. A rig's is message_card_node
 //   (#5536), which answers with the settings' core the row does not take yet; a vault item's and a phone's come with
 //   mbui-message-vault-node and mbui-message-cards-node; a sign-in's is not made yet.
-// - what it quotes (P14): once the picture's part is in main (#5552).
 // - its pictures placed side by side in its words: once its pictures are nodes (#5552, #5553); each its box till then.
 // - an HTML page it places drawn as a page: its file's card till the window's tree holds a host's web view.
 // - its picture held under the pane's top as a long one scrolls past (c.stick), and its coming out of its agent's picture
@@ -75,6 +75,8 @@ fn agent_said_node(
       },
       None,
       fn(b) {
+        // (what it quotes ahead of its words, as the old body's)
+        message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, message_place(@signals.untracked(m)))
         // (a card in its words' place: not here yet, nothing drawn for it)
         b.show(fn() { agent_card_kind(m()) == "" }, fn(p) {
           // (its words and its files 4 apart, as the body's are: msg_main's)

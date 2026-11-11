@@ -11,7 +11,8 @@
 
 ///|
 /// A message's picture `a` (as it is now) in `parent`, `w` by `h` (its box: image_box's at most the width given), for
-/// where it is shown (`place`, `at`) and whose message it is (`by`, for 引用).
+/// where it is shown (`place`, `at`) and whose message it is (`by`, for 引用); `corner` how round it is (a message's
+/// file's, or a quote's own picture's, concentric with its card: quote_picture_corner).
 fn message_image_node(
   parent : @view.View,
   src : Source,
@@ -21,6 +22,7 @@ fn message_image_node(
   at : String,
   w : Double,
   h : Double,
+  corner? : Double = @sf.message_file_corner,
 ) -> Unit {
   let station = fn() { (place.station)() }
   let owner = fn() { owner_of(place.here(), a()) }
@@ -56,7 +58,7 @@ fn message_image_node(
   // the menu up by a finger's hold (its serial among what is presented: lifted while it is drawn)
   let held_menu : @signals.Signal[Int?] = @signals.signal(None)
   parent.box(fn(f) {
-    @sf.style_node(f, fn() { image_box_style(w, h, key() != "!" || letterbox(), @sf.message_file_corner) })
+    @sf.style_node(f, fn() { image_box_style(w, h, key() != "!" || letterbox(), corner) })
     f.says(By(fn() { Some(@view.said(Button, label=@sf.t("web-main.file.view", args=[("name", a().name)]))) })) |> ignore
     let open_menu = fn(x : Double, y : Double, finger : Bool) {
       let here = place.here()
@@ -140,7 +142,7 @@ fn message_image_node(
       }
     })
     |> ignore
-    image_coming_node(f, src, place, a, id, asked)
+    image_coming_node(f, src, place, a, id, asked, corner)
   })
   |> ignore
 }
@@ -158,6 +160,7 @@ fn image_coming_node(
   a : () -> Attachment,
   id : () -> String,
   asked : () -> Bool,
+  corner : Double,
 ) -> Unit {
   let downloading = fn() {
     let a = a()
@@ -229,7 +232,14 @@ fn image_coming_node(
   })
   parent.box(fn(room) {
     room.over(Is(true)) |> ignore
-    @sf.style_node(room, fn() { coming_room })
+    // (in a corner other than a message's file's, as far in as makes it concentric with that: image_coming's)
+    @sf.style_node(room, fn() {
+      if corner == @sf.message_file_corner {
+        coming_room
+      } else {
+        coming_room.then(@ui.style(p=@sf.capsule_fit_room(corner, coming_pill_h, coming_alone_in)))
+      }
+    })
     room.show(at_once=true, fn() { shown.get() && how_far() is Some(_) }, fn(s) {
       s.box(fn(pill) {
         @sf.style_node(pill, fn() { coming_pill })

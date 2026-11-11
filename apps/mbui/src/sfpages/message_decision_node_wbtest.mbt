@@ -184,6 +184,7 @@ fn dec_new(
         width: fn() { w },
         tips,
         stint: fn() { 0 },
+        jump: None,
       }
       root.box(fn(f) {
         @sf.style_node(f, fn() { head_frame })

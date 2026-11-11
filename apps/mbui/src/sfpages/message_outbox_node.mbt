@@ -1,8 +1,8 @@
 // What was sent from here and is not in the chat yet, as nodes of the window's tree (chat_rows.mbt's outbox_row,
-// outbox_unsent, unsent_button; their styles the same): the viewer's message as it went (its files, its words in their
-// bubble), and under it 正在发送 (or what it waits on) a while after it was sent, its time once the station has it, or,
-// not sent, 未发送 with 重试 (or 编辑) and 删除, each turning while the core does it and marked red a moment where that
-// failed (the core's doing). Each read through what it is given, as that changes. Not here yet: what it quotes (P14),
+// outbox_unsent, unsent_button; their styles the same): the viewer's message as it went (what it quotes, its files,
+// its words in their bubble), and under it 正在发送 (or what it waits on) a while after it was sent, its time once the
+// station has it, or, not sent, 未发送 with 重试 (or 编辑) and 删除, each turning while the core does it and marked red
+// a moment where that failed (the core's doing). Each read through what it is given, as that changes. Not here yet:
 // its files still going up as cards (the library's file_card_node has no upload yet), its words flying in from the
 // composer (the list's flight).
 
@@ -66,6 +66,8 @@ fn outbox_said_node(
       @sf.style_node(col, fn() { mine_column })
       col.box(fn(w) {
         @sf.style_node(w, fn() { outbox_words })
+        // (what it quotes ahead of its files and words, as outbox_row's)
+        message_quotes_node(w, src, here, fn() { o().quotes }, fn() { o().attachments }, true, key)
         message_files_node(
           w,
           src,

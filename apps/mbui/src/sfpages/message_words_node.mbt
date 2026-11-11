@@ -2,9 +2,10 @@
 // and others_message's body for a person's words; their styles the same): the words in pieces as the core gave them
 // (person_runs: a chat's reference its chip, a web address its link), each link pressed where it leads and held for its
 // menu; the viewer's own in their bubble at the column's end, its time under it; someone else's under their picture,
-// name and time. Each read through what it is given, as that changes.
-// Each link's card while a mouse rests on it (message_link_card: a web link's, a chat's). Not here yet: what it quotes
-// and its files, the viewer's words flying in from the composer (flight.mbt) and its time faded in as they land.
+// name and time; what each quotes ahead of its words (message_quotes_node). Each read through what it is given, as
+// that changes.
+// Each link's card while a mouse rests on it (message_link_card: a web link's, a chat's). Not here yet: its files, the
+// viewer's words flying in from the composer (flight.mbt) and its time faded in as they land.
 
 ///|
 /// What a person wrote (person_words') in `v`, as `m` says it as it changes: in the face for what people wrote (the
@@ -105,6 +106,8 @@ fn mine_said_node(
   message_row_frame_node(v, key, side, top, over~, fn(r) {
     r.box(fn(col) {
       @sf.style_node(col, fn() { mine_column })
+      // (what it quotes ahead of its words, in the order the composer held them: mine_message's)
+      message_quotes_node(col, src, here, fn() { m().quotes }, fn() { m().attachments }, true, message_place(@signals.untracked(m)))
       col.show(fn() { m().text != "" }, fn(b) {
         mine_bubble_node(b, here, m, found, cards=(here.tips, message_link_card(src, here.station, "", m)))
       })
@@ -198,6 +201,8 @@ fn person_said_node(
       },
       None,
       fn(b) {
+        // (what it quotes ahead of its words, as the old body's)
+        message_quotes_node(b, src, here, fn() { m().quotes }, fn() { m().attachments }, false, message_place(@signals.untracked(m)))
         b.show(fn() { m().text != "" }, fn(w) {
           person_words_node(w, m, found~, cards=(here.tips, message_link_card(src, here.station, "", m))) |> ignore
         })
