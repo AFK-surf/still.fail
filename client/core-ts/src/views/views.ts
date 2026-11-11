@@ -21,6 +21,7 @@ import { t } from "../i18n.ts";
 import * as jobs from "../jobs.ts";
 import * as looks from "../looks.ts";
 import { conformTy } from "../conform.ts";
+import { LISTED_CHAT } from "../shapes/schema.ts";
 import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import * as refs from "../refs.ts";
@@ -222,6 +223,73 @@ const unmade = new WeakMap<object, () => J>();
 /// What a chat's whole row (`chatRow`, views.ts #chatRow `whole` and #rowMenu) says that its list's row is made without:
 /// what is read only as the row is pressed, held, swiped or pointed at (the rest of the two is one: views.test.ts).
 const WHOLE_ONLY = ["watch", "swipeAsk", "decision", "mayShare", "mayPublish", "slackUrl", "slackApp", "feishuUrl"];
+/// What a chat list's row holds (#listRow) besides what its shape declares (schema.ts LISTED_CHAT), each for what reads it
+/// in the core (`store.value`, a row as made): nothing else of its record is copied into it, nor worked out for it.
+/// (A search's, the `@` menu's and a share's chats are a list's rows sent as ChatItem: `search`, `chatSearch`, `shareIn`,
+/// what wholeFor puts on them besides.)
+export const LIST_ROW_READ: Record<string, string> = {
+  lastActiveAt: "#days and #daysOf (its order, its day); refs.search (ranked by it); ChatItem `time` (present.times)",
+  origin: "share-in.ts open (a Slack or Feishu chat takes nothing shared in from here)",
+  xshare: "refs.withOutside (those shared with the workspace first); ChatItem",
+  kept: "ChatItem",
+  muted: "ChatItem",
+  // (worked out for `settled` anyway; no code reads it of a list's row now, views.test.ts holds it the core's)
+  archivable: "whether it goes with one tap whatever the viewer's archiveHint (views.test.ts)",
+};
+/// A chat list's row's keys at most: its shape's and what the core reads of it (LIST_ROW_READ), with its record's moments
+/// a search's ChatItem says in words (`time`: present.times).
+export const LIST_ROW_KEYS: ReadonlySet<string> = new Set([...LISTED_CHAT, ...Object.keys(LIST_ROW_READ), ...present.TIME_KEYS]);
+/// Of those, what a row takes of its record as it is (its values shared, frozen), before what it works out of it is put.
+const LIST_ROW_TAKEN = [...LIST_ROW_KEYS].filter((k) => !["agents", "last", "people", "creator", "pinned", "opener", "station", "stationName"].includes(k));
+
+/// Where a row's chat came from, for one from a connect (`connect`): its mark's kind and its words (Slack · team ·
+/// #channel; 飞书 · tenant · group; Comma · Group). Null for one that came from none. (Both makers of a row: #chatRow,
+/// #listRow.)
+function originOf(connect: J, origin: J): { originKind: string; originText: string } | null {
+  if (connect === undefined || connect === null) return null;
+  const o = origin ?? null;
+  const text = (k: string) => (typeof get(o, k) === "string" && o[k] !== "" ? (o[k] as string) : null);
+  const channelName = text("channelName");
+  // A Feishu chat's: its group by name, no #.
+  const feishu = text("surface")?.startsWith("feishu:") === true || format.isFeishuChat(text("channel") ?? "");
+  // A Comma Task's: Comma and the Group, no place (a Task is not in a channel).
+  const comma = text("surface")?.startsWith("comma:") === true;
+  const place = comma || (text("channel") === null && channelName === null) ? null : format.placeName(text("surface") ?? "slack", text("channel") ?? "", channelName ?? "");
+  return {
+    originKind: comma ? "comma" : feishu ? "feishu" : "slack",
+    originText: [comma ? "Comma" : feishu ? t("core-views.feishu") : "Slack", text("teamName"), place].filter((x) => x !== null).join(" · "),
+  };
+}
+
+/// What a row says of being archived, of `stood` (its record with its card and mark as decisions.presentRow says them):
+/// kept by the viewer (`kept`); archived with one tap whenever nothing is left in it (`archivable`); offered to archive
+/// (faded) as the viewer's `archiveHint` says (`settled`). Only what is so. (Both makers of a row.)
+function archivingOf(stood: J, hint: ArchiveHint): J {
+  const out: J = {};
+  if (get(stood, "archiveReminderDismissed") === true) out.kept = true;
+  if (present.archivable(stood)) {
+    out.archivable = true;
+    if (present.offered(stood, hint)) out.settled = true;
+  }
+  return out;
+}
+
+/// A row's state line (present.rowStateLine) as its fields: its words, the message they are about, what leads them and
+/// what follows. Only what it says. (Both makers of a row.)
+function stateLineOf(line: ReturnType<typeof present.rowStateLine>): J {
+  const out: J = {};
+  if (line === null) return out;
+  out.stateText = line[0];
+  if (line[1] !== null) out.stateAbout = line[1];
+  const lead = line[3];
+  if (lead !== null) {
+    out.stateLead = lead.kind;
+    if (lead.text !== undefined) out.stateLeadText = lead.text;
+    out.stateRest = lead.rest;
+  }
+  return out;
+}
+
 /// A list's item as it goes out: its row, made now if it was not yet.
 const madeRow = (item: J): J => (isObject(item) ? unmade.get(item)?.() : undefined) ?? item;
 /// A list's day with its first `n` rows made (`madeRow`), kept by the day while it is asked the same `n`: a day all of
@@ -1776,7 +1844,9 @@ export class Views implements Owner {
         // each row then looks at again)
         const base = JSON.stringify([s.address, s.name, mark, me, slackUsers, watching, hint]);
         const sig = JSON.stringify([base, members_]);
-        const rowSig = (shown: J) => JSON.stringify([base, present.rowMembers(shown, members_)]);
+        // (the base as it is and the members after a character JSON never leaves unescaped, U+0001: one signature for one
+        // pair, as JSON.stringify([base, members]) was, without writing the base out again escaped for each row)
+        const rowSig = (shown: J) => `${base}\u0001${JSON.stringify(present.rowMembers(shown, members_))}`;
         // One record's row, or null where the list does not show it.
         const make = (raw: J): J | null => {
           work.listed++;
@@ -1804,7 +1874,9 @@ export class Views implements Owner {
           if (kept !== undefined && holds(kept)) return kept.row === null ? null : this.#unsentRow(s.address, kept.row, failed);
           const row = (): J => {
             const made = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark, hint);
-            // Frozen all through: a row made once and shared from then on (output.ts takes it as it is).
+            // Frozen all through: a row made once and shared from then on (output.ts takes it as it is). What it took of
+            // its record as it is was frozen all through with it (db/account.ts `frozen` freezes a part after all of
+            // its own): deepFreeze stops there, and walks only what was made here.
             if (made !== null) deepFreeze(made);
             if (keepable) this.#rowsMade.set(shown, { sig: own(), list: sig, row: made });
             return made;
@@ -2006,47 +2078,25 @@ export class Views implements Owner {
     return out;
   }
 
-  /// A station's row as the list shows it (null: not in this list); `whole`, as its own `chatRow` gives it, with what a
-  /// press, a hold, a swipe or a pointer reads of it besides (its watch, its swipe's question, its card: the menu's are
-  /// #rowMenu's), which the list's rows are made without.
+  /// A station's row as the list shows it (null: not in this list; made by #listRow); `whole`, as its own `chatRow` gives
+  /// it, its record cloned and worked out whole, with what a press, a hold, a swipe or a pointer reads of it besides (its
+  /// watch, its swipe's question, its card: the menu's are #rowMenu's), which the list's rows are made without.
   #chatRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], watching: boolean, mark: { emoji: string | null; icon: string | null } | null, hint: ArchiveHint, whole = false): J {
     work.rows++;
+    if (!whole) return watching && !present.watches(arr(get(raw, "agents"))) ? null : this.#listRow(s, raw, me, slackUsers, members_, mark, hint);
+    work.rowsCloned++;
     let row = structuredClone(raw);
-    // Pinned rows are pinned (true) in the list, in the order they were pinned in (pinnedAt, below); one unpinned says
-    // false.
-    if (row.pinned !== undefined) row.pinned = typeof row.pinned === "number";
-    row.station = s.address;
-    row.stationName = s.name;
-    // A chat made here keeps the key it was asked for by (its page still open by it) as long as this device keeps it:
-    // its station says it only a while (CLIENT_KEY_KEPT_MS), and the row and that page are one chat all along.
-    if (typeof row.clientKey !== "string" && typeof row.session === "string") {
-      const key = this.local.pendingKey(s.address, row.session);
-      if (key !== undefined) row.clientKey = key;
-    }
-    if (mark?.emoji) row.stationEmoji = mark.emoji;
-    if (mark?.icon) row.stationIcon = mark.icon;
+    Object.assign(row, this.#placeOf(s, raw, mark));
     const agents = arr(row.agents);
-    if (whole) {
-      const watch = present.rowWatch(agents);
-      if (watch !== null) {
-        work.watches++;
-        row.watch = watch;
-      } else if (watching) return null;
-    } else if (watching && !present.watches(agents)) return null;
+    const watch = present.rowWatch(agents);
+    if (watch !== null) {
+      work.watches++;
+      row.watch = watch;
+    } else if (watching) return null;
     row.state = present.rowState(agents);
     if (Array.isArray(row.agents)) row.agents = row.agents.map((agent: J) => present.session(agent));
-    if (row.connect !== undefined && row.connect !== null) {
-      const o = row.origin ?? null;
-      const text = (k: string) => (typeof get(o, k) === "string" && o[k] !== "" ? (o[k] as string) : null);
-      const channelName = text("channelName");
-      // A Feishu chat's: its group by name, no #.
-      const feishu = text("surface")?.startsWith("feishu:") === true || format.isFeishuChat(text("channel") ?? "");
-      // A Comma Task's: Comma and the Group, no place (a Task is not in a channel).
-      const comma = text("surface")?.startsWith("comma:") === true;
-      const place = comma || (text("channel") === null && channelName === null) ? null : format.placeName(text("surface") ?? "slack", text("channel") ?? "", channelName ?? "");
-      row.originKind = comma ? "comma" : feishu ? "feishu" : "slack";
-      row.originText = [comma ? "Comma" : feishu ? t("core-views.feishu") : "Slack", text("teamName"), place].filter((x) => x !== null).join(" · ");
-    }
+    const origin = originOf(row.connect, row.origin);
+    if (origin !== null) Object.assign(row, origin);
     if (isObject(row.last)) {
       const text = format.cleanText(format.plainText(str(row.last.text) ?? ""));
       row.last.preview = text === "" ? t("core-views.file") : text;
@@ -2060,43 +2110,102 @@ export class Views implements Owner {
       by.maker = present.maker(str(by.model));
     }
     row = decisions.presentRow(row);
-    // Archived with one tap whenever nothing is left in it; offered to archive (faded) as the
-    // viewer's `archiveHint` says.
-    if (row.archiveReminderDismissed === true) row.kept = true;
-    if (present.archivable(row)) {
-      row.archivable = true;
-      if (present.offered(row, hint)) row.settled = true;
-    }
+    Object.assign(row, archivingOf(row, hint));
     // A swipe is the viewer's own choice: every made chat can be archived this way while its station is there (its
     // station's state, `stationOn`), regardless of the chat's state or whether it is recommended for archiving.
     if (row.pending !== true) {
       row.swipeArchive = true;
       // (one someone else started: archiving it archives it for everyone in the workspace)
-      if (whole) {
-        work.swipeAsks++;
-        const shown = get(row.creator, "shown");
-        const starter = isObject(shown) && get(shown, "mine") !== true ? str(get(shown, "name")) : null;
-        const ask = present.swipeAsk(agents, starter, typeof row.hidden === "boolean");
-        if (ask !== null) row.swipeAsk = ask;
-      }
+      work.swipeAsks++;
+      const shown = get(row.creator, "shown");
+      const starter = isObject(shown) && get(shown, "mine") !== true ? str(get(shown, "name")) : null;
+      const ask = present.swipeAsk(agents, starter, typeof row.hidden === "boolean");
+      if (ask !== null) row.swipeAsk = ask;
     }
-    const line = present.rowStateLine(row);
-    if (line !== null) {
-      row.stateText = line[0];
-      if (line[1] !== null) row.stateAbout = line[1];
-      const lead = line[3];
-      if (lead !== null) {
-        row.stateLead = lead.kind;
-        if (lead.text !== undefined) row.stateLeadText = lead.text;
-        row.stateRest = lead.rest;
-      }
-    }
-    // (its card: its line said, the rest of it is what its chat opens on, and its whole row's; a row of a decision's line
-    // and no `stateText` there is none: rowStateLine says one wherever its card waits for the viewer)
-    if (!whole) delete row.decision;
+    Object.assign(row, stateLineOf(present.rowStateLine(row)));
     const opener = this.#opener(s.address, raw);
     if (opener !== null) row.opener = opener;
     else delete row.opener;
+    if (typeof raw.pinned === "number") pinnedAt.set(row, raw.pinned);
+    return row;
+  }
+
+  /// Where a row's chat is, of its record (`raw`): its station, by name and, with several, by its mark (`mark`); whether
+  /// the viewer pinned it (true, in the order they pinned it in: pinnedAt; one unpinned says false); the key a chat made
+  /// here was asked for by, kept as long as this device keeps it (its station says it only a while, CLIENT_KEY_KEPT_MS:
+  /// the row and the page opened by it are one chat all along). (Both makers of a row: #chatRow, #listRow.)
+  #placeOf(s: StationInfo, raw: J, mark: { emoji: string | null; icon: string | null } | null): J {
+    const out: J = {};
+    if (raw.pinned !== undefined) out.pinned = typeof raw.pinned === "number";
+    out.station = s.address;
+    out.stationName = s.name;
+    if (typeof raw.clientKey !== "string" && typeof raw.session === "string") {
+      const key = this.local.pendingKey(s.address, raw.session);
+      if (key !== undefined) out.clientKey = key;
+    }
+    if (mark?.emoji) out.stationEmoji = mark.emoji;
+    if (mark?.icon) out.stationIcon = mark.icon;
+    return out;
+  }
+
+  /// A chat list's row (#chatRow, not `whole`), made as what it is: what its row draws and what the core reads of it
+  /// (LIST_ROW_KEYS) out of its record, the values it takes as they are the record's (shared, frozen: a record was
+  /// cloned whole into each row, three quarters of it never sent, 2026-11-11), the rest made here: its agents, its last
+  /// line, its people as the row draws them. What only its whole row says (its card, its agents' summaries, who said its
+  /// last line by name) is not worked out for it; what its state line and mark are worked out of is read of the record.
+  #listRow(s: StationInfo, raw: J, me: J, slackUsers: string[], members_: J[], mark: { emoji: string | null; icon: string | null } | null, hint: ArchiveHint): J {
+    const row: J = {};
+    for (const k of LIST_ROW_TAKEN) {
+      const v = raw[k];
+      if (v !== undefined) row[k] = sharedOrCopied(v);
+    }
+    Object.assign(row, this.#placeOf(s, raw, mark));
+    const agents = arr(raw.agents);
+    if (raw.agents !== undefined) row.agents = Array.isArray(raw.agents) ? agents.map((a: J) => present.listedAgent(a)) : sharedOrCopied(raw.agents);
+    const origin = originOf(raw.connect, raw.origin);
+    if (origin !== null) Object.assign(row, origin);
+    // Its last line: what it draws of it (RowMessage) and no more.
+    const last = raw.last;
+    if (isObject(last)) {
+      const text = format.cleanText(format.plainText(str(last.text) ?? ""));
+      const made: J = {};
+      if (last.seq !== undefined) made.seq = last.seq;
+      made.by = { mine: present.lastByMine(raw, me, slackUsers) };
+      made.preview = text === "" ? t("core-views.file") : text;
+      row.last = made;
+    } else if (last !== undefined) row.last = last;
+    // Its people as its pictures draw them (RowPerson, RowCreator).
+    if (raw.people !== undefined || raw.creator !== undefined) {
+      const people = present.rowPeople({ people: raw.people, creator: raw.creator }, me, slackUsers, members_);
+      row.peopleText = people.peopleText;
+      row.people = arr(people.people).map((p: J) => {
+        if (!isObject(p)) return p;
+        const shown = get(p, "shown");
+        const out: J = {};
+        if (p.id !== undefined) out.id = p.id;
+        if (p.email !== undefined) out.email = p.email;
+        out.shown = isObject(shown) ? { name: shown.name, picture: shown.picture, mine: shown.mine } : shown;
+        return out;
+      });
+      if (isObject(raw.creator)) row.creator = get(people.creator, "id") !== undefined ? { id: people.creator.id } : {};
+      else if (raw.creator !== undefined) row.creator = sharedOrCopied(raw.creator);
+    }
+    // Where it stands (its mark, its tone, its state line, whether it is offered to archive), worked out of its record as
+    // a whole row's are (decisions.presentRow, present.rowStateLine), its agents' states said as that line reads them.
+    const read: J = {
+      thread: raw.thread, unread: raw.unread, pinned: raw.pinned, card: raw.card, decision: raw.decision, need: raw.need,
+      archiveReminderDismissed: raw.archiveReminderDismissed, archiveReviewed: raw.archiveReviewed, archiveRecommended: raw.archiveRecommended,
+      agents: Array.isArray(raw.agents) ? agents.map((a: J) => present.agentStated(a)) : raw.agents, state: present.rowState(agents),
+    };
+    const stood = decisions.presentRow(read);
+    if ("state" in stood) row.state = stood.state;
+    else delete row.state;
+    if (stood.tone !== undefined) row.tone = stood.tone;
+    Object.assign(row, archivingOf(stood, hint));
+    if (row.pending !== true) row.swipeArchive = true;
+    Object.assign(row, stateLineOf(present.rowStateLine(stood)));
+    const opener = this.#opener(s.address, raw);
+    if (opener !== null) row.opener = opener;
     if (typeof raw.pinned === "number") pinnedAt.set(row, raw.pinned);
     return row;
   }

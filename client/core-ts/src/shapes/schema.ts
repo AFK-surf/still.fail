@@ -68,7 +68,7 @@ const CHAT_ITEM: Parameters<typeof struct>[0] = [
 ];
 
 /// Those of a chat's row's fields a row of the `chats` list carries (ListedChat).
-const LISTED_CHAT = [
+export const LISTED_CHAT: readonly string[] = [
   "id", "session", "thread", "clientKey", "station", "stationName", "stationEmoji", "stationIcon", "title", "unread", "hidden",
   "settled", "tone", "state", "connect", "originKind", "originText", "opener", "stateText", "stateLead", "stateLeadText",
   "stateRest", "stateAbout", "unsent", "last", "agents", "people", "creator", "peopleText", "pinned", "pending", "swipeArchive",

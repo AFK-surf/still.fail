@@ -119,6 +119,8 @@ export function stamp(ms: number, c: Clock): Record<string, unknown> {
 /// Times kept in seconds (still.fail cloud's) and in milliseconds (the station's).
 const SECONDS = new Set(["created_at", "expires_at", "used_at", "revoked_at", "last_seen", "lastSeen"]);
 const MILLIS = new Set(["createdAt", "lastActiveAt", "lastUsedAt", "checkedAt", "resetsAt"]);
+/// The fields `times` says in words (`time`), each a moment.
+export const TIME_KEYS: readonly string[] = [...SECONDS, ...MILLIS];
 
 /// What a window with `used` percent of it used has left, and how full it is.
 export function leftLevel(used: number): [number, string] {
@@ -713,9 +715,10 @@ export function lastBy(row: J, me: J, slackUsers: string[], members: J[]): J {
   return { kind: "person", id: author, name, picture, mine };
 }
 
-/// A session's summary with what the clients show of it.
-export function session(s: J): J {
-  if (!isObject(s)) return s;
+/// Where a session stands, in words (`statusText`), what leads them (`statusLead`, said by a client as a mark of its own)
+/// and what follows that (`statusRest`); and its colour (`tone`): what a row's state line reads of its agents
+/// (rowStateLine), and a session's summary says (session).
+function statusOf(s: J): { text: string; tone: J; lead: Lead["kind"] | null; rest: string } {
   const status = shownStatus(s);
   let [text, tone] = format.statusText(status);
   const turn = get(s, "lastTurn");
@@ -743,6 +746,46 @@ export function session(s: J): J {
     lead = watched ? "watch" : "wait";
     rest = watched ? text : what ?? "";
   }
+  return { text, tone, lead, rest };
+}
+
+/// An agent as a chat list's row's state line reads it (rowStateLine: its state in words, what leads them), its summary
+/// as it is besides: what session() says of it and that alone reads.
+export function agentStated(s: J): J {
+  if (!isObject(s)) return s;
+  const { text, lead, rest } = statusOf(s);
+  return { ...s, statusText: text, ...(lead !== null ? { statusLead: lead, statusRest: rest } : {}) };
+}
+
+/// An agent as a chat list's row holds it (views.ts #listRow): what the row draws of it (RowAgent: `runtime`, `agentText`,
+/// `maker`, as session() says them), and what the core reads of a list's row's agents besides: `key`, `model` (who said
+/// a found message, lastBy: views.ts #foundMessages, views/search.ts).
+export function listedAgent(s: J): J {
+  if (!isObject(s)) return s;
+  const o = s as J;
+  const m = typeof o.model === "string" ? o.model : null;
+  const out: J = {};
+  if (o.key !== undefined) out.key = o.key;
+  if (o.runtime !== undefined) out.runtime = o.runtime;
+  if (o.model !== undefined) out.model = o.model;
+  out.agentText = format.agentLabel(m, typeof o.effort === "string" ? o.effort : null);
+  out.maker = maker(m);
+  return out;
+}
+
+/// Whether the viewer said a row's last thing: lastBy's `mine`, all a chat list's row says of who said it (LastBy).
+export function lastByMine(row: J, me: J, slackUsers: string[]): boolean | null {
+  const last = get(row, "last");
+  if (!isObject(last)) return null;
+  const kind = str(last.authorKind) ?? "person";
+  if (kind === "agent" || isStationAuthor(kind)) return false;
+  return isViewer(me, str(last.author) ?? "", slackUsers);
+}
+
+/// A session's summary with what the clients show of it.
+export function session(s: J): J {
+  if (!isObject(s)) return s;
+  const { text, tone, lead, rest } = statusOf(s);
   const o = s as J;
   const strOf = (k: string): string | null => (typeof o[k] === "string" ? o[k] : null);
   const runtime = strOf("runtime") ?? "claude";

@@ -11,6 +11,7 @@ import { conform } from "../src/conform.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Topic } from "../src/protocol.ts";
 import { work, workSince } from "../src/work.ts";
+import { LIST_ROW_KEYS } from "../src/views/views.ts";
 import { link, overview, prefs, rows, setup, ui, type Ui } from "./views-rig.ts";
 
 holdLanguage();
@@ -211,3 +212,35 @@ test("a_search_and_the_at_menu_list_their_chats_whole", async () => {
   for (const i of search.value.items as J[]) assert.deepEqual(i, OLD[i.id], `${i.id} as its whole row`);
 });
 
+
+/// Values at the ends of a value (strings, numbers, booleans, nulls).
+const leaves = (v: J): number => (v !== null && typeof v === "object" ? Object.values(v).reduce((n: number, x) => n + leaves(x), 0) : 1);
+
+test("a_lists_row_is_made_as_what_it_holds_its_records_values_shared_none_cloned", async () => {
+  const before = { ...work };
+  const { t } = await listed();
+  const made = workSince(before);
+  // The rows as the core holds them (what its readers read, `store.value`), not as they go out.
+  const held: J[] = items((t.store.value({ topic: "chats", scope: "ws" }) as J).ok);
+  assert.equal(held.length, 8);
+  // No record cloned into a list's row (main: one each, 8, every value of each copied).
+  assert.equal(made.rowsCloned, 0, "records cloned whole");
+  // What a list's row holds: its shape's and what the core reads of it (views.ts LIST_ROW_KEYS, each with its reader),
+  // none of the rest of its record (main: `named`, `mine`, `archiveReviewed`, its card, the whole agents' summaries …).
+  for (const r of held) {
+    for (const k of Object.keys(r)) assert.ok(LIST_ROW_KEYS.has(k), `${r.id}.${k} held: say who reads it (views.ts LIST_ROW_READ)`);
+    for (const a of r.agents) for (const k of Object.keys(a)) assert.ok(["key", "runtime", "model", "agentText", "maker"].includes(k), `${r.id}.agents[].${k}`);
+    if (r.last != null) for (const k of Object.keys(r.last)) assert.ok(["seq", "by", "preview"].includes(k), `${r.id}.last.${k}`);
+    for (const p of r.people ?? []) assert.deepEqual(Object.keys(p.shown).sort(), ["mine", "name", "picture"], `${r.id}.people[].shown`);
+  }
+  // What it takes of its record as it is, the record's own (frozen, shared): none copied.
+  const records = new Map(((t.data.shared({ topic: "chatRows", station: "ws/a" }) as J[]) ?? []).map((r: J) => [r.id, r]));
+  const slack = held.find((r) => r.id === "slack");
+  assert.equal(slack.origin, records.get("slack").origin, "its origin the record's");
+  assert.equal(held.find((r) => r.id === "run").xshare, records.get("run").xshare, "its sharing the record's");
+  // (main: 526 leaves for these 8 rows, 9.3 KB; made as they hold, 237 and 4.6 KB)
+  const n = held.reduce((k, r) => k + leaves(r), 0);
+  assert.ok(n <= LEAVES, `${n} leaves held`);
+});
+/// The leaves the fixture's 8 list rows hold at most (as made, 237).
+const LEAVES = 240;
