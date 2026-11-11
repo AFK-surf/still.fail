@@ -3,7 +3,10 @@
 // marks it (failed a moment ago, its station away, from Slack, opened by another chat, its station's mark), where it
 // stands or the last thing said, who is in it; pressed, its chat; with a mouse, pointed at, its time in that place and
 // 归档 at its top right, right clicked its menu at the pointer; with a finger, held a while its time, held long its
-// menu.
+// menu. What only those read (its menu's, its swipe's question, its time in words) is its chat's whole row
+// (@sfbase.whole_row: the list's rows are made without it), asked as the hand comes to it (a pointer down on it, a
+// pointer coming to rest over it, a swipe setting out), held while what reads it is open: what opens waits for it and
+// opens whole the frame it is answered.
 
 ///|
 /// The row of the chat `item` says as it is now (chat_row's) in `parent`: `lead` whose pictures lead, `on` its chat the
@@ -45,6 +48,28 @@ pub fn chat_row_node(
   // (what a finger pressing it read ahead, let go as it is let go without opening it: a hold)
   let primed : Ref[@sfbase.TopicLease?] = Ref(None)
   let opened = Ref(false)
+  // (its chat's whole row, asked as the hand comes to it: what it is held for, and what waits for it to be answered)
+  let whole = @sfbase.WholeAsk::new()
+  let pressing = Ref(false)
+  let hovering = Ref(false)
+  let whole_waits : @signals.Signal[((ChatItem) -> Unit)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
+  let ask_whole = fn() { whole.ask(src, @signals.untracked(item)) }
+  // (what reads it done with: hovered no more, let go of, its menu gone, nothing waiting for it)
+  let whole_idle = fn() {
+    @signals.untracked(fn() {
+      if !pressing.val && !hovering.val && !menu_on() && whole_waits.get() is None {
+        whole.let_go()
+      }
+    })
+  }
+  // (`run` with its chat's whole row: now where it is answered, else the frame it is)
+  let then_whole = fn(run : (ChatItem) -> Unit) {
+    ask_whole()
+    match @signals.untracked(fn() { @sfbase.whole_row(src, item()) }) {
+      Some(w) => run(w)
+      None => whole_waits.set(Some(run))
+    }
+  }
   // (where the last press went down, and its state line: pressed there, while the core says which message that is
   // about and nothing in it is unread, its chat goes there as it opens: ChatMark.tsx jumpFromLine)
   let down_at : Ref[(Double, Double)?] = Ref(None)
@@ -129,9 +154,7 @@ pub fn chat_row_node(
       .over_scrim(By(fn() { lifted() > 0.0 }))
       |> ignore
     }
-    let open_menu = fn(x : Double, y : Double, from_row : Bool) {
-      guard @signals.untracked(menu_ok) else { return }
-      let i = @signals.untracked(item)
+    let menu_now = fn(i : ChatItem, x : Double, y : Double, from_row : Bool) {
       let from = if from_row {
         let (x, y, w, h) = row.placed_window_now()
         @sf.Beside::At(x, y, w, h)
@@ -146,8 +169,14 @@ pub fn chat_row_node(
       rows.menu_for = @sfbase.row_name(i)
       rows.menu_serial = @sf.last_presented()
     }
+    // (its menu is its whole row's: opened once that is answered, whole)
+    let open_menu = fn(x : Double, y : Double, from_row : Bool) {
+      guard @signals.untracked(menu_ok) else { return }
+      then_whole(fn(i) { menu_now(i, x, y, from_row) })
+    }
     let hover = fn() { !finger && (@sf.lit_in_node(row) || menu_on()) }
-    let shows_time = fn() { hover() || held.get() || (finger && menu_on()) }
+    // (said by its whole row: shown once that is answered, held meanwhile by what reads it here)
+    let shows_time = fn() { (hover() || held.get() || (finger && menu_on())) && @sfbase.whole_answered(src, item()) }
     let archive_key = fn() { !finger && menu_ok() && hover() && !renaming() }
     // its ground: a finger's, held or its menu open the ink at 5%, its chat in view the selected one's; a mouse's, the
     // pointer's eased in and out, the selected one's while its chat is in view (nav_ground_by's)
@@ -386,8 +415,9 @@ pub fn chat_row_node(
             match which {
               1 =>
                 e.box(fn(time) {
-                  @sf.words_node(time, fn() { item().ago }, fn() { row_time }) |> ignore
-                  @sf.tip_node(tips, time, fn() { item().full }, within=true) |> ignore
+                  let said = fn() { @sfbase.whole_row(src, item()).unwrap_or(item()) }
+                  @sf.words_node(time, fn() { said().ago }, fn() { row_time }) |> ignore
+                  @sf.tip_node(tips, time, fn() { said().full }, within=true) |> ignore
                 })
                 |> ignore
               2 => row_aside_node(e, src, tips, item, lead, face_ground, stint)
@@ -407,9 +437,42 @@ pub fn chat_row_node(
         out.set(false)
       })
       swipe_under_node(row, off, past, out)
-      swipe_node(holder, src, item, off, past, out)
+      swipe_node(holder, src, item, off, past, out, ask_whole, then_whole)
     }
     row.reacts(fn() { @sf.lit_in_node(row) }, fn(h) { hand.go(row, if h { 1.0 } else { 0.0 }, @sf.dur_ms) })
+    // (a pointer come to rest over it: its whole row asked for its time, its 归档 and its menu; gone, let go of)
+    if !finger {
+      row.reacts(fn() { @sf.lit_in_node(row) }, fn(h) {
+        hovering.val = h
+        if h {
+          ask_whole()
+        } else {
+          whole_idle()
+        }
+      })
+    }
+    // (its menu gone, what waited answered: let go of where nothing else holds it)
+    row.reacts(fn() { menu_on() }, fn(on) { if !on { whole_idle() } })
+    row.reacts(
+      fn() {
+        match whole_waits.get() {
+          Some(_) => @sfbase.whole_answered(src, item())
+          None => false
+        }
+      },
+      fn(answered) {
+        guard answered else { return }
+        match (whole_waits.untracked(), @signals.untracked(fn() { @sfbase.whole_row(src, item()) })) {
+          (Some(run), Some(w)) => {
+            whole_waits.set(None)
+            run(w)
+            whole_idle()
+          }
+          _ => ()
+        }
+      },
+    )
+    row.owns(fn() { whole.let_go() }) |> ignore
     // (its chat in view or no more, eased; taken for another chat, as that one's at once, as it would be made)
     let chosen_for = Ref(@sfbase.row_name(first))
     row.reacts(fn() { (key(), on()) }, fn(now) {
@@ -441,6 +504,9 @@ pub fn chat_row_node(
       }
       opened.val = false
       down_at.val = None
+      whole_waits.set(None)
+      pressing.val = false
+      whole.let_go()
       // (put, never set going: a row taken for another chat is so as its list is laid out (a block given another key
       // as the list scrolls), what a frame found, no cause; what it shows is put back as it would be were it made anew
       // for that chat, as a list's reused row's looks always are (a way said here was the frame's, at 60 a second and
@@ -502,6 +568,9 @@ pub fn chat_row_node(
         }
       },
       down=fn(d) {
+        // (its whole row asked as it goes down: a hold's menu, a swipe's question find it answered)
+        pressing.val = true
+        ask_whole()
         down_at.val = Some((d.wx, d.wy))
         opened.val = false
         (press_due.val)()
@@ -526,6 +595,8 @@ pub fn chat_row_node(
           unprime(src, @signals.untracked(r), reader)
         }
         primed.val = None
+        pressing.val = false
+        whole_idle()
       },
     )
     // (Tab passes the rows, as the old list's: they are gone through by ⌥↑ ⌥↓, chat.prev and chat.next)
@@ -546,7 +617,7 @@ pub fn chat_row_node(
         .lies_along(Is(Middle))
         .ground(By(fn() { if @sf.lit_node(k) { t().p.hover } else { 0L } }))
         |> ignore
-        @sf.presses_node(k, fn() { archive_row(src, @signals.untracked(item)) })
+        @sf.presses_node(k, fn() { then_whole(fn(w) { archive_row(src, w) }) })
         k.says(By(fn() {
           Some(@view.said(Button, label=@sf.t("web-main.chat.archiveNamed", args=[("title", item().title)])))
         }))
@@ -609,7 +680,9 @@ fn swipe_under_node(
 /// its width or flung left it goes off to the left as fast as the finger let it go and, there, its chat is archived
 /// (refused, it comes back from there); else it springs back. One busy springs back; one keeping watch springs back
 /// and asks first, as its menu's 归档. Passing the line letting go archives at is felt (Home.kt SwipeToArchive:
-/// TextHandleMove), `past` said meanwhile; `out` from its first move until it is back where it rests.
+/// TextHandleMove), `past` said meanwhile; `out` from its first move until it is back where it rests. What it asks is
+/// its chat's whole row's (`ask` asks for it as it sets out; `then_whole` runs with it once answered: let go before,
+/// the row stays where it was let go till then).
 fn swipe_node(
   sw : @view.View,
   src : Source,
@@ -617,6 +690,8 @@ fn swipe_node(
   off : @sf.EdgeWay,
   past : @signals.Signal[Bool],
   out : @signals.Signal[Bool],
+  ask : () -> Unit,
+  then_whole : ((ChatItem) -> Unit) -> Unit,
 ) -> Unit {
   let from = Ref(0.0)
   let from_x = Ref(0.0)
@@ -642,6 +717,7 @@ fn swipe_node(
     guard !rows.swiped_off.contains(key) else { return }
     match d.kind {
       Down => {
+        ask()
         from.val = @signals.untracked(fn() { off.shown(sw) })
         from_x.val = d.wx
         (due.val)()
@@ -661,25 +737,30 @@ fn swipe_node(
         let at = @signals.untracked(fn() { off.target() })
         past.set(false)
         if swipe_archives(at, w, d.vx()) {
+          let vx = d.vx()
           if row_busy(src, i) {
-            back(d.vx())
-          } else if i.swipe_ask is Some(_) {
-            // (one keeping watch, or at work: springs back and asks first, in the core's words: swipeAsk)
-            back(d.vx())
-            archive_row(src, i, ask=i.swipe_ask)
+            back(vx)
           } else {
-            // off to the left, then archived there (no copy of it left behind as it leaves the list: it is out of
-            // sight); refused, it comes back from there
-            rows.swiped_off[key] = true
-            off.go_by(sw, -w, @motion.move(), velocity=d.vx() * 1000.0)
-            sw.at_moment(off.end(), fn() {
-              archive_row(src, i, failed=fn() {
-                rows.swiped_off.remove(key)
-                off.go_from(sw, -w, 0.0, @motion.move_spring)
-                rests()
-              })
+            then_whole(fn(i) {
+              if i.swipe_ask is Some(_) {
+                // (one keeping watch, or at work: springs back and asks first, in the core's words: swipeAsk)
+                back(vx)
+                archive_row(src, i, ask=i.swipe_ask)
+              } else {
+                // off to the left, then archived there (no copy of it left behind as it leaves the list: it is out
+                // of sight); refused, it comes back from there
+                rows.swiped_off[key] = true
+                off.go_by(sw, -w, @motion.move(), velocity=vx * 1000.0)
+                sw.at_moment(off.end(), fn() {
+                  archive_row(src, i, failed=fn() {
+                    rows.swiped_off.remove(key)
+                    off.go_from(sw, -w, 0.0, @motion.move_spring)
+                    rests()
+                  })
+                })
+                |> ignore
+              }
             })
-            |> ignore
           }
         } else {
           back(d.vx())

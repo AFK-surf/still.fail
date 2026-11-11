@@ -255,6 +255,8 @@ fn chat_bar(
   chat : Json?,
   list : FindList,
 ) -> Unit {
+  // (its "…" is its chat's whole row's: held while its page is open, asked as it opens, @sfpages.chat_menu_of)
+  @sfbase.chat_whole_held(src, r) |> ignore
   // the workspace's stations, as the bar shows the chat's (its tag, its first agent's tile)
   let station = @sfbase.station_marks(src, w.id)
     .iter()

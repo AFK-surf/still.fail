@@ -56,6 +56,11 @@ fn chat_rows_reset() -> Unit {
   rows.menu_serial = -1
   rows.swiped_off.clear()
   rows.felt_past.clear()
+  match chat_menu_waits.val {
+    Some(stop) => stop()
+    None => ()
+  }
+  chat_menu_waits.val = None
 }
 
 ///|
@@ -157,6 +162,17 @@ pub fn chat_row(
       row_primed.val = Some(src.lease_topic("chat", chat_params(r)))
     }
   }
+  // its chat's whole row (what its menu, its swipe's question, its time read: the list's row is made without them),
+  // held while the hand is on it (pointed at, down on it, its menu open), let go of after; what reads it waits for it
+  let whole_scope = "row-whole/" + key
+  let wants_whole = !src.read_only && !item.pending &&
+    (down || parts.iter().any(fn(p) { c.hovered(p) }) || c.hovered(archive) || row_menu_open(item) || c.held_down(c.id("swipe/" + key)))
+  let whole : ChatItem? = if wants_whole {
+    @sfbase.whole_of_state(item, @sfbase.hold(src, whole_scope, "chatRow", @sfbase.whole_params(item.station, item.session)).get())
+  } else {
+    @sfbase.let_go(src, whole_scope)
+    None
+  }
   // (what it asks again waits on the station)
   let menu = item.offline is None && !item.pending && !found
   // right clicked, or held long by a finger (Ctx::menu_asked, each part asked once): its menu
@@ -169,7 +185,10 @@ pub fn chat_row(
         row_primed.val = None
         unprime(src, r, reader)
       }
-      row_menu(c, src, item, id, x, y)
+      match whole {
+        Some(w) => row_menu(c, src, w, id, x, y)
+        None => ()
+      }
     }
     _ => ()
   }
@@ -230,10 +249,10 @@ pub fn chat_row(
   }
   // pointed at by a mouse (its menu open beside it too); a finger's, held or its menu open
   let hover = !finger && (parts.iter().any(fn(p) { c.hovered(p) }) || c.hovered(archive) || menu_on)
-  let shows_time = hover || held || (finger && menu_on)
+  let shows_time = (hover || held || (finger && menu_on)) && whole is Some(_)
   // its 归档 key while pointed at by a mouse (shown only under the hand: Ctx::hand_lit); a finger has its swipe and its
   // menu's 归档
-  let archive_key = !finger && menu && !renaming && c.hand_lit(hover)
+  let archive_key = !finger && menu && !renaming && c.hand_lit(hover) && whole is Some(_)
   // (swiped to archive, where what the row offers is not under a pointer's hover: the screen's, as its ⋯ is; a pointer
   // has its 归档 key), which rows the core says: made chats whose stations are there
   let swipes = @sf.more_held() && item.swipe_archive
@@ -446,8 +465,9 @@ pub fn chat_row(
             if shows_time {
               // (its day and time over it while it is pointed at: Time's tip, `fixed`)
               let time = c.id("row/time/" + key)
-              c.box(id=time, taps=false, points=true, fn() { c.text(item.ago, style=row_time) |> ignore }) |> ignore
-              @sf.tip(c, "row/time-tip/" + key, time, item.full)
+              let said = whole.unwrap_or(item)
+              c.box(id=time, taps=false, points=true, fn() { c.text(said.ago, style=row_time) |> ignore }) |> ignore
+              @sf.tip(c, "row/time-tip/" + key, time, said.full)
             } else if at == Whole {
               row_aside(c, src, item, lead, face_ground, ground_by?=face_ground_by)
             }
@@ -466,7 +486,7 @@ pub fn chat_row(
       if archive_key {
         @sf.row_corner_keys(c, fn() {
           c.on_press(archive, fn() {
-            archive_row(src, item)
+            archive_row(src, whole.unwrap_or(item))
           })
           let b = c.box(style=@sf.row_key_box, id=archive, fn() {
             @sf.icon(c, "archive", size=row_icon, color=if c.lit(archive) { t.p.text } else { t.p.muted }) |> ignore
@@ -483,7 +503,15 @@ pub fn chat_row(
   }
   if swipes {
     c.box(style=if more { @sf.list_more(at) } else { row_last }, fn() {
-      swipe_to_archive(c, src, item, busy, at, fn(tx) { draw(tx, false) }, unghost~) |> ignore
+      // (what it asks is its whole row's, held as the finger went down, read as it is let go: not answered then, it
+      // springs back as when busy)
+      swipe_to_archive(c, src, item, busy, at, fn(tx) { draw(tx, false) }, whole_of=fn() {
+        match whole {
+          Some(w) => Some(w)
+          None => @sfbase.whole_row(src, item)
+        }
+      }, unghost~)
+      |> ignore
     })
   } else {
     draw(0.0, more)
@@ -1123,6 +1151,7 @@ fn swipe_to_archive(
   busy : Bool,
   at : @sf.ListAt,
   row : (Double) -> Int,
+  whole_of~ : () -> ChatItem?,
   unghost? : (Bool) -> Unit = fn(_) {  },
 ) -> Int {
   let t = @sf.theme()
@@ -1142,12 +1171,13 @@ fn swipe_to_archive(
       if d.take_end() {
         let at = off.get(c)
         let v = d.vx * 1000.0
+        let whole = if swipe_archives(at, width, d.vx) && !busy { whole_of() } else { None }
         if swipe_archives(at, width, d.vx) {
-          if busy {
+          if busy || whole is None {
             back(v)
-          } else if item.swipe_ask is Some(_) {
+          } else if whole.unwrap().swipe_ask is Some(_) {
             back(v)
-            archive_row(src, item, ask=item.swipe_ask)
+            archive_row(src, whole.unwrap(), ask=whole.unwrap().swipe_ask)
           } else {
             // off to the left, then archived (no copy of it left behind as it leaves the list: it is out of sight)
             rows.swiped_off[key] = true
@@ -1252,13 +1282,55 @@ pub fn open_chat_menu(
   from~ : @sf.Beside,
   along? : @ui.Along = Start,
 ) -> Unit {
-  @sf.menu(chat_menu_of(src, scope, r, extra, share_from=fn() { from }), from~, along~)
+  ignore(scope)
+  match chat_menu_waits.val {
+    Some(stop) => {
+      chat_menu_waits.val = None
+      stop()
+    }
+    None => ()
+  }
+  match chat_menu_whole(src, r, extra, share_from=fn() { from }) {
+    Some(items) => @sf.menu(items, from~, along~)
+    None => {
+      // (its chat's whole row not answered yet, asked as its page opened: opened whole the moment it is; owned by
+      // nothing, as what waits is no part of what reads now)
+      let done = Ref(false)
+      let owner = @signals.set_owner(None)
+      let stop = @signals.effect(fn() {
+        if !done.val && chat_menu_whole(src, r, extra, share_from=fn() { from }) is Some(_) {
+          done.val = true
+          @signals.untracked(fn() {
+            match chat_menu_whole(src, r, extra, share_from=fn() { from }) {
+              Some(items) => @sf.menu(items, from~, along~)
+              None => ()
+            }
+          })
+        }
+      })
+      @signals.set_owner(owner) |> ignore
+      if done.val {
+        stop()
+      } else {
+        chat_menu_waits.val = Some(stop)
+      }
+    }
+  }
 }
 
 ///|
-/// What the chat in view's "…" offers: what a row's menu offers (chat_menu_items) for the row the core's list has of
-/// it, else (an archived one, one it does not list) its link alone; `extra` the page's own (chat_extra_items). Apart
-/// from showing them: the system's bars take them as a menu of their own (rail_native.mbt bar_chat).
+/// What waits to open the chat's "…" asked before its chat's whole row was answered (open_chat_menu): stopped as
+/// another is asked, or the run ends.
+// kept across runs: put back by chat_rows_reset
+let chat_menu_waits : Ref[(() -> Unit)?] = Ref(None)
+
+
+///|
+/// What the chat in view's "…" offers: what a row's menu offers (chat_menu_items) for its chat's whole row (the core's
+/// `chatRow`, held while its page is open: @sfbase.chat_whole_held), else (an archived one, one its station does not
+/// list) its link alone; `extra` the page's own (chat_extra_items). None while that is not answered: what opens it
+/// waits for it (open_chat_menu). Apart from showing them: the system's bars take them as a menu of their own
+/// (rail_native.mbt bar_chat). `scope`: the workspace in view (the row is its station's own).
 pub fn chat_menu_of(
   src : Source,
   scope : String,
@@ -1266,30 +1338,23 @@ pub fn chat_menu_of(
   extra : Array[@sf.MenuItem?],
   share_from~ : () -> @sf.Beside,
 ) -> Array[@sf.MenuItem?] {
-  let mut found : ChatItem? = None
-  match @sfbase.chats_of(src, scope, "all").0 {
-    Some(view) =>
-      for d in view.days {
-        for i in d.items {
-          if found is None && @sfbase.row_is(i, r) {
-            found = Some(i)
-          }
-        }
-      }
-    None => ()
-  }
-  if found is None {
-    match @sfbase.chats_of(src, scope, "hidden").0 {
-      Some(view) =>
-        for d in view.days {
-          for i in d.items {
-            if found is None && @sfbase.row_is(i, r) {
-              found = Some(i)
-            }
-          }
-        }
-      None => ()
-    }
+  ignore(scope)
+  chat_menu_whole(src, r, extra, share_from~).unwrap_or([])
+}
+
+///|
+/// chat_menu_of's items, None while its chat's whole row is not answered.
+fn chat_menu_whole(
+  src : Source,
+  r : ChatRef,
+  extra : Array[@sf.MenuItem?],
+  share_from~ : () -> @sf.Beside,
+) -> Array[@sf.MenuItem?]? {
+  let held = @sfbase.chat_whole_held(src, r)
+  let found : ChatItem? = match (held.value, held.error) {
+    (Some(Object(_) as v), _) => Some(@sfbase.chat_item(v))
+    (Some(_), _) | (_, Some(_)) => None
+    _ => return None
   }
   let items : Array[@sf.MenuItem?] = match found {
     Some(item) => chat_menu_items(src, item, share_from~, page=extra)
@@ -1309,7 +1374,7 @@ pub fn chat_menu_of(
       share_menu(shared, share_from)
     }
   }
-  items
+  Some(items)
 }
 
 ///|
