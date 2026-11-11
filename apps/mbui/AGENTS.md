@@ -170,9 +170,16 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   2026-11-11).
 - Every screen is opened as well on a workspace of real size (`src/sfapp/real_size_wbtest.mbt`; the user, 2026-11-11):
   what the core sends each topic there, written into `src/sfrealsize` by the core's own rig
-  (`client/core-ts/test/real-size-app.test.ts`, never by hand), and the most one frame of its opening makes, lays out
+  (`client/core-ts/test/real-size-app.test.ts`, never by hand), held as a device holds it (asked as a device asks the
+  core, what a mode puts up over its pages reading it too), and the most one frame of its opening makes, lays out
   and measures is held to its bar in `real_size_known_wbtest.mbt`, which only falls. A topic's value changed in the
   core writes those files again in the same change.
+- Each screen shown is given as well each change of the real workspace that reaches a topic it holds, as a device
+  applies it (the same test, on the screen it opened; the user, 2026-11-11: 重心转到想办法防止未来劣化), and what the
+  frame that takes it makes, lets go, lays out and measures, and what the old view builds and lays out more than in a
+  frame given nothing, is held to its bar in `real_size_change_known_wbtest.mbt`, which only falls; a page that comes
+  to hold another topic gets its rows by running the test, and a page moved from the old view onto nodes writes its
+  rows again (what was built old is made).
 - What the core sends for what the app subscribes to, in each flow's trace, keeps to its bar
   (`src/sfreplay/topic_bytes.mbt`: KB of values sent whole, values sent whole again, messages for what was let go of;
   each topic's largest value). A page subscribes to what it shows, no more (the user, 2026-11-10); a trace recorded

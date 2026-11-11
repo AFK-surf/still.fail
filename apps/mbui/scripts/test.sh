@@ -217,7 +217,7 @@ for t in $targets; do
     # 42940297713, 2026-11-11: those three a run each, @2@3@4@5@8, the last run still 8-11 on the second)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:@2@3@4@5@8 src/sfapp/preview_tree_wbtest.mbt:@54
-      src/sfapp/words_large_wbtest.mbt:2 src/sfapp/real_size_wbtest.mbt:1)
+      src/sfapp/words_large_wbtest.mbt:2 src/sfapp/real_size_wbtest.mbt:2)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -230,8 +230,8 @@ for t in $targets; do
       # squeeze_said did not once fail at a rate alone in a day's 490 pipeline runs, 2026-11-10. The three at the four
       # rates were 788 of the app tests' 6,599 process-seconds in 42928153698. Still sweeps: never dealt among the pages)
       if [ -n "${MBUI_TEST_FPS:-}" ]; then
-        # (real_size's, every screen opened on a workspace of real size, the same: a sweep of every screen, its bars
-        # set on the default run; 40-102 s a run at the four rates, #5407 42976047326)
+        # (real_size's, every screen opened on a workspace of real size and given its changes, the same: a sweep of every
+        # screen, its bars set on the default run; 40-102 s a run at the four rates, #5407 42976047326)
         case $f in */screens_wbtest.mbt | */squeeze_said_wbtest.mbt | */words_large_wbtest.mbt | */real_size_wbtest.mbt) continue ;; esac
       fi
       # (in k runs of its tests by their index: moon test FILE --index FROM-TO, the tests in the file's order)
@@ -385,9 +385,12 @@ for t in $targets; do
       # (its two, the app's two languages, a run each: in one at 120 a second it was 173 s of the second's part 2/2, 257 s
       # of its 5 minutes on main caa9c272, 42759467421, 2026-11-10)
       "src/sfapp/words_large_wbtest.mbt "*) echo 2 ;;
-      # (real_size's on the first, the least of the four at the default rate: 103 s of its 5 minutes with it among the
-      # pages, #5407 42976047326, 2026-11-11)
-      "src/sfapp/real_size_wbtest.mbt  ") echo 1 ;;
+      # (real_size's, its two windows a test each since it gives each screen its changes as well, apart on the two with
+      # the most room at the default rate: the wide window's, the longer, on the first, where the opening alone was
+      # 103 s of its 5 minutes (#5407 42976047326); the phone's on the fourth, which has no run but its pages. On Studio
+      # in Wasm 37 s and 13 s where the opening alone was 28 s: some 135 s and 50 s here, 2026-11-11)
+      "src/sfapp/real_size_wbtest.mbt --index 1-2") echo 1 ;;
+      "src/sfapp/real_size_wbtest.mbt --index 0-1") echo 4 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt --index 8-"*) echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
       # (preview_tree's two on the fourth, the one with the most programs: at 120 a second APP_PART gives each of its

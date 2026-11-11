@@ -93,9 +93,9 @@ let naming : Array[String] = [
 ]
 
 ///|
-/// Whether `asked` (as the app asks) asks the way `kept` was asked: every param but those naming a thing the same, one
-/// left out the same as false.
-fn asked_so(asked : Map[String, Json], kept : Map[String, Json]) -> Bool {
+/// Whether `asked` (as the app asks) asks the way `kept` was asked: every param but those naming a thing (`naming`, and
+/// `naming_too`) the same, one left out the same as false.
+fn asked_so(asked : Map[String, Json], kept : Map[String, Json], naming_too? : Array[String] = []) -> Bool {
   let way = fn(m : Map[String, Json], k : String) -> Json {
     match m.get(k) {
       None | Some(Null) | Some(False) => Json::boolean(false)
@@ -110,7 +110,7 @@ fn asked_so(asked : Map[String, Json], kept : Map[String, Json]) -> Bool {
     keys[k] = true
   }
   for k, _ in keys {
-    if !naming.contains(k) && way(asked, k) != way(kept, k) {
+    if !naming.contains(k) && !naming_too.contains(k) && way(asked, k) != way(kept, k) {
       return false
     }
   }
@@ -118,31 +118,17 @@ fn asked_so(asked : Map[String, Json], kept : Map[String, Json]) -> Bool {
 }
 
 ///|
-/// What the core would send `name` asked with `params` on the real workspace, where a v_*.mbt file has it asked so.
-pub fn real_size_value(name : String, params : Map[String, Json]) -> Json? {
+/// What the core would send `name` asked with `params` on the real workspace, where a v_*.mbt file has it asked so
+/// (`naming_too`: more params taken as naming a thing, not compared).
+pub fn real_size_value(name : String, params : Map[String, Json], naming_too? : Array[String] = []) -> Json? {
   let asked = params.copy()
   asked["topic"] = Json::string(name)
   for kept in values().get(name).unwrap_or([]) {
-    if asked_so(asked, kept.0) {
+    if asked_so(asked, kept.0, naming_too~) {
       return Some(kept.1)
     }
   }
   None
-}
-
-///|
-/// `src` with every topic it is asked that the real size has, as it is there; the rest as `src` has them.
-pub fn real_size_source(src : @sfbase.Source) -> @sfbase.Source {
-  {
-    ..src,
-    topic_read: fn(name, params) {
-      let t = (src.topic_read)(name, params)
-      match real_size_value(name, params) {
-        Some(v) => { ..t, value: Some(v), error: None }
-        None => t
-      }
-    },
-  }
 }
 
 ///|
@@ -181,14 +167,16 @@ pub fn real_size_changes() -> Array[(String, Map[String, Json], String, Array[Js
 }
 
 ///|
-/// What changes of `name` asked with `params` on the real workspace, by cause: each cause's messages, in order.
+/// What changes of `name` asked with `params` on the real workspace, by cause: each cause's messages, in order
+/// (`naming_too` as real_size_value's).
 pub fn real_size_changed(
   name : String,
   params : Map[String, Json],
+  naming_too? : Array[String] = [],
 ) -> Array[(String, Array[Json])] {
   let asked = params.copy()
   asked["topic"] = Json::string(name)
   real_size_changes()
-  .filter(fn(c) { c.0 == name && asked_so(asked, c.1) })
+  .filter(fn(c) { c.0 == name && asked_so(asked, c.1, naming_too~) })
   .map(fn(c) { (c.2, c.3) })
 }
