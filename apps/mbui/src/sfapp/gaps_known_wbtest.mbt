@@ -24,36 +24,50 @@
 /// with a request for the phone waiting swept, chat-phone-lacks on the tablet: its card and a login's above it short of
 /// the others' edge, as a request card stood on main, unswept).
 let gaps_known : Map[String, Int] = {
-  "zh rule 1": 0,
-  "zh rule 2": 0,
-  "zh rule 3": 0,
-  "zh rule 4": 10,
-  "en rule 1": 0,
-  "en rule 2": 0,
-  "en rule 3": 0,
-  "en rule 4": 10,
-  "zh rule 5": 1,
-  "en rule 5": 1,
-  "zh rule 6": 0,
-  "en rule 6": 0,
-  "zh rule 7": 0,
-  "en rule 7": 0,
+  "zh small rule 1": 0,
+  "zh small rule 2": 0,
+  "zh small rule 3": 0,
+  "zh small rule 4": 0,
+  "zh small rule 5": 0,
+  "zh small rule 6": 0,
+  "zh small rule 7": 0,
+  "zh large rule 1": 0,
+  "zh large rule 2": 0,
+  "zh large rule 3": 0,
+  "zh large rule 4": 0,
+  "zh large rule 5": 0,
+  "zh large rule 6": 0,
+  "zh large rule 7": 0,
+  "en small rule 1": 0,
+  "en small rule 2": 0,
+  "en small rule 3": 0,
+  "en small rule 4": 0,
+  "en small rule 5": 0,
+  "en small rule 6": 0,
+  "en small rule 7": 0,
+  "en large rule 1": 0,
+  "en large rule 2": 0,
+  "en large rule 3": 0,
+  "en large rule 4": 0,
+  "en large rule 5": 0,
+  "en large rule 6": 0,
+  "en large rule 7": 0,
 }
 
 ///|
 test "the spacing sweep counts row and heading alignment faults" {
   let faults : Array[String] = []
   for rule in ["rule 1", "rule 2", "rule 3", "rule 4", "rule 5", "rule 6", "rule 7"] {
-    for _ in 0..<gaps_known.get("zh \{rule}").unwrap_or(0) {
+    for _ in 0..<gaps_known.get("zh small \{rule}").unwrap_or(0) {
       faults.push("example: \{rule}: known")
     }
   }
-  assert_true(gaps_wrong("zh", faults) is None)
+  assert_true(gaps_wrong("zh small", faults) is None)
   faults.push("example: rule 8: a heading is not aligned with its rows")
-  assert_true(gaps_wrong("zh", faults) is Some(_))
+  assert_true(gaps_wrong("zh small", faults) is Some(_))
   faults.pop() |> ignore
   faults.push("example: rule 9: a new kind of spacing fault")
-  assert_true(gaps_wrong("zh", faults) is Some(_))
+  assert_true(gaps_wrong("zh small", faults) is Some(_))
 }
 
 ///|

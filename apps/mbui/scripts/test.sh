@@ -215,7 +215,7 @@ for t in $targets; do
     # (kept_rows_kinds' four by count put three of its longest (中屏 read out, both scrolled) in one run, 166-233 s at 120 a
     # second alone, app 3/4 at 120 fps part 2/2 226-247 s of its 5 minutes, main e1c758fc 42939211803, mbui-chooser-node
     # 42940297713, 2026-11-11: those three a run each, @2@3@4@5@8, the last run still 8-11 on the second)
-    sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
+    sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:5 src/sfapp/squeeze_said_wbtest.mbt:1
       src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:@2@3@4@5@8 src/sfapp/preview_tree_wbtest.mbt:@54
       src/sfapp/words_large_wbtest.mbt:2 src/sfapp/real_size_wbtest.mbt:2)
     pages=()

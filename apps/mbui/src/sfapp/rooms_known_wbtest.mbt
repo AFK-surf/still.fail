@@ -59,11 +59,18 @@
 /// chat (chat-view-side-video, chat-view-side-audio, 2026-11-11), the same: its tab's close key, 6 more, 309.
 /// An agent's request for the phone swept (chat-phone-lacks, and granted with each step left and connected, 2026-11-11),
 /// what every chat has: its last message's author and time, and a decided card's line opening its history, 112 more, 421.)
-let rooms_known : Map[String, Int] = { "room": 421, "apart": 0, "hover": 0 }
+let rooms_known : Map[String, Int] = {
+  "small room": 0,
+  "small apart": 0,
+  "small hover": 0,
+  "large room": 0,
+  "large apart": 0,
+  "large hover": 0,
+}
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.
-fn rooms_wrong(rooms : Array[String]) -> String? {
+fn rooms_wrong(rooms : Array[String], group : String) -> String? {
   let counts : Map[String, Int] = {}
   for f in rooms {
     for rule in ["room", "apart", "hover"] {
@@ -75,10 +82,10 @@ fn rooms_wrong(rooms : Array[String]) -> String? {
   let off : Array[String] = []
   for rule in ["room", "apart", "hover"] {
     let have = counts.get(rule).unwrap_or(0)
-    let known = rooms_known.get(rule).unwrap_or(0)
+    let known = rooms_known.get("\{group} \{rule}").unwrap_or(0)
     if have != known {
       off.push(
-        "\{rule}: \{have} faults, \{known} known (" +
+        "\{group} \{rule}: \{have} faults, \{known} known (" +
         (if have < known {
           "fewer: its bar comes down in rooms_known_wbtest.mbt"
         } else {

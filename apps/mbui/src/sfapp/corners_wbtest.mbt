@@ -93,12 +93,26 @@ let corner_modes : Array[String] = {
 /// (`press_room`, Chinese) a press's room and the light theme's contrast too, on the same screen opened once. (Apart, a
 /// sweep each, Chinese's screens were opened twice: of a sweep's 1939 screens, opening them was some seven tenths of
 /// its time, the checks the rest, none of them long (27 ms each at the median, 0.3 s the longest), 2026-11-05.)
-fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
+///|
+/// The windows in two groups, each its own test and its process (scripts/test.sh: corners_wbtest.mbt:5): every screen
+/// in all seven was one test a language, 187-215 s of app corners' job, 243-247 s of its 5 minutes on main
+/// (2026-11-11). Each group keeps its own bars (gaps_known's and rooms_known's keys say the group).
+let corner_window_groups : Array[(String, Array[String])] = [
+  ("small", ["phone", "touch", "desk", "desk-win"]),
+  ("large", ["tablet", "wide", "wide-win"]),
+]
+
+///|
+fn corners_check(lang : String, group : String, press_room~ : Bool = false) -> Unit raise {
+  let names = corner_window_groups.iter().find_first(fn(g) { g.0 == group }).unwrap().1
   let wrong : Array[String] = []
   let gaps : Array[String] = []
   let moves : Array[String] = []
   let rooms : Array[String] = []
   for win in corner_windows {
+    if !names.contains(win.0) {
+      continue
+    }
     let squeezed = squeeze_windows.contains(win.0)
     for mode in corner_modes {
       let at = "\{win.0}-\{lang} \{mode}"
@@ -159,12 +173,12 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
     }
   }
   if press_room {
-    match rooms_wrong(rooms) {
+    match rooms_wrong(rooms, group) {
       Some(w) => wrong.push(w)
       None => ()
     }
   }
-  match gaps_wrong(lang, gaps) {
+  match gaps_wrong("\{lang} \{group}", gaps) {
     Some(w) => wrong.push(w)
     None => ()
   }
@@ -182,13 +196,23 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
 }
 
 ///|
-test "corners and squeeze, a press's room and the light theme's contrast: every screen in every window, in Chinese" {
-  corners_check("zh", press_room=true)
+test "corners and squeeze, a press's room and the light theme's contrast: every screen in every small window, in Chinese" {
+  corners_check("zh", "small", press_room=true)
 }
 
 ///|
-test "corners and squeeze: every screen in every window keeps the corner rule and fits, in English" {
-  corners_check("en")
+test "corners and squeeze, a press's room and the light theme's contrast: every screen in every large window, in Chinese" {
+  corners_check("zh", "large", press_room=true)
+}
+
+///|
+test "corners and squeeze: every screen in every small window keeps the corner rule and fits, in English" {
+  corners_check("en", "small")
+}
+
+///|
+test "corners and squeeze: every screen in every large window keeps the corner rule and fits, in English" {
+  corners_check("en", "large")
 }
 
 ///|
