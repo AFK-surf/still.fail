@@ -107,6 +107,7 @@ fn reset() -> Unit {
   first_answered.set(false)
   first_built_tick.set(0)
   first_from.val = -1.0
+  first_top.val = None
   frame_bare.val = false
   window_shown.val = false
   @sfbase.held_pictures_waiting.val = []
@@ -1121,7 +1122,8 @@ let first_has : Ref[Int] = Ref(0)
 
 ///|
 /// Whether the core has answered for what the app's first page shows, as a page opening waits for it, each topic asked
-/// of `ask`: laid out Small the page on top (page_ready), in the wide frame (`wide`) the sidebar's list and the page in
+/// of `ask`: laid out Small the page on top as the wait began (first_top: one opened over it before it is shown, a
+/// chat tapped on what shows of it, is that page's own wait, not the first page's), in the wide frame (`wide`) the sidebar's list and the page in
 /// the pane (pane_ready), the chat the pane lands on once it has (@sfdesk.landing: not the empty pane before it).
 fn first_page_ready_by(
   src : Source,
@@ -1132,7 +1134,7 @@ fn first_page_ready_by(
   if wide {
     @sfbase.list_opens(src, w.id, ask) && !@sfdesk.landing(w) && @sfdesk.pane_opens(w.id, app.nav.top(), ask)
   } else {
-    page_opens_by(src, w, app.nav.top(), ask)
+    page_opens_by(src, w, first_top.val.unwrap_or(app.nav.top()), ask)
   }
 }
 
@@ -1187,6 +1189,7 @@ fn first_page_node(v : @view.View, src : Source) -> Unit {
   v.reacts(fn() { workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(ws) {
     if ws is Some(_) && !first_shown.get() && first_from.val < 0.0 {
       first_from.val = v.cause_at()
+      first_top.val = Some(app.nav.top())
       expiry.val = v.at_moment(first_from.val + first_page_ms, fn() { first_expired.set(true) })
     }
   })
@@ -1249,6 +1252,12 @@ fn first_splash_node(v : @view.View) -> Unit {
 /// When the workspace came into view, the first page's wait begun (-1: not yet): first_page_node's.
 // kept across runs: put back as a run begins (new_run)
 let first_from : Ref[Double] = Ref(-1.0)
+
+///|
+/// The page on top as the first page's wait began (first_page_node), laid out Small: the first page, what its wait
+/// waits for (first_page_ready_by), whatever is opened over it meanwhile.
+// kept across runs: put back as a run begins (new_run)
+let first_top : Ref[Page?] = Ref(None)
 
 ///|
 /// Whether the app's first page has shown (first_page_shown).
