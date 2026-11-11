@@ -362,6 +362,8 @@ pub fn View::words_look(self : View, look : Live[WordsLook], loc~ : SourceLoc) -
     n.look.words_look = k
     // (on one line or not: held to its column's width or not)
     self.tree.capped_applied(self.at)
+    // (cut short: what of them is kept, as they look now)
+    self.tree.cut_applied(self.at)
     // (saying shorter words: how narrow it may be as they look now, and whether they are on one line)
     if n.shorter.length() > 0 {
       self.tree.give_way_applied(self.at)
@@ -481,8 +483,12 @@ pub fn View::cuts(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
       n.shrink_said = None
       self.tree.cut_applied(self.at)
     } else {
-      // (said not to give way: so, whatever else would have it give way, View::shorter's)
+      // (said not to give way: so, whatever else would have it give way, View::shorter's; nothing of it kept as cut)
       n.shrink_said = Some(0.0)
+      if n.flex.style.cut_least == n.flex.style.cut_least {
+        n.flex.style.cut_least = 0.0 / 0.0
+        self.tree.layout_marked_at(self.at)
+      }
       self.tree.give_way_applied(self.at)
     }
   })
@@ -490,7 +496,11 @@ pub fn View::cuts(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
 }
 
 ///|
-/// Node `at`, cut short (View::cuts), giving way along what holds it where that is a row, not where it is a column.
+/// Node `at`, cut short (View::cuts), giving way along what holds it where that is a row, not where it is a column;
+/// there, its words on one line keeping four of their size (at its size of words) where its row leaves out what has not
+/// the room, before a part of the row leaves, and as the least of a row kept no narrower than what it holds (flex's
+/// cut_least: kept_of, fit_least_held), as an old view's words cut short keep them. Worked out again as all words are
+/// measured anew (Tree::words_again) and as its words are said (View::words).
 fn Tree::cut_applied(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
   if !n.live || !n.cut {
@@ -505,6 +515,18 @@ fn Tree::cut_applied(self : Tree, at : Int) -> Unit {
   let s = if along { 1.0 } else { 0.0 }
   if n.flex.style.shrink != s {
     n.flex.style.shrink = s
+    self.layout_marked_at(at)
+  }
+  let look = n.look.words_look
+  // (what is not words measured takes nothing of this: kept_of)
+  let least = if along && !look.wrap {
+    @flex.cut_kept_ems * look.size * @signals.untracked(fn() { self.words_scale_at(at) })
+  } else {
+    0.0 / 0.0
+  }
+  let was = n.flex.style.cut_least
+  if !(was == least || (was != was && least != least)) {
+    n.flex.style.cut_least = least
     self.layout_marked_at(at)
   }
 }

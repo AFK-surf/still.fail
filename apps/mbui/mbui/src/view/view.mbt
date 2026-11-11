@@ -5407,6 +5407,8 @@ pub fn View::words(
   n.look.words_look = look
   let tree = self.tree
   let at = self.at
+  // (cut short as said before its words were: what of them is kept, as they look now)
+  tree.cut_applied(at)
   // (it measures what the node holds now, by its index: dropped as it is let go)
   n.flex.measure = Some(fn(w, wm, _h, _hm) {
     let offered = match wm {

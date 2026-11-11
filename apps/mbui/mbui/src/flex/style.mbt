@@ -156,6 +156,10 @@ pub(all) struct Style {
   mut one_of : Bool
   mut fit_need : Double
   mut fit_whole : Bool
+  // Not CSS's: words on one line cut short (a node's, View::cuts): what of them such a row keeps before what may leave
+  // does, past its padding and border (`cut_kept_ems` of their size, as an old view's fit_need has it), no more than they
+  // are whole (kept_of); NaN none. An old view says its own `fit_need` instead.
+  mut cut_least : Double
   // Not CSS's: the least an item of a row comes to as a last resort (NaN: its min-width), where the row has not the room
   // for all it holds at their min-widths once what may give way has: words on one line that say not how they give, and
   // what holds them. What may come down so, the widest first (layout.mbt last_resort).
@@ -305,6 +309,7 @@ pub fn Style::new() -> Style {
     one_of: false,
     fit_need: 0.0 / 0.0,
     fit_whole: false,
+    cut_least: 0.0 / 0.0,
     soft_min: 0.0 / 0.0,
     stretch_past_max: false,
     min_held: false,
@@ -402,6 +407,7 @@ pub fn Style::reset(self : Style) -> Unit {
   self.one_of = false
   self.fit_need = 0.0 / 0.0
   self.fit_whole = false
+  self.cut_least = 0.0 / 0.0
   self.soft_min = 0.0 / 0.0
   self.stretch_past_max = false
   self.min_held = false

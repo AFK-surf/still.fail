@@ -6,6 +6,12 @@
 let undef : Double = 0.0 / 0.0
 
 ///|
+/// How much of words cut short a row that leaves out what has not the room keeps of them before a part of it leaves, and
+/// comes to at least where it is kept no narrower than what it holds (Style's cut_least, min_held): four of their size,
+/// or all of them where they are fewer. An old view's and a node's alike.
+pub let cut_kept_ems : Double = 4.0
+
+///|
 fn known(x : Double) -> Bool {
   x == x
 }
@@ -2225,8 +2231,8 @@ fn first_fit(flow : Array[Node], room : Double, cb_w : Double, cb_h : Double) ->
 /// What each of a row's items `flow` takes along it as fit_flow measures it, with its margins (0 for what is put where
 /// it is said): what may leave is there whole or not at all, what is kept whole while something may leave (Style's
 /// fit_whole), what never gives way (shrink 0: kept as wide as what it holds) or is never narrower than what it holds (Style's min_held, as the line lays it out: row_item_min) is never
-/// narrower: each as wide as what it holds; the rest at least their least, or what the row keeps of them (fit_need:
-/// words cut short keep some of them). And which is its ⋯ (Style's `drop` -1; -1 none).
+/// narrower: each as wide as what it holds; the rest at least their least, or what the row keeps of them (kept_of:
+/// words cut short keep four of their size). And which is its ⋯ (Style's `drop` -1; -1 none).
 fn fit_needs(flow : Array[Node], cb_w : Double, cb_h : Double) -> (Array[Double], Int) {
   let need = Array::make(flow.length(), 0.0)
   let mut more = -1
@@ -2242,10 +2248,13 @@ fn fit_needs(flow : Array[Node], cb_w : Double, cb_h : Double) -> (Array[Double]
       row_item_min(c, b, cb_w, cb_h)
     } else if known(b.w) {
       b.w
-    } else if known(c.style.fit_need) {
-      fmax(least, c.style.fit_need)
     } else {
-      least
+      let kept = kept_of(c, cb_w, cb_h)
+      if known(kept) {
+        fmax(least, kept)
+      } else {
+        least
+      }
     }
     need[j] = w + b.mar_l + b.mar_r
     if c.style.drop == -1 {
@@ -2258,12 +2267,18 @@ fn fit_needs(flow : Array[Node], cb_w : Double, cb_h : Double) -> (Array[Double]
 ///|
 /// The least an item `c` of a row (its box `cb`, in a container `cb_w` × `cb_h`) may come to along it, as compute's
 /// line has it (its MIN_MAIN): its min-width, no less than its padding and border (box_of); where it is never narrower
-/// than what it holds (Style's min_held), that measured, if more.
+/// than what it holds (Style's min_held), that measured, if more; such a row that leaves out what has not the room
+/// (`fits`), what it keeps once all of it that may leave has (fit_least_held).
 fn row_item_min(c : Node, cb : Box, cb_w : Double, cb_h : Double) -> Double {
   // (one never narrower than what it holds: at least as wide as that comes to, measured here, as a basis of auto
   // would be: what changes in it makes it so again, as anything it holds changing lays its line out again)
   if c.style.min_held {
-    let held = size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
+    // (a row that leaves out what has not the room: what it keeps once all that may leave has, fit_least_held)
+    let held = if c.style.fits && is_row(c.style.direction) {
+      fit_least_held(c, cb, cb_w, cb_h)
+    } else {
+      size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
+    }
     if known(cb.min_w) {
       fmax(cb.min_w, held)
     } else {
@@ -2272,6 +2287,139 @@ fn row_item_min(c : Node, cb : Box, cb_w : Double, cb_h : Double) -> Double {
   } else {
     cb.min_w
   }
+}
+
+///|
+/// The least a row `c` (its box `cb`, in a container `cb_w` × `cb_h`) that leaves out what has not the room (Style's
+/// `fits`) and is never narrower than what it holds (Style's min_held) comes to along it, as an old view's `keep` has it:
+/// what it keeps once all it may leave out has left (its ⋯ then with it, as wide as it is), each of the rest at its
+/// least as such a row keeps it (part_least: words cut short four of their size), with their margins, its gaps and its
+/// padding and border; of ways of saying one thing (`one_of`), the last. What is beside it gives way past that.
+fn fit_least_held(c : Node, cb : Box, cb_w : Double, cb_h : Double) -> Double {
+  let parts = flow_children(c)
+  if c.style.one_of {
+    let mut last = -1
+    for j, k in parts {
+      if k.style.position != Absolute {
+        last = j
+      }
+    }
+    if last < 0 {
+      return cb.pbw()
+    }
+    let k = parts[last]
+    let kb = box_for(k, undef, undef)
+    return cb.pbw() + size_node(k, undef, undef, undef, undef, undef, undef, false) + kb.mar_l + kb.mar_r
+  }
+  let mut may_leave = false
+  for k in parts {
+    if k.style.position != Absolute && k.style.drop > 0 {
+      may_leave = true
+      break
+    }
+  }
+  let mut w = cb.pbw()
+  let mut n = 0
+  for k in parts {
+    let s = k.style
+    if s.position == Absolute || s.drop > 0 || (s.drop == -1 && !may_leave) {
+      continue
+    }
+    let kb = box_for(k, undef, undef)
+    let least = if s.drop == -1 {
+      size_node(k, undef, undef, undef, undef, undef, undef, false)
+    } else {
+      part_least(k, kb, kept_of(k, undef, undef))
+    }
+    w = w + least + kb.mar_l + kb.mar_r
+    n = n + 1
+  }
+  if n > 1 {
+    w = w + edge_of(c.style.gap_col_k, c.style.gap_col_v, undef) * (n - 1).to_double()
+  }
+  w
+}
+
+///|
+/// The least item `k` (its box `kb`, `kept` what a row that leaves out what has not the room keeps of it: kept_of) comes
+/// to in such a row once all of it that may leave has (fit_least_held), as an old view's fit_least has it: never
+/// narrower than what it holds (min_held), as row_item_min has it; a width of its own, that; what never gives way
+/// (shrink 0), as wide as what it holds; the rest at their min-width, padding and border, or what is kept of them.
+fn part_least(k : Node, kb : Box, kept : Double) -> Double {
+  if k.style.min_held {
+    row_item_min(k, kb, undef, undef)
+  } else if known(kb.w) {
+    kb.w
+  } else if k.style.shrink == 0.0 {
+    size_node(k, undef, undef, undef, undef, undef, undef, false)
+  } else {
+    fmax(fmax(or_else(kb.min_w, 0.0), kb.pbw()), or_else(kept, 0.0))
+  }
+}
+
+///|
+/// What a row that leaves out what has not the room keeps of item `c` (in a container `cb_w` × `cb_h`) before a part of it
+/// leaves, past its min-width (fit_needs, fit_line, part_least), as an old view's fit_least has it; NaN none, its
+/// min-width all: what it says it keeps (an old view's `fit_need`); words cut short (Style's cut_least, a node's) four of
+/// their size with its padding and border, no more than they are whole; a box sized by what it holds (no clip) holding
+/// such, what it holds kept so (part_least), along a row summed with its gaps (what may leave none of it, its ⋯ only
+/// beside what may), down a column (or a row that wraps) the widest, with its padding and border.
+fn kept_of(c : Node, cb_w : Double, cb_h : Double) -> Double {
+  let s = c.style
+  if known(s.fit_need) {
+    return s.fit_need
+  }
+  if c.measure is Some(_) {
+    if !known(s.cut_least) {
+      return undef
+    }
+    let b = box_for(c, cb_w, cb_h)
+    return fmin(size_node(c, undef, undef, undef, undef, cb_w, cb_h, false), s.cut_least + b.pbw())
+  }
+  if s.overflow != Visible || c.children.length() == 0 {
+    return undef
+  }
+  let parts = flow_children(c)
+  let along = is_row(s.direction) && s.wrap == NoWrap
+  let mut may_leave = false
+  if along {
+    for k in parts {
+      if k.style.position != Absolute && k.style.drop > 0 {
+        may_leave = true
+        break
+      }
+    }
+  }
+  let mut any = false
+  let mut sum = 0.0
+  let mut n = 0
+  let mut widest = 0.0
+  for k in parts {
+    let ks = k.style
+    if ks.position == Absolute || (along && (ks.drop > 0 || (ks.drop == -1 && !may_leave))) {
+      continue
+    }
+    let kb = box_for(k, undef, undef)
+    let kept = kept_of(k, undef, undef)
+    // (what an old view says it keeps is its own: an old box says its own too, so what it holds is not summed here)
+    if known(kept) && !known(ks.fit_need) {
+      any = true
+    }
+    let least = (if along && ks.drop == -1 {
+      size_node(k, undef, undef, undef, undef, undef, undef, false)
+    } else {
+      part_least(k, kb, kept)
+    }) +
+      kb.mar_l +
+      kb.mar_r
+    sum = sum + least
+    n = n + 1
+    widest = fmax(widest, least)
+  }
+  guard any else { return undef }
+  let b = box_for(c, cb_w, cb_h)
+  let gap = edge_of(s.gap_col_k, s.gap_col_v, undef)
+  b.pbw() + (if along { sum + (if n > 1 { gap * (n - 1).to_double() } else { 0.0 }) } else { widest })
 }
 
 ///|
@@ -2371,7 +2519,7 @@ fn fit_line(
           hyp
         } else {
           let least = or_else(f.unsafe_get(i + MIN_MAIN), 0.0)
-          let fit = flow.unsafe_get(pool.at.unsafe_get(k)).style.fit_need
+          let fit = kept_of(flow.unsafe_get(pool.at.unsafe_get(k)), cb_w, cb_h)
           fmin(hyp, if known(fit) { fmax(least, fit) } else { least })
         })
     } else {
