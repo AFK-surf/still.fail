@@ -706,16 +706,44 @@ test "a kept topic is let go of keeping its value till the core says its version
 }
 
 ///|
-test "a topic not kept, or one with no value, is let go of as ever" {
+test "a topic not kept is let go of as ever" {
   let (c, sent) = recorder()
   c.keep(fn(name, _) { if name == "stations" { 64 } else { 0 } })
   let other = c.subscribe("accounts")
   c.receive("{\"id\":1,\"value\":[]}") |> ignore
   c.unsubscribe(other)
   assert_eq(sent[1].stringify(), ({ "id": 1, "unsubscribe": true } : Json).stringify())
-  let unanswered = c.subscribe("stations", params={ "scope": "ws" })
-  c.unsubscribe(unanswered)
-  assert_eq(sent[3].stringify(), ({ "id": 2, "unsubscribe": true } : Json).stringify())
+}
+
+///|
+test "a kept topic let go of before its first value: said so all the same; what comes before the core's word kept, else nothing" {
+  // (its value come before the core's word of its leaving: kept, and asked again with its version)
+  let (c, sent) = recorder()
+  c.keep(fn(name, _) { if name == "stations" { 64 } else { 0 } })
+  let s = c.subscribe("stations", params={ "scope": "ws" })
+  c.unsubscribe(s)
+  assert_eq(sent[1].stringify(), ({ "id": 1, "unsubscribe": true, "keep": true } : Json).stringify())
+  c.receive("{\"id\":1,\"value\":[{\"id\":\"a\"}]}") |> ignore
+  c.receive("{\"id\":1,\"v\":\"k:1\"}") |> ignore
+  let again = c.subscribe("stations", params={ "scope": "ws" })
+  assert_eq(
+    sent[2].stringify(),
+    ({ "id": 2, "subscribe": { "topic": "stations", "scope": "ws" }, "keyed": true, "have": "k:1" } : Json).stringify(),
+  )
+  c.receive("{\"id\":2,\"same\":true}") |> ignore
+  assert_eq(again.value.unwrap().stringify(), "[{\"id\":\"a\"}]")
+  // (nothing come before the core's word: nothing kept, asked again as ever)
+  let (c, sent) = recorder()
+  c.keep(fn(name, _) { if name == "stations" { 64 } else { 0 } })
+  let s = c.subscribe("stations", params={ "scope": "ws" })
+  c.unsubscribe(s)
+  assert_eq(sent[1].stringify(), ({ "id": 1, "unsubscribe": true, "keep": true } : Json).stringify())
+  c.receive("{\"id\":1,\"v\":null}") |> ignore
+  let again = c.subscribe("stations", params={ "scope": "ws" })
+  assert_eq(sent[2].stringify(), ({ "id": 2, "subscribe": { "topic": "stations", "scope": "ws" }, "keyed": true } : Json).stringify())
+  assert_true(again.value is None)
+  // (after the core's word, nothing more is the id's)
+  assert_true(c.unheld("{\"id\":1,\"value\":[]}"))
 }
 
 ///|

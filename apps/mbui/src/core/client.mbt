@@ -510,8 +510,11 @@ fn Client::end_subscription(self : Client, s : Sub) -> Unit {
       "id": Json::number(s.id.to_double()),
       "unsubscribe": Json::boolean(true),
     }
-    // (its value kept: let go of once the core says what it is, Client::take)
-    if s.value is Some(_) && s.error is None && (self.keeps)(topic_name(s.topic), s.topic) > 0 {
+    // (its value kept: let go of once the core says what it is, Client::take. Said so whether its first value has come
+    // yet or not: what the app sends is what it means to do with it, never which came first, the core's answer or its
+    // leaving (a replay, a slow core). What comes before the core's word of it is applied to it as ever; none come, none
+    // kept, and it is asked again as ever)
+    if s.error is None && (self.keeps)(topic_name(s.topic), s.topic) > 0 {
       s.ending = true
       s.keeping = true
       m["keep"] = Json::boolean(true)
