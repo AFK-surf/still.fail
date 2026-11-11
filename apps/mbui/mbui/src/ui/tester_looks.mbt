@@ -215,8 +215,11 @@ let looks_said_only : Ref[Bool] = Ref(false)
 ///|
 /// A frame found not built whole said and gone on from (looks_fail): `on` for this Tester's run.
 pub fn Tester::looks_said_only(self : Tester, on : Bool) -> Unit {
-  ignore(self)
   looks_said_only.val = on
+  // (and how what moves goes counted, said and gone on from (`MOTION …`, as MBUI_TEST_MOTION=count says it)
+  if on {
+    self.motion = Count
+  }
 }
 
 ///|

@@ -174,7 +174,6 @@ pub fn Replay::left(Self) -> Int32
 pub fn Replay::local_station(Self) -> String
 pub fn Replay::next_due(Self) -> Double?
 pub fn Replay::next_step(Self) -> String?
-pub fn Replay::outs(Self) -> Array[String]
 pub fn Replay::pace(Self, Pace, strict? : Bool) -> Unit
 pub fn Replay::parse(String) -> Self
 pub fn Replay::sent_bytes(Self, String, String, String) -> Bytes?
