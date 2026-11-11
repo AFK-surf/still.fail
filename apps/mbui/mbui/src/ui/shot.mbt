@@ -560,6 +560,15 @@ fn Ctx::tree_shot_paint(self : Ctx, tree : @view.Tree) -> Unit {
     if c.id.at == 0 {
       return
     }
+    // (on its way: cut to itself before it draws its own, as the window's tree is painted, Content::clips_self)
+    if c.clips_self {
+      let r = c.radius * s
+      match c.corners {
+        Some((tl, tr, br, bl)) => push_box_clip(x, y, c.w * s, c.h * s, tl * s, tr * s, br * s, bl * s)
+        None => push_box_clip(x, y, c.w * s, c.h * s, r, r, r, r)
+      }
+      clipping.push(c.id)
+    }
     let ring_at = self.view_drawn(
       tree,
       c,
@@ -572,7 +581,7 @@ fn Ctx::tree_shot_paint(self : Ctx, tree : @view.Tree) -> Unit {
       tree.turn_angle_of(c.id),
       tree.ground_drawn_of(c.id),
     )
-    if c.clips {
+    if c.clips && !c.clips_self {
       let r = c.radius * s
       match c.corners {
         Some((tl, tr, br, bl)) => push_box_clip(x, y, c.w * s, c.h * s, tl * s, tr * s, br * s, bl * s)
