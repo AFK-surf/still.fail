@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [6a55a1f22](https://github.com/AFK-surf/still.fail/commit/6a55a1f22207dc9dec05567c41050840cf5d2538) app: a page's bar made as nodes ends before a Wind | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 94.09 | 178.74 |
 | [7424a775e](https://github.com/AFK-surf/still.fail/commit/7424a775eeac80dcd46f9e46b7a3f1f7cc5d0228) mbui, app: 22 bars of how what moves goes fall to  | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 93.59 | 183.02 |
 | [f7367fe43](https://github.com/AFK-surf/still.fail/commit/f7367fe4394881588af6ad328a401f9d941916e9) core, app: a workspace's first open on 大屏 landing  | 1.85 | 2.48 | 10.39 | 29.14 | 36.66 | 25.95 | 48.4 | 93.75 | 113.72 |
 | [e39116f76](https://github.com/AFK-surf/still.fail/commit/e39116f76d1349b37fa5dd49082fe565bb497070) core: past a call's 3 s the cloud is asked too, an | 1.85 | 2.48 | 10.39 | 29.14 | 36.67 | 25.95 | 48.4 | 94.01 | 190.1 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [26cd17c5c](https://github.com/AFK-surf/still.fail/commit/26cd17c5c188f674989699363a10a49d8c1760bc) cloud: a relay in Shanghai among still.fail's (#54 | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.32 | 123.25 |
 | [391fece48](https://github.com/AFK-surf/still.fail/commit/391fece48955a0b82e59fd5c195e2541ab7550e6) mbui: a node's words with links in them are a grou | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.52 | 152.78 |
 | [bde639b67](https://github.com/AFK-surf/still.fail/commit/bde639b67982d4f531947e6cf11984830b929aef) core: `live` sends a chat what its activity line r | 1.83 | 2.44 | 10.17 | 28.92 | 35.9 | 25.75 | 47.75 | 94.42 | 151.97 |
-| [7ec136989](https://github.com/AFK-surf/still.fail/commit/7ec13698930c8d0c43d01110e9fff0c48a8bc72f) ci: the merge queue's branches start no push workf | 1.82 | 2.44 | 10.17 | 28.91 | 35.89 | 25.74 | 47.74 | 94.34 | 172.94 |
