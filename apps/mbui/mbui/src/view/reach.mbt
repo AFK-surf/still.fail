@@ -202,6 +202,10 @@ fn Tree::reached(
     }
     let (bx0, by0, bx1, by1) = self.input_bounds(id)
     let edge = (dmax(0.0, bx0), dmax(0.0, by0), dmin(ww, bx1), dmin(wh, by1))
+    // (none of it where it is found: out of sight, nothing reached round it, Tree::input_bounds)
+    if x1 <= edge.0 || y1 <= edge.1 || x0 >= edge.2 || y0 >= edge.3 {
+      continue
+    }
     match press_reaches(x0, y0, x1, y1, cut, edge, least, x, y) {
       Some(d) if d < best_d => {
         best_d = d
