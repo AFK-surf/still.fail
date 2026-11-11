@@ -135,3 +135,20 @@ test "a run from before the connects' rows: one connect and its choice's session
   @core.Replay::detach()
   @core.client.reset()
 }
+
+///|
+test "a replay keeps what its run's app kept: the lists with MBUI_HAVE_SAME, a chat only with MBUI_KEEP_CHAT" {
+  let chat : Json = { "topic": "chat", "station": "ws/a", "session": "s", "compact": true }
+  let list : Json = { "topic": "stations", "scope": "ws" }
+  let kept = fn(env : Array[(String, String)]) {
+    let _ = @ui.Tester::new(fn(_) {  }, env~)
+    (replay_kept("stations", list), replay_kept("chat", chat))
+  }
+  // (every trace kept now: neither)
+  assert_eq(kept([]), (0, 0))
+  // (one recorded since #5305 and before this: its lists kept, its chats not, as its run's app asked them)
+  let (lists, chats) = kept([("MBUI_HAVE_SAME", "1")])
+  assert_true(lists > 0 && chats == 0)
+  let (lists, chats) = kept([("MBUI_HAVE_SAME", "1"), ("MBUI_KEEP_CHAT", "1")])
+  assert_true(lists > 0 && chats == 4)
+}

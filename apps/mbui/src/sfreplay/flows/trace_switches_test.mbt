@@ -29,6 +29,8 @@
 /// all 81 as it came, to be recorded again.
 /// MBUI_OUTLINE (对话目录, 2026-11-10: an open chat's page wide enough for its rail of ticks, and its outline's panel,
 /// ask for its outline) off in all 81 as it came.
+/// MBUI_KEEP_CHAT (2026-11-11: a chat kept as it is let go of, the last few, asked again with its version) off in all
+/// 81 as it came: none had been recorded with MBUI_HAVE_SAME on either.
 let switches_known : Map[String, Int] = {
   "MBUI_PLACES_BAR": 80,
   "MBUI_DEVICES": 81,
@@ -36,6 +38,7 @@ let switches_known : Map[String, Int] = {
   "MBUI_HAVE_SAME": 81,
   "MBUI_OUTLINE": 81,
   "MBUI_CONNECT_ROWS": 81,
+  "MBUI_KEEP_CHAT": 81,
 }
 
 ///|

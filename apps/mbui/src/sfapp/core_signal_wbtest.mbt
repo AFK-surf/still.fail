@@ -1861,7 +1861,7 @@ test "a place's list let go of and asked again: kept as the core last said it, n
   new_run()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
-  client.keep(@sfbase.lasting_kept)
+  client.keep(@sfbase.topic_kept)
   let src = signal_client_source(client)
   let params : Map[String, Json] = { "scope": "ws1" }
   let made = Ref(0)
@@ -1904,5 +1904,52 @@ test "a place's list let go of and asked again: kept as the core last said it, n
   assert_true(sent[4].contains("\"have\":\"k:2\""), msg=sent[4])
   client.receive_json({ "id": 3, "same": true })
   assert_eq(third[third.length() - 1].unwrap().stringify(), "[{\"id\":\"a\",\"t\":\"A2\"}]")
+  stop()
+}
+
+///|
+test "a chat let go of and asked again: nothing of it shown before the core answers, then what changed applied to what was kept" {
+  new_run()
+  let sent : Array[String] = []
+  let client = @core.Client::new(fn(s) { sent.push(s) })
+  client.keep(@sfbase.topic_kept)
+  let src = signal_client_source(client)
+  let params : Map[String, Json] = { "station": "ws/a", "session": "s1" }
+  // (the id of the last chat asked, and what it was asked with)
+  let asked = fn() {
+    let last = sent.rev_iter().find_first(fn(s) { s.contains("\"subscribe\"") && s.contains("\"topic\":\"chat\"") }).unwrap()
+    let j = @json.parse(last) catch { _ => Json::null() }
+    match j {
+      Object(m) =>
+        match m.get("id") {
+          Some(Number(d, ..)) => (d.to_int(), last)
+          _ => abort("no id")
+        }
+      _ => abort("not JSON")
+    }
+  }
+  let follow = fn(seen : Array[Json?]) {
+    let live = src.topic("chat", params)
+    let stop = @signals.effect(fn() { seen.push(live.get().value) })
+    fn() {
+      stop()
+      live.dispose()
+    }
+  }
+  let first : Array[Json?] = []
+  let stop = follow(first)
+  let (id, _) = asked()
+  client.receive_json({ "id": id, "value": { "title": "A", "n": 1 } })
+  stop()
+  assert_true(sent.iter().any(fn(s) { s.contains("\"id\":\{id},\"unsubscribe\":true,\"keep\":true") }), msg=sent.join("\n"))
+  client.receive_json({ "id": id, "v": "c:1" })
+  let second : Array[Json?] = []
+  let stop = follow(second)
+  let (again, said) = asked()
+  assert_true(again != id && said.contains("\"have\":\"c:1\""), msg=said)
+  // As before it was kept: nothing shown till the core's answer, not what was kept.
+  assert_true(second.iter().all(fn(v) { v is None }), msg="nothing shown early")
+  client.receive_json({ "id": again, "kept": true, "delta": [{ "path": ["n"], "set": 2 }] })
+  assert_eq(second[second.length() - 1].unwrap().stringify(), "{\"title\":\"A\",\"n\":2}")
   stop()
 }

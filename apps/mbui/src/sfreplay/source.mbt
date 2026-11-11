@@ -526,10 +526,24 @@ let started : Ref[Bool] = Ref::new(false)
 ///|
 fn init {
   @ui.on_reset(fn() { started.val = false })
-  // (kept as src/stillfail's main has it, where the run's app did: its trace's head)
-  @core.client.keep(fn(name, params) {
-    @sfcore.trace_switch("MBUI_HAVE_SAME") && @sfbase.lasting_kept(name, params)
-  })
+  @core.client.keep(replay_kept)
+}
+
+///|
+/// What the core's client keeps as it lets go of it (sfbase's topic_kept, as src/stillfail's main has it), where the
+/// run's app did, its trace's head saying so: the lists the places open on with MBUI_HAVE_SAME, a chat with
+/// MBUI_KEEP_CHAT, each asked again as that run asked it.
+fn replay_kept(name : String, params : Json) -> Int {
+  let on = if name == "chat" {
+    @sfcore.trace_switch("MBUI_KEEP_CHAT")
+  } else {
+    @sfcore.trace_switch("MBUI_HAVE_SAME")
+  }
+  if on {
+    @sfbase.topic_kept(name, params)
+  } else {
+    0
+  }
 }
 
 ///|
