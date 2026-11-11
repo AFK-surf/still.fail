@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [16fd90f9b](https://github.com/AFK-surf/still.fail/commit/16fd90f9b603ce46d07513061b35601404337a12) mbui: what holds a scroller makes its way as anyth | 1.8 | 2.41 | 10.04 | 28.71 | 35.26 | 25.63 | 47.37 | 93.96 | 184.49 |
 | [a3f8baeb2](https://github.com/AFK-surf/still.fail/commit/a3f8baeb2bb12dba6062d6f7e208e577cfa8af4c) app: 对话's card on the rail, each figure opens the  | 1.8 | 2.41 | 10.04 | 28.71 | 35.26 | 25.63 | 47.37 | 94.14 | 187.39 |
 | [e206beae8](https://github.com/AFK-surf/still.fail/commit/e206beae86d84ae2e66bafb64cd12f97a7399e65) ci: main's mbc store keeps the units its runs used | 1.8 | 2.4 | 10.02 | 28.67 | 35.16 | 25.61 | 47.29 | 94.31 | 171.43 |
 | [af3a678a1](https://github.com/AFK-surf/still.fail/commit/af3a678a11e4028dcf45e4dd277ca27fdd252cc1) core, app: 关于 shows this machine's station, its ne | 1.8 | 2.4 | 10.01 | 28.66 | 35.13 | 25.6 | 47.27 | 93.87 | 132.53 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [e59dd4763](https://github.com/AFK-surf/still.fail/commit/e59dd4763d3287a63f65e07176d8853a701ff968) app: a station's card from a chat's agent as nodes | 1.77 | 2.36 | 9.82 | 28.46 | 34.51 | 25.42 | 46.79 | 93.93 | 173.66 |
 | [04cca9525](https://github.com/AFK-surf/still.fail/commit/04cca9525df9de721c3ebe1ddcd337d01bdb0bef) history: its head and details made once as nodes,  | 1.77 | 2.36 | 9.81 | 28.42 | 34.43 | 25.4 | 46.74 | 93.9 | 174.65 |
 | [482c5c57e](https://github.com/AFK-surf/still.fail/commit/482c5c57e528e14af1fe701638cff330c4492504) app, core: a kind of reset's count shown on its ow | 1.77 | 2.36 | 9.8 | 28.4 | 34.32 | 25.38 | 46.66 | 93.19 | 188.43 |
-| [0f96ed1e8](https://github.com/AFK-surf/still.fail/commit/0f96ed1e8401cf9bfba0026bb3641bdca312f64a) ci: words_large's sweep in two runs, a language ea | 1.76 | 2.36 | 9.8 | 28.4 | 34.32 | 25.38 | 46.64 | 93.55 | 181.79 |
