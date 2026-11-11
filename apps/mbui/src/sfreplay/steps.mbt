@@ -166,7 +166,7 @@ pub fn Flow::start(
   r.shuffle(seed)
   // (a test's steps written as a scripted run (FLOW_EMIT) over a trace the app may have outgrown: at once, as the steps
   // do not hang on the run's pace, and an older trace's asks have no wall clock to keep it by)
-  r.pace(if seed == 0 && emit_path() != "" { @core.AtOnce } else { pace_of(seed) }, strict=strict_pass(seed))
+  r.pace(if seed == 0 && emit_path() != "" { @core.AtOnce } else { pace_of(seed) })
   r.attach()
   // (on the screen it was made on, as its host gave it: a phone's window's runs a phone's, Android's, pointed at by a
   // finger; a wider one's the Mac's, by a mouse, and keyboard and mouse's window made narrow (`platform` 0); the live
@@ -709,7 +709,7 @@ pub fn Flow::field(self : Flow, words : String) -> Unit {
   }
   emit(if words == "" { "empty" } else { "field " + words.replace_all(old="\n", new="\\n") })
   let now = self.t.field_words()
-  if self.judges() && (words == "" && now != "") || !now.contains(words) {
+  if self.judges() && ((words == "" && now != "") || !now.contains(words)) {
     self.fail("the field holds \{now.escape()}, not \{words.escape()}")
   }
 }
