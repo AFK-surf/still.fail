@@ -362,7 +362,7 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
       const body: J = { id: a.device, sub: p.sub, kind: a.kind, label: a.label };
       if (a.kind === "app" && a.signKey !== null) body.sign_key = a.signKey;
       if (a.kind === "web") body.exp = Math.floor(inner.host.nowMs() / 1000) + WEB_DEVICE_SECS;
-      const lock = new Lock(inner, p.ws, p.account, null, true);
+      const lock = new Lock(inner, p.ws, p.account, null, { byHand: true });
       const signed = yield* Effect.result(Effect.andThen(p.joins === true ? lock.admit(p.sub, a.email) : Effect.void, lock.append("device", body)));
       if (signed._tag === "Success") done.push(p.ws);
       else failed.push({ ws: p.ws, error: signed.failure.message });
