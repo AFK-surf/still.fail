@@ -51,7 +51,7 @@ pub impl Show for Transition with output(self, logger) {
 ///|
 /// For debugging, its words as `Show` writes them.
 pub impl Debug for Transition with to_repr(self) {
-  Repr(self.to_string())
+  Repr(Show::to_string(self))
 }
 
 ///|
