@@ -2669,6 +2669,8 @@ pub fn Tree::bindings_held(self : Tree) -> Int {
 fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_start? : Bool = true) -> () -> Unit {
   let live = Ref(true)
   let last : Ref[T?] = Ref(None)
+  // (marked as a block is given another key: key_taken.mbt)
+  let by_key = Ref(false)
   // (the watch reads anew as it is told; let go as it stops)
   let watch : Ref[@signals.Watch?] = Ref(None)
   let w = @signals.watch(fn() {
@@ -2679,10 +2681,17 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_
       // (still bound once what was due by then is settled: one let go then reads nothing more, follows nothing again)
       guard live.val else { return false }
       let v = w.read(read)
+      let taken = by_key.val || key_taking.val
+      by_key.val = false
       if last.val != Some(v) {
         last.val = Some(v)
         if live.val {
-          self.structure_done(fn() { then(v) })
+          self.structure_done(fn() {
+            let was = key_taken.val
+            key_taken.val = taken
+            then(v)
+            key_taken.val = was
+          })
         }
         true
       } else {
@@ -2691,6 +2700,12 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_
     })
   })
   watch.val = Some(w)
+  // (marked as it is told, whatever batch that is in: told by a block given another key, its change is that one's)
+  w.on_marked(fn() {
+    if key_taking.val {
+      by_key.val = true
+    }
+  })
   let v = w.read(read)
   last.val = Some(v)
   let stop = fn() {
@@ -2703,9 +2718,11 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_
   }
   // (one change, as each after it is: Tree::at_cause)
   self.committing += 1
+  let taking_was = key_taking.val
   @signals.start_batch()
   self.structure_done(fn() { then(v) })
   @signals.end_batch()
+  key_taking.val = taking_was
   self.committing -= 1
   self.modals_settled()
   if self.committing == 0 && self.cause_at < 0.0 {
@@ -2741,6 +2758,7 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   self.advance_logic(at)
   // What was due has finished. Advancing the drawing clock can notify bindings too: tell it with the structure's
   // change, so a child already queued by the new data cannot run before its parent has had the chance to let it go.
+  let taking_was = key_taking.val
   @signals.start_batch()
   self.advance_clock(at)
   let was = self.cause_at
@@ -2750,6 +2768,8 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   // between two of its writes and seeing half of it)
   let changed = f()
   @signals.end_batch()
+  // (a block given another key in it: told whole now, what that told made at once, key_taken.mbt)
+  key_taking.val = taking_was
   self.committing -= 1
   self.modals_settled()
   self.cause_at = was
@@ -7404,7 +7424,9 @@ fn View::comes(
     tree.last_w >= 0.0 &&
     !@signals.untracked(tree.motion_reduced) &&
     tree.in_column(v.at) &&
-    !tree.holds_shared(v.at) else {
+    !tree.holds_shared(v.at) &&
+    // (made or let go because its block was given another key: at once, as were the block made anew, key_taken.mbt)
+    !key_taken.val else {
     return false
   }
   let st = n.flex.style

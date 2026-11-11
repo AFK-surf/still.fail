@@ -239,6 +239,7 @@ fn leaked_state() -> Array[String] {
   check("drawing", dr.entries.length() + dr.overlay.length() + dr.raised.length() + dr.carry.length())
   check("messages", fake_posted.length())
   check("inst_owners", inst_owners.owner.length())
+  check("key_taken", if @view.key_marks_left() { 1 } else { 0 })
   out
 }
 
@@ -968,6 +969,10 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   frame_ended_outside()
   // (as its host got it, where a test records it: tester_host.mbt)
   host_frame_drawn(at)
+  // (a block's key's marks put back by the change that set them: left set, every structure after them at once, unsaid)
+  if @view.key_marks_left() {
+    @halt.saying("a list's block's key mark (key_taking, key_taken) left set after a frame at \{at}")
+  }
 }
 
 ///|
