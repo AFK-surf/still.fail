@@ -5,8 +5,9 @@
 // the core's doing), 忽略 under them (decision.dismiss); once settled, how it went in one quiet line, pressed for the
 // original card; a login's card (login_card_node) with who is to finish it and 忽略 under it. What comes and goes under
 // the post comes and goes as anything down a column does (View::show: its way from the moment the message or the core
-// changed, the framework's; the old under_post's own fades and the list's turns are not here). Not here yet: a vault
-// item's approval (vault_actions). The cards in place of a post's words: message_cards_node.mbt.
+// changed, the framework's; the old under_post's own fades and the list's turns are not here). A vault item's approval
+// (a card from before its station said what it asks) in its options' place: settings' vault_actions_node. The cards in
+// place of a post's words: message_cards_node.mbt.
 
 ///|
 /// What is under a post, as the message says it now.
@@ -16,12 +17,10 @@ priv enum Asks {
   Nothing
   /// an agent's need with no card: 忽略 alone
   Alone
-  /// who decides, its options, 忽略, how it went
+  /// who decides, its options (or a vault item's approval in their place), 忽略, how it went
   Options
   /// a login's card, who is to finish it, 忽略 under it (where there is a core to read the login of)
   Login
-  /// a vault item's approval: not made as nodes yet
-  NotYet
 }
 
 ///|
@@ -32,7 +31,6 @@ fn decision_asks(m : Message) -> Asks {
     None if m.options is None => if m.asked { Alone } else { Nothing }
     Some({ ask: Some(_), .. }) | Some({ phone: Some(_), .. }) | Some({ signin: Some(_), .. }) | Some({ rig: Some(_), .. }) =>
       Nothing
-    Some({ vault, .. }) if vault != "" => NotYet
     _ => Options
   }
 }
@@ -94,7 +92,7 @@ fn message_decision_node(
             ask_dismiss_node(b, src, here, fn() { m().seq }, fn() { m().asked }, fn() { false }, fn() { true }, false)
           })
           |> ignore
-        (Options, _) => decision_rooms_node(p, src, here, m)
+        (Options, _) => decision_rooms_node(p, src, here, m, core)
         (Login, Some(core)) => decision_login_node(p, src, here, core, m)
         _ => ()
       }
@@ -159,8 +157,15 @@ fn decision_login_node(
 
 ///|
 /// What comes and goes under a post with options (message_decision's rooms): who decides and its options while it is
-/// open, 忽略 under them, how it went once settled.
-fn decision_rooms_node(v : @view.View, src : Source, here : MessageNodeHere, m : () -> Message) -> Unit {
+/// open (a vault item's approval in their place, answered with `core`; nothing there without one), 忽略 under them, how
+/// it went once settled.
+fn decision_rooms_node(
+  v : @view.View,
+  src : Source,
+  here : MessageNodeHere,
+  m : () -> Message,
+  core : @settings.Core?,
+) -> Unit {
   let settled = fn() { decision_settled(m()) }
   let open = fn() { !settled() }
   v.box(fn(rooms) {
@@ -183,9 +188,23 @@ fn decision_rooms_node(v : @view.View, src : Source, here : MessageNodeHere, m :
           )
           |> ignore
         })
-        b.show(fn() { decision_choices(m()).length() > 0 && decision_thread(here) is Some(_) }, fn(o) {
+        let vault = fn() { m().card.map(fn(c) { c.vault }).unwrap_or("") }
+        b.show(fn() { vault() == "" && decision_choices(m()).length() > 0 && decision_thread(here) is Some(_) }, fn(o) {
           decision_options_node(o, src, here, m)
         })
+        // (an agent's request for a vault item: approved here, not answered in words; its buttons and what is typed in
+        // for them as far apart as what is in decision_box)
+        match core {
+          Some(core) =>
+            b.show(fn() { vault() != "" }, fn(a) {
+              @sf.style_node(a, fn() { vault_actions_room })
+              a.width_share(Is(1.0)) |> ignore
+              @settings.vault_actions_node(a, core, fn() { workspace_of(here.station) }, vault, fn() {
+                mine_to_node(here, m().card.map(fn(c) { c.assignee }).unwrap_or(""))
+              })
+            })
+          None => ()
+        }
       })
       |> ignore
     })
@@ -479,6 +498,11 @@ let under_post_room : @ui.Style = @ui.css("w=Full")
 /// What is under a post with the gap over it in its room (under_post's `lead`).
 // kept across runs: a value (no field of it changes)
 let under_post_room_lead : @ui.Style = @ui.css("w=Full pt=S1_5")
+
+///|
+/// A vault item's approval under a post: what is in it as far apart as in decision_box (its gap).
+// kept across runs: a value (no field of it changes)
+let vault_actions_room : @ui.Style = @ui.css("gap=S1_5")
 
 ///|
 /// How it was settled: its first line's height where the theme says none (settled_line's leading).

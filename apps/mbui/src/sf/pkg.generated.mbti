@@ -86,6 +86,8 @@ pub let ask_card_room_most : @ui.Style
 
 pub let ask_foot : @ui.Style
 
+pub fn ask_foot_chosen_end() -> @ui.Style
+
 pub fn ask_foot_lines() -> Double
 
 pub fn ask_here(String, String, (String) -> Unit, () -> Unit, value? : String, placeholder? : String, hint? : String) -> Unit
@@ -285,7 +287,7 @@ pub fn choices(@ui.Ctx, String, String, Array[(String, String, String)], label? 
 
 pub fn chooser(@ui.Ctx, String, String, Array[@kit.Entry], () -> Bool, (Bool) -> Unit, side? : @view.Side, lead? : (Int64) -> Unit, disabled? : Bool, capsule? : Bool, as_button? : Bool, on_pick? : (String) -> Unit) -> @kit.Menu
 
-pub fn chooser_node(@view.View, () -> String, () -> Array[(String, String)], () -> String, (String) -> Unit) -> @view.View
+pub fn chooser_node(@view.View, () -> String, () -> Array[(String, String)], () -> String, (String) -> Unit, press? : () -> Unit, disabled? : () -> Bool) -> @view.View
 
 pub let chooser_chevron : Double
 
@@ -691,7 +693,7 @@ pub let floating : Raised
 
 pub fn foot_across(Double) -> @ui.Style
 
-pub fn foot_chooser_node(@view.View, () -> String, () -> Array[(String, String)], () -> String, (String) -> Unit) -> @view.View
+pub fn foot_chooser_node(@view.View, () -> String, () -> Array[(String, String)], () -> String, (String) -> Unit, press? : () -> Unit, disabled? : () -> Bool) -> @view.View
 
 pub fn foot_capsule(Double, Double, Double) -> (Double, Double, Double)
 
@@ -705,7 +707,7 @@ pub fn foot_pad(Double) -> @ui.Style
 
 pub fn foot_place_node(@view.View, () -> Bool, (@view.View) -> Unit) -> Unit
 
-pub fn foot_reach(Double, start? : Double, words_first? : Bool) -> @ui.Style
+pub fn foot_reach(Double, start? : Double, end? : Double, words_first? : Bool) -> @ui.Style
 
 pub fn foot_spacer_node(@view.View) -> Unit
 
@@ -889,7 +891,7 @@ pub fn ink_runs(String, String, Bool) -> Array[@text.Run]
 
 pub fn input(@ui.Ctx, String, placeholder? : String, shorter? : Array[String], secret? : Bool, disabled? : Bool, small? : Bool, solid? : Bool, leaves? : Array[Int32], field? : @ui.Field, on_submit? : (String) -> Unit, on_change? : (String) -> Unit) -> @kit.Field
 
-pub fn input_node(@view.View, @ui.Field, placeholder? : String, label? : String, shorter? : Array[String], secret? : Bool, placeholder_by? : () -> String, disabled? : () -> Bool, small? : Bool, solid? : Bool, leaves? : Array[Int32], submitted? : (String) -> Unit, edited? : (String) -> Unit, end? : (@view.View) -> Unit) -> @view.View
+pub fn input_node(@view.View, @ui.Field, placeholder? : String, label? : String, shorter? : Array[String], secret? : Bool, placeholder_by? : () -> String, disabled? : () -> Bool, small? : Bool, solid? : Bool, leaves? : Array[Int32], submitted? : (String) -> Unit, edited? : (String) -> Unit, end? : (@view.View) -> Unit, lead? : (@view.View) -> Unit, card_words? : Bool) -> @view.View
 
 pub let inset_room : @ui.Space
 
@@ -2304,7 +2306,7 @@ pub fn text_toggle_node(@view.View, () -> String, () -> Unit) -> Unit
 
 pub fn textarea(@ui.Ctx, String, rows? : Int32, most? : Int32, placeholder? : String, field? : @ui.Field, corner? : Double, solid? : Bool, on_change? : (String) -> Unit) -> String
 
-pub fn textarea_node(@view.View, @ui.Field, rows? : Int32, most? : Int32, placeholder? : String, label? : String, corner? : Double, placeholder_by? : () -> String, disabled? : () -> Bool, edited? : (String) -> Unit) -> @view.View
+pub fn textarea_node(@view.View, @ui.Field, rows? : Int32, most? : Int32, placeholder? : String, label? : String, corner? : Double, placeholder_by? : () -> String, disabled? : () -> Bool, edited? : (String) -> Unit, solid? : Bool, card_words? : Bool) -> @view.View
 
 pub fn theme() -> Theme
 

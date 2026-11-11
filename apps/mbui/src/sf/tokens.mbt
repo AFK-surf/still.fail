@@ -639,15 +639,17 @@ pub fn foot_pad(height : Double) -> @ui.Style {
 /// A card's last row with capsules `height` high at its ends (a card card_pad in, as a page's): reaching past the
 /// card's words to where they stand concentric with its foot corners (card_foot_in), at both its sides and its foot;
 /// `start`: what leads it is that high instead (a field before a button: the row as high as the higher, the lower in
-/// its middle stands as much further from the foot as it is less high, each concentric with its corner); `words_first`:
-/// words lead it (where the card's words stand), only its end reaching.
-pub fn foot_reach(height : Double, start? : Double, words_first? : Bool = false) -> @ui.Style {
-  let out = room(card_foot_in(height) - card_pad)
+/// its middle stands as much further from the foot as it is less high, each concentric with its corner); `end`: what
+/// ends it is that high instead, the same way (a choice's capsule at its end, as far from the card's side as from its
+/// foot); `words_first`: words lead it (where the card's words stand), only its end reaching.
+pub fn foot_reach(height : Double, start? : Double, end? : Double, words_first? : Bool = false) -> @ui.Style {
+  let last = end.unwrap_or(height)
+  let out = room(card_foot_in(last) - card_pad)
   if words_first {
-    return @ui.style(mr=out, mb=out)
+    return @ui.style(mr=out, mb=room(card_foot_in(dmax(height, last)) - card_pad))
   }
   let lead = start.unwrap_or(height)
-  let under = room(card_foot_in(dmax(height, lead)) - card_pad)
+  let under = room(card_foot_in(dmax(dmax(height, lead), last)) - card_pad)
   @ui.style(ml=room(card_foot_in(lead) - card_pad), mr=out, mb=under)
 }
 

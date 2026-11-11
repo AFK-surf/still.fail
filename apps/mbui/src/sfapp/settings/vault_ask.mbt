@@ -93,8 +93,9 @@ fn Asked::picks_file(self : Asked) -> Bool {
 let vault_picked : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
-/// The unit chosen for each requested timeout.
-let vault_timeout_minutes : Map[String, Int] = Map([])
+/// How long each requested timeout is chosen to be, in minutes (授权时限's): read by what is made once of a card as by
+/// the old view's; put back by `reset`.
+let vault_timeout_minutes : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
 
 ///|
 // kept across runs: an immutable style
