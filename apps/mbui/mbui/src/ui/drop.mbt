@@ -537,8 +537,12 @@ pub fn Tester::drop_files(
   self.picks(files)
   self.fake.pick_asks.push({ kind: Files, said: false, taken: false })
   let id = self.fake.pick_asks.length()
+  // (what they hold told after the message, at its moment; where the test answers the pickers itself, as it says:
+  // Tester::pick_answer, the host's reading of them taking a while)
   let f = self.fake
-  f.due(f.time, "files dropped", fn() { fake_pick_said(f, id) })
+  if !f.picks_by_hand {
+    f.due(f.time, "files dropped", fn() { fake_pick_said(f, id) })
+  }
   let m : Map[String, Json] = {
     "type": Json::string("drop"),
     "x": Json::number(x),
