@@ -100,16 +100,9 @@ export function lapse(s: CloudState, after: (ms: number, f: () => void) => unkno
   });
 }
 
-/// Whether `text` is something the cloud tells of besides the station's state (a release out, the models' catalog
+/// Whether `event` is something the cloud tells of besides the station's state (a release out, the models' catalog
 /// changed), told to `said`.
-function cloudSaid(text: string, said?: (event: CloudSaid) => void): boolean {
-  if (!text.startsWith('{"type":')) return false;
-  let event: unknown;
-  try {
-    event = JSON.parse(text);
-  } catch {
-    return false;
-  }
+function cloudSaid(event: unknown, said?: (event: CloudSaid) => void): boolean {
   const type = (event as { type?: unknown } | null)?.type;
   if (type === "release") said?.({ type });
   else if (type === "models") {
@@ -164,9 +157,21 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec, said?: (ev
     socket.on("message", (data, binary) => {
       if (binary) return;
       const text = data.toString();
-      if (text === "pong") answered = true;
-      else if (cloudSaid(text, said)) return;
-      else if (!tool(s, plane, socket, text)) applyState(s, text, (frame) => socket.readyState === WebSocket.OPEN && socket.send(JSON.stringify(frame)));
+      if (text === "pong") {
+        answered = true;
+        return;
+      }
+      // Each frame is told by its parsed `type`, never by where that field sits in the text: a provider's encoder may
+      // put it anywhere (Comma's map encoder puts it last).
+      let body: any;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        return;
+      }
+      if (cloudSaid(body, said)) return;
+      if (body?.type === "tool") tool(s, plane, socket, body);
+      else applyFrame(s, body, (frame) => socket.readyState === WebSocket.OPEN && socket.send(JSON.stringify(frame)));
     });
     socket.on("close", (code, reason) => {
       ping?.();
@@ -213,16 +218,9 @@ export function planeTeller(s: CloudState, send: (frame: unknown) => void, open:
 
 /// A device tool request pushed on the socket (`{type: "tool", id, request}`, contract §8 presence transport): run
 /// by the mesh's tools and answered `{type: "tool_result", id, response}`. Only a provider with device tools pushes
-/// them; anything else is not a tool frame.
-function tool(s: CloudState, plane: ProviderSpec, socket: WebSocket, text: string): boolean {
-  if (!text.startsWith('{"type":"tool"')) return false;
-  let body: any;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    return false;
-  }
-  if (body?.type !== "tool" || typeof body.id !== "string") return false;
+/// them.
+function tool(s: CloudState, plane: ProviderSpec, socket: WebSocket, body: any) {
+  if (typeof body.id !== "string") return;
   // Locked, the control plane pushes no tools: a gateway the lock names calls them itself (mesh/tools.ts).
   const run = plane.tools && s.locked() === null ? s.toolCalls : null;
   const reply = (response: unknown) => {
@@ -230,7 +228,6 @@ function tool(s: CloudState, plane: ProviderSpec, socket: WebSocket, text: strin
   };
   if (run === null) reply({ ok: false, error: { code: "unavailable", message: "this station takes no device tools now" } });
   else run(body.request).then(reply, (e) => reply({ ok: false, error: { code: "invalid_request", message: (e as Error).message } }));
-  return true;
 }
 
 /// The cloud says the station is out of its workspace: marked in cloud.json, kept through restarts.
@@ -264,6 +261,10 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
   } catch {
     return;
   }
+  applyFrame(s, body, send);
+}
+
+function applyFrame(s: CloudState, body: any, send: (frame: unknown) => unknown) {
   if (body?.type === "state") {
     // A workspace it joined taking over from a home it was taken out of: its lock goes along (cloud/state.ts `succeed`).
     const was = s.state;
