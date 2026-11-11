@@ -190,6 +190,8 @@ pub let breath_ms : Double
 
 pub fn breathe(@ui.Ctx, Int32, failed? : Bool, low? : Double, resident? : Bool, share? : @motion.Anim) -> Unit
 
+pub fn breathe_node(@view.View, waits? : () -> Bool, low? : Double, failed? : () -> Bool) -> Unit
+
 pub let bubble_raised : Raised
 
 pub fn button(@ui.Ctx, String, key? : String, tone? : Tone, icon? : String, busy? : Bool, disabled? : Bool, w? : @ui.Size, reach? : @ui.Style, hint? : String, on_press? : () -> Unit) -> Bool
@@ -859,6 +861,8 @@ pub fn icon_path(String) -> String
 
 pub let identity_mark : Double
 
+pub fn image_reveal_node(@view.View, () -> String, () -> String, Double, Double, cover? : Bool, held? : () -> Bool, top_crop? : Bool) -> @view.View
+
 pub fn in_line(Double) -> @ui.Style
 
 pub let in_lines : @ui.TextStyle
@@ -946,6 +950,8 @@ pub let leave_scale : Double
 pub fn level_color(String) -> Int64
 
 pub let lift_held : Double
+
+pub fn lift_node(@view.View, () -> Bool, () -> Bool, Double) -> Unit
 
 pub fn lift_of(@ui.Ctx, String, Bool, Bool) -> Double
 
@@ -1176,6 +1182,8 @@ pub fn menu_node(@view.View, () -> Bool, (@view.View) -> @view.View, () -> Array
 pub fn menu_of(@ui.Ctx, String, Array[MenuItem?], label~ : String, size? : Double) -> Bool
 
 pub fn menu_open_key() -> String
+
+pub fn menu_presses_node(@view.View, () -> Unit, (Double, Double, Bool) -> Unit) -> Unit
 
 pub let menu_raised : Raised
 
@@ -1757,6 +1765,8 @@ pub fn progress_node(@view.View, () -> Double?, () -> Int64, () -> Int64, h? : D
 
 pub fn progress_ring(@ui.Ctx, Double, Double, Int64) -> Int32
 
+pub fn progress_ring_node(@view.View, Double, () -> Double, () -> Int64) -> @view.View
+
 pub fn progress_spinner(@ui.Ctx, String, Double?, size? : Double, stroke? : Double) -> Int32
 
 pub fn progress_spinner_node(@view.View, () -> Double?, size? : Double, stroke? : Double) -> @view.View
@@ -1864,6 +1874,8 @@ pub let ref_item_corner : @ui.Radius
 pub let ref_menu_corner : @ui.Radius
 
 pub fn resize_handle(@ui.Ctx, String, Double, min~ : Double, max~ : Double, label~ : String, edge? : @view.Side, press? : String, over? : Bool, active? : Bool) -> Resized
+
+pub let reveal_ms : Double
 
 pub fn ring_shapes(Double, Double, Int64) -> Array[@paint.Shape]
 
