@@ -229,6 +229,14 @@ jobs:
         with:
           path: ${{ env.MBC_STORE }}
           key: ${{ env.BUILD_KEY }}
+      # (moon's own alone: the units' store and each test program's units' directories taken out of it first. Its
+      # paths' exclusions did not hold them: the store by its absolute path, MBC_STORE, 2.0 GB of it restored with
+      # moon's, and five units' directories, 632 MB, past '**/*.mbc/**': most of the cache's 640 MB, where moon's own
+      # was 166 MB (#5429, 2026-11-11). The store was saved above; nothing after this reads either)
+      - if: always() && env.OWN == 'm-' && steps.moon.outputs.cache-hit != 'true'
+        run: |
+          rm -rf "$MBC_STORE"
+          find apps/mbui/_build -type d -name '*.mbc' -prune -exec rm -rf {} +
       - if: always() && env.OWN == 'm-' && steps.moon.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
