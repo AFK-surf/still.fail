@@ -631,6 +631,13 @@ export class StationTopics implements Owner {
     const span = data.logSpan("entry", station, String(id));
     const latest = this.#latest(station, id);
     let window = this.#windows.get(tk);
+    // A window opened on a chat with nothing in it (#opening: from 1, nothing caught) whose entries came after, but not
+    // from its first (said while the device was away, the rest told): opened again where they are, the page before
+    // to come as it is gone back to. Kept, it would wait on its first entry, which nothing brings: the chat said empty.
+    if (window && window.caught === 0 && span !== null && span.min > window.first) {
+      this.#windows.delete(tk);
+      window = undefined;
+    }
     if (!window) {
       const opening = this.#opening(station, id);
       if (opening.bring) {
