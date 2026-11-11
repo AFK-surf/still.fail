@@ -7,6 +7,12 @@
 /// rest by what shows: what the app reads of the core it asks as a frame is built, so a sparser display's frames
 /// ask it later than an input that came meanwhile (the coordinator of the migration, 2026-11-11: the next step,
 /// what a page reads said as it is made).
+///
+/// It rises only where the measure came truer (the coordinator of the migration, 2026-11-11), never for the app: each
+/// flow so added shows the app unchanged and the split a device's already, and the migration's coordinator agrees.
+/// Once so: #5519 (the fake host tells what is posted at the moment it is posted, as a device's host does, no longer as
+/// the next frame begins; not a line of what a device runs changed) took 120 a second from 10 flows to 11: share and
+/// station-files out, glass, settings-run-settings and wide-answer-reply in (each says why where it is).
 // kept across runs: a value
 let pace_splits_known : Map[String, Array[Int]] = {
   // 20: sub {"scope":…,"topic":"stations"} | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
@@ -20,7 +26,10 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "close-option": [7],
   "delete-failed": [7],
   "draft": [7],
-  "glass": [7],
+  // glass at 120 (#5519): the chat page's reads go out between frames at 1165.3 ms, as a message of the core is
+  // taken as it comes and what read it is made again, chatJobs first; the strict pass sends them as its frame at
+  // 1150 is built, stations, picture, then chatJobs; gone with what a page reads said as it is made
+  "glass": [7, 120],
   "history": [7],
   "markdown": [7],
   "offline-retry": [7],
@@ -49,7 +58,7 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "paste-long": [7],
   "paste-short": [7],
   "pin": [7],
-  "station-files": [7, 120],
+  "station-files": [7],
   // 6: sub {"query":…,"scope":…,"topic":"search"} | strict call cache.usage {}
   "settings-profile": [7],
   "settings-sheet-sinking": [7],
@@ -65,7 +74,11 @@ let pace_splits_known : Map[String, Array[Int]] = {
   // 4: - | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
   "bar-archive": [7, 120],
   "notice-looking": [7],
-  "wide-answer-reply": [7],
+  // wide-answer-reply at 120 (#5519): the new chat page sends its composer, machineSessions.list and status's
+  // release in the frame at 1050 ms, notify.permission (sent once notify's values are in, which came after that
+  // frame) in the next, at 1058.3; the strict pass sends all four in its frame at 1083.3, notify.permission before
+  // machineSessions.list; gone with what a page reads said as it is made
+  "wide-answer-reply": [7, 120],
   "wide-send": [7],
   // 3: sub {"topic":"chat","compact":true,"session":…,"station":…} | strict sub
   // {"topic":"chat","compact":true,"session":…,"station":…}
@@ -77,7 +90,7 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "settings-device-pages": [7],
   "settings-vault-item": [7],
   // 3: sub {"query":…,"scope":…,"topic":"shareIn","source":…} | strict sub {"topic":"notify"}
-  "share": [7, 120],
+  "share": [7],
   "share-files": [7],
   "share-new-chat": [7],
   // 2: unsub {"topic":"status"} | strict sub {"topic":"workspace","workspace":…}
@@ -102,7 +115,10 @@ let pace_splits_known : Map[String, Array[Int]] = {
   // 1: - | strict sub {"topic":"stationNet","station":…}
   "settings-add-station": [7],
   // 1: unsub {"topic":"doing"} | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
-  "settings-run-settings": [7],
+  // settings-run-settings at 120 (#5519): the chat page's chatJobs and picture go out between frames at 1147.3
+  // ms, as a message of the core is taken as it comes, chatJobs first; the strict pass sends them as its frame at
+  // 1133.3 is built, picture first; gone with what a page reads said as it is made
+  "settings-run-settings": [7, 120],
   // 1: call picture {"url":…} | strict unsub {"topic":"driveTransfers","workspace":…}
   "sheets-sinking": [7],
   // 1: - | strict call composer.starting {"key":…,"starting":true}
@@ -119,4 +135,25 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "wide-switcher": [7],
   // 1: - | strict call cache.usage {}
   "workspace-members": [7],
+}
+
+///|
+/// The flows whose strict pass asks what their run did not, known, by trace: each ask exactly, in its order, at its
+/// moment on the app's clock; any other is the flow's failure as ever, and one that asks it no more fails till it is
+/// taken out. Only falls (the coordinator of the migration, 2026-11-11: no ask allowed by its kind, no trace recorded
+/// again over one).
+// kept across runs: a value
+let strict_diverged_known : Map[String, Array[(Double, String)]] = {
+  // lock-wait (#5519): what the lock says taken between frames, at the moment it comes, and the page it shows let
+  // go of what it read then, the page in its place taking it only in the next frame: at 1066 ms the lock's first
+  // value (safe mode on) takes Home away for the waiting page, Home's driveTransfers let go (the waiting page's frame
+  // at 1066.7 asks it again); at 22150 its delta (safe mode off) takes the waiting page away, its doing let go and
+  // asked again by Home's frame at 22166.7. The run's device took each in the frame that built the next page, behind
+  // a message before it, so nothing was let go. Gone with #5135 (what is read kept by its topic while a page is
+  // covered), whose merge takes this out.
+  "lock-wait": [
+    (1066.0, "{\"id\":13,\"unsubscribe\":true}"),
+    (22150.000000000004, "{\"id\":12,\"unsubscribe\":true}"),
+    (22166.666666666668, "{\"id\":25,\"subscribe\":{\"topic\":\"doing\"},\"keyed\":true}"),
+  ],
 }

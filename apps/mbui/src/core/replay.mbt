@@ -62,6 +62,8 @@ pub struct Replay {
   priv mut next_in : Int
   priv mut client : Client?
   priv diverged : Array[String]
+  // (the moment each of them was asked, on the app's clock)
+  priv diverged_at : Array[Double]
   priv fuzzy : Array[String]
   /// the wall clock as far as the run had come by what was given: the latest of the given messages' (so the same
   /// whatever order what may come at once was given in)
@@ -333,6 +335,7 @@ pub fn Replay::parse(log : String) -> Replay {
     next_in: 0,
     client: None,
     diverged: [],
+    diverged_at: [],
     fuzzy: [],
     wall: 0.0,
     walls: [],
@@ -698,7 +701,7 @@ pub fn Replay::deliver(
         }
         n += 1
       }
-      None => self.diverged.push("came for an ask not made again: " + e.msg.stringify())
+      None => self.diverge("came for an ask not made again: " + e.msg.stringify())
     }
     self.advance()
   }
@@ -1177,6 +1180,23 @@ pub fn Replay::diverged(self : Replay) -> Array[String] {
 }
 
 ///|
+/// Each of them with the moment it was asked, on the app's clock (@hostapi.now): for a flow whose strict pass is known
+/// to ask them (sfreplay's strict_diverged_known), held to them and that moment.
+pub fn Replay::diverged_at(self : Replay) -> Array[(Double, String)] {
+  let out = []
+  for i, d in self.diverged {
+    out.push((self.diverged_at[i], d))
+  }
+  out
+}
+
+///|
+fn Replay::diverge(self : Replay, text : String) -> Unit {
+  self.diverged.push(text)
+  self.diverged_at.push(@hostapi.now())
+}
+
+///|
 /// The run's asks the app has not made again (yet), in their order, the skipped ones and the reports aside: at a test's
 /// end, what the run did that this one did not.
 pub fn Replay::unmade(self : Replay) -> Array[String] {
@@ -1220,12 +1240,12 @@ pub fn Replay::has_jobs_summary(self : Replay) -> Bool {
 fn Replay::out(self : Replay, text : String) -> Unit {
   let msg = @json.parse(text) catch {
     _ => {
-      self.diverged.push(text)
+      self.diverge(text)
       return
     }
   }
   guard msg is Object(m) else {
-    self.diverged.push(text)
+    self.diverge(text)
     return
   }
   let kind = kind_of(m)
@@ -1369,7 +1389,7 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       self.unasked_reports.push(text)
       return
     }
-    self.diverged.push(text)
+    self.diverge(text)
     // (a call the run did not make is answered all the same by a live backend: a scripted run waits for it too)
     if kind == "call" {
       self.asked.push(name_of(m))

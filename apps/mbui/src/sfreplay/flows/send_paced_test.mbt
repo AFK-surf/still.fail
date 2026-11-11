@@ -30,7 +30,10 @@ test "62-send-paced" {
     f.see_n(2, "做完了 064618")
     f.see("answered the question")
     f.run_for(@sfapp.emit_out_ms + @ui.move_most_ms)
-    assert_true(f.t.at_end())
+    // (the strict pass's to judge: a pace pass split before it may have no list on screen to ask)
+    if f.judges() {
+      assert_true(f.t.at_end())
+    }
     f.end()
   })
 }

@@ -115,9 +115,10 @@ test "window tree: a part whose leaving ended at 300, a message at 350 setting w
     if frame_at_300 {
       t.frame_at(t0 + 300.0)
     }
+    // (posted at 350: told then, as it is posted, the frame at 350 drawn after it)
+    t.advance(t0 + 350.0 - t.fake.time)
     let before = runs.val
     t.post("settle-test", "{}")
-    // (taken by the frame at 350, the first after it came)
     t.frame_at(t0 + 350.0)
     (s.get(), runs.val - before)
   }

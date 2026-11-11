@@ -783,6 +783,12 @@ pub fn Client::unread(self : Client, name : String) -> Unit {
 }
 
 ///|
+/// Whether call `name`'s answers are taken as they come: said (Client::said) or read by nobody (Client::unread).
+pub fn Client::taken_as_they_come(self : Client, name : String) -> Bool {
+  self.said_names.contains(name) || self.unread_names.contains(name)
+}
+
+///|
 /// The answer of a call `name` changes only signals (what is done with it sets them and nothing else a frame reads:
 /// a draft's words told, `composer.text`), so it may be taken as it comes (Client::call_said): what read those signals
 /// is built again, nothing else; awaited as any call. Said once, as the app starts.

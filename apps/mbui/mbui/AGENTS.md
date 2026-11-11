@@ -163,7 +163,10 @@ yet and you can add one, add it.
   (`MB_OUTSIDE_POSTED`: ui's `messages_between`, which takes what changes only signals then), never left for a frame to
   take as it begins: there the frame has brought the window's tree and read what it does again before what came is
   taken, and a change only the tree reads went undrawn till something else built the frame whole (the web's and
-  Linux's hosts, till 2026-11-11). The Tester's fake host tells it as each frame is about to begin. What each host's
+  Linux's hosts, till 2026-11-11). The Tester's fake host tells it at the moment it is posted on its clock, between
+  frames, in the order posted, never as the next frame begins: what comes at a moment comes at it at every rate of
+  frames (`tester_host_wbtest`'s "told at its moment"; the coordinator of the migration, 2026-11-11: a replay had every
+  message wait for a frame a device's would not, and counted that against the app). What each host's
   check holds: the Tester's every replay; Linux's `host_contract.sh linux posted` (told between frames); the web's
   `test/web/posted.test.mjs` (told between frames, and before an input that came after it). What the window's tree
   was told in a frame is drawn by that frame whenever in it it was told (ui's `view_owes`: its changes waiting count,

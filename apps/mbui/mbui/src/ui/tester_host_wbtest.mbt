@@ -256,10 +256,10 @@ fn still_view(c : Ctx) -> Unit {
 }
 
 ///|
-/// A timer a message's said handler sets (taken as it comes, as the frame begins, before it is said built whole or
-/// not), the message posted long after the last frame and the view still: due from that frame's moment, and only the
-/// frames asked for drawn, the host woken for it.
-test "a timer set by a message's said handler, the view still: due from the frame that took it, the host woken" {
+/// A timer a message's said handler sets (taken as it comes, at the moment it is posted, between frames), the message
+/// posted long after the last frame and the view still: due from that moment, and only the frames asked for drawn, the
+/// host woken for it.
+test "a timer set by a message's said handler, the view still: due from the moment it was posted, the host woken" {
   let (t, _, fired) = idle_tester()
   let taken : Array[Double] = []
   on_message_said("test.timer_said", fn(_, _) {
@@ -268,7 +268,7 @@ test "a timer set by a message's said handler, the view still: due from the fram
     true
   })
   t.record_host()
-  let first = whole_ms(t.tick_after(t.time()))
+  let first = whole_ms(t.time())
   t.post("test.timer_said", "{}")
   t.run_as_host(timers_fired_ms, skip_unasked=true)
   assert_eq(taken, [first])
@@ -279,7 +279,7 @@ test "a timer set by a message's said handler, the view still: due from the fram
 
 ///|
 /// The same, the said handler setting only a signal and an effect of it setting the timer.
-test "a timer set by an effect of a signal a message's said handler set: due from the frame that took it" {
+test "a timer set by an effect of a signal a message's said handler set: due from the moment it was posted" {
   let (t, _, fired) = idle_tester()
   let taken : Array[Double] = []
   let came = @signals.signal(0)
@@ -294,7 +294,7 @@ test "a timer set by an effect of a signal a message's said handler set: due fro
     true
   })
   t.record_host()
-  let first = whole_ms(t.tick_after(t.time()))
+  let first = whole_ms(t.time())
   t.post("test.timer_said_signal", "{}")
   t.run_as_host(timers_fired_ms, skip_unasked=true)
   stop()
@@ -756,4 +756,60 @@ test "a moment said on a device's clock of days: drawn to the first of the displ
       assert_true(n >= 2 && drawn[n - 1] == first && drawn[n - 2] < target && t.time() == first, msg=said)
     }
   }
+}
+
+///|
+/// What the fake host is posted is told at the moment it is posted on its clock, between frames, as a device's host
+/// tells it (MB_OUTSIDE_POSTED), in the order posted: never as the next frame begins. So a message posted at a moment
+/// comes at that moment at any rate of frames (run again at 60, 120, 24 and 7 a second: MBUI_TEST_FPS), and so does
+/// what it sets off.
+test "what is posted between frames is told at its moment, in its order, at any rate" {
+  let (t, start, _) = idle_tester()
+  let told : Array[(String, Double)] = []
+  on_message_said("test.told_at", fn(json, _) {
+    told.push((json, runtime().now().to_double()))
+    true
+  })
+  // (moments on no rate's frame grid: posts between two frames whatever the rate)
+  let first_gap_ms = 37.0
+  let second_gap_ms = 101.0
+  let after_last_ms = 10.0
+  t.post("test.told_at", "a")
+  t.run_for(first_gap_ms)
+  t.post("test.told_at", "b")
+  t.post("test.told_at", "c")
+  t.run_for(second_gap_ms)
+  t.post("test.told_at", "d")
+  t.run_for(after_last_ms)
+  assert_eq(told, [
+    ("a", start),
+    ("b", start + first_gap_ms),
+    ("c", start + first_gap_ms),
+    ("d", start + first_gap_ms + second_gap_ms),
+  ])
+}
+
+///|
+/// What the fake host is to do at a moment of its own (FakeHost::due) is done at that moment, whatever the frames: the
+/// clock stops there (run_for at any rate of frames: MBUI_TEST_FPS), several at one moment in the order said, one said
+/// for now done before the clock goes on.
+test "what the fake host does at a moment of its own: done then, in its order, at any rate" {
+  let (t, start, _) = idle_tester()
+  let done : Array[(String, Double)] = []
+  let at = fn(name : String) { fn() { done.push((name, runtime().now().to_double())) } }
+  // (two moments of the fake host's own, neither on any rate's frame grid, and a span past both)
+  let first_due_ms = 7.0
+  let later_due_ms = 20.0
+  let past_both_ms = 100.0
+  t.fake.due(start + later_due_ms, "b", at("b"))
+  t.fake.due(start + later_due_ms, "c", at("c"))
+  t.fake.due(start + first_due_ms, "a", at("a"))
+  t.fake.due(start, "now", at("now"))
+  t.run_for(past_both_ms)
+  assert_eq(done, [
+    ("now", start),
+    ("a", start + first_due_ms),
+    ("b", start + later_due_ms),
+    ("c", start + later_due_ms),
+  ])
 }

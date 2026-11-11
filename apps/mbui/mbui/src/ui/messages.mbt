@@ -37,6 +37,13 @@ pub fn on_message_said(channel : String, said : (String, Bytes?) -> Bool) -> Uni
 }
 
 ///|
+/// Whether what comes on `channel` is offered to a `said` as it comes (on_message_said): for a test holding that a
+/// replay takes the core's messages as a device does (still.fail's sfreplay).
+pub fn message_said_on(channel : String) -> Bool {
+  message_said.contains(channel)
+}
+
+///|
 /// A Tester's messages posted and not taken by a frame yet (the fake host's queue), oldest first.
 let fake_posted : Array[(String, String, Bytes?)] = []
 

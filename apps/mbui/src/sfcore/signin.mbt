@@ -80,13 +80,36 @@ pub let state : SignIn = {
 }
 
 ///|
+/// How the app takes what its core says, the same on a device (start) and in a replay (sfreplay's Flow::start): each
+/// message posted to mbui's queue (core_native.c), handed here as the next frame begins; a topic's change alone, and the
+/// answers of the calls `said` names, taken as they come (what read them built again, not the whole frame, mbui's
+/// messages.mbt); the answers of those `unread` names read by nobody; the values of each `quiet` call its test says
+/// change nothing a frame reads. The app's lists are sfapp's `core_taking`.
+pub fn listen(taking : (Array[String], Array[String], Array[(String, (Json) -> Bool)])) -> Unit {
+  let (said, unread, quiet) = taking
+  @ui.on_message("core", @core.receive)
+  @ui.on_message_said("core", @core.receive_said)
+  for q in quiet {
+    @core.quiet(q.0, q.1)
+  }
+  for name in unread {
+    @core.unread(name)
+  }
+  for name in said {
+    @core.said(name)
+  }
+}
+
+///|
+/// What `start` listens with (listen): the app's lists, given by its main before it starts (sfapp's `core_taking`).
+// kept across runs: set once by the main as it starts
+pub let listening : Ref[(Array[String], Array[String], Array[(String, (Json) -> Bool)])] = Ref(([], [], []))
+
+///|
 /// Starts the core, its changes drawn in the next frame, and reads what the environment asks of signing in. False
 /// when this build has no core linked in (the web's, a fixture's).
 pub fn start() -> Bool {
-  // what the core says is posted to mbui's queue (core_native.c), which hands it here as the next frame begins
-  @ui.on_message("core", @core.receive)
-  // (a topic's change alone taken as it comes: what read it built again, not the whole frame, mbui's messages.mbt)
-  @ui.on_message_said("core", @core.receive_said)
+  listen(listening.val)
   // a screen is settled only once what it asked of the core is in (mbui's effect.mb outside)
   @core.track(what => @ui.runtime().outside_start(what), t => @ui.runtime().outside_end(t))
   let cloud = @ui.env("MBUI_CLOUD")

@@ -2146,6 +2146,8 @@ impl @hostapi.Host for FakeHost with set_outside(_, _) {
 /// A test's finger (kinds as on_pointer's: 0 down, 1 moved, 2 up, 3 called off; 4, 5, 6 a second finger; 8 the first
 /// let go, the second the first from here), taken as a host takes it where a page's view is.
 fn finger(kind : Int, x : Double, y : Double) -> Unit {
+  // (what was posted before this input told first, at its moment: posted_tell)
+  posted_tell()
   let f = match fake.val {
     Some(f) => f
     None => return on_pointer(kind, x, y, 0)
@@ -2225,6 +2227,7 @@ fn finger_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -
     }
     None => ()
   }
+  posted_tell()
   on_wheel(x, y, dx, dy, phase)
 }
 
@@ -2297,5 +2300,80 @@ impl @hostapi.Host for FakeHost with lines_on_pixels(_) {
   match text_table.val {
     Some(t) => t.metrics.values().any(fn(r) { r.length() > 5 && r[5] == 1.0 })
     None => false
+  }
+}
+
+///|
+/// What the fake host was posted and has not told yet, told now, between frames: before its clock moves on (a frame
+/// drawn later, the clock advanced) and before an input it is given, so at the moment it was posted, as a device's host
+/// tells it as it is posted (MB_OUTSIDE_POSTED), not as the next frame begins. What is posted at one moment is told as
+/// one, in the order posted, as a device's host takes all that came by the time it is told (messages_between).
+fn posted_tell() -> Unit {
+  if in_frame.val || frame_running.val {
+    return
+  }
+  if fake_posted.length() > 0 {
+    on_outside(outside_posted, 0, 0)
+  }
+  // (and what the fake host does at a moment of its own come by now: FakeHost::due, each as one event, in its order)
+  let now = match fake.val {
+    Some(f) => f.time
+    None => return
+  }
+  while fake_dues.length() > 0 && fake_dues[0].0 <= now + 1.0e-9 {
+    let (_, _, _, f) = fake_dues.remove(0)
+    f()
+    if fake_posted.length() > 0 {
+      on_outside(outside_posted, 0, 0)
+    }
+  }
+}
+
+///|
+/// What the fake host is to do at moments of its clock (FakeHost::due): when, in what order said, what (named for what
+/// says it), done.
+// kept across runs: emptied by each Tester (Tester::new)
+let fake_dues : Array[(Double, Int, String, () -> Unit)] = []
+
+///|
+// kept across runs: only counted on
+let fake_due_count : Ref[Int] = Ref(0)
+
+///|
+/// `f` done by the fake host at `at` on its clock, between frames, as an event from outside that comes then (a picked
+/// file, a native call's answer, an operation done, as a device's host tells each at its moment): at the moment the
+/// clock comes to it, however it is run on (run_for and come_to stop there at any rate of frames), after what is
+/// going on now where `at` is now; several at one moment in the order said. `what` names it where it is said.
+pub fn FakeHost::due(self : FakeHost, at : Double, what : String, f : () -> Unit) -> Unit {
+  ignore(self)
+  fake_due_count.val += 1
+  let entry = (at, fake_due_count.val, what, f)
+  let mut i = fake_dues.length()
+  while i > 0 && (fake_dues[i - 1].0 > at || (fake_dues[i - 1].0 == at && fake_dues[i - 1].1 > entry.1)) {
+    i -= 1
+  }
+  fake_dues.insert(i, entry)
+}
+
+///|
+/// The fake host's next moment of its own (FakeHost::due) after `now`, +inf none.
+fn fake_due_next(now : Double) -> Double {
+  for d in fake_dues {
+    if d.0 > now {
+      return d.0
+    }
+  }
+  @double.infinity
+}
+
+///|
+/// The fake host's clock on to each of its moments (FakeHost::due) up to `t`, what is due at each done there, before the
+/// clock goes on.
+fn fake_dues_to(f : FakeHost, t : Double) -> Unit {
+  while !in_frame.val && !frame_running.val && fake_dues.length() > 0 && fake_dues[0].0 <= t + 1.0e-9 {
+    if fake_dues[0].0 > f.time {
+      f.time = fake_dues[0].0
+    }
+    posted_tell()
   }
 }

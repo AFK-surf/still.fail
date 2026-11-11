@@ -316,6 +316,7 @@ fn Tester::frames_on_clock(self : Tester) -> Bool {
 /// display's frames up to `t` drawn on the way, none at or past it drawn ahead of it; `t` itself no frame of its own.
 /// Without a host's frames, run_for.
 pub fn Tester::come_to(self : Tester, t : Double) -> Unit {
+  posted_tell()
   if !self.host_frames {
     if t > self.fake.time {
       self.run_for(t - self.fake.time)
@@ -327,6 +328,7 @@ pub fn Tester::come_to(self : Tester, t : Double) -> Unit {
   while self.tick_after(self.fake.time) <= t + due_hair {
     self.clock_frame()
   }
+  fake_dues_to(self.fake, t)
   if t > self.fake.time {
     self.fake.time = t
   }
@@ -378,6 +380,11 @@ fn Tester::next_due(self : Tester) -> Double {
     if at > now && at < due && self.fake.images.get(id) is Some(im) && im.state == 0 {
       due = at
     }
+  }
+  // (and what the fake host does at a moment of its own: FakeHost::due)
+  let own = fake_due_next(now)
+  if own < due {
+    due = own
   }
   // (and what the outside the test stands for says next: a kept message, at its moment)
   match outside_due.val {
@@ -569,7 +576,9 @@ pub fn Tester::cycles(self : Tester) -> Array[String] {
 ///|
 /// The focused field emptied, as a scripted run's `clear` empties it: all of it picked, then taken out.
 pub fn Tester::clear(self : Tester) -> Unit {
+  posted_tell()
   on_key(key_select_all, 0)
+  posted_tell()
   on_key(key_backspace, 0)
   self.draw()
 }
@@ -613,6 +622,7 @@ pub fn Tester::field_words(self : Tester) -> String {
 /// as the system gives a paste; the frames it causes drawn.
 pub fn Tester::paste(self : Tester, words : String) -> Unit {
   h_clipboard_set(words)
+  posted_tell()
   on_text(text_paste, words, 0, 0)
   self.draw()
 }
@@ -623,6 +633,7 @@ pub fn Tester::paste(self : Tester, words : String) -> Unit {
 pub fn Tester::key_named(self : Tester, name : String) -> Bool {
   match key_named(name) {
     Some((code, mods)) => {
+      posted_tell()
       on_key(code, mods)
       self.draw()
       true

@@ -197,8 +197,9 @@ pub fn Flow::start(
   said("height", h_said, h)
   said("platform", platform_said.map(fn(p) { p.to_double() }), platform.to_double())
   emit_start(seed, w, h, if platform == 2 { env + [("MBUI_PLATFORM", "android")] } else { env })
-  // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
-  @ui.on_message("core", @core.receive)
+  // what the core says taken as the app takes it on a device (sfcore.start's listen: through mbui's queue, what changes
+  // only signals as it comes)
+  @sfcore.listen(@sfapp.core_taking())
   // (the app started with what the run's was: its trace's env, then what the test says of its own; a trace that does
   // not say it is one recorded before it was kept, to record again: never run as if started with nothing)
   if r.env().is_empty() && emit_path() == "" {
@@ -1027,8 +1028,9 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
     if r.left() > 0 {
       why.push("\{r.left()} messages in not given, the next waiting for \{r.waiting().unwrap_or("-")}")
     }
-    if r.diverged().length() > 0 {
-      why.push("asked what the run did not: " + r.diverged().join(", "))
+    match strict_diverged_said(pass_trace.val, r.diverged_at()) {
+      Some(w) => why.push(w)
+      None => ()
     }
     if r.fuzzy().length() > 0 {
       why.push("asked with other params: " + r.fuzzy().join(", "))
@@ -1829,4 +1831,37 @@ pub fn Flow::turns_followed(self : Flow, least? : Double = 1.0) -> Int {
     from = p.1
   }
   turns
+}
+
+///|
+/// What a strict pass asked that its run did not, held to what is known of its flow (strict_diverged_known): None where
+/// it asked nothing else, or exactly the known asks at their moments, in their order; else what to say.
+fn strict_diverged_said(flow : String, asked : Array[(Double, String)]) -> String? {
+  match strict_diverged_known.get(flow) {
+    None =>
+      if asked.length() > 0 {
+        Some("asked what the run did not: " + asked.map(fn(a) { a.1 }).join(", "))
+      } else {
+        None
+      }
+    Some(known) => {
+      let mut same = known.length() == asked.length()
+      for i, k in known {
+        if same && ((k.0 - asked[i].0).abs() >= 1.0e-6 || k.1 != asked[i].1) {
+          same = false
+        }
+      }
+      if same {
+        println("STRICT-KNOWN \{flow}: " + asked.map(fn(a) { "\{a.1} at \{a.0}" }).join(", "))
+        None
+      } else if asked.length() == 0 {
+        Some("its strict pass asks nothing the run did not now: take it out of strict_diverged_known (pace_known.mbt)")
+      } else {
+        Some(
+          "asked what the run did not, not as strict_diverged_known says (pace_known.mbt): " +
+          asked.map(fn(a) { "\{a.1} at \{a.0}" }).join(", "),
+        )
+      }
+    }
+  }
 }
