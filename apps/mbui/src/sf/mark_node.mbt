@@ -184,3 +184,56 @@ pub fn workspace_badge_node(
   })
   |> ignore
 }
+
+///|
+/// A thing's mark (tile_avatar's, as a node: a repository, a project) in `parent`, `size` across, a rounded square
+/// (`corner` its own where it stands in a row's corner, else a tile's .3 of its side): `picture` (a data URL of its own,
+/// its favicon or touch icon) once it is decoded at the size it is shown, covering it; else its `name`'s initial on a
+/// colour of its own by `id` (its repository's address), as a face's is, part of the mark (at its size whatever the
+/// system's size of words: mark_words_node's way). Each as it changes.
+#callsite(autofill(loc))
+pub fn tile_avatar_node(
+  parent : @view.View,
+  id : () -> String,
+  name : () -> String,
+  picture : () -> String,
+  size : Double,
+  corner? : Double,
+  loc~ : SourceLoc,
+) -> Unit {
+  let half = size / 2.0
+  let corner = corner.unwrap_or(size * 0.3)
+  parent.box(made_for=loc, words_as_said=true, fn(d) {
+    let key = fn() { data_image(picture()) }
+    let decoded = fn() {
+      let k = key()
+      k != "" && d.image_ready(k, size * d.pixel_scale())
+    }
+    d
+    .width(Is(Some(size)))
+    .height(Is(Some(size)))
+    .radius(Is(corner))
+    .row(Is(true))
+    .lines_up(Is(Some(Middle)))
+    .lies_along(Is(Middle))
+    .ground(By(fn() { if decoded() { transparent_ground } else { avatar_color(id()) } }))
+    |> ignore
+    d.show(decoded, at_once=true, fn(p) {
+      p
+      .width(Is(Some(size)))
+      .height(Is(Some(size)))
+      .radius(Is(corner))
+      .image(By(fn() { Some((key(), "", 8192)) }))
+      .image_covers(Is(true))
+      |> ignore
+    })
+    d.show(fn() { !decoded() }, at_once=true, fn(l) {
+      l
+      .words(By(fn() { initial(name()) }))
+      .words_look(Is({ size: half, weight: 600, line: half, wrap: false, tracking: @view.letters_own, balance: false }))
+      .ink(Is(face_ink))
+      |> ignore
+    })
+  })
+  |> ignore
+}

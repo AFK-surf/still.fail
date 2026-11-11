@@ -2057,6 +2057,7 @@ web-pages.drive.pickThis
 web-pages.drive.pickUnreadable
 web-pages.drive.pin
 web-pages.drive.places
+web-pages.drive.disks
 web-pages.drive.player.back15
 web-pages.drive.player.buffering
 web-pages.drive.player.captionsOff
@@ -2641,6 +2642,15 @@ web-main.preset.browse
 web-main.preset.pickFolder
 web-main.preset.useFolder
 web-main.preset.search
+web-main.preset.clone
+web-main.preset.cloneTitle
+web-main.preset.cloneUrl
+web-main.preset.clonePlaceholder
+web-main.preset.cloneWhere
+web-main.preset.cloneGo
+web-main.preset.cloning
+web-main.preset.cloneFailed
+web-main.preset.choose
 web-pages.screen.debug.app
 web-pages.screen.device.back
 web-pages.screen.debug.paneHide

@@ -32,6 +32,10 @@ pub(all) struct NewFix {
   presets : Array[Json]
   /// The first station's presets not said yet (their topic as a station still to answer has it)
   mut presets_late : Bool
+  /// The first station's repositories being cloned (the `presets` topic's `clones`), and those cloned since, among its
+  /// folders (`candidates`)
+  clones : Array[Json]
+  cloned : Array[Json]
   /// The models starred in the model control (`pick.like`), the first starred first
   liked : Array[String]
   /// MBUI_FIXTURE=newchat-providers…: as crowded, with keys of many providers besides (fix_providers)
@@ -57,6 +61,8 @@ pub let new_fix : NewFix = {
   tall: false,
   preset: "",
   presets_late: false,
+  clones: [],
+  cloned: [],
   presets: [fix_preset_design(), fix_preset("p-tc", "web-app + backend", ["web-app", "backend"], "")],
   liked: [],
   providers: false,
@@ -95,6 +101,37 @@ pub let fix_presets_said : Ref[Int] = Ref(0)
 /// The first station's presets said, late (newchat's `presets_late` let go), as a station answers once it can.
 pub fn fix_presets_say() -> Unit {
   new_fix.presets_late = false
+  fix_presets_said.val += 1
+  @settings.fixture_changed()
+}
+
+///|
+/// The made-up station's clone `id` done (`url`'s repository among its folders) or failed (`error`), as a station tells
+/// it on its `presets` topic.
+pub fn fix_clone_ends(id : String, error? : String = "") -> Unit {
+  guard new_fix.clones.iter().find_first(fn(x) { text(Some(x), "id") == id }) is Some(c) else { return }
+  match c {
+    Object(m) if error != "" => {
+      let failed = m.copy()
+      failed["state"] = "failed"
+      failed["error"] = Json::string(error)
+      new_fix.clones.retain(fn(x) { text(Some(x), "id") != id })
+      new_fix.clones.insert(0, Json::object(failed))
+    }
+    _ => {
+      new_fix.clones.retain(fn(x) { text(Some(x), "id") != id })
+      let name = text(Some(c), "name")
+      new_fix.cloned.push({
+        "path": Json::string("/Users/me/.stillfail/repos/" + name),
+        "name": Json::string(name),
+        "repo": Json::string(text(Some(c), "repo")),
+        "chats": 0.0,
+        "lastAt": 1793500000000.0,
+        "where": Json::string(text(Some(c), "repo")),
+        "cached": true,
+      })
+    }
+  }
   fix_presets_said.val += 1
   @settings.fixture_changed()
 }
@@ -144,7 +181,14 @@ pub fn fix_presets_of(station : String) -> Json {
       ],
     }
   } else {
-    { "presets": Json::array(new_fix.presets), "candidates": fix_candidates() }
+    {
+      "presets": Json::array(new_fix.presets),
+      "candidates": match fix_candidates() {
+        Array(a) => Json::array(a + new_fix.cloned)
+        other => other
+      },
+      "clones": Json::array(new_fix.clones),
+    }
   }
 }
 
@@ -807,6 +851,40 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       n.presets.push(made)
       f.changed()
       Some(Ok(made))
+    }
+    // (one cloned: `acme/notes` it has already; `bad` refused; any other under way, told in its `clones`)
+    "preset.clone" => {
+      let url = text(p, "url")
+      if url == "bad" {
+        return Some(Err({ "code": "invalid", "message": "无法克隆这个地址" }))
+      }
+      let name = match url.rev_find("/") {
+        Some(i) => url.unsafe_substring(start=i + 1, end=url.length())
+        None => url
+      }
+      let repo = if url.has_prefix("https://") { url.unsafe_substring(start=8, end=url.length()) } else { "github.com/" + url }
+      if url == "acme/notes" {
+        return Some(Ok({ "state": "there", "path": "/Users/me/code/notes", "repo": "github.com/acme/notes", "name": "notes" }))
+      }
+      let id = "c-\{n.clones.length() + n.cloned.length() + 1}"
+      let one : Json = {
+        "id": Json::string(id),
+        "url": Json::string(url),
+        "repo": Json::string(repo),
+        "name": Json::string(name),
+        "state": "cloning",
+        "error": "",
+        "by": "me@example.com",
+        "startedAt": 1793500000000.0,
+      }
+      n.clones.insert(0, one)
+      f.changed()
+      Some(Ok(one))
+    }
+    "preset.cloneDrop" => {
+      take("id", fn(s) { n.clones.retain(fn(x) { text(Some(x), "id") != s }) })
+      f.changed()
+      Some(Ok(Json::object({})))
     }
     "preset.delete" => {
       take("id", fn(s) { n.presets.retain(fn(x) { field(Some(x), "id") != Some(Json::string(s)) }) })

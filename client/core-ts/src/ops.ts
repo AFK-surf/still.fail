@@ -97,6 +97,8 @@ export const PARAMS: Record<string, string> = {
   "preset.add": "name:string dirs:json instructions?:string",
   "preset.put": "id:string name:string dirs:json instructions?:string",
   "preset.delete": "id:string",
+  "preset.clone": "url:string",
+  "preset.cloneDrop": "id:string",
   "chats.archived": "",
   "chat.forSession": "session?:string",
   "widget.state": "key:string path:string",
@@ -445,6 +447,14 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("PUT", () => `/presets/${p.at("id")}`, { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "" }, { kind: "presets" });
     case "preset.delete":
       return op("DELETE", () => `/presets/${p.at("id")}`, null, { kind: "presets" });
+    // A repository cloned from git into the station's repository cache, to be picked once there: answers at once
+    // (`{id, url, repo, name, state: "cloning"}`, or `{state: "there", path, repo, name}` when the station has it
+    // already); how it goes comes as the `presets` topic's `clones`.
+    case "preset.clone":
+      return op("POST", () => "/presets/clone", { url: p.str("url") }, { kind: "presets" });
+    // A clone that failed forgotten, or one under way stopped.
+    case "preset.cloneDrop":
+      return op("DELETE", () => `/presets/clones/${p.at("id")}`, null, { kind: "presets" });
     case "chats.archived":
       return op("GET", () => "/chats?archived=1", null, NONE);
     case "chat.forSession":

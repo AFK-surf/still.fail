@@ -2,7 +2,8 @@
 // one is made; the one picked for a new chat there is kept on this device and goes with the chat as it is made.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
+import { apply as applyOps } from "../src/delta.ts";
+import { answers, apply, call, readsOf, subscribe, v } from "./helpers.ts";
 import { base, overview, started } from "./station-fixture.ts";
 
 const S = "ws/st";
@@ -120,5 +121,52 @@ test("presets_shown_are_read_again_as_the_station_tells_they_changed", async () 
   await s.host.settle();
   apply(s.host, values);
   assert.deepEqual(v(values, 1).candidates.map((c: { name: string }) => c.name), ["app"]);
+  s.core.close();
+});
+
+test("a_repository_cloned_onto_the_station_shows_as_it_goes_and_an_older_station_sends_no_clones", async () => {
+  // (a station from before sends no `clones`: none)
+  const said: Record<string, unknown> = { ...base(), "GET /presets": { presets: [], candidates: [candidate] } };
+  const s = await started(said as never);
+  const ui = s.core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(s.core, ui, 1, { topic: "presets", station: S });
+  await s.host.settle();
+  apply(s.host, values);
+  assert.deepEqual(v(values, 1).clones, []);
+
+  // Started: the station answers at once, the page reads the list again and shows it cloning.
+  const cloning = { id: "c1", url: "https://github.com/acme/lib.git", repo: "github.com/acme/lib", name: "lib", state: "cloning", by: "a@x.com", startedAt: 5 };
+  said["POST /presets/clone"] = cloning;
+  said["GET /presets"] = { presets: [], candidates: [candidate], clones: [cloning] };
+  call(s.core, ui, 2, "preset.clone", { station: S, url: "acme/lib" });
+  await s.host.settle();
+  const emitted = s.host.takeEmitted();
+  const answer = answers(emitted, 2) as { ok?: { id: string; state: string } } | undefined;
+  assert.equal(answer?.ok?.state, "cloning", JSON.stringify(answer));
+  assert.equal(answer?.ok?.id, "c1");
+  const asked = s.host.requests.find((r) => r.method === "POST" && r.url.endsWith("/admin/api/presets/clone"));
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(asked!.body!)), { url: "acme/lib" });
+  for (const [, message] of emitted) {
+    const m = message as Record<string, unknown>;
+    if (m.id !== 1) continue;
+    if ("value" in m) values.set(1, m.value);
+    else if ("delta" in m) values.set(1, applyOps(values.get(1), m.delta as never));
+  }
+  assert.deepEqual(v(values, 1).clones.map((c: { name: string; state: string; error: string }) => [c.name, c.state, c.error]), [["lib", "cloning", ""]]);
+
+  // Failed, then dropped.
+  said["GET /presets"] = { presets: [], candidates: [candidate], clones: [{ ...cloning, state: "failed", error: "fatal: repository not found" }] };
+  s.push("presets", {});
+  await s.host.settle();
+  apply(s.host, values);
+  assert.equal(v(values, 1).clones[0].error, "fatal: repository not found");
+  said["DELETE /presets/clones/c1"] = { ok: true };
+  said["GET /presets"] = { presets: [], candidates: [candidate], clones: [] };
+  call(s.core, ui, 3, "preset.cloneDrop", { station: S, id: "c1" });
+  await s.host.settle();
+  apply(s.host, values);
+  assert.ok(s.host.requests.some((r) => r.method === "DELETE" && r.url.endsWith("/admin/api/presets/clones/c1")));
+  assert.deepEqual(v(values, 1).clones, []);
   s.core.close();
 });

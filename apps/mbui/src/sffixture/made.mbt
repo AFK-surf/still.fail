@@ -26,6 +26,8 @@ pub fn fixture_reset() -> Unit {
   new_fix.tall = false
   new_fix.preset = ""
   new_fix.presets_late = false
+  new_fix.clones.clear()
+  new_fix.cloned.clear()
   new_fix.liked.clear()
   fix_forgotten.clear()
   new_fix.providers = false

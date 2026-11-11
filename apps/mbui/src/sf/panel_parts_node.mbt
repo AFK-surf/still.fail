@@ -118,6 +118,16 @@ priv struct PanelField {
 }
 
 ///|
+/// Whether a panel gives its field `self` the keys as it opens, shown as a sheet from the foot (`as_sheet`) or in the
+/// window's middle or beside what opened it: a field it is for (panel_opens_in_node), always; a search at hand
+/// (panel_search_at_hand_node), only where it is no sheet and the app's native input is keys and a mouse. With a finger
+/// the keys given are an input method raised over what it lists, in the window's middle (a tablet, a fold laid open) as
+/// on a sheet.
+fn PanelField::keyed(self : PanelField, as_sheet : Bool) -> Bool {
+  self.sheet || (!as_sheet && !(native_input() is Finger))
+}
+
+///|
 /// `field`, a field of what a panel's body is made of, has the keyboard's focus as its panel opens, however the
 /// presenters show it (in the window's middle, a sheet from its foot, beside what opened it), the input method up for it
 /// with a finger: given it by the panel's layer as it opens (View::focus_opens), as anything a layer opens on is, given
@@ -138,15 +148,19 @@ pub fn panel_opens_in_node(field : @view.View) -> Unit {
 
 ///|
 /// `field`, a search over what a panel's body lists, has the keyboard's focus as its panel opens where the presenters
-/// show it in the window's middle or beside what opened it (typed into at once there), as panel_opens_in_node's has
-/// (View::focus_opens, given back as it goes); not on a sheet from its foot, where what it lists is looked at first
-/// and an input method raised would cover it: there the focus is left where it is, the field taken when it is pressed.
+/// show it in the window's middle or beside what opened it and the app's native input is keys and a mouse (typed into
+/// at once there), as panel_opens_in_node's has (View::focus_opens, given back as it goes); not on a sheet from its
+/// foot, nor anywhere the native input is a finger (a tablet's dialog in the middle, a fold laid open), where what it
+/// lists is looked at first and an input method raised would cover it: there the focus is left where it is (a dialog
+/// in the middle keeps it on its own ground, no field of it), the field taken when it is pressed (PanelField::keyed).
 /// The old frame's presenters' `field` (panel's `field`: given it where it is not a sheet). Said once as the panel's
 /// body is made; a page never says how its panel is shown.
 ///
 /// | caller | its field | shown |
 /// |---|---|---|
 /// | sfpages outline.mbt, 对话目录 from its round button | what it finds | a sheet on 小屏, beside the button |
+/// | sfdesk drive_dialogs.mbt, the folder picker | its filter | a sheet on 小屏, a dialog in the middle |
+/// | sfpages presets.mbt, 添加目录 | its search | a sheet on 小屏, a dialog in the middle |
 /// | (the old frame's panels that say `field`, as they move over) | | |
 pub fn panel_search_at_hand_node(field : @view.View) -> Unit {
   match field.lent(panel_field_lent) {

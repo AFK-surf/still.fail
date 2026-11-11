@@ -560,6 +560,35 @@ pub fn open_mode(mode : String) -> Unit {
       "newchat-preset-add" => @sfpages.new_chat_ask("preset-add")
       "newchat-preset-new-add" => @sfpages.new_chat_ask("preset-new-add")
       "newchat-preset-new-browse" => @sfpages.new_chat_ask("preset-new-browse")
+      // (the picker in a folder of repositories; 从 Git 克隆; a new one's dialog with a clone under way and one failed)
+      "newchat-preset-new-browse-repos" => @sfpages.new_chat_ask("preset-new-browse-repos")
+      "newchat-preset-new-clone" => @sfpages.new_chat_ask("preset-new-clone")
+      "newchat-preset-new-clones" => {
+        let clones : Array[Json] = [
+            {
+              "id": "c-bad",
+              "url": "acme/private",
+              "repo": "github.com/acme/private",
+              "name": "private",
+              "state": "failed",
+              "error": "仓库不存在或没有权限",
+              "by": "me@example.com",
+              "startedAt": 1793500000000.0,
+            },
+            {
+              "id": "c-web",
+              "url": "acme/shop",
+              "repo": "github.com/acme/shop",
+              "name": "shop",
+              "state": "cloning",
+              "error": "",
+              "by": "me@example.com",
+              "startedAt": 1793500000000.0,
+            },
+          ]
+        @sffixture.new_fix.clones.push_iter(clones.iter())
+        @sfpages.new_chat_ask("preset-new-clones")
+      }
       "newchat-preset-picked" => @sffixture.new_fix.preset = "p-sf"
       "newchat-model" | "newchat-crowded-model" | "newchat-tall-model" | "newchat-crowded-model-liked" | "newchat-providers-model" | "newchat-providers-model-liked" | "newchat-providers-model-many" | "newchat-providers-model-far" =>
         @sfpages.new_chat_ask("model")

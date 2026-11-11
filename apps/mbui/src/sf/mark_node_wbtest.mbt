@@ -210,3 +210,31 @@ test "a mark's picture that is a GIF moving as a node, as the old view's: its fr
   let all = old.join(" ")
   assert_true(all.contains("m.gif#0") && all.contains("m.gif#1"), msg=all)
 }
+
+///|
+test "a thing's tile as a node, as the old view's: its initial on its colour, in its corner" {
+  let old = @ui.Tester::new(
+    fn(c) {
+      c.box(fn() {
+        tile_avatar(c, "github.com/acme/web-app", "web-app", "", 34.0, corner=small_corner)
+        tile_avatar(c, "github.com/acme/notes", "notes", "", 20.0)
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=200.0,
+  )
+  old.draw()
+  let was = marks_drawn(old)
+  let t = @ui.Tester::new(fn(_c) {  }, w=200.0, h=200.0)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.lines_up(Is(Some(Start))) |> ignore
+      tile_avatar_node(b, fn() { "github.com/acme/web-app" }, fn() { "web-app" }, fn() { "" }, 34.0, corner=small_corner)
+      tile_avatar_node(b, fn() { "github.com/acme/notes" }, fn() { "notes" }, fn() { "" }, 20.0)
+    })
+    |> ignore
+  })
+  t.draw()
+  assert_eq(marks_drawn(t), was)
+}

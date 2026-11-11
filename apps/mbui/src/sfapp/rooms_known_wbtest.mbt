@@ -58,8 +58,11 @@
 /// chat-things-side has: its tab's close key, in the three wide windows each, 6 more, 303. A film and a song beside a
 /// chat (chat-view-side-video, chat-view-side-audio, 2026-11-11), the same: its tab's close key, 6 more, 309.
 /// An agent's request for the phone swept (chat-phone-lacks, and granted with each step left and connected, 2026-11-11),
-/// what every chat has: its last message's author and time, and a decided card's line opening its history, 112 more, 421.)
-let rooms_known : Map[String, Int] = { "room": 421, "apart": 0, "hover": 0 }
+/// what every chat has: its last message's author and time, and a decided card's line opening its history, 112 more, 421.
+/// A preset's dialog over a new chat swept, and its steps further in (newchat-preset-new and five more, 2026-11-11), what
+/// newchat has under them on a phone and a tablet: the composer's three chips behind the panel, old views, the page
+/// behind counted again, 36 more, 457.)
+let rooms_known : Map[String, Int] = { "room": 457, "apart": 0, "hover": 0 }
 
 ///|
 /// What is off its bar in the faults `rooms` (each `at: rule: …`), None where each rule keeps to it.

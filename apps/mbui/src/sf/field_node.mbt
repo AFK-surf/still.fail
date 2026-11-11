@@ -15,7 +15,8 @@
 /// `disabled()`, faded, taking no press nor the focus (losing it then). `solid`: on a card's ground (input's
 /// `solid`, field_solid): on the canvas's ground, its line the canvas's too, the field's hover grey while it is pointed
 /// at or written in. `end`: what stands in the capsule after what is typed (a search's count), made in a box at its
-/// end. The field's node (what the focus is given to).
+/// end; `lead`: what stands in it before what is typed (a search's mark), made in a box at its start. The field's node
+/// (what the focus is given to).
 pub fn input_node(
   parent : @view.View,
   field : @ui.Field,
@@ -31,6 +32,7 @@ pub fn input_node(
   submitted? : (String) -> Unit = fn(_) {  },
   edited? : (String) -> Unit,
   end? : (@view.View) -> Unit,
+  lead? : (@view.View) -> Unit,
 ) -> @view.View {
   let line = @signals.untracked(fn() { theme().t.body_line })
   field_frame(parent, disabled, row=true, solid~, fn(f) {
@@ -42,6 +44,12 @@ pub fn input_node(
       f.height(Is(Some(menu_row_min))).radius(Is(1.0e6)) |> ignore
     } else {
       f.min_height(By(fn() { Some(theme().control_h) })).radius(By(fn() { field_round() })) |> ignore
+    }
+    // (what stands before what is typed, kept whole, as far from it as a row's parts are: its start's room the field's
+    // own)
+    match lead {
+      Some(l) => f.box(fn(b) { b.shrink(Is(0.0)).margin(Is((0.0, 0.0, field_lead_gap, 0.0))) |> ignore; l(b) }) |> ignore
+      None => ()
     }
     let typed = @ui.field(
       f,
@@ -174,12 +182,17 @@ fn field_frame(
 }
 
 ///|
+/// How far what stands before a field's words is from them (input_node's `lead`).
+let field_lead_gap : Double = 8.0
+
+///|
 /// How far a disabled field is seen (input_box's `disabled{opacity=O55}`).
 let field_disabled_alpha : Double = 0.55
 
 ///|
 /// A field (field's, as nodes) in `parent`: its `label` (13, 500) over what `body` makes in it (the input), 6 apart,
-/// what `aside` makes at its head's end where it is given; on a wide page not in a panel as wide as what is typed in it
+/// what `aside` makes at its head's end where it is given; under it what is wrong (`error`, 12 red) or else a `hint`
+/// (12, muted), as each says it now (labelled_field_node's); on a wide page not in a panel as wide as what is typed in it
 /// needs (field_box_wide), else as wide as where it is.
 #callsite(autofill(loc))
 pub fn field_node(
@@ -187,6 +200,8 @@ pub fn field_node(
   label : () -> String,
   body : (@view.View) -> Unit,
   aside? : (@view.View) -> Unit,
+  hint? : () -> String = fn() { "" },
+  error? : () -> String = fn() { "" },
   loc~ : SourceLoc,
 ) -> Unit {
   parent.box(made_for=loc, fn(f) {
@@ -209,6 +224,8 @@ pub fn field_node(
     })
     |> ignore
     body(f)
+    f.show(fn() { error() != "" }, fn(w) { words_node(w, error, fn() { field_error }) |> ignore })
+    f.show(fn() { error() == "" && hint() != "" }, fn(w) { words_node(w, hint, fn() { field_hint }) |> ignore })
   })
   |> ignore
 }

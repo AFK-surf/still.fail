@@ -321,7 +321,6 @@
     "page-screen": {},
     "page-look": {
       "src/sfapp/settings/home.mbt": 2,
-      "src/sfdesk/drive_dialogs.mbt": 2,
       "src/sfdesk/files_start.mbt": 4,
       "src/sfdesk/frame.mbt": 2,
       "src/sfdesk/places.mbt": 1,
@@ -470,7 +469,6 @@
       "src/sfapp/settings/parts.mbt": 2,
       "src/sfapp/share.mbt": 1,
       "src/sfbase/viewer.mbt": 3,
-      "src/sfdesk/drive_dialogs.mbt": 2,
       "src/sfdesk/drive_pane.mbt": 2,
       "src/sfdesk/files_nav.mbt": 1,
       "src/sfdesk/jobs.mbt": 3,
@@ -514,7 +512,6 @@
       "src/sfapp/sheets.mbt": 4,
       "src/sfdesk/attention.mbt": 1,
       "src/sfdesk/drag.mbt": 1,
-      "src/sfdesk/drive_dialogs.mbt": 1,
       "src/sfpages/accounts.mbt": 2,
       "src/sfpages/attach.mbt": 1,
       "src/sfpages/decision.mbt": 1,

@@ -850,6 +850,10 @@ pub let said_paths : Map[String, Array[String]] = {
     "candidates.*.path",
     "candidates.*.name",
     "candidates.*.where",
+    "clones.*.url",
+    "clones.*.repo",
+    "clones.*.name",
+    "clones.*.error",
   ],
   "profiles": [
     "items.*.profile.name",

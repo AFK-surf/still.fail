@@ -47,7 +47,8 @@ pub fn confirm_node(
 /// is under it dimmed only while `dims` (read as it changes: one presented under it that dims
 /// already, presenters' scrim_owner, and its ground clear). `first_stop`: the focus given as it opens to the first of
 /// what it holds that takes it, where the panel names no node of its own for it (Ctx::overlay's initial_focus by
-/// default: a panel's, with its fields; a confirm's ground is its own); `first_takes`: only to the first of them that says what
+/// default: a panel's, with its fields; a confirm's ground is its own; asked once the panel is made, which may say its
+/// ground keeps it: a search at hand by touch); `first_takes`: only to the first of them that says what
 /// it holds (a dialog of nodes: what takes what is typed or the arrows), its ground keeping it where none does. `scrim`: what dims what is under it, as far as
 /// its ground has come (the theme's; a stage's its own night, stage_scrim), over `ground_ms` (a stage's night its
 /// surface, in by the time what it holds begins to come: stage_node).
@@ -62,7 +63,7 @@ fn dialog_layer_node(
   dims? : () -> Bool = fn() { true },
   covered? : () -> Bool = fn() { false },
   within? : () -> Bool = fn() { false },
-  first_stop? : Bool = false,
+  first_stop? : () -> Bool = fn() { false },
   first_takes? : (@view.Said) -> Bool,
   scrim? : () -> Int64 = fn() { @ui.tree_theme().scrim },
   ground_ms? : Double = confirm_ground_ms,
@@ -158,7 +159,7 @@ fn dialog_layer_node(
         let first = panel(across, layer, look, veil)
         // (the focus given as it opens; back to what had it as it goes: where `first_stop` and the panel gives it to the
         // layer's own ground, to the first of what it holds that takes it instead, as an old trapping overlay's does)
-        if first_stop && physical_equal(first, layer) {
+        if first_stop() && physical_equal(first, layer) {
           layer.focus_opens_first(takes?=first_takes) |> ignore
         } else {
           layer.focus_opens(first) |> ignore

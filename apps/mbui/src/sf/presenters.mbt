@@ -734,12 +734,46 @@ pub fn panel_back(to? : Int) -> Bool {
         None => nav.pop()
       }
     // (a page of a sheet past its first: taken off; a panel a step further in from another, which closed for it: back
-    // to that one)
-    _ =>
-      match presented_now.iter().filter(fn(q) { q.open && (q.more.untracked().length() > 0 || q.under is Some(_)) }).last() {
-        Some(p) => panel_pop(p) || back_under(p)
-        None => false
+    // to that one; to the step `to` deep, a step back at a time till it is that deep, in the same change)
+    _ => {
+      let back_one = fn() {
+        match presented_now.iter().filter(fn(q) { q.open && (q.more.untracked().length() > 0 || q.under is Some(_)) }).last() {
+          Some(p) => panel_pop(p) || back_under(p)
+          None => false
+        }
       }
+      match to {
+        None => back_one()
+        Some(d) => {
+          let mut went = false
+          @signals.start_batch()
+          while steps_in_now() > d && back_one() {
+            went = true
+          }
+          @signals.end_batch()
+          went
+        }
+      }
+    }
+  }
+}
+
+///|
+/// How many steps deep the topmost open panel of nodes stands (1 its first): its sheet's pages, and the panels it is a
+/// step further in from, each with its own.
+fn steps_in_now() -> Int {
+  fn deep(p : Presented) -> Int {
+    1 +
+    p.more.untracked().length() +
+    (match p.under {
+      Some(u) => deep(u)
+      None => 0
+    })
+  }
+
+  match presented_now.iter().filter(fn(q) { q.open }).last() {
+    Some(p) => deep(p)
+    None => 0
   }
 }
 

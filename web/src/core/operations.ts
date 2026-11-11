@@ -35,6 +35,8 @@ export interface OperationParams {
   "preset.add": { name: string; dirs: unknown; instructions?: string | null | undefined };
   "preset.put": { id: string; name: string; dirs: unknown; instructions?: string | null | undefined };
   "preset.delete": { id: string };
+  "preset.clone": { url: string };
+  "preset.cloneDrop": { id: string };
   "chats.archived": {  };
   "chat.forSession": { session?: string | null | undefined };
   "widget.state": { key: string; path: string };
@@ -212,6 +214,8 @@ export function bindStationOperations(call: Call) {
     presetAdd: <T = unknown>(params: OperationParams["preset.add"]) => call("preset.add", params) as Promise<T>,
     presetPut: <T = unknown>(params: OperationParams["preset.put"]) => call("preset.put", params) as Promise<T>,
     presetDelete: <T = unknown>(params: OperationParams["preset.delete"]) => call("preset.delete", params) as Promise<T>,
+    presetClone: <T = unknown>(params: OperationParams["preset.clone"]) => call("preset.clone", params) as Promise<T>,
+    presetCloneDrop: <T = unknown>(params: OperationParams["preset.cloneDrop"]) => call("preset.cloneDrop", params) as Promise<T>,
     chatsArchived: <T = unknown>(params: OperationParams["chats.archived"] = {}) => call("chats.archived", params) as Promise<T>,
     chatForSession: <T = unknown>(params: OperationParams["chat.forSession"] = {}) => call("chat.forSession", params) as Promise<T>,
     widgetState: <T = unknown>(params: OperationParams["widget.state"]) => call("widget.state", params) as Promise<T>,
