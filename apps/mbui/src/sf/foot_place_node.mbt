@@ -23,7 +23,8 @@ pub fn foot_place_node(foot : @view.View, when : () -> Bool, make : (@view.View)
     place.made_for(loc).row(Is(true)) |> ignore
     if place.lent(foot_fills_lent).unwrap_or(false) {
       // (counted from as much as a button_node beside it is: its padding at its sides)
-      place.grow(Is(1.0)).basis(Is(Some(2.0 * button_padx))) |> ignore
+      // (never narrower than what it holds needs, as a button standing in the foot: keeps_held)
+      place.grow(Is(1.0)).basis(Is(Some(2.0 * button_padx))).keeps_held(Is(true)) |> ignore
     }
     make(place)
   })
