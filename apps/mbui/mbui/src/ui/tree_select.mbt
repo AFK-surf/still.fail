@@ -22,8 +22,15 @@ let words_picks : @view.Lent[Bool] = @view.Lent::new()
 /// page's in Ctx::selectable): pressed and dragged over, picked; ⌘C (Ctrl+C) copies them; a press elsewhere lets them
 /// go.
 pub fn words_picked(v : @view.View) -> Unit {
-  v.lends(words_picks, true).lends(@view.runs_picker, words_picked_span) |> ignore
+  v.lends(words_picks, true).lends(@view.runs_picker, words_picker) |> ignore
 }
+
+///|
+/// The picker words_picked lends (words_picked_span), one value: a block in what has its words picked that is lent
+/// another (one that picks none: a quote's card in a message, whose words were never of what is picked) holds words
+/// none of what is picked, nor copied with it (tree_sels).
+// kept across runs: a function, the same for every run
+let words_picker : (@view.View) -> @view.Live[(Int, Int)] = words_picked_span
 
 ///|
 /// What of each paragraph's words is picked with the pointer (from, to; (0, 0) none), by its key, as a signal of its
@@ -111,7 +118,9 @@ fn tree_sels(finger? : Bool = false) -> Array[SelTarget] {
           return
         }
         match tree.view_of(c.id) {
-          Some(v) if v.lent(words_picks) == Some(true) => {
+          // (where its words are picked, by the picker that picks them: not where a block in it was lent another)
+          Some(v) if v.lent(words_picks) == Some(true) &&
+            v.lent(@view.runs_picker).map(fn(f) { physical_equal(f, words_picker) }) == Some(true) => {
             let (r, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w, tree.words_scale_of(c.id), kept=c.words_breaks)
             let (bx0, by0, bx1, by1) = tree.seen_bounds(c.id)
             let place = tree_place(v)

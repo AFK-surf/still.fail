@@ -350,3 +350,44 @@ test "words picked in a row that scrolls across (a code block's line), held past
   t.frame_at(t.time() + 300.0)
   assert_eq(s.at(view_app.val.unwrap()), a3)
 }
+
+///|
+/// Three paragraphs of words in pieces 300 wide, one under another from 40 down, in a page whose words are picked
+/// (words_picked); the middle one in a block lent a picker that picks none where `none` (a quote's card in a message).
+/// Dragged over with the mouse from the first's start to the last's end: what is picked then.
+fn picked_past_a_block(none : Bool) -> String {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  t.check_looks(false)
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false }
+  set_view_app(fn(root) {
+    root.box(fn(page) {
+      page.padding(Is((0.0, 40.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
+      words_picked(page)
+      page.box(fn(n) { n.width(Is(Some(300.0))).words_runs(Is([plain("before")]), ink=0x333333FFL, look~) |> ignore })
+      |> ignore
+      page.box(fn(b) {
+        if none {
+          b.lends(@view.runs_picker, fn(_) { Is((0, 0)) }) |> ignore
+        }
+        b.box(fn(n) { n.width(Is(Some(300.0))).words_runs(Is([plain("quoted")]), ink=0x333333FFL, look~) |> ignore })
+        |> ignore
+      })
+      |> ignore
+      page.box(fn(n) { n.width(Is(Some(300.0))).words_runs(Is([plain("after")]), ink=0x333333FFL, look~) |> ignore })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  // (from the first's first glyph, 40 down, to the third's end, 84 down)
+  let next = dragged_at(t, 1.0, 51.0, 299.0, 95.0, t.time(), true)
+  t.frame_at(next)
+  t.ctx().selected_text()
+}
+
+///|
+test "dragged over words in pieces past a block lent a picker that picks none: those of the block none of what is picked, nor copied; a block lent none picked with the rest" {
+  assert_eq(picked_past_a_block(true), "before\nafter")
+  assert_eq(picked_past_a_block(false), "before\nquoted\nafter")
+}
