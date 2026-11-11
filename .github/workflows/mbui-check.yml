@@ -249,6 +249,10 @@ jobs:
         if: failure()
         run: |
           failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-test.log" | sed 's/^\[stillfail\] test //; s/ failed.*//' | sort -u)
+          # (a test that ended its program: the words it said last, a halt's and the line that said them, testexe's
+          # lines under it; past test.sh's tail where other programs' lines came after them)
+          ended=$(awk '/the program ended in it/ { on = 1; print; next } on && /^  / { print; next } { on = 0 }' "$RUNNER_TEMP/mbui-test.log" | head -40)
+          [ -z "$ended" ] || { echo '#### what a test that ended its program said last'; echo '```'; printf '%s\n' "$ended" | cut -c1-400; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           why=$(grep -a '^flow: \|assert_idle: not' "$RUNNER_TEMP/mbui-test.log" | grep -v 'not checked idle' | sort -u | head -10)
           subject=$(git log -1 --format='%h %an: %s' "$GITHUB_SHA")
           echo "::error title=check-mbui (${{ env.PART }}${{ env.GROUP && format(' {0}', env.GROUP) || '' }}${{ env.FPS && format(' at {0} fps', env.FPS) || '' }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
@@ -336,6 +340,10 @@ jobs:
         if: failure()
         run: |
           failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-test.log" | sed 's/^\[stillfail[^]]*\] test //; s/ failed.*//' | sort -u)
+          # (a test that ended its program: the words it said last, a halt's and the line that said them, testexe's
+          # lines under it; past test.sh's tail where other programs' lines came after them)
+          ended=$(awk '/the program ended in it/ { on = 1; print; next } on && /^  / { print; next } { on = 0 }' "$RUNNER_TEMP/mbui-test.log" | head -40)
+          [ -z "$ended" ] || { echo '#### what a test that ended its program said last'; echo '```'; printf '%s\n' "$ended" | cut -c1-400; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           echo "::error title=check-mbui (replay${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
 
   # sfapp's tests, the app part's groups (scripts/test.sh app_group_of), each run on the program app-build made
@@ -400,6 +408,10 @@ jobs:
         if: failure()
         run: |
           failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-test.log" | sed 's/^\[stillfail[^]]*\] test //; s/ failed.*//' | sort -u)
+          # (a test that ended its program: the words it said last, a halt's and the line that said them, testexe's
+          # lines under it; past test.sh's tail where other programs' lines came after them)
+          ended=$(awk '/the program ended in it/ { on = 1; print; next } on && /^  / { print; next } { on = 0 }' "$RUNNER_TEMP/mbui-test.log" | head -40)
+          [ -z "$ended" ] || { echo '#### what a test that ended its program said last'; echo '```'; printf '%s\n' "$ended" | cut -c1-400; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           why=$(grep -a '^flow: \|assert_idle: not' "$RUNNER_TEMP/mbui-test.log" | grep -v 'not checked idle' | sort -u | head -10)
           subject=$(git log -1 --format='%h %an: %s' "$GITHUB_SHA")
           echo "::error title=check-mbui (app ${{ matrix.group }}${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"

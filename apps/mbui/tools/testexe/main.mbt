@@ -180,6 +180,8 @@ fn cmd_said(args : Array[String]) -> Unit {
   }
   let lines = @sys.read_text(@sys.join(dir, "parts")).unwrap_or("")
   let failed : Array[String] = []
+  // (how many tests failed: `failed` holds as well the lines said under one that ended its program)
+  let mut failures = 0
   let times : Array[(String, Int)] = []
   let mut total = 0
   let mut skipped = 0
@@ -206,6 +208,9 @@ fn cmd_said(args : Array[String]) -> Unit {
     let done : Map[String, String] = {}
     let mut started = ""
     let rest = StringBuilder::new()
+    // (what the program printed since the test that ended it began: a halt's words and the line that said them,
+    // @halt.saying, said again under that test's failure, so they are there whatever else came after them)
+    let mut since_start : Array[String] = []
     let mut in_mark = false
     for l in said.split("\n") {
       let l = l.to_string()
@@ -221,7 +226,10 @@ fn cmd_said(args : Array[String]) -> Unit {
             _ => ""
           }
           match o.get("type") {
-            Some(String("start")) => started = key
+            Some(String("start")) => {
+              started = key
+              since_start = []
+            }
             Some(String("result")) =>
               done[key] = match o.get("message") {
                 Some(String(m)) => m
@@ -241,6 +249,7 @@ fn cmd_said(args : Array[String]) -> Unit {
         continue
       }
       rest.write_string(l + "\n")
+      since_start.push(l)
     }
     let text = rest.to_string().trim(chars=" \t\r\n").to_string()
     if text != "" {
@@ -259,10 +268,19 @@ fn cmd_said(args : Array[String]) -> Unit {
               "not run: the program ended before it"
             }
             failed.push("[\{pkg}] test \{key} (\{name(f, i)}) failed: \{why} (exit \{code})")
+            failures = failures + 1
+            if key == started {
+              for w in ended_words(since_start) {
+                failed.push("  " + w)
+              }
+            }
           }
           Some("skipped test") => skipped = skipped + 1
           Some("") => ()
-          Some(m) => failed.push("[\{pkg}] test \{key} (\{name(f, i)}) failed: \{m}")
+          Some(m) => {
+            failed.push("[\{pkg}] test \{key} (\{name(f, i)}) failed: \{m}")
+            failures = failures + 1
+          }
         }
       }
     }
@@ -278,7 +296,7 @@ fn cmd_said(args : Array[String]) -> Unit {
     @sys.println_out(f)
   }
   let n = total - skipped
-  @sys.println_out("Total tests: \{n}, passed: \{n - failed.length()}, failed: \{failed.length()}.")
+  @sys.println_out("Total tests: \{n}, passed: \{n - failures}, failed: \{failures}.")
   @sys.exit(if failed.is_empty() { 0 } else { 1 })
 }
 
@@ -294,5 +312,18 @@ fn main {
     "parts" => cmd_parts(args)
     "said" => cmd_said(args)
     w => fail("no command \{w}")
+  }
+}
+
+///|
+/// What a test that ended its program printed last (a halt's words and the line that said them, @halt.saying, its
+/// stack after them on native): the last of its lines, a few at most, its own and not the runtime's noise.
+fn ended_words(lines : Array[String]) -> Array[String] {
+  let kept = lines.filter(fn(l) { l.trim(chars=" \t\r").to_string() != "" })
+  let most = 12
+  if kept.length() <= most {
+    kept
+  } else {
+    kept[kept.length() - most:].to_array()
   }
 }

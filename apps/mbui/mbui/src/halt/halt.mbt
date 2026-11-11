@@ -17,5 +17,6 @@ pub fn said(msg : String, loc : SourceLoc) -> String {
 #callsite(autofill(loc))
 pub fn[T] saying(msg : String, loc~ : SourceLoc) -> T {
   println(said(msg, loc))
+  flush_out()
   abort(msg) // det-ok(abort-unsaid): the one abort, its words printed on the line above
 }
