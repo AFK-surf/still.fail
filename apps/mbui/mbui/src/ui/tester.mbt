@@ -674,6 +674,10 @@ pub fn Tester::finish_all(self : Tester) -> Unit {
 /// A run that judges motion (MBUI_TEST_MOTION, test_motion_judged) judges those too, at a display's rate (60 a second
 /// or more): every frame a host at that rate draws while something moves.
 pub fn Tester::judges_motion(self : Tester) -> Bool {
+  // (a run counting what fails at a rate, its frames not built whole said and gone on from: none judged)
+  if looks_said_only.val {
+    return false
+  }
   if self.between > 0.0 {
     // (a run at a rate: none of its frames where it holds results only, its other frames (an input's, what is due)
     // not the default run's either; every one where it judges motion)
