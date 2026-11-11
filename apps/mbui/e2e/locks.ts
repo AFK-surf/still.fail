@@ -3,7 +3,7 @@
 // on the station's mesh addon: one core a process, as its calls' handlers are the module's), each signed in with the
 // dev cloud's mock account and keeping its keys in a file (a sealer that asks no one, counting what it would have
 // asked), as a person uses the app (round 13's first three devices and round 14's two as apps from before, sealing
-// nothing):
+// nothing; round 16's a web page, keeping no keys):
 //   1-3 A turns safe mode on: alice's own lock begun by A by itself and bound, nobody asked; A keeps an item in a
 //     vault; C, asking from its waiting page with A showing the code, lands on alice's own lock and is given the
 //     vault; A takes C off: C taken out, the vault keyed anew; B joins the own lock face to face, is let in and given
@@ -32,7 +32,10 @@
 //     shut out, he not bound; it joins with one approval, and he is bound;
 //   15 erin, a member of both workspaces: a station of hers asleep (Two's, switched off once her device had reached
 //     it, her app then started again) holds the beginning of her own lock back; switched on again, her device begins
-//     it by itself and it is bound.
+//     it by itself and it is bound;
+//   16 alice's web page in the first workspace, her own lock bound there: refused, it asks from its waiting page, B
+//     shows the code; it is in the workspace's lock as a web page's for 30 days at most, let in, signing nothing, no
+//     vault, her own lock untouched; started again, let in with nobody asked; B takes it out on 设置 › 安全: refused.
 // Each check says PASS or FAIL; it goes on after a failure where it can, and exits 1 if any failed. E2E_SF_SRC,
 // E2E_ORIGIN, E2E_PEER_DATA as peer.ts; E2E_WORK, E2E_STATION as e2e-local.sh's.
 import { readFileSync, writeFileSync } from "node:fs";
@@ -63,6 +66,8 @@ const oDev = new Device("O", "carol");
 const d1 = new Device("D1", "dave", { sealed: false });
 const d2 = new Device("D2", "dave", { sealed: false });
 const e1 = new Device("E1", "erin");
+// (round 16's: a web page of alice's, keeping no keys; named so as `w` is the file's name for a workspace)
+const wDev = new Device("W", "alice", { page: true });
 let dKey = "";
 let dBase = "";
 let sub = "";
@@ -788,8 +793,9 @@ try {
   const bobAgain = async () => {
     await b.call("workspace.addMembers", { account: sub, workspace, role: "member", emails: ["bob@example.test"] });
   };
-  /// `x` approved into the workspace's lock from its waiting page, the code shown on `approver` (round 13's too).
-  const approvedBy = async (approver: Device, x: Device) => {
+  /// `x` approved into the workspace's lock from its waiting page, the code shown on `approver` (round 13's too; round
+  /// 16's web page, which signs nothing once in: `page`). How long from the code typed to let in, in ms.
+  const approvedBy = async (approver: Device, x: Device, page = false): Promise<number> => {
     // (once it has heard the workspace's lock names no lock of its person's: until then its request would go to the
     // devices of the lock named before, not to the workspace's)
     const t1 = Date.now();
@@ -800,8 +806,10 @@ try {
     const p = await shown;
     await x.lock(workspace, (l) => l.me?.pair?.state === "code", 60_000);
     await x.call("lock.pairCode", { workspace, code: p.code });
-    await x.lock(workspace, (l) => l.signs && l.me?.confirmed, 90_000);
+    const typed = Date.now();
+    await x.lock(workspace, (l) => (page || l.signs) && l.me?.confirmed, 90_000);
     await x.stationState(workspace, (s) => s.state === "online", 90_000);
+    return Date.now() - typed;
   };
   const approvedByB = (x: Device) => approvedBy(b, x);
   const persons = async (n: number) => {
@@ -1118,9 +1126,106 @@ try {
     await whenChanged([stationData], () => personsIn((said = stationSays("lock-state"))) === before15 + 1, 90_000, () => `the station's lock: ${said.trim().split("\n").slice(-4).join("; ")}`);
     if (e1.asked() !== 0) throw new Error(`E1's sealer asked the person ${e1.asked()} times`);
   });
+
+  // ── round 16: a web page of alice's, W, in the first workspace, where her own lock is bound. A page keeps no keys (its
+  // code is still.fail cloud's: lock.ts `Signer`), so it is never on her own lock: it is in the workspace's lock as a
+  // device of kind `web` for 30 days at most (views/pair.ts `approve`, WEB_DEVICE_SECS), which the stations let it in by
+  // with her own lock bound there all the same (station/src/mesh/serve.ts `inLock`: a bound person's app devices go by
+  // their own lock, a web page by its entry). From its waiting page it asks in the workspace's lock (views/pair.ts
+  // `waitingIn`: `offOwnLock` is an app's), and B shows the code: the one app of hers still open, on her own lock since
+  // round 4 (A was taken off in round 4, A installed anew closed before round 13). Then B takes it out on 设置 › 安全. ──
+  /// The station's lock's line for device `id`: whose, what kind, until when (seconds; null for no end).
+  const deviceIn = (said: string, id: string) => {
+    const m = said.match(new RegExp(`^DEVICE ${id.slice(0, 12)} (\\S+) (\\S+) own=\\S+ exp=(\\S+)`, "m"));
+    return m ? { sub: m[1]!, kind: m[2]!, exp: m[3] === "-" ? null : Number(m[3]) } : null;
+  };
+  /// Which lock of their own each person is bound to in the station's lock.
+  const bindings = (said: string) => said.split("\n").filter((x) => x.startsWith("PERSON ")).sort().join("; ");
+  const ownKeys = async () => ((await b.personal((p) => p.standing === "member", 60_000)).devices as J[]).map((d) => d.key as string).sort().join(" ");
+  const boundBefore = bindings(stationSays("lock-state"));
+  const ownBefore = await ownKeys();
+  log(`  alice's own lock before W: ${ownBefore.split(" ").length} devices; bound in Dev: ${boundBefore}`);
+  await wDev.signIn();
+  const wId = await baseOf(wDev);
+  await check("W, alice's web page, refused by Dev's station for the lock; its page says a web page's, waiting, signing nothing", async () => {
+    log(`  W sees the first: ${short(await wDev.stationState(workspace, (s) => s.state !== "online" && s.cause === "lock", 90_000))}`);
+    const l = await wDev.lock(workspace, (l) => l.locked && l.me?.waiting, 60_000);
+    const said = { kind: l.me.kind, waiting: l.me.waiting, confirmed: l.me.confirmed, ownLock: l.me.ownLock ?? false, signs: l.signs, canSign: l.canSign };
+    log(`  W's page in Dev: ${JSON.stringify(said)}`);
+    if (said.kind !== "web" || said.confirmed !== false || said.ownLock !== false || said.signs !== false || said.canSign !== false) throw new Error(`W's page: ${JSON.stringify(said)}`);
+  });
+  await must("W asks from its waiting page, B shows the code, W types it: let in", async () => {
+    log(`  W let in ${await approvedBy(b, wDev, true)} ms after the code was typed`);
+  });
+  await check("the station's lock lists W as alice's web page, ending in 31 days at most; W's page lists it under her, confirmed", async () => {
+    let said = "";
+    const d = await whenChanged([stationData], () => deviceIn((said = stationSays("lock-state")), wId), 60_000, () => `W not in the station's lock: ${said.split("\n").filter((x) => x.startsWith("DEVICE")).join("; ")}`);
+    const now = Date.now() / 1000;
+    log(`  the station's lock: W ${JSON.stringify(d)}${d.exp === null ? "" : `, ${((d.exp - now) / 86400).toFixed(1)} days left`}`);
+    if (d.sub !== sub || d.kind !== "web") throw new Error(`W in the station's lock as ${d.sub}'s ${d.kind}`);
+    if (d.exp === null || d.exp <= now || d.exp - now > 31 * 86400) throw new Error(`W's entry ends at ${d.exp} (now ${Math.floor(now)})`);
+    const l = await wDev.lock(workspace, (l) => l.me?.confirmed, 30_000);
+    const hers = (l.members ?? []).find((m: J) => m.sub === sub);
+    const row = (hers?.groups ?? []).flatMap((g: J) => g.devices ?? []).find((x: J) => x.id === wId);
+    if (row?.kind !== "web") throw new Error(`W's page lists it under alice as ${JSON.stringify(row)?.slice(0, 200)}`);
+    await wDev.stationState(workspace, (s) => s.state === "online", 30_000);
+  });
+  await check("alice's own lock as it was (W not on it); no person's binding changed", async () => {
+    const own = await ownKeys();
+    if (own !== ownBefore) throw new Error(`alice's own lock: ${own}, not ${ownBefore}`);
+    const bound = bindings(stationSays("lock-state"));
+    if (bound !== boundBefore) throw new Error(`bound in Dev: ${bound}, not ${boundBefore}`);
+  });
+  await check("W signs nothing and has no vault (not able, none keyed, the item refused); B still opens it", async () => {
+    const l = await wDev.lock(workspace, (l) => l.me?.confirmed, 30_000);
+    if (l.signs !== false || l.canSign !== false) throw new Error(`W's page: signs ${l.signs}, canSign ${l.canSign}`);
+    const v = await wDev.until({ topic: "vaults", workspace }, (v) => v, 30_000);
+    log(`  W's vaults: ${JSON.stringify({ available: v.available, canSign: v.canSign, setUp: v.setUp, vaults: (v.vaults ?? []).map((x: J) => ({ keyed: x.keyed, open: x.open })) })}`);
+    if (v.available !== false || v.canSign !== false || v.setUp !== false || (v.vaults ?? []).some((x: J) => x.keyed || x.open)) throw new Error("W's vaults are not a web page's");
+    const o = await wDev.call("vault.open", { workspace, item }).then((o) => o, (x) => x as Error);
+    if (!(o instanceof Error)) throw new Error(`W opened: ${JSON.stringify(o)?.slice(0, 200)}`);
+    log(`  W's vault.open: ${o.message.slice(0, 200)}`);
+    if (!/vault_unavailable/.test(o.message)) throw new Error(`not refused as a web page: ${o.message.slice(0, 300)}`);
+    await opens(b);
+  });
+  await check("W closed and started again: let in again, nobody asked", async () => {
+    await wDev.restart();
+    const t1 = Date.now();
+    await wDev.stationState(workspace, (s) => s.state === "online", 60_000);
+    log(`  W let in again ${Date.now() - t1} ms after it started`);
+    const l = await wDev.lock(workspace, (l) => l.me?.confirmed && !l.me?.waiting, 30_000);
+    if (l.me.pair != null) throw new Error(`W asked again: ${JSON.stringify(l.me.pair).slice(0, 200)}`);
+    const shown = (await b.call("lockPrompt.state", {}))?.pairing ?? [];
+    if (shown.length !== 0) throw new Error(`B shows a code: ${JSON.stringify(shown).slice(0, 200)}`);
+  });
+  // (as a person does it: 移除 beside the device on 设置 › 安全, as round 9 takes J out)
+  await must("B takes W out on Dev's security page", async () => {
+    const row = lockDevices(await b.lock(workspace, (l) => lockDevices(l).some((x) => x.id === wId), 30_000)).find((x) => x.id === wId);
+    log(`  B's row for W: ${JSON.stringify({ kind: row.kind, removable: row.removable, daysLeft: row.daysLeft, metaText: row.metaText })}`);
+    if (row.removable !== true) throw new Error("B's page offers no 移除 beside W");
+    await b.call("lock.removeDevice", { workspace, device: wId });
+  });
+  await check("W out: the station refuses it for the lock, the station's lock lists it no more, its page says it waits", async () => {
+    const t1 = Date.now();
+    // (W's refusal is waited for, the station's lock then read once: the station writes an entry to its lock's file as
+    // it takes it, before it closes anyone for it (station/src/cloud/state.ts `takeLock`). W's page says so up to
+    // RECONNECT_MS (2 s) after: the station closes W's stream at once (13 ms after the entry, by its log), and W's link
+    // opens the stream again, and is refused, after its wait unless something wakes it (the core's station/link.ts).)
+    log(`  W sees the first: ${short(await wDev.stationState(workspace, (s) => s.state !== "online" && s.cause === "lock", 60_000))} ${Date.now() - t1} ms after B took it out`);
+    const still = deviceIn(stationSays("lock-state"), wId);
+    if (still !== null) throw new Error(`W still in the station's lock: ${JSON.stringify(still)}`);
+    await wDev.lock(workspace, (l) => !l.me?.confirmed && l.me?.waiting, 60_000);
+  });
+  await check("B, alice's app, untouched: let in, signing, opens the item", async () => {
+    await b.stationState(workspace, (s) => s.state === "online", 60_000);
+    await b.lock(workspace, (l) => l.signs && l.me?.confirmed, 30_000);
+    await opens(b);
+  });
+  // (done with: closed, as C, D, F and G are before round 8, for the account's requests)
+  await within(wDev.close(), 5000);
 } catch (e) {
   fail("the run", e);
 }
 log(failures() === 0 ? "ALL PASSED" : `${failures()} FAILED`);
-await within(Promise.all([a, b, c, d, e, f, g, h, i, j, k, lDev, mDev, nDev, oDev, d1, d2, e1].map((x) => x.close())), 5000);
+await within(Promise.all([a, b, c, d, e, f, g, h, i, j, k, lDev, mDev, nDev, oDev, d1, d2, e1, wDev].map((x) => x.close())), 5000);
 process.exit(failures() === 0 ? 0 : 1);

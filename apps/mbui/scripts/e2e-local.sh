@@ -14,8 +14,9 @@
 #   scripts/e2e-local.sh ios        the same on an iOS simulator of our own (MBUI_IOS_DEVICE), recorded
 #   scripts/e2e-local.sh down       stops what `up` started
 #   scripts/e2e-local.sh locks      the locks end to end against what `up` started (e2e/locks.ts: alice's and
-#                                   bob's devices, each still.fail's core in Node; it freezes and starts anew the
-#                                   station and the cloud, and enrolls a second station), pass/fail per step
+#                                   bob's devices, apps and a web page, each still.fail's core in Node; it freezes
+#                                   and starts anew the station and the cloud, and enrolls a second station),
+#                                   pass/fail per step
 #   scripts/e2e-local.sh locks-all  up, locks, down (the side run's, scripts/side.sh locks)
 #   scripts/e2e-local.sh rigs       a rig end to end against what `up` started (e2e/rigs.ts: a machine enrolled as
 #                                   alice's rig beside the test station, asked for, granted, used, taken back)
@@ -32,7 +33,7 @@
 #   scripts/e2e-local.sh android-unlock PIN   the system's prompt for the screen lock answered with PIN, once its field is up
 #   scripts/e2e-local.sh intruder-refused CMD…  e2e/peer.ts as a device the cloud signed in as alice and the lock never
 #                                   took in, asked CMD: INTRUDER REFUSED once the station refused it
-#   scripts/e2e-local.sh lock-state the security mode as the test station keeps it: LOCK, DEVICE lines, STATIONS, PERSONS
+#   scripts/e2e-local.sh lock-state the security mode as the test station keeps it: LOCK, DEVICE lines, STATIONS, PERSONS, PERSON lines
 #   scripts/e2e-local.sh sql SQL    the test station's database, read only
 #   scripts/e2e-local.sh android-ime off|on   the emulator's own keyboard off (the run composes) or back
 #   scripts/e2e-local.sh android-installer    until the system's installer is the emulator's top activity, then back
@@ -406,9 +407,10 @@ peer_wait() {
 }
 
 # the security mode as the test station keeps it (its lock.json, read by the station's own rules): LOCK on|off,
-# DEVICE <id> <person> <kind> own=<own> a line each, STATIONS n, PERSONS n; SAID and the devices whose latest `device`
-# entry says the key they are or would be on their person's own lock with (`person_key`, which the fold drops: read of
-# the entries themselves), the first 12 hex digits of each
+# DEVICE <id> <person> <kind> own=<own> exp=<seconds, or -> a line each, STATIONS n, PERSONS n, PERSON <person> <the
+# lock of their own bound> a line each; SAID and the devices whose latest `device` entry says the key they are or would
+# be on their person's own lock with (`person_key`, which the fold drops: read of the entries themselves), the first 12
+# hex digits of each
 lock_state() {
   local f=$(find $STATION/data -name lock.json 2>/dev/null | head -1)
   [ -n "$f" ] || { echo "LOCK off"; return; }
@@ -418,9 +420,10 @@ const { fold } = await import('./src/cloud/lock.ts');
 const j = JSON.parse(readFileSync(process.argv[1], 'utf8'));
 const s = fold(j.entries ?? j, null);
 console.log(s.disabled ? 'LOCK off' : 'LOCK on ' + s.seq);
-for (const [id, d] of s.devices) console.log('DEVICE ' + id.slice(0, 12) + ' ' + d.sub + ' ' + d.kind + ' own=' + d.own + ' ' + (d.label ?? ''));
+for (const [id, d] of s.devices) console.log('DEVICE ' + id.slice(0, 12) + ' ' + d.sub + ' ' + d.kind + ' own=' + d.own + ' exp=' + (d.exp ?? '-') + ' ' + (d.label ?? ''));
 console.log('STATIONS ' + s.stations.size);
 console.log('PERSONS ' + s.persons.size);
+for (const [sub, person] of s.persons) console.log('PERSON ' + sub + ' ' + String(person).slice(0, 12));
 const said = new Map();
 for (const e of (j.entries ?? j)) if (e?.kind === 'device' && typeof e.body?.id === 'string') said.set(e.body.id, typeof e.body.person_key === 'string');
 console.log(['SAID', ...[...said].filter(([, k]) => k).map(([id]) => id.slice(0, 12))].join(' '));

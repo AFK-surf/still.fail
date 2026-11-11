@@ -3,8 +3,10 @@
 // handlers are the module's), signed in with the dev cloud's mock account and keeping its keys in a file (a sealer
 // that asks no one, though it notes each time it would have asked: `Device.asked`), as a person uses the app; or, as
 // a device from before the update to a lock of one's own for everyone, with no sealer at all (`{ sealed: false }`:
-// the core then keeps its signing key in a plain file and makes no key of a person's lock). This file run as
-// `device NAME` is that process; imported, it gives the run its devices and its checks (PASS or FAIL each, counted).
+// the core then keeps its signing key in a plain file and makes no key of a person's lock); or a web page in a desktop
+// browser (`{ page: true }`: hosts/node.ts `page`, keeping no keys of an app and sealing nothing, as hosts/web.ts; it
+// signs nothing, keeps no vault, approves no one). This file run as `device NAME` is that process; imported, it gives
+// the run its devices and its checks (PASS or FAIL each, counted).
 // E2E_SF_SRC, E2E_ORIGIN, E2E_PEER_DATA as peer.ts.
 import { type ChildProcess, execFileSync, fork } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
@@ -21,23 +23,55 @@ export type J = any;
 /// What `p` gives, or nothing once `ms` have gone by (a deadline: a core or a process that would not end).
 export const within = <T>(p: Promise<T>, ms: number): Promise<T | undefined> => Promise.race([p, new Promise<undefined>((r) => setTimeout(r, ms))]);
 
+/// The watch of a directory waited on, kept for the rest of the run and shared by its waits. A watch begun as a wait
+/// begins sees nothing for a moment after `watch` returns (libuv starts the FSEvents stream on a thread of its own, from
+/// when that thread gets to it), so what is written in that moment is lost to the wait, which ends by the next thing
+/// written there or not at all. A run on a Mac with a load of 20 (2026-11-11) failed with what it waited for there
+/// ("alice's own lock 16 long, not 16", its minute gone by): taken to be that moment, which was not shown. Kept, only
+/// a directory's first wait has it.
+const watches = new Map<string, Set<() => void>>();
+function watching(d: string, changed: () => void): () => void {
+  let told = watches.get(d);
+  if (told === undefined) {
+    const all = (told = new Set<() => void>());
+    watches.set(d, all);
+    const w = watch(d, { recursive: true }, () => {
+      for (const f of [...all]) f();
+    });
+    // (a watch that fails, its directory gone: the next wait there begins another; those waiting keep their deadlines)
+    w.on("error", () => {
+      if (watches.get(d) === all) watches.delete(d);
+      w.close();
+    });
+    w.unref();
+  }
+  told.add(changed);
+  const mine = told;
+  return () => void mine.delete(changed);
+}
+
 /// What `ok` gives, looked at again as each of `dirs` changes (the file system's events, as scripts/waitfor.mjs waits:
-/// a station's database and the lock chains it keeps), or an error saying `what` by `ms`.
+/// a station's database and the lock chains it keeps), or an error saying `what` by `ms`. Looked at once more at `ms`:
+/// what holds by then is not failed for no change having been seen of it, and the run says that it was so.
 export function whenChanged<T>(dirs: string[], ok: () => T | undefined | null | false, ms: number, what: () => string): Promise<T> {
   return new Promise((resolve, reject) => {
     let done = false;
-    const watchers = dirs.map((d) => watch(d, { recursive: true }, () => look()));
     const end = () => {
       done = true;
       clearTimeout(deadline);
-      for (const w of watchers) w.close();
+      for (const stop of stops) stop();
     };
-    const deadline = setTimeout(() => (end(), reject(new Error(what()))), ms);
-    const look = () => {
-      if (done) return;
+    const look = (): boolean => {
+      if (done) return false;
       const got = ok();
       if (got) (end(), resolve(got));
+      return !!got;
     };
+    const deadline = setTimeout(() => {
+      if (look()) log(`  (seen only as its ${ms} ms ended: no change of ${dirs.join(", ")} was seen for it)`);
+      else if (!done) (end(), reject(new Error(what())));
+    }, ms);
+    const stops = dirs.map((d) => watching(d, () => void look()));
     look();
   });
 }
@@ -45,8 +79,8 @@ export function whenChanged<T>(dirs: string[], ok: () => T | undefined | null | 
 /// Where a device notes each time its sealer was asked with the person present (`Device.asked`), in its data.
 const askedFile = (data: string) => join(data, "asked.log");
 
-// A device: this file run as `device NAME again|new sealed|plain`, its core's messages passed to and from the parent
-// as they are.
+// A device: this file run as `device NAME again|new sealed|plain|page`, its core's messages passed to and from the
+// parent as they are.
 if (process.argv[2] === "device") {
   const { start } = await import(pathToFileURL(join(src, "client/core-ts/src/hosts/node.ts")).href);
   const data = join(dir, process.argv[3]);
@@ -69,8 +103,9 @@ if (process.argv[2] === "device") {
     delete: async (key: string) => void (kept.delete(key), save()),
     ask: async (_reason: string) => noteAsked("ask"),
   };
-  // (`plain`: a device from before, whose host seals nothing: hosts/node.ts gives it no `secure*`)
-  const options = process.argv[5] === "plain" ? {} : { sealer };
+  // (`plain`: a device from before, whose host seals nothing: hosts/node.ts gives it no `secure*`; `page`: a web page's
+  // host, no app's keys and nothing sealed)
+  const options = process.argv[5] === "page" ? { page: true } : process.argv[5] === "plain" ? {} : { sealer };
   const core = start(join(data, "core"), origin, (_c: number, json: string) => process.send!(json), undefined, options);
   const client = core.connect();
   process.on("message", (m: J) => {
@@ -113,16 +148,26 @@ export class Device {
   sub = "";
   /// Whether its host seals what it keeps (an app of today); false: an app from before, with no sealer.
   sealed: boolean;
-  constructor(name: string, user = "alice", opts: { sealed?: boolean } = {}) {
+  /// A web page's, not an app's (no keys of an app, nothing sealed).
+  page: boolean;
+  constructor(name: string, user = "alice", opts: { sealed?: boolean; page?: boolean } = {}) {
     this.name = name;
     this.user = user;
-    this.sealed = opts.sealed ?? true;
+    this.page = opts.page ?? false;
+    this.sealed = !this.page && (opts.sealed ?? true);
     this.child = this.#fork(false);
   }
   #fork(again: boolean): ChildProcess {
-    const child = fork(fileURLToPath(import.meta.url), ["device", this.name, again ? "again" : "new", this.sealed ? "sealed" : "plain"], { stdio: ["ignore", "inherit", "inherit", "ipc"] });
+    const kind = this.page ? "page" : this.sealed ? "sealed" : "plain";
+    const child = fork(fileURLToPath(import.meta.url), ["device", this.name, again ? "again" : "new", kind], { stdio: ["ignore", "inherit", "inherit", "ipc"] });
     child.on("message", (json: J) => this.#got(JSON.parse(json)));
     return child;
+  }
+  /// What it says it is (`client.device`, prefs.ts `device`): a desktop app, or a web page in a desktop browser.
+  #about(): J {
+    return this.page
+      ? { client: "still.fail e2e", app: "web", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" }
+      : { client: "still.fail e2e", app: "desktop", model: this.name };
   }
   /// The app quit and started again: the same data, a core anew (what it was subscribed to forgotten). `sealed: true`
   /// on a device from before: the app updated, its host sealing now; left out, as it was.
@@ -132,7 +177,7 @@ export class Device {
     this.topics.clear();
     if (opts.sealed !== undefined) this.sealed = opts.sealed;
     this.child = this.#fork(true);
-    await this.call("client.device", { client: "still.fail e2e", app: "desktop", model: this.name });
+    await this.call("client.device", this.#about());
   }
   /// How many times its sealer was asked with the person present since the device was new: a value sealed for their
   /// presence read (`get` with `user`), or the person asked to say yes (`ask`). None while it had no sealer.
@@ -196,7 +241,7 @@ export class Device {
     });
   }
   async signIn(): Promise<{ workspace: string; station: string }> {
-    await this.call("client.device", { client: "still.fail e2e", app: "desktop", model: this.name });
+    await this.call("client.device", this.#about());
     // (the dev cloud's sign-in: one over the account's requests a minute is a finding, not tried again)
     const r = await fetch(`${origin}/__dev/account?user=${this.user}`);
     const text = await r.text();
