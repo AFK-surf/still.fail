@@ -42,11 +42,15 @@ export const profileFast = (p: Profile): boolean => p.fast === true;
 /// The runtimes a session can be set to Fast on (its own `fast`, else its profile's).
 export const FAST_RUNTIMES: readonly string[] = ["codex", "claude"];
 /// Whether a profile's account takes Fast: an OpenAI subscription on Codex (its service tier); on Claude Code (its
-/// `fastMode` setting) an Anthropic key, or a Claude subscription, whose Fast is billed to its usage credits (offered
-/// only while they are on: `fastNeedsCredits`; Claude Code runs at standard speed without them).
+/// `fastMode` setting) an Anthropic key, a Claude subscription, whose Fast is billed to its usage credits (offered
+/// only while they are on: `fastNeedsCredits`; Claude Code runs at standard speed without them), or an OpenRouter key
+/// (OpenRouter takes Claude Code's `speed: "fast"` and serves it from Anthropic's fast tier; checked 2026-11-11 with
+/// Claude Code 2.1.321, which sends it to a base URL of its own as to Anthropic's).
 export const takesFast = (p: Profile): boolean => {
   const kind = accessKind(p);
-  return (p.runtime === "codex" && kind === "subscription") || (p.runtime === "claude" && (kind === "anthropic-api" || kind === "subscription"));
+  if (p.runtime === "codex") return kind === "subscription";
+  if (p.runtime !== "claude") return false;
+  return kind === "anthropic-api" || kind === "subscription" || (kind === "api-provider" && access(p).provider === "openrouter");
 };
 /// A Claude subscription: its Fast is offered only while its allowance says its usage credits are on.
 export const fastNeedsCredits = (p: Profile): boolean => p.runtime === "claude" && accessKind(p) === "subscription";
