@@ -642,11 +642,23 @@ fn looks_apply(c : Ctx) -> Unit {
   list_looks(c)
   // (the window's tree's endless decorations on the resident clock (View::cycle_resident): its next step woken for,
   // said later, as a look's here is: nothing built for it; a step nobody can see waits)
-  match view_app.val {
-    Some(tree) if tree.resident_read() && app_visible() => c.wake_at_time(tree.resident_next(), later=true)
-    _ => ()
+  if view_resident_read() {
+    match view_app.val {
+      Some(tree) => c.wake_at_time(tree.resident_next(), later=true)
+      None => ()
+    }
   }
   in_looks.val = false
+}
+
+///|
+/// Whether the window's tree draws an endless decoration on the resident clock where it can be seen
+/// (@view.Tree::resident_read): its next step is the looks' to ask for, a frame of its looks alone's too.
+fn view_resident_read() -> Bool {
+  match view_app.val {
+    Some(tree) => tree.resident_read() && app_visible()
+    None => false
+  }
 }
 
 ///|
@@ -896,6 +908,11 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
     // the host draws again of it found from those headers alone, h_present)
     looks_apply(c)
     looks_heads_only.val = true
+  } else if view_resident_read() {
+    // (the window's tree's endless decorations alone (View::cycle_resident): nothing of the old view by the clock, the
+    // tree's resident step woken for as a frame built whole asks it, else the step asked for last, now come, is asked
+    // again and the next never)
+    looks_apply(c)
   }
   c.t_build = 0.0
   c.t_layout = 0.0
