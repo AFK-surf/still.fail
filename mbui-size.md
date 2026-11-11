@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [b1e394b22](https://github.com/AFK-surf/still.fail/commit/b1e394b22589646f7b2449edcf5ba230e1682d75) app: the pictures sent from here written through o | 1.83 | 2.44 | 10.18 | 28.92 | 35.95 | 25.77 | 47.8 | 94.45 | 178.83 |
 | [f56628719](https://github.com/AFK-surf/still.fail/commit/f56628719ec11ee097714cc8fed9bef4e8389abb) sf: a panel's ground is the arrow under a mouse (g | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.77 | 47.8 | 94.57 | 140.66 |
 | [d2482190e](https://github.com/AFK-surf/still.fail/commit/d2482190e3650f97ce2a895f92a60a784a3765b2) app: what a person wrote made once as nodes: the v | 1.83 | 2.44 | 10.18 | 28.92 | 35.95 | 25.76 | 47.8 | 94.67 | 163.05 |
 | [11b5f0537](https://github.com/AFK-surf/still.fail/commit/11b5f0537f73d70a149e6c91403c9851598d826c) app: a chat's pictures told to the nodes that read | 1.83 | 2.44 | 10.18 | 28.92 | 35.94 | 25.76 | 47.8 | 94.42 | 131.81 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [0ef0e0bdb](https://github.com/AFK-surf/still.fail/commit/0ef0e0bdb37d46232e85484e876d4181d5f57b11) mbui, app: an abort says why first (@halt.saying), | 1.82 | 2.43 | 10.11 | 28.85 | 35.69 | 25.69 | 47.59 | 94.34 | 163.61 |
 | [21783afdd](https://github.com/AFK-surf/still.fail/commit/21783afdd082960dcfc4e136c6751df79d54016c) app: a picture waiting in the composer on an iPhon | 1.81 | 2.43 | 10.11 | 28.84 | 35.67 | 25.69 | 47.57 | 94.41 | 181.05 |
 | [4a3fdb277](https://github.com/AFK-surf/still.fail/commit/4a3fdb277585bbe3a57332422c2cdb7d29bd555d) native.ts: a release's assets that could not be li | 1.81 | 2.43 | 10.11 | 28.84 | 35.67 | 25.67 | 47.52 | 94.54 | 174.36 |
-| [3d78e06ad](https://github.com/AFK-surf/still.fail/commit/3d78e06ad6093c58df2818805b24c2e07351614e) app: 选择运行的 station's row's name line as high as it | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.54 | 179.33 |
