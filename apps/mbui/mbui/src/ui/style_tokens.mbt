@@ -617,7 +617,8 @@ pub(all) enum Stroke {
 } derive(Eq, Show, Debug)
 
 ///|
-fn Stroke::px(self : Stroke) -> Double {
+/// How wide a border of this stroke is, in points (an old view's box's, and the library's style_node's for an edge).
+pub fn Stroke::px(self : Stroke) -> Double {
   match self {
     B0 => 0.0
     B0_5 => 0.5

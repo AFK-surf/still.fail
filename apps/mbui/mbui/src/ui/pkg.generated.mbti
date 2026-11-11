@@ -2437,6 +2437,7 @@ pub(all) enum Stroke {
   B4
   B8
 } derive(Eq, Show, @debug.Debug)
+pub fn Stroke::px(Self) -> Double
 
 pub(all) struct Style {
   base : Patch
