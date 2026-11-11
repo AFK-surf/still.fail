@@ -117,9 +117,9 @@ let switch_screens : Array[(String, Double, Double, Int)] = [
 ///|
 /// The made-up core answering each topic as late as `late` says by its name, through the app's own client, what the
 /// places open on asked ahead (reads_ahead), with a third workspace (ws3, 第三个) where `three`: what the client sent and
-/// was told put in `heard`. A run begun for it.
+/// was told put in `heard`. Its caller begins the run (new_run) before it, and makes its
+/// Tester of the source this gives (switch_screen).
 fn switch_core(late : (String) -> Double, heard : Array[String], three? : Bool = false) -> Source {
-  new_run()
   let base = fixture("home")
   let base = if three {
     {
@@ -156,6 +156,7 @@ fn switch_screen(src : Source, w : Double, h : Double, platform : Int, most : Do
 /// A phone over the made-up core answering `ms` late, at rest on Home of ws1 (星火工作室), what the places open on asked
 /// ahead (reads_ahead): what the client sent and was told put in `heard`.
 fn switch_phone(ms : Double, heard : Array[String]) -> (@ui.Tester, Source) {
+  new_run()
   let src = switch_core(fn(_) { ms }, heard)
   (switch_screen(src, 390.0, 844.0, 2, ms), src)
 }
@@ -313,6 +314,7 @@ test "a workspace switched over a core answering each of its topics tens of ms l
   for s in switch_screens {
     let (name, w, h, platform) = s
     let wide = name != "小屏"
+    new_run()
     let src = switch_core(switch_late, [])
     let t = switch_screen(src, w, h, platform, 70.0)
     let start = t.time()
@@ -349,6 +351,7 @@ test "a workspace switched over a core that answers none of it within switch_wai
   let faults : Array[String] = []
   for s in switch_screens {
     let (name, w, h, platform) = s
+    new_run()
     let src = switch_core(fn(_) { 600.0 }, [])
     let t = switch_screen(src, w, h, platform, 600.0)
     let start = t.time()
@@ -402,6 +405,7 @@ test "a second workspace asked while a switch waits takes its place, the first n
   for s in switch_screens {
     let (name, w, h, platform) = s
     let heard : Array[String] = []
+    new_run()
     let src = switch_core(fn(_) { 150.0 }, heard, three=true)
     let t = switch_screen(src, w, h, platform, 150.0)
     let tree = @ui.view_tree().unwrap()
@@ -431,6 +435,7 @@ test "the workspace in view asked while a switch waits calls it off: on 小屏, 
   for s in switch_screens {
     let (name, w, h, platform) = s
     let heard : Array[String] = []
+    new_run()
     let src = switch_core(fn(_) { 150.0 }, heard)
     let t = switch_screen(src, w, h, platform, 150.0)
     let tree = @ui.view_tree().unwrap()
