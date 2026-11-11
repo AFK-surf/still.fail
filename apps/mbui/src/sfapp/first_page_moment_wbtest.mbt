@@ -68,3 +68,34 @@ test "the core's status, read for the splash's words over the first page, let go
 ///|
 /// How long what the first page shows is not answered in the test above: short of first_page_ms.
 let first_slow_ms : Double = splash_label_ms - 200.0
+
+///|
+test "a chat opened over the first page before what it shows is answered: status let go of at the moment the first page's is, not the chat's" {
+  new_run()
+  let slow = @signals.signal(true)
+  let let_go : Array[(String, Double)] = []
+  let t_ref : Ref[@ui.Tester?] = Ref(None)
+  let home = first_slow_src(slow, let_go, fn() { t_ref.val.map(fn(t) { t.time() }).unwrap_or(0.0) })
+  // (the chat answered later than what the first page shows: never, here)
+  let src = {
+    ..home,
+    topic_read: fn(name, params) {
+      if name == "chat" {
+        return { value: None, error: None, version: 0 }
+      }
+      (home.topic_read)(name, params)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t_ref.val = Some(t)
+  t.run_for(first_slow_ms)
+  // (a chat tapped on what shows of it: its own page waits for the chat too)
+  @sfbase.open_page(Chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }))
+  t.run_for(first_short_ms)
+  assert_true(!let_go.iter().any(fn(g) { g.0 == "status {}" }), msg="status still read")
+  let at = t.time()
+  slow.set(false)
+  let status = let_go.filter(fn(g) { g.0 == "status {}" })
+  assert_eq(status.length(), 1)
+  assert_eq(status[0].1, at)
+}
