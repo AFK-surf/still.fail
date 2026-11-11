@@ -7,6 +7,7 @@
 fn init {
   @ui.host_image_bytes_known([
     ("src/sfpages/peek_pictures_wbtest.mbt", 89156),
+    ("src/sfpages/peeks_file_node_wbtest.mbt", 31398),
     ("src/sfpages/screen_wbtest.mbt", 58572),
     ("src/sfpages/settings_rig_wbtest.mbt", 10862),
   ])
