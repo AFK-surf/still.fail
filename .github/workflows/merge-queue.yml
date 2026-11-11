@@ -39,6 +39,7 @@ jobs:
   rates:
     needs: plan
     if: ${{ !cancelled() && needs.plan.outputs.mbui == 'true' }}
+    permissions: { contents: read, actions: read }
     uses: ./.github/workflows/mbui-check.yml
     with: { rates: only }
 
