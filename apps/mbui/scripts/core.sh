@@ -333,7 +333,9 @@ chat_open() {
 
 # A workspace switched to, in Hermes (core/wsswitch.m; client/core-ts/bench/ws-switch-seed.ts seeds two of real size):
 # what the app sends at a switch and when each answer comes, how long the person waits and when the new screen is whole.
-# SCREEN=small|wide: 小屏's Home or 大屏's frame; WS2_LANDS=new: 大屏 lands on a new chat in ws2 (else its chat). Run twice on the same data: the first imports it, the second is the app
+# SCREEN=small|wide: 小屏's Home or 大屏's frame; WS2_LANDS=new: 大屏 lands on a new chat in ws2 (else its chat);
+# STATIONS=up: each workspace's stations up as a device has them as it starts (core/wsswitch.m says how), so a new
+# chat's page is made on one as a device makes it (else every station down). Run twice on the same data: the first imports it, the second is the app
 # started again (the one to read). AWAY_MS: how long away before the last switch (70 s: past what the core keeps of a
 # topic let go of, store.ts EVICT_AFTER_MS).
 ws_switch() {
