@@ -23,7 +23,7 @@ test "92-drive-zip" {
     let kept = f.t.kept().filter(fn(k) { k.0 == "子文件夹.zip" })
     f.check(
       kept.length() == 1 && kept[0].1 == "application/zip" && kept[0].2.length() == 277,
-      "kept \{kept.map(fn(k) { (k.0, k.1, k.2.length()) })}",
+      "kept \{Repr(kept.map(fn(k) { (k.0, k.1, k.2.length()) }))}",
     )
     // its toast, up since the download began, its time shown and gone
     f.run_for(@sfapp.toast_ms)

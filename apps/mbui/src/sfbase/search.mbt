@@ -55,7 +55,7 @@ pub(all) struct FoundOpen {
   root : String?
   path : String
   how : String
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// A kind of what was found (SearchGroup): its heading, what of it is listed, whether there is more of it.

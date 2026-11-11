@@ -15,7 +15,20 @@ pub(all) enum Pose {
   Float
   Spit
   Return
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+/// By its name, as tests count frames by a turn's pose: what `derive(Show)` wrote.
+pub impl Show for Pose with output(self, logger) {
+  logger.write_string(
+    match self {
+      Fold => "Fold"
+      Float => "Float"
+      Spit => "Spit"
+      Return => "Return"
+    },
+  )
+}
 
 ///|
 pub fn Pose::ms(self : Pose) -> Double {

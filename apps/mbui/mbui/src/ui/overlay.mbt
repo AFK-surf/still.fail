@@ -21,7 +21,19 @@ pub(all) enum Dismiss {
   Escape
   Outside
   Back
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+/// By its name, as what a layer is told it was dismissed by is written (tests compare it): what `derive(Show)` wrote.
+pub impl Show for Dismiss with output(self, logger) {
+  logger.write_string(
+    match self {
+      Escape => "Escape"
+      Outside => "Outside"
+      Back => "Back"
+    },
+  )
+}
 
 ///|
 /// A layer as built (Ctx::overlay): its id, node, the layer it was built in (0 the page), how it behaves.

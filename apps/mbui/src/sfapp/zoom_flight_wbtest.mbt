@@ -102,7 +102,7 @@ fn zf_corner_faults(
     }
     let (tl, tr, br, bl) = p.corners
     if tl < corners.0 * 0.2 || tr < corners.1 * 0.2 || br < corners.2 * 0.2 || bl < corners.3 * 0.2 {
-      faults.push("\{share}: corners \{p.corners} of the thumbnail's \{corners}")
+      faults.push("\{share}: corners \{Repr(p.corners)} of the thumbnail's \{Repr(corners)}")
     }
     if tl > corners.0 + 0.01 || tl <= was {
       faults.push("\{share}: its corner \{tl} after \{was}, the thumbnail's \{corners.0}")
@@ -110,7 +110,7 @@ fn zf_corner_faults(
     was = tl
     let (l, top, r, b) = p.clip
     if l < -0.01 || top < -0.01 || r > window.0 + 0.01 || b > window.1 + 0.01 {
-      faults.push("\{share}: cut to \{p.clip}, past the window")
+      faults.push("\{share}: cut to \{Repr(p.clip)}, past the window")
     }
   }
   faults
@@ -171,7 +171,7 @@ fn zf_stop_faults(t : @ui.Tester, v : @sfbase.Viewer, wide : Bool) -> Array[Stri
   for share in [0.25, 0.5, 0.75] {
     t.frame_at(start + (end - start) * share)
     if v.zoom.rect_at(t.time()).unwrap() != stopped {
-      faults.push("\{share}: its zoom went on, \{v.zoom.rect_at(t.time())} from \{stopped}")
+      faults.push("\{share}: its zoom went on, \{Repr(v.zoom.rect_at(t.time()))} from \{Repr(stopped)}")
     }
     match zf_pic(t) {
       Some(p) => {
@@ -304,7 +304,7 @@ fn zf_uneven_frames(t : @ui.Tester, end : Double) -> Array[String] {
       Some(p) => {
         let (tl, tr, br, bl) = p.corners
         if (tl - tr).abs() > 0.01 || (tl - br).abs() > 0.01 || (tl - bl).abs() > 0.01 {
-          faults.push("\{end - t.time()} before its end: \{p.corners}")
+          faults.push("\{end - t.time()} before its end: \{Repr(p.corners)}")
         }
       }
       None => ()

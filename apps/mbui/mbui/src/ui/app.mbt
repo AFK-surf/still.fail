@@ -2806,8 +2806,8 @@ fn probe_said(c : Ctx, t : Double, recording : Bool) -> Unit {
   let said = "fps=\{(n * 1000.0 / span).round()} fps_peak=\{probe_peak.val} span=\{(span / 100.0).round() / 10.0}s cpu=\{cpu}% looks_alone=\{stepped} painted_alone=\{painted} (last: \{probe_last_why.val}) main_busy=\{(probe_work.val * 100.0 / span).round()}% " +
     "work_avg=\{(probe_work.val / n * 10.0).round() / 10.0}ms " +
     "mem=\{probe_mem[1].round()}MB mem_peak=\{probe_mem[0].round()}MB " +
-    "avg tree/msgs/build/layout/paint/present=\{probe_phase.map(fn(x) { (x / n * 10.0).round() / 10.0 })} nodes=\{c.count} " +
-    "drawn whole/part/none=\{probe_parts[0]}/\{probe_parts[1]}/\{probe_parts[2]} whole_why=\{probe_why} damage_avg=\{(probe_damage.val / n * 100.0).round() / 100.0}ms share_avg=\{(probe_share.val * 100.0 / n).round()}% " +
+    "avg tree/msgs/build/layout/paint/present=[\{probe_phase.map(fn(x) { ((x / n * 10.0).round() / 10.0).to_string() }).join(", ")}] nodes=\{c.count} " +
+    "drawn whole/part/none=\{probe_parts[0]}/\{probe_parts[1]}/\{probe_parts[2]} whole_why=[\{probe_why.map(fn(x) { x.to_string() }).join(", ")}] damage_avg=\{(probe_damage.val / n * 100.0).round() / 100.0}ms share_avg=\{(probe_share.val * 100.0 / n).round()}% " +
     "gpu_avg=\{if probe_gpu_n.val > 0 { (probe_gpu.val / probe_gpu_n.val.to_double() * 100.0).round() / 100.0 } else { -1.0 }}ms slow=\{probe_slow.val}"
   // (each line into the record, and on the log with MBUI_PROBE=1: a Mac's, which keeps no record)
   let say = fn(line : String) {

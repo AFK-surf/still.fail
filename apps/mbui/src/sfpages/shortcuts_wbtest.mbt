@@ -143,7 +143,7 @@ test "快捷键, at each width and with either hand: every action's name drawn, 
       }
       let name = @sf.t("web-main.keymap.\{a.0}")
       let n = named(name)
-      assert_true(n.0 == name && n.3 > 0.0 && n.4 == new.4, msg="\{at}: \{name} at \{n}, 新建对话 at \{Repr(new)}")
+      assert_true(n.0 == name && n.3 > 0.0 && n.4 == new.4, msg="\{at}: \{name} at \{Repr(n)}, 新建对话 at \{Repr(new)}")
     }
     // 放大界面's keys, the longest (the only ones with an =): beside it where the line has the room for both, the
     // middle of its line; else under it, at the line's end as 新建对话's are

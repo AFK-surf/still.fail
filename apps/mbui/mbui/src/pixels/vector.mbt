@@ -16,7 +16,7 @@ pub(all) struct VectorPath {
   sy : Double
   tx : Double
   ty : Double
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A picture: its viewport (`w` × `h`) and its paths, drawn in order.
@@ -24,7 +24,7 @@ pub(all) struct Vector {
   w : Double
   h : Double
   layers : Array[VectorPath]
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// The outlines of `l` in the viewport's units times `k`, cut for drawing at `scale` pixels a unit of that.

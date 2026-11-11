@@ -80,7 +80,7 @@ pub struct TrackerSaid {
   priv index : Int
   priv n : Int
   priv t : Double
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What it holds now, kept for its velocity as of `t` (Tracker::velocity_at).

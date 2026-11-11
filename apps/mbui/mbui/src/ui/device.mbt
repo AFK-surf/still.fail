@@ -34,7 +34,7 @@ pub(all) enum Haptic {
   Reject
   /// a key tapped
   KeyboardTap
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 fn Haptic::code(self : Haptic) -> Int {
@@ -103,7 +103,7 @@ pub(all) enum ClipPicture {
   TooLarge
   /// one that could not be read
   Unreadable
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What the clipboard held: its words ("" none), its picture, its files (copied in macOS's Finder, or by an app that
@@ -112,7 +112,7 @@ pub(all) struct Clipboard {
   text : String
   picture : ClipPicture
   files : Array[(String, Bytes)]
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A read of the clipboard under way (clipboard_read), waited on (an outside ticket) until it is taken.
@@ -471,7 +471,7 @@ pub(all) enum KeyIn {
   Text(String)
   /// a key going down or up: the DOM's `key` and `code`, the modifiers held (key_in_*)
   Key(down~ : Bool, key~ : String, code~ : String, mods~ : Int)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A KeyIn's modifiers: Alt (Option), Ctrl, Meta (⌘, the Windows key), Shift.

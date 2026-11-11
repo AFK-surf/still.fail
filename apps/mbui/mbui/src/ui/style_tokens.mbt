@@ -47,7 +47,7 @@ pub(all) enum Space {
   S80
   S96
   Exact(Double)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// The spacing scale: every named step, in order (what each comes to: Space::px). What measures spacing against the
@@ -207,7 +207,58 @@ pub(all) enum Len {
   S72
   S80
   S96
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+/// As a fault of style_node's says a length (sf's style_wrong): what `derive(Show)` wrote, a number as its text.
+pub impl Show for Len with output(self, logger) {
+  match self {
+    Hug => logger.write_string("Hug")
+    Cut => logger.write_string("Cut")
+    Full => logger.write_string("Full")
+    Grow(v) => logger.write_string("Grow(\{v})")
+    Fixed(v) => logger.write_string("Fixed(\{v})")
+    Pct(v) => logger.write_string("Pct(\{v})")
+    Within(v) => logger.write_string("Within(\{v})")
+    S0 => logger.write_string("S0")
+    SPx => logger.write_string("SPx")
+    S0_5 => logger.write_string("S0_5")
+    S1 => logger.write_string("S1")
+    S1_25 => logger.write_string("S1_25")
+    S1_5 => logger.write_string("S1_5")
+    S2 => logger.write_string("S2")
+    S2_5 => logger.write_string("S2_5")
+    S3 => logger.write_string("S3")
+    S3_5 => logger.write_string("S3_5")
+    S4 => logger.write_string("S4")
+    S4_5 => logger.write_string("S4_5")
+    S5 => logger.write_string("S5")
+    S6 => logger.write_string("S6")
+    S7 => logger.write_string("S7")
+    S8 => logger.write_string("S8")
+    S9 => logger.write_string("S9")
+    S10 => logger.write_string("S10")
+    S11 => logger.write_string("S11")
+    S12 => logger.write_string("S12")
+    S14 => logger.write_string("S14")
+    S16 => logger.write_string("S16")
+    S20 => logger.write_string("S20")
+    S24 => logger.write_string("S24")
+    S28 => logger.write_string("S28")
+    S32 => logger.write_string("S32")
+    S36 => logger.write_string("S36")
+    S40 => logger.write_string("S40")
+    S44 => logger.write_string("S44")
+    S48 => logger.write_string("S48")
+    S52 => logger.write_string("S52")
+    S56 => logger.write_string("S56")
+    S60 => logger.write_string("S60")
+    S64 => logger.write_string("S64")
+    S72 => logger.write_string("S72")
+    S80 => logger.write_string("S80")
+    S96 => logger.write_string("S96")
+  }
+}
 
 ///|
 /// The spacing token a length names, if it names one.
@@ -326,7 +377,7 @@ pub(all) enum Radius {
   Linked(CornerOf)
   /// the same each its own (top left, then round it)
   LinkedEach(CornerOf, CornerOf, CornerOf, CornerOf)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A size of words with its line's height: by what the words are (`Caption` … `Display`: the theme's roles, as a
@@ -361,7 +412,7 @@ pub(all) enum TextSize {
   Xl6
   Xl7
   Exact(Double, Double)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A line's height said apart from the words' size (which has one of its own, TextSize): the theme's scale
@@ -378,7 +429,7 @@ pub(all) enum Leading {
   L9
   L10
   Exact(Double)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Letter spacing (Tailwind's tracking, in ems of the words' size), or `Exact(px)` in pixels: added to each
@@ -391,7 +442,7 @@ pub(all) enum Tracking {
   Wider
   Widest
   Exact(Double)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// The spacing in pixels, for words of `size`.
@@ -414,7 +465,7 @@ pub(all) enum Weight {
   Medium
   Semibold
   Bold
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn Weight::value(self : Weight) -> Int {
@@ -451,7 +502,7 @@ pub(all) enum Opacity {
   O95
   O100
   Exact(Double)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn Opacity::value(self : Opacity) -> Double {
@@ -555,7 +606,7 @@ pub(all) enum Color {
   /// a colour that comes with what is shown, not the design's (an avatar's own ground, a colour a person typed): from
   /// data, never a number written in a view (one there is a style-literal)
   Data(Int64)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// An edge's width (Tailwind's border widths, and a hairline: B0_5; B1_5 a ring a little firmer than a line, as a dot
@@ -568,7 +619,7 @@ pub(all) enum Stroke {
   B2
   B4
   B8
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// How wide a border of this stroke is, in points (an old view's box's, and the library's style_node's for an edge).
@@ -595,7 +646,7 @@ pub(all) enum Shadow {
   Xl
   /// a shadow said whole: its sigma, how far down, its colour (an app's own, worked out once where it says why)
   Cast(Double, Double, Int64)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A shadow's blur (its sigma, as CALayer's shadowRadius) and how far down it falls.

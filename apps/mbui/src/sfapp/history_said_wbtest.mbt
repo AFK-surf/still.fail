@@ -12,20 +12,20 @@
 fn name_line_wrong(t : @ui.Tester, at : String, name : String, rest : String, w : Double, made : String) -> String {
   let names = t.words().filter(fn(x) { x.0.has_prefix(name) })
   let rests = t.words().filter(fn(x) { x.0.has_prefix(rest) })
-  guard names.length() >= 1 && rests.length() >= 1 else { return "\{at}: \{names} \{rests}" }
+  guard names.length() >= 1 && rests.length() >= 1 else { return "\{at}: \{Repr(names)} \{Repr(rests)}" }
   let (n, r) = (names[0], rests[0])
   let seen = t
     .glyphs_seen()
     .filter(fn(g) { (g.0 + g.2) / 2.0 > r.1 && (g.0 + g.2) / 2.0 < r.1 + r.3 && (g.1 + g.3) / 2.0 > r.2 && (g.1 + g.3) / 2.0 < r.2 + r.4 })
   let faults = t.squeeze_faults().filter(fn(f) { f.contains(made) })
   if !(n.3 > 0.0 && n.1 + n.3 <= r.1 + 0.5) {
-    "\{at}: the name at \{n}, what follows it at \{r}"
+    "\{at}: the name at \{Repr(n)}, what follows it at \{Repr(r)}"
   } else if !(r.3 >= @sf.name_line_rest_least - 0.5 && r.1 + r.3 <= w + 0.5) {
-    "\{at}: what follows the name at \{r}, no narrower than \{@sf.name_line_rest_least}"
+    "\{at}: what follows the name at \{Repr(r)}, no narrower than \{@sf.name_line_rest_least}"
   } else if seen.length() < 3 {
-    "\{at}: of what follows the name, \{seen.length()} glyphs seen (its dot, one at least, its ellipsis): \{seen}"
+    "\{at}: of what follows the name, \{seen.length()} glyphs seen (its dot, one at least, its ellipsis): \{Repr(seen)}"
   } else if faults.length() > 0 {
-    "\{at}: \{faults}"
+    "\{at}: \{Repr(faults)}"
   } else {
     ""
   }

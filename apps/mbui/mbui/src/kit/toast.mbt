@@ -12,7 +12,7 @@ pub(all) struct Toast {
   title : String
   description : String
   action : String
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// A toast of `title` (its id `id`).

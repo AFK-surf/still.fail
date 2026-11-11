@@ -31,7 +31,7 @@ pub(all) enum SheetDrag {
   DraggedBack
   /// let go: on to this share of the window
   DraggedTo(Double)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What a sheet reports: whether it is open now, whether it is drawn (open, or still sinking away), what a drag let go

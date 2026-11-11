@@ -458,7 +458,7 @@ pub fn Tester::idle_said(self : Tester) -> String? {
   } else if layout_left() {
     why.push(
       "a frame asked for to lay out (" +
-      (if layout_said.val != "" { layout_said.val } else { "what a part or a list's row read changed: \{nodes_run.told_by}" }) +
+      (if layout_said.val != "" { layout_said.val } else { "what a part or a list's row read changed: (\{nodes_run.told_by.0}, \{nodes_run.told_by.1})" }) +
       ")",
     )
   } else if self.fake.wants && !c.wants_frame {

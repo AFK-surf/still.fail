@@ -255,7 +255,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
               }
               None => ""
             }
-            out.push("row " + key + " (list " + st.named + ") " + f + " seen=\{seen}" + why)
+            out.push("row " + key + " (list " + st.named + ") " + f + " seen=[\{seen.map(fn(s) { "(\{s.0}, \{s.1}, \{s.2})" }).join(", ")}]" + why)
             said = true
           }
           None => ()

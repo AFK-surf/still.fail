@@ -13,7 +13,7 @@ pub(all) struct TextRun {
   base : Double
   top : Double
   bottom : Double
-} derive(Show, Debug, Eq)
+} derive(Debug, Eq)
 
 ///|
 priv struct TextRuns {

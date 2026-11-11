@@ -585,7 +585,7 @@ pub(all) struct FieldEdit {
   now : String
   selection : (Int, Int)
   by : FieldEditBy
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What made an edit of a field: keys typed (a key, the input method's text), a paste (and words let go on it), an undo
@@ -595,7 +595,7 @@ pub(all) enum FieldEditBy {
   Pasted
   Undone
   Pointed
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What the edit changed of its words (words_changed).

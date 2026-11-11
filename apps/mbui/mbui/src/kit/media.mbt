@@ -33,7 +33,7 @@ pub(all) struct MediaStatus {
   /// the picture's own size (0 × 0: none, or not known yet)
   width : Double
   height : Double
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// How `n` stands now (nothing open: opening, of no length).
@@ -77,7 +77,7 @@ pub(all) enum MediaPhase {
   Paused
   Ended
   Failed
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What a double tap did, said a moment (the view's words for it): `nudge_ms` back, on, paused, played.
@@ -86,7 +86,7 @@ pub(all) enum MediaNote {
   Ahead(Double)
   Paused
   Played
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A frame of the player: how it stands, what is playing, whether it is a song, whether what it waits on has been

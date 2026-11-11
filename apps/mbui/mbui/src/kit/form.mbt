@@ -11,7 +11,7 @@ pub(all) enum FieldKind {
   Email
   Secret
   Number
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// A form's field: its name (its value's key), its label, what it takes, whether it is needed, its placeholder, and

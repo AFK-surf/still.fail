@@ -9,7 +9,7 @@ pub(all) struct Transform {
   sy : Float
   tx : Float
   ty : Float
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn Transform::identity() -> Transform {

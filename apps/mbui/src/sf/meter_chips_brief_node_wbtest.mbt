@@ -121,7 +121,7 @@ test "meter_chips_brief_node in a line short even of the low ones: those it has 
     // (内存 and 磁盘, the two running low, 4 apart: just the room for both at their narrowest)
     let both = least[1] + @ui.Space::S1.px() + least[2]
     for w in [both, 110.0, 70.0] {
-      let at = "platform \{platform} \{w} wide (least \{least})"
+      let at = "platform \{platform} \{w} wide (least \{Repr(least)})"
       let t = mb_tester(true, w, platform)
       // (each chip's ground and fill: a rect as high as a small chip on the line's top; a chip, the widest at its start)
       let chips : Map[Int, (Double, Double)] = Map([])

@@ -356,13 +356,13 @@ pub(all) enum LengthUnit {
   Pt
   Pc
   Percent
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub(all) struct Length {
   number : Double
   unit : LengthUnit
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 fn Length::zero() -> Length {
@@ -520,14 +520,14 @@ pub(all) enum Align {
   XMinYMax
   XMidYMax
   XMaxYMax
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub(all) struct AspectRatio {
   deferred : Bool
   align : Align
   slice : Bool
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn AspectRatio::default() -> AspectRatio {

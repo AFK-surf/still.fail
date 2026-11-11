@@ -309,14 +309,14 @@ fn list_leaving_changed_history(hz : Int) -> Array[(Double, Double, Double, Doub
   let out = [sample()]
   list_frames_until(t, change_at + @ui.row_size_ms / 2.0, hz)
   let middle = sample()
-  assert_true(middle.1 > 50.0 && middle.1 < 120.0, msg="\{hz} Hz: changed row \{middle}")
-  assert_true(middle.3 > 0.0 && middle.3 < leaving, msg="\{hz} Hz: leaving row \{middle}")
+  assert_true(middle.1 > 50.0 && middle.1 < 120.0, msg="\{hz} Hz: changed row \{Repr(middle)}")
+  assert_true(middle.3 > 0.0 && middle.3 < leaving, msg="\{hz} Hz: leaving row \{Repr(middle)}")
   out.push(middle)
   list_frames_until(t, change_at + @ui.row_size_ms * 2.0, hz)
   let end = sample()
-  assert_true((end.1 - 120.0).abs() < 0.5 && end.3 == -1.0, msg="\{hz} Hz: settled \{end}")
+  assert_true((end.1 - 120.0).abs() < 0.5 && end.3 == -1.0, msg="\{hz} Hz: settled \{Repr(end)}")
   out.push(end)
-  println("leaving and changed row \{hz} Hz: \{out}")
+  println("leaving and changed row \{hz} Hz: \{Repr(out)}")
   out
 }
 

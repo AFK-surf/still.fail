@@ -1272,7 +1272,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   // is laid out by besides what it reads: the window, the navigation bar's room, the ground, the place shown and
   // whether it shows
   let t = @sf.theme()
-  let key = "\{c.width} \{c.height} \{nav_foot()} \{t.p.bg} \{t.dark} \{ws.id} \{active} \{shown}"
+  let key = "\{c.width} \{c.height} \{nav_foot()} \{t.p.bg} \{t.dark} \{ws.id} \{@ui.some_text(active)} \{shown}"
   c.kept_as_nodes(
     c.id("bar/kept"),
     key,

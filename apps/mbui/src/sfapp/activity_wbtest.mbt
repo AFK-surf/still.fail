@@ -296,8 +296,8 @@ test "activity: what its agent's stream changes beside the line builds nothing i
   assert_true(t.find(@sffixture.working_step) is Some(_), msg="the line says its step")
   // a rate, a call's input growing, a step ended: nothing comes
   let none = activity_frame_after(t, fn() { () })
-  assert_eq(none.0, "", msg="nothing built: \{none}")
-  assert_true(none.1 == { made: 0, let_go: 0, laid: 0, measured: 0 }, msg="nothing made: \{none}")
+  assert_eq(none.0, "", msg="nothing built: \{Repr(none)}")
+  assert_true(none.1 == { made: 0, let_go: 0, laid: 0, measured: 0 }, msg="nothing made: \{Repr(none)}")
   // as the core sent it before: the rest of the agent's state changed, the line's words as they were
   let before = activity_frame_after(t, fn() {
     live.set({
@@ -309,7 +309,7 @@ test "activity: what its agent's stream changes beside the line builds nothing i
   t.run_for(@ui.move_most_ms)
   let changed = activity_frame_after(t, fn() { live.set({ "activity": { "now": now("call:2", "整理下一步") } }) })
   t.run_for(@ui.move_most_ms * 4.0)
-  println("nothing told: \{none}\nthe rest of its state told, the line as it was (before): \{before}\nthe line changed: \{changed}")
+  println("nothing told: \{Repr(none)}\nthe rest of its state told, the line as it was (before): \{Repr(before)}\nthe line changed: \{Repr(changed)}")
   assert_true(before.0 != "", msg="before, the line's row was built again for what it does not show: \{Repr(before)}")
   assert_true(changed.0 != "", msg="the line's row built for its words: \{Repr(changed)}")
   assert_true(t.find("整理下一步") is Some(_), msg="the line says what it does now")

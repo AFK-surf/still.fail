@@ -174,9 +174,9 @@ test "where its words stand on each screen: the title, what it asks, whose vault
     let place = prompt_word(t, "星火工作室 · 林的库")
     let (give, later) = (prompt_word(t, "授权"), prompt_word(t, "稍后"))
     // (one under another, in this order, at the same start; the buttons' words in the middle of the panel's)
-    assert_true(title.1 + title.3 <= body.1 && body.1 + body.3 <= place.1 && place.1 + place.3 <= give.1, msg="\{about}: \{title} \{body} \{place} \{give}")
-    assert_true(give.1 + give.3 < later.1, msg="\{about}: \{give} \{later}")
-    assert_true((title.0 - body.0).abs() < 1.0 && (body.0 - place.0).abs() < 1.0, msg="\{about}: \{title} \{Repr(body)} \{Repr(place)}")
+    assert_true(title.1 + title.3 <= body.1 && body.1 + body.3 <= place.1 && place.1 + place.3 <= give.1, msg="\{about}: \{title} \{body} \{place} \{Repr(give)}")
+    assert_true(give.1 + give.3 < later.1, msg="\{about}: \{Repr(give)} \{Repr(later)}")
+    assert_true((title.0 - body.0).abs() < 1.0 && (body.0 - place.0).abs() < 1.0, msg="\{about}: \{Repr(title)} \{Repr(body)} \{Repr(place)}")
     let mid = fn(r : (Double, Double, Double, Double)) { r.0 + r.2 / 2.0 }
     assert_true((mid(give) - mid(place)).abs() < 1.0 && (mid(later) - mid(place)).abs() < 1.0, msg="\{about}: \{Repr(give)} \{Repr(later)} \{Repr(place)}")
   }

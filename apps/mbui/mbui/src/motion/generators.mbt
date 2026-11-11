@@ -11,7 +11,7 @@
 pub(all) struct GenState {
   done : Bool
   value : Double
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Values over time (Motion's KeyframeGenerator): `next(t)` its state at `t` ms from its start, `velocity(t)` (per

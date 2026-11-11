@@ -58,7 +58,7 @@ fn sub_panel(
 fn sub_at(t : @ui.Tester, words : Array[String]) -> Array[String] {
   words.map(fn(s) {
     match t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }).last() {
-      Some(w) => "\{s} \{tenth4((w.1, w.2, w.3, w.4))}"
+      Some(w) => "\{s} \{@ui.rect_text(tenth4((w.1, w.2, w.3, w.4)))}"
       None => "\{s} -"
     }
   })

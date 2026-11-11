@@ -38,7 +38,50 @@ pub(all) enum Role {
   Form
   Heading
   ScrollArea
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+/// By its name, as tests and the said tree's text write a node's role: what `derive(Show)` wrote.
+pub impl Show for Role with output(self, logger) {
+  logger.write_string(
+    match self {
+      Text => "Text"
+      Group => "Group"
+      Button => "Button"
+      Link => "Link"
+      Checkbox => "Checkbox"
+      Switch => "Switch"
+      Radio => "Radio"
+      RadioGroup => "RadioGroup"
+      Slider => "Slider"
+      ProgressBar => "ProgressBar"
+      Tab => "Tab"
+      TabList => "TabList"
+      TabPanel => "TabPanel"
+      Dialog => "Dialog"
+      AlertDialog => "AlertDialog"
+      Tooltip => "Tooltip"
+      Menu => "Menu"
+      MenuBar => "MenuBar"
+      MenuItem => "MenuItem"
+      MenuItemCheckbox => "MenuItemCheckbox"
+      MenuItemRadio => "MenuItemRadio"
+      Listbox => "Listbox"
+      Option => "Option"
+      Combobox => "Combobox"
+      Toolbar => "Toolbar"
+      Separator => "Separator"
+      Image => "Image"
+      TextField => "TextField"
+      Status => "Status"
+      Region => "Region"
+      Navigation => "Navigation"
+      Form => "Form"
+      Heading => "Heading"
+      ScrollArea => "ScrollArea"
+    },
+  )
+}
 
 ///|
 /// A checkbox's state (and a menu's checkbox item's): off, on, or neither (some of what it stands for is on).
@@ -46,7 +89,19 @@ pub(all) enum Check {
   Off
   On
   Mixed
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+/// By its name, as tests and the said tree's text write a checkbox's state: what `derive(Show)` wrote.
+pub impl Show for Check with output(self, logger) {
+  logger.write_string(
+    match self {
+      Off => "Off"
+      On => "On"
+      Mixed => "Mixed"
+    },
+  )
+}
 
 ///|
 /// What can be done to a widget: pressed (a click, a tap), moved up or down a step (a slider), opened or closed,
@@ -62,7 +117,7 @@ pub(all) enum Action {
   /// words put in a field in place of what it held, as a screen reader writes them (UI Automation's SetValue,
   /// TalkBack's set text); among what a widget says it takes, its words are none's (SetText(""))
   SetText(String)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What a node of the window's tree says it is (View::says): its role, its label (none: the words it holds), what
@@ -81,7 +136,7 @@ pub(all) struct Said {
   selected : Bool?
   pressed : Bool?
   actions : Array[Action]
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A node of `role`, what else it says as given.

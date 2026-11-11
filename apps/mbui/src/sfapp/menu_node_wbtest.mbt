@@ -357,7 +357,7 @@ fn menu_of_three(chosen : Array[Int]) -> @ui.Tester {
 /// What has the focus (a menu by its role alone), whether a menu is open, and what was chosen.
 fn menu_keys_said(t : @ui.Tester, chosen : Array[Int]) -> String {
   let f = t.focused().map(fn(s) { if s.role is Menu { "Menu" } else { "\{s.role} \{s.label}" } }).unwrap_or("none")
-  "\{f} open=\{@sf.presenting()} chosen=\{chosen}"
+  "\{f} open=\{@sf.presenting()} chosen=\{@ui.list_text(chosen)}"
 }
 
 ///|

@@ -2443,7 +2443,7 @@ fn shown_sign(e : Entry) -> String {
   match e {
     Said(m) => {
       let d = match m.decision {
-        Some(d) => "\{d.resolved}\{d.dismissed}\{d.chosen}"
+        Some(d) => "\{d.resolved}\{d.dismissed}\{@ui.some_text(d.chosen)}"
         None => ""
       }
       "m\{m.text.length()}|\{m.attachments.length()}|\{m.quotes.length()}|\{m.time is Some(_)}|\{m.waiting}|\{m.joined}|\{m.followed}|\{d}|\{m.notice_failed}|\{m.notice_words.length()}|\{m.notice_retry_session}|\{m.notice_detail.length()}"

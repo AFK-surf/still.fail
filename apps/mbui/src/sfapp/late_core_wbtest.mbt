@@ -339,12 +339,12 @@ test "a workspace switched over a core answering each of its topics tens of ms l
     // (every frame before the switch the first workspace as it was, no bone)
     let before = frames[:i].to_owned().filter(fn(f) { f.1 > 0 || f.2 != "ws1" || f.3 != "ws1" })
     if before.length() > 0 {
-      faults.push(name + ": before the switch \{before}")
+      faults.push(name + ": before the switch \{Repr(before)}")
     }
     // (the switch's frame and every frame after it the other's, whole (on the wide frame the pane filled), no bone)
     let after = frames[i:].to_owned().filter(fn(f) { f.1 > 0 || f.2 != "ws2" || f.3 != "ws2" || (wide && !f.4) })
     if after.length() > 0 {
-      faults.push(name + ": from the switch on \{after}")
+      faults.push(name + ": from the switch on \{Repr(after)}")
     }
     // (within switch_wait_ms, and not before the last it waits for came: on the wide frame the new chat the pane lands
     // on, asked once the marks said it)
@@ -370,11 +370,11 @@ test "a workspace switched over a core that answers none of it within switch_wai
     let wait = @sfbase.switch_wait_ms
     let early = frames.filter(fn(f) { f.0 < wait && (f.1 > 0 || f.2 != "ws1" || f.3 != "ws1") })
     if early.length() > 0 {
-      faults.push(name + ": before switch_wait_ms \{early}")
+      faults.push(name + ": before switch_wait_ms \{Repr(early)}")
     }
     let late = frames.filter(fn(f) { f.0 > wait && f.2 != "ws2" })
     if late.length() > 0 {
-      faults.push(name + ": after switch_wait_ms \{late}")
+      faults.push(name + ": after switch_wait_ms \{Repr(late)}")
     }
   }
   assert_eq(faults, [])

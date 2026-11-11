@@ -19,7 +19,7 @@ pub(all) struct HostFrame {
   /// of the window (1: all)
   damage : Array[(Double, Double, Double, Double)]
   damage_share : Double
-} derive(Show, Debug)
+} derive(Debug)
 
 ///|
 /// The frames recorded since Tester::record_host (None: not recording).

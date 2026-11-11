@@ -81,7 +81,7 @@ test "the button as a node at rest, its words its width or as wide as a column, 
     let (tone, across, start) = k
     let old = button_drawn(button_case(@signals.signal("Join"), @signals.signal(false), false, tone~, across~, start~))
     let new = button_drawn(button_case(@signals.signal("Join"), @signals.signal(false), true, tone~, across~, start~))
-    seen.push("old \{old.0} \{old.1[:1]}, node \{new.0} \{new.1[:1]}")
+    seen.push("old \{Repr(old.0)} \{Repr(old.1[:1])}, node \{Repr(new.0)} \{Repr(new.1[:1])}")
     drawn_near(old, new) && new.0.iter().all(fn(r) { r.3 == button_height() })
   })
   assert_eq(same, Array::make(cases.length(), true), msg="\{Repr(seen)}")

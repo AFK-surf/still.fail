@@ -7,7 +7,7 @@ pub(all) struct ColorU8 {
   g : Int
   b : Int
   a : Int
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn ColorU8::from_rgba(r : Int, g : Int, b : Int, a : Int) -> ColorU8 {
@@ -30,7 +30,7 @@ pub(all) struct PremultipliedColorU8 {
   g : Int
   b : Int
   a : Int
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn PremultipliedColorU8::from_rgba(r : Int, g : Int, b : Int, a : Int) -> PremultipliedColorU8? {
@@ -83,7 +83,7 @@ pub(all) struct Color {
   g : Float
   b : Float
   a : Float
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub let color_transparent : Color = { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }
@@ -155,7 +155,7 @@ pub(all) struct PremultipliedColor {
   g : Float
   b : Float
   a : Float
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn PremultipliedColor::demultiply(self : PremultipliedColor) -> Color {
@@ -184,7 +184,7 @@ pub(all) enum ColorSpace {
   Gamma2
   SimpleSRGB
   FullSRGBGamma
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 fn ColorSpace::expand_channel(self : ColorSpace, x : Float) -> Float {
@@ -283,7 +283,7 @@ pub(all) struct ScreenIntRect {
   y : Int
   width : Int
   height : Int
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn ScreenIntRect::from_xywh(x : Int, y : Int, width : Int, height : Int) -> ScreenIntRect? {
@@ -369,7 +369,7 @@ pub(all) enum BlendMode {
   Saturation
   Color
   Luminosity
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 fn BlendMode::should_pre_scale_coverage(self : BlendMode) -> Bool {

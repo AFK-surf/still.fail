@@ -18,7 +18,7 @@ pub(all) enum CornerOf {
   Own(Double)
   /// `from` followed `inset` in from its edges, concentric with it; `alone` where the ranges do not let it be
   Follow(CornerOf, Double, Double)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What lies in a rounded container's corner and what the corner rule may make of it to be concentric with it : its corner `least` at least and `most` at most, standing `near` to `far` from
@@ -31,7 +31,7 @@ pub(all) struct CornerFit {
   most : Double
   near : Double
   far : Double
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What every linked corner is worked out from: the window's corner in content points, the zoom at which those points
@@ -40,7 +40,7 @@ pub(all) struct CornerRoots {
   window : Double
   fit : CornerFit?
   zoom : Double
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Its radius, from `at`.

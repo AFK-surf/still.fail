@@ -1158,7 +1158,7 @@ pub(all) enum Layout {
   Medium
   /// the panes side by side, all of them shown: the rail and the sidebar, the page, the page's side panel
   Large
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// The layout of a window `width` wide, in points, on every screen alike (medium_from, large_from): neither which way up

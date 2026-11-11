@@ -6,7 +6,19 @@ pub(all) enum FontStyle {
   Normal
   Italic
   Oblique
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+/// By its name, as a font's key says it (svg's SFont::key): what `derive(Show)` wrote.
+pub impl Show for FontStyle with output(self, logger) {
+  logger.write_string(
+    match self {
+      Normal => "Normal"
+      Italic => "Italic"
+      Oblique => "Oblique"
+    },
+  )
+}
 
 ///|
 pub(all) struct FaceInfo {
@@ -211,7 +223,7 @@ pub(all) enum Family {
   Cursive
   Fantasy
   Monospace
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn FontDb::family_name(self : FontDb, f : Family) -> String {

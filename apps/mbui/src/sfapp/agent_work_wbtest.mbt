@@ -259,8 +259,8 @@ test "the history's tiles: a figure longer than six characters, on its smaller l
     for w in [long, short, long_name, short_name] {
       assert_true(w.4 > 0.0, msg="at \{scale}: \{Repr(t.words())}")
     }
-    assert_true(long.4 < short.4, msg="at \{scale}: the long figure on the smaller line: \{long} \{short}")
-    assert_eq(long_name.2, short_name.2, msg="at \{scale}: the names level: \{long_name} \{Repr(short_name)}")
+    assert_true(long.4 < short.4, msg="at \{scale}: the long figure on the smaller line: \{Repr(long)} \{Repr(short)}")
+    assert_eq(long_name.2, short_name.2, msg="at \{scale}: the names level: \{Repr(long_name)} \{Repr(short_name)}")
     assert_true(short.2 + short.4 <= short_name.2 + 1.0, msg="at \{scale}: \{Repr(short)} over \{Repr(short_name)}")
     assert_true(long.2 + long.4 <= long_name.2 + 1.0, msg="at \{scale}: \{Repr(long)} over \{Repr(long_name)}")
     assert_eq(t.squeeze_faults(), [], msg="at \{scale}: \{Repr(t.squeeze_faults())}")

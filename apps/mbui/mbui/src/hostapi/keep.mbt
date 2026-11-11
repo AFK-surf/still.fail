@@ -26,7 +26,19 @@ pub(all) enum KeepWay {
   /// a picture or a film into the phone's photo album (iOS Photos, Android's Pictures or Movies); where there is none, as
   /// Downloads
   Photos
-} derive(Eq, Show)
+} derive(Eq, Debug)
+
+///|
+/// By its name, as tests write where a file was kept: what `derive(Show)` wrote.
+pub impl Show for KeepWay with output(self, logger) {
+  logger.write_string(
+    match self {
+      Downloads => "Downloads"
+      Choose => "Choose"
+      Photos => "Photos"
+    },
+  )
+}
 
 ///|
 /// How a keep stands.

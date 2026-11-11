@@ -18,7 +18,7 @@ pub(all) enum Orientation {
   Horizontal
   Vertical
   Both
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What can take the focus, as built: its id, its roving group (0 none), the layer it is in (0 the page), its node,

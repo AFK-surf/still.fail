@@ -319,7 +319,7 @@ test "an iPhone Duo, folded or on its side: the cards as far from the screen's f
     }
     guard composer_and_page(t) is Some((b, p)) else { fail("no composer in a page") }
     let near = fn(x : Double, y : Double) { (x - y).abs() < 0.05 }
-    assert_true(near(p.y + p.h, h - @sf.native_in), msg="\{size}: the page's foot at \{p.y + p.h}")
+    assert_true(near(p.y + p.h, h - @sf.native_in), msg="\{Repr(size)}: the page's foot at \{p.y + p.h}")
     assert_true(near(b.h, a), msg="\{Repr(size)}: the composer \{b.h} high")
     assert_true(near(b.y + b.h / 2.0, ay + a / 2.0), msg="\{Repr(size)}: the composer's middle at \{b.y + b.h / 2.0}")
     let at = (b.x - p.x, p.y + p.h - (b.y + b.h))
@@ -673,7 +673,7 @@ test "an iPhone Duo on its side: the side panel closed while in use slides off a
   t.run_for(@ui.move_most_ms / 2.0)
   // on its way: the page coming back, the panel's page still drawn, further right
   let holes = t.holes()
-  assert_eq(holes.length(), 1, msg="the panel's page as it goes (\{@sfdesk.wide.tape_at.get()})")
+  assert_eq(holes.length(), 1, msg="the panel's page as it goes (\{Repr(@sfdesk.wide.tape_at.get())})")
   assert_true(holes[0].0 > x0 + 100.0 && holes[0].0 < w, msg="from \{x0}, on its way at \{holes[0].0}")
   t.run_for(@ui.move_most_ms * 2.0)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)

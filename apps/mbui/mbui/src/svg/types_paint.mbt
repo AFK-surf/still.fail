@@ -65,7 +65,7 @@ pub(all) enum PaintOrderKind {
   OFill
   OStroke
   OMarkers
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 fn default_paint_order() -> Array[PaintOrderKind] {

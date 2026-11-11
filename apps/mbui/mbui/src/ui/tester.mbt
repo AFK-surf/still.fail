@@ -975,7 +975,7 @@ pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
 /// The waits asked without their own `since` that count from no cause, from the frame's moment as it began, or from
 /// the latest of several (Ctx::held, wait_look): said as MOTION lines, each a place to give its `since` or to make a node.
 fn wait_looked(kind : String, loc : SourceLoc, causes : Array[(Double, String)]) -> Unit {
-  println("MOTION \{kind} \{sizes_steady.file}: \{loc} \{causes}")
+  println("MOTION \{kind} \{sizes_steady.file}: \{loc} [\{causes.map(fn(c) { "(\{c.0}, \{c.1})" }).join(", ")}]")
 }
 
 ///|
@@ -3346,7 +3346,7 @@ fn Tester::hold_corners(self : Tester) -> Unit {
   if faults.is_empty() {
     return
   }
-  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{c.corner_ladder}; the rule: mbui's src/ui/corners.mbt):\n" +
+  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{Repr(c.corner_ladder)}; the rule: mbui's src/ui/corners.mbt):\n" +
     faults.join("\n")
   @halt.saying(said)
 }
@@ -3476,4 +3476,25 @@ pub fn Tester::bones_drawn(self : Tester) -> Int {
     None => ()
   }
   n
+}
+
+///|
+/// The text `Show` wrote for an option of a plain value (`Some(v)`, `None`), for what a test compares as it was written
+/// before the `Show` of a composed value went (a value shown for debugging is `Repr`). `list_text` the same of an array
+/// (`[a, b]`), `rect_text` of four numbers (`(x, y, w, h)`).
+pub fn[T : Show] some_text(o : T?) -> String {
+  match o {
+    Some(v) => "Some(\{v})"
+    None => "None"
+  }
+}
+
+///|
+pub fn[T : Show] list_text(xs : Array[T]) -> String {
+  "[" + xs.map(fn(x) { x.to_string() }).join(", ") + "]"
+}
+
+///|
+pub fn rect_text(r : (Double, Double, Double, Double)) -> String {
+  "(\{r.0}, \{r.1}, \{r.2}, \{r.3})"
 }

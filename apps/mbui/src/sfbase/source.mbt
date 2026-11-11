@@ -56,7 +56,7 @@ pub(all) enum SignInStep {
   InBrowser
   Verifying
   Failed(String)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// The step a sign-in's state says (sfcore's SignIn: `failed` "" when it did not fail, "!" when it did with no words).

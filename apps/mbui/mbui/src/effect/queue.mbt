@@ -1,6 +1,6 @@
 ///|
 /// A queue that was shut down: no more offers, and takes once it is empty.
-pub suberror QueueShutdown derive(Show)
+pub suberror QueueShutdown derive(Debug)
 
 ///|
 /// A queue between fibers: `take` waits for an item; on a bounded one,

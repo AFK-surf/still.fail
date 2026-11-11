@@ -5697,7 +5697,7 @@ pub(all) struct Menu {
   wx : Double
   wy : Double
   at : Double
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What the pointer's secondary button pressed on it asks for (its menu, where it was pressed): run as one change at
@@ -5738,7 +5738,7 @@ pub(all) struct Wheel {
   at : Double
   w : Double
   h : Double
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What a wheel turned over it does (its own, at the wheel's moment, as one change outside any tracking): what is
@@ -5879,7 +5879,7 @@ pub(all) struct Key {
   code : Int
   mods : Int
   at : Double
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What a key does to it, while it takes input (living, not leaving nor said to take none, no modal layer over it that
@@ -6069,7 +6069,7 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
 pub struct DragSpeed {
   priv across : TrackerSaid?
   priv down : TrackerSaid?
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// No speed (a finger called off, or one that cannot tell).
@@ -6105,7 +6105,20 @@ pub(all) enum DragIs {
   Moved
   Up
   Off
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+/// By its name, as tests write a drag's step: what `derive(Show)` wrote.
+pub impl Show for DragIs with output(self, logger) {
+  logger.write_string(
+    match self {
+      Down => "Down"
+      Moved => "Moved"
+      Up => "Up"
+      Off => "Off"
+    },
+  )
+}
 
 ///|
 pub(all) struct Drag {
@@ -6134,7 +6147,7 @@ pub(all) struct Drag {
   /// how fast the finger goes as of this event (Drag::vx, Drag::vy): its own events since it went down, kept as they
   /// were then, the speed worked out of them only where it is asked
   priv speed : DragSpeed
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What a finger or the pointer held on it does as it goes: put down on it, it is the node's till it is let go or
@@ -10894,7 +10907,7 @@ pub(all) enum FingerAreas {
   InWindow(Array[(Double, Double, Double, Double)])
   /// all of it drawn, where what it hosts takes one (View::hosted_takes; a hosted node saying nothing of it)
   AsItHosts
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Where in the window node `id` takes a finger as it is drawn now, at the logic's moment (Tree::target_at's): none where

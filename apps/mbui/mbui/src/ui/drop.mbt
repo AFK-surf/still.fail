@@ -35,7 +35,7 @@ pub(all) struct DroppedPath {
   path : String
   dir : Bool
   size : Double
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Files from outside let go where they are said by their paths (DroppedPath), the frame they came in: what holds where

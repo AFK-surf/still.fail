@@ -18,7 +18,7 @@ pub(all) enum Spec {
   Snap(Double)
   /// one of Motion's transitions (transition.mbt: spring_to, tween_to, keyframes_to, inertia_to)
   Motion(Transition)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Compose's spring(dampingRatio, stiffness, visibilityThreshold): by

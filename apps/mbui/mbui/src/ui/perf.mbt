@@ -69,7 +69,7 @@ pub(all) struct FramePerf {
   layout_ms : Double
   paint_ms : Double
   passes : Int
-} derive(Show, Debug)
+} derive(Debug)
 
 ///|
 /// The layout's counts as the frame began, and how many builds it took (frame_body).

@@ -576,7 +576,7 @@ test "授权时限 on every screen, 自定义: its field holding the hours, 小�
     guard label.last() is Some(l) else { fail("\{at}: no 自定义") }
     // (on its line, at its end: past its label, its end where the field's is, 8 in from it at most)
     guard vt_field(t) is Some(fd) else { fail("\{at}: no field") }
-    assert_true(u.1 < l.1 + l.3 && u.1 + u.3 > l.1 && u.0 > l.0 + l.2, msg="\{at}: \{l} \{Repr(u)}")
+    assert_true(u.1 < l.1 + l.3 && u.1 + u.3 > l.1 && u.0 > l.0 + l.2, msg="\{at}: \{Repr(l)} \{Repr(u)}")
     assert_true(u.0 + u.2 > fd.rect.0 + fd.rect.2 - 40.0, msg="\{at}: \{Repr(u)} not at the end of \{Repr(fd.rect)}")
     guard vt_field(t) is Some(f) else { fail("\{at}: no field") }
     assert_true(f.rect.1 > u.1 + u.3, msg="\{at}: the field under its head")

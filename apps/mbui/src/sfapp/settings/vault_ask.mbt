@@ -159,7 +159,7 @@ pub(all) enum Answer {
   Decided
   /// another's to answer: whose (the card's 由…决定)
   Theirs(String)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// How a request is answered here as its card says it (`answer`, `lasts`: its `vaultAsk`'s), the core having answered

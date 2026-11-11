@@ -6,7 +6,7 @@ pub(all) struct SColor {
   green : Int
   blue : Int
   alpha : Int
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 fn SColor::black() -> SColor {

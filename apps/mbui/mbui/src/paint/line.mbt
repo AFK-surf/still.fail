@@ -11,7 +11,7 @@ pub(all) struct Line {
   width : Double
   color : Int64
   upto : Double
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A line (see `Line`): whole unless `upto` says how much of it.

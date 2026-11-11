@@ -670,7 +670,7 @@ fn ns_rows_wrong(t : @ui.Tester, at : String) -> String {
       .drawn_rects()
       .filter(fn(g) { g.3 < 30.0 && g.0 <= chip.1 && chip.1 < g.0 + g.2 && g.1 <= chip.2 + chip.4 && chip.2 < g.1 + g.3 })
     if ground.is_empty() || ground.iter().all(fn(g) { chip.2 < g.1 - 0.01 || chip.2 + chip.4 > g.1 + g.3 + 0.01 }) {
-      wrong.push("\{at}: \{name}'s 「CPU」 \{chip.2}..\{chip.2 + chip.4} outside its chip (\{ground})")
+      wrong.push("\{at}: \{name}'s 「CPU」 \{chip.2}..\{chip.2 + chip.4} outside its chip (\{Repr(ground)})")
     }
   }
   wrong.join("\n")

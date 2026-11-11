@@ -4,11 +4,11 @@ pub(all) enum Exit[X] {
   Succeeded(X)
   Failed(Error)
   Interrupted
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Joining a fiber that was interrupted.
-pub suberror Interrupt derive(Show)
+pub suberror Interrupt derive(Debug)
 
 ///|
 /// A fiber: code running beside the code that forked it, in a scope.

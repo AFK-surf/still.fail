@@ -12,7 +12,7 @@ pub(all) enum Fit {
   FitContain
   /// stretched to the box
   FitFill
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 priv struct ImageEntry {

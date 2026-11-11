@@ -1281,14 +1281,14 @@ test "on the tape a settings page opened at one of its own (⌘K's, the bell's �
   assert_true(@sfdesk.wide.tape.get())
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   page_over(t, 600.0)
-  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{Repr(t.rect_of(local_none))}")
+  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of(local_none))}")
 }
 
 ///|
 test "on the tape a settings page a fixture opens as the app begins (a scripted run's, a picture's) is the one in use, as a row of their list opens it: whole in the window" {
   let t = tape_settings(600.0, fn() { open_fixture_mode("settings-local-station") }, first=true)
   assert_true(@sfdesk.wide.tape.get())
-  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{Repr(t.rect_of(local_none))}")
+  assert_true(settings_page_whole(t, local_none, 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of(local_none))}")
 }
 
 ///|
@@ -1311,16 +1311,16 @@ test "on the tape a settings page chosen in their list shows beside it, pressed 
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   page_over(t, 600.0)
-  assert_true(settings_page_whole(t, "全局记忆 · 项目记忆", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{Repr(t.rect_of("全局记忆 · 项目记忆"))}")
+  assert_true(settings_page_whole(t, "全局记忆 · 项目记忆", 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of("全局记忆 · 项目记忆"))}")
   // a level further in from the page in use: a station's memory, then one of its pages
   t.tap_text("Willow")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(settings_page_whole(t, "发布流程", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{Repr(t.rect_of("发布流程"))}")
+  assert_true(settings_page_whole(t, "发布流程", 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of("发布流程"))}")
   t.tap_text("发布流程")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
-  assert_true(settings_page_whole(t, "checklist", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{Repr(t.rect_of("checklist"))}")
+  assert_true(settings_page_whole(t, "checklist", 600.0), msg="\{Repr(@sfdesk.wide.tape_at.get())} \{Repr(t.rect_of("checklist"))}")
 }
 
 ///|

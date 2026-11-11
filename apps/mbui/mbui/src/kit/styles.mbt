@@ -9,7 +9,7 @@ pub(all) enum CardTone {
   Plain
   /// lifted over the page, with a shadow
   Lifted
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A card: a block of its own on the page, rounded, padded so that what lies in its corners is concentric with it
@@ -32,7 +32,7 @@ pub fn list_card() -> @ui.Style {
 pub(all) enum Density {
   Comfy
   Compact
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A row of a list: what it shows in a line, a tint while pointed at and held, chosen in its colour; its corner
@@ -62,7 +62,7 @@ pub(all) enum Indent {
   Page
   /// in line with the words in a card's rows
   Inset
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What heads a section of a page (its words: section_title).
@@ -83,7 +83,7 @@ pub(all) enum ButtonSize {
   Sm
   Md
   Lg
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A button (button.mbt's Variant its tone): a pill of its size, its ground by its tone, tinted pointed at and held, faded when disabled; its words
@@ -161,7 +161,7 @@ pub fn button_text(size? : ButtonSize = Md, tone? : Variant = Solid) -> @ui.Text
 pub(all) enum FieldSize {
   Sm
   Md
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A field's frame: an edge in the theme's border, its colour pointed at and focused.
@@ -192,7 +192,7 @@ pub(all) enum BadgeTone {
   Accent
   Positive
   Danger
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A badge: a small pill (its words badge_text).
@@ -248,7 +248,7 @@ pub(all) enum RowTone {
   Normal
   /// what failed, what cannot be undone
   Bad
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A row's title.

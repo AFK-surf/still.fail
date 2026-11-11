@@ -42,17 +42,17 @@ test "a page's list flung into its end: what it shows at each moment the same at
     let (a, ad, ar) = met_at(platform, 1000.0 / 60.0)
     // (it met its end and showed past it)
     if !a.iter().any(fn(f) { f.2.abs() > 0.01 }) || a.last().unwrap().1 != 40.0 * 50.0 - 844.0 {
-      differ.push("\{platform}: not past its end: \{a}")
+      differ.push("\{platform}: not past its end: \{Repr(a)}")
     }
     for period in [1000.0 / 120.0, 0.0] {
       let (b, bd, br) = met_at(platform, period)
       if ar != br {
-        differ.push("\{platform} at \{period}: at rest at \{br}, at 60 Hz \{ar}")
+        differ.push("\{platform} at \{period}: at rest at \{Repr(br)}, at 60 Hz \{Repr(ar)}")
       }
       for k in 0..<a.length() {
         // (the same moment, however its time was summed: to a millionth of a ms; what shows then to a millionth)
         if (a[k].0 - b[k].0).abs() > 1.0e-6 || (a[k].1 - b[k].1).abs() > 1.0e-6 || (a[k].2 - b[k].2).abs() > 1.0e-6 {
-          differ.push("\{platform} at \{period}: \{b[k]}, at 60 Hz \{a[k]}")
+          differ.push("\{platform} at \{period}: \{Repr(b[k])}, at 60 Hz \{Repr(a[k])}")
           break
         }
         let alike = ad[k].length() == bd[k].length() &&
@@ -61,7 +61,7 @@ test "a page's list flung into its end: what it shows at each moment the same at
             (0).until(ad[k][i].length()).iter().all(fn(j) { (ad[k][i][j] - bd[k][i][j]).abs() <= 1.0e-6 })
           })
         if !alike {
-          differ.push("\{platform} at \{period}: drawn at \{a[k].0} \{bd[k][:imin(3, bd[k].length())]}, at 60 Hz \{ad[k][:imin(3, ad[k].length())]}")
+          differ.push("\{platform} at \{period}: drawn at \{a[k].0} \{Repr(bd[k][:imin(3, bd[k].length())])}, at 60 Hz \{Repr(ad[k][:imin(3, ad[k].length())])}")
           break
         }
       }

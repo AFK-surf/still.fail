@@ -12,7 +12,7 @@
 pub(all) enum TurnFor {
   Send
   Emits
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 pub(all) struct Turns {

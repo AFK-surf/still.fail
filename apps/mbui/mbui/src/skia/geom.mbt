@@ -5,7 +5,7 @@
 pub(all) struct Point {
   x : Float
   y : Float
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn Point::from_xy(x : Float, y : Float) -> Point {
@@ -164,7 +164,7 @@ pub(all) struct IntRect {
   y : Int
   width : Int
   height : Int
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn IntRect::from_xywh(x : Int, y : Int, width : Int, height : Int) -> IntRect? {
@@ -276,7 +276,7 @@ pub(all) struct Rect {
   top : Float
   right : Float
   bottom : Float
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 fn checked_f32_sub(a : Float, b : Float) -> Bool {
@@ -497,7 +497,7 @@ pub(all) struct NonZeroRect {
   top : Float
   right : Float
   bottom : Float
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn NonZeroRect::from_ltrb(left : Float, top : Float, right : Float, bottom : Float) -> NonZeroRect? {
@@ -593,7 +593,7 @@ pub fn NonZeroRect::to_int_rect(self : NonZeroRect) -> IntRect {
 pub(all) struct IntSize {
   width : Int
   height : Int
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn IntSize::from_wh(width : Int, height : Int) -> IntSize? {
@@ -656,7 +656,7 @@ fn size_scale(s1 : IntSize, s2 : IntSize, expand : Bool) -> IntSize {
 pub(all) struct Size {
   width : Float
   height : Float
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn Size::from_wh(width : Float, height : Float) -> Size? {

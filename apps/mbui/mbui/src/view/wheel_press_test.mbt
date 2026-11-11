@@ -63,7 +63,7 @@ fn wheel_press_each(mods : Int, expected : Double) -> Array[(String, (Double, Do
 ///|
 /// Each row's four the same: no frame, one, two between the wheel and the press, and where it is to be.
 fn wheel_press_same(rows : Array[(String, (Double, Double), (Double, Double), (Double, Double), (Double, Double))]) -> Array[String] {
-  rows.filter(fn(r) { r.1 != r.2 || r.1 != r.3 || r.1 != r.4 }).map(fn(r) { "\{r.0}: \{r.1} \{r.2} \{r.3}, to be \{r.4}" })
+  rows.filter(fn(r) { r.1 != r.2 || r.1 != r.3 || r.1 != r.4 }).map(fn(r) { "\{r.0}: \{Repr(r.1)} \{Repr(r.2)} \{Repr(r.3)}, to be \{Repr(r.4)}" })
 }
 
 ///|

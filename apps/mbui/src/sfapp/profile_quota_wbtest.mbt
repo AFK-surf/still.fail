@@ -151,7 +151,7 @@ test "a profile's offline state and its three allowance windows each have room t
     // The state is not beside the figures: even a long station name cannot squeeze the three chips.
     let state = sidebar_runs().filter(fn(r) { r.text == "Willow 离线" })[0]
     let first = sidebar_runs().filter(fn(r) { r.text == "5H" })[0]
-    assert_true(first.top >= state.bottom, msg="state \{state}, first chip \{first}")
+    assert_true(first.top >= state.bottom, msg="state \{Repr(state)}, first chip \{Repr(first)}")
     assert_eq(t.squeeze_faults(), [])
     // Coming back changes the state line to where the account can be used; the allowance stays in place.
     online.set(true)

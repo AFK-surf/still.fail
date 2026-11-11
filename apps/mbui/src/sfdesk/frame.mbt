@@ -115,7 +115,7 @@ pub(all) enum TapePane {
   Side
   Page
   Panel
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub let wide : Wide = {

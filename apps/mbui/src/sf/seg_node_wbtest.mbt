@@ -193,7 +193,7 @@ test "a choice of a few as nodes short of room, its words made smaller to fit (t
   // (room for their words at 0.8 of their size with the least either side: less than whole, more than the smallest)
   let inner = 0.8 * 2.0 * words + 4.0 * segmented_least
   let f = fitted(c, ["预览", "源码"], inner, theme().t.ui, 500, segmented_in, segmented_least)
-  guard f.fit is Smaller(k) else { fail("not made smaller: \{f.fit}") }
+  guard f.fit is Smaller(k) else { fail("not made smaller: \{Repr(f.fit)}") }
   room.set(inner + 2.0 * segmented_pad + segmented_gap)
   t.draw()
   t.run_for(@ui.move_most_ms)

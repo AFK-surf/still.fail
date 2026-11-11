@@ -842,7 +842,7 @@ fn wide_chat_subscription_case(intermediate : Bool, leave_pending : Bool) -> Uni
   let opened_at = t.time()
   open_chat_beside(chat)
   t.frame()
-  guard client.peek_topic("chat", params=core_params) is Some(sub) else { fail("opening did not subscribe to the chat: \{sent}") }
+  guard client.peek_topic("chat", params=core_params) is Some(sub) else { fail("opening did not subscribe to the chat: \{Repr(sent)}") }
   assert_eq(sent.length(), 1, msg="the waiting pane keeps its first chat subscription: \{Repr(sent)}")
   let opened = try Some(@json.parse(sent[0])) catch { _ => None }
   assert_eq(@sfbase.text(@sfbase.field(opened, "subscribe"), "topic"), "chat")
@@ -1825,8 +1825,8 @@ fn drive_place_row_case(intermediate : Bool) -> Unit raise {
   open_drive_fixture("drive")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.frame()
-  guard client.peek_topic("drivePlace", params~) is Some(first) else { fail("the row did not subscribe: \{sent}") }
-  assert_eq(sent.length(), 1, msg="the row subscribes once: \{sent}")
+  guard client.peek_topic("drivePlace", params~) is Some(first) else { fail("the row did not subscribe: \{Repr(sent)}") }
+  assert_eq(sent.length(), 1, msg="the row subscribes once: \{Repr(sent)}")
   let first_ask = try Some(@json.parse(sent[0])) catch { _ => None }
   assert_eq(@sfbase.text(@sfbase.field(first_ask, "subscribe"), "topic"), "drivePlace")
   assert_eq(@sfbase.number(first_ask, "id"), first.id.to_double())
@@ -1841,7 +1841,7 @@ fn drive_place_row_case(intermediate : Bool) -> Unit raise {
   assert_true(physical_equal(first, client.peek_topic("drivePlace", params~).unwrap()), msg="the departing row still has its place")
   t.frame_at(opened_at + @ui.move_ms(390.0))
   t.frame()
-  assert_true(client.peek_topic("drivePlace", params~) is None, msg="the covered list releases its reading place: \{sent}")
+  assert_true(client.peek_topic("drivePlace", params~) is None, msg="the covered list releases its reading place: \{Repr(sent)}")
   assert_eq(sent.length(), 2, msg="the covered list unsubscribes once: \{Repr(sent)}")
   let left = try Some(@json.parse(sent[1])) catch { _ => None }
   assert_true(@sfbase.flag(left, "unsubscribe"))

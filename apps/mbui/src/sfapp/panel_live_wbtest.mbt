@@ -9,7 +9,7 @@ fn live_said(t : @ui.Tester) -> String {
   let w = fn(s : String) { t.words().filter(fn(x) { x.0 == s }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) }) }
   let dialog = t.query(Dialog).map(fn(s) { (s.label, tenth4(s.rect)) })
   let closes = t.all(Button, label="关闭").map(fn(s) { tenth4(s.rect) })
-  "dialog \{dialog} title \{w("任务")} step \{w("第 1 步")} says \{w("说的话")} close \{closes} words \{w("面板里的话，长一些，好看它怎么折行")}"
+  "dialog \{@ui.some_text(dialog.map(fn(d) { "(\{d.0}, \{@ui.rect_text(d.1)})" }))} title \{@ui.list_text(w("任务").map(@ui.rect_text))} step \{@ui.list_text(w("第 1 步").map(@ui.rect_text))} says \{@ui.list_text(w("说的话").map(@ui.rect_text))} close \{@ui.list_text(closes.map(@ui.rect_text))} words \{@ui.list_text(w("面板里的话，长一些，好看它怎么折行").map(@ui.rect_text))}"
 }
 
 ///|
@@ -39,7 +39,7 @@ test "panel live, 大屏 keyboard and mouse: in the middle, a share of the windo
       says.set(s.2)
       // (frames as the display draws them: nothing said changed but what it reads)
       live_frames(t, 30)
-      out.push("\{kind} \{s}: \{live_said(t)}")
+      out.push("\{kind} (\{s.0}, \{s.1}, \{s.2}): \{live_said(t)}")
       // (drawn by the window's tree: in the middle titled as it is now; beside what opened it, as it was presented,
       // read out by its title and what it holds as the host had it)
       drawn.push(tree_said(Dialog, if kind == "beside" { "" } else { s.0 }) is Some(_))
@@ -170,7 +170,7 @@ test "names already where files go, two asked in turn, 大屏 keyboard and mouse
       Some(s) => {
         let (x, y, w, h) = s.rect
         let inside = t.words().filter(fn(v) { v.1 >= x && v.1 < x + w && v.2 >= y && v.2 < y + h }).map(fn(v) { v.0 })
-        "\{s.label} | \{inside}"
+        "\{s.label} | \{@ui.list_text(inside)}"
       }
       None => "none"
     }

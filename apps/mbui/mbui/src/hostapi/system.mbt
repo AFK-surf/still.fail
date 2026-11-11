@@ -93,7 +93,7 @@ pub(all) enum SystemSaid {
   NavTapped(String)
   /// where the system's bars put the app's action of its own in the app's view (x, y, w, h in points; w 0: none)
   NavAction(x~ : Double, y~ : Double, w~ : Double, h~ : Double)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// A window's room one way, as the system classes it (Android's WindowSizeClass; iOS's UIUserInterfaceSizeClass, whose
@@ -102,7 +102,7 @@ pub(all) enum SizeClass {
   Compact
   Medium
   Expanded
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// A device's hinge as the system says it.
@@ -115,7 +115,20 @@ pub(all) enum Hinge {
   Half
   /// open flat, as far as it goes
   Open
-} derive(Eq, Show)
+} derive(Eq, Debug)
+
+///|
+/// By its name, as a page and tests write the hinge: what `derive(Show)` wrote.
+pub impl Show for Hinge with output(self, logger) {
+  logger.write_string(
+    match self {
+      NoHinge => "NoHinge"
+      Closed => "Closed"
+      Half => "Half"
+      Open => "Open"
+    },
+  )
+}
 
 ///|
 /// What a message on `system_channel` says, in this order: the link, over or not, the bars, the size classes, the

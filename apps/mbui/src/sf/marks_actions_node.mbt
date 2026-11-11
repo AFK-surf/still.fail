@@ -16,7 +16,7 @@ pub(all) struct MarksActionsSaid {
   download : String
   put : String
   making : String
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// The red of why making the marked picture failed (marks_actions's).

@@ -10,7 +10,21 @@ pub(all) enum Variant {
   Outline
   Ghost
   Danger
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+/// By its name, as the gallery's buttons say it: what `derive(Show)` wrote.
+pub impl Show for Variant with output(self, logger) {
+  logger.write_string(
+    match self {
+      Solid => "Solid"
+      Soft => "Soft"
+      Outline => "Outline"
+      Ghost => "Ghost"
+      Danger => "Danger"
+    },
+  )
+}
 
 ///|
 /// What a button's look is given.

@@ -752,7 +752,7 @@ test "a moment said on a device's clock of days: drawn to the first of the displ
       t.run_for(ms)
       t.each_frame(None)
       let n = drawn.length()
-      let said = "at \{period} ms a frame, \{off} off the frame: drawn \{drawn.map(fn(d) { d - origin })} ms on, for \{target - origin}"
+      let said = "at \{period} ms a frame, \{off} off the frame: drawn \{Repr(drawn.map(fn(d) { d - origin }))} ms on, for \{target - origin}"
       assert_true(n >= 2 && drawn[n - 1] == first && drawn[n - 2] < target && t.time() == first, msg=said)
     }
   }

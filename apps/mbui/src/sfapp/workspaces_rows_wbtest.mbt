@@ -116,7 +116,7 @@ fn ws_at(t : @ui.Tester, words : String, at : String) -> (Double, Double) raise 
     Some(p) => p
     None => {
       let said = match ws_panel(t) {
-        Some(p) => "panel at \{p.rect}: " + t.words().map(fn(w) { "\{w.0}@\{w.1},\{w.2} a\{w.5}" }).join("|")
+        Some(p) => "panel at \{Repr(p.rect)}: " + t.words().map(fn(w) { "\{w.0}@\{w.1},\{w.2} a\{w.5}" }).join("|")
         None => "no panel"
       }
       fail("\{at}: no \{words} in the panel; \{said}")

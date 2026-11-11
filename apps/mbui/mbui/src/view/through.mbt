@@ -31,7 +31,7 @@ struct Through {
 pub(all) enum Handed {
   Held
   Moved(Double, Double)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What hosts the tree tells of a hold it hands on (View::gesture's `through`): `f` given what it went to (what a node

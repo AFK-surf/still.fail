@@ -57,10 +57,10 @@ test "96-viewer" {
     // (a phone's: into its photo album, said so: keep_way_of)
     f.see("已保存到相册")
     let kept = f.t.kept().filter(fn(k) { k.0.has_prefix("e2e-photo-标注-") && k.0.has_suffix(".png") })
-    f.check(kept.length() == 1, "kept: \{f.t.kept().map(fn(k) { k.0 })}")
+    f.check(kept.length() == 1, "kept: \{Repr(f.t.kept().map(fn(k) { k.0 }))}")
     f.check(
       f.t.kept_ways().iter().any(fn(k) { k.0.has_prefix("e2e-photo-标注-") && k.1.to_string() == "Photos" }),
-      "kept: \{f.t.kept_ways()}",
+      "kept: \{Repr(f.t.kept_ways())}",
     )
     f.check(f.t.marks_drawn().length() >= 1, "no marks drawn onto the picture")
     f.t.marks_make(marked)

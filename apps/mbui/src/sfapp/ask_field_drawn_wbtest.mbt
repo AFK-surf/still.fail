@@ -42,13 +42,13 @@ fn ask_field_drawn(
       n += 1
       shown = shown && x >= clip.0 - 0.5 && y >= clip.1 - 0.5 && x + w <= clip.2 + 0.5 && y + h <= clip.3 + 0.5
       if n == 1 {
-        said = said + " glyph \{(x, y, w, h)} clip \{clip}"
+        said = said + " glyph \{Repr((x, y, w, h))} clip \{Repr(clip)}"
       }
     }
   }
   let held = match bx {
     Some(((x, y, w, h), c)) => {
-      said = said + " box clip \{c}"
+      said = said + " box clip \{Repr(c)}"
       c.0 <= x + 0.5 && c.1 <= y + 0.5 && c.2 >= x + w - 0.5 && c.3 >= y + h - 0.5
     }
     None => false

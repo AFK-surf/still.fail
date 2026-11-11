@@ -62,7 +62,7 @@ test "old_anchor: where kit's open dropdown goes beside, each frame: never drawn
   let moved = frames(3)
   drawn.set(false)
   let gone = frames(4)
-  println("KITANCHOR never \{never} shown \{shown} moved \{moved} gone \{gone}")
+  println("KITANCHOR never \{Repr(never)} shown \{Repr(shown)} moved \{Repr(moved)} gone \{Repr(gone)}")
   for f in never + shown + moved + gone {
     assert_eq(f.1, f.0, msg="never \{Repr(never)} shown \{Repr(shown)} moved \{Repr(moved)} gone \{Repr(gone)}")
   }

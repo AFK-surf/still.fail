@@ -219,7 +219,20 @@ pub(all) enum FileCardPress {
   Retry
   Restore
   Open
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+/// By its name, as tests write what a file card's press asked: what `derive(Show)` wrote.
+pub impl Show for FileCardPress with output(self, logger) {
+  logger.write_string(
+    match self {
+      Remove => "Remove"
+      Retry => "Retry"
+      Restore => "Restore"
+      Open => "Open"
+    },
+  )
+}
 
 ///|
 /// A file as a card (FileCard): its sheet, its name over its size (or how far it has gone up,

@@ -32,7 +32,7 @@ fn letters_room_said(win : (String, Double, Double, Int, String)) -> String {
     None => ()
   }
   let by_back = (t.opened().length() - opened, t.words().any(fn(x) { x.0 == name }), dui.letters_open != "", @sf.presenting())
-  "\{win.0}: faults \{faults} name pressed: opened \{by_name.0} still shown \{by_name.1} letter open \{by_name.2} presenting \{by_name.3}; back pressed: opened \{by_back.0} still shown \{by_back.1} letter open \{by_back.2} presenting \{by_back.3}"
+  "\{win.0}: faults \{@ui.list_text(faults)} name pressed: opened \{by_name.0} still shown \{by_name.1} letter open \{by_name.2} presenting \{by_name.3}; back pressed: opened \{by_back.0} still shown \{by_back.1} letter open \{by_back.2} presenting \{by_back.3}"
 }
 
 ///|

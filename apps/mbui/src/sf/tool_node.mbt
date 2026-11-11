@@ -12,7 +12,7 @@ pub(all) struct ToolSaid {
   label : String
   on : Bool
   disabled : Bool
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// How big a tool is (viewer_tool_box's S8), and how far its icon is in from its sides.

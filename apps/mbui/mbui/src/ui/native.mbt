@@ -102,7 +102,7 @@ pub(all) enum Touch {
   Through
   PinchOut
   VerticalOut
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 fn touch_name(t : Touch) -> String {

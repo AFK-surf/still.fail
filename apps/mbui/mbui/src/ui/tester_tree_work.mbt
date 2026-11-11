@@ -10,7 +10,7 @@ pub(all) struct TreeFrame {
   let_go : Int
   laid : Int
   measured : Int
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 // kept across runs: written by each frame a Tester draws while a test asked for them, put back as a Tester is made

@@ -23,7 +23,7 @@ pub(all) struct PasskeyDone {
   user_handle : String
   err : String
   client_data : String
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Whether this host can ask for a passkey at all (Windows).

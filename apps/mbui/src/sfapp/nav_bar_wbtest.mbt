@@ -138,7 +138,7 @@ test "nav bar: the standard head's back on the same line on every page made once
       }
     }
     let said = at.map(fn(m) { m.0 + "@" + m.1.to_string() }).join(", ")
-    println("standard head under \{top}: \{said}; none on the line: \{missing}")
+    println("standard head under \{top}: \{said}; none on the line: \{Repr(missing)}")
     if !missing.is_empty() {
       fail("no back on the head's line under a \{top} status bar: \{Repr(missing)}")
     }

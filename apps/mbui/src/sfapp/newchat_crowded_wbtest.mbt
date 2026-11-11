@@ -238,10 +238,10 @@ test "narrow, a short window, models starred and used most: they scroll, how it 
   assert_true(sheet.3 <= crowded_short * @sf.sheet_most + 1.0, msg="the sheet is \{sheet.3} high")
   let who = t.boxes().iter().find_first(fn(b) { b.kind == "text" && b.text == "账号" && b.y >= sheet.1 })
   guard who is Some(who) else { fail("no 账号 in the sheet") }
-  assert_true(who.y + who.h <= sheet.1 + sheet.3, msg="账号 \{who.y} past the sheet \{sheet}")
+  assert_true(who.y + who.h <= sheet.1 + sheet.3, msg="账号 \{who.y} past the sheet \{Repr(sheet)}")
   let effort = t.get(Slider, label="思考深度").rect
   let runtime = t.get(Button, label="DeepSeek Harness").rect
-  assert_true(effort.1 + effort.3 <= who.y && runtime.1 >= effort.1 + effort.3, msg="\{effort} \{runtime} 账号 at \{who.y}")
+  assert_true(effort.1 + effort.3 <= who.y && runtime.1 >= effort.1 + effort.3, msg="\{Repr(effort)} \{Repr(runtime)} 账号 at \{who.y}")
   // the models in what is left over how it runs, scrolling, the end of them nearest the hand in view: the way to all
   // of them, the last of them
   let all = t.get(Button, label="全部模型").rect
@@ -363,7 +363,7 @@ test "wide: the model's panel beside its control has the models, how hard it thi
   let used = t.get(Button, label="GPT-6 Astra · 中").rect
   let runtime = t.get(Button, label="DeepSeek Harness").rect
   let effort = t.get(Radio, label="高").rect
-  assert_true(model.1 < used.1 && used.1 < runtime.1, msg="\{model} \{Repr(used)} \{Repr(runtime)}")
+  assert_true(model.1 < used.1 && used.1 < runtime.1, msg="\{Repr(model)} \{Repr(used)} \{Repr(runtime)}")
   assert_true(t.query(Button, label="全部模型") is None)
   // (2026-11-02 用户「思考深度放在整个面板的右边」「模型跟思考深度的并排的」)
   assert_true(effort.0 >= used.0 + used.2 && runtime.1 > effort.1, msg="\{Repr(used)} \{Repr(runtime)} \{Repr(effort)}")

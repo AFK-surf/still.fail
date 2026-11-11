@@ -139,7 +139,7 @@ fn rows_held(t : @ui.Tester, most : Double) -> (() -> (Array[(Double, Double)], 
           let b = now[now.length() - k]
           let d = (b.1 - a.1).abs()
           if d > most && failed.val == "" {
-            failed.val = "at \{t.time()}: the row \{k} from the end went \{d} at once (\{a} to \{b})"
+            failed.val = "at \{t.time()}: the row \{k} from the end went \{d} at once (\{Repr(a)} to \{Repr(b)})"
           }
         }
         crossed.push((pane(before[0]), pane(now[0])))
@@ -236,7 +236,7 @@ fn panel_way_seen(every : Double) -> Array[String] raise {
       let w = (rows[0].2 * 10.0).round() / 10.0
       let x = (rows[0].0 * 10.0).round() / 10.0
       let foot = (rows[rows.length() - 1].3 * 10.0).round() / 10.0
-      seen.push("\{phase} +\{k.to_double() * way_look_ms}: list \{x}+\{w} rows \{tops} foot \{foot} field \{composer_field_y(t)}")
+      seen.push("\{phase} +\{k.to_double() * way_look_ms}: list \{x}+\{w} rows \{@ui.list_text(tops)} foot \{foot} field \{composer_field_y(t)}")
     }
   }
   let with_tabs = chat_value.copy()

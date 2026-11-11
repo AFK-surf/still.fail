@@ -51,7 +51,7 @@ pub fn on_corner(corner : Double, size : Double, room? : Double) -> Double {
 pub(all) struct Surface {
   pad : Double
   inner : Double
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// A surface `pad` in, what sits at its corners rounded `inner`.

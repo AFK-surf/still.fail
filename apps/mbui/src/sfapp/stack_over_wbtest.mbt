@@ -291,7 +291,7 @@ fn over_left(frames : Bool) -> (Double, Double, String) raise {
     _ => "other"
   }
   // (what stands then, for what is said of it when it is not as it should be)
-  let stands = "\{top} \{app.nav.depth()} over \{app.nav.top_over()} \{@sfdesk.wide.tape_at.get()} at \{t1 - t0}"
+  let stands = "\{top} \{app.nav.depth()} over \{Repr(app.nav.top_over())} \{Repr(@sfdesk.wide.tape_at.get())} at \{t1 - t0}"
   (before, over_x(t, third_chat.title), stands)
 }
 

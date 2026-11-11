@@ -726,7 +726,7 @@ pub(all) enum Lies {
   Middle
   End
   Between
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Where what it holds lies along it, as it changes (its start, by default; their middle; its end; spread from its

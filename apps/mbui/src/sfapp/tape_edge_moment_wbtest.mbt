@@ -13,7 +13,7 @@ priv struct EdgeSeen {
   after : Bool
   pressed : @sfdesk.TapePane
   rest : @sfdesk.TapePane
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// 中屏 on the tape (a finger's, 720 wide), the sidebar in use: a finger down on the sidebar's edge at `t0`, held
@@ -86,8 +86,8 @@ test "中屏: the sidebar's edge on the tape held, dragged and let go by a finge
     rest: @sfdesk.TapePane::Page,
   }
   let none = edge_seen(false)
-  assert_eq(stepped, want, msg="frames all along: \{stepped}; no frame: \{none}")
-  assert_eq(none, want, msg="no frame: \{none}")
+  assert_eq(stepped, want, msg="frames all along: \{Repr(stepped)}; no frame: \{Repr(none)}")
+  assert_eq(none, want, msg="no frame: \{Repr(none)}")
 }
 
 ///|

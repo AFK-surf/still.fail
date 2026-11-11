@@ -508,7 +508,7 @@ test "a row held and let down as its menu goes: its shadow fades with its card, 
         if s.2 > 200.0 && near(s.1, s.3) && bare.val is None {
           let a = (s.6 & 0xFFL).to_double()
           if !cards.iter().any(fn(r) { a <= (r.4 & 0xFFL).to_double() / 255.0 * whole + 1.0 }) {
-            bare.val = Some("shadow \{s} over cards \{cards}")
+            bare.val = Some("shadow \{Repr(s)} over cards \{Repr(cards)}")
           }
         }
       }

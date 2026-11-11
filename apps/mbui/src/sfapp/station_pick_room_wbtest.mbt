@@ -24,7 +24,7 @@ test "the station files picker: 所有位置 has a finger's room, and it and the
     t.tap_text("所有位置")
     frames()
     let places = t.find("整个文件夹") is None && t.find("Willow · 文档") is None && t.find("所有位置") is Some(_)
-    said.push("\{win.0}: \{faults} \{one} \{two} \{places}")
+    said.push("\{win.0}: \{@ui.list_text(faults)} \{one} \{two} \{places}")
   }
   assert_eq(said, ["touch: [] true true true", "tablet: [] true true true"])
 }

@@ -7,7 +7,7 @@ pub(all) enum PathVerb {
   Quad
   Cubic
   Close
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub(all) enum PathSegment {
@@ -16,7 +16,7 @@ pub(all) enum PathSegment {
   QuadTo(Point, Point)
   CubicTo(Point, Point, Point)
   Close
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A path of at least one segment past its first move (PathBuilder::finish), its points' bounds.

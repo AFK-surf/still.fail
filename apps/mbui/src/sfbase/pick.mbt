@@ -44,7 +44,7 @@ pub(all) struct Picked {
   ts : String
   a : Int
   b : Int
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Nothing picked.

@@ -251,8 +251,8 @@ fn fills_tree(
 test "props: one said to fill what holds it across does, whatever that lines what it holds up by, in a column and in a row" {
   let fills = @signals.signal(true)
   for lines in [@view.Along::Start, Middle, End] {
-    assert_eq(fills_tree(fills, lines)(), (0.0, 0.0, 100.0, 10.0), msg="a column lining up \{lines}")
-    assert_eq(fills_tree(fills, lines, row=true)(), (0.0, 0.0, 10.0, 100.0), msg="a row lining up \{lines}")
+    assert_eq(fills_tree(fills, lines)(), (0.0, 0.0, 100.0, 10.0), msg="a column lining up \{Repr(lines)}")
+    assert_eq(fills_tree(fills, lines, row=true)(), (0.0, 0.0, 10.0, 100.0), msg="a row lining up \{Repr(lines)}")
   }
 }
 

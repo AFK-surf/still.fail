@@ -20,7 +20,7 @@ pub(all) struct Press {
   moved : Bool
   long : Bool
   mods : Int
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// No press yet.

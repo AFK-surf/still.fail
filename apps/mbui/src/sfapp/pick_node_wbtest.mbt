@@ -24,10 +24,10 @@ fn pick_at_point(n : Int, chosen : Ref[String], search? : Bool = true) -> @ui.Te
 ///|
 /// What is said of the pick now: the roles and labels of its rows, checked or not, and what has the focus.
 fn pick_said(t : @ui.Tester) -> String {
-  let rows = t.all(MenuItemRadio).map(fn(s) { "\{s.label}=\{s.check}" }) + t.all(MenuItem).map(fn(s) { s.label }) +
+  let rows = t.all(MenuItemRadio).map(fn(s) { "\{s.label}=\{@ui.some_text(s.check)}" }) + t.all(MenuItem).map(fn(s) { s.label }) +
     t.all(Button).filter(fn(s) { s.label.has_prefix("第") }).map(fn(s) { "button \{s.label}" })
   let f = t.focused().map(fn(s) { "\{s.role} \{s.label}" }).unwrap_or("none")
-  "rows \{rows} focus \{f} menus \{t.all(Menu).map(fn(s) { s.rect })}"
+  "rows \{@ui.list_text(rows)} focus \{f} menus \{@ui.list_text(t.all(Menu).map(fn(s) { s.rect }).map(@ui.rect_text))}"
 }
 
 ///|
@@ -119,7 +119,7 @@ test "pick, long, 大屏 keyboard and mouse: 30 choices, its list no taller than
   t.wheel(wx, wy, 200.0)
   t.run_for(@ui.move_most_ms)
   let (_, y1b, _, _) = t.get(Button, label="第1项 最近用过").rect
-  println("PICKSAID scroll panel \{py} \{ph} row1 \{y1} -> \{y1b} field \{field} -> \{t.find("搜索")}")
+  println("PICKSAID scroll panel \{py} \{ph} row1 \{y1} -> \{y1b} field \{Repr(field)} -> \{Repr(t.find("搜索"))}")
   assert_eq((ph <= @sf.pick_list_most + 80.0, y1b < y1, t.find("搜索") == field), (true, true, true))
 }
 

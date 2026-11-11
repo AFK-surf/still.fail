@@ -674,7 +674,7 @@ test "价目表 made once while its usage is not read yet, fails to be read, is 
       let t = prices_tester(platform, scale, state=said)
       said.set(state)
       t.run_for(@ui.move_most_ms)
-      let at = "\{case} \{state}"
+      let at = "\{Repr(case)} \{state}"
       assert_true(app.nav.top() is Setting(@settings.Route::UsagePrices(_)), msg=at)
       assert_true(instances_sorted(t).length() > 0, msg=at)
       let words = words_where(t)

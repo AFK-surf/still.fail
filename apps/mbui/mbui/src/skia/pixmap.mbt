@@ -150,7 +150,7 @@ fn SubPixmap::offset_at(self : SubPixmap, dx : Int, dy : Int) -> Int {
 pub(all) enum MaskType {
   Alpha
   Luminance
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub(all) struct Mask {

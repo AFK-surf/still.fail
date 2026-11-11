@@ -49,6 +49,12 @@ pub impl Show for Transition with output(self, logger) {
 }
 
 ///|
+/// For debugging, its words as `Show` writes them.
+pub impl Debug for Transition with to_repr(self) {
+  Repr(self.to_string())
+}
+
+///|
 /// The same, after `delay` ms.
 pub fn Transition::delayed(self : Transition, delay : Double) -> Transition {
   { kind: self.kind, delay, make: self.make, said: self.said }

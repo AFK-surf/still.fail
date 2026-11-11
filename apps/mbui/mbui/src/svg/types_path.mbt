@@ -22,7 +22,7 @@ pub(all) enum SimpleSeg {
   SCurveTo(Double, Double, Double, Double, Double, Double)
   SQuadTo(Double, Double, Double, Double)
   SClose
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 fn is_cmd(c : Int) -> Bool {

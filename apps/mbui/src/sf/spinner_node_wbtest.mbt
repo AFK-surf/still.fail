@@ -127,7 +127,7 @@ test "a page whose spinners turn: each frame of their turning is painted alone o
     frames += 1
     let perf = t.frame_perf()
     if t.built_why() != "" || !(perf.looks || perf.painted) {
-      built.push("\{t.time()}: \{t.built_why()} \{perf}")
+      built.push("\{t.time()}: \{t.built_why()} \{Repr(perf)}")
     }
   }
   let (old1, new1) = spinner_drawn(t)

@@ -119,7 +119,7 @@ pub fn anticipate(p : Double) -> Double {
 pub(all) enum StepsAt {
   End
   Start
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// So many equal steps (Motion's steps, CSS's steps()).

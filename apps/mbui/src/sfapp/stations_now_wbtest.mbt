@@ -212,7 +212,7 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
   assert_true(kinds.iter().all(fn(k) { k.length() == 1 }) && accounts.length() == 2, msg="\{Repr((kinds, accounts))}")
   for i, k in kinds {
     // (on its line: its accounts after its name)
-    assert_true(accounts[i].1 > k[0].1 + k[0].3 && (accounts[i].2 - k[0].2).abs() < 2.0, msg="\{(k, accounts)}")
+    assert_true(accounts[i].1 > k[0].1 + k[0].3 && (accounts[i].2 - k[0].2).abs() < 2.0, msg="\{Repr((k, accounts))}")
   }
   let models = [("Sonnet 5.5", "3800 万 · $171"), ("GPT-5.5 Codex", "4700 万 · $262"), ("Kimi K2", "800 万 · $32.40"), ("GLM-4.6", "300 万 · $12.70")].map(fn(m) {
     (word(m.0), word(m.1))
@@ -280,7 +280,7 @@ fn stage_said(t : @ui.Tester) -> String {
   let dialog = t.query(Dialog).map(fn(s) { (s.label, tenth4(s.rect)) })
   let line = picture_words(t).filter(fn(w) { w.0 == "一生万物，万物归一" }).map(fn(w) { tenth4((w.1, w.2, w.3, w.4)) })
   let b = fn(label : String) { t.query(Button, label~).map(fn(s) { tenth4(s.rect) }) }
-  "dialog \{dialog} line \{line} look \{b("夜色")} close \{b("关闭")} copy \{b("复制图片")} save \{b("保存到相册")} squeeze \{t.squeeze_faults().length()}"
+  "dialog \{@ui.some_text(dialog.map(fn(d) { "(\{d.0}, \{@ui.rect_text(d.1)})" }))} line \{@ui.list_text(line.map(@ui.rect_text))} look \{@ui.some_text(b("夜色").map(@ui.rect_text))} close \{@ui.some_text(b("关闭").map(@ui.rect_text))} copy \{@ui.some_text(b("复制图片").map(@ui.rect_text))} save \{@ui.some_text(b("保存到相册").map(@ui.rect_text))} squeeze \{t.squeeze_faults().length()}"
 }
 
 ///|
@@ -335,7 +335,7 @@ fn stage_ink(t : @ui.Tester, w : Double, h : Double) -> String {
     }
     None => "words none"
   }
-  "night \{night} picture \{ground.map(tenth4)} \{words}"
+  "night \{@ui.list_text(night)} picture \{@ui.some_text(ground.map(tenth4).map(@ui.rect_text))} \{words}"
 }
 
 ///|
@@ -360,7 +360,7 @@ test "stage, 大屏 keyboard and mouse in a tall and a short window, touch in a 
     let src = fixture_app("share-card")
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=at.0, h=at.1, platform=at.2)
     stage_settled(t)
-    out.push("\{at}: \{stage_said(t)}")
+    out.push("(\{at.0}, \{at.1}, \{at.2}): \{stage_said(t)}")
     drawn.push(stage_drawn())
   }
   // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02; 34 of them since 千恋＊万花's: their
@@ -429,10 +429,10 @@ test "stage, 大屏 keyboard and mouse: closed by Escape, by back, by 关闭, by
       }
     }
     t.frame()
-    let at_once = "presenting \{@sf.presenting()} dialog \{t.query(Dialog).map(fn(s) { s.label })}"
+    let at_once = "presenting \{@sf.presenting()} dialog \{@ui.some_text(t.query(Dialog).map(fn(s) { s.label }))}"
     t.run_for(@kit.presence_in_ms)
     let selected = t.all(Button).filter(fn(s) { s.selected == Some(true) }).map(fn(s) { s.label })
-    out.push("\{how}: at once {\{at_once}} after {presenting \{@sf.presenting()} dialog \{t.query(Dialog).map(fn(s) { s.label })} selected \{selected}}")
+    out.push("\{how}: at once {\{at_once}} after {presenting \{@sf.presenting()} dialog \{@ui.some_text(t.query(Dialog).map(fn(s) { s.label }))} selected \{@ui.list_text(selected)}}")
   }
   // (as main has it, 435d3ba8; the looks each their picture drawn small, 2026-11-02)
   assert_eq(out, [
@@ -455,7 +455,7 @@ test "stage, 大屏 keyboard and mouse: the focus as it opens and after a Tab: a
   t.run_for(@kit.presence_in_ms)
   let tabbed = focused()
   // (as main has it, 435d3ba8: nothing of it given the focus, nor by a Tab)
-  assert_eq(["open \{open}", "tab \{tabbed}"], ["open None", "tab None"])
+  assert_eq(["open \{@ui.some_text(open)}", "tab \{@ui.some_text(tabbed)}"], ["open None", "tab None"])
 }
 
 

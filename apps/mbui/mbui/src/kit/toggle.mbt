@@ -12,7 +12,7 @@ pub(all) struct Item {
   value : String
   label : String
   disabled : Bool
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// An item `value`, its words `label` (the value by default).

@@ -33,7 +33,13 @@ pub(all) struct Look {
   /// shows (motion's Trans `ground_first`), so that what it is put over is hidden under it before its own words are
   /// over that's (sf/motion.mbt rule 4); then all it holds at once, never its words after its icons and pictures
   words : Double
-} derive(Show, Eq, Debug)
+} derive(Eq, Debug)
+
+///|
+/// As a frame's said lines write a drawn node's look (tester_rows.mbt): what `derive(Show)` wrote.
+pub impl Show for Look with output(self, logger) {
+  logger.write_string("{alpha: \{self.alpha}, dx: \{self.dx}, dy: \{self.dy}, sx: \{self.sx}, sy: \{self.sy}, ox: \{self.ox}, oy: \{self.oy}, rot: \{self.rot}, circle: \{self.circle}, words: \{self.words}}")
+}
 
 ///|
 /// As laid out.

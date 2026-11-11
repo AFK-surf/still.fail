@@ -168,7 +168,7 @@ test "an old view's words in a node placed off its layout at a point off the pix
     let old = off_words(c.0, c.1, true)
     let new = off_words(c.0, c.1, false)
     if !(old.length() > 0 && glyphs_alike(old, new)) {
-      out.push("\{c}: old \{old[:dmin(3.0, old.length().to_double()).to_int()]} node \{new[:dmin(3.0, new.length().to_double()).to_int()]}")
+      out.push("\{Repr(c)}: old \{Repr(old[:dmin(3.0, old.length().to_double()).to_int()])} node \{Repr(new[:dmin(3.0, new.length().to_double()).to_int()])}")
     }
   }
   assert_eq(out, [])

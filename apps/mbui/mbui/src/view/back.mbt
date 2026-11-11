@@ -15,7 +15,19 @@ pub(all) enum BackStep {
   LetGo(Double, Double)
   CalledOff
   Back
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+/// As tests write a back gesture's step: what `derive(Show)` wrote.
+pub impl Show for BackStep with output(self, logger) {
+  match self {
+    Began(x, y) => logger.write_string("Began(\{x}, \{y})")
+    Moved(x, y) => logger.write_string("Moved(\{x}, \{y})")
+    LetGo(x, y) => logger.write_string("LetGo(\{x}, \{y})")
+    CalledOff => logger.write_string("CalledOff")
+    Back => logger.write_string("Back")
+  }
+}
 
 ///|
 /// What back does to it, while it takes input (as a key's: View::on_key): `f`, as back is done (the system's back let

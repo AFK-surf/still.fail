@@ -669,7 +669,7 @@ test "a field of the tree's: what its look reads changed, its size not: the host
   }
   let glyphs = t.drawn_glyphs()
   assert_eq(glyphs.length(), 3)
-  assert_true(fr.asked && fr.changed, msg="\{fr}")
+  assert_true(fr.asked && fr.changed, msg="\{Repr(fr)}")
   for gl in glyphs {
     assert_true(handed(gl.0 + 1.0, gl.1 + 1.0), msg="\{Repr(gl)} not in \{Repr(fr.damage)}")
     assert_eq(gl.2, 0x00FF00FFL)

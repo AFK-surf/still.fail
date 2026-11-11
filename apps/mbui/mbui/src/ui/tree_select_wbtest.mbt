@@ -246,7 +246,7 @@ test "words picked held past a page's list's foot, the list shorter under a poin
   let state = match tree_edge.val {
     Some(e) =>
       match e.scroll.bind(fn(s) { s.shown_by() }) {
-        Some(v) => "shown by a node, nowhere \{v.shown_nowhere()}, rect \{v.rect()}, speed \{e.speed}"
+        Some(v) => "shown by a node, nowhere \{v.shown_nowhere()}, rect \{Repr(v.rect())}, speed \{e.speed}"
         None => "shown by none"
       }
     None => "none"

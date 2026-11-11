@@ -266,7 +266,7 @@ fn tree_hand_faults(rest : Array[@view.HandNode], now : Array[@view.HandNode]) -
     if grew.contains(n.key) && !holds_grown.contains(n.key) {
       let m = was[n.key]
       let words = if n.words {
-        ", its words \{m.size} at weights \{m.weights} on a line of \{m.line} at rest, \{n.size} at \{n.weights} on \{n.line} lit"
+        ", its words \{m.size} at weights [\{m.weights.map(fn(w) { "(\{w.0}, \{w.1})" }).join(", ")}] on a line of \{m.line} at rest, \{n.size} at [\{n.weights.map(fn(w) { "(\{w.0}, \{w.1})" }).join(", ")}] on \{n.line} lit"
       } else {
         ""
       }

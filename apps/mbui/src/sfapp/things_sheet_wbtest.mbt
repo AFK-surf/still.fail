@@ -363,7 +363,7 @@ test "小屏 with a mouse: a link's card whose row is nodes holds a page's icon 
   })
   // (its image's key, once its card asked it)
   let key = fn() { @sfbase.link_picture(src, r.station, "https://example.com/bench/list", Some(page), "icon") }
-  let drawn = fn(_x : Double, _y : Double) { media_drawn(t, key()).map(fn(b) { "\{b}" }).join(" ") }
+  let drawn = fn(_x : Double, _y : Double) { media_drawn(t, key()).map(fn(b) { "\{@ui.rect_text(b)}" }).join(" ") }
   let old = things_card_seen(t, r, "links", "列表滚动的性能数据", fn() { open_things_old(src, r) }, drawn)
   let now = things_card_seen(t, r, "links", "列表滚动的性能数据", fn() { open_things(src, r, 7.0) }, drawn)
   assert_true(old != "", msg="the old one's icon")
@@ -404,7 +404,7 @@ test "小屏 with a mouse: a link's card whose row is nodes taller than the wind
       t.wheel(lx, ly, things_card_wheel)
       t.run_for(@ui.move_most_ms)
       let wheeled = things_words_drawn(t).filter(fn(w) { w.0.has_prefix("label ") })
-      "\{shown}\n\{wheeled}"
+      "\{@ui.list_text(shown.map(fn(w) { "(\{w.0}, \{w.1}, \{w.2}, \{w.3}, \{w.4})" }))}\n\{@ui.list_text(wheeled.map(fn(w) { "(\{w.0}, \{w.1}, \{w.2}, \{w.3}, \{w.4})" }))}"
     })
   }
   let old = seen(fn() { open_things_old(src, r) })
@@ -464,7 +464,7 @@ test "小屏 with a mouse: a link's card in the chat's things (web_peek_node): t
           "\{t.cursor()}"
         })
         .join(" ") +
-        " \{c.rect}"
+        " \{Repr(c.rect)}"
       }
       None => "none"
     }

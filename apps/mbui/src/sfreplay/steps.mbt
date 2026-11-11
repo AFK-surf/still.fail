@@ -603,7 +603,7 @@ fn Flow::until_at(self : Flow, site : String, so : () -> Bool) -> Unit {
   if keeping.val == 2 {
     match self.kept(site) {
       Some(Waited(at)) => self.wait_to(at)
-      Some(k) => self.fail("the strict pass kept \{k} here, not a wait")
+      Some(k) => self.fail("the strict pass kept \{Repr(k)} here, not a wait")
       None => ()
     }
     return
@@ -974,7 +974,7 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
     // (what never stops asking: said, not hidden behind the idle check)
     if rounds > end_rounds {
       self.fail(
-        "the end still not quiet after \{end_rounds} rounds: \{self.r.left()} messages in left, the next due at \{self.r.next_due()}, \{self.t.posted()} posted, moving: \{self.t.moving().join("; ")}",
+        "the end still not quiet after \{end_rounds} rounds: \{self.r.left()} messages in left, the next due at \{Repr(self.r.next_due())}, \{self.t.posted()} posted, moving: \{self.t.moving().join("; ")}",
       )
       break
     }
@@ -1118,7 +1118,7 @@ pub fn orders(flow : (UInt) -> String raise) -> Unit raise {
   for seed in seeds {
     let again = flow(seed)
     if again != first {
-      let s = "flow: in the pass \{seed} (\{pace_of(seed)}) the screen ends otherwise (\{again}, not \{first})"
+      let s = "flow: in the pass \{seed} (\{Repr(pace_of(seed))}) the screen ends otherwise (\{again}, not \{first})"
       @halt.saying(s)
     }
   }
@@ -1184,7 +1184,7 @@ fn Flow::run_to_at(self : Flow, site : String, end : Double) -> Unit {
   if keeping.val == 2 {
     match self.kept(site) {
       Some(Waited(at)) => self.wait_to(at)
-      Some(k) => self.fail("the strict pass kept \{k} here, not where it ran to")
+      Some(k) => self.fail("the strict pass kept \{Repr(k)} here, not where it ran to")
       None => ()
     }
     self.core()
@@ -1275,7 +1275,7 @@ priv enum Kept {
   NoPoint
   Waited(Double)
   Amount(Double)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// What the strict pass worked its inputs out to, by the test's line that asked (a step there skipped or taken more
@@ -1346,7 +1346,7 @@ fn Flow::kept_point(self : Flow, site : String, find : () -> (Double, Double)?) 
         Some(Point(x, y)) => Some((x, y))
         Some(NoPoint) => None
         Some(k) => {
-          self.fail("the strict pass kept \{k} here, not where an input went")
+          self.fail("the strict pass kept \{Repr(k)} here, not where an input went")
           find()
         }
         None => find()
@@ -1383,7 +1383,7 @@ pub fn Flow::measured(self : Flow, x : Double, loc~ : SourceLoc) -> Double {
       match self.kept(site) {
         Some(Amount(d)) => d
         Some(k) => {
-          self.fail("the strict pass kept \{k} here, not what it measured")
+          self.fail("the strict pass kept \{Repr(k)} here, not what it measured")
           x
         }
         None => x
@@ -1494,7 +1494,7 @@ pub fn Flow::wheel_aligned(self : Flow, dy : Double, loc~ : SourceLoc) -> Unit {
       match self.kept(site) {
         Some(Amount(d)) => d
         Some(k) => {
-          self.fail("the strict pass kept \{k} here, not how far it wheeled")
+          self.fail("the strict pass kept \{Repr(k)} here, not how far it wheeled")
           dy
         }
         None => dy

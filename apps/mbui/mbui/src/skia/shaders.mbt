@@ -5,7 +5,7 @@
 pub(all) struct GradientStop {
   position : Float
   color : Color
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn GradientStop::new(position : Float, color : Color) -> GradientStop {
@@ -210,7 +210,7 @@ pub(all) enum FilterQuality {
   Nearest
   Bilinear
   Bicubic
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What a path is painted with (Shader).

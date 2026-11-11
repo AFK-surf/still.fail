@@ -223,7 +223,7 @@ fn said_sel(k : SelKey) -> String {
   match k {
     NoSel => "0"
     Para(id) => said_id(id).to_string()
-    Words(tree, row, place) => "w\{tree}/\{row.at}/\{row.gen}/\{place}"
+    Words(tree, row, place) => "w\{tree}/\{row.at}/\{row.gen}/\{list_text(place)}"
   }
 }
 
@@ -719,7 +719,7 @@ impl SaidAgain for ScrollsTaken with said_show(self, sb) {
 impl SaidAgain for SelsTaken with said_show(self, sb) {
   for t in self.sels {
     sb.write_string(
-      "sel \{said_sel(t.base)} \{t.at} \{said_num(t.ox)} \{said_num(t.oy)} \{said_num(t.x0)} \{said_num(t.y0)} \{said_num(t.x1)} \{said_num(t.y1)} \{t.text.length()}\n",
+      "sel \{said_sel(t.base)} \{list_text(t.at)} \{said_num(t.ox)} \{said_num(t.oy)} \{said_num(t.x0)} \{said_num(t.y0)} \{said_num(t.x1)} \{said_num(t.y1)} \{t.text.length()}\n",
     )
   }
 }

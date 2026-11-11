@@ -284,7 +284,7 @@ test "the desk's history beside a chat: a wheel up 60 at a time over turns whose
       seen = seen + 1
       match now.get(k) {
         Some(y2) if (y2 - y - 60.0).abs() <= 1.5 => ()
-        other => moved.push("turn \{i}, group \{k}: \{y} to \{other}")
+        other => moved.push("turn \{i}, group \{k}: \{y} to \{Repr(other)}")
       }
     }
   }

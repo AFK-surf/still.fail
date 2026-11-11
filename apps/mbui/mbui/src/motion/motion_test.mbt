@@ -18,7 +18,7 @@ test "the named curves are CSS's cubic-beziers (Compose's CubicBezierEasing)" {
   for w in want {
     let (curve, ys) = w
     for i, t in ts {
-      assert_true(near(curve.at(t), ys[i], 1.0e-6), msg="\{curve} at \{t}: \{curve.at(t)} not \{ys[i]}")
+      assert_true(near(curve.at(t), ys[i], 1.0e-6), msg="\{Repr(curve)} at \{t}: \{curve.at(t)} not \{ys[i]}")
     }
   }
   assert_eq(@ui.Out.at(0.0), 0.0)
@@ -766,7 +766,7 @@ test "springs match Compose's own FloatSpringSpec, frame for frame" {
       let got = spring_value(spec, from, to, v, ms)
       // Compose's are floats
       let eps = 2.0e-6 * dmax2(from.abs(), to.abs()) + 1.0e-6
-      assert_true(near(got, want[i], eps), msg="\{spec} at \{ms}: \{got} not \{want[i]}")
+      assert_true(near(got, want[i], eps), msg="\{Repr(spec)} at \{ms}: \{got} not \{want[i]}")
     }
   }
 }
@@ -794,7 +794,7 @@ test "tweens match Compose's own FloatTweenSpec, frame for frame" {
     let dur = spec.duration(0.0, 1.0, 0.0)
     for i, ms in at {
       let got = spec.value_at(ms, dur, 0.0, 1.0, 0.0).0
-      assert_true(near(got, want[i], 2.0e-6), msg="\{spec} at \{ms}: \{got} not \{want[i]}")
+      assert_true(near(got, want[i], 2.0e-6), msg="\{Repr(spec)} at \{ms}: \{got} not \{want[i]}")
     }
   }
 }

@@ -731,7 +731,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     letterbox~,
     list=list_of(here),
     over=fn(alpha) { over(alpha * marks) },
-    said="\{marks} \{coming} \{a.duration} \{corner}",
+    said="\{marks} \{@ui.some_text(coming)} \{a.duration} \{corner}",
   )
   c.look(b, @ui.look(alpha=thumb_shows(thumb)))
   // held by a finger for its menu: lifted over the menu's scrim (@sf.lift_over)

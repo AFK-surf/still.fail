@@ -266,7 +266,7 @@ fn real_size_sweep(win : (String, Double, Double, Int, String)) -> Unit raise {
           change_lines.push(line)
         }
         Some(bar) => {
-          let said = "made \{f.0} let go \{f.1} laid \{f.2} measured \{f.3} old built \{f.4} old laid \{f.5}, its bar \{bar}"
+          let said = "made \{f.0} let go \{f.1} laid \{f.2} measured \{f.3} old built \{f.4} old laid \{f.5}, its bar \{Repr(bar)}"
           let pairs = [(f.0, bar.0), (f.1, bar.1), (f.2, bar.2), (f.3, bar.3), (f.4, bar.4), (f.5, bar.5)]
           if pairs.iter().any(fn(p) { real_size_change_over(p.0, p.1) }) {
             faults.push("\{name}: \{said}: the frame that takes it does more than a tenth over it")

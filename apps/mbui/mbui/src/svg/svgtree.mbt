@@ -509,7 +509,7 @@ pub(all) enum ShapeRendering {
   OptimizeSpeed
   CrispEdges
   GeometricPrecision
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 fn parse_shape_rendering(v : String) -> ShapeRendering? {
@@ -531,7 +531,7 @@ pub(all) enum TextRendering {
   TrOptimizeSpeed
   TrOptimizeLegibility
   TrGeometricPrecision
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 fn parse_text_rendering(v : String) -> TextRendering? {
@@ -551,7 +551,7 @@ pub(all) enum ImageRendering {
   HighQuality
   IrCrispEdges
   Pixelated
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 fn parse_image_rendering(v : String) -> ImageRendering? {

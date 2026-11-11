@@ -2,7 +2,7 @@
 /// Both sides of a `race` failed.
 pub suberror BothFailed {
   BothFailed(Error, Error)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Which of `tasks` ended first (its index), waiting for one to.

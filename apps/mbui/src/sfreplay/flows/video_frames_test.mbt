@@ -45,10 +45,10 @@ test "97-video-frames" {
     f.see("已保存到相册")
     // kept: the grabbed frame, a PNG of the video's size (640 × 360), named by its frame
     let kept = f.t.kept().filter(fn(k) { k.0.has_prefix("e2e-clip-") && k.0.has_suffix(".png") })
-    f.check(kept.length() == 1, "kept: \{f.t.kept().map(fn(k) { k.0 })}")
+    f.check(kept.length() == 1, "kept: \{Repr(f.t.kept().map(fn(k) { k.0 }))}")
     f.check(
       f.t.kept_ways().iter().any(fn(k) { k.0.has_prefix("e2e-clip-") && k.1.to_string() == "Photos" }),
-      "kept: \{f.t.kept_ways()}",
+      "kept: \{Repr(f.t.kept_ways())}",
     )
     if kept.length() == 1 {
       let b = kept[0].2

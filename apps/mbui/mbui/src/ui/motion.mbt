@@ -78,7 +78,7 @@ pub(all) enum Ease {
   Linear
   /// (.6, 0, .2, 1): words sent on their way to their row (sfbase's flight.mbt)
   Flight
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Move's spring: ω·T where it rests, and how far it has got there (said once under what lays things out: flex's

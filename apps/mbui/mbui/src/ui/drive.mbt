@@ -217,7 +217,7 @@ pub(all) enum StepMoment {
   Began
   /// its input handed to the app as the host sends it (the press, the words typed, the key): the frame it goes in
   Acted
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Who is told each line of a script as it begins and as it acts (@ui.trace_steps): a run's record of it.

@@ -6,7 +6,7 @@ test "用量 and 价目表 made once wide and on the tape: what each holds the t
   for case in [(0, 1280.0), (2, 1280.0), (0, 1800.0), (2, 600.0), (0, 700.0), (2, 839.0)] {
     let (platform, w) = case
     let t = large_about_tester(true, platform, w~, mode="settings-usage")
-    let at = "用量 at \{case}"
+    let at = "用量 at \{Repr(case)}"
     assert_true(app.nav.top() == Setting(@settings.Route::Usage), msg=at)
     let own = tree_words_drawn()
     for word in ["$118", "最花钱的对话", "各设备的工作量", "7 天", "30 天"] {

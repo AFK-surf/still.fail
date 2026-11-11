@@ -46,7 +46,7 @@ test "Android: a page's list flung into its foot, its stretch changing: drawn an
     if ov != 0.0 && ov != was {
       changed = changed + 1
       if presented.step() is Some(st) {
-        faults.push("at \{t.time()}, stretched \{ov} (\{was} before): compared, \{st}")
+        faults.push("at \{t.time()}, stretched \{ov} (\{was} before): compared, \{Repr(st)}")
       }
       if presented_share.val <= 0.0 {
         faults.push("at \{t.time()}, stretched \{ov} (\{was} before): nothing drawn again")

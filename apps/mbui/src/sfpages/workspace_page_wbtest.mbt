@@ -401,7 +401,7 @@ test "where the two panels' words stand on every screen: each under the one befo
     ].map(fn(w) { ws_word(t, w) })
     for k in 1..<order.length() {
       assert_true(order[k].1 >= order[k - 1].1 + order[k - 1].3 - 0.5, msg="\{at}: \{order[k - 1]} over \{order[k]}")
-      assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{order[0]} beside \{order[k]}")
+      assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{Repr(order[0])} beside \{Repr(order[k])}")
     }
     @sf.presenters_reset()
     // the ways': the groups' labels and the ways' titles on one line, down in the core's order
@@ -412,7 +412,7 @@ test "where the two panels' words stand on every screen: each under the one befo
       ws_word(t, w)
     })
     for k in 1..<order.length() {
-      assert_true(order[k].1 >= order[k - 1].1 + order[k - 1].3 - 0.5, msg="\{at}: \{order[k - 1]} over \{order[k]}")
+      assert_true(order[k].1 >= order[k - 1].1 + order[k - 1].3 - 0.5, msg="\{at}: \{Repr(order[k - 1])} over \{Repr(order[k])}")
       assert_true((order[k].0 - order[0].0).abs() < 0.5, msg="\{at}: \{Repr(order[0])} beside \{Repr(order[k])}")
     }
     // (局域网's switch after its title, across the middle of its title and its note)

@@ -76,7 +76,7 @@ pub let asks_kept : Ref[Bool] = Ref(true)
 /// An answer not kept: said on the output for scripts/kept, an error for the asker.
 fn not_kept(ask : Map[String, Json]) -> Result[(Json, Bytes?), Json]? {
   println((if asks_kept.val { "kept-answers-ask " } else { "PACE-UNKEPT " }) + Json::object(ask).stringify())
-  Some(Err({ "code": "not_kept", "message": "the core's answer to \{ask.get("call").unwrap()} is not kept: apps/mbui/scripts/kept" }))
+  Some(Err({ "code": "not_kept", "message": "the core's answer to \{match ask.get("call").unwrap() { String(s) => "String(\{s})"; call => Repr(call).to_string() }} is not kept: apps/mbui/scripts/kept" }))
 }
 
 ///|

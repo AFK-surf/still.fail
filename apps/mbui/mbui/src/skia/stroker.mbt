@@ -7,7 +7,7 @@ pub(all) enum LineCap {
   Butt
   Round
   Square
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub(all) enum LineJoin {
@@ -15,7 +15,7 @@ pub(all) enum LineJoin {
   MiterClip
   Round
   Bevel
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub(all) struct Stroke {

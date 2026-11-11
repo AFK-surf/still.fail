@@ -10,7 +10,7 @@ pub(all) enum Side {
   Right
   Bottom
   Left
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Where along the side it lines up with the anchor: their starts (the left, right to left the right), their middles,
@@ -19,7 +19,7 @@ pub(all) enum Along {
   Start
   Middle
   End
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Where content `w` by `h` goes by an anchor (x, y, w, h, in a window `vw` by `vh`), Radix's Popper: on `side`,
@@ -130,7 +130,7 @@ pub(all) struct Beside {
 pub(all) enum BesideWidth {
   Own
   Anchor
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Placed beside node `anchor` (place_beside: on `side`, `offset` away, lined up `along` it, kept `padding` inside the
@@ -448,7 +448,7 @@ pub(all) enum Pivot {
   At(Double, Double)
   FromBeside
   Drawn
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Where node `self` is drawn bigger or smaller about, in points where it is its own, laid out `w` by `h`.

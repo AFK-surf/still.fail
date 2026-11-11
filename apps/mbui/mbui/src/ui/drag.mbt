@@ -324,7 +324,7 @@ pub(all) enum PressStep {
   Moving(Double, Double)
   Up(Double, Double)
   Off
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What follows the presses that go down on each box (Ctx::follow_press), by its id: what its last build said.

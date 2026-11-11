@@ -11,7 +11,7 @@ pub(all) struct Matrix {
   yy : Float
   dx : Float
   dy : Float
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 pub fn Matrix::identity() -> Matrix {
@@ -35,7 +35,7 @@ pub(all) struct ColorStop {
   offset : Float
   palette_index : Int
   alpha : Float
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// How a gradient goes on past its ends: 0 pad, 1 repeat, 2 reflect, 3 unknown.
@@ -44,7 +44,7 @@ pub(all) enum Brush {
   LinearGradient(Float, Float, Float, Float, Array[ColorStop], Int)
   RadialGradient(Float, Float, Float, Float, Float, Float, Array[ColorStop], Int)
   SweepGradient(Float, Float, Float, Float, Array[ColorStop], Int)
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub(all) enum ColorOp {
@@ -58,7 +58,7 @@ pub(all) enum ColorOp {
   /// a composite mode as COLR numbers it (3 is source over)
   PushLayer(Int)
   PopLayer
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Rust's f32 PI / 180.0, as f32::to_radians multiplies by it.

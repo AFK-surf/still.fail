@@ -36,7 +36,7 @@ pub(all) struct Trans {
   /// come in over it, they going before it as it goes (Look's `words`), so that never are its words and what it is put
   /// over both seen in one place (sf/motion.mbt rule 4)
   ground_first : Bool
-} derive(Show, Eq)
+} derive(Eq)
 
 ///|
 /// A transition: fadeIn/Out to `fade`, scaleIn/Out to `scale`, slideIn/Out by `dx`, `dy`; all by `spec` unless the

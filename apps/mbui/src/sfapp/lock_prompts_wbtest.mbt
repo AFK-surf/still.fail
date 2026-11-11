@@ -90,7 +90,7 @@ test "asked into one more workspace meanwhile: named too, its mark before it; th
   let (open, star) = (pair_word(t, "开源", under=head.1), pair_word(t, "星火工作室", under=head.1))
   let emoji = pair_word(t, "🌲", under=head.1)
   // (under the others; its emoji before it on its line)
-  assert_true(open.1 >= star.1 + star.3, msg="开源 \{open}, 星火工作室 \{Repr(star)}")
+  assert_true(open.1 >= star.1 + star.3, msg="开源 \{Repr(open)}, 星火工作室 \{Repr(star)}")
   assert_true(emoji.0 + emoji.2 <= open.0 && (emoji.1 + emoji.3 / 2.0 - (open.1 + open.3 / 2.0)).abs() < 2.0, msg="🌲 \{Repr(emoji)}, 开源 \{Repr(open)}")
   // (the code still under them all)
   let code = pair_word(t, "4\u{2009}8\u{2009}2\u{2009}9\u{2009}1\u{2009}5")
@@ -159,11 +159,11 @@ test "where its words stand on each screen: whose and what, where it asks in, th
     // (one under another, in this order)
     let order = [body, head, star, mine, code, until, note, deny]
     for i in 1..<order.length() {
-      assert_true(foot(order[i - 1]) <= order[i].1 + 0.5, msg="\{about}: \{i}: \{order[i - 1]} over \{order[i]}")
+      assert_true(foot(order[i - 1]) <= order[i].1 + 0.5, msg="\{about}: \{i}: \{Repr(order[i - 1])} over \{Repr(order[i])}")
     }
     // (what it asks and where at the panel's words' start; each workspace's name after its letter; the code, until when
     // and 拒绝 in the middle of the panel's words)
-    assert_true((body.0 - head.0).abs() < 1.0 && star.0 > head.0 && (star.0 - mine.0).abs() < 1.0, msg="\{about}: \{body} \{Repr(head)} \{Repr(star)} \{Repr(mine)}")
+    assert_true((body.0 - head.0).abs() < 1.0 && star.0 > head.0 && (star.0 - mine.0).abs() < 1.0, msg="\{about}: \{Repr(body)} \{Repr(head)} \{Repr(star)} \{Repr(mine)}")
     let middle = mid(body)
     for r in [code, until, deny] {
       assert_true((mid(r) - middle).abs() < 1.0, msg="\{about}: \{Repr(r)} not in the middle of \{Repr(body)}")

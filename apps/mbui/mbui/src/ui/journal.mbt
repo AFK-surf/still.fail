@@ -28,7 +28,7 @@ pub(all) enum Done {
   FrameEnd
   /// pieces each shorter than `journal_floor_ms`, folded: how many, their work summed (ms)
   Small(Int, Double)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A frame's work up to presenting it, by part (ms on the work clock): the window's tree brought, the messages from
@@ -49,7 +49,7 @@ pub(all) struct FrameDone {
   laid : Int
   measured : Int
   why : String
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// A piece of work and when it began and ended (ms on the work clock); of folded pieces, the first one's beginning and
@@ -61,7 +61,7 @@ pub(all) struct Worked {
   /// what it went on, by part (@hostapi.work_part: where it was made, ms summed), the longest first, each 1 ms in all at
   /// least, at most `journal_notes_kept`
   notes : Array[(String, Double)]
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub fn Worked::ms(self : Worked) -> Double {
@@ -80,14 +80,14 @@ pub(all) enum Seal {
   Idle
   /// the app no longer shown (on_app_state): no frame comes until it is again
   Hidden
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What the journal keeps, oldest first (journal).
 pub(all) enum Entry {
   Work(Worked)
   Boundary(Seal, Double)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Which rule found a hang.
@@ -98,7 +98,7 @@ pub(all) enum HangTrigger {
   LateFrame
   /// an interval closed with no frame, one piece of it at least the budget long
   Blocking
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// An interval with a hang in it: the rule, what closed it, whether no frame had been presented before it (the app
@@ -122,7 +122,7 @@ pub(all) struct Hang {
   lost : Int
   contributors : Array[Worked]
   elided : Int
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// What the app did while it was shown, said as it is hidden (hang_summary_told): from its first work after it was
@@ -146,7 +146,7 @@ pub(all) struct HangSummary {
   moved : Array[Int]
   moved_laid : Array[Int]
   by_page : Array[(String, Int, Int, Int, Int)]
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// The bounds (ms) of the bands a presented frame is counted in by what it waited on (HangSummary): 120, 90 and 60

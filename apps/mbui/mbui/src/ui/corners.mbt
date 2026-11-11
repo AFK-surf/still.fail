@@ -749,7 +749,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
           c.nodes[ct.ground].links is None {
           off_ladder.add(p)
           out.push(
-            "\{c.named(p)} (corner \{ra}\{scaled_said(ra, u)}): something lies in its \{corner}, and its corner is not one of the ladder's \{ladder}",
+            "\{c.named(p)} (corner \{ra}\{scaled_said(ra, u)}): something lies in its \{corner}, and its corner is not one of the ladder's \{list_text(ladder)}",
           )
         }
         let placed_off = match off_at {
@@ -760,7 +760,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
         // zoomed out to 0.9, 17.78; what lies in it follows it, not the ladder)
         if !round && !ct.window && on_ladder(ladder, ra / u) && !on_ladder(ladder, rb / u) && !placed_off {
           out.push(
-            "\{c.named(i)} (corner \{rb}\{scaled_said(rb, u)}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} from its edges, so a corner not one of the ladder's \{ladder} (\{ladder_in(ladder, ra / u)})",
+            "\{c.named(i)} (corner \{rb}\{scaled_said(rb, u)}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} from its edges, so a corner not one of the ladder's \{list_text(ladder)} (\{ladder_in(ladder, ra / u)})",
           )
         }
       }

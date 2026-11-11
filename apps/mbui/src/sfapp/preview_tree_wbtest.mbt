@@ -1645,7 +1645,7 @@ test "viewer on the tree, its window made narrow then wide again (Large, Small, 
     t.draw()
     // (each tier's shell: Small the narrow one's, Medium the tape's, Large the panes')
     let tier = @sf.layout(size.0)
-    assert_eq(tier, if size.0 < 600.0 { @sf.Small } else if size.0 < 840.0 { @sf.Medium } else { @sf.Large }, msg="\{size}")
+    assert_eq(tier, if size.0 < 600.0 { @sf.Small } else if size.0 < 840.0 { @sf.Medium } else { @sf.Large }, msg="\{Repr(size)}")
     let now = viewer.get().unwrap()
     assert_true(physical_equal(now, v), msg="\{Repr(size)}: the same viewer")
     assert_true(now.in_tree, msg="\{Repr(size)}: the tree's")
@@ -1969,7 +1969,7 @@ test "viewer on the tree, a wide window, the bar across the top: its last tool a
     let want = @sf.window_end_in(@sf.viewer_bar_in)
     assert_true(
       (last - want).abs() < 0.001,
-      msg="\{platform} \{w}: its last tool \{last} in, a page's bar's \{want}; roots \{@ui.tree_corner_roots_now()} and \{@ui.corner_roots()}",
+      msg="\{platform} \{w}: its last tool \{last} in, a page's bar's \{want}; roots \{Repr(@ui.tree_corner_roots_now())} and \{Repr(@ui.corner_roots())}",
     )
   }
 }
@@ -2111,7 +2111,7 @@ test "viewer on the tree, the bar across the top, a name far longer than its mid
             let (bx, bw) = get(long, "bar")
             let (wx, ww) = get(long, "words")
             seen.push(
-              "\{at}: bar \{(bx, bw)} (short \{get(short, "bar")}), words \{(wx, ww)} (short \{get(short, "words")}), ends \{w - (bx + bw)} in, want ≥ \{end_in}; back \{get(long, "back")}",
+              "\{at}: bar \{Repr((bx, bw))} (short \{Repr(get(short, "bar"))}), words \{Repr((wx, ww))} (short \{Repr(get(short, "words"))}), ends \{w - (bx + bw)} in, want ≥ \{end_in}; back \{Repr(get(long, "back"))}",
             )
             if bw != get(short, "bar").1 || ww != get(short, "words").1 || ww <= 0.0 {
               fail("\{at}: the words or the bar cut: \{Repr(seen.last())}")
@@ -2124,7 +2124,7 @@ test "viewer on the tree, the bar across the top, a name far longer than its mid
             let (dx, dw) = get(long, "download")
             let (cx, cw) = get(long, "copy")
             let (kx, kw) = get(long, "back")
-            seen.push("\{at}: mark \{(mx, mw)}, copy \{(cx, cw)}, download \{(dx, dw)}, ends \{w - (dx + dw)} in, want \{end_in}; back \{(kx, kw)} (short \{get(short, "back")})")
+            seen.push("\{at}: mark \{Repr((mx, mw))}, copy \{Repr((cx, cw))}, download \{Repr((dx, dw))}, ends \{w - (dx + dw)} in, want \{end_in}; back \{Repr((kx, kw))} (short \{Repr(get(short, "back"))})")
             if mw != @sf.tool_side || cw != @sf.tool_side || dw != @sf.tool_side {
               fail("\{at}: a tool cut: \{Repr(seen.last())}")
             }

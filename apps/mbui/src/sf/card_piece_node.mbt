@@ -12,7 +12,7 @@ pub(all) enum CardPiece {
   CardTop
   CardBetween
   CardFoot
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// The piece of a card the `i`th of `n` rows on it is (n at least 1).

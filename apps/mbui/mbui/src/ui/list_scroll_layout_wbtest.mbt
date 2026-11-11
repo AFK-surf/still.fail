@@ -226,7 +226,7 @@ fn place_report_after_scroll(keep : Bool) -> ((Int, Double, Double), (Int, Doubl
 test "a scroll updates the list place observed after the build" {
   let baseline = place_report_after_scroll(false)
   let kept = place_report_after_scroll(true)
-  println("AFTER_BUILD_PLACE ordinary=\{baseline} retained=\{kept}")
+  println("AFTER_BUILD_PLACE ordinary=\{Repr(baseline)} retained=\{Repr(kept)}")
   assert_true(baseline.1.1 > baseline.0.1, msg="the ordinary path must observe the new place: \{Repr(baseline)}")
   assert_eq(kept, baseline, msg="the kept path must report the same places as the ordinary path")
 }

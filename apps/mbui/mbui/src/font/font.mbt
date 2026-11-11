@@ -10,7 +10,7 @@ pub(all) enum PathCmd {
   QuadTo(Float, Float, Float, Float)
   CubicTo(Float, Float, Float, Float, Float, Float)
   Close
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 pub struct Face {

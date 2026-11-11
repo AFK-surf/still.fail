@@ -76,7 +76,7 @@ fn shows(t : @ui.Tester, words : String) -> Bool {
 ///|
 /// The words drawn now, seen.
 fn runs(t : @ui.Tester) -> String {
-  "\{t.text_runs().map(fn(r) { r.text })} \{t.words().filter(fn(w) { w.5 > 0.5 }).map(fn(w) { w.0 })}"
+  "\{Repr(t.text_runs().map(fn(r) { r.text }))} \{Repr(t.words().filter(fn(w) { w.5 > 0.5 }).map(fn(w) { w.0 }))}"
 }
 
 ///|

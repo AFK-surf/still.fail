@@ -185,7 +185,7 @@ fn main {
       let (si, sn) = seen(ia, na, a)
       draw(si, sn, ar, ag, ab)
       let parts = damage.next(inst, n, dl.w, dl.h, dl.scale, r, gg, b)
-      say("mbui-render: \{path}: drawn again where it differs from \{from_path}: \{parts}")
+      say("mbui-render: \{path}: drawn again where it differs from \{from_path}: \{Repr(parts)}")
       let bench = arg("MBUI_DL_BENCH")
       if bench != "" {
         let times = num(bench).to_int()

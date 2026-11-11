@@ -12,7 +12,7 @@ priv struct PaneEdgeSeen {
   after : Bool
   folded : Bool
   folded_rest : Bool
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// 大屏 (1280 wide, a mouse's), the sidebar open at 240: down on its edge at `t0`, moved 10 wider each slow_drag_ms six
@@ -73,8 +73,8 @@ test "大屏: the sidebar's edge held, dragged and let go by a mouse, then press
   }
   let stepped = pane_edge_seen(true)
   let none = pane_edge_seen(false)
-  assert_eq(stepped, want, msg="frames all along: \{stepped}; no frame: \{none}")
-  assert_eq(none, want, msg="no frame: \{none}")
+  assert_eq(stepped, want, msg="frames all along: \{Repr(stepped)}; no frame: \{Repr(none)}")
+  assert_eq(none, want, msg="no frame: \{Repr(none)}")
 }
 
 ///|

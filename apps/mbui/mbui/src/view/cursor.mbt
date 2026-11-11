@@ -19,7 +19,25 @@ pub(all) enum Cursor {
   Grabbing
   Crosshair
   NotAllowed
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+/// By its name, as a Tester's export writes the pointer's shape: what `derive(Show)` wrote.
+pub impl Show for Cursor with output(self, logger) {
+  logger.write_string(
+    match self {
+      Arrow => "Arrow"
+      Hand => "Hand"
+      IBeam => "IBeam"
+      ResizeX => "ResizeX"
+      ResizeY => "ResizeY"
+      Grab => "Grab"
+      Grabbing => "Grabbing"
+      Crosshair => "Crosshair"
+      NotAllowed => "NotAllowed"
+    },
+  )
+}
 
 ///|
 /// The number a host is told it by (@hostapi.set_cursor).

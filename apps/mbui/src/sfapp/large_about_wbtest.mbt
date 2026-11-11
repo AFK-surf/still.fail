@@ -527,7 +527,7 @@ test "归档, 一台 station 的归档 and 自动决策 made once on a large scr
     (0, 1.0, 1000.0),
   ] {
     let (platform, scale, w) = case
-    let at = "\{case}"
+    let at = "\{Repr(case)}"
     let _ = large_about_tester(true, platform, scale~, w~, mode="settings-archiving")
     assert_true(app.nav.top() == Setting(@settings.Route::Archiving), msg=at)
     let own = tree_words_drawn()

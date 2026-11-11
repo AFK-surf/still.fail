@@ -6,10 +6,10 @@ fn row_paint_status(item : Int) -> String {
   for _, rn in kept_nodes {
     if rn.item == item {
       let drawing = match rn.drawing {
-        Some(d) => "valid=\{d.valid} stale=\{d.watch.is_stale()} x=\{d.x} y=\{d.y} clip=\{d.clip}"
+        Some(d) => "valid=\{d.valid} stale=\{d.watch.is_stale()} x=\{d.x} y=\{d.y} clip=\{Repr(d.clip)}"
         None => "no drawing"
       }
-      return "ok=\{rn.ok} why=\{rn.why} key=\{rn.row_key} base=\{rn.base} count=\{rn.n} pool=\{rn.in_pool} built=\{rn.built_frame}: \{drawing}"
+      return "ok=\{rn.ok} why=\{rn.why} key=\{Repr(rn.row_key)} base=\{rn.base} count=\{rn.n} pool=\{rn.in_pool} built=\{rn.built_frame}: \{drawing}"
     }
   }
   "row not kept"

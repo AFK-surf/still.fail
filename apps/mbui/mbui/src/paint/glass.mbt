@@ -31,7 +31,7 @@ pub(all) struct Glass {
   // past them (CSS backdrop-filter's), so nothing round it bleeds in at its
   // rim: a picture's frost (a message's image coming in)
   contained : Bool
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Frosted glass: what is under it blurred by `blur` (CSS px), `tint` over it.

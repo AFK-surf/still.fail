@@ -103,7 +103,7 @@ enum After {
   Inert
   Anew
   Button(same~ : Bool)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Words laid out only as they are held under a cover holding through (picked_through's), a button of the tree's below
@@ -188,7 +188,7 @@ fn handed_lost(after : After) -> Bool {
 ///|
 test "a hold handed through and not taken yet: called off, or let go and, before a frame, what it was held on not shown in the frame it came to, a modal layer over it, its old view taking no presses, the tree made anew, another press down (on a button of the tree's; at the same moment as it): picks nothing later" {
   let picked = [Off, Hidden, Modal, Inert, Anew, Button(same=false), Button(same=true)].filter(handed_lost).map(fn(a) {
-    "\{a}"
+    "\{Repr(a)}"
   })
   assert_eq(picked, [])
   // (none of them: picked, as picked_through has it)

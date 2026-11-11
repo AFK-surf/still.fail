@@ -63,7 +63,7 @@ pub(all) enum OpTrouble {
   Unreached
   /// Anything else, in its own words.
   Other(String)
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Why it ended badly; None where it gave what it was asked.
@@ -94,7 +94,7 @@ pub(all) struct PasswordLogin {
   id : String
   title : String
   username : String
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// Whether `href` (a login's website, as the password manager keeps it: an address, or a bare host) is `host` or a

@@ -24,7 +24,7 @@ pub(all) struct Response {
   gained_focus : Bool
   /// the widget's value changed this frame (said by the widget: Response::changed_to)
   changed : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// A response of nothing (a widget not there, disabled).

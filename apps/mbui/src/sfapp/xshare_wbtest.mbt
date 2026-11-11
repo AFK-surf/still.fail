@@ -373,10 +373,10 @@ test "分享给其他 workspace: each workspace a row, its box, its mark and its
     assert_true(write.1 > open.1 + open.3 && note.1 >= write.1 + write.3, msg="\{about}: \{open}, \{write}, \{note}")
     assert_true((write.0 - lead.0).abs() < 0.5 && (note.0 - lead.0).abs() < 0.5, msg="\{about}: \{write}, \{note}, \{lead}")
     let switch = t.get(Switch, label="可发送消息").rect
-    assert_true(switch.0 > write.0 + write.2 && switch.0 + switch.2 <= lead.0 + lead.2 + 0.5, msg="\{about}: \{switch}, \{write}, \{lead}")
+    assert_true(switch.0 > write.0 + write.2 && switch.0 + switch.2 <= lead.0 + lead.2 + 0.5, msg="\{about}: \{Repr(switch)}, \{Repr(write)}, \{Repr(lead)}")
     // 完成 last: across a sheet's middle; at a dialog's end
     let done = xshare_word(t, "完成")
-    assert_true(done.1 > note.1 + note.3, msg="\{about}: \{done}, \{Repr(note)}")
+    assert_true(done.1 > note.1 + note.3, msg="\{about}: \{Repr(done)}, \{Repr(note)}")
     if screen.1 {
       assert_true(done.0 + done.2 > lead.0 + lead.2 - 40.0, msg="\{about}: \{Repr(done)}, \{Repr(lead)}")
     } else {

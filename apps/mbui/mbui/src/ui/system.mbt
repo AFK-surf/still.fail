@@ -14,7 +14,7 @@ pub(all) struct SystemBars {
   bottom : Double
   left : Double
   right : Double
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// The bars as the host last said them (none: all 0), a signal: what is laid out by them (the window's tree's sides)
@@ -64,7 +64,7 @@ pub fn system_nav_action() -> (Double, Double, Double, Double)? {
 pub(all) struct SystemSizeClass {
   width : @hostapi.SizeClass
   height : @hostapi.SizeClass
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// The size classes as the host last said them (none yet: None). Put back by each Tester (messages_reset).
@@ -83,7 +83,7 @@ pub(all) struct SystemFold {
   hinge : @hostapi.Hinge
   /// where the fold divides the view now (x, y, w, h in the view's points), the margins the system keeps round it in
   divisions : Array[(Double, Double, Double, Double)]
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// The hinge as the host last said it (none yet: no hinge). Put back by each Tester (messages_reset).

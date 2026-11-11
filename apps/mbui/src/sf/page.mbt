@@ -13,7 +13,7 @@
 pub(all) enum Look {
   Narrow
   Wide
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// The arrangements of the pages being drawn, the innermost last (a page's frame says its own as it draws what it

@@ -49,8 +49,8 @@ fn snap(c : Ctx) -> String {
     sb.write_char('\n')
   }
   // (the ids differ from run to run: pages are numbered as they come)
-  sb.write_string("hits \{c.hit_ids.length()} \{c.hit_rects}\n")
-  sb.write_string("scrolls \{c.scroll_ids.length()} \{c.scroll_rects}\n")
+  sb.write_string("hits \{c.hit_ids.length()} \{list_text(c.hit_rects)}\n")
+  sb.write_string("scrolls \{c.scroll_ids.length()} \{list_text(c.scroll_rects)}\n")
   sb.to_string()
 }
 

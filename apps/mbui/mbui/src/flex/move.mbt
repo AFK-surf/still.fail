@@ -295,7 +295,7 @@ fn come_toward(from : Double, v : Double, goal : Double) -> Bool {
 pub(all) struct ComeWith {
   start : Double
   ends : Double
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// How long its Move to `goal` takes, `far` points away, going along `along` from `t0` ms after the way set out (at

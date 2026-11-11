@@ -109,7 +109,7 @@ fn words_within(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> Arra
 /// Each row of the two sides, as it stands, pointed at and pressed (a finger's, held a while), drawn the same in its
 /// own terms, its words where the old one's are; read out the same; each pressed alone where it can be.
 fn choice_rows_same(look : Look, platform : Int, card? : Bool = false) -> Unit raise {
-  let about = "\{look} on \{platform}, card \{card}"
+  let about = "\{Repr(look)} on \{platform}, card \{card}"
   let pressed : Map[String, Int] = Map([])
   let t = choice_rows_tester(look, platform, pressed, card~)
   for s in choice_rows {
@@ -298,7 +298,7 @@ fn panel_choice_rows(at : (Int, Double, Double), pressed : Bool, old : Bool, lis
     // (each place to a thousandth of a point, as drawn_within has the draw list's: laid out by another sum, a place
     // the same differs in its last digits)
     let k = fn(v : Double) { (v * 1000.0).round() / 1000.0 }
-    stood.push("\{s.label} at \{k(r.0)},\{k(r.1)} \{k(r.2)}x\{k(r.3)} selected \{all[0].selected} unable \{all[0].disabled}")
+    stood.push("\{s.label} at \{k(r.0)},\{k(r.1)} \{k(r.2)}x\{k(r.3)} selected \{@ui.some_text(all[0].selected)} unable \{all[0].disabled}")
     stood.push(drawn_within(t, r).join(" "))
     stood.push(
       t

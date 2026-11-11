@@ -534,7 +534,7 @@ priv enum Fit {
   Whole
   Smaller(Double)
   Menu
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
 
 ///|
 /// How wide each of a choice's options is in `room` (all of it, the gaps between them aside), their words `words`

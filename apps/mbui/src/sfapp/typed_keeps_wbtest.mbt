@@ -27,7 +27,7 @@ fn typed_builds(w : Double, h : Double, n : Int) -> Array[String] {
       }
     }
     if rows.length() > 0 || parts.length() > 1 {
-      out.push("word \{k}: rows \{rows}, parts \{parts}")
+      out.push("word \{k}: rows \{Repr(rows)}, parts \{Repr(parts)}")
     }
   }
   // (and what was typed is what is sent)

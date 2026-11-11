@@ -105,7 +105,7 @@ test "bar: back from a chat, the notch opening frame by frame: drawn where it is
   let (cy, r) = notch_of(bar.k_at(at))
   assert_eq(second, (cy, r))
   // and nothing of the bar is built or laid out for it
-  assert_eq((p1.nodes, p1.laid, p2.nodes, p2.laid), (0, 0, 0, 0), msg="before: \{warm1} / \{warm2}; counted: \{p1} \{why1} / \{p2} \{t.built_why()}")
+  assert_eq((p1.nodes, p1.laid, p2.nodes, p2.laid), (0, 0, 0, 0), msg="before: \{warm1} / \{warm2}; counted: \{Repr(p1)} \{why1} / \{Repr(p2)} \{t.built_why()}")
 }
 
 ///|

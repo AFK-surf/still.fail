@@ -408,12 +408,12 @@ test "分享对话: a chat and whose it is on one line, why it cannot be shared 
     let title = outside_word(t, "发布检查")
     let no = outside_word(t, "你没有分享权限，需由发起人或管理员分享")
     assert_true((mid(title) - mid(open)).abs() < 1.0 && (mid(title) - mid(no)).abs() < 1.0, msg="\{about}: \{title}, \{open}, \{no}")
-    assert_true(no.0 > open.0 + open.2, msg="\{about}: \{open}, \{no}")
-    assert_true((no.0 + no.2 - (lead.0 + lead.2)).abs() < 1.0, msg="\{about}: \{no}, the lead \{lead}")
+    assert_true(no.0 > open.0 + open.2, msg="\{about}: \{open}, \{Repr(no)}")
+    assert_true((no.0 + no.2 - (lead.0 + lead.2)).abs() < 1.0, msg="\{about}: \{Repr(no)}, the lead \{Repr(lead)}")
     // 取消 before 分享并发送: across a sheet, a half each; at a dialog's end
     let (cancel, yes) = (outside_word(t, "取消"), outside_word(t, "分享并发送"))
     let half = lead.0 + lead.2 / 2.0
-    assert_true((mid(cancel) - mid(yes)).abs() < 1.0, msg="\{about}: \{cancel}, \{Repr(yes)}")
+    assert_true((mid(cancel) - mid(yes)).abs() < 1.0, msg="\{about}: \{Repr(cancel)}, \{Repr(yes)}")
     if screen.1 {
       assert_true(cancel.0 > half && cancel.0 + cancel.2 < yes.0, msg="\{about}: \{Repr(cancel)}, \{Repr(yes)}")
     } else {

@@ -3678,7 +3678,19 @@ pub(all) enum Resized {
   Pressed
   /// the second of two clicks (the first was `Pressed`): its own width again, or as wide as what it holds needs
   Twice
-} derive(Eq, Show, Debug)
+} derive(Eq, Debug)
+
+///|
+/// As what an edge's handle was done with is written (tests compare it): what `derive(Show)` wrote, a number as its text.
+pub impl Show for Resized with output(self, logger) {
+  match self {
+    Untouched => logger.write_string("Untouched")
+    Dragging(v) => logger.write_string("Dragging(\{v})")
+    Dropped(v) => logger.write_string("Dropped(\{v})")
+    Pressed => logger.write_string("Pressed")
+    Twice => logger.write_string("Twice")
+  }
+}
 
 ///|
 /// An edge in hand: where the press went down, its column's width then; which end of what it is dragged between it was
