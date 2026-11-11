@@ -230,3 +230,39 @@ test "the history's details on a phone: each tile's figure on a line as high as 
     }
   }
 }
+
+///|
+test "the history's tiles: a figure longer than six characters, on its smaller line, in a tile as high as a short one's beside it, the names level, at the default size of words and at 1.3" {
+  // (a cost of nine characters, drawn smaller, beside a cache's of three)
+  let card : Json = { "cost": "$1,234.56", "cache": { "text": "91%" } }
+  for scale in [1.0, words_large_scale] {
+    new_run()
+    let t = @ui.Tester::new(fn(c) { @sf.begin(c) |> ignore }, w=390.0, h=300.0, platform=2)
+    if scale != 1.0 {
+      t.set_font_scale(scale)
+    }
+    @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      agent_tiles_node(root, fn() { Some(card) }, 14.0)
+    })
+    t.run_for(@ui.move_most_ms)
+    let word = fn(s : String) {
+      match t.words().search_by(fn(w) { w.0 == s }) {
+        Some(i) => t.words()[i]
+        None => ("", 0.0, 0.0, 0.0, 0.0, 0.0)
+      }
+    }
+    let long = word("$1,234.56")
+    let short = word("91%")
+    let long_name = word(tr("android-chat.agent.cost"))
+    let short_name = word(tr("android-chat.agent.cache"))
+    for w in [long, short, long_name, short_name] {
+      assert_true(w.4 > 0.0, msg="at \{scale}: \{t.words()}")
+    }
+    assert_true(long.4 < short.4, msg="at \{scale}: the long figure on the smaller line: \{long} \{short}")
+    assert_eq(long_name.2, short_name.2, msg="at \{scale}: the names level: \{long_name} \{short_name}")
+    assert_true(short.2 + short.4 <= short_name.2 + 1.0, msg="at \{scale}: \{short} over \{short_name}")
+    assert_true(long.2 + long.4 <= long_name.2 + 1.0, msg="at \{scale}: \{long} over \{long_name}")
+    assert_eq(t.squeeze_faults(), [], msg="at \{scale}: \{t.squeeze_faults()}")
+  }
+}
