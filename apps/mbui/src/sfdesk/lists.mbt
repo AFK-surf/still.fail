@@ -587,7 +587,7 @@ fn todo_shown(src : Source, w : Workspace) -> Bool {
 fn band_h(src : Source, w : Workspace) -> Double {
   side_top_h() +
   band_row_h() +
-  (if wide.tape {
+  (if wide.tape.get() {
     band_new_top + side_new_under + band_new_tape_over()
   } else {
     band_pane_top() + band_pane_under()

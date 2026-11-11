@@ -1328,7 +1328,7 @@ test "a new chat on an iPhone Duo: its 文件 among the page's actions in the sy
     @sfdesk.new_chat()
     t.run_for(@ui.move_most_ms)
     assert_true(app.nav.top() is NewChat, msg=at)
-    assert_true(@sfdesk.wide.tape, msg=at)
+    assert_true(@sfdesk.wide.tape.get(), msg=at)
     let files = @sf.t("web-pages.chat.files")
     assert_true(nav_icon_of(t, "page/new/files") is Some(_), msg="\{at}: the bars handed hold no 文件: \{t.nav_said()}")
     assert_true(said_at(t, files) is None, msg="\{at}: 文件 drawn on the page too")

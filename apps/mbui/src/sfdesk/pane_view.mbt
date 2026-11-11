@@ -155,7 +155,7 @@ fn pane_room(src : Source, w : Workspace, ww : Double) -> PaneRoom {
   let crowded = own &&
     (@sf.native_input() is Finger) &&
     ww - rail_left() - side_on_fold().unwrap_or(wide.side_w.get()) < page_beside_least
-  let folded = (wide.folded.get() && !wide.tape) || crowded
+  let folded = (wide.folded.get() && !wide.tape.get()) || crowded
   let on_fold = if folded { None } else { side_on_fold() }
   let bar = (own && folded) || bare
   let s = if gated { 0.0 } else { on_fold.unwrap_or(wide.side_w.get()) }
@@ -187,7 +187,7 @@ fn fold_look_of(r : PaneRoom, shift : Double) -> FoldLook {
   let over_bars = peek && !inset
   let updating = !r.gated && update_shown()
   let shift = if peek { shift } else { 0.0 }
-  let rail_extra = if !bar && !wide.tape && !@sf.native_on() { rail_window_in() - rail_in_px } else { 0.0 }
+  let rail_extra = if !bar && !wide.tape.get() && !@sf.native_on() { rail_window_in() - rail_in_px } else { 0.0 }
   // (under the window's buttons where they are the system's, at its left: macOS's)
   let above = if keys_left { closed_bar_top } else { bar_in_now() }
   let (blur, fall, shade) = if peek {
@@ -448,7 +448,7 @@ fn fold_built(c : @ui.Ctx, now : FoldLook) -> FoldLook {
 /// The frame off the tape in node `v` (the signed-in shell's, filling the window: sfapp's paned_shell), in the workspace
 /// in view (its file's head).
 pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : Double) -> Unit {
-  wide.tape = false
+  wide.tape.set(false)
   // (its tips over all of the window, as the old frame's are: none cut by the pane, the sidebar's edge's and its pages')
   let tips = @sf.TipLayer::new(fn() { Some(v) })
   fold_goes.node = Some(v)
@@ -879,7 +879,7 @@ pub fn pane_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   c.mouse_drags_lists(pane_finger())
   wide.side_place = side_place()
   side_follow(c, src, w.id)
-  wide.tape = false
+  wide.tape.set(false)
   tape_off()
   native_frame(c, src, w, all)
   let r = pane_room(src, w, c.width)

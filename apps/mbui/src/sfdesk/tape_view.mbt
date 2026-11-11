@@ -619,7 +619,7 @@ fn tape_settle(chat : String, open : String, known : Bool, at : Double) -> Unit 
 /// file's head): the page brought over once `ready` says the core has given what it shows of the page put on it, `most`
 /// ms after it was put there at the latest.
 pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : Double) -> Unit {
-  wide.tape = true
+  wide.tape.set(true)
   tape_goes.node = Some(v)
   tape_goes.ready = ready
   tape_goes.most = most
@@ -656,7 +656,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     wide.tape_pull.set(None)
     wide.tape_drag.set(0.0)
     wide.tape_backing = false
-    wide.tape = false
+    wide.tape.set(false)
     @hostapi.window_buttons_down(0.0, @ui.move_ms(bar_in_now()))
   })
   |> ignore
@@ -1397,7 +1397,7 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
   c.mouse_drags_lists(pane_finger())
   wide.side_place = side_place()
   side_follow(c, src, w.id)
-  wide.tape = true
+  wide.tape.set(true)
   wide.crowded = false
   side_crowded()
   wide.peeking.set(false)
@@ -1436,7 +1436,7 @@ pub fn tape_under(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspac
 /// and closed from its end (the user, 2026-11-05: its name twice, its × alone in a row of its own; 2026-11-06: its × among
 /// the chat's actions in a Duo's system bars read as another thing's, so there too it is the bar's own).
 fn screen_tab_alone(tabs : Array[String]) -> Bool {
-  wide.tape && tabs.length() == 1 && station_tab(tabs[0]) is Some(("screen", _, _))
+  wide.tape.get() && tabs.length() == 1 && station_tab(tabs[0]) is Some(("screen", _, _))
 }
 
 ///|

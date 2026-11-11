@@ -18,7 +18,7 @@ fn files_page_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
 ///|
 /// On the tape (laid out Medium, the sidebar in use at first), what shows of the page tapped: the page over.
 fn files_page_over(t : @ui.Tester, w : Double, h : Double) -> Unit {
-  if @sfdesk.wide.tape && @sfdesk.wide.tape_at.get() != @sfdesk.TapePane::Page {
+  if @sfdesk.wide.tape.get() && @sfdesk.wide.tape_at.get() != @sfdesk.TapePane::Page {
     t.tap(w - @sfdesk.tape_shows / 2.0, h / 2.0)
     t.run_for(@ui.move_most_ms)
   }

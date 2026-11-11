@@ -202,16 +202,16 @@ fn tape_left_for_usage(t : @ui.Tester) -> ((Double, Double), (Double, Double)) {
 test "中屏 to 用量 while the tape goes: the block closes from where the tape had it then; and again after the tape again" {
   let t = tape_chat(0, 720.0, 840.0)
   let (tape, from) = tape_left_for_usage(t)
-  assert_false(@sfdesk.wide.tape)
+  assert_false(@sfdesk.wide.tape.get())
   assert_eq(from, tape)
   // back to the chats (the tape again), the page brought over again, and 用量 once more mid-way: the same from there
   t.run_for(@ui.move_most_ms)
   @sfbase.go_place("chats") |> ignore
   t.run_for(@ui.move_most_ms)
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Side))
   t.run_for(@ui.move_most_ms)
   let (tape, from) = tape_left_for_usage(t)
-  assert_false(@sfdesk.wide.tape)
+  assert_false(@sfdesk.wide.tape.get())
   assert_eq(from, tape)
 }
