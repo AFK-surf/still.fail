@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [3d78e06ad](https://github.com/AFK-surf/still.fail/commit/3d78e06ad6093c58df2818805b24c2e07351614e) app: 选择运行的 station's row's name line as high as it | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.54 | 179.33 |
 | [89ddb06c6](https://github.com/AFK-surf/still.fail/commit/89ddb06c630614459cb5acc1a81e7e6f8c7178aa) sf: the composer's least room is worked out of its | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.41 | 162.14 |
 | [a5accdbad](https://github.com/AFK-surf/still.fail/commit/a5accdbad8ac91788c618d28ebdd6e0fde00e90b) app: 选择运行的 station's row's name line as high as it | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.27 | 149.89 |
 | [7eb12a296](https://github.com/AFK-surf/still.fail/commit/7eb12a29623ab0f3dbe85dada5ea4f416cd6f435) sf: list_turns says what it does, and what did not | 1.81 | 2.42 | 10.08 | 28.81 | 35.59 | 25.67 | 47.52 | 94.52 | 149.03 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [7e073ec98](https://github.com/AFK-surf/still.fail/commit/7e073ec9853b3f7dc4f357f909696b840c28d459) mbui: a box gone_empty takes no room holding nothi | 1.78 | 2.38 | 9.92 | 28.54 | 34.74 | 25.49 | 46.91 | 94.13 | 179.72 |
 | [39bcd19a7](https://github.com/AFK-surf/still.fail/commit/39bcd19a7d08bed6546e1d1419d3d3e203850874) mbui: a way set off again turns back while it is s | 1.78 | 2.38 | 9.91 | 28.54 | 34.72 | 25.48 | 46.89 | 94.52 | 169.68 |
 | [40f35d3be](https://github.com/AFK-surf/still.fail/commit/40f35d3be2e7c649b0f7d2ffadc3961fb30a3dfd) mbui: a scripted run's img: finds a picture or sha | 1.78 | 2.38 | 9.91 | 28.54 | 34.72 | 25.48 | 46.89 | 94.32 | 137.98 |
-| [bb7577768](https://github.com/AFK-surf/still.fail/commit/bb757776884b3ae1cd67c868e160dcd9e16ec64a) web: the core's worker gives the core its build, s | 1.78 | 2.38 | 9.91 | 28.54 | 34.71 | 25.48 | 46.89 | 94.21 | 175.79 |
