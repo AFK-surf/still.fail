@@ -314,6 +314,47 @@ test("what is left of those kept in part: the first of each not kept, the most l
   assert.deepEqual((await run(kept.unfinished(["played"], host.nowMs() - 61_000))).map((f) => f.id), [song]);
 });
 
+test("what is left of those read since a time is found without reading every file ever kept, nor its parts", async () => {
+  const host = new FakeHost();
+  // (the rows each statement gives back, counted: what the core's thread is held for, each of them decoded there)
+  const read = { rows: 0 };
+  const open = host.openDb.bind(host);
+  host.openDb = (name) =>
+    Effect.map(open(name), (sql) => ({
+      exec: (q) => sql.exec(q),
+      run: (q, p) => sql.run(q, p),
+      all: (q, p) => {
+        const rows = sql.all(q, p);
+        read.rows += rows.length;
+        return rows;
+      },
+      close: () => sql.close(),
+    }));
+  const kept = new DriveKept(host);
+  const run = <A>(e: Effect.Effect<A>) => Effect.runPromise(e);
+  // a chat's files opened long ago, never let go by themselves: each whole, in two parts; one of them in part
+  const old = Array.from({ length: 40 }, (_, i) => chatKeptId(ST, "k1", `old-${i}.png`));
+  for (const id of old) {
+    await run(kept.keep(id, "chat", 0, 20, "image/png", 0, bytesOf(10)));
+    if (id !== old[7]) await run(kept.keep(id, "chat", 0, 20, "image/png", 10, bytesOf(10)));
+  }
+  host.advance(4 * 24 * 3600_000);
+  // a film opened now, its start kept; and one of the old ones asked to be loaded
+  const film = chatKeptId(ST, "k1", "film.mp4");
+  await run(kept.keep(film, "chat", 0, 50, "video/mp4", 0, bytesOf(10)));
+  const since = host.nowMs() - 3 * 24 * 3600_000;
+  read.rows = 0;
+  assert.deepEqual((await run(kept.unfinished(["chat", "played"], since))).map((f) => [f.id, f.at, f.length]), [[film, 10, 40]]);
+  assert.ok(read.rows <= 4, `${read.rows} rows read for one file in part`);
+  await run(kept.want(old[7]!, "chat", 20));
+  read.rows = 0;
+  assert.deepEqual((await run(kept.unfinished(["chat", "played"], since))).map((f) => [f.id, f.at, f.length, f.wanted]), [[old[7], 10, 10, true], [film, 10, 40, false]]);
+  assert.ok(read.rows <= 8, `${read.rows} rows read for two files in part`);
+  // (with no time said: every one in part, as before)
+  await run(kept.unwant(old[7]!));
+  assert.deepEqual((await run(kept.unfinished(["chat"]))).map((f) => f.id), [film, old[7]]);
+});
+
 test("a chat's file opened is kept with its chat: read again from the device, listed with it, let go one at a time or with it", async () => {
   const t = await started();
   const pdf = bytesOf(40, 7);
