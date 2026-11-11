@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [400a6b98e](https://github.com/AFK-surf/still.fail/commit/400a6b98e2567eaf732bea8251226ae78cc01517) mbui: what the app did while shown says its frames | 1.79 | 2.39 | 9.95 | 28.6 | 34.94 | 25.53 | 47.12 | 94.32 | 171.62 |
 | [d76d0b580](https://github.com/AFK-surf/still.fail/commit/d76d0b5800f7742bbb43bb2a569f060e5429aaf0) app, core: 密钥 says a vault waits to be keyed anew, | 1.79 | 2.39 | 9.95 | 28.59 | 34.92 | 25.52 | 47.11 | 93.72 | 147.22 |
 | [c54a7ee88](https://github.com/AFK-surf/still.fail/commit/c54a7ee88af08631d81dd933c11d6dba6044e2d8) sf: a switch of nodes is one thing to the keys and | 1.79 | 2.38 | 9.94 | 28.58 | 34.91 | 25.52 | 47.09 | 94.32 | 179.03 |
 | [35383456b](https://github.com/AFK-surf/still.fail/commit/35383456bbf71d8c66fdfeeb1c59e9df474b0953) sf: a style on a node sets what it has said so far | 1.79 | 2.38 | 9.94 | 28.58 | 34.91 | 25.52 | 47.09 | 94.23 | 176.88 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [a7b60f6b2](https://github.com/AFK-surf/still.fail/commit/a7b60f6b22673771b8f1cfe19bfd7e5b67dcb910) mbui: a stack's pages put in place, or gone back t | 1.76 | 2.35 | 9.79 | 28.4 | 34.29 | 25.38 | 46.63 | 94.03 | 162.11 |
 | [154f6d152](https://github.com/AFK-surf/still.fail/commit/154f6d152de376a69b8f0c80c94d649724516667) station: the main thread waits on no disk, process | 1.76 | 2.35 | 9.79 | 28.38 | 34.26 | 25.36 | 46.61 | 93.57 | 125.36 |
 | [d2247c1b5](https://github.com/AFK-surf/still.fail/commit/d2247c1b58fac7c5cd9117925a7a1d8f4462362f) feedback: the still.fail team replies on a bug rep | 1.76 | 2.35 | 9.78 | 28.38 | 34.26 | 25.35 | 46.59 | 93.7 | 173.58 |
-| [87bc79faf](https://github.com/AFK-surf/still.fail/commit/87bc79faf1131dbca3843f025a7644b17f1c090c) mbui: the Wasm film's host answers the core's call | 1.76 | 2.35 | 9.78 | 28.38 | 34.21 | 25.34 | 46.58 | 93.54 | 138.22 |
