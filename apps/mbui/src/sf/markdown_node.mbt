@@ -13,7 +13,8 @@
 /// smaller as makes it fit, rather than part of it left to scroll to (a chat's shared picture: markdown's); `paths`: the files its paths name are a session's (chips);
 /// `found`: words found, in bold; `on_link` where a link leads, `on_link_hold` a link held; `on_link_shown`, each
 /// paragraph's links as they are (its words' node, each link's way, its words and its first run: what shows over one
-/// while it is pointed at, @ui.runs_links' `shown`); `one_line`: its first block's words alone, on one line as wide as
+/// while it is pointed at, @ui.runs_links' `shown`); `link_cards`, the card each link has (drawn in its layer while a
+/// mouse rests on that link: link_cards_node); `one_line`: its first block's words alone, on one line as wide as
 /// they are, cut with an ellipsis where the column is narrower (markdown's: a notice closed); `chat_title`, what a bare
 /// link to a chat reads as; `code`, a fenced block of a language drawn another way (what draws it, its code as it
 /// changes); `files`, the files it names by their names, drawn where it names them (a paragraph of only a link to one,
@@ -36,6 +37,7 @@ pub fn markdown_node(
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
   on_link_shown? : (@view.View, Array[(String, String, Int)]) -> Unit,
+  link_cards? : (TipLayer, (LinkOf) -> LinkCard?),
   one_line? : Bool = false,
   chat_title? : (String) -> String? = fn(_) { None },
   code? : (String) -> ((@view.View, () -> String) -> Unit)? = fn(_) { None },
@@ -77,6 +79,7 @@ pub fn markdown_node(
       on_link,
       on_link_hold,
       on_link_shown,
+      link_cards,
       chat_title,
       code,
       files,
@@ -108,6 +111,7 @@ priv struct MdNode {
   on_link : (String) -> Unit
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?
   on_link_shown : ((@view.View, Array[(String, String, Int)]) -> Unit)?
+  link_cards : (TipLayer, (LinkOf) -> LinkCard?)?
   chat_title : (String) -> String?
   code : (String) -> ((@view.View, () -> String) -> Unit)?
   files : (String) -> PlacedNode?
@@ -594,16 +598,34 @@ fn md_words_node(
     let line = if md.line > 0.0 { -md.line } else { md_line(md, size) }
     { size, weight: if weight > 0 { weight } else { 400 }, line, wrap, tracking: @view.letters_own, balance: false }
   }
-  p.box(made_for=loc, fn(w) {
+  // (its links as they are, where something is told of them or has cards over them)
+  let shown : @signals.Signal[Array[(String, String, Int)]] = @signals.signal([])
+  let told = md.on_link_shown is Some(_) || md.link_cards is Some(_)
+  let links : Ref[@ui.RunsLinks?] = Ref(None)
+  let words = p.box(made_for=loc, fn(w) {
     w.words_runs(By(runs)).words_look(By(look)).runs_look(By(table_runs_look)).ink(By(md.ink)) |> ignore
     // (on one line as wide as they are, cut short with an ellipsis where the column is narrower: one_line's)
     if cut {
       w.cuts(Is(true)).min_width(Is(Some(0.0))).allow_ellipsis(Is(true)) |> ignore
     }
-    @ui.runs_links(w, runs, md.on_link, hold?=md.on_link_hold, shown?=md.on_link_shown.map(fn(f) { fn(links) { f(w, links) } }))
-    |> ignore
+    links.val = Some(
+      @ui.runs_links(w, runs, md.on_link, hold?=md.on_link_hold, shown?=if told {
+        Some(fn(now) {
+          shown.set(now)
+          match md.on_link_shown {
+            Some(f) => f(w, now)
+            None => ()
+          }
+        })
+      } else {
+        None
+      }),
+    )
   })
-  |> ignore
+  match (md.link_cards, links.val) {
+    (Some((layer, card_of)), Some(l)) => link_cards_node(p, layer, words, l, fn() { shown.get() }, card_of, loc~) |> ignore
+    _ => ()
+  }
 }
 
 ///|

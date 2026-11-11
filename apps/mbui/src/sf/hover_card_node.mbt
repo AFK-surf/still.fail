@@ -68,7 +68,12 @@ pub struct HoverHand {
 /// hold alone): a tap, a click or a drag on it is what holds it's as ever (a row pressed to open, a bar dragged), the
 /// finger its once held still that long; held by a finger, it is held to the room a press takes as anything pressed is
 /// (t.audit()'s `room`): what it is put in gives it that room (a bar as high as a press's), not this part. Closed with the focus in
-/// it, the focus goes back to `anchor` (where that takes it). The hand the card is opened and closed by.
+/// it, the focus goes back to `anchor` (where that takes it). `pointed`: a mouse's pointer on what it is of as that
+/// says (a piece of `anchor`: a link of its words, @ui.runs_links' `pointed`), in place of on `anchor`, a press as it
+/// goes down there not one outside; and nothing of the hand put on `anchor` (`press`, `tapped` and a finger's hold
+/// none of its: what holds it says them, a finger's hold opening it by the hand's `hold`). `owner`: what it is made
+/// and let go with (a card of a piece of `anchor`, as that piece comes and goes), `anchor` where not said. The hand
+/// the card is opened and closed by.
 #callsite(autofill(loc))
 pub fn hover_card_node(
   layer : TipLayer,
@@ -83,8 +88,11 @@ pub fn hover_card_node(
   held? : () -> Bool = fn() { false },
   press? : () -> Unit,
   tapped? : () -> Unit,
+  pointed? : () -> Bool,
+  owner? : @view.View,
   loc~ : SourceLoc,
 ) -> HoverHand {
+  let owner = owner.unwrap_or(anchor)
   let open : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
   // (opened by a finger's hold: stays till a press outside, Escape, or its anchor takes no input)
   let by_hand = Ref(false)
@@ -111,7 +119,7 @@ pub fn hover_card_node(
   let set_open : Ref[(Bool) -> Unit] = Ref(fn(_) {  })
   let make = fn() -> Bool {
     guard (layer.layer)() is Some(l) else { return false }
-    let holder = l.box(made_for=loc, fn(h) { h.over(Is(true)) |> ignore }).lives_with(anchor)
+    let holder = l.box(made_for=loc, fn(h) { h.over(Is(true)) |> ignore }).lives_with(owner)
     holder.on_key(fn(k) {
       if k.code == @ui.key_escape && open.untracked() && !@signals.untracked(held) {
         (set_open.val)(false)
@@ -137,7 +145,11 @@ pub fn hover_card_node(
           None => false
         }
       }
-      if !(on(card.untracked()) || on(Some(anchor))) {
+      let on_anchor = match pointed {
+        Some(p) => @signals.untracked(p)
+        None => on(Some(anchor))
+      }
+      if !(on(card.untracked()) || on_anchor) {
         (set_open.val)(false)
       }
     })
@@ -222,7 +234,13 @@ pub fn hover_card_node(
   let takes = fn() { input_of.takes_input() }
   let state = fn() {
     let mouse = @ui.pointing() is Mouse
-    let on_anchor = mouse && (if within { anchor.pointer_within() } else { anchor.pointed_in() })
+    let on_anchor = mouse &&
+      (
+        match pointed {
+          Some(p) => p()
+          None => if within { anchor.pointer_within() } else { anchor.pointed_in() }
+        }
+      )
     let on_card = mouse &&
       (
         match card.get() {
@@ -233,9 +251,9 @@ pub fn hover_card_node(
     (on_anchor, on_card, anchor.pressed(), takes(), held())
   }
   let rests_was = Ref(false)
-  anchor.reacts(state, fn(s) {
+  owner.reacts(state, fn(s) {
     let (on_anchor, on_card, pressed, takes, keep) = s
-    let at = anchor.cause_at()
+    let at = owner.cause_at()
     let rests = on_anchor && !pressed
     let rests_now = rests && !rests_was.val
     rests_was.val = rests
@@ -251,7 +269,7 @@ pub fn hover_card_node(
       } else if due.val is None {
         // (left both: closed a while from now, the pointer as it is then)
         due.val = Some(
-          anchor.at_moment(at + hover_card_close_ms, fn() {
+          owner.at_moment(at + hover_card_close_ms, fn() {
             due.val = None
             let (a, c, _, _, k) = @signals.untracked(state)
             if !(a || c || k || by_hand.val) {
@@ -264,7 +282,7 @@ pub fn hover_card_node(
       // (rested on a while from now: opened then, the pointer as it is then)
       stop_due()
       due.val = Some(
-        anchor.at_moment(at + hover_card_open_ms, fn() {
+        owner.at_moment(at + hover_card_open_ms, fn() {
           due.val = None
           let (a, _, p, t, _) = @signals.untracked(state)
           if a && !p && t {
@@ -287,6 +305,8 @@ pub fn hover_card_node(
     }
   }
   match (press, tapped) {
+    // (its pointer said: nothing of the hand put on it, what holds it says that)
+    _ if pointed is Some(_) => ()
     // (said neither: a hold and nothing else (View::gesture's hold alone): a press or a drag on it what holds it's as
     // ever (a row pressed to open, a bar dragged), the finger its once held still that long)
     (None, None) => anchor.gesture(@ui.touch_slop(), hold=(@ui.long_press_ms, on_held)) |> ignore
@@ -341,7 +361,7 @@ pub fn hover_card_node(
     }
   }
   // (let go: nothing of it left pending)
-  anchor.owns(fn() {
+  owner.owns(fn() {
     stop_due()
     way.put(0.0)
   })
