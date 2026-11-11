@@ -1337,6 +1337,7 @@ fn Ctx::held_by(self : Ctx, outer : RowNodes?, rn : RowNodes) -> Unit {
 /// The rows (their list and item) and the parts (their id, -1) the frames built, not kept, since this was last asked
 /// (a test's), each time one was: none of those a build keeping none built to compare with.
 pub fn Tester::rows_built(self : Tester) -> Array[(Int, Int)] {
+  self.reads_own()
   ignore(self)
   let out = nodes_run.built_at.copy()
   nodes_run.built_at.clear()
@@ -1346,6 +1347,7 @@ pub fn Tester::rows_built(self : Tester) -> Array[(Int, Int)] {
 ///|
 /// How many rows the last frame kept as their nodes, and how many it built (a test's, a bench's).
 pub fn Tester::rows_as_nodes(self : Tester) -> (Int, Int) {
+  self.reads_own()
   ignore(self)
   (nodes_run.kept, nodes_run.built)
 }
@@ -1355,6 +1357,7 @@ pub fn Tester::rows_as_nodes(self : Tester) -> (Int, Int) {
 /// every frame's added up: those built again keeping none to hold a frame that kept some among them, where the Tester
 /// checks so (check_looks).
 pub fn Tester::rows_read_built(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   nodes_run.built_read
 }

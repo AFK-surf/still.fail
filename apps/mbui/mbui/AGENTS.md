@@ -193,6 +193,10 @@ yet and you can add one, add it.
   `draw_said`, `flex.reuse_refused`…) and one stopping on it, and the test asserts the first. detlint's `panic-test`
   holds it (none left); a Tester starting on a signals' graph left mid-change or mid-read stops, naming it
   (`leaked_state`) (the coordinator of the migration, 2026-11-11).
+- A Tester reads the frame of the Tester made last, never one of its own: read one after making another and it reads
+  the other's (an old card read as the new: a message's file cards). Each reading call stops on that, saying so
+  (`Tester::own_read_said`, `src/ui/tester_own.mbt`): read all of one before making the next (the coordinator of the
+  migration, 2026-11-11).
 - A test starts its own run of the app (an app's `new_run`, a Tester) before it reads anything of the app: before
   that, what it reads is the app as the test before it in the process left it (a landing's titles read in the English
   of gate_wbtest's last run, found in none of the Chinese it drew: only where CI's grouping put the two files in one

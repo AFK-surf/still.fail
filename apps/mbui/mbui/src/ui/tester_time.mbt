@@ -134,6 +134,7 @@ fn Tester::owed_now(self : Tester) -> Bool {
 /// What is said to move and is not at rest after the last frame, a line each: what it is (a spring, an Anim and its
 /// key, a list's ease, a stack's slide), who told it, and when it is at rest.
 pub fn Tester::moving(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   g().moving_now()
 }
@@ -144,6 +145,7 @@ pub fn Tester::moving(self : Tester) -> Array[String] {
 /// now, when the latest of them came to rest (its own end, whichever frames were drawn on its way); -1 where none so
 /// named was ever said to move. What a test runs to when the motion has no rest of its own to ask.
 pub fn Tester::rest_of(self : Tester, name : String) -> Double {
+  self.reads_own()
   ignore(self)
   rest_of(name)
 }
@@ -396,6 +398,7 @@ fn Tester::next_due(self : Tester) -> Double {
 /// shown (a cycle: a spinner, a breath) is not of it (Tester::cycles). The words assert_idle stops with: the two are one
 /// asking, assert_idle stopping on what this says.
 pub fn Tester::idle_said(self : Tester) -> String? {
+  self.reads_own()
   // messages posted that no frame took: what came from outside, not looked at (messages.mbt)
   let posted = posted_left()
   // (the frame the last input or motion left owed is drawn first: idle is what comes after)
@@ -524,12 +527,14 @@ fn Ctx::rest_why(self : Ctx) -> String {
 /// between frames and no message posted that no frame took. For assertions only (`assert_true(t.at_rest())`, a test's
 /// end): no loop, `until` or run goes on until it is (detlint's at-rest-wait).
 pub fn Tester::at_rest(self : Tester) -> Bool {
+  self.reads_own()
   g().frame_rest && !self.fake.wants && posted_left() == ""
 }
 
 ///|
 /// What keeps the app from its rest after the last frame, in words (Tester::at_rest): "" when nothing does.
 pub fn Tester::rest_why(self : Tester) -> String {
+  self.reads_own()
   let why = []
   let c = g()
   if !c.frame_rest {
@@ -548,6 +553,7 @@ pub fn Tester::rest_why(self : Tester) -> String {
 ///|
 /// What comes again every so often while shown in the last frame (Ctx::every): its period and who reads it, a line each.
 pub fn Tester::periodic(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   g().periodic.map(fn(p) { "every \{p.0.to_int()} ms by \{p.1}" })
 }
@@ -555,6 +561,7 @@ pub fn Tester::periodic(self : Tester) -> Array[String] {
 ///|
 /// What never ends while shown in the last frame (Ctx::cycle): its period and who reads it, a line each.
 pub fn Tester::cycles(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   g().cycles.map(fn(c) { "\{c.0.to_int()} ms by \{c.1}" })
 }
@@ -579,6 +586,7 @@ fn by_of(l : SourceLoc?) -> String {
 /// Where the words (or `=WORDS` exactly, `icon:NAME` an @sf icon, `img:NAME` an image by the end of its source) are
 /// on screen, as a scripted run's steps find them (drive.mbt): the middle of each, laid out inside the window.
 pub fn Tester::locate(self : Tester, what : String) -> Array[(Double, Double)] {
+  self.reads_own()
   ignore(self)
   on_screen(g(), what)
 }
@@ -587,6 +595,7 @@ pub fn Tester::locate(self : Tester, what : String) -> Array[(Double, Double)] {
 /// Where `what` is on screen that a finger reaches (not under what lies over it: a sheet, a scrim), as a scripted run's
 /// tap finds it (drive.mbt reachable): the same press in a test as in the run.
 pub fn Tester::reachable(self : Tester, what : String) -> Array[(Double, Double)] {
+  self.reads_own()
   ignore(self)
   reachable(g(), what)
 }
@@ -594,6 +603,7 @@ pub fn Tester::reachable(self : Tester, what : String) -> Array[(Double, Double)
 ///|
 /// The focused field's words ("" when none is focused).
 pub fn Tester::field_words(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   field_words(g())
 }
@@ -624,6 +634,7 @@ pub fn Tester::key_named(self : Tester, name : String) -> Bool {
 ///|
 /// The window's size (points).
 pub fn Tester::size(self : Tester) -> (Double, Double) {
+  self.reads_own()
   ignore(self)
   let c = g()
   (c.width, c.height)
@@ -657,6 +668,7 @@ pub fn Tester::tap_notice(self : Tester, text : String) -> Bool {
 /// Not what comes again by itself (Ctx::every: Tester::periodic; a runtime's `later`). What a run's end goes on to, as
 /// it goes on to a motion's declared end (Tester::rest_of).
 pub fn Tester::next_wake(self : Tester) -> (Double, String)? {
+  self.reads_own()
   ignore(self)
   let c = g()
   let waited = c.waited_at()

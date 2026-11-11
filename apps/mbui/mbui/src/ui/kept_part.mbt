@@ -113,6 +113,7 @@ pub fn Ctx::kept_part(
 ///|
 /// How many parts the last frame kept as their nodes (Ctx::kept_part, kept_nodes.mbt), not built.
 pub fn Tester::parts_kept(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   nodes_run.kept_at.iter().filter(fn(k) { k.1 < 0 }).count()
 }

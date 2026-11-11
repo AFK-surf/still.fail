@@ -88,6 +88,7 @@ fn perf_frame_start() -> Unit {
 ///|
 /// What the last frame did (FramePerf).
 pub fn Tester::frame_perf(self : Tester) -> FramePerf {
+  self.reads_own()
   ignore(self)
   frame_perf()
 }
@@ -117,6 +118,7 @@ fn frame_perf() -> FramePerf {
 /// frame (a frame wanted, a motion going, a cycle shown, a fiber stepping a frame at a time, a frame asked for between
 /// frames); else the moment it asked to be woken at; +inf, none.
 pub fn Tester::wanted_after(self : Tester) -> Double {
+  self.reads_own()
   let c = g()
   if self.fake.wants ||
     c.wants_frame ||
@@ -154,6 +156,7 @@ pub fn Tester::frames_paced(self : Tester) -> Double {
 /// Why the app asks for a frame (Tester::wanted_after), in words: the display's next frame's, else its wake's; "" when
 /// it asks for none.
 pub fn Tester::wanted_why(self : Tester) -> String {
+  self.reads_own()
   let c = g()
   let why = []
   if self.fake.wants {

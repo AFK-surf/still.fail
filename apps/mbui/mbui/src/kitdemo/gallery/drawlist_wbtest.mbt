@@ -59,6 +59,9 @@ test "the same screen reached by other steps is the same draw list: glyphs and p
   let a = with_picture(Ref("two.png"))
   a.draw()
   a.draw()
+  // (read whole before the next is made: a Tester read after another was made reads the other's frame, tester_own.mbt)
+  let straight = a.drawlist()
+  assert_true(straight.contains("image 0 "))
   // by way of another picture first (decoded first: another id), and other words drawn before (other atlas places)
   let pic = Ref("one.png")
   let extra = Ref("Light")
@@ -69,8 +72,7 @@ test "the same screen reached by other steps is the same draw list: glyphs and p
   extra.val = ""
   b.draw()
   b.draw()
-  assert_eq(b.drawlist(), a.drawlist())
-  assert_true(a.drawlist().contains("image 0 "))
+  assert_eq(b.drawlist(), straight)
 }
 
 ///|

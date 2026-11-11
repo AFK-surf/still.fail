@@ -189,6 +189,7 @@ fn Ctx::hand_faults(self : Ctx, rest : Map[String, HandMark]) -> Array[String] {
 /// what differs from the last is the hand alone: where it stands otherwise (Ctx::hand_faults). The frame after it is
 /// built as before; the last must have been built with nothing lit (none pointed at, none pressed).
 pub fn Tester::hand_moves(self : Tester) -> Array[String] {
+  self.reads_own()
   let c = g()
   let rest = c.hand_marks()
   // (the window's tree's nodes too: each that reads the pointer told it is over it, View::pointed)

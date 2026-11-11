@@ -76,6 +76,7 @@ let gap_slack : Double = 0.5
 ///|
 /// Where the last frame breaks the spacing rules (see the file's head): one line for each fault, its rule first.
 pub fn Tester::gap_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   g().gap_faults()
 }

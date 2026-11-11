@@ -190,6 +190,7 @@ fn text_table_of(lines : String) -> TextTable {
 /// What the kept text (Tester::new's `text`) did not have that the view asked of it, once each: "metrics 15|400|0",
 /// "shape 15|400|0|words", "key …", "glyph N".
 pub fn Tester::text_missing(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   match text_table.val {
     Some(t) => t.missing.copy()

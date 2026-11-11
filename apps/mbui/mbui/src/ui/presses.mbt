@@ -70,6 +70,7 @@ fn Ctx::presses_unheld(self : Ctx) -> Array[String] {
 /// The presses said to be an area's that takes none where they are, in the frame drawn last (Ctx::presses_unheld): what
 /// a Tester made with presses_held=false finds in place of stopping on it.
 pub fn Tester::presses_unheld(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   g().presses_unheld()
 }

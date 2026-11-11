@@ -3,6 +3,7 @@
 ///|
 /// How many of the last frame's list rows were kept as their nodes (kept_nodes.mbt), not built.
 pub fn Tester::rows_kept(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   nodes_run.kept_at.iter().filter(fn(k) { k.1 >= 0 }).count()
 }

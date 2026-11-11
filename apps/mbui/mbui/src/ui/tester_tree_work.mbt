@@ -59,6 +59,7 @@ pub fn Tester::tree_frames_from_now(self : Tester) -> Unit {
 ///|
 /// What the window's tree did in each frame drawn since Tester::tree_frames_from_now, in order.
 pub fn Tester::tree_frames(self : Tester) -> Array[TreeFrame] {
+  self.reads_own()
   ignore(self)
   tree_frames_kept.copy()
 }

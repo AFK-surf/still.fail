@@ -253,6 +253,12 @@ test "a station's backups are one row of its 设置, 备份, nothing to press; a
     assert_true(pairs.length() > 0, msg="the button counted in the card's corner: \{at}")
     let faults = r.corner_faults().filter(fn(f) { f.contains("恢复到这台") })
     assert_true(faults.length() == 0, msg="concentric with the card's corner: \{at} \{faults}")
+    // (read whole before the next is made: a Tester read after another was made reads the other's frame, tester_own.mbt;
+    // the next made as the settings begin anew, @settings.reset)
+    @settings.station_parts["ws1/st1"] = "overview"
+    r.draw()
+    assert_true(r.find("恢复到这台") is None, msg="not on the overview: \{at}")
+    assert_true(r.find("Old Mac 的 128 个聊天") is None, msg="not on the overview: \{at}")
     // while it is restored, and once it is, the row says how it goes, nothing to press
     let g = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-restore", h=2400.0)
     g.run_for(@ui.move_most_ms)
@@ -262,10 +268,6 @@ test "a station's backups are one row of its 设置, 备份, nothing to press; a
     d.run_for(@ui.move_most_ms)
     assert_true(d.find("已恢复 Old Mac 的 128 个聊天 · 2 分钟前") is Some(_), msg="what came of it: \{at}")
     assert_true(d.find("恢复到这台") is None, msg="no button once it is restored: \{at}")
-    @settings.station_parts["ws1/st1"] = "overview"
-    r.draw()
-    assert_true(r.find("恢复到这台") is None, msg="not on the overview: \{at}")
-    assert_true(r.find("Old Mac 的 128 个聊天") is None, msg="not on the overview: \{at}")
   }
 }
 

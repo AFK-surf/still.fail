@@ -919,6 +919,7 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
 /// the one that draws the screen back after it are both at the last frame's moment (Tester::frame_again): what is
 /// read after it, and the clock, are as before.
 pub fn Tester::contrast_faults(self : Tester, marks? : Double = contrast_mark_least) -> Array[String] {
+  self.reads_own()
   let c = g()
   inst_owners.on = true
   inst_owners_clear()

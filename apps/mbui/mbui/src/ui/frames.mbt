@@ -14,6 +14,7 @@ fn hash_mix(h : Int64, v : Int64) -> Int64 {
 /// laid-out tree with its words and carets (`dump`). The same steps give the same number on every run and every
 /// machine, whatever was drawn before.
 pub fn Tester::frame_hash(self : Tester) -> Int64 {
+  self.reads_own()
   ignore(self)
   drawn_hash()
 }
@@ -24,6 +25,7 @@ pub fn Tester::frame_hash(self : Tester) -> Int64 {
 /// a shape says its pieces by what they are, not where they stand among the frame's (its hash takes them as they
 /// stand): what draws the same reads the same, whatever drew before it.
 pub fn Tester::drawn_text(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   drawn_text()
 }
@@ -65,6 +67,7 @@ fn drawn_text() -> String {
 /// pieces by what they are (shape_pieces_key) in the place of where they stand among the frame's, the pieces' own
 /// instances (kind 12, none drawn) left out. What draws the same reads the same, whatever drew before it.
 pub fn Tester::drawn_instances_keyed(self : Tester) -> Array[Array[Double]] {
+  self.reads_own()
   ignore(self)
   let c = g()
   let out = []
@@ -248,6 +251,7 @@ fn run_first_frame(run : String) -> Double? {
 /// one's (as text). A frame at the time this Tester drew its last is that one (Tester::new at the host's first frame:
 /// `time` 16 ms before it, and `run` this log, so that frame is drawn by the settings the run began with).
 pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String, String)] {
+  self.reads_own()
   let out = []
   let mut framed = false
   // an input handed on since the last frame: the next frame is its, drawn though at the Tester's own first frame's

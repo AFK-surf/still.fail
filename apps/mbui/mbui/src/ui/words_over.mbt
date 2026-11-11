@@ -336,6 +336,7 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
 /// view's own and the same of the nodes made in its place at the same moments, no other). Where it holds the rule,
 /// none: what it finds fails it.
 pub fn Tester::words_over_frames(self : Tester) -> Array[WordsOverAt] {
+  self.reads_own()
   ignore(self)
   words_over.frames.copy()
 }
@@ -363,6 +364,7 @@ fn Ctx::words_over_made(self : Ctx, by : InstBy) -> String {
 /// meet: for a sweep of screens at rest (still.fail's words_large_wbtest.mbt), where words over words are otherwise
 /// the squeeze's, which measures an old view's boxes side by side but not the window tree's words.
 pub fn Tester::words_over_now(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   g()
   .words_over_details()

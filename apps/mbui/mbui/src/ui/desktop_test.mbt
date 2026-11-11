@@ -640,23 +640,28 @@ test "a wheel's ease is solved for the time: in frames of 16 ms, of 8, or at onc
   let at = @ui.wheel_ease_ms * 1.5
   let long_frame = @ui.drag_step_ms
   let short_frame = @ui.drag_step_ms / 2.0
+  // (each run gone through and read whole before the next is made: a Tester driven or read after another was made
+  // draws and reads the other's, tester_own.mbt)
   let sixteen = notched()
-  let eight = notched()
-  let rest = Ref(0.0)
-  let once = notched(rest~)
   let start = sixteen.time()
   while sixteen.time() + long_frame <= start + at {
     sixteen.frame(ms=long_frame)
   }
   sixteen.frame(ms=start + at - sixteen.time())
+  let by_sixteen = sixteen.list_offset()
+  let eight = notched()
+  let start = eight.time()
   while eight.time() + short_frame <= start + at {
     eight.frame(ms=short_frame)
   }
   eight.frame(ms=start + at - eight.time())
+  let by_eight = eight.list_offset()
+  let rest = Ref(0.0)
+  let once = notched(rest~)
   once.frame(ms=at)
   assert_true(once.list_offset() > 0.0 && once.list_offset() < 120.0)
-  assert_eq(sixteen.list_offset(), once.list_offset())
-  assert_eq(eight.list_offset(), once.list_offset())
+  assert_eq(by_sixteen, once.list_offset())
+  assert_eq(by_eight, once.list_offset())
   // its scroll bar shows while it moves and after, then fades: what moves until it is gone (the list's own rest), then
   // nothing
   // (its end goes on while the ease scrolls it: run to it until it is where it is)

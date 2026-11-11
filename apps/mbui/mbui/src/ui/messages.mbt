@@ -303,6 +303,7 @@ pub fn Tester::post(self : Tester, channel : String, json : String, bytes? : Byt
 /// it has its next to say (a kept message's moment; +inf: nothing it knows of), a moment run_for draws a frame at, as
 /// a host's message that comes then: what comes at a time comes at it, however the clock was run on.
 pub fn Tester::between_frames(self : Tester, f : () -> Unit, due? : () -> Double) -> Unit {
+  self.reads_own()
   ignore(self)
   between_frames.val = Some(f)
   outside_due.val = due
@@ -311,6 +312,7 @@ pub fn Tester::between_frames(self : Tester, f : () -> Unit, due? : () -> Double
 ///|
 /// How many messages are posted and not taken by a frame yet.
 pub fn Tester::posted(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   fake_posted.length()
 }
@@ -318,6 +320,7 @@ pub fn Tester::posted(self : Tester) -> Int {
 ///|
 /// How many messages the last frame took and handed to their handlers.
 pub fn Tester::messages_taken(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   messages_handed.val
 }
@@ -325,6 +328,7 @@ pub fn Tester::messages_taken(self : Tester) -> Int {
 ///|
 /// How many frames the Tester's posts asked for since it began (one for each lot posted between two frames).
 pub fn Tester::post_wakes(self : Tester) -> Int {
+  self.reads_own()
   ignore(self)
   post_wakes.val
 }
@@ -350,6 +354,7 @@ pub fn Tester::start_tape(self : Tester) -> Unit {
 ///|
 /// The run kept since `start_tape`, a line each ("" when none is kept).
 pub fn Tester::tape(self : Tester) -> String {
+  self.reads_own()
   ignore(self)
   match tape.val {
     Some(lines) => lines.join("\n")

@@ -35,11 +35,13 @@ test "the card to share is one picture, in a dialog as on a phone: what leads th
   let desk_src = fixture_app("share-card")
   let desk = @ui.Tester::new(fn(c) { view(c, desk_src) }, tree=app_tree(desk_src), w=1440.0, h=1000.0, platform=0)
   share_card_laid(desk)
+  // (read whole before the next is made: a Tester read after another was made reads the other's frame, tester_own.mbt)
+  let at_desk = picture_parts(desk)
   let phone_src = fixture_app("share-card")
   let phone = @ui.Tester::new(fn(c) { view(c, phone_src) }, tree=app_tree(phone_src), w=430.0, h=932.0, platform=2)
   share_card_laid(phone)
   // 「分享图片不应该分电脑和手机」: each part as far from what leads the share in either
-  let (at_desk, at_phone) = (picture_parts(desk), picture_parts(phone))
+  let at_phone = picture_parts(phone)
   assert_eq(at_desk.map(fn(p) { p.0 }), picture_part_words)
   assert_eq(at_desk, at_phone)
 }

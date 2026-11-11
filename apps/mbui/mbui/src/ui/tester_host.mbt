@@ -82,6 +82,7 @@ pub fn Tester::record_host(self : Tester) -> Unit {
 ///|
 /// The frames recorded since Tester::record_host or the last taken, oldest first; recording goes on.
 pub fn Tester::host_frames(self : Tester) -> Array[HostFrame] {
+  self.reads_own()
   ignore(self)
   match host_record.val {
     Some(r) => {

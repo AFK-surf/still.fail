@@ -1030,6 +1030,7 @@ fn Ctx::paint_tree_field(
 /// of words applied; another's its words' look's): what holds each as drawn (its index, -1 none) and whether it takes a
 /// press, as there. Drawn.words keeps what is drawn as words; nothing of a field made to look drawn.
 pub fn Tester::drawn_words_found(self : Tester) -> Array[(@view.Drawn, Int, Bool, String, Double)] {
+  self.reads_own()
   ignore(self)
   guard view_tree() is Some(tree) else { return [] }
   let c = g()

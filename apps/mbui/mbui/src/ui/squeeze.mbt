@@ -43,6 +43,7 @@ let squeeze_wrap_ems : Double = 4.0
 /// nodes and the window tree's alike, by the same rules: the tree's as squeeze_tree.mbt puts them among the frame's
 /// (Ctx::tree_squeeze_said), each saying where it was made.
 pub fn Tester::squeeze_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   g().squeeze_faults()
 }
@@ -726,6 +727,7 @@ fn Ctx::shows_words(self : Ctx, k : Int) -> Bool {
 /// The words of the last frame broken or cut short only for what shares their row (Ctx::beside_faults), a line each:
 /// those squeeze_faults says among the rest.
 pub fn Tester::beside_faults(self : Tester) -> Array[String] {
+  self.reads_own()
   ignore(self)
   let c = g()
   c.beside_faults(c.squeeze_seen()) + c.tree_squeeze_said(beside=true)

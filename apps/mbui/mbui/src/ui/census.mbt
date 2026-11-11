@@ -44,6 +44,7 @@ fn census_sorted(m : Map[String, Bool]) -> Array[String] {
 ///|
 /// What values the last frame's nodes took (Census), the window's tree's nodes' as they are set too.
 pub fn Tester::census(self : Tester) -> Census {
+  self.reads_own()
   ignore(self)
   let c = g()
   let text : Map[String, Bool] = {}
