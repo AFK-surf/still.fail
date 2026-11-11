@@ -241,10 +241,11 @@ pub fn poster_image_id(station : String, key : String, name : String) -> String 
 }
 
 ///|
-/// Whether a message's picture the device holds (Attachment.held) was drawn this frame before it was decoded: the app's
-/// first page waits for it with the rest of what it shows (sfapp's first_page_shown, which reads and clears it each
-/// frame), not shown with a likeness in its place for the frame or two its decoding takes.
-pub let held_pictures_waiting : Ref[Bool] = Ref(false)
+/// The pictures the device holds (Attachment.held) a page's build drew before they were decoded, by their image keys:
+/// the app's first page waits for them with the rest of what it shows (sfapp's first_page_done, by the host's word
+/// that each is decoded), not shown with a likeness in a picture's place for the frame or two its decoding takes. Said
+/// afresh by each build of the page (emptied as it begins).
+pub let held_pictures_waiting : Ref[Array[String]] = Ref([])
 
 ///|
 /// Whether the app's first page is built and waits for what it shows (sfapp's first_waiting), followed: what the chats'

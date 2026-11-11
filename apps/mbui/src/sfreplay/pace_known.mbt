@@ -63,10 +63,6 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "settings-station-settings": [7],
   "settings-workspace-people": [7],
   "station-rename": [7],
-  // 4: unsub {"topic":"status"} | strict call cache.usage {}
-  "appearance-kept": [7],
-  "notify-off": [7],
-  "settings-appearance": [7],
   "settings-decisions": [7],
   // 4: - | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
   "bar-archive": [7, 120],

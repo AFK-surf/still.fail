@@ -110,7 +110,7 @@ fn tape_page_one(c : @ui.Ctx, src : Source, page : Page) -> Unit {
   let (now, _, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
   // (said by this build: image_item, video_item)
-  @sfbase.held_pictures_waiting.val = false
+  @sfbase.held_pictures_waiting.val = []
   let side = tape_shown_side()
   let under = if side is None { tape_room_now().under } else { 0.0 }
   let corners = tape_pane_corners(Page, side is Some(_))

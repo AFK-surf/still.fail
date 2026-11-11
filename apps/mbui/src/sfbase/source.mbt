@@ -407,8 +407,24 @@ pub fn declared_unread() -> Array[String] {
 }
 
 ///|
+/// As a run begins: what the run before declared and no reader took let go of, as another workspace coming in view
+/// would (declared_let_go), not left followed by nothing into the next run (where it was taken as asked already, its
+/// subscription never sent again: a replay's pace pass after one ended before the reader came).
 fn declared_reset() -> Unit {
-  declared_topics.val = []
+  declared_let_go()
+}
+
+///|
+/// Topics asked as the core holds them now for what follows them, asking for none (one nothing follows yet is answered
+/// by nothing): what reads it follows its value and error while it reads, holding nothing it would not hold else
+/// (sfapp's first_page_node, reading between frames whether what a page builds is answered).
+pub fn read_held(src : Source) -> (String, Map[String, Json]) -> TopicState {
+  fn(name, params) {
+    match existing_followed_topic(src, name, params) {
+      Some(h) => h.get()
+      None => { value: None, error: None, version: -1, waiting: false }
+    }
+  }
 }
 
 ///|

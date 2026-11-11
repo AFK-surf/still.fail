@@ -96,13 +96,20 @@ fn reset() -> Unit {
   splash_waited.set(false)
   splash_from.val = -1.0
   splash_owner.val = None
-  first_shown.val = false
+  first_shown.set(false)
   first_waiting.val = false
   @sfbase.first_page_waits.set(false)
   first_has.val = 0
+  first_expired.set(false)
+  first_built_ready.set(false)
+  first_held.set([])
+  first_words.set("")
+  first_answered.set(false)
+  first_built_tick.set(0)
+  first_from.val = -1.0
   frame_bare.val = false
   window_shown.val = false
-  @sfbase.held_pictures_waiting.val = false
+  @sfbase.held_pictures_waiting.val = []
   cui.restore_error.clear()
   cui.doing.clear()
   pick_reset()
@@ -403,10 +410,18 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
   @ui.old_views_here(c)
   // the first page built with what it shows, the pictures the device holds in it decoded as it drew them (a likeness
   // in a picture's place for the frame or two its decoding takes is not shown): shown from this frame
-  if first_waiting.val &&
-    (first_has.val == 2 || (first_has.val == 1 && !@sfbase.held_pictures_waiting.val)) {
-    first_shown.val = true
-    first_waiting.val = false
+  if first_waiting.val {
+    // (what this frame built with what it shows answered: what it holds of the device's pictures not decoded yet
+    // said with it, what first_page_done waits by; first_page_node read it of the core as it holds it now)
+    if first_has.val == 1 {
+      first_held.set(@sfbase.held_pictures_waiting.val.copy())
+      first_built_ready.set(true)
+    }
+    first_built_tick.set(first_built_tick.get() + 1)
+    if first_page_done() {
+      first_shown.set(true)
+      first_waiting.val = false
+    }
   }
   first_hide(first_waiting.val)
   // the first page built, waiting for what it shows (signed_in): not shown yet, the splash over the window's ground
@@ -414,7 +429,11 @@ fn view_in(c : @ui.Ctx, src : Source) -> Unit {
   if first_waiting.val {
     // (each of the shell's old views: narrow_shell.mbt)
     @ui.old_views_look(c, { ..@ui.still_look, alpha: 0.0 }) |> ignore
-    c.layer(fn() { splash(c, Some(t_reading_workspaces(src)), false) }) |> ignore
+    // (the splash itself the window's tree's nodes over the shell: first_splash_node; the ground alone till the app's
+    // first splash has waited its second, the window held not shown for it)
+    if !splash_waited.get() {
+      frame_bare.val = true
+    }
   }
   // the window held (host_setup) shown with the first frame that draws more than the ground (the host shows it once
   // the frame is on it)
@@ -577,6 +596,8 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
             @sfbase.history_note(ws, wide && pages == [Home])
           },
         )
+        // the first page's wait, at the moments its causes come (first_page_node)
+        first_page_node(v, src)
         // what the workspace in view opens on, asked as it comes to be in view, the splash or the shell before it
         // still shown (sfbase's opens_ahead_node): its shell's panes' (小屏's Home, home_opens; the wide frame's,
         // sfdesk's frame_opens)
@@ -616,6 +637,9 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
             Unsized => ()
           }
         })
+        // the first page built, waiting for what it shows: not shown yet, the splash over it, its words as while the
+        // workspaces are read (first_words), on the window's ground (what the host clears to)
+        first_splash_node(v)
         }
       }
     },
@@ -679,7 +703,7 @@ fn reading_said_words(src : Source) -> (String, Bool) {
 /// alone until the splash's second, unless it failed.
 fn reading_said(src : Source) -> Unit {
   first_waiting.val = false
-  @sfbase.held_pictures_waiting.val = false
+  @sfbase.held_pictures_waiting.val = []
   frame_bare.val = !splash_waited.get() && !reading_said_words(src).1
 }
 
@@ -905,55 +929,6 @@ pub let toast_ms : Double = @sf.toast_ms
 pub let toast_action_ms : Double = @sf.toast_action_ms
 
 ///|
-/// The app starting, or waiting for what every page needs: the ground alone, as the system's own
-/// splash before the app's first frame is (Android's theme, iOS's launch screen), so an opening quicker than a second
-/// is one picture and then the page; once it takes a while (a second), still.fail's mark and what it waits for under
-/// it, from then on; at once when `now` (a failure). (The mark at once, on Android after the launcher's
-/// icon on the system's splash, then the page: three pictures in a second, 2026-10-26 「打开的时候感觉乱闪」.)
-fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
-  let t = @sf.theme()
-  // a second after the app's first splash, it is said that it waits, and for what, from then on: set at that moment
-  // by what lives through the app's states (splash_begin), nothing set as this is built; with no window's tree (a
-  // test's old view alone), as the build finds it waited
-  if !splash_waited.get() {
-    match splash_owner.val {
-      Some(owner) if owner.alive() => splash_begin(owner, c.moment())
-      _ =>
-        if @kit.after(c, "splash-label", true, splash_label_ms) {
-          splash_waited.set(true)
-        }
-    }
-  }
-  if !now && !splash_waited.get() {
-    // (the ground alone: the window held is not shown for it, view_in)
-    frame_bare.val = true
-    return
-  }
-  c.box(
-    w=Fill(1.0),
-    h=Fill(1.0),
-    pad=24.0,
-    gap=16.0,
-    align=ACenter,
-    justify=JCenter,
-    fn() {
-      @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 56.0) |> ignore
-      // (waiting, not failed: the bar going, how far not known)
-      if !now {
-        @sf.progress(c, "splash", None, w=Px(splash_bar_w))
-      }
-      match label {
-        Some(s) =>
-          c.text(s, size=t.t.meta, color=t.p.muted, center=true, line=18.0)
-          |> ignore
-        None => ()
-      }
-    },
-  )
-  |> ignore
-}
-
-///|
 /// What the splash says it waits for, or what failed (`state` Starting or Failed): the core's failure; the accounts'
 /// error. Said at once where there is one (splash's `now`).
 fn splash_label(src : Source, state : AppIs) -> String? {
@@ -972,7 +947,7 @@ fn splash_label(src : Source, state : AppIs) -> String? {
 /// page waiting nor its pictures; the ground alone until the splash's second, unless there is something to say at once.
 fn splash_said(src : Source, state : AppIs) -> Unit {
   first_waiting.val = false
-  @sfbase.held_pictures_waiting.val = false
+  @sfbase.held_pictures_waiting.val = []
   frame_bare.val = !splash_waited.get() && splash_label(src, state) is None
 }
 
@@ -984,7 +959,12 @@ fn splash_tree(v : @view.View, src : Source, state : AppIs) -> Unit {
 }
 
 ///|
-/// The splash as the window's tree's nodes in `v` (splash's): saying `label` as it changes, the ground alone till the
+/// The app starting, or waiting for what every page needs: the ground alone, as the system's own splash before the
+/// app's first frame is (Android's theme, iOS's launch screen), so an opening quicker than a second is one picture and
+/// then the page; once it takes a while (a second), still.fail's mark and what it waits for under it, from then on; at
+/// once when `now` (a failure). (The mark at once, on Android after the launcher's icon on the system's splash, then
+/// the page: three pictures in a second, 2026-10-26 「打开的时候感觉乱闪」.)
+/// The splash as the window's tree's nodes in `v`: saying `label` as it changes, the ground alone till the
 /// app's first splash has waited its second unless `now` says to show it at once (splash_begin, at this moment if none
 /// has begun); then still.fail's mark and what it says under it, its lines each in the middle, all in the middle of the
 /// window. Where the window's buttons are in the app's top row (as that changes), its top drags it, under all of it.
@@ -1091,36 +1071,43 @@ let first_page_ms : Double = splash_label_ms
 /// opening): a chat (or said its messages wait on a station: its page shows them to come), an agent's history, Home
 /// (all it opens on: home_opens, what a workspace switched waits for too); any other page is not waited for.
 fn page_ready(src : Source, w : Workspace, p : Page) -> Bool {
-  let answered = fn(t : Topic) { t.value is Some(_) || t.error is Some(_) }
+  page_opens_by(src, w, p, @sfbase.read_now(src))
+}
+
+///|
+/// page_ready's, each topic asked of `ask`.
+fn page_opens_by(
+  src : Source,
+  w : Workspace,
+  p : Page,
+  ask : (String, Map[String, Json]) -> @sfbase.TopicState,
+) -> Bool {
   match p {
-    Chat(r) => chat_answered(src, r)
-    History(r, key, _) => chat_answered(src, r) && answered(src.topic("history", history_params(r, key)).get().snapshot())
-    Home => home_opens(src, w.id, @sfbase.read_now(src))
+    Chat(r) => @sfbase.chat_opens(r, ask)
+    History(r, key, _) => {
+      let t = ask("history", history_params(r, key))
+      @sfbase.chat_opens(r, ask) && (t.value is Some(_) || t.error is Some(_))
+    }
+    Home => home_opens(src, w.id, ask)
     _ => true
   }
 }
 
 ///|
-/// Whether the core has answered for workspace `w`'s chats' list as it is filtered (Home's, the wide frame's sidebar's:
-/// sfbase's list_opens).
-fn list_ready(src : Source, w : Workspace) -> Bool {
-  @sfbase.list_opens(src, w.id, @sfbase.read_now(src))
-}
-
-///|
-/// Whether the app's first page shows: once the core has answered for what it shows (first_page_ready), or
-/// `first_page_ms` after the workspace came into view, from then on.
+/// Whether the app's first page shows: once the core has answered for what it shows and the pictures the device holds
+/// in it are decoded (first_page_done), or `first_page_ms` after the workspace came into view (first_expired), from
+/// then on. What the frame finds of it as it begins (first_has), for view_in to say after its builds.
 fn first_page_shown(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
-  if !first_shown.val {
-    first_has.val = if @kit.after(c, "first-page", true, first_page_ms) {
+  if !first_shown.get() {
+    first_has.val = if first_expired.get() {
       2
-    } else if first_page_ready(c, src, w) {
+    } else if first_page_ready_by(src, w, @sfdesk.is_wide(c), @sfbase.read_now(src)) {
       1
     } else {
       0
     }
   }
-  first_shown.val
+  first_shown.get()
 }
 
 ///|
@@ -1129,20 +1116,139 @@ fn first_page_shown(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
 let first_has : Ref[Int] = Ref(0)
 
 ///|
-/// Whether the core has answered for what the app's first page shows, as a page opening waits for it: laid out Small
-/// the page on top (page_ready), in the wide frame the sidebar's list and the page in the pane (pane_ready), the chat
-/// the pane lands on once it has (@sfdesk.landing: not the empty pane before it).
-fn first_page_ready(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
-  if @sfdesk.is_wide(c) {
-    list_ready(src, w) && !@sfdesk.landing(w) && pane_ready(src, app.nav.top())
+/// Whether the core has answered for what the app's first page shows, as a page opening waits for it, each topic asked
+/// of `ask`: laid out Small the page on top (page_ready), in the wide frame (`wide`) the sidebar's list and the page in
+/// the pane (pane_ready), the chat the pane lands on once it has (@sfdesk.landing: not the empty pane before it).
+fn first_page_ready_by(
+  src : Source,
+  w : Workspace,
+  wide : Bool,
+  ask : (String, Map[String, Json]) -> @sfbase.TopicState,
+) -> Bool {
+  if wide {
+    @sfbase.list_opens(src, w.id, ask) && !@sfdesk.landing(w) && @sfdesk.pane_opens(w.id, app.nav.top(), ask)
   } else {
-    page_ready(src, w, app.nav.top())
+    page_opens_by(src, w, app.nav.top(), ask)
   }
 }
 
 ///|
+/// Whether the first page waits no more, at the moment its cause comes: `first_page_ms` gone by (first_expired), or
+/// what it shows answered as a frame built it (first_built_ready) and each picture the device holds in it that build
+/// found not decoded decoded since (first_held: the host's word on each, image_decoded's moment).
+fn first_page_done() -> Bool {
+  first_expired.get() ||
+  (first_built_ready.get() && first_held.get().iter().all(fn(k) { @ui.image_any_ready(k) }))
+}
+
+///|
+/// Whether `first_page_ms` has gone by since the workspace came into view, not shown yet (first_page_node: set at
+/// that moment).
+let first_expired : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
+
+///|
+/// Whether a frame has built the first page with what it shows answered (view_in: what it holds of the device's
+/// pictures said with it, first_held).
+let first_built_ready : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
+
+///|
+/// The pictures the device holds in the first page that its build found not decoded (sfbase's held_pictures_waiting,
+/// as the frame that built it with what it shows answered left it: view_in).
+let first_held : @signals.Signal[Array[String]] = @signals.signal([], same=fn(a, b) { a == b })
+
+///|
+/// What the splash over the first page says while it waits (first_page_node: 正在读取你的 workspace and what the core
+/// waits on, read till what the page shows is answered, the last of it said after).
+let first_words : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
+
+///|
+/// Whether what the first page shows has been answered as first_page_node read it (the splash's words read of the
+/// core's status no more from then).
+let first_answered : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
+
+///|
+/// Each frame the first page waits (view_in), told: what first_page_node asks of the core as it holds it now comes to
+/// be followed once a build has asked it (read_held asks nothing).
+let first_built_tick : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// The first page's wait in node `v` (signed in), at the moments its causes come, between frames: `first_page_ms`
+/// after the workspace came into view, the first page shown as it ends (first_expired); the first page shown at the
+/// moment it waits no more (first_page_done: its pictures decoded, the host's word's moment); and the splash's words
+/// over it (first_words) read of the core's `status` only till what the page shows is answered, so what was asked for
+/// them is let go of at that moment, not as a frame after it builds.
+fn first_page_node(v : @view.View, src : Source) -> Unit {
+  // (its first_page_ms waited for no more once it has shown: nothing left due)
+  let expiry : Ref[() -> Unit] = Ref(fn() {  })
+  v.reacts(fn() { workspace_in_view(src).0.map(fn(w) { w.id }) }, fn(ws) {
+    if ws is Some(_) && !first_shown.get() && first_from.val < 0.0 {
+      first_from.val = v.cause_at()
+      expiry.val = v.at_moment(first_from.val + first_page_ms, fn() { first_expired.set(true) })
+    }
+  })
+  v.reacts(fn() { first_shown.get() }, fn(shown) {
+    if shown {
+      (expiry.val)()
+    }
+  })
+  v.reacts(fn() { !first_shown.get() && first_from.val >= 0.0 && first_page_done() }, fn(done) {
+    if done {
+      first_shown.set(true)
+      first_waiting.val = false
+      first_hide(false)
+    }
+  })
+  v.reacts(
+    fn() {
+      // (once answered, the core's status read no more for it, though what the first page shows comes to be another)
+      if first_shown.get() || first_answered.get() {
+        return None
+      }
+      guard workspace_in_view(src).0 is Some(w) else { return None }
+      first_built_tick.get() |> ignore
+      let wide = !(@sf.layout(v.window().0) is Small) || @sf.native_able()
+      if first_page_ready_by(src, w, wide, @sfbase.read_held(src)) {
+        Some(None)
+      } else {
+        Some(Some(t_reading_workspaces(src)))
+      }
+    },
+    fn(said) {
+      match said {
+        Some(Some(words)) => first_words.set(words)
+        // (answered: the core's status no longer read, the words last read kept; none read yet, the words alone)
+        Some(None) => {
+          first_answered.set(true)
+          if first_words.get() == "" {
+            first_words.set(tr("android-misc.workspaces.loading"))
+          }
+        }
+        _ => ()
+      }
+    },
+  )
+}
+
+///|
+/// The splash over the first page while it is built and waits for what it shows (sfbase's first_page_waits, told by
+/// the frame as it is: first_hide), in node `v`, over all it holds: splash_of_tree saying first_words, once the app's
+/// first splash has waited its second; before it nothing over what the shell's nodes draw, its old views drawn at none
+/// (view_in), as the old view's splash was.
+fn first_splash_node(v : @view.View) -> Unit {
+  v.show(fn() { @sfbase.first_page_waits.get() && splash_waited.get() }, fn(s) {
+    s.over(Is(true)) |> ignore
+    splash_of_tree(s, fn() { Some(first_words.get()) }, fn() { false })
+  })
+}
+
+///|
+/// When the workspace came into view, the first page's wait begun (-1: not yet): first_page_node's.
+// kept across runs: put back as a run begins (new_run)
+let first_from : Ref[Double] = Ref(-1.0)
+
+///|
 /// Whether the app's first page has shown (first_page_shown).
-let first_shown : Ref[Bool] = Ref(false)
+let first_shown : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
 
 ///|
 /// Whether this frame's first page is built and not shown yet (signed_in, view_in).
@@ -1173,13 +1279,6 @@ fn pane_ready(src : Source, p : Page) -> Bool {
     Some(w) => @sfdesk.pane_opens(w.id, p, @sfbase.read_now(src))
     None => true
   }
-}
-
-///|
-/// Whether the core has answered for chat `r` (sfbase's chat_opens): its view, why it has none, or that its messages
-/// wait on a station (none of them on the device: Source.waits).
-fn chat_answered(src : Source, r : ChatRef) -> Bool {
-  @sfbase.chat_opens(r, @sfbase.read_now(src))
 }
 
 ///|
