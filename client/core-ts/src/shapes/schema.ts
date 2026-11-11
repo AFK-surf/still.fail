@@ -3271,6 +3271,7 @@ export const SHAPES: Record<string, Shape> = {
     ["value", "String"],
     ["label", "String"],
     ["tone", opt("String"), { doc: "red (gone wrong, used up) | amber (wants a look); absent: as it should be." }],
+    ["go", opt("String"), { doc: "The rail's place pressing it opens (attention, archive): the chats it counts. Absent: not pressed." }],
   ]),
   RailRow: struct([
     ["name", "String", { said: true }],
