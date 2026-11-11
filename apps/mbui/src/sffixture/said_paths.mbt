@@ -44,7 +44,6 @@ pub let said_paths : Map[String, Array[String]] = {
     "note",
   ],
   "changelog": [
-    "tabs.*.days.*.entries.*.text.*",
     "tabs.*.days.*.entries.*.lines.*.text",
     "news.entries.*.text.*",
     "news.entries.*.lines.*.text",

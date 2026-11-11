@@ -864,6 +864,90 @@ export function fixture(now: number, chat = CHAT_MESSAGES): [Topic, unknown][] {
   return out;
 }
 
+// ── the changelog ──
+//
+// still.fail cloud's beta feed as it was read on 2026-11-11 (`GET /v1/changelog`, `x-stillfail-channel: beta`: 2546
+// entries), at its size and shape and made up: of its newest 200 (what the topic shows, changelog.ts `SHOWN`) the days
+// held 43, 79, 12, 11, 29 and 26, a line was about 50 Chinese characters, an entry 1.06 lines; its parts android, desktop
+// and web 53%, the station's 21%, all four 4%, desktop and web 3.5%, the desktop's 3%, Android's 2.5%, Android and
+// desktop 2.5%, Android, desktop and the station 2.5%, none 2%, a few others; Android's tab 137 of them, by day 37, 62,
+// 9, 4, 11 and 14. Sixty more after them, as `SHOWN` cuts the feed; the newest few not out yet.
+
+/// How many entries the feed holds, and of its newest 200 each day's, newest first, and how many of a day's are Android's.
+export const CHANGELOG_ENTRIES = 260;
+const CHANGELOG_DAYS = [43, 79, 12, 11, 29, 26, 20, 20, 20];
+const CHANGELOG_ANDROID = [37, 62, 9, 4, 11, 14, 15, 15, 15];
+/// The parts of Android's changes, and of the others, as many of each in the newest 200 as the feed had.
+const ANDROID_PARTS: [string[], number][] = [
+  [["android", "desktop", "web"], 106], [["android", "desktop", "station", "web"], 8], [["android"], 5], [["android", "desktop"], 5],
+  [["android", "desktop", "station"], 5], [["android", "web"], 4], [["android", "station"], 4],
+];
+const OTHER_PARTS: [string[], number][] = [[["station"], 42], [["desktop", "web"], 7], [["desktop"], 6], [[], 4], [["web"], 4]];
+/// The newest version in the feed.
+const CHANGELOG_NEWEST = 8400;
+
+/// `pool`'s kinds spread over `n` (each as many times as it says, in turn).
+function spread(pool: [string[], number][], n: number): string[][] {
+  const all = pool.reduce((a, [, k]) => a + k, 0);
+  const out: string[][] = [];
+  const used = pool.map(() => 0);
+  for (let i = 0; i < n; i++) {
+    // (the kind furthest behind its share)
+    let best = 0;
+    for (let k = 1; k < pool.length; k++) if (used[k]! - ((i + 1) * pool[k]![1]) / all < used[best]! - ((i + 1) * pool[best]![1]) / all) best = k;
+    used[best]!++;
+    out.push(pool[best]![0]);
+  }
+  return out;
+}
+
+const CL_KINDS = ["修复：", "改进：", "新增：", "修复：", "改进："];
+const CL_WHERE = ["对话列表", "Station 页面", "更新日志", "设置里的账号", "聊天输入框", "图片预览", "文件面板", "Profile 页面", "通知", "手机上的侧边栏", "命令面板", "终端", "搜索结果", "归档"];
+const CL_WHAT = [
+  "在网络断开又恢复后不再一直显示正在连接，切回前台时也会立刻读到最新的消息",
+  "滚动到很长的对话中间时不再跳回底部，新消息到来时只在已经看到最后一条的时候才跟随",
+  "打开时先显示设备上已经有的内容，再在后台读取更新，不再先闪一下空白的骨架",
+  "字号调大以后文字不再被截断，按钮在窄屏上换行排列，长名字在中间省略",
+  "里显示每台机器的版本和是否需要更新，点一下就能更新，更新完成后自动刷新",
+  "在键盘弹出时不再被挡住，输入多行文字时高度跟着增长，发送后回到一行",
+];
+
+/// The made-up line `i` of the feed, about 50 characters as the feed's are.
+function changelogLine(i: number): string {
+  return `${pick(CL_KINDS, i)}${pick(CL_WHERE, i * 7 + 3)}${pick(CL_WHAT, i * 5 + i % 3)}`;
+}
+
+/// The feed as the cloud answers it (`{entries, released}`), its newest made a few minutes before `now`; each day of it
+/// one day before the next, in the day's middle hours where the device is (UTC, or within a few hours of it; `now` past
+/// three in the morning).
+export function changelogFeed(now: number): J {
+  const android = spread(ANDROID_PARTS, CHANGELOG_ANDROID.reduce((a, b) => a + b, 0));
+  const others = spread(OTHER_PARTS, CHANGELOG_DAYS.reduce((a, b) => a + b, 0) - android.length);
+  const today = Math.floor(now / DAY) * DAY;
+  const entries: J[] = [];
+  let [a, o] = [0, 0];
+  for (const [d, n] of CHANGELOG_DAYS.entries()) {
+    const mine = CHANGELOG_ANDROID[d]!;
+    for (let k = 0; k < n; k++) {
+      const i = entries.length;
+      // (Android's spread through the day as many as it had)
+      const isAndroid = Math.floor(((k + 1) * mine) / n) > Math.floor((k * mine) / n);
+      const parts = isAndroid ? android[a++]! : others[o++]!;
+      // (the day's from its newest, a few minutes apart, in the day's middle hours; today's up to a few minutes ago)
+      const at = d === 0 ? now - (k + 1) * 4 * MIN : today - d * DAY + 15 * HOUR - (k * 8 * HOUR) / n;
+      const text = i % 17 === 5 ? [changelogLine(i), changelogLine(i + 1000)] : [changelogLine(i)];
+      entries.push({ version: CHANGELOG_NEWEST - i * 2, commit: (BigInt(i + 1) * 0x9e3779b97f4a7c15n % (1n << 160n)).toString(16).padStart(40, "0"), at: Math.trunc(at / 1000), text, fixes: [], parts });
+    }
+  }
+  const version = (i: number) => CHANGELOG_NEWEST - i * 2;
+  return { entries, released: { station: version(9), android: version(4), desktop: version(4), web: version(1) } };
+}
+
+/// What the device says it is (`client.device`): Android, a build some forty changes into the feed, the build seen before
+/// it some ten further, so what it has, what an update brings and what it got since are all said.
+export const CHANGELOG_DEVICE = { app: "android", build: `0.1.${CHANGELOG_NEWEST - 40 * 2}` };
+export const CHANGELOG_SEEN = CHANGELOG_NEWEST - 52 * 2;
+
 // ── devices ──
 
 /// What up station `st` says of the devices attached to it and the phones lent to it (its `GET /devices`, the `devices`

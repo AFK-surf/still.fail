@@ -33,7 +33,7 @@ import { parseTopic, TOPICS, type Topic } from "../src/protocol.ts";
 import { SHAPES } from "../src/shapes/schema.ts";
 import { isObject } from "../src/util.ts";
 import { OUTLINE_FOUND, OUTLINE_ROWS } from "../src/things.ts";
-import { CHAT, CHAT_MESSAGES, DRIVE, JOB, JOB_LOG_LINES, OPENS, OTHER_WORKSPACE, OUTLINED, OUTLINED_ENTRIES, PEEKS, SEARCH, UP, VAULT_ITEM, devicesSaid, fixture, hostReading, messageAdded, more, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, quotaChanged, records, screensOf, transcriptOf } from "./real-size.ts";
+import { CHANGELOG_DEVICE, CHANGELOG_SEEN, CHAT, CHAT_MESSAGES, DRIVE, JOB, JOB_LOG_LINES, OPENS, OTHER_WORKSPACE, OUTLINED, OUTLINED_ENTRIES, PEEKS, SEARCH, UP, VAULT_ITEM, changelogFeed, devicesSaid, fixture, hostReading, messageAdded, more, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, quotaChanged, records, screensOf, transcriptOf } from "./real-size.ts";
 import { applyKeyed } from "../src/collections.ts";
 import type { Inner } from "../src/core.ts";
 import type { Owner } from "../src/core/routing.ts";
@@ -67,6 +67,8 @@ const DELTA_BAR_KB = 4;
 /// page read (`OPENS`), and again as `… six pages`, its six pages loaded (`LONG`).
 const station = CHAT.station;
 const key = CHAT.keys[0];
+/// The changes of a tab the changelog's page asks first (apps/mbui/src/sfpages/changelog_node.mbt `changelog_page`).
+const CHANGELOG_PAGE = 30;
 const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
   "stations": { topic: "stations", scope: "ws" },
   "station": { topic: "station", scope: "ws", station },
@@ -106,7 +108,9 @@ const ASKED: Record<string, Record<string, unknown> & { topic: string }> = {
   "archive": { topic: "archive", scope: "ws", limit: 60 },
   "search": { topic: "search", scope: "ws", query: SEARCH },
   "chatSearch": { topic: "chatSearch", scope: "ws", query: SEARCH, station, limit: 8, elsewhere: true, exclude: key },
-  "changelog": { topic: "changelog" },
+  // (the page's first page of the tab in view, none chosen; of another tab; and Home's card)
+  "changelog": { topic: "changelog", limit: CHANGELOG_PAGE },
+  "changelog station": { topic: "changelog", part: "station", limit: CHANGELOG_PAGE },
   "changelog news": { topic: "changelog", news: true },
   "devices": { topic: "devices", workspace: "ws" },
   // (of the chat of four weeks held whole: what it is made of is all of a chat held)
@@ -224,7 +228,6 @@ const LETTER = "what a letter, an agent's words to another chat, does not have";
 const ASKED_SO = "not made for the way the app asks it here";
 const NEVER = "the core never makes it, whatever the workspace";
 const KIND = "another kind's: of a pull request (labels, its time), a text file (lines), a folder (entries)";
-const CHANGELOG = "its feed is another change's (changelog-pages)";
 /// A chat's paths EMPTY lists, as each way of asking it has them: the chat at its last page (`older`), compact.
 const chatEmpty = (older: boolean, compact: boolean): Record<string, string> => ({
   // (QuotaWindow's `time`: present.ts `times` makes a quota's windows anew, never into each; `refills` says `resetsAt`)
@@ -283,8 +286,8 @@ const EMPTY: Record<string, Record<string, string>> = {
   },
   // (words, messages: asked with `messages`, which the app does not pass)
   "chatSearch": { "items[].xshare.to": STATE, "items[].foundMarks": NEVER, words: ASKED_SO, messages: ASKED_SO },
-  "changelog": { tabs: CHANGELOG, "news.entries": CHANGELOG },
-  "changelog news": { tabs: CHANGELOG, "news.entries": CHANGELOG },
+  // (asked for its news alone: no tab is made, changelog.ts)
+  "changelog news": { tabs: ASKED_SO },
   // (a rig's devices', a station that only runs tasks: the workspace has none)
   "devices": { "devices[].requests": NONE },
   // (names chosen, a tree's folders open, columns widened by hand)
@@ -306,7 +309,7 @@ const EMPTY: Record<string, Record<string, string>> = {
   "filePeek text": { entries: KIND },
 };
 /// Those that may say `loading: true` as they are weighed, by topic, and why.
-const LOADING: Record<string, string> = { changelog: CHANGELOG };
+const LOADING: Record<string, string> = {};
 
 // ── weighing ──
 
@@ -480,6 +483,7 @@ async function held(long = false) {
     if (!inners.has(parts.data)) inners.set(parts.data, innerOf(parts));
     return inners.get(parts.data)!;
   };
+  let changelog: Changelog | null = null;
   const t = setup({
     all: true,
     // (the account's workspaces and how their stations are reached, as core.ts gives the views them of its `/v1/me`)
@@ -505,9 +509,10 @@ async function held(long = false) {
         view: (workspace) => data.shared({ topic: "workspace", workspace }), call: () => Effect.succeed(null),
       });
       const d = devices;
+      changelog = new Changelog(host, store, data);
       return [
         new Choose({ store, data, now: () => host.nowMs(), agent: (s, k) => views.agent(s, k) }),
-        new Changelog(host, store, data),
+        changelog,
         { owns: (topic: Topic) => topic.topic === "devices", compute: (topic: Topic) => ({ ok: d.value(String(topic.workspace)) }) },
         ...pageOwners(inner, notices, () => screens),
       ];
@@ -516,6 +521,10 @@ async function held(long = false) {
   const base = t.host.nowMs();
   screens = screensOf(base);
   for (const [table, k, value] of records(base)) t.data.put(table, k, value);
+  // (the changelog as read from the cloud, on a device of Android that saw a build before its own)
+  t.data.put("changelog", "feed", changelogFeed(base));
+  t.data.put("changelog", "seen", CHANGELOG_SEEN, false);
+  changelog!.device(CHANGELOG_DEVICE);
   const names = Object.keys(ASKED).filter((name) => LONG.has(name) === long);
   names.forEach((name, i) => t.store.subscribe(1, i + 1, topicOf(name), true));
   // Set as the topics are watched, and again once the views watch what they found they are made of (a value set of a
@@ -741,6 +750,41 @@ test("what each topic the app asks is sent as the workspace changes holds to its
   const faults = judge(heaviestOf, DELTA_BAR_KB, OVER_DELTA, "OVER_DELTA");
   if (print || faults.length > 0) console.log(table(`What goes out as the workspace changes, its heaviest message (bar ${DELTA_BAR_KB} KB):`, rows));
   assert.deepEqual(faults, []);
+});
+
+// ── a page more ──
+
+test("a page more of the changelog comes as what changed from the page held, within the bar", async () => {
+  const { t, first } = await held();
+  try {
+    // (the id `held` subscribed it by, among those held with the chat's last page)
+    const at = Object.keys(ASKED).filter((name) => !LONG.has(name)).indexOf("changelog") + 1;
+    const more = { ...ASKED.changelog!, limit: 2 * CHANGELOG_PAGE };
+    t.host.takeEmitted();
+    t.store.subscribe(1, 9_000, parseTopic(more)!, true, at);
+    await t.host.time.pass(100);
+    const m = t.host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === 9_000 && !("waiting" in m));
+    const whole = first.get("changelog")!;
+    const rows = [{ name: "changelog, a page more", bytes: m === undefined ? 0 : bytes(m), bar: BAR_KB }];
+    const faults: string[] = [];
+    if (m === undefined || !("delta" in m) || m.from !== at) faults.push(`a page more: ${JSON.stringify(m)?.slice(0, 120)}`);
+    else {
+      // (what it holds then: the tab's first two pages)
+      const holds = applyKeyed(whole.value, m.delta) as J;
+      const tab = holds.tabs.find((x: J) => x.days.length > 0);
+      const shown = tab.days.flatMap((d: J) => d.entries).length;
+      if (shown !== 2 * CHANGELOG_PAGE) faults.push(`a page more holds ${shown} changes`);
+      // (the new changes alone, put by their days' and their own keys: not the tab's days set whole)
+      if ((m.delta as J[]).some((op) => "set" in op && op.path[0] === "tabs")) faults.push("a page more sets the tabs whole");
+      if (bytes(m) > BAR_KB * 1024) faults.push(`a page more: ${kb(bytes(m)).toFixed(1)} KB, over the bar of ${BAR_KB} KB`);
+    }
+    if (print || faults.length > 0) console.log(table(`What a page more of the changelog is sent, from the page held (bar ${BAR_KB} KB; the page whole ${bytes(whole)} B):`, rows));
+    // (each of its ops: what it does, where, what it weighs)
+    if (print && m !== undefined && Array.isArray(m.delta)) for (const op of m.delta as J[]) console.log(`        ${["put", "patch", "drop", "move", "set", "append", "remove"].find((k) => k in op)} ${JSON.stringify(op.path)} ${JSON.stringify(op.patch ?? op.put?.day ?? op.put?.version ?? "")} ${bytes(op)} B`);
+    assert.deepEqual(faults, []);
+  } finally {
+    t.store.runner.shutdown();
+  }
 });
 
 // ── what a chat's outline answers ──

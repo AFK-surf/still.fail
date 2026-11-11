@@ -1,6 +1,7 @@
 // A page's dated record made once, laid
-// out by the width the page's frame gives it (look_node): a day's label over its rows, one change's lines each led by
-// its kind, and what a page says in place of what it lists. The page keeps what they say and who each is (its topic,
+// out by the width the page's frame gives it (look_node): a day's label, and under it its changes, each a block of the
+// page's list of its own (a piece of the day's card, narrow), one change's lines each led by its kind, and what a page
+// says in place of what it lists. The page keeps what they say and who each is (its topic,
 // its days and changes by their keys); these only how they are laid out.
 
 ///|
@@ -30,30 +31,46 @@ pub fn page_said_node(parent : @view.View, words : () -> String, bad? : Bool = f
 }
 
 ///|
-/// A day of a record, `label` as it is now, its rows (`rows` makes them: change_node's) under it: narrow, a heading
-/// over them on a list card (heading_node, group_node); wide, its label (10 in, the meta's medium muted) over them, 20
-/// over it all, 2 apart.
+/// A day's heading of a record made a block of its own, its changes each one after it (day_change_node), so a long day
+/// is made only as far as it shows: `label` as it is now; narrow, a heading over the card its changes are pieces of
+/// (heading_node); wide, its label (10 in, the meta's medium muted), 20 over it.
 #callsite(autofill(loc))
-pub fn day_group_node(
-  parent : @view.View,
-  label : () -> String,
-  rows : (@view.View) -> Unit,
-  loc~ : SourceLoc,
-) -> Unit {
+pub fn day_heading_node(parent : @view.View, label : () -> String, loc~ : SourceLoc) -> Unit {
   match look_node(parent) {
-    Narrow => {
-      heading_node(parent, label)
-      group_node(parent, rows)
-    }
+    Narrow => heading_node(loc~, parent, label)
     Wide =>
       parent.box(made_for=loc, fn(d) {
-        d.padding(Is((0.0, day_top, 0.0, 0.0))).gap(Is(day_gap)) |> ignore
+        d.padding(Is((0.0, day_top, 0.0, 0.0))) |> ignore
         d.box(fn(h) {
           h.padding(Is((change_in, 0.0, change_in, 0.0))) |> ignore
           words_node(h, label, fn() { day_heading }) |> ignore
         })
         |> ignore
-        rows(d)
+      })
+      |> ignore
+  }
+}
+
+///|
+/// One change of a day made a block of its own under its day's heading (day_heading_node), change_node's: narrow, a
+/// piece of the day's list card (card_piece_node, `piece` saying which as it is now); wide, 2 under what is over it.
+/// Laid out one under another, a day's heading and its changes are what one block of all of them was.
+#callsite(autofill(loc))
+pub fn day_change_node(
+  parent : @view.View,
+  piece : () -> CardPiece,
+  lines : () -> Array[ChangeLine],
+  version : () -> String,
+  note : () -> String,
+  coming : () -> Bool,
+  loc~ : SourceLoc,
+) -> Unit {
+  match look_node(parent) {
+    Narrow => card_piece_node(loc~, parent, piece, fn(card) { change_narrow_node(card, lines, version, note, coming) })
+    Wide =>
+      parent.box(made_for=loc, fn(d) {
+        d.padding(Is((0.0, day_gap, 0.0, 0.0))) |> ignore
+        change_wide_node(d, lines, version, note, coming)
       })
       |> ignore
   }

@@ -2390,38 +2390,39 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("hintReviewText", str("")),
         ]),
       )
-    "changelog" =>
+    // (as the core answers it: every tab, the one asked (`part`, the first where none or another is said) with its
+    // days, its first `limit` of them; two changes, none more)
+    "changelog" => {
+      let asked = match params.get("part") {
+        Some(String("station")) => "station"
+        _ => "app"
+      }
+      let days : Array[Json] = [
+        obj([
+          ("day", Json::number(20380.0)),
+          ("label", str("10 月 19 日")),
+          (
+            "entries",
+            [
+              obj([("version", Json::number(2.0)), ("versionName", str("0.1.1300")), ("lines", [obj([("kind", str("new")), ("label", str("新增")), ("text", str("设置里可以添加 station 和 Profile"))])]), ("has", Json::boolean(false)), ("note", str("更新后可用"))]),
+              obj([("version", Json::number(1.0)), ("versionName", str("0.1.1288")), ("lines", [obj([("kind", str("fix")), ("label", str("修复")), ("text", str("对话列表偶尔把同一行显示两次，滑到底再滑回来也不会消失"))])]), ("has", Json::boolean(true)), ("note", str(""))]),
+            ],
+          ),
+        ]),
+      ]
       Some(
         obj([
           ("build", Json::number(1300.0)),
           (
             "tabs",
             [
-              obj([
-                ("part", str("app")),
-                ("label", str("此 app")),
-                (
-                  "days",
-                  [
-                    obj([
-                      ("day", Json::number(20380.0)),
-                      ("label", str("10 月 19 日")),
-                      (
-                        "entries",
-                        [
-                          obj([("version", Json::number(2.0)), ("versionName", str("0.1.1300")), ("text", []), ("lines", [obj([("kind", str("new")), ("label", str("新增")), ("text", str("设置里可以添加 station 和 Profile"))])]), ("has", Json::boolean(false)), ("note", str("更新后可用")), ("mine", Json::boolean(true))]),
-                          obj([("version", Json::number(1.0)), ("versionName", str("0.1.1288")), ("text", []), ("lines", [obj([("kind", str("fix")), ("label", str("修复")), ("text", str("对话列表偶尔把同一行显示两次，滑到底再滑回来也不会消失"))])]), ("has", Json::boolean(true)), ("note", str("")), ("mine", Json::boolean(true))]),
-                        ],
-                      ),
-                    ]),
-                  ],
-                ),
-              ]),
+              obj([("part", str("app")), ("label", str("此 app")), ("days", if asked == "app" { Json::array(days) } else { [] })]),
               obj([("part", str("station")), ("label", str("Station")), ("days", [])]),
             ],
           ),
         ]),
       )
+    }
     "agentEnvForm" =>
       Some(
         obj([

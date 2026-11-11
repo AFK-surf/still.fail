@@ -88,6 +88,7 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
 fn reset_globals() -> Unit {
   window_zoom_reset()
   journal_reset()
+  tree_frames_reset()
   run_let_go()
   // A run can end with a frame's resource handover still queued. Finish it before resetting the next run.
   frame_afters_run()
@@ -918,6 +919,8 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   bench_frame_ends()
   self.hold_a11y_whole()
   self.frames = self.frames + 1
+  // (what the window's tree did in it, where a test asked: tester_tree_work.mbt)
+  tree_frame_kept()
   // (each box's presses said to be another's that one's to take, where the box is: presses.mbt)
   g().check_press_owners()
   // (how what moves goes from frame to frame, judged on a display's own frames: Tester::judges_motion)

@@ -269,13 +269,14 @@ test("an_app_of_its_own_on_the_test_channel_reads_its_changelog_is_named_still_f
   await ask(host, core, ui, 1, "client.device", { app: "android", build: "0.1.1320", client: "still.fail mbui" });
   subscribe(core, ui, 2, { topic: "changelog" });
   subscribe(core, ui, 4, { topic: "prefs" });
+  subscribe(core, ui, 5, { topic: "changelog", part: "station" });
   await host.settle();
   const values = new Map();
   answersOf(host, values);
-  // Each part's tab its own changes.
-  assert.deepEqual(v(values, 2).tabs.map((x: J) => [x.part, x.days.flatMap((d: J) => d.entries.map((e: J) => e.text[0]))]), [
-    ["android", ["修复：安卓的"]], ["desktop", []], ["web", []], ["station", ["修复：station 的"]], ["cloud", []],
-  ]);
+  // Each part's tab its own changes, the tab asked alone with them (this app's where none is said).
+  const said = (id: number) => v(values, id).tabs.map((x: J) => [x.part, x.days.flatMap((d: J) => d.entries.map((e: J) => e.lines[0].text))]);
+  assert.deepEqual(said(2), [["android", ["安卓的"]], ["desktop", []], ["web", []], ["station", []], ["cloud", []]]);
+  assert.deepEqual(said(5), [["android", []], ["desktop", []], ["web", []], ["station", ["station 的"]], ["cloud", []]]);
   assert.equal(brandName(), "still.fail");
   assert.equal(v(values, 4).productName, "still.fail");
   // Its newer builds from its own feed as it names it, not that feed's beta.
@@ -2356,6 +2357,8 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   let ui = core.connect();
   await ask(host, core, ui, 1, "client.device", { app: "android", build: "0.1.1320" });
   subscribe(core, ui, 2, { topic: "changelog" });
+  const asked: Record<string, number> = { desktop: 6, web: 7, station: 8, cloud: 9 };
+  for (const [part, id] of Object.entries(asked)) subscribe(core, ui, id, { topic: "changelog", part });
   await host.settle();
   const values = new Map();
   answersOf(host, values);
@@ -2363,7 +2366,7 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   assert.deepEqual([c.app, c.build, c.loading], ["android", 1320, false]);
   // A tab a part, this app's first; the desktop's carries the web's.
   assert.deepEqual(c.tabs.map((x: J) => [x.part, x.label]), [["android", "安卓"], ["desktop", "桌面"], ["web", "网页"], ["station", "Station"], ["cloud", "云端"]]);
-  const notes = (part: string) => c.tabs.find((x: J) => x.part === part).days.flatMap((d: J) => d.entries.map((e: J) => e.note));
+  const notes = (part: string) => v(values, asked[part] ?? 2).tabs.find((x: J) => x.part === part).days.flatMap((d: J) => d.entries.map((e: J) => e.note));
   assert.equal(c.tabs[0].days[0].label, "今天");
   // Each day which it is where the device is (its label only says it): the same day for all of today's.
   assert.equal(c.tabs[0].days.length, 1);
@@ -2419,7 +2422,44 @@ test("the_changelog_whose_every_change_is_every_parts_is_one_list", async () => 
   answersOf(host, values);
   const tabs = v(values, 2).tabs;
   assert.deepEqual(tabs.map((x: J) => x.part), ["desktop"]);
-  assert.deepEqual(tabs[0].days.flatMap((d: J) => d.entries.map((e: J) => e.text[0])), ["修复：列表跳动", "新功能：更早的"]);
+  assert.deepEqual(tabs[0].days.flatMap((d: J) => d.entries.map((e: J) => e.lines[0].text)), ["列表跳动", "更早的"]);
+  core.close();
+});
+
+test("the_changelog_sends_the_tab_asked_a_page_at_a_time_and_says_how_many_more", async () => {
+  const host = new FakeHost();
+  const now = Math.round(host.nowMs() / 1000);
+  const entry = (version: number, parts: string[]) => ({ version, commit: "c", at: now - (2000 - version) * 600, text: [`修复：第 ${version} 个`], fixes: [], parts });
+  // Forty of Android's, five of the station's among them.
+  const entries = Array.from({ length: 45 }, (_, i) => entry(2000 - i, i % 9 === 4 ? ["station"] : ["android"]));
+  host.onFetch((req) => req.url.endsWith("/v1/changelog") ? jsonResponse(200, { entries, released: { android: 2000, station: 2000 } }) : jsonResponse(404, {}));
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  await ask(host, core, ui, 1, "client.device", { app: "android", build: "0.1.1990" });
+  subscribe(core, ui, 2, { topic: "changelog" });
+  subscribe(core, ui, 3, { topic: "changelog", part: "station" });
+  subscribe(core, ui, 4, { topic: "changelog", part: "nowhere", limit: 12 });
+  subscribe(core, ui, 5, { topic: "changelog", limit: 60 });
+  await host.settle();
+  const values = new Map();
+  answersOf(host, values);
+  const versions = (id: number) => v(values, id).tabs.map((x: J) => [x.part, x.days.flatMap((d: J) => d.entries.map((e: J) => e.version))]);
+  const android = entries.filter((e) => e.parts[0] === "android").map((e) => e.version);
+  const station = entries.filter((e) => e.parts[0] === "station").map((e) => e.version);
+  const others = (asked: string, shown: number[]) => ["android", "desktop", "web", "station", "cloud"].map((part) => [part, part === asked ? shown : []]);
+  // A page (30) of this app's tab where none is said, the others none, and how many it has past them.
+  assert.deepEqual(versions(2), others("android", android.slice(0, 30)));
+  assert.equal(v(values, 2).more, 10);
+  // Another tab asked: its own, all of them, nothing more.
+  assert.deepEqual(versions(3), others("station", station));
+  assert.equal(v(values, 3).more, undefined);
+  // A tab there is not: this app's; a limit of its own.
+  assert.deepEqual(versions(4), others("android", android.slice(0, 12)));
+  assert.equal(v(values, 4).more, 28);
+  assert.deepEqual(versions(5), others("android", android));
+  assert.equal(v(values, 5).more, undefined);
+  // A day's change is what the page shows of it: its words as written and whether it is this app's are news' alone.
+  assert.deepEqual(Object.keys(v(values, 2).tabs[0].days[0].entries[0]).sort(), ["has", "lines", "note", "version", "versionName"]);
   core.close();
 });
 

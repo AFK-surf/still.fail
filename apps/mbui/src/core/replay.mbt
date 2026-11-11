@@ -1201,8 +1201,8 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       }
     }
   }
-  // A chats' list asked for its first rows (`limit`) and the changelog asked for its news alone can be answered by the
-  // whole in an older tape.
+  // A chats' list asked for its first rows (`limit`) and the changelog asked for its news alone or for a tab's first
+  // changes (`part`, `limit`) can be answered by the whole in an older tape.
   if found < 0 && kind == "subscribe" && twin_topic(name_of(m)) {
     let same = sig(m, refers, ignore_part=true)
     for i in self.first_out..<self.evs.length() {
@@ -1384,8 +1384,9 @@ fn name_of(m : Map[String, Json]) -> String {
 }
 
 ///|
-/// Whether topic `name` is one a page may ask a part of (a chats' list's first rows, the changelog's news alone) where
-/// an older tape asked the whole, or both are asked in a run: answered by the tape's one (sig's `ignore_part`). The
+/// Whether topic `name` is one a page may ask a part of (a chats' list's first rows; the changelog's news alone, or a
+/// tab's first changes) where an older tape asked the whole, or both are asked in a run: answered by the tape's one
+/// (sig's `ignore_part`; the changelog's whole holds every tab's days, read the same way, and says no `more`). The
 /// stations are not: a tape from before their rows keeps its own (Replay::keep_stations), a newer one is held to them
 /// as to any topic.
 fn twin_topic(name : String) -> Bool {
@@ -1404,12 +1405,14 @@ fn sig(
 ) -> String {
   let copy : Map[String, Json] = {}
   for k, v in m {
-    if k != "id" {
+    // (asked as more of another of its subscriptions: answered whole as the tape's one is)
+    if k != "id" && !(k == "from" && ignore_part && twin_topic(name_of(m))) {
       match (k, v) {
         ("subscribe", Object(t)) if ignore_part && twin_topic(name_of(m)) => {
           let asked = t.copy()
           asked.remove("limit")
           asked.remove("news")
+          asked.remove("part")
           copy[k] = Json::object(asked)
         }
         ("subscribe", Object(t)) if ignore_compact && (t.get("topic") == Some(Json::string("chat")) || t.get("topic") == Some(Json::string("chatJobs"))) => {

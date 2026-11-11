@@ -1202,6 +1202,24 @@ pub fn Tree::scroll_corrected(self : Tree, id : NodeId) -> Double {
 }
 
 ///|
+/// Each page's list live now (View::scrolls over a Scroll::list, up and down: View::scrolls_window's), in the order its
+/// node was made: how tall what it holds is laid out (its blocks each as tall as it was measured, one never made as tall
+/// as it was counted: the whole its bar shows the share of), how tall it is, where it is scrolled to, and how far its
+/// scroll was put in all for what came out another height over what shows (Tree::scroll_corrected). What a test reads of
+/// how its list was reckoned against what it came to.
+pub fn Tree::lists_reckoned(self : Tree) -> Array[(Double, Double, Double, Double)] {
+  let ats = self.lists_scrolled.keys().to_array()
+  ats.sort()
+  ats.filter_map(fn(at) {
+    let n = self.nodes[at]
+    guard n.live && n.scroll_held >= 0 && n.scroll_held < self.nodes.length() && self.lists_scrolled.get(at) is Some(s) else {
+      return None
+    }
+    Some((self.nodes[n.scroll_held].flex.height, n.flex.height, s.at(self), s.corrected))
+  })
+}
+
+///|
 /// Whether node `id` scrolls what it holds (View::scrolls), whether or not what it holds is taller than it now
 /// (Tree::scrolls_now): the same all the while it is one, as what it holds comes to fit in it or grows past it.
 pub fn Tree::is_scroller(self : Tree, id : NodeId) -> Bool {

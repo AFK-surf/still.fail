@@ -1767,19 +1767,20 @@ export const SHAPES: Record<string, Shape> = {
     ["app", "String", { default: true }],
     ["build", opt("i64"), { client: opt("I54") }],
     ["tabs", vec("ChangelogTab")],
+    ["more", opt("i64"), { client: opt("I54"), doc: "How many changes the tab asked has past the first `limit` (its days hold those alone); absent when it has\nnone." }],
     ["news", opt("ChangelogNews")],
     ["loading", "bool", { default: true }],
     ["error", opt("String")],
-  ], { doc: "What changed in still.fail, as this app shows it (the `changelog` topic; client/core-ts/src/changelog.ts): `app`\n(web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the changes in a tab a part,\nthis app's first (this app's alone where each would list the same: the stable channel's), by day, newest first; what\nthis app got since the changelog was last shown here (`news`, until `changelog.seen`); `loading` while first read,\n`error` when it could not be and none was kept." }),
+  ], { doc: "What changed in still.fail, as this app shows it (the `changelog` topic; client/core-ts/src/changelog.ts): `app`\n(web, desktop or android) and its `build` (0.1.<n>: n), absent before its host says; the tabs, a part each, this\napp's first (this app's alone where each would list the same: the stable channel's), the one asked (`part`; the first\nwhere none is said, or one there is not) with its first `limit` changes by day, newest first (a page where none is\nsaid), the others with none; what this app got since the changelog was last shown here (`news`, until\n`changelog.seen`; asked with `news`, that alone and no tab); `loading` while first read, `error` when it could not be\nand none was kept." }),
   ChangelogTab: struct([
     ["part", "String"],
     ["label", "String"],
     ["days", vec("ChangelogDay")],
-  ], { doc: "A part's changes (`part`: desktop, web, android, station or cloud; the desktop's include the web's), under\nits name.", keepNone: true }),
+  ], { doc: "A part's changes (`part`: desktop, web, android, station or cloud; the desktop's include the web's), under\nits name; none but in the tab asked.", keepNone: true }),
   ChangelogDay: struct([
     ["day", "i64", { client: "I54" }],
     ["label", "String"],
-    ["entries", vec("ChangelogItem")],
+    ["entries", vec("ChangelogChange")],
   ], { doc: "A day's changes, under its heading (今天, 昨天, 9月20日): which day it is where the device is (`day`: days since\n1970 there, the same day whatever else it lists or the list leaves off; its heading only says it).", keepNone: true }),
   ChangelogItem: struct([
     ["version", "i64", { client: "I54" }],
@@ -1790,6 +1791,13 @@ export const SHAPES: Record<string, Shape> = {
     ["note", "String"],
     ["mine", "bool"],
   ], { doc: "One change: its lines for people (`text` as written, `lines` with their kind apart), the version it came in,\nwhether this app has it (`has`: absent in another tab, or when it is not this app's), and what is not out yet\n(`note`: 更新到 0.1.n 后就有, 刷新页面后就有, 还没发布; empty when it is out); `mine`: it is this app's." }),
+  ChangelogChange: struct([
+    ["version", "i64", { client: "I54" }],
+    ["versionName", "String"],
+    ["lines", vec("ChangelogLine")],
+    ["has", opt("bool")],
+    ["note", "String"],
+  ], { doc: "One change of a tab's day, as its page shows it: its lines with their kind apart, the version it came in, whether\nthis app has it (`has`: absent in another tab, or when it is not this app's), and what is not out yet (`note`, as\n`ChangelogItem`'s). Its words as written and whether it is this app's are `news`' alone (`ChangelogItem`)." }),
   ChangelogLine: struct([
     ["kind", opt("String")],
     ["label", "String"],
