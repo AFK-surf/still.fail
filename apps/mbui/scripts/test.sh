@@ -301,7 +301,9 @@ for t in $targets; do
           # 43074044573, f06a53f3 43076123102; on one 121-199. Reckoned at 800 of its cores, fewer pages)
           # (two programs gave the third 86 page files beside kept_rows at 60, 271 s of them, the job 281 s of its 5
           # minutes, main e73742ee 43081853101: one again, as it was at 121-199 s)
-          60) specs="4,4,520,1 4,4,20,1 1,4,600,1 4,4,0,1" ;;
+          # (the second's at 60 260-281 s of its 5 minutes on main's last five runs, the third's 114-207: the second
+          # reckoned 200 s of other runs it has not, so it is dealt fewer pages; main f4940357 43103370007, 2026-11-11)
+          60) specs="4,4,520,1 4,4,200,1 1,4,600,1 4,4,0,1" ;;
           # (the first's packages' programs at 120 275 s beside its pages' 263, the job 295 s of its 5 minutes, main
           # 436755fc 43074044573, 2026-11-11: reckoned 160 s of its cores, they take some 500 now)
           120) specs="4,4,500,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
