@@ -871,13 +871,34 @@ fn wheel_said(
       _ => "none"
     }
   }
-  let (found, took) = @view.wheel_last.val
+  let last = @view.wheel_last
+  let found : @view.NodeId? = if last.found_at >= 0 { Some({ at: last.found_at, gen: last.found_gen }) } else { None }
+  let took : @view.NodeId? = if last.took_at >= 0 { Some({ at: last.took_at, gen: last.took_gen }) } else { None }
+  // (what of an old view's scrolls where it went, as it stands now the wheel has moved it)
+  let old_said = fn() {
+    let target = wheel_old_target.val
+    if target == 0 {
+      "nothing that scrolls there"
+    } else {
+      "what scrolls there, \{target}" +
+      (match g().lists.get(target) {
+        Some(st) => if st.wheel_moves(number(dy)) { ", a list not at its end that way" } else { ", a list at its end that way" }
+        None => ""
+      })
+    }
+  }
+  let went = match wheel_went.val {
+    1 => "the window's tree"
+    2 => "the old view the tree hosts there: " + old_said()
+    3 => old_said()
+    _ => "nowhere"
+  }
   let words = match near {
     Some((_, w, wy)) => "\"" + w + "\" at y \{wy}"
     None => "no words of the tree's"
   }
   h_log(
-    "DRIVE wheel \{dy} at \{x.to_int()},\{y.to_int()}: went to \{wheel_went.val}; the tree's found \{named(found)}, taken by \{named(took)}; nearest " +
+    "DRIVE wheel \{dy} at \{x.to_int()},\{y.to_int()}: went to \{went}; the tree's found \{named(found)}, taken by \{named(took)}; nearest " +
     words + "; moving: " + (if moving.length() == 0 { "nothing" } else { moving.join("; ") }),
   )
   d.wheel_follow = match near {

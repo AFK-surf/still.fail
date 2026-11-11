@@ -5307,10 +5307,19 @@ pub fn View::on_wheel_moves(self : View, f : (Wheel) -> Bool) -> View {
 /// the old frame's, as ever; or the tree is gone).
 ///|
 /// The last wheel a tree was asked of (Tree::wheel_at): the node found under it and the one that took it (its
-/// `on_wheel`, or the old view it hosts), None where none: what a scripted run says of its `wheel` (ui's drive.mbt),
-/// nothing reads it to decide anything.
+/// `on_wheel`, or the old view it hosts), each by its place and generation (-1: none). What a scripted run says of its
+/// `wheel` (ui's drive.mbt); nothing reads it to decide anything. Numbers written in place: a wheel turned on a
+/// device makes nothing for it.
+pub(all) struct WheelLast {
+  mut found_at : Int
+  mut found_gen : Int
+  mut took_at : Int
+  mut took_gen : Int
+}
+
+///|
 // kept across runs: each wheel writes it anew
-pub let wheel_last : Ref[(NodeId?, NodeId?)] = Ref((None, None))
+pub let wheel_last : WheelLast = { found_at: -1, found_gen: 0, took_at: -1, took_gen: 0 }
 
 ///|
 pub fn Tree::wheel_at(
@@ -5329,7 +5338,8 @@ pub fn Tree::wheel_at(
     self.bring_to(t)
   }
   let theirs = Ref(false)
-  wheel_last.val = (None, None)
+  wheel_last.found_at = -1
+  wheel_last.took_at = -1
   self.event(t, fn() {
     // (where things are as of then, what the change under way set before it counted: Tree::asked_at's)
     self.laid_now()
@@ -5347,7 +5357,13 @@ pub fn Tree::wheel_at(
         }
       }
     })
-    wheel_last.val = (found.val, None)
+    match found.val {
+      Some(f) => {
+        wheel_last.found_at = f.at
+        wheel_last.found_gen = f.gen
+      }
+      None => ()
+    }
     guard found.val is Some(id) && self.nodes[0].live else { return }
     // (from it up through what holds it as of then, the innermost first: each node, whether it hosted an old view, and
     // how many times what a wheel does to it was said then)
@@ -5366,7 +5382,8 @@ pub fn Tree::wheel_at(
       if hosted && n.hosted {
         theirs.val = true
         if @signals.untracked(fn() { old(id) }) {
-          wheel_last.val = (wheel_last.val.0, Some(id))
+          wheel_last.took_at = id.at
+          wheel_last.took_gen = id.gen
           break
         }
       }
@@ -5376,7 +5393,8 @@ pub fn Tree::wheel_at(
       if @signals.untracked(fn() {
           f({ x: (x - nx) / ns, y: (y - ny) / ns, wx: x, wy: y, dx, dy, mods, at: t, w: n.flex.width, h: n.flex.height })
         }) {
-        wheel_last.val = (wheel_last.val.0, Some(id))
+        wheel_last.took_at = id.at
+          wheel_last.took_gen = id.gen
         break
       }
     }
