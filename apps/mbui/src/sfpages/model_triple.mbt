@@ -417,9 +417,9 @@ pub fn model_triple(
     } else {
       triple_let_go(me)
     }
-    // (pressed before it was answered: opened as it is)
+    // (pressed before it was answered: opened as it is, once the frame's builds are over: opening it tells outside)
     if triple_ahead.waiting && triple_ahead_answered(station, of) {
-      triple_open_waited(src, station, of, Of(id), saved)
+      c.after_build("triple-open/" + me, fn() { triple_open_waited(src, station, of, Of(id), saved) })
     }
   }
   if can && !open {
