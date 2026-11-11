@@ -590,7 +590,7 @@ fn screen_views_node(g : @view.View, core : Core, here : () -> Here, address : S
 
 ///|
 /// Its profiles by account kind (station_overview's): a row a kind, how many and how many need a look, pressed open to
-/// its accounts beside it (station_profiles_panel).
+/// its accounts beside it (station_profiles_panel), from the row (link_row_opens_node).
 fn station_profiles_node(b : @view.View, core : Core, here : () -> Here, s : () -> Json?) -> Unit {
   let address = text(@signals.untracked(s), "station")
   st_section_node(b, fn() { @sf.t("android-misc.bar.place.profiles") }, fn(sec) {
@@ -606,13 +606,13 @@ fn station_profiles_node(b : @view.View, core : Core, here : () -> Here, s : () 
           }
         }
         row.box(fn(holder) {
-          @sf.link_row_node(
+          // (opened from the row itself: beside it, following it, the focus back on it as it closes)
+          @sf.link_row_opens_node(
             holder,
             fn() { text(gv(), "title") },
-            fn() {
-              let (x, y, w, h) = holder.placed_window_now()
+            fn(at) {
               let many = @signals.untracked(ids).length() >= @sf.pick_search_from
-              station_profiles_panel(core, @signals.untracked(here), address, kind, text(@signals.untracked(gv), "title"), At(x, y, w, h), many)
+              station_profiles_panel(core, @signals.untracked(here), address, kind, text(@signals.untracked(gv), "title"), Node(at), many)
             },
             value=fn() { @sf.t("web-mobile.settings.profilesCount", args=[("n", ids().length().to_string())]) },
             trouble=fn() {

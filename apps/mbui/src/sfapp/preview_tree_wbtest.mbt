@@ -593,7 +593,7 @@ test "viewer on the tree: the strip let go as the app begins anew, wherever it w
   let t = preview_tester("step")
   t.hold_drag(300.0, 422.0, 250.0, 422.0)
   assert_true(pv_strip.way.value_at(t.time()) != 0.0)
-  new_run()
+  fresh_app()
   assert_eq(pv_strip.way.value_at(t.time()), 0.0)
   assert_true(!pv_strip.way.goes_at(t.time()))
 }

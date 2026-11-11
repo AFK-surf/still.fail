@@ -113,6 +113,11 @@ pub fn Way::go(
   loc~ : SourceLoc,
 ) -> Unit {
   let (x, v) = self.at(at)
+  // (at rest where it is told to go, and told no speed: no setting out, so nothing said, no start, no frame asked and
+  // nothing that reads it worked out again)
+  if !self.goes_at(at) && x == target && v == 0.0 && velocity.unwrap_or(0.0) == 0.0 {
+    return
+  }
   self.from = x
   self.v0 = velocity.unwrap_or(v)
   self.to = target

@@ -1175,11 +1175,48 @@ let code_key_h : Double = 24.0
 let copied_at : LiveMap[Int, Bool] = LiveMap::new()
 
 ///|
+/// The code blocks wrapped at their width (their wrap key pressed), by their id.
+let code_wrapped : LiveMap[Int, Bool] = LiveMap::new()
+
+///|
+/// How far apart a code block's keys stand (4), and its code wrapped at its width: in from its sides as scrolled (14
+/// across, 12 down).
+let code_keys_apart : @ui.Style = @ui.css("w=S1")
+
+///|
+let code_wrapped_box : @ui.Style = @ui.css("w=Full px=S3_5 py=S3")
+
+///|
+/// A key on a code block's bar (code_block's): a capsule code_key_h high, its icon (none: "") and its words in the
+/// muted ink, rippling as it is pressed.
+fn code_key(c : @ui.Ctx, id : Int, icon_name : String, words : String) -> Unit {
+  let w = web()
+  c.box(
+    dir=Row,
+    h=Px(code_key_h),
+    padx=7.0,
+    gap=4.0,
+    align=ACenter,
+    radius=code_key_h / 2.0,
+    bg=alpha(theme().p.canvas, 0.8),
+    id~,
+    fn() {
+      if icon_name != "" {
+        icon(c, icon_name, size=12.0, color=w.muted) |> ignore
+      }
+      c.text(words, size=theme().t.caption, color=w.muted, wrap=false) |> ignore
+      @motion.ripple(c, id, code_key_h / 2.0)
+    },
+  )
+  |> ignore
+}
+
+///|
 /// A code block as the web phone draws it: a quiet
 /// tinted block with no frame; above the code, on a row of its own, its
 /// language and a copy button; the code in the code face, 12 on 18 lines,
-/// in its colours as the core said them (ink.mbt), scrolled sideways rather than
-/// wrapped.
+/// in its colours as the core said them (ink.mbt), scrolled sideways, or wrapped at
+/// its width once its wrap key (before the copy key) is pressed, till it is pressed again.
 pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? = None, face? : Int? = None) -> Unit {
   let t = theme()
   let w = web()
@@ -1191,6 +1228,15 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
     @kit.after(c, copy_key, false, copied_ms) |> ignore
     copied_at[id] = true
   })
+  let wrap_id = c.id("sf-code-wrap/" + code)
+  c.on_press(wrap_id, fn() {
+    if code_wrapped.contains(id) {
+      code_wrapped.remove(id)
+    } else {
+      code_wrapped[id] = true
+    }
+  })
+  let wrapped = code_wrapped.contains(id)
   let copied = copied_at.contains(id) &&
     (if @kit.after(c, copy_key, true, copied_ms) {
       copied_at.remove(id)
@@ -1225,43 +1271,19 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
           |> ignore
         })
         |> ignore
-        c.box(
-          dir=Row,
-          h=Px(code_key_h),
-          padx=7.0,
-          gap=4.0,
-          align=ACenter,
-          radius=code_key_h / 2.0,
-          bg=alpha(t.p.canvas, 0.8),
-          id~,
-          fn() {
-            icon(c, if copied { "check" } else { "copy" }, size=12.0, color=w.muted)
-            |> ignore
-            c.text(
-              // (common.copied, common.copy: the catalog's words)
-              if language() == "en" {
-                if copied { "Copied" } else { "Copy" }
-              } else if copied {
-                "已复制"
-              } else {
-                "复制"
-              },
-              size=theme().t.caption,
-              color=w.muted,
-              wrap=false,
-            )
-            |> ignore
-            @motion.ripple(c, id, code_key_h / 2.0)
-          },
-        )
-        |> ignore
+        // (wrapped at the block's width, or on its lines as written, scrolled across: a press each way)
+        code_key(c, wrap_id, "", md_wrap_words(wrapped))
+        c.box(style=code_keys_apart, fn() {  }) |> ignore
+        // (common.copied, common.copy: the catalog's words)
+        code_key(c, id, if copied { "check" } else { "copy" }, md_copy_words(copied))
       },
     )
   }
   c.box(w=Fill(1.0), bg=t.p.code_ground, radius=block_radius, clip=true, fn() {
     bar() |> ignore
-    // in the colours the core said (ink.mbt), scrolled sideways rather than wrapped (12 on 1.6 on a desktop's width)
-    c.sideways("sf-code/" + code, padx=14.0, pady=12.0, fn() {
+    // in the colours the core said (ink.mbt), scrolled sideways, or wrapped at its width (12 on 1.6 on a desktop's
+    // width)
+    let words = fn(wrap : Bool) {
       c.rich(
         match colours {
           // (the core coloured it as it read the Markdown)
@@ -1270,14 +1292,18 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
         },
         size=t.t.caption,
         line=if over { code_line_wide } else { 18.0 },
-        wrap=false,
+        wrap~,
         breaks=true,
         color=t.p.text,
         face=face.unwrap_or(0),
       )
       |> ignore
-    })
-    |> ignore
+    }
+    if wrapped {
+      c.box(style=code_wrapped_box, fn() { words(true) }) |> ignore
+    } else {
+      c.sideways("sf-code/" + code, padx=14.0, pady=12.0, fn() { words(false) }) |> ignore
+    }
   })
   |> ignore
 }

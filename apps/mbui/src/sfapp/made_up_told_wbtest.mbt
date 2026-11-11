@@ -13,7 +13,7 @@ fn live_step(src : Source) -> String? {
 
 ///|
 test "a made-up topic answered late: told once to the reader that read it first and to the one that read it after, again as it changes, not as it is set the same" {
-  new_run()
+  fresh_app()
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = @sffixture.round_trip(fixture("chat-working"), 100.0)

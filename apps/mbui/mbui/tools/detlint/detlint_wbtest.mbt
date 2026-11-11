@@ -10,6 +10,7 @@ let conf_text : String =
   #| "scripts": ["scripts/*.sh", "scripts/*.mjs"],
   #| "hosts": ["android/*.java", "src/host/*.m", "src/host/*.c"],
   #| "run_first": {"starts": ["new_run", "fresh_app"], "reads": ["@sf.t", "tr"]},
+  #| "reset_by_hand": {"names": ["new_run"]},
   #| "counts": {}}
 
 ///|
@@ -2466,4 +2467,23 @@ test "read-before-run" {
     rule="read-before-run",
   )
   assert_eq(fs.map(fn(f) { "\{f.file}:\{f.line}" }), ["src/app/a_wbtest.mbt:6", "src/app/a_wbtest.mbt:12"])
+}
+
+///|
+test "reset-by-hand" {
+  // a test putting the app back by hand (new_run) with no Tester after it: counted; one with Tester::new after it, or a
+  // function said to give a Tester back (here, in another file), or a helper that does both itself, not; new_run
+  // defined, called outside a test file, or as a method, not
+  let fs = lint_of(
+    [
+      (
+        "src/app/a_wbtest.mbt",
+        "test \"model\" {\n  new_run()\n  ignore(1)\n}\n\ntest \"screen\" {\n  new_run()\n  let t = @ui.Tester::new(fn(_c) { () })\n  ignore(t)\n}\n\ntest \"by a helper\" {\n  new_run()\n  let t = phone()\n  ignore(t)\n}\n\ntest \"twice, the last none after\" {\n  new_run()\n  let t = phone()\n  ignore(t)\n  new_run()\n}\n",
+      ),
+      ("src/app/b_wbtest.mbt", "fn phone() -> @ui.Tester {\n  new_run()\n  @ui.Tester::new(fn(_c) { () })\n}\n"),
+      ("src/app/app.mbt", "fn new_run() -> Unit {\n  reset()\n}\n\nfn go() -> Unit {\n  new_run()\n  x.new_run()\n}\n"),
+    ],
+    rule="reset-by-hand",
+  )
+  assert_eq(fs.map(fn(f) { "\{f.file}:\{f.line}" }), ["src/app/a_wbtest.mbt:2", "src/app/a_wbtest.mbt:22"])
 }

@@ -21,7 +21,8 @@ fn pick_reset() -> Unit {
 fn pick_back(c : @ui.Ctx) -> Unit {
   if link_menu.open {
     c.take_back(fn() { link_menu.open = false })
-  } else if pk.ts != "" {
+  } else if @sfbase.picked.get().ts != "" {
+    // (as told: picked as a message's row is built, elsewhere than this may be built: what lies over the tape's)
     c.take_back(fn() { pick_clear() })
   }
 }

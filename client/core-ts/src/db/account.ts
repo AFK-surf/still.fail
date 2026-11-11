@@ -20,7 +20,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, versionOf } from "./schema.ts";
+import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, overviewPartOf, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 import { timed } from "../spent.ts";
 import { OWN_SURFACES } from "../titles.ts";
@@ -304,6 +304,8 @@ export class AccountDb {
   readonly found: number;
   /// Whether what was said can be found (`said` is there; it could not be made without room).
   readonly #said: boolean = false;
+  /// Whether each overview's part the chat list reads is kept (`station_part`; it could not be made without room).
+  #parts = false;
   /// The logs let go for room (`log_use`), by K(kind, station, id).
   readonly #evicted = new Set<string>();
   readonly #runner: Runner;
@@ -358,6 +360,12 @@ export class AccountDb {
         // No room to make it: messages are not found by their words this time.
       }
       try {
+        ensureOverviewParts(sql);
+        this.#parts = true;
+      } catch {
+        // No room to make it: each part is read of its overview, by SQLite, this time.
+      }
+      try {
         if (ensureSlackSaid(sql)) this.#fillSlackSaid();
       } catch {
         // No room to make it: what agents said in Slack is not shown in their chats this time.
@@ -381,6 +389,7 @@ export class AccountDb {
     } else if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'said'").length > 0) {
       this.#said = true;
     }
+    if (this.readOnly) this.#parts = this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'station_part'").length > 0;
     this.#bursts = Effect.runSync(Queue.unbounded<void>());
     // The one write fiber: a burst is committed once what started it has run.
     this.#writer = runner.fork(Effect.forever(Effect.andThen(Queue.take(this.#bursts), Effect.andThen(Effect.yieldNow, Effect.sync(() => this.#commit())))));
@@ -612,15 +621,56 @@ export class AccountDb {
 
   /// A station's overview or usage.
   stationDoc(station: string, kind: string): J {
-    return this.#doc(K("st", station, kind), "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind]);
+    const key = K("st", station, kind);
+    const read = kind === "overview" && !this.#cache.has(key);
+    const v = this.#doc(key, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind]);
+    if (read && v !== undefined) work.overviewsRead++;
+    return v;
   }
 
   putStationDoc(station: string, kind: string, value: J, confirmed: number | null, topic: Topic | null): void {
-    this.#putDoc(K("st", station, kind), value, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind], "INSERT INTO station (address, kind, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [station, kind, json, confirmed], topic);
+    const put = () => this.#putDoc(K("st", station, kind), value, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind], "INSERT INTO station (address, kind, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [station, kind, json, confirmed], topic);
+    if (kind === "overview") this.#partWritten(station, put);
+    else put();
   }
 
   dropStationDoc(station: string, kind: string, topic: Topic | null): void {
-    this.#dropDoc(K("st", station, kind), "DELETE FROM station WHERE address = ? AND kind = ?", [station, kind], topic);
+    const drop = () => this.#dropDoc(K("st", station, kind), "DELETE FROM station WHERE address = ? AND kind = ?", [station, kind], topic);
+    if (kind === "overview") this.#partWritten(station, drop);
+    else drop();
+  }
+
+  /// What the chat list reads of a station's overview (schema.ts overviewPartOf), undefined while none is held: kept
+  /// beside it (`station_part`, by triggers), not the overview, which is not read.
+  overviewPart(station: string): J {
+    const key = K("part", station);
+    if (this.#cache.has(key)) return this.#cache.get(key) ?? undefined;
+    const text = this.#partText(station);
+    const part = text === undefined ? undefined : frozen(JSON.parse(text));
+    this.#cache.set(key, part ?? null);
+    return part;
+  }
+
+  /// An overview's part as the database holds it; where it could not keep them (no room, a database a newer core
+  /// wrote), made of the overview by SQLite as it is read.
+  #partText(station: string): string | undefined {
+    const r = this.#parts
+      ? this.sql.all("SELECT part FROM station_part WHERE address = ?", [station])[0]
+      : this.sql.all(`SELECT ${overviewPartOf("st.json")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [station])[0];
+    return typeof r?.[0] === "string" ? r[0] : undefined;
+  }
+
+  /// The overview written or dropped by `write`, its part with it (the triggers): said (`$overview-part`) only where the
+  /// part is not what it was.
+  #partWritten(station: string, write: () => void): void {
+    this.#write(() => {
+      const before = this.#partText(station);
+      write();
+      const after = this.#partText(station);
+      if (after === before) return;
+      this.#cache.set(K("part", station), after === undefined ? null : frozen(JSON.parse(after)));
+      this.#tell({ topic: "$overview-part", station });
+    });
   }
 
   /// At most `most` of a station's documents whose kind starts with `prefix`, the latest confirmed: the others go.
@@ -757,34 +807,107 @@ export class AccountDb {
     c = new Collection(kind === "threads");
     switch (kind) {
       case "chats":
-      case "archived":
-        for (const r of this.sql.all("SELECT id, ord, json, unread FROM chat WHERE station = ? AND archived = ?", [station, kind === "archived" ? 1 : 0])) {
-          const id = String(r[0]);
-          c.set(id, this.#chatRow(station, kind === "archived" ? 1 : 0, id, r[2], r[3]), [r[1] as number]);
-        }
+      case "archived": {
+        // (each kept row as it is kept: account.ts #byKey)
+        const a = kind === "archived" ? 1 : 0;
+        const found = this.sql.all("SELECT station, id, ord FROM chat WHERE station = ? AND archived = ?", [station, a]);
+        const made = this.#chatRowsFound(found, a, () => this.sql.all("SELECT station, id, json, unread FROM chat WHERE station = ? AND archived = ?", [station, a]));
+        found.forEach((r, i) => {
+          if (made[i] !== undefined) c.set(String(r[1]), made[i], [r[2] as number]);
+        });
         break;
-      case "sessions":
-        for (const r of this.sql.all("SELECT key, ord, summary FROM session WHERE station = ? AND listed = 1", [station])) c.set(String(r[0]), this.#cached(K("sum", station, String(r[0])), r[2]), [r[1] as number]);
+      }
+      case "sessions": {
+        const found = this.sql.all("SELECT key, ord FROM session WHERE station = ? AND listed = 1", [station]);
+        const key = (r: SqlRow) => K("sum", station, String(r[0]));
+        const made = this.#byKey(
+          found.map((r) => [key(r), r[0]]),
+          () => this.sql.all("SELECT key, summary FROM session WHERE station = ? AND listed = 1", [station]),
+          (keys) => this.sql.all("SELECT s.key, s.summary FROM json_each(?) AS k CROSS JOIN session AS s WHERE s.station = ? AND s.key = k.value", [keys, station]),
+          key,
+          (r) => this.#cached(key(r), r[1]),
+        );
+        found.forEach((r, i) => c.set(String(r[0]), made[i], [r[1] as number]));
         break;
-      case "threads":
-        for (const r of this.sql.all("SELECT id, sort_at, created_at, json, last, read, unread FROM thread WHERE station = ? AND listed = 1", [station])) {
-          c.set(String(r[0]), this.#threadRow(station, r[0] as number, r[3], r[4], r[5], r[6]), [r[1] as number, r[2] as number, r[0] as number]);
-        }
+      }
+      case "threads": {
+        const found = this.sql.all("SELECT id, sort_at, created_at FROM thread WHERE station = ? AND listed = 1", [station]);
+        const made = this.#threadsFound(station, found, () => this.sql.all("SELECT id, json, last, read, unread FROM thread WHERE station = ? AND listed = 1", [station]));
+        found.forEach((r, i) => {
+          if (made[i] !== undefined) c.set(String(r[0]), made[i], [r[1] as number, r[2] as number, r[0] as number]);
+        });
         break;
-      case "jobs":
-        for (const r of this.sql.all("SELECT id, ord, json, chat FROM job WHERE station = ? AND open = 1", [station])) c.set(String(r[0]), this.#jobItem(station, String(r[0]), r[2], r[3]), [r[1] as number]);
+      }
+      case "jobs": {
+        const found = this.sql.all("SELECT id, ord FROM job WHERE station = ? AND open = 1", [station]);
+        const key = (r: SqlRow) => K("jobitem", station, String(r[0]));
+        const made = this.#byKey(
+          found.map((r) => [key(r), r[0]]),
+          () => this.sql.all("SELECT id, json, chat FROM job WHERE station = ? AND open = 1", [station]),
+          (keys) => this.sql.all("SELECT j.id, j.json, j.chat FROM json_each(?) AS k CROSS JOIN job AS j WHERE j.station = ? AND j.id = k.value", [keys, station]),
+          key,
+          (r) => this.#jobItem(station, String(r[0]), r[1], r[2]),
+        );
+        found.forEach((r, i) => {
+          if (made[i] !== undefined) c.set(String(r[0]), made[i], [r[1] as number]);
+        });
         break;
+      }
     }
     this.#lists.set(key, c);
     return c;
+  }
+
+  /// The rows a query found by their keys alone (`found`: each one's key in the cache, and what `byKey` finds it again
+  /// by), in its order, undefined where none was read: each one kept by its key as it is kept, read from the database
+  /// only where none is. A list asked for again, a workspace's mark made again, read every row's JSON to take the one
+  /// kept (5.6 ms in Hermes for a mark of 123 rows, every one kept, 2026-11-11). The JSON of those not kept is read by one
+  /// more query: where they are most of what was found (more than half: a list read cold), `all`, the query again with
+  /// its JSON, so that a cold read costs one query more of keys alone; otherwise `byKey`, given their keys as one JSON
+  /// array (json_each: one statement whatever their number, never near SQLite's variable limit, and one statement kept
+  /// prepared), each found by its primary key. Each row read: `keyOf` its key, `make` it into the row (which keeps it).
+  #byKey(found: [string, unknown][], all: () => SqlRow[], byKey: (keys: string) => SqlRow[], keyOf: (r: SqlRow) => string, make: (r: SqlRow) => J): (J | undefined)[] {
+    const out: (J | undefined)[] = found.map(([key]) => this.#cache.get(key) ?? undefined);
+    let missing = 0;
+    for (const v of out) if (v === undefined) missing++;
+    if (missing === 0) return out;
+    const whole = missing * 2 > found.length;
+    const rows = whole ? all() : byKey(JSON.stringify(found.flatMap(([, at], i) => (out[i] === undefined ? [at] : []))));
+    const read = new Map<string, SqlRow>();
+    for (const r of rows) read.set(keyOf(r), r);
+    for (let i = 0; i < found.length; i++) {
+      if (out[i] !== undefined) {
+        // (read again with the rest, for nothing)
+        if (whole && read.has(found[i][0])) work.rowJson++;
+        continue;
+      }
+      const r = read.get(found[i][0]);
+      if (r !== undefined) out[i] = make(r);
+    }
+    return out;
+  }
+
+  /// Chat rows a query found (`found`: station, id), `archived` or not, in its order (account.ts #byKey); `all` the
+  /// query again with their JSON (station, id, json, unread).
+  #chatRowsFound(found: SqlRow[], archived: number, all: () => SqlRow[]): (J | undefined)[] {
+    const key = (r: SqlRow) => K("chat", String(r[0]), archived, String(r[1]));
+    return this.#byKey(
+      found.map((r) => [key(r), [r[0], r[1]]]),
+      all,
+      (keys) => this.sql.all("SELECT c.station, c.id, c.json, c.unread FROM json_each(?) AS k CROSS JOIN chat AS c WHERE c.station = json_extract(k.value, '$[0]') AND c.archived = ? AND c.id = json_extract(k.value, '$[1]')", [keys, archived]),
+      key,
+      (r) => this.#chatRow(String(r[0]), archived, String(r[1]), r[2], r[3]),
+    );
   }
 
   #loadedList(station: string, kind: ListKind): Collection | undefined {
     return this.#lists.get(K(kind, station));
   }
 
-  /// A row parsed once and kept by its key until written.
-  #cached(key: string, json: SqlValue, make?: (parsed: J) => J): J {
+  /// A row parsed once and kept by its key until written. `json` as read from the database (counted: work.rowJson, read
+  /// for nothing where the row is kept), else as written here (`read` false).
+  #cached(key: string, json: SqlValue, make?: (parsed: J) => J, read = true): J {
+    if (read && typeof json === "string") work.rowJson++;
     const hit = this.#cache.get(key);
     if (hit !== undefined && hit !== null) return hit;
     const v = frozen(make ? make(parse(json)) : parse(json));
@@ -902,6 +1025,9 @@ export class AccountDb {
 
   /// A sidebar row by its id.
   chat(station: string, id: string): J {
+    // (a row kept by its key is the one in the database: written, it is kept anew; gone, let go)
+    const kept = this.#cache.get(K("chat", station, 0, id));
+    if (kept !== undefined && kept !== null) return kept;
     const r = this.sql.all("SELECT json, unread FROM chat WHERE station = ? AND archived = 0 AND id = ?", [station, id])[0];
     return r ? this.#chatRow(station, 0, id, r[0], r[1]) : undefined;
   }
@@ -949,9 +1075,9 @@ export class AccountDb {
   chatHead(stations: string[], limit: number): [string, J][] {
     if (stations.length === 0) return [];
     const marks = stations.map(() => "?").join(", ");
-    return this.sql
-      .all(`SELECT station, id, json, unread FROM chat WHERE archived = 0 AND station IN (${marks}) ORDER BY pinned_at DESC, last_active DESC LIMIT ?`, [...stations, limit])
-      .map((r) => [String(r[0]), this.#chatRow(String(r[0]), 0, String(r[1]), r[2], r[3])]);
+    const found = this.sql.all(`SELECT station, id FROM chat WHERE archived = 0 AND station IN (${marks}) ORDER BY pinned_at DESC, last_active DESC LIMIT ?`, [...stations, limit]);
+    const made = this.#chatRowsFound(found, 0, () => this.sql.all(`SELECT station, id, json, unread FROM chat WHERE archived = 0 AND station IN (${marks}) ORDER BY pinned_at DESC, last_active DESC LIMIT ?`, [...stations, limit]));
+    return found.flatMap((r, i): [string, J][] => (made[i] === undefined ? [] : [[String(r[0]), made[i]]]));
   }
 
   /// How many sidebar rows these stations have.
@@ -964,9 +1090,10 @@ export class AccountDb {
   marked(stations: string[]): [string, J][] {
     if (stations.length === 0) return [];
     const marks = stations.map(() => "?").join(", ");
-    return this.sql
-      .all(`SELECT station, id, json, unread FROM chat WHERE archived = 0 AND station IN (${marks}) AND (tone IS NOT NULL OR asks = 1)`, stations)
-      .map((r) => [String(r[0]), this.#chatRow(String(r[0]), 0, String(r[1]), r[2], r[3])]);
+    const where = `archived = 0 AND station IN (${marks}) AND (tone IS NOT NULL OR asks = 1)`;
+    const found = this.sql.all(`SELECT station, id FROM chat WHERE ${where}`, stations);
+    const made = this.#chatRowsFound(found, 0, () => this.sql.all(`SELECT station, id, json, unread FROM chat WHERE ${where}`, stations));
+    return found.flatMap((r, i): [string, J][] => (made[i] === undefined ? [] : [[String(r[0]), made[i]]]));
   }
 
   /// The viewer read a thread up to `n`: its rows unread no more where that covers their last message.
@@ -990,6 +1117,8 @@ export class AccountDb {
 
   /// A session's summary.
   summary(station: string, key: string): J {
+    const kept = this.#cache.get(K("sum", station, key));
+    if (kept !== undefined && kept !== null) return kept;
     const r = this.sql.all("SELECT summary FROM session WHERE station = ? AND key = ?", [station, key])[0];
     return r && r[0] !== null ? this.#cached(K("sum", station, key), r[0]) : undefined;
   }
@@ -1143,11 +1272,10 @@ export class AccountDb {
   }
 
   #detailThreads(station: string, key: string, ids: number[]): J[] {
-    const rows = this.sql.all(
-      `SELECT id, json, last, read, unread FROM thread WHERE station = ? AND (id IN (SELECT thread FROM thread_member WHERE station = ? AND session = ?)${ids.length > 0 ? ` OR id IN (${ids.map(() => "?").join(", ")})` : ""}) ORDER BY sort_at DESC, created_at DESC, id DESC`,
-      [station, station, key, ...ids],
-    );
-    return rows.map((r) => this.#threadRow(station, r[0] as number, r[1], r[2], r[3], r[4]));
+    const where = `station = ? AND (id IN (SELECT thread FROM thread_member WHERE station = ? AND session = ?)${ids.length > 0 ? ` OR id IN (${ids.map(() => "?").join(", ")})` : ""}) ORDER BY sort_at DESC, created_at DESC, id DESC`;
+    const found = this.sql.all(`SELECT id FROM thread WHERE ${where}`, [station, station, key, ...ids]);
+    const made = this.#threadsFound(station, found, () => this.sql.all(`SELECT id, json, last, read, unread FROM thread WHERE ${where}`, [station, station, key, ...ids]));
+    return made.filter((t) => t !== undefined);
   }
 
   /// A session's detail as read (GET /sessions/:key): its threads into their rows (the ids it named kept), the rest
@@ -1217,13 +1345,28 @@ export class AccountDb {
 
   // ── threads ──
 
-  #threadRow(station: string, id: number, json: SqlValue, last: SqlValue, read: SqlValue, unread: SqlValue): J {
+  /// `read` false: `json` as written here, not read.
+  #threadRow(station: string, id: number, json: SqlValue, last: SqlValue, read: SqlValue, unread: SqlValue, fromDb = true): J {
     return this.#cached(K("thread", station, id), json, (t) => {
       if (last !== null) t.last = last;
       if (read !== null) t.read = read;
       if (unread !== null) t.unread = unread;
       return t;
-    });
+    }, fromDb);
+  }
+
+  /// A station's thread rows a query found (`found`: their ids first), in its order (account.ts #byKey); `all` the
+  /// query again with their JSON (id, json, last, read, unread). A thread's `last`, `read` and `unread`, columns only,
+  /// are in its row as kept: a change of them lets the row go (#threadChanged).
+  #threadsFound(station: string, found: SqlRow[], all: () => SqlRow[]): (J | undefined)[] {
+    const key = (r: SqlRow) => K("thread", station, r[0] as number);
+    return this.#byKey(
+      found.map((r) => [key(r), r[0]]),
+      all,
+      (keys) => this.sql.all("SELECT t.id, t.json, t.last, t.read, t.unread FROM json_each(?) AS k CROSS JOIN thread AS t WHERE t.station = ? AND t.id = k.value", [keys, station]),
+      key,
+      (r) => this.#threadRow(station, r[0] as number, r[1], r[2], r[3], r[4]),
+    );
   }
 
   /// A thread's summary, listed or not.
@@ -1293,7 +1436,7 @@ export class AccountDb {
       [station, id, isListed, c.last, c.read, c.unread, c.sortAt, c.createdAt, c.surface, c.first, c.json],
     );
     this.#cache.delete(K("thread", station, id));
-    const row = this.#threadRow(station, id, c.json, c.last, c.read, c.unread);
+    const row = this.#threadRow(station, id, c.json, c.last, c.read, c.unread, false);
     const members = membersOf(view);
     const was = before ? membersOf(before) : [];
     if (members.join("\u0001") !== was.join("\u0001")) {
@@ -1417,15 +1560,17 @@ export class AccountDb {
 
   // ── jobs ──
 
-  #jobItem(station: string, id: string, json: SqlValue, chat: SqlValue): J {
+  #jobItem(station: string, id: string, json: SqlValue, chat: SqlValue, fromDb = true): J {
     return this.#cached(K("jobitem", station, id), json, (job) => {
       if (chat !== null && chat !== undefined) job.chat = parse(chat);
       return job;
-    });
+    }, fromDb);
   }
 
   /// A job as it is now.
   job(station: string, id: string): J {
+    const kept = this.#cache.get(K("job", station, id));
+    if (kept !== undefined && kept !== null) return kept;
     const r = this.sql.all("SELECT json FROM job WHERE station = ? AND id = ?", [station, id])[0];
     return r ? this.#cached(K("job", station, id), r[0]) : undefined;
   }
@@ -1472,7 +1617,7 @@ export class AccountDb {
     this.#cache.delete(K("job", station, id));
     this.#cache.delete(K("jobitem", station, id));
     const list = this.#loadedList(station, "jobs");
-    if (open) list?.set(id, this.#jobItem(station, id, json, chat), [ord]);
+    if (open) list?.set(id, this.#jobItem(station, id, json, chat, false), [ord]);
     else list?.delete(id);
     this.#tell({ topic: "jobs", station });
     this.#tell({ topic: "job", station, id });

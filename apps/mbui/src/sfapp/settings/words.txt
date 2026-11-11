@@ -602,6 +602,7 @@ android-settings.quota.updated
 android-settings.relays.add
 android-settings.relays.addAction
 android-settings.relays.added
+android-settings.relays.by
 android-settings.relays.hint
 android-settings.relays.lead
 android-settings.relays.removeWhat

@@ -226,7 +226,8 @@ export function workspaceMark(views: Views, local: Local, id: string, prefs: J):
   const me = views.me(id);
   const gone = failsGoneOf(prefs, id);
   // Only the rows that ask something or are unread count (db/account.ts: found by their columns, not loaded whole).
-  const stations = views.stations(id) ?? [];
+  // (their addresses and names alone: not each one's link, which comes and goes: Views `stationsNamed`)
+  const stations = views.stationsNamed(id);
   const nameOf = new Map(stations.map((s) => [s.address, s.name]));
   for (const [address, row] of views.marked(stations.map((s) => s.address))) {
     if (local.beingArchived(address, row)) continue;

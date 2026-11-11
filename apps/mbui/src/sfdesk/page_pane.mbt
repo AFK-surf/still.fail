@@ -18,7 +18,7 @@ fn page_one(
 ) -> Unit {
   let top = page == app.nav.top()
   if @ui.window_inset() {
-    title_row(c, "page-title-row", @sf.wide_bar_h + (if wide.tape { @sf.tape_bar_over() } else { 0.0 }))
+    title_row(c, "page-title-row", @sf.wide_bar_h + (if wide.tape.get() { @sf.tape_bar_over() } else { 0.0 }))
   }
   c.sized(main_w, ph, fn() {
     let body = fn() {

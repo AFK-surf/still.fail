@@ -18,6 +18,7 @@ import type { Topic } from "../protocol.ts";
 import { LOOK_COLOURS, type MermaidLook } from "../mermaid.ts";
 import { draftAt } from "../refs.ts";
 import { OUTLINE_ROWS } from "../things.ts";
+import { LINK_PICTURES, type LinkPicture } from "../peek-pictures.ts";
 import { StationAddr } from "../station/addr.ts";
 import type { FindAt, FindHit } from "../chat-find.ts";
 import { readConnects, readPeople, type RelayConnect, type RelayPerson } from "../relay-pick.ts";
@@ -87,6 +88,9 @@ export type Call =
   /// `quiet`: the core's own (fill.ts), in the background: not waited on, and nothing a viewer let go.
   | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean; keep: number | null; quiet?: boolean; from?: unknown }
   | { kind: "stationPoster"; station: string; key: string; name: string }
+  /// A link's card's picture, or a file's peek's, its bytes beside: out of what the topic's read brought (peek-pictures.ts).
+  | { kind: "linkPicture"; station: string; url: string; which: LinkPicture }
+  | { kind: "peekPicture"; station: string; key: string; path: string; line: number | null }
   | { kind: "fileOpen"; station: string; key: string; path: string; range: { offset: number; length: number } | null }
   /// `keep`: what is read kept on the device and what is kept answered (drive-kept.ts), the file as its folder said it
   /// is (`mtime`, `size`; neither said, nothing kept).
@@ -169,6 +173,8 @@ export type Call =
   | { kind: "lockPrompt"; name: string; params: Record<string, unknown> }
   /// The vault (views/vault.ts): `vault.<name>` on a workspace, with what it takes.
   | { kind: "vault"; name: string; workspace: string; params: Record<string, unknown> }
+  /// A workspace's ways changed from the app (views/ways-stations.ts): on its stations, else on still.fail cloud.
+  | { kind: "ways"; name: "setRelays" | "setWay"; workspace: string; params: Record<string, unknown> }
   | { kind: "driveTransfer"; action: "start" | "cancel" | "retry"; params: Record<string, unknown> }
   /// A station's files as they are browsed (views/browse.ts): `drive.browse` and the rest of drive-browse.ts's CALLS,
   /// with what each takes.
@@ -284,6 +290,8 @@ export function counts(call: Call, name: string): boolean {
       return false;
     case "vault":
       return call.name !== "state" && call.name !== "lock" && call.name !== "open";
+    case "ways":
+      return true;
     default:
       return false;
   }
@@ -378,6 +386,10 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
     return { kind: "download", action: name.slice(9) as "start" | "retry" | "take" | "read" | "done" | "cancel", params: isObject(params) ? (params as Record<string, unknown>) : {} };
   }
   if (name === "fill.want" || name === "fill.stop" || name === "fill.stopAll") return { kind: "fill", action: name === "fill.want" ? "want" : name === "fill.stop" ? "stop" : "stopAll", params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  if (name === "workspace.setRelays" || name === "workspace.setWay") {
+    const p = read(params, [["workspace", S, "req"]]);
+    return { kind: "ways", name: name === "workspace.setRelays" ? "setRelays" : "setWay", workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  }
   if (name.startsWith("vault.") && VAULT_CALLS.includes(name.slice(6))) {
     const p = read(params, [["workspace", S, "req"]]);
     return { kind: "vault", name: name.slice(6), workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
@@ -1024,6 +1036,26 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
       ]);
       const range = p.offset === null && p.length === null ? null : { offset: (p.offset as number | null) ?? 0, length: (p.length as number | null) ?? FILE_OPEN_PART };
       return { kind: "fileOpen", station: p.station as string, key: p.key as string, path: p.path as string, range };
+    }
+    // A link's card's picture (`which`: icon, image, avatar) and a file's peek's, as their topics (`linkPreview`,
+    // `filePeek`) read them last, their bytes beside `{ type }`: what those topics say of them is a token alone.
+    case "link.preview.picture": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["url", S, "req"],
+        ["which", S, "req"],
+      ]);
+      if (!(LINK_PICTURES as readonly string[]).includes(p.which as string)) throw CoreError.invalid(`which: ${String(p.which)}`);
+      return { kind: "linkPicture", station: p.station as string, url: p.url as string, which: p.which as LinkPicture };
+    }
+    case "file.peek.picture": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["key", S, "req"],
+        ["path", S, "req"],
+        ["line", "u32", "opt"],
+      ]);
+      return { kind: "peekPicture", station: p.station as string, key: p.key as string, path: p.path as string, line: (p.line as number | null) ?? null };
     }
     case "station.poster": {
       const p = read(params, [

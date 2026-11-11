@@ -50,6 +50,8 @@ pub fn performing() -> Bool
 
 pub fn relayout(Node) -> Unit
 
+pub fn reuse_refused(Node) -> String?
+
 // Errors
 
 // Types and methods

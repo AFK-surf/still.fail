@@ -133,10 +133,10 @@ test "bytes beside a message are kept on the tape as they were" {
 }
 
 ///|
-test "panic assert_idle with a message posted that no frame took" {
+test "assert_idle with a message posted that no frame took: not idle, said (Tester::idle_said, what it stops on)" {
   let t = Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
   t.post("test.a", "1")
-  t.assert_idle()
+  assert_eq(t.idle_said(), Some("Tester::assert_idle: not idle: 1 messages posted that no frame took (on test.a)"))
 }
 
 ///|

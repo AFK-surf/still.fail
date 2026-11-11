@@ -64,7 +64,7 @@ test "places on a glass that takes their presses: tapped through it once each sa
 }
 
 ///|
-test "panic presses said to be an area's that is drawn nowhere fail, saying where" {
+test "presses said to be an area's that is drawn nowhere: said, where (what a Tester stops on unless made not to)" {
   let t = @ui.Tester::new(
     fn(c) {
       c.box(w=Px(50.0), h=Px(50.0), fn() {
@@ -75,8 +75,14 @@ test "panic presses said to be an area's that is drawn nowhere fail, saying wher
     },
     w=100.0,
     h=100.0,
+    presses_held=false,
   )
   t.draw()
+  let said = t.presses_unheld()
+  assert_eq(said.length(), 1, msg="\{said}")
+  assert_true(said[0].has_prefix("Ctx::presses_to: area "), msg=said[0])
+  assert_true(said[0].contains(", said at src/ui/presses_test.mbt:"), msg=said[0])
+  assert_true(said[0].has_suffix(", takes no presses where its box is (0,0 50x50)"), msg=said[0])
 }
 
 ///|

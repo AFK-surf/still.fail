@@ -105,6 +105,8 @@ pub fn cover_spring_end(Double, Double) -> Double
 
 pub fn css(String) -> Style
 
+pub fn css_read(String) -> Result[Style, String]
+
 pub fn current() -> Ctx
 
 pub fn cut_soft(Double, Double) -> Double
@@ -2542,8 +2544,10 @@ pub fn Tester::display_frame(Self, Double) -> Double
 pub fn Tester::drag(Self, Double, Double, Double, Double, steps? : Int32) -> Unit
 pub fn Tester::drags_window_at(Self, Double, Double) -> Bool
 pub fn Tester::draw(Self) -> Unit
+pub fn Tester::draw_said(Self) -> String?
 pub fn Tester::drawlist(Self, bytes? : Bool) -> String
 pub fn Tester::drawlist_images(Self) -> Array[(Int32, String, Bytes)]
+pub fn Tester::drawlist_said(Self) -> String?
 pub fn Tester::drawn_again(Self, Bool) -> Unit
 pub fn Tester::drawn_cut(Self) -> Array[(Int32, Double, Double, Double, Double, (Double, Double, Double, Double))]
 pub fn Tester::drawn_fades(Self) -> Array[(Int32, Double, Double, Double, Double, Double, Double)]
@@ -2597,6 +2601,7 @@ pub fn Tester::frame_late(Self, Double) -> Unit
 pub fn Tester::frame_perf(Self) -> FramePerf
 pub fn Tester::frame_period(Self) -> Double
 pub fn Tester::frame_shown_at(Self, Double, Double) -> Unit
+pub fn Tester::frame_times_wrong(Self, Array[Double]) -> String?
 pub fn Tester::frames(Self, Int32, ms? : Double) -> Array[Int64]
 pub fn Tester::frames_on(Self) -> Int32
 pub fn Tester::frames_owed(Self) -> Unit
@@ -2624,6 +2629,7 @@ pub fn Tester::holes(Self) -> Array[(Double, Double, Double, Double)]
 pub fn Tester::host_frames(Self) -> Array[HostFrame]
 pub fn Tester::host_says_finger(Self, Bool?) -> Unit
 pub fn Tester::hover_only_faults(Self) -> Array[String]
+pub fn Tester::idle_said(Self) -> String?
 pub fn Tester::image_loads(Self) -> Array[(String, Int32)]
 pub fn Tester::image_nodes(Self) -> Array[(String, Double, Double)]
 pub fn Tester::image_src(Self, Int32) -> String
@@ -2669,7 +2675,7 @@ pub fn Tester::native_asked(Self) -> Array[(String, Json)]
 pub fn Tester::native_calls(Self) -> Array[(Int32, String, Json)]
 pub fn Tester::nav_said(Self) -> String
 #callsite(autofill(loc))
-pub fn Tester::new((Ctx) -> Unit, w? : Double, h? : Double, dark? : Bool, window_inset? : Bool, env? : Array[(String, String)], app_version? : Int32, images? : Array[(String, Int32, Int32)], platform? : Int32, keys? : Int32, pointing? : Pointing, native? : Pointing, keyboard? : Bool, seed? : Int32, text? : String, scale? : Double, time? : Double, stable? : Bool, finish? : Bool, run? : String, h264? : Bool, copy_shown? : Bool, live? : Live, corners_held? : Bool, window_corner? : Double, window_corners? : FixedArray[Double], words_over_held? : Bool, nav_able? : Bool, tree? : (@view.View) -> Unit, before? : () -> Unit, loc~ : SourceLoc) -> Self
+pub fn Tester::new((Ctx) -> Unit, w? : Double, h? : Double, dark? : Bool, window_inset? : Bool, env? : Array[(String, String)], app_version? : Int32, images? : Array[(String, Int32, Int32)], platform? : Int32, keys? : Int32, pointing? : Pointing, native? : Pointing, keyboard? : Bool, seed? : Int32, text? : String, scale? : Double, time? : Double, stable? : Bool, finish? : Bool, run? : String, h264? : Bool, copy_shown? : Bool, live? : Live, corners_held? : Bool, presses_held? : Bool, window_corner? : Double, window_corners? : FixedArray[Double], words_over_held? : Bool, nav_able? : Bool, tree? : (@view.View) -> Unit, before? : () -> Unit, loc~ : SourceLoc) -> Self
 pub fn Tester::next_frame_time(Self) -> Double
 pub fn Tester::next_wake(Self) -> (Double, String)?
 pub fn Tester::notice_asks(Self) -> Int32
@@ -2693,6 +2699,7 @@ pub fn Tester::posted(Self) -> Int32
 pub fn Tester::presented(Self) -> (FixedArray[Double], Int32, (Double, Double, Double))
 pub fn Tester::press(Self, String) -> Unit
 pub fn Tester::press_at(Self, Double, Double) -> Unit
+pub fn Tester::presses_unheld(Self) -> Array[String]
 pub fn Tester::probe_at(Self, Double, Double) -> String
 pub fn Tester::query(Self, @view.Role, label? : String, has? : String, checked? : @view.Check, selected? : Bool, expanded? : Bool, disabled? : Bool, within? : SemNode) -> SemNode?
 pub fn Tester::reachable(Self, String) -> Array[(Double, Double)]

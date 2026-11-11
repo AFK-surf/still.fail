@@ -51,7 +51,7 @@ fn rail_round_of(bar : Bool) -> @ui.Radius {
   let in_bar : @ui.CornerOf = Follow(@sf.closed_bar_of(rail_closed_ground_in), rail_closed_ground_in, @sf.small_corner)
   if bar {
     @sf.rail_ground_radius(@sf.closed_bar_of(rail_closed_ground_in), rail_closed_ground_in)
-  } else if wide.tape {
+  } else if wide.tape.get() {
     @sf.rail_ground_radius(@sf.tape_side_corners()[3], @sf.rail_in_tape() + rail_ground_in)
   } else {
     @sf.rail_ground_radius(Window, rail_window_in() + rail_ground_in, alone=in_bar.radius(@ui.corner_roots()))

@@ -53,7 +53,7 @@ fn native_workspace_placed(c : @ui.Ctx) -> Unit {
   let floating : Array[@hostapi.NavFloating] = []
   let blocked = @sf.presenter_visible()
   let semantics = c.semantics_tree()
-  if !bar.bare && !switcher_open() && (!wide.tape || wide.tape_at.get() == Side) {
+  if !bar.bare && !switcher_open() && (!wide.tape.get() || wide.tape_at.get() == Side) {
     // Semantic anchors also survive a sidebar drawn from its kept part.
     for s in semantics {
       if !s.hidden || blocked {
@@ -509,7 +509,7 @@ fn rail_left() -> Double {
 /// Whether the sidebar's ground runs the window's height (its top and foot under the system's bars, what is in it
 /// clear of them): open beside the system's tabs, off the tape, as the system's own sidebars do.
 fn side_full_height(bar : Bool) -> Bool {
-  @sf.native_on() && !bar && !wide.tape
+  @sf.native_on() && !bar && !wide.tape.get()
 }
 
 ///|

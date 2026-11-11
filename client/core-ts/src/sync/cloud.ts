@@ -474,8 +474,11 @@ export class CloudSync {
     return entryTargetsOf(this.#relayMe());
   }
 
-  /// A workspace's own relays, as its members' `/v1/me` name them: used besides still.fail's for its stations alone.
+  /// A workspace's own relays, as its stations keep them (views/ways-stations.ts), else as its members' `/v1/me` name
+  /// them (stations from before): used besides still.fail's for its stations alone.
   workspaceRelays(workspace: string): string[] {
+    const kept = this.#core.data.record("ways", workspace);
+    if (isObject(kept) && Array.isArray(kept.relays)) return kept.relays.flatMap((r) => (isObject(r) && typeof r.url === "string" ? [r.url] : []));
     for (const account of this.#core.accounts.list()) {
       const me = this.#core.data.record("me", account.sub);
       const found = (isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []).find((w) => isObject(w) && w.id === workspace);
@@ -484,9 +487,11 @@ export class CloudSync {
     return [];
   }
 
-  /// The ways a workspace turned off (its `ways_off`: relays, `lan`, `tailnet`, `direct`), as its members' `/v1/me` name
-  /// them: none of its stations reached that way (mesh.ts `Mesh.link`).
+  /// The ways a workspace turned off (its `ways_off`: relays, `lan`, `tailnet`, `direct`), as its stations keep them,
+  /// else as its members' `/v1/me` name them: none of its stations reached that way (mesh.ts `Mesh.link`).
   workspaceOff(workspace: string): string[] {
+    const kept = this.#core.data.record("ways", workspace);
+    if (isObject(kept) && Array.isArray(kept.off)) return kept.off.filter((u): u is string => typeof u === "string");
     for (const account of this.#core.accounts.list()) {
       const me = this.#core.data.record("me", account.sub);
       const found = (isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []).find((w) => isObject(w) && w.id === workspace);

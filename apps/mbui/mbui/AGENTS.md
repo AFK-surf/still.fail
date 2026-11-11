@@ -50,7 +50,11 @@ yet and you can add one, add it.
   long as its speed takes to be told to stop by its speed alone (`come_turn_w`), no speed a threshold (the coordinator
   of the migration, 2026-11-11).
 - State that what is made reads is a signal: a mutable value read by a binding that is not one is never seen to
-  change (detlint `built-by-hand`).
+  change. No check finds such a read: detlint's `built-by-hand` only refuses the two ways of covering one by hand
+  (`Ctx::forget_parts`, `built_from_changed`). What shows one is the Tester keeping rows and parts as a device does
+  (`Tester::frame`; a pass that kept rows compared with one built whole, `src/ui/tester_rows.mbt`): a test that changes
+  the value and looks sees what a device would, the old (sfdesk's `wide.tape`, a plain field read by the rail's
+  corners till 2026-11-11).
 - Layout goes one way (the user, 2026-11-05): what is laid out is never told back as a change to make things by. What
   is made by the width a node is given, or by how tall something in it comes to, is made in `View::by_room`
   (`src/view/room.mbt`) as that layout comes to it; what it would change outside its room is a fault. Nothing outside
@@ -79,9 +83,9 @@ yet and you can add one, add it.
   a function of the inputs and that moment, at 60 Hz, at 120 Hz, or in one jump.
 - So every test the Tester runs, mbui's and the app's, runs again with frames drawn on `run_for`'s way (while the app
   asks for them, as a host draws them) at 60, 120, 24 and 7 a second (`MBUI_TEST_FPS`, `scripts/fps_check.sh`; in CI
-  mbui-ci's `native at …` and mbui-check's `… at … fps`, a runner a rate, on a branch's pushes and pull requests and
-  in the day's run: main's run after a merge is at the default rate alone, the rates having run on the merged head, 64
-  runs and 13.8% of GitHub's runner time with none red, 2026-11-10), and must come out the same; the app's sweeps of
+  mbui-ci's `native at …` and mbui-check's `… at … fps`, a runner a rate; the app's once before its merge, in the merge
+  queue (`.github/workflows/merge-queue.yml`), not on a branch's pushes (the user, 2026-11-11: 帧率只在合并前跑), and in
+  the day's run: main's run after a merge is at the default rate alone), and must come out the same; the app's sweeps of
   each screen at rest (screens, squeeze_said, words_large, corners, contrast) only at the default rate, a rate having
   found nothing in them the default run did not (the user, 2026-11-11: each part of the tests is run for what it is
   for). Only
@@ -177,8 +181,10 @@ yet and you can add one, add it.
   (moon's `test "panic …"`): stopped in the middle of a change it leaves the process there, and on wasm-gc the tests
   after it run on from it (view's `shared_test` left the signals' batch open: 185 of view's 435 failed after it). What
   must fail is asked as an app's run on a host asks it, its fault told (`@view.faults_stop`, `@view.fault_told`) and
-  its words asserted. detlint's `panic-test` counts those left, only falling (the coordinator of the migration,
-  2026-11-11).
+  its words asserted; a check that stops is two steps, one saying what is wrong (`css_read`, `Tester::idle_said`,
+  `draw_said`, `flex.reuse_refused`…) and one stopping on it, and the test asserts the first. detlint's `panic-test`
+  holds it (none left); a Tester starting on a signals' graph left mid-change or mid-read stops, naming it
+  (`leaked_state`) (the coordinator of the migration, 2026-11-11).
 - A test starts its own run of the app (an app's `new_run`, a Tester) before it reads anything of the app: before
   that, what it reads is the app as the test before it in the process left it (a landing's titles read in the English
   of gate_wbtest's last run, found in none of the Chinese it drew: only where CI's grouping put the two files in one

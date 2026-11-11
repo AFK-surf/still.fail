@@ -787,37 +787,31 @@ fn received_node(
 }
 
 ///|
-/// A place as its platform's mark and its name in `v`: a Slack thread opens in Slack, a still.fail
-/// chat its page.
+/// A place as its platform's mark and its name in `v` (the library's place_node): a Slack thread opens in Slack, a
+/// still.fail chat its page.
 fn place_node(v : @view.View, station : String, place : Json?) -> Unit {
   let url = text(place, "url")
   let session = text(place, "session")
-  let goes = url != "" || session != ""
-  v.box(fn(p) {
-    @sf.style_node(p, fn() { h_place })
-    p.ground(By(fn() { if goes && @sf.lit_node(p) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
-    // (giving way in its line: its name wrapped where it is long)
-    p.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
-    if goes {
-      @sf.presses_node(p, fn() {
-        if url != "" {
-          @sfbase.open_slack(text(place, "app"), url) |> ignore
-        } else {
-          @sfbase.history_push()
-          app.nav.push(Chat({ station, session, title: text(place, "name"), station_name: "" }))
-        }
-      })
-    }
-    match text(place, "surface") {
-      "chat" | "ember" | "stillfail" =>
-        p.pick(fn() { @sf.theme().dark }, fn(d, dark) {
-          @sf.drawable_node(d, if dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 12.0) |> ignore
-        })
-      "feishu" => @sf.drawable_node(p, "feishu", 12.0) |> ignore
-      _ => @sf.drawable_node(p, "slack", 12.0) |> ignore
-    }
-    steps_words(p, fn() { text(place, "name") }, h_place_words)
-  })
+  let press = if url != "" || session != "" {
+    Some(fn() {
+      if url != "" {
+        @sfbase.open_slack(text(place, "app"), url) |> ignore
+      } else {
+        @sfbase.history_push()
+        app.nav.push(Chat({ station, session, title: text(place, "name"), station_name: "" }))
+      }
+    })
+  } else {
+    None
+  }
+  @sf.place_node(
+    v,
+    fn() { text(place, "surface") },
+    fn() { text(place, "name") },
+    fn(hot) { if hot { h_place_hot } else { h_place } },
+    h_place_words,
+    press~,
+  )
   |> ignore
 }
 
@@ -1764,6 +1758,10 @@ let h_person : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 /// A place (hPlace): its mark and name 4 apart; where it goes, the pointer's ground on it.
 // kept across runs: a value (no field of it changes)
 let h_place : @ui.Style = @ui.css("row gap=S1 align=ACenter radius=Base clip")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_place_hot : @ui.Style = h_place.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)

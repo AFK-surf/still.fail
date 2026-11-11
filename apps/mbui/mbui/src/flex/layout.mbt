@@ -326,6 +326,19 @@ fn on_grid(v : Double) -> Double {
 }
 
 ///|
+/// Room `v` added down a page's list's rows on a grid of `g` pixels a point (Style's rows_grid, more than 0): a
+/// gap, a margin, its padding, what its justifying leaves, each as many whole pixels as it takes, up, as each row's
+/// height is (its MAIN, below): so the room between rows is the same wherever it is, not 16 pixels here and 17 there
+/// as each top put on the nearest pixel by itself would have it.
+fn rows_room(v : Double, g : Double) -> Double {
+  if v == 0.0 {
+    v
+  } else {
+    (v * g - 0.000001).ceil() / g
+  }
+}
+
+///|
 /// Whether a container laid out in the current compute() has an absolutely
 /// positioned child: without one, layout_static_absolute has nothing to
 /// place.
@@ -364,7 +377,8 @@ fn Box::pbh(self : Box) -> Double {
 /// function (or what it measures) or children changed, and every node
 /// above one; a node moved under another parent dirties both parents.
 /// Nothing may be aligned by baseline (finding one lays items out while
-/// only measuring their container): reuse aborts on it.
+/// only measuring their container): reuse stops on it, saying so
+/// (reuse_refused_item; reuse_refused says it of a whole tree).
 ///
 /// With `grid` (device pixels a point), each node is placed on whole device
 /// pixels from its parent, as Compose places a child (its alignment's and
@@ -1093,6 +1107,40 @@ fn Pool::line(self : Pool, start : Int, end : Int) -> Unit {
 }
 
 ///|
+/// Why an item aligned `align` in a container laid out in a row (`row`) is one compute(reuse=true) cannot lay out, said;
+/// None where it can. Asked by compute as it comes to the item (it stops there on what this says), and by reuse_refused
+/// of a whole tree: the two are one judging.
+fn reuse_refused_item(align : Align, row : Bool) -> String? {
+  if align == Baseline && row {
+    Some("flex: compute(reuse=true) with an item aligned by baseline")
+  } else {
+    None
+  }
+}
+
+///|
+/// What compute(reuse=true) would stop on in the tree under `root`, said (each item judged as compute judges it as it
+/// comes to it, reuse_refused_item); None where it would lay it all out. Walks the whole tree: a test's, never asked
+/// on the way of a compute.
+pub fn reuse_refused(root : Node) -> String? {
+  let row = is_row(root.style.direction)
+  for c in root.children {
+    if c.style.display == DisplayNone || c.style.position == Absolute {
+      continue
+    }
+    match reuse_refused_item(item_align(root.style, c.style), row) {
+      Some(said) => return Some(said)
+      None => ()
+    }
+    match reuse_refused(c) {
+      Some(said) => return Some(said)
+      None => ()
+    }
+  }
+  None
+}
+
+///|
 fn item_align(container : Style, s : Style) -> Align {
   if s.align_self == Auto {
     container.align_items
@@ -1142,10 +1190,20 @@ fn layout_flex(
   // (what it holds sized by what each holds along its main axis with no bound where it scrolls (CSS's and Yoga's overflow:
   // scroll): its content runs on past it, its own size bound as ever; across, bound as ever, its words wrapping)
   let held_main = if s.overflow == Scroll { undef } else { avail_main }
+  // (down a page's list's rows on a host's pixels (Style's rows_grid), all that is added down it whole pixels: each row's
+  // height (below), the gap between rows, their margins, the column's padding over them, what its justifying puts over
+  // and between them; so where each row's top is, put on the grid's own number for it, is the same whatever order it was
+  // added in)
+  let rows_g = if row { 0.0 } else { s.rows_grid }
   let gap_main = if row {
     edge_of(s.gap_col_k, s.gap_col_v, inner_main)
   } else {
-    edge_of(s.gap_row_k, s.gap_row_v, inner_main)
+    let gap = edge_of(s.gap_row_k, s.gap_row_v, inner_main)
+    if rows_g > 0.0 {
+      rows_room(gap, rows_g)
+    } else {
+      gap
+    }
   }
   let gap_cross = if row {
     edge_of(s.gap_row_k, s.gap_row_v, inner_cross)
@@ -1383,10 +1441,18 @@ fn layout_flex(
       f.unsafe_set(i + MAX_MAIN, max_main)
       f.unsafe_set(i + MIN_CROSS, if row { cb.min_h } else { cb.min_w })
       f.unsafe_set(i + MAX_CROSS, if row { cb.max_h } else { cb.max_w })
-      f.unsafe_set(i + MARGIN_MAIN, margin_main)
       f.unsafe_set(i + MARGIN_CROSS, margin_cross)
-      f.unsafe_set(i + MAR_MAIN_START, if row { cb.mar_l } else { cb.mar_t })
-      f.unsafe_set(i + MAR_MAIN_END, if row { cb.mar_r } else { cb.mar_b })
+      if rows_g > 0.0 && (cb.mar_t != 0.0 || cb.mar_b != 0.0) {
+        let m_start = rows_room(cb.mar_t, rows_g)
+        let m_end = rows_room(cb.mar_b, rows_g)
+        f.unsafe_set(i + MARGIN_MAIN, m_start + m_end)
+        f.unsafe_set(i + MAR_MAIN_START, m_start)
+        f.unsafe_set(i + MAR_MAIN_END, m_end)
+      } else {
+        f.unsafe_set(i + MARGIN_MAIN, margin_main)
+        f.unsafe_set(i + MAR_MAIN_START, if row { cb.mar_l } else { cb.mar_t })
+        f.unsafe_set(i + MAR_MAIN_END, if row { cb.mar_r } else { cb.mar_b })
+      }
       f.unsafe_set(i + MAR_CROSS_START, if row { cb.mar_t } else { cb.mar_l })
       f.unsafe_set(i + MAR_CROSS_END, if row { cb.mar_b } else { cb.mar_r })
       f.unsafe_set(i + CROSS_STYLE, cross_style)
@@ -1454,9 +1520,17 @@ fn layout_flex(
         f.unsafe_set(i + PB_MAIN, 0.0)
         // (its margins top and foot as much as that too)
         let k = cs.come_k
-        f.unsafe_set(i + MARGIN_MAIN, margin_main * k)
-        f.unsafe_set(i + MAR_MAIN_START, cb.mar_t * k)
-        f.unsafe_set(i + MAR_MAIN_END, cb.mar_b * k)
+        if rows_g > 0.0 {
+          let m_start = rows_room(cb.mar_t * k, rows_g)
+          let m_end = rows_room(cb.mar_b * k, rows_g)
+          f.unsafe_set(i + MARGIN_MAIN, m_start + m_end)
+          f.unsafe_set(i + MAR_MAIN_START, m_start)
+          f.unsafe_set(i + MAR_MAIN_END, m_end)
+        } else {
+          f.unsafe_set(i + MARGIN_MAIN, margin_main * k)
+          f.unsafe_set(i + MAR_MAIN_START, cb.mar_t * k)
+          f.unsafe_set(i + MAR_MAIN_END, cb.mar_b * k)
+        }
       } else {
         basis = fmax(basis, pb_main)
       }
@@ -1541,7 +1615,13 @@ fn layout_flex(
         for k in ln.start..<ln.end {
           let cs = flow.unsafe_get(at.unsafe_get(k)).style
           let here = if cs.come_k < 1.0 && known(cs.come_now) && !cs.come_fill { 1.0 } else { cs.come_k }
-          let g = if k == ln.start { 0.0 } else { gap_main * fmin(here, seen) }
+          let g = if k == ln.start {
+            0.0
+          } else if rows_g > 0.0 {
+            rows_room(gap_main * fmin(here, seen), rows_g)
+          } else {
+            gap_main * fmin(here, seen)
+          }
           gap_before.unsafe_set(k, g)
           all = all + g
           seen = fmax(seen, here)
@@ -1679,7 +1759,10 @@ fn layout_flex(
           // its baseline is found by laying it out, while this one may be
           // only measured: a layout kept above it could hold that one
           if reusing.val {
-            @halt.saying("flex: compute(reuse=true) with an item aligned by baseline")
+            match reuse_refused_item(aligns.unsafe_get(k), row) {
+              Some(said) => @halt.saying(said)
+              None => ()
+            }
           }
           let iw = f.unsafe_get(i + MAIN)
           let ih = f.unsafe_get(i + CROSS)
@@ -1799,8 +1882,8 @@ fn layout_flex(
       } else {
         distribute(s.justify, free, n, false)
       }
-      let between = out_b.val
-      let mut p = lead
+      let between = if rows_g > 0.0 { rows_room(out_b.val, rows_g) } else { out_b.val }
+      let mut p = if rows_g > 0.0 { rows_room(lead, rows_g) } else { lead }
       for k in ln.start..<ln.end {
         let i = k * ITEM
         // (the gap before it its share of it where one comes or goes: gap_before)
@@ -1914,6 +1997,7 @@ fn layout_flex(
     let ox = b.bor_l + b.pad_l
     let oy = b.bor_t + b.pad_t
     let oy = if gone_cut > 0.0 { oy - b.pad_t * gone_cut } else { oy }
+    let oy = if rows_g > 0.0 { rows_room(oy, rows_g) } else { oy }
     for k in 0..<count {
       let i = k * ITEM
       let n = flow.unsafe_get(at.unsafe_get(k))
@@ -1967,7 +2051,10 @@ fn layout_flex(
         0.0
       }
       n.left = on_grid(ox + x + dx)
-      n.top = on_grid(oy + y + dy)
+      // (down a page's list's rows on a host's pixels: a sum of whole pixels (rows_room, the heights) put on the grid's own
+      // number for the pixel it comes to: within far less than half of one whatever order it was added in, but at a
+      // scale that is no power of two not the same double every way; put back on the grid's number, it is)
+      n.top = on_grid(if rows_g > 0.0 { ((oy + y + dy) * rows_g + 0.5).floor() / rows_g } else { oy + y + dy })
     }
     // (one laid out nowhere: left out as one its row has not the room for is, its last layout forgotten, what it holds
     // of no size; one laid out over the rest (Absolute) back from that, in again: on no line of the flow, it is given

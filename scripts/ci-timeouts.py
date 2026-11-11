@@ -5,7 +5,8 @@
 # default of 6 hours. A job that needs longer is to be made faster, not given longer (2026-10-22: mbui-ios hung 25
 # minutes on a PR). Only those in LONGER may take 10: runs of the day's or by hand, which hold no push back, and two
 # not yet made faster. A job whose own runs differ says `${{ github.event_name == 'push' && A || B }}`: A for a push
-# (5 at most), B for the others (its LONGER). A job that calls a workflow (`uses:`) is that workflow's jobs, checked
+# (5 at most), B for the others (its LONGER); or `!= 'schedule'`: A for all but the day's run (a push's, the merge
+# queue's). A job that calls a workflow (`uses:`) is that workflow's jobs, checked
 # there. Prints each one that does not, and fails then.
 import glob, os, re, sys
 
@@ -65,7 +66,7 @@ for path in sorted(glob.glob(os.path.join(root, ".github/workflows/*.yml"))):
             continue
         t = j["timeout"]
         most = LONGER.get((os.path.basename(path), j["name"]), LIMIT)
-        m = re.match(r"^\$\{\{ *github\.event_name *== *'push' *&& *(\d+) *\|\| *(\d+) *\}\}$", t or "")
+        m = re.match(r"^\$\{\{ *github\.event_name *(?:== *'push'|!= *'schedule') *&& *(\d+) *\|\| *(\d+) *\}\}$", t or "")
         if t is None:
             bad.append(f"{name}: {j['name']}: no timeout-minutes")
         elif m:

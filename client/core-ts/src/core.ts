@@ -74,6 +74,7 @@ import * as publish from "./views/publish.ts";
 import * as lockCalls from "./views/lock.ts";
 import * as pairing from "./views/pair.ts";
 import * as vaultCalls from "./views/vault.ts";
+import * as waysCalls from "./views/ways-stations.ts";
 import * as transferCalls from "./views/transfers.ts";
 import * as browseCalls from "./views/browse.ts";
 import * as downloads from "./views/downloads.ts";
@@ -265,6 +266,7 @@ export class Core {
       lockCalls.install(inner);
       pairing.install(inner);
       vaultCalls.install(inner);
+      waysCalls.install(inner);
       transferCalls.install(inner);
       browseCalls.install(inner);
       downloads.install(inner);

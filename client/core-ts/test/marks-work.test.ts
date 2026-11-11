@@ -103,6 +103,26 @@ test("writing_the_workspace_shown_makes_no_workspaces_mark_again", async () => {
   assert.equal(after.ok.workspaces.wb, value.ok.workspaces.wb);
 });
 
+test("a_stations_link_coming_and_going_makes_no_workspaces_mark_again", async () => {
+  const { t, a } = await twoWorkspaces();
+  const value = t.store.value(marksOf("ws")) as J;
+  const before = { ...work };
+  // As a workspace switched to has its stations tried anew: offline, connecting from offline, online again.
+  for (const state of [{ state: "offline" }, { state: "connecting", last: "offline" }, { state: "connecting" }, { state: "online" }]) {
+    t.set(link("ws/st"), state);
+    await t.readAll([[a, 1]]);
+  }
+  assert.deepEqual([workSince(before).workspaceMarks, workSince(before).marked], [0, 0]);
+  const after = t.store.value(marksOf("ws")) as J;
+  assert.equal(after.ok.workspaces.ws, value.ok.workspaces.ws);
+  assert.equal(after.ok.workspaces.wb, value.ok.workspaces.wb);
+  // (a station renamed is its mark's: made again)
+  t.set({ topic: "workspace", workspace: "ws" }, { id: "ws", stations: [{ id: "st", name: "studio 2", last_seen: null, version: null }] });
+  await t.readAll([[a, 1]]);
+  assert.equal(workSince(before).workspaceMarks, 1);
+  assert.equal((t.store.value(marksOf("ws")) as J).ok.workspaces.ws.items[0].stationName, "studio 2");
+});
+
 test("a_row_that_changed_makes_its_own_part_again_and_no_other", async () => {
   const { t, a, home, now } = await twoWorkspaces();
   const value = t.store.value(marksOf("ws")) as J;
@@ -142,4 +162,22 @@ test("what_the_badge_counts_changes_every_workspaces_mark_and_the_badge", async 
   assert.deepEqual(a.value.workspaces.ws.items.map((i: J) => i.session), ["f1", "k1", "k2", "u2"]);
   assert.deepEqual(a.value.workspaces.wb.items.map((i: J) => i.session), ["g1", "g2", "v2"]);
   assert.deepEqual([a.value.workspaces.ws.badge, a.value.workspaces.wb.badge, a.value.badge, a.value.badgeKinds.done], [4, 2, 6, false]);
+});
+
+test("a_mark_made_again_reads_of_the_database_only_the_row_that_changed", async () => {
+  // Made again, a workspace's mark read the JSON of every row it counts to take each one kept (account.ts #byKey): 5.6
+  // ms in Hermes for 123 rows, each time one of them changed (2026-11-11).
+  const { t, a, home } = await twoWorkspaces();
+  const list = ui();
+  t.subscribe(3, { topic: "chats", scope: "ws" });
+  await t.readAll([[a, 1], [list, 3]]);
+  assert.equal(list.value.days.flatMap((d: J) => d.items).length, home.length);
+  const before = { ...work };
+  // k2 looked at: one marked row changed, as a station's event says it.
+  t.data.putChat("ws/st", { ...home[1], unread: false, title: "看过了" });
+  await t.readAll([[a, 1], [list, 3]]);
+  const spent = workSince(before);
+  assert.equal(spent.workspaceMarks, 1, "the mark made again");
+  assert.ok(spent.rowJson <= 1, `rows whose JSON was read: ${spent.rowJson}`);
+  assert.ok(list.value.days.flatMap((d: J) => d.items).some((i: J) => i.title === "看过了"));
 });

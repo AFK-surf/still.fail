@@ -105,6 +105,7 @@ fn reset_globals() -> Unit {
   notices_reset()
   hand_reset()
   corners_hold.val = true
+  presses_hold.val = true
   placed_presented.val = None
   text_runs.on = false
   inst_owners.on = false
@@ -221,6 +222,10 @@ fn reset_globals() -> Unit {
 fn leaked_state() -> Array[String] {
   let out = []
   let check = fn(name : String, n : Int) { if n > 0 { out.push(name) } }
+  // (the signals' graph in the middle of a change or a read: what ran before stopped inside one, and every set after it
+  // tells nothing (view's 185 of 435 on wasm-gc, 2026-11-11))
+  check("signals' change begun and never ended (batch)", @signals.batch_depth())
+  check("signals' reader left reading", if @signals.active_sub() is Some(_) { 1 } else { 0 })
   check("desk.menus", desk.menus.length() + desk.mutable_menus.length())
   check("desk.keys", desk.keys.length() + desk.mutable_keys.length())
   check("desk.sels", desk.sels.length() + desk.next_sels.length())
@@ -279,6 +284,8 @@ fn leaked_state() -> Array[String] {
 /// mbui/src/film; never a test's), recorded as a host's are (MBUI_TEXT_RECORD=1 in `env`); `text` is then not read.
 /// `corners_held`: whether every frame it draws with nothing moving is held to the corner rule where the theme says
 /// its ladder (Tester::hold_corners); false for a test that draws a fault on purpose, to find it.
+/// `presses_held`: whether a frame it draws with presses said to be an area's that takes none there (Ctx::presses_to)
+/// stops the test; false for a test that says one wrong on purpose, to find it (Tester::presses_unheld).
 /// `window_corner`: how round the system draws the window's corners (@hostapi.window_corner: a Mac's 16, Windows 11's
 /// 8; 0 square), the outermost container what lies in them is held concentric with (corners.mbt); `window_corners`
 /// each of them where they differ (top left, then round it: an iPhone Duo's outer screen, 8 along its hinge).
@@ -316,6 +323,7 @@ pub fn Tester::new(
   copy_shown? : Bool = false,
   live? : Live,
   corners_held? : Bool = true,
+  presses_held? : Bool = true,
   window_corner? : Double = 0.0,
   window_corners? : FixedArray[Double],
   words_over_held? : Bool = true,
@@ -515,6 +523,7 @@ pub fn Tester::new(
     f.shot_drawn.push(shot_drawn_of(s.inst, s.ninst, x, y))
   })
   corners_hold.val = corners_held
+  presses_hold.val = presses_held
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
   looks_made_at.val = loc.to_string()
@@ -886,18 +895,30 @@ pub fn Tester::set_frame_period(self : Tester, ms : Double) -> Unit {
 }
 
 ///|
+/// What is wrong with `times` as the frames' times set_frame_times is given (a time not later than now, or than the one
+/// before it), said; None where nothing is. The words set_frame_times stops with: the two are one asking.
+pub fn Tester::frame_times_wrong(self : Tester, times : Array[Double]) -> String? {
+  let mut before = self.fake.time
+  for i, at in times {
+    if !(at > before) {
+      return Some(
+        "Tester::set_frame_times: time \{i} (\{at}) is not later than " +
+        (if i == 0 { "now (\{before})" } else { "the one before it (\{before})" }),
+      )
+    }
+    before = at
+  }
+  None
+}
+
+///|
 /// The display's frames from now on at `times` (ms on the frames' clock, each later than the one before and than now):
 /// a run's own, as its tape had them, where every frame the Tester draws comes (an input's, run_for's, draw's); after
 /// the last, on the frame period from it. Grid and tape are one: the period's frames a table of times evenly apart.
 pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
-  let mut before = self.fake.time
-  for i, at in times {
-    if !(at > before) {
-      let s = "Tester::set_frame_times: time \{i} (\{at}) is not later than " +
-        (if i == 0 { "now (\{before})" } else { "the one before it (\{before})" })
-      @halt.saying(s)
-    }
-    before = at
+  match self.frame_times_wrong(times) {
+    Some(s) => @halt.saying(s)
+    None => ()
   }
   self.times = times.copy()
   self.host_frames = true

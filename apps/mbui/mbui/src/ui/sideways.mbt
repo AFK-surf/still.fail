@@ -52,6 +52,10 @@ priv struct Sideways {
   /// told as it is scrolled, flung or stopped (Sideways::told): what is drawn where it is as it is painted (Ctx::sideways'
   /// box, its fades and its bar) painted again, nothing built for it
   said : @signals.Signal[Int]
+  /// brought on by words picked with the pointer held past its start or its end (desktop.mbt's select_edge_across): px
+  /// a ms (0 still), from the frames' clock at `edge_t`
+  mut edge_v : Double
+  mut edge_t : Double
 }
 
 ///|
@@ -205,6 +209,8 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
         bar_room: false,
         bar_in: 0.0,
         said: @signals.signal(0),
+        edge_v: 0.0,
+        edge_t: 0.0,
       }
       sideways[id] = s
       s
@@ -336,7 +342,22 @@ impl Moving for Sideways with rest_at(self, now, frame) {
   if self.built_frame != frame {
     return -1.0
   }
-  dmax(self.fling_rest(), self.bar.rest(now, self.bar_until()))
+  // (brought on toward words picked past its edge: till it would be at that end, as it was said)
+  let edge_end = if self.edge_v > 0.0 {
+    self.edge_t + (dmax(self.max, 0.0) - self.x) / self.edge_v
+  } else if self.edge_v < 0.0 {
+    self.edge_t + self.x / -self.edge_v
+  } else {
+    -1.0
+  }
+  dmax(edge_end, dmax(self.fling_rest(), self.bar.rest(now, self.bar_until())))
+}
+
+///|
+/// Brought on toward words picked past its edge, it keeps the time: what picks them is built again each frame it goes,
+/// the words under the pointer coming as it does (desktop.mbt's select_edge_across).
+impl Moving for Sideways with keeps_time(self) {
+  self.edge_v != 0.0
 }
 
 ///|
@@ -604,6 +625,27 @@ fn outer_scroll_in(ids : Array[Int], rects : Array[Double], x : Double, y : Doub
       y >= rects[r + 1] &&
       y < rects[r + 3] {
       return ids[k]
+    }
+    k = k - 1
+  }
+  0
+}
+
+///|
+/// The innermost box scrolled sideways under (x, y) (Ctx::sideways; not one up and down, not a field's), 0 none: what
+/// words picked there scroll across toward the pointer (Ctx::select_edge_across).
+fn across_scroll(c : Ctx, x : Double, y : Double) -> Int {
+  let mut k = c.scroll_ids.length() - 1
+  while k >= 0 {
+    let r = k * 4
+    match sideways.get(c.scroll_ids[k]) {
+      Some(st) if !st.vertical &&
+        !st.field &&
+        x >= c.scroll_rects[r] &&
+        x < c.scroll_rects[r + 2] &&
+        y >= c.scroll_rects[r + 1] &&
+        y < c.scroll_rects[r + 3] => return c.scroll_ids[k]
+      _ => ()
     }
     k = k - 1
   }

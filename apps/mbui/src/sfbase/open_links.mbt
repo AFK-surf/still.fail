@@ -71,7 +71,31 @@ pub let link_src : Ref[Source?] = Ref(None)
 ///|
 /// The links the system opened the app with (@hostapi.system_channel `link`), oldest first, not opened yet: opened once
 /// signed in and the workspaces known (an invitation's shows its sheet signed out too).
-pub let link_later : Array[String] = []
+let link_later : Array[String] = []
+
+///|
+/// How many links wait in link_later, said as it changes: what a frame's build reads to know one waits (links_wait),
+/// so what takes them, kept as its nodes, is built again as one is given and takes it.
+let links_waiting : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+fn links_later_said() -> Unit {
+  links_waiting.set(link_later.length())
+}
+
+///|
+/// A link the system opened the app with (app_frame.mbt's system_said), kept for the frame to open (links_wait).
+pub fn link_opened_with(url : String) -> Unit {
+  link_later.push(url)
+  links_later_said()
+}
+
+///|
+/// Whether a link the system opened the app with waits to be opened: read as what takes them is built
+/// (links_given, signed_out_links), followed.
+pub fn links_wait() -> Bool {
+  links_waiting.get() > 0
+}
 
 ///|
 /// Each frame signed in, the workspace `w` in view: the core and the workspace a link is opened against.
@@ -86,6 +110,7 @@ pub fn links_frame(src : Source, w : Workspace) -> Unit {
 pub fn links_given(src : Source) -> Unit {
   let given = link_later.copy()
   link_later.clear()
+  links_later_said()
   for url in given {
     @hostapi.log("link opens " + url)
     open_link_in(src, url, outside=true)
@@ -98,13 +123,14 @@ pub fn links_given(src : Source) -> Unit {
 pub fn signed_out_links(src : Source) -> Unit {
   let given = link_later.copy()
   link_later.clear()
+  links_later_said()
   for url in given {
     @hostapi.log("link opens " + url + " (signed out)")
     (src.call)("link.parse", { "url": Json::string(url) }, fn(r) {
       match r {
         Ok(Object(_) as t) if text(Some(t), "opens") == "invite" && text(Some(t), "token") != "" =>
           (shell.val.open_invite)(text(Some(t), "token"))
-        Ok(Object(_)) => link_later.push(url)
+        Ok(Object(_)) => link_opened_with(url)
         _ => ()
       }
     })
@@ -361,6 +387,7 @@ pub fn links_reset() -> Unit {
   link_workspace.val = ""
   link_src.val = None
   link_later.clear()
+  links_later_said()
 }
 
 ///|

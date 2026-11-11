@@ -45,11 +45,21 @@ fn new_run() -> Unit {
 }
 
 ///|
+/// The app as at the start for a test that makes no Tester after it (a model's, a source's, a draft's): new_run, but
+/// leaving nothing for a Tester to come. reset_by_hand is for what a test sets between new_run() and its own Tester;
+/// left set by a test that made none, the next test's Tester (in the same process, whichever test that is) took the app
+/// as that test had left it, not as at the start (2026-11-11). detlint's `reset-by-hand` holds new_run() to a Tester
+/// after it.
+fn fresh_app() -> Unit {
+  new_run()
+  reset_by_hand.val = false
+}
+
+///|
 /// As at the start: Home alone, nothing chosen here yet (tests; every Tester as it starts: init above). Each global
 /// of this package is put back here (or in what this calls) as its `let` has it, or says why it is kept across runs
 /// (scripts/check.sh checks).
 fn reset() -> Unit {
-  @sf.set_language(None)
   files_cornered.val = false
   image_quoted_at.val = -1
   bar_glyph.val = None

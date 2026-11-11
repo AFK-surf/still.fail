@@ -17,11 +17,15 @@ pub struct ChatImages {
   /// how far the ones coming have come, by id: the bytes here, of how many when that is known (the core's
   /// `{loaded, total}`)
   coming : Map[String, (Double, Double?)]
+  /// what a node of the window's tree read of each picture (the `*_told` reads), by id: told as that one changes, made
+  /// as one is first read so, let go as nothing reads it any more. The old views' reads track nothing (they are built
+  /// again each frame), so none is made for them and nothing is told of what they read.
+  priv told : Map[String, @signals.Signal[Int]]
 }
 
 ///|
 pub fn ChatImages::new() -> ChatImages {
-  { keys: {}, unreached: {}, reached: {}, held: {}, coming: {} }
+  { keys: {}, unreached: {}, reached: {}, held: {}, coming: {}, told: {} }
 }
 
 ///|
@@ -32,6 +36,39 @@ pub fn ChatImages::clear(self : ChatImages) -> Unit {
   self.reached.clear()
   self.held.clear()
   self.coming.clear()
+  let ids = self.told.keys().to_array()
+  for id in ids {
+    self.tell(id)
+  }
+  self.told.clear()
+}
+
+///|
+/// What a node read of picture `id` changed: told, where one reads it (none made where none does).
+fn ChatImages::tell(self : ChatImages, id : String) -> Unit {
+  match self.told.get(id) {
+    Some(s) =>
+      if s.watched() {
+        s.set(s.untracked() + 1)
+      } else {
+        self.told.remove(id)
+      }
+    None => ()
+  }
+}
+
+///|
+/// Picture `id` read by a node: what reads it told as it changes (its key, how far it has come, failed or not).
+pub fn ChatImages::track(self : ChatImages, id : String) -> Unit {
+  let s = match self.told.get(id) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(0)
+      self.told[id] = s
+      s
+    }
+  }
+  s.get() |> ignore
 }
 
 ///|
@@ -52,13 +89,16 @@ pub fn ChatImages::get(
         fn(v) {
           match field(Some(v), "loaded") {
             Some(Number(n, ..)) if self.keys.get(id) == Some("") =>
-              self.coming[id] = (
-                n,
-                match field(Some(v), "total") {
-                  Some(Number(t, ..)) if t > 0.0 => Some(t)
-                  _ => None
-                },
-              )
+              {
+                self.coming[id] = (
+                  n,
+                  match field(Some(v), "total") {
+                    Some(Number(t, ..)) if t > 0.0 => Some(t)
+                    _ => None
+                  },
+                )
+                self.tell(id)
+              }
             _ => ()
           }
         },
@@ -81,6 +121,8 @@ pub fn ChatImages::get(
             }
           }
         }
+        // (told once all of it is said: its key, failed or not, held or not)
+        self.tell(id)
       },
       )
       ""
@@ -93,6 +135,27 @@ pub fn ChatImages::get(
 /// said, or once it is here.
 pub fn ChatImages::coming(self : ChatImages, id : String) -> (Double, Double?)? {
   self.coming.get(id)
+}
+
+///|
+/// How far picture `id` has come (coming), read by a node: told as it changes.
+pub fn ChatImages::coming_told(self : ChatImages, id : String) -> (Double, Double?)? {
+  self.track(id)
+  self.coming.get(id)
+}
+
+///|
+/// Whether picture `id` failed for want of its station (unreached), read by a node: told as that changes.
+pub fn ChatImages::unreached_told(self : ChatImages, id : String) -> Bool {
+  self.track(id)
+  self.unreached.contains(id)
+}
+
+///|
+/// Whether picture `id` came from what the device had (held), read by a node: told as that changes.
+pub fn ChatImages::held_told(self : ChatImages, id : String) -> Bool {
+  self.track(id)
+  self.held.contains(id)
 }
 
 ///|
@@ -115,6 +178,7 @@ pub fn ChatImages::again(self : ChatImages, station : String) -> Unit {
     self.unreached.remove(id)
     self.keys.remove(id)
     self.coming.remove(id)
+    self.tell(id)
   }
 }
 
@@ -161,3 +225,20 @@ pub let held_pictures_waiting : Ref[Bool] = Ref(false)
 /// the splash in their place.
 // kept across runs: said by the frame as it is told (sfapp's first_hide)
 pub let first_page_waits : @signals.Signal[Bool] = @signals.signal(false)
+
+///|
+/// The picture of a chat's file (Source's `file`) read by a node of the window's tree: told as it comes, fails or is
+/// asked again (ChatImages::track), where `file` alone tells nothing (the old views' read, built again each frame).
+pub fn Source::file_told(self : Source, station : String, key : String, name : String) -> String {
+  let k = (self.file)(station, key, name)
+  self.images.track(file_image_id(station, key, name))
+  k
+}
+
+///|
+/// A video's still from its station (Source's `poster`) read by a node: told as it comes.
+pub fn Source::poster_told(self : Source, station : String, key : String, name : String) -> String {
+  let k = (self.poster)(station, key, name)
+  self.images.track(poster_image_id(station, key, name))
+  k
+}

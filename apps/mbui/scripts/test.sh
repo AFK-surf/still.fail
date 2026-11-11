@@ -287,11 +287,14 @@ for t in $targets; do
       # halves 152 and 222 s and the packages' 190 beside its pages, kept_rows' five runs 81-148 s; app 1/4 at 60 fps
       # was 289 s of its 5 minutes, its pages 278, where the second's and fourth's were 175 and 202,
       # mbui-reused-block-at-once 42992663019, 2026-11-11)
+      # (at 24 and 7 the third's other runs, kept_rows' five at each, are 840 s of its cores, not 450: its pages beside
+      # them on one program were 148 and 120 s, the job 281 s of its 5 minutes, mbui-lang-reset 42998551581; the
+      # fourth's, preview_tree's halves, 123 and 99, not 170)
       if [ -n "${APP_GROUP:-}" ] && [ "${APP_GROUP#*/}" = 4 ]; then
         case "${MBUI_TEST_FPS:-}" in
           60) specs="4,4,560,1 4,4,20,1 1,4,600,1 4,4,0,1" ;;
           120) specs="4,4,160,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
-          24 | 7) specs="4,4,90,2 4,4,14,2 1,4,450,2 4,4,170,1" ;;
+          24 | 7) specs="4,4,90,2 4,4,14,2 1,4,840,2 4,4,120,1" ;;
           *) specs="4,4,80,1 2,4,160,1 1,4,240,1 4,4,0,1" ;;
         esac
         g1=() g2=() g3=() g4=()

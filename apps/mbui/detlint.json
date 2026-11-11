@@ -196,6 +196,9 @@
     "starts": ["new_run", "fresh_app", "reset", "@sfbase.reset"],
     "reads": ["@sf.t", "@sf.t_around", "@sf.language", "tr", "@sfbase.tr"]
   },
+  "reset_by_hand": {
+    "names": ["new_run"]
+  },
   "counts": {
     "frame-request": {},
     "settle": {},
@@ -249,7 +252,7 @@
       "src/sfapp/settings/profile_more.mbt": 20,
       "src/sfapp/settings/profile_new.mbt": 13,
       "src/sfapp/settings/profiles.mbt": 42,
-      "src/sfapp/settings/run_more.mbt": 87,
+      "src/sfapp/settings/run_more.mbt": 65,
       "src/sfapp/settings/station_add.mbt": 29,
       "src/sfapp/settings/stations.mbt": 32,
       "src/sfapp/share.mbt": 36,
@@ -286,7 +289,7 @@
       "src/sfapp/settings/profile_more.mbt": 11,
       "src/sfapp/settings/profile_new.mbt": 10,
       "src/sfapp/settings/profiles.mbt": 23,
-      "src/sfapp/settings/run_more.mbt": 45,
+      "src/sfapp/settings/run_more.mbt": 33,
       "src/sfapp/settings/station_add.mbt": 14,
       "src/sfapp/settings/stations.mbt": 24,
       "src/sfapp/share.mbt": 34,
@@ -506,7 +509,7 @@
       "src/sfpages/security.mbt": 1
     },
     "old-panel": {
-      "src/sfapp/settings/run_more.mbt": 2,
+      "src/sfapp/settings/run_more.mbt": 1,
       "src/sfapp/sheet.mbt": 1,
       "src/sfapp/sheets.mbt": 4,
       "src/sfdesk/attention.mbt": 1,
@@ -520,7 +523,6 @@
       "src/sfpages/screen_panel.mbt": 1,
       "src/sfpages/screen_view.mbt": 1,
       "src/sfpages/settings_page.mbt": 1,
-      "src/sfpages/station_page.mbt": 1,
       "src/sfpages/stations_now.mbt": 1
     },
     "click-read": {},
@@ -530,7 +532,8 @@
     "abort-unsaid": {},
     "empty-on-done": {},
     "panic-test": {},
-    "read-before-run": {}
+    "read-before-run": {},
+    "reset-by-hand": {}
   },
   "excused": {
     "frame-request": {},

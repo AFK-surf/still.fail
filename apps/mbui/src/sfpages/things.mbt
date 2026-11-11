@@ -947,7 +947,7 @@ fn media_tile_node(
     let picture = if video {
       @sfbase.video_still_node(b, src, r.station, owner, a, thumb)
     } else {
-      fn() { (src.file)(r.station, owner, stored_name(a.path)) }
+      fn() { src.file_told(r.station, owner, stored_name(a.path)) }
     }
     @sf.style_node(b, fn() { things_tile })
     b

@@ -386,6 +386,8 @@ pub fn fixture_pdf() -> Bytes
 
 pub fn fixture_peek((Json, Bytes?) -> Unit) -> Int32
 
+pub fn fixture_peek_picture(String, Json) -> Result[(Json, Bytes), Json]?
+
 pub let fixture_pictures : Map[String, (String, Bytes)]
 
 pub fn fixture_play_read(Json, (Result[(Json, Bytes), Json]) -> Unit) -> Bool

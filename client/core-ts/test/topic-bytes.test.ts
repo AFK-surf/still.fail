@@ -8,8 +8,8 @@
 //
 // Measured as the app asks (`keyed`, every way it asks each, `ASKED`): the value a subscription is sent whole as it
 // subscribes to a topic the workspace has come in for, as the JSON text the host hands over (its UTF-8 bytes), is at
-// most `BAR_KB`; then, the subscriptions held, what goes out as the workspace changes (a minute passes, a station's
-// host reading, an allowance read again, a message in the chat), each message at most `DELTA_BAR_KB`. Those over a bar now are in `OVER` (by topic) and `OVER_DELTA` (by topic/cause),
+// most `BAR_KB`; then, the subscriptions held, what goes out as the workspace changes (each cause of real-size-asked.ts
+// `CAUSES`: a station's host reading, a message in the chat, a minute passing, …), each message at most `DELTA_BAR_KB`. Those over a bar now are in `OVER` (by topic) and `OVER_DELTA` (by topic/cause),
 // each with what it weighs now in KB, rounded up to the next 8 so the fixture's drift does not flap it: one there must
 // still be over the bar (else it comes out of the table) and no heavier than said (else it grew). The tables only fall.
 // Every topic of `TOPICS` is either asked here or in `NOT_MEASURED` with why: a new topic is placed in one of them.
@@ -23,34 +23,32 @@ import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Ty } from "../src/conform.ts";
 import { shapeOf } from "../src/present.ts";
-import { parseTopic, TOPICS } from "../src/protocol.ts";
+import { parseTopic, TOPICS, type Topic } from "../src/protocol.ts";
 import { SHAPES } from "../src/shapes/schema.ts";
-import { isObject } from "../src/util.ts";
+import { equal, isObject } from "../src/util.ts";
 import { OUTLINE_FOUND, OUTLINE_ROWS } from "../src/things.ts";
-import { CHAT, JOB, JOB_LOG_LINES, OUTLINED, OUTLINED_ENTRIES, hostReading, jobLogOf, messageAdded, outlinedEdit, outlinedSaid, outlinedWorking, quotaChanged } from "./real-size.ts";
+import { CHAT, OUTLINED, OUTLINED_ENTRIES, hostReading, liveOf, messageAdded, quotaChanged } from "./real-size.ts";
+import { base, started } from "./station-fixture.ts";
 import { applyKeyed } from "../src/collections.ts";
-import { logged } from "../src/log-lines.ts";
 import { hostOf, overview, setup } from "./views-rig.ts";
-import { ASKED, CHANGELOG_PAGE, LONG, topicOf, held, firstOfAll } from "./real-size-asked.ts";
+import { ASKED, CHANGELOG_PAGE, LONG, causesOfAll, topicOf, held, firstOfAll } from "./real-size-asked.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
 type J = any;
 
-/// What a value sent whole may weigh, in KB.
-const BAR_KB = 32;
 /// What one message may weigh as something changes, in KB.
 const DELTA_BAR_KB = 4;
+/// What a value sent whole may weigh, in KB.
+const BAR_KB = 32;
 
 const station = CHAT.station;
 
 
 /// Those over `BAR_KB` now, by the name `ASKED` gives them: what each weighs, KB rounded up to a multiple of 8.
 const OVER: Record<string, number> = {
-  "filePeek picture": 344,
   "chat six pages": 264,
   "chat compact six pages": 264,
-  "linkPreview page": 224,
   "vaultUses": 128,
   "usage": 112,
   "jobLog 400": 96,
@@ -62,12 +60,34 @@ const OVER: Record<string, number> = {
   "history": 56,
   "chat": 56,
   "chat compact": 56,
-  "live": 40,
   "chatLetters": 40,
 };
 
 /// Those over `DELTA_BAR_KB` as something changes, by `<name>/<cause>`: the heaviest message, KB as in `OVER`.
-const OVER_DELTA: Record<string, number> = {};
+const OVER_DELTA: Record<string, number> = {
+  "vaultUses/used": 128,
+  "usage/down": 88,
+  "drive/file": 72,
+  "chatLetters/letter": 40,
+  "profiles/down": 40,
+  "usage/usage": 40,
+  "devices/device": 24,
+  "connects/down": 24,
+  "connect/session": 24,
+  "connectCandidates/session": 24,
+  "longJobs/down": 24,
+  "chatThings/thing": 16,
+  "chatThings q/thing": 16,
+  "driveBrowse phone/file": 16,
+  "driveBrowse columns/file": 16,
+  "archive/down": 16,
+  "notices/card": 16,
+  "workspaceMarks/card": 8,
+  "longJobs/job": 16,
+  "resources/sample": 8,
+  "connects mine/down": 8,
+  "stationPart automaticDecisions/decided": 8,
+};
 
 /// The topics measured nowhere here, and why. (Not `stationsWhole`, the stations each with its page and its models:
 /// the core's own, which no UI can ask, so it is no topic of `TOPICS`; views/views.ts.)
@@ -412,50 +432,19 @@ test("what each topic the app asks is sent whole fills what its shape declares",
   assert.deepEqual(faults, []);
 });
 
-/// What goes out to each of `ASKED` as the workspace changes, by cause: the chat's six pages' with the rest.
-async function causesOfAll(): Promise<[string, Map<string, J[]>][]> {
-  const causes: [string, Map<string, J[]>][] = [];
-  for (const long of [false, true]) {
-    const { t, base, chat, during } = await held(long);
-    try {
-      const st = 0;
-      causes.push(["host", await during(() => t.set(hostOf(station), hostReading(t.host.nowMs(), st, 0.83)), 1000)]);
-      causes.push(["quota", await during(() => t.set(overview(station), quotaChanged(base, t.host.nowMs(), st)), 1000)]);
-      causes.push(["message", await during(() => {
-        for (const [topic, value] of messageAdded(base, t.host.nowMs(), chat)) t.set(topic, value);
-      }, 1000)]);
-      if (!long) {
-        // The chat of four weeks: its agent writing on (twice), a person's words edited, a person saying something.
-        const log = (item: [number, unknown]) => t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), [item]);
-        causes.push(["agent", await during(() => {
-          log(outlinedWorking(base, 1));
-          log(outlinedWorking(base, 2));
-        }, 1000)]);
-        causes.push(["edit", await during(() => log(outlinedEdit(base, t.host.nowMs())), 1000)]);
-        causes.push(["said", await during(() => log(outlinedSaid(base, t.host.nowMs())), 1000)]);
-        // The chat's dev server printing a line more: its log as the station's `job-log` event says it for each way
-        // the app asks it, one line longer, its first gone where it was at its most, kept as station/sync.ts keeps it
-        // (its lines numbered on from what was kept before: log-lines.ts `logged`).
-        causes.push(["line", await during(() => {
-          for (const lines of JOB_LOG_LINES) {
-            const now = jobLogOf(base, lines, 1);
-            t.set({ topic: "jobLog", station, job: JOB, lines }, logged(jobLogOf(base, lines), now.text, now.outputAt));
-          }
-        }, 1000)]);
-      }
-      causes.push(["minute", await during(() => {}, 60_000)]);
-    } finally {
-      t.store.runner.shutdown();
-    }
-  }
-  return causes;
-}
+/// What goes out to each of `ASKED` as each cause of `CAUSES` happens (real-size-asked.ts), made once for the tests here.
+let causesMade: ReturnType<typeof causesOfAll> | undefined;
+const causesSent = () => (causesMade ??= causesOfAll());
+
+/// What op `op` (a keyed message's) does, where, and what it weighs: as a line of the table.
+const opLine = (op: J) => `        ${(["put", "patch", "drop", "move", "set", "append", "remove"].find((k) => k in op) ?? "?").padEnd(6)} ${JSON.stringify(op.path).padEnd(42)} ${JSON.stringify(op.key ?? "").slice(0, 40).padEnd(40)} ${String(bytes(op)).padStart(9)} B`;
 
 test("what each topic the app asks is sent as the workspace changes holds to its bar", async () => {
-  const causes = await causesOfAll();
   const heaviestOf = new Map<string, number>();
   const rows: { name: string; bytes: number; bar: number; value?: unknown }[] = [];
-  for (const [cause, sent] of causes) {
+  /// Of each message over the bar, its ops (or that it is a value whole), the heaviest first.
+  const ops: string[] = [];
+  for (const { cause, sent } of await causesSent()) {
     for (const [name, messages] of sent) {
       const sizes = messages.map(bytes);
       const top = Math.max(...sizes);
@@ -463,11 +452,166 @@ test("what each topic the app asks is sent as the workspace changes holds to its
       heaviestOf.set(at, top);
       const m = messages[sizes.indexOf(top)];
       rows.push({ name: `${at} (${messages.length}, ${sizes.reduce((a, b) => a + b, 0)} B in all)`, bytes: top, bar: OVER_DELTA[at] !== undefined ? 0 : DELTA_BAR_KB, value: m.value ?? m.delta });
+      if (top > DELTA_BAR_KB * 1024) {
+        ops.push(`  ${at}: ${top} B, ${"value" in m ? "its value whole" : `${(m.delta as J[]).length} ops`}`);
+        if (Array.isArray(m.delta)) ops.push(...[...(m.delta as J[])].sort((a, b) => bytes(b) - bytes(a)).slice(0, 12).map(opLine));
+      }
     }
   }
   const faults = judge(heaviestOf, DELTA_BAR_KB, OVER_DELTA, "OVER_DELTA");
-  if (print || faults.length > 0) console.log(table(`What goes out as the workspace changes, its heaviest message (bar ${DELTA_BAR_KB} KB):`, rows));
+  if (print || faults.length > 0) {
+    console.log(table(`What goes out as the workspace changes, its heaviest message (bar ${DELTA_BAR_KB} KB):`, rows));
+    if (ops.length > 0) console.log(["Of each over the bar, its heaviest ops (what, path, key, bytes):", ...ops].join("\n"));
+  }
   assert.deepEqual(faults, []);
+});
+
+// ── what changes while shown ──
+//
+// What a topic sends as the workspace changes is weighed only where some cause above sends it something: a name no
+// cause reached was weighed whole and never as it changes (a job's log re-sent whole, 128 KB, for every line it printed,
+// for months: no cause printed a line). So every way the app asks a topic (`ASKED`) has a cause that changes what it
+// shows (`CAUSES`, real-size-asked.ts), or is in `STILL` with why its value does not change while a page shows it. It
+// only falls: one listed that a cause now reaches comes out.
+
+/// Why a value does not change while shown: read as it opens and not again; changed only by what the same page does
+/// (the call named); a device's or the cloud's that nothing tells it of.
+const READ_ONCE = (how: string) => `read once as its page opens, not again while it shows (${how})`;
+const BY_PAGE = (call: string) => `changed only by what this same page does (${call})`;
+const UNTOLD = (what: string) => `nothing tells the core it changed (${what})`;
+const CARD = READ_ONCE("station/sync.ts #cardShown: a card's read each time it shows, kept meanwhile");
+/// Those of `ASKED` no cause sends a message, by the name `ASKED` gives them, and why.
+const STILL: Record<string, string> = {
+  // (a model control's: what the station's accounts read, their allowances, a station down move none of it, choose.ts)
+  "pick": BY_PAGE("pick.set, pick.save, pick.like, pick.forget"),
+  "joinable": BY_PAGE("station.join: the stations of the account's workspaces, one joining another"),
+  "memberships": READ_ONCE("views/memberships.ts readSoon, and again by station.join"),
+  "workspaceWays": BY_PAGE("workspace.setWay: the rest is still.fail's relays, as /v1/me lists them"),
+  "changelog news": UNTOLD("what this build got since the changelog was last shown: the device's build, said as a run starts (client.device), and the changelog shown (changelog.seen), on its own page"),
+  "linkPreview page": CARD, "linkPreview pull": CARD, "filePeek picture": CARD, "filePeek text": CARD, "messagePeek": CARD,
+};
+/// Those reached by a cause of a test of their own, not of `CAUSES`: by name, the test.
+const REACHED_ELSEWHERE: Record<string, string> = { live: "a working agent's stream" };
+
+test("every way the app asks a topic has a change weighed, or says why it has none", async () => {
+  const reached = new Map<string, string[]>();
+  for (const { cause, sent } of await causesSent()) for (const name of sent.keys()) reached.set(name, [...(reached.get(name) ?? []), cause]);
+  for (const [name, test] of Object.entries(REACHED_ELSEWHERE)) reached.set(name, [...(reached.get(name) ?? []), test]);
+  const faults: string[] = [];
+  for (const name of Object.keys(ASKED)) {
+    const by = reached.get(name);
+    if (by !== undefined && STILL[name] !== undefined) faults.push(`${name}: reached by ${by.join(", ")}, and STILL says ${STILL[name]}: bring it out of STILL`);
+    if (by === undefined && STILL[name] === undefined) faults.push(`${name}: no cause sends it a message: make one that changes what it shows (CAUSES, real-size-asked.ts), or list it in STILL with why its value does not change while a page shows it`);
+  }
+  for (const name of [...Object.keys(STILL), ...Object.keys(REACHED_ELSEWHERE)]) if (!(name in ASKED)) faults.push(`${name}: in STILL or REACHED_ELSEWHERE but not asked`);
+  if (print || faults.length > 0) {
+    const lines = ["Each way the app asks a topic, the causes that reach it, or why none does:"];
+    for (const name of Object.keys(ASKED)) lines.push(`    ${name.padEnd(32)} ${reached.get(name)?.join(", ") ?? `STILL: ${STILL[name] ?? "(none)"}`}`);
+    console.log(lines.join("\n"));
+  }
+  assert.deepEqual(faults, []);
+});
+
+// ── a working agent's stream ──
+//
+// While an agent works in an open chat, the chat's activity line (apps/mbui src/sfpages/chat_rows.mbt `activity_row`)
+// holds its agent's `live` and reads `activity.now` of it, nothing else. What the agent's stream brings is told here
+// as its station tells it (station/src/sessions/live.ts `LiveMessage`) and taken as the core takes it (station/sync.ts
+// `#onLive`, station/topics.ts `#live`, the store, output.ts): on the real-size agent's state (real-size.ts `liveOf`),
+// a turn of twenty events: a step's words growing (a call's input, its `start` told again), steps ended and their
+// transcript entries come (`timeline` one entry longer), the rate changing, its work told whole. Each message at most
+// `DELTA_BAR_KB`, and an event that leaves the line as it was sends nothing.
+
+/// A turn of a working agent's stream after `live` (as `liveOf` makes it, its transcript `live.timeline`), each event
+/// named by what it is.
+function turnOf(live: J, at: (n: number) => string): [string, J][] {
+  const from = live.timeline.length;
+  const used = (k: number) => ({ ...live.usage, modelCalls: live.usage.modelCalls + k, outputTokens: live.usage.outputTokens + 280 * k, contextTokens: live.usage.contextTokens + 900 * k });
+  const entry = (k: number, e: J): J => ({ type: "timeline", start: from + k, entries: [{ at: at(k), ...e }], usage: used(k + 1) });
+  const step = (event: J): J => ({ type: "step", event });
+  const rate = (n: number): J => ({ type: "rate", tokensPerSecond: n });
+  const command = "pnpm exec tsgo --noEmit && TOPIC_BYTES_PRINT=1 node --test test/topic-bytes.test.ts";
+  const call = (n: number) => JSON.stringify({ command: command.slice(0, n), description: "Type-check, then weigh what each topic sends" });
+  return [
+    ["step start (text)", step({ kind: "start", id: "s-2", step: "text", input: "" })],
+    ["rate", rate(41)],
+    ["rate", rate(44)],
+    ["step end", step({ kind: "end", id: "s-2" })],
+    ["rate", rate(0)],
+    ["timeline +1", entry(0, { kind: "assistant", text: "先跑类型检查，再看 live 在一轮里发了多少。" })],
+    ["step start (call)", step({ kind: "start", id: "s-3", step: "tool", tool: "Bash", input: "" })],
+    ["step words", step({ kind: "start", id: "s-3", step: "tool", tool: "Bash", input: call(20) })],
+    ["step words", step({ kind: "start", id: "s-3", step: "tool", tool: "Bash", input: call(50) })],
+    ["step words", step({ kind: "start", id: "s-3", step: "tool", tool: "Bash", input: call(command.length) })],
+    ["step end", step({ kind: "end", id: "s-3" })],
+    ["timeline +1", entry(1, { kind: "tool_call", tool: "Bash", callId: "call-turn-1", text: call(command.length) })],
+    ["work", { type: "work", tasks: live.tasks.map((t: J) => ({ ...t, elapsedMs: t.elapsedMs + 9_000 })), plan: live.plan }],
+    ["timeline +1", entry(2, { kind: "tool_result", tool: "Bash", callId: "call-turn-1", ok: true, text: "✔ 9 tests passed (41.2s)" })],
+    ["step start (thinking)", step({ kind: "start", id: "s-4", step: "thinking", input: "" })],
+    ["rate", rate(52)],
+    ["rate", rate(55)],
+    ["step end", step({ kind: "end", id: "s-4" })],
+    ["rate", rate(0)],
+    ["timeline +1", entry(3, { kind: "thinking", text: "live 只剩下一行要发：这一行没变的事件什么也不发。" })],
+  ];
+}
+
+test("what a working agent's stream sends its chat's activity line holds to the change's bar, and nothing where the line stays", async () => {
+  const answers = base();
+  answers["GET /chats"] = [{ id: "7", thread: 7, session: "k1", title: "部署", agents: [{ key: "k1", process: "running" }], lastActiveAt: 1 }];
+  const { host, core, push } = await started(answers);
+  try {
+    const topic = { topic: "live", station: "ws/st", key: "k1" };
+    const ui = core.connect();
+    // (as the app holds it: keyed, sfbase's source.mbt)
+    core.receive(ui, { kind: "subscribe", id: 1, subscribe: topic, keyed: true });
+    await host.settle();
+    // The agent as the real-size rig has it at work, told as its stream opens.
+    const now = host.nowMs();
+    const live = liveOf(now);
+    push("live", { key: "k1", type: "timeline", start: 0, entries: live.timeline, usage: live.usage });
+    push("live", { key: "k1", type: "steps", steps: [], phase: { phase: "working", elapsedMs: 40_000 } });
+    push("live", { key: "k1", type: "work", tasks: live.tasks, plan: live.plan });
+    await host.time.pass(100);
+    host.takeEmitted();
+    // What a chat opened now is sent whole.
+    core.receive(ui, { kind: "subscribe", id: 2, subscribe: topic, keyed: true });
+    await host.time.pass(100);
+    const whole = host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === 2 && "value" in m);
+    core.receive(ui, { kind: "unsubscribe", id: 2, unsubscribe: true });
+    await host.time.pass(100);
+    host.takeEmitted();
+    const activity = () => (core.inner.store.value(topic as Topic) as J)?.ok?.activity;
+    const rows: { name: string; bytes: number; bar: number; value?: unknown }[] = [];
+    const faults: string[] = [];
+    let all = 0;
+    let changed = 0;
+    const turn = turnOf(live, (k) => new Date(now + (k + 1) * 3000).toISOString());
+    for (const [i, [name, message]] of turn.entries()) {
+      const was = activity();
+      push("live", { key: "k1", ...message });
+      await host.time.pass(100);
+      const sent = host.takeEmitted().map(([, m]) => m as J).filter((m) => m.id === 1);
+      const n = sent.reduce((a, m) => a + bytes(m), 0);
+      all += n;
+      const same = equal(was, activity());
+      if (!same) changed++;
+      rows.push({ name: `${String(i + 1).padStart(2)} ${name}${same ? "" : " (the line changes)"}`, bytes: n, bar: DELTA_BAR_KB, value: sent[0]?.value ?? sent[0]?.delta });
+      if (same && sent.length > 0) faults.push(`${i + 1} ${name}: the line stays, and ${n} B are sent: ${JSON.stringify(sent).slice(0, 160)}`);
+      if (!same && sent.length !== 1) faults.push(`${i + 1} ${name}: the line changes, and ${sent.length} messages are sent`);
+      for (const m of sent) if (bytes(m) > DELTA_BAR_KB * 1024) faults.push(`${i + 1} ${name}: ${kb(bytes(m)).toFixed(1)} KB, over the bar of ${DELTA_BAR_KB} KB`);
+    }
+    if (whole === undefined || bytes(whole) > BAR_KB * 1024) faults.push(`live whole: ${whole === undefined ? "none came" : `${kb(bytes(whole)).toFixed(1)} KB`}`);
+    // (the turn moves the line: what it changes to comes)
+    if (changed < 8) faults.push(`the line changed ${changed} times in the turn`);
+    if (print || faults.length > 0) {
+      console.log(`A working agent's stream to its chat's activity line (\`live\`): sent whole ${whole === undefined ? "-" : bytes(whole)} B; a turn of ${turn.length} events, ${all} B in all, the line changing ${changed} times`);
+      for (const r of rows) console.log(`  ${r.bytes > r.bar * 1024 ? "!" : " "} ${r.name.padEnd(48)} ${String(r.bytes).padStart(9)} B${r.bytes > 0 && print ? `  ${JSON.stringify(r.value).slice(0, 140)}` : ""}`);
+    }
+    assert.deepEqual(faults, []);
+  } finally {
+    core.close();
+  }
 });
 
 // ── a page more ──

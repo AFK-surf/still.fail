@@ -184,17 +184,35 @@ fn no_glyph_name(k : Int) -> String {
 }
 
 ///|
+/// What the host's kept text lacks of what was drawn (Tester::new's `text`), said; None where it lacks nothing. The words
+/// a draw list stops with (drawlist_of): the two are one checking.
+fn drawlist_lacks() -> String? {
+  match text_table.val {
+    Some(t) if t.missing.length() > 0 =>
+      Some(
+        "Tester::drawlist: the host's kept text lacks \{t.missing.length()} of what was drawn (record its text again): " +
+        t.missing[:5].to_array().join(", "),
+      )
+    _ => None
+  }
+}
+
+///|
+/// What Tester::drawlist would stop on, said (drawlist_lacks: the host's kept text lacking what was drawn); None where
+/// it would not.
+pub fn Tester::drawlist_said(self : Tester) -> String? {
+  ignore(self)
+  drawlist_lacks()
+}
+
+///|
 fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
   // over a host's kept text, what it lacks was shaped by the fake host: its glyphs' atlas places are not the host's,
   // and named by the host's they would be drawn as other glyphs (a renderer's picture of words never drawn). Said, not
   // drawn
-  match text_table.val {
-    Some(t) if t.missing.length() > 0 => {
-      let s = "Tester::drawlist: the host's kept text lacks \{t.missing.length()} of what was drawn (record its text again): " +
-        t.missing[:5].to_array().join(", ")
-      @halt.saying(s)
-    }
-    _ => ()
+  match drawlist_lacks() {
+    Some(s) => @halt.saying(s)
+    None => ()
   }
   let sb = StringBuilder()
   // (fading towards a cut across: 9 and its 60 numbers; down: 8 and 56; an outer clip: 7 and 52; a box's corners each its own: 6 and 40;

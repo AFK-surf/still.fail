@@ -281,6 +281,9 @@ pub fn pickable(
   }
   // a mouse picks words as a browser's selection (Ctx::selectable): what of this message it holds is told the pill,
   // whose message it is with it; no long press then
+  // (wrong by the rule, known: a row's build writes `pk` and tells `picked` for what is built elsewhere to read, and
+  // reads where the last frame drew it, which has every message row shown built every frame while a mouse's selection
+  // stands; it goes once the message rows are nodes of the window's tree, a selection let go a handler's there)
   if mouse {
     match c.selection_box() {
       Some((sx, sy, sw, sh)) =>
@@ -380,7 +383,8 @@ pub fn pick_layer(
     pick_pop(c, quote)
     return
   }
-  if pk.ts == "" {
+  // (as told, as pick_pop reads it: a finger's hold picks as a message's row is built)
+  if picked.get().ts == "" {
     return
   }
   // (words held elsewhere since, picked as @ui picks them: this let go, one thing picked at a time)
@@ -562,8 +566,11 @@ pub fn pick_layer(
 /// mark, quoting it (whose words they are, as the message says: pickable). ⌘C copies it (Ctx::selectable); a press
 /// elsewhere lets it go.
 fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Unit {
+  // (whether a pick stands, as told (picked), not as `pk` holds it: a message's row tells it as it is built, after
+  // what builds this read it, and what holds this is built once more for it, not kept without it)
+  let told = picked.get().ts != ""
   let (x, y) = match c.selection_end() {
-    Some((ex, ey, _)) if pk.ts != "" => (ex, ey - 8.0 - pick_pop_h)
+    Some((ex, ey, _)) if told => (ex, ey - 8.0 - pick_pop_h)
     _ => {
       if pk.ts != "" {
         pk.ts = ""

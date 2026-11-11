@@ -963,6 +963,8 @@ export class Data {
     if (table === "feedback") return [this.#ofWorkspace(key) ?? null, [key, "feedback"]];
     // A workspace's lock as the cloud keeps it (views/lock.ts): in the workspace's, by its id.
     if (table === "lock") return [this.#ofWorkspace(key) ?? null, [key, "lock"]];
+    // A workspace's ways as its stations keep them (views/ways-stations.ts): in the workspace's, by its id.
+    if (table === "ways") return [this.#ofWorkspace(key) ?? null, [key, "ways"]];
     // A workspace's vaults as its stations hold them (views/vault.ts): the vaults, box certificates and requests by the
     // workspace's id; each vault's items by `<workspace>/<vault>`.
     if (table === "vault") return [this.#ofWorkspace(key) ?? null, [key, "vault"]];
@@ -1097,6 +1099,13 @@ export class Data {
       by.set(db, [...(by.get(db) ?? []), s]);
     }
     return [...by].flatMap(([db, list]) => db.chatHead(list, limit));
+  }
+
+  /// What the chat list reads of a station's overview (account.ts overviewPart): read in a computed, it is made again
+  /// only as that part changes, not with the rest of the overview.
+  overviewPart(station: string): unknown {
+    this.#readQuery({ topic: "$overview-part", station });
+    return this.of(station)?.overviewPart(station);
   }
 
   /// How many sidebar rows these stations have.

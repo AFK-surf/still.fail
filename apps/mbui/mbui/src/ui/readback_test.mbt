@@ -59,20 +59,25 @@ test "a row's height read as the view builds is this frame's, in the frame it ch
 }
 
 ///|
-test "panic a box sized by its own laid width never holds still, and says which" {
+test "a box sized by its own laid width never holds still: said, and which (Tester::draw_said, what draw stops on)" {
+  let grows = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       let a = c.id("a")
       let w = match c.laid_rect(a) {
-        Some((_, _, w, _)) => w + 10.0
-        None => 10.0
+        Some((_, _, w, _)) if grows.val => w + 10.0
+        _ => 10.0
       }
       c.box(w=Px(w), h=Px(10.0), id=a, fn() {  }) |> ignore
     },
     w=500.0,
     h=100.0,
   )
-  t.draw()
+  grows.val = true
+  let said = t.draw_said().unwrap_or("")
+  assert_true(said.has_prefix("Tester::draw: what the view reads (laid_rect of box "), msg=said)
+  assert_true(said.contains(", read at src/ui/readback_test.mbt:"), msg=said)
+  assert_true(said.has_suffix(") still changes after 3 frames: it does not converge"), msg=said)
 }
 
 ///|

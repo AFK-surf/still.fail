@@ -48,7 +48,7 @@ test "a run begun anew: nothing picked told, no identity of a run before given a
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   let before = @sfbase.picked.get().serial
   assert_true(before > 0)
-  new_run()
+  fresh_app()
   assert_eq(@sfbase.picked.get(), @sfbase.picked_none)
   let t2 = fake_core(calls)
   hold_on(t2, "做完了：列表、跳到最新的按钮") |> ignore

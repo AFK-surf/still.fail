@@ -19,7 +19,7 @@ import {
 }
 
 // Values
-pub let absolute_times : @ref.Ref[Bool]
+pub let absolute_times : @signals.Signal[Bool]
 
 pub fn act(Source, String, String, String, @json.Json, done? : String, done_action? : String, done_run? : () -> Unit, at_once? : Bool, ok? : (@json.Json) -> Unit, failed? : () -> Unit) -> Unit
 
@@ -496,6 +496,8 @@ pub fn file_image_id(String, String, String) -> String
 
 pub fn file_key(Attachment) -> String
 
+pub fn file_peek_picture(Source, String, String, String, Int32?, @json.Json?) -> String
+
 pub fn file_params(Viewer) -> Map[String, @json.Json]
 
 pub let file_progress_corner : Double
@@ -837,6 +839,10 @@ pub fn link_name(String) -> Bool
 pub fn link_open(Source, ServicePage, @ui.NativeView, String, String, String) -> Unit
 
 pub fn link_path(String) -> Bool
+
+pub fn link_picture(Source, String, String, @json.Json?, String) -> String
+
+pub fn link_pictures_here(Source, String, String, @json.Json?) -> Bool
 
 pub fn link_port(Source, ServicePage, @ui.NativeView, @json.Json) -> Unit
 
@@ -1271,6 +1277,8 @@ pub fn picked_sig(@json.Json?) -> String
 pub let picture_bar_corner : Double
 
 pub fn picture_button(@ui.Ctx, String, String, Int64, Bool, enabled? : Bool, held? : Bool, said~ : String) -> Bool
+
+pub fn picture_drawn(String) -> String
 
 pub let picture_key : Double
 

@@ -144,7 +144,7 @@ test("every change reaches exactly the accounts it affects", async () => {
     assert.equal(first.status, 101);
     await expect(on, {}, "a station connecting tells no one");
     await first.ping!();
-    assert.deepEqual(first.frames![0], { type: "state", peers: [{ id: station.id, name: "willow", version: "0.2.0" }], workspace: w, workspace_name: "House", name: "willow", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations, lock: null, workspaces: [] });
+    assert.deepEqual(first.frames![0], { type: "state", peers: [{ id: station.id, name: "willow", version: "0.2.0" }], workspace: w, workspace_name: "House", name: "willow", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations, lock: null, ways: { relays: [], off: [] }, workspaces: [] });
     // bob's role changed above: the credentials he held then are refused, as the station hears at once on connecting.
     assert.deepEqual(first.frames![0].revocations.map((r: any) => [r.kind, r.id]), [["sub", bobSub]]);
     let seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
@@ -356,6 +356,7 @@ test("a workspace's own relays: set by its managers, told to its stations and me
     await socket.ping!();
     assert.deepEqual(socket.frames!.at(-1).relay_urls, [...ours, "https://relay.home.test", "https://cn.home.test/relay"], "the station hears them after still.fail's");
     assert.equal(socket.frames!.at(-1).relay_url, ours[0]);
+    assert.deepEqual(socket.frames!.at(-1).ways, { relays: ["https://relay.home.test", "https://cn.home.test/relay"], off: [] }, "and as the workspace's own, for it to take as its first (station/src/mesh/ways.ts)");
     const me = (await (await bob("GET", "/v1/me")).json()) as any;
     assert.deepEqual(me.relay_urls, ours, "still.fail's alone for the account");
     assert.deepEqual(me.workspaces.find((x: any) => x.id === w).relays, ["https://relay.home.test", "https://cn.home.test/relay"]);

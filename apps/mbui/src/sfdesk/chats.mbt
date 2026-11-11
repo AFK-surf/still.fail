@@ -13,7 +13,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
     // under it (Sidebar.css.ts navNew, closed)
     let in_bar = wide.in_bar
-    c.box(style=if wide.tape { band_new_tape() } else { band_new_pane() }, fn() {
+    c.box(style=if wide.tape.get() { band_new_tape() } else { band_new_pane() }, fn() {
       let is_new = app.nav.top() is NewChat
       c.box(style=side_full, fn() {
         // (on one line with the search's field under it: its ground's edge, its mark and its words the band's; in the
@@ -103,7 +103,7 @@ priv struct BandAt {
 ///|
 /// BandAt as the old views have it: as the frame said it as it drew the block (fold_bars, tape_under).
 fn band_at_old() -> BandAt {
-  { brand: side_top_h(), band: wide.band, tape: wide.tape, in_bar: wide.in_bar, roots: @ui.corner_roots() }
+  { brand: side_top_h(), band: wide.band, tape: wide.tape.get(), in_bar: wide.in_bar, roots: @ui.corner_roots() }
 }
 
 ///|

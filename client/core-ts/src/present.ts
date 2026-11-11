@@ -21,6 +21,7 @@ import * as clock from "./clock.ts";
 import { untracked } from "./reactive.ts";
 import { GROUPS as PROFILE_GROUPS, group as profileGroup, groupTitle as profileGroupTitle } from "./views/profiles.ts";
 import { codexQuotaFailure } from "./codex-quota.ts";
+import { linkShown, peekShown } from "./peek-pictures.ts";
 import { isStationAuthor } from "./titles.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -1327,14 +1328,19 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
     case "slackApp":
       if (isObject(v)) value = { ...v, sections: slackSections() };
       break;
-    // A web link's card: when a pull request or an issue last changed, in words (3 小时前).
-    case "linkPreview":
-      if (isObject(v) && typeof v.updatedAt === "number" && v.updatedAt > 0) value = { ...v, time: { updatedAt: stamp(v.updatedAt, c) } };
+    // A web link's card: when a pull request or an issue last changed, in words (3 小时前); its pictures by their tokens,
+    // their bytes asked beside (peek-pictures.ts).
+    case "linkPreview": {
+      const shown = linkShown(v);
+      value = isObject(shown) && typeof shown.updatedAt === "number" && shown.updatedAt > 0 ? { ...shown, time: { updatedAt: stamp(shown.updatedAt, c) } } : shown;
       break;
-    // A file's card: when it was last written, in words.
-    case "filePeek":
-      if (isObject(v) && typeof v.mtime === "number" && v.mtime > 0) value = { ...v, time: { mtime: stamp(v.mtime, c) } };
+    }
+    // A file's card: when it was last written, in words; its picture by its token, as a link's.
+    case "filePeek": {
+      const shown = peekShown(v);
+      value = isObject(shown) && typeof shown.mtime === "number" && shown.mtime > 0 ? { ...shown, time: { mtime: stamp(shown.mtime, c) } } : shown;
       break;
+    }
     // One message's card: who said it, when, and its words as a chat's row has them. No such message: nothing.
     case "messagePeek":
       value = messagePeek(v, c);

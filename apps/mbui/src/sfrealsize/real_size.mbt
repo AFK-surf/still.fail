@@ -144,3 +144,51 @@ pub fn real_size_source(src : @sfbase.Source) -> @sfbase.Source {
     },
   }
 }
+
+///|
+/// What the c_*.mbt files put as the program starts (made by the same test from real-size-asked.ts `CAUSES`): `asked`
+/// as a v_ file's, the cause, and what the core sends it as that happens, in order (JSON: each message an array of the
+/// keyed ops a device applies to what it holds, `@core.apply_delta`, or `{"value": …}` a value sent whole).
+let changes_raw : Array[(String, String, String)] = []
+
+///|
+fn put_changes(asked : String, cause : String, messages : String) -> Unit {
+  changes_raw.push((asked, cause, messages))
+}
+
+///|
+/// What changes of the real workspace, as the c_*.mbt files put it: the topic, the params it is asked with, the cause
+/// and its messages (with the fixture's names, as `real_size_value`'s values), each file once. A file whose JSON does
+/// not read is here with no messages.
+pub fn real_size_changes() -> Array[(String, Map[String, Json], String, Array[Json])] {
+  let out : Array[(String, Map[String, Json], String, Array[Json])] = []
+  for raw in changes_raw {
+    let params = match (@json.parse(raw.0) catch { _ => Json::null() }) {
+      Object(p) => p
+      _ => Map::new()
+    }
+    let topic = match params.get("topic") {
+      Some(String(t)) => t
+      _ => ""
+    }
+    let messages = match (@json.parse(raw.2) catch { _ => Json::null() }) {
+      Array(a) => a.map(fixture_named)
+      _ => []
+    }
+    out.push((topic, params, raw.1, messages))
+  }
+  out
+}
+
+///|
+/// What changes of `name` asked with `params` on the real workspace, by cause: each cause's messages, in order.
+pub fn real_size_changed(
+  name : String,
+  params : Map[String, Json],
+) -> Array[(String, Array[Json])] {
+  let asked = params.copy()
+  asked["topic"] = Json::string(name)
+  real_size_changes()
+  .filter(fn(c) { c.0 == name && asked_so(asked, c.1) })
+  .map(fn(c) { (c.2, c.3) })
+}

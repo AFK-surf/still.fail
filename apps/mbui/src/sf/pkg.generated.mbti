@@ -611,6 +611,8 @@ pub fn file_card(@ui.Ctx, String, String, Double, path? : String, dir? : Bool, n
 
 pub fn file_card_across(@ui.Ctx, String, Double, meta? : String, ends? : Int32) -> Double
 
+pub fn file_card_node(@view.View, TipLayer, () -> String, () -> String, () -> Bool, () -> Bool, () -> Bool, () -> String, () -> String, (FileCardPress) -> Unit, menu? : (Double, Double) -> Unit) -> @view.View
+
 pub let file_card_w : Double
 
 pub fn file_mark(String) -> String
@@ -945,6 +947,8 @@ pub fn link_menu(String, from~ : Beside, () -> Unit, () -> Unit) -> Unit
 pub fn link_row(@ui.Ctx, String, String, value? : String, value_lit? : Bool, value_bad? : Bool, value_dot? : Bool, strong? : Bool, danger? : Bool, out? : Bool, chevron? : Bool, chevron_room? : Bool, folds? : Bool, note? : String, lacks? : Bool, trouble? : String, lead? : () -> Unit, tail? : () -> Unit, below? : () -> Unit, below_open? : Double, goes? : Bool, acts? : Bool, adds? : Bool, title_after? : () -> Unit, control? : () -> Unit, note_cut? : Bool, face? : Bool, title_style? : @ui.TextStyle, title_cut? : Bool, value_cut? : Bool, tile? : Bool, on_press? : () -> Unit) -> Bool
 
 pub fn link_row_node(@view.View, () -> String, () -> Unit, value? : () -> String, value_bad? : () -> Bool, value_dot? : () -> Bool, value_lit? : Bool, note? : () -> String, wide_note? : () -> String, trouble? : () -> String, strong? : Bool, danger? : Bool, lacks? : Bool, lead? : RowLead, face? : Bool, goes? : Bool, chevron? : Bool, out? : Bool, acts? : Bool, below? : (@view.View) -> Unit, below_open? : () -> Double, note_cut? : Bool, title_after? : (@view.View) -> Unit, title_after_shown? : () -> Bool, folds? : () -> Bool, tail? : (@view.View) -> Unit, tail_shown? : () -> Bool, control? : (@view.View) -> Unit, adds? : Bool, wide_title? : () -> @ui.TextStyle, title_cut? : Bool, value_cut? : Bool, chevron_room? : Bool) -> Unit
+
+pub fn link_row_opens_node(@view.View, () -> String, (@view.View) -> Unit, value? : () -> String, value_bad? : () -> Bool, value_dot? : () -> Bool, value_lit? : Bool, note? : () -> String, wide_note? : () -> String, trouble? : () -> String, strong? : Bool, danger? : Bool, lacks? : Bool, lead? : RowLead, face? : Bool, goes? : Bool, chevron? : Bool, out? : Bool, acts? : Bool, below? : (@view.View) -> Unit, below_open? : () -> Double, note_cut? : Bool, title_after? : (@view.View) -> Unit, title_after_shown? : () -> Bool, folds? : () -> Bool, tail? : (@view.View) -> Unit, tail_shown? : () -> Bool, control? : (@view.View) -> Unit, adds? : Bool, wide_title? : () -> @ui.TextStyle, title_cut? : Bool, value_cut? : Bool, chevron_room? : Bool) -> Unit
 
 pub fn link_to_of(@json.Json, text? : String, bare? : Bool) -> LinkTo
 
@@ -1630,6 +1634,8 @@ pub fn pill_node(@view.View, () -> String, tone? : PillTone, icon? : String) -> 
 
 pub let pin_raised : Raised
 
+pub fn place_node(@view.View, () -> String, () -> String, (Bool) -> @ui.Style, @ui.TextStyle, press? : (() -> Unit)?, on? : () -> Bool, mark? : Double) -> @view.View
+
 pub fn play_mark(@ui.Ctx, Double, @ui.Color) -> Int32
 
 pub fn player(@ui.Ctx, String, ViewerFile, Array[ViewerEntry], back_label~ : String, on_back~ : () -> Unit, on_go~ : (String) -> Unit) -> Unit
@@ -1692,6 +1698,8 @@ pub fn presented_drawn() -> Bool
 
 pub fn presented_drawn_of(Int32) -> Bool
 
+pub fn presented_from(Anchor) -> Bool
+
 pub fn presented_nodes(@view.View) -> Unit
 
 pub fn presented_open_of(Int32) -> Bool
@@ -1722,6 +1730,8 @@ pub fn progress_ring(@ui.Ctx, Double, Double, Int64) -> Int32
 
 pub fn progress_spinner(@ui.Ctx, String, Double?, size? : Double, stroke? : Double) -> Int32
 
+pub fn progress_spinner_node(@view.View, () -> Double?, size? : Double, stroke? : Double) -> @view.View
+
 pub fn provider_logo(@ui.Ctx, String, String, Double, String) -> Unit
 
 pub fn qr_code(@ui.Ctx, @json.Json?, Double, String) -> Unit
@@ -1735,6 +1745,8 @@ pub fn quota_chip(@ui.Ctx, @json.Json?, small? : Bool, compact? : Bool, marked? 
 pub fn quota_chips(@ui.Ctx, @json.Json?, small? : Bool, marked? : Bool, worded? : Bool, gap? : Double, key? : String) -> Unit
 
 pub fn quota_chips_node(@view.View, () -> @json.Json?, small? : Bool, marked? : Bool, gap? : Double, tips? : TipLayer) -> Unit
+
+pub fn quota_lines_node(@view.View, () -> @json.Json?, small? : Bool, gap? : Double, in_row? : Bool) -> Unit
 
 pub fn quota_said(@json.Json?) -> String
 
@@ -1857,6 +1869,8 @@ pub let row_key_box : @ui.Style
 pub fn row_keys_room(Int32) -> Double
 
 pub fn row_lead_mark(@ui.Ctx, String, color? : Int64) -> Unit
+
+pub fn row_lead_out_node(@view.View) -> @ui.Style
 
 pub fn row_least() -> Double
 
@@ -2610,12 +2624,13 @@ pub(all) struct Bars {
   field : Double
 }
 
-#derive(Eq)
 pub(all) enum Beside {
   Of(Int32)
+  Node(@view.View)
   At(Double, Double, Double, Double)
 }
 pub fn Beside::anchor(Self) -> Anchor
+pub impl Eq for Beside
 
 pub struct Book {
   title : String

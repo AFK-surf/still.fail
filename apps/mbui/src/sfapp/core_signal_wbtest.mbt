@@ -2,7 +2,7 @@
 
 ///|
 test "two view-owned sources share a topic until the last view goes" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -32,7 +32,7 @@ test "two view-owned sources share a topic until the last view goes" {
 
 ///|
 test "one view leaving a topic does not release another view's reader" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -71,7 +71,7 @@ test "one view leaving a topic does not release another view's reader" {
 
 ///|
 test "an independent graph reader outlives a view-owned source" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let owner : Ref[Source?] = Ref(None)
@@ -89,7 +89,7 @@ test "an independent graph reader outlives a view-owned source" {
 
 ///|
 test "an untracked view reader outlives an independent base graph" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -110,7 +110,7 @@ test "an untracked view reader outlives an independent base graph" {
 
 ///|
 test "a view leaving does not release an independent legacy reader" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -134,7 +134,7 @@ test "a view leaving does not release an independent legacy reader" {
 
 ///|
 test "a live view-owned reader resubscribes when the client resets" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -160,7 +160,7 @@ test "a live view-owned reader resubscribes when the client resets" {
 
 ///|
 test "an event of a view reads a topic its graph holds as it is then, held no longer than the graph holds it" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -183,7 +183,7 @@ test "an event of a view reads a topic its graph holds as it is then, held no lo
 
 ///|
 test "a view-owned untracked frame read leaves no extra manual hold" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let owner : Ref[Source?] = Ref(None)
@@ -199,7 +199,7 @@ test "a view-owned untracked frame read leaves no extra manual hold" {
 
 ///|
 test "view owners can leave a topic through its equivalent overridden name" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -228,7 +228,7 @@ test "view owners can leave a topic through its equivalent overridden name" {
 
 ///|
 test "view owners share normalized chat parameters and release independently" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = signal_client_source(client)
@@ -269,7 +269,7 @@ test "view owners share normalized chat parameters and release independently" {
 
 ///|
 test "a view changing parameters explicitly leaves the earlier topic" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -292,7 +292,7 @@ test "a view changing parameters explicitly leaves the earlier topic" {
 
 ///|
 test "a view's raw prefetch ends on cancel and coexists with another owner" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -323,7 +323,7 @@ test "a view's raw prefetch ends on cancel and coexists with another owner" {
 
 ///|
 test "a prefetch made inside a graph outlives that graph until cancelled" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -349,7 +349,7 @@ test "a prefetch made inside a graph outlives that graph until cancelled" {
 
 ///|
 test "a base source prefetch made in a graph remains until explicitly left" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -367,7 +367,7 @@ test "a base source prefetch made in a graph remains until explicitly left" {
 ///|
 test "a direct graph read and an independent base prefetch release differently" {
   for prefetch in [false, true] {
-    new_run()
+    fresh_app()
     let sent : Array[String] = []
     let client = @core.Client::new(fn(s) { sent.push(s) })
     let src = signal_client_source(client)
@@ -394,7 +394,7 @@ test "a direct graph read and an independent base prefetch release differently" 
 
 ///|
 test "a source callback can prefetch a different topic for its view" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let base = signal_client_source(client)
@@ -426,7 +426,7 @@ test "a source callback can prefetch a different topic for its view" {
 
 ///|
 test "a wrapper can prefetch before forwarding a view graph read" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let owner : Ref[Source?] = Ref(None)
@@ -455,7 +455,7 @@ test "a wrapper can prefetch before forwarding a view graph read" {
 
 ///|
 test "a wrapper's low-level reads follow the graph without a prefetch" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let owner : Ref[Source?] = Ref(None)
@@ -480,7 +480,7 @@ test "a wrapper's low-level reads follow the graph without a prefetch" {
 
 ///|
 test "a wrapper can forward a view graph to another topic name" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let owner : Ref[Source?] = Ref(None)
@@ -502,7 +502,7 @@ test "a wrapper can forward a view graph to another topic name" {
 ///|
 test "one wire subscription preserves each source-side projection" {
   for reverse in [false, true] {
-    new_run()
+    fresh_app()
     let sent : Array[String] = []
     let client = @core.Client::new(fn(s) { sent.push(s) })
     let base = signal_client_source(client)
@@ -535,7 +535,7 @@ test "one wire subscription preserves each source-side projection" {
 
 ///|
 test "a made source keeps its own topic identity" {
-  new_run()
+  fresh_app()
   let src = @sfbase.made_source(topic=fn(name, _) { Some(Json::string(name)) })
   let owner : Ref[Source?] = Ref(None)
   let tree = @view.Tree::new(fn(root) { owner.val = Some(src.owned_by(root)) })
@@ -550,7 +550,7 @@ test "a made source keeps its own topic identity" {
 
 ///|
 fn disposed_owned_source_case(read_kind : Int, independent_base : Bool) -> Unit raise {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -615,7 +615,7 @@ test "a late prefetch and leave do not disturb a base graph" {
 
 ///|
 test "a graph using a view's source stops following when the view is disposed" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let owner : Ref[Source?] = Ref(None)
@@ -634,7 +634,7 @@ test "a graph using a view's source stops following when the view is disposed" {
 
 ///|
 test "a view source graph drops changed parameters while the view remains" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -659,7 +659,7 @@ test "a view source graph drops changed parameters while the view remains" {
 
 ///|
 test "a view source graph follows updates without another view hold" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -686,7 +686,7 @@ test "a view source graph follows updates without another view hold" {
 
 ///|
 test "a wrapper around a view source preserves its projection" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -717,7 +717,7 @@ test "a wrapper around a view source preserves its projection" {
 
 ///|
 test "a nested view source does not give its parent an extra reader" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   let src = signal_client_source(client)
@@ -738,7 +738,7 @@ test "a nested view source does not give its parent an extra reader" {
 
 ///|
 test "a nested view source becomes inert when its parent ends" {
-  new_run()
+  fresh_app()
   let client = @core.Client::new(fn(_) {  })
   let src = signal_client_source(client)
   let parent : Ref[Source?] = Ref(None)
@@ -1858,7 +1858,7 @@ test "a chat after closing the switcher reads station changes made in the gap" {
 
 ///|
 test "a place's list let go of and asked again: kept as the core last said it, nothing made of it again when it is the same" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   client.keep(@sfbase.topic_kept)
@@ -1909,7 +1909,7 @@ test "a place's list let go of and asked again: kept as the core last said it, n
 
 ///|
 test "a chat let go of and asked again: nothing of it shown before the core answers, then what changed applied to what was kept" {
-  new_run()
+  fresh_app()
   let sent : Array[String] = []
   let client = @core.Client::new(fn(s) { sent.push(s) })
   client.keep(@sfbase.topic_kept)

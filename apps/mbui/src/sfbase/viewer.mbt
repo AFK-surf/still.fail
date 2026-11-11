@@ -356,6 +356,40 @@ pub let pv_thumbs : Map[String, ThumbLook] = Map([])
 pub let pv_frames : Map[String, (String, Double)] = Map([])
 
 ///|
+/// What a node of the window's tree read of pv_frames (pv_frame_track), by the thumbnail's id: told as its frame is kept
+/// or let go, made as one is first read so, let go as nothing reads it any more. The old views' reads track nothing.
+// kept across runs: let go with pv_frames (viewer's clear)
+let pv_frames_told : Map[String, @signals.Signal[Int]] = Map([])
+
+///|
+/// The frame kept for thumbnail `id` read by a node: what reads it told as one is kept or let go.
+fn pv_frame_track(id : String) -> Unit {
+  let s = match pv_frames_told.get(id) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(0)
+      pv_frames_told[id] = s
+      s
+    }
+  }
+  s.get() |> ignore
+}
+
+///|
+/// The frame kept for thumbnail `id` changed: told, where a node reads it.
+fn pv_frame_tell(id : String) -> Unit {
+  match pv_frames_told.get(id) {
+    Some(s) =>
+      if s.watched() {
+        s.set(s.untracked() + 1)
+      } else {
+        pv_frames_told.remove(id)
+      }
+    None => ()
+  }
+}
+
+///|
 /// How many frames have been kept (each one's image a key of its own).
 pub let pv_frames_n : Ref[Int] = { val: 0 }
 
@@ -1884,6 +1918,7 @@ pub fn Viewer::left_with_frame(self : Viewer, src : Source, at : Double, window 
         let key = "mem:pv-frame/\{pv_frames_n.val}/\{self.name}"
         @ui.add_image(key, jpeg)
         pv_frames[self.id()] = (key, self.left_at)
+        pv_frame_tell(self.id())
         self.fly_home(key, at, window)
       } else {
         self.fly_home(self.still(src), at, window)
@@ -3378,6 +3413,11 @@ pub fn file_viewer_reset() -> Unit {
   thumbs_said.clear()
   pv_lists.clear()
   pv_frames.clear()
+  let told = pv_frames_told.keys().to_array()
+  for id in told {
+    pv_frame_tell(id)
+  }
+  pv_frames_told.clear()
   pv_frames_n.val = 0
   pv_first.clear()
   pv_hidden.set("")
@@ -3407,7 +3447,7 @@ pub fn video_still(c : @ui.Ctx, src : Source, station : String, owner : String, 
 /// video_still for a node of the window's tree `v` (a chat's things' tile), read as it comes: the station's still, or
 /// where it made none, the first frame drawn here (first_frame_node).
 pub fn video_still_node(v : @view.View, src : Source, station : String, owner : String, a : Attachment, thumb : String) -> () -> String {
-  let known = fn() { video_still_known(src, station, owner, a, thumb) }
+  let known = fn() { video_still_known(src, station, owner, a, thumb, told=true) }
   // (its first frame's, asked as the station is known to have made none: then, once)
   let first : @signals.Signal[(() -> String)?] = @signals.signal(None, same=fn(x, y) { physical_equal(x, y) })
   v.reacts(fn() { known() == "!" }, fn(none) {
@@ -3430,13 +3470,18 @@ pub fn video_still_node(v : @view.View, src : Source, station : String, owner : 
 ///|
 /// The same as far as it is known without drawing a frame of it here (what a node shows: the viewer's still, one sent
 /// from here, the station's poster): "!" where the station made none.
-fn video_still_known(src : Source, station : String, owner : String, a : Attachment, thumb : String) -> String {
+/// `told`: read by a node, told as the frame kept or the station's still changes (the tracking reads: pv_frame_track,
+/// Source::poster_told).
+fn video_still_known(src : Source, station : String, owner : String, a : Attachment, thumb : String, told? : Bool = false) -> String {
+  if told {
+    pv_frame_track(thumb)
+  }
   match pv_frames.get(thumb) {
     Some((k, _)) => k
     None =>
       match sent_picture(station, a) {
         Some(k) => k
-        None => (src.poster)(station, owner, base_name(a.path))
+        None => if told { src.poster_told(station, owner, base_name(a.path)) } else { (src.poster)(station, owner, base_name(a.path)) }
       }
   }
 }

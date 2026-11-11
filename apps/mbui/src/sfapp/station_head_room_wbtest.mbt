@@ -15,7 +15,7 @@ fn duo_station_page() -> @ui.Tester raise {
   app.nav.push_over(Setting(@settings.Route::Station("ws1/st1")))
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_true(@sfdesk.wide.tape)
+  assert_true(@sfdesk.wide.tape.get())
   @sfdesk.wide.tape_ask.set(Some(@sfdesk.TapePane::Page))
   t.draw()
   t.run_for(@ui.move_most_ms)

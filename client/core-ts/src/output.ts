@@ -115,13 +115,19 @@ export class Output {
         }
         const inner = spec.item ? this.#build(topic, item, spec.item, itemTy, place, here, next) : item;
         const made = computed(() => {
-          const decorated = present.decorateItem(topic, copy(inner), this.#c);
+          // Decorated as it is, not a copy of it: an item's decoration (present.ts `decorateItem`: `session`, `times`)
+          // makes a new object of what it puts something in and never writes on what it is given. A copy of each was
+          // 1.3 ms of the 52 items of a chat list's first page in Hermes on a Mac Studio (2026-11-11).
+          const decorated = present.decorateItem(topic, inner, this.#c);
           let out = decorated;
           if (itemTy !== undefined) {
             const shapedItem = conformTy(itemTy, decorated, here);
             if ("error" in shapedItem) throw new ItemWrong(shapedItem.error);
             out = shapedItem.ok;
           }
+          // (what goes out is marked as gone out, which other values that hold it take it as, shaped: never the item
+          // itself, where nothing was put in it nor shaped of it, no shape or one of `Value`: a copy of it, as before)
+          if (out === inner && !shaped.has(inner)) out = copy(inner);
           freeze(out);
           return out;
         });

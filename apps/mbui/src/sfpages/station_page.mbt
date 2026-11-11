@@ -629,7 +629,9 @@ fn st_row_mark(c : @ui.Ctx, icon : String) -> Unit {
 let st_row_glyph : Double = 16.0
 
 ///|
-/// One account kind, with its live profiles and their allowances. A long kind can be searched without leaving it.
+/// One account kind, with its live profiles and their allowances, in a panel opened `from` what was pressed (a sheet
+/// from the foot on 小屏, beside it on 中屏 and 大屏), made once as nodes (@sf.panel_nodes, station_kind_node). A long
+/// kind (`many`: its list scrolls, a share of the window tall) can be searched without leaving it.
 fn station_profiles_panel(
   core : Core,
   here : Here,
@@ -639,98 +641,181 @@ fn station_profiles_panel(
   from : @sf.Anchor,
   many : Bool,
 ) -> Unit {
-  let search_key = "station-profiles-search/" + address + "/" + kind
-  let query = @ui.Field::new()
-  @sf.panel(
+  @sf.panel_nodes(
     title,
-    fn(c, close) {
-      let now = @settings.station_of(core, here, address)
-      let group = items(now, "profileGroups").iter().find_first(fn(g) { text(Some(g), "group") == kind })
-      let ids = strings(group, "profiles")
-      let profiles = items(field(now, "overview"), "profiles")
-      let mut words = ""
-      if ids.length() >= @sf.pick_search_from || query.text() != "" {
-        c.box(style=@sf.panel_words_in().then(st_profiles_search), fn() {
-          words = @sf.input(c, search_key, placeholder=@sf.t("common.search"), small=true, field=query).text.trim().to_owned().to_lower()
-        }) |> ignore
-      }
-      let found : Array[Json] = []
-      for id in ids {
-        match profiles.iter().find_first(fn(p) { text(Some(p), "id") == id }) {
-          Some(p) => {
-            let hay = (text(Some(p), "name") + "\n" + text(Some(p), "email")).to_lower()
-            if words == "" || hay.contains(words) {
-              found.push(p)
-            }
-          }
-          None => ()
-        }
-      }
-      if found.is_empty() {
-        @sf.panel_note(c, @sf.t("common.noMatch"))
-      } else if many {
-        @sf.panel_list(c, "station-profiles-list/" + address + "/" + kind, found.length(), st_profile_row_est, fn(i) {
-          let p = found[i]
-          station_profile_row(c, core, address, Some(p), field(field(now, "profileStates"), text(Some(p), "id")), close)
-        }) |> ignore
-      } else {
-        c.box(style=st_profiles_rows, fn() {
-          for p in found {
-            station_profile_row(c, core, address, Some(p), field(field(now, "profileStates"), text(Some(p), "id")), close)
-          }
-        }) |> ignore
-      }
-    },
+    fn(v, close) { station_kind_node(v, core, here, address, kind, many, close) },
     from~,
-    field=if many { search_key } else { "" },
     tall=if many { 0.85 } else { 0.0 },
     grows=many,
   )
 }
 
 ///|
-/// An account's name, models, use, allowance and state; its row opens its profile.
-fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?, state : Json?, close : () -> Unit) -> Unit {
-  let used = items(p, "usedBy").length()
-  let facts = [text(p, "modelsText")]
-  if used > 0 {
-    facts.push(@sf.t("web-pages.settings.profiles.usedBy", args=[("n", used.to_string())]))
+/// What one account kind's panel holds (station_profiles_panel), in node `v` (its body), as station `address` says now
+/// (its own ask, held while the panel is up): a search over its accounts while it has as many as a pick searches
+/// (pick_search_from) or words are in it, then its accounts it finds, a row each by its id (View::each; a long
+/// list's rows made as they show, panel_list_node, where `many`), coming and going as the station lists them; none
+/// found, a line saying so. A row pressed closes the panel (`close`) for its account's page. Once the station said
+/// the kind and says it no more, the panel closes (`close`, as that is said), showing what it showed last till it is
+/// gone; while the station is not said yet, or never said the kind, it stays.
+fn station_kind_node(
+  v : @view.View,
+  core : Core,
+  here : Here,
+  address : String,
+  kind : String,
+  many : Bool,
+  close : () -> Unit,
+) -> Unit {
+  let query = @ui.Field::new()
+  let group_in = fn(s : Json?) { items(s, "profileGroups").iter().find_first(fn(g) { text(Some(g), "group") == kind }) }
+  let said = fn() { @settings.station_of(core, here, address) }
+  // (the kind gone: the panel closes, what it showed last kept as it goes, not emptied under it)
+  let last : Ref[Json?] = Ref(None)
+  let now = fn() {
+    let s = said()
+    match s {
+      Some(_) if group_in(s) is None && last.val is Some(_) => last.val
+      _ => {
+        if group_in(s) is Some(_) {
+          last.val = s
+        }
+        s
+      }
+    }
   }
-  @sf.link_row(
-    c,
-    "station-profile/" + address + "/" + text(p, "id"),
-    text(p, "name"),
-    note=join(facts, " · "),
-    lead=fn() {
-      c.box(style=st_profile_mark.then(@sf.row_lead_out()), fn() { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), st_profile_glyph, text(p, "providerMark")) })
-      |> ignore
-    },
-    below?=if text(field(p, "quota"), "state") == "ok" {
-      Some(fn() { @sf.quota_chips(c, field(p, "quota"), small=true, lines=true, key="station-profile/" + address + "/" + text(p, "id")) })
-    } else {
-      None
-    },
-    tail=fn() {
-      let status = if text(state, "text") != "" { text(state, "text") } else { text(p, "checkText") }
-      let tone = if text(state, "text") != "" { text(state, "tone") } else { text(p, "checkTone") }
-      if tone != "green" && status != "" {
-        @sf.pill(
-          c,
-          status,
-          tone=match tone {
-            "red" => Red
-            "amber" => Amber
-            "blue" => Blue
-            _ => Neutral
-          },
-        )
+  // (closed as a kind the station said comes to be gone: said once, as it does; while the station is not said, or
+  // the kind never was, nothing)
+  let had = Ref(false)
+  v.reacts(
+    fn() {
+      let s = said()
+      match s {
+        None => 0
+        Some(_) => if group_in(s) is Some(_) { 1 } else { 2 }
       }
     },
-    on_press=fn() {
-      close()
-      (core.push)(Profile(address, text(p, "id")))
+    fn(says) {
+      if says == 1 {
+        had.val = true
+      } else if says == 2 && had.val {
+        close()
+      }
     },
-  ) |> ignore
+  )
+  let ids = fn() { strings(group_in(now()), "profiles") }
+  let searched = fn() { ids().length() >= @sf.pick_search_from || query.text() != "" }
+  // (its accounts it lists that the station has, in its order, those the search's words are in)
+  let found = fn() {
+    let words = if searched() { query.text().trim().to_owned().to_lower() } else { "" }
+    let profiles = items(field(now(), "overview"), "profiles")
+    let out : Array[String] = []
+    for id in ids() {
+      match profiles.iter().find_first(fn(p) { text(Some(p), "id") == id }) {
+        Some(p) => {
+          let hay = (text(Some(p), "name") + "\n" + text(Some(p), "email")).to_lower()
+          if words == "" || hay.contains(words) {
+            out.push(id)
+          }
+        }
+        None => ()
+      }
+    }
+    out
+  }
+  let profile = fn(id : String) {
+    items(field(now(), "overview"), "profiles").iter().find_first(fn(p) { text(Some(p), "id") == id })
+  }
+  let state = fn(id : String) { field(field(now(), "profileStates"), id) }
+  let row = fn(b : @view.View, id : String) {
+    station_profile_row_node(b, core, address, id, fn() { profile(id) }, fn() { state(id) }, close)
+  }
+  v.show(searched, fn(s) {
+    @sf.style_node(s, fn() { @sf.panel_words_in_node(s).then(st_profiles_search) })
+    let f = @sf.input_node(s, query, placeholder=@sf.t("common.search"), small=true)
+    // (a long kind's: the keys there as it opens beside what opened it, not on a sheet)
+    if many {
+      @sf.panel_search_at_hand_node(f)
+    }
+  })
+  v.show(fn() { found().is_empty() }, fn(n) { @sf.panel_note_node(n, fn() { @sf.t("common.noMatch") }) })
+  if many {
+    @sf.panel_list_node(v, found, row, est=st_profile_row_est) |> ignore
+  } else {
+    v.box(fn(rows) {
+      @sf.style_node(rows, fn() { st_profiles_rows })
+      rows.each(found, fn(id) { id }, fn(r, id) { row(r, id.untracked()) })
+    })
+    |> ignore
+  }
+}
+
+///|
+/// An account's row (`id`, `p` as the station says it now, `state` how its check stands) in `b`: its name, its models
+/// and how many use it, its maker's mark before them; its allowance's chips under them while the core can say it; a
+/// pill at its end where its check (or the station's word on it) is not well. Pressed, the panel closes (`close`) for
+/// its page.
+fn station_profile_row_node(
+  b : @view.View,
+  core : Core,
+  address : String,
+  id : String,
+  p : () -> Json?,
+  state : () -> Json?,
+  close : () -> Unit,
+) -> Unit {
+  let facts = fn() {
+    let used = items(p(), "usedBy").length()
+    let facts = [text(p(), "modelsText")]
+    if used > 0 {
+      facts.push(@sf.t("web-pages.settings.profiles.usedBy", args=[("n", used.to_string())]))
+    }
+    join(facts, " · ")
+  }
+  // (its check's words and tone, the station's own where it says any)
+  let check = fn() {
+    let st = state()
+    if text(st, "text") != "" {
+      (text(st, "text"), text(st, "tone"))
+    } else {
+      (text(p(), "checkText"), text(p(), "checkTone"))
+    }
+  }
+  @sf.link_row_node(
+    b,
+    fn() { text(p(), "name") },
+    fn() {
+      close()
+      (core.push)(Profile(address, id))
+    },
+    note=facts,
+    lead=LeadLine(fn(l) {
+      l.box(fn(m) {
+        @sf.style_node(m, fn() { st_profile_mark.then(@sf.row_lead_out_node(m)) })
+        m.pick(fn() { (text(p(), "runtime"), text(field(p(), "access"), "kind"), text(p(), "providerMark")) }, fn(k, mk) {
+          @sf.provider_logo_node(k, mk.0, mk.1, st_profile_glyph, mk.2) |> ignore
+        })
+      })
+      |> ignore
+    }),
+    below=fn(q) { @sf.quota_lines_node(q, fn() { field(p(), "quota") }, small=true, in_row=true) },
+    below_open=fn() { if text(field(p(), "quota"), "state") == "ok" { 1.0 } else { 0.0 } },
+    tail=fn(e) {
+      e.pick(check, fn(k, c) {
+        @sf.pill_node(k, fn() { c.0 }, tone=match c.1 {
+          "red" => Red
+          "amber" => Amber
+          "blue" => Blue
+          _ => Neutral
+        })
+        |> ignore
+      })
+    },
+    tail_shown=fn() {
+      let (status, tone) = check()
+      tone != "green" && status != ""
+    },
+  )
 }
 
 ///|

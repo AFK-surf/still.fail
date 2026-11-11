@@ -270,7 +270,7 @@ test "a quoted picture opened as it is sent returns to its row after the core ta
 
 ///|
 test "the pictures before and after a quote can be separate occurrences of the same file" {
-  new_run()
+  fresh_app()
   let a = strip("same-photo.png")
   let photo = attachment_json(a, "s-c1")
   let base = fixture("chat")
