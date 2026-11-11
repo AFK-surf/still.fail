@@ -16,9 +16,9 @@ test "33-settings-appearance" {
     f.run_for(@ui.move_most_ms)
     f.see("跟随系统")
     f.tap("=浅色")
-    assert_true(!@sf.theme().dark)
+    f.check(!@sf.theme().dark, "the theme light before 深色")
     f.tap("=深色")
-    assert_true(@sf.theme().dark)
+    f.check(@sf.theme().dark, "the theme dark after 深色")
     // its thumb slides there (Ctx::cover), from this tap to the end of its slide
     f.run_for(@ui.cover_slide_ms)
     f.back()

@@ -21,9 +21,10 @@ test "92-drive-zip" {
     f.answered("download.done", 1)
     f.until(fn() { f.t.kept().iter().any(fn(k) { k.0 == "子文件夹.zip" }) })
     let kept = f.t.kept().filter(fn(k) { k.0 == "子文件夹.zip" })
-    assert_eq(kept.length(), 1)
-    assert_eq(kept[0].1, "application/zip")
-    assert_eq(kept[0].2.length(), 277)
+    f.check(
+      kept.length() == 1 && kept[0].1 == "application/zip" && kept[0].2.length() == 277,
+      "kept \{kept.map(fn(k) { (k.0, k.1, k.2.length()) })}",
+    )
     // its toast, up since the download began, its time shown and gone
     f.run_for(@sfapp.toast_ms)
     f.end()

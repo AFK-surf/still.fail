@@ -70,6 +70,6 @@ fn flow_84_connect(seed : UInt) -> String raise {
   f.tap("=下一步")
   // with no configuration token yet, how to get one: Slack's app list opened (handed to the system)
   f.tap("打开 api.slack.com/apps")
-  assert_eq(f.t.opened().length(), 1)
+  f.check(f.t.opened().length() == 1, "opened \{f.t.opened()}, not Slack's app list")
   f.end()
 }

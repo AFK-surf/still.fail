@@ -17,7 +17,7 @@ test "65-wide-places" {
     f.tap("=外观")
     f.see("跟随系统")
     f.tap("=深色")
-    assert_true(@sf.theme().dark)
+    f.check(@sf.theme().dark, "not dark after 深色")
     f.tap("=跟随系统", top=true)
     // its thumb slides there (Ctx::cover), from this tap to the end of its slide
     f.run_for(@ui.cover_slide_ms)

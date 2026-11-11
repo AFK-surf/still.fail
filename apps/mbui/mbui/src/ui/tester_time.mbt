@@ -41,8 +41,28 @@ pub fn Tester::frames_owed(self : Tester) -> Unit {
 /// The frames owed now (Tester::draw's) after what is the hand's on mbui's own (a pointer moved, a wheel turned): not
 /// a change of the test's.
 fn Tester::drawn_now(self : Tester) -> Unit {
+  if self.past_inputs_next() || self.frames_on_clock() {
+    return
+  }
   self.frame_now()
   self.draw_owed(1)
+}
+
+///|
+/// When the next input comes, as a run's script gave it (a replay's next step, Flow's): a host's frames are drawn
+/// before it as the host drew them, and none after it ahead of it, so the input comes at its own moment whatever the
+/// display's rate, only more or fewer frames between (+inf: none said).
+pub fn Tester::inputs_next(self : Tester, at : Double) -> Unit {
+  self.inputs_next = at
+}
+
+///|
+/// Whether the host's next frame falls after the next input (Tester::inputs_next): not drawn ahead of it. An input due
+/// already (what the test waited for came later than in the run) holds back no frame: the test is past it.
+fn Tester::past_inputs_next(self : Tester) -> Bool {
+  self.host_frames &&
+  self.inputs_next > self.fake.time &&
+  self.tick_after(self.fake.time) > self.inputs_next + due_hair
 }
 
 ///|
@@ -78,6 +98,9 @@ fn Tester::draw_owed_said(self : Tester, n : Int) -> String? {
           "Tester::draw: what the view reads (\{c.read_back_key}) still changes after \{n} frames: it does not converge",
         )
       }
+      return None
+    }
+    if self.past_inputs_next() || self.frames_on_clock() {
       return None
     }
     self.frame_now()
@@ -255,6 +278,47 @@ fn Tester::between_after(self : Tester, t : Double) -> Double {
     k = k + 1.0
   }
   self.origin + k * self.between
+}
+
+///|
+/// Whether a host's frames are drawn only as the clock passes them (Tester::frames_by_clock): an input or a message
+/// waits for the next of them, as on the host, not drawn a frame ahead of the clock.
+// kept across runs: put back by each Tester (Tester::new)
+let frames_by_clock_on : Ref[Bool] = Ref(false)
+
+///|
+/// A host's frames drawn only as the clock passes them (Tester::come_to, run_for), or also as an input or a message
+/// asks for one (Tester::draw: at the display's next frame, the clock on to it): a replay's pace pass, whose inputs
+/// come at their moments however the frames fall.
+pub fn Tester::frames_by_clock(self : Tester, on : Bool) -> Unit {
+  ignore(self)
+  frames_by_clock_on.val = on
+}
+
+///|
+fn Tester::frames_on_clock(self : Tester) -> Bool {
+  self.host_frames && frames_by_clock_on.val
+}
+
+///|
+/// The clock on to `t` as a host's runs between its frames (a replay's pace pass: an input at its moment): the
+/// display's frames up to `t` drawn on the way, none at or past it drawn ahead of it; `t` itself no frame of its own.
+/// Without a host's frames, run_for.
+pub fn Tester::come_to(self : Tester, t : Double) -> Unit {
+  if !self.host_frames {
+    if t > self.fake.time {
+      self.run_for(t - self.fake.time)
+    }
+    return
+  }
+  // (a host's frames: each of them up to `t` drawn, none past it; the clock then at `t` between two of them, as a
+  // host's is when an input comes)
+  while self.tick_after(self.fake.time) <= t + due_hair {
+    self.clock_frame()
+  }
+  if t > self.fake.time {
+    self.fake.time = t
+  }
 }
 
 ///|

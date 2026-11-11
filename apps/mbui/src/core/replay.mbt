@@ -72,6 +72,9 @@ pub struct Replay {
   priv mut seed : UInt
   /// when what came is given (`pace`): at once, or at the run's own pace
   priv mut pace : Pace
+  /// whether a step of the script's is timed from the step before it (Replay::chain_steps: a pace pass's, its frames
+  /// not the run's), else from what happened again before it
+  priv mut steps_chained : Bool
   /// whether every ask of the run's before a message waits it (else only its own and those that are not reports)
   priv mut strict : Bool
   /// the clock the replay's events are timed on (a Tester's: when an ask is made again, a message given)
@@ -143,7 +146,54 @@ let ambient : Array[String] = ["downloads", "driveTransfers", "chatFeedback"]
 ///|
 /// The conversation in `log`: a trace's lines (`{"out":…}`, `{"in":…}`), or a log with them after CORETRACE. Other
 /// lines are left out.
+///|
+/// What the app told the core in this replay, each message as a line (its kind, what it names, its params; an
+/// unsubscribe by what it subscribed, a subscription's id left out): what two passes of a flow at other paces are
+/// held to say alike (sfreplay's `orders`). Not the reports (`reports`: their number is the timing's by design).
+// kept across runs: begun anew by each replay (Replay::parse)
+let outs_said : Array[String] = []
+
+///|
+// kept across runs: begun anew by each replay (Replay::parse)
+let outs_subs : Map[Int, String] = {}
+
+///|
+/// What the app told the core in the replay last begun, in order (outs_said).
+pub fn Replay::outs(self : Replay) -> Array[String] {
+  ignore(self)
+  outs_said.copy()
+}
+
+///|
+fn outs_note(m : Map[String, Json], kind : String) -> Unit {
+  let id = match id_of(m) {
+    Some(i) => i
+    None => -1
+  }
+  match kind {
+    "subscribe" => {
+      let key = m.get("subscribe").map(fn(t) { canon(t) }).unwrap_or("")
+      outs_subs[id] = key
+      outs_said.push("sub " + key + (if m.contains("have") { " have" } else { "" }))
+    }
+    "unsubscribe" =>
+      outs_said.push(
+        "unsub " + outs_subs.get(id).unwrap_or("?") + (if m.get("keep") is Some(True) { " keep" } else { "" }),
+      )
+    "call" => {
+      let name = name_of(m)
+      if !reports.contains(name) {
+        outs_said.push("call " + name + " " + canon(m.get("params").unwrap_or(Json::null())))
+      }
+    }
+    other => outs_said.push(other + " " + name_of(m))
+  }
+}
+
+///|
 pub fn Replay::parse(log : String) -> Replay {
+  outs_said.clear()
+  outs_subs.clear()
   let evs : Array[Ev] = []
   let run_env : Array[(String, String)] = []
   let run_text : Array[String] = []
@@ -287,6 +337,7 @@ pub fn Replay::parse(log : String) -> Replay {
     wall: 0.0,
     walls: [],
     pace: AtOnce,
+    steps_chained: false,
     strict: true,
     clock: fn() { 0.0 },
     seed: 0,
@@ -872,6 +923,29 @@ fn Replay::due_at(self : Replay, i : Int) -> Double {
     AtOnce => return -@double.infinity
     AsRun(scale) => scale
   }
+  // (a step of the script's: on from the step before it as the run's script went on from it, by their gap in the
+  // run, whenever what came between them was taken here: an input is the run's own moment at any frame rate, not one
+  // that follows what this pace's frames took when)
+  if self.steps_chained && is_step(self.evs[i].msg) {
+    let mut k = i - 1
+    while k >= 0 {
+      let e = self.evs[k]
+      if is_step(e.msg) && e.done && e.at >= 0.0 && e.has_wall && self.evs[i].has_wall {
+        let gap = self.evs[i].wall - e.wall
+        return e.at + (if gap > 0.0 { gap * scale } else { 0.0 })
+      }
+      k = k - 1
+    }
+    // (the first step: from the first of the run that happened again here, by their gap in the run, not from what
+    // this pace's frames took last before it)
+    for j in 0..<i {
+      let e = self.evs[j]
+      if e.at >= 0.0 && (e.has_wall || !e.out) && self.evs[i].has_wall {
+        let gap = self.evs[i].wall - e.wall
+        return e.at + (if gap > 0.0 { gap * scale } else { 0.0 })
+      }
+    }
+  }
   let mut j = i - 1
   while j >= 0 {
     let e = self.evs[j]
@@ -887,6 +961,27 @@ fn Replay::due_at(self : Replay, i : Int) -> Double {
     j = j - 1
   }
   -@double.infinity
+}
+
+///|
+/// Each step of the script's timed from the step before it, by their gap in the run (Replay::due_at): for a pass whose
+/// frames are not the run's (a pace pass, at a display's rate), so its inputs come at the run's moments whatever its
+/// frames took when. The strict pass's frames and steps are mapped from the run together: not so.
+pub fn Replay::chain_steps(self : Replay) -> Unit {
+  self.steps_chained = true
+}
+
+///|
+/// When the run's next step not taken again is due at this pace (Replay::due_at), +inf where there is none or it waits
+/// for an ask not made again: up to when what a step set off is drawn before the next input comes (Tester::inputs_next).
+pub fn Replay::next_step_at(self : Replay) -> Double {
+  for i in self.first_out..<self.evs.length() {
+    let e = self.evs[i]
+    if e.out && !e.done && is_step(e.msg) {
+      return self.due_at(i)
+    }
+  }
+  @double.infinity
 }
 
 ///|
@@ -1134,6 +1229,7 @@ fn Replay::out(self : Replay, text : String) -> Unit {
     return
   }
   let kind = kind_of(m)
+  outs_note(m, kind)
   // The stations of a run whose own the replay keeps (Replay::keep_stations): asked, given the scope's value at the
   // next delivery and whole again as it changes; let go of, no more.
   if self.stations_own {
@@ -1468,6 +1564,31 @@ pub fn Replay::answers_given(self : Replay, call : String) -> Int {
     }
   }
   n
+}
+
+///|
+/// When the app asked the run's `n`-th call `call` here (Replay::clock; counted from the start) and when that one's
+/// answer (an `ok` or an `error`) was given here: a pace pass's `answered` step, said not waited on (Flow::answered).
+/// None where it is not so yet.
+pub fn Replay::nth_call_at(self : Replay, call : String, n : Int) -> (Double?, Double?) {
+  let mut k = 0
+  let mut id = -1
+  let mut asked : Double? = None
+  for e in self.evs {
+    guard e.msg is Object(m) && m.get("id") is Some(Number(i, ..)) else { continue }
+    if id < 0 {
+      if e.out && kind_of(m) == "call" && name_of(m) == call {
+        k += 1
+        if k == n {
+          id = i.to_int()
+          asked = if e.done && e.at >= 0.0 { Some(e.at) } else { None }
+        }
+      }
+    } else if !e.out && !e.host && e.done && i.to_int() == id && (m.contains("ok") || m.contains("error")) {
+      return (asked, Some(e.given))
+    }
+  }
+  (asked, None)
 }
 
 ///|
