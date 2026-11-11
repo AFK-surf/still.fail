@@ -6,10 +6,11 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, Signer, entryHash, next } from "../src/lock.ts";
-import { Lock, OTHERS_MS, fold, held, personalStations, read } from "../src/views/lock.ts";
+import { ASKED_MS, Lock, OTHERS_MS, fold, held, personalStations, read } from "../src/views/lock.ts";
 import { ME, genesis, grant, rig } from "./lock-rig.ts";
-import { hooks } from "../src/core/execute.ts";
-import { Status, stationReplies } from "./station-fixture.ts";
+import { REREAD_WAIT_MS, hooks } from "../src/core/execute.ts";
+import { jsonResponse } from "../src/testing.ts";
+import { Status, stationLater, stationReplies } from "./station-fixture.ts";
 
 const A = "aa".repeat(32);
 /// A second station of the workspace's, gone silent (its machine asleep): asked, it never answers.
@@ -20,10 +21,12 @@ const S = "bb".repeat(32);
 function station(first: Entry) {
   const chain: Entry[] = [first];
   const came: Record<string, unknown>[] = [];
-  const say = { old: false, refuse: false, asked: [] as string[] };
+  const say = { old: false, refuse: false, silent: false, asked: [] as string[] };
   const head = (): Head => ({ seq: chain.length - 1, hash: entryHash(chain.at(-1)!), genesis: entryHash(chain[0]!) });
   const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     say.asked.push(`${method} ${path}`);
+    // (its machine asleep, its network gone: asked, it never answers)
+    if (say.silent) return Effect.never;
     if (say.refuse) return Effect.fail(new CoreError("lock_unconfirmed", "this device is not on the lock its person bound in this workspace"));
     if (say.old) return path.startsWith("/lock?") || path === "/lock" ? Effect.succeed({ head: head(), entries: [], takes: ["person"] }) : Effect.fail(new CoreError("http_404", "no route", 404));
     const serves = { takes: ["person"], serves: ["person", "devices", "told"] };
@@ -393,4 +396,63 @@ test("the one to begin its person's lock, held back for a station asleep, begins
   assert.ok(atA.includes("POST /lock/person"), atA.join());
   // Begun quietly: its key made then, its seed in hand, the person not asked.
   assert.equal(r.host.secureAsked.length, asked, JSON.stringify(r.host.secureAsked));
+});
+
+test("a locked workspace's roster changes answer within the stations' wait and the reread's while nothing read answers, signed in the lock as held", async () => {
+  // (2026-11-11: 添加 turned for minutes in a locked workspace whose stations were not reached; #5549 bounded only the
+  // reread after. test/writes-answer.test.ts holds every cloud write to this in a workspace with no lock; here the six
+  // of them the lock has a part in, in one this device signs for, its station having served the lock and gone silent)
+  const { inner, st, run, r, cloud } = await setUp();
+  await run(read(inner, "ws"));
+  assert.equal(held(inner, "ws")?.head?.seq, 0);
+  const members = [{ sub: "s1", email: "a@x.com", role: "owner" }, { sub: "s2", email: "b@x.com", role: "member" }];
+  const json = (b: unknown) => Promise.resolve(jsonResponse(200, b));
+  const said: string[] = [];
+  // Every read of the cloud left unanswered, its writes answered at once (the lock's entries kept, lock-rig.ts).
+  stationLater(r.host, (req) => {
+    const path = new URL(req.url).pathname;
+    if (req.method === "GET") return new Promise(() => {});
+    if (req.method === "POST" && path === "/v1/workspaces/ws/lock") said.push("lock");
+    if (req.method === "POST" && path === "/v1/workspaces/ws/members") return json({ joined: [], added: ["d@x.com"], already: [], view: { members } });
+    if ((req.method === "PATCH" || req.method === "DELETE") && path === "/v1/workspaces/ws/members/s2") {
+      said.push(`cloud ${req.method}`);
+      return json({ ok: true });
+    }
+    if (req.method === "DELETE" && path === "/v1/workspaces/ws/added/d%40x.com") return json({ members });
+    if (req.method === "DELETE" && path === `/v1/workspaces/ws/stations/${A}`) return json({ ok: true });
+    if (req.method === "POST" && path === "/v1/workspaces/ws/enrollments") {
+      return json({ token: "tok", install: "curl x | sh -s -- tok", installWindows: "& (irm x) tok", command: "stillfail station enroll https://x tok" });
+    }
+    return undefined;
+  });
+  // The station, which served the lock until now, answers nothing more: neither a read nor what it is brought.
+  st.say.silent = true;
+  const chain = () => r.cloud.chains.get("ws")!;
+  const timed = async (name: string, params: Record<string, unknown>): Promise<any> => {
+    const t0 = r.host.nowMs();
+    const answer = await r.ask(name, { account: "s1", workspace: "ws", ...params });
+    // (ask steps the clock 10 ms at a time, and passes 100 ms after the answer)
+    assert.ok(r.host.nowMs() - t0 <= ASKED_MS + REREAD_WAIT_MS + 200, `${name} answered after ${r.host.nowMs() - t0} ms`);
+    return answer;
+  };
+  // Each entry follows the one before: the chain is held here after each, nothing read between them.
+  const follows = async (name: string, params: Record<string, unknown>, kind: string, body: unknown) => {
+    const length = chain().length;
+    await timed(name, params);
+    assert.equal(chain().length, length + 1, name);
+    assert.deepEqual([chain().at(-1)!.kind, chain().at(-1)!.body, chain().at(-1)!.seq], [kind, body, length], name);
+    assert.equal(held(inner, "ws")?.head?.hash, r.cloud.head("ws")!.hash, name);
+  };
+
+  await follows("workspace.setRole", { member: "s2", role: "admin" }, "member", { sub: "s2", email: "b@x.com", role: "admin" });
+  assert.deepEqual(said, ["lock", "cloud PATCH"], "in the lock before the cloud's roster is asked, still");
+  assert.ok(cloud.asked.includes("POST /lock"));
+  await follows("workspace.addMembers", { role: "admin", emails: ["d@x.com"] }, "member", { sub: "pending:d@x.com", email: "", role: "admin" });
+  await follows("workspace.removeAdded", { email: "d@x.com" }, "member.remove", { sub: "pending:d@x.com" });
+  // The command pins the lock as its station last said it (it took none of the entries since): an entry of the chain.
+  const enrolled = await timed("workspace.enroll", { name: "mini" });
+  assert.ok(enrolled.command.endsWith(` --lock ${st.head().hash}`), enrolled.command);
+  assert.equal(st.chain.length, 1);
+  await follows("workspace.removeMember", { member: "s2" }, "member.remove", { sub: "s2" });
+  await follows("workspace.removeStation", { station: A }, "station.remove", { key: A });
 });
