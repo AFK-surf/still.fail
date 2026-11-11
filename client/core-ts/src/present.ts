@@ -489,10 +489,31 @@ export function isViewer(me: J, person: string, slackUsers: string[]): boolean {
   return id === person || (email !== undefined && email.toLowerCase() === person.toLowerCase()) || slackUsers.includes(person);
 }
 
-const sameEmail = (a: unknown, b: string) => typeof a === "string" && a.toLowerCase() === b.toLowerCase();
+/// A members list's members by their e-mail in lower case, the first of each, while the list is as long as it was
+/// (a workspace's is shared and never changed in place). Looked up for every person of every row of a list: each a
+/// scan of the list, both sides lowered at every step, was a third of making a row (13 ms of 42 for 420 rows in
+/// Hermes, 2026-11-11).
+const membersByEmail = new WeakMap<J[], { length: number; of: Map<string, J> }>();
+
+/// The member whose e-mail is `email`, whatever its case: the first in the list.
+function memberOf(members: J[], email: string): J {
+  let kept = membersByEmail.get(members);
+  if (kept === undefined || kept.length !== members.length) {
+    const of = new Map<string, J>();
+    for (const m of members) {
+      const e = get(m, "email");
+      if (typeof e !== "string") continue;
+      const key = e.toLowerCase();
+      if (!of.has(key)) of.set(key, m);
+    }
+    kept = { length: members.length, of };
+    membersByEmail.set(members, kept);
+  }
+  return kept.of.get(email.toLowerCase());
+}
 
 export function memberName(members: J[], email: string): string | null {
-  const m = members.find((m) => sameEmail(get(m, "email"), email));
+  const m = memberOf(members, email);
   const name = str(get(m, "name"));
   return name ? name : null;
 }
@@ -542,7 +563,7 @@ export function person(p: J, me: J, members: J[]): J {
   const id = strOf("id") ?? "";
   const email = strOf("email");
   const key = email ?? id;
-  const member = members.find((m) => sameEmail(get(m, "email"), key));
+  const member = memberOf(members, key);
   const mName = str(get(member, "name")) || null;
   const name = id === "local" ? t("core-views.present.local_page") : (mName ?? strOf("name") ?? email ?? id);
   const mine = isViewer(me, id, []) || (email !== null && isViewer(me, email, []));
@@ -596,7 +617,7 @@ export function lastBy(row: J, me: J, slackUsers: string[], members: J[]): J {
   }
   if (isStationAuthor(kind)) return { kind: "station", name: brand.name(), mine: false };
   const mine = isViewer(me, author, slackUsers);
-  const member = members.find((m) => sameEmail(get(m, "email"), author));
+  const member = memberOf(members, author);
   const name = mine ? t("core-views.present.you") : (str(get(member, "name")) || saidName || author);
   // A Slack person's own picture, as their Slack shows it; else their workspace account's.
   const picture = str(last.authorPicture) || str(get(member, "picture")) || null;

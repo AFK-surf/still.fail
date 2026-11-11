@@ -138,6 +138,38 @@ test("a_rows_people_are_said_in_words_who_started_it_first", () => {
   assert.equal(row.peopleText, "Lina");
 });
 
+test("a member is found by e-mail whatever its case, the first of them, as a scan of the list finds it", () => {
+  // (what the names came of before the list was kept by e-mail: the first whose e-mail, a string, is the same lowered)
+  const scan = (members: any[], email: string) => members.find((m) => typeof m?.email === "string" && m.email.toLowerCase() === email.toLowerCase());
+  const members: any[] = [
+    { email: "Ana@Acme.dev", name: "Ana" },
+    { email: "ana@acme.dev", name: "the second Ana" },
+    { email: "", name: "no address" },
+    { email: 7, name: "a number" },
+    null,
+    "not a member",
+    { name: "none at all" },
+    { email: "WANG.LEI@acme.dev", name: "王磊", picture: "https://x/p.png" },
+  ];
+  const asked = ["ana@acme.dev", "ANA@ACME.DEV", "Ana@Acme.dev", "wang.lei@ACME.dev", "", "7", "nobody@acme.dev", "local"];
+  for (const email of asked) {
+    const m = scan(members, email);
+    assert.equal(p.memberName(members, email), m?.name ? m.name : null, email);
+    const shown = (p.person({ id: email, email: email === "" ? undefined : email }, { id: "me", email: "me@acme.dev" }, members) as any).shown;
+    assert.equal(shown.name, email === "local" ? shown.name : (m?.name || email), email);
+    assert.equal(shown.picture, typeof m?.picture === "string" && m.picture !== "" ? m.picture : null, email);
+    const by = p.lastBy({ last: { authorKind: "person", author: email, authorName: "said" } }, { id: "me", email: "me@acme.dev" }, [], members) as any;
+    assert.equal(by.name, m?.name || "said" || email, email);
+  }
+  // a list that grew is read again: the one added is found, the first of an address still the first
+  members.push({ email: "new@acme.dev", name: "New" }, { email: "ANA@acme.dev", name: "a third Ana" });
+  assert.equal(p.memberName(members, "new@acme.dev"), "New");
+  assert.equal(p.memberName(members, "ana@acme.dev"), "Ana");
+  // another list is another's
+  assert.equal(p.memberName([{ email: "ana@acme.dev", name: "Other" }], "ANA@acme.dev"), "Other");
+  assert.equal(p.memberName([], "ana@acme.dev"), null);
+});
+
 test("profile_recovery_follows_states_and_clears_after_success", () => {
   let q: J = { access: { kind: "subscription" }, check: { state: "login" }, quota: { state: "unavailable" } };
   q = p.profile(q);
