@@ -3798,6 +3798,10 @@ fn[T] Ctx::with_old_drawn(self : Ctx, f : () -> T) -> T {
       o.tx = o.tx * s
       o.ty = o.ty * s
       o.border_w = o.border_w * s
+      // (drawn so big: what the corner rule asks of it as said, corners.mbt's corner_scale_at)
+      if s != 1.0 {
+        corner_scale_at[j] = s
+      }
       let mut ch = o.first
       while ch >= 0 && ch < count {
         stack.push(ch)
@@ -3808,6 +3812,7 @@ fn[T] Ctx::with_old_drawn(self : Ctx, f : () -> T) -> T {
   let out = f()
   for m in moved_back {
     let o = self.nodes[m.0]
+    corner_scale_at.remove(m.0)
     o.x = m.1
     o.y = m.2
     o.fw = m.3

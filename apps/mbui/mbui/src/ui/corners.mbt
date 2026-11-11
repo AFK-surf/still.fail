@@ -343,6 +343,13 @@ fn[T] Ctx::with_tree_nodes(
       n.id = -(k + 1)
     }
     let i = add(n)
+    // (how big it is drawn, where not as laid out: corner_scale_at)
+    if !laid {
+      let s = tree.drawn_scale(d.id)
+      if s != 1.0 {
+        corner_scale_at[i] = s
+      }
+    }
     if steady && tree.is_scroller(d.id) {
       tree_scroller_at.add(i)
     }
@@ -401,6 +408,7 @@ fn[T] Ctx::with_tree_nodes(
   }
   tree_field_boxes.clear()
   tree_scaled_at.clear()
+  corner_scale_at.clear()
   tree_draws_at.clear()
   tree_fixed_h_at.clear()
   tree_moved_at.clear()
@@ -527,6 +535,10 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       continue
     }
     let a = c.nodes[p]
+    // (it and the container's ground drawn under one scale (View::scale, a lift's): what the theme says of a corner, its
+    // ladder and its ranges, asked of them as said, what is drawn divided by that scale; concentric holds at any scale.
+    // One scaled and the other not, or each its own, as drawn)
+    let u = c.corner_scale_shared(i, ct)
     let l = b.x - a.x
     let t = b.y - a.y
     let r = a.x + a.fw - (b.x + b.fw)
@@ -538,7 +550,7 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
     if ladder.length() > 0 {
       for k in 0..<4 {
         let ra = c.container_r(ct, k)
-        if !on_ladder(ladder, ra) {
+        if !on_ladder(ladder, ra / u) {
           match c.corner_inset_at(i, p, k, ra) {
             Some(e) => off_at = Some(e)
             None => ()
@@ -653,14 +665,14 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
         )
         continue
       }
-      if !in_step && !c.fit_there(ra, rb, round, room=room_a) {
+      if !in_step && !c.fit_there(ra / u, rb / u, round, room=room_a / u) {
         continue
       }
       // nor a smooth one standing in it (not flush with it) whose own corner is rounder than any it could have
       // concentric there (a card's 26 in a window's 16, 10 in: 8): the corner too square for the shape it has, it stands
       // as it is, alone. Following it would square all of it, or that one corner alone, its corners then not alike,
       // which only a design says (the user, 2026-10-26: 每个四边圆角不一致的都应该手动确认是否 by design)
-      if !round && !in_step && dmin(dx, dy) >= c.fit_near() - 0.5 && concentric(ra, c.fit_near()) < rb - 0.5 {
+      if !round && !in_step && dmin(dx, dy) / u >= c.fit_near() - 0.5 && concentric(ra / u, c.fit_near()) < rb / u - 0.5 {
         continue
       }
       // nor one that holds a circle in its own corner there which could not follow it if it followed this one (a
@@ -682,9 +694,9 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       // as big as half its container each way may be rounder than the ladder's most, following a container that is
       // (a page alone in a panel whose corner is the screen's or the system's round its action: the user, 2026-10-28:
       // 边距 4 且同心); a smaller thing so round reads as a blob
-      if !round && even && in_step && !c.corner_fits(rb) && !(c.corner_fits_least(rb) && c.half_of(i, p)) &&
-        c.fit_there(ra, rb, round, room=room_a) {
-        let place = c.fit_place(ra, dx)
+      if !round && even && in_step && !c.corner_fits(rb / u) && !(c.corner_fits_least(rb / u) && c.half_of(i, p)) &&
+        c.fit_there(ra / u, rb / u, round, room=room_a / u) {
+        let place = c.fit_place(ra / u, dx / u) * u
         out.push(
           "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} from its edges, a corner the theme's ranges do not let it have; \{place} in, it would be \{concentric(ra, place)}",
         )
@@ -698,21 +710,21 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       if ladder.length() > 0 &&
         even &&
         in_step &&
-        dmax(dx, dy) >= ladder_hug(ladder) &&
-        ra > ladder[ladder.length() - 1] + 0.5 {
+        dmax(dx, dy) / u >= ladder_hug(ladder) &&
+        ra / u > ladder[ladder.length() - 1] + 0.5 {
         let round_a = ra >= dmin(a.fw, a.fh) / 2.0 - 0.5
         // (not one round as it is because it lies in a corner of its own, concentric with it there: a panel in the
         // window's, a composer at a panel's foot, its corners all alike as that one; nor the window, round as the
         // system has it; nor one whose corners are linked, round as what they come from has them: a strip along the
         // window's edge, the window's less its inset all round)
         if !round_a &&
-          !on_ladder(ladder, ra) &&
+          !on_ladder(ladder, ra / u) &&
           !off_ladder.contains(p) &&
           !c.follows_corner(ct, k, grounds) &&
           c.nodes[ct.ground].links is None {
           off_ladder.add(p)
           out.push(
-            "\{c.named(p)} (corner \{ra}): something lies in its \{corner}, and its corner is not one of the ladder's \{ladder}",
+            "\{c.named(p)} (corner \{ra}\{scaled_said(ra, u)}): something lies in its \{corner}, and its corner is not one of the ladder's \{ladder}",
           )
         }
         let placed_off = match off_at {
@@ -721,9 +733,9 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
         }
         // (the window's corner is the system's, never the ladder's, though it may come near one of its steps: a Mac's 16
         // zoomed out to 0.9, 17.78; what lies in it follows it, not the ladder)
-        if !round && !ct.window && on_ladder(ladder, ra) && !on_ladder(ladder, rb) && !placed_off {
+        if !round && !ct.window && on_ladder(ladder, ra / u) && !on_ladder(ladder, rb / u) && !placed_off {
           out.push(
-            "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} from its edges, so a corner not one of the ladder's \{ladder} (\{ladder_in(ladder, ra)})",
+            "\{c.named(i)} (corner \{rb}\{scaled_said(rb, u)}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} from its edges, so a corner not one of the ladder's \{ladder} (\{ladder_in(ladder, ra / u)})",
           )
         }
       }
@@ -880,6 +892,40 @@ fn nearest_corner(k : Int, l : Double, t : Double, r : Double, d : Double) -> Bo
   let side_ok = if corner_left(k) { l <= r + 0.5 } else { r <= l + 0.5 }
   let end_ok = if k < 2 { t <= d + 0.5 } else { d <= t + 0.5 }
   side_ok && end_ok
+}
+
+///|
+/// How big the frame's nodes put there for what the window's tree draws are drawn, where not as laid out (View::scale,
+/// its holders' with it: Tree::drawn_scale): a node of the tree's, and an old view's drawn in one (Ctx::with_old_drawn),
+/// by their place among the frame's nodes.
+// kept across runs: filled and emptied round one asking of the corner rule (Ctx::with_tree_nodes, Ctx::with_old_drawn)
+let corner_scale_at : Map[Int, Double] = Map([])
+
+///|
+/// The scale node `i` and container `ct`'s ground are both drawn at, where it is one (corner_scale_at); 1 where it is
+/// not (one scaled and the other not, each its own, or the window).
+fn Ctx::corner_scale_shared(self : Ctx, i : Int, ct : Container) -> Double {
+  ignore(self)
+  if ct.window {
+    return 1.0
+  }
+  let si = corner_scale_at.get(i).unwrap_or(1.0)
+  let sg = corner_scale_at.get(ct.ground).unwrap_or(1.0)
+  if (si - sg).abs() <= 1.0e-9 {
+    si
+  } else {
+    1.0
+  }
+}
+
+///|
+/// A corner `r` drawn `u` as big, as said, for a fault's words ("" drawn as said).
+fn scaled_said(r : Double, u : Double) -> String {
+  if u == 1.0 {
+    ""
+  } else {
+    ", \{r / u} as said, drawn \{u} as big"
+  }
 }
 
 ///|
