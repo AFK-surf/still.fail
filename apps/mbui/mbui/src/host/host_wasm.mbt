@@ -190,7 +190,6 @@ fn ffi_bench_mode() -> Int = "mbhost" "mb_host_bench_mode"
 fn ffi_set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Int = "mbhost" "mb_host_set_outside"
 
 ///|
-#borrow(what)
 fn mbw_mb_host_frame_awaiting(awaiting : Int, what : Int) = "mbhost" "mb_host_frame_awaiting"
 
 ///|
