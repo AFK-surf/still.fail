@@ -209,7 +209,9 @@ pub fn Tree::looks_of(self : Tree, id : NodeId) -> Array[String] {
 ///|
 /// What takes presses where it is drawn now, for a check of the room each has to be pressed in (ui's rooms.mbt): each
 /// node drawn that does something pressed or held (View::on_press, View::on_drag; not one hosting an old view, whose
-/// own boxes are its) and takes it now (Tree::pressless_at: not leaving, nor said to take none, nor under a modal layer
+/// own boxes are its; nor a ground, its pointer said the arrow (View::cursor's Arrow, as an old view's: a message's
+/// words a hold picks in, the links in them, ui's runs_links), no control: no room of its own, none it cuts) and takes
+/// it now (Tree::pressless_at: not leaving, nor said to take none, nor under a modal layer
 /// it is not in), seen, whole within the window and what bounds its input (View::bounds_input: a list's rows scrolled
 /// partly out are not). Each with its box in the window (x0, y0, x1, y1), the nearest such that holds it (its index
 /// here, -1 none) and the node of the root's it is in (its layer: two in different ones never meet).
@@ -218,7 +220,11 @@ pub fn Tree::press_boxes(self : Tree) -> Array[(NodeId, (Double, Double, Double,
   let (ww, wh) = self.room.untracked()
   self.each_drawn_scaled(fn(c, cx, cy, alpha, s) {
     let n = self.nodes[c.id.at]
-    if alpha <= 0.01 || n.hosted || (n.on_press is None && n.on_drag is None) || self.pressless_at(c.id.at) {
+    if alpha <= 0.01 ||
+      n.hosted ||
+      (n.on_press is None && n.on_drag is None) ||
+      n.cursor is Some(Arrow) ||
+      self.pressless_at(c.id.at) {
       return
     }
     let b = (cx, cy, cx + c.w * s, cy + c.h * s)
