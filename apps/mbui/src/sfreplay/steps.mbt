@@ -185,6 +185,18 @@ pub fn Flow::start(
   if pace_pass.val {
     r.chain_steps()
   }
+  // (the strict pass keeps each input as it worked it out of the screen (where it tapped, how far it wheeled, when
+  // what it waited for was so); a pace pass gives the same, at the same moments, and judges nothing of the screen:
+  // the same inputs, only the frames between them other)
+  if seed == 0 && emit_path() == "" {
+    kept_inputs.clear()
+    keeping.val = 1
+  } else if pace_pass.val {
+    kept_next.clear()
+    keeping.val = 2
+  } else {
+    keeping.val = 0
+  }
   pace_failed.val = false
   t.looks_said_only(pace_pass.val)
   // (what it says from here, MOTION lines too, the pace pass's till its PACE-END)
@@ -440,7 +452,7 @@ fn Flow::reach_spots(self : Flow, what : String) -> Array[(Double, Double)] {
 /// writes the steps as a scripted run over a trace the app has outgrown (FLOW_EMIT), said and the steps after it
 /// written all the same (Flow::fail).
 pub fn Flow::check(self : Flow, so : Bool, why : String) -> Unit {
-  if !so {
+  if self.judges() && !so {
     self.fail(why)
   }
 }
@@ -473,7 +485,23 @@ fn Flow::fail(self : Flow, why : String) -> Unit {
 /// What the run's script waited through at a step that waits (`until`, `gone`: what came after it began, Replay::
 /// step_taken), given a message at a time, each with its frame, until `so` holds: as the run's script saw it come,
 /// not past it (a player's place told after the script saw 0:02 is not given before it looks).
-pub fn Flow::until(self : Flow, so : () -> Bool) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::until(self : Flow, so : () -> Bool, loc~ : SourceLoc) -> Unit {
+  self.until_at(loc.to_string(), so)
+}
+
+///|
+/// Flow::until, its inputs kept by `site` (the test's line that asked: Kept).
+fn Flow::until_at(self : Flow, site : String, so : () -> Bool) -> Unit {
+  // (a pace pass waits to when the strict pass found it so, what comes meanwhile given: not looking at its screen)
+  if keeping.val == 2 {
+    match self.kept(site) {
+      Some(Waited(at)) => self.wait_to(at)
+      Some(k) => self.fail("the strict pass kept \{k} here, not a wait")
+      None => ()
+    }
+    return
+  }
   self.one_by_one.val = true
   let began = self.t.time()
   while !so() {
@@ -497,6 +525,28 @@ pub fn Flow::until(self : Flow, so : () -> Bool) -> Unit {
     self.t.run_for(frame_ms)
   }
   self.one_by_one.val = false
+  if keeping.val == 1 {
+    kept_push(site, Waited(self.t.time()))
+  }
+}
+
+///|
+/// The clock on to `at` (a pace pass's wait, Flow::until), what comes meanwhile given a message at a time with its
+/// frame, as the strict pass's wait gave it.
+fn Flow::wait_to(self : Flow, at : Double) -> Unit {
+  self.one_by_one.val = true
+  while self.t.time() < at - 1.0e-9 {
+    let n = self.r.deliver(at_most=1, now=self.t.time(), host_by=self.t.taken_at(), taken_at=self.t.taken_at(), to=fn(json, bytes) { self.t.post("core", json, bytes?) })
+    if n > 0 || self.t.posted() > 0 {
+      self.t.draw()
+      if self.t.posted() == 0 {
+        continue
+      }
+    }
+    let step = at - self.t.time()
+    self.t.run_for(if step < frame_ms { step } else { frame_ms })
+  }
+  self.one_by_one.val = false
 }
 
 ///|
@@ -509,31 +559,37 @@ let until_most_ms : Double = 60000.0
 
 ///|
 /// `what` is on screen now.
-pub fn Flow::see(self : Flow, what : String) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::see(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   emit("until " + what)
-  self.until(fn() { self.spots(what).length() > 0 })
-  if self.spots(what).length() == 0 {
+  self.until_at(site, fn() { self.spots(what).length() > 0 })
+  if self.judges() && self.spots(what).length() == 0 {
     self.fail("not on screen: " + what)
   }
 }
 
 ///|
 /// `n` or more of `what` on screen now.
-pub fn Flow::see_n(self : Flow, n : Int, what : String) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::see_n(self : Flow, n : Int, what : String, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   emit("untiln \{n} " + what)
-  self.until(fn() { self.spots(what).length() >= n })
+  self.until_at(site, fn() { self.spots(what).length() >= n })
   let k = self.spots(what).length()
-  if k < n {
+  if self.judges() && k < n {
     self.fail("\{k} of \{what} on screen, not \{n}")
   }
 }
 
 ///|
 /// `what` is not on screen now.
-pub fn Flow::gone(self : Flow, what : String) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::gone(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   emit("gone " + what)
-  self.until(fn() { self.spots(what).length() == 0 })
-  if self.spots(what).length() > 0 {
+  self.until_at(site, fn() { self.spots(what).length() == 0 })
+  if self.judges() && self.spots(what).length() > 0 {
     self.fail("still on screen: " + what)
   }
 }
@@ -543,7 +599,7 @@ pub fn Flow::gone(self : Flow, what : String) -> Unit {
 pub fn Flow::field(self : Flow, words : String) -> Unit {
   emit(if words == "" { "empty" } else { "field " + words.replace_all(old="\n", new="\\n") })
   let now = self.t.field_words()
-  if (words == "" && now != "") || !now.contains(words) {
+  if self.judges() && (words == "" && now != "") || !now.contains(words) {
     self.fail("the field holds \{now.escape()}, not \{words.escape()}")
   }
 }
@@ -552,27 +608,32 @@ pub fn Flow::field(self : Flow, words : String) -> Unit {
 /// A visible field holds words even when it has lost focus, as for a restored draft.
 pub fn Flow::field_visible(self : Flow, words : String) -> Unit {
   emit("field " + words.replace_all(old="\n", new="\\n"))
-  if !self.t.all(@ui.Role::TextField).iter().any(fn(field) { field.value.contains(words) }) {
+  if self.judges() && !self.t.all(@ui.Role::TextField).iter().any(fn(field) { field.value.contains(words) }) {
     self.fail("no visible field holds \{words.escape()}")
   }
 }
 
 ///|
 /// The lowest `what` on screen (`top`: the highest) tapped, and what the core answers to it given.
-pub fn Flow::tap(self : Flow, what : String, top? : Bool = false) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::tap(self : Flow, what : String, top? : Bool = false, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   emit((if top { "tap1 " } else { "tap " }) + what)
   // Messages posted as the last frame ended are taken in the next frame. Show them before locating the target, so a
   // response that reorders the rows cannot move it between choosing its coordinates and taking the tap.
   self.core()
   // (as a scripted run's tap waits for what it taps to show, where a finger reaches it, not under a sheet or a scrim:
   // what came for it given first, Flow::until)
-  self.until(fn() { self.reach_spots(what).length() > 0 })
-  let at = self.reach_spots(what)
-  if at.length() == 0 {
-    self.fail("nothing to tap: " + what)
-    return
-  }
-  let (x, y) = if top { at[at.length() - 1] } else { at[0] }
+  self.until_at(site, fn() { self.reach_spots(what).length() > 0 })
+  let p = self.kept_point(site, fn() {
+    let at = self.reach_spots(what)
+    if at.length() == 0 {
+      self.fail("nothing to tap: " + what)
+      return None
+    }
+    Some(if top { at[at.length() - 1] } else { at[0] })
+  })
+  guard p is Some((x, y)) else { return }
   self.t.tap(x, y)
   self.core()
 }
@@ -588,17 +649,22 @@ pub fn Flow::tap_at(self : Flow, x : Double, y : Double) -> Unit {
 
 ///|
 /// The lowest `what` pressed for `ms` (a declared length: a long press's), then let go.
-pub fn Flow::hold(self : Flow, what : String, ms : Double) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::hold(self : Flow, what : String, ms : Double, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   // (a host's long press is held past its threshold: as long again, not to the frame)
   emit("hold \{(ms * 2.0).to_int()} " + what)
   // (as a scripted run's tap waits for what it taps to show: what came for it given first, Flow::until)
-  self.until(fn() { self.spots(what).length() > 0 })
-  let at = self.spots(what)
-  if at.length() == 0 {
-    self.fail("nothing to hold: " + what)
-    return
-  }
-  let (x, y) = at[0]
+  self.until_at(site, fn() { self.spots(what).length() > 0 })
+  let p = self.kept_point(site, fn() {
+    let at = self.spots(what)
+    if at.length() == 0 {
+      self.fail("nothing to hold: " + what)
+      return None
+    }
+    Some(at[0])
+  })
+  guard p is Some((x, y)) else { return }
   // (held as the run's host held it, past the threshold: not released on its very moment)
   self.t.press_at(x, y)
   self.t.run_for(ms * 2.0)
@@ -637,12 +703,14 @@ pub fn Flow::paste(self : Flow, s : String) -> Unit {
 /// The run's `n`-th answer to a call `call` (counted from its start) given: a scripted run's `answered CALL`, what a
 /// step waits for when what it waits on is what the app asked of the core and nothing on screen says it (a site view's
 /// page loaded, its requests through the core answered).
-pub fn Flow::answered(self : Flow, call : String, n : Int) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::answered(self : Flow, call : String, n : Int, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   // (what was asked before, written as the steps would have; this call's own counted by the n written here, not
   // written again by the next step: a scripted run waits for the n-th, not for more)
   emit_answered(self.r.take_asked().filter(fn(c) { c != call }))
   emit_answered_to(call, n)
-  self.until(fn() { self.r.answers_given(call) >= n })
+  self.until_at(site, fn() { self.r.answers_given(call) >= n })
   emit_answered(self.r.take_asked().filter(fn(c) { c != call }))
   if self.r.answers_given(call) < n {
     self.fail("\{call} answered \{self.r.answers_given(call)} times, not \{n}")
@@ -875,7 +943,23 @@ pub fn Flow::clear(self : Flow) -> Unit {
 /// `@sf.presented_rest()`, `@sfapp.bar_rest()`), or none where the clock is past it already (the run's own waiting took
 /// it there: each says its end as it was once it is over, whichever frames were drawn): the test fails if it has not
 /// started yet (+inf: draw first) or nothing of it ever moved (-1).
-pub fn Flow::run_to(self : Flow, end : Double) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::run_to(self : Flow, end : Double, loc~ : SourceLoc) -> Unit {
+  self.run_to_at(loc.to_string(), end)
+}
+
+///|
+/// Flow::run_to, kept by `site` (Kept): a pace pass runs to where the strict pass ran, the moment it came to.
+fn Flow::run_to_at(self : Flow, site : String, end : Double) -> Unit {
+  if keeping.val == 2 {
+    match self.kept(site) {
+      Some(Waited(at)) => self.wait_to(at)
+      Some(k) => self.fail("the strict pass kept \{k} here, not where it ran to")
+      None => ()
+    }
+    self.core()
+    return
+  }
   if end < 0.0 || end > 1.0e300 {
     self.fail("no motion to run to (its end: \{end}); said since the last step that acted: \{self.said.join(" | ")}")
     return
@@ -889,6 +973,9 @@ pub fn Flow::run_to(self : Flow, end : Double) -> Unit {
     self.t.run_for(end - now)
   }
   self.core()
+  if keeping.val == 1 {
+    kept_push(site, Waited(self.t.time()))
+  }
 }
 
 ///|
@@ -906,14 +993,16 @@ fn waiting_step(line : String) -> Bool {
 /// as run_to. At the run's pace it may be over already, the run's own waiting having taken the clock past it: when a
 /// motion so named was said since the last step that acted and is at rest now, that is where the test would have run it to;
 /// one over before that step, its end as it said it (Tester::rest_of). One never said: no motion.
-pub fn Flow::run_to_rest(self : Flow, name : String) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::run_to_rest(self : Flow, name : String, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   let end = self.t.rest_of(name)
   if end <= self.t.time() && self.rest_passed(name) {
     self.core()
     return
   }
   // (one so named over before the last step that acted: its end as it said it (Tester::rest_of), run_to there)
-  self.run_to(end)
+  self.run_to_at(site, end)
 }
 
 ///|
@@ -927,14 +1016,16 @@ pub fn Flow::rest_passed(self : Flow, name : String) -> Bool {
 /// `page` pushed over Home, as a scripted run's `#env MBUI_OPEN_PAGE` has it (src/stillfail/main.mbt; there before
 /// the first frame, here once the Tester has drawn Home: the same asks, matched whatever their order), in place once
 /// its push is over (@ui.nav_rest).
-pub fn Flow::open_page(self : Flow, page : @sfapp.Page) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::open_page(self : Flow, page : @sfapp.Page, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   emit("#env MBUI_OPEN_PAGE=" + page_name(page))
   @sfapp.open_page(page)
   self.t.draw()
   self.core()
   // (a page pushed over Home slides in, to its end)
   if @ui.nav_rest() >= 0.0 {
-    self.run_to(@ui.nav_rest())
+    self.run_to_at(site, @ui.nav_rest())
   }
 }
 
@@ -942,22 +1033,140 @@ pub fn Flow::open_page(self : Flow, page : @sfapp.Page) -> Unit {
 
 ///|
 /// The lowest `what` (`top`: the highest) on screen, or the test fails.
-fn Flow::spot(self : Flow, what : String, top? : Bool = false) -> (Double, Double)? {
-  // (as a scripted run's tap waits for what it taps to show: what came for it given first, Flow::until)
-  self.until(fn() { self.spots(what).length() > 0 })
-  let at = self.spots(what)
-  if at.length() == 0 {
-    self.fail("not on screen: " + what)
+/// An input as the strict pass worked it out of the screen (Flow::start): a pace pass's own, the same.
+priv enum Kept {
+  Point(Double, Double)
+  NoPoint
+  Waited(Double)
+  Amount(Double)
+} derive(Show)
+
+///|
+/// What the strict pass worked its inputs out to, by the test's line that asked (a step there skipped or taken more
+/// often, as what the test reads of its screen decides, does not shift the others'), in the order taken there (Kept).
+// kept across runs: emptied as each strict pass begins, read on by the pace passes after it (Flow::start)
+let kept_inputs : Map[String, Array[Kept]] = {}
+
+///|
+/// How many of each line's kept inputs a pace pass has given.
+// kept across runs: emptied as each pace pass begins
+let kept_next : Map[String, Int] = {}
+
+///|
+/// `k` kept for the step the test's line `site` asked (the strict pass's).
+fn kept_push(site : String, k : Kept) -> Unit {
+  match kept_inputs.get(site) {
+    Some(a) => a.push(k)
+    None => kept_inputs[site] = [k]
+  }
+}
+
+///|
+/// 1: the strict pass, keeping its inputs; 2: a pace pass, giving them; 0: neither.
+// kept across runs: set as each pass begins (Flow::start)
+let keeping : Ref[Int] = Ref(0)
+
+///|
+/// The next input kept, in a pace pass: None where the strict pass kept no more (said).
+fn Flow::kept(self : Flow, site : String) -> Kept? {
+  let i = kept_next.get(site).unwrap_or(0)
+  let all = kept_inputs.get(site).unwrap_or([])
+  if i >= all.length() {
+    self.fail("the strict pass kept no input for this step (\{site})")
     return None
   }
-  Some(if top { at[at.length() - 1] } else { at[0] })
+  kept_next[site] = i + 1
+  Some(all[i])
+}
+
+///|
+/// Where an input goes, worked out of the screen by `find` in the strict pass (kept), the strict pass's in a pace pass.
+fn Flow::kept_point(self : Flow, site : String, find : () -> (Double, Double)?) -> (Double, Double)? {
+  match keeping.val {
+    2 =>
+      match self.kept(site) {
+        Some(Point(x, y)) => Some((x, y))
+        Some(NoPoint) => None
+        Some(k) => {
+          self.fail("the strict pass kept \{k} here, not where an input went")
+          find()
+        }
+        None => find()
+      }
+    _ => {
+      let p = find()
+      if keeping.val == 1 {
+        kept_push(site, match p {
+          Some((x, y)) => Point(x, y)
+          None => NoPoint
+        })
+      }
+      p
+    }
+  }
+}
+
+///|
+/// What the test worked out of the screen at line `loc` (a choice it makes by it: whether to wheel again), as the
+/// strict pass saw it: a pace pass takes the same way through the test, its screen another rate's.
+#callsite(autofill(loc))
+pub fn Flow::saw(self : Flow, so : Bool, loc~ : SourceLoc) -> Bool {
+  self.measured(if so { 1.0 } else { 0.0 }, loc~) != 0.0
+}
+
+///|
+/// A distance the test measured on the screen at line `loc` (how far to wheel to line two things up), as the strict
+/// pass measured it: a pace pass's the same.
+#callsite(autofill(loc))
+pub fn Flow::measured(self : Flow, x : Double, loc~ : SourceLoc) -> Double {
+  let site = loc.to_string()
+  match keeping.val {
+    2 =>
+      match self.kept(site) {
+        Some(Amount(d)) => d
+        Some(k) => {
+          self.fail("the strict pass kept \{k} here, not what it measured")
+          x
+        }
+        None => x
+      }
+    1 => {
+      kept_push(site, Amount(x))
+      x
+    }
+    _ => x
+  }
+}
+
+///|
+/// Whether what the test says of the screen is judged: not in a pace pass, whose inputs are the strict pass's and whose
+/// screen is another rate's (what it judges: what the app tells the core, and a flow that cannot go on).
+pub fn Flow::judges(self : Flow) -> Bool {
+  ignore(self)
+  keeping.val != 2
+}
+
+///|
+fn Flow::spot(self : Flow, what : String, site : String, top? : Bool = false) -> (Double, Double)? {
+  // (as a scripted run's tap waits for what it taps to show: what came for it given first, Flow::until)
+  self.until_at(site, fn() { self.spots(what).length() > 0 })
+  self.kept_point(site, fn() {
+    let at = self.spots(what)
+    if at.length() == 0 {
+      self.fail("not on screen: " + what)
+      return None
+    }
+    Some(if top { at[at.length() - 1] } else { at[0] })
+  })
 }
 
 ///|
 /// The pointer over the lowest `what`, no button down (a flow's `hover`).
-pub fn Flow::hover(self : Flow, what : String) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::hover(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   emit("hover " + what)
-  guard self.spot(what) is Some((x, y)) else { return }
+  guard self.spot(what, site) is Some((x, y)) else { return }
   self.t.move(x, y)
   self.t.draw()
   self.core()
@@ -965,9 +1174,11 @@ pub fn Flow::hover(self : Flow, what : String) -> Unit {
 
 ///|
 /// A secondary click on the lowest `what` (a flow's `rightclick`: a row's menu).
-pub fn Flow::right_click(self : Flow, what : String) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::right_click(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   emit("rightclick " + what)
-  guard self.spot(what) is Some((x, y)) else { return }
+  guard self.spot(what, site) is Some((x, y)) else { return }
   self.t.right_click(x, y)
   self.core()
 }
@@ -992,7 +1203,9 @@ pub fn Flow::wheel(self : Flow, dy : Double) -> Unit {
 ///|
 /// Align content using a distance measured on the current frame. In another timing, that distance can change while
 /// the same scroll is needed; match the recorded wheel step in the same direction while applying the measured distance.
-pub fn Flow::wheel_aligned(self : Flow, dy : Double) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::wheel_aligned(self : Flow, dy : Double, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   let actual = "wheel \{dy.to_int()}"
   let step = if !self.strict {
     match self.r.next_step() {
@@ -1002,6 +1215,23 @@ pub fn Flow::wheel_aligned(self : Flow, dy : Double) -> Unit {
     }
   } else { actual }
   emit(step)
+  // (how far, as the strict pass measured it on its screen: a pace pass's the same)
+  let dy = match keeping.val {
+    2 =>
+      match self.kept(site) {
+        Some(Amount(d)) => d
+        Some(k) => {
+          self.fail("the strict pass kept \{k} here, not how far it wheeled")
+          dy
+        }
+        None => dy
+      }
+    1 => {
+      kept_push(site, Amount(dy))
+      dy
+    }
+    _ => dy
+  }
   let (w, h) = self.t.size()
   self.t.wheel(w / 2.0, h / 2.0, dy)
   self.core()
@@ -1009,10 +1239,12 @@ pub fn Flow::wheel_aligned(self : Flow, dy : Double) -> Unit {
 
 ///|
 /// The lowest `what` dragged by (dx, dy) in `steps` moves, a frame apart, then let go (a flow's `dragon`).
-pub fn Flow::drag(self : Flow, what : String, dx : Double, dy : Double, steps? : Int = 10) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::drag(self : Flow, what : String, dx : Double, dy : Double, steps? : Int = 10, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   // (a host's drag moves a frame a step: as many frames)
   emit("dragon \{dx.to_int()} \{dy.to_int()} \{(steps.to_double() * @ui.drag_step_ms).to_int()} " + what)
-  guard self.spot(what) is Some((x, y)) else { return }
+  guard self.spot(what, site) is Some((x, y)) else { return }
   self.t.drag(x, y, x + dx, y + dy, steps~)
   self.t.draw()
   self.core()
@@ -1021,28 +1253,32 @@ pub fn Flow::drag(self : Flow, what : String, dx : Double, dy : Double, steps? :
 ///|
 /// The list under the lowest `what` scrolled by `dy` (a mouse wheel's: down the page as it grows), and what the core
 /// answers to it given.
-pub fn Flow::wheel_at(self : Flow, what : String, dy : Double) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::wheel_at(self : Flow, what : String, dy : Double, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   emit("wheelat \{dy.to_int()} " + what)
-  guard self.spot(what) is Some((x, y)) else { return }
+  guard self.spot(what, site) is Some((x, y)) else { return }
   self.t.wheel(x, y, dy)
   self.core()
   // the list's wheel eased to where it goes (a phone's lists, Android's, go there at once)
   let eased = self.t.rest_of("wheel ease")
   if eased > self.t.time() && eased < @double.infinity {
-    self.run_to(eased)
+    self.run_to_at(site, eased)
   }
 }
 
 ///|
 /// The toast on screen gone: its time shown (`@sfapp.toast_ms`, a timer), then the frame that sends it away and its way
 /// out (`@kit.toast_rest`).
-pub fn Flow::toast_gone(self : Flow) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::toast_gone(self : Flow, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   self.run_for(@sfapp.toast_ms)
   self.t.draw()
   // (its way out over already where it began before the test looked at it: a step that waited took the clock past)
   let out = @kit.toast_rest("toast")
   if out > self.t.time() {
-    self.run_to(out)
+    self.run_to_at(site, out)
   }
 }
 
@@ -1055,21 +1291,25 @@ fn Flow::holds_notice(self : Flow, text : String) -> Bool {
 ///|
 /// One of the app's notifications (the system's, @ui.notice_show: Tester::notices) holds `text` in its title or words
 /// now.
-pub fn Flow::noticed(self : Flow, text : String) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::noticed(self : Flow, text : String, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   emit("noticed " + text)
   // (as a scripted run's `noticed` waits for it: what came for it given first, Flow::until)
-  self.until(fn() { self.holds_notice(text) })
-  if !self.holds_notice(text) {
+  self.until_at(site, fn() { self.holds_notice(text) })
+  if self.judges() && !self.holds_notice(text) {
     self.fail("no notice holds " + text)
   }
 }
 
 ///|
 /// None of the app's notifications holds `text` now.
-pub fn Flow::no_notice(self : Flow, text : String) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::no_notice(self : Flow, text : String, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   emit("nonotice " + text)
-  self.until(fn() { !self.holds_notice(text) })
-  if self.holds_notice(text) {
+  self.until_at(site, fn() { !self.holds_notice(text) })
+  if self.judges() && self.holds_notice(text) {
     self.fail("a notice holds " + text)
   }
 }
@@ -1077,9 +1317,11 @@ pub fn Flow::no_notice(self : Flow, text : String) -> Unit {
 ///|
 /// The notification holding `text` tapped, as the system's shade sends the tap (Tester::tap_notice), and what the
 /// core answers to what that opens given.
-pub fn Flow::tap_notice(self : Flow, text : String) -> Unit {
+#callsite(autofill(loc))
+pub fn Flow::tap_notice(self : Flow, text : String, loc~ : SourceLoc) -> Unit {
+  let site = loc.to_string()
   emit("notice " + text)
-  self.until(fn() { self.holds_notice(text) })
+  self.until_at(site, fn() { self.holds_notice(text) })
   if !self.t.tap_notice(text) {
     self.fail("no notice to tap holds " + text)
     return
@@ -1105,16 +1347,21 @@ pub fn Flow::drag_at(self : Flow, x : Double, y : Double, dx : Double, dy : Doub
 /// it comes as the clock goes on (until_moving, Tester::run_for), a motion it sets off seen on its way. The frame after
 /// the one that took the tap: where what the tap sets off from the next frame starts (a card let go: decide.mbt
 /// ask_dismiss, marked as the tap is taken, going from the frame after).
-pub fn Flow::tap_now(self : Flow, what : String, top? : Bool = false) -> Double {
+#callsite(autofill(loc))
+pub fn Flow::tap_now(self : Flow, what : String, top? : Bool = false, loc~ : SourceLoc) -> Double {
+  let site = loc.to_string()
   emit((if top { "tap1 " } else { "tap " }) + what)
   // (as a scripted run's tap waits for what it taps to show: what came for it given first, Flow::until)
-  self.until(fn() { self.spots(what).length() > 0 })
-  let at = self.spots(what)
-  if at.length() == 0 {
-    self.fail("nothing to tap: " + what)
-    return -1.0
-  }
-  let (x, y) = if top { at[at.length() - 1] } else { at[0] }
+  self.until_at(site, fn() { self.spots(what).length() > 0 })
+  let p = self.kept_point(site, fn() {
+    let at = self.spots(what)
+    if at.length() == 0 {
+      self.fail("nothing to tap: " + what)
+      return None
+    }
+    Some(if top { at[at.length() - 1] } else { at[0] })
+  })
+  guard p is Some((x, y)) else { return -1.0 }
   // (down and up, taken by a frame; then the frame that one left owed, where what the tap sets off starts: at the
   // tap's moment, or a host's run's next two frames)
   self.t.touch(0, x, y)
@@ -1148,7 +1395,9 @@ fn Flow::frame_taking(self : Flow, given : Double?) -> Double {
 ///|
 /// The clock stepped a frame at a time, what is due given as it comes, until something said to move holds `name`
 /// (Tester::moving, Tester::rest_of): when it is at rest. The test fails if nothing more may come first and none does.
-pub fn Flow::until_moving(self : Flow, name : String) -> Double {
+#callsite(autofill(loc))
+pub fn Flow::until_moving(self : Flow, name : String, loc~ : SourceLoc) -> Double {
+  let site = loc.to_string()
   // (one the last step that acts began: one of its name moving as it was taken, its coming in not over at a tap, is not
   // it)
   let told = fn() { self.t.moving().iter().any(fn(l) { l.contains(name) && !self.at_step.contains(l) }) }
