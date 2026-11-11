@@ -1114,14 +1114,16 @@ fn Ctx::list_finds_field(self : Ctx, st : ListState, order : Array[Int], iy : Do
 
 ///|
 /// Whether a list's rows are laid on the device's pixels (Ctx::row_slot, rows_on_pixels): where the host draws each
-/// glyph on its pixels (@hostapi.rows_on_pixels: every platform's), its rows kept or not; not while anything reads what
-/// each frame builds as it was (instance owners measured, everything lit). Not with the parts kept as drawn (Ctx::rows_on): on a host with them,
-/// they went off with them (#2325), and a list scrolled had its words crawl again.
+/// glyph on its pixels (@hostapi.rows_on_pixels: every platform's), its rows kept or not, what the host says and nothing
+/// else: what is measured of a frame (instance owners, everything lit) is measured of the frame a device draws. Not with
+/// the parts kept as drawn (Ctx::rows_on): on a host with them, they went off with them (#2325), and a list scrolled had
+/// its words crawl again.
 fn Ctx::rows_on_grid(self : Ctx) -> Bool {
+  ignore(self)
   if rows_on_pixels_said.val < 0 {
     rows_on_pixels_said.val = if @hostapi.rows_on_pixels() { 1 } else { 0 }
   }
-  rows_on_pixels_said.val == 1 && !inst_owners.on && !self.lit_every
+  rows_on_pixels_said.val == 1
 }
 
 ///|
