@@ -50,7 +50,7 @@ fn motion_runs() -> Bool {
 }
 
 ///|
-// (asked once: -1 not yet)
+// kept across runs: the test program's own environment, asked once (-1 not yet)
 let motion_run_said : Ref[Int] = Ref(-1)
 
 ///|

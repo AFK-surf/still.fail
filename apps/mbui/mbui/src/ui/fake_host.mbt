@@ -716,6 +716,7 @@ let host_image_bytes_bars : Map[String, Int] = Map([])
 
 ///|
 /// The most bytes each file's Testers had their hosts hold so far in this run, said as it grows (motion_runs).
+// kept across runs: the most of all the program's Testers, each file's said once as it grows
 let host_image_bytes_most : Map[String, Int] = Map([])
 
 ///|
