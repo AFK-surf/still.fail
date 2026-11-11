@@ -589,7 +589,10 @@ fn md_words_node(
   }
   let look = fn() -> @view.WordsLook {
     let size = size()
-    { size, weight: if weight > 0 { weight } else { 400 }, line: md_line(md, size), wrap, tracking: @view.letters_own, balance: false }
+    // (a line said as a share of the size (`line`): that share of the words as they are drawn, the system's size of
+    // words applied first, as the old view's paragraph's line_em; else Md::lh's points)
+    let line = if md.line > 0.0 { -md.line } else { md_line(md, size) }
+    { size, weight: if weight > 0 { weight } else { 400 }, line, wrap, tracking: @view.letters_own, balance: false }
   }
   p.box(made_for=loc, fn(w) {
     w.words_runs(By(runs)).words_look(By(look)).runs_look(By(table_runs_look)).ink(By(md.ink)) |> ignore
