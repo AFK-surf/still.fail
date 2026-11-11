@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [2ad95a0b4](https://github.com/AFK-surf/still.fail/commit/2ad95a0b4edde672213300c0be4d8a685b8d9717) app: a card's pictures told to the nodes that read | 1.83 | 2.44 | 10.2 | 28.94 | 36.04 | 25.78 | 47.89 | 94.13 | 176.76 |
 | [a1ccda637](https://github.com/AFK-surf/still.fail/commit/a1ccda637531afcf0305f7b740715027b052f26b) mbui: a row of ways of saying one thing as nodes ( | 1.83 | 2.44 | 10.2 | 28.94 | 36.03 | 25.79 | 47.87 | 94.49 | 188.62 |
 | [19d52998a](https://github.com/AFK-surf/still.fail/commit/19d52998ac2d6af2f0dcefb77273736cae8997b6) mbui: a right click on what has no menu of its own | 1.83 | 2.44 | 10.2 | 28.94 | 36.03 | 25.79 | 47.87 | 94.34 | 184.61 |
 | [ebbf50a92](https://github.com/AFK-surf/still.fail/commit/ebbf50a920ab55bb799d6b59bacab25689892c1c) mbui: what goes beside a link of a node's words (V | 1.83 | 2.44 | 10.19 | 28.94 | 36 | 25.78 | 47.85 | 94.96 | 177.29 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [1c9ba20bc](https://github.com/AFK-surf/still.fail/commit/1c9ba20bc472cdd21811f38bab1cc07543e06d4a) mbui: words a box with its height said does not ho | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.39 | 124.68 |
 | [f305e8b90](https://github.com/AFK-surf/still.fail/commit/f305e8b9083d2a2da0524307d29686b390dff901) app fixture: a card's answer stays before what was | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.6 | 155.81 |
 | [acc4dd528](https://github.com/AFK-surf/still.fail/commit/acc4dd528a0538d72e55dedcd321be3662bf7d33) core: a pref set looks at the files kept only for  | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.7 | 163.67 |
-| [9bea105e3](https://github.com/AFK-surf/still.fail/commit/9bea105e3af80832962d9b620a03d9ce129e6ad9) app: 添加 station as nodes (settings' station_add.mb | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.41 | 187.44 |
