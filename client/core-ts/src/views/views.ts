@@ -3052,7 +3052,9 @@ export class Views implements Owner {
     };
   }
 
-  /// An agent of a chat: its session, the connect that started it, its profile, turns and threads.
+  /// An agent of a chat: its session, the connect that started it, its profile, turns and threads, the models it can
+  /// move to and the accounts that can run them. The core's own, whole (choose.ts, `agentCard`, a chat's view reading
+  /// its agents): a chat sends of it what its page reads (its shape, ChatAgent), the rest dropped as it goes out.
   agent(station: string, key: string): J {
     const v = this.value({ topic: "session", station, key });
     let detail: J;

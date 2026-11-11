@@ -9,7 +9,7 @@
 
 ///|
 pub fn by_agent(maker : String, runtime : String, key : String) -> Json {
-  { "name": "Claude", "agent": Json::string(key), "maker": { "id": Json::string(maker), "name": Json::string(maker) }, "runtime": Json::string(runtime), "here": true }
+  { "name": "Claude", "agent": Json::string(key), "maker": { "id": Json::string(maker), "name": Json::string(maker) }, "runtime": Json::string(runtime) }
 }
 
 ///|
@@ -18,8 +18,9 @@ pub fn by_person(name : String) -> Json {
 }
 
 ///|
+/// When a message (an outgoing one, one said elsewhere) was said, as a chat says it (SaidAt).
 pub fn ago(s : String, full : String) -> Json {
-  { "createdAt": { "at": 0, "ago": Json::string(s), "full": Json::string(full), "until": "", "past": true } }
+  { "createdAt": { "ago": Json::string(s), "full": Json::string(full) } }
 }
 
 ///|
@@ -1212,7 +1213,7 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
         fix_chat(session).outbox.push(outgoing_json(id, params, "sending", ""))
         // (chat-ask-end's card answered by it at once, as the core says it: decisions.ts inMessages)
         if f.mode == "chat-ask-end" && session == "s-c1" && !fix_decided.contains(62) {
-          fix_decided[62] = { "resolved": true, "answeredBy": "你", "text": "你 回复了" }
+          fix_decided[62] = { "resolved": true, "text": "你 回复了" }
         }
         fix_later(fix_pace.val.0, fn() { fix_deliver(session, id) })
       }
@@ -2454,7 +2455,6 @@ pub fn with_station_update(v : Json) -> Json {
         "version": "0.25.0",
         "open": true,
         "canUpdate": true,
-        "dismissible": true,
       }
       Json::object(o)
     }
@@ -2541,7 +2541,7 @@ pub fn fixture_things(q : String, many? : Bool = true) -> Json {
       "seq": Json::number(seq.to_double()),
       "createdAt": Json::number(seq.to_double()),
       "by": Json::string(by),
-      "time": ago(when, "10/19 0\{seq % 10}:12:00"),
+      "time": { "createdAt": { "at": 0, "ago": Json::string(when), "full": Json::string("10/19 0\{seq % 10}:12:00"), "until": "", "past": true } },
     }
     for k, v in more {
       m[k] = v

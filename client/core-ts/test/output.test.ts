@@ -18,7 +18,8 @@ test("output_an_agents_markdown_goes_out_as_the_tree_kept_for_its_words_not_copi
   assert.equal(again.ok.messages[0]!.md, md);
 });
 
-test("a_compact_chat_sends_its_page_without_the_agents_unshown_histories", () => {
+// (an agent's turns and threads go out to neither: its shape, ChatAgent, has them not, views.test.ts)
+test("a_compact_chat_sends_its_page_without_the_agents_jobs", () => {
   const raw = {
     title: "Chat", messages: [], outbox: [],
     agents: [{ session: { key: "k" }, turns: [{ id: "t1" }], threads: [{ id: 1 }], jobs: [{ id: "j1", state: "exited", startedAt: 1 }] }],
@@ -31,9 +32,9 @@ test("a_compact_chat_sends_its_page_without_the_agents_unshown_histories", () =>
   assert.equal(full.ok.agents[0]!.jobs[0]!.id, "j1");
   assert.deepEqual(compact.ok.messages, full.ok.messages);
   assert.equal(compact.ok.agents[0]!.session.key, "k");
-  assert.deepEqual([compact.ok.agents[0]!.turns, compact.ok.agents[0]!.threads, compact.ok.agents[0]!.jobs], [[], [], []]);
+  assert.deepEqual(compact.ok.agents[0]!.jobs, []);
   assert.equal(compact.ok.agents[0]!.hasJobs, true);
-  assert.equal(raw.agents[0]!.turns.length, 1, "the full value stays available to other readers");
+  assert.equal(raw.agents[0]!.jobs.length, 1, "the full value stays available to other readers");
 });
 
 test("a_new_minute_makes_again_only_the_items_whose_times_it_may_say_otherwise", () => {

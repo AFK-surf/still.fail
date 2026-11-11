@@ -6,11 +6,12 @@
 // Claude's and ChatGPT's subscriptions with their allowances and a done check, Devin, DeepSeek, and in turn
 // OpenRouter, an Anthropic key, OpenCode Go, SuperGrok, Cursor. With them connects, Slack apps, automatic decisions
 // with a policy, the machine's own logins and a host reading; some 400 chats across the stations with their titles,
-// last lines and people; one chat of 300 messages of every length, another of four weeks held whole on the device
-// (`OUTLINED`); a week of usage, the jobs at work, the archive.
-// Every family of fields is filled as a station fills it, none made larger than a station makes it. Made of the
-// test's clock and indexes alone: the same every run.
+// last lines and people; one chat of 300 messages of every length (six pages: it opens on the last, `PAGE`), another
+// of four weeks held whole on the device (`OUTLINED`); a week of usage, the jobs at work, the archive. Every family of
+// fields is filled as a station fills it, none made larger than a station makes it. Made of the test's clock and
+// indexes alone: the same every run.
 import type { Topic } from "../src/protocol.ts";
+import { PAGE } from "../src/station/channel-kinds.ts";
 import { localDay } from "../src/views/usage.ts";
 import { hostOf, link, overview, rows, sessions, threads, workspace } from "./views-rig.ts";
 
@@ -553,7 +554,11 @@ const rowsCount = (station: number) => (station < UP_COUNT ? ROWS_UP : ROWS_DOWN
 
 // ── the chat of 300 messages ──
 
-const CHAT_MESSAGES = 300;
+/// All of its messages, six of the pages a chat is read in (`PAGE`): as many as a chat with all six loaded holds. One
+/// opened holds the last page alone (`OPENS`).
+export const CHAT_MESSAGES = 6 * PAGE;
+/// What the chat holds as it opens: its last page.
+export const OPENS = PAGE;
 
 function entryOf(now: number, n: number): J {
   const agent = n % 2 === 0;
@@ -566,8 +571,10 @@ function entryOf(now: number, n: number): J {
   };
 }
 
+/// The chat's thread as its station's page of the last `count` of its messages has it (older ones before, `first`).
 export function chatPage(now: number, count = CHAT_MESSAGES): J {
-  return { first: 1, last: count, entries: Array.from({ length: count }, (_, i) => entryOf(now, i + 1)), end: true, thread: null };
+  const first = CHAT_MESSAGES - count + 1;
+  return { first, last: CHAT_MESSAGES, entries: Array.from({ length: count }, (_, i) => entryOf(now, first + i)), end: true, thread: null };
 }
 
 // ── a chat of four weeks, held whole ──
@@ -687,8 +694,9 @@ function resourcesOf(now: number, station: number): J {
 
 // ── all of it, as the stations' topics hold it ──
 
-/// Each topic of the workspace with what it holds: what `set` puts in the rig, in an order a core could have it come.
-export function fixture(now: number): [Topic, unknown][] {
+/// Each topic of the workspace with what it holds: what `set` puts in the rig, in an order a core could have it come;
+/// the chat with the last `chat` of its messages read.
+export function fixture(now: number, chat = CHAT_MESSAGES): [Topic, unknown][] {
   const out: [Topic, unknown][] = [];
   out.push([workspace(), {
     id: "ws", name: "Acme", role: "owner",
@@ -714,7 +722,7 @@ export function fixture(now: number): [Topic, unknown][] {
       out.push([{ topic: "stationResources", station: at }, resourcesOf(now, st)]);
     }
   }
-  out.push([{ topic: "thread", station: CHAT.station, thread: CHAT.thread }, chatPage(now)]);
+  out.push([{ topic: "thread", station: CHAT.station, thread: CHAT.thread }, chatPage(now, chat)]);
   for (const [i, key] of CHAT.keys.entries()) {
     out.push([{ topic: "session", station: CHAT.station, key }, detailOf(now, key, i)]);
     out.push([{ topic: "live", station: CHAT.station, key }, liveOf(now)]);
@@ -764,10 +772,10 @@ export function quotaChanged(base: number, at: number, st: number): J {
   return o;
 }
 
-/// What the chat's station tells as one more message comes at `at` (the workspace made at `base`): its page, its
-/// thread and its row.
-export function messageAdded(base: number, at: number): [Topic, unknown][] {
-  const page = chatPage(base);
+/// What the chat's station tells as one more message comes at `at` (the workspace made at `base`, the chat with the last
+/// `chat` of its messages read): its page, its thread and its row.
+export function messageAdded(base: number, at: number, chat = CHAT_MESSAGES): [Topic, unknown][] {
+  const page = chatPage(base, chat);
   const n = CHAT_MESSAGES + 1;
   const entry = { ...entryOf(base, n), text: "好的，我先跑一遍测试再合。", at };
   const t0 = threadOf(base, 0, 0);
