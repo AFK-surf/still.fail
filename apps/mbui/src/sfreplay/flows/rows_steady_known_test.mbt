@@ -19,6 +19,14 @@ fn init {
     // main 0, -11.16, -11.46, 5.43 for 5.73; at the exact moment 0, -11.84, -11.52, 6.07 for 5.76. Taken away as the
     // node list takes its place)
     ("src/sfreplay/flows/paste_long_test.mbt", 1),
-    ("src/sfreplay/flows/share_test.mbt", 1),
+    // (+1 here, and share_files' one: the old chat page's message list and its old composer, two ways of other causes
+    // one after the other on the newest message's state row: the composer emptied as it is sent takes the row down
+    // ~60, the answers after it take it back up ~13. main has the same two, the same sizes; where they meet goes by
+    // when the send's answer comes, which a device does not choose either: as #5625 has the chat's reads asked as it
+    // opens, the answer comes 133 ms sooner (share: "went 58.08 one way, stood 133.3 ms, came back 2.64") and 170 ms
+    // sooner (share-files: "went 2.76 one way, stood 66.7 ms, came back 5.39"). Taken away as the node message list
+    // makes the two one way with the composer)
+    ("src/sfreplay/flows/share_test.mbt", 2),
+    ("src/sfreplay/flows/share_files_test.mbt", 1),
   ])
 }
