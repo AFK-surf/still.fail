@@ -38,7 +38,11 @@ yet and you can add one, add it.
   what a block holds makes its way as anywhere. What holds a scroller makes its way as anything does, what it holds
   laid out once at the size it comes to (a panel's capped list in a pick); a page or a pane comes and goes at once by
   being grown to what its column leaves it, not by holding a scroller (the coordinator of the migration, 2026-11-11:
-  the rule that made all of them come at once was for those, and pages in a stack say at_once).
+  the rule that made all of them come at once was for those, and pages in a stack say at_once). What comes and goes
+  down one column at one moment, with what is still on its way there then, goes one way (flex's `ComeGroup`), each its
+  share, setting out and coming to rest together; turned away from where it goes as a whole, all of it slows as one
+  first; one alone goes its own way. Never each its own beside the others (the coordinator of the migration,
+  2026-11-11, by the user's 2026-10-30, 2026-11-03 and 2026-11-09).
 - State that what is made reads is a signal: a mutable value read by a binding that is not one is never seen to
   change (detlint `built-by-hand`).
 - Layout goes one way (the user, 2026-11-05): what is laid out is never told back as a change to make things by. What

@@ -312,3 +312,25 @@ test "what is on its way down a column, a show opening in another at that moment
   let without = cg_two(true, false, [(100.0, Some(false), None)], 0.0, 800.0)
   assert_eq(opened.map(fn(r) { r.0 }), without.map(fn(r) { r.0 }))
 }
+
+///|
+test "rows as tall as each other coming at one moment: each as it comes alone, to a millionth of a point" {
+  let keys = @signals.signal(["头"], same=fn(a, b) { a == b })
+  let t = @view.Tree::new(fn(root) {
+    root.each(fn() { keys.get() }, fn(k) { k }, fn(row, k) {
+      row.height(Is(Some(if k.get() == "头" { 20.0 } else { 44.0 }))).words(Is(k.get())) |> ignore
+    })
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("下")) |> ignore }) |> ignore
+  })
+  t.frame(390.0, 844.0) |> ignore
+  t.event(100.0, fn() { keys.set(["头", "甲", "乙", "丙"]) })
+  for i in 0..=40 {
+    let at = 100.0 + i.to_double() * 1000.0 / 60.0
+    t.at(at)
+    t.frame(390.0, 844.0) |> ignore
+    let alone = @flex.come_way(0.0, 0.0, 44.0, at - 100.0).0
+    for w in ["甲", "乙", "丙"] {
+      assert_true((cg_drawn(t, w).1 - alone).abs() < 1.0e-6, msg="\{w} at \{at}: \{cg_drawn(t, w).1} \{alone}")
+    }
+  }
+}
