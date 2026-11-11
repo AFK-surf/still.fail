@@ -1294,7 +1294,7 @@ export class Views implements Owner {
   }
 
   /// The station a link names now (`<workspace>/<station>`): one that took a lost one's place, where that is the one
-  /// named (its overview's `copies.formerly`); the one named otherwise.
+  /// named (its overview's `copies.formerly`, as a chat's page reads it: #chatOverview); the one named otherwise.
   stationNow(address: string): string {
     const at = address.lastIndexOf("/");
     if (at < 0) return address;
@@ -1302,7 +1302,7 @@ export class Views implements Owner {
     const id = address.slice(at + 1);
     for (const s of this.stations(scope) ?? []) {
       if (s.id === id) continue;
-      const formerly = get(get(this.ok({ topic: "overview", station: s.address }), "copies"), "formerly");
+      const formerly = get(get(this.#chatOverview(s.address), "copies"), "formerly");
       if (Array.isArray(formerly) && formerly.includes(id)) return s.address;
     }
     return address;
@@ -1467,7 +1467,7 @@ export class Views implements Owner {
     const v = out.ok as J;
     const station = view.station as string;
     if (isObject(v.link)) v.connection = looks.linkShown(v.link, this.stationName(station));
-    const overview = this.ok({ topic: "overview", station });
+    const overview = this.#chatOverview(station);
     const prefs = this.ok({ topic: "prefs" }) ?? null;
     const workspace = this.ok({ topic: "workspace", workspace: ofAddress(station) }) ?? null;
     const role = get(workspace, "role");
@@ -2999,10 +2999,11 @@ export class Views implements Owner {
     return { ok: view };
   }
 
-  /// A chat's agents: those its thread names that are known.
+  /// A chat's agents: those its thread names that are known, as its page and its messages read them (`agent`'s
+  /// `forChat`).
   #agentsOf(station: string, thread: J): J[] {
     return members(thread).flatMap((key) => {
-      const a = this.agent(station, key);
+      const a = this.agent(station, key, true);
       return a === null ? [] : [a];
     });
   }
@@ -3011,7 +3012,7 @@ export class Views implements Owner {
   #peopleOf(station: string, agents: J[]): { scope: string; viewer: J; slackUsers: string[]; members_: J[]; bots: [string, string][] } {
     const scope = ofAddress(station);
     const viewer = this.me(scope);
-    const slackUsers = arr(get(this.ok({ topic: "overview", station }), "slackUsers")).filter((u): u is string => typeof u === "string");
+    const slackUsers = arr(get(this.#chatOverview(station), "slackUsers")).filter((u): u is string => typeof u === "string");
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
     const bots = agents.flatMap((a) => {
       const b = a.connect !== undefined ? present.botOf(a.connect) : null;
@@ -3026,10 +3027,10 @@ export class Views implements Owner {
   /// notice one to report where the station takes bug reports.
   #shown(station: string, thread: J, agents: J[], said: J[], waits: number[]): J[] {
     const { scope, viewer, slackUsers, members_, bots } = this.#peopleOf(station, agents);
-    const updates = arr(get(this.ok({ topic: "overview", station }), "updates"));
+    const updates = arr(get(this.#chatOverview(station), "updates"));
     const role = get(this.ok({ topic: "workspace", workspace: scope }), "role");
     const manages = role === "owner" || role === "admin";
-    const reports = get(this.ok({ topic: "overview", station }), "feedback") === true;
+    const reports = get(this.#chatOverview(station), "feedback") === true;
     // What each message is shown as follows from it and from this (the chat's people and the station's state): while
     // this is as it was, a message made before is the one shown, so a new message costs that message.
     // (of its agents, what shownMessage reads of them: who each is, not what each did since)
@@ -3422,7 +3423,7 @@ export class Views implements Owner {
     const first = u64(messages[0]?.createdAt);
     const last = u64(messages.at(-1)?.createdAt);
     if ((more || newer) && (first === null || last === null)) return [];
-    const overview = this.ok({ topic: "overview", station });
+    const overview = this.#chatOverview(station);
     const workspaces = slackWorkspaces(overview);
     const connects = arr(get(overview, "connects"));
     const offsetMin = this.#core.host.utcOffsetMin(this.#core.host.nowMs());
@@ -3504,9 +3505,12 @@ export class Views implements Owner {
   }
 
   /// An agent of a chat: its session, the connect that started it, its profile, turns and threads, the models it can
-  /// move to and the accounts that can run them. The core's own, whole (choose.ts, `agentCard`, a chat's view reading
-  /// its agents): a chat sends of it what its page reads (its shape, ChatAgent), the rest dropped as it goes out.
-  agent(station: string, key: string): J {
+  /// move to and the accounts that can run them. The core's own, whole (choose.ts, `agentCard`): a chat sends of it what
+  /// its page reads (its shape, ChatAgent), the rest dropped as it goes out. As a chat's page and its messages read it
+  /// (`forChat`), made of what that reads of its station's overview, kept beside it (#chatOverview), not the overview,
+  /// and without the models it can move to and the accounts that can run them (`choices`, `profiles`), which no chat
+  /// reads: those are a model control's, asked as it opens (choose.ts).
+  agent(station: string, key: string, forChat = false): J {
     const v = this.value({ topic: "session", station, key });
     let detail: J;
     if (v !== undefined && "ok" in v) detail = v.ok;
@@ -3523,7 +3527,7 @@ export class Views implements Owner {
         detail = { session: agent };
       }
     }
-    const overview = this.ok({ topic: "overview", station });
+    const overview = forChat ? this.#chatOverview(station) : this.ok({ topic: "overview", station });
     const now = this.#core.host.nowMs();
     const session = present.session(get(detail, "session") ?? null);
     const connect = present.connect(find(get(overview, "connects"), get(session, "connect")));
@@ -3545,8 +3549,7 @@ export class Views implements Owner {
       session,
       connect,
       profile,
-      profiles: runnableOn(overview, session, now),
-      choices: choices(overview, session, now),
+      ...(forChat ? {} : { profiles: runnableOn(overview, session, now), choices: choices(overview, session, now) }),
       account,
       attention: attention(overview, session, now),
       since,
@@ -3555,6 +3558,14 @@ export class Views implements Owner {
       threads: sharedOrCopied(get(detail, "threads") ?? []),
       jobs: sharedOrCopied(get(detail, "jobs") ?? []),
     };
+  }
+
+  /// What a chat's page reads of station `station`'s overview (schema.ts OVERVIEW_CHAT: its agents' accounts and
+  /// connects, who the viewer is in Slack, its updates, whether it takes bug reports, its context, what it was
+  /// formerly), kept beside it (data.ts overviewChat): the overview whole is not read, and a change to the rest of it
+  /// (its processes, its automatic decisions, a sign-in's step) makes no chat again.
+  #chatOverview(station: string): J {
+    return this.#core.data.overviewChat(station);
   }
 
   /// An agent as its sidebar row lists it, with the connect its row came from.
@@ -3576,7 +3587,7 @@ export class Views implements Owner {
     const slack = !isOwnSurface(surface) && !feishu;
     const place = format.placeName(surface, channel, channelName);
     // A Feishu chat opens in Feishu (Lark's own app for its connect's).
-    const feishuConnect = (connects ?? arr(get(this.ok({ topic: "overview", station }), "connects"))).find((c) => `feishu:${strOf(c, "id")}` === surface);
+    const feishuConnect = (connects ?? arr(get(this.#chatOverview(station), "connects"))).find((c) => `feishu:${strOf(c, "id")}` === surface);
     const feishuUrl = feishu ? format.feishuChatUrl(format.feishuApplink(str(get(get(feishuConnect, "feishu"), "domain"))), channel) : null;
     let workspaceUrl: string | null = null;
     let team = "";
