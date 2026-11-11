@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [1609696a9](https://github.com/AFK-surf/still.fail/commit/1609696a9c136ac22f5dd8c1b356ffb68ad79e80) mbui: 投进来的消息在每个宿主上都在帧之间告知，帧里告知过节点树的改动在这一帧画出来 (#539 | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.01 | 187.12 |
 | [1c9ba20bc](https://github.com/AFK-surf/still.fail/commit/1c9ba20bc472cdd21811f38bab1cc07543e06d4a) mbui: words a box with its height said does not ho | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.39 | 124.68 |
 | [f305e8b90](https://github.com/AFK-surf/still.fail/commit/f305e8b9083d2a2da0524307d29686b390dff901) app fixture: a card's answer stays before what was | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.6 | 155.81 |
 | [acc4dd528](https://github.com/AFK-surf/still.fail/commit/acc4dd528a0538d72e55dedcd321be3662bf7d33) core: a pref set looks at the files kept only for  | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.7 | 163.67 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [35383456b](https://github.com/AFK-surf/still.fail/commit/35383456bbf71d8c66fdfeeb1c59e9df474b0953) sf: a style on a node sets what it has said so far | 1.79 | 2.38 | 9.94 | 28.58 | 34.91 | 25.52 | 47.09 | 94.23 | 176.88 |
 | [20cbc21c6](https://github.com/AFK-surf/still.fail/commit/20cbc21c6531a870fea37d5b2fe8e461e1c7254a) mbui: a node that says it takes no press is no pre | 1.79 | 2.38 | 9.94 | 28.58 | 34.9 | 25.52 | 47.07 | 94 | 162.36 |
 | [68685cd2a](https://github.com/AFK-surf/still.fail/commit/68685cd2a13c0ba43977f36cc23380a9bea31bf8) core, app: a list a place opens on, asked again, i | 1.79 | 2.38 | 9.93 | 28.56 | 34.79 | 25.5 | 46.96 | 93.9 | 147.14 |
-| [e6400c684](https://github.com/AFK-surf/still.fail/commit/e6400c684933bf0db7e641ff35c05904458fbb58) app: the update dialog (检查更新) as nodes (#5306) | 1.78 | 2.38 | 9.93 | 28.56 | 34.78 | 25.5 | 46.96 | 94.14 | 180.44 |
