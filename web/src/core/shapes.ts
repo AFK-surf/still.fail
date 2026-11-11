@@ -267,9 +267,6 @@ export interface Job {
 	/** running | exited | stopped | failed (a service that exited is being started again) */
 	state: string;
 	port?: number;
-	exitCode?: number;
-	startedAt: number;
-	endedAt?: number;
 	/** What it runs (sh -c). */
 	command?: string;
 	/** How often a service was started again after it ended. */
@@ -278,8 +275,6 @@ export interface Job {
 	notices?: JobNotice[];
 	/** Started to keep watch (`job_start` watch). A station from before watches says none. */
 	watch?: boolean;
-	/** When its output last grew; absent when it has none. */
-	outputAt?: number;
 	/** Its dot: up (a service up), live (a job alive), restart (a service being started again), fail, off (over). */
 	tone?: string;
 	/** A web service (it has a port). */
@@ -1834,8 +1829,15 @@ export interface MessageBy {
 	picture?: string;
 	/** Another chat's agent (session_send): that chat's link, its name opens it. */
 	from?: string;
-	/** In a chat's page: its agent is one of the chat's, its name opens its execution history. Absent otherwise. */
-	here?: boolean;
+}
+
+/**
+ * A moment of a chat's (a message's, an outgoing one's, its thread's) in words, as its page says it: 3 分钟前 (`ago`), 9/20
+ * 14:05:09 (`full`, its tip). A Stamp's other parts are for moments to come and no page of a chat reads them.
+ */
+export interface SaidAt {
+	ago: string;
+	full: string;
 }
 
 /**
@@ -1992,7 +1994,7 @@ export interface SignInAsk {
 
 /**
  * What an agent's message asks people to answer it with (core decisions.ts): `type` options (`options`, as shown: the
- * recommended one last; a tap answers, `decision.answer`) or text (a field to write in, with a `placeholder`;
+ * recommended one last; a tap answers, `decision.answer`) or text (a field to write in;
  * `decision.reply`). A type a UI does not know: answered by writing in the chat.
  */
 export interface MessageCard {
@@ -2003,7 +2005,6 @@ export interface MessageCard {
 	/** options | text | login */
 	type: string;
 	options?: DecisionOption[];
-	placeholder?: string;
 	/**
 	 * An agent's request to use a vault item: the request's id. An app shows approving it (the options,
 	 * then the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;
@@ -2036,17 +2037,12 @@ export interface MessageCard {
 
 /**
  * Where a decision in a chat's messages stands (core, decisions.ts): still waiting (no person has written since it was
- * asked, and no newer one replaced it), or `resolved`, with who answered and whether by picking an option.
+ * asked, and no newer one replaced it), or `resolved`, and whether by picking an option (`text` says who answered how).
  */
 export interface MessageDecision {
 	resolved: boolean;
 	/** Still waiting, and the viewer dismissed it (off their list; the options still work). */
 	dismissed?: boolean;
-	/**
-	 * Who answered it (the first person to write after it), by name; absent while it waits, or when a newer decision
-	 * replaced it.
-	 */
-	answeredBy?: string;
 	/** The option they picked (their message quoted it with an option's label), its label. */
 	chosen?: string;
 	/** Resolved, in words: 林晓 选了「先不改」, 林晓 回复了, 已换成新的问题. */
@@ -2092,7 +2088,7 @@ export interface ChatSentElsewhere {
 	attachments?: Attachment[];
 	by: MessageBy;
 	/** Its times in words, by field (`createdAt`). */
-	time?: Record<string, Stamp>;
+	time?: Record<string, SaidAt>;
 }
 
 /**
@@ -2108,19 +2104,6 @@ export interface ChatMessage {
 	/** person | agent | the station (ember, as the station stores it) */
 	authorKind: string;
 	author: string;
-	authorName?: string;
-	/** A Slack person's picture, as their Slack shows it; absent for others and from a station that does not say. */
-	authorPicture?: string;
-	/**
-	 * An agent's: its session's model, for its mark before the session is read. Absent for others, for one on the
-	 * runtime's default model and from a station that does not say.
-	 */
-	authorModel?: string;
-	/**
-	 * An agent's: its session's runtime, for its mark before the session is read. Absent for others and from a
-	 * station that does not say.
-	 */
-	authorRuntime?: string;
 	text: string;
 	/**
 	 * An agent's words read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw. Absent for a
@@ -2134,12 +2117,9 @@ export interface ChatMessage {
 	words?: unknown;
 	attachments: Attachment[];
 	quotes: Quote[];
-	/** An agent's post that ended its turn: final, block (the words from before; `ending` has today's). */
-	declared?: string;
 	/** all_done, need_decision, need_help: how the post ended its agent's turn. A station yet to update says nothing. */
 	ending?: string;
 	createdAt: number;
-	editedAt?: number;
 	mine: boolean;
 	system: boolean;
 	/** still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it. */
@@ -2187,7 +2167,7 @@ export interface ChatMessage {
 	 */
 	said?: boolean;
 	/** Its times in words, by field (`createdAt`). */
-	time?: Record<string, Stamp>;
+	time?: Record<string, SaidAt>;
 	/**
 	 * An agent's post with an options card: the answers to pick, in the order they are shown (the one the agent
 	 * recommends last), as `card.options`; drawn under the message. Absent for every other message.

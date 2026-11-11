@@ -2213,11 +2213,13 @@ test("a_compact_chat_keeps_the_page_and_its_jobs_available_separately", async ()
   const detail = { session: fullSession("k"), threads: [chat], turns: [turn("t1")], jobs: [job] };
   t.set(sessionOf("ws/a", "k"), detail);
   await t.readAll([[full, 1], [compact, 2], [jobs, 3], [summary, 4]]);
-  assert.equal(full.value.agents[0].turns[0].id, "t1");
   assert.equal(full.value.agents[0].jobs[0].id, "j1");
+  // (its turns and threads are the core's own: neither page is sent them)
+  assert.deepEqual([full.value.agents[0].turns, full.value.agents[0].threads], [undefined, undefined]);
+  assert.equal(t.views.agent("ws/a", "k").turns[0].id, "t1");
   assert.deepEqual(compact.value.messages, full.value.messages);
   assert.equal(compact.value.agents[0].hasJobs, true);
-  assert.deepEqual([compact.value.agents[0].turns, compact.value.agents[0].threads, compact.value.agents[0].jobs], [[], [], []]);
+  assert.deepEqual([compact.value.agents[0].turns, compact.value.agents[0].threads, compact.value.agents[0].jobs], [undefined, undefined, []]);
   assert.equal(jobs.value.jobs[0].id, "j1");
   assert.equal(summary.value.hasJobs, true);
   assert.deepEqual(summary.value.jobs, []);
@@ -2293,22 +2295,28 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   v = u.value;
   assert.deepEqual(v.me, { id: "Me@x.com", email: "Me@x.com" });
   assert.equal(v.title, "排查");
-  assert.deepEqual(plain(v.thread), plain(chat));
+  // (its thread as its page reads it: who started it and when, when it was last written in, how many wait; the rest the
+  // core's own)
+  assert.deepEqual(plain(v.thread), { id: 7, surface: "ember", unread: 0, lastMessage: {} });
   assert.deepEqual(plain(v.people), plain(chat.people));
   assert.equal(v.people[0].shown.name, "本机管理页");
   assert.deepEqual(v.link, { state: "connecting" });
   assert.deepEqual([v.messages.length, v.more], [30, true]);
   assert.equal(v.agents.length, 1);
   assert.equal(v.agents[0].session.key, "k");
-  assert.equal(v.agents[0].turns[0].id, "t1");
-  assert.deepEqual(plain(v.agents[0].threads), plain([chat]));
+  // (its turns and threads the core's own: the page is sent neither)
+  assert.deepEqual([v.agents[0].turns, v.agents[0].threads], [undefined, undefined]);
+  assert.equal(t.views.agent("ws/a", "k").turns[0].id, "t1");
+  assert.deepEqual(plain(t.views.agent("ws/a", "k").threads), plain([chat]));
   assert.deepEqual([v.agents[0].connect, v.agents[0].profile], [undefined, undefined]);
   t.set(overview("ws/a"), overviewOf([connect("c1", "Slack")], [profile("p1"), profile("p2", { name: "主力" })]));
   t.set(link("ws/a"), { state: "online" });
   await t.read(u, 1);
   v = u.value;
-  assert.deepEqual([v.agents[0].connect.id, v.agents[0].connect.name], ["c1", "Slack"]);
-  assert.deepEqual([v.agents[0].profile.id, v.agents[0].profile.name], ["p2", "主力"]);
+  // (its connect and its profile as its page names them; the rest of each the core's own)
+  assert.deepEqual(v.agents[0].connect, { name: "Slack" });
+  assert.deepEqual([v.agents[0].profile.id, v.agents[0].profile.name], [undefined, "主力"]);
+  assert.deepEqual([t.views.agent("ws/a", "k").connect.id, t.views.agent("ws/a", "k").profile.id], ["c1", "p2"]);
   assert.deepEqual(v.link, { state: "online" });
   // A new message goes out as an append.
   t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...(p as J).entries, entry(41, "新的")], last: 41 }));
@@ -2327,7 +2335,8 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   await t.read(u, 1);
   v = u.value;
   assert.equal(v.lastEntry, 42, "an edit advances the entry cursor without adding a message");
-  assert.deepEqual(v.messages.slice(-2).reverse().map((m: J) => [m.text, m.editedAt ?? null]), [["新的（改）", 42], ["第 40 条", null]]);
+  // (the page is sent its words as they are now; when they were edited is the core's own)
+  assert.deepEqual(v.messages.slice(-2).reverse().map((m: J) => [m.text, m.editedAt ?? null]), [["新的（改）", null], ["第 40 条", null]]);
   t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...Array.from({ length: 10 }, (_, i) => entry(i + 1, "旧的")), ...(p as J).entries], first: 1 }));
   await t.read(u, 1);
   v = u.value;
@@ -2387,17 +2396,23 @@ test("an_agent_without_a_chat_is_its_page_with_no_messages", async () => {
   assert.deepEqual([v.thread ?? null, v.title, v.messages, v.outbox, v.more], [null, "部署挂了", [], [], false]);
   const a = v.agents[0];
   assert.deepEqual([v.agents.length, a.session.key, a.connect.name, a.status], [1, "k", "Slack", "idle"]);
-  assert.deepEqual([a.turns[0].id, a.threads[0].id], ["t1", 3]);
+  // (its turns and threads the core's own: the page is sent neither)
+  assert.deepEqual([a.turns, a.threads], [undefined, undefined]);
+  assert.deepEqual([t.views.agent("ws/a", "k").turns[0].id, t.views.agent("ws/a", "k").threads[0].id], ["t1", 3]);
   assert.deepEqual(v.me, { id: "Me@x.com", email: "Me@x.com" });
   // where its Slack thread is, and the way there, as a chat's info says them
   assert.deepEqual([v.place, v.slackUrl, v.feishuUrl], ["#ops", "https://afk.slack.com/archives/C1/p12", undefined]);
   assert.equal(v.slackApp, "slack://channel?team=T1&id=C1&message=1.2");
-  assert.equal(v.noChat, undefined, "its Slack thread is its chat: the page does not open its history by itself");
+  // (whether it has a chat is the core's own, read by its side panel's tabs: the page is sent those, `tabs.auto`)
+  const own = () => t.store.get(agentPage("ws/a", "k")) as J;
+  assert.equal(own().noChat, undefined, "its Slack thread is its chat: the page does not open its history by itself");
+  assert.equal(v.noChat, undefined);
   for (const archived of [42, null]) {
     t.set(sessionOf("ws/a", "k"), { session: fullSession("k", { archivedAt: archived }), threads: [], turns: [] });
     await t.read(u, 1);
     assert.equal(u.value.archived, archived !== null);
-    assert.equal(u.value.noChat, archived === null ? true : undefined);
+    assert.equal(own().noChat, archived === null ? true : undefined);
+    assert.equal(u.value.noChat, undefined);
   }
   t.fail(sessionOf("ws/a", "k"), new CoreError("http_404", "会话已删除", 404));
   await t.read(u, 1);
@@ -2720,7 +2735,10 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
   assert.deepEqual(v.elsewhere, []);
   assert.deepEqual(v.messages.map((m: J) => (m.elsewhere ?? []).length), [2, 1]);
   const agent = sent(v)[0].by.name;
-  assert.deepEqual(sent(v).map((s: J) => [s.after, s.text, s.place.name, s.failed, s.received ?? false, s.by.name, s.by.here ?? false]), [
+  // (whether who said it is one of the chat's agents, `by.here`, is the core's own: the page is not sent it)
+  const own = () => t.store.get(chatTopic("ws/a", 7)) as J;
+  assert.deepEqual(sent(v).map((s: J) => s.by.here), [undefined, undefined, undefined]);
+  assert.deepEqual(sent(own()).map((s: J, i: number) => [s.after, s.text, s.place.name, s.failed, s.received ?? false, sent(v)[i].by.name, s.by.here ?? false]), [
     [1, "**部署** 好了 [看这里](https://x.y)", "#C0OPS", false, false, agent, true],
     [1, "**收到**，@Mia 看一下", "#C0OPS", false, true, "Mia", false],
     [2, "@Mia 新话题", "#C0DEV", false, false, agent, true],
@@ -2728,8 +2746,8 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
   assert.equal(v.messages.length, 2);
   // Slack people the station's agents heard from are named in what agents say too.
   assert.equal(v.messages[1].text, "@Mia 发了");
-  // The agent's own message: its name opens its history (one of the chat's).
-  assert.equal(v.messages[1].by.here, true);
+  // The agent's own message: one of the chat's agents said it.
+  assert.equal(own().messages[1].by.here, true);
   // Slack's answer gives the new message its thread; one Slack refused failed.
   t.data.putItems("transcript", "ws/a", "k", [
     [5, { at: "1970-01-01T00:00:04Z", kind: "tool_result", text: JSON.stringify({ ok: true, ts: "1727.0002" }), callId: "c3" }],

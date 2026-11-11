@@ -30,7 +30,10 @@ way the app asks each topic on a workspace of real size (`test/real-size.ts`), a
 message as something changes at most 4 KB. A list's item carries what its row shows; a page of one thing asks that
 thing's own topic; a field one page needs is not added to a list every page holds; a new topic is placed in the test's
 tables. Its `OVER` tables only fall. A topic the app lets go of keeping its value (`keep`) and asks again (`have`) is
-sent `same`, or what changed from what it kept (store.ts `#first`), held to the change's bar too (`OVER_AGAIN`).
+sent `same`, or what changed from what it kept (store.ts `#first`), held to the change's bar too (`OVER_AGAIN`). What
+goes out is what the topic's shape declares, the rest dropped (`src/conform.ts`), while the core's own readers read its
+whole value (`store.value`): a field the core reads and no UI does stays out of the shape (a chat's agents' models,
+which `src/choose.ts` reads of `views.agent`).
 
 ## What is shared is never written
 
