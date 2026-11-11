@@ -916,23 +916,6 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
       @settings.connect_said(all, text(p, "station"), text(p, "id"), name == "connectCandidates")
     }
     "profiles" => @settings.profiles_of_stations(value, wholes())
-    // (where a new chat runs, a row each, as the stations' list has them)
-    "newChat" =>
-      match value {
-        Some(Object(o)) => {
-          let m = o.copy()
-          match o.get("stations") {
-            Some(Array(a)) => m["stations"] = Json::array(a.map(@settings.station_row))
-            _ => ()
-          }
-          match o.get("station") {
-            Some(Object(_) as s) => m["station"] = @settings.station_row(s)
-            _ => ()
-          }
-          Some(Json::object(m))
-        }
-        v => v
-      }
     "chat" if f.mode.has_prefix("chat-opened") && params.get("session") is Some(String("s-c1")) =>
       fixture_with_tabs(f, params, with_opened(value))
     "chat" if f.mode.has_prefix("chat-opener") && params.get("session") is Some(String("s-c1")) =>

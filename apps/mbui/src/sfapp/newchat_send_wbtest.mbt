@@ -442,11 +442,7 @@ fn reading_core(reading : @signals.Signal[Bool], made : Ref[Int]) -> @ui.Tester 
           value: Some({
             "kept": "st1",
             "any": false,
-            "efforts": [],
-            "accounts": [],
-            "pickAccount": false,
             "waiting": false,
-            "frequent": [],
           }),
           error: None,
           version: 0,

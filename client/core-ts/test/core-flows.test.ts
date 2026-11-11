@@ -1096,6 +1096,7 @@ test("a_new_chat_is_made_under_the_key_its_page_had_before_it_was_made_and_its_p
   core.close();
 });
 
+// (the combinations, how hard it thinks and how fast are the core's own value's: its page is sent its model control's, `pick`)
 test("new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_together", async () => {
   const { host, core } = await choosing();
   let ui = core.connect();
@@ -1104,14 +1105,16 @@ test("new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_
   await host.settle();
   let values = new Map();
   apply(host, values);
-  assert.deepEqual(v(values, 1).frequent, []);
+  const own = (c: Core) => c.inner.store.get(topic) as J;
+  assert.deepEqual(own(core).frequent, []);
+  assert.deepEqual([v(values, 1).frequent, v(values, 1).effort, v(values, 1).accounts], [undefined, undefined, undefined], "not sent");
   await ask(host, core, ui, 2, "newChat.pick", { scope: "ws", model: "gpt-6-astra", runtime: "codex", effort: "medium", fast: true });
   apply(host, values);
-  assert.deepEqual(v(values, 1).frequent, [], "picking alone is not usage");
+  assert.deepEqual(own(core).frequent, [], "picking alone is not usage");
   core.inner.choose.used("other/st", { model: "claude-opus-5-5", runtime: "claude", effort: "high" });
   await ask(host, core, ui, 3, "newChat.create", { station: "ws/st" });
   apply(host, values);
-  const combos = v(values, 1).frequent;
+  const combos = own(core).frequent;
   assert.equal(combos.length, 1, "another workspace's history must not appear");
   assert.equal(combos[0].effort, "medium");
   await run(core.inner.data.written);
@@ -1123,16 +1126,14 @@ test("new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_
   await host.settle();
   values = new Map();
   apply(host, values);
-  const combo = v(values, 1).frequent[0];
+  const combo = own(again).frequent[0];
   assert.equal(combo.model, "gpt-6-astra");
   assert.equal(combo.fast, true);
   await ask(host, again, ui, 2, "newChat.pick", { scope: "ws", model: "claude-opus-5-5", effort: "low", fast: false });
   await ask(host, again, ui, 3, "newChat.pick", { scope: "ws", model: combo.model, runtime: combo.runtime, effort: combo.effort, fast: combo.fast });
   apply(host, values);
   assert.equal(v(values, 1).model.model, "gpt-6-astra");
-  assert.equal(v(values, 1).effort, "medium");
-  assert.equal(v(values, 1).fast, true);
-  assert.equal(v(values, 1).frequent[0].selected, true);
+  assert.deepEqual([own(again).effort, own(again).fast, own(again).frequent[0].selected], ["medium", true, true]);
   again.close();
 });
 
@@ -1187,7 +1188,7 @@ test("the_model_control_keeps_the_configurations_used_most_near_and_each_model_a
   await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", model: "gpt-6-astra", runtime: "codex", effort: "medium", fast: null, context: null });
   apply(host, values);
   assert.equal(v(values, 3).model.model, "gpt-6-astra");
-  assert.equal(v(values, 3).effort, "medium");
+  assert.equal((core.inner.store.get({ topic: "newChat", scope: "ws" }) as J).effort, "medium");
   // the one picked exactly as the panel has it drafted, and only that
   const selected = () => v(values, 1).combos.filter((c: J) => c.selected).map(combo);
   assert.deepEqual(selected(), [["gpt-6-astra", "codex", "medium", null, null]]);
@@ -1287,7 +1288,8 @@ test("a_model_never_run_here_takes_what_is_set_by_hand_in_its_panel_and_one_that
   await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "new", open: true });
   await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", effort: "high" });
   apply(host, values);
-  assert.equal(v(values, 3).effort, "high");
+  const effort = () => (core.inner.store.get({ topic: "newChat", scope: "ws" }) as J).effort;
+  assert.equal(effort(), "high");
   assert.equal(option("gpt-6-astra").usual.effort, "medium", "one that ran here keeps its own");
   assert.equal(option("gpt-6-astra").usualText, "中");
   assert.equal(option("claude-sonnet-5").usual.effort, "high", "one that never did takes it");
@@ -1305,7 +1307,7 @@ test("a_model_never_run_here_takes_what_is_set_by_hand_in_its_panel_and_one_that
   await ask(host, core, ui, 7, "pick.save", { station: "ws/st", of: "new", model: "claude-sonnet-5", runtime: u.runtime, effort: u.effort, fast: u.fast, context: u.context });
   apply(host, values);
   assert.equal(v(values, 3).model.model, "claude-sonnet-5");
-  assert.equal(v(values, 3).effort, "high");
+  assert.equal(effort(), "high");
   core.close();
 });
 
@@ -1360,16 +1362,20 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   let values = new Map();
   apply(host, values);
   let n = v(values, 2);
+  // (how hard it thinks, the account kept to and who could run it are the core's own value's: the page's model control
+  // says them, `pick`)
+  const own = (c: Core) => c.inner.store.get(topic) as J;
   assert.deepEqual([n.kept, n.station.id], ["st", "st"]);
-  assert.deepEqual([n.model.model, n.runtime, n.effort], ["claude-sonnet-5", "claude", "low"]);
-  assert.deepEqual([n.waiting, n.blocked ?? null, n.pickAccount], [false, null, false]);
+  assert.deepEqual([n.model.model, n.runtime, own(core).effort], ["claude-sonnet-5", "claude", "low"]);
+  assert.deepEqual([n.waiting, n.blocked ?? null, own(core).pickAccount], [false, null, false]);
+  assert.deepEqual([n.effort, n.pickAccount, n.accounts], [undefined, undefined, undefined], "not sent");
   // Its unchecked profile is checked, once.
   assert.equal(stationPosted(host, "/profiles/p1/check").length, 1);
   assert.equal(stationPosted(host, "/profiles/p2/check").length, 0);
   // An account kept to that does not run the model gives way to the station's pick.
   await ask(host, core, ui, 3, "newChat.pick", { scope: "ws", model: "claude-opus-5-5", profile: "p3" });
   apply(host, values);
-  n = v(values, 2);
+  n = own(core);
   assert.deepEqual([n.model.model, n.effort, n.profile ?? null], ["claude-opus-5-5", "low", null]);
   assert.equal(n.accounts.length, 2);
   assert.equal(n.pickAccount, true);
@@ -1378,7 +1384,7 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   // A model on another runtime takes it, and its default depth.
   await ask(host, core, ui, 4, "newChat.pick", { scope: "ws", model: "gpt-6-astra" });
   apply(host, values);
-  assert.deepEqual([v(values, 2).runtime, v(values, 2).effort ?? null], ["codex", null]);
+  assert.deepEqual([v(values, 2).runtime, own(core).effort ?? null], ["codex", null]);
   // Kept across a restart; what an older page kept does not come in over it.
   await run(core.inner.data.written);
   core.close();
@@ -1404,9 +1410,10 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   assert.equal(v(values, 2).model.model, "gpt-6-astra", "only a draft until saved");
   assert.equal((await ask(host, again, ui, 7, "pick.save", { station: "ws/st", of: "new" })).saved, true);
   apply(host, values);
-  assert.deepEqual([v(values, 2).model.model, v(values, 2).profile], ["claude-opus-5-5", "p2"]);
-  // Kept to an account running low: the control names it, amber.
-  assert.deepEqual(v(values, 5).account, { text: "p2@x.com", auto: false, level: "amber" });
+  assert.deepEqual([v(values, 2).model.model, own(again).profile], ["claude-opus-5-5", "p2"]);
+  // Kept to an account running low: the control names it, amber (that it is not the station's pick the core's own).
+  assert.deepEqual(v(values, 5).account, { text: "p2@x.com", level: "amber" });
+  assert.equal((again.inner.store.get({ topic: "pick", station: "ws/st", of: "new" }) as J).account.auto, false);
   // A chat made there is asked for with it, and the scope's next new chat starts there too.
   const made = await ask(host, again, ui, 8, "newChat.create", { station: "ws/st" });
   assert.ok(String(made.key).startsWith(PENDING_PREFIX), JSON.stringify(made));

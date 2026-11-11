@@ -3422,14 +3422,13 @@ fn fx_session_pick() -> Json {
     ("accountText", str("自动分配")),
     ("accountNote", str("Claude 主账号 · 5 小时窗口已用 62%")),
     ("repick", str("重新分配")),
-    // (RunnableProfile: its kind, its runtime, its allowance)
+    // (PickProfile: its kind, its runtime, its allowance as its chips draw it)
     (
       "accounts",
       [
         obj([
           ("id", str("p1")),
           ("name", str("Claude 主账号")),
-          ("current", Json::boolean(true)),
           ("kind", str("subscription")),
           ("runtime", str("claude")),
           (

@@ -292,8 +292,9 @@ export class Choose implements Owner {
     const id = typeof station.id === "string" ? station.id : "";
     const name = typeof station.name === "string" ? station.name : "";
     const addr = typeof station.station === "string" ? station.station : "";
-    // The page and the rows say the stations as a list does (StationRow); what it runs is worked out from the one it
-    // starts on alone: its page's overview, the models it serves this workspace (not every station's, by the minute).
+    // The stations are held as a list has them (StationRow; the page is sent what it names them by, NewChatStation);
+    // what it runs is worked out from the one it starts on alone: its page's overview, the models it serves this
+    // workspace (not every station's, by the minute).
     const page: J = this.#env.store.get({ topic: "station", scope, station: addr });
     const overview = isObject(get(page, "overview")) ? page.overview : null;
     const options = overview !== null ? models(servingIn(this.#env.store.get({ topic: "overview", station: addr }), scope, station.joined === true), this.#env.now()) : [];

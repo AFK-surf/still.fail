@@ -629,7 +629,6 @@ fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
         ("newChat", Some(Object(v))) => {
           let m = v.copy()
           if text(v.get("station"), "id") == "st2" {
-            m["frequent"] = Json::array([])
             m["spent"] = Json::string("Opus 5.5 的额度已用完，发出的消息会等它恢复")
             m["problem"] = Json::string("Maple 上还没有选好要用的模型")
           } else {
