@@ -387,6 +387,8 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   // (a layer of the tree's giving the focus as it opens, given back as it goes: either side's, as the old frame's
   // layers do)
   t.on_layers_focus(fn(gone, opened) { view_layers_focus(t, gone, opened) })
+  // (a node's pointer's shape said anew: shown at once where the pointer shows it, no frame for it)
+  t.on_cursor(view_cursor_tell)
   t.on_due(fn() {
     // (what set it going, the first time since it was last painted: said with why the frame is painted)
     if view_due_at.val == "" {

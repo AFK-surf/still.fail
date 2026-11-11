@@ -401,6 +401,8 @@ struct Node {
   mut focusable : Bool
   /// the pointer's shape over it, said (View::cursor; none: as it is shown without being told, Tree::cursor_of)
   mut cursor : Cursor?
+  /// whether it is a ground, no control (View::as_ground): no room of its own to be pressed in, none it cuts
+  mut as_ground : Bool
   /// what it is placed beside (View::beside: its anchor, the side, how along it), placed so as the tree is placed
   mut beside : Beside?
   /// the side it went on beside its anchor, as it was last placed there (none: not placed beside one yet)
@@ -1019,6 +1021,9 @@ pub struct Tree {
   boxes_held_at : Array[Int]
   /// told as there is first something for a frame to do: what hosts it asks for a frame
   mut on_due : () -> Unit
+  /// told as a node's pointer's shape is said anew (View::cursor): what hosts it shows the pointer's shape again, no frame
+  /// asked for it (nothing is drawn for a shape)
+  mut on_cursor : () -> Unit
   /// what hosts the tree told as what may take input changes (a modal layer said on, what is drawn over what, a node
   /// let go, leaving, said to take no press): what it holds of its own, an old view's press, to ask whether that may
   /// still take input (Tree::takes_presses)
@@ -1257,6 +1262,7 @@ pub fn Tree::new(
     thumbs: {},
     rows_grid_said: @signals.signal(0.0),
     on_due: fn() {  },
+    on_cursor: fn() {  },
     on_modals: fn() {  },
     shared_live: {},
     shared_n: 0,
@@ -1432,6 +1438,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.tab_by_stop = false
       n.input_cell = None
       n.cursor = None
+      n.as_ground = false
       n.beside = None
       n.beside_last = None
       n.beside_point = None
@@ -1549,6 +1556,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         focusable: false,
         input_cell: None,
         cursor: None,
+        as_ground: false,
         beside: None,
         went: None,
         beside_last: None,
@@ -2670,7 +2678,14 @@ pub fn Tree::bindings_held(self : Tree) -> Int {
 /// that change's moment: what it makes reads the state as it is then, what leaves starts leaving then), what had left
 /// by that moment let go first. Layout, words and paint of what it makes wait for the frame. Run now with the target
 /// it starts at, unless not `at_start` (as of its changes alone). What stops it.
-fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_start? : Bool = true) -> () -> Unit {
+/// A frame asked for each change, unless not `draws` (what it sets draws nothing: a pointer's shape, View::cursor).
+fn[T : Eq] Tree::structured(
+  self : Tree,
+  read : () -> T,
+  then : (T) -> Unit,
+  at_start? : Bool = true,
+  draws? : Bool = true,
+) -> () -> Unit {
   let live = Ref(true)
   let last : Ref[T?] = Ref(None)
   // (marked as a block is given another key: key_taken.mbt)
@@ -2697,7 +2712,7 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_
             key_taken.val = was
           })
         }
-        true
+        draws
       } else {
         false
       }
@@ -6635,6 +6650,7 @@ fn View::let_go(self : View) -> Unit {
   n.tab_by_stop = false
   n.input_cell = None
   n.cursor = None
+  n.as_ground = false
   n.beside = None
   n.beside_last = None
   n.beside_point = None
@@ -10362,6 +10378,13 @@ pub fn Tree::press(self : Tree, x : Double, y : Double) -> Bool {
 /// What hosts the tree told as there is first something for a frame to do (it asks for a frame).
 pub fn Tree::on_due(self : Tree, f : () -> Unit) -> Unit {
   self.on_due = f
+}
+
+///|
+/// What hosts the tree told as a node's pointer's shape is said anew (View::cursor), at that change: what shows the
+/// pointer's shape again where that is the shape the pointer shows; no frame asked for it.
+pub fn Tree::on_cursor(self : Tree, f : () -> Unit) -> Unit {
+  self.on_cursor = f
 }
 
 ///|

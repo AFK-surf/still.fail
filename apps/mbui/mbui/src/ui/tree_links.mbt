@@ -59,7 +59,10 @@ pub fn runs_links(
   v.takes(fn(_, _, _) { pieces().map(fn(p) { (p.1, p.2, p.3, p.4) }) }) |> ignore
   // (a ground, as an old view's paragraph is (Ctx::rich: its links' pieces hits of their own, no room's targets): its
   // words, links and all, pressed on the words, no room of their own (rooms.mbt), none cut from what is beside them)
-  v.cursor(Is(Some(@view.Cursor::Arrow))) |> ignore
+  v.as_ground() |> ignore
+  // (the pointer over a link's piece a hand, as over an old view's link (a hit that takes presses); over the rest of
+  // its words the arrow, never the hand of what lies under it: by which link it is on, as the tree places things)
+  v.cursor(By(fn() { if pointed.get() >= 0 { Some(@view.Cursor::Hand) } else { Some(@view.Cursor::Arrow) } })) |> ignore
   // (held: no tap of it as it is let go)
   let was_held = Ref(false)
   let told = fn(d : @view.Drag, f : (Int, (Double, Double, Double, Double)) -> Unit) {

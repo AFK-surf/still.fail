@@ -113,8 +113,10 @@ struct FakeHost {
   finished : Array[(Int, Int)]
   /// what its sites say, oldest first (Tester::site_says), as a site view's host would (view_site_next)
   site : Array[String]
-  /// the pointer's shape as last told (desktop.mbt), and how often the window was asked to be dragged
+  /// the pointer's shape as last told (desktop.mbt), how many times it was told, and how often the window was asked to be
+  /// dragged
   mut cursor : Int
+  mut cursors_told : Int
   mut window_drags : Int
   /// what the app asked of the window's own buttons (@hostapi.window_act: 1 minimize, 2 maximize or back, 3 close),
   /// oldest first; whether the window is maximized (Tester::set_window_zoomed); where the app last said its maximize
