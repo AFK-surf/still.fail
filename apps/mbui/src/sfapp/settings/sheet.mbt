@@ -7,7 +7,7 @@
 /// workspace it is of: the frame's, said by panels_frame, followed (what is made once and reads it, as it is first
 /// read, made again as it comes or another workspace's comes: put up before there was one, it is not left without it).
 /// The same workspace's is the same core, told to none again (said every frame).
-// kept across runs: said again by every frame (panels_frame), taken back by reset
+// kept across runs: said again by every frame (panels_frame), taken back as a run begins (on_reset) and by reset
 let panels_core : @signals.Signal[(String, Core)?] = @signals.signal(None, same=fn(a, b) {
   match (a, b) {
     (None, None) => true
@@ -15,6 +15,14 @@ let panels_core : @signals.Signal[(String, Core)?] = @signals.signal(None, same=
     _ => false
   }
 })
+
+///|
+fn init {
+  // (a run begins with none: a run before it of the same workspace's, its core another's, is not this one's, and the
+  // same workspace's is told to none again; till 2026-11-11 only the app's reset let it go, so a Tester made without
+  // it (a program with no app: sfpages', sfdesk's) read the core of the one before it)
+  @ui.on_reset(fn() { panels_core.set(None) })
+}
 
 ///|
 /// The settings' core for this frame (what a panel put up by what has none at hand draws with), of workspace
