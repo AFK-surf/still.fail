@@ -106,6 +106,16 @@ the one in `LICENSE`, with the copyright line given here.
   `bench/flutter/macos/Runner/MainFlutterWindow.swift` began as the
   `flutter create` template. Flutter itself is not included.
 
+## mimalloc
+
+- What: the allocator of MoonBit's runtime in the Android app, compiled from
+  its source release into `libmbui.so` (`scripts/android.sh`, `mimalloc_obj`:
+  downloaded at build time, checked by its SHA-256; not in this repository),
+  by way of `src/host/mimalloc_android.c`, ours, which includes its
+  `src/static.c` unchanged.
+- From: https://github.com/microsoft/mimalloc, v2.1.7.
+- Licence: MIT. Copyright (c) 2018-2021 Microsoft Corporation, Daan Leijen.
+
 ## Downloaded at build time, not included
 
 The Android build fetches AndroidX Media3 (Apache-2.0) from Maven Central;
