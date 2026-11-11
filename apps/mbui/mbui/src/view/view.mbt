@@ -2558,8 +2558,6 @@ fn Tree::order_marked_in(self : Tree, at : Int) -> Unit {
 }
 
 ///|
-/// The order the nodes are drawn in made again (Tree::ordered): from each in it that holds what changed in it
-///|
 /// Node `at` (no slot) made in what node `h` lays out: put in the order by its own run where it goes, the rest of the
 /// order as it was (Tree::order_spliced); else from `h` as any change there is (Tree::order_marked_in).
 fn Tree::order_put_in(self : Tree, at : Int, h : Int) -> Unit {
@@ -2720,6 +2718,8 @@ fn Tree::order_spliced(self : Tree) -> Bool {
   true
 }
 
+///|
+/// The order the nodes are drawn in made again (Tree::ordered): from each in it that holds what changed in it
 /// (Tree::order_marked_in), what it holds put in its place and the rest moved past it, all of it where the root's
 /// changed, where that is not known, or where more than a few did.
 fn Tree::order_again(self : Tree) -> Unit {
@@ -7665,7 +7665,10 @@ fn Tree::box_taken_out(self : Tree, h : Int, b : @flex.Node) -> Bool {
 
 ///|
 /// How many boxes a change that makes many (Tree::holding_boxes) puts in or takes out one at a time before its holders
-/// are put again whole as it ends instead (each one a search of what its holder lays out).
+/// are put again whole as it ends instead (each one a search of what its holder lays out). Why 8: one at a time is a
+/// search of the holder's boxes each, putting all again one walk of them; a change of a list's own (a row come, gone,
+/// a message or two) is one to a few, well under it, and a page made with its rows is tens to thousands, over it at
+/// once, put whole once. Not measured to the row: past a few, the searches add up to the walk they save.
 let boxes_one_by_one_most : Int = 8
 
 ///|
@@ -8046,8 +8049,11 @@ fn each_place(slot : View, sn : Node, order : Array[Int], made? : Array[Int] = [
   let moved = order.length() != kids.length() || order.mapi(fn(i, v) { kids[i] != v }).contains(true)
   if moved {
     // (the others keep their order among themselves: only the made ones come where they go)
+    // (more made than are put in one at a time (each_change is always inside Tree::holding_boxes, whose cap that is):
+    // all put again at once, the others not compared, a walk of the kids for each made)
     let fresh = fn(v : Int) { made.contains(v) }
     let few = made.length() > 0 &&
+      made.length() <= boxes_one_by_one_most &&
       kids.filter(fn(v) { !fresh(v) }) == order.filter(fn(v) { !fresh(v) })
     kids.clear()
     tree.marked_up(slot.at, true, true, false, false, true)

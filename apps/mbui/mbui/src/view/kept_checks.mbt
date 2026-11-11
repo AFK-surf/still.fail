@@ -4,6 +4,26 @@
 // and whether each node that asks takes input (told from what changed, Tree::inputs_told). Each is looked at only after
 // a frame that changed it, by the tree's own counts of its work since the last look; what the look itself walks is
 // counted nowhere. A difference stops the run, saying where.
+//
+// Every way a node comes to be held, and what tells the drawing order of it (Tree::made marks nothing of the order: what
+// holds it does, as below). A new way to hold a node says it here and tells the order; the check finds a miss only on a
+// path some test walks.
+// - View::box: Tree::made, then View::box_appended, one of three ways: the root's (View::boxes_again, Tree::boxes_put:
+//   Tree::order_marked_in the root, its children ordered by layers); its box after its holder's last
+//   (Tree::order_put_in the node); else Tree::box_put_in (Tree::order_put_in), or where that says no View::boxes_again
+//   (Tree::boxes_put: Tree::order_marked_in the holder). In a change holding its boxes (Tree::holding_boxes) the holder
+//   put whole as it ends is marked so too.
+// - View::slot: Tree::made, then Tree::order_marked_in what holds the slot (a slot is in no order of its own; what it
+//   comes to hold is told by the ways above).
+// - The root: Tree::new's Tree::made(-1); the order made whole at the first frame (an empty order is made whole).
+// - View::take_in (a node put by, held again): View::box_appended, as View::box. View::park, the other way:
+//   Tree::order_marked_in what held it.
+// - View::each and each_of putting rows in their order (each_place): Tree::marked_up of the slot, and each row made
+//   Tree::order_put_in where it goes (box_put_in), else View::boxes_again.
+// - A shared node's flight and landing (shared.mbt: Tree::paired takes the old copy out of what held it, the held
+//   one parked or let go; Tree::lifted_order): the order made whole while any flight is (Tree::order_again, `flights`).
+// - Let go (View::drop, View::let_go): Tree::order_taken_out the node, not one under another being let go.
+// - An old view's host makes no node of the tree (ui's view_host draws its Ctx inside the node View::box made).
 
 ///|
 /// The first difference between what the tree keeps and what working it out whole gives, where any part kept changed
@@ -62,6 +82,9 @@ fn Tree::order_kept_said(self : Tree) -> String? {
   let whole = self.order.copy()
   let whole_holder = self.order_holder.copy()
   let whole_end = self.order_end.copy()
+  let whole_of = self.order_of.copy()
+  let whole_tops = self.tops.copy()
+  let whole_gens = self.order_gen.copy()
   // (the kept put back, as it was)
   self.order.clear()
   self.order.append(order)
@@ -75,6 +98,21 @@ fn Tree::order_kept_said(self : Tree) -> String? {
     self.order_gen[i] = gens[i]
   }
   if whole == order && whole_holder == holder && whole_end == end {
+    // (where each is in it, the node of the root's it is in and its making, as kept by hand where a run was put in or
+    // taken out (Tree::order_spliced) and read by what draws: for each in the order the whole's; for each other living
+    // node, where it is, what the whole leaves it)
+    for i, a in whole {
+      if of[a] != whole_of[a] || tops[a] != whole_tops[a] || gens[a] != whole_gens[a] {
+        return Some(
+          "the drawing order kept holds node \{a} at \{i} as the whole does, but keeps it at \{of[a]} (whole \{whole_of[a]}), in the root's node \{tops[a]} (whole \{whole_tops[a]}), of making \{gens[a]} (whole \{whole_gens[a]})",
+        )
+      }
+    }
+    for a in 0..<n {
+      if self.nodes[a].live && of[a] != whole_of[a] && !(whole_of[a] >= 0 && whole_of[a] < whole.length() && whole[whole_of[a]] == a) {
+        return Some("node \{a}, living, kept at \{of[a]} in the drawing order, where the whole leaves it at \{whole_of[a]}")
+      }
+    }
     return None
   }
   let m = if whole.length() < order.length() { whole.length() } else { order.length() }
