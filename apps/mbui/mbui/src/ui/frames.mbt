@@ -305,7 +305,8 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
       }
       None => ()
     }
-    // a native call's answer as the app took it, given again at its place: the frame after it takes it (native.mbt)
+    // a native call's answer as the app took it, given again at its place: told there, as the host's event that brought
+    // it (native.mbt's fake_native_due)
     match native_of_line(line) {
       Some((name, r)) => {
         fake_native_give(self.fake, name, r)

@@ -473,6 +473,7 @@ pub fn Tester::new(
     marks_out: [],
     marks_next: None,
     marks_by_hand: false,
+    picks_by_hand: false,
     rows_on_pixels: false,
     groups: true,
     keeps_sources,
@@ -1065,6 +1066,10 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   tester_rests_seen()
   // (as its host got it, where a test records it: tester_host.mbt)
   host_frame_drawn(at)
+  // (what the fake host does at a moment of its own that this frame asked for at its moment (a pick, a native call
+  // answered as it is asked: FakeHost::due) told as it ends, between frames, as a device's host answers after the
+  // frame that asked: fake_dues_after_frame)
+  fake_dues_after_frame(self.fake)
   // (a block's key's marks put back by the change that set them: left set, every structure after them at once, unsaid)
   if @view.key_marks_left() {
     @halt.saying("a list's block's key mark (key_taking, key_taken) left set after a frame at \{at}")

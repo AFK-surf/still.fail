@@ -12,10 +12,13 @@ let told_before : Double = 100.0
 let told_between : Double = 400.0
 
 ///|
-/// The host's answer for native call `id` (Tester::native_calls) there to take now, not from the frame after: as a host
-/// that tells it by its event has it.
+/// The host's answer for native call `id` (Tester::native_calls) there to take now, its event said by the test (not
+/// told by the fake host at its own moment, as Tester::answer_native has it): as a host that tells it by its event has
+/// it.
 fn native_there(t : Tester, id : Int, r : Result[Json, String]) -> Unit {
-  t.fake.dev.natives[id - 1].answer = Some((r, -1))
+  let a = t.fake.dev.natives[id - 1]
+  a.answer = Some(r)
+  a.said = true
 }
 
 ///|
@@ -110,14 +113,14 @@ test "a pick's answer: what reads it in the tree told at the moment the host's e
   })
   t.picks([("a.txt", b"hi"), ("b.txt", b"yo")])
   t.run_for(told_before)
+  // (its host's answer not there till the test says so: the fake's pickers answer as they are asked otherwise)
+  t.picks_by_hand()
   asked.set(pick(Files))
-  // (its host's answer not there till the test says so: the fake's pickers answer by the frame otherwise)
-  t.fake.pick_asks[0] = { kind: Files, frame: 2147483647, taken: false }
   t.run_for(told_before)
   assert_true(t.find("picking") is Some(_))
   waits_quietly(t)
   // the system answers: its event, now
-  t.fake.pick_asks[0] = { kind: Files, frame: -1, taken: false }
+  t.fake.pick_asks[0].said = true
   let came = t.time()
   on_outside(outside_pick, 1, 1)
   t.run_for(told_between)
@@ -173,5 +176,123 @@ test "two native calls asked by one press, each its own on_got given its answer 
   on_outside(outside_native, calls[0].0, -1)
   t.run_for(told_between)
   assert_eq(got.length(), 2)
+  t.assert_idle()
+}
+
+///|
+/// A node reading native call `call`'s answer (its words, and a `reacts` recording what it was told and when).
+fn native_read_by(call : @signals.Signal[NativeCall?], told : Array[(String, Double)]) -> Unit {
+  set_view_app(fn(root) {
+    root.box(fn(n) {
+      n
+      .words(By(fn() {
+        match call.get().map(fn(c) { c.got() }) {
+          Some(Some(Ok(j))) => "got " + j.stringify()
+          Some(Some(Err(why))) => "refused " + why
+          _ => "asking"
+        }
+      }))
+      |> ignore
+      n.reacts(fn() { call.get().map(fn(c) { c.got() }) }, fn(r) {
+        match r {
+          Some(Some(Ok(j))) => told.push((j.stringify(), n.cause_at()))
+          Some(Some(Err(why))) => told.push(("refused " + why, n.cause_at()))
+          _ => ()
+        }
+      })
+    })
+    |> ignore
+  })
+}
+
+///|
+test "the test's own answer to a native call told at the moment it gives it, at any rate (Tester::answer_native, refuse_native)" {
+  let call : @signals.Signal[NativeCall?] = @signals.signal(None)
+  let told : Array[(String, Double)] = []
+  let t = Tester::new(fn(_c) {  })
+  native_read_by(call, told)
+  t.run_for(told_before)
+  call.set(Some(native_call("adb.phone", Json::object(Map([])))))
+  t.run_for(told_before)
+  let id = t.native_calls()[0].0
+  waits_quietly(t)
+  let came = t.time()
+  t.answer_native(id, { "wireless": true })
+  t.run_for(told_between)
+  assert_eq(told, [("{\"wireless\":true}", came)])
+  assert_true(t.find("got {\"wireless\":true}") is Some(_))
+  // refused, at its own moment
+  call.set(Some(native_call("adb.phone", Json::object(Map([])))))
+  t.run_for(told_before)
+  let refused = t.time()
+  t.refuse_native(t.native_calls()[0].0, "no")
+  t.run_for(told_between)
+  assert_eq(told, [("{\"wireless\":true}", came), ("refused no", refused)])
+  assert_eq(runtime().awaiting(), 0)
+  t.assert_idle()
+}
+
+///|
+test "a native call the test answers as it is asked told at the moment it is asked, at any rate (Tester::native_answers)" {
+  let call : @signals.Signal[NativeCall?] = @signals.signal(None)
+  let told : Array[(String, Double)] = []
+  let t = Tester::new(fn(_c) {  })
+  t.native_answers("adb.phone", fn(_) { { "wireless": false } })
+  native_read_by(call, told)
+  t.run_for(told_before)
+  let asked = t.time()
+  call.set(Some(native_call("adb.phone", Json::object(Map([])))))
+  t.run_for(told_between)
+  assert_eq(told, [("{\"wireless\":false}", asked)])
+  assert_true(t.find("got {\"wireless\":false}") is Some(_))
+  assert_eq(runtime().awaiting(), 0)
+  t.assert_idle()
+}
+
+///|
+test "what the test's pickers give told at the moment of the ask, or of the answer it says, at any rate (Tester::picks, pick_answer)" {
+  let asked : @signals.Signal[Pick?] = @signals.signal(None)
+  let told : Array[(Int, Double)] = []
+  let t = Tester::new(fn(_c) {  })
+  set_view_app(fn(root) {
+    root.box(fn(n) {
+      n
+      .words(By(fn() {
+        match asked.get().map(fn(p) { p.files() }) {
+          Some(Some(files)) => "picked \{files.length()}"
+          _ => "picking"
+        }
+      }))
+      |> ignore
+      n.reacts(fn() { asked.get().map(fn(p) { p.files().map(fn(f) { f.length() }) }) }, fn(r) {
+        match r {
+          Some(Some(n_files)) => told.push((n_files, n.cause_at()))
+          _ => ()
+        }
+      })
+    })
+    |> ignore
+  })
+  t.picks([("a.txt", b"hi"), ("b.txt", b"yo")])
+  t.run_for(told_before)
+  // answered as it is asked
+  let first = t.time()
+  asked.set(pick(Files))
+  t.run_for(told_between)
+  assert_eq(told, [(2, first)])
+  assert_true(t.find("picked 2") is Some(_))
+  // answered as the test says, the person having taken a while
+  t.picks_by_hand()
+  t.picks([("c.txt", b"c")])
+  asked.set(pick(Files))
+  t.run_for(told_before)
+  assert_true(t.find("picking") is Some(_))
+  waits_quietly(t)
+  let second = t.time()
+  t.pick_answer(2)
+  t.run_for(told_between)
+  assert_eq(told, [(2, first), (1, second)])
+  assert_true(t.find("picked 1") is Some(_))
+  assert_eq(runtime().awaiting(), 0)
   t.assert_idle()
 }

@@ -525,7 +525,8 @@ pub fn Tester::hold_files(self : Tester, at : (Double, Double)?) -> Unit {
 /// `files` (their names, a folder's by their way down and a folder itself with a "/" at its end, and bytes) let go on
 /// the window at (x, y), as a host says, with their `paths` where it says them (the Finder's: one for each of `files`,
 /// a folder as that file says, its size that file's bytes); taken as the frame that takes the message begins
-/// (Ctx::on_files), read by the frame after, as a pick is.
+/// (Ctx::on_files), what they hold told by the host's event after the message, at its moment (FakeHost::due), as a
+/// pick's is.
 pub fn Tester::drop_files(
   self : Tester,
   x : Double,
@@ -534,8 +535,10 @@ pub fn Tester::drop_files(
   paths? : Array[String] = [],
 ) -> Unit {
   self.picks(files)
-  self.fake.pick_asks.push({ kind: Files, frame: g().frame_no, taken: false })
+  self.fake.pick_asks.push({ kind: Files, said: false, taken: false })
   let id = self.fake.pick_asks.length()
+  let f = self.fake
+  f.due(f.time, "files dropped", fn() { fake_pick_said(f, id) })
   let m : Map[String, Json] = {
     "type": Json::string("drop"),
     "x": Json::number(x),

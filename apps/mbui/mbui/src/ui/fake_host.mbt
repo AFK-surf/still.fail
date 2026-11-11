@@ -59,14 +59,15 @@ impl @hostapi.Host for FakeHost with update_state(_) {
 }
 
 // The system's pickers and the files kept on the device (@hostapi pick.mbt, keep.mbt) as a test has them: its pickers
-// give what the test said (Tester::picks) from the frame after each ask; what the app keeps is kept by the test
-// (Tester::kept), from the frame after it was finished.
+// give what the test said (Tester::picks) at the moment each is asked, told as a host's event tells it (FakeHost::due:
+// after the event that asked, before the clock moves on); what the app keeps is kept by the test (Tester::kept), from
+// the frame after it was finished.
 
 ///|
 priv struct FakePick {
   kind : @hostapi.PickKind
-  /// the frame it was asked in: answered from the next on
-  frame : Int
+  /// its answer told (the host's event said): what the pickers give is there to take from then
+  mut said : Bool
   mut taken : Bool
 }
 
@@ -89,17 +90,29 @@ impl @hostapi.Host for FakeHost with pk_start(self, kind) {
     3 => Camera
     _ => Files
   }
-  self.pick_asks.push({ kind, frame: g().frame_no, taken: false })
-  self.wants = true
-  self.pick_asks.length()
+  self.pick_asks.push({ kind, said: false, taken: false })
+  let id = self.pick_asks.length()
+  // (answered at the moment it is asked, the host's event after the one that asked; where the test answers its pickers
+  // itself, as it says: Tester::pick_answer)
+  if !self.picks_by_hand {
+    self.due(self.time, "a pick answered", fn() { fake_pick_said(self, id) })
+  }
+  id
 }
 
 ///|
-/// How ask `id` goes: 0 asking (until the frame after it was asked: as that frame begins, before it is counted, its
-/// answer taken then, hostcall.mbt's takers_by_the_frame), 1 answered, -1 let go of or none.
+/// Ask `id` answered with what the pickers give: told as a host's event tells it (on_outside, MB_OUTSIDE_PICK).
+fn fake_pick_said(f : FakeHost, id : Int) -> Unit {
+  guard f.pick_asks.get(id - 1) is Some(a) && !a.said else { return }
+  a.said = true
+  on_outside(outside_pick, id, 1)
+}
+
+///|
+/// How ask `id` goes: 0 asking (till its answer is told: fake_pick_said), 1 answered, -1 let go of or none.
 impl @hostapi.Host for FakeHost with pk_state(self, id) {
   match self.pick_asks.get(id - 1) {
-    Some(a) if !a.taken => if g().frame_no < a.frame { 0 } else { 1 }
+    Some(a) if !a.taken => if a.said { 1 } else { 0 }
     _ => -1
   }
 }
@@ -2079,14 +2092,14 @@ impl @hostapi.Host for FakeHost with post_next(_) {
 
 // The app's own calls of its host (@hostapi native.mbt; @ui's native_call.mbt) as a test has them: each waits until
 // the test answers it (Tester::answer_native, refuse_native), or answered as it is asked (Tester::native_answers) or by
-// an answer given before it (held), each from the frame after.
+// an answer given before it (held: a replay's NATIVESAID), each told at that moment as a host's event tells it
+// (FakeHost::due: after the event that asked or answered, before the clock moves on).
 
 ///|
 /// A call asked (its id, from 1: its place).
 impl @hostapi.Host for FakeHost with ncall_call(self, name, params) {
   let params = @json.parse(params) catch { _ => Json::string(params) }
-  let ask : FakeNative = { name, params, answer: None }
-  let at = g().frame_no
+  let ask : FakeNative = { name, params, answer: None, said: false }
   let mut held = -1
   for i, h in self.dev.native_held {
     if h.0 == name {
@@ -2095,29 +2108,26 @@ impl @hostapi.Host for FakeHost with ncall_call(self, name, params) {
     }
   }
   if held >= 0 {
-    ask.answer = Some((self.dev.native_held.remove(held).1, at))
+    ask.answer = Some(self.dev.native_held.remove(held).1)
   } else {
     match self.dev.native_auto.get(name) {
-      Some(answer) => ask.answer = Some((answer(params), at))
+      Some(answer) => ask.answer = Some(answer(params))
       None => ()
     }
   }
   self.dev.natives.push(ask)
+  let id = self.dev.natives.length()
   if ask.answer is Some(_) {
-    self.wants = true
+    fake_native_due(self, id)
   }
-  self.dev.natives.length()
+  id
 }
 
 ///|
-/// Call `id`'s answer, from the frame after it was given (as that frame begins, before it is counted: its answer taken
-/// then, hostcall.mbt's takers_by_the_frame).
+/// Call `id`'s answer, once its host's event told it (fake_native_due).
 fn FakeHost::native_given(self : FakeHost, id : Int) -> Result[Json, String]? {
-  guard self.dev.natives.get(id - 1) is Some(a) else { return None }
-  match a.answer {
-    Some((r, at)) if g().frame_no >= at => Some(r)
-    _ => None
-  }
+  guard self.dev.natives.get(id - 1) is Some(a) && a.said else { return None }
+  a.answer
 }
 
 ///|
@@ -2142,15 +2152,17 @@ impl @hostapi.Host for FakeHost with ncall_result(self, id) {
 
 ///|
 /// Its answers come by the frame after they were asked or given (Tester::finish where the test says when), told by
-/// no event; the marks' drawings, where the test answers them by hand (Tester::marks_by_hand), told as a host's event
-/// tells them (Tester::marks_answer).
+/// no event; but what was picked and a native call's answer, told at their moment as a host's event tells them
+/// (fake_pick_said, fake_native_due), and the marks' drawings where the test answers them by hand
+/// (Tester::marks_by_hand), told so (Tester::marks_answer).
 impl @hostapi.Host for FakeHost with answers_by_frame(self, kind) {
+  kind != outside_pick &&
+  kind != outside_native &&
   !(kind == outside_marks && self.marks_by_hand)
 }
 
 ///|
-/// What it answers by hand is told as a host's event (Tester::marks_answer: on_outside); the rest by the frame
-/// (answers_by_frame).
+/// What it answers at a moment is told as a host's event (on_outside); the rest by the frame (answers_by_frame).
 impl @hostapi.Host for FakeHost with set_outside(_, _) {
   true
 }
@@ -2340,6 +2352,17 @@ fn posted_tell() -> Unit {
     if fake_posted.length() > 0 {
       on_outside(outside_posted, 0, 0)
     }
+  }
+}
+
+///|
+/// A frame of the fake host's ended: what it is to do by now (FakeHost::due: asked of it as the frame was made, at the
+/// frame's moment) done now, between frames, before anything else comes, and what was posted with it (posted_tell),
+/// as a device's host answers after the frame that asked. Nothing of the frame's posted else is told here: that waits,
+/// as ever, for the clock to move or an input.
+fn fake_dues_after_frame(f : FakeHost) -> Unit {
+  if fake_dues.length() > 0 && fake_dues[0].0 <= f.time + 1.0e-9 {
+    posted_tell()
   }
 }
 
