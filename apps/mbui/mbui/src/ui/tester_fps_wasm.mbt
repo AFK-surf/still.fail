@@ -17,3 +17,21 @@ fn test_motion_judged(_loc : String) -> MotionJudged {
 fn test_corners_looked() -> Bool {
   true
 }
+
+///|
+/// (no such run either: motion_runs, tester_fps.mbt)
+fn motion_runs() -> Bool {
+  false
+}
+
+///|
+/// (nothing said where no run counts or judges: motion_bars_said, tester_fps.mbt)
+fn motion_bars_said(_check : String, _bars : Array[(String, Int)]) -> Unit {
+
+}
+
+///|
+/// (nothing said either: motion_known_said, tester_fps.mbt)
+fn motion_known_said(_check : String, _file : String, _n : Int, _bar : Int, _what : String) -> Unit {
+
+}
