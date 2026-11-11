@@ -8,6 +8,8 @@
 # fifths of its runner time, and two or three branches pushing at once filled the account's 60, their tests waiting
 # 285-479 s for a runner, main's tests and a release's deltas 60-150 s (the user, 2026-11-11: 帧率只在合并前跑).
 # main's own run after a merge at the default rate alone: the rates ran on what merged, in the queue.
+# The queue's run has one run at the default rate as well, the sweep of every screen on a workspace of real size
+# (app-queue): its bars are of what merged, not of a branch alone.
 name: mbui-check
 on:
   workflow_call:
@@ -370,8 +372,8 @@ jobs:
   app:
     name: native (app ${{ matrix.group }}${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}${{ matrix.part && format(' part {0}', matrix.part) || '' }})
     needs: app-build
-    # (arch/next's run keeps its units: its tests are its pipeline's; the merge queue's runs the rates alone, the
-    # default's having run on the branch's push)
+    # (arch/next's run keeps its units: its tests are its pipeline's; the merge queue's runs the rates, the default's
+    # having run on the branch's push, and of the default's the real-size sweep alone, app-queue below)
     if: github.event_name != 'workflow_run' && inputs.rates != 'only'
     runs-on: ubuntu-24.04
     # (a push's 5 minutes; the day's, its pages in one process, 10)
@@ -442,6 +444,27 @@ jobs:
             echo '```'
             [ -z "$why" ] || { echo '```'; printf '%s\n' "$why" | cut -c1-300; echo '```'; }
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # The sweep of every screen on a workspace of real size (src/sfapp/real_size_wbtest.mbt) again in the merge queue, at
+  # the default rate (it runs at no other: scripts/test.sh's sweeps), on what would merge. Its bars are exact counts
+  # of what a frame makes, lays out and measures on each screen, some 2,200 rows, and a page that comes to hold a topic
+  # owes rows: two branches each green on its own push are red together when one changes what the other's rows count
+  # (#5488's rows and 2c90e4161e's `chatRow`, merged 35 minutes apart, 2026-11-11: every branch off main failed on four
+  # rows it had not touched until #5513). Here the second of them leaves the queue instead. Its two windows side by side
+  # on one runner: 135 s and 50 s of a branch's push, each beside other runs there.
+  app-queue:
+    name: native (app ${{ matrix.group }})
+    needs: app-build
+    if: inputs.rates == 'only'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [real-size]
+        fps: [""]
+    env: *app-env
+    steps: *app-steps
 
   # The page tests again with frames drawn on run_for's way while the app asks for them (MBUI_TEST_FPS, mbui's
   # scripts/fps_check.sh): the same results, what a test asserts at a moment what is so at it however many frames came
