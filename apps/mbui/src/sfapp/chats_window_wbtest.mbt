@@ -232,17 +232,19 @@ test "a chats' list scrolled down on 小屏 with a finger and on 大屏 with a m
         }
       }
     } else {
-      // the wheel over the sidebar's list, five turns of 30 points a frame apart, each frame looked at, then a second at
-      // rest, looked at as it ends. (Its frames at rest are not walked one by one: the sidebar's list wheeled so and
-      // walked a frame at a time trips sizes_steady 2.5 s in whatever it holds, the made-up "long" list with no window
-      // as well, not this change's)
+      // the wheel of a trackpad over the sidebar's list, five turns of 30 points at one moment (each looked at), then a
+      // second at rest, every frame of it looked at: the next turns come while its bar still shows from these, and take
+      // it along with the list
       for _ in 0..<24 {
         for _ in 0..<5 {
           t.wheel(140.0, 400.0, 30.0)
           look()
         }
-        t.run_for(window_rest_ms)
-        look()
+        let rest = t.time()
+        while t.time() - rest < window_rest_ms - 1.0e-6 {
+          t.run_for(@ui.frame_period_default)
+          look()
+        }
       }
     }
     let wire = asked
