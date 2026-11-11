@@ -241,7 +241,8 @@ test("two lists of a workspace keep windows of their own", async () => {
   await t.host.time.pass(100);
   assert.equal(rowsOf(valueOf(t, ALL)).length, 20);
   assert.equal(rowsOf(valueOf(t, MINE)).length, 50);
-  assert.ok(rowsOf(valueOf(t, MINE)).every((r: J) => r.mine === true));
+  // (each the viewer's own, as its record says: a list's row holds no `mine`, views.ts LIST_ROW_KEYS)
+  assert.ok(rowsOf(valueOf(t, MINE)).every((r: J) => Number(/\d+$/.exec(r.id)![0]) % 2 === 0));
 });
 
 test("what a list gives at a window of n is what it gave asked with `limit: n`", async () => {

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Effect } from "effect";
 import { NodeHost } from "../src/hosts/node.ts";
-import { OPENS, fixture } from "../test/real-size.ts";
+import { CHAT, fixture } from "../test/real-size.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -28,12 +28,15 @@ const enc = new TextEncoder();
 const rec = (tbl: string, key: string, value: unknown) => put.run(tbl, key, enc.encode(JSON.stringify(value)));
 db.exec("BEGIN");
 // (the device's prefs as a device that was used has them: without, the first switch's write of `workspace` is the
-// first prefs there are, and everything reading a part of them is made again for it, which no real switch does)
-rec("prefs", "device", { workspace: "ws", lang: "zh" });
+// first prefs there are, and everything reading a part of them is made again for it, which no real switch does. ws2 was
+// left on its chat of real size (`openChat`, workspaceMarks' `chat`): the wide frame lands on it there, on a new chat
+// in ws)
+rec("prefs", "device", { workspace: "ws", lang: "zh", openChat: { ws2: { station: "ws2/maple", key: CHAT.keys[0] } } });
 rec("me", SUB, { workspaces: [{ id: "ws", name: "Acme" }, { id: "ws2", name: "Second" }], invitations: [], relay_url: null, user: { email: "me@x.com" } });
 const counts: Record<string, number> = {};
 for (const ws of ["ws", "ws2"]) {
-  const all: [J, J][] = ws === "ws" ? fixture(NOW, OPENS) : JSON.parse(JSON.stringify(fixture(NOW, OPENS)).replaceAll('"ws/', '"ws2/'));
+  // (the chat with all its messages: where it opens, its first unread, is on the device, so it opens without its station)
+  const all: [J, J][] = ws === "ws" ? fixture(NOW) : JSON.parse(JSON.stringify(fixture(NOW)).replaceAll('"ws/', '"ws2/'));
   for (const [topic, value] of all) {
     const st = topic.station as string;
     const list = (table: string, idOf: (v: J) => string) => {
@@ -64,6 +67,11 @@ for (const ws of ["ws", "ws2"]) {
         break;
       case "archivedRows":
         list("archived_row", (v) => String(v.id));
+        break;
+      // the chat's messages, held on the device as its log (db/import.ts reads `entry` <station>, <thread>, <n>)
+      case "thread":
+        for (const e of value.entries as J[]) rec("entry", `${st}${SEP}${topic.thread}${SEP}${e.n}`, e);
+        counts[`${ws} entry`] = (counts[`${ws} entry`] ?? 0) + value.entries.length;
         break;
     }
   }
