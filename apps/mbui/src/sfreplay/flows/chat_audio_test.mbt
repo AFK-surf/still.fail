@@ -42,7 +42,7 @@ test "46-chat-audio" {
     f.tap("e2e-tune")
     f.run_to(@sfapp.preview_rest())
     let v = opened_view(f)
-    assert_true(v > 0)
+    f.check(v > 0, "no player view opened")
     // the system's player reads the song as the run's asked (the trace's read lines)
     player_opened(f, v)
     // ready and playing as the Mac's player said (the trace's info lines, Replay::host), 2 s in
