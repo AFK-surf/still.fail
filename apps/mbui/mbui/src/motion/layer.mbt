@@ -1599,6 +1599,21 @@ fn carried_way(ox : Double, vx : Double, oy : Double, vy : Double) -> Double {
 let part_moving : Double = 30.0
 
 ///|
+/// The way what moves for cause `by` this frame goes on when that cause was said with a declared moment (cause_at:
+/// reshape's `at`, come by now), by `spec` (from 1 to none): that moment, and the share of it left now (1 as it sets
+/// out, 0 at its end), worked out as the way's own Anim works it out (Spec::value_at); None when no moment was said.
+fn declared_way_left(c : @ui.Ctx, by : String, spec : Spec) -> (Double, Double)? {
+  guard by != "" && cause_at.get(by) is Some(at) else { return None }
+  let dur = spec.duration(1.0, 0.0, 0.0)
+  Some((at, spec.value_at(c.moment() - at, dur, 1.0, 0.0, 0.0).0))
+}
+
+///|
+/// The least share of a declared way left for a part aimed anew on it to go on from where it is by it: less, it is
+/// where it goes at once, as a row on the list's way is then (ListState::row_sized's 0.02).
+let declared_left_least : Double = 0.02
+
+///|
 /// How far (points) a ground's way from where it is drawn to shape `to` goes, along what changes most of it.
 fn ground_way(r : Rec, to : (Double, Double, Double, Double)) -> Double {
   dmax(dmax((to.0 - r.gx).abs(), (to.1 - r.gy).abs()), dmax((to.2 - r.gw).abs(), (to.3 - r.gh).abs()))
@@ -2067,27 +2082,56 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
             let (vx, vy) = if r.p_set_at == c.moment() { r.p_set_v } else { (r.ox.velocity, r.oy.velocity) }
             r.p_set_v = (vx, vy)
             r.p_set_at = c.moment()
-            // (set off again while it went: a Move on from that speed, as its shape's ground does, as long as how far
-            // it has to go or how far its speed carries it, the further)
-            // (only toward where it goes: turned back by its cause (sent words let the composer go as it grew), it sets
-            // out from rest, not thrown past and turned in a frame (the user, 2026-11-09: 「发送反向时不带速度」))
-            let toward = (cx + dx) * vx <= 0.0 && (cy + dy) * vy <= 0.0
-            let carried = sets_out_from_rest(spec) && toward && (vx.abs() > part_moving || vy.abs() > part_moving)
-            let spec = if carried {
-              move(over=carried_way(cx + dx, vx, cy + dy, vy))
-            } else {
-              spec.delayed(delay)
-            }
-            // (carried on from where it is now and how fast it goes now: from now, not from its cause's moment before)
-            let start_at = if carried { Some(c.moment()) } else { None }
             r.driven = false
             r.moved_now = true
-            ignore(r.ox.tells_now(c))
-            r.ox.value = cx + dx
-            moves_with(c, group, far, r.ox, 0.0, spec, start_at?, velocity=vx)
-            ignore(r.oy.tells_now(c))
-            r.oy.value = cy + dy
-            moves_with(c, group, far, r.oy, 0.0, spec, start_at?, velocity=vy)
+            match declared_way_left(c, group, spec) {
+              // A part going with a way told with a declared moment (a part of a reshape following its frame, the
+              // frame set off for a cause at the moment that cause said: reshape's `at`, cause_at) and aimed anew by a
+              // later change on it stays on that way: on from where it is, by the share of the way left (as tall as it
+              // is now, all of that the share left of it), and stops with it. What goes with it (the list's room under a
+              // composer let go by words sent, mbui's ui/list_size.mbt, which takes a row's new height on its way so)
+              // goes as one with it so; a Move of its own carrying its speed, set out now, was another clock beside it
+              // (lines typed as words sent let go of the composer: its field on a 250 ms Move from as fast as it went,
+              // the list's foot on their 461 ms from rest, the room between them closing 5 points and opening again).
+              // The rules: what changes together goes one way (the user, 2026-10-30), and a new cause joins what is left
+              // of the one going as a whole (the user, 2026-11-03). Not the reversal below (the user, 2026-11-09:
+              // 「发送反向时不带速度」): that one is of what goes by itself; this is the same way, its end moved.
+              Some((at, left)) => {
+                ignore(r.ox.tells_now(c))
+                ignore(r.oy.tells_now(c))
+                if left > declared_left_least {
+                  r.ox.value = (cx + dx) / left
+                  moves_with(c, group, far, r.ox, 0.0, spec, start_at=at, velocity=0.0)
+                  r.oy.value = (cy + dy) / left
+                  moves_with(c, group, far, r.oy, 0.0, spec, start_at=at, velocity=0.0)
+                } else {
+                  // (all but over: where it goes, as a row on the list's way is, ListState::row_sized)
+                  r.ox.snap(c, 0.0)
+                  r.oy.snap(c, 0.0)
+                }
+              }
+              None => {
+                // (set off again while it went: a Move on from that speed, as its shape's ground does, as long as how far
+                // it has to go or how far its speed carries it, the further: what goes by itself)
+                // (only toward where it goes: turned back by its cause (sent words let the composer go as it grew), it sets
+                // out from rest, not thrown past and turned in a frame (the user, 2026-11-09: 「发送反向时不带速度」))
+                let toward = (cx + dx) * vx <= 0.0 && (cy + dy) * vy <= 0.0
+                let carried = sets_out_from_rest(spec) && toward && (vx.abs() > part_moving || vy.abs() > part_moving)
+                let spec = if carried {
+                  move(over=carried_way(cx + dx, vx, cy + dy, vy))
+                } else {
+                  spec.delayed(delay)
+                }
+                // (carried on from where it is now and how fast it goes now: from now, not from its cause's moment before)
+                let start_at = if carried { Some(c.moment()) } else { None }
+                ignore(r.ox.tells_now(c))
+                r.ox.value = cx + dx
+                moves_with(c, group, far, r.ox, 0.0, spec, start_at?, velocity=vx)
+                ignore(r.oy.tells_now(c))
+                r.oy.value = cy + dy
+                moves_with(c, group, far, r.oy, 0.0, spec, start_at?, velocity=vy)
+              }
+            }
               }
         }
       }

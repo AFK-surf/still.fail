@@ -208,6 +208,7 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
     timed: false,
     set_out: -1.0,
     after: 0.0,
+    row_left: @double.infinity,
   }
   send_flight.set(Some(f))
   let t = @ui.Tester::new(
@@ -278,6 +279,7 @@ test "a tall sent picture moves its crop to the top as it lands" {
     timed: false,
     set_out: -1.0,
     after: 0.0,
+    row_left: @double.infinity,
   }
   send_flight.set(Some(f))
   let t = @ui.Tester::new(
@@ -362,6 +364,7 @@ test "an image sent while it goes up flies on to its place once it is up: its me
     timed: false,
     set_out: -1.0,
     after: 0.0,
+    row_left: @double.infinity,
   }
   send_flight.set(Some(f))
   let t = @ui.Tester::new(

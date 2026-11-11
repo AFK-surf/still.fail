@@ -782,10 +782,33 @@ pub fn[T] ListRows::rows(
           continue
         }
         if !here.contains(k) && !self.going.contains(k) {
-          let at = from(k).unwrap_or(now)
-          self.going[k] = { item, at, after: prev }
-          self.causes.by[k] = (Goes(at), ms(k).unwrap_or(row_size_ms))
-          began = true
+          match self.causes.by.get(k) {
+            // A way's end is a function of the causes still there. A cause timed for the future and taken back before
+            // it has started leaves nothing: no start and no end; the way is planned again from the causes that remain
+            // (the coordinator of the migration, 2026-11-11). A row said to come later (words sent, coming as they let
+            // go of the composer) and gone before then (they were refused) has not opened: nothing of it closes, and
+            // its moment and length are not the way's (they held the list's foot 125 ms behind the composer's frame and
+            // 220 ms past its rest, the room between them closing 47 points and opening 4 again). One under way taken
+            // back is a turn and goes as any row going does, below.
+            Some((Comes(at), _)) if at > now => {
+              self.causes.by.remove(k)
+              self.causes.own.remove(k)
+              self.causes.by_room.remove(k)
+              self.causes.not_by_room.remove(k)
+              self.causes.opened.remove(k)
+              self.causes.stood.remove(k)
+              self.causes.leads.remove(k)
+              // (its height on the way forgotten: said to come again, it comes from nothing, ListState::row_sized)
+              self.causes.anew.add(k)
+              began = true
+            }
+            _ => {
+              let at = from(k).unwrap_or(now)
+              self.going[k] = { item, at, after: prev }
+              self.causes.by[k] = (Goes(at), ms(k).unwrap_or(row_size_ms))
+              began = true
+            }
+          }
         }
         if here.contains(k) || self.going.contains(k) {
           prev = k

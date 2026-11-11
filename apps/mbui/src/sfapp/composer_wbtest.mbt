@@ -230,6 +230,59 @@ test "an upload's id is the same in every run and on js and native: written out,
 }
 
 ///|
+/// Where the composer's frame's top is drawn: its box where it is laid out, its ground as far over that as it is drawn
+/// on its way to another shape (@motion.reshaped_over).
+fn composer_frame_top(t : @ui.Tester) -> Double {
+  match @motion.measured_rect(t.ctx(), "composer/content") {
+    Some((_, y, _, _)) => y - @motion.reshaped_over(t.ctx(), "composer/box")
+    None => @halt.saying("the composer's frame not laid out")
+  }
+}
+
+///|
+/// Where the chat's list's last row ends: its Foot row's top (the room it keeps under its rows for the composer).
+fn list_last_foot(t : @ui.Tester) -> Double {
+  let rows = t.rows()
+  rows[rows.length() - 1].1
+}
+
+///|
+/// The room between the composer's frame's top and the list's last row's foot (the owner's, 2026-11-03: the same on
+/// every frame as words sent leave the composer), held to go one way on every frame drawn from now on: never closing
+/// and then opening again, nor the other way (`said` what it is about; `also` looked at after each of those frames too).
+/// Its frames' rooms, as drawn.
+fn room_one_way(t : @ui.Tester, said : String, also? : () -> Unit = fn() {  }) -> Array[(Double, Double)] {
+  let rooms : Array[(Double, Double)] = [(t.time(), composer_frame_top(t) - list_last_foot(t))]
+  let way = Ref(0.0)
+  t.each_frame(
+    Some(fn() {
+      let room = composer_frame_top(t) - list_last_foot(t)
+      let (_, was) = rooms[rooms.length() - 1]
+      rooms.push((t.time(), room))
+      let d = room - was
+      if d.abs() > 1.0e-6 {
+        let now = if d > 0.0 { 1.0 } else { -1.0 }
+        if way.val != 0.0 && now != way.val {
+          @halt.saying("\{said}: the room between the composer's frame and the list's last row went back at \{t.time()}: \{rooms}")
+        }
+        way.val = now
+      }
+      also()
+    }),
+  )
+  rooms
+}
+
+///|
+/// Where the composer's field's words are drawn (their top), as gaps_steady finds them: its line said as 发消息.
+fn composer_field_top(t : @ui.Tester) -> Double {
+  match t.words_said().search_by(fn(w) { w.0.has_prefix("发消息") }) {
+    Some(i) => t.words_said()[i].2
+    None => @halt.saying("the composer's field not drawn")
+  }
+}
+
+///|
 test "refused before the outbox, the words come back and why is said" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
@@ -237,17 +290,23 @@ test "refused before the outbox, the words come back and why is said" {
   t.type_text("发不出去的话")
   tap_send(t)
   let sent = named(calls, "chat.send")
+  // (from the refusal, the composer's frame going on its own way, why said under it, and the list's foot with it on
+  // that way, not on the way the words would have let go of it: the room between them one way)
+  let rooms = room_one_way(t, "refused")
   (sent[0].done)(Err({ "code": "invalid_params", "message": "没有这个对话" }))
   t.draw()
   // sent, then refused: felt each
   assert_eq(t.haptics(), [@ui.KeyboardTap, @ui.Reject])
   assert_true(t.dump().contains("发不出去的话"))
   assert_true(t.find("没有这个对话") is Some(_))
-  // the words sent wait over the field for their row, which this core never gives; the composer's room held as
-  // tall as they went meanwhile, then let go to its own height (both said as they set off)
+  // the words sent wait over the field for their row, which this core never gives; the composer, theirs no more from
+  // the refusal, goes to its own height from then, the list's foot with it
   t.run_for(flight_wait_ms + @ui.move_most_ms)
   // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
   t.run_for(@sfpages.sending_shows_ms)
+  t.each_frame(None)
+  // (the room did go somewhere: the composer's frame went up from its capsule as why was said under it)
+  assert_true(rooms.length() > 1 && (rooms[0].1 - rooms[rooms.length() - 1].1).abs() > 1.0, msg="\{rooms}")
   t.assert_idle()
 }
 
@@ -827,6 +886,15 @@ test "lines typed while words sent let go of the composer: the list's foot goes 
   t.enter()
   t.type_text("又一行")
   t.enter()
+  // from here the composer's field goes on the way the words let go of it on (their moment, as long as what is left of
+  // their way: flight_lets_go), aimed anew there by the lines typed: on from where it is by the share of that way left
+  // (mbui's motion layer.mbt, declared_way_left), stopping with it, its frame and the list's foot; not a Move of its
+  // own from as fast as it went (it rested at 1916 ms, the list's foot at 2124: the room between the field and the row
+  // over it closed 5 points and opened again). The list's rows go on that way's exact time, the field on its whole
+  // milliseconds (Spec::value_at): which of the two becomes the other is not this test's
+  let (way_at, way_ms) = @sfbase.flight_lets_go("ws1/st1:s-c1").unwrap()
+  let ways : Array[(Double, Double)] = [(t.time(), composer_field_top(t))]
+  let rooms = room_one_way(t, "lines typed", also=fn() { ways.push((t.time(), composer_field_top(t))) })
   let foot = fn() {
     let rows = t.rows()
     rows[rows.length() - 1].2
@@ -840,6 +908,22 @@ test "lines typed while words sent let go of the composer: the list's foot goes 
   // point; the composer stopped where it was going as the words were sent, @motion.stop_for)
   let now = foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1")
   assert_true((now - over).abs() < 0.01, msg="\{now} after \{over}")
+  t.each_frame(None)
+  assert_true(rooms.length() > 1)
+  // its share of what it has left to go, at every frame, that of a Move on whole milliseconds from that moment, as long
+  let left = fn(at : Double) {
+    @motion.tween(way_ms, ease=@ui.Ease::Move).value_at(at - way_at, way_ms, 1.0, 0.0, 0.0).0
+  }
+  let (t0, field0) = ways[0]
+  let field_end = ways[ways.length() - 1].1
+  for w in ways {
+    let field_left = (w.1 - field_end) / (field0 - field_end)
+    let move_left = left(w.0) / left(t0)
+    assert_true(
+      (field_left - move_left).abs() <= 1.0e-12,
+      msg="at \{w.0}: the field \{field_left} of its way left, its way \{move_left}: \{ways}",
+    )
+  }
   t.assert_idle()
 }
 

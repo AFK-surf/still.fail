@@ -107,6 +107,9 @@ pub(all) struct SendFlight {
   mut timed : Bool
   mut set_out : Double
   mut after : Double
+  /// the moment their row left the list (they did not go: flight_row_gone), +inf while it is in it or to come: from
+  /// then they hold nothing of the composer they were sent from, nor time the list (flight_lets_go, shown_rows)
+  mut row_left : Double
 }
 
 ///|
@@ -303,6 +306,7 @@ pub fn flight_start(
         timed: false,
         set_out: -1.0,
         after: 0.0,
+        row_left: @double.infinity,
       }))
       // (they wait for nothing, nor does anything wait for them: the chat's list's turns told they set out,
       // list_turns.mbt)
@@ -393,6 +397,7 @@ pub fn flight_carry_start(
         timed: false,
         set_out: -1.0,
         after: 0.0,
+        row_left: @double.infinity,
         from_top,
       }))
     }
@@ -432,6 +437,16 @@ pub fn flight_carry_waiting(c : @ui.Ctx) -> Unit {
       flight_waiting(c, f.chat)
       flight_files(c, f.chat)
     }
+    _ => ()
+  }
+}
+
+///|
+/// The words sent from chat `chat` to row `key` did not go (refused, nothing taken: sent_local_gone), their row gone
+/// from the list at moment `at`: they hold nothing from then (flight_lets_go).
+pub fn flight_row_gone(chat : String, key : String, at : Double) -> Unit {
+  match flight_of(chat) {
+    Some(f) if f.key == key && f.row_left == @double.infinity => f.row_left = at
     _ => ()
   }
 }
@@ -791,9 +806,14 @@ fn flight_list_key(f : SendFlight) -> String {
 /// When the composer of chat `chat` is let go by the words sent from it, and how long it then takes to come down (its
 /// room with it): a share of their way on, as long as what is left of it, so their row opening, the composer coming
 /// down and its room closing go as one (shown_rows, the composer's reshape); a new chat's as they set out, down in sent_down_ms. Said once,
-/// as their way is (flight_timed); None till then, the composer held as it is.
+/// as their way is (flight_timed); None till then, the composer held as it is. Their row gone from the list (they did
+/// not go: flight_row_gone), they let go of it at that moment, at once: what the composer does then (their words back
+/// in it, why said under it) is its own way, and the list's room under it goes on that way (sfpages' foot_way), not on
+/// theirs; held for them till the moment their row would have opened, the list's foot went 125 ms after the composer
+/// on a longer curve, the room between them closing 5 points and opening again.
 pub fn flight_lets_go(chat : String) -> (Double, Double)? {
   match flight_of(chat) {
+    Some(f) if f.row_left < @double.infinity => Some((f.row_left, 0.0))
     Some(f) if f.placed && f.timed =>
       if f.carried {
         Some((f.set_out + f.after, sent_down_ms))

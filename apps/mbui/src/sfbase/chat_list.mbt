@@ -1656,8 +1656,10 @@ fn shown_rows(
   // from now till then (a card they answer closing) sets out with them, one way
   let now = c.moment()
   let mut told_foot = false
+  // (their row gone from the list, they did not go: nothing of theirs times the rows, flight_row_gone; what the composer
+  // does then is the Foot row's way, `foot_way`, the row going on it with it)
   let leaving = match flight {
-    Some(f) if !f.carried => {
+    Some(f) if !f.carried && f.row_left == @double.infinity => {
       // (once their way is said, in the frame their row is placed: flight_timed)
       if f.placed && f.timed && rd.sent_foot != "/" + f.key {
         rd.sent_foot = "/" + f.key

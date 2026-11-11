@@ -134,3 +134,102 @@ test "an arriving row told to come sooner than it was before it set out opens fr
   t.run_for(@ui.row_size_ms * 2.0)
   assert_eq(t.row(1).unwrap().3, 50.0)
 }
+
+///|
+/// A list of rows r0 and r3 (50 tall, r3 80 once it changes), held at its end, every frame of it from the moment
+/// something is said of it to rest (each frame's time and every row's item, place and height): r3 said to change at a
+/// moment to come, and (`taken_back`) r1 said to come at a moment to come as well, and gone from the list again a
+/// while after it was said, before that moment: every frame from that taking back on. The way's start and end are in
+/// what is drawn: the frames drawn on its way and at its end, the rows' heights and places on it.
+fn future_cause_taken_back(taken_back : Bool) -> Array[(Double, Array[(Int, Double, Double)])] {
+  let entries = [[0, 3]]
+  let tall = [50.0]
+  let changes = [-1.0]
+  let comes = [-1.0]
+  let rows : @ui.ListRows[Int] = @ui.ListRows::new()
+  let t = @ui.Tester::new(fn(c) {
+    let now = entries[0]
+    let (items, _) = rows.rows(
+      c,
+      now.map(fn(i) { "r\{i}" }),
+      now,
+      fn(i) { if i == 3 { tall[0].to_string() } else { "" } },
+      from=fn(k) {
+        if k == "r3" && changes[0] >= 0.0 {
+          Some(changes[0])
+        } else if k == "r1" && comes[0] >= 0.0 {
+          Some(comes[0])
+        } else {
+          None
+        }
+      },
+      ms=fn(k) { if k == "r1" { Some(@ui.row_size_ms * 2.0) } else { None } },
+    )
+    c.list("list", items.length(), 50.0, fn(k) {
+      let h = if items[k] == 3 { tall[0] } else { 50.0 }
+      c.box(h=Px(h), fn() { c.text("Row \{items[k]}") |> ignore }) |> ignore
+    }, stick_end=true, sized=rows.sized()) |> ignore
+  }, w=300.0, h=400.0)
+  t.draw()
+  let frames : Array[(Double, Array[(Int, Double, Double)])] = []
+  t.each_frame(Some(fn() { frames.push((t.time(), t.rows())) }))
+  // said now, to set out a while from now
+  changes[0] = t.time() + @ui.row_size_ms / 2.0
+  tall[0] = 80.0
+  if taken_back {
+    comes[0] = t.time() + @ui.row_size_ms / 2.0
+    entries[0] = [0, 1, 3]
+  }
+  t.draw()
+  t.run_for(@ui.row_size_ms / 4.0)
+  // taken back before its moment: from here on, what is drawn
+  entries[0] = [0, 3]
+  frames.clear()
+  t.draw()
+  t.run_for(@ui.row_size_ms * 4.0)
+  t.each_frame(None)
+  t.assert_idle()
+  frames
+}
+
+///|
+test "a cause timed for the future and taken back before it has started leaves nothing" {
+  // A way's end is a function of the causes still there: one taken back before it set out is as if it was never said
+  // (the coordinator of the migration, 2026-11-11). Every frame's moment and every row's place and height, to the bit.
+  let never = future_cause_taken_back(false)
+  let taken = future_cause_taken_back(true)
+  assert_true(never.length() > 2, msg="\{never}")
+  assert_eq(taken, never)
+  // (and the change it was said beside goes as said: r3 80 tall at rest)
+  let last = never[never.length() - 1].1
+  assert_eq(last[last.length() - 1].2, 80.0)
+}
+
+///|
+test "a cause under way taken back is a turn: the row closes from where it got to" {
+  // (not the rule above: it had set out, so it goes from where it is, as any row going does)
+  let entries = [[0]]
+  let rows : @ui.ListRows[Int] = @ui.ListRows::new()
+  let t = @ui.Tester::new(fn(c) {
+    let now = entries[0]
+    let (items, _) = rows.rows(c, now.map(fn(i) { "r\{i}" }), now, fn(_) { "" })
+    c.list("list", items.length(), 50.0, fn(_) {
+      c.box(h=Px(50.0), fn() { c.text("Row") |> ignore }) |> ignore
+    }, stick_end=true, sized=rows.sized()) |> ignore
+  }, w=300.0, h=400.0)
+  entries[0] = [0, 1]
+  t.draw()
+  t.run_for(@ui.row_size_ms / 2.0)
+  let open = t.row(1).unwrap().3
+  assert_true(open > 0.0 && open < 50.0, msg="on its way in: \{open}")
+  entries[0] = [0]
+  t.draw()
+  // still there, as tall as it had got, closing from there
+  assert_eq(t.row(1).unwrap().3, open)
+  t.run_for(@ui.row_size_ms / 2.0)
+  let closing = t.row(1).unwrap().3
+  assert_true(closing > 0.0 && closing < open, msg="closing: \{open} then \{closing}")
+  t.run_for(@ui.row_size_ms)
+  assert_true(t.row(1) is None, msg="gone once its room has closed")
+  t.assert_idle()
+}

@@ -2159,6 +2159,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   writing_take(src, w, fn(taken) {
     guard taken is Some(_) else {
       sent_local_gone(rk, row)
+      @sfbase.flight_row_gone(w.key, row, c.moment())
       return
     }
     let params : Map[String, Json] = {
@@ -2178,7 +2179,10 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     (src.call)("chat.send", Json::object(params), fn(res) {
       match res {
         Err(e) => {
+          // (its row gone from the list now: the words hold the composer no more, what it does from here its own and
+          // the list's with it, flight_row_gone)
           sent_local_gone(rk, row)
+          @sfbase.flight_row_gone(w.key, row, c.moment())
           @ui.haptic(Reject)
           let why = @sf.t("web-main.draft.notSent", args=[("error", text(Some(e), "message"))])
           match text(Some(e), "code") {
