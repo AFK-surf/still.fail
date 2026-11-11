@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [bde639b67](https://github.com/AFK-surf/still.fail/commit/bde639b67982d4f531947e6cf11984830b929aef) core: `live` sends a chat what its activity line r | 1.83 | 2.44 | 10.17 | 28.92 | 35.9 | 25.75 | 47.75 | 94.42 | 151.97 |
 | [7ec136989](https://github.com/AFK-surf/still.fail/commit/7ec13698930c8d0c43d01110e9fff0c48a8bc72f) ci: the merge queue's branches start no push workf | 1.82 | 2.44 | 10.17 | 28.91 | 35.89 | 25.74 | 47.74 | 94.34 | 172.94 |
 | [c11e8c7d2](https://github.com/AFK-surf/still.fail/commit/c11e8c7d26359a8b78abb2f82c3cffb386b9acf4) app: 引用 over words a mouse picked comes in the fra | 1.82 | 2.43 | 10.16 | 28.89 | 35.85 | 25.73 | 47.72 | 94.24 | 166.21 |
 | [af3361193](https://github.com/AFK-surf/still.fail/commit/af33611938021707c27c6c0d74a4cd5cf453bb31) app tests: late_core's switch tests begin their ru | 1.82 | 2.43 | 10.16 | 28.9 | 35.85 | 25.73 | 47.72 | 94.42 | 167.88 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [df98aad1f](https://github.com/AFK-surf/still.fail/commit/df98aad1f9ce6419cc52f4f1bcbb167acd756250) app: a drive upload's id leaves out the path of th | 1.81 | 2.42 | 10.09 | 28.83 | 35.6 | 25.67 | 47.52 | 94.37 | 162.3 |
 | [7456d7f11](https://github.com/AFK-surf/still.fail/commit/7456d7f117a21e630e5cf7f741540ed40e945544) sf: a style said Full across fills what holds it a | 1.81 | 2.42 | 10.08 | 28.81 | 35.57 | 25.66 | 47.49 | 94.55 | 177.51 |
 | [5111040ef](https://github.com/AFK-surf/still.fail/commit/5111040ef78d86e8936eccbca41f2bc42725601c) app: a reader left where it last held still does n | 1.81 | 2.42 | 10.07 | 28.81 | 35.55 | 25.66 | 47.47 | 94.32 | 178.63 |
-| [d61f237d6](https://github.com/AFK-surf/still.fail/commit/d61f237d694dc35aa680d4f3d804819771b81d48) sf: a style on a node draws its border, as its edg | 1.81 | 2.42 | 10.07 | 28.81 | 35.55 | 25.65 | 47.47 | 94.42 | 134.74 |
