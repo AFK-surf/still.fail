@@ -11148,7 +11148,7 @@ pub fn Tree::follow_point(self : Tree, x : Double, y : Double, then : (Target) -
   let mine = self.point_said
   let stop = self.queued(fn() { (self.target_in(x, y, tracked=true), self.points_over(x, y)) }, fn(found) {
     // (EXPERIMENT, print branch only: a still pointer finds nothing new while what moves places goes)
-    if !moved.val && zz_point_hold.val() {
+    if !moved.val && (zz_point_hold.val)() {
       return
     }
     self.points_hover = found.1
