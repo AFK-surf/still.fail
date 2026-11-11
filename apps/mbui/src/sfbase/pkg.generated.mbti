@@ -124,6 +124,10 @@ pub fn call_said(String) -> Bool
 
 pub fn calls_said() -> Array[String]
 
+pub fn chat_first_window(Double) -> Int32
+
+pub let chat_grow_rows : Int32
+
 pub fn chat_inputs_left(ChatRef) -> Unit
 
 pub fn chat_inputs_left_from(Source, ChatRef) -> Unit
@@ -162,6 +166,8 @@ pub fn chat_ref(String, String) -> ChatRef
 
 pub fn chat_ref_of(ChatItem) -> ChatRef
 
+pub let chat_row_least : Double
+
 pub fn chat_scope(String, String) -> String
 
 pub fn chat_screen_first(ChatRef, Array[ChatScreen]) -> Unit
@@ -173,6 +179,8 @@ pub fn chat_screen_label(ChatScreen) -> String
 pub fn chat_screens_driven(Array[ChatScreen]) -> Bool
 
 pub fn chat_screens_open(ChatRef, Array[ChatScreen], from~ : @sf.Beside, along? : @view.Along) -> Unit
+
+pub fn chat_short_above(@ui.ListInfo, @ui.ListReader) -> Bool
 
 pub fn chat_tick(@ui.Ctx, String, Reading, ChatView, shown~ : Bool, in_front~ : Bool) -> Unit
 
@@ -896,7 +904,7 @@ pub fn list_after(@ui.Ctx, Source, ChatRef, ChatView, ListFrame, top~ : Double, 
 
 pub fn list_frame(@ui.Ctx, ChatRef, ChatView, Array[Entry], key~ : String, draft~ : String, rise_ms~ : Double, top~ : Double, in_front~ : Bool, laid? : String, laid_at? : Double, foot_way? : (Double, Double)) -> ListFrame
 
-pub fn list_made(@ui.ListInfo?, Int32, Array[Int32]) -> ListMade
+pub fn list_made(@ui.ListInfo?, Int32, Array[Int32], @ui.ListReader) -> ListMade
 
 pub fn list_opens(Source, String, (String, Map[String, @json.Json]) -> TopicState) -> Bool
 

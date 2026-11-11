@@ -56,6 +56,9 @@ export const work = {
   /// Chats' pages made (views.ts `chat`): each made again only as something it is made of changed, not as a UI's focus
   /// moves or a pref it does not read is written.
   chats: 0,
+  /// A chat's messages made as its page shows them (views.ts `#chat`, shownMessage): those of its window, each made
+  /// again only as it or what it is shown by changed.
+  messages: 0,
   /// Topics' values hashed for their token (store.ts, digest.ts `token`): those that are no object alone (a value that
   /// is one goes by the object itself, nothing of it read), as a client lets one go keeping it and asks it again.
   versions: 0,

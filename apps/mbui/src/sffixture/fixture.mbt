@@ -1660,7 +1660,8 @@ pub fn round_trip_again(
   let serving = fn() {
     if mine.val == 0 {
       mine.val = @core.serve(send)
-      // (as the app's client tells it: a chat list's first window before the list: src/stillfail's main)
+      // (as the app's client tells it: a chat list's first window before the list, a chat's before the chat:
+      // src/stillfail's main)
       @core.client.tells_before(@sfbase.chats_told_before)
     }
   }
@@ -2073,6 +2074,8 @@ pub fn fixture(mode : String) -> Source {
         // a visualization's widget kept nothing yet; what it keeps is taken (viz.mbt)
         "widget.state" => done(Ok({ "state": Json::null() }))
         "widget.setState" => done(Ok(Json::object({})))
+        // (how many of a chat's last messages it opens on: its made-up chats are short, each given whole)
+        "chat.window" => done(Ok(Json::null()))
         "chat.older" => {
           f.older += 1
           f.changed()

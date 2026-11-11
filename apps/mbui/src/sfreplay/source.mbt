@@ -613,9 +613,11 @@ fn init {
 
 ///|
 /// What the core's client tells it before a topic is asked (sfbase's chats_told_before, as src/stillfail's app tells
-/// it), where the run's app did, its trace's head saying so: a chats' list's first window with MBUI_CHATS_WINDOW.
+/// it), where the run's app did, its trace's head saying so: a chats' list's first window with MBUI_CHATS_WINDOW. A
+/// chat's (`chat.window`) is told whatever the run did, one of the replay's reports (@core.Replay's): its topic is the
+/// same either way, and its tape's answers the run's.
 fn replay_tells(name : String, topic : Json) -> Array[(String, Json)] {
-  if chats_windowed() {
+  if name == "chat" || chats_windowed() {
     @sfbase.chats_told_before(name, topic)
   } else {
     []

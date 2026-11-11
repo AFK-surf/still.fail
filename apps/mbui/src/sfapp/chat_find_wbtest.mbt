@@ -5,7 +5,7 @@
 
 ///|
 /// The fixture's chat on 大屏 with a Mac's keys, its calls kept in `calls` and answered as the made-up core answers them;
-/// `found`: what chat.find answers instead (None: the made-up core's own finding).
+/// `found`: what chat.find answers instead (None: the made-up core's own finding), chat.find.go going to its first.
 fn find_chat_tester(calls : Array[Made], found? : Json? = None) -> @ui.Tester {
   new_run()
   let base = fixture("chat")
@@ -15,6 +15,8 @@ fn find_chat_tester(calls : Array[Made], found? : Json? = None) -> @ui.Tester {
       calls.push({ name, params, bytes: None, done })
       match (name, found) {
         ("chat.find", Some(f)) => done(Ok(f))
+        ("chat.find.go", Some(f)) =>
+          done(Ok({ "at": { "seq": Json::number(number(Some(items(Some(f), "hits")[0]), "seq")), "k": 0 }, "position": 1, "total": 1 }))
         _ => (base.call)(name, params, done)
       }
     },
@@ -94,14 +96,16 @@ test "⌘F: words no message has say 无结果, and its ways up and down are not
 ///|
 test "⌘F: a message found out of the chat's window has the window moved about it (chat.around by its seq), asked once, no page before asked for it" {
   let calls : Array[Made] = []
-  // (found in the page before the chat's first: seq -98)
+  // (found six pages before the chat's first, seq -598: the chat's few messages have a page before them come as it
+  // opens, less than a screen of it above what shows, chat_short_above)
   let t = find_chat_tester(calls, found=Some({
     "words": ["构建脚本"],
-    "hits": [{ "seq": -98, "count": 1 }],
+    "hits": [{ "seq": -598, "count": 1 }],
     "held": 30,
     "of": 30,
     "whole": true,
   }))
+  let olders = named(calls, "chat.older").length()
   find_typed(t, "构建脚本")
   t.run_for(@sfpages.find_typing_ms)
   for _ in 0..<4 {
@@ -109,9 +113,9 @@ test "⌘F: a message found out of the chat's window has the window moved about 
   }
   let around = named(calls, "chat.around")
   assert_eq(around.length(), 1, msg="\{Repr(calls.map(fn(m) { m.name }))}")
-  assert_eq(number(Some(around[0].params), "seq"), -98.0)
+  assert_eq(number(Some(around[0].params), "seq"), -598.0)
   assert_eq(number(Some(around[0].params), "thread"), 7.0)
-  assert_eq(named(calls, "chat.older").length(), 0)
+  assert_eq(named(calls, "chat.older").length(), olders)
 }
 
 

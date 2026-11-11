@@ -520,9 +520,10 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
     root.reacts(fn() { src.topic("prefs", {}).get().value }, @sfbase.language_from_prefs)
     // (the window's keys as the core's prefs keep them on this device, changed as they are: settings' keymap.mbt)
     root.keymap(By(fn() { @settings.keymap_of(src.topic("prefs", {}).get().value) })) |> ignore
-    // (the window's height, what a chat list's first window is worked out of wherever it is first asked: sfbase's
-    // first_window; said before any page of nodes is made, as it asks)
-    root.reacts(fn() { root.window().1 }, fn(h) { @sfbase.window_tall.val = h })
+    // (the window's height, what a chat list's and a chat's first window are worked out of wherever they are first
+    // asked: sfbase's first_window, chat_first_window; said before any page of nodes is made, as it asks; none before
+    // the first frame gives it, what was known kept till then)
+    root.reacts(fn() { root.window().1 }, fn(h) { if h > 0.0 { @sfbase.window_tall.val = h } })
     // (the window's size from the menu bar, in every state: sfdesk's window_zoom.mbt)
     @sfdesk.zoom_actions(root, src)
     // (pictures by their address as the core gives them, said before any page of nodes is made: what one shows on its

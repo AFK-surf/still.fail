@@ -381,7 +381,7 @@ fn main {
   // what the places open on, and the last few chats, are kept by the core's client as they are let go of, asked again
   // with their version
   @core.client.keep(@sfbase.topic_kept)
-  // (a chat list's first window told the core before the list is asked, each time it is)
+  // (a chat list's first window told the core before the list is asked, each time it is; a chat's before the chat)
   @core.client.tells_before(@sfbase.chats_told_before)
   // SVG pictures (a chat's .svg files) drawn by mbui's own SVG renderer, whatever the system decodes
   @ui.set_vector_pictures(draw_svg)

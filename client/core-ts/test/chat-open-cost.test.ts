@@ -12,7 +12,7 @@ import { work, workSince } from "../src/work.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
 import { held } from "./real-size-asked.ts";
 import { CHAT, OPENS, fixture } from "./real-size.ts";
-import { started } from "./station-fixture.ts";
+import { base as answersOf, entries, started, threadView } from "./station-fixture.ts";
 import { setup, ui } from "./views-rig.ts";
 
 holdLanguage();
@@ -220,4 +220,75 @@ test("a_chat_let_go_of_keeping_it_and_asked_again_is_answered_by_what_changed_no
   assert.deepEqual(again[0], { id: 2, same: true });
   assert.equal(workSince(before).versions, 0, "nothing hashed: its token is the value object's (digest.ts token)");
   core.close();
+});
+
+test("a_chat_opens_on_as_many_of_its_last_messages_as_its_page_says_its_screen_shows_and_a_screen_more", async () => {
+  // A chat opened at its end made and sent its latest page of entries whole, 50 messages (37 KB of its 46 KB on a
+  // workspace of real size), of which 大屏 shows four. Its page says how many it opens on (`chat.window`: its screen by
+  // the least height of a row it counts, by tens), no part of its topic; it grows by `chat.older` as many as its page
+  // asks (a screen kept above what shows).
+  const opened = async (rows: number | null, by: "thread" | "session") => {
+    const answers = answersOf();
+    answers["GET /threads"] = [threadView(7, 120)];
+    answers["GET /threads/7/entries?limit=50"] = { last: 120, entries: entries(71, 120) };
+    answers["GET /threads/7/entries?from=21&to=70"] = { last: 120, entries: entries(21, 70) };
+    answers["GET /threads/7/entries?from=1&to=20"] = { last: 120, entries: entries(1, 20) };
+    const { host, core } = await started(answers);
+    await host.time.pass(500);
+    const client = core.connect();
+    const values = new Map();
+    const said = by === "thread" ? { thread: 7 } : { session: "k1" };
+    if (rows !== null) call(core, client, 9, "chat.window", { station: "ws/st", ...said, rows });
+    const before = { ...work };
+    subscribe(core, client, 1, parseTopic({ topic: "chat", station: "ws/st", ...said, compact: true })!);
+    await host.settle();
+    const sent = host.takeEmitted().map(([, m]) => m as { id?: number; value?: { messages: unknown[] } }).find((m) => m.id === 1 && m.value !== undefined)!;
+    const made = workSince(before);
+    const bytes = JSON.stringify(sent.value!.messages).length;
+    values.set(1, sent.value);
+    const shown = v(values, 1).messages.length;
+    call(core, client, 2, "chat.older", { station: "ws/st", thread: 7, ...(rows !== null ? { rows: 20 } : {}) });
+    await host.time.pass(100);
+    apply(host, values);
+    const grown = v(values, 1).messages.length;
+    core.close();
+    return { shown, grown, bytes, made };
+  };
+  const untold = await opened(null, "thread");
+  assert.deepEqual([untold.shown, untold.grown], [50, 100]);
+  const told = await opened(30, "thread");
+  assert.deepEqual([untold.made.messages, told.made.messages], [50, 30], "messages made for its first answer");
+  assert.deepEqual([told.shown, told.grown], [30, 50], "30 messages, and 20 more as its page asks them, read back");
+  assert.ok(told.bytes <= untold.bytes * 0.62, `its messages ${told.bytes} bytes of ${untold.bytes}`);
+  // Told by its agent's session, as a chat is asked before its thread is known.
+  assert.equal((await opened(30, "session")).shown, 30);
+});
+
+test("a_chat_told_its_window_opens_still_at_what_is_unread_and_where_it_was_left_as_wide_as_before", async () => {
+  // Where the chat is to be read (its first unread, else where it was left) is the core's, and its window about it wins
+  // over the count its page says: its unread line and the place it was left come with what they did before.
+  const opened = async (rows: number | null, read: number, unread: number, place: number | null) => {
+    const answers = answersOf();
+    answers["GET /threads"] = [threadView(7, 120, read, unread)];
+    answers["GET /threads/7/entries?limit=50"] = { last: 120, entries: entries(71, 120) };
+    answers["GET /threads/7/entries?from=21&to=70"] = { last: 120, entries: entries(21, 70) };
+    answers["GET /threads/7/entries?from=1&to=20"] = { last: 120, entries: entries(1, 20) };
+    const { host, core } = await started(answers);
+    await host.time.pass(500);
+    const client = core.connect();
+    const values = new Map();
+    if (place !== null) call(core, client, 8, "chat.place", { station: "ws/st", thread: 7, seq: place });
+    if (rows !== null) call(core, client, 9, "chat.window", { station: "ws/st", thread: 7, rows });
+    subscribe(core, client, 1, { topic: "thread", station: "ws/st", thread: 7 });
+    await host.settle();
+    apply(host, values);
+    const w = v(values, 1);
+    core.close();
+    return [w.first, w.last, w.at ?? null];
+  };
+  assert.deepEqual(await opened(30, 100, 20, null), [51, 120, 101], "at the first unread");
+  assert.deepEqual(await opened(30, 100, 20, null), await opened(null, 100, 20, null));
+  assert.deepEqual(await opened(30, 120, 0, 40), [1, 89, 40], "where it was left");
+  assert.deepEqual(await opened(30, 120, 0, 40), await opened(null, 120, 0, 40));
+  assert.deepEqual(await opened(30, 120, 0, null), [91, 120, null], "at its end, the count");
 });

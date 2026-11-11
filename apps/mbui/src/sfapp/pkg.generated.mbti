@@ -508,7 +508,7 @@ pub fn list_after(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @sfbase.ChatView, @s
 
 pub fn list_frame(@ui.Ctx, @sfbase.ChatRef, @sfbase.ChatView, Array[@sfbase.Entry], key~ : String, draft~ : String, rise_ms~ : Double, top~ : Double, in_front~ : Bool) -> @sfbase.ListFrame
 
-pub fn list_made(@ui.ListInfo?, Int32, Array[Int32]) -> @sfbase.ListMade
+pub fn list_made(@ui.ListInfo?, Int32, Array[Int32], @ui.ListReader) -> @sfbase.ListMade
 
 pub fn local_sent(@sfbase.Outgoing) -> Bool
 

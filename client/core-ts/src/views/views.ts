@@ -863,6 +863,8 @@ export class Views implements Owner {
   readonly local: Local;
   /// Per live view, the topics it watches.
   readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch>; opening: boolean }>();
+  /// Each chat's first window as its page told it (`chat.window`), by station, thread and session.
+  readonly #chatWindows = new Map<string, number>();
   /// The latest chats' things read (`#things`), by station and thread, with what they were read from.
   readonly #thingsKept = new Map<string, Derived<{ messages: J[]; things: ReturnType<typeof thingsOf>; whole: boolean; title: unknown } | null>>();
   /// A chat's outline's rows (`outlineRows`), by the message each was made of, and what else it was made with.
@@ -3277,6 +3279,7 @@ export class Views implements Owner {
       const waiting = u64(raw.seq) !== null && waits.includes(raw.seq as number);
       const was = this.#shownMade.get(raw);
       if (was !== undefined && was.by === by && was.waiting === waiting) return was.out;
+      work.messages++;
       const m = shownMessage(raw, agents, viewer, slackUsers, members_, bots, thread.creator);
       const out: J = { ...m, waiting };
       const install = m.system === true && typeof m.runtime === "string" ? present.installView(m.runtime, updates, manages) : null;
@@ -3321,6 +3324,26 @@ export class Views implements Owner {
     this.#seen.read(`cc ${station} ${thread}`);
     const prefix = `${station} ${thread} `;
     return [...this.#cc].filter((k) => k.startsWith(prefix)).map((k) => Number(k.slice(prefix.length)));
+  }
+
+  /// How many of the messages of chat `thread` of `station` its page opens on at its end (station/topics.ts #opening),
+  /// as its page told it (`chat.window`, by its thread or by its agent's session bound to it); null, not told: a page
+  /// of its entries, as before.
+  chatFirstRows(station: string, thread: number): number | null {
+    let rows: number | null = null;
+    for (const [key, told] of this.#chatWindows) {
+      const [s, th, session] = key.split("\u0001");
+      if (s !== station) continue;
+      if (th === String(thread) || (session !== "" && this.boundThread(station, session) === thread)) rows = Math.max(rows ?? 0, told);
+    }
+    return rows;
+  }
+
+  /// A chat's page says how many of its messages it opens on at its end (`chat.window`): as many as fill its screen,
+  /// told before the chat is asked; it asks more before them as less than a screen of them is above what shows
+  /// (`chat.older` with its `rows`).
+  setChatWindow(station: string, thread: number | null, session: string | null, rows: number): void {
+    this.#chatWindows.set(`${station}\u0001${thread ?? ""}\u0001${session ?? ""}`, rows);
   }
 
   /// How many of chat list `list`'s rows go out (`chatsWindow`'s): as it was told, WINDOW_UNTOLD where it was not.

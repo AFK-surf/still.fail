@@ -180,15 +180,19 @@ test "the page before that could not be read says why in its place, not asked fo
     }
     t.drag(195.0, 200.0, 195.0, 700.0, steps=40)
   }
-  // on up to its top, and there a while: nothing more asked, its row says why
-  for _ in 0..<10 {
+  // on up to its top (asked a screen before it: chat_short_above), and there a while: nothing more asked, its row
+  // says why
+  let words = @sf.t("web-main.chat.olderFailed", args=[("why", "连不上")])
+  for _ in 0..<60 {
+    if t.find(words) is Some(_) {
+      break
+    }
     t.drag(195.0, 300.0, 195.0, 600.0, steps=20)
   }
   for _ in 0..<5 {
     t.run_for(@ui.move_most_ms)
   }
   assert_eq(asked, [171])
-  let words = @sf.t("web-main.chat.olderFailed", args=[("why", "连不上")])
   assert_true(t.find(words) is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   // the core's wait over: asked again, there at the top
   failed.set(false)

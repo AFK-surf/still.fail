@@ -73,6 +73,35 @@ pub fn first_window(tall : Double) -> Int {
 }
 
 ///|
+/// The least height a row the core counts in a chat's window has, in points: a station's notice joined to the one before
+/// it (38 on 小屏's 390×844 with a finger's rows and on a wide 1280×800 with a mouse's; one alone 54 and 62; a message
+/// of a person's or an agent's joined to the one before 55 and 57, with its author's name 71 and 81), measured in the
+/// Tester. Rows the core does not count (a day's line, what an agent is at) only add to what is laid out above.
+/// chat_window_wbtest.mbt holds it.
+pub let chat_row_least : Double = 38.0
+
+///|
+/// A chat's first window in a window `tall` points high: as many of its last messages as fill it for sure, at the least
+/// height a row it counts has (chat_row_least), rounded up to ten (30 on 小屏's 390×844 and on a wide 1280×800): no
+/// more, the screen more above them kept as it is read (chat_grow_rows). 0 before it is laid out (the core opens on its
+/// untold page then, 50 entries). Where the chat opens at something unread or where it was left, the core's window
+/// about that wins over the count.
+pub fn chat_first_window(tall : Double) -> Int {
+  if tall <= 0.0 {
+    0
+  } else {
+    by_tens((tall / chat_row_least).ceil().to_int())
+  }
+}
+
+///|
+/// How many of a chat's messages more its page asks for (`chat.older`'s `rows`) whenever less than a screen of it is
+/// laid out above what shows and the core has more (chat_list.mbt chat_short_above), at rest as while it is read back:
+/// at least 760 points at chat_row_least, what a fling at its fastest goes in the frames the core's answer takes, a
+/// frame on a Mac (chat_window_wbtest.mbt measures it).
+pub let chat_grow_rows : Int = 20
+
+///|
 /// How many rows more a chat list scrolled near its foot is told: a screen of them, rounded up to ten, 20 at least.
 pub fn window_step(tall : Double) -> Int {
   let n = by_tens(rows_held(tall))
@@ -101,8 +130,12 @@ fn list_window_key(p : Map[String, Json]) -> String {
 /// time it is asked): before a chat list, its first window (`chats.window`, first_window), so that its first answer is
 /// made of no more rows than the screen shows and a screen more. Its window grown before is not said: a list asked anew
 /// (let go of, a core started again) starts from what it shows; one the core still holds keeps what it showed (the
-/// core's window only grows while it holds it).
+/// core's window only grows while it holds it). Before a chat, how many of its last messages it opens on (`chat.window`,
+/// chat_first_window), grown from there by its page (`chat.older`).
 pub fn chats_told_before(name : String, topic : Json) -> Array[(String, Json)] {
+  if name == "chat" {
+    return chat_told_before(topic)
+  }
   guard name == "chats" && topic is Object(t) else { return [] }
   let params : Map[String, Json] = Map([])
   for k in ["scope", "mine", "watching", "hidden"] {
@@ -118,6 +151,27 @@ pub fn chats_told_before(name : String, topic : Json) -> Array[(String, Json)] {
   }
   params["rows"] = Json::number(rows.to_double())
   [("chats.window", Json::object(params))]
+}
+
+///|
+/// What the core is told before chat `topic` is asked: how many of its last messages it opens on (`chat.window`), by
+/// the chat as the topic names it (its station, and its session or thread).
+fn chat_told_before(topic : Json) -> Array[(String, Json)] {
+  guard topic is Object(t) && t.get("station") is Some(String(_) as station) else { return [] }
+  let rows = chat_first_window(window_tall.val)
+  if rows <= 0 {
+    return []
+  }
+  let params : Map[String, Json] = { "station": station }
+  for k in ["session", "thread"] {
+    match t.get(k) {
+      Some(v) => params[k] = v
+      None => ()
+    }
+  }
+  guard params.length() > 1 else { return [] }
+  params["rows"] = Json::number(rows.to_double())
+  [("chat.window", Json::object(params))]
 }
 
 ///|

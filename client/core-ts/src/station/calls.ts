@@ -237,7 +237,7 @@ export function install(): void {
   };
   handlers.chatOlder = (inner, call) => {
     const c = call as Extract<Call, { kind: "chatOlder" }>;
-    return Effect.andThen(parse(c.station), Effect.map(inner.stationTopics.older(c.station, c.thread), (more) => ({ more })));
+    return Effect.andThen(parse(c.station), Effect.map(inner.stationTopics.older(c.station, c.thread, c.rows), (more) => ({ more })));
   };
   handlers.chatNewer = (inner, call) => {
     const c = call as Extract<Call, { kind: "chatNewer" }>;
