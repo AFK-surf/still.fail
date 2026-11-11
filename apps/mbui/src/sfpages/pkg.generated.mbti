@@ -441,10 +441,6 @@ pub let pf_spin : Double
 
 pub let pf_sub : @ui.TextStyle
 
-pub let pf_tag : @ui.Style
-
-pub let pf_tag_words : @ui.TextStyle
-
 pub fn pick_files(@sfbase.Writing) -> Unit
 
 pub fn picking(MessageHere, @ui.Ctx, @sfbase.Source, String, Double, String, String, String, () -> Unit, fill? : Bool, key? : String) -> Unit

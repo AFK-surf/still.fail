@@ -329,15 +329,20 @@ pub fn meter_chips_node(parent : @view.View, meters : () -> Array[Json], tips? :
 
 ///|
 /// A fill chip's box (chip_box's, chip_box_small's) at the system's size of words `scale`: as high as chip_text's line
-/// drawn at that size where that is higher than the chip (list_looks_at's way for a row's lines).
+/// drawn at that size where that is higher than the chip (box_at: kept for the last theme and size, each its own).
 fn chip_box_at(scale : Double, small : Bool) -> @ui.Style {
-  let box = if small { chip_box_small } else { chip_box }
-  let h = if small { fill_chip_small_h } else { fill_chip_h }
-  let look = @ui.style_words(chip_text)
-  let line = if look.line < 0.0 { -look.line * @ui.sp_at(scale, look.size) } else { @ui.sp_at(scale, look.line) }
-  if line > h {
-    box.then(@ui.style(h=Fixed(line)))
+  if small {
+    box_at(chip_small_kept, chip_box_small, fill_chip_small_h, chip_text, scale)
   } else {
-    box
+    box_at(chip_kept, chip_box, fill_chip_h, chip_text, scale)
   }
 }
+
+///|
+// kept across runs: the last theme and size of words a fill chip was asked at and its box (box_at), worked out again
+// for any other
+let chip_kept : Ref[WordsBoxKept?] = Ref(None)
+
+///|
+// kept across runs: the same of a small fill chip
+let chip_small_kept : Ref[WordsBoxKept?] = Ref(None)

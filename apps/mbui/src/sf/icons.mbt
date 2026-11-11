@@ -213,7 +213,8 @@ pub fn video_capsule_node(parent : @view.View, duration : Double, loc~ : SourceL
     foot.over(Is(true)) |> ignore
     style_node(foot, fn() { video_capsule_foot })
     foot.box(fn(b) {
-      style_node(b, fn() { video_capsule_box })
+      // (as high as its words' line where the system's size of words draws it higher than the capsule: box_at)
+      style_node(b, fn() { box_at(video_capsule_kept, video_capsule_box, video_capsule_h, video_capsule_words, b.words_scale()) })
       b.box(fn(row) {
         style_node(row, fn() { video_capsule_row })
         icon_node(row, "play", video_capsule_mark, Is(white)) |> ignore
@@ -227,6 +228,11 @@ pub fn video_capsule_node(parent : @view.View, duration : Double, loc~ : SourceL
   })
   |> ignore
 }
+
+///|
+// kept across runs: the last theme and size of words a video's capsule was asked at and its box (box_at), worked out
+// again for any other
+let video_capsule_kept : Ref[WordsBoxKept?] = Ref(None)
 
 ///|
 /// How far each video's capsule last said it had come: what it fades out with once it is here.

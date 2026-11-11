@@ -989,10 +989,13 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
       // (AgentTiles: 「name figure」 to a screen reader)
       label=name + " " + figure,
       fn() {
-        c.box(h=Px(26.0), justify=JCenter, fn() {
+        // (on a line of 26 at the system's size of words, its box as high: where a box of 26 drew its 28 before, its
+        // glyphs where they were, and growing with them as the system's size of words grows)
+        c.box(fn() {
           c.text(
             figure,
             size=if figure.length() > 6 { 16.0 } else { 20.0 },
+            line=26.0,
             weight=600,
             color~,
             wrap=false,

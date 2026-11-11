@@ -638,9 +638,8 @@ fn machine_offers_node(
               line.fits(Is(true)) |> ignore
               @sf.words_node(line, fn() { @settings.runtime_label(rt) }, fn() { ap_offer_title }) |> ignore
               line.show(fn() { text(lv(), "planText") != "" }, fn(t) {
-                @sf.style_node(t, fn() { pf_tag })
+                @sf.tag_node(t, fn() { text(lv(), "planText") })
                 t.drops(Is(ap_drop_plan)) |> ignore
-                @sf.words_node(t, fn() { text(lv(), "planText") }, fn() { pf_tag_words }) |> ignore
               })
               line.box(fn(p) {
                 p.row(Is(true)).drops(Is(ap_drop_state)) |> ignore

@@ -2186,6 +2186,8 @@ pub fn t_around(String, String, args? : Array[(String, String)]) -> (String, Str
 
 pub fn table_node(@view.View, () -> String, bleed? : Double, tree? : () -> @json.Json?, copy? : Bool, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?) -> Unit
 
+pub fn tag_node(@view.View, () -> String) -> Unit
+
 pub let take_over_max : @ui.Len
 
 pub fn tap_text_node(@view.View, () -> String, () -> Unit, size? : Double) -> Unit
