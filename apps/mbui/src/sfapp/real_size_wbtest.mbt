@@ -42,9 +42,12 @@ let real_size_windows : Array[(String, Double, Double, Int, String)] = [
 ]
 
 ///|
-/// The ways the shell holds on every screen (the bar's and the rail's lists, the stations, the workspace): the same
+/// The ways the shell holds on every screen (the bar's and the rail's lists and a row's own chat, sfpages' chat_row's
+/// `chatRow`, the stations, the workspace): the same
 /// shell on every screen, so their changes are given on one, Home (or the first screen that reads a way Home does not).
-let real_size_shell_ways : Array[String] = ["chats", "workspaceMarks", "lock", "stations", "longJobs", "workspace"]
+let real_size_shell_ways : Array[String] = [
+  "chats", "chatRow", "workspaceMarks", "lock", "stations", "longJobs", "workspace",
+]
 
 ///|
 /// The chat page's own ways: the same chat page under each of its other modes (a sheet, a panel over it), so their
