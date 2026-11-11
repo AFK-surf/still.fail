@@ -10,7 +10,9 @@
 //   middle, moved in from the window's edge rather than cut short there, within what holds it that takes presses (a
 //   row's button: in the row's room, not its neighbour's) (@view.press_room); where two rooms meet, each has the part
 //   nearer it, as the hit test gives it. A ground is no control (Ctx::cursor's Arrow: a stage a click shows the bars
-//   on, the room round a list's rows, a message's words a hold picks in): no room of its own, none it cuts.
+//   on, the room round a list's rows, a message's words a hold picks in): no room of its own, none it cuts. A node's
+//   words with links in them (runs_links) are as an old view's paragraph's: pressed on the words, a ground, no room of
+//   their own (Tree::press_boxes: a node of the window's tree whose pointer is said the arrow, View::cursor).
 // apart: two such in one layer, neither holding the other, are never drawn over each other: a press there would be
 //   either's.
 // hover: what is shown only under the hand (Ctx::hand_shown: a row's ⋯ under a resting pointer) and takes presses is a
