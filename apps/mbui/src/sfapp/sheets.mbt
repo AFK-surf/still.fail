@@ -202,7 +202,7 @@ fn agent_since(c : @ui.Ctx, src : Source, a : Json?) -> String {
       match opt_number(wait, "seconds") {
         Some(sec) => {
           // at its most it stands still
-          if now - from < sec * second_ms {
+          if now < from + sec * second_ms {
             each_second(c, now - from)
           }
           elapsed(dmin(now, from + sec * second_ms) - from) + " / " + elapsed(sec * second_ms)

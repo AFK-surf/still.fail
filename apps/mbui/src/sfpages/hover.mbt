@@ -374,7 +374,7 @@ fn agent_waited(c : @ui.Ctx, src : Source, a : Json?) -> String {
       match opt_number(wait, "seconds") {
         Some(sec) if sec > 0.0 => {
           // at its most it stands still
-          if now - from < sec * second_ms {
+          if now < from + sec * second_ms {
             each_second(c, now - from)
           }
           let ran = if now < from + sec * second_ms { now - from } else { sec * second_ms }

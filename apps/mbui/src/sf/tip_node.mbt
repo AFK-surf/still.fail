@@ -165,7 +165,7 @@ pub fn tip_node(
       set_open(false)
     } else if focused || open.untracked() {
       set_open(true)
-    } else if skip && at - tips.went_at <= @kit.tooltip_skip_ms {
+    } else if skip && at < tips.went_at + @kit.tooltip_skip_ms {
       // (another of the layer's went a moment ago: at once)
       set_open(true)
     } else {

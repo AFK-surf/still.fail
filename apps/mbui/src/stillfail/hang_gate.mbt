@@ -42,7 +42,7 @@ fn hang_heavier(a : @ui.Hang, b : @ui.Hang) -> Bool {
 /// `hangs_most` went at once).
 fn HangGate::offer(self : HangGate, h : @ui.Hang) -> Array[@ui.Hang] {
   let out = []
-  if self.since < 0.0 || h.end - self.since >= hangs_span_ms {
+  if self.since < 0.0 || h.end >= self.since + hangs_span_ms {
     out.append(self.held)
     self.held.clear()
     self.since = h.end
