@@ -86,6 +86,9 @@ fn home_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> @s
   let list = @sfbase.list_opens(src, ws, ask)
   let news = @sfbase.opens_answered(ask("changelog", @sfpages.news_params()))
   let long = @sfbase.opens_answered(ask("longJobs", @sfbase.long_jobs_asked(ws)))
+  // (and what the narrow shell round it reads as it is first built, asked with it and not waited for: Home shows,
+  // and the splash goes, as it did before they were asked here: sfbase's shell_opens)
+  @sfbase.shell_opens(src, ws, ask) |> ignore
   list && news && long
 }
 

@@ -75,6 +75,11 @@ let switch_hand_at : @signals.Signal[Double] = @signals.signal(-1.0, same=fn(a, 
 let switch_count : Ref[Int] = Ref(0)
 
 ///|
+/// The workspace whose first screen is declared (opens_ahead_node), None none.
+// kept across runs: put back as a run begins (switch_reset)
+let opens_declared : Ref[String?] = Ref(None)
+
+///|
 /// What the screen opens on, each ask held under the switch's name (owned by none of what asked: held till let go of),
 /// as far as what is answered leads: whether all of it is answered.
 fn SwitchWait::hold_all(self : SwitchWait) -> Bool {
@@ -250,6 +255,65 @@ pub fn workspace_switch_node(
 }
 
 ///|
+/// What the workspace in view opens on (`opens`: the shell's, as workspace_switch_node is given it, which asks what its
+/// first screen reads), declared at the moment it is known to be the one in view, in the app's node `v` that outlives
+/// the splash and every shell: each topic asked of the core then (declare_topic), not as the frame that builds the
+/// panes runs, and taken over by the reader that comes to read it as it reads, the same subscription never let go of
+/// between. Only what is asked as it is known: what an answer leads to (the chat a pane lands on, once the marks say
+/// it) is asked by its reader as before, as nothing here may read what it declared (it would be its reader, holding it
+/// past its own). What no reader took is let go of as another workspace comes in view, or none. A bridge till the old view is gone: a page made as nodes says what it reads where
+/// it is made.
+pub fn opens_ahead_node(
+  v : @view.View,
+  src : Source,
+  opens : () -> (String, (Source, String, (String, Map[String, Json]) -> TopicState) -> Bool)?,
+) -> Unit {
+  // (the first screen of the shell its window's width picks as the workspace comes in view, none before the window has
+  // a width; another shell come of the window's width alone declares nothing: the workspace is in view already, what
+  // its first screen read taken over by its readers and the graph's since, as a page's opening is its own)
+  v.reacts(
+    fn() {
+      match (workspace_in_view(src).0, opens()) {
+        (Some(w), Some(_)) => Some(w.id)
+        _ => None
+      }
+    },
+    fn(now) {
+      if opens_declared.val == now {
+        return
+      }
+      declared_let_go()
+      opens_declared.val = now
+      guard now is Some(ws) else { return }
+      guard @signals.untracked(opens) is Some((_, panes)) else { return }
+      panes(src, ws, fn(name, params) { declare_topic(src, name, params) }) |> ignore
+    },
+  )
+}
+
+///|
+/// What every shell reads of workspace `ws` as its frame is built, whatever page it lands on, asked of `ask`: the lock
+/// and what waits in it, the marks, what is going on and going up or down, the workspace's status line, notifications'
+/// state: part of what each shell's first screen opens on (sfapp's home_opens, sfdesk's frame_opens), declared with it
+/// (opens_ahead_node), never waited for (Home shows, a switch is done, the splash goes, as before they were asked
+/// there). Whether all of it is answered.
+pub fn shell_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> TopicState) -> Bool {
+  ignore(src)
+  let of = Json::string(ws)
+  let reads : Array[(String, Map[String, Json])] = [
+    ("lock", { "workspace": of }),
+    ("workspaceMarks", marks_asked(ws)),
+    ("doing", {}),
+    ("driveTransfers", { "workspace": of }),
+    ("status", { "workspace": of }),
+    ("lockPrompts", {}),
+    ("notify", {}),
+    ("notify", notify_params(ws)),
+  ]
+  reads.fold(init=true, fn(all, r) { opens_answered(ask(r.0, r.1)) && all })
+}
+
+///|
 fn switch_reset() -> Unit {
   switch_shell.val = None
   switch_wait.val = None
@@ -257,4 +321,6 @@ fn switch_reset() -> Unit {
   switch_held_more.set(0)
   switch_handing.val = []
   switch_hand_at.set(-1.0)
+  opens_declared.val = None
+  declared_reset()
 }

@@ -1088,15 +1088,30 @@ pub fn pane_opens(ws : String, p : Page, ask : (String, Map[String, Json]) -> @s
 /// pane lands on (land_page) with what that opens on (pane_opens). Whether all of it is answered. A workspace switched
 /// waits for it (sfapp's tape_shell.mbt: sfbase's workspace_switch_node).
 pub fn frame_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
-  let rail = rail_opens(ws, ask)
-  let side = side_opens(src, ws, ask)
   // (come back to a workspace landed on last: a new chat, as land has it)
   let landed : Page? = if wide.landed.get() == ws { Some(NewChat) } else { land_page(ws, ask) }
+  frame_opens_on(src, ws, landed, ask)
+}
+
+///|
+/// What the wide frame shows of workspace `ws` with page `landed` in its pane (None: the marks could not say which),
+/// asked of `ask`: frame_opens's, the page the pane shows given (a run that opens on a page already open, not landing).
+pub fn frame_opens_on(
+  src : Source,
+  ws : String,
+  landed : Page?,
+  ask : (String, Map[String, Json]) -> @sfbase.TopicState,
+) -> Bool {
+  let rail = rail_opens(ws, ask)
+  let side = side_opens(src, ws, ask)
   let pane = match landed {
     Some(p) => pane_opens(ws, p, ask)
     // (the marks could not be read: nothing it lands on to wait for)
     None => ask("workspaceMarks", @sfbase.marks_asked(ws)).error is Some(_)
   }
+  // (and what the wide frame round them reads as it is first built, asked with it and not waited for: sfbase's
+  // shell_opens)
+  @sfbase.shell_opens(src, ws, ask) |> ignore
   rail && side && pane
 }
 

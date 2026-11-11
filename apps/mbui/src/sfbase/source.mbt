@@ -350,6 +350,66 @@ fn topics_held() -> Array[(Source, String, Map[String, Json])] {
 }
 
 ///|
+/// What is declared (declare_topic) and not let go of: each by its source, name and parameters.
+// kept across runs: put back as a run begins (declared_reset)
+let declared_topics : Ref[Array[(Source, String, Map[String, Json])]] = Ref([])
+
+///|
+/// Topic `name` with `params` of `src` declared: asked of the core now, outside any build, and kept asked with no
+/// reader of its own, so the first reader to come takes it over as it reads (the same subscription, never let go of
+/// between) and the graph lets it go once its last reader leaves, as any. One no reader comes to is let go of as what
+/// it was declared for ends (declared_let_go). What it holds now. What declares never reads what it declared, then
+/// or after (the coordinator of the migration, 2026-11-12): a read of its own would be a reader that holds it past its
+/// readers' leaving, its unsubscribe never sent.
+pub fn declare_topic(src : Source, name : String, params : Map[String, Json]) -> TopicState {
+  let key = name + "\u{1}" + Json::object(params).stringify()
+  if !declared_topics.val.iter().any(fn(d) { physical_equal(d.0, src) && d.1 + "\u{1}" + Json::object(d.2).stringify() == key }) {
+    declared_topics.val.push((src, name, params.copy()))
+  }
+  let owner = @signals.set_owner(None)
+  let state = @signals.untracked(fn() { followed_topic(src, name, params).get() })
+  @signals.set_owner(owner) |> ignore
+  state
+}
+
+///|
+/// What is declared that no reader took over, let go of now (what it was declared for ended: another workspace in view,
+/// none); what a reader took is the graph's, let go of as its last reader leaves.
+pub fn declared_let_go() -> Unit {
+  let was = declared_topics.val
+  declared_topics.val = []
+  for d in was {
+    let (src, name, params) = d
+    let key = name + "\u{1}" + Json::object(params).stringify()
+    match followed_topics.val.search_by(fn(t) { physical_equal(t.source, src) && t.key == key && !t.independent }) {
+      Some(i) if !followed_topics.val[i].holder.watched() => {
+        followed_topics.val = followed_topics.val.filter(fn(t) { !(physical_equal(t.source, src) && t.key == key && !t.independent) })
+        (src.release)(name, params)
+      }
+      _ => ()
+    }
+  }
+}
+
+///|
+/// What is declared and read by no reader now (`name` and parameters, as JSON): at the moment what declared it is
+/// shown whole, none; one here is declared and not read, a fault of the declaration (sfapp's declared_read_wbtest).
+pub fn declared_unread() -> Array[String] {
+  declared_topics.val.filter_map(fn(d) {
+    let (src, name, params) = d
+    match existing_followed_topic(src, name, params) {
+      Some(h) if h.watched() => None
+      _ => Some(name + " " + Json::object(params).stringify())
+    }
+  })
+}
+
+///|
+fn declared_reset() -> Unit {
+  declared_topics.val = []
+}
+
+///|
 fn existing_followed_topic(src : Source, name : String, params : Map[String, Json]) -> @signals.Computed[TopicState]? {
   let key = name + "\u{1}" + Json::object(params).stringify()
   followed_topics.val.search_by(fn(t) { physical_equal(t.source, src) && t.key == key && !t.independent }).map(fn(i) { followed_topics.val[i].holder })
