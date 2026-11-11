@@ -103,6 +103,9 @@ priv struct SettingsFixture {
   /// five Claude subscription accounts, by their e-mails, each its own windows as a report showed them
   /// (settings-profiles-several: one row's figures a point wider than the others')
   mut several : Bool
+  /// Willow's own Codex login, not a profile yet, with its allowance as the core sends an offered login's
+  /// (settings-profiles-offer: what is left of its week shown where it is listed, as a profile's is)
+  mut offer_quota : Bool
   /// The same subscription independently signed in and borrowed on several stations.
   mut profile_hosts : Bool
   /// Only one station is signed in; another borrows it.
@@ -169,6 +172,7 @@ let fx : SettingsFixture = {
   own: 0,
   no_hours: false,
   several: false,
+  offer_quota: false,
   profile_hosts: false,
   profile_one_owner: false,
   profile_away: false,
@@ -320,6 +324,7 @@ fn fixture_reset() -> Unit {
   fx.own = 0
   fx.no_hours = false
   fx.several = false
+  fx.offer_quota = false
   fx.profile_hosts = false
   fx.profile_one_owner = false
   fx.profile_away = false
@@ -573,6 +578,7 @@ pub fn fixture_page(mode : String) -> String {
       fx.no_hours = true
     }
     "settings-profiles-several" => fx.several = true
+    "settings-profiles-offer" => fx.offer_quota = true
     "settings-stations-existing" => up("add-existing", "", 0)
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
@@ -717,7 +723,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-quota-kinds" => "profile:ws1/st1#cc"
     "settings-me-reading" => "me"
     "settings-usage-details-pending" => "usage"
-    "settings-profiles-pick" | "settings-profiles-monthly" | "settings-profiles-fable" | "settings-profiles-own3" | "settings-profiles-week-fable" | "settings-profiles-several" => "profiles"
+    "settings-profiles-pick" | "settings-profiles-monthly" | "settings-profiles-fable" | "settings-profiles-own3" | "settings-profiles-week-fable" | "settings-profiles-several" | "settings-profiles-offer" => "profiles"
     "settings-connect" | "settings-connect-borrow" => "connect:ws1/st1#k1"
     _ =>
       if m.has_prefix("settings-") {
@@ -897,6 +903,20 @@ fn fx_profiles() -> Array[Json] {
     fx_several(profiles)
   }
   profiles
+}
+
+///|
+/// The offered login's allowance (settings-profiles-offer): the figures of the fixture's own Claude subscription,
+/// as the Mac's text has them.
+fn fx_offer_quota() -> Json {
+  obj([
+    ("state", str("ok")),
+    ("windows", [
+      obj([("label", str("5 小时")), ("usedPercent", Json::number(38.0)), ("mark", str("5H")), ("left", Json::number(62.0)), ("level", str("ok")), ("refills", str("4 小时后恢复"))]),
+      obj([("label", str("本周")), ("usedPercent", Json::number(81.0)), ("mark", str("W")), ("left", Json::number(19.0)), ("level", str("ok")), ("refills", str("星期一恢复"))]),
+    ]),
+    ("checkedAt", Json::number(0.0)),
+  ])
 }
 
 ///|
@@ -1607,7 +1627,10 @@ fn fx_station(address : String) -> Json {
           (
             "machineLogins",
             [
-              obj([("runtime", str("codex")), ("installed", Json::boolean(true)), ("loggedIn", Json::boolean(true)), ("email", str("lin@example.com")), ("plan", str("plus")), ("planText", str("Plus")), ("usable", Json::boolean(true)), ("text", str("")), ("offered", Json::boolean(true))]),
+              obj([("runtime", str("codex")), ("installed", Json::boolean(true)), ("loggedIn", Json::boolean(true)), ("email", str("lin@example.com")), ("plan", str("plus")), ("planText", str("Plus")), ("usable", Json::boolean(true)), ("text", str("")), ("offered", Json::boolean(true)),
+                // (null where the fixture says none: a field left as it is, as field_made has it)
+                ("quota", if fx.offer_quota { fx_offer_quota() } else { Json::null() }),
+              ]),
             ],
           ),
           (

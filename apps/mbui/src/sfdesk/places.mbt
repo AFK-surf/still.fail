@@ -270,10 +270,20 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"), trailing?=update_trailing(c, src), band=update_band(), at=side_at())
     side_scroll(c, "profiles-nav/" + w.id, fn() {
       let mut group = ""
-      // (the room the widest allowance's chips need: one way for every row, nav_quota_chips)
+      // each station's own logins, not profiles yet (under the profiles: each station up that offers one)
+      let offered = @settings.profiles_offers(src.topic("profiles", { "scope": Json::string(w.id) }).get().value).map(fn(o) {
+        (o.0, o.1.filter(fn(l) { flag(Some(l), "offered") && text(field(Some(l), "quota"), "state") != "blocked" }))
+      })
+      // (the room the widest allowance's chips need: one way for every row, a profile's or an offered login's,
+      // nav_quota_chips)
       let mut chips = 0.0
       for e in list {
         chips = dmax(chips, @sf.nav_quota_line(c, field(field(Some(e), "profile"), "quota")))
+      }
+      for o in offered {
+        for l in o.1 {
+          chips = dmax(chips, @sf.nav_quota_line(c, field(Some(l), "quota")))
+        }
       }
       for i, e in list {
         let e = Some(e)
@@ -356,21 +366,25 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             },
           )
       }
-      // each station's own logins, not profiles yet: as the profiles' list says them (each station up that offers one)
-      for o in @settings.profiles_offers(src.topic("profiles", { "scope": Json::string(w.id) }).get().value) {
+      // as the profiles' list says them; its allowance under each as a profile's row has it (the same chips), so an
+      // account not added yet shows what is left of its week as well
+      for o in offered {
         let s = Some(o.0)
         let station = text(s, "station")
-        let offers = o.1.filter(fn(l) { flag(Some(l), "offered") && text(field(Some(l), "quota"), "state") != "blocked" })
+        let offers = o.1
         if offers.length() == 0 {
           continue
         }
         @sf.list_heading(c, @sf.t("web-pages.profiles.machineSignedIn", args=[("station", text(s, "name"))]), side_at())
         for j, l in offers {
           let l = Some(l)
+          let quota = field(l, "quota")
+          let windows = text(quota, "state") == "ok" && items(quota, "windows").length() > 0
+          let key = "profiles/machine/" + station + "/" + text(l, "runtime")
           nav_item(
               c,
               at=side_at(),
-              "profiles/machine/" + station + "/" + text(l, "runtime"),
+              key,
               false,
               fn() { @sf.maker_mark(c, "", text(l, "runtime"), nav_mark_side) |> ignore },
               fn() { nav_title(c, @settings.runtime_label(text(l, "runtime"))) },
@@ -381,6 +395,8 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
                 })
               },
               more=j + 1 < offers.length(),
+              foot?=if windows { Some(fn() { @sf.nav_quota_chips(c, quota, key~, at=side_at(), widest=chips) }) } else { None },
+              foot_capsule?=if windows { Some(@sf.fill_chip_small_h) } else { None },
               on_press=fn() {
                 @sfbase.history_push()
                 app.nav.push(Setting(Route::NewProfile(station)))
