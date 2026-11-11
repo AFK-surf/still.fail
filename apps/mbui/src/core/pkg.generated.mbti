@@ -174,6 +174,7 @@ pub fn Replay::host(Self, (String) -> Unit) -> Unit
 pub fn Replay::host_frames(Self) -> Array[Double]
 pub fn Replay::host_given(Self) -> (Double, Double)?
 pub fn Replay::last_given(Self) -> Double
+pub fn Replay::late_unsubs(Self) -> Array[(String, Int, Double)]
 pub fn Replay::left(Self) -> Int32
 pub fn Replay::local_station(Self) -> String
 pub fn Replay::next_due(Self) -> Double?

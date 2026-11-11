@@ -1156,6 +1156,13 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
   }
   self.t.assert_idle()
   let r = self.r
+  // (the strict pass: each of the run's unsubscriptions made after messages the run had after it came, said, not
+  // held to anything: the replay gives those without waiting for it, Replay::ready)
+  if keeping.val == 1 {
+    for u in r.late_unsubs() {
+      println("LATE-UNSUB \{pass_trace.val}: \{u.0} after \{u.1} messages the run had after it, \{u.2} ms after the first")
+    }
+  }
   let why = []
   if !self.strict {
     // another timing: the reports it makes its own, its asks not compared; what it asked all answered

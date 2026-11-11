@@ -88,6 +88,8 @@ pub struct Replay {
   priv skipped : Array[String]
   /// reports the app made that the run did not (Replay::sent: its frames had them, the run's not)
   priv unasked_reports : Array[String]
+  /// the run's unsubscriptions made again after messages the run had after them were given (Replay::late_unsubs)
+  priv late_unsubs : Array[(String, Int, Double)]
   /// the ids the app gave its watches of `ambient` topics the run did not have (let go of as well, unasked)
   priv ambient_ids : Map[Int, Bool]
   /// what the run's app was started with (its trace's `{"env":…}`: src/stillfail's CORETRACE env)
@@ -350,6 +352,7 @@ pub fn Replay::parse(log : String) -> Replay {
     host_said: None,
     skipped: [],
     unasked_reports: [],
+    late_unsubs: [],
     ambient_ids: {},
     run_env,
     run_text,
@@ -819,7 +822,7 @@ pub fn Replay::asks_before_step_due(self : Replay) -> Double {
     if is_step(e.msg) {
       break
     }
-    if is_report(e.msg) || !e.has_wall {
+    if is_report(e.msg) || is_let_go(e.msg) || !e.has_wall {
       continue
     }
     let mut j = i - 1
@@ -849,7 +852,7 @@ pub fn Replay::asks_before_step(self : Replay) -> Bool {
       if is_step(e.msg) {
         return false
       }
-      if !is_report(e.msg) {
+      if !is_report(e.msg) && !is_let_go(e.msg) {
         return true
       }
     }
@@ -1078,8 +1081,9 @@ fn Replay::due_chained(self : Replay, i : Int) -> Double {
       return e.at + (if gap > 0.0 { gap * scale } else { 0.0 })
     }
     // (a step of the script's is the run's own: timed from what happened again before it, the app's asks it has not
-    // made again aside, as they may be made in that time: a draft kept while the run waited to tap)
-    if e.out && !e.done && !is_report(e.msg) && !is_step(self.evs[i].msg) {
+    // made again aside, as they may be made in that time: a draft kept while the run waited to tap; nor is anything
+    // timed from one let go of not made again yet, which holds nothing back, Replay::ready)
+    if e.out && !e.done && !is_report(e.msg) && !is_let_go(e.msg) && !is_step(self.evs[i].msg) {
       return @double.infinity
     }
     j = j - 1
@@ -1151,6 +1155,14 @@ fn is_report(m : Json) -> Bool {
 }
 
 ///|
+/// Whether `m` (an ask of the run's) lets go of one: what comes after it waits nothing of it, as a core sends one
+/// topic's values whether or not another was let go of yet (Replay::ready); it is made again all the same by the end.
+fn is_let_go(m : Json) -> Bool {
+  guard m is Object(o) else { return false }
+  kind_of(o) == "unsubscribe"
+}
+
+///|
 /// The messages in that may come whenever their time (what they came after asked again), the first of each ask's: in
 /// the run's order: up to the first ask not made again, past those that are reports; an ask's own coming
 /// once it was made (an answer to an ask not made again does not).
@@ -1162,8 +1174,10 @@ fn Replay::ready(self : Replay) -> Array[Int] {
   for i in from..<self.evs.length() {
     let e = self.evs[i]
     if e.out && !e.done {
-      // (a report waits nothing: the run's frames made it, the app's own frames may not, Replay::sent)
-      if !is_report(e.msg) {
+      // (a report waits nothing: the run's frames made it, the app's own frames may not, Replay::sent; nor does one
+      // let go of (is_let_go): no message comes of it, and a core does not hold one topic back for another not let go
+      // of yet; the coordinator of the migration, 2026-11-12)
+      if !is_report(e.msg) && !is_let_go(e.msg) {
         break
       }
       continue
@@ -1328,6 +1342,14 @@ pub fn Replay::unmade(self : Replay) -> Array[String] {
     }
   }
   out
+}
+
+///|
+/// The run's unsubscriptions this one made after messages the run had after them were given (Replay::ready gives
+/// those without waiting for it): each as made, how many came before it, and how long before it the first of them
+/// came (ms on the app's clock). Said, not held to anything: a subscription kept longer than the run kept it shows here.
+pub fn Replay::late_unsubs(self : Replay) -> Array[(String, Int, Double)] {
+  self.late_unsubs
 }
 
 ///|
@@ -1520,6 +1542,23 @@ fn Replay::out(self : Replay, text : String) -> Unit {
   let e = self.evs[found]
   e.done = true
   e.at = (self.clock)()
+  // (one let go of after messages the run had after it came: how many, from how long before)
+  if kind == "unsubscribe" {
+    let mut n = 0
+    let mut earliest = @double.infinity
+    for j in (found + 1)..<self.evs.length() {
+      let a = self.evs[j]
+      if !a.out && a.done && a.at >= 0.0 {
+        n = n + 1
+        if a.at < earliest {
+          earliest = a.at
+        }
+      }
+    }
+    if n > 0 {
+      self.late_unsubs.push((text, n, e.at - earliest))
+    }
+  }
   if e.msg is Object(r) && (kind == "subscribe" || kind == "call") {
     match (id_of(r), id_of(m)) {
       (Some(then), Some(now)) => {

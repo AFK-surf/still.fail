@@ -125,11 +125,44 @@ test "an unsubscription matched by what it names" {
   let c = r.client()
   let a = c.subscribe("threads", params={ "station": "a" })
   let b = c.subscribe("threads", params={ "station": "b" })
-  // `a` is asked again but not yet let go of `b`: the value waits
-  assert_eq(r.deliver(), 0)
   c.unsubscribe(b)
   assert_eq(r.deliver(), 1)
   assert_eq(a.value.unwrap().stringify(), "[1]")
+  assert_eq(r.diverged().length(), 0)
+  assert_eq(r.unmade().length(), 0)
+}
+
+///|
+test "an unsubscription not made again yet holds back nothing after it; a subscription or a call not made again holds its own" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":3,"subscribe":{"topic":"threads","station":"a"},"keyed":true},"w":1}
+    #|{"out":{"id":4,"subscribe":{"topic":"threads","station":"b"},"keyed":true},"w":2}
+    #|{"out":{"id":4,"unsubscribe":true},"w":3}
+    #|{"in":{"id":3,"value":[1]},"w":5}
+    #|{"out":{"id":5,"subscribe":{"topic":"threads","station":"c"},"keyed":true},"w":6}
+    #|{"in":{"id":5,"value":[2]},"w":7}
+    #|{"in":{"id":3,"value":[3]},"w":8}
+  ))
+  let c = r.client()
+  let a = c.subscribe("threads", params={ "station": "a" })
+  let b = c.subscribe("threads", params={ "station": "b" })
+  // `b` still held here (let go of later than the run did): what came for `a` after the run let it go comes all the same
+  assert_eq(r.deliver(), 1)
+  assert_eq(a.value.unwrap().stringify(), "[1]")
+  // `c` not asked again: its own value waits, and what came after it with it
+  assert_eq(r.deliver(), 0)
+  assert_true(r.waiting().unwrap().contains("unsubscribe") || r.waiting().unwrap().contains("\"c\""))
+  let cs = c.subscribe("threads", params={ "station": "c" })
+  assert_eq(r.deliver(), 2)
+  assert_eq(cs.value.unwrap().stringify(), "[2]")
+  assert_eq(a.value.unwrap().stringify(), "[3]")
+  // the unsubscription is the run's all the same: not made, it is listed
+  assert_eq(r.unmade().length(), 1)
+  c.unsubscribe(b)
+  assert_eq(r.unmade().length(), 0)
+  // and said: made after the 3 messages the run had after it
+  assert_eq(r.late_unsubs().length(), 1)
+  assert_eq(r.late_unsubs()[0].1, 3)
   assert_eq(r.diverged().length(), 0)
 }
 
@@ -354,6 +387,42 @@ test "at the run's pace: a call's answer measured from its ask made again, the n
   assert_eq(r.next_due(), Some(750.0))
   assert_eq(r.deliver(now=750.0), 1)
   assert_eq(r.left(), 0)
+}
+
+///|
+test "at the run's pace: a value after an unsubscription not made again yet comes on time; one after a subscription not made again waits" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":3,"subscribe":{"topic":"chats"},"keyed":true},"w":1000}
+    #|{"out":{"id":5,"subscribe":{"topic":"status"},"keyed":true},"w":1010}
+    #|{"out":{"id":5,"unsubscribe":true},"w":1100}
+    #|{"in":{"id":3,"value":[1]},"w":1200}
+    #|{"out":{"id":6,"subscribe":{"topic":"doing"},"keyed":true},"w":1300}
+    #|{"in":{"id":6,"value":[2]},"w":1350}
+  ))
+  let now : Ref[Double] = { val: 0.0 }
+  r.clock(fn() { now.val })
+  r.pace(@core.AsRun(1.0))
+  let c = r.client()
+  let chats = c.subscribe("chats")
+  let status = c.subscribe("status")
+  // `status` still held (let go of later than the run did): the value of `chats` 190 ms after `status` was asked
+  // again, as the run had it, not held till it is let go of
+  assert_eq(r.next_due(), Some(190.0))
+  assert_eq(r.deliver(now=189.0), 0)
+  assert_eq(r.deliver(now=190.0), 1)
+  assert_eq(chats.value.unwrap().stringify(), "[1]")
+  // `doing` not asked again: its value waits for it, whenever
+  assert_eq(r.next_due(), None)
+  now.val = 400.0
+  let doing = c.subscribe("doing")
+  assert_eq(r.next_due(), Some(450.0))
+  assert_eq(r.deliver(now=450.0), 1)
+  assert_eq(doing.value.unwrap().stringify(), "[2]")
+  // let go of at last: made, and said late, after the 2 messages the run had after it
+  c.unsubscribe(status)
+  assert_eq(r.unmade().length(), 0)
+  assert_eq(r.late_unsubs().length(), 1)
+  assert_eq(r.late_unsubs()[0].1, 2)
 }
 
 ///|
