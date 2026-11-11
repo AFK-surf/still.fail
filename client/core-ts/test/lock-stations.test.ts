@@ -171,6 +171,21 @@ test("a station the lock does not name, keeping none, read alone does not make t
   assert.deepEqual(held(inner, "ws")?.entries, h.entries);
 });
 
+test("a station read alone tells who came to it: the devices that came to the others are kept", async () => {
+  const { inner, st, run, r, atS } = await setUp(false, { unnamed: true });
+  st.came.push({ sub: "s1", email: "a@x.com", device: "dd".repeat(32), base: ME, kind: "app", label: "Mac", first_seen: 900, last_seen: 1000 });
+  await run(read(inner, "ws"));
+  await r.host.time.pass(100);
+  assert.deepEqual(held(inner, "ws")?.seen?.map((d) => d.label), ["Mac"]);
+  // S, to which none came, tells its lock moved and is read alone: the Mac that came to A is listed still.
+  atS.length = 0;
+  inner.stations.onEvent(`ws/${S}`, "lock", JSON.stringify({ workspace: "ws", head: null }));
+  for (let i = 0; i < 50 && !atS.includes("GET /lock/devices"); i++) await r.host.time.pass(10);
+  assert.ok(atS.includes("GET /lock/devices"), atS.join());
+  await r.host.time.pass(100);
+  assert.deepEqual(held(inner, "ws")?.seen?.map((d) => d.label), ["Mac"]);
+});
+
 test("every station the lock names keeping none, this device lets the lock go", async () => {
   const { inner, run, r, reset } = await setUp(false, { unnamed: true });
   await run(read(inner, "ws"));
@@ -230,6 +245,37 @@ test("a device holding no lock where the cloud's view says there is one reads it
   await run(Effect.all(inner.stations.also.filter((p) => p.resume).map((p) => Effect.ignore(p.read(`ws/${A}`))), { discard: true }));
   assert.ok(atA.some((a) => a.startsWith("GET /lock")), atA.join());
   await r.host.time.pass(100);
+  assert.equal(held(inner, "ws")?.head?.hash, st.head().hash);
+  assert.deepEqual(held(inner, "ws")?.entries, h.entries);
+});
+
+test("the cloud keeping no lock, asked as no station answered, does not make this device forget the one it holds", async () => {
+  const { inner, st, run, r, cloud } = await setUp();
+  await run(read(inner, "ws"));
+  await r.host.time.pass(100);
+  const h = held(inner, "ws")!;
+  assert.notEqual(h.head, null);
+  // No station serves the lock now (as one from before), so the cloud is asked; and the cloud has lost it.
+  st.say.old = true;
+  r.cloud.chains.set("ws", []);
+  cloud.asked.length = 0;
+  await run(read(inner, "ws"));
+  await r.host.time.pass(100);
+  assert.ok(cloud.asked.some((a) => a.startsWith("GET /lock")), cloud.asked.join());
+  assert.equal(held(inner, "ws")?.head?.hash, h.head!.hash);
+  assert.deepEqual(held(inner, "ws")?.entries, h.entries);
+});
+
+test("the page to turn safe mode on, asked where none is held and the cloud's view says there is a lock, reads the lock instead", async () => {
+  const { inner, st, run, r } = await setUp();
+  await run(read(inner, "ws"));
+  await r.host.time.pass(100);
+  const h = held(inner, "ws")!;
+  assert.notEqual(h.head, null);
+  // (#5540's device: the lock let go, the stations keeping it still)
+  inner.data.put("lock", "ws", { head: null, entries: [] });
+  await r.watch({ topic: "lockDraft", workspace: "ws" });
+  for (let i = 0; i < 50 && held(inner, "ws")?.head == null; i++) await r.host.time.pass(10);
   assert.equal(held(inner, "ws")?.head?.hash, st.head().hash);
   assert.deepEqual(held(inner, "ws")?.entries, h.entries);
 });
