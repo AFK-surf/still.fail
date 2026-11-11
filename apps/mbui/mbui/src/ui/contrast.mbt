@@ -915,16 +915,20 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
 
 ///|
 /// Where the screen as it is now draws something too faint to be seen on what it lies on (see the file's head): a
-/// frame drawn, each fault once. `marks`: the least for what has nothing in it (contrast_mark_least).
+/// frame drawn, each fault once. `marks`: the least for what has nothing in it (contrast_mark_least). Its frame and
+/// the one that draws the screen back after it are both at the last frame's moment (Tester::frame_again): what is
+/// read after it, and the clock, are as before.
 pub fn Tester::contrast_faults(self : Tester, marks? : Double = contrast_mark_least) -> Array[String] {
   let c = g()
   inst_owners.on = true
   inst_owners_clear()
-  self.frame()
+  self.frame_again()
   inst_owners.on = false
-  // (drawn as before from the next frame on, built whole: frame_watch.mbt)
+  let faults = c.contrast_faults_drawn(marks)
+  // (drawn back as it was, built whole: frame_watch.mbt; each loop where the clock has it again, not at its start)
   test_stepped()
-  c.contrast_faults_drawn(marks)
+  self.frame_again()
+  faults
 }
 
 ///|
