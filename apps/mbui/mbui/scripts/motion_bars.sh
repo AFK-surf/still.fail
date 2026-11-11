@@ -3,8 +3,9 @@
 # judge how what moves goes, and at the default rate, MBUI_TEST_BARS; their MOTION_OUT) set beside the most one Tester
 # of its file found under it in those runs, said for people: a bar more than that falls, or what it was for is filed
 # under another file (the file a Tester is made in is the bars' key: one made in a helper of another file's is that
-# file's); a file still only counted (motion_counted) with nothing found at 60 or 120 leaves the list. A bar is how many
-# one Tester may show, so it is set beside one Tester's most, never a sum of a file's. Only files a Tester of these runs
+# file's); a file still only counted (motion_counted) with nothing found where a Tester of it was counted (at 60 or
+# 120, `MOTION counting`; a sweep run at the default rate alone is never) leaves the list. A bar is how many one Tester
+# may show, so it is set beside one Tester's most, never a sum of a file's. Only files a Tester of these runs
 # was made in, and none of whose Testers is not judged on how what moves goes (Tester::motion_unjudged: what it finds
 # is not looked for, so none found says nothing); given all the jobs' of a run together (a Tester made in another
 # file's helper is that file's, whose own tests may run in another job). Says, fails nothing (for now: the coordinator
@@ -21,6 +22,8 @@ sort -u "$f" | awk -v title="${2:-bars}" '
   $2 == "bar" { bar[$3 " " $4] = $5; next }
   # MOTION counted <file>
   $2 == "counted" { counted[$3] = 1; next }
+  # MOTION counting <file> (a Tester made there counted, at 60 or 120)
+  $2 == "counting" { counting[$3] = 1; next }
   # MOTION known <check> <file> <n>/<bar>: … (the most n one Tester came to, judged or counted)
   $2 == "known" { split($5, part, "/"); k = $3 " " $4; if (part[1] + 0 > found[k] + 0) found[k] = part[1] + 0; next }
   # MOTION held host_image_bytes <file> <bytes>
@@ -42,7 +45,7 @@ sort -u "$f" | awk -v title="${2:-bars}" '
         if (got * 10 < bar[k] * 9) { printf "falls   %-16s %s: bar %d, held at most %d\n", cf[1], cf[2], bar[k], got; off++ }
       } else if (got < bar[k]) { printf "falls   %-16s %s: bar %d, one Tester found at most %d\n", cf[1], cf[2], bar[k], got; off++ }
     }
-    for (c in counted) if ((c in made) && !(c in unjudged) && !(c in inlist)) { printf "leaves  motion_counted   %s: counted, nothing found\n", c; off++ }
+    for (c in counted) if ((c in counting) && !(c in unjudged) && !(c in inlist)) { printf "leaves  motion_counted   %s: counted, nothing found\n", c; off++ }
     # (what a counted file showed, by check, where it has no bar of that check: what keeps it on the list)
     for (k in found) { split(k, cf, " "); if (!(k in bar) && (cf[2] in counted) && cf[1] ~ /^(gaps_steady|rows_steady|sizes_steady|words_over)$/) printf "counted %-16s %s: one Tester found at most %d\n", cf[1], cf[2], found[k] }
     nu = 0; for (u in unjudged) nu++

@@ -21,8 +21,8 @@ fn init {
   ])
   @ui.words_over_known([
     ("src/sfapp/composer_wbtest.mbt", 2),
-    ("src/sfapp/preview_wbtest.mbt", 13),
-    ("src/sfapp/screens_wbtest.mbt", 42),
-    ("src/sfapp/wide_wbtest.mbt", 3),
+    ("src/sfapp/preview_wbtest.mbt", 2),
+    ("src/sfapp/screens_wbtest.mbt", 2),
+    ("src/sfapp/wide_wbtest.mbt", 2),
   ])
 }

@@ -553,7 +553,16 @@ pub fn Tester::new(
   // (the file each bar of its is held by: motion_runs)
   if motion_runs() {
     let at = loc.to_string()
-    println("MOTION made \{match at.find(":") { Some(i) => at.unsafe_substring(start=0, end=i); None => at }}")
+    let file = match at.find(":") {
+      Some(i) => at.unsafe_substring(start=0, end=i)
+      None => at
+    }
+    println("MOTION made \{file}")
+    // (and counted here, a run at a rate counting its file (motion_counted): what may say it leaves the list, a file
+    // never run so, a sweep of the default rate's alone, says nothing of it)
+    if test_motion_judged(at) == Count {
+      println("MOTION counting \{file}")
+    }
   }
   looks_unjudged.val = false
   motion_unjudged.val = false
