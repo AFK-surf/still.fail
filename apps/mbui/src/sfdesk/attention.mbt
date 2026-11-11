@@ -266,7 +266,7 @@ let att_sheet : @ui.Style = @ui.css("w=Full")
 /// Each workspace's chats in 待处理 (the core's marks' items), the one in view's first, those let go here left out
 /// when `shown`: (workspace, its name, its chats).
 fn attention_groups(src : Source, w : Workspace, shown : Bool) -> Array[(String, String, Array[Json])] {
-  let marks = src.topic("workspaceMarks", @sfbase.marks_asked(w.id)).get().value
+  let marks = src.topic("workspaceMarks", @sfbase.marks_asked()).get().value
   let groups : Array[(String, String, Array[Json])] = []
   match field(marks, "workspaces") {
     Some(Object(by)) => {

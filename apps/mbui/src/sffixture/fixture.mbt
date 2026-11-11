@@ -1388,10 +1388,10 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     "workspaceMarks" =>
       Some({
         "workspaces": {
-          "ws1": { "alert": 1, "unread": 2, "wait": 1, "tone": "alert" },
-          "ws2": { "alert": 0, "unread": 2, "tone": "done" },
+          // (each with what the other has waiting)
+          "ws1": { "alert": 1, "unread": 2, "wait": 1, "tone": "alert", "others": "done" },
+          "ws2": { "alert": 0, "unread": 2, "tone": "done", "others": "alert" },
         },
-        "others": if f.workspace == "ws1" { "done" } else { "alert" },
         // what the badge counts, as the core says it (the prefs' badgeKinds, or their defaults)
         "badgeKinds": { "on": true, "wait": true, "failed": true, "done": true, "message": true, "services": true },
       })

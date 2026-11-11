@@ -936,10 +936,12 @@ pub fn chat_opens(r : ChatRef, ask : (String, Map[String, Json]) -> TopicState) 
 }
 
 ///|
-/// The core's marks of workspace `ws`'s chats and the others' (`workspaceMarks`: the rail's, 待处理's, the chat it was
-/// left on), asked one way wherever a workspace opening reads them.
-pub fn marks_asked(ws : String) -> Map[String, Json] {
-  { "workspace": Json::string(ws) }
+/// The core's marks of every workspace's chats (`workspaceMarks`: the rail's, 待处理's, the chat each was left on, and in
+/// each what the others have waiting), asked one way wherever a workspace opening reads them: one topic whichever
+/// workspace is shown, held across a switch. Asked of the one shown, each switch asked another, sent whole (24.6 KB of
+/// the real-size two) for what it said of the others alone.
+pub fn marks_asked() -> Map[String, Json] {
+  {}
 }
 
 ///|

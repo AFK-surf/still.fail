@@ -1058,7 +1058,7 @@ fn land(src : Source, w : Workspace) -> Unit {
 /// The page the chats' place of workspace `ws` lands on with nothing open, the first time it does (land's): the chat
 /// the core's marks say was open last there, else a new chat; None till the marks, asked of `ask`, are read.
 fn land_page(ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Page? {
-  let marks = ask("workspaceMarks", @sfbase.marks_asked(ws))
+  let marks = ask("workspaceMarks", @sfbase.marks_asked())
   guard marks.value is Some(_) else { return None }
   let chat = field(field(field(marks.value, "workspaces"), ws), "chat")
   let station = text(chat, "station")
@@ -1103,12 +1103,12 @@ pub fn frame_opens_on(
   landed : Page?,
   ask : (String, Map[String, Json]) -> @sfbase.TopicState,
 ) -> Bool {
-  let rail = rail_opens(ws, ask)
+  let rail = rail_opens(ask)
   let side = side_opens(src, ws, ask)
   let pane = match landed {
     Some(p) => pane_opens(ws, p, ask)
     // (the marks could not be read: nothing it lands on to wait for)
-    None => ask("workspaceMarks", @sfbase.marks_asked(ws)).error is Some(_)
+    None => ask("workspaceMarks", @sfbase.marks_asked()).error is Some(_)
   }
   // (and what the wide frame round them reads as it is first built, asked with it and not waited for: sfbase's
   // shell_opens)

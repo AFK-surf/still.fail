@@ -110,7 +110,7 @@ fn workspaces_list(v : @view.View, src : Source, close : () -> Unit, compact~ : 
   // (what each workspace has waiting, as the one in use's marks say it)
   let marks = fn() {
     match in_view().0 {
-      Some(w) => field(src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value, "workspaces")
+      Some(_) => field(src.topic("workspaceMarks", @sfbase.marks_asked()).get().value, "workspaces")
       None => None
     }
   }

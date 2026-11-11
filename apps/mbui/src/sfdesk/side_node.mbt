@@ -44,7 +44,7 @@ fn side_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideA
 fn side_opens(src : Source, ws : String, ask : (String, Map[String, Json]) -> @sfbase.TopicState) -> Bool {
   let list = @sfbase.list_opens(src, ws, ask)
   let all = @sfbase.chats_all_opens(src, ws, ask)
-  let marks = @sfbase.opens_answered(ask("workspaceMarks", @sfbase.marks_asked(ws)))
+  let marks = @sfbase.opens_answered(ask("workspaceMarks", @sfbase.marks_asked()))
   // (the foot's 运行中 reads it where the bell is not in the rail: in its panel then, read as that opens, lists_foot)
   let long = rail_items(src, ws).contains("attention") ||
     @sfbase.opens_answered(ask("longJobs", @sfbase.long_jobs_asked(ws)))

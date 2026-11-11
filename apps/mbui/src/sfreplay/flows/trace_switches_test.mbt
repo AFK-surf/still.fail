@@ -37,6 +37,8 @@
 /// MBUI_CHATS_WINDOW (2026-11-11: a chats' list asked without a `limit`, how many of its rows go out its window, told
 /// the core before it is asked and raised as it is scrolled) off in all 81 as it came: only the replay reads it, which
 /// answers the app's list by the run's asked with its first limit and tells the run no window.
+/// MBUI_MARKS_ONE (2026-11-12: the workspaces' marks one topic whichever workspace is shown) off in all 81 as it came:
+/// only the replay reads it, which answers the app's marks by the run's, asked of the workspace then shown.
 let switches_known : Map[String, Int] = {
   "MBUI_PLACES_BAR": 79,
   "MBUI_DEVICES": 80,
@@ -47,6 +49,7 @@ let switches_known : Map[String, Int] = {
   "MBUI_KEEP_CHAT": 80,
   "MBUI_CHAT_ROW": 81,
   "MBUI_CHATS_WINDOW": 81,
+  "MBUI_MARKS_ONE": 81,
 }
 
 ///|

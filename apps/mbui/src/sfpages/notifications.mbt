@@ -36,11 +36,11 @@ let badge_chosen : @sf.LiveMap[String, Bool] = @sf.LiveMap::new()
 ///|
 /// What the badge counts, as the core keeps it (`workspaceMarks`' `badgeKinds`: the prefs', or as their older `badge`
 /// says), or as it was just chosen here.
-fn badge_kind(core : Core, here : Here, kind : String) -> Bool {
+fn badge_kind(core : Core, kind : String) -> Bool {
   match badge_chosen.get(kind) {
     Some(v) => v
     None =>
-      flag(field((core.topic)("workspaceMarks", { "workspace": str(here.workspace) }).get().value, "badgeKinds"), kind)
+      flag(field((core.topic)("workspaceMarks", @sfbase.marks_asked()).get().value, "badgeKinds"), kind)
   }
 }
 
@@ -129,7 +129,7 @@ pub fn notify_node(
 ) -> Unit {
   let notify = fn() { (core.topic)("notify", Map([])).get().value }
   let kept_badge = fn() {
-    field((core.topic)("workspaceMarks", { "workspace": str(here().workspace) }).get().value, "badgeKinds")
+    field((core.topic)("workspaceMarks", @sfbase.marks_asked()).get().value, "badgeKinds")
   }
   // what was chosen, once the core says it: the core's word from then on
   for k in notify_kinds {
@@ -208,7 +208,7 @@ fn notify_block_node(
       None => flag(notify(), "on")
     }
   }
-  let badge = fn(kind) { badge_kind(core, here(), kind) }
+  let badge = fn(kind) { badge_kind(core, kind) }
   match key {
     "preview" => notify_preview_node(b, core, here, notify, on, page_w)
     "ways" =>
@@ -271,7 +271,7 @@ fn notify_block_node(
         @sf.kinds_card_node(sec, fn(k) {
           // (each its row, apart by its room: no line between)
           for kind in notify_kinds_shown {
-            kind_row_node(k, core, here, notify, on, kind)
+            kind_row_node(k, core, notify, on, kind)
           }
         })
       })
@@ -398,8 +398,8 @@ fn notify_preview_node(
   let look = notice_look()
   let mark = fn() -> @sf.IconMark {
     if @ui.badge_shown() {
-      let n = count((core.topic)("workspaceMarks", { "workspace": str(here().workspace) }).get().value, "badge")
-      if badge_kind(core, here(), "on") && n > 0 {
+      let n = count((core.topic)("workspaceMarks", @sfbase.marks_asked()).get().value, "badge")
+      if badge_kind(core, "on") && n > 0 {
         Count(n)
       } else {
         Unmarked
@@ -439,9 +439,9 @@ fn app_icon_name() -> String {
 ///|
 /// A kind of thing that happens (KindRow) as nodes: what tells of it in a line, opened (kind_open), each way on or off (a
 /// done turn's banner: off, while away, always; the services left up long: the bell's alone), as they change.
-fn kind_row_node(k : @view.View, core : Core, here : () -> Here, notify : () -> Json?, on : () -> Bool, kind : String) -> Unit {
+fn kind_row_node(k : @view.View, core : Core, notify : () -> Json?, on : () -> Bool, kind : String) -> Unit {
   let bell = kind == "services"
-  let badge = fn(kind) { badge_kind(core, here(), kind) }
+  let badge = fn(kind) { badge_kind(core, kind) }
   let sum = fn() {
     let ways : Array[String] = []
     if bell && badge(kind) {

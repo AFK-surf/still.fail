@@ -86,7 +86,7 @@ pub fn back_pop() -> Unit
 
 pub fn back_step() -> (() -> Unit)?
 
-pub fn badge_frame(@ui.Ctx, Source, Workspace) -> Unit
+pub fn badge_frame(@ui.Ctx, Source) -> Unit
 
 pub fn bar_as_nodes(Viewer, Double) -> Bool
 
@@ -960,7 +960,7 @@ pub fn marks_actions(@ui.Ctx, Bool, (Bool) -> Unit, ink? : Int64) -> Unit
 
 pub fn marks_any() -> Bool
 
-pub fn marks_asked(String) -> Map[String, @json.Json]
+pub fn marks_asked() -> Map[String, @json.Json]
 
 pub fn marks_back(@ui.Ctx) -> Unit
 

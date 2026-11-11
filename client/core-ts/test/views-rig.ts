@@ -43,6 +43,9 @@ export class Router implements Source {
       this.store.invalidate(topic);
     } else this.started.push(topic);
   }
+  opened(topic: Topic): void {
+    if (this.#isView(topic)) this.views.opened(topic);
+  }
   stop(topic: Topic): void {
     const owner = this.#owner(topic);
     if (this.#isView(topic)) this.views.stop(topic);

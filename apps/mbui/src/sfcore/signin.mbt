@@ -524,6 +524,11 @@ pub let trace_switches : Array[String] = [
   // it has the app's list answered by its run's `chats` asked with its first `limit` (@core.Replay's twin topics), and
   // the app's `chats.window` told nothing (src/sfreplay/source.mbt))
   "MBUI_CHATS_WINDOW",
+  // (the workspaces' marks one topic whichever workspace is shown, held across a switch, each mark with what the others
+  // have waiting: `workspaceMarks` asked with no `workspace`. Like MBUI_CHATS_WINDOW the app does not branch on it, its
+  // old way gone from it, so only the replay reads it: a trace without it has the app's marks answered by its run's,
+  // asked of the workspace then shown (@core.Replay's twin topics))
+  "MBUI_MARKS_ONE",
 ]
 
 ///|

@@ -81,7 +81,7 @@ export const ASKED: Record<string, Record<string, unknown> & { topic: string }> 
   "railCard usage": { topic: "railCard", scope: "ws", place: "usage" },
   "resources": { topic: "resources", scope: "ws", station },
   "workspace": { topic: "workspace", workspace: "ws" },
-  "workspaceMarks": { topic: "workspaceMarks", workspace: "ws" },
+  "workspaceMarks": { topic: "workspaceMarks" },
   "longJobs": { topic: "longJobs", scope: "ws" },
   "archive": { topic: "archive", scope: "ws", limit: 60 },
   "search": { topic: "search", scope: "ws", query: SEARCH },

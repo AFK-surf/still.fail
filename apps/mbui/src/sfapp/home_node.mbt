@@ -230,9 +230,10 @@ fn home_top_bar_node(
             @sf.top_bar_title_node(t, name, look=@sf.home_workspace_title_look) |> ignore
           })
           |> ignore
+          // (what the others have waiting, as the workspace shown's mark says it)
           let marks = fn() {
             match workspace() {
-              Some(w) => src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value
+              Some(w) => field(field(src.topic("workspaceMarks", @sfbase.marks_asked()).get().value, "workspaces"), w.id)
               None => None
             }
           }

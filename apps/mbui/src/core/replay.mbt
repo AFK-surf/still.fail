@@ -1503,11 +1503,12 @@ fn name_of(m : Map[String, Json]) -> String {
 ///|
 /// Whether topic `name` is one a page may ask a part of (a chats' list's first rows; the changelog's news alone, or a
 /// tab's first changes) where an older tape asked the whole, or both are asked in a run: answered by the tape's one
-/// (sig's `ignore_part`; the changelog's whole holds every tab's days, read the same way, and says no `more`). The
-/// stations are not: a tape from before their rows keeps its own (Replay::keep_stations), a newer one is held to them
-/// as to any topic.
+/// (sig's `ignore_part`; the changelog's whole holds every tab's days, read the same way, and says no `more`). And the
+/// workspaces' marks, asked of the workspace shown before they were one topic whichever is (a tape without
+/// MBUI_MARKS_ONE): answered by the tape's, of whichever workspace it asked them. The stations are not: a tape from
+/// before their rows keeps its own (Replay::keep_stations), a newer one is held to them as to any topic.
 fn twin_topic(name : String) -> Bool {
-  name == "chats" || name == "changelog"
+  name == "chats" || name == "changelog" || name == "workspaceMarks"
 }
 
 ///|
@@ -1530,6 +1531,9 @@ fn sig(
           asked.remove("limit")
           asked.remove("news")
           asked.remove("part")
+          if t.get("topic") == Some(Json::string("workspaceMarks")) {
+            asked.remove("workspace")
+          }
           copy[k] = Json::object(asked)
         }
         ("subscribe", Object(t)) if ignore_compact && (t.get("topic") == Some(Json::string("chat")) || t.get("topic") == Some(Json::string("chatJobs"))) => {

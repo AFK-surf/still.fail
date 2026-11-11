@@ -171,7 +171,7 @@ export const TOPICS: Record<string, Spec> = {
   changelog: { news: ["bool", "skipFalse"], part: ["string", "skip"], limit: ["u32", "skip"] },
   releases: {},
   fonts: {},
-  workspaceMarks: { workspace: ["string", "skip"] },
+  workspaceMarks: {},
   workspaceWays: { workspace: S },
   lock: { workspace: S },
   joinable: { workspace: S },

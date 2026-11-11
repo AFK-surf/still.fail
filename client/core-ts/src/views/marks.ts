@@ -296,29 +296,43 @@ export function workspaceMark(views: Views, local: Local, id: string, prefs: J):
   return mark;
 }
 
-/// Every workspace's mark (`workspaceMark`, each kept for its workspace), what the app's badge comes to and what the
-/// workspaces besides the one shown (`currentWorkspace`) have waiting: only this is made again as another is shown.
-export function marks(views: Views, currentWorkspace: string | null): Value {
+/// A workspace's mark with what the others have waiting (`others`, `othersLabel`: their most urgent and in words, as
+/// the place where workspaces are switched shows them while it is the one shown), the same object while they and the
+/// mark are as they were.
+const withOthers = new WeakMap<object, { tone: string | null; label: string | null; out: J }>();
+
+/// Every workspace's mark (`workspaceMark`, each kept for its workspace), what the app's badge comes to, and in each
+/// what the others have waiting. One value whichever workspace is shown, so the app holds it across a switch of
+/// workspace: asked of the one shown (`workspace`), a new subscription at every switch went out whole (24.6 KB of the
+/// real-size two, shaped again, 2.4 ms in Hermes on a Mac Studio before 大屏's list could be made) for the one field
+/// that differed.
+export function marks(views: Views): Value {
   const { kinds } = views.prefsPart(marksPrefs);
+  const ids = workspaceIds(views.ok({ topic: "workspaces" }));
+  const made = ids.map((id) => [id, views.markOf(id)] as [string, J]);
+  const lang = current();
   const all: Record<string, J> = {};
-  const others = new Counts();
   let total = 0;
-  for (const id of workspaceIds(views.ok({ topic: "workspaces" }))) {
-    const mark = views.markOf(id);
-    if (currentWorkspace !== id) {
-      others.alert += mark.alert;
-      others.wait += mark.wait ?? 0;
-      others.unread += mark.unread;
+  for (const [id, mark] of made) {
+    const others = new Counts();
+    for (const [other, m] of made) {
+      if (other === id) continue;
+      others.alert += m.alert;
+      others.wait += m.wait ?? 0;
+      others.unread += m.unread;
+    }
+    const tone = others.tone();
+    const label = tone === null ? null : tr(lang, "core-views.marks.others", { label: others.labelIn(lang) });
+    const was = withOthers.get(mark);
+    let out: J = mark;
+    if (was !== undefined && was.tone === tone && was.label === label) out = was.out;
+    else if (tone !== null) {
+      out = { ...mark, others: tone, othersLabel: label };
+      withOthers.set(mark, { tone, label, out });
     }
     // (a workspace turned off on the notifications page adds nothing to the app's badge; its own mark stays)
     if (views.heard(id)) total += mark.badge;
-    all[id] = mark;
+    all[id] = out;
   }
-  const value: J = { workspaces: all, badge: total, badgeKinds: kinds };
-  const tone = others.tone();
-  if (tone !== null) {
-    value.others = tone;
-    value.othersLabel = tr(current(), "core-views.marks.others", { label: others.label() });
-  }
-  return { ok: value };
+  return { ok: { workspaces: all, badge: total, badgeKinds: kinds } };
 }
