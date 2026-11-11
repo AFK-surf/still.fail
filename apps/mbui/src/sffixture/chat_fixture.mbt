@@ -494,6 +494,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_cache_cold(rich_chat(f.older))
           } else if f.mode == "chat-done" {
             with_state(rich_chat(f.older), done_state)
+          } else if f.mode == "chat-image-coming" {
+            with_coming_screenshot(rich_chat(f.older))
           } else if f.mode == "chat-download" || f.mode == "chat-keeping" {
             with_download_message(rich_chat(f.older))
           } else if f.mode == "chat-download-on" {
@@ -1937,6 +1939,62 @@ pub let viz_answer : String =
   #|```mermaid
   #|graph LR; 构建-->签名-->发布
   #|```
+
+///|
+/// MBUI_FIXTURE=chat-image-coming: a last message's two pictures still coming from their station (fixture.mbt's
+/// `file`): a photograph (its ThumbHash's field a sky over a meadow), 8400 of its thumbnail's 24000 bytes heard, and a
+/// light screenshot (a report's, 780 × 2600, its ThumbHash's field the page's colour), 0 of its 13249.
+let coming_screenshot : String = "adb-chats.png"
+
+///|
+let coming_photo : String = "meadow.jpg"
+
+///|
+/// How far each of chat-image-coming's pictures has come, by its name (None: not one of them).
+fn coming_heard(name : String) -> Json? {
+  if name == coming_screenshot {
+    Some({ "loaded": 0.0, "total": 13249.0 })
+  } else if name == coming_photo {
+    Some({ "loaded": 8400.0, "total": 24000.0 })
+  } else {
+    None
+  }
+}
+
+///|
+fn with_coming_screenshot(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      let shot = match file(coming_screenshot, 780, 2600, 182000) {
+        Object(a) => {
+          let a = a.copy()
+          a["thumbhash"] = "PAgCAgBQN4aJy7s3lnBcKvU="
+          Json::object(a)
+        }
+        a => a
+      }
+      let photo = match file(coming_photo, 1200, 860, 412000) {
+        Object(a) => {
+          let a = a.copy()
+          a["thumbhash"] = "3OcRJYB4d3h/iIeHeEh3eIhw+j3A"
+          Json::object(a)
+        }
+        a => a
+      }
+      all.push(
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), "截图在这里。", "1 分钟前", { "ending": "all_done", "attachments": [photo, shot] }),
+      )
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
 
 ///|
 /// MBUI_FIXTURE=chat-file-links: a last message naming two of its files by links within a sentence, written escaped

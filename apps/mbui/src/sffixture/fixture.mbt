@@ -1577,6 +1577,7 @@ pub fn fixture(mode : String) -> Source {
       "{\"supported\":true,\"developer\":false,\"wireless\":false,\"wifi\":true,\"canSwitch\":false,\"reads\":false}",
     )
   }
+  let images = @sfbase.ChatImages::new()
   let read_bytes = fn(name : String, params : Json, done : (Result[(Json, Bytes), Json]) -> Unit) {
     match fixture_kept(name, params, None) {
       Some(r) => {
@@ -1940,12 +1941,19 @@ pub fn fixture(mode : String) -> Source {
     sign_in_step: fn() { Idle },
     picture: fn(_, _) { "" },
     fatal: fn() { None },
-    file: fn(_, _, name) { fixture_file(name) },
+    // (chat-image-coming: its pictures asked of their station, so much of each heard, never here)
+    file: fn(station, key, name) {
+      match (if f.mode == "chat-image-coming" { coming_heard(name) } else { None }) {
+        Some(far) =>
+          images.get(station, @sfbase.file_image_id(station, key, name), "mem:fixture/" + name, fn(heard, _) { heard(far) })
+        None => fixture_file(name)
+      }
+    },
     // a video's still: its first frame as the station makes it (the made-up ones' each a picture of its own)
     poster: fn(_, _, name) { fixture_file(name) },
     // (a made-up draft's pictures are the page's own: compose_fixture.mbt)
     draft_picture: fn(_, _) { "!" },
-    images: @sfbase.ChatImages::new(),
+    images,
     now: fn() { 0.0 },
     leave: fn(_, _, __reason) {
       if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }

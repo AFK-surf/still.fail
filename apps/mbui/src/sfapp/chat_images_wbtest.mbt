@@ -23,10 +23,12 @@ fn image_tester(images : @sfbase.ChatImages, asked : Ref[Int], answer : (Int) ->
 }
 
 ///|
-/// The same, its picture asked by `ask` (told how far it has come, then its answer, when the test says).
+/// The same, its picture asked by `ask` (told how far it has come, then its answer, when the test says); `picture`
+/// another than line.png.
 fn image_tester_asking(
   images : @sfbase.ChatImages,
   ask : ((Json) -> Unit, (Result[(Json, Bytes?), Json]) -> Unit) -> Unit,
+  picture? : Attachment = { ..strip("line.png"), width: 800.0, height: 600.0 },
 ) -> @ui.Tester {
   new_run()
   let src : Source = {
@@ -40,7 +42,7 @@ fn image_tester_asking(
     "authorKind": "person",
     "author": "Mia",
     "text": "",
-    "attachments": [attachment_json({ ..strip("line.png"), width: 800.0, height: 600.0 }, "s-c1")],
+    "attachments": [attachment_json(picture, "s-c1")],
   })
   @ui.Tester::new(
     fn(c) {
@@ -216,4 +218,23 @@ test "a chat's picture slow to come: the whole of what stands in for it breathin
   t.run_for(@sf.dur_ms)
   t.draw()
   assert_eq(breathing(), 0)
+}
+
+///|
+test "a light screenshot slow to come stands apart from the page: what stands in for it held off it by the neutral ground, on none" {
+  let images = @sfbase.ChatImages::new()
+  // (the report's adb-chats.png: its field the page's colour, 246,243,240 on 244,243,240)
+  let hash = "PAgCAgBQN4aJy7s3lnBcKvU="
+  let shot = { ..strip("adb-chats.png"), width: 780.0, height: 2600.0, thumbhash: hash }
+  let t = image_tester_asking(images, fn(_, _) {  }, picture=shot)
+  t.draw()
+  t.run_for(@sfpages.coming_after_ms + @sfpages.coming_in_ms)
+  // (the neutral ground as this window's theme has it: what `bg=Neutral` draws)
+  let ground = t.ctx().color(Neutral)
+  assert_true((ground & 0xFFL) > 0L)
+  let waiting = t.image_nodes().filter(fn(i) { i.0.has_prefix("mem:wait-picture/\{hash}/") })
+  assert_true(waiting.length() > 0, msg="\{t.image_nodes()}")
+  assert_true(waiting.iter().all(fn(i) { i.0.has_suffix("/\{ground}/\{t.ctx().color(Bg)}") }), msg="\{waiting}")
+  // (the ground in it: not under it as well)
+  assert_false(t.drawn_rects().iter().any(fn(r) { (r.4 & 0xFFFFFF00L) == (ground & 0xFFFFFF00L) }), msg="\{t.drawn_rects()}")
 }

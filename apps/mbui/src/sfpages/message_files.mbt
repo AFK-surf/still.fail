@@ -72,7 +72,7 @@ fn media_content(c : @ui.Ctx, p : MediaPicture, w : Double, h : Double, fit : @u
   } else if p.key != "" {
     c.image(p.key, w=Px(w), h=Px(h), fit~, radius~, bg=0L, fade=false) |> ignore
   } else {
-    match image_wait_colours(p.hash, w, h) {
+    match image_wait_colours(p.hash, w, h, c.color(Neutral), c.color(Bg)) {
       Some(likeness) => {
         c.image(likeness, w=Px(w), h=Px(h), fit=FitFill, radius~, bg=0L, fade=false) |> ignore
       }
@@ -440,8 +440,9 @@ fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 }
 
 ///|
-/// An image (FileItem's image): in its box on the neutral ground, what it waits on until it is decoded (a field of its
-/// colours), then brushed in from its top; one sent from here the picture it was picked as, there at once; one that
+/// An image (FileItem's image): in its box, what it waits on until it is decoded (a field of its colours, the neutral
+/// ground where they are the page's, so a light screenshot's stands apart from it; the ground alone without one), then
+/// brushed in from its top; one sent from here the picture it was picked as, there at once; one that
 /// cannot be had says so. Pressed, the preview; held or right-clicked, 下载 and 复制图片.
 fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, by~ : (String, String, String)?, corner~ : Double, at~ : String) -> Unit {
 
@@ -473,7 +474,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let (pw, ph) = (w * sw, h * sh)
   let top_crop = tall_image_cropped(a)
   let fit : @ui.Fit = if top_crop { FitCoverAt(0.0) } else { FitCover }
-  let likeness = image_wait_colours(a.thumbhash, pw, ph).unwrap_or("")
+  let likeness = image_wait_colours(a.thumbhash, pw, ph, c.color(Neutral), c.color(Bg)).unwrap_or("")
   let picture = fn() { media_content(c, p, pw, ph, fit, 0.0) }
   // one the device holds and not decoded yet: what the app's first page waits for
   if a.held && !p.sent && (key == "" || (key != "!" && !c.image_ready(key, reveal_px(c, pw, ph)))) {
@@ -496,7 +497,8 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     if key == "!" {
       media_content(c, p, w, h, fit, 0.0)
     } else {
-      let stand_in = c.box(style=if key != "" || letterbox { image_fill } else { image_fill_waiting }, fn() {
+      // (its likeness has the neutral ground in it, where it shows: none under it as well)
+      let stand_in = c.box(style=if key != "" || letterbox || likeness != "" { image_fill } else { image_fill_waiting }, fn() {
         if letterbox {
           c.box(style=letterbox_room, fn() { c.box(style=@ui.style(w=Fixed(pw), h=Fixed(ph)), picture) |> ignore })
           |> ignore
@@ -573,13 +575,10 @@ pub let coming_in_ms : Double = 200.0
 let coming_ring : Double = 14.0
 
 ///|
-/// The pill's height: its ring 2 from its top, foot and start, concentric with its end, and its words' line; 18, so
-/// that it stands concentric in a picture's corner (a card's, 26) no further in than corner_fit lets it (16).
+/// The pill's height: its ring and its words' line, as a video's capsule (@sf.video_capsule: the same ring and
+/// words, its ends S1_5 each); 18, so that it stands concentric in a picture's corner (a card's, 26) no further in
+/// than corner_fit lets it (16).
 let coming_pill_h : Double = 18.0
-
-///|
-/// How far the ring is from the pill's top, foot and start: concentric with its end.
-let coming_ring_in : Double = (coming_pill_h - coming_ring) / 2.0
 
 ///|
 /// How far the pill is from the picture's sides and foot: concentric with its corner (26 less its half: 17; 8 in, its
@@ -609,8 +608,7 @@ let coming_pill : @ui.Style = @ui.style(
   row=true,
   h=Fixed(coming_pill_h),
   gap=S1,
-  pl=@sf.room_of(coming_ring_in),
-  pr=S2,
+  px=S1_5,
   radius=Full,
   bg=@sf.video_shade,
   align=ACenter,
@@ -873,7 +871,7 @@ pub fn image_reveal(
   if waited <= 0.0 {
     return
   }
-  let likeness = image_wait_colours(hash, w, h)
+  let likeness = image_wait_colours(hash, w, h, c.color(Neutral), c.color(Bg))
   // (each step on the screen's pixels: one meets the next with no seam)
   let px_of = fn(y : Double) { (y * c.scale).round() / c.scale }
   let wait = fn(y0 : Double, y1 : Double, alpha : Double) {
@@ -1036,7 +1034,8 @@ let image_frame_waiting : @ui.Style = image_frame.then(@ui.css("bg=Neutral"))
 
 ///|
 /// What stands in an image's box for it (image_item): the whole box, breathing while it is asked of its station; the
-/// neutral ground under it while it waits (image_fill_waiting).
+/// neutral ground under it while it waits with no likeness (image_fill_waiting; a likeness has the ground in it,
+/// where its own colours do not hold it off the page).
 // kept across runs: a value (no field of it changes)
 let image_fill : @ui.Style = @ui.css("w=Full h=Full")
 
