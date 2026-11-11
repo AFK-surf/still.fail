@@ -53,7 +53,14 @@ pub fn chats_lists_node(
     let (_, _, w, _) = v.laid_window_now()
     at.go_by(v, k.to_double(), @sf.theme().chat_list.slide.per_unit(w))
     (due.val)()
-    due.val = v.at_moment(at.end(), fn() { rest.set(k) })
+    due.val = fn() {  }
+    // (at rest from the moment its way ends; there already (as it is made, or put there), at rest now: never a moment
+    // gone by asked for, whose change the tree would commit at that past moment, what it tells with it as of then)
+    if at.end() > v.cause_at() {
+      due.val = v.at_moment(at.end(), fn() { rest.set(k) })
+    } else {
+      rest.set(k)
+    }
   })
   // the search's page open over them (search.mbt: from a list's field, or by ⌘K laid out Small): the lists up and away
   // under it
