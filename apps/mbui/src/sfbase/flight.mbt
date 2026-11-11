@@ -531,6 +531,54 @@ pub fn flight_ground_of(c : @ui.Ctx, f : SendFlight) -> Double {
 }
 
 ///|
+/// Whether its bubble's ground shows whole (flight_ground_of at its end), read as it gets there, not where it is each
+/// frame (way_reaches): what is built otherwise till then (its ground drawn apart, coming in) built again at that moment.
+pub fn flight_grounded(c : @ui.Ctx, f : SendFlight) -> Bool {
+  // (told anew as it is timed: built again, as what reads whether it is over is; flight_frame reads it so too)
+  ignore(f.way.over(c))
+  way_reaches(c, f.way, fn(p) { flight_ground(p, flies_desk(f)) >= 1.0 })
+}
+
+///|
+/// Whether `holds` holds of where `a` (words sent's way, what leaves as they set out) is at this moment, read as it is
+/// built without following the way frame by frame: what reads it is built again in the first frame drawn at or past
+/// the first moment on its declared way that `holds` does (Ctx::shows_from: drawn each frame while it goes, it asks no
+/// frame of its own), so that it shows what that frame's moment is, as reading where it is each frame did, and nothing
+/// built from it is built again each frame it goes. `holds` once true stays so on the rest of the way (a share of it
+/// reached). What is told anew (words sent's way, as it is timed) its caller follows (Anim::over).
+fn way_reaches(c : @ui.Ctx, a : @motion.Anim, holds : (Double) -> Bool) -> Bool {
+  let now = c.moment()
+  if holds(a.value_at(now)) {
+    return true
+  }
+  let end = a.ends()
+  if end < @double.infinity && end > now && holds(a.value_at(end)) {
+    // (the first moment it holds, on the way told: as near as the clock's numbers tell)
+    let mut lo = now
+    let mut hi = end
+    for _ in 0..<80 {
+      let mid = lo + (hi - lo) / 2.0
+      if mid <= lo || mid >= hi {
+        break
+      }
+      if holds(a.value_at(mid)) {
+        hi = mid
+      } else {
+        lo = mid
+      }
+    }
+    c.shows_from(hi)
+  }
+  false
+}
+
+///|
+/// How far what leaves as they set out has gone (SendFlight's `gone`), where it is drawn.
+fn flight_gone(c : @ui.Ctx, f : SendFlight) -> Double {
+  f.gone.get(c)
+}
+
+///|
 /// Whether it flies the desktop's way (the web's, 520 ms on the flight's curve): what a composer sends does
 /// (`desk`), a new chat's first words too, from either frame.
 fn flies_desk(f : SendFlight) -> Bool {
@@ -670,6 +718,10 @@ pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
 /// however many) they are still where they were, its row not seen: what is drawn at a moment is what that moment
 /// is, not how many frames came before it.
 fn flight_going(c : @ui.Ctx, f : SendFlight) -> Bool {
+  // (placed now: what reads it built again the next frame, as they set out)
+  if f.placed && c.moment() <= f.set_out {
+    c.shows_until(f.set_out)
+  }
   f.placed && c.moment() > f.set_out
 }
 
@@ -758,7 +810,15 @@ pub fn flight_lets_go(chat : String) -> (Double, Double)? {
 pub fn flight_held_lines(c : @ui.Ctx, chat : String) -> Int {
   match (flight_of(chat), flight_lets_go(chat)) {
     (Some(_), Some((at, _))) if c.moment() >= at => 0
-    (Some(f), _) => f.held_lines
+    (Some(f), held) => {
+      // (built again as they let go of it, in the first frame drawn at or past that moment: their way is drawn each
+      // frame meanwhile)
+      match held {
+        Some((at, _)) if c.moment() < at => c.shows_from(at)
+        _ => ()
+      }
+      f.held_lines
+    }
     _ => 0
   }
 }
@@ -1067,8 +1127,10 @@ fn flight_pieces_drawn(
 ) -> Unit {
   let t = @sf.theme()
   let flying = flight_going(c, f)
-  let across = if flying { flight_across_of(c, f) } else { 0.0 }
-  let up = if flying { flight_up_of(c, f) } else { 0.0 }
+  // (where they are on their way read where each piece is drawn, as the frame is laid out and painted, not as their
+  // row is built)
+  let across = fn() { if flying { flight_across_of(c, f) } else { 0.0 } }
+  let up = fn() { if flying { flight_up_of(c, f) } else { 0.0 } }
   let runs = person_runs(f.text, f.runs, t.p.accent)
   for k, p in pieces {
     let (ax, ay, aw, ah) = p.at
@@ -1083,7 +1145,7 @@ fn flight_pieces_drawn(
     @motion.flying_placed(c, cut)
     c.cut_across_by(cut, fn() {
       match @motion.measured_rect(c, flight_words_key(f)) {
-        Some((wx, wy, _, _)) => flight_piece_room(pieces, k, wx, wy, across, up)
+        Some((wx, wy, _, _)) => flight_piece_room(pieces, k, wx, wy, across(), up())
         None => (0.0, aw)
       }
     })
@@ -1092,6 +1154,7 @@ fn flight_pieces_drawn(
     @motion.placed(c, cut, fn() {
       match @motion.measured_rect(c, flight_words_key(f)) {
         Some((wx, wy, _, _)) if bubble.val >= 0 => {
+          let (across, up) = (across(), up())
           let (x, y, _, _) = c.node_rect(cut)
           let (bx, by, _, _) = c.node_rect(bubble.val)
           let ox = (f.from_x - bubble_in_x - bx) * (1.0 - across)
@@ -1141,7 +1204,8 @@ pub fn flight_bubble(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
     if !flight_going(c, f) {
       c.look(i, @ui.look(alpha=0.0))
     }
-    @motion.fly(c, i, f.from_x - 14.0, f.from_y - 8.0, px=flight_across_of(c, f), py=1.0)
+    // (where it is on its way read as the frame is laid out, not as its row is built: fly_by)
+    @motion.fly_by(c, i, fn() { (f.from_x - 14.0, f.from_y - 8.0, 1.0, flight_across_of(c, f), 1.0, 1.0) })
     return
   }
   if !flight_going(c, f) {
@@ -1153,8 +1217,11 @@ pub fn flight_bubble(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
     @motion.fly(c, i, f.from_x - bubble_in_x, f.from_y - bubble_in_y, px=0.0, py=0.0)
     return
   }
-  let p = flight_p(c, f)
-  @motion.fly(c, i, f.from_x - bubble_in_x, f.from_y - bubble_in_y, px=flight_across(p, f.desk), py=flight_up(p, f.desk))
+  // (where it is on its way read as the frame is laid out, not as its row is built: fly_by)
+  @motion.fly_by(c, i, fn() {
+    let p = flight_p(c, f)
+    (f.from_x - bubble_in_x, f.from_y - bubble_in_y, 1.0, flight_across(p, f.desk), flight_up(p, f.desk), 1.0)
+  })
 }
 
 ///|
@@ -1171,7 +1238,13 @@ pub fn flight_hint_away(c : @ui.Ctx, chat : String) -> Bool {
 ///|
 /// Whether words sent `f` are out of the field they were typed in: half their way up.
 pub fn flight_out(c : @ui.Ctx, f : SendFlight) -> Bool {
-  f.placed && flight_up_of(c, f) >= 0.5
+  // (as they get there, not where they are each frame: way_reaches; their way told anew as it is timed: built again,
+  // as what reads whether it is over is)
+  if !f.placed {
+    return false
+  }
+  ignore(f.way.over(c))
+  way_reaches(c, f.way, fn(p) { flight_up(p, flies_desk(f)) >= 0.5 })
 }
 
 ///|
@@ -1264,7 +1337,7 @@ fn flight_files_of(c : @ui.Ctx, f : SendFlight) -> Unit {
       let (sw, sh, top_crop) = landing_shares.get(to).unwrap_or((1.0, 1.0, false))
       match (landing, ff.picture, ff.paint) {
         (Some((_, _, bw, bh)), Some(_), Some(paint)) => {
-          let across = flight_across_of(c, f)
+          // (its size goes with them as it is built: its box's room, laid out)
           let up = flight_up_of(c, f)
           let (ew, eh) = (bw * sw, bh * sh)
           let w = fw + (ew - fw) * up
@@ -1291,6 +1364,7 @@ fn flight_files_of(c : @ui.Ctx, f : SendFlight) -> Unit {
             match @motion.measured_rect(c, to) {
               Some((bx, by, bw, bh)) => {
                 let (ex, ey) = (bx + bw * (1.0 - sw) / 2.0, by + bh * (1.0 - sh) / 2.0)
+                let across = flight_across_of(c, f)
                 let (px, py, pw, ph) = c.node_rect(pic)
                 let alpha = flight_shown(c, pic, ff.shown, ff.from, pw, ph, up)
                 @ui.look(alpha~, dx=fx + (ex - fx) * across - px, dy=fy + (ey - fy) * up - py)
@@ -1318,10 +1392,9 @@ fn flight_files_of(c : @ui.Ctx, f : SendFlight) -> Unit {
   c.draw_only(l)
   // What belongs only to a quote in the composer goes with its card, leaving from the frame it is sent. Draw it over
   // the card in its own layer: a layer drawn only is over the rest of that layer alone.
-  let gone = f.gone.get(c)
-  if gone < 1.0 && f.files.iter().any(fn(ff) { ff.key.has_prefix(quote_prefix) }) {
-    let across = flight_across_of(c, f)
-    let up = flight_up_of(c, f)
+  // (gone: as it gets there, not where it is each frame, way_reaches; where it is, and where they are on their way,
+  // read where each is drawn, as the frame is laid out)
+  if f.files.iter().any(fn(ff) { ff.key.has_prefix(quote_prefix) }) && !way_reaches(c, f.gone, fn(g) { g >= 1.0 }) {
     let flying = flight_going(c, f)
     let reach = @sf.corner_remove_reach(@sf.composer_inner())
     c.layer(fn() {
@@ -1337,6 +1410,7 @@ fn flight_files_of(c : @ui.Ctx, f : SendFlight) -> Unit {
             c.stratum(part, Flying)
             c.draw_only(part)
             @motion.placed(c, part, fn() {
+              let (gone, across, up) = (flight_gone(c, f), flight_across_of(c, f), flight_up_of(c, f))
               let (gx, gy) = match @motion.measured_rect(c, to) {
                 Some((bx, by, _, _)) if flying => (fx + (bx - fx) * across, fy + (by - fy) * up)
                 _ => (fx, fy)
@@ -1352,6 +1426,7 @@ fn flight_files_of(c : @ui.Ctx, f : SendFlight) -> Unit {
         c.stratum(x, Flying)
         c.draw_only(x)
         @motion.placed(c, x, fn() {
+          let (gone, across, up) = (flight_gone(c, f), flight_across_of(c, f), flight_up_of(c, f))
           // (on the card's ground as this frame draws it: flight_quote_landing's)
           let (gx, gy, gw) = match @motion.measured_rect(c, to) {
             Some((bx, by, bw, _)) if flying => (fx + (bx - fx) * across, fy + (by - fy) * up, fw + (bw - fw) * across)
@@ -1403,15 +1478,19 @@ pub fn flight_landing(
     c.look(i, @ui.look(alpha=0.0))
     return
   }
-  let up = flight_up_of(c, f)
   // from the tile's size: by the larger of its two shares of its own (Compose's crop to the box)
-  let s0 = match @motion.measured_rect(c, flight_to_key(f, key)) {
-    Some((_, _, ew, eh)) if ew > 0.0 && eh > 0.0 => dmax(fw / ew, fh / eh)
+  let s0 = match @motion.measured_size(c, flight_to_key(f, key)) {
+    Some((ew, eh)) if ew > 0.0 && eh > 0.0 => dmax(fw / ew, fh / eh)
     _ => 1.0
   }
   // (in a new chat's list coming up with the words, drawn below its place by as much: from its tile all the same,
   // straight, as its words go: flight_carry_shift)
-  @motion.fly(c, i, fx, fy - flight_carry_rise(c, f), scale=s0, px=flight_across_of(c, f), py=up, ps=up)
+  let rise = flight_carry_rise(c, f)
+  // (where they are on their way read as the frame is laid out, not as its row is built)
+  @motion.fly_by(c, i, fn() {
+    let up = flight_up_of(c, f)
+    (fx, fy - rise, s0, flight_across_of(c, f), up, up)
+  })
   // (read where it is as it is placed: its message's row kept as its nodes is put back elsewhere among the frame's as
   // what is built before it makes more nodes or fewer, this not made again)
   let held = c.node_held(i)
@@ -1419,7 +1498,7 @@ pub fn flight_landing(
     match held.at() {
       Some(i) => {
         let (_, _, w, h) = c.node_rect(i)
-        @ui.look(alpha=flight_shown(c, i, ff.shown, ff.from, w, h, up))
+        @ui.look(alpha=flight_shown(c, i, ff.shown, ff.from, w, h, flight_up_of(c, f)))
       }
       None => @ui.still_look
     }
@@ -1444,20 +1523,21 @@ pub fn flight_quote_landing(c : @ui.Ctx, f : SendFlight, card : Int, key : Strin
     return
   }
   let (fx, fw) = (ff.from.0, ff.from.2)
+  let fh = ff.from.3
+  let (sx, sy) = shift
+  let own = c.node_bg(card)
+  let from = if ff.ground != 0L { ff.ground } else { own }
   // (in a new chat's list coming up with the words, drawn below its place by as much: from its card all the same,
   // straight: flight_carry_shift)
   let fy = ff.from.1 - flight_carry_rise(c, f)
-  let fh = ff.from.3
-  let (sx, sy) = shift
-  let across = flight_across_of(c, f)
-  let up = flight_up_of(c, f)
-  let own = c.node_bg(card)
-  let from = if ff.ground != 0L { ff.ground } else { own }
   @motion.flying_placed(c, card)
-  // (read where it is as it is placed, as flight_landing's)
+  // (read where it is as it is placed, as flight_landing's; where they are on their way read then too, as the frame is
+  // laid out, not as its row is built)
   let held = c.node_held(card)
   @motion.placed(c, card, fn() {
     guard held.at() is Some(card) else { return @ui.still_look }
+    let across = flight_across_of(c, f)
+    let up = flight_up_of(c, f)
     let (x, y, w, h) = c.node_rect(card)
     let dx = (fx + sx - x) * (1.0 - across)
     let dy = (fy + sy - y) * (1.0 - up)

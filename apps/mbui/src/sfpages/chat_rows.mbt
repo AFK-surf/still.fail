@@ -214,7 +214,8 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
       // the station took it: its time under it, as its message has it, until the message takes its place
       let at = c.box(fn() { message_time(c, "o:" + o.id, o.time) })
       match flight_here(here) {
-        Some(f) if f.text != "" => c.look(at, @ui.look(alpha=flight_settled_of(c, f)))
+        // (how settled they are read as it is painted, not as its row is built)
+        Some(f) if f.text != "" => c.look_by(at, fn() { @ui.look(alpha=flight_settled_of(c, f)) })
         _ => ()
       }
     } else {

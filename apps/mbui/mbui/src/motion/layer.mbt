@@ -132,6 +132,8 @@ priv struct Moving {
   mut scope : Int
   /// flown from (x, y, scale), how far across, down and grown
   mut fly : (Double, Double, Double, Double, Double, Double)?
+  /// the same worked out once this frame is laid out (fly_by), in its place
+  mut fly_by : (() -> (Double, Double, Double, Double, Double, Double))?
   /// placed by its own look but flying over rows, which must make room for it
   mut flying_placed : Bool
   /// its own ground changes shape for its cause (reshape), by `spec`
@@ -504,6 +506,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     kept_drawn: false,
     scope: 0,
     fly: None,
+    fly_by: None,
     flying_placed: false,
     reshape: false,
     carry: false,
@@ -699,6 +702,20 @@ pub fn fly(
     e.name = "fly"
   }
   e.fly = Some((x, y, scale, px, py, ps))
+  c.stratum(i, Flying)
+}
+
+///|
+/// Node `i` flown as `fly` flies it, from where and how far on as `at` gives them (x, y, scale, px, py, ps), worked out
+/// once this frame is laid out as `placed`'s are: what is read there of a way going on (where words sent are on theirs)
+/// is read as the frame is laid out, not as it is built, so that what builds it is not built again each frame it goes.
+pub fn fly_by(c : @ui.Ctx, i : Int, at : () -> (Double, Double, Double, Double, Double, Double)) -> Unit {
+  let e = moving_of(c, i)
+  if e.name == "" {
+    e.name = "fly"
+  }
+  e.fly = Some((0.0, 0.0, 1.0, 1.0, 1.0, 1.0))
+  e.fly_by = Some(at)
   c.stratum(i, Flying)
 }
 
@@ -2307,7 +2324,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         None => ()
       }
     }
-    match e.fly {
+    match (match e.fly_by { Some(at) => Some(at()); None => e.fly }) {
       Some((fx, fy, fs, px, py, ps)) => {
         let s = fs + (1.0 - fs) * ps
         let x = fx + (nx - fx) * px

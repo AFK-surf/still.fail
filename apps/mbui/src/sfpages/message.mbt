@@ -571,18 +571,23 @@ fn mine_bubble(
   picking(here, c, src, ts, turn, @sf.t("web-main.chat.you"), "person", words, fn() {
     // words sent flying here: the bubble's ground comes in round them on their way (sfbase's flight.mbt)
     let flight = flight_here(here)
-    let ground = match flight {
-      Some(f) if f.placed => flight_ground_of(c, f)
-      _ => 1.0
+    // (whether it shows whole yet read as it gets there; how much of it shows, where it is drawn, as it is painted: not
+    // where their way is each frame as its row is built)
+    let coming = match flight {
+      Some(f) if f.placed && !flight_grounded(c, f) => Some(f)
+      _ => None
     }
     // (the bubble, for what is drawn in it as it flies: flight_pieces_in)
     let bubble_node = Ref::new(-1)
     let b = c.box(
-      style=(if ground < 1.0 { bubble_bare } else { bubble }).then(@ui.style(max_w=Fixed(mine_most(c)))),
+      style=(if coming is Some(_) { bubble_bare } else { bubble }).then(@ui.style(max_w=Fixed(mine_most(c)))),
       fn() {
-        if ground < 1.0 {
-          let g = c.layer(fn() { c.box(style=bubble_ground, fn() {  }) |> ignore })
-          c.look(g, @ui.look(alpha=ground))
+        match coming {
+          Some(f) => {
+            let g = c.layer(fn() { c.box(style=bubble_ground, fn() {  }) |> ignore })
+            c.look_by(g, fn() { @ui.look(alpha=flight_ground_of(c, f)) })
+          }
+          None => ()
         }
         // words sent flying here land on its words, piece by piece (sfbase's flight.mbt)
         match flight {

@@ -417,8 +417,26 @@ fn answered_at(v : ChatView, all : Array[Entry]) -> Array[Agent] {
 /// sent, all of it goes on one way with them (their agent's line too: answered_at). Not sent after all, their row
 /// gone, the core's word stands again: the card waits.
 fn sent_here_view(r : ChatRef, v : ChatView, list : Array[Entry]) -> (ChatView, Array[Entry]) {
-  guard local_sending.get(r.station + "\u{1}" + r.session) is Some(sending) && !sending.is_empty() else {
+  let rk = r.station + "\u{1}" + r.session
+  guard local_sending.get(rk) is Some(sending) && !sending.is_empty() else {
+    // (nothing sent from here on its way: what was made of its views while there was, let go)
+    sent_here_made.remove(rk)
     return (v, list)
+  }
+  // (made of this view and these words already: that, the same rows to the list)
+  let sig = sending.map(fn(l) { l.row.id + "@" + l.newest.to_string() }).join(",")
+  let kept = match sent_here_made.get(rk) {
+    Some(k) => k
+    None => {
+      let k : Array[SentHereMade] = []
+      sent_here_made[rk] = k
+      k
+    }
+  }
+  for m in kept {
+    if physical_equal(m.of, v) && physical_equal(m.list, list) && m.sending == sig {
+      return (m.view, m.entries)
+    }
   }
   let mut at = -1
   for i, m in v.messages {
@@ -443,9 +461,38 @@ fn sent_here_view(r : ChatRef, v : ChatView, list : Array[Entry]) -> (ChatView, 
   // (no more asked: letting it go is not offered under it)
   messages[at] = { ..m, asked: false, decision: Some({ resolved: true, dismissed: false, text: Some(said), chosen: None }) }
   let asks = v.asks.filter(fn(seq) { seq != m.seq })
-  let v = { ..v, messages, asks, ask_clear: v.ask_clear && !asks.is_empty(), state: None, state_ask: None }
-  (v, chat_entries(v).0)
+  let made = { ..v, messages, asks, ask_clear: v.ask_clear && !asks.is_empty(), state: None, state_ask: None }
+  let out = (made, chat_entries(made).0)
+  // (of other words sent, or more than its readers are: let go)
+  kept.retain(fn(m) { m.sending == sig })
+  if kept.length() >= sent_here_kept_most {
+    kept.remove(0) |> ignore
+  }
+  kept.push({ of: v, list, sending: sig, view: out.0, entries: out.1 })
+  out
 }
+
+///|
+/// What sent_here_view made of a chat's view, and of what: the core's view and entries it was made from and the words
+/// sent then. The same again while those are (each frame of the words' flight reads it, a phone's core answering many
+/// frames after the press): a view and entries made anew each read were other rows to the list every frame, all of
+/// them built again, twice a frame while the frame is built again for what it set. One for each of the chat's readers
+/// (its page, the frame round it, linger_tick: each its source's own view of it), a few at most.
+priv struct SentHereMade {
+  of : ChatView
+  list : Array[Entry]
+  sending : String
+  view : ChatView
+  entries : Array[Entry]
+}
+
+///|
+// kept across runs: forgotten with what was sent (sent_reset, as a run starts)
+let sent_here_made : Map[String, Array[SentHereMade]] = {}
+
+///|
+/// How many of a chat's views sent_here_view keeps what it made of: more readers than this at once make theirs again.
+let sent_here_kept_most : Int = 4
 
 ///|
 /// The entries and where their messages end, before the live rows at the foot.
@@ -1694,6 +1741,12 @@ fn shown_rows(
       }
     }
     _ => None
+  }
+  // (built again as their row opens, in the first frame drawn at or past that moment: their way is drawn each frame
+  // meanwhile)
+  match leaving {
+    Some((_, at, _)) if at > now => c.shows_from(at)
+    _ => ()
   }
   let told_laid = laid != rd.rows_laid
   rd.rows_laid = laid

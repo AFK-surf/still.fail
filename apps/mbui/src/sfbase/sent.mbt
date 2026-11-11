@@ -21,6 +21,7 @@ pub fn sending_of(rk : String) -> Array[LocalSent] {
 ///|
 pub fn sent_reset() -> Unit {
   local_sending.clear()
+  sent_here_made.clear()
   local_sent_n.val = 0
   sent_pictures.clear()
 }

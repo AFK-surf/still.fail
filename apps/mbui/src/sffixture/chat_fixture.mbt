@@ -509,7 +509,16 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             _ => v
           }
         })
-        Some(with_cards(f, with_sent(base, session), session))
+        // chat-done-live: a chat whose agent's turn is over, saying where the chat stands as the core does: not while
+        // words sent are on their way or its agent works (scripts/instrbench.sh's `send`)
+        let sent = with_sent(base, session)
+        let fc = fix_chat(session)
+        let sent = if f.mode == "chat-done-live" && fc.outbox.is_empty() && fc.working < 0.0 {
+          with_state(sent, done_state)
+        } else {
+          sent
+        }
+        Some(with_cards(f, sent, session))
       } else if session.has_prefix("new:") {
         // one just made from a new chat (newChat.create): nothing in it but what is sent to it
         Some(with_sent(made_chat(session), session))
