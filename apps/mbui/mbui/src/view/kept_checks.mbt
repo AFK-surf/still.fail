@@ -15,7 +15,7 @@ pub fn Tree::kept_said(self : Tree) -> String? {
   let walked = (w.boxes_walked, w.order_copied)
   let mut said : String? = None
   // (each looked at once nothing of it is still due to be worked out, as the frame left it)
-  let order_settled = !self.order_due
+  let order_settled = !self.order_due && self.order_ins.is_empty() && self.order_outs.is_empty()
   if w.orders != orders && order_settled {
     said = self.order_kept_said()
   }

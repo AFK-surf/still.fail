@@ -766,6 +766,13 @@ pub struct Tree {
   /// what the checks of what is kept against what is worked out whole (kept_checks.mbt) last saw of the work: the
   /// order made again, the structure changed, what takes input told
   mut kept_seen : (Int, Int, Int)
+  /// nodes made since the order was last worked out to be put in it by their own runs (Tree::order_put_in), each with
+  /// what lays it out; and those let go to be taken out of it so, each with its making and what held it
+  /// (Tree::order_taken_out): the rest of the order as it was, where nothing else changed in it (Tree::order_spliced)
+  order_ins : Array[(Int, Int)]
+  order_outs : Array[(Int, Int, Int)]
+  /// how deep in letting go a node's holders it is (View::let_go): what goes with one let go goes out of the order with it
+  mut letting_go : Int
   mut order_whole : Bool
   mut due : Bool
   /// the host is being told that a frame is due (Tree::marked)
@@ -1246,6 +1253,9 @@ pub fn Tree::new(
     order_due: true,
     order_in: [],
     kept_seen: (0, 0, 0),
+    order_ins: [],
+    order_outs: [],
+    letting_go: 0,
     order_whole: true,
     due: true,
     telling_due: false,
@@ -1818,7 +1828,8 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
     self.order_of[at] = -1
     self.tops[at] = -2
   }
-  self.order_marked_in(parent)
+  // (put in the order by what holds it as it is laid out there: View::box_appended by its own run, View::slot from what
+  // holds it)
   self.handle(at)
 }
 
@@ -2548,6 +2559,167 @@ fn Tree::order_marked_in(self : Tree, at : Int) -> Unit {
 
 ///|
 /// The order the nodes are drawn in made again (Tree::ordered): from each in it that holds what changed in it
+///|
+/// Node `at` (no slot) made in what node `h` lays out: put in the order by its own run where it goes, the rest of the
+/// order as it was (Tree::order_spliced); else from `h` as any change there is (Tree::order_marked_in).
+fn Tree::order_put_in(self : Tree, at : Int, h : Int) -> Unit {
+  self.order_ins.push((at, h))
+  self.order_due = true
+  self.hits = self.hits + 1
+  self.marked()
+}
+
+///|
+/// Node `at` (of making `gen`) let go, held by `parent`: its run taken out of the order, the rest as it was
+/// (Tree::order_spliced); else from what held it as any change there is.
+fn Tree::order_taken_out(self : Tree, at : Int, gen : Int, parent : Int) -> Unit {
+  self.order_outs.push((at, gen, parent))
+  self.order_due = true
+  self.hits = self.hits + 1
+  self.marked()
+}
+
+///|
+/// Whether node `at` is in the order as it is now, the node of that making there.
+fn Tree::in_order(self : Tree, at : Int) -> Bool {
+  let i = self.order_of[at]
+  i >= 0 && i < self.order.length() && self.order[i] == at && self.order_gen[at] == self.nodes[at].gen
+}
+
+///|
+/// Where the run of what node `at` holds in the order ends (it no slot, in the order; a slot, the last of what it holds
+/// that is): none where none of it is.
+fn Tree::order_run_end(self : Tree, at : Int) -> Int? {
+  let n = self.nodes[at]
+  if !n.slot {
+    return if self.in_order(at) { Some(self.order_end[self.order_of[at]]) } else { None }
+  }
+  let mut i = n.kids.length() - 1
+  while i >= 0 {
+    match self.order_run_end(n.kids[i]) {
+      Some(e) => return Some(e)
+      None => ()
+    }
+    i = i - 1
+  }
+  None
+}
+
+///|
+/// Where node `at`'s run goes in the order, and the place of what holds it there: after the run of what comes before it
+/// in its slots, else just after what holds it. None where what holds it is the root (its children ordered by the
+/// window's layers, Tree::kids_in_order) or not in the order.
+fn Tree::order_place(self : Tree, at : Int) -> (Int, Int)? {
+  let h = self.box_holder(at)
+  guard h > 0 && self.in_order(h) else { return None }
+  let mut c = at
+  while true {
+    let p = self.nodes[c].parent
+    guard p >= 0 else { return None }
+    let kids = self.nodes[p].kids
+    let mut j = match kids.search(c) {
+      Some(i) => i - 1
+      None => return None
+    }
+    while j >= 0 {
+      match self.order_run_end(kids[j]) {
+        Some(e) => return Some((e, self.order_of[h]))
+        None => ()
+      }
+      j = j - 1
+    }
+    if p == h {
+      return Some((self.order_of[h] + 1, self.order_of[h]))
+    }
+    c = p
+  }
+  None
+}
+
+///|
+/// The nodes made and let go since the order was last worked out put in it and taken out of it by their own runs, the
+/// rest of the order moved past them as it was: no run of the order but theirs worked out, none copied. Whether it was
+/// so: not where one let go is not in the order as its making, nor where one made has no place found in it (all of it
+/// made again then).
+fn Tree::order_spliced(self : Tree) -> Bool {
+  // (a few alone: many made or let go at once (a page opened), what holds them made again once instead of each
+  // splice moving all after it)
+  guard self.order_ins.length() + self.order_outs.length() <= boxes_one_by_one_most else { return false }
+  // (each made held by what is in the order, or by one made before it in this change: none by the root)
+  for k, o in self.order_ins {
+    let (at, _) = o
+    guard self.nodes[at].live && !self.nodes[at].slot else { continue }
+    let h = self.box_holder(at)
+    let held_by_one_made = self.order_ins[:k].iter().any(fn(e) { e.0 == h })
+    guard h > 0 && (self.in_order(h) || held_by_one_made) else { return false }
+  }
+  // (taken out first, each as it is in the order)
+  for o in self.order_outs {
+    let (at, gen, _) = o
+    let i = self.order_of[at]
+    guard i >= 0 && i < self.order.length() && self.order[i] == at && self.order_gen[at] == gen else { return false }
+  }
+  for o in self.order_outs {
+    let (at, _, _) = o
+    let p = self.order_of[at]
+    let e = self.order_end[p]
+    let d = e - p
+    let hi = self.order_holder[p]
+    for j in p..<e {
+      let a = self.order[j]
+      if self.order_of[a] == j {
+        self.order_of[a] = -1
+      }
+    }
+    let len = self.order.length()
+    self.order_moved(e, len, 1, -d, e)
+    self.order.truncate(len - d)
+    self.order_holder.truncate(len - d)
+    self.order_end.truncate(len - d)
+    let mut j = hi
+    while j >= 0 {
+      self.order_end[j] = self.order_end[j] - d
+      j = self.order_holder[j]
+    }
+  }
+  // (then put in, each where it goes as what it is among is now; one made with another put in already with its run)
+  for o in self.order_ins {
+    let (at, _) = o
+    guard self.nodes[at].live && !self.nodes[at].slot else { continue }
+    if self.in_order(at) {
+      continue
+    }
+    guard self.order_place(at) is Some((p, hi)) else {
+      self.order_whole = true
+      return true
+    }
+    let h = self.order[hi]
+    self.order_new.clear()
+    self.order_new_holder.clear()
+    self.order_new_end.clear()
+    self.ordered_keeping(at, hi, self.tops[h], p, p)
+    let made = self.order_new.length()
+    let len = self.order.length()
+    for _ in 0..<made {
+      self.order.push(-1)
+      self.order_holder.push(-1)
+      self.order_end.push(-1)
+    }
+    self.order_moved(len - 1, p - 1, -1, made, p)
+    for k in 0..<made {
+      self.order.unsafe_set(p + k, self.order_new.unsafe_get(k))
+      self.order_holder.unsafe_set(p + k, self.order_new_holder.unsafe_get(k))
+      self.order_end.unsafe_set(p + k, self.order_new_end.unsafe_get(k))
+    }
+    let mut j = hi
+    while j >= 0 {
+      self.order_end[j] = self.order_end[j] + made
+      j = self.order_holder[j]
+    }
+  }
+  true
+}
+
 /// (Tree::order_marked_in), what it holds put in its place and the rest moved past it, all of it where the root's
 /// changed, where that is not known, or where more than a few did.
 fn Tree::order_again(self : Tree) -> Unit {
@@ -2561,6 +2733,27 @@ fn Tree::order_again(self : Tree) -> Unit {
     self.order_gen.push(-1)
     self.order_was.push(-1)
     self.order_changed.push(-1)
+  }
+  // (nodes made and let go by themselves, nothing else changed in it: their own runs put in and taken out, the rest as
+  // it was, Tree::order_spliced; else what held each made again as any change there is)
+  if !self.order_ins.is_empty() || !self.order_outs.is_empty() {
+    let alone = !self.order_whole &&
+      !self.order.is_empty() &&
+      self.flights.length() == 0 &&
+      self.order_in.is_empty()
+    if alone && self.order_spliced() && !self.order_whole {
+      self.order_ins.clear()
+      self.order_outs.clear()
+      return
+    }
+    for o in self.order_outs {
+      self.order_in.push(o.2)
+    }
+    for o in self.order_ins {
+      self.order_in.push(o.1)
+    }
+    self.order_ins.clear()
+    self.order_outs.clear()
   }
   // (all of it while anything flies: what does drawn over the rest of its layer, out of what holds it, shared.mbt)
   let from = if self.order_whole || self.order.is_empty() || self.flights.length() > 0 {
@@ -7074,9 +7267,12 @@ fn View::let_go(self : View) -> Unit {
   // tip of a row held beside it in one layer), which is then let go already, its handle on nothing)
   let kids = n.kids.map(fn(k) { self.tree.handle(k) })
   n.kids.clear()
+  // (what it holds goes out of the order with it, its run whole: none of theirs taken out by itself)
+  self.tree.letting_go = self.tree.letting_go + 1
   for k in kids {
     k.let_go()
   }
+  self.tree.letting_go = self.tree.letting_go - 1
   n.live = false
   if n.on_back is Some(_) || n.on_back_step is Some(_) {
     self.tree.backs = self.tree.backs - 1
@@ -7195,7 +7391,10 @@ fn View::let_go(self : View) -> Unit {
   }
   self.tree.removed.push({ at: self.at, gen: self.gen })
   self.tree.free.push(self.at)
-  self.tree.order_marked_in(parent)
+  // (its run taken out of the order by itself, the rest as it was; one held by what is let go with it, none)
+  if self.tree.letting_go == 0 {
+    self.tree.order_taken_out(self.at, self.gen, parent)
+  }
   self.tree.work.let_go = self.tree.work.let_go + 1
   self.tree.hits_bump()
 }
@@ -7218,6 +7417,7 @@ fn View::slot(self : View, loc : SourceLoc) -> View {
   let v = self.tree.made(self.at, words_as_said=n.words_as_said, loc~)
   self.tree.nodes[v.at].slot = true
   n.kids.push(v.at)
+  self.tree.order_marked_in(self.at)
   if self.at == 0 {
     self.tree.top_last()
   }
@@ -7268,7 +7468,7 @@ fn View::box_appended(self : View, child : Int) -> Unit {
   // (what it holds changed, not what it asks of what holds it: where it lays out alone, laid out again from it, as
   // boxes_put does)
   self.tree.layout_marked_at(at, within=true)
-  self.tree.order_marked_in(at)
+  self.tree.order_put_in(child, at)
   self.tree.modals_told(within=child)
 }
 
@@ -7441,7 +7641,7 @@ fn Tree::box_put_in(self : Tree, at : Int) -> Bool {
     self.nodes[h].flex.holds_gone = true
   }
   self.layout_marked_at(h, within=true)
-  self.order_marked_in(h)
+  self.order_put_in(at, h)
   true
 }
 
@@ -7459,7 +7659,6 @@ fn Tree::box_taken_out(self : Tree, h : Int, b : @flex.Node) -> Bool {
   guard self.box_one_more() else { return false }
   children.remove(i) |> ignore
   self.layout_marked_at(h, within=true)
-  self.order_marked_in(h)
   self.modals_marked()
   true
 }

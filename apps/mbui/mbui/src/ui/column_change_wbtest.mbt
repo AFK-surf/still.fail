@@ -97,11 +97,15 @@ let change_settle_ms : Double = 100.0
 ///|
 /// What one child put in (`in`) and taken out (`out`) of a column of 17 and of 170 works out again, as main had it:
 /// each may only fall. What grows with the column's children here grows with them for each change of any column.
+/// `copied` and `handed` are the paint's, not the drawing order's: `copied` is `view_paint_work.copied`, the nodes of
+/// each kept row's drawing the paint's walk copies into the frame (ui's view_host.mbt: `list_again`, `ride_again`),
+/// about three for each of the column's rows in every frame it draws, whatever the order kept; `handed` the instances
+/// put into the frame for the host. Both pinned as they are till the paint's own mend.
 let column_change_known : Map[(Int, String), ChangeCount] = Map::from_array([
-  ((17, "in"), { inputs: 1, order: 19, boxes: 0, made: 1, copied: 54, handed: 252 }),
-  ((17, "out"), { inputs: 0, order: 18, boxes: 0, made: 0, copied: 51, handed: 225 }),
-  ((170, "in"), { inputs: 1, order: 172, boxes: 0, made: 1, copied: 513, handed: 2757 }),
-  ((170, "out"), { inputs: 0, order: 171, boxes: 0, made: 0, copied: 510, handed: 2730 }),
+  ((17, "in"), { inputs: 1, order: 1, boxes: 0, made: 1, copied: 54, handed: 252 }),
+  ((17, "out"), { inputs: 0, order: 0, boxes: 0, made: 0, copied: 51, handed: 225 }),
+  ((170, "in"), { inputs: 1, order: 1, boxes: 0, made: 1, copied: 513, handed: 2757 }),
+  ((170, "out"), { inputs: 0, order: 0, boxes: 0, made: 0, copied: 510, handed: 2730 }),
 ])
 
 ///|
