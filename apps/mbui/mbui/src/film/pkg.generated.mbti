@@ -9,7 +9,7 @@ import {
 // Values
 pub fn arg(String) -> String
 
-pub fn bench((@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit, script~ : String, name~ : String, w? : Double, h? : Double, scale? : Double, platform? : Int32, pointing? : @ui.Pointing, fps? : Double, frames_out? : String) -> Bool
+pub fn bench((@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit, script~ : String, name~ : String, w? : Double, h? : Double, scale? : Double, platform? : Int32, pointing? : @ui.Pointing, fps? : Double, frames_out? : String, settings? : Json) -> Bool
 
 pub fn bench_log(String, String) -> Bool
 
@@ -27,7 +27,7 @@ pub fn read_text(String) -> String
 
 pub fn run((@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit
 
-pub fn run_bench((@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit
+pub fn run_bench((@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit, settings? : Json) -> Unit
 
 pub fn say(String) -> Unit
 
