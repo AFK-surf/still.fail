@@ -552,6 +552,7 @@
   "web-pages.profiles.disable": "停用",
   "web-pages.profiles.disableBody": "{name} 不再使用这台机器上 {runtime} 的登录；这台机器上的登录本身不受影响，以后可以再次使用。正在使用它的会话会切换到其他 Profile 继续运行；没有可切换的 Profile 时会停止。",
   "web-pages.profiles.disableConfirm": "停用「{name}」？",
+  "web-pages.profiles.disableCopyBody": "这台 station 不再使用这个共享的 Profile；分享它的 station 不受影响，以后可以在这里再启用。正在使用它的会话会切换到其他 Profile；没有可用的 Profile 时会停止。",
   "web-pages.profiles.disabled": "已停用",
   "web-pages.profiles.disableKeyBody": "Key 和配置会保留，以后可以重新启用。使用它的会话会切换到其他 Profile；没有可用的 Profile 时会停止。共享副本的 station 更新后会同步停用状态。",
   "web-pages.stations.agentEnv": "Agent 环境变量",

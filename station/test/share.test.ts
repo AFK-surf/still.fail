@@ -147,9 +147,25 @@ test("a shared key profile is copied to the other station, key and all; stopping
   await settle(a, b);
   assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).enabled, false, "a disabled key stays disabled on its copy");
   assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).access.key, "sk-new", "the key is retained");
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).share.hostOff, true);
   a.config.update((raw) => { delete raw.profiles[0].enabled; });
   await settle(a, b);
   assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).enabled, undefined, "enabling propagates too");
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).share.hostOff, undefined);
+  // Paused on the borrowing station (accounts/index.ts putProfile): so it stays as its host edits it, disables it and
+  // enables it again.
+  b.config.update((raw) => { const c = raw.profiles.find((p: any) => p.id === id); c.share.paused = true; c.enabled = false; });
+  a.config.update((raw) => (raw.profiles[0].access.key = "sk-newer"));
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).access.key, "sk-newer");
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).enabled, false, "the pause here outlives the host's edit");
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).share.paused, true);
+  a.config.update((raw) => (raw.profiles[0].enabled = false));
+  await settle(a, b);
+  a.config.update((raw) => { delete raw.profiles[0].enabled; });
+  await settle(a, b);
+  assert.equal(b.config.raw().profiles.find((p: any) => p.id === id).enabled, false, "the host enabling it again does not end the pause here");
+  b.config.update((raw) => { const c = raw.profiles.find((p: any) => p.id === id); delete c.share.paused; delete c.enabled; });
   // The host offline: the copy stays.
   all.delete(A);
   await settle(b);

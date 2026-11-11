@@ -67,6 +67,9 @@ priv struct SettingsFixture {
   models_added : Array[String]
   /// Whether the example API key is enabled.
   mut key_enabled : Bool
+  /// A copy of Maple's Claude subscription among Willow's profiles (settings-profile-copy), and whether Willow uses it.
+  mut copy_shown : Bool
+  mut copy_enabled : Bool
   /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
   /// prompt closed
   mut pairing : Bool
@@ -156,6 +159,8 @@ let fx : SettingsFixture = {
   fable_used: false,
   models_added: [],
   key_enabled: true,
+  copy_shown: false,
+  copy_enabled: true,
   pairing: false,
   pairing_personal: false,
   pairing_more: false,
@@ -287,6 +292,8 @@ fn fixture_reset() -> Unit {
   fx.fable_used = false
   fx.models_added.clear()
   fx.key_enabled = true
+  fx.copy_shown = false
+  fx.copy_enabled = true
   fx.version = 0
   fx.marks.clear()
   fx.auto = false
@@ -597,6 +604,11 @@ pub fn fixture_page(mode : String) -> String {
       fx.login = "needs_code"
       up("", "settings/profile/ws1/st1/cc", 0)
     }
+    // A copy of another station's subscription: its page, where this station pauses it (its ⋯'s 停用)
+    "settings-profile-copy" => {
+      fx.copy_shown = true
+      up("", "settings/profile/ws1/st1/bx", 0)
+    }
     "settings-profile-login-station" => {
       fx.login = "needs_code"
       fx.login_station = true
@@ -719,6 +731,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-hosts-cutoff" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" | "settings-profile-fable" | "settings-profile-own3" | "settings-profile-week-fable" =>
       "profile:ws1/st1#cc"
     "settings-profile-key" => "profile:ws1/st1#k2"
+    "settings-profile-copy" => "profile:ws1/st1#bx"
     "settings-profile-quota" | "settings-profile-quota-login" | "settings-profile-quota-expiry" => "profile:ws1/st1#cx"
     "settings-profile-quota-kinds" => "profile:ws1/st1#cc"
     "settings-me-reading" => "me"
@@ -899,6 +912,17 @@ fn fx_profiles() -> Array[Json] {
       ("usedBy", []),
     ]),
   ]
+  if fx.copy_shown {
+    // Maple's Claude subscription borrowed here (share role user): its station pauses it (`enabled`), edits nothing else.
+    profiles.push(
+      fx_profile("bx", "maple@example.com", "subscription", if fx.copy_enabled { "green" } else { "neutral" }, if fx.copy_enabled { "可用" } else { "已停用" }, "claude", "Claude 订阅", [
+        ("email", str("maple@example.com")),
+        ("share", obj([("id", str("sh2")), ("role", str("user")), ("host", str("st2")), ("allow", Json::null()), ("reachable", Json::boolean(true))])),
+        ("enabled", Json::boolean(fx.copy_enabled)),
+        ("usedBy", []),
+      ]),
+    )
+  }
   if fx.several {
     fx_several(profiles)
   }
@@ -2995,6 +3019,11 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     }
     "profile.put" if text(p, "id") == "k2" && has(field(p, "input"), "enabled") => {
       fx.key_enabled = flag(field(p, "input"), "enabled")
+      fx_changed()
+      Some(Ok(obj([])))
+    }
+    "profile.put" if text(p, "id") == "bx" && has(field(p, "input"), "enabled") => {
+      fx.copy_enabled = flag(field(p, "input"), "enabled")
       fx_changed()
       Some(Ok(obj([])))
     }

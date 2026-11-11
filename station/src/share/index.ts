@@ -25,6 +25,7 @@
 //   its login over, keeps a copy borrowed from the new host, and tells the stations it had told where it went.
 //
 // Config: a shared profile has `share: {id, allow}` on its host and `share: {id, borrowed: true, host}` where copied
+// (`paused`: this station does not use the copy, `hostOff`: its host disabled it; accounts/index.ts putProfile);
 // (made and removed only here). Shared skills are config.json `sharedSkills: {name: {id, allow}}`.
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, unlinkSync, watch, writeFileSync } from "node:fs";
@@ -689,6 +690,13 @@ export class Sharing {
       const local = at >= 0 ? String(list[at].id) : id;
       const home = at >= 0 && typeof list[at].home === "string" ? list[at].home : `homes/${id}`;
       const made: Json = { ...portable(given), id: local, home, share: { id, borrowed: true, host: had.host } };
+      // Disabled by its host (kept apart from a pause here, so that the host enabling it again does not end the pause);
+      // paused on this station (accounts/index.ts putProfile): still, as the host changes it.
+      if (given.enabled === false) made.share.hostOff = true;
+      if (at >= 0 && isObject(list[at].share) && list[at].share.paused === true) {
+        made.share.paused = true;
+        made.enabled = false;
+      }
       if (typeof got.email === "string") made.share.email = got.email;
       // The workspaces it may serve here (none said: a host of before, as before).
       if (Array.isArray(got.workspaces)) made.share.workspaces = got.workspaces.filter((w: unknown) => typeof w === "string");

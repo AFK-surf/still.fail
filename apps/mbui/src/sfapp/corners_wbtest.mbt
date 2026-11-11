@@ -72,7 +72,7 @@ let corner_modes : Array[String] = {
     "chat-phone-linked-connected",
     "settings-profiles", "settings-profiles-monthly", "settings-profiles-fable", "settings-profiles-own3", "settings-profiles-week-fable", "settings-profiles-several",
     "settings-profile", "settings-profile-fable", "settings-profile-own3", "settings-profile-week-fable", "settings-profile-quota", "settings-profile-quota-kinds",
-    "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed",
+    "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed", "settings-profile-copy",
     "settings-profile-blocked", "settings-profile-signin", "settings-profile-key", "settings-new-profile",
     "settings-connects", "settings-connect", "settings-connect-menu", "settings-connect-mode", "settings-connect-run",
     "settings-new-connect", "settings-new-connect-platform", "settings-new-connect-scan", "settings-new-connect-app",
