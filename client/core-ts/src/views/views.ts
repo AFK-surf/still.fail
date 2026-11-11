@@ -1739,7 +1739,18 @@ export class Views implements Owner {
     const known = stations.filter((s) => data.listed(s.address, "chats")).map((s) => s.address);
     const unloaded = known.filter((s) => !data.loaded({ topic: "chatRows", station: s }));
     const heads = first + 1;
-    const head = unloaded.length > 0 && data.chatCount(unloaded) > heads ? this.#head(scope, known, heads) : null;
+    // Whether the list shows a record, as `make` below decides it of each before its row is made: what the first
+    // screen's records are read by (#head), so a list of some of its stations' chats (the viewer's own, the hidden,
+    // the watched, none of those being archived here) opens on its window of them, not on those of them among the
+    // first of all.
+    const shows = (station: string, raw: J): boolean => {
+      if (mine && get(raw, "mine") !== true) return false;
+      if (this.local.beingArchived(station, raw)) return false;
+      const shown = this.local.asChanging(station, raw);
+      if (visibility !== "all" && (get(shown, "hidden") === true) !== (visibility === "hidden")) return false;
+      return !watching || present.watches(arr(get(shown, "agents")));
+    };
+    const head = unloaded.length > 0 && data.chatCount(unloaded) > heads ? this.#head(scope, known, heads, mine, shows) : null;
     for (const s of stations) {
       const read = head !== null && data.listed(s.address, "chats") ? ({ ok: head.get(s.address) ?? [] } as Value) : this.value({ topic: "chatRows", station: s.address });
       if (!(read && "ok" in read)) unread.push(s.address);
@@ -1960,11 +1971,19 @@ export class Views implements Owner {
 
   /// The rows a scope's list shows on top (`n` of them: its window and one more, to know it has more; 2026-11-11, 80
   /// whatever it showed, 9.5 ms of a list's 12.5 in Hermes making and putting out 50 rows of them on a first open), by
-  /// station, while its stations' rows load: one is loaded after another, the list computed again after each.
-  #head(scope: string, stations: string[], n: number): Map<string, J[]> {
+  /// station, while its stations' rows load: one is loaded after another, the list computed again after each. They are
+  /// the first records the list shows (`shows`; `mine`, read of the viewer's own alone): where fewer than `n` of those
+  /// read are, twice as many are read, until `n` show or there are no more.
+  #head(scope: string, stations: string[], n: number, mine: boolean, shows: (station: string, raw: J) => boolean): Map<string, J[]> {
     const data = this.#core.data;
     const out = new Map<string, J[]>();
-    for (const [station, row] of data.chatHead(stations, n)) out.set(station, [...(out.get(station) ?? []), row]);
+    let limit = n;
+    let read = data.chatHead(stations, limit, mine);
+    while (read.length >= limit && read.reduce((k, [station, row]) => k + (shows(station, row) ? 1 : 0), 0) < n) {
+      limit *= 2;
+      read = data.chatHead(stations, limit, mine);
+    }
+    for (const [station, row] of read) out.set(station, [...(out.get(station) ?? []), row]);
     // (its stations' rows loaded behind the first screen: what shows them is made again then)
     this.#seen.read(`loaded ${scope}`);
     if (!this.#loading.has(scope)) {

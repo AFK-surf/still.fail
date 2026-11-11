@@ -26,7 +26,8 @@ const session = (key: string): J => ({ key, connect: "c1", profile: "p1", runtim
 /// A workspace of real size's list (test/real-size.ts's: 420 chats on 5 stations, 84 a station, an hour apart across
 /// the stations, over 17 days; a few pinned, some at work, every other one the viewer's), its rows on the device and
 /// none of them read yet, as a core started anew has them as it opens (views.ts #head reads the first of them alone).
-async function opened() {
+/// (`more`: what each chat's record says besides, by its place among its station's.)
+async function opened(more: (i: number) => J = () => ({})) {
   const w = setup({ all: true });
   const now = w.host.nowMs();
   w.set(workspace(), { id: "ws", stations: NAMES.map((id) => ({ id, name: id, last_seen: null, version: null })) });
@@ -38,7 +39,7 @@ async function opened() {
         const at = now - (i * 5 + st) * 3_600_000;
         return {
           id, session: id, thread: null, title: `${id} 的标题`, agents: [{ ...session(id), ...(i % 7 === 0 ? { process: "running" } : {}) }], last: null, unread: false,
-          mine: i % 2 === 0, lastActiveAt: Math.trunc(at), connect: null, origin: null, ...(i === 3 ? { pinned: 1000 + st } : {}),
+          mine: i % 2 === 0, lastActiveAt: Math.trunc(at), connect: null, origin: null, ...(i === 3 ? { pinned: 1000 + st } : {}), ...more(i),
         };
       }),
     );
@@ -122,6 +123,48 @@ test("a list of 420 chats on 5 stations told a window of 20 makes 20 rows and re
   assert.equal(rowsOf(valueOf(t, ALL)).length, 20);
   assert.equal(valueOf(t, ALL).more, 400);
   assert.ok(work.rows - from.rows <= 20, `the list made ${work.rows - from.rows} rows`);
+});
+
+test("a list of some of its stations' chats opens on its window of them, its first answer reading on until they show", async () => {
+  // The viewer's own (every other chat): read by their column, the 21 first of them and no other record.
+  {
+    const t = await opened();
+    const { messages, workAt } = heard(t);
+    const from = { ...work };
+    t.window(MINE, 20);
+    t.store.subscribe(1, 1, MINE, true);
+    await t.host.time.pass(100);
+    const first = messages.get(1)?.[0];
+    assert.ok(first !== undefined && "value" in first, "a first value");
+    assert.equal(rowsOf(first.value).length, 20);
+    // (every other chat of a station is the viewer's: those of an even place)
+    assert.ok(rowsOf(first.value).every((r: J) => Number(String(r.id).slice(1)) % 2 === 0));
+    assert.equal(first.value.more > 0, true, "it says it has more");
+    const read = workAt.get(first)!.rowJson - from.rowJson;
+    assert.ok(read <= 21, `its first answer read ${read} records' JSON`);
+  }
+  // A third of the chats hidden: the list of those shown reads twice (21 records, 14 of them shown; then 42), the list
+  // of the hidden three times (84 for 28 of them); each opens on 20 rows and says it has more.
+  for (const [hidden, most] of [[false, 42], [true, 84]] as const) {
+    const t = await opened((i) => (i % 3 === 0 ? { hidden: true } : {}));
+    const { messages, workAt } = heard(t);
+    const from = { ...work };
+    const asked = parseTopic({ topic: "chats", scope: "ws", mine: false, hidden })!;
+    t.window(asked, 20);
+    t.store.subscribe(1, 1, asked, true);
+    await t.host.time.pass(100);
+    const first = messages.get(1)?.[0];
+    assert.ok(first !== undefined && "value" in first, "a first value");
+    assert.equal(rowsOf(first.value).length, 20, `${hidden ? "the hidden" : "those shown"}: its first answer's rows`);
+    assert.equal(first.value.more > 0, true, "it says it has more");
+    const read = workAt.get(first)!.rowJson - from.rowJson;
+    assert.ok(read <= most, `its first answer read ${read} records' JSON`);
+    assert.ok(workAt.get(first)!.rows - from.rows <= 20, "and made its window's rows alone");
+    // (as its stations' rows load behind it, the same rows)
+    const was = rowsOf(first.value).map((r: J) => r.id);
+    await t.host.time.pass(100);
+    assert.deepEqual(rowsOf(valueOf(t, asked)).map((r: J) => r.id), was);
+  }
 });
 
 test("a window raised from 20 to 40 makes the 20 rows added and sends them alone, as inserts", async () => {

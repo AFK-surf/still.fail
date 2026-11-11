@@ -1090,15 +1090,15 @@ export class Data {
     return this.of(station)?.rowsRev(station) ?? 0;
   }
 
-  /// The rows of these stations a list shows first, across their databases.
-  chatHead(stations: string[], limit: number): [string, any][] {
+  /// The rows of these stations a list shows first, across their databases (`mine`: of the viewer's own alone).
+  chatHead(stations: string[], limit: number, mine = false): [string, any][] {
     const by = new Map<AccountDb, string[]>();
     for (const s of stations) {
       const db = this.of(s);
       if (!db) continue;
       by.set(db, [...(by.get(db) ?? []), s]);
     }
-    return [...by].flatMap(([db, list]) => db.chatHead(list, limit));
+    return [...by].flatMap(([db, list]) => db.chatHead(list, limit, mine));
   }
 
   /// What the chat list reads of a station's overview (account.ts overviewPart): read in a computed, it is made again
