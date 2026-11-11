@@ -133,8 +133,9 @@ fn button_by(
       // (as wide as what holds it, whichever way that lays out: its own height kept)
       v.width_share(Is(1.0)) |> ignore
     } else if v.lent(foot_fills_lent).unwrap_or(false) {
-      // (at a sheet's foot, in a thumb's reach: its share of the foot's width, as the old button's there, foot_fills)
-      v.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
+      // (at a sheet's foot, in a thumb's reach: its share of the foot's width, as the old button's there, foot_fills;
+      // never narrower than its words and its ends need, what is beside it giving way first, as the old one's `keep`)
+      v.grow(Is(1.0)).basis(Is(Some(0.0))).keeps_held(Is(true)) |> ignore
     }
     // (what it holds in its middle, however wide it is laid out (as wide as a column, stretched by what holds it): as
     // the old one's justify=JCenter)

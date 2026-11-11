@@ -446,8 +446,9 @@ fn sheet_node(
               }
               body.box(fn(row) {
                 style_node(row, fn() { sheet_foot_at })
-                // (its buttons across it, each its share, in a thumb's reach: the host's sheet's foot_fills)
-                row.lends(foot_fills_lent, true) |> ignore
+                // (its buttons across it, each its share, in a thumb's reach: the host's sheet's foot_fills; where they have not the
+                // room each as wide as its words, a line each, as the old foot's flow and line_gap: ask_foot_lines)
+                row.lends(foot_fills_lent, true).wraps(Is(Some(ask_foot_lines()))).wraps_at_least(Is(true)) |> ignore
                 f(row, close)
               })
               |> ignore
