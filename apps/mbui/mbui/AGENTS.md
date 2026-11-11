@@ -177,8 +177,10 @@ yet and you can add one, add it.
   (moon's `test "panic …"`): stopped in the middle of a change it leaves the process there, and on wasm-gc the tests
   after it run on from it (view's `shared_test` left the signals' batch open: 185 of view's 435 failed after it). What
   must fail is asked as an app's run on a host asks it, its fault told (`@view.faults_stop`, `@view.fault_told`) and
-  its words asserted. detlint's `panic-test` counts those left, only falling (the coordinator of the migration,
-  2026-11-11).
+  its words asserted; a check that stops is two steps, one saying what is wrong (`css_read`, `Tester::idle_said`,
+  `draw_said`, `flex.reuse_refused`…) and one stopping on it, and the test asserts the first. detlint's `panic-test`
+  holds it (none left); a Tester starting on a signals' graph left mid-change or mid-read stops, naming it
+  (`leaked_state`) (the coordinator of the migration, 2026-11-11).
 - A test starts its own run of the app (an app's `new_run`, a Tester) before it reads anything of the app: before
   that, what it reads is the app as the test before it in the process left it (a landing's titles read in the English
   of gate_wbtest's last run, found in none of the Chinese it drew: only where CI's grouping put the two files in one

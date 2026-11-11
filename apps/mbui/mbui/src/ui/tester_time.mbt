@@ -21,6 +21,15 @@ pub fn Tester::draw(self : Tester) -> Unit {
 }
 
 ///|
+/// Tester::draw, what it would stop on said instead (a layout read back that does not converge: its words), None where
+/// it draws as draw does. The same drawing as draw's and the same words: draw stops on what this says.
+pub fn Tester::draw_said(self : Tester) -> String? {
+  outside_came()
+  self.frame_now()
+  self.draw_owed_said(1)
+}
+
+///|
 /// The frames the app has asked for drawn, each at the display's next frame, as a host draws them (nothing said
 /// changed: none of Tester::draw's telling): after an input handed on, the frame that takes it and any it asks for
 /// after.
@@ -50,19 +59,31 @@ fn Tester::frame_now(self : Tester) -> Unit {
 /// The frames owed drawn (Tester::draw's, after `n` drawn already), each at the display's next frame: what a frame left
 /// owed is drawn as the Tester stands, at its making (Tester::new), not left to the next input.
 fn Tester::draw_owed(self : Tester, n : Int) -> Unit {
+  match self.draw_owed_said(n) {
+    Some(s) => @halt.saying(s)
+    None => ()
+  }
+}
+
+///|
+/// The frames owed drawn as draw_owed draws them, what does not converge said and not stopped at: draw_owed's words,
+/// the two one drawing (draw_owed stopping on what this says).
+fn Tester::draw_owed_said(self : Tester, n : Int) -> String? {
   let mut n = n
   while self.owed_now() {
     if n == draw_frames_most {
       let c = g()
       if c.read_back_moved {
-        let s = "Tester::draw: what the view reads (\{c.read_back_key}) still changes after \{n} frames: it does not converge"
-        @halt.saying(s)
+        return Some(
+          "Tester::draw: what the view reads (\{c.read_back_key}) still changes after \{n} frames: it does not converge",
+        )
       }
-      return
+      return None
     }
     self.frame_now()
     n = n + 1
   }
+  None
 }
 
 ///|
@@ -291,10 +312,11 @@ fn Tester::next_due(self : Tester) -> Double {
 }
 
 ///|
-/// Nothing asks for a frame now: no frame asked for, no motion said that is not at rest, no wake owed, no fiber or
-/// ticket of the runtime running. Else the test fails, saying who. What never ends while shown (a cycle: a spinner, a
-/// breath) does not break it: it is said (Tester::cycles).
-pub fn Tester::assert_idle(self : Tester) -> Unit {
+/// What asks for a frame now, said (None where nothing does): a frame asked for, a motion said that is not at rest, a
+/// wake owed, a fiber or a ticket of the runtime running, a message posted that no frame took. What never ends while
+/// shown (a cycle: a spinner, a breath) is not of it (Tester::cycles). The words assert_idle stops with: the two are one
+/// asking, assert_idle stopping on what this says.
+pub fn Tester::idle_said(self : Tester) -> String? {
   // messages posted that no frame took: what came from outside, not looked at (messages.mbt)
   let posted = posted_left()
   // (the frame the last input or motion left owed is drawn first: idle is what comes after)
@@ -341,8 +363,20 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
     why.push(rt)
   }
   if why.length() > 0 {
-    let s = "Tester::assert_idle: not idle: " + why.join("; ")
-    @halt.saying(s)
+    Some("Tester::assert_idle: not idle: " + why.join("; "))
+  } else {
+    None
+  }
+}
+
+///|
+/// Nothing asks for a frame now: no frame asked for, no motion said that is not at rest, no wake owed, no fiber or
+/// ticket of the runtime running. Else the test fails, saying who (Tester::idle_said's words: the two are one asking).
+/// What never ends while shown (a cycle: a spinner, a breath) does not break it: it is said (Tester::cycles).
+pub fn Tester::assert_idle(self : Tester) -> Unit {
+  match self.idle_said() {
+    Some(s) => @halt.saying(s)
+    None => ()
   }
   let cycles = self.cycles()
   if cycles.length() > 0 {

@@ -541,7 +541,7 @@ test "a frame grab is waited on until its PNG is taken; then the view may grab a
 }
 
 ///|
-test "panic a second frame grab of a view before the first is taken" {
+test "a second frame grab of a view before the first is taken: a fault, told, that grab not made" {
   let cell : Ref[@ui.NativeView?] = { val: None }
   let _ = @ui.Tester::new(fn(c) {
     let v = once(cell, fn() {
@@ -553,8 +553,14 @@ test "panic a second frame grab of a view before the first is taken" {
     c.native(v, h=Px(220.0)) |> ignore
   })
   let v = cell.val.unwrap()
+  let told : Array[String] = []
+  @view.faults_stop.val = false
+  @view.fault_told.val = Some(fn(said) { told.push(said) })
   v.grab_frame(40.0)
   v.grab_frame(80.0)
+  @view.faults_stop.val = true
+  @view.fault_told.val = None
+  assert_eq(told, ["NativeView::grab_frame: view 1 grabs a frame already: one at a time, its `grabbed` taken first"])
 }
 
 ///|
