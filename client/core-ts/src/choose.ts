@@ -26,7 +26,7 @@ const arr = (v: unknown): J[] => arrU(v) ?? [];
 const get = (v: unknown, k: string): J => getU(v, k);
 
 const TABLE = "choice";
-/// How many of the models used most a model control's panel keeps nearest what opened it.
+/// How many of the combinations used most a model control's panel keeps nearest what opened it.
 const NEAR = 4;
 const FIELDS = ["runtime", "model", "effort", "profile", "fast", "context"];
 /// How a model runs, apart from who runs it: what is set by hand in a control's panel (`Choose`'s `#hand`).
@@ -105,37 +105,50 @@ function picked(r: Resolved): J {
 
 const comboFast = (v: J): boolean | null => fastRuntime(get(v, "runtime")) && typeof get(v, "fast") === "boolean" ? v.fast : null;
 
-/// Usage stays bounded on the device; ties favour the most recently started chat.
+/// Whether `a` and `b` are the same combination used here (`ws:<scope>:frequent`): the same model, runtime, how hard it
+/// thinks, how fast and how much context (none, an entry kept before context was: its model's whole window).
+export function sameCombo(a: J, b: J): boolean {
+  return ["model", "runtime", "effort"].every((f) => text(get(a, f)) === text(get(b, f))) && comboFast(a) === comboFast(b) && contextOf(get(a, "context")) === contextOf(get(b, "context"));
+}
+
+/// A combination used here, kept by what it is (sameCombo). Usage stays bounded on the device; ties favour the most
+/// recently started chat.
 export function recordCombo(history: J[], choice: J, now: number): J[] {
-  const same = (v: J) => ["model", "runtime", "effort"].every((f) => text(get(v, f)) === text(get(choice, f))) && comboFast(v) === comboFast(choice);
+  const same = (v: J) => sameCombo(v, choice);
   const found = history.find(same);
   const count = (typeof get(found, "count") === "number" ? found.count : 0) + 1;
   const out = history.filter((v) => !same(v));
-  out.push({ model: get(choice, "model") ?? null, runtime: get(choice, "runtime") ?? null, effort: text(get(choice, "effort")), fast: comboFast(choice), count, last: now });
+  out.push({ model: get(choice, "model") ?? null, runtime: get(choice, "runtime") ?? null, effort: text(get(choice, "effort")), fast: comboFast(choice), context: contextOf(get(choice, "context")), count, last: now });
   out.sort((a, b) => (typeof b.last === "number" ? b.last : 0) - (typeof a.last === "number" ? a.last : 0));
   return out.slice(0, 64);
 }
 
-/// Only exact, still runnable combinations are offered: never silently change a remembered depth or runtime.
-export function frequentCombos(history: J[], options: J[], current: Resolved): J[] {
+/// The combinations used most here (a configuration each: model, runtime, how hard it thinks, how fast, how much
+/// context; the same model run two ways is two), the most first, then the most recently used, at most `NEAR`. Only
+/// exact, still runnable ones are offered: never silently change a remembered depth, runtime or context; one only
+/// another station has (borrowable) is left out. `fixed`: the runtime the control cannot leave, only its own offered
+/// and none said by it. `selected`: `current` is exactly it.
+export function frequentCombos(history: J[], options: J[], current: Resolved, fixed: string | null = null): J[] {
   const sorted = [...history].sort(
     (a, b) => (typeof b.count === "number" ? b.count : -1) - (typeof a.count === "number" ? a.count : -1) || (typeof b.last === "number" ? b.last : 0) - (typeof a.last === "number" ? a.last : 0),
   );
   const seen = new Set<string>();
   const out: J[] = [];
   for (const v of sorted) {
-    if (out.length >= 4) break;
+    if (out.length >= NEAR) break;
     const entry = optionOf(options, typeof get(v, "model") === "string" ? v.model : null);
-    if (entry === undefined) continue;
+    if (entry === undefined || entry.availability === "borrowable") continue;
     const runtime = get(v, "runtime");
     if (typeof runtime !== "string" || !arr(entry.runtimes).some((r) => r === runtime)) continue;
+    if (fixed !== null && runtime !== fixed) continue;
     const effort = text(get(v, "effort"));
     const fast = comboFast(v);
-    const r = resolve(options, { model: entry.model, runtime, effort, fast, profile: current.profile });
-    if (r.effort !== effort) continue;
+    const context = contextOf(get(v, "context"));
+    const r = resolve(options, { model: entry.model, runtime, effort, fast, context, profile: current.profile });
+    if (r.effort !== effort || r.context !== context) continue;
     const m = typeof entry.model === "string" ? entry.model : null;
     if (m === null) continue;
-    const key = JSON.stringify([m, runtime, effort, fast]);
+    const key = JSON.stringify([m, runtime, effort, fast, context]);
     if (seen.has(key)) continue;
     seen.add(key);
     // (the effort as the picker says it; none, the runtime's own)
@@ -146,8 +159,11 @@ export function frequentCombos(history: J[], options: J[], current: Resolved): J
     const speedText = fast === null ? null : fast ? "Fast" : t("core-logic.choose.speed.standard");
     const baseLabel = runtimeText === null ? `${name} · ${effortText}` : `${name} · ${runtimeText} · ${effortText}`;
     const label = speedText === null ? baseLabel : `${baseLabel} · ${speedText}`;
-    const selected = current.entry !== null && current.entry.model === m && current.runtime === runtime && current.effort === effort && current.fast === fast;
-    out.push({ model: m, runtime, effort, fast, ...(speedText === null ? {} : { speedText }), label, name, ...(runtimeText === null ? {} : { runtimeText }), effortText, selected });
+    // how it runs in words, after its name: the runtime where it can be another (its short name, format.runtimeShort),
+    // the effort, the speed, the context
+    const parts = [fixed === null && runtimeText !== null ? format.runtimeShort(runtime) : null, effortText, speedText, context === null ? null : format.compactNumber(context)].filter((x): x is string => x !== null);
+    const selected = current.entry !== null && current.entry.model === m && current.runtime === runtime && current.effort === effort && current.fast === fast && current.context === context;
+    out.push({ model: m, runtime, effort, fast, context, ...(speedText === null ? {} : { speedText }), label, text: parts.join(" · "), name, ...(runtimeText === null ? {} : { runtimeText }), effortText, selected });
   }
   return out;
 }
@@ -699,16 +715,10 @@ export class Choose implements Owner {
         : null;
     const borrow = option !== undefined && option.availability === "borrowable" ? this.#borrowView(station, option) : null;
     // Each model as it would run picked in the panel (`usual`: what it last ran with here, the one picked as it is
-    // drafted now) and how often new chats here started on it (`uses`); the few used most, nearest what opened the
-    // panel (`near`): a chat's or a new chat's, of the station's own models.
+    // drafted now).
     const scope = ofAddress(station);
     const history = arr(this.#record(`ws:${scope}:frequent`));
     const likedKeys = this.#liked(scope, station);
-    const uses = new Map<string, number>();
-    for (const h of history) {
-      const found = optionOf(options, text(get(h, "model")));
-      if (found !== undefined) uses.set(found.model, (uses.get(found.model) ?? 0) + (typeof h.count === "number" ? h.count : 1));
-    }
     const hand = this.#hand.get(topicKey(topic));
     // What a model never run here takes of what was set by hand in the panel: a runtime among those it runs on, how
     // hard it thinks among that runtime's levels, how fast and how much context where that runtime has them; none,
@@ -735,23 +745,36 @@ export class Choose implements Owner {
       const r = ran === undefined ? null : resolve(options, { model: id, runtime: fixed ? value.runtime : ran.runtime, effort: ran.effort, fast: ran.fast, context: ran.context });
       const parts: string[] = [];
       if (r !== null) {
-        if (!fixed && arr(opt.runtimes).length > 1 && r.runtime !== null) parts.push(format.runtimeLabel(r.runtime));
+        if (!fixed && arr(opt.runtimes).length > 1 && r.runtime !== null) parts.push(format.runtimeShort(r.runtime));
         if (r.effort !== null) parts.push(format.effortLabel(r.effort));
         if (r.fast === true) parts.push("Fast");
         if (r.context !== null && (o.kind === "new" || o.kind === "session")) parts.push(format.compactNumber(r.context));
       }
       const usual = r === null ? null : { runtime: r.runtime, effort: r.effort, fast: r.fast, context: o.kind === "new" || o.kind === "session" ? r.context : null };
-      return { ...opt, usual, usualText: parts.length > 0 ? parts.join(" · ") : null, uses: uses.get(id) ?? 0, liked: likedKeys.includes(model.key(id)) };
+      return { ...opt, usual, usualText: parts.length > 0 ? parts.join(" · ") : null, liked: likedKeys.includes(model.key(id)) };
     });
-    // The starred, in the order they were starred, every one of them: what the person keeps at hand stays put however
-    // often it is used. Those used most leave them out (not twice); then every model, by its maker (`makers`).
+    // Two things, apart (the user, 2026-11-10: 「收藏跟常用不一样」「常用包括了思考深度和速度还有上下文长度」「是一种
+    // 配置」): the configurations new chats here started on most (`combos`: a model with how it runs, the same model
+    // run two ways two of them, starred or not), a chat's or a new chat's, of its runtime alone where that is fixed;
+    // and the starred models (`liked`), in the order they were starred, every one of them, one of those used most or
+    // not. Then every model, by its maker (`makers`).
+    const draftNow: Resolved = { entry: option ?? null, runtime: typeof on === "string" ? on : null, effort, fast, context, profile, efforts, contexts, accounts };
+    const combos = o.kind === "new" || o.kind === "session"
+      ? frequentCombos(history, options, draftNow, fixed && typeof value.runtime === "string" ? value.runtime : null).map((c: J) => ({
+          model: c.model,
+          runtime: c.runtime,
+          effort: c.effort,
+          fast: c.fast,
+          context: c.context,
+          name: c.name,
+          text: c.text,
+          selected: c.selected,
+        }))
+      : [];
     const liked = likedKeys.flatMap((k) => {
       const found = annotated.find((x: J) => model.key(x.model) === k);
       return found !== undefined ? [found.model] : [];
     });
-    const near = o.kind === "new" || o.kind === "session"
-      ? annotated.filter((x: J) => x.uses > 0 && x.availability !== "borrowable" && !liked.includes(x.model)).sort((a: J, b: J) => b.uses - a.uses).slice(0, NEAR).map((x: J) => x.model)
-      : [];
     const makers = this.#makers(annotated);
     let saveText = changed ? t("core-logic.choose.save", { model: modelName ?? t("core-logic.format.default_model"), effort: effortText, account: chosenText }) : t("core-logic.choose.save.unchanged");
     if (changed && fastAvailable) saveText = `${saveText} · ${speedText(fast)}`;
@@ -765,7 +788,7 @@ export class Choose implements Owner {
         fastPlan,
         fastText: effectiveFast ? "Fast" : null,
         options: annotated,
-        near,
+        combos,
         liked,
         makers,
         runtimeFixed: fixed,
@@ -836,7 +859,7 @@ export class Choose implements Owner {
   }
 
   /// `pick.like`: model `model` starred (`liked`) or not in the workspace of the control's station: listed in every
-  /// model control's panel there after those used most.
+  /// model control's panel there, after the combinations used most.
   like(station: string, m: string, liked: boolean): void {
     if (m === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "model" }));
     const scope = ofAddress(station);
@@ -844,6 +867,20 @@ export class Choose implements Owner {
     const now = this.#liked(scope, station).filter((k) => k !== key);
     if (liked) now.push(key);
     this.#env.data.put(TABLE, `ws:${scope}:liked`, now, false);
+    this.#changed();
+  }
+
+  /// `pick.forget`: the combination `choice` (its model, runtime, effort, fast, context) no longer among those used most
+  /// in the workspace of the control's station (the user, 2026-11-10: 「常用模型应该是一种特定配置，并且可以删掉，跟模型
+  /// 没有关系」): its entry taken out, nothing else (how the model last ran, the starred, stay); a new chat on it later
+  /// counts it again from one.
+  forget(station: string, choice: J): void {
+    if (text(get(choice, "model")) === null) throw CoreError.invalid(t("core-misc.params.missing", { field: "model" }));
+    const key = `ws:${ofAddress(station)}:frequent`;
+    const history = arr(this.#record(key));
+    const left = history.filter((v) => !sameCombo(v, choice));
+    if (left.length === history.length) return;
+    this.#env.data.put(TABLE, key, left, false);
     this.#changed();
   }
 

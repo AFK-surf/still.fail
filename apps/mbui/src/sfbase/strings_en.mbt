@@ -1088,6 +1088,7 @@ let en : Map[String, String] = {
   "web-main.model.models": "Model",
   "web-main.model.allModels": "All models",
   "web-main.model.likeModel": "Star {model}",
+  "web-main.model.forgetCombo": "Remove {name} from frequent",
   "web-main.model.noMatch": "No models match",
   "web-main.model.none": "No models available",
   "web-main.model.otherSeries": "Other",

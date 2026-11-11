@@ -27,6 +27,7 @@ pub fn fixture_reset() -> Unit {
   new_fix.preset = ""
   new_fix.presets_late = false
   new_fix.liked.clear()
+  fix_forgotten.clear()
   new_fix.providers = false
   new_fix.borrow = false
   fix_presets_said.val = 0

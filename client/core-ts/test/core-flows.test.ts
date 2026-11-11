@@ -1027,7 +1027,7 @@ test("the profiles topic gives the app each station once when it has two copies"
 
 /// A core whose station has three profiles: p1 (unchecked) and p2 run Claude Code, p3 Codex (core/tests.rs
 /// `choosing_core`); `speed`: its session on Codex with `fast` as given, p3 offering `fast` as `profileFast`.
-async function choosing(speed = false, profileFast = false, sessionFast: boolean | null = null, switchRuntime = false) {
+async function choosing(speed = false, profileFast = false, sessionFast: boolean | null = null, switchRuntime = false, contexts = false) {
   const s = (key: string) => (speed ? { ...session(key), runtime: "codex", model: "gpt-6-astra", profile: "p3", fast: sessionFast } : session(key));
   return started({
     ...base(),
@@ -1035,6 +1035,7 @@ async function choosing(speed = false, profileFast = false, sessionFast: boolean
       ...overview,
       sessionRuntimeChange: switchRuntime,
       connectRuntimeChange: switchRuntime,
+      ...(contexts ? { contextCaps: { runtimes: ["claude", "codex"], least: 100_000, windows: { "claude-opus-5-5": 1_000_000 } } } : {}),
       connects: [{ id: "c1", name: "c1", kind: "slack", mode: "multi-session", requireMention: true, enabled: true, bind: { runtime: "claude", model: "claude-opus-5-5" }, connection: { state: "connected" }, slack: { appToken: "", botToken: "" }, sessions: 0 }],
       profiles: [
         profile("p1", "claude", ["claude-opus-5-5", "claude-sonnet-5"], false, 10),
@@ -1135,7 +1136,9 @@ test("new_chat_combos_are_local_to_a_workspace_persist_and_pick_model_and_depth_
   again.close();
 });
 
-test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran", async () => {
+// What is used most is a configuration, apart from what is starred (the user, 2026-11-10: 「收藏跟常用不一样」「常用包括了
+// 思考深度和速度还有上下文长度」「是一种配置」).
+test("the_model_control_keeps_the_configurations_used_most_near_and_each_model_as_it_last_ran", async () => {
   const { host, core } = await choosing();
   const ui = core.connect();
   const fresh = { topic: "pick", station: "ws/st", of: "new" };
@@ -1149,12 +1152,12 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   const option = (n: number, model: string) => v(values, n).options.find((o: J) => o.model === model);
   // (as it last ran: a field none is left out of the topic)
   const ran = (o: J) => ["runtime", "effort", "fast"].map((f) => o.usual?.[f] ?? null);
-  // (none starred: a starred one is listed among those starred, not here)
+  const combo = (c: J) => [c.model, c.runtime, c.effort ?? null, c.fast ?? null, c.context ?? null];
   for (const [n, m] of [[7, "claude-opus-5-5"], [8, "claude-sonnet-5"], [9, "gpt-6-astra"]] as const) {
     await ask(host, core, ui, n, "pick.like", { station: "ws/st", of: "new", model: m, liked: false });
   }
   apply(host, values);
-  assert.deepEqual(v(values, 1).near, [], "nothing used here yet");
+  assert.deepEqual(v(values, 1).combos, [], "nothing used here yet");
   assert.equal(option(1, "gpt-6-astra").usual ?? null, null);
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "medium" });
@@ -1162,25 +1165,108 @@ test("the_model_control_keeps_the_models_used_most_near_and_each_as_it_last_ran"
   core.inner.choose.used("other/st", { model: "claude-opus-5-5", runtime: "claude", effort: null });
   await host.settle();
   apply(host, values);
-  // the used most first, another workspace's not at all
-  assert.deepEqual(v(values, 1).near, ["gpt-6-astra", "claude-sonnet-5"]);
-  assert.equal(option(1, "gpt-6-astra").uses, 2);
+  // the used most first, another workspace's not at all; each said as it runs
+  assert.deepEqual(v(values, 1).combos.map(combo), [["gpt-6-astra", "codex", "medium", null, null], ["claude-sonnet-5", "claude", null, null, null]]);
+  assert.deepEqual(v(values, 1).combos.map((c: J) => [c.name, c.text]), [["GPT-6 Astra", "中"], ["Sonnet 5", "默认深度"]]);
+  assert.equal(option(1, "gpt-6-astra").uses, undefined);
   assert.deepEqual(ran(option(1, "gpt-6-astra")), ["codex", "medium", null]);
   assert.equal(option(1, "gpt-6-astra").usualText, "中");
-  // a chat's, of the models its runtime runs
-  assert.ok(v(values, 2).near.every((m: J) => m !== "gpt-6-astra"), String(v(values, 2).near));
-  // picked with how it last ran: all of it saved at once
+  // a chat's whose runtime is fixed: of its runtime alone
+  assert.deepEqual(v(values, 2).combos.map(combo), [["claude-sonnet-5", "claude", null, null, null]]);
+  // the same model run another way: another, counted on its own
+  core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: "high" });
+  await host.settle();
+  apply(host, values);
+  const combos = v(values, 1).combos.map(combo);
+  assert.deepEqual(combos[0], ["gpt-6-astra", "codex", "medium", null, null]);
+  assert.deepEqual(combos.slice(1).sort(), [["claude-sonnet-5", "claude", null, null, null], ["gpt-6-astra", "codex", "high", null, null]].sort());
+  // picked with how it last ran (the newest of it): all of it saved at once
   const [runtime, effort, fast] = ran(option(1, "gpt-6-astra"));
-  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", model: "gpt-6-astra", runtime, effort, fast });
+  assert.deepEqual([runtime, effort, fast], ["codex", "high", null]);
+  // a configuration of it pressed: all of it saved at once
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "new", model: "gpt-6-astra", runtime: "codex", effort: "medium", fast: null, context: null });
   apply(host, values);
   assert.equal(v(values, 3).model.model, "gpt-6-astra");
   assert.equal(v(values, 3).effort, "medium");
+  // the one picked exactly as the panel has it drafted, and only that
+  const selected = () => v(values, 1).combos.filter((c: J) => c.selected).map(combo);
+  assert.deepEqual(selected(), [["gpt-6-astra", "codex", "medium", null, null]]);
+  await ask(host, core, ui, 10, "pick.set", { station: "ws/st", of: "new", effort: "high" });
+  apply(host, values);
+  assert.deepEqual(selected(), [["gpt-6-astra", "codex", "high", null, null]]);
+  await ask(host, core, ui, 11, "pick.set", { station: "ws/st", of: "new", fast: true });
+  apply(host, values);
+  assert.deepEqual(selected(), [], "how fast it runs is part of it");
+  await ask(host, core, ui, 12, "pick.set", { station: "ws/st", of: "new", open: true });
   // how hard it thinks changed for it: kept for it, as it runs next time it is picked
   await ask(host, core, ui, 5, "pick.save", { station: "ws/st", of: "new", effort: null });
   await ask(host, core, ui, 6, "pick.save", { station: "ws/st", of: "new", model: "claude-sonnet-5" });
   apply(host, values);
   assert.deepEqual(ran(option(1, "gpt-6-astra")), ["codex", null, null]);
   assert.equal(option(1, "gpt-6-astra").usualText ?? null, null);
+  core.close();
+});
+
+test("the_configurations_used_most_keep_their_context_each_on_its_own", async () => {
+  const { host, core } = await choosing(false, false, null, false, true);
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "new" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  const opus = { model: "claude-opus-5-5", runtime: "claude", effort: "high" };
+  core.inner.choose.used("ws/st", { ...opus, context: 300_000 });
+  core.inner.choose.used("ws/st", { ...opus, context: 300_000 });
+  core.inner.choose.used("ws/st", { ...opus, context: null });
+  // (one no longer offered: none of it)
+  core.inner.choose.used("ws/st", { ...opus, context: 400_000 });
+  core.inner.choose.used("ws/st", { ...opus, context: 400_000 });
+  core.inner.choose.used("ws/st", { ...opus, context: 400_000 });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).combos.map((c: J) => [c.model, c.context ?? null, c.text]), [["claude-opus-5-5", 300_000, "高 · 300K"], ["claude-opus-5-5", null, "高"]]);
+  // pressed: all of it made what it runs on, picked exactly
+  await ask(host, core, ui, 2, "pick.save", { station: "ws/st", of: "new", ...opus, fast: null, context: 300_000 });
+  apply(host, values);
+  assert.deepEqual(v(values, 1).combos.map((c: J) => c.selected), [true, false]);
+  core.close();
+});
+
+// A configuration used most can be taken out (the user, 2026-11-10: 「常用模型应该是一种特定配置，并且可以删掉，跟模型
+// 没有关系」): that one alone, the model's others, how it last ran and the starred staying.
+test("a_configuration_used_most_is_forgotten_alone_and_counted_anew_when_used_again", async () => {
+  const { host, core } = await choosing();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "new" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  const combo = (c: J) => [c.model, c.runtime, c.effort ?? null];
+  const astra = { model: "gpt-6-astra", runtime: "codex" };
+  for (let i = 0; i < 3; i++) core.inner.choose.used("ws/st", { ...astra, effort: "high" });
+  core.inner.choose.used("ws/st", { ...astra, effort: "medium" });
+  core.inner.choose.used("ws/st", { ...astra, effort: "medium" });
+  await ask(host, core, ui, 2, "pick.like", { station: "ws/st", of: "new", model: "gpt-6-astra", liked: true });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).combos.map(combo), [["gpt-6-astra", "codex", "high"], ["gpt-6-astra", "codex", "medium"]]);
+  const usual = v(values, 1).options.find((o: J) => o.model === "gpt-6-astra").usual;
+  // the one forgotten, the pushed view without it
+  await ask(host, core, ui, 3, "pick.forget", { station: "ws/st", of: "new", ...astra, effort: "high", fast: null, context: null });
+  apply(host, values);
+  assert.deepEqual(v(values, 1).combos.map(combo), [["gpt-6-astra", "codex", "medium"]]);
+  assert.ok(v(values, 1).liked.includes("gpt-6-astra"), "still starred");
+  assert.deepEqual(v(values, 1).options.find((o: J) => o.model === "gpt-6-astra").usual, usual, "how it last ran stays");
+  // one not there: nothing changes
+  const before = v(values, 1).combos;
+  await ask(host, core, ui, 4, "pick.forget", { station: "ws/st", of: "new", ...astra, effort: "low", fast: null, context: null });
+  apply(host, values);
+  assert.deepEqual(v(values, 1).combos, before);
+  // a new chat on it again: back, counted from one (after the other, used twice)
+  core.inner.choose.used("ws/st", { ...astra, effort: "high" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).combos.map(combo), [["gpt-6-astra", "codex", "medium"], ["gpt-6-astra", "codex", "high"]]);
   core.close();
 });
 
@@ -1223,7 +1309,7 @@ test("a_model_never_run_here_takes_what_is_set_by_hand_in_its_panel_and_one_that
   core.close();
 });
 
-test("the_model_control_lists_the_starred_after_those_used_most_and_every_model_by_its_maker", async () => {
+test("the_model_control_lists_every_starred_model_apart_from_the_configurations_used_most_and_every_model_by_its_maker", async () => {
   const { host, core } = await choosing();
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "new" });
@@ -1241,23 +1327,24 @@ test("the_model_control_lists_the_starred_after_those_used_most_and_every_model_
   assert.deepEqual(v(values, 1).liked, [], "once changed, as changed");
   // the makers of its models, in their models' order, each with how many
   assert.deepEqual(v(values, 1).makers.map((k: J) => [k.id, k.title, k.count]), [["anthropic", "Anthropic", 2], ["openai", "OpenAI", 1]]);
-  // starred, in the order starred; one used most stays among them and is not listed among those used most again
+  // starred, in the order starred
   await ask(host, core, ui, 2, "pick.like", { station: "ws/st", of: "new", model: "claude-sonnet-5", liked: true });
   await ask(host, core, ui, 3, "pick.like", { station: "ws/st", of: "new", model: "gpt-6-astra", liked: true });
   apply(host, values);
   assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5", "gpt-6-astra"]);
   assert.equal(option("gpt-6-astra").liked, true);
   assert.equal(option("claude-opus-5-5").liked, false);
+  // a starred model's configuration among those used most, and the model still among the starred: the two apart
   core.inner.choose.used("ws/st", { model: "gpt-6-astra", runtime: "codex", effort: null });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 1).near, []);
+  assert.deepEqual(v(values, 1).combos.map((c: J) => [c.model, c.runtime, c.effort ?? null]), [["gpt-6-astra", "codex", null]]);
   assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5", "gpt-6-astra"]);
-  // unstarred: back among those used most
+  // unstarred: gone from the starred, its configuration where it was
   await ask(host, core, ui, 4, "pick.like", { station: "ws/st", of: "new", model: "gpt-6-astra", liked: false });
   apply(host, values);
   assert.deepEqual(v(values, 1).liked, ["claude-sonnet-5"]);
-  assert.deepEqual(v(values, 1).near, ["gpt-6-astra"]);
+  assert.deepEqual(v(values, 1).combos.map((c: J) => c.model), ["gpt-6-astra"]);
   assert.equal(option("gpt-6-astra").liked, false);
   core.close();
 });

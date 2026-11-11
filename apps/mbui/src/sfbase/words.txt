@@ -1063,6 +1063,7 @@ web-main.model.fastNote
 web-main.model.models
 web-main.model.allModels
 web-main.model.likeModel
+web-main.model.forgetCombo
 web-main.model.noMatch
 web-main.model.none
 web-main.model.otherSeries

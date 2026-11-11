@@ -1072,6 +1072,7 @@ let zh : Map[String, String] = {
   "web-main.model.models": "模型",
   "web-main.model.allModels": "全部模型",
   "web-main.model.likeModel": "喜欢 {model}",
+  "web-main.model.forgetCombo": "从常用搭配移除 {name}",
   "web-main.model.noMatch": "没有匹配的模型",
   "web-main.model.none": "没有可用模型",
   "web-main.model.otherSeries": "其他",

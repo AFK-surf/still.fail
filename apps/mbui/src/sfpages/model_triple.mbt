@@ -1,8 +1,9 @@
 // The one way a model is chosen (still.fail web/src/ModelTriple.tsx, ModelTriple.css.ts; NewChat.kt's run picker said the
 // same): a control that says the model, the runtime (where it can still change and the model runs on more than one),
 // how hard it thinks and who runs it, in one line; pressed, its panel through the presenters (beside it with keyboard and mouse,
-// a sheet with touch): the models, each saying how it runs picked (as it last ran here), the ones used most nearest
-// what opened it, the rest past them (a filter over them when there are many); between them and it the runtime, the
+// a sheet with touch): the configurations used most here nearest what opened it (a model with how it runs, the core's
+// `combos`), then the starred models, each saying how it runs picked (as it last ran here), the rest past them (a
+// filter over them when there are many); between them and it the runtime, the
 // effort and the speed, every name whole; at its foot who runs it (the accounts in a panel of their own, from it).
 // Its rows are the screen's (Theme::rows pick). Each pick is made what it runs on as it is picked (`pick.save`), a
 // model closing the panel; a model another station has is drafted (`pick.set`) and borrowed first, asked in a dialog.
@@ -50,10 +51,13 @@ priv struct TriplePanel {
   /// what its stops for how hard it thinks keep between builds (@sf.stops), those of each of a sheet's steps ("" its
   /// first)
   effort_stops : Map[String, @sf.Stops]
-  /// the models of its first level, as they stood when it opened and those come to it since, those used most (and
-  /// the one picked where it is neither) and those starred: one starred or not since stays where it was while the
-  /// panel is open
+  /// the models of its first level after the configurations used most, as they stood when it opened and those come to
+  /// it since: the one picked where it is not starred (where the rest are a level further) and those starred: one
+  /// starred or not since stays where it was while the panel is open
   mut first : (Array[String], Array[String])?
+  /// the configurations used most as they stood when it opened: one taken out since (`pick.forget`) stays where it was,
+  /// said to be gone, till the panel opens again, so nothing under the hand moves and the panel keeps its height
+  mut combos_first : Array[Json]?
 }
 
 ///|
@@ -164,7 +168,7 @@ pub fn open_triple_panel(
   if accounts {
     triple.accounts_asked = true
   }
-  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: triple_no_kind, all: false, pick: page, sheet: false, shown: {}, asks, effort_stops: {}, first: None }
+  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: triple_no_kind, all: false, pick: page, sheet: false, shown: {}, asks, effort_stops: {}, first: None, combos_first: None }
   pick_draft(src, station, of, { "open": Json::boolean(true) })
   // (as wide as its models and how hard it thinks beside them; wider where they are many, their makers a column
   // before them)
@@ -531,13 +535,14 @@ fn triple_panel(
   if v is None {
     // (read the first time: the panel of made-up models, in its bones; the model picked brought into view once its own
     // are read)
-    let (shown, first) = (contents.shown.copy(), contents.first)
+    let (shown, first, combos_first) = (contents.shown.copy(), contents.first, contents.combos_first)
     @sf.waiting(c, fn() { triple_body(c, @sfbase.sample_source, station, of, contents, Some(triple_sample()), saved, close, at) })
     contents.shown.clear()
     for k, v in shown {
       contents.shown[k] = v
     }
     contents.first = first
+    contents.combos_first = combos_first
     return
   }
   triple_body(c, src, station, of, contents, v, saved, close, at)
@@ -576,8 +581,8 @@ fn triple_body(
     text(o, "model").to_lower().contains(words) ||
     items(o, "ids").iter().any(fn(i) { i is String(s) && s.to_lower().contains(words) })
   })
-  // two levels (2026-11-02 用户「两级优化」): first the models used most here (the core's `near`), nearest what opened
-  // the panel, then those starred (`liked`), then the way to all of them; there, every model of a maker (the core's
+  // two levels (2026-11-02 用户「两级优化」): first the configurations used most here (the core's `combos`), nearest
+  // what opened the panel, then the models starred (`liked`), then the way to all of them; there, every model of a maker (the core's
   // `makers`, 「分组应该是模型厂商，而不是供应商」; 「我 20 个 provider 你怎么排」: a list of them, not a row), each starred
   // there by the box before it (「星标改成前面的选择框」). Typed, every one that matches, whatever its kind. None used nor starred: all of them at
   // once.
@@ -586,7 +591,30 @@ fn triple_body(
     guard id is String(id) else { return None }
     options.search_by(fn(o) { text(Some(o), "model") == id }).map(fn(i) { options[i] })
   }
-  let near : Array[Json] = items(v, "near").filter_map(model_of)
+  let combos_now : Array[Json] = items(v, "combos").filter_map(fn(x) {
+    if x is Object(_) && model_of(Json::string(text(Some(x), "model"))) is Some(_) {
+      Some(x)
+    } else {
+      None
+    }
+  })
+  // (as they stood when the panel opened, each as the core says it now; one taken out since where it was, gone)
+  let combos : Array[(Json, Bool)] = match contents.combos_first {
+    Some(was) =>
+      was.map(fn(x) {
+        let key = triple_combo_key(Some(x))
+        match combos_now.search_by(fn(y) { triple_combo_key(Some(y)) == key }) {
+          Some(i) => (combos_now[i], false)
+          None => (x, true)
+        }
+      })
+    None => {
+      if !c.in_bones() && v is Some(_) {
+        contents.combos_first = Some(combos_now)
+      }
+      combos_now.map(fn(x) { (x, false) })
+    }
+  }
   let liked : Array[Json] = items(v, "liked").filter_map(model_of)
   let kinds = items(v, "makers")
   let kind_of = fn(o : Json) -> String { text(field(Some(o), "maker"), "id") }
@@ -594,7 +622,7 @@ fn triple_body(
   // 全部模型 and its makers to reach one); more, those used most and starred first and the rest a level further, by
   // their makers, a maker's models a step past them (2026-11-02 用户「我 20 个 provider 你怎么排」)
   let flat = kinds.length() < 2 || options.length() <= triple_flat_most
-  let has_first = !near.is_empty() || !liked.is_empty()
+  let has_first = !combos.is_empty() || !liked.is_empty()
   let all = searching || (!flat && ((if sheet { at != "" } else { contents.all }) || !has_first))
   // (the kind asked for: a sheet's step's, else the one chosen in the panel)
   // (none asked for is no maker's id: the makers with none known, 其他, have the id "", and a step into them was
@@ -707,28 +735,40 @@ fn triple_body(
     let name = if usual_w > 0.0 { name + @ui.Space::px(S1_5) + usual_w } else { name }
     dmax(dmax(m, name), c.words_across(text(field(o, "spent"), "text"), triple_note))
   })
-  // (and the sides of the capsule how one of those used most runs is in)
-  let names_w = (if near.is_empty() { names_w } else { names_w + 2.0 * @ui.Space::px(S2) }).ceil()
+  // (and the configurations used most: a name, how it runs in a capsule after it, the capsule's sides with it)
+  let names_w = combos
+    .fold(init=names_w, fn(m, xg) {
+      let x = Some(xg.0)
+      dmax(
+        m,
+        c.words_across(text(x, "name"), triple_row_picked) +
+        @ui.Space::px(S1_5) +
+        c.words_across(text(x, "text"), triple_combo_words) +
+        2.0 * @ui.Space::px(S2),
+      )
+    })
+    .ceil()
   // (the panel at least as wide as a row with the widest name and the widest of how it runs, and its star, where it
   // has the room)
   let row_least = names_w + 14.0 + @sf.icon_button_side + 4.0 * @ui.Space::px(S1_5) + 2.0 * @ui.Space::px(S2_5) +
     @ui.Space::px(S3_5)
   c.box(style=@ui.style(min_w=Within(row_least)), fn() {  }) |> ignore
   let up = @sf.panel_opens_up()
-  // the first level, two of them told apart (the user, 2026-11-10: 「感觉常用模型配置需要跟普通的收藏模型从 ui 上区分
-  // 开」, of the two in one list, each a name with grey words after it): those used most, each a model with how it
-  // runs, under their name (常用搭配), how each runs in a capsule after its name, the most used nearest what opened
-  // the panel (2026-11-01 用户「那它就不应该跑到离按钮很远的最顶上去啊」); and those starred, plain models told by their
-  // stars, past them with room between. Each its star at its end (lit while starred; pressed, starred or not where
-  // it stands); the one picked with those used most where it is neither. Each stays where it was while the panel is
-  // open, starred or not since.
+  // the first level, two things told apart (the user, 2026-11-10: 「感觉常用模型配置需要跟普通的收藏模型从 ui 上区分
+  // 开」; and then 「我常用只有一个 sonnet 是什么逻辑」「收藏跟常用不一样」「常用包括了思考深度和速度还有上下文长度」
+  // 「是一种配置」): those used most, each a configuration (the core's `combos`: a model with its runtime, how hard it
+  // thinks, how fast and how much context; one model run two ways two rows), under their name (常用搭配), how each
+  // runs in a capsule after its name, no star (a configuration is not starred) but what takes it out of them where a
+  // star is (「常用模型应该是一种特定配置，并且可以删掉，跟模型没有关系」), the most used nearest what opened the
+  // panel (2026-11-01 用户「那它就不应该跑到离按钮很远的最顶上去啊」); and every starred model, plain models told by
+  // their stars, past them with room between, one of them there whether or not a configuration of it is used most.
+  // Each model its star at its end (lit while starred; pressed, starred or not where it stands); the one picked, where
+  // it is not starred, after them where the rest are a level further (in the one list of a few, among the rest), so it
+  // is always in sight as a model. Each model stays where it was while the panel is open, starred or not since.
   let now_used : Array[String] = []
   match model_of(Json::string(picked)) {
-    Some(o) if !near.contains(o) && !liked.contains(o) => now_used.push(picked)
+    Some(o) if !flat && !liked.contains(o) => now_used.push(picked)
     _ => ()
-  }
-  for o in near {
-    now_used.push(text(Some(o), "model"))
   }
   let now_liked : Array[String] = liked.map(fn(o) { text(Some(o), "model") })
   let (used_ids, liked_ids) = match contents.first {
@@ -755,16 +795,14 @@ fn triple_body(
       (now_used, now_liked)
     }
   }
-  let used : Array[Json] = used_ids.filter_map(fn(id) { model_of(Json::string(id)) })
-  let starred : Array[Json] = liked_ids.filter_map(fn(id) { model_of(Json::string(id)) })
+  // (the starred, then the one picked where it is not)
+  let starred : Array[Json] = (liked_ids + used_ids).filter_map(fn(id) { model_of(Json::string(id)) })
   // (the rest of a few, past them in the same list, in the core's order)
   let others : Array[Json] = if flat {
     options.filter(fn(o) { !used_ids.contains(text(Some(o), "model")) && !liked_ids.contains(text(Some(o), "model")) })
   } else {
     []
   }
-  // (those used most named as what they are where any is: the one picked alone there is no combination)
-  let used_head = !near.is_empty()
   // the models' room as tall as what it holds at each level, up to a most, scrolling in itself past that (the user,
   // 2026-11-10: 「感觉不用固定高度吧，不能做到撑开吗？定个最大高度」, of a room as tall at every level, what a short
   // level did not need left empty over it): beside what opened it the web's 360; in a sheet eight rows and a half
@@ -868,28 +906,30 @@ fn triple_body(
     if !all {
       // (the way to all of them under them)
       let room = c.box(style=triple_room, h?=level_h, justify?=level_ends, fn() {
-        let rows = fn(of_them : Array[Json], combo : Bool) {
+        let rows = fn(of_them : Array[Json]) {
           for o in of_them {
-            triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close, combo~)
+            triple_model_row(c, src, station, of, v, Some(o), names_w, saved, close)
           }
         }
         // (its groups one after another, room between two that both hold something)
         let groups : Array[(Bool, () -> Unit)] = [
           (
-            !used.is_empty(),
+            !combos.is_empty(),
             fn() {
-              if used_head {
-                triple_column_head(c, @sf.t("web-main.combos.label"))
+              triple_column_head(c, @sf.t("web-main.combos.label"))
+              for xg in if up { combos.rev() } else { combos } {
+                let (x, gone) = xg
+                triple_combo_row(c, src, station, of, v, Some(x), model_of(Json::string(text(Some(x), "model"))), names_w, saved, close, gone~)
               }
-              rows(if up { used.rev() } else { used }, used_head)
             },
           ),
-          (!starred.is_empty(), fn() { rows(starred, false) }),
-          (!others.is_empty(), fn() { rows(others, false) }),
+          (!starred.is_empty(), fn() { rows(starred) }),
+          (!others.is_empty(), fn() { rows(others) }),
         ]
         let shown = groups.filter(fn(g) { g.0 })
         scroll("triple/first", if flat { list_most } else { list_most - row_h }, fn() {
-          // (those used most nearest what opened the panel, those starred past them, the rest of a few past those)
+          // (the configurations used most nearest what opened the panel, the starred past them, the rest of a few past
+          // those)
           for i, g in if up { shown.rev() } else { shown } {
             if i > 0 {
               c.box(style=triple_apart, fn() {  }) |> ignore
@@ -1019,28 +1059,44 @@ fn triple_body(
     |> ignore
   }
   // the model picked in view as the panel opens and as each level is come to (2026-11-05 用户「模型选择面板打开不会自动
-  // 滚动到能看见已选择模型的地方」), not while what is typed filters them
-  let level = if !all { "first" } else if kind_open { "all/" + kind } else { "all" }
+  // 滚动到能看见已选择模型的地方」), not while what is typed filters them; and again once the panel is found to stand
+  // above what opened it (its side is the presenters' once it is laid out: a panel flipped up for want of room below
+  // is first built as one going down, its rows in the other order and the one to bring into view another; shown for
+  // that alone, the row nearest the hand was left a row past the scroller's foot, under the panel's, 2026-11-10)
+  let level = (if !all { "first" } else if kind_open { "all/" + kind } else { "all" }) + (if up { "/up" } else { "" })
   let shown_was = contents.shown.get(at).unwrap_or("")
   if !searching && shown_was != level {
     // (a first level opening up from what opened it starts at its foot, nearest the hand, where the one picked shows
     // from there; else at the one picked. One of the two, said once: brought to the foot and then to the one picked,
     // each as the other had been laid out, a sheet's step did not come to rest, 2026-11-10)
-    let nearest = match (used.get(0), starred.last(), others.last()) {
-      (Some(o), _, _) | (None, Some(o), _) | (None, None, Some(o)) => text(Some(o), "model")
+    // (each by its row's key: a configuration's, a model's)
+    let model_key = fn(o : Json) { "triple/model/" + text(Some(o), "model") }
+    let nearest = match (combos.get(0), starred.last(), others.last()) {
+      (Some(x), _, _) => triple_combo_key(Some(x.0))
+      (None, Some(o), _) | (None, None, Some(o)) => model_key(o)
       _ => ""
     }
     let is_picked = fn(o : Json) { text(Some(o), "model") == picked }
-    let from_foot = match (used.search_by(is_picked), starred.search_by(is_picked), others.search_by(is_picked)) {
-      (Some(i), _, _) => i
-      (None, Some(j), _) => used.length() + starred.length() - 1 - j
-      (None, None, Some(k)) => used.length() + starred.length() + others.length() - 1 - k
-      _ => 0
+    // (at the first level the configuration it runs on exactly, where one is, else its model)
+    let combo_on = if all { None } else { combos.search_by(fn(x) { !x.1 && flag(Some(x.0), "selected") }) }
+    let (picked_key, from_foot) = match combo_on {
+      Some(i) => (triple_combo_key(Some(combos[i].0)), i)
+      None =>
+        (
+          "triple/model/" + picked,
+          // (the configurations' title a row under it too)
+          (if combos.is_empty() { 0 } else { 1 }) +
+          (match (starred.search_by(is_picked), others.search_by(is_picked)) {
+            (Some(j), _) => combos.length() + starred.length() - 1 - j
+            (None, Some(k)) => combos.length() + starred.length() + others.length() - 1 - k
+            _ => 0
+          }),
+        )
     }
     let rows_in_view = ((if flat { list_most } else { list_most - row_h }) / row_h).to_int()
-    let to = if !all && up && nearest != "" && from_foot < rows_in_view - 1 { nearest } else { picked }
+    let to = if !all && up && nearest != "" && from_foot < rows_in_view - 1 { nearest } else { picked_key }
     contents.shown[at] = level
-    c.show(c.id("triple/model/" + to))
+    c.show(c.id(to))
   }
   // the model picked is another station's: said over the foot, which borrows it rather than confirming
   let borrow = field(v, "borrow")
@@ -1269,7 +1325,7 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, content
 ///|
 /// A model's row: its maker's mark, its name (what it has spent under it) `names_w` wide (the widest of the models'),
 /// how it runs picked right after its name (cut short first where the row is short), at its end the station it comes
-/// from (`combo`: one of those used most, how it runs a capsule after its name); beside it at its end its star, lit
+/// from; beside it at its end its star, lit
 /// while it is starred: pressed, starred or not (`pick.like`). Pressed,
 /// picked as the core says it runs picked (its `usual`): as it last ran here; one that never ran here, with what was
 /// set by hand in the panel since it opened, where it takes it.
@@ -1283,7 +1339,6 @@ fn triple_model_row(
   names_w : Double,
   saved : String,
   close : () -> Unit,
-  combo? : Bool = false,
 ) -> Unit {
   let t = @sf.theme()
   let model = text(o, "model")
@@ -1296,8 +1351,9 @@ fn triple_model_row(
   let ids = items(o, "ids").filter_map(fn(i) { if i is String(s) { Some(s) } else { None } }).join("\n")
   // how it would run picked, after its name (the core's: as it last ran here; one never run here, how it was set by
   // hand in the panel since it opened; the user, 2026-11-10: 「常用模型按理说是包括思考深度的，这样随便切会让常用模型的
-  // 配置失效」, of every model picked taking what was set by hand); nothing after the one picked, whose own is what the
-  // panel shows under the models
+  // 配置失效」, of every model picked taking what was set by hand; what is used most is a configuration of its own
+  // now, triple_combo_row, the user, 2026-11-10: 「常用包括了思考深度和速度还有上下文长度」「是一种配置」); nothing
+  // after the one picked, whose own is what the panel shows under the models
   let usual = if picked { "" } else { text(o, "usualText") }
   let from_station = match field(o, "fromStation") {
     Some(Object(_)) as fs =>
@@ -1386,14 +1442,7 @@ fn triple_model_row(
               // is after it gives way first)
               c.box(keep=true, name) |> ignore
               // (giving way to the name where the row is short: what the name leaves of it, cut short)
-              c.box(style=triple_usual_room, fn() {
-                if combo {
-                  // (one of those used most: how it runs a capsule, part of what the row is)
-                  c.box(style=triple_combo, fn() { c.text(usual, style=triple_combo_words) |> ignore }) |> ignore
-                } else {
-                  c.text(usual, style=triple_usual) |> ignore
-                }
-              })
+              c.box(style=triple_usual_room, fn() { c.text(usual, style=triple_usual) |> ignore })
               |> ignore
             })
             |> ignore
@@ -1411,6 +1460,144 @@ fn triple_model_row(
   })
   |> ignore
 }
+
+///|
+/// A configuration's row's key: its model, runtime, how hard it thinks, how fast and how much context, so two of one
+/// model are two.
+fn triple_combo_key(x : Json?) -> String {
+  let fast = match field(x, "fast") {
+    Some(True) => "fast"
+    Some(False) => "standard"
+    _ => ""
+  }
+  let context = match field(x, "context") {
+    Some(Number(n, ..)) => n.to_int64().to_string()
+    _ => ""
+  }
+  "triple/combo/" + text(x, "model") + "/" + text(x, "runtime") + "/" + text(x, "effort") + "/" + fast + "/" + context
+}
+
+///|
+/// A configuration used most (`x`, one of the pick's `combos`; `o` its model): its maker's mark, its model's name, how
+/// it runs (the core's `text`) in a capsule after it, part of what the row is; drawn picked while it is exactly what
+/// is drafted (`selected`). No star, a configuration is not starred: where a model's star is, what takes it out of
+/// those used most (`pick.forget`, the user, 2026-11-10: 「常用模型应该是一种特定配置，并且可以删掉，跟模型没有关系」),
+/// a press of its own beside the row, the panel open. Taken out (`gone`: no longer the core's, the panel still open),
+/// it stays where it stood, quiet, nothing to press, till the panel opens again: a row gone at once took the panel
+/// another height in a frame (sizes_steady), what was under the hand moving. Pressed, the panel closes and all of it is
+/// made what it runs on at once (`pick.save`): nothing sent where it already runs on it.
+fn triple_combo_row(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  of : String,
+  v : Json?,
+  x : Json?,
+  o : Json?,
+  names_w : Double,
+  saved : String,
+  close : () -> Unit,
+  gone? : Bool = false,
+) -> Unit {
+  let on = !gone && flag(x, "selected")
+  let name = text(x, "name")
+  let how = text(x, "text")
+  let go = fn() {
+    triple.open = ""
+    close()
+    if !on || flag(v, "changed") {
+      let p : Map[String, Json] = { "model": Json::string(text(x, "model")) }
+      for k in ["runtime", "effort", "fast", "context"] {
+        p[k] = field(x, k).unwrap_or(Json::null())
+      }
+      pick_save(src, station, of, p, done=saved)
+    }
+  }
+  // (what the row shows: its maker's mark, its name, how it runs)
+  let body = fn() {
+        @sf.maker_mark(c, text(field(o, "maker"), "id"), text(x, "runtime"), 14.0) |> ignore
+        c.box(style=triple_name_column.then(@ui.style(w=Fixed(names_w))), fn() {
+          c.box(style=triple_name_line, fn() {
+            c.box(keep=true, fn() {
+              c.text(name, style=if gone { triple_row_gone } else if on { triple_row_picked } else { triple_row_name })
+              |> ignore
+            })
+            |> ignore
+            // (giving way to the name where the row is short: cut short, all of it where the name leaves no room;
+            // its capsule's sides too, which would else stand over what is at the row's end: said_at_its_longest)
+            if how != "" {
+              c.box(style=triple_combo_room, fn() {
+                c.box(style=triple_combo, fn() { c.text(how, style=if gone { triple_usual } else { triple_combo_words }) |> ignore })
+                |> ignore
+              })
+              |> ignore
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+  }
+  c.box(style=triple_liking, fn() {
+    c.box(style=triple_models_column, fn() {
+      if gone {
+        // (taken out: its words where they stood, quiet, as wide as a row's with its check's room, nothing in it to
+        // press, point at or name as a button)
+        c.box(style=triple_option_gone.then(@ui.style(min_h=Fixed(@sf.theme().rows.pick))), fn() {
+          body()
+          c.box(style=triple_end, fn() {
+            if @sf.in_small_panel() {
+              c.box(style=triple_check_room, fn() {  }) |> ignore
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+      } else {
+        triple_option(c, triple_combo_key(x), if how == "" { name } else { name + " · " + how }, on, body, on_press=go)
+      }
+    })
+    |> ignore
+    // (beside it, where a model's star is: taken out of those used most; once taken out, its room kept)
+    if gone {
+      c.box(style=triple_star_room, fn() {  }) |> ignore
+      return
+    }
+    let t = @sf.theme()
+    let p = pick_params(station, of)
+    p["model"] = Json::string(text(x, "model"))
+    for k in ["runtime", "effort", "fast", "context"] {
+      p[k] = field(x, k).unwrap_or(Json::null())
+    }
+    @sf.icon_button(
+      c,
+      "close",
+      key=triple_combo_key(x) + "/forget",
+      round=true,
+      ink=t.p.muted,
+      label=@sf.t("web-main.model.forgetCombo", args=[("name", if how == "" { name } else { name + " · " + how })]),
+      on_press=fn() {
+        (src.call)("pick.forget", Json::object(p), fn(res) {
+          match res {
+            Ok(_) => ()
+            Err(e) => toast_later(@sf.t("web-main.pick.failed", args=[("error", error_words(e))]))
+          }
+        })
+      },
+    )
+  })
+  |> ignore
+}
+
+///|
+/// Where what takes a configuration out of those used most was, once it is taken out: as wide (@sf.icon_button_side, S8's
+/// 32).
+// kept across runs: a value (no field of it changes)
+let triple_star_room : @ui.Style = @ui.css("w=S8")
+
+///|
+/// A configuration's name once it is taken out of those used most, the panel still open: the rows' words, quiet.
+// kept across runs: a value (no field of it changes)
+let triple_row_gone : @ui.TextStyle = @ui.text_style(size=Ui, color=Muted, w=Full, max_lines=2)
 
 ///|
 /// A pick row's icon (a maker's mark, Fast's bolt) and its chevron.
@@ -1875,6 +2062,13 @@ let triple_option_style : @ui.Style = @ui.css(
 ).then(@ui.style(radius=@sf.panel_in))
 
 ///|
+/// A configuration's row once it is taken out (triple_combo_row's `gone`): a row's room, no ground under the pointer.
+// kept across runs: a value (no field of it changes)
+let triple_option_gone : @ui.Style = @ui.css(
+  #|row w=Full px=S2_5 py=S1 gap=S1_5 align=ACenter
+).then(@ui.style(radius=@sf.panel_in))
+
+///|
 // kept across runs: a value (no field of it changes)
 let triple_option_on : @ui.Style = @ui.css(
   #|row w=Full px=S2_5 py=S1 gap=S1_5 align=ACenter bg=Hover
@@ -1958,6 +2152,11 @@ let triple_combo : @ui.Style = @ui.css("row h=S5 px=S2 align=ACenter radius=Full
 ///|
 // kept across runs: a value (no field of it changes)
 let triple_combo_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false, w=Cut)
+
+///|
+/// A configuration's capsule's room: as its words', down to nothing, the capsule cut where the name leaves less.
+// kept across runs: a value (no field of it changes)
+let triple_combo_room : @ui.Style = triple_usual_room.then(@ui.css("min_w=S0 clip"))
 
 ///|
 /// Its room: right after the name, what the name leaves of the row.

@@ -380,13 +380,90 @@ fn fix_shown_models() -> Array[Json] {
 }
 
 ///|
-/// The models new chats here started on most, most first.
-fn fix_near() -> Array[String] {
-  if new_fix.crowded {
-    ["gpt-6-astra", "deepseek-v4-1-flash", "swe-2"]
-  } else {
-    ["claude-opus-5-5", "gpt-6"]
+/// A runtime by its short name, as the core says it after a model's name in a model control's panel (format.ts
+/// runtimeShort): CC, DSH.
+fn fix_runtime_short(runtime : String) -> String {
+  match runtime {
+    "claude" => "CC"
+    "codex" => "Codex"
+    "dsh" => "DSH"
+    "grok" => "GROK"
+    "cursor" => "Cursor"
+    "devin" => "Devin"
+    "hermes" => "Hermes"
+    "agy" => "AGY"
+    _ => "CC"
   }
+}
+
+///|
+/// The configurations taken out of those used most (`pick.forget`), each by fix_combo_key.
+let fix_forgotten : Array[String] = []
+
+///|
+/// A configuration by what it is: its model, runtime, effort and context (its tokens in digits, "" its whole window).
+fn fix_combo_key(model : String, runtime : String, effort : String, context : String) -> String {
+  model + "\u{1}" + runtime + "\u{1}" + effort + "\u{1}" + context
+}
+
+///|
+/// The configurations new chats here started on most, most first, as the core's `combos` has them: one model run two
+/// ways (Opus 5.5 at its whole window and kept to 300K; GPT-6 Astra 中 and 高), and one of a model the `-liked` modes
+/// and the tests star (Sonnet 5, Kimi For Coding), whichever is starred; those taken out (`pick.forget`:
+/// fix_forgotten) left out. Each `selected` while it is exactly what is drafted.
+fn fix_combos() -> Json {
+  let n = new_fix
+  let effort_word = fn(e : String) {
+    match e {
+      "low" => "低"
+      "medium" => "中"
+      "high" => "高"
+      _ => "默认深度"
+    }
+  }
+  // (model, runtime, effort, context in thousands of tokens: 0 its whole window)
+  let all : Array[(String, String, String, Int)] = if n.crowded {
+    [
+      ("gpt-6-astra", "codex", "medium", 0),
+      ("deepseek-v4-1-flash", "dsh", "high", 0),
+      ("gpt-6-astra", "codex", "high", 0),
+      ("kimi-for-coding", "claude", "high", 0),
+    ]
+  } else {
+    [
+      ("claude-opus-5-5", "claude", "high", 0),
+      ("gpt-6", "codex", "medium", 0),
+      ("claude-opus-5-5", "claude", "high", 300),
+      ("claude-sonnet-5", "claude", "low", 0),
+    ]
+  }
+  Json::array(
+    all
+    .filter(fn(c) { !fix_forgotten.contains(fix_combo_key(c.0, c.1, c.2, if c.3 > 0 { "\{c.3 * 1000}" } else { "" })) })
+    .map(fn(c) {
+      let (model, runtime, effort, context) = c
+      let o = Some(fix_model(model))
+      let parts = []
+      if items(o, "runtimes").length() > 1 {
+        parts.push(fix_runtime_short(runtime))
+      }
+      parts.push(effort_word(effort))
+      if context > 0 {
+        parts.push("\{context}K")
+      }
+      let tokens = if context > 0 { "\{context * 1000}" } else { "" }
+      {
+        "model": Json::string(model),
+        "runtime": Json::string(runtime),
+        "effort": Json::string(effort),
+        "fast": Json::null(),
+        "context": if context > 0 { Json::number((context * 1000).to_double()) } else { Json::null() },
+        "name": Json::string(text(o, "name")),
+        "text": Json::string(parts.join(" · ")),
+        "selected": Json::boolean(n.d_model == model && n.d_runtime == runtime && n.d_effort == effort && n.context == tokens),
+      }
+    }),
+  )
 }
 
 ///|
@@ -408,9 +485,9 @@ pub fn fix_pick() -> Json {
   }
   {
     "options": fix_pick_options(fix_shown_models()),
-    // (those used most, the starred left out)
-    "near": Json::array(fix_near().filter(fn(m) { !n.liked.contains(m) }).map(Json::string(_))),
-    // (every one starred, however often used)
+    // (the configurations used most, starred or not)
+    "combos": fix_combos(),
+    // (every model starred, one of the configurations used most or not)
     "liked": Json::array(n.liked.map(Json::string(_))),
     // (the makers of its models, in their order, as the core says them)
     "makers": {
@@ -497,7 +574,7 @@ pub fn fix_pick() -> Json {
 
 ///|
 /// The models as the model control has them: each as it last ran here (`usual`, `usualText`; the one drafted as it is
-/// drafted) and how often new chats started on it (`uses`): the new chat's frequent ones, the rest never used.
+/// drafted): the new chat's frequent ones, the rest never used.
 fn fix_pick_options(all : Array[Json]) -> Json {
   let n = new_fix
   let effort_word = fn(e : String) {
@@ -509,11 +586,11 @@ fn fix_pick_options(all : Array[Json]) -> Json {
       _ => ""
     }
   }
-  // (model: runtime, effort, uses)
-  let used : Map[String, (String, String, Int)] = if n.crowded {
-    { "gpt-6-astra": ("codex", "medium", 6), "deepseek-v4-1-flash": ("dsh", "high", 4), "swe-2": ("devin", "high", 2) }
+  // (model: runtime, effort)
+  let used : Map[String, (String, String)] = if n.crowded {
+    { "gpt-6-astra": ("codex", "medium"), "deepseek-v4-1-flash": ("dsh", "high"), "swe-2": ("devin", "high") }
   } else {
-    { "claude-opus-5-5": ("claude", "high", 9), "gpt-6": ("codex", "medium", 5) }
+    { "claude-opus-5-5": ("claude", "high"), "gpt-6": ("codex", "medium") }
   }
   Json::array(
     all.map(fn(o) {
@@ -523,13 +600,9 @@ fn fix_pick_options(all : Array[Json]) -> Json {
           let model = text(Some(o), "model")
           m["liked"] = Json::boolean(n.liked.contains(model))
           let many = items(Some(o), "runtimes").length() > 1
-          let ran = if model == n.d_model {
-            Some((n.d_runtime, n.d_effort, used.get(model).map(fn(u) { u.2 }).unwrap_or(0)))
-          } else {
-            used.get(model)
-          }
+          let ran = if model == n.d_model { Some((n.d_runtime, n.d_effort)) } else { used.get(model) }
           match ran {
-            Some((runtime, effort, uses)) => {
+            Some((runtime, effort)) => {
               m["usual"] = {
                 "runtime": Json::string(runtime),
                 "effort": if effort == "" { Json::null() } else { Json::string(effort) },
@@ -537,7 +610,7 @@ fn fix_pick_options(all : Array[Json]) -> Json {
               }
               let parts = []
               if many {
-                parts.push(@settings.runtime_label(runtime))
+                parts.push(fix_runtime_short(runtime))
               }
               if effort_word(effort) != "" {
                 parts.push(effort_word(effort))
@@ -545,9 +618,8 @@ fn fix_pick_options(all : Array[Json]) -> Json {
               if parts.length() > 0 {
                 m["usualText"] = Json::string(parts.join(" · "))
               }
-              m["uses"] = Json::number(uses.to_double())
             }
-            None => m["uses"] = Json::number(0.0)
+            None => ()
           }
           Json::object(m)
         }
@@ -873,6 +945,18 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       f.changed()
       Some(Ok(Json::object({})))
     }
+    "pick.forget" => {
+      let s = fn(k : String) {
+        match field(p, k) {
+          Some(String(v)) => v
+          Some(Number(n, ..)) => n.to_int64().to_string()
+          _ => ""
+        }
+      }
+      fix_forgotten.push(fix_combo_key(s("model"), s("runtime"), s("effort"), s("context")))
+      f.changed()
+      Some(Ok(Json::object({})))
+    }
     "pick.save" => {
       // (with picks of its own, a model's as it last ran or a change in the panel: those picked first)
       take("model", fn(s) {
@@ -882,7 +966,11 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       take("runtime", fn(s) { n.d_runtime = s })
       take("effort", fn(s) { n.d_effort = s })
       take("profile", fn(s) { n.d_profile = s })
-      take("context", fn(s) { n.context = s })
+      // (in tokens, as a configuration used most has it, or its digits, as the panel's context says it)
+      match field(p, "context") {
+        Some(Number(k, ..)) => n.context = k.to_int64().to_string()
+        _ => take("context", fn(s) { n.context = s })
+      }
       n.model = n.d_model
       n.runtime = n.d_runtime
       n.effort = n.d_effort
