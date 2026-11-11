@@ -493,7 +493,7 @@ for t in $targets; do
   # (how what moves goes, said where a run counts it (MBUI_TEST_MOTION=count): all of it kept, past LINES_OUT's tail)
   [ -z "${MOTION_OUT:-}" ] || grep -a '^MOTION ' "$out" >> "$MOTION_OUT"
   # (the pace passes' lines, all of them, past LINES_OUT's tail: #5374's numbers)
-  grep -a '^PACE\|^LOOKS-FAIL \|^C811P ' "$out" | sed 's/^/NUMBERS /'
+  grep -a '^PACE\|^LOOKS-FAIL \|^C811P \|^MOTION ' "$out" | sed 's/^/NUMBERS /'
   grep -v "$F" "$out" | grep -av '^MOTION ' | grep -v '^Total tests' | tail -${LINES_OUT:-60}
   grep '^Total tests' "$out"
   [ -z "${TIMES:-}" ] || cat "$out".time.* 2>/dev/null | sort -rn | sed 's/^/test.sh: a run of /'

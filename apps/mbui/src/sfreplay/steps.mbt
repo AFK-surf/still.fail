@@ -177,6 +177,10 @@ pub fn Flow::start(
   pace_pass.val = pace_between(seed) is Some(_)
   pace_failed.val = false
   t.looks_said_only(pace_pass.val)
+  // (what it says from here, MOTION lines too, the pace pass's till its PACE-END)
+  if pace_pass.val {
+    println("PACE-BEGIN \{pass_trace.val} at \{(1000.0 / pace_between(seed).unwrap_or(1000.0)).round()} a second")
+  }
   // (which station this machine is, as the run's host said)
   if r.local_station() != "" {
     t.set_local_station(r.local_station())
@@ -736,6 +740,9 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
   }
   // (what it told the core, kept for orders' pace passes)
   pass_outs.val = self.r.outs()
+  if pace_pass.val {
+    println("PACE-END \{pass_trace.val}")
+  }
   let sum = screen_sum(self.t)
   @core.Replay::detach()
   // (what the app asked as the flow ended (a page gone at its slide's end, its player's place told): the script
