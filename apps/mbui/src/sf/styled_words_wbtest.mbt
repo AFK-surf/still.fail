@@ -32,7 +32,8 @@ test "styled_words: one line filling it, cut, said so; one saying nothing, cut, 
   // (laid out alike: saying it may be cut is no layout of its own)
   assert_eq(a.w, b.w)
   assert_true(a.w <= 60.0, msg=a.w.to_string())
-  let faults = t.squeeze_faults().filter(fn(f) { f.contains(sw_long) })
+  // (named as the squeeze names a node: its first words)
+  let faults = t.squeeze_faults().filter(fn(f) { f.contains("words much") })
   assert_eq(faults.length(), 1, msg=faults.join("\n"))
   assert_true(faults[0].contains("cut short without saying they may be"), msg=faults[0])
 }
