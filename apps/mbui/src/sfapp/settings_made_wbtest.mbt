@@ -3,6 +3,19 @@
 // again; its rows pressed opening their pages.
 
 ///|
+/// The corner rule's fault known on the settings' list (Tester::corners_known), wherever the list has scrolled it, kept
+/// till the rows' layout is decided (the coordinator of the migration, 2026-11-12): the account's row (settings_row_node's
+/// Person, link_row_node's), its ground under the hand or with the focus 18 round, follows its card's 24 at 6 in, but
+/// in its own top left corner its picture, a circle 23 round (identity_mark), stands 16 from its top and its side
+/// (its words two lines, the row's lines up at its top): a corner of 18 too square for it there, the rule asking the
+/// row to stand alone round enough for it, 39, which would not follow the card. What would mend it: the picture in the
+/// row's middle, top to foot.
+// kept across runs: a value (no field of it changes)
+let settings_person_corners_known : Array[String] = [
+  "「林 林 lin@example.com」 (at 18,149 354×83, node 49) (corner 18) in the top left of 「林 林 lin@example.com」 (at 12,143 366×95, node 47) (corner 24): follows it, too square for the circle in its own corner to follow it in turn; it stands alone, round enough for that",
+]
+
+///|
 /// The settings' list on a small screen (`platform`'s input), 390 × `h`: drawn by the window's tree, its page made once.
 fn settings_home_tester(
   platform : Int,
@@ -14,6 +27,7 @@ fn settings_home_tester(
 ) -> (@ui.Tester, Source) {
   let src = fixture_app(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h~, platform~, corners_held~)
+  t.corners_known(settings_person_corners_known)
   // (the system's size of words as said)
   t.set_font_scale(scale)
   t.run_for(wait)

@@ -24,15 +24,23 @@ fn Node::shows_ground(self : Node) -> Bool {
 /// pointed at, pressed, chosen or focused (state_ground), a row pressed as a whole too (its ground under the pointer in
 /// its container's corner as any other's: the user, 2026-10-26, a dialog's last row lit, its corners not alike, not
 /// found); or, a press target rounded, not a row, the one it draws as it is lit (a button's hover or press ground drawn
-/// from Ctx::lit). The corner rule holds it as one with a ground, so a ground seen only under the hand is held to the
-/// rule as one at rest is, not only when a test happens to point at it (the user, 2026-10-25: a row's 归档 under the
-/// pointer stood off the row's corner, not found).
+/// from Ctx::lit); or a node of the window's tree whose ground, as it was last worked out, read the hand on a node or the
+/// keyboard's focus (ground_by_hand: View::ground's binding reading View::pointed, pressed, pointed_in, focused or
+/// focus_shown), a row's as anything's, whatever it read them to be now. The corner rule holds it as one with a
+/// ground, so a ground seen only under the hand is held to the rule as one at rest is, not only when a test happens to
+/// point at it (the user, 2026-10-25: a row's 归档 under the pointer stood off the row's corner, not found; till
+/// 2026-11-12 a tree's node held so only where it took presses and was rounded: a key's square hover ground in a
+/// capsule's end, a press target's lit ground in a card's corner, not said at rest).
 fn Node::lit_ground(self : Node) -> Bool {
   self.kind == kind_box &&
   self.opacity > 0.01 &&
   self.fw > 0.0 &&
   self.fh > 0.0 &&
-  (self.state_ground || (!self.pressed_row() && self.id != 0 && self.hit && self.radius >= 0.5))
+  (
+    self.state_ground ||
+    self.ground_by_hand ||
+    (!self.pressed_row() && self.id != 0 && self.hit && self.radius >= 0.5)
+  )
 }
 
 ///|
@@ -304,6 +312,7 @@ fn[T] Ctx::with_tree_nodes(
     last[parent] = i
     p.kids = p.kids + 1
   }
+  let grounds_read = @hostapi.keeps_sources()
   for k, h in held {
     let (d, holder, presses) = h
     let parent = if holder >= 0 { at[holder] } else { -1 }
@@ -331,6 +340,11 @@ fn[T] Ctx::with_tree_nodes(
     match tree_links.get(d.id) {
       Some(links) => n.links = @signals.untracked(links)
       None => ()
+    }
+    // (its ground shown under the hand or with the focus, whichever it is now: Node::lit_ground; noted only where the
+    // tree keeps sources, so asked only there)
+    if grounds_read {
+      n.ground_by_hand = (tree.ground_read(d.id) & (@view.ground_read_hand | @view.ground_read_focus)) != 0
     }
     n.glass = d.glass
     n.clip = d.clips
@@ -426,6 +440,14 @@ fn[T] Ctx::with_tree_nodes(
       tree_laid_spare.push(self.nodes[count + k])
     }
     self.nodes[count + k] = n
+  }
+  // (and those past the end, the frame's from now on, not the tree's: none of the old views' boxes made in them the
+  // next frame takes the mark of a ground under the hand, which Ctx::box does not set (an old confirm's button's words
+  // held as lit, till 2026-11-12))
+  if grounds_read {
+    for i in (count + kept.length())..<self.nodes.length() {
+      self.nodes[i].ground_by_hand = false
+    }
   }
   self.count = count
   out

@@ -246,6 +246,9 @@ struct Node {
   mut layer : Bool
   // a ground its style gives it in a state it is not in now (pointed at, pressed, chosen, focused): the corner rule's
   mut state_ground : Bool
+  // of a node of the window's tree's, its ground read the hand on a node or the keyboard's focus as it was last worked
+  // out (view's Tree::ground_read): a ground seen in a state it is not in now, the corner rule's as state_ground is
+  mut ground_by_hand : Bool
   // its margins (CSS's: outside its border, below 0 pulling what is beside it over it)
   mut mar_l : Double
   mut mar_t : Double
@@ -508,6 +511,7 @@ fn Node::new() -> Node {
     page_no: -1,
     layer: false,
     state_ground: false,
+    ground_by_hand: false,
     mar_l: 0.0,
     mar_t: 0.0,
     mar_r: 0.0,
@@ -780,6 +784,7 @@ let no_shapes : Array[Shape] = []
 /// What Ctx::box sets, all of it.
 fn Node::reset_look(self : Node) -> Unit {
   self.state_ground = false
+  self.ground_by_hand = false
   self.dir = Column
   self.rtl = false
   self.aspect = 0.0

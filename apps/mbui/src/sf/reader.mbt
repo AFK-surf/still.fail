@@ -2370,10 +2370,19 @@ let desk_size_row : @ui.Style = @ui.css("row w=Full align=ACenter radius=Xl2").t
 let desk_size_row_h : Double = 32.0 + 2.0 * corner_inset
 
 ///|
+/// A size's key (sizeKey): its corner its row's next step in, concentric with the row's (desk_size_key_corner).
 // kept across runs: a value (no field of it changes)
 let desk_size_key_box : @ui.Style = @ui.css(
-  #|h=S8 min_w=S11 px=S2_5 radius=Inner align=ACenter justify=JCenter hovered{bg=Tint} disabled{opacity=O35}
+  #|h=S8 min_w=S11 px=S2_5 align=ACenter justify=JCenter hovered{bg=Tint} disabled{opacity=O35}
 )
+
+///|
+/// How round a size's key is: its row's corner less the ladder's inset it stands in from the row's ends (18 less 8,
+/// 10), its tint under the hand concentric with the row's capsule end (said as radius=Inner, which a node of the
+/// window's tree's style does not work out: square till 2026-11-12).
+fn desk_size_key_corner() -> Double {
+  @ui.concentric(@ui.tree_theme().corner(Xl2), corner_inset)
+}
 
 ///|
 // kept across runs: a value (no field of it changes)

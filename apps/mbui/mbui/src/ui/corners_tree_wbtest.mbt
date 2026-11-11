@@ -99,16 +99,21 @@ test "corners of the window's tree: an old view's box 20 round in a node's 20's 
 }
 
 ///|
-test "corners of the window's tree: a node's ground shown only while pointed at, 20 round in a node's 20, said as all is lit, not at rest; the hand as it was after" {
+test "corners of the window's tree: a node's ground shown only while pointed at, 20 round in a node's 20, said at rest as all is lit (its ground read the hand: Node's ground_by_hand); the hand as it was after" {
   let follow = concentric(20.0, 6.0)
-  let t = tree_card(fn(v) {
-    v.radius(Is(20.0)).ground(By(fn() { if v.pointed() { 0xEEEEEEFFL } else { 0L } })) |> ignore
-  })
+  let t = tree_card(
+    fn(v) { v.radius(Is(20.0)).ground(By(fn() { if v.pointed() { 0xEEEEEEFFL } else { 0L } })) |> ignore },
+    corners_held=false,
+  )
   let rest = t.corner_faults()
   let lit = t.lit_all_faults()
   let tree = view_tree().unwrap()
   let after = t.corner_faults()
-  assert_eq((rest, wants(lit, follow), tree.pointed, tree.pressing, after), ([], true, None, None, []), msg=lit.join("\n"))
+  assert_eq(
+    (wants(rest, follow), wants(lit, follow), tree.pointed, tree.pressing, wants(after, follow)),
+    (true, true, None, None, true),
+    msg="\{rest}\n\{lit}",
+  )
 }
 
 ///|
@@ -721,4 +726,65 @@ test "the corner rule, a box said concentric whose foot is at the card's corner'
   let inside = inner_foot_faults(94.01)
   assert_eq((at_radius, a_hair_in), ([], []))
   assert_true(inside.length() == 1, msg="\{inside}")
+}
+
+///|
+/// The window's old frame beside the window's tree, whose nodes' grounds read the hand: drawn first with nothing in the
+/// old frame, then (`full` set) with a card 200×120, 20 round, holding 40 boxes one in another, 10×10, 6 in from its
+/// top left, with no ground of their own: the corner rule's faults of that frame.
+fn old_beside_lit_faults() -> Array[String] {
+  let full = @signals.signal(false)
+  let t = Tester::new(
+    fn(c) {
+      if full.get() {
+        c.box(w=Px(200.0), h=Px(120.0), pad=6.0, radius=20.0, bg=0x333333FFL, fn() {
+          fn nest(n : Int) -> Unit {
+            if n > 0 {
+              c.box(w=Px(10.0), h=Px(10.0), fn() { nest(n - 1) }) |> ignore
+            }
+          }
+
+          nest(40)
+        })
+        |> ignore
+      }
+    },
+    tree=fn(root) {
+      root.box(fn(col) {
+        col.pad(Is(40.0)) |> ignore
+        for _ in 0..<40 {
+          col.box(fn(v) {
+            v
+            .width(Is(Some(100.0)))
+            .height(Is(Some(4.0)))
+            .ground(By(fn() { if v.pointed() { 0xEEEEEEFFL } else { 0L } }))
+            .presses(Is(true))
+            .on_press(fn() {  })
+            .says(Is(Some(@view.said(Button, label="lit"))))
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+    corners_held=false,
+  )
+  t.draw()
+  t.corner_faults() |> ignore
+  full.set(true)
+  t.draw()
+  t.corner_faults()
+}
+
+///|
+test "corners: an old view's boxes made where the window's tree's nodes were held to the corner rule the frame before, one of them a ground read under the hand, are none of theirs; with no ground of their own, nothing said" {
+  // (Ctx::box sets all of a box's look but that mark, which Ctx::with_tree_nodes clears in what it leaves the frame:
+  // one of its nodes made in what had been one of the tree's said a ground by the hand of a box with none, in the
+  // print-only run of 2026-11-12: a confirm's button's words, 0 round in its 18)
+  let faults = old_beside_lit_faults()
+  assert_eq(faults, [])
 }

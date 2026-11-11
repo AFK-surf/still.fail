@@ -131,6 +131,18 @@ fn card_old_rig(c : @ui.Ctx, here : MessageHere, m : Message) -> Unit {
 }
 
 ///|
+/// The corner rule's fault known in a phone's request (Tester::corners_known), kept till the card is put in the chat
+/// (the coordinator of the migration, 2026-11-12; xfer's list of what is shown before that): the key at its foot saying
+/// how long it lasts (14 round, a capsule 28 tall), under the hand or with the focus, stands 10 in from the card's side
+/// and 12 over its foot in its 26 corner, as the old card's does: as far from neither edge as from the other, so no
+/// corner of it is concentric there (26 − 12 = 14 by its foot, 26 − 10 = 16 by its side). What would mend it: the key
+/// 12 in from the side too.
+// kept across runs: a value (no field of it changes)
+let card_phone_corners_known : Array[String] = [
+  "「闲置 1 小时后失效」 (at 186,133 143×28, node 48) (corner 14) in the bottom right of 「允许这个对话的 agent 调试你的手机？ 装上…」 (at 16,52 323×121, node 20) (corner 26): 10 and 12 from its edges",
+]
+
+///|
 /// The same post as the nodes draw it in its row (message_others_node, its words' place by `body`: message_card_node
 /// unless it says otherwise), `m` as it changes.
 fn card_new(
@@ -143,7 +155,7 @@ fn card_new(
   @settings.reset()
   @sf.set_words(@sfbase.fill)
   absolute_times.set(false)
-  @ui.Tester::new(
+  let t = @ui.Tester::new(
     fn(c) {
       @sf.begin(c) |> ignore
       c.with_theme(@sf.ui_theme(), fn() { @ui.old_views_here(c) })
@@ -192,6 +204,8 @@ fn card_new(
     h=420.0,
     platform~,
   )
+  t.corners_known(card_phone_corners_known)
+  t
 }
 
 ///|
@@ -239,9 +253,11 @@ fn card_audit(t : @ui.Tester, at : String, rooms : Int) -> Unit raise {
     f.contains("×32 to be pressed in, under 36") &&
     (f.contains("stillfail/src/sfpages/message_head_node.mbt:") || f.contains("stillfail/src/sfapp/settings/ask_answered_node.mbt:"))
   }
-  let rest = faults.filter(fn(f) { !stacked(f) })
+  // (the corner rule's fault known at a phone's request's foot, where it shows: card_phone_corners_known)
+  let cornered = card_phone_corners_known.map(@ui.corner_fault_unplaced)
+  let rest = faults.filter(fn(f) { !stacked(f) && !cornered.contains(@ui.corner_fault_unplaced(f)) })
   assert_true(rest.is_empty(), msg=at + ": " + rest.join(" | "))
-  assert_eq(faults.length() - rest.length(), rooms, msg=at + ": " + faults.join(" | "))
+  assert_eq(faults.filter(stacked).length(), rooms, msg=at + ": " + faults.join(" | "))
 }
 
 ///|
