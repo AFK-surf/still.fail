@@ -626,6 +626,19 @@ pub fn View::lines_up(self : View, along : Live[Along?], loc~ : SourceLoc) -> Vi
 }
 
 ///|
+/// Whether it fills what holds it across the way that lays it out (`on`: stretched from its start to its end there, its
+/// margin kept, as flex's align-self: stretch), whatever that lines up what it holds by (View::lines_up), as it
+/// changes; not said, or said off, as what holds it lines it up. An old view's box said Full across (a column's w=Full, a
+/// row's h=Full). Layout's.
+#callsite(autofill(loc))
+pub fn View::fills_across(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, FillsAcross, on, Layout, fn(on) {
+    self.tree.nodes[self.at].flex.style.align_self = if on { Stretch } else { Auto }
+  })
+  self
+}
+
+///|
 /// Where what a node holds lies along the way it lays them out (View::lies_along; flex's justify): at its start, in its
 /// middle, at its end, or `Between`, the first at its start and the last at its end, what is left of its room shared
 /// out between them (each line's, where it wraps; one alone at its start). Along is the other thing: which end of

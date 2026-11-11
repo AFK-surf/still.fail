@@ -4,11 +4,11 @@
 ///|
 /// What style `look` says (its base, the theme's as it is now: read again as that changes) laid on node `v`: a row or a
 /// column, its size (`in_row`: what holds it lays what it holds in a row, so `w=Full` takes what is left along it, else
-/// across it; `h=Full` the other way; `w=Cut` cut short where it has not the room), its least and most, its padding and
-/// margin, the room between what it holds and how that lines up across it and lies along it (spread between its ends
-/// too), its corner, its ground, its border (an edge round its ground) and whether it cuts what it holds. What no node
-/// is laid out by is a fault (style_of). What it has never said is left as the node has it; what it said once and says no more is put back to none (no ground, a
-/// corner of 0, ...).
+/// fills it across; `h=Full` the other way; `w=Cut` cut short where it has not the room), its least and most, its
+/// padding and margin, the room between what it holds and how that lines up across it and lies along it (spread
+/// between its ends too), its corner, its ground, its border (an edge round its ground) and whether it cuts what it
+/// holds. What no node is laid out by is a fault (style_of). What it has never said is left as the node has it; what it
+/// said once and says no more is put back to none (no ground, a corner of 0, ...).
 #callsite(autofill(loc))
 pub fn style_node(v : @view.View, look : () -> @ui.Style, in_row? : Bool = false, loc~ : SourceLoc) -> Unit {
   // (all of it set together, in one binding, set again where it comes out otherwise as what it reads changes (the
@@ -35,6 +35,7 @@ priv struct StyleSet {
   w : Double?
   h : Double?
   grow : Double
+  fills : Bool
   cut : Bool
   min_w : Double?
   min_w_within : Bool
@@ -58,6 +59,7 @@ priv struct StyleSays {
   w : Bool
   h : Bool
   grow : Bool
+  fills : Bool
   cut : Bool
   min_w : Bool
   max_w : Bool
@@ -77,6 +79,7 @@ fn StyleSays::joined(self : StyleSays, more : StyleSays) -> StyleSays {
     w: self.w || more.w,
     h: self.h || more.h,
     grow: self.grow || more.grow,
+    fills: self.fills || more.fills,
     cut: self.cut || more.cut,
     min_w: self.min_w || more.min_w,
     max_w: self.max_w || more.max_w,
@@ -101,6 +104,8 @@ fn StyleSays::joined(self : StyleSays, more : StyleSays) -> StyleSays {
 /// (style_wrong), the node laid out as though it had not said it.
 fn style_of(q : @ui.Patch, in_row : Bool, loc : SourceLoc) -> StyleSet {
   let along = if in_row { q.w } else { q.h }
+  let across = if in_row { q.h } else { q.w }
+  let fills = across is Some(Full | Grow(_))
   let w = style_size(q.w, "w", loc)
   let h = style_size(q.h, "h", loc)
   let min_w = style_bound(q.min_w, "min_w", loc)
@@ -111,6 +116,7 @@ fn style_of(q : @ui.Patch, in_row : Bool, loc : SourceLoc) -> StyleSet {
       w: w is Some(_),
       h: h is Some(_),
       grow: along is Some(Full | Grow(_)),
+      fills,
       cut: q.w is Some(Cut),
       min_w: q.min_w is Some(_),
       max_w: q.max_w is Some(_),
@@ -137,6 +143,8 @@ fn style_of(q : @ui.Patch, in_row : Bool, loc : SourceLoc) -> StyleSet {
       Some(Grow(k)) => k
       _ => 0.0
     },
+    // (filling what holds it across, an old view's Fill across: stretched there whatever it lines up by)
+    fills,
     // (cut short where what holds it has not the room across, an old view's w=Cut: View::cuts, which gives way along a
     // row and keeps its height in a column)
     cut: q.w is Some(Cut),
@@ -254,6 +262,9 @@ fn style_set(v : @view.View, was : StyleSet?, s : StyleSet, loc : SourceLoc) -> 
     if style_first(new, before.grow, now.grow) {
       v.basis(loc~, Is(Some(0.0))) |> ignore
     }
+  }
+  if style_first(new, before.fills, now.fills) || (before.fills && w.fills != s.fills) {
+    v.fills_across(loc~, Is(s.fills)) |> ignore
   }
   if style_first(new, before.cut, now.cut) || (before.cut && w.cut != s.cut) {
     v.cuts(loc~, Is(s.cut)) |> ignore
