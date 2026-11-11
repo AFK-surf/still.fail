@@ -24,8 +24,6 @@ const TWICE: Record<string, string> = {
   "station": "overview.profiles[0].quota.resets[1].text: \"3 天后、9 天后到期 · 到达它能恢复的上限后才能用\", then \"2 天 23 小时后、8 天 23 小时后到期 · 到达它能恢复的上限后才能用\"",
   "chat": "agents[0].jobs[0].meta[1].text: \" · 5 小时\", then \" · 0 秒\"",
   "chat compact": "agents[0].hasJobs: true, then false",
-  "jobLog 300": "lines: 300 items, then 0",
-  "jobLog 400": "lines: 400 items, then 0",
   "messagePeek": "(whole): {\"author\":\"\",\"text\":\"结论 列表掉帧的根因是每一帧都在重新测量行高：measure_row 在滚动时被调用了 1,800 次/秒。 做了什么, then null",
   "job": "detail: \"运行中 · 20 小时 · 20 条通知\", then \"运行中 · 0 秒 · 20 条通知\"",
   "chat six pages": "agents[0].jobs[0].meta[1].text: \" · 5 小时\", then \" · 0 秒\"",

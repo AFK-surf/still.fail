@@ -30,9 +30,13 @@ way the app asks each topic on a workspace of real size (`test/real-size.ts`), a
 message as something changes at most 4 KB. A list's item carries what its row shows; a page of one thing asks that
 thing's own topic; a field one page needs is not added to a list every page holds; a new topic is placed in the test's
 tables. Its `OVER` tables only fall. A topic the app lets go of keeping its value (`keep`) and asks again (`have`) is
-sent `same`, or what changed from what it kept (store.ts `#first`), held to the change's bar too (`OVER_AGAIN`). What
-goes out is what the topic's shape declares, the rest dropped (`src/conform.ts`), while the core's own readers read its
-whole value (`store.value`): a field the core reads and no UI does stays out of the shape (a chat's agents' models,
+sent `same`, or what changed from what it kept (store.ts `#first`), held to the change's bar too (`OVER_AGAIN`).
+Every way of asking has a change measured, a cause of `test/real-size-asked.ts` `CAUSES` that changes what it shows as
+the sync is told it, or is in the test's `STILL` with why its value does not change while shown, and `STILL` only
+falls; what each cause sends is written for the app's sweep as the ops a device applies (`test/real-size-app.test.ts`,
+`apps/mbui/src/sfrealsize/c_*.mbt`). What goes out is what the topic's shape declares, the rest dropped
+(`src/conform.ts`), while the core's own readers read its whole value (`store.value`): a field the core reads and
+no UI does stays out of the shape (a chat's agents' models,
 which `src/choose.ts` reads of `views.agent`). A part a view shapes once for every topic that holds it (views.ts
 `asShaped`) goes out as each topic's own shape says there (a station's overview to its page as `StationOverview`,
 conform.ts `reshaped`); where one shape is sent by several topics and only some pages read a field, the others get a

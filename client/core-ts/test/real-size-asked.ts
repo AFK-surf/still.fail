@@ -9,7 +9,13 @@ import type { PersonalLock } from "../src/personal-lock.ts";
 import type { Rigs } from "../src/rigs.ts";
 import { parseTopic, type Topic } from "../src/protocol.ts";
 import { isObject } from "../src/util.ts";
-import { CHANGELOG_DEVICE, CHANGELOG_SEEN, CHAT, CHAT_MESSAGES, DRIVE, JOB, JOB_LOG_LINES, OPENS, OTHER_WORKSPACE, OUTLINED, PEEKS, SEARCH, UP, VAULT_ITEM, changelogFeed, devicesSaid, fixture, more, outlinedLog, records, screensOf, transcriptOf } from "./real-size.ts";
+import {
+  CHANGELOG_DEVICE, CHANGELOG_SEEN, CHAT, CHAT_MESSAGES, DRIVE, LETTERS_COUNT, JOB, JOB_LOG_LINES, OPENS, OTHER_WORKSPACE, OUTLINED, PEEKS, SEARCH, UP, VAULT_ITEM, cardCame, changelogFeed, changelogReleased,
+  chatArchived, chatRenamed, devicesAdded, devicesSaid, driveAdded, fixture, hostReading, jobLogOf, jobsMoved, lettersHeld, liveStepped, lockApproved, memberJoined, messageAdded, more,
+  netOf, outlinedEdit, outlinedLog, outlinedSaid, outlinedWorking, overviewMoved, presetsChanged, quotaChanged, records, resourcesOf, screensMoved, screensOf, sessionMade, thingSaid, transcriptOf,
+  usageRead, vaultAdded, vaultUsed,
+} from "./real-size.ts";
+import { logged } from "../src/log-lines.ts";
 import type { Inner } from "../src/core.ts";
 import type { Owner } from "../src/core/routing.ts";
 import type { Data } from "../src/data.ts";
@@ -26,7 +32,7 @@ import type { Views } from "../src/views/views.ts";
 import { waysView } from "../src/views/ways.ts";
 import * as xshare from "../src/views/xshare.ts";
 import { Workspaces } from "../src/workspace.ts";
-import { overview, setup } from "./views-rig.ts";
+import { hostOf, overview, setup } from "./views-rig.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -291,7 +297,161 @@ export async function held(long = false) {
     }
     return out;
   };
-  return { t, base, chat, first, during };
+  /// The chat's station's screens as it tells them now (its `screens` event: sync.ts `#heldScreens`, what shows them
+  /// made again).
+  const screensAre = (value: J) => {
+    screens = value;
+    t.store.invalidate({ topic: "screens", station: CHAT.station });
+  };
+  return { t, base, chat, first, during, notices: notices!, devices: devices!, screensAre };
+}
+
+export type Held = Awaited<ReturnType<typeof held>>;
+
+// ── what changes ──
+
+/// A way the workspace changes while the app shows it, told the core as a core is told it: `run` does it on a rig `held`
+/// made, as the sync would on what its station or the cloud said (what it sets, what the sync sets; where a change goes
+/// through the core's own code, that code: log-lines.ts `logged`, notices.ts `changed`, devices.ts `heard`); then `ms`
+/// of the clock pass (1 s). `long`: done again with the chat's six pages loaded. Each on a rig of its own, so what it
+/// sends is what changed from the values sent whole (real-size-app.test.ts writes it for the app as that).
+export type Cause = { run: (h: Held) => void; ms?: number; long?: true };
+const job = (h: Held, j: J) => {
+  // (as station/sync.ts `onJob` takes a station's `job` event)
+  h.t.data.patchDetail(station, j.session, (detail) => {
+    const i = detail.jobs.findIndex((x: J) => x.id === j.id);
+    if (i >= 0) detail.jobs[i] = j;
+  });
+  h.t.data.putJob(station, j, j.state === "running" || (j.state === "exited" && j.port !== null));
+};
+export const CAUSES: Record<string, Cause> = {
+  // A station's host reading (its load up), an allowance read again, a message in the chat, a minute passing.
+  host: { run: ({ t }) => t.set(hostOf(station), hostReading(t.host.nowMs(), 0, 0.83)), long: true },
+  quota: { run: ({ t, base }) => t.set(overview(station), quotaChanged(base, t.host.nowMs(), 0)), long: true },
+  message: {
+    run: ({ t, base, chat }) => {
+      for (const [topic, value] of messageAdded(base, t.host.nowMs(), chat)) t.set(topic, value);
+    },
+    long: true,
+  },
+  minute: { run: () => {}, ms: 60_000, long: true },
+  // The chat of four weeks: its agent writing on (twice), a person's words edited, a person saying something.
+  agent: {
+    run: ({ t, base }) => {
+      t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), [outlinedWorking(base, 1)]);
+      t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), [outlinedWorking(base, 2)]);
+    },
+  },
+  edit: { run: ({ t, base }) => t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), [outlinedEdit(base, t.host.nowMs())]) },
+  said: { run: ({ t, base }) => t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), [outlinedSaid(base, t.host.nowMs())]) },
+  // The chat's dev server printing a line more: its log as the station's `job-log` event says it for each way the app
+  // asks it, one line longer, its first gone where it was at its most, kept as station/sync.ts keeps it (its lines
+  // numbered on from what was kept before: log-lines.ts `logged`).
+  line: {
+    run: ({ t, base }) => {
+      for (const lines of JOB_LOG_LINES) {
+        const now = jobLogOf(base, lines, 1);
+        t.set({ topic: "jobLog", station, job: JOB, lines }, logged(jobLogOf(base, lines), now.text, now.outputAt));
+      }
+    },
+  },
+  // The chat's agent working on: a call more in its transcript (`live`), what the history page shows of it.
+  step: { run: ({ t, base }) => t.set({ topic: "live", station, key }, liveStepped(base, t.host.nowMs())) },
+  // The chat's agent's next message with a picture and a link (its things).
+  thing: {
+    run: ({ t, base, chat }) => {
+      const told = messageAdded(base, t.host.nowMs(), chat, thingSaid(t.host.nowMs()));
+      for (const [topic, value] of told) t.set(topic, value);
+      // (and the chat's whole log, where its things are found: views.ts `#thingsMade`)
+      t.set({ topic: "letters", station, thread: CHAT.thread }, lettersHeld(base, undefined, [(told[0]![1] as J).entries.at(-1)]));
+    },
+  },
+  // A letter more from another chat.
+  letter: { run: ({ t, base }) => t.set({ topic: "letters", station, thread: CHAT.thread }, lettersHeld(base, LETTERS_COUNT + 1)) },
+  // A chat of the viewer's coming to wait on a card: its row, and the notice it makes (attention.ts `look`).
+  card: {
+    run: ({ t, base, notices }) => {
+      const { rows, before, after } = cardCame(base, t.host.nowMs());
+      t.set({ topic: "chatRows", station }, rows);
+      notices.changed(station, [{ id: after.id, before, after }], false);
+    },
+  },
+  // A chat archived by its station's archiving; one named by its agent with the words searched for.
+  archived: {
+    run: ({ t, base }) => {
+      const { rows, archived } = chatArchived(base, t.host.nowMs());
+      t.set({ topic: "chatRows", station }, rows);
+      t.set({ topic: "archivedRows", station }, archived);
+    },
+  },
+  renamed: { run: ({ t, base }) => t.set({ topic: "chatRows", station }, chatRenamed(base)) },
+  // Another station gone down.
+  down: { run: ({ t }) => t.set({ topic: "link", station: "ws/willow" }, { state: "offline", message: "连不上这台 station：它可能关机了", last: "offline" }) },
+  // Three of Maple's jobs told again (its `job` event): the chat's dev server crashed, its watch of CI ended red, the
+  // soak a round more.
+  job: { run: (h) => jobsMoved(h.base, h.t.host.nowMs()).forEach((j) => job(h, j)) },
+  // Maple's usage read again (its `usage` event).
+  usage: { run: ({ t, base }) => t.set({ topic: "stationUsage", station }, usageRead(base)) },
+  // A sample more of what still.fail uses of Maple's machine, and of the device's connection to it.
+  sample: {
+    run: ({ t, base }) => {
+      t.set({ topic: "stationResources", station }, resourcesOf(base, 0, 1));
+      t.set({ topic: "net", station }, netOf(base, 1));
+    },
+  },
+  // A file saved into the drive's folder shown (kept as it is while shown: sync.ts `driveWatch`).
+  file: { run: ({ t, base }) => t.set({ topic: "drive", ...DRIVE }, driveAdded(base, t.host.nowMs())) },
+  // Maple's screens told again: the agent's tab moved on, a person off it.
+  screen: { run: ({ t, base, screensAre }) => screensAre(screensMoved(base, t.host.nowMs())) },
+  // A member's phone attached to Maple (its `devices` event).
+  device: { run: ({ t, base, devices }) => devices.heard(station, "devices", devicesAdded(base, t.host.nowMs())) },
+  // A member's new device approved in the workspace's lock, as its stations keep it.
+  approved: { run: ({ t, base }) => t.data.put("lock", "ws", lockApproved(base, t.host.nowMs())) },
+  // The vault's plain library: an item used once more (its uses as Maple told them again), an item added.
+  used: { run: ({ t, base }) => t.data.put("vault", "ws", vaultUsed(base, t.host.nowMs())) },
+  item: { run: ({ t, base }) => t.data.put("vault", "ws", vaultAdded(base, t.host.nowMs())) },
+  // A member more in the workspace, as the cloud lists it.
+  member: { run: ({ t, base }) => t.set({ topic: "workspace", workspace: "ws" }, memberJoined(base)) },
+  // A session more on Maple, a Slack thread's.
+  session: {
+    run: ({ t, base }) => {
+      for (const [topic, value] of sessionMade(base, t.host.nowMs())) t.set(topic, value);
+    },
+  },
+  // Maple's overview told again: an automatic decision made, Claude Code updating, the machine's login's allowance, a
+  // sign-in begun, its archiving changed, its automatic decisions turned off.
+  decided: { run: ({ t, base }) => t.set(overview(station), overviewMoved(base, t.host.nowMs(), "decided")) },
+  updating: { run: ({ t, base }) => t.set(overview(station), overviewMoved(base, t.host.nowMs(), "updating")) },
+  machine: { run: ({ t, base }) => t.set(overview(station), overviewMoved(base, t.host.nowMs(), "machine")) },
+  login: { run: ({ t, base }) => t.set(overview(station), overviewMoved(base, t.host.nowMs(), "login")) },
+  archiving: { run: ({ t, base }) => t.set(overview(station), overviewMoved(base, t.host.nowMs(), "archiving")) },
+  off: { run: ({ t, base }) => t.set(overview(station), overviewMoved(base, t.host.nowMs(), "off")) },
+  // A preset of Maple's changed on another device (its `presets` event, read again).
+  preset: { run: ({ t, base }) => t.set({ topic: "presets", station }, presetsChanged(base, t.host.nowMs())) },
+  // A build more out: the changelog read again (changelog.ts `read`: kept, and both of its ways told).
+  release: {
+    run: ({ t, base }) => {
+      t.data.put("changelog", "feed", changelogReleased(base, t.host.nowMs()));
+      t.store.invalidateAll((topic) => topic.topic === "changelog");
+    },
+  },
+};
+
+/// What goes out to each of `ASKED` as each cause happens, on a rig of its own (the chat's six pages' too where it is
+/// done with them): the cause, the messages by name, and what each was sent whole before it.
+export async function causesOfAll(): Promise<{ cause: string; sent: Map<string, J[]>; first: Map<string, J> }[]> {
+  const out: { cause: string; sent: Map<string, J[]>; first: Map<string, J> }[] = [];
+  for (const [cause, c] of Object.entries(CAUSES)) {
+    for (const long of c.long ? [false, true] : [false]) {
+      const h = await held(long);
+      try {
+        out.push({ cause, sent: await h.during(() => c.run(h), c.ms ?? 1000), first: h.first });
+      } finally {
+        h.t.store.runner.shutdown();
+      }
+    }
+  }
+  return out;
 }
 
 /// What each of `ASKED` is sent whole as it subscribes: the chat's six pages' with the rest.

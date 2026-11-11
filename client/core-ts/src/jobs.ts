@@ -340,6 +340,8 @@ export function longJobs(stations: [string, string | null, J[]][], c: Clock, fro
 /// words put in. Asked for its last line alone (`lines` 1: a job's row), those two alone, no lines.
 export function log(value: J, c: Clock, asked: unknown = null): J {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
+  // (one already shown, its lines made and its text gone, as it is: present.ts may shape a value twice)
+  if (typeof value.text !== "string" && Array.isArray(value.lines)) return value;
   const all = linesOf(strOf(value, "text"));
   const from = typeof value.from === "number" ? value.from : 0;
   let last = "";

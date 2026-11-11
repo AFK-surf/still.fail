@@ -8,8 +8,8 @@
 //
 // Measured as the app asks (`keyed`, every way it asks each, `ASKED`): the value a subscription is sent whole as it
 // subscribes to a topic the workspace has come in for, as the JSON text the host hands over (its UTF-8 bytes), is at
-// most `BAR_KB`; then, the subscriptions held, what goes out as the workspace changes (a minute passes, a station's
-// host reading, an allowance read again, a message in the chat), each message at most `DELTA_BAR_KB`. Those over a bar now are in `OVER` (by topic) and `OVER_DELTA` (by topic/cause),
+// most `BAR_KB`; then, the subscriptions held, what goes out as the workspace changes (each cause of real-size-asked.ts
+// `CAUSES`: a station's host reading, a message in the chat, a minute passing, …), each message at most `DELTA_BAR_KB`. Those over a bar now are in `OVER` (by topic) and `OVER_DELTA` (by topic/cause),
 // each with what it weighs now in KB, rounded up to the next 8 so the fixture's drift does not flap it: one there must
 // still be over the bar (else it comes out of the table) and no heavier than said (else it grew). The tables only fall.
 // Every topic of `TOPICS` is either asked here or in `NOT_MEASURED` with why: a new topic is placed in one of them.
@@ -27,21 +27,20 @@ import { parseTopic, TOPICS, type Topic } from "../src/protocol.ts";
 import { SHAPES } from "../src/shapes/schema.ts";
 import { equal, isObject } from "../src/util.ts";
 import { OUTLINE_FOUND, OUTLINE_ROWS } from "../src/things.ts";
-import { CHAT, JOB, JOB_LOG_LINES, OUTLINED, OUTLINED_ENTRIES, hostReading, jobLogOf, liveOf, messageAdded, outlinedEdit, outlinedSaid, outlinedWorking, quotaChanged } from "./real-size.ts";
+import { CHAT, OUTLINED, OUTLINED_ENTRIES, hostReading, liveOf, messageAdded, quotaChanged } from "./real-size.ts";
 import { base, started } from "./station-fixture.ts";
 import { applyKeyed } from "../src/collections.ts";
-import { logged } from "../src/log-lines.ts";
 import { hostOf, overview, setup } from "./views-rig.ts";
-import { ASKED, CHANGELOG_PAGE, LONG, topicOf, held, firstOfAll } from "./real-size-asked.ts";
+import { ASKED, CHANGELOG_PAGE, LONG, causesOfAll, topicOf, held, firstOfAll } from "./real-size-asked.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
 type J = any;
 
-/// What a value sent whole may weigh, in KB.
-const BAR_KB = 32;
 /// What one message may weigh as something changes, in KB.
 const DELTA_BAR_KB = 4;
+/// What a value sent whole may weigh, in KB.
+const BAR_KB = 32;
 
 const station = CHAT.station;
 
@@ -65,7 +64,30 @@ const OVER: Record<string, number> = {
 };
 
 /// Those over `DELTA_BAR_KB` as something changes, by `<name>/<cause>`: the heaviest message, KB as in `OVER`.
-const OVER_DELTA: Record<string, number> = {};
+const OVER_DELTA: Record<string, number> = {
+  "vaultUses/used": 128,
+  "usage/down": 88,
+  "drive/file": 72,
+  "chatLetters/letter": 40,
+  "profiles/down": 40,
+  "usage/usage": 40,
+  "devices/device": 24,
+  "connects/down": 24,
+  "connect/session": 24,
+  "connectCandidates/session": 24,
+  "longJobs/down": 24,
+  "chatThings/thing": 16,
+  "chatThings q/thing": 16,
+  "driveBrowse phone/file": 16,
+  "driveBrowse columns/file": 16,
+  "archive/down": 16,
+  "notices/card": 16,
+  "workspaceMarks/card": 8,
+  "longJobs/job": 16,
+  "resources/sample": 8,
+  "connects mine/down": 8,
+  "stationPart automaticDecisions/decided": 8,
+};
 
 /// The topics measured nowhere here, and why. (Not `stationsWhole`, the stations each with its page and its models:
 /// the core's own, which no UI can ask, so it is no topic of `TOPICS`; views/views.ts.)
@@ -410,50 +432,19 @@ test("what each topic the app asks is sent whole fills what its shape declares",
   assert.deepEqual(faults, []);
 });
 
-/// What goes out to each of `ASKED` as the workspace changes, by cause: the chat's six pages' with the rest.
-async function causesOfAll(): Promise<[string, Map<string, J[]>][]> {
-  const causes: [string, Map<string, J[]>][] = [];
-  for (const long of [false, true]) {
-    const { t, base, chat, during } = await held(long);
-    try {
-      const st = 0;
-      causes.push(["host", await during(() => t.set(hostOf(station), hostReading(t.host.nowMs(), st, 0.83)), 1000)]);
-      causes.push(["quota", await during(() => t.set(overview(station), quotaChanged(base, t.host.nowMs(), st)), 1000)]);
-      causes.push(["message", await during(() => {
-        for (const [topic, value] of messageAdded(base, t.host.nowMs(), chat)) t.set(topic, value);
-      }, 1000)]);
-      if (!long) {
-        // The chat of four weeks: its agent writing on (twice), a person's words edited, a person saying something.
-        const log = (item: [number, unknown]) => t.data.putItems("entry", OUTLINED.station, String(OUTLINED.thread), [item]);
-        causes.push(["agent", await during(() => {
-          log(outlinedWorking(base, 1));
-          log(outlinedWorking(base, 2));
-        }, 1000)]);
-        causes.push(["edit", await during(() => log(outlinedEdit(base, t.host.nowMs())), 1000)]);
-        causes.push(["said", await during(() => log(outlinedSaid(base, t.host.nowMs())), 1000)]);
-        // The chat's dev server printing a line more: its log as the station's `job-log` event says it for each way
-        // the app asks it, one line longer, its first gone where it was at its most, kept as station/sync.ts keeps it
-        // (its lines numbered on from what was kept before: log-lines.ts `logged`).
-        causes.push(["line", await during(() => {
-          for (const lines of JOB_LOG_LINES) {
-            const now = jobLogOf(base, lines, 1);
-            t.set({ topic: "jobLog", station, job: JOB, lines }, logged(jobLogOf(base, lines), now.text, now.outputAt));
-          }
-        }, 1000)]);
-      }
-      causes.push(["minute", await during(() => {}, 60_000)]);
-    } finally {
-      t.store.runner.shutdown();
-    }
-  }
-  return causes;
-}
+/// What goes out to each of `ASKED` as each cause of `CAUSES` happens (real-size-asked.ts), made once for the tests here.
+let causesMade: ReturnType<typeof causesOfAll> | undefined;
+const causesSent = () => (causesMade ??= causesOfAll());
+
+/// What op `op` (a keyed message's) does, where, and what it weighs: as a line of the table.
+const opLine = (op: J) => `        ${(["put", "patch", "drop", "move", "set", "append", "remove"].find((k) => k in op) ?? "?").padEnd(6)} ${JSON.stringify(op.path).padEnd(42)} ${JSON.stringify(op.key ?? "").slice(0, 40).padEnd(40)} ${String(bytes(op)).padStart(9)} B`;
 
 test("what each topic the app asks is sent as the workspace changes holds to its bar", async () => {
-  const causes = await causesOfAll();
   const heaviestOf = new Map<string, number>();
   const rows: { name: string; bytes: number; bar: number; value?: unknown }[] = [];
-  for (const [cause, sent] of causes) {
+  /// Of each message over the bar, its ops (or that it is a value whole), the heaviest first.
+  const ops: string[] = [];
+  for (const { cause, sent } of await causesSent()) {
     for (const [name, messages] of sent) {
       const sizes = messages.map(bytes);
       const top = Math.max(...sizes);
@@ -461,10 +452,63 @@ test("what each topic the app asks is sent as the workspace changes holds to its
       heaviestOf.set(at, top);
       const m = messages[sizes.indexOf(top)];
       rows.push({ name: `${at} (${messages.length}, ${sizes.reduce((a, b) => a + b, 0)} B in all)`, bytes: top, bar: OVER_DELTA[at] !== undefined ? 0 : DELTA_BAR_KB, value: m.value ?? m.delta });
+      if (top > DELTA_BAR_KB * 1024) {
+        ops.push(`  ${at}: ${top} B, ${"value" in m ? "its value whole" : `${(m.delta as J[]).length} ops`}`);
+        if (Array.isArray(m.delta)) ops.push(...[...(m.delta as J[])].sort((a, b) => bytes(b) - bytes(a)).slice(0, 12).map(opLine));
+      }
     }
   }
   const faults = judge(heaviestOf, DELTA_BAR_KB, OVER_DELTA, "OVER_DELTA");
-  if (print || faults.length > 0) console.log(table(`What goes out as the workspace changes, its heaviest message (bar ${DELTA_BAR_KB} KB):`, rows));
+  if (print || faults.length > 0) {
+    console.log(table(`What goes out as the workspace changes, its heaviest message (bar ${DELTA_BAR_KB} KB):`, rows));
+    if (ops.length > 0) console.log(["Of each over the bar, its heaviest ops (what, path, key, bytes):", ...ops].join("\n"));
+  }
+  assert.deepEqual(faults, []);
+});
+
+// ── what changes while shown ──
+//
+// What a topic sends as the workspace changes is weighed only where some cause above sends it something: a name no
+// cause reached was weighed whole and never as it changes (a job's log re-sent whole, 128 KB, for every line it printed,
+// for months: no cause printed a line). So every way the app asks a topic (`ASKED`) has a cause that changes what it
+// shows (`CAUSES`, real-size-asked.ts), or is in `STILL` with why its value does not change while a page shows it. It
+// only falls: one listed that a cause now reaches comes out.
+
+/// Why a value does not change while shown: read as it opens and not again; changed only by what the same page does
+/// (the call named); a device's or the cloud's that nothing tells it of.
+const READ_ONCE = (how: string) => `read once as its page opens, not again while it shows (${how})`;
+const BY_PAGE = (call: string) => `changed only by what this same page does (${call})`;
+const UNTOLD = (what: string) => `nothing tells the core it changed (${what})`;
+const CARD = READ_ONCE("station/sync.ts #cardShown: a card's read each time it shows, kept meanwhile");
+/// Those of `ASKED` no cause sends a message, by the name `ASKED` gives them, and why.
+const STILL: Record<string, string> = {
+  // (a model control's: what the station's accounts read, their allowances, a station down move none of it, choose.ts)
+  "pick": BY_PAGE("pick.set, pick.save, pick.like, pick.forget"),
+  "joinable": BY_PAGE("station.join: the stations of the account's workspaces, one joining another"),
+  "memberships": READ_ONCE("views/memberships.ts readSoon, and again by station.join"),
+  "workspaceWays": BY_PAGE("workspace.setWay: the rest is still.fail's relays, as /v1/me lists them"),
+  "changelog news": UNTOLD("what this build got since the changelog was last shown: the device's build, said as a run starts (client.device), and the changelog shown (changelog.seen), on its own page"),
+  "linkPreview page": CARD, "linkPreview pull": CARD, "filePeek picture": CARD, "filePeek text": CARD, "messagePeek": CARD,
+};
+/// Those reached by a cause of a test of their own, not of `CAUSES`: by name, the test.
+const REACHED_ELSEWHERE: Record<string, string> = { live: "a working agent's stream" };
+
+test("every way the app asks a topic has a change weighed, or says why it has none", async () => {
+  const reached = new Map<string, string[]>();
+  for (const { cause, sent } of await causesSent()) for (const name of sent.keys()) reached.set(name, [...(reached.get(name) ?? []), cause]);
+  for (const [name, test] of Object.entries(REACHED_ELSEWHERE)) reached.set(name, [...(reached.get(name) ?? []), test]);
+  const faults: string[] = [];
+  for (const name of Object.keys(ASKED)) {
+    const by = reached.get(name);
+    if (by !== undefined && STILL[name] !== undefined) faults.push(`${name}: reached by ${by.join(", ")}, and STILL says ${STILL[name]}: bring it out of STILL`);
+    if (by === undefined && STILL[name] === undefined) faults.push(`${name}: no cause sends it a message: make one that changes what it shows (CAUSES, real-size-asked.ts), or list it in STILL with why its value does not change while a page shows it`);
+  }
+  for (const name of [...Object.keys(STILL), ...Object.keys(REACHED_ELSEWHERE)]) if (!(name in ASKED)) faults.push(`${name}: in STILL or REACHED_ELSEWHERE but not asked`);
+  if (print || faults.length > 0) {
+    const lines = ["Each way the app asks a topic, the causes that reach it, or why none does:"];
+    for (const name of Object.keys(ASKED)) lines.push(`    ${name.padEnd(32)} ${reached.get(name)?.join(", ") ?? `STILL: ${STILL[name] ?? "(none)"}`}`);
+    console.log(lines.join("\n"));
+  }
   assert.deepEqual(faults, []);
 });
 
