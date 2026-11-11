@@ -786,7 +786,7 @@ fn fix_new_chat_of(f : Fixture) -> Json {
 /// it runs on, its model's name, maker and runtimes, how hard it can think, Fast, the account it names.
 fn fix_pick_face() -> Json {
   let p = Some(fix_pick())
-  let o : Map[String, Json] = {}
+  let o : Map[String, Json] = Map([])
   for k in ["value", "efforts", "fastText"] {
     match field(p, k) {
       Some(v) => o[k] = v
@@ -795,7 +795,7 @@ fn fix_pick_face() -> Json {
   }
   let vo = field(p, "valueOption")
   if vo is Some(Object(_)) {
-    let m : Map[String, Json] = {}
+    let m : Map[String, Json] = Map([])
     for k in ["name", "maker", "runtimes"] {
       match field(vo, k) {
         Some(v) => m[k] = v
@@ -806,7 +806,7 @@ fn fix_pick_face() -> Json {
   }
   let account = field(p, "account")
   if account is Some(Object(_)) {
-    let m : Map[String, Json] = {}
+    let m : Map[String, Json] = Map([])
     for k in ["text", "level"] {
       match field(account, k) {
         Some(v) => m[k] = v
