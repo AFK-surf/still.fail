@@ -14,7 +14,7 @@ pub(all) enum Side {
 
 ///|
 /// Where along the side it lines up with the anchor: their starts (the left, right to left the right), their middles,
-/// their ends.
+/// their ends. (Where what a node holds lies along its own way, spread between its ends too, is Lies: words.mbt.)
 pub(all) enum Along {
   Start
   Middle
@@ -72,7 +72,7 @@ pub fn place_beside(
   }
   // right to left, a start is the right
   let across = side == Top || side == Bottom
-  let along = if rtl && across {
+  let along : Along = if rtl && across {
     match along {
       Start => End
       End => Start
