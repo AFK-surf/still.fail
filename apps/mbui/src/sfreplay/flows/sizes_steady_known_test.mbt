@@ -27,7 +27,6 @@ fn init {
     ("src/sfreplay/flows/pick_words_test.mbt", 2),
     ("src/sfreplay/flows/reader_test.mbt", 1),
     ("src/sfreplay/flows/service_page_test.mbt", 3),
-    ("src/sfreplay/flows/settings_add_station_test.mbt", 16),
     ("src/sfreplay/flows/settings_appearance_test.mbt", 4),
     ("src/sfreplay/flows/settings_connect_test.mbt", 26),
     ("src/sfreplay/flows/settings_device_pages_test.mbt", 6),
