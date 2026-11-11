@@ -11,7 +11,7 @@ test "19-drive-rename" {
     f.before("drive-photo 082940")
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-082940")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.right_click("e2e-photo.jpg")
     f.run_for(@kit.presence_in_ms)
     f.tap("重命名")

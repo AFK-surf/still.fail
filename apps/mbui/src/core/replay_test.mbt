@@ -625,3 +625,41 @@ test "a run with the stations' rows: its stations matched as any topic, a whole 
   c.subscribe("stations", params={ "scope": "w", "x": true }) |> ignore
   assert_eq(r.diverged().length(), 2)
 }
+
+///|
+/// A run that unsubscribed a moment after its step (`tap`), asked as it took it and answered 2 ms after: the step
+/// taken here later than the run's moment, the unsubscription made here before it.
+let late_step : String =
+  #|CORETRACE {"out":{"id":7,"subscribe":{"topic":"accounts"},"keyed":true},"w":900}
+  #|CORETRACE {"in":{"id":7,"value":[]},"w":1000}
+  #|CORETRACE {"step":"tap 端到端测试","w":1100}
+  #|CORETRACE {"out":{"id":8,"subscribe":{"topic":"chat"},"keyed":true},"w":1100.5}
+  #|CORETRACE {"out":{"id":7,"unsubscribe":true},"w":1101}
+  #|CORETRACE {"in":{"id":8,"value":{}},"w":1102}
+  #|CORETRACE {"step":"until 发消息","w":1110}
+
+///|
+test "at the run's pace, a step taken later than the run's moment: all after it later by as much, whatever was made again sooner" {
+  let r = @core.Replay::parse(late_step)
+  let now : Ref[Double] = { val: 0.0 }
+  r.clock(fn() { now.val })
+  r.pace(@core.AsRun(1.0))
+  let c = r.client()
+  let acc = c.subscribe("accounts")
+  now.val = 100.0
+  assert_eq(r.deliver(now=100.0), 1)
+  // the unsubscription the run made after its step, made here before it
+  now.val = 150.0
+  c.unsubscribe(acc)
+  assert_eq(r.step_at("tap 端到端测试"), Some(200.0))
+  // the step taken 5 ms after the run's moment for it (its screen later here)
+  now.val = 205.0
+  assert_true(r.step_taken("tap 端到端测试"))
+  c.subscribe("chat") |> ignore
+  // what came 2 ms after the step in the run comes 2 ms after it here, not timed from the unsubscription made sooner
+  // (151: before the step that asked for it)
+  assert_eq(r.next_due(), Some(207.0))
+  // and the run's next step 10 ms after the step as it was taken here, never before it (wide-newline's came 9.6 ms
+  // before its tap)
+  assert_eq(r.step_at("until 发消息"), Some(215.0))
+}

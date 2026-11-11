@@ -895,6 +895,20 @@ fn Tester::tick_after(self : Tester, t : Double) -> Double {
 let grid_hair : Double = 1.0e-9
 
 ///|
+/// How many of the display's frames fall after `from` and at or before `to`, on its frames' times (Tester::tick_after):
+/// what was drawn between two moments (a replay's first screen, Flow::until_at).
+pub fn Tester::frames_between(self : Tester, from : Double, to : Double) -> Int {
+  let mut n = 0
+  let mut t = self.tick_after(from)
+  while t <= to + grid_hair * self.period {
+    n = n + 1
+    t = self.tick_after(t)
+  }
+  n
+}
+
+///|
+///|
 /// The display's first frame at or after `t`.
 fn Tester::tick_at(self : Tester, t : Double) -> Double {
   match self.times.search_by(fn(f) { f >= t }) {

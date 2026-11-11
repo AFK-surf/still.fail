@@ -2594,6 +2594,7 @@ pub fn Tester::frame_period(Self) -> Double
 pub fn Tester::frame_shown_at(Self, Double, Double) -> Unit
 pub fn Tester::frame_times_wrong(Self, Array[Double]) -> String?
 pub fn Tester::frames(Self, Int32, ms? : Double) -> Array[Int64]
+pub fn Tester::frames_between(Self, Double, Double) -> Int
 pub fn Tester::frames_on(Self) -> Int32
 pub fn Tester::frames_owed(Self) -> Unit
 pub fn Tester::frames_paced(Self) -> Double

@@ -21,14 +21,7 @@ let pace_splits_known : Map[String, Array[Int]] = {
   // subscriptions at 1159 here, 1033-1050 in the strict pass; the tap at 1150))
   "agent-reply": [7],
   "answer-option": [7],
-  // at 120 (#5613: notify.permission told as notify is answered, between frames, not in a frame): the chat's top bar's
-  // faces ask their picture of the core as their binding is worked out, in a frame (src/sfapp/chat_bar_node.mbt:405,
-  // @sf.avatar_node's picture closure calling (src.picture)(p.picture, stint()), src/sfbase/source.mbt:118), so where
-  // it falls beside a message said at its cause goes by the frames' rate: step 2 (tapxy 200 -38): message #22: call
-  // picture {"url":"https://example.test/p.png"} | strict call notify.permission {"state":"unknown"}. Gone once a
-  // face's picture is asked as the face is made or its picture changes, not as its binding is worked out (the
-  // coordinator of the migration, 2026-11-12)
-  "bar-going-down": [7, 120],
+  "bar-going-down": [7],
   "card-motion": [7],
   "close-option": [7],
   "delete-failed": [7],
@@ -69,13 +62,7 @@ let pace_splits_known : Map[String, Array[Int]] = {
   "station-rename": [7],
   "settings-decisions": [7],
   // 4: - | strict sub {"topic":"chat","compact":true,"session":…,"station":…}
-  // at 120 (#5613: notify.permission told as notify is answered, between frames, not in a frame): the chat's top bar's
-  // faces ask their picture of the core as their binding is worked out, in a frame (src/sfapp/chat_bar_node.mbt:405,
-  // @sf.avatar_node's picture closure calling (src.picture)(p.picture, stint()), src/sfbase/source.mbt:118), so where
-  // it falls beside a message said at its cause goes by the frames' rate: step 5 (until icon:archive): message #22:
-  // call picture {"url":"https://example.test/p.png"} | strict call notify.permission {"state":"unknown"}. Gone as
-  // bar-going-down's
-  "bar-archive": [7, 120],
+  "bar-archive": [7],
   "notice-looking": [7],
   // wide-answer-reply at 120 (#5519): the new chat page sends its composer, machineSessions.list and status's
   // release in the frame at 1050 ms, notify.permission (sent once notify's values are in, which came after that
@@ -162,3 +149,14 @@ let strict_diverged_known : Map[String, Array[(Double, String)]] = {
     (22133.333333333336, "{\"id\":24,\"subscribe\":{\"topic\":\"doing\"},\"keyed\":true}"),
   ],
 }
+
+///|
+/// How long after the last message its run had before its first step each flow's first step found what it waits for
+/// so (its first screen: Flow::first_screen), in ms and the display's frames drawn meanwhile, in the strict pass. Its
+/// waits before that step wait (the moments there are those of the app that recorded the run, before #5589 and #5618,
+/// asking otherwise as it started), so how long the first screen takes is measured here instead: only falls, each
+/// flow's ms and frames at most its own, one under them to be brought down (the coordinator of the migration,
+/// 2026-11-12: B). Once the traces are recorded again under the strict pass's moments, those waits are assertions and
+/// this goes.
+// kept across runs: a value
+let first_screen_known : Map[String, (Double, Int)] = Map([])

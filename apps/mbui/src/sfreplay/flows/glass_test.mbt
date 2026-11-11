@@ -43,7 +43,7 @@ test "29-glass" {
   @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("glass"), seed~, h=glass_window_h)
     f.tap("端到端测试")
-    f.run_to(@ui.nav_rest())
+    f.run_to(@ui.nav_rest)
     f.see("发消息")
     for i, words in glass_words {
       f.tap("发消息")
@@ -59,14 +59,14 @@ test "29-glass" {
     // (one at a time)
     let turns = f.t.rest_of("a chat's list turns")
     if f.saw(turns > f.t.time() && turns < @double.infinity) {
-      f.run_to(turns)
+      f.run_to(fn() { turns })
     }
     // (the list come to its end after them: gliding to what came at it, the rows over what came in over its end going
     // up for it)
     for moves in ["a list gliding", "Anim \"layout ", "a list's rows' heights"] {
       let rest = f.t.rest_of(moves)
       if f.saw(rest > f.t.time() && rest < @double.infinity) {
-        f.run_to(rest)
+        f.run_to(fn() { rest })
       }
     }
     // the first scrolled to run on under the top bar's glass (how far it went up past it the layout's: the composer's
@@ -79,7 +79,7 @@ test "29-glass" {
       f.wheel(-300.0)
       let eased = f.t.rest_of("wheel ease")
       if f.saw(eased > f.t.time() && eased < @double.infinity) {
-        f.run_to(eased)
+        f.run_to(fn() { eased })
       }
     }
     glass_align(f, glass_words[0], top=true)
@@ -88,7 +88,7 @@ test "29-glass" {
     // (eased where its lists have it: a phone's, Android's, go there at once)
     let eased = f.t.rest_of("wheel ease")
     if f.saw(eased > f.t.time() && eased < @double.infinity) {
-      f.run_to(eased)
+      f.run_to(fn() { eased })
     }
     // scrolled up: what was above runs under the composer's
     // Align a visible message with the composer's pane; fixed scrolling can stop between messages.
@@ -114,7 +114,7 @@ fn glass_align(f : @sfreplay.Flow, words : String, top~ : Bool) -> Unit {
     f.wheel_aligned(-down)
     let eased = f.t.rest_of("wheel ease")
     if f.saw(eased > f.t.time() && eased < @double.infinity) {
-      f.run_to(eased)
+      f.run_to(fn() { eased })
     }
   }
 }

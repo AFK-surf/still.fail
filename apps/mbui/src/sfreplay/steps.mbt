@@ -209,10 +209,14 @@ pub fn Flow::start(
   }
   // (and its host's answers as the run's gave them, where it kept them: a word's bounds as the system splits words)
   // (on the system the run was on, its core told so: above)
+  // (what the app asks as it starts, in the Tester's first frame, asked at the Tester's first moment: the run's answers
+  // to it due as long after it as they came in the run, its first step too, not as long after the replay's clock began)
+  let started_at = 1000.0
+  r.clock(fn() { started_at })
   let t = match r.text() {
     Some(text) =>
-      @ui.Tester::new(app, w~, h~, scale~, dark~, window_inset~, native~, env=r.env() + env, text~, platform~, tree=@sfapp.app_tree(the_source), loc~)
-    None => @ui.Tester::new(app, w~, h~, scale~, dark~, window_inset~, native~, env=r.env() + env, platform~, tree=@sfapp.app_tree(the_source), loc~)
+      @ui.Tester::new(app, w~, h~, scale~, dark~, window_inset~, native~, env=r.env() + env, text~, platform~, tree=@sfapp.app_tree(the_source), time=started_at, loc~)
+    None => @ui.Tester::new(app, w~, h~, scale~, dark~, window_inset~, native~, env=r.env() + env, platform~, tree=@sfapp.app_tree(the_source), time=started_at, loc~)
   }
   // (and the rest of what its host gave its first frame: the system's settings, the minutes it was off UTC)
   ignore(t.settings_said(settings.stringify()))
@@ -241,6 +245,11 @@ pub fn Flow::start(
   } else {
     keeping.val = 0
   }
+  step_moment.val = None
+  first_taken.val = false
+  opening_late.val = 0.0
+  first_step_run_at.val = None
+  opening_given.val = -@double.infinity
   pace_failed.val = false
   pace_split.val = ""
   pace_steps.val = 0
@@ -354,8 +363,40 @@ pub fn Flow::start(
 
 ///|
 fn Flow::settle_start(self : Flow) -> Unit {
-  // (a pace pass: up to the strict pass's first step, its frames none past it; what is due after comes as the steps go)
-  let first = if keeping.val == 2 && strict_steps.length() > 0 { strict_steps[0].1 } else { @double.infinity }
+  // (the strict pass: the display's frames only as the clock passes them, from the start, till all the run had before
+  // its first step has happened again (its asks made, what came for them given at its moment); the first step's
+  // moment is the run's after the last of it (Replay::due_at), not known before it: the step itself comes to it)
+  if keeping.val == 1 {
+    self.t.frames_by_clock(true)
+    let began = self.t.time()
+    while true {
+      self.r.deliver(now=self.t.time(), host_by=self.t.taken_at(), taken_at=self.t.taken_at(), to=fn(json, bytes) { self.t.post("core", json, bytes?) }) |> ignore
+      let first = self.r.next_step_at()
+      self.t.inputs_next(first)
+      let due = self.r.next_due().unwrap_or(@double.infinity)
+      // (or, nothing more to come for what was asked, the first step's moment come with the run's asks before it not
+      // all made again: it is taken then all the same, and what it says of the screen is held to that moment)
+      let now = self.t.time()
+      if (due == @double.infinity &&
+        (!self.r.asks_before_step() ||
+        (now >= first - 1.0e-6 && now >= self.r.asks_before_step_due() - 1.0e-6))) ||
+        now - began > until_most_ms {
+        let given = self.r.last_given()
+        opening_given.val = if given > -@double.infinity { given } else { began }
+        break
+      }
+      self.t.come_to(if due > now && due < now + frame_ms { due } else { now + frame_ms })
+    }
+    emit_answered(self.r.take_asked())
+    return
+  }
+  // (a pace pass alike: up to the strict pass's first step, the display's frames none past it, the input given at its
+  // own moment as a device's host gives it; what is due after comes as the steps go)
+  let first = if keeping.val == 2 && strict_steps.length() > 0 {
+    strict_steps[0].1
+  } else {
+    @double.infinity
+  }
   if first < @double.infinity {
     self.t.inputs_next(first)
     // (its frames only as the clock passes them: what comes waits for the next, none drawn ahead of the clock)
@@ -427,12 +468,26 @@ fn Flow::take_step(self : Flow, line : String) -> Unit {
   match (match at_strict { Some(t) => Some(t); None => self.r.step_at(line) }) {
     Some(at) => {
       let now = self.t.time()
+      // (the strict pass: a step's moment before the step before it was taken is the replay's own fault (its timeline
+      // left on a line the run had before that step), never the app's lateness: said, and stopped)
+      if keeping.val == 1 && at > -@double.infinity {
+        // (the run's step before it as taken here: one of its script's that says its moment, not a line of the test's
+        // own (`#env …`, `#before …`) the run kept none of)
+        match self.r.step_anchor() {
+          Some((taken, _)) if at < taken - 1.0e-6 =>
+            @halt.saying(
+              "replay \{pass_trace.val}: the run's moment for `\{line}` (\{at} ms) comes before its step before it was taken (\{taken} ms): the replay's timeline, not the app (Replay::due_at)",
+            )
+          _ => ()
+        }
+      }
       if at_strict is Some(_) && now > at + 0.001 {
         println("STEP-LATE \{pass_trace.val}: \{line} at \{now}, strict \{at}")
       }
       if at > now && at < @double.infinity {
-        // (a pace pass: the clock on to the step's moment between the host's frames, none drawn past it)
-        if keeping.val == 2 {
+        // (the strict pass and its pace passes: the clock on to the step's moment between the host's frames, none
+        // drawn past it)
+        if keeping.val >= 1 {
           self.t.come_to(at)
         } else {
           self.t.run_for(at - now)
@@ -454,11 +509,21 @@ fn Flow::take_step(self : Flow, line : String) -> Unit {
       // (and what it sets off drawn on the host's frames up to the next step's moment, none past it: the next input
       // comes at its own moment at any frame rate, Tester::inputs_next)
       if keeping.val == 1 {
+        // (the first step's moment in the run, on this clock: how much later its first screen let it be taken,
+        // Flow::first_screen)
+        if strict_steps.is_empty() {
+          first_step_run_at.val = if at > -@double.infinity && at < @double.infinity { Some(at) } else { None }
+        }
         strict_steps.push((line, self.t.time()))
+        step_moment.val = if at < @double.infinity { Some(self.t.time()) } else { None }
+        if strict_steps.length() > 1 {
+          first_taken.val = true
+        }
       }
-      if pace_pass.val {
-        // (a step at the strict pass's moment: no frame past that moment till the next step, the input it gives
-        // given at it, not after a frame of the host's that falls later; what it sets off drawn on the way to the next)
+      if keeping.val >= 1 {
+        // (a step at its moment (the run's, the strict pass's): no frame past that moment till the next step, the
+        // input it gives given at it, not after a frame of the host's that falls later; what it sets off drawn on the
+        // way to the next)
         self.t.inputs_next(
           if at_strict is Some(_) {
             let i = pace_step_next.val
@@ -472,6 +537,10 @@ fn Flow::take_step(self : Flow, line : String) -> Unit {
     None =>
       if keeping.val == 1 {
         strict_steps.push((line, self.t.time()))
+        step_moment.val = None
+        if strict_steps.length() > 1 {
+          first_taken.val = true
+        }
       }
   }
   if !waiting_step(line) {
@@ -593,6 +662,7 @@ pub fn Flow::until(self : Flow, so : () -> Bool, loc~ : SourceLoc) -> Unit {
   if pace_split.val != "" {
     return
   }
+  step_moment.val = None
   self.until_at(loc.to_string(), so)
 }
 
@@ -610,11 +680,39 @@ fn Flow::until_at(self : Flow, site : String, so : () -> Bool) -> Unit {
   }
   self.one_by_one.val = true
   let began = self.t.time()
+  // (the strict pass: the step falls at the run's moment, never where what it waits for came to be so; the wait is
+  // an assertion of it then: at the moment of its own line as the run took it (Flow::take_step came to it), or, a wait
+  // the run's script did not write, by the run's next step. Not so then, it fails, saying how much later it came;
+  // looked for on to there only to say that)
+  // Before the run's first step is taken the strict pass waits for what it waits for, as before: those moments are
+  // the app's that recorded the run (its traces older than what the app now reads first, #5589, #5618), and what it
+  // waited is measured (first_screen_known) till they are recorded again (the coordinator of the migration,
+  // 2026-11-12: B). From the step on, the run's timeline from there, later by as much (opening_late).
+  let opening = keeping.val == 1 && !first_taken.val
+  let first_own = opening && strict_steps.length() == 1 && step_moment.val is Some(_)
+  let by = if keeping.val == 1 && !opening {
+    match step_moment.val {
+      Some(t) => t
+      None => self.r.next_step_at()
+    }
+  } else {
+    @double.infinity
+  }
+  let run_at = step_moment.val
+  step_moment.val = None
+  let mut late = false
   while !so() {
     // (bounded on the run's clock: what it waits for never coming, said, not run on)
     if self.t.time() - began > until_most_ms {
-      self.fail("not so after \{until_most_ms.to_int()} ms; moving: \{self.t.moving().join("; ")}")
+      self.fail(
+        (if late { "not so at \{by} ms, the run's moment for it, nor " } else { "not so " }) +
+        "after \{until_most_ms.to_int()} ms; moving: \{self.t.moving().join("; ")}",
+      )
+      late = false
       break
+    }
+    if self.t.time() >= by - 1.0e-6 {
+      late = true
     }
     let n = self.r.deliver(at_most=1, now=self.t.time(), host_by=self.t.taken_at(), taken_at=self.t.taken_at(), to=fn(json, bytes) { self.t.post("core", json, bytes?) })
     if n > 0 || self.t.posted() > 0 {
@@ -629,6 +727,20 @@ fn Flow::until_at(self : Flow, site : String, so : () -> Bool) -> Unit {
     // waited on, until what it waits for is so (a page pushed when its answer came, sliding in; a line a timer brings)
     // or the most it waits)
     self.t.run_for(frame_ms)
+  }
+  if late {
+    let at = self.t.time()
+    self.fail(
+      "\{site}: not so at \{by} ms, the run's moment for it (its timeline \{opening_late.val} ms later from its first step): so at \{at} ms, \{at - by} ms later",
+    )
+  }
+  if first_own {
+    self.first_screen(
+      match first_step_run_at.val {
+        Some(a) => a
+        None => run_at.unwrap_or(self.t.time())
+      },
+    )
   }
   self.one_by_one.val = false
   if keeping.val == 1 {
@@ -650,7 +762,7 @@ fn Flow::wait_to(self : Flow, at : Double) -> Unit {
       }
     }
     let step = at - self.t.time()
-    if keeping.val == 2 {
+    if keeping.val >= 1 {
       self.t.come_to(self.t.time() + (if step < frame_ms { step } else { frame_ms }))
     } else {
       self.t.run_for(if step < frame_ms { step } else { frame_ms })
@@ -764,7 +876,21 @@ pub fn Flow::tap(self : Flow, what : String, top? : Bool = false, loc~ : SourceL
   guard p is Some((x, y)) else { return }
 
   self.t.tap(x, y)
+  self.input_framed()
   self.core()
+}
+
+///|
+/// The strict pass and its pace passes: the host's frame after an input given at its moment drawn, as a device draws
+/// the frame that takes it, where that falls before the run's next step (an old view takes a press in its frame: what
+/// the test looks at after the tap is that frame's, not the one before it).
+fn Flow::input_framed(self : Flow) -> Unit {
+  if keeping.val >= 1 {
+    let next = self.t.next_frame_time()
+    if next <= self.r.next_step_at() + 1.0e-6 {
+      self.t.come_to(next)
+    }
+  }
 }
 
 ///|
@@ -776,6 +902,7 @@ pub fn Flow::tap_at(self : Flow, x : Double, y : Double) -> Unit {
   emit("tapxy \{x.to_int()} \{y.to_int()}")
   let (w, h) = self.t.size()
   self.t.tap(if x < 0.0 { w + x } else { x }, if y < 0.0 { h + y } else { y })
+  self.input_framed()
   self.core()
 }
 
@@ -864,6 +991,7 @@ pub fn Flow::answered(self : Flow, call : String, n : Int, loc~ : SourceLoc) -> 
     pace_answers.push((site, call, n))
     return
   }
+  step_moment.val = None
   self.until_at(site, fn() { self.r.answers_given(call) >= n })
   if keeping.val == 1 {
     strict_answers[site + " " + call + " \{n}"] = self.r.nth_call_at(call, n)
@@ -1166,12 +1294,13 @@ pub fn Flow::clear(self : Flow) -> Unit {
 }
 
 ///|
-/// On the frames' clock to `end`, a motion's own end as it says it (`@kit.sheet_rest(key)`, `@ui.nav_rest()`,
-/// `@sf.presented_rest()`, `@sfapp.bar_rest()`), or none where the clock is past it already (the run's own waiting took
-/// it there: each says its end as it was once it is over, whichever frames were drawn): the test fails if it has not
-/// started yet (+inf: draw first) or nothing of it ever moved (-1).
+/// On the frames' clock to `end`, a motion's own end as it says it (`@kit.sheet_rest`, `@ui.nav_rest`,
+/// `@sf.presented_rest`, `@sfapp.bar_rest`: asked, not its answer, so the strict pass can ask again at the run's next
+/// step, Flow::run_to_at), or none where the clock is past it already (the run's own waiting took it there: each says
+/// its end as it was once it is over, whichever frames were drawn): the test fails if it has not started yet (+inf:
+/// draw first) or nothing of it ever moved (-1).
 #callsite(autofill(loc))
-pub fn Flow::run_to(self : Flow, end : Double, loc~ : SourceLoc) -> Unit {
+pub fn Flow::run_to(self : Flow, end : () -> Double, loc~ : SourceLoc) -> Unit {
   if pace_split.val != "" {
     return
   }
@@ -1180,7 +1309,7 @@ pub fn Flow::run_to(self : Flow, end : Double, loc~ : SourceLoc) -> Unit {
 
 ///|
 /// Flow::run_to, kept by `site` (Kept): a pace pass runs to where the strict pass ran, the moment it came to.
-fn Flow::run_to_at(self : Flow, site : String, end : Double) -> Unit {
+fn Flow::run_to_at(self : Flow, site : String, end_of : () -> Double) -> Unit {
   if keeping.val == 2 {
     match self.kept(site) {
       Some(Waited(at)) => self.wait_to(at)
@@ -1189,6 +1318,23 @@ fn Flow::run_to_at(self : Flow, site : String, end : Double) -> Unit {
     }
     self.core()
     return
+  }
+  let mut end = end_of()
+  // (the strict pass: to the run's moment, not the motion's: what an input just given at its moment sets off is not
+  // taken till the host's next frame (none drawn ahead of the clock), so its end may not be said yet; the clock to the
+  // run's next step, and the motion's end asked again there. Either way it is at rest by then, or the test fails,
+  // saying by how much)
+  if keeping.val == 1 && first_taken.val {
+    let by = self.r.next_step_at()
+    if (end < 0.0 || end > 1.0e300) && by < @double.infinity && by > self.t.time() {
+      self.t.come_to(by)
+      end = end_of()
+    }
+    if end >= 0.0 && end <= 1.0e300 && by < @double.infinity && end > by + 1.0e-6 {
+      self.fail(
+        "its motion at rest at \{end} ms, \{end - by} ms after the run's next step (\{by} ms; its timeline \{opening_late.val} ms later from its first step); said since the last step that acted: \{self.said.join(" | ")}",
+      )
+    }
   }
   if end < 0.0 || end > 1.0e300 {
     self.fail("no motion to run to (its end: \{end}); said since the last step that acted: \{self.said.join(" | ")}")
@@ -1235,7 +1381,7 @@ pub fn Flow::run_to_rest(self : Flow, name : String, loc~ : SourceLoc) -> Unit {
     return
   }
   // (one so named over before the last step that acted: its end as it said it (Tester::rest_of), run_to there)
-  self.run_to_at(site, end)
+  self.run_to_at(site, fn() { self.t.rest_of(name) })
 }
 
 ///|
@@ -1261,7 +1407,7 @@ pub fn Flow::open_page(self : Flow, page : @sfapp.Page, loc~ : SourceLoc) -> Uni
   self.core()
   // (a page pushed over Home slides in, to its end)
   if @ui.nav_rest() >= 0.0 {
-    self.run_to_at(site, @ui.nav_rest())
+    self.run_to_at(site, @ui.nav_rest)
   }
 }
 
@@ -1319,6 +1465,66 @@ let strict_steps : Array[(String, Double)] = []
 /// Which of the strict pass's steps a pace pass takes next.
 // kept across runs: put back as each pace pass begins
 let pace_step_next : Ref[Int] = Ref(0)
+
+///|
+/// The strict pass: the run's moment of the step whose line was just taken (Flow::take_step), for the wait that line
+/// says (Flow::until_at) to hold at; None where it has none (a wait the run's script did not write: Flow::until,
+/// Flow::answered; a line the trace has not).
+// kept across runs: put back as each flow starts
+let step_moment : Ref[Double?] = Ref(None)
+
+///|
+/// The strict pass: whether its first step has been taken, what it waited for so (Flow::until_at): from then on its
+/// waits hold at the run's moments.
+// kept across runs: put back as each flow starts
+let first_taken : Ref[Bool] = Ref(false)
+
+///|
+/// The strict pass: how much later than the run's moment its first step was taken (Flow::first_screen): the run's
+/// timeline from there on later by as much, each step after timed from that one (Replay::due_at), said with a wait
+/// not so in time.
+// kept across runs: put back as each flow starts
+let opening_late : Ref[Double] = Ref(0.0)
+
+///|
+/// The strict pass: the run's moment for its first step on this clock (Replay::step_at), its first screen what may let
+/// it be taken later (Flow::first_screen: opening_late); None at once, or not taken yet.
+// kept across runs: put back as each flow starts
+let first_step_run_at : Ref[Double?] = Ref(None)
+
+///|
+/// The strict pass: when the last message the run had before its first step was given (Flow::settle_start).
+// kept across runs: put back as each flow starts
+let opening_given : Ref[Double] = Ref(0.0)
+
+///|
+/// The strict pass's first step taken now, what it waited for so (the run had it at `run_at`): the run's timeline on
+/// from here (Replay::step_moved_to, and the pace passes' first step here too), and how long after the last message
+/// the run had before it that was, in ms and frames drawn, held to first_screen_known.
+fn Flow::first_screen(self : Flow, run_at : Double) -> Unit {
+  let now = self.t.time()
+  first_taken.val = true
+  opening_late.val = if now > run_at { now - run_at } else { 0.0 }
+  self.r.step_moved_to(now)
+  if strict_steps.length() > 0 {
+    strict_steps[0] = (strict_steps[0].0, now)
+  }
+  let ms = now - opening_given.val
+  let frames = self.t.frames_between(opening_given.val, now)
+  println("FIRST-SCREEN \{pass_trace.val}: \{ms} ms, \{frames} frames after the last message the run had before its first step")
+  match first_screen_known.get(pass_trace.val) {
+    Some((most, most_frames)) if ms > most + 1.0e-3 || frames > most_frames =>
+      self.fail(
+        "flow \{pass_trace.val}: its first step's screen \{ms} ms (\{frames} frames) after the last message before it, more than its bar \{most} ms (\{most_frames} frames: first_screen_known)",
+      )
+    Some((most, most_frames)) if ms < most - 1.0e-3 || frames < most_frames =>
+      self.fail(
+        "flow \{pass_trace.val}: its first step's screen \{ms} ms (\{frames} frames) after the last message before it, under its bar \{most} ms (\{most_frames} frames): bring it down (first_screen_known)",
+      )
+    Some(_) => ()
+    None => println("TEMP not in first_screen_known")
+  }
+}
 
 ///|
 /// 1: the strict pass, keeping its inputs; 2: a pace pass, giving them; 0: neither.
@@ -1543,7 +1749,7 @@ pub fn Flow::wheel_at(self : Flow, what : String, dy : Double, loc~ : SourceLoc)
   // the list's wheel eased to where it goes (a phone's lists, Android's, go there at once)
   let eased = self.t.rest_of("wheel ease")
   if eased > self.t.time() && eased < @double.infinity {
-    self.run_to_at(site, eased)
+    self.run_to_at(site, fn() { self.t.rest_of("wheel ease") })
   }
 }
 
@@ -1561,7 +1767,7 @@ pub fn Flow::toast_gone(self : Flow, loc~ : SourceLoc) -> Unit {
   // (its way out over already where it began before the test looked at it: a step that waited took the clock past)
   let out = @kit.toast_rest("toast")
   if out > self.t.time() {
-    self.run_to_at(site, out)
+    self.run_to_at(site, fn() { @kit.toast_rest("toast") })
   }
 }
 

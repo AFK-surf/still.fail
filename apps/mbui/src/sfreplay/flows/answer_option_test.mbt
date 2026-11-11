@@ -29,7 +29,7 @@ test "22-answer-option" {
     // (closed as the core said it decided: to its end)
     let closing = @sfapp.under_rest()
     if closing > f.t.time() {
-      f.run_to(closing)
+      f.run_to(fn() { closing })
     }
     f.check(@sfapp.under_rest() <= f.t.time(), "something under the post moves: \{@sfapp.under_rest()}")
     f.end()

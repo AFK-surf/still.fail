@@ -25,14 +25,14 @@ test "96-viewer" {
     // (where the run's pace had the row come with the list's first rows, nothing of the list moved: where it rests)
     let rows_end = @sfpages.rows_rest()
     if rows_end >= 0.0 {
-      f.run_to(rows_end)
+      f.run_to(fn() { rows_end })
     }
     f.tap("两张图片 201493")
     f.see("=willow")
     f.see("img:e2e-photo.jpg")
     f.tap("img:e2e-photo.jpg")
     // flown open from its thumbnail, its bars on once it is in
-    f.run_to(@sfapp.preview_rest())
+    f.run_to(@sfapp.preview_rest)
     // grown from its thumbnail, its whole picture here (复制 offered)
     f.see("icon:copy")
     f.see("icon:chevron-right")

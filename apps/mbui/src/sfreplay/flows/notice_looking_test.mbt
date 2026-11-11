@@ -22,7 +22,7 @@ test "42-notice-looking" {
     f.see("端到端测试")
     f.no_notice("这个不该通知 083209")
     // the bottom bar at its end
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

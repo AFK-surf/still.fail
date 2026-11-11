@@ -17,7 +17,7 @@ test "07-draft-restart" {
     // (the core told as it changed: composer.text)
     f.answered("composer.text", 1)
     // the bar moved by what this did (the field focused, the chat left) at rest
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

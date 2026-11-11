@@ -14,7 +14,7 @@ test "37-workspace-members" {
     f.see("alice@example.test")
     f.see("成员")
     // the bottom bar's own motion (gone under the page pushed, its ball) to its declared end
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

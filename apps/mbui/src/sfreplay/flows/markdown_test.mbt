@@ -21,13 +21,13 @@ test "74-markdown" {
     // sent (composer_hold): all that moves at rest before the code is dragged, in every timing)
     let rest = f.t.rest_of("")
     if f.saw(rest > f.t.time()) {
-      f.run_to(rest)
+      f.run_to(fn() { rest })
     }
     // (and the agent's line gone, its room closed: Reading's going, in every timing)
     f.gone("处理中")
     let closed = f.t.rest_of("a list's rows' heights")
     if f.saw(closed > f.t.time()) {
-      f.run_to(closed)
+      f.run_to(fn() { closed })
     }
     // (what the screen says here is the strict pass's to judge: a pace pass gives the same inputs, f.check)
     let at = fn(what : String, i : Int) -> Double {
@@ -66,7 +66,7 @@ test "74-markdown" {
     f.check(f.t.opened().length() == 0, "a link opened")
     // the code's sideways fling, the link's menu going, the toast coming: to their ends, as each set out
     let rests = [f.t.rest_of("a fling"), f.t.rest_of("link-menu"), f.t.rest_of("presence/toast")]
-    f.run_to(rests.fold(init=-1.0, fn(a, b) { if b > a { b } else { a } }))
+    f.run_to(fn() { rests.fold(init=-1.0, fn(a, b) { if b > a { b } else { a } }) })
     f.end()
   })
 }

@@ -27,7 +27,7 @@ test "31-places" {
     f.run_for(@sfapp.switch_fade_ms)
     f.see("端到端测试")
     // the bottom bar's springs and tweens to their declared end (the ball's ride on the bar chosen included)
-    f.run_to(@sfapp.bar_rest())
+    f.run_to(@sfapp.bar_rest)
     f.end()
   })
 }

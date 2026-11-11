@@ -153,6 +153,8 @@ pub struct Replay {
   // private fields
 }
 pub fn Replay::answers_given(Self, String) -> Int32
+pub fn Replay::asks_before_step(Self) -> Bool
+pub fn Replay::asks_before_step_due(Self) -> Double
 pub fn Replay::attach(Self) -> Unit
 pub fn Replay::client(Self) -> Client
 pub fn Replay::clock(Self, () -> Double) -> Unit
@@ -171,6 +173,7 @@ pub fn Replay::has_jobs_summary(Self) -> Bool
 pub fn Replay::host(Self, (String) -> Unit) -> Unit
 pub fn Replay::host_frames(Self) -> Array[Double]
 pub fn Replay::host_given(Self) -> (Double, Double)?
+pub fn Replay::last_given(Self) -> Double
 pub fn Replay::left(Self) -> Int32
 pub fn Replay::local_station(Self) -> String
 pub fn Replay::next_due(Self) -> Double?
@@ -184,6 +187,7 @@ pub fn Replay::shuffle(Self, UInt32) -> Unit
 pub fn Replay::skip(Self, String) -> Unit
 pub fn Replay::skip_where(Self, (String, @json.Json) -> Bool) -> Unit
 pub fn Replay::step_at(Self, String) -> Double?
+pub fn Replay::step_moved_to(Self, Double) -> Unit
 pub fn Replay::step_taken(Self, String) -> Bool
 pub fn Replay::step_wall(Self, String) -> Double?
 pub fn Replay::take_asked(Self) -> Array[String]

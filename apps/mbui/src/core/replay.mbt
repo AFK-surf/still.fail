@@ -775,6 +775,89 @@ pub fn Replay::next_step(self : Replay) -> String? {
 }
 
 ///|
+/// When the last message in given so far was given (-inf: none yet).
+pub fn Replay::last_given(self : Replay) -> Double {
+  let mut most = -@double.infinity
+  for e in self.evs {
+    if !e.out && e.at > most {
+      most = e.at
+    }
+  }
+  most
+}
+
+///|
+/// The step taken last held taken at `at` (the strict pass's first, taken once what it waited for was so): what is
+/// timed from it (the run's next steps, Replay::due_at) on from there.
+pub fn Replay::step_moved_to(self : Replay, at : Double) -> Unit {
+  let mut i = self.evs.length() - 1
+  while i >= 0 {
+    let e = self.evs[i]
+    if e.out && e.done && is_step(e.msg) {
+      e.at = at
+      return
+    }
+    i = i - 1
+  }
+}
+
+///|
+/// When the last of what the run asked before its next step not taken again, not asked here yet, was due to be asked
+/// at this pace (each on from the latest event before it that happened again, by their gap in the run; a report aside,
+/// Replay::sent): -inf where there is none, or at once.
+pub fn Replay::asks_before_step_due(self : Replay) -> Double {
+  let scale = match self.pace {
+    AtOnce => return -@double.infinity
+    AsRun(scale) => scale
+  }
+  let mut most = -@double.infinity
+  for i in self.first_out..<self.evs.length() {
+    let e = self.evs[i]
+    if !e.out || e.done {
+      continue
+    }
+    if is_step(e.msg) {
+      break
+    }
+    if is_report(e.msg) || !e.has_wall {
+      continue
+    }
+    let mut j = i - 1
+    while j >= 0 {
+      let a = self.evs[j]
+      if a.at >= 0.0 && (a.has_wall || !a.out) {
+        let gap = e.wall - a.wall
+        let t = a.at + (if gap > 0.0 { gap * scale } else { 0.0 })
+        if t > most {
+          most = t
+        }
+        break
+      }
+      j = j - 1
+    }
+  }
+  most
+}
+
+///|
+/// Whether the run asked something before its next step not taken again that this run has not asked yet (a report
+/// aside, Replay::sent): what comes before the step has not all happened again.
+pub fn Replay::asks_before_step(self : Replay) -> Bool {
+  for i in self.first_out..<self.evs.length() {
+    let e = self.evs[i]
+    if e.out && !e.done {
+      if is_step(e.msg) {
+        return false
+      }
+      if !is_report(e.msg) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
 /// The run's next step not taken again, when it is `line` (step_of: as the test says it), taken: what came after it
 /// may come. Whether it was. Another line (a test that says a step the run did not, or in another order) leaves it
 /// waiting, said by `waiting`.
@@ -923,6 +1006,43 @@ pub fn Replay::next_due(self : Replay) -> Double? {
 /// message in not given yet (what may come at once in another order: its own time stands for it), as are asks with no
 /// wall clock (an older trace: anchored to the messages in). None before it: at once.
 fn Replay::due_at(self : Replay, i : Int) -> Double {
+  let due = self.due_chained(i)
+  // (never before the run's latest step taken again before it, by their gap in the run: what came after a step in the
+  // run comes after it here, on the timeline from where it was taken (a first step taken later than the run's moment
+  // for it, its first screen later: all after it later by as much), whatever was made again sooner meanwhile (an
+  // unsubscription the run made after the step, made here before it: wide-newline's answers timed from it came 15.7 ms
+  // before the tap that asked for them, its next step's moment 9.6 ms before the tap))
+  match self.step_before(i) {
+    Some((at, wall)) if due > -@double.infinity && due < @double.infinity && self.evs[i].has_wall => {
+      let scale = match self.pace {
+        AsRun(scale) => scale
+        AtOnce => 1.0
+      }
+      let gap = self.evs[i].wall - wall
+      let from_step = at + (if gap > 0.0 { gap * scale } else { 0.0 })
+      if from_step > due { from_step } else { due }
+    }
+    _ => due
+  }
+}
+
+///|
+/// The run's latest step before event `i` taken again here that says its moment: when here and when in the run.
+fn Replay::step_before(self : Replay, i : Int) -> (Double, Double)? {
+  let mut k = i - 1
+  while k >= 0 {
+    let e = self.evs[k]
+    if e.out && e.done && e.at >= 0.0 && e.has_wall && is_step(e.msg) {
+      return Some((e.at, e.wall))
+    }
+    k = k - 1
+  }
+  None
+}
+
+///|
+/// When event `i` is due by the events before it alone (due_at's, before the steps are taken into account).
+fn Replay::due_chained(self : Replay, i : Int) -> Double {
   let scale = match self.pace {
     AtOnce => return -@double.infinity
     AsRun(scale) => scale
@@ -1692,6 +1812,20 @@ pub fn Replay::host_frames(self : Replay) -> Array[Double] {
     }
   }
   frames
+}
+
+///|
+/// The latest step of the run's script taken again here that says its moment: when here (this clock) and when in the
+/// run (its clock): what the steps after it, and the run's frames, are timed from (Replay::due_at). None before the
+/// first.
+pub fn Replay::step_anchor(self : Replay) -> (Double, Double)? {
+  let mut last : (Double, Double)? = None
+  for e in self.evs {
+    if e.out && e.done && e.at >= 0.0 && e.has_wall && is_step(e.msg) {
+      last = Some((e.at, e.wall))
+    }
+  }
+  last
 }
 
 ///|

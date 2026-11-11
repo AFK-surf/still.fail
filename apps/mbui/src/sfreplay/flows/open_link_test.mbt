@@ -23,7 +23,7 @@ test "75-open-link" {
     f.see("icon:archive")
     let rest = f.t.rest_of("bar-archive/")
     if rest > f.t.time() {
-      f.run_to(rest)
+      f.run_to(fn() { rest })
     }
     f.end()
   })
