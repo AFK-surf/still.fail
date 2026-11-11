@@ -762,7 +762,9 @@ pub fn is_viz(String) -> Bool
 
 pub fn java_hash(String) -> Int32
 
-pub fn job_output_lines(Source, String, String, Double, Int64, Bool) -> Array[Array[@text.Run]]?
+pub fn job_output_lines(Source, String, String, Double, Int64, Bool) -> TermLines?
+
+pub fn job_output_of(Source, Map[String, @json.Json], Int64, Bool) -> TermLines
 
 pub fn jobs_scope(String) -> String
 
@@ -1652,7 +1654,7 @@ pub fn tell_place(Source, ChatRef, ChatView, Reading, exact? : Bool) -> Unit
 
 pub fn term_color(String, Bool) -> Int64
 
-pub fn term_lines(Array[@json.Json], Int64, Bool) -> Array[Array[@text.Run]]
+pub fn term_line(Array[@json.Json], Int64, Bool) -> Array[@text.Run]
 
 pub fn this_machine() -> String
 
@@ -3345,6 +3347,17 @@ pub(all) struct Tagging {
   start : @buffer.Buffer
   mut placed : Bool
 }
+
+pub(all) struct TermLine {
+  n : Int32
+  line : @json.Json
+  runs : Array[@text.Run]
+}
+
+pub(all) struct TermLines {
+  lines : Array[TermLine]
+}
+pub fn TermLines::at(Self, Int32) -> TermLine?
 
 pub(all) struct Thumb {
   x : Double

@@ -40,6 +40,9 @@ const TOPICS: Topic[] = [
   { topic: "host", station: S },
 ];
 
+/// A job's log's lines as sent, their words.
+const logWords = (log: { lines: { runs: { text: string }[] }[] }) => log.lines.map((l) => l.runs.map((r) => r.text).join("")).join("\n");
+
 /// Each topic's value after `ms`, from a UI subscribing to all of them.
 async function shown(core: Core, host: FakeHost, ms: number): Promise<Map<number, unknown>> {
   const ui = core.connect();
@@ -61,7 +64,7 @@ test("what_a_station_said_beyond_the_tables_shows_after_a_restart_before_any_net
   apply(first.host, values);
   assert.equal(v(values, 1).logins.length, 1);
   assert.equal(v(values, 2).screens.length, 1);
-  assert.equal(v(values, 3).text, "one\ntwo\n");
+  assert.equal(logWords(v(values, 3)), "one\ntwo\n");
   assert.deepEqual(v(values, 5).transfers.map((t: { id: string }) => t.id), ["t1"]);
   assert.equal(v(values, 6).rttMs, 40);
   assert.equal((first.core.inner.stations.link(S)?.memory.get("host") as { identity?: string } | undefined)?.identity, "studio");
@@ -79,7 +82,7 @@ test("what_a_station_said_beyond_the_tables_shows_after_a_restart_before_any_net
   assert.deepEqual(v(again, 1).logins.map((l: { id: string }) => l.id), ["l0"]);
   assert.equal(v(again, 2).known, true);
   assert.deepEqual(v(again, 2).screens.map((s: { id: string }) => s.id), ["desktop"]);
-  assert.equal(v(again, 3).text, "one\ntwo\n");
+  assert.equal(logWords(v(again, 3)), "one\ntwo\n");
   assert.notEqual(v(again, 4), undefined);
   assert.deepEqual(v(again, 5).transfers.map((t: { id: string }) => t.id), ["t1"]);
   assert.equal(v(again, 6).rttMs, 40, "how it was reached last, until it is reached anew");
@@ -97,7 +100,7 @@ test("a_job_log_kept_is_read_again_once_a_run_and_what_is_live_only_is_not_kept"
   subscribe(first.core, ui, 2, search);
   await first.host.time.pass(KEEP_MS + 1_000, 1_000);
   const data = first.core.inner.data;
-  assert.deepEqual(data.stationMemory(S, logKey("j1", 300)), { text: "one\ntwo\n", outputAt: 1 });
+  assert.deepEqual(data.stationMemory(S, logKey("j1", 300)), { text: "one\ntwo\n", outputAt: 1, from: 0 });
   assert.notEqual(first.core.inner.stations.link(S)?.memory.get(topicKey(search)), undefined, "what the search found is shown");
   assert.equal(data.stationMemory(S, topicKey(search)), undefined, "and not kept");
   await run(data.written);
@@ -114,7 +117,8 @@ test("a_job_log_kept_is_read_again_once_a_run_and_what_is_live_only_is_not_kept"
   subscribe(core, ui2, 1, { topic: "jobLog", station: S, job: "j1", lines: 300 });
   await host.time.pass(2_000, 50);
   apply(host, values);
-  assert.equal(v(values, 1).text, "one\ntwo\nthree\n");
+  // (its lines numbered on from what was kept: those kept as they were, the one more under them)
+  assert.deepEqual((v(values, 1).lines as { n: number; runs: { text: string }[] }[]).map((l) => [l.n, l.runs.map((r) => r.text).join("")]), [[0, "one"], [1, "two"], [2, "three"], [3, ""]]);
   assert.equal(reads(), before + 1);
   core.close();
 });

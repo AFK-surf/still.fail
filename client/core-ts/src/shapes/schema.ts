@@ -3563,13 +3563,16 @@ export const SHAPES: Record<string, Shape> = {
     ["session", opt("String")],
   ], { doc: "Where a chat in the usage lists opens: its station and its agent's session (its thread the core's)." }),
   JobLogView: struct([
-    ["text", "String"],
+    ["lines", opt(vec("LogLine")), { doc: "Its lines as a terminal shows them, the oldest first, each by its `n`; absent asked for its last line\nalone (`lines` 1: what a job's row shows is `last` and `said`)." }],
     ["outputAt", opt("i64"), { client: opt("I54") }],
     ["state", opt("String")],
-    ["last", opt("String"), { said: true }],
+    ["last", opt("String"), { said: true, doc: "Its last line with words in it, its words alone." }],
     ["said", opt("String")],
-    ["runs", opt(vec("TermRun")), { doc: "`text` in runs of one style, as a terminal colours it; absent when none of it is styled (show `text`)." }],
   ], { doc: "A job's output as it grows (the `jobLog` topic): its last lines as a terminal shows them (control sequences done\nor dropped, src/terminal.ts), when it last grew, its state (absent from a station yet to say), and, put in by the core,\nits last line and when in words (absent: nothing to say)." }),
+  LogLine: struct([
+    ["n", "u32", { doc: "Its number, its own as the log grows (src/log-lines.ts): the key a line more is put by, the line before it\nkept as it was." }],
+    ["runs", vec("TermRun"), { doc: "Its words in runs of one style, as a terminal colours them (a line of no style one run of its words); none\nwhere it is empty." }],
+  ], { doc: "A line of a job's output (`JobLogView.lines`)." }),
   TermRun: struct([
     ["text", "String"],
     ["fg", opt("String"), { doc: "One of the 16 colours of the client's terminal palette for its theme by number (`0`…`15`), or `#rrggbb`;\nabsent: the text's colour." }],

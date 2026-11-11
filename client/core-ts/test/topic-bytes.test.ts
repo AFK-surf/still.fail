@@ -27,8 +27,9 @@ import { parseTopic, TOPICS } from "../src/protocol.ts";
 import { SHAPES } from "../src/shapes/schema.ts";
 import { isObject } from "../src/util.ts";
 import { OUTLINE_FOUND, OUTLINE_ROWS } from "../src/things.ts";
-import { CHAT, OUTLINED, OUTLINED_ENTRIES, hostReading, messageAdded, outlinedEdit, outlinedSaid, outlinedWorking, quotaChanged } from "./real-size.ts";
+import { CHAT, JOB, JOB_LOG_LINES, OUTLINED, OUTLINED_ENTRIES, hostReading, jobLogOf, messageAdded, outlinedEdit, outlinedSaid, outlinedWorking, quotaChanged } from "./real-size.ts";
 import { applyKeyed } from "../src/collections.ts";
+import { logged } from "../src/log-lines.ts";
 import { hostOf, overview, setup } from "./views-rig.ts";
 import { ASKED, CHANGELOG_PAGE, LONG, topicOf, held, firstOfAll } from "./real-size-asked.ts";
 
@@ -50,11 +51,11 @@ const OVER: Record<string, number> = {
   "chat six pages": 264,
   "chat compact six pages": 264,
   "linkPreview page": 224,
-  "jobLog 400": 176,
-  "jobLog 300": 128,
   "vaultUses": 128,
   "usage": 112,
+  "jobLog 400": 96,
   "chats mine": 80,
+  "jobLog 300": 72,
   "chats": 72,
   "drive": 72,
   "profiles": 64,
@@ -140,6 +141,8 @@ const EMPTY: Record<string, Record<string, string>> = {
   "profiles": { "wait.failing": NEVER },
   "connects": { "wait.failing": ERROR },
   "connects mine": { "wait.failing": ERROR },
+  // (asked for its last line alone, a job's row: no lines, jobs.ts log)
+  "jobLog line": { lines: ASKED_SO },
   // (a single-session connect's session, and the one weighed is many sessions')
   "connect": { "bound.efforts": STATE, "bound.time": STATE, "bound.watch.names": STATE },
   // (a new chat's pick names no account's allowance, choose.ts `#now` quiet; the model it takes with nothing chosen,
@@ -430,6 +433,15 @@ async function causesOfAll(): Promise<[string, Map<string, J[]>][]> {
         }, 1000)]);
         causes.push(["edit", await during(() => log(outlinedEdit(base, t.host.nowMs())), 1000)]);
         causes.push(["said", await during(() => log(outlinedSaid(base, t.host.nowMs())), 1000)]);
+        // The chat's dev server printing a line more: its log as the station's `job-log` event says it for each way
+        // the app asks it, one line longer, its first gone where it was at its most, kept as station/sync.ts keeps it
+        // (its lines numbered on from what was kept before: log-lines.ts `logged`).
+        causes.push(["line", await during(() => {
+          for (const lines of JOB_LOG_LINES) {
+            const now = jobLogOf(base, lines, 1);
+            t.set({ topic: "jobLog", station, job: JOB, lines }, logged(jobLogOf(base, lines), now.text, now.outputAt));
+          }
+        }, 1000)]);
       }
       causes.push(["minute", await during(() => {}, 60_000)]);
     } finally {

@@ -458,7 +458,7 @@ pub fn items(@json.Json?, String) -> Array[@json.Json]
 
 pub fn java_hash(String) -> Int32
 
-pub fn job_output_lines(@sfbase.Source, String, String, Double, Int64, Bool) -> Array[Array[@text.Run]]?
+pub fn job_output_lines(@sfbase.Source, String, String, Double, Int64, Bool) -> @sfbase.TermLines?
 
 pub fn keep_bytes(@ui.Ctx, String, String, Bytes, way? : @hostapi.KeepWay, saved? : String, failed? : String) -> Unit
 

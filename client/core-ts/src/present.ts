@@ -1261,7 +1261,7 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
       value = jobsMod.shown(v, c);
       break;
     case "jobLog":
-      value = jobsMod.log(v, c);
+      value = jobsMod.log(v, c, topic.lines);
       break;
     case "slackApp":
       if (isObject(v)) value = { ...v, sections: slackSections() };

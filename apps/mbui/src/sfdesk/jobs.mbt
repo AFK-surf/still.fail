@@ -516,19 +516,20 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
 }
 
 ///|
-/// A job's output (Output: its last 400 lines), in a terminal's colours where the core says them, following its end
-/// while it is scrolled there.
+/// A job's output (Output: its last 400 lines), in a terminal's colours as the core says them, following its end
+/// while it is scrolled there. (An old view's list, by the lines' places: built again each frame whatever came, each
+/// line's runs worked out once as it came, job_output_lines'.)
 fn job_output(c : @ui.Ctx, src : Source, station : String, id : String) -> Unit {
   let t = @sf.theme()
   c.box(style=job_output_box, fn() {
     match @sfbase.job_output_lines(src, station, id, job_output_lines, t.p.text, t.dark) {
-      Some([]) => c.text(@sf.t("web-main.jobs.noOutput"), style=job_output_none) |> ignore
-      Some(lines) =>
+      Some(o) if o.lines.is_empty() => c.text(@sf.t("web-main.jobs.noOutput"), style=job_output_none) |> ignore
+      Some(o) =>
         c.list(
           "jobs-tab/output/" + id,
-          lines.length(),
+          o.lines.length(),
           job_output_line,
-          fn(i) { c.rich(lines[i], style=job_output_words) |> ignore },
+          fn(i) { c.rich(o.lines[i].runs, style=job_output_words) |> ignore },
           stick_end=true,
         )
         |> ignore
