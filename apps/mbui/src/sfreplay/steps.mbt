@@ -72,6 +72,43 @@ fn strict_pass(seed : UInt) -> Bool {
 let pass_outs : Ref[Array[String]] = Ref([])
 
 ///|
+/// What the app told the core in the flow's strict pass (orders): what a pace pass is held to, message by message.
+// kept across runs: written as each flow's strict pass ends (orders)
+let strict_outs : Ref[Array[String]] = Ref([])
+
+///|
+/// Where a pace pass first told the core otherwise than the strict pass ("" not yet): it stops there, its steps after
+/// it none of its own (Flow's steps return at once), what comes after only what that set off.
+// kept across runs: put back as each pass begins (Flow::start)
+let pace_split : Ref[String] = Ref("")
+
+///|
+/// How many steps a pace pass has taken (Flow::take_step): where it split, said by the step.
+// kept across runs: put back as each pass begins (Flow::start)
+let pace_steps : Ref[Int] = Ref(0)
+
+///|
+/// Whether the pace pass told the core otherwise than the strict pass so far (the first message apart, which the app
+/// said in it and which the strict pass did): "" none; then the pass is split, said once (PACE-SPLIT).
+fn Flow::split_seen(self : Flow, at : String) -> Unit {
+  if !pace_pass.val || pace_split.val != "" {
+    return
+  }
+  let outs = self.r.outs()
+  let strict = strict_outs.val
+  let n = outs.length()
+  let mut k = 0
+  while k < n && k < strict.length() && outs[k] == strict[k] {
+    k += 1
+  }
+  if k < n {
+    let theirs = if k < strict.length() { strict[k] } else { "-" }
+    pace_split.val = "step \{pace_steps.val} (\{at}): message #\{k}: \{outs[k]} | strict \{theirs}"
+    println("PACE-SPLIT \{pass_trace.val}: " + pace_split.val)
+  }
+}
+
+///|
 /// The trace the pass that began last replays (Flow::start).
 // kept across runs: written as each pass begins
 let pass_trace : Ref[String] = Ref("")
@@ -209,6 +246,8 @@ pub fn Flow::start(
     keeping.val = 0
   }
   pace_failed.val = false
+  pace_split.val = ""
+  pace_steps.val = 0
   @sfkept.asks_kept.val = !pace_pass.val
   t.looks_said_only(pace_pass.val)
   // (what it says from here, MOTION lines too, the pace pass's till its PACE-END)
@@ -393,6 +432,14 @@ fn notice_permission_of(trace : String) -> String? {
 /// is due meanwhile given (the run's script typed, then waited for an upload, then tapped: as long here). A step the
 /// trace does not hold, or one whose time waits for an ask not made again, is taken now.
 fn Flow::take_step(self : Flow, line : String) -> Unit {
+  // (a pace pass: what it told the core so far, held to the strict pass's before this step is taken)
+  if pace_pass.val {
+    self.split_seen(line)
+    pace_steps.val += 1
+    if pace_split.val != "" {
+      return
+    }
+  }
   // (a pace pass takes each step at the moment the strict pass took it: the same inputs at the same moments, only the
   // frames between them other; not by the run's events as they happened again here, which come with its frames)
   let at_strict = if keeping.val == 2 {
@@ -467,6 +514,9 @@ fn Flow::take_step(self : Flow, line : String) -> Unit {
 /// What the core has for the app, each message when it is due: the clock stepped a frame at a time to it, posted, taken
 /// by the frame after; until nothing more may come (the next message waits for an ask the app has not made again).
 pub fn Flow::core(self : Flow) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   // (writing the steps as a scripted run, FLOW_EMIT: what may come given a frame at a time on a clock that stands, as
   // before the run's pace was kept, for a trace the app has outgrown to take the test's steps to their end)
   if self.strict && emit_path() != "" {
@@ -520,6 +570,9 @@ fn Flow::reach_spots(self : Flow, what : String) -> Array[(Double, Double)] {
 /// writes the steps as a scripted run over a trace the app has outgrown (FLOW_EMIT), said and the steps after it
 /// written all the same (Flow::fail).
 pub fn Flow::check(self : Flow, so : Bool, why : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   if self.judges() && !so {
     self.fail(why)
   }
@@ -555,6 +608,9 @@ fn Flow::fail(self : Flow, why : String) -> Unit {
 /// not past it (a player's place told after the script saw 0:02 is not given before it looks).
 #callsite(autofill(loc))
 pub fn Flow::until(self : Flow, so : () -> Bool, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   self.until_at(loc.to_string(), so)
 }
 
@@ -633,6 +689,9 @@ let until_most_ms : Double = 60000.0
 /// `what` is on screen now.
 #callsite(autofill(loc))
 pub fn Flow::see(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   emit("until " + what)
   self.until_at(site, fn() { self.spots(what).length() > 0 })
@@ -645,6 +704,9 @@ pub fn Flow::see(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
 /// `n` or more of `what` on screen now.
 #callsite(autofill(loc))
 pub fn Flow::see_n(self : Flow, n : Int, what : String, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   emit("untiln \{n} " + what)
   self.until_at(site, fn() { self.spots(what).length() >= n })
@@ -658,6 +720,9 @@ pub fn Flow::see_n(self : Flow, n : Int, what : String, loc~ : SourceLoc) -> Uni
 /// `what` is not on screen now.
 #callsite(autofill(loc))
 pub fn Flow::gone(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   emit("gone " + what)
   self.until_at(site, fn() { self.spots(what).length() == 0 })
@@ -669,6 +734,9 @@ pub fn Flow::gone(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
 ///|
 /// The focused field's words contain `words` (`""`: it is empty).
 pub fn Flow::field(self : Flow, words : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit(if words == "" { "empty" } else { "field " + words.replace_all(old="\n", new="\\n") })
   let now = self.t.field_words()
   if self.judges() && (words == "" && now != "") || !now.contains(words) {
@@ -679,6 +747,9 @@ pub fn Flow::field(self : Flow, words : String) -> Unit {
 ///|
 /// A visible field holds words even when it has lost focus, as for a restored draft.
 pub fn Flow::field_visible(self : Flow, words : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("field " + words.replace_all(old="\n", new="\\n"))
   if self.judges() && !self.t.all(@ui.Role::TextField).iter().any(fn(field) { field.value.contains(words) }) {
     self.fail("no visible field holds \{words.escape()}")
@@ -689,6 +760,9 @@ pub fn Flow::field_visible(self : Flow, words : String) -> Unit {
 /// The lowest `what` on screen (`top`: the highest) tapped, and what the core answers to it given.
 #callsite(autofill(loc))
 pub fn Flow::tap(self : Flow, what : String, top? : Bool = false, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   emit((if top { "tap1 " } else { "tap " }) + what)
   // Messages posted as the last frame ended are taken in the next frame. Show them before locating the target, so a
@@ -714,6 +788,9 @@ pub fn Flow::tap(self : Flow, what : String, top? : Bool = false, loc~ : SourceL
 ///|
 /// A tap at (x, y) (negative: from the right, the bottom).
 pub fn Flow::tap_at(self : Flow, x : Double, y : Double) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("tapxy \{x.to_int()} \{y.to_int()}")
   let (w, h) = self.t.size()
   self.t.tap(if x < 0.0 { w + x } else { x }, if y < 0.0 { h + y } else { y })
@@ -724,6 +801,9 @@ pub fn Flow::tap_at(self : Flow, x : Double, y : Double) -> Unit {
 /// The lowest `what` pressed for `ms` (a declared length: a long press's), then let go.
 #callsite(autofill(loc))
 pub fn Flow::hold(self : Flow, what : String, ms : Double, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   // (a host's long press is held past its threshold: as long again, not to the frame)
   emit("hold \{(ms * 2.0).to_int()} " + what)
@@ -749,6 +829,9 @@ pub fn Flow::hold(self : Flow, what : String, ms : Double, loc~ : SourceLoc) -> 
 ///|
 /// Words committed by the input method.
 pub fn Flow::type_text(self : Flow, s : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("type " + s)
   self.t.type_text(s)
   self.t.draw()
@@ -758,6 +841,9 @@ pub fn Flow::type_text(self : Flow, s : String) -> Unit {
 ///|
 /// Words composed by the input method, not committed yet.
 pub fn Flow::compose(self : Flow, s : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("mark " + s)
   self.t.compose(s)
   self.t.draw()
@@ -767,6 +853,9 @@ pub fn Flow::compose(self : Flow, s : String) -> Unit {
 ///|
 /// `s` on the clipboard, then the system's paste.
 pub fn Flow::paste(self : Flow, s : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("paste " + s)
   self.t.paste(s)
   self.core()
@@ -778,6 +867,9 @@ pub fn Flow::paste(self : Flow, s : String) -> Unit {
 /// page loaded, its requests through the core answered).
 #callsite(autofill(loc))
 pub fn Flow::answered(self : Flow, call : String, n : Int, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   // (what was asked before, written as the steps would have; this call's own counted by the n written here, not
   // written again by the next step: a scripted run waits for the n-th, not for more)
@@ -803,6 +895,9 @@ pub fn Flow::answered(self : Flow, call : String, n : Int, loc~ : SourceLoc) -> 
 ///|
 /// `s` again and again to `n` characters, pasted (as a flow's `pasten N TEXT`: a paste too long to write out).
 pub fn Flow::paste_n(self : Flow, n : Int, s : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("pasten \{n} " + s)
   let words = StringBuilder::new()
   let chars = s.to_array()
@@ -816,6 +911,9 @@ pub fn Flow::paste_n(self : Flow, n : Int, s : String) -> Unit {
 ///|
 /// A key by name, with what is held before it (as a flow's `key`: esc, enter, cmd+k, shift+enter).
 pub fn Flow::key(self : Flow, name : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("key " + name)
   if !self.t.key_named(name) {
     self.fail("no such key: " + name)
@@ -825,6 +923,9 @@ pub fn Flow::key(self : Flow, name : String) -> Unit {
 
 ///|
 pub fn Flow::enter(self : Flow) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("enter")
   self.t.enter()
   self.core()
@@ -832,6 +933,9 @@ pub fn Flow::enter(self : Flow) -> Unit {
 
 ///|
 pub fn Flow::back(self : Flow) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("back")
   self.t.back()
   self.core()
@@ -840,6 +944,9 @@ pub fn Flow::back(self : Flow) -> Unit {
 ///|
 /// `ms` on the frames' clock (a declared length: a motion's, a timer's), what the core has meanwhile given.
 pub fn Flow::run_for(self : Flow, ms : Double) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit_wait(ms)
   // (a pace pass: as long on the clock, the host's frames on the way, none past its end ahead of the next input)
   if keeping.val == 2 {
@@ -856,6 +963,20 @@ pub fn Flow::run_for(self : Flow, ms : Double) -> Unit {
 /// timing, all it asked answered. The screen
 /// as it ends, in a number (screen_sum). The app's core the engine again.
 pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
+  // (a pace pass split before its end: stopped there, what came after it not looked at; its line said, PACE-SPLIT)
+  if pace_pass.val {
+    self.split_seen("the end")
+  }
+  if pace_pass.val && pace_split.val != "" {
+    pass_outs.val = self.r.outs()
+    println("PACE-END \{pass_trace.val}")
+    @core.Replay::detach()
+    emit_end()
+    step_hook.val = None
+    self.t.frames_by_clock(false)
+    @sfkept.asks_kept.val = true
+    return ""
+  }
   // (no input after the test's last: what is left drawn on, whatever of the run's steps it did not take)
   self.t.inputs_next(@double.infinity)
   self.t.frames_by_clock(false)
@@ -974,6 +1095,13 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
         why.push("\{call} answered \{self.r.answers_given(call)} times by the flow's end, not \{n} (\{site})")
       }
     }
+    // (and all the run's talk said, none of it otherwise: what is left of the strict pass's not said is a split too)
+    self.split_seen("the end")
+    if pace_split.val == "" && self.r.outs().length() != strict_outs.val.length() {
+      let k = self.r.outs().length()
+      pace_split.val = "step \{pace_steps.val} (the end): message #\{k}: - | strict \{if k < strict_outs.val.length() { strict_outs.val[k] } else { "-" }}"
+      println("PACE-SPLIT \{pass_trace.val}: " + pace_split.val)
+    }
     println("PACE-END \{pass_trace.val}")
   }
   let sum = screen_sum(self.t)
@@ -1008,38 +1136,53 @@ pub let seeds : Array[UInt] = [1, 2, 3]
 /// other passes (`seeds`): the same end each time.
 pub fn orders(flow : (UInt) -> String raise) -> Unit raise {
   let first = flow(0)
-  let strict_outs = pass_outs.val
+  let strict = pass_outs.val
+  strict_outs.val = strict
   for seed in seeds {
     let again = flow(seed)
-    println("C811P pass \{seed} vs strict: " + (if pass_outs.val == strict_outs { "same" } else { "apart" }) + " \{pass_outs.val.length()}/\{strict_outs.length()}")
     if again != first {
       let s = "flow: in the pass \{seed} (\{pace_of(seed)}) the screen ends otherwise (\{again}, not \{first})"
       @halt.saying(s)
     }
   }
   // what the app tells the core the same however the frames fall: the strict pass again with run_for's frames at 7
-  // a second and at 120, each message alike and in its place (said, not failed, while what differs now is counted:
-  // PACE lines)
-  flow(10) |> ignore
-  let few = pass_outs.val
-  flow(11) |> ignore
-  let many = pass_outs.val
-  if few != many {
-    let n = if few.length() < many.length() { few.length() } else { many.length() }
-    let mut k = 0
-    while k < n && few[k] == many[k] {
-      k += 1
+  // a second and at 120, each held to the strict pass message by message and stopped where it first tells it
+  // otherwise (PACE-SPLIT); which flows split at which rate is known (pace_splits_known) and only falls
+  let split_at : Array[Int] = []
+  let said : Array[String] = []
+  for p in [(10U, 7), (11U, 120)] {
+    let (seed, rate) = p
+    flow(seed) |> ignore
+    if pace_split.val != "" {
+      split_at.push(rate)
+      said.push("at \{rate} a second " + pace_split.val)
+    } else {
+      said.push("at \{rate} a second the same (\{strict.length()})")
     }
-    let at = fn(a : Array[String]) { if k < a.length() { a[k] } else { "-" } }
-    println("PACE \{pass_trace.val}: apart at #\{k} of \{few.length()}/\{many.length()}: at 7 a second " + at(few) + " | at 120 " + at(many))
-  } else {
-    println("PACE \{pass_trace.val}: the same (\{few.length()})")
+  }
+  println("PACE \{pass_trace.val}: " + said.join(" || "))
+  let known = pace_splits_known.get(pass_trace.val).unwrap_or([])
+  let unknown = split_at.filter(fn(r) { !known.contains(r) })
+  let healed = known.filter(fn(r) { !split_at.contains(r) })
+  if unknown.length() > 0 {
+    fail(
+      "flow \{pass_trace.val}: its pace pass splits from the strict pass at \{unknown} a second, not known (pace_known.mbt): " +
+      said.join(" || "),
+    )
+  }
+  if healed.length() > 0 {
+    fail(
+      "flow \{pass_trace.val}: its pace pass at \{healed} a second no longer splits: take it out of pace_splits_known (pace_known.mbt)",
+    )
   }
 }
 
 ///|
 /// The focused field emptied (all of it chosen, then deleted), as a flow's `clear`.
 pub fn Flow::clear(self : Flow) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("clear")
   self.t.clear()
   self.core()
@@ -1052,6 +1195,9 @@ pub fn Flow::clear(self : Flow) -> Unit {
 /// started yet (+inf: draw first) or nothing of it ever moved (-1).
 #callsite(autofill(loc))
 pub fn Flow::run_to(self : Flow, end : Double, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   self.run_to_at(loc.to_string(), end)
 }
 
@@ -1102,6 +1248,9 @@ fn waiting_step(line : String) -> Bool {
 /// one over before that step, its end as it said it (Tester::rest_of). One never said: no motion.
 #callsite(autofill(loc))
 pub fn Flow::run_to_rest(self : Flow, name : String, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   let end = self.t.rest_of(name)
   if end <= self.t.time() && self.rest_passed(name) {
@@ -1125,6 +1274,9 @@ pub fn Flow::rest_passed(self : Flow, name : String) -> Bool {
 /// its push is over (@ui.nav_rest).
 #callsite(autofill(loc))
 pub fn Flow::open_page(self : Flow, page : @sfapp.Page, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   emit("#env MBUI_OPEN_PAGE=" + page_name(page))
   @sfapp.open_page(page)
@@ -1293,6 +1445,9 @@ fn Flow::spot(self : Flow, what : String, site : String, top? : Bool = false) ->
 /// The pointer over the lowest `what`, no button down (a flow's `hover`).
 #callsite(autofill(loc))
 pub fn Flow::hover(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   emit("hover " + what)
   guard self.spot(what, site) is Some((x, y)) else { return }
@@ -1305,6 +1460,9 @@ pub fn Flow::hover(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
 /// A secondary click on the lowest `what` (a flow's `rightclick`: a row's menu).
 #callsite(autofill(loc))
 pub fn Flow::right_click(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   emit("rightclick " + what)
   guard self.spot(what, site) is Some((x, y)) else { return }
@@ -1315,6 +1473,9 @@ pub fn Flow::right_click(self : Flow, what : String, loc~ : SourceLoc) -> Unit {
 ///|
 /// The window made w × h (a flow's `resize`: a desktop's window across the wide frame's breakpoint).
 pub fn Flow::resize(self : Flow, w : Double, h : Double) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("resize \{w.to_int()} \{h.to_int()}")
   self.t.resize(w, h)
   self.core()
@@ -1323,6 +1484,9 @@ pub fn Flow::resize(self : Flow, w : Double, h : Double) -> Unit {
 ///|
 /// The wheel turned by `dy` over the window's middle (a flow's `wheel`).
 pub fn Flow::wheel(self : Flow, dy : Double) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("wheel \{dy.to_int()}")
   let (w, h) = self.t.size()
   self.t.wheel(w / 2.0, h / 2.0, dy)
@@ -1334,6 +1498,9 @@ pub fn Flow::wheel(self : Flow, dy : Double) -> Unit {
 /// the same scroll is needed; match the recorded wheel step in the same direction while applying the measured distance.
 #callsite(autofill(loc))
 pub fn Flow::wheel_aligned(self : Flow, dy : Double, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   let actual = "wheel \{dy.to_int()}"
   let step = if !self.strict {
@@ -1370,6 +1537,9 @@ pub fn Flow::wheel_aligned(self : Flow, dy : Double, loc~ : SourceLoc) -> Unit {
 /// The lowest `what` dragged by (dx, dy) in `steps` moves, a frame apart, then let go (a flow's `dragon`).
 #callsite(autofill(loc))
 pub fn Flow::drag(self : Flow, what : String, dx : Double, dy : Double, steps? : Int = 10, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   // (a host's drag moves a frame a step: as many frames)
   emit("dragon \{dx.to_int()} \{dy.to_int()} \{(steps.to_double() * @ui.drag_step_ms).to_int()} " + what)
@@ -1384,6 +1554,9 @@ pub fn Flow::drag(self : Flow, what : String, dx : Double, dy : Double, steps? :
 /// answers to it given.
 #callsite(autofill(loc))
 pub fn Flow::wheel_at(self : Flow, what : String, dy : Double, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   emit("wheelat \{dy.to_int()} " + what)
   guard self.spot(what, site) is Some((x, y)) else { return }
@@ -1401,6 +1574,9 @@ pub fn Flow::wheel_at(self : Flow, what : String, dy : Double, loc~ : SourceLoc)
 /// out (`@kit.toast_rest`).
 #callsite(autofill(loc))
 pub fn Flow::toast_gone(self : Flow, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   self.run_for(@sfapp.toast_ms)
   self.t.draw()
@@ -1422,6 +1598,9 @@ fn Flow::holds_notice(self : Flow, text : String) -> Bool {
 /// now.
 #callsite(autofill(loc))
 pub fn Flow::noticed(self : Flow, text : String, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   emit("noticed " + text)
   // (as a scripted run's `noticed` waits for it: what came for it given first, Flow::until)
@@ -1435,6 +1614,9 @@ pub fn Flow::noticed(self : Flow, text : String, loc~ : SourceLoc) -> Unit {
 /// None of the app's notifications holds `text` now.
 #callsite(autofill(loc))
 pub fn Flow::no_notice(self : Flow, text : String, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   emit("nonotice " + text)
   self.until_at(site, fn() { !self.holds_notice(text) })
@@ -1448,6 +1630,9 @@ pub fn Flow::no_notice(self : Flow, text : String, loc~ : SourceLoc) -> Unit {
 /// core answers to what that opens given.
 #callsite(autofill(loc))
 pub fn Flow::tap_notice(self : Flow, text : String, loc~ : SourceLoc) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let site = loc.to_string()
   emit("notice " + text)
   self.until_at(site, fn() { self.holds_notice(text) })
@@ -1462,6 +1647,9 @@ pub fn Flow::tap_notice(self : Flow, text : String, loc~ : SourceLoc) -> Unit {
 /// A finger down at (x, y) (negative: from the right, the bottom), moved by (dx, dy) a move a frame over `steps`
 /// frames, then lifted there (a flow's `drag X Y DX DY`); what the core answers given.
 pub fn Flow::drag_at(self : Flow, x : Double, y : Double, dx : Double, dy : Double, steps? : Int = 10) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("drag \{x.to_int()} \{y.to_int()} \{dx.to_int()} \{dy.to_int()} \{(steps.to_double() * @ui.drag_step_ms).to_int()}")
   let (w, h) = self.t.size()
   let x0 = if x < 0.0 { w + x } else { x }
@@ -1478,6 +1666,9 @@ pub fn Flow::drag_at(self : Flow, x : Double, y : Double, dx : Double, dy : Doub
 /// ask_dismiss, marked as the tap is taken, going from the frame after).
 #callsite(autofill(loc))
 pub fn Flow::tap_now(self : Flow, what : String, top? : Bool = false, loc~ : SourceLoc) -> Double {
+  if pace_split.val != "" {
+    return self.t.time()
+  }
   let site = loc.to_string()
   emit((if top { "tap1 " } else { "tap " }) + what)
   // (as a scripted run's tap waits for what it taps to show: what came for it given first, Flow::until)
@@ -1526,6 +1717,9 @@ fn Flow::frame_taking(self : Flow, given : Double?) -> Double {
 /// (Tester::moving, Tester::rest_of): when it is at rest. The test fails if nothing more may come first and none does.
 #callsite(autofill(loc))
 pub fn Flow::until_moving(self : Flow, name : String, loc~ : SourceLoc) -> Double {
+  if pace_split.val != "" {
+    return self.t.time()
+  }
   let site = loc.to_string()
   // (one the last step that acts began: one of its name moving as it was taken, its coming in not over at a tap, is not
   // it)
@@ -1567,6 +1761,9 @@ pub fn Flow::shrinks(
   ms~ : Double,
   rest~ : Double,
 ) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   let start = rest - ms
   self.t.run_for(start + ms / 2.0 - self.t.time())
   let p = (self.t.time() - start) / ms
@@ -1594,6 +1791,9 @@ pub fn Flow::shrinks(
 /// the first staged in the app's own provider and sent as ACTION_SEND), their bytes the run's (what it sent of each:
 /// Replay::sent_bytes), as Tester::share_in gives them.
 pub fn Flow::share_files(self : Flow, names : Array[String]) -> Unit raise {
+  if pace_split.val != "" {
+    return
+  }
   emit("#before android-stage " + names[0])
   emit(
     "#android-intent -a android.intent.action.SEND -t " + (if names[0].has_suffix(".pdf") { "application/pdf" } else { "image/jpeg" }) +
@@ -1621,6 +1821,9 @@ pub fn Flow::share_files(self : Flow, names : Array[String]) -> Unit raise {
 /// Another app shares `text` (a link) titled `title` into the app (the Tester's share_in; a scripted run's
 /// MBUI_SHARE_TEXT and MBUI_SHARE_TITLE, `#env` lines its run starts the app with), taken by the frame after.
 pub fn Flow::share_in(self : Flow, text : String, title? : String = "") -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   emit("#env MBUI_SHARE_TEXT=" + text)
   if title != "" {
     emit("#env MBUI_SHARE_TITLE=" + title)
@@ -1634,6 +1837,9 @@ pub fn Flow::share_in(self : Flow, text : String, title? : String = "") -> Unit 
 /// From here, where `what` (words on screen, as Tester::find finds them) is drawn down the screen each frame, till
 /// Flow::followed: what the reader sees of the list carrying it, whatever moved it.
 pub fn Flow::follow(self : Flow, what : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   self.followed.val = what
   self.follow_ys.clear()
 }

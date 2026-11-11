@@ -87,6 +87,9 @@ fn emit_end() -> Unit {
 /// the station frozen…): said on the script's log there (`log do: WORDS`), nothing here, where the trace has what came
 /// of it.
 pub fn Flow::peer(self : Flow, words : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   ignore(self)
   emit("log do: " + words)
   // (the runner does it beside the script (e2e/runner-do.sh) and says when it has: the script waits for its word, the
@@ -110,6 +113,9 @@ pub fn Flow::peer(self : Flow, words : String) -> Unit {
 /// for this one to ask it): `log do:` and no waiting for its word, as what it does needs the app's next steps (the tap
 /// that asks); what came of it is the trace's, here as anywhere.
 pub fn Flow::peer_aside(self : Flow, words : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   ignore(self)
   emit("log do: " + words)
 }
@@ -118,6 +124,9 @@ pub fn Flow::peer_aside(self : Flow, words : String) -> Unit {
 /// What a live run does before the app starts (`#before WORDS`: scripts/e2e-local.sh WORDS, a chat made elsewhere):
 /// nothing here.
 pub fn Flow::before(self : Flow, words : String) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   ignore(self)
   emit("#before " + words)
 }
@@ -176,6 +185,9 @@ let unawaited : Array[String] = ["session.warm", "draft.put", "client.focus", "c
 /// Calls the host may make an incidental number of times while these steps run. This changes script emission only;
 /// explicit `answered` steps still wait for their answers. Pass an empty array once the incidental steps are over.
 pub fn Flow::incidental_calls(self : Flow, calls : Array[String]) -> Unit {
+  if pace_split.val != "" {
+    return
+  }
   ignore(self)
   incidental_calls.val = calls.copy()
 }
