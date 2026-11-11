@@ -98,7 +98,7 @@ fn rig_foot(
   lock : () -> Unit,
 ) -> Unit {
   let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_string()
+    Some(i) => station.view(end_offset=i).to_owned()
     None => ""
   }
   let rigs = (core.topic)("rigs", { "workspace": str(ws) }).get().value

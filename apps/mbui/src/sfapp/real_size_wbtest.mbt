@@ -248,7 +248,7 @@ fn real_size_sweep(win : (String, Double, Double, Int, String)) -> Unit raise {
     for r in rows {
       let (row, f) = r
       let way = match row.rev_find("/") {
-        Some(i) => row.view(end_offset=i).to_string()
+        Some(i) => row.view(end_offset=i).to_owned()
         None => row
       }
       if mode == "home" {

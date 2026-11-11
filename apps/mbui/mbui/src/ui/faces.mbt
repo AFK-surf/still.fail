@@ -125,7 +125,7 @@ fn faces_reset() -> Unit {
 
 ///|
 /// Whether MBUI_FACES was read (once, as the first frame begins).
-let faces_env_read : Ref[Bool] = Ref::new(false)
+let faces_env_read : Ref[Bool] = Ref(false)
 
 ///|
 /// The faces a run is given from outside, as its first frame begins: MBUI_FACES, `face:path` or `face:path:weight`
@@ -136,7 +136,7 @@ fn faces_from_env() -> Unit {
   }
   faces_env_read.val = true
   for item in h_env("MBUI_FACES").split(";") {
-    let parts = item.split(":").map(fn(p) { p.to_string() }).collect()
+    let parts = item.split(":").map(fn(p) { p.to_owned() }).collect()
     if parts.length() < 2 {
       continue
     }

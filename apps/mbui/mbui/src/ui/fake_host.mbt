@@ -27,7 +27,7 @@ impl @hostapi.Host for FakeHost with drive(_, kind, text) {
   if kind != 8 {
     return false
   }
-  let wh = text.split("x").map(fn(v) { number(v.to_string()) }).to_array()
+  let wh = text.split("x").map(fn(v) { number(v.to_owned()) }).to_array()
   if wh.length() < 2 {
     return false
   }
@@ -2276,7 +2276,7 @@ impl @hostapi.Host for FakeHost with script_step(self, step, arg) {
               n = n * 10 + (ch.to_int() - 48)
             }
             let bytes = Bytes::make(n, b'x')
-            self.picks.push({ name: part[:i].to_string(), bytes, held: 0, size: n.to_double(), src: "" })
+            self.picks.push({ name: part[:i].to_owned(), bytes, held: 0, size: n.to_double(), src: "" })
           }
           None => ()
         }

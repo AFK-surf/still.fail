@@ -252,7 +252,7 @@ pub fn row_aside_node(
         let shown = fn() {
           let people = item().people
           if people.length() > aside_most {
-            people[:aside_most].to_array()
+            people[:aside_most].to_owned()
           } else {
             people
           }

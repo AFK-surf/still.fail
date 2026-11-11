@@ -723,5 +723,5 @@ fn png_of(w : Int, h : Int, rgba : FixedArray[Byte]) -> Bytes {
   // (IEND)
   png_chunk_head(out, o, 0, 0x49454E44)
   png_crc(out, o + 4, o + 8)
-  Bytes::from_fixedarray(out)
+  Bytes::from_array(out[:])
 }

@@ -278,7 +278,7 @@ fn bar_felt(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Array[@ui.Hap
   t.drag(x0, y0, x1, y1, steps=40)
   t.run_for(@ui.move_most_ms)
   let felt = t.haptics()
-  felt[before:].to_array()
+  felt[before:].to_owned()
 }
 
 ///|

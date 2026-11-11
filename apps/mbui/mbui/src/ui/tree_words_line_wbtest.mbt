@@ -111,8 +111,8 @@ fn breaks_read(
   words : String,
   cut : Int,
 ) -> ((Double, Double), Array[String], Array[String], Array[String]) {
-  let first = words.view(end_offset=cut).to_string()
-  let second = words.view(start_offset=cut).to_string()
+  let first = words.view(end_offset=cut).to_owned()
+  let second = words.view(start_offset=cut).to_owned()
   let t = if node {
     Tester::new(fn(_c) {  }, w=400.0, h=300.0)
   } else {
@@ -153,7 +153,7 @@ fn breaks_read(
   }
   t.draw()
   t.draw()
-  let probe = words.split("\n").to_array().filter(fn(l) { l != "" }).map(fn(l) { l.to_string() })
+  let probe = words.split("\n").to_array().filter(fn(l) { l != "" }).map(fn(l) { l.to_owned() })
   let (x0, y0, w, h) = t.rect_of(probe[0]).unwrap()
   let r2 = fn(x : Double) { (x * 100.0).round() / 100.0 }
   let at = if runs {

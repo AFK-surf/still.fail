@@ -10,7 +10,7 @@ let b64_digits : Array[Char] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv
 ///|
 /// Bytes as base64 (standard, padded).
 pub fn base64(b : Bytes) -> String {
-  let sb = StringBuilder::new(size_hint=(b.length() + 2) / 3 * 4)
+  let sb = StringBuilder(size_hint=(b.length() + 2) / 3 * 4)
   let n = b.length()
   let mut i = 0
   while i < n {
@@ -53,7 +53,7 @@ pub fn from_base64(s : String) -> Bytes {
   let mut acc = 0
   let mut bits = 0
   for i in 0..<s.length() {
-    let v = b64_value(s.unsafe_charcode_at(i))
+    let v = b64_value(s.unsafe_get(i).to_int())
     if v < 0 {
       continue
     }
@@ -76,7 +76,7 @@ pub fn from_base64_exact(s : String) -> Bytes? {
   let mut acc = 0
   let mut bits = 0
   for i in 0..<s.length() {
-    let c = s.unsafe_charcode_at(i)
+    let c = s.unsafe_get(i).to_int()
     if c == 61 || c == 32 || c == 10 || c == 13 || c == 9 {
       continue
     }
@@ -105,7 +105,7 @@ let hex_digits : Array[Char] = "0123456789abcdef".to_array()
 ///|
 /// Bytes in hex, two lowercase digits each.
 pub fn hex(b : Bytes) -> String {
-  let sb = StringBuilder::new(size_hint=b.length() * 2)
+  let sb = StringBuilder(size_hint=b.length() * 2)
   for i in 0..<b.length() {
     let v = b[i].to_int()
     sb.write_char(hex_digits[v >> 4])
@@ -129,6 +129,6 @@ pub fn from_hex(s : String) -> Bytes {
     }
   }
   Bytes::makei(s.length() / 2, fn(i) {
-    (digit(s.unsafe_charcode_at(2 * i)) * 16 + digit(s.unsafe_charcode_at(2 * i + 1))).to_byte()
+    (digit(s.unsafe_get(2 * i).to_int()) * 16 + digit(s.unsafe_get(2 * i + 1).to_int())).to_byte()
   })
 }

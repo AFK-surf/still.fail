@@ -284,5 +284,5 @@ test "scrolls_window following its foot under a head: a block come at its foot, 
   let shown = k.live.keys().collect()
   shown.sort()
   // (made: the one come alone, those over it the blocks they were; at its foot, all three showing)
-  assert_eq((k.made[made:].to_array(), shown, k.off_foot()), ([40], [38, 39, 40], 0.0))
+  assert_eq((k.made[made:].to_owned(), shown, k.off_foot()), ([40], [38, 39, 40], 0.0))
 }

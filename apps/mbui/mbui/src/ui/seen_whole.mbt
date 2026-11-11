@@ -8,7 +8,7 @@
 ///|
 /// The words held seen whole ("" none) and what drew over them first.
 // kept across runs: begun anew by each Tester (Tester::new), each test saying its own
-let seen_whole : Ref[String] = Ref::new("")
+let seen_whole : Ref[String] = Ref("")
 
 ///|
 /// From now on, until said again, nothing of the page is drawn over the words `words` (a node's whole text) on any

@@ -458,7 +458,7 @@ fn drawn_from(t : @ui.Tester, left : Double) -> Array[String] {
         }
       }
       if (sign * x).to_double() / 64.0 >= left {
-        out.push(line.to_string())
+        out.push(line.to_owned())
       }
     }
   }

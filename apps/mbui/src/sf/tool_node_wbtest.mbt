@@ -103,7 +103,7 @@ fn drawn_within(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> Arra
   let (rx, ry, rw, rh) = rect
   let rows : Array[Array[String]] = []
   for line in t.drawlist().split("\n") {
-    let f = line.split(" ").map(fn(v) { v.to_string() }).to_array()
+    let f = line.split(" ").map(fn(v) { v.to_owned() }).to_array()
     if f.length() >= 21 && f[0] == "i" {
       rows.push(f)
     }
@@ -136,7 +136,7 @@ fn drawn_within(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> Arra
       continue
     }
     // (a corner as round as it can be, as said (Full: one far past its half) or as its half: drawn the same)
-    let rest = f[3:13].to_array().mapi(fn(k, v) {
+    let rest = f[3:13].to_owned().mapi(fn(k, v) {
       match (k, number_of(f[3]), number_of(f[4]), number_of(v)) {
         (2, Some(w), Some(h), Some(r)) if r >= (if w < h { w } else { h }) / 2.0 => "half"
         _ => v
@@ -515,7 +515,7 @@ fn tip_alphas(t : @ui.Tester) -> (Double, Double) {
   let mut ground = 0.0
   let mut words = 0.0
   for line in t.drawlist().split("\n") {
-    let f = line.split(" ").map(fn(v) { v.to_string() }).to_array()
+    let f = line.split(" ").map(fn(v) { v.to_owned() }).to_array()
     if f.length() < 21 || f[0] != "i" {
       continue
     }
@@ -609,7 +609,7 @@ fn tip_drawn_turns(which : String) -> Array[String] raise {
     let mut best = ""
     let mut most = 0.0
     for line in t.drawlist().split("\n") {
-      let f = line.split(" ").map(fn(v) { v.to_string() }).to_array()
+      let f = line.split(" ").map(fn(v) { v.to_owned() }).to_array()
       if f.length() < 21 || f[0] != "i" || f[6] != "0" {
         continue
       }

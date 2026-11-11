@@ -412,7 +412,7 @@ pub fn perf_said(span : Double) -> String {
   ins.sort_by(fn(a, b) { b.1.2.compare(a.1.2) })
   let outs = perf_outs.to_array()
   outs.sort_by(fn(a, b) { b.1.compare(a.1) })
-  let line = StringBuilder::new()
+  let line = StringBuilder()
   line.write_string("in (ms/count/KB, the 6 longest):")
   for i, e in ins {
     if i >= 6 {

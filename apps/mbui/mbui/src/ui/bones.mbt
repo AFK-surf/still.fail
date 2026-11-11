@@ -42,7 +42,7 @@ pub fn Ctx::bone_whole(self : Ctx, node : Int) -> Unit {
 ///|
 /// The instances drawn as bones, while a test asks (contrast.mbt: each is measured as what has nothing in it).
 // kept across runs: emptied each time a test asks again (inst_owners_clear)
-let bone_insts : Set[Int] = Set::new()
+let bone_insts : Set[Int] = Set([])
 
 ///|
 /// A bone drawn: (`x`, `y`) `w` × `h`, `r` round, in `color`.

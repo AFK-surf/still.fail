@@ -776,7 +776,7 @@ pub enum MotionJudged {
 ///|
 /// The files whose Testers a run that counts motion only counts (test_motion_judged), not judges.
 // kept across runs: said once as a test program starts (its packages' `init`)
-let motion_counted_files : Set[String] = Set::new()
+let motion_counted_files : Set[String] = Set([])
 
 ///|
 /// The files whose Testers still show faults of how what moves goes at 60 or 120 a second (MBUI_TEST_MOTION `count`,
@@ -1228,7 +1228,7 @@ pub fn Tester::find_last(self : Tester, s : String) -> (Double, Double)? {
   self.reads_own()
   ignore(self)
   let c = g()
-  let found : Ref[(Double, Double)?] = Ref::new(None)
+  let found : Ref[(Double, Double)?] = Ref(None)
   let over : Array[Int] = []
   fn walk(i : Int, overlay : Bool) -> Unit {
     if !overlay && c.drawn_entry(i) is Some(e) && e.z == z_flying {

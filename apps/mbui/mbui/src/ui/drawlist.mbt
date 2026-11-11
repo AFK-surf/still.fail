@@ -193,7 +193,7 @@ fn drawlist_lacks() -> String? {
     Some(t) if t.missing.length() > 0 =>
       Some(
         "Tester::drawlist: the host's kept text lacks \{t.missing.length()} of what was drawn (record its text again): " +
-        t.missing[:5].to_array().join(", "),
+        t.missing[:5].to_owned().join(", "),
       )
     _ => None
   }
@@ -373,8 +373,8 @@ pub fn drawlist_first_unlike(a : String, b : String) -> (Int, String, String)? {
   let lb = b.split("\n").to_array()
   let n = if la.length() > lb.length() { la.length() } else { lb.length() }
   for i in 0..<n {
-    let x = la.get(i).map(fn(v) { v.to_string() }).unwrap_or("")
-    let y = lb.get(i).map(fn(v) { v.to_string() }).unwrap_or("")
+    let x = la.get(i).map(fn(v) { v.to_owned() }).unwrap_or("")
+    let y = lb.get(i).map(fn(v) { v.to_owned() }).unwrap_or("")
     if i >= la.length() || i >= lb.length() || !dl_line_same(x, y) {
       return Some((i + 1, x, y))
     }
@@ -393,13 +393,13 @@ fn dl_line_same(x : String, y : String) -> Bool {
     return false
   }
   // (only the lines of numbers: a glyph's or an image's words, and bytes' base64, word for word)
-  match wx.get(0).map(fn(w) { w.to_string() }) {
+  match wx.get(0).map(fn(w) { w.to_owned() }) {
     Some("window") | Some("clear") | Some("i") => ()
     _ => return false
   }
   for k in 0..<wx.length() {
-    let p = wx[k].to_string()
-    let q = wy[k].to_string()
+    let p = wx[k].to_owned()
+    let q = wy[k].to_owned()
     if p == q {
       continue
     }

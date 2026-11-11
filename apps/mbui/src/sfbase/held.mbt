@@ -29,7 +29,7 @@ let held_deferred : Ref[Array[HeldTopic]] = Ref([])
 let held_read_now : Ref[Array[HeldTopic]] = Ref([])
 
 ///|
-let held_building : Ref[Bool] = Ref::new(false)
+let held_building : Ref[Bool] = Ref(false)
 
 ///|
 /// This watch belongs to its legacy scope, not to the particular build which first read that scope.

@@ -903,7 +903,7 @@ fn rule_after(items : Array[@sf.MenuItem?]) -> Unit {
 ///|
 /// A chat renamed `title` (`chat.rename`): nothing when it is no different.
 fn rename(src : Source, item : ChatItem, title : String) -> Unit {
-  let words = title.trim(chars=" \n\t").to_string()
+  let words = title.trim(chars=" \n\t").to_owned()
   if words == "" || words == item.title {
     return
   }

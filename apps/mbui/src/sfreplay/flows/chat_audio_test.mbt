@@ -12,7 +12,7 @@ fn opened_view(f : @sfreplay.Flow) -> Int {
       match line.split(" ").to_array() {
         [_, n, ..] => {
           let mut v = 0
-          for ch in n.to_string() {
+          for ch in n.to_owned() {
             v = v * 10 + (ch.to_int() - '0'.to_int())
           }
           id = v

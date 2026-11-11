@@ -240,13 +240,13 @@ fn a11y_update_text(full : Bool, focus : Int, told : Array[A11yNode]) -> String 
 fn a11y_update_read(text : String) -> (Bool, Int, Array[A11yNode])? {
   let lines = text.split("\n").to_array()
   guard lines.length() > 0 else { return None }
-  let head = lines[0].split(a11y_sep).map(fn(v) { v.to_string() }).to_array()
+  let head = lines[0].split(a11y_sep).map(fn(v) { v.to_owned() }).to_array()
   guard head.length() >= 3 && head[0] == "T" else { return None }
   let num = a11y_int
   let real = a11y_real
   let told : Array[A11yNode] = []
   for l in lines[1:] {
-    let f = l.split(a11y_sep).map(fn(v) { v.to_string() }).to_array()
+    let f = l.split(a11y_sep).map(fn(v) { v.to_owned() }).to_array()
     if f.length() < 17 || f[0] != "N" {
       continue
     }
@@ -264,7 +264,7 @@ fn a11y_update_read(text : String) -> (Bool, Int, Array[A11yNode])? {
       range: if f[12] == "" { None } else { Some((real(f[11]), real(f[12]), real(f[13]))) },
       actions: f[14],
       widget: num(f[15]),
-      kids: if f[16] == "" { [] } else { f[16].split(",").map(fn(k) { num(k.to_string()) }).to_array() },
+      kids: if f[16] == "" { [] } else { f[16].split(",").map(fn(k) { num(k.to_owned()) }).to_array() },
     })
   }
   Some((head[1] == "1", num(head[2]), told))
@@ -995,7 +995,7 @@ fn a11y_real(s : String) -> Double {
     }
   }
   if i < chars.length() && (chars[i] == 'e' || chars[i] == 'E') {
-    let e = a11y_int(String::from_array(chars[i + 1:].to_array()).replace(old="+", new=""))
+    let e = a11y_int(String::from_array(chars[i + 1:].to_owned()).replace(old="+", new=""))
     for _ in 0..<(if e < 0 { -e } else { e }) {
       v = if e < 0 { v / 10.0 } else { v * 10.0 }
     }

@@ -165,7 +165,7 @@ pub fn about_node(
 fn version_rows_node(g : @view.View, core : Core) -> Unit {
   // (its name as the core's preferences say it, still.fail where they say none)
   @sf.link_row_node(g, fn() {
-    let product = text((core.topic)("prefs", Map::new()).get().value, "productName")
+    let product = text((core.topic)("prefs", Map([])).get().value, "productName")
     (if product == "" { @sf.product() } else { product }) + " " + build_version()
   }, fn() {  }, goes=false)
   let v = fn() { (core.version_now)() }

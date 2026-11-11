@@ -828,7 +828,7 @@ fn strip_photos(t : @ui.Tester) -> Array[String] {
     // image N PX "SOURCE"
     let parts = line.split("\"").to_array()
     if line.has_prefix("image ") && parts.length() >= 2 && parts[1].has_prefix("content://") {
-      out.push(parts[1].to_string())
+      out.push(parts[1].to_owned())
     }
   }
   out

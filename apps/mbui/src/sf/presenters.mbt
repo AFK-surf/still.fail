@@ -1467,7 +1467,7 @@ fn dismissed_now(serial : Int, back? : Bool = false) -> Unit {
     Some(i) if back && presented_now[i].open && (panel_pop(presented_now[i]) || back_under(presented_now[i])) => ()
     Some(i) if presented_now[i].open => {
       // (it and what is over it, each closed unsaid let go of once, from the top)
-      let closing = presented_now[i:].to_array().filter(fn(q) { q.open && !q.ended }).rev()
+      let closing = presented_now[i:].to_owned().filter(fn(q) { q.open && !q.ended }).rev()
       close_from(i)
       for q in closing {
         q.ended = true
@@ -1510,7 +1510,7 @@ fn panel_pop(p : Presented) -> Bool {
     Some(f) => p.stands = f()
     None => ()
   }
-  p.more.set(more[:more.length() - 1].to_array())
+  p.more.set(more[:more.length() - 1].to_owned())
   (last.gone)()
   true
 }
@@ -1531,7 +1531,7 @@ fn gone_all(p : Presented) -> Unit {
 fn back_under(p : Presented) -> Bool {
   guard p.under is Some(u) && p.open else { return false }
   guard presented_now.search_by(fn(q) { q.serial == p.serial }) is Some(i) else { return false }
-  let closing = presented_now[i:].to_array().filter(fn(q) { q.open && !q.ended }).rev()
+  let closing = presented_now[i:].to_owned().filter(fn(q) { q.open && !q.ended }).rev()
   // (closed and the one before presented as one change: what draws `p` going finds that one in its place already)
   @signals.start_batch()
   close_from(i)
@@ -1927,7 +1927,7 @@ pub let pick_list_most : Double = 320.0
 ///|
 /// The choices whose words or note hold every word of `query` (case aside), in their order; all of them for none.
 fn pick_found(choices : Array[Choice], query : String) -> Array[Choice] {
-  let words = query.split(" ").filter(fn(w) { !w.is_empty() }).map(fn(w) { w.to_string() }).collect()
+  let words = query.split(" ").filter(fn(w) { !w.is_empty() }).map(fn(w) { w.to_owned() }).collect()
   if words.is_empty() {
     return choices
   }
@@ -2568,7 +2568,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       c.box(style=sheet_words_at, fn() {
         // (said, by Enter or its action: what it says done with its words as they are then)
         let say = fn(typed : String) {
-          let line = typed.trim(chars=" \t\n").to_string()
+          let line = typed.trim(chars=" \t\n").to_owned()
           if ask_can(line, value, empty) {
             done_with(p, fn() { run(line) })
           }
@@ -2585,7 +2585,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           on_submit=say,
         )
         focus_once(c, p, key + "/line")
-        let words = f.text.trim(chars=" \t\n").to_string()
+        let words = f.text.trim(chars=" \t\n").to_owned()
         if hint != "" {
           c.text(hint, style=sheet_hint) |> ignore
         }

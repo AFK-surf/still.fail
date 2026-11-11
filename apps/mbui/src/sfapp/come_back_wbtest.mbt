@@ -214,7 +214,7 @@ test "a show's node called back as it closes its room: never hanging near still 
       let (ys, turn) = come_back_walk(false, after, ms~)
       let v = (ys[turn] - ys[turn - 1]) / ms
       if v.abs() > turn_judged_from {
-        assert_not_hung(ys[turn:].to_array(), ms, "called back \{after} ms on, frames \{ms} ms apart")
+        assert_not_hung(ys[turn:].to_owned(), ms, "called back \{after} ms on, frames \{ms} ms apart")
       }
     }
   }

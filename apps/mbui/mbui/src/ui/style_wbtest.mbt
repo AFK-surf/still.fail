@@ -308,7 +308,7 @@ test "style: the narrow theme in frames narrower than its bound, picked from the
 
 ///|
 test "style: set once, the narrow theme is picked again each frame as the window's width changes" {
-  let set = Ref::new(false)
+  let set = Ref(false)
   let t = Tester::new(
     fn(c) {
       if !set.val {
@@ -516,7 +516,7 @@ test "style: radius=InnerOr: alone its own corner; in a panel's corner the panel
 
 ///|
 test "style: Ctx's tokens outside a style: space, color, text_size" {
-  let got : Ref[(Double, Bool, Bool, (Double, Double))] = Ref::new((0.0, false, false, (0.0, 0.0)))
+  let got : Ref[(Double, Bool, Bool, (Double, Double))] = Ref((0.0, false, false, (0.0, 0.0)))
   let t = Tester::new(fn(c) {
     got.val = (
       c.space(S11),
@@ -575,7 +575,7 @@ test "style: a list's rows, built as it is laid out, are built in the theme in f
 
 ///|
 test "style: a cover, built once its items are laid out, is built in the theme and direction where it was asked for" {
-  let seen : Ref[(Int64, Bool)] = Ref::new((0L, false))
+  let seen : Ref[(Int64, Bool)] = Ref((0L, false))
   let t = Tester::new(fn(c) {
     c.with_direction(Rtl, fn() {
       c.with_theme(Theme::dark(), fn() {
@@ -598,7 +598,7 @@ test "style: a cover, built once its items are laid out, is built in the theme a
 
 ///|
 test "style: a list's rows are built in the direction where the list was" {
-  let rtl : Ref[Bool] = Ref::new(false)
+  let rtl : Ref[Bool] = Ref(false)
   let t = Tester::new(fn(c) {
     c.with_direction(Rtl, fn() {
       c.list("rows", 1, 40.0, fn(_) {

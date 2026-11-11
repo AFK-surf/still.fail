@@ -496,7 +496,7 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
   }
   // 4. what a box with a ground holds, in from its edges and as far from both sides: each content's box, the nearest
   // grounded one round it
-  let held : Map[Int, Array[Int]] = Map::new()
+  let held : Map[Int, Array[Int]] = Map([])
   for i in 0..<n {
     let c = self.nodes[i]
     if !whole[i] || !c.gap_content() || self.in_picture(i, pictures) {

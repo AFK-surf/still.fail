@@ -73,7 +73,7 @@ let writing_went : Map[String, (String, String, Bytes)] = {}
 /// The videos added here, read whole, that the host has no picture of (no address for them: @hostapi.Picked.src), by
 /// their id: their picture their first frame, drawn here from their bytes (writing_went) by writing_stills.
 // kept across runs: put back by writings_reset (sfbase's reset)
-let writing_unseen : Set[String] = Set::new()
+let writing_unseen : Set[String] = Set([])
 
 ///|
 /// The stills of the videos waiting here the host has no picture of, made from their bytes (bytes_first_frame), each
@@ -769,7 +769,7 @@ pub fn writing_take(src : Source, w : Writing, station? : String = "", done : (J
 /// What `take` took put back (a chat that could not be made, a message never sent), saying why; with `unless_written`,
 /// only while nothing new is written there (`composer.restore`).
 pub fn writing_restore(src : Source, w : Writing, error : String, unless_written? : Bool = false) -> Unit {
-  if unless_written && (w.state.text.get().trim(chars=" \n\t").to_string() != "" || w.state.files.get().length() > 0 || w.state.quotes.get().length() > 0) {
+  if unless_written && (w.state.text.get().trim(chars=" \n\t").to_owned() != "" || w.state.files.get().length() > 0 || w.state.quotes.get().length() > 0) {
     return
   }
   let kept = w.taken

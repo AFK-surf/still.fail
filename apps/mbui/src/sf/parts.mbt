@@ -15,7 +15,7 @@ pub fn ease_to(c : @ui.Ctx, key : String, on : Bool) -> Double {
 fn draw_icon(c : @ui.Ctx, name : String, size : Double, color : Int64, by_ink? : Bool = false) -> Unit {
   // (a runtime's mark by its runtime, `runtime:<runtime>`: its maker's, as maker_mark draws it)
   if name.has_prefix("runtime:") {
-    maker_mark(c, "", name.view(start_offset=8).to_string(), size) |> ignore
+    maker_mark(c, "", name.view(start_offset=8).to_owned(), size) |> ignore
   } else {
     icon(c, name, size~, color~, by_ink~) |> ignore
   }

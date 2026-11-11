@@ -91,7 +91,7 @@ test "a face as a node: its initial while its picture decodes, the picture at on
     assert_eq(made[i], o, msg="at step \{i}")
   }
   // (the picture shown at the second step, at once: no fade, no initial under it)
-  assert_true(old[1].iter().any(fn(x) { x.split(",").collect()[5].to_string() == "4" }))
+  assert_true(old[1].iter().any(fn(x) { x.split(",").collect()[5].to_owned() == "4" }))
 }
 
 ///|

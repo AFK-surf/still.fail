@@ -200,14 +200,14 @@ fn settings_parts_of(core : Core, here : @settings.Here, bars~ : Bool, kept~ : S
   })
   // this device's: what there is of it here (the bottom bar where the window has one, 2026-10-26: 「为啥中型屏会有这个
   // 设置」; the keys, this computer's station a computer's)
-  let prefs = (core.topic)("prefs", Map::new()).get().value
+  let prefs = (core.topic)("prefs", Map([])).get().value
   let theme = match @settings.appearance(prefs) {
     "light" => @sf.t("android-settings.theme.light")
     "dark" => @sf.t("android-settings.theme.dark")
     _ => @sf.t("android-settings.theme.system")
   }
   // notifications as the core's `notify` says, or as switched while `notify.set` is out; refused by the system, in red
-  let notify = (core.topic)("notify", Map::new()).get().value
+  let notify = (core.topic)("notify", Map([])).get().value
   let on = match @settings.notify_switched.get() {
     Some(v) => v
     None => notify is None || flag(notify, "on")

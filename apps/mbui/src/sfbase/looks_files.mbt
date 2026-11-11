@@ -78,7 +78,7 @@ pub(all) enum LooksStand {
 
 ///|
 pub fn looks_stand(src : Source, files : Array[String]) -> LooksStand {
-  let going = field(src.topic("fonts", Map::new()).get().value, "share")
+  let going = field(src.topic("fonts", Map([])).get().value, "share")
   let mut got = 0.0
   let mut whole = 0.0
   let mut known = true

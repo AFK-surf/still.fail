@@ -181,7 +181,7 @@ pub fn Ctx::list_rest(self : Ctx, key : String) -> Double {
     Some(st) => {
       // (where its own motions have it at the frame's time, what that leaves to come: read so)
       self.list_step(st)
-      st.rest_at(self.clock, self.frame_no)
+      Moving::rest_at(st, self.clock, self.frame_no)
     }
     None => -1.0
   }
@@ -550,7 +550,7 @@ pub fn Ctx::list(
   // is its layout's to work out: Ctx::place_list)
   let back = st.built >= 0 && st.built < self.frame_no - 1
   st.built = self.frame_no
-  if back && st.rest_at(self.clock, self.frame_no) > self.clock {
+  if back && Moving::rest_at(st, self.clock, self.frame_no) > self.clock {
     self.moving(st.ease_mover, st as &Moving, what="a list's wheel ease, glide and scroll bar")
   }
   // with `glide_on_growth`, rows come at the end while it is at its end: it glides after them from where it was

@@ -240,7 +240,7 @@ fn several_rows(t : @ui.Tester) -> (Array[Double?], Array[Double], Array[String]
   let title_runs = titles.mapi(fn(i, title) {
     let found = runs.filter(fn(r) {
       r.text == title ||
-      (r.text.has_suffix("…") && r.text.length() > 4 && title.has_prefix(r.text.substring(end=r.text.length() - 1)))
+      (r.text.has_suffix("…") && r.text.length() > 4 && title.has_prefix(r.text[:r.text.length() - 1].to_owned()))
     })
     if found.length() == 0 && i == titles.length() - 1 {
       return None

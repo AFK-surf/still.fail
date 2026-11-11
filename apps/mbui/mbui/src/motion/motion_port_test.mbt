@@ -693,8 +693,8 @@ test "inertia: a longer time constant, a longer animation" {
 
 ///|
 test "inertia: higher power, further distance" {
-  let long_target = Ref::new(0.0)
-  let short_target = Ref::new(0.0)
+  let long_target = Ref(0.0)
+  let short_target = Ref(0.0)
   let long = @motion.inertia_generator(
     100.0,
     velocity=200.0,
@@ -1207,9 +1207,9 @@ test "Motion.kt's motionSpring is Motion's spring by visual duration and bounce"
 
 ///|
 test "animate plays a Motion spring as its generator says, from the frame it is asked in" {
-  let to = Ref::new(0.0)
+  let to = Ref(0.0)
   let seen : Array[Double] = []
-  let kept : Ref[@motion.Anim?] = Ref::new(None)
+  let kept : Ref[@motion.Anim?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
     seen.push(@motion.animate(c, "m", to.val, spec=@motion.spring_to(stiffness=300.0, damping=20.0)))
     // (the Anim it plays, to ask its end)
@@ -1239,8 +1239,8 @@ test "animate plays a Motion spring as its generator says, from the frame it is 
 
 ///|
 test "animate plays inertia to where it ends, not to the target asked" {
-  let go = Ref::new(false)
-  let a : Ref[@motion.Anim?] = Ref::new(None)
+  let go = Ref(false)
+  let a : Ref[@motion.Anim?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
     let v = @motion.anim(c, "i", 0.0)
     if go.val && a.val is None {
@@ -1266,8 +1266,8 @@ test "animate plays inertia to where it ends, not to the target asked" {
 ///|
 test "animate plays keyframes through their values" {
   let seen : Array[Double] = []
-  let on = Ref::new(false)
-  let kept : Ref[@motion.Anim?] = Ref::new(None)
+  let on = Ref(false)
+  let kept : Ref[@motion.Anim?] = Ref(None)
   // the keyframes' length
   let keys_ms = 160.0
   let t = @ui.Tester::new(fn(c) {

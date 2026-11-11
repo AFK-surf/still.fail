@@ -264,7 +264,7 @@ fn archive_search_side(c : @ui.Ctx, gap : Bool) -> Unit {
         placeholder_color=t.p.subtle,
         caret_color=t.p.accent,
       )
-      let q = r.text.trim(chars=" \t\n").to_string()
+      let q = r.text.trim(chars=" \t\n").to_owned()
       if q != archive_side.q {
         archive_side.q = q
         archive_side.limit = archive_side_page

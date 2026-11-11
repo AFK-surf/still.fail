@@ -120,7 +120,7 @@ fn things_held_seen(t : @ui.Tester, r : ChatRef, name : String, open : () -> Uni
   let menu_lit = lit()
   // (its menu's 在对话中查看 in words: the row's own is its icon alone)
   let menu = t.words().iter().any(fn(w) { w.0 == @sf.t("web-main.things.show") && w.5 > 0.0 })
-  let haptics = t.haptics()[felt:].to_array()
+  let haptics = t.haptics()[felt:].to_owned()
   // (the sheet under the menu: pushed back, its row's words where they are then, and dimmed, the scrim drawn over them)
   let pushed = t.words().filter(fn(w) { w.0 == name }).map(fn(w) { (half(w.1), half(w.2)) })
   let dimmed = match pushed {
@@ -184,7 +184,7 @@ fn things_first_seen(t : @ui.Tester, r : ChatRef, frame : Bytes, open : () -> Un
   t.run_for(sheet_way_ms(t))
   let grabs = t
     .views()[before:]
-    .to_array()
+    .to_owned()
     .filter_map(fn(l) {
       match l.split(" ").map(fn(p) { p.to_owned() }).to_array() {
         ["control", view, "21", ..] => Some(view)

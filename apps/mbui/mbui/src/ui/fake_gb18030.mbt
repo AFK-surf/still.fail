@@ -206,7 +206,7 @@ fn gb_four(i : Int) -> Int {
 /// `data` as GB18030 (GBK and GB2312 are in it): what is not, U+FFFD.
 fn gb18030_decode(data : Bytes) -> String {
   let n = data.length()
-  let out = StringBuilder::new(size_hint=n)
+  let out = StringBuilder(size_hint=n)
   let mut i = 0
   while i < n {
     let a = data[i].to_int()

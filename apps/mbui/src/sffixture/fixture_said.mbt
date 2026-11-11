@@ -27,7 +27,7 @@ pub fn said_stretch(value : Json, path : ArrayView[String]) -> Json {
     [step, .. rest] if step.contains("=") =>
       // (a union's variant: on where its tag says that word)
       match (step.split("=").collect(), value) {
-        ([tag, word], Object(m)) if m.get(tag.to_string()) == Some(Json::string(word.to_string())) =>
+        ([tag, word], Object(m)) if m.get(tag.to_owned()) == Some(Json::string(word.to_owned())) =>
           said_stretch(value, rest)
         _ => value
       }
@@ -76,7 +76,7 @@ pub fn said_steps_of(topic : String) -> Array[Array[String]] {
     None => {
       let m : Map[String, Array[Array[String]]] = {}
       for name, paths in said_paths {
-        m[name] = paths.map(fn(p) { p.split(".").map(fn(v) { v.to_string() }).collect() })
+        m[name] = paths.map(fn(p) { p.split(".").map(fn(v) { v.to_owned() }).collect() })
       }
       said_steps.val = Some(m)
       m

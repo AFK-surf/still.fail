@@ -247,7 +247,7 @@ test "Tab between two nodes builds none of the old views again; Tab to an old vi
 /// The line a host is told of a node read out as `role` labelled `label` (a11y.mbt's fields), if one.
 fn told_line(t : Tester, role : String, label : String) -> Array[String]? {
   for l in t.a11y_said().split("\n") {
-    let f = l.split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+    let f = l.split("\u{1F}").map(fn(v) { v.to_owned() }).to_array()
     if f.length() == 16 && f[3] == role && f[9] == label {
       return Some(f)
     }

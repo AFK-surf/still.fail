@@ -196,7 +196,7 @@ fn new_profile_flow_node(
         "plan" => new_profile_plan_node(b, core, station, n, s, d, install)
         "form" => new_profile_form_node(b, core, station, n, d, edit)
         _ => {
-          let gid = key.view(start_offset=6).to_string()
+          let gid = key.view(start_offset=6).to_owned()
           let group = fn() {
             let all = items(d(), "groups")
             match all.search_by(fn(g) { text(Some(g), "id") == gid }) {

@@ -23,7 +23,7 @@ pub fn update_check_run(c : @ui.Ctx, asked : String) -> Unit {
       let size = @string.parse_int(size) catch { _ => 0 }
       @ui.update_fetch(url, sha256, size.to_double(), name, true, delta)
     }
-    match asked.split("|").map(fn(s) { s.to_string() }).to_array() {
+    match asked.split("|").map(fn(s) { s.to_owned() }).to_array() {
       [url, sha256, size, name] => fetch(url, sha256, size, name, "")
       [url, sha256, size, name, delta] => fetch(url, sha256, size, name, delta)
       _ =>

@@ -51,7 +51,7 @@ pub fn Tester::room_faults(self : Tester) -> Array[String] {
 pub fn Tester::hover_only_faults(self : Tester) -> Array[String] {
   self.reads_own()
   let c = g()
-  let rest : Set[Int] = Set::new()
+  let rest : Set[Int] = Set([])
   for i in c.press_targets() {
     rest.add(c.nodes[i].id)
   }

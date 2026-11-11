@@ -534,7 +534,7 @@ let fill_sizes : Array[Double] = [1024.0 * 1024.0 * 1024.0, 100.0 * 1024.0 * 102
 /// `keeping`), each with how it stands, all of them stopped at once; into `blocks`.
 fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
   let t = @sf.theme()
-  let prefs = (core.topic)("prefs", Map::new()).get().value
+  let prefs = (core.topic)("prefs", Map([])).get().value
   let on = !flag(prefs, "fillOff")
   let most = match field(prefs, "fillMax") {
     Some(Number(n, ..)) => n
@@ -572,7 +572,7 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
       }
     })
   })
-  let keeping = items((core.topic)("downloads", Map::new()).get().value, "keeping")
+  let keeping = items((core.topic)("downloads", Map([])).get().value, "keeping")
   if !on || keeping.length() == 0 {
     return
   }

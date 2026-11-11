@@ -76,7 +76,7 @@ fn chat_rows_same(mode : String, every~ : Int = 1, set~ : (Fixture) -> Unit = fn
     }
   }
   if !said.is_empty() {
-    fail(said[:3].to_array().join(" ;; "))
+    fail(said[:3].to_owned().join(" ;; "))
   }
 }
 

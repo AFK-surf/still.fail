@@ -922,7 +922,7 @@ pub let fix_core_for : Ref[Double] = Ref(0.0)
 /// it puts out (sfbench's APPBENCH, a film's record).
 pub fn fix_pace_said(pace : String, core : String) -> Unit {
   let ms = fn(s : StringView) -> Double? {
-    match (try Some(@json.parse(s.trim(chars=" ").to_string())) catch { _ => None }) {
+    match (try Some(@json.parse(s.trim(chars=" ").to_owned())) catch { _ => None }) {
       Some(Number(n, ..)) => Some(n)
       _ => None
     }
@@ -1180,16 +1180,16 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
       fix_later(end_in, fn() { over(answer_seq) })
     }
     // (its first line, as a made-up agent would take it up)
-    let lead = words.trim(chars=" \n\r\t").to_string()
+    let lead = words.trim(chars=" \n\r\t").to_owned()
     let first = match lead.find("\n") {
-      Some(i) => lead.view(end_offset=i).to_string()
+      Some(i) => lead.view(end_offset=i).to_owned()
       None => lead
     }
     let said = if first == "" {
       "收到文件了，我看一下。"
     } else {
       let cut = if first.length() > 40 {
-        first.view(end_offset=40).to_string() + "…"
+        first.view(end_offset=40).to_owned() + "…"
       } else {
         first
       }
@@ -1357,7 +1357,7 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
       let words : Array[String] = []
       for w in text(p, "query").to_lower().split(" ") {
         if w.length() > 0 {
-          words.push(w.to_string())
+          words.push(w.to_owned())
         }
       }
       let all = items(Some(rich_chat(f.older)), "messages")
@@ -1368,7 +1368,7 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
         for w in words {
           let mut from = 0
           while from <= said.length() {
-            match said.view(start_offset=from).to_string().find(w) {
+            match said.view(start_offset=from).to_owned().find(w) {
               Some(i) => {
                 count += 1
                 from = from + i + w.length()
@@ -2720,8 +2720,8 @@ pub fn fixture_things(q : String, many? : Bool = true) -> Json {
     pull(127, 5, "虚拟列表：按估计高度占位", "merged", 0, "1 小时前"),
     pull(124, 3, "去掉旧的分页加载", "closed", 0, "2 小时前"),
   ]
-  let pulls = if many { pulls } else { pulls[:1].to_array() }
-  let words : Array[String] = q.to_lower().split(" ").map(fn(w) { w.to_string() }).filter(fn(w) { w != "" }).collect()
+  let pulls = if many { pulls } else { pulls[:1].to_owned() }
+  let words : Array[String] = q.to_lower().split(" ").map(fn(w) { w.to_owned() }).filter(fn(w) { w != "" }).collect()
   let having = fn(list : Array[Json]) -> Json {
     Json::array(
       list.filter(fn(t) {

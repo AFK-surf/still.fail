@@ -8,7 +8,7 @@
 
 ///|
 let words_large_known : Map[String, Int] = {
-  let known = Map::new()
+  let known = Map([])
   for k in [
     ("phone-zh switcher", 6),
     ("phone-zh switcher-found", 4),
@@ -164,7 +164,7 @@ let words_large_known : Map[String, Int] = {
 /// of a mark's letter (drawn at 1 as its mark is, @sf.mark_words_node), of a tag, a video's length or 用量's months (as
 /// high as their words' line, @sf.tag_node, box_at, a least), or of 智能体's card's spend (on its line of 26).
 let words_large_outgrown_known : Map[String, Int] = {
-  let known = Map::new()
+  let known = Map([])
   for k in [
     ("phone-en chat-image-coming", 2),
     ("phone-en chat-publish", 4),

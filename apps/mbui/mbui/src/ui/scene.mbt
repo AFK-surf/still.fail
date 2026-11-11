@@ -398,7 +398,7 @@ fn clip_arc_powers(e : Double) -> Unit {
 
 ///|
 // kept across runs: worked out again only for another power (clip_arc_powers)
-let clip_arc_e : Ref[Double] = Ref::new(-1.0)
+let clip_arc_e : Ref[Double] = Ref(-1.0)
 
 ///|
 // kept across runs: as clip_arc_e

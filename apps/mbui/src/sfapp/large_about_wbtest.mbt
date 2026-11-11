@@ -587,7 +587,7 @@ fn archiving_pictures_asked(w : Double, url : String) -> (Array[Int], Array[Int]
         }
         _ => []
       }
-      { ..r, value: Some(Json::array(first + a[1:].to_array())) }
+      { ..r, value: Some(Json::array(first + a[1:].to_owned())) }
     },
   }
   @sfdesk.pane_makes.val = true
@@ -653,7 +653,7 @@ test "归档 made once, on every screen: a station's picture answered later, whi
           }
           _ => []
         }
-        { ..r, value: Some(Json::array(first + a[1:].to_array())) }
+        { ..r, value: Some(Json::array(first + a[1:].to_owned())) }
       },
     }
     @sfdesk.pane_makes.val = true

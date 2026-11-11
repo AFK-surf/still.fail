@@ -17,7 +17,7 @@ let glide_under_way_ms : Double = 300.0
 fn told_nodes(update : String) -> Array[(String, String)] {
   let out = []
   for l in update.split("\n") {
-    let f = l.split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+    let f = l.split("\u{1F}").map(fn(v) { v.to_owned() }).to_array()
     if f.length() >= 17 && f[0] == "N" {
       out.push((f[2], f[8]))
     }

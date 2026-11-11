@@ -10,7 +10,7 @@
 ///|
 /// The serials of what of the presented the window's tree draws, while it is drawn (made, till it has gone).
 // kept across runs: put back by presenters_reset; each let go as its node is
-let tree_presented : Set[Int] = Set::new()
+let tree_presented : Set[Int] = Set([])
 
 ///|
 /// Whether the row of each serial draws it as a sheet (sheet_node): what a page is put on (panel_page) only where it

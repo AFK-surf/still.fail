@@ -34,7 +34,7 @@ test "watching's lead alone: two of its loops run, its dot drawn otherwise from 
   t.draw()
   t.run_for(lead_loop_ms * 2.0)
   // (over a loop, a step at a time: the dot beats, so what is drawn is not the same at every step)
-  let seen : Set[String] = Set::new()
+  let seen : Set[String] = Set([])
   let mut ms = 0.0
   while ms < lead_loop_ms {
     t.run_for(@view.resident_step_ms)
@@ -49,7 +49,7 @@ test "waiting's lead alone: two of its loops run, its dots drawn otherwise from 
   let t = lead_alone("wait")
   t.draw()
   t.run_for(lead_loop_ms * 2.0)
-  let seen : Set[String] = Set::new()
+  let seen : Set[String] = Set([])
   let mut ms = 0.0
   while ms < lead_loop_ms {
     t.run_for(@view.resident_step_ms)

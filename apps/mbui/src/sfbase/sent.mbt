@@ -162,7 +162,7 @@ pub fn sent_local(
     // (a chat just made: none)
     before: match v {
       Some(v) => sent_before(v)
-      None => Map::new()
+      None => Map([])
     },
     newest: match v {
       Some(v) => v.messages.fold(init=-@double.infinity, fn(n, m) { if m.seq > n { m.seq } else { n } })

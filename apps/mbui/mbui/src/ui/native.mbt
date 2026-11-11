@@ -344,10 +344,10 @@ pub fn NativeView::script(self : NativeView, js : String) -> Unit {
 fn script_hash(js : String) -> String {
   let mut h = 0x811c9dc5U
   for i in 0..<js.length() {
-    h = (h ^ js.unsafe_charcode_at(i).reinterpret_as_uint()) * 0x01000193U
+    h = (h ^ js.unsafe_get(i).to_int().reinterpret_as_uint()) * 0x01000193U
   }
   let digits = "0123456789abcdef"
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for k in 0..<8 {
     let d = ((h >> (28 - 4 * k)) & 15U).reinterpret_as_int()
     out.write_char(digits.get_char(d).unwrap())

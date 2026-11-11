@@ -1430,7 +1430,7 @@ let a_moment_ms : Double = 50.0
 ///|
 /// How many of what was kept since `before` are `png`.
 fn kept_as(t : @ui.Tester, before : Int, png : Bytes) -> Int {
-  t.kept()[before:].to_array().filter(fn(k) { k.2 == png }).length()
+  t.kept()[before:].to_owned().filter(fn(k) { k.2 == png }).length()
 }
 
 ///|

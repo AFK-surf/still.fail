@@ -95,7 +95,7 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
   let felt = t.haptics().length()
   t.tap_text("忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
-  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
+  assert_eq(t.haptics()[felt:].to_owned(), [@ui.Confirm])
   // let go at once (what it showed only drawn as it closes up)
   t.frame()
   assert_eq(@sfpages.dismissed.count(), 1)

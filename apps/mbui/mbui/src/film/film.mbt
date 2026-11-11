@@ -121,9 +121,9 @@ pub fn film(
     say("film: \{out}: not made")
     return false
   }
-  let buf = Ref::new(FixedArray::make(0, 0.0))
-  let drawn = Ref::new(0)
-  let put = Ref::new(0)
+  let buf = Ref(FixedArray::make(0, 0.0))
+  let drawn = Ref(0)
+  let put = Ref(0)
   let run = t.film(
     script,
     fps=fps.to_double(),

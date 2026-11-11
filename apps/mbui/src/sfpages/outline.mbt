@@ -283,7 +283,7 @@ fn outline_body(
     let from = i * outline_chunk
     guard from < seqs.length() && !at.asking.contains(i) && !src.read_only else { return }
     let to = if from + outline_chunk < seqs.length() { from + outline_chunk } else { seqs.length() }
-    let chunk = seqs[from:to].to_array()
+    let chunk = seqs[from:to].to_owned()
     let held = at.held.untracked()
     guard chunk.iter().any(fn(q) { !held.contains(q) && !at.absent.contains(q) }) else { return }
     at.asking[i] = true
@@ -368,7 +368,7 @@ fn outline_body(
   }
   let typed = fn(words : String) {
     (due.val)()
-    let q = words.trim(chars=" ").to_string()
+    let q = words.trim(chars=" ").to_owned()
     if q == "" {
       at.asked += 1
       at.query.set("")
@@ -460,7 +460,7 @@ fn outline_body(
   // opens looked for at once
   at.lit.set(current_key(at))
   v.at_moment(v.cause_at(), fn() { ask_chunk(chunk_of(at.current)) }) |> ignore
-  let first = @signals.untracked(fn() { at.field.text() }).trim(chars=" ").to_string()
+  let first = @signals.untracked(fn() { at.field.text() }).trim(chars=" ").to_owned()
   if first != "" {
     ask(first)
   }
@@ -865,7 +865,7 @@ fn rail_ask(src : Source, r : ChatRef, thread : Double, said : Array[Double], at
   guard from < to else { return }
   rail_asking[asking] = true
   let asked = outline_params(r, thread)
-  asked["seqs"] = Json::array(said[from:to].to_array().map(fn(q) { Json::number(q) }))
+  asked["seqs"] = Json::array(said[from:to].to_owned().map(fn(q) { Json::number(q) }))
   (src.call)("chat.outline.rows", Json::object(asked), fn(res) {
     match res {
       Ok(j) => {

@@ -598,7 +598,7 @@ fn typeahead_to(items : Array[MenuItem?], typed : String, at : Int) -> Int {
   if n == 0 {
     return -1
   }
-  let first = typed.view(start_offset=0, end_offset=1).to_string()
+  let first = typed.view(start_offset=0, end_offset=1).to_owned()
   let same = typed.iter().all(fn(ch) { ch.to_string() == first })
   let want = if same { first } else { typed }
   let from = if same { at + 1 } else if at < 0 { 0 } else { at }

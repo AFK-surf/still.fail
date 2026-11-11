@@ -239,7 +239,7 @@ fn type_words(send : (Json) -> Unit, held : HeldKeys, words : String) -> Unit {
       stroke(send, "Enter", "Enter", 0)
     }
     if line.length() > 0 {
-      send(text_input(line.to_string()))
+      send(text_input(line.to_owned()))
     }
   }
 }

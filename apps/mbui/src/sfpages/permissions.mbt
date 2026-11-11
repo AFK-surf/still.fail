@@ -19,7 +19,7 @@ pub fn permissions_node(
   width? : () -> Double,
 ) -> Unit {
   let state = fn() {
-    let notify = (core.topic)("notify", Map::new()).get().value
+    let notify = (core.topic)("notify", Map([])).get().value
     match text(notify, "permission") {
       "granted" | "denied" | "default" => text(notify, "permission")
       _ => "unknown"
@@ -314,8 +314,8 @@ pub fn station_archiving_node(
       m => m
     }
   }
-  let days_offered = fn() { items(view(), "daysOffered").map(fn(n) { n.as_number().unwrap_or(0.0) }) }
-  let slack_offered = fn() { items(view(), "slackDaysOffered").map(fn(n) { n.as_number().unwrap_or(0.0) }) }
+  let days_offered = fn() { items(view(), "daysOffered").map(fn(n) { (if n is Number(n, ..) { Some(n) } else { None }).unwrap_or(0.0) }) }
+  let slack_offered = fn() { items(view(), "slackDaysOffered").map(fn(n) { (if n is Number(n, ..) { Some(n) } else { None }).unwrap_or(0.0) }) }
   // (as it is when a choice is made: what it reads not followed by what chose)
   let locked = fn() {
     @signals.untracked(fn() {
@@ -357,7 +357,7 @@ pub fn station_archiving_node(
     }
   }
   @sf.page_node(v, title, on_back~, frame~, said?, width?, blocks, fn(b, key) {
-    match key.split("/").to_array()[0].to_string() {
+    match key.split("/").to_array()[0].to_owned() {
       "admin" => @sf.page_note_node(b, fn() { @sf.t("web-pages.archiving.adminOnly") })
       // its review: how it stands, the way to it right after its words
       "review" =>

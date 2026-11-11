@@ -2434,7 +2434,7 @@ fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? 
   if bones == 0L {
     self.emit_lines(0.0, 0.0, c.lines, 1.0)
   }
-  let segs = self.segs[seg_start:].to_array()
+  let segs = self.segs[seg_start:].to_owned()
   self.segs_cut(seg_start)
   inst_owners.painting = was
   inst_owners.tree_painting = was_tree

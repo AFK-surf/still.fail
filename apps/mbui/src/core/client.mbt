@@ -269,7 +269,7 @@ fn topic_json(topic : String, params : Map[String, Json]) -> Json {
 /// tagged and length-prefixed. `topic_json` lets a parameter named `topic` replace the supplied name, so do that here
 /// too and keep the remaining parameters in the same order as the object sent to the core.
 fn subscribe_key(topic : String, params : Map[String, Json]) -> String {
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   let part = fn(kind : Char, x : String) {
     b.write_char(kind)
     b.write_string(x.length().to_string())
@@ -866,7 +866,7 @@ fn head_id(text : String) -> Int? {
   let mut id = 0
   let from = i
   while i < n && i - from < 9 {
-    let ch = text.unsafe_charcode_at(i)
+    let ch = text.unsafe_get(i).to_int()
     if ch < 48 || ch > 57 {
       break
     }

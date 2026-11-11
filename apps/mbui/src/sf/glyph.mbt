@@ -393,7 +393,7 @@ fn glyph_icon_of(g : GlyphCounts) -> String {
       shape(ellipse_path(x, 12.0, 1.1, 1.25), 5, 0.0)
     }
   }
-  out.to_string().trim_end(chars=" ").to_string()
+  out.to_string().trim_end(chars=" ").to_owned()
 }
 
 ///|

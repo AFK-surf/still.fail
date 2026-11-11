@@ -48,7 +48,7 @@ fn film_in_chat(platform? : Int = 2, w? : Double = 390.0) -> (@ui.Tester, Double
 fn film_frame_answered(t : @ui.Tester) -> Unit {
   let asked = t.views().filter(fn(l) { l.has_prefix("control ") })
   guard asked.last() is Some(l) else { return }
-  let view = l.split(" ").to_array()[1].to_string()
+  let view = l.split(" ").to_array()[1].to_owned()
   let frame = fixture_file_png("演示录屏.mp4")
   t.view_said("{\"still\":{\"view\":\{view}},\"b\":\"\{hex_bytes(frame)}\"}") |> ignore
   t.draw()

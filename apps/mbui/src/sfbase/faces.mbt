@@ -385,14 +385,14 @@ pub fn share_face_whole(src : Source, drawing : Int) -> Unit {
   // (the carried one given first: asked for later, it would not be given over the whole one)
   ignore(share_face_given())
   let files = share_face_whole_files(drawing)
-  let got : Map[Int, Bytes] = Map::new()
+  let got : Map[Int, Bytes] = Map([])
   for f in files {
     let (file, weight) = f
     looks_file(src, file, fn(gz) {
       match @zip.gunzip(gz) {
         Some(b) => {
           got[weight] = b
-          if got.size() == files.length() && share_face_whole_asked.val != drawing {
+          if got.length() == files.length() && share_face_whole_asked.val != drawing {
             share_face_whole_asked.val = drawing
             @ui.face_clear(share_face)
             for w in files {

@@ -415,7 +415,7 @@ test "an option pressed answers with it (decision.answer), felt; on its way it t
   assert_eq(number(p, "seq"), 8.0)
   assert_eq(number(p, "thread"), 7.0)
   assert_eq(text(p, "station"), "ws1/st1")
-  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
+  assert_eq(t.haptics()[felt:].to_owned(), [@ui.Confirm])
   // on its way, as the core says: turning past its words, none pressed meanwhile
   doing.set(Some(dec_doing("一起换")))
   t.run_for(@ui.move_most_ms)

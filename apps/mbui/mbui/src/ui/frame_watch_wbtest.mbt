@@ -420,6 +420,6 @@ test "a frame built again for what a part or a list's row read names it and wher
     msg=why,
   )
   // (set on `at`'s line)
-  let parts = at.to_string().split(":").take(2).map(fn(v) { v.to_string() }).collect()
+  let parts = at.to_string().split(":").take(2).map(fn(v) { v.to_owned() }).collect()
   assert_true(why.contains(", set at \{parts[0]}:\{parts[1]}:"), msg=why)
 }

@@ -399,7 +399,7 @@ fn aw_opened(t : @ui.Tester, at : String, rest? : Bool = true) -> Unit raise {
 /// A fault said as `t.audit()` says it, without which node of the old view's it names (that numbering moves as a
 /// panel opens over it).
 fn aw_plain(f : String) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let cs = f.to_array()
   let mut i = 0
   while i < cs.length() {

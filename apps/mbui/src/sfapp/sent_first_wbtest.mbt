@@ -127,7 +127,7 @@ fn not_seen(t : @ui.Tester, words : String) -> Bool {
 
 ///|
 test "words sent while an answer comes out of its avatar fly at once; the answer comes in once they have landed" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   t.tap_text("发消息")
   t.type_text("再看一下按钮")

@@ -73,7 +73,7 @@ fn glyph_rects(t : Tester) -> Array[(Double, Double, Double, Double)] {
 test "a glyph moves and scales about its advance in plain and rich text" {
   for rich in [false, true] {
     let shown = fn(turned : Bool) {
-      let cells : Ref[Array[(Double, Double)]] = Ref::new([])
+      let cells : Ref[Array[(Double, Double)]] = Ref([])
       let t = Tester::new(fn(c) {
         let style = text_style(size=Sm, wrap=false)
         cells.val = c.words_glyph_cells("ab", style)
@@ -106,7 +106,7 @@ test "a glyph moves and scales about its advance in plain and rich text" {
 test "a line's glyph cells match the shaped rich words, including different widths and scripts" {
   for words in ["Wi 正在检查", "مرحبا", "á 😀"] {
     for mono in [false, true] {
-      let cells : Ref[Array[(Double, Double)]] = Ref::new([])
+      let cells : Ref[Array[(Double, Double)]] = Ref([])
       let t = Tester::new(fn(c) {
         let style = text_style(size=Sm, wrap=false)
         cells.val = c.words_glyph_cells(words, style, mono~)

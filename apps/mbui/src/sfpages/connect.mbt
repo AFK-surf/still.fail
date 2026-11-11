@@ -526,7 +526,7 @@ fn cd_sessions_node(b : @view.View, core : Core, station : String, item : () -> 
       g.each(
         fn() {
           let s = sessions()
-          if all.get() || s.length() <= cd_sessions_shown { s } else { s[:cd_sessions_shown].to_array() }
+          if all.get() || s.length() <= cd_sessions_shown { s } else { s[:cd_sessions_shown].to_owned() }
         },
         fn(s) { text(Some(s), "key") },
         fn(r, s) { cd_session_row_node(r, core, station, fn() { Some(s.get()) }) },

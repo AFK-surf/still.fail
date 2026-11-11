@@ -104,7 +104,7 @@ pub fn Path::clear(_self : Path) -> PathBuilder {
 ///|
 /// The path as SVG path data (Debug's segments: "M 1 2 L 3 4 Z").
 pub fn Path::to_svg(self : Path) -> String {
-  let s = StringBuilder::new()
+  let s = StringBuilder()
   let iter = self.segments()
   let parts : Array[String] = []
   while iter.next() is Some(seg) {
@@ -126,7 +126,7 @@ pub fn Path::to_svg(self : Path) -> String {
 fn fs(x : Float) -> String {
   let s = x.to_string()
   if s.has_suffix(".0") {
-    s.view(end_offset=s.length() - 2).to_string()
+    s.view(end_offset=s.length() - 2).to_owned()
   } else {
     s
   }

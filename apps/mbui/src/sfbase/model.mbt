@@ -446,7 +446,7 @@ pub fn java_hash(s : String) -> Int {
 /// The first line of some words that has any: what a one-line event shows of them.
 pub fn first_line(words : String) -> String {
   for l in words.split("\n") {
-    let s = l.trim(chars=" \t").to_string()
+    let s = l.trim(chars=" \t").to_owned()
     if s != "" {
       return s
     }

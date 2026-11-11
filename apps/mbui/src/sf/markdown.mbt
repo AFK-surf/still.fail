@@ -261,16 +261,16 @@ let file_chip_ground : @ui.Ground = { room: 6.0 / 13.2, height: 20.0 / 13.2, cor
 /// The file a link or an image names, by its name (the last part of its
 /// path): `shot.png`, `/w/shot.png`, `file:///w/shot.png`.
 pub fn file_name_of(url : String) -> String {
-  let mut u = url.trim(chars=" ").to_string()
+  let mut u = url.trim(chars=" ").to_owned()
   if u.has_prefix("file://") {
-    u = u.view(start_offset=7).to_string()
+    u = u.view(start_offset=7).to_owned()
   }
   let u = @codec.percent_decoded(u)
   let mut i = u.length()
   while i > 0 && u.at(i - 1).to_int() != 47 {
     i = i - 1
   }
-  u.view(start_offset=i).to_string()
+  u.view(start_offset=i).to_owned()
 }
 
 
@@ -299,7 +299,7 @@ pub(all) struct Placed {
 fn screen_alone(xs : Array[MdInline]) -> (String, LinkTo, String?)? {
   let parts = xs.filter(fn(x) {
     match x {
-      Text(t) => t.trim(chars=" \n\t").to_string() != ""
+      Text(t) => t.trim(chars=" \n\t").to_owned() != ""
       _ => true
     }
   })
@@ -399,7 +399,7 @@ pub fn markdown(
   let t = theme()
   // (in a page's bones, made-up words: each paragraph as it is, asking the core for nothing)
   let tree = if tree is None && c.in_bones() {
-    Some(Json::array(text.split("\n\n").map(fn(p) { Json::array([Json::string("p"), Json::array([Json::string(p.to_string())])]) }).collect()))
+    Some(Json::array(text.split("\n\n").map(fn(p) { Json::array([Json::string("p"), Json::array([Json::string(p.to_owned())])]) }).collect()))
   } else {
     tree
   }
@@ -727,7 +727,7 @@ fn Md::placed(
   }
   let parts = xs.filter(fn(x) {
     match x {
-      Text(t) => t.trim(chars=" \n\t").to_string() != ""
+      Text(t) => t.trim(chars=" \n\t").to_owned() != ""
       _ => true
     }
   })
@@ -760,7 +760,7 @@ fn Md::placed(
     let nodes = run
     if nodes.iter().any(fn(x) {
         match x {
-          Text(t) => t.trim(chars=" ").to_string() != ""
+          Text(t) => t.trim(chars=" ").to_owned() != ""
           HardBreak => false
           _ => true
         }
@@ -1301,7 +1301,7 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
   let n = s.length()
   let piece = fn(a : Int, b : Int) {
     if b > a {
-      let w = @ui.text_advance(s.view(start_offset=a, end_offset=b).to_string(), size~, weight~)
+      let w = @ui.text_advance(s.view(start_offset=a, end_offset=b).to_owned(), size~, weight~)
       if w > least {
         least = w
       }
@@ -1567,7 +1567,7 @@ fn Md::cell_images(self : Md, cell : Array[MdInline]) -> Array[(Double, (Double)
   let out = []
   for x in cell {
     match x {
-      Text(t) if t.trim(chars=" \n\t").to_string() == "" => ()
+      Text(t) if t.trim(chars=" \n\t").to_owned() == "" => ()
       HardBreak => ()
       Image(src, _) =>
         match (self.files)(file_name_of(src)) {

@@ -949,13 +949,13 @@ let layer_opened : Ref[Int] = Ref(0)
 /// The layers' openings whose back was taken (Ctx::layer_back_taken), till they read it (Ctx::overlay: dismissed) or
 /// close: what they said of back no more what takes it, said again as a part kept or not.
 // kept across runs: put back by layer_back_forget
-let layer_back_spent : Map[Int, Int] = Map::new()
+let layer_back_spent : Map[Int, Int] = Map([])
 
 ///|
 /// What the last frame drew of layers dismissed since (Ctx::layers_dismissed), by its ids: no input of theirs, pressed,
 /// pointed at or scrolled (hit_at), till the next frame's targets are found.
 // kept across runs: put back by layer_back_forget; let go as a frame's targets come (frame_paint)
-let layer_retired_ids : Set[Int] = Set::new()
+let layer_retired_ids : Set[Int] = Set([])
 
 ///|
 fn layer_back_forget() -> Unit {

@@ -156,7 +156,7 @@ test "a film waiting in the composer, opened, plays from the bytes picked: none 
   let got : Array[(Bytes, Double, Bool)] = []
   (track.read)(1000.0, 100, fn(b, size, more) { got.push((b, size, more)) }) |> ignore
   assert_eq(got.length(), 1)
-  assert_eq(got[0].0, film[1000:1100].to_bytes())
+  assert_eq(got[0].0, film[1000:1100].to_owned())
   assert_eq(got[0].1, 4096.0)
   assert_false(got[0].2)
   assert_eq(named(calls, "station.file.part").length(), 0)

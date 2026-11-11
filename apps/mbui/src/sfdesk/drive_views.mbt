@@ -534,7 +534,7 @@ pub fn columns_view(
   halves? : Bool = false,
   empty? : () -> Unit,
 ) -> Unit {
-  let parts = if open == "" { [] } else { open.split("/").map(fn(p) { p.to_string() }).collect() }
+  let parts = if open == "" { [] } else { open.split("/").map(fn(p) { p.to_owned() }).collect() }
   let paths = [at.path]
   let mut so_far = at.path
   for p in parts {

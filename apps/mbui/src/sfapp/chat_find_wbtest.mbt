@@ -207,7 +207,7 @@ fn outline_let_go(held : OutlineHeld) -> Unit {
 /// The seqs each `chat.outline.rows` asked for.
 fn outline_rows_asked(calls : Array[Made]) -> Array[Array[Double]] {
   named(calls, "chat.outline.rows").map(fn(m) {
-    items(Some(m.params), "seqs").map(fn(q) { q.as_number().unwrap_or(-1.0) })
+    items(Some(m.params), "seqs").map(fn(q) { (if q is Number(n, ..) { Some(n) } else { None }).unwrap_or(-1.0) })
   })
 }
 
@@ -471,17 +471,17 @@ fn outline_drawn(t : @ui.Tester, kind : String) -> Array[(Double, Double, Double
   t
   .frame_export()
   .filter_map(fn(l) {
-    let p = l.split(" ").map(fn(s) { s.to_string() }).collect()
+    let p = l.split(" ").map(fn(s) { s.to_owned() }).collect()
     guard p.length() > 5 && p[0] == kind else { return None }
     let n = fn(s : String) {
       let j = try Some(@json.parse(s)) catch { _ => None }
       match j {
-        Some(j) => j.as_number().unwrap_or(-1.0)
+        Some(j) => (if j is Number(n, ..) { Some(n) } else { None }).unwrap_or(-1.0)
         None => -1.0
       }
     }
     let words = match l.find("\"") {
-      Some(i) => l.view(start_offset=i + 1).to_string().trim_end(chars="\"").to_string()
+      Some(i) => l.view(start_offset=i + 1).to_owned().trim_end(chars="\"").to_owned()
       None => ""
     }
     Some((n(p[1]), n(p[2]), n(p[3]), n(p[4]), p[5], words))
@@ -493,7 +493,7 @@ fn outline_drawn(t : @ui.Tester, kind : String) -> Array[(Double, Double, Double
 fn outline_hex(c : Int64) -> String {
   let v = ((c >> 8) & 0xffffffL).to_int()
   let digits = "0123456789abcdef"
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   out.write_char('#')
   for i in 0..<6 {
     out.write_char(digits[(v >> ((5 - i) * 4)) & 15].unsafe_to_char())
@@ -807,9 +807,9 @@ test "对话目录: a person's message said while it is open adds its row, askin
       let cut : Json = {
         "date": field(Some(last), "date").unwrap(),
         "day": field(Some(last), "day").unwrap(),
-        "seqs": Json::array(seqs[:seqs.length() - 1].to_array()),
+        "seqs": Json::array(seqs[:seqs.length() - 1].to_owned()),
       }
-      o["days"] = Json::array(days[:days.length() - 1].to_array() + [cut])
+      o["days"] = Json::array(days[:days.length() - 1].to_owned() + [cut])
       Json::object(o)
     }
     _ => full
@@ -823,7 +823,7 @@ test "对话目录: a person's message said while it is open adds its row, askin
   // (its words in the panel, as the core cuts a row's: they begin as it does)
   let shows = fn() {
     let (px, _, _, _) = outline_panel(t).unwrap()
-    outline_drawn(t, "glyphs").filter(fn(g) { g.0 >= px && g.5.has_prefix(row.view(end_offset=20).to_string()) }).length()
+    outline_drawn(t, "glyphs").filter(fn(g) { g.0 >= px && g.5.has_prefix(row.view(end_offset=20).to_owned()) }).length()
   }
   assert_eq(shows(), 0)
   live.set(Some(full))
@@ -957,7 +957,7 @@ fn outline_long_tick(m : Int, seq : Double) -> Int {
   let seqs : Array[Double] = []
   for d in items(index, "days") {
     for q in items(Some(d), "seqs") {
-      seqs.push(q.as_number().unwrap_or(-1.0))
+      seqs.push((if q is Number(n, ..) { Some(n) } else { None }).unwrap_or(-1.0))
     }
   }
   seqs.search(seq).unwrap_or(-1) * m / seqs.length()
@@ -981,8 +981,8 @@ test "对话目录: the longer chat's rail a steady map, its ticks where they we
   t.run_for(@ui.move_most_ms)
   let p = outline_tick_places(t)
   assert_eq(ys(p), ys(first))
-  let went = (try Some(@json.parse(outline_reading().flash.view(start_offset=2).to_string())) catch { _ => None })
-    .bind(fn(j) { j.as_number() })
+  let went = (try Some(@json.parse(outline_reading().flash.view(start_offset=2).to_owned())) catch { _ => None })
+    .bind(fn(j) { (if j is Number(n, ..) { Some(n) } else { None }) })
     .unwrap_or(-1.0)
   assert_eq(long(p), [outline_long_tick(m, went)])
   // scrolled up through some messages by the hand: one long, all where they were

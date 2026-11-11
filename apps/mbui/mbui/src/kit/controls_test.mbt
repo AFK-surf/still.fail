@@ -274,7 +274,7 @@ test "slider: the arrows a step, Page keys ten, Home and End the ends; Increment
   assert_eq(s.value, "0")
   assert_eq(s.range, Some((0.0, 0.0, 100.0)), msg="its least, where it is, its most")
   let told = t.ctx().a11y_lines().split("\n").filter(fn(l) { l.contains("Slider") }).to_array()
-  let f = told[0].split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+  let f = told[0].split("\u{1F}").map(fn(v) { v.to_owned() }).to_array()
   assert_eq([f[12], f[13], f[14]], [(0.0).to_string(), (0.0).to_string(), (100.0).to_string()], msg="told the host so")
 }
 

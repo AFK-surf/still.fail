@@ -74,7 +74,7 @@ test "a layer in a stack's top page, in an old view over a node of the tree's ta
 
 ///|
 /// A layer said as `key` while `open` holds (Ctx::overlay), its dismissal (`why`) put down in `said` and closing it.
-fn layer_while(c : Ctx, key : String, open : Ref[Bool], said : Array[String], ids? : Map[String, Int] = Map::new()) -> Unit {
+fn layer_while(c : Ctx, key : String, open : Ref[Bool], said : Array[String], ids? : Map[String, Int] = Map([])) -> Unit {
   if !open.val {
     return
   }
@@ -91,7 +91,7 @@ test "two layers in a stack's top page, in an old view over a node of the tree's
   let tree_backs = Ref(0)
   let a = Ref(true)
   let b = Ref(true)
-  let ids : Map[String, Int] = Map::new()
+  let ids : Map[String, Int] = Map([])
   let said : Array[String] = []
   let nav : Nav[String] = Nav::new("a")
   nav.push("b")

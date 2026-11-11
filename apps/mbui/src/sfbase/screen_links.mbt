@@ -740,7 +740,7 @@ pub fn peeks_settle(c : @ui.Ctx, src : Source) -> Unit {
       @ui.add_image(p.pictures[i], b"")
     }
     if newest > 0 {
-      let rest = p.pictures[newest:].to_array()
+      let rest = p.pictures[newest:].to_owned()
       p.pictures.clear()
       p.pictures.append(rest)
     }

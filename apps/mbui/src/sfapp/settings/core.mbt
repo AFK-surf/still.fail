@@ -293,7 +293,7 @@ pub fn error_text(e : Json) -> String {
 
 ///|
 pub fn obj(pairs : Array[(String, Json)]) -> Json {
-  let m : Map[String, Json] = Map::new()
+  let m : Map[String, Json] = Map([])
   for p in pairs {
     m[p.0] = p.1
   }
@@ -350,7 +350,7 @@ pub fn failed_of(core : Core, calls : Array[String], on : Array[(String, String)
 
 ///|
 fn doing_items(core : Core) -> Array[Json] {
-  items((core.topic)("doing", Map::new()).get().value, "doing")
+  items((core.topic)("doing", Map([])).get().value, "doing")
 }
 
 ///|
@@ -457,7 +457,7 @@ pub fn workspace_of(address : String) -> String {
 ///|
 /// The workspace `id` and the account it is reached through, from the `workspaces` topic (AccountWorkspaces).
 pub fn here_of(core : Core, id : String, name : String) -> Here {
-  let ws = (core.topic)("workspaces", Map::new()).get()
+  let ws = (core.topic)("workspaces", Map([])).get()
   match ws.value {
     Some(Array(accounts)) =>
       for a in accounts {

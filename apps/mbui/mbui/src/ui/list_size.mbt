@@ -604,7 +604,7 @@ pub struct ListRows[T] {
 
 ///|
 pub fn[T] ListRows::new() -> ListRows[T] {
-  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), not_by_room: Set::new(), opened: {}, stood: {}, carried: {}, anew: Set::new(), leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
+  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set([]), by_room: Set([]), not_by_room: Set([]), opened: {}, stood: {}, carried: {}, anew: Set([]), leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
 }
 
 ///|
@@ -745,7 +745,7 @@ pub fn[T] ListRows::rows(
     // Those that moved are the fewest whose order changed: all but the most rows kept in the order they had (one gone
     // down past others moved, not each it passed, which only kept their order among themselves)
     if !same_keys {
-      let ahead : Set[String] = Set::new()
+      let ahead : Set[String] = Set([])
       let before : Map[String, Int] = {}
       for j, r in self.order {
         before[r.0] = j

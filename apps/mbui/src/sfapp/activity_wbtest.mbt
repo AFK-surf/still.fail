@@ -182,7 +182,7 @@ test "the viewer's own message taller than the list is followed to the end: its 
 
 ///|
 test "its line gone with the answer that came out of its avatar, the agent still at work: not back this turn" {
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
   fix_clock_set(clock, clock.val + fix_answer_ms)
@@ -201,7 +201,7 @@ test "its line gone with the answer that came out of its avatar, the agent still
 ///|
 test "its line stays after a post saying how far it got, the agent still at work: only an answer that ends the turn takes its place" {
   // (2026-11-09 the user: 「agent 发完消息 activity 不出现」, its line gone for the rest of the turn after a progress post)
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   let t = emit_core(clock, words="看下进度")
   let em = emits_of("ws1/st1\u{1}s-c1")
   fix_clock_set(clock, clock.val + fix_answer_ms)

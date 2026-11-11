@@ -387,14 +387,14 @@ fn FieldBox::hint_kept(self : FieldBox) -> (Int, Double)? {
 /// them where that is less.
 fn Node::squeeze_wrap_w(self : Node) -> Double {
   let mut widest = 0.0
-  let mut word = StringBuilder::new()
+  let mut word = StringBuilder()
   let mut in_word = false
   // (a word ends where a line may: a space, a zero-width space, a CJK character)
   for ch in self.text + " " {
     if ch == ' ' || ch == '\n' || ch == '\t' || ch == '\u{200B}' || ch.to_int() >= 0x2E80 {
       if in_word {
         widest = dmax(widest, text_advance(word.to_string(), size=self.font_size, weight=self.weight))
-        word = StringBuilder::new()
+        word = StringBuilder()
         in_word = false
       }
     } else {

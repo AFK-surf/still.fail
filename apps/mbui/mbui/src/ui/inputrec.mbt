@@ -19,14 +19,14 @@ fn draw_logging() -> Bool {
 /// An input came between two frames (any of the host's: a pointer's, a key's…): the next frame is the framework's to
 /// draw, and the one after it, for what was changed by what read the input late in a frame (a list's rows are built
 /// after the rest). Kept on the log when it is (MBUI_DRAW_LOG).
-let inputs_since : Ref[Bool] = Ref::new(false)
+let inputs_since : Ref[Bool] = Ref(false)
 
 ///|
 /// An input came between two frames that what is built takes (a press, a key, words typed, a drag, a wheel): the
 /// frame after the next is built, for what it changed late in it that is no signal yet (what the build itself keeps of
 /// a press: a menu shut). Not a pointer moved with nothing down: what changes of where it is, what
 /// reads it reads (hand.mbt).
-let inputs_taken : Ref[Bool] = Ref::new(false)
+let inputs_taken : Ref[Bool] = Ref(false)
 
 ///|
 /// `typed`: an input that goes into the field with the focus (words typed, a key of the field's own), the part of the

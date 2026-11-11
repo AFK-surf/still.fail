@@ -241,7 +241,7 @@ fn md_paragraph_kind(md : MdNode, xs : Array[MdInline]) -> Int {
 fn md_parts_of(xs : Array[MdInline]) -> Array[MdInline] {
   xs.filter(fn(x) {
     match x {
-      Text(t) => t.trim(chars=" \n\t").to_string() != ""
+      Text(t) => t.trim(chars=" \n\t").to_owned() != ""
       _ => true
     }
   })
@@ -1014,7 +1014,7 @@ fn md_placed_runs(md : MdNode, xs : Array[MdInline]) -> Array[(Int, Array[MdInli
   let flush = fn() {
     if run.iter().any(fn(x) {
         match x {
-          Text(t) => t.trim(chars=" ").to_string() != ""
+          Text(t) => t.trim(chars=" ").to_owned() != ""
           HardBreak => false
           _ => true
         }

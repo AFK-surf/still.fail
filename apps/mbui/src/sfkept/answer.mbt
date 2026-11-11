@@ -22,7 +22,7 @@ fn kept(call : String) -> Map[String, Json] {
       // an answer a line: [call, key, answer]
       let t : Map[String, Json] = {}
       for line in kept_answers.split("\n") {
-        match (@json.parse(line.to_string()) catch { _ => Json::null() }) {
+        match (@json.parse(line.to_owned()) catch { _ => Json::null() }) {
           Array([String(call), String(key), answer]) =>
             match t.get(call) {
               Some(Object(m)) => m[key] = answer
@@ -253,7 +253,7 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
                 Some(Object(s)) if s.get(query) is Some(at) => Some(Ok(({ "at": at }, None)))
                 _ => {
                   let (markdown, text) = match key.split("\u{1}").next() {
-                    Some(m) => (m == "md", key.view(start_offset=m.length() + 1).to_string())
+                    Some(m) => (m == "md", key.view(start_offset=m.length() + 1).to_owned())
                     None => (false, key)
                   }
                   not_kept({
@@ -288,7 +288,7 @@ fn book_text(key : String) -> String {
     Some(Object(entry)) if entry.get("text") is Some(String(t)) => t
     _ =>
       match key.split("\u{1}").next() {
-        Some(m) => key.view(start_offset=m.length() + 1).to_string()
+        Some(m) => key.view(start_offset=m.length() + 1).to_owned()
         None => key
       }
   }

@@ -94,7 +94,7 @@ pub fn size_kept(v : Viewport?) -> Json {
 ///|
 /// A size the core kept (size_kept's), within the sizes a page can take; None for none, or one that does not read.
 pub fn size_of_kept(s : String) -> Viewport? {
-  let parts = s.split("x").map(fn(x) { x.to_string() }).to_array()
+  let parts = s.split("x").map(fn(x) { x.to_owned() }).to_array()
   let num = fn(x : String) -> Int? {
     if x.length() > 4 {
       None
@@ -655,7 +655,7 @@ pub fn no_fragment(s : String) -> String {
 /// A path from the root with its `.` and `..` segments taken out (RFC 3986 remove_dot_segments, as URI.resolve does).
 pub fn dots_out(path : String) -> String {
   let out : Array[String] = []
-  let parts = path.split("/").map(fn(v) { v.to_string() }).to_array()
+  let parts = path.split("/").map(fn(v) { v.to_owned() }).to_array()
   for i, seg in parts {
     let last = i == parts.length() - 1
     if i == 0 {
@@ -756,7 +756,7 @@ pub fn size_of(s : String) -> Int? {
 ///|
 /// Digits only, four at most (a size typed).
 pub fn size_digits(s : String) -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   let mut n = 0
   for ch in s {
     if ch >= '0' && ch <= '9' && n < 4 {

@@ -84,7 +84,7 @@ fn real_changelog(params : Map[String, Json]) -> Json {
       None => all
       Some(l) if part == asked => {
         more.val = @cmp.maximum(0, all.length() - l)
-        all[:@cmp.minimum(l, all.length())].to_array()
+        all[:@cmp.minimum(l, all.length())].to_owned()
       }
       Some(_) => []
     }

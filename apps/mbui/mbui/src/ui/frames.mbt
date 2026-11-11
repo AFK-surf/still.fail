@@ -184,10 +184,10 @@ fn drawn_hash() -> Int64 {
 /// stable: 1 when the host asked for output the same on every run, MBUI_BENCH=-1),
 /// for a Tester over the host's kept text (textrec.mbt) given the same frames (`replay_frames`) to be checked against:
 /// -1 not asked yet, 0 no, 1 yes.
-let draw_log : Ref[Int] = Ref::new(-1)
+let draw_log : Ref[Int] = Ref(-1)
 
 ///|
-let draw_frames : Ref[Int] = Ref::new(0)
+let draw_frames : Ref[Int] = Ref(0)
 
 ///|
 fn log_drawn(w : Double, h : Double, scale : Double, t : Double) -> Unit {

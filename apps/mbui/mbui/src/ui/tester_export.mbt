@@ -32,7 +32,7 @@ pub fn Tester::frame_export(self : Tester) -> Array[String] {
     let n = (v * 255.0).round().to_int()
     let n = if n < 0 { 0 } else if n > 255 { 255 } else { n }
     let d = "0123456789abcdef"
-    d[n / 16:n / 16 + 1].to_string() + d[n % 16:n % 16 + 1].to_string()
+    d[n / 16:n / 16 + 1].to_owned() + d[n % 16:n % 16 + 1].to_owned()
   }
   let kind_of = fn(k : Double) -> String {
     match k.to_int() {

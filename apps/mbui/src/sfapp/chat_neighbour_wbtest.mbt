@@ -3,7 +3,7 @@
 ///|
 test "chat neighbours: a list held under the pointer is traversed in its displayed order" {
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)

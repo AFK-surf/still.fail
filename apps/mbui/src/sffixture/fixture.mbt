@@ -117,7 +117,7 @@ pub fn fixture_tabs_shown(mode : String) -> Map[String, Json] {
 /// far as their tabs go, whether it has a chat yet, its session; the `change`, when one is made), as kept.
 pub fn fixture_tabs_ask(f : Fixture, key : String, chat : Json?, change : Json?) -> Json {
   let (station, rest) = match key.find(":") {
-    Some(i) => (key.view(end_offset=i).to_string(), key.view(start_offset=i + 1).to_string())
+    Some(i) => (key.view(end_offset=i).to_owned(), key.view(start_offset=i + 1).to_owned())
     None => ("", "")
   }
   let agents = items(chat, "agents").map(fn(a) {
@@ -169,13 +169,13 @@ pub fn fixture_tabs_call(f : Fixture, name : String, params : Json) -> Result[Js
   let chat = match key.find(":") {
     Some(i) if key.view(end_offset=i).contains("/") =>
       fixture_topic_inner(f, "chat", {
-        "station": Json::string(key.view(end_offset=i).to_string()),
-        "session": Json::string(key.view(start_offset=i + 1).to_string()),
+        "station": Json::string(key.view(end_offset=i).to_owned()),
+        "session": Json::string(key.view(start_offset=i + 1).to_owned()),
       })
     _ => None
   }
   let change : Json = {
-    "action": Json::string(name.view(start_offset="chat.tabs.".length()).to_string()),
+    "action": Json::string(name.view(start_offset="chat.tabs.".length()).to_owned()),
     "tab": match field(Some(params), "tab") {
       Some(String(t)) => Json::string(t)
       _ => Json::null()
@@ -739,7 +739,7 @@ fn first_rows(days : Array[Json], window : Int) -> (Array[Json], Int) {
       match d {
         Object(m) => {
           let v = m.copy()
-          v["items"] = Json::array(its[:left].to_array())
+          v["items"] = Json::array(its[:left].to_owned())
           out.push(Json::object(v))
         }
         _ => out.push(d)

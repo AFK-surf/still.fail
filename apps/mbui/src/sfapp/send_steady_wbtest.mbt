@@ -306,7 +306,7 @@ test "words sent while the words sent before them still fly: those go on to thei
       let (step, when) = sent_soon_step(soon, deliver) catch {
         e => {
           let said = e.to_string()
-          let cut = if said.length() > 900 { said.view(end_offset=900).to_string() } else { said }
+          let cut = if said.length() > 900 { said.view(end_offset=900).to_owned() } else { said }
           bad.push("soon \{soon} deliver \{deliver}: " + cut.replace_all(old="\n", new=" "))
           continue
         }
@@ -334,7 +334,7 @@ test "words sent before the words sent before them are out of the field: never d
     let _ = sent_soon_step(soon, 100.0) catch {
       e => {
         let said = e.to_string()
-        let cut = if said.length() > 900 { said.view(end_offset=900).to_string() } else { said }
+        let cut = if said.length() > 900 { said.view(end_offset=900).to_owned() } else { said }
         bad.push("\{-soon} ms after: " + cut.replace_all(old="\n", new=" "))
         continue
       }

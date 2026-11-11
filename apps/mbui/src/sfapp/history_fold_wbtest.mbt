@@ -6,7 +6,7 @@
 /// A page of an agent's work, a message to it of `lines` lines among it.
 fn fold_history(lines : Int) -> Json {
   let items : Array[Json] = []
-  let long = StringBuilder::new()
+  let long = StringBuilder()
   for q in 0..<lines {
     long.write_string("第 \{q} 行，一段很长的话，反复出现用来撑出很多行的文字。\n")
   }

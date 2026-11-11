@@ -138,7 +138,7 @@ pub fn fix_context_actions(chat : Json) -> Json {
               let ao = am.copy()
               let session = match am.get("session") {
                 Some(Object(sm)) => sm.copy()
-                _ => Map::new()
+                _ => Map([])
               }
               session["canCompact"] = Json::boolean(true)
               session["canClear"] = Json::boolean(true)

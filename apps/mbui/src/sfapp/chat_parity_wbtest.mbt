@@ -139,7 +139,7 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
   t.frame()
   let sent = named(calls, "chat.report")
   assert_eq(sent.length(), 1)
-  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
+  assert_eq(t.haptics()[felt:].to_owned(), [@ui.Confirm])
   assert_eq(number(Some(sent[0].params), "seq"), 9.0)
   assert_eq(number(Some(sent[0].params), "thread"), 7.0)
   assert_eq(text(Some(sent[0].params), "station"), "ws1/st1")
@@ -150,7 +150,7 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
 ///|
 test "an overload notice offers to cancel its retry at the notice" {
   let calls : Array[Made] = []
-  let retrying = Ref::new(true)
+  let retrying = Ref(true)
   let epoch = @signals.signal(0)
   let t = edited_core(
     calls,
@@ -360,7 +360,7 @@ test "a Slack user's name in a history: 这是我 binds them to the viewer (slac
   let t = edited_core(calls, "history", fn(name, v) {
     if name == "history" {
       // (that item alone: the steps open at their newest, and it in view)
-      with_fields(v, [("items", Json::array(items(Some(v), "items").map(slack_from)[:1].to_array()))])
+      with_fields(v, [("items", Json::array(items(Some(v), "items").map(slack_from)[:1].to_owned()))])
     } else {
       v
     }
@@ -442,16 +442,16 @@ test "a station's failed update stays out of the chat bar even when its notice w
 fn words_node(t : @ui.Tester, s : String) -> (Double, Double)? {
   let want = " \"" + s + "\" "
   for l in t.dump().split("\n") {
-    let l = l.trim_start(chars=" ").to_string()
+    let l = l.trim_start(chars=" ").to_owned()
     if l.has_prefix("text ") && l.contains(want) {
       // "text x,y wxh \"…\" lines=n"
       let parts = l.split(" ").collect()
       let xy = parts[1].split(",").collect()
       let wh = parts[2].split("x").collect()
-      let x = dump_number(xy[0].to_string())
-      let y = dump_number(xy[1].to_string())
-      let w = dump_number(wh[0].to_string())
-      let h = dump_number(wh[1].to_string())
+      let x = dump_number(xy[0].to_owned())
+      let y = dump_number(xy[1].to_owned())
+      let w = dump_number(wh[0].to_owned())
+      let h = dump_number(wh[1].to_owned())
       return Some((x + w / 2.0, y + h / 2.0))
     }
   }

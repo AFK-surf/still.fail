@@ -958,7 +958,7 @@ test "a swipe back from the left edge of a page under a modal layer: none while 
   at(t, t0 + 64.0, 2, 300.0)
   t.frame_at(t0 + 64.0 + move_most_ms)
   assert_true(begun > 0 && told[0] == 0, msg="\{told}")
-  assert_eq(told[begun:].to_array(), [3])
+  assert_eq(told[begun:].to_owned(), [3])
   assert_eq(nav.depth(), 2)
 }
 
@@ -1167,7 +1167,7 @@ fn back_let_go_of(how : Int) -> (Array[String], Array[Bool], Array[String]) {
   back(80.0, 1, 200.0, 0.6)
   back(96.0, 2, 0.0, 1.0)
   t.frame_at(t0 + 200.0)
-  (by_then, at_own, told[by_then.length():].to_array())
+  (by_then, at_own, told[by_then.length():].to_owned())
 }
 
 ///|
@@ -1269,7 +1269,7 @@ test "the system's back of an old view going on as the window's tree is made ane
     back(120.0, 0, 0.0, 0.0)
     back(136.0, 2, 0.0, 1.0)
     let now = if how == "tree" { "B" } else { "A" }
-    assert_eq(told[3:].to_array().map(fn(e) { e.0 }), ["\{now} began", "\{now} back"], msg=how)
+    assert_eq(told[3:].to_owned().map(fn(e) { e.0 }), ["\{now} began", "\{now} back"], msg=how)
   }
 }
 

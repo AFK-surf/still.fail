@@ -1,6 +1,6 @@
 ///|
 test "a press says the keys held as it went down, whatever is held or let go of after" {
-  let seen : Ref[@ui.Press?] = Ref::new(None)
+  let seen : Ref[@ui.Press?] = Ref(None)
   let t = @ui.Tester::new(
     fn(c) {
       let p = c.press()

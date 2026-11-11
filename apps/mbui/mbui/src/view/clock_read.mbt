@@ -51,7 +51,7 @@ let clock_read_places : Map[String, Array[String]] = {}
 /// The file of a place (`module/path:line`).
 fn place_file(place : String) -> String {
   match place.rev_find(":") {
-    Some(k) => place[:k].to_string()
+    Some(k) => place[:k].to_owned()
     None => place
   }
 }

@@ -343,7 +343,7 @@ fn typeahead(c : @ui.Ctx, pid : Int, entries : Array[Entry], ids : Array[Int], l
     }
   }
   // the same letter again moves on to the next it starts; more letters stay on the one that matches
-  let first = typed.view(start_offset=0, end_offset=1).to_string()
+  let first = typed.view(start_offset=0, end_offset=1).to_owned()
   let same = typed.iter().all(fn(ch) { ch.to_string() == first })
   let want = if same { first } else { typed }
   let from = if same { at + 1 } else { imax(at, 0) }

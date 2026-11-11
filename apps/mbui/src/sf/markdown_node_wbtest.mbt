@@ -304,7 +304,7 @@ fn mlines_tester(node : Bool, code : String, ink : String?, w : Double, scale : 
 /// the words holding its first line.
 fn mlines_at(t : @ui.Tester, code : String) -> (Array[String], String) {
   let r2 = fn(x : Double) { (x * 100.0).round() / 100.0 }
-  let lines = code.split("\n").to_array().filter(fn(l) { l != "" }).map(fn(l) { l.to_string() })
+  let lines = code.split("\n").to_array().filter(fn(l) { l != "" }).map(fn(l) { l.to_owned() })
   let at = lines.map(fn(l) { "\{l}: \{t.run_rects(l).map(fn(r) { (r2(r.0), r2(r.1), r2(r.2), r2(r.3)) })}" })
   let first = match t.rect_of(lines[0]) {
     Some(r) => "\{(r2(r.0), r2(r.1), r2(r.2), r2(r.3))}"
@@ -349,7 +349,7 @@ fn mlines_alike(wrapped : Bool) -> Unit raise {
             msg="\{at}: \{made_drawn.length()} drawn, \{old_drawn.length()} old;\nonly made \{only_made.iter().take(8).collect()}\nonly old  \{only_old.iter().take(8).collect()}",
           )
           // (each a line of its own, one under the other)
-          let rows = code.split("\n").to_array().filter(fn(l) { l != "" }).map(fn(l) { made_t.run_rects(l.to_string()) })
+          let rows = code.split("\n").to_array().filter(fn(l) { l != "" }).map(fn(l) { made_t.run_rects(l.to_owned()) })
           assert_true(rows.iter().all(fn(r) { r.length() == 1 }), msg="\{at}: \{rows}")
           for k in 1..<rows.length() {
             assert_true(rows[k][0].1 > rows[k - 1][0].1, msg="\{at}: \{rows}")

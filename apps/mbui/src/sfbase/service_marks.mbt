@@ -373,7 +373,7 @@ pub fn page_marks_frame(p : ServicePage, site : @ui.NativeView) -> Unit {
             (
               svc("android-chat.preview.mark.quote", args=[("name", name), ("n", mark.n.to_string())]),
               mark_where(mark, file),
-              mark.comment.trim(chars=" \n\t").to_string(),
+              mark.comment.trim(chars=" \n\t").to_owned(),
             ),
           ))
           s.i += 1

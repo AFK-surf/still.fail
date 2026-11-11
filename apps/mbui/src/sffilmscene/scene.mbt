@@ -32,10 +32,10 @@ pub fn source(arg : (String) -> String) -> () -> @sfapp.Source {
         if arg("MBUI_UPDATE") != "" { @sffixture.fixture_update(arg("MBUI_UPDATE")) }
         let s = if late > 0.0 { @sffixture.round_trip(s, late) } else { s }
         let held = arg("MBUI_HOLD")
-        let s = if held != "" { @sffixture.held_topics(s, held.split(",").map(fn(x) { x.to_string() }).collect()) } else { s }
+        let s = if held != "" { @sffixture.held_topics(s, held.split(",").map(fn(x) { x.to_owned() }).collect()) } else { s }
         let failed = arg("MBUI_FAILED")
         let s = if failed != "" {
-          @sffixture.failed_topics(s, failed.split(",").map(fn(x) { x.to_string() }).collect(), arg("MBUI_FAILED_WHY"))
+          @sffixture.failed_topics(s, failed.split(",").map(fn(x) { x.to_owned() }).collect(), arg("MBUI_FAILED_WHY"))
         } else { s }
         let s = if arg("MBUI_SAID") == "1" { @sffixture.said_longest_source(s) } else { s }
         if dark { @sf.set_dark(Some(true)) }

@@ -465,7 +465,7 @@ fn main {
     // scripted runs: a chat opened by words in its title once Home lists it (MBUI_OPEN_CHAT), or by its station and
     // session at once (MBUI_OPEN_SESSION=<workspace>/<station>|<session>)
     @sfapp.open_titled.val = @ui.env("MBUI_OPEN_CHAT")
-    match @ui.env("MBUI_OPEN_SESSION").split("|").map(fn(v) { v.to_string() }).to_array() {
+    match @ui.env("MBUI_OPEN_SESSION").split("|").map(fn(v) { v.to_owned() }).to_array() {
       [station, session] =>
         @sfapp.open_chat({ station, session, title: "", station_name: "" })
       _ => ()

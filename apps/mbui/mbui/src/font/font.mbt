@@ -54,7 +54,7 @@ fn u32(b : Bytes, i : Int) -> Int {
 
 ///|
 fn tag_at(b : Bytes, i : Int) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   for k in 0..<4 {
     sb.write_char(Int::unsafe_to_char(u8(b, i + k)))
   }
@@ -551,7 +551,7 @@ pub fn Face::names(self : Face) -> Array[NameRecord] {
     let len = u16(b, r + 8)
     let off = storage + u16(b, r + 10)
     let text = if platform == 0 || (platform == 3 && (encoding == 0 || encoding == 1 || encoding == 10)) {
-      let sb = StringBuilder::new()
+      let sb = StringBuilder()
       let mut i = 0
       while i + 1 < len {
         let u = u16(b, off + i)
@@ -566,7 +566,7 @@ pub fn Face::names(self : Face) -> Array[NameRecord] {
       }
       Some(sb.to_string())
     } else if platform == 1 && encoding == 0 {
-      let sb = StringBuilder::new()
+      let sb = StringBuilder()
       for i in 0..<len {
         sb.write_char(Int::unsafe_to_char(mac_roman(u8(b, off + i))))
       }

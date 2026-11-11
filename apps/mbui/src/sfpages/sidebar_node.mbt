@@ -589,7 +589,7 @@ fn RowsMotion::said(
   let watched = watched && self.had && !lines.is_empty()
   if watched && !(was == lines) {
     let now = v.cause_at()
-    let here : Set[String] = Set::new()
+    let here : Set[String] = Set([])
     for k in lines {
       here.add(k)
     }
@@ -617,7 +617,7 @@ fn RowsMotion::said(
       }
     }
     let kept = kept_in_order(was_at)
-    let ahead : Set[String] = Set::new()
+    let ahead : Set[String] = Set([])
     for n, k in at {
       if !kept[n] {
         ahead.add(k)

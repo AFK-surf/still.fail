@@ -156,8 +156,8 @@ pub fn Flow::take(self : Flow, bytes : Bytes) -> Unit {
     b.to_bytes()
   }
   let end = if self.whole() { all.length() } else { utf8_whole(all) }
-  self.carry = all[end:].to_bytes()
-  let words = self.tail + @codec.utf8_text(all[:end].to_bytes(), end)
+  self.carry = all[end:].to_owned()
+  let words = self.tail + @codec.utf8_text(all[:end].to_owned(), end)
   let parts = words.split("\n").map(fn(s) { s.to_owned() }).to_array()
   self.tail = parts.pop().unwrap_or("")
   let from = self.lines.length()

@@ -70,7 +70,7 @@ fn tab_from_field(takes : Bool, bound : Bool, back : Bool) -> (String, Int) rais
   t.frame()
   let said = t.focus_said()
   let at = match said.find(" at ") {
-    Some(i) => said.view(end_offset=i).to_string()
+    Some(i) => said.view(end_offset=i).to_owned()
     None => said
   }
   (at, asked.val)

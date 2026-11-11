@@ -267,11 +267,11 @@ pub fn Flow::start(
   r.clock(fn() { t.time() })
   // the run's core answering as it did: what is due is posted as each frame ends, taken by the next (but while a
   // waiting step is given what came for it a message at a time: Flow::until)
-  let one_by_one = Ref::new(false)
+  let one_by_one = Ref(false)
   // (the last of the run's frames given to the Tester's display)
-  let frames_to = Ref::new(-@double.infinity)
+  let frames_to = Ref(-@double.infinity)
   let said : Array[String] = []
-  let followed = Ref::new("")
+  let followed = Ref("")
   let follow_ys : Array[(Double, Double)] = []
   // (and when the next is due, a frame drawn then however the clock is run on: what came at a time came at it)
   // (what the run's host said comes before the frame it was said for: given as a frame ends, it is the next one's, by
@@ -881,7 +881,7 @@ pub fn Flow::paste_n(self : Flow, n : Int, s : String) -> Unit {
     return
   }
   emit("pasten \{n} " + s)
-  let words = StringBuilder::new()
+  let words = StringBuilder()
   let chars = s.to_array()
   for i in 0..<n {
     words.write_char(chars[i % chars.length()])

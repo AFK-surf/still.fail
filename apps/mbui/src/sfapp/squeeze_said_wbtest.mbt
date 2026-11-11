@@ -75,4 +75,4 @@ let said_modes : Array[String] = [
 ///|
 /// What each screen still has squeezed with what people wrote at its longest, by window, language and screen: the bar
 /// it may only fall from. A screen not listed has none.
-let said_known : Map[String, Int] = Map::new()
+let said_known : Map[String, Int] = Map([])

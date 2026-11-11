@@ -24,7 +24,7 @@ fn lock_prompts_reset() -> Unit {
 /// The oldest device waiting on this one's code, put up in a sheet when nothing else is (`free`: no sheet of the
 /// app's up): call each frame, over the pages.
 pub fn lock_prompts(core : Core, free : Bool) -> Unit {
-  let prompts = (core.topic)("lockPrompts", Map::new()).get().value
+  let prompts = (core.topic)("lockPrompts", Map([])).get().value
   let pairing = items(prompts, "pairing")
   if prompts is Some(_) {
     prompts_closed.retain(fn(d) { pairing.iter().any(fn(r) { ask_of(r) == d }) })

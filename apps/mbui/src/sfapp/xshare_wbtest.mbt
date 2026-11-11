@@ -187,7 +187,7 @@ fn xshare_told(calls : Array[Made]) -> (Array[String], Bool) {
   let made = named(calls, "chat.xshare")
   guard made.length() == 1 else { @halt.saying("chat.xshare told \{made.length()} times") }
   let to = match field(Some(made[0].params), "to") {
-    Some(Array(to)) => to.map(fn(j) { j.as_string().unwrap_or("?") })
+    Some(Array(to)) => to.map(fn(j) { (if j is String(s) { Some(s) } else { None }).unwrap_or("?") })
     _ => @halt.saying("no workspaces said")
   }
   (to, flag(Some(made[0].params), "write"))

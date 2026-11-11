@@ -351,7 +351,7 @@ test "marks drawn onto an image are kept for the test, a PNG made by the next fr
   match made.val {
     Some(png) => {
       assert_true(png.length() > 8)
-      assert_eq(png[0:8].to_bytes(), b"\x89PNG\r\n\x1A\n")
+      assert_eq(png[0:8].to_owned(), b"\x89PNG\r\n\x1A\n")
     }
     None => fail("no PNG made")
   }
@@ -502,7 +502,7 @@ test "a native view between pixels is placed on whole device pixels, its hole an
       .split(" ")
       .to_array()
       .filter_map(fn(p) {
-        match (try Some(@json.parse(p.to_string())) catch { _ => None }) {
+        match (try Some(@json.parse(p.to_owned())) catch { _ => None }) {
           Some(Number(d, ..)) => Some(d)
           _ => None
         }

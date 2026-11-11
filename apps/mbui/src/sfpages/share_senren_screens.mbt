@@ -17,7 +17,7 @@ fn gc_args(fleet : Json?) -> Array[(String, String)] {
 ///|
 /// What follows a figure in what is said of it (「57 个」: 个), its space left out; "" for none.
 fn gc_unit(value : String) -> String {
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   let mut seen = false
   let mut started = false
   for ch in value {
@@ -140,7 +140,7 @@ let gc_edge_ways : Array[(Double, Double)] = [
 ///|
 /// Words spread out, a space between each two of their letters (a title's letters set wide, as CSS's letter-spacing).
 fn gc_spread(words : String) -> String {
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   let mut first = true
   for ch in words {
     if !first {
@@ -156,7 +156,7 @@ fn gc_spread(words : String) -> String {
 /// Words spread out where they are Chinese: a space between two letters only when both are past ASCII (「种 别」, while
 /// 「Length」 stays as it is: Latin letters set apart do not fit a label's column).
 fn gc_spread_han(words : String) -> String {
-  let b = StringBuilder::new()
+  let b = StringBuilder()
   let mut last = ' '
   let mut first = true
   for ch in words {

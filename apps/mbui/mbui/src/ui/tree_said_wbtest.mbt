@@ -211,7 +211,7 @@ test "what can be done to a node of the tree's: Activate where a press does some
   let said = t.a11y_said()
   let line = fn(role : String, label : String) {
     for l in said.split("\n") {
-      let f = l.split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+      let f = l.split("\u{1F}").map(fn(v) { v.to_owned() }).to_array()
       if f.length() == 16 && f[3] == role && f[9] == label {
         return Some(f)
       }

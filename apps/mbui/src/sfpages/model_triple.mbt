@@ -95,7 +95,7 @@ pub fn effort_text(effort : String) -> String {
   } else if effort == "" {
     effort
   } else {
-    effort.view(end_offset=1).to_upper().to_string() + effort.view(start_offset=1).to_string()
+    effort.view(end_offset=1).to_upper().to_owned() + effort.view(start_offset=1).to_owned()
   }
 }
 
@@ -565,7 +565,7 @@ fn triple_body(
   // one panel, the makers and a maker's models side by side)
   let sheet = !@sf.in_small_panel()
   // (typed in its first step, where its search is)
-  let words = if sheet && at != "" { "" } else { contents.query.trim(chars=" ").to_string().to_lower() }
+  let words = if sheet && at != "" { "" } else { contents.query.trim(chars=" ").to_owned().to_lower() }
   // (the search, where the panel's head has none: a sheet's, its head its own)
   if sheet && at == "" && options.length() > 8 {
     c.box(style=triple_search, fn() { triple_find_field(c, contents, v) }) |> ignore
@@ -626,7 +626,7 @@ fn triple_body(
   let kind_asked = if !sheet {
     contents.kind
   } else if at.has_prefix("kind:") {
-    at.view(start_offset=5).to_string()
+    at.view(start_offset=5).to_owned()
   } else {
     triple_no_kind
   }

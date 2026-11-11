@@ -49,7 +49,7 @@ test "a page popped: the stack seen two deep at rest, then one deep with the pag
   assert_true(nav.pop())
   t.draw()
   t.run_for(move_most_ms)
-  assert_eq(seen[before - 1:].to_array(), [(2, false, 0), (1, true, 2), (1, true, 0)])
+  assert_eq(seen[before - 1:].to_owned(), [(2, false, 0), (1, true, 2), (1, true, 0)])
 }
 
 ///|
@@ -63,7 +63,7 @@ test "a page let go of by a finger: as a page popped, never one deep at rest wit
   nav.let_go(0.0)
   t.draw()
   t.run_for(move_most_ms)
-  assert_eq(seen[before - 1:].to_array(), [(2, false, 0), (1, true, 2), (1, true, 0)])
+  assert_eq(seen[before - 1:].to_owned(), [(2, false, 0), (1, true, 2), (1, true, 0)])
 }
 
 ///|
@@ -118,5 +118,5 @@ test "back to the root while a page still comes in: seen coming in, then going b
   assert_true(nav.pop_to(1))
   t.draw()
   t.run_for(move_most_ms)
-  assert_eq(seen[before - 1:].to_array(), [(3, "c", false, 1), (1, "a", true, 2), (1, "a", true, 0)])
+  assert_eq(seen[before - 1:].to_owned(), [(3, "c", false, 1), (1, "a", true, 2), (1, "a", true, 0)])
 }

@@ -602,7 +602,7 @@ let the_source : @sfapp.Source = source()
 
 ///|
 /// Whether this Tester's app has been started (sfcore.begin), as src/stillfail's is before its first frame.
-let started : Ref[Bool] = Ref::new(false)
+let started : Ref[Bool] = Ref(false)
 
 ///|
 fn init {

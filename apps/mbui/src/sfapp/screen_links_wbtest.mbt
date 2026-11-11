@@ -72,7 +72,7 @@ fn inks_of(t : @ui.Tester, words : String) -> Array[Int64] {
 fn image_line(t : @ui.Tester, part : String) -> String {
   for line in t.drawlist().split("\n") {
     if line.contains(part) {
-      return line.to_string()
+      return line.to_owned()
     }
   }
   ""

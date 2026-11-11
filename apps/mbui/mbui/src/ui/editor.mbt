@@ -609,12 +609,12 @@ pub fn FieldEdit::span(self : FieldEdit) -> (Int, Int, Int) {
 pub fn words_changed(was : String, now : String) -> (Int, Int, Int) {
   let most = if was.length() < now.length() { was.length() } else { now.length() }
   let mut start = 0
-  while start < most && was.unsafe_charcode_at(start) == now.unsafe_charcode_at(start) {
+  while start < most && was.unsafe_get(start).to_int() == now.unsafe_get(start).to_int() {
     start += 1
   }
   let mut end = 0
   while end < most - start &&
-        was.unsafe_charcode_at(was.length() - 1 - end) == now.unsafe_charcode_at(now.length() - 1 - end) {
+        was.unsafe_get(was.length() - 1 - end).to_int() == now.unsafe_get(now.length() - 1 - end).to_int() {
     end += 1
   }
   (start, was.length() - end, now.length() - end)

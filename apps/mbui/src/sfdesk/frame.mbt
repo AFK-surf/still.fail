@@ -1234,7 +1234,7 @@ fn side_take(src : Source, ws : String) -> Bool {
   let width_key = "\n" + group
   if wide.side_key != key {
     let kept = field(prefs, "sidebars")
-    let parts = text(kept, key).split(",").map(fn(p) { p.to_string() }).collect()
+    let parts = text(kept, key).split(",").map(fn(p) { p.to_owned() }).collect()
     let closed = parts.contains("closed")
     let own = if parts.length() > 0 && parts[0] != "closed" { parts[0] } else { "" }
     let width = match text(kept, width_key) {

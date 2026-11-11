@@ -92,6 +92,6 @@ test "desktop: words in a box scrolled sideways, scrolled on: a press and a drag
   t.move(x + per * 5.0 + per * 0.25, y + h / 2.0)
   t.release(x + per * 5.0 + per * 0.25, y + h / 2.0)
   let first = (s / per).round().to_int()
-  let want = sideways_edge_line.view(start_offset=first, end_offset=first + 5).to_string()
+  let want = sideways_edge_line.view(start_offset=first, end_offset=first + 5).to_owned()
   assert_eq(t.ctx().selected_text(), want)
 }

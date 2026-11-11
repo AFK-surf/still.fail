@@ -55,7 +55,7 @@ fn return_walk(goes : Int) -> Array[String] {
       came = true
       let now = ids.get()
       let at = now.search(100).unwrap()
-      ids.set(now[:at + 1].to_array() + [200] + now[at + 1:].to_array())
+      ids.set(now[:at + 1].to_owned() + [200] + now[at + 1:].to_owned())
     }
     t.frame()
   }

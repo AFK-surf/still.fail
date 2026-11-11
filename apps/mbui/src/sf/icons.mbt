@@ -365,7 +365,7 @@ fn icon_traced_data(name : String, trace : (Int, Array[Double]) -> Array[Array[D
         let n = d[i + 2].to_int()
         let end = i + 3 + 2 * n
         if d[i].to_int() != 2 {
-          for pts in trace(line, d[i + 3:end].to_array()) {
+          for pts in trace(line, d[i + 3:end].to_owned()) {
             if pts.length() >= 4 {
               data.push(0.0)
               data.push(w)
@@ -514,7 +514,7 @@ fn icon_shapes(data : Array[Double], k : Double, color : Int64) -> Array[@ui.Sha
     let kind = data[i].to_int()
     let w = data[i + 1]
     let n = data[i + 2].to_int()
-    let pts = data[i + 3:i + 3 + 2 * n].to_array().map(fn(v) { v * k })
+    let pts = data[i + 3:i + 3 + 2 * n].to_owned().map(fn(v) { v * k })
     i = i + 3 + 2 * n
     if kind == 2 {
       if w > 0.0 || fills.length() == 0 {

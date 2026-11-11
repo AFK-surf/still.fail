@@ -2,8 +2,8 @@
 
 ///|
 test "back whose word has not the room: the chevron alone, the word not cut, the button still called by it; given the room, the word whole" {
-  let went = Ref::new(0)
-  let room = Ref::new(40.0)
+  let went = Ref(0)
+  let room = Ref(40.0)
   let t = @ui.Tester::new(
     fn(c) {
       begin(c) |> ignore

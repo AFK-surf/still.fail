@@ -22,14 +22,14 @@ priv struct Source {
 pub fn source_place(loc : SourceLoc) -> String {
   let s = loc.to_string()
   let (path, module) = match s.rev_find("@") {
-    Some(i) => (s[:i].to_string(), s[i + 1:].to_string())
+    Some(i) => (s[:i].to_owned(), s[i + 1:].to_owned())
     None => (s, "")
   }
   // (`path:line:col-line:col`: to its first line)
   let path = match path.find(":") {
     Some(i) =>
       match path[i + 1:].find(":") {
-        Some(j) => path[:i + 1 + j].to_string()
+        Some(j) => path[:i + 1 + j].to_owned()
         None => path
       }
     None => path
@@ -80,7 +80,7 @@ pub fn Tree::sources_of(self : Tree, id : NodeId) -> Array[SourceStep] {
         ords.sort()
         let said = ords.map(fn(k) {
           let (p, l) = s.said.get(k).unwrap()
-          (p.to_string(), source_place(l))
+          (Show::to_string(p), source_place(l))
         })
         out.push({
           id: { at, gen: n.gen },
@@ -159,7 +159,7 @@ pub fn Tree::looks_of(self : Tree, id : NodeId) -> Array[String] {
     sb.write_string("#")
     for k = 7; k >= 0; k = k - 1 {
       let v = ((c >> (k * 4)) & 0xFL).to_int()
-      sb.write_string(d[v:v + 1].to_string())
+      sb.write_string(d[v:v + 1].to_owned())
     }
     sb.to_string()
   }

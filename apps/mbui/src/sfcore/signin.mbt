@@ -307,7 +307,7 @@ fn by_hand(step : String) -> Unit {
 
 ///|
 /// The browser login waiting to come back, and who to tell.
-let login : Ref[(@hostapi.BrowserLogin, (Result[String, String]) -> Unit)?] = Ref::new(
+let login : Ref[(@hostapi.BrowserLogin, (Result[String, String]) -> Unit)?] = Ref(
   None,
 )
 

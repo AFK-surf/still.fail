@@ -51,7 +51,7 @@ let tree_field_boxes : Map[Int, FieldBox] = Map([])
 ///|
 /// The nodes of the window's tree among the frame's drawn another size than what holds them (View::scale).
 // kept across runs: filled and emptied round one asking of the squeeze (Ctx::with_tree_nodes)
-let tree_scaled_at : Set[Int] = Set::new()
+let tree_scaled_at : Set[Int] = Set([])
 
 ///|
 /// The first of the frame's nodes put there for the window's tree's (Ctx::with_tree_nodes `facts`), -1 none.
@@ -63,19 +63,19 @@ let tree_nodes_from : Ref[Int] = Ref(-1)
 /// (Content::draws: a picture, a drawing, glass, a shadow, an old view hosted in it), what Ctx::squeeze_shows_at reads
 /// of them as it reads an old view's node's shapes and lines.
 // kept across runs: filled and emptied round one asking of the squeeze (Ctx::with_tree_nodes)
-let tree_draws_at : Set[Int] = Set::new()
+let tree_draws_at : Set[Int] = Set([])
 
 ///|
 /// The nodes of the window's tree among the frame's where they are drawn is their own to say (LaidFacts' `moves_own`):
 /// apart from the flow on purpose, as an old view's node drawn off its place is (Ctx::squeeze_aside_at).
 // kept across runs: filled and emptied round one asking of the squeeze (Ctx::with_tree_nodes)
-let tree_moved_at : Set[Int] = Set::new()
+let tree_moved_at : Set[Int] = Set([])
 
 ///|
 /// The nodes of the window's tree among the frame's whose height is said in points (LaidFacts' `height_points`), as an
 /// old view's node's `h=Px` is: what Ctx::fixed_outgrown holds the words in them to.
 // kept across runs: filled and emptied round one asking of the squeeze (Ctx::with_tree_nodes)
-let tree_fixed_h_at : Set[Int] = Set::new()
+let tree_fixed_h_at : Set[Int] = Set([])
 
 ///|
 /// Node `n`, put among the frame's as node `i` for the window's tree's drawn `d` (in `holder`, drawn), told how it is

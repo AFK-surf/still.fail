@@ -48,12 +48,12 @@ fn glass_bar(said : Bool, picked : Ref[String]) -> @ui.Tester {
 
 ///|
 test "places on a glass that takes their presses: tapped through it once each says so, else under it, said what" {
-  let picked = Ref::new("")
+  let picked = Ref("")
   let t = glass_bar(true, picked)
   let log = t.drive("timeout 300\ntap 设置\nexit")
   assert_eq(picked.val, "settings", msg=log.join("\n"))
   // not said: the glass is another's to press, and the failure says what it is
-  let picked2 = Ref::new("")
+  let picked2 = Ref("")
   let u = glass_bar(false, picked2)
   let log2 = u.drive("timeout 300\ntap 设置\nexit")
   assert_eq(picked2.val, "")
@@ -87,7 +87,7 @@ test "presses said to be an area's that is drawn nowhere: said, where (what a Te
 
 ///|
 test "words partly under what lies over them: tapped at the point of them in sight nearest their middle, each run" {
-  let tapped = Ref::new(0)
+  let tapped = Ref(0)
   let t = @ui.Tester::new(
     fn(c) {
       let row = c.id("row")
@@ -120,7 +120,7 @@ test "words partly under what lies over them: tapped at the point of them in sig
 
 ///|
 test "the next wake the app waits on: when, and who said it; none once it has come" {
-  let armed = Ref::new(false)
+  let armed = Ref(false)
   // how long the app waits
   let wait_ms = 300.0
   let t = @ui.Tester::new(fn(c) {
@@ -144,7 +144,7 @@ test "the next wake the app waits on: when, and who said it; none once it has co
 
 ///|
 test "a fractional wake is due at its requested moment" {
-  let armed = Ref::new(false)
+  let armed = Ref(false)
   let requested_wake_ms = 0.125
   let t = @ui.Tester::new(fn(c) {
       if !armed.val {
@@ -192,7 +192,7 @@ fn link_after_words(went : Array[String], cover : Ref[Double]) -> @ui.Tester {
 ///|
 test "a link in a paragraph is tapped on the link, its own target, not on the words beside it" {
   let went = []
-  let t = link_after_words(went, Ref::new(1000.0))
+  let t = link_after_words(went, Ref(1000.0))
   let log = t.drive("timeout 300\ntap example.com/e2e\nexit")
   assert_eq(went, ["https://example.com/e2e"], msg=log.join("\n"))
 }
@@ -200,7 +200,7 @@ test "a link in a paragraph is tapped on the link, its own target, not on the wo
 ///|
 test "a link half under what takes presses is tapped on its part in sight, not on the words beside it" {
   let went = []
-  let cover = Ref::new(1000.0)
+  let cover = Ref(1000.0)
   let t = link_after_words(went, cover)
   t.draw()
   let (x, _, w, _) = t.run_rects("example.com/e2e")[0]

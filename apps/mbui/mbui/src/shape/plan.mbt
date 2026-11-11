@@ -444,7 +444,7 @@ fn ShapePlan::new(ot : OtData, direction : Direction, script : Int, user_feature
         }
       }
       if last_lookup + 1 < list.length() {
-        let tail = list[last_lookup:].to_array()
+        let tail = list[last_lookup:].to_owned()
         tail.sort_by(fn(a, b) {
           let c = a.index.compare(b.index)
           if c != 0 {

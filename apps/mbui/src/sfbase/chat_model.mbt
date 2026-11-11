@@ -953,7 +953,7 @@ pub fn chat_jobs_summary_params(r : ChatRef) -> Map[String, Json] {
 /// The last part of a path.
 pub fn base_name(path : String) -> String {
   match path.rev_find("/") {
-    Some(i) => path.view(start_offset=i + 1).to_string()
+    Some(i) => path.view(start_offset=i + 1).to_owned()
     None => path
   }
 }

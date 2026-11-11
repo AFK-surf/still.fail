@@ -1092,7 +1092,7 @@ fn acts_in_order(rd : Reading, list : Array[Entry]) -> Array[Entry] {
     return list
   }
   let out = list.copy()
-  let block = out[start:end].to_array()
+  let block = out[start:end].to_owned()
   block.sort_by(fn(a, b) { order(a).compare(order(b)) })
   for i, e in block {
     out[start + i] = e

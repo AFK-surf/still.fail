@@ -463,7 +463,7 @@ fn held_let_go(
   })
   let felt = t.haptics().length()
   let now = fn() -> (String, Int, Int, Int, Array[@ui.Haptic], @sfdesk.TapePane) {
-    (pk.ts, pk.sel.a, pk.sel.b, told.val, t.haptics()[felt:].to_array(), @sfdesk.wide.tape_at.get())
+    (pk.ts, pk.sel.a, pk.sel.b, told.val, t.haptics()[felt:].to_owned(), @sfdesk.wide.tape_at.get())
   }
   let t0 = t.time() + between_frames_ms
   t.advance(t0 - t.time())

@@ -962,7 +962,7 @@ fn outside_kinds() -> Array[(String, Int)] {
 }
 
 ///|
-let outside_tickets : Map[Int64, Int] = Map::new()
+let outside_tickets : Map[Int64, Int] = Map([])
 
 ///|
 let outside_told : Ref[Bool] = { val: false }
@@ -1000,7 +1000,7 @@ let answers_told : Array[@signals.Signal[Int]] = Array::makei(outside_native + 1
 ///|
 /// The answers the host told of (outside_key) not taken yet.
 // kept across runs: emptied by each Tester (reset_globals)
-let answers_waiting : Map[Int64, Bool] = Map::new()
+let answers_waiting : Map[Int64, Bool] = Map([])
 
 ///|
 /// An answer of `kind` came (the host's event; under a Tester, a frame: its fake host's answers come by the frame).
@@ -1051,7 +1051,7 @@ fn answers_by_the_frame() -> Unit {
 /// (outside_key): told by the host's event, it takes the answer from the host into what reads it, and says whether it
 /// was there to take.
 // kept across runs: emptied by each Tester (reset_globals)
-let outside_takers : Map[Int64, () -> Bool] = Map::new()
+let outside_takers : Map[Int64, () -> Bool] = Map([])
 
 ///|
 /// `take` takes the host's answer of `kind` for `id` as its event comes (outside_take); now, where the event came
@@ -1103,7 +1103,7 @@ fn takers_by_the_frame() -> Unit {
 
 ///|
 /// The native views the host said were ready (or failed): their work is the host's no more, whatever is asked after.
-let views_told : Map[Int, Bool] = Map::new()
+let views_told : Map[Int, Bool] = Map([])
 
 ///|
 /// The host's event: what it did for the app is done (`state`: 1 done, -1 failed), or (a view, 0) it waits on the
@@ -1426,7 +1426,7 @@ fn site_body_kept(b : Bytes) -> Bytes {
   // (its bytes a char each: the JSON's or the form's names are ASCII, what else is in it kept byte for byte)
   let s = String::from_array(Array::makei(b.length(), fn(i) { b[i].to_int().unsafe_to_char() }))
   let bytes_of = fn(t : String) -> Bytes {
-    Bytes::makei(t.length(), fn(i) { t.unsafe_charcode_at(i).to_byte() })
+    Bytes::makei(t.length(), fn(i) { t.unsafe_get(i).to_int().to_byte() })
   }
   match (try Some(@json.parse(s)) catch { _ => None }) {
     Some(Object(_) as j) => {
@@ -1486,7 +1486,7 @@ fn query_kept(path : String) -> String {
     None => path
     Some(q) => {
       let fields = path.unsafe_substring(start=q + 1, end=path.length()).split("&").map(fn(f) {
-        let f = f.to_string()
+        let f = f.to_owned()
         match f.find("=") {
           Some(i) if secret_name(f.unsafe_substring(start=0, end=i)) => f.unsafe_substring(start=0, end=i) + "=-"
           _ => f
@@ -1571,7 +1571,7 @@ fn h_view_still(id : Int) -> Bytes {
 ///|
 /// Who is told what the host says of its views (@ui.trace_views): a run's record of it.
 // kept across runs: the app's own, set once as it starts (a Tester's host says nothing to it)
-let views_tracer : Ref[((Map[String, Json]) -> Unit)?] = Ref::new(None)
+let views_tracer : Ref[((Map[String, Json]) -> Unit)?] = Ref(None)
 
 ///|
 /// What was last told of each view's answers (view, what), so that each is told once as it changes.

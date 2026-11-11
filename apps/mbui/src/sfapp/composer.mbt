@@ -21,7 +21,7 @@
 
 ///|
 /// Whether the files' row (or the station files') is in the capsule's top left corner this frame (capsule_top).
-let files_cornered : Ref[Bool] = Ref::new(false)
+let files_cornered : Ref[Bool] = Ref(false)
 
 ///|
 fn draft_key(r : ChatRef) -> String {

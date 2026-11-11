@@ -15,7 +15,7 @@
 
 ///|
 /// The settings last kept on the tape ("" none yet).
-let env_kept : Ref[String] = Ref::new("")
+let env_kept : Ref[String] = Ref("")
 
 ///|
 /// The system's settings as this frame begins, kept on the tape when they are not as last kept.
@@ -61,11 +61,11 @@ fn env_at_frame() -> Unit {
 ///|
 /// What a core trace is told of the host's settings (trace_settings), and what it was told last ("" nothing yet).
 // kept across runs: the app's own, set once as it starts (a Tester sets it only where it tests it)
-let settings_tracer : Ref[((Map[String, Json]) -> Unit)?] = Ref::new(None)
+let settings_tracer : Ref[((Map[String, Json]) -> Unit)?] = Ref(None)
 
 ///|
 // kept across runs: settings_tracer's, put back as that is set (trace_settings)
-let settings_kept : Ref[String] = Ref::new("")
+let settings_kept : Ref[String] = Ref("")
 
 ///|
 /// What the host gives the app from now on given to `line` as a frame begins, whenever it is not as last given: the

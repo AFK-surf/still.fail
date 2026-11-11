@@ -27,7 +27,7 @@ fn lc_seen(t : @ui.Tester, s : String) -> Array[String] {
 ///|
 /// What `t` draws (ag_drawn's), each line in order of what it says: as a set.
 fn lc_drawn(t : @ui.Tester) -> String {
-  let lines = ag_drawn(t).split("\n").map(fn(l) { l.to_string() }).collect()
+  let lines = ag_drawn(t).split("\n").map(fn(l) { l.to_owned() }).collect()
   lines.sort()
   lines.join("\n")
 }

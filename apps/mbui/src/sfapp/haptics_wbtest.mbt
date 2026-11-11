@@ -91,7 +91,7 @@ test "the bottom bar: the 震动 setting turns holding and switching off and on"
   let before = t.haptics().length()
   t.tap(xs[0], y)
   assert_true(app.nav.top() == Home)
-  assert_eq(t.haptics()[before:].to_array(), [@ui.TextHandleMove])
+  assert_eq(t.haptics()[before:].to_owned(), [@ui.TextHandleMove])
 }
 
 ///|

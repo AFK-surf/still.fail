@@ -52,7 +52,7 @@ test "the screen's pointer is drawn in the station's shape, the point it points 
   r.config()
   r.frame(1000.0)
   assert_true(r.sess().pad(r.sess().src))
-  let seen : Map[String, Bool] = Map::new()
+  let seen : Map[String, Bool] = Map([])
   for shape in ["default", "text", "pointer", "ew-resize", "nwse-resize", "move", "crosshair", "not-allowed", "wait"] {
     r.cursor_at(0.5, 0.5, shape)
     let (src, x, y, w) = drawn_pointer(r).unwrap()

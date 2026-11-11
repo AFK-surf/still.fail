@@ -88,7 +88,7 @@ fn staged_file_name(key : String) -> String {
   let path = key.replace_all(old="\\", new="/")
   match path.rev_find("/") {
     Some(i) => {
-      let parent = path.view(end_offset=i).to_string()
+      let parent = path.view(end_offset=i).to_owned()
       if @sfbase.base_name(parent) == "uploads" { @sfbase.base_name(path) } else { "" }
     }
     None => ""
@@ -218,7 +218,7 @@ fn owner_of(here : MessageHere, a : Attachment) -> String {
 /// The last part of a path: the name the station keeps a file by (storedName).
 fn stored_name(path : String) -> String {
   match path.rev_find("/") {
-    Some(i) => path.view(start_offset=i + 1).to_string()
+    Some(i) => path.view(start_offset=i + 1).to_owned()
     None => path
   }
 }

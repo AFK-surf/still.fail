@@ -578,7 +578,7 @@ fn mine_bubble(
       _ => None
     }
     // (the bubble, for what is drawn in it as it flies: flight_pieces_in)
-    let bubble_node = Ref::new(-1)
+    let bubble_node = Ref(-1)
     let b = c.box(
       style=(if coming is Some(_) { bubble_bare } else { bubble }).then(@ui.style(max_w=Fixed(mine_most(c)))),
       fn() {
@@ -800,8 +800,8 @@ fn system_notice(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> 
             let p = @sf.theme().p
             c.rich(
               [
-                @ui.span(said.view(end_offset=m.notice_link).to_string()),
-                @ui.span(said.view(start_offset=m.notice_link).to_string(), underline=true, link="profile"),
+                @ui.span(said.view(end_offset=m.notice_link).to_owned()),
+                @ui.span(said.view(start_offset=m.notice_link).to_owned(), underline=true, link="profile"),
               ],
               key="notice-profile/" + m.ts,
               style=(if open { notice_words_open } else { notice_words }).then(@ui.text_style(color=ink)),
@@ -1166,7 +1166,7 @@ fn elsewhere_route(c : @ui.Ctx, key : String, s : Elsewhere) -> Unit {
   c.on_press(place, fn() { @sfbase.open_slack(app, url) |> ignore })
   c.box(style=msg_route, fn() {
     @sf.icon(c, if s.received { "received" } else { "send" }, size=route_icon, color=t.p.accent) |> ignore
-    c.text(@sf.t(if s.received { "web-main.chat.fromSlack" } else { "web-main.history.sentTo" }).trim_end(chars=" ").to_string(), style=route_words)
+    c.text(@sf.t(if s.received { "web-main.chat.fromSlack" } else { "web-main.history.sentTo" }).trim_end(chars=" ").to_owned(), style=route_words)
     |> ignore
     c.box(style=if place != 0 && c.hovered(place) { route_place_hot } else { route_place }, id=place, fn() {
       let (mark, name) = match s.place {

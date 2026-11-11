@@ -14,7 +14,7 @@ test "messages posted between frames are handed on as the next frame begins, in 
   })
   // what the view saw as it built: the messages handed on before it
   let seen : Array[Int] = []
-  let late : Ref[Bool] = Ref::new(false)
+  let late : Ref[Bool] = Ref(false)
   let t = Tester::new(
     fn(c) {
       seen.push(got.length())
@@ -127,7 +127,7 @@ test "MSG lines kept on the tape and given again by replay_frames draw the same 
 test "bytes beside a message are kept on the tape as they were" {
   let b = b"\x00\x01\x02\xfd\xfe\xff\x10"
   for n in 0..=b.length() {
-    let part = Bytes::from_array(b.to_array()[0:n].to_array())
+    let part = Bytes::from_array(b.to_array()[0:n].to_owned())
     assert_eq(@codec.from_base64(@codec.base64(part)), part)
   }
 }
@@ -180,7 +180,7 @@ test "what the outside says comes at its moment, however the clock is run on: a 
   on_message("test.a", fn(j, _) { got.push((j, g().clock)) })
   // a kept conversation's message due 437 ms on (off the display's frames)
   let at = t.time() + 437.0
-  let due = Ref::new(at)
+  let due = Ref(at)
   t.between_frames(
     fn() {
       if t.time() >= due.val {

@@ -626,7 +626,7 @@ test "a new chat's stations on every screen, Maple pressed: picked (newChat.pick
       n += 1
     }
     assert_false(@sf.presenter_visible(), msg="\{at}: gone")
-    assert_eq(calls[before:].to_array().filter(fn(c) { c.has_prefix("newChat.pick") }), ["newChat.pick {\"station\":\"st2\",\"scope\":\"ws1\"}"], msg=at)
+    assert_eq(calls[before:].to_owned().filter(fn(c) { c.has_prefix("newChat.pick") }), ["newChat.pick {\"station\":\"st2\",\"scope\":\"ws1\"}"], msg=at)
   }
 }
 

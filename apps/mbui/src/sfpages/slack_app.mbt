@@ -849,7 +849,7 @@ fn sa_permissions_node(k : @view.View, d : SaDraft, sections : () -> Array[Json]
               |> ignore
               let mut i = 0
               while i < groups.length() {
-                let row = groups[i:if i + 3 < groups.length() { i + 3 } else { groups.length() }].to_array()
+                let row = groups[i:if i + 3 < groups.length() { i + 3 } else { groups.length() }].to_owned()
                 s.box(fn(r) {
                   @sf.style_node(r, fn() { sa_perm_row })
                   for g in row {
@@ -1192,7 +1192,7 @@ fn sa_permissions(c : @ui.Ctx, d : SaDraft, sections : Array[Json]) -> Unit {
           |> ignore
           let mut i = 0
           while i < groups.length() {
-            let row = groups[i:if i + 3 < groups.length() { i + 3 } else { groups.length() }].to_array()
+            let row = groups[i:if i + 3 < groups.length() { i + 3 } else { groups.length() }].to_owned()
             c.box(style=sa_perm_row, fn() {
               for g in row {
                 sa_permission(c, d, Some(g))

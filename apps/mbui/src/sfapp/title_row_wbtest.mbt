@@ -202,7 +202,7 @@ test "a window of its own, a station's screen live alone in it (the window's tre
   assert_eq((shell.val == Lone, center is Some(_), t.find("新建对话") is None), (true, true, true), msg="\{read().map(fn(s) { s.label })}")
   row_drags(t, "a window of its own", 0.0)
   let inputs = fn() { calls.filter(fn(c) { c.name == "screen.input" }).length() }
-  let sent_since = fn(n : Int) { calls.filter(fn(c) { c.name == "screen.input" })[n:].to_array().map(fn(c) { c.params.stringify() }) }
+  let sent_since = fn(n : Int) { calls.filter(fn(c) { c.name == "screen.input" })[n:].to_owned().map(fn(c) { c.params.stringify() }) }
   let (cx, cy) = match center {
     Some(s) => (s.rect.0 + s.rect.2 / 2.0, s.rect.1 + s.rect.3 / 2.0)
     None => (0.0, 0.0)

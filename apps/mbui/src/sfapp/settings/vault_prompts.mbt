@@ -25,7 +25,7 @@ fn vault_prompts_reset() -> Unit {
 /// The latest device waiting on this one for a key, put up in a sheet when nothing else is (`free`: no sheet of the
 /// app's up): call each frame, over the pages.
 pub fn vault_prompts(core : Core, free : Bool) -> Unit {
-  let prompts = (core.topic)("lockPrompts", Map::new()).get().value
+  let prompts = (core.topic)("lockPrompts", Map([])).get().value
   let asks = items(prompts, "asks")
   if prompts is Some(_) {
     key_asks_closed.retain(fn(d) { asks.iter().any(fn(r) { key_ask_of(r) == d }) })

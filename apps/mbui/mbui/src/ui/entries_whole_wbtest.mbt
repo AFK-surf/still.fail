@@ -38,7 +38,7 @@ test "a message's handler writing two things: what reads both sees them before a
 ///|
 test "a build's tell writing two things: what reads both sees them before and after, never one of them written" {
   let (a, b, seen) = two_seen()
-  let ask = Ref::new(false)
+  let ask = Ref(false)
   let t = Tester::new(
     fn(c) {
       if ask.val {
@@ -61,7 +61,7 @@ test "a build's tell writing two things: what reads both sees them before and af
 ///|
 test "what a build says to do after the frame's builds writing two things: what reads both sees them before and after, never one of them written" {
   let (a, b, seen) = two_seen()
-  let ask = Ref::new(false)
+  let ask = Ref(false)
   let t = Tester::new(
     fn(c) {
       if ask.val {

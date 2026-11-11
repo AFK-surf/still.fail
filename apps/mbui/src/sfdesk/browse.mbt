@@ -392,7 +392,7 @@ pub fn Browse::rename(self : Browse, c : @ui.Ctx, src : Source, folder : String,
   let p = browse_place(self.key)
   p.renaming = None
   let name = match to {
-    Some(t) => t.trim(chars=" \t\n").to_string()
+    Some(t) => t.trim(chars=" \t\n").to_owned()
     None => return
   }
   if name == "" || name == e.name {

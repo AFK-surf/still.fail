@@ -41,7 +41,7 @@ test "activity: the first words of a newly seen turn arrive a glyph at a time" {
 ///|
 test "activity: a row whose coming is set for later reveals its words from then" {
   new_run()
-  let clock = Ref::new(0.0)
+  let clock = Ref(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })

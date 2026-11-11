@@ -780,7 +780,7 @@ fn fix_new_chat_of(f : Fixture) -> Json {
     "presetStation": Json::string(if n.preset == "" { "" } else { text(Some(fix_station(n.station)), "station") }),
     "presetName": Json::string(
       match n.presets.iter().find_first(fn(p) { field(Some(p), "id") == Some(Json::string(n.preset)) }) {
-        Some(p) => field(Some(p), "name").unwrap_or(Json::string("")).as_string().unwrap_or("")
+        Some(p) => (if field(Some(p), "name").unwrap_or(Json::string("")) is String(s) { Some(s) } else { None }).unwrap_or("")
         None => ""
       },
     ),
@@ -838,10 +838,10 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
         _ => "p-\{n.presets.length()}"
       }
       let dirs = match field(p, "dirs") {
-        Some(Array(a)) => a.map(fn(d) { d.as_string().unwrap_or("") })
+        Some(Array(a)) => a.map(fn(d) { (if d is String(s) { Some(s) } else { None }).unwrap_or("") })
         _ => []
       }
-      let made = fix_preset(id, field(p, "name").unwrap_or(Json::string("")).as_string().unwrap_or(""), dirs.map(fn(d) {
+      let made = fix_preset(id, (if field(p, "name").unwrap_or(Json::string("")) is String(s) { Some(s) } else { None }).unwrap_or(""), dirs.map(fn(d) {
         match d.rev_find("/") {
           Some(i) => d.unsafe_substring(start=i + 1, end=d.length())
           None => d

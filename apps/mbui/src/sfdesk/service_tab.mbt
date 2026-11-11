@@ -9,7 +9,7 @@
 /// A tab's service, `service:<job>` (None: none).
 pub fn tab_service(tab : String) -> String? {
   if tab.has_prefix("service:") {
-    Some(tab.view(start_offset="service:".length()).to_string())
+    Some(tab.view(start_offset="service:".length()).to_owned())
   } else {
     None
   }
@@ -22,7 +22,7 @@ pub fn tab_file(tab : String) -> (String, String, String)? {
   if !tab.has_prefix("file:") {
     return None
   }
-  match (try Some(@json.parse(tab.view(start_offset="file:".length()).to_string())) catch { _ => None }) {
+  match (try Some(@json.parse(tab.view(start_offset="file:".length()).to_owned())) catch { _ => None }) {
     Some(Array([String(session), String(path), String(name)])) => Some((session, path, name))
     _ => None
   }

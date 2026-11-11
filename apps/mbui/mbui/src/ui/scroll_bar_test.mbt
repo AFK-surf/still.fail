@@ -222,7 +222,7 @@ test "scroll bar: a box scrolled sideways out past the view it is for has its ba
 
 ///|
 test "scroll bar: a box scrolled sideways keeps room at its foot for its bar while it can scroll, none once what it holds fits" {
-  let content = Ref::new(1000.0)
+  let content = Ref(1000.0)
   let t = @ui.Tester::new(
     fn(c) {
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {

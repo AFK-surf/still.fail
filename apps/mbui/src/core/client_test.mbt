@@ -376,7 +376,7 @@ test "what is asked of the core is awaited until answered or first read" {
   let sent : Array[String] = []
   let c = Client::new(fn(s) { sent.push(s) })
   let waits : Map[Int, String] = {}
-  let n = Ref::new(0)
+  let n = Ref(0)
   c.track(
     fn(what) {
       n.val += 1

@@ -231,7 +231,7 @@ fn dv_orders_reset() -> Unit {
 pub fn dv_in_order_held(key : String, names : Array[String]?, entries : Array[DvEntry]) -> Array[DvEntry]? {
   match names {
     Some(ns) => {
-      let have : Set[String] = Set::new()
+      let have : Set[String] = Set([])
       for e in entries {
         have.add(e.name)
       }

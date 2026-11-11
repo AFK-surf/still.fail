@@ -42,7 +42,7 @@ pub let fx_key_unlisted : Array[String] = ["chat.said.prev", "chat.said.next"]
 ///|
 /// A binding as a key cap shows it (keymap.ts label): ⌘⇧H on a Mac, Ctrl+Shift+H elsewhere.
 pub fn fx_key_label(b : String, mac : Bool) -> String {
-  let parts = b.split("+").map(fn(p) { p.to_string() }).collect()
+  let parts = b.split("+").map(fn(p) { p.to_owned() }).collect()
   let key = parts.pop().unwrap_or("")
   let shown = match key {
     "Space" => tr("web-main.keymap.space")

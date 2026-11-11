@@ -522,7 +522,7 @@ test "a row of the tree's that moves the window, as the old view's top row does:
   assert_eq(old_row.0, [1, 1, 1], msg="the old view's: moved by the primary button on its blank alone")
   assert_eq(node_row.0, old_row.0, msg="the tree's: moved as the old view's is")
   assert_eq(node_row.1, old_row.1, msg="the focus as the old view's leaves it")
-  assert_eq(node_row.1[0:2].to_array(), [true, true], msg="the focus kept by a press on the blank, either button")
+  assert_eq(node_row.1[0:2].to_owned(), [true, true], msg="the focus kept by a press on the blank, either button")
   assert_eq(node_row.2, old_row.2, msg="its button pressed as the old view's is")
 }
 

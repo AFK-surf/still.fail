@@ -97,7 +97,7 @@ fn mark(frame : Int, end : Bool) -> Unit {
 ///|
 /// What the host answered last.
 fn got() -> String {
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for i in 0..<h_got_length() {
     out.write_char(h_got_unit(i).unsafe_to_char())
   }

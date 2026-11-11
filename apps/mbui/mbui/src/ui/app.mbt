@@ -308,7 +308,7 @@ fn frame_said_told(c : Ctx, at : Int) -> Unit {
 ///|
 /// Called at the end of every frame (tests).
 // kept across runs: a test sets it around the Testers it makes, and puts it back (layout_wbtest's same_both_ways)
-let frame_hook : Ref[(() -> Unit)?] = Ref::new(None)
+let frame_hook : Ref[(() -> Unit)?] = Ref(None)
 
 ///|
 /// The frame painted, told where a test asks (frame_hook): drawn out first where a header stands for what a host keeps,
@@ -750,7 +750,7 @@ let frame_passes_most = 3
 ///|
 /// Whether a frame is being built or laid out now (frame_body), before it is drawn: what the view read changing now
 /// is built again in this frame (Ctx::read_changed).
-let building : Ref[Bool] = Ref::new(false)
+let building : Ref[Bool] = Ref(false)
 
 ///|
 /// The view built (a pass of frame_body): what each build collects begins from nothing; the root, the window's size.
@@ -2333,7 +2333,7 @@ pub fn Ctx::focus_editor(self : Ctx, key : String) -> Unit {
 
 ///|
 /// Whether the app is shown (1) and in front (2), as the host last said (shown and in front until it says).
-let app_state : Ref[Int] = Ref::new(3)
+let app_state : Ref[Int] = Ref(3)
 
 ///|
 /// The same, each a signal of its own (app_visible, app_focused, app_awake): what reads one, a node's binding or its
@@ -2364,7 +2364,7 @@ fn app_state_is(s : Int) -> Unit {
 
 ///|
 /// Who is told when that changes (the app's one: `on_app_change`).
-let app_change : Ref[((Bool, Bool) -> Unit)?] = Ref::new(None)
+let app_change : Ref[((Bool, Bool) -> Unit)?] = Ref(None)
 
 ///|
 fn on_app_state(s : Int) -> Unit {
@@ -2659,7 +2659,7 @@ fn[N : Compare + Show] probe_top(m : Map[String, (Int, N)], n : Int, unit : Stri
     let c = Compare::compare(b.1.1, a.1.1)
     if c != 0 { c } else { b.1.0.compare(a.1.0) }
   })
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for i, e in all {
     if i >= n {
       break

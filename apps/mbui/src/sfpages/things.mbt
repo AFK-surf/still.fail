@@ -761,7 +761,7 @@ fn things_list_node(
             let tiles = items(group, "items")
             for line in media_lines(tiles.map(media_aspect), across, things_line_high, things_gap) {
               let (from, to, high) = line
-              let these = tiles[from:to].to_array()
+              let these = tiles[from:to].to_owned()
               put("tiles/\{di}/\{gi}/\{from}/\{to}/\{high}", RowTiles(these, high))
             }
           }

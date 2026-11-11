@@ -327,7 +327,7 @@ fn gh_dim(ink : Int64) -> Int64 {
 /// `words` with a space between each two of its characters (three between its words): letters set far apart, as a
 /// masthead's small line is (the mockups' letter spacing of 0.32 to 0.42 of an em, past the widest tracking).
 fn gh_spaced(words : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut first = true
   for ch in words {
     if !first {
@@ -342,7 +342,7 @@ fn gh_spaced(words : String) -> String {
 ///|
 /// The figures of `words` alone (the time's: 10月26日 04:12, 10260412).
 fn gh_figures(words : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in words {
     if ch >= '0' && ch <= '9' {
       buf.write_char(ch)

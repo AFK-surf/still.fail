@@ -141,7 +141,7 @@ pub fn fixture_fonts_read(f : Fixture, name : String, params? : Json = Json::nul
   match name {
     "fonts.file" =>
       Some(
-        if f.fonts_fetched.size() > 0 {
+        if f.fonts_fetched.length() > 0 {
           Ok(({ "zipped": true }, file))
         } else {
           Err({ "code": "not_found", "message": "没有这个文件" })

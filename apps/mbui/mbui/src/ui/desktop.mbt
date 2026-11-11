@@ -818,7 +818,7 @@ pub fn Ctx::selected_text(self : Ctx) -> String {
 fn selected_words() -> String {
   let spans : Array[SelSpan] = picked.spans.values().filter(fn(s) { s.a < s.b }).collect()
   spans.sort_by(fn(p, q) { order_cmp(p.at, q.at) })
-  spans.map(fn(s) { s.text.view(start_offset=s.a, end_offset=s.b).to_string() }).join("\n")
+  spans.map(fn(s) { s.text.view(start_offset=s.a, end_offset=s.b).to_owned() }).join("\n")
 }
 
 ///|

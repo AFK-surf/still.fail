@@ -591,7 +591,7 @@ fn note_cards_node(r : @view.View) -> Unit {
               note_said(mid)
             }, fn() {
               marks_said()
-              marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_string() == ""
+              marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_owned() == ""
             })
           },
           fn(b) {

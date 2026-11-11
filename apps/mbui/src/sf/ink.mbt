@@ -101,10 +101,10 @@ fn core_ink(code : String, ink : String, dark : Bool) -> Array[@ui.Run] {
       i += 1
     }
     let end = imin(code.length(), at + (if n > 0 { n } else { 1 }))
-    out.push(@ui.span(code.view(start_offset=at,end_offset=end).to_string(),mono=true,color=if dark {scopes[k].dark()}else{scopes[k].light()}))
+    out.push(@ui.span(code.view(start_offset=at,end_offset=end).to_owned(),mono=true,color=if dark {scopes[k].dark()}else{scopes[k].light()}))
     at = end
   }
-  if at < code.length() { out.push(@ui.span(code.view(start_offset=at).to_string(),mono=true,color=if dark {Scope::Text.dark()}else{Scope::Text.light()})) }
+  if at < code.length() { out.push(@ui.span(code.view(start_offset=at).to_owned(),mono=true,color=if dark {Scope::Text.dark()}else{Scope::Text.light()})) }
   out
 }
 

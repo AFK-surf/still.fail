@@ -356,6 +356,6 @@ test "the player's volume read out as a slider whose range is its least, where i
   assert_eq(s.range, Some((desk_none, 0.4, desk_whole)))
   let told = tt.ctx().a11y_lines().split("\n").filter(fn(l) { l.contains("Slider") }).to_array()
   assert_eq(told.length(), 1)
-  let f = told[0].split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+  let f = told[0].split("\u{1F}").map(fn(v) { v.to_owned() }).to_array()
   assert_eq([f[12], f[13], f[14]], [desk_none.to_string(), (0.4).to_string(), desk_whole.to_string()])
 }

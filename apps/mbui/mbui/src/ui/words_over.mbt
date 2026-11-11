@@ -46,7 +46,7 @@ pub(all) struct WordsOverAt {
 
 ///|
 // kept across runs: begun anew by each Tester (words_over_begin)
-let words_over : WordsOver = { held: true, file: "", pairs: Set::new(), frames: [] }
+let words_over : WordsOver = { held: true, file: "", pairs: Set([]), frames: [] }
 
 ///|
 /// Each file's bar: how many pairs of words over words a Tester made there may show while what it walks through
@@ -230,7 +230,7 @@ fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double,
   // (glyphs met through a grid of cells, not each with each)
   let cell = 24.0
   let grid : Map[Int, Array[Int]] = {}
-  let pairs : Set[Int] = Set::new()
+  let pairs : Set[Int] = Set([])
   for q in 0..<ks.length() {
     let (x0, y0, x1, y1) = rs[q]
     for gx in (x0 / cell).to_int()..=(x1 / cell).to_int() {

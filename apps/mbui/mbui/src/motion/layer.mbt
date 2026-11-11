@@ -1103,7 +1103,7 @@ pub fn list_keys(
     lm.names = keys
     return id
   }
-  let ks : Array[Int] = Array::new(capacity=nk)
+  let ks : Array[Int] = Array(capacity=nk)
   for i in 0..<lead {
     ks.push(before[i])
   }
@@ -2579,7 +2579,7 @@ fn measures_said(span : Double) -> String {
     let c = b.1.compare(a.1)
     if c != 0 { c } else { a.0.compare(b.0) }
   })
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   for i, e in all {
     if i >= 6 {
       break

@@ -1315,7 +1315,7 @@ fn take_over(c : @ui.Ctx, s : ScreenSess, in_bar? : Bool = false) -> Unit {
 /// the 帧率 and 画质 asked, the frames and bytes that came since last asked (as 控制中心's 连接 counts them: ScreenSess::came),
 /// over `span` ms; "" where none is open.
 pub fn screens_perf(span : Double) -> String {
-  let line = StringBuilder::new()
+  let line = StringBuilder()
   for key, s in screens_open {
     let (frames, bytes) = s.came()
     let (f0, b0) = screens_perf_was.get(key).unwrap_or((frames, bytes))

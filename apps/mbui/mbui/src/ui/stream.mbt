@@ -102,7 +102,7 @@ let stream_nodes : Map[Int, (Stream, (Double, Double, Double, Double)?)] = Map([
 
 ///|
 /// The frames handed over so far (their tickets' numbers).
-let stream_tickets : Ref[Int] = Ref::new(0)
+let stream_tickets : Ref[Int] = Ref(0)
 
 ///|
 fn streams_reset() -> Unit {
@@ -416,7 +416,7 @@ fn Stream::take_direct(self : Stream, w : Array[String]) -> Unit {
 /// shows (shown on its layer and said shown at once), one let go (said), its decoder broken. False for one that
 /// changes what the app draws (the first frame, another size): taken as the frame is built, as before.
 fn Stream::take_quietly(self : Stream, e : String) -> Bool {
-  let w = e.split(" ").map(fn(x) { x.to_string() }).to_array()
+  let w = e.split(" ").map(fn(x) { x.to_owned() }).to_array()
   match w {
     ["f", t, pw, ph, ..] =>
       match (stream_num(t), stream_num(pw), stream_num(ph)) {
@@ -600,9 +600,9 @@ fn streams_frame_start() -> Unit {
     // (what the host said of it, taken as the frame began: streams_arrive)
     let events = s.own.copy()
     s.own.clear()
-    let latch : Ref[Double?] = Ref::new(None)
+    let latch : Ref[Double?] = Ref(None)
     let take = fn(e : String) {
-      let w = e.split(" ").map(fn(x) { x.to_string() }).to_array()
+      let w = e.split(" ").map(fn(x) { x.to_owned() }).to_array()
       match w {
         ["f", t, pw, ph, ..] =>
           match (stream_num(t), stream_num(pw), stream_num(ph)) {
@@ -639,7 +639,7 @@ fn streams_frame_start() -> Unit {
       match (e.has_prefix("c "), s.feed) {
         (true, Some(f)) => {
           // the host's decoder or surface said something: what the feed makes of it taken now, in its place
-          f.event(e.split(" ").map(fn(x) { x.to_string() }).to_array()[1:].to_array())
+          f.event(e.split(" ").map(fn(x) { x.to_owned() }).to_array()[1:].to_owned())
           let said = f.said.copy()
           f.said.clear()
           for x in said {

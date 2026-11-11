@@ -73,7 +73,7 @@ priv struct FormState {
 ///|
 /// What is wrong with `text` in `f` ("" nothing).
 pub fn field_error(f : FormField, text : String, words? : FormWords = form_words) -> String {
-  let s = text.trim().to_string()
+  let s = text.trim().to_owned()
   if s == "" {
     return if f.required { words.missing } else { "" }
   }

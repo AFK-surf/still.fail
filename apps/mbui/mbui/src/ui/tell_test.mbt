@@ -3,7 +3,7 @@
 ///|
 test "a tap's tell is told once, after the frame's builds, though the frame is built again for a read back" {
   let told : Array[String] = []
-  let open = Ref::new(false)
+  let open = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       let b = c.id("button")
@@ -39,8 +39,8 @@ test "a tap's tell is told once, after the frame's builds, though the frame is b
 ///|
 test "one key told twice in a frame's builds is told once, the last said" {
   let told : Array[Int] = []
-  let pass = Ref::new(0)
-  let go = Ref::new(false)
+  let pass = Ref(0)
+  let go = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       if go.val {
@@ -76,7 +76,7 @@ test "one key told twice in a frame's builds is told once, the last said" {
 
 ///|
 test "a tell outside a build is told at once" {
-  let told = Ref::new(0)
+  let told = Ref(0)
   let t = @ui.Tester::new(fn(c) { c.text("x", wrap=false) |> ignore })
   t.ctx().tell("k", fn() { told.val += 1 })
   assert_eq(told.val, 1)
@@ -85,7 +85,7 @@ test "a tell outside a build is told at once" {
 
 ///|
 test "what a tell is answered at once is shown by the frame after it, owed at its moment" {
-  let answer = Ref::new("")
+  let answer = Ref("")
   let t = @ui.Tester::new(
     fn(c) {
       c.button("ask", on_press=fn() {

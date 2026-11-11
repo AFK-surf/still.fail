@@ -151,7 +151,7 @@ pub fn real_size_changes() -> Array[(String, Map[String, Json], String, Array[Js
   for raw in changes_raw {
     let params = match (@json.parse(raw.0) catch { _ => Json::null() }) {
       Object(p) => p
-      _ => Map::new()
+      _ => Map([])
     }
     let topic = match params.get("topic") {
       Some(String(t)) => t

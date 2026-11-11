@@ -193,7 +193,7 @@ fn Ctx::frame_said_lines(self : Ctx) -> Array[String] {
     l.said_take(self, 0).said_show(sb)
   }
   for l in sb.to_string().split("\n") {
-    out.push(l.to_string())
+    out.push(l.to_owned())
   }
   let sems = self.sems.map(fn(s) { (pos(s.node), "\{s.id} \{s.label} \{s.value} \{s.hidden}") })
   sems.sort_by(fn(a, b) { a.0.compare(b.0) })

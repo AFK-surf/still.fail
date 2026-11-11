@@ -295,7 +295,7 @@ fn connects_list_node(
 /// as connects_list_node makes them, through a core that answers nothing.
 fn connects_sample_node(v : @view.View, core : Core, look : Look, only : String, count : Int, tips : @sf.TipLayer, stint : () -> Int) -> Unit {
   let name = @sf.sample_words(4)
-  let shown = [8, 6, 10][:count].to_array().map(fn(n) {
+  let shown = [8, 6, 10][:count].to_owned().map(fn(n) {
     Json::object({
       "station": "sample",
       "stationName": Json::string(name),

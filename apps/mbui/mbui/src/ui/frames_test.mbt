@@ -8,8 +8,8 @@ let counting_later_ms = 100.0
 /// A view that changes with time and with a tap: a count of taps, and words that come `counting_later_ms` after the
 /// last.
 fn counting() -> (@ui.Ctx) -> Unit {
-  let taps : Ref[Int] = Ref::new(0)
-  let at : Ref[Double] = Ref::new(-1.0)
+  let taps : Ref[Int] = Ref(0)
+  let at : Ref[Double] = Ref(-1.0)
   fn(c) {
     c.button("加一", on_press=fn() {
       taps.val = taps.val + 1

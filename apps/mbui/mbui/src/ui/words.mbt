@@ -245,7 +245,7 @@ pub fn Words::slice(self : Words, a : Int, b : Int) -> String {
   let n = self.text.length()
   let a = imax(0, imin(a, n))
   let b = imax(a, imin(b, n))
-  self.text.view(start_offset=a, end_offset=b).to_string()
+  self.text.view(start_offset=a, end_offset=b).to_owned()
 }
 
 ///|
@@ -320,7 +320,7 @@ pub fn word_at(text : String, off : Int) -> (Int, Int) {
   let i = imax(0, imin(off, n - 1))
   let (s, e) = h_word_at(text, i)
   if s >= 0 && e > s && s <= i && i < e {
-    let w = text.view(start_offset=s, end_offset=e).to_string()
+    let w = text.view(start_offset=s, end_offset=e).to_owned()
     if w.trim(chars=" \t\n").length() > 0 {
       return (s, e)
     }

@@ -115,7 +115,7 @@ fn caret_typed(tree : Bool, scale : Double, at : (Double, Double)) -> (Array[Dou
   // (the caret's colour, 0x0A84FF: its red; taller than wide, whatever it is drawn as big as)
   let carets = insts().filter(fn(i) { i[5] == 0.0 && i[8] == 10.0 / 255.0 && i[3] > i[2] })
   guard carets is [.., c] else { fail("\{tree}, \{scale}, at \{at}: no caret drawn") }
-  (c[0:4].to_array(), t.ime_rect())
+  (c[0:4].to_owned(), t.ime_rect())
 }
 
 ///|

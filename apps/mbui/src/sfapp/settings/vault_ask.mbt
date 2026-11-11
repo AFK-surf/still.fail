@@ -603,12 +603,12 @@ pub fn vault_foot(
       })
     _ => ()
   }
-  let empty = typed is Some(_) && secret.trim(chars=" \n\t").to_string() == ""
+  let empty = typed is Some(_) && secret.trim(chars=" \n\t").to_owned() == ""
   // (what goes with the approval: an object, never kept among what the core is doing)
   let given : Json? = match typed {
     Some(_) => {
       let words : Array[(String, Json)] = [("secret", str(secret))]
-      if username.trim(chars=" ").to_string() != "" {
+      if username.trim(chars=" ").to_owned() != "" {
         words.push(("username", str(username)))
       }
       if filename != "" {

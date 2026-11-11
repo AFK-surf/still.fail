@@ -519,7 +519,7 @@ test "an old view hosted in a node drawn half as big, the mouse's pointer on it:
 ///|
 test "an old view hosted in a node drawn half as big, a button in it cut round (its corners' radius 40 of 80): pressed inside its corner's curve as drawn, half as round; not outside it" {
   let s = @signals.signal(0.5, same=fn(a, b) { a == b })
-  let clicks = Ref::new(0)
+  let clicks = Ref(0)
   let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0, platform=0)
   set_view_app(fn(root) {
     root.box(fn(h) {
@@ -844,7 +844,7 @@ test "an old view hosted in a node drawn half as big, a native view in it all of
   let placed = fn() {
     match t.views().iter().filter(fn(l) { l.has_prefix("place \{page.id} ") }).last() {
       Some(l) => {
-        let w = l.split(" ").map(fn(v) { v.to_string() }).collect()
+        let w = l.split(" ").map(fn(v) { v.to_owned() }).collect()
         (said_number(w[2]), said_number(w[3]), said_number(w[4]), said_number(w[5]))
       }
       None => (-1.0, -1.0, -1.0, -1.0)

@@ -452,7 +452,7 @@ fn journal_work(what : Done, start : Double, end : Double) -> Unit {
     journal_notes.clear()
     all.sort_by(fn(a, b) { b.1.compare(a.1) })
     if all.length() > journal_notes_kept {
-      all[:journal_notes_kept].to_array()
+      all[:journal_notes_kept].to_owned()
     } else {
       all
     }
@@ -673,7 +673,7 @@ fn journal_seal(seal : Seal, at : Double) -> Unit {
     0
   }
   if elided > 0 {
-    contributors = contributors[:hang_contributors_kept].to_array()
+    contributors = contributors[:hang_contributors_kept].to_owned()
   }
   let hang = {
     trigger,
@@ -747,7 +747,7 @@ fn journal_said_shown(at : Double) -> Unit {
 /// id of what is shown.
 fn journal_places(why : String) -> String {
   let out : Array[String] = []
-  let word = StringBuilder::new()
+  let word = StringBuilder()
   let take = fn(w : String) {
     if w.contains(".mbt:") && !out.contains(w) && out.length() < 4 {
       out.push(w)

@@ -22,7 +22,7 @@ fn a11y_view(sent : Ref[Int], send_id : Ref[Int]) -> (@ui.Ctx) -> Unit {
 /// The fields of the line whose role and label are these, if there is one.
 fn a11y_line(said : String, role : String, label : String) -> Array[String]? {
   for line in said.split("\n") {
-    let f = line.split("\u{1F}").map(fn(v) { v.to_string() }).to_array()
+    let f = line.split("\u{1F}").map(fn(v) { v.to_owned() }).to_array()
     if f.length() == 16 && f[3] == role && f[9] == label {
       return Some(f)
     }
@@ -32,8 +32,8 @@ fn a11y_line(said : String, role : String, label : String) -> Array[String]? {
 
 ///|
 test "a screen reader on: told the widgets, a pressed box a button by its words or label; nothing while off" {
-  let sent : Ref[Int] = Ref::new(0)
-  let send_id : Ref[Int] = Ref::new(0)
+  let sent : Ref[Int] = Ref(0)
+  let send_id : Ref[Int] = Ref(0)
   let t = @ui.Tester::new(a11y_view(sent, send_id))
   assert_eq(t.a11y_said(), "")
   t.set_a11y(true)
@@ -56,8 +56,8 @@ test "a screen reader on: told the widgets, a pressed box a button by its words 
 
 ///|
 test "a screen reader's double tap: the button activated the next frame, as a tap" {
-  let sent : Ref[Int] = Ref::new(0)
-  let send_id : Ref[Int] = Ref::new(0)
+  let sent : Ref[Int] = Ref(0)
+  let send_id : Ref[Int] = Ref(0)
   let t = @ui.Tester::new(a11y_view(sent, send_id))
   t.set_a11y(true)
   t.draw()
@@ -68,8 +68,8 @@ test "a screen reader's double tap: the button activated the next frame, as a ta
 
 ///|
 test "a node's number is kept from frame to frame, and words of the same parent told apart" {
-  let sent : Ref[Int] = Ref::new(0)
-  let send_id : Ref[Int] = Ref::new(0)
+  let sent : Ref[Int] = Ref(0)
+  let send_id : Ref[Int] = Ref(0)
   let t = @ui.Tester::new(a11y_view(sent, send_id))
   t.set_a11y(true)
   t.draw()

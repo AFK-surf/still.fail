@@ -116,7 +116,7 @@ fn bar_held(by : Double) -> (Array[Array[Double]], Array[Array[Double]]) {
   }
   let rows = same_drawn(t)
   // (what else is drawn: the bar)
-  let bar = t.drawn_instances().filter(fn(a) { a[5] == 0.0 && a[0] > 350.0 && a[2] < 20.0 }).map(fn(a) { a[0:5].to_array() })
+  let bar = t.drawn_instances().filter(fn(a) { a[5] == 0.0 && a[0] > 350.0 && a[2] < 20.0 }).map(fn(a) { a[0:5].to_owned() })
   (bar, rows)
 }
 

@@ -361,7 +361,7 @@ test "desktop: a drag from one paragraph into another picks the rest of the firs
   let (x1, y1) = (bx + bw / 2.0, by + bh / 2.0)
   t.drag(x0, y0, x1, y1)
   let down = t.ctx().selected_text()
-  let lines = down.split("\n").map(fn(l) { l.to_string() }).collect()
+  let lines = down.split("\n").map(fn(l) { l.to_owned() }).collect()
   assert_eq(lines.length(), 3, msg=down)
   assert_true(lines[0] != "" && lines[0] != "first words here" && "first words here".has_suffix(lines[0]), msg=down)
   assert_eq(lines[1], "the middle")
@@ -470,7 +470,7 @@ test "desktop: words picked on down a list the wheel scrolls under the held poin
   t.run_for(@ui.wheel_ease_ms)
   assert_true(t.rect_of("row 1 words") is None)
   t.release(x + 20.0, 170.0)
-  let lines = t.ctx().selected_text().split("\n").map(fn(l) { l.to_string() }).collect()
+  let lines = t.ctx().selected_text().split("\n").map(fn(l) { l.to_owned() }).collect()
   assert_true(lines.length() >= 8, msg=t.ctx().selected_text())
   for k in 0..<(lines.length() - 1) {
     assert_eq(lines[k], "row \{k + 1} words")
@@ -514,7 +514,7 @@ test "desktop: words picked with the pointer held past a list's shown foot (onto
   assert_true(o1 > o0 + 80.0, msg="\{o0} \{o1}")
   // (row 1 gone up out of view)
   assert_true(t.rect_of("row 1 words").map(fn(r) { r.1 + r.3 <= 0.0 }).unwrap_or(true), msg="\{t.rect_of("row 1 words")}")
-  let lines = t.ctx().selected_text().split("\n").map(fn(l) { l.to_string() }).collect()
+  let lines = t.ctx().selected_text().split("\n").map(fn(l) { l.to_owned() }).collect()
   assert_true(lines.length() >= 5, msg=t.ctx().selected_text())
   for k in 0..<(lines.length() - 1) {
     assert_eq(lines[k], "row \{k + 1} words")
@@ -976,10 +976,10 @@ test "desktop: lit by the hand on it: a mouse resting on it, a finger pressing i
 ///|
 test "a field leaving keys to the app: ↑ keeps its caret, Enter sends nothing; the app still reads them" {
   let f = @ui.Field::new(text="one\ntwo")
-  let leaves : Ref[Array[Int]] = Ref::new([])
-  let up = Ref::new(false)
-  let enter = Ref::new(false)
-  let sent : Ref[String?] = Ref::new(None)
+  let leaves : Ref[Array[Int]] = Ref([])
+  let up = Ref(false)
+  let enter = Ref(false)
+  let sent : Ref[String?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
     let r = c.editor("e", field=f, leaves=leaves.val)
     if r.submitted is Some(_) {

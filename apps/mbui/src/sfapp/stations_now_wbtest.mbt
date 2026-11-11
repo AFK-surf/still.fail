@@ -108,7 +108,7 @@ test "the card to share's looks: each chosen under it draws the picture in it at
       assert_true(png_size(png) is Some((1080, _)), msg="\{(at, look)}")
     }
     // (kept: the prefs say the last chosen)
-    assert_eq(@sfbase.text(src.topic("prefs", Map::new()).get().value, "shareLook"), "night")
+    assert_eq(@sfbase.text(src.topic("prefs", Map([])).get().value, "shareLook"), "night")
   }
 }
 

@@ -105,7 +105,7 @@ test "a press's handler forks; the fiber first runs as the frame the press bring
   let tapped = t.time().floor().to_int64()
   assert_eq(log, [])
   t.draw()
-  assert_eq(log[0:2].to_array(), ["fiber at \{tapped}", "view busy"])
+  assert_eq(log[0:2].to_owned(), ["fiber at \{tapped}", "view busy"])
   let due = (tapped + nap.to_int64()).to_double()
   // a millisecond before it
   t.run_for(due - 1.0 - t.time())
@@ -235,7 +235,7 @@ fn race_dump(seed : Int) -> String {
 
 ///|
 test "with a seed, the order ready fibers run in is drawn from it, and a seed replays it" {
-  let seen : Map[String, Int] = Map::new()
+  let seen : Map[String, Int] = Map([])
   @effect.for_seeds(count=30, s => {
     let d = race_dump(s)
     assert_eq(race_dump(s), d)

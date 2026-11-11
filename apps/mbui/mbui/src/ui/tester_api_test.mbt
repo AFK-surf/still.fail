@@ -283,7 +283,7 @@ test "what moves says what it is and who told it; a test runs to it by its name"
 ///|
 test "a scripted run waits for a picture decoded by its name, and a frame drawn after it" {
   // (shown once the run has begun: what it waits for ends after its step begins)
-  let shown = Ref::new(false)
+  let shown = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       if shown.val {
@@ -304,7 +304,7 @@ test "a scripted run waits for a picture decoded by its name, and a frame drawn 
 ///|
 test "a scripted run waits for a picture decoded from bytes handed over for it, by its name" {
   // (the bytes as a core's answer brings them: a key of the app's, under which the node shows them)
-  let shown = Ref::new(false)
+  let shown = Ref(false)
   let t = @ui.Tester::new(fn(c) {
     if shown.val {
       c.image_bytes("core:files/e2e-photo.jpg", b"\xFF\xD8\xFF\xE0 not a whole JPEG")
@@ -343,9 +343,9 @@ test "a tap goes where the frame drawn has its words, that frame: no wait for th
     })
     |> ignore
   })
-  let began = Ref::new(-1.0)
-  let acted = Ref::new(-1.0)
-  let words = Ref::new((0.0, 0.0, 0.0, 0.0))
+  let began = Ref(-1.0)
+  let acted = Ref(-1.0)
+  let words = Ref((0.0, 0.0, 0.0, 0.0))
   @ui.trace_steps(fn(step, moment) {
     if step == "tap go" {
       match moment {
@@ -375,7 +375,7 @@ test "a tap goes where the frame drawn has its words, that frame: no wait for th
 ///|
 test "a scripted run's answered lines each wait for an answer of their own: two lines, two answers" {
   // the core answers x.get once in the second frame and again in the fortieth
-  let frames = Ref::new(0)
+  let frames = Ref(0)
   let t = @ui.Tester::new(fn(c) {
     frames.val += 1
     if frames.val == 2 || frames.val == 40 {
@@ -398,7 +398,7 @@ test "a scripted run's answered lines each wait for an answer of their own: two 
 test "a scripted run's answered line takes an answer come before the step that acted ahead of it" {
   // the core answers x.get in the run's first frame (the Tester's second), before the tap the line comes after acts
   // (once its words hold still, a frame on)
-  let frames = Ref::new(0)
+  let frames = Ref(0)
   let t = @ui.Tester::new(fn(c) {
     frames.val += 1
     if frames.val == 2 {
@@ -419,7 +419,7 @@ test "a scripted run's answered line takes an answer come before the step that a
 test "a scripted run taps words only where a finger reaches them: not under what lies over them" {
   // a row's words under a bar over the page's foot (a composer): tapped only once the bar has gone from over them
   let covered = @signals.signal(true)
-  let tapped = Ref::new(0)
+  let tapped = Ref(0)
   let t = @ui.Tester::new(
     fn(c) {
       let row = c.id("row")
@@ -453,7 +453,7 @@ test "a scripted run taps words only where a finger reaches them: not under what
 ///|
 test "a box built where a box placed by its size was the frame before is where it is laid out, not placed the same" {
   // the first frame: a menu's box placed by its size (at 50, 60); the next: a plain box built in its slot
-  let menu = Ref::new(true)
+  let menu = Ref(true)
   let t = @ui.Tester::new(
     fn(c) {
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -487,7 +487,7 @@ test "a scripted run that waits for a call never answered fails within its timeo
 ///|
 test "a scripted run finds what it waits for however many others end before it looks (300 pictures in one frame)" {
   let srcs = Array::makei(300, fn(k) { "p\{k}.jpg" })
-  let shown = Ref::new(false)
+  let shown = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       if shown.val {
@@ -598,8 +598,8 @@ test "the system's answer polled once its frame is built (Ctx::after_build): tak
 
 ///|
 test "how a node is drawn over its layout: its scale and opacity, with what holds it" {
-  let shrink = Ref::new(1.0)
-  let down = Ref::new(1.0)
+  let shrink = Ref(1.0)
+  let down = Ref(1.0)
   let t = @ui.Tester::new(fn(c) {
     let card = c.box(w=Px(200.0), h=Px(80.0), id=c.id("card"), fn() { c.text("a card", wrap=false) |> ignore })
     c.look(card, @ui.look(scale=shrink.val, sy=down.val * shrink.val, alpha=0.5))
@@ -635,7 +635,7 @@ test "how a node is drawn, the text node whose words are exactly these (=WORDS):
 
 ///|
 test "a motion going on owes no frame at a moment: draw draws one, run_for draws it on as its time goes" {
-  let go = Ref::new(false)
+  let go = Ref(false)
   let t = @ui.Tester::new(fn(c) {
     let x = c.spring("knob-x", if go.val { 100.0 } else { 0.0 })
     c.box(w=Px(10.0), h=Px(10.0), tx=x, fn() {  }) |> ignore

@@ -51,7 +51,7 @@ fn kept_link_hits(mode : String, again : Bool, w : Double, h : Double) -> (Array
   let mut kept = 0
   for _ in 0..<8 {
     t.run_for(kept_rows_still_ms)
-    out.push(t.said().split("\n").filter(fn(l) { l.has_prefix("hit ") }).map(fn(l) { l.to_string() }).collect())
+    out.push(t.said().split("\n").filter(fn(l) { l.has_prefix("hit ") }).map(fn(l) { l.to_owned() }).collect())
     kept = kept + t.rows_kept()
   }
   (out, kept)

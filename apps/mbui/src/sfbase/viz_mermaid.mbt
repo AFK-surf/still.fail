@@ -55,7 +55,7 @@ fn mermaid_hex(rgba : Int64, ground : Int64) -> String {
     (c * a + g * (255 - a) + 127) / 255
   }
   let hex = "0123456789abcdef"
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   out.write_char('#')
   for shift in [24, 16, 8] {
     let v = mix(shift)

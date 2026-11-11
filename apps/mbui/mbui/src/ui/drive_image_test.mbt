@@ -22,7 +22,7 @@ test "a script waits for its named picture to decode and rejects a failed decode
   let t = make()
   let pending = t.pending()
   assert_eq(pending.length(), 1)
-  let said = Ref::new(false)
+  let said = Ref(false)
   let logs = t.drive("image_ready poster.png\nexit", each=fn(t) {
     if !said.val {
       said.val = true

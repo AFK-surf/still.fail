@@ -546,7 +546,7 @@ test "list: what is built from how it stood is built again once a scroll of one 
 
 ///|
 test "a click seen in a list's row is drawn by the next frame" {
-  let on : Ref[Bool] = Ref::new(false)
+  let on : Ref[Bool] = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       if on.val {
@@ -572,7 +572,7 @@ test "a click seen in a list's row is drawn by the next frame" {
 
 ///|
 test "a row followed from its top: a glide to the end stops with its top under the view's, not past it" {
-  let n = Ref::new(10)
+  let n = Ref(10)
   let t = @ui.Tester::new(
     fn(c) {
       c.list(

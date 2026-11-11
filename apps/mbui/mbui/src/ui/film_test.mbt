@@ -96,8 +96,8 @@ let film_picture : Int = 7
 
 ///|
 test "a Tester over a live host: the words laid out and drawn by its text, the faces given to it, the pictures decoded there" {
-  let host = FilmHost::{ faces: [], turns: Ref::new(0), freed: [], put: [] }
-  let made = Ref::new(false)
+  let host = FilmHost::{ faces: [], turns: Ref(0), freed: [], put: [] }
+  let made = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       if !made.val {
@@ -155,7 +155,7 @@ let inst_numbers = 60
 ///|
 test "a failed drawing must not be written as an old film frame" {
   let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
-  let drawn = Ref::new(0)
+  let drawn = Ref(0)
   let written : Array[Int] = []
   let film = t.film(
     "tap go\ntap go\nexit",
@@ -178,7 +178,7 @@ test "a failed drawing must not be written as an old film frame" {
 test "a film stops when a frame cannot be written" {
   let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
   let written : Array[Int] = []
-  let drawn = Ref::new(0)
+  let drawn = Ref(0)
   let film = t.film(
     "tap go\ntap go\nexit",
     draw=fn(_) {
@@ -215,7 +215,7 @@ test "a film cannot begin without its first drawing" {
 test "a film at 120 Hz can draw a different picture for each frame" {
   let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
   t.set_frame_period(1000.0 / 120.0)
-  let shown = Ref::new(0.0)
+  let shown = Ref(0.0)
   let pictures : Array[Double] = []
   let film = t.film(
     "tap go\ntap go\nexit",

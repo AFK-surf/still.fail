@@ -609,7 +609,7 @@ fn desk_rows_with_others(at : Ref[Double]) -> (Ctx) -> Unit {
 
 ///|
 test "desktop: the mouse dragged up or down on a code block or a swiped row in a list drags the list no more than on a row (2026-11-05 用户: codeblock/table 啥的，鼠标是可以拖动导致 chat 页面滚动的)" {
-  let at = Ref::new(0.0)
+  let at = Ref(0.0)
   let t = Tester::new(desk_rows_with_others(at), w=900.0, h=800.0)
   t.draw()
   // on the sideways box's row (its third row: 100 to 150), dragged up: the list stands

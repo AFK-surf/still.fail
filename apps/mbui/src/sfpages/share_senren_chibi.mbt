@@ -112,8 +112,8 @@ fn sb_split(value : String) -> (String, String) {
   if last < 0 {
     return (value, "")
   }
-  let head = StringBuilder::new()
-  let tail = StringBuilder::new()
+  let head = StringBuilder()
+  let tail = StringBuilder()
   let mut k = 0
   let mut digit = false
   for ch in value {
@@ -149,7 +149,7 @@ fn sb_figure(value : String, hi : Int64, scale : Double, whole? : Bool = false) 
 ///|
 /// The day of when the view was had (10月26日 of 10月26日 04:12).
 fn sb_date(at : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in at {
     if ch == ' ' {
       break
@@ -1148,7 +1148,7 @@ fn parfait_kind(name : String, key : String) -> String {
 /// or what is before its dash.
 fn parfait_short(name : String) -> String {
   let words : Array[String] = []
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut figure = false
   let flush = fn(buf : StringBuilder, figure : Bool) {
     let w = buf.to_string()
@@ -1172,7 +1172,7 @@ fn parfait_short(name : String) -> String {
   if words.length() > 0 {
     return words[0]
   }
-  let head = StringBuilder::new()
+  let head = StringBuilder()
   for ch in name {
     if ch == '-' || ch == ' ' {
       break

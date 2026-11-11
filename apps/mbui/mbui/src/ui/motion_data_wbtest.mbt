@@ -17,8 +17,8 @@ test "a spring solved comes to rest by the end it said, and is still at it" {
 
 ///|
 test "a spring's frames are drawn until its end, then none; retargeted, it goes on as fast as it went" {
-  let target = Ref::new(0.0)
-  let seen = Ref::new(0.0)
+  let target = Ref(0.0)
+  let seen = Ref(0.0)
   // the spring's own end (its way said as it set out)
   let end = fn() { g().springs.values().fold(init=-1.0, fn(e, s) { if s.end() > e { s.end() } else { e } }) }
   // a moment mid-way

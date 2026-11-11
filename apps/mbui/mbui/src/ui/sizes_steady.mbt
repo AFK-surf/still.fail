@@ -40,7 +40,7 @@ let sizes_steady : SizesSteady = {
   file: "",
   seen: {},
   turned: {},
-  found: Set::new(),
+  found: Set([]),
   window: (-1.0, -1.0),
   words: -1.0,
   hand: -1.0e9,
@@ -196,7 +196,7 @@ fn sizes_steady_fault(
   set_out? : Double = -1.0,
 ) -> (String?, Double) {
   // (the last four; the one before them, where there is one, for whether they set out from rest)
-  let seen = if all.length() > 4 { all[all.length() - 4:].to_array() } else { all }
+  let seen = if all.length() > 4 { all[all.length() - 4:].to_owned() } else { all }
   let n = seen.length()
   if n >= 4 && seen[0].1 < seen[1].1 && seen[1].1 < seen[2].1 && seen[2].1 < seen[3].1 &&
     !(set_out > seen[0].1 && set_out <= seen[3].1) {
@@ -259,7 +259,7 @@ fn sizes_steady_fault(
 /// go now (Tree::is_scroller): what is in one measured from its top all the while it is one, never switched to the
 /// window's as what it holds comes to fit in it or grows past it on its way (Ctx::sizes_steady_faults).
 // kept across runs: filled and emptied round one asking of sizes steady (Ctx::with_tree_nodes's `steady`)
-let tree_scroller_at : Set[Int] = Set::new()
+let tree_scroller_at : Set[Int] = Set([])
 
 ///|
 /// The faults the frame just drawn (at `now`, the display's frames `period` apart) shows, each said once: of whom, how.
@@ -272,7 +272,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
   // (the hand did something since the frame before was judged (rows_steady_hand: the wheel, a key, a press, let go))
   let hand_now = rows_steady.hand != sizes_steady.hand
   sizes_steady.hand = rows_steady.hand
-  let here : Set[(Int, Int, Int64, Bool)] = Set::new()
+  let here : Set[(Int, Int, Int64, Bool)] = Set([])
   self.with_tree_nodes(steady=true, fn() {
     let tree = view_tree()
     // (one ident twice in the frame: who either is, unsaid)
@@ -477,7 +477,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
         placed[f.0] = f.3
       }
     }
-    let carried : Set[Int] = Set::new()
+    let carried : Set[Int] = Set([])
     for k, f in faults {
       if f.2 {
         continue
@@ -495,7 +495,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
       }
     }
     // (else the innermost of what goes together: what holds it goes with it)
-    let holds : Set[Int] = Set::new()
+    let holds : Set[Int] = Set([])
     for k, f in faults {
       if carried.contains(k) {
         continue

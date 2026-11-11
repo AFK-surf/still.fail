@@ -5,7 +5,7 @@
 
 ///|
 let squeeze_known : Map[String, Int] = {
-  let known = Map::new()
+  let known = Map([])
   for k in [
     // 真问题，待修: (g) a member's note broken onto 2 lines beside what is at the row's end, one line alone:
     // sf/page_node.mbt:935, asked for at sfpages/workspace_page.mbt:397

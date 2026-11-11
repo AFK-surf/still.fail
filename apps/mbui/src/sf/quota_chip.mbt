@@ -340,7 +340,7 @@ pub fn meter_chip(
 ) -> Unit {
   let unit = chip_str(m, "unit")
   let words = if (brief || figure) && chip_str(m, "big") != "" {
-    chip_str(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_string() })
+    chip_str(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_owned() })
   } else {
     chip_str(m, "remaining")
   }

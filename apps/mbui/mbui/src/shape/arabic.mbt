@@ -137,7 +137,7 @@ fn arabic_reorder_marks(buffer : Buffer, start : Int, end : Int) -> Unit {
     }
     buffer.merge_clusters(start, j)
     // rotate [start, j) left by i - start
-    let moved = buffer.info[start:j].to_array()
+    let moved = buffer.info[start:j].to_owned()
     let k = i - start
     for n in 0..<moved.length() {
       buffer.info[start + n] = moved[(n + k) % moved.length()]

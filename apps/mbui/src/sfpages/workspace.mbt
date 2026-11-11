@@ -623,8 +623,8 @@ fn new_ws_owner(src : Source) -> (Array[Json], String) {
 /// Made, if it can be (a name, an account, nothing being made).
 fn new_ws_create(src : Source, close : () -> Unit) -> Unit {
   let (_, owner) = new_ws_owner(src)
-  let name = new_ws.name.text().trim(chars=" \n\t").to_string()
-  let code = new_ws.code.text().trim(chars=" \n\t").to_string()
+  let name = new_ws.name.text().trim(chars=" \n\t").to_owned()
+  let code = new_ws.code.text().trim(chars=" \n\t").to_owned()
   if name != "" && owner != "" && !new_ws.creating.get() {
     new_ws.close = close
     make_workspace(src, owner, name, code)
@@ -638,7 +638,7 @@ fn new_ws_create(src : Source, close : () -> Unit) -> Unit {
 fn new_workspace_body(v : @view.View, src : Source, close : () -> Unit) -> Unit {
   let accounts = fn() { new_ws_owner(src).0 }
   let wants_code = fn() { invite_error_key(new_ws.error_code.get()) is Some(_) }
-  let code = fn() { new_ws.code.text().trim(chars=" \n\t").to_string() }
+  let code = fn() { new_ws.code.text().trim(chars=" \n\t").to_owned() }
   @sf.field_node(v, fn() { @sf.t("web-pages.settings.workspace.name") }, fn(b) {
     let f = @sf.input_node(b, new_ws.name, placeholder=@sf.t("web-pages.workspace.namePlaceholder"), submitted=fn(_) {
       new_ws_create(src, close)
@@ -681,7 +681,7 @@ fn new_workspace_body(v : @view.View, src : Source, close : () -> Unit) -> Unit 
 ///|
 /// Its foot in node `v`: 取消 and 新建 (waiting while it is made, not pressed while nothing is named).
 fn new_workspace_foot(v : @view.View, src : Source, close : () -> Unit) -> Unit {
-  let name = fn() { new_ws.name.text().trim(chars=" \n\t").to_string() }
+  let name = fn() { new_ws.name.text().trim(chars=" \n\t").to_owned() }
   @sf.button_node(v, fn() { @sf.t("common.cancel") }, fn() {
     close()
     new_ws_cleared()
@@ -815,7 +815,7 @@ pub fn workspace_menu(c : @ui.Ctx, src : Source, at : (Double, Double, Double, D
     Some("account") => (src.sign_in)()
     Some(v) if v.has_prefix("join:") || v.has_prefix("ignore:") => {
       let join = v.has_prefix("join:")
-      let id = v.view(start_offset=if join { 5 } else { 7 }).to_string()
+      let id = v.view(start_offset=if join { 5 } else { 7 }).to_owned()
       for p in pending {
         if text(Some(p.1), "id") == id {
           answer_invitation(src, p.0, id, join, text(Some(p.1), "name"), fn() {  })

@@ -390,7 +390,7 @@ pub fn marks_put_down() -> Unit {
     Some(x) => x
     None => return
   }
-  let text = marking.write_field.text().trim(chars=" \n\t").to_string()
+  let text = marking.write_field.text().trim(chars=" \n\t").to_owned()
   marking.writing = None
   // (the keyboard down, what was written in done with: its field lets go of the focus)
   marking.write_field.let_go()
@@ -776,7 +776,7 @@ pub fn marks_quotes(made : String, original : String, nw : Double, nh : Double) 
           (
             pv_fill("android-chat.marks.quote.title", [("original", original), ("n", "\{n}")]),
             what + "\n" + on,
-            marking.comments.get(s.id).unwrap_or("").trim(chars=" \n\t").to_string(),
+            marking.comments.get(s.id).unwrap_or("").trim(chars=" \n\t").to_owned(),
           ),
         )
       }
@@ -953,7 +953,7 @@ pub let note_pop_ms : Double = 140.0
 ///|
 /// What is said of note `mid`, else 只引用.
 fn note_said(mid : Int) -> String {
-  match marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_string() {
+  match marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_owned() {
     "" => pv("android-chat.annotate.quoteOnly")
     said => said
   }

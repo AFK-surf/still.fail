@@ -119,14 +119,14 @@ pub fn push_sync(src : Source, wanted : Bool?) -> Unit {
   let push = match wanted {
     Some(b) => Some(b)
     None =>
-      match field(src.topic("notify", Map::new()).get().value, "push") {
+      match field(src.topic("notify", Map([])).get().value, "push") {
         Some(True) => Some(true)
         Some(False) => Some(false)
         _ => None
       }
   }
   match push {
-    Some(false) => (src.call)("push.unregister", Json::object(Map::new()), answer_unread)
+    Some(false) => (src.call)("push.unregister", Json::object(Map([])), answer_unread)
     Some(true) =>
       match (notice_host.val.token)() {
         "" => ()
@@ -170,7 +170,7 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
   notice_state.src = Some(src)
   let h = notice_host.val
   let shown = @ui.app_visible()
-  let notify = src.topic("notify", Map::new()).get().value
+  let notify = src.topic("notify", Map([])).get().value
   match notify {
     Some(_) => {
       // what the system allows, as the app starts and each time it is shown again (MainActivity onStart)

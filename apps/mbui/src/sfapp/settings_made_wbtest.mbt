@@ -94,7 +94,7 @@ fn same_drawn(made : Array[String], old : Array[String], what : String) -> Unit 
     let m : Map[String, Int] = {}
     for x in a {
       let parts = x.split(",").collect()
-      let k = if parts.length() > 5 { parts[5].to_string() } else { "?" }
+      let k = if parts.length() > 5 { parts[5].to_owned() } else { "?" }
       m[k] = m.get(k).unwrap_or(0) + 1
     }
     m.to_array().map(fn(e) { "kind \{e.0}: \{e.1}" }).join(", ")
@@ -825,7 +825,7 @@ test "用量 made once in a window 220 wide at words twice as large: 30 天 chos
   let from = made.words_over_frames().length()
   usage_30_days(made)
   assert_true(made.words().iter().any(fn(x) { x.0 == "$486" }), msg="30 天's total")
-  let over = made.words_over_frames()[from:].to_array()
+  let over = made.words_over_frames()[from:].to_owned()
   assert_true(over.iter().all(fn(m) { m.y >= made_end }), msg="words over words on its title's line: \{over}")
 }
 ///|

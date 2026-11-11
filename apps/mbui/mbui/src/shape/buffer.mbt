@@ -344,12 +344,12 @@ pub fn Buffer::guess_script(self : Buffer) -> Unit {
 
 ///|
 pub fn Buffer::glyph_infos(self : Buffer) -> Array[GlyphInfo] {
-  self.info[0:self.len].to_array()
+  self.info[0:self.len].to_owned()
 }
 
 ///|
 pub fn Buffer::glyph_positions(self : Buffer) -> Array[GlyphPosition] {
-  self.pos[0:self.len].to_array()
+  self.pos[0:self.len].to_owned()
 }
 
 ///|

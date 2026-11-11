@@ -58,7 +58,7 @@ fn Ctx::list_hand_follow(self : Ctx, id : Int, st : ListState, at : Double) -> U
     st.hand_said.get() |> ignore
     // The scrollbar's clock belongs to this list too. Keep it separate from other layout reads; an active wheel
     // ease, fling or glide still reads time while stepped by layout and takes the ordinary path.
-    self.shows_motion(st.ease_mover, st.rest_at(at, self.frame_no) > at)
+    self.shows_motion(st.ease_mover, Moving::rest_at(st, at, self.frame_no) > at)
   })
 }
 

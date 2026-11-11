@@ -1171,7 +1171,7 @@ test "wide: words in a message that did not go can be picked, copied and quoted"
   let quoted = named(calls, "composer.quote")
   assert_eq(quoted.length(), 1)
   let q = field(Some(quoted[0].params), "quote")
-  assert_eq(text(q, "text"), selected.trim(chars=" \n\t").to_string())
+  assert_eq(text(q, "text"), selected.trim(chars=" \n\t").to_owned())
   assert_eq(text(q, "ts"), "")
 }
 

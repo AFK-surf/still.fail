@@ -234,7 +234,7 @@ test "the top page's fetch() on its port: asked of the service, its answer said 
 fn png_hex_head(w : Int, h : Int) -> String {
   let hex = fn(n : Int) {
     let d = "0123456789abcdef".to_array()
-    let out = StringBuilder::new()
+    let out = StringBuilder()
     for i in [24, 16, 8, 0] {
       let b = (n >> i) & 0xFF
       out.write_char(d[b >> 4])

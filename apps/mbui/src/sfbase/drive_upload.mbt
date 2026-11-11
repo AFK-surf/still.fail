@@ -242,7 +242,7 @@ pub fn upload_id(what : String, n : Int) -> String {
   let hex = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
   ]
-  let out = StringBuilder::new()
+  let out = StringBuilder()
   // two FNV-1a (@ui.stable_hash: the same in every run and on js and native), 16 digits each
   for half in [@ui.stable_hash(seed), @ui.stable_hash(seed + "\u{1}")] {
     let mut h = half

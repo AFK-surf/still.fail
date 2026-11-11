@@ -338,7 +338,7 @@ pub fn composer(
       // (the line of a quote it takes had the focus: the words' field has it from here, as Enter in that line gives
       // it, not lost with the line as its card sets out)
       quote_focus_to_words(c, w, quote_had)
-      @sfbase.send_sharing(src, w.key, spec.station, w.text.get().trim(chars=" \n\t").to_string(), fn() { send(w) })
+      @sfbase.send_sharing(src, w.key, spec.station, w.text.get().trim(chars=" \n\t").to_owned(), fn() { send(w) })
       // (sent in this build, after its field was built: their field's hint and caret gone with them from now, not
       // shown once over them as they set out)
       if @sfbase.flight_hint_away(c, w.key) {
@@ -1926,7 +1926,7 @@ fn sent_quotes(w : Writing) -> Array[Json] {
     Json::object({
       "author": Json::string(text(v, "author")),
       "text": Json::string(text(v, "text")),
-      "comment": Json::string(text(v, "comment").trim(chars=" \n\t").to_string()),
+      "comment": Json::string(text(v, "comment").trim(chars=" \n\t").to_owned()),
       "ts": Json::string(text(v, "ts")),
       "role": Json::string(text(v, "role")),
       "file": Json::string(file),
@@ -2121,7 +2121,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   }
   // sent, felt as a key's light tap (a no as something refused)
   @ui.haptic(KeyboardTap)
-  let words = w.text.get().trim(chars=" \n\t").to_string()
+  let words = w.text.get().trim(chars=" \n\t").to_owned()
   let rk = r.station + "\u{1}" + r.session
   remember_sent_pictures(src, w, r.station)
   // (its references as the field's marks, which its flight takes off as; its row's runs as the core read its words)

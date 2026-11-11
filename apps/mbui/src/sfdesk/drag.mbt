@@ -345,7 +345,7 @@ fn fdrag_when(ready : () -> Bool, go : () -> Unit) -> Unit {
 /// filled, as Finder merges), then each file up into its folder.
 fn fdrag_put_up(src : Source, into : DriveAt, files : Array[@hostapi.Picked]) -> Unit {
   let root = into.root.unwrap_or("")
-  let folders = files.filter(fn(f) { f.name.has_suffix("/") }).map(fn(f) { f.name.view(end_offset=f.name.length() - 1).to_string() })
+  let folders = files.filter(fn(f) { f.name.has_suffix("/") }).map(fn(f) { f.name.view(end_offset=f.name.length() - 1).to_owned() })
   let up = files.filter(fn(f) { !f.name.has_suffix("/") })
   let send = fn() {
     for f in up {

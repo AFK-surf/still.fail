@@ -88,9 +88,9 @@ fn head_drawn(tt : @ui.Tester) -> (Array[String], (Double, Double, Double, Doubl
     line
     .split(" ")
     .map(fn(v) {
-      match number_of(v.to_string()) {
+      match number_of(v.to_owned()) {
         Some(d) => ((d * 1000000.0).round() / 1000000.0).to_string()
-        None => v.to_string()
+        None => v.to_owned()
       }
     })
     .collect()
@@ -198,7 +198,7 @@ test "the floating head as nodes never narrower once open: tools gone, a shorter
 fn head_alpha(drawn : Array[String]) -> Double {
   match drawn {
     [first, ..] =>
-      match first.split(" ").map(fn(v) { v.to_string() }).to_array() {
+      match first.split(" ").map(fn(v) { v.to_owned() }).to_array() {
         [.., last] => number_of(last).unwrap_or(-1.0)
         _ => -1.0
       }
@@ -230,7 +230,7 @@ test "the floating head as nodes going as it sleeps and coming as it wakes, from
 fn glyph_clips_right(t : @ui.Tester, top : Double, bottom : Double) -> Array[(Double, Double)] {
   let out = []
   for line in t.drawlist().split("\n") {
-    let f = line.split(" ").map(fn(v) { v.to_string() }).to_array()
+    let f = line.split(" ").map(fn(v) { v.to_owned() }).to_array()
     if f.length() >= 21 && f[0] == "i" && f[6] == "1" {
       match (number_of(f[1]), number_of(f[2]), number_of(f[19])) {
         (Some(x), Some(y), Some(r)) if y >= top && y <= bottom => out.push((x, r))

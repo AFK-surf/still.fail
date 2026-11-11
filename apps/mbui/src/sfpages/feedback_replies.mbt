@@ -163,7 +163,7 @@ fn feedback_foot(v : @view.View, src : Source, r : ChatRef, id : String, report 
         acts,
         fn() { @sf.t("web-main.feedback.send") },
         fn() {
-          let said = f.text().trim().to_string()
+          let said = f.text().trim().to_owned()
           guard said != "" else { return }
           let r0 = report()
           let params : Json = {
@@ -179,7 +179,7 @@ fn feedback_foot(v : @view.View, src : Source, r : ChatRef, id : String, report 
         },
         tone=Primary,
         busy=fn() { doing(feedback_doing(id)) },
-        disabled=fn() { words.get().trim().to_string() == "" || report() is None },
+        disabled=fn() { words.get().trim().to_owned() == "" || report() is None },
       )
       |> ignore
     })

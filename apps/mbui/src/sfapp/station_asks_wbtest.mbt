@@ -83,7 +83,7 @@ fn asked_phone(said : Array[String]) -> @ui.Tester {
   new_run()
   let heard = fn(h : String) {
     guard h.has_prefix("out ") else { return }
-    let j = @json.parse(h.view(start_offset=4).to_string()) catch { _ => return }
+    let j = @json.parse(h.view(start_offset=4).to_owned()) catch { _ => return }
     guard j is Object(m) && m.get("subscribe") is Some(Object(sub)) && sub.get("topic") is Some(String(topic)) else {
       return
     }
@@ -121,7 +121,7 @@ test "a station's page open: that station alone subscribed, no other's, no part"
   @sfbase.open_page(Setting(@settings.Route::Station("ws1/st2")))
   t.run_for(@ui.move_most_ms)
   t.run_for(place_core_soon_ms * 4.0)
-  let now = said[before:].to_array()
+  let now = said[before:].to_owned()
   assert_eq(asked_of(now, "station"), ["station {\"scope\":\"ws1\",\"station\":\"ws1/st2\"}"])
   assert_eq(asked_of(now, "stationPart"), [])
   assert_true(t.find("Maple") is Some(_), msg="its page shows it")
@@ -135,7 +135,7 @@ test "权限's archiving open: each station's archiving subscribed by its own ro
   @sfbase.open_page(Setting(@settings.Route::Archiving))
   t.run_for(@ui.move_most_ms)
   t.run_for(place_core_soon_ms * 4.0)
-  let now = said[before:].to_array()
+  let now = said[before:].to_owned()
   let parts = asked_of(now, "stationPart")
   parts.sort()
   assert_eq(parts, [1, 2, 3].map(fn(n) { "stationPart {\"scope\":\"ws1\",\"station\":\"ws1/st\{n}\",\"part\":\"archiving\"}" }))

@@ -156,7 +156,7 @@ fn job_row(
 /// the row's words (the 任务 tab's), else how long ago. None said: how a job says something.
 fn job_notices(c : @ui.Ctx, job : Json?, limit? : Int = 0, clock? : Bool = false) -> Unit {
   let all = items(job, "notices")
-  let notices = if limit > 0 && all.length() > limit { all[:limit].to_array() } else { all }
+  let notices = if limit > 0 && all.length() > limit { all[:limit].to_owned() } else { all }
   if notices.length() == 0 {
     c.rich(
       [

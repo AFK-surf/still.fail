@@ -143,7 +143,7 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
   let folders : Map[String, Json] = {}
   let given = fn(path : String) {
     let mut so_far = ""
-    let parts = if path == "" { [] } else { path.split("/").map(fn(p) { p.to_string() }).collect() }
+    let parts = if path == "" { [] } else { path.split("/").map(fn(p) { p.to_owned() }).collect() }
     folders[station + "\n" + root + "\n"] = fix_browse_folder(mode, root, "")
     for p in parts {
       so_far = dv_join(so_far, p)
@@ -197,7 +197,7 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
                 String(s) => s
                 _ => ""
               }
-              let parts = key.split("\n").map(fn(p) { p.to_string() }).collect()
+              let parts = key.split("\n").map(fn(p) { p.to_owned() }).collect()
               if parts.length() == 3 {
                 folders[key] = fix_browse_folder(mode, parts[1], parts[2])
               }

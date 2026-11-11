@@ -28,9 +28,9 @@ fn rows_built_twice(extra : Ref[Bool], builds : Ref[Int]) -> @ui.Tester {
 
 ///|
 test "a frame built twice: its keyed nodes are the last build's, moved from where the last frame drew them" {
-  let extra = Ref::new(false)
+  let extra = Ref(false)
   // (how many times the view was built: the frame below built twice)
-  let builds = Ref::new(0)
+  let builds = Ref(0)
   let t = rows_built_twice(extra, builds)
   t.frame()
   let a = t.drawn_of("row a").unwrap()
@@ -69,8 +69,8 @@ let push_midway_ms : Double = 100.0
 
 ///|
 test "a frame built twice whose rows did move: moved once, from where the last frame drew them" {
-  let extra = Ref::new(false)
-  let top = Ref::new(0.0)
+  let extra = Ref(false)
+  let top = Ref(0.0)
   let t = @ui.Tester::new(
     fn(c) {
       c.column(fn() {

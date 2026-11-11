@@ -1918,13 +1918,13 @@ fn fx_usage(days : Int, split? : String = "people", only? : String = "", day? : 
     ("models", "按模型", [("claude-opus-5-5", "Opus 5.5", "", "$84", 0.71), ("gpt-6", "GPT-6", "", "$28", 0.24), ("claude-haiku-5", "Haiku 5", "", "$6.10", 0.05)]),
   ]
   // (the day's name as the core says it: 10/5 for 2026-10-05)
-  let dd = if day.length() >= 10 { day.substring(start=8) } else { "" }
+  let dd = if day.length() >= 10 { day[8:].to_owned() } else { "" }
   // (its cost, as its bar says it)
   let day_cost = match daily.search_by(fn(d) { day != "" && text(Some(d), "day") == day }) {
     Some(i) => text(Some(daily[i]), "costText")
     None => ""
   }
-  let day_name = if day == "" { "" } else { "10/" + (if dd.has_prefix("0") { dd.substring(start=1) } else { dd }) }
+  let day_name = if day == "" { "" } else { "10/" + (if dd.has_prefix("0") { dd[1:].to_owned() } else { dd }) }
   let only_shown = match lists.search_by(fn(l) { l.2.search_by(fn(it) { it.0 == only }) is Some(_) }) {
     Some(k) if only != "" => {
       let (_, _, its) = lists[k]
@@ -3468,7 +3468,7 @@ fn fx_feishu_flow(step : String) -> Json {
 fn fx_qr(n : Int) -> Json {
   let rows : Array[Json] = []
   for y in 0..<n {
-    let row = StringBuilder::new()
+    let row = StringBuilder()
     for x in 0..<n {
       let finder = fn(ox : Int, oy : Int) {
         let dx = x - ox

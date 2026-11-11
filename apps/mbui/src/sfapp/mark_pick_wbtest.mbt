@@ -459,7 +459,7 @@ test "图标 with keys: Tab goes from the field to the colours, then the grid; E
     let from = order.search("TextField 搜索图标").unwrap_or(-1)
     assert_true(from >= 0, msg="\{about}: \{order}")
     assert_eq(
-      order[from + 1:from + 10].to_array(),
+      order[from + 1:from + 10].to_owned(),
       ["Button 图标", "Button red", "Button orange", "Button amber", "Button green", "Button teal", "Button blue", "Button purple", "Button pink"],
       msg=about,
     )

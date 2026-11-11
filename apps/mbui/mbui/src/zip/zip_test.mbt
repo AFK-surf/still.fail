@@ -72,7 +72,7 @@ test "a longer text, in a block's own codes: as long and with the hash Python's 
   // damaged: a byte of it changed, or cut short
   let bad = gz.to_fixedarray()
   bad[1000] = (bad[1000].to_int() ^ 0x55).to_byte()
-  assert_true(@zip.gunzip(Bytes::from_fixedarray(bad)) is None)
+  assert_true(@zip.gunzip(Bytes::from_array(bad[:])) is None)
   assert_true(@zip.gunzip(gz[0:gz.length() - 100].to_owned()) is None)
   assert_true(@zip.gunzip(b"not gzip at all, not at all") is None)
 }

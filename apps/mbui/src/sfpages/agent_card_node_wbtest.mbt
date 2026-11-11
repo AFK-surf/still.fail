@@ -261,7 +261,7 @@ fn agent_tiles_apart(lines : Array[String], card : Json?) -> (Array[String], Arr
   ].filter(fn(w) { w != "" })
   let tile = fn(l : String) {
     match l.find("@") {
-      Some(i) => words.contains(l.view(end_offset=i).to_string())
+      Some(i) => words.contains(l.view(end_offset=i).to_owned())
       None => l.contains("x\{agent_tile_h} ")
     }
   }
@@ -282,7 +282,7 @@ fn agent_tile_widths(tiles : Array[String]) -> Array[String] {
       Some(i) => {
         let rest = l.view(start_offset=i + 1)
         match rest.find("x") {
-          Some(j) => rest.view(end_offset=j).to_string()
+          Some(j) => rest.view(end_offset=j).to_owned()
           None => ""
         }
       }

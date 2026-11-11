@@ -1636,7 +1636,7 @@ pub fn Viewer::fetch(self : Viewer, src : Source) -> Unit {
                 Some(b) => {
                   let from = offset.to_int()
                   let to = if from + length < b.length() { from + length } else { b.length() }
-                  answer(if from < to { b[from:to].to_bytes() } else { b"" }, b.length().to_double(), false)
+                  answer(if from < to { b[from:to].to_owned() } else { b"" }, b.length().to_double(), false)
                   return fn() {  }
                 }
                 None => ()
