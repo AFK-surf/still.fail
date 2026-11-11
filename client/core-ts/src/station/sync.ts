@@ -167,11 +167,17 @@ export class StationsSync {
     this.seen.touch(address, what === "errors" ? "log" : what, key);
     this.onTouched(address, what, key);
     if (what === "link") {
+      this.linkChanged(address);
       const waiting = this.#linkWaits.get(address);
       this.#linkWaits.delete(address);
       if (waiting) Deferred.doneUnsafe(waiting, Effect.void);
     }
   }
+
+  /// How a station's link changed (views/device-cache.ts).
+  linkChanged: (address: string) => void = () => {};
+  /// One of a station's chats opened (views/device-cache.ts).
+  chatOpened: (address: string) => void = () => {};
 
   /// Those waiting for a station's link to change (`#linkChange`).
   readonly #linkWaits = new Map<string, Deferred.Deferred<void>>();

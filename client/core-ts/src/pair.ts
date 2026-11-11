@@ -11,6 +11,8 @@ import { utf8 } from "./util.ts";
 
 /// The protocol a trusted device takes a new one's connection on.
 export const PAIR_ALPN = utf8("stillfail/pair/1");
+/// A person's other device, asked what it holds of a station that is down (views/device-cache.ts).
+export const CACHE_ALPN = utf8("stillfail/cache/1");
 /// How many wrong codes one connection is allowed.
 export const PAIR_TRIES = 3;
 

@@ -89,7 +89,7 @@ export function streamDuplex(stream: IrohStream, close: () => void): Duplex {
 }
 
 /// A member credential's word on who the device is, checked against the lock's keys (station/src/mesh/credential.ts).
-export function credentialOf(token: string, keys: unknown, ws: string, device: string, now: number): { sub: string; email: string; name: string } | null {
+export function credentialOf(token: string, keys: unknown, ws: string, device: string, now: number): { sub: string; email: string; name: string; sid: string | null } | null {
   try {
     const [head, body, sig] = token.split(".");
     if (!head || !body || !sig) return null;
@@ -101,7 +101,7 @@ export function credentialOf(token: string, keys: unknown, ws: string, device: s
     if (x === null || s === null || !ed25519.verify(s, utf8(`${head}.${body}`), x)) return null;
     const c = JSON.parse(new TextDecoder().decode(fromB64url(body) ?? new Uint8Array()));
     if (!ISSUERS.includes(c?.iss) || c?.ws !== ws || c?.device !== device || !(Number.isInteger(c?.exp) && c.exp > now)) return null;
-    return { sub: String(c.sub ?? ""), email: String(c.email ?? ""), name: String(c.name ?? "") };
+    return { sub: String(c.sub ?? ""), email: String(c.email ?? ""), name: String(c.name ?? ""), sid: typeof c.sid === "string" ? c.sid : null };
   } catch {
     return null;
   }

@@ -27,7 +27,7 @@ import { RELAY } from "./status.ts";
 import { Kind, route, type SpanContext, type Tracer } from "./trace.ts";
 import { fromUtf8, hex, parseJson, sha256, toJsonBytes, utf8 } from "./util.ts";
 import { type LockClaim, lockClaim } from "./lock.ts";
-import { PAIR_ALPN } from "./pair.ts";
+import { CACHE_ALPN, PAIR_ALPN } from "./pair.ts";
 import { hooks } from "./core/execute.ts";
 import type { Wakes } from "./wake.ts";
 
@@ -2504,11 +2504,16 @@ function waiting<A>(status: import("./status.ts").Status, place: import("./statu
   });
 }
 
-/// What an app's main endpoint takes (a trusted device met face to face: views/pair.ts `hooks.lockPair`); a page's
+/// What an app's main endpoint takes (a trusted device met face to face: views/pair.ts `hooks.lockPair`; the person's
+/// other device asking what this one holds: views/device-cache.ts `hooks.deviceCache`); a page's
 /// nothing (it approves no one).
 function takes(inner: Inner): Pick<MeshEnv, "takes" | "incoming"> {
   if (!inner.host.appKeys) return {};
-  return { takes: [PAIR_ALPN], incoming: (connection, alpn) => (alpn.length === PAIR_ALPN.length && alpn.every((b, i) => b === PAIR_ALPN[i]) ? hooks.lockPair?.(inner, connection) : connection.close(0, "no such protocol")) };
+  const is = (alpn: Uint8Array, one: Uint8Array) => alpn.length === one.length && alpn.every((b, i) => b === one[i]);
+  return {
+    takes: [PAIR_ALPN, CACHE_ALPN],
+    incoming: (connection, alpn) => (is(alpn, PAIR_ALPN) ? hooks.lockPair?.(inner, connection) : is(alpn, CACHE_ALPN) ? hooks.deviceCache?.(inner, connection) : connection.close(0, "no such protocol")),
+  };
 }
 
 /// The core's mesh: brought up on first use with the relays any account's `/v1/me` names, the credentials from

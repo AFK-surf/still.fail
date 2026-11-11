@@ -40,6 +40,7 @@ export const hooks: {
   roster?: (inner: Inner, sub: string, workspace: string, what: Roster) => Effect.Effect<unknown, CoreError>;
   /// A new device's connection, met face to face (views/pair.ts).
   lockPair?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;
+  deviceCache?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;
 } = {};
 
 /// What a write to still.fail cloud changes of a workspace's roster, as its lock has one: a member out, a member's
