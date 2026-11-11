@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [4c8329652](https://github.com/AFK-surf/still.fail/commit/4c8329652908f02745d2faaad2b0a9377d6130d2) app: 分享给其他 workspace copies the chat's link as 完成  | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 94.47 | 148.37 |
 | [9dcbee8c7](https://github.com/AFK-surf/still.fail/commit/9dcbee8c7e4c39c596d3618103997a50a0cf9d8e) sf: a dialog of nodes in the window's middle opens | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 94.19 | 170.58 |
 | [4cb54577a](https://github.com/AFK-surf/still.fail/commit/4cb54577a45e3ff3cff6a8f736f96c31c8566635) ci: at a frame rate only what a rate is for; the p | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 94 | 171.98 |
 | [3cbd0905b](https://github.com/AFK-surf/still.fail/commit/3cbd0905bf22ecf621481076b9a52cacd01665f7) app: a history tile's figure on its own line, its  | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 93.8 | 171.95 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [0c0ba9fb9](https://github.com/AFK-surf/still.fail/commit/0c0ba9fb9c1a585b4974a5e5438213727376188d) core: the device that began a person's lock says i | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 93.65 | 173.63 |
 | [5d8ebf2e2](https://github.com/AFK-surf/still.fail/commit/5d8ebf2e2ca7c99a6d20c6ea990e6350f0d57b29) core test: the devices topic placed among those no | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 93.95 | 171.54 |
 | [6d985b7a7](https://github.com/AFK-surf/still.fail/commit/6d985b7a745263f260eb8c47a5e6cfc06dce56bb) mac: update in place where a translocated app was  | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 94.09 | 151.58 |
-| [351ef47b8](https://github.com/AFK-surf/still.fail/commit/351ef47b876954e1c506c5514ec2409c0b63720b) core: what each topic sends at a workspace's real  | 1.78 | 2.37 | 9.85 | 28.5 | 34.62 | 25.46 | 46.88 | 94.09 | 185.99 |
