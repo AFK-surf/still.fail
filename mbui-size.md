@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [e39116f76](https://github.com/AFK-surf/still.fail/commit/e39116f76d1349b37fa5dd49082fe565bb497070) core: past a call's 3 s the cloud is asked too, an | 1.85 | 2.48 | 10.39 | 29.14 | 36.67 | 25.95 | 48.4 | 94.01 | 190.1 |
 | [9414759c2](https://github.com/AFK-surf/still.fail/commit/9414759c2fdec23894aee9864bf012b4042cdc48) core: an entry a station of the lock refuses fails | 1.85 | 2.48 | 10.39 | 29.14 | 36.67 | 25.95 | 48.4 | 94.21 | 152.68 |
 | [b74057fd8](https://github.com/AFK-surf/still.fail/commit/b74057fd8d0d593b09d966dddb0071e3e5144d50) mbui: each bar set beside the most one Tester of i | 1.85 | 2.48 | 10.39 | 29.14 | 36.67 | 25.95 | 48.4 | 94 | 138.34 |
 | [a02efcc16](https://github.com/AFK-surf/still.fail/commit/a02efcc16431cd4a623b9be3b8e31a3082a0dbdf) test: new_pick_whole says a string's view owned an | 1.85 | 2.47 | 10.37 | 29.12 | 36.62 | 25.92 | 48.37 | 93.83 | 174.41 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [7ec136989](https://github.com/AFK-surf/still.fail/commit/7ec13698930c8d0c43d01110e9fff0c48a8bc72f) ci: the merge queue's branches start no push workf | 1.82 | 2.44 | 10.17 | 28.91 | 35.89 | 25.74 | 47.74 | 94.34 | 172.94 |
 | [c11e8c7d2](https://github.com/AFK-surf/still.fail/commit/c11e8c7d26359a8b78abb2f82c3cffb386b9acf4) app: 引用 over words a mouse picked comes in the fra | 1.82 | 2.43 | 10.16 | 28.89 | 35.85 | 25.73 | 47.72 | 94.24 | 166.21 |
 | [af3361193](https://github.com/AFK-surf/still.fail/commit/af33611938021707c27c6c0d74a4cd5cf453bb31) app tests: late_core's switch tests begin their ru | 1.82 | 2.43 | 10.16 | 28.9 | 35.85 | 25.73 | 47.72 | 94.42 | 167.88 |
-| [cfc0e8fde](https://github.com/AFK-surf/still.fail/commit/cfc0e8fde50ebe7082861a75ebd79d2b6f72caf9) ci: the mbui app's tests at the rates once before  | 1.82 | 2.43 | 10.16 | 28.9 | 35.85 | 25.73 | 47.72 | 94.42 | 177.1 |
