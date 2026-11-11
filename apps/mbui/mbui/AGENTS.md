@@ -254,5 +254,8 @@ yet and you can add one, add it.
 
 ## Before a PR
 
+- A compiler warning is an error or off, never left a warning: `moon.mod`'s `warnings` is the app's line
+  (`apps/mbui/AGENTS.md`, Warnings).
+
 - One PR per piece of work. Squash with `git reset --soft $(git merge-base HEAD origin/main)`, never onto
   `origin/main`; check `git diff origin/main --stat` lists only your files.

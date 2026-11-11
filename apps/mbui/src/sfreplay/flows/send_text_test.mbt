@@ -5,7 +5,7 @@
 
 ///|
 test "03-send-text" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("send-text"), seed~)
     f.tap("端到端测试")
     // the chat pushed over Home: in place once its push is over

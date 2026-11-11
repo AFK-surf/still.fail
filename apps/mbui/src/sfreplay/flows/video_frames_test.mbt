@@ -6,7 +6,7 @@
 
 ///|
 test "97-video-frames" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("video-frames"), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
     f.see("端到端测试")
     f.peer("peer createfiles 一段视频 201493 post:收到视频 201493 -- e2e-clip.mp4")

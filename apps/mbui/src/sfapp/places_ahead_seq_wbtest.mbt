@@ -9,7 +9,7 @@
 /// A phone signed in over a core answering `ms` late, every subscription the app's client sent its core and every
 /// letting go of one said in `said` in order (`sub <topic>`, `unsub <topic>`, with the subscription's params beside it
 /// where they say more than its workspace or station): the client's messages out, what a run's trace keeps.
-fn ahead_phone(ms : Double, said : Array[String]) -> @ui.Tester raise {
+fn ahead_phone(ms : Double, said : Array[String]) -> @ui.Tester {
   new_run()
   let names : Map[Int, String] = {}
   let heard = fn(h : String) {
@@ -64,7 +64,7 @@ fn tab_named_at(t : @ui.Tester, label : String) -> (Double, Double, Double, Doub
 ///|
 /// Home, then its 设置 pressed and come in, then back: what the client sent of the places read ahead, after what Home's
 /// coming sent, over a core answering `ms` late.
-fn home_settings_back(ms : Double) -> (Array[String], Array[String], Array[String]) raise {
+fn home_settings_back(ms : Double) -> (Array[String], Array[String], Array[String]) {
   let said : Array[String] = []
   let t = ahead_phone(ms, said)
   let start = ahead_said(said)

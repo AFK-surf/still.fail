@@ -5,7 +5,7 @@
 
 ///|
 test "20-drive-delete" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-delete"), seed~)
     // The renamed photo is the starting state when this flow runs on its own.
     f.before("drive-photo 082940 renamed")

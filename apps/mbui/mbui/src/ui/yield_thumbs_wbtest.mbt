@@ -85,7 +85,7 @@ fn yield_run(
 
 ///|
 /// Pressed at the thumb and dragged down 40, 10 each drag_step_ms, let go.
-fn yield_drag(t : Tester, p : (Double, Double), _there : @signals.Signal[Bool]) -> Unit raise {
+fn yield_drag(t : Tester, p : (Double, Double), _there : @signals.Signal[Bool]) -> Unit {
   t.press_at(p.0, p.1)
   for i in 1..=4 {
     t.move(p.0, p.1 + 10.0 * i.to_double())
@@ -97,19 +97,19 @@ fn yield_drag(t : Tester, p : (Double, Double), _there : @signals.Signal[Bool]) 
 
 ///|
 test "yield_thumbs: a mouse's press at the list's thumb under the edge's strip, dragged: the list scrolled, the edge told nothing" {
-  let (said, moved) = yield_run(yield_drag)
+  let (said, moved) = yield_run(fn(t, p, there) { yield_drag(t, p, there) })
   assert_true(moved > 0.0 && said.length() == 0, msg="\{said} \{moved}")
 }
 
 ///|
 test "yield_thumbs: a button of the tree's over the edge where the thumb is: its, the list not scrolled, the edge told nothing" {
-  let (said, moved) = yield_run(yield_drag, cover=true)
+  let (said, moved) = yield_run(fn(t, p, there) { yield_drag(t, p, there) }, cover=true)
   assert_true(moved == 0.0 && said.length() > 0 && said.iter().all(fn(s) { s.has_prefix("button") }), msg="\{said} \{moved}")
 }
 
 ///|
 test "yield_thumbs: a finger at the thumb a mouse brought out: the edge's" {
-  let (said, moved) = yield_run(fn(t, p, _) raise {
+  let (said, moved) = yield_run(fn(t, p, _) {
     let at = t.time() + 10.0
     t.advance(at - t.time())
     t.touch_raw(0, 1, p.0, p.1, at)
@@ -147,7 +147,7 @@ test "yield_thumbs: the old view let go while its thumb is held: what follows, n
 ///|
 test "yield_thumbs: the pointer still at the thumb under the edge's strip, the thumb wheeled away from it and back: the edge pointed at as the thumb leaves, not as it is there" {
   let seen : Array[Bool] = []
-  let (said, _) = yield_run(fn(t, p, _) raise {
+  let (said, _) = yield_run(fn(t, p, _) {
     let tree = view_tree().unwrap()
     seen.push(tree.pointed_now() == yield_edge.val)
     // (the list wheeled far on: the thumb gone down from under the pointer, which stays; as the frame that publishes it
@@ -167,7 +167,7 @@ test "yield_thumbs: the pointer and the thumb still, the old view's box rounded 
   let round = @signals.signal(0.0, same=fn(a, b) { a == b })
   let seen : Array[Bool] = []
   let rects : Array[Array[(Double, Double, Double, Double)]] = []
-  let (said, _) = yield_run(round~, fn(t, p, _) raise {
+  let (said, _) = yield_run(round~, fn(t, p, _) {
     let tree = view_tree().unwrap()
     let thumb = fn() {
       t.drawn_rects().filter(fn(r) { r.2 == scroll_bar_size && r.0 > 280.0 }).map(fn(r) { (r.0, r.1, r.2, r.3) })

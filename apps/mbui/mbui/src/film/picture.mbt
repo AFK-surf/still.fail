@@ -151,7 +151,7 @@ fn run_picture(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
   let drive_path = arg("MBUI_FILM_DRIVE")
   let prepare = if prepare_path == "" { "" } else { read_text(prepare_path) }
   let script = if drive_path == "" { "" } else { read_text(drive_path) }
-  if prepare_path != "" && prepare == "" || drive_path != "" && script == "" {
+  if (prepare_path != "" && prepare == "") || (drive_path != "" && script == "") {
     say("picture: a scene script could not be read")
     exit(2)
     return

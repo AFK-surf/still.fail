@@ -253,6 +253,5 @@ pub fn settings_of(j : Json) -> Result[(Double, Double, Double, Int, Pointing, B
     Ok((w, h, scale, platform, pointing, dark))
   } catch {
     Failure(k) => Err("its {\"settings\":…} has no " + k)
-    _ => Err("its {\"settings\":…} is not one")
   }
 }

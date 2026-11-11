@@ -3,7 +3,7 @@
 
 ///|
 test "44-notice-cancel" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("notice-cancel"), seed~)
     f.see("端到端测试")
     // (a live run's step beside the app, the trace has what came of it)

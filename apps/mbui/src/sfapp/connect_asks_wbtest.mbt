@@ -28,7 +28,7 @@ fn connect_candidates_said(base : Source) -> Source {
 ///|
 /// A phone over the settings' made-up core answering `place_core_soon_ms` late, a page of the settings open (`page`, as
 /// open_setting names it): every subscription the client sent said in `said` as `<topic> <params>`.
-fn connect_asked(said : Array[String], page : String) -> @ui.Tester raise {
+fn connect_asked(said : Array[String], page : String) -> @ui.Tester {
   new_run()
   let heard = fn(h : String) {
     guard h.has_prefix("out ") else { return }

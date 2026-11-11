@@ -242,7 +242,7 @@ test "on the tape the sidebar left wide on a larger screen opens at the tape's m
     @sfdesk.wide.side_w.set(@sfdesk.side_max)
     t.frame()
     let most = @sfdesk.rail_w + @sfdesk.tape_side_max
-    let page_at = fn() raise { said_at(t, "收起侧边栏").unwrap().0 }
+    let page_at = fn() { said_at(t, "收起侧边栏").unwrap().0 }
     assert_true(page_at() > most && page_at() < most + 4.0 * apart, msg="\{at}: the page from \{page_at()}")
     assert_eq(@sfdesk.wide.side_w.get(), @sfdesk.side_max, msg=at)
     // dragged wider from there: no further than the tape's most; narrower, from where it shows
@@ -271,7 +271,7 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
     let t = tape_chat(platform, 720.0, 840.0, width=room, height=room)
     // the sidebar in use, its own 240: held a while first (a finger's hold on an edge is to drag it, no long press:
     // no words of it; a finger drags it only so, @sf.handle_drag), then dragged 60 wider, the page beside it as much further on as it goes; let go, the width kept
-    let page_at = fn() raise { said_at(t, "收起侧边栏").unwrap().0 }
+    let page_at = fn() { said_at(t, "收起侧边栏").unwrap().0 }
     let before = page_at()
     let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
     t.press_at(ex, ey)
@@ -298,7 +298,7 @@ test "on the tape the edge beside the page, the sidebar's or the side panel's in
     t.leave()
     t.run_for(@ui.move_most_ms)
     assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel, msg=at)
-    let page_end = fn() raise { covered(t, "收起侧边栏").unwrap().1 }
+    let page_end = fn() { covered(t, "收起侧边栏").unwrap().1 }
     let shown = page_end()
     let (px, py) = edge_middle(t, "调整侧栏宽度")
     drag_slowly(t, px, py, 200.0, up=false, hold=true)
@@ -328,7 +328,7 @@ test "on the tape the edge beside the page pressed where it lies over the page: 
     let room = if platform == 2 { "medium" } else { "" }
     let at = "platform \{platform}"
     let t = tape_chat(platform, 720.0, 840.0, width=room, height=room)
-    let page_from = fn() raise { covered(t, "收起侧边栏").unwrap().0 }
+    let page_from = fn() { covered(t, "收起侧边栏").unwrap().0 }
     let (ex, ey) = edge_middle(t, "调整侧边栏宽度")
     drag_slowly(t, ex, ey, 60.0, hold=true)
     t.frame()

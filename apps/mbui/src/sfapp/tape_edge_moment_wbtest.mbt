@@ -232,7 +232,7 @@ let edge_look_ms : Double = @sf.edge_bar_ms
 ///|
 /// The sidebar's edge's bar where it is drawn, left of where the page's 收起侧边栏 is: across less that, how high, its
 /// ink; none drawn (hidden).
-fn edge_bar_drawn(t : @ui.Tester) -> (Double, Double, Int64)? raise {
+fn edge_bar_drawn(t : @ui.Tester) -> (Double, Double, Int64)? {
   let page = covered(t, "收起侧边栏").unwrap().0
   match t.drawn_rects().filter(fn(r) { r.2 == @sf.edge_bar_w && r.0 < page }) {
     [r, ..] => Some((r.0 - page, r.3, r.4))

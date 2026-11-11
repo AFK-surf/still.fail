@@ -541,7 +541,7 @@ fn Ctx::shows_after_layout(self : Ctx) -> Unit {
       k = k + 1
     }
     if k >= self.count {
-      if laid < 0 && self.frame_no <= frame + 1 || laid == self.frame_no {
+      if (laid < 0 && self.frame_no <= frame + 1) || laid == self.frame_no {
         left.push(ask)
       }
       continue

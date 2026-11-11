@@ -3,7 +3,7 @@
 
 ///|
 test "27-pin" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     // (the run's list of chats, under the chat, let go of the rows under the block that came as the chat was pinned
     // (已固定) and made them again, their watch of `doing` let go of and asked again with them: a block that comes
     // now leaves the rows that show as they are (mbui's list_window.mbt), and the watch goes on)

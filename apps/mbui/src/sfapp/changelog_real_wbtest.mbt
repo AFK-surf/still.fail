@@ -137,7 +137,7 @@ struct RealSeen {
 /// 更新日志 opened 窄排法 at 390 × 844 on the real-size source, walked as the head says, every frame looked at: what the
 /// tree did (with the stage of the walk, the changes alive after it, the list's whole as counted then), the faults
 /// (more changes alive than meet the list's room; the whole as counted further than a screen from what it came to).
-fn changelog_real_walk() -> RealSeen raise {
+fn changelog_real_walk() -> RealSeen {
   new_run()
   let asks = []
   // (while held, an ask not answered before is not answered yet: the core's round trip for a tab chosen)

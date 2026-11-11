@@ -131,6 +131,6 @@ pub fn[K : Hash + Eq] Keyed::remove(self : Keyed[K], k : K) -> Unit {
 
 ///|
 /// How many are in it, read by nothing.
-pub fn[K : Hash + Eq] Keyed::count(self : Keyed[K]) -> Int {
+pub fn[K] Keyed::count(self : Keyed[K]) -> Int {
   self.members.length()
 }

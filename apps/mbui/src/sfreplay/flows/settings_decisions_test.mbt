@@ -3,12 +3,12 @@
 
 ///|
 test "86-decisions" {
-  @sfreplay.orders(flow_86_decisions)
+  @sfreplay.orders(fn(seed) { flow_86_decisions(seed) })
 }
 
 ///|
 /// The flow of 86-decisions in the pass `seed` (@sfreplay.orders): its end's screen.
-fn flow_86_decisions(seed : UInt) -> String raise {
+fn flow_86_decisions(seed : UInt) -> String {
   let f = @sfreplay.Flow::start(@sfreplay.trace("settings-decisions"), seed~)
   f.tap("icon:settings")
   f.run_to(@ui.nav_rest())

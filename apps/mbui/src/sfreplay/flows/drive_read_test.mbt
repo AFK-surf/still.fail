@@ -6,7 +6,7 @@
 
 ///|
 test "17-drive-read" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-read"), seed~)
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-082940")

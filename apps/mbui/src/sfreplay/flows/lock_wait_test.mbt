@@ -4,12 +4,12 @@
 
 ///|
 test "67-lock-wait" {
-  @sfreplay.orders(flow_67_lock_wait)
+  @sfreplay.orders(fn(seed) { flow_67_lock_wait(seed) })
 }
 
 ///|
 /// The flow of 67-lock-wait in the pass `seed` (@sfreplay.orders): its end's screen.
-fn flow_67_lock_wait(seed : UInt) -> String raise {
+fn flow_67_lock_wait(seed : UInt) -> String {
   let f = @sfreplay.Flow::start(@sfreplay.trace("lock-wait"), seed~)
   // (the station locked before the app starts, then let wait and unlocked: a live run's steps)
   f.before("peer lock-on")

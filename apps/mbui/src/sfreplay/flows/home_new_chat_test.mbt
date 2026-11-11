@@ -3,12 +3,12 @@
 
 ///|
 test "02-home-new-chat" {
-  @sfreplay.orders(flow_02_home_new_chat)
+  @sfreplay.orders(fn(seed) { flow_02_home_new_chat(seed) })
 }
 
 ///|
 /// The flow of 02-home-new-chat in the pass `seed` (@sfreplay.orders): its end's screen.
-fn flow_02_home_new_chat(seed : UInt) -> String raise {
+fn flow_02_home_new_chat(seed : UInt) -> String {
   let f = @sfreplay.Flow::start(@sfreplay.trace("home-new-chat"), seed~)
   f.see("端到端测试")
   // (alice's other device makes the chat: a live run's step beside the app)

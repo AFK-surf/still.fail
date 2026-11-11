@@ -378,7 +378,7 @@ fn native_turned(c : @ui.Ctx, was : FixedArray[Double]) -> Bool {
 ///|
 /// The colour 0xRRGGBBAA as `rrggbbaa`, opaque, for an icon the host draws (ws_badge).
 fn hex_of(k : Int64) -> String {
-  (k >> 8 & 0xFFFFFFL).to_string(radix=16).pad_start(6, '0') + "ff"
+  ((k >> 8) & 0xFFFFFFL).to_string(radix=16).pad_start(6, '0') + "ff"
 }
 
 ///|

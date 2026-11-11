@@ -3,7 +3,7 @@
 
 ///|
 test "12-offline-retry" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("offline-retry"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)

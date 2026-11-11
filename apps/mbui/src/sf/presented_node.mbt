@@ -358,7 +358,6 @@ pub fn presented_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
             min_w=chooser_menu_w,
           )
         }
-        _ => ()
       }
     },
   )

@@ -26,7 +26,7 @@ fn open_jobs_tester(long : Json, calls? : Array[(String, Json)] = []) -> @ui.Tes
 ///|
 /// The ripples over the row of `words` (its last drawn) as a finger goes down on it and slowly on up the list, 6 a move
 /// (past the slop at the second), each move drawn as it comes; with where the words are then.
-fn scrolled_from(words : String) -> Array[(Int, Double)] raise {
+fn scrolled_from(words : String) -> Array[(Int, Double)] {
   let t = open_jobs_tester(@sffixture.long_screens_view())
   let (x, y) = t.find_last(words).unwrap()
   let seen = []

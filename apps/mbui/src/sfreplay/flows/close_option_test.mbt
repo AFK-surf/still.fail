@@ -4,7 +4,7 @@
 
 ///|
 test "24-close-option" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("close-option"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)

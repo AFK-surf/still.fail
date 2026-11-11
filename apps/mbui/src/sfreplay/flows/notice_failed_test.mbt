@@ -4,7 +4,7 @@
 
 ///|
 test "41-notice-failed" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     // (the run's app had the local cloud, its trace's env says which: the notice's link read against it, link.parse)
     let f = @sfreplay.Flow::start(@sfreplay.trace("notice-failed"), seed~)
     f.see("端到端测试")

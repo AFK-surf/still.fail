@@ -28,7 +28,7 @@ test "a place gone to at each width on either screen: 文件 the stack's root fr
       t.run_for(@ui.move_most_ms)
       assert_eq(app.nav.depth(), 1, msg=at)
     }
-    let place = fn() raise {
+    let place = fn() {
       // (the bottom bar's places are its tabs, the rail's its buttons)
       let n = match t.query(Tab, label="文件") {
         Some(n) => n

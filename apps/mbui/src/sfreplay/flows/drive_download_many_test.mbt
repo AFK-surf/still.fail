@@ -12,7 +12,7 @@ test "91-drive-download-many" {
 
 ///|
 fn replay_drive_download_many() -> Unit raise {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     // (the run's folder opened on stations asked anew (its page's `stations` whole, after the files' with a drive), so
     // it read the operations under way (`doing`) only once they came: its watch handed over from the page before let
     // go of and asked again. The stations' rows are one ask held all along now (MBUI_STATION_ROWS), the folder opened

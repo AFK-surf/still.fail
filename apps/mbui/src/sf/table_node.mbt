@@ -159,7 +159,7 @@ fn table_cell_runs(cell : Array[MdInline]) -> Array[@ui.Run] {
 /// words a person's.
 fn table_runs_look() -> @view.RunsLook {
   let p = theme().p
-  { ..@view.runs_plain, link: p.blue, pressed: alpha(p.blue, 0.14), code_ink: p.code_ink, code_ground: 0L, code_scale: 0.9, words: true }
+  { link: p.blue, pressed: alpha(p.blue, 0.14), code_ink: p.code_ink, code_ground: 0L, code_scale: 0.9, words: true }
 }
 
 ///|

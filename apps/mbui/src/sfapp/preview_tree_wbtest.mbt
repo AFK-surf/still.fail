@@ -1816,7 +1816,7 @@ fn held_wide_preview(
 /// a frame drawn: where its way back starts (-1: none), whether a press on its blank (between the way back and the name) moved
 /// the window, whether the bars still show after it, the viewer open; how far in from the window's side its last tool (download) ends,
 /// where it has one (-1 none: a picture coming has none).
-fn wide_bar_inset(t : @ui.Tester, v : Viewer, inset : Bool) -> ((Double, Bool, Bool), Double) raise {
+fn wide_bar_inset(t : @ui.Tester, v : Viewer, inset : Bool) -> ((Double, Bool, Bool), Double) {
   t.set_window_inset(inset)
   t.draw()
   // (none: -1, the bar gone)
@@ -2024,7 +2024,7 @@ test "viewer on the tree, an Android tablet 840 wide, a picture whose name is fa
 /// come said once: 1 KB of 4 KB); else whole. Where the bar across the top has its way back, each of its tools, its
 /// progress bar and the words beside it (each x, w; none: (-1, 0)), and whether it is as `hold` says and the bar its
 /// nodes ("nodes" 1, else 0).
-fn wide_bar_room(what : String, w : Double, platform : Int, fs : Double, hold : Bool) -> Map[String, (Double, Double)] raise {
+fn wide_bar_room(what : String, w : Double, platform : Int, fs : Double, hold : Bool) -> Map[String, (Double, Double)] {
   new_run()
   let base = fixture("chat-preview-" + what)
   let said : Map[String, (Json) -> Unit] = {}

@@ -8,7 +8,7 @@
 
 ///|
 test "18-drive-upload" {
-  @sfreplay.orders(fn(seed) raise {
+  @sfreplay.orders(fn(seed) {
     let f = @sfreplay.Flow::start(@sfreplay.trace("drive-upload"), seed~)
     f.t.picks([("e2e-photo.jpg", @sfreplay.e2e_photo()), ("e2e-data.bin", @sfreplay.e2e_data())])
     f.open_page(@sfapp.Page::Files)
