@@ -305,7 +305,10 @@ jobs:
           APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui SF_SRC=$PWD bash apps/mbui/scripts/ios.sh build
           cd apps/mbui/out/ios-device && rm -rf Payload *.ipa && mkdir Payload && cp -R MBUI.app Payload/
           zip -qry stillfail-mbui.ipa Payload && ls -la stillfail-mbui.ipa
+      # (for people: no later job downloads it, so a reset of the artifact service fails nothing that passed, main
+      # 391fece4's ios, its CreateArtifact timed out five times, 2026-11-11)
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: mbui-ios-unsigned-${{ github.sha }}
           path: apps/mbui/out/ios-device/stillfail-mbui.ipa
