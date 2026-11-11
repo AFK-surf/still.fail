@@ -1042,6 +1042,8 @@ pub let mark_ring_bg : @ui.Color
 
 pub let mark_said_h : @ui.Len
 
+pub fn mark_words_node(@view.View, () -> String, () -> @ui.TextStyle) -> @view.View
+
 pub let mark_yellow : Int64
 
 pub fn markdown(@ui.Ctx, String, key? : String, tree? : @json.Json?, size? : Double, line? : Double, one_line? : Bool, ink? : Int64, on_link? : (String) -> Unit, on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)?, on_link_shown? : ((String, String, Int32) -> Unit)?, files? : (String) -> Placed?, found? : Array[String], code? : (String, String) -> (() -> Unit)?, screens? : Screens?, chat_title? : (String) -> String?, document? : Bool, bleed? : Double, copy? : Bool, fit_tables? : Bool, paths? : Bool, text_face? : Int32?, code_face? : Int32?) -> Int32

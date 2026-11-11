@@ -4,7 +4,7 @@
 
 ///|
 /// Words `s` measured 8 a letter on lines 16 high, wrapped at the width offered (none offered: on one line).
-fn alone_measure(s : String, _look : WordsLook, offered : Double) -> (Double, Double) {
+fn alone_measure(s : String, _look : WordsLook, offered : Double, _scale : Double) -> (Double, Double) {
   let whole = s.length().to_double() * 8.0
   if offered > 0.0 && whole > offered {
     (offered, (whole / offered).ceil() * 16.0)

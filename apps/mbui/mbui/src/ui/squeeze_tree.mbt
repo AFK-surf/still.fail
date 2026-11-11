@@ -176,7 +176,8 @@ fn Ctx::tree_facts(
 
 ///|
 /// The words of the window tree's node `d` put among the frame's as node `w` (in its node there), set and laid
-/// out as the tree draws them (view_host's words), said they may be cut as the tree says it (Tree::allows_ellipsis).
+/// out as the tree draws them (view_host's words: at its node's size of words, Tree::words_scale_of), said they may be
+/// cut as the tree says it (Tree::allows_ellipsis).
 fn Ctx::tree_words_facts(
   self : Ctx,
   w : Node,
@@ -186,7 +187,8 @@ fn Ctx::tree_words_facts(
 ) -> Unit {
   guard contents.get(d.id.at) is Some((c, _)) else { return }
   let k = c.words_look
-  let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
+  let scale = tree.words_scale_of(d.id)
+  let (size, line, style, spacing) = (view_sp(scale, k.size), view_line(scale, k), view_words_style(), view_spacing(scale, k))
   w.wrap = k.wrap
   w.balance = k.balance
   w.center = c.words_center
@@ -218,7 +220,7 @@ fn Ctx::tree_words_facts(
   } else {
     w.kind = kind_rich
     w.text = c.words
-    let rich = view_rich(c.runs, k, c.runs_look)
+    let rich = view_rich(c.runs, k, c.runs_look, scale)
     let whole = layout_rich(rich, 1.0e9)
     w.rich = Some(rich)
     w.rl_whole = if k.wrap { @double.not_a_number } else { whole.w }

@@ -66,10 +66,43 @@ pub fn Tree::drawn_by(
 ///|
 /// The system's size of words its tree's words are drawn at (1: as said), followed: what reads it is worked out again
 /// as all words are measured anew (View::words_redone). What a node lays out by words it measures itself, their size
-/// said by it (ui's sp_at).
+/// said by it (ui's sp_at). 1 where it was made with its words as said (View::box's `words_as_said`): the one way it is
+/// read, by what is made (this) and by what hosts the tree as it measures and draws a node's words
+/// (Tree::words_scale_of).
 pub fn View::words_scale(self : View) -> Double {
   self.tree.words_redone.get() |> ignore
-  (self.tree.env.words_scale)()
+  self.tree.words_scale_at(self.at)
+}
+
+///|
+/// The size of words node `id`'s words are measured and drawn at (View::words_scale's, not followed): what hosts the
+/// tree measures and draws them by.
+pub fn Tree::words_scale_of(self : Tree, id : NodeId) -> Double {
+  self.words_scale_at(id.at)
+}
+
+///|
+/// Said by a part whose words its host draws at the system's size of words whatever its node says (`what`: a field,
+/// its words the editor's, ui's Ctx::editor_sizing), as its node is made: where that node's words are as said
+/// (View::box's `words_as_said`), a fault naming where it was made and why, under a tree that keeps where its nodes
+/// were made (a Tester's, source.mbt); a device's keeps none, and nothing is done there.
+pub fn View::words_follow_system(self : View, what : String) -> Unit {
+  guard self.live() is Some(n) && n.words_as_said && n.source is Some(_) else { return }
+  let (made, part) = self.tree.source_of(self.id())
+  let in_part = if part == "" { "" } else { " (in what was asked for at \{part})" }
+  self.fault(
+    "\{what} made at \{made}\{in_part}, where words are drawn at the size they are said (View::box's words_as_said): its words are drawn at the system's size of words all the same, not as said there",
+  )
+}
+
+///|
+/// The size of words node `at`'s words are at: 1 where it was made with its words as said, else the system's.
+fn Tree::words_scale_at(self : Tree, at : Int) -> Double {
+  if at >= 0 && at < self.nodes.length() && self.nodes[at].words_as_said {
+    1.0
+  } else {
+    (self.env.words_scale)()
+  }
 }
 
 ///|

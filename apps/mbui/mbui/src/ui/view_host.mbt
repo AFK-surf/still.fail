@@ -522,18 +522,18 @@ fn view_forget() -> Unit {
 
 ///|
 /// Words of a node made once measured as they are drawn (text.mbt), in `width` (< 0: as wide as they are): at the
-/// system's size of words, as an old view's are (Ctx::sp: the look's size and line said at 1).
-fn view_words_measure(words : String, look : @view.WordsLook, width : Double) -> (Double, Double) {
-  let c = g()
+/// size of words `scale` its node's are at (View::words_scale's: the system's, as an old view's are, Ctx::sp, but where
+/// it says its words are as said), the look's size and line said at 1.
+fn view_words_measure(words : String, look : @view.WordsLook, width : Double, scale : Double) -> (Double, Double) {
   let tl = layout_words(
     view_words_set(words, look),
-    c.sp(look.size),
+    view_sp(scale, look.size),
     look.weight,
     if width < 0.0 { 1.0e9 } else { width },
     look.wrap,
     balance=look.balance,
-    line=view_line(c, look),
-    spacing=view_spacing(c, look),
+    line=view_line(scale, look),
+    spacing=view_spacing(scale, look),
     style=view_words_style(),
   )
   // (broken onto more lines than their own where the width ran out: as wide as it, as an old view's words are, leaf_size)
@@ -555,11 +555,17 @@ fn view_words_set(words : String, look : @view.WordsLook) -> String {
 
 ///|
 /// How wide a node's words too wide for `width` on one line are drawn where they say `shorter` ways (View::shorter), as
-/// an old view's are laid out (said_in: the first that fits whole, else the last cut with an ellipsis).
-fn view_shorter_measure(words : String, shorter : Array[String], look : @view.WordsLook, width : Double) -> Double {
-  let c = g()
+/// an old view's are laid out (said_in: the first that fits whole, else the last cut with an ellipsis), at `scale`
+/// (view_words_measure's).
+fn view_shorter_measure(
+  words : String,
+  shorter : Array[String],
+  look : @view.WordsLook,
+  width : Double,
+  scale : Double,
+) -> Double {
   let lay = fn(s : String) {
-    layout_text(s, c.sp(look.size), look.weight, 1.0e9, false, line=view_line(c, look), spacing=view_spacing(c, look), style=view_words_style())
+    layout_text(s, view_sp(scale, look.size), look.weight, 1.0e9, false, line=view_line(scale, look), spacing=view_spacing(scale, look), style=view_words_style())
   }
   // (set on one line as they are drawn, its own and the shorter ones alike: view_words_set)
   let words = view_words_set(words, look)
@@ -580,11 +586,10 @@ fn view_words_style() -> Int {
 ///|
 /// A node's words in pieces (@text.Run) as the paragraph the frame lays out and draws (rich.mbt, as Ctx::rich's):
 /// each piece as it says itself (its weight, slant, face, size, ink, ground, lines, link, drawing: 0 or none the
-/// words' own, the node's), the rest as `set` says (a link's ink, code's: RunsLook), at the system's size of words, in
-/// the theme's digits where they are the app's own words (view_words_style), in the face chosen for a person's words
-/// where they are those (faces_style, as Ctx::rich's `words`).
-fn view_rich(runs : Array[@text.Run], look : @view.WordsLook, set : @view.RunsLook) -> Rich {
-  let c = g()
+/// words' own, the node's), the rest as `set` says (a link's ink, code's: RunsLook), at the size of words `scale` its
+/// node's are at (view_words_measure's), in the theme's digits where they are the app's own words (view_words_style),
+/// in the face chosen for a person's words where they are those (faces_style, as Ctx::rich's `words`).
+fn view_rich(runs : Array[@text.Run], look : @view.WordsLook, set : @view.RunsLook, scale : Double) -> Rich {
   // (on one line where they do not wrap: what breaks them run on with a space across all of them at once, a break and
   // what blanks follow it perhaps in two of them, as Ctx::rich's; each as weighty and inked as it was)
   let texts = if look.wrap || !runs.iter().any(fn(r) { has_nl(r.text) }) {
@@ -597,10 +602,10 @@ fn view_rich(runs : Array[@text.Run], look : @view.WordsLook, set : @view.RunsLo
   }
   {
     runs: runs.mapi(fn(k, r) { { ..r, text: texts[k] } }),
-    size: c.sp(look.size),
+    size: view_sp(scale, look.size),
     weight: look.weight,
     color: 0L,
-    line: view_line(c, look),
+    line: view_line(scale, look),
     trim: false,
     wrap: look.wrap,
     link_color: set.link,
@@ -608,7 +613,7 @@ fn view_rich(runs : Array[@text.Run], look : @view.WordsLook, set : @view.RunsLo
     code_color: set.code_ink,
     code_bg: set.code_ground,
     code_scale: set.code_scale,
-    spacing: view_spacing(c, look),
+    spacing: view_spacing(scale, look),
     base: 0,
     select: false,
     max_lines: 0,
@@ -620,14 +625,15 @@ fn view_rich(runs : Array[@text.Run], look : @view.WordsLook, set : @view.RunsLo
 ///|
 /// A node's words in pieces as they are drawn `w` wide (view_rich): wrapped in that width as laid out, as an old view's
 /// paragraph is where it is placed (Node::rich_layout's); on one line wider than it, cut to it, ending in an ellipsis,
-/// as its plain words are (and whether they were).
+/// as its plain words are (and whether they were), at `scale` (view_rich's).
 fn view_runs_laid(
   runs : Array[@text.Run],
   look : @view.WordsLook,
   set : @view.RunsLook,
   w : Double,
+  scale : Double,
 ) -> (Rich, RichLayout, Bool) {
-  let r = view_rich(runs, look, set)
+  let r = view_rich(runs, look, set, scale)
   let lay = layout_rich(r, if r.wrap { w } else { 1.0e9 })
   let over = !r.wrap && lay.w > w + 0.5
   if over {
@@ -639,14 +645,15 @@ fn view_runs_laid(
 }
 
 ///|
-/// A node's words in pieces measured as they are drawn (view_rich), in `width` (< 0: as wide as they are).
+/// A node's words in pieces measured as they are drawn (view_rich), in `width` (< 0: as wide as they are), at `scale`.
 fn view_runs_measure(
   runs : Array[@text.Run],
   look : @view.WordsLook,
   set : @view.RunsLook,
   width : Double,
+  scale : Double,
 ) -> (Double, Double) {
-  let lay = layout_rich(view_rich(runs, look, set), if width < 0.0 || !look.wrap { 1.0e9 } else { width })
+  let lay = layout_rich(view_rich(runs, look, set, scale), if width < 0.0 || !look.wrap { 1.0e9 } else { width })
   // (broken where the width ran out: as wide as it, as leaf_size has an old view's)
   (if width >= 0.0 && look.wrap && soft_wrapped(lay.line_end, lay.cu) { width } else { lay.w }, lay.h)
 }
@@ -1610,7 +1617,7 @@ fn Ctx::view_drawn(
       // (made where it is its own, cut by nothing it is drawn in: what cuts it is the clip it is composed in, as each
       // frame composes it, view_blit; its words never left out for where a clip once was)
       push_unclipped()
-      let b = self.view_made(c, edge_after~)
+      let b = self.view_made(tree, c, edge_after~)
       pop_clip()
       view_blocks[c.id] = b
       b
@@ -1969,9 +1976,12 @@ fn glyphs_held_drawn() -> Unit {
 
 ///|
 /// Content `c`'s instances made (its ground, its words) where it is its own (its top left at 0, 0, wholly opaque), out
-/// of the frame's: what is kept for it, composed wherever it is drawn (Ctx::view_blit).
-fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> ViewBlock {
+/// of the frame's: what is kept for it, composed wherever it is drawn (Ctx::view_blit). Its words at the size of words
+/// `tree` says its node's are at (Tree::words_scale_of), as they were measured.
+fn Ctx::view_made(self : Ctx, tree : @view.Tree, c : @view.Content, edge_after? : Bool = false) -> ViewBlock {
   view_paint_work.made = view_paint_work.made + 1
+  // (asked only of what has words)
+  let words_scale = if c.words != "" || c.words_drawn is Some(_) { tree.words_scale_of(c.id) } else { 1.0 }
   let start = self.ninst
   // (who drew what kept: the node's, each glyph's cell as it is made)
   let (was, was_tree) = (inst_owners.painting, inst_owners.tree_painting)
@@ -2069,19 +2079,19 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     // (as their words are laid out to be drawn, below: one line given less than it is wide cut to it, its ellipsis's
     // bar with it)
     if c.words != "" && !c.runs.is_empty() {
-      let r = view_rich(c.runs, c.words_look, c.runs_look)
+      let r = view_rich(c.runs, c.words_look, c.runs_look, words_scale)
       let lay = layout_rich(r, if r.wrap { c.w } else { 1.0e9 })
       let lay = if !r.wrap && lay.w > c.w + 0.5 {
         layout_rich(cut_rich({ ..r, max_lines: 1 }, lay, c.w), 1.0e9)
       } else {
         lay
       }
-      self.emit_bone_rich(lay, 0.0, 0.0, self.sp(c.words_look.size), bones, 1.0)
+      self.emit_bone_rich(lay, 0.0, 0.0, view_sp(words_scale, c.words_look.size), bones, 1.0)
     } else if c.words_drawn.unwrap_or(c.words) != "" {
       // (what is drawn of its words: shorter ones where it says them and its own have not the room, View::shorter)
       let shown = c.words_drawn.unwrap_or(c.words)
       let k = c.words_look
-      let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
+      let (size, line, style, spacing) = (view_sp(words_scale, k.size), view_line(words_scale, k), view_words_style(), view_spacing(words_scale, k))
       let words = view_words_set(shown, k)
       let tl = layout_words(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, balance=k.balance, line~, style~, spacing~)
       let tl = if !k.wrap && tl.w > c.w + 0.5 {
@@ -2102,7 +2112,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   if bones == 0L && c.words != "" && !c.runs.is_empty() {
     // (in pieces each set its own way: one paragraph, as Ctx::rich's; one line given less than it is wide cut to it,
     // ending in an ellipsis, as its plain words are)
-    let (r, lay, over) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w)
+    let (r, lay, over) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w, words_scale)
     // (each run's ink its own, else a link's, code's, else the node's: as an old view's paragraph's, Rich::run_colors)
     let colors = r.run_colors(c.ink)
     let k = clip_top()
@@ -2154,7 +2164,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
     let k = c.words_look
     // (one line given less than it is wide: cut to it, ending in an ellipsis, as an old view's words on one line are)
     // (at the system's size of words, in the theme's digits, as measured: view_words_measure)
-    let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
+    let (size, line, style, spacing) = (view_sp(words_scale, k.size), view_line(words_scale, k), view_words_style(), view_spacing(words_scale, k))
     // (wrapped in its width as laid out, as an old view's words are where they are placed: Node::text_layout's)
     let words = view_words_set(shown, k)
     let tl = layout_words(words, size, k.weight, if k.wrap { c.w } else { 1.0e9 }, k.wrap, balance=k.balance, line~, style~, spacing~)
@@ -5848,24 +5858,35 @@ fn tree_layer_focused(c : Ctx, t : @view.Tree, layer : @view.NodeId) -> Bool {
 let back_progress : Ref[Double] = Ref(-1.0)
 
 ///|
-/// The height of a line of a node's words as they are drawn (WordsLook's `line`: its points at the system's size of
-/// words; 0 the font's own; a share of their size as it is drawn), as Ctx::text sets an old view's.
-fn view_line(c : Ctx, look : @view.WordsLook) -> Double {
-  if look.line < 0.0 {
-    -look.line * c.sp(look.size)
+/// What a node's words (or a line, a letter spacing said with them) of size `v` are drawn at, at the size of words
+/// `scale` its node's are at (View::words_scale's, Tree::words_scale_of): as Ctx::sp has an old view's at the system's.
+fn view_sp(scale : Double, v : Double) -> Double {
+  if scale == 1.0 {
+    v
   } else {
-    c.sp(look.line)
+    sp_at(scale, v)
+  }
+}
+
+///|
+/// The height of a line of a node's words as they are drawn (WordsLook's `line`: its points at its size of words,
+/// `scale`; 0 the font's own; a share of their size as it is drawn), as Ctx::text sets an old view's.
+fn view_line(scale : Double, look : @view.WordsLook) -> Double {
+  if look.line < 0.0 {
+    -look.line * view_sp(scale, look.size)
+  } else {
+    view_sp(scale, look.line)
   }
 }
 
 ///|
 /// How far apart a node's letters are set besides their own as they are drawn (WordsLook's `tracking`: a share of their
 /// size as drawn, or points), as Ctx::text sets an old view's (Tracking::px of its size as drawn).
-fn view_spacing(c : Ctx, look : @view.WordsLook) -> Double {
+fn view_spacing(scale : Double, look : @view.WordsLook) -> Double {
   match look.tracking {
-    Ems(e) => e * c.sp(look.size)
+    Ems(e) => e * view_sp(scale, look.size)
     Points(p) => p
-    ScaledPoints(p) => c.sp(p)
+    ScaledPoints(p) => view_sp(scale, p)
   }
 }
 

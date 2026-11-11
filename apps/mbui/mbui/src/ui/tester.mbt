@@ -1608,15 +1608,16 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
           return
         }
         let look = d.words_look
+        let scale = tree.words_scale_of(d.id)
         let tl = layout_words(
           view_words_set(shown, look),
-          c.sp(look.size),
+          view_sp(scale, look.size),
           look.weight,
           if look.wrap { d.w } else { 1.0e9 },
           look.wrap,
           balance=look.balance,
-          line=view_line(c, look),
-          spacing=view_spacing(c, look),
+          line=view_line(scale, look),
+          spacing=view_spacing(scale, look),
           style=view_words_style(),
         )
         let lines = Array::makei(tl.line_start.length(), fn(l) {
@@ -2312,7 +2313,7 @@ fn tree_run_rects(s : String) -> Array[(Double, Double, Double, Double)] {
     if out.length() > 0 || c.runs.is_empty() || a <= 0.0 {
       return
     }
-    let (_, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w)
+    let (_, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w, tree.words_scale_of(c.id))
     match lay.text.find(s) {
       Some(i) =>
         for r in lay.rects(i, i + s.length()) {

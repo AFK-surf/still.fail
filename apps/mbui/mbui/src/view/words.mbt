@@ -256,13 +256,19 @@ pub fn words_run(text : String, weight? : Int = 0, ink? : Int64 = 0L) -> @text.R
 
 ///|
 /// Words in pieces measured as a test's are: as their words one after another (words_measure).
-pub fn runs_measure(runs : Array[@text.Run], look : WordsLook, set : RunsLook, width : Double) -> (Double, Double) {
+pub fn runs_measure(
+  runs : Array[@text.Run],
+  look : WordsLook,
+  set : RunsLook,
+  width : Double,
+  scale : Double,
+) -> (Double, Double) {
   ignore(set)
   let words = StringBuilder()
   for r in runs {
     words.write_string(r.text)
   }
-  words_measure(words.to_string(), look, width)
+  words_measure(words.to_string(), look, width, scale)
 }
 
 ///|
