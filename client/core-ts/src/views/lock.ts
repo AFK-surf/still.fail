@@ -521,7 +521,11 @@ function readLockOf(inner: Inner, ws: string, stations: string[], said?: { refus
       // are, now. Each of them reset on its own machine tells it alone, and no such read by itself is the lock's end.
       return yield* readLockOf(inner, ws, lockStations(inner, ws), said);
     }
-    yield* hold(inner, ws, sub, was, head, entries, mergeSeen(served.map((a) => a.seen)));
+    // The devices that came, as those read say: with what was held where not every station of the lock answered this
+    // read (one read alone as its link opened told only who came to it, and the others' devices lost their last use
+    // on 设置 › 安全 until all were read again).
+    const whole = lockStations(inner, ws).every((id) => served.some((a) => a.id === id));
+    yield* hold(inner, ws, sub, was, head, entries, mergeSeen([...(whole ? [] : [(was?.seen ?? []) as J[]]), ...served.map((a) => a.seen)]));
     return true;
   });
 }
