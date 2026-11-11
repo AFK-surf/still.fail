@@ -6,6 +6,7 @@ import { Effect } from "effect";
 import { STORAGE_KEY } from "../src/accounts.ts";
 import { answer, Core, CREDENTIAL_KEY, relaysOf } from "../src/core.ts";
 import { SOCKET_IDLE_MS, SOCKET_RETRY_MS } from "../src/sync/cloud.ts";
+import { REREAD_WAIT_MS } from "../src/core/execute.ts";
 import { run } from "./run.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { diff } from "../src/delta.ts";
@@ -248,6 +249,28 @@ test("an_accounts_devices_are_a_topic_read_again_after_a_write", async () => {
   call(core, ui, 2, "loginSession.revoke", { account: "s1", id: "d2" });
   await host.settle();
   assert.equal(count(host, "/v1/auth/sessions"), before + 1);
+  core.close();
+});
+
+test("a_write_answers_once_the_reads_after_it_have_had_their_while_and_they_go_on", async () => {
+  const { host, core } = await cloudCore();
+  const ui = core.connect();
+  await host.settle();
+  host.takeEmitted();
+  // The account's `/v1/me` read again after the write does not answer (a link where nothing comes).
+  const release = host.hold("/v1/me");
+  const before = count(host, "/v1/me");
+  call(core, ui, 2, "loginSession.revoke", { account: "s1", id: "d2" });
+  await host.settle();
+  assert.equal(count(host, "/v1/me"), before + 1);
+  assert.equal(answers(host.takeEmitted(), 2), undefined);
+  await host.time.pass(REREAD_WAIT_MS);
+  assert.ok("ok" in (answers(host.takeEmitted(), 2) ?? {}));
+  // The read goes on after the answer: what it brings is read as it comes.
+  const sessions = count(host, "/v1/auth/sessions");
+  release();
+  await host.settle();
+  assert.equal(count(host, "/v1/auth/sessions"), sessions + 1);
   core.close();
 });
 
