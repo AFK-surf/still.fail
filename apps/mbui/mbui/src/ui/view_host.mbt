@@ -3440,12 +3440,34 @@ fn view_input_taken() -> Int {
 /// nothing of the window's tree over that layer in the window's stack of layers takes it there first (old_layer_takes).
 fn old_root_hit(c : Ctx, x : Double, y : Double, pressed? : Bool = true) -> Bool {
   let k = if pressed {
-    let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true)
-    press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y)
+    // (on the window's tree's top row, the old views' targets under it passed over: what of its root reaches from
+    // round it there (the window's buttons from 2 off) as it did over an old view's top row, which held them)
+    let passes = old_under_top_row(c, x, y)
+    let top = hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y, pressed=true, passes~)
+    press_reach(c.hit_ids, c.hit_rects, c.hit_clips, top, x, y, passes~)
   } else {
     hit_at(c.hit_ids, c.hit_rects, c.hit_clips, x, y)
   }
   k >= 0 && old_hit_owner(k) is None && old_layer_takes(old_hit_stack(k), x, y)
+}
+
+///|
+/// What a press at (x, y) passes over of the old frame's targets (Ctx's `passes`): where what takes it of the window's
+/// tree is a top row (Tree::target_at's TopRow), each old view's under it too, as none of them takes it there.
+fn old_under_top_row(c : Ctx, x : Double, y : Double) -> Map[Int, Bool] {
+  guard view_app.val is Some(tree) else { return c.passes }
+  guard @signals.untracked(fn() { tree.target_at(x, y) }) is TopRow(_) else { return c.passes }
+  guard !old_hits.is_empty() else { return c.passes }
+  let passes : Map[Int, Bool] = Map([])
+  for id, on in c.passes {
+    passes[id] = on
+  }
+  for h in old_hits {
+    for k in h.from..<h.to {
+      passes[c.hit_ids[k]] = true
+    }
+  }
+  passes
 }
 
 ///|

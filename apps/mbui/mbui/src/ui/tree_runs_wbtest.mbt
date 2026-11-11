@@ -972,3 +972,61 @@ test "words in pieces on a node, code's ground coming, changing colour and going
     }
   }
 }
+
+///|
+/// A window 400 by 300 (a mouse's): the window's tree's top row (44 high, View::moves_window) over an old view whose
+/// target lies under it and below it (200 to 369 across, 80 down: a message scrolled under a chat's bar), and over all
+/// of it a small key of the old frame's root (24 by 32 at 370, 6: a window's own button, reached from 6 round it). Each
+/// press: where (x, y), and after it how many times the window was moved, the key pressed, the old view's target pressed.
+fn top_row_over_old(presses : Array[(Double, Double)]) -> Array[(Int, Int, Int)] {
+  let key_pressed = Ref(0)
+  let under_pressed = Ref(0)
+  let t = Tester::new(
+    fn(c) {
+      // (the old views where the tree has them, then over all of it the root's layer, as an app's window's buttons)
+      old_views_here(c)
+      c.layer(fn() {
+        let key = c.id("key")
+        c.on_press(key, fn() { key_pressed.val += 1 })
+        c.box(id=key, ml=370.0, mt=6.0, w=Px(24.0), h=Px(32.0), fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    tree=fn(root) {
+      old(root, fn(c) {
+        let under = c.id("under")
+        c.on_press(under, fn() { under_pressed.val += 1 })
+        c.box(id=under, ml=200.0, w=Px(169.0), h=Px(80.0), fn() {  }) |> ignore
+      }).grow(Is(1.0))
+      |> ignore
+      root.box(fn(o) {
+        o.over(Is(true)) |> ignore
+        o.box(fn(top) { top.height(Is(Some(44.0))).moves_window(Is(true)) |> ignore }) |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+    platform=0,
+  )
+  t.draw()
+  let out = []
+  for p in presses {
+    let (x, y) = p
+    on_pointer(0, x, y, 0)
+    on_pointer(2, x, y, 0)
+    t.draw()
+    out.push((t.window_drags(), key_pressed.val, under_pressed.val))
+  }
+  out
+}
+
+///|
+test "the window's tree's top row over an old view's target: a small key of the old frame's root reached from round it there as over an old view's top row; the row's blank moves the window; the old view's target takes no press under the row, its own below it" {
+  let got = top_row_over_old([(380.0, 22.0), (368.0, 22.0), (100.0, 20.0), (250.0, 20.0), (250.0, 60.0)])
+  assert_eq(got[0], (0, 1, 0), msg="on the key: the key's: \{Repr(got)}")
+  assert_eq(got[1], (0, 2, 0), msg="2 before the key, over the old view's target under the row: the key's, as its room reaches: \{Repr(got)}")
+  assert_eq(got[2], (1, 2, 0), msg="the row's blank: the window moved: \{Repr(got)}")
+  assert_eq(got[3], (2, 2, 0), msg="the row over the old view's target: the window moved, the target not pressed: \{Repr(got)}")
+  assert_eq(got[4], (2, 2, 1), msg="the old view's target below the row: its own: \{Repr(got)}")
+}

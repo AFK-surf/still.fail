@@ -17,7 +17,9 @@ fn page_one(
   aside : Double,
 ) -> Unit {
   let top = page == app.nav.top()
-  if @ui.window_inset() {
+  // (a chat's bar the page node's, dragging the window itself where nothing of it takes the press:
+  // chat_bar_wide_node; the old view's row there would take what is over it)
+  if @ui.window_inset() && !(page is Chat(_) && pane_makes.val) {
     title_row(c, "page-title-row", @sf.wide_bar_h + (if wide.tape.get() { @sf.tape_bar_over() } else { 0.0 }))
   }
   c.sized(main_w, ph, fn() {
@@ -368,7 +370,18 @@ fn pane_made(
             let page_src : Ref[Source] = Ref(src)
             v.box(fn(p) {
               p.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))) |> ignore
-              page_src.val = @sfbase.chat_page_made(p, src, k, pane_page_one, key=tape_island_key)
+              // (its bar the tree's, over the page's old view: chat_bar_wide_node, keeping clear of the window's corner)
+              page_src.val = @sfbase.chat_page_made(
+                p,
+                src,
+                k,
+                pane_page_one,
+                key=tape_island_key,
+                drawn=fn(serial) { pane_page_wait.draws(serial) },
+                over=fn(o, src, page, stint) {
+                  chat_bar_wide_node(o, src, page, pane_chat_bar_ends(src, o), tips, stint)
+                },
+              )
             })
             |> ignore
             side_panel_node(v, page_src.val, k, tips)
@@ -376,6 +389,56 @@ fn pane_made(
         ),
       )
     _ => None
+  }
+}
+
+///|
+/// Where a chat's bar in the pane off the tape keeps clear at its ends (chat_bar_wide_node's, node `n` its page's): as a
+/// page's bar there (page_bar_room), where the block's move has it as the bar is drawn (fold_along's, as
+/// pane_aside_at's): its start past the rail and the window's buttons as the block is closed, its margins while it is
+/// shown a while; its end at the window's corner while no panel is open beside it (window_end_in: its buttons'
+/// corner the window's, followed), clear of a corner too square for ⌘F's field (a capsule: window_corner_past), the
+/// bar's own padding beside a panel.
+fn pane_chat_bar_ends(src : Source, n : @view.View) -> ChatBarEnds {
+  let look = fn() {
+    match @sfbase.workspace_in_view(src).0 {
+      Some(w) => {
+        let (_, now) = fold_target(src, w, n.window().0)
+        Some(fold_along(fold_drawn_at(n), now))
+      }
+      None => None
+    }
+  }
+  {
+    over: fn() { 0.0 },
+    // (as the old view's were, drawn in the page moved aside: page_one's `aside`, which the bar over it is not)
+    margins: fn() {
+      match look() {
+        Some(f) => (f.bar_ml + f.aside, f.bar_mr - f.aside)
+        None => (0.0, 0.0)
+      }
+    },
+    start: fn() {
+      match look() {
+        Some(f) => f.bar_pl
+        None => 0.0
+      }
+    },
+    end: fn(beside, finding) {
+      if beside {
+        bar_in
+      } else if finding {
+        if @ui.window_keys_own() {
+          @sf.window_keys_room(roots=@ui.tree_corner_roots_now()) + bar_in
+        } else {
+          @sf.window_corner_past(bar_in, roots=@ui.tree_corner_roots_now())
+        }
+      } else {
+        @sf.window_end_in(bar_in, roots=@ui.tree_corner_roots_now())
+      }
+    },
+    linked: fn() { if @ui.window_keys_own() { None } else { Some(@sf.window_corner_key()) } },
+    ground: fn(_) { @sf.theme().p.bg },
   }
 }
 

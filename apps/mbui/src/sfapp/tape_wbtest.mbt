@@ -1009,6 +1009,26 @@ fn words_in_page(t : @ui.Tester, words : String) -> (Double, Double, Double)? {
 }
 
 ///|
+/// The middle, across, of the topmost words `words` drawn in the page's panel on the tape (words_in_page's panel: an
+/// old view's or a node of the window's tree's, as a chat's bar is: chat_bar_wide_node).
+fn words_middle_in_page(t : @ui.Tester, words : String) -> Double? {
+  let mut page : @ui.Laid? = None
+  for b in t.boxes_held() {
+    if b.radius >= 11.0 && b.w >= 300.0 && b.h >= 300.0 && b.y < 50.0 && (page is None || b.x > page.unwrap().x) {
+      page = Some(b)
+    }
+  }
+  guard page is Some(p) else { return None }
+  let mut found : (Double, Double)? = None
+  for w in t.words() {
+    if w.0 == words && w.1 >= p.x && w.1 < p.x + p.w && w.5 > 0.0 && (found is None || w.2 < found.unwrap().0) {
+      found = Some((w.2, w.2 + w.4 / 2.0))
+    }
+  }
+  found.map(fn(f) { f.1 })
+}
+
+///|
 /// The middle of the first words `words` drawn, across (their line's).
 fn words_middle(t : @ui.Tester, words : String) -> Double? {
   for b in t.boxes() {
@@ -1027,7 +1047,7 @@ test "on the tape a page's head is a chat's bar: its title where a chat's stands
     let chat = screen_in("chat", win, "zh")
     guard words_in_page(chat, "整理发布清单") is Some((cx, cy, cs)) else { fail("\{win.0}: no chat's title") }
     // the sidebar's first row and the page's bar on the tape's one line (@sf.tape_bar_over)
-    match (words_middle(chat, "新建对话"), words_middle(chat, "整理发布清单")) {
+    match (words_middle(chat, "新建对话"), words_middle_in_page(chat, "整理发布清单")) {
       (Some(a), Some(b)) => assert_true((a - b).abs() < 1.0, msg="\{win.0}: 新建对话's line \{a}, the chat's title's \{b}")
       _ => fail("\{win.0}: no 新建对话 or chat's title")
     }

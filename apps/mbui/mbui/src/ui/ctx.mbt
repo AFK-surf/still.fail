@@ -2676,10 +2676,11 @@ fn marks_drawn(marks : Int) -> Bool {
 fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
   let targets = physical_equal(rects, g().hit_rects)
   let clips = if targets { g().hit_clips } else { [] }
-  // (a press: past what is only pointed at)
-  let k = hit_at(ids, rects, clips, x, y, pressed=targets)
+  // (a press: past what is only pointed at; on the window's tree's top row, past the old views' under it)
+  let passes = if targets { old_under_top_row(g(), x, y) } else { g().passes }
+  let k = hit_at(ids, rects, clips, x, y, pressed=targets, passes~)
   // what is drawn smaller than its room is reached from round it, by a finger or a pointer alike (press_reach)
-  let k = if targets { press_reach(ids, rects, clips, k, x, y) } else { k }
+  let k = if targets { press_reach(ids, rects, clips, k, x, y, passes~) } else { k }
   if k >= 0 {
     ids[k]
   } else {
@@ -2710,6 +2711,7 @@ fn press_reach(
   top : Int,
   x : Double,
   y : Double,
+  passes? : Map[Int, Bool] = g().passes,
 ) -> Int {
   if top >= 0 && captures.contains(ids[top]) {
     return top
@@ -2724,7 +2726,7 @@ fn press_reach(
     let r = k * 4
     let (x0, y0, x1, y1) = (rects[r], rects[r + 1], rects[r + 2], rects[r + 3])
     if points.contains(ids[k]) ||
-      g().passes.contains(ids[k]) ||
+      passes.contains(ids[k]) ||
       as_drawn(ids[k]) ||
       (hits && !old_hit_open(k)) ||
       !@view.press_small(x0, y0, x1, y1, least) {

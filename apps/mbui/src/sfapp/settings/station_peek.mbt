@@ -35,6 +35,8 @@ pub fn open_station_peek(address : String, from~ : @sf.Anchor) -> Unit {
 /// StationPeek in a small panel: the station's part of its agent's tile, the chat's station beside its title): how it
 /// is (its dot, its mark, its name) and what it says of itself, the machine in brief, then where to go on from it, rows
 /// at the card's padding (peekLink). Drawn in a hover card that pads nothing itself (@sfpages.hover `padded` false).
+/// The app draws it no more (a chat's bar is nodes: station_peek_card_node's); held by the node cards' comparison tests
+/// (sfpages' peek_cards_node_wbtest, agent_card_node_wbtest).
 pub fn station_peek_card(c : @ui.Ctx, address : String) -> Unit {
   guard panels_core_as_is() is Some(core) else { return }
   let s = peek_station(core, address)
@@ -77,6 +79,8 @@ pub fn station_peek_card(c : @ui.Ctx, address : String) -> Unit {
 /// agent card's so the two start alike (the user, 2026-10-27: 最好有个一致的开头好视觉分割): its mark on a square 28 of
 /// the neutral ground, its name beside it; under them a dot in its tone (online or not) and what it says of itself;
 /// then its machine at a glance and where to go on, as the card has them.
+/// The app draws it no more (a chat's bar is nodes: station_peek_part_node's); held by the node cards' comparison tests
+/// (sfpages' peek_cards_node_wbtest, agent_card_node_wbtest).
 pub fn station_peek_part(c : @ui.Ctx, address : String) -> Unit {
   guard panels_core_as_is() is Some(core) else { return }
   let s = peek_station(core, address)

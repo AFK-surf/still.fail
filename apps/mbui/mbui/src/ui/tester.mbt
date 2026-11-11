@@ -3190,6 +3190,42 @@ pub fn Tester::drags_window_at(self : Tester, x : Double, y : Double) -> Bool {
 }
 
 ///|
+/// What a press at (x, y) would land on, pressing nothing, found as drags_window_at finds it (view_pointer's order):
+/// "window" where it drags the window; "pressed" where what it lands on does something pressed (a node of the window's
+/// tree with its press or its drag said, as Tree::target_at has it, the rule of a press's room measuring by the same;
+/// an old view's target whose press is read, Ctx::takes_presses); "" where it lands on nothing that does (what is only
+/// pointed at or named, a top row that moves no window, nothing).
+pub fn Tester::press_lands_at(self : Tester, x : Double, y : Double) -> String {
+  self.reads_own()
+  let c = self.ctx()
+  let old = fn() {
+    let m = hit_marks(hit_in(c.hit_ids, c.hit_rects, x, y))
+    if (m & mark_drags) != 0 {
+      "window"
+    } else if (m & mark_takes) != 0 {
+      "pressed"
+    } else {
+      ""
+    }
+  }
+  match view_tree() {
+    None => old()
+    Some(tree) => {
+      old_hits_place(c, Some(tree))
+      if old_root_hit(c, x, y) {
+        return old()
+      }
+      match tree.target_at(x, y) {
+        TopRow(id) => if tree.moves_window(id) { "window" } else { "" }
+        Pressed(_) | Dragged(_) => "pressed"
+        Hosted(_) => old()
+        Nothing => if old_whole.val && island_allows(old_whole_island()) { old() } else { "" }
+      }
+    }
+  }
+}
+
+///|
 /// Tab (Shift+Tab when `back`): the focus to the next stop (focus.mbt).
 pub fn Tester::tab(self : Tester, back? : Bool = false) -> Unit {
   self.key(key_tab, mods=if back { mod_shift_key } else { 0 })

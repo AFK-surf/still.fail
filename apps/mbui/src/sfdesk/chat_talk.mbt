@@ -14,7 +14,10 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
   match view {
     Some(v) => {
       latest_key(c, src, r, v)
-      chat_list(c, src, r, v, read, room, settings_core(src, w), top=chat_bar_room() + list_head_gap, bar=chat_bar_room())
+      // (a picture flying from it drawn under the bar in the page's slot while it is under it (sfbase's
+      // viewer_flight_slot, chat_page_made's): the bar is the page's nodes (chat_bar_wide_node), which the viewer's
+      // layer is over, so the old view's lifting it over the flight (over_flight) lifts none of it)
+      chat_list(c, src, r, v, read, room, settings_core(src, w), top=chat_bar_room() + list_head_gap, bar=chat_bar_room(), slotted=true)
     }
     None => {
       // (a chat just made from a new chat is the core's own: nothing breathing while its first view comes)
