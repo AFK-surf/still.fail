@@ -9,6 +9,7 @@ let conf_text : String =
   #| "flows": ["flows/*.drive"],
   #| "scripts": ["scripts/*.sh", "scripts/*.mjs"],
   #| "hosts": ["android/*.java", "src/host/*.m", "src/host/*.c"],
+  #| "run_first": {"starts": ["new_run", "fresh_app"], "reads": ["@sf.t", "tr"]},
   #| "counts": {}}
 
 ///|
@@ -2446,4 +2447,23 @@ test "the rule panic-test (named so: a test named panic… is one moon expects t
     rule="panic-test",
   )
   assert_eq(fs.map(fn(f) { "\{f.file}:\{f.line}" }), ["src/view/shared_test.mbt:1", "src/ui/css_wbtest.mbt:2"])
+}
+
+///|
+test "read-before-run" {
+  // a test reading the app's words before its run: itself, or by a function of its own file it calls first; after its
+  // new_run, after its Tester, after a function that starts one (here, in another file), or in a function written for
+  // later (a view's), not; outside a test file, not
+  let fs = lint_of(
+    [
+      (
+        "src/app/a_wbtest.mbt",
+        "fn title() -> String {\n  @sf.t(\"t\")\n}\n\ntest \"before\" {\n  let w = @sf.t(\"k\")\n  new_run()\n  ignore(w)\n}\n\ntest \"by its own function\" {\n  let w = title()\n  new_run()\n  ignore(w)\n}\n\ntest \"after\" {\n  new_run()\n  let w = tr(\"k\")\n  ignore(w)\n}\n\ntest \"after a Tester\" {\n  let t = @ui.Tester::new(fn(_c) { ignore(@sf.t(\"k\")) })\n  ignore((t, @sf.t(\"k\")))\n}\n\ntest \"after a helper\" {\n  let t = phone()\n  ignore((t, @sf.t(\"k\")))\n}\n\ntest \"written for later\" {\n  let view = fn() { @sf.t(\"k\") }\n  new_run()\n  ignore(view())\n}\n",
+      ),
+      ("src/app/b_wbtest.mbt", "fn phone() -> Int {\n  new_run()\n  1\n}\n"),
+      ("src/app/c.mbt", "fn said() -> String {\n  @sf.t(\"k\")\n}\n"),
+    ],
+    rule="read-before-run",
+  )
+  assert_eq(fs.map(fn(f) { "\{f.file}:\{f.line}" }), ["src/app/a_wbtest.mbt:6", "src/app/a_wbtest.mbt:12"])
 }

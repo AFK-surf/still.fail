@@ -74,17 +74,18 @@ test "narrow_retry_node: what could not be read and 重试 drawn where the old o
 
 ///|
 test "narrow_empty_node: nothing here, with what can be done about it and without, drawn where the old one's is, as big; its button pressed, done" {
-  let words = @sf.t("web-main.rail.filesNone")
+  // (its words read as each run's view is made: read before any run, they are the run before's)
+  let words = fn() { @sf.t("web-main.rail.filesNone") }
   for platform in [2, 0] {
     for act in [false, true] {
       let done : Array[String] = []
       let t = narrow_beside(
         platform,
         fn(c) {
-          narrow_empty(c, words, if act { Some(("刷新", fn() { done.push("old") })) } else { None })
+          narrow_empty(c, words(), if act { Some(("刷新", fn() { done.push("old") })) } else { None })
         },
         fn(v) {
-          narrow_empty_node(v, fn() { words }, if act { Some((fn() { "刷新" }, fn() { done.push("new") })) } else { None })
+          narrow_empty_node(v, words, if act { Some((fn() { "刷新" }, fn() { done.push("new") })) } else { None })
         },
       )
       let (old, new) = (narrow_drawn(t, 0.0), narrow_drawn(t, 400.0))

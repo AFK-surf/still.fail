@@ -192,6 +192,10 @@
       "@sf.ask"
     ]
   },
+  "run_first": {
+    "starts": ["new_run", "fresh_app", "reset", "@sfbase.reset"],
+    "reads": ["@sf.t", "@sf.t_around", "@sf.language", "tr", "@sfbase.tr"]
+  },
   "counts": {
     "frame-request": {},
     "settle": {},
@@ -525,7 +529,8 @@
     "layout-told": {},
     "abort-unsaid": {},
     "empty-on-done": {},
-    "panic-test": {}
+    "panic-test": {},
+    "read-before-run": {}
   },
   "excused": {
     "frame-request": {},

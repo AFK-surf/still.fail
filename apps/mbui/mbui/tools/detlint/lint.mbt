@@ -54,6 +54,11 @@ priv struct Config {
   // Tester's own files (`tester.files`, globs) and the tests (tester-branch)
   tester_names : Array[String]
   tester_files : Array[String]
+  // what starts a test's own run of the app (`run_first.starts`: the app's new_run; `@pkg.name` or a bare name) and
+  // what reads the app's words or language (`run_first.reads`): in a test file, none of the second before the first
+  // (read-before-run)
+  run_starts : Array[String]
+  run_reads : Array[String]
 }
 
 ///|
@@ -110,6 +115,8 @@ fn Config::new(d : @rjson.Value) -> Config {
     fixture_openers: strs(sect(d, "fixture").get("openers"), []),
     tester_names: strs(sect(d, "tester").get("names"), []),
     tester_files: strs(sect(d, "tester").get("files"), []),
+    run_starts: strs(sect(d, "run_first").get("starts"), []),
+    run_reads: strs(sect(d, "run_first").get("reads"), []),
   }
 }
 
@@ -2285,4 +2292,152 @@ fn done_of_call(toks : Array[Tok], k : Int) -> Bool {
     i = i - 1
   }
   false
+}
+
+///|
+/// A call as `run_first`'s names say one: `@pkg.name` a package's, a bare name its own.
+fn call_named(c : Call, names : Array[String]) -> Bool {
+  if c.kind == "bare" {
+    names.contains(c.name)
+  } else if c.kind == "pkg" {
+    names.contains(c.qual + "." + c.name)
+  } else {
+    false
+  }
+}
+
+///|
+/// The spans of the functions written in item `i` of `f` (fn(…) { … } inside it, not its own): what they read is read
+/// when they are called, not where they are written.
+fn lambda_spans(f : MbtFile, i : Int) -> Array[(Int, Int)] {
+  let it = f.items[i]
+  let toks = f.toks
+  let mut open = it.start
+  while open <= it.end && open < toks.length() && toks[open].text != "{" {
+    open += 1
+  }
+  let out = []
+  for k in (open + 1)..<@cmp.minimum(it.end + 1, toks.length()) {
+    if toks[k].kind == "ident" && toks[k].text == "fn" && k + 1 < toks.length() && toks[k + 1].text == "(" {
+      let p = toks[k + 1].end
+      if p < 0 {
+        continue
+      }
+      let mut b = p + 1
+      while b < toks.length() && toks[b].text != "{" {
+        b += 1
+      }
+      if b < toks.length() && toks[b].end >= 0 {
+        out.push((k, toks[b].end))
+      }
+    }
+  }
+  out
+}
+
+///|
+/// read-before-run: in a test file, a test that reads the app's words or language (`run_first.reads`) before it starts
+/// its own run of the app (`run_first.starts`, Tester::new, or a function that does one of them before anything it
+/// reads: by its name, in any file), itself or by a function of its own file it calls first: what it reads is what the
+/// test before it in the process left
+fn lint_read_before_run(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> Unit {
+  if cfg.run_reads.is_empty() {
+    return
+  }
+  // each function by its name: where it is (its file, its item)
+  let fns : Map[String, Array[(Int, Int)]] = Map::new()
+  // what gives a Tester back (its type after `->` names Tester)
+  let makers : Map[String, Unit] = Map::new()
+  for fi, f in files {
+    for i, it in f.items {
+      if it.kind != "fn" || it.name == "" {
+        continue
+      }
+      let parts = it.name.split("::").to_array()
+      let short = parts[parts.length() - 1].to_string()
+      match fns.get(short) {
+        Some(a) => a.push((fi, i))
+        None => fns[short] = [(fi, i)]
+      }
+      let mut k = it.start
+      let mut arrow = false
+      while k <= it.end && k < f.toks.length() {
+        let t = f.toks[k]
+        if t.text == "(" && t.end >= 0 && !arrow {
+          k = t.end + 1
+          continue
+        }
+        if t.text == "{" {
+          break
+        }
+        if t.text == "->" {
+          arrow = true
+        } else if arrow && t.kind == "ident" && t.text == "Tester" {
+          makers[short] = ()
+          break
+        }
+        k += 1
+      }
+    }
+  }
+  // what an item does first: 1 starts a run, 2 reads, 0 neither; and the call that does it
+  let memo : Map[String, (Int, Int)] = Map::new()
+  fn first(fi : Int, i : Int, local_reads : Bool) -> (Int, Int) {
+    let key = "\{fi}:\{i}:\{local_reads}"
+    match memo.get(key) {
+      Some(r) => return r
+      None => ()
+    }
+    memo[key] = (0, -1) // (a cycle: neither)
+    let f = files[fi]
+    let spans = lambda_spans(f, i)
+    let mut got = (0, -1)
+    for c in f.calls {
+      if c.item != i || c.is_def || spans.iter().any(fn(sp) { c.at > sp.0 && c.at <= sp.1 }) {
+        continue
+      }
+      let kind = if call_named(c, cfg.run_starts) ||
+        (c.kind == "type" && c.qual == "Tester" && c.name == "new") ||
+        ((c.kind == "bare" || c.kind == "pkg") && makers.contains(c.name)) {
+        1
+      } else if call_named(c, cfg.run_reads) {
+        2
+      } else if c.kind == "bare" || c.kind == "pkg" {
+        // a function: starting a run first, wherever it is; reading first, one of this file's
+        let mut k = 0
+        for at in fns.get(c.name).unwrap_or([]) {
+          if at.0 == fi && at.1 == i {
+            continue
+          }
+          let (fk, _) = first(at.0, at.1, local_reads && at.0 == fi)
+          if fk == 1 || (fk == 2 && local_reads && at.0 == fi && c.kind == "bare") {
+            k = fk
+            break
+          }
+        }
+        k
+      } else {
+        0
+      }
+      if kind != 0 && (got.1 < 0 || c.at < got.1) {
+        got = (kind, c.at)
+      }
+    }
+    memo[key] = got
+    got
+  }
+  for fi, f in files {
+    if !f.test_file {
+      continue
+    }
+    for i, it in f.items {
+      if it.kind != "test" {
+        continue
+      }
+      let (k, at) = first(fi, i, true)
+      if k == 2 {
+        out.push(finding("read-before-run", f.rel, f.toks[at].line, f.line_text(at)))
+      }
+    }
+  }
 }
