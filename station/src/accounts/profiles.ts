@@ -452,6 +452,8 @@ async function checkApi(source: Source, at: Endpoints, key: string, lang: Lang):
   const response = await get(`${base}/models`, headers);
   if (response.status === 401 || response.status === 403) return check("failed", t("station.profile.keyRefused", { provider: source.name, status: response.status }), null);
   if (!response.ok) return check("unknown", t("station.profile.noModelList", { provider: source.name }), null);
-  const models = sorted(await modelIds(response));
+  // A `:batch` entry (OpenRouter's) is served by the provider's Batch API alone, results within a day: refused on the
+  // endpoints a runtime speaks ("cannot be used with the chat/completions endpoint", checked 2026-11-11).
+  const models = sorted((await modelIds(response)).filter((id) => !id.endsWith(":batch")));
   return check("ok", t("station.profile.works", { n: models.length }), models);
 }
