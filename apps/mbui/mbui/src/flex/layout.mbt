@@ -377,7 +377,8 @@ fn Box::pbh(self : Box) -> Double {
 /// function (or what it measures) or children changed, and every node
 /// above one; a node moved under another parent dirties both parents.
 /// Nothing may be aligned by baseline (finding one lays items out while
-/// only measuring their container): reuse aborts on it.
+/// only measuring their container): reuse stops on it, saying so
+/// (reuse_refused_item; reuse_refused says it of a whole tree).
 ///
 /// With `grid` (device pixels a point), each node is placed on whole device
 /// pixels from its parent, as Compose places a child (its alignment's and
@@ -1106,6 +1107,40 @@ fn Pool::line(self : Pool, start : Int, end : Int) -> Unit {
 }
 
 ///|
+/// Why an item aligned `align` in a container laid out in a row (`row`) is one compute(reuse=true) cannot lay out, said;
+/// None where it can. Asked by compute as it comes to the item (it stops there on what this says), and by reuse_refused
+/// of a whole tree: the two are one judging.
+fn reuse_refused_item(align : Align, row : Bool) -> String? {
+  if align == Baseline && row {
+    Some("flex: compute(reuse=true) with an item aligned by baseline")
+  } else {
+    None
+  }
+}
+
+///|
+/// What compute(reuse=true) would stop on in the tree under `root`, said (each item judged as compute judges it as it
+/// comes to it, reuse_refused_item); None where it would lay it all out. Walks the whole tree: a test's, never asked
+/// on the way of a compute.
+pub fn reuse_refused(root : Node) -> String? {
+  let row = is_row(root.style.direction)
+  for c in root.children {
+    if c.style.display == DisplayNone || c.style.position == Absolute {
+      continue
+    }
+    match reuse_refused_item(item_align(root.style, c.style), row) {
+      Some(said) => return Some(said)
+      None => ()
+    }
+    match reuse_refused(c) {
+      Some(said) => return Some(said)
+      None => ()
+    }
+  }
+  None
+}
+
+///|
 fn item_align(container : Style, s : Style) -> Align {
   if s.align_self == Auto {
     container.align_items
@@ -1724,7 +1759,10 @@ fn layout_flex(
           // its baseline is found by laying it out, while this one may be
           // only measured: a layout kept above it could hold that one
           if reusing.val {
-            @halt.saying("flex: compute(reuse=true) with an item aligned by baseline")
+            match reuse_refused_item(aligns.unsafe_get(k), row) {
+              Some(said) => @halt.saying(said)
+              None => ()
+            }
           }
           let iw = f.unsafe_get(i + MAIN)
           let ih = f.unsafe_get(i + CROSS)

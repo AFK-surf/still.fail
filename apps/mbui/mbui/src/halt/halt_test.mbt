@@ -1,4 +1,4 @@
-// What a halt prints is its words and its caller's line; it stops the run whatever it stands in for.
+// What a halt prints is its words and its caller's line (said: what it stops with, @halt.saying).
 
 ///|
 #callsite(autofill(loc))
@@ -13,15 +13,4 @@ test "a halt says its words and the line that said them" {
   assert_true(words.has_prefix("flow: nothing in the run holds 「x」 to drop\n  at "))
   assert_true(words.contains("halt_test.mbt:"))
   assert_true(words.has_suffix(at.to_string()))
-}
-
-///|
-test "panic a halt stops the run where a value is wanted" {
-  let n : Int = @halt.saying("a halt in an Int's place")
-  ignore(n)
-}
-
-///|
-test "panic a halt stops the run as a statement" {
-  @halt.saying("a halt in a Unit's place")
 }

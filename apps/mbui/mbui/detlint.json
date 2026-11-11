@@ -263,18 +263,7 @@
     "layout-told": {},
     "abort-unsaid": {},
     "empty-on-done": {},
-    "panic-test": {
-      "src/flex/reuse_test.mbt": 1,
-      "src/halt/halt_test.mbt": 2,
-      "src/ui/editor_look_test.mbt": 2,
-      "src/ui/messages_wbtest.mbt": 1,
-      "src/ui/native_test.mbt": 1,
-      "src/ui/presses_test.mbt": 1,
-      "src/ui/readback_test.mbt": 1,
-      "src/ui/style_css_wbtest.mbt": 6,
-      "src/ui/tester_api_test.mbt": 3,
-      "src/ui/textrec_test.mbt": 1
-    },
+    "panic-test": {},
     "read-before-run": {},
     "reset-by-hand": {}
   },

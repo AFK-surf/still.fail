@@ -509,13 +509,15 @@ pub fn NativeView::frames(self : NativeView) -> Array[Double]? {
 ///|
 /// The video's frame showing at `ms` grabbed whole at its own size, as a PNG (`grabbed` once it is here); a page's (or
 /// a site's) view, what its page shows now, at its view's size in device pixels (`ms` not read). One grab of a view at
-/// a time: asked again before the last one's `grabbed` is taken, it aborts.
+/// a time: asked again before the last one's `grabbed` is taken, a fault (@view.fault: a test stops on it, a run on a
+/// host is told it) and that grab not made.
 pub fn NativeView::grab_frame(self : NativeView, ms : Double) -> Unit {
   if self.id != 0 && !self.closed {
     // (one grab of a view at a time: its ticket is the view's)
     if outside_tickets.contains(outside_key(outside_grab, self.id)) {
       let s = "NativeView::grab_frame: view \{self.id} grabs a frame already: one at a time, its `grabbed` taken first"
-      @halt.saying(s)
+      @view.fault(s)
+      return
     }
     outside_start(outside_grab, self.id, "a frame of view \{self.id} grabbed")
     self.grab_since = view_now()
@@ -532,7 +534,8 @@ pub fn NativeView::grab_shown(self : NativeView, side : Double) -> Unit {
   if self.id != 0 && !self.closed {
     if outside_tickets.contains(outside_key(outside_grab, self.id)) {
       let s = "NativeView::grab_shown: view \{self.id} grabs a frame already: one at a time, its `grabbed` taken first"
-      @halt.saying(s)
+      @view.fault(s)
+      return
     }
     outside_start(outside_grab, self.id, "the frame view \{self.id} shows grabbed")
     self.grab_since = view_now()

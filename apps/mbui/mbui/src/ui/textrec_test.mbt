@@ -28,8 +28,14 @@ test "a Tester after one that kept text has the fake host's own again" {
 }
 
 ///|
-test "panic a draw list over a host's kept text that lacks what was drawn: said, not drawn as other glyphs" {
+test "a draw list over a host's kept text that lacks what was drawn: said (drawlist_said), not drawn as other glyphs" {
   // (kept text with nothing in it: the words below were never shaped by the host)
   let t = @ui.Tester::new(fn(c) { c.text("never kept", wrap=false) |> ignore }, text="")
-  ignore(t.drawlist())
+  assert_true(t.text_missing().length() > 0)
+  assert_eq(
+    t.drawlist_said(),
+    Some(
+      "Tester::drawlist: the host's kept text lacks 9 of what was drawn (record its text again): shape 15|400|0|never kept, metrics 15|400|0, glyph 110, glyph 101, glyph 118",
+    ),
+  )
 }

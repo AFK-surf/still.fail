@@ -157,9 +157,28 @@ test "draw: a layout read back that moves once is placed again in the frame that
 }
 
 ///|
-test "panic draw: a layout read back that moves at every frame does not converge, and says whose" {
-  let t = reading_back(1.0)
-  t.draw()
+test "draw: a layout read back that moves at every frame does not converge: said, and whose (draw_said)" {
+  let moves = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let x = match c.words_of("w") {
+        Some(w) if w.pieces.length() > 0 && moves.val => w.pieces[0].x + 1.0
+        _ => 0.0
+      }
+      c.box(padx=x, fn() {
+        let b = c.column(w=Px(100.0), fn() { c.rich([@ui.plain("hello")], size=10.0) |> ignore })
+        c.words(b, "w")
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=100.0,
+  )
+  moves.val = true
+  assert_eq(
+    t.draw_said(),
+    Some("Tester::draw: what the view reads (words_of \"w\") still changes after 3 frames: it does not converge"),
+  )
 }
 
 ///|
@@ -673,15 +692,21 @@ test "set_frame_times: every frame at the times given (an input's, run_for's, dr
 }
 
 ///|
-test "panic set_frame_times: a time not later than the one before is said, and which" {
+test "set_frame_times: a time not later than the one before is said, and which (frame_times_wrong)" {
   let t = @ui.Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
-  t.set_frame_times([t.time() + 10.0, t.time() + 10.0])
+  let at = t.time() + 10.0
+  assert_eq(
+    t.frame_times_wrong([at, at]),
+    Some("Tester::set_frame_times: time 1 (\{at}) is not later than the one before it (\{at})"),
+  )
 }
 
 ///|
-test "panic set_frame_times: a time not later than now is said" {
+test "set_frame_times: a time not later than now is said (frame_times_wrong)" {
   let t = @ui.Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
-  t.set_frame_times([t.time()])
+  let now = t.time()
+  assert_eq(t.frame_times_wrong([now]), Some("Tester::set_frame_times: time 0 (\{now}) is not later than now (\{now})"))
+  assert_eq(t.frame_times_wrong([now + 10.0, now + 20.0]), None)
 }
 
 ///|
