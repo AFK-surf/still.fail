@@ -84,9 +84,11 @@ export type Reach = {
   enqueue(station: string, task: string, priority: number, work: Effect.Effect<void, CoreError>): Deferred.Deferred<void, CoreError>;
   /// Runs `work` once the burst of what the station is saying is over.
   later(station: string, work: Effect.Effect<void>): void;
-  /// The clock and whether a newly opened view is waiting, for sharing the engine with it during a large burst.
+  /// The clock and whether a newly opened view is waiting, for sharing the engine with it during a large burst, and
+  /// the next slice's turn (the store's `turn`: after what pages wait for).
   now(): number;
   firstWaiting(): boolean;
+  turn(): Effect.Effect<void>;
   /// A read made in the background answered, well (`error` null) or not; `nothing`: none of the channel is held.
   answered(channel: Channel, error: CoreError | null, nothing: boolean): void;
 };
@@ -153,7 +155,7 @@ export class Channels {
         this.settle(channel);
         sliced++;
         if (++visited < waiting.size && (visited === 1 || this.#reach.firstWaiting() || sliced >= SETTLE_SLICE_ITEMS || this.#reach.now() - at >= SETTLE_SLICE_MS)) {
-          yield* Effect.yieldNow;
+          yield* this.#reach.turn();
           at = this.#reach.now();
           sliced = 0;
         }
