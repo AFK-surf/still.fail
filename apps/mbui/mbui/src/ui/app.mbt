@@ -2336,6 +2336,33 @@ pub fn Ctx::focus_editor(self : Ctx, key : String) -> Unit {
 let app_state : Ref[Int] = Ref::new(3)
 
 ///|
+/// The same, each a signal of its own (app_visible, app_focused, app_awake): what reads one, a node's binding or its
+/// `reacts`, is told at the moment the host says it changed (on_app_state, an event at its own moment), and only by
+/// the one it reads.
+// kept across runs: put back by each Tester, set by the host as it says (app_state_is)
+let app_shown_said : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b })
+
+///|
+// kept across runs: put back by each Tester, set by the host as it says (app_state_is)
+let app_front_said : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b })
+
+///|
+// kept across runs: put back by each Tester, set by the host as it says (app_state_is)
+let app_on_said : @signals.Signal[Bool] = @signals.signal(true, same=fn(a, b) { a == b })
+
+///|
+/// The app's state is `s` from now on (1 shown, 2 in front, 4 going on not shown), its signals set with it.
+fn app_state_is(s : Int) -> Unit {
+  app_state.val = s
+  // (one change: what reads two of them told once)
+  @signals.start_batch()
+  app_shown_said.set((s & 1) != 0)
+  app_front_said.set((s & 2) != 0)
+  app_on_said.set((s & (1 | 4)) != 0)
+  @signals.end_batch()
+}
+
+///|
 /// Who is told when that changes (the app's one: `on_app_change`).
 let app_change : Ref[((Bool, Bool) -> Unit)?] = Ref::new(None)
 
@@ -2374,7 +2401,7 @@ fn app_state_taken(s : Int) -> Unit {
   if s == app_state.val {
     return
   }
-  app_state.val = s
+  app_state_is(s)
   // (not shown: the window thread's interval closed as the event that said so ends, journal.mbt)
   if (s & 1) == 0 {
     journal_hidden.val = true
@@ -2397,13 +2424,13 @@ fn app_state_taken(s : Int) -> Unit {
 ///|
 /// Whether the app's window is shown (not hidden, minimized, covered; Android: the activity resumed).
 pub fn app_visible() -> Bool {
-  (app_state.val & 1) != 0
+  app_shown_said.get()
 }
 
 ///|
 /// Whether it is also in front (the key window of the active app; Android: with the window's focus).
 pub fn app_focused() -> Bool {
-  (app_state.val & 2) != 0
+  app_front_said.get()
 }
 
 ///|
@@ -2411,7 +2438,7 @@ pub fn app_focused() -> Bool {
 /// desktop's app put away to the notification area or minimized: Windows'). Not an Android app behind another, whose
 /// frames stop.
 pub fn app_awake() -> Bool {
-  (app_state.val & (1 | 4)) != 0
+  app_on_said.get()
 }
 
 ///|

@@ -114,6 +114,9 @@ fn reset_globals() -> Unit {
   tester_size.val = None
   env_kept.val = ""
   app_state.val = 3
+  app_shown_said.set(true)
+  app_front_said.set(true)
+  app_on_said.set(true)
   driver.val = None
   track_x.reset()
   track_y.reset()
