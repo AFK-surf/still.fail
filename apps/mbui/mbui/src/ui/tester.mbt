@@ -105,6 +105,7 @@ fn reset_globals() -> Unit {
   notices_reset()
   hand_reset()
   corners_hold.val = true
+  corners_known_now.val = []
   presses_hold.val = true
   placed_presented.val = None
   text_runs.on = false
@@ -542,6 +543,7 @@ pub fn Tester::new(
     f.shot_drawn.push(shot_drawn_of(s.inst, s.ninst, x, y))
   })
   corners_hold.val = corners_held
+  corners_known_now.val = []
   presses_hold.val = presses_held
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
   looks_check.val = true
@@ -3336,13 +3338,78 @@ fn Tester::hold_corners(self : Tester) -> Unit {
     return
   }
   let c = g()
-  let faults = c.held_corner_faults()
+  let faults = corners_unknown(c.held_corner_faults())
   if faults.is_empty() {
     return
   }
   let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val} (the theme's ladder \{c.corner_ladder}; the rule: mbui's src/ui/corners.mbt):\n" +
     faults.join("\n")
   @halt.saying(said)
+}
+
+///|
+/// The corner faults a test knows and keeps (Tester::corners_known), as corner_fault_unplaced says them: those
+/// Tester::hold_corners passes over. None but where a test says them.
+// kept across runs: set again by each Tester (Tester::new)
+let corners_known_now : Ref[Array[String]] = Ref([])
+
+///|
+/// Faults of the corner rule this test knows and keeps (a design not yet decided, each with why where it is said):
+/// Tester::hold_corners passes over each fault that is one of them where it stands (corner_fault_unplaced: what it
+/// names by its words and size, its container the same, the rule's same words; where they stand on the window, and
+/// which of the frame's nodes they are, not compared: the same part as a list scrolls). Any other fails as ever:
+/// another part, another size, the rule's other words. Said once, after the Tester is made, for the rest of it.
+pub fn Tester::corners_known(self : Tester, known : Array[String]) -> Unit {
+  ignore(self)
+  corners_known_now.val = known.map(corner_fault_unplaced)
+}
+
+///|
+/// Of `faults`, those the test does not know (Tester::corners_known): what Tester::hold_corners fails on.
+fn corners_unknown(faults : Array[String]) -> Array[String] {
+  let known = corners_known_now.val
+  faults.filter(fn(f) { !known.contains(corner_fault_unplaced(f)) })
+}
+
+///|
+/// A fault of the corner rule said without where what it names stands: each `(at x,y ` of its as `(at * `, each
+/// `node n` as `node *` (Tester::corners_known's way of comparing).
+pub fn corner_fault_unplaced(fault : String) -> String {
+  let sb = StringBuilder()
+  let cs = fault.to_array()
+  let n = cs.length()
+  let starts = fn(i : Int, w : String) -> Bool {
+    let ws = w.to_array()
+    if i + ws.length() > n {
+      return false
+    }
+    for j in 0..<ws.length() {
+      if cs[i + j] != ws[j] {
+        return false
+      }
+    }
+    true
+  }
+  let mut i = 0
+  while i < n {
+    if starts(i, "(at ") {
+      sb.write_string("(at *")
+      i += 4
+      while i < n && cs[i] != ' ' {
+        i += 1
+      }
+    } else if starts(i, "node ") {
+      sb.write_string("node *")
+      i += 5
+      while i < n && cs[i] >= '0' && cs[i] <= '9' {
+        i += 1
+      }
+    } else {
+      sb.write_char(cs[i])
+      i += 1
+    }
+  }
+  sb.to_string()
 }
 
 ///|

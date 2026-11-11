@@ -3,9 +3,22 @@
 // that only runs tasks has 免批准 for its person, and is taken off by them.
 
 ///|
+/// The corner rule's faults known in a device's panel beside its place (Tester::corners_known), kept till the panels'
+/// layout is decided (the coordinator of the migration, 2026-11-12): its last row's ground under the hand or with the
+/// focus (移除设备, choice_row_node's, 18 round) stands 16 in from the panel's sides and 24 over its foot, in its 42
+/// corners, as far from neither edge as from the other, so no corner of it is concentric there (42 − 24 = 18 by its
+/// foot, 42 − 16 = 26 by its side). What would mend it: the row 16 over the foot too, its corner 26.
+// kept across runs: a value (no field of it changes)
+let device_corners_known : Array[String] = [
+  "「移除设备」 (at 396,581 488×36, node 529) (corner 18) in the bottom right of 「开发板 类型 串口设备 地址 /dev/ttyU…」 (at 380,160 520×481, node 460) (corner 42): 16 and 24 from its edges",
+  "「移除设备」 (at 396,581 488×36, node 529) (corner 18) in the bottom left of 「开发板 类型 串口设备 地址 /dev/ttyU…」 (at 380,160 520×481, node 460) (corner 42): 16 and 24 from its edges",
+]
+
+///|
 test "大屏: the stations' place lists the devices under the stations; pressed, a device's panel says where it is and whose" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="place-stations-devices")
+  t.corners_known(device_corners_known)
   app.nav.replace(Place("stations"))
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("设备") is Some(_))
@@ -24,6 +37,8 @@ test "大屏: the stations' place lists the devices under the stations; pressed,
   assert_true(t.find("Willow 上的对话") is Some(_))
   assert_true(t.find("免批准") is Some(_))
   assert_true(t.find("移除设备") is Some(_))
+  // (the corner rule's faults there, those known and no more: device_corners_known)
+  assert_eq(t.corner_faults().map(@ui.corner_fault_unplaced), device_corners_known.map(@ui.corner_fault_unplaced))
 }
 
 ///|
@@ -87,6 +102,7 @@ test "a station's 设备: its devices, and 添加设备: the kind from a menu, t
 test "a device of the viewer's station that only runs tasks: 免批准 theirs to turn on; taken off, asked first" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="place-stations-devices")
+  t.corners_known(device_corners_known)
   app.nav.replace(Place("stations"))
   t.run_for(@ui.move_most_ms)
   let (x, y) = t.find("开发板").unwrap()

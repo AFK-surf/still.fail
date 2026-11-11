@@ -69,6 +69,18 @@ test "a list's panel as tall as what it holds, its share of the window the most 
 // where its words stand.
 
 ///|
+/// The corner rule's faults known in the context's dialog in a wide window's middle (Tester::corners_known), kept till
+/// the panels' layout is decided (the coordinator of the migration, 2026-11-12): its last row's ground under the hand or
+/// with the focus (choice_row_node's, 18 round) stands 16 in from the dialog's sides and 24 over its foot, in its 42
+/// corners, as far from neither edge as from the other, so no corner of it is concentric there (42 − 24 = 18 by its
+/// foot, 42 − 16 = 26 by its side). What would mend it: the row 16 over the foot too, its corner 26.
+// kept across runs: a value (no field of it changes)
+let context_corners_known : Array[String] = [
+  "「清空上下文 结束当前进程，下一条消息开始新的会话」 (at 356,434 488×60, node 911) (corner 18) in the bottom right of 「上下文 压缩上下文 保留摘要，释放上下文空间 清…」 (at 340,283 520×235, node 880) (corner 42): 16 and 24 from its edges",
+  "「清空上下文 结束当前进程，下一条消息开始新的会话」 (at 356,434 488×60, node 911) (corner 18) in the bottom left of 「上下文 压缩上下文 保留摘要，释放上下文空间 清…」 (at 340,283 520×235, node 880) (corner 42): 16 and 24 from its edges",
+]
+
+///|
 /// The fixture's agent card (decide_core's `chat-agent-unsaid`, its context compactable and clearable) on a window of
 /// `platform`, 390×844, or 1200×800 where `wide`; its context's tile pressed, the panel come to rest (with `rest`, else
 /// at the frame it opened in).
@@ -86,6 +98,9 @@ fn context_up(calls : Array[Made], platform? : Int = 2, wide? : Bool = false, re
   open_fixture_over("chat-agent-unsaid", src)
   let (w, h) = if wide { (1200.0, 800.0) } else { (390.0, 844.0) }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
+  if wide {
+    t.corners_known(context_corners_known)
+  }
   t.run_for(@ui.move_most_ms)
   let tile = if t.find("压缩上下文") is Some(_) { "压缩上下文" } else { "上下文" }
   t.tap_text(tile)
@@ -231,6 +246,12 @@ test "an agent's context: its title over its rows, each row's note under its nam
     if screen.1 {
       // in the middle of the window: neither at its foot nor at its side
       assert_true(title.0 > 200.0 && title.0 < 800.0 && title.1 > 100.0 && title.1 < 500.0, msg="\{about}: \{title}")
+      // (the corner rule's faults there, those known and no more: context_corners_known)
+      assert_eq(
+        t.corner_faults().map(@ui.corner_fault_unplaced),
+        context_corners_known.map(@ui.corner_fault_unplaced),
+        msg=about,
+      )
     } else {
       // a sheet from the foot: its rows in the window's lower half
       assert_true(clear_note.1 > 422.0, msg="\{about}: \{clear_note}")

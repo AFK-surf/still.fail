@@ -319,6 +319,7 @@ fn layout_size_key(
     style_node(k, fn() { desk_size_key_box })
     k
     .alpha(By(fn() { if on() { desk_whole } else { desk_size_key_off } }))
+    .radius(By(desk_size_key_corner))
     .ground(By(fn() { if on() && lit_node(k) { @ui.tree_theme().color(Tint) } else { no_ground } }))
     .says(By(fn() { Some(@view.said(Button, label=said())) }))
     |> ignore
