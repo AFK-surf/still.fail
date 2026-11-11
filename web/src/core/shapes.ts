@@ -1260,6 +1260,35 @@ export interface StationElevation {
 	canChange: boolean;
 }
 
+/** A backup of a station no longer there that a station with no chats could restore. */
+export interface CopyOffer {
+	/** The lost station's id: `copies.restore`'s `origin`. */
+	station: string;
+	/** Which generation of its backup: `copies.restore`'s `gen`. */
+	gen: string;
+	name: string;
+	/** What it would restore (Old Mac 的 128 个聊天), or how its restore goes, or why it failed. */
+	line: string;
+	/** The station it is restored from: `copies.restore`'s `fromStation`. */
+	fromStation?: string;
+	/** Its restore is under way. */
+	busy: boolean;
+}
+
+/** A station's backups, as its 设置 shows them: one row. */
+export interface StationCopies {
+	/** Its 备份 row: the stations up to date with it and since when, one not reached or behind said briefly; that it is the only station; that backups stopped and why; or, just after a restore, what came of it. */
+	line: string;
+	/** ok: up to date somewhere; amber: a station not reached or behind, or none to back up to; red: backups stopped. */
+	level: Level;
+	/** On a station with no chat of its own: a backup of each station no longer there that it could restore, a row each in place of its 备份 row. */
+	offers: CopyOffer[];
+	/** The viewer may restore one now (`copies.restore`): one of the workspace's owners and admins, none under way. */
+	canRestore: boolean;
+	/** The stations it took the place of (their ids): a link that names one is to it. */
+	formerly: string[];
+}
+
 /** A station's overview, with what the clients show of its connects and profiles. */
 export interface Overview {
 	automaticDecisions?: AutomaticDecisionView;
@@ -1327,6 +1356,8 @@ export interface Overview {
 	 * then shows nothing).
 	 */
 	elevation?: StationElevation;
+	/** The copies of its chats kept off it (copies.ts). None from a station older than them, which then shows nothing. */
+	copies?: StationCopies;
 }
 
 /** What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), the viewer's hidden chats (已隐藏), or archived chats (已归档). */

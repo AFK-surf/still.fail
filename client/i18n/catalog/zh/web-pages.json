@@ -1896,5 +1896,10 @@
   "web-pages.rigs.ask.ended": "这台 station 的授权已结束：{why}",
   "web-pages.rigs.ask.appOnly": "网页版批准不了：请在手机或电脑上的 app 里批准",
   "web-pages.rigs.ask.time.idle": "闲置 {time}",
-  "web-pages.rigs.ask.time.fixed": "固定 {time}"
+  "web-pages.rigs.ask.time.fixed": "固定 {time}",
+  "web-pages.stations.copies.section": "备份",
+  "web-pages.stations.copies.restore": "恢复到这台",
+  "web-pages.stations.copies.restoreTitle": "恢复 {name} 的备份？",
+  "web-pages.stations.copies.restoreBody": "这台 station 会下载 {name} 的备份，然后重启，把聊天放进来。恢复完成前这台 station 不能有聊天：期间有新聊天，恢复会停下。恢复后，对话里的 agent 重新开始；原来那台机器上的工作目录和登录的账号不会一起恢复。",
+  "web-pages.stations.copies.restoreWhat": "恢复聊天"
 }

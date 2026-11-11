@@ -68,6 +68,9 @@ export class PeerBus {
   /// What every request passes before the part that answers it hears it (a rig's: rig/module.ts); it throws why not.
   private guard: ((workspace: string, peer: string, request: Json) => void) | null = null;
   private readonly onAttach: (() => void)[] = [];
+  /// The station that took a lost one's place, by the lost one's id (replica/copies.ts `now`), and this station's id.
+  private now: ((station: string, workspace: string | null) => string) | null = null;
+  private self = "";
 
   /// `sleep`: how a request waits for the transport (the station's clock).
   constructor(options: { waitMs?: number; sleep: (ms: number) => Promise<void> }) {
@@ -89,13 +92,22 @@ export class PeerBus {
     else this.onAttach.push(f);
   }
 
-  /// A request to another station of the workspace.
+  /// A request to another station of the workspace. One named by a lost station's id goes to the station that took its
+  /// place (a chat's link from before it was lost), this one's own answered here.
   async ask(station: string, request: Json): Promise<Json> {
     if (!this.call) await Promise.race([this.attached, this.sleep(this.waitMs)]);
     const call = this.call;
     if (!call) throw new Error("station mesh is not ready");
     const workspace = typeof request?.workspace === "string" ? request.workspace : null;
-    return call(station, workspace, request);
+    const to = station === "" || this.now === null ? station : this.now(station, workspace);
+    if (to !== station && to === this.self) return this.handle(workspace ?? "", this.self, request);
+    return call(to, workspace, request);
+  }
+
+  /// Which station took a lost one's place (`now`); `self`, this station's id.
+  formerly(now: (station: string, workspace: string | null) => string, self: string): void {
+    this.now = now;
+    this.self = self;
   }
 
   /// Who answers `methods` (whole names, or prefixes ending in `.`): one part each.

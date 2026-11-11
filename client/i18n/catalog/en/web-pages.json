@@ -1944,5 +1944,10 @@
   "web-pages.rigs.ask.ended": "The station's grant ended: {why}",
   "web-pages.rigs.ask.appOnly": "The web app can't approve this: approve it in the app on your phone or computer",
   "web-pages.rigs.ask.time.idle": "Idle {time}",
-  "web-pages.rigs.ask.time.fixed": "Fixed {time}"
+  "web-pages.rigs.ask.time.fixed": "Fixed {time}",
+  "web-pages.stations.copies.section": "Backup",
+  "web-pages.stations.copies.restore": "Restore here",
+  "web-pages.stations.copies.restoreTitle": "Restore {name}'s backup?",
+  "web-pages.stations.copies.restoreBody": "This station downloads {name}'s backup, then restarts to put the chats in. It must have no chats until the restore is done: a new chat meanwhile stops it. After the restore, the chats' agents start afresh; the old machine's working folders and signed-in accounts are not restored.",
+  "web-pages.stations.copies.restoreWhat": "restore the chats"
 }

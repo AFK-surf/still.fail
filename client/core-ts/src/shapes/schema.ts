@@ -993,7 +993,23 @@ export const SHAPES: Record<string, Shape> = {
     ["diagnostics", opt("StationDiagnostics"), { doc: "Whether it sends its log to still.fail. None from a station older than it, which then does not offer it." }],
     ["permissions", opt("StationPermissions"), { doc: "What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then\nshows nothing)." }],
     ["elevation", opt("StationElevation"), { doc: "Whether it runs as the machine's administrator (a Windows station only; none from one older than it, which\nthen shows nothing)." }],
+    ["copies", opt("StationCopies"), { doc: "The copies of its chats kept off it (copies.ts). None from a station older than them, which then shows nothing." }],
   ], { doc: "A station's overview, with what the clients show of its connects and profiles." }),
+  StationCopies: struct([
+    ["line", "String", { doc: "Its 备份 row: the stations up to date with it and since when, one not reached or behind said briefly; that it is the only station; that backups stopped and why; or, just after a restore, what came of it." }],
+    ["level", "Level", { doc: "ok: up to date somewhere; amber: a station not reached or behind, or none to back up to; red: backups stopped." }],
+    ["offers", vec("CopyOffer"), { doc: "On a station with no chat of its own: a backup of each station no longer there that it could restore, a row each in place of its 备份 row." }],
+    ["canRestore", "bool", { doc: "The viewer may restore one now (`copies.restore`): one of the workspace's owners and admins, none under way." }],
+    ["formerly", vec("String"), { doc: "The stations it took the place of (their ids): a link that names one is to it." }],
+  ], { doc: "A station's backups, as its 设置 shows them: one row." }),
+  CopyOffer: struct([
+    ["station", "String", { doc: "The lost station's id: `copies.restore`'s `origin`." }],
+    ["gen", "String", { doc: "Which generation of its backup: `copies.restore`'s `gen`." }],
+    ["name", "String"],
+    ["line", "String", { doc: "What it would restore (Old Mac 的 128 个聊天), or how its restore goes, or why it failed." }],
+    ["fromStation", opt("String"), { doc: "The station it is restored from: `copies.restore`'s `fromStation`." }],
+    ["busy", "bool", { doc: "Its restore is under way." }],
+  ], { doc: "A backup of a station no longer there that a station with no chats could restore." }),
   StationElevation: struct([
     ["on", "bool", { doc: "Where its switch stands: the setting, or what a change under way goes to (`elevation.set`)." }],
     ["busy", "bool", { doc: "A change is under way (Windows' prompt up, the station restarting): the switch waits." }],

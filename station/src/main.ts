@@ -49,6 +49,8 @@ import { FeishuLive } from "./feishu/module.ts";
 import { CommaLive } from "./comma/module.ts";
 import { WorkspaceConnectsLive } from "./connects/workspace.ts";
 import { ModelsLive } from "./models/module.ts";
+import { CopiesLive } from "./replica/module.ts";
+import { takeBackSoon } from "./replica/restore.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
 import { answerHeapRequests, heapCommand } from "./ops/heap.ts";
@@ -193,7 +195,12 @@ function run() {
   // Every line to still.fail, scrubbed, unless config.json turns it off (telemetry.logs: false); sent once the mesh is up.
   stationLog.configure({ enabled: () => settings.raw()?.telemetry?.logs !== false, station: stationId, version });
   hearLines((line) => stationLog.add(line));
-  const paths = Layer.succeed(Paths)({ data, app });
+  // A lost station's chats brought here to take back (replica/restore.ts): put in before the store opens.
+  const beforeStore = () => takeBackSoon(data, join(data, "stillfail.db"), wall.now()).then(
+    (restored) => { if (restored !== null) log.info("copies", "a lost station's chats taken back", { station: restored.origin, from: restored.from }); },
+    (e: Error) => log.error("copies", "a lost station's chats not taken back", { error: e.message }),
+  );
+  const paths = Layer.succeed(Paths)({ data, app, beforeStore });
   // still.fail Helper, one for the screens and the drive, and one look at its grants.
   const base = Layer.mergeAll(Key.layer, ReadersAndStore, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(Previous.layer), Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
@@ -213,7 +220,7 @@ function run() {
   );
   const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, CheckpointsLive, BecameRig).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
-    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, LoginsLive, DriveTransfersLive, UsageLive, ElevationLive, ResourcesLive, SearchLive, SlackLive, FeishuLive, CommaLive, WorkspaceConnectsLive, ModelsLive, RigsLive, DevicesLive)),
+    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, LoginsLive, DriveTransfersLive, UsageLive, ElevationLive, ResourcesLive, SearchLive, SlackLive, FeishuLive, CommaLive, WorkspaceConnectsLive, ModelsLive, RigsLive, DevicesLive, CopiesLive)),
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
     // The drive, the admin API's: the platform's, before the agents.

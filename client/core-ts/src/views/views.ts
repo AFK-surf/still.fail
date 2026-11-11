@@ -1044,6 +1044,21 @@ export class Views implements Owner {
     });
   }
 
+  /// The station a link names now (`<workspace>/<station>`): one that took a lost one's place, where that is the one
+  /// named (its overview's `copies.formerly`); the one named otherwise.
+  stationNow(address: string): string {
+    const at = address.lastIndexOf("/");
+    if (at < 0) return address;
+    const scope = address.slice(0, at);
+    const id = address.slice(at + 1);
+    for (const s of this.stations(scope) ?? []) {
+      if (s.id === id) continue;
+      const formerly = get(get(this.ok({ topic: "overview", station: s.address }), "copies"), "formerly");
+      if (Array.isArray(formerly) && formerly.includes(id)) return s.address;
+    }
+    return address;
+  }
+
   #stationsOr(scope: string): StationInfo[] | Value | undefined {
     const v = this.value({ topic: "workspace", workspace: scope });
     if (v === undefined) return undefined;
@@ -1058,7 +1073,8 @@ export class Views implements Owner {
     for (const e of entries) {
       if (!mayLink(e)) continue;
       const text = str(get(e, "text")) ?? "";
-      for (const c of chatsLinked(text, station)) {
+      for (const linked of chatsLinked(text, station)) {
+        const c = { ...linked, station: this.stationNow(linked.station) };
         if (out.includes(c.station)) continue;
         if (c.station === station || (this.stations(ofAddress(c.station)) ?? []).some((s) => s.address === c.station && s.online)) out.push(c.station);
       }
@@ -1072,7 +1088,8 @@ export class Views implements Owner {
   /// link were most of what opening a chat that has one took (0.65-0.83 s on a phone, 2026-10-31).
   #linkedChats(station: string, text: string): J[] {
     if (!text.includes("/chats/") && !text.includes("/o/")) return [];
-    return chatsLinked(text, station).flatMap((c) => {
+    return chatsLinked(text, station).flatMap((linked) => {
+      const c = { ...linked, station: this.stationNow(linked.station) };
       const found = this.#core.data.chatNamed(c.station, c.id);
       if (found === undefined || (found.archived && !isObject(get(found.row, "archived")))) return [];
       const row = found.row as J;

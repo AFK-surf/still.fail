@@ -24,7 +24,7 @@
 <p>本政策适用于我们运营的 still.fail 托管服务，包括 still.fail 官网、网页版（app.still.fail）、公开分享页（share.still.fail）、预览页（preview.still.fail），以及连接这些服务时的桌面应用、Android 应用和 iOS 应用（合称“本服务”）。测试渠道 youdid.wtf 也适用本政策。</p>
 <p>以下情况不适用本政策：</p>
 <ul>
-<li><strong>你自己机器上的 station</strong>：station 运行在你自己（或你所在 workspace 成员）的电脑或服务器上，聊天记录、文件和 agent 的工作都保存在那里，由你和你的 workspace 控制，我们无法访问；</li>
+<li><strong>你自己机器上的 station</strong>：station 运行在你自己（或你所在 workspace 成员）的电脑或服务器上，聊天记录、文件和 agent 的工作都保存在那里，由你和你的 workspace 控制，我们无法访问。为了丢一台机器不丢聊天，每台 station 还会把它的聊天（消息、聊天里的附件和会话记录；不含 agent 的执行记录、工作目录和已登录的账号）备份到同一 workspace 的另外两台 station 上，从不备份到其他 workspace 的 station 上。workspace 里新加的 station 可以从这些备份恢复丢失的那台的聊天。备份在你的 station 之间端到端加密传送，不经过我们的服务器；</li>
 <li>别人用 still.fail 开源代码自己部署的服务；</li>
 <li>你在 station 上使用的第三方服务，例如 Claude、ChatGPT/Codex、Hermes Agent 及你为它配置的模型服务、Google 的 Antigravity CLI、Slack、GitHub。它们适用各自的隐私政策。</li>
 </ul>
@@ -111,7 +111,7 @@
 <li>关闭使用统计：在应用的设置中关闭“发送使用统计和错误报告”；</li>
 <li>其他请求也请发邮件到 hi@still.fail。我们会在 15 个工作日内答复。</li>
 </ul>
-<p>你的聊天记录和文件在你的 station 上，可以直接在那里查看、导出和删除。</p>
+<p>你的聊天记录和文件在你的 station 上，可以直接在那里查看、导出和删除。你删除的聊天，也会在下一次更新备份时从其他 station 上的备份里删除；station 离开一个 workspace 时，会删除它为那个 workspace 的 station 保存的备份。</p>
 
 <h2>11. 安全</h2>
 <p>设备和 station 之间的通信是端到端加密的，网站全程使用 HTTPS，登录凭据只保存哈希，服务器访问受到严格限制。但没有绝对安全的系统；如果发生个人信息安全事件，我们会按法律要求通知你并采取补救措施。发现安全漏洞，请按 <a href="https://github.com/AFK-surf/still.fail/blob/main/SECURITY.md">SECURITY.md</a> 私下报告。</p>

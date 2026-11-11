@@ -11,6 +11,7 @@ import * as drive from "./drive.ts";
 import * as prefsMod from "./prefs.ts";
 import * as jobsMod from "./jobs.ts";
 import { permissionsShown } from "./permissions.ts";
+import { copiesShown } from "./copies.ts";
 import { elevationShown } from "./elevation.ts";
 import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
@@ -1274,6 +1275,10 @@ function overview(value: J, c: Clock, station: string | null): J {
   const elevation = elevationShown(v.elevation);
   if (elevation === undefined) delete v.elevation;
   else v.elevation = elevation;
+  // Where its chats are copied (copies.ts); none said, none shown.
+  const copies = copiesShown(v.copies, c);
+  if (copies === undefined) delete v.copies;
+  else v.copies = copies;
   const decided = v.automaticDecisions;
   if (isObject(decided)) {
     const shown: J = { ...decided };

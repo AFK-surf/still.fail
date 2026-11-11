@@ -147,6 +147,7 @@ fn station_view_node(
       "elevation" => station_elevation_node(b, core, address, fn() { field(field(s(), "overview"), "elevation") })
       "workspaces" => station_workspaces_node(b, core, address)
       "network" => station_network_node(b, core, address, fn() { field(field(s(), "overview"), "network") }, manager)
+      "copies" => station_copies_node(b, core, address, fn() { field(field(s(), "overview"), "copies") })
       "software" => station_software_node(b, core, s, manager, tips)
       "device" => station_device_node(b, s)
       _ => ()
@@ -239,6 +240,9 @@ fn station_settings_keys(s : Json?, manager : Bool) -> Array[String] {
   }
   if manager {
     out.push("workspaces")
+  }
+  if field(o, "copies") is Some(Object(_)) {
+    out.push("copies")
   }
   if field(o, "network") is Some(Object(_)) {
     out.push("network")

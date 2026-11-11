@@ -23,6 +23,9 @@ priv struct SettingsFixture {
   /// a Windows station's running as administrator, as the core shows it (its overview's `elevation`), as a test sets
   /// it; none: not a Windows station
   mut elevation : Json?
+  /// the copies of its chats as the core shows them (its overview's `copies`), as a mode sets them; none: a station
+  /// from before them
+  mut copies : Json?
   /// The station with two GPUs, for the resource overview's fixture.
   mut gpus : Bool
   /// Four GPUs, to exercise another row of resource dials.
@@ -131,6 +134,7 @@ let fx : SettingsFixture = {
   afresh_above: 1.0,
   logs: true,
   elevation: None,
+  copies: None,
   gpus: false,
   more_gpus: false,
   low_meters: false,
@@ -286,6 +290,7 @@ fn fixture_reset() -> Unit {
   fx.afresh_above = 1.0
   fx.logs = true
   fx.elevation = None
+  fx.copies = None
   fx.gpus = false
   fx.more_gpus = false
   fx.low_meters = false
@@ -513,6 +518,33 @@ pub fn fixture_page(mode : String) -> String {
       station_network_open["ws1/st1"] = true
       up("", "settings/station/ws1/st1", -1)
     }
+    // its 设置 scrolled to 备份: its row (Cedar and Aspen up to date; -alone: the only station of its workspace)
+    "settings-station-copies" | "settings-station-copies-alone" => {
+      fx.copies = Some(fixture_copies_row(alone=m == "settings-station-copies-alone"))
+      station_parts["ws1/st1"] = "settings"
+      up("", "settings/station/ws1/st1", -1)
+    }
+    // a new station's 设置 scrolled to 备份: a backup of a station no longer there it can restore (-offer: 恢复到这台
+    // live; -confirm: asked first), one being restored; -restored: what came of it, after the restart
+    "settings-station-restore" => {
+      fx.copies = Some(fixture_copies_restore(under_way=true, name="Old Mac"))
+      station_parts["ws1/st1"] = "settings"
+      up("", "settings/station/ws1/st1", -1)
+    }
+    // (-long: a station named in 24 characters, its confirm's title kept to one line)
+    "settings-station-restore-offer" | "settings-station-restore-confirm" | "settings-station-restore-confirm-long" => {
+      fx.copies = Some(fixture_copies_restore(under_way=false, name=if m == "settings-station-restore-confirm-long" { "Lin's MacBook Pro (2021)" } else { "Old Mac" }))
+      station_parts["ws1/st1"] = "settings"
+      up("", "settings/station/ws1/st1", -1)
+      if m != "settings-station-restore-offer" {
+        fixture_open.desk = "copies-confirm"
+      }
+    }
+    "settings-station-restored" => {
+      fx.copies = Some(fixture_copies_restored())
+      station_parts["ws1/st1"] = "settings"
+      up("", "settings/station/ws1/st1", -1)
+    }
     // its 进程: what still.fail uses of the machine
     "settings-station-processes" => station_parts["ws1/st1"] = "processes"
     "settings-station-lower" => {
@@ -626,7 +658,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-update-failed" | "settings-station-updated" | "settings-station-network" | "settings-station-away" =>
+    "settings-station-mark" | "settings-station-gpu" | "settings-station-gpu-many" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" | "settings-station-update-failed" | "settings-station-updated" | "settings-station-network" | "settings-station-away" | "settings-station-copies" | "settings-station-copies-alone" | "settings-station-restore" | "settings-station-restore-offer" | "settings-station-restore-confirm" | "settings-station-restore-confirm-long" | "settings-station-restored" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
@@ -1566,6 +1598,7 @@ fn fx_station(address : String) -> Json {
           ("diagnostics", obj([("logs", Json::boolean(fx.logs))])),
           ("network", obj([("congestion", str(fx.congestion))])),
           ("elevation", fx.elevation.unwrap_or(Json::null())),
+          ("copies", fx.copies.unwrap_or(Json::null())),
           ("sharing", Json::boolean(true)),
           (
             "machineLogins",
@@ -3151,6 +3184,12 @@ fn waiting_lock(mode : String) -> Json {
 ///|
 /// The dialog of the desktop's pages a fixture's mode puts up ("" none), taken once: the desktop's page puts it up
 /// once it is drawn with what it needs.
+pub fn fixture_copies() -> Json? {
+  fx.copies
+}
+
+///|
+/// What a fixture's mode puts up over the settings (MBUI_FIXTURE=settings-…), said once.
 pub fn fixture_desk() -> String {
   let d = fixture_open.desk
   fixture_open.desk = ""
@@ -3751,4 +3790,55 @@ pub fn fixture_machine_sessions(core : Core) -> Unit {
     s("m9", "codex", "把发票 PDF 按月份归档", "~/Documents/Codex/ledger", "10月20日", "09:31", ""),
   ]
   open_machine_sessions(core, "ws1/st1", "Willow")
+}
+
+///|
+/// Willow's 备份 row as the core shows it (StationCopies): Cedar and Aspen up to date; `alone`: the only station of its
+/// workspace.
+fn fixture_copies_row(alone~ : Bool) -> Json {
+  obj([
+    ("line", str(if alone { "再加一台 station 就会自动备份" } else { "已备份到 Cedar 和 Aspen · 2 分钟前" })),
+    ("level", str(if alone { "amber" } else { "ok" })),
+    ("offers", []),
+    ("canRestore", Json::boolean(true)),
+    ("formerly", []),
+  ])
+}
+
+///|
+/// A new station's 备份 (StationCopies): no chat of its own yet, Old Mac's backup (at Cedar) to restore; `under_way`:
+/// it being restored, how in its row (恢复到这台 waits), else 恢复到这台 live.
+fn fixture_copies_restore(under_way~ : Bool, name~ : String) -> Json {
+  obj([
+    ("line", str("还没备份好 · Cedar 连不上")),
+    ("level", str("amber")),
+    (
+      "offers",
+      [
+        obj([
+          ("station", str("st9")),
+          ("gen", str("1-abcdef01")),
+          ("name", str(name)),
+          ("line", str(if under_way { "正在恢复：37 / 412 个文件" } else { name + " 的 128 个聊天" })),
+          ("fromStation", str("st2")),
+          ("busy", Json::boolean(under_way)),
+        ]),
+      ],
+    ),
+    ("canRestore", Json::boolean(!under_way)),
+    ("formerly", []),
+  ])
+}
+
+///|
+/// The station after the restart that took Old Mac's chats in: what came of it, in its 备份 row until a station is up to
+/// date with it.
+fn fixture_copies_restored() -> Json {
+  obj([
+    ("line", str("已恢复 Old Mac 的 128 个聊天 · 2 分钟前")),
+    ("level", str("amber")),
+    ("offers", []),
+    ("canRestore", Json::boolean(true)),
+    ("formerly", [str("st9")]),
+  ])
 }

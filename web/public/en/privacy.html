@@ -25,7 +25,7 @@
 <p>This policy applies to the still.fail hosted service we operate, including the still.fail website, the web app (app.still.fail), public share pages (share.still.fail), preview pages (preview.still.fail), and the desktop, Android and iOS apps when they connect to these services (together, the “Service”). It also applies to the beta channel youdid.wtf.</p>
 <p>This policy does not apply to:</p>
 <ul>
-<li><strong>Stations on your own machines</strong>: a station runs on a computer or server belonging to you (or to a member of your workspace). Chat history, files and the agents' work are stored there, under the control of you and your workspace, and we can't access them;</li>
+<li><strong>Stations on your own machines</strong>: a station runs on a computer or server belonging to you (or to a member of your workspace). Chat history, files and the agents' work are stored there, under the control of you and your workspace, and we can't access them. So that losing one machine does not lose them, each station also keeps a copy of its chats (their messages, the files attached to them, and their sessions' records; not the agents' transcripts, working folders or signed-in accounts) on two other stations of the same workspace, and never on another workspace's stations. A new station of the workspace can take a lost one's chats back from these copies. The copies go between your stations end to end encrypted, never through our servers;</li>
 <li>Services that others deploy themselves from the still.fail open-source code;</li>
 <li>Third-party services you use on your stations, such as Claude, ChatGPT/Codex, Hermes Agent and the model services you configure for it, Google's Antigravity CLI, Slack and GitHub. Their own privacy policies apply.</li>
 </ul>
@@ -112,7 +112,7 @@
 <li>Turning off usage statistics: turn off “Send usage and error reports” in the app's settings;</li>
 <li>For other requests, also email hi@still.fail. We'll reply within 15 working days.</li>
 </ul>
-<p>Your chat history and files are on your stations, where you can view, export and delete them directly.</p>
+<p>Your chat history and files are on your stations, where you can view, export and delete them directly. A chat you delete is deleted from its copies on the workspace's other stations as well, the next time each is brought up to date; a station that leaves a workspace deletes the copies it kept of that workspace's stations.</p>
 
 <h2>11. Security</h2>
 <p>Communication between devices and stations is end-to-end encrypted, the website uses HTTPS throughout, only hashes of sign-in credentials are stored, and access to servers is tightly restricted. But no system is perfectly secure; if a personal information security incident occurs, we'll notify you and take remedial measures as required by law. If you find a security vulnerability, please report it privately as described in <a href="https://github.com/AFK-surf/still.fail/blob/main/SECURITY.md">SECURITY.md</a>.</p>
