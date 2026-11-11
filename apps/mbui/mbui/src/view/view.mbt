@@ -398,6 +398,11 @@ struct Node {
   /// let go with it
   mut pressed_cell : @signals.Signal[Bool]?
   mut pointed_cell : @signals.Signal[Bool]?
+  /// where the tree keeps sources (a Tester's: source.mbt) and its ground (View::ground) is bound, what its ground, as
+  /// last worked out, read of what shows it (ground_read_*: the hand on a node, the keyboard's focus), and that it is
+  /// bound: a ground seen in a state it is not in now, which the corner rule holds at rest as shown (ui's corners.mbt,
+  /// Node::lit_ground). None kept elsewhere
+  mut ground_read : Int
   /// what it does as the pointer moves onto it or over it (View::on_pointer_moved): the pointer's own moving, not a
   /// layout putting it under a still pointer
   mut on_pointer_moved : (() -> Unit)?
@@ -1517,6 +1522,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.on_back_step = None
       n.pressed_cell = None
       n.pointed_cell = None
+      n.ground_read = 0
       n.on_pointer_moved = None
       n.pointed_in_cell = None
       n.within_cell = None
@@ -1639,6 +1645,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         back_said: 0,
         pressed_cell: None,
         pointed_cell: None,
+        ground_read: 0,
         on_pointer_moved: None,
         pointed_in_cell: None,
         within_cell: None,
@@ -3864,8 +3871,87 @@ pub fn View::picture(self : View, picture : Live[@pixels.Vector?], loc~ : Source
 /// Its ground (0: none): paint's.
 #callsite(autofill(loc))
 pub fn View::ground(self : View, ink : Live[Int64], loc~ : SourceLoc) -> View {
+  // (where the tree keeps sources alone: what it reads of what shows it, each time it is worked out, Node's
+  // ground_read; elsewhere bound as it is said)
+  let ink = match ink {
+    By(f) if self.tree.sources => {
+      let (at, gen) = (self.at, self.gen)
+      By(fn() {
+        let was = ground_reading.val
+        ground_reading.val = ground_read_bound
+        let k = f()
+        let n = self.tree.nodes[at]
+        if n.live && n.gen == gen {
+          n.ground_read = ground_reading.val
+        }
+        ground_reading.val = was
+        k
+      })
+    }
+    _ => {
+      match self.live() {
+        Some(n) => n.ground_read = 0
+        None => ()
+      }
+      ink
+    }
+  }
   self.bind(loc~, Ground, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ground = k })
   self
+}
+
+///|
+/// What a ground being worked out read of what shows it (View::ground, where the tree keeps sources): set by what it
+/// reads (Tree::ground_reads), asked and put back by View::ground.
+// kept across runs: set only while a ground is worked out where the tree keeps sources, put back as it ends
+let ground_reading : Ref[Int] = Ref(0)
+
+///|
+/// What node `id`'s ground read: the hand on a node (View::pointed, View::pressed, View::pointed_in).
+pub let ground_read_hand : Int = 1
+
+///|
+/// What node `id`'s ground read: the keyboard's focus (View::focused, View::focus_shown).
+pub let ground_read_focus : Int = 2
+
+///|
+/// That node `id`'s ground is bound (By), worked out where the tree keeps sources.
+pub let ground_read_bound : Int = 4
+
+///|
+/// (What reads `what` of what shows a ground, told where the tree keeps sources and a ground is being worked out.)
+fn Tree::ground_reads(self : Tree, what : Int) -> Unit {
+  if self.sources {
+    ground_reading.val = ground_reading.val | what
+  }
+}
+
+///|
+/// What node `id`'s ground, as last worked out, read of what shows it (ground_read_hand, ground_read_focus) and
+/// whether it is bound (ground_read_bound), where the tree keeps sources (a Tester's); 0 elsewhere.
+pub fn Tree::ground_read(self : Tree, id : NodeId) -> Int {
+  if self.alive_id(id) {
+    self.nodes[id.at].ground_read
+  } else {
+    0
+  }
+}
+
+///|
+/// Whether node `id`, or what holds it, says it can be chosen (Said's selected, check or pressed: chosen or not now).
+pub fn Tree::says_chosen(self : Tree, id : NodeId) -> Bool {
+  guard self.alive_id(id) else { return false }
+  let mut i = id.at
+  let mut up = 0
+  while i >= 0 && up < 2 {
+    match self.nodes[i].said {
+      Some(d) => return d.selected is Some(_) || d.check is Some(_) || d.pressed is Some(_)
+      None => ()
+    }
+    i = self.nodes[i].parent
+    up += 1
+  }
+  false
 }
 
 ///|
@@ -6907,6 +6993,7 @@ fn View::let_go(self : View) -> Unit {
   n.cut = false
   n.pressed_cell = None
   n.pointed_cell = None
+  n.ground_read = 0
   n.on_pointer_moved = None
   n.pointed_in_cell = None
   // (the focus on it: let go of with it, what has it told so)
@@ -11456,6 +11543,7 @@ fn Tree::hand_told(self : Tree, id : NodeId?, cell : (Node) -> @signals.Signal[B
 /// told only as that comes or goes. Its cell made as first read, let go with it.
 pub fn View::pressed(self : View) -> Bool {
   guard self.live() is Some(n) else { return false }
+  self.tree.ground_reads(ground_read_hand)
   let s = match n.pressed_cell {
     Some(s) => s
     None => {
@@ -11472,6 +11560,7 @@ pub fn View::pressed(self : View) -> Bool {
 /// as the pointer comes over it or leaves it. Its cell made as first read, let go with it.
 pub fn View::pointed(self : View) -> Bool {
   guard self.live() is Some(n) else { return false }
+  self.tree.ground_reads(ground_read_hand)
   let s = match n.pointed_cell {
     Some(s) => s
     None => {
@@ -11490,6 +11579,7 @@ pub fn View::pointed(self : View) -> Bool {
 /// made as first read, let go with it.
 pub fn View::pointed_in(self : View) -> Bool {
   guard self.live() is Some(n) else { return false }
+  self.tree.ground_reads(ground_read_hand)
   let s = match n.pointed_in_cell {
     Some(s) => s
     None => {

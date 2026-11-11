@@ -90,6 +90,7 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
 /// first read, let go with it.
 pub fn View::focused(self : View) -> Bool {
   guard self.live() is Some(n) else { return false }
+  self.tree.ground_reads(ground_read_focus)
   let s = match n.focused_cell {
     Some(s) => s
     None => {
@@ -106,6 +107,7 @@ pub fn View::focused(self : View) -> Bool {
 /// :focus-visible). Its cell made as first read, let go with it.
 pub fn View::focus_shown(self : View) -> Bool {
   guard self.live() is Some(n) else { return false }
+  self.tree.ground_reads(ground_read_focus)
   let s = match n.focus_shown_cell {
     Some(s) => s
     None => {
