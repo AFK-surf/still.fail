@@ -29,6 +29,9 @@ pub struct Tester {
   /// a host's frames as its run had them (set_frame_times, set_frame_period): every frame on them, as the host drew
   /// it (an input's, a draw's, run_for's), not at the moments the test says
   mut host_frames : Bool
+  /// when the next input comes, as a run's script gave it (Tester::inputs_next; +inf: none said): a host's frames after
+  /// it not drawn ahead of it, what is owed then left to be drawn on the way to it and after
+  mut inputs_next : Double
   /// what the test looks at after each frame it draws, as it is drawn (Tester::each_frame): a frame an input's draw
   /// passes over on its way (the one that takes it, before the ones after) seen too
   mut each : (() -> Unit)?
@@ -547,7 +550,7 @@ pub fn Tester::new(
   }
   let between = test_frames_between()
   tester_rested.clear()
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(loc.to_string()), host_frames: false, each: None, before }
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(loc.to_string()), host_frames: false, inputs_next: @double.infinity, each: None, before }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {

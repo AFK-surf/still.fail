@@ -17,6 +17,9 @@ test "65-wide-places" {
     f.tap("=外观")
     f.see("跟随系统")
     f.tap("=深色")
+    // (dark from the frame that takes the tap: at a display's rate whose next frame falls after the run's next tap, the
+    // one before it, Tester::inputs_next)
+    f.until(fn() { @sf.theme().dark })
     assert_true(@sf.theme().dark)
     f.tap("=跟随系统", top=true)
     // its thumb slides there (Ctx::cover), from this tap to the end of its slide

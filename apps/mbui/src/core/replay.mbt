@@ -919,6 +919,20 @@ fn Replay::due_at(self : Replay, i : Int) -> Double {
     AtOnce => return -@double.infinity
     AsRun(scale) => scale
   }
+  // (a step of the script's: on from the step before it as the run's script went on from it, by their gap in the
+  // run, whenever what came between them was taken here: an input is the run's own moment at any frame rate, not one
+  // that follows what this pace's frames took when)
+  if is_step(self.evs[i].msg) {
+    let mut k = i - 1
+    while k >= 0 {
+      let e = self.evs[k]
+      if is_step(e.msg) && e.done && e.at >= 0.0 && e.has_wall && self.evs[i].has_wall {
+        let gap = self.evs[i].wall - e.wall
+        return e.at + (if gap > 0.0 { gap * scale } else { 0.0 })
+      }
+      k = k - 1
+    }
+  }
   let mut j = i - 1
   while j >= 0 {
     let e = self.evs[j]
@@ -934,6 +948,19 @@ fn Replay::due_at(self : Replay, i : Int) -> Double {
     j = j - 1
   }
   -@double.infinity
+}
+
+///|
+/// When the run's next step not taken again is due at this pace (Replay::due_at), +inf where there is none or it waits
+/// for an ask not made again: up to when what a step set off is drawn before the next input comes (Tester::inputs_next).
+pub fn Replay::next_step_at(self : Replay) -> Double {
+  for i in self.first_out..<self.evs.length() {
+    let e = self.evs[i]
+    if e.out && !e.done && is_step(e.msg) {
+      return self.due_at(i)
+    }
+  }
+  @double.infinity
 }
 
 ///|

@@ -32,8 +32,28 @@ pub fn Tester::frames_owed(self : Tester) -> Unit {
 /// The frames owed now (Tester::draw's) after what is the hand's on mbui's own (a pointer moved, a wheel turned): not
 /// a change of the test's.
 fn Tester::drawn_now(self : Tester) -> Unit {
+  if self.past_inputs_next() {
+    return
+  }
   self.frame_now()
   self.draw_owed(1)
+}
+
+///|
+/// When the next input comes, as a run's script gave it (a replay's next step, Flow's): a host's frames are drawn
+/// before it as the host drew them, and none after it ahead of it, so the input comes at its own moment whatever the
+/// display's rate, only more or fewer frames between (+inf: none said).
+pub fn Tester::inputs_next(self : Tester, at : Double) -> Unit {
+  self.inputs_next = at
+}
+
+///|
+/// Whether the host's next frame falls after the next input (Tester::inputs_next): not drawn ahead of it. An input due
+/// already (what the test waited for came later than in the run) holds back no frame: the test is past it.
+fn Tester::past_inputs_next(self : Tester) -> Bool {
+  self.host_frames &&
+  self.inputs_next > self.fake.time &&
+  self.tick_after(self.fake.time) > self.inputs_next + due_hair
 }
 
 ///|
@@ -58,6 +78,9 @@ fn Tester::draw_owed(self : Tester, n : Int) -> Unit {
         let s = "Tester::draw: what the view reads (\{c.read_back_key}) still changes after \{n} frames: it does not converge"
         @halt.saying(s)
       }
+      return
+    }
+    if self.past_inputs_next() {
       return
     }
     self.frame_now()

@@ -364,6 +364,9 @@ fn Flow::take_step(self : Flow, line : String) -> Unit {
       if self.r.step_taken(line) && !waiting_step(line) {
         self.said.clear()
       }
+      // (and what it sets off drawn on the host's frames up to the next step's moment, none past it: the next input
+      // comes at its own moment at any frame rate, Tester::inputs_next)
+      self.t.inputs_next(self.r.next_step_at())
     }
     None => ()
   }
@@ -392,8 +395,14 @@ pub fn Flow::core(self : Flow) -> Unit {
   while true {
     self.r.deliver(now=self.t.time(), host_by=self.t.taken_at(), taken_at=self.t.taken_at(), to=fn(json, bytes) { self.t.post("core", json, bytes?) })
     |> ignore
-    if self.t.posted() > 0 {
+    let posted = self.t.posted()
+    if posted > 0 {
       self.t.draw()
+      // (the host's next frame after the next step's moment: what came taken by a frame after that input, as a host's
+      // would be, Tester::inputs_next)
+      if self.t.posted() >= posted {
+        break
+      }
     } else {
       break
     }
@@ -469,7 +478,11 @@ pub fn Flow::until(self : Flow, so : () -> Bool) -> Unit {
     let n = self.r.deliver(at_most=1, now=self.t.time(), host_by=self.t.taken_at(), taken_at=self.t.taken_at(), to=fn(json, bytes) { self.t.post("core", json, bytes?) })
     if n > 0 || self.t.posted() > 0 {
       self.t.draw()
-      continue
+      // (what the next frame takes, where that frame falls after the next step's moment (Tester::inputs_next): the
+      // test waits on, the clock on to it below)
+      if self.t.posted() == 0 {
+        continue
+      }
     }
     // (nothing due yet at the run's pace, or nothing more to come: the clock on a frame at a time, as the run's step
     // waited on, until what it waits for is so (a page pushed when its answer came, sliding in; a line a timer brings)
@@ -680,6 +693,8 @@ pub fn Flow::run_for(self : Flow, ms : Double) -> Unit {
 /// timing, all it asked answered. The screen
 /// as it ends, in a number (screen_sum). The app's core the engine again.
 pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
+  // (no input after the test's last: what is left drawn on, whatever of the run's steps it did not take)
+  self.t.inputs_next(@double.infinity)
   self.core()
   // (the rest of the run's conversation as it came, the clock on to each; what came after the test's last step, that
   // it did not wait for (an agent's turn ending after the run's last step, and in another timing later still), told
