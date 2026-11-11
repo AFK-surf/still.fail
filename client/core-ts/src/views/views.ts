@@ -712,7 +712,7 @@ const SNIPPET_LEAD = 12;
 export class Views implements Owner {
   /// The list rows made from each record (with what else they were made with), so a row whose record did not change
   /// is not made again (rule 7). Kept as long as the record is.
-  readonly #rowsMade = new WeakMap<object, { sig: string; row: J }>();
+  readonly #rowsMade = new WeakMap<object, { sig: string; list: string; row: J }>();
   /// Each record's whole row (`chatRow`, #wholeOf) as #rowsMade keeps its list's row; and a list's row given what only
   /// the whole one says (#wholeFor), by the list's row, while that whole row is the same.
   readonly #wholeMade = new WeakMap<object, { sig: string; row: J }>();
@@ -1764,13 +1764,25 @@ export class Views implements Owner {
           // Only a frozen row (db/account.ts) is surely as it was when its row was made.
           const keepable = isObject(shown) && Object.isFrozen(shown);
           const kept = keepable ? this.#rowsMade.get(shown) : undefined;
-          const own = rowSig(shown);
-          if (kept && kept.sig === own) return kept.row === null ? null : this.#unsentRow(s.address, kept.row, failed);
+          // (held by the list's signature where that is as it was, every row of it then; its own, of the members it
+          // names, worked out only where the list's changed: for each of 420 records at every making of a list it was
+          // a signature a record)
+          let own_: string | undefined;
+          const own = () => (own_ ??= rowSig(shown));
+          const holds = (k: { sig: string; list: string; row: J } | undefined): boolean => {
+            if (k === undefined) return false;
+            if (k.list === sig) return true;
+            if (k.sig !== own()) return false;
+            // (held by the list as it is now: looked at once for this change of the list's)
+            this.#rowsMade.set(shown, { sig: k.sig, list: sig, row: k.row });
+            return true;
+          };
+          if (kept !== undefined && holds(kept)) return kept.row === null ? null : this.#unsentRow(s.address, kept.row, failed);
           const row = (): J => {
             const made = this.#chatRow(s, shown, me, slackUsers, members_, watching, mark, hint);
             // Frozen all through: a row made once and shared from then on (output.ts takes it as it is).
             if (made !== null) deepFreeze(made);
-            if (keepable) this.#rowsMade.set(shown, { sig: own, row: made });
+            if (keepable) this.#rowsMade.set(shown, { sig: own(), list: sig, row: made });
             return made;
           };
           if (!keepable || get(shown, "pending") === true) {
@@ -1781,7 +1793,7 @@ export class Views implements Owner {
           // decided as its row would (#chatRow: watching, one nobody watches).
           const agents = arr(get(shown, "agents"));
           if (watching && !present.watches(agents)) {
-            this.#rowsMade.set(shown, { sig: own, row: null });
+            this.#rowsMade.set(shown, { sig: own(), list: sig, row: null });
             return null;
           }
           const standIn: J = { lastActiveAt: shown.lastActiveAt, station: s.address, state: present.rowState(agents) };
@@ -1791,7 +1803,7 @@ export class Views implements Owner {
           unmade.set(standIn, () => {
             if (shownRow === undefined) {
               const again = this.#rowsMade.get(shown);
-              shownRow = this.#unsentRow(s.address, again !== undefined && again.sig === own && again.row !== null ? again.row : row(), failed);
+              shownRow = this.#unsentRow(s.address, again !== undefined && holds(again) && again.row !== null ? again.row : row(), failed);
             }
             return shownRow;
           });
