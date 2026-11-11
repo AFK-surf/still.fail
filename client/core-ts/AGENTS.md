@@ -39,7 +39,9 @@ conform.ts `reshaped`); where one shape is sent by several topics and only some 
 shape of their own (`ListedProfile`, `StationProfile` beside `Profile`). The fixture fills every list and map a
 weighed topic's shape declares: one left empty is listed in the test's `EMPTY` with why (an error or a state the
 workspace is not in, a thing it has none of), and `EMPTY` only falls; a topic is left unweighed (`NOT_MEASURED`) only
-with the bound that keeps it small named (a cap's constant, a fixed set of fields).
+with the bound that keeps it small named (a cap's constant, a fixed set of fields). A picture goes in no topic's
+value: the value names it by a token and its bytes come beside a call's answer (a link's card's and a file's peek's:
+`src/peek-pictures.ts`; a chat's: `station.file`).
 
 ## What is shared is never written
 

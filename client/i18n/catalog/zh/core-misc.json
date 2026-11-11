@@ -30,6 +30,7 @@
   "core-misc.call.cancelled": "已取消",
   "core-misc.call.models_saving": "正在保存模型",
   "core-misc.call.no_chat": "对话不存在",
+  "core-misc.call.no_picture": "没有这张图片",
   "core-misc.join.expired": "登记码已失效，请重试",
   "core-misc.join.failed": "无法加入：{error}",
   "core-misc.join.lockedStation": "此 station 所在的 workspace 已开启安全模式，只能加入同样开启安全模式的 workspace",
