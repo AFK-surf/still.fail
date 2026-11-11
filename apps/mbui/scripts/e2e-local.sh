@@ -17,10 +17,15 @@
 #                                   bob's devices, apps and a web page, each still.fail's core in Node; it freezes
 #                                   and starts anew the station and the cloud, and enrolls a second station),
 #                                   pass/fail per step
-#   scripts/e2e-local.sh locks-all  up, locks, down (the side run's, scripts/side.sh locks)
+#   scripts/e2e-local.sh locks-all  up, locks, down (the side run's, scripts/side.sh locks); locks failed, what the run
+#                                   wrote is kept before down (`kept locks`)
 #   scripts/e2e-local.sh rigs       a rig end to end against what `up` started (e2e/rigs.ts: a machine enrolled as
 #                                   alice's rig beside the test station, asked for, granted, used, taken back)
-#   scripts/e2e-local.sh rigs-all   up, rigs, down (the side run's, scripts/side.sh rigs)
+#   scripts/e2e-local.sh rigs-all   up, rigs, down (the side run's, scripts/side.sh rigs); rigs failed, kept the same
+#   scripts/e2e-local.sh kept locks|rigs   what this run wrote, copied to $E2E_WORK/kept (emptied first, and by up):
+#                                   the cloud's and relay's logs, each station's (station, second, third, rig: its
+#                                   launcher's, its enrollment's, its data/logs, its kept locks of data/mesh), each
+#                                   device's record (devices/NAME.log); a file over 5 MB its last 5 MB
 #   scripts/e2e-local.sh snapshot NAME [CORE]   a starting point: the cloud's, the station's, the peer's and the app's
 #                                   core data (CORE) as they are now ($E2E_WORK/snapshots/NAME)
 #   scripts/e2e-local.sh restore NAME          back to it (the station and the cloud stopped, put back, started)
@@ -242,6 +247,8 @@ up() {
   for p in $PORT $((PORT + 1)) $((PORT + 2)) $((PORT + 3)) $((PORT + 4)) $((PORT + 5)) $RELAY_PORT; do
     listening $p && die "port $p is taken (E2E_PORT, E2E_RELAY): run down, or pick others"
   done
+  # (what a failed run before this one kept is not this one's)
+  rm -rf $KEPT
   sources
   # the relay: iroh-relay in dev mode (plain HTTP) on loopback, as still.fail's side tests run it
   cat > $RUN/relay.toml <<EOF
@@ -366,6 +373,36 @@ rigs() {
   (export E2E_HOME=$HOME; . $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/rigs-home; mkdir -p $HOME
    E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/rigs E2E_WORK=$WORK E2E_STATION=$STATION E2E_PORT=$PORT \
      E2E_RELAY=$RELAY_PORT node $ROOT/e2e/rigs.ts </dev/null)
+}
+
+# What a failed locks or rigs leaves to be read (the side run uploads it: .github/workflows/side.yml), copied before
+# down ends it all: the logs of this run, the cloud's, the relay's and each station's apart (side run 42815367472's
+# job's log had a device's handshake refused five times and did not say which process refused it), each device's
+# record of what its links did (e2e/device.ts), and the locks each station kept as they stood (public keys and signed
+# entries of the test accounts). Nothing else of the data directories: no database, keys, config or sealed values.
+# Only files written since this run's up (its auth-key), so another run's left in $WORK never pass for this one's. A
+# copy that fails is let be: what the run ended with is what it says.
+KEPT=$WORK/kept
+keep() {
+  [ -f "$1" ] && [ ! "$1" -ot $RUN/auth-key ] || return 0
+  mkdir -p "$(dirname "$KEPT/$2")" || return 0
+  if [ "$(wc -c < "$1" | tr -d ' ')" -gt 5242880 ]; then tail -c 5242880 "$1" > "$KEPT/$2"; else cp "$1" "$KEPT/$2"; fi
+}
+kept() {
+  local part=${1:?locks or rigs} n d f
+  rm -rf $KEPT && mkdir -p $KEPT || return 0
+  keep $RUN/cloud.log cloud.log
+  keep $RUN/relay.log relay.log
+  for n in station second third rig; do
+    if [ $n = station ]; then d=$STATION; f=enroll; else d=$(more_dir $n); f=$n-enroll; fi
+    keep $RUN/$n.log $n/launcher.log
+    keep $RUN/$f.log $n/enroll.log
+    for f in "$d"/data/logs/*.log; do keep "$f" $n/logs/"$(basename "$f")"; done
+    keep "$d"/data/mesh/lock.json $n/mesh/lock.json
+    keep "$d"/data/mesh/person-chains.json $n/mesh/person-chains.json
+  done
+  for f in $WORK/$part/*/record.log; do keep "$f" devices/"$(basename "$(dirname "$f")")".log; done
+  say "kept $KEPT ($(find $KEPT -type f | wc -l | tr -d ' ') files)"
 }
 
 # a device the cloud signed in as alice on its own (what a cloud that is not to be trusted can do: mint her a credential)
@@ -829,15 +866,17 @@ case "${1:-all}" in
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
   ios) shift; "$ROOT/e2e/run.sh" ios "$@" ;;
   locks) locks ;;
+  kept) shift; kept "$@" ;;
+  # (locks failed: what it leaves kept before the trap's down, and its status the run's)
   locks-all)
     trap down EXIT
     up
-    locks ;;
+    locks || { rc=$?; kept locks || true; exit $rc; } ;;
   rigs) rigs ;;
   rigs-all)
     trap down EXIT
     up
-    rigs ;;
+    rigs || { rc=$?; kept rigs || true; exit $rc; } ;;
   all)
     trap down EXIT
     up

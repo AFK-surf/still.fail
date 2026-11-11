@@ -53,7 +53,10 @@ networks made up at random) is the side run's: `sh scripts/side.sh` (each packag
 `rigs-all`), every four hours on main in CI (`.github/workflows/side.yml`, each part on a runner of its own; run it by hand with `gh workflow run side`),
 blocking nothing. A side failure goes to an agent, which reproduces it as a test CI runs, failing the same way every
 time, and fixes it; one it cannot reproduce is let be. Never a retry, a longer deadline or a looser bound to make a
-test pass.
+test pass. A failed locks or rigs leaves its logs (the cloud's, the relay's, each station's apart), each device's record
+of what its links did and the stations' locks as the run's artifact `side-<part>-<run>-<attempt>`, kept 3 days
+(`gh run download <run>`; `apps/mbui/scripts/e2e-local.sh`, `kept`, says what is in it); in the job's log a device's lines begin
+with its name (`E| …`).
 
 ## Browser and station builds
 
