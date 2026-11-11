@@ -199,8 +199,25 @@ fn looks_fail(s : String) -> Unit {
   let said = "a frame not built whole (frame_watch.mbt), the Tester made at \{looks_made_at.val}: " +
     s +
     " (built whole last at \{looks_base.built_at.to_int()} ms\{if wall_read.val { "; the time of day read as it was built" } else { "" }}; what is said to move: \{g().moving_now().join("; ")})"
+  if looks_said_only.val {
+    println("LOOKS-FAIL " + said)
+    return
+  }
   println(said)
   abort(said)
+}
+
+///|
+/// Whether a frame found not built whole is said (`LOOKS-FAIL`, the whole of what looks_fail says) and the run goes on,
+/// not ended: for a run that counts what such frames a rate shows (sfreplay's pace passes), every other run failing.
+// kept across runs: set by the Tester that asks it (Tester::looks_said_only), off as each Tester is made
+let looks_said_only : Ref[Bool] = Ref(false)
+
+///|
+/// A frame found not built whole said and gone on from (looks_fail): `on` for this Tester's run.
+pub fn Tester::looks_said_only(self : Tester, on : Bool) -> Unit {
+  ignore(self)
+  looks_said_only.val = on
 }
 
 ///|

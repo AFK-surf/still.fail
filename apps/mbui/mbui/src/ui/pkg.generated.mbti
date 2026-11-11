@@ -2655,6 +2655,7 @@ pub fn Tester::local_acts(Self) -> Array[String]
 pub fn Tester::locate(Self, String) -> Array[(Double, Double)]
 pub fn Tester::look_of(Self, String) -> (Double, Double, Double)?
 pub fn Tester::looks_alone(Self) -> Int32
+pub fn Tester::looks_said_only(Self, Bool) -> Unit
 pub fn Tester::marks_answer(Self, Int32) -> Unit
 pub fn Tester::marks_by_hand(Self) -> Unit
 pub fn Tester::marks_drawn(Self) -> Array[String]
