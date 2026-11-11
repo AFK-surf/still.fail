@@ -973,9 +973,10 @@ let md_task_side : Double = 13.0
 let md_task_check : Double = 11.0
 
 ///|
-/// Words of `size` on one line, in 400, on lines `line` high (0: the theme's line for that size, as old text's with none said).
+/// Words of `size` on one line, in 400, on lines `line` high (0: the theme's line for that size as they are drawn, the
+/// system's size of words applied first, as old text's with none said: style_words' share of their size).
 fn md_plain_look(size : Double, line : Double) -> @view.WordsLook {
-  { size, weight: 400, line: if line > 0.0 { line } else { @ui.tree_theme().text_line * size }, wrap: false, tracking: @view.letters_own, balance: false }
+  { size, weight: 400, line: if line > 0.0 { line } else { -@ui.tree_theme().text_line }, wrap: false, tracking: @view.letters_own, balance: false }
 }
 
 ///|
