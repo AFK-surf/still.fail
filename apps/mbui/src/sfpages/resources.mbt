@@ -467,11 +467,7 @@ fn rs_figures(
 /// Whose a chat's row is: its chat opened from its title, where it has one.
 fn rs_title(c : @ui.Ctx, core : Core, key : String, g : Json?, style : @ui.TextStyle) -> Unit {
   let chat = field(g, "chat")
-  let thread = match field(chat, "thread") {
-    Some(Number(n, ..)) => n.to_int64().to_string()
-    _ => ""
-  }
-  let session = if thread != "" { thread } else { text(chat, "session") }
+  let session = text(chat, "session")
   if chat is Some(Object(_)) && session != "" {
     let id = c.id("resources-chat/" + key)
     c.on_press(id, fn() {

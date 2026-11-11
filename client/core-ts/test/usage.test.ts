@@ -66,7 +66,7 @@ test("days_split_by_who_and_lists_ranked_by_cost", () => {
   const people = list(0);
   assert.deepEqual([people[0].title, people[0].shareText, people[0].person.shown.picture], ["阿一", "100%", "https://p/a"]);
   const chats = list(1);
-  assert.deepEqual([chats[0].title, chats[0].chat], ["修登录", { station: "ws/st", thread: 7 }]);
+  assert.deepEqual([chats[0].title, chats[0].chat], ["修登录", { station: "ws/st", session: "chat:c-1" }]);
   // each chat said with who it was for and its model, the most of each, then where it is
   assert.deepEqual([chats[0].sub, chats[1].sub, chats[1].chat], ["阿一 · Opus 5.5", "阿一 · Opus 5.5 · Slack · 已归档", { station: "ws/st", session: "chat:c-2" }]);
   // one person, one model: neither said of a chat, nor any list of one told apart
