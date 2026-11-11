@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [3ac2bae84](https://github.com/AFK-surf/still.fail/commit/3ac2bae8499dc5db4f9f62ce53f801c4f4b745ba) app: what the workspace in view's first screen rea | 1.85 | 2.47 | 10.35 | 29.09 | 36.55 | 25.9 | 48.32 | 94.86 | 135.49 |
 | [62447bc44](https://github.com/AFK-surf/still.fail/commit/62447bc440a1d8e8b9db9c9c1225ad9757411600) mbui: words in pieces in a block lent a picker of  | 1.84 | 2.47 | 10.35 | 29.09 | 36.55 | 25.9 | 48.3 | 94.31 | 135.49 |
 | [0d024466b](https://github.com/AFK-surf/still.fail/commit/0d024466b290064b1d9dec6da6309128fb2c7283) mbui: the corner rule holds a node of the window's | 1.85 | 2.47 | 10.36 | 29.09 | 36.58 | 25.9 | 48.32 | 94.6 | 125.5 |
 | [6272573dc](https://github.com/AFK-surf/still.fail/commit/6272573dcd3fb0b9f5871645e332fe307ddc10f0) app: a message's pictures and videos as nodes, com | 1.85 | 2.47 | 10.36 | 29.09 | 36.58 | 25.9 | 48.32 | 94.88 | 130.81 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [c41e22428](https://github.com/AFK-surf/still.fail/commit/c41e224283adc5681cff8fdbe4b9df1790f50070) sfpages: a chat row's ground put at once when anot | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.21 | 173.03 |
 | [f611394ac](https://github.com/AFK-surf/still.fail/commit/f611394ac0491da422ee79658b1df51a42a839f1) app, core, mbui: a job's log goes out as its lines | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.09 | 142.66 |
 | [40341920a](https://github.com/AFK-surf/still.fail/commit/40341920a397ce7dbfaf62436840f8a22b33fd51) core: a workspace switched to answers what is aske | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.67 | 171.26 |
-| [8e60cc3ef](https://github.com/AFK-surf/still.fail/commit/8e60cc3ef41ab9526858fbd6bfa94d57a9d8df28) mbui: the corners worked out of an old view each f | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.36 | 161.99 |
