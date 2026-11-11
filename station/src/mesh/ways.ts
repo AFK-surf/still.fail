@@ -160,11 +160,18 @@ export class WaysRefusal extends Error {}
 /// Whether still.fail's cloud is on http (a local setup), where a relay on http is taken too.
 const insecure = (cloud: Cloud) => (cloud.state?.origin ?? "").startsWith("http:");
 
+/// still.fail's own relays: what the control plane's `relay_urls` say, but the workspaces' own it puts after them
+/// (as it kept them, `waysSaid`): every workspace has these.
+export function stillFails(cloud: Cloud): string[] {
+  const theirs = cloud.memberships().flatMap((m) => cloud.waysSaid(m.workspace)?.relays ?? []);
+  return cloud.relays().filter((u) => !theirs.some((t) => sameUrl(t) === sameUrl(u)));
+}
+
 /// `url` added to `ws`'s own relays, by `by`. One already there stays as it is.
 export function addRelay(ways: Ways, ws: string, raw: string, by: string | null): WaysRecord {
   const url = relayUrl(raw, insecure(ways.cloud));
   if (url === null) throw new WaysRefusal("not a relay's URL: https://host[:port][/path], with no account, query or fragment");
-  if (ways.cloud.relays().some((u) => sameUrl(u) === sameUrl(url)) && !ways.view(ws).relays.some((r) => sameUrl(r.url) === sameUrl(url))) throw new WaysRefusal("that is one of still.fail's own relays, which every workspace has already");
+  if (stillFails(ways.cloud).some((u) => sameUrl(u) === sameUrl(url))) throw new WaysRefusal("that is one of still.fail's own relays, which every workspace has already");
   return ways.change(ws, (now) => {
     if (now.relays.some((r) => sameUrl(r.url) === sameUrl(url))) return now;
     if (now.relays.length >= MAX_OWN_RELAYS) throw new WaysRefusal(`a workspace has at most ${MAX_OWN_RELAYS} relays of its own: remove one first`);
@@ -186,12 +193,12 @@ export function setRelays(ways: Ways, ws: string, raws: unknown[], by: string | 
   for (const raw of raws) {
     const url = relayUrl(raw, insecure(ways.cloud));
     if (url === null) throw new WaysRefusal("not a relay's URL: https://host[:port][/path], with no account, query or fragment");
-    if (!ways.cloud.relays().some((u) => sameUrl(u) === sameUrl(url)) && !urls.some((u) => sameUrl(u) === sameUrl(url))) urls.push(url);
+    if (!stillFails(ways.cloud).some((u) => sameUrl(u) === sameUrl(url)) && !urls.some((u) => sameUrl(u) === sameUrl(url))) urls.push(url);
   }
   if (urls.length > MAX_OWN_RELAYS) throw new WaysRefusal(`a workspace has at most ${MAX_OWN_RELAYS} relays of its own`);
   return ways.change(ws, (now) => ({
     relays: urls.map((url) => now.relays.find((r) => sameUrl(r.url) === sameUrl(url)) ?? (by ? { url, by } : { url })),
-    off: now.off.filter((w) => !URL.canParse(w) || urls.some((u) => sameUrl(u) === sameUrl(w)) || ways.cloud.relays().some((u) => sameUrl(u) === sameUrl(w))),
+    off: now.off.filter((w) => !URL.canParse(w) || urls.some((u) => sameUrl(u) === sameUrl(w)) || stillFails(ways.cloud).some((u) => sameUrl(u) === sameUrl(w))),
   }));
 }
 
@@ -199,7 +206,7 @@ export function setRelays(ways: Ways, ws: string, raws: unknown[], by: string | 
 /// web app goes through relays alone, and a device that never reached a station yet knows of no other way there.
 export function setWay(ways: Ways, ws: string, way: string, on: boolean): WaysRecord {
   const own = ways.view(ws).relays.map((r) => r.url);
-  const relays = [...ways.cloud.relays(), ...own];
+  const relays = [...stillFails(ways.cloud), ...own];
   const isKind = (WAY_KINDS as readonly string[]).includes(way);
   const relay = isKind ? null : relays.find((u) => sameUrl(u) === sameUrl(way)) ?? null;
   if (!isKind && relay === null) throw new WaysRefusal("no such way: a relay of the workspace's, or lan, tailnet, direct");
@@ -307,6 +314,23 @@ export function followWays(ways: Ways, call: PeerCall, after: (ms: number, f: ()
 export type Tell = (event: string, data: unknown, of: string, to: { workspace: string }) => void;
 
 /// Tells each change of a workspace's ways to its members' devices (`ways`, `{workspace}`): they read `GET /ways` again.
+/// Where this station keeps none yet, the ways as still.fail cloud keeps them, changed there (by an app from before).
 export function tellWays(ways: Ways, tell: Tell): () => void {
-  return ways.listen((workspace) => tell("ways", { workspace }, `ways\0${workspace}`, { workspace }));
+  const told = (workspace: string) => tell("ways", { workspace }, `ways\0${workspace}`, { workspace });
+  const said = new Map<string, string>();
+  const look = () => {
+    for (const m of ways.cloud.memberships()) {
+      const now = JSON.stringify(ways.cloud.waysSaid(m.workspace));
+      const was = said.get(m.workspace);
+      said.set(m.workspace, now);
+      if (was !== undefined && was !== now && ways.record(m.workspace) === null) told(m.workspace);
+    }
+  };
+  look();
+  const unlistenCloud = ways.cloud.listen(look);
+  const unlistenWays = ways.listen(told);
+  return () => {
+    unlistenCloud();
+    unlistenWays();
+  };
 }

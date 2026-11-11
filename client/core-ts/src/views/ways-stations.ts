@@ -105,6 +105,6 @@ export function install(inner: Inner): void {
       const ws = ofAddress(address);
       if (name === "ways" && get(data, "workspace") === ws) inner.scheduler.enqueue(address, `ways/${address}`, Priority.background, Effect.ignore(readStation(inner, address)));
     },
-    resume: true,
+    // (not read again after an absence: a stream that came back says each change it missed, `ways` among them)
   });
 }

@@ -162,3 +162,23 @@ test("an agent adds a relay only once this station reached it as one, by its cha
   const none = relayTools({ ways: () => null, workspaceOf: () => null, by: () => "" })[0]!;
   await assert.rejects(none.run("session", { action: "list" }) as Promise<string>, /in no workspace/);
 });
+
+test("a relay the cloud kept as the workspace's own is not taken for still.fail's; a change of it there is told", () => {
+  // As the control plane tells it: the workspace's own after still.fail's in relay_urls, and in `ways`.
+  const data = mkdtempSync(join(tmpdir(), "ways-"));
+  writeState(data, { origin: "https://app.still.fail", station: A, workspace: WS, workspace_name: "Team", name: "s", relay_url: OURS[0]!, relay_urls: OURS, grant_keys: { keys: [] }, peers: [], revocations: [] });
+  const cloud = new Cloud(data, false);
+  const frame = (own: string[]) => JSON.stringify({ type: "state", workspace: WS, workspace_name: "Team", name: "s", origin: "https://app.still.fail", relay_url: OURS[0], relay_urls: [...OURS, ...own], peers: [{ id: A, name: "a" }], revocations: [], ways: { relays: own, off: [] } });
+  applyState(cloud, frame(["https://pvg.test:8445"]));
+  const ways = new Ways(cloud, join(data, "mesh", "ways.json"));
+  const told: string[] = [];
+  const stop = tellWays(ways, (_e, data) => told.push(JSON.stringify(data)));
+  // Changed on the cloud by an app from before: told, as this station keeps none of its own yet.
+  applyState(cloud, frame(["https://pvg.test:8445", "https://sz.test"]));
+  assert.deepEqual(told, [`{"workspace":"${WS}"}`]);
+  // The app's whole list: the cloud's own relay stays one of the workspace's, not dropped as still.fail's.
+  const r = setRelays(ways, WS, ["https://pvg.test:8445", "https://new.test"], "Ana");
+  assert.deepEqual(r.relays.map((x) => x.url), ["https://pvg.test:8445", "https://new.test"]);
+  assert.deepEqual(addRelay(ways, WS, "https://pvg.test:8445", null).relays.length, 2, "already the workspace's: stays as it is");
+  stop();
+});

@@ -1,7 +1,7 @@
 // The agents' hand on the relays of their chat's workspace (mesh/ways.ts): listed, added, taken away. Nobody approves
 // a relay (the user, 2026-11-11: 「要手动加太不 ai native 了」); one is added only once this station reached it as a relay.
 import { wall } from "../ops/fibers.ts";
-import { MAX_OWN_RELAYS, type Ways, WaysRefusal, addRelay, relayUrl, removeRelay } from "../mesh/ways.ts";
+import { MAX_OWN_RELAYS, type Ways, WaysRefusal, addRelay, relayUrl, removeRelay, stillFails } from "../mesh/ways.ts";
 import type { Tool } from "./mcp.ts";
 
 /// What reaching a relay found: it answered as one (its round trip, the second ask's), or why it is none.
@@ -60,7 +60,7 @@ export function relayTools(deps: RelayToolsDeps): Tool[] {
       const action = args.action;
       const list = () => {
         const v = ways.view(ws);
-        return { workspace: ws, own: v.relays, still_fail: ways.cloud.relays().filter((u) => !v.relays.some((r) => r.url === u)), off: v.off };
+        return { workspace: ws, own: v.relays, still_fail: stillFails(ways.cloud), off: v.off };
       };
       if (action === "list") return JSON.stringify(list());
       const raw = typeof args.url === "string" ? args.url : "";
