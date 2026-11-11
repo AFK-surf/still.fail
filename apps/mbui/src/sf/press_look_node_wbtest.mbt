@@ -92,8 +92,8 @@ test "a press's ripple on a node drawn as the old view's is: from where it went 
     t.touch(0, 270.0, 26.0)
     let new = pressed_through(t, 260.0, held, moments)
     t.run_for(@motion.ripple_tap_ms)
-    assert_true(old[1].length() > 0, msg="held \{held}: the old one's disc drawn: \{old}")
-    assert_eq(new, old, msg="held \{held}: as the old one's: \{new} and \{old}")
+    assert_true(old[1].length() > 0, msg="held \{held}: the old one's disc drawn: \{Repr(old)}")
+    assert_eq(new, old, msg="held \{held}: as the old one's: \{Repr(new)} and \{Repr(old)}")
   }
   assert_true(!@ui.view_tree().unwrap().clock_read(), msg="gone: nothing read of the clock")
 }
@@ -119,7 +119,7 @@ test "a press's ripple on a node, motion reduced: there at once as the old view'
   t.run_for(t.frame_period() * 3.0)
   let ticking = @ui.view_tree().unwrap().clock_read()
   @ui.set_motion_chosen(None)
-  assert_eq(new, old, msg="as the old one's: \{new} and \{old}")
+  assert_eq(new, old, msg="as the old one's: \{Repr(new)} and \{Repr(old)}")
   assert_true(!ticking, msg="let go of: nothing read of the clock")
 }
 
@@ -158,11 +158,11 @@ test "a press on a node standing on its own ground sinks it while held to the ol
   }
   let (old, new) = sizes(0xFFFFFFFFL)
   assert_eq(old, [0.96, 0.96, 1.0], msg="solid: the old one sunk while held, back as let go")
-  assert_true(new[0] < 1.0 && new[0] > 0.96, msg="solid: the node on its way down a frame in: \{new}")
-  assert_eq([new[1], new[2]], [old[1], old[2]], msg="solid: held, as deep as the old one; let go, back: \{new} and \{old}")
+  assert_true(new[0] < 1.0 && new[0] > 0.96, msg="solid: the node on its way down a frame in: \{Repr(new)}")
+  assert_eq([new[1], new[2]], [old[1], old[2]], msg="solid: held, as deep as the old one; let go, back: \{Repr(new)} and \{Repr(old)}")
   let (old, new) = sizes(0xFFFFFF29L)
   assert_eq(old, [1.0, 1.0, 1.0], msg="faint: the old one not sunk")
-  assert_eq(new, old, msg="faint: as the old one: \{new} and \{old}")
+  assert_eq(new, old, msg="faint: as the old one: \{Repr(new)} and \{Repr(old)}")
 }
 
 ///|
@@ -186,8 +186,8 @@ test "a press on a node held, moved off it and called off: its ripple as the old
     seen.push(marks)
     t.run_for(@motion.ripple_tap_ms)
   }
-  assert_true(seen[0][0].length() > 0, msg="the old one's disc on its way out: \{seen[0]}")
-  assert_eq(seen[1], seen[0], msg="as the old one's: \{seen[1]} and \{seen[0]}")
+  assert_true(seen[0][0].length() > 0, msg="the old one's disc on its way out: \{Repr(seen[0])}")
+  assert_eq(seen[1], seen[0], msg="as the old one's: \{Repr(seen[1])} and \{Repr(seen[0])}")
 }
 
 ///|

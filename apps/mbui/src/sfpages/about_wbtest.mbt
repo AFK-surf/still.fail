@@ -104,7 +104,7 @@ test "关于's version rows, at each width and with either hand: this build alon
       // note, 「自动下载新版本，在你不用 still.fail 时安装」, goes on in two lines beside the switch, one line alone: made at
       // sf/page_node.mbt:1254, asked for at about.mbt:145. Its bar, to come down as it is mended.)
       let known = if at == "390 platform 2" { 1 } else { 0 }
-      assert_true(t.beside_faults().length() == known, msg="\{at}: \{t.beside_faults()}")
+      assert_true(t.beside_faults().length() == known, msg="\{at}: \{Repr(t.beside_faults())}")
       let (_, y, _, _) = t.rect_of("更新日志").unwrap()
       if under < 0.0 {
         under = y
@@ -382,10 +382,10 @@ test "更新日志 on a phone: a change's kind on a label before its words, whic
   let labels = t
     .drawn_rects()
     .filter(fn(r) { r.4 == @sf.theme().p.chip && r.1 < rs[0].1 + rs[0].3 && r.1 + r.3 > rs[0].1 && (r.0 - rs[1].0).abs() < 0.001 })
-  assert_eq(labels.length(), 1, msg="\{t.drawn_rects().filter(fn(r) { r.4 == @sf.theme().p.chip })} \{rs}")
+  assert_eq(labels.length(), 1, msg="\{Repr(t.drawn_rects().filter(fn(r) { r.4 == @sf.theme().p.chip }))} \{Repr(rs)}")
   // (19 high at words of 15: as the words are set now, in the theme they are drawn in)
   let size = @ui.style_words(@sf.body).size
-  assert_true((labels[0].3 - size * 19.0 / 15.0).abs() < 0.001, msg="\{labels[0]} at \{size}")
+  assert_true((labels[0].3 - size * 19.0 / 15.0).abs() < 0.001, msg="\{Repr(labels[0])} at \{size}")
 }
 
 ///|

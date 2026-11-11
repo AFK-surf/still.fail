@@ -187,7 +187,7 @@ test "传输: each key asks the core what it says; 显示 goes to the copy's fol
     t.draw()
     let again = calls_named(calls, "download.retry")
     assert_eq(again.length(), 1, msg=about)
-    assert_true(text(Some(again[0]), "id").has_suffix("日志.tar"), msg="\{about}: \{again}")
+    assert_true(text(Some(again[0]), "id").has_suffix("日志.tar"), msg="\{about}: \{Repr(again)}")
     // the copy going, called off; the failed one, tried again: each by its station and id
     let (x, y) = button_mid(t, "取消传输")
     t.tap(x, y)
@@ -270,7 +270,7 @@ test "传输 with keyboard and mouse: a key's name shows by it as the pointer re
     t.move_to(x, y)
     t.run_for(@sf.tip_delay_ms + @ui.move_most_ms)
     let tip = t.words().iter().find_first(fn(w) { w.0 == "取消传输" })
-    assert_true(tip is Some(w) && w.2 > y, msg="wide \{wide}: \{tip}, the key at \{y}")
+    assert_true(tip is Some(w) && w.2 > y, msg="wide \{wide}: \{Repr(tip)}, the key at \{y}")
     // drawn over the list: the last of what is drawn under its words its own ground, no larger than it; the list's
     // ground, under it, before it
     let (tx, ty, tw, th) = match tip {
@@ -279,10 +279,10 @@ test "传输 with keyboard and mouse: a key's name shows by it as the pointer re
     }
     let (mx, my) = (tx + tw / 2.0, ty + th / 2.0)
     let under = t.drawn_rects().filter(fn(r) { r.0 <= mx && mx <= r.0 + r.2 && r.1 <= my && my <= r.1 + r.3 })
-    assert_true(under.length() >= 2, msg="wide \{wide}: under the tip \{under}")
+    assert_true(under.length() >= 2, msg="wide \{wide}: under the tip \{Repr(under)}")
     let top = under[under.length() - 1]
-    assert_true(top.2 < 200.0 && top.3 < 40.0, msg="wide \{wide}: the last under the tip \{top}")
-    assert_true(under[0].2 >= 300.0, msg="wide \{wide}: the first under the tip \{under[0]}")
+    assert_true(top.2 < 200.0 && top.3 < 40.0, msg="wide \{wide}: the last under the tip \{Repr(top)}")
+    assert_true(under[0].2 >= 300.0, msg="wide \{wide}: the first under the tip \{Repr(under[0])}")
     // (Escape shuts the tip first, then the list)
     t.key(@ui.key_escape)
     t.draw()

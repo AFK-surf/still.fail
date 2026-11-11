@@ -84,7 +84,7 @@ test "beside as wide as its anchor: laid out alone as the anchor widens, then by
   let alone = laid_under(t, p)
   assert_eq(alone[0].2, 260.0)
   // (the words wrapped at its width, the box at its most, what its room made half of it)
-  assert_true(alone.length() >= 5, msg="\{alone}")
+  assert_true(alone.length() >= 5, msg="\{Repr(alone)}")
   // what lays out all of it again, the layer too: the same
   let at_alone = t.nodes[p].flex.laid_out_at()
   assert_true(at_alone > at_first)

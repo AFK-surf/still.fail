@@ -122,7 +122,7 @@ test "a line's glyph cells match the shaped rich words, including different widt
       }
       assert_eq(cells.val.length(), expected.length(), msg=words)
       for i in 0..<expected.length() {
-        assert_true((cells.val[i].0 - expected[i].0).abs() < 0.01 && (cells.val[i].1 - expected[i].1).abs() < 0.01, msg="\{words}: \{cells.val} / \{expected}")
+        assert_true((cells.val[i].0 - expected[i].0).abs() < 0.01 && (cells.val[i].1 - expected[i].1).abs() < 0.01, msg="\{words}: \{Repr(cells.val)} / \{Repr(expected)}")
       }
     }
   }
@@ -177,5 +177,5 @@ test "a glyph is told what cuts the node that says the looks, not a box of its o
   })
   t.draw()
   assert_true(tops.length() >= 4)
-  assert_true(tops.iter().all(fn(y) { y == tops[0] }), msg="\{tops}")
+  assert_true(tops.iter().all(fn(y) { y == tops[0] }), msg="\{Repr(tops)}")
 }

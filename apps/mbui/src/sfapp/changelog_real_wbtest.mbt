@@ -346,7 +346,7 @@ test "更新日志 of the beta's size, opened 窄排法, scrolled to its end, ba
   let seen = changelog_real_walk()
   println(real_said(seen))
   // (its pages asked as it came near their last: a page, then more, each tab's own)
-  assert_true(seen.asks.contains("{\"limit\":30}") && seen.asks.contains("{\"limit\":60}"), msg="\{seen.asks}")
-  assert_true(seen.asks.iter().any(fn(a) { a.contains("station") }), msg="\{seen.asks}")
+  assert_true(seen.asks.contains("{\"limit\":30}") && seen.asks.contains("{\"limit\":60}"), msg="\{Repr(seen.asks)}")
+  assert_true(seen.asks.iter().any(fn(a) { a.contains("station") }), msg="\{Repr(seen.asks)}")
   assert_eq(seen.faults, [])
 }

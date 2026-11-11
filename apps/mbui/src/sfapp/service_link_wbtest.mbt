@@ -383,7 +383,7 @@ test "the system's back steps the page back in its own history first; at its fir
   t.back()
   // the page a step back, the service's page still there
   if !t.views().iter().any(fn(s) { s.has_prefix("control \{site} 5 ") }) {
-    fail("the page not stepped back: \{t.views()}")
+    fail("the page not stepped back: \{Repr(t.views())}")
   }
   assert_eq(app.nav.depth(), depth)
   assert_true(t.view_said(state("/", false)))

@@ -189,7 +189,7 @@ test "a layer of the old frame's over everything, modal: the tree's buttons unde
   })
   t.draw()
   let tree_button = t.semantics().filter(fn(s) { s.label == "树的" })
-  assert_true(tree_button.length() == 1 && tree_button[0].hidden, msg="\{tree_button}")
+  assert_true(tree_button.length() == 1 && tree_button[0].hidden, msg="\{Repr(tree_button)}")
   g().ask_action(tree_button[0].id, Activate)
   t.draw()
   assert_eq(pressed.val, 0)

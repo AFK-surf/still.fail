@@ -94,8 +94,8 @@ test "Station 文件: the places on each screen, each station's name over its ho
     let (way, home, docs, maple) = (pick_word(t, "所有位置"), pick_word(t, "主目录"), pick_word(t, "文档"), pick_word(t, "Maple · 离线"))
     assert_true(way.1 < home.1 && home.1 < docs.1 && docs.1 < maple.1, msg="\{about}")
     // (a place's words in from a station's name, its mark before them)
-    assert_true(home.0 > maple.0, msg="\{about}: \{home} \{maple}")
-    assert_true((docs.0 - home.0).abs() < 0.5, msg="\{about}: \{docs} \{home}")
+    assert_true(home.0 > maple.0, msg="\{about}: \{Repr(home)} \{Repr(maple)}")
+    assert_true((docs.0 - home.0).abs() < 0.5, msg="\{about}: \{Repr(docs)} \{Repr(home)}")
     // (nothing ticked: 添加 takes no press)
     pick_press(t, "添加")
     assert_true(t.find("所有位置") is Some(_), msg="\{about}: still up")
@@ -118,7 +118,7 @@ test "Station 文件: a place pressed goes into it, the way over it; a folder en
     assert_true(t.find("4.1 KB · 09:30") is Some(_) || t.find("4 KB · 09:30") is Some(_), msg="\{about}: a file's size and time")
     // (the way on its own line over them)
     let way = pick_word(t, "Willow · 文档")
-    assert_true(way.1 + way.3 <= whole.1, msg="\{about}: \{way} \{whole}")
+    assert_true(way.1 + way.3 <= whole.1, msg="\{about}: \{Repr(way)} \{Repr(whole)}")
     pick_press(t, "设计稿")
     for w in ["Willow · 文档", "设计稿", "图标.png", "配色说明.md", "旧版"] {
       assert_true(t.find(w) is Some(_), msg="\{about}: in 设计稿, \{w}")
@@ -180,7 +180,7 @@ test "Station 文件: a folder read the first time shows its bones, none of its 
     assert_true(t.find("Willow · 文档") is Some(_), msg="\{about}: its way")
     let (why, again) = (pick_word(t, "无法读取：权限不足"), pick_word(t, "重试"))
     // (why, then 重试 at the end of its line)
-    assert_true((why.1 + why.3 / 2.0 - (again.1 + again.3 / 2.0)).abs() < 1.0 && again.0 > why.0 + why.2, msg="\{about}: \{why} \{again}")
+    assert_true((why.1 + why.3 / 2.0 - (again.1 + again.3 / 2.0)).abs() < 1.0 && again.0 > why.0 + why.2, msg="\{about}: \{Repr(why)} \{Repr(again)}")
     assert_true(t.find("整个文件夹") is None, msg="\{about}")
   }
 }
@@ -283,9 +283,9 @@ test "Station 文件: where its words stand on each screen, the way and each sta
     assert_true((home.0 - whole.0).abs() < 0.5, msg="\{about}: a place \{home}, a folder's rows \{whole}")
     // (the way over them: its first step at the title's start, the folder's after it on its line)
     let (first, docs) = (pick_word(t, "所有位置"), pick_word(t, "Willow · 文档"))
-    assert_true((first.0 - title.0).abs() < 0.5 && docs.0 > first.0 + first.2 && docs.1 + docs.3 <= whole.1, msg="\{about}: \{first} \{docs} \{whole}")
+    assert_true((first.0 - title.0).abs() < 0.5 && docs.0 > first.0 + first.2 && docs.1 + docs.3 <= whole.1, msg="\{about}: \{Repr(first)} \{Repr(docs)} \{Repr(whole)}")
     pick_press(t, "发布清单.md")
     let (cancel, add) = (pick_word(t, "取消"), pick_word(t, "添加 1 个"))
-    assert_true((cancel.1 + cancel.3 / 2.0 - (add.1 + add.3 / 2.0)).abs() < 1.0 && cancel.0 + cancel.2 < add.0, msg="\{about}: \{cancel} \{add}")
+    assert_true((cancel.1 + cancel.3 / 2.0 - (add.1 + add.3 / 2.0)).abs() < 1.0 && cancel.0 + cancel.2 < add.0, msg="\{about}: \{Repr(cancel)} \{Repr(add)}")
   }
 }

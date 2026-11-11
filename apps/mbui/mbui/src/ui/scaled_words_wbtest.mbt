@@ -62,21 +62,21 @@ fn glyphs_alike(a : Array[(Double, Double, Int64)], b : Array[(Double, Double, I
 test "words in a node drawn half as big, its middle a quarter pixel off the pixels: each glyph where an old view's words drawn half as big are" {
   let old = old_scaled(0.0, 0.5, 1.0)
   let new = tree_scaled(0.0, 0.5, 1.0)
-  assert_true(old.length() > 0 && glyphs_alike(old, new), msg="old \{old[:3]}\nnode \{new[:3]}")
+  assert_true(old.length() > 0 && glyphs_alike(old, new), msg="old \{Repr(old[:3])}\nnode \{Repr(new[:3])}")
 }
 
 ///|
 test "words in a node drawn 0.7 as big in one drawn 0.6 as big and moved: each glyph where an old view's are so" {
   let old = old_scaled(3.3, 0.7, 0.6)
   let new = tree_scaled(3.3, 0.7, 0.6)
-  assert_true(old.length() > 0 && glyphs_alike(old, new), msg="old \{old[:3]}\nnode \{new[:3]}")
+  assert_true(old.length() > 0 && glyphs_alike(old, new), msg="old \{Repr(old[:3])}\nnode \{Repr(new[:3])}")
 }
 
 ///|
 test "words in a node not grown or shrunk: where an old view's are" {
   let old = old_scaled(3.3, 1.0, 1.0)
   let new = tree_scaled(3.3, 1.0, 1.0)
-  assert_true(old.length() > 0 && glyphs_alike(old, new), msg="old \{old[:3]}\nnode \{new[:3]}")
+  assert_true(old.length() > 0 && glyphs_alike(old, new), msg="old \{Repr(old[:3])}\nnode \{Repr(new[:3])}")
 }
 
 ///|
@@ -125,7 +125,7 @@ fn back_to_size(node : Bool) -> Array[(Double, Double, Int64)] {
 test "words in a node drawn half as big in one drawn twice as big, its point and place a fraction of a pixel: each glyph where an old view's are so" {
   let old = back_to_size(false)
   let new = back_to_size(true)
-  assert_true(old.length() > 0 && glyphs_alike(old, new), msg="old \{old[:3]}\nnode \{new[:3]}")
+  assert_true(old.length() > 0 && glyphs_alike(old, new), msg="old \{Repr(old[:3])}\nnode \{Repr(new[:3])}")
 }
 
 ///|

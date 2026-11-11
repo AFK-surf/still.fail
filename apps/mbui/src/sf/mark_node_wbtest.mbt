@@ -139,7 +139,7 @@ test "a station's mark as a node, as the old view's: a glyph, a glyph in its col
       let old = mark_drawn(false, m.0, m.1, size)
       let made = mark_drawn(true, m.0, m.1, size)
       for i, o in old {
-        assert_eq(made[i], o, msg="\{m} at \{size}, step \{i}")
+        assert_eq(made[i], o, msg="\{Repr(m)} at \{size}, step \{i}")
       }
     }
   }

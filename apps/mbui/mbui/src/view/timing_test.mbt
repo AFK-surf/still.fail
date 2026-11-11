@@ -198,7 +198,7 @@ test "a part shown at 10 holding a card hidden at 150, the first frame at 200: t
   }
   let jumped = run([200.0])
   assert_eq(jumped, run([10.0, 100.0, 200.0]))
-  assert_eq(jumped.0.filter(fn(s) { s.contains("0.8333") }).length(), 1, msg="\{jumped.0}")
+  assert_eq(jumped.0.filter(fn(s) { s.contains("0.8333") }).length(), 1, msg="\{Repr(jumped.0)}")
 }
 
 ///|

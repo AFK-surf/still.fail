@@ -206,9 +206,9 @@ test "a chooser, old and as nodes, on the three screens: where it stands, what i
     let made = ch_hand(false, platform, wide)
     let same = fn(l : Array[String]) { l.filter(fn(x) { !x.has_prefix("escape focus:") }) }
     assert_eq(same(made), same(old), msg=at)
-    assert_true(made.length() > 8, msg="\{at}: \{made}")
+    assert_true(made.length() > 8, msg="\{at}: \{Repr(made)}")
     // (its menu closed by Escape, the focus back on it, on a sheet too: the old one's left it nowhere there)
-    assert_true(made.contains("escape focus: Some(分钟)"), msg="\{at}: \{made}")
+    assert_true(made.contains("escape focus: Some(分钟)"), msg="\{at}: \{Repr(made)}")
   }
 }
 
@@ -221,6 +221,6 @@ test "a chooser, old and as nodes, with keyboard and mouse: Tab to it, Enter ope
     // of nodes gives it none: that is the dialog's, not the chooser's, so how it came to the focus is not compared there)
     let same = fn(l : Array[String]) { l.filter(fn(x) { !wide || !(x.has_prefix("tab:") || x.has_prefix("focused drawn:")) }) }
     assert_eq(same(made), same(old), msg="wide \{wide}")
-    assert_true(made.length() == 6 && made[0].has_suffix("Some(小时)"), msg="wide \{wide}: \{made}")
+    assert_true(made.length() == 6 && made[0].has_suffix("Some(小时)"), msg="wide \{wide}: \{Repr(made)}")
   }
 }

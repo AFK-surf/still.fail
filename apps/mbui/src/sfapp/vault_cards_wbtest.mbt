@@ -187,7 +187,7 @@ test "a request's card is whole with its post: its answer the core's with it, no
   for w in ["使用 GitHub token", "允许", "拒绝", "本对话内"] {
     assert_true(t.find(w) is Some(_), msg=w)
   }
-  assert_true(!asked.contains("vaults"), msg="the vaults topic asked: \{asked}")
+  assert_true(!asked.contains("vaults"), msg="the vaults topic asked: \{Repr(asked)}")
 }
 
 ///|
@@ -462,7 +462,7 @@ fn vt_seen(t : @ui.Tester, words : String) -> (Double, Double, Double, Double)? 
 fn vt_press(t : @ui.Tester, words : String) -> Unit raise {
   match vt_seen(t, words) {
     Some(r) => t.tap(r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
-    None => fail("no \{words} drawn: \{t.words().filter(fn(w) { w.5 > 0.0 }).map(fn(w) { w.0 })}")
+    None => fail("no \{words} drawn: \{Repr(t.words().filter(fn(w) { w.5 > 0.0 }).map(fn(w) { w.0 }))}")
   }
   t.frame()
   vt_rest(t)
@@ -546,12 +546,12 @@ test "授权时限 on every screen: opened from the card's length, nothing in it
     let at = "platform \{platform} wide \{wide}"
     let calls = []
     let t = vt_open(calls, platform~, wide~)
-    assert_false(t.focused() is Some(f) && vt_parts.contains(f.label), msg="\{at}: \{t.focused()}")
+    assert_false(t.focused() is Some(f) && vt_parts.contains(f.label), msg="\{at}: \{Repr(t.focused())}")
     assert_false(t.ime().0, msg="\{at}: the input method up")
     let y = fn(w : String) { vt_seen(t, w).map(fn(r) { r.1 }).unwrap_or(-1.0) }
     let order = ["授权时限", "时长", "36 小时", "失效方式", "闲置后到期", "固定时间后到期", "完成"].map(y)
     for i in 1..<order.length() {
-      assert_true(order[i - 1] >= 0.0 && order[i] > order[i - 1], msg="\{at}: \{order}")
+      assert_true(order[i - 1] >= 0.0 && order[i] > order[i - 1], msg="\{at}: \{Repr(order)}")
     }
     assert_true(vt_done(t) is Some(d) && !d.disabled, msg="\{at}: 完成")
     vt_press(t, "完成")
@@ -576,14 +576,14 @@ test "授权时限 on every screen, 自定义: its field holding the hours, 小�
     guard label.last() is Some(l) else { fail("\{at}: no 自定义") }
     // (on its line, at its end: past its label, its end where the field's is, 8 in from it at most)
     guard vt_field(t) is Some(fd) else { fail("\{at}: no field") }
-    assert_true(u.1 < l.1 + l.3 && u.1 + u.3 > l.1 && u.0 > l.0 + l.2, msg="\{at}: \{l} \{u}")
-    assert_true(u.0 + u.2 > fd.rect.0 + fd.rect.2 - 40.0, msg="\{at}: \{u} not at the end of \{fd.rect}")
+    assert_true(u.1 < l.1 + l.3 && u.1 + u.3 > l.1 && u.0 > l.0 + l.2, msg="\{at}: \{l} \{Repr(u)}")
+    assert_true(u.0 + u.2 > fd.rect.0 + fd.rect.2 - 40.0, msg="\{at}: \{Repr(u)} not at the end of \{Repr(fd.rect)}")
     guard vt_field(t) is Some(f) else { fail("\{at}: no field") }
     assert_true(f.rect.1 > u.1 + u.3, msg="\{at}: the field under its head")
     assert_true(vt_seen(t, "失效方式") is Some(_), msg="\{at}: 失效方式")
     vt_press(t, "小时")
     vt_press(t, "分钟")
-    assert_true(vt_seen(t, "分钟") is Some(_) && vt_seen(t, "小时") is None, msg="\{at}: \{vt_seen(t, "分钟")} \{vt_seen(t, "小时")}")
+    assert_true(vt_seen(t, "分钟") is Some(_) && vt_seen(t, "小时") is None, msg="\{at}: \{Repr(vt_seen(t, "分钟"))} \{Repr(vt_seen(t, "小时"))}")
     vt_press(t, "完成")
     assert_false(@sf.presenter_visible(), msg="\{at}: closed")
     vt_allow_after(t)
@@ -606,16 +606,16 @@ test "授权时限 on every screen, 自定义: nothing typed, or longer than 30 
     t.key(@ui.key_code_backspace)
     t.key(@ui.key_code_backspace)
     t.run_for(@ui.move_most_ms)
-    assert_true(vt_done(t) is Some(d) && d.disabled, msg="\{at}: nothing typed: \{vt_done(t)}")
+    assert_true(vt_done(t) is Some(d) && d.disabled, msg="\{at}: nothing typed: \{Repr(vt_done(t))}")
     t.type_text("9999")
     t.run_for(@ui.move_most_ms)
-    assert_true(vt_done(t) is Some(d) && d.disabled, msg="\{at}: 9999 hours: \{vt_done(t)}")
+    assert_true(vt_done(t) is Some(d) && d.disabled, msg="\{at}: 9999 hours: \{Repr(vt_done(t))}")
     for _ in 0..<4 {
       t.key(@ui.key_code_backspace)
     }
     t.type_text("2")
     t.run_for(@ui.move_most_ms)
-    assert_true(vt_done(t) is Some(d) && !d.disabled, msg="\{at}: 2 hours: \{vt_done(t)}")
+    assert_true(vt_done(t) is Some(d) && !d.disabled, msg="\{at}: 2 hours: \{Repr(vt_done(t))}")
     vt_press(t, "完成")
     vt_allow_after(t)
     assert_eq(vt_vault_calls(calls), ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r-demo\",\"scope\":\"chat\",\"timeout\":{\"kind\":\"idle\",\"seconds\":7200}}"], msg=at)

@@ -30,10 +30,10 @@ test "the tree's work timed by part: its structures' changes, its bindings, its 
   t.event(1.0, fn() { rows.set([1, 2, 3]) })
   t.frame(300.0, 600.0, now=1.0) |> ignore
   for part in ["tree bindings", "tree layout", "tree placing", "tree structures", "tree words measured"] {
-    assert_true(took.contains(part), msg="\{part} not told: \{took}")
+    assert_true(took.contains(part), msg="\{part} not told: \{Repr(took)}")
   }
   assert_eq(took.length(), 5)
-  assert_true(took.values().all(fn(ms) { ms >= 1.0 }), msg=took.to_string())
+  assert_true(took.values().all(fn(ms) { ms >= 1.0 }), msg=Repr(took).to_string())
   // (nobody listening: nothing timed, nothing told)
   took.clear()
   listening.val = false

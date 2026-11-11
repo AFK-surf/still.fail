@@ -75,9 +75,9 @@ fn over_open() -> Unit {
 /// What draws a thumbnail's words drawn in as big each time from build `from` on (the last as the clock's own frames
 /// began) as then.
 fn over_sized(sizes : Array[(Double, Double)], from : Int) -> Unit raise {
-  guard from >= 0 && sizes.get(from) is Some(at) && at.0 > 0.0 else { fail("what draws its words never built: \{sizes}") }
+  guard from >= 0 && sizes.get(from) is Some(at) && at.0 > 0.0 else { fail("what draws its words never built: \{Repr(sizes)}") }
   for k in from..<sizes.length() {
-    assert_true(sizes[k] == at, msg="drawn in as big each time from \{from}: \{sizes}")
+    assert_true(sizes[k] == at, msg="drawn in as big each time from \{from}: \{Repr(sizes)}")
   }
 }
 
@@ -100,13 +100,13 @@ test "a film flying in (its still as big all the way), its thumbnail's words cha
   // (past the frames the test's steps build whole: the clock's own frames from here)
   t.frame_at(t.next_frame_time())
   assert_true(v.flies && !v.fly_back && v.fly.goes_at(t.ctx().moment()), msg="flying in")
-  guard over_word(t, "一") is [(_, _, w0, h0)] else { fail("its words over its still: \{over_word(t, "一")}") }
+  guard over_word(t, "一") is [(_, _, w0, h0)] else { fail("its words over its still: \{Repr(over_word(t, "一"))}") }
   let from = sizes.length() - 1
   word.set("二")
   t.frame_at(t.next_frame_time())
   assert_true(v.flies && v.fly.goes_at(t.ctx().moment()), msg="still flying")
   assert_true(over_word(t, "一").is_empty(), msg="its words gone")
-  guard over_word(t, "二") is [(_, _, w1, h1)] else { fail("its new words over its still: \{over_word(t, "二")}") }
+  guard over_word(t, "二") is [(_, _, w1, h1)] else { fail("its new words over its still: \{Repr(over_word(t, "二"))}") }
   assert_true(h1 == h0 && w1 > 0.0 && w0 > 0.0, msg="as high")
   // (what draws them as big each time it was drawn from its first frame of the clock's on: built again as it was told,
   // not as it was resized)
@@ -129,7 +129,7 @@ fn over_moving(moved : Bool) -> ((Double, Double, Double, Double), Int) raise {
   t.draw()
   let v = viewer.get().unwrap()
   t.frame_at(t.next_frame_time())
-  guard over_word(t, "一") is [_] else { fail("its words over its still: \{over_word(t, "一")}") }
+  guard over_word(t, "一") is [_] else { fail("its words over its still: \{Repr(over_word(t, "一"))}") }
   let base = built.val
   let from = sizes.length() - 1
   t.frame_at(t.next_frame_time())
@@ -139,7 +139,7 @@ fn over_moving(moved : Bool) -> ((Double, Double, Double, Double), Int) raise {
   t.frame_at(t.next_frame_time())
   t.frame_at(t.next_frame_time())
   assert_true(v.flies && !v.fly_back && v.fly.goes_at(t.ctx().moment()), msg="still flying in")
-  guard over_word(t, "一") is [at] else { fail("its words over its still: \{over_word(t, "一")}") }
+  guard over_word(t, "一") is [at] else { fail("its words over its still: \{Repr(over_word(t, "一"))}") }
   over_sized(sizes, from)
   (at, built.val - base)
 }
@@ -149,5 +149,5 @@ test "a film flying in (its still as big all the way), its thumbnail moved alone
   let (still, built_still) = over_moving(false)
   let (moved, built_moved) = over_moving(true)
   assert_eq((built_still, built_moved), (0, 0), msg="not built again")
-  assert_true(moved.1 > still.1 + 1.0 && moved.2 == still.2 && moved.3 == still.3, msg="moved down with it, as big: \{moved}, not moved \{still}")
+  assert_true(moved.1 > still.1 + 1.0 && moved.2 == still.2 && moved.3 == still.3, msg="moved down with it, as big: \{Repr(moved)}, not moved \{Repr(still)}")
 }

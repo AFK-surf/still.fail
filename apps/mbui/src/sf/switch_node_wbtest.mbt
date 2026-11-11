@@ -79,9 +79,9 @@ test "a switch's row as nodes, with keyboard and mouse and with a finger: Tab to
   for platform in [0, 2] {
     let made = switch_said(true, platform, false)
     let old = switch_said(false, platform, false)
-    assert_eq(made, old, msg="platform \{platform}: as nodes \{made}, as the old view's \{old}")
-    assert_true(made.contains("tab: Switch 性能记录 Some(Off) at 0,0"), msg="platform \{platform}: \{made}")
-    assert_true(made.contains("space: on true") && made.contains("enter: on false"), msg="platform \{platform}: \{made}")
+    assert_eq(made, old, msg="platform \{platform}: as nodes \{Repr(made)}, as the old view's \{Repr(old)}")
+    assert_true(made.contains("tab: Switch 性能记录 Some(Off) at 0,0"), msg="platform \{platform}: \{Repr(made)}")
+    assert_true(made.contains("space: on true") && made.contains("enter: on false"), msg="platform \{platform}: \{Repr(made)}")
   }
 }
 
@@ -90,7 +90,7 @@ test "a switch's row as nodes taking no press: read out disabled, Tab passing it
   for platform in [0, 2] {
     let made = switch_said(true, platform, true)
     let old = switch_said(false, platform, true)
-    assert_eq(made, old, msg="platform \{platform}: as nodes \{made}, as the old view's \{old}")
-    assert_true(made.contains("tab: none") && made.contains("space: on false"), msg="platform \{platform}: \{made}")
+    assert_eq(made, old, msg="platform \{platform}: as nodes \{Repr(made)}, as the old view's \{Repr(old)}")
+    assert_true(made.contains("tab: none") && made.contains("space: on false"), msg="platform \{platform}: \{Repr(made)}")
   }
 }

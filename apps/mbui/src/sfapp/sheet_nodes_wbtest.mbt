@@ -300,17 +300,17 @@ test "小屏: a sheet whose body is nodes opened by what a sheet's button does a
     // sheet and one scrim all the way; back again closes it)
     t.back()
     assert_true(t.find("看更多") is Some(_), msg="\{case}")
-    assert_eq(sheet_tops(t).length(), 1, msg="\{case}: back \{sheet_tops(t)}")
-    assert_true((sheet_tops(t)[0] - last).abs() < 0.5, msg="\{case}: back \{sheet_tops(t)} from \{last}")
+    assert_eq(sheet_tops(t).length(), 1, msg="\{case}: back \{Repr(sheet_tops(t))}")
+    assert_true((sheet_tops(t)[0] - last).abs() < 0.5, msg="\{Repr(case)}: back \{Repr(sheet_tops(t))} from \{last}")
     for _ in 0..<40 {
       t.run_for(@ui.frame_period_default)
-      assert_eq(sheet_tops(t).length(), 1, msg="\{case}: back \{sheet_tops(t)}")
-      assert_eq(scrim_drawn(t).length(), 1, msg="\{case}: back")
+      assert_eq(sheet_tops(t).length(), 1, msg="\{Repr(case)}: back \{Repr(sheet_tops(t))}")
+      assert_eq(scrim_drawn(t).length(), 1, msg="\{Repr(case)}: back")
     }
-    assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{case}: \{sheet_tops(t)} \{top0}")
+    assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{Repr(case)}: \{Repr(sheet_tops(t))} \{Repr(top0)}")
     t.back()
     t.run_for(sheet_way_ms(t))
-    assert_false(@sf.presenter_visible(), msg="\{case}")
+    assert_false(@sf.presenter_visible(), msg="\{Repr(case)}")
   }
 }
 
@@ -375,9 +375,9 @@ test "小屏: a panel of nodes a panel of nodes closes for is a page of the same
   let mut top = top0[0]
   for _ in 0..<40 {
     t.run_for(@ui.frame_period_default)
-    assert_eq(sheet_tops(t).length(), 1, msg="\{sheet_tops(t)}")
+    assert_eq(sheet_tops(t).length(), 1, msg="\{Repr(sheet_tops(t))}")
     assert_eq(scrim_drawn(t).length(), 1)
-    assert_true(sheet_tops(t)[0] <= top + 0.5, msg="\{sheet_tops(t)} after \{top}")
+    assert_true(sheet_tops(t)[0] <= top + 0.5, msg="\{Repr(sheet_tops(t))} after \{top}")
     top = sheet_tops(t)[0]
     match t.drawn_of("第一页") {
       Some((x, _)) => {
@@ -397,10 +397,10 @@ test "小屏: a panel of nodes a panel of nodes closes for is a page of the same
   assert_true(@sf.presenting())
   for _ in 0..<40 {
     t.run_for(@ui.frame_period_default)
-    assert_eq(sheet_tops(t).length(), 1, msg="back: \{sheet_tops(t)}")
+    assert_eq(sheet_tops(t).length(), 1, msg="back: \{Repr(sheet_tops(t))}")
     assert_eq(scrim_drawn(t).length(), 1)
   }
-  assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{sheet_tops(t)} \{top0}")
+  assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{Repr(sheet_tops(t))} \{Repr(top0)}")
   assert_true((t.drawn_of("第一页").unwrap().0 - x0).abs() < 0.5)
   assert_true(t.drawn_of("第二页") is None || t.drawn_of("第二页").unwrap().0 >= 390.0, msg="the second page gone")
   assert_eq(made.val, 1)
@@ -449,7 +449,7 @@ test "小屏: an old panel an old panel closes for is a page of the same sheet: 
   t.back()
   t.run_for(sheet_way_ms(t))
   assert_true(@sf.presenting())
-  assert_true((t.drawn_of("第 0 行").unwrap().1 - y1).abs() < 0.5, msg="not as it was left: \{t.drawn_of("第 0 行")} \{y1}")
+  assert_true((t.drawn_of("第 0 行").unwrap().1 - y1).abs() < 0.5, msg="not as it was left: \{Repr(t.drawn_of("第 0 行"))} \{y1}")
   assert_eq(said, ["second gone"])
   t.tap_text("下一步")
   t.run_for(sheet_way_ms(t))

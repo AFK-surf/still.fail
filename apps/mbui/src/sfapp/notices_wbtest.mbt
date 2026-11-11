@@ -295,7 +295,7 @@ test "a notice gone to lights its own pill, round, never a band across the list 
   let (x, _, w, h, _, corners) = lit[0]
   // the pill's, in from the list's sides, as round as it (its ends whole half circles)
   assert_true(x > 1.0 && w < 388.0 && h > 0.0)
-  assert_true(corners.0 >= h / 2.0 - 0.5, msg="\{corners} for \{h}")
+  assert_true(corners.0 >= h / 2.0 - 0.5, msg="\{Repr(corners)} for \{h}")
 }
 
 ///|

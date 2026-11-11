@@ -30,7 +30,7 @@ test "the system's back gesture done as it decides: the node holding it told Bac
   t.frames_owed()
   on_back(2, 0.0, 1.0, 0)
   t.frames_owed()
-  assert_eq(told.length(), 4, msg="\{told}")
+  assert_eq(told.length(), 4, msg="\{Repr(told)}")
   assert_eq([told[2], told[3]], ["first Back", "first Back"])
 }
 
@@ -42,11 +42,11 @@ test "a gesture held by a node said anew to follow back, the system then decidin
   v.val.unwrap().follows_back(fn(s) { told.push("second \{s}") }) |> ignore
   on_back(2, 50.0, 1.0, 0)
   t.frames_owed()
-  assert_false(told.contains("second Back"), msg="the gesture's end, taken for a back of its own: \{told}")
+  assert_false(told.contains("second Back"), msg="the gesture's end, taken for a back of its own: \{Repr(told)}")
   // (a back with no gesture after it: the new saying's)
   on_back(2, 0.0, 1.0, 0)
   t.frames_owed()
-  assert_true(told.contains("second Back"), msg="\{told}")
+  assert_true(told.contains("second Back"), msg="\{Repr(told)}")
 }
 
 ///|
@@ -59,7 +59,7 @@ test "a gesture done as the system decides, then the node taking no press: no ge
   t.frames_owed()
   let tree = view_app.val.unwrap()
   tree.event(view_moment(), fn() { on.set(false) })
-  assert_false(told.contains("first CalledOff"), msg="\{told}")
+  assert_false(told.contains("first CalledOff"), msg="\{Repr(told)}")
 }
 
 ///|

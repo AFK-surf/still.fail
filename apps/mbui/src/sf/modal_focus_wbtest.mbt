@@ -50,7 +50,7 @@ fn field_page_tester(at : (Int, Double, Double), old_field : Bool, f : @ui.Field
 fn focus_page_field(t : @ui.Tester, at : String) -> Unit raise {
   t.act(@ui.Role::TextField, Focus, label="页面输入框")
   t.draw()
-  assert_eq(t.focused().map(fn(s) { s.label }), Some("页面输入框"), msg="\{at}: the page's field focused: \{t.focused().map(fn(s) { (s.role, s.label) })}")
+  assert_eq(t.focused().map(fn(s) { s.label }), Some("页面输入框"), msg="\{at}: the page's field focused: \{Repr(t.focused().map(fn(s) { (s.role, s.label) }))}")
 }
 
 ///|
@@ -104,7 +104,7 @@ fn modal_focus_way(at : (Int, Double, Double), old_field : Bool, nodes : Bool, m
   assert_true(t.find("盖住的字") is Some(_), msg="\{msg}: open")
   // (up: not the field's focus, nor what is typed, nor its input method)
   assert_false(t.focused().map(fn(s) { s.label }) == Some("页面输入框"), msg="\{msg}: focus under it")
-  assert_false(t.ime().0, msg="\{msg}: the input method up under it: \{t.ime()}")
+  assert_false(t.ime().0, msg="\{msg}: the input method up under it: \{Repr(t.ime())}")
   t.type_text("下")
   t.draw()
   assert_eq(f.text(), "写", msg="\{msg}: typed under it")
@@ -115,7 +115,7 @@ fn modal_focus_way(at : (Int, Double, Double), old_field : Bool, nodes : Bool, m
   assert_true(t.find("盖住的字") is None, msg="\{msg}: Escape closes it")
   // (gone: the focus, its input method and what is typed the field's again, what was in it still)
   assert_eq(t.focused().map(fn(s) { s.label }), Some("页面输入框"), msg="\{msg}: focus back")
-  assert_true(t.ime().0, msg="\{msg}: the input method back: \{t.ime()}")
+  assert_true(t.ime().0, msg="\{msg}: the input method back: \{Repr(t.ime())}")
   t.type_text("回")
   t.draw()
   assert_eq(f.text(), "写回", msg~)

@@ -46,13 +46,13 @@ test "a field of an old view with the focus, a modal layer of the tree's giving 
   let t = plain_modal_tester(open, ask)
   t.draw()
   t.draw()
-  assert_true(t.ime().0, msg="the field's, the layer not open: \{t.ime()}")
+  assert_true(t.ime().0, msg="the field's, the layer not open: \{Repr(t.ime())}")
   open.set(true)
   t.draw()
-  assert_true(!t.ime().0, msg="its input method put away under the layer: \{t.ime()}")
+  assert_true(!t.ime().0, msg="its input method put away under the layer: \{Repr(t.ime())}")
   open.set(false)
   t.draw()
-  assert_true(t.ime().0, msg="the layer gone: the field's again: \{t.ime()}")
+  assert_true(t.ime().0, msg="the layer gone: the field's again: \{Repr(t.ime())}")
 }
 
 ///|
@@ -68,7 +68,7 @@ test "a modal layer of the tree's giving no focus open, a field of an old view u
   t.draw()
   t.draw()
   // (what it was told under the layer, and once it is gone: the field given no focus, none kept for it)
-  assert_eq((under.0, t.ime().0), (false, false), msg="under it \{under}, gone \{t.ime()}")
+  assert_eq((under.0, t.ime().0), (false, false), msg="under it \{Repr(under)}, gone \{Repr(t.ime())}")
 }
 
 ///|
@@ -79,7 +79,7 @@ test "a field of an old view with the focus, a modal layer of the tree's opened 
   t.draw()
   open.set(true)
   t.draw()
-  assert_true(t.ime().0, msg="its input method kept under the layer: \{t.ime()}")
+  assert_true(t.ime().0, msg="its input method kept under the layer: \{Repr(t.ime())}")
   t.type_text("ab")
   t.draw()
   assert_eq(t.ime().1, "ab", msg="what is typed the field's")

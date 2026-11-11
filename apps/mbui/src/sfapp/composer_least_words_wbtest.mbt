@@ -137,7 +137,7 @@ test "小屏, a finger's: words of three lines sent hold the composer as tall as
       let at = "words \{scale}, \{k} of the way to their letting go of it"
       let now_box = @motion.measured(t.ctx(), "composer/content")
       let now_room = @sfpages.composer_room(t.ctx(), draft)
-      assert_eq(now_box, box, msg="\{at}: its box \{now_box}, \{box} before the press")
+      assert_eq(now_box, box, msg="\{at}: its box \{Repr(now_box)}, \{Repr(box)} before the press")
       assert_eq(now_room, room, msg="\{at}: its room \{now_room}, \{room} before the press")
     }
   }

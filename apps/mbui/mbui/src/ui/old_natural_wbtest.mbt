@@ -117,7 +117,7 @@ test "old natural: as tall as what it holds the first frame, and as it grows, na
   assert_eq(
     (ok(first), ok(grown), grown.0 > first.0, ok(narrowed), narrowed.0 > grown.0, ok(shrunk), shrunk.0 < narrowed.0),
     (true, true, true, true, true, true, true),
-    msg="first \{first} grown \{grown} narrowed \{narrowed} shrunk \{shrunk}",
+    msg="first \{Repr(first)} grown \{Repr(grown)} narrowed \{Repr(narrowed)} shrunk \{Repr(shrunk)}",
   )
 }
 
@@ -138,7 +138,7 @@ test "old natural: held by a short window and grown, the same as opened in the t
   let (_, tids) = mk(800.0)
   let tall = (laid_of(tids["old"]), laid_of(tids["marker"]))
   // (its node cut to the window less 100 while short; tall, as tall as what it holds: 12 rows of 30 and a line of words)
-  assert_eq((held.3 == 200.0, grown, tall.0.3 == natural_content_h(), tall.0.3 > 360.0), (true, tall, true, true), msg="held \{held} tall \{tall}")
+  assert_eq((held.3 == 200.0, grown, tall.0.3 == natural_content_h(), tall.0.3 > 360.0), (true, tall, true, true), msg="held \{Repr(held)} tall \{Repr(tall)}")
 }
 
 ///|
@@ -232,7 +232,7 @@ test "old natural: scaled: laid out as tall as it was, what comes after where it
   assert_eq(
     (before.3, laid_of(ids["old"]), laid_of(ids["marker"]), whole.length(), block(), alone),
     (120.0, before, marker, 1, half, true),
-    msg="whole \{whole}",
+    msg="whole \{Repr(whole)}",
   )
 }
 
@@ -431,6 +431,6 @@ test "old fits: as wide as what it holds and as tall from the first frame; wider
       moved,
     ),
     (true, true, true, true, true, true, true, true, (1, 200.0)),
-    msg="built \{built.val} first \{first} grown \{grown} shrunk \{shrunk} past \{past}",
+    msg="built \{built.val} first \{Repr(first)} grown \{Repr(grown)} shrunk \{Repr(shrunk)} past \{Repr(past)}",
   )
 }

@@ -68,7 +68,7 @@ test "a node's words centred, a line said and one wrapped, drawn where an old vi
   assert_eq(
     (centred == old, plain != centred, plain.map(fn(g) { g.0 }).fold(init=1.0e9, fn(m, x) { dmin(m, x) }) < 2.0, again == centred, lines.length()),
     (true, true, true, true, 4),
-    msg="old \{old.length()} glyphs, the tree's \{centred.length()}; lines \{lines}",
+    msg="old \{old.length()} glyphs, the tree's \{centred.length()}; lines \{Repr(lines)}",
   )
 }
 
@@ -136,6 +136,6 @@ test "a node's words in pieces centred, lines ending in spaces said and wrapped:
   assert_eq(
     (runs == whole, runs_again == runs, whole_again == whole, whole.length() > 0, lines.length() > 2),
     (true, true, true, true, true),
-    msg="whole \{whole.length()} glyphs, in pieces \{runs.length()}; first whole \{whole[:4]}, in pieces \{runs[:4]}; lines \{lines}",
+    msg="whole \{whole.length()} glyphs, in pieces \{runs.length()}; first whole \{Repr(whole[:4])}, in pieces \{Repr(runs[:4])}; lines \{Repr(lines)}",
   )
 }

@@ -84,7 +84,7 @@ test "the button as a node at rest, its words its width or as wide as a column, 
     seen.push("old \{old.0} \{old.1[:1]}, node \{new.0} \{new.1[:1]}")
     drawn_near(old, new) && new.0.iter().all(fn(r) { r.3 == button_height() })
   })
-  assert_eq(same, Array::make(cases.length(), true), msg="\{seen}")
+  assert_eq(same, Array::make(cases.length(), true), msg="\{Repr(seen)}")
 }
 
 ///|
@@ -220,7 +220,7 @@ test "the button as a node, its words longer and shorter again: its ground and i
   }
   let (old, new) = (seen(false), seen(true))
   let same = Array::makei(old.length(), fn(k) { drawn_near(old[k].0, new[k].0) && pieces_near(old[k].1, new[k].1) })
-  assert_eq(same, Array::make(old.length(), true), msg="old \{old}\nnode \{new}")
+  assert_eq(same, Array::make(old.length(), true), msg="old \{Repr(old)}\nnode \{Repr(new)}")
 }
 
 ///|
@@ -237,7 +237,7 @@ test "the button as a node set to work and back: its spinner's room opening and 
   assert_eq(
     (same, spun[0], spun[1], spun[2], spun[4], spun[8]),
     (Array::make(old.length(), true), false, false, true, true, false),
-    msg="old \{old}\nnode \{new}",
+    msg="old \{Repr(old)}\nnode \{Repr(new)}",
   )
 }
 
@@ -271,7 +271,7 @@ test "the button as a node, the pointer come onto it and gone: its ground's colo
   let on = fn(t : @ui.Tester, x, y) { t.move_to(x, y) }
   let off = fn(t : @ui.Tester, _x, _y) { t.move_to(390.0, 290.0) }
   let (old, new) = (button_answers(false, on, off), button_answers(true, on, off))
-  assert_eq((new == old, new[0] != new[3]), (true, true), msg="old \{old}\nnode \{new}")
+  assert_eq((new == old, new[0] != new[3]), (true, true), msg="old \{Repr(old)}\nnode \{Repr(new)}")
 }
 
 ///|
@@ -279,5 +279,5 @@ test "the button as a node pressed and let go: its ground's colour as the old on
   let on = fn(t : @ui.Tester, x, y) { t.press_at(x, y) }
   let off = fn(t : @ui.Tester, x, y) { t.release(x, y) }
   let (old, new) = (button_answers(false, on, off), button_answers(true, on, off))
-  assert_eq((new == old, new[0] != new[3]), (true, true), msg="old \{old}\nnode \{new}")
+  assert_eq((new == old, new[0] != new[3]), (true, true), msg="old \{Repr(old)}\nnode \{Repr(new)}")
 }

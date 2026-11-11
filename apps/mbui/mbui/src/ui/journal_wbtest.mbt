@@ -25,7 +25,7 @@ test "under a Tester's own clock its frames and events are journaled, and take n
   t.frame(ms=first_frame_ms)
   assert_eq(hangs(), [])
   let j = journal()
-  assert_true(j.any(fn(e) { e is Work({ what: Frame(_), .. }) }), msg=j.to_string())
+  assert_true(j.any(fn(e) { e is Work({ what: Frame(_), .. }) }), msg=Repr(j).to_string())
   assert_true(j.any(fn(e) { e is Boundary(Presented, _) }))
   // (an event of no time is folded, as what comes often)
   assert_true(j.any(fn(e) { e is Work({ what: Small(_, _), .. }) }))
@@ -89,7 +89,7 @@ test "an event and the frame it asked for, each under the budget, together over 
   journal_work(Present, 1034.0, 1035.0)
   journal_seal(Presented, 1035.0)
   let h = hangs()
-  assert_eq(h.length(), 1, msg=h.to_string())
+  assert_eq(h.length(), 1, msg=Repr(h).to_string())
   assert_eq(h[0].trigger, LateFrame)
   assert_eq(h[0].sealed_by, Presented)
   assert_eq(h[0].start, 1000.0)
@@ -145,7 +145,7 @@ test "a frame's interval closes as it is presented; asked for again as it ends, 
   defer set_work_clock(None)
   t.draw()
   let j = journal()
-  assert_true(j.any(fn(e) { e is Boundary(Presented, 1000.0) }), msg=j.to_string())
+  assert_true(j.any(fn(e) { e is Boundary(Presented, 1000.0) }), msg=Repr(j).to_string())
   // a frame asked for between frames: waited on from then
   clock.val = 1100.0
   h_request_frame()

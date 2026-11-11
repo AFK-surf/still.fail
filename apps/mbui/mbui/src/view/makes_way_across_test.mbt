@@ -338,7 +338,7 @@ test "along_row said with at_once, or where a column lays it out: a fault, said 
     })
     t.frame(390.0, 844.0) |> ignore
   })
-  assert_eq(told.length(), 2, msg="\{told}")
+  assert_eq(told.length(), 2, msg="\{Repr(told)}")
   assert_true(told[0].contains("along_row=true and at_once=true said together"), msg=told[0])
   assert_true(told[0].contains("makes_way_across_test.mbt"), msg=told[0])
   assert_true(told[1].contains("View::pick") && told[1].contains("no row"), msg=told[1])

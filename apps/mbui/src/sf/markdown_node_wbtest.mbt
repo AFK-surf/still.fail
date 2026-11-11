@@ -106,14 +106,14 @@ test "Markdown as nodes: its blocks' words where an old view's markdown draws th
     let made = mn_words(made_t)
     let made_drawn = mn_instances(made_t)
     // (each block's words drawn, the heading's to the last paragraph's)
-    assert_true(old.iter().any(fn(w) { w.has_prefix("今天的进度") }) && old.iter().any(fn(w) { w.has_prefix("最后一段。") }), msg="\{case}: \{old}")
-    assert_eq(made, old, msg="\{case}:\nmade \{made}\nold  \{old}")
+    assert_true(old.iter().any(fn(w) { w.has_prefix("今天的进度") }) && old.iter().any(fn(w) { w.has_prefix("最后一段。") }), msg="\{Repr(case)}: \{Repr(old)}")
+    assert_eq(made, old, msg="\{Repr(case)}:\nmade \{Repr(made)}\nold  \{Repr(old)}")
     // (and every instance the window draws: grounds, bars, keys, glyphs, where each is cut)
     let only_made = made_drawn.filter(fn(x) { !old_drawn.contains(x) })
     let only_old = old_drawn.filter(fn(x) { !made_drawn.contains(x) })
     assert_true(
       made_drawn == old_drawn,
-      msg="\{case}: \{made_drawn.length()} drawn, \{old_drawn.length()} old;\nonly made \{only_made.iter().take(8).collect()}\nonly old  \{only_old.iter().take(8).collect()}",
+      msg="\{Repr(case)}: \{made_drawn.length()} drawn, \{old_drawn.length()} old;\nonly made \{Repr(only_made.iter().take(8).collect())}\nonly old  \{Repr(only_old.iter().take(8).collect())}",
     )
   }
 }
@@ -172,14 +172,14 @@ test "Markdown as nodes: a code block's language changed draws it as the new one
   }
   // (its text as it is read: what a reading is kept by, as a message's words are)
   let t = mn_live(fn() { "```" + lang.get() + "\n" + code.get() + "\n```" }, tree, fn() { 15.0 })
-  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "a:x" }), msg="\{mn_drawn()}")
+  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "a:x" }), msg="\{Repr(mn_drawn())}")
   code.set("y")
   t.draw()
-  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "a:y" }), msg="\{mn_drawn()}")
+  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "a:y" }), msg="\{Repr(mn_drawn())}")
   lang.set("b")
   t.draw()
-  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "b:y" }), msg="\{mn_drawn()}")
-  assert_true(!mn_drawn().iter().any(fn(d) { d.0.has_prefix("a:") }), msg="\{mn_drawn()}")
+  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "b:y" }), msg="\{Repr(mn_drawn())}")
+  assert_true(!mn_drawn().iter().any(fn(d) { d.0.has_prefix("a:") }), msg="\{Repr(mn_drawn())}")
 }
 
 ///|
@@ -196,11 +196,11 @@ test "Markdown as nodes: a paragraph of only a link to a file the message places
     )
   }
   let t = mn_live(fn() { "[图](" + href.get() + ")" }, tree, fn() { 15.0 })
-  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "file:x.png" }), msg="\{mn_drawn()}")
+  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "file:x.png" }), msg="\{Repr(mn_drawn())}")
   href.set("y.png")
   t.draw()
-  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "file:y.png" }), msg="\{mn_drawn()}")
-  assert_true(!mn_drawn().iter().any(fn(d) { d.0 == "file:x.png" }), msg="\{mn_drawn()}")
+  assert_true(mn_drawn().iter().any(fn(d) { d.0 == "file:y.png" }), msg="\{Repr(mn_drawn())}")
+  assert_true(!mn_drawn().iter().any(fn(d) { d.0 == "file:x.png" }), msg="\{Repr(mn_drawn())}")
 }
 
 ///|
@@ -248,13 +248,13 @@ test "Markdown as nodes: a row of images, one of them twice, each drawn at the w
   t.draw()
   let wider = images()
   assert_true(said_as_drawn(), msg="\{wider}")
-  assert_true(wider[0].1 > first[0].1, msg="\{first} \{wider}")
+  assert_true(wider[0].1 > first[0].1, msg="\{first} \{Repr(wider)}")
   ratio.set(0.5)
   t.draw()
   let narrower = images()
-  assert_eq(narrower.length(), 3, msg="\{narrower}")
-  assert_true(said_as_drawn(), msg="\{narrower}")
-  assert_true(narrower[0].1 < wider[0].1, msg="\{wider} \{narrower}")
+  assert_eq(narrower.length(), 3, msg="\{Repr(narrower)}")
+  assert_true(said_as_drawn(), msg="\{Repr(narrower)}")
+  assert_true(narrower[0].1 < wider[0].1, msg="\{Repr(wider)} \{Repr(narrower)}")
 }
 
 ///|

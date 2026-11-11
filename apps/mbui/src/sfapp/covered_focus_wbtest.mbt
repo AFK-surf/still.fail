@@ -42,7 +42,7 @@ fn covered_by_card(t : @ui.Tester) -> Unit raise {
 /// The field's: none of the focus, the input method put away, nothing typed going into it.
 fn covered_none_of_it(t : @ui.Tester, msg : String) -> Unit raise {
   assert_false(t.focused().map(fn(s) { s.label }) == Some("发消息"), msg="\{msg}: the focus under it: \{t.focus_said()}")
-  assert_false(t.ime().0, msg="\{msg}: the input method up under it: \{t.ime()}")
+  assert_false(t.ime().0, msg="\{msg}: the input method up under it: \{Repr(t.ime())}")
   t.type_text("q")
   t.draw()
 }
@@ -56,7 +56,7 @@ fn covered_back(t : @ui.Tester, back : () -> Unit, msg : String) -> Unit raise {
   t.run_for(@ui.move_most_ms)
   guard app.nav.top() is Chat(_) else { fail("\{msg}: not back on the chat") }
   assert_eq(t.focused().map(fn(s) { s.label }), Some("发消息"), msg="\{msg}: the focus back: \{t.focus_said()}")
-  assert_true(t.ime().0, msg="\{msg}: the input method back: \{t.ime()}")
+  assert_true(t.ime().0, msg="\{msg}: the input method back: \{Repr(t.ime())}")
   t.type_text("回")
   t.draw()
   assert_eq(composer_said(t), "写回", msg="\{msg}: what was written still there, nothing typed over it")
@@ -118,7 +118,7 @@ test "小屏: the chat gone from the stack before it is come back to: what had t
     t.run_for(@ui.move_most_ms)
     guard app.nav.top() is Home else { fail("\{msg}: not Home") }
     assert_eq(t.focused().map(fn(s) { s.label }), None, msg="\{msg}: \{t.focus_said()}")
-    assert_false(t.ime().0, msg="\{msg}: \{t.ime()}")
+    assert_false(t.ime().0, msg="\{msg}: \{Repr(t.ime())}")
   }
 }
 
@@ -132,7 +132,7 @@ test "小屏: back to Home from a chat whose field has the focus: none of it fro
     t.type_text("z")
     assert_eq(composer_said(t), "写", msg="\{msg}: typed into the chat leaving")
     assert_false(t.focused().map(fn(s) { s.label }) == Some("发消息"), msg="\{msg}: \{t.focus_said()}")
-    assert_false(t.ime().0, msg="\{msg}: \{t.ime()}")
+    assert_false(t.ime().0, msg="\{msg}: \{Repr(t.ime())}")
     t.run_for(@ui.move_most_ms)
     guard app.nav.top() is Home else { fail("\{msg}: not Home") }
     assert_eq(t.focused().map(fn(s) { s.label }), None, msg="\{msg}: \{t.focus_said()}")

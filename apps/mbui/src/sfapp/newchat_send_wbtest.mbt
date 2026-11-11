@@ -16,7 +16,7 @@ fn seen_once(t : @ui.Tester, s : String) -> (Double, Double) raise {
   guard at.length() > 0 else { fail("「\{s}」 not seen at \{t.time()}") }
   for p in at {
     if (p.0 - at[0].0).abs() > 0.5 || (p.1 - at[0].1).abs() > 0.5 {
-      fail("「\{s}」 seen twice apart at \{t.time()}: \{at}")
+      fail("「\{s}」 seen twice apart at \{t.time()}: \{Repr(at)}")
     }
   }
   at[0]
@@ -26,7 +26,7 @@ fn seen_once(t : @ui.Tester, s : String) -> (Double, Double) raise {
 #callsite(autofill(loc))
 fn assert_at(was : (Double, Double), now : (Double, Double), loc~ : SourceLoc) -> Unit raise {
   if (was.0 - now.0).abs() > 0.5 || (was.1 - now.1).abs() > 0.5 {
-    fail("moved from \{was} to \{now} (\{loc})")
+    fail("moved from \{Repr(was)} to \{Repr(now)} (\{loc})")
   }
 }
 
@@ -100,7 +100,7 @@ fn one_way_till(t : @ui.Tester, s : String, until : Double, most : Double) -> (D
     let now = seen_once(t, s)
     let d = now.1 - at.1
     if d.abs() > most || (way != 0.0 && d * way < 0.0 && d.abs() > 0.5) {
-      fail("「\{s}」 from \{at} to \{now} in a frame at \{t.time()}")
+      fail("「\{s}」 from \{Repr(at)} to \{Repr(now)} in a frame at \{t.time()}")
     }
     if d.abs() > 0.5 {
       way = d
@@ -161,7 +161,7 @@ test "a new chat's first words go into their bubble from the frame they are sent
   let landed = one_way_till(t, words, sent + flight_carry_after_ms + flight_carry_ms + 34.0, 120.0)
   assert_true(send_flight.get() is None)
   // in their bubble, over the composer at the chat's foot (its rows at its end, the room over them)
-  assert_true(landed.1 < typed.1 && landed.1 > typed.1 - 200.0, msg="landed at \{landed} from \{typed}")
+  assert_true(landed.1 < typed.1 && landed.1 > typed.1 - 200.0, msg="landed at \{Repr(landed)} from \{Repr(typed)}")
   assert_true((landed.0 - typed.0).abs() > 1.0)
   // the chat made, the message sent to it, its view read: they stay in their bubble (up only as what comes under them
   // opens its room, its agent's line)
@@ -177,7 +177,7 @@ test "a new chat's first words go into their bubble from the frame they are sent
   t.draw()
   t.frame()
   let after = seen_once(t, words)
-  assert_true(after.0 == landed.0 && after.1 <= landed.1 + 0.5 && landed.1 - after.1 < 12.0, msg="\{landed} then \{after}")
+  assert_true(after.0 == landed.0 && after.1 <= landed.1 + 0.5 && landed.1 - after.1 < 12.0, msg="\{Repr(landed)} then \{Repr(after)}")
 }
 
 ///|
@@ -207,7 +207,7 @@ test "a new chat's first words sent with the keyboard up: no words over others o
   assert_true(app.nav.top() is Chat(_))
   let typed = seen_once(t, words)
   let landed = one_way_till(t, words, t.time() + flight_carry_after_ms + flight_carry_ms + 34.0, 120.0)
-  assert_true(landed.1 < typed.1, msg="landed at \{landed} from \{typed}")
+  assert_true(landed.1 < typed.1, msg="landed at \{Repr(landed)} from \{Repr(typed)}")
   for name in ["newChat.create", "chat.send"] {
     match held.get(name) {
       Some(give) => give()
@@ -378,7 +378,7 @@ test "a new chat's first words with the core at once: never gone, into their bub
   let landed = one_way_till(t, words, sent + flight_carry_after_ms + flight_carry_ms + 100.0, 120.0)
   assert_true(send_flight.get() is None)
   // over the composer at the chat's foot
-  assert_true(landed.1 < typed.1 && landed.1 > typed.1 - 200.0, msg="landed at \{landed} from \{typed}")
+  assert_true(landed.1 < typed.1 && landed.1 > typed.1 - 200.0, msg="landed at \{Repr(landed)} from \{Repr(typed)}")
 }
 
 ///|

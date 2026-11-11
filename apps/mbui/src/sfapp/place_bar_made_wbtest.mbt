@@ -50,7 +50,7 @@ test "用量 as a place on a phone: its days and its share in the place's top ba
   assert_true((t.words()[i].2 - dy).abs() < 20.0, msg="its days on the name's line")
   t.tap(dx + dw / 2.0, dy + dh / 2.0)
   t.run_for(@ui.move_most_ms)
-  assert_eq(days.last(), Some("30"), msg="\{days}")
+  assert_eq(days.last(), Some("30"), msg="\{Repr(days)}")
   let share = fn() {
     t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == @sf.t("web-main.stations.shareCard") && !s.hidden })
   }

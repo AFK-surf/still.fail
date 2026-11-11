@@ -87,7 +87,7 @@ test "a station's file's card pressed: its panel says where it is, how it goes a
     guard ref_words_at(t, "发布清单.md") is Some((_, title_y, _, _)) else { fail("\{at}: no title") }
     // where it is: its station and its folder, under its title
     let where_ = t.words().filter(fn(w) { w.0.has_prefix("Willow · ") && w.0 != "Willow · 文件" && w.5 > 0.5 })
-    assert_eq(where_.length(), 1, msg="\{at}: where it is: \{where_.map(fn(w) { w.0 })}")
+    assert_eq(where_.length(), 1, msg="\{at}: where it is: \{Repr(where_.map(fn(w) { w.0 }))}")
     assert_true(where_[0].2 > title_y, msg="\{at}: where it is under its title")
     guard ref_words_at(t, "发送方式") is Some((how_x, how_y, _, _)) else { fail("\{at}: no 发送方式") }
     assert_true(how_y > where_[0].2, msg="\{at}: how it goes under where it is")
@@ -96,7 +96,7 @@ test "a station's file's card pressed: its panel says where it is, how it goes a
     guard ref_words_at(t, "此对话默认发送文件") is Some((_, say_y, _, _)) else { fail("\{at}: no chat's say") }
     // its two ways side by side under 发送方式, the chat's say under them
     let ways = t.words().filter(fn(w) { (w.0 == "路径" || w.0 == "文件") && w.2 > how_y && w.2 < say_y && w.5 > 0.5 })
-    assert_eq(ways.length(), 2, msg="\{at}: its ways: \{ways.map(fn(w) { w.0 })}")
+    assert_eq(ways.length(), 2, msg="\{at}: its ways: \{Repr(ways.map(fn(w) { w.0 }))}")
     assert_eq(ways[0].2, ways[1].2, msg="\{at}: side by side")
     ref_close(t, platform, at)
   }

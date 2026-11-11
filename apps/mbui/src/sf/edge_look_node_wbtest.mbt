@@ -145,8 +145,8 @@ test "an edge's look as nodes, made as each state is (nothing of either moving):
     let (start, (bars, parts)) = s
     for at in [0.0, 400.0] {
       let (node, old, _) = looks_at(start, [], at, true, old=true)
-      assert_eq(Some(node), old, msg="\{start} at \{at}: node \{node}, old \{old}")
-      assert_eq((node.bar.length(), node.parts), (bars, parts), msg="\{start} at \{at}")
+      assert_eq(Some(node), old, msg="\{Repr(start)} at \{at}: node \{node}, old \{Repr(old)}")
+      assert_eq((node.bar.length(), node.parts), (bars, parts), msg="\{Repr(start)} at \{at}")
     }
   }
 }
@@ -182,8 +182,8 @@ test "an edge's look as nodes made on it, or in hand: as it is then, at once, no
   for start in [(true, true, false), (true, true, true)] {
     let (made, _, _) = looks_at(start, [], 0.0, false)
     let (later, _, _) = looks_at(start, [], 400.0, true)
-    assert_eq(made, later, msg="\{start}")
-    assert_eq(made.bar.map(fn(b) { b.1 }), [@ui.Space::px(S12)], msg="\{start}")
+    assert_eq(made, later, msg="\{Repr(start)}")
+    assert_eq(made.bar.map(fn(b) { b.1 }), [@ui.Space::px(S12)], msg="\{Repr(start)}")
   }
 }
 

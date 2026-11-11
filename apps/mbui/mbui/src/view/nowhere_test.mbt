@@ -88,6 +88,6 @@ test "laid nowhere: a box holding a coloured box, words and a button: none of it
       1,
       2,
     ),
-    msg="\{before} \{gone} \{back}",
+    msg="\{Repr(before)} \{Repr(gone)} \{Repr(back)}",
   )
 }

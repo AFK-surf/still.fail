@@ -34,7 +34,7 @@ fn speeds_dismissed(how : (@ui.Tester) -> Unit, narrow? : Bool = false) -> Array
   t.draw()
   seen.push(speeds_open())
   assert_eq(backs, [], msg="not left the frame after")
-  assert_true(shown, msg="its speeds shown: \{seen}")
+  assert_true(shown, msg="its speeds shown: \{Repr(seen)}")
   seen
 }
 

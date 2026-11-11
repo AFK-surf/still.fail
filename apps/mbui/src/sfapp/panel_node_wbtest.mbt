@@ -400,7 +400,7 @@ test "panel, 大屏 keyboard and mouse: at a point, its way in and its way out a
   assert_eq(
     (after_in - opened, built.val - closed, part_in, whole_in, part_out, falls, gone_stays, in_time),
     (0, 0, true, true, true, true, true, true),
-    msg="in \{way_in}; out \{way_out}",
+    msg="in \{Repr(way_in)}; out \{Repr(way_out)}",
   )
 }
 

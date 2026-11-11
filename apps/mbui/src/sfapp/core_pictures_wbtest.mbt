@@ -143,7 +143,7 @@ test "a picture's answer told to all that read it: one that could not be had the
     }
     assert_true(second.get().has_prefix("mem:picture/"), msg="the one that asked, later \{later}")
     assert_true(first.get().has_prefix("mem:picture/"), msg="the first reader told too, later \{later}")
-    assert_true(seen.last().unwrap_or("").has_prefix("mem:picture/"), msg="followed by the first: \{seen}, later \{later}")
+    assert_true(seen.last().unwrap_or("").has_prefix("mem:picture/"), msg="followed by the first: \{Repr(seen)}, later \{later}")
     stop()
   }
 }

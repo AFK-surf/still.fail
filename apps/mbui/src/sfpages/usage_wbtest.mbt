@@ -227,7 +227,7 @@ test "the year: a month whose weeks have not the room for its name says none, no
   t.draw()
   assert_true(t.rect_of("10月") is Some(_))
   let last = t.lines_of("11月")
-  assert_true(last.iter().all(fn(l) { !l.has_suffix("…") }), msg="\{last}")
+  assert_true(last.iter().all(fn(l) { !l.has_suffix("…") }), msg="\{Repr(last)}")
   // a day pointed at: its date and tokens a moment later (week 50's fourth day: its column and row among the cells,
   // each a square under the months' row)
   let squares = t.drawn_rects().filter(fn(r) { r.2 == r.3 && r.2 > 4.0 && r.2 < 20.0 })

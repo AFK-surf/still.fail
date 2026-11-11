@@ -136,7 +136,7 @@ fn through_said(
         go(at)
         match t.target_at(x, y) {
           Dragged(id) => t.drag_at(id, Down, x, y, at) |> ignore
-          other => @halt.saying("no cover: \{other is Nothing} \{t.drawn().map(fn(d) { (d.id.at, d.x, d.y, d.w, d.h) })}")
+          other => @halt.saying("no cover: \{other is Nothing} \{Repr(t.drawn().map(fn(d) { (d.id.at, d.x, d.y, d.w, d.h) }))}")
         }
       }
       Move(x, y, at) => {
@@ -237,13 +237,13 @@ test "a cover holding through, moved past the slop just before the hold's moment
 ///|
 test "a cover holding through let go of before the hold's moment: nothing handed to what is under it" {
   let said = through_said([Down(10.0, 10.0, 0.0), CoverGone(later_ms), To(through_ms + later_ms)])
-  assert_false(said.iter().any(fn(s) { s.has_prefix("under") }), msg="\{said}")
+  assert_false(said.iter().any(fn(s) { s.has_prefix("under") }), msg="\{Repr(said)}")
 }
 
 ///|
 test "what is under a cover holding through made anew in its place before the hold's moment: neither the one found nor the new handed it" {
   let said = through_said([Down(10.0, 10.0, 0.0), UnderAnew(later_ms), To(through_ms + later_ms)])
-  assert_false(said.iter().any(fn(s) { s.has_prefix("under") }), msg="\{said}")
+  assert_false(said.iter().any(fn(s) { s.has_prefix("under") }), msg="\{Repr(said)}")
 }
 
 ///|
@@ -275,7 +275,7 @@ test "what is under a cover holding through moved off where the finger is before
   let steps = [Down(10.0, 10.0, 0.0), UnderAway(later_ms), To(through_ms + later_ms)]
   for frames in [0.0, 16.0] {
     let said = through_said(steps, frames~)
-    assert_false(said.iter().any(fn(s) { s.has_prefix("under") }), msg="frames \{frames}: \{said}")
+    assert_false(said.iter().any(fn(s) { s.has_prefix("under") }), msg="frames \{frames}: \{Repr(said)}")
   }
 }
 
@@ -295,7 +295,7 @@ test "what is under a cover holding through, its on_drag said anew before the ho
   ])
   for same in [false, true] {
     let said = through_said([..down, Rebound(later_ms, same), To(through_ms + later_ms)], under_raw=true)
-    assert_false(said.iter().any(fn(s) { s.has_prefix("under") }), msg="same \{same}: \{said}")
+    assert_false(said.iter().any(fn(s) { s.has_prefix("under") }), msg="same \{same}: \{Repr(said)}")
   }
 }
 

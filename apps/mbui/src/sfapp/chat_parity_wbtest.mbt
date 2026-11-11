@@ -521,6 +521,6 @@ fn report_drawn(words : String) -> (Double, Double) {
 test "a failure the viewer may report, its words too long for the line: they are cut short before 上报, which is whole" {
   let short = report_drawn("这一轮没跑完")
   let long = report_drawn("本轮 agent 未在对话中回复，以下是它最后输出的文字，由 station 代为转发（并非它发出的消息），请留意")
-  assert_true(short.0 > 0.0 && short.1 > 0.0, msg="\{short}")
+  assert_true(short.0 > 0.0 && short.1 > 0.0, msg="\{Repr(short)}")
   assert_eq(long, short)
 }

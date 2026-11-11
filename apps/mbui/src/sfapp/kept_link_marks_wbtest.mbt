@@ -33,8 +33,8 @@ test "a link in a message left still with a mouse: the hand over it, its right c
   t.right_click(x + w / 2.0 + 1.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms)
   let came = t.words().map(fn(w) { w.0 })
-  assert_true(came.contains("在浏览器中打开链接") && came.contains("复制链接"), msg="\{came}")
-  assert_true(!came.contains("复制消息") && !came.contains("复制消息链接") && !came.contains("多选"), msg="\{came}")
+  assert_true(came.contains("在浏览器中打开链接") && came.contains("复制链接"), msg="\{Repr(came)}")
+  assert_true(!came.contains("复制消息") && !came.contains("复制消息链接") && !came.contains("多选"), msg="\{Repr(came)}")
 }
 
 ///|
@@ -100,7 +100,7 @@ test "a link in a message left still on a phone, held by a finger: its menu, no 
   // (its menu, the presenters': a sheet with a finger, in)
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   let came = t.words().map(fn(w) { w.0 })
-  assert_true(came.contains("打开链接") && came.contains("复制链接"), msg="\{came}")
+  assert_true(came.contains("打开链接") && came.contains("复制链接"), msg="\{Repr(came)}")
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   // (the message's own hold picks its words)
   assert_eq(pk.ts, "")

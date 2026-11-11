@@ -233,8 +233,8 @@ test "a light screenshot slow to come stands apart from the page: what stands in
   let ground = t.ctx().color(Neutral)
   assert_true((ground & 0xFFL) > 0L)
   let waiting = t.image_nodes().filter(fn(i) { i.0.has_prefix("mem:wait-picture/\{hash}/") })
-  assert_true(waiting.length() > 0, msg="\{t.image_nodes()}")
-  assert_true(waiting.iter().all(fn(i) { i.0.has_suffix("/\{ground}/\{t.ctx().color(Bg)}") }), msg="\{waiting}")
+  assert_true(waiting.length() > 0, msg="\{Repr(t.image_nodes())}")
+  assert_true(waiting.iter().all(fn(i) { i.0.has_suffix("/\{ground}/\{t.ctx().color(Bg)}") }), msg="\{Repr(waiting)}")
   // (the ground in it: not under it as well)
-  assert_false(t.drawn_rects().iter().any(fn(r) { (r.4 & 0xFFFFFF00L) == (ground & 0xFFFFFF00L) }), msg="\{t.drawn_rects()}")
+  assert_false(t.drawn_rects().iter().any(fn(r) { (r.4 & 0xFFFFFF00L) == (ground & 0xFFFFFF00L) }), msg="\{Repr(t.drawn_rects())}")
 }

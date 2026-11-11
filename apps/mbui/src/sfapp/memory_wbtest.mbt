@@ -74,7 +74,7 @@ test "一台 station 的记忆 as a place, become another station's in its place
     assert_eq(
       (first, asked.last(), own.iter().any(fn(o) { o.contains("发布流程") })),
       ((Some("ws1/st1"), true), Some("ws1/st2"), true),
-      msg="at \{w}: \{own}",
+      msg="at \{w}: \{Repr(own)}",
     )
   }
 }
@@ -98,7 +98,7 @@ test "一台 station 的记忆 as a place over another place, on the tape and wi
     // (on the tape, its panel the one in use: what its bar says read out)
     @sfdesk.bring_page()
     t.run_for(@ui.move_most_ms)
-    assert_true(tree_words_drawn().iter().any(fn(o) { o.contains("发布流程") }), msg="at \{w}: \{tree_words_drawn()}")
+    assert_true(tree_words_drawn().iter().any(fn(o) { o.contains("发布流程") }), msg="at \{w}: \{Repr(tree_words_drawn())}")
     assert_eq(backs(), alone, msg="a back over it at \{w}")
   }
 }

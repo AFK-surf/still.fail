@@ -57,9 +57,9 @@ test "a step further in taller than the page it comes in the place of: the page 
     t.run_for(@ui.frame_period_default)
   }
   // (from where it stood, in the frame it was pressed in too; on its way up with the sheet's top after, never down)
-  assert_true(went.length() > 1 && (went[0] - (stood * 10.0).round() / 10.0).abs() < 0.5, msg="完成 \{stood} \{went}")
+  assert_true(went.length() > 1 && (went[0] - (stood * 10.0).round() / 10.0).abs() < 0.5, msg="完成 \{stood} \{Repr(went)}")
   for i in 1..<went.length() {
-    assert_true(went[i] <= went[i - 1], msg="完成 \{went}")
+    assert_true(went[i] <= went[i - 1], msg="完成 \{Repr(went)}")
   }
-  assert_true(came.length() > 1 && came.iter().all(fn(y) { y == came[came.length() - 1] }), msg="好 \{came}")
+  assert_true(came.length() > 1 && came.iter().all(fn(y) { y == came[came.length() - 1] }), msg="好 \{Repr(came)}")
 }

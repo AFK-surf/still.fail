@@ -163,7 +163,7 @@ fn owned_row_left_case(
       assert_true(@sfbase.chat_open_is_pending(serial), msg="the row registered a pending handover")
       row_owner.dispose()
       let current = client.peek_topic("chat", params~)
-      assert_true(current is Some(s) && physical_equal(s, sub), msg="the pending handover outlives the row's view; current_id=\{current.map(fn(s) { s.id })}, original_id=\{sub.id}, original_unsubscribes=\{lease_ended(sent, sub.id)}, messages=\{sent}")
+      assert_true(current is Some(s) && physical_equal(s, sub), msg="the pending handover outlives the row's view; current_id=\{Repr(current.map(fn(s) { s.id }))}, original_id=\{sub.id}, original_unsubscribes=\{lease_ended(sent, sub.id)}, messages=\{Repr(sent)}")
       assert_eq(lease_ended(sent, sub.id), 0, msg="the original subscription stayed active")
     }
     after_page.val = Some(@view.Tree::new(fn(page) {

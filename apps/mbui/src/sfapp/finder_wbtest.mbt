@@ -157,7 +157,7 @@ test "a finger's search field comes up from the list and goes back as itself: it
     guard search_field_drawn(t, false) is Some(list) else { fail("\{at}: no field in the list") }
     tap_search_field(t)
     t.run_for(@ui.move_most_ms)
-    assert_eq(search_field_drawn(t, true), Some(list), msg="\{at}: come up: \{search_field_drawn(t, true)} for \{list}")
+    assert_eq(search_field_drawn(t, true), Some(list), msg="\{at}: come up: \{Repr(search_field_drawn(t, true))} for \{Repr(list)}")
     // 取消: on its way back, then the list's again, as it was
     guard t.find_last("取消") is Some((x, y)) else { fail("\{at}: no 取消") }
     t.tap(x, y)
@@ -207,7 +207,7 @@ test "small with a mouse, ⌘K: the search's page in the lists' box, the keys in
   // the lists gone from under it, as under a finger's (not seen through its rows)
   // (the list's row there unseen; the same chat among what the search offers, seen)
   let rows = t.words().filter(fn(x) { x.0 == "整理发布清单" }).map(fn(x) { x.5 })
-  assert_true(rows.iter().any(fn(a) { a < 0.01 }), msg=rows.to_string())
+  assert_true(rows.iter().any(fn(a) { a < 0.01 }), msg=Repr(rows).to_string())
   // what can be done here among what it finds: 设置 with its keys, Enter runs it
   t.type_text("设置")
   t.frame()
@@ -385,8 +385,8 @@ test "⌘K: the pointer going down its rows leaves only the one under it shown c
     t.move_to(list.x + list.w / 2.0, y)
     t.run_for(@ui.move_most_ms)
     let rows = chosen()
-    assert_eq(rows.length(), 1, msg="the pointer on row \{k}: \{rows}")
-    assert_true(rows[0] <= y && y < rows[0] + @sf.theme().chat_list.found.row_h, msg="the pointer at \{y}: \{rows}")
+    assert_eq(rows.length(), 1, msg="the pointer on row \{k}: \{Repr(rows)}")
+    assert_true(rows[0] <= y && y < rows[0] + @sf.theme().chat_list.found.row_h, msg="the pointer at \{y}: \{Repr(rows)}")
   }
 }
 

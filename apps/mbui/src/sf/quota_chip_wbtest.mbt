@@ -43,7 +43,7 @@ test "an allowance's windows in words: one way for them all, the longest that fi
     // (the words drawn: the way the line says it, the others laid out nowhere)
     let shown = t.words().filter(fn(w) { w.5 > 0.5 }).map(fn(w) { w.0 })
     let way = ways.search(shown)
-    assert_true(way is Some(_), msg="\{room}: \{shown}")
+    assert_true(way is Some(_), msg="\{room}: \{Repr(shown)}")
     assert_eq(t.squeeze_faults(), [], msg=room.to_string())
     said.push(way.unwrap())
   }
@@ -98,7 +98,7 @@ test "an account's windows and its models' own, five: where no line holds them t
       let at = fn(words : Array[String]) {
         match shown.filter(fn(w) { words.contains(w.0) }) {
           [w] => w
-          found => @halt.saying("\{room}: one of \{words}: \{found} in \{shown.map(fn(w) { w.0 })}")
+          found => @halt.saying("\{room}: one of \{Repr(words)}: \{Repr(found)} in \{Repr(shown.map(fn(w) { w.0 }))}")
         }
       }
       // every window said once, whole, within the line's room
@@ -106,7 +106,7 @@ test "an account's windows and its models' own, five: where no line holds them t
       let fable = at(["每周 · Fable", "Fable"])
       let sonnet = at(["每周 · Sonnet", "Sonnet"])
       assert_eq(t.squeeze_faults(), [], msg="\{worded} \{room}")
-      assert_true(shown.iter().all(fn(w) { w.1 + w.3 <= room + 0.01 }), msg="\{worded} \{room}: past the line's end: \{shown}")
+      assert_true(shown.iter().all(fn(w) { w.1 + w.3 <= room + 0.01 }), msg="\{worded} \{room}: past the line's end: \{Repr(shown)}")
       if fable.2 > week.2 {
         // (in lines: its models' own by the model, under the account's; the account's by their names where worded)
         lined += 1
@@ -153,8 +153,8 @@ test "fill_chip_wide is the width a fill chip is laid out at: small and marked, 
     for i, chip in chips {
       let holder = boxes.search_by(fn(b) { b.name == "chip-\{i}" }).unwrap()
       let laid = boxes.filter(fn(b) { b.parent == holder })
-      assert_eq(laid.length(), 1, msg="\{platform} \{chip}")
-      assert_eq(said[i], laid[0].w, msg="\{platform} \{chip}")
+      assert_eq(laid.length(), 1, msg="\{platform} \{Repr(chip)}")
+      assert_eq(said[i], laid[0].w, msg="\{platform} \{Repr(chip)}")
     }
   }
 }

@@ -377,7 +377,7 @@ test "a pending card's long question gives way to its lead on a narrow row" {
       t.draw()
       assert_eq(t.lines_of(lead), [lead])
       let narrow = t.lines_of(rest)
-      assert_true(narrow.length() == 1 && narrow[0].has_suffix("…"), msg="\{lead}: \{narrow}")
+      assert_true(narrow.length() == 1 && narrow[0].has_suffix("…"), msg="\{lead}: \{Repr(narrow)}")
       assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
       width.set(800.0)
       t.frame()
@@ -454,7 +454,7 @@ test "a row held long, its 分享…: the next level in the menu's sheet, one sh
     assert_true(row_lifted(t, ry))
   }
   assert_true(t.find("复制会话链接") is Some(_) && t.find("重命名") is None)
-  assert_true(sheet_tops(t)[0] > top0[0] + 20.0, msg="\{sheet_tops(t)} \{top0}")
+  assert_true(sheet_tops(t)[0] > top0[0] + 20.0, msg="\{Repr(sheet_tops(t))} \{Repr(top0)}")
   let added = t.audit().filter(fn(f) { !held.contains(f) })
   assert_eq(added, [])
   t.back()
@@ -464,7 +464,7 @@ test "a row held long, its 分享…: the next level in the menu's sheet, one sh
     assert_true(row_lifted(t, ry))
   }
   assert_true(t.find("重命名") is Some(_) && t.find("复制会话链接") is None)
-  assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{sheet_tops(t)} \{top0}")
+  assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{Repr(sheet_tops(t))} \{Repr(top0)}")
   t.back()
   t.run_for(@ui.move_most_ms * 2.0)
   assert_true(!@sf.presenting() && !row_lifted(t, ry))
@@ -928,7 +928,7 @@ test "a toast is a capsule while its words fit a line; its 撤销 a capsule in i
     let calls : Array[Made] = []
     let t = if wide { wide_tester(calls) } else { wide_tester(calls, w=390.0, h=844.0, platform=2) }
     let (bare, _) = rested_toast(t, "已复制", "")
-    assert_true((bare.3 - 2.0 * @sf.toast_r).abs() < 0.5, msg="\{wide} \{bare}")
+    assert_true((bare.3 - 2.0 * @sf.toast_r).abs() < 0.5, msg="\{wide} \{Repr(bare)}")
     t.run_for(@sf.toast_ms + @kit.presence_out_ms)
     let ((x, y, w, h), button) = rested_toast(t, "已归档", "撤销")
     let (bx, by, bw, bh) = button.unwrap()
@@ -983,7 +983,7 @@ test "a toast naming a long title with its 撤销: inside the screen, its 撤销
     let ((x, y, tw, th), button) = rested_toast(t, words, "撤销")
     let (bx, by, bw, bh) = button.unwrap()
     assert_true(x >= 0.0 && x + tw <= w, msg="\{wide} \{x} \{tw}")
-    assert_true(bx >= x && bx + bw <= x + tw && by >= y && by + bh <= y + th, msg="\{wide} \{button}")
+    assert_true(bx >= x && bx + bw <= x + tw && by >= y && by + bh <= y + th, msg="\{wide} \{Repr(button)}")
     t.run_for(@sf.toast_action_ms + @kit.presence_out_ms)
   }
 }
@@ -1006,7 +1006,7 @@ test "a toast naming a title that wraps: its 撤销 whole, as wide as beside a s
       let ((x, y, tw, th), button) = rested_toast(t, words, "撤销")
       let (bx, by, bw, bh) = button.unwrap()
       assert_true((bw - short_w).abs() < 0.5, msg="\{wide} \{words} \{bw} \{short_w}")
-      assert_true(bx >= x && bx + bw <= x + tw && by >= y && by + bh <= y + th, msg="\{wide} \{button}")
+      assert_true(bx >= x && bx + bw <= x + tw && by >= y && by + bh <= y + th, msg="\{wide} \{Repr(button)}")
       // its words whole too, as laid out
       let drawn = t.words().filter(fn(w) { w.0 == "撤销" })
       assert_eq(drawn.length(), 1)
@@ -1321,5 +1321,5 @@ test "Home's long list held and dragged: a frame moves the list's header alone, 
   let (_, y1) = t.find("整理发布清单").unwrap()
   t.release(195.0, 460.0)
   assert_true(y1 < y0 - 100.0, msg="the list moved from \{y0} to \{y1}")
-  assert_eq(others, [], msg="\{looks} of 40 frames of the looks alone; \{others}")
+  assert_eq(others, [], msg="\{looks} of 40 frames of the looks alone; \{Repr(others)}")
 }

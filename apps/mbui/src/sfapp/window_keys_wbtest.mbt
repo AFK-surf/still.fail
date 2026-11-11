@@ -7,7 +7,7 @@
 fn named_at(t : @ui.Tester, label : String) -> (Double, Double, Double, Double)? raise {
   let all = t.semantics().filter(fn(s) { !s.hidden && s.label == label && s.role is Button }).map(fn(s) { s.rect })
   if all.length() > 1 {
-    fail("\{all.length()} buttons named \{label}: \{all}")
+    fail("\{all.length()} buttons named \{label}: \{Repr(all)}")
   }
   all.get(0)
 }

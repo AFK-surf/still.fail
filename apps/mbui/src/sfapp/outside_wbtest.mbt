@@ -399,7 +399,7 @@ test "分享对话: a chat and whose it is on one line, why it cannot be shared 
     // (its letter the one on its name's line: a wide window's rail draws the workspace in view's too)
     let name = outside_word(t, "个人")
     let letter = t.words().iter().find_first(fn(w) { w.0 == "个" && (w.2 + w.4 / 2.0 - mid(name)).abs() < 1.0 })
-    assert_true(letter is Some(w) && w.1 + w.3 <= name.0, msg="\{about}: 个 \{letter}, 个人 \{name}")
+    assert_true(letter is Some(w) && w.1 + w.3 <= name.0, msg="\{about}: 个 \{Repr(letter)}, 个人 \{name}")
     let (emoji, open) = (outside_word(t, "🌲"), outside_word(t, "开源"))
     // (an emoji on the baseline its line's face gives it: within a point or two of the words' middle)
     assert_true(emoji.0 + emoji.2 <= open.0 && (mid(emoji) - mid(open)).abs() < 2.0, msg="\{about}: 🌲 \{emoji}, 开源 \{open}")
@@ -413,11 +413,11 @@ test "分享对话: a chat and whose it is on one line, why it cannot be shared 
     // 取消 before 分享并发送: across a sheet, a half each; at a dialog's end
     let (cancel, yes) = (outside_word(t, "取消"), outside_word(t, "分享并发送"))
     let half = lead.0 + lead.2 / 2.0
-    assert_true((mid(cancel) - mid(yes)).abs() < 1.0, msg="\{about}: \{cancel}, \{yes}")
+    assert_true((mid(cancel) - mid(yes)).abs() < 1.0, msg="\{about}: \{cancel}, \{Repr(yes)}")
     if screen.1 {
-      assert_true(cancel.0 > half && cancel.0 + cancel.2 < yes.0, msg="\{about}: \{cancel}, \{yes}")
+      assert_true(cancel.0 > half && cancel.0 + cancel.2 < yes.0, msg="\{about}: \{Repr(cancel)}, \{Repr(yes)}")
     } else {
-      assert_true(cancel.0 + cancel.2 < half && yes.0 > half, msg="\{about}: \{cancel}, \{yes}")
+      assert_true(cancel.0 + cancel.2 < half && yes.0 > half, msg="\{about}: \{Repr(cancel)}, \{Repr(yes)}")
     }
   }
 }
@@ -433,6 +433,6 @@ test "分享对话 on a sheet by touch: 分享并发送, drawn less tall than a 
     assert_true(h < @ui.room_least(), msg="drawn \{h} tall")
     t.tap(x + w / 2.0, if dy < 0.0 { y + dy } else { y + h + dy })
     t.draw()
-    assert_eq(named(calls, "chat.outsideShare").length(), 1, msg="\{dy} from it: \{(x, y, w, h)}")
+    assert_eq(named(calls, "chat.outsideShare").length(), 1, msg="\{dy} from it: \{Repr((x, y, w, h))}")
   }
 }

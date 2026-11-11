@@ -110,5 +110,5 @@ test "shown across as an event finds it: words come to show and read at once, no
   t.frame(400.0, 300.0) |> ignore
   let framed = page.val.unwrap().shown_across()
   assert_eq(at_once, framed)
-  assert_true(at_once != before, msg="\{at_once} as \{before}")
+  assert_true(at_once != before, msg="\{Repr(at_once)} as \{Repr(before)}")
 }

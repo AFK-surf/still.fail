@@ -102,7 +102,7 @@ test "one panel over another, the four ways, at Small with a finger and Large wi
       let (x, y) = outside_both(at)
       t.tap(x, y)
       come_to_rest(t)
-      assert_eq((both, which_shown(t), pressed.val), ((true, true), (true, false), 0), msg="\{name} at \{at}")
+      assert_eq((both, which_shown(t), pressed.val), ((true, true), (true, false), 0), msg="\{name} at \{Repr(at)}")
     }
   }
 }
@@ -117,7 +117,7 @@ test "one panel over another, the four ways, at Small with a finger and Large wi
       let foot = where_is(t, "上面的按钮")
       t.tap_text("上面的按钮")
       come_to_rest(t)
-      assert_eq((which_shown(t), pressed.val), ((true, true), 1), msg="\{name} at \{at}, the button at \{foot}")
+      assert_eq((which_shown(t), pressed.val), ((true, true), 1), msg="\{name} at \{Repr(at)}, the button at \{Repr(foot)}")
     }
   }
 }
@@ -131,7 +131,7 @@ test "one panel over another, the four ways, at Small with a finger and Large wi
       let t = one_over_another(at, lower, upper, pressed)
       t.key_named("esc") |> ignore
       come_to_rest(t)
-      assert_eq((which_shown(t), pressed.val), ((true, false), 0), msg="\{name} at \{at}")
+      assert_eq((which_shown(t), pressed.val), ((true, false), 0), msg="\{name} at \{Repr(at)}")
     }
   }
 }

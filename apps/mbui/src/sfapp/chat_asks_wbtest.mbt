@@ -212,7 +212,7 @@ test "an agent's context opened from its card on a phone's window (the presenter
     while ms <= @ui.move_most_ms {
       t.run_for(from + ms - t.time())
       let sheets = t.drawn_glass().filter(fn(g) { g.3 > 100.0 })
-      assert_eq(sheets.length(), 1, msg="platform \{platform} at \{ms}: \{sheets}")
+      assert_eq(sheets.length(), 1, msg="platform \{platform} at \{ms}: \{Repr(sheets)}")
       let scrims = t
         .drawn_rects()
         .filter(fn(r) { r.0 <= 0.0 && r.1 <= 0.0 && r.2 >= 390.0 && r.3 >= 844.0 && (r.4 & 0xFFL) > 0L && (r.4 & 0xFFL) < 0xFFL })
@@ -236,8 +236,8 @@ test "an agent's context: its title over its rows, each row's note under its nam
     // top to bottom: the title, 压缩上下文 and its note, 清空上下文 and its note
     assert_true(title.1 + title.3 <= compact.1, msg="\{about}: \{title}, \{compact}")
     assert_true(compact.1 + compact.3 <= compact_note.1, msg="\{about}: \{compact}, \{compact_note}")
-    assert_true(compact_note.1 + compact_note.3 <= clear.1, msg="\{about}: \{compact_note}, \{clear}")
-    assert_true(clear.1 + clear.3 <= clear_note.1, msg="\{about}: \{clear}, \{clear_note}")
+    assert_true(compact_note.1 + compact_note.3 <= clear.1, msg="\{about}: \{compact_note}, \{Repr(clear)}")
+    assert_true(clear.1 + clear.3 <= clear_note.1, msg="\{about}: \{Repr(clear)}, \{Repr(clear_note)}")
     // each note starts where its name does; the two rows' words line up
     assert_true((compact.0 - compact_note.0).abs() < 1.0 && (clear.0 - clear_note.0).abs() < 1.0, msg=about)
     assert_true((compact.0 - clear.0).abs() < 1.0, msg=about)
@@ -254,7 +254,7 @@ test "an agent's context: its title over its rows, each row's note under its nam
       )
     } else {
       // a sheet from the foot: its rows in the window's lower half
-      assert_true(clear_note.1 > 422.0, msg="\{about}: \{clear_note}")
+      assert_true(clear_note.1 > 422.0, msg="\{about}: \{Repr(clear_note)}")
     }
   }
 }

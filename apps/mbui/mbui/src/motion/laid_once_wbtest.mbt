@@ -124,7 +124,7 @@ test "a box pushed down by what B set as it was built, after A was: A built agai
   let passes = passes_of(l, fn() { frame_by_clock(l.t) })
   assert_eq(l.done_in_b.val, 1, msg="B did it once")
   // (built with the old top; again with the new, the move told; again for it, the same way: none told)
-  assert_eq(passes, [3], msg="the frame B set it in: \{passes}")
+  assert_eq(passes, [3], msg="the frame B set it in: \{Repr(passes)}")
   assert_eq(l.t.drawn_of("a box"), Some(was))
   l.t.run_for(push_midway_ms)
   let y = l.t.drawn_of("a box").unwrap().1
@@ -153,12 +153,12 @@ test "a box moving, then the frames as it goes and the one it gets to its end in
     frame_by_clock(l.t)
   }
   l.t.each_frame(None)
-  assert_true(passes.length() > 2, msg="\{passes}")
+  assert_true(passes.length() > 2, msg="\{Repr(passes)}")
   // (going all the way: drawn lower each frame till it is there)
-  assert_true(ys.iter().any(fn(y) { y > was.1 && y < was.1 + 40.0 }), msg="on its way: \{ys}")
-  assert_eq(ys[ys.length() - 1], was.1 + 40.0, msg="\{ys}")
+  assert_true(ys.iter().any(fn(y) { y > was.1 && y < was.1 + 40.0 }), msg="on its way: \{Repr(ys)}")
+  assert_eq(ys[ys.length() - 1], was.1 + 40.0, msg="\{Repr(ys)}")
   // (a frame painted alone, nothing built: none)
-  assert_eq(passes.filter(fn(p) { p > 1 }), [], msg="\{passes}")
+  assert_eq(passes.filter(fn(p) { p > 1 }), [], msg="\{Repr(passes)}")
 }
 
 ///|
@@ -369,7 +369,7 @@ test "a box pushed down, its ease changed by what B set as it was built (the sam
   in_b(l, fn() { curve.set(true) })
   let passes = passes_of(l, fn() { frame_by_clock(l.t) })
   assert_eq(l.done_in_b.val, 1, msg="B did it once")
-  assert_eq(passes, [3], msg="built with the first ease, again with the second (told), again for it: \{passes}")
+  assert_eq(passes, [3], msg="built with the first ease, again with the second (told), again for it: \{Repr(passes)}")
   l.t.run_for(push_midway_ms)
   // (halfway in time: ease-in not yet half of the way; ease-out past it)
   let y = l.t.drawn_of("a box").unwrap().1
@@ -467,7 +467,7 @@ test "a box measured let go: what reads its size reads it the same in that frame
   frame_by_clock(l.t)
   frame_by_clock(l.t)
   l.t.each_frame(None)
-  assert_eq(passes.filter(fn(p) { p > 1 }), [], msg="\{passes}")
+  assert_eq(passes.filter(fn(p) { p > 1 }), [], msg="\{Repr(passes)}")
   assert_eq(l.builds_a.val, builds, msg="built again after")
   assert_true(l.t.at_rest(), msg=l.t.rest_why())
 }

@@ -170,7 +170,7 @@ test "switching the browsing station starts at its home and saves the chosen fol
   t.click(MenuItemRadio, label="Maple")
   t.run_for(@ui.move_most_ms)
   let asks = named(calls, "drive.folders")
-  assert_eq(asks.length(), 3, msg="\{asks.map(fn(m) { m.params.stringify() })}")
+  assert_eq(asks.length(), 3, msg="\{Repr(asks.map(fn(m) { m.params.stringify() }))}")
   assert_eq(text(Some(asks[2].params), "station"), "ws1/st2")
   assert_eq(text(Some(asks[2].params), "path"), "")
   press(t, "项目")

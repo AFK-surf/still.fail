@@ -179,7 +179,7 @@ test "an editor in an old view hosted in a node drawn half as big: a tap where i
   assert_eq(
     half_rect,
     (20.0 + (x - 20.0) * 0.5, 20.0 + (y - 20.0) * 0.5, w * 0.5, h * 0.5),
-    msg="half: the host told the caret where it is drawn, as big: \{whole_rect} whole",
+    msg="half: the host told the caret where it is drawn, as big: \{Repr(whole_rect)} whole",
   )
 }
 
@@ -225,7 +225,7 @@ fn hosted_picked(scale : Double, from : Double, to : Double) -> (Int, Int) {
 test "an editor in an old view hosted in a node drawn half as big: words picked by a pointer dragged across where they are drawn, as dragged across them whole" {
   let whole = hosted_picked(1.0, 7.0, 40.0)
   let half = hosted_picked(0.5, 7.0, 40.0)
-  assert_true(whole.0 != whole.1, msg="whole: words picked: \{whole}")
+  assert_true(whole.0 != whole.1, msg="whole: words picked: \{Repr(whole)}")
   assert_eq(half, whole, msg="half: the same words picked")
 }
 
@@ -269,18 +269,18 @@ test "an old view hosted in a node laid out off the window's corner, drawn moved
     t.draw()
     // (laid out at (30, 10), drawn from (30 + dx, 10 + dy) half as big: the button laid out 100 in and 20 down in it)
     let (qx, qy) = (30.0 + step.0, 10.0 + step.1)
-    assert_eq(t.get(Button, label="old button").rect, (qx + 50.0, qy + 10.0, 50.0, 25.0), msg="moved \{step}: read out where it is drawn")
+    assert_eq(t.get(Button, label="old button").rect, (qx + 50.0, qy + 10.0, 50.0, 25.0), msg="moved \{Repr(step)}: read out where it is drawn")
     let before = clicks.val
     t.tap(qx + 60.0, qy + 20.0)
     t.draw()
-    assert_eq(clicks.val, before + 1, msg="moved \{step}: pressed where it is drawn")
+    assert_eq(clicks.val, before + 1, msg="moved \{Repr(step)}: pressed where it is drawn")
     // (its caret put down a tap 33 along its line, where it is drawn: as whole)
     t.tap(qx + 33.0 * 0.5, qy + 5.0)
     t.draw()
     let caret = field.selection().1
-    assert_true(caret > 0, msg="moved \{step}: its caret put down in its words: \{caret}")
+    assert_true(caret > 0, msg="moved \{Repr(step)}: its caret put down in its words: \{caret}")
     let (x, y, w, h) = t.ime_rect()
-    assert_true(x >= qx && x <= qx + 100.0 && y >= qy && y <= qy + 10.0 && h <= 10.0 + 0.001, msg="moved \{step}: the host told the caret where it is drawn, as big: \{(x, y, w, h)}")
+    assert_true(x >= qx && x <= qx + 100.0 && y >= qy && y <= qy + 10.0 && h <= 10.0 + 0.001, msg="moved \{Repr(step)}: the host told the caret where it is drawn, as big: \{Repr((x, y, w, h))}")
   }
 }
 
@@ -406,7 +406,7 @@ test "an editor in an old view hosted in a node drawn half as big, a finger on i
   let (whole_down, whole_moved) = hosted_sel_handle(1.0, 30.0)
   let (half_down, half_moved) = hosted_sel_handle(0.5, 30.0)
   assert_eq(half_down, whole_down, msg="pressed: the words picked as whole")
-  assert_true(whole_moved != whole_down, msg="whole: moved by its handle: \{whole_down} then \{whole_moved}")
+  assert_true(whole_moved != whole_down, msg="whole: moved by its handle: \{Repr(whole_down)} then \{Repr(whole_moved)}")
   assert_eq(half_moved, whole_moved, msg="half: moved as whole")
 }
 
@@ -432,7 +432,7 @@ test "an editor in an old view hosted in a node drawn half as big, a word picked
   assert_eq(
     hosted_menu(0.5),
     (true, 20.0 + (x - 20.0) * 0.5, 20.0 + (y - 20.0) * 0.5, w * 0.5, h * 0.5),
-    msg="half: told over the word where it is drawn, as big: \{(x, y, w, h)} whole",
+    msg="half: told over the word where it is drawn, as big: \{Repr((x, y, w, h))} whole",
   )
 }
 
@@ -457,7 +457,7 @@ fn hosted_widened(scale : Double, dx : Double) -> (Int, Int) {
 test "an editor in an old view hosted in a node drawn half as big: a double click's second press dragged on, words picked as the same whole" {
   let whole = hosted_widened(1.0, 40.0)
   let half = hosted_widened(0.5, 40.0)
-  assert_true(whole.0 != whole.1, msg="whole: words picked: \{whole}")
+  assert_true(whole.0 != whole.1, msg="whole: words picked: \{Repr(whole)}")
   assert_eq(half, whole, msg="half: the same words")
 }
 
@@ -853,7 +853,7 @@ test "an old view hosted in a node drawn half as big, a native view in it all of
   let half = fn(r : (Double, Double, Double, Double)) { (20.0 + (r.0 - 20.0) * 0.5, 20.0 + (r.1 - 20.0) * 0.5, r.2 * 0.5, r.3 * 0.5) }
   let whole_at = placed()
   let whole_holes = t.holes()
-  assert_true(whole_at.2 > 0.0 && whole_holes.length() == 1, msg="whole: placed \{whole_at}, its hole \{whole_holes}")
+  assert_true(whole_at.2 > 0.0 && whole_holes.length() == 1, msg="whole: placed \{Repr(whole_at)}, its hole \{Repr(whole_holes)}")
   // (the button laid out at (120, 20) 80 by 40)
   assert_eq(covers_of(page), [120.0, 20.0, 200.0, 60.0], msg="whole: where it is laid out")
   s.set(0.5)
@@ -981,7 +981,7 @@ test "a press's room in an old view hosted in a node drawn whole, half as big, w
   let said = fn(at : String) { half.iter().any(fn(f) { f.has_prefix("room: ") && f.contains(at) }) }
   assert_true(
     half.length() == 2 && said("at 20,20 22×22") && said("at 42,20 22×22"),
-    msg="half: too little room for each, said where it is drawn, as big, nothing else: \{half}",
+    msg="half: too little room for each, said where it is drawn, as big, nothing else: \{Repr(half)}",
   )
   assert_eq(again, [], msg="whole again: room enough")
 }

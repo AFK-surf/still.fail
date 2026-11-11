@@ -15,7 +15,7 @@ pub(all) enum Pose {
   Float
   Spit
   Return
-} derive(Eq, Show)
+} derive(Eq, Show, Debug)
 
 ///|
 pub fn Pose::ms(self : Pose) -> Double {

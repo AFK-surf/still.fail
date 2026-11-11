@@ -98,13 +98,13 @@ fn yield_drag(t : Tester, p : (Double, Double), _there : @signals.Signal[Bool]) 
 ///|
 test "yield_thumbs: a mouse's press at the list's thumb under the edge's strip, dragged: the list scrolled, the edge told nothing" {
   let (said, moved) = yield_run(fn(t, p, there) { yield_drag(t, p, there) })
-  assert_true(moved > 0.0 && said.length() == 0, msg="\{said} \{moved}")
+  assert_true(moved > 0.0 && said.length() == 0, msg="\{Repr(said)} \{moved}")
 }
 
 ///|
 test "yield_thumbs: a button of the tree's over the edge where the thumb is: its, the list not scrolled, the edge told nothing" {
   let (said, moved) = yield_run(fn(t, p, there) { yield_drag(t, p, there) }, cover=true)
-  assert_true(moved == 0.0 && said.length() > 0 && said.iter().all(fn(s) { s.has_prefix("button") }), msg="\{said} \{moved}")
+  assert_true(moved == 0.0 && said.length() > 0 && said.iter().all(fn(s) { s.has_prefix("button") }), msg="\{Repr(said)} \{moved}")
 }
 
 ///|
@@ -116,7 +116,7 @@ test "yield_thumbs: a finger at the thumb a mouse brought out: the edge's" {
     t.touch_raw(1, 1, p.0, p.1 + 20.0, at + 20.0)
     t.touch_raw(2, 1, p.0, p.1 + 20.0, at + 40.0)
   })
-  assert_true(moved == 0.0 && said.contains("edge press"), msg="\{said} \{moved}")
+  assert_true(moved == 0.0 && said.contains("edge press"), msg="\{Repr(said)} \{moved}")
 }
 
 ///|
@@ -141,7 +141,7 @@ test "yield_thumbs: the old view let go while its thumb is held: what follows, n
     t.frame()
     assert_eq(t.list_offset(), held_at, msg="the list as its thumb was left")
   })
-  assert_true(said.iter().all(fn(s) { !s.has_prefix("edge") }), msg="\{said}")
+  assert_true(said.iter().all(fn(s) { !s.has_prefix("edge") }), msg="\{Repr(said)}")
 }
 
 ///|
@@ -186,7 +186,7 @@ test "yield_thumbs: the pointer and the thumb still, the old view's box rounded 
   })
   ignore(said)
   // (the thumb where it was, drawn as it was, all along: only its corner's cut changed)
-  assert_true(rects.length() == 3 && rects[0].length() == 1 && rects.iter().all(fn(r) { r == rects[0] }), msg="the thumb: \{rects}")
+  assert_true(rects.length() == 3 && rects[0].length() == 1 && rects.iter().all(fn(r) { r == rects[0] }), msg="the thumb: \{Repr(rects)}")
   assert_eq(seen, [false, true, false], msg="pointed at the edge: at the thumb, cut, square again")
 }
 

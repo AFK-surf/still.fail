@@ -296,7 +296,7 @@ fn tape_bar_back(t : @ui.Tester) -> (Double, Double, Double, Double) raise {
   let backs = t.semantics().filter(fn(s) { s.role == @ui.Role::Button && s.label == "记忆" && !s.hidden })
   guard backs is [b] else { fail("back read out \{backs.length()} times") }
   let (x, y, w, h) = b.rect
-  assert_true(x >= p.x && x + w < p.x + 80.0 && y >= p.y && y + h <= p.y + 60.0, msg="back at \{b.rect}")
+  assert_true(x >= p.x && x + w < p.x + 80.0 && y >= p.y && y + h <= p.y + 60.0, msg="back at \{Repr(b.rect)}")
   b.rect
 }
 

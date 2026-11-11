@@ -91,14 +91,14 @@ test "a video closed, the frame it shows grabbed and its answer late (past a who
   media_opened(t)
   let v = viewer.get().unwrap()
   let m = v.media
-  guard t.holes() is [hole] else { fail("its player's picture: \{t.holes()}") }
+  guard t.holes() is [hole] else { fail("its player's picture: \{Repr(t.holes())}") }
   t.back()
   assert_true(t.views().contains("control 1 22 640"), msg="its frame asked for")
   for _ in 0..<4 {
     t.run_for(@ui.move_most_ms / 2.0)
     assert_true(viewer.get() is None && pv_leaving.get().map(fn(l) { physical_equal(l, v) }) == Some(true), msg="going, the same viewer")
     assert_true(physical_equal(v.media, m), msg="its player the same")
-    assert_true(t.holes() is [h] && media_near(h, hole), msg="its player's picture where it was: \{t.holes()}, was \{hole}")
+    assert_true(t.holes() is [h] && media_near(h, hole), msg="its player's picture where it was: \{Repr(t.holes())}, was \{Repr(hole)}")
     assert_eq(media_closed(t), 0, msg="its player not closed")
   }
   // (going, nothing of it takes a press: the button under it its own, the player not closed by it)
@@ -107,7 +107,7 @@ test "a video closed, the frame it shows grabbed and its answer late (past a who
       let (x, y, w, h) = b.rect
       t.tap(x + w / 2.0, y + h / 2.0)
     }
-    other => fail("the tree's button: \{other}")
+    other => fail("the tree's button: \{Repr(other)}")
   }
   t.run_for(@ui.frame_period_default)
   assert_eq((pressed, media_closed(t)), ([1], 0), msg="the button under it pressed, its player not closed")
@@ -122,7 +122,7 @@ test "a video closed, the frame it shows grabbed and its answer late (past a who
     }
     None => fail("no frame kept")
   }
-  assert_true(media_drawn(t, kept) is [r] && media_near(r, hole), msg="its frame flying from where its picture was: \{media_drawn(t, kept)}, was \{hole}")
+  assert_true(media_drawn(t, kept) is [r] && media_near(r, hole), msg="its frame flying from where its picture was: \{Repr(media_drawn(t, kept))}, was \{Repr(hole)}")
   t.run_for(@ui.move_most_ms)
   assert_true(pv_leaving.get() is None && media_closed(t) == 1, msg="landed: gone, its player closed once (\{media_closed(t)})")
 }
@@ -132,13 +132,13 @@ test "a video closed, its frame's grab answered with nothing: back into its thum
   let t = media_tree()
   media_opened(t)
   let v = viewer.get().unwrap()
-  guard t.holes() is [hole] else { fail("its player's picture: \{t.holes()}") }
+  guard t.holes() is [hole] else { fail("its player's picture: \{Repr(t.holes())}") }
   t.back()
   assert_true(t.view_said("{\"still\":{\"view\":1},\"b\":\"\"}"))
   t.draw()
   assert_eq(t.holes().length(), 0, msg="flown back")
   assert_true(pv_frames.is_empty(), msg="nothing kept")
-  assert_true(v.fly_pic != "" && media_drawn(t, v.fly_pic) is [r] && media_near(r, hole), msg="its still \{v.fly_pic} flying from where its picture was: \{media_drawn(t, v.fly_pic)}, was \{hole}")
+  assert_true(v.fly_pic != "" && media_drawn(t, v.fly_pic) is [r] && media_near(r, hole), msg="its still \{v.fly_pic} flying from where its picture was: \{Repr(media_drawn(t, v.fly_pic))}, was \{Repr(hole)}")
   t.run_for(@ui.move_most_ms)
   assert_true(viewer.get() is None && pv_leaving.get() is None && media_closed(t) == 1, msg="gone, its player closed once")
 }
@@ -156,7 +156,7 @@ test "a video opened from its thumbnail: at each of four moments of its flight i
     assert_true(v.flies && !v.fly_back && v.fly.goes_at(t.ctx().moment()), msg="at \{k}/5: still flying in")
     let still = if v.fly_pic != "" { v.fly_pic } else { v.still(fixture("chat")) }
     let drawn = media_drawn(t, still)
-    assert_eq(drawn.length(), 1, msg="at \{k}/5: its still \{still} drawn \{drawn}")
+    assert_eq(drawn.length(), 1, msg="at \{k}/5: its still \{still} drawn \{Repr(drawn)}")
   }
 }
 
@@ -203,7 +203,7 @@ test "a video sent with no size, its still's known: opened from its thumbnail, i
   guard t.reachable("演示录屏.mp4") is [(x, y), ..] else { fail("no video") }
   // (where the thumbnail is: its still as the chat draws it)
   let thumbs = t.drawn_images().filter(fn(i) { i[2] > 100.0 })
-  guard thumbs is [th] else { fail("its thumbnail: \{thumbs}") }
+  guard thumbs is [th] else { fail("its thumbnail: \{Repr(thumbs)}") }
   // (each frame drawn from the press on, as it is drawn: whether the viewer is up, and where its still is)
   let seen : Array[(Bool, Array[(Double, Double, Double, Double)])] = []
   t.each_frame(
@@ -218,12 +218,12 @@ test "a video sent with no size, its still's known: opened from its thumbnail, i
   t.each_frame(None)
   let v = viewer.get().unwrap()
   let still = v.still(fixture("chat"))
-  assert_true(v.file.width == 0.0 && @ui.image_natural(still) is Some((sw, sh)) && sw > 0.0 && sh > 0.0, msg="sent with no size, its still's known: \{@ui.image_natural(still)}")
+  assert_true(v.file.width == 0.0 && @ui.image_natural(still) is Some((sw, sh)) && sw > 0.0 && sh > 0.0, msg="sent with no size, its still's known: \{Repr(@ui.image_natural(still))}")
   // (the first frame it is up in: flying, its still once, where its thumbnail was, as big)
   guard seen.get(0) is Some((flying, drawn)) else { fail("no frame drawn with it up") }
   assert_true(flying, msg="set out as a flight in its first frame")
   assert_true(
     drawn is [r] && (r.0 - th[0]).abs() < 1.0 && (r.1 - th[1]).abs() < 1.0 && (r.2 - th[2]).abs() < 1.0 && (r.3 - th[3]).abs() < 1.0,
-    msg="its still where its thumbnail was, in its first frame: \{drawn}, the thumbnail \{th} (frames: \{seen.length()})",
+    msg="its still where its thumbnail was, in its first frame: \{Repr(drawn)}, the thumbnail \{Repr(th)} (frames: \{seen.length()})",
   )
 }

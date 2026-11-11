@@ -437,15 +437,15 @@ test "新建 workspace on each screen: what it is for over 名称, its field und
     let cancel = t.all(Button, label="取消")
     assert_eq(cancel.length(), 1, msg=at)
     let create = create_button(t)
-    assert_true(inside(field, d.rect), msg="\{at}: \{field} in \{d.rect}")
-    assert_true(lead_y < name_y && name_y < field.1 && field.1 + field.3 <= owner_y, msg="\{at}: \{lead_y} \{name_y} \{field} \{owner_y}")
+    assert_true(inside(field, d.rect), msg="\{at}: \{Repr(field)} in \{Repr(d.rect)}")
+    assert_true(lead_y < name_y && name_y < field.1 && field.1 + field.3 <= owner_y, msg="\{at}: \{lead_y} \{name_y} \{Repr(field)} \{owner_y}")
     assert_true(owner_y < radios[0].rect.1 && radios[0].rect.1 < radios[1].rect.1, msg=at)
     assert_true(radios[1].rect.1 + radios[1].rect.3 <= cancel[0].rect.1, msg=at)
     // its foot: 取消 then 新建, on one line
     assert_eq(cancel[0].rect.1, create.rect.1, msg=at)
     assert_true(cancel[0].rect.0 + cancel[0].rect.2 <= create.rect.0, msg=at)
     // the rows across as the field is
-    assert_eq(radios[0].rect.0 <= field.0, true, msg="\{at}: \{radios[0].rect} \{field}")
+    assert_eq(radios[0].rect.0 <= field.0, true, msg="\{at}: \{Repr(radios[0].rect)} \{Repr(field)}")
   }
 }
 

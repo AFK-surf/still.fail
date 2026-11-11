@@ -191,7 +191,7 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
       assert_true(kept_at >= ch4 - 300.0, msg="kept \{kept_at}, chapter \{ch4}")
       assert_true(kept_at <= ch4 + 50.0, msg="kept \{kept_at}, chapter \{ch4}")
     }
-    None => fail("no place kept: \{fix_places.keys().collect()}")
+    None => fail("no place kept: \{Repr(fix_places.keys().collect())}")
   }
   t.assert_idle()
 }
@@ -205,7 +205,7 @@ test "＋'s Station 文件: a file ticked in a folder lent goes into the chat's 
   let log = t.drive(
     "tap icon:plus\ntap Station 文件\nuntil 所有位置\nuntil 主目录\ntap =文档\nuntil 整个文件夹\ntap 发布清单.md\ntap 添加 1 个\ngone 所有位置\n",
   )
-  assert_true(log.contains("EXIT 0"), msg="\{log}")
+  assert_true(log.contains("EXIT 0"), msg="\{Repr(log)}")
   // in the draft as the core keeps it, where it is on the station (sent, the core names it in the message)
   t.draw()
   let files = @sfbase.writing(src, "ws1/st1:s-c1").files.get()

@@ -112,7 +112,7 @@ test "one of a few as a node beside the old one: a press chooses the one pressed
     t.draw()
     t.tap(r.rect.0 + 30.0, r.rect.1 + r.rect.3 / 2.0)
     t.draw()
-    assert_eq(told.length(), 2, msg="\{platform}: \{told}")
+    assert_eq(told.length(), 2, msg="\{platform}: \{Repr(told)}")
   }
 }
 

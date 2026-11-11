@@ -151,8 +151,8 @@ test "小屏: the chat's things whose body is nodes: a file's row held by a fing
   assert_eq(now.2, old.2, msg="lit while its menu is open")
   assert_eq(now.3, old.3, msg="its menu")
   // (the sheet behind it pushed back and dimmed: its row up from where it was, the scrim over it)
-  assert_true(old.4.1.length() > 0 && old.4.1[0].1 < old.4.0, msg="the old one pushed back: \{old.4}")
-  assert_true(old.4.2.length() > 1, msg="the old one dimmed over itself: \{old.4}")
+  assert_true(old.4.1.length() > 0 && old.4.1[0].1 < old.4.0, msg="the old one pushed back: \{Repr(old.4)}")
+  assert_true(old.4.2.length() > 1, msg="the old one dimmed over itself: \{Repr(old.4)}")
   assert_eq(now.4, old.4, msg="pushed back and dimmed")
 }
 
@@ -191,7 +191,7 @@ fn things_first_seen(t : @ui.Tester, r : ChatRef, frame : Bytes, open : () -> Un
         _ => None
       }
     })
-  guard grabs is [view, ..] else { fail("no frame asked of a player: \{t.views()}") }
+  guard grabs is [view, ..] else { fail("no frame asked of a player: \{Repr(t.views())}") }
   assert_true(t.view_said("{\"still\":{\"view\":\{view}},\"b\":\"\{hex_bytes(frame)}\"}"), msg="answered")
   t.run_for(@ui.move_most_ms)
   let drawn = things_firsts_drawn(t)
@@ -208,7 +208,7 @@ test "小屏: the chat's things whose body is nodes: a video the station made no
   let frame = fixture_file_png("演示录屏.mp4")
   let old = things_first_seen(t, r, frame, fn() { open_things_old(src, r) })
   let now = things_first_seen(t, r, frame, fn() { open_things(src, r, 7.0) })
-  assert_true(old.0 > 0 && old.1.length() > 0, msg="the old one's first frame: \{old}")
+  assert_true(old.0 > 0 && old.1.length() > 0, msg="the old one's first frame: \{Repr(old)}")
   assert_eq(now, old)
 }
 
@@ -252,7 +252,7 @@ fn things_peek_seen(t : @ui.Tester, r : ChatRef, kind : String, name : String, o
   t.run_for(sheet_way_ms(t))
   let before = words_below(t, 1.0)
   let at = t.words().filter(fn(w) { w.0 == name && w.2 >= 844.0 * (1.0 - things_share) })
-  guard at is [(_, x, y, w, h, _), ..] else { fail("\{name}: not drawn: \{before}") }
+  guard at is [(_, x, y, w, h, _), ..] else { fail("\{name}: not drawn: \{Repr(before)}") }
   t.move_to(x + w / 2.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
   let card = words_below(t, 1.0).filter(fn(w) { !before.contains(w) })
@@ -273,8 +273,8 @@ test "小屏 with a mouse: the chat's things whose body is nodes: a link's row a
     let (kind, name) = k
     let old = things_peek_seen(t, r, kind, name, fn() { open_things_old(src, r) })
     let now = things_peek_seen(t, r, kind, name, fn() { open_things(src, r, 7.0) })
-    assert_true(old.0.length() > 0 && old.1, msg="\{kind}: the old one's card, gone after: \{old}")
-    assert_eq(now, old, msg="\{kind}: \{now}, the old one's \{old}")
+    assert_true(old.0.length() > 0 && old.1, msg="\{kind}: the old one's card, gone after: \{Repr(old)}")
+    assert_eq(now, old, msg="\{kind}: \{Repr(now)}, the old one's \{Repr(old)}")
   }
 }
 

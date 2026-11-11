@@ -38,5 +38,5 @@ test "a new Slack app's look in the new connect's dialog, at a phone's width: it
   assert_true(@sf.presenting())
   assert_true(t.query(Button, label="后端接口").unwrap().selected == Some(true))
   let edits = calls.filter(fn(m) { m.name == "connect.flow.edit" }).map(fn(m) { field(Some(m.params), "input") })
-  assert_true(edits.iter().any(fn(i) { text(field(i, "settings"), "backgroundColor") == "#B582EB" }), msg=edits.map(fn(e) { e.to_string() }).join(" | "))
+  assert_true(edits.iter().any(fn(i) { text(field(i, "settings"), "backgroundColor") == "#B582EB" }), msg=edits.map(fn(e) { Repr(e).to_string() }).join(" | "))
 }

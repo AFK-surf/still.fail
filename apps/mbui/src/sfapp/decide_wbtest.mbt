@@ -150,17 +150,17 @@ test "the chat's own sheet, on to its agent's card and to what was said in it: e
     assert_true(t.find(shown) is Some(_), msg=row)
     for _ in 0..<40 {
       t.run_for(@ui.frame_period_default)
-      assert_eq(sheet_tops(t).length(), 1, msg="\{row}: \{sheet_tops(t)}")
+      assert_eq(sheet_tops(t).length(), 1, msg="\{row}: \{Repr(sheet_tops(t))}")
     }
     // back: the chat's own sheet again, as tall as it was, never two sheets on the way
     t.back()
     assert_true(@sf.presenting(), msg=row)
     for _ in 0..<40 {
       t.run_for(@ui.frame_period_default)
-      assert_eq(sheet_tops(t).length(), 1, msg="\{row}: \{sheet_tops(t)}")
+      assert_eq(sheet_tops(t).length(), 1, msg="\{row}: \{Repr(sheet_tops(t))}")
     }
     assert_true(t.find("Claude · Opus 5.5") is Some(_), msg=row)
-    assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{row}: \{sheet_tops(t)} \{top0}")
+    assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{row}: \{Repr(sheet_tops(t))} \{Repr(top0)}")
   }
   // back from the chat's own sheet: closed
   t.back()
@@ -394,7 +394,7 @@ fn words_x(t : @ui.Tester, s : String) -> Double? {
 /// as tall as it was. `scroll`: the first scrolled so far first, as far scrolled after.
 fn steps_in_one_sheet(t : @ui.Tester, row : String, scroll? : Double = 0.0) -> Unit raise {
   let top0 = sheet_tops(t)
-  assert_eq(top0.length(), 1, msg="\{row}: \{top0}")
+  assert_eq(top0.length(), 1, msg="\{row}: \{Repr(top0)}")
   let in_window = fn() { t.words().filter(fn(w) { w.0.length() > 1 && w.1 >= 0.0 && w.1 < 390.0 }) }
   let shown0 = in_window()
   let before : Set[String] = Set::from_array(shown0.map(fn(w) { w.0 }))
@@ -404,7 +404,7 @@ fn steps_in_one_sheet(t : @ui.Tester, row : String, scroll? : Double = 0.0) -> U
   let shown1 = in_window()
   let after : Set[String] = Set::from_array(shown1.map(fn(w) { w.0 }))
   let own = shown1.filter(fn(w) { !before.contains(w.0) })
-  assert_true(own.length() > 0, msg="\{row}: nothing of its own in \{t.words().map(fn(w) { w.0 })}")
+  assert_true(own.length() > 0, msg="\{row}: nothing of its own in \{Repr(t.words().map(fn(w) { w.0 }))}")
   let (next, next_x) = (own[0].0, own[0].1)
   // (words of the first page alone: what it is told by as it slides)
   let firsts = shown0.filter(fn(w) { !after.contains(w.0) })
@@ -415,7 +415,7 @@ fn steps_in_one_sheet(t : @ui.Tester, row : String, scroll? : Double = 0.0) -> U
   t.back()
   t.run_for(@sf.presented_rest() - t.time())
   assert_true(@sf.presenting(), msg="\{row}: back closed it")
-  assert_true((words_x(t, first).unwrap() - x0).abs() < 0.5, msg="\{row}: \{first} back at \{words_x(t, first)}")
+  assert_true((words_x(t, first).unwrap() - x0).abs() < 0.5, msg="\{row}: \{first} back at \{Repr(words_x(t, first))}")
   // (scrolled, where it scrolls: as far scrolled as it comes back)
   let y0 = t.drawn_of(first).unwrap().1
   if scroll > 0.0 {
@@ -433,7 +433,7 @@ fn steps_in_one_sheet(t : @ui.Tester, row : String, scroll? : Double = 0.0) -> U
   for _ in 0..<40 {
     t.run_for(@ui.frame_period_default)
     let tops = sheet_tops(t)
-    assert_eq(tops.length(), 1, msg="\{row}: \{tops}")
+    assert_eq(tops.length(), 1, msg="\{row}: \{Repr(tops)}")
     assert_eq(scrim_drawn(t).length(), 1, msg="\{row}")
     // (its top one way only, from where it stood to where the next has it)
     if up {
@@ -468,11 +468,11 @@ fn steps_in_one_sheet(t : @ui.Tester, row : String, scroll? : Double = 0.0) -> U
   t.back()
   for _ in 0..<40 {
     t.run_for(@ui.frame_period_default)
-    assert_eq(sheet_tops(t).length(), 1, msg="\{row} back: \{sheet_tops(t)}")
+    assert_eq(sheet_tops(t).length(), 1, msg="\{row} back: \{Repr(sheet_tops(t))}")
     assert_eq(scrim_drawn(t).length(), 1, msg="\{row} back")
   }
-  assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{row}: \{sheet_tops(t)} \{top0}")
-  assert_true((words_x(t, first).unwrap() - x0).abs() < 0.5, msg="\{row}: \{first} back at \{words_x(t, first)}")
+  assert_true((sheet_tops(t)[0] - top0[0]).abs() < 0.5, msg="\{row}: \{Repr(sheet_tops(t))} \{Repr(top0)}")
+  assert_true((words_x(t, first).unwrap() - x0).abs() < 0.5, msg="\{row}: \{first} back at \{Repr(words_x(t, first))}")
   let y_back = t.drawn_of(first).map(fn(p) { p.1 })
   assert_true(
     match (y_back, y_scrolled) {
@@ -480,7 +480,7 @@ fn steps_in_one_sheet(t : @ui.Tester, row : String, scroll? : Double = 0.0) -> U
       (None, None) => true
       _ => false
     },
-    msg="\{row}: \{first} not as it was left: \{t.drawn_of(first)}, \{y_scrolled} (\{y0})",
+    msg="\{row}: \{first} not as it was left: \{Repr(t.drawn_of(first))}, \{Repr(y_scrolled)} (\{y0})",
   )
 }
 

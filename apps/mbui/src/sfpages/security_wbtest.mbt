@@ -82,7 +82,7 @@ test "安全, at each width and with either hand: no row of a lock of one's own,
     let at = "\{w} platform \{platform}"
     assert_true(t.find("安全模式已开启") is Some(_), msg=at)
     let named = t.words().filter(fn(x) { x.0.contains("个人锁") || x.0.contains("以你的名义批准") })
-    assert_eq(named.length(), 0, msg="\{at}: \{named}")
+    assert_eq(named.length(), 0, msg="\{at}: \{Repr(named)}")
   }
 }
 
@@ -232,7 +232,7 @@ test "安全, at each width and with either hand: another device of one's own ta
     scrolled_to(t, w, "Ana 的 MacBook Air")
     let (_, theirs) = t.find("Ana 的 MacBook Air").unwrap()
     let under = t.words().filter(fn(x) { x.0 == "移除" && x.5 > 0.5 && x.2 + x.4 > theirs })
-    assert_eq(under.length(), 0, msg="\{at}: \{under.map(fn(x) { (x.1, x.2) })} under \{theirs}")
+    assert_eq(under.length(), 0, msg="\{at}: \{Repr(under.map(fn(x) { (x.1, x.2) }))} under \{theirs}")
   }
 }
 

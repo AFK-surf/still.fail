@@ -88,7 +88,7 @@ test "list: a row coming where it is opens its room at once, what it holds in it
     if h > 1.0 && h < 49.0 {
       between += 1
       // (as big as it is open, seen from half open, in its room's middle)
-      assert_true((w.5 - @ui.row_held_look(h / 50.0).alpha).abs() < 0.03, msg="\{w} \{h}")
+      assert_true((w.5 - @ui.row_held_look(h / 50.0).alpha).abs() < 0.03, msg="\{Repr(w)} \{h}")
       assert_true((w.2 - (y + (h - 50.0) / 2.0)).abs() < 1.5)
     }
     t.frame()
@@ -114,7 +114,7 @@ test "list: a row going closes its room at once, what it holds in its middle, fa
   let (_, y, _, h) = t.row(19).unwrap()
   assert_true(h > 1.0 && h < 49.0)
   let w = t.words().filter(fn(w) { w.0 == "Row 19" })[0]
-  assert_true((w.5 - @ui.row_held_look(h / 50.0).alpha).abs() < 0.03, msg="\{w} \{h}")
+  assert_true((w.5 - @ui.row_held_look(h / 50.0).alpha).abs() < 0.03, msg="\{Repr(w)} \{h}")
   assert_true((w.2 - (y + (h - 50.0) / 2.0)).abs() < 1.5)
   assert_true((y_of(t, 18) - (y18 + 50.0 - h)).abs() < 0.001)
   assert_eq(bottom_of(t, 19), 400.0)
@@ -145,7 +145,7 @@ test "list: two rows going one after the other, side by side: each closes where 
   // (18 still where it was, 19 under it, the rows end to end)
   let w18 = t.words().filter(fn(w) { w.0 == "Row 18" })
   let w19 = t.words().filter(fn(w) { w.0 == "Row 19" })
-  guard (w18, w19) is ([a, ..], [b, ..]) else { fail("rows 18 and 19 not both drawn: \{w18} \{w19}") }
+  guard (w18, w19) is ([a, ..], [b, ..]) else { fail("rows 18 and 19 not both drawn: \{Repr(w18)} \{Repr(w19)}") }
   assert_true(a.2 < b.2, msg="row 18 at \{a.2}, row 19 at \{b.2}")
   let (_, y18b, _, _) = t.row(18).unwrap()
   assert_true((y18b - y18).abs() < h18, msg="row 18 from \{y18} to \{y18b}")
@@ -175,7 +175,7 @@ test "list: a row gone down past others is the one that moves: it leaves where i
   }
   // (row 0 on its way: a copy of it closing where it was, it opening where it is, neither seen whole)
   let seen = row_seen(t, 0)
-  assert_true(seen.iter().all(fn(a) { a < 1.0 }), msg="\{seen}")
+  assert_true(seen.iter().all(fn(a) { a < 1.0 }), msg="\{Repr(seen)}")
   t.run_for(@ui.row_size_ms)
   assert_eq(row_seen(t, 0), [1.0])
 }
@@ -331,7 +331,7 @@ test "list: a changed version while another row leaves at the same moments with 
       assert_true(
         (a.0 - b.0).abs() < 0.01 && (a.1 - b.1).abs() < 0.01 &&
         (a.2 - b.2).abs() < 0.01 && (a.3 - b.3).abs() < 0.01,
-        msg="\{hz} Hz, sample \{i}: \{a} vs \{b}",
+        msg="\{hz} Hz, sample \{i}: \{Repr(a)} vs \{Repr(b)}",
       )
     }
   }

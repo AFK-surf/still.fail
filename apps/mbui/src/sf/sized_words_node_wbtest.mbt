@@ -80,12 +80,12 @@ test "words said by a size alone: the node's where the old view's are, as big, o
     assert_eq(new_words, old_words, msg="platform \{platform}: the words")
     assert_eq(new_glyphs, old_glyphs, msg="platform \{platform}: the glyphs")
     // (the note wrapped, the path cut short: there is something to see in each)
-    assert_true(old_words.iter().any(fn(w) { w.has_prefix(sized_note) }), msg="platform \{platform}: \{old_words}")
+    assert_true(old_words.iter().any(fn(w) { w.has_prefix(sized_note) }), msg="platform \{platform}: \{Repr(old_words)}")
     let lines = t.words().filter(fn(w) { w.0 == sized_note })
-    assert_true(lines.length() == 2 && lines.iter().all(fn(w) { w.4 > 30.0 }), msg="platform \{platform}: wrapped \{lines}")
+    assert_true(lines.length() == 2 && lines.iter().all(fn(w) { w.4 > 30.0 }), msg="platform \{platform}: wrapped \{Repr(lines)}")
     // (the node's said to be cut where it has less room: no fault of words that do not fit of its; the old view's path,
     // max_lines=1, is taken for words wrapped narrower than they need, its own way)
     let faults = t.squeeze_faults().filter(fn(f) { !f.contains("in an old view") })
-    assert_eq(faults, [], msg="platform \{platform}: \{faults}")
+    assert_eq(faults, [], msg="platform \{platform}: \{Repr(faults)}")
   }
 }

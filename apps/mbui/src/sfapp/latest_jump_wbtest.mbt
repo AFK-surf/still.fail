@@ -13,7 +13,7 @@ test "a chat short of its end: its way to the end says how many new messages wai
     { ..tp, value: Some(Json::object(o)) }
   })
   t.run_for(@ui.move_most_ms)
-  guard t.find("3 条新消息") is Some((x, y)) else { fail("\{t.words().map(fn(w) { w.0 })}") }
+  guard t.find("3 条新消息") is Some((x, y)) else { fail("\{Repr(t.words().map(fn(w) { w.0 }))}") }
   assert_eq(named(calls, "chat.latest").length(), 0)
   t.tap(x, y)
   t.draw()

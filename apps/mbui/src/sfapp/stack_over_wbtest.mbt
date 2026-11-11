@@ -83,8 +83,8 @@ fn over_same(late : Double?, ats : Array[Double]) -> Unit raise {
     let stepped = over_seen(late, every, at)
     let once = over_seen(late, [8.0].filter(fn(f) { f < at }), at)
     let jumped = over_seen(late, [], at)
-    assert_eq(once, stepped, msg="at \{at}: one frame just after: \{once} stepped \{stepped}")
-    assert_eq(jumped, stepped, msg="at \{at}: none: \{jumped} stepped \{stepped}")
+    assert_eq(once, stepped, msg="at \{at}: one frame just after: \{Repr(once)} stepped \{Repr(stepped)}")
+    assert_eq(jumped, stepped, msg="at \{at}: none: \{Repr(jumped)} stepped \{Repr(stepped)}")
     // (back the stack's: the chat over it off, the page under it on top, still in use)
     assert_eq((stepped.2, stepped.3, stepped.4), ("s-c1", 2, true), msg="at \{at}: back")
   }

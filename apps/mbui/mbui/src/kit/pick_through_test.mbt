@@ -273,8 +273,8 @@ fn picked_under(swiped : Bool, frames : Bool) -> ((Int, Int, Bool), Int, Array[S
 test "words under a cover a finger drags only once held, the finger moved past the slop at once and let go: nothing picked, nothing felt; under one holding through, held past a long press: the word picked once (a hold handed through felt by none, as ever); frames or none" {
   for frames in [true, false] {
     let (picked, took, said, felt) = picked_under(true, frames)
-    assert_eq((picked.2, took, said, felt), (false, 0, ["cover press", "cover drag Off"], []), msg="swiped, frames \{frames}: \{picked}")
+    assert_eq((picked.2, took, said, felt), (false, 0, ["cover press", "cover drag Off"], []), msg="swiped, frames \{frames}: \{Repr(picked)}")
     let held = picked_under(false, frames)
-    assert_eq(held, ((0, 5, true), 1, ["cover press", "cover drag Off"], []), msg="held, frames \{frames}: \{held}")
+    assert_eq(held, ((0, 5, true), 1, ["cover press", "cover drag Off"], []), msg="held, frames \{frames}: \{Repr(held)}")
   }
 }

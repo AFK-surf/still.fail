@@ -111,7 +111,7 @@ test "a connect's Slack app: its colour's swatch edged 1 in the border's colour"
   let t = slack_app_tester(390.0, 2)
   // (the swatch: the one square drawn 28 across, beside the colour's field)
   let swatches = t.drawn_rects().filter(fn(r) { r.2 == 28.0 && r.3 == 28.0 })
-  assert_eq(swatches.length(), 1, msg="\{swatches}")
+  assert_eq(swatches.length(), 1, msg="\{Repr(swatches)}")
   let (sx, sy, _, _, _) = swatches[0]
   let (x, y) = (sx + 14.0, sy + 14.0)
   assert_eq(edge_round(t, x, y), (1.0, edge_shown(t, x, y, @ui.tree_theme().color(Border))), msg="at \{x},\{y}: \{edges_at(t, x, y)}")

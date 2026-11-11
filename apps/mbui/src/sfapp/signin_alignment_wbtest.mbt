@@ -47,7 +47,7 @@ test "the sign-in choice has the button's size and keeps its quiet colors" {
   let inks = t.drawn_glyphs().filter(fn(g) {
     g.0 >= choice.1 - 1.0 && g.0 <= choice.1 + choice.3 + 1.0 && g.1 >= choice.2 - 1.0 && g.1 <= choice.2 + choice.4 + 1.0
   }).map(fn(g) { g.2 })
-  assert_true(!inks.is_empty() && inks.iter().all(fn(ink) { ink == @sf.theme().p.muted }), msg="choice ink \{inks}")
+  assert_true(!inks.is_empty() && inks.iter().all(fn(ink) { ink == @sf.theme().p.muted }), msg="choice ink \{Repr(inks)}")
 }
 
 ///|

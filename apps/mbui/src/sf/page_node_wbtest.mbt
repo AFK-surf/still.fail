@@ -277,8 +277,8 @@ test "分享 and a choice of days at a page's title's line's end as nodes, the l
     let (_, _, whole) = ends_drawn(share, seg, title~)
     let (_, _, _, _, share, seg) = titled_ends(w, title~, scale~)
     let (words, sh, sg) = ends_drawn(share, seg, title~)
-    assert_true(sg.2 < whole.2 - 0.5, msg="\{case}: the choice given way: \{sg.2} of \{whole.2}")
-    assert_true(sh.1 < words.1 + words.3 && sg.1 < words.1 + words.3, msg="\{case}: one line: \{words} \{sh} \{sg}")
+    assert_true(sg.2 < whole.2 - 0.5, msg="\{Repr(case)}: the choice given way: \{sg.2} of \{whole.2}")
+    assert_true(sh.1 < words.1 + words.3 && sg.1 < words.1 + words.3, msg="\{Repr(case)}: one line: \{Repr(words)} \{Repr(sh)} \{Repr(sg)}")
   }
 }
 
@@ -674,9 +674,9 @@ test "a page's title with 分享 and a choice of days at its line's end, where e
     assert_true(x >= 0.0 && x + w <= 220.0 + 0.01 && y >= 0.0 && w > 0.0 && h > 0.0, msg="\{p.0} within the window: \{p.1}")
   }
   // (under the title, 分享 then the choice, the choice's end the line's: 16 in from the window's)
-  assert_true(sh.1 >= title.1 + title.3 && sg.1 >= title.1 + title.3, msg="under the title: \{title} \{sh} \{sg}")
-  assert_true(sh.0 + sh.2 <= sg.0 + 0.01, msg="分享 before the choice: \{sh} \{sg}")
-  assert_true((sg.0 + sg.2 - 204.0).abs() < 0.01, msg="the choice's end the line's: \{sg}")
+  assert_true(sh.1 >= title.1 + title.3 && sg.1 >= title.1 + title.3, msg="under the title: \{title} \{Repr(sh)} \{Repr(sg)}")
+  assert_true(sh.0 + sh.2 <= sg.0 + 0.01, msg="分享 before the choice: \{Repr(sh)} \{Repr(sg)}")
+  assert_true((sg.0 + sg.2 - 204.0).abs() < 0.01, msg="the choice's end the line's: \{Repr(sg)}")
   t.tap(sh.0 + sh.2 / 2.0, sh.1 + sh.3 / 2.0)
   t.run_for(@ui.move_most_ms)
   assert_eq(shared.val, 1, msg="分享 pressed once")

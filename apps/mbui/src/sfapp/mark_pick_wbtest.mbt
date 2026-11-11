@@ -167,7 +167,7 @@ test "图标: on each screen the icons' side, its field, the colours with the ma
     let said = mark_colours_said(t)
     assert_eq(said.filter(fn(c) { c.1 }).map(fn(c) { c.0 }), ["orange"])
     assert_eq(said.length(), 9)
-    assert_true(said.iter().all(fn(c) { !c.0.has_suffix(" none") }), msg="\{about}: \{said}")
+    assert_true(said.iter().all(fn(c) { !c.0.has_suffix(" none") }), msg="\{about}: \{Repr(said)}")
     // six to a row, as wide as they are tall, none of them picked but the mark's own
     let cells = mark_cells(t)
     assert_true(cells.length() >= 12, msg=about)
@@ -209,7 +209,7 @@ test "图标: an icon pressed sets it in the colour picked, the sheet going; a c
     let (ox, oy, ow, oh) = other.rect
     t.tap(ox + ow / 2.0, oy + oh / 2.0)
     t.run_for(@ui.move_most_ms)
-    assert_true(run.set[run.set.length() - 1].1 == "glyph:" + other.label + ":purple", msg="\{about}: \{run.set}")
+    assert_true(run.set[run.set.length() - 1].1 == "glyph:" + other.label + ":purple", msg="\{about}: \{Repr(run.set)}")
     assert_true(!@sf.presenter_visible(), msg="\{about}: gone")
   }
 }
@@ -396,7 +396,7 @@ test "图标 and Emoji: the grid is the other side's, or what the words typed fi
     assert_eq(cells.filter(fn(b) { !station_emoji_has(b.label) }).length(), 0, msg="\{about}: the icons gone")
     assert_true(cells.iter().all(fn(b) { b.rect.1 >= mark_button(t, "🖥️").1 - 0.5 }), msg="\{about}: from its top")
     t.run_for(@ui.move_most_ms)
-    assert_true(mark_button(t, "🖥️").1 < top.1 - 30.0, msg="\{about}: \{mark_button(t, "🖥️")} \{top}")
+    assert_true(mark_button(t, "🖥️").1 < top.1 - 30.0, msg="\{about}: \{Repr(mark_button(t, "🖥️"))} \{Repr(top)}")
     assert_true(mark_buttons(t, "red").length() == 0, msg="\{about}: no colours")
     mark_close(t)
     assert_true(!@sf.presenter_visible(), msg="\{about}: closed")
@@ -429,7 +429,7 @@ test "图标: the colours read out as buttons by their names, the picked one sai
     let first = mark_buttons(t, "red")[0].rect
     let words = mark_buttons(t, "图标").iter().find_first(fn(b) { b.rect.2 < 48.0 }).unwrap().rect
     let last = mark_button(t, "pink")
-    assert_true(words.0 <= field.0 + 0.5 && last.0 + last.2 >= field.0 + field.2 - 0.5, msg="\{about}: \{words} \{last} \{field}")
+    assert_true(words.0 <= field.0 + 0.5 && last.0 + last.2 >= field.0 + field.2 - 0.5, msg="\{about}: \{Repr(words)} \{Repr(last)} \{Repr(field)}")
     assert_true(first.0 - (words.0 + words.2) > 0.0, msg=about)
     // 4 under the ring: a finger's press there is the dot's; a mouse's is not
     let (x, y, w, h) = mark_button(t, "teal")
@@ -457,7 +457,7 @@ test "图标 with keys: Tab goes from the field to the colours, then the grid; E
       }
     }
     let from = order.search("TextField 搜索图标").unwrap_or(-1)
-    assert_true(from >= 0, msg="\{about}: \{order}")
+    assert_true(from >= 0, msg="\{about}: \{Repr(order)}")
     assert_eq(
       order[from + 1:from + 10].to_owned(),
       ["Button 图标", "Button red", "Button orange", "Button amber", "Button green", "Button teal", "Button blue", "Button purple", "Button pink"],

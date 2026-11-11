@@ -31,8 +31,8 @@ test "clock read in a binding: a node's offset worked out from the logic's momen
   t.run_for(move_most_ms)
   let said = @view.clock_reads_in_bindings()
   let new = said.filter(fn(k) { !before.contains(k) })
-  assert_eq(new.length(), 1, msg="\{new}")
-  assert_true(new[0].has_prefix("logic_at mbui/src/ui/clock_in_binding_wbtest.mbt:"), msg="\{new}")
+  assert_eq(new.length(), 1, msg="\{Repr(new)}")
+  assert_true(new[0].has_prefix("logic_at mbui/src/ui/clock_in_binding_wbtest.mbt:"), msg="\{Repr(new)}")
 }
 
 ///|

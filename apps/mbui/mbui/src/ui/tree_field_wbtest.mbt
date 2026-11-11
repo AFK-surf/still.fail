@@ -93,9 +93,9 @@ test "a field of the tree's as an old view's in its place: tapped, typed into an
     let (words, tapped, told, rect, said, drawn) = field_typed(false, scale)
     assert_true(tapped > 0 && tapped < 10, msg="old, \{scale}: the tap's caret in its words: \{tapped}")
     assert_eq((words, told, said), ("abcdefghijab", (true, "abcdefghijab", 12, 12), ["abcdefghijab"]), msg="old, \{scale}")
-    assert_true(drawn.iter().any(fn(r) { r.0 == "abcdefghijab" }), msg="old, \{scale}: its words drawn: \{drawn}")
+    assert_true(drawn.iter().any(fn(r) { r.0 == "abcdefghijab" }), msg="old, \{scale}: its words drawn: \{Repr(drawn)}")
     let theirs = field_typed(true, scale)
-    assert_eq(theirs, (words, tapped, told, rect, said, drawn), msg="the tree's, \{scale}: as the old view's: \{theirs}, the old view's \{(words, tapped, told, rect, said, drawn)}")
+    assert_eq(theirs, (words, tapped, told, rect, said, drawn), msg="the tree's, \{scale}: as the old view's: \{Repr(theirs)}, the old view's \{Repr((words, tapped, told, rect, said, drawn))}")
   }
 }
 
@@ -114,7 +114,7 @@ fn caret_typed(tree : Bool, scale : Double, at : (Double, Double)) -> (Array[Dou
   t.draw()
   // (the caret's colour, 0x0A84FF: its red; taller than wide, whatever it is drawn as big as)
   let carets = insts().filter(fn(i) { i[5] == 0.0 && i[8] == 10.0 / 255.0 && i[3] > i[2] })
-  guard carets is [.., c] else { fail("\{tree}, \{scale}, at \{at}: no caret drawn") }
+  guard carets is [.., c] else { fail("\{tree}, \{scale}, at \{Repr(at)}: no caret drawn") }
   (c[0:4].to_owned(), t.ime_rect())
 }
 
@@ -124,10 +124,10 @@ test "a field of the tree's as an old view's, placed off the pixels, whole and h
     for scale in [1.0, 0.5] {
       let old_typed = field_typed(false, scale, at~)
       let theirs = field_typed(true, scale, at~)
-      assert_eq(theirs, old_typed, msg="the tree's, at \{at}, \{scale}: as the old view's: \{theirs}, the old view's \{old_typed}")
+      assert_eq(theirs, old_typed, msg="the tree's, at \{Repr(at)}, \{scale}: as the old view's: \{Repr(theirs)}, the old view's \{Repr(old_typed)}")
       let old_caret = caret_typed(false, scale, at)
       let caret = caret_typed(true, scale, at)
-      assert_eq(caret, old_caret, msg="the tree's caret, at \{at}, \{scale}: drawn and told as the old view's: \{caret}, the old view's \{old_caret}")
+      assert_eq(caret, old_caret, msg="the tree's caret, at \{Repr(at)}, \{scale}: drawn and told as the old view's: \{Repr(caret)}, the old view's \{Repr(old_caret)}")
     }
   }
 }
@@ -206,7 +206,7 @@ fn field_cut_half(tree : Bool, words : String) -> Array[(Int, Double, Double, Do
 test "a field of the tree's drawn half as big in a box that cuts it short: its words drawn and cut as the old view's in its place, to the box's end" {
   let words = "abcdefghijklmnopqrstuvwxyz0123456789"
   let old_cut = field_cut_half(false, words)
-  assert_true(old_cut.iter().any(fn(d) { d.5.2 == 100.0 }), msg="the old view's: cut at the box's end, 100: \{old_cut}")
+  assert_true(old_cut.iter().any(fn(d) { d.5.2 == 100.0 }), msg="the old view's: cut at the box's end, 100: \{Repr(old_cut)}")
   let theirs = field_cut_half(true, words)
   let differ = fn(a : Array[(Int, Double, Double, Double, Double, (Double, Double, Double, Double))], b : Array[(Int, Double, Double, Double, Double, (Double, Double, Double, Double))]) {
     let mut k = 0
@@ -219,7 +219,7 @@ test "a field of the tree's drawn half as big in a box that cuts it short: its w
   assert_eq(
     theirs,
     old_cut,
-    msg="the tree's: as the old view's: \{theirs.length()} drawn, the old view's \{old_cut.length()}; first apart at \{k}: \{theirs.get(k)}, the old view's \{old_cut.get(k)}",
+    msg="the tree's: as the old view's: \{theirs.length()} drawn, the old view's \{old_cut.length()}; first apart at \{k}: \{Repr(theirs.get(k))}, the old view's \{Repr(old_cut.get(k))}",
   )
 }
 
@@ -259,7 +259,7 @@ test "a field of the tree's let go, its Field then an old view's editor's: no lo
   assert_eq(
     (f.text(), x >= 20.0 && x < 120.0 && y >= 20.0 && y < 30.0 && h <= 10.0),
     ("dabc", true),
-    msg="\{(x, y, w, h)}: \{f.text()}, told \{t.ime()}, laid out \{f.st.tl is Some(_)}, focus \{g().focus}, old views \{old_islands.length()}",
+    msg="\{Repr((x, y, w, h))}: \{f.text()}, told \{Repr(t.ime())}, laid out \{f.st.tl is Some(_)}, focus \{g().focus}, old views \{old_islands.length()}",
   )
 }
 
@@ -295,7 +295,7 @@ fn field_alike(
 ) -> Unit raise {
   let old_one = field_after(false, words, act, platform~, scale~, tall~)
   let tree_one = field_after(true, words, act, platform~, scale~, tall~)
-  assert_eq(tree_one, old_one, msg="\{what}: the tree's \{tree_one}, the old view's \{old_one}")
+  assert_eq(tree_one, old_one, msg="\{what}: the tree's \{Repr(tree_one)}, the old view's \{Repr(old_one)}")
 }
 
 ///|
@@ -405,7 +405,7 @@ test "a field of the tree's as an old view's on Android's: a finger down on it, 
   assert_eq(
     field_after(true, words, platform=2, second),
     (words, (17, 17), false, [], (false, "", 0, 0)),
-    msg="a second finger before it is held long: nothing picked, no focus, nothing felt (the old view's: \{old_second})",
+    msg="a second finger before it is held long: nothing picked, no focus, nothing felt (the old view's: \{Repr(old_second)})",
   )
   let (_, picked, _, felt, _) = field_after(true, words, platform=2, fn(t, _) {
     t.press_at(20.0 + 45.0, 30.0)
@@ -478,7 +478,7 @@ test "a field of the tree's as an old view's: three lines from ⌘V, in the firs
   let old_one = pasted_lines(false)
   assert_eq(old_one.0, "one\ntwo\nthree", msg="the old view's: pasted")
   let tree_one = pasted_lines(true)
-  assert_eq(tree_one, old_one, msg="the tree's \{tree_one}, the old view's \{old_one}")
+  assert_eq(tree_one, old_one, msg="the tree's \{Repr(tree_one)}, the old view's \{Repr(old_one)}")
 }
 
 ///|
@@ -567,7 +567,7 @@ test "a field of the tree's as an old view's, said so: its placeholder said its 
   let alike = fn(what : String, run : (Bool) -> (String, Array[(String, Double, Double, Double, Double, Double)], Array[Int64], Int, Array[String]) raise) raise {
     let old_one = run(false)
     let tree_one = run(true)
-    assert_eq(tree_one, old_one, msg="\{what}: the tree's \{tree_one}, the old view's \{old_one}")
+    assert_eq(tree_one, old_one, msg="\{what}: the tree's \{Repr(tree_one)}, the old view's \{Repr(old_one)}")
   }
   alike("its placeholder's shorter way", fn(tree) raise { field_said_so(tree, "", placeholder=long, shorter=["shorter", "short"]) })
   alike("a secret", fn(tree) raise { field_said_so(tree, "hunter2", secret=true) })
@@ -671,7 +671,7 @@ test "a field of the tree's: what its look reads changed, its size not: the host
   assert_eq(glyphs.length(), 3)
   assert_true(fr.asked && fr.changed, msg="\{fr}")
   for gl in glyphs {
-    assert_true(handed(gl.0 + 1.0, gl.1 + 1.0), msg="\{gl} not in \{fr.damage}")
+    assert_true(handed(gl.0 + 1.0, gl.1 + 1.0), msg="\{Repr(gl)} not in \{Repr(fr.damage)}")
     assert_eq(gl.2, 0x00FF00FFL)
   }
 }
@@ -763,9 +763,9 @@ test "a field of the tree's as an old view's, of more lines than it shows: the w
     t.wheel(20.0 + 50.0, 25.0, -40.0)
   }
   let old_one = field_scrolled(false, act)
-  assert_eq(old_one.3.length(), 1, msg="the old view's: its bar's thumb drawn \{old_one.3}")
+  assert_eq(old_one.3.length(), 1, msg="the old view's: its bar's thumb drawn \{Repr(old_one.3)}")
   let tree_one = field_scrolled(true, act)
-  assert_eq(tree_one, old_one, msg="the tree's \{tree_one}, the old view's \{old_one}")
+  assert_eq(tree_one, old_one, msg="the tree's \{Repr(tree_one)}, the old view's \{Repr(old_one)}")
 }
 
 ///|
@@ -773,7 +773,7 @@ test "a field of the tree's as an old view's on Android's, of more lines than it
   let act = fn(t : Tester) { t.drag(20.0 + 50.0, 25.0, 20.0 + 50.0, 25.0 + 40.0) }
   let old_one = field_scrolled(false, act, platform=2)
   let tree_one = field_scrolled(true, act, platform=2)
-  assert_eq(tree_one, old_one, msg="the tree's \{tree_one}, the old view's \{old_one}")
+  assert_eq(tree_one, old_one, msg="the tree's \{Repr(tree_one)}, the old view's \{Repr(old_one)}")
 }
 
 ///|
@@ -865,7 +865,7 @@ test "a field of the tree's as an old view's on Android's: its words flung on as
     let old_one = field_flung(false, stopped, after)
     assert_eq(old_one.1, goes, msg="\{what}: the old view's words going then as it was meant")
     let tree_one = field_flung(true, stopped, after)
-    assert_eq(tree_one, old_one, msg="\{what}: the tree's \{tree_one}, the old view's \{old_one}")
+    assert_eq(tree_one, old_one, msg="\{what}: the tree's \{Repr(tree_one)}, the old view's \{Repr(old_one)}")
   }
 }
 
@@ -1135,7 +1135,7 @@ test "a field of the tree's as an old view's: ⌘V with files on the clipboard, 
     let (what, give) = c
     let old_one = files_pasted(false, give)
     let tree_one = files_pasted(true, give)
-    assert_eq(tree_one, old_one, msg="\{what}: the tree's \{tree_one}, the old view's \{old_one}")
+    assert_eq(tree_one, old_one, msg="\{what}: the tree's \{Repr(tree_one)}, the old view's \{Repr(old_one)}")
   }
 }
 
@@ -1448,8 +1448,8 @@ test "a field of the tree's of more lines than it shows, drawn half as big about
   let (fx, fy, fw, fh) = t.get(TextField).rect
   // (laid out from 20 down, under the bar's 40; drawn clear of it; as tall laid out as its bar keeps clear in, what is
   // under the bar where it is laid out kept clear of)
-  assert_true(fy >= 40.0, msg="drawn clear of the system's bar: \{(fx, fy, fw, fh)}")
-  assert_true(fh / 0.5 - (40.0 - 20.0) >= scroll_bar_least * 2.0, msg="its bar as long as keeps clear: \{(fx, fy, fw, fh)}")
+  assert_true(fy >= 40.0, msg="drawn clear of the system's bar: \{Repr((fx, fy, fw, fh))}")
+  assert_true(fh / 0.5 - (40.0 - 20.0) >= scroll_bar_least * 2.0, msg="its bar as long as keeps clear: \{Repr((fx, fy, fw, fh))}")
   t.tap(fx + 2.0, fy + 2.0)
   t.draw()
   f.set(f.text(), caret=0)
@@ -1459,9 +1459,9 @@ test "a field of the tree's of more lines than it shows, drawn half as big about
   t.run_for(scrollbar_fade_ms)
   let thumbs = t.drawn_rects().filter(fn(r) { r.2 == scroll_bar_size * 0.5 || r.3 == scroll_bar_size * 0.5 })
   system_bars_now.set({ top: 0.0, bottom: 0.0, left: 0.0, right: 0.0 })
-  guard thumbs is [thumb, ..] else { fail("no thumb drawn: \{t.drawn_rects()}") }
+  guard thumbs is [thumb, ..] else { fail("no thumb drawn: \{Repr(t.drawn_rects())}") }
   // (its words at their top: its thumb at its bar's top, its own top where it is drawn, nothing over it to keep clear of)
-  assert_true(thumb.1 >= fy && thumb.1 < fy + scroll_bar_size, msg="its thumb from its top: \{thumb} in \{(fx, fy, fw, fh)}")
+  assert_true(thumb.1 >= fy && thumb.1 < fy + scroll_bar_size, msg="its thumb from its top: \{Repr(thumb)} in \{Repr((fx, fy, fw, fh))}")
 }
 
 ///|
@@ -1520,12 +1520,12 @@ test "a field of the tree's and words of the tree's in its place: its node off t
   let fields = field_or_words(false, put)
   let words = field_or_words(true, put)
   for k, p in put {
-    assert_true(words[k].length() == 10, msg="\{p}: the words' glyphs drawn: \{words[k]}")
+    assert_true(words[k].length() == 10, msg="\{Repr(p)}: the words' glyphs drawn: \{Repr(words[k])}")
     // (as scaled_words_wbtest's glyphs_alike: the same to the last bits but what the two ways of working out the
     // same place round off, 1e-14 at 0.7)
     let alike = fields[k].length() == words[k].length() &&
       fields[k].iter().zip(words[k].iter()).all(fn(q) { (q.0.0 - q.1.0).abs() <= 1.0e-9 && (q.0.1 - q.1.1).abs() <= 1.0e-9 })
-    assert_true(alike, msg="\{p}: the field's glyphs where the words' are: \{fields[k]}, the words' \{words[k]}")
+    assert_true(alike, msg="\{Repr(p)}: the field's glyphs where the words' are: \{Repr(fields[k])}, the words' \{Repr(words[k])}")
   }
 }
 

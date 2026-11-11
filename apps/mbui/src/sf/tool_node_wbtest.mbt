@@ -199,7 +199,7 @@ test "a tool as a node beside the old one, in each state and as what it says cha
       t.move_to(n.rect.0 + 16.0, n.rect.1 + 16.0)
     }
     let new_drawn = drawn_within(t, n.rect)
-    assert_eq(new_drawn, old_drawn, msg="\{name}: new \{new_drawn} old \{old_drawn}")
+    assert_eq(new_drawn, old_drawn, msg="\{name}: new \{Repr(new_drawn)} old \{Repr(old_drawn)}")
     assert_eq((n.role, n.pressed, n.disabled), (o.role, o.pressed, o.disabled), msg="\{name}: read out")
     // (what can be done to it said as it is: the old one says none of it though a screen reader's Activate presses it)
     let can : Array[@ui.Action] = if s.disabled { [] } else { [Activate, Focus] }
@@ -305,10 +305,10 @@ test "a tool as a node's tip: shown as the pointer rests on it tip_delay_ms, not
   assert_eq(
     (new_tip.rect.0 - n.rect.0, new_tip.rect.1 - n.rect.1, new_tip.rect.2, new_tip.rect.3),
     (old_tip.rect.0 - o.rect.0, old_tip.rect.1 - o.rect.1, old_tip.rect.2, old_tip.rect.3),
-    msg="where, how big: new \{new_tip.rect} by \{n.rect}; old \{old_tip.rect} by \{o.rect}",
+    msg="where, how big: new \{Repr(new_tip.rect)} by \{Repr(n.rect)}; old \{Repr(old_tip.rect)} by \{Repr(o.rect)}",
   )
   let new_drawn = drawn_within(t, new_tip.rect)
-  assert_eq(new_drawn, old_drawn, msg="drawn: new \{new_drawn} old \{old_drawn}")
+  assert_eq(new_drawn, old_drawn, msg="drawn: new \{Repr(new_drawn)} old \{Repr(old_drawn)}")
   t.leave()
   t.run_for(tip_settled_ms)
   assert_eq(tip_of("复制 new").length(), 0, msg="gone as the pointer left")
@@ -584,15 +584,15 @@ test "a tip coming in and going as kit's does: its ground the first half of the 
   assert_eq(tip_turns(false, looks), dense, msg="frames or none, the same")
   // (5 in: its ground part of the way, its words none)
   let (g5, w5) = dense[0]
-  assert_true(g5 > 0.0 && g5 < 1.0 && w5 == 0.0, msg="5 in: \{dense[0]}")
+  assert_true(g5 > 0.0 && g5 < 1.0 && w5 == 0.0, msg="5 in: \{Repr(dense[0])}")
   // (left at 40: as it was the moment before, then going from there)
   assert_eq(dense[2], dense[1], msg="left at 40: from where it was")
   // (going: its words first, as its ground stays)
-  assert_true(dense[3].1 < dense[2].1 && dense[3].0 == dense[2].0, msg="going: its words less at 60 \{dense}")
+  assert_true(dense[3].1 < dense[2].1 && dense[3].0 == dense[2].0, msg="going: its words less at 60 \{Repr(dense)}")
   // (back at 80: from where it was going, no jump)
   assert_eq(dense[5], dense[4], msg="back at 80: from where it was")
   // (whole at last, its words too)
-  assert_true(dense[7].0 == 1.0 && dense[7].1 > 0.0, msg="whole at 400: \{dense}")
+  assert_true(dense[7].0 == 1.0 && dense[7].1 > 0.0, msg="whole at 400: \{Repr(dense)}")
 }
 
 ///|
@@ -650,9 +650,9 @@ fn tip_drawn_turns(which : String) -> Array[String] raise {
 test "a tip going as kit's goes, drawn smaller as it fades about its edge toward its tool (pop_out), whole as it comes back from wherever it was turned: where and how big it is drawn at each turn, as the old one's" {
   let old = tip_drawn_turns("old")
   let new = tip_drawn_turns("new")
-  assert_eq(new, old, msg="new \{new} old \{old}")
+  assert_eq(new, old, msg="new \{Repr(new)} old \{Repr(old)}")
   // (going, smaller than whole: the scale itself, not only the fade)
-  assert_true(new[1] != new[0], msg="half way gone as big as whole: \{new}")
+  assert_true(new[1] != new[0], msg="half way gone as big as whole: \{Repr(new)}")
 }
 
 ///|
@@ -685,7 +685,7 @@ fn finger_held_tip(wait : Double, then_press : Bool) -> (Bool, Bool, Bool, Int) 
 ///|
 test "a tool as a node's tip held open by a finger, as kit's tooltip: shown once held long_press_ms, the press then no tap; on a while after it is let go, gone tooltip_lifted_ms after, or at the next press wherever it lands" {
   let (held, lifted, later, pressed) = finger_held_tip(@kit.tooltip_lifted_ms / 2.0, false)
-  assert_eq((held, lifted, later, pressed), (true, true, true, 0), msg="held, let go, half its while after: still: \{(held, lifted, later, pressed)}")
+  assert_eq((held, lifted, later, pressed), (true, true, true, 0), msg="held, let go, half its while after: still: \{Repr((held, lifted, later, pressed))}")
   let (_, _, gone, _) = finger_held_tip(@kit.tooltip_lifted_ms + @kit.pop_out_ms * 2.0, false)
   assert_true(!gone, msg="its while over: gone")
   let (_, _, pressed_off, _) = finger_held_tip(@kit.pop_out_ms * 2.0, true)
@@ -753,7 +753,7 @@ fn held_then(then : (@ui.Tester, @signals.Signal[ToolSaid], Double, Double) -> U
 ///|
 test "a tool as a node's tip a finger held open: called off by the system, gone then, none of it kept; the tool taken from the hand (unable), gone, not shown again as it can be pressed again; Escape, gone" {
   let off = held_then(fn(t, _, x, y) { t.touch(3, x, y) }, fn(_, _) {  })
-  assert_eq(off, (true, true, true), msg="called off: \{off}")
+  assert_eq(off, (true, true, true), msg="called off: \{Repr(off)}")
   let unable = held_then(
     fn(_, s, _, _) { s.set({ icon: "copy", label: "复制", on: false, disabled: true }) },
     fn(t, s) {
@@ -761,13 +761,13 @@ test "a tool as a node's tip a finger held open: called off by the system, gone 
       t.draw()
     },
   )
-  assert_eq(unable, (true, true, true), msg="unable, then able again: \{unable}")
+  assert_eq(unable, (true, true, true), msg="unable, then able again: \{Repr(unable)}")
   let escaped = held_then(fn(t, _, x, y) {
     t.touch(2, x, y)
     t.run_for(a_moment_ms)
     t.key(@ui.key_escape)
   }, fn(_, _) {  })
-  assert_eq(escaped, (true, true, true), msg="let go, Escape: \{escaped}")
+  assert_eq(escaped, (true, true, true), msg="let go, Escape: \{Repr(escaped)}")
 }
 
 ///|

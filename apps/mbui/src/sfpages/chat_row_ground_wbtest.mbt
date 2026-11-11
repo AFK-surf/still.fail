@@ -164,7 +164,7 @@ test "a chat row taken for another chat, as its list is laid out, sets no way go
   t.frame()
   assert_eq(@motion.ways_said() - said, 0, msg="ways set going as the row was taken for another chat")
   assert_true(t.find(other.title) is Some(_))
-  assert_true(t.moving().length() == 0, msg="\{t.moving()}")
+  assert_true(t.moving().length() == 0, msg="\{Repr(t.moving())}")
   assert_true(
     !t.drawn_rects().iter().any(fn(r) { r.2 > 100.0 && r.3 > 30.0 && r.4 == @sf.theme().p.selected }),
     msg="no ground of the chat in view on a row not in view",

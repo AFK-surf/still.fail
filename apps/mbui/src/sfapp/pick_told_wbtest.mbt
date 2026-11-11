@@ -32,7 +32,7 @@ test "a passage held with a finger: an identity told once, the message and where
     hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
     t.run_for(pick_bar_in_ms)
   })
-  assert_eq(told.length(), 3, msg="\{told}")
+  assert_eq(told.length(), 3, msg="\{Repr(told)}")
   let one = told[0]
   assert_true(one.serial > 0 && one.ts != "" && one.a >= 0 && one.b > one.a, msg="\{one}")
   assert_eq(told[1], @sfbase.picked_none)

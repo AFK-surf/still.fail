@@ -39,7 +39,7 @@ test "stops: every level a stop on one line, the one it is at alone named; a sto
   // (its name whole in its thumb, the thumb in its track)
   let (x, y, w, h) = s.rect
   let (nx, _, nw, _) = t.rect_of("高").unwrap()
-  assert_true(nx >= x && nx + nw <= x + w, msg="\{(nx, nw)} in \{s.rect}")
+  assert_true(nx >= x && nx + nw <= x + w, msg="\{Repr((nx, nw))} in \{Repr(s.rect)}")
   // its last stop tapped
   t.tap(x + w - w / 8.0, y + h / 2.0)
   t.run_for(@ui.move_most_ms)
@@ -133,7 +133,7 @@ test "stops: seven levels with long names on a narrow phone: still one line, the
   let (x, _, w, h) = t.get(@ui.Role::Slider, label="思考深度").rect
   assert_eq(t.lines_of("Very high"), ["Very high"])
   let (nx, _, nw, _) = t.rect_of("Very high").unwrap()
-  assert_true(nx >= x && nx + nw <= x + w, msg="\{(nx, nw)} in \{(x, w)}")
+  assert_true(nx >= x && nx + nw <= x + w, msg="\{Repr((nx, nw))} in \{Repr((x, w))}")
   assert_true(h <= 44.5, msg="\{h} high: more than a line")
   assert_eq(stops_named(t, labels), ["Very high"])
   assert_eq(t.squeeze_faults(), [])

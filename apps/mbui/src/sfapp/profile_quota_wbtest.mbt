@@ -73,10 +73,10 @@ test "two allowance windows keep their marks beside their figures when they fit"
   let runs = t.text_runs().filter(fn(r) { r.x0 < 300.0 })
   let shown = runs.map(fn(r) { r.text })
   for words in ["5H", "62%", "W", "19%"] {
-    assert_true(shown.contains(words), msg="\{words}: \{shown}")
+    assert_true(shown.contains(words), msg="\{words}: \{Repr(shown)}")
   }
   let chip_words = runs.filter(fn(r) { ["5H", "62%", "W", "19%"].contains(r.text) })
-  assert_true(chip_words.iter().all(fn(r) { r.top == chip_words[0].top }), msg="\{chip_words}")
+  assert_true(chip_words.iter().all(fn(r) { r.top == chip_words[0].top }), msg="\{Repr(chip_words)}")
   assert_eq(t.squeeze_faults(), [])
 }
 
@@ -88,14 +88,14 @@ test "three full allowance windows still fit in the narrowest sidebar" {
     t.draw()
     let runs = t.text_runs().filter(fn(r) { r.x0 < 300.0 })
     let shown = runs.map(fn(r) { r.text })
-    assert_eq(shown.filter(fn(s) { s == "100%" }).length(), 3, msg="\{platform}, \{digits}: \{shown}")
+    assert_eq(shown.filter(fn(s) { s == "100%" }).length(), 3, msg="\{platform}, \{digits}: \{Repr(shown)}")
     for mark in ["5H", "W", "M"] {
-      assert_true(shown.contains(mark), msg="\{platform}, \{digits}: \{shown}")
+      assert_true(shown.contains(mark), msg="\{platform}, \{digits}: \{Repr(shown)}")
     }
     // A short line must not leave one window stranded below the others. In a compact arrangement the marks may be
     // above the figures, but the figures themselves stay in one aligned row.
     let values = runs.filter(fn(r) { r.text == "100%" })
-    assert_true(values.iter().all(fn(r) { r.top == values[0].top }), msg="\{platform}, \{digits}: \{values}")
+    assert_true(values.iter().all(fn(r) { r.top == values[0].top }), msg="\{platform}, \{digits}: \{Repr(values)}")
     assert_eq(t.squeeze_faults(), [])
   }
 }
@@ -109,11 +109,11 @@ test "a model's own week, marked by the model, still fits beside the account's w
     let runs = t.text_runs().filter(fn(r) { r.x0 < 300.0 })
     let shown = runs.map(fn(r) { r.text })
     for mark in ["5H", "W", "Fable"] {
-      assert_eq(shown.filter(fn(s) { s == mark }).length(), 1, msg="\{platform}, \{digits}: \{mark}: \{shown}")
+      assert_eq(shown.filter(fn(s) { s == mark }).length(), 1, msg="\{platform}, \{digits}: \{mark}: \{Repr(shown)}")
     }
     let values = runs.filter(fn(r) { r.text == "100%" })
-    assert_eq(values.length(), 3, msg="\{platform}, \{digits}: \{shown}")
-    assert_true(values.iter().all(fn(r) { r.top == values[0].top }), msg="\{platform}, \{digits}: \{values}")
+    assert_eq(values.length(), 3, msg="\{platform}, \{digits}: \{Repr(shown)}")
+    assert_true(values.iter().all(fn(r) { r.top == values[0].top }), msg="\{platform}, \{digits}: \{Repr(values)}")
     assert_eq(t.squeeze_faults(), [])
   }
 }
@@ -126,9 +126,9 @@ test "four allowance windows stay readable in the narrowest sidebar" {
   let runs = t.text_runs().filter(fn(r) { r.x0 < 300.0 })
   let shown = runs.map(fn(r) { r.text })
   for mark in ["5H", "W", "M", "2D"] {
-    assert_true(shown.contains(mark), msg="\{mark}: \{shown}")
+    assert_true(shown.contains(mark), msg="\{mark}: \{Repr(shown)}")
   }
-  assert_eq(shown.filter(fn(s) { s == "100%" }).length(), 4, msg="\{shown}")
+  assert_eq(shown.filter(fn(s) { s == "100%" }).length(), 4, msg="\{Repr(shown)}")
   let values = runs.filter(fn(r) { r.text == "100%" })
   assert_true(values[0].top == values[1].top && values[2].top == values[3].top && values[0].top < values[2].top)
   assert_eq(t.squeeze_faults(), [])
@@ -144,7 +144,7 @@ test "a profile's offline state and its three allowance windows each have room t
     let whole = fn(phase : String) raise {
       let shown = sidebar_runs().map(fn(r) { r.text })
       for words in ["5H", "62%", "W", "19%", "M", "97%"] {
-        assert_true(shown.contains(words), msg="\{platform}: \{phase}: \{words}: \{shown}")
+        assert_true(shown.contains(words), msg="\{platform}: \{phase}: \{words}: \{Repr(shown)}")
       }
     }
     whole("offline")
@@ -245,7 +245,7 @@ fn several_rows(t : @ui.Tester) -> (Array[Double?], Array[Double], Array[String]
     if found.length() == 0 && i == titles.length() - 1 {
       return None
     }
-    guard found.length() > 0 else { @halt.saying("no \{title} in \{runs.map(fn(r) { r.text })}") }
+    guard found.length() > 0 else { @halt.saying("no \{title} in \{Repr(runs.map(fn(r) { r.text }))}") }
     Some(found.fold(init=found[0], fn(a, r) { if r.x0 < a.x0 { r } else { a } }))
   })
   let tops = title_runs.map(fn(r) {
@@ -326,20 +326,20 @@ test "a list of five accounts' allowances: every row's chips start where its mar
       let at = "\{platform} \{digits} \{side}"
       // (a) the five Claude accounts' and ChatGPT's: one start, the mark's
       let shown = starts.filter_map(fn(s) { s })
-      assert_eq(shown.length(), 6, msg="\{at}: \{starts}")
-      assert_true(shown.iter().all(fn(s) { (s - shown[0]).abs() < 0.01 }), msg="\{at}: first capsules start at \{starts}")
+      assert_eq(shown.length(), 6, msg="\{at}: \{Repr(starts)}")
+      assert_true(shown.iter().all(fn(s) { (s - shown[0]).abs() < 0.01 }), msg="\{at}: first capsules start at \{Repr(starts)}")
       // (the mark's left edge: the text is the mark and the row's gap, S2, in from it)
       let mark_x = text_x - @sf.nav_mark_side - @ui.Space::S2.px()
-      assert_true((shown[0] - mark_x).abs() < 0.01, msg="\{at}: first capsules start at \{starts}, the mark at \{mark_x}")
+      assert_true((shown[0] - mark_x).abs() < 0.01, msg="\{at}: first capsules start at \{Repr(starts)}, the mark at \{mark_x}")
       // (one way for a list's rows: claude1 and claude2 have three windows, claude3 and claude4 two, each pair as tall)
-      assert_true(heights[0] == heights[1] && heights[2] == heights[3], msg="\{at}: rows \{heights}")
+      assert_true(heights[0] == heights[1] && heights[2] == heights[3], msg="\{at}: rows \{Repr(heights)}")
       // (each way of a row's chips from the start, never spread to the row's ends: no more room between two side by
       // side than a mark wider than its chip leaves)
-      assert_true(gaps.iter().all(fn(g) { g < 16.0 }), msg="\{at}: room between capsules \{gaps}")
+      assert_true(gaps.iter().all(fn(g) { g < 16.0 }), msg="\{at}: room between capsules \{Repr(gaps)}")
       // (and each row's line under its title, its facts: from the mark's edge too)
-      assert_true(lines_x.iter().all(fn(x) { (x - mark_x).abs() < 0.01 }), msg="\{at}: lines under the titles start at \{lines_x}, the mark at \{mark_x}")
+      assert_true(lines_x.iter().all(fn(x) { (x - mark_x).abs() < 0.01 }), msg="\{at}: lines under the titles start at \{Repr(lines_x)}, the mark at \{mark_x}")
       // (b) every chip whole
-      assert_true(words.iter().all(fn(w) { !w.has_suffix("…") }), msg="\{at}: \{words}")
+      assert_true(words.iter().all(fn(w) { !w.has_suffix("…") }), msg="\{at}: \{Repr(words)}")
       assert_eq(t.squeeze_faults(), [], msg=at)
       seen.push((starts, heights))
     }
@@ -354,7 +354,7 @@ test "a list of five accounts' allowances: every row's chips start where its mar
         let (starts, heights, _, _, _, _) = several_rows(t)
         let at = "\{platform} \{digits} \{side}: \{row} all \{left}"
         assert_eq(starts, seen[i].0, msg=at)
-        assert_true(heights[0] == heights[1] && heights[2] == heights[3], msg="\{at}: rows \{heights}")
+        assert_true(heights[0] == heights[1] && heights[2] == heights[3], msg="\{at}: rows \{Repr(heights)}")
       }
     }
   }

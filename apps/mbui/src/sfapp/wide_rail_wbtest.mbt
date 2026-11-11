@@ -762,7 +762,7 @@ test "wide: the files sidebar's update stays in place as it starts to float" {
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(@sfdesk.wide.folded.get() && @sfdesk.wide.peeking.get())
   let start = update_at()
-  assert_true((start.0 - open.0).abs() < 0.5 && (start.1 - open.1).abs() < 0.5, msg="open \{open}, floating starts \{start}")
+  assert_true((start.0 - open.0).abs() < 0.5 && (start.1 - open.1).abs() < 0.5, msg="open \{Repr(open)}, floating starts \{Repr(start)}")
 }
 
 ///|
@@ -811,9 +811,9 @@ test "an update in each sidebar keeps its corner and press room on medium and la
         t.run_for(@ui.move_most_ms)
       }
       let corners = t.corner_faults()
-      assert_true(corners.is_empty(), msg="\{win.0} \{mode}: \{corners}")
+      assert_true(corners.is_empty(), msg="\{win.0} \{mode}: \{Repr(corners)}")
       let rooms = t.room_faults().filter(fn(f) { f.contains("正在下载") })
-      assert_true(rooms.is_empty(), msg="\{win.0} \{mode}: \{rooms}")
+      assert_true(rooms.is_empty(), msg="\{win.0} \{mode}: \{Repr(rooms)}")
     }
   }
 }
@@ -878,7 +878,7 @@ test "wide: a downloading update's ring sits in the middle of its key, as the fi
   let (mx, my) = ((left + right) / 2.0, (top + bottom) / 2.0)
   assert_true(
     (mx - (x + w / 2.0)).abs() < 0.5 && (my - (y + h / 2.0)).abs() < 0.5,
-    msg="the ring's middle \{(mx, my)}, the key's \{(x + w / 2.0, y + h / 2.0)}",
+    msg="the ring's middle \{Repr((mx, my))}, the key's \{Repr((x + w / 2.0, y + h / 2.0))}",
   )
 }
 
@@ -925,8 +925,8 @@ test "wide: 重启更新 a mark alone, its tip as the pointer rests on it says w
   let tip = said("重启以更新到 0.1.9999")
   assert_eq(tip.length(), 1, msg="its tip: \{t.words().map(fn(w) { w.0 }).join("|")}")
   // under the key, in the window
-  assert_true(tip[0].2 >= y + h, msg="\{tip[0]} under \{y + h}")
-  assert_true(tip[0].1 >= 0.0, msg="\{tip[0]}")
+  assert_true(tip[0].2 >= y + h, msg="\{Repr(tip[0])} under \{y + h}")
+  assert_true(tip[0].1 >= 0.0, msg="\{Repr(tip[0])}")
   // pressed, still.fail cloud asked first: the key stays, under way, said so
   @sfbase.update.checking.set(true)
   t.frame()

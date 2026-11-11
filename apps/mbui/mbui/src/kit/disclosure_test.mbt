@@ -263,37 +263,37 @@ test "accordion: a fold opening is laid out open at once, what is under it drawn
   // (it goes down through more than a few places to where it is laid out, never back up, and A's red is shown down to
   // the line over B's trigger all the way: what is under it neither left as a gap nor drawn over)
   let places = opening.map(fn(s) { s.0 })
-  assert_true(places.filter(fn(y) { y > 41.0 && y < 133.0 }).length() > 3, msg="\{places}")
+  assert_true(places.filter(fn(y) { y > 41.0 && y < 133.0 }).length() > 3, msg="\{Repr(places)}")
   assert_eq(places[places.length() - 1], 133.0)
   for k, s in opening {
     if k > 0 {
-      assert_true(s.0 >= opening[k - 1].0, msg="\{places}")
+      assert_true(s.0 >= opening[k - 1].0, msg="\{Repr(places)}")
     }
     match s.1 {
       // (shown down to the line over B's trigger: the whole of it once that is past its foot, 120 down)
-      Some(cut) => assert_true((red_shown(cut) - red_shown(s.0 - 1.0)).abs() <= 0.5, msg="\{s}")
-      None => fail("A's red not drawn as it opens: \{opening}")
+      Some(cut) => assert_true((red_shown(cut) - red_shown(s.0 - 1.0)).abs() <= 0.5, msg="\{Repr(s)}")
+      None => fail("A's red not drawn as it opens: \{Repr(opening)}")
     }
   }
-  assert_eq(built, [], msg="built for the clock: \{built}")
+  assert_eq(built, [], msg="built for the clock: \{Repr(built)}")
   // closing: laid out shut at once, B's trigger going up from where it was, A's red going in under it
   t.act(@ui.Role::Button, @ui.Action::Activate, label="A")
   assert_eq(v.val, [])
   assert_eq(t.get(@ui.Role::Button, label="B").rect.1, 41.0)
   let (closing, built) = fold_frames(t, @kit.collapsible_close_ms)
   let places = closing.map(fn(s) { s.0 })
-  assert_true(places.filter(fn(y) { y > 41.0 && y < 133.0 }).length() > 3, msg="\{places}")
+  assert_true(places.filter(fn(y) { y > 41.0 && y < 133.0 }).length() > 3, msg="\{Repr(places)}")
   for k, s in closing {
     if k > 0 {
-      assert_true(s.0 <= closing[k - 1].0, msg="\{places}")
+      assert_true(s.0 <= closing[k - 1].0, msg="\{Repr(places)}")
     }
     match s.1 {
       // (shown down to the line over B's trigger: the whole of it once that is past its foot, 120 down)
-      Some(cut) => assert_true((red_shown(cut) - red_shown(s.0 - 1.0)).abs() <= 0.5, msg="\{s}")
-      None => assert_eq(s.0, 41.0, msg="A's red gone before B's trigger is up: \{closing}")
+      Some(cut) => assert_true((red_shown(cut) - red_shown(s.0 - 1.0)).abs() <= 0.5, msg="\{Repr(s)}")
+      None => assert_eq(s.0, 41.0, msg="A's red gone before B's trigger is up: \{Repr(closing)}")
     }
   }
   assert_eq(b_at(), shut)
-  assert_eq(built, [], msg="built for the clock: \{built}")
+  assert_eq(built, [], msg="built for the clock: \{Repr(built)}")
   t.assert_idle()
 }

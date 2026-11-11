@@ -69,7 +69,7 @@ test "way_line_node: at each width, the same steps left out and the rest where t
   for w in [360.0, 240.0, 170.0, 110.0] {
     let t = ways_tester(w, [])
     let (old, new) = (ways_words(t, 0.0), ways_words(t, 400.0))
-    assert_eq(new, old, msg="\{w} wide: new \{new} old \{old}")
+    assert_eq(new, old, msg="\{w} wide: new \{Repr(new)} old \{Repr(old)}")
   }
 }
 
@@ -107,7 +107,7 @@ test "way_line_node: at each width, its chevrons and all else drawn where the ol
     let t = ways_tester(w, [])
     let (old, new) = (ways_drawn(t, 0.0), ways_drawn(t, 400.0))
     let (only_new, only_old) = (new.filter(fn(x) { !old.contains(x) }), old.filter(fn(x) { !new.contains(x) }))
-    assert_eq(new, old, msg="\{w} wide: new \{only_new} old \{only_old}")
+    assert_eq(new, old, msg="\{w} wide: new \{Repr(only_new)} old \{Repr(only_old)}")
   }
 }
 
@@ -136,11 +136,11 @@ test "way_line_node: its … offers the steps left out, in their order, where th
     }
     let old = offered(100.0)
     let new = offered(500.0)
-    assert_eq(new, old, msg="\{w} wide: new \{new} old \{old}")
-    assert_eq(went.length(), 2, msg="\{w} wide: \{went}")
-    assert_eq(went[1], 100 + went[0], msg="\{w} wide: \{went}")
+    assert_eq(new, old, msg="\{w} wide: new \{Repr(new)} old \{Repr(old)}")
+    assert_eq(went.length(), 2, msg="\{w} wide: \{Repr(went)}")
+    assert_eq(went[1], 100 + went[0], msg="\{w} wide: \{Repr(went)}")
     // (the last offered is the last left out: the step before the last but one's, left out at either width)
-    assert_true(went[0] >= 1 && went[0] <= 3, msg="\{w} wide: \{went}")
+    assert_true(went[0] >= 1 && went[0] <= 3, msg="\{w} wide: \{Repr(went)}")
   }
 }
 

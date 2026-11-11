@@ -34,7 +34,7 @@ test "a need let go: its card goes as its room closes, what is over it coming do
   let need = @sffixture.need_state.2
   let said = "已忽略：" + need
   let above = "你在手机上试一下新的列表，有问题截个图给我。"
-  guard t.rect_of(need) is Some((_, need_y, _, _)) else { fail("no need: \{t.words().map(fn(w) { w.0 })}") }
+  guard t.rect_of(need) is Some((_, need_y, _, _)) else { fail("no need: \{Repr(t.words().map(fn(w) { w.0 }))}") }
   // (its 忽略 the last on the page: the card at the list's end)
   let (dx, dy) = t.find_last("忽略").unwrap()
   assert_true((dy - need_y).abs() < 20.0, msg="\{dy} \{need_y}")
@@ -58,7 +58,7 @@ test "a need let go: its card goes as its room closes, what is over it coming do
   }
   assert_true(last > was + 1.0, msg="\{was} \{last}")
   // how it went, whole, where the card was; its 忽略 gone with it (the options card's further up stays)
-  assert_true(seen().contains(said), msg="\{seen()}")
+  assert_true(seen().contains(said), msg="\{Repr(seen())}")
   assert_true(!seen().contains(need))
-  assert_true(t.words().iter().all(fn(w) { w.0 != "忽略" || w.5 == 0.0 || w.2 < last }), msg="\{t.words()}")
+  assert_true(t.words().iter().all(fn(w) { w.0 != "忽略" || w.5 == 0.0 || w.2 < last }), msg="\{Repr(t.words())}")
 }

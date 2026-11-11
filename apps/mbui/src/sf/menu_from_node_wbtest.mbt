@@ -64,14 +64,14 @@ test "a menu opened beside a node stands beside it, follows it as it moves, and 
   assert_true(t.find("摆着") is Some(_) && t.find("收着") is None)
   // (under it, the button's whole height down at least)
   let (_, y1, _, _) = t.rect_of("一").unwrap()
-  assert_true(y1 > by + bh, msg="\{(by, bh, y1)}")
+  assert_true(y1 > by + bh, msg="\{Repr((by, bh, y1))}")
   // the node moved: the menu with it, as far
   down.set(80.0)
   t.run_for(@ui.move_most_ms)
   let (_, by2, _, _) = t.rect_of("开").unwrap()
   let (_, y2, _, _) = t.rect_of("一").unwrap()
-  assert_true((by2 - by - 80.0).abs() < 0.5, msg="\{(by, by2)}")
-  assert_true((y2 - y1 - 80.0).abs() < 0.5, msg="\{(y1, y2)}")
+  assert_true((by2 - by - 80.0).abs() < 0.5, msg="\{Repr((by, by2))}")
+  assert_true((y2 - y1 - 80.0).abs() < 0.5, msg="\{Repr((y1, y2))}")
   // closed: the focus on the node that opened it
   t.key(@ui.key_escape)
   t.run_for(@ui.move_most_ms)

@@ -78,7 +78,7 @@ test "what was refused as it is says why, and 编辑 in place of 重试 puts its
   assert_eq(named(calls, "chat.retry").length(), 0)
   // (its words in the composer's field, to be sent anew)
   let typed = named(calls, "composer.text").map(fn(m) { text(Some(m.params), "text") })
-  assert_true(typed.contains("这条还在路上"), msg="\{typed}")
+  assert_true(typed.contains("这条还在路上"), msg="\{Repr(typed)}")
 }
 
 ///|
@@ -113,6 +113,6 @@ test "once the station has it, what was sent says its time under it, not 正在�
   let t = outbox_chat(calls, outgoing("sent"))
   t.run_for(@sfpages.sending_shows_ms)
   assert_true(!outbox_seen(t, "正在发送"))
-  assert_true(outbox_seen(t, "刚刚"), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(outbox_seen(t, "刚刚"), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   assert_true(t.find("未发送") is None)
 }

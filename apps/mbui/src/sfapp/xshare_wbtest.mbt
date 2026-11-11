@@ -96,7 +96,7 @@ test "分享给其他 workspace on a phone: its rows a finger's, 完成 across t
   let (x, y, w, h) = t.rect_of("完成").unwrap()
   let (cx, cy) = (x + w / 2.0, y + h / 2.0)
   let grounds = t.drawn_rects().filter(fn(r) { r.0 <= cx && cx <= r.0 + r.2 && r.1 <= cy && cy <= r.1 + r.3 && r.3 < 60.0 })
-  assert_true(grounds.iter().any(fn(r) { r.2 >= 390.0 - 2.0 * 24.0 }), msg="完成 not across the sheet: \{grounds}")
+  assert_true(grounds.iter().any(fn(r) { r.2 >= 390.0 - 2.0 * 24.0 }), msg="完成 not across the sheet: \{Repr(grounds)}")
 }
 
 ///|
@@ -363,7 +363,7 @@ test "分享给其他 workspace: each workspace a row, its box, its mark and its
       let box = t.get(Checkbox, label=name).rect
       // its letter (the mark of a workspace with none) on its name's line, before it, its box before that
       let letter = t.words().iter().find_first(fn(w) { w.0 == first && (w.2 + w.4 / 2.0 - mid(words)).abs() < 1.5 })
-      assert_true(letter is Some(l) && l.1 + l.3 <= words.0 && box.0 + box.2 <= l.1, msg="\{about}: \{name} \{words}, its letter \{letter}, its box \{box}")
+      assert_true(letter is Some(l) && l.1 + l.3 <= words.0 && box.0 + box.2 <= l.1, msg="\{about}: \{name} \{words}, its letter \{Repr(letter)}, its box \{box}")
       assert_true((mid(box) - mid(words)).abs() < 1.0, msg="\{about}: \{name} \{words}, its box \{box}")
       // (its box by the panel's words' line: its row out by a row's room, 12, its box in by its corner)
       assert_true((box.0 - lead.0).abs() < 12.0, msg="\{about}: \{name}'s box \{box}, the lead \{lead}")
@@ -376,11 +376,11 @@ test "分享给其他 workspace: each workspace a row, its box, its mark and its
     assert_true(switch.0 > write.0 + write.2 && switch.0 + switch.2 <= lead.0 + lead.2 + 0.5, msg="\{about}: \{switch}, \{write}, \{lead}")
     // 完成 last: across a sheet's middle; at a dialog's end
     let done = xshare_word(t, "完成")
-    assert_true(done.1 > note.1 + note.3, msg="\{about}: \{done}, \{note}")
+    assert_true(done.1 > note.1 + note.3, msg="\{about}: \{done}, \{Repr(note)}")
     if screen.1 {
-      assert_true(done.0 + done.2 > lead.0 + lead.2 - 40.0, msg="\{about}: \{done}, \{lead}")
+      assert_true(done.0 + done.2 > lead.0 + lead.2 - 40.0, msg="\{about}: \{Repr(done)}, \{Repr(lead)}")
     } else {
-      assert_true((done.0 + done.2 / 2.0 - (lead.0 + lead.2 / 2.0)).abs() < 1.0, msg="\{about}: \{done}, \{lead}")
+      assert_true((done.0 + done.2 / 2.0 - (lead.0 + lead.2 / 2.0)).abs() < 1.0, msg="\{about}: \{Repr(done)}, \{Repr(lead)}")
     }
   }
 }

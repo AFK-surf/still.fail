@@ -252,7 +252,7 @@ test "a station's backups are one row of its 设置, 备份, nothing to press; a
     let pairs = r.corner_pairs().filter(fn(p) { p.contains("恢复到这台") })
     assert_true(pairs.length() > 0, msg="the button counted in the card's corner: \{at}")
     let faults = r.corner_faults().filter(fn(f) { f.contains("恢复到这台") })
-    assert_true(faults.length() == 0, msg="concentric with the card's corner: \{at} \{faults}")
+    assert_true(faults.length() == 0, msg="concentric with the card's corner: \{at} \{Repr(faults)}")
     // (read whole before the next is made: a Tester read after another was made reads the other's frame, tester_own.mbt;
     // the next made as the settings begin anew, @settings.reset)
     @settings.station_parts["ws1/st1"] = "overview"
@@ -847,7 +847,7 @@ fn ground_round(t : @ui.Tester, r : (Double, Double, Double, Double)) -> (Double
   }
   match best {
     Some(b) => b
-    None => fail("no ground round \{r}")
+    None => fail("no ground round \{Repr(r)}")
   }
 }
 
@@ -1265,7 +1265,7 @@ fn sp_seen(t : @ui.Tester, s : String, h? : Double = 844.0) -> Array[(String, Do
 /// The one `s` drawn and seen, at `at`.
 fn sp_one(t : @ui.Tester, s : String, at : String) -> (String, Double, Double, Double, Double, Double) raise {
   let w = sp_seen(t, s)
-  guard w.length() == 1 else { fail("\{at}: \{s}: \{w}") }
+  guard w.length() == 1 else { fail("\{at}: \{s}: \{Repr(w)}") }
   w[0]
 }
 
@@ -1432,7 +1432,7 @@ test "an account kind's panel closes as the station comes to list no such kind, 
       // (on each frame of its way out all of it, each where it was from the first, or none; never 没有匹配的结果)
       let now = places()
       let drawn = now.filter(fn(p) { p is Some(_) }).length()
-      assert_true(drawn == 0 || drawn == seen.length(), msg="\{at}: frame \{n}: \{drawn} of \{seen}")
+      assert_true(drawn == 0 || drawn == seen.length(), msg="\{at}: frame \{n}: \{drawn} of \{Repr(seen)}")
       assert_eq(t.words().filter(fn(w) { w.0 == "没有匹配的结果" && w.5 > 0.0 }).length(), 0, msg="\{at}: frame \{n}")
       // (a sheet goes down whole; beside its row, it shrinks as it goes)
       if drawn > 0 && !wide {

@@ -42,7 +42,7 @@ pub(all) struct WordsOverAt {
   x : Double
   y : Double
   leaving : Bool
-} derive(Eq, Show)
+} derive(Eq, Show, Debug)
 
 ///|
 // kept across runs: begun anew by each Tester (words_over_begin)

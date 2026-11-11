@@ -107,7 +107,7 @@ test "a sheet's foot of nodes: both buttons' words more than the foot has room f
     let at = "place \{place}"
     let (old, old_cut) = foot_keeps_stood(true, first, second, 1.3, place)
     let (new, cut) = foot_keeps_stood(false, first, second, 1.3, place)
-    assert_eq(new, old, msg="\{at}: old \{old} cut \{old_cut}; new \{new} cut \{cut}")
+    assert_eq(new, old, msg="\{at}: old \{Repr(old)} cut \{Repr(old_cut)}; new \{Repr(new)} cut \{Repr(cut)}")
   }
 }
 
@@ -121,7 +121,7 @@ test "a dialog's foot in the middle of a window and a panel's beside what opened
         let at = "\{about}, place \{place}, \{second}"
         let (old, old_cut) = foot_keeps_stood(true, first, second, 1.3, place, at=(0, 800.0, 600.0), beside~)
         let (new, cut) = foot_keeps_stood(false, first, second, 1.3, place, at=(0, 800.0, 600.0), beside~)
-        assert_eq(new, old, msg="\{at}: old \{old} cut \{old_cut}; new \{new} cut \{cut}")
+        assert_eq(new, old, msg="\{at}: old \{Repr(old)} cut \{Repr(old_cut)}; new \{Repr(new)} cut \{Repr(cut)}")
       }
     }
   }

@@ -1143,13 +1143,13 @@ pub fn orders(flow : (UInt) -> String raise) -> Unit raise {
   let healed = known.filter(fn(r) { !split_at.contains(r) })
   if unknown.length() > 0 {
     fail(
-      "flow \{pass_trace.val}: its pace pass splits from the strict pass at \{unknown} a second, not known (pace_known.mbt): " +
+      "flow \{pass_trace.val}: its pace pass splits from the strict pass at \{Repr(unknown)} a second, not known (pace_known.mbt): " +
       said.join(" || "),
     )
   }
   if healed.length() > 0 {
     fail(
-      "flow \{pass_trace.val}: its pace pass at \{healed} a second no longer splits: take it out of pace_splits_known (pace_known.mbt)",
+      "flow \{pass_trace.val}: its pace pass at \{Repr(healed)} a second no longer splits: take it out of pace_splits_known (pace_known.mbt)",
     )
   }
 }

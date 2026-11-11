@@ -207,7 +207,7 @@ test "a frame that moves only its headers is left out of as all of it asked agai
     groups(fresh)
     let (s0, n0) = fresh.occlude(a, 7, 400.0, 300.0)
     let moved = d.occlude_moved(a, 7, 400.0, 300.0, [1, 5]).map(fn(o) { shown(o.0, o.1) })
-    assert_eq(moved, Some(shown(s0, n0)), msg="\{p}")
+    assert_eq(moved, Some(shown(s0, n0)), msg="\{Repr(p)}")
   }
   // (a group set again: asked whole)
   groups(d)

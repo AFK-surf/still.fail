@@ -86,8 +86,8 @@ test "a cover over an old view's button, held still past a long press: its own h
 ///|
 test "a cover over an old view's button made anew by another name before a long press: nothing handed to the new one, the cover's a hold still (no tap)" {
   let said = old_through(true)
-  assert_false(said.iter().any(fn(s) { s.has_prefix("a ") || s.has_prefix("b ") }), msg="\{said}")
-  assert_false(said.contains("cover tap"), msg="\{said}")
+  assert_false(said.iter().any(fn(s) { s.has_prefix("a ") || s.has_prefix("b ") }), msg="\{Repr(said)}")
+  assert_false(said.contains("cover tap"), msg="\{Repr(said)}")
 }
 
 ///|

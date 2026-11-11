@@ -79,7 +79,7 @@ test "presses said to be an area's that is drawn nowhere: said, where (what a Te
   )
   t.draw()
   let said = t.presses_unheld()
-  assert_eq(said.length(), 1, msg="\{said}")
+  assert_eq(said.length(), 1, msg="\{Repr(said)}")
   assert_true(said[0].has_prefix("Ctx::presses_to: area "), msg=said[0])
   assert_true(said[0].contains(", said at src/ui/presses_test.mbt:"), msg=said[0])
   assert_true(said[0].has_suffix(", takes no presses where its box is (0,0 50x50)"), msg=said[0])

@@ -38,11 +38,11 @@ test "scrolling within the visible rows moves their drawing and hit without anot
   let layouts = @flex.computes() - computes
   let why = t.built_why()
   assert_eq(t.visible(), first, msg="the scroll must not expose another row")
-  assert_true(after.1 < before.1, msg="the row must move: \{before} -> \{after}")
+  assert_true(after.1 < before.1, msg="the row must move: \{Repr(before)} -> \{Repr(after)}")
   assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == 0x224466FFL && (r.1 - after.1).abs() < 0.01 }), msg="the moved row must be drawn at its new position")
   t.tap_once(100.0, after.1 + 20.0)
   assert_eq(pressed, [2], msg="the moved row must be hit at its new position")
-  assert_eq(layouts, 0, msg="no row entered and no size changed, but flex was run \{layouts} times; why: \{why}; state: \{state}; dirty: \{dirty}")
+  assert_eq(layouts, 0, msg="no row entered and no size changed, but flex was run \{layouts} times; why: \{why}; state: \{Repr(state)}; dirty: \{dirty}")
 }
 
 ///|
@@ -163,7 +163,7 @@ test "a view that reads the list's place is updated when the list scrolls" {
   t.wheel_told(100.0, 100.0, 0.0, 5.0, 0, at + 17.0)
   t.frame_at(at + 32.0)
   let after = place.val.unwrap()
-  assert_true(after.1 > before.1, msg="the place read by the view must follow the scroll: \{before} -> \{after}")
+  assert_true(after.1 > before.1, msg="the place read by the view must follow the scroll: \{Repr(before)} -> \{Repr(after)}")
 }
 
 ///|
@@ -227,7 +227,7 @@ test "a scroll updates the list place observed after the build" {
   let baseline = place_report_after_scroll(false)
   let kept = place_report_after_scroll(true)
   println("AFTER_BUILD_PLACE ordinary=\{baseline} retained=\{kept}")
-  assert_true(baseline.1.1 > baseline.0.1, msg="the ordinary path must observe the new place: \{baseline}")
+  assert_true(baseline.1.1 > baseline.0.1, msg="the ordinary path must observe the new place: \{Repr(baseline)}")
   assert_eq(kept, baseline, msg="the kept path must report the same places as the ordinary path")
 }
 

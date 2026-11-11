@@ -32,10 +32,10 @@ test "activity: the first words of a newly seen turn arrive a glyph at a time" {
   assert_true(at >= 0.0 && at < @double.infinity, msg="\{at}")
   t.run_for(dmax(at - t.time(), 0.0) + @sfbase.glyph_line_in_ms / 2.0)
   let alphas = activity_glyph_alphas(t, tr("android-chat.chat.working"))
-  assert_true(alphas.length() > 1 && alphas.iter().any(fn(a) { a != alphas[0] }), msg="\{alphas}")
+  assert_true(alphas.length() > 1 && alphas.iter().any(fn(a) { a != alphas[0] }), msg="\{Repr(alphas)}")
   t.run_for(@ui.move_most_ms + @sfbase.glyph_line_in_ms)
   let alphas = activity_glyph_alphas(t, tr("android-chat.chat.working"))
-  assert_true(alphas.length() > 1 && alphas.iter().all(fn(a) { a == alphas[0] }), msg="\{alphas}")
+  assert_true(alphas.length() > 1 && alphas.iter().all(fn(a) { a == alphas[0] }), msg="\{Repr(alphas)}")
 }
 
 ///|
@@ -107,10 +107,10 @@ test "activity: a step changes glyphs individually before the next step is whole
   // The next step is first held long enough to exclude one that vanishes during its own arrival.
   t.run_for(@sfbase.glyph_change_in_ms + @sfbase.glyph_change_in_ms / 2.0)
   let alphas = activity_glyph_alphas(t, activity_next_words)
-  assert_true(alphas.length() > 1 && alphas.iter().any(fn(a) { a != alphas[0] }), msg="\{alphas}")
+  assert_true(alphas.length() > 1 && alphas.iter().any(fn(a) { a != alphas[0] }), msg="\{Repr(alphas)}")
   t.run_for(@ui.move_most_ms + @sfbase.glyph_change_in_ms)
   let final_alphas = activity_glyph_alphas(t, activity_next_words)
-  assert_true(final_alphas.length() > 1 && final_alphas.iter().all(fn(a) { a == final_alphas[0] }), msg="\{final_alphas}")
+  assert_true(final_alphas.length() > 1 && final_alphas.iter().all(fn(a) { a == final_alphas[0] }), msg="\{Repr(final_alphas)}")
 }
 
 ///|
@@ -140,7 +140,7 @@ fn activity_glyphs_do_not_collide(before : String, next : String) -> Unit raise 
       for j in (i + 1)..<glyphs.length() {
         let a = glyphs[i]
         let b = glyphs[j]
-        assert_true(a.2 <= b.0 + 0.01 || b.2 <= a.0 + 0.01 || a.3 <= b.1 + 0.01 || b.3 <= a.1 + 0.01, msg="\{before} → \{next} at \{t.time()}: \{a} / \{b}")
+        assert_true(a.2 <= b.0 + 0.01 || b.2 <= a.0 + 0.01 || a.3 <= b.1 + 0.01 || b.3 <= a.1 + 0.01, msg="\{before} → \{next} at \{t.time()}: \{Repr(a)} / \{Repr(b)}")
       }
     }
   }

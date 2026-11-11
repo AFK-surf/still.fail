@@ -26,12 +26,12 @@ test "a checklist's long item wraps within its column, never wider than it, at t
     })
     t.run_for(@ui.move_most_ms)
     let at = "at \{scale}"
-    guard t.words().iter().find_first(fn(w) { w.0 == long }) is Some(w) else { fail("\{at}: \{t.words()}") }
+    guard t.words().iter().find_first(fn(w) { w.0 == long }) is Some(w) else { fail("\{at}: \{Repr(t.words())}") }
     guard t.words().iter().find_first(fn(w) { w.0 == "截图" }) is Some(one) else { fail(at) }
     // wrapped: more than one line, as high as two of a short item's at least
-    assert_true(w.4 >= one.4 * 2.0 - 0.5, msg="\{at}: \{w} \{one}")
+    assert_true(w.4 >= one.4 * 2.0 - 0.5, msg="\{at}: \{Repr(w)} \{Repr(one)}")
     // within its column: after its mark, ending at the column's end at most
-    assert_true(w.1 + w.3 <= column + 0.01, msg="\{at}: \{w} past \{column}")
+    assert_true(w.1 + w.3 <= column + 0.01, msg="\{at}: \{Repr(w)} past \{column}")
     assert_eq(t.room_faults() + t.tree_room_faults() + t.squeeze_faults(), [], msg=at)
   }
 }

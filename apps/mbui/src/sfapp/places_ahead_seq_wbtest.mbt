@@ -202,6 +202,6 @@ test "the other bar brought into view once: its places' own subscribed, what onl
   t.draw()
   t.run_for(place_core_soon_ms * 4.0)
   let now = ahead_said(said[before:].to_owned())
-  assert_false(now.contains("unsub stations") || now.contains("sub stations"), msg="\{now}")
+  assert_false(now.contains("unsub stations") || now.contains("sub stations"), msg="\{Repr(now)}")
   assert_eq(now, ["sub connects {\"mine\":false}", "sub vaults", "unsub workspace", "unsub profiles"])
 }

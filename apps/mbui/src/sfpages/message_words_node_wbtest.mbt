@@ -352,11 +352,11 @@ test "the viewer's words in their bubble at the column's end, as wide as the com
     ).unwrap()
   }
   let b = bubble_of(t)
-  assert_true(b.2 <= mine_most_of(760.0) + 0.5, msg="\{b}")
-  assert_true((b.0 + b.2 - (760.0 - row_side(760.0))).abs() < 0.5, msg="at the column's end: \{b}")
+  assert_true(b.2 <= mine_most_of(760.0) + 0.5, msg="\{Repr(b)}")
+  assert_true((b.0 + b.2 - (760.0 - row_side(760.0))).abs() < 0.5, msg="at the column's end: \{Repr(b)}")
   // (its time under it, at its end too)
   let (tx, ty, tw, _) = t.rect_of("2 分钟前").unwrap()
-  assert_true(ty > b.1 + b.3 && (tx + tw - (b.0 + b.2)).abs() < 1.0, msg="\{(tx, ty, tw)} \{b}")
+  assert_true(ty > b.1 + b.3 && (tx + tw - (b.0 + b.2)).abs() < 1.0, msg="\{Repr((tx, ty, tw))} \{Repr(b)}")
   // narrowed: drawn so in the frame it is, as one made so
   now.set(390.0)
   t.resize(390.0, 320.0)
@@ -425,9 +425,9 @@ test "someone else's: their picture out in the margin before the name, the time 
   let (nx, ny, _, _) = t.rect_of("Ana").unwrap()
   let (tx, ty, _, _) = t.rect_of("2 分钟前").unwrap()
   let (wx, wy, _, _) = t.rect_of("安装包签名已经核对完了，发布说明在").unwrap()
-  assert_true(nx < tx && (ty - ny).abs() < 4.0 && wy > ny && wx < tx, msg="\{(nx, ny, tx, ty, wx, wy)}")
+  assert_true(nx < tx && (ty - ny).abs() < 4.0 && wy > ny && wx < tx, msg="\{Repr((nx, ny, tx, ty, wx, wy))}")
   let picture = t.drawn_rects().filter(fn(r) { r.2 == 18.0 && r.3 == 18.0 })
-  assert_true(picture.length() == 1 && picture[0].0 + picture[0].2 <= nx, msg="\{picture}")
+  assert_true(picture.length() == 1 && picture[0].0 + picture[0].2 <= nx, msg="\{Repr(picture)}")
   guard made.val is Some(row) else { fail("no row") }
   assert_eq(row.key, "m:ts5")
   assert_true(row.node.alive())
@@ -536,7 +536,7 @@ test "its ⋯ opens the message's menu beside it, the row saying so; closed with
   assert_false((row.menu_on)())
   assert_true(said_more(t) is None)
   // (its menu opened by the pointer, nothing had the focus: none has it as it closes, none left on a ⋯ gone)
-  assert_true(t.focused() is None, msg="\{t.focused().map(fn(s) { s.label })}")
+  assert_true(t.focused() is None, msg="\{Repr(t.focused().map(fn(s) { s.label }))}")
   // chosen: its turn shared
   t.move_to(wx, wy)
   t.run_for(@ui.move_most_ms)
@@ -603,13 +603,13 @@ test "under the viewer's message, its time gives way to the runtime it waits for
     t.run_for(@ui.move_most_ms)
     turned.push(head_drawn(t))
     let faults = said_audit(t, 0)
-    assert_true(faults.is_empty(), msg="\{step}: " + faults.join(" | "))
+    assert_true(faults.is_empty(), msg="\{Repr(step)}: " + faults.join(" | "))
   }
   for i, step in steps {
     let (blocked, waiting) = step
     let made = said_new_row(760.0, fn() { said_msg(mine=true, blocked~, waiting~) })
     made.run_for(@ui.move_most_ms)
-    assert_eq(turned[i], head_drawn(made), msg="\{step}")
+    assert_eq(turned[i], head_drawn(made), msg="\{Repr(step)}")
   }
 }
 
@@ -620,7 +620,7 @@ test "a name pressed shorter than a press's room has room of its own, its time a
     t.run_for(@ui.move_most_ms)
     let (nx, _, nw, _) = t.rect_of("Ana").unwrap()
     let (tx, _, _, _) = t.rect_of("2 分钟前").unwrap()
-    assert_true((tx - (nx + @ui.room_least() - msg_head_gap + msg_head_gap)).abs() < 0.5, msg="platform \{platform}: \{(nx, nw, tx)}")
+    assert_true((tx - (nx + @ui.room_least() - msg_head_gap + msg_head_gap)).abs() < 0.5, msg="platform \{platform}: \{Repr((nx, nw, tx))}")
     let faults = said_audit(t, 0)
     assert_true(faults.is_empty(), msg="platform \{platform}: " + faults.join(" | "))
   }
@@ -629,5 +629,5 @@ test "a name pressed shorter than a press's room has room of its own, its time a
   t.run_for(@ui.move_most_ms)
   let (nx, _, nw, _) = t.rect_of("Ana").unwrap()
   let (tx, _, _, _) = t.rect_of("2 分钟前").unwrap()
-  assert_true((tx - (nx + nw + msg_head_gap)).abs() < 0.5, msg="\{(nx, nw, tx)}")
+  assert_true((tx - (nx + nw + msg_head_gap)).abs() < 0.5, msg="\{Repr((nx, nw, tx))}")
 }

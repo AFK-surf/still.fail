@@ -43,7 +43,7 @@ test "a binding a layout tells again in every layout it is laid out by: given it
   })
   assert_true(
     faults.length() == 1 && faults[0].contains("left with no frame asked for it"),
-    msg="faults told: \{faults}, the binding run \{runs.val} times",
+    msg="faults told: \{Repr(faults)}, the binding run \{runs.val} times",
   )
   // (bounded: in each of the three frames, as it is due and once a pass, the passes at most four)
   assert_true(runs.val >= 2 && runs.val <= 20, msg="the binding run \{runs.val} times")

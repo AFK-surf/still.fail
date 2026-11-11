@@ -1053,7 +1053,7 @@ test "cubicBezier: its output matches points on the curve" {
       let dx = 3.0 * (1.0 - t) * (1.0 - t) * x1 + 6.0 * (1.0 - t) * t * (x2 - x1) + 3.0 * t * t * (1.0 - x2)
       let dy = 3.0 * (1.0 - t) * (1.0 - t) * y1 + 6.0 * (1.0 - t) * t * (y2 - y1) + 3.0 * t * t * (1.0 - y2)
       let tolerance = 1.0e-9 + 1.0e-9 * (dy / dmax_(dx, 1.0e-6)).abs()
-      assert_true((ease(x) - expected).abs() < tolerance, msg="\{c} at \{t}")
+      assert_true((ease(x) - expected).abs() < tolerance, msg="\{Repr(c)} at \{t}")
     }
   }
 }
@@ -1176,9 +1176,9 @@ test "a Compose spring and its Motion physics are the same oscillator" {
       for t in [0.0, 16.0, 50.0, 120.0, 300.0, 700.0] {
         let (x, xv) = @motion.spring_at(ratio, k, from - to, v, t / 1000.0)
         let s = g.next(t)
-        assert_true((s.value - (to + x)).abs() < 1.0e-9 * dmax1((from - to).abs()), msg="\{c} \{start} \{t}: \{s.value} \{to + x}")
+        assert_true((s.value - (to + x)).abs() < 1.0e-9 * dmax1((from - to).abs()), msg="\{Repr(c)} \{Repr(start)} \{t}: \{s.value} \{to + x}")
         if t > 0.0 {
-          assert_true((g.velocity(t) - xv).abs() < 1.0e-6 * dmax1(xv.abs()), msg="v \{c} \{start} \{t}")
+          assert_true((g.velocity(t) - xv).abs() < 1.0e-6 * dmax1(xv.abs()), msg="v \{Repr(c)} \{Repr(start)} \{t}")
         }
       }
     }
@@ -1197,7 +1197,7 @@ test "Motion.kt's motionSpring is Motion's spring by visual duration and bounce"
     let (visual, bounce) = c
     let (ratio, k) = @motion.visual_to_compose(visual, bounce)
     match @motion.motion_spring(visual, bounce~) {
-      Spring(r, k2, _, _) => assert_true((r - ratio).abs() < 1.0e-12 && (k2 - k).abs() < 1.0e-9, msg="\{c}")
+      Spring(r, k2, _, _) => assert_true((r - ratio).abs() < 1.0e-12 && (k2 - k).abs() < 1.0e-9, msg="\{Repr(c)}")
       _ => fail("a spring")
     }
   }

@@ -40,7 +40,7 @@ test "a Move drawn at the display's frames, 60 and 120 a second: at each frame w
       }
     }
     for i in (fastest + 1)..<steps.length() {
-      assert_true(steps[i] <= steps[i - 1], msg="at \{rate} a second, step \{i}: \{steps[i]} after \{steps[i - 1]} (\{steps})")
+      assert_true(steps[i] <= steps[i - 1], msg="at \{rate} a second, step \{i}: \{steps[i]} after \{steps[i - 1]} (\{Repr(steps)})")
     }
   }
 }

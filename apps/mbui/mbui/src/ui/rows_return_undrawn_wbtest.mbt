@@ -81,5 +81,5 @@ test "rows steady: the same walk, the row moving back drawn whole: its return sa
   }
   // (row 1 goes, row 100 coming in its place: row 0, whole, over them, down 30 and back up 50)
   let found = return_walk(1)
-  assert_true(found.iter().any(fn(f) { f.has_suffix("/r0 (list list)") }), msg="\{found}")
+  assert_true(found.iter().any(fn(f) { f.has_suffix("/r0 (list list)") }), msg="\{Repr(found)}")
 }

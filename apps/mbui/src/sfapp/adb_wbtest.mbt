@@ -52,11 +52,11 @@ test "共享调试 on a phone no chat holds: its switch and the chats alone, the
   t.draw()
   t.run_for(@ui.move_most_ms)
   let said = t.words().map(fn(w) { w.0 })
-  assert_true(t.find("重启手机、更新 app 后也保持开启") is Some(_), msg="\{said}")
+  assert_true(t.find("重启手机、更新 app 后也保持开启") is Some(_), msg="\{Repr(said)}")
   assert_true(t.find("已授权的对话") is Some(_))
   // (2026-11-11: what a person does not need here, gone) no grant live: nothing of the phone's lacks yet
   for gone in ["默认最长授权", "本机设置", "等你允许", "能批准手机调试的设备", "自动填配对码", "允许 app 自动开启无线调试", "打开开发者选项", "下一步"] {
-    assert_true(t.find(gone) is None, msg="\{gone}: \{said}")
+    assert_true(t.find(gone) is None, msg="\{gone}: \{Repr(said)}")
   }
   // its switch turns 共享调试 on for the chats' grants (the core's adb.on), never the host's lending to a station
   t.tap_text("重启手机、更新 app 后也保持开启")
@@ -205,8 +205,8 @@ test "a granted request on the phone: the first thing left a card under its line
     // (the line stops at what was allowed: the card says what is left)
     assert_true(t.find("已允许调试手机 · 本对话内") is Some(_), msg="\{mode}: \{said}")
     assert_true(t.find(title) is Some(_), msg="\{mode}: \{said}")
-    assert_true(line == "" || t.find(line) is Some(_), msg="\{mode}: \{said}")
-    assert_true(!said.contains("前往设置开启") && !said.contains("开启"), msg="\{mode}: \{said}")
+    assert_true(line == "" || t.find(line) is Some(_), msg="\{mode}: \{Repr(said)}")
+    assert_true(!said.contains("前往设置开启") && !said.contains("开启"), msg="\{mode}: \{Repr(said)}")
     let (x, y) = adb_button_at(t, title).unwrap()
     t.tap(x, y)
     t.draw()
@@ -222,7 +222,7 @@ test "a granted request on the phone: the first thing left a card under its line
   // the app may not turn Wireless debugging on as the phone refused it: which switch lets it, on the card
   let t = phone_chat("chat-phone-step-refused", adb_phone_of())
   assert_true(t.find("开启无线调试") is Some(_))
-  assert_true(t.words().iter().any(fn(w) { w.0.contains("禁止权限监控") }), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.words().iter().any(fn(w) { w.0.contains("禁止权限监控") }), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   // the pairing dialog open: its code typed in the app, asked for from the card
   let (t, calls) = phone_chat_calls("chat-phone-step-code")
   assert_true(t.find("输入配对码") is Some(_))
@@ -230,12 +230,12 @@ test "a granted request on the phone: the first thing left a card under its line
   t.tap(x, y)
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("配对码") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("配对码") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   assert_eq(calls.filter(fn(c) { c.0 == "adb.pair" }).length(), 0)
   // the phone's own prompt to allow: said, nothing to press
   let (t, calls) = phone_chat_calls("chat-phone-linked-unauthorized", phone=adb_phone_of(wireless=true))
   let prompt = "手机上弹出「允许 USB 调试吗？」时，点「允许」"
-  assert_true(t.find(prompt) is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find(prompt) is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   // pressed: nothing asked of the host or the core, nothing opened
   let (px, py) = t.find(prompt).unwrap()
   t.tap(px + 4.0, py + 4.0)
@@ -266,7 +266,7 @@ test "共享调试 of the second station a phone is lent to: its step first, nam
   assert_true(t.find("agent 可以使用 adb") is None)
   // the next step: its code, paired with this station, which it names (lent to two)
   assert_true(t.find("输入配对码") is Some(_))
-  assert_true(t.find("Maple") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("Maple") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   adb_done(t)
 }
 ///|
@@ -296,7 +296,7 @@ test "settings' 共享调试: unfinished setup stands out before routine setting
   t.post("native:adb.phone", adb_phone_of(developer=false, wifi=false).stringify())
   t.draw()
   assert_true(t.find("打开开发者选项") is Some(_))
-  assert_true(t.words().iter().any(fn(w) { w.0.contains("设置 › 关于手机") }), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.words().iter().any(fn(w) { w.0.contains("设置 › 关于手机") }), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   // its press: About phone, where Developer options are turned on
   t.tap_text("前往关于手机")
   t.draw()
@@ -317,7 +317,7 @@ test "settings' 共享调试: a request waiting is not on the page (its card in 
   let t = settings_tester("adb:", shows="settings-adb-chats", platform=2)
   assert_true(t.find("已授权的对话") is Some(_))
   assert_true(t.find("等你允许") is None)
-  assert_true(t.words().iter().all(fn(w) { !w.0.contains("看通知权限弹窗的文案") }), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.words().iter().all(fn(w) { !w.0.contains("看通知权限弹窗的文案") }), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
 }
 
 ///|
@@ -339,7 +339,7 @@ test "settings' 共享调试: grants show each chat, its reason and when it was 
   assert_eq(actions[1].1, actions[2].1)
   // Each action has a full touch target inside its own row.
   let rooms = t.room_faults()
-  assert_true(!rooms.iter().any(fn(f) { f.contains("「收回」") }), msg="\{rooms}")
+  assert_true(!rooms.iter().any(fn(f) { f.contains("「收回」") }), msg="\{Repr(rooms)}")
 }
 
 ///|
@@ -348,9 +348,9 @@ test "settings' 共享调试: the grants list keeps its spacing and each action 
     for lang in ["zh", "en"] {
       let t = screen_in("settings-adb-chats-long", win, lang)
       let gaps = t.gap_faults()
-      assert_true(gaps.is_empty(), msg="\{win.0}-\{lang}: \{gaps}")
+      assert_true(gaps.is_empty(), msg="\{win.0}-\{lang}: \{Repr(gaps)}")
       let rooms = t.room_faults().filter(fn(f) { f.contains("「收回」") || f.contains("「Take back」") })
-      assert_true(rooms.is_empty(), msg="\{win.0}-\{lang}: \{rooms}")
+      assert_true(rooms.is_empty(), msg="\{win.0}-\{lang}: \{Repr(rooms)}")
     }
   }
 }
@@ -431,7 +431,7 @@ test "settings' 共享调试: the phone that refused the app's grant: its step s
   t.draw()
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("开启无线调试") is Some(_))
-  assert_true(t.words().iter().any(fn(w) { w.0.contains("禁止权限监控") }), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.words().iter().any(fn(w) { w.0.contains("禁止权限监控") }), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   // the app let since: the switch's own press, no word of it
   t.post("native:adb.phone", adb_phone_of(can_switch=true, refused=true).stringify())
   t.draw()
@@ -467,16 +467,16 @@ test "a request on a device its person's trusted devices have not approved: 批�
 test "settings' 共享调试: a grant the phone does not lend keeps its title whole, what it says clear of 收回" {
   let t = settings_tester("adb:", shows="settings-adb-unsigned", platform=2)
   let title = t.rect_of("定时 · 每 15 分钟审 mbui 三条线").unwrap()
-  assert_true(title.2 > 200.0, msg="\{title}")
+  assert_true(title.2 > 200.0, msg="\{Repr(title)}")
   let said = t.words().filter(fn(w) { w.0 == "待确认" })
   let back = t.words().filter(fn(w) { w.0 == "收回" })
   assert_eq(said.length(), 1)
   assert_eq(back.length(), 1)
-  assert_true(said[0].1 + said[0].3 <= back[0].1, msg="\{said} \{back}")
+  assert_true(said[0].1 + said[0].3 <= back[0].1, msg="\{Repr(said)} \{Repr(back)}")
   // the card's link rows' words on the same line as the switch's
   let other = t.rect_of("重启手机、更新 app 后也保持开启").unwrap()
   assert_eq(title.0, other.0)
-  assert_true(t.room_faults().is_empty(), msg="\{t.room_faults()}")
+  assert_true(t.room_faults().is_empty(), msg="\{Repr(t.room_faults())}")
 }
 
 ///|
@@ -529,7 +529,7 @@ test "settings' 共享调试 on a device its person's trusted devices have not a
   t.tap_text("发送批准请求")
   t.draw()
   let asked = calls.filter(fn(call) { call.0 == "adb.personalJoin" })
-  assert_eq(asked.length(), 1, msg="\{calls.map(fn(call) { call.0 })}")
+  assert_eq(asked.length(), 1, msg="\{Repr(calls.map(fn(call) { call.0 }))}")
   assert_eq(asked[0].1, { "sub": "s" })
 }
 
@@ -541,7 +541,7 @@ test "settings' 共享调试: a device being approved types the code its trusted
   t.tap_text("MacBook Pro")
   t.type_text("123456")
   let typed = calls.filter(fn(call) { call.0 == "adb.personalCode" })
-  assert_eq(typed.length(), 1, msg="\{calls.map(fn(call) { call.0 })}")
+  assert_eq(typed.length(), 1, msg="\{Repr(calls.map(fn(call) { call.0 }))}")
   assert_eq(typed[0].1, { "code": "123456" })
 }
 
@@ -553,7 +553,7 @@ test "settings' 共享调试 on a device its person's trusted devices approved: 
   assert_true(t.find("能批准手机调试的设备") is None)
   assert_true(t.find("MacBook Pro") is None)
   assert_true(t.find("移除") is None)
-  assert_true(t.find("确认") is Some(_), msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("确认") is Some(_), msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
   assert_eq(calls.filter(fn(call) { call.0 == "adb.personalRemove" }).length(), 0)
 }
 
@@ -580,10 +580,10 @@ test "settings' 共享调试 on a phone's narrow page: what it is behind the ⓘ
   for w in [390.0, 320.0] {
     let (t, _) = adb_settings_calls("settings-adb-chats-long", w~)
     assert_true(t.find("agent 在对话里申请，你允许后只有那个对话能用。") is None)
-    guard adb_button_at(t, "说明") is Some((x, y)) else { fail("no ⓘ at \{w}: \{t.semantics().map(fn(s) { s.label })}") }
+    guard adb_button_at(t, "说明") is Some((x, y)) else { fail("no ⓘ at \{w}: \{Repr(t.semantics().map(fn(s) { s.label }))}") }
     // after the title, in the bar
     let (title_x, title_y) = t.find("共享调试").unwrap()
-    assert_true(x > title_x && (y - title_y).abs() < 20.0, msg="\{w}: \{(x, y)} \{(title_x, title_y)}")
+    assert_true(x > title_x && (y - title_y).abs() < 20.0, msg="\{w}: \{Repr((x, y))} \{Repr((title_x, title_y))}")
     t.tap(x, y)
     t.draw()
     t.run_for(@ui.move_most_ms)

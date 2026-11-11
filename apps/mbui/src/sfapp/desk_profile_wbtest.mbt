@@ -132,7 +132,7 @@ test "wide, by touch: the profiles' place opens on a page placed as it is laid o
   // (its sections' titles each across the page's column, none in a box of a few points)
   for words in ["额度", "可使用的 station"] {
     let wide = t.words().filter(fn(w) { w.0 == words }).map(fn(w) { w.3 })
-    assert_true(wide.length() == 1 && wide[0] > 200.0, msg="\{words}: \{wide} wide")
+    assert_true(wide.length() == 1 && wide[0] > 200.0, msg="\{words}: \{Repr(wide)} wide")
   }
 }
 

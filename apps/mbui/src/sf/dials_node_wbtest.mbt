@@ -40,12 +40,12 @@ fn dial_lines(t : @ui.Tester, dials : Array[Dial], w : Double, at : String) -> I
   let names = dials.map(fn(d) {
     match shown.filter(fn(x) { x.0 == d.label }) {
       [x] => x
-      found => @halt.saying("\{at}: \{d.label}: \{found} in \{shown.map(fn(x) { x.0 })}")
+      found => @halt.saying("\{at}: \{d.label}: \{Repr(found)} in \{Repr(shown.map(fn(x) { x.0 }))}")
     }
   })
   let drawn = t.text_runs().map(fn(r) { r.text })
-  guard drawn.iter().all(fn(s) { !s.has_suffix("…") }) else { @halt.saying("\{at}: cut: \{drawn}") }
-  guard shown.iter().all(fn(x) { x.1 >= 0.0 && x.1 + x.3 <= w + 0.01 }) else { @halt.saying("\{at}: past the window: \{shown}") }
+  guard drawn.iter().all(fn(s) { !s.has_suffix("…") }) else { @halt.saying("\{at}: cut: \{Repr(drawn)}") }
+  guard shown.iter().all(fn(x) { x.1 >= 0.0 && x.1 + x.3 <= w + 0.01 }) else { @halt.saying("\{at}: past the window: \{Repr(shown)}") }
   let tops : Array[Double] = []
   for n in names {
     if !tops.contains(n.2) {
@@ -56,7 +56,7 @@ fn dial_lines(t : @ui.Tester, dials : Array[Dial], w : Double, at : String) -> I
   for i, n in names {
     let per = (names.length() + tops.length() - 1) / tops.length()
     if i >= per {
-      guard (n.1 - names[i - per].1).abs() < 0.01 else { @halt.saying("\{at}: \{n.0} not under \{names[i - per].0}: \{names}") }
+      guard (n.1 - names[i - per].1).abs() < 0.01 else { @halt.saying("\{at}: \{n.0} not under \{names[i - per].0}: \{Repr(names)}") }
     }
   }
   tops.length()

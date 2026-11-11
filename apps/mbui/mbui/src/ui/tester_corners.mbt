@@ -121,7 +121,7 @@ fn corners_looked(c : Ctx) -> Unit {
     }
   }
   if kept.faults != anew.faults {
-    fail("what is said of corners not worked out (inner_faults): \{kept.faults} kept, \{anew.faults} anew")
+    fail("what is said of corners not worked out (inner_faults): \{Repr(kept.faults)} kept, \{Repr(anew.faults)} anew")
   }
 }
 

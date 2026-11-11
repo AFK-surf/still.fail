@@ -89,8 +89,8 @@ test "narrow_empty_node: nothing here, with what can be done about it and withou
         },
       )
       let (old, new) = (narrow_drawn(t, 0.0), narrow_drawn(t, 400.0))
-      assert_eq(new.1, old.1, msg="\{platform} \{act}: words new \{new.1} old \{old.1}")
-      assert_eq(new.0, old.0, msg="\{platform} \{act}: drawn new \{new.0.filter(fn(x) { !old.0.contains(x) })} old \{old.0.filter(fn(x) { !new.0.contains(x) })}")
+      assert_eq(new.1, old.1, msg="\{platform} \{act}: words new \{Repr(new.1)} old \{Repr(old.1)}")
+      assert_eq(new.0, old.0, msg="\{platform} \{act}: drawn new \{Repr(new.0.filter(fn(x) { !old.0.contains(x) }))} old \{Repr(old.0.filter(fn(x) { !new.0.contains(x) }))}")
       if act {
         narrow_press(t, 0.0, "刷新")
         narrow_press(t, 400.0, "刷新")

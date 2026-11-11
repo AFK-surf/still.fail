@@ -131,10 +131,10 @@ test "gone_empty, the first of what it holds coming: its padding, margin and gap
   assert_eq(ys[0], 30.0)
   assert_eq(ys[ys.length() - 1], 126.0)
   for i in 1..<ys.length() {
-    assert_true(ys[i] >= ys[i - 1], msg="opens only: \{ys}")
+    assert_true(ys[i] >= ys[i - 1], msg="opens only: \{Repr(ys)}")
   }
   let most = ge_most_step(ys)
-  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{ys}")
+  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{Repr(ys)}")
   t.at(900.0)
   t.frame(390.0, 844.0) |> ignore
   assert_false(t.clock_read())
@@ -151,10 +151,10 @@ test "gone_empty, the last of what it holds going: its padding, margin and gap c
   assert_eq(ys[0], 126.0)
   assert_eq(ys[ys.length() - 1], 30.0)
   for i in 1..<ys.length() {
-    assert_true(ys[i] <= ys[i - 1], msg="closes only: \{ys}")
+    assert_true(ys[i] <= ys[i - 1], msg="closes only: \{Repr(ys)}")
   }
   let most = ge_most_step(ys)
-  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{ys}")
+  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{Repr(ys)}")
   assert_eq(ge_y(t, "里"), -1.0)
   assert_false(t.clock_read())
 }
@@ -181,7 +181,7 @@ test "gone_empty, what it holds called back as it goes: its padding turns with i
   assert_eq(back[back.length() - 1], 126.0)
   let all = going + back
   let most = ge_most_step(all)
-  assert_true(most < 12.0, msg="no step as it turns: the most a frame \{most}, \{all}")
+  assert_true(most < 12.0, msg="no step as it turns: the most a frame \{most}, \{Repr(all)}")
   t.at(1000.0)
   t.frame(390.0, 844.0) |> ignore
   assert_false(t.clock_read())
@@ -223,7 +223,7 @@ test "gone_empty, what it holds coming and going on its way: the same at a momen
   let at_120 = at_moments(1000.0 / 120.0)
   let at_7 = at_moments(1000.0 / 7.0)
   for i in 0..<jumped.length() {
-    assert_true(ge_near(jumped[i], at_120[i]) && ge_near(jumped[i], at_7[i]), msg="\{jumped} \{at_120} \{at_7}")
+    assert_true(ge_near(jumped[i], at_120[i]) && ge_near(jumped[i], at_7[i]), msg="\{Repr(jumped)} \{Repr(at_120)} \{Repr(at_7)}")
   }
 }
 
@@ -251,7 +251,7 @@ test "gone_empty, one picked in another's place: its padding stays, only the one
   assert_eq(ge_y(t, "乙"), 48.0)
   let ys = ys + ge_frames(t, 180.0, 800.0)
   for i in 1..<ys.length() {
-    assert_true(ys[i] >= ys[i - 1], msg="grows only: \{ys}")
+    assert_true(ys[i] >= ys[i - 1], msg="grows only: \{Repr(ys)}")
   }
   assert_eq(ys[ys.length() - 1], 142.0)
   assert_eq(ge_y(t, "乙"), 48.0)
@@ -308,13 +308,13 @@ test "gone_empty in gone_empty: what the innermost holds coming, called back and
   assert_eq(ys[ys.length() - 1], 30.0)
   assert_eq(ge_y(t, "里"), -1.0)
   let most = ge_most_step(ys)
-  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{ys}")
+  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{Repr(ys)}")
   // (again, all the way in)
   t.event(1000.0, fn() { on.set(true) })
   let ys = ge_frames(t, 1000.0, 1800.0)
   assert_eq(ys[ys.length() - 1], 136.0)
   assert_eq(ge_y(t, "里"), 54.0)
-  assert_true(ge_most_step(ys) < 12.0, msg="no step: \{ys}")
+  assert_true(ge_most_step(ys) < 12.0, msg="no step: \{Repr(ys)}")
   assert_false(t.clock_read())
 }
 
@@ -396,10 +396,10 @@ test "gone_empty, a pick changed to a case that makes nothing: its padding, marg
   assert_eq(ys[0], 126.0)
   assert_eq(ys[ys.length() - 1], 30.0)
   for i in 1..<ys.length() {
-    assert_true(ys[i] <= ys[i - 1], msg="closes only: \{ys}")
+    assert_true(ys[i] <= ys[i - 1], msg="closes only: \{Repr(ys)}")
   }
   let most = ge_most_step(ys)
-  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{ys}")
+  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{Repr(ys)}")
   assert_eq(ge_y(t, "里"), -1.0)
   assert_false(t.clock_read())
 }
@@ -415,10 +415,10 @@ test "gone_empty, a pick changed from a case that makes nothing: its padding, ma
   assert_eq(ys[0], 30.0)
   assert_eq(ys[ys.length() - 1], 126.0)
   for i in 1..<ys.length() {
-    assert_true(ys[i] >= ys[i - 1], msg="opens only: \{ys}")
+    assert_true(ys[i] >= ys[i - 1], msg="opens only: \{Repr(ys)}")
   }
   let most = ge_most_step(ys)
-  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{ys}")
+  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{Repr(ys)}")
   assert_false(t.clock_read())
 }
 
@@ -433,7 +433,7 @@ test "gone_empty, a pick changed to nothing and back half way: its padding turns
   let ys = going + ge_frames(t, 160.0, 900.0)
   assert_eq(ys[ys.length() - 1], 126.0)
   let most = ge_most_step(ys)
-  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{ys}")
+  assert_true(most < 12.0, msg="no step: the most a frame \{most}, \{Repr(ys)}")
 }
 
 ///|

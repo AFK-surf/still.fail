@@ -451,7 +451,7 @@ test "profiles on a phone: an allowance of three windows said one way for all, e
   // a phone's 390 has the room for all three in full: each its name and what is left, whole
   let shown = t.words().filter(fn(w) { w.5 > 0.5 }).map(fn(w) { w.0 })
   for words in ["5 小时", "剩 62%", "本周", "剩 19%", "每月", "剩 97%"] {
-    assert_true(shown.contains(words), msg="\{words}: \{shown}")
+    assert_true(shown.contains(words), msg="\{words}: \{Repr(shown)}")
     assert_eq(t.lines_of(words), [words], msg=words)
   }
   assert_eq(t.squeeze_faults(), [])
@@ -464,7 +464,7 @@ test "a model's own week (Fable's) is a chip and a dial of its own, after the ac
   let shown = fn(t : @ui.Tester) { t.words().filter(fn(w) { w.5 > 0.5 }) }
   let at = fn(t : @ui.Tester, words : String) { shown(t).filter(fn(w) { w.0 == words })[0] }
   for words in ["每周", "每周 · Fable"] {
-    assert_eq(shown(t).filter(fn(w) { w.0 == words }).length(), 1, msg="\{words}: \{shown(t).map(fn(w) { w.0 })}")
+    assert_eq(shown(t).filter(fn(w) { w.0 == words }).length(), 1, msg="\{words}: \{Repr(shown(t).map(fn(w) { w.0 }))}")
   }
   assert_true(shown(t).iter().any(fn(w) { w.0.has_suffix("46%") && w.1 > at(t, "每周 · Fable").1 }))
   assert_true(at(t, "每周 · Fable").1 > at(t, "每周").1 && at(t, "每周 · Fable").2 == at(t, "每周").2)
@@ -473,8 +473,8 @@ test "a model's own week (Fable's) is a chip and a dial of its own, after the ac
   // line has not the room for all three whole (dials_node's `lines`)
   let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-fable")
   let (week, fable) = (at(t, "每周"), at(t, "每周 · Fable"))
-  assert_true((fable.2 == week.2 && fable.1 > week.1) || (fable.2 > week.2 && fable.1 == at(t, "5 小时").1), msg="\{week} \{fable}")
-  assert_true(shown(t).iter().any(fn(w) { w.0.has_prefix("46") }), msg="\{shown(t).map(fn(w) { w.0 })}")
+  assert_true((fable.2 == week.2 && fable.1 > week.1) || (fable.2 > week.2 && fable.1 == at(t, "5 小时").1), msg="\{Repr(week)} \{Repr(fable)}")
+  assert_true(shown(t).iter().any(fn(w) { w.0.has_prefix("46") }), msg="\{Repr(shown(t).map(fn(w) { w.0 }))}")
   assert_eq(t.squeeze_faults(), [])
 }
 
@@ -781,8 +781,8 @@ test "settings: a station's card with its CPU, memory and disk all low shows eac
     // in words where the line has the room for all three, else all by their figures: one way for all of them
     let worded = ["空闲 8%", "剩 5.8 G", "剩 19.4 G"].iter().all(fn(x) { shown.contains(x) })
     let figured = ["8%", "5.8G", "19.4G"].iter().all(fn(x) { shown.contains(x) })
-    assert_true(worded != figured, msg="\{w}: \{shown}")
-    assert_true(!shown.iter().any(fn(x) { x.contains("…") }), msg="\{w}: \{shown}")
+    assert_true(worded != figured, msg="\{w}: \{Repr(shown)}")
+    assert_true(!shown.iter().any(fn(x) { x.contains("…") }), msg="\{w}: \{Repr(shown)}")
     // (at 320 its summary beside its name is cut short, as it may be: none of the chips is)
     let chips = t.squeeze_faults().filter(fn(f) { ["空闲", "剩", "%", "G」"].iter().any(fn(x) { f.contains(x) }) })
     assert_eq(chips, [], msg="\{w}")

@@ -101,13 +101,13 @@ test "an agent's card over its name, as over its picture: its background work an
   let line = word(work_line)
   assert_eq(line.length(), 1)
   let latest = word("改了 src/ui/list.mbt")
-  assert_true(latest.length() == 1 && line[0].2 > latest[0].2, msg="\{(line, latest)}")
+  assert_true(latest.length() == 1 && line[0].2 > latest[0].2, msg="\{Repr((line, latest))}")
   // the card's words start where the name does, its edge out to the side of them (its lines 14 in, after the dot)
   assert_eq(latest[0].1, name.1 + 14.0)
   assert_eq(word("审阅 live.ts 的改动").length(), 0)
   assert_eq(word("截图").length(), 0)
   // as tall as one of its latest lines: it never wraps
-  assert_true(line[0].4 <= latest[0].4 + 0.5, msg="\{(line[0].4, latest[0].4)}")
+  assert_true(line[0].4 <= latest[0].4 + 0.5, msg="\{Repr((line[0].4, latest[0].4))}")
   assert_eq(t.corner_faults(), [])
   // pressed: its execution history, beside the chat
   t.tap(line[0].1 + 10.0, line[0].2 + line[0].4 / 2.0)
@@ -138,7 +138,7 @@ test "the history's details: its turns' line says its work after it, none withou
   t.frame()
   let mark = forms()
   assert_eq(mark.length(), 1)
-  assert_true((mark[0].2 - turns[0].2).abs() < 2.0 && mark[0].1 > turns[0].1 + turns[0].3, msg="\{(mark, turns)}")
+  assert_true((mark[0].2 - turns[0].2).abs() < 2.0 && mark[0].1 > turns[0].1 + turns[0].3, msg="\{Repr((mark, turns))}")
   assert_eq(word("8 轮 · 共干了 1 小时 12 分").length(), 1)
   let after = t.words().filter(fn(w) { w.5 > 0.5 && w.0 != " · " && w.0 != mark[0].0 }).map(fn(w) { (w.0, w.1, w.2) })
   assert_eq(after, before)
@@ -157,14 +157,14 @@ test "the history's details: its turns' line says its work after it, none withou
     assert_eq(w.length(), 1)
     w[0].2
   })
-  assert_true(ys[0] < ys[1] && ys[1] < ys[2] && ys[2] < ys[3], msg="\{ys}")
+  assert_true(ys[0] < ys[1] && ys[1] < ys[2] && ys[2] < ys[3], msg="\{Repr(ys)}")
   assert_eq(word("✓").length(), 2)
   // the tasks' descriptions in one column, their times' ends in one; the checklist's marks on the chips' line
   let xs = ["审阅 live.ts 的改动", "pnpm test --watch", "gh run watch 18820431"].map(fn(s) { word(s)[0].1 })
-  assert_true(xs[0] == xs[1] && xs[1] == xs[2], msg="\{xs}")
+  assert_true(xs[0] == xs[1] && xs[1] == xs[2], msg="\{Repr(xs)}")
   let ends = ["4m 12s", "1m 35s", "31s", "12m"].map(fn(s) { word(s)[0].1 + word(s)[0].3 })
-  assert_true(ends.iter().all(fn(e) { (e - ends[0]).abs() < 0.5 }), msg="\{ends}")
-  assert_true((word("子代理")[0].1 - word("✓")[0].1).abs() < 8.0, msg="\{(word("子代理"), word("✓"))}")
+  assert_true(ends.iter().all(fn(e) { (e - ends[0]).abs() < 0.5 }), msg="\{Repr(ends)}")
+  assert_true((word("子代理")[0].1 - word("✓")[0].1).abs() < 8.0, msg="\{Repr((word("子代理"), word("✓")))}")
   // beside the mark, under it
   assert_true(word("后台进行中")[0].2 > mark[0].2, msg="under it")
   // Escape: gone
@@ -186,14 +186,14 @@ test "on a phone, its details' turns say its work after them, its head as it was
   assert_eq(turns.length(), 1)
   let mark = word("后台 4 · 2/6") + word("4 · 2/6") + word("4")
   assert_eq(mark.length(), 1)
-  assert_true((mark[0].2 + mark[0].4 / 2.0 - turns[0].2 - turns[0].4 / 2.0).abs() < 2.0, msg="\{(mark, turns)}")
+  assert_true((mark[0].2 + mark[0].4 / 2.0 - turns[0].2 - turns[0].4 / 2.0).abs() < 2.0, msg="\{Repr((mark, turns))}")
   assert_eq(word("后台进行中").length(), 0)
   t.tap(mark[0].1 + 4.0, mark[0].2 + mark[0].4 / 2.0)
   t.run_for(@kit.presence_in_ms * 2.0)
   assert_eq(word("后台进行中").length(), 1)
   assert_eq(word("跑检查并提交").length(), 1)
   // from the foot: its lists low in the window
-  assert_true(word("跑检查并提交")[0].2 > 422.0, msg="\{word("跑检查并提交")}")
+  assert_true(word("跑检查并提交")[0].2 > 422.0, msg="\{Repr(word("跑检查并提交"))}")
 }
 
 ///|
@@ -210,7 +210,7 @@ test "the mark of an agent's work: at work's spokes before it while something ru
     t.cycles()
   }
   // the spokes' step, on the resident clock (10 a second)
-  assert_true(cycles(true).iter().any(fn(c) { c.has_prefix("800 ms") }), msg="\{cycles(true)}")
+  assert_true(cycles(true).iter().any(fn(c) { c.has_prefix("800 ms") }), msg="\{Repr(cycles(true))}")
   assert_eq(cycles(false), [])
 }
 
@@ -226,7 +226,7 @@ test "the history's details on a phone: each tile's figure on a line as high as 
       }
       // (a figure drawn over its name: 「figure」 (…) and 「name」 (…) overlap)
       let over = t.squeeze_faults().filter(fn(f) { names.iter().any(fn(n) { f.contains(" and 「" + n) }) })
-      assert_eq(over, [], msg="\{lang} at \{scale}: \{over}")
+      assert_eq(over, [], msg="\{lang} at \{scale}: \{Repr(over)}")
     }
   }
 }
@@ -257,13 +257,13 @@ test "the history's tiles: a figure longer than six characters, on its smaller l
     let long_name = word(tr("android-chat.agent.cost"))
     let short_name = word(tr("android-chat.agent.cache"))
     for w in [long, short, long_name, short_name] {
-      assert_true(w.4 > 0.0, msg="at \{scale}: \{t.words()}")
+      assert_true(w.4 > 0.0, msg="at \{scale}: \{Repr(t.words())}")
     }
     assert_true(long.4 < short.4, msg="at \{scale}: the long figure on the smaller line: \{long} \{short}")
-    assert_eq(long_name.2, short_name.2, msg="at \{scale}: the names level: \{long_name} \{short_name}")
-    assert_true(short.2 + short.4 <= short_name.2 + 1.0, msg="at \{scale}: \{short} over \{short_name}")
-    assert_true(long.2 + long.4 <= long_name.2 + 1.0, msg="at \{scale}: \{long} over \{long_name}")
-    assert_eq(t.squeeze_faults(), [], msg="at \{scale}: \{t.squeeze_faults()}")
+    assert_eq(long_name.2, short_name.2, msg="at \{scale}: the names level: \{long_name} \{Repr(short_name)}")
+    assert_true(short.2 + short.4 <= short_name.2 + 1.0, msg="at \{scale}: \{Repr(short)} over \{Repr(short_name)}")
+    assert_true(long.2 + long.4 <= long_name.2 + 1.0, msg="at \{scale}: \{Repr(long)} over \{Repr(long_name)}")
+    assert_eq(t.squeeze_faults(), [], msg="at \{scale}: \{Repr(t.squeeze_faults())}")
   }
 }
 
@@ -435,7 +435,7 @@ fn aw_audited(t : @ui.Tester, before : Array[String], at : String, open? : Bool 
     ((f.has_prefix("words \"✓\"") && f.contains("#2f8f5b on")) || (f.has_prefix("words \"›\"") && f.contains("#cc5a34 on")))
   }
   assert_eq(added.filter(fn(f) { !old_own(f) }), [], msg=at)
-  assert_eq(added.filter(old_own).length(), if open { 3 } else { 0 }, msg="\{at}: \{added}")
+  assert_eq(added.filter(old_own).length(), if open { 3 } else { 0 }, msg="\{at}: \{Repr(added)}")
 }
 
 ///|
@@ -472,7 +472,7 @@ test "its panel on each screen, at the default size of words and at 1.3: what ru
       aw_opened(t, at)
       let one = fn(s : String) raise {
         let w = aw_word(t, s)
-        assert_eq(w.length(), 1, msg="\{at}: \{s} \{w}")
+        assert_eq(w.length(), 1, msg="\{at}: \{s} \{Repr(w)}")
         w[0]
       }
       let head = one("后台进行中")
@@ -582,7 +582,7 @@ test "its panel closes as the card comes to say neither (none left in the backgr
       // (on each frame of its way out all of it, each where it was from the first, or none)
       let now = places()
       let drawn = now.filter(fn(p) { p is Some(_) }).length()
-      assert_true(drawn == 0 || drawn == seen.length(), msg="\{at}: frame \{n}: \{drawn} of \{seen}")
+      assert_true(drawn == 0 || drawn == seen.length(), msg="\{at}: frame \{n}: \{drawn} of \{Repr(seen)}")
       if drawn > 0 && !wide {
         // (a sheet goes down whole)
         for i in 1..<now.length() {

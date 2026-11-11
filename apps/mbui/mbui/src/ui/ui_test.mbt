@@ -398,7 +398,7 @@ test "a scripted step waits for nothing settling: a tap goes as soon as its word
   // what the host's page brings is waited for by what it shows
   let log = t.drive("tap 打开\nuntil 页面来了\ntap 按一下\nexit")
   assert_true(log.contains("DRIVE PASS"))
-  assert_true(tapped.val is Some((_, true)), msg="\{tapped.val}")
+  assert_true(tapped.val is Some((_, true)), msg="\{Repr(tapped.val)}")
   t.draw()
 }
 

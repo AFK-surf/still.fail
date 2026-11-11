@@ -95,8 +95,8 @@ test "a submenu row, old and as nodes, on a wide window: the rows, and its menu 
       t.run_for(@ui.move_most_ms)
       at.push(rows + sub_at(t, ["甲一", "甲二"]))
     }
-    assert_eq(at[1], at[0], msg="\{f.0}: old \{at[0]}, nodes \{at[1]}")
-    assert_true(!at[0].iter().any(fn(s) { s.has_suffix(" -") }), msg="\{f.0}: \{at[0]}")
+    assert_eq(at[1], at[0], msg="\{f.0}: old \{Repr(at[0])}, nodes \{Repr(at[1])}")
+    assert_true(!at[0].iter().any(fn(s) { s.has_suffix(" -") }), msg="\{f.0}: \{Repr(at[0])}")
   }
 }
 
@@ -116,7 +116,7 @@ test "a submenu row, old and as nodes, on 小屏: pressed, a sheet of its items 
     assert_eq(chosen, ["甲二"], msg="old \{old}")
     assert_true(!sub_has(t, "甲一"), msg="old \{old}")
   }
-  assert_eq(at[1], at[0], msg="old \{at[0]}, nodes \{at[1]}")
+  assert_eq(at[1], at[0], msg="old \{Repr(at[0])}, nodes \{Repr(at[1])}")
 }
 
 ///|
@@ -155,10 +155,10 @@ test "a submenu row, old and as nodes: Escape closes its menu alone; Right, the 
       t.run_for(@ui.move_most_ms)
       t.key(@ui.key_escape)
       t.run_for(@ui.move_most_ms)
-      assert_true(!sub_has(t, "甲一") && sub_has(t, "说明文字"), msg="\{about}: Escape: \{sub_at(t, ["甲一", "说明文字"])}")
+      assert_true(!sub_has(t, "甲一") && sub_has(t, "说明文字"), msg="\{about}: Escape: \{Repr(sub_at(t, ["甲一", "说明文字"]))}")
       t.key(@ui.key_code_right)
       t.run_for(@ui.move_most_ms)
-      assert_true(sub_has(t, "甲一"), msg="\{about}: Right: \{t.focused()}")
+      assert_true(sub_has(t, "甲一"), msg="\{about}: Right: \{Repr(t.focused())}")
       t.key(@ui.key_code_left)
       t.run_for(@ui.move_most_ms)
       assert_true(!sub_has(t, "甲一") && sub_has(t, "说明文字"), msg="\{about}: Left")
@@ -185,11 +185,11 @@ test "a submenu row, old and as nodes: a press on the panel's words closes its m
       let (bx, by) = sub_mid(t, "乙")
       t.tap(bx, by)
       t.run_for(@ui.move_most_ms)
-      assert_true(sub_has(t, "乙一") && !sub_has(t, "甲一"), msg="\{about}: the other row: \{sub_at(t, ["甲一", "乙一"])}")
+      assert_true(sub_has(t, "乙一") && !sub_has(t, "甲一"), msg="\{about}: the other row: \{Repr(sub_at(t, ["甲一", "乙一"]))}")
       let (ix, iy) = sub_mid(t, "乙一")
       t.tap(ix, iy)
       t.run_for(@ui.move_most_ms)
-      assert_eq(chosen, ["乙一"], msg="\{about}: \{sub_at(t, ["乙一", "说明文字"])}")
+      assert_eq(chosen, ["乙一"], msg="\{about}: \{Repr(sub_at(t, ["乙一", "说明文字"]))}")
       assert_true(!sub_has(t, "乙一") && sub_has(t, "说明文字"), msg="\{about}: chosen")
     }
   }
@@ -247,7 +247,7 @@ fn sub_called_back(f : (String, @sf.Anchor), away : Bool) -> @ui.Tester raise {
 test "a submenu row as nodes, called back as it goes, the mouse's pointer resting on it: its menu opens again" {
   for f in sub_froms {
     let t = sub_called_back(f, false)
-    assert_true(sub_has(t, "甲") && sub_has(t, "甲一"), msg="\{f.0}: back, open again: \{sub_at(t, ["甲", "甲一"])}")
+    assert_true(sub_has(t, "甲") && sub_has(t, "甲一"), msg="\{f.0}: back, open again: \{Repr(sub_at(t, ["甲", "甲一"]))}")
   }
 }
 
@@ -255,7 +255,7 @@ test "a submenu row as nodes, called back as it goes, the mouse's pointer restin
 test "a submenu row as nodes, called back as it goes, the mouse's pointer moved off first: its menu closed; pointed at, open" {
   for f in sub_froms {
     let t = sub_called_back(f, true)
-    assert_true(sub_has(t, "甲") && !sub_has(t, "甲一"), msg="\{f.0}: back, closed: \{sub_at(t, ["甲", "甲一"])}")
+    assert_true(sub_has(t, "甲") && !sub_has(t, "甲一"), msg="\{f.0}: back, closed: \{Repr(sub_at(t, ["甲", "甲一"]))}")
     let (x, y) = sub_mid(t, "甲")
     t.move_to(x, y)
     t.run_for(@ui.move_most_ms)

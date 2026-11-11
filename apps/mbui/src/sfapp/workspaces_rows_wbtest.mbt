@@ -308,7 +308,7 @@ test "the workspaces on each screen: 当前使用 over the card of the one in us
       ws_in_panel(t, w).map(fn(p) { p.1 }).unwrap_or(-1.0)
     })
     for i in 1..<ys.length() {
-      assert_true(ys[i - 1] >= 0.0 && ys[i - 1] < ys[i], msg="\{at}: \{ys}")
+      assert_true(ys[i - 1] >= 0.0 && ys[i - 1] < ys[i], msg="\{at}: \{Repr(ys)}")
     }
     // the invitation's buttons beside its words, 加入 before 忽略
     let (jx, jy) = ws_in_panel(t, "加入").unwrap()

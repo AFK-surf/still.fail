@@ -74,7 +74,7 @@ test "old_anchor: follows an old target the frame the old frame's own reading of
   // (the node where the old build's reading is, each frame it reads one)
   for f in shown + moved {
     if f.0 is Some(_) {
-      assert_eq(f.1, f.0, msg="\{shown} \{moved}")
+      assert_eq(f.1, f.0, msg="\{Repr(shown)} \{Repr(moved)}")
     }
   }
   assert_eq((shown[shown.length() - 1], moved[moved.length() - 1]), ((r1, r1), (r2, r2)))

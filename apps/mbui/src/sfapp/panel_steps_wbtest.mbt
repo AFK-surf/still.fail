@@ -104,7 +104,7 @@ test "wide, a confirm over the preset's dialog (both the window's tree's) dims w
   let scrim = rects.iter().find_first(fn(r) { r.2 >= 1280.0 && r.3 >= 800.0 && (r.4 & 0xFFL) > 0L && (r.4 & 0xFFL) < 0xFFL })
   assert_true(
     scrim is Some(s) && rects.iter().any(fn(r) { r.2 < 1280.0 && (r.4 >> 8) == (s.4 >> 8) && (r.4 & 0xFFL) > 0L }),
-    msg="\{rects.filter(fn(r) { (r.4 & 0xFFL) < 0xFFL })}",
+    msg="\{Repr(rects.filter(fn(r) { (r.4 & 0xFFL) < 0xFFL }))}",
   )
 }
 

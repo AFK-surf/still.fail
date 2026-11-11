@@ -292,7 +292,7 @@ test "tooltip: to a finger, shown as it is held on the trigger (no tap then), go
     t.release(x + w / 2.0, y + h / 2.0)
     assert_true(shown.val)
     t.tap(at.0, at.1)
-    assert_false(shown.val, msg="a tap at \{at}")
+    assert_false(shown.val, msg="a tap at \{Repr(at)}")
   }
   assert_eq(taps.val, 2)
   t.press_at(x + w / 2.0, y + h / 2.0)
@@ -891,8 +891,8 @@ test "toasts: one comes in faded and risen as each frame is painted, nothing bui
     }
   }
   // (it rose and faded in: drawn somewhere else, fainter, most frames, to where it rests, whole)
-  assert_true(seen.length() > 3, msg="\{seen}")
+  assert_true(seen.length() > 3, msg="\{Repr(seen)}")
   let (y, a) = seen[seen.length() - 1]
-  assert_true(seen.iter().all(fn(s) { s.0 >= y && s.1 <= a }), msg="\{seen}")
-  assert_eq(built, [], msg="\{built.length()} frames built: \{built}")
+  assert_true(seen.iter().all(fn(s) { s.0 >= y && s.1 <= a }), msg="\{Repr(seen)}")
+  assert_eq(built, [], msg="\{built.length()} frames built: \{Repr(built)}")
 }

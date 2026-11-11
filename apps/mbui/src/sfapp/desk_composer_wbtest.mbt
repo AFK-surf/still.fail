@@ -694,13 +694,13 @@ test "desk composer: a draft kept, read again as the app starts, shows its pictu
     }),
   )
   t.frame()
-  assert_true(asked.length() > 0 && asked.iter().all(fn(a) { a == "ws1/st1:s-c1 kept-1" }), msg="\{asked}")
+  assert_true(asked.length() > 0 && asked.iter().all(fn(a) { a == "ws1/st1:s-c1 kept-1" }), msg="\{Repr(asked)}")
   // (its picture, the one image drawn)
   assert_eq(loaded_sources(t), 1)
   // a tile, not a card naming it; the other file a card
   let words = t.words().map(fn(w) { w.0 })
-  assert_true(!words.iter().any(fn(w) { w.contains("照片") }), msg="\{words}")
-  assert_true(words.iter().any(fn(w) { w.contains("说明") }), msg="\{words}")
+  assert_true(!words.iter().any(fn(w) { w.contains("照片") }), msg="\{Repr(words)}")
+  assert_true(words.iter().any(fn(w) { w.contains("说明") }), msg="\{Repr(words)}")
 }
 
 ///|
@@ -896,7 +896,7 @@ test "the composer growing a line as it is typed in draws none of its words over
     // (words enough for a line more)
     t.type_text("，然后把第四项里每一个还没有人认领的条目都分给明天值班的同事，再把结果写进发布清单的最后一节里面")
     t.frame()
-    assert_true(t.text_runs().length() > lines, msg="no line more: \{t.text_runs()}")
+    assert_true(t.text_runs().length() > lines, msg="no line more: \{Repr(t.text_runs())}")
     assert_eq(over(), 0, msg="as it sets off, platform \{platform}")
     t.run_for(@ui.move_most_ms / 2.0)
     assert_eq(over(), 0, msg="half way, platform \{platform}")
@@ -996,7 +996,7 @@ test "the line a composer grows by comes out fading to its foot pixel by pixel, 
       let lowest = gs.fold(init=-1.0e9, fn(m, g) { if g.0 > m { g.0 } else { m } })
       for g in gs {
         if g.0 < lowest - 1.0 {
-          assert_true(g.3 <= 0.0 || g.0 + g.1 <= g.2 - g.3 + 0.001, msg="\{at}: a line that showed faded \{g}, platform \{platform}")
+          assert_true(g.3 <= 0.0 || g.0 + g.1 <= g.2 - g.3 + 0.001, msg="\{at}: a line that showed faded \{Repr(g)}, platform \{platform}")
         }
       }
       gs.iter().any(fn(g) { g.0 == lowest && g.3 > 0.0 })
@@ -1031,7 +1031,7 @@ test "on a phone a finger 3 off the send button, beside it or over it, sends: th
     let half = @sf.theme().round.side / 2.0
     t.tap(cx + off.0 * (half + 3.0), cy + off.1 * (half + 3.0))
     t.frame()
-    assert_eq(named(calls, "chat.send").length(), 1, msg="pressed \{off}")
+    assert_eq(named(calls, "chat.send").length(), 1, msg="pressed \{Repr(off)}")
   }
 }
 
@@ -1123,7 +1123,7 @@ test "desk composer: where 抄送 copies to is said just before send in either s
   // (going with send, which stands 2 further in on one line: each concentric with its own corner, 8 in the capsule's
   // 24 and 10 in the box's 26, a card's)
   let moved = xs.filter(fn(x) { (x - xs[0]).abs() > 2.5 })
-  assert_true(moved.is_empty(), msg="went across: \{xs}")
+  assert_true(moved.is_empty(), msg="went across: \{Repr(xs)}")
 }
 
 ///|
@@ -1173,7 +1173,7 @@ test "desk composer: 抄送's menu has each thread's platform mark before its pl
     let before = row.filter(fn(b) { b.index < w.index })
     let after = row.filter(fn(b) { b.index > w.index })
     // one column before its words, its mark's: none empty where a check would go
-    assert_true(before.length() == 1 && draws(before[0].index), msg="\{place}: \{before.map(fn(b) { (b.kind, b.x, b.w) })}")
+    assert_true(before.length() == 1 && draws(before[0].index), msg="\{place}: \{Repr(before.map(fn(b) { (b.kind, b.x, b.w) }))}")
     // a ticked one's check at its end, only there
     assert_eq(after.iter().any(fn(b) { draws(b.index) }), place == "产品讨论", msg=place)
   }

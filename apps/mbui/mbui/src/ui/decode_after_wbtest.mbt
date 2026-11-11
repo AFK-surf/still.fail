@@ -28,8 +28,8 @@ test "a picture that takes 137 ms to decode: told decoded at the moment it was a
   shown.set(true)
   t.run_for(decode_test_after)
   let at = fn(src : String) { told.get(src).unwrap_or(-1.0) }
-  assert_true((at("quick") - asked).abs() < 1.0e-6, msg="\{told} asked \{asked}")
-  assert_true((at("slow") - (asked + 137.0)).abs() < 1.0e-6, msg="\{told} asked \{asked}")
+  assert_true((at("quick") - asked).abs() < 1.0e-6, msg="\{Repr(told)} asked \{asked}")
+  assert_true((at("slow") - (asked + 137.0)).abs() < 1.0e-6, msg="\{Repr(told)} asked \{asked}")
 }
 
 ///|

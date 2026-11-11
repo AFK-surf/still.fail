@@ -62,7 +62,7 @@ test "words said to be at their size: at the system's 1.3 drawn as at 1 not said
   let p = outside(plain_words)
   assert_eq(o.length(), 1)
   assert_eq(o[0].4, g[0].4)
-  assert_true(o[0].4 > p[0].4, msg="\{o} \{p}")
+  assert_true(o[0].4 > p[0].4, msg="\{Repr(o)} \{Repr(p)}")
   // (the inside not said at 1.3 grown: what the part's saying kept it from)
   assert_true(inside(grown_words)[0].4 > inside(plain_words)[0].4)
 }

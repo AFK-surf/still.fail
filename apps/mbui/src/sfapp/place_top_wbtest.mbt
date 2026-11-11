@@ -20,7 +20,7 @@ test "a place's page: from under its frosted top bar, scrolled on under it, not 
   // the bar frosted from the page's top over the status bar to its foot (8 + 34 + 8; no line under it)
   let glass = t.drawn_glass()
   if !glass.iter().any(fn(g) { g.0 == 0.0 && g.1 == 0.0 && g.3 == 24.0 + 50.0 }) {
-    fail("no frosted bar at the top: \{glass}")
+    fail("no frosted bar at the top: \{Repr(glass)}")
   }
   // its first station as it opens: under the bar, 8 down in its card
   let y0 = match t.rect_of("Willow") {
@@ -67,11 +67,11 @@ test "a page's name kept whole: 用量's share and days as wide as they are afte
       // (2026-10-26 用户's phone: 「Us…」, the days filling half the line beside it)
       let cut = t.beside_faults()
       if cut.length() > 0 {
-        fail("\{at}: \{cut}")
+        fail("\{at}: \{Repr(cut)}")
       }
       let faults = t.squeeze_faults()
       if faults.length() > 0 {
-        fail("\{at}: \{faults}")
+        fail("\{at}: \{Repr(faults)}")
       }
       // (the name: the largest words saying it)
       let mut title = (0.0, 0.0, 0.0, 0.0)
@@ -86,12 +86,12 @@ test "a page's name kept whole: 用量's share and days as wide as they are afte
       // the share and the days after the name, on its line, in the window
       let (x, y, w, h) = t.get(Button, label="Share card").rect
       if x < title.0 + title.2 || (y + h / 2.0 - (title.1 + title.3 / 2.0)).abs() >= 1.0 || x + w > 360.0 {
-        fail("\{at}: Share card at \{(x, y, w, h)}, Usage at \{title}")
+        fail("\{at}: Share card at \{Repr((x, y, w, h))}, Usage at \{Repr(title)}")
       }
       match t.rect_of("7 days") {
         Some((x, _, w, _)) =>
           if x < title.0 + title.2 || x + w > 360.0 {
-            fail("\{at}: 7 days at \{x}, \{w}, Usage at \{title}")
+            fail("\{at}: 7 days at \{x}, \{w}, Usage at \{Repr(title)}")
           }
         None => fail("\{at}: no 7 days")
       }

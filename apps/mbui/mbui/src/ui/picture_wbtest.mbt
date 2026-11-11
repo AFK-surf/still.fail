@@ -171,7 +171,7 @@ test "a node's picture tinted: drawn again in the tint, each path's own opacity 
       colours.contains(0x3366CC80L),
     ),
     (0, true, true, true),
-    msg="\{colours}",
+    msg="\{Repr(colours)}",
   )
 }
 

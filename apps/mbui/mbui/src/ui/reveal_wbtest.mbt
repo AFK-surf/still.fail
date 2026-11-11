@@ -160,7 +160,7 @@ test "where the window is the tree's: its ground and an old view's words in it o
   assert_true(ground_drawn(0xEE) && ground_drawn(0x11))
   // (the words as they were under the tree's ground, not seen through to the words as they are)
   let over = t.words_over_frames()
-  assert_true(over.is_empty(), msg="words over words: \{over}")
+  assert_true(over.is_empty(), msg="words over words: \{Repr(over)}")
   t.run_for(reveal_ms / 2.0)
   assert_false(reveal.on)
 }

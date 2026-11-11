@@ -195,7 +195,7 @@ test "a page's list grown above what is in sight as it moves by itself: what is 
         (0).until(was.length()).iter().all(fn(i) {
           (0).until(was[i].length()).iter().all(fn(j) { (was[i][j] - now[i][j]).abs() <= 1.0e-6 })
         })
-      assert_true(alike, msg="\{platform} \{name}: drawn \{was[:imin(2, was.length())]}, grown \{now[:imin(2, now.length())]}")
+      assert_true(alike, msg="\{platform} \{name}: drawn \{Repr(was[:imin(2, was.length())])}, grown \{Repr(now[:imin(2, now.length())])}")
       assert_true((y - (x + grown_by)).abs() < 1.0e-6, msg="\{platform} \{name}: at \{y}, was \{x}")
       assert_eq(rest_now, rest, msg="\{platform} \{name}")
       assert_true((end - (end_alone + grown_by)).abs() < 1.0e-6, msg="\{platform} \{name}: at rest at \{end}, not grown \{end_alone}")
@@ -303,11 +303,11 @@ test "a page's list flung down toward its foot, what it holds grown on its way: 
     for platform in [0, 1, 2] {
       let (after, end, most) = grown_down(platform, grown.0, grown.1)
       match after.iter().find_first(fn(f) { f.1 != 0.0 && (f.0 - f.2).abs() > 1.0e-6 }) {
-        Some(f) => fail("\{platform} \{grown}: past its end \{f.1} at \{f.0} of \{f.2}")
+        Some(f) => fail("\{platform} \{Repr(grown)}: past its end \{f.1} at \{f.0} of \{f.2}")
         None => ()
       }
-      assert_true((end - most).abs() < 1.0e-6, msg="\{platform} \{grown}: at rest at \{end} of \{most}")
-      assert_true(platform == 0 || after.iter().any(fn(f) { f.1 != 0.0 }), msg="\{platform} \{grown}: never past its foot")
+      assert_true((end - most).abs() < 1.0e-6, msg="\{platform} \{Repr(grown)}: at rest at \{end} of \{most}")
+      assert_true(platform == 0 || after.iter().any(fn(f) { f.1 != 0.0 }), msg="\{platform} \{Repr(grown)}: never past its foot")
     }
   }
 }
@@ -450,7 +450,7 @@ test "a page's list flung down, what is under it measured shorter as it is let g
     below.set(shrunk_from - (s.most() - at))
     t.draw()
     let rest = s.glides_till()
-    assert_true(rest is Some(r) && r > t.time(), msg="\{platform}: at rest at \{rest}, now \{t.time()}")
+    assert_true(rest is Some(r) && r > t.time(), msg="\{platform}: at rest at \{Repr(rest)}, now \{t.time()}")
     let mut past = false
     let end = t.time() + grown_rest_ms
     while t.time() < end {

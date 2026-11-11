@@ -64,6 +64,6 @@ test "a page's list's blocks taken for other keys as a frame lays it out draw th
       reused_words_in_order(after, 17),
     ),
     (true, true, true),
-    msg="first \{first}, by the wheel's frame \{by_the_wheel}, after \{after}",
+    msg="first \{Repr(first)}, by the wheel's frame \{Repr(by_the_wheel)}, after \{Repr(after)}",
   )
 }

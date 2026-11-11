@@ -39,16 +39,16 @@ fn unlaid_list(held : Double, unlaid : Bool) -> (Tester, Array[Int]) {
 test "an old view as tall as what it holds, first in a list, unlaid as tall as a screen: no row made for room it takes; as tall as it is then, the rows after it where it ends" {
   // (150 tall: of the rows only the first two and part of the third show)
   let (t, made) = unlaid_list(150.0, true)
-  assert_true(made.iter().all(fn(i) { i <= 3 }), msg="\{made}")
+  assert_true(made.iter().all(fn(i) { i <= 3 }), msg="\{Repr(made)}")
   assert_eq(t.rect_of("行 1").map(fn(r) { r.1 }), Some(150.0))
   // (taken as none tall at first, as it is without: rows made for the room it then takes)
   let (_, made) = unlaid_list(150.0, false)
-  assert_true(made.iter().any(fn(i) { i > 3 }), msg="\{made}")
+  assert_true(made.iter().any(fn(i) { i > 3 }), msg="\{Repr(made)}")
 }
 
 ///|
 test "an old view first in a list, unlaid as tall as a screen, none tall as laid out: the rows after it from the list's top" {
   let (t, made) = unlaid_list(0.0, true)
-  assert_true(made.contains(1) && made.contains(9), msg="\{made}")
+  assert_true(made.contains(1) && made.contains(9), msg="\{Repr(made)}")
   assert_eq(t.rect_of("行 1").map(fn(r) { r.1 }), Some(0.0))
 }

@@ -394,7 +394,7 @@ test "wide: the mouse's pointer over the layout's ground (its title, a heading's
       [] => (s, NotAllowed)
     }
   })
-  assert_eq(grounds, [("排版", Arrow), ("背景", Arrow)], msg="\{words}")
+  assert_eq(grounds, [("排版", Arrow), ("背景", Arrow)], msg="\{Repr(words)}")
   let (kx, ky) = layout_middle(t, Button, "增大字号")
   assert_eq(shape_on(kx, ky), Hand)
 }

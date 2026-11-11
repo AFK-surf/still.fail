@@ -75,7 +75,7 @@ test "a node's lines turned a quarter about its middle, drawn as an old view's b
   assert_eq(
     (turned == old_turned(quarter), plain == old_turned(0.0), turned != plain, turned.length() > 0),
     (true, true, true, true),
-    msg="tree \{turned}\nold \{old_turned(quarter)}",
+    msg="tree \{Repr(turned)}\nold \{Repr(old_turned(quarter))}",
   )
 }
 
@@ -137,7 +137,7 @@ test "a node turned in one that cuts what it holds: cut where the one that holds
   })
   t.draw()
   let cut = t.drawn_instances().filter(fn(i) { i[5] == 10.0 }).map(fn(i) { (i[16], i[17], i[18], i[19], i[35]) })
-  assert_eq((cut.length() > 0, cut.iter().all(fn(c) { c == (0.0, 0.0, 30.0, 30.0, 1.0) })), (true, true), msg="\{cut}")
+  assert_eq((cut.length() > 0, cut.iter().all(fn(c) { c == (0.0, 0.0, 30.0, 30.0, 1.0) })), (true, true), msg="\{Repr(cut)}")
 }
 
 ///|

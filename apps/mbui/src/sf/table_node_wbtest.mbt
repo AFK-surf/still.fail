@@ -202,9 +202,9 @@ test "a table's copy key as nodes: its menu's Markdown, CSV and picture as an ol
   let ((w, h), drawn) = made.4[0]
   assert_true(
     old.0 != "" && old.1 != "" && made.4.length() == 1 && w > 300 && h > 0 && drawn.length() > 10,
-    msg="\{old.0} \{old.1} \{old.2} \{w}x\{h} \{drawn.length()}",
+    msg="\{old.0} \{old.1} \{Repr(old.2)} \{w}x\{h} \{drawn.length()}",
   )
-  assert_true(made.3.length() == 1 && made.3[0].contains("$18.75"), msg="\{made.3}")
+  assert_true(made.3.length() == 1 && made.3[0].contains("$18.75"), msg="\{Repr(made.3)}")
 }
 
 ///|
@@ -255,7 +255,7 @@ test "a table's menu open, its words changed and not read yet: its picture the t
   let drawn = tt.shot_drawn()
   assert_true(
     shots.length() == 1 && shots[0].contains("Opus 5.5") && drawn.length() == 1 && (drawn[0].0).0 > 0 && drawn[0].1.length() > 4,
-    msg="\{shots} \{drawn.map(fn(d) { (d.0, d.1.length()) })}",
+    msg="\{Repr(shots)} \{Repr(drawn.map(fn(d) { (d.0, d.1.length()) }))}",
   )
 }
 

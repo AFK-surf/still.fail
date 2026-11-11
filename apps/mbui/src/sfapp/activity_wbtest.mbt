@@ -310,7 +310,7 @@ test "activity: what its agent's stream changes beside the line builds nothing i
   let changed = activity_frame_after(t, fn() { live.set({ "activity": { "now": now("call:2", "整理下一步") } }) })
   t.run_for(@ui.move_most_ms * 4.0)
   println("nothing told: \{none}\nthe rest of its state told, the line as it was (before): \{before}\nthe line changed: \{changed}")
-  assert_true(before.0 != "", msg="before, the line's row was built again for what it does not show: \{before}")
-  assert_true(changed.0 != "", msg="the line's row built for its words: \{changed}")
+  assert_true(before.0 != "", msg="before, the line's row was built again for what it does not show: \{Repr(before)}")
+  assert_true(changed.0 != "", msg="the line's row built for its words: \{Repr(changed)}")
   assert_true(t.find("整理下一步") is Some(_), msg="the line says what it does now")
 }

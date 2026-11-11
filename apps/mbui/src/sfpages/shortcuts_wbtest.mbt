@@ -143,13 +143,13 @@ test "快捷键, at each width and with either hand: every action's name drawn, 
       }
       let name = @sf.t("web-main.keymap.\{a.0}")
       let n = named(name)
-      assert_true(n.0 == name && n.3 > 0.0 && n.4 == new.4, msg="\{at}: \{name} at \{n}, 新建对话 at \{new}")
+      assert_true(n.0 == name && n.3 > 0.0 && n.4 == new.4, msg="\{at}: \{name} at \{n}, 新建对话 at \{Repr(new)}")
     }
     // 放大界面's keys, the longest (the only ones with an =): beside it where the line has the room for both, the
     // middle of its line; else under it, at the line's end as 新建对话's are
     let n = named(@sf.t("web-main.keymap.zoom.in"))
     let keys = word(fn(s) { s.contains("=") })
-    assert_true(keys.3 > 0.0, msg="\{at}: \{t.words()}")
+    assert_true(keys.3 > 0.0, msg="\{at}: \{Repr(t.words())}")
     let mid = fn(x : (String, Double, Double, Double, Double, Double)) { x.2 + x.4 / 2.0 }
     let button = fn(x : (String, Double, Double, Double, Double, Double)) {
       match t.drawn_rects().search_by(fn(r) { r.0 <= x.1 && x.1 + x.3 <= r.0 + r.2 && r.1 <= x.2 && x.2 + x.4 <= r.1 + r.3 && r.3 < 40.0 }) {
@@ -159,15 +159,15 @@ test "快捷键, at each width and with either hand: every action's name drawn, 
     }
     let new_keys = word(fn(s) { s.has_suffix("N") && s != n.0 })
     let (b, nb) = (button(keys), button(new_keys))
-    assert_true(b.2 > 0.0 && nb.2 > 0.0, msg="\{at}: its keys' button \{b}, 新建对话's \{nb}")
+    assert_true(b.2 > 0.0 && nb.2 > 0.0, msg="\{at}: its keys' button \{Repr(b)}, 新建对话's \{Repr(nb)}")
     if w >= 720.0 {
-      assert_true((mid(keys) - mid(n)).abs() < 0.5 && keys.1 > n.1 + n.3, msg="\{at}: its name at \{n}, its keys at \{keys}")
+      assert_true((mid(keys) - mid(n)).abs() < 0.5 && keys.1 > n.1 + n.3, msg="\{at}: its name at \{Repr(n)}, its keys at \{Repr(keys)}")
     } else {
       if platform == 2 {
-        assert_true(keys.2 >= n.2 + n.4, msg="\{at}: its name at \{n}, its keys at \{keys}")
+        assert_true(keys.2 >= n.2 + n.4, msg="\{at}: its name at \{Repr(n)}, its keys at \{Repr(keys)}")
       }
       if keys.2 >= n.2 + n.4 {
-        assert_true((b.0 + b.2 - (nb.0 + nb.2)).abs() < 0.5, msg="\{at}: its keys' button \{b}, 新建对话's \{nb}")
+        assert_true((b.0 + b.2 - (nb.0 + nb.2)).abs() < 0.5, msg="\{at}: its keys' button \{Repr(b)}, 新建对话's \{Repr(nb)}")
       }
     }
   }

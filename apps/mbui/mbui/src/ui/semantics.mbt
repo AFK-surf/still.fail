@@ -55,7 +55,7 @@ pub struct SemNode {
   hidden : Bool
   parent : Int
   depth : Int
-} derive(Show)
+} derive(Show, Debug)
 
 ///|
 /// Node `node` (as Ctx::box returns it) is a widget of `role`: its `label` (none: the words built in it, as a button

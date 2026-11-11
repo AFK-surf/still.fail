@@ -30,7 +30,7 @@ fn message_menu_dismissed(how : (@ui.Tester) -> Unit) -> Array[Bool] raise {
   seen.push(open())
   t.draw()
   seen.push(open())
-  assert_true(shown, msg="its menu shown: \{seen}")
+  assert_true(shown, msg="its menu shown: \{Repr(seen)}")
   seen
 }
 

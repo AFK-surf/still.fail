@@ -7,7 +7,7 @@ test "the pointer over a node's link across lines: a hand over each of its piece
   let glyphs = link_glyphs(m.t)
   let first = glyphs[0]
   let last = glyphs[glyphs.length() - 1]
-  assert_true(last.1 > first.1, msg="across lines: \{first} \{last}")
+  assert_true(last.1 > first.1, msg="across lines: \{Repr(first)} \{Repr(last)}")
   let at = fn(x : Double, y : Double) {
     m.t.move_to(x, y)
     m.t.draw()
@@ -40,7 +40,7 @@ test "the pointer moved over a node's links and off them: its shape said again, 
     shapes.push(m.t.cursor())
   }
   let after = tree.work()
-  assert_true(shapes.iter().all(fn(s) { s == Hand || s == Arrow }) && shapes.contains(Hand), msg="\{shapes}")
+  assert_true(shapes.iter().all(fn(s) { s == Hand || s == Arrow }) && shapes.contains(Hand), msg="\{Repr(shapes)}")
   assert_eq(
     (after.computes - before.computes, after.laid - before.laid, after.measured - before.measured, after.composed - before.composed),
     (0, 0, 0, 0),

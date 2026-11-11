@@ -86,17 +86,17 @@ fn come_back_holds(centred : Bool, after : Double) -> Unit raise {
   let rest = ys[0]
   // (closing: up, each frame from the first it moved)
   for i in 2..=turn {
-    assert_true(ys[i] < ys[i - 1], msg="\{centred} \{after}: closing at \{i}: \{ys}")
+    assert_true(ys[i] < ys[i - 1], msg="\{centred} \{after}: closing at \{i}: \{Repr(ys)}")
   }
   // (called back: up a little more first, from as fast as it went; not still, not down at once)
-  assert_true(ys[turn + 1] < ys[turn], msg="\{centred} \{after}: on from its speed as it is called back: \{ys}")
+  assert_true(ys[turn + 1] < ys[turn], msg="\{centred} \{after}: on from its speed as it is called back: \{Repr(ys)}")
   // (then down to where it stood, never up again)
   let mut down = false
   for i in (turn + 2)..<ys.length() {
     if ys[i] > ys[i - 1] {
       down = true
     } else {
-      assert_true(!down || ys[i] == ys[i - 1], msg="\{centred} \{after}: up again at \{i}: \{ys}")
+      assert_true(!down || ys[i] == ys[i - 1], msg="\{centred} \{after}: up again at \{i}: \{Repr(ys)}")
     }
   }
   assert_eq(ys[ys.length() - 1], rest)
@@ -204,7 +204,7 @@ let turn_judged_from : Double = 0.05
 /// Hanging at its turn as `ys` (on frames `ms` apart) has it, called `what`: none, frames still as long as turn_hung_ms.
 fn assert_not_hung(ys : Array[Double], ms : Double, what : String) -> Unit raise {
   let hung = hung_at_turn(ys, ms)
-  assert_true(hung + 0.01 < turn_hung_ms, msg="\{what}: still \{hung} ms at its turn: \{ys}")
+  assert_true(hung + 0.01 < turn_hung_ms, msg="\{what}: still \{hung} ms at its turn: \{Repr(ys)}")
 }
 
 ///|

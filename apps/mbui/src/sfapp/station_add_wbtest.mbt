@@ -84,7 +84,7 @@ fn sa_leaving(t : @ui.Tester, at : String, press : () -> Unit raise, seen~ : Arr
     assert_true(sa_panel(t) is None, msg="\{at}: frame \{n} on its way out: still read out")
     let now = places()
     let drawn = now.filter(fn(p) { p is Some(_) }).length()
-    assert_true(drawn == 0 || drawn == seen.length(), msg="\{at}: frame \{n} on its way out: \{drawn} of \{seen} drawn")
+    assert_true(drawn == 0 || drawn == seen.length(), msg="\{at}: frame \{n} on its way out: \{drawn} of \{Repr(seen)} drawn")
     if drawn > 0 {
       let first = now[0].unwrap()
       let scale = wide().unwrap_or(was_w) / was_w

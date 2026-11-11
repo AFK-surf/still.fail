@@ -413,7 +413,7 @@ test "words sent: the chat's rows they fly past are kept, not built again each f
   // (their own row, where its pieces are drawn, and no other; all of them again only in the frames a share of their
   // way is reached: their row opening, the composer let go and down, shows_from)
   let own = built.filter(fn(n) { n <= 1 }).length()
-  assert_true(own * 4 >= built.length() * 3, msg="rows built each frame of their flight: \{built}")
+  assert_true(own * 4 >= built.length() * 3, msg="rows built each frame of their flight: \{Repr(built)}")
 }
 
 ///|

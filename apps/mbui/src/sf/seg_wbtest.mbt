@@ -221,7 +221,7 @@ test "segmented short of room for its equal columns: the longer as wide as its w
     assert_eq(t.lines_of(words), [words], msg=words)
   }
   let short = widths()
-  assert_true((short[1] - need()).abs() < 1.0, msg="\{short} \{need()}")
+  assert_true((short[1] - need()).abs() < 1.0, msg="\{Repr(short)} \{need()}")
   assert_true(short[0] < short[1])
   let (x0, _, _, _) = t.get(@ui.Role::Radio, label="Settings").rect
   let (x1, _, w1, _) = t.get(@ui.Role::Radio, label="Software and devices").rect
@@ -230,7 +230,7 @@ test "segmented short of room for its equal columns: the longer as wide as its w
   t.resize(600.0, 200.0)
   t.draw()
   let wide = widths()
-  assert_true((wide[0] - wide[1]).abs() < 0.5 && (wide[1] - need()).abs() < 1.0, msg="\{wide} \{need()}")
+  assert_true((wide[0] - wide[1]).abs() < 0.5 && (wide[1] - need()).abs() < 1.0, msg="\{Repr(wide)} \{need()}")
   t.resize(320.0, 200.0)
   t.draw()
   assert_eq(widths(), short)

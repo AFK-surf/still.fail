@@ -30,13 +30,13 @@ fn sub_back_a_frame_on(away : Bool) -> @ui.Tester raise {
 ///|
 test "a submenu row in a dialog called back a frame after it starts going, the pointer resting on it: steady, its menu open again" {
   let t = sub_back_a_frame_on(false)
-  assert_true(sub_has(t, "甲") && sub_has(t, "甲一"), msg="back, open again: \{sub_at(t, ["甲", "甲一"])}")
+  assert_true(sub_has(t, "甲") && sub_has(t, "甲一"), msg="back, open again: \{Repr(sub_at(t, ["甲", "甲一"]))}")
 }
 
 ///|
 test "a submenu row in a dialog called back a frame after it starts going, the pointer moved off it first: steady, its menu closed; pointed at, open" {
   let t = sub_back_a_frame_on(true)
-  assert_true(sub_has(t, "甲") && !sub_has(t, "甲一"), msg="back, closed: \{sub_at(t, ["甲", "甲一"])}")
+  assert_true(sub_has(t, "甲") && !sub_has(t, "甲一"), msg="back, closed: \{Repr(sub_at(t, ["甲", "甲一"]))}")
   let (x, y) = sub_mid(t, "甲")
   t.move_to(x, y)
   t.run_for(@ui.move_most_ms)

@@ -28,7 +28,7 @@ test "bar: a page put on the stack between frames, the bar going from that momen
   let many = bar_after_push([11.0, 13.0, 16.0, 24.0, 33.0, 80.0])
   assert_eq((late, many), (one, one))
   // (going from the moment the page was put on: hidden by then, not there yet)
-  assert_true((one.0 - between_frames_ms).abs() < 0.000001 && one.1 > 0.0 && one.1 < 1.0 && one.2 == 0.0, msg="\{one}")
+  assert_true((one.0 - between_frames_ms).abs() < 0.000001 && one.1 > 0.0 && one.1 < 1.0 && one.2 == 0.0, msg="\{Repr(one)}")
 }
 
 ///|
@@ -146,7 +146,7 @@ test "bar: its places put in another order between frames, the place shown the s
   let late = bar_after_order([40.0])
   let many = bar_after_order([11.0, 13.0, 16.0, 24.0, 33.0, 80.0])
   assert_eq((late, many), (one, one))
-  assert_true((one.2 - between_frames_ms).abs() < 0.000001, msg="\{one}")
+  assert_true((one.2 - between_frames_ms).abs() < 0.000001, msg="\{Repr(one)}")
 }
 
 ///|
@@ -231,7 +231,7 @@ test "bar: drawn up by a finger, each event at its own moment: the same at a mom
   let few = bar_drawn_up([100.0])
   assert_eq((each, few), (none, none))
   // (drawn up: open)
-  assert_true(none.2, msg="\{none}")
+  assert_true(none.2, msg="\{Repr(none)}")
 }
 
 ///|
@@ -420,7 +420,7 @@ test "bar: a ride set out days before what it rides on rests (a change caught up
   assert_true(r.legs.length() < 1000, msg="\{r.legs.length()} legs")
   assert_eq(r.to, 100.0)
   assert_true((r.at(r.end).0 - 100.0).abs() < 0.000001)
-  assert_true((r.at(still - 400.0).0 - 40.0).abs() < 0.01, msg="\{r.at(still - 400.0)}")
+  assert_true((r.at(still - 400.0).0 - 40.0).abs() < 0.01, msg="\{Repr(r.at(still - 400.0))}")
 }
 
 ///|
@@ -526,7 +526,7 @@ test "bar: a bar chosen landing, another of its places tapped before it has land
       assert_eq(bar_tapped_landing(after, frames), one)
     }
     let (left, key, sent, active, x, to, end) = one
-    assert_true(left > 0.0 && end < 3000.0, msg="after \{after}: \{one}")
+    assert_true(left > 0.0 && end < 3000.0, msg="after \{after}: \{Repr(one)}")
     assert_eq(active, Some(first))
     assert_eq(key, Some(Some(first)))
     assert_true((sent - xs[0]).abs() < 0.5, msg="after \{after}: sent to \{sent}")
@@ -567,7 +567,7 @@ test "bar: a bar chosen without a place, the place shown in it elsewhere: the ba
     assert_eq(bar_chosen_bare(frames), one)
   }
   let (left, key, sent, active, x, to, end) = one
-  assert_true(left > 0.0 && end < 3000.0, msg="\{one}")
+  assert_true(left > 0.0 && end < 3000.0, msg="\{Repr(one)}")
   // (chosen between its places: no place with it)
   assert_eq(key, Some(None))
   assert_eq((active, bars_picked.get().map(fn(b) { b.1 })), (Some("stations"), Some(1)))

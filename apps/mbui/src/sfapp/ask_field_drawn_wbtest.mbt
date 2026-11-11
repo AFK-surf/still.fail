@@ -68,7 +68,7 @@ test "中屏 and 大屏, touch and keyboard and mouse: a question, its line give
     assert_eq(
       (tall, held0, n0 >= 4, shown0, held1, n1 > n0, shown1),
       (true, true, true, true, true, true, true),
-      msg="\{c} line \{line} box \{bx} (one-line \{@sf.theme().control_h}) held \{held0} glyphs \{n0} shown \{shown0} → typed held \{held1} glyphs \{n1} shown \{shown1};\{said0}",
+      msg="\{Repr(c)} line \{Repr(line)} box \{Repr(bx)} (one-line \{@sf.theme().control_h}) held \{held0} glyphs \{n0} shown \{shown0} → typed held \{held1} glyphs \{n1} shown \{shown1};\{said0}",
     )
   }
 }

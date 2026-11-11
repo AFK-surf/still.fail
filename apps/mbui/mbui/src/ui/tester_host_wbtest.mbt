@@ -14,9 +14,9 @@ test "a frame no one asked for that drew something else: the next asked for said
   // (the next frame, asked for, drawing the same as the one between)
   t.frame()
   let frames = t.host_frames()
-  assert_eq(frames.map(fn(f) { (f.asked, f.changed) }), [(false, true), (true, true)], msg="\{frames}")
-  assert_eq(frames[0].damage, [], msg="\{frames}")
-  assert_true(frames[1].damage.length() > 0, msg="\{frames}")
+  assert_eq(frames.map(fn(f) { (f.asked, f.changed) }), [(false, true), (true, true)], msg="\{Repr(frames)}")
+  assert_eq(frames[0].damage, [], msg="\{Repr(frames)}")
+  assert_true(frames[1].damage.length() > 0, msg="\{Repr(frames)}")
 }
 
 ///|
@@ -86,7 +86,7 @@ test "a timer due less than a ms after the host's clock: the host woken for its 
   assert_eq(fired, [due])
   let frames = t.host_frames()
   assert_true(frames.length() > 0, msg="no frame drawn for it")
-  assert_eq(frames[0].at, tick, msg="\{frames.map(f => (f.at, f.asked, f.changed))}")
+  assert_eq(frames[0].at, tick, msg="\{Repr(frames.map(f => (f.at, f.asked, f.changed)))}")
 }
 
 ///|
@@ -121,14 +121,14 @@ fn frame_short_of_timer(compare : Bool) -> Unit raise {
   assert_eq(fired, [])
   assert_eq(t.built_why(), "", msg="the frame short of the timer built whole")
   let early = t.host_frames()
-  assert_eq(early.map(f => f.changed), [false], msg="\{early.map(f => (f.at, f.asked, f.changed, f.why))}")
+  assert_eq(early.map(f => f.changed), [false], msg="\{Repr(early.map(f => (f.at, f.asked, f.changed, f.why)))}")
   assert_true(t.fake.wake >= due && t.fake.wake <= due - drawn_short_ms + 1.0, msg="woken again at \{t.fake.wake}")
   t.run_as_host(timers_fired_ms, skip_unasked=true)
   assert_eq(fired, [due])
   let frames = t.host_frames()
   let shown = frames.map(f => (f.at, f.asked, f.changed, f.why))
-  assert_true(frames.length() > 0 && whole_ms(frames[0].at) >= due, msg="\{shown}")
-  assert_true(frames[0].changed && frames[0].why != "", msg="\{shown}")
+  assert_true(frames.length() > 0 && whole_ms(frames[0].at) >= due, msg="\{Repr(shown)}")
+  assert_true(frames[0].changed && frames[0].why != "", msg="\{Repr(shown)}")
   for f in frames {
     assert_true(f.asked, msg="an unasked frame drawn at \{f.at}")
   }
@@ -226,7 +226,7 @@ test "timers set between frames, only frames asked for drawn: each callback at i
   t.run_as_host(timers_fired_ms, skip_unasked=true)
   assert_eq(fired, [start + 50.0, start + 100.0])
   let frames = t.host_frames()
-  assert_true(frames.length() > 0 && frames.all(fn(f) { f.asked }), msg="\{frames}")
+  assert_true(frames.length() > 0 && frames.all(fn(f) { f.asked }), msg="\{Repr(frames)}")
 }
 
 ///|
@@ -274,7 +274,7 @@ test "a timer set by a message's said handler, the view still: due from the mome
   assert_eq(taken, [first])
   assert_eq(fired, [first + 50.0])
   let frames = t.host_frames()
-  assert_true(frames.all(fn(f) { f.asked }), msg="\{frames}")
+  assert_true(frames.all(fn(f) { f.asked }), msg="\{Repr(frames)}")
 }
 
 ///|
@@ -301,7 +301,7 @@ test "a timer set by an effect of a signal a message's said handler set: due fro
   assert_eq(taken, [first])
   assert_eq(fired, [first + 50.0])
   let frames = t.host_frames()
-  assert_true(frames.all(fn(f) { f.asked }), msg="\{frames}")
+  assert_true(frames.all(fn(f) { f.asked }), msg="\{Repr(frames)}")
 }
 
 ///|
@@ -361,7 +361,7 @@ test "a fiber forked long after the last frame: runs at its moment, after a time
     ("slept", start + 50.0),
   ])
   let frames = t.host_frames()
-  assert_true(frames.all(fn(f) { f.asked }), msg="\{frames}")
+  assert_true(frames.all(fn(f) { f.asked }), msg="\{Repr(frames)}")
 }
 
 ///|
@@ -600,7 +600,7 @@ test "fibers forked between frames at one moment, a seed: in their order; their 
   for seed in 1..=8 {
     let o = order(seed, false)
     let fibers = o.filter(r => r.has_prefix("fiber"))
-    assert_eq(fibers, ["fiber 0", "fiber 1", "fiber 2", "fiber 3"], msg="seed \{seed}: \{o}")
+    assert_eq(fibers, ["fiber 0", "fiber 1", "fiber 2", "fiber 3"], msg="seed \{seed}: \{Repr(o)}")
     assert_eq(o.length(), 2 * forked_n)
     assert_eq(order(seed, false), o, msg="seed \{seed} twice")
     assert_eq(order(seed, true), o, msg="seed \{seed}, a frame between each")
@@ -609,7 +609,7 @@ test "fibers forked between frames at one moment, a seed: in their order; their 
       children.push(c)
     }
   }
-  assert_true(children.length() > 1, msg="one order of the children for eight seeds: \{children}")
+  assert_true(children.length() > 1, msg="one order of the children for eight seeds: \{Repr(children)}")
 }
 
 ///|
@@ -646,10 +646,10 @@ test "a timer set between frames with the frame's time ahead of the host's: due 
   let frames = t.host_frames()
   assert_eq(fired, [due])
   let changed = frames.filter(f => f.changed).map(f => f.at)
-  assert_eq(changed.length(), 1, msg="\{frames.map(f => (f.at, f.asked, f.changed))}")
+  assert_eq(changed.length(), 1, msg="\{Repr(frames.map(f => (f.at, f.asked, f.changed)))}")
   assert_true(whole_ms(changed[0]) >= due, msg="shown at \{changed[0]}, due \{due}")
   // (the first frame drawn the one it runs in: none drawn before it for nothing)
-  assert_eq(frames[0].at, changed[0], msg="\{frames.map(f => (f.at, f.asked, f.changed))}")
+  assert_eq(frames[0].at, changed[0], msg="\{Repr(frames.map(f => (f.at, f.asked, f.changed)))}")
   for f in frames {
     assert_true(f.asked, msg="an unasked frame drawn at \{f.at}")
   }
@@ -694,11 +694,11 @@ test "a timer set between frames with the frame's time ahead, no frame built aga
   let frames = t.host_frames()
   assert_eq(fired, [due])
   let changed = frames.filter(f => f.changed)
-  assert_eq(changed.length(), 1, msg="\{frames.map(f => (f.at, f.asked, f.changed, f.why))}")
+  assert_eq(changed.length(), 1, msg="\{Repr(frames.map(f => (f.at, f.asked, f.changed, f.why)))}")
   assert_true(whole_ms(changed[0].at) >= due, msg="shown at \{changed[0].at}, due \{due}")
   assert_true(changed[0].why != "", msg="run in a frame not built whole at \{changed[0].at}")
   // (the first frame drawn the one it runs in: none drawn before it for nothing)
-  assert_eq(frames[0].at, changed[0].at, msg="\{frames.map(f => (f.at, f.asked, f.changed, f.why))}")
+  assert_eq(frames[0].at, changed[0].at, msg="\{Repr(frames.map(f => (f.at, f.asked, f.changed, f.why)))}")
   for f in frames {
     assert_true(f.asked, msg="an unasked frame drawn at \{f.at}")
   }

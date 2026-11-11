@@ -126,7 +126,7 @@ test "input_node, keyboard and mouse: the pointer on its padding (in its frame, 
     t.run_for(@ui.move_most_ms)
     lit.push((padding, t.cursor()))
   }
-  assert_eq(lit[1], lit[0], msg="old \{lit[0]}, made \{lit[1]}")
+  assert_eq(lit[1], lit[0], msg="old \{Repr(lit[0])}, made \{Repr(lit[1])}")
 }
 
 ///|

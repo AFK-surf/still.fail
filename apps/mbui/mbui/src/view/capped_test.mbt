@@ -78,7 +78,7 @@ test "one line of words in a column: as wide as the column; a most said, that wh
     seen.push(w())
     // (column 100: 100; most 150: 100; most 80: 80; none again: 100; a row: 210; a column again: 100; 180 said: 180;
     // wrapped: within the column; one line again: 100)
-    assert_eq(seen, [100.0, 100.0, 80.0, 100.0, 210.0, 100.0, 180.0, 100.0, 100.0], msg="shown \{shown}: \{seen}")
+    assert_eq(seen, [100.0, 100.0, 80.0, 100.0, 210.0, 100.0, 180.0, 100.0, 100.0], msg="shown \{shown}: \{Repr(seen)}")
   }
 }
 

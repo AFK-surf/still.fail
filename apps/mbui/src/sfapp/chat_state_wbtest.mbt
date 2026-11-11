@@ -84,7 +84,7 @@ test "what a chat's agent needs is said under its last message" {
       (b.w - 14.0).abs() < 0.01 && (b.h - 14.0).abs() < 0.01 && b.x + b.w <= run.x0 && b.x > run.x0 - 30.0
     })
   // (its place and the icon in it: one square)
-  assert_true(bell.length() > 0 && bell.all(fn(b) { b.y == bell[0].y }), msg="\{bell.map(fn(b) { (b.x, b.y, b.w, b.h) })}")
+  assert_true(bell.length() > 0 && bell.all(fn(b) { b.y == bell[0].y }), msg="\{Repr(bell.map(fn(b) { (b.x, b.y, b.w, b.h) }))}")
   let line_mid = (run.top + run.bottom) / 2.0
   let bell_mid = bell[0].y + bell[0].h / 2.0
   assert_true((bell_mid - line_mid).abs() < 0.01, msg="bell \{bell_mid}, line \{line_mid}")

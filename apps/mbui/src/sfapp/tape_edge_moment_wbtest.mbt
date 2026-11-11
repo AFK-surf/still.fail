@@ -124,8 +124,8 @@ test "中屏: what shows of the page where the sidebar's edge reaches over it pr
   let want = (@sfdesk.TapePane::Page, @sfdesk.TapePane::Page)
   let stepped = edge_page_pressed(true)
   let none = edge_page_pressed(false)
-  assert_eq(stepped, want, msg="frames before: \{stepped}; none: \{none}")
-  assert_eq(none, want, msg="none: \{none}")
+  assert_eq(stepped, want, msg="frames before: \{Repr(stepped)}; none: \{Repr(none)}")
+  assert_eq(none, want, msg="none: \{Repr(none)}")
 }
 
 ///|
@@ -296,7 +296,7 @@ test "中屏: the sidebar's edge by a mouse: hidden at rest; pointed at, its bar
   t.run_for(edge_look_ms)
   assert_true(@sfdesk.wide.edge_held.get(), msg="pressed: in hand")
   guard edge_bar_drawn(t) is Some((x2, h2, held_ink)) else { fail("in hand: not shown") }
-  assert_true((x2, h2) == (x1, s12) && held_ink != on_ink, msg="in hand: \{(x2, h2, held_ink)}, on it \{(x1, on_ink)}")
+  assert_true((x2, h2) == (x1, s12) && held_ink != on_ink, msg="in hand: \{Repr((x2, h2, held_ink))}, on it \{Repr((x1, on_ink))}")
   assert_eq((said_at(t, "调整侧边栏宽度").unwrap(), covered(t, "收起侧边栏").unwrap()), (room, page), msg="in hand: where it was")
   // (dragged 20 wider: the width, the page beside it and the edge 20 on, its bar with it)
   t.move_to(ex + 20.0, ey)

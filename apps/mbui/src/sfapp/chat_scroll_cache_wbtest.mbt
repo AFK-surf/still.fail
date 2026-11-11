@@ -44,7 +44,7 @@ fn chat_scrolled_reference(keep : Bool) -> (Double, Double, String) raise {
   t.frame_at(at + 16.0)
   let after = t.run_rects(title)[0]
   assert_eq(t.visible(), visible, msg="the short scroll must keep the same chat rows")
-  assert_true(after.1 < before.1, msg="the reference must move with its message: \{before} -> \{after}")
+  assert_true(after.1 < before.1, msg="the reference must move with its message: \{Repr(before)} -> \{Repr(after)}")
   t.tap_run(title)
   let opened = match app.nav.top() {
     Chat(r) => r.session

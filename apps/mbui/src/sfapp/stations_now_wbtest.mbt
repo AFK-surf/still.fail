@@ -19,7 +19,7 @@ test "wide: the rail's 用量 place, the pointer resting on it, offers 分享卡
     Some(png) =>
       match png_size(png) {
         Some((pw, ph)) => {
-          assert_true(pw == 1080 && ph > 600, msg="\{(pw, ph)}")
+          assert_true(pw == 1080 && ph > 600, msg="\{Repr((pw, ph))}")
           assert_eq(t.clipboard_label(), "still.fail")
         }
         None => fail("not a PNG")
@@ -69,7 +69,7 @@ test "the card to share in a short window, in a 360 phone's sheet: all of it see
   for at in [(1280.0, 800.0, 0), (1280.0, 640.0, 0), (360.0, 740.0, 2)] {
     // (the whole picture, not the part of it a scroll shows; drawn apart, not as the window shows it)
     let got = shared(at.0, at.1, at.2)
-    assert_true(got == (w0, h0), msg="\{(at, got, w0, h0)}")
+    assert_true(got == (w0, h0), msg="\{Repr((at, got, w0, h0))}")
   }
 }
 
@@ -91,8 +91,8 @@ test "the card to share's looks: each chosen under it draws the picture in it at
     ] {
       t.click(Button, label=look.0)
       t.run_for(@kit.presence_in_ms)
-      assert_true(picture_says(t, look.1), msg="\{(at, look)}")
-      assert_true(!picture_says(t, look.2), msg="\{(at, look)}")
+      assert_true(picture_says(t, look.1), msg="\{Repr((at, look))}")
+      assert_true(!picture_says(t, look.2), msg="\{Repr((at, look))}")
       assert_eq(t.squeeze_faults(), [])
       assert_eq(t.corner_faults(), [])
       assert_eq(t.contrast_faults(), [])
@@ -105,7 +105,7 @@ test "the card to share's looks: each chosen under it draws the picture in it at
         t.frame()
         t.clipboard_png().unwrap()
       }
-      assert_true(png_size(png) is Some((1080, _)), msg="\{(at, look)}")
+      assert_true(png_size(png) is Some((1080, _)), msg="\{Repr((at, look))}")
     }
     // (kept: the prefs say the last chosen)
     assert_eq(@sfbase.text(src.topic("prefs", Map([])).get().value, "shareLook"), "night")
@@ -167,7 +167,7 @@ test "the card to share on a phone: the picture as wide as its sheet lets it, no
   t.run_for(@kit.presence_in_ms)
   assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [("still.fail.png", "Photos")])
   match png_size(t.kept()[0].2) {
-    Some((pw, ph)) => assert_true(pw == 1080 && ph > 900, msg="\{(pw, ph)}")
+    Some((pw, ph)) => assert_true(pw == 1080 && ph > 900, msg="\{Repr((pw, ph))}")
     None => fail("not a PNG")
   }
   assert_true(t.find("已保存到相册") is Some(_))
@@ -184,7 +184,7 @@ test "the card to share in a 千恋＊万花 look, kept on a phone: the whole ca
   t.run_for(@kit.presence_in_ms)
   match png_size(t.kept()[0].2) {
     // (a tile's is 360 by 480: 1080 by 1440; the ledger's card is taller, its every day's row under its picture)
-    Some((pw, ph)) => assert_true(pw == 1080 && ph > 2000, msg="\{(pw, ph)}")
+    Some((pw, ph)) => assert_true(pw == 1080 && ph > 2000, msg="\{Repr((pw, ph))}")
     None => fail("not a PNG")
   }
 }
@@ -202,14 +202,14 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
   let lead = word("用 6 个 Claude 订阅账号消耗了")
   let share = word("2.1 亿")
   let of = word("token，折合 $1,420")
-  assert_true(lead.length() == 1 && share.length() == 1 && of.length() == 1 && share[0].4 > of[0].4 * 2.0, msg="\{(lead, share, of)}")
+  assert_true(lead.length() == 1 && share.length() == 1 && of.length() == 1 && share[0].4 > of[0].4 * 2.0, msg="\{Repr((lead, share, of))}")
   assert_true(
     lead[0].2 < share[0].2 && of[0].2 > share[0].2 && of[0].1 == share[0].1 && lead[0].1 < share[0].1,
-    msg="\{(lead, share, of)}",
+    msg="\{Repr((lead, share, of))}",
   )
   let kinds = ["ChatGPT 订阅", "OpenCode Go 订阅"].map(fn(k) { word(k) })
   let accounts = word("2 个账号")
-  assert_true(kinds.iter().all(fn(k) { k.length() == 1 }) && accounts.length() == 2, msg="\{(kinds, accounts)}")
+  assert_true(kinds.iter().all(fn(k) { k.length() == 1 }) && accounts.length() == 2, msg="\{Repr((kinds, accounts))}")
   for i, k in kinds {
     // (on its line: its accounts after its name)
     assert_true(accounts[i].1 > k[0].1 + k[0].3 && (accounts[i].2 - k[0].2).abs() < 2.0, msg="\{(k, accounts)}")
@@ -219,22 +219,22 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
   })
   for m in models {
     let (name, used) = m
-    assert_true(name.length() == 1 && used.length() == 1, msg="\{m}")
+    assert_true(name.length() == 1 && used.length() == 1, msg="\{Repr(m)}")
     // (on its line, past where the kinds' names start: its tokens and cost at the end, the ends one under another)
-    assert_true(used[0].1 > name[0].1 + name[0].3 && (used[0].2 - name[0].2).abs() < 2.0 && name[0].1 == kinds[0][0].1, msg="\{m}")
-    assert_true((used[0].1 + used[0].3 - (models[0].1[0].1 + models[0].1[0].3)).abs() < 0.5, msg="\{(m, models[0])}")
+    assert_true(used[0].1 > name[0].1 + name[0].3 && (used[0].2 - name[0].2).abs() < 2.0 && name[0].1 == kinds[0][0].1, msg="\{Repr(m)}")
+    assert_true((used[0].1 + used[0].3 - (models[0].1[0].1 + models[0].1[0].3)).abs() < 0.5, msg="\{Repr((m, models[0]))}")
   }
   // each model under its kind: Sonnet under the first's tokens, GPT-5.5 Codex under ChatGPT, Kimi K2 under OpenCode
-  assert_true(models[0].0[0].2 > of[0].2 && models[0].0[0].2 < kinds[0][0].2 && kinds[0][0].2 < models[1].0[0].2, msg="\{models}")
-  assert_true(models[1].0[0].2 < kinds[1][0].2 && kinds[1][0].2 < models[2].0[0].2 && models[2].0[0].2 < models[3].0[0].2, msg="\{models}")
+  assert_true(models[0].0[0].2 > of[0].2 && models[0].0[0].2 < kinds[0][0].2 && kinds[0][0].2 < models[1].0[0].2, msg="\{Repr(models)}")
+  assert_true(models[1].0[0].2 < kinds[1][0].2 && kinds[1][0].2 < models[2].0[0].2 && models[2].0[0].2 < models[3].0[0].2, msg="\{Repr(models)}")
   // today over the last 7 days (under the share: 今天 is the chats' heading too); each day's date under its bar
   let today = word("今天").filter(fn(w) { w.2 > share[0].2 })
   let week = word("近 7 天")
-  assert_true(today.length() == 1 && week.length() == 1, msg="\{(today, week)}")
-  assert_true(today[0].1 == week[0].1 && today[0].2 < week[0].2, msg="\{(today, week)}")
+  assert_true(today.length() == 1 && week.length() == 1, msg="\{Repr((today, week))}")
+  assert_true(today[0].1 == week[0].1 && today[0].2 < week[0].2, msg="\{Repr((today, week))}")
   assert_true(word("12 个").length() == 1 && word("57 个").length() == 1 && word("$1,911").length() == 1)
   let days = ["10/20", "10/26"].map(fn(d) { word(d) })
-  assert_true(days.iter().all(fn(d) { d.length() == 1 }) && days[0][0].1 < days[1][0].1, msg="\{days}")
+  assert_true(days.iter().all(fn(d) { d.length() == 1 }) && days[0][0].1 < days[1][0].1, msg="\{Repr(days)}")
   // the chats at work now, the tasks run across devices, and still.fail's line
   assert_true(picture_says(t, "9 个对话正在运行") && picture_says(t, "今天用了 3 台设备"))
   assert_true(picture_says(t, "近 7 天 agent 跨设备执行了 312 个任务") && picture_says(t, "平均每个对话 5.2 个"))
@@ -247,16 +247,16 @@ fn share_card_laid(t : @ui.Tester) -> Unit raise {
   // (the picture drawn smaller where its sheet is short, its words laid out as large: over the button as it is drawn,
   // the button in its sheet or dialog)
   let (_, dy, _, dh) = t.get(@ui.Role::Dialog).rect
-  assert_true(line.length() == 1 && button.rect.1 + button.rect.3 <= dy + dh + 0.5, msg="\{(line, button.rect)}")
+  assert_true(line.length() == 1 && button.rect.1 + button.rect.3 <= dy + dh + 0.5, msg="\{Repr((line, button.rect))}")
   // another kind's line and the chats at work's each on one line (as tall as each other, both Meta's)
   match (t.rect_of("OpenCode Go 订阅"), t.rect_of("9 个对话正在运行")) {
-    (Some((_, _, _, oh)), Some((_, _, _, ch))) => assert_true(oh == ch, msg="\{(oh, ch)}")
+    (Some((_, _, _, oh)), Some((_, _, _, ch))) => assert_true(oh == ch, msg="\{Repr((oh, ch))}")
     _ => fail("no other kind's line, or no chats at work")
   }
   // what it says on a line of its own, the more of it under it: neither broken onto two
   let tasks = word("近 7 天 agent 跨设备执行了 312 个任务")
   let more = word("平均每个对话 5.2 个")
-  assert_true(tasks.length() == 1 && more.length() == 1 && tasks[0].4 == more[0].4 && more[0].2 > tasks[0].2, msg="\{(tasks, more)}")
+  assert_true(tasks.length() == 1 && more.length() == 1 && tasks[0].4 == more[0].4 && more[0].2 > tasks[0].2, msg="\{Repr((tasks, more))}")
   assert_true(picture_says(t, "一生万物，万物归一"))
   assert_eq(t.squeeze_faults(), [])
   assert_eq(t.corner_faults(), [])
@@ -469,7 +469,7 @@ test "a look with files of its own (千恋＊万花's): handed out only once its
   // each asked on its own: the look's picture, its tile's small one, the face's two weights
   let asked = held.map(fn(h) { h.0 })
   for file in ["1/a1-murasame-adv.webp", "1/a1-murasame-adv.small.webp", "1/face-400.gz", "1/face-600.gz"] {
-    assert_true(asked.contains(file), msg="\{asked}")
+    assert_true(asked.contains(file), msg="\{Repr(asked)}")
   }
   // nothing to save while they come: the button says so, and does nothing
   assert_true(t.query(Button, label="保存到相册") is None)

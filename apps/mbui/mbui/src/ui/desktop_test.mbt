@@ -396,12 +396,12 @@ test "desktop: what is picked ends where the pointer let it go: dragged down, th
   assert_true(t.ctx().selection_end() is None)
   t.drag(x0, y0, x1, y1)
   let (ex, ey, eh) = t.ctx().selection_end().unwrap()
-  assert_true(ey <= y1 && ey + eh >= y1, msg="\{(ex, ey, eh)}")
-  assert_true((ex - x1).abs() < 15.0, msg="\{(ex, ey, eh)}")
+  assert_true(ey <= y1 && ey + eh >= y1, msg="\{Repr((ex, ey, eh))}")
+  assert_true((ex - x1).abs() < 15.0, msg="\{Repr((ex, ey, eh))}")
   t.drag(x1, y1, x0, y0)
   let (ex, ey, eh) = t.ctx().selection_end().unwrap()
-  assert_true(ey <= y0 && ey + eh >= y0, msg="\{(ex, ey, eh)}")
-  assert_true((ex - x0).abs() < 15.0, msg="\{(ex, ey, eh)}")
+  assert_true(ey <= y0 && ey + eh >= y0, msg="\{Repr((ex, ey, eh))}")
+  assert_true((ex - x0).abs() < 15.0, msg="\{Repr((ex, ey, eh))}")
 }
 
 ///|
@@ -513,7 +513,7 @@ test "desktop: words picked with the pointer held past a list's shown foot (onto
   let o1 = t.list_offset()
   assert_true(o1 > o0 + 80.0, msg="\{o0} \{o1}")
   // (row 1 gone up out of view)
-  assert_true(t.rect_of("row 1 words").map(fn(r) { r.1 + r.3 <= 0.0 }).unwrap_or(true), msg="\{t.rect_of("row 1 words")}")
+  assert_true(t.rect_of("row 1 words").map(fn(r) { r.1 + r.3 <= 0.0 }).unwrap_or(true), msg="\{Repr(t.rect_of("row 1 words"))}")
   let lines = t.ctx().selected_text().split("\n").map(fn(l) { l.to_owned() }).collect()
   assert_true(lines.length() >= 5, msg=t.ctx().selected_text())
   for k in 0..<(lines.length() - 1) {
@@ -929,7 +929,7 @@ test "desktop: a finger or a pointer reaches a target smaller than its room from
   let t = @ui.Tester::new(view, platform=0)
   t.move_to(250.0, 14.0)
   t.draw()
-  assert_true(lit.contains("a") && !lit.contains("b"), msg="\{lit}")
+  assert_true(lit.contains("a") && !lit.contains("b"), msg="\{Repr(lit)}")
 }
 
 ///|

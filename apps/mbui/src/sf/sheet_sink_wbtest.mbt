@@ -53,7 +53,7 @@ fn sink_closed(grow : Bool, body : Double, more : Double, into : Double) -> Unit
   sink_frames(t, into)
   t.key(@ui.key_escape)
   sink_frames(t, @ui.move_most_ms)
-  assert_true(t.find("第一行") is None, msg="\{t.words().map(fn(w) { w.0 })}")
+  assert_true(t.find("第一行") is None, msg="\{Repr(t.words().map(fn(w) { w.0 }))}")
 }
 
 ///|
@@ -89,7 +89,7 @@ test "a sheet rising as what it holds grows: it rises to as tall as it comes to,
     tall.set(true)
     sink_frames(t, @ui.move_most_ms)
     // (risen: its foot at the window's, all of it in the window)
-    guard t.find("最后一行") is Some((_, y)) else { fail("no 最后一行: \{t.words().map(fn(w) { w.0 })}") }
+    guard t.find("最后一行") is Some((_, y)) else { fail("no 最后一行: \{Repr(t.words().map(fn(w) { w.0 }))}") }
     assert_true(y < 844.0, msg="\{y}")
   }
 }
@@ -128,7 +128,7 @@ test "a sheet closed as what it holds grows or shrinks: the same at each moment 
       let jumped = sink_tops(grow, c, false)
       let walked = sink_tops(grow, c, true)
       for i in 0..<jumped.length() {
-        assert_true((jumped[i] - walked[i]).abs() < 1.0e-6, msg="\{c} \{grow}: \{jumped} \{walked}")
+        assert_true((jumped[i] - walked[i]).abs() < 1.0e-6, msg="\{Repr(c)} \{grow}: \{Repr(jumped)} \{Repr(walked)}")
       }
     }
   }
@@ -168,7 +168,7 @@ test "a sheet's sink, said at its moment, goes as it was said whatever what it h
     let as_said = sink_tops_after(c, false)
     let changed = sink_tops_after(c, true)
     for i in 0..<as_said.length() {
-      assert_true((as_said[i] - changed[i]).abs() < 1.0e-6, msg="\{c}: \{as_said} \{changed}")
+      assert_true((as_said[i] - changed[i]).abs() < 1.0e-6, msg="\{Repr(c)}: \{Repr(as_said)} \{Repr(changed)}")
     }
   }
 }
@@ -229,7 +229,7 @@ test "a sheet of nodes closed for a step further in as what it holds grows: the 
   for ms in [1000.0 / 60.0, 1000.0 / 120.0] {
     let walked = cause_own_tops(Some(ms), into)
     for i in 0..<jumped.length() {
-      assert_true((jumped[i] - walked[i]).abs() < 1.0e-9, msg="frames \{ms} ms apart: \{walked} against \{jumped}")
+      assert_true((jumped[i] - walked[i]).abs() < 1.0e-9, msg="frames \{ms} ms apart: \{Repr(walked)} against \{Repr(jumped)}")
     }
   }
 }
@@ -283,6 +283,6 @@ test "a sheet of nodes a step further in, what the new page holds growing as it 
     tops.push(one_sheet(t).0)
   }
   for i in 1..<tops.length() {
-    assert_true(tops[i] <= tops[i - 1] + 1.0e-9, msg="frame \{i}: its top went back down, \{tops}")
+    assert_true(tops[i] <= tops[i - 1] + 1.0e-9, msg="frame \{i}: its top went back down, \{Repr(tops)}")
   }
 }

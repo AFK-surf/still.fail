@@ -78,9 +78,9 @@ test "scrolling moves a keyed row's drawing and target without painting the row 
   t.wheel_told(100.0, 100.0, 0.0, 20.0, 0, at + 17.0)
   t.frame_at(at + 32.0)
   let after_row = t.row(2).unwrap()
-  assert_true(after_row.1 < before_row.1, msg="the row must actually move: \{before_row} -> \{after_row}")
+  assert_true(after_row.1 < before_row.1, msg="the row must actually move: \{Repr(before_row)} -> \{Repr(after_row)}")
   let drawn = t.drawn_rects().filter(fn(r) { r.4 == 0xCC6633FFL })
-  assert_true(drawn.iter().any(fn(r) { (r.1 - after_row.1).abs() < 0.01 }), msg="the row is drawn where it moved: \{drawn} vs \{after_row}")
+  assert_true(drawn.iter().any(fn(r) { (r.1 - after_row.1).abs() < 0.01 }), msg="the row is drawn where it moved: \{Repr(drawn)} vs \{Repr(after_row)}")
   let after_paint = painted.val
   let after_status = row_paint_status(2)
   t.tap_once(100.0, after_row.1 + 20.0)
@@ -217,13 +217,13 @@ test "a row inside the list whose words reach past it is drawn again as the line
   let at = t.time()
   t.frame_at(at + 16.0)
   let before = t.row(3).unwrap()
-  assert_true(before.1 + 40.0 <= 160.001, msg="row 3 is wholly in view: \{before}")
+  assert_true(before.1 + 40.0 <= 160.001, msg="row 3 is wholly in view: \{Repr(before)}")
   t.wheel_told(100.0, 100.0, 0.0, 20.0, 0, at + 17.0)
   t.frame_at(at + 32.0)
   t.frame_at(at + 48.0)
   let after = t.row(3).unwrap()
-  assert_true(after.1 < before.1, msg="row 3 moved up: \{before} -> \{after}")
-  assert_true(after.1 + 40.0 <= 160.001, msg="row 3 is still wholly in view, its lines below it coming in: \{after}")
+  assert_true(after.1 < before.1, msg="row 3 moved up: \{Repr(before)} -> \{Repr(after)}")
+  assert_true(after.1 + 40.0 <= 160.001, msg="row 3 is still wholly in view, its lines below it coming in: \{Repr(after)}")
 }
 
 ///|
@@ -257,7 +257,7 @@ test "a row cut by the list's edge keeps its drawing, what is past the edge left
   t.frame_at(at + 32.0)
   t.frame_at(at + 48.0)
   let after = t.row(0).unwrap()
-  assert_true(after.1 < 0.0 && after.1 + 60.0 > 0.0, msg="row 0 is cut by the list's top: \{before} -> \{after}")
+  assert_true(after.1 < 0.0 && after.1 + 60.0 > 0.0, msg="row 0 is cut by the list's top: \{Repr(before)} -> \{Repr(after)}")
   // (kept as it is cut: painted whole once as it comes to the edge, kept as drawn wholly inside before; then drawn
   // from that as it goes on being cut)
   assert_eq(painted.val, paints + 1, msg="the row is painted once more as the list's edge first cuts it")
@@ -266,7 +266,7 @@ test "a row cut by the list's edge keeps its drawing, what is past the edge left
   t.frame_at(at + 64.0)
   t.frame_at(at + 80.0)
   let later = t.row(0).unwrap()
-  assert_true(later.1 < after.1 && later.1 + 60.0 > 0.0, msg="row 0 moved on, still cut: \{after} -> \{later}")
+  assert_true(later.1 < after.1 && later.1 + 60.0 > 0.0, msg="row 0 moved on, still cut: \{Repr(after)} -> \{Repr(later)}")
   assert_eq(painted.val, cut_paints, msg="the cut row is drawn from what it kept")
 }
 
@@ -377,14 +377,14 @@ test "a row's own clips cut by the list's top are drawn from what it kept" {
   // (row 0 cut by the top from the first step: painted whole once there)
   own_clips_scroll(t, 2)
   let row = t.row(0).unwrap()
-  assert_true(row.1 < 0.0, msg="row 0 is cut by the list's top: \{row}")
+  assert_true(row.1 < 0.0, msg="row 0 is cut by the list's top: \{Repr(row)}")
   let paints = painted.val
   own_clips_scroll(t, 4)
   let later = t.row(0).unwrap()
-  assert_true(later.1 < row.1 && later.1 + 70.0 > 0.0, msg="row 0 moved on, still cut: \{row} -> \{later}")
+  assert_true(later.1 < row.1 && later.1 + 70.0 > 0.0, msg="row 0 moved on, still cut: \{Repr(row)} -> \{Repr(later)}")
   assert_eq(painted.val, paints, msg="the cut row, its own clips cut, is drawn from what it kept")
   let kept = row_kept_drawing(0)
-  assert_true(kept is Some((true, true, _)), msg="kept as painted whole: \{kept}")
+  assert_true(kept is Some((true, true, _)), msg="kept as painted whole: \{Repr(kept)}")
 }
 
 ///|
@@ -464,16 +464,16 @@ test "a row past how far it is painted whole draws what comes into view as a pai
   t.set_rows_on_pixels(true)
   t.draw()
   let row = t.row(0).unwrap()
-  assert_true(row.3 > 160.0 * 2.0 + 160.0, msg="the row reaches past how far it is painted whole: \{row}")
+  assert_true(row.3 > 160.0 * 2.0 + 160.0, msg="the row reaches past how far it is painted whole: \{Repr(row)}")
   // (its lines past the list's clip have glyphs not yet asked for: not drawn there, so it is kept drawn only short of
   // them, rec_reach)
   let kept = row_kept_drawing(0)
-  assert_true(kept is Some((true, true, _)), msg="kept painted whole: \{kept}")
+  assert_true(kept is Some((true, true, _)), msg="kept painted whole: \{Repr(kept)}")
   let reach = row_kept_reach(0)
-  assert_true(reach is Some((b, r)) && r < b, msg="kept short of its lines with glyphs not asked for: \{reach}")
+  assert_true(reach is Some((b, r)) && r < b, msg="kept short of its lines with glyphs not asked for: \{Repr(reach)}")
   own_clips_scroll(t, 80)
   let later = t.row(0).unwrap()
-  assert_true(later.1 + later.3 < 160.0, msg="its foot came into view: \{later}")
+  assert_true(later.1 + later.3 < 160.0, msg="its foot came into view: \{Repr(later)}")
 }
 
 ///|
@@ -486,7 +486,7 @@ test "a row past how far it is painted whole is drawn from what it kept while th
   let first = painted.val
   // (7 points a step: 35 in, inside the half clip, 80, painted whole past it)
   let was = row_kept_drawing(0)
-  assert_true(was is Some((true, true, _)), msg="painted whole: \{was}")
+  assert_true(was is Some((true, true, _)), msg="painted whole: \{Repr(was)}")
   own_clips_scroll(t, 5)
   assert_eq(painted.val, first, msg="drawn from what it kept")
   assert_eq(row_kept_drawing(0), was, msg="the same kept, not painted whole again")
@@ -497,8 +497,8 @@ test "a row past how far it is painted whole is drawn from what it kept while th
   // another place)
   assert_true(again > first && again <= first + 2, msg="painted again once the clip went past how far it was: \{first} -> \{again}")
   match (was, now) {
-    (Some((_, _, y0)), Some((true, true, y1))) => assert_true(y1 < y0, msg="painted whole again further on: \{was} -> \{now}")
-    _ => fail("kept as painted whole again: \{was} -> \{now}")
+    (Some((_, _, y0)), Some((true, true, y1))) => assert_true(y1 < y0, msg="painted whole again further on: \{Repr(was)} -> \{Repr(now)}")
+    _ => fail("kept as painted whole again: \{Repr(was)} -> \{Repr(now)}")
   }
 }
 
@@ -539,7 +539,7 @@ test "a scrolled row's targets are said again from what it kept, and pressed whe
   t.frame_at(at + 16.0)
   t.frame_at(at + 32.0)
   let found = row_kept_targets(1)
-  assert_true(found is Some((true, _)), msg="row 1's targets kept: \{found}")
+  assert_true(found is Some((true, _)), msg="row 1's targets kept: \{Repr(found)}")
   // (moved up 25: row 0 cut by the top, row 1 moved; their targets said again from what was kept, not found again)
   let said : Array[Int] = []
   row_targets_again.val = Some(said)
@@ -548,19 +548,19 @@ test "a scrolled row's targets are said again from what it kept, and pressed whe
   t.frame_at(at + 64.0)
   t.frame_at(at + 80.0)
   let top = t.row(0).unwrap()
-  assert_true(top.1 < 0.0 && top.1 + 60.0 > 0.0, msg="row 0 cut by the top: \{top}")
-  assert_true(said.contains(1), msg="row 1's targets said again from what it kept: \{said}")
+  assert_true(top.1 < 0.0 && top.1 + 60.0 > 0.0, msg="row 0 cut by the top: \{Repr(top)}")
+  assert_true(said.contains(1), msg="row 1's targets said again from what it kept: \{Repr(said)}")
   assert_eq(row_kept_targets(1), found, msg="row 1's targets said again from where they were found")
   // (row 0, cut by the top: found again whole once, then said again from that as it goes on being cut)
   let cut = row_kept_targets(0)
-  assert_true(cut is Some((true, _)), msg="row 0's targets kept as it is cut: \{cut}")
+  assert_true(cut is Some((true, _)), msg="row 0's targets kept as it is cut: \{Repr(cut)}")
   said.clear()
   t.wheel_told(100.0, 100.0, 0.0, 10.0, 0, at + 81.0)
   t.frame_at(at + 96.0)
   t.frame_at(at + 112.0)
   assert_true(t.row(0).unwrap().1 + 60.0 > 0.0, msg="row 0 still in view")
-  assert_true(said.contains(0), msg="row 0's targets said again, cut: \{said}")
-  assert_true(said.contains(1), msg="row 1's targets said again: \{said}")
+  assert_true(said.contains(0), msg="row 0's targets said again, cut: \{Repr(said)}")
+  assert_true(said.contains(1), msg="row 1's targets said again: \{Repr(said)}")
   assert_eq(row_kept_targets(0), cut, msg="row 0's targets said again from where they were found, cut")
   row_targets_again.val = None
   t.tap_once(100.0, 2.0)
@@ -634,7 +634,7 @@ test "a kept row's targets in a layer that comes to pass a finger on pass it on,
   t.frame_at(at + 32.0)
   t.frame_at(at + 48.0)
   let kept = row_kept_targets(0)
-  assert_true(kept is Some((true, _)), msg="row 0's targets kept to be said again: \{kept}")
+  assert_true(kept is Some((true, _)), msg="row 0's targets kept to be said again: \{Repr(kept)}")
   let said : Array[Int] = []
   row_targets_again.val = Some(said)
   pass.set(true)
@@ -644,7 +644,7 @@ test "a kept row's targets in a layer that comes to pass a finger on pass it on,
   assert_true(c.hit_ids.contains(first.val), msg="row 0's target found")
   let passes = c.passes.contains(first.val)
   t.tap_once(100.0, 20.0)
-  assert_eq((pressed, under.val), ([0], 1), msg="the box under the layer pressed through row 0: pressed \{pressed}, under \{under.val}, said again \{said}")
+  assert_eq((pressed, under.val), ([0], 1), msg="the box under the layer pressed through row 0: pressed \{Repr(pressed)}, under \{under.val}, said again \{Repr(said)}")
   assert_true(passes, msg="row 0's target passes the finger on")
 }
 
@@ -669,13 +669,13 @@ test "a kept row that passes a finger on of its own keeps none of its targets to
   t.frame_at(at + 64.0)
   t.frame_at(at + 80.0)
   row_targets_again.val = None
-  assert_true(!said.contains(0) && said.contains(1), msg="row 1's said again, row 0's not: \{said}")
+  assert_true(!said.contains(0) && said.contains(1), msg="row 1's said again, row 0's not: \{Repr(said)}")
   let c = g()
   assert_true(c.passes.contains(first.val), msg="row 0's target passes the finger on")
   let top = t.row(0).unwrap().1
   t.tap_once(100.0, top + 20.0)
   t.tap_once(100.0, t.row(1).unwrap().1 + 20.0)
-  assert_eq((pressed, under.val), ([1], 1), msg="row 0 pressed through to the box under, row 1 pressed: pressed \{pressed}, under \{under.val}")
+  assert_eq((pressed, under.val), ([1], 1), msg="row 0 pressed through to the box under, row 1 pressed: pressed \{Repr(pressed)}, under \{under.val}")
 }
 
 ///|
@@ -734,7 +734,7 @@ test "a kept row's node marked to pass a finger on from another row's build pass
   t.frame_at(at + 64.0)
   t.frame_at(at + 80.0)
   let kept = row_kept_targets(0)
-  assert_true(kept is Some((true, _)), msg="row 0's targets kept to be said again: \{kept}")
+  assert_true(kept is Some((true, _)), msg="row 0's targets kept to be said again: \{Repr(kept)}")
   let before = first_builds.val
   let said : Array[Int] = []
   row_targets_again.val = Some(said)
@@ -747,7 +747,7 @@ test "a kept row's node marked to pass a finger on from another row's build pass
   assert_eq(first_builds.val, before, msg="row 0 not built again")
   assert_true(c.hit_ids.contains(first_id.val), msg="row 0's target found")
   t.tap_once(100.0, 20.0)
-  assert_eq((pressed, under.val), ([], 1), msg="the box under pressed through row 0: pressed \{pressed}, under \{under.val}, said again \{said}")
+  assert_eq((pressed, under.val), ([], 1), msg="the box under pressed through row 0: pressed \{Repr(pressed)}, under \{under.val}, said again \{Repr(said)}")
   assert_true(passes, msg="row 0's target passes the finger on")
 }
 
@@ -820,11 +820,11 @@ test "a rich row cut by the top with glyphs above not yet asked for is drawn fro
   t.draw()
   cold_rich_back(t, 0)
   let top = t.row(0).unwrap()
-  assert_true(top.1 < -100.0 && top.1 + top.3 > 160.0, msg="row 0 cut by both edges: \{top}")
+  assert_true(top.1 < -100.0 && top.1 + top.3 > 160.0, msg="row 0 cut by both edges: \{Repr(top)}")
   let kept = row_kept_drawing(0)
-  assert_true(kept is Some((true, true, _)), msg="kept painted whole: \{kept}")
+  assert_true(kept is Some((true, true, _)), msg="kept painted whole: \{Repr(kept)}")
   let reach = row_kept_reach_top(0)
-  assert_true(reach is Some((b, r)) && r > b, msg="kept short of its lines above with glyphs not asked for: \{reach}")
+  assert_true(reach is Some((b, r)) && r > b, msg="kept short of its lines above with glyphs not asked for: \{Repr(reach)}")
   let (_, r) = reach.unwrap()
   let (_, _, y0) = kept.unwrap()
   // (moved back up while the list's clip, its top at 0, stays inside how far it was kept, moved as the row is: drawn

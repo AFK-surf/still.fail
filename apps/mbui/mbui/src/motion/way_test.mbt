@@ -68,7 +68,7 @@ test "a way set out a fraction into a ms: its time counted from that moment as i
   let want = [50.0 / way_ms, 50.6 / way_ms, 49.9 / way_ms, (way_ms - 0.4) / way_ms]
   assert_eq((w.starts_at(), w.ends_at()), (1000.7, 1000.7 + way_ms))
   for i, x in read {
-    assert_true((x - want[i]).abs() < 1.0e-9, msg="\{i}: \{read} against \{want}")
+    assert_true((x - want[i]).abs() < 1.0e-9, msg="\{i}: \{Repr(read)} against \{Repr(want)}")
   }
 }
 

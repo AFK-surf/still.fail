@@ -180,7 +180,7 @@ test "the avatar going home draws its movement without laying out the chat again
   let until = t.time() + Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() + Pose::Return.ms() / 4.0
   ignore(host_frames_till(t, until))
   guard em.current is Some(turn) && turn.pose == Return else {
-    fail("the avatar is not on its way home: \{em.current.map(fn(c) { c.pose })}")
+    fail("the avatar is not on its way home: \{Repr(em.current.map(fn(c) { c.pose }))}")
   }
   // Compare whole and retained frames above; inspect the next frame itself, without the comparison's rebuild.
   t.check_looks(false)

@@ -63,6 +63,6 @@ test "a picture returning to a rounded card keeps all four thumbnail corners thr
         }
       }
     }
-    assert_eq(bad, 0, msg="\{corners}: pixels changing at a corner")
+    assert_eq(bad, 0, msg="\{Repr(corners)}: pixels changing at a corner")
   }
 }

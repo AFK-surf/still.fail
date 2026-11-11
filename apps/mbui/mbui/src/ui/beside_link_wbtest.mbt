@@ -18,17 +18,17 @@ test "an old view's link across lines: what goes by it goes by the box round all
   t.frame()
   t.frame()
   let lines = t.run_rects("still.fail 的文档在这里")
-  assert_true(lines.length() >= 2, msg="across lines: \{lines}")
+  assert_true(lines.length() >= 2, msg="across lines: \{Repr(lines)}")
   let x0 = lines.fold(init=1.0e9, fn(a, r) { dmin(a, r.0) })
   let y0 = lines.fold(init=1.0e9, fn(a, r) { dmin(a, r.1) })
   let x1 = lines.fold(init=-1.0e9, fn(a, r) { dmax(a, r.0 + r.2) })
   let y1 = lines.fold(init=-1.0e9, fn(a, r) { dmax(a, r.1 + r.3) })
   guard rect.val is Some((rx, ry, rw, rh)) else { fail("no rect") }
   // (its first line's piece starts past the words before it: the box from the start of the next)
-  assert_true(lines[0].0 > x0 + 0.5, msg="its first piece past its start: \{lines}")
+  assert_true(lines[0].0 > x0 + 0.5, msg="its first piece past its start: \{Repr(lines)}")
   assert_true(
     (rx - x0).abs() < 1.0 && (ry - y0).abs() < 1.0 && (rx + rw - x1).abs() < 1.0 && (ry + rh - y1).abs() < 1.0,
-    msg="round all of it: \{rect.val} for \{lines}",
+    msg="round all of it: \{Repr(rect.val)} for \{Repr(lines)}",
   )
 }
 
@@ -107,7 +107,7 @@ fn link_and_card(words : @view.NodeId, card : @view.NodeId) -> ((Double, Double,
 /// That the card is under the link's box at its start, 4 off (as it is drawn: `what`).
 fn card_under(words : @view.NodeId, card : @view.NodeId, what : String) -> (Double, Double) raise {
   let ((lx, ly, _, lh), (cx, cy)) = link_and_card(words, card)
-  assert_true((cx - lx).abs() < 0.01 && (cy - (ly + lh + 4.0)).abs() < 0.01, msg="\{what}: card at \{(cx, cy)}, link \{(lx, ly, lh)}")
+  assert_true((cx - lx).abs() < 0.01 && (cy - (ly + lh + 4.0)).abs() < 0.01, msg="\{what}: card at \{Repr((cx, cy))}, link \{Repr((lx, ly, lh))}")
   (cx, cy)
 }
 
@@ -126,7 +126,7 @@ test "a card beside a node's link across lines: under the box round all its piec
   tree.event(t.time(), fn() { w.set(300.0) })
   t.draw()
   let wider = card_under(words, card, "laid out wider")
-  assert_true(wider != first, msg="moved with it: \{first} \{wider}")
+  assert_true(wider != first, msg="moved with it: \{Repr(first)} \{Repr(wider)}")
   // (what holds it moved)
   tree.event(t.time(), fn() { dx.set(70.0) })
   t.draw()
@@ -138,7 +138,7 @@ test "a card beside a node's link across lines: under the box round all its piec
   })
   t.draw()
   let said = card_under(words, card, "its words said again")
-  assert_true(said != moved, msg="with its words: \{moved} \{said}")
+  assert_true(said != moved, msg="with its words: \{Repr(moved)} \{Repr(said)}")
   // (a frame with nothing changed: nothing placed, its piece not asked)
   let was = asked.val
   t.draw()

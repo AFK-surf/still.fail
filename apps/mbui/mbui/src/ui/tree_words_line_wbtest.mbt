@@ -21,10 +21,10 @@ test "words of the tree's on one line: a break in them run on, one line high, as
   t.draw()
   let (_, h) = @signals.untracked(fn() { node.val.unwrap().laid_size() })
   assert_eq(h, 22.0)
-  assert_true(t.find("一行 两行") is Some(_), msg="\{t.words()}")
+  assert_true(t.find("一行 两行") is Some(_), msg="\{Repr(t.words())}")
   // (found so by a drive's step, exactly; read out so by the group holding it)
   assert_eq(tree_on_screen(t.ctx(), "=一行 两行").length(), 1)
-  assert_true(t.semantics().iter().any(fn(s) { s.role == Group && s.label == "一行 两行" }), msg="\{t.semantics()}")
+  assert_true(t.semantics().iter().any(fn(s) { s.role == Group && s.label == "一行 两行" }), msg="\{Repr(t.semantics())}")
 }
 
 ///|
@@ -53,7 +53,7 @@ fn runs_high(wrap : Bool) -> (Tester, Double) {
 test "words in pieces on one line: a break across them run on as one, one line high; wrapped, two lines" {
   let (t, h) = runs_high(false)
   assert_eq(h, 22.0)
-  assert_true(t.find("粗体 细体") is Some(_), msg="\{t.words()}")
+  assert_true(t.find("粗体 细体") is Some(_), msg="\{Repr(t.words())}")
   let (_, h) = runs_high(true)
   assert_eq(h, 44.0)
 }

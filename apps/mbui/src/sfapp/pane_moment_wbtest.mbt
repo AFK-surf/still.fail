@@ -61,7 +61,7 @@ test "大屏: the sidebar folded and opened again while the block goes: from whe
   let (col, was, from) = one
   // (set out back from where the fold had the block at that moment, its column on its way between)
   assert_eq(from, was)
-  assert_true(was.1 > @sfdesk.rail_w && was.1 < col, msg="at the turn \{was}, open \{col}")
+  assert_true(was.1 > @sfdesk.rail_w && was.1 < col, msg="at the turn \{Repr(was)}, open \{col}")
 }
 
 ///|

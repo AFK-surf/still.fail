@@ -194,10 +194,10 @@ test "共享调试 alone in a paragraph: a link, nothing in the chat lending the
   // (alone: its title, as one bare in a sentence)
   // (its paragraph's words, the link at their start)
   let alone = t.words().filter(fn(w) { w.0 == "共享调试" })
-  guard alone.last() is Some(w) else { fail("the link alone: \{t.words().map(fn(w) { w.0 })}") }
+  guard alone.last() is Some(w) else { fail("the link alone: \{Repr(t.words().map(fn(w) { w.0 }))}") }
   t.tap(w.1 + 8.0, w.2 + w.4 / 2.0)
   t.draw()
-  assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb"], msg="\{alone}")
+  assert_eq(t.opened(), ["https://still.fail/w/ws1/s/st1/adb"], msg="\{Repr(alone)}")
   assert_eq(t.native_asked().filter(fn(a) { a.0 == "adb.start" }), [])
 }
 

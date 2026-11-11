@@ -60,5 +60,5 @@ test "an old layer with its own take_back said in it over the view's own: Escape
   on_back(2, 0.0, 1.0, 0)
   let at_once = closed.copy()
   t.draw()
-  assert_eq((at_once, outer.get()), (["底页"], false), msg="\{closed}")
+  assert_eq((at_once, outer.get()), (["底页"], false), msg="\{Repr(closed)}")
 }

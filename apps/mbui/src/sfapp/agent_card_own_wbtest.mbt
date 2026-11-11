@@ -65,24 +65,24 @@ test "wide: an agent's card with its model's own week: three chips whole, beside
     let one = fn(words : String) {
       match shown.filter(fn(w) { w.0 == words }) {
         [w] => w
-        found => @halt.saying("\{name}: \{words}: \{found} in \{shown.map(fn(w) { w.0 })}")
+        found => @halt.saying("\{name}: \{words}: \{Repr(found)} in \{Repr(shown.map(fn(w) { w.0 }))}")
       }
     }
     // each chip its mark and its figure on one line, the model's own after the account's
     let chips = [("5H", "62%"), ("W", "18%"), ("Fable", "46%")].map(fn(c) { (one(c.0), one(c.1)) })
-    assert_true(chips.iter().all(fn(c) { c.0.2 == chips[0].0.2 && c.1.1 > c.0.1 }), msg="\{name}: \{chips}")
-    assert_true(chips[1].0.1 > chips[0].1.1 && chips[2].0.1 > chips[1].1.1, msg="\{name}: \{chips}")
+    assert_true(chips.iter().all(fn(c) { c.0.2 == chips[0].0.2 && c.1.1 > c.0.1 }), msg="\{name}: \{Repr(chips)}")
+    assert_true(chips[1].0.1 > chips[0].1.1 && chips[2].0.1 > chips[1].1.1, msg="\{name}: \{Repr(chips)}")
     // its account's name whole: before them on their line, or on the line over them
     let named = one(name)
     assert_true(t.text_runs().iter().any(fn(r) { r.text == name }), msg="\{name}: drawn whole")
-    assert_true(t.squeeze_faults().is_empty(), msg="\{name}: \{t.squeeze_faults()}")
+    assert_true(t.squeeze_faults().is_empty(), msg="\{name}: \{Repr(t.squeeze_faults())}")
     lines.push(if named.2 + named.4 <= chips[0].0.2 { 2 } else { 1 })
     if lines[lines.length() - 1] == 1 {
-      assert_true(named.1 + named.3 <= chips[0].0.1, msg="\{name}: \{named} \{chips}")
+      assert_true(named.1 + named.3 <= chips[0].0.1, msg="\{name}: \{Repr(named)} \{Repr(chips)}")
     } else {
       // (its name where its label starts over it; the chips under it at the line's end still)
-      assert_eq(named.1, one("Claude · Opus 5.5").1, msg="\{name}: \{named}")
-      assert_true(chips[2].1.1 + chips[2].1.3 > named.1 + 100.0, msg="\{name}: \{named} \{chips}")
+      assert_eq(named.1, one("Claude · Opus 5.5").1, msg="\{name}: \{Repr(named)}")
+      assert_true(chips[2].1.1 + chips[2].1.3 > named.1 + 100.0, msg="\{name}: \{Repr(named)} \{Repr(chips)}")
     }
   }
   assert_eq(lines, [1, 2])

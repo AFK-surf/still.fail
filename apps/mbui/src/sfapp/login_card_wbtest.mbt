@@ -360,7 +360,7 @@ test "a code-pasting login's card in its chat and on its station's page beside i
   assert_eq(side_now({ station: "ws1/st1", session: "s-c1", title: "", station_name: "" }).1, "station:[\"ws1/st1\"]")
   assert_true(t.find("这部分显示出错了") is None)
   let fields = t.locate("粘贴登录码")
-  assert_eq(fields.length(), 2, msg="\{fields}")
+  assert_eq(fields.length(), 2, msg="\{Repr(fields)}")
   // what is typed in the one is its own: typed on the station's page
   let (x, y) = fields.iter().find_first(fn(p) { p.0 > 800.0 }).unwrap()
   t.tap(x, y)
@@ -368,5 +368,5 @@ test "a code-pasting login's card in its chat and on its station's page beside i
   t.frame()
   // (完成 shows once a code is in: on the station's page's card alone)
   let done = t.locate("完成")
-  assert_true(done.length() == 1 && done[0].0 > 800.0, msg="\{done}")
+  assert_true(done.length() == 1 && done[0].0 > 800.0, msg="\{Repr(done)}")
 }

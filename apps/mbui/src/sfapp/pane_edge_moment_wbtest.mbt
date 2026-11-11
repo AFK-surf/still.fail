@@ -89,7 +89,7 @@ test "大屏: the sidebar's list's thumb shown where the edge's strip is: a mous
   let g = 4.0
   let x0 = if tx - g > ex { tx - g } else { ex }
   let x1 = if tx + tw + g < ex + ew { tx + tw + g } else { ex + ew }
-  assert_true(x1 > x0 && ty + th / 2.0 > ey && ty + th / 2.0 < ey + eh, msg="thumb \{(tx, ty, tw, th)} edge \{(ex, ey, ew, eh)}")
+  assert_true(x1 > x0 && ty + th / 2.0 > ey && ty + th / 2.0 < ey + eh, msg="thumb \{Repr((tx, ty, tw, th))} edge \{Repr((ex, ey, ew, eh))}")
   let (px, py) = ((x0 + x1) / 2.0, ty + th / 2.0)
   // (where the list is, by its thumb: down it as the list scrolls on)
   let before = ty

@@ -141,7 +141,7 @@ test "a quote sent while the composer opens leaves from where it was seen" {
   tap_send(t)
   assert_true(send_flight.get() is Some(_), msg="the message was not sent")
   let after = quote_once(t)
-  assert_true((after.0 - before.0).abs() < 1.0 && (after.1 - before.1).abs() < 1.0, msg="the quote jumped from \{before} to \{after} on sending")
+  assert_true((after.0 - before.0).abs() < 1.0 && (after.1 - before.1).abs() < 1.0, msg="the quote jumped from \{Repr(before)} to \{Repr(after)} on sending")
 }
 
 ///|
@@ -167,7 +167,7 @@ test "a picture sent while the composer opens leaves from where it was seen" {
   }
   let visible_before = (dmax(before[1], before[17]), dmin(before[1] + before[3], before[19]))
   let visible_after = (dmax(sent[1], sent[17]), dmin(sent[1] + sent[3], sent[19]))
-  assert_true((visible_after.0 - visible_before.0).abs() < 1.0 && (visible_after.1 - visible_before.1).abs() < 1.0, msg="the picture's visible part changed from \{visible_before} to \{visible_after} on sending")
+  assert_true((visible_after.0 - visible_before.0).abs() < 1.0 && (visible_after.1 - visible_before.1).abs() < 1.0, msg="the picture's visible part changed from \{Repr(visible_before)} to \{Repr(visible_after)} on sending")
   assert_true((sent[11] - before[11]).abs() < 0.03, msg="the picture's opacity changed on sending")
 }
 
