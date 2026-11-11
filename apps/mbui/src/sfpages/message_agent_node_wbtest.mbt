@@ -98,26 +98,6 @@ fn ag_new_row(w : Double, m : () -> Message, platform? : Int = 0, src? : Source,
 }
 
 ///|
-/// What `t.audit()` says of these rows, but a code block's keys (换行, 复制) with less than 36 high to be pressed in
-/// (sf/markdown_node.mbt), said exactly `keys` times (two a block of code). The rule's way of working out a press's
-/// room, not the block's: it parts a key's room with what scrolls the code under it as neighbours of one layer, where
-/// the hit test reaches the key all round it as far as a press's room, over what scrolls too (ra4-20, ra4-21: pressed 6
-/// over it and 10 under it, the key's). Kept for the Tester's checks' line to mend (the coordinator, 2026-11-11); one
-/// more or one fewer is a fault, so that once mended this is taken out.
-fn ag_audit(t : @ui.Tester, keys : Int) -> Array[String] {
-  let all = t.audit()
-  let known = all.filter(fn(f) {
-    f.has_prefix("room: ") && f.contains("sf/markdown_node.mbt") && f.contains("to be pressed in, under 36") &&
-    (f.contains("「换行」") || f.contains("「复制」"))
-  })
-  let faults = all.filter(fn(f) { !known.contains(f) })
-  if known.length() != keys {
-    faults.push("a code block's keys short of room \{known.length()} times, \{keys} known: " + known.join(" | "))
-  }
-  faults
-}
-
-///|
 /// What a Tester draws (head_drawn's), each place and size to a hundredth of a point (the old view's sums leave tails
 /// the nodes' do not).
 fn ag_drawn(t : @ui.Tester) -> String {
@@ -125,6 +105,20 @@ fn ag_drawn(t : @ui.Tester) -> String {
   t.words().map(fn(w) { "\{w.0}@\{r(w.1)},\{r(w.2)} \{r(w.3)}x\{r(w.4)} a\{w.5}" }).join("\n") +
   "\n" +
   t.drawn_rects().map(fn(d) { "\{r(d.0)},\{r(d.1)} \{r(d.2)}x\{r(d.3)} \{d.4}" }).join("\n")
+}
+
+///|
+/// How many rooms `t.audit()` finds short in a case named `name` (ag_cases'), `w` wide, of its head's time (「1 分钟前」,
+/// sfpages/message_head_node.mbt): narrow, where the first line of its words is a link right under the head, the time
+/// is pressed in 44×34 where 36 is due, 2 short (links: 1; the rest none). That line is drawn as the old view drew it,
+/// each item alike (this file's first test), so it is the old arrangement's, not mended where the rule is changed: known,
+/// held exactly, only to fall (the coordinator of the migration, 2026-11-12; xfer/chat-wire-list.md).
+fn ag_rooms(name : String, w : Double) -> Int {
+  if name == "links" && w < 760.0 {
+    1
+  } else {
+    0
+  }
 }
 
 ///|
@@ -142,6 +136,7 @@ fn ag_cases() -> Array[(String, Message, Source?)] {
 
 ///|
 test "what an agent said, made once as nodes, is drawn as the old view drew it: its Markdown, its links, a file it places and its others, still.fail's own, wide and narrow" {
+  let said : Array[String] = []
   for c in ag_cases() {
     for w in [760.0, 390.0] {
       let at = "\{c.0} at \{w}"
@@ -151,9 +146,23 @@ test "what an agent said, made once as nodes, is drawn as the old view drew it: 
       let t = ag_new_row(w, fn() { c.1 }, src?=c.2, h=ag_high(c.0))
       t.run_for(@ui.move_most_ms)
       assert_eq(ag_drawn(t), was, msg=at)
-      assert_eq(ag_audit(t, if c.1.text.contains("prose") { 2 } else { 0 }), [], msg=at)
+      let faults = t.audit()
+      let time = faults.filter(fn(f) {
+        f.has_prefix("room: ") &&
+        f.contains("stillfail/src/sfpages/message_head_node.mbt:") &&
+        f.contains("to be pressed in, under 36")
+      })
+      if time.length() != ag_rooms(c.0, w) {
+        said.push(at + ": its head's time short of room \{time.length()} times, \{ag_rooms(c.0, w)} known: " + time.join(" | "))
+      }
+      for f in faults {
+        if !time.contains(f) {
+          said.push(at + ": " + f)
+        }
+      }
     }
   }
+  assert_eq(said, [], msg=said.join("\n"))
 }
 
 ///|
@@ -181,7 +190,8 @@ test "what an agent said at the system's words set to 1.3 is drawn as the old vi
     t.set_font_scale(1.3)
     t.run_for(@ui.move_most_ms)
     assert_eq(ag_drawn(t), was, msg=c.0)
-    assert_eq(ag_audit(t, 0), [], msg=c.0)
+    let faults = t.audit()
+    assert_eq(faults, [], msg=c.0 + ": " + faults.join(" | "))
   }
 }
 
@@ -261,7 +271,8 @@ test "a link in what an agent said opens where it leads tapped; right clicked, i
   t.right_click(x, y)
   t.draw()
   assert_false(@sf.presenting(), msg="nothing opens beside it here")
-  assert_eq(ag_audit(t, 0), [])
+  let faults = t.audit()
+  assert_eq(faults, [], msg=faults.join(" | "))
   @sf.presenters_reset()
 }
 

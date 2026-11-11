@@ -3715,7 +3715,9 @@ pub fn Tree::claimers_at(
       let least = self.least_now()
       let near : Array[Near] = []
       let order = Ref(0)
-      self.each_drawn_scaled(fn(c, cx, cy, _, s) {
+      // (the last drawn there that hides what is under it: Node::covers, as Tree::target_at)
+      let covered = Ref(-1)
+      self.each_drawn_scaled(fn(c, cx, cy, a, s) {
         let o = order.val
         order.val = o + 1
         let n = self.nodes[c.id.at]
@@ -3726,6 +3728,8 @@ pub fn Tree::claimers_at(
             n.claims is Some(_) ||
             (n.hosted && @signals.untracked(fn() { there(c.id) })) {
             found.val = Some((c.id, o, (cx, cy, cx + c.w * s, cy + c.h * s)))
+          } else if n.covers(a) {
+            covered.val = o
           }
         } else {
           self.near_said(n, c, cx, cy, s, x, y, least, o, near)
@@ -3735,7 +3739,7 @@ pub fn Tree::claimers_at(
         Some((id, o, box)) => {
           let n = self.nodes[id.at]
           let top = if n.hosted { Hosted(id) } else if n.on_drag is Some(_) { Dragged(id) } else { Pressed(id) }
-          match self.reached(top, o, box, near, x, y, least) {
+          match self.reached(top, o, box, near, x, y, least, covered=covered.val) {
             Pressed(r) | Dragged(r) => Some(r)
             _ => Some(id)
           }
@@ -11013,7 +11017,9 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
   let boxes : Array[(Double, Double, Double, Double)] = []
   let near : Array[Near] = []
   let order = Ref(0)
-  self.each_drawn_scaled(fn(c, cx, cy, _, s) {
+  // (the last drawn there that hides what is under it: Node::covers)
+  let covered = Ref(-1)
+  self.each_drawn_scaled(fn(c, cx, cy, a, s) {
     let o = order.val
     order.val = o + 1
     self.work.found_walked = self.work.found_walked + 1
@@ -11033,6 +11039,9 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
       } else if n.top_row {
         TopRow(c.id)
       } else {
+        if n.covers(a) {
+          covered.val = o
+        }
         return
       }
       found.push(t)
@@ -11047,7 +11056,7 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
     Some(i) => (orders[i], boxes[i])
     None => (-1, (0.0, 0.0, 0.0, 0.0))
   }
-  self.reached(top, top_order, top_box, near, x, y, least)
+  self.reached(top, top_order, top_box, near, x, y, least, covered=covered.val)
 }
 
 ///|

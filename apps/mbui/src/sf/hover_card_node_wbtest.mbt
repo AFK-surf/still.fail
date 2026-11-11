@@ -17,9 +17,10 @@ struct HoverRig {
 ///|
 /// Two triggers in a row, 甲 and 乙 (buttons 120 by 32, 40 apart, 40 in), each with its card holding its name's words
 /// and its key, and after them 丙 (60 by 20, pressed for nothing) in 外 (a button 120 wide, 44 high, as a bar's name in
-/// its bar; `cramped`, 32 high: less room than a press takes), in a window 800 by 500 (`platform` 0 a mouse's, 1 a
-/// touch screen's): 甲's and 乙's holders taking input while `takes` says, a modal layer over all of it while `modal`,
-/// 甲's card kept open while `held`; 甲's and 乙's cards `along_offset` along and beside their `piece`.
+/// its bar; `cramped`, 32 high, a neighbour that takes presses right under 丙: less room than a press takes), in a
+/// window 800 by 500 (`platform` 0 a mouse's, 1 a touch screen's): 甲's and 乙's holders taking input while `takes`
+/// says, a modal layer over all of it while `modal`, 甲's card kept open while `held`; 甲's and 乙's cards
+/// `along_offset` along and beside their `piece`.
 fn hover_rig(
   platform? : Int = 0,
   along_offset? : Double = 0.0,
@@ -83,6 +84,22 @@ fn hover_rig(
       |> ignore
     })
     |> ignore
+    // (cramped: right under 丙, at 外's foot, a neighbour as wide as 丙 that takes presses, so that 丙's room ends there:
+    // a hold reaches it from round it as a press does, and with nothing under 外 it would be reached from there. 外's
+    // own room, down its middle past 丙's end, as it was)
+    if cramped {
+      root.box(fn(u) {
+        u
+        .over(Is(true))
+        .offset(Is((360.0, 32.0)))
+        .width(Is(Some(60.0)))
+        .height(Is(Some(44.0)))
+        .says(Is(Some(@view.said(Button, label="丙下"))))
+        |> ignore
+        presses_node(u, fn() {  })
+      })
+      |> ignore
+    }
     // (丁: a finger's tap its own (`tapped` alone), in 拖, which a press drags (a bar dragging the window): how many
     // presses went down on 拖, in `pressed`)
     root.box(fn(g) { g.width(Is(Some(40.0))) |> ignore }) |> ignore
