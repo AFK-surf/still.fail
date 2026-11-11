@@ -139,6 +139,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 
 ## Running the app in development
 
+- Source `scripts/env.sh` before invoking MoonBit in development, including remote task commands. Keep its `moon`
+  wrapper on PATH: it preserves file/line/code/message and JSON diagnostics without huge source excerpts. Do not
+  invoke the toolchain's absolute `moon` path, replace PATH, or bypass the wrapper to get rendered diagnostics;
+  inspect the named source lines instead (the user, 2026-11-11: agents must not accidentally restore full warnings).
 - `scripts/wasm-app.sh run` runs the Mac app built for Wasm in mbui's native shell (the user, 2026-11-03: no C of the
   app compiled in development); `build` alone builds it (the shell is built again only when the host's C, the core's
   parts or the declarations change). `e2e/run.sh mac` runs it too outside CI. The

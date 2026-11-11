@@ -6,6 +6,19 @@ if [ -n "$TOOLS" ] && [ -d "$TOOLS" ]; then
   export PATH=$MOON_HOME/bin:$TOOLS/go/bin:$HOME/.local/bin:$PATH
 fi
 
+# Keep the compact MoonBit entry point on PATH for child shells and `env moon` too. Record the toolchain before
+# adding it, so callers looking for the runtime never mistake the wrapper for the MoonBit installation.
+MBUI_MOON_BIN=$(cd "$(dirname "${BASH_SOURCE[0]}")/moon-bin" && pwd)
+if [ -n "${MOON_HOME:-}" ] && [ -x "$MOON_HOME/bin/moon" ]; then
+  export MBUI_REAL_MOON="$MOON_HOME/bin/moon"
+elif [ "$(command -v moon || true)" != "$MBUI_MOON_BIN/moon" ]; then
+  export MBUI_REAL_MOON=$(command -v moon || true)
+fi
+if [ -n "${MBUI_REAL_MOON:-}" ]; then
+  export MOON_HOME=${MOON_HOME:-$(dirname "$(dirname "$MBUI_REAL_MOON")")}
+  export PATH="$MBUI_MOON_BIN:$PATH"
+fi
+
 # Where moon builds package $1 (its directory under src) for target $2 (native, js) in mode $3 (release, debug), from
 # the module's directory: a workspace's of more than one module (moon.work: an app of a module beside mbui,
 # MBUI_APP_MOD) under its module's name; mbui's own (moon.work, itself alone: kept from the app's workspace above it in
