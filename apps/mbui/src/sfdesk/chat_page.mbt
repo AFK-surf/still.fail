@@ -7,14 +7,14 @@
 
 ///|
 /// What the chat's page keeps of its own (the rest is the core's): its info's popover open, its services' popover
-/// open, archiving it asked to confirm (its key, "" none: one keeping watch). The popovers' as signals: opened or
+/// open, archiving it asked to confirm (its key, "" none: one keeping watch; asked from its bar's node). All signals: opened or
 /// closed from another island than the page's (an item of the system's bars chosen as the frame under the tape is
 /// built, after the page was: rail_native.mbt), the page's is told and built again, not kept as it was till the hand
 /// comes to it (an iPhone Duo's ⓘ, 2026-11-01: the popover only once a finger moved).
 priv struct ChatOwn {
   info_open : @signals.Signal[Bool]
   jobs_open : @signals.Signal[Bool]
-  mut archive_asking : String
+  archive_asking : @signals.Signal[String]
 }
 
 ///|
@@ -22,14 +22,16 @@ priv struct ChatOwn {
 let chat_own : ChatOwn = {
   info_open: @signals.signal(false, same=fn(a, b) { a == b }),
   jobs_open: @signals.signal(false, same=fn(a, b) { a == b }),
-  archive_asking: "",
+  archive_asking: @signals.signal("", same=fn(a, b) { a == b }),
 }
 
 ///|
 fn chat_page_reset() -> Unit {
   chat_own.info_open.set(false)
   chat_own.jobs_open.set(false)
-  chat_own.archive_asking = ""
+  chat_own.archive_asking.set("")
+  chat_bar_from.info_node = None
+  chat_bar_from.jobs_node = None
 }
 
 ///|
@@ -64,8 +66,8 @@ pub fn chat_find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
 }
 
 ///|
-/// The chat `r` in the pane.
-fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
+/// The chat `r` in the pane; its bar the page node's where `barred` (chat_bar_wide_node), its room alone here.
+fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, barred? : Bool = false) -> Unit {
   let chat = src.topic("chat", chat_params(r)).get().value
   let view = view_of_chat(src, r).0
   let key = chat_key(r)
@@ -94,7 +96,18 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
       let pane = c.id("chat/pane")
       c.box(style=side_panel_style, id=pane, fn() {
         chat_talk(c, src, w, r, pane, fn() {
-          let bar = c.layer(fn() { chat_bar(c, src, w, r, view, chat, list) })
+          // (on 大屏 the bar is the page node's, laid over its room (chat_bar_wide_node): what runs under it keeps clear
+          // of it, as of the old bar; the page's Bar all the same, so that what flies in it lands under it; what the bar
+          // hands the system's bars, and what it asks to confirm, as the page is built)
+          let bar = c.layer(fn() {
+            if !barred {
+              chat_bar(c, src, w, r, view, chat, list)
+            } else {
+              let room = c.box(style=@ui.style(w=Full, h=Fixed(chat_bar_room())), fn() {  })
+              c.floats_over(room)
+              chat_bar_handed(c, src, w, r, view, chat)
+            }
+          })
           c.stratum(bar, Bar)
           over_flight(c, bar)
           match view {
@@ -196,7 +209,7 @@ fn stop_agents(src : Source, r : ChatRef, v : ChatView) -> Unit {
 /// Into the archive, asked first where the chat keeps watch (in the core's words).
 fn archive_asked(src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   if field(chat, "watch") is Some(Object(_)) {
-    chat_own.archive_asking = chat_key(r)
+    chat_own.archive_asking.set(chat_key(r))
   } else {
     archive(src, w, r, v)
   }
@@ -429,23 +442,101 @@ fn chat_bar(
   })
   // over the messages: their scroll bar keeps clear of it
   c.floats_over(bar_row)
-  // a chat keeping watch, archived once asked (the core's words)
+  chat_archive_confirm(c, src, w, r, v, chat)
+}
+
+///|
+/// What the chat's bar (its node: chat_bar_wide_node) leaves to the page as it is built: its "…"'s row held while the
+/// page is open; its actions handed the system's bars where it has them, each its own button there (rail_native.mbt
+/// bar_chat), the actions of the chat before kept there till its own come (bar_chat_waiting); archiving it asked to
+/// confirm where it keeps watch (in the core's words).
+fn chat_bar_handed(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?, chat : Json?) -> Unit {
+  // (its "…" is its chat's whole row's: held while its page is open, asked as it opens, @sfpages.chat_menu_of)
+  @sfbase.chat_whole_held(src, r) |> ignore
+  match v {
+    // (a chat's ⌘F bar in place of the buttons: nothing of them handed)
+    Some(view) if find_chat() == chat_key(r) && view.thread is Some(_) => ()
+    Some(view) => {
+      let archivable = view.archivable && !view.archived
+      let archive = fn() { archive_asked(src, w, r, view, chat) }
+      let info = fn() { chat_own.info_open.set(!chat_own.info_open.untracked()) }
+      let extra = @sfpages.chat_extra_items(src, r, chat)
+      let more = fn() {
+        let (from, along) = bar_menu_from(c, c.id("chat-more"))
+        @sfpages.open_chat_menu(src, w.id, r, extra, from~, along~)
+      }
+      let rows = if @sf.native_on() {
+        @sfpages.chat_menu_of(src, w.id, r, extra, share_from=fn() { bar_menu_from(c, c.id("chat-more")).0 })
+      } else {
+        []
+      }
+      let screens = view.screens
+      let screen = if screens.length() > 0 {
+        Some(
+          (
+            fn() {
+              let (from, along) = bar_menu_from(c, c.id("chat-screen"))
+              chat_screens_open(r, screens, from~, along~)
+            },
+            chat_screens_driven(screens),
+          ),
+        )
+      } else {
+        None
+      }
+      let jobs_view = src.topic("chatJobs", chat_jobs_summary_params(r)).get().value
+      let jobs = if flag(jobs_view, "hasJobs") || items(jobs_view, "jobs").length() > 0 {
+        Some((jobs_toggle, text(jobs_view, "alarm") != ""))
+      } else {
+        None
+      }
+      // (the short column, no room in it for their own buttons: the first rows of its "…", a line under them; the
+      // user, 2026-11-07: 右上角那两个按钮应该收到右侧边栏)
+      let rows = if @sf.native_on() && column_short.get() {
+        let firsts : Array[@sf.MenuItem?] = []
+        match screen {
+          Some((act, _)) => firsts.push(Some(@sf.menu_item_of(@sf.t("web-pages.chat.screen"), icon="monitor", act)))
+          None => ()
+        }
+        match jobs {
+          Some((act, _)) => firsts.push(Some(@sf.menu_item_of(@sf.t("web-pages.chat.services"), icon="web", act)))
+          None => ()
+        }
+        if firsts.length() > 0 {
+          firsts.push(None)
+        }
+        firsts + rows
+      } else {
+        rows
+      }
+      bar_chat(src, r, view.agents, info, rows, more, jobs, screen, if archivable { Some(archive) } else { None })
+      |> ignore
+    }
+    // (not read yet: the actions of the chat before it kept in the system's bars till its own come)
+    None => bar_chat_waiting() |> ignore
+  }
+  chat_archive_confirm(c, src, w, r, v, chat)
+}
+
+///|
+/// A chat keeping watch, archived once asked (the core's words).
+fn chat_archive_confirm(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?, chat : Json?) -> Unit {
   @sf.confirm_dialog(
     c,
     "archive-confirm/" + chat_key(r),
-    chat_own.archive_asking == chat_key(r),
+    chat_own.archive_asking.get() == chat_key(r),
     @sf.t("web-pages.chat.archiveConfirm", args=[("title", match v { Some(view) => view.title; None => r.title })]),
     text(field(chat, "watch"), "ask"),
     @sf.t("web-pages.chat.archive"),
     cancel=@sf.t("common.cancel"),
     on_confirm=fn() {
-      chat_own.archive_asking = ""
+      chat_own.archive_asking.set("")
       match v {
         Some(view) => archive(src, w, r, view)
         None => ()
       }
     },
-    on_close=fn() { chat_own.archive_asking = "" },
+    on_close=fn() { chat_own.archive_asking.set("") },
   )
 }
 
@@ -782,16 +873,17 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
     chat_own.info_open.set(false)
     chat_own.jobs_open.set(false)
   }
-  // (its ⋯ in the system's bars: from the mark where it was chosen, rail_native.mbt)
+  // (its ⋯ in the system's bars: from the mark where it was chosen, rail_native.mbt; its button the bar node's, beside
+  // it where it is: chat_bar_by)
   let (info_at, info_side, info_along) = bar_anchor(c.id("chat-info"), Bottom, End)
   // (closed by what was pressed in it; dismissed by the hand, Escape or a press outside it and its button, at that
   // moment)
   c.with_dismissed(fn(_) { chat_own.info_open.set(false) }, fn() {
-    @kit.popover(
+    @sf.popover_from(
       c,
       "chat-info-pop",
       chat_own.info_open.get(),
-      info_at,
+      chat_bar_by(info_at, c.id("chat-info"), chat_bar_from.info_node),
       side=info_side,
       along=info_along,
       look=@sf.beside_look(@ui.Size::Px(chat_info_w)),
@@ -807,11 +899,11 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
 fn chat_jobs_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   // (its button in the system's bars: from the mark where it was chosen, rail_native.mbt)
   let (at, side, along) = bar_anchor(c.id("chat-jobs"), Bottom, End)
-  @kit.popover(
+  @sf.popover_from(
     c,
     "chat-jobs-pop",
     chat_own.jobs_open.get(),
-    at,
+    chat_bar_by(at, c.id("chat-jobs"), chat_bar_from.jobs_node),
     side~,
     along~,
     look=@sf.beside_look(@ui.Size::Px(jobs_pop_w)),
@@ -828,6 +920,17 @@ fn chat_jobs_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
     },
   )
   |> ignore
+}
+
+///|
+/// What a popover of the bar opens beside (`at`: bar_anchor's, the system's bars' mark where they have it, else `own`,
+/// the page's own button's id): its button in the bar's node (`node`, while it is made), where that is as it is drawn
+/// (@sf.popover_from); else what bar_anchor says.
+fn chat_bar_by(at : Int, own : Int, node : @view.View?) -> @sf.Beside {
+  match node {
+    Some(v) if at == own && v.alive() => Node(v)
+    _ => Of(at)
+  }
 }
 
 ///|

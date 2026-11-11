@@ -27,7 +27,7 @@ fn find_list_none() -> FindList {
 /// again).
 fn find_state(state : String, typed : String) -> Unit {
   find_close()
-  finding.chat = chat_key(find_chat_ref)
+  finding.chat.set(chat_key(find_chat_ref))
   finding.field.set(typed)
   finding.asked.set(typed)
   let found = fn(whole : Bool, n : Int) -> Found {

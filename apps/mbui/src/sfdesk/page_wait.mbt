@@ -96,3 +96,10 @@ let tape_page_wait : PageWait = page_wait()
 ///|
 // kept across runs: its wait called off and nothing shown as a run begins (fold_goes_reset)
 let pane_page_wait : PageWait = page_wait()
+
+///|
+/// Whether entry `serial` is drawn in the pane this wait follows: it shows (Nav::shows), or it is the one kept shown
+/// in place while the one on top waits (what the pane shows: `shown`), as its island is (chat_page_made's `drawn`).
+fn PageWait::draws(self : PageWait, serial : Int) -> Bool {
+  app.nav.shows(serial) || self.shown.get().0 == serial
+}

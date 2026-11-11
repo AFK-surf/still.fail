@@ -59,7 +59,8 @@ pub struct HoverHand {
 /// words starting where they start: sfpages' hover's `words_along`); `piece`: beside that piece of `anchor`, not all of
 /// it (a link in its words: View::beside's). `held`: kept open meanwhile, whatever the pointer does, through a press
 /// outside, Escape and its anchor taking no input (what was pressed in it opened something beside it the pointer goes
-/// on to, a modal panel over its anchor, pressed in), as kit's hover_card's `held`; let go, as the pointer is then.
+/// on to, a modal panel over its anchor, pressed in), as kit's hover_card's `held`; let go, as the pointer is then. A
+/// row of it opening a menu beside it (submenu_row_node) holds it so while that is open, without being said.
 /// `press`: what a press on `anchor` does, every input's (a tap, a click, Enter), `anchor` then taking presses;
 /// `tapped`: what a finger's tap on `anchor` does in place of `press` (a station's card from the presenters, a finger
 /// resting on nothing); said alone, `anchor` takes presses from a finger only, a mouse's press there what holds it's (a
@@ -71,7 +72,10 @@ pub struct HoverHand {
 /// it, the focus goes back to `anchor` (where that takes it). `pointed`: a mouse's pointer on what it is of as that
 /// says (a piece of `anchor`: a link of its words, @ui.runs_links' `pointed`), in place of on `anchor`, a press as it
 /// goes down there not one outside; and nothing of the hand put on `anchor` (`press`, `tapped` and a finger's hold
-/// none of its: what holds it says them, a finger's hold opening it by the hand's `hold`). `owner`: what it is made
+/// none of its: what holds it says them, a finger's hold opening it by the hand's `hold`). `yields_to`: a mouse's pointer
+/// on that or on what it holds (View::pointed_in) not on `anchor`, wherever it is within it: what beside `anchor`
+/// reaches over it (a key's room over a tag, a press there that key's) answers there alone, its card the one that
+/// opens (lit_within_node's). `owner`: what it is made
 /// and let go with (a card of a piece of `anchor`, as that piece comes and goes), `anchor` where not said. The hand
 /// the card is opened and closed by.
 #callsite(autofill(loc))
@@ -89,10 +93,15 @@ pub fn hover_card_node(
   press? : () -> Unit,
   tapped? : () -> Unit,
   pointed? : () -> Bool,
+  yields_to? : @view.View,
   owner? : @view.View,
   loc~ : SourceLoc,
 ) -> HoverHand {
   let owner = owner.unwrap_or(anchor)
+  // (a row of it opening a menu beside it (submenu_row_node): its menu open, the card kept open as by `held`, the pointer
+  // gone on to the menu, outside the card; as kit's hover_card was held by what opened from it)
+  let row_open : @signals.Signal[@view.View?] = @signals.signal(None, same=same_view)
+  let held = fn() { held() || row_open.get() is Some(_) }
   let open : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
   // (opened by a finger's hold: stays till a press outside, Escape, or its anchor takes no input)
   let by_hand = Ref(false)
@@ -182,6 +191,10 @@ pub fn hover_card_node(
       // (ground_node), the arrow over it; what it holds that is pressed, the hand as ever)
       |> ground_node
       |> ignore
+      // (its submenu rows' one open: row_open; their menus made in the card's own layer over the window, not in what
+      // it scrolls, which would cut them and what takes their presses)
+      t.lends(panel_submenus_lent, row_open) |> ignore
+      t.lends(submenu_layer_lent, holder) |> ignore
       t.box(fn(b) {
         b.alpha(By(fn() { look().words })) |> ignore
         b.scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
@@ -220,8 +233,9 @@ pub fn hover_card_node(
     }
     open.set(on)
   }
-  // (what decides it, as of each cause: a mouse's pointer on what it is of or on the card, a press held there,
-  // whether it takes input, whether it is held open; one a mouse does not press (no `press`), by where the pointer is
+  // (what decides it, as of each cause: a mouse's pointer on what it is of or on the card, a press held anywhere in
+  // the window (View::window_held: one carried onto it from elsewhere, or one on it that is not its, a bar's dragging
+  // the window, rests on nothing till it is let go, as kit's hover_card's `c.press().down`), whether it takes input, whether it is held open; one a mouse does not press (no `press`), by where the pointer is
   // within it, what a press there is for being another's)
   let within = press is None
   // (whether it takes input: one said `tapped` alone says itself it takes no press from a mouse (below), and that is no
@@ -240,7 +254,8 @@ pub fn hover_card_node(
           Some(p) => p()
           None => if within { anchor.pointer_within() } else { anchor.pointed_in() }
         }
-      )
+      ) &&
+      !yielded(yields_to)
     let on_card = mouse &&
       (
         match card.get() {
@@ -248,7 +263,7 @@ pub fn hover_card_node(
           None => false
         }
       )
-    (on_anchor, on_card, anchor.pressed(), takes(), held())
+    (on_anchor, on_card, anchor.window_held(), takes(), held())
   }
   let rests_was = Ref(false)
   owner.reacts(state, fn(s) {

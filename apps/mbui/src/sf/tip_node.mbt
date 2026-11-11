@@ -40,7 +40,8 @@ let tip_out_scale : Double = 0.97
 /// pressed there the bar's), not by its being pointed at. `repeats`: it says words the control shows itself (a file's
 /// name on its card), whole: shown only where they show cut short there as it would show (View::words_cut_now: any words
 /// in `anchor`, as the old tip's Ctx::shows_cut), none where they show whole; once shown, it goes as any does, not as
-/// they come to show whole.
+/// they come to show whole. `shortcut`: the action that does what the control does, its keys said after the words
+/// (tip's: shortcut_keys, as the app says them; none while no keyboard is at hand).
 pub fn tip_node(
   tips : TipLayer,
   anchor : @view.View,
@@ -52,6 +53,7 @@ pub fn tip_node(
   at_pointer? : Bool = false,
   within? : Bool = false,
   repeats? : Bool = false,
+  shortcut? : String = "",
 ) -> TipHand {
   let open : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
   // (a finger held on its control: Held while it is down, Lifted a while once it is let go, till then or the next
@@ -83,7 +85,7 @@ pub fn tip_node(
     })
     |> ignore
     holder.show(fn() { open.get() }, leave=@kit.pop_out_ms, fn(t) {
-      tip_look_node(t, anchor_id, side, label, fade, gap, at_pointer, owner)
+      tip_look_node(t, anchor_id, side, label, shortcut, fade, gap, at_pointer, owner)
     })
     true
   }
@@ -329,14 +331,16 @@ fn TipFade::shown(self : TipFade, t : @view.View) -> Double {
 }
 
 ///|
-/// A tip's node `t` as tip_look draws it (tip_box, tip_words), beside `anchor` on `side`, saying `label`: its look and
-/// its words set as the window's theme says, as that changes; in and out as `fade` says.
+/// A tip's node `t` as tip_look draws it (tip_box, tip_words), beside `anchor` on `side`, saying `label`, then the keys of
+/// action `shortcut` where there are any as it is shown (tip_line, tip_quiet): its look and its words set as the window's
+/// theme says, as that changes; in and out as `fade` says.
 #callsite(autofill(loc))
 fn tip_look_node(
   t : @view.View,
   anchor : @view.NodeId,
   side : @view.Side,
   label : () -> String,
+  shortcut : String,
   fade : TipFade,
   gap : Double,
   at_pointer : Bool,
@@ -382,14 +386,38 @@ fn tip_look_node(
   .says(By(fn() { Some(@view.said(Tooltip, label=label())) }))
   .hides(By(fn() { !@kit.tip_owns(owner) }))
   |> ignore
+  let words_look = fn(wrap : Bool) -> @view.WordsLook {
+    let (size, line) = theme().text_size(Meta)
+    { size, weight: 400, line, wrap, tracking: @view.letters_own, balance: false, max_lines: 0 }
+  }
+  // (whether it says keys, as it is shown: a keyboard come or gone while it shows, so the next time it is)
+  let keys = @signals.untracked(fn() { shortcut_keys(shortcut) })
   t.box(made_for=loc, fn(w) {
+    if keys != "" {
+      // (its words, then its keys at 60% (tip_line, tip_quiet), the two of them fading in after its ground)
+      style_node(w, fn() { tip_line })
+      w.box(fn(l) {
+        l.words(By(fn() { label() })).words_look(By(fn() { words_look(true) })).ink(By(fn() { theme().color(OnPrimary) }))
+        |> ignore
+      })
+      |> ignore
+      w.box(fn(q) {
+        q.alpha(Is(tip_keys_seen)) |> ignore
+        q.box(fn(k) {
+          k
+          .words(By(fn() { shortcut_keys(shortcut) }))
+          .words_look(By(fn() { words_look(false) }))
+          .ink(By(fn() { theme().color(OnPrimary) }))
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    } else {
+      w.words(By(fn() { label() })).words_look(By(fn() { words_look(true) })).ink(By(fn() { theme().color(OnPrimary) }))
+      |> ignore
+    }
     w
-    .words(By(fn() { label() }))
-    .words_look(By(fn() {
-      let (size, line) = theme().text_size(Meta)
-      { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false, max_lines: 0 }
-    }))
-    .ink(By(fn() { theme().color(OnPrimary) }))
     .alpha(By(fn() {
       // (of its ground's: what of the words shows over as much of the ground as there is)
       let a = fade.shown(t)
@@ -405,6 +433,10 @@ fn tip_look_node(
   })
   |> ignore
 }
+
+///|
+/// How far a tip's keys are seen (tip_quiet's).
+let tip_keys_seen : Double = 0.6
 
 ///|
 /// How far a tip is from its control (kit's tooltip `offset`), and how wide it may grow (tip_max).

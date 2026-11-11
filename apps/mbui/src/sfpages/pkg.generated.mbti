@@ -27,6 +27,8 @@ pub fn agent_avatar(@ui.Ctx, @sfbase.Source, MessageHere, String, String, String
 
 pub fn agent_badge(@ui.Ctx, String, Double, Int64) -> Unit
 
+pub fn agent_badge_node(@view.View, String, Double) -> Unit
+
 pub fn agent_card(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, @json.Json, across? : Bool) -> Unit
 
 pub fn agent_card_node(@view.View, @sfbase.Source, @sfbase.ChatRef, String, @sf.TipLayer, () -> @view.View?, across? : Bool) -> () -> Bool
@@ -755,7 +757,7 @@ pub(all) struct FindList {
 }
 
 pub(all) struct Finding {
-  mut chat : String
+  chat : @signals.Signal[String]
   field : @ui.Field
   mut query : String
   asked : @signals.Signal[String]

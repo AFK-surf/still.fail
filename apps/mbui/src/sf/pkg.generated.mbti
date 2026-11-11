@@ -828,7 +828,7 @@ pub let home_workspace_title_look : @view.WordsLook
 pub let hover_card_close_ms : Double
 
 #callsite(autofill(loc))
-pub fn hover_card_node(TipLayer, @view.View, (@view.View) -> Unit, tile? : Bool, padded? : Bool, side? : @view.Side, along? : @view.Along, along_offset? : Double, piece? : (Double, Double) -> (Double, Double, Double, Double)?, held? : () -> Bool, press? : () -> Unit, tapped? : () -> Unit, pointed? : () -> Bool, owner? : @view.View, loc~ : SourceLoc) -> HoverHand
+pub fn hover_card_node(TipLayer, @view.View, (@view.View) -> Unit, tile? : Bool, padded? : Bool, side? : @view.Side, along? : @view.Along, along_offset? : Double, piece? : (Double, Double) -> (Double, Double, Double, Double)?, held? : () -> Bool, press? : () -> Unit, tapped? : () -> Unit, pointed? : () -> Bool, yields_to? : @view.View, owner? : @view.View, loc~ : SourceLoc) -> HoverHand
 
 pub let hover_card_open_ms : Double
 
@@ -854,7 +854,7 @@ pub fn icon_action_opens_node(@view.View, String, () -> String, (@view.View) -> 
 
 pub fn icon_button(@ui.Ctx, String, key? : String, size? : Double, icon_size? : Double, on? : Bool, lit? : Bool, round? : Bool, corner? : Double, linked? : @paint.CornerOf, ink? : Int64, quiet? : Int64, disabled? : Bool, label? : String, shortcut? : String, on_press? : () -> Unit) -> Bool
 
-pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double, icon_now? : () -> String, disabled? : () -> Bool) -> @view.View
+pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double, icon_now? : () -> String, disabled? : () -> Bool, linked? : () -> @ui.CornerOf?, shortcut? : String) -> @view.View
 pub fn icon_button_opens_node(@view.View, String, () -> String, (@view.View) -> Unit) -> @view.View
 
 pub let icon_button_side : Double
@@ -1038,6 +1038,8 @@ pub let list_words_room : @ui.Space
 pub let lit_apart : Double
 
 pub fn lit_node(@view.View) -> Bool
+
+pub fn lit_within_node(@view.View, yields_to? : @view.View) -> Bool
 
 pub let lit_reach : Double
 
@@ -1739,6 +1741,8 @@ pub let pointer_size : Double
 
 pub let pointer_tip : Double
 
+pub fn popover_from(@ui.Ctx, String, Bool, Beside, side? : @view.Side, along? : @view.Along, look? : (@ui.Ctx, @kit.PopState, () -> Unit) -> Unit, () -> Unit) -> @ui.Changed[Bool]
+
 pub fn presented(@ui.Ctx, alone? : Bool) -> Unit
 
 pub fn presented_changed() -> Unit
@@ -2322,7 +2326,7 @@ pub fn tip_look(@ui.Ctx, String, String) -> Unit
 
 pub let tip_max : @ui.Len
 
-pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side, delay? : Double, skip? : Bool, gap? : Double, at_pointer? : Bool, within? : Bool, repeats? : Bool) -> TipHand
+pub fn tip_node(TipLayer, @view.View, () -> String, side? : @view.Side, delay? : Double, skip? : Bool, gap? : Double, at_pointer? : Bool, within? : Bool, repeats? : Bool, shortcut? : String) -> TipHand
 
 pub let title : @ui.TextStyle
 
@@ -2608,7 +2612,7 @@ pub let window_keys_band : Double
 
 pub let window_keys_in : Double
 
-pub fn window_keys_room() -> Double
+pub fn window_keys_room(roots? : @paint.CornerRoots) -> Double
 
 pub fn window_keys_room_at(Double) -> Double
 

@@ -1125,7 +1125,8 @@ fn main_page(
   page : Page,
 ) -> Unit {
   match page {
-    Chat(r) => chat_page(c, src, w, r)
+    // (its bar the page node's off the tape: chat_bar_wide_node)
+    Chat(r) => chat_page(c, src, w, r, barred=!wide.tape.get() && pane_makes.val)
     // an agent's history, asked as a page (a link's `?history=…&entry=…`): on the desktop its chat with the history
     // open beside it at the entry asked, the page the chat's
     History(r, key, entry) => {

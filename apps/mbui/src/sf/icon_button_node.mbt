@@ -6,7 +6,9 @@
 ///|
 /// The icon button in `parent` showing icon `icon`, `size` across (round), its icon `icon_size`; named `label` (read
 /// out, and its tip in `tips`); `press` done as it is pressed. While `disabled()`, faded (icon_button's: 0.45), taking
-/// no press nor the focus. The node.
+/// no press nor the focus. `linked`: its corner where that comes from, as it is worked out where it stands now (a bar's
+/// buttons' at the window's corner: @sf.bar_keys_link; icon_button's `linked`), else round. `shortcut`: the action that
+/// does what it does, its keys said in its tip after its label (icon_button's). The node.
 #callsite(autofill(loc))
 pub fn icon_button_node(
   parent : @view.View,
@@ -18,9 +20,11 @@ pub fn icon_button_node(
   icon_size? : Double = 16.0,
   icon_now? : () -> String,
   disabled? : () -> Bool = fn() { false },
+  linked? : () -> @ui.CornerOf?,
+  shortcut? : String = "",
   loc~ : SourceLoc,
 ) -> @view.View {
-  icon_button_by(loc~, parent, icon, label, fn(_) { press() }, tips, size, icon_size, icon_now, disabled)
+  icon_button_by(loc~, parent, icon, label, fn(_) { press() }, tips, size, icon_size, icon_now, disabled, linked?=linked, shortcut~)
 }
 
 ///|
@@ -50,6 +54,8 @@ fn icon_button_by(
   icon_size : Double,
   icon_now : (() -> String)?,
   disabled : () -> Bool,
+  linked? : () -> @ui.CornerOf?,
+  shortcut? : String = "",
   loc~ : SourceLoc,
 ) -> @view.View {
   let live = fn() { !disabled() }
@@ -74,7 +80,18 @@ fn icon_button_by(
     .width(Is(Some(size)))
     .height(Is(Some(size)))
     .padding(Is((pad, pad, pad, pad)))
-    .radius(Is(size / 2.0))
+    .radius(
+      match linked {
+        Some(f) =>
+          By(fn() {
+            match f() {
+              Some(link) => link.radius(@ui.tree_corner_roots_now())
+              None => size / 2.0
+            }
+          })
+        None => Is(size / 2.0)
+      },
+    )
     .presses(By(live))
     .focusable(By(live))
     .alpha(By(fn() { if disabled() { icon_button_disabled_alpha } else { 1.0 } }))
@@ -86,7 +103,7 @@ fn icon_button_by(
     icon_node(v, icon, icon_size, By(fn() { if hand.shown(v) > 0.5 { theme().p.text } else { theme().p.muted } }), name_now?=icon_now)
     |> ignore
     let tip = match tips {
-      Some(t) => Some(tip_node(t, v, label, side=Bottom))
+      Some(t) => Some(tip_node(t, v, label, side=Bottom, shortcut~))
       None => None
     }
     let held = Ref(false)

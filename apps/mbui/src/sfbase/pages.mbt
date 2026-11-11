@@ -75,7 +75,8 @@ pub fn page_chat_reader(src : Source, entry : @view.View, serial : Int) -> (Page
 /// built by `build` as the stack built it before (a chat from the source it keeps while its entry is on the stack, its
 /// reader held: page_entry_source, page_chat_reader; a new chat from the node's own), again as `key` changes. Over it
 /// a picture flying from its list while under its bar (viewer_flight_slot), and over that what of it is nodes already (`over`: given a node over the island, the chat's source, what the page is now and its
-/// time on top, `stint`). What it reads by, the source it keeps (its reads the page's, let go with it), given back:
+/// time on top, `stint`; made while `drawn` says its entry is drawn: shown, or kept shown in place while the one on top
+/// waits, as its island is). What it reads by, the source it keeps (its reads the page's, let go with it), given back:
 /// what is beside it reads by it too.
 pub fn chat_page_made(
   v : @view.View,
@@ -85,6 +86,7 @@ pub fn chat_page_made(
   key? : () -> String = fn() { "" },
   over? : (@view.View, Source, () -> Page?, () -> Int) -> Unit,
   stint? : () -> Int = fn() { 0 },
+  drawn? : (Int) -> Bool = fn(serial) { app.nav.shows(serial) },
 ) -> Source {
   let retained = page_entry_source(src, v, serial)
   let page_read = page_chat_reader(retained, v, serial)
@@ -107,7 +109,7 @@ pub fn chat_page_made(
   match over {
     Some(f) =>
       // (while the page shows, as its old view is built: what it reads let go of while another covers it)
-      v.show(fn() { app.nav.shows(serial) }, fn(o) {
+      v.show(fn() { drawn(serial) }, fn(o) {
         o.over(Is(true)) |> ignore
         f(o, retained, fn() { app.nav.page_of(serial).map(fn(e) { e.0 }) }, stint)
       })
