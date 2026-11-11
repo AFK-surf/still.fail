@@ -1722,6 +1722,8 @@ pub fn progress_ring(@ui.Ctx, Double, Double, Int64) -> Int32
 
 pub fn progress_spinner(@ui.Ctx, String, Double?, size? : Double, stroke? : Double) -> Int32
 
+pub fn progress_spinner_node(@view.View, () -> Double?, size? : Double, stroke? : Double) -> @view.View
+
 pub fn provider_logo(@ui.Ctx, String, String, Double, String) -> Unit
 
 pub fn qr_code(@ui.Ctx, @json.Json?, Double, String) -> Unit
