@@ -282,8 +282,7 @@ pub fn menu_node(
         .focusable(Is(true), keys=0)
         // (a press on it its own: on what of it takes none (its padding, a heading, a line, a row not to be chosen),
         // nothing, not outside it)
-        .presses(Is(true))
-        .on_press(fn() {  })
+        |> ground_node
         |> ignore
         p.box(fn(body) {
           // (all it holds as far in as its look says, past the panel's own ground, edge and shadow: its rows, their

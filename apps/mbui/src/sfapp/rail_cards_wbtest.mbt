@@ -69,3 +69,27 @@ fn rail_card_shown(t : @ui.Tester, label : String, words : Array[String]) -> Uni
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_true(t.find(words[0]) is None, msg=label + ": its card gone")
 }
+
+///|
+test "wide: a mouse's pointer over a rail card's ground is the arrow, over 分享卡片 the hand (@sf.ground_node)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let place = t.query(Button, label="用量").unwrap()
+  let (x, y, w, h) = place.rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  assert_true(t.find("分享卡片") is Some(_), msg="its card")
+  let shape_on = fn(px : Double, py : Double) {
+    t.move(px, py)
+    t.run_for(@ui.move_most_ms)
+    t.cursor()
+  }
+  // (the card beside its place, at its right, its top level with it, 6 off, 320 wide: sfdesk's rail_card_off,
+  // rail_card_w; points 3 in from its left, its top, its right)
+  let left = x + w + 6.0
+  let points = [(left + 3.0, y + 20.0), (left + 160.0, y + 3.0), (left + 317.0, y + 20.0)]
+  let grounds = points.map(fn(p) { shape_on(p.0, p.1) })
+  assert_eq(grounds, [Arrow, Arrow, Arrow], msg="its ground at \{points}")
+  let (sx, sy, sw, sh) = t.get(Button, label="分享卡片").rect
+  assert_eq(shape_on(sx + sw / 2.0, sy + sh / 2.0), Hand, msg="分享卡片")
+}

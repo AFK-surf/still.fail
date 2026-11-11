@@ -668,8 +668,7 @@ fn sheet_node(
           }
         }))
         // (a press on it its own: not over it)
-        .presses(Is(true))
-        .on_press(fn() {  })
+        |> ground_node
         |> ignore
         // (when its motions end, as presented_rest asks: its rise or sink as long as its own height makes it, from where
         // it stood in another's place (moved_by's own end, at the height it is laid out as of the logic's moment, not

@@ -448,3 +448,27 @@ test "小屏 with a mouse: a link's card whose row is nodes, its address copied,
   assert_eq(old, (true, true), msg="the old one's")
   assert_eq(now, old)
 }
+
+///|
+test "小屏 with a mouse: a link's card in the chat's things (web_peek_node): the pointer over its ground is the arrow (@sf.ground_node)" {
+  let (t, src, r) = things_chat_mouse()
+  let seen = fn(_px : Double, _py : Double) {
+    // (the card: the last group read out, drawn over all of the window, as wide as a card at least)
+    match t.semantics().filter(fn(s) { s.role == Group && !s.hidden && s.rect.2 >= 200.0 }).last() {
+      Some(c) => {
+        let (x, y, w, h) = c.rect
+        [(x + 3.0, y + h / 2.0), (x + w / 2.0, y + 3.0), (x + w / 2.0, y + h - 3.0), (x + w - 3.0, y + h / 2.0)]
+        .map(fn(p) {
+          t.move(p.0, p.1)
+          t.run_for(@ui.move_most_ms)
+          "\{t.cursor()}"
+        })
+        .join(" ") +
+        " \{c.rect}"
+      }
+      None => "none"
+    }
+  }
+  let got = things_card_seen(t, r, "links", "列表滚动的性能数据", fn() { open_things(src, r, 7.0) }, seen)
+  assert_true(got.has_prefix("Arrow Arrow Arrow Arrow "), msg=got)
+}

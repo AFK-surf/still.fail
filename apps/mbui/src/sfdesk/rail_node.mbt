@@ -637,8 +637,8 @@ fn rail_card_node(anchor : @view.View, src : Source, tips : @sf.TipLayer, place 
       .shadow(By(fn() { (16.0, 12.0, @sf.theme().p.shadow) }))
       .clips(Is(true))
       .padding(Is((@sf.panel_pad, @sf.panel_pad, @sf.panel_pad, @sf.panel_pad)))
-      .presses(Is(true))
-      .on_press(fn() {  })
+      // (a press on it its own: a ground, the arrow over it)
+      |> @sf.ground_node
       |> ignore
       // (its words 10 in: what reaches out to the panel's padding, 分享卡片, drawn there)
       k.box(fn(w) {

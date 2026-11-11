@@ -92,8 +92,7 @@ pub fn pick_node(
       .scale(By(fn() { look().sx }), about=FromBeside)
       .says(Is(Some(@view.said(Dialog, label=title))))
       // (a press on it its own: on what of it takes none, nothing, not outside it)
-      .presses(Is(true))
-      .on_press(fn() {  })
+      |> ground_node
       |> ignore
       // (its search, a capsule in its top corners, the library's line: Enter in it picks the first found)
       let search : Ref[@view.View?] = Ref(None)

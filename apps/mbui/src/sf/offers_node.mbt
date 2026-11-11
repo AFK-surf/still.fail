@@ -215,8 +215,7 @@ pub fn offers_node(
         .scale(By(fn() { look().sx }), about=FromBeside)
         .says(Is(Some(@view.said(Dialog, label~))))
         // (a press on it its own, not outside it: on what of it takes none, nothing)
-        .presses(Is(true))
-        .on_press(fn() {  })
+        |> ground_node
         |> ignore
         style_node(p, fn() { offers_box })
         p.box(fn(body) {
