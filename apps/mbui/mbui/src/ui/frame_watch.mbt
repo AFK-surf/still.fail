@@ -706,7 +706,11 @@ fn list_looks(c : Ctx) -> Unit {
       Some(end) if c.clock < end => {
         c.cycling = true
         looks_own.cycling = true
-        c.wake_at_time(end)
+        // (a frame at its end, not waited for: the glide's end is its column's motion's (on_glides, said moving till
+        // then), and what is waited for is put down only as a frame is built, which a frame of the looks alone is not:
+        // waited for here, it stayed after the rest, a Tester on a host keeping groups drawing every display frame
+        // after a fling till its next input and never at rest, glide_wake_wbtest)
+        c.wake_at_time(end, later=true)
       }
       _ => ()
     }
