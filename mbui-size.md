@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [2cdb3ab04](https://github.com/AFK-surf/still.fail/commit/2cdb3ab040f068fcd7ab15c9d14316ca9db55030) app: a history's model and its station, and an act | 1.81 | 2.42 | 10.07 | 28.81 | 35.55 | 25.65 | 47.47 | 94.5 | 186.35 |
 | [224daa17e](https://github.com/AFK-surf/still.fail/commit/224daa17e9b815b8d33dd3aa1784663e287bc704) core, app: a model control and a new chat send wha | 1.81 | 2.42 | 10.07 | 28.81 | 35.54 | 25.65 | 47.47 | 94.6 | 130.15 |
 | [1c21e3620](https://github.com/AFK-surf/still.fail/commit/1c21e36201ae7b64bd2ebbeb5874b65924398483) mbui: what comes and goes down a column at one mom | 1.81 | 2.42 | 10.07 | 28.81 | 35.54 | 25.65 | 47.47 | 94.32 | 139.21 |
 | [d4072dad1](https://github.com/AFK-surf/still.fail/commit/d4072dad1eac9fe7c85ac4e74733728623bd8554) sf: a style on a node lies between its ends where  | 1.81 | 2.41 | 10.06 | 28.79 | 35.52 | 25.65 | 47.46 | 94.41 | 184.61 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [594d3a7a3](https://github.com/AFK-surf/still.fail/commit/594d3a7a3ff33bb8d36eedb0090ae1232b49374c) app: the workspaces and a new workspace in panels  | 1.78 | 2.37 | 9.9 | 28.52 | 34.68 | 25.45 | 46.78 | 93.9 | 174.54 |
 | [4d3e89971](https://github.com/AFK-surf/still.fail/commit/4d3e8997122c119275171876adefff623b546ad0) mbui: a come way that goes along with another way  | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 93.9 | 162.13 |
 | [5e6176182](https://github.com/AFK-surf/still.fail/commit/5e61761821eb6bb4a614aea56d73683aa4ef5e98) mbui: window tree words may be cut by their own sa | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 93.8 | 187.35 |
-| [c96bf86e3](https://github.com/AFK-surf/still.fail/commit/c96bf86e3fbeaa57e946050230a3f3475ddabe3a) mbui: a show's node called back as it closes goes  | 1.78 | 2.37 | 9.85 | 28.49 | 34.52 | 25.45 | 46.78 | 94.26 | 152.04 |
