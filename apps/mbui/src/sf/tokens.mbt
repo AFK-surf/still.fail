@@ -2398,7 +2398,7 @@ pub fn tape_bar_end_of(
   // (the panel at the window's right edge, the window's own buttons over its top right corner where they are the
   // app's: its bar's last before them, alone: window_keys)
   if k[1] == tape_edge && @ui.window_keys_own() {
-    return window_keys_room_tape() - window_in + alone
+    return window_keys_room_tape(roots~) - window_in + alone
   }
   line_end_in(k[1].radius(roots), alone, side~)
 }
@@ -2443,7 +2443,7 @@ pub fn line_end_in(corner : Double, alone : Double, side? : Double = bar_key_sid
 pub fn window_end_in(alone : Double, roots? : @ui.CornerRoots = @ui.corner_roots()) -> Double {
   // (the window's own buttons there where the app draws them: the bar's last before them, alone: window_keys)
   if @ui.window_keys_own() {
-    return window_keys_room() + alone
+    return window_keys_room(roots~) + alone
   }
   match bar_keys_link() {
     Some(_) => window_key_in(alone, roots~)
