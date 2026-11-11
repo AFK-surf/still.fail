@@ -444,7 +444,7 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     let entries = same ? [...was!.entries, ...more.filter((e) => e.seq > was!.head!.seq)] : more;
     if (!same && head && (more.length === 0 || more[0]!.seq !== 0)) entries = arr(get(yield* cloud("/lock"), "entries")) as Entry[];
     const seen = head === null ? null : yield* Effect.orElseSucceed(Effect.map(cloud("/devices"), (r) => arr(get(r, "devices"))), () => was?.seen ?? null);
-    yield* hold(inner, ws, sub, was, head, entries, seen);
+    yield* hold(inner, ws, sub, head, entries, seen);
   });
 }
 
@@ -593,7 +593,7 @@ function readLockOnce(inner: Inner, ws: string, stations: string[], said?: { ref
     // read (one read alone as its link opened told only who came to it, and the others' devices lost their last use
     // on 设置 › 安全 until all were read again).
     const whole = lockStations(inner, ws).every((id) => served.some((a) => a.id === id));
-    yield* hold(inner, ws, sub, was, head, entries, mergeSeen([...(whole ? [] : [(was?.seen ?? []) as J[]]), ...served.map((a) => a.seen)]));
+    yield* hold(inner, ws, sub, head, entries, mergeSeen([...(whole ? [] : [(was?.seen ?? []) as J[]]), ...served.map((a) => a.seen)]));
     return true;
   });
 }
@@ -610,11 +610,18 @@ function mergeSeen(lists: J[][]): J[] {
   return [...by.values()];
 }
 
-/// The lock as read (of the cloud or the stations) held, and what follows from it.
-function hold(inner: Inner, ws: string, sub: string, was: Held | null, head: Head | null, entries: Entry[], seen: J[] | null): Effect.Effect<void> {
+/// The lock as read (of the cloud or the stations) held, and what follows from it. What is held may have moved on
+/// while it was read (another read landed first: a station asked alone as its link opened, on a slow line, answers
+/// what it kept as it was asked): a chain that goes only as far as some entry of the one held now is behind it, and
+/// the one held stays. Held as read, it took the entries since back off this device until the lock next moved.
+function hold(inner: Inner, ws: string, sub: string, said: Head | null, entries: Entry[], seen: J[] | null): Effect.Effect<void> {
   return Effect.gen(function* () {
-    if (head !== null && inner.provider.kind === "stillfail") yield* Effect.ignore(new Lock(inner, ws, sub, null).base());
-    inner.data.put("lock", ws, { head, entries: head === null ? [] : entries, ...(seen ? { seen } : {}) });
+    if (said !== null && inner.provider.kind === "stillfail") yield* Effect.ignore(new Lock(inner, ws, sub, null).base());
+    // (as held now, not as it was when the read began)
+    const was = held(inner, ws);
+    const ahead = said !== null && was?.head != null && said.seq < was.head.seq && onChain(was, said) ? was : null;
+    const head = ahead !== null ? ahead.head : said;
+    inner.data.put("lock", ws, { head, entries: head === null ? [] : ahead !== null ? ahead.entries : entries, ...(seen ? { seen } : {}) });
     // checked as it comes, in a turn of its own (views/vault.ts vaultCome)
     inner.runner.fork(laterSleep(0).pipe(Effect.andThen(Effect.sync(() => vaultCome(inner, ws)))));
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
@@ -1304,7 +1311,7 @@ function heardTail(inner: Inner, ws: string, raw: unknown): void {
   const entries = [...was.entries.slice(0, first), ...tail];
   if (entries.length <= was.entries.length || entryHash(entries[0]!) !== was.head.genesis) return;
   const last = entries[entries.length - 1]!;
-  inner.runner.fork(hold(inner, ws, sub, was, { seq: last.seq, hash: entryHash(last), genesis: was.head.genesis }, entries, was.seen ?? null));
+  inner.runner.fork(hold(inner, ws, sub, { seq: last.seq, hash: entryHash(last), genesis: was.head.genesis }, entries, was.seen ?? null));
 }
 
 /// The stations of `sub`'s workspaces here, each once (one in two of them is asked in the first).
