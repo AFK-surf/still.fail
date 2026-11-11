@@ -1312,8 +1312,9 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
     if u == 32 || u == 10 {
       piece(start, i)
       start = i + 1
-    } else if u >= 0x2E80 && u < 0xFF00 {
-      // a CJK character breaks either side
+    } else if u >= 0x2E80 && u < 0xFF00 && !(u >= 0xD800 && u < 0xE000) {
+      // a CJK character breaks either side (not half of a pair, which that range holds too: an emoji stays whole
+      // in its word, where each half was once measured as a piece of its own)
       piece(start, i)
       piece(i, i + 1)
       start = i + 1
