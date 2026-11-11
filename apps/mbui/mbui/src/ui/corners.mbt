@@ -217,13 +217,19 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
 /// opaque, what holds it as drawn, whether it takes a press, its words in it; each old view's box held by the tree's node it is drawn in. The frame as it was after. Where
 /// the old view is the whole window (old_whole), none: the tree draws nothing else. `laid`: each where it is laid out instead, as
 /// big, the old views where they are laid out (Tree::laid_held): what is worked out of them before they are drawn
-/// (Ctx::corners_after_layout). `facts`: each besides as it is said to be laid out and its words as drawn (Ctx::tree_facts,
+/// (Ctx::corners_after_layout), on every frame an old view builds: only what holds an old view and what lies as it does,
+/// as the tree keeps them while none of it changed (Tree::laid_held_hosted), their nodes here the last call's again
+/// (tree_laid_spare), each as a new one; `fresh` (a Tester's look at it, tester_corners.mbt): each worked out anew
+/// (Tree::laid_held_toward, Node::new), nothing kept touched.
+/// `facts`: each besides as it is said to be laid out and its words as drawn (Ctx::tree_facts,
 /// Ctx::tree_words_facts), for the squeeze (Ctx::tree_squeeze_said); none of it else. `steady`: which scroll what they
-/// hold (tree_scroller_at), for sizes steady.
+/// hold (tree_scroller_at), for sizes steady. Which of the tree's each of the frame's nodes is (tree_frame_ids) is
+/// said while `f` runs, where it is not `laid` (none of whose asks reads it), and let go after.
 fn[T] Ctx::with_tree_nodes(
   self : Ctx,
   f : () -> T,
   laid? : Bool = false,
+  fresh? : Bool = false,
   facts? : Bool = false,
   steady? : Bool = false,
 ) -> T {
@@ -234,6 +240,21 @@ fn[T] Ctx::with_tree_nodes(
   let count = self.count
   let kept : Array[Node] = []
   let reparented : Array[(Int, Int)] = []
+  // (each of the tree's here: in the laid form one of the last call's again, each as a new one; else, or fresh, new)
+  let spare = laid && !fresh
+  let node_new = fn() -> Node {
+    if spare {
+      match tree_laid_spare.pop() {
+        Some(n) => {
+          n.reset_new()
+          n
+        }
+        None => Node::new()
+      }
+    } else {
+      Node::new()
+    }
+  }
   let add = fn(n : Node) -> Int {
     let i = self.count
     if i < self.nodes.length() {
@@ -246,11 +267,20 @@ fn[T] Ctx::with_tree_nodes(
     i
   }
   tree_pictures.clear()
-  tree_frame_ids.clear()
+  if !laid {
+    tree_frame_ids.clear()
+  }
   // (laid out, for what the old views hold worked out against what holds them: only what holds an old view, and what
   // lies laid out where that does, as big (a ground laid beside it as a layer, Ctx::layer_grounds); what else of the
-  // tree there is no container of any of theirs, and what it works out of the tree's own nodes is let go with them)
-  let held = if laid { tree.laid_held_toward(fn(c) { c.hosted }) } else { tree.drawn_held() }
+  // tree there is no container of any of theirs, and what it works out of the tree's own nodes is let go with them;
+  // as the tree keeps it while none of it changed, read only)
+  let held = if laid && fresh {
+    tree.laid_held_toward(fn(c) { c.hosted })
+  } else if laid {
+    tree.laid_held_hosted()
+  } else {
+    tree.drawn_held()
+  }
   // (what each draws as it is drawn, and how big: what the squeeze reads of its words, View::shorter's and its scale)
   let contents : Map[Int, (@view.Content, Double)] = {}
   if facts {
@@ -275,7 +305,7 @@ fn[T] Ctx::with_tree_nodes(
   for k, h in held {
     let (d, holder, presses) = h
     let parent = if holder >= 0 { at[holder] } else { -1 }
-    let n = Node::new()
+    let n = node_new()
     n.kind = kind_box
     // (who it is among the frames: its tree node, sizes_steady.mbt)
     n.ident = -(d.id.at * 65599 + d.id.gen) - 1
@@ -319,7 +349,9 @@ fn[T] Ctx::with_tree_nodes(
     if facts {
       self.tree_facts(i, n, d, if holder >= 0 { Some(held[holder].0) } else { None }, contents, tree)
     }
-    tree_frame_ids[i] = d.id
+    if !laid {
+      tree_frame_ids[i] = d.id
+    }
     at[k] = i
     link(parent, i)
     if facts && n.kind == kind_editor {
@@ -333,7 +365,7 @@ fn[T] Ctx::with_tree_nodes(
       tree_pictures.add(i)
     }
     if d.words != "" {
-      let w = Node::new()
+      let w = node_new()
       w.kind = kind_text
       w.text = view_words_set(d.words, d.words_look)
       // (set as the tree draws them (view_host's words: at its node's size of words, Tree::words_scale_of), its weight,
@@ -364,6 +396,9 @@ fn[T] Ctx::with_tree_nodes(
   // their nodes are laid out, as the tree's: each old view's carried back from where it is drawn, Ctx::moved_carries)
   let out = if laid { self.with_old_laid(count, f) } else { self.with_old_drawn(f) }
   tree_pictures.clear()
+  if !laid {
+    tree_frame_ids.clear()
+  }
   tree_field_boxes.clear()
   tree_scaled_at.clear()
   tree_draws_at.clear()
@@ -375,11 +410,23 @@ fn[T] Ctx::with_tree_nodes(
     self.nodes[r.0].parent = r.1
   }
   for k, n in kept {
+    // (the tree's put there: kept for the next call, where they were the last call's again; those put past the end
+    // stay the frame's, as any made there)
+    if spare {
+      tree_laid_spare.push(self.nodes[count + k])
+    }
     self.nodes[count + k] = n
   }
   self.count = count
   out
 }
+
+///|
+/// The nodes Ctx::with_tree_nodes put the window's tree's in where it is `laid` (not `fresh`), given back as the
+/// frame's own are put back, for its next call to put them there again, each as a new one (Node::reset_new): none made
+/// and let go again each frame an old view builds.
+// kept across runs: only ever nodes no frame holds, each reset as it is taken
+let tree_laid_spare : Array[Node] = []
 
 ///|
 /// Every box in the frame just built drawn with corners not all alike (a ground, a border, a clip; with `lit`, the
@@ -1103,8 +1150,9 @@ let tree_pictures : Set[Int] = Set::new()
 
 ///|
 /// Which of the window's tree's nodes each of them is, by its node here, while they are among the frame's
-/// (Ctx::with_tree_nodes): for a fault to say where it was made (sizes_steady.mbt).
-// kept across runs: emptied each time the tree's nodes are taken in
+/// (Ctx::with_tree_nodes, but where they are `laid`, whose asks read none of it): for a fault to say where it was made
+/// (sizes_steady.mbt). None while they are not.
+// kept across runs: emptied before and after each time the tree's nodes are taken in so
 let tree_frame_ids : Map[Int, @view.NodeId] = {}
 
 ///|
@@ -1334,10 +1382,26 @@ let inner_even : Double = 0.5
 /// `InnerOr` keeps its own corner in no container or near none of its edges (it stands alone there), and at different
 /// distances keeps it too, said so.
 fn Ctx::corners_after_layout(self : Ctx) -> Unit {
+  match corners_look.val {
+    Some(look) => look(self)
+    None => self.corners_worked_out(fresh=false)
+  }
+}
+
+///|
+/// What looks at the corners worked out once laid out (Ctx::corners_after_layout) in their place, where something does
+/// (a Tester's: corners_looked, tester_corners.mbt): works them out itself, as kept and anew, and compares the two.
+// kept across runs: set by each Tester as it is made, let go as its run ends
+let corners_look : Ref[((Ctx) -> Unit)?] = Ref(None)
+
+///|
+/// Ctx::corners_after_layout's work: with the window's tree's nodes as it keeps them (Ctx::with_tree_nodes `laid`), or
+/// each worked out anew (`fresh`).
+fn Ctx::corners_worked_out(self : Ctx, fresh~ : Bool) -> Unit {
   self.inner_faults.clear()
   // (among the window's tree's nodes where they are laid out, each old view's box held by the one it is drawn in: what
   // holds an old view's box a container of it as the corner rule finds it, Ctx::with_tree_nodes)
-  self.with_tree_nodes(laid=true, fn() {
+  self.with_tree_nodes(laid=true, fresh~, fn() {
     // the containers whose corner is what lies in it (`Around`), before the boxes worked out from their containers
     self.arounds_after_layout()
     let grounds = self.layer_grounds()

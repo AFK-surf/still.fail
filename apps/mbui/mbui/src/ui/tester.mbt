@@ -73,6 +73,7 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
       fake.val = None
       shot_watch.val = None
       pass_look.val = None
+      corners_look.val = None
       frame_look.val = None
       @hostapi.set_host(restore)
     }
@@ -492,6 +493,8 @@ pub fn Tester::new(
   reset_globals()
   // (each pass of a frame's build that kept rows built again keeping none and compared: tester_rows.mbt)
   pass_look.val = Some(rows_pass_looked)
+  // (each frame's corners worked out with what is kept worked out anew as well and the two compared: tester_corners.mbt)
+  corners_look.val = if test_corners_looked() { Some(corners_looked) } else { None }
   // (each frame painted alone or of its looks alone built whole after it and the two compared: tester_looks.mbt)
   frame_look.val = Some(looks_looked)
   // (each shot taken kept, what it says, how big a picture it makes and what it drew: Tester::shot_drawn)

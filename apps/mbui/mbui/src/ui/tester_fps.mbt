@@ -35,3 +35,10 @@ fn test_motion_judged(loc : String) -> MotionJudged {
     _ => Results
   }
 }
+
+///|
+/// Whether a Tester looks at each frame's corners worked out with what is kept (tester_corners.mbt): MBUI_CORNERS_LOOK
+/// `0` not, for a run to set beside one that does (the same to the bit); else, the default, it does.
+fn test_corners_looked() -> Bool {
+  @env.get_env_var("MBUI_CORNERS_LOOK").unwrap_or("") != "0"
+}
