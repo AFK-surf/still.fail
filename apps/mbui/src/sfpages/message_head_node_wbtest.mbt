@@ -62,15 +62,14 @@ fn head_old(e : Elsewhere, w : Double, inline : Bool, platform? : Int = 0) -> @u
 }
 
 ///|
-/// `e` drawn by the nodes, `w` wide, inline where `inline`.
+/// `e` drawn by the nodes, `w` wide (its list as wide: inline where narrow; `width_now`, its list's width as it says).
 fn head_new(
   e : Elsewhere,
   w : Double,
-  inline : Bool,
   platform? : Int = 0,
   made? : Ref[MessageRowNode?] = Ref(None),
   over? : (@view.View, String) -> Unit = fn(_, _) {  },
-  inline_now? : @signals.Signal[Bool],
+  width_now? : @signals.Signal[Double],
 ) -> @ui.Tester {
   @sf.set_words(@sfbase.fill)
   absolute_times.set(false)
@@ -88,16 +87,16 @@ fn head_new(
         station: "ws1/st1",
         session: "s1",
         view: fn() { view },
-        inline: match inline_now {
+        width: match width_now {
           Some(s) => fn() { s.get() }
-          None => fn() { inline }
+          None => fn() { w }
         },
         tips,
         stint: fn() { 0 },
       }
       root.box(fn(f) {
         @sf.style_node(f, fn() { head_frame })
-        made.val = Some(sent_elsewhere_node(f, src, here, "s:" + e.key, fn() { row_side(w) }, fn() { 0.0 }, fn() { e }, over~))
+        made.val = Some(sent_elsewhere_node(f, src, here, "s:" + e.key, fn() { row_side((here.width)()) }, fn() { 0.0 }, fn() { e }, over~))
       })
       |> ignore
     },
@@ -147,7 +146,7 @@ test "what was said elsewhere, made once as nodes, is drawn as the old view drew
       let old = head_old(c.1, width.0, width.1)
       old.run_for(@ui.move_most_ms)
       let (was, from) = head_old_drawn(old, width.1)
-      let t = head_new(c.1, width.0, width.1)
+      let t = head_new(c.1, width.0)
       t.run_for(@ui.move_most_ms)
       assert_eq(head_drawn(t, from~, up=route_line_down()), was, msg=at)
       let faults = t.audit()
@@ -161,7 +160,7 @@ test "what was said elsewhere, made once as nodes, is drawn as the old view drew
   old.run_for(@ui.move_most_ms)
   let was = head_drawn(old)
   absolute_times.set(false)
-  let t = head_new(head_said(), 760.0, false)
+  let t = head_new(head_said(), 760.0)
   t.run_for(@ui.move_most_ms)
   t.tap_text("3 分钟前")
   t.run_for(@ui.move_most_ms)
@@ -171,7 +170,7 @@ test "what was said elsewhere, made once as nodes, is drawn as the old view drew
   old.set_font_scale(1.3)
   old.run_for(@ui.move_most_ms)
   let (was, from) = head_old_drawn(old, true)
-  let t = head_new(head_said(), 390.0, true)
+  let t = head_new(head_said(), 390.0)
   t.set_font_scale(1.3)
   t.run_for(@ui.move_most_ms)
   assert_eq(head_drawn(t, from~, up=route_line_down()), was)
@@ -182,7 +181,7 @@ test "what was said elsewhere, made once as nodes, is drawn as the old view drew
 
 ///|
 test "its head: the picture out in the margin before the name, where it went and its time after it; inline, the route on a line of its own" {
-  let t = head_new(head_said(failed=true), 760.0, false)
+  let t = head_new(head_said(failed=true), 760.0)
   t.run_for(@ui.move_most_ms)
   let (nx, ny, _, _) = t.rect_of("Claude").unwrap()
   let (rx, ry, _, _) = t.rect_of("发送到").unwrap()
@@ -199,7 +198,7 @@ test "its head: the picture out in the margin before the name, where it went and
   let faults = t.audit()
   assert_true(faults.is_empty(), msg=faults.join(" | "))
   // inline: where it went under the name and time, over its words
-  let t = head_new(head_said(), 390.0, true)
+  let t = head_new(head_said(), 390.0)
   t.run_for(@ui.move_most_ms)
   let (nx, ny, _, _) = t.rect_of("Claude").unwrap()
   let (_, ry, _, _) = t.rect_of("发送到").unwrap()
@@ -215,15 +214,17 @@ test "its head: the picture out in the margin before the name, where it went and
 test "as the list's width turns it inline or back, the frame it turns in draws it as one made so draws it, nothing on its way" {
   for to in [true, false] {
     let e = head_said()
-    let now = @signals.signal(!to)
-    let t = head_new(e, 760.0, !to, inline_now=now)
+    let (from_w, to_w) = if to { (760.0, 390.0) } else { (390.0, 760.0) }
+    let now = @signals.signal(from_w)
+    let t = head_new(e, from_w, width_now=now)
     t.run_for(@ui.move_most_ms)
-    now.set(to)
-    t.frame()
+    // (the window and its list narrowed or widened at once: drawn so in one frame)
+    now.set(to_w)
+    t.resize(to_w, 240.0)
     let turned = head_drawn(t)
     let faults = t.audit()
     assert_true(faults.is_empty(), msg="\{to}: " + faults.join(" | "))
-    let made = head_new(e, 760.0, to)
+    let made = head_new(e, to_w)
     made.run_for(@ui.move_most_ms)
     assert_eq(turned, head_drawn(made), msg="inline \{to}")
   }
@@ -232,7 +233,7 @@ test "as the list's width turns it inline or back, the frame it turns in draws i
 ///|
 test "inline, the time and the place on the line under it each have a press's room, a keyboard and mouse's and a finger's" {
   for platform in [0, 2] {
-    let t = head_new(head_said(), 390.0, true, platform~)
+    let t = head_new(head_said(), 390.0, platform~)
     t.run_for(@ui.move_most_ms)
     let (_, ty, _, th) = t.rect_of("3 分钟前").unwrap()
     let (_, py, _, ph) = t.rect_of("星火#发布").unwrap()
@@ -248,7 +249,7 @@ test "inline, the time and the place on the line under it each have a press's ro
 
 ///|
 test "its time pressed says when it was, every time the other way, and again how long ago; under the pointer, its tip says the other" {
-  let t = head_new(head_said(), 760.0, false)
+  let t = head_new(head_said(), 760.0)
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("3 分钟前") is Some(_) && t.find("2026-11-11 21:04") is None)
   let (x, y) = t.find("3 分钟前").unwrap()
@@ -288,7 +289,7 @@ fn head_ground_at(t : @ui.Tester, x : Double, y : Double) -> Int64 {
 ///|
 test "the place pressed opens it where it has its link, its ground lit under the pointer; without one, neither" {
   for url in ["https://acme.slack.com/archives/C1/p1", ""] {
-    let t = head_new(head_said(url~), 760.0, false)
+    let t = head_new(head_said(url~), 760.0)
     t.run_for(@ui.move_most_ms)
     let (x, y) = t.find("星火#发布").unwrap()
     let rest = head_ground_at(t, x + 2.0, y + 2.0)
@@ -308,7 +309,7 @@ test "the place pressed opens it where it has its link, its ground lit under the
 test "the row is found by its key: made in its row's room, what is laid over it told its node and key once" {
   let made : Ref[MessageRowNode?] = Ref(None)
   let told : Array[String] = []
-  let t = head_new(head_said(), 760.0, false, made~, over=fn(_, key) { told.push(key) })
+  let t = head_new(head_said(), 760.0, made~, over=fn(_, key) { told.push(key) })
   t.run_for(@ui.move_most_ms)
   guard made.val is Some(row) else { fail("no row") }
   assert_eq(row.key, "s:e9")

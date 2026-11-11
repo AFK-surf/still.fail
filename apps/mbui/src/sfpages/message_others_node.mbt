@@ -1,14 +1,30 @@
 // Someone else's message as nodes of the window's tree, made once (message.mbt's others_message, sent_elsewhere, their
 // styles the same): its picture out in the margin before its words (inline: over its head's start), its head (name,
-// where it went, time), what it says under it. Not here yet: its picture held under the pane's top as a long one
-// scrolls past (the old one's c.stick: the list's, to come), its ⋯ menu and the card over its picture and name, its
-// files (message_files.mbt), coming out of its agent's picture (emit).
+// where it went, time; where a mouse is what it is used with and it offers itself, its ⋯ at the head's end), what it
+// says under it. Not here yet: its picture held under the pane's top as a long one scrolls past (the old one's c.stick:
+// the list's, to come), the card over its picture and name, its files (message_files.mbt), coming out of its agent's
+// picture (emit).
+
+///|
+/// What a message offers of itself (share_turn_tool's, others_message's `share`): its key (its list's Entry::id, as a
+/// right click on it says it: what the menu that opens is open for, @sfbase.message_menu_on), its link and its words
+/// as they are, and its turn's picture shared (`go`).
+pub(all) struct MessageShare {
+  key : String
+  link : () -> String
+  words : () -> String
+  go : () -> Unit
+}
 
 ///|
 /// Someone else's message (others_message's) in `v`: its picture (`avatar`, made in its room) out in the margin, held
 /// over the row (inline: over its head's start, 3 down); its head (`name`; where it went, `route`, after it, or on a
 /// line of its own under the head while inline; its time); `body` under them, 4 apart. Inline as `here` says as it
-/// changes. The row's node.
+/// changes (message_inline). Where it offers itself (`share`) and a mouse is the native input (not @sf.more_held: a
+/// finger has these on the bar over what it holds picked), its ⋯ at the head's end, shown while the pointer is on the
+/// row or its menu is open (its words, its link, its turn shared: @sfbase.message_items, beside the ⋯'s room), and a
+/// right click on the row offers the same to the window's menu (@sfbase.share_offer, at the click's moment). The row's
+/// node, and whether its ⋯'s menu is open (as that changes: presented_from).
 fn message_others_node(
   v : @view.View,
   here : MessageNodeHere,
@@ -17,27 +33,66 @@ fn message_others_node(
   name : (@view.View) -> Unit,
   route : ((@view.View) -> Unit)?,
   body : (@view.View) -> Unit,
-) -> @view.View {
-  v.box(fn(row) {
-    @sf.style_node(row, fn() { msg_row })
+  share? : MessageShare? = None,
+) -> (@view.View, () -> Bool) {
+  // (its ⋯ where a mouse is the native input: laid out by it, the head as it is whichever hand is on it now)
+  let share = if @sf.more_held() { None } else { share }
+  let menu_on : Ref[() -> Bool] = Ref(fn() { false })
+  let node = v.box(fn(row) {
+    @sf.style_node(row, fn() { if share is Some(_) { msg_row_share } else { msg_row } })
+    match share {
+      Some(s) => {
+        // (pointed at over all of it, its ⋯ shown then, nothing pressed for it: an old view's box with an id, hovered;
+        // what is pressed in it, its name, time, links, as ever)
+        row.points(Is(true)).cursor(Is(Some(@view.Cursor::Arrow))) |> ignore
+        row.on_menu(fn(m) {
+          @sfbase.share_offer(m.wx, m.wy, s.go, @signals.untracked(s.link), @signals.untracked(s.words), s.key)
+        })
+        |> ignore
+      }
+      None => ()
+    }
     row.box(fn(col) {
-      @sf.style_node(col, fn() { msg_main })
+      @sf.style_node(col, fn() { if share is Some(_) { msg_main_share } else { msg_main } })
       col.box(fn(head) {
-        @sf.style_node(head, fn() { if (here.inline)() { msg_head_inline } else { msg_head } })
+        @sf.style_node(head, fn() { if message_inline(here) { msg_head_inline } else { msg_head } })
         name(head)
         match route {
           // (at once: the list's width says the arrangement, and what the window or the sidebar does to the width is
           // no motion of its own; nothing comes or goes)
-          Some(r) => head.show(fn() { !(here.inline)() }, r, at_once=true)
+          Some(r) => head.show(fn() { !message_inline(here) }, r, at_once=true)
           None => ()
         }
         message_time_node(head, here.tips, time)
+        match share {
+          Some(s) => {
+            head.box(fn(sp) { sp.grow(Is(1.0)) |> ignore }) |> ignore
+            head.box(fn(room) {
+              @sf.style_node(room, fn() { msg_share_room })
+              // (its menu beside its room, which is there whether the ⋯ shows or not: open while it is)
+              let open = fn() { @sf.presented_from(Node(room)) }
+              menu_on.val = open
+              room.show(fn() { @sf.hovered_in_node(row) || open() }, fn(m) {
+                @sf.icon_button_node(m, "more", fn() { @sf.t("web-main.menu.more") }, fn() {
+                  @sf.menu(
+                    @sfbase.message_items(@signals.untracked(s.link), @signals.untracked(s.words), s.go),
+                    from=Node(room),
+                    along=End,
+                  )
+                }, size=msg_share_side)
+                |> ignore
+              })
+            })
+            |> ignore
+          }
+          None => ()
+        }
       })
       |> ignore
       match route {
         Some(r) =>
           // (at once, as over the head: an arrangement by the list's width, not a coming or a going)
-          col.show(here.inline, at_once=true, fn(l) {
+          col.show(fn() { message_inline(here) }, at_once=true, fn(l) {
             @sf.style_node(l, fn() { msg_route_line })
             // (as far under the head as keeps the time's room and the place's whole, one over the other)
             l.margin(Is((0.0, route_line_down(), 0.0, 0.0))) |> ignore
@@ -52,14 +107,23 @@ fn message_others_node(
     row.box(fn(layer) {
       layer.over(Is(true)) |> ignore
       layer.box(fn(av) {
-        @sf.style_node(av, fn() { if (here.inline)() { msg_avatar_inline } else { msg_avatar_room } })
+        @sf.style_node(av, fn() { if message_inline(here) { msg_avatar_inline } else { msg_avatar_room } })
         avatar(av)
       })
       |> ignore
     })
     |> ignore
   })
+  (node, menu_on.val)
 }
+
+///|
+/// The room of a message's ⋯ at its head's end (share_turn_tool's share_turn_room), and the ⋯ as big.
+// kept across runs: a value (no field of it changes)
+let msg_share_room : @ui.Style = @ui.css("w=S6 h=S6")
+
+///|
+let msg_share_side : Double = 24.0
 
 ///|
 /// What an agent of the chat said in Slack (or Feishu, or another chat) rather than here, or a person's message there it

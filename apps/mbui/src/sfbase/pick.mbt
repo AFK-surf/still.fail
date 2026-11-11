@@ -112,7 +112,7 @@ pub fn message_menu_on(key : String) -> Bool {
 
 ///|
 /// The turn of a message right clicked offered (share_offered).
-fn share_offer(x : Double, y : Double, go : () -> Unit, link : String, words : String, key : String) -> Unit {
+pub fn share_offer(x : Double, y : Double, go : () -> Unit, link : String, words : String, key : String) -> Unit {
   share_offered.set(Some((x, y, go, link, words, key)))
 }
 
@@ -137,7 +137,7 @@ pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, word
 
 ///|
 /// A message's own items (its ⋯, its right click's): its words, link and turn's picture, where each exists.
-fn message_items(link : String, words : String, go : () -> Unit) -> Array[@sf.MenuItem?] {
+pub fn message_items(link : String, words : String, go : () -> Unit) -> Array[@sf.MenuItem?] {
   let items : Array[@sf.MenuItem?] = []
   if words.trim(chars=" \n\t") != "" {
     items.push(
