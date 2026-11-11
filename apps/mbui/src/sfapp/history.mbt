@@ -273,7 +273,8 @@ fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
           .says(By(fn() { Some(@view.said(Text, label=name() + " " + figure())) }))
           |> ignore
           t.box(fn(f) {
-            f.height(Is(Some(26.0))).lies_along(Is(Middle)) |> ignore
+            // (as high as its line, at the system's size of words: tile_figure_line)
+            f.height(By(fn() { Some(@sf.node_sp(f, tile_figure_line)) })).lies_along(Is(Middle)) |> ignore
             @sf.words_node(f, figure, fn() {
               let big = if figure().length() > 6 { tile_figure_small } else { tile_figure }
               match level() {
@@ -323,13 +324,32 @@ fn agent_tiles_node(v : @view.View, card : () -> Json?, top : Double) -> Unit {
 }
 
 ///|
-/// A tile's figure: the heading's size (22), 600, on a line; 16 where it is longer than six characters.
+/// A tile's figure: the heading's size (22), 600, on a line of tile_figure_line; 16 where it is longer than six
+/// characters.
 // kept across runs: a value (no field of it changes)
-let tile_figure : @ui.TextStyle = @ui.text_style(size=Heading, weight=Semibold, color=Fg, wrap=false)
+let tile_figure : @ui.TextStyle = @ui.text_style(
+  size=Heading,
+  weight=Semibold,
+  color=Fg,
+  wrap=false,
+  leading=Exact(tile_figure_line),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tile_figure_small : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Fg, wrap=false)
+let tile_figure_small : @ui.TextStyle = @ui.text_style(
+  size=Xl,
+  weight=Semibold,
+  color=Fg,
+  wrap=false,
+  leading=Exact(tile_figure_line),
+)
+
+///|
+/// How high a tile's figure's line is, and the box it is in (the old agent_tiles' 26), at the default size of words:
+/// its words in the middle of it as they were in the heading's taller line (30), only that line no longer reaching over
+/// its name; at the system's size of words, both as words are drawn there (node_sp).
+let tile_figure_line : Double = 26.0
 
 ///|
 /// The tiles side by side across the details, 8 apart.
