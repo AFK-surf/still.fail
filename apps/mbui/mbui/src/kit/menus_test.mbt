@@ -1,14 +1,14 @@
 // The menus (batch 3) driven by the pointer and the keyboard, what is open and chosen kept by the test (the view's).
 
 ///|
-fn file_menu() -> Array[Entry] {
+fn file_menu() -> Array[@kit.Entry] {
   [
-    menu_item("new", label="New tab", shortcut="⌘T"),
-    menu_item("window", label="New window"),
-    menu_item("private", label="Private window", disabled=true),
-    menu_separator(),
-    menu_sub("Share", [menu_item("mail", label="Email link"), menu_item("copy", label="Copy link")]),
-    menu_check("bar", true, label="Show bookmarks"),
+    @kit.menu_item("new", label="New tab", shortcut="⌘T"),
+    @kit.menu_item("window", label="New window"),
+    @kit.menu_item("private", label="Private window", disabled=true),
+    @kit.menu_separator(),
+    @kit.menu_sub("Share", [@kit.menu_item("mail", label="Email link"), @kit.menu_item("copy", label="Copy link")]),
+    @kit.menu_check("bar", true, label="Show bookmarks"),
   ]
 }
 
@@ -17,11 +17,11 @@ test "dropdown menu: opened by the keyboard at its first item; the arrows skip w
   let open = Ref(false)
   let chosen : Ref[String?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
-    let tr = button(c, "File", key="file")
+    let tr = @kit.button(c, "File", key="file")
     if tr.clicked {
       open.val = !open.val
     }
-    let m = dropdown_menu(c, "menu", open.val, tr.id, file_menu(), label="File")
+    let m = @kit.dropdown_menu(c, "menu", open.val, tr.id, file_menu(), label="File")
     open.val = m.open
     if m.chosen is Some(_) {
       chosen.val = m.chosen
@@ -51,11 +51,11 @@ test "dropdown menu: opened by the keyboard at its first item; the arrows skip w
 test "dropdown menu: opened by a click, nothing lit until a key; Down on the trigger opens it; Escape closes it" {
   let open = Ref(false)
   let t = @ui.Tester::new(fn(c) {
-    let tr = button(c, "File", key="file")
+    let tr = @kit.button(c, "File", key="file")
     if tr.clicked {
       open.val = !open.val
     }
-    open.val = dropdown_menu(c, "menu", open.val, tr.id, file_menu(), label="File").open
+    open.val = @kit.dropdown_menu(c, "menu", open.val, tr.id, file_menu(), label="File").open
   })
   t.click(@ui.Role::Button, label="File")
   assert_true(open.val)
@@ -79,8 +79,8 @@ test "menu: letters typed go to the item they start; a press outside closes it; 
   let open = Ref(true)
   let chosen : Ref[String?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
-    let tr = button(c, "File", key="file")
-    let m = dropdown_menu(c, "menu", open.val, tr.id, file_menu(), label="File")
+    let tr = @kit.button(c, "File", key="file")
+    let m = @kit.dropdown_menu(c, "menu", open.val, tr.id, file_menu(), label="File")
     open.val = m.open
     if m.chosen is Some(_) {
       chosen.val = m.chosen
@@ -92,7 +92,7 @@ test "menu: letters typed go to the item they start; a press outside closes it; 
   t.press("s")
   assert_eq(t.focused().unwrap().label, "Show bookmarks")
   // what was typed forgotten: a word from the start
-  t.run_for(typeahead_ms)
+  t.run_for(@kit.typeahead_ms)
   t.press("n")
   t.press("e")
   t.press("w")
@@ -112,8 +112,8 @@ test "submenu: Right opens it at its first item, Left closes it alone; the point
   let open = Ref(true)
   let chosen : Ref[String?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
-    let tr = button(c, "File", key="file")
-    let m = dropdown_menu(c, "menu", open.val, tr.id, file_menu(), label="File")
+    let tr = @kit.button(c, "File", key="file")
+    let m = @kit.dropdown_menu(c, "menu", open.val, tr.id, file_menu(), label="File")
     open.val = m.open
     if m.chosen is Some(_) {
       chosen.val = m.chosen
@@ -150,14 +150,14 @@ test "context menu: opened at the pointer by a right click, at its press by a lo
   let t = @ui.Tester::new(fn(c) {
     let area = c.id("area")
     c.box(id=area, w=Fill(1.0), h=Px(300.0), fn() { c.text("Right click here") |> ignore }) |> ignore
-    let m = context_menu(c, "ctx", area, [menu_item("cut", label="Cut"), menu_item("paste", label="Paste")], label="Edit")
+    let m = @kit.context_menu(c, "ctx", area, [@kit.menu_item("cut", label="Cut"), @kit.menu_item("paste", label="Paste")], label="Edit")
     if m.chosen is Some(_) {
       chosen.val = m.chosen
     }
   })
   t.right_click(100.0, 120.0)
   // come in (its panel grows in from where it opened)
-  t.run_for(pop_ms)
+  t.run_for(@kit.pop_ms)
   let (x, y, _, _) = t.get(@ui.Role::Menu, label="Edit").rect
   assert_true(x >= 100.0 && x < 110.0 && y >= 120.0 && y < 130.0)
   t.click(@ui.Role::MenuItem, label="Paste")
@@ -178,13 +178,13 @@ test "context menu: opened at the pointer by a right click, at its press by a lo
 test "menubar: a click opens a menu, the pointer moves among them, Left and Right too; a choice closes it" {
   let chosen : Ref[String?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
-    let v = menubar(
+    let v = @kit.menubar(
       c,
       "bar",
       [
-        ("File", [menu_item("new", label="New"), menu_item("open", label="Open…")]),
-        ("Edit", [menu_item("undo", label="Undo"), menu_item("redo", label="Redo")]),
-        ("View", [menu_check("side", false, label="Sidebar")]),
+        ("File", [@kit.menu_item("new", label="New"), @kit.menu_item("open", label="Open…")]),
+        ("Edit", [@kit.menu_item("undo", label="Undo"), @kit.menu_item("redo", label="Redo")]),
+        ("View", [@kit.menu_check("side", false, label="Sidebar")]),
       ],
       label="Main",
     )
@@ -220,11 +220,11 @@ test "menubar: a click opens a menu, the pointer moves among them, Left and Righ
 test "select: opens on the chosen option; Enter chooses; letters on the trigger choose; a click outside leaves it" {
   let v = Ref("b")
   let t = @ui.Tester::new(fn(c) {
-    v.val = select(
+    v.val = @kit.select(
       c,
       "fruit",
       v.val,
-      [item("a", label="Apple"), item("b", label="Banana"), item("c", label="Cherry"), item("d", label="Date", disabled=true)],
+      [@kit.item("a", label="Apple"), @kit.item("b", label="Banana"), @kit.item("c", label="Cherry"), @kit.item("d", label="Date", disabled=true)],
       placeholder="Pick a fruit",
       label="Fruit",
     ).value
@@ -263,12 +263,12 @@ test "select: opens on the chosen option; Enter chooses; letters on the trigger 
 test "toolbar: one Tab stop, the arrows along it" {
   let t = @ui.Tester::new(fn(c) {
     c.column(gap=8.0, fn() {
-      toolbar(c, "tools", label="Format", fn() {
-        button(c, "Bold", key="b", variant=Ghost) |> ignore
-        button(c, "Italic", key="i", variant=Ghost) |> ignore
-        button(c, "Link", key="l", variant=Ghost) |> ignore
+      @kit.toolbar(c, "tools", label="Format", fn() {
+        @kit.button(c, "Bold", key="b", variant=Ghost) |> ignore
+        @kit.button(c, "Italic", key="i", variant=Ghost) |> ignore
+        @kit.button(c, "Link", key="l", variant=Ghost) |> ignore
       })
-      button(c, "After") |> ignore
+      @kit.button(c, "After") |> ignore
     })
     |> ignore
   })
@@ -292,13 +292,13 @@ test "navigation menu: a trigger's content shown once the pointer rests on it, a
   let followed : Ref[String?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
     c.column(pad=20.0, fn() {
-      let f = navigation_menu(
+      let f = @kit.navigation_menu(
         c,
         "nav",
         [
-          nav_trigger("Learn", fn() { c.text("Guides and tutorials") |> ignore }),
-          nav_trigger("Overview", fn() { c.text("What it is") |> ignore }),
-          nav_link("github", label="GitHub"),
+          @kit.nav_trigger("Learn", fn() { c.text("Guides and tutorials") |> ignore }),
+          @kit.nav_trigger("Overview", fn() { c.text("What it is") |> ignore }),
+          @kit.nav_link("github", label="GitHub"),
         ],
         label="Site",
       )
@@ -313,7 +313,7 @@ test "navigation menu: a trigger's content shown once the pointer rests on it, a
   // (taken at its moment)
   let moved = t.time()
   t.move(x + w / 2.0, y + h / 2.0)
-  let due = moved + nav_menu_open_ms
+  let due = moved + @kit.nav_menu_open_ms
   // (a millisecond before it)
   t.run_for(due - 1.0 - t.time())
   assert_true(t.find("Guides and tutorials") is None)
@@ -329,7 +329,7 @@ test "navigation menu: a trigger's content shown once the pointer rests on it, a
   // (taken at its moment)
   let moved = t.time()
   t.move(380.0, 800.0)
-  let due = moved + nav_menu_close_ms
+  let due = moved + @kit.nav_menu_close_ms
   // (a millisecond before it)
   t.run_for(due - 1.0 - t.time())
   assert_true(t.find("What it is") is Some(_))
@@ -354,12 +354,12 @@ test "dropdown menu: put by a rectangle, its own motion and a scrim; gone once i
   let motion_ms = 300.0
   let open = Ref(true)
   let t = @ui.Tester::new(fn(c) {
-    open.val = dropdown_menu(
+    open.val = @kit.dropdown_menu(
       c,
       "menu",
       open.val,
       0,
-      [menu_item("a", label="One"), menu_item("b", label="Two")],
+      [@kit.menu_item("a", label="One"), @kit.menu_item("b", label="Two")],
       label="Filter",
       at=(200.0, 60.0, 40.0, 40.0),
       along=End,
@@ -394,22 +394,22 @@ fn words_span(t : @ui.Tester, words : String) -> (Double, Double) raise {
 ///|
 test "dropdown menu: taller than the window, as tall as it lets it, its items scrolled to" {
   let open = Ref(true)
-  let entries = Array::makei(40, fn(i) { menu_item("i\{i}", label="Item \{i + 1}") })
+  let entries = Array::makei(40, fn(i) { @kit.menu_item("i\{i}", label="Item \{i + 1}") })
   let t = @ui.Tester::new(
     fn(c) {
       c.box(w=Fill(1.0), h=Fill(1.0), pad=40.0, justify=JEnd, fn() {
-        let tr = button(c, "More", key="more")
+        let tr = @kit.button(c, "More", key="more")
         if tr.clicked {
           open.val = !open.val
         }
-        open.val = dropdown_menu(c, "menu", open.val, tr.id, entries, label="More").open
+        open.val = @kit.dropdown_menu(c, "menu", open.val, tr.id, entries, label="More").open
       })
       |> ignore
     },
     w=600.0,
     h=400.0,
   )
-  t.run_for(presence_in_ms)
+  t.run_for(@kit.presence_in_ms)
   // its first item in the window, its last past it until scrolled to
   let (first, _) = words_span(t, "Item 1")
   assert_true(first > 0.0, msg="its first item out of the window")

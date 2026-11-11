@@ -12,9 +12,9 @@ test "sheet: a field under it keeps neither the focus, what is typed nor its inp
     let t = @ui.Tester::new(
       fn(c) {
         c.editor("page", placeholder="Page field", field=page) |> ignore
-        open.val = sheet(c, "s", open.val, h=300.0, label="Chat info", fn() {
+        open.val = @kit.sheet(c, "s", open.val, h=300.0, label="Chat info", fn() {
           c.editor("inner", placeholder="Sheet field", field=inner) |> ignore
-          button(c, "Pin") |> ignore
+          @kit.button(c, "Pin") |> ignore
         }).open
       },
       platform~,
@@ -50,7 +50,7 @@ test "sheet: opened with nothing focused, nothing is (no field in it, none under
   let page = @ui.Field::new()
   let t = @ui.Tester::new(fn(c) {
     c.editor("page", placeholder="Page field", field=page) |> ignore
-    open.val = sheet(c, "s", open.val, h=300.0, label="Chat info", fn() {
+    open.val = @kit.sheet(c, "s", open.val, h=300.0, label="Chat info", fn() {
       c.editor("inner", placeholder="Sheet field") |> ignore
     }).open
   })

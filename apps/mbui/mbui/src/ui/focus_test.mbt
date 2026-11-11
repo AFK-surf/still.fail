@@ -1,6 +1,6 @@
 ///|
 /// A plain button for these tests: its words, an id from them, Enter and Space (or `keys`) pressing it.
-fn btn(c : Ctx, label : String, keys? : Int = 3, w? : Size = Auto) -> Response {
+fn btn(c : @ui.Ctx, label : String, keys? : Int = 3, w? : @ui.Size = Auto) -> @ui.Response {
   let id = c.id(label)
   let r = c.interact(id, keys~)
   let i = c.box(w~, padx=8.0, pady=4.0, id~, fn() { c.text(label, wrap=false) |> ignore })
@@ -10,7 +10,7 @@ fn btn(c : Ctx, label : String, keys? : Int = 3, w? : Size = Auto) -> Response {
 
 ///|
 test "Tab goes through what can take the focus in the order it is built, round; Shift+Tab back" {
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     c.column(gap=4.0, fn() {
       btn(c, "one") |> ignore
       btn(c, "two") |> ignore
@@ -34,15 +34,15 @@ test "Tab goes through what can take the focus in the order it is built, round; 
 test "Enter and Space press what has the focus, as it says; the key is taken from the view" {
   let log : Array[String] = []
   let seen_enter = Ref(0)
-  let t = Tester::new(fn(c) {
-    if c.key_pressed(key_code_enter) {
+  let t = @ui.Tester::new(fn(c) {
+    if c.key_pressed(@ui.key_code_enter) {
       seen_enter.val = seen_enter.val + 1
     }
     c.column(fn() {
       if btn(c, "both").clicked {
         log.push("both")
       }
-      if btn(c, "space only", keys=press_space).clicked {
+      if btn(c, "space only", keys=@ui.press_space).clicked {
         log.push("space only")
       }
     })
@@ -65,7 +65,7 @@ test "Enter and Space press what has the focus, as it says; the key is taken fro
 ///|
 test "the focus shows only when it came by the keyboard; a press lets it go from a button, not from a field" {
   let shown = Ref(false)
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     c.column(gap=8.0, fn() {
       let r = btn(c, "button")
       shown.val = r.focus_shown
@@ -93,7 +93,7 @@ test "the focus shows only when it came by the keyboard; a press lets it go from
 
 ///|
 test "a roving group is one stop for Tab; the arrows move in it, round, Home and End to its ends" {
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
       btn(c, "before") |> ignore
       c.roving("group", orientation=Horizontal, current=c.id("b"), fn() {
@@ -135,7 +135,7 @@ test "a roving group is one stop for Tab; the arrows move in it, round, Home and
 
 ///|
 test "right to left, a row runs from the right and Left and Right swap in a group" {
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     c.with_direction(Rtl, fn() {
       c.roving("group", orientation=Horizontal, fn() {
         c.box(dir=Row, pl=10.0, fn() {
@@ -162,7 +162,7 @@ test "right to left, a row runs from the right and Left and Right swap in a grou
 ///|
 test "held long: long_pressed once, and no click when let go" {
   let log : Array[String] = []
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     let r = btn(c, "hold me")
     if r.long_pressed {
       log.push("long")
@@ -176,14 +176,14 @@ test "held long: long_pressed once, and no click when let go" {
   let pressed = t.time()
   t.press_at(x + w / 2.0, y + h / 2.0)
   t.draw()
-  let due = pressed + long_press_ms
+  let due = pressed + @ui.long_press_ms
   // (a millisecond before it)
   t.run_for(due - 1.0 - t.time())
   assert_eq(log, [])
   t.run_for(due - t.time())
   assert_eq(log, ["long"])
   // held on as long again: still once
-  t.run_for(long_press_ms)
+  t.run_for(@ui.long_press_ms)
   assert_eq(log, ["long"])
   t.release(x + w / 2.0, y + h / 2.0)
   assert_eq(log, ["long"])
@@ -194,7 +194,7 @@ test "held long: long_pressed once, and no click when let go" {
 ///|
 test "an action asked of a node comes to its widget as input: Activate is a click, Focus the focus" {
   let n = Ref(0)
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
       btn(c, "other") |> ignore
       if btn(c, "count").clicked {
@@ -211,14 +211,14 @@ test "an action asked of a node comes to its widget as input: Activate is a clic
 
 ///|
 test "a Tester starts with a fresh context: no focus, theme or direction of the test before" {
-  let t = Tester::new(fn(c) {
-    c.set_theme(Theme::dark())
+  let t = @ui.Tester::new(fn(c) {
+    c.set_theme(@ui.Theme::dark())
     c.set_direction(Rtl)
     btn(c, "x") |> ignore
   })
   t.tab()
   assert_true(t.ctx().theme().dark)
-  let t2 = Tester::new(fn(c) { btn(c, "y") |> ignore })
+  let t2 = @ui.Tester::new(fn(c) { btn(c, "y") |> ignore })
   assert_false(t2.ctx().theme().dark)
   assert_eq(t2.ctx().direction(), Ltr)
   assert_true(t2.focused() is None)
@@ -226,7 +226,7 @@ test "a Tester starts with a fresh context: no focus, theme or direction of the 
 
 ///|
 test "Tab goes into a list's rows too, built as the list is laid out" {
-  let t = Tester::new(fn(c) {
+  let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
       btn(c, "before") |> ignore
       c.list("rows", 3, 30.0, h=Px(120.0), fn(i) { btn(c, "row \{i}") |> ignore }) |> ignore

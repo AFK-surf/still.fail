@@ -436,9 +436,9 @@ test "at the run's pace, its steps taken when it took them: each from the event 
 
 ///|
 test "step_of: the line as the drive took it" {
-  assert_eq(step_of("now noticed 出错 · "), Some("noticed 出错 ·"))
-  assert_eq(step_of("tap =保存"), Some("tap 保存"))
-  assert_eq(step_of("wait 1500"), None)
+  assert_eq(@core.step_of("now noticed 出错 · "), Some("noticed 出错 ·"))
+  assert_eq(@core.step_of("tap =保存"), Some("tap 保存"))
+  assert_eq(@core.step_of("wait 1500"), None)
 }
 
 ///|

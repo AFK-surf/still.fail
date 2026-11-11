@@ -17,10 +17,10 @@ fn dropdown_then_layer(tree_layer : Bool) -> (@ui.Tester, @ui.Field) {
   let page_view = fn(c : @ui.Ctx) {
       c.editor("page", placeholder="Page field", field=page) |> ignore
       let trigger = c.id("menu")
-      if button(c, "Menu", key="menu").clicked {
+      if @kit.button(c, "Menu", key="menu").clicked {
         open.val = true
       }
-      let m = dropdown_menu(c, "m", open.val, trigger, [menu_item("new", label="New")])
+      let m = @kit.dropdown_menu(c, "m", open.val, trigger, [@kit.menu_item("new", label="New")])
       open.val = m.open
       if m.chosen == Some("new") {
         open.val = false
