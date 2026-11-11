@@ -527,6 +527,9 @@ struct Node {
   mut drag_end : (() -> Unit)?
   /// a slot (show, pick, each): no box of its own, what it holds laid out as its holder's own
   mut slot : Bool
+  /// a slot whose structure said `along_row`: what it makes or lets go along the row laying it out makes its way
+  /// across (View::comes, Tree::makes_way)
+  mut along_row : Bool
   /// as big as what holds it says, whatever it holds (View::lays_out_alone): what changes under it laid out again from
   /// it alone, nothing above it
   mut alone : Bool
@@ -1429,6 +1432,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.allow_ellipsis = false
       n.words_as_said = words_as_said
       n.slot = false
+      n.along_row = false
       n.alone = false
       n.boxes_due = false
       n.fault_to = None
@@ -1632,6 +1636,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         takes_ver: None,
         drag_end: None,
         slot: false,
+        along_row: false,
         alone: false,
         fault_to: None,
         hosted: false,
@@ -7022,7 +7027,9 @@ fn View::take_in(self : View, v : View) -> Unit {
 /// `leave`: it leaves over that long first (View::leave), and no shorter than a move it holds that holds its leaving
 /// is (View::moved_by's `holds_leaving`): its end what that move says it is, at the size it is laid out. Down a column
 /// it makes its way in and closes it as it goes (View::comes, View::goes), but as it is made with what holds it, or
-/// `at_once`, or where it is said to go over a time (`leave`: its coming and going its own).
+/// `at_once`, or where it is said to go over a time (`leave`: its coming and going its own); along a
+/// row the same across where `along_row` is said (Tree::along_row_at; with `at_once`, or where no row lays it out, a
+/// fault).
 #callsite(autofill(loc))
 pub fn View::show(
   self : View,
@@ -7030,10 +7037,12 @@ pub fn View::show(
   then : (View) -> Unit,
   leave? : Double = 0.0,
   at_once? : Bool = false,
+  along_row? : Bool = false,
   loc~ : SourceLoc,
 ) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot(loc)
+  slot.along_row_said(along_row, at_once, "show", loc)
   let had : Ref[View?] = Ref(None)
   // (the one leaving, shown again as it leaves: the same node, come back)
   let gone : Ref[View?] = Ref(None)
@@ -7077,17 +7086,20 @@ pub fn View::show(
 ///|
 /// A node made by `make` for what `which` is, made anew (the one before let go) as that changes, kept as it does not.
 /// Down a column the new one makes its way from as tall as the one before was to as tall as it comes to (View::comes),
-/// but `at_once`.
+/// but `at_once`; along a row, where `along_row` is said, from as wide as the one
+/// before was (Tree::along_row_at).
 #callsite(autofill(loc))
 pub fn[K : Eq] View::pick(
   self : View,
   which : () -> K,
   make : (View, K) -> Unit,
   at_once? : Bool = false,
+  along_row? : Bool = false,
   loc~ : SourceLoc,
 ) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot(loc)
+  slot.along_row_said(along_row, at_once, "pick", loc)
   let had : Ref[(K, View)?] = Ref(None)
   let stop = slot.tree.structured(which, fn(k) {
     guard slot.alive() else { return }
@@ -7099,9 +7111,9 @@ pub fn[K : Eq] View::pick(
         // no room holding nothing following it still, Style's come_fill)
         let (tall, fill) = match had.val {
           Some((_, v)) => {
-            // (one over what holds it, or along a row, took none of the column's room)
-            let (tall, fill) = if v.live() is Some(n) && slot.tree.in_column(v.at) {
-              (tall_now(n, slot.tree.cause_now()), n.coming && n.flex.style.come_fill)
+            // (one over what holds it, or along a row it makes no way along, took none of the column's room)
+            let (tall, fill) = if v.live() is Some(n) && slot.tree.makes_way(v.at) {
+              (slot.tree.along_now(v.at, slot.tree.cause_now()), n.coming && n.flex.style.come_fill)
             } else {
               (0.0, false)
             }
@@ -7136,7 +7148,8 @@ pub fn[K : Eq] View::pick(
 /// go as it goes. Each is given its item as a signal of its own, set again only as the item comes out otherwise (by
 /// its data, not by which object it is): a row whose item is the same runs nothing. Down a column a row makes its way
 /// in as it comes and closes it as it goes (View::comes, View::goes), but those made with what holds them, or
-/// `at_once`, or where they are said to go over a time (`leave`: their coming and going their own).
+/// `at_once`, or where they are said to go over a time (`leave`: their coming and going their own); along a
+/// row the same across where `along_row` is said (Tree::along_row_at).
 #callsite(autofill(loc))
 pub fn[T : Eq, K : Hash + Eq] View::each(
   self : View,
@@ -7145,10 +7158,12 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
   row : (View, @signals.Signal[T]) -> Unit,
   leave? : Double = 0.0,
   at_once? : Bool = false,
+  along_row? : Bool = false,
   loc~ : SourceLoc,
 ) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot(loc)
+  slot.along_row_said(along_row, at_once, "each", loc)
   let rows : Map[K, (View, @signals.Signal[T])] = Map([])
   // (the rows leaving, by key: one whose key comes back as it leaves is the same row, come back)
   let gone_rows : Map[K, (View, @signals.Signal[T])] = Map([])
@@ -7482,7 +7497,7 @@ fn View::come_back(self : View, v : View) -> Unit {
       }
       None => ()
     }
-    self.comes(v, tall_now(n, now), 1.0) |> ignore
+    self.comes(v, self.tree.along_now(v.at, now), 1.0) |> ignore
   }
   self.tree.marked()
 }
@@ -7493,7 +7508,8 @@ fn View::come_back(self : View, v : View) -> Unit {
 /// (Style's come_*, flex's move.mbt): laid out so as the clock goes, cut at its edges, what is under it in its column
 /// moved by as much and the gap before it opening with it, in the same layout (the user, 2026-11-09: what comes or goes
 /// makes its way in or closes it, the framework's, not each page's). Only where it is laid out in its turn down a
-/// column, the tree has been drawn, motion is not reduced and nothing of it is shared by an id: elsewhere nothing, and
+/// column, or along a row where its structure said so (Tree::makes_way: its width's way, Style's come_across), the
+/// tree has been drawn, motion is not reduced and nothing of it is shared by an id: elsewhere nothing, and
 /// false. What scrolls in it makes its way as anything does, what it holds laid out once at the size it comes to (flex's
 /// come_*: its room, how far it can go and the blocks a list makes in it as at rest all the way); a page or a pane,
 /// grown to what the column leaves it, is not laid out in its turn (Tree::in_column), and comes at once. `stays`: closing to nothing, it stays there once its way
@@ -7513,7 +7529,7 @@ fn View::comes(
     v.live() is Some(n) &&
     tree.last_w >= 0.0 &&
     !@signals.untracked(tree.motion_reduced) &&
-    tree.in_column(v.at) &&
+    tree.makes_way(v.at) &&
     !tree.holds_shared(v.at) &&
     // (made or let go because its block was given another key: at once, as were the block made anew, key_taken.mbt)
     !key_taken.val else {
@@ -7521,6 +7537,8 @@ fn View::comes(
   }
   let st = n.flex.style
   let at = tree.cause_now()
+  // (along a row its structure said so: its width's way, Style's come_across)
+  st.come_across = !tree.in_column(v.at)
   // (set off again on its way: from where that way had it at this moment and as fast, not from rest, stopped dead as
   // it turned. Its end and how tall it goes to are known by then whether a frame was drawn since or not: going, it goes
   // to nothing, said with it (below); coming, it is measured as the change that said it is over (after_flush, below).
@@ -7752,16 +7770,6 @@ fn come_done(tree : Tree, v : View, m : Node) -> Unit {
 }
 
 ///|
-/// How tall node `n` is at moment `at`: on its way in or out, where that way has it then (flex's come_state), whether a
-/// frame has laid it out since the way was said or not; else as it was laid out last.
-fn tall_now(n : Node, at : Double) -> Double {
-  match (n.coming, @flex.come_state(n.flex.style, at)) {
-    (true, Some((h, _))) => h
-    _ => n.flex.height
-  }
-}
-
-///|
 /// Node `v`, one this slot's show or each lets go: down a column (View::comes) closing its way as it leaves over as
 /// long as that takes and no shorter than `ms` (View::leave), what it and what it holds bind at rest meanwhile where
 /// nothing of it was said to go over a time (`ms` 0: drawn as it was, nothing of it worked out again); else, or
@@ -7772,9 +7780,9 @@ fn View::goes(self : View, v : View, ms : Double, at_once : Bool, swaps? : Bool 
   if !at_once && v.live() is Some(n) {
     // (as tall as it is at this moment: on its way, where that way has it (flex's come_state), whether a frame has laid
     // it out since or not; else as it was laid out last)
-    let tall = tall_now(n, self.tree.cause_now())
-    // (nothing tall: nothing to close)
-    if tall < 0.5 || !self.tree.in_column(v.at) {
+    let tall = self.tree.along_now(v.at, self.tree.cause_now())
+    // (nothing tall, or wide along a row: nothing to close)
+    if tall < 0.5 || !self.tree.makes_way(v.at) {
       self.leave(v, ms)
       return ms > 0.0
     }

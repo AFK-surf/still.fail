@@ -48,7 +48,15 @@ yet and you can add one, add it.
   slows at one rate to rest and from there sets back out still and gaining as it slowed, its place, speed and gain going
   on where the two meet (flex's `come_turned`, `come_back_path`); how long it slows goes from a Move's from rest's to as
   long as its speed takes to be told to stop by its speed alone (`come_turn_w`), no speed a threshold (the coordinator
-  of the migration, 2026-11-11).
+  of the migration, 2026-11-11). Along a row it is the same way on its width (flex's `come_across`, what it holds laid
+  out whole at the width it comes to, what is after it and a grown one beside it going with it; a row's group its
+  own, apart from its column's), but for now only where the structure says `along_row=true` (`src/view/along_row.mbt`;
+  with `at_once`, or where no row lays it out, a fault); not in a row that wraps, nor alone in its row, nor across its
+  height. Words said on the very node making its way (in a column as in a row) are not cut by it on the way (its
+  clip cuts what it holds, not itself), so they are drawn whole over what is beside it: put them in a box it holds.
+  The rows' other structures (`apps/mbui`'s, 133 found by the screens' sweep) are looked at one by one once
+  the chat's page is made as nodes, then rows make their way by default and `along_row` goes: a switch a page must
+  say is a debt of 方案 A, not its end (the coordinator of the migration, 2026-11-11).
 - State that what is made reads is a signal: a mutable value read by a binding that is not one is never seen to
   change. No check finds such a read: detlint's `built-by-hand` only refuses the two ways of covering one by hand
   (`Ctx::forget_parts`, `built_from_changed`). What shows one is the Tester keeping rows and parts as a device does

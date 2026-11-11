@@ -211,6 +211,10 @@ pub(all) struct Style {
   // (`gone_empty`): whether this way is it going from holding nothing or to it (set out from none, going to none, or
   // turned back on such a way), not one in another's place (a pick's, from as tall as that one was).
   mut come_fill : Bool
+  // Not CSS's: whether its come way (come_*) goes along a row, across: its width the way's, what it holds laid out
+  // whole at the width it comes to, the gap before it in that row its share; else down a column, its height. Said with
+  // the way (the view's View::comes, by the direction of what lays it out).
+  mut come_across : Bool
   // Not CSS's: holding nothing laid out (all it holds laid out nowhere, or none), it is laid out nowhere itself: no
   // room, padding or gap in what holds it (an old view's box `gone_empty`, CSS's :empty { display: none }). Its padding
   // top and foot as much as what it holds is there while what it holds comes from none or goes to none (come_fill: the
@@ -319,6 +323,7 @@ pub fn Style::new() -> Style {
     come_turn: None,
     come_group: None,
     come_fill: false,
+    come_across: false,
     gone_empty: false,
     structural: false,
     rows_grid: 0.0,
