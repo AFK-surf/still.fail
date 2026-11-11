@@ -233,3 +233,56 @@ test "a sheet of nodes closed for a step further in as what it holds grows: the 
     }
   }
 }
+
+///|
+/// How far into a page's slide what it holds grows (ms): four frames of 120 a second, the slide still going.
+let sheet_grows_into : Double = 4.0 * 1000.0 / 120.0
+
+///|
+test "a sheet of nodes a step further in, what the new page holds growing as it slides in: the sheet goes one way, frame by frame" {
+  // (补齐线's steps: the page's way said with how tall the sheet was at its cause, only its end following what it holds)
+  if @ui.test_at_a_rate() {
+    return
+  }
+  let more = @signals.signal(false)
+  let t = presenting_tester(phone, fn(_) {
+    panel_nodes(
+      "信息",
+      fn(v, close) {
+        words_node(v, fn() { "信息内容" }, fn() { paragraph }) |> ignore
+        button_node(v, fn() { "看详情" }, fn() {
+          close()
+          panel_nodes(
+            "详情",
+            fn(v, _) {
+              v.box(fn(b) { b.height(Is(Some(20.0))) |> ignore }) |> ignore
+              v.show(fn() { more.get() }, fn(b) { b.height(Is(Some(600.0))) |> ignore })
+            },
+            from=Unanchored,
+          )
+        })
+        |> ignore
+      },
+      from=Unanchored,
+    )
+  })
+  open_it(t)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("看详情")
+  // (four frames of 120 a second into the page's slide: what it holds grows then, the slide still going)
+  let ms = 1000.0 / 120.0
+  let into = t.time() + sheet_grows_into
+  while t.time() < into - 0.001 {
+    t.frame(ms~)
+  }
+  more.set(true)
+  let tops = []
+  let till = t.time() + @ui.move_most_ms
+  while t.time() < till {
+    t.frame(ms~)
+    tops.push(one_sheet(t).0)
+  }
+  for i in 1..<tops.length() {
+    assert_true(tops[i] <= tops[i - 1] + 1.0e-9, msg="frame \{i}: its top went back down, \{tops}")
+  }
+}
