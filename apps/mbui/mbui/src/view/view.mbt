@@ -668,6 +668,9 @@ pub struct Tree {
   /// what a show set making or closing its way down a column at the moment of the change being made (View::arrives,
   /// View::goes): one coming where another goes in the same column at the same moment is in its place (View::swapped)
   priv swaps : Array[Swap]
+  /// what comes or goes down a column at one moment, with what was on its way there then: one way for all of it
+  /// (flex's ComeGroup), and the nodes in it (Tree::come_group_join), by the column
+  priv come_groups : Map[Int, (@flex.ComeGroup, Array[View])]
   /// what is due being done (Tree::advance)
   mut advancing : Bool
   /// where its logic stands: what is due by then done (Tree::advance), what is said from then on said as of then at the
@@ -1104,6 +1107,7 @@ pub fn Tree::new(
     timeline: [],
     leave_holders: [],
     swaps: [],
+    come_groups: {},
     told: 0,
     advancing: false,
     logic: start,
@@ -7305,6 +7309,8 @@ fn View::comes(
   st.come_ends = if to <= 0.0 { at + @flex.come_way_ms(from, speed, 0.0) } else { 0.0 / 0.0 }
   st.come_plan = st.come_goal
   n.coming = true
+  // (one way with what else comes or goes in its column at this moment and what is on its way there now)
+  tree.come_group_join(v, st, at)
   n.look.clips = true
   (n.come_off)()
   n.come_off = fn() {  }
@@ -7373,6 +7379,117 @@ fn View::comes(
     n.come_off = v.at_moment(st.come_ends, fn() { come_done(tree, v, n) })
   }
   true
+}
+
+///|
+/// Node `v` (its style `st`) set making or closing its way in its column at moment `at`: in the one way of what comes or
+/// goes there at that moment (flex's ComeGroup, the user 2026-11-03 and 2026-11-09: what comes while others go goes with
+/// what is left of theirs as one; 处理中 and the answer change places in one move). Only noted here: once the change is
+/// made (Tree::come_group_settle) the group is said, or none is where it would hold one alone.
+fn Tree::come_group_join(self : Tree, v : View, st : @flex.Style, at : Double) -> Unit {
+  // (its own way from here, whatever group it went in before: a way said once is that way's alone)
+  st.come_group = None
+  let col = self.column_of(v.at)
+  guard col >= 0 else { return }
+  let (_, views) = match self.come_groups.get(col) {
+    Some((g, views)) if g.at == at && !g.set => (g, views)
+    _ => {
+      let g = @flex.ComeGroup::new(at)
+      let views : Array[View] = []
+      self.come_groups[col] = (g, views)
+      @signals.after_flush(fn() { self.come_group_settle(col, g, views) })
+      (g, views)
+    }
+  }
+  if !views.iter().any(fn(w) { w.at == v.at }) {
+    views.push(v)
+  }
+}
+
+///|
+/// The nodes laid out in column `col` in their turn: what it holds, through the slots holding them.
+fn Tree::column_items(self : Tree, col : Int) -> Array[Int] {
+  let out = []
+  let walk : Ref[(Int) -> Unit] = Ref(fn(_) {  })
+  walk.val = fn(at : Int) {
+    for k in self.nodes[at].kids {
+      if self.nodes[k].slot {
+        (walk.val)(k)
+      } else {
+        out.push(k)
+      }
+    }
+  }
+  (walk.val)(col)
+  out
+}
+
+///|
+/// Group `g` of column `col`, its change made: what was set off at its moment and is still coming or going (`views`),
+/// and what was on its way down the column then, set off again from where its way had it and as fast; two or more, they
+/// are measured at its moment and the group's way said (flex's come_group_set), each in it then resting and let go as
+/// that way ends. One alone is left its own way, untouched.
+fn Tree::come_group_settle(self : Tree, col : Int, g : @flex.ComeGroup, views : Array[View]) -> Unit {
+  match self.come_groups.get(col) {
+    Some((h, _)) if physical_equal(h, g) => self.come_groups.remove(col)
+    _ => ()
+  }
+  let at = g.at
+  // (set off at its moment and not let go or set off again since: still of it)
+  let live = views.filter(fn(w) {
+    w.live() is Some(m) && m.coming && m.flex.style.come_at == at
+  })
+  // (what is on its way down the column now, set off before)
+  let under_way = []
+  for k in self.column_items(col) {
+    if live.iter().any(fn(w) { w.at == k }) {
+      continue
+    }
+    let m = self.nodes[k]
+    guard m.live && m.coming else { continue }
+    let ms = m.flex.style
+    if ms.come_at < at && at < ms.come_ends {
+      under_way.push(k)
+    }
+  }
+  // (one alone goes its own way, as it always did)
+  if live.length() + under_way.length() < 2 {
+    return
+  }
+  for k in under_way {
+    let ms = self.nodes[k].flex.style
+    guard @flex.come_state(ms, at) is Some((h, sp)) else { continue }
+    ms.come_from = h
+    ms.come_v = sp
+    ms.come_at = at
+    ms.come_now = at
+    ms.come_plan = ms.come_goal
+    ms.come_ends = at + @flex.come_way_ms(h, sp, ms.come_goal)
+    ms.come_group = None
+    live.push(self.handle(k))
+  }
+  g.members.clear()
+  for w in live {
+    if w.live() is Some(m) {
+      g.members.push(m.flex.style)
+    }
+  }
+  // (what comes measured at the group's moment, how tall it goes to known: come_height's)
+  self.measured_now()
+  @flex.come_group_set(g)
+  guard g.set else { return }
+  for w in live {
+    guard w.live() is Some(m) else { continue }
+    let st = m.flex.style
+    if st.come_to >= 1.0 {
+      (m.come_off)()
+      m.come_off = w.at_moment(st.come_ends, fn() { come_done(self, w, m) })
+    } else if m.left_at >= 0.0 {
+      // (leaving as long as the group's way: let go as it ends)
+      m.span = dmax(st.come_ends - m.left_at, 0.0)
+    }
+    self.layout_marked_at(w.at)
+  }
 }
 
 ///|

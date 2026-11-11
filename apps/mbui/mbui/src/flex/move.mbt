@@ -255,6 +255,111 @@ pub fn come_way_by(
 }
 
 ///|
+/// What comes or goes down one column at one moment, with what was on its way there then (the user, 2026-11-03: a
+/// change come while others go is put with what is left of theirs, one whole going to where it all ends): one way for
+/// all of it, each item its share. Its speed (`v`, points a ms) the items' toward where each goes, summed, and how far
+/// all of them go (`far`, the most of any); turned away from where it goes (v < 0), all of it slows as one first, each
+/// on along its own speed by that one slowing (come_turn of `v`: `s` and `t1`, setting out for where it goes from
+/// `t0`), then one Move from where each has come to, `dur` long; else one Move from rest or on from `v` (no faster
+/// than it goes past where it goes: ω·D), `dur` long. Said once, at the moment it is said for (come_group_set); read by
+/// flex alone, each item laid out by it (come_height).
+pub(all) struct ComeGroup {
+  at : Double
+  members : Array[Style]
+  mut set : Bool
+  mut v : Double
+  mut d : Double
+  mut s : Double
+  mut t1 : Double
+  mut t0 : Double
+  mut dur : Double
+}
+
+///|
+/// A group said at moment `at`, none in it yet.
+pub fn ComeGroup::new(at : Double) -> ComeGroup {
+  { at, members: [], set: false, v: 0.0, d: 0.0, s: 0.0, t1: 0.0, t0: 0.0, dur: 0.0 }
+}
+
+///|
+/// The group's way worked out of what each in it goes from, how fast, and to: each its come_goal, known by now (coming,
+/// as it was measured at the group's moment; going, nothing). Its end each one's (come_ends, come_plan). None set where
+/// it holds no more than one: that one goes its own way (come_way), so as it always did.
+pub fn come_group_set(g : ComeGroup) -> Unit {
+  if g.members.length() < 2 {
+    for m in g.members {
+      m.come_group = None
+    }
+    return
+  }
+  let mut v = 0.0
+  for m in g.members {
+    let d = m.come_goal - m.come_from
+    v = v + (if d >= 0.0 { m.come_v } else { -m.come_v })
+  }
+  g.v = v
+  let (s, t1) = if v < 0.0 { come_turn(v) } else { (0.0, 0.0) }
+  g.s = s
+  g.t1 = t1
+  g.t0 = if v < 0.0 { come_turn_out(v, t1) } else { 0.0 }
+  // (each from where its slowing leaves it: as far on as its own speed is of the group's)
+  let mut far = 0.0
+  let mut dd = 0.0
+  for m in g.members {
+    let start = if v < 0.0 { m.come_from + m.come_v * s / v } else { m.come_from }
+    let d = (m.come_goal - start).abs()
+    far = fmax(far, d)
+    dd = dd + d
+  }
+  g.d = dd
+  g.dur = if v < 0.0 { come_move_ms(far, g.t0, None) } else if far < 0.5 { 0.0 } else { move_ms(far) }
+  let ends = g.at + (if v < 0.0 { fmax(t1, g.t0 + g.dur) } else { g.dur })
+  for m in g.members {
+    m.come_group = Some(g)
+    m.come_ends = ends
+    m.come_plan = m.come_goal
+  }
+  g.set = true
+}
+
+///|
+/// Where item `s` of group `g` is `t` ms on from the group's moment, going to `goal` now, and how fast (points a ms):
+/// its share of the group's way.
+fn come_group_way(g : ComeGroup, s : Style, goal : Double, t : Double) -> (Double, Double) {
+  if g.v < 0.0 {
+    // (slowing as one: carried as far as its own speed is of the group's)
+    let (x, xv) = if g.t1 <= 0.0 || t >= g.t1 {
+      (g.s, 0.0)
+    } else {
+      let (off, ov) = move_path(-g.s, g.v, t, g.t1)
+      (g.s + off, ov)
+    }
+    let k = s.come_v / g.v
+    let start = s.come_from + k * g.s
+    let t2 = t - g.t0
+    let (m, mv) = if t2 <= 0.0 {
+      (0.0, 0.0)
+    } else if g.dur <= 0.0 || t2 >= g.dur {
+      (1.0, 0.0)
+    } else {
+      let (off, ov) = move_path(-1.0, 0.0, t2, g.dur)
+      (1.0 + off, ov)
+    }
+    (s.come_from + k * x + (goal - start) * m, k * xv + (goal - start) * mv)
+  } else {
+    // (one Move for all, on from the group's speed, as a share of how far all of it goes)
+    let (p, pv) = if g.d <= 0.0 || g.dur <= 0.0 || t >= g.dur {
+      (1.0, 0.0)
+    } else {
+      let v = fmin(g.v, move_k / g.dur * g.d)
+      let (off, ov) = move_path(-g.d, v, t, g.dur)
+      (1.0 + off / g.d, ov / g.d)
+    }
+    (s.come_from + (goal - s.come_from) * p, (goal - s.come_from) * pv)
+  }
+}
+
+///|
 /// What its way's length and turn were said by (Style's come_plan): as tall as it went to then; `goal` where none was.
 fn plan_of(s : Style, goal : Double) -> Double {
   if known(s.come_plan) {
@@ -283,7 +388,10 @@ fn come_height(s : Style, natural : Double) -> Double {
     s.come_k = fmax(fmin(s.come_to, 1.0), 0.0)
     return if s.come_to >= 1.0 { 0.0 / 0.0 } else { goal }
   }
-  let (tall, _) = come_way_by(s.come_from, s.come_v, goal, plan_of(s, goal), t)
+  let (tall, _) = match s.come_group {
+    Some(g) if g.set => come_group_way(g, s, goal, t)
+    _ => come_way_by(s.come_from, s.come_v, goal, plan_of(s, goal), t)
+  }
   let tall = fmax(tall, 0.0)
   // (holding nothing it is laid out by, closing to nothing from as tall as one before it was (a pick's case that made
   // nothing): its share of that)
@@ -310,6 +418,9 @@ pub fn come_state(s : Style, at : Double) -> (Double, Double)? {
   if dur <= 0.0 || t >= dur {
     return Some((s.come_goal, 0.0))
   }
-  let (tall, v) = come_way_by(s.come_from, s.come_v, s.come_goal, plan_of(s, s.come_goal), t)
+  let (tall, v) = match s.come_group {
+    Some(g) if g.set => come_group_way(g, s, s.come_goal, t)
+    _ => come_way_by(s.come_from, s.come_v, s.come_goal, plan_of(s, s.come_goal), t)
+  }
   Some((fmax(tall, 0.0), v))
 }

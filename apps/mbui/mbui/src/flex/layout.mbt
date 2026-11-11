@@ -1483,6 +1483,9 @@ fn layout_flex(
     let count = pool.count
     let at = pool.at
     let aligns = pool.aligns
+    // (each item's come_k is this layout's: an item's own layout_flex, where one taking no room holding nothing says its
+    // share (gone_there, below), ran as its basis was measured above in this same layout; one with what it holds on a
+    // way is marked to be laid out again at each frame, never measured out of the cache)
     // (the gap before each item where one comes or goes in a column: as much of it as that one is there and some before
     // it is (Style's come_k), where it comes from nothing or goes to it (come_fill) or takes no room holding nothing; one
     // on its way from as tall as one in its place was has it all along, that one's gap its own (View::arrives). None
