@@ -87,6 +87,7 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: mbui-next-moon-mac-${{ github.event.workflow_run.head_sha || github.sha }}
           restore-keys: mbui-next-moon-mac-
       - uses: actions/cache/restore@v4
@@ -95,6 +96,7 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: mbui-mac-moon-${{ github.sha }}
           restore-keys: mbui-mac-moon-
       - run: |
@@ -134,4 +136,5 @@ jobs:
           path: |
             apps/mbui/_build
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: ${{ env.MOON_KEY }}

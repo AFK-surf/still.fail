@@ -97,6 +97,9 @@ jobs:
       # a part): a branch takes main's. Without each test program's objects (<test>.mbc: the units' store keeps them):
       # with them, a run took its units from there and left the store's untouched, so it kept none of them, and a
       # branch from before this took main's store of 68 units and compiled the rest (files-browse, 40038188859).
+      # ('**/*.mbc' alone kept their files: it names the directory, not what is in it, and 44 of them, 2.9 GB, were
+      # most of the app part's 1.1 GB cache (419 MB without, zstd -3), restored in 21-45 s of each job and saved
+      # again on main's: #5410, 2026-11-11)
       - uses: actions/cache/restore@v4
         id: moon
         with:
@@ -104,6 +107,7 @@ jobs:
             apps/mbui/_build
             !${{ env.MBC_STORE }}
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: mbui-moon-build-${{ env.PART }}-${{ github.sha }}
           restore-keys: mbui-moon-build-${{ env.PART }}-
       # (each file an mtime of its content: moon builds again only what changed since that build, not all of it after
@@ -232,6 +236,7 @@ jobs:
             apps/mbui/_build
             !${{ env.MBC_STORE }}
             !apps/mbui/_build/**/*.mbc
+            !apps/mbui/_build/**/*.mbc/**
           key: mbui-moon-build-${{ env.PART }}-${{ github.sha }}
       # (what the run counted of how what moves goes, MBUI_TEST_MOTION=count: in the summary, and whole as an artifact)
       - name: How what moves goes
