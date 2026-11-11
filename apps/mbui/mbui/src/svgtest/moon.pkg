@@ -6,4 +6,4 @@ import {
   "mbui/skiatest",
   "mbui/pixels",
   "moonbitlang/core/encoding/utf8",
-}
+} for "test"

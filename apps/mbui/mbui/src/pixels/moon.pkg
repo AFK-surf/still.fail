@@ -2,5 +2,4 @@ import {
   "mbui/dmath",
   "mbui/zip",
 }
-import { "mbui/codec" } for "test"
 import { "mbui/halt" } for "wbtest"
