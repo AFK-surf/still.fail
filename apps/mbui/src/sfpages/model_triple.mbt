@@ -86,33 +86,33 @@ fn triple_reset() -> Unit {
 ///|
 /// A control drawn of its face (a new chat's: its `pick` as the page has it, NewChatPick) asks its panel's own `pick` as
 /// the hand comes to it (a pointer resting over it, a finger or a pointer going down on it, a press) and opens that panel
-/// once it is answered, whole: what it holds of it meanwhile (`lease`, of `of`: its station and pick), and what waits
-/// for it to be answered to open it (`waits`: what follows the pick; `waiting`). A press waits only while what it was
-/// pressed in is as it was (`stay`: the page on top's stay then, Nav::top_stay; `shown`: the last put up by the
-/// presenters then, last_presented): the page left, the workspace switched, or something else put up meanwhile, it
-/// waits no more and what it asked is let go of. The panel holds it while it is open, and a borrowing asked from it
+/// once it is answered, whole: what it holds of it meanwhile (`lease`, of `of`: its station and pick), and the press
+/// waiting for it to be answered (`wait`: sfbase's press_wait, which waits only while what it was pressed in stays as it
+/// was, and lets go of what it asked when it stops). The panel holds it while it is open, and a borrowing asked from it
 /// while that is asked.
 priv struct TripleAhead {
   mut lease : @sfbase.TopicLease?
   mut of : String
-  mut waits : (() -> Unit)?
-  mut waiting : Bool
-  mut stay : (Int, Int)
-  mut shown : Int
+  mut wait : @sfbase.PressWait?
 }
 
 ///|
 // kept across runs: put back by triple_reset
-let triple_ahead : TripleAhead = { lease: None, of: "", waits: None, waiting: false, stay: (-1, -1), shown: -1 }
+let triple_ahead : TripleAhead = { lease: None, of: "", wait: None }
 
 ///|
-/// What waits to open a panel stopped.
+/// Whether a press waits for a panel's pick.
+fn triple_waiting() -> Bool {
+  triple_ahead.wait is Some(w) && w.waiting()
+}
+
+///|
+/// What waits to open a panel ended, letting go of nothing (the same asked again, or the panel opened holds it).
 fn triple_ahead_stop() -> Unit {
-  triple_ahead.waiting = false
-  match triple_ahead.waits {
-    Some(stop) => {
-      triple_ahead.waits = None
-      stop()
+  match triple_ahead.wait {
+    Some(w) => {
+      triple_ahead.wait = None
+      w.end()
     }
     None => ()
   }
@@ -141,39 +141,10 @@ fn triple_ahead_read(station : String, of : String) -> @sfbase.TopicState? {
 }
 
 ///|
-/// Whether what was asked ahead of the panel of the pick `of` on `station` is answered (triple_ahead_read's).
-fn triple_ahead_answered(station : String, of : String) -> Bool {
-  triple_ahead_read(station, of) is Some(s) && @sfbase.opens_answered(s)
-}
-
-///|
-/// Whether a press waiting for its panel still may open it: what it was pressed in as it was (TripleAhead's `stay`,
-/// `shown`), the page's stay read as it changes.
-fn triple_ahead_still() -> Bool {
-  app.nav.top_stay() == triple_ahead.stay && @sf.last_presented() == triple_ahead.shown
-}
-
-///|
-/// A press that waits no more (what it was pressed in is gone or something else is up): what follows the pick stopped
-/// once the change under way is told, what was asked let go of.
-fn triple_ahead_gives_up(me : String) -> Unit {
-  triple_ahead.waiting = false
-  let stop = triple_ahead.waits
-  triple_ahead.waits = None
-  @signals.after_flush(fn() {
-    match stop {
-      Some(f) => f()
-      None => ()
-    }
-  })
-  triple_let_go(me)
-}
-
-///|
 /// What was asked ahead of the panel of `me` let go of, where nothing reads it: its panel not open, nothing waiting to
 /// open it, no borrowing of it asked, the hand not on its control (`hand`).
 fn triple_let_go(me : String, hand? : Bool = false) -> Unit {
-  guard triple_ahead.of == me && !hand && triple.open != me && !triple_ahead.waiting && triple.borrow_asking != me else {
+  guard triple_ahead.of == me && !hand && triple.open != me && !triple_waiting() && triple.borrow_asking != me else {
     return
   }
   match triple_ahead.lease {
@@ -187,9 +158,9 @@ fn triple_let_go(me : String, hand? : Bool = false) -> Unit {
 
 ///|
 /// The panel of the pick `of` on `station` opened beside `from` once its own pick is answered (asked now where it is
-/// not held already): at once where it is, else the moment it is (the control's build, or what follows the pick, which
-/// comes first), whole, never on what the control's face has nor in its bones; and not at all once what it was pressed
-/// in is gone (triple_ahead_still). Opened already, it closes (as open_triple_panel).
+/// not held already): at once where it is, else the moment it is, whole, never on what the control's face has nor in
+/// its bones; a press that waits for it as sfbase's press_wait says (not at all once what it was pressed in is gone,
+/// what it asked let go of then). Opened already, it closes (as open_triple_panel).
 fn open_triple_whole(src : Source, station : String, of : String, from : @sf.Anchor, saved : String) -> Unit {
   let me = station + "\u{1}" + of
   if triple.open == me {
@@ -198,50 +169,22 @@ fn open_triple_whole(src : Source, station : String, of : String, from : @sf.Anc
   }
   triple_ahead_stop()
   triple_ask(src, station, of)
-  let open = fn() { triple_open_waited(src, station, of, from, saved) }
-  if triple_ahead_answered(station, of) {
-    open()
-    return
-  }
-  triple_ahead.waiting = true
-  triple_ahead.stay = @signals.untracked(fn() { app.nav.top_stay() })
-  triple_ahead.shown = @sf.last_presented()
-  // (owned by nothing, read outside what reads now (a fixture's ask opens it as a build runs): what waits is no part of
-  // it; it follows the page's stay, and the pick through what holds it, never through the page's source, which would
-  // hold it while the page is there)
-  let owner = @signals.set_owner(None)
-  let stop = @signals.untracked(fn() { @signals.effect(fn() {
-    guard triple_ahead.waiting else { return }
-    if !triple_ahead_still() {
-      @signals.untracked(fn() { triple_ahead_gives_up(me) })
-    } else if (match triple_ahead.lease { Some(l) => l.follow(); None => None }) is Some(st) && @sfbase.opens_answered(st) {
-      @signals.untracked(open)
-    }
-  }) })
-  @signals.set_owner(owner) |> ignore
-  if triple_ahead.waiting {
-    triple_ahead.waits = Some(stop)
-  } else {
-    stop()
-  }
-}
-
-///|
-/// The panel a press waited for opened, once (open_triple_whole's, or its control's build that found it answered),
-/// where what it was pressed in is as it was; else it waits no more.
-fn triple_open_waited(src : Source, station : String, of : String, from : @sf.Anchor, saved : String) -> Unit {
-  let me = station + "\u{1}" + of
-  if triple_ahead.waiting && !@signals.untracked(triple_ahead_still) {
-    triple_ahead_gives_up(me)
-    return
-  }
-  triple_ahead.waiting = false
-  guard triple.open != me else { return }
-  // (gone: what waited for it stopped, and what it held let go of where nothing else holds it)
-  open_triple_panel(src, station, of, from, saved~, gone=fn() {
-    triple_ahead_stop()
-    triple_let_go(me)
-  })
+  // (the pick read through what holds it, never through the page's source, which would hold it while the page is there)
+  let w = @sfbase.press_wait(
+    fn() {
+      match triple_ahead.lease {
+        Some(l) if triple_ahead.of == me => l.follow() is Some(st) && @sfbase.opens_answered(st)
+        _ => false
+      }
+    },
+    fn() {
+      guard triple.open != me else { return }
+      // (gone: what it held let go of where nothing else holds it)
+      open_triple_panel(src, station, of, from, saved~, gone=fn() { triple_let_go(me) })
+    },
+    let_go=fn() { triple_let_go(me) },
+  )
+  triple_ahead.wait = if w.waiting() { Some(w) } else { None }
 }
 
 ///|
@@ -417,9 +360,11 @@ pub fn model_triple(
     } else {
       triple_let_go(me)
     }
-    // (pressed before it was answered: opened as it is, once the frame's builds are over: opening it tells outside)
-    if triple_ahead.waiting && triple_ahead_answered(station, of) {
-      c.after_build("triple-open/" + me, fn() { triple_open_waited(src, station, of, Of(id), saved) })
+    // (pressed before it was answered: looked at again once the frame's builds are over, where opening it tells
+    // outside)
+    match triple_ahead.wait {
+      Some(w) => c.after_build("triple-open/" + me, fn() { w.check() })
+      None => ()
     }
   }
   if can && !open {

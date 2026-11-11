@@ -52,22 +52,50 @@ pub fn chat_row_node(
   let whole = @sfbase.WholeAsk::new()
   let pressing = Ref(false)
   let hovering = Ref(false)
-  let whole_waits : @signals.Signal[((ChatItem) -> Unit)?] = @signals.signal(None, same=fn(a, b) { a is None && b is None })
+  // (a press waiting for it: sfbase's press_wait, while what it was pressed in stays as it was)
+  let whole_wait : Ref[@sfbase.PressWait?] = Ref(None)
+  let whole_waits = fn() { whole_wait.val is Some(w) && w.waiting() }
   let ask_whole = fn() { whole.ask(src, @signals.untracked(item)) }
   // (what reads it done with: hovered no more, let go of, its menu gone, nothing waiting for it)
   let whole_idle = fn() {
     @signals.untracked(fn() {
-      if !pressing.val && !hovering.val && !menu_on() && whole_waits.get() is None {
+      if !pressing.val && !hovering.val && !menu_on() && !whole_waits() {
         whole.let_go()
       }
     })
   }
-  // (`run` with its chat's whole row: now where it is answered, else the frame it is)
-  let then_whole = fn(run : (ChatItem) -> Unit) {
+  // (`run` with its chat's whole row: now where it is answered, else the frame it is, while what it was pressed in
+  // stays as it was (sfbase's press_wait); else nothing, `gone` done, and what it asked let go of)
+  let then_whole = fn(run : (ChatItem) -> Unit, gone : () -> Unit) {
     ask_whole()
-    match @signals.untracked(fn() { @sfbase.whole_row(src, item()) }) {
-      Some(w) => run(w)
-      None => whole_waits.set(Some(run))
+    match whole_wait.val {
+      Some(w) => {
+        whole_wait.val = None
+        w.end()
+      }
+      None => ()
+    }
+    let w = @sfbase.press_wait(fn() { @sfbase.whole_answered(src, item()) }, fn() {
+      match @signals.untracked(fn() { @sfbase.whole_row(src, item()) }) {
+        Some(i) => run(i)
+        None => ()
+      }
+      whole_idle()
+    }, let_go=fn() {
+      gone()
+      whole_idle()
+    })
+    whole_wait.val = if w.waiting() { Some(w) } else { None }
+  }
+  // (what waits for it ended with the row: gone, or taken for another chat, what it asked let go of by what follows,
+  // what the row showed put back as it is made anew)
+  let whole_wait_gone = fn() {
+    match whole_wait.val {
+      Some(w) => {
+        whole_wait.val = None
+        w.end()
+      }
+      None => ()
     }
   }
   // (where the last press went down, and its state line: pressed there, while the core says which message that is
@@ -172,7 +200,7 @@ pub fn chat_row_node(
     // (its menu is its whole row's: opened once that is answered, whole)
     let open_menu = fn(x : Double, y : Double, from_row : Bool) {
       guard @signals.untracked(menu_ok) else { return }
-      then_whole(fn(i) { menu_now(i, x, y, from_row) })
+      then_whole(fn(i) { menu_now(i, x, y, from_row) }, fn() {  })
     }
     let hover = fn() { !finger && (@sf.lit_in_node(row) || menu_on()) }
     // (said by its whole row: shown once that is answered, held meanwhile by what reads it here)
@@ -453,26 +481,11 @@ pub fn chat_row_node(
     }
     // (its menu gone, what waited answered: let go of where nothing else holds it)
     row.reacts(fn() { menu_on() }, fn(on) { if !on { whole_idle() } })
-    row.reacts(
-      fn() {
-        match whole_waits.get() {
-          Some(_) => @sfbase.whole_answered(src, item())
-          None => false
-        }
-      },
-      fn(answered) {
-        guard answered else { return }
-        match (whole_waits.untracked(), @signals.untracked(fn() { @sfbase.whole_row(src, item()) })) {
-          (Some(run), Some(w)) => {
-            whole_waits.set(None)
-            run(w)
-            whole_idle()
-          }
-          _ => ()
-        }
-      },
-    )
-    row.owns(fn() { whole.let_go() }) |> ignore
+    row.owns(fn() {
+      whole_wait_gone()
+      whole.let_go()
+    })
+    |> ignore
     // (its chat in view or no more, eased; taken for another chat, as that one's at once, as it would be made)
     let chosen_for = Ref(@sfbase.row_name(first))
     row.reacts(fn() { (key(), on()) }, fn(now) {
@@ -504,7 +517,7 @@ pub fn chat_row_node(
       }
       opened.val = false
       down_at.val = None
-      whole_waits.set(None)
+      whole_wait_gone()
       pressing.val = false
       whole.let_go()
       // (put, never set going: a row taken for another chat is so as its list is laid out (a block given another key
@@ -617,7 +630,7 @@ pub fn chat_row_node(
         .lies_along(Is(Middle))
         .ground(By(fn() { if @sf.lit_node(k) { t().p.hover } else { 0L } }))
         |> ignore
-        @sf.presses_node(k, fn() { then_whole(fn(w) { archive_row(src, w) }) })
+        @sf.presses_node(k, fn() { then_whole(fn(w) { archive_row(src, w) }, fn() {  }) })
         k.says(By(fn() {
           Some(@view.said(Button, label=@sf.t("web-main.chat.archiveNamed", args=[("title", item().title)])))
         }))
@@ -691,7 +704,7 @@ fn swipe_node(
   past : @signals.Signal[Bool],
   out : @signals.Signal[Bool],
   ask : () -> Unit,
-  then_whole : ((ChatItem) -> Unit) -> Unit,
+  then_whole : ((ChatItem) -> Unit, () -> Unit) -> Unit,
 ) -> Unit {
   let from = Ref(0.0)
   let from_x = Ref(0.0)
@@ -760,6 +773,9 @@ fn swipe_node(
                 })
                 |> ignore
               }
+            }, fn() {
+              // (what it was let go in is gone before it was answered: back where it rests, nothing asked)
+              back(0.0)
             })
           }
         } else {
