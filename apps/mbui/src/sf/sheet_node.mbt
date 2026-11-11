@@ -65,9 +65,11 @@ fn sheet_node(
       // (in another's place: its scrim whole from the first, where that one stood, not below)
       let dim = EdgeWay::new(if in_place is Some(_) { 1.0 } else { 0.0 })
       let below = SheetRise::new()
+      // (its box, once it is made: how tall it is as a way is said)
+      let sheet_box : Ref[@view.View?] = Ref(None)
       let placed = match in_place {
         Some(stood) => {
-          below.start = 0.0
+          below.risen = true
           Some((stood, layer.cause_at()))
         }
         None => None
@@ -75,6 +77,19 @@ fn sheet_node(
       // (how far its foot reaches on under the window's: by its corner; in the place of one that stood taller than
       // it, drawn so tall at first, its foot that much under the window's as it is laid out)
       let under = sheet_under + in_place.unwrap_or(0.0)
+      // (in another's place: its Move from as tall as that one stood as long as how far that is from how tall it is
+      // laid out at its moment, once it is)
+      if in_place is Some(stood) {
+        @signals.after_flush(fn() {
+          match sheet_box.val {
+            Some(b) if b.alive() => {
+              below.placed_ms = @ui.move_ms((dmax(b.grows_now().0 - under, 0.0) - stood).abs())
+              below.said.set(below.said.untracked() + 1)
+            }
+            _ => ()
+          }
+        })
+      }
       let held : @signals.Signal[Double?] = @signals.signal(None)
       let back = EdgeWay::new(0.0)
       // (one that grows (`grows`): how tall it is where it was dragged or tapped to another height, or a finger has it;
@@ -90,11 +105,11 @@ fn sheet_node(
       layer.reacts(fn() { layer.leaving() }, fn(going) {
         if going {
           dim.go(layer, 0.0, @kit.sheet_scrim_ms, ease=Out)
-          below.go(layer, 1.0, speed?=let_go_speed.val)
+          below.go(sheet_box, layer, 1.0, under, speed?=let_go_speed.val)
           let_go_speed.val = None
         } else {
           dim.go(layer, 1.0, @kit.sheet_scrim_ms, ease=Out)
-          below.go(layer, 0.0)
+          below.go(sheet_box, layer, 0.0, under)
         }
       })
       let live = fn() { !layer.leaving() }
@@ -160,6 +175,7 @@ fn sheet_node(
       // (the room over it: what a press closes it on)
       layer.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
       layer.box(fn(sheet) {
+        sheet_box.val = Some(sheet)
         // (how tall it stands, asked as it closes: where it was last placed)
         stands_by(fn() { dmax(0.0, layer.window().1 - sheet.placed_window_now().1) })
         sheet
@@ -208,7 +224,7 @@ fn sheet_node(
           fn(_, h, t) {
             let own = h - under
             let off = match placed {
-              Some((stood, at)) => @ui.move_path(own - stood, 0.0, t - at, @ui.move_ms((own - stood).abs())).0
+              Some((stood, at)) => @ui.move_path(own - stood, 0.0, t - at, below.placed_for(own - stood)).0
               None => 0.0
             }
             (0.0, below.shown(own, t) + off)
@@ -216,8 +232,8 @@ fn sheet_node(
           fn(_, h) {
             let own = h - under
             match placed {
-              Some((stood, at)) => dmax(below.ends(own), at + @ui.move_ms((own - stood).abs()))
-              None => below.ends(own)
+              Some((stood, at)) => dmax(below.ends(), at + below.placed_for(own - stood))
+              None => below.ends()
             }
           },
           holds_leaving=true,
@@ -237,11 +253,10 @@ fn sheet_node(
         // it stood in another's place, its scrim, a height it goes to, its way back from under a finger: each said with
         // its cause's moment and its length)
         presented_sheet_rest(layer, fn() {
-          let own = dmax(0.0, sheet.placed_window_now().3 - under)
-          let mut e = below.ends(own)
+          let mut e = below.ends()
           match placed {
-            Some((stood, at)) => e = dmax(e, at + @ui.move_ms((own - stood).abs()))
-            None => ()
+            Some((_, at)) if below.placed_ms == below.placed_ms => e = dmax(e, at + below.placed_ms)
+            _ => ()
           }
           for w in [dim, back, tall, recede] {
             e = dmax(e, w.end())
@@ -516,74 +531,110 @@ fn sheet_stretched_slope(h : Double, top : Double, room : Double) -> Double {
 let sheet_give : Double = 0.55
 
 ///|
-/// How far a sheet is below its place, in its own heights (1: out of the window, 0: risen), as it rises and sinks: each
-/// way a Move from where the one before had it at that way's cause's moment (as fast as it went then) to where it goes,
-/// as long as its own height makes it (@kit.sheet's below, a SpringPath that moves: move_ms of how far it goes). Only
-/// how far and when are said; where it is is worked out as it is drawn, by how tall it is laid out then
-/// (View::moved_by), so a way under way follows the height it comes to.
+/// How high a sheet's top stands over its place's foot as it rises and sinks (`u`: as tall as it is, risen; none,
+/// sunk): each way said once, at its cause's moment, from where its top stood then and as fast as it went (what it
+/// holds growing or shrinking then, a hand's speed as it let it go), its turn and length by how tall it was then
+/// (come_way_by's plan); only its end follows how tall it comes to, rising (to as tall as it is laid out), none
+/// sinking (to the window's foot, however tall it is). So a sheet closed while what it holds grows or shrinks sinks on
+/// from as fast as its top went, slowing first where that was up (the coordinator of the migration, 2026-11-11: as one
+/// node turned back does, PR 2's whole). Where it is drawn is worked out as it is, by how tall it is laid out then
+/// (View::moved_by): `h - u` below its place.
 struct SheetRise {
-  /// where it was before its first way, and its ways (their cause's moment, where to, and how fast it set out, points a
-  /// millisecond down: a hand's as it let it go; NaN, as fast as the way before had it then)
-  mut start : Double
-  ways : Array[(Double, Double, Double)]
+  /// where it stood before its first way: risen (in another's place) or below
+  mut risen : Bool
+  /// its way: the cause's moment, whether up, where its top stood and how fast it went (points a ms, up), and how tall
+  /// it was then
+  mut way : SheetWay?
+  /// how long its Move from where it stood in another's place takes (NaN: none worked out yet)
+  mut placed_ms : Double
   /// told as a way is said
   said : @signals.Signal[Int]
 }
 
 ///|
-fn SheetRise::new() -> SheetRise {
-  { start: 1.0, ways: [], said: @signals.signal(0) }
+priv struct SheetWay {
+  at : Double
+  up : Bool
+  u0 : Double
+  v0 : Double
+  plan : Double
 }
 
 ///|
-/// Off to `to` (in its heights) from `n`'s cause's moment, from where it is then, as fast as it went then; `speed`: as
-/// fast as that instead (points a millisecond down: what a finger let it go at).
-fn SheetRise::go(self : SheetRise, n : @view.View, to : Double, speed? : Double) -> Unit {
-  let at = n.cause_at()
-  // (the ways before over, however tall it is: from where the last of them went)
-  match self.ways.last() {
-    Some((_, last_to, _)) if last_to == to => return
-    Some((last_at, last_to, _)) if at >= last_at + @ui.move_most_ms => {
-      self.start = last_to
-      self.ways.clear()
+fn SheetRise::new() -> SheetRise {
+  { risen: false, way: None, placed_ms: @double.not_a_number, said: @signals.signal(0) }
+}
+
+///|
+/// Where its top stands at moment `t` over its place's foot, `h` tall then, and how fast it goes (points a ms, up), as
+/// long as `h` goes `hv` a ms.
+fn SheetRise::top_at(self : SheetRise, h : Double, hv : Double, t : Double) -> (Double, Double) {
+  match self.way {
+    None => if self.risen { (h, hv) } else { (0.0, 0.0) }
+    Some(w) => {
+      let goal = if w.up { h } else { 0.0 }
+      let (u, uv) = @ui.come_way_by(w.u0, w.v0, goal, if w.up { w.plan } else { 0.0 }, t - w.at)
+      // (rising: its end as tall as it comes to, as much of how fast that goes as its way has got there)
+      if w.up && hv != 0.0 {
+        let (u1, _) = @ui.come_way_by(w.u0, w.v0, goal + 1.0, w.plan, t - w.at)
+        (u, uv + (u1 - u) * hv)
+      } else {
+        (u, uv)
+      }
     }
-    None if self.start == to => return
+  }
+}
+
+///|
+/// Off to `to` (1: below, 0: risen) at `n`'s cause's moment, from where its top stands then and as fast as it goes,
+/// `sheet` its box (how tall it is then and how fast that goes: View::grows_now, once it is laid out); `speed`: as fast
+/// as that down instead (points a millisecond: what a finger let it go at).
+fn SheetRise::go(self : SheetRise, sheet : Ref[@view.View?], n : @view.View, to : Double, under : Double, speed? : Double) -> Unit {
+  let up = to <= 0.0
+  match self.way {
+    Some(w) if w.up == up => return
+    None if self.risen == up => return
     _ => ()
   }
-  self.ways.push((at, to, speed.unwrap_or(@double.not_a_number)))
-  self.said.set(self.said.untracked() + 1)
+  let at = n.cause_at()
+  let said = fn(h : Double, hv : Double) {
+    let (u, uv) = self.top_at(h, hv, at)
+    let v0 = match speed {
+      Some(s) => -s
+      None => uv
+    }
+    self.way = Some({ at, up, u0: u, v0, plan: h })
+    self.said.set(self.said.untracked() + 1)
+  }
+  match sheet.val {
+    Some(b) if b.alive() => {
+      let (h, hv) = b.grows_now()
+      said(dmax(h - under, 0.0), hv)
+    }
+    // (as it is first made: once it is laid out, at that moment)
+    _ =>
+      @signals.after_flush(fn() {
+        match sheet.val {
+          Some(b) if b.alive() => {
+            let (h, hv) = b.grows_now()
+            said(dmax(h - under, 0.0), hv)
+          }
+          _ => said(0.0, 0.0)
+        }
+      })
+  }
 }
 
 ///|
-/// Where it is at moment `t` (in its heights), `d` points one of its heights, and when its last way ends (no way said:
-/// none, -1).
-fn SheetRise::at(self : SheetRise, d : Double, t : Double) -> (Double, Double) {
-  let mut x = self.start
-  // (its speed, its heights a millisecond)
-  let mut v = 0.0
-  let mut end = -1.0
-  for i, w in self.ways {
-    let (from_at, to, speed) = w
-    // (let go by a hand: as fast as it went)
-    if !speed.is_nan() && d > 0.0 {
-      v = speed / d
-    }
-    let last = i + 1 >= self.ways.length()
-    let until = if last { t } else { self.ways[i + 1].0 }
-    let dur = if (x == to && v == 0.0) || d <= 0.0 { 0.0 } else { @ui.move_ms((x - to).abs() * d) }
-    if last {
-      end = from_at + dur
-    }
-    if d <= 0.0 {
-      x = to
-      v = 0.0
-    } else {
-      let (dx, dv) = @ui.move_path((x - to) * d, v * d, until - from_at, dur)
-      x = to + dx / d
-      v = dv / d
-    }
+/// How long its Move from where it stood in another's place takes, `far` points from its own height: said once, as
+/// tall as it was as it came (placed_ms), not as tall as each frame lays it out.
+fn SheetRise::placed_for(self : SheetRise, far : Double) -> Double {
+  self.said.get() |> ignore
+  if self.placed_ms == self.placed_ms {
+    self.placed_ms
+  } else {
+    @ui.move_ms(far.abs())
   }
-  (x, end)
 }
 
 ///|
@@ -591,12 +642,35 @@ fn SheetRise::at(self : SheetRise, d : Double, t : Double) -> (Double, Double) {
 fn SheetRise::shown(self : SheetRise, h : Double, t : Double) -> Double {
   self.said.get() |> ignore
   let d = dmax(h, 0.0)
-  self.at(d, t).0 * d
+  match self.way {
+    // (risen or below, no way said: there, as tall as it is)
+    None => if self.risen { 0.0 } else { d }
+    // (from rest at its place's foot or risen, as tall as it is now as it was then: the same way worked out as it was
+    // before its top's was (in its heights), only so that each frame of a sheet whose content stands still is what it
+    // was to the bit; the same curve as its top's (sheet_sink_wbtest holds them within 1e-9 of each other, on into a
+    // frame laid out another height), to go once nothing compares frames with those of before)
+    Some(w) if w.v0 == 0.0 && d == w.plan && d > 0.0 && (if w.up { w.u0 == 0.0 } else { w.u0 == w.plan }) =>
+      sheet_below_as_before(w.up, d, t - w.at)
+    Some(_) => d - self.top_at(d, 0.0, t).0
+  }
 }
 
 ///|
-/// When its last way is over, `h` points tall (what is said of it followed): its move's end, View::moved_by's.
-fn SheetRise::ends(self : SheetRise, h : Double) -> Double {
+/// How far below its place a sheet `d` tall is `t` ms into its way up (`up`) or down from rest, worked out as it was in
+/// its own heights (SheetRise::shown's, for its frames to the bit).
+fn sheet_below_as_before(up : Bool, d : Double, t : Double) -> Double {
+  let x0 = if up { 1.0 } else { 0.0 }
+  let to = 1.0 - x0
+  let (dx, _) = @ui.move_path((x0 - to) * d, 0.0, t, @ui.move_ms((x0 - to).abs() * d))
+  (to + dx / d) * d
+}
+
+///|
+/// When its last way is over (what is said of it followed; no way said: -1), however tall it comes to: View::moved_by's.
+fn SheetRise::ends(self : SheetRise) -> Double {
   self.said.get() |> ignore
-  self.at(dmax(h, 0.0), 0.0).1
+  match self.way {
+    None => -1.0
+    Some(w) => w.at + @ui.come_way_ms(w.u0, w.v0, if w.up { w.plan } else { 0.0 })
+  }
 }

@@ -454,3 +454,30 @@ test "新建 workspace on each screen: what it is for over 名称, its field und
     assert_eq(radios[0].rect.0 <= field.0, true, msg="\{at}: \{radios[0].rect} \{field}")
   }
 }
+
+///|
+test "新建 workspace's sheet closed by 取消 two frames into its invite code's field opening: it sinks on from as fast as its top went, frame by frame" {
+  // (judged frame to frame on frame()'s, the display's own: the default run's alone, @ui.test_at_a_rate)
+  if @ui.test_at_a_rate() {
+    return
+  }
+  let calls : Array[Made] = []
+  let t = new_ws_over(calls, platform=2, wide=false)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("例如：产品团队")
+  t.type_text("产品团队")
+  t.frame()
+  press_create(t)
+  (calls[0].done)(Err({ "code": "invite_code_required", "message": "code" }))
+  t.frame()
+  // (two frames of the field opening, the sheet's top going up with it)
+  t.frame()
+  t.frame()
+  let (bx, by, bw, bh) = t.get(Button, label="取消").rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  let till = t.time() + @ui.move_most_ms
+  while t.time() < till {
+    t.frame()
+  }
+  assert_true(new_ws_dialog(t) is None)
+}

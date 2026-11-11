@@ -4286,6 +4286,26 @@ pub fn Tree::placed_against_laid(self : Tree, id : NodeId) -> (Bool, Double, Dou
 }
 
 ///|
+/// The clock set to `ms` and what is bound to it worked out there (what follows a way: View::drawn_while), as the
+/// layout at that moment asks (Tree::measured_now, View::grows_now); untracked, its caller's.
+fn Tree::bound_at(self : Tree, ms : Double) -> Unit {
+  self.clock_to(ms)
+  self.beat.set(ms)
+  self.pull()
+  self.draining += 1
+  let mut i = 0
+  while i < self.bindings_due.length() {
+    let b = self.bindings_due[i]
+    if b.queued {
+      (b.run)()
+    }
+    i = i + 1
+  }
+  self.draining -= 1
+  self.bindings_due.clear()
+}
+
+///|
 /// Whether it was ever placed: where it stood before a change told now (placed_window_now) is somewhere, not nowhere
 /// (none of what is made for that change, or since the last was placed).
 pub fn View::was_placed(self : View) -> Bool {
@@ -4313,20 +4333,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
   let was_standing = self.standing
   self.standing = true
   @signals.untracked(fn() {
-    self.clock_to(at)
-    self.beat.set(at)
-    self.pull()
-    self.draining += 1
-    let mut i = 0
-    while i < self.bindings_due.length() {
-      let b = self.bindings_due[i]
-      if b.queued {
-        (b.run)()
-      }
-      i = i + 1
-    }
-    self.draining -= 1
-    self.bindings_due.clear()
+    self.bound_at(at)
     if self.layout_due && self.measured_gen < 0 {
       self.alone_laid_out()
       self.work.computes = self.work.computes + 1
