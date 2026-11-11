@@ -4707,7 +4707,8 @@ fn view_pointed_again() -> Unit {
         view_point_tell(tree)
       }
     Some((x, y)) => {
-      if view_point_seen.val != (tree.hits_said(), old_layer_over(x, y), yields_said.val) {
+      // (EXPERIMENT, not to merge: a still pointer's hand not found again while something goes, once nothing does)
+      if view_point_seen.val != (tree.hits_said(), old_layer_over(x, y), yields_said.val) && !tree.clock_read() {
         view_point_tell(tree)
       }
     }
