@@ -161,3 +161,63 @@ test "input_node, keyboard and mouse: a layer over it, the pointer on the layer 
   let under = covered.filter(fn(i) { unlit.contains(i) }).length()
   assert_eq((lit, under == unlit.length(), back != unlit), (true, true, true))
 }
+
+///|
+/// A solid line to type in (on a card's ground: input's and input_node's `solid`) in a column 300 wide at the window's
+/// top left, started as `platform`: the old view's or the tree's (`node`); its states as field_look_states says them.
+fn field_solid_states(node : Bool, platform : Int) -> Array[(String, Array[String])] {
+  let f = @ui.Field::new()
+  let t = @ui.Tester::new(
+    fn(c) {
+      begin(c) |> ignore
+      if !node {
+        c.with_theme(ui_theme(), fn() {
+          c.box(w=Px(300.0), fn() { input(c, "f", placeholder="名字", solid=true, field=f) |> ignore }) |> ignore
+        })
+      }
+    },
+    w=400.0,
+    h=300.0,
+    platform~,
+  )
+  if node {
+    @ui.set_view_app(fn(root) {
+      @ui.set_tree_theme(ui_theme_now)
+      root.box(fn(b) {
+        b.width(Is(Some(300.0))) |> ignore
+        input_node(b, f, placeholder="名字", solid=true) |> ignore
+      })
+      |> ignore
+    })
+  }
+  t.run_for(@ui.move_most_ms)
+  let out = [("unlit", field_look_drawn(t))]
+  let (x, y) = (40.0, 17.0)
+  if platform == 0 {
+    t.move(x, y)
+    t.run_for(@ui.move_most_ms)
+    out.push(("pointed", field_look_drawn(t)))
+  }
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  out.push(("written in", field_look_drawn(t)))
+  t.type_text("字")
+  t.run_for(@ui.move_most_ms)
+  out.push(("typed", field_look_drawn(t)))
+  out
+}
+
+///|
+test "input_node solid drawn as input solid, each instance: at rest (on the canvas's ground, its line the same), pointed at and written in (the field's hover grey round it), typed in; keyboard and mouse and touch" {
+  for platform in [0, 2] {
+    let old = field_solid_states(false, platform)
+    let made = field_solid_states(true, platform)
+    assert_eq(made.length(), old.length())
+    for i, s in old {
+      seg_same(made[i].1, s.1, "solid platform \{platform} \{s.0}")
+    }
+    // (not the plain one's: its ground and line are another's at rest)
+    let plain = field_look_states(true, OneLine, platform, 1.0)
+    assert_true(plain[0].1 != made[0].1, msg="platform \{platform}: solid as the plain one at rest")
+  }
+}

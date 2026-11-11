@@ -583,7 +583,7 @@ pub fn field(@ui.Ctx, String, () -> Unit, hint? : String, error? : String, aside
 
 pub fn field_look(@ui.Ctx, @kit.FieldState, () -> Unit) -> Unit
 
-pub fn field_node(@view.View, () -> String, (@view.View) -> Unit) -> Unit
+pub fn field_node(@view.View, () -> String, (@view.View) -> Unit, aside? : (@view.View) -> Unit) -> Unit
 
 pub fn field_round() -> Double
 
@@ -842,7 +842,7 @@ pub fn ink_runs(String, String, Bool) -> Array[@text.Run]
 
 pub fn input(@ui.Ctx, String, placeholder? : String, shorter? : Array[String], secret? : Bool, disabled? : Bool, small? : Bool, solid? : Bool, leaves? : Array[Int32], field? : @ui.Field, on_submit? : (String) -> Unit, on_change? : (String) -> Unit) -> @kit.Field
 
-pub fn input_node(@view.View, @ui.Field, placeholder? : String, label? : String, shorter? : Array[String], secret? : Bool, placeholder_by? : () -> String, disabled? : () -> Bool, small? : Bool, leaves? : Array[Int32], submitted? : (String) -> Unit, edited? : (String) -> Unit, end? : (@view.View) -> Unit) -> @view.View
+pub fn input_node(@view.View, @ui.Field, placeholder? : String, label? : String, shorter? : Array[String], secret? : Bool, placeholder_by? : () -> String, disabled? : () -> Bool, small? : Bool, solid? : Bool, leaves? : Array[Int32], submitted? : (String) -> Unit, edited? : (String) -> Unit, end? : (@view.View) -> Unit) -> @view.View
 
 pub let inset_room : @ui.Space
 
