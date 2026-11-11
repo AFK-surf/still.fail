@@ -276,24 +276,34 @@ fn sheet_node(
       let held : @signals.Signal[Double?] = @signals.signal(None)
       // (how long its way from as tall as it stood takes, `own` tall: as long as that is far, `least` at least (a page's
       // slide's, what was left of a way it carries on))
+      // (how tall it was laid out as that way was said, its cause's: how long it is and how it turns are said by that
+      // once, whatever what it holds comes to as it goes (a page put on, then what it holds growing as it slides in, went
+      // another length each frame, a step where the Move's length passed the slide's); only where it ends follows how
+      // tall it comes to, as SheetRise's plan; NaN: as tall as it is)
+      let placed_plan : Ref[Double] = Ref(0.0 / 0.0)
+      let plan_of = fn(own : Double) { if placed_plan.val.is_nan() { own } else { placed_plan.val } }
       let placed_ms = fn(_w : Double, own : Double, stood : Double, least : Double) {
-        dmax(least, @ui.move_ms((own - stood).abs()))
+        dmax(least, @ui.move_ms((plan_of(own) - stood).abs()))
       }
       // (that way, set out at `v` (how fast how far it is drawn off its place goes): a Move on from that speed where it
       // goes toward its end, as long as placed_ms; turned away from it (a page put on as the sheet rose, to a page
       // less tall), slowing at one rate first and back from there, as any way turned back does (come_way_by), as long
       // as that takes: how far it is drawn off its place `t` ms on, and how fast that goes)
-      let placed_turned = fn(own : Double, stood : Double, v : Double) { v * (stood - own) < 0.0 }
+      let placed_turned = fn(own : Double, stood : Double, v : Double) { v * (stood - plan_of(own)) < 0.0 }
       let placed_path = fn(own : Double, stood : Double, v : Double, t : Double, least : Double) {
         if placed_turned(own, stood, v) {
-          @ui.come_way_by(own - stood, v, 0.0, 0.0, t)
+          // (its way said from as tall as it was planned; how far it is off its end goes as what it comes to does)
+          let p = plan_of(own) - stood
+          let (x, xv) = @ui.come_way_by(p, v, 0.0, 0.0, t)
+          let k = if p != 0.0 { (own - stood) / p } else { 1.0 }
+          (x * k, xv * k)
         } else {
           @ui.move_path(own - stood, v, t, placed_ms(0.0, own, stood, least))
         }
       }
       let placed_end = fn(own : Double, stood : Double, v : Double, least : Double) {
         if placed_turned(own, stood, v) {
-          @ui.come_way_ms(own - stood, v, 0.0)
+          @ui.come_way_ms(plan_of(own) - stood, v, 0.0)
         } else {
           placed_ms(0.0, own, stood, least)
         }
@@ -438,6 +448,7 @@ fn sheet_node(
         guard @signals.untracked(live) && @signals.untracked(open) else { return }
         let at = layer.cause_at()
         guard seen_from(at, true) is Some((stood, v, left)) else { return }
+        placed_plan.val = own_now()
         placed.set(Some((stood, at, left, v)))
         reach.set(dmax(reach.untracked(), sheet_under + stood))
       }
@@ -522,6 +533,7 @@ fn sheet_node(
           settle(stood_own.val)
         }
         // (as long as the slide at least, longer where it has further to go: no way of a height cut short)
+        placed_plan.val = own_now()
         placed.set(Some((stood, at, dur, stood_v.val)))
         stood_v.val = 0.0
         reach.set(dmax(reach.untracked(), sheet_under + stood))
