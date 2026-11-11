@@ -1824,6 +1824,13 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
 }
 
 ///|
+/// Which way the last wheel went (on_wheel_now, old_wheel): to the window's tree, to the old view it hosts there, to the
+/// old frame and what of it scrolls there. What a scripted run says of its `wheel` (drive.mbt); nothing reads it to
+/// decide anything.
+// kept across runs: each wheel writes it anew
+let wheel_went : Ref[String] = Ref("")
+
+///|
 fn on_wheel_now(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
   // what was held with it, above its phase (wheel_mod_*: ⇧ ⌃ ⌥ ⌘, and a trackpad's pinch as a wheel with ⌃ held)
   let mods = phase / 16
@@ -1841,9 +1848,13 @@ fn on_wheel_now(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -
   }
   // (a wheel's notch said so to the tree's: a page's list of it eases it in, as an old view's list does)
   let notch = if phase % 16 == 4 { @view.wheel_notch } else { 0 }
+  wheel_went.val = ""
   if view_wheel(x, y, dx, dy, mods | notch, old~) {
     if !old_took.val {
+      wheel_went.val = "the window's tree"
       input_taped("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
+    } else {
+      wheel_went.val = "the old view the tree hosts there: " + wheel_went.val
     }
     return
   }
@@ -1948,6 +1959,15 @@ fn old_wheel(
   let c = g()
   let (ids, rects) = wheel_scrolls(c, island)
   let mut target = wheel_target(ids, rects, x, y)
+  wheel_went.val = if target == 0 {
+    "nothing that scrolls there"
+  } else {
+    "what scrolls there, \{target}" +
+    (match c.lists.get(target) {
+      Some(st) => if st.wheel_moves(dy) { ", a list not at its end that way" } else { ", a list at its end that way" }
+      None => ""
+    })
+  }
   // (what scrolls there in an old view a modal layer of the window's tree keeps from input: nothing scrolls, the wheel
   // taken: island_allows)
   if target != 0 && !island_allows(c.island_of_id(target)) {
