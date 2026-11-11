@@ -432,18 +432,23 @@ fn page_tile_node(
           fn() { peek_tile_title },
         )
         |> ignore
-        @sf.words_node(
-          body,
-          fn() {
-            let site = text(page(), "site")
-            if site != "" {
-              site + " · " + destination(href())
-            } else {
-              destination(href())
-            }
-          },
-          fn() { peek_tile_url },
-        )
+        // (as wide as its words, as the old view's (w=Cut): cut where it is longer, not stretched across)
+        body.box(fn(u) {
+          u.lines_up(Is(Some(@view.Along::Start))) |> ignore
+          @sf.words_node(
+            u,
+            fn() {
+              let site = text(page(), "site")
+              if site != "" {
+                site + " · " + destination(href())
+              } else {
+                destination(href())
+              }
+            },
+            fn() { peek_tile_url },
+          )
+          |> ignore
+        })
         |> ignore
       })
       |> ignore

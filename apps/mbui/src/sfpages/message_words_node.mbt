@@ -3,27 +3,46 @@
 // (person_runs: a chat's reference its chip, a web address its link), each link pressed where it leads and held for its
 // menu; the viewer's own in their bubble at the column's end, its time under it; someone else's under their picture,
 // name and time. Each read through what it is given, as that changes.
-// Not here yet: a link's card while it is pointed at (link_peek: peeks.mbt, with Markdown's), what it quotes and its
-// files, the viewer's words flying in from the composer (flight.mbt) and its time faded in as they land.
+// Each link's card while a mouse rests on it (message_link_card: a web link's, a chat's). Not here yet: what it quotes
+// and its files, the viewer's words flying in from the composer (flight.mbt) and its time faded in as they land.
 
 ///|
 /// What a person wrote (person_words') in `v`, as `m` says it as it changes: in the face for what people wrote (the
 /// theme's `words`), in pieces as the core gave them, links in blue; a link tapped opens where it leads, held (or right
-/// clicked) its menu; the words `found` says in bold. The words' node.
-fn person_words_node(v : @view.View, m : () -> Message, found? : () -> Array[String] = fn() { [] }) -> @view.View {
+/// clicked) its menu; the words `found` says in bold; each link's card while a mouse rests on it where `cards` says
+/// them (drawn in its layer: a chat's link_peeks, message_link_card). The words' node.
+fn person_words_node(
+  v : @view.View,
+  m : () -> Message,
+  found? : () -> Array[String] = fn() { [] },
+  cards? : (@sf.TipLayer, (@sf.LinkOf) -> @sf.LinkCard?),
+) -> @view.View {
   let runs = fn() {
     let now = m()
     @sf.found_weight(@sfbase.person_runs(now.text, now.words, @sf.theme().p.accent, chat_title=chat_title_of(now)), found())
   }
-  v.box(fn(w) {
+  let shown : @signals.Signal[Array[(String, String, Int)]] = @signals.signal([])
+  let links : Ref[@ui.RunsLinks?] = Ref(None)
+  let words = v.box(fn(w) {
     w
     .words_runs(By(runs))
     .words_look(By(fn() { @ui.style_words(@sf.theme().t.words) }))
     .runs_look(By(fn() { { ..@view.runs_plain, link: @sf.theme().p.blue, words: true } }))
     .ink(By(fn() { @ui.style_ink(@sf.theme().t.words) }))
     |> ignore
-    @ui.runs_links(w, runs, fn(h) { open_link(h) }, hold=fn(href, at) { message_link_held(href, at) }) |> ignore
+    links.val = Some(
+      @ui.runs_links(w, runs, fn(h) { open_link(h) }, hold=fn(href, at) { message_link_held(href, at) }, shown?=cards.map(fn(
+        _,
+      ) {
+        fn(now) { shown.set(now) }
+      })),
+    )
   })
+  match (cards, links.val) {
+    (Some((layer, card_of)), Some(l)) => @sf.link_cards_node(v, layer, words, l, fn() { shown.get() }, card_of) |> ignore
+    _ => ()
+  }
+  words
 }
 
 ///|
@@ -48,11 +67,18 @@ fn mine_most_of(pane : Double) -> Double {
 
 ///|
 /// The viewer's words in their bubble (mine_bubble's, as they rest: none flying in) in `v`: 8 by 14 in, 18 round, on
-/// the neutral ground, as wide as the composer sets its words at most (mine_most_of the pane's width, as it changes).
-fn mine_bubble_node(v : @view.View, here : MessageNodeHere, m : () -> Message, found : () -> Array[String]) -> Unit {
+/// the neutral ground, as wide as the composer sets its words at most (mine_most_of the pane's width, as it changes);
+/// its links' cards as `cards` says (person_words_node's: none for what is not in the chat yet, as the old one's).
+fn mine_bubble_node(
+  v : @view.View,
+  here : MessageNodeHere,
+  m : () -> Message,
+  found : () -> Array[String],
+  cards? : (@sf.TipLayer, (@sf.LinkOf) -> @sf.LinkCard?),
+) -> Unit {
   v.box(fn(b) {
     @sf.style_node(b, fn() { bubble.then(@ui.style(max_w=Fixed(mine_most_of((here.width)())))) })
-    person_words_node(b, m, found~) |> ignore
+    person_words_node(b, m, found~, cards?) |> ignore
   })
   |> ignore
 }
@@ -77,7 +103,9 @@ fn mine_said_node(
   message_row_frame_node(v, key, side, top, over~, fn(r) {
     r.box(fn(col) {
       @sf.style_node(col, fn() { mine_column })
-      col.show(fn() { m().text != "" }, fn(b) { mine_bubble_node(b, here, m, found) })
+      col.show(fn() { m().text != "" }, fn(b) {
+        mine_bubble_node(b, here, m, found, cards=(here.tips, message_link_card(src, here.station, "", m)))
+      })
       col.pick(fn() { mine_under(m()) }, fn(u, under) {
         match under {
           MineBlocked =>
@@ -165,7 +193,11 @@ fn person_said_node(
         })
       },
       None,
-      fn(b) { b.show(fn() { m().text != "" }, fn(w) { person_words_node(w, m, found~) |> ignore }) },
+      fn(b) {
+        b.show(fn() { m().text != "" }, fn(w) {
+          person_words_node(w, m, found~, cards=(here.tips, message_link_card(src, here.station, "", m))) |> ignore
+        })
+      },
       share~,
     )
     menu_on.val = on

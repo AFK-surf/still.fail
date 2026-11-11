@@ -2,11 +2,11 @@
 // with prose_with_files): under its picture, name and time, its words as the core read their Markdown (markdown_node:
 // its links pressed where they lead and held for their menus, a bare link to a chat read as its title, the files its
 // paths name its agent's chips, the files it places drawn where it places them, a link to a station's screens its card
-// and a bare one its title: screen_links_node), its other files under them, what it asks under it (message_decision_node).
+// and a bare one its title: screen_links_node; each link's card while a mouse rests on it: message_link_card), its other
+// files under them, what it asks under it (message_decision_node).
 // Each read through what it is given, as that changes.
 // Not here yet, each where it comes in:
 // - a Mermaid chart: as its code till then; `code` takes viz_mermaid_node once it is in main (#5525).
-// - a link's card while it is pointed at: `shown` tells its links; the library's link cards come next (P20).
 // - a card in its words' place (vault, phone, signin, rig): nothing drawn for it yet. A rig's is message_card_node
 //   (#5536), which answers with the settings' core the row does not take yet; a vault item's and a phone's come with
 //   mbui-message-vault-node and mbui-message-cards-node; a sign-in's is not made yet.
@@ -159,6 +159,8 @@ fn agent_prose_node(
       on_link~,
       on_link_hold=Some(on_hold),
       on_link_shown?=shown,
+      // (each link's card while a mouse rests on it: link_peeks', its agent's files read in its working directory)
+      link_cards=(here.tips, message_link_card(src, here.station, @signals.untracked(m).by.agent, m)),
       chat_title=fn(h) { chat_title_of(m())(h) },
       // the files its paths name are its agent's (Chat.tsx ProseWithFiles' PathSession): their chips
       paths=@signals.untracked(m).by.agent != "",
