@@ -30,13 +30,7 @@ pub fn runs_links(
   // (where its links' pieces are as it is laid out now, in its own terms: its words and how they are set as it holds
   // them now (View::runs_set_now: what it is laid out and drawn from, not what the frame before drew), laid out as wide
   // as it is in them as of the moment (View::laid_size, laying out what was said before it), not as big as it is drawn)
-  let pieces = fn() -> Array[(Int, Double, Double, Double, Double)] {
-    let w = v.laid_size().0
-    let (rs, look, set) = v.runs_set_now()
-    guard !rs.is_empty() else { return [] }
-    let (r, lay, _) = view_runs_laid(rs, look, set, w, v.tree.words_scale_of(v.id()))
-    rich_link_pieces(r, lay, 0.0, 0.0, center_in=if v.words_centered_now() { w } else { -1.0 })
-  }
+  let pieces = fn() { runs_link_pieces(v, v.laid_size().0) }
   let piece_at = fn(x : Double, y : Double) -> (Int, Double, Double, Double, Double)? {
     pieces().iter().find_first(fn(p) { x >= p.1 && x < p.3 && y >= p.2 && y < p.4 })
   }
@@ -189,4 +183,42 @@ pub fn runs_links(
     None => ()
   }
   { pointed, }
+}
+
+///|
+/// Where the pieces of line node `v`'s links are drawn on as its words are set now, laid out `w` wide, in its own terms:
+/// each by its link's first run and where it is (x0, y0, x1, y1), as it lays them out and draws them (view_runs_laid,
+/// each line in its middle where its words stand so). Laid out anew each time it is asked.
+fn runs_link_pieces(v : @view.View, w : Double) -> Array[(Int, Double, Double, Double, Double)] {
+  let (rs, look, set) = v.runs_set_now()
+  guard !rs.is_empty() else { return [] }
+  let (r, lay, _) = view_runs_laid(rs, look, set, w, v.tree.words_scale_of(v.id()))
+  rich_link_pieces(r, lay, 0.0, 0.0, center_in=if v.words_centered_now() { w } else { -1.0 })
+}
+
+///|
+/// The link of node `v`'s words in pieces (View::words_runs) that starts at run `first` and leads to `href` (as
+/// runs_links' `shown` tells each), as a piece of `v` for what goes beside it (View::beside's `piece`): the box round
+/// all its pieces of line, as an old view's link is (Ctx::rect_of: what hangs by it lines up with its start), laid out
+/// as wide as `v` is laid out as it is placed, in its own terms. None where its words have no such link now (said again
+/// without it, or run `first` the start of another): what goes beside it stays where it was. Its words laid out once
+/// each time it is asked (once each time what goes beside it is placed).
+pub fn runs_link_piece(
+  v : @view.View,
+  first : Int,
+  href : String,
+) -> (Double, Double) -> (Double, Double, Double, Double)? {
+  fn(w, _h) {
+    let (rs, _, _) = v.runs_set_now()
+    guard first >= 0 && first < rs.length() && rs[first].link == href && link_starts(rs, first) else { return None }
+    let mut box : (Double, Double, Double, Double)? = None
+    for p in runs_link_pieces(v, w) {
+      guard p.0 == first else { continue }
+      box = match box {
+        None => Some((p.1, p.2, p.3, p.4))
+        Some((x0, y0, x1, y1)) => Some((dmin(x0, p.1), dmin(y0, p.2), dmax(x1, p.3), dmax(y1, p.4)))
+      }
+    }
+    box.map(fn(b) { (b.0, b.1, b.2 - b.0, b.3 - b.1) })
+  }
 }

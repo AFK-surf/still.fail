@@ -142,7 +142,15 @@ pub(all) enum BesideWidth {
 /// as its anchor is laid out (Tree::beside_widened: in the same layout, before it is placed by it; as the anchor is
 /// laid out, not as it is drawn bigger or smaller, which is its look's), its width said by nothing else. That takes
 /// the anchor and it to be drawn at one scale at rest: where they are not (an anchor in a box drawn half as big, this
-/// drawn whole over it), its width is the anchor's laid out, and it is not drawn as wide as the anchor is.
+/// drawn whole over it), its width is the anchor's laid out, and it is not drawn as wide as the anchor is. `piece`:
+/// beside a piece of the anchor, not all of it (a link in its words: mbui/ui's `runs_link_piece`, the box round its
+/// pieces of line): asked as it is placed, given how wide and tall the anchor is laid out then, the piece in the
+/// anchor's own terms (x, y, w, h); none where it has no such piece now (its words said again without it), where it
+/// stays as it does when its anchor is drawn nowhere. Asked untracked, only as it is placed: what it reads changing
+/// places nothing again by itself. The anchor's words set again, its size, its place or what holds it moving does (the
+/// anchor laid out or placed again); a signal of the app's it reads does not: a piece by which of the words is picked
+/// (View::runs_picked) stays by the words picked when it was last placed as the pick moves on, till something is laid
+/// out or placed again. So it reads the anchor's words as they are laid out, nothing else.
 pub fn View::beside(
   self : View,
   anchor : NodeId,
@@ -152,8 +160,10 @@ pub fn View::beside(
   padding? : Double = 8.0,
   at_pointer? : Bool = false,
   width? : BesideWidth = Own,
+  piece? : (Double, Double) -> (Double, Double, Double, Double)?,
 ) -> View {
   guard self.live() is Some(n) else { return self }
+  n.beside_piece = piece
   // (beside another anchor now, or as wide as what it holds: what it was made as wide as before none of its own; said
   // beside one for the first time, none kept of a node let go before at its index)
   match n.beside {
@@ -289,7 +299,15 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       None => (0.0, 0.0, 1.0)
     }
     // (where it is beside: all of its anchor as drawn now; by the pointer, the point it is at, while it is on it)
-    let (aw, ah) = (a.lw * ascale, a.lh * ascale)
+    let (ax, ay, aw, ah) = match n.beside_piece {
+      None => (ax, ay, a.lw * ascale, a.lh * ascale)
+      // (a piece of it: as it is laid out now, where it is drawn; none now, where it last was beside it)
+      Some(f) =>
+        match @signals.untracked(fn() { f(a.lw, a.lh) }) {
+          Some((x, y, w, h)) => (ax + x * ascale, ay + y * ascale, w * ascale, h * ascale)
+          None => return stay()
+        }
+    }
     let (px, py) = self.pointer_xy
     // (the pointer gone off it: by the point of it the pointer was last at, as the anchor is now, never jumping to all of
     // it; never on it (shown by the keyboard's focus), beside all of it)

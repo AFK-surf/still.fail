@@ -493,6 +493,8 @@ pub fn run(String, (Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit
 
 pub fn run_let_go() -> Unit
 
+pub fn runs_link_piece(@view.View, Int32, String) -> (Double, Double) -> (Double, Double, Double, Double)?
+
 pub fn runs_links(@view.View, () -> Array[@text.Run], (String) -> Unit, hold? : (String, (Double, Double, Double, Double)) -> Unit, shown? : (Array[(String, String, Int32)]) -> Unit) -> RunsLinks
 
 pub fn runtime() -> @effect.Runtime
