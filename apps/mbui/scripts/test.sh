@@ -283,9 +283,13 @@ for t in $targets; do
       # preview_tree's alone, 173 and 73 (42928153698, 2026-11-11, before this); the first's has the packages' programs
       # too (@pkgs), five side by side beside its pages: 107 s at 60 beside preview_tree's 220, 157 at 120, 46 and 43 at
       # 24 and 7, its job at 120 211 s with them counted 40 (ci-rates-for-what-they-test 42942660697, 2026-11-11))
+      # (at 60 the first's other runs are 560 s of its cores, not 330, and the third's 600, not 340: preview_tree's
+      # halves 152 and 222 s and the packages' 190 beside its pages, kept_rows' five runs 81-148 s; app 1/4 at 60 fps
+      # was 289 s of its 5 minutes, its pages 278, where the second's and fourth's were 175 and 202,
+      # mbui-reused-block-at-once 42992663019, 2026-11-11)
       if [ -n "${APP_GROUP:-}" ] && [ "${APP_GROUP#*/}" = 4 ]; then
         case "${MBUI_TEST_FPS:-}" in
-          60) specs="4,4,330,1 4,4,20,1 1,4,340,1 4,4,0,1" ;;
+          60) specs="4,4,560,1 4,4,20,1 1,4,600,1 4,4,0,1" ;;
           120) specs="4,4,160,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
           24 | 7) specs="4,4,90,2 4,4,14,2 1,4,450,2 4,4,170,1" ;;
           *) specs="4,4,80,1 2,4,160,1 1,4,240,1 4,4,0,1" ;;
