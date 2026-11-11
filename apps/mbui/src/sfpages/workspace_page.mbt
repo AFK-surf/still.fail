@@ -527,7 +527,7 @@ fn ws_gone(core : Core, ws : String, what : String, call : String, params : Json
   match all.iter().find_first(fn(w) { w.id != ws }) {
     Some(o) => {
       app.picked.set(o.id)
-      (core.call)("prefs.set", { "workspace": Json::string(o.id) }, fn(_) {  })
+      (core.call)("prefs.set", { "workspace": Json::string(o.id) }, @sfbase.answer_unread)
     }
     None => ()
   }

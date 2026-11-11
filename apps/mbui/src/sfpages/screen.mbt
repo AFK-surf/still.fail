@@ -342,7 +342,7 @@ fn ScreenSess::own_stream(self : ScreenSess) -> Unit {
 /// A call nobody waits for (`screen.ack`): sent in order with the rest, its
 /// answer (or error) let go.
 fn screen_tell(src : Source, name : String, params : Map[String, Json]) -> Unit {
-  (src.call)(name, Json::object(params), fn(_) {  })
+  (src.call)(name, Json::object(params), @sfbase.answer_unread)
 }
 
 ///|

@@ -261,7 +261,8 @@
     "key-read": {},
     "part-place": {},
     "layout-told": {},
-    "abort-unsaid": {}
+    "abort-unsaid": {},
+    "empty-on-done": {}
   },
   "excused": {
     "frame-request": {},
@@ -330,7 +331,8 @@
     "layout-told": {},
     "abort-unsaid": {
       "src/halt/halt.mbt": 1
-    }
+    },
+    "empty-on-done": {}
   },
   "tester": {
     "names": [

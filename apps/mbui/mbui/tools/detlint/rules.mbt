@@ -10,7 +10,7 @@ let rule_names : Array[String] = [
   "motion-read", "page-old-part", "page-old-sheet", "corners-each", "cursor-hand", "tier-outside-shell", "fixture-import",
   "motion-spring", "built-by-hand", "layout-read-back", "motion-length", "tester-branch", "frame-number", "ui-current",
   "build-clock", "build-motion", "old-list", "old-island", "old-panel",
-  "click-read", "key-read", "part-place", "layout-told", "abort-unsaid",
+  "click-read", "key-read", "part-place", "layout-told", "abort-unsaid", "empty-on-done",
 ]
 
 ///|
@@ -73,6 +73,7 @@ let rule_words : Map[String, String] = {
   "corners-each": "a box's corners said not all alike (Corners, LinkedEach): only a design's, each looked at and kept, never what came by the way (the user, 2026-10-26: 每个四边圆角不一致的都应该手动确认是否 by design); say why where it is said and list it in the app's sf/align.mbt (四角不一致的), then raise its count: mbui itself never works corners out unlike each other",
   "cursor-hand": "the pointer's hand said over something (Ctx::cursor(…, Hand)): what takes presses shows it by itself (its click read: Ctx::clicked, a part's Response; its press taken without it said, Ctx::takes_presses: a slider), and nothing else does; what takes presses as a ground (a stage, the room round a list's rows) says Arrow",
   "abort-unsaid": "an abort of its own (abort(…)): on wasm-gc, where the tests run off CI, it prints nothing of its words, the test only `failed: Error` with no place; stop with @halt.saying(…) (mbui/halt), which prints the words and the line that said them first",
+  "empty-on-done": "an empty on_done (or a source's call's `done`, `fn(_) {  }`): to the core it reads the answer, awaited and the frame after it built whole for nothing; a call whose answer nobody reads gives none (@core.call with no on_done), or the app's answer_unread for a source's call",
   "host-delay": "a host does something a fixed time later (postDelayed, dispatch_after, SetTimer, setTimeout): do it on the event it waits for (a callback, a listener, the system's word); a time the app asked for (its wake) says so on its line (det-ok)",
 }
 

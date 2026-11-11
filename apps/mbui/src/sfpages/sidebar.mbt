@@ -182,5 +182,5 @@ pub fn set_filter(src : Source, w : Workspace, f : String) -> Unit {
     return
   }
   app.filters[w.id] = f
-  (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), fn(_) {  })
+  (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), @sfbase.answer_unread)
 }

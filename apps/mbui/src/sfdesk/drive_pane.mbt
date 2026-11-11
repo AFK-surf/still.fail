@@ -16,7 +16,7 @@ pub fn preview_shown(src : Source, place : String) -> Bool {
 pub fn set_preview_shown(src : Source, place : String, on : Bool) -> Unit {
   let o : Map[String, Json] = {}
   o[if place == "page" { "preview" } else { "tabPreview" }] = if on { Json::string("shown") } else { Json::null() }
-  (src.call)("prefs.set", { "driveViews": Json::object(o) }, fn(_) {  })
+  (src.call)("prefs.set", { "driveViews": Json::object(o) }, @sfbase.answer_unread)
 }
 
 ///|

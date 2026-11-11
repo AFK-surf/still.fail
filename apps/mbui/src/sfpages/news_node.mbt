@@ -65,7 +65,7 @@ pub fn changelog_news_node(parent : @view.View, src : Source, tips : @sf.TipLaye
           @sf.style_node(x, fn() { news_close })
           @sf.rippled_node(x, fn() {
             news_gone.set(@signals.untracked(news))
-            (src.call)("changelog.seen", Json::object({}), fn(_) {  })
+            (src.call)("changelog.seen", Json::object({}), @sfbase.answer_unread)
           }, news_close_side / 2.0, fn() { @sf.t("android-settings.changelog.dismiss") })
           @sf.icon_node(x, "close", 16.0, By(fn() { @sf.theme().p.muted })) |> ignore
           // (over it)

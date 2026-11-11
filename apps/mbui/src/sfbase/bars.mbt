@@ -84,7 +84,7 @@ pub fn set_bars(src : Source, ws : String, sets : Array[Array[String]], cur : In
   })
   let by : Map[String, Json] = Map([])
   by[ws] = whole
-  (src.call)("prefs.set", Json::object({ "barsBy": Json::object(by) }), fn(_) {  })
+  (src.call)("prefs.set", Json::object({ "barsBy": Json::object(by) }), answer_unread)
 }
 
 ///|

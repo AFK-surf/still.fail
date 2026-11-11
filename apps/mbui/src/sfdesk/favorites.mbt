@@ -73,7 +73,7 @@ fn favorites_keep(src : Source, ws : String, list : Array[Favorite], hidden : Ar
   let removed : Map[String, Json] = {}
   favorites[ws] = Json::string(favorites_json(kept))
   removed[ws] = Json::string(favorites_json(hidden))
-  (src.call)("prefs.set", { "driveFavorites": Json::object(favorites), "driveFavoritesHidden": Json::object(removed) }, fn(_) {  })
+  (src.call)("prefs.set", { "driveFavorites": Json::object(favorites), "driveFavoritesHidden": Json::object(removed) }, @sfbase.answer_unread)
 }
 
 ///|

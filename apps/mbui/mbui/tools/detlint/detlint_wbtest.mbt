@@ -2405,3 +2405,30 @@ test "abort-unsaid" {
     "src/app/flow.mbt:3", "src/app/flow.mbt:5", "src/ui/tester_wbtest.mbt:2",
   ])
 }
+
+///|
+test "empty-on-done" {
+  found(
+    [
+      (
+        "src/app/view.mbt",
+        "fn v(src : Source) -> Unit {\n  @core.call(\"client.focus\", on_done=fn(_) {  })\n  (src.call)(\"prefs.set\", p, fn(_) {  })\n  (core.call_bytes)(\"fonts.keep\", p, b, fn(_) {  })\n}\n",
+      ),
+    ],
+    "empty-on-done",
+    3,
+  )
+  |> ignore
+  found(
+    [
+      (
+        "src/app/view.mbt",
+        "fn v(src : Source) -> Unit {\n  @core.call(\"client.focus\")\n  (src.call)(\"prefs.set\", p, answer_unread)\n  (src.call)(\"chat.send\", p, fn(r) { said(r) })\n  each(xs, fn(_) {  })\n}\n",
+      ),
+      ("src/app/view_test.mbt", "test \"x\" {\n  (src.call)(\"prefs.set\", p, fn(_) {  })\n}\n"),
+    ],
+    "empty-on-done",
+    0,
+  )
+  |> ignore
+}

@@ -254,7 +254,7 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
             danger=true,
             fn() {
               shut()
-              (src.call)("preset.delete", Json::object({ "station": Json::string(address), "id": Json::string(id) }), fn(_) {  })
+              (src.call)("preset.delete", Json::object({ "station": Json::string(address), "id": Json::string(id) }), @sfbase.answer_unread)
             },
           )
         }) |> ignore

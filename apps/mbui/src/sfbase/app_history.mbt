@@ -259,7 +259,7 @@ fn history_go(src : Source, spot : Spot) -> Unit {
   }
   if spot.ws != ws {
     app.picked.set(spot.ws)
-    (src.call)("prefs.set", { "workspace": Json::string(spot.ws) }, fn(_) {  })
+    (src.call)("prefs.set", { "workspace": Json::string(spot.ws) }, answer_unread)
   }
   history_now.val = Some(spot)
   app.menu = false

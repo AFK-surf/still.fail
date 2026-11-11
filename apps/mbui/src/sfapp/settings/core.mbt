@@ -706,3 +706,11 @@ pub fn Core::quiet(self : Core) -> Core {
 using @sf {
   dmax,
 }
+
+///|
+/// The `done` of a call whose answer nobody reads (a call told and let go: `(core.call)("lockPrompt.hide", p,
+/// answer_unread)`): what asks the core gives it no `on_done` (@core.call), so its answer, taken as it comes, runs
+/// nothing, builds nothing and is awaited by nothing; the call goes all the same. An empty `done` of a call's own is
+/// refused (detlint's `empty-on-done`): to the core it would be a reader, its answer awaited and the frame after it
+/// built whole for nothing. sfbase's `answer_unread` is this one.
+pub let answer_unread : (Result[Json, Json]) -> Unit = fn(_) { () }

@@ -524,7 +524,8 @@
     "key-read": {},
     "part-place": {},
     "layout-told": {},
-    "abort-unsaid": {}
+    "abort-unsaid": {},
+    "empty-on-done": {}
   },
   "excused": {
     "frame-request": {},
@@ -606,6 +607,7 @@
     "key-read": {},
     "part-place": {},
     "layout-told": {},
-    "abort-unsaid": {}
+    "abort-unsaid": {},
+    "empty-on-done": {}
   }
 }

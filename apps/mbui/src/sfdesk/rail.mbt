@@ -374,7 +374,7 @@ fn rail_go_told(src : Source, w : Workspace, place : String, tell : (String, () 
         app.filters[w.id] = f
         // (kept once, whichever build asked: Ctx::tell)
         tell("rail/list-filter", fn() {
-          (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), fn(_) {  })
+          (src.call)("prefs.set", Json::object({ "listFilter": Json::object(Map::from_array([(w.id, Json::string(f))])) }), @sfbase.answer_unread)
         })
       }
       // the chats again: the chat last open stays open beside the list

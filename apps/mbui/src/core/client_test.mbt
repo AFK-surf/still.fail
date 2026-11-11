@@ -386,7 +386,8 @@ test "what is asked of the core is awaited until answered or first read" {
     fn(t) { waits.remove(t) },
   )
   let s = c.subscribe("overview", params={ "station": Json::string("st1") })
-  let id = c.call("chat.send", params=Json::object({}))
+  let answers : Array[Result[Json, Json]] = []
+  let id = c.call("chat.send", params=Json::object({}), on_done=fn(r) { answers.push(r) })
   assert_eq(waits.length(), 2)
   // the subscription's first value: no longer awaited
   assert_true(c.receive("{\"id\":\{s.id},\"value\":{\"a\":1}}"))
@@ -402,7 +403,8 @@ test "what is asked of the core is awaited until answered or first read" {
   c.unsubscribe(s2)
   assert_eq(waits.length(), 0)
   // a fatal ends every call's wait; the core started again is asked again, and awaited
-  ignore(c.call("x"))
+  let answers : Array[Result[Json, Json]] = []
+  ignore(c.call("x", on_done=fn(r) { answers.push(r) }))
   assert_true(c.receive("{\"fatal\":\"gone\"}"))
   assert_eq(waits.length(), 0)
   c.restarted()
@@ -541,7 +543,8 @@ test "a quiet call's values and an unread call's answer may be taken as they com
   let values : Array[String] = []
   let view = c.stream("screen.view", on_value=fn(v, _) { values.push(v.stringify()) })
   let ack = c.call("screen.ack")
-  let other = c.call("prefs.set")
+  let read : Array[Result[Json, Json]] = []
+  let other = c.call("prefs.set", on_done=fn(r) { read.push(r) })
   let said = fn(m : Json) {
     guard m is Object(o) else { return false }
     c.call_said(o)
@@ -607,7 +610,8 @@ test "a value or a delta for an id nothing holds is told from its head, unread, 
   let (c, sent) = recorder()
   let stations = c.subscribe("stations")
   let view = c.stream("screen.view", on_value=fn(_, _) {  })
-  let other = c.call("prefs.set")
+  let read : Array[Result[Json, Json]] = []
+  let other = c.call("prefs.set", on_done=fn(r) { read.push(r) })
   // held: read as any message (a subscription's, a stream's, a call's awaiting its answer)
   assert_false(c.unheld("{\"id\":\{stations.id},\"value\":{\"a\":1}}"))
   assert_false(c.unheld("{\"id\":\{view},\"value\":{\"frame\":{}}}"))
@@ -825,4 +829,31 @@ test "a topic's name keeps as many values as said, the oldest forgotten; one for
   c.receive("{\"id\":\{second.id},\"value\":{\"title\":\"1b\"}}") |> ignore
   assert_eq(second.value.unwrap().stringify(), "{\"title\":\"1b\"}")
   assert_true(first.value is None)
+}
+
+///|
+test "a call given no on_done: sent as any call, its id its own; its answer nobody reads, awaited by nothing, taken as it comes" {
+  let (c, sent) = recorder()
+  let waits : Array[String] = []
+  c.track(fn(what) { waits.push(what); waits.length() }, fn(_) {  })
+  let told = c.call("client.focus", params={ "chat": "ws/a" })
+  let read : Array[Result[Json, Json]] = []
+  let asked = c.call("chat.send", params={ "text": "hi" }, on_done=fn(r) { read.push(r) })
+  // (on the wire as ever: the same message, its own id)
+  assert_eq(sent[0].stringify(), ({ "id": told, "call": "client.focus", "params": { "chat": "ws/a" } } : Json).stringify())
+  assert_eq(sent[1].stringify(), ({ "id": asked, "call": "chat.send", "params": { "text": "hi" } } : Json).stringify())
+  // (awaited: only the one whose answer is read)
+  assert_eq(waits, ["core: chat.send (call \{asked})"])
+  let said = fn(m : Json) {
+    guard m is Object(o) else { return false }
+    c.call_said(o)
+  }
+  assert_true(said({ "id": told, "ok": {} }))
+  assert_true(said({ "id": told, "error": {} }))
+  assert_false(said({ "id": asked, "ok": {} }))
+  // (its answer taken: nothing runs, nothing more of it is said)
+  c.receive_json({ "id": told, "ok": {} })
+  assert_false(said({ "id": told, "ok": {} }))
+  c.receive_json({ "id": asked, "ok": { "sent": true } })
+  assert_eq(read.length(), 1)
 }

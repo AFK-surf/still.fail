@@ -85,7 +85,7 @@ fn latest_key(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
     } else {
       match v.thread {
         Some(th) =>
-          (src.call)("chat.latest", { "station": Json::string(r.station), "thread": Json::number(th) }, fn(_) {  })
+          (src.call)("chat.latest", { "station": Json::string(r.station), "thread": Json::number(th) }, @sfbase.answer_unread)
         None => ()
       }
     }

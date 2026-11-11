@@ -140,7 +140,7 @@ pub fn view_in(src : Source, place : String, room : Double) -> String {
 pub fn set_drive_view(src : Source, place : String, v : String) -> Unit {
   let o : Map[String, Json] = {}
   o[place] = if place != "page" && v == "columns" { Json::null() } else { Json::string(v) }
-  (src.call)("prefs.set", { "driveViews": Json::object(o) }, fn(_) {  })
+  (src.call)("prefs.set", { "driveViews": Json::object(o) }, @sfbase.answer_unread)
 }
 
 ///|
@@ -681,7 +681,7 @@ fn column_edge(c : @ui.Ctx, src : Source, s : Shown, path : String, column : Int
         s.b.forget_widths(c, src)
         let kept = if w == column_w { Json::null() } else { Json::string(w.to_int().to_string()) }
         cols.every = Some((match kept { String(k) => k; _ => "" }, w))
-        (src.call)("prefs.set", { "driveViews": { "column": kept } }, fn(_) {  })
+        (src.call)("prefs.set", { "driveViews": { "column": kept } }, @sfbase.answer_unread)
       } else {
         s.b.keep_width(c, src, path, w)
       }
