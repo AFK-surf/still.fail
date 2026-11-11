@@ -367,11 +367,12 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
   rows_frame_start()
   let t0 = work_now()
   // what was posted from outside since the last frame (a core's answers), all of it, handed to its handlers in the
-  // order it came, before anything reads it (messages.mbt)
+  // order it came, before anything reads it, outside the frame's reading (messages.mbt)
   take_messages()
   // (the probe's: how long the messages took, slow_probe)
   probe_msgs_ms.val = work_now() - t0
-  // the runtime's fibers run up to this frame's time (fx.mbt): the view reads what they left
+  // the runtime's fibers run up to this frame's time, outside the frame's reading (fx.mbt): the view reads what they
+  // left
   fx_frame_start(c)
   // the parts kept (kept_part.mbt): another run's forgotten, what the runtime did since the last frame an event from outside
   parts_frame_start(c)
