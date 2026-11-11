@@ -13,7 +13,8 @@ LIMIT = 5
 # (workflow, job): minutes. sfapp's pages in one process of the day's (mbui-check.yml native), the emulator's checks of the day's (2026-10-31: android-devices 430-575 s), the Windows
 # app's end to end of the day's (preview.yml windows' runs that are no push), prebuild's Windows shell (300-450 s) and
 # TestFlight's release (330-550 s), both to be made faster; the stable Windows app's, from a later commit's cached build
-# when the day before's main has none (2026-11-11: 3m44s, monoid's pack after it); the side run's station part, its simulators one at a time
+# when the day before's main has none (2026-11-11: 3m44s, monoid's pack after it) and
+# its Android app's with monoid's after it (2026-11-11: cut at 5); the side run's station part, its simulators one at a time
 LONGER = {
     ("mbui-ci.yml", "android-devices"): 10,
     ("mbui-ci.yml", "android-oldest"): 10,
@@ -31,6 +32,7 @@ LONGER = {
     ("mbui-testflight.yml", "release"): 10,
     ("side.yml", "side"): 10,
     ("stable.yml", "desktop-win"): 10,
+    ("stable.yml", "android"): 10,
 }
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 bad = []

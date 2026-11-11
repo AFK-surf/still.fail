@@ -34,12 +34,13 @@ jobs:
         run: python3 .github/stable-plan.py
 
   # The Android app is mbui's (apps/mbui, its `stable` variant: fail.still.android, signed as the Kotlin app was, so an
-  # installed one updates in place) since 2026-10-24, as asked; the Kotlin app stopped at 0.1.4520.
+  # installed one updates in place) since 2026-10-24, as asked; the Kotlin app stopped at 0.1.4520. 10 minutes (it runs
+  # by hand): on 2026-11-11 still.fail's took 2m09s and monoid's was cut at the job's 5, which skipped the release after.
   android:
     needs: plan
     runs-on: [self-hosted, macos-ci]
     environment: production
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
