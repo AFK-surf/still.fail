@@ -130,6 +130,8 @@ pub(all) struct Look {
   mut clips : Bool
   /// whether its words' lines each stand in the middle of its width (View::words_centered)
   mut words_center : Bool
+  /// whether its words, not wrapped, keep their line breaks, each line as it is (View::words_breaks)
+  mut words_breaks : Bool
   /// whether its words' ellipsis, one line cut short past it, is drawn past its box (View::ellipsis_past)
   mut ellipsis_past : Bool
   /// the picture it draws as wide as it is laid out, its curves cut for the pixels it is drawn at (View::picture)
@@ -184,6 +186,8 @@ pub(all) struct Content {
   clips : Bool
   /// its words' lines each in the middle of its width (View::words_centered)
   words_center : Bool
+  /// its words, not wrapped, on their lines as written (View::words_breaks)
+  words_breaks : Bool
   /// its words' ellipsis drawn past its box where it has not the room for it (View::ellipsis_past)
   ellipsis_past : Bool
   /// the picture it draws as wide as it is (View::picture)
@@ -281,6 +285,8 @@ pub(all) struct Drawn {
   clips : Bool
   /// its words' lines each in the middle of its width (View::words_centered)
   words_center : Bool
+  /// its words, not wrapped, on their lines as written (View::words_breaks)
+  words_breaks : Bool
   /// its words' ellipsis drawn past its box where it has not the room for it (View::ellipsis_past)
   ellipsis_past : Bool
   /// the picture it draws as wide as it is (View::picture)
@@ -677,6 +683,10 @@ pub struct Tree {
   /// how wide words too wide for a width on one line are drawn where they say shorter ways (View::shorter): the first of
   /// those that fits, else the last cut with an ellipsis, as the host lays them out (at the size of words given last)
   measure_shorter : (String, Array[String], WordsLook, Double, Double) -> Double
+  /// and words not wrapped that keep their line breaks (View::words_breaks), as `measure` and `measure_runs` take
+  /// theirs (the same two where none is given)
+  measure_kept : (String, WordsLook, Double, Double) -> (Double, Double)
+  measure_runs_kept : (Array[@text.Run], WordsLook, RunsLook, Double, Double) -> (Double, Double)
   /// whether each node keeps where in the source it was made and its properties said (source.mbt): a Tester's tree
   sources : Bool
   nodes : Array[Node]
@@ -1108,6 +1118,8 @@ pub fn Tree::new(
   measure? : (String, WordsLook, Double, Double) -> (Double, Double) = words_measure,
   measure_runs? : (Array[@text.Run], WordsLook, RunsLook, Double, Double) -> (Double, Double) = runs_measure,
   measure_shorter? : (String, Array[String], WordsLook, Double, Double) -> Double,
+  measure_kept? : (String, WordsLook, Double, Double) -> (Double, Double),
+  measure_runs_kept? : (Array[@text.Run], WordsLook, RunsLook, Double, Double) -> (Double, Double),
   time? : () -> Double,
   sources? : Bool = false,
 ) -> Tree {
@@ -1145,6 +1157,8 @@ pub fn Tree::new(
       Some(f) => f
       None => fn(words, shorter, look, room, scale) { shorter_w_by(measure, words, shorter, look, room, scale) }
     },
+    measure_kept: measure_kept.unwrap_or(measure),
+    measure_runs_kept: measure_runs_kept.unwrap_or(measure_runs),
     sources,
     nodes: [],
     free: [],
@@ -1417,6 +1431,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
       n.look.drawn_as = ""
       n.look.clips = false
       n.look.words_center = false
+      n.look.words_breaks = false
       n.look.ellipsis_past = false
       n.look.picture = None
       n.look.turn = 0.0
@@ -1551,7 +1566,7 @@ fn Tree::made(self : Tree, parent : Int, words_as_said? : Bool = false, loc? : S
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_contain: false, image_cover_at: None, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_contain: false, image_cover_at: None, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, words_breaks: false, ellipsis_past: false, picture: None },
         parent,
         allow_ellipsis: false,
         words_as_said,
@@ -2930,6 +2945,7 @@ priv enum Prop {
   Comes
   GoneEmpty
   FillsAcross
+  WordsBreaks
 } derive(Eq, Show)
 
 ///|
@@ -2992,6 +3008,7 @@ fn Prop::ord(self : Prop) -> Int {
     Measured => 52
     WordsCentered => 53
     EllipsisPast => 54
+    WordsBreaks => 87
     Points => 55
     Picture => 56
     Drop => 57
@@ -5224,10 +5241,17 @@ pub fn View::words(
     let t0 = tree.part_began()
     // (at its own size of words: View::words_scale's)
     let scale = if nd.words_as_said { 1.0 } else { (tree.env.words_scale)() }
+    // (its line breaks kept where it says so, View::words_breaks: measured on their lines as written)
     let (mw, mh) = if look.runs.is_empty() {
-      (tree.measure)(look.words, look.words_look, offered, scale)
+      (if look.words_breaks { tree.measure_kept } else { tree.measure })(look.words, look.words_look, offered, scale)
     } else {
-      (tree.measure_runs)(look.runs, look.words_look, look.runs_look, offered, scale)
+      (if look.words_breaks { tree.measure_runs_kept } else { tree.measure_runs })(
+        look.runs,
+        look.words_look,
+        look.runs_look,
+        offered,
+        scale,
+      )
     }
     if t0 >= 0.0 {
       let t1 = tree.part_began()
@@ -9372,6 +9396,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     hosted: n.hosted,
     clips: n.look.clips,
     words_center: n.look.words_center,
+    words_breaks: n.look.words_breaks,
     ellipsis_past: n.look.ellipsis_past,
     picture: n.look.picture,
     bones: self.bones_of_at(at),
@@ -10133,6 +10158,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     hosted: c.hosted,
     clips: c.clips,
     words_center: c.words_center,
+    words_breaks: c.words_breaks,
     ellipsis_past: c.ellipsis_past,
     picture: c.picture,
     bones: c.bones,

@@ -112,7 +112,7 @@ fn tree_sels(finger? : Bool = false) -> Array[SelTarget] {
         }
         match tree.view_of(c.id) {
           Some(v) if v.lent(words_picks) == Some(true) => {
-            let (r, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w, tree.words_scale_of(c.id))
+            let (r, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w, tree.words_scale_of(c.id), kept=c.words_breaks)
             let (bx0, by0, bx1, by1) = tree.seen_bounds(c.id)
             let place = tree_place(v)
             out.push({

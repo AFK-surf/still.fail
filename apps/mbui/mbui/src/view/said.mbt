@@ -241,7 +241,8 @@ pub fn Tree::words_within(
     let n = self.nodes[at]
     let me = { at, gen: n.gen }
     match self.drawn_of(me) {
-      Some(d) => put(set(d.words, d.words_look))
+      // (on their lines as written where they keep their breaks, View::words_breaks: as they are, `set` none of theirs)
+      Some(d) => put(if d.words_breaks { d.words } else { set(d.words, d.words_look) })
       None => ()
     }
     for k in self.kids_in_order(at) {

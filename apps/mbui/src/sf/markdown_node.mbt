@@ -909,7 +909,8 @@ pub fn code_block_node(
       tracking: @view.letters_own,
       balance: false,
     }
-    w.words_runs(By(runs), look~).ink(By(fn() { theme().p.text })) |> ignore
+    // (each of its lines a line of its own, scrolled across or wrapped: code_block's `breaks`)
+    w.words_runs(By(runs), look~).words_breaks(Is(true)).ink(By(fn() { theme().p.text })) |> ignore
   }
   p.box(fn(sc) {
     sc.pick(fn() { if wrapped.get() { 1 } else { 0 } }, fn(q, kind) {

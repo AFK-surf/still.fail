@@ -373,6 +373,31 @@ pub fn View::words_look(self : View, look : Live[WordsLook], loc~ : SourceLoc) -
 }
 
 ///|
+/// Whether its words, where they do not wrap (WordsLook's `wrap` false), keep their line breaks, as it changes: each line
+/// a line of its own as it is, none broken, as wide as the widest, as tall as their lines (code shown as written, in
+/// what scrolls across: an old view's `breaks`, Ctx::text's and Ctx::rich's, CSS's pre); else, as by default, what
+/// breaks them is run on with a space (CSS's nowrap). Wrapped, their breaks are kept either way. Measured, drawn, found,
+/// picked and read out so (what hosts the tree: its `measure_kept`). Layout's and paint's.
+/// A property of its own, not WordsLook's (2026-11-11): every WordsLook is said whole, so a field of it is one to add
+/// to each that is said, on every branch not yet in; it may go there once few are.
+#callsite(autofill(loc))
+pub fn View::words_breaks(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, WordsBreaks, on, Both, fn(on) {
+    self.tree.nodes[self.at].look.words_breaks = on
+    // (how its words are set said: what follows it told, once this is)
+    self.words_told()
+  })
+  self
+}
+
+///|
+/// Whether its words keep their line breaks as it is said now (View::words_breaks).
+pub fn View::words_breaks_now(self : View) -> Bool {
+  guard self.live() is Some(n) else { return false }
+  n.look.words_breaks
+}
+
+///|
 /// A last-resort ellipsis is intended without changing the words' layout sizing (as Ctx::text's allow_ellipsis).
 #callsite(autofill(loc))
 pub fn View::allow_ellipsis(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {

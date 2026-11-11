@@ -1713,7 +1713,7 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
         let look = d.words_look
         let scale = tree.words_scale_of(d.id)
         let tl = layout_words(
-          view_words_set(shown, look),
+          view_words_set(shown, look, d.words_breaks),
           view_sp(scale, look.size),
           look.weight,
           if look.wrap { d.w } else { 1.0e9 },
@@ -2433,7 +2433,7 @@ fn tree_run_rects(s : String) -> Array[(Double, Double, Double, Double)] {
     if out.length() > 0 || c.runs.is_empty() || a <= 0.0 {
       return
     }
-    let (_, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w, tree.words_scale_of(c.id))
+    let (_, lay, _) = view_runs_laid(c.runs, c.words_look, c.runs_look, c.w, tree.words_scale_of(c.id), kept=c.words_breaks)
     match lay.text.find(s) {
       Some(i) =>
         for r in lay.rects(i, i + s.length()) {
@@ -2702,7 +2702,7 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
   match view_tree() {
     Some(tree) =>
       for d in tree.drawn() {
-        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
+        if d.bones == 0L && view_words_set(d.words, d.words_look, d.words_breaks).contains(s) && d.alpha > 0.0 {
           return Some((d.x, d.y))
         }
       }
@@ -2749,7 +2749,7 @@ pub fn Tester::shown_of(self : Tester, s : String) -> (Double, Double, Double, D
       let drawn = tree.drawn_held()
       for e in drawn {
         let (d, holder, _) = e
-        if d.bones == 0L && view_words_set(d.words, d.words_look).contains(s) && d.alpha > 0.0 {
+        if d.bones == 0L && view_words_set(d.words, d.words_look, d.words_breaks).contains(s) && d.alpha > 0.0 {
           let mut x0 = d.x
           let mut y0 = d.y
           let mut x1 = d.x + d.w
