@@ -270,14 +270,14 @@ for t in $targets; do
       # (at a rate since the screens', squeeze_said's and words_large's sweeps are none (above): the second's other run
       # is kept_rows' last alone, 15 s at 60, 26 at 120, 9 and 5 at 24 and 7, so its pages have its four cores, four
       # programs as the first's and the fourth's, and at 60 one runner again; the fourth's at 24 and at 7 is
-      # preview_tree's alone, 173 and 73; the first's has the packages' programs too (@pkgs: moon test's run of them was
-      # 50 s at 60, 37 at 120, 27 and 24 at 24 and 7), beside preview_tree's 151 at 60. Each from 42928153698,
-      # 2026-11-11, before this; to be measured again from the runs after)
+      # preview_tree's alone, 173 and 73 (42928153698, 2026-11-11, before this); the first's has the packages' programs
+      # too (@pkgs), five side by side beside its pages: 107 s at 60 beside preview_tree's 220, 157 at 120, 46 and 43 at
+      # 24 and 7, its job at 120 211 s with them counted 40 (ci-rates-for-what-they-test 42942660697, 2026-11-11))
       if [ -n "${APP_GROUP:-}" ] && [ "${APP_GROUP#*/}" = 4 ]; then
         case "${MBUI_TEST_FPS:-}" in
-          60) specs="4,4,200,1 4,4,15,1 1,4,340,1 4,4,0,1" ;;
-          120) specs="4,4,40,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
-          24 | 7) specs="4,4,50,2 4,4,14,2 1,4,450,2 4,4,170,1" ;;
+          60) specs="4,4,330,1 4,4,20,1 1,4,340,1 4,4,0,1" ;;
+          120) specs="4,4,160,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
+          24 | 7) specs="4,4,90,2 4,4,14,2 1,4,450,2 4,4,170,1" ;;
           *) specs="4,4,80,1 2,4,160,1 1,4,240,1 4,4,0,1" ;;
         esac
         g1=() g2=() g3=() g4=()
