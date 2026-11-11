@@ -5,7 +5,8 @@
 /// A fill chip (fill_chip's, as a node) in `parent`: on the neutral ground, filled from the left as far as `fill` (0–100)
 /// says now, grey while `level` is ok, faintly the level's colour once it is not; `mark` and `words` in the text's
 /// colour; `small` a lower one. `said` (what is left and when it fills again) over it while it is pointed at, in `tips`.
-/// In a page's bones, one piece.
+/// In a page's bones, one piece. Never squeezed, but `squeezes`: given way to its row where that has not the room for it
+/// left, its figure cut short with an ellipsis (meter_chips_brief_node's, the old line's `keep`).
 #callsite(autofill(loc))
 pub fn fill_chip_node(
   parent : @view.View,
@@ -16,6 +17,7 @@ pub fn fill_chip_node(
   small? : Bool = false,
   said? : () -> String,
   tips? : TipLayer,
+  squeezes? : Bool = false,
   loc~ : SourceLoc,
 ) -> @view.View {
   let part = fn() {
@@ -30,7 +32,10 @@ pub fn fill_chip_node(
   }
   let chip = parent.box(made_for=loc, fn(b) {
     style_node(b, fn() { if small { chip_box_small } else { chip_box } })
-    b.bone_whole(Is(true)).shrink(Is(0.0)) |> ignore
+    b.bone_whole(Is(true)).shrink(Is(if squeezes { 1.0 } else { 0.0 })) |> ignore
+    if squeezes {
+      b.min_width(Is(Some(0.0))) |> ignore
+    }
     // (its fill a plain rectangle cut along the chip's corners, its end square where it stops)
     b.box(fn(f) {
       style_node(f, fn() { chip_fill_row })
@@ -71,7 +76,12 @@ pub fn fill_chip_node(
         }
       })
       w.show(fn() { mark() != "" }, fn(m) { words_node(m, mark, fn() { chip_text }) |> ignore })
-      words_node(w, words, fn() { chip_text }) |> ignore
+      let f = words_node(w, words, fn() { chip_text })
+      // (squeezed where it may be: its figure cut short with an ellipsis, as the old line's chips kept to the last are)
+      if squeezes {
+        w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        f.shrink(Is(1.0)).min_width(Is(Some(0.0))).cuts(Is(true)).allow_ellipsis(Is(true)) |> ignore
+      }
     })
     |> ignore
   })
