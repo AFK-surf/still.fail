@@ -644,6 +644,7 @@ fn native_said(vw : Viewer, src : Source, width : Double) -> NativeSaid? {
     words: [
       "common.close", "web-main.preview.fitKey", "web-main.preview.actualKey", "web-main.annotate.image", "common.copy",
       "web-main.stations.saveToPhotos", "android-chat.file.download", "web-main.preview.rendered", "web-main.preview.source",
+      "android-misc.drive.share",
       "android-misc.drive.player.full", "android-misc.drive.player.unfull",
     ].map(fn(k) { @sf.t(k) }),
   })
@@ -1338,6 +1339,22 @@ fn image_tools(
     )
     |> ignore
   })
+  // 分享 on a phone (shares_out): what is here handed to the system's share sheet; one told of, read whole first. Not
+  // beside 预览 / 源码 (a table, a page): a phone's floating bar has no room for both with the name (words at 1.3)
+  row.show(fn() { shares_out() && !vw.coming() && !downloading(dl()) && (whole() || vw.told_of()) && !(whole() && (vw.shown_kind() == Some(KCsv) || vw.shown_kind() == Some(KHtml))) }, fn(r) {
+    @sf.tool_node(
+      r,
+      fn() {
+        let here = vw.bytes.get() is Some(_) || (vw.told_of() && !vw.asked_now())
+        { icon: "share", label: @sf.t("android-misc.drive.share"), on: false, disabled: !here }
+      },
+      ink,
+      corner,
+      fn() { vw.ask_share() },
+      tip=tips,
+    )
+    |> ignore
+  })
   // download: what is here saved at once; one told of, read whole first; a ring while the core downloads it
   row.show(fn() { !vw.coming() && !downloading(dl()) }, fn(r) {
     @sf.tool_node(
@@ -1579,6 +1596,8 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
       vw.install_after = false
       vw.ask_install()
     }
+    // 分享 asked before its bytes came, handed on as they come (Viewer::ask_share)
+    vw.share_came()
   })
 }
 
@@ -1943,9 +1962,20 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
     // an APK: 安装 first, handed to the system's installer (strong); 下载 then the quieter. As it is read for one, that
     // one at work, saying how much has come in its words; the other not pressed meanwhile
     let apk = @sf.lower(vw.file.name).has_suffix(".apk")
-    let reading_for = fn(install : Bool) { reading() && vw.install_after == install }
-    let label = fn(install : Bool, rest : String) {
-      if !reading_for(install) {
+    // (what it is read for: 0 下载, 1 安装, 2 分享)
+    let reading_for = fn(k : Int) {
+      reading() &&
+      (if vw.install_after {
+        1
+      } else if vw.share_after {
+        2
+      } else {
+        0
+      }) ==
+      k
+    }
+    let label = fn(k : Int, rest : String) {
+      if !reading_for(k) {
         return rest
       }
       let reading_words = @sf.t("web-main.preview.loadingLabel")
@@ -1959,17 +1989,24 @@ fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
       }
     }
     if apk {
-      @sf.button_node(r, fn() { label(true, pv("android-chat.file.install")) }, fn() { vw.ask_install() }, tone=Primary, busy=fn() {
-        reading_for(true)
-      }, disabled=fn() { reading_for(false) }, across=true)
+      @sf.button_node(r, fn() { label(1, pv("android-chat.file.install")) }, fn() { vw.ask_install() }, tone=Primary, busy=fn() {
+        reading_for(1)
+      }, disabled=fn() { reading() && !reading_for(1) }, across=true)
       |> ignore
     }
-    @sf.button_node(r, fn() { label(false, @sf.t("web-main.preview.download")) }, fn() { vw.ask_save(@ui.current()) }, tone=if apk {
+    @sf.button_node(r, fn() { label(0, @sf.t("web-main.preview.download")) }, fn() { vw.ask_save(@ui.current()) }, tone=if apk {
       Ghost
     } else {
       Primary
-    }, icon="download", busy=fn() { reading_for(false) }, disabled=fn() { reading_for(true) }, across=true)
+    }, icon="download", busy=fn() { reading_for(0) }, disabled=fn() { reading() && !reading_for(0) }, across=true)
     |> ignore
+    // 分享 on a phone (shares_out), the quieter: read whole, then the system's share sheet
+    if shares_out() {
+      @sf.button_node(r, fn() { label(2, @sf.t("android-misc.drive.share")) }, fn() { vw.ask_share() }, tone=Ghost, icon="share", busy=fn() {
+        reading_for(2)
+      }, disabled=fn() { reading() && !reading_for(2) }, across=true)
+      |> ignore
+    }
   })
 }
 

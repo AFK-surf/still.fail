@@ -18,7 +18,8 @@
 //
 // Out: a file of a drive handed to another app: read whole through the core
 // (`drive.read`), then the system's share sheet (@hostapi.share: Android's chooser, a file of the app's own provider;
-// macOS's sharing picker); 本机没有可打开此文件的应用 when nothing takes it.
+// macOS's sharing picker); 本机没有可打开此文件的应用 when nothing takes it. A chat's picture or file the same from its
+// preview on a phone (sfbase viewer.mbt's Viewer::ask_share: its bar, a picture's held menu, a file told of).
 
 ///|
 fn sh(key : String, args? : Array[(String, String)] = []) -> String {

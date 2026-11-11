@@ -123,6 +123,43 @@ test "the picture held by a finger, Small or Medium: its one menu, 保存到相�
 }
 
 ///|
+test "分享 on a phone: in the bar beside download and beside 保存到相册 in the picture's held menu, the picture handed whole to the system's share sheet; none on the Mac" {
+  for platform in [1, 2] {
+    let t = preview_tester("image", platform~)
+    assert_true(t.query(Button, label=@sf.t("web-main.preview.download")) is Some(_), msg="platform \{platform}")
+    t.click(Button, label="分享")
+    let shared = t.shared_out()
+    assert_eq(shared.length(), 1, msg="platform \{platform}")
+    assert_eq(shared[0].1, "界面草图.png")
+    assert_true(shared[0].3.length() > 0)
+    // held by a finger: its menu has it beside 保存到相册
+    t.press_at(195.0, 422.0)
+    t.run_for(@ui.long_press_ms + 20.0)
+    t.release(195.0, 422.0)
+    t.draw()
+    t.run_for(@sf.presented_rest() - t.time())
+    assert_true(t.reachable("保存到相册").length() > 0)
+    t.tap_text("分享")
+    t.frame()
+    assert_eq(t.shared_out().length(), 2, msg="platform \{platform}")
+  }
+  // the Mac downloads and copies; its share sheet is not offered here
+  let t = preview_tester("image")
+  assert_true(t.query(Button, label="分享") is None)
+}
+
+///|
+test "分享 on a phone of a file told of: read whole through the core first, then handed to the share sheet" {
+  let t = preview_tester("none", platform=2)
+  assert_true(t.find("下载") is Some(_))
+  t.tap_text("分享")
+  t.frame()
+  let shared = t.shared_out()
+  assert_eq(shared.length(), 1)
+  assert_true(shared[0].3.length() > 0)
+}
+
+///|
 test "held by a finger round the picture, over the chat's words under the viewer: none of them picked" {
   let t = preview_tester("image", platform=2)
   assert_true(viewer.get() is Some(_))

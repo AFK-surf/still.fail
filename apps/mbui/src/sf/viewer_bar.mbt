@@ -94,7 +94,7 @@ pub fn viewer_bar(
       })
       |> ignore
       // the middle, as wide as what it says, the sides kept for the way back and the tools
-      let most = dmax(viewer_none, c.width - viewer_bar_sides)
+      let most = dmax(viewer_none, c.width - viewer_bar_sides())
       let middle = c.id(key + "/name")
       c.box(style=viewer_bar_middle.then(@ui.style(max_w=Fixed(most))), id=if live && title != "" { middle } else { 0 }, taps=false, points=true, fn() {
         c.text(name, style=viewer_name_words.then(@ui.text_style(color=Data(ink.ink)))) |> ignore
@@ -278,8 +278,14 @@ pub let viewer_bar_saturation : Double = 1.4
 
 ///|
 /// What the middle leaves its sides at least: the way back's and the tools' room either side (as the grid's equal
-/// sides keep it in the middle).
-let viewer_bar_sides : Double = 320.0
+/// sides keep it in the middle); a phone's (a tablet's) 90 more each side, for its one more tool (分享).
+pub fn viewer_bar_sides() -> Double {
+  if picture_to_album() {
+    500.0
+  } else {
+    320.0
+  }
+}
 
 ///|
 let viewer_none : Double = 0.0

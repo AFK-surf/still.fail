@@ -110,6 +110,7 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
       @sf.native_over_act("source", @sf.t(if v.source { "web-main.preview.rendered" } else { "web-main.preview.source" }), "code", fn() {
         v.set_source(!v.source)
       })
+      vf_native_share(v)
       if !downloading(v.download(src)) {
         @sf.native_over_act("download", @sf.t("android-chat.file.download"), "download", fn() { v.ask_save(c) })
       }
@@ -137,6 +138,7 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
     }
     None => ()
   }
+  vf_native_share(v)
   vf_native_download(v, c, src, v.bytes.get() is Some(_) || (v.told_of() && !v.asked))
 }
 
@@ -168,6 +170,14 @@ fn vf_native_media(v : Viewer, c : @ui.Ctx, src : Source, width : Double) -> Uni
     _ => ()
   }
   vf_native_download(v, c, src, true)
+}
+
+///|
+/// 分享 among the actions in the system's bars, on a phone (shares_out), once it is here or told of (read whole first).
+fn vf_native_share(v : Viewer) -> Unit {
+  if shares_out() && (v.bytes.get() is Some(_) || (v.told_of() && !v.asked)) {
+    @sf.native_over_act("share", @sf.t("android-misc.drive.share"), "share", fn() { v.ask_share() })
+  }
 }
 
 ///|

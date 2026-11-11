@@ -399,6 +399,7 @@ pub fn viewer_tab_node(
         vw.install_after = false
         vw.ask_install()
       }
+      vw.share_came()
     }
   })
   let tips_at : Ref[@view.View?] = Ref(None)
