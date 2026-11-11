@@ -391,7 +391,8 @@ struct Node {
   mut piece_cell : (@signals.Signal[Int], (Double, Double) -> Int)?
   /// how many times how its words are set was said (their words, pieces, look: View::words_said), made as first read
   mut said_cell : @signals.Signal[Int]?
-  /// a row of a list made by its key (View::each): the same while its key is there, whatever is made in it anew
+  /// a row of a list made by its key (View::each; a page's list's slot and block, View::scrolls_window): the same while
+  /// its key is there, whatever is made in it anew (read by View::row_place alone)
   mut each_row : Bool
   /// whether it takes input now as what reads it reads it (View::takes_input): made as first read, let go with it
   mut input_cell : @signals.Signal[Bool]?
@@ -990,6 +991,11 @@ pub struct Tree {
   /// what is asked of one laid out alone once it is (View::scrolls_window's slots: whether what it shows came out
   /// another height, the column marked laid out again then, before the layout of all of it), by its index
   alone_asks : Map[Int, () -> Bool]
+  /// a page's list's rows known by their keys (View::scrolls_window), by the index of the row's slot and of the block
+  /// made in it (each marked each_row): whose list, the number its key has there (given as it is first asked, kept while
+  /// the list lives; read as the key is read, so that what reads it reads it again as a block is taken for another key),
+  /// and where it is among them now (View::row_place, View::row_order)
+  rows_named : Map[Int, (NodeId, () -> Int, () -> Int)]
   /// a page's list's scroll by the node it scrolls in (View::scrolls): how far it was put for what came out another
   /// height over what shows, as what is drawn is held steady (Tree::scroll_corrected)
   lists_scrolled : Map[Int, Scroll]
@@ -1259,6 +1265,7 @@ pub fn Tree::new(
     alone_due: [],
     alone_laid: [],
     alone_asks: {},
+    rows_named: {},
     lists_scrolled: {},
     rooming: -1,
     room_marks: 0,

@@ -136,7 +136,9 @@ pub let runs_picker : Lent[(View) -> Live[(Int, Int)]] = Lent::new()
 ///|
 /// Which row of a list made by its key (View::each) it is in, nearest it, and where it is in that row (its place among
 /// what holds it, each from the row down): the same while the row's key is there, whatever is made in it anew where it
-/// was; the window's root and where it is from it where it is in none.
+/// was; a page's list's row (View::scrolls_window) by its list and its key's number there, whichever node it is made
+/// in (the number says which row, never where: given as it is first asked, it is compared, not ordered; where a row is
+/// among its list's keys now is View::row_order); the window's root and where it is from it where it is in none.
 pub fn View::row_place(self : View) -> (NodeId, Array[Int]) {
   let up : Array[Int] = []
   let mut at = self
@@ -144,7 +146,24 @@ pub fn View::row_place(self : View) -> (NodeId, Array[Int]) {
     up.push(p.kids().search_by(fn(k) { k.at == at.at }).unwrap_or(0))
     at = p
   }
-  (at.id(), up.rev())
+  // (a page's list's row, or the block made in it (marked as an each's row is): known by its key's number in that list,
+  // whatever node it is made in, read as its key is (a block taken for another key is that key's row from then))
+  match self.tree.rows_named.get(at.at) {
+    Some((list, number, _)) => {
+      up.push(number())
+      (list, up.rev())
+    }
+    None => (at.id(), up.rev())
+  }
+}
+
+///|
+/// Where a page's list's row (a row of View::scrolls_window, `self` that row's node) is among the list's keys now; none
+/// for any other node: the order its rows are in, whichever of them are made.
+pub fn View::row_order(self : View) -> Int? {
+  // (a row's node is marked so: no other node looked up)
+  guard self.live() is Some(n) && n.each_row else { return None }
+  self.tree.rows_named.get(self.at).map(fn(r) { (r.2)() })
 }
 
 ///|

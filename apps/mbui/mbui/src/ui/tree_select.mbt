@@ -151,14 +151,17 @@ let tree_sels_made : Ref[Int] = Ref(0)
 
 ///|
 /// Where node `v` stands in the window's tree: from the root down, each node's place among what holds it (a page's
-/// list's block's as its key's, its slot kept whether it shows or not: View::scrolls_window), the order the tree holds
-/// them in whatever is drawn over what, as an old view's paragraphs' places are (Ctx::page_order): their order, not who
-/// they are (tree_key's).
+/// list's row's as its key's among the list's keys, whichever of its rows are made: View::row_order), the order the
+/// tree holds them in whatever is drawn over what, as an old view's paragraphs' places are (Ctx::page_order): their
+/// order, not who they are (tree_key's).
 fn tree_place(v : @view.View) -> Array[Int] {
   let up : Array[Int] = []
   let mut at = v
   while at.parent() is Some(p) {
-    let i = p.kids().search_by(fn(k) { k.id() == at.id() }).unwrap_or(0)
+    let i = match at.row_order() {
+      Some(i) => i
+      None => p.kids().search_by(fn(k) { k.id() == at.id() }).unwrap_or(0)
+    }
     up.push(i)
     at = p
   }
