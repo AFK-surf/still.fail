@@ -18,6 +18,7 @@ import type { Topic } from "../protocol.ts";
 import { LOOK_COLOURS, type MermaidLook } from "../mermaid.ts";
 import { draftAt } from "../refs.ts";
 import { OUTLINE_ROWS } from "../things.ts";
+import { LINK_PICTURES, type LinkPicture } from "../peek-pictures.ts";
 import { StationAddr } from "../station/addr.ts";
 import type { FindAt, FindHit } from "../chat-find.ts";
 import { readConnects, readPeople, type RelayConnect, type RelayPerson } from "../relay-pick.ts";
@@ -87,6 +88,9 @@ export type Call =
   /// `quiet`: the core's own (fill.ts), in the background: not waited on, and nothing a viewer let go.
   | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean; stream: boolean; keep: number | null; quiet?: boolean; from?: unknown }
   | { kind: "stationPoster"; station: string; key: string; name: string }
+  /// A link's card's picture, or a file's peek's, its bytes beside: out of what the topic's read brought (peek-pictures.ts).
+  | { kind: "linkPicture"; station: string; url: string; which: LinkPicture }
+  | { kind: "peekPicture"; station: string; key: string; path: string; line: number | null }
   | { kind: "fileOpen"; station: string; key: string; path: string; range: { offset: number; length: number } | null }
   /// `keep`: what is read kept on the device and what is kept answered (drive-kept.ts), the file as its folder said it
   /// is (`mtime`, `size`; neither said, nothing kept).
@@ -1024,6 +1028,26 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array): Ca
       ]);
       const range = p.offset === null && p.length === null ? null : { offset: (p.offset as number | null) ?? 0, length: (p.length as number | null) ?? FILE_OPEN_PART };
       return { kind: "fileOpen", station: p.station as string, key: p.key as string, path: p.path as string, range };
+    }
+    // A link's card's picture (`which`: icon, image, avatar) and a file's peek's, as their topics (`linkPreview`,
+    // `filePeek`) read them last, their bytes beside `{ type }`: what those topics say of them is a token alone.
+    case "link.preview.picture": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["url", S, "req"],
+        ["which", S, "req"],
+      ]);
+      if (!(LINK_PICTURES as readonly string[]).includes(p.which as string)) throw CoreError.invalid(`which: ${String(p.which)}`);
+      return { kind: "linkPicture", station: p.station as string, url: p.url as string, which: p.which as LinkPicture };
+    }
+    case "file.peek.picture": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["key", S, "req"],
+        ["path", S, "req"],
+        ["line", "u32", "opt"],
+      ]);
+      return { kind: "peekPicture", station: p.station as string, key: p.key as string, path: p.path as string, line: (p.line as number | null) ?? null };
     }
     case "station.poster": {
       const p = read(params, [

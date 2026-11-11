@@ -39,6 +39,12 @@ function versionOf(c: string): string {
   return `${c.length.toString(36)}:${hash(c).toString(36)}`;
 }
 
+/// A short name for a long text that changes when it does (a picture's base64 or data: URL, peek-pictures.ts): its
+/// cyrb53 and its length, in base 36.
+export function textHash(s: string): string {
+  return `${hash(s).toString(36)}-${s.length.toString(36)}`;
+}
+
 /// JSON with every object's keys sorted.
 function canonical(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map((x) => (x === undefined ? "null" : canonical(x))).join(",")}]`;

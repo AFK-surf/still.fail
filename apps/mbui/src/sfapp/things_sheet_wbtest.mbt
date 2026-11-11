@@ -213,8 +213,9 @@ test "小屏: the chat's things whose body is nodes: a video the station made no
 }
 
 ///|
-/// The chat's things open on a phone used with a mouse (an iPad's, a narrow window's): what shows a link's card.
-fn things_chat_mouse(previews? : Map[String, Json] = {}) -> (@ui.Tester, Source, ChatRef) {
+/// The chat's things open on a phone used with a mouse (an iPad's, a narrow window's): what shows a link's card. Its
+/// pictures (`link.preview.picture`) as `pictures` has them by the link's address and which, its type PNG.
+fn things_chat_mouse(previews? : Map[String, Json] = {}, pictures? : Map[String, Bytes] = {}) -> (@ui.Tester, Source, ChatRef) {
   new_run()
   let base = fixture("chat")
   // (a link's card as `previews` has it by its address, where it has one: the made-up core's otherwise)
@@ -225,6 +226,12 @@ fn things_chat_mouse(previews? : Map[String, Json] = {}) -> (@ui.Tester, Source,
       match previews.get(text(Some(Json::object(params)), "url")) {
         Some(v) if name == "linkPreview" => { ..got, value: Some(v) }
         _ => got
+      }
+    },
+    read_bytes: fn(name, params, done) {
+      match pictures.get(text(Some(params), "url") + "\u{1}" + text(Some(params), "which")) {
+        Some(b) if name == "link.preview.picture" => done(Ok(({ "type": "image/png" }, b)))
+        _ => (base.read_bytes)(name, params, done)
       }
     },
   }
@@ -336,9 +343,10 @@ test "小屏 with a mouse: a link's card whose row is nodes waits for the hand t
 }
 
 ///|
-/// A page's icon not square (the made-up still of 演示录屏.mp4, 16:9), as a data address: what its card's square holds.
-fn things_wide_icon() -> String {
-  "data:image/png;base64," + @codec.base64(fixture_file_png("演示录屏.mp4"))
+/// A page's icon not square (the made-up still of 演示录屏.mp4, 16:9), as the core answers it (`link.preview.picture`):
+/// what its card's square holds.
+fn things_wide_icon() -> Bytes {
+  fixture_file_png("演示录屏.mp4")
 }
 
 ///|
@@ -348,11 +356,14 @@ test "小屏 with a mouse: a link's card whose row is nodes holds a page's icon 
     "url": "https://example.com/bench/list",
     "title": "列表滚动的性能数据",
     "site": "Example",
-    "icon": Json::string(things_wide_icon()),
+    "icon": "wide-icon",
   }
-  let (t, src, r) = things_chat_mouse(previews={ "https://example.com/bench/list": page })
-  let key = @sf.data_image(things_wide_icon())
-  let drawn = fn(_x : Double, _y : Double) { media_drawn(t, key).map(fn(b) { "\{b}" }).join(" ") }
+  let (t, src, r) = things_chat_mouse(previews={ "https://example.com/bench/list": page }, pictures={
+    "https://example.com/bench/list\u{1}icon": things_wide_icon(),
+  })
+  // (its image's key, once its card asked it)
+  let key = fn() { @sfbase.link_picture(src, r.station, "https://example.com/bench/list", Some(page), "icon") }
+  let drawn = fn(_x : Double, _y : Double) { media_drawn(t, key()).map(fn(b) { "\{b}" }).join(" ") }
   let old = things_card_seen(t, r, "links", "列表滚动的性能数据", fn() { open_things_old(src, r) }, drawn)
   let now = things_card_seen(t, r, "links", "列表滚动的性能数据", fn() { open_things(src, r, 7.0) }, drawn)
   assert_true(old != "", msg="the old one's icon")

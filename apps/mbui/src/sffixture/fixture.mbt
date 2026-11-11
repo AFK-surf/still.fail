@@ -988,7 +988,39 @@ pub fn fixture_file_peek(path : String) -> Json {
         },
         "time": { "mtime": { "at": 0, "ago": "5 分钟前", "full": "10/26 11:00", "until": "", "past": true } },
       }
+    // a screenshot, its picture by its token (its bytes: fixture_peek_picture)
+    "shots/list.png" =>
+      {
+        "kind": "image",
+        "path": "/Users/lin/shop/shots/list.png",
+        "name": "list.png",
+        "size": 48213,
+        "mtime": 0,
+        "type": "image/png",
+        "image": { "type": "image/png", "picture": "fix-shot" },
+        "time": { "mtime": { "at": 0, "ago": "5 分钟前", "full": "10/26 11:00", "until": "", "past": true } },
+      }
     _ => Json::null()
+  }
+}
+
+///|
+/// The pictures the made-up station's cards name, as the core answers them (`link.preview.picture`: a page's icon and
+/// picture; `file.peek.picture`: a screenshot's), each its bytes beside `{ type }`; one it has none of, the core's
+/// error; any other call, none of these.
+pub fn fixture_peek_picture(name : String, params : Json) -> Result[(Json, Bytes), Json]? {
+  let p = Some(params)
+  let png = fn(of : String) -> Result[(Json, Bytes), Json]? { Some(Ok(({ "type": "image/png" }, fixture_file_png(of)))) }
+  let none : Result[(Json, Bytes), Json]? = Some(Err({ "code": "no_picture", "message": "没有这张图片", "status": 404 }))
+  match name {
+    "link.preview.picture" =>
+      match (text(p, "url"), text(p, "which")) {
+        ("https://example.com/bench/shot", "icon") => png("compare.png")
+        ("https://example.com/bench/shot", "image") => png("after.png")
+        _ => none
+      }
+    "file.peek.picture" => if text(p, "path") == "shots/list.png" { png("before.png") } else { none }
+    _ => None
   }
 }
 
@@ -1009,6 +1041,16 @@ pub fn fixture_link_preview(url : String) -> Json {
   match url {
     "https://example.com/bench/list" =>
       { "kind": "page", "url": url, "title": "列表滚动的性能数据", "site": "Example", "description": "每一帧的耗时" }
+    // (a page with an icon and a picture, by their tokens: fixture_peek_picture)
+    "https://example.com/bench/shot" =>
+      {
+        "kind": "page",
+        "url": url,
+        "title": "列表滚动截图",
+        "site": "Example",
+        "icon": "fix-icon",
+        "image": "fix-image",
+      }
     "https://github.com/acme/shop/pull/128" =>
       {
         "kind": "github_pull_request",
@@ -1661,6 +1703,14 @@ pub fn fixture(mode : String) -> Source {
     // the player's made-up films (play_fixture.mbt)
     if name == "drive.read" && fixture_play_read(params, done) {
       return
+    }
+    // a link's card's pictures, a picture file's peek's (fixture_peek_picture)
+    match fixture_peek_picture(name, params) {
+      Some(r) => {
+        done(r)
+        return
+      }
+      None => ()
     }
     match fixture_drive_read(name, params) {
       Some(r) => done(r)

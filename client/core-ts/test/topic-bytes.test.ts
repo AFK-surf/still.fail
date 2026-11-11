@@ -47,10 +47,8 @@ const station = CHAT.station;
 
 /// Those over `BAR_KB` now, by the name `ASKED` gives them: what each weighs, KB rounded up to a multiple of 8.
 const OVER: Record<string, number> = {
-  "filePeek picture": 344,
   "chat six pages": 264,
   "chat compact six pages": 264,
-  "linkPreview page": 224,
   "vaultUses": 128,
   "usage": 112,
   "jobLog 400": 96,

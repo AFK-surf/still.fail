@@ -1513,8 +1513,8 @@ export const SHAPES: Record<string, Shape> = {
     ["title", opt("String"), { said: true }],
     ["description", opt("String"), { said: true }],
     ["site", opt("String"), { said: true }],
-    ["icon", opt("String"), { doc: "The page's icon, inline (a data: URL)." }],
-    ["image", opt("String"), { doc: "The page's picture (og:image), inline, as its thumbnail where it is big." }],
+    ["icon", opt("String"), { doc: "Which icon the page has (a token, a hash of what the station said: another when it changes), where it has\none: its bytes are `link.preview.picture`'s (`which: icon`), not in here (peek-pictures.ts)." }],
+    ["image", opt("String"), { doc: "Which picture the page has (og:image, its thumbnail where it is big), as `icon`: its bytes are\n`link.preview.picture`'s (`which: image`)." }],
     ["repository", opt("String"), { doc: "A pull request's or issue's: owner/name." }],
     ["number", opt("i64"), { client: opt("I54") }],
     ["state", opt("String"), { doc: "A pull request's: open | closed | merged | draft; an issue's: open | completed | not_planned | closed." }],
@@ -1530,7 +1530,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "What a web link in a message is, for its card (the `linkPreview` topic, GET /link-preview): a page by its title,\nsite, icon and picture; a GitHub pull request or issue as GitHub says it." }),
   LinkPerson: struct([
     ["login", "String", { said: true }],
-    ["avatar", opt("String"), { doc: "Inline (a data: URL)." }],
+    ["avatar", opt("String"), { doc: "Which face they have, as LinkPreview's `icon`: its bytes are `link.preview.picture`'s (`which: avatar`)." }],
   ], { doc: "Who opened a pull request or an issue." }),
   LinkChecks: struct([
     ["passed", "i64", { client: "I54" }],
@@ -1557,7 +1557,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A few of a text file's lines: around the one a message points at, else its first." }),
   FilePeekImage: struct([
     ["type", "String"],
-    ["data", "String", { doc: "Base64." }],
+    ["picture", "String", { doc: "Which picture (a token, a hash of what the station said: another when it changes): its bytes are\n`file.peek.picture`'s, not in here (peek-pictures.ts)." }],
   ], { doc: "An image file's picture (its thumbnail where it is big)." }),
   MessagePeek: struct([
     ["author", "String", { said: true, doc: "Who said it." }],
