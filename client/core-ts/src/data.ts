@@ -1144,6 +1144,13 @@ export class Data {
     return frozen(out);
   }
 
+  /// The stations a station took the place of (account.ts overviewFormerly), kept beside its overview: read in a
+  /// computed, it is made again only as that changes.
+  overviewFormerly(station: string): unknown {
+    this.#readQuery({ topic: "$overview-formerly", station });
+    return this.of(station)?.overviewFormerly(station);
+  }
+
   /// How the views judge whether this core can read an overview, for each database to judge one as it is written and
   /// keep the verdict beside it (account.ts #overviewWritten).
   judgeOverviews(fit: OverviewFit | null): void {

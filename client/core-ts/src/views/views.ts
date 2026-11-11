@@ -1300,7 +1300,7 @@ export class Views implements Owner {
   }
 
   /// The station a link names now (`<workspace>/<station>`): one that took a lost one's place, where that is the one
-  /// named (its overview's `copies.formerly`, as a chat's page reads it: #chatOverview); the one named otherwise.
+  /// named (its overview's `copies.formerly`, kept beside it: data.ts overviewFormerly); the one named otherwise.
   stationNow(address: string): string {
     const at = address.lastIndexOf("/");
     if (at < 0) return address;
@@ -1308,7 +1308,7 @@ export class Views implements Owner {
     const id = address.slice(at + 1);
     for (const s of this.stations(scope) ?? []) {
       if (s.id === id) continue;
-      const formerly = get(get(this.#chatOverview(s.address), "copies"), "formerly");
+      const formerly = this.#core.data.overviewFormerly(s.address);
       if (Array.isArray(formerly) && formerly.includes(id)) return s.address;
     }
     return address;
@@ -3568,9 +3568,9 @@ export class Views implements Owner {
   }
 
   /// What a chat's page reads of station `station`'s overview (schema.ts OVERVIEW_CHAT: its agents' accounts and
-  /// connects, who the viewer is in Slack, its updates, whether it takes bug reports, its context, what it was
-  /// formerly), kept beside it (data.ts overviewChat): the overview whole is not read, and a change to the rest of it
-  /// (its processes, its automatic decisions, a sign-in's step) makes no chat again.
+  /// connects, who the viewer is in Slack, its updates, whether it takes bug reports, its context), kept beside it
+  /// (data.ts overviewChat): the overview whole is not read, and a change to the rest of it (its processes, its
+  /// automatic decisions, a sign-in's step) makes no chat again.
   #chatOverview(station: string): J {
     return this.#core.data.overviewChat(station);
   }

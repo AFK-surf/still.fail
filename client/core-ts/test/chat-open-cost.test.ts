@@ -52,6 +52,19 @@ test("a_core_started_anew_opens_a_chat_reading_and_decorating_no_overview", asyn
   assert.equal(value.messages.length, OPENS);
 });
 
+test("a_chat_with_links_reads_of_each_other_station_what_a_link_is_taken_to_alone", async () => {
+  // Where a link to a chat goes (views.ts stationNow) read each other station's `copies.formerly` out of its chat's
+  // part: 4 parts of some 17 KB parsed for a few bytes (82.7 KB in Hermes with its own). They are kept apart
+  // (station_part.formerly): its own station's chat part, and a few bytes of each other's.
+  const { host, base } = await written();
+  const sql = host.sqls.get(dbName("s1"))!;
+  const own = String(sql.all("SELECT chat FROM station_part WHERE address = ?", [CHAT.station])[0]![0]).length;
+  const { value, made } = await chatAnew(host, base);
+  assert.ok(value.messages.some((m: { text?: string }) => (m.text ?? "").includes("still.fail/o/")), "it has links to chats");
+  assert.equal(made.overviewsRead, 0);
+  assert.ok(made.overviewPartChars - own <= 5 * 16, `${made.overviewPartChars - own} characters of parts besides its own station's chat part`);
+});
+
 /// What a core before the chat's part keeps the parts by (schema.ts as #5619 left it): its triggers, made again in
 /// place of these, and every part made again of the overviews with them, none with a chat's.
 function olderTriggers(): string {
@@ -83,7 +96,7 @@ test("a_chat_opens_the_same_on_a_database_from_before_its_part_and_while_a_core_
   // Brought to it as it opens: the column added, the triggers and every part made again, by SQLite.
   const anew = await chatAnew(host, base);
   assert.deepEqual(sql.all("SELECT count(*), count(chat) FROM station_part")[0], [5, 5]);
-  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("(address, part, row, chat)"));
+  assert.ok(String(sql.all("SELECT sql FROM sqlite_master WHERE name = 'station_part_set'")[0]?.[0]).includes("(address, part, row, chat, formerly)"));
   assert.deepEqual([anew.made.overviewsRead, anew.made.overviews], [0, 0]);
   assert.deepEqual(anew.value, kept.value);
   // A core from before it opening the database meanwhile (a web page still open from before) keeps the parts by its

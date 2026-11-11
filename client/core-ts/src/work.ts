@@ -50,6 +50,11 @@ export const work = {
   /// Topics' values hashed whole for their version (store.ts, digest.ts `version`): as a client lets one go keeping it,
   /// and as it asks it again where what it holds is not remembered.
   versions: 0,
+  /// Columns of stations' overviews' parts read from the database and parsed (db/account.ts `#overviewColumn`), not
+  /// taken as kept, and how many characters they came to: what a list, a row or a page reads of an overview, never the
+  /// whole of it.
+  overviewParts: 0,
+  overviewPartChars: 0,
   /// Stations' whole overviews read from the database and parsed (db/account.ts `stationDoc`), not taken as kept.
   overviewsRead: 0,
   /// Stations' whole overviews decorated and shaped (views.ts #stationShownOf), not taken as made for their record.

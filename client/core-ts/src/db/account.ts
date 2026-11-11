@@ -20,7 +20,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, overviewChatOf, overviewPartOf, overviewRowOf, versionOf } from "./schema.ts";
+import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureOverviewParts, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, PART_COLUMNS, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 import { timed } from "../spent.ts";
 import { OWN_SURFACES } from "../titles.ts";
@@ -312,10 +312,8 @@ export class AccountDb {
   readonly #said: boolean = false;
   /// Whether each overview's part the chat list reads is kept (`station_part`; it could not be made without room).
   #parts = false;
-  /// Whether what each station's row reads of its overview is kept beside its part (`station_part.row`).
-  #rows = false;
-  /// Whether what a chat's page reads of its station's overview is kept beside its part (`station_part.chat`).
-  #chats = false;
+  /// The columns of each overview's part this database keeps (schema.ts PART_COLUMNS: `station_part`'s).
+  #columns = new Set<string>();
   /// How this core judges an overview as it is written, and keeps the verdict beside it (`station_fit`, made with
   /// `station_part`); none: judged as it is read, nothing kept.
   fit: OverviewFit | null = null;
@@ -375,8 +373,7 @@ export class AccountDb {
       try {
         ensureOverviewParts(sql);
         this.#parts = true;
-        this.#rows = true;
-        this.#chats = true;
+        for (const [column] of PART_COLUMNS) this.#columns.add(column);
       } catch {
         // No room to make it: each part is read of its overview, by SQLite, this time.
       }
@@ -406,9 +403,7 @@ export class AccountDb {
     }
     if (this.readOnly) {
       this.#parts = this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'station_part'").length > 0;
-      const columns = this.#parts ? this.sql.all("PRAGMA table_info(station_part)").map((r) => r[1]) : [];
-      this.#rows = columns.includes("row");
-      this.#chats = columns.includes("chat");
+      for (const r of this.#parts ? this.sql.all("PRAGMA table_info(station_part)") : []) this.#columns.add(String(r[1]));
     }
     this.#bursts = Effect.runSync(Queue.unbounded<void>());
     // The one write fiber: a burst is committed once what started it has run.
@@ -660,64 +655,52 @@ export class AccountDb {
     else drop();
   }
 
-  /// What the chat list and a station's row read of a station's overview (schema.ts overviewPartOf), undefined while
-  /// none is held: kept beside it (`station_part`, by triggers), not the overview, which is not read.
+  /// What the chat list reads of a station's overview (schema.ts overviewPartOf), undefined while none is held: kept
+  /// beside it (`station_part`, by triggers), not the overview, which is not read.
   overviewPart(station: string): J {
-    const key = K("part", station);
-    if (this.#cache.has(key)) return this.#cache.get(key) ?? undefined;
-    const text = this.#partText(station);
-    const part = text === undefined ? undefined : frozen(JSON.parse(text));
-    this.#cache.set(key, part ?? null);
-    return part;
+    return this.#overviewColumn(station, "part");
   }
 
   /// What a station's row reads of its overview (schema.ts overviewRowOf), undefined while none is held or it is not an
   /// object: kept beside its part (`station_part.row`), not in it, so the chat list reads and parses what it did.
   overviewRow(station: string): J {
-    const key = K("row", station);
-    if (this.#cache.has(key)) return this.#cache.get(key) ?? undefined;
-    const text = this.#rowText(station);
-    const row = text === undefined ? undefined : frozen(JSON.parse(text));
-    this.#cache.set(key, row ?? null);
-    return row;
-  }
-
-  /// An overview's part as the database holds it; where it could not keep them (no room, a database a newer core
-  /// wrote), made of the overview by SQLite as it is read.
-  #partText(station: string): string | undefined {
-    const r = this.#parts
-      ? this.sql.all("SELECT part FROM station_part WHERE address = ?", [station])[0]
-      : this.sql.all(`SELECT ${overviewPartOf("st.json")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [station])[0];
-    return typeof r?.[0] === "string" ? r[0] : undefined;
+    return this.#overviewColumn(station, "row");
   }
 
   /// What a chat's page reads of its station's overview (schema.ts overviewChatOf), undefined while none is held or it
   /// is not an object: kept beside its part (`station_part.chat`), not the overview, which is not read.
   overviewChat(station: string): J {
-    const key = K("chat", station);
+    return this.#overviewColumn(station, "chat");
+  }
+
+  /// The stations a station took the place of (schema.ts overviewFormerlyOf), undefined while no overview is held:
+  /// kept beside its part (`station_part.formerly`).
+  overviewFormerly(station: string): J {
+    return this.#overviewColumn(station, "formerly");
+  }
+
+  /// Column `column` of a station's part (schema.ts PART_COLUMNS), parsed, kept till it changes.
+  #overviewColumn(station: string, column: string): J {
+    const key = K(column, station);
     if (this.#cache.has(key)) return this.#cache.get(key) ?? undefined;
-    const text = this.#chatText(station);
-    const chat = text === undefined ? undefined : frozen(JSON.parse(text));
-    this.#cache.set(key, chat ?? null);
-    return chat;
+    const text = this.#columnText(station, column);
+    if (text !== undefined) {
+      work.overviewParts++;
+      work.overviewPartChars += text.length;
+    }
+    const v = text === undefined ? undefined : frozen(JSON.parse(text));
+    this.#cache.set(key, v ?? null);
+    return v;
   }
 
-  /// What a chat's page reads of a station's overview as the database holds it (`#partText`'s, for a chat's page); made
-  /// of the overview by SQLite where the part has none (it could not be kept, or a core from before it keeps the parts
-  /// now, by its own triggers: a web page still open from before).
-  #chatText(station: string): string | undefined {
-    const kept = this.#chats ? this.sql.all("SELECT chat FROM station_part WHERE address = ?", [station])[0] : undefined;
-    const r = typeof kept?.[0] === "string"
-      ? kept
-      : this.sql.all(`SELECT ${overviewChatOf("st.json")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [station])[0];
-    return typeof r?.[0] === "string" ? r[0] : undefined;
-  }
-
-  /// What a station's row reads of its overview as the database holds it (`#partText`'s, for the row).
-  #rowText(station: string): string | undefined {
-    const r = this.#rows
-      ? this.sql.all("SELECT row FROM station_part WHERE address = ?", [station])[0]
-      : this.sql.all(`SELECT ${overviewRowOf("st.json")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [station])[0];
+  /// Column `column` of a station's part as the database holds it; where it holds none (it could not keep the parts,
+  /// a database a newer core wrote, or a core from before the column keeps the parts now by its own triggers: a web
+  /// page still open from before), made of the overview by SQLite as it is read.
+  #columnText(station: string, column: string): string | undefined {
+    const kept = this.#columns.has(column) ? this.sql.all(`SELECT ${column} FROM station_part WHERE address = ?`, [station])[0] : undefined;
+    if (typeof kept?.[0] === "string") return kept[0];
+    const of = PART_COLUMNS.find(([c]) => c === column)![1];
+    const r = this.sql.all(`SELECT ${of("st.json")} FROM station AS st WHERE st.address = ? AND st.kind = 'overview' AND json_valid(st.json)`, [station])[0];
     return typeof r?.[0] === "string" ? r[0] : undefined;
   }
 
@@ -752,32 +735,22 @@ export class AccountDb {
     });
   }
 
-  /// The overview written or dropped by `write`, its part with it (the triggers): said only where the part is not what
-  /// it was, as what the chat list reads (`$overview-part`), what a station's row reads (`$overview-row`) and what a
-  /// chat's page reads (`$overview-chat`) each changed. Where the overview is not what it was, its verdict (dropped by the triggers) is this core's again, judged
-  /// as it is written (`fit`), and said (`$overview-fit`).
+  /// The overview written or dropped by `write`, its part with it (the triggers): said only where a column of the part
+  /// is not what it was, as `$overview-<column>` (what the chat list reads, `$overview-part`; a station's row,
+  /// `$overview-row`; a chat's page, `$overview-chat`; a link to a chat, `$overview-formerly`). Where the overview is
+  /// not what it was, its verdict (dropped by the triggers) is this core's again, judged as it is written (`fit`), and
+  /// said (`$overview-fit`).
   #overviewWritten(station: string, write: () => void): void {
     this.#write(() => {
-      const before = this.#partText(station);
-      const rowBefore = this.#rowText(station);
-      const chatBefore = this.#chatText(station);
+      const before = PART_COLUMNS.map(([column]) => this.#columnText(station, column));
       const key = K("st", station, "overview");
       const was = this.#cache.get(key);
       write();
-      const after = this.#partText(station);
-      if (after !== before) {
-        this.#cache.set(K("part", station), after === undefined ? null : frozen(JSON.parse(after)));
-        this.#tell({ topic: "$overview-part", station });
-      }
-      const rowAfter = this.#rowText(station);
-      if (rowAfter !== rowBefore) {
-        this.#cache.set(K("row", station), rowAfter === undefined ? null : frozen(JSON.parse(rowAfter)));
-        this.#tell({ topic: "$overview-row", station });
-      }
-      const chatAfter = this.#chatText(station);
-      if (chatAfter !== chatBefore) {
-        this.#cache.set(K("chat", station), chatAfter === undefined ? null : frozen(JSON.parse(chatAfter)));
-        this.#tell({ topic: "$overview-chat", station });
+      for (const [i, [column]] of PART_COLUMNS.entries()) {
+        const after = this.#columnText(station, column);
+        if (after === before[i]) continue;
+        this.#cache.set(K(column, station), after === undefined ? null : frozen(JSON.parse(after)));
+        this.#tell({ topic: `$overview-${column}`, station });
       }
       const now = this.#cache.get(key);
       if (now === was && now !== undefined) return;
