@@ -32,7 +32,7 @@ pub fn Tester::frames_owed(self : Tester) -> Unit {
 /// The frames owed now (Tester::draw's) after what is the hand's on mbui's own (a pointer moved, a wheel turned): not
 /// a change of the test's.
 fn Tester::drawn_now(self : Tester) -> Unit {
-  if self.past_inputs_next() {
+  if self.past_inputs_next() || self.frames_on_clock() {
     return
   }
   self.frame_now()
@@ -80,7 +80,7 @@ fn Tester::draw_owed(self : Tester, n : Int) -> Unit {
       }
       return
     }
-    if self.past_inputs_next() {
+    if self.past_inputs_next() || self.frames_on_clock() {
       return
     }
     self.frame_now()
@@ -257,6 +257,47 @@ fn Tester::between_after(self : Tester, t : Double) -> Double {
     k = k + 1.0
   }
   self.origin + k * self.between
+}
+
+///|
+/// Whether a host's frames are drawn only as the clock passes them (Tester::frames_by_clock): an input or a message
+/// waits for the next of them, as on the host, not drawn a frame ahead of the clock.
+// kept across runs: put back by each Tester (Tester::new)
+let frames_by_clock_on : Ref[Bool] = Ref(false)
+
+///|
+/// A host's frames drawn only as the clock passes them (Tester::come_to, run_for), or also as an input or a message
+/// asks for one (Tester::draw: at the display's next frame, the clock on to it): a replay's pace pass, whose inputs
+/// come at their moments however the frames fall.
+pub fn Tester::frames_by_clock(self : Tester, on : Bool) -> Unit {
+  ignore(self)
+  frames_by_clock_on.val = on
+}
+
+///|
+fn Tester::frames_on_clock(self : Tester) -> Bool {
+  self.host_frames && frames_by_clock_on.val
+}
+
+///|
+/// The clock on to `t` as a host's runs between its frames (a replay's pace pass: an input at its moment): the
+/// display's frames up to `t` drawn on the way, none at or past it drawn ahead of it; `t` itself no frame of its own.
+/// Without a host's frames, run_for.
+pub fn Tester::come_to(self : Tester, t : Double) -> Unit {
+  if !self.host_frames {
+    if t > self.fake.time {
+      self.run_for(t - self.fake.time)
+    }
+    return
+  }
+  // (a host's frames: each of them up to `t` drawn, none past it; the clock then at `t` between two of them, as a
+  // host's is when an input comes)
+  while self.tick_after(self.fake.time) <= t + due_hair {
+    self.clock_frame()
+  }
+  if t > self.fake.time {
+    self.fake.time = t
+  }
 }
 
 ///|

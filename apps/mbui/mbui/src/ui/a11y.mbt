@@ -908,6 +908,7 @@ fn a11y_took(json : String) -> Unit {
 ///|
 /// Something reads the widgets out (a screen reader on), or not, from the next frame on.
 pub fn Tester::set_a11y(self : Tester, on : Bool) -> Unit {
+  host_setting_set("set_a11y")
   self.fake.a11y = on
   self.fake.wants = true
 }

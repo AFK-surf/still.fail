@@ -42,8 +42,6 @@ let glass_window_h : Double = 700.0
 test "29-glass" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("glass"), seed~, h=glass_window_h)
-    // The recording used a Mac window whose buttons occupy the app's top row.
-    f.t.set_window_inset(true)
     f.tap("端到端测试")
     f.run_to(@ui.nav_rest())
     f.see("发消息")

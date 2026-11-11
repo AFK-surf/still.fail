@@ -1567,6 +1567,31 @@ pub fn Replay::answers_given(self : Replay, call : String) -> Int {
 }
 
 ///|
+/// When the app asked the run's `n`-th call `call` here (Replay::clock; counted from the start) and when that one's
+/// answer (an `ok` or an `error`) was given here: a pace pass's `answered` step, said not waited on (Flow::answered).
+/// None where it is not so yet.
+pub fn Replay::nth_call_at(self : Replay, call : String, n : Int) -> (Double?, Double?) {
+  let mut k = 0
+  let mut id = -1
+  let mut asked : Double? = None
+  for e in self.evs {
+    guard e.msg is Object(m) && m.get("id") is Some(Number(i, ..)) else { continue }
+    if id < 0 {
+      if e.out && kind_of(m) == "call" && name_of(m) == call {
+        k += 1
+        if k == n {
+          id = i.to_int()
+          asked = if e.done && e.at >= 0.0 { Some(e.at) } else { None }
+        }
+      }
+    } else if !e.out && !e.host && e.done && i.to_int() == id && (m.contains("ok") || m.contains("error")) {
+      return (asked, Some(e.given))
+    }
+  }
+  (asked, None)
+}
+
+///|
 /// When the answer to the run's latest call `call` given so far was given here (the clock, Replay::clock): what a
 /// test times a motion the answer starts from, as the tape has it at this pace, not as the app says it. None while
 /// none is given.

@@ -173,6 +173,7 @@ fn env_before_frames(f : FakeHost, run : String) -> Unit {
 ///|
 /// Motion reduced or not, as the person's setting, from the next frame on.
 pub fn Tester::set_reduce_motion(self : Tester, on : Bool) -> Unit {
+  host_setting_set("set_reduce_motion")
   self.fake.reduce_motion = on
   self.fake.wants = true
 }

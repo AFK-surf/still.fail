@@ -325,6 +325,8 @@ pub fn Tester::new(
   keeps_sources? : Bool = true,
   loc~ : SourceLoc,
 ) -> Tester {
+  host_settings_given.val = ""
+  frames_by_clock_on.val = false
   let f = {
     time,
     late: 0.0,
@@ -2038,6 +2040,7 @@ pub fn Tester::perf_said(self : Tester) -> (Array[Bool], Array[String]) {
 ///|
 /// The system asks for less transparency from now on, or no longer.
 pub fn Tester::set_reduce_transparency(self : Tester, on : Bool) -> Unit {
+  host_setting_set("set_reduce_transparency")
   self.fake.reduce_transparency = on
 }
 
@@ -2898,6 +2901,7 @@ pub fn Tester::window_snap_rect(self : Tester) -> (Double, Double, Double, Doubl
 ///|
 /// The window maximized or not, from the next frame on (@hostapi.window_zoomed).
 pub fn Tester::set_window_zoomed(self : Tester, zoomed : Bool) -> Unit {
+  host_setting_set("set_window_zoomed")
   self.fake.zoomed = zoomed
   self.fake.wants = true
 }
