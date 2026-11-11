@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [abfaa469a](https://github.com/AFK-surf/still.fail/commit/abfaa469ad49121f8c8ea1e22e163714af21a6bf) mbui, app: words that are part of a mark are drawn | 1.82 | 2.43 | 10.11 | 28.85 | 35.7 | 25.69 | 47.6 | 94.14 | 175.39 |
 | [c9b3fdad5](https://github.com/AFK-surf/still.fail/commit/c9b3fdad545c280f168f6c9e5d78838a064c69f1) app, core, station: 共享调试 is its switch and the cha | 1.82 | 2.43 | 10.11 | 28.85 | 35.69 | 25.68 | 47.59 | 94.64 | 164.87 |
 | [62481b40c](https://github.com/AFK-surf/still.fail/commit/62481b40c7b55489d2357425a4240f5450753109) mbui: a way called back slows to rest and sets bac | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.64 | 94.41 | 185.91 |
 | [1609696a9](https://github.com/AFK-surf/still.fail/commit/1609696a9c136ac22f5dd8c1b356ffb68ad79e80) mbui: 投进来的消息在每个宿主上都在帧之间告知，帧里告知过节点树的改动在这一帧画出来 (#539 | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.01 | 187.12 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [400a6b98e](https://github.com/AFK-surf/still.fail/commit/400a6b98e2567eaf732bea8251226ae78cc01517) mbui: what the app did while shown says its frames | 1.79 | 2.39 | 9.95 | 28.6 | 34.94 | 25.53 | 47.12 | 94.32 | 171.62 |
 | [d76d0b580](https://github.com/AFK-surf/still.fail/commit/d76d0b5800f7742bbb43bb2a569f060e5429aaf0) app, core: 密钥 says a vault waits to be keyed anew, | 1.79 | 2.39 | 9.95 | 28.59 | 34.92 | 25.52 | 47.11 | 93.72 | 147.22 |
 | [c54a7ee88](https://github.com/AFK-surf/still.fail/commit/c54a7ee88af08631d81dd933c11d6dba6044e2d8) sf: a switch of nodes is one thing to the keys and | 1.79 | 2.38 | 9.94 | 28.58 | 34.91 | 25.52 | 47.09 | 94.32 | 179.03 |
-| [35383456b](https://github.com/AFK-surf/still.fail/commit/35383456bbf71d8c66fdfeeb1c59e9df474b0953) sf: a style on a node sets what it has said so far | 1.79 | 2.38 | 9.94 | 28.58 | 34.91 | 25.52 | 47.09 | 94.23 | 176.88 |
