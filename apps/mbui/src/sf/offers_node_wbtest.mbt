@@ -24,7 +24,6 @@ priv struct OffersAt {
 /// A window with the offers' keys (offers_bindings), a field 300 wide 100 in and 100 down, a button 下面 beside it, and
 /// what the field offers (`n` of them, 甲 乙 丙, then 第3 …), opened once the field has the focus.
 fn offers_tester(n? : Int = 3) -> OffersAt raise {
-  parts_reset()
   let t = @ui.Tester::new(fn(_c) {  }, w=800.0, h=600.0, platform=0)
   let names = ["甲", "乙", "丙"]
   let keys = Array::makei(n, fn(i) { "k\{i}" })

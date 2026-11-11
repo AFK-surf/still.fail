@@ -746,3 +746,23 @@ test "the window's buttons coming into the app's top row (a Mac's window back fr
 ///|
 /// How long a test lets the host's answer and the frame it asks for come (a few of the display's frames).
 let host_answer_ms : Double = 100.0
+
+///|
+test "what a test sets for its run in `begun` its first frame shows; what it set before its Tester is the run before's, put back as the run begins" {
+  // (a value put back as a run begins by its on_reset hook, as a library's state is)
+  let state = Ref("as at first")
+  @ui.on_reset(fn() { state.val = "as at first" })
+  let first = Ref("")
+  let seen = fn(c : @ui.Ctx) {
+    if first.val == "" {
+      first.val = state.val
+    }
+    c.text(state.val, size=13.0) |> ignore
+  }
+  state.val = "set before"
+  @ui.Tester::new(seen) |> ignore
+  let before = first.val
+  first.val = ""
+  @ui.Tester::new(seen, begun=fn() { state.val = "set as it began" }) |> ignore
+  assert_eq((before, first.val), ("as at first", "set as it began"))
+}

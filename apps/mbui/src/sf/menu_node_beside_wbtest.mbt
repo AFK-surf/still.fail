@@ -6,8 +6,6 @@
 /// A window with a button 开 that opens a menu at its Right (`modal` or not), and a button 下面 under it, each counting its
 /// presses (`under`), the menu's closings unchosen counted in `cancels`.
 fn side_menu_tester(modal : Bool, open : @signals.Signal[Bool], cancels : Ref[Int], under : Ref[Int]) -> @ui.Tester {
-  // (nothing another test left presented or open: parts_reset's, presenters' with it)
-  parts_reset()
   let t = @ui.Tester::new(fn(_c) {  }, w=800.0, h=600.0, platform=0)
   t.check_looks(false)
   @ui.set_view_app(fn(root) {

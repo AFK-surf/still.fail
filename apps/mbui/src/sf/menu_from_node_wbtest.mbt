@@ -7,7 +7,6 @@
 /// opens a menu of 一 and 二 beside itself, lined up at its end, and words beside it saying whether that is open (摆着,
 /// 收着: presented_from, bound); the presenters drawn over it.
 fn mfn_tester(down : @signals.Signal[Double], opener : Ref[@view.View?]) -> @ui.Tester {
-  parts_reset()
   set_words(fn(key, _) { key })
   let t = @ui.Tester::new(fn(_c) {  }, w=1200.0, h=800.0, platform=0)
   t.check_looks(false)

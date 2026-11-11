@@ -116,17 +116,13 @@ fn reset() -> Unit {
   dv_reset()
   decide_reset()
   @settings.reset()
-  @sf.group_rows_reset()
-  @sf.page_rows_reset()
   @sfdesk.drive_rows_reset()
   ask_turns.clear()
   wide_reset()
   invite_reset()
-  // the library's viewers: the texts read, the films played, a desktop's player's 选集 and the pointer it last saw
-  @sf.viewer_reset()
-  // the menu open (@sf.menu_of, context_items)
-  @sf.parts_reset()
-  // the library as a run begins (what is presented): this is the moment the run begins where it is said by hand
+  // the library as a run begins (what is presented, the menus open, a group's and a page's rows, the viewers: the texts
+  // read, the films played, the reader's layout; the system's bars): this is the moment the run begins where it is said
+  // by hand (sf's run_begins.mbt)
   @sf.run_begin()
   outside_reset()
   attach_reset()

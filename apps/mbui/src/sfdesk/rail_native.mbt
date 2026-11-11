@@ -819,7 +819,6 @@ fn nav_hold(src : Source) -> Unit {
 fn rail_native_reset() -> Unit {
   native_workspace_anchor.val = 0
   column_short.set(false)
-  @sf.native_bars_reset()
   nav_want.val = None
   nav_held.val = fn() { None }
   nav_untaken.val = false

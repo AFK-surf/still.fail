@@ -471,12 +471,13 @@ pub let page_list_opened : Ref[(@ui.Ctx, String, Int) -> Unit] = Ref(fn(_, _, _)
 ///|
 /// The keys of the blocks of the page being drawn (`page`'s `keys`: each block's own and what it shows), taken by the
 /// list its blocks are laid out in (keyed_blocks); None: its blocks by their places.
-// kept across runs: set by each page as it is drawn and taken by its list in the same build
+// kept across runs: set by each page as it is drawn and taken by its list in the same build; put back by
+// page_rows_reset, as a run begins (run_begin)
 let page_keyed : Ref[Array[(String, String)]?] = Ref(None)
 
 ///|
 /// Each page's blocks as given and as its list made of them, by the list's key (keyed_blocks).
-// kept across runs: put back by page_rows_reset (the app's reset)
+// kept across runs: put back by page_rows_reset, as a run begins (run_begin)
 let page_lists : Map[String, @ui.ListRows[(String, () -> Unit)]] = {}
 
 ///|

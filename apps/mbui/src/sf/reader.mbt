@@ -165,6 +165,7 @@ pub(all) struct Reading {
 
 ///|
 /// The texts being read, by their key (kept while their page is open: reader_let_go).
+// kept across runs: put back by readings_reset (viewer_reset), as a run begins (run_begin)
 let readings : Map[String, Reading] = Map([])
 
 ///|
@@ -266,7 +267,7 @@ pub fn reader_panel_toggle(key : String, panel : ReaderPanel) -> Unit {
 ///|
 /// The text whose layout's panel is open (its reading's key; None, none): what the window's tree lays it out by
 /// (reader_layout_nodes), told as a reader's panel is opened or closed (reader_panel_set).
-// kept across runs: put back by readings_reset
+// kept across runs: put back by readings_reset (viewer_reset), as a run begins (run_begin)
 let layout_open : @signals.Signal[String?] = @signals.signal(None)
 
 ///|

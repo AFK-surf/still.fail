@@ -8,7 +8,6 @@ let carried_ms : Double = 300.0
 
 ///|
 test "a tool's tip, the tool carried from under a still pointer on a way: shown as it goes, shut once the way is over" {
-  parts_reset()
   let grow = @motion.Way::new(40.0)
   let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=300.0)
   t.check_looks(false)

@@ -5,8 +5,6 @@
 ///|
 /// A column: room, then a tool (复制) while `there` says so, then room; the tips' layer over all of it.
 fn tip_leaving_tester(there : @signals.Signal[Bool]) -> @ui.Tester {
-  // (nothing another test left presented or open)
-  parts_reset()
   let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
   t.check_looks(false)
   @ui.set_view_app(fn(root) {

@@ -300,6 +300,9 @@ fn leaked_state() -> Array[String] {
 /// `nav_able`: whether the system lays out the app's tabs itself (an iPhone Duo's: @hostapi.nav_bar_able), as a host
 /// says it from the app's first frame on; Tester::set_nav_able changes it later.
 /// `before`: a live renderer's frame setup, called before every frame including the first (a film's offscreen target).
+/// `begun`: what the test sets for this run that its first frame is to show (a library's state, a film pinned), said
+/// once the run has begun (the globals put back, every on_reset hook run) and before the first frame is drawn, which
+/// is drawn here: what is set before the Tester is made is the run before's, put back as this one begins.
 /// `keeps_sources`: whether the window's tree keeps where in the source each node was made (Tester::sources_at); off
 /// for a run measured as a device runs it.
 /// `loc`: where it is made, said where a check of its frames fails (frame_watch.mbt, words_over.mbt).
@@ -336,6 +339,7 @@ pub fn Tester::new(
   nav_able? : Bool = false,
   tree? : (@view.View) -> Unit,
   before? : () -> Unit,
+  begun? : () -> Unit,
   keeps_sources? : Bool = true,
   loc~ : SourceLoc,
 ) -> Tester {
@@ -574,6 +578,10 @@ pub fn Tester::new(
     bench.mode = -1
   }
   fx_reset(seed)
+  // (the run begun: what the test sets for it, before its first frame is made or drawn)
+  if begun is Some(set) {
+    set()
+  }
   // (the window a tree made once: `tree`, the view under test the old frame around its old views; else the view its
   // one old view: view_host.mbt)
   match tree {

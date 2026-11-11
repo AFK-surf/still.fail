@@ -5,7 +5,6 @@
 ///|
 /// A window holding one node styled `said` where `on()`, `plain` where not, kept in `at`.
 fn style_tester(on : @signals.Signal[Bool], plain : @ui.Style, said : @ui.Style, at : Ref[@view.View?]) -> @ui.Tester {
-  parts_reset()
   let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
   @ui.set_view_app(fn(root) {
     root.padding(Is((20.0, 20.0, 0.0, 0.0))).lines_up(Is(Some(Start))) |> ignore
@@ -84,7 +83,6 @@ test "style_node: a least height said only after the node was made is laid out, 
 /// A window 400 wide holding a row 300 wide styled `row`, two boxes in it styled `each` (as it lays them in a row), kept
 /// in `at`: where each is placed in the window.
 fn style_row_tester(row : @ui.Style, each : @ui.Style, at : Array[@view.View]) -> @ui.Tester {
-  parts_reset()
   let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
   @ui.set_view_app(fn(root) {
     root.lines_up(Is(Some(Start))) |> ignore
@@ -128,7 +126,6 @@ test "style_node: w=Cut in a row is cut short where the row has not the room, as
 test "style_node: a least width said Within is so many points where what holds it has the room, all of it where it has less" {
   let wide = @signals.signal(true, same=fn(a, b) { a == b })
   let at : Ref[@view.View?] = Ref(None)
-  parts_reset()
   let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
   @ui.set_view_app(fn(root) {
     root.lines_up(Is(Some(Start))) |> ignore
