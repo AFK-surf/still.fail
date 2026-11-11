@@ -11591,7 +11591,8 @@ pub fn[T : Eq] View::reacts(self : View, read : () -> T, f : (T) -> Unit, at_sta
 /// Tree::advance), whatever frames are drawn: what is to show, go or be done at a moment said so, never found by watching
 /// the clock. The node's: not done once it is let go, or once what it returns is called. What is to be done is waited
 /// for, as what has yet to happen (Tree::wake_waited: a test's run goes on to it, and is not idle before it); `later`,
-/// not: a time what is shown does not wait for (a toast's time on screen), as an old view's wake said `later` is.
+/// not: a time what is shown does not wait for (a toast's time on screen), as an old view's wake said `later` is. A
+/// `when` gone by as it is asked is done at the moment it is asked (Tree::cause_now then), never before it.
 #callsite(autofill(loc))
 pub fn View::at_moment(
   self : View,
@@ -11618,7 +11619,11 @@ pub fn View::at_moment(
     (unkeep.val)()
     f()
   }
-  tree.timeline.push(Once({ at: when, f: done, live, later, by: loc.to_string() }, tree.told))
+  // (a moment gone by as it is asked (a way's end that never set out: 0) is done at the moment it is asked, its cause's
+  // that one, never at the one gone by: what is committed with it is not told as of before what asked it; one between
+  // two frames, at its own (the coordinator of the migration, 2026-11-12))
+  let at = dmax(when, tree.cause_now())
+  tree.timeline.push(Once({ at, f: done, live, later, by: loc.to_string() }, tree.told))
   tree.told = tree.told + 1
   tree.marked()
   stop

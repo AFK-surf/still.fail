@@ -138,7 +138,10 @@ yet and you can add one, add it.
   value at any time computed from that. Nothing in an animation, a timer or a fiber may step frame by frame
   (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set
   off by its cause, never found by comparing frames (a laid-out box or a measured size that differs from last frame's),
-  and never by a time window.
+  and never by a time window. Nor does a cause's moment go back: a moment asked for (`View::at_moment`) that is gone
+  by as it is asked (a way's end that never set out, 0) is done at the moment it is asked, the cause of what is
+  committed with it that one; one between two frames at its own (`src/view/at_moment_past_test.mbt`; the coordinator
+  of the migration, 2026-11-12).
 - What is built never asks which frame or build it is (`Ctx::frame_number`, `Ctx::build_number`, a counter of its
   own): "this frame", "the frame before" or "this build" is no cause. Say it by its cause, recorded where the cause is
   taken, or by the moment (`Ctx::moment`). detlint's `frame-number` counts what is left and only lets it fall; the two
