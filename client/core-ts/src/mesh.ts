@@ -1507,12 +1507,12 @@ export class Mesh {
     this.#steerIf(addr);
   }
 
-  /// Steers the station's ways (`#steer`) unless they are steered already, or there is but one way there: no relays or
-  /// one, and none at an address it said (or turned off): nothing to choose between.
+  /// Steers the station's ways (`#steer`) unless they are steered already: its one way too (no relays or one, and none
+  /// at an address it said), nothing to choose between but its pings to answer, which are how a station gone from under
+  /// it is found (`#suspect`): with one relay and no address said, a view of a station killed and started again stood
+  /// still 24 s, unpinged (2026-11-11).
   #steerIf(addr: string): void {
     if (this.#steering.has(addr) || this.#live(addr).length === 0) return;
-    const at = AT_ADDRESSES.filter((kind) => (this.#said[addr]?.[kind] ?? []).length > 0 && !this.#isOff(addr, kind)).length;
-    if (this.#waysFor(addr).length + at < 2 && this.#live(addr).length < 2) return;
     this.#steering.add(addr);
     this.#env.runner.fork(this.#steer(addr));
   }

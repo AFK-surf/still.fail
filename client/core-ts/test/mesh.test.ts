@@ -595,9 +595,9 @@ sim("renews_the_grant_until_the_link_closes", async (s) => {
   const { mesh, station } = await setup(s);
   const count = { n: 0 };
   const link = await s.run(mesh.link(station.id(), grants("ok", count)));
-  // Renewed every RENEW_MS: three renewals by three of them.
+  // Renewed every RENEW_MS: three renewals by three of them (each ping presents the one it has again).
   await s.time.pass(3 * RENEW_MS + 1000);
-  assert.deepEqual(station.grants, ["ok-1", "ok-2", "ok-3", "ok-4"]);
+  assert.deepEqual([...new Set(station.grants)], ["ok-1", "ok-2", "ok-3", "ok-4"]);
   // Renewing kept the same link.
   assert.equal(await s.run(mesh.link(station.id(), grants("ok", count))), link);
   link.close();
@@ -823,10 +823,10 @@ sim("its_pings_say_when_no_way_answers_and_when_one_answers_again", async (s) =>
 /// 2026-11-11: a station killed and started again on another port, its old connection open and silent (QUIC says so
 /// only at its idle timeout): a link raced beside it at its first missed ping takes its place, not after DEAD_PINGS
 /// (a view of its screen stood still 14 s, all of it the misses counted).
-sim("a_link_whose_station_stops_answering_on_it_is_replaced_at_its_first_missed_ping", async (s) => {
+for (const relays of [1, 2]) sim(`a_link_whose_station_stops_answering_on_it_is_replaced_at_its_first_missed_ping_on_${relays}_relays`, async (s) => {
   const a = s.relay("https://a.relay.test/", { device: { ms: 20 }, station: { ms: 20 } });
   const b = s.relay("https://b.relay.test/", { device: { ms: 30 }, station: { ms: 30 } });
-  const { station, mesh, id } = await onRelays(s, [a, b]);
+  const { station, mesh, id } = await onRelays(s, [a, b].slice(0, relays));
   const old = await s.run(mesh.link(id, grants("ok", { n: 0 })));
   await request(s, old, head("/admin/api/overview"));
   await s.time.pass(2 * TICK_MS);
@@ -839,6 +839,24 @@ sim("a_link_whose_station_stops_answering_on_it_is_replaced_at_its_first_missed_
   assert.notEqual(next, old);
   assert.equal((await request(s, next, head("/admin/api/overview"))).status, 200);
   await close(s, station, mesh);
+});
+
+/// The core closed while a link is dialled beside one gone quiet: the link that opens after it is let go, not left
+/// open (the dial is the core's fiber, not the race's, so it goes on past the race; mesh.ts `#race`).
+sim("a_link_dialled_beside_one_gone_quiet_as_the_core_closes_is_let_go", async (s) => {
+  const a = s.relay("https://a.relay.test/", { device: { ms: 20 }, station: { ms: 20 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 30 }, station: { ms: 30 } });
+  const { station, mesh, id } = await onRelays(s, [a, b]);
+  const old = await s.run(mesh.link(id, grants("ok", { n: 0 })));
+  await request(s, old, head("/admin/api/overview"));
+  await s.time.pass(2 * TICK_MS);
+  const before = station.conns.length;
+  station.deadBelow = before;
+  // The station has the new connection (its credential not answered yet): the core closes.
+  await s.until(() => station.conns.length > before);
+  await s.run(mesh.close());
+  await s.time.pass(CONNECT_TIMEOUT_MS + RETIRE_MS);
+  assert.ok(station.conns.every((c: J) => c.isClosed()), "every connection closed");
 });
 
 /// The network gone a while, the station not: the link raced beside the old one at its first missed ping is let go,
