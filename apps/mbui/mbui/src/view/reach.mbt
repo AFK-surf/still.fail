@@ -164,8 +164,11 @@ fn Tree::near_said(
 /// several (where rooms meet, each has the part nearer it): a row's small button from round it, not the row's
 /// neighbour's. By a finger and a pointer alike (the user, 2026-10-26: drawn small with a keyboard and mouse, a press's
 /// room is not), so what lights under the pointer is what a click there presses. On what a drag pans whole
-/// (View::on_drag's `whole`, the old view's `capture`: a picture) the press is its own, nothing over it reached; one
-/// hosting an old view, its own (the old view reaches what it draws itself).
+/// (View::on_drag's `whole`, the old view's `capture`: a picture) the press is its own, nothing over it reached. On one
+/// hosting an old view, the old view's where it has something of its own there, as its host says (Tree::hosts_at: one
+/// of its targets or its room round one, words of it to pick; the old view reaches what it draws itself); where it has
+/// nothing, what is drawn over it is reached as though nothing were under the press, so a small key of the tree's over
+/// an app's shell has its room as anywhere (none of it reached: still the old view's).
 fn Tree::reached(
   self : Tree,
   top : Target,
@@ -181,13 +184,19 @@ fn Tree::reached(
   }
   let (ww, wh) = self.room.untracked()
   let window = (0.0, 0.0, ww, wh)
-  let cut = match top {
-    Nothing => window
-    Hosted(_) => return top
+  // (on one hosting an old view: the old view's where it has something of its own there (Tree::hosts_at); where it has
+  // nothing, as though nothing were under the press, what is drawn over it reached from round it as anywhere)
+  let (cut, on) = match top {
+    Nothing => (window, false)
+    Hosted(id) => {
+      if (self.hosts_at)(id, x, y) is Some(_) {
+        return top
+      }
+      (window, false)
+    }
     Dragged(id) if self.nodes[id.at].drags_whole => return top
-    _ => top_box
+    _ => (top_box, true)
   }
-  let on = !(top is Nothing)
   let mut best = top
   let mut best_d = 1.0e18
   for k in near {
