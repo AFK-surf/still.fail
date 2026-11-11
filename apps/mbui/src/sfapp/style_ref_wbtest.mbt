@@ -57,10 +57,10 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|waiting wide 58561:95cb81f6
     #|waiting-dark narrow 28193:277c0cc7
     #|waiting-dark wide 58388:a2810814
-    #|finding narrow 44483:4f8a0e44
-    #|finding wide 75292:aa5ff171
-    #|finding-dark narrow 44536:e796be88
-    #|finding-dark wide 75254:678ac02d
+    #|finding narrow 44483:19a881e2
+    #|finding wide 75292:ef31b5ff
+    #|finding-dark narrow 44536:d1f32a7a
+    #|finding-dark wide 75254:5f39daef
     #|code narrow 31619:9deffdf
     #|code wide 61977:d3d20b74
     #|code-dark narrow 31494:1c8c4705
@@ -69,10 +69,10 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|wrong wide 58675:b9440a2a
     #|wrong-dark narrow 28342:6b141516
     #|wrong-dark wide 58686:1155f0c7
-    #|checking narrow 35321:c76ea221
-    #|checking wide 66422:4a6b188c
-    #|checking-dark narrow 35413:be05c142
-    #|checking-dark wide 66423:3eb6872b
+    #|checking narrow 35321:285a7a7f
+    #|checking wide 66422:9d8764b2
+    #|checking-dark narrow 35413:543f0fd4
+    #|checking-dark wide 66423:5c9c74d5
     #|none narrow 37542:1dbb1867
     #|none wide 67714:168f01d1
     #|none-dark narrow 37420:fd5a9a96
@@ -154,16 +154,16 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
   inspect(out.to_string(), content=(
     #|settings narrow 77022:ba68b727
     #|station narrow 95281:75936fb1
-    #|me-reading narrow 23860:9496c484
+    #|me-reading narrow 23870:8074bf2b
     #|settings wide 169493:802f151e
     #|station wide 236631:e25020d5
-    #|me-reading wide 164139:50cbbeba
+    #|me-reading wide 164149:d62b64d1
     #|settings-dark narrow 77290:42efbe58
     #|station-dark narrow 95149:7bceef30
-    #|me-reading-dark narrow 23998:61f49844
+    #|me-reading-dark narrow 23998:5789351d
     #|settings-dark wide 169413:9d946751
     #|station-dark wide 236297:f022531f
-    #|me-reading-dark wide 164135:59f1010c
+    #|me-reading-dark wide 164135:8c5f9435
     #|
 
 
