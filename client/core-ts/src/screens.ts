@@ -806,6 +806,10 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
           const tapped = socket.tap === undefined ? false : yield* socket.tap(at[1]);
           const reader = new FrameReader();
           let seen = false;
+          // The way to the station replaced (its pings went unanswered, a new link answered beside it: mesh.ts
+          // `#suspect`): opened again on the new one, this one kept meanwhile.
+          const wire = inner.stations.requests.wire;
+          if (wire.replaced) yield* Effect.forkScoped(Effect.andThen(wire.replaced(addr), Effect.sync(() => Deferred.doneUnsafe(again, Effect.void))));
           for (;;) {
             const next = yield* Effect.raceFirst(
               Effect.map(Effect.result(socket.reply.body.take), (r) => ({ r }) as const),

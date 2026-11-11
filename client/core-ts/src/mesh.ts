@@ -249,6 +249,8 @@ export class Way {
   missed = 0;
   /// A ping of it is under way (one not answered yet is not sent again over it).
   pinging = false;
+  /// How long its last ping answered took, its first too (none answered: null).
+  answeredMs: number | null = null;
   /// What its link's replies had brought as it was last pinged: a ping late while more came is not missed (`brought`).
   rx = 0;
   /// Its first ping answered: not counted, it carried the link's own start (its first streams, the station taking the
@@ -1505,12 +1507,12 @@ export class Mesh {
     this.#steerIf(addr);
   }
 
-  /// Steers the station's ways (`#steer`) unless they are steered already, or there is but one way there: no relays or
-  /// one, and none at an address it said (or turned off): nothing to choose between.
+  /// Steers the station's ways (`#steer`) unless they are steered already: its one way too (no relays or one, and none
+  /// at an address it said), nothing to choose between but its pings to answer, which are how a station gone from under
+  /// it is found (`#suspect`): with one relay and no address said, a view of a station killed and started again stood
+  /// still 24 s, unpinged (2026-11-11).
   #steerIf(addr: string): void {
     if (this.#steering.has(addr) || this.#live(addr).length === 0) return;
-    const at = AT_ADDRESSES.filter((kind) => (this.#said[addr]?.[kind] ?? []).length > 0 && !this.#isOff(addr, kind)).length;
-    if (this.#waysFor(addr).length + at < 2 && this.#live(addr).length < 2) return;
     this.#steering.add(addr);
     this.#env.runner.fork(this.#steer(addr));
   }
@@ -1618,6 +1620,7 @@ export class Mesh {
           if (late && r._tag === "Success") {
             way.missed = 0;
             way.note(took);
+            way.answeredMs = took;
           }
           Deferred.doneUnsafe(answered, Effect.succeed(r._tag === "Success" ? took : null));
         }),
@@ -1629,6 +1632,7 @@ export class Mesh {
           way.note(PING_TIMEOUT_MS);
         } else {
           way.missed = 0;
+          way.answeredMs = ms;
           if (way.warm) way.note(ms);
           way.warm = true;
         }
@@ -1842,6 +1846,7 @@ export class Mesh {
         for (const w of this.#live(addr)) this.#watchPaths(addr, w);
         if (recording(this.#env.host)) this.#recordWays(addr);
         recordDht(this.#env.host, this.#endpoint, TICK_MS);
+        this.#suspect(addr);
         this.#choose(addr, null);
         this.#prune(addr);
         // The way direct requests moved to stayed: one lost after this is not lost soon after.
@@ -2043,13 +2048,33 @@ export class Mesh {
     });
   }
 
-  /// A link suspect against a new one opened beside it at once: whichever answers first.
-  #race(addr: string, old: Link): Effect.Effect<void> {
+  /// The way the requests go on missed its ping, its last one answered quickly, and no other is up: a new link is raced
+  /// beside it at once (`#race`), not after DEAD_PINGS. A station whose process was killed and started again on another
+  /// port leaves its old connection open and silent until QUIC's idle timeout: a view of its screen stood still 14 s,
+  /// all of it the misses counted (2026-11-11). A way whose pings take near PING_TIMEOUT_MS misses them for its slowness
+  /// alone, and is not dialled again for each.
+  #suspect(addr: string): void {
+    const cur = this.current(addr);
+    if (cur === null || this.#racing.has(addr)) return;
+    const ways = this.#live(addr);
+    const mine = ways.find((w) => w.link === cur);
+    if (mine === undefined || mine.missed !== 1 || mine.answeredMs === null || mine.answeredMs >= PING_TIMEOUT_MS / 2) return;
+    if (ways.some((w) => w !== mine && w.missed === 0)) return;
+    this.#racing.add(addr);
+    this.#env.runner.fork(this.#race(addr, cur, true));
+  }
+
+  /// A link suspect against a new one opened beside it at once: whichever answers first. `heard` (its ping missed): the
+  /// new one is let go if anything came on the old one meanwhile (QUIC's own packets too), the network only paused, and
+  /// moving would cut what is open on it.
+  #race(addr: string, old: Link, heard = false): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
+      const rx = old.conn.stats().rxBytes;
       const span = this.#env.tracer.span("mesh.race", Kind.Internal);
       span.set("stillfail.station", stationId(addr));
       const fresh = Effect.result(this.#dialAll(addr, this.#endpoint, old.credentials, false, span.context));
-      const freshFiber = yield* Effect.forkChild(fresh);
+      // (the core's, not this race's: a link it opens after the race is over is still had, to be let go)
+      const freshFiber = this.#env.runner.fork(fresh);
       const probeFiber = yield* Effect.forkChild(old.answers());
       const first = yield* Effect.raceFirst(
         Effect.map(Fiber.join(probeFiber), (answered) => ({ probe: answered }) as const),
@@ -2064,11 +2089,11 @@ export class Mesh {
         }
       } else if (first.fresh._tag === "Success") won = first.fresh.success;
       else won = (yield* Fiber.join(probeFiber)) ? "old" : "neither";
-      // The other, still going, is let be: a link it opens late is let go.
-      if (won === "old") {
-        const late = yield* Effect.forkChild(Effect.map(Fiber.join(freshFiber), (r) => (r._tag === "Success" ? r.success.close() : undefined)));
-        void late;
-      }
+      // Something came on the old one meanwhile, its probe given up or not: it is there after all.
+      if (heard && won !== "old" && old.conn.stats().rxBytes > rx) won = "old";
+      // The new one, opened or still opening, is let go (by a fiber of the core's: one of this race's would be ended with
+      // it, and a link opened already left open).
+      if (won === "old") this.#env.runner.fork(Effect.map(Fiber.join(freshFiber), (r) => (r._tag === "Success" ? r.success.close() : undefined)));
       this.#racing.delete(addr);
       span.set("stillfail.race", won === "old" ? "old" : won === "neither" ? "neither" : "new");
       span.end();
