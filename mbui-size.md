@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [4b231d061](https://github.com/AFK-surf/still.fail/commit/4b231d0618e72bab4c12dc8d748fef3c4621cdda) mbui: a page's list held stretched at an end told  | 1.84 | 2.45 | 10.24 | 28.99 | 36.2 | 25.82 | 48 | 94.57 | 170.18 |
 | [525a3f848](https://github.com/AFK-surf/still.fail/commit/525a3f848a2de213b7314f3af6cd579bfaea28e8) app: links to a station's screens and to a chat's  | 1.84 | 2.45 | 10.23 | 29 | 36.2 | 25.82 | 48 | 94.49 | 132.29 |
 | [16c0c777a](https://github.com/AFK-surf/still.fail/commit/16c0c777ace2f893323615cacc5ce638c0d5e694) app, mbui: a hang report says which kind of page w | 1.83 | 2.45 | 10.24 | 28.99 | 36.19 | 25.82 | 48 | 94.45 | 185.01 |
 | [1bf02b581](https://github.com/AFK-surf/still.fail/commit/1bf02b58130efa46b6b95f1bfa89070021955321) core: race a link at its first missed ping; a scre | 1.83 | 2.45 | 10.21 | 28.96 | 36.07 | 25.79 | 47.9 | 94.75 | 177.21 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [e4ae7785a](https://github.com/AFK-surf/still.fail/commit/e4ae7785aedbee58bbb68aa136bcf196592a55fd) mbui: a chat's picture or file shared from its pre | 1.82 | 2.43 | 10.11 | 28.85 | 35.71 | 25.69 | 47.6 | 94.24 | 179.2 |
 | [dd5043929](https://github.com/AFK-surf/still.fail/commit/dd504392987e37f66165900fb79c8183f4f04d58) core test: the byte bar refuses a topic its fixtur | 1.82 | 2.43 | 10.11 | 28.85 | 35.7 | 25.69 | 47.6 | 94.32 | 175.87 |
 | [abfaa469a](https://github.com/AFK-surf/still.fail/commit/abfaa469ad49121f8c8ea1e22e163714af21a6bf) mbui, app: words that are part of a mark are drawn | 1.82 | 2.43 | 10.11 | 28.85 | 35.7 | 25.69 | 47.6 | 94.14 | 175.39 |
-| [c9b3fdad5](https://github.com/AFK-surf/still.fail/commit/c9b3fdad545c280f168f6c9e5d78838a064c69f1) app, core, station: 共享调试 is its switch and the cha | 1.82 | 2.43 | 10.11 | 28.85 | 35.69 | 25.68 | 47.59 | 94.64 | 164.87 |
