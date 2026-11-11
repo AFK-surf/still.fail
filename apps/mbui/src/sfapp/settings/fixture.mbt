@@ -917,7 +917,7 @@ fn fx_profiles() -> Array[Json] {
     profiles.push(
       fx_profile("bx", "maple@example.com", "subscription", if fx.copy_enabled { "green" } else { "neutral" }, if fx.copy_enabled { "可用" } else { "已停用" }, "claude", "Claude 订阅", [
         ("email", str("maple@example.com")),
-        ("share", obj([("id", str("sh2")), ("role", str("user")), ("host", str("st2")), ("allow", Json::null()), ("reachable", Json::boolean(true))])),
+        ("share", obj([("id", str("sh2")), ("role", str("user")), ("host", str("st2")), ("allow", Json::null()), ("reachable", Json::boolean(true)), ("pausable", Json::boolean(true))])),
         ("enabled", Json::boolean(fx.copy_enabled)),
         ("usedBy", []),
       ]),

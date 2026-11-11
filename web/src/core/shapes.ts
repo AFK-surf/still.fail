@@ -819,6 +819,8 @@ export interface ProfileShare {
 	allow?: string[];
 	/** For a copy: whether its host answered lately (absent on the host). */
 	reachable?: boolean;
+	/** For a copy: its station pauses it (`profile.put` `enabled`), since 2026-11-11; absent on a station from before, which refuses that. */
+	pausable?: boolean;
 	/** On its host: the stations that have it (a copy, or borrowing it). */
 	users?: string[];
 }

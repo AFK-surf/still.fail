@@ -904,6 +904,7 @@ export const SHAPES: Record<string, Shape> = {
     ["host", "String", { doc: "The station that has it." }],
     ["allow", opt(vec("String")), { doc: "The stations that may use it; absent: every station of the workspace." }],
     ["reachable", opt("bool"), { doc: "For a copy: whether its host answered lately (absent on the host)." }],
+    ["pausable", opt("bool"), { doc: "For a copy: its station pauses it (`profile.put` `enabled`), since 2026-11-11; absent on a station from before, which refuses that." }],
     ["users", vec("String"), { default: true, doc: "On its host: the stations that have it (a copy, or borrowing it)." }],
   ], { doc: "How a profile is shared between the workspace's stations." }),
   ProfileTrouble: struct([

@@ -138,7 +138,7 @@ test("a shared key profile is copied to the other station, key and all; stopping
   assert.equal(copy.id, id);
   assert.equal(copy.access.key, "sk-secret");
   assert.equal(copy.share.borrowed, true);
-  assert.deepEqual(b.sharing.profileView(copy), { id, role: "user", host: A, allow: null, reachable: true });
+  assert.deepEqual(b.sharing.profileView(copy), { id, role: "user", host: A, allow: null, reachable: true, pausable: true });
   // An edit on its host reaches the copy.
   a.config.update((raw) => (raw.profiles[0].access.key = "sk-new"));
   await settle(a, b);

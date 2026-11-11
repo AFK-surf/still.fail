@@ -70,8 +70,10 @@ const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 const CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token";
 
 export type ShareRole = "host" | "user";
-/// What the overview says of a shared profile or skill: for its host also the stations that have it (`users`).
-export type ShareView = { id: string; role: ShareRole; host: string; allow: string[] | null; reachable: boolean | null; users?: string[] };
+/// What the overview says of a shared profile or skill: for its host also the stations that have it (`users`); for a
+/// copy of a profile, that this station pauses it (`pausable`: accounts/index.ts putProfile; absent on a station from
+/// before, which refuses it).
+export type ShareView = { id: string; role: ShareRole; host: string; allow: string[] | null; reachable: boolean | null; users?: string[]; pausable?: true };
 export type ShareKind = "profile" | "skill";
 
 export type SharingDeps = {
@@ -1382,7 +1384,7 @@ export class Sharing {
     if (p.share.borrowed === true) {
       const host = String(p.share.host ?? "");
       const had = this.readState().borrowed[id];
-      return { id, role: "user", host, allow: had?.allow ?? null, reachable: !this.unreachable.has(host) };
+      return { id, role: "user", host, allow: had?.allow ?? null, reachable: !this.unreachable.has(host), pausable: true };
     }
     const told = this.readState().hosted[id]?.told ?? {};
     return { id, role: "host", host: this.me() ?? "", allow: Array.isArray(p.share.allow) ? p.share.allow : null, reachable: null, users: Object.entries(told).filter(([, v]) => v >= 0).map(([k]) => k) };

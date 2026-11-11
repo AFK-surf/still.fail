@@ -484,9 +484,13 @@ export class Accounts {
         const list: Json[] = Array.isArray(raw.profiles) ? raw.profiles : [];
         const existing = list.find((p) => p?.id === id);
         if (!existing) return;
+        // Disabled by its host: said so (`hostOff`, share/index.ts placeProfile), or disabled with no pause here, as a
+        // copy placed before `hostOff` was written has it (only its host disabled one then).
+        const hostOff = existing.share.hostOff === true || (existing.enabled === false && existing.share.paused !== true);
+        if (hostOff) existing.share.hostOff = true;
         if (given.enabled === false) existing.share.paused = true;
         else delete existing.share.paused;
-        if (given.enabled === false || existing.share.hostOff === true) existing.enabled = false;
+        if (given.enabled === false || hostOff) existing.enabled = false;
         else delete existing.enabled;
         raw.profiles = list;
       });
