@@ -155,8 +155,25 @@ test("a_task_another_stations_chat_runs_is_in_that_chat", () => {
 test("a_logs_last_line_and_when", () => {
   let v: J = { text: "a\nbuilt ok\n", outputAt: NOW - 3_000, state: "running" };
   v = log(v, c());
-  assert.deepEqual([v.last, v.said], ["a\nbuilt ok", "最后输出 · 刚刚"]);
+  assert.deepEqual([v.last, v.said], ["built ok", "最后输出 · 刚刚"]);
   let empty: J = { text: "" };
   empty = log(empty, c());
-  assert.deepEqual([empty.last, empty.said], [undefined, undefined]);
+  assert.deepEqual([empty.last, empty.said, empty.lines], [undefined, undefined, []]);
+});
+
+test("a_logs_lines_each_by_its_number_its_runs_and_nothing_else_of_it", () => {
+  // (numbered from what the link kept, `from`; an empty line no runs; the text, the runs whole and `from` not sent)
+  const v = log({ text: "\u001b[32mok\u001b[39m one\n\n  two  ", outputAt: NOW - 3_000, from: 40 }, c());
+  assert.deepEqual(v.lines, [
+    { n: 40, runs: [{ text: "ok", fg: "2" }, { text: " one" }] },
+    { n: 41, runs: [] },
+    { n: 42, runs: [{ text: "  two  " }] },
+  ]);
+  assert.deepEqual(Object.keys(v).sort(), ["last", "lines", "outputAt", "said"]);
+  assert.equal(v.last, "two");
+  // Asked for its last line alone (a job's row): that and when, no lines.
+  const row = log({ text: "two", outputAt: NOW - 3_000, from: 7 }, c(), 1);
+  assert.deepEqual(row, { outputAt: NOW - 3_000, last: "two", said: "最后输出 · 刚刚" });
+  // (shaped as it goes out)
+  assert.ok("ok" in conform("JobLogView", v), JSON.stringify(conform("JobLogView", v)));
 });

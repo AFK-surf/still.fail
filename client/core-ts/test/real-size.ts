@@ -1156,16 +1156,18 @@ function netOf(now: number): J {
 /// The longest a job's log comes: what the station reads of its end (station/src/read/jobs.ts LOG_BYTES).
 const LOG_BYTES = 64 * 1024;
 /// The last `lines` lines of the chat's dev server's log, as `GET /jobs/:id/log` gives them (its colours kept): a test
-/// runner's lines with their paths, so 400 of them reach the 64 KB the station reads.
-export function jobLogOf(now: number, lines: number): J {
+/// runner's lines with their paths, so 400 of them reach the 64 KB the station reads. `more`: as it is that many lines
+/// on, each line the same as before (its time too), those it printed after them under them, its first ones gone where
+/// the station reads no more of it.
+export function jobLogOf(now: number, lines: number, more = 0): J {
   const line = (k: number) => {
     const ok = k % 17 !== 5;
     const path = `src/${pick(["views", "station", "sync", "db", "shapes"], k)}/${pick(["views", "chat-tabs", "collections", "scheduler", "account", "conform"], k * 3)}.test.ts`;
     return `\u001b[2m${new Date(now - (lines - k) * 900).toISOString()}\u001b[22m ${ok ? "\u001b[32m✔" : "\u001b[33m↻"}\u001b[39m ${path} › ${pick(TITLES, k)} \u001b[2m(${(k * 37) % 900} ms, ${(k * 13) % 40} assertions)\u001b[22m`;
   };
-  let text = Array.from({ length: lines }, (_, k) => line(k)).join("\n");
+  let text = Array.from({ length: lines }, (_, k) => line(k + more)).join("\n");
   while (new TextEncoder().encode(text).length > LOG_BYTES) text = text.slice(text.indexOf("\n") + 1);
-  return { text, outputAt: now - 2000 };
+  return { text, outputAt: now - 2000 + more * 900 };
 }
 
 /// A folder of the station's drive (its `/drive/list`): the Downloads of a machine used a year, a few hundred files.

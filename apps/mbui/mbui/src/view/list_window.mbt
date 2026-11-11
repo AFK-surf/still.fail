@@ -772,7 +772,20 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       // made and still shows let go for one come in over it)
       let foot = follows_foot || to_end
       let si = if foot {
-        all.length() - 1
+        // (at its foot, from the last measured that meets where it shows: those come under it, never measured, made
+        // as it goes down to them, what showed over them kept made. Gone out from its last alone, one come at its foot
+        // and not measured yet showed alone, every block in sight let go and made again once it was measured: a job's
+        // output following its end made every line it showed again for each line more, 2026-11-11)
+        let mut i = all.length() - 1
+        let mut from = all.length() - 1
+        while i >= 0 && all[i].top + all[i].h > top {
+          if all[i].known {
+            from = i
+            break
+          }
+          i = i - 1
+        }
+        from
       } else if all[ai].top + all[ai].h > top && all[ai].top < top + vh {
         ai
       } else {

@@ -1502,9 +1502,10 @@ fn job_said_node(v : @view.View, src : Source, r : ChatRef, id : String, j : () 
 }
 
 ///|
-/// A job's output (job_detail's, as nodes) in `v`: its last lines (the core's `jobLog`) in a terminal's colours where the
-/// core says them, else as words, on a faint ground, scrolling, from its end and kept there as lines come while it is
-/// there; words saying it wrote nothing where it did not, a spinner while it is read.
+/// A job's output (job_detail's, as nodes) in `v`: its last lines (the core's `jobLog`) in a terminal's colours as the
+/// core says them, a block a line by its number, on a faint ground, scrolling, from its end and kept there as lines come
+/// while it is there (a line more makes its block alone); words saying it wrote nothing where it did not, a spinner
+/// while it is read.
 fn job_output_node(v : @view.View, src : Source, r : ChatRef, id : String) -> Unit {
   let params : Map[String, Json] = {
     "station": Json::string(r.station),
@@ -1512,22 +1513,12 @@ fn job_output_node(v : @view.View, src : Source, r : ChatRef, id : String) -> Un
     "lines": Json::number(job_output_most),
   }
   let log = @sfbase.hold(src, @sfbase.jobs_scope(r.station), "jobLog", params)
-  // (its lines as they are now, in the theme's ink: job_output_lines's)
-  let lines : @signals.Computed[Array[Array[@ui.Run]]?] = @signals.computed(fn(_) {
+  // (its lines as they are now, each by its number, in the theme's ink: job_output_of's, a line's runs worked out as it
+  // comes and kept while it is the same)
+  let lines : @signals.Computed[@sfbase.TermLines?] = @signals.computed(fn(_) {
     guard log.get().value is Some(Object(_)) else { return None }
     let t = @sf.theme()
-    let value = src.topic("jobLog", params).get().value
-    let words = text(value, "text")
-    let runs = items(value, "runs")
-    Some(
-      if words == "" {
-        [[@ui.span(tr("android-misc.jobs.noOutput"), mono=true)]]
-      } else if runs.length() > 0 {
-        @sfbase.term_lines(runs, t.p.text, t.dark)
-      } else {
-        words.split("\n").map(fn(l) { [@ui.span(l.to_owned(), mono=true)] }).to_array()
-      },
-    )
+    Some(@sfbase.job_output_of(src, params, t.p.text, t.dark))
   })
   @sf.style_node(v, fn() { job_output_box.then(@ui.style(bg=Data(@sf.alpha(@sf.theme().p.text, job_output_ink)))) })
   // (filling what is left of its column (job_output_box's h=Full, an old view's Fill), at least its min_h, from none:
@@ -1541,29 +1532,49 @@ fn job_output_node(v : @view.View, src : Source, r : ChatRef, id : String) -> Un
     // (the room its box has, whatever it holds: from none, not from how tall all its lines are, an old list's)
     b.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
     let scroll = @view.Scroll::list()
-    let count = fn() { lines.get().map(fn(l) { l.length() }).unwrap_or(0) }
+    // (its blocks are its lines by their numbers: a line more one block more, those there before as they were; where
+    // it wrote nothing, one saying so, `job_output_none`)
+    let keys = fn() {
+      match lines.get() {
+        Some(l) if l.lines.is_empty() => [job_output_none]
+        Some(l) => l.lines.map(fn(x) { x.n })
+        None => []
+      }
+    }
+    let first = fn() {
+      match lines.get() {
+        Some(l) if !l.lines.is_empty() => l.lines[0].n
+        _ => job_output_none
+      }
+    }
     b.scrolls_window(
       scroll,
-      fn() { Array::makei(count(), fn(i) { i }) },
-      fn(row, i) {
-        @sf.style_node(row, fn() {
-          job_output_line.then(
-            @ui.style(
-              pt=@sf.room_of(if i == 0 { job_output_end } else { 0.0 }),
-              pb=@sf.room_of(if i == count() - 1 { job_output_end } else { 0.0 }),
-            ),
-          )
-        })
-        job_runs_node(
-          row,
-          fn() { lines.get().bind(fn(l) { l.get(i) }).unwrap_or([]) },
-          fn() { job_words(@sf.theme().t.caption, line=job_code_line) },
-          fn() { @sf.theme().p.text },
+      keys,
+      fn(row, n) {
+        // (its own line's runs, read again only as that line changes: the same while it is the same line)
+        let runs = @signals.computed(
+          fn(_) {
+            if n == job_output_none {
+              [@ui.span(tr("android-misc.jobs.noOutput"), mono=true)]
+            } else {
+              lines.get().bind(fn(l) { l.at(n) }).map_or([], fn(l) { l.runs })
+            }
+          },
+          same=fn(a, b) { physical_equal(a, b) },
         )
+        let top = @signals.computed(fn(_) { first() == n }, same=fn(a, b) { a == b })
+        @sf.style_node(row, fn() {
+          job_output_line.then(@ui.style(pt=@sf.room_of(if top.get() { job_output_end } else { 0.0 })))
+        })
+        job_runs_node(row, fn() { runs.get() }, fn() { job_words(@sf.theme().t.caption, line=job_code_line) }, fn() {
+          @sf.theme().p.text
+        })
       },
       est=job_code_line,
       slop=@ui.touch_slop(),
       bar=@ui.tree_scroll_bar(),
+      // (under its last line the room its first has over it)
+      foot_room=fn() { job_output_end },
       // (Ctx::list's stick_end, the old one's: made at its end, kept there as lines come while it is there, not once
       // scrolled off it; followed again once scrolled back to it)
       follows=fn() { true },
@@ -1573,6 +1584,10 @@ fn job_output_node(v : @view.View, src : Source, r : ChatRef, id : String) -> Un
     |> ignore
   })
 }
+
+///|
+/// The key of the one block of a job's output that wrote nothing: none of its lines' numbers.
+let job_output_none : Int = -1
 
 ///|
 /// How many of a job's last lines its output shows.

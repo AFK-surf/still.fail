@@ -996,7 +996,8 @@ test("archive_fallback_updates_the_session_only_after_success", async () => {
 });
 
 /// A log as the station said it (the topic goes out with its last line and when, in words, besides).
-const raw = (log: J) => ({ text: log.text, outputAt: log.outputAt });
+/// A job's log as sent: its lines' words (its last line where it is asked alone), and when it grew.
+const raw = (log: J) => ({ text: log.lines ? log.lines.map((l: J) => l.runs.map((r: J) => r.text).join("")).join("\n") : (log.last ?? ""), outputAt: log.outputAt });
 const sessionOf = (core: J, key: string) => core.inner.data.get({ topic: "session", station: ST, key }) as J;
 const reqs = (host: FakeHost) => host.requests.filter((r) => r.url.includes("/admin/api/")).length;
 
@@ -1161,6 +1162,8 @@ test("a_jobs_log_is_read_once_and_then_kept_current_by_the_stations_events", asy
   apply(host, values);
   assert.deepEqual(raw(v(values, 1)), { text: "a\nb\nc", outputAt: 9 });
   assert.deepEqual(raw(v(values, 2)), { text: "c", outputAt: 9 });
+  // (each line by its number, those there before as they were: a line more is that line)
+  assert.deepEqual(v(values, 1).lines.map((l: J) => l.n), [0, 1, 2]);
   await host.time.pass(5_000, 100);
   assert.deepEqual([gets(host, "/admin/api/jobs/j1/log?lines=400"), gets(host, "/admin/api/jobs/j1/log?lines=1")], [1, 1]);
   // Given up: the stream no longer asks for it (once its grace is over).

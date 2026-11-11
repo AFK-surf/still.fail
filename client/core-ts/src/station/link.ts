@@ -40,8 +40,8 @@ export const LONG_MISSES = 12;
 export const LINK_KEY = "link";
 /// Where cores before kept a station's last host sample (`host/<address>`): its memory keeps it now (memory.ts).
 export const HOST_KEY = "host";
-/// A job's log as its station said it, its last `lines` lines (the `jobLog` topic), in the link's memory; the most kept
-/// of a station's (one opened since its job's).
+/// A job's log as its station said it, its last `lines` lines (the `jobLog` topic), in the link's memory, with the
+/// number its first line has (log-lines.ts `Logged`); the most kept of a station's (one opened since its job's).
 export const LOG_KEY = "jobLog\n";
 export const logKey = (job: string, lines: number) => `${LOG_KEY}${job}\n${lines}`;
 export const LOGS_KEPT = 40;

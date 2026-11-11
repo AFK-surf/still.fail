@@ -29,6 +29,7 @@ import { activity as historyActivity } from "../history.ts";
 import { StationAddr } from "./addr.ts";
 import { IDEMPOTENCY_KEY, JSON_IDLE_MS, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
+import { logged } from "../log-lines.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, LETTERS, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, lettersOf, transcriptOf } from "./channel-kinds.ts";
 import { type HistoryRead, type Link, Links, type LiveView, MEMORY, RECONNECT_MAX_MS, PRESETS, filePeekKey, linkPreviewKey, logKey, messagePeekKey } from "./link.ts";
@@ -564,7 +565,7 @@ export class StationsSync {
         link.followsLogs = get(answer, "follows") === true;
         // What the stream said meanwhile is newer.
         if (!link.memory.fresh(key)) {
-          link.memory.set(key, { text: get(answer, "text") ?? "", outputAt: get(answer, "outputAt") ?? null });
+          link.memory.set(key, logged(link.memory.get(key), str(get(answer, "text")) ?? "", get(answer, "outputAt") ?? null));
           this.onChange(address, "log", topicKey({ topic: "jobLog", station: address, job, lines }));
         }
       }),
@@ -1482,7 +1483,9 @@ export class StationsSync {
         const lines = u64(get(data, "lines"));
         const link = this.#links.get(address);
         if (id && lines !== null && link) {
-          link.memory.set(logKey(id, lines), { text: get(data, "text") ?? "", outputAt: get(data, "outputAt") ?? null });
+          // (its lines numbered on from what it said before: log-lines.ts)
+          const key = logKey(id, lines);
+          link.memory.set(key, logged(link.memory.get(key), str(get(data, "text")) ?? "", get(data, "outputAt") ?? null));
           this.onChange(address, "log", topicKey({ topic: "jobLog", station: address, job: id, lines }));
         }
         return;

@@ -273,3 +273,16 @@ test "scrolls_window following its foot under a head: read 60 up from its foot, 
   k.tree.frame(600.0, 400.0) |> ignore
   assert_eq((was, k.live.get(38).map(fn(v) { v.rect().1 }), k.off_foot()), (Some(100.0), Some(100.0), 80.0))
 }
+
+///|
+test "scrolls_window following its foot under a head: a block come at its foot, not measured yet, is made alone, what showed over it kept made" {
+  // (its last two, 150 and 210 tall, showing; one come under them 30 tall, counted 48: a job's output's line more)
+  let k = foot_case(40)
+  let made = k.made.length()
+  k.keys.set(Array::makei(41, fn(i) { i }))
+  k.tree.frame(600.0, 400.0) |> ignore
+  let shown = k.live.keys().collect()
+  shown.sort()
+  // (made: the one come alone, those over it the blocks they were; at its foot, all three showing)
+  assert_eq((k.made[made:].to_array(), shown, k.off_foot()), ([40], [38, 39, 40], 0.0))
+}
