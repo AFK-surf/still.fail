@@ -405,6 +405,18 @@ fn init {
 }
 
 ///|
+/// An effect made as the frame's watch reads (a build, an after_build, a Ctx::tell, and what the window's runtime runs
+/// as the frame begins, its timers and fibers (fx_frame_start): frame_body under frame_watch_of's read) is that
+/// watch's, let go as it reads the next frame, whatever owner is set: a fault (@signals.effect_in_watch).
+fn init {
+  @signals.effect_in_watch.val = Some(fn(loc) {
+    @view.fault(
+      "an effect made as a frame is read (a build, an after_build, a Ctx::tell, a timer or fiber of the window's runtime) is let go as the next frame is read: make it in a handler, or in @signals.untracked with its owner set (@signals.set_owner); made at \{loc}",
+    )
+  })
+}
+
+///|
 /// The frames' clock (ms), followed only before `end` (Ctx::now): what moves till then and is still from then on (a
 /// spring's way, a fade), built again each frame till it is.
 #callsite(autofill(loc))

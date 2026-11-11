@@ -320,13 +320,17 @@ fn fdrag_when(ready : () -> Bool, go : () -> Unit) -> Unit {
   }
   fdrag.later.retain(fn(w) { !w.0.val })
   let done = Ref(false)
-  // (owned by nothing: what waits is no part of what reads now)
+  // (owned by nothing: what waits is no part of what reads now, neither the owner set nor what is reading as it is
+  // made: a drop is taken as a frame is read, and an effect made there is that frame's watch's, let go by the next
+  // frame before the files' reading is done: @signals.effect_in_watch)
   let owner = @signals.set_owner(None)
-  let stop = @signals.effect(fn() {
-    if !done.val && ready() {
-      done.val = true
-      @signals.untracked(go)
-    }
+  let stop = @signals.untracked(fn() {
+    @signals.effect(fn() {
+      if !done.val && ready() {
+        done.val = true
+        @signals.untracked(go)
+      }
+    })
   })
   @signals.set_owner(owner) |> ignore
   if done.val {

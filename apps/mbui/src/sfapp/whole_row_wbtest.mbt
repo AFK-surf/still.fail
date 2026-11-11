@@ -196,3 +196,26 @@ test "the chat's page's … over a late whole row: asked as the page opens, open
     whole_from(words_over(t, start, late + @ui.move_most_ms, items), items, late, late, at)
   }
 }
+
+///|
+test "an iPhone Duo: the chat's … in the system's bars chosen before its whole row is answered opens whole as that is answered" {
+  // (the system's … is chosen as a frame is read (sfdesk rail_native.mbt): what waits for the row was let go by the
+  // next frame till 2026-11-12, and nothing opened)
+  let late = 3000.0
+  new_run()
+  let src = round_trip_again(fixture("chat"), 0.0, late=fn(name, _) { if name == "chatRow" { late } else { 0.0 } })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=951.0, h=669.0, platform=1, nav_able=true)
+  let start = t.time()
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
+  t.run_for(@ui.move_most_ms)
+  // (its rows not handed yet: the system's … is the app's to open)
+  let said = t.nav_said()
+  assert_true(said.contains("\"id\":\"page/chat/more\"") && !said.contains("page/chat/more/0"), msg=said)
+  t.post(@hostapi.system_channel, "{\"nav\":\"page/chat/more\"}")
+  let items = ["重命名", "归档"]
+  whole_from(words_over(t, start, late + @ui.move_most_ms, items), items, late, late, "duo")
+  @sf.close_all_presented()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("归档") is None)
+}

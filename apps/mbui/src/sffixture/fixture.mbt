@@ -1586,18 +1586,24 @@ pub fn round_trip_again(
         }
         fix_later(due, fn() {
           guard on.val else { return }
+          // (owned by nothing: what follows the topic is the client's subscription, let go only by its unsubscribe,
+          // no part of what reads now; a timer of the window's runtime fires as a frame is read (ui's fx_frame_start),
+          // and an effect made there is that frame's watch's, let go by the next frame before the topic's changes are
+          // told: @signals.effect_in_watch)
           let owner = @signals.set_owner(None)
-          stop.val = @signals.effect(fn() {
-            let now = base.topic(name, params).get().snapshot()
-            let m : Json? = match (now.value, now.error) {
-              (Some(v), _) => Some({ "id": Json::number(id.to_double()), "value": v })
-              (_, Some(e)) => Some({ "id": Json::number(id.to_double()), "error": e })
-              _ => None
-            }
-            match m {
-              Some(m) => @signals.after_flush(fn() { if on.val { give(m) } })
-              None => ()
-            }
+          stop.val = @signals.untracked(fn() {
+            @signals.effect(fn() {
+              let now = base.topic(name, params).get().snapshot()
+              let m : Json? = match (now.value, now.error) {
+                (Some(v), _) => Some({ "id": Json::number(id.to_double()), "value": v })
+                (_, Some(e)) => Some({ "id": Json::number(id.to_double()), "error": e })
+                _ => None
+              }
+              match m {
+                Some(m) => @signals.after_flush(fn() { if on.val { give(m) } })
+                None => ()
+              }
+            })
           })
           @signals.set_owner(owner) |> ignore
         })

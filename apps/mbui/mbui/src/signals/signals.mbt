@@ -320,24 +320,45 @@ pub fn[T] computed_following(getter : (T?) -> T, dependency : Computed[Unit], sa
 }
 
 ///|
-/// An effect: `fn` run now, and again as what it read changes; the function that stops it.
-pub fn effect(f : () -> Unit) -> () -> Unit {
-  effect_of(fn() {
-    f()
-    None
-  })
+/// An effect: `fn` run now, and again as what it read changes; the function that stops it. `loc`: where it was made,
+/// said only where it is made as a watch reads (effect_in_watch), kept nowhere.
+#callsite(autofill(loc))
+pub fn effect(f : () -> Unit, loc~ : SourceLoc) -> () -> Unit {
+  effect_of(
+    fn() {
+      f()
+      None
+    },
+    loc,
+  )
 }
 
 ///|
 /// An effect whose run returns its cleanup, run before it runs again and as it is stopped.
-pub fn effect_cleanup(f : () -> (() -> Unit)) -> () -> Unit {
-  effect_of(fn() { Some(f()) })
+#callsite(autofill(loc))
+pub fn effect_cleanup(f : () -> (() -> Unit), loc~ : SourceLoc) -> () -> Unit {
+  effect_of(fn() { Some(f()) }, loc)
 }
 
 ///|
-fn effect_of(f : () -> (() -> Unit)?) -> () -> Unit {
+/// Told as an effect is made while a watch reads (Watch::read): it is that watch's whatever owner is set (owner_now
+/// takes what is reading first), and is let go as the watch reads anew, what it follows followed no longer (kitdemo's
+/// pick and op checks, made in an after_build as a frame's watch read: nothing took the host's word, 2026-11-12). ui
+/// says it as a fault (frame_watch.mbt), told where it was made; None: nothing told.
+pub let effect_in_watch : Ref[((SourceLoc) -> Unit)?] = Ref(None)
+
+///|
+fn effect_of(f : () -> (() -> Unit)?, loc : SourceLoc) -> () -> Unit {
   let e = ReactiveNode::new(WATCHING | RECURSED_CHECK, EffectNode, own=EffectOwn(f))
   let parent = owner_now()
+  match parent {
+    Some(p) if p.kind is WatchNode =>
+      match effect_in_watch.val {
+        Some(told) => told(loc)
+        None => ()
+      }
+    _ => ()
+  }
   let prev_sub = set_active_sub(Some(e))
   let prev_owner = set_owner(Some(e))
   match parent {
@@ -973,7 +994,8 @@ pub fn watch(changed : () -> Unit) -> Watch {
 /// What `f` makes, all it reads followed by the watch in place of what the last read read; not stale after it unless
 /// what it read changed as it ran (a value it read set later in it), and then `changed` is called at its end, or it
 /// was touched as it ran (Watch::touch), which it keeps. What
-/// was reading before it does not read what it reads.
+/// was reading before it does not read what it reads. An effect `f` makes is the watch's, whatever owner is set, and
+/// is let go as it reads anew (told: effect_in_watch).
 pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   // (at rest: read, nothing followed, till it wakes and reads anew)
   if self.own.resting {
