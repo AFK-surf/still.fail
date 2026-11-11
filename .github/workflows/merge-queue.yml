@@ -1,7 +1,9 @@
 # The merge queue's run (main's protection: a pull request merges through it, `gh pr merge` putting it there): what a
 # branch's pushes leave out, the mbui app's tests at 120, 60, 24 and 7 frames a second (mbui-check.yml with rates:
 # only), on what would merge, when it changes what they test (scripts/plan.sh's mbui); and mbui's own at those rates
-# (mbui-ci.yml with rates: only) when it changes mbui. Its gate is the check the queue
+# (mbui-ci.yml with rates: only) when it changes mbui; and, of the default rate's, the app's sweep of every screen on a
+# workspace of real size, whose bars two branches green apart can break together (mbui-check.yml's app-queue). Its gate
+# is the check the queue
 # waits for, as pipeline.yml's is a push's (the user, 2026-11-11: 帧率只在合并前跑: the rates on every push were four
 # fifths of a push's runner time, and pushes waited minutes for GitHub's runners).
 name: merge-queue
