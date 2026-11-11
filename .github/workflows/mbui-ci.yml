@@ -207,8 +207,8 @@ jobs:
           key: mbui-ci-native-moon-${{ github.sha }}
 
   # (each per-file bar of mbui's set beside the most one Tester of its file found under it in the runs at 60, 120 and the
-  # default rate, together (scripts/motion_bars.sh). Said, failing nothing, for now: the coordinator of the migration,
-  # 2026-11-12)
+  # default rate, together (scripts/motion_bars.sh): a bar to fall or a file to leave motion_counted fails it, once the
+  # tables were clean on main (the coordinator of the migration, 2026-11-12), and what merged since is said by rates-said)
   motion-bars:
     name: native (mbui's bars against what was found)
     needs: native
@@ -221,14 +221,20 @@ jobs:
       - uses: actions/download-artifact@v4
         continue-on-error: true
         with: { pattern: "motion-mbui-*", path: "${{ runner.temp }}/motion" }
-      - run: |
+      # (failing where a bar is to fall or a file to leave the list, once every run it was given went through: one cut
+      # short found less than there is, and a bar it set beside that would be said to fall for nothing)
+      - env:
+          STRICT: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && '' || '1' }}
+          NAME: "mbui's bars"
+        run: |
           find "$RUNNER_TEMP/motion" -type f | xargs -r cat > "$RUNNER_TEMP/motion.txt"
-          bash apps/mbui/mbui/scripts/motion_bars.sh "$RUNNER_TEMP/motion.txt" "mbui's bars against what 60, 120 and the default rate found" >> "$GITHUB_STEP_SUMMARY"
+          MOTION_BARS_FAIL=$STRICT bash apps/mbui/mbui/scripts/motion_bars.sh "$RUNNER_TEMP/motion.txt" "mbui's bars against what 60, 120 and the default rate found" >> "$GITHUB_STEP_SUMMARY" ||
+            { echo "::error title=$NAME::a bar to fall or a file to leave motion_counted: this job's summary says which, and the one line to change for each"; exit 1; }
 
   # On main, after a merge: what failed and what merged since the last run that went through, the likeliest first
   # (scripts/rates-said.sh), for whoever brought it to mend forward; it holds no pull request back
   rates-said:
-    needs: [test, native, macos, android]
+    needs: [test, native, macos, android, motion-bars]
     if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 3

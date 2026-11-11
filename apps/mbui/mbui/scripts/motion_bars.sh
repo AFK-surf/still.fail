@@ -8,12 +8,14 @@
 # may show, so it is set beside one Tester's most, never a sum of a file's. Only files a Tester of these runs
 # was made in, and none of whose Testers is not judged on how what moves goes (Tester::motion_unjudged: what it finds
 # is not looked for, so none found says nothing); given all the jobs' of a run together (a Tester made in another
-# file's helper is that file's, whose own tests may run in another job). Says, fails nothing (for now: the coordinator
-# of the migration, 2026-11-12). scripts/motion_bars.sh FILE [TITLE]; in CI to the summary of a job after the runs
-# (mbui-check's and mbui-ci's motion-bars).
+# file's helper is that file's, whose own tests may run in another job). With MOTION_BARS_FAIL=1 (CI's, where every
+# run it was given went through: a run cut short found less than there is) a bar to fall or a file to leave fails it,
+# each said as an error with the one line to change (the coordinator of the migration, 2026-11-12: once main's tables
+# were clean, so it fails only for what a change itself mended). scripts/motion_bars.sh FILE [TITLE]; in CI to the
+# summary of a job after the runs (mbui-check's and mbui-ci's motion-bars).
 f=${1:?motion_bars.sh FILE [TITLE]}
 [ -s "$f" ] || { echo "### ${2:-bars}: nothing said"; exit 0; }
-sort -u "$f" | awk -v title="${2:-bars}" '
+sort -u "$f" | awk -v title="${2:-bars}" -v strict="${MOTION_BARS_FAIL:-}" '
   # MOTION made <file>
   $2 == "made" { made[$3] = 1; next }
   # MOTION unjudged <file>
@@ -51,4 +53,17 @@ sort -u "$f" | awk -v title="${2:-bars}" '
     nu = 0; for (u in unjudged) nu++
     print nb " bars of files Testers were made in, " off " to fall or leave; " nu " files not judged on how what moves goes, their bars left as they are"
     print "```"
+    if (off > 0) {
+      print ""
+      print "A bar is how many faults one Tester made in its file may show, and only falls; a counted file found clean leaves"
+      print "the list. Each line above is mended by one line of the change that mended what was found:"
+      print ""
+      print "- `falls <check> <file>: bar B, … at most N`: in the `<check>_known` table of its package (`*_known_*test.mbt`)"
+      print "  write `(\"<file>\", N)` for `(\"<file>\", B)`; at N = 0 take the line out."
+      print "- `leaves motion_counted <file>`: take `\"<file>\"` out of the `motion_counted([…])` of its package"
+      print "  (`motion_counted_*test.mbt`): its faults fail its tests from now on."
+      print ""
+      print "(mbui AGENTS.md, Time in a test is declared; apps/mbui/mbui/scripts/motion_bars.sh.)"
+    }
+    if (strict == "1" && off > 0) exit 1
   }'

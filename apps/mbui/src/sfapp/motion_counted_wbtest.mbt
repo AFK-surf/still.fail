@@ -33,7 +33,6 @@ fn init {
     "src/sfapp/preview_wbtest.mbt",
     "src/sfapp/publish_wbtest.mbt",
     "src/sfapp/quote_image_wbtest.mbt",
-    "src/sfapp/screens_wbtest.mbt",
     "src/sfapp/service_link_wbtest.mbt",
     "src/sfapp/settings_wbtest.mbt",
     "src/sfapp/squeeze_wbtest.mbt",

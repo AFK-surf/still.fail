@@ -135,8 +135,9 @@ yet and you can add one, add it.
   judged or counted (`MOTION bar`, `known`, `made`, `unjudged`, `counted`, `counting`, `held`), and `scripts/motion_bars.sh` sets
   each bar beside the most one Tester of its file found at any of the three, in the summary of a job after them: a bar
   more than that to fall, a counted file showing none where it was counted to leave the list, a file with a Tester not judged
-  on how what moves goes (`Tester::motion_unjudged`) left out (for now said, not failed: the coordinator of the
-  migration, 2026-11-12).
+  on how what moves goes (`Tester::motion_unjudged`) left out. Either fails that job on main (once the tables were
+  clean: the coordinator of the migration, 2026-11-12), each line saying the one line of a table to change: the change
+  that mended a fault brings its bar down, or takes its file off the list, itself.
 - Motion is data: said once with where from, where to, curve and start; its
   value at any time computed from that. Nothing in an animation, a timer or a fiber may step frame by frame
   (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set

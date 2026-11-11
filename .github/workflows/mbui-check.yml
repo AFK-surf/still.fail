@@ -564,8 +564,9 @@ jobs:
     steps: *app-steps
   # (each per-file bar of the app's set beside the most one Tester of its file found under it in the runs at 60, 120
   # and the default rate, all their jobs' together: a file's tests run in one job, but a Tester made in another file's
-  # helper is filed under that file, whose own tests may run in another (scripts/motion_bars.sh). Said, failing
-  # nothing, for now: the coordinator of the migration, 2026-11-12)
+  # helper is filed under that file, whose own tests may run in another (scripts/motion_bars.sh). A bar to fall or a
+  # file to leave motion_counted fails it, once the tables were clean on main (the coordinator of the migration,
+  # 2026-11-12), and what merged since is said by rates-said)
   motion-bars:
     name: native (the app's bars against what was found)
     needs: [native, replay-fps, app, app-rates]
@@ -578,16 +579,22 @@ jobs:
       - uses: actions/download-artifact@v4
         continue-on-error: true
         with: { pattern: "motion-*", path: "${{ runner.temp }}/motion" }
-      - run: |
+      # (failing where a bar is to fall or a file to leave the list, once every run it was given went through: one cut
+      # short found less than there is, and a bar it set beside that would be said to fall for nothing)
+      - env:
+          STRICT: ${{ (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) && '' || '1' }}
+          NAME: "the app's bars"
+        run: |
           # (the app's jobs' alone: mbui's own, motion-mbui-*, are mbui-ci's)
           find "$RUNNER_TEMP/motion" -mindepth 1 -maxdepth 1 -type d ! -name 'motion-mbui-*' -exec find {} -type f \; | xargs -r cat > "$RUNNER_TEMP/motion.txt"
-          bash apps/mbui/mbui/scripts/motion_bars.sh "$RUNNER_TEMP/motion.txt" "the app's bars against what 60, 120 and the default rate found" >> "$GITHUB_STEP_SUMMARY"
+          MOTION_BARS_FAIL=$STRICT bash apps/mbui/mbui/scripts/motion_bars.sh "$RUNNER_TEMP/motion.txt" "the app's bars against what 60, 120 and the default rate found" >> "$GITHUB_STEP_SUMMARY" ||
+            { echo "::error title=$NAME::a bar to fall or a file to leave motion_counted: this job's summary says which, and the one line to change for each"; exit 1; }
 
   # On main, after a merge: what failed, at the rates or the default's, and what merged since the last run that went
   # through, the likeliest first (scripts/rates-said.sh), for whoever brought it to mend forward. Red here holds no pull
   # request back. (actions: read: this run's jobs and main's runs before it; its callers grant it)
   rates-said:
-    needs: [native, app-build, replay-build, replay-fps, app, app-rates]
+    needs: [native, app-build, replay-build, replay-fps, app, app-rates, motion-bars]
     if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 3
