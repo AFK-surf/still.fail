@@ -692,13 +692,34 @@ fn on_pixels(v : Double, sc : Double) -> Double {
 }
 
 ///|
-/// Where a glyph's picture goes down the screen: its line's baseline `base` set on the pixels first, then the glyph's
-/// own offset `oy` from it. A host draws each picture with the baseline on a pixel row (win_text.cpp), so every glyph
-/// of a line lands on the same row; rounded as one sum, a baseline half way between two rows went up for one glyph
-/// and down for the next, by how its offset's float rounded (at 150%, a flat-topped "u" a pixel above its "p" and "s").
-fn on_glyph_row(base : Double, oy : Double, sc : Double) -> Double {
-  on_pixels(on_pixels(base, sc) + oy, sc)
+/// Where a glyph's picture goes down the screen, its words `base` under the top `top` of the box they are in: its line's
+/// baseline set on the pixels first, then the glyph's own offset `oy` from it. A host draws each picture with the
+/// baseline on a pixel row (win_text.cpp), so every glyph of a line lands on the same row; rounded as one sum, a
+/// baseline half way between two rows went up for one glyph and down for the next, by how its offset's float rounded (at
+/// 150%, a flat-topped "u" a pixel above its "p" and "s").
+/// Words are rigid in their box: the top is taken apart into its nearest whole pixel and what is left of it, the
+/// baseline's offset added to what is left, and that put on the pixel half way up (a tie, and what is within
+/// tie_slack under one, going up), then the glyph's own offset in whole pixels; so a box moved by whole pixels, its top
+/// on them or not, draws its words the same to the bit (rounded as one sum with the top, an offset half way between two
+/// pixels went to either by the float bits of the top: a row's words a pixel higher as it was kept, moved, than drawn
+/// anew at 2.75 pixels a point), and a box on a motion's way has its baseline on the pixel nearest where it falls.
+/// Not mended here: across, glyph_x puts a sum on the pixels the same way, so a list that scrolls sideways may still
+/// have its words step in their rows; and an old view's list (ListRows), whose rows are not put on the pixels, has its
+/// words on the pixel nearest where they fall while its rows' grounds are where they fall.
+fn on_glyph_row(top : Double, base : Double, oy : Double, sc : Double) -> Double {
+  let t = top * sc
+  let tp = t.round()
+  let f = t - tp
+  // (half way up, as the sum was where it is on the screen: an offset is the same wherever its box is)
+  let up = fn(v : Double) { (v + 0.5).floor() }
+  (tp + (f + base * sc + 0.5 + tie_slack).floor() + up(oy * sc)) / sc
 }
+
+///|
+/// How far under half way between two pixels a baseline still goes up (on_glyph_row): what is left of a top past its
+/// whole pixel carries the float bits of the sums it came of (about a millionth of a millionth of a pixel), which
+/// decided a tie by where the box stood; what is laid out falls on a tie or well off one, never a millionth under it.
+let tie_slack : Double = 1.0e-6
 
 ///|
 /// How far the old view painted now is carried off the pixels from where it was laid out (an old view hosted in a node
@@ -716,11 +737,11 @@ fn glyph_x(x : Double, sc : Double) -> Double {
 }
 
 ///|
-/// Where a glyph's picture goes down, its line's baseline `base` as painted, then its own offset `oy` (on_glyph_row): on
-/// the pixels where it is laid out (glyphs_carried).
-fn glyph_row(base : Double, oy : Double, sc : Double) -> Double {
+/// Where a glyph's picture goes down, its line's baseline `base` under the top `top` of its box as painted, then its own
+/// offset `oy` (on_glyph_row): on the pixels where it is laid out (glyphs_carried).
+fn glyph_row(top : Double, base : Double, oy : Double, sc : Double) -> Double {
   let m = glyphs_carried[1]
-  on_glyph_row(base - m, oy, sc) + m
+  on_glyph_row(top - m, base, oy, sc) + m
 }
 
 ///|
@@ -1168,7 +1189,7 @@ fn Ctx::emit_text(
       0.0
     }
     let gx = glyph_x(ox + dx + tl.xs[c] + s.pad + g.ox / z, sc)
-    let gy = glyph_row(top + tl.ascent, g.oy / z, sc)
+    let gy = glyph_row(oy, line.to_double() * tl.line_h + tl.ascent, g.oy / z, sc)
     let adaptive = glass_paint.ink_r > 0.0 && !g.color
     // (the uniform scale is about its ink's middle; an extra horizontal scale is about its advance's middle, so a
     // glyph stays in its place while that place changes width)
