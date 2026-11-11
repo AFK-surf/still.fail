@@ -940,6 +940,16 @@ let outside_stood = 13
 let outside_perf = 14
 
 ///|
+/// A run of the password manager's `op` ended (@hostapi.OpRun's id: passwords.mbt), told as it does (macOS, Windows):
+/// what it said taken then into what reads it (OpRun::done).
+let outside_op = 15
+
+///|
+/// The system's autofill gave the login the person picked (id 1: @hostapi's autofill.mbt), told as it does (Android):
+/// taken then into what reads it (autofill_take).
+let outside_autofill = 16
+
+///|
 /// Every kind above, by its name: each its own number (outside_kinds_wbtest.mbt), the hosts' named the same
 /// (Native.java's OUTSIDE_*, apple.h's, win.h's and android_host.c's MB_OUTSIDE_*, web/host.js's OUTSIDE_*), every
 /// `outside_*` here in it: scripts/chk outside-kinds, host_contract.sh HOST kinds
@@ -960,6 +970,8 @@ fn outside_kinds() -> Array[(String, Int)] {
     ("streamed", outside_streamed),
     ("stood", outside_stood),
     ("perf", outside_perf),
+    ("op", outside_op),
+    ("autofill", outside_autofill),
   ]
 }
 
@@ -1047,7 +1059,8 @@ fn answers_by_the_frame() -> Unit {
 }
 
 ///|
-/// Who takes the host's answer of a kind that is taken as it comes (outside_pick, outside_native), by its key
+/// Who takes the host's answer of a kind that is taken as it comes (outside_pick, outside_native, outside_op,
+/// outside_autofill), by its key
 /// (outside_key): told by the host's event, it takes the answer from the host into what reads it, and says whether it
 /// was there to take.
 // kept across runs: emptied by each Tester (reset_globals)
@@ -1065,6 +1078,22 @@ fn outside_takes(kind : Int, id : Int, take : () -> Bool) -> Unit {
     }
   }
   outside_takers[k] = take
+}
+
+///|
+/// What waited on the host's answer of `kind` for `id` let go of (an op's run ended by the app, an autofill's ask let
+/// go): nothing takes it any more, a word that comes for it after is nothing.
+fn outside_let_go(kind : Int, id : Int) -> Unit {
+  let k = outside_key(kind, id)
+  outside_takers.remove(k)
+  answers_waiting.remove(k)
+}
+
+///|
+/// What @hostapi waits on (its op's runs, its autofill's ask) waited on here: taken as the host's word comes.
+fn init {
+  @hostapi.outside_waits.val = fn(kind, id, take) { outside_takes(kind, id, take) }
+  @hostapi.outside_lets_go.val = fn(kind, id) { outside_let_go(kind, id) }
 }
 
 ///|
@@ -1136,7 +1165,7 @@ fn on_outside_now(kind : Int, id : Int, state : Int) -> Unit {
   }
   // (what was picked, a native call's answer: taken now into what reads it, Pick::files and NativeCall::got, each a
   // signal; nothing else of the frame built again for it, no frame asked but where something reads it)
-  if kind == outside_pick || kind == outside_native {
+  if kind == outside_pick || kind == outside_native || kind == outside_op || kind == outside_autofill {
     outside_take(kind, id)
     return
   }

@@ -6,10 +6,16 @@
 // (win_passwords.c); none elsewhere (`passwords` is false there).
 
 ///|
-/// A run of `op` under way (`op_run`).
+/// A run of `op` under way (`op_run`): how it ended, once the host's word says it has (`done`).
 pub struct OpRun {
   priv id : Int
+  priv said : @signals.Signal[OpDone?]
 }
+
+///|
+/// The kind the host's word that a run of `op` ended is told by (set_outside; ui's hostcall.mbt `outside_op`, the hosts'
+/// MB_OUTSIDE_OP).
+let op_told : Int = 15
 
 ///|
 /// How a run of `op` ended: its exit code (-1: it could not be started, or there is no `op` here), its standard output
@@ -35,23 +41,32 @@ pub fn op_run(args : Array[String]) -> OpRun? {
   if id <= 0 {
     None
   } else {
-    Some({ id, })
+    let r : OpRun = { id, said: @signals.signal(None) }
+    (outside_waits.val)(op_told, id, fn() { r.take() })
+    Some(r)
   }
 }
 
 ///|
-/// How it ended, once it has; None until then. A frame is asked for as it ends, so a view can look each frame.
-pub fn OpRun::done(self : OpRun) -> OpDone? {
-  // (the host's own state, come with no event: what reads it as it is built, built each frame while it does)
-  (polled.val)()
+/// What the host says of how it ended taken, as its word comes (outside_waits): whether it was there to take.
+fn OpRun::take(self : OpRun) -> Bool {
+  guard self.said.untracked() is None else { return false }
   let s = pw_out(self.id)
   if s == "" {
-    return None
+    return false
   }
   // (from the host: its exit code, its output and its error output, each ended by a unit separator)
   let parts = s.split("\u{1f}").map(fn(p) { p.to_owned() }).to_array()
   let code = @string.parse_int(parts.get(0).unwrap_or("-1")[:]) catch { _ => -1 }
-  Some({ code, out: parts.get(1).unwrap_or(""), err: parts.get(2).unwrap_or("") })
+  self.said.set(Some({ code, out: parts.get(1).unwrap_or(""), err: parts.get(2).unwrap_or("") }))
+  true
+}
+
+///|
+/// How it ended, once the host's word says it has; None until then. A signal's read: what reads it (a node's binding
+/// or `reacts`, an old view's build) is told as it ends, and reads the same however often.
+pub fn OpRun::done(self : OpRun) -> OpDone? {
+  self.said.get()
 }
 
 ///|
@@ -86,6 +101,7 @@ pub fn OpDone::trouble(self : OpDone) -> OpTrouble? {
 ///|
 /// Forgets it (its output, and the process if it still runs).
 pub fn OpRun::end(self : OpRun) -> Unit {
+  (outside_lets_go.val)(op_told, self.id)
   pw_end(self.id)
 }
 

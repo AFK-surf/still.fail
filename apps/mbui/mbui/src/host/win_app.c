@@ -85,7 +85,7 @@ static POINT drag_at;
 // a message posted from outside (mb_post_wake), a stream shown by its layer that said something (mb_app_streamed:
 // wParam its id), each told the app between frames, which asks for a frame only where something is left for one
 enum { WM_MB_DRAG = WM_APP + 6, WM_MB_POSTED = WM_APP + 7, WM_MB_STREAMED = WM_APP + 8, WM_MB_CALL = WM_APP + 9,
-       WM_MB_CAUGHT_KEY = WM_APP + 10, WM_MB_PICKED = WM_APP + 11 };  // (win_life.h has 1 to 5, win.h 4)
+       WM_MB_CAUGHT_KEY = WM_APP + 10, WM_MB_PICKED = WM_APP + 11, WM_MB_TOLD = WM_APP + 12 };  // (win_life.h has 1 to 5, win.h 4)
 static void mb_app_picked(void);  // a pick read on its thread: the app told between frames (WM_MB_PICKED)
 static int frames_drawn;
 static int sizing;  // inside the modal move/size loop, where our loop does not run
@@ -667,6 +667,7 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_MB_POSTED: told_between(MB_OUTSIDE_POSTED, 0); return 0;
     case WM_MB_STREAMED: told_between(MB_OUTSIDE_STREAMED, (int)wp); return 0;
     case WM_MB_PICKED: picks_between(); return 0;
+    case WM_MB_TOLD: told_between((int)wp, (int)lp); return 0;
     case WM_MB_CALL: ((void (*)(void *))wp)((void *)lp); return 0;  // mb_app_call
     case WM_MB_DRAG:
       if (GetKeyState(VK_LBUTTON) < 0) {
@@ -997,6 +998,7 @@ static void mb_post_wake(void) { PostMessageW(hwnd, WM_MB_POSTED, 0, 0); }
 
 void mb_app_streamed(int id) { PostMessageW(hwnd, WM_MB_STREAMED, (WPARAM)id, 0); }
 static void mb_app_picked(void) { PostMessageW(hwnd, WM_MB_PICKED, 0, 0); }
+void mb_app_told(int kind, int id) { PostMessageW(hwnd, WM_MB_TOLD, (WPARAM)kind, (LPARAM)id); }
 
 void mb_app_call(void (*fn)(void *), void *arg) { PostMessageW(hwnd, WM_MB_CALL, (WPARAM)fn, (LPARAM)arg); }
 

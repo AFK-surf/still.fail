@@ -2260,7 +2260,7 @@ moonbit_string_t mb_host_env(moonbit_string_t name) {
 }
 
 // The app in front or not (@hostapi.set_app_state): 1 while the window is shown (not hidden, minimized or covered), | 2
-// while it is also the active app's key window; told as any of that changes.
+// while it is also the active app's key window; told as any of that changes, and only then.
 static void (*state_cb)(int32_t);
 void mb_host_set_app_state(void (*f)(int32_t)) { state_cb = f; }
 static void tell_state(void) {
@@ -2271,7 +2271,12 @@ static void tell_state(void) {
   int front = shown && NSApp.isActive && w.isKeyWindow;
   // (not in front: what drawing holds given back, the frame shown kept; a frame after makes what it needs again)
   if (!front) mb_render_trim();
-  state_cb((shown ? 1 : 0) | (front ? 2 : 0));
+  // (told only as it changes: the same said again tells the app nothing, and draws nothing)
+  static int told = -1;
+  int s = (shown ? 1 : 0) | (front ? 2 : 0);
+  if (s == told) return;
+  told = s;
+  state_cb(s);
   [the_view requestFrame];
 }
 

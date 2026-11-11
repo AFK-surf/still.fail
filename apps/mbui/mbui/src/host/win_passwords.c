@@ -1,6 +1,6 @@
 // This device's password manager for the Windows host (host_native.mbt `pw_*`, hostapi/passwords.mbt): 1Password's
 // command-line tool `op.exe`, run without a window with the arguments the app gives, its output kept until the app
-// takes it: apple_passwords.m's way. `op` signed in through 1Password's desktop app asks the person itself (Windows
+// takes it: apple_passwords.m's way, the app told as it ends (MB_OUTSIDE_OP, between frames: win_app.c's mb_app_told). `op` signed in through 1Password's desktop app asks the person itself (Windows
 // Hello, in its own window). Found where winget and 1Password's installer put it, else on PATH.
 #include <windows.h>
 #include <stdio.h>
@@ -8,7 +8,6 @@
 #include <string.h>
 #include "win.h"
 
-void mb_host_request_frame(void);
 
 typedef struct run {
   int id;
@@ -129,8 +128,9 @@ static DWORD WINAPI wait_run(LPVOID p) {
     free(done);
   }
   ReleaseSRWLockExclusive(&lock);
+  int id = w->id;
   free(w);
-  mb_host_request_frame();
+  mb_app_told(MB_OUTSIDE_OP, id);
   return 0;
 }
 
@@ -145,7 +145,7 @@ static int ended(int id, const char *why) {
   if (r) r->done = done;
   else free(done);
   ReleaseSRWLockExclusive(&lock);
-  mb_host_request_frame();
+  mb_app_told(MB_OUTSIDE_OP, id);
   return id;
 }
 

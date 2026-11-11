@@ -42,6 +42,8 @@ fn main {
   let posted = @ui.env("MBUI_POSTCHECK") == "1"
   // MBUI_PICKCHECK=1: what the system's picker gave told between frames, said on the log (pickcheck.mbt)
   let picked = @ui.env("MBUI_PICKCHECK") == "1"
+  // MBUI_OPCHECK=ran|missing: how a run of `op` ended told between frames, said on the log (opcheck.mbt)
+  let op_case = @ui.env("MBUI_OPCHECK")
   if imaged != "" {
     @gallery.image_check_follow()
   }
@@ -56,6 +58,8 @@ fn main {
       @gallery.post_check_run(c)
     } else if picked {
       @gallery.pick_check_run(c)
+    } else if op_case != "" {
+      @gallery.op_check_run(c, op_case)
     } else if updated != "" {
       @gallery.update_check_run(c, updated)
     } else if linked {

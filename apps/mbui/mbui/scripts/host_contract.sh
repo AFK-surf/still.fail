@@ -35,6 +35,8 @@
 #        (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt)
 #   scripts/host_contract.sh linux posted       what the host posts from outside the frames told between frames, not
 #        taken as a frame begins (kitdemo's MBUI_POSTCHECK, src/kitdemo/gallery/postcheck.mbt)
+#   scripts/host_contract.sh mac op             how a run of 1Password's `op` ended told between frames and read, with a
+#        stand-in `op` first on PATH and with none (kitdemo's MBUI_OPCHECK, src/kitdemo/gallery/opcheck.mbt)
 #   scripts/host_contract.sh linux picked       what the system's picker gave told between frames, not taken as a frame
 #        begins (kitdemo's MBUI_PICKCHECK with MBUI_PICK_FILES, src/kitdemo/gallery/pickcheck.mbt)
 #   scripts/host_contract.sh linux notices      (a session bus) a notification the app shows kept, and clicked by the
@@ -901,6 +903,28 @@ INSTALL
       echo "posted contract (linux): what was posted not told between frames"; tail -20 $O/posted.log; exit 1
     fi
     echo "posted contract (linux): told between frames" ;;
+  op)
+    # (macOS) a run of `op` (apple_passwords.m: Homebrew's and 1Password's places, then PATH) with a stand-in first on
+    # PATH that prints `[{"opcheck":true}]` and ends 0, then with none anywhere: each told between frames (MB_OUTSIDE_OP)
+    # and read (kitdemo's MBUI_OPCHECK, src/kitdemo/gallery/opcheck.mbt). The places looked in before PATH must hold no
+    # `op` on this machine, or the stand-in is not the one run: said so, and failed.
+    [ "$H" = mac ] || { echo "op contract: macOS only (Windows' looks for op.exe: no stand-in made here)"; exit 1; }
+    for p in /opt/homebrew/bin/op /usr/local/bin/op /usr/bin/op; do
+      [ -x "$p" ] && { echo "op contract (mac): $p is installed on this machine, run before any stand-in"; exit 1; }
+    done
+    mkdir -p "$O/opbin"
+    printf '#!/bin/sh\necho %s\nexit 0\n' "'[{\"opcheck\":true}]'" > "$O/opbin/op"
+    chmod +x "$O/opbin/op"
+    for c in ran missing; do
+      if [ $c = ran ]; then path="$PWD/$O/opbin:/usr/bin:/bin"; else path="/usr/bin:/bin"; fi
+      r=0
+      run "MBUI_OPCHECK=$c PATH=$path" $O/op-$c.log || r=$?
+      grep -a "OPCHECK" $O/op-$c.log || true
+      if [ $r != 0 ] || ! grep -aq "OPCHECK told between frames" $O/op-$c.log; then
+        echo "op contract (mac, $c): not told between frames, or not read as it ended"; tail -20 $O/op-$c.log; exit 1
+      fi
+    done
+    echo "op contract (mac): a run ended and none to run, each told between frames and read" ;;
   picked)
     # (Linux) what the system's picker gave (MBUI_PICK_FILES: a file of the run's, no dialog) told between frames, not
     # taken as a frame begins (kitdemo's MBUI_PICKCHECK, src/kitdemo/gallery/pickcheck.mbt): the app ends 0 only where
@@ -1003,5 +1027,5 @@ INSTALL
     echo "links contract (mac): opened with a link of its own scheme, the app said it" ;;
   kinds)
     scripts/chk outside-kinds $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge, secret, a11y, fontscale, posted, picked; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds, update, links, notices, pdf, play, station, badge, secret, a11y, fontscale, posted, picked, op; ios: free, done)" >&2; exit 1 ;;
 esac
