@@ -1091,6 +1091,48 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("a copy of another station's profile is paused and used again here, nothing else of it edited here", async () => {
+    const data = temp("borrowed-paused");
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));
+    const moved: string[] = [];
+    const shared = { status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: null }), view: () => ({ id: "s1", role: "user", host: "H", allow: null, reachable: true, pausable: true as const }) };
+    const t = await rig({ data, shared, hub: { accounts: { setHealth: () => {}, healthOf: () => ({}) }, profileGone: async (id) => { moved.push(id); } } });
+    try {
+      assert.equal(t.view("bx")!.enabled, true);
+      assert.equal((await t.call("PUT", "/profiles/bx", { name: "Mine" }))[0], 409, "a copy is edited on its host");
+      assert.equal((await t.call("PUT", "/profiles/bx", { enabled: false, name: "Mine" }))[0], 409);
+      assert.equal((await t.call("PUT", "/profiles/bx", { enabled: false }))[0], 200);
+      assert.equal(t.view("bx")!.enabled, false);
+      assert.deepEqual(moved, ["bx"], "its sessions here move off it");
+      assert.equal((t.profile("bx") as any).share.paused, true);
+      assert.equal((await t.call("PUT", "/profiles/bx", { enabled: false }))[0], 200);
+      assert.deepEqual(moved, ["bx"], "paused already: nothing moves again");
+      assert.equal((await t.call("PUT", "/profiles/bx", { enabled: true }))[0], 200);
+      assert.equal(t.view("bx")!.enabled, true);
+      assert.equal((t.profile("bx") as any).share.paused, undefined);
+      assert.notEqual(t.profile("bx")!.enabled, false);
+    } finally { await t.close(); }
+  });
+
+  test("a copy its host disabled stays disabled as it is used again here, said so or placed before that was said", async () => {
+    // (`hostOff` is written as a copy is placed; one placed before it was, disabled, its host disabled: nothing else did)
+    for (const share of [{ id: "s1", borrowed: true, host: "H", hostOff: true }, { id: "s1", borrowed: true, host: "H" }]) {
+      const data = temp("borrowed-host-off");
+      writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, enabled: false, share }], connects: [] }));
+      const shared = { status: async () => ({ check: { state: "ok", detail: "host", models: null, checkedAt: 1 }, quota: null }), view: () => null };
+      const t = await rig({ data, shared });
+      try {
+        assert.equal((await t.call("PUT", "/profiles/bx", { enabled: true }))[0], 200);
+        assert.equal(t.view("bx")!.enabled, false, `its host disabled it (${JSON.stringify(share)}): using it again is the host's to say`);
+        assert.equal((await t.call("PUT", "/profiles/bx", { enabled: false }))[0], 200);
+        assert.equal((t.profile("bx") as any).share.paused, true);
+        assert.equal(t.view("bx")!.enabled, false);
+        assert.equal((await t.call("PUT", "/profiles/bx", { enabled: true }))[0], 200);
+        assert.equal(t.view("bx")!.enabled, false, "paused here and ended: still its host's disabling");
+      } finally { await t.close(); }
+    }
+  });
+
   test("a shared Codex host signing out updates the borrowed check even when there is no login to lend", async () => {
     const data = temp("borrowed-signed-out");
     writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "bx", runtime: "codex", home: "homes/bx", access: { kind: "subscription" }, share: { id: "s1", borrowed: true, host: "H" } }], connects: [] }));

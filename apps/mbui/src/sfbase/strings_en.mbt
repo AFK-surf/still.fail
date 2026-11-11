@@ -2298,6 +2298,7 @@ let en : Map[String, String] = {
   "web-pages.profiles.disable": "Disable",
   "web-pages.profiles.disableBody": "{name} stops using {runtime}'s sign-in on this machine. The sign-in itself is kept and can be used again later. Sessions using it switch to another Profile, or stop if none is available.",
   "web-pages.profiles.disableConfirm": "Disable “{name}”?",
+  "web-pages.profiles.disableCopyBody": "This station stops using this shared Profile; the station sharing it is not affected, and it can be enabled here again. Sessions using it move to another Profile, or stop if none is available.",
   "web-pages.profiles.disabled": "Disabled",
   "web-pages.profiles.disableKeyBody": "The key and its settings are kept, and can be enabled again. Sessions using it move to another Profile, or stop if none is available. Stations with shared copies sync the disabled state after they update.",
   "web-pages.profiles.env": "Environment variables",

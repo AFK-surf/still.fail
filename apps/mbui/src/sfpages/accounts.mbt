@@ -192,6 +192,13 @@ fn profile_copy(p : Json?) -> Bool {
 }
 
 ///|
+/// Whether a copy of another station's profile is one its station pauses (`share.pausable`, said since 2026-11-11; a
+/// station from before refuses `enabled` on a copy).
+fn profile_pausable(p : Json?) -> Bool {
+  profile_copy(p) && flag(field(p, "share"), "pausable") && has(p, "enabled")
+}
+
+///|
 /// Whether a subscription's sign-in is under way (its `login`'s state).
 fn signing_in(p : Json?) -> Bool {
   ["starting", "needs_code", "needs_approval", "verifying"].contains(text(field(p, "login"), "state"))
@@ -462,10 +469,10 @@ fn runtime_tag(r : String) -> String {
 }
 
 ///|
-/// Its ⋯ in node `a` (but for a copy of another station's): pressed, its menu beside it (profile_menu), lined up at its
-/// end.
+/// Its ⋯ in node `a` (a copy of another station's: only where its station says it pauses it, `share.pausable`; one from
+/// before refuses that): pressed, its menu beside it (profile_menu), lined up at its end.
 fn profile_more_node(a : @view.View, core : Core, here : () -> Here, address : String, p : () -> Json?) -> Unit {
-  a.show(fn() { !profile_copy(p()) }, fn(m) {
+  a.show(fn() { !profile_copy(p()) || profile_pausable(p()) }, fn(m) {
     // (beside itself, as it is pressed)
     @sf.icon_action_opens_node(m, "more", fn() { @sf.t("common.more") }, fn(at) {
       let (x, y, w, h) = at.placed_window_now()
@@ -477,13 +484,16 @@ fn profile_more_node(a : @view.View, core : Core, here : () -> Here, address : S
 
 ///|
 /// Its menu, beside what opened it (`from`): renaming it (but the machine's own), turning a key's off or on, deleting
-/// it (the machine's own login: stopping it, the login stays the machine's), asked first.
+/// it (the machine's own login: stopping it, the login stays the machine's), asked first. A copy of another station's
+/// is edited there: here only whether this station uses it (停用, 启用: `profile.put` `enabled`, kept by its station as
+/// the copy is refreshed).
 fn profile_menu(core : Core, here : Here, address : String, p : Json?, from : @sf.Beside) -> Unit {
   let id = text(p, "id")
   let machine = flag(p, "machine")
+  let copy = profile_copy(p)
   let access = field(p, "access")
   let keyed = ["api-provider", "anthropic-api", "opencode-go"].contains(text(access, "kind")) && !flag(access, "login")
-  let can_disable = keyed && has(p, "enabled")
+  let can_disable = (keyed && has(p, "enabled")) || profile_pausable(p)
   let item = if machine { @sf.t("web-pages.profiles.disable") } else { @sf.t("web-pages.profiles.delete") }
   let remove = fn() {
     let (title, words) = if machine {
@@ -508,7 +518,7 @@ fn profile_menu(core : Core, here : Here, address : String, p : Json?, from : @s
     })
   }
   let items : Array[@sf.MenuItem?] = []
-  if !machine {
+  if !machine && !copy {
     items.push(Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { profile_rename(core, address, p) })))
   }
   if can_disable {
@@ -525,13 +535,16 @@ fn profile_menu(core : Core, here : Here, address : String, p : Json?, from : @s
     }
     items.push(Some(@sf.menu_item_of(label, icon="power", disabled=is_doing(core, ["profile.put"], [("station", address), ("id", id)]), fn() {
       if enabled {
-        confirm(@sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]), @sf.t("web-pages.profiles.disableKeyBody"), label, danger=true, change)
+        let words = @sf.t(if copy { "web-pages.profiles.disableCopyBody" } else { "web-pages.profiles.disableKeyBody" })
+        confirm(@sf.t("web-pages.profiles.disableConfirm", args=[("name", text(p, "name"))]), words, label, danger=true, change)
       } else {
         change()
       }
     })))
   }
-  items.push(Some(@sf.menu_item_of(item, icon="trash", danger=true, remove)))
+  if !copy {
+    items.push(Some(@sf.menu_item_of(item, icon="trash", danger=true, remove)))
+  }
   @sf.menu(items, from~, along=End)
 }
 

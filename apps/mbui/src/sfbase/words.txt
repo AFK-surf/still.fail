@@ -2253,6 +2253,7 @@ web-pages.profiles.deviceCodeNoteOpencode
 web-pages.profiles.disable
 web-pages.profiles.disableBody
 web-pages.profiles.disableConfirm
+web-pages.profiles.disableCopyBody
 web-pages.profiles.disabled
 web-pages.profiles.disableKeyBody
 web-pages.profiles.env

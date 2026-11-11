@@ -446,8 +446,13 @@ export class Accounts {
 
   /// Refused for a copy of another station's profile: it is changed there.
   private own(id: string, lang: Lang) {
-    const p = (Array.isArray(this.deps.config.raw()?.profiles) ? this.deps.config.raw().profiles : []).find((x: Json) => x?.id === id);
+    const p = this.rawProfile(id);
     if (p && borrowed(p)) throw new Refusal(409, tr(lang, "station.share.borrowedEdit"));
+  }
+
+  /// Profile `id` as config.json has it (undefined: none).
+  private rawProfile(id: string): Json | undefined {
+    return (Array.isArray(this.deps.config.raw()?.profiles) ? this.deps.config.raw().profiles : []).find((x: Json) => x?.id === id);
   }
 
   // ── edits ──
@@ -467,10 +472,33 @@ export class Accounts {
   /// those who manage the station only; kept as those of the station's joined workspaces withheld from it, so one it
   /// joins later runs on it too.
   putProfile(id: string, given: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()) {
-    this.own(id, lang);
-    const before = this.profile(id);
     if (given.enabled !== undefined && typeof given.enabled !== "boolean") throw new Refusal(400, "enabled must be a boolean");
+    // A copy of another station's is edited there; only whether this station uses it is its own to say (paused here,
+    // kept as its host's copy is refreshed: share/index.ts placeProfile).
+    const pausing = Object.keys(given).every((k) => k === "enabled") && given.enabled !== undefined;
+    if (!pausing) this.own(id, lang);
+    const before = this.profile(id);
     if (given.enabled !== undefined && before?.machine === true) throw new Refusal(400, "a machine login cannot be paused here");
+    if (pausing && before !== undefined && borrowed(this.rawProfile(id))) {
+      this.save(viewer, `profile ${id}`, (raw) => {
+        const list: Json[] = Array.isArray(raw.profiles) ? raw.profiles : [];
+        const existing = list.find((p) => p?.id === id);
+        if (!existing) return;
+        // Disabled by its host: said so (`hostOff`, share/index.ts placeProfile), or disabled with no pause here, as a
+        // copy placed before `hostOff` was written has it (only its host disabled one then).
+        const hostOff = existing.share.hostOff === true || (existing.enabled === false && existing.share.paused !== true);
+        if (hostOff) existing.share.hostOff = true;
+        if (given.enabled === false) existing.share.paused = true;
+        else delete existing.share.paused;
+        if (given.enabled === false || hostOff) existing.enabled = false;
+        else delete existing.enabled;
+        raw.profiles = list;
+      });
+      if (before.enabled !== false && given.enabled === false) {
+        this.deps.hub?.profileGone?.(id).catch((error) => log.warn("accounts", "moving sessions off a paused copy failed", { profile: id, error: (error as Error).message }));
+      }
+      return;
+    }
     const givenWorkspaces = given.workspaces;
     if (givenWorkspaces !== undefined && !manages(viewer)) throw new Refusal(403, tr(lang, "station.share.managersOnly"));
     if (givenWorkspaces !== undefined && givenWorkspaces !== null && (!Array.isArray(givenWorkspaces) || !givenWorkspaces.every((w) => typeof w === "string" && /^[0-9A-Za-z_-]{1,128}$/.test(w)))) {
