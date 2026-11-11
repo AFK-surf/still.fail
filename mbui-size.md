@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [1c9ba20bc](https://github.com/AFK-surf/still.fail/commit/1c9ba20bc472cdd21811f38bab1cc07543e06d4a) mbui: words a box with its height said does not ho | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.39 | 124.68 |
 | [f305e8b90](https://github.com/AFK-surf/still.fail/commit/f305e8b9083d2a2da0524307d29686b390dff901) app fixture: a card's answer stays before what was | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.6 | 155.81 |
 | [acc4dd528](https://github.com/AFK-surf/still.fail/commit/acc4dd528a0538d72e55dedcd321be3662bf7d33) core: a pref set looks at the files kept only for  | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.7 | 163.67 |
 | [9bea105e3](https://github.com/AFK-surf/still.fail/commit/9bea105e3af80832962d9b620a03d9ce129e6ad9) app: 添加 station as nodes (settings' station_add.mb | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.41 | 187.44 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [20cbc21c6](https://github.com/AFK-surf/still.fail/commit/20cbc21c6531a870fea37d5b2fe8e461e1c7254a) mbui: a node that says it takes no press is no pre | 1.79 | 2.38 | 9.94 | 28.58 | 34.9 | 25.52 | 47.07 | 94 | 162.36 |
 | [68685cd2a](https://github.com/AFK-surf/still.fail/commit/68685cd2a13c0ba43977f36cc23380a9bea31bf8) core, app: a list a place opens on, asked again, i | 1.79 | 2.38 | 9.93 | 28.56 | 34.79 | 25.5 | 46.96 | 93.9 | 147.14 |
 | [e6400c684](https://github.com/AFK-surf/still.fail/commit/e6400c684933bf0db7e641ff35c05904458fbb58) app: the update dialog (检查更新) as nodes (#5306) | 1.78 | 2.38 | 9.93 | 28.56 | 34.78 | 25.5 | 46.96 | 94.14 | 180.44 |
-| [da1d0b203](https://github.com/AFK-surf/still.fail/commit/da1d0b2036a3012eca5ef47277f8adbf06526026) sf: a panel's body of nodes holding nothing takes  | 1.78 | 2.38 | 9.93 | 28.56 | 34.77 | 25.49 | 46.94 | 93.9 | 177.94 |
