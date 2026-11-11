@@ -1055,7 +1055,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, 
   // (the room, read where it is as what it holds is painted: held_coming)
   let room : Ref[@ui.NodeHeld?] = Ref(None)
   let area = c.box(
-    style=if held > 0.0 { extras_column.then(@ui.style(min_h=Fixed(held))) } else { extras_column },
+    style=extras_room(held),
     left?=if empty { Some(@sf.composer_pad) } else { None },
     top?=if empty { Some(@sf.composer_pad) } else { None },
     fn() { composer_extra_items(c, src, spec, w, holds, shape, quote_pictures, file_pictures, room) },
@@ -1736,6 +1736,24 @@ let round_hot : @ui.Style = @ui.css("bg=Hover")
 let extras_column : @ui.Style = @ui.css("w=Full gap=S2_5")
 
 ///|
+/// Where what waits stands (extras_column): in from the padding where the box is too round for it there
+/// (@sf.composer_waiting_in), at least `held` tall.
+fn extras_room(held : Double) -> @ui.Style {
+  let d = @sf.composer_waiting_in()
+  let base = if d > 0.0 {
+    let r = @sf.room_of(d)
+    extras_column.then(@ui.style(pl=r, pr=r, pt=r))
+  } else {
+    extras_column
+  }
+  if held > 0.0 {
+    base.then(@ui.style(min_h=Fixed(held)))
+  } else {
+    base
+  }
+}
+
+///|
 // kept across runs: a value (no field of it changes)
 let quotes_column : @ui.Style = @ui.css("w=Full gap=S1_5")
 
@@ -1745,7 +1763,7 @@ let quotes_column : @ui.Style = @ui.css("w=Full gap=S1_5")
 /// Over the words, at the top of the box: their lines end short of its top right corner (@sf.composer_files_end), so
 /// the last of the first one never stands in it off its circle, however wide the box is.
 fn files_flow() -> @ui.Style {
-  @ui.style(row=true, w=Full, gap=S1_5, pr=@sf.room_of(@sf.composer_files_end()))
+  @ui.style(row=true, w=Full, gap=S1_5, pr=@sf.room_of(@sf.composer_files_end() - @sf.composer_waiting_in()))
 }
 
 ///|

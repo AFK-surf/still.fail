@@ -875,9 +875,17 @@ fn quote_box_composer() -> @ui.Style {
 ///|
 /// What sits in the composer's corners is rounded concentric with it, its padding in (composer_corner: alone a card's,
 /// so the ladder's next step, a row's; at the tape's foot 24.8, so 16.8): what waits in it (a quote, a file's card, a
-/// picture), every one alike.
+/// picture), every one alike. Never rounder than alone (a row's): a composer rounder than a card (an iPhone Duo's screen
+/// corners, 39) would make a 56 picture a circle, so there what waits stands further in (composer_waiting_in).
 pub fn composer_inner() -> Double {
-  @ui.concentric(composer_corner(), composer_pad)
+  dmin(@ui.concentric(composer_corner(), composer_pad), row_corner)
+}
+
+///|
+/// How much further in than the padding what waits in the composer stands, concentric with its corner at
+/// composer_inner: none where that is concentric at the padding.
+pub fn composer_waiting_in() -> Double {
+  dmax(composer_corner() - composer_pad - composer_inner(), 0.0)
 }
 
 ///|
