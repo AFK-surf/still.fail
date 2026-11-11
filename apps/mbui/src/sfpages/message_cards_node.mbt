@@ -3,17 +3,20 @@
 // following it and the core as they change: its card while it waits, answered on it, then one line saying how it went,
 // pressed for the card read again; the one in the other's place as it is decided, as anything down a column comes and
 // goes (View::pick: the old under_post's fades and the list's turns are not here). The card's insides are the settings'
-// (rig_card_node…), as the old ones are. Made so far: a rig's (P32). Not here yet: a vault item's (P30), a phone's
-// (P31), a sign-in's (P33).
+// (rig_card_node…), as the old ones are. Made so far: a rig's (P32), a phone's (P31: not the step left on the phone
+// under its line once granted, settings' phone_ask_node says why). Not here yet: a vault item's (P30), a sign-in's (P33:
+// its password manager's and the system's autofill's answers are only looked at each frame, @hostapi.polled).
 
 ///|
 /// What is in place of a post's words, as the message says it now.
 priv enum InPlace {
   /// its words (the agent's message's own)
   Words
+  /// a request for its person's phone
+  Phone
   /// a request for a rig of the workspace
   Rig
-  /// a vault item's, a phone's, a sign-in's: not made as nodes yet
+  /// a vault item's, a sign-in's: not made as nodes yet
   NotYet
 } derive(Eq)
 
@@ -21,8 +24,10 @@ priv enum InPlace {
 /// What is in place of post `m`'s words (prose_with_files' cases).
 fn in_place_of(m : Message) -> InPlace {
   match m.card {
+    Some({ ask: Some(_), .. }) => NotYet
+    Some({ phone: Some(_), .. }) => Phone
+    Some({ signin: Some(_), .. }) => NotYet
     Some({ rig: Some(_), .. }) => Rig
-    Some({ ask: Some(_), .. }) | Some({ phone: Some(_), .. }) | Some({ signin: Some(_), .. }) => NotYet
     _ => Words
   }
 }
@@ -33,6 +38,7 @@ fn in_place_of(m : Message) -> InPlace {
 fn message_card_node(v : @view.View, here : MessageNodeHere, core : @settings.Core?, m : () -> Message) -> Unit {
   v.pick(fn() { in_place_of(m()) }, fn(p, k) {
     match k {
+      Phone => phone_ask_node(p, here, core, m)
       Rig => rig_ask_node(p, here, core, m)
       Words | NotYet => ()
     }
@@ -155,6 +161,66 @@ fn rig_ask_node(v : @view.View, here : MessageNodeHere, core : @settings.Core?, 
               fn() { ask().reason },
             )
             |> ignore
+          })
+        }),
+      )
+    }
+  })
+}
+
+///|
+/// A request with nothing in it (what a phone's reads where its message says none: the card going as another comes).
+// kept across runs: a value (no field of it changes)
+let phone_ask_none : PhoneAsk = { request: "", reason: "", status: "", scope: "", why: "", link: "", lasts: "" }
+
+///|
+/// Post `m`'s request for its person's phone in place of its words (phone_ask_card's, as nodes) in `v`: its card while it
+/// waits (answered with `adb.decide` on the chat's station), then a line saying how it went, how its station holds the
+/// phone after it, pressed for what was asked; decided, the line in the card's place. Not here yet: the step left on
+/// the phone under the line (settings' phone_ask_node).
+fn phone_ask_node(v : @view.View, here : MessageNodeHere, core : @settings.Core?, m : () -> Message) -> Unit {
+  let ask = fn() {
+    match m().card {
+      Some({ phone: Some(a), .. }) => a
+      _ => phone_ask_none
+    }
+  }
+  let assignee = fn() { m().card.map(fn(c) { c.assignee }).unwrap_or("") }
+  let who = fn() { m().card.bind(fn(c) { c.assignee_text }) }
+  v.pick(fn() { ask().status != "" }, fn(p, decided) {
+    @sf.style_node(p, fn() { under_post_room })
+    if !decided {
+      // (the card as wide as what it says: lined up at the column's start, not across it)
+      p.lines_up(Is(Some(Start))) |> ignore
+      p.box(fn(r) {
+        @sf.style_node(r, fn() { @sf.ask_card_room.then(ask_card_under_head) })
+        let card = @signals.computed(fn(_) -> @settings.PhoneCard {
+          let a = ask()
+          {
+            request: a.request,
+            reason: a.reason,
+            lasts: a.lasts,
+            mine: mine_to_node(here, assignee()),
+            who: who(),
+            ended: if a.status != "" { Some((a.status, a.scope, a.why)) } else { None },
+          }
+        })
+        @settings.phone_card_node(r, core, here.station, fn() { card.get() }, how=fn() {
+          open_page(Setting(@settings.Route::AdbShare("")))
+        })
+      })
+      |> ignore
+    } else {
+      @settings.phone_outcome_node(
+        p,
+        fn() { ask().status },
+        fn() { ask().scope },
+        fn() { ask().why },
+        fn() { @settings.phone_link(core, here.station, ask().link) },
+        fn() { message_inline(here) },
+        history=Some(fn(from) {
+          card_history_node(from, fn(b) {
+            @sf.ask_words_node(b, fn() { @sf.t("android-misc.adb.ask.chat.title") }, fn() { ask().reason }) |> ignore
           })
         }),
       )

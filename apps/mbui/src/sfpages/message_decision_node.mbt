@@ -3,10 +3,10 @@
 // need_card): each made once as what it reads says, following the message and the core as they change. Who decides,
 // the options while it waits for the viewer (pressing one answers with it: decision.answer; the one on its way turning,
 // the core's doing), 忽略 under them (decision.dismiss); once settled, how it went in one quiet line, pressed for the
-// original card. What comes and goes under the post comes and goes as anything down a column does (View::show: its
-// way from the moment the message or the core changed, the framework's; the old under_post's own fades and the list's
-// turns are not here). Not here yet: a login card (P34), a vault item's approval (vault_actions), the four cards in
-// place of a post's words (P30-P33).
+// original card; a login's card (login_card_node) with who is to finish it and 忽略 under it. What comes and goes under
+// the post comes and goes as anything down a column does (View::show: its way from the moment the message or the core
+// changed, the framework's; the old under_post's own fades and the list's turns are not here). Not here yet: a vault
+// item's approval (vault_actions). The cards in place of a post's words: message_cards_node.mbt.
 
 ///|
 /// What is under a post, as the message says it now.
@@ -17,7 +17,9 @@ priv enum Asks {
   Alone
   /// who decides, its options, 忽略, how it went
   Options
-  /// a login card, a vault item's approval: not made as nodes yet
+  /// a login's card, who is to finish it, 忽略 under it (where there is a core to read the login of)
+  Login
+  /// a vault item's approval: not made as nodes yet
   NotYet
 } derive(Eq)
 
@@ -25,7 +27,7 @@ priv enum Asks {
 /// What post `m` asks under it (message_decision's cases).
 fn decision_asks(m : Message) -> Asks {
   match m.card {
-    Some({ kind: "login", login, .. }) if login != "" => NotYet
+    Some({ kind: "login", login, .. }) if login != "" => Login
     None if m.options is None => if m.asked { Alone } else { Nothing }
     Some({ ask: Some(_), .. }) | Some({ phone: Some(_), .. }) | Some({ signin: Some(_), .. }) | Some({ rig: Some(_), .. }) =>
       Nothing
@@ -67,20 +69,91 @@ fn decision_thread(here : MessageNodeHere) -> Double? {
 ///|
 /// Under post `m` (as it says as it changes) of the chat `here` is, what it asks (message_decision's, as nodes): who
 /// decides, its options while it is open and the chat's thread can be sent to, 忽略 while it is asked, and how it went
-/// once settled, one in the others' place as that changes.
-fn message_decision_node(v : @view.View, src : Source, here : MessageNodeHere, m : () -> Message) -> Unit {
-  v.pick(fn() { decision_asks(m()) }, fn(p, asks) {
-    match asks {
-      Alone =>
-        p.box(fn(b) {
-          @sf.style_node(b, fn() { decision_box })
-          ask_dismiss_node(b, src, here, fn() { m().seq }, fn() { m().asked }, fn() { false }, fn() { true }, false)
-        })
-        |> ignore
-      Options => decision_rooms_node(p, src, here, m)
-      Nothing | NotYet => ()
+/// once settled, one in the others' place as that changes; a login's card, read with `core` (the settings' over the
+/// chat's workspace; None where nothing is answered: a login's post is then as one with no options).
+fn message_decision_node(
+  v : @view.View,
+  src : Source,
+  here : MessageNodeHere,
+  m : () -> Message,
+  core? : @settings.Core? = None,
+) -> Unit {
+  v.pick(
+    fn() {
+      match (decision_asks(m()), core) {
+        (Login, None) => Options
+        (asks, _) => asks
+      }
+    },
+    fn(p, asks) {
+      match (asks, core) {
+        (Alone, _) =>
+          p.box(fn(b) {
+            @sf.style_node(b, fn() { decision_box })
+            ask_dismiss_node(b, src, here, fn() { m().seq }, fn() { m().asked }, fn() { false }, fn() { true }, false)
+          })
+          |> ignore
+        (Options, _) => decision_rooms_node(p, src, here, m)
+        (Login, Some(core)) => decision_login_node(p, src, here, core, m)
+        _ => ()
+      }
+    },
+  )
+}
+
+///|
+/// Under post `m`, its login's card (message_decision's login case, as nodes): who is to finish it while it is open, the
+/// card (login_card_node) on the chat's station or another of its workspace (the card's `station`), as the core says it
+/// now, and 忽略 under it while it is asked.
+fn decision_login_node(
+  v : @view.View,
+  src : Source,
+  here : MessageNodeHere,
+  core : @settings.Core,
+  m : () -> Message,
+) -> Unit {
+  let open = fn() {
+    match m().decision {
+      Some(d) => !d.resolved && !d.dismissed
+      None => true
     }
+  }
+  // (on the chat's station, or another of its workspace: the card's)
+  let login = fn() {
+    let card = m().card
+    let id = card.map(fn(c) { c.login }).unwrap_or("")
+    let other = card.map(fn(c) { c.station }).unwrap_or("")
+    let station = if other == "" {
+      here.station
+    } else {
+      match here.station.find("/") {
+        Some(i) => here.station.view(end_offset=i).to_string() + "/" + other
+        None => other
+      }
+    }
+    (station, id)
+  }
+  v.box(fn(b) {
+    @sf.style_node(b, fn() { decision_box })
+    b.show(fn() { open() && m().card.bind(fn(c) { c.assignee_text }) is Some(_) }, fn(w) {
+      @sf.words_node(w, fn() { m().card.bind(fn(c) { c.assignee_text }).unwrap_or("") }, fn() { settled_line }) |> ignore
+    })
+    // (none the core does not know: the message's words say it, and nothing takes its room)
+    b.show(fn() { login_of(core, login().0, login().1) is Some(_) }, fn(s) {
+      // (as wide as what it is under, as the old card's room is in decision_box: a share of its width, not stretched
+      // across it, which a column lined up at its start does not do; ended, its line as wide as its words, at the start)
+      s.width_share(Is(1.0)) |> ignore
+      s.pick(login, fn(c, at) {
+        c
+        .width_share(Is(1.0))
+        .lines_up(By(fn() { if flag(login_of(core, at.0, at.1), "active") { None } else { Some(Start) } }))
+        |> ignore
+        login_card_node(c, core, at.0, at.1)
+      })
+    })
+    ask_dismiss_node(b, src, here, fn() { m().seq }, fn() { m().asked }, fn() { false }, fn() { true }, false)
   })
+  |> ignore
 }
 
 ///|
