@@ -41,15 +41,7 @@ pub fn file_card_node(
     match menu {
       // (right clicked, its menu where the pointer is; held by a finger, there, felt, the press the menu's: lifting it
       // opens nothing. A mouse's button held is a press as long as any: file_menu's, menu_asked's)
-      Some(open) => {
-        card.on_menu(fn(m) { open(m.wx, m.wy) }) |> ignore
-        presses_held_node(card, fn() { on_press(Open) }, @ui.long_press_ms, fn(d) {
-          if @ui.pointing() is Finger {
-            menu_held_node()
-            open(d.wx, d.wy)
-          }
-        })
-      }
+      Some(open) => menu_presses_node(card, fn() { on_press(Open) }, fn(x, y, _) { open(x, y) })
       None => presses_node(card, fn() { on_press(Open) })
     }
     // (its mark, 24, concentric with its round start)
