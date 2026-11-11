@@ -1122,6 +1122,10 @@ pub fn Client::perf_forget(self : Client) -> Unit {
 
 ///|
 fn Client::answer(self : Client, id : Int, r : Result[Json, Json]) -> Unit {
+  if self.unread_calls.contains(id) && !self.calls.contains(id) {
+    let n = self.perf_calls.get(id).unwrap_or("?")
+    unread_taken_by[n] = unread_taken_by.get(n).unwrap_or(0) + 1
+  }
   self.unread_calls.remove(id)
   self.said_calls.remove(id)
   match self.echo_waits.get(id) {

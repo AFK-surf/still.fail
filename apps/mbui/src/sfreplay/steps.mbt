@@ -160,6 +160,10 @@ pub fn Flow::start(
   // (what the run's host said comes before the frame it was said for: given as a frame ends, it is the next one's, by
   // that frame's time, as a host's events before a vsync are that frame's)
   t.between_frames(fn() {
+    numbers_frames.val += 1
+    if t.built_why() != "" {
+      numbers_whole.val += 1
+    }
     if followed.val != "" {
       match t.find(followed.val) {
         Some((_, y)) => follow_ys.push((t.time(), y))
@@ -683,6 +687,15 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
       why.push("did not ask what the run did: " + left.join(", "))
     }
   }
+  if self.strict {
+    println("NUMBERS whole \{numbers_trace.val} \{numbers_whole.val} of \{numbers_frames.val}")
+    for kv in @core.unread_taken() {
+      println("NUMBERS unread \{numbers_trace.val} \{kv.0} \{kv.1}")
+    }
+  }
+  @core.unread_taken_reset()
+  numbers_whole.val = 0
+  numbers_frames.val = 0
   let sum = screen_sum(self.t)
   @core.Replay::detach()
   // (what the app asked as the flow ended (a page gone at its slide's end, its player's place told): the script

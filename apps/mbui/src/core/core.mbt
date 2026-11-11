@@ -612,3 +612,17 @@ pub fn query_of(url : String) -> String {
     None => q.to_owned()
   }
 }
+
+///|
+// kept across runs: numbers only, answers of calls nobody reads taken, by name
+let unread_taken_by : Map[String, Int] = {}
+
+///|
+pub fn unread_taken() -> Array[(String, Int)] {
+  unread_taken_by.to_array()
+}
+
+///|
+pub fn unread_taken_reset() -> Unit {
+  unread_taken_by.clear()
+}
