@@ -315,3 +315,51 @@ test "a show let go of and its opposite shown down a column at once: one in the 
   assert_eq(word_y(t, "C"), 40.0)
   assert_eq(word_y(t, "下"), 100.0)
 }
+
+///|
+/// A pick down a column from a box 20 tall to one as tall as `tall` says, picked at 100, `tall` set to `then` at
+/// `at` (none: never): where what is under it is drawn, every 10 ms from 100 to 600.
+fn grown_on_way(then : Double, at : Double) -> Array[Double] {
+  let picked = @signals.signal(false, same=fn(a, b) { a == b })
+  let tall = @signals.signal(60.0, same=fn(a, b) { a == b })
+  let t = @view.Tree::new(fn(root) {
+    root.pick(fn() { picked.get() }, fn(v, k) {
+      if k {
+        v.box(fn(b) { b.height(By(fn() { Some(tall.get()) })) |> ignore }) |> ignore
+      } else {
+        v.height(Is(Some(20.0))) |> ignore
+      }
+    })
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("下")) |> ignore }) |> ignore
+  })
+  t.frame(390.0, 844.0) |> ignore
+  t.event(100.0, fn() { picked.set(true) })
+  let out = []
+  let mut ms = 100.0
+  while ms <= 600.0 {
+    if ms == at {
+      t.event(at, fn() { tall.set(then) })
+    }
+    t.at(ms)
+    t.frame(390.0, 844.0) |> ignore
+    out.push(word_y(t, "下"))
+    ms = ms + 10.0
+  }
+  out
+}
+
+///|
+test "what comes in another's place grown of its own on its way: its way the same, only its end moved, by as much as its Move has got" {
+  // (60 all the way, and 60 till 180 then 220 at once, what it holds grown of its own: no cause of this way's. Its way
+  // as long and turned as it was said at 100; from then, as far on to the new end as to the old: as tall as from 20 by
+  // the same share of 200 as of 40)
+  let steady = grown_on_way(60.0, -1.0)
+  let grown = grown_on_way(220.0, 180.0)
+  for i, y in steady {
+    let ms = 100.0 + i.to_double() * 10.0
+    let share = (y - 20.0) / 40.0
+    let expect = if ms < 180.0 { y } else { 20.0 + 200.0 * share }
+    assert_true((grown[i] - expect).abs() < 0.001, msg="at \{ms}: \{grown[i]}, as far on as \{expect}")
+  }
+  assert_eq(grown[grown.length() - 1], 220.0)
+}

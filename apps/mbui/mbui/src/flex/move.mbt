@@ -210,9 +210,27 @@ pub fn come_way_ms(from : Double, v : Double, goal : Double, along? : ComeWith) 
 /// within one; a little toward `goal` and a little away from it, nearly the same way. `t` from the moment it set out
 /// (before it, where it was); going `along` another way, set out as that one does and there as it ends (come_way_ms).
 pub fn come_way(from : Double, v : Double, goal : Double, t : Double, along? : ComeWith) -> (Double, Double) {
+  come_way_by(from, v, goal, goal, t, along?)
+}
+
+///|
+/// Where a way from `from` tall set out at `v` toward `plan` (come_way: its turn, how long its slowing and its Move
+/// take, worked out of that) has got `t` ms on and how fast it goes, as it goes to `goal`: what it goes to come to
+/// another height on the way (what it holds grown or shrunk of its own, no cause of this way's), the way the same
+/// whatever it comes to, only its end where that is: where it is goes by as much of that as its Move has got (the
+/// coordinator of the migration, 2026-11-11: 份额跟着走, not a way of its own laid anew). As come_way where `goal` is
+/// `plan`, to the bit.
+pub fn come_way_by(
+  from : Double,
+  v : Double,
+  goal : Double,
+  plan : Double,
+  t : Double,
+  along? : ComeWith,
+) -> (Double, Double) {
   // (going toward where it goes already: a Move on from that speed, not slowed to rest on the way, stalling)
-  if come_toward(from, v, goal) {
-    let (off, ov) = move_path(from - goal, v, t, come_on_ms(goal - from, along))
+  if come_toward(from, v, plan) {
+    let (off, ov) = move_path(from - goal, v, t, come_on_ms(plan - from, along))
     return (goal + off, ov)
   }
   let (s, t1) = come_turn(v)
@@ -228,12 +246,22 @@ pub fn come_way(from : Double, v : Double, goal : Double, t : Double, along? : C
   if t2 <= 0.0 {
     return (x, xv)
   }
-  let dur = come_move_ms(far, t0, along)
+  let dur = come_move_ms(plan - from - s, t0, along)
   if dur <= 0.0 || t2 >= dur {
     return (x + far, xv)
   }
   let (off, ov) = move_path(-far, 0.0, t2, dur)
   (x + far + off, xv + ov)
+}
+
+///|
+/// What its way's length and turn were said by (Style's come_plan): as tall as it went to then; `goal` where none was.
+fn plan_of(s : Style, goal : Double) -> Double {
+  if known(s.come_plan) {
+    s.come_plan
+  } else {
+    goal
+  }
 }
 
 ///|
@@ -247,6 +275,7 @@ fn come_height(s : Style, natural : Double) -> Double {
   s.come_whole = natural
   if !known(s.come_ends) {
     s.come_ends = s.come_at + come_way_ms(s.come_from, s.come_v, goal)
+    s.come_plan = goal
   }
   let dur = s.come_ends - s.come_at
   let t = s.come_now - s.come_at
@@ -254,7 +283,7 @@ fn come_height(s : Style, natural : Double) -> Double {
     s.come_k = fmax(fmin(s.come_to, 1.0), 0.0)
     return if s.come_to >= 1.0 { 0.0 / 0.0 } else { goal }
   }
-  let (tall, _) = come_way(s.come_from, s.come_v, goal, t)
+  let (tall, _) = come_way_by(s.come_from, s.come_v, goal, plan_of(s, goal), t)
   let tall = fmax(tall, 0.0)
   // (holding nothing it is laid out by, closing to nothing from as tall as one before it was (a pick's case that made
   // nothing): its share of that)
@@ -281,6 +310,6 @@ pub fn come_state(s : Style, at : Double) -> (Double, Double)? {
   if dur <= 0.0 || t >= dur {
     return Some((s.come_goal, 0.0))
   }
-  let (tall, v) = come_way(s.come_from, s.come_v, s.come_goal, t)
+  let (tall, v) = come_way_by(s.come_from, s.come_v, s.come_goal, plan_of(s, s.come_goal), t)
   Some((fmax(tall, 0.0), v))
 }
