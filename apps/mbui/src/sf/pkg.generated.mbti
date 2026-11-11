@@ -76,7 +76,11 @@ pub fn ask_buttons(@ui.Ctx, () -> Unit) -> Unit
 
 pub fn ask_buttons_across(@ui.Ctx, () -> Unit) -> Unit
 
+pub fn ask_buttons_node(@view.View, (@view.View) -> Unit) -> @view.View
+
 pub let ask_card_room : @ui.Style
+
+pub fn ask_card_node(@view.View, (@view.View) -> Unit) -> @view.View
 
 pub let ask_card_room_most : @ui.Style
 
@@ -115,6 +119,8 @@ pub let ask_title : @ui.TextStyle
 pub let ask_what : @ui.Style
 
 pub fn ask_words(@ui.Ctx, String, String, centred? : Bool) -> Unit
+
+pub fn ask_words_node(@view.View, () -> String, () -> String) -> @view.View
 
 pub fn at_head_end() -> Bool
 
@@ -682,6 +688,8 @@ pub fn fixed_anchor(@view.View, (Double, Double, Double, Double)) -> @view.View
 pub let floating : Raised
 
 pub fn foot_across(Double) -> @ui.Style
+
+pub fn foot_chooser_node(@view.View, () -> String, () -> Array[(String, String)], () -> String, (String) -> Unit) -> @view.View
 
 pub fn foot_capsule(Double, Double, Double) -> (Double, Double, Double)
 

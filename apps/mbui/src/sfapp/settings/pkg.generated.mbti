@@ -39,6 +39,8 @@ pub let answered_fade_ms : Double
 
 pub fn answered_in_place(@ui.Ctx, String, (Bool, Array[@text.Run])?, () -> Unit) -> Unit
 
+pub fn answered_in_place_node(@view.View, () -> (Bool, Array[@text.Run])?, (@view.View) -> Unit) -> Unit
+
 pub fn appearance(@json.Json?) -> String
 
 pub fn ask(String, String, String, String, (String) -> Unit, hint? : String, secret? : Bool) -> Unit
@@ -46,6 +48,8 @@ pub fn ask(String, String, String, String, (String) -> Unit, hint? : String, sec
 pub fn ask_action(String) -> Unit
 
 pub fn ask_outcome(@ui.Ctx, Bool, Array[@text.Run], inline? : Bool, history? : (String, (Int32) -> Unit)?) -> Unit
+
+pub fn ask_outcome_node(@view.View, () -> Bool, () -> Array[@text.Run], () -> Bool, history? : ((@view.View) -> Unit)?) -> Unit
 
 pub fn avatar(@ui.Ctx, Core, String, String, Double, picture? : String) -> Unit
 
@@ -287,6 +291,10 @@ pub let recovery_words_turned : @signals.Signal[Int32]
 
 pub fn reset() -> Unit
 
+pub fn rig_card_node(@view.View, Core?, String, () -> RigCard, lock? : () -> Unit) -> Unit
+
+pub fn rig_outcome_node(@view.View, () -> String, () -> String, () -> Bool, () -> (String, Int32), () -> Bool, history? : ((@view.View) -> Unit)?) -> Unit
+
 pub fn role_label(String) -> String
 
 pub fn route_of(String) -> Route?
@@ -513,6 +521,19 @@ pub(all) struct Read {
   value : @json.Json?
   error : @json.Json?
   version : Int32
+}
+
+#derive(Eq)
+pub(all) struct RigCard {
+  request : String
+  name : String
+  reason : String
+  timeout : (String, Int32)
+  ask : @json.Json
+  mine : Bool
+  who : String?
+  device : String
+  ended : (Bool, String)?
 }
 
 #derive(Eq)

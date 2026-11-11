@@ -88,8 +88,9 @@ fn Asked::picks_file(self : Asked) -> Bool {
 }
 
 ///|
-/// The length of use picked for each request; put back by `reset`.
-let vault_picked : Map[String, String] = {}
+/// The length of use picked for each request (a rig's, a phone's too, keyed `rig/<id>`, `phone/<id>`): read by what is
+/// made once of a card as by the old view's; put back by `reset`.
+let vault_picked : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 ///|
 /// The unit chosen for each requested timeout.
