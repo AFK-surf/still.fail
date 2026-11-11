@@ -515,8 +515,18 @@ test "an activity row's avatar says neither: a finger's tap on it the row's (ope
     "station": Json::string("ws1/st1"),
     "key": Json::string(agent_at),
   }).value
-  let (known, rest) = agent_rooms_known(t.audit(), card)
-  assert_eq(rest, [], msg="held: \{rest}")
+  let (_, rest) = agent_rooms_known(t.audit(), card)
+  // (the card is in this rig's own layer over the row (its TipLayer's, not one presented over all, View::over_all), so
+  // from 7 under the avatar and the name it takes the press: they are said as 44×37 and 60×37. Known, these two
+  // exactly (the coordinator of the migration, 2026-11-12); none once the card is put in the presented layer, as the
+  // app is to put it (presented_nodes' tips))
+  let over_row = rest.filter(fn(f) {
+    f.has_prefix("room: a box (a node of the window's tree's at ") &&
+    f.contains("made at stillfail/src/sfpages/agent_card_node_wbtest.mbt:") &&
+    (f.contains(" at 60,53 18×18, ") || f.contains(" at 138,52 60×20, "))
+  })
+  assert_eq(over_row.length(), 2, msg="held: \{rest}")
+  assert_eq(rest.filter(fn(f) { !over_row.contains(f) }), [], msg="held: \{rest}")
 }
 
 ///|

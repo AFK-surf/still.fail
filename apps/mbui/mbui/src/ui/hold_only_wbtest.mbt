@@ -118,3 +118,65 @@ test "a mark that answers only a hold in a row that drags: dragged from it, the 
   assert_true(drags.val > 0, msg="the row not dragged")
   assert_eq(held.val, 0)
 }
+
+///|
+/// A row 300 by 100 at the window's top left by a finger (a press's room 44 across), pressed counted in `pressed`; in
+/// it a mark 30 by 20 at (100, 40), its hold alone counted in `held`; the tree and the mark.
+fn hold_only_small(pressed : Ref[Int], held : Ref[Int]) -> (Tester, @view.Tree, @view.NodeId) {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=2)
+  let mark : Ref[@view.NodeId?] = Ref(None)
+  set_view_app(fn(root) {
+    root.box(fn(r) {
+      r
+      .width(Is(Some(300.0)))
+      .height(Is(Some(100.0)))
+      .says(Is(Some(@view.said(Button, label="Row"))))
+      .on_press(fn() { pressed.val = pressed.val + 1 })
+      |> ignore
+      r.box(fn(v) {
+        mark.val = Some(v.id())
+        v
+        .over(Is(true))
+        .offset(Is((100.0, 40.0)))
+        .width(Is(Some(30.0)))
+        .height(Is(Some(20.0)))
+        .says(Is(Some(@view.said(Image, label="Mark"))))
+        .gesture(touch_slop(), hold=(long_press_ms, fn(_) { held.val = held.val + 1 }))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  (t, view_app.val.unwrap(), mark.val.unwrap())
+}
+
+///|
+test "a mark drawn smaller than a press's room that answers only a hold: held past its edge in its room, its hold, the row not pressed; past its room, the row's; tapped there, the row's; its room as a hold finds it" {
+  // (30 by 20 at (100, 40): a finger's room 44 round its middle, 93 to 137 across, 28 to 72 down)
+  let pressed = Ref(0)
+  let held = Ref(0)
+  let (t, tree, mark) = hold_only_small(pressed, held)
+  for p in [(115.0, 64.0), (96.0, 50.0), (115.0, 30.0)] {
+    let was = (held.val, pressed.val)
+    t.touch(0, p.0, p.1)
+    t.run_for(long_press_ms)
+    t.touch(2, p.0, p.1)
+    t.draw()
+    assert_eq((held.val - was.0, pressed.val - was.1), (1, 0), msg="held at \{p}: \{(held.val - was.0, pressed.val - was.1)}, the mark \{tree.drawn_of(mark).map(fn(d) { (d.x, d.y, d.w, d.h) })}")
+  }
+  // (tapped in its room: a tap is no hold, the row's)
+  t.touch(0, 115.0, 64.0)
+  t.touch(2, 115.0, 64.0)
+  t.draw()
+  assert_eq((held.val, pressed.val), (3, 1), msg="tapped 4 below it")
+  // (past its room: no hold of its)
+  t.touch(0, 115.0, 73.0)
+  t.run_for(long_press_ms)
+  t.touch(2, 115.0, 73.0)
+  t.draw()
+  assert_eq(held.val, 3, msg="held 13 below it")
+  // (what the room rules measure: the room a hold finds, Tree::hold_at)
+  assert_eq(tree.press_room_found(mark, (100.0, 40.0, 130.0, 60.0)), (93.0, 28.0, 137.0, 72.0))
+}

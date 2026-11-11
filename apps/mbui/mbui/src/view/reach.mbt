@@ -112,13 +112,48 @@ fn Tree::least_now(self : Tree) -> Double {
 }
 
 ///|
+/// Whether node `n` is pressed only where it is drawn, no room grown round it: a column's edge, its pointer's shape a
+/// resize (the user, 2026-10-28: 左右各 6px, 同 web; the old view's the same, ui's as_drawn).
+fn Node::as_drawn(self : Node) -> Bool {
+  self.cursor is Some(ResizeX) || self.cursor is Some(ResizeY)
+}
+
+///|
+/// Whether node `n`, drawn `a` opaque, hides what is drawn under it where it is drawn: a ground of its own drawn whole
+/// (no ink showing through it, the node not fading), or glass (a bar frosted over what scrolls under it). What is under
+/// it there is out of sight (Tree::reached: an old view's own under a bar is none of it there).
+fn Node::covers(self : Node, a : Double) -> Bool {
+  self.look.glass is Some(_) || (a >= 1.0 && (self.look.ground & 0xFFL) == 0xFFL)
+}
+
+///|
+/// The node over all else of the window (View::over_all) node `id` is in, it or what holds it; -1 none.
+fn Tree::over_all_of(self : Tree, id : NodeId) -> Int {
+  guard self.alive_id(id) else { return -1 }
+  let mut i = id.at
+  while i >= 0 {
+    if self.nodes[i].over_all {
+      return i
+    }
+    i = self.nodes[i].parent
+  }
+  -1
+}
+
+///|
+/// Whether node `id` of the tree is pressed only where it is drawn (a column's edge: Node::as_drawn): what the hit test
+/// reaches from round it (Tree::near_said) and the room rules measure (ui's tree_room_faults) ask it alike.
+pub fn Tree::pressed_as_drawn(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].as_drawn()
+}
+
+///|
 /// Node `n` (content `c`, drawn at (cx, cy), `s` as big) passed by a walk finding what takes a finger at (x, y), not
 /// there: kept in `out` (its place `order` in the walk) where it may be reached from round it, a press's room (`least`
 /// across) away at most. One that does something pressed or held as its own (View::on_press; View::on_drag, not one
 /// taking over holds), drawn smaller than its room, taking presses now; not one only pointed at (View::points), nor
-/// one pressed only where it is drawn: a column's edge, its pointer's shape a resize (the user, 2026-10-28: 左右各
-/// 6px, 同 web), one saying where it takes a finger (View::takes), one hosting an old view (whose own are its).
-/// Only arithmetic on what the walk gives it, but for one that near.
+/// one pressed only where it is drawn: a column's edge (Node::as_drawn), one saying where it takes a finger
+/// (View::takes), one hosting an old view (whose own are its). Only arithmetic on what the walk gives it, but for one that near.
 fn Tree::near_said(
   self : Tree,
   n : Node,
@@ -143,18 +178,116 @@ fn Tree::near_said(
   if x < x0 - least || x >= x1 + least || y < y0 - least || y >= y1 + least || !press_small(x0, y0, x1, y1, least) {
     return
   }
-  if n.points || n.hosted || n.takes is Some(_) {
+  if n.points || n.hosted || n.takes is Some(_) || n.as_drawn() {
     return
-  }
-  match n.cursor {
-    Some(ResizeX) | Some(ResizeY) => return
-    _ => ()
   }
   if self.pressless_at(c.id.at) {
     return
   }
   self.work.near_kept = self.work.near_kept + 1
   out.push({ order, target, box: (x0, y0, x1, y1) })
+}
+
+///|
+/// The room a press has round node `id`, drawn as `box` (x0, y0, x1, y1), as the hit test gives it (Tree::target_at
+/// asked, nothing worked out beside it; one answering a hold alone, what a finger held there holds, Tree::hold_at; what a
+/// layer presented over all else takes there not counted against it, View::over_all): across, on the line through its middle, from as far before its left edge to as
+/// far past its right as a press there is on it; down, so on the line through its middle across. Each way it is drawn
+/// as big as a press's room at least it is pressed only where drawn (press_small), its box. So what the room rules
+/// measure (ui's rooms.mbt) is what a press does where the tree is drawn: what is drawn over another and within it
+/// takes the press there first, where two reach the nearer has it, what the press lands in cuts what it reaches. What
+/// the tree counts of its searches (found_walked, near_kept) is left as it was: a check's asking is none of its work.
+/// Measured on its middle lines alone, a row as crowded is said only where its middle is under its neighbour: a line
+/// 9 under a head, whose start is as near, not where it is long enough that its middle is past the head's last (a
+/// rig's request granted). That is as little as the rule says, never what it lets pass; measured whole (the narrowest
+/// along each edge) is to come (the coordinator of the migration, 2026-11-12).
+pub fn Tree::press_room_found(
+  self : Tree,
+  id : NodeId,
+  box : (Double, Double, Double, Double),
+) -> (Double, Double, Double, Double) {
+  let least = self.least_now()
+  let (x0, y0, x1, y1) = box
+  let (walked, kept) = (self.work.found_walked, self.work.near_kept)
+  let (mx, my) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
+  let (rx0, rx1) = if x1 - x0 < least {
+    let far = least - (x1 - x0)
+    (x0 - self.reached_past(id, x0, my, -1.0, 0.0, far), x1 + self.reached_past(id, x1, my, 1.0, 0.0, far))
+  } else {
+    (x0, x1)
+  }
+  let (ry0, ry1) = if y1 - y0 < least {
+    let far = least - (y1 - y0)
+    (y0 - self.reached_past(id, mx, y0, 0.0, -1.0, far), y1 + self.reached_past(id, mx, y1, 0.0, 1.0, far))
+  } else {
+    (y0, y1)
+  }
+  self.work.found_walked = walked
+  self.work.near_kept = kept
+  (rx0, ry0, rx1, ry1)
+}
+
+///|
+/// How far from (x, y), an edge of what node `id` draws, going (dx, dy) out of it, a press is still on it
+/// (Tree::target_at), `far` at most (a press's room past one edge: as much as the room is wider than what is drawn, it
+/// moved in from the window's edge whole): found in eight steps out and halved sixteen times in the last, to the
+/// 1024th of a point (a place the layout gives, a half's or a third's, read as it is, no hair of a halving left on it).
+fn Tree::reached_past(
+  self : Tree,
+  id : NodeId,
+  x : Double,
+  y : Double,
+  dx : Double,
+  dy : Double,
+  far : Double,
+) -> Double {
+  // (one answering a hold alone: what a finger held there holds, Tree::hold_at; else what a press there is on)
+  let held = self.alive_id(id) && self.nodes[id.at].hold_only is Some(_)
+  let layer = self.over_all_of(id)
+  let on = fn(d : Double) {
+    let (px, py) = (x + dx * d, y + dy * d)
+    if held && self.hold_at(px, py) == Some(id) {
+      return true
+    }
+    match self.target_at(px, py) {
+      Pressed(t) | Dragged(t) => {
+        if t == id && !held {
+          return true
+        }
+        // (what a layer presented over all else takes there (a hover card, a tip: View::over_all, opened by its
+        // cause, gone at a press elsewhere) is its to take, as what a modal layer covers is none of the rules': not
+        // room this one lacks (the coordinator of the migration, 2026-11-12). Not what is merely drawn after it, nor
+        // what is in the same layer as it)
+        let l = self.over_all_of(t)
+        l >= 0 && l != layer
+      }
+      _ => false
+    }
+  }
+  let step = far / 8.0
+  let mut hit = 0.0
+  let mut miss = -1.0
+  for k = 1; k <= 8; k = k + 1 {
+    let d = step * k.to_double()
+    if on(d) {
+      hit = d
+    } else {
+      miss = d
+      break
+    }
+  }
+  if miss < 0.0 {
+    return far
+  }
+  for _ in 0..<16 {
+    let d = (hit + miss) / 2.0
+    if on(d) {
+      hit = d
+    } else {
+      miss = d
+    }
+  }
+  (hit * 1024.0).round() / 1024.0
 }
 
 ///|
@@ -168,7 +301,9 @@ fn Tree::near_said(
 /// hosting an old view, the old view's where it has something of its own there, as its host says (Tree::hosts_at: one
 /// of its targets or its room round one, words of it to pick; the old view reaches what it draws itself); where it has
 /// nothing, what is drawn over it is reached as though nothing were under the press, so a small key of the tree's over
-/// an app's shell has its room as anywhere (none of it reached: still the old view's).
+/// an app's shell has its room as anywhere (none of it reached: still the old view's). Where what is drawn over the old
+/// view there hides it (`covered`, its place in the walk: a bar's ground or glass over a chat's messages, Node::covers),
+/// what the old view has there is out of sight and none of it: a key on the bar has its room over it as anywhere.
 fn Tree::reached(
   self : Tree,
   top : Target,
@@ -178,6 +313,7 @@ fn Tree::reached(
   x : Double,
   y : Double,
   least : Double,
+  covered? : Int = -1,
 ) -> Target {
   if near.is_empty() {
     return top
@@ -189,7 +325,7 @@ fn Tree::reached(
   let (cut, on) = match top {
     Nothing => (window, false)
     Hosted(id) => {
-      if (self.hosts_at)(id, x, y) is Some(_) {
+      if covered <= top_order && (self.hosts_at)(id, x, y) is Some(_) {
         return top
       }
       (window, false)

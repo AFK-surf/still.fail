@@ -55,11 +55,9 @@ fn cb_drawn(t : @ui.Tester) -> String {
 }
 
 ///|
-/// What `t.audit()` says of a code block but a press's room its keys (换行, 复制) and what scrolls its code under them
-/// are short of: the rule parts the room between a key and what scrolls the code under it as neighbours of one layer,
-/// where the hit test reaches the key all round it as far as a press's room, over what scrolls too (the test below;
-/// ra4-20, ra4-21). The rule's, not the block's (the coordinator keeps it for the Tester's checks' line); said exactly
-/// `known` times, so that once the rule is mended this is taken out.
+/// What `t.audit()` says of a code block but a press's room what scrolls its code is short of with a finger at the
+/// default size of words (42 high, under 44): said exactly `known` times, so that once it is mended this is taken out.
+/// Its keys (换行, 复制) have theirs as the hit test reaches them, over what scrolls too (the test below).
 fn cb_audit(t : @ui.Tester, known : Int) -> Array[String] {
   let all = t.audit()
   let room = all.filter(fn(f) { f.has_prefix("room: ") && f.contains("sf/markdown_node.mbt") })
@@ -79,8 +77,8 @@ test "a code block's bar (its language, 换行, 复制) at the system's words se
       let was = cb_drawn(old)
       let t = cb_tester(true, platform~, scale~)
       assert_eq(cb_drawn(t), was, msg=at)
-      // (its keys' two; with a finger at 1, what scrolls its code too, under 44 high)
-      let faults = cb_audit(t, if platform == 2 && scale == 1.0 { 3 } else { 2 })
+      // (with a finger at 1, what scrolls its code, under 44 high)
+      let faults = cb_audit(t, if platform == 2 && scale == 1.0 { 1 } else { 0 })
       assert_true(faults.is_empty(), msg=at + ": " + faults.join(" || "))
     }
   }
@@ -91,7 +89,7 @@ test "a code block's 换行 is pressed as far round it as a press's room: over i
   for dy in [-6.0, 26.0] {
     let t = cb_tester(true)
     let w = t.words().iter().find_first(fn(w) { w.0 == md_wrap_words(false) }).unwrap()
-    assert_eq(cb_audit(t, 3), [])
+    assert_eq(cb_audit(t, 1), [])
     t.tap(w.1 + w.3 / 2.0, w.2 + dy)
     t.run_for(@ui.move_most_ms)
     assert_true(t.find(md_wrap_words(true)) is Some(_), msg="\{dy} from its words' top")

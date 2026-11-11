@@ -172,10 +172,19 @@ fn Tree::handed_takes(self : Tree, th : Through, why : Handed, x : Double, y : D
 /// A finger going through handed on, at `now`, its cover's hold ended and what that did committed: looked at again (the
 /// one found gone, said to take no press, the tree made anew; another holding), the finger then that one's. Held long:
 /// told it went down where it is, as long held as since it went down. Moved: told it went down where it did, then moved
-/// to where it is, as one change of `now` (the move that handed it on its own).
-fn Tree::hand_on(self : Tree, th : Through, why : Handed, x : Double, y : Double, now : Double) -> Unit {
+/// to where it is, as one change of `now` (the move that handed it on its own). `found`: what it goes to found taking it
+/// where it is already (a hold handed in, Tree::hold_found: on it or in its room round it), not asked again here.
+fn Tree::hand_on(
+  self : Tree,
+  th : Through,
+  why : Handed,
+  x : Double,
+  y : Double,
+  now : Double,
+  found? : Bool = false,
+) -> Unit {
   self.laid_now()
-  guard self.held is None && self.handed_takes(th, why, x, y) else { return }
+  guard self.held is None && (found || self.handed_takes(th, why, x, y)) else { return }
   match th.under {
     Dragged(u) => {
       let n = self.nodes[u.at]

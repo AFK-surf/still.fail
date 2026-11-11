@@ -15,7 +15,8 @@ let ro_lit : Int64 = 0xCC3333FFL
 
 ///|
 /// What the old view draws where the key is: nothing (0), a button of its own 37 by 24 ending 3 before the key's left,
-/// 110 down (1), words to pick across the key's left, 106 down (2).
+/// 110 down (1), words to pick across the key's left, 106 down (2), a list of 40 rows 50 high a finger scrolls, nothing in it
+/// pressed (3).
 fn ro_old(c : Ctx, what : Int) -> Unit {
   c.mouse_drags_lists(false)
   c.column(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -42,6 +43,11 @@ fn ro_old(c : Ctx, what : Int) -> Unit {
         })
         |> ignore
       }
+      3 =>
+        c.list("rows", 40, 50.0, fn(i) {
+          c.box(w=Fill(1.0), h=Px(50.0), bg=if i % 2 == 0 { 0xF4F4F4FFL } else { 0xFFFFFFFFL }, fn() {  }) |> ignore
+        })
+        |> ignore
       _ => c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
     }
   })
@@ -185,4 +191,116 @@ test "a key of the tree over an old view with nothing there: every point of its 
       y = y + 0.25
     }
   }
+}
+
+///|
+/// A finger's drag from (x, y) up 100 over the key on an old view's list (ro_old's 3), let go there: how far the list
+/// scrolled, how many times the key was pressed, and whether (x, y) is the key's as the hit test says.
+fn ro_drag_from(x : Double, y : Double) -> (Double, Int, Bool) {
+  let (t, tree, key) = ro_tester(2, 3)
+  let on = tree.target_at(x, y) == Pressed(key)
+  t.drag(x, y, x, y - 100.0, steps=10)
+  (t.list_state().offset(), ro_key_presses[0], on)
+}
+
+///|
+test "a key of the tree over an old view's list: a finger's drag begun in its room past its edge does what one begun in it does" {
+  // (the key's room is the key (the coordinator of the migration, 2026-11-11): what a press, a drag or a hold does
+  // begun in the ring round it is what it does begun where it is drawn)
+  let inside = ro_drag_from(117.0, 117.0)
+  let ring = ro_drag_from(96.0, 117.0)
+  assert_true(inside.2 && ring.2, msg="the key's where each began: inside \{inside.2}, in its room \{ring.2}")
+  assert_eq((ring.0, ring.1), (inside.0, inside.1), msg="(scrolled, pressed) begun in its room against begun in it")
+  // (what that is: the key's hold, moved off it, presses nothing, and the old view's list under it is not dragged)
+  assert_eq((inside.0, inside.1), (0.0, 0))
+}
+
+///|
+/// A Tester by a finger (a room 44 across), 400 by 400, the whole window an old view: a frame that takes presses (as a
+/// page's list's measured by its id, pressing nothing), in it words to pick 20 to 42 down and again 60 to 82 down; over
+/// it a bar 48 high across the window, its ground `ground` (0: none), and on the bar a key of the tree's 34 by 34 at
+/// (100, 7); the tree, the key.
+fn ro_bar_tester(ground : Int64) -> (Tester, @view.Tree, @view.NodeId) {
+  ro_key_presses[0] = 0
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=400.0, platform=2)
+  t.check_looks(false)
+  let key : Ref[@view.NodeId?] = Ref(None)
+  let words = fn(c : Ctx, s : String) {
+    c.box(w=Px(300.0), fn() {
+      c.selectable(fn() { c.rich([plain(s)], size=15.0, line=22.0, color=0x333333FFL) |> ignore })
+    })
+    |> ignore
+  }
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(400.0))) |> ignore
+      old(b, fn(c) {
+        c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+          c.box(id=c.id("whole"), w=Fill(1.0), h=Fill(1.0), fn() {
+            c.box(w=Px(300.0), h=Px(20.0), fn() {  }) |> ignore
+            words(c, "words under the bar")
+            c.box(w=Px(300.0), h=Px(18.0), fn() {  }) |> ignore
+            words(c, "words past the bar")
+          })
+          |> ignore
+        })
+        |> ignore
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(bar) {
+      bar.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(48.0))).ground(Is(ground)) |> ignore
+      bar.box(fn(n) {
+        key.val = Some(n.id())
+        n
+        .over(Is(true))
+        .offset(Is((100.0, 7.0)))
+        .width(Is(Some(34.0)))
+        .height(Is(Some(34.0)))
+        .presses(Is(true))
+        .says(Is(Some(@view.said(Button, label="key"))))
+        .on_press(fn() { ro_key_presses[0] = ro_key_presses[0] + 1 })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.drawn_now()
+  (t, view_app.val.unwrap(), key.val.unwrap())
+}
+
+///|
+test "a key on a bar whose ground hides an old view under it: past its edge in its room, over the old view's words and its frame there, the key's; under no ground, the old view's; past the bar, its words picked by a long press" {
+  // (the key 100–134 across, 7–41 down; a finger's room 5 round it)
+  let (t, tree, key) = ro_bar_tester(0xFFFFFFFFL)
+  let island = match tree.target_at(10.0, 200.0) {
+    Hosted(h) => h
+    _ => @halt.saying("the old view not found")
+  }
+  // (what the old view has there, were it seen: its words 4 left of the key, its frame 4 below it)
+  assert_true(old_taker_at(tree, island, 96.0, 30.0) is Some(_), msg="the old view's 4 left of it")
+  assert_true(old_taker_at(tree, island, 117.0, 45.0) is Some(_), msg="the old view's 4 below it")
+  t.tap(96.0, 30.0)
+  assert_eq(ro_key_presses[0], 1, msg="4 left of it, over the words under the bar")
+  t.tap(117.0, 45.0)
+  assert_eq(ro_key_presses[0], 2, msg="4 below it, over the old view's frame under the bar")
+  // (a finger down there: the key holds it)
+  t.press_at(117.0, 45.0)
+  assert_true(tree.holder() == Some(key), msg="held 4 below it")
+  t.touch(3, 117.0, 45.0)
+  t.draw()
+  // (past the bar, on the words there: a long press picks them, the old view's)
+  t.press_at(20.0, 71.0)
+  t.run_for(long_press_ms)
+  assert_eq(t.ctx().selected_text(), "words", msg="held long on the words past the bar")
+  t.release(20.0, 71.0)
+  assert_eq(ro_key_presses[0], 2)
+  // (the bar without a ground of its own, the old view seen through it: what it has there its)
+  let (u, _, _) = ro_bar_tester(0L)
+  u.tap(96.0, 30.0)
+  u.tap(117.0, 45.0)
+  assert_eq(ro_key_presses[0], 0, msg="no ground: the old view's under it")
 }

@@ -439,6 +439,21 @@ fn aw_audited(t : @ui.Tester, before : Array[String], at : String, open? : Bool 
 }
 
 ///|
+/// What `faults` (`t.audit()`'s) say of a press's room the history's details' links (sfdesk/history.mbt's
+/// `wh_link_node`) and its line of the agent's work (sfpages/agent_work.mbt's mark) are short of: lines of words 18
+/// high (22 at 1.3) two apart, each pressed in 32 (34) where a keyboard and mouse's is 36. Crowded as drawn, by either
+/// way of measuring it (the coordinator of the migration, 2026-11-12: known, its count held, only to fall); said
+/// exactly `history` and `work` times, so that once the rows are set further apart this is brought down.
+fn aw_crowded(faults : Array[String], at : String, history : Int, work : Int) -> Unit raise {
+  let room = faults.filter(fn(f) { f.has_prefix("room: ") })
+  let of = fn(place : String) { room.filter(fn(f) { f.contains(place) }) }
+  let h = of("sfdesk/history.mbt:397")
+  let w = of("sfpages/agent_work.mbt:352")
+  assert_eq(h.length(), history, msg="\{at}: \{h}")
+  assert_eq(w.length(), work, msg="\{at}: \{w}")
+}
+
+///|
 test "its panel on each screen, at the default size of words and at 1.3: what runs in the background under its head and how many, a task a row (its kind's chip whole, what it is, how long it has run), then the checklist in its order; nothing more for the audit than the old panel's own" {
   for screen in aw_screens {
     for scale in [1.0, words_large_scale] {
@@ -446,6 +461,13 @@ test "its panel on each screen, at the default size of words and at 1.3: what ru
       let at = "platform \{platform} wide \{wide} at \{scale}"
       let t = aw_tester(aw_card(), platform~, wide~, scale~)
       let before = t.audit()
+      // (the details' crowded rows, on a wide window, at 1 and at 1.3 alike: 「释放进程」 48×32 or 「Profile 详情」 94×34,
+      // and 「后台 4 · 2/6」 88×32 or 110×34; known, see aw_crowded)
+      if wide {
+        aw_crowded(before, at, 1, 1)
+      } else {
+        aw_crowded(before, at, 0, 0)
+      }
       let mark = aw_mark(t, at)
       aw_opened(t, at)
       let one = fn(s : String) raise {

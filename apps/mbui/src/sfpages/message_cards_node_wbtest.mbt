@@ -213,10 +213,25 @@ fn card_rig_cases() -> Array[(String, String, Message, Json?)] {
 
 
 ///|
+/// How many of card_audit's rooms the rig's request `c` (card_rig_cases') has: none while it is asked; decided, the
+/// head's name and time, and the line saying how it went where it is short enough that its middle is under the time
+/// (「已批准，等它上线」 112 wide, 「已拒绝使用这台 station」 148, from 40; 「已允许使用这台 station · 8 小时后失效」 and an
+/// ended one's are longer).
+fn card_rig_rooms(c : (String, String, Message, Json?)) -> Int {
+  match c.0 {
+    "granted" | "ended" => 2
+    "away" | "denied" => 3
+    _ => 0
+  }
+}
+
+///|
 /// What `t.audit()` says, the rooms of what stands over and under each other where the line saying how a request went
 /// is right under its post's head (in place of its words) aside: the head's name and time and that line, each
 /// left 32 high to be pressed in by the other (laid out as the old view's is, whose rooms nothing checks). Exactly
-/// `rooms` of those, nothing else.
+/// `rooms` of those, nothing else. Each is measured as a press lands, along the lines through its middle: the line is
+/// said where its middle is under the head's time (card_rig_rooms), not where it is long enough that its middle is past
+/// it, though its start is as near.
 fn card_audit(t : @ui.Tester, at : String, rooms : Int) -> Unit raise {
   let faults = t.audit()
   let stacked = fn(f : String) {
@@ -284,7 +299,7 @@ test "a rig's request in place of its post's words, made once as nodes, is drawn
       } else {
         assert_true(now != waiting, msg=at + ": drawn as waiting")
       }
-      card_audit(t, at, if c.2.card is Some({ rig: Some({ status: "", .. }), .. }) { 0 } else { 3 })
+      card_audit(t, at, card_rig_rooms(c))
     }
   }
   let cases = card_rig_cases()
@@ -292,7 +307,7 @@ test "a rig's request in place of its post's words, made once as nodes, is drawn
     let at = "\{c.0} at 1.3"
     let (was, now, t) = card_rig_both(c, 390.0, scale=1.3)
     assert_eq(now, was, msg=at)
-    card_audit(t, at, if c.0 == "waiting" { 0 } else { 3 })
+    card_audit(t, at, card_rig_rooms(c))
   }
   for over in ["拒绝", "闲置 1 小时"] {
     let (was, now, t) = card_rig_both(cases[0], 760.0, over~)
@@ -382,7 +397,8 @@ test "a rig's request decided as its card shows: the card goes, the line saying 
   assert_true(t.find("在 Linux 上跑一遍完整的 station 测试") is None)
   let line = "已允许使用这台 station · 8 小时后失效"
   assert_true(t.find(line) is Some(_))
-  card_audit(t, "decided", 3)
+  // (granted: its line's middle past the head's time, card_rig_rooms)
+  card_audit(t, "decided", 2)
   t.click(Button, label=line + " · " + @sf.t("web-main.history.details"))
   t.run_for(@ui.move_most_ms)
   assert_true(@sf.presenting())
@@ -637,6 +653,21 @@ fn card_phone_cases() -> Array[(String, Source, Message)] {
 }
 
 ///|
+/// How many of card_audit's rooms the phone's request named `name` (card_phone_cases') has `w` wide: none while it is
+/// asked; decided, the head's name and time, and the line saying how it went where its middle is under the time (as
+/// card_rig_rooms: 「已允许调试手机 · 本对话内」 166 wide, 「已拒绝调试手机」 100, 「调试手机已结束：对话已归档」 172, from 40),
+/// not where the line goes on past the time to say how the phone is held (granted, held; granted, off; to be paired on
+/// the phone, wide), its middle past it; to be paired, narrow, on two lines, tall enough to leave the head its room.
+fn card_phone_rooms(name : String, w : Double) -> Int {
+  match name {
+    "granted" | "denied" | "ended" => 3
+    "granted, held" | "granted, off" => 2
+    "granted, to pair" => if w < 760.0 { 0 } else { 2 }
+    _ => 0
+  }
+}
+
+///|
 /// The phone's request `m` over `src` as the old view draws it (phone_ask_card in a list's row), `w` wide at `scale`;
 /// then as the nodes do: both, and the new one's Tester.
 fn card_phone_both(src : Source, m : Message, w : Double, at : String, scale? : Double = 1.0) -> (String, String, @ui.Tester) {
@@ -669,9 +700,7 @@ test "a phone's request in place of its post's words, made once as nodes, is dra
       } else {
         assert_true(now != waiting, msg=at + ": drawn as waiting")
       }
-      // (decided, its line right under the head; on two lines, narrow, tall enough to leave them their room)
-      let waits = c.2.card is Some({ phone: Some({ status: "", .. }), .. })
-      card_audit(t, at, if waits || (c.0 == "granted, to pair" && w < 760.0) { 0 } else { 3 })
+      card_audit(t, at, card_phone_rooms(c.0, w))
     }
   }
   // (at 1.3 narrow, waiting with its length's choice, the old view's foot goes on to a second line whose choice breaks

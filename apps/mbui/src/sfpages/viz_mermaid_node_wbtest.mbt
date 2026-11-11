@@ -109,23 +109,6 @@ fn mm_drawn(t : @ui.Tester) -> String {
 }
 
 ///|
-/// What `t.audit()` says, but a code block's keys (换行, 复制) with less than 36 high to be pressed in
-/// (sf/markdown_node.mbt), said exactly `keys` times (two a block of code): the rule's way of working out a press's room,
-/// not the block's (message_agent_node_wbtest's ag_audit says why; ra4-20, ra4-21), the Tester's checks' line to mend.
-fn mm_audit(t : @ui.Tester, keys : Int) -> Array[String] {
-  let all = t.audit()
-  let known = all.filter(fn(f) {
-    f.has_prefix("room: ") && f.contains("sf/markdown_node.mbt") && f.contains("to be pressed in, under 36") &&
-    (f.contains("「换行」") || f.contains("「复制」"))
-  })
-  let faults = all.filter(fn(f) { !known.contains(f) })
-  if known.length() != keys {
-    faults.push("a code block's keys short of room \{known.length()} times, \{keys} known: " + known.join(" | "))
-  }
-  faults
-}
-
-///|
 test "a mermaid block, made once as nodes, is drawn as the old view drew it: its chart made, refused, being made; wide and narrow, at 1.3" {
   for answer in ["made", "refused", "coming"] {
     for (w, scale) in [(760.0, 1.0), (390.0, 1.0), (390.0, 1.3)] {
@@ -148,7 +131,7 @@ test "a mermaid block, made once as nodes, is drawn as the old view drew it: its
         assert_eq(mm_drawn(t), was, msg=at)
       }
       // (refused, its code: a block's two keys)
-      let faults = mm_audit(t, if answer == "refused" { 2 } else { 0 })
+      let faults = t.audit()
       assert_true(faults.is_empty(), msg=at + ": " + faults.join(" | "))
     }
   }

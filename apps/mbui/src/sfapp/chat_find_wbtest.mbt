@@ -1061,3 +1061,53 @@ test "对话目录: a tick of the rail pointed at says its message's first line 
   assert_true(outline_panel(t) is Some(_))
   assert_eq(outline_faults(t), [])
 }
+
+///|
+/// A phone's chat as it shows, a finger down at (x, y): what the window's tree holds it by, the finger then called off.
+fn bar_key_held(x : Double, y : Double) -> @view.NodeId? {
+  let t = screen_in("chat", corner_windows[0], "zh")
+  t.press_at(x, y)
+  let held = @ui.view_tree().unwrap().holder()
+  t.touch(3, x, y)
+  t.draw()
+  held
+}
+
+///|
+test "a phone's chat: each key of its bar, over the messages scrolled under the bar's glass, holds a finger down past its foot in its room; past the bar, a message's words held long are picked" {
+  let t = screen_in("chat", corner_windows[0], "zh")
+  let tree = @ui.view_tree().unwrap()
+  // (the bar: frosted glass over the messages from the window's top)
+  let bars = tree.drawn().filter(fn(d) { d.glass is Some(_) && d.y <= 0.0 && d.w >= 300.0 })
+  assert_true(bars.length() == 1, msg="the bar's glass: \{bars.length()}")
+  let foot = bars[0].y + bars[0].h
+  // (its keys: back, 40 across, and the three round ones, 34)
+  let keys = tree
+    .press_boxes()
+    .filter(fn(b) { b.1.1 < foot && b.1.3 - b.1.1 >= 34.0 && b.1.2 - b.1.0 <= 40.0 })
+    .map(fn(b) { (tree.said_of(b.0).map(fn(s) { s.label }).unwrap_or(""), b.0, b.1) })
+  assert_eq(keys.map(fn(k) { k.0 }), ["返回", "归档", "对话信息", "更多"])
+  // (the messages' words under the bar there: the old view's own, were it seen)
+  let runs = t.text_runs()
+  assert_true(runs.iter().any(fn(r) { r.top < foot }), msg="no message's words under the bar")
+  let past = match runs.search_by(fn(r) { r.top >= foot + 10.0 && r.x1 - r.x0 >= 30.0 }) {
+    Some(i) => runs[i]
+    None => @halt.saying("no message's words past the bar")
+  }
+  for k in keys {
+    let (label, id, (x0, _, x1, y1)) = k
+    // (past its foot in a finger's room (44): 4 below one 34 high, 1.5 below the back key, 40 high)
+    let d = if 44.0 - (y1 - k.2.1) >= 10.0 { 4.0 } else { (44.0 - (y1 - k.2.1)) / 2.0 - 0.5 }
+    assert_true(y1 + d < foot, msg="\{label}: \{d} below it is under the bar")
+    assert_true(bar_key_held((x0 + x1) / 2.0, y1 + d) == Some(id), msg="\{label}: \{d} below it")
+  }
+  // (past the bar, on a message's words: a long press picks them, the old view's)
+  let u = screen_in("chat", corner_windows[0], "zh")
+  let (x, y) = (past.x0 + 24.0, (past.top + past.bottom) / 2.0)
+  u.press_at(x, y)
+  u.run_for(@ui.long_press_ms)
+  u.release(x, y)
+  u.run_for(@sfbase.pick_bar_in_ms)
+  let p = @sfbase.picked.get()
+  assert_true(p.ts != "" && p.b > p.a, msg="held long on \{past.text} at (\{x}, \{y}): \{p}")
+}
