@@ -43,7 +43,7 @@ fn perf_touch_started() -> Unit {
 fn perf_touch_submitted(at : Double) -> Unit {
   let start = perf_touch_at.val
   perf_touch_at.val = -1.0
-  if start >= 0.0 && @hostapi.perf_recording() && at - start >= probe_slow_ms {
+  if start >= 0.0 && @hostapi.perf_recording() && at >= start + probe_slow_ms {
     @hostapi.perf_line("touch: to_submit=\{((at - start) * 10.0).round() / 10.0}ms")
   }
 }

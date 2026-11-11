@@ -26,7 +26,7 @@ pub fn Tree::twice_within(self : Tree, f : () -> (Double, Double)) -> Unit {
 fn Tree::pressed_twice(self : Tree, id : NodeId, at : Double, wx : Double, wy : Double) -> Bool {
   let (ms, slop) = (self.twice_feel)()
   match self.last_press {
-    Some((was, t, x, y)) if was == id && at - t < ms && (wx - x).abs() <= slop && (wy - y).abs() <= slop => {
+    Some((was, t, x, y)) if was == id && at < t + ms && (wx - x).abs() <= slop && (wy - y).abs() <= slop => {
       self.last_press = None
       true
     }

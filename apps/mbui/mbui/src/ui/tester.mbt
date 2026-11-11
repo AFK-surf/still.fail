@@ -835,12 +835,14 @@ fn Tester::clock_frame(self : Tester, ms? : Double = 0.0) -> Unit {
 
 ///|
 /// A display's frame at `t`, or the moment something is due at (Tester::next_due: a wake, a motion's end) where that
-/// is within `due_hair` of it: the same moment summed one way or another, drawn at what is due, not a hair before it,
-/// where what ends then has not (a fade's end 5e-13 ms after the frame a grid of 7 a second put there: the frame drawn
-/// of its looks alone kept what the whole build let go). run_for's on_grid holds the same the other way.
+/// is a hair after it (within `due_hair`): the same moment summed one way or another, drawn at what is due, not a hair
+/// before it, where what ends then has not (a fade's end 5e-13 ms after the frame a grid of 7 a second put there: the
+/// frame drawn of its looks alone kept what the whole build let go). What is due a hair before the frame is past at it:
+/// the frame stays on the grid, the same double whatever is due (an old view's list and the window's tree's, each its
+/// own ease's end summed from its own moments: list_scroll_same_wbtest). run_for's on_grid holds the same the other way.
 fn Tester::at_due(self : Tester, t : Double) -> Double {
   let due = self.next_due()
-  if due > self.fake.time && (due - t).abs() < due_hair {
+  if due > self.fake.time && due > t && due - t < due_hair {
     due
   } else {
     t
@@ -867,10 +869,10 @@ fn Tester::tick_after(self : Tester, t : Double) -> Double {
       // the hair, and the frame after it would be that frame again: frames after it never drawn)
       let hair = grid_hair * self.period
       let mut k = ((t - self.origin) / self.period).floor() - 1.0
-      while self.origin + k * self.period <= t + hair {
+      while grid_moment(self.origin, k, self.period) <= t + hair {
         k = k + 1.0
       }
-      self.origin + k * self.period
+      grid_moment(self.origin, k, self.period)
     }
   }
 }
@@ -892,10 +894,10 @@ fn Tester::tick_at(self : Tester, t : Double) -> Double {
       // (counted on the frames' times, as tick_after)
       let hair = grid_hair * self.period
       let mut k = ((t - self.origin) / self.period).floor() + 2.0
-      while self.origin + (k - 1.0) * self.period >= t - hair {
+      while grid_moment(self.origin, k - 1.0, self.period) >= t - hair {
         k = k - 1.0
       }
-      self.origin + k * self.period
+      grid_moment(self.origin, k, self.period)
     }
   }
 }

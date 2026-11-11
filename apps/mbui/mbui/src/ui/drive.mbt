@@ -930,7 +930,7 @@ fn wheel_followed(d : Driver) -> Unit {
         h_log("DRIVE wheel +\{after} ms: \"\{words}\" at y \{y}")
         d.wheel_follow = Some((id, words, y0, y, t0))
       }
-      if h_now() - t0 > wheel_follow_ms {
+      if h_now() > t0 + wheel_follow_ms {
         h_log("DRIVE wheel +\{after} ms: \"\{words}\" ends at y \{y}, from \{y0}")
         d.wheel_follow = None
       }
@@ -1617,7 +1617,7 @@ fn drive_steps(c : Ctx) -> Unit {
             d.shot_at = now
             return
           }
-        } else if now - d.shot_at >= shot_taker_ms {
+        } else if now >= d.shot_at + shot_taker_ms {
           next()
         } else {
           return

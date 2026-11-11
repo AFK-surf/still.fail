@@ -396,7 +396,7 @@ fn tree_field_down(id : @view.NodeId, x : Double, y : Double, at : Double) -> Bo
   }
   // (how many presses in a row: one soon after the last and near it counts on from it, as the old frame counts)
   let (n, was, ax, ay) = tf.run
-  tf.clicks = if at - was <= double_click_ms && (x - ax).abs() <= double_click_slop && (y - ay).abs() <= double_click_slop {
+  tf.clicks = if at <= was + double_click_ms && (x - ax).abs() <= double_click_slop && (y - ay).abs() <= double_click_slop {
     n + 1
   } else {
     1
@@ -553,7 +553,7 @@ fn tree_field_tapped(id : @view.NodeId) -> Unit {
   let st = tf.st
   let t = view_moment()
   let (was, lx, ly) = tf.last_tap
-  if t - was <= double_tap_ms && (x - lx).abs() <= 2.0 * touch_slop() && (y - ly).abs() <= 2.0 * touch_slop() {
+  if t <= was + double_tap_ms && (x - lx).abs() <= 2.0 * touch_slop() && (y - ly).abs() <= 2.0 * touch_slop() {
     match st.local_point(x, y) {
       Some((px, py)) => st.pick_word(px, py, t) |> ignore
       None => ()

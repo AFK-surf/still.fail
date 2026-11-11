@@ -154,7 +154,7 @@ fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[S
       }
     }
     rows_steady.lists[ln.id] = if shown_since < 0.0 { -1.0e9 } else { shown_since }
-    let settled = shown_since < 0.0 || now - shown_since > rows_first_ms
+    let settled = shown_since < 0.0 || now > shown_since + rows_first_ms
     let free = settled && !(st.held || st.moving() || st.easing() || now - st.put_at <= 1.5 * period)
     let view = st.vp_h
     let keys = match st.causes {
@@ -417,7 +417,7 @@ fn rows_steady_fault(
         if at == turned {
           return (None, turned)
         }
-        if at - turned < rows_turn_ms {
+        if at < turned + rows_turn_ms {
           return (Some("moved \{d} at \{at}, back \{e} at \{seen[n - 1].1}, turned back at \{turned} before"), at)
         }
         return (None, at)

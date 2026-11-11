@@ -44,8 +44,6 @@ priv struct BandCase {
   frames : Array[BandFrame]
   phase : Ref[String]
   shots : Map[Int64, Array[String]]
-  /// the same, each number to a millionth of a point (`near`)
-  nears : Map[Int64, Array[String]]
 }
 
 ///|
@@ -97,7 +95,7 @@ fn band_case(
     })
     |> ignore
   })
-  let c = { t, log, frames: [], phase: Ref("made"), shots: Map([]), nears: Map([]) }
+  let c = { t, log, frames: [], phase: Ref("made"), shots: Map([]) }
   t.each_frame(Some(fn() { band_frame(c) }))
   t.draw()
   c
@@ -110,13 +108,10 @@ fn band_frame(c : BandCase) -> Unit {
   let rows : Array[(Int, Double, Double)] = []
   let bits = fn(v : Double) { v.reinterpret_as_int64().to_string() }
   let shot : Array[String] = []
-  let near = fn(v : Double) { (v * 1.0e6).round().to_int64().to_string() }
-  let close : Array[String] = []
   let meets = fn(x : Double, y : Double, w : Double, h : Double) { x < 300.0 && x + w > 0.0 && y < 300.0 && y + h > 0.0 }
   for r in c.t.drawn_rects() {
     if meets(r.0, r.1, r.2, r.3) {
       shot.push("rect \{bits(r.0)} \{bits(r.1)} \{bits(r.2)} \{bits(r.3)} \{r.4}")
-      close.push("rect \{near(r.0)} \{near(r.1)} \{near(r.2)} \{near(r.3)} \{r.4}")
     }
     let g = r.4 - 0x40000000L - 0xFFL
     if r.0 < 1.0 && r.2 > 250.0 && g >= 0L && g % 0x100L == 0L && g / 0x100L < 1000L && meets(r.0, r.1, r.2, r.3) {
@@ -126,7 +121,6 @@ fn band_frame(c : BandCase) -> Unit {
   for w in c.t.words() {
     if meets(w.1, w.2, w.3, w.4) {
       shot.push("words \{w.0} \{bits(w.1)} \{bits(w.2)} \{bits(w.3)} \{bits(w.4)} \{bits(w.5)}")
-      close.push("words \{w.0} \{near(w.1)} \{near(w.2)} \{near(w.3)} \{near(w.4)} \{near(w.5)}")
     }
   }
   rows.sort_by(fn(a, b) { a.1.compare(b.1) })
@@ -148,7 +142,6 @@ fn band_frame(c : BandCase) -> Unit {
   }
   c.frames.push({ n: c.frames.length() + 1, phase: c.phase.val, at: c.t.time(), gap, gap_at, rows })
   c.shots[(c.t.time() * 1000.0).round().to_int64()] = shot
-  c.nears[(c.t.time() * 1000.0).round().to_int64()] = close
 }
 
 ///|
@@ -214,21 +207,15 @@ test "a page's list scrolled slowly, by the wheel, by over a row at once and by 
 }
 
 ///|
-/// On a host's pixels of 2.75 a point what is drawn at a moment two rates share is held to a millionth of a point, not
-/// to the bit: a frame's moment is the display's grid (its first frame and so many periods on), so 24's and 120's
-/// frame at what is one moment are two doubles a few last bits apart (n periods of 1000/24 against 5n of 1000/120);
-/// a fling is where it is at that moment, as many last bits apart, and a row's place where it is drawn keeps them (the
-/// same pixel, not the same double: drawn by the host's paint off the grid's own number). On 2 the grid's numbers are
-/// whole and each lands on its own: to the bit, and that stays so.
-///
-/// A millionth is no precision that is good enough: what the app works out is the same to the bit at both rates
-/// (every addition to the scroll's place checked so, the inputs at their moments); the moment the Tester gives is not.
-/// It is held this loosely only till the Tester's frame moments are worked out once each (its first frame and n times
-/// 1000 over the rate, never added up period by period); then 2.75, and 3 and 3.5, are held to the bit here as 2 is
-/// (the coordinator of the migration, 2026-11-12).
-test "a page's list given the same input at the same moments at 60, 120 and 24 frames a second: at each moment two of them draw, what is drawn where it shows is the same, to the bit on 2 pixels a point, to a millionth on 2.75" {
+/// On 2 pixels a point and on a host's pixels of 2.75, 3 and 3.5 a point, what is drawn at a moment two rates share is
+/// the same to the bit: a frame's moment is one double at every rate that draws it (the Tester's grid, its frames worked
+/// out at once: tester_time.mbt's grid_moment), a fling's place there one double, and a row's place where it is drawn
+/// one. Till 2026-11-12 the grid's moments were k periods of 1000/24 against 5k of 1000/120, a few last bits apart, and
+/// 2.75 was held only to a millionth of a point (the coordinator of the migration, 2026-11-12: held to the bit once the
+/// Tester's moments were worked out once each).
+test "a page's list given the same input at the same moments at 60, 120 and 24 frames a second: at each moment two of them draw, what is drawn where it shows is the same to the bit, on 2 pixels a point and on 2.75, 3 and 3.5" {
   let faults = []
-  for run in [(2.0, false), (2.75, true)] {
+  for run in [(2.0, false), (2.75, true), (3.0, true), (3.5, true)] {
     let (scale, on_pixels) = run
     let cases = []
     for p in [1000.0 / 60.0, 1000.0 / 120.0, 1000.0 / 24.0] {
@@ -240,7 +227,7 @@ test "a page's list given the same input at the same moments at 60, 120 and 24 f
     let (_, c120) = cases[1]
     for i in [0, 2] {
       let (rate, c) = cases[i]
-      let (mine, theirs) = if on_pixels { (c.nears, c120.nears) } else { (c.shots, c120.shots) }
+      let (mine, theirs) = (c.shots, c120.shots)
       let moments = mine.keys().filter(fn(k) { theirs.contains(k) }).collect()
       moments.sort()
       let differ = moments.filter(fn(k) { mine[k] != theirs[k] })

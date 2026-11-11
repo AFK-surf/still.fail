@@ -1113,7 +1113,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     // how many presses in a row this one is (NSEvent's clickCount: a double click's second 2, a triple's third 3):
     // one soon after the last (double_click_ms) and near it (double_click_slop) counts on from it
     let (n, at, ax, ay) = c.press_run
-    c.clicks = if t - at <= double_click_ms &&
+    c.clicks = if t <= at + double_click_ms &&
       (x - ax).abs() <= double_click_slop &&
       (y - ay).abs() <= double_click_slop {
       n + 1
@@ -1429,7 +1429,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
       // the second of two (Ctx::on_double_press): on the same, soon enough and near enough; then none is first
       let (was, at, ax, ay) = c.last_click
       let second = was == c.active &&
-        t - at <= double_click_ms &&
+        t <= at + double_click_ms &&
         (x - ax).abs() <= double_click_slop &&
         (y - ay).abs() <= double_click_slop
       if second {
@@ -1491,7 +1491,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
           c.focus_moved(c.editor_tap)
           let (was, at, lx, ly) = c.last_tap
           if was == c.editor_tap &&
-            t - at <= double_tap_ms &&
+            t <= at + double_tap_ms &&
             (c.press_x - lx).abs() <= 2.0 * touch_slop() &&
             (c.press_y - ly).abs() <= 2.0 * touch_slop() {
             // a second tap soon after the first, near it: the word there picked (Compose's double tap)
@@ -2717,7 +2717,7 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double, tree? : Doub
   // burst of frames at its start, is said whole, its seconds' busiest beside its average, not with the frames that
   // come after a pause)
   let every = if probe_on.val == 1 { probe_log_ms } else { probe_record_ms }
-  if probe_since.val >= 0.0 && t - probe_since.val >= every && probe_frames.val > 0 {
+  if probe_since.val >= 0.0 && t >= probe_since.val + every && probe_frames.val > 0 {
     probe_said(c, t, recording)
     probe_reset(t)
   }

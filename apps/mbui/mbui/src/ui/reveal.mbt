@@ -139,9 +139,9 @@ fn Ctx::revealed(self : Ctx, w : Double, h : Double, view : () -> Unit) -> Unit 
   let at = self.moment()
   if reveal.on &&
     (if reveal.start >= 0.0 {
-      at - reveal.start >= reveal_ms
+      at >= reveal.start + reveal_ms
     } else {
-      at - reveal.asked > reveal_wait_most
+      at > reveal.asked + reveal_wait_most
     }) {
     reveal_drop()
   }

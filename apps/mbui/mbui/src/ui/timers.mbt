@@ -233,7 +233,9 @@ pub fn Ctx::mark(self : Ctx, id : Int) -> Unit {
 /// (nothing waits on it), so what read it is built again then.
 pub fn Ctx::within(self : Ctx, id : Int, ms : Double) -> Bool {
   let at = mark_of(id).get()
-  if self.clock - at < ms {
+  // (its end one sum, the one it wakes at and a test's run_for comes to, start and length: the clock less the start is
+  // a rounding short of the length at that very moment, 2016.6666666666665 - 1016.6666666666666 < 1000)
+  if self.clock < at + ms {
     // (what reads it read so till then: drawn again as it ends)
     self.wake_at_time(at + ms, later=true)
     true

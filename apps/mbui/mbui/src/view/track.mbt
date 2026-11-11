@@ -176,7 +176,7 @@ pub fn Tracker::velocity(self : Tracker) -> Double {
 /// back less. Not caught: a turn of one move only (8 ms at 120 Hz) may go back less than that, flung the first way
 /// still, as theirs flings it.
 pub fn Tracker::velocity_at(self : Tracker, t : Double) -> Double {
-  if self.n == 0 || t - self.times[self.index] > tracker_gap_ms {
+  if self.n == 0 || t > self.times[self.index] + tracker_gap_ms {
     return 0.0
   }
   let v = self.velocity()
@@ -197,10 +197,10 @@ pub fn Tracker::velocity_at(self : Tracker, t : Double) -> Double {
   for _ in 1..<self.n {
     let before = (if idx == 0 { track_size } else { idx }) - 1
     let bt = self.times[before]
-    if newest - bt > tracker_horizon_ms || self.times[idx] - bt > tracker_gap_ms {
+    if newest > bt + tracker_horizon_ms || self.times[idx] > bt + tracker_gap_ms {
       break
     }
-    if newest - bt <= tracker_gap_ms {
+    if newest <= bt + tracker_gap_ms {
       last = before
     }
     let step = (self.vals[idx] - self.vals[before]) * way
