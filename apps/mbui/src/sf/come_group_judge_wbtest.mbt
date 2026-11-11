@@ -28,6 +28,14 @@ fn come_group_case(first : Double, after : Double, then : Array[String]) -> Unit
 }
 
 ///|
+/// How long 处理中 has been opening when one of 100 comes under it: all but open.
+let cg_all_but_open : Double = 200.0
+
+///|
+/// How long that one has been opening fast when 处理中 is called back: two frames of 60 a second.
+let cg_two_frames : Double = 33.3
+
+///|
 test "come group, judged: 处理中 all but open (42.65 of 44) called back, the answer in its place" {
   come_group_case(44.0, 183.3, ["头", "回复"])
 }
@@ -65,9 +73,9 @@ test "come group, judged: 处理中 all but open called back as one of 100 is op
   t.draw()
   t.run_for(@ui.move_most_ms)
   keys.set(["头", "处理中"])
-  t.run_for(200.0)
+  t.run_for(cg_all_but_open)
   keys.set(["头", "处理中", "长"])
-  t.run_for(33.3)
+  t.run_for(cg_two_frames)
   keys.set(["头", "长"])
   t.run_for(@ui.move_most_ms + 200.0)
 }

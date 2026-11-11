@@ -202,3 +202,113 @@ test "a group said as what one in it holds is on its way too: the same at each m
     assert_eq(at_every(frames), jumped, msg="\{frames}")
   }
 }
+
+///|
+/// A column of A (40 tall) and C (60) shown as `a0` and `c0` say from the first, 20 between them and 下 under them;
+/// at each of `events`' moments A's and C's shows set as it says (none: left). A's and C's heights and 下's top at each
+/// frame `step` apart from `from` to `to`; `inner`: at that moment a show 30 tall opens in a box of its own beside.
+fn cg_two(
+  a0 : Bool,
+  c0 : Bool,
+  events : Array[(Double, Bool?, Bool?)],
+  from : Double,
+  to : Double,
+  step? : Double = 1000.0 / 60.0,
+  inner? : Double,
+) -> Array[(Double, Double, Double)] {
+  let a_on = @signals.signal(a0, same=fn(a, b) { a == b })
+  let c_on = @signals.signal(c0, same=fn(a, b) { a == b })
+  let i_on = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = @view.Tree::new(fn(root) {
+    root.show(fn() { a_on.get() }, fn(v) { v.height(Is(Some(40.0))).words(Is("A")) |> ignore })
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("B")) |> ignore }) |> ignore
+    root.show(fn() { c_on.get() }, fn(v) { v.height(Is(Some(60.0))).words(Is("C")) |> ignore })
+    root.box(fn(b) {
+      b.show(fn() { i_on.get() }, fn(v) { v.height(Is(Some(30.0))).words(Is("I")) |> ignore }) |> ignore
+    })
+    |> ignore
+    root.box(fn(b) { b.height(Is(Some(20.0))).words(Is("下")) |> ignore }) |> ignore
+  })
+  t.frame(390.0, 844.0) |> ignore
+  let due = events.copy()
+  match inner {
+    Some(at) => due.push((at, None, None))
+    None => ()
+  }
+  due.sort_by_key(fn(e) { e.0 })
+  let out = []
+  let mut at = 0.0
+  let mut i = 0
+  let mut f = 0
+  while at <= to {
+    while i < due.length() && due[i].0 <= at + 0.001 {
+      let (when, a, c) = due[i]
+      t.event(when, fn() {
+        if a is Some(x) {
+          a_on.set(x)
+        }
+        if c is Some(x) {
+          c_on.set(x)
+        }
+        if a is None && c is None {
+          i_on.set(true)
+        }
+      })
+      i = i + 1
+    }
+    t.at(at)
+    t.frame(390.0, 844.0) |> ignore
+    if at >= from - 0.001 {
+      out.push((cg_drawn(t, "A").1, cg_drawn(t, "C").1, cg_drawn(t, "下").0))
+    }
+    // (each frame's moment as a multiple of the step, not a sum: the same moments at 60 and 120 a second, bit for bit)
+    f = f + 1
+    at = f.to_double() * step
+  }
+  out
+}
+
+///|
+test "one that went in a group, then set off alone: its way bit for bit as one that never went in one" {
+  let s = 1000.0 / 60.0
+  // (A opening again alone, then C closing alone, once both are at rest)
+  for again in [(Some(true), None), (None, Some(false))] {
+    let (a, c) = again
+    let grouped = cg_two(true, false, [(100.0, Some(false), Some(true)), (90.0 * s, a, c)], 90.0 * s, 140.0 * s)
+    let alone = cg_two(true, false, [(100.0, Some(false), None), (40.0 * s, None, Some(true)), (90.0 * s, a, c)], 90.0 * s, 140.0 * s)
+    assert_eq(grouped, alone, msg="\{again}")
+  }
+}
+
+///|
+test "both of a group set off again together once at rest: bit for bit as the same change made from rest" {
+  let s = 1000.0 / 60.0
+  let again = cg_two(true, false, [(100.0, Some(false), Some(true)), (90.0 * s, Some(true), Some(false))], 90.0 * s, 140.0 * s)
+  let fresh = cg_two(false, true, [(90.0 * s, Some(true), Some(false))], 90.0 * s, 140.0 * s)
+  assert_eq(again, fresh)
+  let ys = again.map(fn(r) { r.2 })
+  let (turns, _) = cg_turns(ys)
+  assert_eq(turns, 0, msg="\{ys}")
+}
+
+///|
+test "one of a group turned back on its way, the other on its way: a group of the two again, the same whatever frames" {
+  let run = fn(step : Double) {
+    cg_two(true, false, [(100.0, Some(false), Some(true)), (150.0, Some(true), None)], 0.0, 1000.0, step~)
+  }
+  let a = run(1000.0 / 60.0)
+  let b = run(1000.0 / 120.0)
+  for i in 0..<a.length() {
+    assert_eq(a[i], b[i * 2], msg="at \{i}: \{a[i]} \{b[i * 2]}")
+  }
+  let (turns, _) = cg_turns(a.map(fn(r) { r.2 }))
+  assert_true(turns <= 1, msg="\{a}")
+  assert_eq(a[a.length() - 1], (40.0, 60.0, 120.0))
+}
+
+///|
+test "what is on its way down a column, a show opening in another at that moment: its way untouched, bit for bit" {
+  let opened = cg_two(true, false, [(100.0, Some(false), None)], 0.0, 800.0, inner=150.0)
+  let without = cg_two(true, false, [(100.0, Some(false), None)], 0.0, 800.0)
+  assert_eq(opened.map(fn(r) { r.0 }), without.map(fn(r) { r.0 }))
+}
