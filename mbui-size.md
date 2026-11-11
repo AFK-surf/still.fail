@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [80220ce56](https://github.com/AFK-surf/still.fail/commit/80220ce56c2138afb177d342bd78f313df9034e2) mbui: a list's block come at its foot is made alon | 1.82 | 2.43 | 10.13 | 28.86 | 35.75 | 25.7 | 47.64 | 94.5 | 126.65 |
 | [704829c69](https://github.com/AFK-surf/still.fail/commit/704829c6912df0d8d968971712f6750ede3a7b02) mbui: a motion's end said as it was once it is ove | 1.82 | 2.43 | 10.12 | 28.86 | 35.75 | 25.7 | 47.62 | 94.65 | 183.12 |
 | [ebbb3bd62](https://github.com/AFK-surf/still.fail/commit/ebbb3bd62f4fd46751b2549c9f5707285a1c00b4) Leave batch-only models out of a provider's model  | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.82 | 173.08 |
 | [a0a38cd76](https://github.com/AFK-surf/still.fail/commit/a0a38cd76cac16c75a2fd16651e86a28d2d1ab34) app, core: 更新日志 is asked the tab in view a page at | 1.82 | 2.43 | 10.12 | 28.86 | 35.74 | 25.7 | 47.62 | 94.08 | 173.84 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [16fd90f9b](https://github.com/AFK-surf/still.fail/commit/16fd90f9b603ce46d07513061b35601404337a12) mbui: what holds a scroller makes its way as anyth | 1.8 | 2.41 | 10.04 | 28.71 | 35.26 | 25.63 | 47.37 | 93.96 | 184.49 |
 | [a3f8baeb2](https://github.com/AFK-surf/still.fail/commit/a3f8baeb2bb12dba6062d6f7e208e577cfa8af4c) app: 对话's card on the rail, each figure opens the  | 1.8 | 2.41 | 10.04 | 28.71 | 35.26 | 25.63 | 47.37 | 94.14 | 187.39 |
 | [e206beae8](https://github.com/AFK-surf/still.fail/commit/e206beae86d84ae2e66bafb64cd12f97a7399e65) ci: main's mbc store keeps the units its runs used | 1.8 | 2.4 | 10.02 | 28.67 | 35.16 | 25.61 | 47.29 | 94.31 | 171.43 |
-| [af3a678a1](https://github.com/AFK-surf/still.fail/commit/af3a678a11e4028dcf45e4dd277ca27fdd252cc1) core, app: 关于 shows this machine's station, its ne | 1.8 | 2.4 | 10.01 | 28.66 | 35.13 | 25.6 | 47.27 | 93.87 | 132.53 |
