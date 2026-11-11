@@ -159,14 +159,34 @@ pub fn move_path(d : Double, v : Double, t : Double, dur : Double) -> (Double, D
 /// Where a way from `from` set out at `v` (points a ms) toward `plan` has got `t` ms on, and how fast it goes, as it
 /// goes to `goal` (flex's come_way_by: its turn and lengths said by `plan`, only its end where `goal` is): for what
 /// sets off from where it stands as fast as it goes there, not from rest.
-pub fn come_way_by(from : Double, v : Double, goal : Double, plan : Double, t : Double) -> (Double, Double) {
-  @flex.come_way_by(from, v, goal, plan, t)
+pub fn come_way_by(
+  from : Double,
+  v : Double,
+  goal : Double,
+  plan : Double,
+  t : Double,
+  kept? : ComeKept,
+) -> (Double, Double) {
+  @flex.come_way_by(from, v, goal, plan, t, kept?)
+}
+
+///|
+/// (flex's: what a way turned back keeps of its turn, @ui.ComeKept)
+pub using @flex {
+  type ComeKept,
+}
+
+///|
+/// What a way turned back keeps of its turn, worked out once (flex's ComeKept): one to hold with a way set off, given
+/// to each come_way_by and come_way_ms of it.
+pub fn come_kept() -> ComeKept {
+  @flex.ComeKept::new()
 }
 
 ///|
 /// How long that way takes (flex's come_way_ms, `goal` its plan).
-pub fn come_way_ms(from : Double, v : Double, goal : Double) -> Double {
-  @flex.come_way_ms(from, v, goal)
+pub fn come_way_ms(from : Double, v : Double, goal : Double, kept? : ComeKept) -> Double {
+  @flex.come_way_ms(from, v, goal, kept?)
 }
 
 ///|

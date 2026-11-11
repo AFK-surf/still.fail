@@ -121,6 +121,7 @@ static void schedule(void) {
 
 // asked for from any thread (an image decoded, a message posted): its frame on the main thread
 static gint waking;
+static gint posting;  // a told of what was posted asked of the main loop, not yet run (mb_post_wake)
 static gboolean wake_idle(gpointer data) {
   (void)data;
   g_atomic_int_set(&waking, 0);
@@ -132,8 +133,22 @@ void mb_app_wake(void) {
   if (g_atomic_int_compare_and_exchange(&waking, 0, 1)) g_idle_add_full(G_PRIORITY_HIGH_IDLE, wake_idle, NULL, NULL);
 }
 
-// A message posted from outside the frames (post.h), on whatever thread: a frame asked for.
-static void mb_post_wake(void) { mb_app_wake(); }
+// A message posted from outside the frames (post.h), on whatever thread: the app told on the main loop, between frames
+// (MB_OUTSIDE_POSTED, ui's messages_between), as the Mac's host tells it (mac_app.m): it takes what changes only
+// signals then and asks for a frame only where something is left for one. Never taken as a frame begins: there the
+// frame has read what it does again before what came is taken, and a change only the window's tree reads went unseen
+// till something else built the frame whole (the web and Linux, 2026-11-11).
+static gboolean posted_idle(gpointer data) {
+  (void)data;
+  g_atomic_int_set(&posting, 0);
+  if (outside_cb) outside_cb(MB_OUTSIDE_POSTED, 0, 0);
+  else mb_app_wake();
+  return G_SOURCE_REMOVE;
+}
+
+static void mb_post_wake(void) {
+  if (g_atomic_int_compare_and_exchange(&posting, 0, 1)) g_idle_add_full(G_PRIORITY_HIGH_IDLE, posted_idle, NULL, NULL);
+}
 
 double mb_app_scale(void) { return scale; }
 

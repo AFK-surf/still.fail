@@ -9315,6 +9315,14 @@ pub fn Tree::changed(self : Tree) -> Array[NodeId] {
 }
 
 ///|
+/// Whether anything it changed or let go of waits to be taken (take_changed, take_removed): what it was told is laid
+/// out and placed, `due` no more, as a tree that lays itself out as each change is told whole does in the change's own
+/// event (View::laid_before_causes), and not drawn yet.
+pub fn Tree::changes_waiting(self : Tree) -> Bool {
+  !self.pending.is_empty() || !self.removed.is_empty()
+}
+
+///|
 /// The nodes whose content was made again since this was last asked (by frames, by an event bringing the tree to its
 /// moment): what the host keeps of each made again. Taken: asked again, only those since.
 pub fn Tree::take_changed(self : Tree) -> Array[NodeId] {

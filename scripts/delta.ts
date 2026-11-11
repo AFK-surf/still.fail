@@ -18,6 +18,8 @@
 // the entries whose deflated bytes changed inflated, written out with the n_deflate ranges deflated again. Only a
 // deflater giving the same bytes as the one that made the apk makes it again: node's (level 6) makes the tests' zips;
 // a real APK is checked by the Java applier the app carries (`--deflate-check none` here checks the bsdiff alone).
+// Making: the old files found whole in the made bytes (wholeFiles: an old tree's files, an apk's entries) are matched
+// where they were found, and only the rest of the old blob is sorted for bsdiff to search (sparseSuffixArray).
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -100,10 +102,106 @@ function lmsNames(s: Uint8Array | Int32Array, n: number, lms: Int32Array, sorted
   return { names, upper };
 }
 
+// --- the old files found whole ---
+
+/** `len` bytes of the made blob from `made` that are the old file at `old`, byte for byte. */
+export type Run = { made: number; old: number; len: number };
+
+/** The window a file's start is looked for by: files shorter than it are not looked for. */
+export const WINDOW = 256;
+const HASH = 0x01000193;
+
+/**
+ * Runs of `made` that are a whole old file (`files`: their ranges in `old`), sorted by `made`, not overlapping: the
+ * first WINDOW bytes of each file are indexed by a rolling hash, which is rolled over `made`; at a hit the whole file
+ * is compared. Where several files match there, the longest, then the first in `old`.
+ */
+export function wholeFiles(old: Uint8Array, files: Range[], made: Uint8Array): Run[] {
+  const W = WINDOW, out: Run[] = [];
+  if (made.length < W) return out;
+  const hash = (b: Uint8Array, at: number) => {
+    let h = 0;
+    for (let i = 0; i < W; i++) h = (Math.imul(h, HASH) + b[at + i]!) | 0;
+    return h;
+  };
+  let top = 1; // HASH ** W, what the byte leaving the window weighed
+  for (let i = 0; i < W; i++) top = Math.imul(top, HASH);
+  // (a bit for each value of a hash's top 22 bits, so that the scan touches no Map at most bytes)
+  const bits = new Uint32Array(1 << 17), starting = new Map<number, Range[]>();
+  for (const f of files) {
+    if (f.len < W) continue;
+    // (a window of one byte said over, zeros mostly, is at every place of such a stretch of `made`, each a compare as
+    // long as the stretch: such a file is not looked for)
+    let flat = true;
+    for (let i = 1; i < W && flat; i++) flat = old[f.at + i] === old[f.at];
+    if (flat) continue;
+    const h = hash(old, f.at);
+    bits[h >>> 15]! |= 1 << ((h >>> 10) & 31);
+    const list = starting.get(h);
+    if (list) list.push(f); else starting.set(h, [f]);
+  }
+  for (const list of starting.values()) list.sort((a, b) => b.len - a.len || a.at - b.at);
+  const view = Buffer.from(made.buffer, made.byteOffset, made.length), oldView = Buffer.from(old.buffer, old.byteOffset, old.length);
+  let p = 0, h = hash(made, 0);
+  for (;;) {
+    let found: Range | undefined;
+    if (bits[h >>> 15]! & (1 << ((h >>> 10) & 31))) {
+      for (const f of starting.get(h) ?? []) {
+        if (p + f.len <= made.length && view.compare(oldView, f.at, f.at + f.len, p, p + f.len) === 0) { found = f; break; }
+      }
+    }
+    if (found) {
+      out.push({ made: p, old: found.at, len: found.len });
+      p += found.len;
+      if (p + W > made.length) break;
+      h = hash(made, p);
+    } else {
+      if (p + W >= made.length) break;
+      h = (Math.imul(h, HASH) - Math.imul(made[p]!, top) + made[p + W]!) | 0;
+      p++;
+    }
+  }
+  return out;
+}
+
+/** The ranges of an old blob of `size` bytes outside `runs`' files, and how many bytes they hold. */
+function outside(size: number, runs: Run[]) {
+  const taken = runs.map((r) => [r.old, r.old + r.len] as const).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const gaps: [number, number][] = [];
+  let o = 0, m = 0;
+  for (const [start, end] of [...taken, [size, size] as const]) {
+    if (start > o) { gaps.push([o, start]); m += start - o; }
+    o = Math.max(o, end);
+  }
+  return { gaps, m };
+}
+
+/**
+ * The suffix array of the old bytes outside `runs`' files, each suffix by its offset in `old`, I[0] = old.length (the
+ * empty suffix), as bsdiff searches it.
+ */
+export function sparseSuffixArray(old: Uint8Array, runs: Run[]): Int32Array {
+  const { gaps, m } = outside(old.length, runs);
+  const reduced = new Uint8Array(m), at = new Int32Array(m);
+  let r = 0;
+  for (const [start, end] of gaps) {
+    reduced.set(old.subarray(start, end), r);
+    for (let i = start; i < end; i++) at[r++] = i;
+  }
+  // Sorted as the reduced bytes, not the whole old: only where a comparison runs past a reduced range's end does that
+  // differ, which makes a search find a shorter match, never a wrong one (matchlen, below and the records read `old`).
+  const I = new Int32Array(m + 1);
+  I[0] = old.length;
+  sais(reduced, m, 255, I.subarray(1));
+  for (let i = 1; i <= m; i++) I[i] = at[I[i]!]!;
+  return I;
+}
+
 // --- bsdiff ---
 
-/** bsdiff's records turning `old` into `made`, cut in chunks (each with its 8-byte head), without the end chunk. */
-export function bsdiff(old: Buffer, made: Buffer, I: Int32Array = suffixArray(old)): Buffer[] {
+/** bsdiff's records turning `old` into `made`, cut in chunks (each with its 8-byte head), without the end chunk;
+ * with `known` (wholeFiles), a position in one of its runs is matched there without a search. */
+export function bsdiff(old: Buffer, made: Buffer, I: Int32Array = suffixArray(old), known: Run[] = []): Buffer[] {
   const oldsize = old.length, newsize = made.length;
   const out = chunker();
   let pos = 0;
@@ -119,8 +217,17 @@ export function bsdiff(old: Buffer, made: Buffer, I: Int32Array = suffixArray(ol
     for (let i = 0; i < quick; i++) if (old[o + i] !== made[s + i]) return old[o + i]! < made[s + i]!;
     return n > quick && old.compare(made, s + quick, s + n, o + quick, o + n) < 0;
   };
+  // (scan never goes back: the run that may hold it is found by going forward)
+  let k = 0;
   const search = (scan: number) => {
-    let st = 0, en = oldsize;
+    while (k < known.length && known[k]!.made + known[k]!.len <= scan) k++;
+    const run = known[k];
+    if (run && run.made <= scan) {
+      pos = run.old + (scan - run.made);
+      const n = run.made + run.len - scan;
+      return n + matchlen(pos + n, scan + n);
+    }
+    let st = 0, en = I.length - 1;
     while (en - st >= 2) {
       const x = st + ((en - st) >> 1);
       if (below(I[x]!, scan)) st = x; else en = x;
@@ -284,16 +391,25 @@ export function treeFiles(root: string): string[] {
 
 const END = Buffer.alloc(8);
 
-export function makeDelta(old: Buffer, made: Buffer, files: string[], inflate: Range[], deflate: Range[]): Buffer {
+/** Below this share of the old blob found whole, the whole of it is sorted, as without `oldFiles`. */
+const WHOLE_ENOUGH = 1 / 8;
+
+/** A delta's bytes; `oldFiles`, the ranges of the old blob's files, lets those found whole in `made` go unsorted. */
+export function makeDelta(old: Buffer, made: Buffer, files: string[], inflate: Range[], deflate: Range[], oldFiles?: Range[]): Buffer {
   const head = encodeHeader({ files, inflate, oldSize: old.length, oldSha256: sha256(old), deflate, madeSize: made.length });
-  return Buffer.concat([head, ...bsdiff(old, made), END]);
+  const runs = oldFiles ? wholeFiles(old, oldFiles, made) : [];
+  const covered = old.length - outside(old.length, runs).m;
+  const body = covered > 0 && covered >= old.length * WHOLE_ENOUGH ? bsdiff(old, made, sparseSuffixArray(old, runs), runs) : bsdiff(old, made);
+  return Buffer.concat([head, ...body, END]);
 }
 
 /** A delta from the folder `oldDir` to the file `newFile`, written to `out` once applying it gives that file. */
 export function makeTree(oldDir: string, newFile: string, out: string): void {
   const files = treeFiles(oldDir);
   const neu = readFileSync(newFile);
-  writeFileSync(out, makeDelta(Buffer.concat(files.map((f) => readFileSync(join(oldDir, f)))), neu, files, [], []));
+  const data = files.map((f) => readFileSync(join(oldDir, f))), ranges: Range[] = [];
+  for (let at = 0, i = 0; i < data.length; at += data[i]!.length, i++) ranges.push({ at, len: data[i]!.length });
+  writeFileSync(out, makeDelta(Buffer.concat(data), neu, files, [], [], ranges));
   verified(out, () => {
     const d = readFileSync(out), h = parseHeader(d), want = expecting(neu);
     apply(h, readOld(h, { dir: oldDir }), d, want.sink);
@@ -383,13 +499,29 @@ export function transparent(oldZip: Buffer, newZip: Buffer) {
   };
 }
 
+/** Where each entry's data of `zip` is in its old blob (`inflate`: the entries inflated in it, as a delta's header says
+ * them): shifted by what the entries inflated before it grew; theirs inflated. */
+export function entriesInBlob(zip: Buffer, inflate: Range[]): Range[] {
+  const grown = new Set(inflate.map((r) => r.at)), out: Range[] = [];
+  let shift = 0, last = -1;
+  for (const e of zipEntries(zip).sort((a, b) => a.at - b.at)) {
+    if (e.at === last) continue;
+    last = e.at;
+    const len = grown.has(e.at) ? e.raw : e.packed;
+    out.push({ at: e.at + shift, len });
+    shift += len - e.packed;
+  }
+  return out;
+}
+
 /** A delta from one apk to another, written to `out` once applying it checks (`node`: the new apk made again with
  * node's deflater; `none`: bspatch's made bytes only). Returns how many entries were transparent. */
 export function makeApk(oldApk: string, newApk: string, out: string, check: "node" | "none" = "node"): number {
   const oldZip = readFileSync(oldApk), newZip = readFileSync(newApk);
   const t = transparent(oldZip, newZip);
   const old = inflated(oldZip, t.old), made = inflated(newZip, t.neu);
-  writeFileSync(out, makeDelta(old.blob, made.blob, [], t.old.map((e) => ({ at: e.at, len: e.packed })), made.ranges));
+  const inflate = t.old.map((e) => ({ at: e.at, len: e.packed }));
+  writeFileSync(out, makeDelta(old.blob, made.blob, [], inflate, made.ranges, entriesInBlob(oldZip, inflate)));
   verified(out, () => {
     const d = readFileSync(out), h = parseHeader(d), blob = readOld(h, { apk: oldApk });
     const want = expecting(check === "node" ? newZip : made.blob);

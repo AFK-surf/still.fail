@@ -72,6 +72,12 @@ let tree_draws_at : Set[Int] = Set::new()
 let tree_moved_at : Set[Int] = Set::new()
 
 ///|
+/// The nodes of the window's tree among the frame's whose height is said in points (LaidFacts' `height_points`), as an
+/// old view's node's `h=Px` is: what Ctx::fixed_outgrown holds the words in them to.
+// kept across runs: filled and emptied round one asking of the squeeze (Ctx::with_tree_nodes)
+let tree_fixed_h_at : Set[Int] = Set::new()
+
+///|
 /// Node `n`, put among the frame's as node `i` for the window's tree's drawn `d` (in `holder`, drawn), told how it is
 /// said to be laid out, what it draws and how opaque it is of its own (see the file's head).
 fn Ctx::tree_facts(
@@ -135,6 +141,9 @@ fn Ctx::tree_facts(
     Auto
   }
   n.keep = f.keeps
+  if f.height_points {
+    tree_fixed_h_at.add(i)
+  }
   // (as the layout takes it: laid_facts.mbt's head)
   n.least = if f.shrink <= 0.0 || f.keeps {
     d.w

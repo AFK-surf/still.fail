@@ -38,6 +38,8 @@ fn main {
     @sfapp.fixture_json(@hostapi.env_text("MBUI_FIXTURE_JSON"))
   } else {
     let src = @sffixture.fixture(mode)
+    // MBUI_FIX_PACE, MBUI_FIX_CORE: the made-up station's pace
+    @sffixture.fix_pace_said(@ui.env("MBUI_FIX_PACE"), @ui.env("MBUI_FIX_CORE"))
     // MBUI_UPDATE=<version>: a newer build offered
     if @ui.env("MBUI_UPDATE") != "" {
       @sffixture.fixture_update(@ui.env("MBUI_UPDATE"))

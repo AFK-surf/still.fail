@@ -33,6 +33,8 @@
 #        machine's refused
 #   scripts/host_contract.sh mac links          a link of a scheme the app's Info.plist names, opened while it runs, said to the app
 #        (kitdemo's MBUI_LINKCHECK, src/kitdemo/gallery/linkcheck.mbt)
+#   scripts/host_contract.sh linux posted       what the host posts from outside the frames told between frames, not
+#        taken as a frame begins (kitdemo's MBUI_POSTCHECK, src/kitdemo/gallery/postcheck.mbt)
 #   scripts/host_contract.sh linux notices      (a session bus) a notification the app shows kept, and clicked by the
 #        run's script (MBUI_DRIVE `notice`, as the desktop's click): what it opens given to the app (kitdemo's
 #        MBUI_NOTICECHECK, src/kitdemo/gallery/noticecheck.mbt)
@@ -885,6 +887,18 @@ INSTALL
     esac
     # (the browser's host pictures no window: drive 4)
     [ "$H" = web ] || scripts/chk images $O/images.log ;;
+  posted)
+    # (Linux) what the host posts from outside the frames (a package asked of an installer it has none for, said on the
+    # system channel: mb_post) told between frames (MB_OUTSIDE_POSTED), not taken as a frame begins (kitdemo's
+    # MBUI_POSTCHECK, src/kitdemo/gallery/postcheck.mbt): the app ends 0 only where it was offered between frames.
+    [ "$H" = linux ] || { echo "posted contract: Linux only (the web's: test/web/posted.test.mjs)"; exit 1; }
+    r=0
+    run "MBUI_POSTCHECK=1" $O/posted.log || r=$?
+    grep -a "POSTCHECK" $O/posted.log || true
+    if [ $r != 0 ] || ! grep -aq "POSTCHECK offered between frames" $O/posted.log; then
+      echo "posted contract (linux): what was posted not told between frames"; tail -20 $O/posted.log; exit 1
+    fi
+    echo "posted contract (linux): told between frames" ;;
   notices)
     # (Linux) the app as its desktop entry runs it (MBUI_APP_ID: its notifications the desktop's, linux_life.h), a
     # notification shown, then clicked by the run's script as the desktop's click would be: the app says what it opened

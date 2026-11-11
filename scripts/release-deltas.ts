@@ -17,10 +17,10 @@
 //   node scripts/release-deltas.ts <release dir> [--releases URL|DIR] [--bases N] [--jobs N] [--deadline SECONDS] [--into DIR]
 // --releases: where the releases are now (default https://app.still.fail/releases; a directory for tests and dev
 //   clouds): the feed published there is the build before, its own deltas' `from` the ones before that (newest first,
-//   --bases of them, 3 by default), each package fetched from there (one not there is passed over). A package of this
+//   --bases of them, 10 by default), each package fetched from there (one not there is passed over). A package of this
 //   release not in the directory (CI's apps put theirs before: scripts/release-put.sh --files) is fetched from there too,
 //   checked against its feed.
-// --jobs: deltas made at once, each a process of its own (~2 GB for a 60 MB package): the cores, the memory, 3 at most.
+// --jobs: deltas made at once, each a process of its own (~2 GB for a 60 MB package): the cores, the memory, 4 at most.
 //   What is made does not depend on it. --deadline: what is not made by then is left out (a warning each), so that the
 //   job running it is not ended by its own time limit.
 // --into: where the deltas and the amended feeds are written (default: the release directory itself).
@@ -44,6 +44,9 @@ import { makeApk, makeTree, rawOf, storedZip } from "./delta.ts";
 /** What apps/mbui/linux/install.sh copies into the app's folder (`stillfail`, `lib*.so*`, `core.hbc`, `VERSION`): the
  * files an installed Linux app has, which its deltas are made from. The two change together. */
 export const LINUX_INSTALLED = /^(stillfail|lib[^/]*\.so[^/]*|core\.hbc|VERSION)$/;
+/** `file`, a feed's of `build`, as build `from`'s was named: the name a base is fetched by, and kept by
+ * (scripts/release-prune.ts). The build's number where it stands alone in the file's own name. */
+export const baseFile = (file: string, build: number, from: number) => file.replace(new RegExp(`(?<![0-9])${build}(?![0-9])(?=[^/]*$)`), String(from));
 /** A delta is kept only when it is less than this much of its package. */
 const KEPT_BELOW = 0.8;
 const STATION_PLATFORMS = ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"];
@@ -428,17 +431,16 @@ class Run {
     }
     // (Windows: the raw installer beside its installer, `<exe>.raw.zst`, which is what its deltas make and are made from)
     const pkgName = (f: string) => (kind === "win" ? `${f}.raw.zst` : f);
-    const swap = (f: string, from: number, to: number) => f.replace(new RegExp(`(?<![0-9])${from}(?![0-9])(?=[^/]*$)`), String(to));
     const list: Base[] = [];
     if (prev && Number.isSafeInteger(prev.versionCode) && typeof prev.file === "string") {
       const signedRaw = kind === "win" ? wordsOf(prev.signed)?.raw?.sha256 : undefined;
       list.push({ build: prev.versionCode, names: [pkgName(prev.file)], ...(kind === "win" ? { rawSha256: signedRaw } : { sha256: prev.sha256 }) });
       for (const d of Array.isArray(prev.deltas) ? prev.deltas : []) {
-        if (Number.isSafeInteger(d?.from)) list.push({ build: d.from, names: [pkgName(swap(prev.file, prev.versionCode, d.from))] });
+        if (Number.isSafeInteger(d?.from)) list.push({ build: d.from, names: [pkgName(baseFile(prev.file, prev.versionCode, d.from))] });
       }
     }
     // (a feed of this very build published already: the bases its deltas are from, by this release's names)
-    for (const b of list) if (prev?.versionCode === build) b.names = [pkgName(swap(file, build, b.build))];
+    for (const b of list) if (prev?.versionCode === build) b.names = [pkgName(baseFile(file, build, b.build))];
     const bases = this.bases(build, list);
     if (bases.length === 0) {
       this.lines.push(`${label} ${build}: no deltas (${prev ? "none older published" : `no feed published at ${this.o.releases}`}); package ${mb(feed.size)}`);
@@ -706,11 +708,12 @@ if (import.meta.main) {
     const n = Number(v);
     return Number.isFinite(n) && n > 0 ? n : usage();
   };
-  // (each maker ~2 GB at its most, a 60 MB package: no more at once than the memory holds, nor than the cores)
-  const jobs = Math.max(1, Math.min(3, availableParallelism(), Math.floor(totalmem() / (2 * GB))));
+  // (each maker ~2 GB at its most, a 60 MB package: no more at once than the memory holds, nor than the cores; 4 at
+  // most, a GitHub runner's cores, as the CI Macs are shared)
+  const jobs = Math.max(1, Math.min(4, availableParallelism(), Math.floor(totalmem() / (2 * GB))));
   const o: Options = {
     releases: flag("--releases") ?? "https://app.still.fail/releases",
-    bases: number("--bases", 3)!,
+    bases: number("--bases", 10)!,
     jobs: number("--jobs", jobs)!,
     deadline: number("--deadline", null),
     into: flag("--into") ?? dir,

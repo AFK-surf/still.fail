@@ -401,3 +401,22 @@ test "a node's corners each (View::corners): its ground drawn with them, what it
   assert_eq((cut.0, cut.3), (10.0, 0.0), msg="its left corners its own: \{cut}")
   assert_eq((cut.1, cut.2), (0.0, 0.0), msg="its right ones where what holds it cuts, square: \{cut}")
 }
+
+///|
+test "a node's picture in a tree laid out once each change is told: drawn by the frame after the host says it is decoded" {
+  // (the host's word, between frames on every host (an event from its loop: on_outside), the tree laying itself out in
+  // that event (View::laid_before_causes), due no more: the frame brings it as it begins all the same (view_frame), and
+  // a frame's own (answers_by_the_frame, views_arrive) sets signals outside any event, the tree due still: drawn either
+  // way, view_owes the same, 2026-11-11)
+  let t = Tester::new(fn(_c) {  }, images=[("pic", 600, 400)])
+  set_view_app(fn(root) {
+    root.laid_before_causes()
+    root.box(fn(n) {
+      n.offset(Is((100.0, 100.0))).width(Is(Some(60.0))).height(Is(Some(40.0))).image(Is(Some(("pic", "", 4096)))) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.run_for(image_fade_ms)
+  assert_eq(pictures_sized(60.0, 40.0).length(), 1)
+}
