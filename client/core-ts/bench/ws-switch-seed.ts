@@ -27,6 +27,9 @@ const put = db.prepare("INSERT OR REPLACE INTO records (tbl, key, value) VALUES 
 const enc = new TextEncoder();
 const rec = (tbl: string, key: string, value: unknown) => put.run(tbl, key, enc.encode(JSON.stringify(value)));
 db.exec("BEGIN");
+// (the device's prefs as a device that was used has them: without, the first switch's write of `workspace` is the
+// first prefs there are, and everything reading a part of them is made again for it, which no real switch does)
+rec("prefs", "device", { workspace: "ws", lang: "zh" });
 rec("me", SUB, { workspaces: [{ id: "ws", name: "Acme" }, { id: "ws2", name: "Second" }], invitations: [], relay_url: null, user: { email: "me@x.com" } });
 const counts: Record<string, number> = {};
 for (const ws of ["ws", "ws2"]) {
