@@ -70,6 +70,7 @@ let gaps_steady_bars : Map[String, Int] = Map([])
 /// The faults known in the tests of the files `bars` names, each how many a Tester made there may show (as
 /// rows_steady_known). Said by a test package as it starts (`fn init`); only falls.
 pub fn gaps_steady_known(bars : Array[(String, Int)]) -> Unit {
+  motion_bars_said("gaps_steady", bars)
   for b in bars {
     gaps_steady_bars.set(b.0, b.1)
   }
@@ -231,6 +232,7 @@ fn Tester::hold_gaps_steady(self : Tester) -> Unit {
       continue
     }
     let bar = gaps_steady_bars.get(gaps_steady.file).unwrap_or(0)
+    motion_known_said("gaps_steady", gaps_steady.file, gaps_steady.found.length(), bar, f)
     if gaps_steady.found.length() > bar {
       let said = "gaps not steady (gaps_steady.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{f}; \{gaps_steady.found.length()} now, \{bar} known in \{gaps_steady.file}"

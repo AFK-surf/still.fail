@@ -715,10 +715,16 @@ let host_image_bytes_free : Int = 4096
 let host_image_bytes_bars : Map[String, Int] = Map([])
 
 ///|
+/// The most bytes each file's Testers had their hosts hold so far in this run, said as it grows (motion_runs).
+// kept across runs: the most of all the program's Testers, each file's said once as it grows
+let host_image_bytes_most : Map[String, Int] = Map([])
+
+///|
 /// The bars of the files `bars` names, each the most bytes handed over for decodes (image_load_bytes) a Tester made
 /// there may have its host hold at once, a tenth over it let by. Said by a test package as it starts (`fn init`);
 /// only falls.
 pub fn host_image_bytes_known(bars : Array[(String, Int)]) -> Unit {
+  motion_bars_said("host_image_bytes", bars)
   for b in bars {
     host_image_bytes_bars.set(b.0, b.1)
   }
@@ -732,6 +738,11 @@ fn host_image_bytes_held(f : FakeHost) -> Unit {
     None => f.made_at
   }
   let bar = host_image_bytes_bars.get(file).unwrap_or(host_image_bytes_free)
+  // (the most each file's Testers held, said as it grows: motion_runs, `MOTION held host_image_bytes <file> <bytes>`)
+  if motion_runs() && f.image_bytes_now > host_image_bytes_most.get(file).unwrap_or(0) {
+    host_image_bytes_most.set(file, f.image_bytes_now)
+    println("MOTION held host_image_bytes \{file} \{f.image_bytes_now}")
+  }
   if f.image_bytes_now * 10 > bar * 11 {
     @halt.saying(
       "the host holds \{f.image_bytes_now} bytes handed over for decodes at once (fake_host.mbt: host_image_bytes_known), " +

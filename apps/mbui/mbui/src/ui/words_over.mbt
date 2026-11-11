@@ -78,6 +78,7 @@ fn words_over_expected_closing(file : String, under : String, over : String, lea
 /// says it without line and column: "src/sfapp/chat_wbtest.mbt"), each how many pairs a Tester made there may show.
 /// Said by a test package as it starts (`fn init`); only falls.
 pub fn words_over_known(bars : Array[(String, Int)]) -> Unit {
+  motion_bars_said("words_over", bars)
   for b in bars {
     words_over_bars.set(b.0, b.1)
   }
@@ -322,6 +323,7 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
       continue
     }
     let bar = words_over_bars.get(words_over.file).unwrap_or(0)
+    motion_known_said("words_over", words_over.file, words_over.pairs.length(), bar, pair)
     if words_over.pairs.length() > bar {
       let said = "words over words while it moves (words_over.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{pair} at (\{x.round()}, \{y.round()}); \{words_over.pairs.length()} pairs now, \{bar} known in \{words_over.file}"

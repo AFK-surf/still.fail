@@ -49,6 +49,7 @@ let sizes_steady_bars : Map[String, Int] = {}
 /// The faults known in the tests of the files `bars` names, each how many a Tester made there may show (as
 /// rows_steady_known). Said by a test package as it starts (`fn init`); only falls.
 pub fn sizes_steady_known(bars : Array[(String, Int)]) -> Unit {
+  motion_bars_said("sizes_steady", bars)
   for b in bars {
     sizes_steady_bars.set(b.0, b.1)
   }
@@ -518,6 +519,7 @@ fn Tester::hold_sizes_steady(self : Tester) -> Unit {
       continue
     }
     let bar = sizes_steady_bars.get(sizes_steady.file).unwrap_or(0)
+    motion_known_said("sizes_steady", sizes_steady.file, sizes_steady.found.length(), bar, f)
     if sizes_steady.found.length() > bar {
       let said = "sizes not steady (sizes_steady.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{f}; \{sizes_steady.found.length()} now, \{bar} known in \{sizes_steady.file}"

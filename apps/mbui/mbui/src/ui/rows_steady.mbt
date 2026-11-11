@@ -97,6 +97,7 @@ let rows_steady_bars : Map[String, Int] = {}
 /// The jolts known in the tests of the files `bars` names (as words_over_known says its files), each how many a Tester
 /// made there may show. Said by a test package as it starts (`fn init`); only falls.
 pub fn rows_steady_known(bars : Array[(String, Int)]) -> Unit {
+  motion_bars_said("rows_steady", bars)
   for b in bars {
     rows_steady_bars.set(b.0, b.1)
   }
@@ -454,6 +455,7 @@ fn Tester::hold_rows_steady(self : Tester) -> Unit {
       println("MOTION rows_steady \{rows_steady.file}: \{f} (the Tester made at \{looks_made_at.val})")
       continue
     }
+    motion_known_said("rows_steady", rows_steady.file, rows_steady.found.length(), bar, f)
     if rows_steady.found.length() > bar {
       let said = "rows not steady (rows_steady.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +
         "\{f}; \{rows_steady.found.length()} now, \{bar} known in \{rows_steady.file}"
