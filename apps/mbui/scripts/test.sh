@@ -270,7 +270,7 @@ for t in $targets; do
       # (each file onto the group, then the part, that would end the soonest with it, the longest first by its time in
       # CI, scripts/page-seconds.txt. A group's runners: the first's pages on four programs, the second's on two, the
       # third's on one, the fourth's on four, each on four cores; at 120 a second the second, third and fourth on two
-      # runners (APP_PART), and at 24 and 7 the fourth a runner a rate where the others run both in turn
+      # runners (APP_PART), at 60 the fourth, and at 24 and 7 the fourth a runner a rate where the others run both in turn
       # (mbui-check.yml's app-rates). Their other runs, seconds of their cores, from main's runs of 2026-11-10 and 11
       # and ci/pages-dealt-by-time 42928057443: the first's preview_tree 80 at the default rate and 180 at 60; the
       # second's sweeps 160, 400 at 60, 340 on its two at 120, 210 at 24 and 7; the third's kept_rows 240, 340, 370 and
@@ -303,7 +303,14 @@ for t in $targets; do
           # minutes, main e73742ee 43081853101: one again, as it was at 121-199 s)
           # (the second's at 60 260-281 s of its 5 minutes on main's last five runs, the third's 114-207: the second
           # reckoned 200 s of other runs it has not, so it is dealt fewer pages; main f4940357 43103370007, 2026-11-11)
-          60) specs="4,4,520,1 4,4,200,1 1,4,600,1 4,4,0,1" ;;
+          # (dealt so the fourth's at 60 was 211-277 s on main's five runs after, and stopped at its five minutes once,
+          # its tests passed in 289 s, main f7367fe4 43114028979, 2026-11-11; the second's 136-223. The same deal ran
+          # 150 s on one runner and 223 on another, so four runners levelled at some 215 s have no room. The fourth's on
+          # two runners at 60 as at 120 (mbui-check.yml's app-rates, APP_PART), eight programs; the second's other runs
+          # as they are, 20; the first's, 200: its pages' 755 s beside them were 154-276 s. By page-seconds.txt's times
+          # at 60 written again from those five runs (the fourth's 941 s of pages there, its job 248 s, the second's 560
+          # and 145): each runner's pages some 160 s on its programs)
+          60) specs="4,4,200,1 4,4,20,1 1,4,600,1 8,8,0,1" ;;
           # (the first's packages' programs at 120 275 s beside its pages' 263, the job 295 s of its 5 minutes, main
           # 436755fc 43074044573, 2026-11-11: reckoned 160 s of its cores, they take some 500 now)
           120) specs="4,4,500,1 8,8,26,1 2,8,370,1 8,8,220,1" ;;
