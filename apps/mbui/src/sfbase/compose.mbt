@@ -346,7 +346,10 @@ fn writing_act(
 /// set with the signals the menu reads). Taken as they come, what read those is built again, nothing else: not a page
 /// whose field had a word typed in it built whole for each.
 pub fn calls_said() -> Array[String] {
-  ["composer.text", "ref.at"]
+  // (and where a chat is and that it shows, told as it changes, `chat.place` and `client.focus`: their answers read
+  // by nobody, tell_place's and tell_focus's; taken as anything else, each built the chat's page whole, every row of
+  // its list, in the frame it came in, as the chat moved)
+  ["composer.text", "ref.at", "chat.place", "client.focus"]
 }
 
 ///|

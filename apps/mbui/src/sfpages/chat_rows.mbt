@@ -529,13 +529,17 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
   }
   let swap = @motion.anim(c, "now-swap/" + row, 1.0, global=true)
   let reveal = @motion.anim(c, "now-glyphs/" + row, 1.0, global=true)
+  // (its line's turn as the list has it now, written before it is read: what read it, this row, read it as it is)
   let new_line = match came {
-    Some(at) => at != st.came.get()
+    Some(at) => at != st.came.untracked()
     None => false
   }
   if new_line {
-    let at = came.unwrap()
-    st.came.set(at)
+    st.came.set(came.unwrap())
+  }
+  let came_at = st.came.get()
+  if new_line {
+    let at = came_at
     st.key = key
     st.words = words
     st.mono = mono
@@ -553,7 +557,7 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
   } else {
     let now = c.moment()
     let mut next : (String, String, Bool, Bool, Double)? = None
-    if st.came.get() > now {
+    if came_at > now {
       // Before the reserved row's turn, its first words are whatever the agent is doing at that turn.
       st.key = key
       st.words = words
